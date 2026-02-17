@@ -84,7 +84,7 @@ func versionSupportsLoader(
 	loader types.Platform,
 ) bool {
 	for _, l := range version.Loaders {
-		if types.Platform(l).Eq(loader) {
+		if types.Platform(l).Satisfy(loader) {
 			return true
 		}
 	}
