@@ -24,8 +24,11 @@ func TernaryFunc[T any](expr func() bool, a T, b T) T {
 	return b
 }
 
-// Ternary gives a if v == true, b if v == false. For a function parameter, use
+// Ternary returns a if v == true, b if v == false. For a function parameter, use
 // TernaryFunc instead.
+//
+// Do not use this in a loop or a performance-critical code path, as it may cause
+// unnecessary evaluations of a and b.
 func Ternary[T any](v bool, a T, b T) T {
 	if v {
 		return a

@@ -41,9 +41,15 @@ var actionStatus cli.ActionFunc = func(
 func generateStatusOutput(
 	data *types.ServerInfo,
 	cmd *cli.Command,
-) (status *tui.Data) {
+) (output *tui.Data) {
 	longOutput := cmd.Bool("long")
 	noStyle := cmd.Bool("no-style")
+
+	packageNameOutput := tools.Ternary(
+		longOutput,
+		func(pkg types.Package) string { return pkg.Id.StringFull() },
+		func(pkg types.Package) string { return pkg.Id.Name.String() },
+	)
 
 	if data.Executable == nil {
 		return &tui.Data{
@@ -55,31 +61,19 @@ func generateStatusOutput(
 		}
 	}
 
-	status = &tui.Data{
-		Fields: []tui.Field{},
-	}
+	output = &tui.Data{Fields: []tui.Field{}}
 
-	status.Fields = append(
-		status.Fields, &tui.FieldAnnotatedShortText{
+	output.Fields = append(
+		output.Fields, &tui.FieldAnnotatedShortText{
 			Title:      "Game",
 			Text:       data.Executable.GameVersion.String(),
 			Annotation: data.Executable.Path,
 		},
 	)
 
-	if data.Executable.ModLoader != types.Minecraft {
-		status.Fields = append(
-			status.Fields, &tui.FieldAnnotatedShortText{
-				Title:      "Modding",
-				Text:       data.Executable.ModLoader.Title(),
-				Annotation: data.Executable.LoaderVersion.String(),
-			},
-		)
-	}
-
 	if data.Activity != nil {
-		status.Fields = append(
-			status.Fields, &tui.FieldAnnotatedShortText{
+		output.Fields = append(
+			output.Fields, &tui.FieldAnnotatedShortText{
 				Title: "Activity",
 				Text: tools.Ternary(
 					data.Activity.Active,
@@ -94,64 +88,101 @@ func generateStatusOutput(
 			},
 		)
 	} else {
-		status.Fields = append(
-			status.Fields, &tui.FieldShortText{
+		output.Fields = append(
+			output.Fields, &tui.FieldShortText{
 				Title: "Activity",
 				Text:  tools.Dim("(Unknown)"),
 			},
 		)
 	}
 
-	// Modding related fields only shown when modding platform detected
-	if data.Executable.ModLoader != types.Vanilla {
-		if len(data.Packages) > 0 {
-			modNames := make([]string, 0, len(data.Packages))
-			modPaths := make([]string, 0, len(modNames))
-			for _, mod := range data.Packages {
-				if mod.Id.Platform == types.Forge || mod.Id.Platform == types.Fabric {
-					if longOutput {
-						modNames = append(modNames, mod.Id.StringFull())
-					} else {
-						modNames = append(modNames, mod.Id.Name.String())
-					}
-					modPaths = append(modPaths, mod.Local.Path)
-				}
+	// Show modding platform if detected, even if no mods found, to differentiate
+	// between modded and vanilla servers
+	if data.Executable.ModLoader != types.Minecraft {
+		output.Fields = append(
+			output.Fields, &tui.FieldAnnotatedShortText{
+				Title:      "Platform",
+				Text:       data.Executable.ModLoader.Title(),
+				Annotation: data.Executable.LoaderVersion.String(),
+			},
+		)
+	}
+
+	listMods := data.Executable.ModLoader.IsModding() && len(data.Packages) > 0
+	listMcdrPlugins := data.Environments.Mcdr != nil && len(data.Packages) > 0
+
+	// Collect mod/plugin names and paths for later use. This is to avoid
+	// traversing the package list multiple times, which can be costly when
+	// there are many packages.
+	var modNames []string
+	var modPaths []string
+	var mcdrPlugins []string
+	if listMods {
+		modNames = make([]string, 0, len(data.Packages))
+		modPaths = make([]string, 0, len(data.Packages))
+	}
+	if listMcdrPlugins {
+		mcdrPlugins = make([]string, 0, len(data.Packages))
+	}
+	if listMods || listMcdrPlugins {
+		for _, pkg := range data.Packages {
+			if listMods && (pkg.Id.Platform.IsModding()) {
+				modNames = append(modNames, packageNameOutput(pkg))
+				modPaths = append(modPaths, pkg.Local.Path)
 			}
-			status.Fields = append(
-				status.Fields,
+			if listMcdrPlugins && pkg.Id.Platform.Eq(types.Mcdr) {
+				mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
+			}
+		}
+	}
+
+	// Modding related fields only shown when modding platform detected
+	if listMods {
+		modListTitle := tools.Ternary(
+			noStyle,
+			"Mods",
+			"└── Mods",
+		)
+		if len(modNames) == 0 {
+			output.Fields = append(
+				output.Fields, &tui.FieldShortText{
+					Title: modListTitle,
+					Text:  tools.Dim("(None)"),
+				},
+			)
+		} else {
+			output.Fields = append(
+				output.Fields,
 				tools.Ternary[tui.Field](
 					longOutput,
 					&tui.FieldMultiAnnotatedShortText{
-						Title:       "Mods",
+						Title:       modListTitle,
 						Texts:       modNames,
 						Annotations: modPaths,
 						ShowTotal:   true,
 					},
 					&tui.FieldDynamicColumnLabels{
-						Title:     "Mods",
+						Title:     modListTitle,
 						Labels:    modNames,
 						MaxLines:  0,
 						ShowTotal: true,
 					},
 				),
 			)
-		} else {
-			status.Fields = append(
-				status.Fields, &tui.FieldMultiAnnotatedShortText{
-					Title:       "Mods",
-					Texts:       []string{tools.Dim("(None)")},
-					Annotations: nil,
-					ShowTotal:   false,
-				},
-			)
 		}
 	}
 
 	// List MCDR plugins if MCDR environment detected
-	if data.Environments.Mcdr != nil {
+	if listMcdrPlugins {
+		mcdrPluginListTitle := tools.Ternary(
+			noStyle,
+			"MCDR Plugins",
+			"└── Plugins",
+		)
+
 		// Tell users that MCDR is installed
-		status.Fields = append(
-			status.Fields, &tui.FieldShortText{
+		output.Fields = append(
+			output.Fields, &tui.FieldShortText{
 				Title: "MCDR",
 				Text: "Installed" + tools.Ternary(
 					noStyle,
@@ -160,29 +191,25 @@ func generateStatusOutput(
 				),
 			},
 		)
-		var mcdrPlugins []string
-		for _, pkg := range data.Packages {
-			if pkg.Id.Platform == types.Mcdr {
-				if longOutput {
-					mcdrPlugins = append(mcdrPlugins, pkg.Id.StringFull())
-				} else {
-					mcdrPlugins = append(mcdrPlugins, pkg.Id.Name.String())
-				}
-			}
+
+		if len(mcdrPlugins) == 0 {
+			output.Fields = append(
+				output.Fields, &tui.FieldShortText{
+					Title: mcdrPluginListTitle,
+					Text:  tools.Dim("(None)"),
+				},
+			)
+		} else {
+			output.Fields = append(
+				output.Fields, &tui.FieldDynamicColumnLabels{
+					Title:     mcdrPluginListTitle,
+					Labels:    mcdrPlugins,
+					MaxLines:  0,
+					ShowTotal: true,
+				},
+			)
 		}
-		status.Fields = append(
-			status.Fields, &tui.FieldDynamicColumnLabels{
-				Title: tools.Ternary(
-					noStyle,
-					"MCDR Plugins",
-					"└── Plugins",
-				),
-				Labels:    mcdrPlugins,
-				MaxLines:  0,
-				ShowTotal: true,
-			},
-		)
 	}
 
-	return status
+	return output
 }
