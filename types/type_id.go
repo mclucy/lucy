@@ -15,9 +15,9 @@ import (
 type Platform string
 
 const (
-	AllPlatform     Platform = ""
+	AnyPlatform     Platform = ""
 	Minecraft       Platform = "minecraft"
-	Vanilla         Platform = Minecraft
+	Vanilla         Platform = Minecraft // Alias for Minecraft
 	Fabric          Platform = "fabric"
 	Forge           Platform = "forge"
 	Neoforge        Platform = "neoforge"
@@ -26,7 +26,7 @@ const (
 )
 
 func (p Platform) Title() string {
-	if p == AllPlatform {
+	if p == AnyPlatform {
 		return "Any"
 	}
 	if p.Valid() {
@@ -36,7 +36,7 @@ func (p Platform) Title() string {
 }
 
 func (p Platform) String() string {
-	if p == AllPlatform {
+	if p == AnyPlatform {
 		return "any"
 	}
 	return string(p)
@@ -45,20 +45,37 @@ func (p Platform) String() string {
 // Valid should be edited if you added a new platform.
 func (p Platform) Valid() bool {
 	switch p {
-	case Minecraft, Fabric, Forge, Neoforge, Mcdr, AllPlatform, UnknownPlatform:
+	case Minecraft, Fabric, Forge, Neoforge, Mcdr, AnyPlatform:
 		return true
 	}
 	return false
 }
 
-func (p Platform) Eq(other Platform) bool {
-	if p == AllPlatform || other == AllPlatform {
-		return true
-	}
-	if p == UnknownPlatform || other == UnknownPlatform {
+// Satisfy returns true if p satisfies the requirement of p2.
+func (p Platform) Satisfy(p2 Platform) bool {
+	// UnknownPlatform is not satisfied by any platform, and does not satisfy
+	// any platform including itself.
+	if p == UnknownPlatform || p2 == UnknownPlatform {
 		return false
 	}
-	return p == other
+	// When p2 is AnyPlatform, it is satisfied by all platforms.
+	if p2 == AnyPlatform {
+		return true
+	}
+	// When p is AnyPlatform, it does not satisfy any platform except itself.
+	if p == AnyPlatform {
+		return false
+	}
+	// Trivial cases
+	return p == p2
+}
+
+// Is is just an alias for equality check
+//
+// This is created to differentiate the meaning of "satisfy" and "is".
+// For example, "fabric" satisfies "minecraft", but does not "is" "minecraft".
+func (p Platform) Is(p2 Platform) bool {
+	return p == p2
 }
 
 func (p Platform) IsModding() bool {
@@ -108,7 +125,7 @@ func (p PackageId) NewPackage() Package {
 
 func (p PackageId) String() string {
 	return tools.Ternary(
-		p.Platform == AllPlatform,
+		p.Platform == AnyPlatform,
 		"", string(p.Platform)+"/",
 	) +
 		string(p.Name) +

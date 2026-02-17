@@ -110,7 +110,7 @@ func parseOperatorSlash(s string) (
 	split := strings.Split(s, "/")
 
 	if len(split) == 1 {
-		pl = types.AllPlatform
+		pl = types.AnyPlatform
 		n = types.ProjectName(split[0])
 		if types.Platform(n).Valid() {
 			// Remember, all platforms are also valid packages under themselves.

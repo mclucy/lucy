@@ -130,7 +130,7 @@ func generateStatusOutput(
 				modNames = append(modNames, packageNameOutput(pkg))
 				modPaths = append(modPaths, pkg.Local.Path)
 			}
-			if listMcdrPlugins && pkg.Id.Platform.Eq(types.Mcdr) {
+			if listMcdrPlugins && pkg.Id.Platform == types.Mcdr {
 				mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
 			}
 		}
