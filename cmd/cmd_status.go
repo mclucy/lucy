@@ -33,15 +33,18 @@ var actionStatus cli.ActionFunc = func(
 	if cmd.Bool("json") {
 		tools.PrintAsJson(serverInfo)
 	} else {
-		tui.Flush(generateStatusOutput(&serverInfo, cmd.Bool("long")))
+		tui.Flush(generateStatusOutput(&serverInfo, cmd))
 	}
 	return nil
 }
 
 func generateStatusOutput(
 	data *types.ServerInfo,
-	longOutput bool,
+	cmd *cli.Command,
 ) (status *tui.Data) {
+	longOutput := cmd.Bool("long")
+	noStyle := cmd.Bool("no-style")
+
 	if data.Executable == nil {
 		return &tui.Data{
 			Fields: []tui.Field{
@@ -106,14 +109,11 @@ func generateStatusOutput(
 			modPaths := make([]string, 0, len(modNames))
 			for _, mod := range data.Packages {
 				if mod.Id.Platform == types.Forge || mod.Id.Platform == types.Fabric {
-					modNames = append(
-						modNames,
-						tools.Ternary(
-							longOutput,
-							mod.Id.StringFull(),
-							mod.Id.StringNameVersion(),
-						),
-					)
+					if longOutput {
+						modNames = append(modNames, mod.Id.StringFull())
+					} else {
+						modNames = append(modNames, mod.Id.Name.String())
+					}
 					modPaths = append(modPaths, mod.Local.Path)
 				}
 			}
@@ -149,15 +149,34 @@ func generateStatusOutput(
 
 	// List MCDR plugins if MCDR environment detected
 	if data.Environments.Mcdr != nil {
+		// Tell users that MCDR is installed
+		status.Fields = append(
+			status.Fields, &tui.FieldShortText{
+				Title: "MCDR",
+				Text: "Installed" + tools.Ternary(
+					noStyle,
+					"",
+					tools.Green(" ✓"),
+				),
+			},
+		)
 		var mcdrPlugins []string
 		for _, pkg := range data.Packages {
 			if pkg.Id.Platform == types.Mcdr {
-				mcdrPlugins = append(mcdrPlugins, pkg.Id.StringNameVersion())
+				if longOutput {
+					mcdrPlugins = append(mcdrPlugins, pkg.Id.StringFull())
+				} else {
+					mcdrPlugins = append(mcdrPlugins, pkg.Id.Name.String())
+				}
 			}
 		}
 		status.Fields = append(
 			status.Fields, &tui.FieldDynamicColumnLabels{
-				Title:     "MCDR Plugins",
+				Title: tools.Ternary(
+					noStyle,
+					"MCDR Plugins",
+					"└── Plugins",
+				),
 				Labels:    mcdrPlugins,
 				MaxLines:  0,
 				ShowTotal: true,
