@@ -8,9 +8,10 @@ import (
 	"github.com/mclucy/lucy/tools"
 )
 
-// keyColumnWidth is the fixed width for the key column in key-value output.
-// This replaces the dynamic tab writer alignment with a predictable layout.
-const keyColumnWidth = 16
+// keyColumnWidth takes the longest key label in the current context and adds
+// padding to ensure alignment of values in a two-column layout. It is set by
+// while Flush() is rendering the current view.
+var keyColumnWidth int
 
 // renderKey renders a styled key label with fixed-width padding for alignment.
 func renderKey(title string) string {
@@ -39,12 +40,12 @@ func renderTab() string {
 	return strings.Repeat(" ", keyColumnWidth)
 }
 
-// renderSeparator returns a horizontal separator line. A length of 0 produces
-// a line spanning 75% of the terminal width.
+// renderSeparator returns a horizontal separator line.
+//
+// A zero-length separator is allowed and will not render anything. However,
+// lengths longer than the terminal width will be truncated to fit.
 func renderSeparator(length int, dim bool) string {
-	if length == 0 {
-		length = tools.TermWidth() * 3 / 4
-	} else if length > tools.TermWidth() {
+	if length > tools.TermWidth() {
 		length = tools.TermWidth()
 	}
 	sep := strings.Repeat("-", length)

@@ -31,22 +31,44 @@ type Data struct {
 // implementation returns its formatted string representation from Render.
 type Field interface {
 	Render() string
+	KeyLength() int
 }
 
 // FieldSeparator renders a horizontal separator line. A Length of 0 produces
-// a line spanning 75% of the terminal width.
+// a line spanning 80% of the terminal width.
+//
+// Proportional turns the Length value into a percentage of the terminal width
+// instead of a character count, so Length=50 with Proportional=true would render
+// a line spanning 50% of the terminal width. If Proportional is true, Length
+// is treated as a percentage and should be between 0 and 100; values outside
+// this range will be clamped.
 type FieldSeparator struct {
-	Length int
-	Dim    bool
+	Length       int
+	Proportional bool
+	Dim          bool
+}
+
+func (f *FieldSeparator) KeyLength() int {
+	return 0
 }
 
 func (f *FieldSeparator) Render() string {
+	if f.Proportional {
+		f.Length = f.Length * tools.TermWidth() / 100
+	}
+	if f.Length == 0 {
+		f.Length = tools.TermWidth() * 8 / 10
+	}
 	return renderSeparator(f.Length, f.Dim)
 }
 
 // FieldAnnotation renders a single line of dimmed annotation text.
 type FieldAnnotation struct {
 	Annotation string
+}
+
+func (f *FieldAnnotation) KeyLength() int {
+	return 0
 }
 
 func (f *FieldAnnotation) Render() string {
@@ -59,12 +81,20 @@ type FieldShortText struct {
 	Text  string
 }
 
+func (f *FieldShortText) KeyLength() int {
+	return len(f.Title)
+}
+
 func (f *FieldShortText) Render() string {
 	return renderKey(f.Title) + f.Text + "\n"
 }
 
 // FieldMarkdown renders Markdown content as styled ANSI terminal output.
 type FieldMarkdown FieldLongText
+
+func (f *FieldMarkdown) KeyLength() int {
+	return len(f.Title)
+}
 
 func (f *FieldMarkdown) Render() string {
 	long := FieldLongText(*f)
@@ -87,6 +117,10 @@ type FieldLongText struct {
 	UseAlternate  bool   // UseAlternate shows AlternateText instead of the text body if it is truncated
 	AlternateText string // AlternateText is shown instead of the text body if it is truncated
 	FoldNotice    string // FoldNotice is a dimmed message shown after the text body if it is truncated, left empty for default message
+}
+
+func (f *FieldLongText) KeyLength() int {
+	return len(f.Title)
 }
 
 func (f *FieldLongText) Render() string {
@@ -159,6 +193,10 @@ type FieldAnnotatedShortText struct {
 	Annotation string
 }
 
+func (f *FieldAnnotatedShortText) KeyLength() int {
+	return len(f.Title)
+}
+
 func (f *FieldAnnotatedShortText) Render() string {
 	var sb strings.Builder
 	sb.WriteString(renderKey(f.Title))
@@ -175,6 +213,10 @@ var FieldNil = &fieldNil{}
 
 type fieldNil struct{}
 
+func (f *fieldNil) KeyLength() int {
+	return 0
+}
+
 func (f *fieldNil) Render() string { return "" }
 
 // FieldLabels renders a title followed by a comma-separated list of labels
@@ -185,6 +227,10 @@ type FieldLabels struct {
 	Labels   []string
 	MaxWidth int
 	MaxLines int
+}
+
+func (f *FieldLabels) KeyLength() int {
+	return len(f.Title)
 }
 
 func (f *FieldLabels) Render() string {
@@ -230,11 +276,20 @@ func (f *FieldLabels) Render() string {
 
 // FieldDynamicColumnLabels renders labels in a dynamic grid whose column
 // count is derived from the terminal width and longest label length.
+//
+// NoTitle renders a label-only grid without a key column, useful for search
+// results and similar content.
 type FieldDynamicColumnLabels struct {
-	Title     string
-	Labels    []string
-	MaxLines  int
-	ShowTotal bool
+	Title      string
+	Labels     []string
+	MaxLines   int
+	MaxColumns int
+	ShowTotal  bool
+	NoTitle    bool
+}
+
+func (f *FieldDynamicColumnLabels) KeyLength() int {
+	return len(f.Title)
 }
 
 func (f *FieldDynamicColumnLabels) Render() string {
@@ -243,32 +298,42 @@ func (f *FieldDynamicColumnLabels) Render() string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(renderKey(f.Title))
 
-	maxLabelLen := 0
+	if !f.NoTitle {
+		sb.WriteString(renderKey(f.Title))
+	}
+
+	longestLabel := 0
 	for _, label := range f.Labels {
-		if len(label) > maxLabelLen {
-			maxLabelLen = len(label)
+		if len(label) > longestLabel {
+			longestLabel = len(label)
 		}
 	}
 
-	colWidth := maxLabelLen + 2
-	columns := (tools.TermWidth() - keyColumnWidth) / colWidth
-	if columns <= 0 {
-		columns = 1
+	colWidth := longestLabel + 2
+	columnNumber := (tools.TermWidth() - keyColumnWidth) / colWidth
+	if columnNumber <= 0 {
+		columnNumber = 1
+	}
+	if f.MaxColumns != 0 && columnNumber > f.MaxColumns {
+		columnNumber = f.MaxColumns
 	}
 
-	lines := 1
+	currentLine := 1
 	for i, label := range f.Labels {
-		lastInRow := (i+1)%columns == 0
+		lastInRow := (i+1)%columnNumber == 0
 		lastAmongAll := i == len(f.Labels)-1
 
 		padded := label + strings.Repeat(" ", colWidth-len(label))
 		sb.WriteString(padded)
 
-		if f.MaxLines != 0 && lines == f.MaxLines && lastInRow {
+		// If MaxLines is set, and we've reached the limit, show a total count of
+		// remaining labels and stop rendering more.
+		if f.MaxLines != 0 && currentLine == f.MaxLines && lastInRow {
 			sb.WriteString("\n")
-			sb.WriteString(renderTab())
+			if !f.NoTitle {
+				sb.WriteString(renderTab())
+			}
 			if f.ShowTotal {
 				sb.WriteString(
 					renderDim(
@@ -293,10 +358,11 @@ func (f *FieldDynamicColumnLabels) Render() string {
 			return sb.String()
 		}
 
+		// If this is the last label, optionally show a total count of all labels.
 		if lastAmongAll {
 			if f.ShowTotal {
-				if lastInRow {
-					sb.WriteString("\n")
+				sb.WriteString("\n")
+				if lastInRow && !f.NoTitle {
 					sb.WriteString(renderTab())
 				}
 				sb.WriteString(
@@ -312,10 +378,13 @@ func (f *FieldDynamicColumnLabels) Render() string {
 			return sb.String()
 		}
 
+		// For the last label in a row, add a newline and indentation for the next row.
 		if lastInRow {
 			sb.WriteString("\n")
-			lines++
-			sb.WriteString(renderTab())
+			currentLine++
+			if !f.NoTitle {
+				sb.WriteString(renderTab())
+			}
 		}
 	}
 
@@ -329,6 +398,10 @@ type FieldMultiAnnotatedShortText struct {
 	Texts       []string
 	Annotations []string
 	ShowTotal   bool
+}
+
+func (f *FieldMultiAnnotatedShortText) KeyLength() int {
+	return len(f.Title)
 }
 
 func (f *FieldMultiAnnotatedShortText) Render() string {
@@ -366,6 +439,10 @@ type FieldMultiShortText struct {
 	ShowTotal bool
 }
 
+func (f *FieldMultiShortText) KeyLength() int {
+	return len(f.Title)
+}
+
 func (f *FieldMultiShortText) Render() string {
 	if len(f.Texts) == 0 {
 		return ""
@@ -400,6 +477,10 @@ type FieldCheckBox struct {
 	FalseText string
 }
 
+func (f *FieldCheckBox) KeyLength() int {
+	return len(f.Title)
+}
+
 func (f *FieldCheckBox) Render() string {
 	trueText := f.TrueText
 	if trueText == "" {
@@ -423,6 +504,13 @@ func (f *FieldCheckBox) Render() string {
 
 // Flush renders all fields in data and prints the composed output.
 func Flush(data *Data) {
+	for _, field := range data.Fields {
+		if field.KeyLength() > keyColumnWidth {
+			keyColumnWidth = field.KeyLength()
+		}
+	}
+	keyColumnWidth += 2
+
 	var sb strings.Builder
 	for _, field := range data.Fields {
 		if field != nil {
