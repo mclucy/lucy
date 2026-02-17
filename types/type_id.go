@@ -61,6 +61,10 @@ func (p Platform) Eq(other Platform) bool {
 	return p == other
 }
 
+func (p Platform) IsModding() bool {
+	return p == Fabric || p == Forge || p == Neoforge
+}
+
 // ProjectName is the slug of the package, using hyphens as separators. For example,
 // "fabric-api".
 //
