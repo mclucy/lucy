@@ -8,21 +8,22 @@ import (
 	"github.com/mclucy/lucy/tools"
 )
 
-// Platform is an enum of several string constants. All platform is a package under
-// itself, for example, "fabric/fabric" is a valid package, and is equivalent to
-// "fabric". This literal is typically used when installing/upgrading a platform
-// itself.
+// Platform is an enum of several string constants.
+//
+// All platform is a package under itself, for example, "fabric/fabric" is a
+// valid package, and is equivalent to "fabric". This literal is typically used
+// when installing/upgrading a platform itself.
 type Platform string
 
 const (
-	AnyPlatform     Platform = ""
+	AnyPlatform     Platform = "" // AnyPlatform is ambiguous but has single-valueness. It does NOT refer to multiple platforms, but rather a single platform that is unknown. Understand this as AnyPlatform reduces to a definite platform at evaluation. Again, keep in mind that you should not allow it to be explicitly evaluated as multiple platforms.
 	Minecraft       Platform = "minecraft"
 	Vanilla         Platform = Minecraft // Alias for Minecraft
 	Fabric          Platform = "fabric"
 	Forge           Platform = "forge"
 	Neoforge        Platform = "neoforge"
 	Mcdr            Platform = "mcdr"
-	UnknownPlatform Platform = "unknown"
+	UnknownPlatform Platform = "unknown" // UnknownPlatform is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
 )
 
 func (p Platform) Title() string {
@@ -70,7 +71,13 @@ func (p Platform) Satisfy(p2 Platform) bool {
 	return p == p2
 }
 
-// Is is just an alias for equality check
+// Is is just an alias for `==`, they are fully interchangeable. There's no
+// restriction on which one to use.
+//
+// This function does not represent a mathematical equivalence relation, since
+// UnknownPlatform should always be unequal to any platform including itself.
+// However, rather than using .IsUnknown() function, it is more intuitive to
+// just use an equality operator.
 //
 // This is created to differentiate the meaning of "satisfy" and "is".
 // For example, "fabric" satisfies "minecraft", but does not "is" "minecraft".
