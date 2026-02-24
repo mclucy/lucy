@@ -21,7 +21,9 @@
 
 `lucy` is a powerful, unified command-line tool to simplify the management of Minecraft server-side content. Whether you're installing plugins, mods, managing dependencies, or coordinating complex modpacks, `lucy` provides an intuitive command-line interface to handle all your package management needs.
 
-We want to fully mimic the experience of other package managers your might be familiar with, such as `apt`, `brew`, or `npm`. If you've used any of these tools, you'll feel right at home with `lucy`'s command syntax and workflow. We want to bring the reliability, ease of use, and convenience of modern package management to Minecraft server administration, allowing both newcomers and experienced admins to manage their server content with confidence and efficiency.
+We want to fully mimic the experience of other package managers your might be familiar with, such as `apt`, `brew`, or `npm`. If you've used any of these tools, you'll feel right at home with `lucy`'s command syntax and workflow.
+
+The goal of this tool is to bring the reliability, ease of use, and convenience of modern package management to Minecraft server administration, allowing both newcomers and experienced admins to manage their server content with confidence and efficiency.
 
 ## ⭐ Functionalities
 
@@ -116,7 +118,7 @@ A compiled, ready-to-use instance of a project with a specific platform and vers
 
 Packages are identified using the format: `platform/project@version`
 
-```
+```{text}
 fabric/fabric-api@1.2.3
    ↑        ↑        ↑
 platform   name   version
@@ -140,6 +142,7 @@ Organize, version, and distribute your modpacks efficiently. Maintain dependency
 Automate deployment and updates across multiple server instances. Integrate with CI/CD pipelines for streamlined server provisioning.
 
 ### Development Teams
+
 Integrate package management into CI/CD pipelines and automation workflows. Manage server configurations as code.
 
 ## ⚖️ License
