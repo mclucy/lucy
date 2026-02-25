@@ -104,12 +104,7 @@ func getRelease(id string, version types.RawVersion) (*release, error) {
 			return &rel, nil
 		}
 	}
-	return nil, fmt.Errorf(
-		"%w for plugin %s: %s",
-		ErrVersionNotFound,
-		id,
-		version,
-	)
+	return nil, ErrVersionNotFound(id, version.String())
 }
 
 func getLatestRelease(id string) (*release, error) {
