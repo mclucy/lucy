@@ -17,12 +17,12 @@ import (
 	"io"
 	"net/http"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 
-	"lucy/remote"
-	"lucy/types"
+	"github.com/mclucy/lucy/remote"
+	"github.com/mclucy/lucy/types"
 
-	"lucy/logger"
+	"github.com/mclucy/lucy/logger"
 )
 
 type self struct{}

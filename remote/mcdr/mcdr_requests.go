@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"lucy/github"
-	"lucy/types"
+	"github.com/mclucy/lucy/github"
+	"github.com/mclucy/lucy/types"
 
 	"github.com/sahilm/fuzzy"
 )

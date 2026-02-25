@@ -6,8 +6,8 @@ import (
 	"context"
 	"os"
 
-	"lucy/cmd"
-	"lucy/logger"
+	"github.com/mclucy/lucy/cmd"
+	"github.com/mclucy/lucy/logger"
 )
 
 func main() {

@@ -3,7 +3,7 @@ package types
 import (
 	"strings"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 )
 
 // RawVersion is the version of a package. Here we expect mods and plugins

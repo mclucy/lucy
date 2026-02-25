@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 
-	"lucy/probe"
-	"lucy/remote"
-	"lucy/remote/source"
-	"lucy/tools"
-	"lucy/util"
+	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/remote"
+	"github.com/mclucy/lucy/remote/source"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/util"
 
-	"lucy/logger"
-	"lucy/syntax"
-	"lucy/types"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/types"
 
 	"github.com/urfave/cli/v3"
 )

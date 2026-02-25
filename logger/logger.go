@@ -21,7 +21,7 @@ import (
 	"os"
 	"time"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 )
 
 // Logging only functions

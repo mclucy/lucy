@@ -3,8 +3,8 @@ package detector
 import (
 	"strings"
 
-	"lucy/dependency"
-	"lucy/types"
+	"github.com/mclucy/lucy/dependency"
+	"github.com/mclucy/lucy/types"
 )
 
 // parseNpmVersionRange parses a simplified npm/semver version range string into

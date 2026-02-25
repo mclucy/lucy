@@ -3,11 +3,11 @@ package mcdr
 import (
 	"fmt"
 
-	"lucy/logger"
-	"lucy/probe"
-	"lucy/remote"
-	"lucy/syntax"
-	"lucy/types"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/remote"
+	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/types"
 )
 
 type self struct{}

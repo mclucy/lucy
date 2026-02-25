@@ -1,10 +1,10 @@
 package source
 
 import (
-	"lucy/remote"
-	"lucy/remote/mcdr"
-	"lucy/remote/modrinth"
-	"lucy/types"
+	"github.com/mclucy/lucy/remote"
+	"github.com/mclucy/lucy/remote/mcdr"
+	"github.com/mclucy/lucy/remote/modrinth"
+	"github.com/mclucy/lucy/types"
 )
 
 // All is currently hardcoded, but in the future, this could be made customizable

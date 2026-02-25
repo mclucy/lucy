@@ -1,4 +1,4 @@
-module lucy
+module github.com/mclucy/lucy
 
 go 1.23.4
 

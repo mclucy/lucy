@@ -9,10 +9,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"lucy/logger"
-	"lucy/probe/internal/detector"
-	"lucy/tools"
-	"lucy/types"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/probe/internal/detector"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 
 	"github.com/charmbracelet/huh"
 )

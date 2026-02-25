@@ -6,9 +6,9 @@ import (
 	"path"
 	"time"
 
-	"lucy/global"
-	"lucy/logger"
-	"lucy/tools"
+	"github.com/mclucy/lucy/global"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
 )
 
 // This is traditional OOP

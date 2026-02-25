@@ -3,9 +3,9 @@ package cmd
 import (
 	"context"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 
-	"lucy/logger"
+	"github.com/mclucy/lucy/logger"
 
 	"github.com/urfave/cli/v3"
 )

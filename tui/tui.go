@@ -19,7 +19,7 @@ import (
 
 	"github.com/muesli/reflow/wrap"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 )
 
 // Data is a collection of Field values to be rendered together.

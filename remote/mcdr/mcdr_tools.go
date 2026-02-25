@@ -3,8 +3,8 @@ package mcdr
 import (
 	"strings"
 
-	"lucy/dependency"
-	"lucy/types"
+	"github.com/mclucy/lucy/dependency"
+	"github.com/mclucy/lucy/types"
 )
 
 func parseRequiredVersion(s string) (reqs []types.VersionConstraint) {

@@ -3,8 +3,8 @@ package cmd
 import (
 	"errors"
 
+	"github.com/mclucy/lucy/types"
 	"github.com/urfave/cli/v3"
-	"lucy/types"
 )
 
 const (

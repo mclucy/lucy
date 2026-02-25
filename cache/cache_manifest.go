@@ -9,8 +9,8 @@ import (
 	"path"
 	"time"
 
-	"lucy/logger"
-	"lucy/tools"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
 )
 
 const (

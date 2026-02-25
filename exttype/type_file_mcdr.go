@@ -1,6 +1,6 @@
 package exttype
 
-import "lucy/tools"
+import "github.com/mclucy/lucy/tools"
 
 type FileMcdrPluginIdentifier struct {
 	Id          string `json:"id"`

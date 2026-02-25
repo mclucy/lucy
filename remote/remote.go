@@ -9,7 +9,7 @@ package remote
 import (
 	"fmt"
 
-	"lucy/types"
+	"github.com/mclucy/lucy/types"
 )
 
 // IoC via dependency injection

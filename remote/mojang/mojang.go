@@ -5,12 +5,15 @@ import (
 	"io"
 	"net/http"
 
-	"lucy/exttype"
+	"github.com/mclucy/lucy/exttype"
 )
 
 const VersionManifestURL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 
-func getVersionManifest() (manifest *exttype.ApiMojangMinecraftVersionManifest, err error) {
+func getVersionManifest() (
+manifest *exttype.ApiMojangMinecraftVersionManifest,
+err error,
+) {
 	manifest = &exttype.ApiMojangMinecraftVersionManifest{}
 
 	// TODO: Add cache mechanism if http call is too slow or fails

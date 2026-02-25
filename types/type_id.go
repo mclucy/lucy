@@ -4,7 +4,7 @@ package types
 import (
 	"strings"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 )
 
 // Platform is an enum of several string constants. All platform is a package under

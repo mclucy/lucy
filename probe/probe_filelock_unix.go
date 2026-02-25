@@ -29,10 +29,10 @@ import (
 	"strings"
 	"syscall"
 
-	"lucy/logger"
+	"github.com/mclucy/lucy/logger"
 
-	"lucy/tools"
-	"lucy/types"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 )
 
 var checkServerFileLock = tools.Memoize(

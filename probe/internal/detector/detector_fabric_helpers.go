@@ -3,8 +3,8 @@ package detector
 import (
 	"strings"
 
-	"lucy/dependency"
-	"lucy/types"
+	"github.com/mclucy/lucy/dependency"
+	"github.com/mclucy/lucy/types"
 )
 
 // parseFabricVersionRange parses Fabric version range strings into 2D constraint arrays.
@@ -33,10 +33,16 @@ func parseFabricVersionRange(s string) types.VersionConstraintExpression {
 		if strings.Contains(part, ",") {
 			subParts := strings.Split(part, ",")
 			for _, subPart := range subParts {
-				andConstraints = append(andConstraints, parseSingleFabricVersion(subPart))
+				andConstraints = append(
+					andConstraints,
+					parseSingleFabricVersion(subPart),
+				)
 			}
 		} else {
-			andConstraints = append(andConstraints, parseSingleFabricVersion(part))
+			andConstraints = append(
+				andConstraints,
+				parseSingleFabricVersion(part),
+			)
 		}
 	}
 

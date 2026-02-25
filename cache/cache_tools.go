@@ -8,8 +8,8 @@ import (
 	"slices"
 	"time"
 
-	"lucy/global"
-	"lucy/logger"
+	"github.com/mclucy/lucy/global"
+	"github.com/mclucy/lucy/logger"
 )
 
 var hash = func(data []byte) string { return fmt.Sprintf("%x", md5.Sum(data)) }

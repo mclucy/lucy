@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"lucy/cache"
-	"lucy/logger"
-	"lucy/tools"
+	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
 )
 
 const (

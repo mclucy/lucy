@@ -1,7 +1,7 @@
 package modrinth
 
 import (
-	"lucy/types"
+	"github.com/mclucy/lucy/types"
 )
 
 func GetFile(id types.PackageId) (url string, filename string, err error) {

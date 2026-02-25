@@ -6,8 +6,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/util"
 	"github.com/urfave/cli/v3"
-	"lucy/util"
 )
 
 func init() {

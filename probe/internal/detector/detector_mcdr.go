@@ -7,14 +7,14 @@ import (
 	"os"
 	"path"
 
-	"lucy/exttype"
-	"lucy/syntax"
-	"lucy/tools"
-	"lucy/types"
+	"github.com/mclucy/lucy/exttype"
+	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 
 	"gopkg.in/yaml.v3"
 
-	"lucy/logger"
+	"github.com/mclucy/lucy/logger"
 )
 
 const mcdrConfigFileName = "config.yml"

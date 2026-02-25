@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"lucy/types"
+	"github.com/mclucy/lucy/types"
 )
 
 // analyzeForgeArgFile parses Forge argument files to extract version information

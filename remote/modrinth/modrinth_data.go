@@ -3,8 +3,8 @@ package modrinth
 import (
 	"time"
 
-	"lucy/syntax"
-	"lucy/types"
+	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/types"
 )
 
 // projectResponse

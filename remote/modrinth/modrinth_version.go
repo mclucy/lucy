@@ -6,10 +6,10 @@ import (
 	"io"
 	"net/http"
 
-	"lucy/logger"
+	"github.com/mclucy/lucy/logger"
 
-	"lucy/probe"
-	"lucy/types"
+	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/types"
 )
 
 // TODO: Refactor to separate all API functions to accept an url. While the urls

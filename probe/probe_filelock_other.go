@@ -18,7 +18,7 @@ limitations under the License.
 
 package probe
 
-import "lucy/types"
+import "github.com/mclucy/lucy/types"
 
 func checkServerFileLock() *types.ServerActivity {
 	return nil

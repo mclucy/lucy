@@ -3,7 +3,7 @@ package types
 import (
 	"os/exec"
 
-	"lucy/exttype"
+	"github.com/mclucy/lucy/exttype"
 )
 
 // ServerInfo components that do not exist, use an empty string. Note Executable

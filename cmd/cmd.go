@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 
 	"github.com/urfave/cli/v3"
 )

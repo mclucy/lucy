@@ -18,8 +18,8 @@ import (
 	"errors"
 	"strings"
 
-	"lucy/logger"
-	"lucy/types"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/types"
 )
 
 func ToProjectName(s string) types.ProjectName {

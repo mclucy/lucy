@@ -1,6 +1,6 @@
 package remote
 
-import "lucy/types"
+import "github.com/mclucy/lucy/types"
 
 type SourceHandler interface {
 	Search(query string, options types.SearchOptions) (

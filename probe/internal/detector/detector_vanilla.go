@@ -6,10 +6,10 @@ import (
 	"io"
 	"os"
 
-	"lucy/exttype"
-	"lucy/logger"
-	"lucy/tools"
-	"lucy/types"
+	"github.com/mclucy/lucy/exttype"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 )
 
 // VanillaDetector detects vanilla Minecraft servers

@@ -4,7 +4,7 @@ import (
 	"archive/zip"
 	"os"
 
-	"lucy/types"
+	"github.com/mclucy/lucy/types"
 )
 
 // ExecutableDetector is the interface for detecting different types of

@@ -22,11 +22,11 @@ import (
 	"os"
 	"path"
 
-	"lucy/logger"
+	"github.com/mclucy/lucy/logger"
 
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 	"golang.org/x/sys/windows"
-	"lucy/tools"
-	"lucy/types"
 )
 
 // This is AI generated code, please check it before use. I have no knowledge to

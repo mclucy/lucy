@@ -6,9 +6,9 @@ import (
 	"io"
 	"net/http"
 
-	"lucy/syntax"
+	"github.com/mclucy/lucy/syntax"
 
-	"lucy/types"
+	"github.com/mclucy/lucy/types"
 )
 
 func getProjectId(slug types.ProjectName) (id string, err error) {

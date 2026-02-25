@@ -5,8 +5,8 @@ import (
 	"strings"
 	"text/template"
 
-	"lucy/logger"
-	"lucy/types"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/types"
 )
 
 const projectUrlPrefix = "https://api.modrinth.com/v2/project/"

@@ -3,8 +3,8 @@ package mcdr
 import (
 	"time"
 
-	"lucy/tools"
-	"lucy/types"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 )
 
 // GitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/plugins/{plugin_name}/plugin_info.json

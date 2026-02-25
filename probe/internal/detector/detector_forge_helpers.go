@@ -5,10 +5,10 @@ import (
 	"io"
 	"strings"
 
-	"lucy/dependency"
-	"lucy/logger"
-	"lucy/tools"
-	"lucy/types"
+	"github.com/mclucy/lucy/dependency"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 )
 
 // getForgeModVersion extracts the version from a Forge JAR's manifest
@@ -116,20 +116,30 @@ func parseMavenVersionRange(interval string) [][]types.VersionConstraint {
 					if leftBracket == '[' {
 						op = types.OpGte
 					}
-					bounds = append(bounds, types.VersionConstraint{
-						Value:    dependency.Parse(types.RawVersion(left), types.Semver),
-						Operator: op,
-					})
+					bounds = append(
+						bounds, types.VersionConstraint{
+							Value: dependency.Parse(
+								types.RawVersion(left),
+								types.Semver,
+							),
+							Operator: op,
+						},
+					)
 				}
 				if right != "" {
 					op := types.OpLt
 					if rightBracket == ']' {
 						op = types.OpLte
 					}
-					bounds = append(bounds, types.VersionConstraint{
-						Value:    dependency.Parse(types.RawVersion(right), types.Semver),
-						Operator: op,
-					})
+					bounds = append(
+						bounds, types.VersionConstraint{
+							Value: dependency.Parse(
+								types.RawVersion(right),
+								types.Semver,
+							),
+							Operator: op,
+						},
+					)
 				}
 
 				// Both bounds are AND constraints, wrap in single inner array
@@ -145,7 +155,10 @@ func parseMavenVersionRange(interval string) [][]types.VersionConstraint {
 				return [][]types.VersionConstraint{
 					{
 						{
-							Value:    dependency.Parse(types.RawVersion(body), types.Semver),
+							Value: dependency.Parse(
+								types.RawVersion(body),
+								types.Semver,
+							),
 							Operator: types.OpEq,
 						},
 					},

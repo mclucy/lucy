@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"strconv"
 
-	"lucy/remote"
-	"lucy/remote/source"
-	"lucy/types"
+	"github.com/mclucy/lucy/remote"
+	"github.com/mclucy/lucy/remote/source"
+	"github.com/mclucy/lucy/types"
 
-	"lucy/logger"
-	"lucy/syntax"
-	"lucy/tools"
-	"lucy/tui"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui"
 
 	"github.com/urfave/cli/v3"
 )

@@ -3,7 +3,7 @@ package logger
 import (
 	"time"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 )
 
 // Level represents the severity of a log entry.

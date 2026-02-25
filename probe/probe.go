@@ -15,14 +15,14 @@ import (
 	"sort"
 	"sync"
 
-	"lucy/exttype"
-	"lucy/probe/internal/detector"
+	"github.com/mclucy/lucy/exttype"
+	"github.com/mclucy/lucy/probe/internal/detector"
 
 	"gopkg.in/ini.v1"
 
-	"lucy/logger"
-	"lucy/tools"
-	"lucy/types"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 )
 
 // ServerInfo is the exposed function for external packages to get serverInfo.

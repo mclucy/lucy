@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"lucy/types"
+	"github.com/mclucy/lucy/types"
 )
 
 // Parse is the main function to parse a RawVersion into a ComparableVersion.

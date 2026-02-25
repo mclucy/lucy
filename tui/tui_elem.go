@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 )
 
 // keyColumnWidth is the fixed width for the key column in key-value output.

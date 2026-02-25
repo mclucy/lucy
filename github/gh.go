@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"lucy/logger"
-	"lucy/tools"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
 )
 
 // checkGitHubMessage checks if the response data is a GitHub API error message

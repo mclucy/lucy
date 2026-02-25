@@ -26,7 +26,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"lucy/tools"
+	"github.com/mclucy/lucy/tools"
 )
 
 // --- Options ----------------------------------------------------------------
@@ -91,7 +91,10 @@ func (t *Tracker) Run() error {
 	var barOpts []progress.Option
 	switch {
 	case t.gradientA != "" && t.gradientB != "":
-		barOpts = append(barOpts, progress.WithGradient(t.gradientA, t.gradientB))
+		barOpts = append(
+			barOpts,
+			progress.WithGradient(t.gradientA, t.gradientB),
+		)
 	case t.solidFill != "":
 		barOpts = append(barOpts, progress.WithSolidFill(t.solidFill))
 	default:
@@ -249,8 +252,12 @@ func (r *proxyReader) Read(p []byte) (int, error) {
 	r.read += int64(n)
 	if r.total > 0 {
 		r.tracker.SetPercent(float64(r.read) / float64(r.total))
-		r.tracker.SetMessage(fmt.Sprintf("%s / %s",
-			humanBytes(r.read), humanBytes(r.total)))
+		r.tracker.SetMessage(
+			fmt.Sprintf(
+				"%s / %s",
+				humanBytes(r.read), humanBytes(r.total),
+			),
+		)
 	} else {
 		r.tracker.SetMessage(humanBytes(r.read))
 	}

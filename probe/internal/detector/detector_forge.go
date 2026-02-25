@@ -7,11 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"lucy/exttype"
-	"lucy/logger"
-	"lucy/syntax"
-	"lucy/tools"
-	"lucy/types"
+	"github.com/mclucy/lucy/exttype"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 
 	"github.com/pelletier/go-toml"
 )
