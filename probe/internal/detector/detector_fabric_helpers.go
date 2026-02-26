@@ -59,18 +59,18 @@ func parseFabricVersionRange(s string) types.VersionConstraintExpression {
 func parseSingleFabricVersion(version string) types.VersionConstraint {
 	version = strings.TrimSpace(version)
 	op := types.OpEq
-	if strings.HasPrefix(version, "<") {
-		op = types.OpLt
-		version = strings.TrimPrefix(version, "<")
-	} else if strings.HasPrefix(version, "<=") {
+	if strings.HasPrefix(version, "<=") {
 		op = types.OpLte
 		version = strings.TrimPrefix(version, "<=")
-	} else if strings.HasPrefix(version, ">") {
-		op = types.OpGt
-		version = strings.TrimPrefix(version, ">")
 	} else if strings.HasPrefix(version, ">=") {
 		op = types.OpGte
 		version = strings.TrimPrefix(version, ">=")
+	} else if strings.HasPrefix(version, "<") {
+		op = types.OpLt
+		version = strings.TrimPrefix(version, "<")
+	} else if strings.HasPrefix(version, ">") {
+		op = types.OpGt
+		version = strings.TrimPrefix(version, ">")
 	}
 
 	return types.VersionConstraint{
