@@ -11,6 +11,9 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+// TODO(version-dialect): migrate this file to dependency.ParseRangeByPlatform
+// and delete local parsing once external callers are switched.
+
 // getForgeModVersion extracts the version from a Forge JAR's manifest
 // when the mod version is set to `${file.jarVersion}`
 func getForgeModVersion(zip *zip.Reader) types.RawVersion {

@@ -156,3 +156,26 @@ func getRepository(id string) (*pluginRepo, error) {
 	}
 	return &repo, nil
 }
+
+func getFactory[T any]() func(id string) (*T, error) {
+	return func(id string) (*T, error) {
+		ghEndpoint := pluginCatalogueRepoEndpoint + id + "/repository.json" + branchMeta
+		err, msg, data := github.GetFileFromGitHub(ghEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		if msg != nil && msg.Message != "" {
+			if msg.Status == "404" {
+				return nil, ErrPluginNotFound(id)
+			}
+			return nil, fmt.Errorf("%w: %s", ErrorGhApi, msg.Message)
+		}
+
+		var res T
+		err = json.Unmarshal(data, &res)
+		if err != nil {
+			return nil, err
+		}
+		return &res, nil
+	}
+}

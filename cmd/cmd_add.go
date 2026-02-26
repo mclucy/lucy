@@ -65,13 +65,16 @@ var actionAdd cli.ActionFunc = func(
 
 	// check if the specified platform matches the server platform
 	if id.Platform != types.AllPlatform {
-		if id.Platform == types.Mcdr {
+		switch id.Platform {
+		case types.Mcdr:
 			// for mcdr, we only need to check if it's mcdr-managed
 			if serverInfo.Environments.Mcdr == nil {
 				return errors.New("mcdr not found")
 			}
-		} else if id.Platform != serverInfo.Executable.ModLoader {
-			return errors.New("platform mismatch")
+		case types.Forge:
+
+		case types.Fabric:
+
 		}
 	}
 

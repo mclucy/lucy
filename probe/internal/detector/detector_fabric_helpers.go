@@ -7,6 +7,9 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+// TODO(version-dialect): migrate this file to dependency.ParseRangeByPlatform
+// and delete local parsing once external callers are switched.
+
 // parseFabricVersionRange parses Fabric version range strings into 2D constraint arrays.
 //
 // According to Fabric spec:

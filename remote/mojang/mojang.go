@@ -11,8 +11,8 @@ import (
 const VersionManifestURL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 
 func getVersionManifest() (
-manifest *exttype.ApiMojangMinecraftVersionManifest,
-err error,
+	manifest *exttype.ApiMojangMinecraftVersionManifest,
+	err error,
 ) {
 	manifest = &exttype.ApiMojangMinecraftVersionManifest{}
 
