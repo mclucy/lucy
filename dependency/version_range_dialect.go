@@ -81,3 +81,34 @@ func ParseRange(
 		return nil
 	}
 }
+
+// ParseRanges parses multiple range strings as OR alternatives.
+//
+// This matches the VersionConstraintExpression design where the outer slice
+// represents OR clauses and each inner slice represents AND constraints.
+//
+// If any item resolves to an unconstrained expression (nil/empty), the result
+// is unconstrained (nil), because one OR branch already matches all versions.
+func ParseRanges(
+	raws []string,
+	dialect VersionRangeDialect,
+	scheme types.VersionScheme,
+) types.VersionConstraintExpression {
+	if len(raws) == 0 {
+		return nil
+	}
+
+	merged := make(types.VersionConstraintExpression, 0, len(raws))
+	for _, raw := range raws {
+		expr := ParseRange(raw, dialect, scheme)
+		if len(expr) == 0 {
+			return nil
+		}
+		merged = append(merged, expr...)
+	}
+
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
+}
