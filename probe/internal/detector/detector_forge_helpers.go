@@ -54,5 +54,9 @@ func getForgeModVersion(zip *zip.Reader) types.RawVersion {
 //   - https://docs.minecraftforge.net/en/latest/gettingstarted/modfiles/
 //   - https://maven.apache.org/enforcer/enforcer-rules/versionRanges.html
 func parseMavenVersionRange(interval string) [][]types.VersionConstraint {
-	return dependency.ParseRangeByPlatform(interval, types.Forge, types.Semver)
+	return dependency.ParseRange(
+		interval,
+		dependency.InferRangeDialect(types.Forge),
+		types.Semver,
+	)
 }

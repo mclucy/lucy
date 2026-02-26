@@ -26,8 +26,8 @@ const (
 	DialectMavenRange
 )
 
-// platformRangeDialect gets the range dialect from package platform.
-func platformRangeDialect(platform types.Platform) VersionRangeDialect {
+// InferRangeDialect infers the range dialect from package platform.
+func InferRangeDialect(platform types.Platform) VersionRangeDialect {
 	switch platform {
 	case types.Mcdr:
 		return DialectNpmSemver
@@ -40,21 +40,12 @@ func platformRangeDialect(platform types.Platform) VersionRangeDialect {
 	}
 }
 
-// ParseRangeByPlatform parses range text using the platform-specific dialect.
-func ParseRangeByPlatform(
-	raw string,
-	platform types.Platform,
-	scheme types.VersionScheme,
-) types.VersionConstraintExpression {
-	return parseRange(raw, platformRangeDialect(platform), scheme)
-}
-
-// parseRange parses range text using the given dialect.
+// ParseRange parses range text using the given dialect.
 //
 // This parser layer is the intended home for syntax-specific operators such as
 // '^' and '~'. It expands these operators into basic comparison constraints
 // (>, >=, <, <=, =, !=) so that the evaluator layer stays dialect-agnostic.
-func parseRange(
+func ParseRange(
 	raw string,
 	dialect VersionRangeDialect,
 	scheme types.VersionScheme,

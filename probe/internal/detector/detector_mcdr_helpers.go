@@ -14,5 +14,9 @@ import (
 // Note: call sites remain unchanged in detector; the parser implementation is
 // centralized in the dependency package.
 func parseNpmVersionRange(s string) types.VersionConstraintExpression {
-	return dependency.ParseRangeByPlatform(s, types.Mcdr, types.Semver)
+	return dependency.ParseRange(
+		s,
+		dependency.InferRangeDialect(types.Mcdr),
+		types.Semver,
+	)
 }

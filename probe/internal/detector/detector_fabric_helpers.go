@@ -9,5 +9,9 @@ import (
 //
 // Reference: https://wiki.fabricmc.net/documentation:fabric_mod_json_spec
 func parseFabricVersionRange(s string) types.VersionConstraintExpression {
-	return dependency.ParseRangeByPlatform(s, types.Fabric, types.Semver)
+	return dependency.ParseRange(
+		s,
+		dependency.InferRangeDialect(types.Fabric),
+		types.Semver,
+	)
 }

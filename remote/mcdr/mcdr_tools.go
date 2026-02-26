@@ -10,7 +10,11 @@ func parseRequiredVersion(s string) (reqs []types.VersionConstraint) {
 	// References:
 	//   - https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
 	//   - https://docs.npmjs.com/about-semantic-versioning
-	expr := dependency.ParseRangeByPlatform(s, types.Mcdr, types.Semver)
+	expr := dependency.ParseRange(
+		s,
+		dependency.InferRangeDialect(types.Mcdr),
+		types.Semver,
+	)
 	if len(expr) == 0 {
 		return nil
 	}
