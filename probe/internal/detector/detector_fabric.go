@@ -263,7 +263,7 @@ func (d *fabricModDetector) Detect(
 
 func (d *fabricModDetector) buildDependency(
 	pkg *types.Package,
-	deps map[string]string,
+	deps map[string]tools.SingleOrSlice[string],
 	mandatory bool,
 	inverse bool,
 ) {
@@ -273,7 +273,7 @@ func (d *fabricModDetector) buildDependency(
 				Platform: types.Fabric,
 				Name:     syntax.ToProjectName(k),
 			},
-			Constraint: parseFabricVersionRange(v),
+			Constraint: parseFabricVersionRanges(v),
 			Mandatory:  mandatory,
 		}
 		if inverse {

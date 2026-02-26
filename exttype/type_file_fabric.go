@@ -1,5 +1,7 @@
 package exttype
 
+import "github.com/mclucy/lucy/tools"
+
 type FabricEnvironment string
 
 const (
@@ -44,11 +46,11 @@ type FileFabricModIdentifier struct {
 
 	// Depends > Recommends > Suggests
 	// Breaks > Conflicts
-	Depends    map[string]string `json:"depends"`
-	Recommends map[string]string `json:"recommends"`
-	Suggests   map[string]string `json:"suggests"`
-	Breaks     map[string]string `json:"breaks"`
-	Conflicts  map[string]string `json:"conflicts"`
+	Depends    map[string]tools.SingleOrSlice[string] `json:"depends"`
+	Recommends map[string]tools.SingleOrSlice[string] `json:"recommends"`
+	Suggests   map[string]tools.SingleOrSlice[string] `json:"suggests"`
+	Breaks     map[string]tools.SingleOrSlice[string] `json:"breaks"`
+	Conflicts  map[string]tools.SingleOrSlice[string] `json:"conflicts"`
 
 	Custom interface{} `json:"-"`
 }
