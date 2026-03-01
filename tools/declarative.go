@@ -74,12 +74,26 @@ func IsEmptyVector[T any](arr []T) bool {
 		return true
 	}
 	for _, e := range arr {
-		// Use reflection to check if element is a slice
-		v := reflect.ValueOf(e)
-		if v.Kind() == reflect.Slice {
-			if !IsEmptyVector(v.Interface().([]any)) {
-				return false
-			}
+		if !isEmptyVectorValue(reflect.ValueOf(e)) {
+			return false
+		}
+	}
+	return true
+}
+
+func isEmptyVectorValue(v reflect.Value) bool {
+	if !v.IsValid() {
+		return true
+	}
+	if v.Kind() != reflect.Slice {
+		return false
+	}
+	if v.Len() == 0 {
+		return true
+	}
+	for i := 0; i < v.Len(); i++ {
+		if !isEmptyVectorValue(v.Index(i)) {
+			return false
 		}
 	}
 	return true
