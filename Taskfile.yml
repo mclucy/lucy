@@ -1,0 +1,45 @@
+# https://taskfile.dev
+
+version: "3"
+
+tasks:
+  copyright-add:
+    desc: Add missing copyright headers to Go files
+    cmds:
+      - ./copyright.sh add
+  copyright-remove:
+    desc: Remove copyright headers from Go files
+    cmds:
+      - ./copyright.sh remove
+  cleanup-dist:
+    cmds:
+      - rm -rf dist
+  cleanup-release:
+    cmds:
+      - rm -rf release
+  build-release:
+    desc: Build the release for Windows, Linux, and macOS
+    deps: [cleanup-release]
+    cmds:
+      - GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -tags release -o release/lucy-linux-amd64
+      - GOOS=windows GOARCH=amd64 go build -ldflags="-w -s" -tags release -o release/lucy-windows-amd64.exe
+      - GOOS=darwin GOARCH=amd64 go build -ldflags="-w -s" -tags release -o release/lucy-darwin-amd64
+      - GOOS=darwin GOARCH=arm64 go build -ldflags="-w -s" -tags release -o release/lucy-darwin-arm64
+    sources: [./**/*.go, go.mod, .go.sum]
+  build-dev:
+    desc: Build a binary for development purposes (on macOS)
+    deps: [cleanup-dist]
+    cmds:
+      - GOOS=darwin GOARCH=arm64 go build -tags debug -o dist/lucy-darwin-arm64-dev
+    sources: [./**/*.go, ./go.mod, ./go.sum]
+    generates: [dist/lucy-darwin-arm64-dev]
+    vars:
+      INTERVAL: 1s
+      DELAY: 500ms
+  build-watch:
+    desc: Build a debug binary on file changes
+    deps: [build-dev]
+    cmds:
+      - task build-dev
+    watch: true
+    sources: ["./**/*.go", "./go.mod", "./go.sum"]
