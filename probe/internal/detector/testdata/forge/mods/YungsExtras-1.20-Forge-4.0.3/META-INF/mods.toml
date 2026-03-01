@@ -1,0 +1,35 @@
+modLoader="javafml" #mandatory
+loaderVersion="[46,)"
+license="LGPLv3"
+issueTrackerURL="https://github.com/yungnickyoung/YUNGs-Extras/issues"
+
+[[mods]]
+    modId="yungsextras"
+    version="1.20-Forge-4.0.3"
+    displayName="YUNG's Extras"
+    credits="Thanks so much to all my patrons!"
+    authors="YUNGNICKYOUNG, Acarii"
+    description="Extra structures and vanilla+ content added throughout the game!"
+    logoFile="logo.png"
+    displayURL="https://www.curseforge.com/minecraft/mc-mods/yungs-extras"
+
+[modproperties.yungsextras]
+    catalogueImageIcon="icon.png"
+    catalogueBackground="catalogue_background.png"
+
+[[dependencies.yungsextras]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20,1.21)"
+
+[[dependencies.yungsextras]]
+    modId="forge"
+    mandatory=true
+    versionRange="[46.0.2,)"
+
+[[dependencies.yungsextras]]
+    modId="yungsapi"
+    versionRange="[1.20-Forge-4.0.1,)"
+    mandatory=true
+    ordering="NONE"
+    side="BOTH"
