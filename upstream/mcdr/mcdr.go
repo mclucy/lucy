@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -36,11 +35,11 @@ func (s provider) Search(
 	query string,
 	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
-	if options.Platform != types.Mcdr && options.Platform != types.AllPlatform {
+	if options.FilterPlatform != types.Mcdr && options.FilterPlatform != types.AllPlatform {
 		return nil, fmt.Errorf(
 			"invalid search platform: expected %s, got %s",
 			types.Mcdr,
-			options.Platform,
+			options.FilterPlatform,
 		)
 	}
 	res, err = search(query)
@@ -115,7 +114,6 @@ func (s provider) ParseAmbiguousVersion(id types.PackageId) (
 			return id, err
 		}
 	case types.LatestCompatibleVersion:
-		_ = probe.ServerInfo()
 		panic("implement me")
 	default:
 		return id, fmt.Errorf(

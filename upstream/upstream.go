@@ -44,7 +44,7 @@ func Dependencies(
 	id types.PackageId,
 ) (deps *types.PackageDependencies, err error) {
 	// TODO: Implement
-	return nil, fmt.Errorf("%w: %s", ErrorSourceNotSupported, provider)
+	panic("not implemented")
 }
 
 func PlatformSupport(src types.Source, name types.ProjectName) (
@@ -78,7 +78,7 @@ func Search(
 	}
 	res = raw.ToSearchResults()
 	if len(res.Projects) == 0 {
-		return res, ErrorNoResults
+		return res, fmt.Errorf("no projects found for \"%s\"", query)
 	}
 	return res, nil
 }

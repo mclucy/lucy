@@ -20,9 +20,9 @@ func (s SearchSort) Valid() bool {
 }
 
 type SearchOptions struct {
-	IncludeClient bool
-	SortBy        SearchSort
-	Platform      Platform
+	IncludeClient  bool
+	SortBy         SearchSort
+	FilterPlatform Platform
 }
 
 type SearchResults struct {

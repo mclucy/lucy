@@ -11,7 +11,6 @@ import (
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 
 	"github.com/urfave/cli/v3"
@@ -54,16 +53,13 @@ var subcmdSearch = &cli.Command{
 }
 
 var actionSearch cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
+_ context.Context,
+cmd *cli.Command,
 ) error {
 	p := syntax.Parse(cmd.Args().First())
-
-	showClientPackage := cmd.Bool("client")
-	indexBy := types.SearchSort(cmd.String("index"))
 	options := types.SearchOptions{
-		IncludeClient: showClientPackage,
-		SortBy:        indexBy,
+		IncludeClient: cmd.Bool("client"),
+		SortBy:        types.SearchSort(cmd.String("index")),
 	}
 	sourceArg := cmd.String("source")
 	specifiedSource := types.ParseSource(sourceArg)
@@ -78,21 +74,17 @@ var actionSearch cli.ActionFunc = func(
 		logger.Fatal(fmt.Errorf("%w: %s", err, errArg))
 	}
 
-	results, providerErrors := routing.SearchMany(providers, p.Name, options)
-
-	for _, providerErr := range providerErrors {
+	results, errs := routing.SearchMany(providers, p.Name, options)
+	for _, err := range errs {
 		if specifiedSource == types.SourceAuto && len(providers) > 1 {
 			logger.ReportWarn(
 				fmt.Errorf(
 					"search on %s failed: %w",
-					providerErr.Source.Title(),
-					providerErr.Err,
+					err.Source.Title(),
+					err.Err,
 				),
 			)
 			continue
-		}
-		if !errors.Is(providerErr.Err, upstream.ErrorNoResults) {
-			logger.Fatal(providerErr.Err)
 		}
 	}
 
@@ -100,18 +92,14 @@ var actionSearch cli.ActionFunc = func(
 		appendToSearchOutput(out, cmd.Bool("long"), res)
 	}
 
-	if len(results) == 0 {
-		logger.ShowInfo("no results found")
-	}
-
 	tui.Flush(out)
 	return nil
 }
 
 func appendToSearchOutput(
-	out *tui.Data,
-	showAll bool,
-	res types.SearchResults,
+out *tui.Data,
+showAll bool,
+res types.SearchResults,
 ) {
 	var results []string
 	for _, r := range res.Projects {

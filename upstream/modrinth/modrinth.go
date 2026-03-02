@@ -40,25 +40,23 @@ func (s provider) Search(
 	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
 	var facets []facetItems
-	switch options.Platform {
+	switch options.FilterPlatform {
 	case types.Forge:
-		facets = append(facets, facetForge)
+		facets = append(facets, facetForgeOnly)
 	case types.Fabric:
-		facets = append(facets, facetFabric)
+		facets = append(facets, facetFabricOnly)
 	case types.AllPlatform:
 		fallthrough
 	default:
-		facets = append(facets, facetForge, facetAllLoaders)
+		facets = append(facets, facetAllLoaders)
 	}
 
-	if options.IncludeClient {
-		facets = append(facets, facetServerSupported, facetClientSupported)
-	} else {
+	if !options.IncludeClient {
 		facets = append(facets, facetServerSupported)
 	}
 
 	internalOptions := searchOptions{
-		index:  toModrinthSearchSort(options.SortBy),
+		index:  modrinthSearchSortingString(options.SortBy),
 		facets: facets,
 	}
 	searchUrl := searchUrl(types.ProjectName(query), internalOptions)
@@ -138,7 +136,7 @@ func (s provider) ParseAmbiguousVersion(p types.PackageId) (
 
 	switch p.Version {
 	case types.LatestCompatibleVersion:
-		v, err = LatestCompatibleVersion(p.Name)
+		v, err = latestCompatibleVersion(p.Name)
 	case types.AllVersion, types.NoVersion, types.LatestVersion:
 		v, err = latestVersion(p.Name)
 	default:

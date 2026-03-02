@@ -114,7 +114,7 @@ func latestVersion(slug types.ProjectName) (
 	return v, nil
 }
 
-func LatestCompatibleVersion(slug types.ProjectName) (
+func latestCompatibleVersion(slug types.ProjectName) (
 	v *versionResponse,
 	err error,
 ) {

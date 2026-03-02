@@ -142,6 +142,17 @@ func FetchMany(
 	return results, providerErrors
 }
 
+// FirstFetch executes fetch on all providers in parallel and returns the first
+// successful result.
+func FirstFetch(
+	providers []upstream.Provider,
+	id types.PackageId,
+) (types.PackageRemote, []ProviderError, error) {
+	// TODO: implement this function in a way that doesn't wait for all providers
+	//  to finish if one has already succeeded
+	panic("not implemented")
+}
+
 // FirstInfo executes info+fetch on all providers in parallel and returns the
 // first successful result.
 func FirstInfo(

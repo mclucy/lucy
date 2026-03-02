@@ -10,7 +10,6 @@ import (
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 
 	"github.com/urfave/cli/v3"
@@ -65,21 +64,18 @@ var actionInfo cli.ActionFunc = func(
 		)
 	}
 
-	if err == nil {
-		p.Information, p.Remote = &infoResult.Information, &infoResult.Remote
-		out = infoOutput(p, cmd.Bool(flagLongOutput.Name))
+	if err != nil {
+		logger.Fatal(fmt.Errorf("failed to get information: %w", err))
 	}
 
-	if out == nil {
-		err = fmt.Errorf("%w: %s", upstream.ErrorNoPackage, id.StringFull())
-		logger.ReportError(err)
-		return err
-	}
+	p.Information, p.Remote = &infoResult.Information, &infoResult.Remote
+	out = infoOutput(p, cmd.Bool(flagLongOutput.Name))
+
 	if cmd.Bool(flagJsonOutput.Name) {
 		tools.PrintAsJson(p)
-		return nil
+	} else {
+		tui.Flush(out)
 	}
-	tui.Flush(out)
 	return nil
 }
 

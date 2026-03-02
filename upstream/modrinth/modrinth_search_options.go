@@ -143,7 +143,7 @@ var facetAllLoaders = facetItems{
 	},
 }
 
-var facetForge = facetItems{
+var facetForgeOnly = facetItems{
 	{
 		Type:      "categories",
 		Operation: operationEq,
@@ -151,7 +151,7 @@ var facetForge = facetItems{
 	},
 }
 
-var facetFabric = facetItems{
+var facetFabricOnly = facetItems{
 	{
 		Type:      "categories",
 		Operation: operationEq,
