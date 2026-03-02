@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/mclucy/lucy/remote"
-	"github.com/mclucy/lucy/remote/source"
-	"github.com/mclucy/lucy/types"
-
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
+	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream/routing"
 
 	"github.com/urfave/cli/v3"
 )
@@ -28,7 +26,7 @@ var subcmdSearch = &cli.Command{
 			Usage:   "Index search results by `INDEX`",
 			Value:   "relevance",
 			Validator: func(s string) error {
-				if types.SearchIndex(s).Valid() {
+				if types.SearchSort(s).Valid() {
 					return nil
 				}
 				return errors.New("must be one of \"relevance\", \"downloads\",\"newest\"")
@@ -54,101 +52,44 @@ var subcmdSearch = &cli.Command{
 	),
 }
 
-var (
-	errorUnknownSource     = errors.New("unknown specified source")
-	errorUnsupportedSource = errors.New("unsupported source")
-	errorInvalidPlatform   = errors.New("invalid platform")
-)
-
 var actionSearch cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
+_ context.Context,
+cmd *cli.Command,
 ) error {
 	p := syntax.Parse(cmd.Args().First())
-
-	showClientPackage := cmd.Bool("client")
-	indexBy := types.SearchIndex(cmd.String("index"))
 	options := types.SearchOptions{
-		ShowClientPackage: showClientPackage,
-		IndexBy:           indexBy,
+		IncludeClient: cmd.Bool("client"),
+		SortBy:        types.SearchSort(cmd.String("index")),
 	}
-	sourceStr := cmd.String("source")
-	src := types.StringToSource(sourceStr)
+	sourceArg := cmd.String("source")
+	specifiedSource := types.ParseSource(sourceArg)
 
 	out := &tui.Data{}
-	res := types.SearchResults{}
-	var err error
+	providers, err := routing.ResolveProviders(p.Platform, specifiedSource)
+	if err != nil {
+		errArg := sourceArg
+		if specifiedSource == types.SourceAuto {
+			errArg = p.Platform.String()
+		}
+		logger.Fatal(fmt.Errorf("%w: %s", err, errArg))
+	}
 
-	if src == types.AutoSource {
-		switch p.Platform {
-		case types.AllPlatform:
-			for _, sourceHandler := range source.All {
-				res, err = remote.Search(sourceHandler, p.Name, options)
-				if err != nil {
-					logger.ReportWarn(
-						fmt.Errorf(
-							"search on %s failed: %w",
-							sourceHandler.Name().Title(),
-							err,
-						),
-					)
-					continue
-				}
-				appendToSearchOutput(out, cmd.Bool("long"), res)
-			}
-		case types.Forge, types.Fabric, types.Neoforge:
-			res, err = remote.Search(source.Modrinth, p.Name, options)
-			if err != nil && !errors.Is(err, remote.ErrorNoResults) {
-				logger.Fatal(err)
-			}
-			appendToSearchOutput(out, cmd.Bool("long"), res)
-		case types.Mcdr:
-			res, err = remote.Search(source.Mcdr, p.Name, options)
-			if err != nil && !errors.Is(err, remote.ErrorNoResults) {
-				logger.Fatal(err)
-			}
-			appendToSearchOutput(out, cmd.Bool("long"), res)
-		case types.UnknownPlatform:
-			logger.Fatal(
+	results, errs := routing.SearchMany(providers, p.Name, options)
+	for _, err := range errs {
+		if specifiedSource == types.SourceAuto && len(providers) > 1 {
+			logger.ReportWarn(
 				fmt.Errorf(
-					"%w: %s",
-					errorInvalidPlatform,
-					p.Platform,
+					"search on %s failed: %w",
+					err.Source.Title(),
+					err.Err,
 				),
 			)
-		}
-	} else {
-		if src == types.UnknownSource {
-			logger.Fatal(
-				fmt.Errorf(
-					"%w: %s",
-					errorUnknownSource,
-					sourceStr,
-				),
-			)
-		}
-		sourceHandler, ok := source.Map[src]
-		if !ok {
-			logger.Fatal(
-				fmt.Errorf(
-					"%w: %s",
-					errorUnsupportedSource,
-					src.Title(),
-				),
-			)
-		}
-		res, err = remote.Search(
-			sourceHandler,
-			p.Name,
-			options,
-		)
-		if err != nil && !errors.Is(err, remote.ErrorNoResults) {
-			logger.Fatal(err)
+			continue
 		}
 	}
 
-	if errors.Is(err, remote.ErrorNoResults) {
-		logger.ShowInfo("no results found")
+	for _, res := range results {
+		appendToSearchOutput(out, cmd.Bool("long"), res)
 	}
 
 	tui.Flush(out)
@@ -156,12 +97,12 @@ var actionSearch cli.ActionFunc = func(
 }
 
 func appendToSearchOutput(
-	out *tui.Data,
-	showAll bool,
-	res types.SearchResults,
+out *tui.Data,
+showAll bool,
+res types.SearchResults,
 ) {
 	var results []string
-	for _, r := range res.Results {
+	for _, r := range res.Projects {
 		results = append(results, r.String())
 	}
 
@@ -181,7 +122,7 @@ func appendToSearchOutput(
 		},
 	)
 
-	if res.Source == types.Modrinth && len(res.Results) == 100 {
+	if res.Source == types.SourceModrinth && len(res.Projects) == 100 {
 		out.Fields = append(
 			out.Fields,
 			&tui.FieldAnnotation{
@@ -194,7 +135,7 @@ func appendToSearchOutput(
 		out.Fields,
 		&tui.FieldShortText{
 			Title: "#  ",
-			Text:  strconv.Itoa(len(res.Results)),
+			Text:  strconv.Itoa(len(res.Projects)),
 		},
 		&tui.FieldDynamicColumnLabels{
 			Title:  ">>>",

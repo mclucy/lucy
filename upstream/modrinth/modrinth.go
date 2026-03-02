@@ -1,6 +1,6 @@
-// Package modrinth provides functions to interact with Modrinth API
+// Package modrinth provides functions to interact with Modrinth API.
 //
-// We here use Modrinth terms in private functions:
+// We use Modrinth terms in private functions:
 //   - project: A project is a mod, plugin, or resource pack.
 //   - Version: A version is a release, beta, or alpha version of a project.
 //
@@ -17,50 +17,46 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/mclucy/lucy/tools"
-
-	"github.com/mclucy/lucy/remote"
-	"github.com/mclucy/lucy/types"
-
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
-type self struct{}
+type provider struct{}
 
-func (s self) Name() types.Source {
-	return types.Modrinth
+func (s provider) Source() types.Source {
+	return types.SourceModrinth
 }
 
-var Self self
+var Provider provider
 
 // Search
 //
 // For Modrinth search API, see:
 // https://docs.modrinth.com/api/operations/searchprojects/
-func (s self) Search(
+func (s provider) Search(
 	query string,
 	options types.SearchOptions,
-) (res remote.RawSearchResults, err error) {
+) (res upstream.RawSearchResults, err error) {
 	var facets []facetItems
-	switch options.Platform {
+	switch options.FilterPlatform {
 	case types.Forge:
-		facets = append(facets, facetForge)
+		facets = append(facets, facetForgeOnly)
 	case types.Fabric:
-		facets = append(facets, facetFabric)
+		facets = append(facets, facetFabricOnly)
 	case types.AllPlatform:
 		fallthrough
 	default:
-		facets = append(facets, facetForge, facetAllLoaders)
+		facets = append(facets, facetAllLoaders)
 	}
 
-	if options.ShowClientPackage {
-		facets = append(facets, facetServerSupported, facetClientSupported)
-	} else {
+	if !options.IncludeClient {
 		facets = append(facets, facetServerSupported)
 	}
 
 	internalOptions := searchOptions{
-		index:  options.IndexBy.ToModrinth(),
+		index:  modrinthSearchSortingString(options.SortBy),
 		facets: facets,
 	}
 	searchUrl := searchUrl(types.ProjectName(query), internalOptions)
@@ -84,8 +80,8 @@ func (s self) Search(
 	return res, nil
 }
 
-func (s self) Fetch(id types.PackageId) (
-	remote remote.RawPackageRemote,
+func (s provider) Fetch(id types.PackageId) (
+	remote upstream.RawPackageRemote,
 	err error,
 ) {
 	id, err = s.ParseAmbiguousVersion(id)
@@ -96,8 +92,8 @@ func (s self) Fetch(id types.PackageId) (
 	return version, nil
 }
 
-func (s self) Information(name types.ProjectName) (
-	info remote.RawProjectInformation,
+func (s provider) Information(name types.ProjectName) (
+	info upstream.RawProjectInformation,
 	err error,
 ) {
 	project, err := getProjectByName(name)
@@ -109,8 +105,8 @@ func (s self) Information(name types.ProjectName) (
 
 // Support from Modrinth API is extremely unreliable. A local check (if any
 // files were downloaded) is recommended.
-func (s self) Support(name types.ProjectName) (
-	supports remote.RawProjectSupport,
+func (s provider) Support(name types.ProjectName) (
+	supports upstream.RawProjectSupport,
 	err error,
 ) {
 	project, err := getProjectByName(name)
@@ -122,15 +118,15 @@ func (s self) Support(name types.ProjectName) (
 
 var ErrInvalidAPIResponse = errors.New("invalid data from modrinth api")
 
-func (s self) Dependencies(id types.PackageId) (
-	deps remote.RawPackageDependencies,
+func (s provider) Dependencies(id types.PackageId) (
+	deps upstream.RawPackageDependencies,
 	err error,
 ) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s self) ParseAmbiguousVersion(p types.PackageId) (
+func (s provider) ParseAmbiguousVersion(p types.PackageId) (
 	parsed types.PackageId,
 	err error,
 ) {
@@ -140,7 +136,7 @@ func (s self) ParseAmbiguousVersion(p types.PackageId) (
 
 	switch p.Version {
 	case types.LatestCompatibleVersion:
-		v, err = LatestCompatibleVersion(p.Name)
+		v, err = latestCompatibleVersion(p.Name)
 	case types.AllVersion, types.NoVersion, types.LatestVersion:
 		v, err = latestVersion(p.Name)
 	default:
