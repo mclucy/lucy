@@ -5,18 +5,18 @@ import (
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/remote"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
-type self struct{}
+type provider struct{}
 
-func (s self) Name() types.Source {
-	return types.McdrCatalogue
+func (s provider) Source() types.Source {
+	return types.SourceMCDR
 }
 
-var Self self
+var Provider provider
 
 // Just a trivial type to implement the SearchResults interface
 type mcdrSearchResult []string
@@ -24,18 +24,18 @@ type mcdrSearchResult []string
 func (m mcdrSearchResult) ToSearchResults() types.SearchResults {
 	var res types.SearchResults
 	for _, id := range m {
-		res.Results = append(res.Results, syntax.ToProjectName(id))
+		res.Projects = append(res.Projects, syntax.ToProjectName(id))
 	}
-	res.Source = types.McdrCatalogue
+	res.Source = types.SourceMCDR
 	return res
 }
 
 // TODO: handle search options
 
-func (s self) Search(
+func (s provider) Search(
 	query string,
 	options types.SearchOptions,
-) (res remote.RawSearchResults, err error) {
+) (res upstream.RawSearchResults, err error) {
 	if options.Platform != types.Mcdr && options.Platform != types.AllPlatform {
 		return nil, fmt.Errorf(
 			"invalid search platform: expected %s, got %s",
@@ -47,8 +47,8 @@ func (s self) Search(
 	return
 }
 
-func (s self) Fetch(id types.PackageId) (
-	rem remote.RawPackageRemote,
+func (s provider) Fetch(id types.PackageId) (
+	rem upstream.RawPackageRemote,
 	err error,
 ) {
 	if id.Version.NeedsInfer() {
@@ -61,8 +61,8 @@ func (s self) Fetch(id types.PackageId) (
 	return
 }
 
-func (s self) Information(name types.ProjectName) (
-	info remote.RawProjectInformation,
+func (s provider) Information(name types.ProjectName) (
+	info upstream.RawProjectInformation,
 	err error,
 ) {
 	plugin, err := getInfo(name.Pep8String())
@@ -87,23 +87,23 @@ func (s self) Information(name types.ProjectName) (
 	return info, nil
 }
 
-func (s self) Dependencies(id types.PackageId) (
-	remote.RawPackageDependencies,
+func (s provider) Dependencies(id types.PackageId) (
+	upstream.RawPackageDependencies,
 	error,
 ) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s self) Support(name types.ProjectName) (
-	supports remote.RawProjectSupport,
+func (s provider) Support(name types.ProjectName) (
+	supports upstream.RawProjectSupport,
 	err error,
 ) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s self) ParseAmbiguousVersion(id types.PackageId) (
+func (s provider) ParseAmbiguousVersion(id types.PackageId) (
 	parsed types.PackageId,
 	err error,
 ) {

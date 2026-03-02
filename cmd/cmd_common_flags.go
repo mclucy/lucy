@@ -33,7 +33,7 @@ var flagSource = &cli.StringFlag{
 	Usage:   "To fetch info from `SOURCE`",
 	Value:   "",
 	Validator: func(s string) error {
-		if types.StringToSource(s) == types.UnknownSource {
+		if types.ParseSource(s) == types.SourceUnknown {
 			return errors.New("unknown source " + s)
 		}
 		return nil

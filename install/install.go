@@ -5,9 +5,9 @@ import (
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/remote"
-	"github.com/mclucy/lucy/remote/source"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/routing"
 )
 
 type platformInstaller func(p types.Package) error
@@ -28,7 +28,7 @@ func Install(id types.PackageId, designatedSource types.Source) error {
 	// severPlatform := serverInfo.Executable.ModLoader
 	// hasMcdr := serverInfo.Environments.Mcdr != nil
 
-	sources := source.All // TODO: filter sources based on platform and user preference
+	sources := routing.ListAutoProviders() // TODO: filter sources based on platform and user preference
 
 	remoteCandidates, err := fetchFromSources(id, sources)
 	if err != nil {
@@ -82,8 +82,8 @@ func ensurePlatformMatch(platform types.Platform) error {
 	}
 }
 
-func fetchFromSources(id types.PackageId, sources []remote.SourceHandler) (
-	candidates []remote.RawPackageRemote,
+func fetchFromSources(id types.PackageId, sources []upstream.Provider) (
+	candidates []upstream.RawPackageRemote,
 	err error,
 ) {
 	for _, src := range sources {
@@ -101,8 +101,8 @@ func fetchFromSources(id types.PackageId, sources []remote.SourceHandler) (
 	return candidates, nil
 }
 
-func selectFromCandidates(candidates []remote.RawPackageRemote) (
-	remote.RawPackageRemote,
+func selectFromCandidates(candidates []upstream.RawPackageRemote) (
+	upstream.RawPackageRemote,
 	error,
 ) {
 	panic("not implemented yet")

@@ -40,5 +40,5 @@ var actionAdd cli.ActionFunc = func(
 		// compatible version, which is more likely what users want.
 		id.Version = types.LatestCompatibleVersion
 	}
-	return install.Install(id, types.AutoSource)
+	return install.Install(id, types.SourceAuto)
 }

@@ -184,13 +184,13 @@ type searchResultResponse struct {
 
 func (s *searchResultResponse) ToSearchResults() types.SearchResults {
 	res := types.SearchResults{
-		Source:  types.Modrinth,
-		Results: make([]types.ProjectName, 0, s.TotalHits),
+		Source:   types.SourceModrinth,
+		Projects: make([]types.ProjectName, 0, s.TotalHits),
 	}
 
 	// The hits should already be sorted by whatever index passed in.
 	for _, hit := range s.Hits {
-		res.Results = append(res.Results, syntax.ToProjectName(hit.Slug))
+		res.Projects = append(res.Projects, syntax.ToProjectName(hit.Slug))
 	}
 
 	return res
@@ -225,7 +225,7 @@ type versionResponse struct {
 
 func (v versionResponse) ToPackageRemote() types.PackageRemote {
 	remote := types.PackageRemote{
-		Source:   types.Modrinth,
+		Source:   types.SourceModrinth,
 		FileUrl:  v.Files[0].Url,
 		Filename: v.Files[0].Filename,
 	}

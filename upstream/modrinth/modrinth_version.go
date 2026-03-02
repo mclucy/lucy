@@ -43,7 +43,7 @@ func listVersions(slug types.ProjectName) (
 }
 
 // getVersion is named as so because a Package in lucy is equivalent to a version
-// in Modrinth.
+// in SourceModrinth.
 func getVersion(id types.PackageId) (
 	v *versionResponse,
 	err error,

@@ -26,7 +26,7 @@ func versionUrl(id string) (urlString string) {
 	return versionUrlPrefix + id
 }
 
-// projectUrl returns the URL for a project with the given Modrinth project id
+// projectUrl returns the URL for a project with the given SourceModrinth project id
 // or slug (package name).
 func projectUrl(suffix string) (urlString string) {
 	return projectUrlPrefix + string(suffix)

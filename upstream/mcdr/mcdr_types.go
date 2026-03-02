@@ -7,7 +7,7 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// GitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/plugins/{plugin_name}/plugin_info.json
+// SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/plugins/{plugin_name}/plugin_info.json
 // The purpose of this file is quite unclear to me.
 // For this project, meta.json under the meta branch is more handy.
 type pluginInfo struct {
@@ -28,7 +28,7 @@ type author struct {
 	Link string `json:"link"`
 }
 
-// GitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/{plugin_name}/release.json?ref=meta
+// SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/{plugin_name}/release.json?ref=meta
 type pluginRelease struct {
 	SchemaVersion      int       `json:"schema_version"`
 	Id                 string    `json:"id"`
@@ -49,7 +49,7 @@ type release struct {
 
 func (r release) ToPackageRemote() types.PackageRemote {
 	remote := types.PackageRemote{
-		Source:   types.McdrCatalogue,
+		Source:   types.SourceMCDR,
 		FileUrl:  r.Asset.BrowserDownloadUrl,
 		Filename: r.Asset.Name,
 	}
@@ -67,7 +67,7 @@ type asset struct {
 	HashSha256         string    `json:"hash_sha256"`
 }
 
-// GitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/meta.json?ref=meta
+// SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/meta.json?ref=meta
 type pluginMeta struct {
 	SchemaVersion int               `json:"schema_version"`
 	Id            string            `json:"id"`
@@ -83,7 +83,7 @@ type pluginMeta struct {
 	} `json:"description"`
 }
 
-// GitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/repository.json?ref=meta
+// SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/repository.json?ref=meta
 type pluginRepo struct {
 	Url             string `json:"url"`
 	Name            string `json:"name"`
@@ -104,7 +104,7 @@ type pluginRepo struct {
 	} `json:"license"`
 }
 
-// Internal struct to fulfill the remote.RawProjectInformation interface
+// Internal struct to fulfill the upstream.RawProjectInformation interface
 type rawProjectInformation struct {
 	Info       *pluginInfo
 	Meta       *pluginMeta
@@ -145,7 +145,7 @@ func (r rawProjectInformation) ToProjectInformation() types.ProjectInformation {
 			Type: types.UrlHome,
 			Url:  r.Meta.Link,
 		}, types.Url{
-			Name: "GitHub Repo",
+			Name: "SourceGitHub Repo",
 			Type: types.UrlSource,
 			Url:  r.Info.Repository,
 		},

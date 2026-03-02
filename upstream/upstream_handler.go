@@ -1,8 +1,17 @@
-package remote
+package upstream
 
 import "github.com/mclucy/lucy/types"
 
-type SourceHandler interface {
+// Provider is the inversion boundary between core upstream orchestration and
+// concrete upstream integrations.
+//
+// Rules:
+//   - Core code depends on this interface, never on concrete provider packages.
+//   - Provider packages implement this interface and perform upstream-specific
+//     API/data handling.
+//   - Source selection/fallback policy is handled by dedicated resolver logic
+//     outside this file.
+type Provider interface {
 	Search(query string, options types.SearchOptions) (
 		res RawSearchResults,
 		err error,
@@ -27,12 +36,11 @@ type SourceHandler interface {
 		parsed types.PackageId,
 		err error,
 	)
-	Name() types.Source
+	Source() types.Source
 }
 
-// Raw interfaces are designed for lazy evaluation and conversion to typed
-// structures only when necessary. More functionality can be added to these
-// interfaces as needed.
+// Raw interfaces are internal conversion contracts returned by providers before
+// being normalized into types.* structures.
 
 type (
 	RawProjectSupport interface {

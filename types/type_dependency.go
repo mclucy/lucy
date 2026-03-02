@@ -8,7 +8,7 @@ import (
 // use semver (which they should). A known exception is Minecraft snapshots.
 //
 // There are several special constants for ambiguous(adaptive) versions.
-// You MUST call remote.InferVersion() before parsing them to ComparableVersion.
+// You MUST call upstream.InferVersion() before parsing them to ComparableVersion.
 type RawVersion string
 
 func (v RawVersion) String() string {
@@ -138,7 +138,10 @@ func (d Dependency) Satisfy(id PackageId, v ComparableVersion) bool {
 		satisfied := true
 		for _, andStatements := range orStatements {
 			cmp := andStatements.Operator.Comparator()
-			if v == nil || andStatements.Value == nil || !cmp(v, andStatements.Value) {
+			if v == nil || andStatements.Value == nil || !cmp(
+				v,
+				andStatements.Value,
+			) {
 				satisfied = false
 				break
 			}
@@ -223,14 +226,50 @@ func compareSemverWeakGt(p1, p2 ComparableVersion) bool {
 }
 
 var operatorFunctions = map[VersionOperator]VersionComparator{
-	OpEq:     func(p1, p2 ComparableVersion) bool { return compareByOperator(OpEq, p1, p2) },
+	OpEq: func(p1, p2 ComparableVersion) bool {
+		return compareByOperator(
+			OpEq,
+			p1,
+			p2,
+		)
+	},
 	OpWeakEq: compareSemverWeakEq,
-	OpNeq:    func(p1, p2 ComparableVersion) bool { return compareByOperator(OpNeq, p1, p2) },
-	OpGt:     func(p1, p2 ComparableVersion) bool { return compareByOperator(OpGt, p1, p2) },
+	OpNeq: func(p1, p2 ComparableVersion) bool {
+		return compareByOperator(
+			OpNeq,
+			p1,
+			p2,
+		)
+	},
+	OpGt: func(p1, p2 ComparableVersion) bool {
+		return compareByOperator(
+			OpGt,
+			p1,
+			p2,
+		)
+	},
 	OpWeakGt: compareSemverWeakGt,
-	OpGte:    func(p1, p2 ComparableVersion) bool { return compareByOperator(OpGte, p1, p2) },
-	OpLt:     func(p1, p2 ComparableVersion) bool { return compareByOperator(OpLt, p1, p2) },
-	OpLte:    func(p1, p2 ComparableVersion) bool { return compareByOperator(OpLte, p1, p2) },
+	OpGte: func(p1, p2 ComparableVersion) bool {
+		return compareByOperator(
+			OpGte,
+			p1,
+			p2,
+		)
+	},
+	OpLt: func(p1, p2 ComparableVersion) bool {
+		return compareByOperator(
+			OpLt,
+			p1,
+			p2,
+		)
+	},
+	OpLte: func(p1, p2 ComparableVersion) bool {
+		return compareByOperator(
+			OpLte,
+			p1,
+			p2,
+		)
+	},
 }
 
 const (

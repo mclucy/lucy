@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/mclucy/lucy/remote/source"
-
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/remote"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/routing"
 
 	"github.com/urfave/cli/v3"
 )
@@ -40,66 +39,39 @@ var actionInfo cli.ActionFunc = func(
 ) error {
 	id := syntax.Parse(cmd.Args().First())
 	p := id.NewPackage()
+	sourceArg := cmd.String(flagSourceName)
+	specifiedSource := types.ParseSource(sourceArg)
 
 	var out *tui.Data
-	var err error
 
-	switch id.Platform {
-	case types.AllPlatform:
-		for _, source := range source.All {
-			info, err := remote.Information(source, id.Name)
-			if err != nil {
-				continue
-			}
-			p.Information = &info
-
-			remote, err := remote.Fetch(source, id)
-			if err != nil {
-				continue
-			}
-			p.Remote = &remote
-			out = infoOutput(p, cmd.Bool(flagLongOutput.Name))
-			break
-		}
-
-	case types.Fabric, types.Forge:
-		info, err := remote.Information(source.Modrinth, id.Name)
-		if err != nil {
-			logger.ReportError(err)
-		}
-		p.Information = &info
-
-		remote, err := remote.Fetch(source.Modrinth, id)
-		p.Remote = &remote
-		if err != nil {
-			logger.ReportError(err)
-			return err
-		}
-		out = infoOutput(p, cmd.Bool(flagLongOutput.Name))
-	case types.Mcdr:
-		info, err := remote.Information(
-			source.Mcdr,
-			id.Name,
-		)
-		if err != nil {
-			logger.ReportWarn(err)
-			break
-		}
-		remote, err := remote.Fetch(source.Mcdr, id)
-		if err != nil {
-			logger.ReportWarn(err)
-			break
-		}
-		p.Information, p.Remote = &info, &remote
-		out = infoOutput(p, cmd.Bool(flagLongOutput.Name))
-	}
-
+	providers, err := routing.ResolveProviders(id.Platform, specifiedSource)
 	if err != nil {
-		logger.Warn(err)
+		errArg := sourceArg
+		if specifiedSource == types.SourceAuto {
+			errArg = id.Platform.String()
+		}
+		logger.ReportError(fmt.Errorf("%w: %s", err, errArg))
 		return err
 	}
+
+	infoResult, providerErrors, err := routing.FirstInfo(providers, id)
+	for _, providerErr := range providerErrors {
+		logger.ReportWarn(
+			fmt.Errorf(
+				"info on %s failed: %w",
+				providerErr.Source.Title(),
+				providerErr.Err,
+			),
+		)
+	}
+
+	if err == nil {
+		p.Information, p.Remote = &infoResult.Information, &infoResult.Remote
+		out = infoOutput(p, cmd.Bool(flagLongOutput.Name))
+	}
+
 	if out == nil {
-		err = fmt.Errorf("%w: %s", remote.ErrorNoPackage, id.StringFull())
+		err = fmt.Errorf("%w: %s", upstream.ErrorNoPackage, id.StringFull())
 		logger.ReportError(err)
 		return err
 	}
