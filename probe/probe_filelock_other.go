@@ -20,6 +20,14 @@ package probe
 
 import "github.com/mclucy/lucy/types"
 
-func checkServerFileLock() *types.ServerActivity {
+var checkServerFileLock = func() *types.ServerActivity {
 	return nil
+}
+
+func init() {
+	resetProbeFileLockCache = func() {
+		checkServerFileLock = func() *types.ServerActivity {
+			return nil
+		}
+	}
 }
