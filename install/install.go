@@ -165,7 +165,7 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 	serverPlatform := serverInfo.Executable.ModLoader
 
 	switch platform {
-	case types.AllPlatform:
+	case types.AnyPlatform:
 		return nil
 	case types.Mcdr:
 		if serverInfo.Environments.Mcdr == nil {
@@ -202,8 +202,8 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 }
 
 func selectFromCandidates(candidates []types.PackageRemote) (
-	selected *types.PackageRemote,
-	err error,
+selected *types.PackageRemote,
+err error,
 ) {
 	options := make([]huh.Option[types.PackageRemote], len(candidates))
 	for i, candidate := range candidates {

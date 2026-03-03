@@ -73,7 +73,7 @@ func ResolveProviders(
 	}
 
 	switch platform {
-	case types.AllPlatform:
+	case types.AnyPlatform:
 		return ListAutoProviders(), nil
 	case types.Forge, types.Fabric, types.Neoforge:
 		return []upstream.Provider{modrinth.Provider}, nil

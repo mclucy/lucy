@@ -35,7 +35,7 @@ func (s provider) Search(
 	query string,
 	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
-	if options.FilterPlatform != types.Mcdr && options.FilterPlatform != types.AllPlatform {
+	if options.FilterPlatform != types.Mcdr && options.FilterPlatform != types.AnyPlatform {
 		return nil, fmt.Errorf(
 			"invalid search platform: expected %s, got %s",
 			types.Mcdr,

@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	registerInstaller(types.AllPlatform, installGenericPackage)
+	registerInstaller(types.AnyPlatform, installGenericPackage)
 }
 
 func installGenericPackage(p types.Package) error {
