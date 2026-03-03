@@ -36,7 +36,7 @@ import (
 )
 
 func buildServerFileLockStatus() *types.ServerActivity {
-	var inactive = &types.ServerActivity{Active: false, Pid: 0}
+	inactive := &types.ServerActivity{Active: false, Pid: 0}
 
 	if savePath() == "" {
 		return inactive

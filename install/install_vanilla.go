@@ -37,7 +37,10 @@ func installMinecraftServer(id types.PackageId) error {
 		return err
 	}
 
-	versionId, versionURL, err := resolveMinecraftVersionEntry(manifest, id.Version)
+	versionId, versionURL, err := resolveMinecraftVersionEntry(
+		manifest,
+		id.Version,
+	)
 	if err != nil {
 		return err
 	}
@@ -63,13 +66,19 @@ func installMinecraftServer(id types.PackageId) error {
 		return err
 	}
 
-	serverJar, data, err := util.DownloadFile(detail.Downloads.Server.Url, workPath)
+	serverJar, data, err := util.DownloadFile(
+		detail.Downloads.Server.Url,
+		workPath,
+	)
 	if err != nil {
 		return fmt.Errorf("download minecraft server jar failed: %w", err)
 	}
 	defer func() { _ = serverJar.Close() }()
 
-	if err := verifyMojangDownloadSha1(data, detail.Downloads.Server.Sha1); err != nil {
+	if err := verifyMojangDownloadSha1(
+		data,
+		detail.Downloads.Server.Sha1,
+	); err != nil {
 		return err
 	}
 	if err := addExecutePermission(serverJar); err != nil {
@@ -141,7 +150,10 @@ func resolveMinecraftVersionEntry(
 func fetchMojangVersionDetail(versionURL string) (*mojangVersionDetail, error) {
 	resp, err := http.Get(versionURL)
 	if err != nil {
-		return nil, fmt.Errorf("fetch minecraft version metadata failed: %w", err)
+		return nil, fmt.Errorf(
+			"fetch minecraft version metadata failed: %w",
+			err,
+		)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -154,12 +166,18 @@ func fetchMojangVersionDetail(versionURL string) (*mojangVersionDetail, error) {
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read minecraft version metadata failed: %w", err)
+		return nil, fmt.Errorf(
+			"read minecraft version metadata failed: %w",
+			err,
+		)
 	}
 
 	detail := &mojangVersionDetail{}
 	if err := json.Unmarshal(data, detail); err != nil {
-		return nil, fmt.Errorf("parse minecraft version metadata failed: %w", err)
+		return nil, fmt.Errorf(
+			"parse minecraft version metadata failed: %w",
+			err,
+		)
 	}
 
 	return detail, nil
@@ -256,7 +274,10 @@ func addExecutePermission(file *os.File) error {
 	}
 
 	if err := file.Chmod(mode | 0o111); err != nil {
-		return fmt.Errorf("set execute permission on server jar failed: %w", err)
+		return fmt.Errorf(
+			"set execute permission on server jar failed: %w",
+			err,
+		)
 	}
 
 	return nil
