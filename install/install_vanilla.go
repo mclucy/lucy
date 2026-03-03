@@ -72,6 +72,9 @@ func installMinecraftServer(id types.PackageId) error {
 	if err := verifyMojangDownloadSha1(data, detail.Downloads.Server.Sha1); err != nil {
 		return err
 	}
+	if err := addExecutePermission(serverJar); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -238,5 +241,23 @@ func writeMinecraftEULAFile(workPath string) error {
 	if err != nil {
 		return fmt.Errorf("write eula.txt failed: %w", err)
 	}
+	return nil
+}
+
+func addExecutePermission(file *os.File) error {
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("read server jar file mode failed: %w", err)
+	}
+
+	mode := info.Mode()
+	if mode&0o111 == 0o111 {
+		return nil
+	}
+
+	if err := file.Chmod(mode | 0o111); err != nil {
+		return fmt.Errorf("set execute permission on server jar failed: %w", err)
+	}
+
 	return nil
 }
