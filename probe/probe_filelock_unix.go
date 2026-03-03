@@ -36,8 +36,10 @@ import (
 )
 
 func buildServerFileLockStatus() *types.ServerActivity {
+	var inactive = &types.ServerActivity{Active: false, Pid: 0}
+
 	if savePath() == "" {
-		return nil
+		return inactive
 	}
 
 	lockPath := path.Join(
@@ -46,27 +48,22 @@ func buildServerFileLockStatus() *types.ServerActivity {
 	)
 	// Try lsof before using the file lock check. As the file lock check is
 	// tested to be unstable on linux (Ubuntu 20.04, Linux 5.15.0-48-generic).
-	pid, err := lsof(lockPath)
-	if err != nil {
-		return nil
-	}
+	pid, _ := lsof(lockPath)
 	if pid != 0 {
-		return &types.ServerActivity{
-			Active: true,
-			Pid:    pid,
-		}
+		return &types.ServerActivity{Active: true, Pid: pid}
 	}
 
 	file, err := os.OpenFile(lockPath, os.O_RDWR|os.O_APPEND, 0o666)
 	defer tools.CloseReader(file, logger.Warn)
-	if err != nil {
-		logger.Warn(err)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		return inactive
+	} else if err != nil {
 		return nil
 	}
 
 	logger.Debug("checking lock on: " + file.Name())
 	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-	if errors.Is(err, syscall.EWOULDBLOCK) {
+	if err != nil && errors.Is(err, syscall.EWOULDBLOCK) {
 		logger.Debug("found a lock on the file: " + err.Error())
 		fl := syscall.Flock_t{
 			Type: syscall.F_WRLCK,
@@ -76,28 +73,20 @@ func buildServerFileLockStatus() *types.ServerActivity {
 			fmt.Errorf("activity detected but cannot get pid: %w", err),
 		)
 		if err != nil {
-			return &types.ServerActivity{
-				Active: true,
-				Pid:    0,
-			}
+			return &types.ServerActivity{Active: true, Pid: 0}
 		}
-		return &types.ServerActivity{
-			Active: true,
-			Pid:    int(fl.Pid),
-		}
+		return &types.ServerActivity{Active: true, Pid: int(fl.Pid)}
 	} else if err != nil {
 		return nil
 	}
+
 	logger.Debug("no lock found on the file: " + file.Name())
 	err = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
 	if err != nil {
 		logger.Warn(err)
 	}
 
-	return &types.ServerActivity{
-		Active: false,
-		Pid:    0,
-	}
+	return inactive
 }
 
 var checkServerFileLock = tools.Memoize(buildServerFileLockStatus)
