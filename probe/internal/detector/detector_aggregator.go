@@ -11,7 +11,13 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-var UnknownExecutable = &types.ExecutableInfo{}
+var UnknownExecutable = &types.ExecutableInfo{
+	Path:          "",
+	GameVersion:   types.UnknownVersion,
+	ModLoader:     types.UnknownPlatform,
+	LoaderVersion: types.UnknownVersion,
+	BootCommand:   nil,
+}
 
 // Executable analyzes a JAR file using all registered detectors
 // and returns the first successful match (in registration order).
