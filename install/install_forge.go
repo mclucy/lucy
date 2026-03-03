@@ -41,17 +41,14 @@ func init() {
 }
 
 func installForgeMod(p types.Package) error {
-	if isForgeInstallerPackage(p.Id.Name) {
-		return installForge(p)
-	}
 	return installModLoaderPackage(p, types.Forge)
 }
 
-func installForge(p types.Package) error {
+func installForge(p types.PackageId) error {
+
+	panic("Forge installation is not implemented yet")
+
 	fileURL := ""
-	if p.Remote != nil {
-		fileURL = p.Remote.FileUrl
-	}
 
 	serverInfo := probe.ServerInfo()
 	if serverInfo.WorkPath == "" {
