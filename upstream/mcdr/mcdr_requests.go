@@ -97,7 +97,7 @@ func getRelease(id string, version types.RawVersion) (*release, error) {
 		return nil, err
 	}
 
-	if version == types.LatestVersion {
+	if version == types.VersionLatest {
 		return &history.Releases[history.LatestVersionIndex], nil
 	}
 

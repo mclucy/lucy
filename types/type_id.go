@@ -109,7 +109,7 @@ func (p PackageId) String() string {
 	) +
 		string(p.Name) +
 		tools.Ternary(
-			p.Version == AllVersion,
+			p.Version == VersionAny,
 			"",
 			"@"+string(p.Version),
 		)
@@ -127,46 +127,27 @@ func (p PackageId) StringPlatformName() string {
 	return string(p.Platform) + "/" + string(p.Name)
 }
 
-var identityPackages = map[ProjectName]struct{}{
-	"minecraft":     {},
-	"fabric-loader": {},
-	"fabric":        {},
-	"forge":         {},
-	"neoforge":      {},
-	"mcdreforged":   {},
-	"mcdr":          {},
-}
-
-var identityPackagesByPlatform = map[Platform]map[ProjectName]struct{}{
-	Minecraft: {
-		"minecraft": {},
-	},
-	Fabric: {
-		"fabric-loader": {},
-		"fabric":        {},
-	},
-	Forge: {
-		"forge": {},
-	},
-	Neoforge: {
-		"neoforge": {},
-	},
-	Mcdr: {
-		"mcdreforged": {},
-		"mcdr":        {},
-	},
+var platformByIdentityPackage = map[ProjectName]Platform{
+	"minecraft":     Minecraft,
+	"mc":            Minecraft,
+	"fabric":        Fabric,
+	"fabric-loader": Fabric,
+	"forge":         Forge,
+	"neoforge":      Neoforge,
+	"mcdreforged":   Mcdr,
+	"mcdr":          Mcdr,
 }
 
 var canonicalIdentityPackageByPlatform = map[Platform]ProjectName{
 	Minecraft: "minecraft",
-	Fabric:    "fabric-loader",
+	Fabric:    "fabric",
 	Forge:     "forge",
 	Neoforge:  "neoforge",
 	Mcdr:      "mcdreforged",
 }
 
 func (p PackageId) IsIdentityPackage() bool {
-	_, exists := identityPackages[p.Name]
+	_, exists := platformByIdentityPackage[p.Name]
 	return exists
 }
 
@@ -177,18 +158,13 @@ func (p PackageId) IsValidIdentityPackage() error {
 
 	ErrInvalidPlatformPackage := func(p PackageId) error {
 		return fmt.Errorf(
-			"mismatch in platform specifier: %s under %s",
+			"mismatch in an identity package: %s under %s",
 			p.Name,
 			p.Platform,
 		)
 	}
 
-	platformPackages, exists := identityPackagesByPlatform[p.Platform]
-	if !exists {
-		return nil
-	}
-
-	if _, valid := platformPackages[p.Name]; !valid {
+	if _, valid := platformByIdentityPackage[p.Name]; !valid {
 		return ErrInvalidPlatformPackage(p)
 	}
 
@@ -201,13 +177,14 @@ func (p PackageId) NormalizeIdentityPackage() PackageId {
 	}
 
 	canonicalName, exists := canonicalIdentityPackageByPlatform[p.Platform]
-	if !exists || p.Name == canonicalName {
+	if exists || p.Name == canonicalName {
 		return p
 	}
 
-	return PackageId{
-		Platform: p.Platform,
-		Name:     canonicalName,
-		Version:  p.Version,
+	p.Name = canonicalName
+	if p.Version.CanInfer() {
+		p.Version = VersionCompatible
 	}
+
+	return p
 }

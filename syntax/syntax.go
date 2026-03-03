@@ -89,10 +89,10 @@ func parseOperatorAt(s string) (
 	}
 
 	if len(split) == 1 {
-		v = types.AllVersion
+		v = types.VersionAny
 	} else if len(split) == 2 {
 		v = types.RawVersion(split[1])
-		if v == types.NoVersion || v == types.AllVersion {
+		if v == types.VersionNone || v == types.VersionAny {
 			return "", "", "", ESyntax
 		}
 	} else {

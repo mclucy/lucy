@@ -18,7 +18,7 @@ func Parse(
 	scheme types.VersionScheme,
 ) types.ComparableVersion {
 	switch raw {
-	case types.LatestVersion, types.LatestCompatibleVersion, types.NoVersion, types.AllVersion, types.UnknownVersion:
+	case types.VersionLatest, types.VersionCompatible, types.VersionNone, types.VersionAny, types.VersionUnknown:
 		logger.Error(
 			fmt.Errorf("attempting to parse an ambiguous version: %s", raw),
 		)

@@ -24,7 +24,7 @@ func analyzeForgeArgFile(file *os.File) (
 				forgeVersion = types.RawVersion(split[1])
 				continue
 			}
-			forgeVersion = types.UnknownVersion
+			forgeVersion = types.VersionUnknown
 		}
 		if strings.HasPrefix(line, "--fml.mcVersion") {
 			split := strings.Split(line, " ")
@@ -32,7 +32,7 @@ func analyzeForgeArgFile(file *os.File) (
 				mcVersion = types.RawVersion(split[1])
 				continue
 			}
-			mcVersion = types.UnknownVersion
+			mcVersion = types.VersionUnknown
 		}
 	}
 
