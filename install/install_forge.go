@@ -37,11 +37,11 @@ type forgePromotions struct {
 }
 
 func init() {
-	registerInstaller(types.Forge, installForgeMod)
+	registerInstaller(types.PlatformForge, installForgeMod)
 }
 
 func installForgeMod(p types.Package) error {
-	return installModLoaderPackage(p, types.Forge)
+	return installModLoaderPackage(p, types.PlatformForge)
 }
 
 func installForge(p types.PackageId) error {

@@ -29,11 +29,11 @@ const (
 // InferRangeDialect infers the range dialect from package platform.
 func InferRangeDialect(platform types.Platform) VersionRangeDialect {
 	switch platform {
-	case types.Mcdr:
+	case types.PlatformMCDR:
 		return DialectNpmSemver
-	case types.Fabric:
+	case types.PlatformFabric:
 		return DialectFabricSemver
-	case types.Forge, types.Neoforge:
+	case types.PlatformForge, types.PlatformNeoforge:
 		return DialectMavenRange
 	default:
 		return DialectUnknown

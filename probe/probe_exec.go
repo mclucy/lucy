@@ -18,6 +18,7 @@ import (
 )
 
 var UnknownExecutable = detector.UnknownExecutable
+var NoExecutable = detector.NoExecutable
 
 const noteSuspectPrePackagedServer = "This is likely a pre-packaged server. Therefore, you might want to ignore the paths, and only look for the executable with your expected game version and mod loader."
 
@@ -111,7 +112,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 	switch len(valid) {
 	case 0:
 		logger.Info("no server executable found")
-		return UnknownExecutable
+		return NoExecutable
 	case 1:
 		return valid[0]
 	default:
@@ -175,7 +176,7 @@ func executableLabel(executable *types.ExecutableInfo) string {
 
 func executableAnnotation(executable *types.ExecutableInfo) string {
 	gameVersion := executable.GameVersion.String()
-	if executable.ModLoader == types.Minecraft {
+	if executable.ModLoader == types.PlatformMinecraft {
 		return fmt.Sprintf("(Minecraft %s, Vanilla)", gameVersion)
 	}
 	return fmt.Sprintf(

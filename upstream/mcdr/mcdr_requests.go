@@ -126,7 +126,7 @@ func getLatestCompatibleRelease(id string) (*release, error) {
 
 	localMcdrVersion := serverInfo.Environments.Mcdr.Version
 	mcdrPackage := types.PackageId{
-		Platform: types.Mcdr,
+		Platform: types.PlatformMCDR,
 		Name:     "mcdreforged",
 		Version:  localMcdrVersion,
 	}

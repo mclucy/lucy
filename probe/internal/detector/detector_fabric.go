@@ -69,7 +69,7 @@ func (d *fabricServerSingleFileDetector) Detect(
 	exec = &types.ExecutableInfo{
 		Path:          filePath,
 		GameVersion:   gameVersion,
-		ModLoader:     types.Fabric,
+		ModLoader:     types.PlatformFabric,
 		LoaderVersion: loaderVersion,
 		BootCommand:   nil,
 	}
@@ -178,7 +178,7 @@ func (d *fabricServerLauncherDetector) Detect(
 			exec = &types.ExecutableInfo{
 				Path:          filePath,
 				GameVersion:   gameVersion,
-				ModLoader:     types.Fabric,
+				ModLoader:     types.PlatformFabric,
 				LoaderVersion: loaderVersion,
 				BootCommand:   nil,
 			}
@@ -222,7 +222,7 @@ func (d *fabricModDetector) Detect(
 
 			pkg := types.Package{
 				Id: types.PackageId{
-					Platform: types.Fabric,
+					Platform: types.PlatformFabric,
 					Name:     syntax.ToProjectName(modInfo.Id),
 					Version:  types.RawVersion(modInfo.Version),
 				},
@@ -270,7 +270,7 @@ func (d *fabricModDetector) buildDependency(
 	for k, v := range deps {
 		dep := types.Dependency{
 			Id: types.PackageId{
-				Platform: types.Fabric,
+				Platform: types.PlatformFabric,
 				Name:     syntax.ToProjectName(k),
 			},
 			Constraint: parseFabricVersionRanges(v),

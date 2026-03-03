@@ -178,7 +178,7 @@ func infoOutput(p *types.Package, longOutput bool) *tui.Data {
 	// TODO: Hide snapshot versions, except if the current server is using it
 	if p.Supports != nil &&
 		p.Supports.Platforms != nil &&
-		!slices.Contains(p.Supports.Platforms, types.Mcdr) {
+		!slices.Contains(p.Supports.Platforms, types.PlatformMCDR) {
 		f := &tui.FieldLabels{
 			Title:    "Game Versions",
 			Labels:   []string{},

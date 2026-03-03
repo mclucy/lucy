@@ -98,7 +98,7 @@ func generateStatusOutput(
 
 	// Show modding platform if detected, even if no mods found, to differentiate
 	// between modded and vanilla servers
-	if data.Executable.ModLoader != types.Minecraft {
+	if data.Executable.ModLoader != types.PlatformMinecraft {
 		output.Fields = append(
 			output.Fields, &tui.FieldAnnotatedShortText{
 				Title:      "Platform",
@@ -130,7 +130,7 @@ func generateStatusOutput(
 				modNames = append(modNames, packageNameOutput(pkg))
 				modPaths = append(modPaths, pkg.Local.Path)
 			}
-			if hasMcdr && pkg.Id.Platform == types.Mcdr {
+			if hasMcdr && pkg.Id.Platform == types.PlatformMCDR {
 				mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
 			}
 		}

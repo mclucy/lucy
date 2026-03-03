@@ -75,7 +75,7 @@ func (d *forgeServerDetector) Detect(
 				exec := &types.ExecutableInfo{
 					Path:          filePath,
 					GameVersion:   gameVersion,
-					ModLoader:     types.Forge,
+					ModLoader:     types.PlatformForge,
 					LoaderVersion: forgeVersion,
 					BootCommand:   nil,
 				}
@@ -133,7 +133,7 @@ func (d *forgeModDetector) Detect(
 				// Parse as internal id
 				p := types.Package{
 					Id: types.PackageId{
-						Platform: types.Forge,
+						Platform: types.PlatformForge,
 						Name:     syntax.ToProjectName(mod.ModID),
 						Version:  version,
 					},
@@ -157,7 +157,7 @@ func (d *forgeModDetector) Detect(
 						p.Dependencies.Value,
 						types.Dependency{
 							Id: types.PackageId{
-								Platform: types.Forge,
+								Platform: types.PlatformForge,
 								Name:     syntax.ToProjectName(dep.ModID),
 							},
 							Constraint: parseMavenVersionRange(dep.VersionRange),

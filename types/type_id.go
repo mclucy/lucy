@@ -16,18 +16,19 @@ import (
 type Platform string
 
 const (
-	AnyPlatform     Platform = "" // AnyPlatform is ambiguous but has single-valueness. It does NOT refer to multiple platforms, but rather a single platform that is unknown. Understand this as AnyPlatform reduces to a definite platform at evaluation. Again, keep in mind that you should not allow it to be explicitly evaluated as multiple platforms.
-	Minecraft       Platform = "minecraft"
-	Vanilla         Platform = Minecraft // Alias for Minecraft
-	Fabric          Platform = "fabric"
-	Forge           Platform = "forge"
-	Neoforge        Platform = "neoforge"
-	Mcdr            Platform = "mcdr"
-	UnknownPlatform Platform = "unknown" // UnknownPlatform is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
+	PlatformAny       Platform = "" // PlatformAny is ambiguous but has single-valueness. It does NOT refer to multiple platforms, but rather a single platform that is unknown. Understand this as PlatformAny reduces to a definite platform at evaluation. Again, keep in mind that you should not allow it to be explicitly evaluated as multiple platforms.
+	PlatformMinecraft Platform = "minecraft"
+	PlatformVanilla            = PlatformMinecraft // Alias for Minecraft
+	PlatformFabric    Platform = "fabric"
+	PlatformForge     Platform = "forge"
+	PlatformNeoforge  Platform = "neoforge"
+	PlatformMCDR      Platform = "mcdr"
+	PlatformNone      Platform = "none"    // PlatformNone is a special platform that is not satisfied by any platform, but it can satisfy all platforms. It is typically used to indicate the absence of a platform, for example, when a package is not compatible with any platform, or when a package does not require a platform.
+	UnknownPlatform   Platform = "unknown" // UnknownPlatform is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
 )
 
 func (p Platform) Title() string {
-	if p == AnyPlatform {
+	if p == PlatformAny {
 		return "Any"
 	}
 	if p.Valid() {
@@ -37,7 +38,7 @@ func (p Platform) Title() string {
 }
 
 func (p Platform) String() string {
-	if p == AnyPlatform {
+	if p == PlatformAny {
 		return "any"
 	}
 	return string(p)
@@ -46,7 +47,7 @@ func (p Platform) String() string {
 // Valid should be edited if you added a new platform.
 func (p Platform) Valid() bool {
 	switch p {
-	case Minecraft, Fabric, Forge, Neoforge, Mcdr, AnyPlatform:
+	case PlatformMinecraft, PlatformFabric, PlatformForge, PlatformNeoforge, PlatformMCDR, PlatformAny:
 		return true
 	}
 	return false
@@ -54,17 +55,21 @@ func (p Platform) Valid() bool {
 
 // Satisfy returns true if p satisfies the requirement of p2.
 func (p Platform) Satisfy(p2 Platform) bool {
+	// When p2 is PlatformNone, it is satisfied by all platforms.
+	if p2 == PlatformNone {
+		return true
+	}
 	// UnknownPlatform is not satisfied by any platform, and does not satisfy
 	// any platform including itself.
 	if p == UnknownPlatform || p2 == UnknownPlatform {
 		return false
 	}
-	// When p2 is AnyPlatform, it is satisfied by all platforms.
-	if p2 == AnyPlatform {
+	// When p2 is PlatformAny, it is satisfied by all platforms.
+	if p2 == PlatformAny {
 		return true
 	}
-	// When p is AnyPlatform, it does not satisfy any platform except itself.
-	if p == AnyPlatform {
+	// When p is PlatformAny, it does not satisfy any platform except itself.
+	if p == PlatformAny {
 		return false
 	}
 	// Trivial cases
@@ -86,7 +91,7 @@ func (p Platform) Is(p2 Platform) bool {
 }
 
 func (p Platform) IsModding() bool {
-	return p == Fabric || p == Forge || p == Neoforge
+	return p == PlatformFabric || p == PlatformForge || p == PlatformNeoforge
 }
 
 // ProjectName is the slug of the package, using hyphens as separators. For example,
@@ -132,7 +137,7 @@ func (p PackageId) NewPackage() Package {
 
 func (p PackageId) String() string {
 	return tools.Ternary(
-		p.Platform == AnyPlatform,
+		p.Platform == PlatformAny,
 		"", string(p.Platform)+"/",
 	) +
 		string(p.Name) +
@@ -156,22 +161,22 @@ func (p PackageId) StringPlatformName() string {
 }
 
 var platformByIdentityPackage = map[ProjectName]Platform{
-	"minecraft":     Minecraft,
-	"mc":            Minecraft,
-	"fabric":        Fabric,
-	"fabric-loader": Fabric,
-	"forge":         Forge,
-	"neoforge":      Neoforge,
-	"mcdreforged":   Mcdr,
-	"mcdr":          Mcdr,
+	"minecraft":     PlatformMinecraft,
+	"mc":            PlatformMinecraft,
+	"fabric":        PlatformFabric,
+	"fabric-loader": PlatformFabric,
+	"forge":         PlatformForge,
+	"neoforge":      PlatformNeoforge,
+	"mcdreforged":   PlatformMCDR,
+	"mcdr":          PlatformMCDR,
 }
 
 var canonicalIdentityPackageByPlatform = map[Platform]ProjectName{
-	Minecraft: "minecraft",
-	Fabric:    "fabric",
-	Forge:     "forge",
-	Neoforge:  "neoforge",
-	Mcdr:      "mcdreforged",
+	PlatformMinecraft: "minecraft",
+	PlatformFabric:    "fabric",
+	PlatformForge:     "forge",
+	PlatformNeoforge:  "neoforge",
+	PlatformMCDR:      "mcdreforged",
 }
 
 func (p PackageId) IsIdentityPackage() bool {

@@ -16,7 +16,7 @@ import (
 func parseNpmVersionRange(s string) types.VersionConstraintExpression {
 	return dependency.ParseRange(
 		s,
-		dependency.InferRangeDialect(types.Mcdr),
+		dependency.InferRangeDialect(types.PlatformMCDR),
 		types.Semver,
 	)
 }

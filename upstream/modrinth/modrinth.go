@@ -41,11 +41,11 @@ func (s provider) Search(
 ) (res upstream.RawSearchResults, err error) {
 	var facets []facetItems
 	switch options.FilterPlatform {
-	case types.Forge:
+	case types.PlatformForge:
 		facets = append(facets, facetForgeOnly)
-	case types.Fabric:
+	case types.PlatformFabric:
 		facets = append(facets, facetFabricOnly)
-	case types.AnyPlatform:
+	case types.PlatformAny:
 		fallthrough
 	default:
 		facets = append(facets, facetAllLoaders)

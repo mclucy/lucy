@@ -115,7 +115,7 @@ func (d *McdrPluginDetector) Detect(
 
 			pkg = types.Package{
 				Id: types.PackageId{
-					Platform: types.Mcdr,
+					Platform: types.PlatformMCDR,
 					Name:     syntax.ToProjectName(pluginInfo.Id),
 					Version:  types.RawVersion(pluginInfo.Version),
 				},
@@ -132,7 +132,7 @@ func (d *McdrPluginDetector) Detect(
 					pkg.Dependencies.Value,
 					types.Dependency{
 						Id: types.PackageId{
-							Platform: types.Mcdr,
+							Platform: types.PlatformMCDR,
 							Name:     syntax.ToProjectName(key),
 						},
 						Constraint: parseNpmVersionRange(value),
