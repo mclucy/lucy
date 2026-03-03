@@ -220,7 +220,6 @@ func selectFromCandidates(candidates []types.PackageRemote) (
 				Value(selected),
 		),
 	).Run()
-
 	if err != nil {
 		return nil, err
 	}

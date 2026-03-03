@@ -45,7 +45,6 @@ func installForgeMod(p types.Package) error {
 }
 
 func installForge(p types.PackageId) error {
-
 	panic("Forge installation is not implemented yet")
 
 	fileURL := ""
