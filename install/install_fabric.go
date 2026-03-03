@@ -41,7 +41,7 @@ func installFabric(p types.Package) error {
 	}
 
 	serverInfo := probe.ServerInfo()
-	if serverInfo.WorkPath == "" {
+	if serverInfo.Executable == probe.UnknownExecutable {
 		return errors.New("server working directory not found")
 	}
 
@@ -60,7 +60,8 @@ func installFabric(p types.Package) error {
 		}
 	}
 
-	_, _, err := util.DownloadFile(fileURL, serverInfo.WorkPath)
+	file, _, err := util.DownloadFile(fileURL, serverInfo.WorkPath)
+	tools.CloseReader(file, nil)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
@@ -79,8 +80,8 @@ func installFabricMod(p types.Package) error {
 }
 
 func resolveFabricServerLaunchJarURL(gameVersion types.RawVersion) (
-string,
-error,
+	string,
+	error,
 ) {
 	loaderVersion, err := fetchFabricLoaderVersion(gameVersion)
 	if err != nil {

@@ -1,7 +1,8 @@
-// Package lucytypes is a general package for all types used in Lucy.
+// Package types is a general package for all types used in Lucy.
 package types
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/mclucy/lucy/tools"
@@ -124,4 +125,89 @@ func (p PackageId) StringNameVersion() string {
 
 func (p PackageId) StringPlatformName() string {
 	return string(p.Platform) + "/" + string(p.Name)
+}
+
+var identityPackages = map[ProjectName]struct{}{
+	"minecraft":     {},
+	"fabric-loader": {},
+	"fabric":        {},
+	"forge":         {},
+	"neoforge":      {},
+	"mcdreforged":   {},
+	"mcdr":          {},
+}
+
+var identityPackagesByPlatform = map[Platform]map[ProjectName]struct{}{
+	Minecraft: {
+		"minecraft": {},
+	},
+	Fabric: {
+		"fabric-loader": {},
+		"fabric":        {},
+	},
+	Forge: {
+		"forge": {},
+	},
+	Neoforge: {
+		"neoforge": {},
+	},
+	Mcdr: {
+		"mcdreforged": {},
+		"mcdr":        {},
+	},
+}
+
+var canonicalIdentityPackageByPlatform = map[Platform]ProjectName{
+	Minecraft: "minecraft",
+	Fabric:    "fabric-loader",
+	Forge:     "forge",
+	Neoforge:  "neoforge",
+	Mcdr:      "mcdreforged",
+}
+
+func (p PackageId) IsIdentityPackage() bool {
+	_, exists := identityPackages[p.Name]
+	return exists
+}
+
+func (p PackageId) IsValidIdentityPackage() error {
+	if !p.IsIdentityPackage() {
+		return nil
+	}
+
+	ErrInvalidPlatformPackage := func(p PackageId) error {
+		return fmt.Errorf(
+			"mismatch in platform specifier: %s under %s",
+			p.Name,
+			p.Platform,
+		)
+	}
+
+	platformPackages, exists := identityPackagesByPlatform[p.Platform]
+	if !exists {
+		return nil
+	}
+
+	if _, valid := platformPackages[p.Name]; !valid {
+		return ErrInvalidPlatformPackage(p)
+	}
+
+	return nil
+}
+
+func (p PackageId) NormalizeIdentityPackage() PackageId {
+	if !p.IsIdentityPackage() {
+		return p
+	}
+
+	canonicalName, exists := canonicalIdentityPackageByPlatform[p.Platform]
+	if !exists || p.Name == canonicalName {
+		return p
+	}
+
+	return PackageId{
+		Platform: p.Platform,
+		Name:     canonicalName,
+		Version:  p.Version,
+	}
 }
