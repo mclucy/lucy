@@ -20,7 +20,7 @@ func getForgeModVersion(zip *zip.Reader) types.RawVersion {
 		if f.Name == "META-INF/MANIFEST.MF" {
 			r, err = f.Open()
 			if err != nil {
-				return types.UnknownVersion
+				return types.VersionUnknown
 			}
 			defer tools.CloseReader(r, logger.Warn)
 			break
@@ -28,18 +28,18 @@ func getForgeModVersion(zip *zip.Reader) types.RawVersion {
 	}
 
 	if r == nil {
-		return types.UnknownVersion
+		return types.VersionUnknown
 	}
 
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return types.UnknownVersion
+		return types.VersionUnknown
 	}
 	manifest := string(data)
 	const versionField = "Implementation-Version: "
 	idx := strings.Index(manifest, versionField)
 	if idx == -1 {
-		return types.UnknownVersion
+		return types.VersionUnknown
 	}
 	i := idx + len(versionField)
 	v := manifest[i:]

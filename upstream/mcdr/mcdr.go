@@ -50,7 +50,7 @@ func (s provider) Fetch(id types.PackageId) (
 	rem upstream.RawPackageRemote,
 	err error,
 ) {
-	if id.Version.NeedsInfer() {
+	if id.Version.CanInfer() {
 		id, err = s.ParseAmbiguousVersion(id)
 		if err != nil {
 			return nil, err
@@ -108,9 +108,9 @@ func (s provider) ParseAmbiguousVersion(id types.PackageId) (
 ) {
 	var rel *release
 	switch id.Version {
-	case types.LatestCompatibleVersion:
+	case types.VersionCompatible:
 		rel, err = getLatestCompatibleRelease(id.Name.Pep8String())
-	case types.LatestVersion, types.AllVersion:
+	case types.VersionLatest, types.VersionAny:
 		rel, err = getLatestRelease(id.Name.Pep8String())
 		if err != nil {
 			return id, err

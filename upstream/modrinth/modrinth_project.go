@@ -88,7 +88,7 @@ func DependencyToPackage(
 		project, _ = getProjectById(dependency.ProjectId)
 		// This is not safe, TODO: use better inference method
 		version, _ = latestVersion(syntax.ToProjectName(project.Slug))
-		p.Version = types.LatestVersion
+		p.Version = types.VersionLatest
 	} else {
 		return p, ErrorInvalidDependency
 	}

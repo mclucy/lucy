@@ -65,7 +65,7 @@ func installForge(p types.Package) error {
 				forgeDocsURL,
 			)
 		}
-		if serverInfo.Executable.GameVersion == types.UnknownVersion {
+		if serverInfo.Executable.GameVersion == types.VersionUnknown {
 			return fmt.Errorf(
 				"unknown minecraft version, cannot infer forge bootstrap artifact; see %s",
 				forgeDocsURL,
@@ -76,7 +76,10 @@ func installForge(p types.Package) error {
 		if err != nil {
 			return err
 		}
-		fileURL = resolveForgeInstallerURL(serverInfo.Executable.GameVersion, forgeVersion)
+		fileURL = resolveForgeInstallerURL(
+			serverInfo.Executable.GameVersion,
+			forgeVersion,
+		)
 	}
 
 	installer, _, err := util.DownloadFile(fileURL, serverInfo.WorkPath)
@@ -85,7 +88,10 @@ func installForge(p types.Package) error {
 	}
 	defer func() { _ = installer.Close() }()
 
-	if err := runForgeInstaller(installer.Name(), serverInfo.WorkPath); err != nil {
+	if err := runForgeInstaller(
+		installer.Name(),
+		serverInfo.WorkPath,
+	); err != nil {
 		return err
 	}
 
@@ -100,7 +106,10 @@ func fetchForgeVersion(gameVersion types.RawVersion) (string, error) {
 	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return "", fmt.Errorf("fetch forge promotions failed: status %d", res.StatusCode)
+		return "", fmt.Errorf(
+			"fetch forge promotions failed: status %d",
+			res.StatusCode,
+		)
 	}
 
 	body, err := io.ReadAll(res.Body)
@@ -132,7 +141,10 @@ func fetchForgeVersion(gameVersion types.RawVersion) (string, error) {
 	)
 }
 
-func resolveForgeInstallerURL(gameVersion types.RawVersion, forgeVersion string) string {
+func resolveForgeInstallerURL(
+	gameVersion types.RawVersion,
+	forgeVersion string,
+) string {
 	combinedVersion := fmt.Sprintf("%s-%s", gameVersion.String(), forgeVersion)
 	escaped := url.PathEscape(combinedVersion)
 	return fmt.Sprintf(

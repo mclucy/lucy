@@ -30,8 +30,8 @@ func (d *fabricServerSingleFileDetector) Detect(
 	zipReader *zip.Reader,
 	fileHandle *os.File,
 ) (exec *types.ExecutableInfo, err error) {
-	loaderVersion := types.UnknownVersion
-	gameVersion := types.UnknownVersion
+	loaderVersion := types.VersionUnknown
+	gameVersion := types.VersionUnknown
 	for _, f := range zipReader.File {
 		if f.Name == "install.properties" {
 			r, err := f.Open()
@@ -55,14 +55,14 @@ func (d *fabricServerSingleFileDetector) Detect(
 					gameVersion = types.RawVersion(after)
 				}
 			}
-			if loaderVersion == types.UnknownVersion || gameVersion == types.UnknownVersion {
+			if loaderVersion == types.VersionUnknown || gameVersion == types.VersionUnknown {
 				continue
 			}
 			break
 		}
 	}
 
-	if loaderVersion == types.UnknownVersion || gameVersion == types.UnknownVersion {
+	if loaderVersion == types.VersionUnknown || gameVersion == types.VersionUnknown {
 		return nil, nil
 	}
 
@@ -118,8 +118,8 @@ func (d *fabricServerLauncherDetector) Detect(
 		return nil, nil
 	}
 
-	loaderVersion := types.UnknownVersion
-	gameVersion := types.UnknownVersion
+	loaderVersion := types.VersionUnknown
+	gameVersion := types.VersionUnknown
 	for _, f := range zipReader.File {
 		if f.Name == "META-INF/MANIFEST.MF" {
 			r, err := f.Open()
@@ -171,7 +171,7 @@ func (d *fabricServerLauncherDetector) Detect(
 				}
 			}
 
-			if loaderVersion == types.UnknownVersion || gameVersion == types.UnknownVersion {
+			if loaderVersion == types.VersionUnknown || gameVersion == types.VersionUnknown {
 				continue
 			}
 

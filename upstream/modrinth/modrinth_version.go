@@ -52,7 +52,7 @@ func getVersion(id types.PackageId) (
 	if err != nil {
 		return nil, err
 	}
-	if id.Version == types.LatestVersion {
+	if id.Version == types.VersionLatest {
 		v, err = latestVersion(id.Name)
 		if err != nil {
 			return nil, err

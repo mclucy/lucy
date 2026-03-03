@@ -28,8 +28,8 @@ func (d *forgeServerDetector) Detect(
 	zipReader *zip.Reader,
 	fileHandle *os.File,
 ) (*types.ExecutableInfo, error) {
-	forgeVersion := types.UnknownVersion
-	gameVersion := types.UnknownVersion
+	forgeVersion := types.VersionUnknown
+	gameVersion := types.VersionUnknown
 	for _, f := range zipReader.File {
 		if f.Name == "META-INF/MANIFEST.MF" {
 			r, err := f.Open()
@@ -71,7 +71,7 @@ func (d *forgeServerDetector) Detect(
 				}
 			}
 
-			if forgeVersion != types.UnknownVersion && gameVersion != types.UnknownVersion {
+			if forgeVersion != types.VersionUnknown && gameVersion != types.VersionUnknown {
 				exec := &types.ExecutableInfo{
 					Path:          filePath,
 					GameVersion:   gameVersion,

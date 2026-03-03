@@ -13,34 +13,42 @@ type RawVersion string
 
 func (v RawVersion) String() string {
 	switch v {
-	case AllVersion, "":
+	case VersionAny, "":
 		return "any"
-	case NoVersion:
+	case VersionNone:
 		return "none"
-	case UnknownVersion:
+	case VersionUnknown:
 		return "unknown"
-	case LatestVersion:
+	case VersionLatest:
 		return "latest"
-	case LatestCompatibleVersion:
+	case VersionCompatible:
 		return "compatible"
 	}
 	return string(v)
 }
 
-func (v RawVersion) NeedsInfer() bool {
+func (v RawVersion) CanInfer() bool {
 	switch v {
-	case AllVersion, NoVersion, UnknownVersion, LatestVersion, LatestCompatibleVersion:
+	case VersionAny, VersionLatest, VersionCompatible:
+		return true
+	}
+	return false
+}
+
+func (v RawVersion) IsInvalid() bool {
+	switch v {
+	case VersionNone, VersionUnknown:
 		return true
 	}
 	return false
 }
 
 var (
-	AllVersion              RawVersion = "all"
-	NoVersion               RawVersion = "none"
-	UnknownVersion          RawVersion = "unknown"
-	LatestVersion           RawVersion = "latest"
-	LatestCompatibleVersion RawVersion = "compatible"
+	VersionAny        RawVersion = "all"
+	VersionNone       RawVersion = "none"
+	VersionUnknown    RawVersion = "unknown"
+	VersionLatest     RawVersion = "latest"
+	VersionCompatible RawVersion = "compatible"
 )
 
 // ComparableVersion is an interface for comparable parsed versions.
