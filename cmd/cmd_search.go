@@ -53,8 +53,8 @@ var subcmdSearch = &cli.Command{
 }
 
 var actionSearch cli.ActionFunc = func(
-_ context.Context,
-cmd *cli.Command,
+	_ context.Context,
+	cmd *cli.Command,
 ) error {
 	p := syntax.Parse(cmd.Args().First())
 	options := types.SearchOptions{
@@ -97,9 +97,9 @@ cmd *cli.Command,
 }
 
 func appendToSearchOutput(
-out *tui.Data,
-showAll bool,
-res types.SearchResults,
+	out *tui.Data,
+	showAll bool,
+	res types.SearchResults,
 ) {
 	var results []string
 	for _, r := range res.Projects {

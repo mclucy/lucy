@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/github"
+	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 
 	"github.com/sahilm/fuzzy"
@@ -113,6 +115,45 @@ func getLatestRelease(id string) (*release, error) {
 		return nil, err
 	}
 	return &history.Releases[history.LatestVersionIndex], nil
+}
+
+func getLatestCompatibleRelease(id string) (*release, error) {
+	serverInfo := probe.ServerInfo()
+	history, err := getReleaseHistory(id)
+	if err != nil {
+		return nil, err
+	}
+
+	localMcdrVersion := serverInfo.Environments.Mcdr.Version
+	mcdrPackage := types.PackageId{
+		Platform: types.Mcdr,
+		Name:     "mcdreforged",
+		Version:  localMcdrVersion,
+	}
+	for _, rel := range history.Releases {
+		for k, v := range rel.Meta.Dependencies {
+			if k == "mcdreforged" {
+				dep := types.Dependency{
+					Id: mcdrPackage,
+					Constraint: dependency.ParseRange(
+						v,
+						dependency.DialectNpmSemver,
+						types.Semver,
+					),
+					Mandatory: true,
+				}
+				if dep.Satisfy(
+					mcdrPackage,
+					dependency.Parse(localMcdrVersion, types.Semver),
+				) {
+					return &rel, nil
+				}
+				break
+			}
+		}
+	}
+
+	return nil, ErrVersionNotFound(id, "latest compatible")
 }
 
 func getReleaseHistory(id string) (*pluginRelease, error) {

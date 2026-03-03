@@ -91,8 +91,8 @@ type PackageId struct {
 	Version  RawVersion
 }
 
-func (p PackageId) NewPackage() *Package {
-	return &Package{
+func (p PackageId) NewPackage() Package {
+	return Package{
 		Id: PackageId{
 			Platform: p.Platform,
 			Name:     p.Name,

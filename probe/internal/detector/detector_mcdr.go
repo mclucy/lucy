@@ -3,9 +3,12 @@ package detector
 import (
 	"archive/zip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path"
+	"strings"
 
 	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/syntax"
@@ -57,7 +60,24 @@ func (d *McdrDetector) Detect(dir string, env *types.EnvironmentInfo) {
 		logger.Warn(err)
 		return
 	}
-	env.Mcdr = (*types.McdrEnv)(config)
+
+	bytes, err := exec.Command("mcdreforged", "--version").Output()
+	if err != nil {
+		logger.ReportWarn(
+			fmt.Errorf(
+				"cannot execute mcdr, it is in your $PATH?: %w",
+				err,
+			),
+		)
+	}
+
+	// `mcdreforged --version` output is like "MCDReforged 2.13.2"
+	version := types.RawVersion(strings.Split(string(bytes), " ")[1])
+	env.Mcdr = &types.McdrEnv{
+		Version: version,
+		Config:  config,
+	}
+	return
 }
 
 func init() {
