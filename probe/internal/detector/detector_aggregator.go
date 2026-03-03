@@ -19,6 +19,14 @@ var UnknownExecutable = &types.ExecutableInfo{
 	BootCommand:   nil,
 }
 
+var NoExecutable = &types.ExecutableInfo{
+	Path:          "",
+	GameVersion:   types.VersionNone,
+	ModLoader:     types.PlatformNone,
+	LoaderVersion: types.VersionNone,
+	BootCommand:   nil,
+}
+
 // Executable analyzes a JAR file using all registered detectors
 // and returns the first successful match (in registration order).
 // If multiple detectors match, callers should handle ambiguity separately.
@@ -54,7 +62,7 @@ func Executable(filePath string) *types.ExecutableInfo {
 	}
 
 	if len(candidates) == 0 {
-		return nil
+		return NoExecutable
 	}
 
 	if len(candidates) > 1 {

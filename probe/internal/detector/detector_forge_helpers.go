@@ -56,7 +56,7 @@ func getForgeModVersion(zip *zip.Reader) types.RawVersion {
 func parseMavenVersionRange(interval string) [][]types.VersionConstraint {
 	return dependency.ParseRange(
 		interval,
-		dependency.InferRangeDialect(types.Forge),
+		dependency.InferRangeDialect(types.PlatformForge),
 		types.Semver,
 	)
 }

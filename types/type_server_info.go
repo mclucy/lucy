@@ -26,6 +26,10 @@ type ExecutableInfo struct {
 	BootCommand   *exec.Cmd
 }
 
+func (e *ExecutableInfo) IsValid() bool {
+	return e.Path != "" && e.GameVersion != "" && e.ModLoader.Valid()
+}
+
 type ServerActivity struct {
 	Active bool
 	Pid    int

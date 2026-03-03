@@ -13,11 +13,11 @@ import (
 )
 
 func init() {
-	registerInstaller(types.Mcdr, installMcdrPlugin)
+	registerInstaller(types.PlatformMCDR, installMcdrPlugin)
 }
 
 func installMcdrPlugin(p types.Package) error {
-	if p.Id.Platform != types.Mcdr {
+	if p.Id.Platform != types.PlatformMCDR {
 		return fmt.Errorf("unsupported platform: %s", p.Id.Platform)
 	}
 	if p.Remote == nil {

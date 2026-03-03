@@ -13,7 +13,7 @@ func parseFabricVersionRanges(
 ) types.VersionConstraintExpression {
 	return dependency.ParseRanges(
 		[]string(ranges),
-		dependency.InferRangeDialect(types.Fabric),
+		dependency.InferRangeDialect(types.PlatformFabric),
 		types.Semver,
 	)
 }

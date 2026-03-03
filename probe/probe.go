@@ -182,7 +182,7 @@ func buildServerInfo() types.ServerInfo {
 // is needed, just call ServerInfo() without the concern of redundant calculation.
 
 func buildModPaths() (paths []string) {
-	if exec := getExecutableInfo(); exec != nil && (exec.ModLoader == types.Fabric || exec.ModLoader == types.Forge || exec.ModLoader == types.Neoforge) {
+	if exec := getExecutableInfo(); exec != nil && (exec.ModLoader == types.PlatformFabric || exec.ModLoader == types.PlatformForge || exec.ModLoader == types.PlatformNeoforge) {
 		paths = append(paths, path.Join(workPath(), "mods"))
 	}
 	return

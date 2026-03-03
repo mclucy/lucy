@@ -14,6 +14,7 @@ package routing
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -26,7 +27,7 @@ import (
 var (
 	ErrUnknownSource     = errors.New("unknown source")
 	ErrUnsupportedSource = errors.New("unsupported source")
-	ErrInvalidPlatform   = errors.New("invalid platform")
+	ErrInvalidPlatform   = errors.New("cannot find sources for platform")
 )
 
 var autoProviders = []upstream.Provider{
@@ -67,19 +68,19 @@ func ResolveProviders(
 	if src != types.SourceAuto {
 		provider, ok := GetProvider(src)
 		if !ok {
-			return nil, ErrUnsupportedSource
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 		}
 		return []upstream.Provider{provider}, nil
 	}
 
 	switch platform {
-	case types.AnyPlatform:
+	case types.PlatformAny:
 		return ListAutoProviders(), nil
-	case types.Forge, types.Fabric, types.Neoforge:
+	case types.PlatformForge, types.PlatformFabric, types.PlatformNeoforge:
 		return []upstream.Provider{modrinth.Provider}, nil
-	case types.Mcdr:
+	case types.PlatformMCDR:
 		return []upstream.Provider{mcdr.Provider}, nil
 	default:
-		return nil, ErrInvalidPlatform
+		return nil, fmt.Errorf("%w: %s", ErrInvalidPlatform, platform)
 	}
 }

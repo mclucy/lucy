@@ -47,7 +47,7 @@ func Install(id types.PackageId, source types.Source) error {
 
 	if hasMcdr {
 		mcdrProviders, err := routing.ResolveProviders(
-			types.Mcdr,
+			types.PlatformMCDR,
 			types.SourceAuto,
 		)
 		if err != nil {
@@ -114,42 +114,39 @@ func installPlatform(id types.PackageId) error {
 	}
 
 	errExistingPlatform := func() error {
-		if serverPlatform != types.UnknownPlatform {
-			return fmt.Errorf(
-				"found an existing server platform %s, installation of %s aborted",
-				serverPlatform.Title(),
-				id.Platform.Title(),
-			)
-		}
-		return nil
+		return fmt.Errorf(
+			"found an existing server platform %s, installation of %s aborted",
+			serverPlatform.Title(),
+			id.Platform.Title(),
+		)
 	}
 
 	id.NormalizeIdentityPackage()
 	switch id.IdentityToPlatform() {
-	case types.Minecraft:
-		if serverPlatform != types.UnknownPlatform {
+	case types.PlatformMinecraft:
+		if serverPlatform.Valid() {
 			// TODO: ask if overwrite existing server
 			return errors.New("minecraft already installed")
 		}
 		return installMinecraftServer(id)
-	case types.Forge:
-		if serverPlatform != types.Vanilla {
+	case types.PlatformForge:
+		if serverPlatform != types.PlatformVanilla {
 			// TODO: ask if overwrite existing modding platform
 			return errExistingPlatform()
 		}
 		return installForge(id)
-	case types.Fabric:
-		if serverPlatform != types.Vanilla {
+	case types.PlatformFabric:
+		if serverPlatform != types.PlatformVanilla {
 			// TODO: ask if overwrite existing modding platform
 			return errExistingPlatform()
 		}
 		return installFabric(id)
-	case types.Neoforge:
-		if serverPlatform != types.Vanilla {
+	case types.PlatformNeoforge:
+		if serverPlatform != types.PlatformVanilla {
 			return errExistingPlatform()
 		}
 		return installNeoForge(id)
-	case types.Mcdr:
+	case types.PlatformMCDR:
 		if hasMcdr {
 			return errors.New("mcdr already installed")
 		}
@@ -165,34 +162,34 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 	serverPlatform := serverInfo.Executable.ModLoader
 
 	switch platform {
-	case types.AnyPlatform:
+	case types.PlatformAny:
 		return nil
-	case types.Mcdr:
+	case types.PlatformMCDR:
 		if serverInfo.Environments.Mcdr == nil {
 			return errors.New("mcdr not found")
 		}
 		return nil
-	case types.Forge:
-		if serverInfo.Executable == probe.UnknownExecutable {
-			return errors.New("no executable found, `lucy add` requires a server in current directory")
+	case types.PlatformForge:
+		if !serverInfo.Executable.IsValid() {
+			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
-		if serverPlatform != types.Forge {
+		if serverPlatform != types.PlatformForge {
 			return errors.New("forge server not found")
 		}
 		return nil
-	case types.Fabric:
-		if serverInfo.Executable == probe.UnknownExecutable {
-			return errors.New("no executable found, `lucy add` requires a server in current directory")
+	case types.PlatformFabric:
+		if !serverInfo.Executable.IsValid() {
+			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
-		if serverPlatform != types.Fabric {
+		if serverPlatform != types.PlatformFabric {
 			return errors.New("fabric server not found")
 		}
 		return nil
-	case types.Neoforge:
-		if serverInfo.Executable == probe.UnknownExecutable {
-			return errors.New("no executable found, `lucy add` requires a server in current directory")
+	case types.PlatformNeoforge:
+		if !serverInfo.Executable.IsValid() {
+			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
-		if serverPlatform != types.Neoforge {
+		if serverPlatform != types.PlatformNeoforge {
 			return errors.New("neoforge server not found")
 		}
 		return nil

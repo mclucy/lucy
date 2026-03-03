@@ -35,10 +35,10 @@ func (s provider) Search(
 	query string,
 	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
-	if options.FilterPlatform != types.Mcdr && options.FilterPlatform != types.AnyPlatform {
+	if options.FilterPlatform != types.PlatformMCDR && options.FilterPlatform != types.PlatformAny {
 		return nil, fmt.Errorf(
 			"invalid search platform: expected %s, got %s",
-			types.Mcdr,
+			types.PlatformMCDR,
 			options.FilterPlatform,
 		)
 	}
@@ -126,7 +126,7 @@ func (s provider) ParseAmbiguousVersion(id types.PackageId) (
 		return id, err
 	}
 	parsed = types.PackageId{
-		Platform: types.Mcdr,
+		Platform: types.PlatformMCDR,
 		Name:     id.Name,
 		Version:  types.RawVersion(rel.Meta.Version),
 	}

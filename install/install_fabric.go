@@ -32,7 +32,7 @@ type fabricLoaderVersionEntry struct {
 }
 
 func init() {
-	registerInstaller(types.Fabric, installFabricMod)
+	registerInstaller(types.PlatformFabric, installFabricMod)
 }
 
 func installFabric(p types.PackageId) error {
@@ -70,7 +70,7 @@ func installFabric(p types.PackageId) error {
 }
 
 func installFabricMod(p types.Package) error {
-	return installModLoaderPackage(p, types.Fabric)
+	return installModLoaderPackage(p, types.PlatformFabric)
 }
 
 func resolveFabricServerLaunchJarURL(gameVersion types.RawVersion) (

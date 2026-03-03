@@ -41,7 +41,7 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.Mcdr,
+		types.PlatformMCDR,
 		"mcdreforged",
 		"2.12.0",
 		true,
@@ -50,7 +50,7 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.Mcdr,
+		types.PlatformMCDR,
 		"mcdreforged",
 		"2.11.9",
 		false,
@@ -81,7 +81,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		minecraftExpr,
-		types.Fabric,
+		types.PlatformFabric,
 		"minecraft",
 		"1.20.2",
 		true,
@@ -90,7 +90,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		minecraftExpr,
-		types.Fabric,
+		types.PlatformFabric,
 		"minecraft",
 		"1.20.1",
 		false,
@@ -101,7 +101,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		loaderExpr,
-		types.Fabric,
+		types.PlatformFabric,
 		"fabricloader",
 		"0.16.9",
 		true,
@@ -110,7 +110,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		loaderExpr,
-		types.Fabric,
+		types.PlatformFabric,
 		"fabricloader",
 		"0.14.17",
 		false,
@@ -141,7 +141,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.Fabric,
+		types.PlatformFabric,
 		"fabricloader",
 		"0.14.19",
 		true,
@@ -150,7 +150,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.Fabric,
+		types.PlatformFabric,
 		"fabricloader",
 		"0.15.2",
 		false,
@@ -159,7 +159,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.Fabric,
+		types.PlatformFabric,
 		"fabricloader",
 		"0.16.9",
 		true,
@@ -206,7 +206,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.Forge,
+		types.PlatformForge,
 		"minecraft",
 		"1.20.1",
 		true,
@@ -215,7 +215,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.Forge,
+		types.PlatformForge,
 		"minecraft",
 		"1.20.2",
 		false,
@@ -224,7 +224,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.Forge,
+		types.PlatformForge,
 		"minecraft",
 		"1.20.0",
 		false,
@@ -265,7 +265,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		yungsExpr,
-		types.Forge,
+		types.PlatformForge,
 		"yungsapi",
 		"1.20.0-Forge-4.0.0",
 		false,
@@ -274,7 +274,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		yungsExpr,
-		types.Forge,
+		types.PlatformForge,
 		"yungsapi",
 		"1.20.0-Forge-4.0.1",
 		true,

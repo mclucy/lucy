@@ -123,8 +123,8 @@ func latestCompatibleVersion(slug types.ProjectName) (
 		return nil, err
 	}
 	serverInfo := probe.ServerInfo()
-	if serverInfo.Executable == probe.UnknownExecutable {
-		logger.Info("no executable found, unable to infer a compatible version. falling back to latest version")
+	if !serverInfo.Executable.IsValid() {
+		logger.Info("no valid server, unable to infer a compatible version. falling back to latest version")
 		v, err := latestVersion(slug)
 		if err != nil {
 			return nil, err
