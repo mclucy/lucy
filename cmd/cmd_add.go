@@ -3,12 +3,10 @@ package cmd
 import (
 	"context"
 
-	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/remote"
-	"github.com/mclucy/lucy/remote/source"
+	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
-	"github.com/mclucy/lucy/util"
-
+	"github.com/mclucy/lucy/types"
 	"github.com/urfave/cli/v3"
 )
 
