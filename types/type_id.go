@@ -171,14 +171,14 @@ func (p PackageId) IsValidIdentityPackage() error {
 	return nil
 }
 
-func (p PackageId) NormalizeIdentityPackage() PackageId {
+func (p PackageId) NormalizeIdentityPackage() {
 	if !p.IsIdentityPackage() {
-		return p
+		return
 	}
 
 	canonicalName, exists := canonicalIdentityPackageByPlatform[p.Platform]
 	if exists || p.Name == canonicalName {
-		return p
+		return
 	}
 
 	p.Name = canonicalName
@@ -186,5 +186,13 @@ func (p PackageId) NormalizeIdentityPackage() PackageId {
 		p.Version = VersionCompatible
 	}
 
-	return p
+	return
+}
+
+func (p PackageId) IdentityToPlatform() Platform {
+	platform, exists := platformByIdentityPackage[p.Name]
+	if !exists {
+		return UnknownPlatform
+	}
+	return platform
 }

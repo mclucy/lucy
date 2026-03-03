@@ -9,6 +9,7 @@ import (
 	"net/url"
 
 	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
 )
@@ -34,11 +35,10 @@ func init() {
 	registerInstaller(types.Fabric, installFabricMod)
 }
 
-func installFabric(p types.Package) error {
+func installFabric(p types.PackageId) error {
+	panic("fabric installation is not implemented yet")
+
 	fileURL := ""
-	if p.Remote != nil {
-		fileURL = p.Remote.FileUrl
-	}
 
 	serverInfo := probe.ServerInfo()
 	if serverInfo.Executable == probe.UnknownExecutable {
@@ -49,7 +49,7 @@ func installFabric(p types.Package) error {
 		if serverInfo.Executable == nil || serverInfo.Executable == probe.UnknownExecutable {
 			return errors.New("no executable found, cannot infer minecraft version for fabric bootstrap")
 		}
-		if serverInfo.Executable.GameVersion == types.UnknownVersion {
+		if serverInfo.Executable.GameVersion == types.VersionUnknown {
 			return errors.New("unknown minecraft version, cannot infer fabric bootstrap artifact")
 		}
 
@@ -70,12 +70,6 @@ func installFabric(p types.Package) error {
 }
 
 func installFabricMod(p types.Package) error {
-	if p.Id.Name == "fabric-loader" {
-		err := installFabric(p)
-		if err != nil {
-			return err
-		}
-	}
 	return installModLoaderPackage(p, types.Fabric)
 }
 

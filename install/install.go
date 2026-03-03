@@ -8,7 +8,6 @@ import (
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
@@ -26,73 +25,77 @@ func registerInstaller(platform types.Platform, installer platformInstaller) {
 func Install(id types.PackageId, source types.Source) error {
 	p := id.NewPackage()
 
-	if err := ensurePlatformMatch(id); err != nil {
+	// route to platform installer if it's an identity package
+	if id.IsIdentityPackage() {
+		return installPlatform(id)
+	}
+
+	// this is order-sensitive, ensureServerPlatformMatch() does not check for
+	// identity packages
+	if err := ensureServerPlatformMatch(id); err != nil {
 		return err
 	}
 
 	serverInfo := probe.ServerInfo()
 	serverPlatform := serverInfo.Executable.ModLoader
-	providerPlatform := resolveProviderPlatform(id, serverPlatform)
 	hasMcdr := serverInfo.Environments.Mcdr != nil
 
-	if !shouldSkipRemoteFetch(id) {
-		providers, err := routing.ResolveProviders(providerPlatform, source)
+	providers, err := routing.ResolveProviders(serverPlatform, source)
+	if err != nil {
+		return err
+	}
+
+	if hasMcdr {
+		mcdrProviders, err := routing.ResolveProviders(
+			types.Mcdr,
+			types.SourceAuto,
+		)
+		if err != nil {
+			logger.ShowInfo(
+				fmt.Errorf(
+					"failed to resolve MCDR provider: %w",
+					err,
+				),
+			)
+		}
+		providers = append(providers, mcdrProviders...)
+	}
+
+	remotes, errs := routing.FetchMany(providers, id)
+	for _, err := range errs {
+		if source == types.SourceAuto && len(providers) > 1 {
+			logger.ReportWarn(
+				fmt.Errorf(
+					"search on %s failed: %w",
+					err.Source.Title(),
+					err.Err,
+				),
+			)
+			continue
+		}
+	}
+
+	switch len(remotes) {
+	case 0:
+		return fmt.Errorf("no candidates found for %s", id.String())
+	case 1:
+		// good,follow through
+		p.Remote = &remotes[0]
+	default:
+		// prompt user to select one
+		var err error
+		p.Remote, err = selectFromCandidates(remotes)
 		if err != nil {
 			return err
 		}
-
-		if hasMcdr {
-			mcdrProviders, err := routing.ResolveProviders(
-				types.Mcdr,
-				types.SourceAuto,
-			)
-			if err != nil {
-				logger.ShowInfo(
-					fmt.Errorf(
-						"failed to resolve MCDR provider: %w",
-						err,
-					),
-				)
-			}
-			providers = append(providers, mcdrProviders...)
-		}
-
-		remotes, errs := routing.FetchMany(providers, id)
-		for _, err := range errs {
-			if source == types.SourceAuto && len(providers) > 1 {
-				logger.ReportWarn(
-					fmt.Errorf(
-						"search on %s failed: %w",
-						err.Source.Title(),
-						err.Err,
-					),
-				)
-				continue
-			}
-		}
-
-		switch len(remotes) {
-		case 0:
-			return fmt.Errorf("no candidates found for %s", id.String())
-		case 1:
-			// good,follow through
-			p.Remote = &remotes[0]
-		default:
-			// prompt user to select one
-			var err error
-			p.Remote, err = selectFromCandidates(remotes)
-			if err != nil {
-				return err
-			}
-		}
-		source = p.Remote.Source
 	}
+	source = p.Remote.Source
 
 	installer := installers[id.Platform]
 	if installer == nil {
 		return fmt.Errorf("no installer found for platform %s", id.Platform)
 	}
-	err := installer(p)
+	err = installer(p)
 	if err != nil {
 		return err
 	}
@@ -100,9 +103,66 @@ func Install(id types.PackageId, source types.Source) error {
 	return nil
 }
 
-func ensurePlatformMatch(id types.PackageId) error {
+func installPlatform(id types.PackageId) error {
+	serverInfo := probe.ServerInfo()
+	serverPlatform := serverInfo.Executable.ModLoader
+	hasMcdr := serverInfo.Environments.Mcdr != nil
+
+	err := id.IsValidIdentityPackage()
+	if err != nil {
+		return err
+	}
+
+	errExistingPlatform := func() error {
+		if serverPlatform != types.UnknownPlatform {
+			return fmt.Errorf(
+				"found an existing server platform %s, installation of %s aborted",
+				serverPlatform.Title(),
+				id.Platform.Title(),
+			)
+		}
+		return nil
+	}
+
+	id.NormalizeIdentityPackage()
+	switch id.IdentityToPlatform() {
+	case types.Minecraft:
+		if serverPlatform != types.UnknownPlatform {
+			// TODO: ask if overwrite existing server
+			return errors.New("minecraft already installed")
+		}
+		return installMinecraftServer(id)
+	case types.Forge:
+		if serverPlatform != types.Vanilla {
+			// TODO: ask if overwrite existing modding platform
+			return errExistingPlatform()
+		}
+		return installForge(id)
+	case types.Fabric:
+		if serverPlatform != types.Vanilla {
+			// TODO: ask if overwrite existing modding platform
+			return errExistingPlatform()
+		}
+		return installFabric(id)
+	case types.Neoforge:
+		if serverPlatform != types.Vanilla {
+			return errExistingPlatform()
+		}
+		return installNeoForge(id)
+	case types.Mcdr:
+		if hasMcdr {
+			return errors.New("mcdr already installed")
+		}
+		return initMcdr()
+	default:
+		return fmt.Errorf("cannot install platform: %s", id.Platform)
+	}
+}
+
+func ensureServerPlatformMatch(id types.PackageId) error {
 	platform := id.Platform
 	serverInfo := probe.ServerInfo()
+	serverPlatform := serverInfo.Executable.ModLoader
 
 	switch platform {
 	case types.AllPlatform:
@@ -116,10 +176,7 @@ func ensurePlatformMatch(id types.PackageId) error {
 		if serverInfo.Executable == probe.UnknownExecutable {
 			return errors.New("no executable found, `lucy add` requires a server in current directory")
 		}
-		if isForgeInstallerPackage(id.Name) && serverInfo.Executable.ModLoader == types.Minecraft {
-			return nil
-		}
-		if serverInfo.Executable.ModLoader != types.Forge {
+		if serverPlatform != types.Forge {
 			return errors.New("forge server not found")
 		}
 		return nil
@@ -127,10 +184,7 @@ func ensurePlatformMatch(id types.PackageId) error {
 		if serverInfo.Executable == probe.UnknownExecutable {
 			return errors.New("no executable found, `lucy add` requires a server in current directory")
 		}
-		if isFabricLoaderPackage(id.Name) && serverInfo.Executable.ModLoader == types.Minecraft {
-			return nil
-		}
-		if serverInfo.Executable.ModLoader != types.Fabric {
+		if serverPlatform != types.Fabric {
 			return errors.New("fabric server not found")
 		}
 		return nil
@@ -138,58 +192,13 @@ func ensurePlatformMatch(id types.PackageId) error {
 		if serverInfo.Executable == probe.UnknownExecutable {
 			return errors.New("no executable found, `lucy add` requires a server in current directory")
 		}
-		if serverInfo.Executable.ModLoader != types.Neoforge {
+		if serverPlatform != types.Neoforge {
 			return errors.New("neoforge server not found")
 		}
 		return nil
 	default:
 		return errors.New("unsupported platform")
 	}
-}
-
-func isFabricLoaderPackage(name types.ProjectName) bool {
-	return name == types.ProjectName(types.Fabric) || name == "fabric-loader"
-}
-
-func isForgeInstallerPackage(name types.ProjectName) bool {
-	return name == types.ProjectName(types.Forge) || name == "minecraftforge"
-}
-
-func resolveProviderPlatform(
-	id types.PackageId,
-	serverPlatform types.Platform,
-) types.Platform {
-	if id.Platform == types.Fabric && isFabricLoaderPackage(id.Name) {
-		return types.Fabric
-	}
-	if id.Platform == types.Forge && isForgeInstallerPackage(id.Name) {
-		return types.Forge
-	}
-	return serverPlatform
-}
-
-func shouldSkipRemoteFetch(id types.PackageId) bool {
-	return (id.Platform == types.Fabric && isFabricLoaderPackage(id.Name)) ||
-		(id.Platform == types.Forge && isForgeInstallerPackage(id.Name))
-}
-
-func fetchFromSources(id types.PackageId, sources []upstream.Provider) (
-	candidates []upstream.RawPackageRemote,
-	err error,
-) {
-	for _, src := range sources {
-		remoteData, err := src.Fetch(id)
-		if err != nil {
-			logger.ShowInfo(err)
-			err = nil
-			continue
-		}
-		if remoteData != nil {
-			candidates = append(candidates, remoteData)
-		}
-	}
-
-	return candidates, nil
 }
 
 func selectFromCandidates(candidates []types.PackageRemote) (

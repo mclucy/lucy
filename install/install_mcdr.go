@@ -37,3 +37,7 @@ func installMcdrPlugin(p types.Package) error {
 
 	return nil
 }
+
+func initMcdr() error {
+	panic("MCDR installation is not implemented yet")
+}
