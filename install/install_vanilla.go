@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"net/http"
 	"os"
@@ -14,10 +15,11 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/exttype"
+	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
+	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/mojang"
-	"github.com/mclucy/lucy/util"
 )
 
 const minecraftEULAURL = "https://aka.ms/MinecraftEULA"
@@ -66,7 +68,7 @@ func installMinecraftServer(id types.PackageId) error {
 		return err
 	}
 
-	serverJar, data, err := util.DownloadFile(
+	serverJar, hasher, err := downloadMinecraftServerJarWithProgress(
 		detail.Downloads.Server.Url,
 		workPath,
 	)
@@ -75,8 +77,8 @@ func installMinecraftServer(id types.PackageId) error {
 	}
 	defer func() { _ = serverJar.Close() }()
 
-	if err := verifyMojangDownloadSha1(
-		data,
+	if err := verifyMojangDownloadSha1Hash(
+		hasher,
 		detail.Downloads.Server.Sha1,
 	); err != nil {
 		return err
@@ -183,13 +185,12 @@ func fetchMojangVersionDetail(versionURL string) (*mojangVersionDetail, error) {
 	return detail, nil
 }
 
-func verifyMojangDownloadSha1(data []byte, expected string) error {
+func verifyMojangDownloadSha1Hash(hasher hash.Hash, expected string) error {
 	if expected == "" {
 		return nil
 	}
 
-	actual := sha1.Sum(data)
-	actualHex := hex.EncodeToString(actual[:])
+	actualHex := hex.EncodeToString(hasher.Sum(nil))
 	if !strings.EqualFold(actualHex, expected) {
 		return fmt.Errorf(
 			"minecraft server jar sha1 mismatch: expected %s, got %s",
@@ -199,6 +200,57 @@ func verifyMojangDownloadSha1(data []byte, expected string) error {
 	}
 
 	return nil
+}
+
+func downloadMinecraftServerJarWithProgress(
+	url string,
+	dir string,
+) (*os.File, hash.Hash, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, nil, fmt.Errorf("download request failed: status %d", resp.StatusCode)
+	}
+
+	filename := path.Base(resp.Request.URL.Path)
+	if filename == "" || filename == "." || filename == "/" {
+		filename = "server.jar"
+	}
+
+	filePath := path.Join(dir, filename)
+	file, err := os.Create(filePath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tracker := tuiprogress.NewTracker("Downloading server")
+	hasher := sha1.New()
+	writer := io.MultiWriter(file, hasher)
+	reader := tracker.ProxyReader(resp.Body, resp.ContentLength)
+
+	copyErrChan := make(chan error, 1)
+	go func() {
+		defer tracker.Close()
+		_, copyErr := io.Copy(writer, reader)
+		copyErrChan <- copyErr
+	}()
+
+	runErr := tracker.Run()
+	copyErr := <-copyErrChan
+	if runErr != nil {
+		logger.ShowError(fmt.Errorf("progress renderer failed, download continues: %w", runErr))
+	}
+	if copyErr != nil {
+		_ = file.Close()
+		_ = os.Remove(filePath)
+		return nil, nil, copyErr
+	}
+
+	return file, hasher, nil
 }
 
 func ensureMinecraftEULAAccepted(workPath string) error {
