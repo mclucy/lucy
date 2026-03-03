@@ -108,8 +108,8 @@ func generateStatusOutput(
 		)
 	}
 
-	listMods := data.Executable.ModLoader.IsModding() && len(data.Packages) > 0
-	listMcdrPlugins := data.Environments.Mcdr != nil && len(data.Packages) > 0
+	listMods := data.Executable.ModLoader.IsModding()
+	hasMcdr := data.Environments.Mcdr != nil
 
 	// Collect mod/plugin names and paths for later use. This is to avoid
 	// traversing the package list multiple times, which can be costly when
@@ -121,16 +121,16 @@ func generateStatusOutput(
 		modNames = make([]string, 0, len(data.Packages))
 		modPaths = make([]string, 0, len(data.Packages))
 	}
-	if listMcdrPlugins {
+	if hasMcdr {
 		mcdrPlugins = make([]string, 0, len(data.Packages))
 	}
-	if listMods || listMcdrPlugins {
+	if listMods || hasMcdr {
 		for _, pkg := range data.Packages {
 			if listMods && (pkg.Id.Platform.IsModding()) {
 				modNames = append(modNames, packageNameOutput(pkg))
 				modPaths = append(modPaths, pkg.Local.Path)
 			}
-			if listMcdrPlugins && pkg.Id.Platform == types.Mcdr {
+			if hasMcdr && pkg.Id.Platform == types.Mcdr {
 				mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
 			}
 		}
@@ -173,7 +173,7 @@ func generateStatusOutput(
 	}
 
 	// List MCDR plugins if MCDR environment detected
-	if listMcdrPlugins {
+	if hasMcdr {
 		mcdrPluginListTitle := tools.Ternary(
 			noStyle,
 			"MCDR Plugins",
