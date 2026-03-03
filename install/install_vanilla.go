@@ -8,14 +8,19 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/mojang"
 	"github.com/mclucy/lucy/util"
 )
+
+const minecraftEULAURL = "https://aka.ms/MinecraftEULA"
 
 type mojangVersionDetail struct {
 	Downloads struct {
@@ -52,6 +57,10 @@ func installMinecraftServer(id types.PackageId) error {
 	workPath := probe.ServerInfo().WorkPath
 	if workPath == "" {
 		workPath = "."
+	}
+
+	if err := ensureMinecraftEULAAccepted(workPath); err != nil {
+		return err
 	}
 
 	serverJar, data, err := util.DownloadFile(detail.Downloads.Server.Url, workPath)
@@ -168,5 +177,66 @@ func verifyMojangDownloadSha1(data []byte, expected string) error {
 		)
 	}
 
+	return nil
+}
+
+func ensureMinecraftEULAAccepted(workPath string) error {
+	if hasAcceptedEULA(workPath) {
+		return nil
+	}
+
+	accepted := false
+	err := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Minecraft EULA consent required").
+				Description(
+					"To install and run the official server, you must agree to Mojang EULA: " + minecraftEULAURL,
+				).
+				Affirmative("I Agree").
+				Negative("Cancel").
+				Value(&accepted),
+		),
+	).Run()
+	if err != nil {
+		return fmt.Errorf(
+			"unable to confirm EULA acceptance interactively after reviewing %s: %w",
+			minecraftEULAURL,
+			err,
+		)
+	}
+
+	if !accepted {
+		return fmt.Errorf(
+			"minecraft server installation aborted: EULA was not accepted (%s)",
+			minecraftEULAURL,
+		)
+	}
+
+	return writeMinecraftEULAFile(workPath)
+}
+
+func hasAcceptedEULA(workPath string) bool {
+	data, err := os.ReadFile(path.Join(workPath, "eula.txt"))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(data)), "eula=true")
+}
+
+func writeMinecraftEULAFile(workPath string) error {
+	content := strings.Join(
+		[]string{
+			"# By changing the setting below to TRUE you are indicating your agreement to the Minecraft EULA.",
+			"# " + minecraftEULAURL,
+			"eula=true",
+			"",
+		},
+		"\n",
+	)
+	err := os.WriteFile(path.Join(workPath, "eula.txt"), []byte(content), 0o644)
+	if err != nil {
+		return fmt.Errorf("write eula.txt failed: %w", err)
+	}
 	return nil
 }
