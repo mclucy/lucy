@@ -9,6 +9,8 @@ import (
 	"github.com/mclucy/lucy/util"
 )
 
+// installModLoaderPackage is a unified function to handle the installation of mods
+// since most mod loaders has the same mod loading process
 func installModLoaderPackage(p types.Package, platform types.Platform) error {
 	if p.Id.Platform != platform {
 		return fmt.Errorf("unsupported platform: %s", p.Id.Platform)
