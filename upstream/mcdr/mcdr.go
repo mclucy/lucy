@@ -108,19 +108,22 @@ func (s provider) ParseAmbiguousVersion(id types.PackageId) (
 ) {
 	var rel *release
 	switch id.Version {
+	case types.LatestCompatibleVersion:
+		rel, err = getLatestCompatibleRelease(id.Name.Pep8String())
 	case types.LatestVersion, types.AllVersion:
 		rel, err = getLatestRelease(id.Name.Pep8String())
 		if err != nil {
 			return id, err
 		}
-	case types.LatestCompatibleVersion:
-		panic("implement me")
 	default:
 		return id, fmt.Errorf(
 			"cannot parse version %s for package %s",
 			id.Version,
 			id.Name,
 		)
+	}
+	if err != nil {
+		return id, err
 	}
 	parsed = types.PackageId{
 		Platform: types.Mcdr,

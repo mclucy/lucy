@@ -69,7 +69,7 @@ var actionInfo cli.ActionFunc = func(
 	}
 
 	p.Information, p.Remote = &infoResult.Information, &infoResult.Remote
-	out = infoOutput(p, cmd.Bool(flagLongOutput.Name))
+	out = infoOutput(&p, cmd.Bool(flagLongOutput.Name))
 
 	if cmd.Bool(flagJsonOutput.Name) {
 		tools.PrintAsJson(p)

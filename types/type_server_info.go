@@ -36,7 +36,10 @@ type EnvironmentInfo struct {
 	Mcdr *McdrEnv
 }
 
-type McdrEnv exttype.FileMcdrConfig
+type McdrEnv struct {
+	Version RawVersion
+	Config  *exttype.FileMcdrConfig
+}
 
 // LucyEnv is a placeholder for Lucy environment; currently just a boolean
 // indicating presence, but can be expanded with more details if needed

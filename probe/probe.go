@@ -134,7 +134,7 @@ func buildServerInfo() types.ServerInfo {
 
 var modPaths = tools.Memoize(
 	func() (paths []string) {
-		if exec := getExecutableInfo(); exec != nil && (exec.ModLoader == types.Fabric || exec.ModLoader == types.Forge) {
+		if exec := getExecutableInfo(); exec != nil && (exec.ModLoader == types.Fabric || exec.ModLoader == types.Forge || exec.ModLoader == types.Neoforge) {
 			paths = append(paths, path.Join(workPath(), "mods"))
 		}
 		return
@@ -151,7 +151,7 @@ var workPath = tools.Memoize(
 	func() string {
 		env := getEnvironment()
 		if env.Mcdr != nil {
-			return env.Mcdr.WorkingDirectory
+			return env.Mcdr.Config.WorkingDirectory
 		}
 		return "."
 	},
@@ -211,7 +211,7 @@ var installedPackages = tools.Memoize(
 
 		env := getEnvironment()
 		if env.Mcdr != nil {
-			for _, dir := range env.Mcdr.PluginDirectories {
+			for _, dir := range env.Mcdr.Config.PluginDirectories {
 				pluginFiles, err := findFileWithExt(dir, ".pyz", ".mcdr")
 				if err != nil {
 					logger.Warn(err)
