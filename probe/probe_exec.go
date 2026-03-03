@@ -24,106 +24,112 @@ const noteSuspectPrePackagedServer = "This is likely a pre-packaged server. Ther
 const multiThreadThreshold = 10
 
 // getExecutableInfo uses the new detector-based architecture to find server executables
-var getExecutableInfo = tools.Memoize(
-	func() *types.ExecutableInfo {
-		var valid []*types.ExecutableInfo
-		workPath := workPath()
+func buildExecutableInfo() *types.ExecutableInfo {
+	var valid []*types.ExecutableInfo
+	workPath := workPath()
 
-		// Layered search
-		// 1. pwd
-		// Proceed to step 2 no matter the result
-		jars, err := findJar(workPath)
+	// Layered search
+	// 1. pwd
+	// Proceed to step 2 no matter the result
+	jars, err := findJar(workPath)
+	if err != nil {
+		logger.Warn(fmt.Errorf("cannot read server directory: %w", err))
+	}
+	for _, jar := range jars {
+		exec := detector.Executable(jar)
+		if exec == nil {
+			continue
+		}
+		valid = append(valid, exec)
+	}
+
+	// 2. Forge/Fabric installation paths
+	// Will break after found
+	fabricLib := path.Join(workPath, "libraries", "net", "fabricmc")
+	forgeLib := path.Join(workPath, "libraries", "net", "minecraftforge")
+	var forgeJars, fabricJars []string
+
+	if stat, err := os.Stat(fabricLib); err == nil && stat.IsDir() {
+		fabricJars, err = findJar(fabricLib)
 		if err != nil {
-			logger.Warn(fmt.Errorf("cannot read server directory: %w", err))
+			logger.Warn(fmt.Errorf("cannot read fabric libraries: %w", err))
 		}
-		for _, jar := range jars {
-			exec := detector.Executable(jar)
-			if exec == nil {
-				continue
-			}
-			valid = append(valid, exec)
+	}
+
+	if stat, err := os.Stat(forgeLib); err == nil && stat.IsDir() {
+		forgeJars, err = findJar(forgeLib)
+		if err != nil {
+			logger.Warn(fmt.Errorf("cannot read forge libraries: %w", err))
 		}
+	}
+	jars = slices.Concat(forgeJars, fabricJars)
 
-		// 2. Forge/Fabric installation paths
-		// Will break after found
-		fabricLib := path.Join(workPath, "libraries", "net", "fabricmc")
-		forgeLib := path.Join(workPath, "libraries", "net", "minecraftforge")
-		var forgeJars, fabricJars []string
-
-		if stat, err := os.Stat(fabricLib); err == nil && stat.IsDir() {
-			fabricJars, err = findJar(fabricLib)
-			if err != nil {
-				logger.Warn(fmt.Errorf("cannot read fabric libraries: %w", err))
-			}
+	for _, jar := range jars {
+		exec := detector.Executable(jar)
+		if exec == nil {
+			continue
 		}
+		valid = append(valid, exec)
+	}
 
-		if stat, err := os.Stat(forgeLib); err == nil && stat.IsDir() {
-			forgeJars, err = findJar(forgeLib)
-			if err != nil {
-				logger.Warn(fmt.Errorf("cannot read forge libraries: %w", err))
-			}
-		}
-		jars = slices.Concat(forgeJars, fabricJars)
-
-		for _, jar := range jars {
-			exec := detector.Executable(jar)
-			if exec == nil {
-				continue
-			}
-			valid = append(valid, exec)
-		}
-
-		// 3. Everything under libraries
-		if len(valid) == 0 {
-			logger.Info("no valid jar found yet, trying to find under libraries")
-			jarPaths := findJarRecursive(path.Join(workPath, "libraries"))
-			if len(jarPaths) >= multiThreadThreshold {
-				mu := sync.Mutex{}
-				wg := sync.WaitGroup{}
-				for _, jarPath := range jarPaths {
-					wg.Add(1)
-					go func(jarPath string) {
-						exec := detector.Executable(jarPath)
-						if exec == nil {
-							wg.Done()
-							return
-						}
-						mu.Lock()
-						valid = append(valid, exec)
-						mu.Unlock()
-						wg.Done()
-					}(jarPath)
-				}
-				wg.Wait()
-			} else {
-				for _, jarPath := range jarPaths {
+	// 3. Everything under libraries
+	if len(valid) == 0 {
+		logger.Info("no valid jar found yet, trying to find under libraries")
+		jarPaths := findJarRecursive(path.Join(workPath, "libraries"))
+		if len(jarPaths) >= multiThreadThreshold {
+			mu := sync.Mutex{}
+			wg := sync.WaitGroup{}
+			for _, jarPath := range jarPaths {
+				wg.Add(1)
+				go func(jarPath string) {
 					exec := detector.Executable(jarPath)
 					if exec == nil {
-						continue
+						wg.Done()
+						return
 					}
+					mu.Lock()
 					valid = append(valid, exec)
+					mu.Unlock()
+					wg.Done()
+				}(jarPath)
+			}
+			wg.Wait()
+		} else {
+			for _, jarPath := range jarPaths {
+				exec := detector.Executable(jarPath)
+				if exec == nil {
+					continue
 				}
+				valid = append(valid, exec)
 			}
 		}
+	}
 
-		// 4. pwd, recursively
-		// Prompt before do so due to the potential large number of files
-		// TODO: Implement
-		switch len(valid) {
-		case 0:
-			logger.Info("no server executable found")
-			return UnknownExecutable
-		case 1:
-			return valid[0]
-		default:
-			choice := selectExecutable(
-				valid,
-				[]string{noteSuspectPrePackagedServer},
-			)
-			return valid[choice]
-		}
-	},
-)
+	// 4. pwd, recursively
+	// Prompt before do so due to the potential large number of files
+	// TODO: Implement
+	switch len(valid) {
+	case 0:
+		logger.Info("no server executable found")
+		return UnknownExecutable
+	case 1:
+		return valid[0]
+	default:
+		choice := selectExecutable(
+			valid,
+			[]string{noteSuspectPrePackagedServer},
+		)
+		return valid[choice]
+	}
+}
+
+var getExecutableInfo = tools.Memoize(buildExecutableInfo)
+
+func init() {
+	resetProbeExecCache = func() {
+		getExecutableInfo = tools.Memoize(buildExecutableInfo)
+	}
+}
 
 func selectExecutable(
 	executables []*types.ExecutableInfo,

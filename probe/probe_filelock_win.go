@@ -31,54 +31,60 @@ import (
 
 // This is AI generated code, please check it before use. I have no knowledge to
 // Windows syscall.
-var checkServerFileLock = tools.Memoize(
-	func() *types.ServerActivity {
-		lockPath := path.Join(
-			savePath(),
-			"session.lock",
-		)
-		file, err := os.OpenFile(lockPath, os.O_RDWR, 0o666)
-		defer tools.CloseReader(file, logger.Warn)
+func buildServerFileLockStatus() *types.ServerActivity {
+	lockPath := path.Join(
+		savePath(),
+		"session.lock",
+	)
+	file, err := os.OpenFile(lockPath, os.O_RDWR, 0o666)
+	defer tools.CloseReader(file, logger.Warn)
 
-		if err != nil {
-			return nil
-		}
+	if err != nil {
+		return nil
+	}
 
-		err = windows.LockFileEx(
+	err = windows.LockFileEx(
+		windows.Handle(file.Fd()),
+		windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY,
+		0,
+		1,
+		0,
+		&windows.Overlapped{},
+	)
+	if err != nil {
+		var info windows.ByHandleFileInformation
+		err = windows.GetFileInformationByHandle(
 			windows.Handle(file.Fd()),
-			windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY,
-			0,
-			1,
-			0,
-			&windows.Overlapped{},
+			&info,
 		)
-		if err != nil {
-			var info windows.ByHandleFileInformation
-			err = windows.GetFileInformationByHandle(
-				windows.Handle(file.Fd()),
-				&info,
-			)
-			if err == nil {
-				return &types.ServerActivity{
-					Active: true,
-					Pid:    int(info.VolumeSerialNumber),
-				}
+		if err == nil {
+			return &types.ServerActivity{
+				Active: true,
+				Pid:    int(info.VolumeSerialNumber),
 			}
 		}
-		err = windows.UnlockFileEx(
-			windows.Handle(file.Fd()),
-			0,
-			1,
-			0,
-			&windows.Overlapped{},
-		)
-		if err != nil {
-			return nil
-		}
+	}
+	err = windows.UnlockFileEx(
+		windows.Handle(file.Fd()),
+		0,
+		1,
+		0,
+		&windows.Overlapped{},
+	)
+	if err != nil {
+		return nil
+	}
 
-		return &types.ServerActivity{
-			Active: false,
-			Pid:    0,
-		}
-	},
-)
+	return &types.ServerActivity{
+		Active: false,
+		Pid:    0,
+	}
+}
+
+var checkServerFileLock = tools.Memoize(buildServerFileLockStatus)
+
+func init() {
+	resetProbeFileLockCache = func() {
+		checkServerFileLock = tools.Memoize(buildServerFileLockStatus)
+	}
+}

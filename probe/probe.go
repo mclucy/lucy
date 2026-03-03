@@ -25,11 +25,60 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+var (
+	serverInfoMu    sync.RWMutex
+	serverInfoCache types.ServerInfo
+	serverInfoReady bool
+
+	resetProbeExecCache     = func() {}
+	resetProbeFileLockCache = func() {}
+)
+
 // ServerInfo is the exposed function for external packages to get serverInfo.
-// As we can assume that the environment does not change while the program is
-// running, a sync.Once is used to prevent further calls to this function. Rather,
-// the cached serverInfo is used as the return value.
-var ServerInfo = tools.Memoize(buildServerInfo)
+// The value is cached after the first build, and read access is blocked while
+// Rebuild refreshes the cache.
+func ServerInfo() types.ServerInfo {
+	serverInfoMu.RLock()
+	if serverInfoReady {
+		cached := serverInfoCache
+		serverInfoMu.RUnlock()
+		return cached
+	}
+	serverInfoMu.RUnlock()
+
+	serverInfoMu.Lock()
+	defer serverInfoMu.Unlock()
+
+	if !serverInfoReady {
+		resetProbeMemoizedStateLocked()
+		serverInfoCache = buildServerInfo()
+		serverInfoReady = true
+	}
+
+	return serverInfoCache
+}
+
+// Rebuild forces ServerInfo to be regenerated and blocks all readers while
+// rebuilding.
+func Rebuild() {
+	serverInfoMu.Lock()
+	defer serverInfoMu.Unlock()
+
+	resetProbeMemoizedStateLocked()
+	serverInfoCache = buildServerInfo()
+	serverInfoReady = true
+}
+
+func resetProbeMemoizedStateLocked() {
+	modPaths = tools.Memoize(buildModPaths)
+	getEnvironment = tools.Memoize(buildEnvironment)
+	workPath = tools.Memoize(buildWorkPath)
+	serverProperties = tools.Memoize(buildServerProperties)
+	savePath = tools.Memoize(buildSavePath)
+	installedPackages = tools.Memoize(buildInstalledPackages)
+	resetProbeExecCache()
+	resetProbeFileLockCache()
+}
 
 // buildServerInfo builds the server information by performing several checks
 // and gathering data from various sources. It uses goroutines to perform these
@@ -132,105 +181,105 @@ func buildServerInfo() types.ServerInfo {
 // as ServerInfo() applies a memoization mechanism. Every time a serverInfo
 // is needed, just call ServerInfo() without the concern of redundant calculation.
 
-var modPaths = tools.Memoize(
-	func() (paths []string) {
-		if exec := getExecutableInfo(); exec != nil && (exec.ModLoader == types.Fabric || exec.ModLoader == types.Forge || exec.ModLoader == types.Neoforge) {
-			paths = append(paths, path.Join(workPath(), "mods"))
+func buildModPaths() (paths []string) {
+	if exec := getExecutableInfo(); exec != nil && (exec.ModLoader == types.Fabric || exec.ModLoader == types.Forge || exec.ModLoader == types.Neoforge) {
+		paths = append(paths, path.Join(workPath(), "mods"))
+	}
+	return
+}
+
+var modPaths = tools.Memoize(buildModPaths)
+
+func buildEnvironment() types.EnvironmentInfo {
+	return detector.Environment(".")
+}
+
+var getEnvironment = tools.Memoize(buildEnvironment)
+
+func buildWorkPath() string {
+	env := getEnvironment()
+	if env.Mcdr != nil {
+		return env.Mcdr.Config.WorkingDirectory
+	}
+	return "."
+}
+
+var workPath = tools.Memoize(buildWorkPath)
+
+func buildServerProperties() exttype.FileMinercaftServerProperties {
+	exec := getExecutableInfo()
+	propertiesPath := path.Join(workPath(), "server.properties")
+	file, err := ini.Load(propertiesPath)
+	if err != nil {
+		if exec != UnknownExecutable {
+			logger.Warn(errors.New("this server is missing a server.properties"))
 		}
-		return
-	},
-)
+		return nil
+	}
 
-var getEnvironment = tools.Memoize(
-	func() types.EnvironmentInfo {
-		return detector.Environment(".")
-	},
-)
-
-var workPath = tools.Memoize(
-	func() string {
-		env := getEnvironment()
-		if env.Mcdr != nil {
-			return env.Mcdr.Config.WorkingDirectory
+	properties := make(map[string]string)
+	for _, section := range file.Sections() {
+		for _, key := range section.Keys() {
+			properties[key.Name()] = key.String()
 		}
-		return "."
-	},
-)
+	}
 
-var serverProperties = tools.Memoize(
-	func() exttype.FileMinercaftServerProperties {
-		exec := getExecutableInfo()
-		propertiesPath := path.Join(workPath(), "server.properties")
-		file, err := ini.Load(propertiesPath)
+	return properties
+}
+
+var serverProperties = tools.Memoize(buildServerProperties)
+
+func buildSavePath() string {
+	serverProperties := serverProperties()
+	if serverProperties == nil {
+		return ""
+	}
+	levelName := serverProperties["level-name"]
+	return path.Join(workPath(), levelName)
+}
+
+var savePath = tools.Memoize(buildSavePath)
+
+func buildInstalledPackages() (mods []types.Package) {
+	paths := modPaths()
+	for _, modPath := range paths {
+		jarFiles, err := findJar(modPath)
 		if err != nil {
-			if exec != UnknownExecutable {
-				logger.Warn(errors.New("this server is missing a server.properties"))
-			}
-			return nil
+			logger.Warn(err)
+			logger.Info("cannot read the mod directory")
+			continue
 		}
-
-		properties := make(map[string]string)
-		for _, section := range file.Sections() {
-			for _, key := range section.Keys() {
-				properties[key.Name()] = key.String()
+		for _, jarPath := range jarFiles {
+			analyzed := detector.Packages(jarPath)
+			if analyzed != nil {
+				mods = append(mods, analyzed...)
 			}
 		}
+	}
 
-		return properties
-	},
-)
-
-var savePath = tools.Memoize(
-	func() string {
-		serverProperties := serverProperties()
-		if serverProperties == nil {
-			return ""
-		}
-		levelName := serverProperties["level-name"]
-		return path.Join(workPath(), levelName)
-	},
-)
-
-var installedPackages = tools.Memoize(
-	func() (mods []types.Package) {
-		paths := modPaths()
-		for _, modPath := range paths {
-			jarFiles, err := findJar(modPath)
+	env := getEnvironment()
+	if env.Mcdr != nil {
+		for _, dir := range env.Mcdr.Config.PluginDirectories {
+			pluginFiles, err := findFileWithExt(dir, ".pyz", ".mcdr")
 			if err != nil {
 				logger.Warn(err)
-				logger.Info("cannot read the mod directory")
+				logger.Info("cannot read the MCDR plugin directory")
 				continue
 			}
-			for _, jarPath := range jarFiles {
-				analyzed := detector.Packages(jarPath)
+			for _, pluginFile := range pluginFiles {
+				analyzed := detector.McdrPlugin(pluginFile)
 				if analyzed != nil {
 					mods = append(mods, analyzed...)
 				}
 			}
 		}
+	}
 
-		env := getEnvironment()
-		if env.Mcdr != nil {
-			for _, dir := range env.Mcdr.Config.PluginDirectories {
-				pluginFiles, err := findFileWithExt(dir, ".pyz", ".mcdr")
-				if err != nil {
-					logger.Warn(err)
-					logger.Info("cannot read the MCDR plugin directory")
-					continue
-				}
-				for _, pluginFile := range pluginFiles {
-					analyzed := detector.McdrPlugin(pluginFile)
-					if analyzed != nil {
-						mods = append(mods, analyzed...)
-					}
-				}
-			}
-		}
+	sort.Slice(
+		mods,
+		func(i, j int) bool { return mods[i].Id.Name < mods[j].Id.Name },
+	)
+	return mods
+}
 
-		sort.Slice(
-			mods,
-			func(i, j int) bool { return mods[i].Id.Name < mods[j].Id.Name },
-		)
-		return mods
-	},
-)
+var installedPackages = tools.Memoize(buildInstalledPackages)

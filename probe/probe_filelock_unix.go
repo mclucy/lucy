@@ -35,72 +35,78 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-var checkServerFileLock = tools.Memoize(
-	func() *types.ServerActivity {
-		if savePath() == "" {
-			return nil
-		}
+func buildServerFileLockStatus() *types.ServerActivity {
+	if savePath() == "" {
+		return nil
+	}
 
-		lockPath := path.Join(
-			savePath(),
-			"session.lock",
-		)
-		// Try lsof before using the file lock check. As the file lock check is
-		// tested to be unstable on linux (Ubuntu 20.04, Linux 5.15.0-48-generic).
-		pid, err := lsof(lockPath)
-		if err != nil {
-			return nil
-		}
-		if pid != 0 {
-			return &types.ServerActivity{
-				Active: true,
-				Pid:    pid,
-			}
-		}
-
-		file, err := os.OpenFile(lockPath, os.O_RDWR|os.O_APPEND, 0o666)
-		defer tools.CloseReader(file, logger.Warn)
-		if err != nil {
-			logger.Warn(err)
-			return nil
-		}
-
-		logger.Debug("checking lock on: " + file.Name())
-		err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			logger.Debug("found a lock on the file: " + err.Error())
-			fl := syscall.Flock_t{
-				Type: syscall.F_WRLCK,
-			}
-			err = syscall.FcntlFlock(file.Fd(), syscall.F_GETLK, &fl)
-			logger.Warn(
-				fmt.Errorf("activity detected but cannot get pid: %w", err),
-			)
-			if err != nil {
-				return &types.ServerActivity{
-					Active: true,
-					Pid:    0,
-				}
-			}
-			return &types.ServerActivity{
-				Active: true,
-				Pid:    int(fl.Pid),
-			}
-		} else if err != nil {
-			return nil
-		}
-		logger.Debug("no lock found on the file: " + file.Name())
-		err = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-		if err != nil {
-			logger.Warn(err)
-		}
-
+	lockPath := path.Join(
+		savePath(),
+		"session.lock",
+	)
+	// Try lsof before using the file lock check. As the file lock check is
+	// tested to be unstable on linux (Ubuntu 20.04, Linux 5.15.0-48-generic).
+	pid, err := lsof(lockPath)
+	if err != nil {
+		return nil
+	}
+	if pid != 0 {
 		return &types.ServerActivity{
-			Active: false,
-			Pid:    0,
+			Active: true,
+			Pid:    pid,
 		}
-	},
-)
+	}
+
+	file, err := os.OpenFile(lockPath, os.O_RDWR|os.O_APPEND, 0o666)
+	defer tools.CloseReader(file, logger.Warn)
+	if err != nil {
+		logger.Warn(err)
+		return nil
+	}
+
+	logger.Debug("checking lock on: " + file.Name())
+	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if errors.Is(err, syscall.EWOULDBLOCK) {
+		logger.Debug("found a lock on the file: " + err.Error())
+		fl := syscall.Flock_t{
+			Type: syscall.F_WRLCK,
+		}
+		err = syscall.FcntlFlock(file.Fd(), syscall.F_GETLK, &fl)
+		logger.Warn(
+			fmt.Errorf("activity detected but cannot get pid: %w", err),
+		)
+		if err != nil {
+			return &types.ServerActivity{
+				Active: true,
+				Pid:    0,
+			}
+		}
+		return &types.ServerActivity{
+			Active: true,
+			Pid:    int(fl.Pid),
+		}
+	} else if err != nil {
+		return nil
+	}
+	logger.Debug("no lock found on the file: " + file.Name())
+	err = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	if err != nil {
+		logger.Warn(err)
+	}
+
+	return &types.ServerActivity{
+		Active: false,
+		Pid:    0,
+	}
+}
+
+var checkServerFileLock = tools.Memoize(buildServerFileLockStatus)
+
+func init() {
+	resetProbeFileLockCache = func() {
+		checkServerFileLock = tools.Memoize(buildServerFileLockStatus)
+	}
+}
 
 func lsof(filePath string) (pid int, err error) {
 	cmd := exec.Command("lsof", filePath)
