@@ -52,7 +52,7 @@ func initMcdr() error {
 	}
 
 	// make subdir
-	err = os.Mkdir("server", 0755)
+	err = os.Mkdir("server", 0o755)
 	if err != nil {
 		return err
 	}
