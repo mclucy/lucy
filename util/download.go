@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"time"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/logger"
@@ -23,6 +24,8 @@ type DownloadOptions struct {
 	HashAlgorithm cache.HashAlgorithm
 	Filename      string
 	WrapReader    func(io.Reader, int64) io.Reader
+	OnCacheHit    func()
+	TTL           time.Duration
 }
 
 type DownloadResult struct {
@@ -38,6 +41,9 @@ func CachedDownload(url, dir string, opts DownloadOptions) (*DownloadResult, err
 	}
 	if hit && cachedFile != nil {
 		defer cachedFile.Close()
+		if opts.OnCacheHit != nil {
+			opts.OnCacheHit()
+		}
 		destPath := path.Join(dir, path.Base(cachedFile.Name()))
 		destFile, err := tools.CopyFile(cachedFile, destPath)
 		if err != nil {
@@ -145,6 +151,9 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (*DownloadResult, e
 	ttl := cache.DefaultCacheConfig().DownloadKeepFor
 	if opts.Kind == cache.KindMetadata {
 		ttl = cache.DefaultCacheConfig().IndexRefreshAfter
+	}
+	if opts.TTL > 0 {
+		ttl = opts.TTL
 	}
 
 	if err := cache.Network().IngestEntry(
