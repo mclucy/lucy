@@ -34,6 +34,11 @@ type DownloadResult struct {
 	Verified bool
 }
 
+// CachedDownload downloads a file from url into dir, using the cache for
+// deduplication. On cache hit the file is copied from the store and
+// OnCacheHit (if set) is called. On miss the response body is streamed
+// through an optional WrapReader (for progress tracking) and simultaneously
+// hashed for both content-addressing and integrity verification.
 func CachedDownload(url, dir string, opts DownloadOptions) (*DownloadResult, error) {
 	hit, cachedFile, err := cache.Network().Get(url)
 	if err != nil {
