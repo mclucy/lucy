@@ -115,6 +115,8 @@ func (h *handler) AddEntry(
 		return err
 	}
 
+	logger.Debug(fmt.Sprintf("cache store: %s (%s, %s)", k, kind, integrity.State))
+
 	h.index.put(ckey, &CacheEntry{
 		Kind:        kind,
 		Filename:    filename,
@@ -176,6 +178,8 @@ func (h *handler) IngestEntry(
 		return err
 	}
 
+	logger.Debug(fmt.Sprintf("cache ingest: %s (%s, %s)", k, kind, integrity.State))
+
 	h.index.put(ckey, &CacheEntry{
 		Kind:        kind,
 		Filename:    filename,
@@ -228,6 +232,7 @@ func (h *handler) Get(k string) (hit bool, file *os.File, err error) {
 	ckey := canonicalizeKey(k)
 	entry, ok := h.index.get(ckey)
 	if !ok {
+		logger.Debug("cache miss: " + k)
 		return false, nil, nil
 	}
 
@@ -235,6 +240,7 @@ func (h *handler) Get(k string) (hit bool, file *os.File, err error) {
 	if err != nil {
 		return false, nil, err
 	}
+	logger.Debug("cache hit: " + k)
 	return true, file, nil
 }
 
@@ -282,6 +288,7 @@ func (h *handler) ClearAll() error {
 	if err := resetCache(h.index.path); err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
+	logger.Info("cache cleared")
 
 	idx := newIndex(h.index.path)
 	if !idx.create() {

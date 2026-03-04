@@ -128,6 +128,7 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (*DownloadResult, e
 			State:     cache.IntegrityVerified,
 		}
 		verified = true
+		logger.Debug(fmt.Sprintf("integrity verified (%s): %s", opts.HashAlgorithm, url))
 	}
 
 	if filename == "" {

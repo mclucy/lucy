@@ -53,6 +53,7 @@ func (idx *index) load() bool {
 	}
 
 	if idx.migrateFromV1(data) {
+		logger.Info("cache index migrated from v1 to v2")
 		if err := idx.flush(); err != nil {
 			logger.Warn(fmt.Errorf("failed to persist migrated index: %w", err))
 		}
