@@ -22,6 +22,7 @@ type DownloadOptions struct {
 	ExpectedHash  string
 	HashAlgorithm cache.HashAlgorithm
 	Filename      string
+	WrapReader    func(io.Reader, int64) io.Reader
 }
 
 type DownloadResult struct {
@@ -90,7 +91,13 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (*DownloadResult, e
 	}
 
 	w := io.MultiWriter(writers...)
-	size, err := io.Copy(w, resp.Body)
+
+	var reader io.Reader = resp.Body
+	if opts.WrapReader != nil {
+		reader = opts.WrapReader(reader, resp.ContentLength)
+	}
+
+	size, err := io.Copy(w, reader)
 	if err != nil {
 		return nil, fmt.Errorf("download stream failed: %w", err)
 	}
