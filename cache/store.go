@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,48 @@ func (s *store) Remove(contentHash string) error {
 	if err := os.RemoveAll(p); err != nil {
 		return fmt.Errorf("failed to remove blob: %w", err)
 	}
+	return nil
+}
+
+// Ingest moves a file from srcPath into the content-addressed store.
+// Tries os.Rename for atomic same-filesystem moves, falls back to copy+delete.
+func (s *store) Ingest(contentHash, filename, srcPath string) error {
+	filename = sanitizeFilename(filename, contentHash)
+	dir := filepath.Join(s.dir, contentHash)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("failed to create blob directory: %w", err)
+	}
+	destPath := filepath.Join(dir, filename)
+	if !containedUnder(dir, destPath) {
+		return fmt.Errorf("filename %q escapes cache directory", filename)
+	}
+
+	if err := os.Rename(srcPath, destPath); err == nil {
+		return nil
+	}
+
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to open source for ingestion: %w", err)
+	}
+	defer src.Close()
+
+	dst, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("failed to create destination blob: %w", err)
+	}
+
+	if _, err := io.Copy(dst, src); err != nil {
+		dst.Close()
+		os.Remove(destPath)
+		return fmt.Errorf("failed to copy blob during ingestion: %w", err)
+	}
+	if err := dst.Close(); err != nil {
+		os.Remove(destPath)
+		return fmt.Errorf("failed to finalize blob: %w", err)
+	}
+
+	os.Remove(srcPath)
 	return nil
 }
 
