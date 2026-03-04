@@ -17,8 +17,10 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-var UnknownExecutable = detector.UnknownExecutable
-var NoExecutable = detector.NoExecutable
+var (
+	UnknownExecutable = detector.UnknownExecutable
+	NoExecutable      = detector.NoExecutable
+)
 
 const noteSuspectPrePackagedServer = "This is likely a pre-packaged server. Therefore, you might want to ignore the paths, and only look for the executable with your expected game version and mod loader."
 

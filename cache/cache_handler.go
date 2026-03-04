@@ -115,6 +115,8 @@ func (h *handler) AddEntry(
 		return err
 	}
 
+	logger.Debug(fmt.Sprintf("cache store: %s (%s, %s)", k, kind, integrity.State))
+
 	h.index.put(ckey, &CacheEntry{
 		Kind:        kind,
 		Filename:    filename,
@@ -129,6 +131,69 @@ func (h *handler) AddEntry(
 	if err := h.index.flush(); err != nil {
 		logger.Warn(
 			fmt.Errorf("failed to update index after adding item: %w", err),
+		)
+	}
+	return nil
+}
+
+// IngestEntry is a file-path variant of AddEntry for large files that should
+// not be loaded into memory. The source file at srcPath is moved into the
+// content-addressed store; contentHash must be pre-computed by the caller.
+func (h *handler) IngestEntry(
+	srcPath string,
+	filename string,
+	k string,
+	size int64,
+	contentHash string,
+	kind EntryKind,
+	integrity Integrity,
+	expiration time.Duration,
+) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if !h.on {
+		return nil
+	}
+
+	if expiration == 0 {
+		expiration = h.policy.ConfigFor(kind).TTL
+	}
+
+	ckey := canonicalizeKey(k)
+	if filename == "" {
+		filename = contentHash
+	}
+	filename = sanitizeFilename(filename, contentHash)
+
+	if existing, ok := h.index.get(ckey); ok {
+		if existing.ContentHash == contentHash {
+			return nil
+		}
+		_ = h.store.Remove(existing.ContentHash)
+		h.index.delete(ckey)
+	}
+
+	if err := h.store.Ingest(contentHash, filename, srcPath); err != nil {
+		return err
+	}
+
+	logger.Debug(fmt.Sprintf("cache ingest: %s (%s, %s)", k, kind, integrity.State))
+
+	h.index.put(ckey, &CacheEntry{
+		Kind:        kind,
+		Filename:    filename,
+		Size:        size,
+		ContentHash: contentHash,
+		Integrity:   integrity,
+		Expiration:  time.Now().Add(expiration),
+		Key:         string(ckey),
+		CreatedAt:   time.Now(),
+	})
+
+	if err := h.index.flush(); err != nil {
+		logger.Warn(
+			fmt.Errorf("failed to update index after ingesting item: %w", err),
 		)
 	}
 	return nil
@@ -167,6 +232,7 @@ func (h *handler) Get(k string) (hit bool, file *os.File, err error) {
 	ckey := canonicalizeKey(k)
 	entry, ok := h.index.get(ckey)
 	if !ok {
+		logger.Debug("cache miss: " + k)
 		return false, nil, nil
 	}
 
@@ -174,6 +240,7 @@ func (h *handler) Get(k string) (hit bool, file *os.File, err error) {
 	if err != nil {
 		return false, nil, err
 	}
+	logger.Debug("cache hit: " + k)
 	return true, file, nil
 }
 
@@ -221,6 +288,7 @@ func (h *handler) ClearAll() error {
 	if err := resetCache(h.index.path); err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
+	logger.Info("cache cleared")
 
 	idx := newIndex(h.index.path)
 	if !idx.create() {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
 )
@@ -17,10 +18,16 @@ func installGenericPackage(p types.Package) error {
 		return errors.New("package remote data is missing")
 	}
 
-	_, _, err := util.DownloadFile(p.Remote.FileUrl, ".")
+	result, err := util.CachedDownload(p.Remote.FileUrl, ".", util.DownloadOptions{
+		Kind:          cache.KindArtifact,
+		Filename:      p.Remote.Filename,
+		ExpectedHash:  p.Remote.Hash,
+		HashAlgorithm: cache.ParseHashAlgorithm(p.Remote.HashAlgorithm),
+	})
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
+	defer result.File.Close()
 
 	return nil
 }

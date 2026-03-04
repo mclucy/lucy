@@ -23,13 +23,13 @@ var subcmdDownload = &cli.Command{
 			return fmt.Errorf("url is required")
 		}
 
-		file, hit, err := util.DownloadFileWithCache(url, ".", 0)
+		result, err := util.CachedDownload(url, ".", util.DownloadOptions{})
 		if err != nil {
 			return err
 		}
 
-		println("downloaded", file.Name())
-		if hit {
+		println("downloaded", result.File.Name())
+		if result.CacheHit {
 			println("Cache hit")
 		} else {
 			println("Cache miss")

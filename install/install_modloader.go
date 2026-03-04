@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
@@ -23,13 +24,20 @@ func installModLoaderPackage(p types.Package, platform types.Platform) error {
 		return errors.New("mod directory not found")
 	}
 
-	_, _, err := util.DownloadFile(
+	result, err := util.CachedDownload(
 		p.Remote.FileUrl,
 		serverInfo.ModPath[0],
+		util.DownloadOptions{
+			Kind:          cache.KindArtifact,
+			Filename:      p.Remote.Filename,
+			ExpectedHash:  p.Remote.Hash,
+			HashAlgorithm: cache.ParseHashAlgorithm(p.Remote.HashAlgorithm),
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
+	defer result.File.Close()
 
 	return nil
 }
