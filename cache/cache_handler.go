@@ -18,13 +18,17 @@ type handler struct {
 	policy Policy
 }
 
-func newHandler(name string) (obj *handler) {
+func newHandler(name string, cfg CacheConfig) (obj *handler) {
 	dir := setDir(name)
 	obj = &handler{
-		on:     true,
+		on:     cfg.Enabled,
 		dir:    dir,
 		store:  newStore(dir),
-		policy: DefaultPolicy(),
+		policy: cfg.toPolicy(),
+	}
+
+	if !obj.on {
+		return obj
 	}
 
 	if err := os.MkdirAll(obj.dir, 0o700); err != nil {

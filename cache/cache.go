@@ -9,7 +9,7 @@ var (
 
 func Network() *handler {
 	networkOnce.Do(func() {
-		networkHandler = newHandler("network")
+		networkHandler = newHandler("network", DefaultCacheConfig())
 	})
 	return networkHandler
 }
