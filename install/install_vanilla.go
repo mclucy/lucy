@@ -1,25 +1,23 @@
 package install
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash"
-	"io"
-	"net/http"
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/huh"
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/mojang"
+	"github.com/mclucy/lucy/util"
 )
 
 const minecraftEULAURL = "https://aka.ms/MinecraftEULA"
@@ -68,8 +66,9 @@ func installMinecraftServer(id types.PackageId) error {
 		return err
 	}
 
-	serverJar, hasher, err := downloadMinecraftServerJarWithProgress(
+	serverJar, err := downloadMinecraftServerJar(
 		detail.Downloads.Server.Url,
+		detail.Downloads.Server.Sha1,
 		workPath,
 	)
 	if err != nil {
@@ -77,12 +76,6 @@ func installMinecraftServer(id types.PackageId) error {
 	}
 	defer func() { _ = serverJar.Close() }()
 
-	if err := verifyMojangDownloadSha1Hash(
-		hasher,
-		detail.Downloads.Server.Sha1,
-	); err != nil {
-		return err
-	}
 	if err := addExecutePermission(serverJar); err != nil {
 		return err
 	}
@@ -94,20 +87,20 @@ func fetchMojangVersionManifest() (
 	*exttype.ApiMojangMinecraftVersionManifest,
 	error,
 ) {
-	resp, err := http.Get(mojang.VersionManifestURL)
+	result, err := util.CachedDownload(
+		mojang.VersionManifestURL,
+		os.TempDir(),
+		util.DownloadOptions{Kind: cache.KindMetadata},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("fetch mojang version manifest failed: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		_ = result.File.Close()
+		_ = os.Remove(result.File.Name())
+	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf(
-			"fetch mojang version manifest failed: status %d",
-			resp.StatusCode,
-		)
-	}
-
-	data, err := io.ReadAll(resp.Body)
+	data, err := os.ReadFile(result.File.Name())
 	if err != nil {
 		return nil, fmt.Errorf("read mojang version manifest failed: %w", err)
 	}
@@ -150,23 +143,26 @@ func resolveMinecraftVersionEntry(
 }
 
 func fetchMojangVersionDetail(versionURL string) (*mojangVersionDetail, error) {
-	resp, err := http.Get(versionURL)
+	result, err := util.CachedDownload(
+		versionURL,
+		os.TempDir(),
+		util.DownloadOptions{
+			Kind: cache.KindMetadata,
+			TTL:  7 * 24 * time.Hour,
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"fetch minecraft version metadata failed: %w",
 			err,
 		)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		_ = result.File.Close()
+		_ = os.Remove(result.File.Name())
+	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf(
-			"fetch minecraft version metadata failed: status %d",
-			resp.StatusCode,
-		)
-	}
-
-	data, err := io.ReadAll(resp.Body)
+	data, err := os.ReadFile(result.File.Name())
 	if err != nil {
 		return nil, fmt.Errorf(
 			"read minecraft version metadata failed: %w",
@@ -185,72 +181,41 @@ func fetchMojangVersionDetail(versionURL string) (*mojangVersionDetail, error) {
 	return detail, nil
 }
 
-func verifyMojangDownloadSha1Hash(hasher hash.Hash, expected string) error {
-	if expected == "" {
-		return nil
-	}
-
-	actualHex := hex.EncodeToString(hasher.Sum(nil))
-	if !strings.EqualFold(actualHex, expected) {
-		return fmt.Errorf(
-			"minecraft server jar sha1 mismatch: expected %s, got %s",
-			expected,
-			actualHex,
-		)
-	}
-
-	return nil
-}
-
-func downloadMinecraftServerJarWithProgress(
+func downloadMinecraftServerJar(
 	url string,
+	expectedSha1 string,
 	dir string,
-) (*os.File, hash.Hash, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, nil, fmt.Errorf("download request failed: status %d", resp.StatusCode)
-	}
-
-	filename := path.Base(resp.Request.URL.Path)
-	if filename == "" || filename == "." || filename == "/" {
-		filename = "server.jar"
-	}
-
-	filePath := path.Join(dir, filename)
-	file, err := os.Create(filePath)
-	if err != nil {
-		return nil, nil, err
-	}
-
+) (*os.File, error) {
 	tracker := tuiprogress.NewTracker("Downloading server")
-	hasher := sha1.New()
-	writer := io.MultiWriter(file, hasher)
-	reader := tracker.ProxyReader(resp.Body, resp.ContentLength)
 
-	copyErrChan := make(chan error, 1)
+	var result *util.DownloadResult
+	errCh := make(chan error, 1)
 	go func() {
 		defer tracker.Close()
-		_, copyErr := io.Copy(writer, reader)
-		copyErrChan <- copyErr
+		var err error
+		result, err = util.CachedDownload(url, dir, util.DownloadOptions{
+			Kind:          cache.KindArtifact,
+			ExpectedHash:  expectedSha1,
+			HashAlgorithm: cache.HashSHA1,
+			WrapReader:    tracker.ProxyReader,
+			OnCacheHit: func() {
+				tracker.SetMessage("cached")
+				tracker.SetPercent(1.0)
+			},
+		})
+		errCh <- err
 	}()
 
 	runErr := tracker.Run()
-	copyErr := <-copyErrChan
+	dlErr := <-errCh
 	if runErr != nil {
-		logger.ShowError(fmt.Errorf("progress renderer failed, download continues: %w", runErr))
+		logger.ShowError(fmt.Errorf("progress renderer failed: %w", runErr))
 	}
-	if copyErr != nil {
-		_ = file.Close()
-		_ = os.Remove(filePath)
-		return nil, nil, copyErr
+	if dlErr != nil {
+		return nil, dlErr
 	}
 
-	return file, hasher, nil
+	return result.File, nil
 }
 
 func ensureMinecraftEULAAccepted(workPath string) error {
