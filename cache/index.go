@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
 	"io"
 	"os"
 	"path/filepath"
-	"time"
-
-	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 )
 
 const indexVersion = 2
@@ -52,14 +50,6 @@ func (idx *index) load() bool {
 		return true
 	}
 
-	if idx.migrateFromV1(data) {
-		logger.Info("cache index migrated from v1 to v2")
-		if err := idx.flush(); err != nil {
-			logger.Warn(fmt.Errorf("failed to persist migrated index: %w", err))
-		}
-		return true
-	}
-
 	_ = resetCache(idx.path)
 	return idx.create()
 }
@@ -73,31 +63,6 @@ func (idx *index) tryLoadV2(data []byte) bool {
 		return false
 	}
 	idx.entries = m.Entries
-	return true
-}
-
-func (idx *index) migrateFromV1(data []byte) bool {
-	var legacy manifest
-	if err := json.Unmarshal(data, &legacy); err != nil {
-		return false
-	}
-	if legacy.Content == nil || legacy.LifeTime <= 0 || legacy.MaxSize <= 0 {
-		return false
-	}
-
-	idx.entries = make(map[key]*CacheEntry, len(legacy.Content))
-	for k, item := range legacy.Content {
-		idx.entries[k] = &CacheEntry{
-			Kind:        KindArtifact,
-			Filename:    item.Filename,
-			Size:        int64(item.Size),
-			ContentHash: item.Hash,
-			Integrity:   Integrity{State: IntegrityUnverified},
-			Expiration:  item.Expiration,
-			Key:         string(k),
-			CreatedAt:   time.Time{},
-		}
-	}
 	return true
 }
 
