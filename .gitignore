@@ -43,3 +43,7 @@ documents
 
 # Taskfile
 .task
+
+# Code agents
+.sisyphus
+AGENTS.md
