@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
 )
@@ -33,11 +33,16 @@ func installMcdrPlugin(p types.Package) error {
 		return errors.New("mcdr plugin directory not found")
 	}
 
-	file, _, err := util.DownloadFile(p.Remote.FileUrl, pluginDirectories[0])
-	tools.CloseReader(file, nil)
+	result, err := util.CachedDownload(p.Remote.FileUrl, pluginDirectories[0], util.DownloadOptions{
+		Kind:          cache.KindArtifact,
+		Filename:      p.Remote.Filename,
+		ExpectedHash:  p.Remote.Hash,
+		HashAlgorithm: cache.ParseHashAlgorithm(p.Remote.HashAlgorithm),
+	})
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
+	defer result.File.Close()
 
 	return nil
 }
