@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -28,8 +27,8 @@ func setDir(name string) string {
 func (h *handler) clearExpiredCache() {
 	now := time.Now()
 	var expired []key
-	for k, item := range h.manifest.Content {
-		if item.Expiration.Before(now) {
+	for k, entry := range h.index.all() {
+		if entry.Expiration.Before(now) {
 			expired = append(expired, k)
 		}
 	}
@@ -42,25 +41,39 @@ func (h *handler) clearExpiredCache() {
 }
 
 func (h *handler) maintainCacheLimit() {
-	size := 0
-	arr := make([]cacheItem, 0)
-	for _, item := range h.manifest.Content {
-		size += item.Size
-		arr = append(arr, item)
+	type sizedEntry struct {
+		key  key
+		kind EntryKind
+		size int64
+		exp  time.Time
 	}
-	slices.SortFunc(
-		arr,
-		func(a, b cacheItem) int { return a.Expiration.Compare(b.Expiration) },
-	)
-	for _, item := range arr {
-		if size <= h.manifest.MaxSize {
-			break
-		}
-		logger.Info("removing cache item " + item.Key)
-		if err := h.removeEntryLocked(item.Key); err != nil {
+
+	totals := map[EntryKind]int64{}
+	var entries []sizedEntry
+	for k, entry := range h.index.all() {
+		totals[entry.Kind] += entry.Size
+		entries = append(entries, sizedEntry{
+			key:  k,
+			kind: entry.Kind,
+			size: entry.Size,
+			exp:  entry.Expiration,
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].exp.Before(entries[j].exp)
+	})
+
+	for _, e := range entries {
+		limit := h.policy.ConfigFor(e.kind).MaxSize
+		if totals[e.kind] <= limit {
 			continue
 		}
-		size -= item.Size
+		logger.Info("removing cache item " + e.key)
+		if err := h.removeEntryLocked(e.key); err != nil {
+			continue
+		}
+		totals[e.kind] -= e.size
 	}
 }
 
