@@ -277,6 +277,20 @@ func (h *handler) removeEntryLocked(k key) error {
 	return nil
 }
 
+func (h *handler) All() []*CacheEntry {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if !h.on {
+		return nil
+	}
+	entries := h.index.all()
+	result := make([]*CacheEntry, 0, len(entries))
+	for _, entry := range entries {
+		result = append(result, entry)
+	}
+	return result
+}
+
 func (h *handler) ClearAll() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()

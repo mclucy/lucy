@@ -57,6 +57,7 @@ var Cli = &cli.Command{
 		subcmdSearch,
 		subcmdAdd,
 		subcmdInit,
+		subcmdCache,
 	},
 	EnableShellCompletion:  true,
 	Suggest:                true,
