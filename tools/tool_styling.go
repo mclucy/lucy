@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
@@ -114,4 +115,38 @@ func Capitalize(v any) string {
 		return ""
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func FormatSize(bytes int64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+	switch {
+	case bytes >= gb:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(gb))
+	case bytes >= mb:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
+	case bytes >= kb:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
+func FormatDuration(t time.Time) string {
+	remaining := time.Until(t)
+	if remaining <= 0 {
+		return "expired"
+	}
+	switch {
+	case remaining >= 24*time.Hour:
+		days := int(remaining.Hours() / 24)
+		return fmt.Sprintf("expires in %dd", days)
+	case remaining >= time.Hour:
+		return fmt.Sprintf("expires in %dh", int(remaining.Hours()))
+	default:
+		return fmt.Sprintf("expires in %dm", int(remaining.Minutes()))
+	}
 }
