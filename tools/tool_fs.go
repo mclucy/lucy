@@ -16,12 +16,9 @@ func CopyFile(src *os.File, dest string) (file *os.File, err error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func(destFile *os.File) {
-		_ = destFile.Close()
-	}(destFile)
 
-	_, err = io.Copy(destFile, src)
-	if err != nil {
+	if _, err = io.Copy(destFile, src); err != nil {
+		destFile.Close()
 		return nil, err
 	}
 
