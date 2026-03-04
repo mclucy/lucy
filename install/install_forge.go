@@ -78,14 +78,14 @@ func installForge(p types.PackageId) error {
 		)
 	}
 
-	installer, _, err := util.DownloadFile(fileURL, serverInfo.WorkPath)
+	result, err := util.CachedDownload(fileURL, serverInfo.WorkPath, util.DownloadOptions{})
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
-	defer func() { _ = installer.Close() }()
+	defer func() { _ = result.File.Close() }()
 
 	if err := runForgeInstaller(
-		installer.Name(),
+		result.File.Name(),
 		serverInfo.WorkPath,
 	); err != nil {
 		return err

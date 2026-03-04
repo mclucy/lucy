@@ -60,8 +60,10 @@ func installFabric(p types.PackageId) error {
 		}
 	}
 
-	file, _, err := util.DownloadFile(fileURL, serverInfo.WorkPath)
-	tools.CloseReader(file, nil)
+	result, err := util.CachedDownload(fileURL, serverInfo.WorkPath, util.DownloadOptions{})
+	if result != nil {
+		tools.CloseReader(result.File, nil)
+	}
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
