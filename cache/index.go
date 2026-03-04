@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/tools"
 )
 
 const indexVersion = 2
