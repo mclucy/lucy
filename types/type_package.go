@@ -95,14 +95,11 @@ type (
 	// PackageRemote is an optional attribution to types.Package. It is used to
 	// represent package's presence in a remote source.
 	PackageRemote struct {
-		// Source should come from upstream provider metadata.
-		Source   Source
-		FileUrl  string
-		Filename string
-
-		// Not implementing this for now until I found a good library to handle it.
-		// Hash       string
-		// HashMethod string
+		Source        Source
+		FileUrl       string
+		Filename      string
+		Hash          string // upstream-provided digest; empty if unavailable
+		HashAlgorithm string // e.g. "sha1", "sha512"; empty if Hash is empty
 	}
 
 	// PlatformSupport reflects the support information of the whole project. For

@@ -3,35 +3,35 @@ package cache
 import (
 	"fmt"
 	"os"
-	"path"
+	"sync"
 	"time"
 
-	"github.com/mclucy/lucy/global"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
-)
-
-// This is traditional OOP
-
-const (
-	defaultLifeTime = global.ThirtyMinutes
-	maxSize         = 30 * 1024 * 1024 // 30MB
 )
 
 type handler struct {
-	on           bool
-	dir          string
-	manifest     *manifest
-	manifestPath string
+	mu     sync.RWMutex
+	on     bool
+	dir    string
+	store  *store
+	index  *index
+	policy Policy
 }
 
-func newHandler(name string) (obj *handler) {
+func newHandler(name string, cfg CacheConfig) (obj *handler) {
+	dir := setDir(name)
 	obj = &handler{
-		on:       true,
-		dir:      setDir(name),
-		manifest: nil,
+		on:     cfg.Enabled,
+		dir:    dir,
+		store:  newStore(dir),
+		policy: cfg.toPolicy(),
 	}
-	if err := os.MkdirAll(obj.dir, os.ModePerm); err != nil {
+
+	if !obj.on {
+		return obj
+	}
+
+	if err := os.MkdirAll(obj.dir, 0o700); err != nil {
 		logger.Warn(
 			fmt.Errorf(
 				"cannnot create cache directory, disabling %s cache: %w",
@@ -39,25 +39,23 @@ func newHandler(name string) (obj *handler) {
 			),
 		)
 		obj.on = false
+		return obj
 	}
 
-	obj.manifestPath = path.Join(obj.dir, manifestFilename)
-	obj.manifest = readManifest(obj.manifestPath)
-	if obj.dir == "" || obj.manifest == nil || obj.manifest.Content == nil {
+	idx := newIndex(fmt.Sprintf("%s/%s", obj.dir, manifestFilename))
+	if !idx.load() {
 		obj.on = false
+		return obj
 	}
+	obj.index = idx
 
-	// Maintenance on initialization
-	//  - clear expired cache
-	//  - maintain cache limit
-	//  - update manifest
 	if obj.on {
 		obj.clearExpiredCache()
 		obj.maintainCacheLimit()
-		if err := updateManifest(obj.manifestPath, obj.manifest); err != nil {
+		if err := obj.index.flush(); err != nil {
 			logger.Warn(
 				fmt.Errorf(
-					"failed to update manifest on initialization: %w",
+					"failed to update index on initialization: %w",
 					err,
 				),
 			)
@@ -67,153 +65,168 @@ func newHandler(name string) (obj *handler) {
 	return obj
 }
 
-// Add
-//
-// If expiration is set to 0, the default expiration time will be applied.
-//
-// If the cache already exists, it will be updated with the new data.
 func (h *handler) Add(
 	data []byte,
 	filename string,
 	k string,
 	expiration time.Duration,
-) (err error) {
+) error {
+	if expiration == 0 {
+		expiration = h.policy.Artifact.TTL
+	}
+	return h.AddEntry(data, filename, k, KindArtifact, Integrity{State: IntegrityUnverified}, expiration)
+}
+
+func (h *handler) AddEntry(
+	data []byte,
+	filename string,
+	k string,
+	kind EntryKind,
+	integrity Integrity,
+	expiration time.Duration,
+) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	if !h.on {
 		return nil
 	}
-	key := key(k)
-	hash := hash(data)
-	if filename == "" {
-		filename = hash
+
+	if expiration == 0 {
+		expiration = h.policy.ConfigFor(kind).TTL
 	}
 
-	if h.Exist(k) {
-		// update the cache item if it exists
-		if h.manifest.Content[key].Sha1 != hash {
-			_ = h.Remove(key)
-		} else {
-			// same hash, no need to update
+	ckey := canonicalizeKey(k)
+	contentHash := hash(data)
+	if filename == "" {
+		filename = contentHash
+	}
+	filename = sanitizeFilename(filename, contentHash)
+
+	if existing, ok := h.index.get(ckey); ok {
+		if existing.ContentHash == contentHash {
 			return nil
 		}
+		_ = h.store.Remove(existing.ContentHash)
+		h.index.delete(ckey)
 	}
 
-	// using the hash as the directory name
-	dir := path.Join(h.dir, hash)
-	err = os.MkdirAll(dir, os.ModeDir|os.ModePerm)
-	if err != nil {
-		return err
-	}
-	// create and write the file
-	filepath := path.Join(dir, filename)
-	err = os.WriteFile(filepath, data, 0o644)
-	if err != nil {
+	if err := h.store.Write(contentHash, filename, data); err != nil {
 		return err
 	}
 
-	// update the manifest
-	h.manifest.Content[key] = cacheItem{
-		Filename: filename,
-		Size:     len(data),
-		Sha1:     hash,
-		Expiration: tools.Ternary(
-			expiration == 0,
-			time.Now().Add(defaultLifeTime),
-			time.Now().Add(expiration),
-		),
-		Key: key,
-	}
+	h.index.put(ckey, &CacheEntry{
+		Kind:        kind,
+		Filename:    filename,
+		Size:        int64(len(data)),
+		ContentHash: contentHash,
+		Integrity:   integrity,
+		Expiration:  time.Now().Add(expiration),
+		Key:         string(ckey),
+		CreatedAt:   time.Now(),
+	})
 
-	// update manifest file
-	if err := updateManifest(h.manifestPath, h.manifest); err != nil {
+	if err := h.index.flush(); err != nil {
 		logger.Warn(
-			fmt.Errorf(
-				"failed to update manifest after adding item: %w",
-				err,
-			),
+			fmt.Errorf("failed to update index after adding item: %w", err),
 		)
 	}
-
 	return nil
 }
 
+func (h *handler) Flush() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.on {
+		return nil
+	}
+	return h.index.flush()
+}
+
 func (h *handler) Exist(k string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.existLocked(k)
+}
+
+func (h *handler) existLocked(k string) bool {
 	if !h.on {
 		return false
 	}
-	_, ok := h.manifest.Content[key(k)]
-	return ok
+	return h.index.exists(canonicalizeKey(k))
 }
 
 func (h *handler) Get(k string) (hit bool, file *os.File, err error) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
 	if !h.on {
 		return false, nil, nil
 	}
 
-	key := key(k)
-
-	item, ok := h.manifest.Content[key]
+	ckey := canonicalizeKey(k)
+	entry, ok := h.index.get(ckey)
 	if !ok {
 		return false, nil, nil
 	}
-	itemPath := path.Join(h.dir, item.Sha1, item.Filename)
-	file, err = os.Open(itemPath)
+
+	file, err = h.store.Read(entry.ContentHash, entry.Filename)
 	if err != nil {
 		return false, nil, err
 	}
 	return true, file, nil
 }
 
-func (h *handler) Remove(key key) (err error) {
-	if !h.on {
-		return nil
-	}
-	item, ok := h.manifest.Content[key]
-	if !ok {
-		return nil
-	}
-	itemPath := path.Join(h.dir, item.Sha1)
-	err = os.RemoveAll(itemPath)
-	if err != nil {
+func (h *handler) Remove(k string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.removeLocked(canonicalizeKey(k))
+}
+
+func (h *handler) removeLocked(k key) error {
+	if err := h.removeEntryLocked(k); err != nil {
 		return err
 	}
-	delete(h.manifest.Content, key)
-
-	// update manifest file
-	if err := updateManifest(h.manifestPath, h.manifest); err != nil {
+	if err := h.index.flush(); err != nil {
 		logger.Warn(
-			fmt.Errorf(
-				"failed to update manifest after removing item: %w",
-				err,
-			),
+			fmt.Errorf("failed to update index after removing item: %w", err),
 		)
 	}
-
 	return nil
 }
 
-// ClearAll clears the cache and creates a new manifest.
-//
-// This is useful when the cache is corrupted or when you want to start fresh.
+func (h *handler) removeEntryLocked(k key) error {
+	if !h.on {
+		return nil
+	}
+	entry, ok := h.index.get(k)
+	if !ok {
+		return nil
+	}
+	if err := h.store.Remove(entry.ContentHash); err != nil {
+		return err
+	}
+	h.index.delete(k)
+	return nil
+}
+
 func (h *handler) ClearAll() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	if !h.on {
 		return nil
 	}
 
-	// clear the cache directory
-	err := resetCache(h.manifestPath)
-	if err != nil {
+	if err := resetCache(h.index.path); err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
 
-	// create a new manifest
-	newManifest := createManifest(h.manifestPath)
-	if newManifest == nil {
-		h.on = false
-		return fmt.Errorf("failed to create new manifest after clearing cache")
+	idx := newIndex(h.index.path)
+	if !idx.create() {
+		return fmt.Errorf("failed to create new index after clearing cache")
 	}
-
-	// update the manifest
-	h.manifest = newManifest
+	h.index = idx
 
 	return nil
 }

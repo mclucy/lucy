@@ -229,6 +229,15 @@ func (v versionResponse) ToPackageRemote() types.PackageRemote {
 		FileUrl:  v.Files[0].Url,
 		Filename: v.Files[0].Filename,
 	}
+
+	if h := v.Files[0].Hashes; h.Sha512 != "" {
+		remote.Hash = h.Sha512
+		remote.HashAlgorithm = "sha512"
+	} else if h.Sha1 != "" {
+		remote.Hash = h.Sha1
+		remote.HashAlgorithm = "sha1"
+	}
+
 	return remote
 }
 
