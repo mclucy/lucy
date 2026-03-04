@@ -43,7 +43,7 @@ func (idx *index) load() bool {
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		_ = resetCache(idx.path)
+		_, _ = resetCache(idx.path, false)
 		return idx.create()
 	}
 
@@ -51,7 +51,7 @@ func (idx *index) load() bool {
 		return true
 	}
 
-	_ = resetCache(idx.path)
+	_, _ = resetCache(idx.path, false)
 	return idx.create()
 }
 
@@ -70,7 +70,13 @@ func (idx *index) tryLoadV2(data []byte) bool {
 func (idx *index) create() bool {
 	dir := filepath.Dir(idx.path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		logger.Warn(fmt.Errorf("failed to create index directory %s: %w", dir, err))
+		logger.Warn(
+			fmt.Errorf(
+				"failed to create index directory %s: %w",
+				dir,
+				err,
+			),
+		)
 		return false
 	}
 	idx.entries = make(map[key]*CacheEntry)

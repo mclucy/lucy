@@ -74,7 +74,14 @@ func (h *handler) Add(
 	if expiration == 0 {
 		expiration = h.policy.Artifact.TTL
 	}
-	return h.AddEntry(data, filename, k, KindArtifact, Integrity{State: IntegrityUnverified}, expiration)
+	return h.AddEntry(
+		data,
+		filename,
+		k,
+		KindArtifact,
+		Integrity{State: IntegrityUnverified},
+		expiration,
+	)
 }
 
 func (h *handler) AddEntry(
@@ -115,18 +122,27 @@ func (h *handler) AddEntry(
 		return err
 	}
 
-	logger.Debug(fmt.Sprintf("cache store: %s (%s, %s)", k, kind, integrity.State))
+	logger.Debug(
+		fmt.Sprintf(
+			"cache store: %s (%s, %s)",
+			k,
+			kind,
+			integrity.State,
+		),
+	)
 
-	h.index.put(ckey, &CacheEntry{
-		Kind:        kind,
-		Filename:    filename,
-		Size:        int64(len(data)),
-		ContentHash: contentHash,
-		Integrity:   integrity,
-		Expiration:  time.Now().Add(expiration),
-		Key:         string(ckey),
-		CreatedAt:   time.Now(),
-	})
+	h.index.put(
+		ckey, &CacheEntry{
+			Kind:        kind,
+			Filename:    filename,
+			Size:        int64(len(data)),
+			ContentHash: contentHash,
+			Integrity:   integrity,
+			Expiration:  time.Now().Add(expiration),
+			Key:         string(ckey),
+			CreatedAt:   time.Now(),
+		},
+	)
 
 	if err := h.index.flush(); err != nil {
 		logger.Warn(
@@ -178,18 +194,27 @@ func (h *handler) IngestEntry(
 		return err
 	}
 
-	logger.Debug(fmt.Sprintf("cache ingest: %s (%s, %s)", k, kind, integrity.State))
+	logger.Debug(
+		fmt.Sprintf(
+			"cache ingest: %s (%s, %s)",
+			k,
+			kind,
+			integrity.State,
+		),
+	)
 
-	h.index.put(ckey, &CacheEntry{
-		Kind:        kind,
-		Filename:    filename,
-		Size:        size,
-		ContentHash: contentHash,
-		Integrity:   integrity,
-		Expiration:  time.Now().Add(expiration),
-		Key:         string(ckey),
-		CreatedAt:   time.Now(),
-	})
+	h.index.put(
+		ckey, &CacheEntry{
+			Kind:        kind,
+			Filename:    filename,
+			Size:        size,
+			ContentHash: contentHash,
+			Integrity:   integrity,
+			Expiration:  time.Now().Add(expiration),
+			Key:         string(ckey),
+			CreatedAt:   time.Now(),
+		},
+	)
 
 	if err := h.index.flush(); err != nil {
 		logger.Warn(
@@ -277,24 +302,38 @@ func (h *handler) removeEntryLocked(k key) error {
 	return nil
 }
 
-func (h *handler) ClearAll() error {
+func (h *handler) All() []*CacheEntry {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if !h.on {
+		return nil
+	}
+	entries := h.index.all()
+	result := make([]*CacheEntry, 0, len(entries))
+	for _, entry := range entries {
+		result = append(result, entry)
+	}
+	return result
+}
+
+func (h *handler) ClearAll() (report ResetReport, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if !h.on {
-		return nil
+		return ResetReport{}, nil
 	}
 
-	if err := resetCache(h.index.path); err != nil {
-		return fmt.Errorf("failed to clear cache: %w", err)
+	if report, err = resetCache(h.index.path, true); err != nil {
+		return ResetReport{}, fmt.Errorf("failed to clear cache: %w", err)
 	}
 	logger.Info("cache cleared")
 
 	idx := newIndex(h.index.path)
 	if !idx.create() {
-		return fmt.Errorf("failed to create new index after clearing cache")
+		return ResetReport{}, fmt.Errorf("failed to create new index after clearing cache")
 	}
 	h.index = idx
 
-	return nil
+	return report, nil
 }
