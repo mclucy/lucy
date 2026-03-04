@@ -31,14 +31,15 @@ func DownloadFileWithCache(
 	dir string,
 	expiration time.Duration,
 ) (file *os.File, hit bool, err error) {
-	if cache.Network.Exist(url) {
-		_, cache, err := cache.Network.Get(url)
+	if cache.Network().Exist(url) {
+		_, cacheFile, err := cache.Network().Get(url)
 		if err != nil {
 			return nil, false, err
 		}
+		defer cacheFile.Close()
 		file, err = tools.CopyFile(
-			cache,
-			path.Join(dir, path.Base(cache.Name())),
+			cacheFile,
+			path.Join(dir, path.Base(cacheFile.Name())),
 		)
 		if err != nil {
 			return nil, false, err
@@ -50,7 +51,7 @@ func DownloadFileWithCache(
 	if err != nil {
 		return nil, false, err
 	}
-	err = cache.Network.Add(data, file.Name(), url, expiration)
+	err = cache.Network().Add(data, file.Name(), url, expiration)
 	if err != nil {
 		logger.Warn(fmt.Errorf("failed to add file to cache: %w", err))
 	}
