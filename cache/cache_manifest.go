@@ -20,7 +20,7 @@ const (
 type cacheItem struct {
 	Filename   string    `json:"filename"`
 	Size       int       `json:"size"`
-	Sha1       string    `json:"sha1"`
+	Hash       string    `json:"hash"`
 	Expiration time.Time `json:"expiration"`
 	Key        key       `json:"key"`
 }
@@ -69,7 +69,7 @@ func readManifest(filepath string) *manifest {
 func createManifest(filepath string) *manifest {
 	// make directory
 	dir := path.Dir(filepath)
-	if err := os.MkdirAll(dir, os.ModeDir|os.ModePerm); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		logger.Warn(
 			fmt.Errorf(
 				"failed to create manifest directory %s: %w",
