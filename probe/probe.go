@@ -163,16 +163,6 @@ func buildServerInfo() types.ServerInfo {
 		mu.Unlock()
 	}()
 
-	// Server Mod Path
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		modPath := modPaths()
-		mu.Lock()
-		serverInfo.ModPath = modPath
-		mu.Unlock()
-	}()
-
 	wg.Wait()
 	return serverInfo
 }

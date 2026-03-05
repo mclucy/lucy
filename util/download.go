@@ -19,13 +19,14 @@ import (
 )
 
 type DownloadOptions struct {
-	Kind          cache.EntryKind
-	ExpectedHash  string
-	HashAlgorithm cache.HashAlgorithm
-	Filename      string
-	WrapReader    func(io.Reader, int64) io.Reader
-	OnCacheHit    func()
-	TTL           time.Duration
+	Kind                 cache.EntryKind
+	ExpectedHash         string
+	HashAlgorithm        cache.HashAlgorithm
+	ContentHashAlgorithm cache.HashAlgorithm
+	Filename             string
+	WrapReader           func(io.Reader, int64) io.Reader
+	OnCacheHit           func()
+	TTL                  time.Duration
 }
 
 type DownloadResult struct {
@@ -104,7 +105,17 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 		os.Remove(tmpPath)
 	}()
 
-	contentHasher := sha256.New()
+	var contentHasher hash.Hash
+	if opts.ContentHashAlgorithm != cache.HashNone {
+		// Use the requested content hash algorithm when specified.
+		contentHasher = newHasher(opts.ContentHashAlgorithm)
+	}
+	// Fallback to SHA-256 to preserve existing behavior if no content hash
+	// algorithm was specified or if newHasher returned nil.
+	if contentHasher == nil {
+		contentHasher = sha256.New()
+	}
+
 	writers := []io.Writer{tmpFile, contentHasher}
 
 	var integrityHasher hash.Hash
@@ -161,15 +172,12 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 	}
 
 	destPath := path.Join(dir, filename)
-	tmpFile.Close()
 
-	src, err := os.Open(tmpPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to reopen temp file: %w", err)
+	if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("failed to seek temp file: %w", err)
 	}
-	defer src.Close()
 
-	destFile, err := tools.CopyFile(src, destPath)
+	destFile, err := tools.CopyFile(tmpFile, destPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write file to destination: %w", err)
 	}
