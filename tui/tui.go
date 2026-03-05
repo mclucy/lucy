@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/muesli/reflow/wrap"
+	"golang.org/x/term"
 
 	"github.com/mclucy/lucy/tools"
 )
@@ -504,19 +505,73 @@ func (f *FieldCheckBox) Render() string {
 
 // Flush renders all fields in data and prints the composed output.
 func Flush(data *Data) {
+	var logoField *FieldLogo
 	for _, field := range data.Fields {
-		if field.KeyLength() > keyColumnWidth {
-			keyColumnWidth = field.KeyLength()
+		if fl, ok := field.(*FieldLogo); ok {
+			logoField = fl
+			break
 		}
 	}
-	keyColumnWidth += 2
 
-	var sb strings.Builder
+	if logoField == nil {
+		for _, field := range data.Fields {
+			if field.KeyLength() > keyColumnWidth {
+				keyColumnWidth = field.KeyLength()
+			}
+		}
+		keyColumnWidth += 2
+
+		var sb strings.Builder
+		for _, field := range data.Fields {
+			if field != nil {
+				sb.WriteString(field.Render())
+			}
+		}
+		sb.WriteString("\n")
+		fmt.Print(sb.String())
+		return
+	}
+
+	// LOGO BRANCH: uses a local key width; does not corrupt the global.
+
+	localKeyWidth := 0
 	for _, field := range data.Fields {
-		if field != nil {
-			sb.WriteString(field.Render())
+		if _, ok := field.(*FieldLogo); ok {
+			continue
+		}
+		if field.KeyLength() > localKeyWidth {
+			localKeyWidth = field.KeyLength()
 		}
 	}
-	sb.WriteString("\n")
-	fmt.Print(sb.String())
+	localKeyWidth += 2
+
+	// Save/restore keyColumnWidth so existing Render() methods pick up our
+	// local width without permanently corrupting the global.
+	savedKeyColumnWidth := keyColumnWidth
+	keyColumnWidth = localKeyWidth
+	var infoSb strings.Builder
+	for _, field := range data.Fields {
+		if field == nil {
+			continue
+		}
+		if _, ok := field.(*FieldLogo); ok {
+			continue
+		}
+		infoSb.WriteString(field.Render())
+	}
+	keyColumnWidth = savedKeyColumnWidth
+	infoBlock := infoSb.String()
+
+	isTTY := term.IsTerminal(int(1))
+	params := NegotiateStatusLayout(
+		tools.TermWidth(),
+		logoField.Width(LogoLarge),
+		logoField.Width(LogoSmall),
+		isTTY,
+	)
+
+	// TODO(T6): full side-by-side composition.
+	_ = params
+	fmt.Print(infoBlock)
+	fmt.Println()
 }
