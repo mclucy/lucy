@@ -206,7 +206,7 @@ func buildWorkPath() string {
 
 var workPath = tools.Memoize(buildWorkPath)
 
-func buildServerProperties() exttype.FileMinercaftServerProperties {
+func buildServerProperties() exttype.FileMinecraftServerProperties {
 	exec := getExecutableInfo()
 	propertiesPath := path.Join(workPath(), "server.properties")
 	file, err := ini.Load(propertiesPath)
