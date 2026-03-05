@@ -536,7 +536,7 @@ func Flush(data *Data) {
 				keyColumnWidth = field.KeyLength()
 			}
 		}
-		keyColumnWidth += 2
+		keyColumnWidth += keyColPadding
 
 		var sb strings.Builder
 		for _, field := range data.Fields {
@@ -560,12 +560,13 @@ func Flush(data *Data) {
 			localKeyWidth = field.KeyLength()
 		}
 	}
-	localKeyWidth += 2
+	localKeyWidth += keyColPadding
 
 	// Save/restore keyColumnWidth so existing Render() methods pick up our
 	// local width without permanently corrupting the global.
 	savedKeyColumnWidth := keyColumnWidth
 	keyColumnWidth = localKeyWidth
+	defer func() { keyColumnWidth = savedKeyColumnWidth }()
 	var infoSb strings.Builder
 	for _, field := range data.Fields {
 		if field == nil {
@@ -576,7 +577,6 @@ func Flush(data *Data) {
 		}
 		infoSb.WriteString(field.Render())
 	}
-	keyColumnWidth = savedKeyColumnWidth
 	infoBlock := infoSb.String()
 
 	isTTY := term.IsTerminal(int(1))

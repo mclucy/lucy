@@ -13,6 +13,10 @@ import (
 // while Flush() is rendering the current view.
 var keyColumnWidth int
 
+// keyColPadding is the fixed padding (in characters) added to the key column width
+// to ensure minimum spacing between keys and values.
+const keyColPadding = 2
+
 // renderKey renders a styled key label with fixed-width padding for alignment.
 func renderKey(title string) string {
 	styled := tools.Bold(tools.Magenta(title))

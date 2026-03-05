@@ -58,4 +58,25 @@ func TestNormalizeLinesEmpty(t *testing.T) {
 	if result != nil {
 		t.Errorf("normalizeLines(\"\\n\\n\\n\") = %v, want nil", result)
 	}
+
+	// Test CRLF line endings
+	result = normalizeLines("line1\r\nline2\r\n")
+	if len(result) != 2 {
+		t.Errorf("normalizeLines(\"line1\\r\\nline2\\r\\n\") returned %d lines, want 2", len(result))
+	}
+	if result[0] != "line1" {
+		t.Errorf("normalizeLines(\"line1\\r\\nline2\\r\\n\")[0] = %q, want %q", result[0], "line1")
+	}
+	if result[1] != "line2" {
+		t.Errorf("normalizeLines(\"line1\\r\\nline2\\r\\n\")[1] = %q, want %q", result[1], "line2")
+	}
+
+	// Test single-line input without trailing newline
+	result = normalizeLines("hello")
+	if len(result) != 1 {
+		t.Errorf("normalizeLines(\"hello\") returned %d lines, want 1", len(result))
+	}
+	if result[0] != "hello" {
+		t.Errorf("normalizeLines(\"hello\")[0] = %q, want %q", result[0], "hello")
+	}
 }
