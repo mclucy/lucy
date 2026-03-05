@@ -6,7 +6,6 @@ import (
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/mclucy/lucy/tools"
 )
 
@@ -66,12 +65,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case completeMsg:
 		m.percent = 1.0
 		m.message = string(msg)
-		m.bar = progress.New(
-			progress.WithColors(
-				lipgloss.Green,
-				lipgloss.BrightGreen,
-			),
-		)
+		options := append(defaultOptions, defaultColorComplete...)
+		m.bar = progress.New(options...)
 		return m, nil
 
 	case tea.KeyMsg:

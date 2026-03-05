@@ -9,7 +9,9 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/huh v0.8.0
+	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/muesli/reflow v0.3.0
+	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml v1.9.5
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/urfave/cli/v3 v3.6.2
@@ -31,7 +33,6 @@ require (
 	github.com/charmbracelet/harmonica v0.2.0 // indirect
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260205113103-524a6607adb8 // indirect
-	github.com/charmbracelet/x/ansi v0.11.6 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20260223200540-d6a276319c45 // indirect
 	github.com/charmbracelet/x/exp/strings v0.1.0 // indirect
@@ -52,7 +53,6 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.16 // indirect
