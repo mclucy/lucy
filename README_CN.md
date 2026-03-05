@@ -1,23 +1,57 @@
-# Lucy
-
 <div align="center">
-
-<!-- ![lucy](https://socialify.git.ci/litetech-dev/lucy/image?description=1&font=Jost&forks=1&issues=1&language=1&name=1&owner=1&pattern=Brick%20Wall&pulls=1&stargazers=1&theme=Auto) -->
-
-![banner](https://raw.githubusercontent.com/minecraft-lucy/lucy/main/images/banner.png)
-
-[English](./README.md) | [中文](./README_CN.md)
-
+  <img src="images/banner.png" alt="banner" />
+  <br />
+  <br />
+  <h2>
+    <div>
+        <h3>服务器 · 群组服 · 整合包</h3>
+        <sup>……一行命令秒了</sup>
+    </div>
+  </h2>
+  <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
+  <br />
+  <br />
+  <br />
+  <div>
+    <img
+      src="https://goreportcard.com/badge/github.com/mclucy/lucy"
+      alt="Go Report Card"
+    />
+    <img
+      src="https://github.com/mclucy/lucy/actions/workflows/github-code-scanning/codeql/badge.svg"
+      alt="CodeQL"
+    />
+    <img
+      src="https://img.shields.io/github/last-commit/mclucy/lucy"
+      alt="Last Commit"
+    />
+    <img
+      src="https://img.shields.io/github/languages/code-size/mclucy/lucy"
+      alt="Code Size"
+    />
+    <img
+      src="https://img.shields.io/github/license/mclucy/lucy"
+      alt="License"
+    />
+    <img
+      href="https://qm.qq.com/q/Sf65NVYaAi"
+      src="https://img.shields.io/badge/QQ-949559661-blue"
+      alt="QQ Groupchat"
+    />
+  </div>
+  <br />
 </div>
 
----
-
-> 🚧 \
+> <h1>🚧</h1>
+>
 > 本项目正在开发中且尚未完成。 \
-> 我们需要您的帮助！ \
-> 如果你有兴趣贡献代码或想了解最新进展，请联系 <4rcadia.0@gmail.com>，或者加 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)。
+> 如果你有兴趣贡献代码或想了解最新进展，请联系 <4rcadia.0@gmail.com>，也可以加入 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)。
 
-## 🚀 项目简介
+<br/>
+
+## 🪣 项目简介
+
+> <https://news.ycombinator.com/item?id=41379902>
 
 `lucy` 是一个强大的、统一的命令行工具，旨在简化 Minecraft 服务器端的管理。包括安装插件、模组、管理依赖项，甚至是协调复杂的整合包。仅通过几行简单的命令解决各种复杂的服务器管理需求。
 
@@ -30,12 +64,17 @@
 - **依赖管理** - 自动解析依赖项，处理冲突，无缝管理升级。
 - **来源集成** - 从各种来源下载。
 - **非侵入式设计** - 独立于服务器运行，确保零干扰。
-- **现代 CLI** - 用户友好的命令行界面，命令和选项清晰。
+- **现代 CLI** - 美观、现代和用户友好。
 - **脚本和自动化** - 轻松将 `lucy` 集成到脚本和自动化工作流中进行持续部署。
 
-## 🚀 快速开始
+## 🚀 开始
 
 ### 安装
+
+```bash
+# 警告：不要在首个 beta 发布前安装，除非你想测试和贡献代码。
+go install github.com/mclucy/lucy@latest
+```
 
 当我们发布第一个beta时，我们将尝试支持尽可能多的安装方式。
 
@@ -55,7 +94,7 @@ lucy search <keyword>
 lucy info <package-id>
 
 # 安装包到你的服务器
-lucy install <package-id>
+lucy add <package-id>
 
 # 检查服务器状态和已安装的包列表
 lucy status <server-path>
@@ -142,8 +181,8 @@ fabric/fabric-api@1.2.3
 
 将包管理集成到 CI/CD 流水线和自动化工作流中。将服务器配置作为代码进行管理。
 
-## ⚖️ 许可证
+## ⚖️ 开源
 
-本项目以 Apache 2.0 许可证授权。
+本项目遵循 [Apache 2.0 协议]((LICENSE))。
 
-Logo和其他图片中出现的蝾螈形象的著作权完全属于Mojang AB。
+Logo和其他图片中出现的蝾螈形象的著作权完全属于Mojang AB。我们将会尽快替换。

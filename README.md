@@ -1,23 +1,53 @@
-# Lucy
-
 <div align="center">
-
-<!-- ![lucy](https://socialify.git.ci/litetech-dev/lucy/image?description=1&font=Jost&forks=1&issues=1&language=1&name=1&owner=1&pattern=Brick%20Wall&pulls=1&stargazers=1&theme=Auto) -->
-
-![banner](https://raw.githubusercontent.com/minecraft-lucy/lucy/main/images/banner.png)
-
-[English](./README.md) | [中文](./README_CN.md)
-
+  <img
+    src="images/banner.png"
+    alt="banner"
+  />
+  <br />
+  <br />
+  <h2>
+    <sub>Servers. Clusters. Modpacks.</sub>
+    <div>All in one command.</div>
+  </h2>
+  <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
+  <br />
+  <br />
+  <br />
+  <div>
+    <img
+      src="https://goreportcard.com/badge/github.com/mclucy/lucy"
+      alt="Go Report Card"
+    />
+    <img
+      src="https://github.com/mclucy/lucy/actions/workflows/github-code-scanning/codeql/badge.svg"
+      alt="CodeQL"
+    />
+    <img
+      src="https://img.shields.io/github/last-commit/mclucy/lucy"
+      alt="Last Commit"
+    />
+    <img
+      src="https://img.shields.io/github/languages/code-size/mclucy/lucy"
+      alt="Code Size"
+    />
+    <img
+      src="https://img.shields.io/github/license/mclucy/lucy"
+      alt="License"
+    />
+  </div>
+  <br />
 </div>
 
----
-
-> 🚧 \
+> <h1>🚧</h1>
+>
 > This project is currently INCOMPLETE and under active development. Features and functionalities are subject to change. \
-> The project is large and we really need assistance! \
 > If you're interested in contributing or want to stay updated, please contact <4rcadia.0@gmail.com>, or join the [QQ groupchat](https://qm.qq.com/q/Sf65NVYaAi). A Discord server will be up soon!
 
-## 🚀 Overview
+<br/>
+
+## 🪣 Overview
+
+> <https://news.ycombinator.com/item?id=41379902>
 
 `lucy` is a powerful, unified command-line tool to simplify the management of Minecraft server-side content. Whether you're installing plugins, mods, managing dependencies, or coordinating complex modpacks, `lucy` provides an intuitive command-line interface to handle all your package management needs.
 
@@ -36,6 +66,11 @@ The goal of this tool is to bring the reliability, ease of use, and convenience 
 ## 🚀 Quick Start
 
 ### Installation
+
+```bash
+# WARNING: Do not install before the first beta release unless you want to test and contribute code.
+go install github.com/mclucy/lucy@latest
+```
 
 We know you server owners might be using some niche Linux distros, so we will be available via as many package managers as possible when we release the first beta.
 
@@ -147,6 +182,6 @@ Integrate package management into CI/CD pipelines and automation workflows. Mana
 
 ## ⚖️ License
 
-This project is licensed under the Apache 2.0 License.
+This project is licensed under the [Apache 2.0 License](LICENSE).
 
-Logo and other images featuring the axolotl pixel art are the copyright of Mojang AB.
+Logo and other images featuring the axolotl pixel art are the copyright of Mojang AB. Replacement will be made as soon as possible.
