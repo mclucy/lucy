@@ -193,16 +193,18 @@ func downloadMinecraftServerJar(
 	go func() {
 		defer tracker.Close()
 		var err error
-		result, err = util.CachedDownload(url, dir, util.DownloadOptions{
-			Kind:          cache.KindArtifact,
-			ExpectedHash:  expectedSha1,
-			HashAlgorithm: cache.HashSHA1,
-			WrapReader:    tracker.ProxyReader,
-			OnCacheHit: func() {
-				tracker.SetMessage("cached")
-				tracker.SetPercent(1.0)
+		result, err = util.CachedDownload(
+			url, dir, util.DownloadOptions{
+				Kind:          cache.KindArtifact,
+				ExpectedHash:  expectedSha1,
+				HashAlgorithm: cache.HashSHA1,
+				WrapReader:    tracker.ProxyReader,
+				OnCacheHit: func() {
+					tracker.Complete("cache hit")
+					time.Sleep(500 * time.Millisecond)
+				},
 			},
-		})
+		)
 		errCh <- err
 	}()
 

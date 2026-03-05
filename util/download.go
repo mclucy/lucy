@@ -39,10 +39,18 @@ type DownloadResult struct {
 // OnCacheHit (if set) is called. On miss the response body is streamed
 // through an optional WrapReader (for progress tracking) and simultaneously
 // hashed for both content-addressing and integrity verification.
-func CachedDownload(url, dir string, opts DownloadOptions) (*DownloadResult, error) {
+func CachedDownload(url, dir string, opts DownloadOptions) (
+	*DownloadResult,
+	error,
+) {
 	hit, cachedFile, err := cache.Network().Get(url)
 	if err != nil {
-		logger.Warn(fmt.Errorf("cache lookup failed, proceeding with download: %w", err))
+		logger.Warn(
+			fmt.Errorf(
+				"cache lookup failed, proceeding with download: %w",
+				err,
+			),
+		)
 	}
 	if hit && cachedFile != nil {
 		defer cachedFile.Close()
@@ -52,7 +60,10 @@ func CachedDownload(url, dir string, opts DownloadOptions) (*DownloadResult, err
 		destPath := path.Join(dir, path.Base(cachedFile.Name()))
 		destFile, err := tools.CopyFile(cachedFile, destPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to copy cached file to destination: %w", err)
+			return nil, fmt.Errorf(
+				"failed to copy cached file to destination: %w",
+				err,
+			)
 		}
 		return &DownloadResult{
 			File:     destFile,
@@ -64,7 +75,10 @@ func CachedDownload(url, dir string, opts DownloadOptions) (*DownloadResult, err
 	return downloadAndCache(url, dir, opts)
 }
 
-func downloadAndCache(url, dir string, opts DownloadOptions) (*DownloadResult, error) {
+func downloadAndCache(url, dir string, opts DownloadOptions) (
+	*DownloadResult,
+	error,
+) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
@@ -133,7 +147,13 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (*DownloadResult, e
 			State:     cache.IntegrityVerified,
 		}
 		verified = true
-		logger.Debug(fmt.Sprintf("integrity verified (%s): %s", opts.HashAlgorithm, url))
+		logger.Debug(
+			fmt.Sprintf(
+				"integrity verified (%s): %s",
+				opts.HashAlgorithm,
+				url,
+			),
+		)
 	}
 
 	if filename == "" {

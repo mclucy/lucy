@@ -39,16 +39,8 @@ func renewStyleFunctions() {
 				return fmt.Sprintf("%v", v)
 			}
 		}
-		Bold = noStyle
-		Dim = noStyle
-		Italic = noStyle
-		Underline = noStyle
-		Red = noStyle
-		Green = noStyle
-		Yellow = noStyle
-		Blue = noStyle
-		Magenta = noStyle
-		Cyan = noStyle
+		Bold, Dim, Italic, Underline, Red, Green, Yellow, Blue, Magenta, Cyan =
+			noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle
 		return
 	}
 
@@ -117,11 +109,29 @@ func Capitalize(v any) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-func FormatSize(bytes int64) string {
+func FormatBytesBinary(bytes int64) string {
 	const (
-		kb = 1024
-		mb = kb * 1024
-		gb = mb * 1024
+		kib = 1024
+		mib = kib * 1024
+		gib = mib * 1024
+	)
+	switch {
+	case bytes >= gib:
+		return fmt.Sprintf("%.1f GiB", float64(bytes)/float64(gib))
+	case bytes >= mib:
+		return fmt.Sprintf("%.1f MiB", float64(bytes)/float64(mib))
+	case bytes >= kib:
+		return fmt.Sprintf("%.1f KiB", float64(bytes)/float64(kib))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
+func FormatBytesDecimal(bytes int64) string {
+	const (
+		kb = 1000
+		mb = kb * 1000
+		gb = mb * 1000
 	)
 	switch {
 	case bytes >= gb:

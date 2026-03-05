@@ -95,7 +95,7 @@ var actionCacheLs cli.ActionFunc = func(
 				Text: fmt.Sprintf(
 					"%s  %s",
 					entry.Kind,
-					tools.FormatSize(entry.Size),
+					tools.FormatBytesBinary(entry.Size),
 				),
 				Annotation: tools.FormatDuration(entry.Expiration),
 			},
@@ -119,7 +119,7 @@ var actionCacheClear cli.ActionFunc = func(
 		fmt.Sprintf(
 			"removed %d files, freed up %s of space",
 			report.FileCount,
-			tools.FormatSize(report.TotalFreedSize),
+			tools.FormatBytesBinary(report.TotalFreedSize),
 		),
 	)
 	return nil
