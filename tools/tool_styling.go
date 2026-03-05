@@ -83,6 +83,9 @@ func StylesEnabled() bool {
 
 func TermWidth() int {
 	width, _, _ := term.GetSize(0)
+	if width <= 0 {
+		return 80
+	}
 	return width
 }
 
