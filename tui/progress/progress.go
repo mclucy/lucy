@@ -23,7 +23,6 @@ import (
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 // Tracker is a thread-safe progress bar controller.
@@ -46,10 +45,8 @@ func NewTracker(title string) *Tracker {
 // Run starts the progress bar and blocks until [Tracker.Close] is called
 // or the user presses Ctrl+C.
 func (t *Tracker) Run() error {
-	bar := progress.New(
-		progress.WithColors(lipgloss.Magenta, lipgloss.BrightMagenta),
-	)
-
+	options := append(defaultOptions, defaultColor...)
+	bar := progress.New(options...)
 	m := model{
 		bar:   bar,
 		title: t.title,
