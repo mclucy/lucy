@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"golang.org/x/term"
 )
 
@@ -48,12 +48,12 @@ func renewStyleFunctions() {
 	Dim = lsStyle(lipgloss.NewStyle().Faint(true))
 	Italic = lsStyle(lipgloss.NewStyle().Italic(true))
 	Underline = lsStyle(lipgloss.NewStyle().Underline(true))
-	Red = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("1")))
-	Green = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("2")))
-	Yellow = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("3")))
-	Blue = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("4")))
-	Magenta = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("5")))
-	Cyan = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("6")))
+	Red = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Red))
+	Green = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Green))
+	Yellow = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Yellow))
+	Blue = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Blue))
+	Magenta = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Magenta))
+	Cyan = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Cyan))
 }
 
 // lsStyle wraps a lipgloss.Style into a func(any) string, matching the
