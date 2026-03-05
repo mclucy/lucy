@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/muesli/reflow/wrap"
 	"golang.org/x/term"
 
@@ -503,6 +504,18 @@ func (f *FieldCheckBox) Render() string {
 	return sb.String()
 }
 
+// clipLines truncates each line in s to at most maxWidth runes.
+func clipLines(s string, maxWidth int) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		runes := []rune(l)
+		if len(runes) > maxWidth {
+			lines[i] = string(runes[:maxWidth])
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 // Flush renders all fields in data and prints the composed output.
 func Flush(data *Data) {
 	var logoField *FieldLogo
@@ -570,8 +583,30 @@ func Flush(data *Data) {
 		isTTY,
 	)
 
-	// TODO(T6): full side-by-side composition.
-	_ = params
-	fmt.Print(infoBlock)
+	var output string
+	switch params.Mode {
+	case LayoutLargeLogoSideBySide, LayoutSmallLogoSideBySide:
+		variant := LogoLarge
+		if params.Mode == LayoutSmallLogoSideBySide {
+			variant = LogoSmall
+		}
+		logoLines := logoField.Lines(variant)
+		logoBlock := strings.Join(logoLines, "\n")
+		gapStr := strings.Repeat(" ", params.GapWidth)
+		infoStyle := lipgloss.NewStyle().Width(params.InfoWidth)
+		constrainedInfo := infoStyle.Render(infoBlock)
+		output = lipgloss.JoinHorizontal(lipgloss.Top, logoBlock, gapStr, constrainedInfo)
+
+	case LayoutVertical:
+		logoLines := logoField.Lines(LogoLarge)
+		output = strings.Join(logoLines, "\n") + "\n\n" + infoBlock
+
+	case LayoutClipped:
+		output = clipLines(infoBlock, params.InfoWidth)
+
+	default:
+		output = infoBlock
+	}
+	fmt.Print(output)
 	fmt.Println()
 }
