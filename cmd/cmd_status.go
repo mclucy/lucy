@@ -63,6 +63,8 @@ func generateStatusOutput(
 
 	output = &tui.Data{Fields: []tui.Field{}}
 
+	output.Fields = append(output.Fields, &tui.FieldLogo{})
+
 	output.Fields = append(
 		output.Fields, &tui.FieldAnnotatedShortText{
 			Title:      "Game",
