@@ -3,12 +3,12 @@ module github.com/mclucy/lucy
 go 1.24.2
 
 require (
+	charm.land/bubbles/v2 v2.0.0
+	charm.land/bubbletea/v2 v2.0.1
+	charm.land/lipgloss/v2 v2.0.0
 	github.com/Masterminds/semver/v3 v3.4.0
-	github.com/charmbracelet/bubbles v1.0.0
-	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/huh v0.8.0
-	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/muesli/reflow v0.3.0
 	github.com/pelletier/go-toml v1.9.5
 	github.com/sahilm/fuzzy v0.1.1
@@ -25,13 +25,19 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
+	github.com/charmbracelet/bubbles v1.0.0 // indirect
+	github.com/charmbracelet/bubbletea v1.3.10 // indirect
 	github.com/charmbracelet/colorprofile v0.4.2 // indirect
 	github.com/charmbracelet/harmonica v0.2.0 // indirect
+	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834 // indirect
+	github.com/charmbracelet/ultraviolet v0.0.0-20260205113103-524a6607adb8 // indirect
 	github.com/charmbracelet/x/ansi v0.11.6 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20260223200540-d6a276319c45 // indirect
 	github.com/charmbracelet/x/exp/strings v0.1.0 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
+	github.com/charmbracelet/x/termios v0.1.1 // indirect
+	github.com/charmbracelet/x/windows v0.2.2 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
@@ -52,5 +58,6 @@ require (
 	github.com/yuin/goldmark v1.7.16 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )

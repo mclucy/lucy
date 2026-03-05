@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/progress"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/progress"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/mclucy/lucy/tools"
 )
 
@@ -36,7 +37,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
-		m.bar.Width = defaultBarWidth(msg.Width)
+		m.bar.SetWidth(defaultBarWidth(msg.Width))
 		return m, nil
 
 	case bytesProgressMsg:
@@ -65,7 +66,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case completeMsg:
 		m.percent = 1.0
 		m.message = string(msg)
-		m.bar = progress.New(progress.WithGradient("#2E7D32", "#558B2F"))
+		m.bar = progress.New(
+			progress.WithColors(
+				lipgloss.Green,
+				lipgloss.BrightGreen,
+			),
+		)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -76,7 +82,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
 	var sb strings.Builder
 
 	// Title styled like tui.renderKey: bold magenta with fixed-width padding.
@@ -104,5 +110,5 @@ func (m model) View() string {
 		sb.WriteString(tools.Dim(m.message))
 	}
 
-	return sb.String()
+	return tea.NewView(sb.String())
 }
