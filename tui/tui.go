@@ -505,7 +505,11 @@ func (f *FieldCheckBox) Render() string {
 }
 
 // clipLines truncates each line in s to at most maxWidth runes.
+// A maxWidth <= 0 is treated as "no clipping".
 func clipLines(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
 	lines := strings.Split(s, "\n")
 	for i, l := range lines {
 		runes := []rune(l)
