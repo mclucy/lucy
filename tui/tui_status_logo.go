@@ -3,34 +3,47 @@ package tui
 import (
 	_ "embed"
 	"strings"
+
+	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
 )
 
 // LogoVariant selects between the large and small logo variants.
 type LogoVariant int
 
 const (
-	// LogoLarge selects the full-size ASCII art logo.
-	LogoLarge LogoVariant = 0
-	// LogoSmall selects the compact ASCII art logo.
-	LogoSmall LogoVariant = 1
+	// LogoLargePlain selects the full-size ASCII art logo.
+	LogoLargePlain LogoVariant = iota
+	// LogoSmallPlain selects the compact ASCII art logo.
+	LogoSmallPlain
+	LogoLargeColored
+	LogoSmallColored
 )
 
-//go:embed assets/status_logo_large.txt
-var logoLargeRaw string
-
-//go:embed assets/status_logo_small.txt
-var logoSmallRaw string
+const (
+	logoSmallMaxWidth = 30
+	logoLargeMaxWidth = 72
+)
 
 // FieldLogo is a Field that holds the ASCII logo for the status view.
 // It satisfies the Field interface so it can be placed in Data.Fields,
 // but its primary API is the Lines / Width / Height helpers which the
 // layout compositor uses to build the neofetch-style side-by-side view.
-type FieldLogo struct{}
+type FieldLogo struct {
+	Platform types.Platform // TODO: this is not limited to platform
+	NoColor  bool
+}
 
 // Render returns the large logo as a plain string. This is a fallback for
 // callers that are not layout-aware and simply iterate over Fields.
 func (f *FieldLogo) Render() string {
-	return strings.Join(normalizeLines(logoLargeRaw), "\n")
+	variant := tools.Ternary(
+		useLargeLogo(),
+		tools.Ternary(f.NoColor, LogoLargePlain, LogoLargeColored),
+		tools.Ternary(f.NoColor, LogoSmallPlain, LogoSmallColored),
+	)
+	logo := GetLogo(f.Platform, variant)
+	return strings.Join(normalizeLines(logo), "\n")
 }
 
 // KeyLength returns 0 because the logo is not a key-value field.
@@ -42,13 +55,13 @@ func (f *FieldLogo) KeyLength() int {
 // Each line is padded with trailing spaces so that all lines share the
 // same width, making grid-based composition straightforward.
 func (f *FieldLogo) Lines(variant LogoVariant) []string {
-	return normalizeLines(rawForVariant(variant))
+	return normalizeLines(GetLogo(f.Platform, variant))
 }
 
 // Width returns the uniform width (in runes) of every line for the given
 // logo variant.
 func (f *FieldLogo) Width(variant LogoVariant) int {
-	lines := normalizeLines(rawForVariant(variant))
+	lines := normalizeLines(GetLogo(f.Platform, variant))
 	if len(lines) == 0 {
 		return 0
 	}
@@ -57,17 +70,12 @@ func (f *FieldLogo) Width(variant LogoVariant) int {
 
 // Height returns the number of lines for the given logo variant.
 func (f *FieldLogo) Height(variant LogoVariant) int {
-	return len(normalizeLines(rawForVariant(variant)))
+	return len(normalizeLines(GetLogo(f.Platform, variant)))
 }
 
-// rawForVariant returns the raw embedded string for the given variant.
-func rawForVariant(variant LogoVariant) string {
-	switch variant {
-	case LogoSmall:
-		return logoSmallRaw
-	default:
-		return logoLargeRaw
-	}
+func useLargeLogo() bool {
+	termWidth := tools.TermWidth()
+	return termWidth >= logoLargeMaxWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth
 }
 
 // normalizeLines splits the raw logo text into lines, strips \r characters,
