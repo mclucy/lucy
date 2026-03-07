@@ -23,8 +23,10 @@ var (
 	Cyan      func(any) string
 )
 
-var ValidUserColors bool
-var UserColors = make(map[ansi.BasicColor]color.Color)
+var (
+	ValidUserColors bool
+	UserColors      = make(map[ansi.BasicColor]color.Color)
+)
 
 var stylesEnabled = true
 
@@ -50,8 +52,7 @@ func updateStyles() {
 				return fmt.Sprintf("%v", v)
 			}
 		}
-		Bold, Dim, Italic, Underline, Red, Green, Yellow, Blue, Magenta, Cyan =
-			noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle
+		Bold, Dim, Italic, Underline, Red, Green, Yellow, Blue, Magenta, Cyan = noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle
 		return
 	}
 
