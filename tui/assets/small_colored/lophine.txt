@@ -1,0 +1,15 @@
+[size=9px][font=monospace][color=#808080]<span style="color:#808080"> [/color]</span>
+[color=#808080][/color][color=#808080]                     [/color][color=#94818e]_[/color][color=#9a7f92],[/color][color=#9a7f8f],[/color]
+[color=#808080][/color][color=#808080]                [/color][color=#ab88a3]a[/color][color=#ac88a6]&lt;[/color][color=#d28bbf]M[/color][color=#e88bcb]M[/color][color=#cf8dbe]$[/color][color=#ed96d9]M[/color][color=#eb8cd2]M[/color][color=#df81c3]M[/color][color=#ca7eaf]}[/color]
+[color=#808080][/color][color=#808080]            [/color][color=#8c888a],[/color][color=#a7969f]p[/color][color=#e1a4c4]M[/color][color=#f19dd3]M[/color][color=#f295dd]M[/color][color=#bf8ab5]J[/color][color=#f496e3]M[/color][color=#f495e2]M[/color][color=#e78ed0]M[/color][color=#ed8bcf]M[/color][color=#e68ece]M[/color][color=#e093cf]K[/color]
+[color=#808080][/color][color=#808080]          [/color][color=#a6999a]p[/color][color=#a8a099])[/color][color=#b9afa7]j[/color][color=#e5ccd0]M[/color][color=#e8c0d4]M[/color][color=#cda6bc]{[/color][color=#f1abd0]M[/color][color=#b78ea9]{[/color][color=#d991c8]M[/color][color=#d18dc3]*[/color][color=#c68dbc]*[/color][color=#b98ab1]?[/color][color=#ba87ac]][/color][color=#9f8397]![/color]
+[color=#808080][/color][color=#808080]        [/color][color=#8b8c8a],[/color][color=#b2a8ac]{[/color][color=#ae9fa8]L [/color][color=#e5c6c4]$[/color][color=#ebd2c3]M[/color][color=#e7d5c6]M[/color][color=#b4a7aa]|[/color][color=#d6b7c6]M[/color][color=#d1abbf]k[/color][color=#be9eb0]m[/color][color=#ce98b4]M[/color][color=#d994c5]M[/color][color=#dc8fcd]M[/color][color=#b389ab]*[/color]
+[color=#808080][/color][color=#808080]       [/color][color=#93979a]{ [/color][color=#cad2cd]$  [/color][color=#d1b7c6]$[/color][color=#e5c1d1]M[/color][color=#d2b8b8]k[/color][color=#b0a69e]C[/color][color=#ada59f]}[/color][color=#a79d9f]^[/color][color=#a5969e]=[/color][color=#a3929c]![/color][color=#ba9cac]a[/color][color=#ae8ea0]C[/color]
+[color=#808080][/color][color=#808080]      [/color][color=#999e97]|[/color][color=#a9b3b4]{[/color][color=#a3adb1]L[/color][color=#abb2b8]{  [/color][color=#bdbfba]J[/color][color=#aea5a8]C[/color][color=#8c8a8b]_[/color][color=#958e92]_[/color][color=#a6989e]a[/color][color=#bbaaa5]m[/color][color=#c9bbae]M[/color][color=#c5b8b6]*[/color][color=#948b90]`[/color]
+[color=#808080][/color][color=#808080]      [/color][color=#babfb2]{[/color][color=#a2a69d]_[/color][color=#c9d9c4]M [/color][color=#a3adb1]q[/color][color=#a5acb1]C[/color][color=#96989a]"[/color][color=#969996]`   [/color][color=#a5989f]J[/color][color=#9d9394]^[/color]
+[color=#808080][/color][color=#808080]       [/color][color=#b0aaa4][[/color][color=#acaba4]L[/color][color=#adb6a9]*[/color][color=#989e96]~[/color][color=#989f9b]?[/color][color=#a1a7ae]*[/color][color=#a7aeb3]?[/color][color=#a5a9ad]7[/color][color=#9fa4a2]][/color][color=#949492]`[/color]
+[color=#808080][/color][color=#808080]       [/color][color=#bca5a7]M[/color][color=#a39999]\[/color]
+[color=#808080][/color][color=#808080]      [/color][color=#c3a1af]*[/color]
+[color=#808080][/color][color=#808080] [/color]
+
+[/font][/size]
