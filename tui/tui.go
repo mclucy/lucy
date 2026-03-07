@@ -582,17 +582,17 @@ func Flush(data *Data) {
 	isTTY := term.IsTerminal(1)
 	params := NegotiateStatusLayout(
 		tools.TermWidth(),
-		logoField.Width(LogoLarge),
-		logoField.Width(LogoSmall),
+		logoField.Width(LogoLargePlain),
+		logoField.Width(LogoSmallPlain),
 		isTTY,
 	)
 
 	var output string
 	switch params.Mode {
 	case LayoutLargeLogoSideBySide, LayoutSmallLogoSideBySide:
-		variant := LogoLarge
+		variant := LogoLargePlain
 		if params.Mode == LayoutSmallLogoSideBySide {
-			variant = LogoSmall
+			variant = LogoSmallPlain
 		}
 		logoLines := logoField.Lines(variant)
 		logoBlock := strings.Join(logoLines, "\n")
@@ -607,7 +607,7 @@ func Flush(data *Data) {
 		)
 
 	case LayoutVertical:
-		logoLines := logoField.Lines(LogoLarge)
+		logoLines := logoField.Lines(LogoLargePlain)
 		output = strings.Join(logoLines, "\n") + "\n\n" + infoBlock
 
 	case LayoutClipped:

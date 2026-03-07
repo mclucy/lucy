@@ -44,6 +44,9 @@ func generateStatusOutput(
 ) (output *tui.Data) {
 	longOutput := cmd.Bool("long")
 	noStyle := cmd.Bool("no-style")
+	serverPlatform := data.Executable.ModLoader
+	hasMcdr := data.Environments.Mcdr != nil
+	hasLucy := data.Environments.Lucy != nil
 
 	packageNameOutput := tools.Ternary(
 		longOutput,
@@ -63,10 +66,32 @@ func generateStatusOutput(
 
 	output = &tui.Data{Fields: []tui.Field{}}
 
-	output.Fields = append(output.Fields, &tui.FieldLogo{})
+	// logo display strategy:
+	// custom client > mod loader > mcdr > lucy > vanilla
+	var logoPlatform types.Platform
+	if serverPlatform == types.PlatformVanilla {
+		if hasMcdr {
+			logoPlatform = types.PlatformMCDR
+		} else if hasLucy {
+			// logoPlatform =
+			// lucy is not supposed to be a platform, needs refactor
+			// also need structural support for all other custom server clients
+		} else {
+			logoPlatform = types.PlatformVanilla
+		}
+	} else if serverPlatform.IsModding() {
+		output.Fields = append(
+			output.Fields,
+			&tui.FieldLogo{
+				Platform: logoPlatform,
+				NoColor:  noStyle,
+			},
+		)
+	}
 
 	output.Fields = append(
-		output.Fields, &tui.FieldAnnotatedShortText{
+		output.Fields,
+		&tui.FieldAnnotatedShortText{
 			Title:      "Game",
 			Text:       data.Executable.GameVersion.String(),
 			Annotation: data.Executable.Path,
@@ -110,8 +135,7 @@ func generateStatusOutput(
 		)
 	}
 
-	listMods := data.Executable.ModLoader.IsModding()
-	hasMcdr := data.Environments.Mcdr != nil
+	showMods := data.Executable.ModLoader.IsModding()
 
 	// Collect mod/plugin names and paths for later use. This is to avoid
 	// traversing the package list multiple times, which can be costly when
@@ -119,27 +143,28 @@ func generateStatusOutput(
 	var modNames []string
 	var modPaths []string
 	var mcdrPlugins []string
-	if listMods {
+	if showMods {
 		modNames = make([]string, 0, len(data.Packages))
 		modPaths = make([]string, 0, len(data.Packages))
 	}
 	if hasMcdr {
 		mcdrPlugins = make([]string, 0, len(data.Packages))
 	}
-	if listMods || hasMcdr {
-		for _, pkg := range data.Packages {
-			if listMods && (pkg.Id.Platform.IsModding()) {
-				modNames = append(modNames, packageNameOutput(pkg))
-				modPaths = append(modPaths, pkg.Local.Path)
+	if showMods || hasMcdr {
+		for _, p := range data.Packages {
+			packagePlatform := p.Id.Platform
+			if showMods && packagePlatform == serverPlatform {
+				modNames = append(modNames, packageNameOutput(p))
+				modPaths = append(modPaths, p.Local.Path)
 			}
-			if hasMcdr && pkg.Id.Platform == types.PlatformMCDR {
-				mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
+			if hasMcdr && packagePlatform == types.PlatformMCDR {
+				mcdrPlugins = append(mcdrPlugins, packageNameOutput(p))
 			}
 		}
 	}
 
 	// Modding related fields only shown when modding platform detected
-	if listMods {
+	if showMods {
 		modListTitle := tools.Ternary(
 			noStyle,
 			"Mods",
