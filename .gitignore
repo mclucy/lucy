@@ -47,3 +47,6 @@ documents
 # Code agents
 .sisyphus
 AGENTS.md
+
+# Worktrees
+.worktrees
