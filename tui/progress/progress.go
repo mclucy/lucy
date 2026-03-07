@@ -88,12 +88,10 @@ func (t *Tracker) Close() {
 	}
 }
 
-// Complete is similar to Close but with visual feedback. It also
-// terminates the program like Close.
+// Complete is similar to Close but with visual feedback.
 func (t *Tracker) Complete(msg string) {
 	if t.program != nil {
 		t.program.Send(completeMsg(msg))
-		t.program.Send(closeMsg{})
 	}
 }
 
