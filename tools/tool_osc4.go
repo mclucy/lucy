@@ -16,7 +16,7 @@ import (
 )
 
 func osc4Query(index uint8) color.Color {
-	if index < 0 || index > 15 {
+	if index > 15 {
 		return nil
 	}
 
@@ -130,6 +130,6 @@ func parseOSC4Response(index uint8, data []byte) color.Color {
 		R: scale(r16),
 		G: scale(g16),
 		B: scale(b16),
-		A: 0,
+		A: 255,
 	}
 }
