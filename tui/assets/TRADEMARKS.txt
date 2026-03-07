@@ -1,0 +1,6 @@
+Trademark Notice
+
+Logos, trademarks, and ASCII representations in this directory belong to
+their respective owners. They are included solely for identification or
+compatibility purposes. Their presence does not imply endorsement or
+affiliation, and no trademark rights are granted by this repository.

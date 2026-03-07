@@ -579,7 +579,7 @@ func Flush(data *Data) {
 	}
 	infoBlock := infoSb.String()
 
-	isTTY := term.IsTerminal(int(1))
+	isTTY := term.IsTerminal(1)
 	params := NegotiateStatusLayout(
 		tools.TermWidth(),
 		logoField.Width(LogoLarge),
@@ -599,7 +599,12 @@ func Flush(data *Data) {
 		gapStr := strings.Repeat(" ", params.GapWidth)
 		infoStyle := lipgloss.NewStyle().Width(params.InfoWidth)
 		constrainedInfo := infoStyle.Render(infoBlock)
-		output = lipgloss.JoinHorizontal(lipgloss.Top, logoBlock, gapStr, constrainedInfo)
+		output = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			logoBlock,
+			gapStr,
+			constrainedInfo,
+		)
 
 	case LayoutVertical:
 		logoLines := logoField.Lines(LogoLarge)
