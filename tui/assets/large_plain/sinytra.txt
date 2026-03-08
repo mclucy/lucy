@@ -1,38 +1,29 @@
 
-                                _agg@#**FF????FF***@ggg_
-                          _agMFT[`                     ]?F#gg_
-                      _g@FT~                                 TF@g_
-                   _gPT`                                         ?%g_
-                 gBT                                                J@g,
-               gP}                                                    !*g,
-             gF!                                                         Rg
-           gB]                                                             @g
-          @F                                                                ]B,
-        _@]                                    ;                             ^@r
-       jB                                     M                                @r
-      _B                                    pM                                  @r
-      @\                                  pMM                                    @,
-     gF                                 _MMM           _p                        Jg
-     @                                 MMMF      ,ppMMMM`                         @L
-    4F                               pMMMM_apMMMMMMMMML                           {&
-    g)                             zMMMMMMMMMM**MMMMF                              @
-    @                            _MMMMMM*7]    MMMM)                               @
-    @                           MM*T!         MMMF                                 @
-    @_                                       MMM\                                  @
-    $L                                      MM*                                   {B
-    {B                                    jMM'                                    gL
-     @r                                  jM|                                      B
-     {@                                 jF                                       @L
-      {g                               p}                                       gF
-       *g                             /                                        gF
-        ?g                                                                    gF
-         {B,                                                                 @C
-           @g                                                              gM!
-            7@g                                                          _@C
-              T@g                                                      j@F
-                {@g,                                                 gBT
-                  !*@g,                                           agF^
-                     (T@gg                                    _g@F]
-                         [F@gg_                          _agB?]
-                              [TF#Mgggg__________jggg@P*FT
-    
+                      _aa#FFFTTTTTTTFF%ag_
+                  g@F[`                   ]FMg_
+              _gF]                            ~FM_
+            gM]                                  ~Ng
+          gB`                                       Ng
+        _@~                                           M_
+       gK                                              $g
+      gC                         4                      ~g
+     jK                        xM                        JK
+     M                       _MM       ,i                 $,
+    @L                      MMM __mMMMMM                   K
+    @                     4MMMMMMMNMMM}                    @
+    @                   aMMMF"`  ;MMM                      @
+    @                  "`       _MM^                       @
+    @                          _MK                         B
+    ~K                        jM~                         {B
+     @,                      jF                           @
+      @                     /'                           @`
+       @                                                @`
+        NL                                            _M
+         [@,                                         @D
+           JM_                                     @F
+             [Mg                                aM]
+                [Ng_                        _gFT
+                    ]F%aq_            _ag@FP`
+                          ~]TTTTTTTT]~`
+     
+     
