@@ -24,10 +24,28 @@ type ExecutableInfo struct {
 	ModLoader     Platform
 	LoaderVersion RawVersion
 	BootCommand   *exec.Cmd
+	Topology      *RuntimeTopology
 }
 
 func (e *ExecutableInfo) IsValid() bool {
 	return e.Path != "" && e.GameVersion != "" && e.ModLoader.Valid()
+}
+
+// DerivedModLoader returns the platform representing the primary mod loader.
+// If Topology is set and resolved, it derives the value from the primary node's
+// IdentityPlatform. Otherwise it returns the legacy ModLoader field directly.
+func (e *ExecutableInfo) DerivedModLoader() Platform {
+	if e == nil {
+		return PlatformNone
+	}
+	if e.Topology != nil && e.Topology.Resolved() {
+		if primary, ok := e.Topology.PrimaryNodeData(); ok {
+			if primary.IdentityPlatform.Valid() {
+				return primary.IdentityPlatform
+			}
+		}
+	}
+	return e.ModLoader
 }
 
 type ServerActivity struct {
