@@ -16,12 +16,17 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+const (
+	flagIndexName  = "index"
+	flagClientName = "client"
+)
+
 var subcmdSearch = &cli.Command{
 	Name:  "search",
 	Usage: "Search for mods and plugins",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name:    "index",
+			Name:    flagIndexName,
 			Aliases: []string{"i"},
 			Usage:   "Index search results by `INDEX`",
 			Value:   "relevance",
@@ -33,7 +38,7 @@ var subcmdSearch = &cli.Command{
 			},
 		},
 		&cli.BoolFlag{
-			Name:    "client",
+			Name:    flagClientName,
 			Aliases: []string{"c"},
 			Usage:   "Also show client-only mods in results",
 			Value:   false,
@@ -58,10 +63,10 @@ var actionSearch cli.ActionFunc = func(
 ) error {
 	p := syntax.Parse(cmd.Args().First())
 	options := types.SearchOptions{
-		IncludeClient: cmd.Bool("client"),
-		SortBy:        types.SearchSort(cmd.String("index")),
+		IncludeClient: cmd.Bool(flagClientName),
+		SortBy:        types.SearchSort(cmd.String(flagIndexName)),
 	}
-	sourceArg := cmd.String("source")
+	sourceArg := cmd.String(flagSourceName)
 	specifiedSource := types.ParseSource(sourceArg)
 
 	out := &tui.Data{}
@@ -89,7 +94,7 @@ var actionSearch cli.ActionFunc = func(
 	}
 
 	for _, res := range results {
-		appendToSearchOutput(out, cmd.Bool("long"), res)
+		appendToSearchOutput(out, cmd.Bool(flagLongName), res)
 	}
 
 	tui.Flush(out)

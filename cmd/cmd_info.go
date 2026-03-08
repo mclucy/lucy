@@ -24,6 +24,7 @@ var subcmdInfo = &cli.Command{
 		flagLongOutput,
 		flagNoStyle,
 	},
+	ArgsUsage: "<package-identifier>",
 	Action: tools.Decorate(
 		actionInfo,
 		decoratorGlobalFlags,

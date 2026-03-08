@@ -14,10 +14,7 @@ import (
 // flag actions.
 func decoratorBaseCommandFlags(f cli.ActionFunc) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
-		if cmd.Bool("no-style") {
-			tools.TurnOffStyles()
-		}
-		if cmd.Bool("log-file") {
+		if cmd.Bool(flagLogFileName) {
 			println("Log file at", logger.LogFile.Name())
 		}
 		return f(ctx, cmd)
@@ -28,16 +25,16 @@ func decoratorBaseCommandFlags(f cli.ActionFunc) cli.ActionFunc {
 // to the action function.
 func decoratorGlobalFlags(f cli.ActionFunc) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
-		if cmd.Bool("print-logs") {
+		if cmd.Bool(flagPrintLogsName) {
 			logger.EnablePrintLogs()
 		}
-		if cmd.Bool("debug") {
+		if cmd.Bool(flagDebugName) {
 			logger.EnableDebug()
 		}
-		if cmd.Bool("dump-logs") {
+		if cmd.Bool(flagDumpLogsName) {
 			logger.EnableDumpHistory()
 		}
-		if cmd.Bool("no-style") {
+		if cmd.Bool(flagNoStyleName) {
 			tools.TurnOffStyles()
 		}
 		return f(ctx, cmd)

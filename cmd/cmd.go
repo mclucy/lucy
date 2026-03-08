@@ -28,23 +28,23 @@ var Cli = &cli.Command{
 	),
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
-			Name:    "log-file",
+			Name:    flagLogFileName,
 			Aliases: []string{"l"},
 			Usage:   "Output the path to logfile",
 			Value:   false,
 		},
 		&cli.BoolFlag{
-			Name:  "print-logs",
+			Name:  flagPrintLogsName,
 			Usage: "Print logs to console",
 			Value: false,
 		},
 		&cli.BoolFlag{
-			Name:  "debug",
+			Name:  flagDebugName,
 			Usage: "Show debug logs",
 			Value: false,
 		},
 		&cli.BoolFlag{
-			Name:   "dump-logs",
+			Name:   flagDumpLogsName,
 			Usage:  "Dump the log history to console before exit",
 			Value:  false,
 			Hidden: true,

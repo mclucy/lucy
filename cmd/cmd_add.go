@@ -10,22 +10,28 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+const (
+	flagForceName = "force"
+)
+
 var subcmdAdd = &cli.Command{
 	Name:  "add",
 	Usage: "Add new mods, plugins, or server modules",
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
-			Name:    "force",
+			Name:    flagForceName,
 			Aliases: []string{"f"},
 			Usage:   "Ignore version, dependency, and platform warnings",
 			Value:   false,
 		},
 		flagNoStyle,
 	},
+	ArgsUsage: "<package-identifier>",
 	Action: tools.Decorate(
 		actionAdd,
 		decoratorGlobalFlags,
 		decoratorHelpAndExitOnNoArg,
+		decoratorLogAndExitOnError,
 	),
 }
 

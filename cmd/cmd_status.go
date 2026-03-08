@@ -18,6 +18,7 @@ var subcmdStatus = &cli.Command{
 	Action: tools.Decorate(
 		actionStatus,
 		decoratorGlobalFlags,
+		decoratorLogAndExitOnError,
 	),
 	Flags: []cli.Flag{
 		flagJsonOutput,
@@ -30,7 +31,7 @@ var actionStatus cli.ActionFunc = func(
 	cmd *cli.Command,
 ) error {
 	serverInfo := probe.ServerInfo()
-	if cmd.Bool("json") {
+	if cmd.Bool(flagJsonName) {
 		tools.PrintAsJson(serverInfo)
 	} else {
 		tui.Flush(generateStatusOutput(&serverInfo, cmd))
@@ -42,8 +43,8 @@ func generateStatusOutput(
 	data *types.ServerInfo,
 	cmd *cli.Command,
 ) (output *tui.Data) {
-	longOutput := cmd.Bool("long")
-	noStyle := cmd.Bool("no-style")
+	longOutput := cmd.Bool(flagLongName)
+	noStyle := cmd.Bool(flagNoStyleName)
 
 	packageNameOutput := tools.Ternary(
 		longOutput,

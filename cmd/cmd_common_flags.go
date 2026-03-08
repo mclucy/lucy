@@ -8,10 +8,14 @@ import (
 )
 
 const (
-	flagJsonName    = "json"
-	flagLongName    = "long"
-	flagNoStyleName = "no-style"
-	flagSourceName  = "source"
+	flagJsonName      = "json"
+	flagLongName      = "long"
+	flagNoStyleName   = "no-style"
+	flagSourceName    = "source"
+	flagLogFileName   = "log-file"
+	flagPrintLogsName = "print-logs"
+	flagDebugName     = "debug"
+	flagDumpLogsName  = "dump-logs"
 )
 
 var flagJsonOutput = &cli.BoolFlag{
