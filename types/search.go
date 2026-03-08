@@ -26,6 +26,8 @@ type SearchOptions struct {
 }
 
 type SearchResults struct {
+	// Source labels which upstream catalog produced this result set.
+	// It is a semantic provenance marker, not a provider instance.
 	Source   Source
 	Projects []ProjectName
 }

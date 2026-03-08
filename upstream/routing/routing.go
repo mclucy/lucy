@@ -31,11 +31,19 @@ var (
 	ErrInvalidPlatform   = errors.New("cannot find sources for platform")
 )
 
+// autoProviders defines fallback execution order for SourceAuto when the
+// platform allows broad search.
 var autoProviders = []upstream.Provider{
 	modrinth.Provider,
 	mcdr.Provider,
 }
 
+// providerBySource binds semantic Source values to executable Provider
+// implementations.
+//
+// Source and Provider are intentionally not synonyms:
+//   - Some Source values are policy/sentinel markers (SourceAuto/SourceUnknown).
+//   - A Source can resolve to one provider, many providers, or none.
 var providerBySource = map[types.Source]upstream.Provider{
 	types.SourceCurseForge: curseforge.Provider,
 	types.SourceModrinth:   modrinth.Provider,

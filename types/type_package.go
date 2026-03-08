@@ -95,6 +95,9 @@ type (
 	// PackageRemote is an optional attribution to types.Package. It is used to
 	// represent package's presence in a remote source.
 	PackageRemote struct {
+		// Source is the semantic origin label of this package metadata/artifact.
+		// It is stored and displayed as provenance, not used as an executable
+		// provider identifier.
 		Source        Source
 		FileUrl       string
 		Filename      string

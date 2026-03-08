@@ -5,6 +5,13 @@ import "github.com/mclucy/lucy/types"
 // Provider is the inversion boundary between core upstream orchestration and
 // concrete upstream integrations.
 //
+// Provider is an executable capability boundary: implementations perform actual
+// native API calls and adapt upstream-specific data into raw contracts.
+//
+// Provider is intentionally not the same concept as types.Source:
+//   - types.Source is a stable semantic identifier exposed to users and storage.
+//   - Provider is the runtime executor selected by routing logic.
+//
 // Rules:
 //   - Core code depends on this interface, never on concrete provider packages.
 //   - Provider packages implement this interface and perform upstream-specific
@@ -36,6 +43,7 @@ type Provider interface {
 		parsed types.PackageId,
 		err error,
 	)
+	// Source returns the semantic source identity represented by this provider.
 	Source() types.Source
 }
 

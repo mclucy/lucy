@@ -5,17 +5,23 @@ import "strings"
 // Source identifies an upstream catalog where package metadata and artifacts can
 // be fetched.
 //
-// Source is a stable semantic identifier used by CLI/config/storage. Execution
-// capabilities are implemented by upstream.Provider.
+// Source is a stable semantic identifier used by CLI/config/storage. It is not
+// an execution object.
+//   - In user input, Source can express either a concrete upstream
+//     (SourceModrinth) or a routing policy marker (SourceAuto).
+//   - In result payloads, Source records where data came from.
+//   - In routing, Source is the key that resolves to one or more providers.
+//
+// Execution of native upstream APIs is implemented by upstream.Provider.
 type Source uint8
 
 const (
-	SourceAuto Source = iota
+	SourceAuto Source = iota // policy marker: let routing choose providers
 	SourceCurseForge
 	SourceModrinth
 	SourceGitHub
 	SourceMCDR
-	SourceUnknown
+	SourceUnknown // sentinel for parse/validation failure
 )
 
 func (s Source) String() string {

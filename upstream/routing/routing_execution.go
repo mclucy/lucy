@@ -12,6 +12,8 @@ import (
 var ErrNoProviderSucceeded = errors.New("no provider succeeded")
 
 type ProviderError struct {
+	// Source identifies the semantic upstream label for user-facing diagnostics.
+	// The failed runtime executor is a Provider implementation.
 	Source types.Source
 	Err    error
 }
