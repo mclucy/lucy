@@ -18,7 +18,7 @@ func decoratorBaseCommandFlags(f cli.ActionFunc) cli.ActionFunc {
 			tools.TurnOffStyles()
 		}
 		if cmd.Bool(flagLogFileName) {
-			println("Log file at", logger.LogFile.Name())
+			println("Log file at", logger.GetLogFile().Name())
 		}
 		return f(ctx, cmd)
 	}
