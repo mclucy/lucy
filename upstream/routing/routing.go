@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/curseforge"
@@ -66,11 +67,11 @@ func ResolveProviders(
 	}
 
 	if src != types.SourceAuto {
-		provider, ok := GetProvider(src)
-		if !ok {
-			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
-		}
-		return []upstream.Provider{provider}, nil
+		return resolveExplicitSource(src)
+	}
+
+	if capability := capabilityForPlatform(platform); capability != "" {
+		return ResolveProvidersFromTopology(topologyForCapability(capability), src)
 	}
 
 	switch platform {
@@ -82,5 +83,106 @@ func ResolveProviders(
 		return []upstream.Provider{mcdr.Provider}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrInvalidPlatform, platform)
+	}
+}
+
+func ResolveProvidersFromTopology(
+	topology *types.RuntimeTopology,
+	src types.Source,
+) ([]upstream.Provider, error) {
+	if src == types.SourceUnknown {
+		return nil, ErrUnknownSource
+	}
+
+	if src != types.SourceAuto {
+		return resolveExplicitSource(src)
+	}
+
+	if topology == nil || !topology.Resolved() {
+		logger.Warn(fmt.Errorf("routing: topology unresolved, falling back to auto providers"))
+		return ResolveProviders(types.PlatformAny, src)
+	}
+
+	providers := make([]upstream.Provider, 0, 2)
+	seen := make(map[types.Source]struct{}, 2)
+	sawKnownCapability := false
+	sawProxyCapability := false
+
+	appendProvider := func(provider upstream.Provider) {
+		source := provider.Source()
+		if _, ok := seen[source]; ok {
+			return
+		}
+		seen[source] = struct{}{}
+		providers = append(providers, provider)
+	}
+
+	for _, node := range topology.Nodes {
+		for _, capability := range node.Capabilities {
+			switch capability {
+			case types.CapabilityFabricMods,
+				types.CapabilityForgeMods,
+				types.CapabilityNeoforgeMods,
+				types.CapabilityBukkitPlugins:
+				sawKnownCapability = true
+				appendProvider(modrinth.Provider)
+			case types.CapabilityMCDRPlugins:
+				sawKnownCapability = true
+				appendProvider(mcdr.Provider)
+			case types.CapabilityProxying:
+				sawKnownCapability = true
+				sawProxyCapability = true
+			}
+		}
+	}
+
+	if len(providers) > 0 {
+		return providers, nil
+	}
+
+	if sawProxyCapability {
+		return []upstream.Provider{}, nil
+	}
+
+	if !sawKnownCapability {
+		return ListAutoProviders(), nil
+	}
+
+	return []upstream.Provider{}, nil
+}
+
+func resolveExplicitSource(src types.Source) ([]upstream.Provider, error) {
+	provider, ok := GetProvider(src)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
+	}
+
+	return []upstream.Provider{provider}, nil
+}
+
+func capabilityForPlatform(p types.Platform) types.RuntimeCapability {
+	switch p {
+	case types.PlatformFabric:
+		return types.CapabilityFabricMods
+	case types.PlatformForge:
+		return types.CapabilityForgeMods
+	case types.PlatformNeoforge:
+		return types.CapabilityNeoforgeMods
+	case types.PlatformMCDR:
+		return types.CapabilityMCDRPlugins
+	default:
+		return ""
+	}
+}
+
+func topologyForCapability(c types.RuntimeCapability) *types.RuntimeTopology {
+	const legacyNodeID types.RuntimeNodeID = "legacy_platform"
+
+	return &types.RuntimeTopology{
+		PrimaryNode: legacyNodeID,
+		Nodes: []types.RuntimeNode{{
+			ID:           legacyNodeID,
+			Capabilities: []types.RuntimeCapability{c},
+		}},
 	}
 }

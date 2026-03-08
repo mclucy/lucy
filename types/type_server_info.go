@@ -19,22 +19,22 @@ type ServerInfo struct {
 }
 
 type ExecutableInfo struct {
-	Path          string           `json:"path"`
-	GameVersion   RawVersion       `json:"game_version"`
-	ModLoader     Platform         `json:"mod_loader"`
-	LoaderVersion RawVersion       `json:"loader_version"`
-	BootCommand   *exec.Cmd        `json:"-"`
-	Topology      *RuntimeTopology `json:"topology,omitempty"`
-	BridgeHints   []string         `json:"bridge_hints,omitempty"`
+	Path                   string           `json:"path"`
+	GameVersion            RawVersion       `json:"game_version"`
+	PrimaryPlatform        Platform         `json:"primary_platform"`
+	PrimaryPlatformVersion RawVersion       `json:"primary_platform_version"`
+	BootCommand            *exec.Cmd        `json:"-"`
+	Topology               *RuntimeTopology `json:"topology,omitempty"`
+	BridgeHints            []string         `json:"bridge_hints,omitempty"`
 }
 
 func (e *ExecutableInfo) IsValid() bool {
-	return e.Path != "" && e.GameVersion != "" && e.ModLoader.Valid()
+	return e.Path != "" && e.GameVersion != "" && e.PrimaryPlatform.Valid()
 }
 
 // DerivedModLoader returns the platform representing the primary mod loader.
 // If Topology is set and resolved, it derives the value from the primary node's
-// IdentityPlatform. Otherwise it returns the legacy ModLoader field directly.
+// IdentityPlatform. Otherwise, it returns the legacy PrimaryPlatform field directly.
 func (e *ExecutableInfo) DerivedModLoader() Platform {
 	if e == nil {
 		return PlatformNone
@@ -46,7 +46,7 @@ func (e *ExecutableInfo) DerivedModLoader() Platform {
 			}
 		}
 	}
-	return e.ModLoader
+	return e.PrimaryPlatform
 }
 
 type ServerActivity struct {

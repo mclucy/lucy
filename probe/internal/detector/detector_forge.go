@@ -73,19 +73,21 @@ func (d *forgeServerDetector) Detect(
 
 			if forgeVersion != types.VersionUnknown && gameVersion != types.VersionUnknown {
 				exec := &types.ExecutableInfo{
-					Path:          filePath,
-					GameVersion:   gameVersion,
-					ModLoader:     types.PlatformForge,
-					LoaderVersion: forgeVersion,
-					BootCommand:   nil,
+					Path:                   filePath,
+					GameVersion:            gameVersion,
+					PrimaryPlatform:        types.PlatformForge,
+					PrimaryPlatformVersion: forgeVersion,
+					BootCommand:            nil,
 					Topology: &types.RuntimeTopology{
 						PrimaryNode: "forge",
-						Nodes: []types.RuntimeNode{{
-							ID:               "forge",
-							Role:             types.RuntimeRoleModLoader,
-							IdentityPlatform: types.PlatformForge,
-							Capabilities:     []types.RuntimeCapability{types.CapabilityForgeMods},
-						}},
+						Nodes: []types.RuntimeNode{
+							{
+								ID:               "forge",
+								Role:             types.RuntimeRoleModLoader,
+								IdentityPlatform: types.PlatformForge,
+								Capabilities:     []types.RuntimeCapability{types.CapabilityForgeMods},
+							},
+						},
 					},
 				}
 				return exec, nil

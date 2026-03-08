@@ -115,7 +115,7 @@ func parseOperatorSlash(s string) (
 		if types.Platform(n).Valid() {
 			// Remember, all platforms are also valid packages under themselves.
 			// This literal is for users to specify the platform itself. See the
-			// docs for syntaxtypes.ModLoader for more information.
+			// docs for syntaxtypes.PrimaryPlatform for more information.
 			pl = types.Platform(n)
 			n = types.ProjectName(pl)
 		}

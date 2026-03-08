@@ -7,7 +7,10 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func EnrichTopologyFromPackages(exec *types.ExecutableInfo, packages []types.Package) {
+func EnrichTopologyFromPackages(
+	exec *types.ExecutableInfo,
+	packages []types.Package,
+) {
 	if exec == nil {
 		return
 	}
@@ -92,16 +95,16 @@ func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {
 	}
 
 	detected := make([]types.RuntimeNodeID, 0, 6)
-	if hasAnyName(names, "connector", "sinytra-connector", "fabric-connector") {
+	if hasAnyName(names, "sinytra-connector") {
 		detected = append(detected, RuntimeNodeConnector)
 	}
 	if hasAnyName(names, "kilt") {
 		detected = append(detected, RuntimeNodeKilt)
 	}
-	if hasAnyName(names, "velocity", "velocity-proxy") {
+	if hasAnyName(names, "velocity") {
 		detected = append(detected, RuntimeNodeVelocity)
 	}
-	if hasAnyName(names, "bungeecord", "bungee") {
+	if hasAnyName(names, "bungeecord") {
 		detected = append(detected, RuntimeNodeBungeecord)
 	}
 	if hasAnyName(names, "waterfall") {
@@ -169,7 +172,10 @@ func mergeTopology(dst *types.RuntimeTopology, src *types.RuntimeTopology) {
 		return
 	}
 
-	seenNodes := make(map[types.RuntimeNodeID]struct{}, len(dst.Nodes)+len(src.Nodes))
+	seenNodes := make(
+		map[types.RuntimeNodeID]struct{},
+		len(dst.Nodes)+len(src.Nodes),
+	)
 	for _, node := range dst.Nodes {
 		seenNodes[node.ID] = struct{}{}
 	}
@@ -182,7 +188,10 @@ func mergeTopology(dst *types.RuntimeTopology, src *types.RuntimeTopology) {
 		seenNodes[node.ID] = struct{}{}
 	}
 
-	seenEdges := make(map[types.RuntimeEdge]struct{}, len(dst.Edges)+len(src.Edges))
+	seenEdges := make(
+		map[types.RuntimeEdge]struct{},
+		len(dst.Edges)+len(src.Edges),
+	)
 	for _, edge := range dst.Edges {
 		seenEdges[edge] = struct{}{}
 	}
@@ -203,17 +212,21 @@ func sortTopology(t *types.RuntimeTopology) {
 		return
 	}
 
-	sort.Slice(t.Nodes, func(i, j int) bool {
-		return string(t.Nodes[i].ID) < string(t.Nodes[j].ID)
-	})
+	sort.Slice(
+		t.Nodes, func(i, j int) bool {
+			return string(t.Nodes[i].ID) < string(t.Nodes[j].ID)
+		},
+	)
 
-	sort.Slice(t.Edges, func(i, j int) bool {
-		if t.Edges[i].From != t.Edges[j].From {
-			return string(t.Edges[i].From) < string(t.Edges[j].From)
-		}
-		if t.Edges[i].To != t.Edges[j].To {
-			return string(t.Edges[i].To) < string(t.Edges[j].To)
-		}
-		return string(t.Edges[i].Kind) < string(t.Edges[j].Kind)
-	})
+	sort.Slice(
+		t.Edges, func(i, j int) bool {
+			if t.Edges[i].From != t.Edges[j].From {
+				return string(t.Edges[i].From) < string(t.Edges[j].From)
+			}
+			if t.Edges[i].To != t.Edges[j].To {
+				return string(t.Edges[i].To) < string(t.Edges[j].To)
+			}
+			return string(t.Edges[i].Kind) < string(t.Edges[j].Kind)
+		},
+	)
 }

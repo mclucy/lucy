@@ -1,6 +1,10 @@
 package probe
 
-import "github.com/mclucy/lucy/types"
+import (
+	"strings"
+
+	"github.com/mclucy/lucy/types"
+)
 
 const (
 	RuntimeNodeMinecraft  types.RuntimeNodeID = "minecraft"
@@ -11,6 +15,7 @@ const (
 	RuntimeNodePaper      types.RuntimeNodeID = "paper"
 	RuntimeNodeSpigot     types.RuntimeNodeID = "spigot"
 	RuntimeNodeBukkit     types.RuntimeNodeID = "bukkit"
+	RuntimeNodeFolia      types.RuntimeNodeID = "folia"
 	RuntimeNodeArclight   types.RuntimeNodeID = "arclight"
 	RuntimeNodeYouer      types.RuntimeNodeID = "youer"
 	RuntimeNodeVelocity   types.RuntimeNodeID = "velocity"
@@ -79,6 +84,15 @@ var defaultRegistryEntries = []RegistryEntry{
 		NodeID:           RuntimeNodeBukkit,
 		Role:             types.RuntimeRolePluginCore,
 		IdentityPlatform: types.PlatformAny,
+		Capabilities: []types.RuntimeCapability{
+			types.CapabilityBukkitPlugins,
+		},
+	},
+	{
+		NodeID:           RuntimeNodeFolia,
+		Role:             types.RuntimeRolePluginCore,
+		IdentityPlatform: types.PlatformAny,
+		RiskLevel:        types.RiskMedium,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
@@ -159,4 +173,31 @@ var defaultRegistryEntries = []RegistryEntry{
 			},
 		},
 	},
+}
+
+var normalizedRuntimeIDByName = map[string]types.RuntimeNodeID{
+	"minecraft":       RuntimeNodeMinecraft,
+	"vanilla":         RuntimeNodeMinecraft,
+	"fabric":          RuntimeNodeFabric,
+	"fabric server":   RuntimeNodeFabric,
+	"forge":           RuntimeNodeForge,
+	"forge server":    RuntimeNodeForge,
+	"neoforge":        RuntimeNodeNeoforge,
+	"neoforge server": RuntimeNodeNeoforge,
+	"mcdr":            RuntimeNodeMCDR,
+	"mcdr plugin":     RuntimeNodeMCDR,
+}
+
+func NormalizeRuntimeID(name string) types.RuntimeNodeID {
+	normalized := strings.TrimSpace(strings.ToLower(name))
+	if normalized == "" {
+		return types.RuntimeNodeUnknown
+	}
+
+	id, ok := normalizedRuntimeIDByName[normalized]
+	if !ok {
+		return types.RuntimeNodeUnknown
+	}
+
+	return id
 }

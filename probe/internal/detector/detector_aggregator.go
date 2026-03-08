@@ -12,21 +12,21 @@ import (
 )
 
 var UnknownExecutable = &types.ExecutableInfo{
-	Path:          "",
-	GameVersion:   types.VersionUnknown,
-	ModLoader:     types.UnknownPlatform,
-	LoaderVersion: types.VersionUnknown,
-	BootCommand:   nil,
-	Topology:      &types.RuntimeTopology{},
+	Path:                   "",
+	GameVersion:            types.VersionUnknown,
+	PrimaryPlatform:        types.UnknownPlatform,
+	PrimaryPlatformVersion: types.VersionUnknown,
+	BootCommand:            nil,
+	Topology:               &types.RuntimeTopology{},
 }
 
 var NoExecutable = &types.ExecutableInfo{
-	Path:          "",
-	GameVersion:   types.VersionNone,
-	ModLoader:     types.PlatformNone,
-	LoaderVersion: types.VersionNone,
-	BootCommand:   nil,
-	Topology:      &types.RuntimeTopology{},
+	Path:                   "",
+	GameVersion:            types.VersionNone,
+	PrimaryPlatform:        types.PlatformNone,
+	PrimaryPlatformVersion: types.VersionNone,
+	BootCommand:            nil,
+	Topology:               &types.RuntimeTopology{},
 }
 
 // Executable analyzes a JAR file using all registered detectors
@@ -68,7 +68,10 @@ func Executable(filePath string) *types.ExecutableInfo {
 		if len(bridgeMarkers) > 0 {
 			candidates[0].BridgeHints = make([]string, 0, len(bridgeMarkers))
 			for _, marker := range bridgeMarkers {
-				candidates[0].BridgeHints = append(candidates[0].BridgeHints, marker.NodeID)
+				candidates[0].BridgeHints = append(
+					candidates[0].BridgeHints,
+					marker.NodeID,
+				)
 			}
 		}
 	}

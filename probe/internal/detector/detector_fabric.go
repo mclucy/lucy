@@ -67,19 +67,21 @@ func (d *fabricServerSingleFileDetector) Detect(
 	}
 
 	exec = &types.ExecutableInfo{
-		Path:          filePath,
-		GameVersion:   gameVersion,
-		ModLoader:     types.PlatformFabric,
-		LoaderVersion: loaderVersion,
-		BootCommand:   nil,
+		Path:                   filePath,
+		GameVersion:            gameVersion,
+		PrimaryPlatform:        types.PlatformFabric,
+		PrimaryPlatformVersion: loaderVersion,
+		BootCommand:            nil,
 		Topology: &types.RuntimeTopology{
 			PrimaryNode: "fabric",
-			Nodes: []types.RuntimeNode{{
-				ID:               "fabric",
-				Role:             types.RuntimeRoleModLoader,
-				IdentityPlatform: types.PlatformFabric,
-				Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
-			}},
+			Nodes: []types.RuntimeNode{
+				{
+					ID:               "fabric",
+					Role:             types.RuntimeRoleModLoader,
+					IdentityPlatform: types.PlatformFabric,
+					Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
+				},
+			},
 		},
 	}
 
@@ -185,19 +187,21 @@ func (d *fabricServerLauncherDetector) Detect(
 			}
 
 			exec = &types.ExecutableInfo{
-				Path:          filePath,
-				GameVersion:   gameVersion,
-				ModLoader:     types.PlatformFabric,
-				LoaderVersion: loaderVersion,
-				BootCommand:   nil,
+				Path:                   filePath,
+				GameVersion:            gameVersion,
+				PrimaryPlatform:        types.PlatformFabric,
+				PrimaryPlatformVersion: loaderVersion,
+				BootCommand:            nil,
 				Topology: &types.RuntimeTopology{
 					PrimaryNode: "fabric",
-					Nodes: []types.RuntimeNode{{
-						ID:               "fabric",
-						Role:             types.RuntimeRoleModLoader,
-						IdentityPlatform: types.PlatformFabric,
-						Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
-					}},
+					Nodes: []types.RuntimeNode{
+						{
+							ID:               "fabric",
+							Role:             types.RuntimeRoleModLoader,
+							IdentityPlatform: types.PlatformFabric,
+							Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
+						},
+					},
 				},
 			}
 
