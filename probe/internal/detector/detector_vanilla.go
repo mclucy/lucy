@@ -48,6 +48,14 @@ func (d *VanillaDetector) Detect(
 				Path:        filePath,
 				ModLoader:   types.PlatformMinecraft,
 				GameVersion: types.RawVersion(obj.Id),
+				Topology: &types.RuntimeTopology{
+					PrimaryNode: "minecraft",
+					Nodes: []types.RuntimeNode{{
+						ID:               "minecraft",
+						Role:             types.RuntimeRoleVanilla,
+						IdentityPlatform: types.PlatformMinecraft,
+					}},
+				},
 			}
 
 			return exec, nil

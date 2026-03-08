@@ -49,33 +49,33 @@ const (
 )
 
 type CompatResult struct {
-	Verdict   CompatVerdict
-	Reason    string
-	Detail    string
-	RiskLevel RuntimeRiskLevel
+	Verdict   CompatVerdict    `json:"verdict"`
+	Reason    string           `json:"reason"`
+	Detail    string           `json:"detail"`
+	RiskLevel RuntimeRiskLevel `json:"risk_level"`
 }
 
 // CompatPolicy describes the compatibility relationship between a server runtime
 // and package ecosystem. All edges are directed: "can runtime A host packages for ecosystem B?"
 type CompatPolicy struct {
 	// HostNodeID is the runtime that hosts/runs the packages.
-	HostNodeID RuntimeNodeID
+	HostNodeID RuntimeNodeID `json:"host_node_id"`
 	// PackageEcosystem is the capability (ecosystem) the packages belong to.
-	PackageEcosystem RuntimeCapability
+	PackageEcosystem RuntimeCapability `json:"package_ecosystem"`
 	// Verdict is the base verdict for this relationship (without bridge layers).
-	Verdict CompatVerdict
+	Verdict CompatVerdict `json:"verdict"`
 	// Risk is the risk level for this combination.
-	Risk RuntimeRiskLevel
+	Risk RuntimeRiskLevel `json:"risk"`
 	// Reason is a machine-readable code for why this verdict was reached.
-	Reason string
+	Reason string `json:"reason"`
 }
 
 type RuntimeNode struct {
-	ID               RuntimeNodeID
-	Role             RuntimeRole
-	IdentityPlatform Platform
-	Capabilities     []RuntimeCapability
-	RiskLevel        RuntimeRiskLevel
+	ID               RuntimeNodeID       `json:"id"`
+	Role             RuntimeRole         `json:"role"`
+	IdentityPlatform Platform            `json:"identity_platform"`
+	Capabilities     []RuntimeCapability `json:"capabilities"`
+	RiskLevel        RuntimeRiskLevel    `json:"risk_level"`
 }
 
 func (n RuntimeNode) HasCapability(c RuntimeCapability) bool {
@@ -98,16 +98,16 @@ const (
 )
 
 type RuntimeEdge struct {
-	From RuntimeNodeID
-	To   RuntimeNodeID
-	Kind RuntimeEdgeKind
-	Risk RuntimeRiskLevel
+	From RuntimeNodeID    `json:"from"`
+	To   RuntimeNodeID    `json:"to"`
+	Kind RuntimeEdgeKind  `json:"kind"`
+	Risk RuntimeRiskLevel `json:"risk"`
 }
 
 type RuntimeTopology struct {
-	PrimaryNode RuntimeNodeID
-	Nodes       []RuntimeNode
-	Edges       []RuntimeEdge
+	PrimaryNode RuntimeNodeID `json:"primary_node"`
+	Nodes       []RuntimeNode `json:"nodes"`
+	Edges       []RuntimeEdge `json:"edges"`
 }
 
 func (t *RuntimeTopology) Resolved() bool {

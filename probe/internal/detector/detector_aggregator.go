@@ -17,6 +17,7 @@ var UnknownExecutable = &types.ExecutableInfo{
 	ModLoader:     types.UnknownPlatform,
 	LoaderVersion: types.VersionUnknown,
 	BootCommand:   nil,
+	Topology:      &types.RuntimeTopology{},
 }
 
 var NoExecutable = &types.ExecutableInfo{
@@ -25,6 +26,7 @@ var NoExecutable = &types.ExecutableInfo{
 	ModLoader:     types.PlatformNone,
 	LoaderVersion: types.VersionNone,
 	BootCommand:   nil,
+	Topology:      &types.RuntimeTopology{},
 }
 
 // Executable analyzes a JAR file using all registered detectors
@@ -59,6 +61,16 @@ func Executable(filePath string) *types.ExecutableInfo {
 			continue
 		}
 		candidates = append(candidates, result)
+	}
+
+	if len(candidates) == 1 {
+		bridgeMarkers := DetectBridgeMarkers(zipReader)
+		if len(bridgeMarkers) > 0 {
+			candidates[0].BridgeHints = make([]string, 0, len(bridgeMarkers))
+			for _, marker := range bridgeMarkers {
+				candidates[0].BridgeHints = append(candidates[0].BridgeHints, marker.NodeID)
+			}
+		}
 	}
 
 	if len(candidates) == 0 {

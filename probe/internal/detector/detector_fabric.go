@@ -72,6 +72,15 @@ func (d *fabricServerSingleFileDetector) Detect(
 		ModLoader:     types.PlatformFabric,
 		LoaderVersion: loaderVersion,
 		BootCommand:   nil,
+		Topology: &types.RuntimeTopology{
+			PrimaryNode: "fabric",
+			Nodes: []types.RuntimeNode{{
+				ID:               "fabric",
+				Role:             types.RuntimeRoleModLoader,
+				IdentityPlatform: types.PlatformFabric,
+				Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
+			}},
+		},
 	}
 
 	return exec, nil
@@ -181,6 +190,15 @@ func (d *fabricServerLauncherDetector) Detect(
 				ModLoader:     types.PlatformFabric,
 				LoaderVersion: loaderVersion,
 				BootCommand:   nil,
+				Topology: &types.RuntimeTopology{
+					PrimaryNode: "fabric",
+					Nodes: []types.RuntimeNode{{
+						ID:               "fabric",
+						Role:             types.RuntimeRoleModLoader,
+						IdentityPlatform: types.PlatformFabric,
+						Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
+					}},
+				},
 			}
 
 			return exec, nil

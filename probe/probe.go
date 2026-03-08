@@ -174,6 +174,12 @@ func buildServerInfo() types.ServerInfo {
 	}()
 
 	wg.Wait()
+	EnrichTopologyFromPackages(serverInfo.Executable, serverInfo.Packages)
+
+	if serverInfo.Executable != nil && serverInfo.Executable.Topology == nil {
+		serverInfo.Executable.Topology = &types.RuntimeTopology{}
+	}
+
 	return serverInfo
 }
 
@@ -182,9 +188,30 @@ func buildServerInfo() types.ServerInfo {
 // is needed, just call ServerInfo() without the concern of redundant calculation.
 
 func buildModPaths() (paths []string) {
-	if exec := getExecutableInfo(); exec != nil && (exec.ModLoader == types.PlatformFabric || exec.ModLoader == types.PlatformForge || exec.ModLoader == types.PlatformNeoforge) {
-		paths = append(paths, path.Join(workPath(), "mods"))
+	exec := getExecutableInfo()
+	if exec == nil {
+		return
 	}
+
+	if exec.Topology != nil && exec.Topology.Resolved() {
+		// Topology-driven path discovery
+		if exec.Topology.HasCapability(types.CapabilityFabricMods) ||
+			exec.Topology.HasCapability(types.CapabilityForgeMods) ||
+			exec.Topology.HasCapability(types.CapabilityNeoforgeMods) {
+			paths = append(paths, path.Join(workPath(), "mods"))
+		}
+		if exec.Topology.HasCapability(types.CapabilityBukkitPlugins) {
+			paths = append(paths, path.Join(workPath(), "plugins"))
+		}
+	} else {
+		// Legacy fallback
+		if exec.ModLoader == types.PlatformFabric ||
+			exec.ModLoader == types.PlatformForge ||
+			exec.ModLoader == types.PlatformNeoforge {
+			paths = append(paths, path.Join(workPath(), "mods"))
+		}
+	}
+
 	return
 }
 

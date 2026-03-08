@@ -9,22 +9,23 @@ import (
 // ServerInfo components that do not exist, use an empty string. Note Executable
 // must exist, otherwise the program will exit; therefore, it is not a pointer.
 type ServerInfo struct {
-	WorkPath     string
-	SavePath     string
-	ModPath      []string
-	Packages     []Package
-	Executable   *ExecutableInfo
-	Activity     *ServerActivity
-	Environments EnvironmentInfo
+	WorkPath     string          `json:"work_path"`
+	SavePath     string          `json:"save_path"`
+	ModPath      []string        `json:"mod_path"`
+	Packages     []Package       `json:"packages"`
+	Executable   *ExecutableInfo `json:"executable,omitempty"`
+	Activity     *ServerActivity `json:"activity,omitempty"`
+	Environments EnvironmentInfo `json:"environments"`
 }
 
 type ExecutableInfo struct {
-	Path          string
-	GameVersion   RawVersion
-	ModLoader     Platform
-	LoaderVersion RawVersion
-	BootCommand   *exec.Cmd
-	Topology      *RuntimeTopology
+	Path          string           `json:"path"`
+	GameVersion   RawVersion       `json:"game_version"`
+	ModLoader     Platform         `json:"mod_loader"`
+	LoaderVersion RawVersion       `json:"loader_version"`
+	BootCommand   *exec.Cmd        `json:"-"`
+	Topology      *RuntimeTopology `json:"topology,omitempty"`
+	BridgeHints   []string         `json:"bridge_hints,omitempty"`
 }
 
 func (e *ExecutableInfo) IsValid() bool {
@@ -49,18 +50,18 @@ func (e *ExecutableInfo) DerivedModLoader() Platform {
 }
 
 type ServerActivity struct {
-	Active bool
-	Pid    int
+	Active bool `json:"active"`
+	Pid    int  `json:"pid"`
 }
 
 type EnvironmentInfo struct {
-	Lucy *LucyEnv
-	Mcdr *McdrEnv
+	Lucy *LucyEnv `json:"lucy,omitempty"`
+	Mcdr *McdrEnv `json:"mcdr,omitempty"`
 }
 
 type McdrEnv struct {
-	Version RawVersion
-	Config  *exttype.FileMcdrConfig
+	Version RawVersion              `json:"version"`
+	Config  *exttype.FileMcdrConfig `json:"config,omitempty"`
 }
 
 // LucyEnv is a placeholder for Lucy environment; currently just a boolean

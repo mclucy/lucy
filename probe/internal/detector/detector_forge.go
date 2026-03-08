@@ -78,6 +78,15 @@ func (d *forgeServerDetector) Detect(
 					ModLoader:     types.PlatformForge,
 					LoaderVersion: forgeVersion,
 					BootCommand:   nil,
+					Topology: &types.RuntimeTopology{
+						PrimaryNode: "forge",
+						Nodes: []types.RuntimeNode{{
+							ID:               "forge",
+							Role:             types.RuntimeRoleModLoader,
+							IdentityPlatform: types.PlatformForge,
+							Capabilities:     []types.RuntimeCapability{types.CapabilityForgeMods},
+						}},
+					},
 				}
 				return exec, nil
 			}
