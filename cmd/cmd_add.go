@@ -33,6 +33,22 @@ var subcmdAdd = &cli.Command{
 		decoratorHelpAndExitOnNoArg,
 		decoratorLogAndExitOnError,
 	),
+	ShellComplete: func(_ context.Context, cmd *cli.Command) {
+		token := ""
+		if cmd.NArg() > 0 {
+			token = cmd.Args().First()
+		}
+		_, _, _, seg := ParseCompletionToken(token)
+		if seg == "platform" || seg == "" {
+			all := AggregatePackageCandidates()
+			filtered := FilterByPrefix(all, token)
+			const maxCandidates = 50
+			if len(filtered) > maxCandidates {
+				filtered = filtered[:maxCandidates]
+			}
+			PrintCandidates(filtered)
+		}
+	},
 }
 
 var actionAdd cli.ActionFunc = func(

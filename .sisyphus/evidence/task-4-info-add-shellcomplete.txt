@@ -1,0 +1,28 @@
+=== BUILD ===
+BUILD_OK
+
+=== info --source --generate-shell-completion ===
+curseforge:CurseForge
+modrinth:Modrinth
+github:GitHub
+mcdr:MCDR
+
+=== info -s --generate-shell-completion ===
+curseforge:CurseForge
+modrinth:Modrinth
+github:GitHub
+mcdr:MCDR
+
+=== info --generate-shell-completion ===
+minecraft:Vanilla Minecraft
+fabric:Fabric mod loader
+forge:Forge mod loader
+neoforge:NeoForge mod loader
+mcdr:MCDReforged plugin manager
+
+=== add --generate-shell-completion ===
+minecraft:Vanilla Minecraft
+fabric:Fabric mod loader
+forge:Forge mod loader
+neoforge:NeoForge mod loader
+mcdr:MCDReforged plugin manager

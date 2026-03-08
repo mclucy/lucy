@@ -1,0 +1,15 @@
++zsh:1> grep -R 'http\.\|https\.\|routing\.SearchMany\|FirstInfo' cmd/cmd_completion_candidates.go cmd/cmd_completion_helpers.go
++zsh:1> echo NO_VIOLATIONS
+NO_VIOLATIONS
++zsh:1> grep -R 'syntax\.Parse' cmd/cmd_completion_candidates.go cmd/cmd_completion_helpers.go
+cmd/cmd_completion_helpers.go:// Uses manual string splitting instead of syntax.Parse which panics on partial input.
++zsh:1> grep -R maxCandidates cmd/cmd_search.go cmd/cmd_info.go cmd/cmd_add.go
+cmd/cmd_search.go:		const maxCandidates = 50
+cmd/cmd_search.go:		if len(filtered) > maxCandidates {
+cmd/cmd_search.go:			filtered = filtered[:maxCandidates]
+cmd/cmd_info.go:			const maxCandidates = 50
+cmd/cmd_info.go:			if len(filtered) > maxCandidates {
+cmd/cmd_info.go:				filtered = filtered[:maxCandidates]
+cmd/cmd_add.go:			const maxCandidates = 50
+cmd/cmd_add.go:			if len(filtered) > maxCandidates {
+cmd/cmd_add.go:				filtered = filtered[:maxCandidates]

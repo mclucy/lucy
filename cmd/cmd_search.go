@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/mclucy/lucy/logger"
@@ -55,6 +56,41 @@ var subcmdSearch = &cli.Command{
 		decoratorHelpAndExitOnNoArg,
 		decoratorLogAndExitOnError,
 	),
+	ShellComplete: func(ctx context.Context, cmd *cli.Command) {
+		if len(os.Args) < 2 {
+			return
+		}
+
+		lastArg := ""
+		for i := len(os.Args) - 1; i >= 0; i-- {
+			if os.Args[i] != "--generate-shell-completion" {
+				lastArg = os.Args[i]
+				break
+			}
+		}
+
+		switch lastArg {
+		case "--" + flagIndexName, "-i":
+			PrintCandidates(StaticSortCandidates())
+			return
+		case "--" + flagSourceName, "-s":
+			PrintCandidates(StaticSourceCandidates())
+			return
+		}
+
+		prefix := ""
+		if cmd.NArg() > 0 {
+			prefix = cmd.Args().First()
+		}
+		all := AggregatePackageCandidates()
+		filtered := FilterByPrefix(all, prefix)
+		// Truncate to max 50 to avoid overwhelming the shell
+		const maxCandidates = 50
+		if len(filtered) > maxCandidates {
+			filtered = filtered[:maxCandidates]
+		}
+		PrintCandidates(filtered)
+	},
 }
 
 var actionSearch cli.ActionFunc = func(
