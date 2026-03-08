@@ -65,7 +65,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case completeMsg:
 		m.percent = 1.0
 		m.message = string(msg)
-		options := append(defaultOptions, defaultColorComplete...)
+		options := append(defaultOptions, resolveCompleteColorOptions()...)
 		m.bar = progress.New(options...)
 		return m, nil
 

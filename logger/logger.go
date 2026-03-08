@@ -165,7 +165,7 @@ func DumpHistory() {
 	_, _ = fmt.Fprintln(os.Stderr)
 	_, _ = fmt.Fprintln(
 		os.Stderr,
-		tools.Dim("── Log history ("+LogFile.Name()+") ──"),
+		tools.Dim("── Log history ("+getLogFile().Name()+") ──"),
 	)
 	for _, e := range history {
 		timestamp := tools.Dim(e.Time.Format("15:04:05"))

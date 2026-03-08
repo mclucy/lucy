@@ -45,7 +45,7 @@ func NewTracker(title string) *Tracker {
 // Run starts the progress bar and blocks until [Tracker.Close] is called
 // or the user presses Ctrl+C.
 func (t *Tracker) Run() error {
-	options := append(defaultOptions, defaultColor...)
+	options := append(defaultOptions, resolveColorOptions()...)
 	bar := progress.New(options...)
 	m := model{
 		bar:   bar,

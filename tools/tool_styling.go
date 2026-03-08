@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"image/color"
+	"sync"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -27,9 +28,16 @@ var UserColors = make(map[ansi.BasicColor]color.Color)
 
 var stylesEnabled = true
 
+var ensureTermColorsOnce sync.Once
+
+// EnsureTermColors lazily initializes UserColors and ValidUserColors
+// on first call, using sync.Once for thread safety.
+func EnsureTermColors() {
+	ensureTermColorsOnce.Do(getTermProfileColors)
+}
+
 func init() {
 	updateStyles()
-	getTermProfileColors()
 }
 
 func updateStyles() {

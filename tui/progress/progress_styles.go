@@ -7,9 +7,7 @@ import (
 )
 
 var (
-	defaultOptions       []progress.Option
-	defaultColor         []progress.Option
-	defaultColorComplete []progress.Option
+	defaultOptions []progress.Option
 )
 
 func init() {
@@ -17,23 +15,35 @@ func init() {
 		progress.WithFillCharacters('█', '░'),
 		progress.WithWidth(defaultBarWidth(0)),
 	}
+}
+
+// resolveColorOptions returns color options lazily, ensuring OSC4 probing
+// has been completed first. This is called at first use, not at init time.
+func resolveColorOptions() []progress.Option {
+	tools.EnsureTermColors()
 	if tools.ValidUserColors {
-		defaultColor = []progress.Option{
+		return []progress.Option{
 			progress.WithColors(
 				tools.UserColors[lipgloss.Magenta],
 				tools.UserColors[lipgloss.BrightMagenta],
 			),
 		}
-		defaultColorComplete = []progress.Option{
+	}
+	return []progress.Option{progress.WithColors(lipgloss.Magenta)}
+}
+
+// resolveCompleteColorOptions returns color options for completion state,
+// lazily ensuring OSC4 probing has been completed first.
+func resolveCompleteColorOptions() []progress.Option {
+	tools.EnsureTermColors()
+	if tools.ValidUserColors {
+		return []progress.Option{
 			progress.WithColors(
 				tools.UserColors[lipgloss.Magenta],
 				tools.UserColors[lipgloss.Blue],
 				tools.UserColors[lipgloss.BrightBlue],
 			),
 		}
-
-	} else {
-		defaultColor = []progress.Option{progress.WithColors(lipgloss.Magenta)}
-		defaultColorComplete = []progress.Option{progress.WithColors(lipgloss.Blue)}
 	}
+	return []progress.Option{progress.WithColors(lipgloss.Blue)}
 }
