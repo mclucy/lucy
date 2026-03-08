@@ -59,6 +59,8 @@ var Cli = &cli.Command{
 		subcmdInit,
 		subcmdCache,
 	},
+	// Shell completion scripts are generated at runtime via `lucy completion <shell>`.
+	// Use `lucy completion bash|fish|pwsh|zsh`; `--generate-shell-completion` is internal.
 	EnableShellCompletion:  true,
 	Suggest:                true,
 	UseShortOptionHandling: true,
