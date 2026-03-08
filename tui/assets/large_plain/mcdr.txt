@@ -1,38 +1,30 @@
 
-                                            Mp_
-                                            $MMMMm_
-                                            $MMMMMMMMm,
-                                            $MMMMMMMMMMMMm,
-                                            *MMMMMMMMMMMMMMMMp,
-                                               7*MMMMMMMMMMMMMMMM_
-                                                  `?MMMMMMMMMMMMMMMMm_
-                                                      ~*MMMMMMMMMMMMMMMMm_
-                                                          ]*MMMMMMMMMMMMMMMMm,
-         {k,                              ,WWu,               ?*MMMMMMMMMMMMMMK
-         {WWWMu,                      ,u{[[[[[[{W,,               ?NMMMMMMMMMMk
-         {WWWWWWWM                ,uW[[[[[[[[[[[[[[{W,,              `$MMMMMMMk
-         {WWWWWWWW            ,uW[[[[[[[[[[[[[[[[[[[[[[Wu,            $MMMMMMMk
-         {WWWWWWWW          "{[[[[[[[[[[[[[[[[[[[[[[[[[[[[{)          $MMMMMMMk
-         {WWWWWWWW         \,  ^W{[[[[[[[[[[[[[[[[[[[[[V'` ,u,        $MMMMMMMk
-         {WWWWWWWW         |||[;,  'W[[[[[[[[[[[[[[W^` ,uW[[['        $MMMMMMMk
-         {WWWWWWWW         |||||||[;, `^W[[[[[[W!' ,uW[[[[[[['        $MMMMMMMk
-         {WWWWWWWW         ||||||||||\[;, ^!)'  ,W{[[[[[[[[[['        $MMMMMMMk
-         {WWWWWWWW         ||||||||||||||\\  W{[[[[[[[[[[[[[['        $MMMMMMMk
-         {WWWWWWWW         ||||||||||||||||  [[[[[[[[[[[[[[[['        $MMMMMMMk
-         {WWWWWWWW         ||||||||||||||||  [[[[[[[[[[[[[[[['        $MMMMMMMk
-         {WWWWWWWW         ||||||||||||||||  [[[[[[[[[[[[[[[['        $MMMMMMMk
-         {WWWWWWWW         [|||||||||||||||  [[[[[[[[[[[[[[[['        $MMMMMMMk
-         {WWWWWWWW           `\\|||||||||||  [[[[[[[[[[[[W^`          $MMMMMMMk
-         {WWWWWWWW               `\\|||||||  [[[[[[[[W!'              $MMMMMMMk
-         {WWWWWWWWMk,               ``\||||  [[[[W)'                   ?*MMMMMk
-         {WWWWWWWWWWWWMp,               ``[  W)'                           ?MMk
-          ?%WWWWWWWWWWWWWWMm,                                                 `
-             ^?%WWWWWWWWWWWWWW%m,
-                 "*%WWWWWWWWWWWWW%%,,
-                     "WWWWWWWWWWWWWWWM%,
-                        ^?WWWWWWWWWWWWWWWMp,
-                            `?%WWWWWWWWWWWWW
-                                ^?%WWWWWWWWW
-                                    ^*%WWWWW
-                                        "WWW
-    
+                                M%_
+                                $MMMMp_
+                                $MMMMMMMMm,
+                                ^WMMMMMMMMMMMx.
+                                    ^NMMMMMMMMMMMc
+                                        ?MMMMMMMMMMMM_
+        ,                      ,;          `?MMMMMMMMMMM,
+        WWNu,              ,/W####W{,          ~YMMMMMMM'
+        WWWWWW         ,/A############W>,         $MMMMM'
+        WWWWWW       "W##################W)       $MMMMM'
+        WWWWWW      [!,.^{W###########V"`,/W      $MMMMM'
+        WWWWWW      ||||[!.."V####V"`,/WWWWW      $MMMMM'
+        WWWWWW      ||||||||[;.``,\VWWWWWWWW      $MMMMM'
+        WWWWWW      |||||||||||, WWWWWWWWWWW      $MMMMM'
+        WWWWWW      |||||||||||, WWWWWWWWWWW      $MMMMM'
+        WWWWWW      |||||||||||, WWWWWWWWWWW      $MMMMM'
+        WWWWWW        "[|||||||, WWWWWWWW?^       $MMMMM'
+        WWWWWW,          `![|||, WWWWV"           *MMMMM'
+        WWWWWWWWWv.          `\' V"                  "NM'
+        `?%WWWWWWWWNXv
+            ^V%WWWWWWWWNk,
+                ^*NWWWWWWWWNu,
+                    "WNWWWWWWWW%
+                        "WWWWWWW
+                           `?%WW
+                               ^
+     
+     
+     
