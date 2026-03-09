@@ -57,6 +57,10 @@ var subcmdSearch = &cli.Command{
 		decoratorLogAndExitOnError,
 	),
 	ShellComplete: func(ctx context.Context, cmd *cli.Command) {
+		if CompleteFlagNamesIfRequested(cmd) {
+			return
+		}
+
 		if len(os.Args) < 2 {
 			return
 		}
@@ -82,7 +86,7 @@ var subcmdSearch = &cli.Command{
 		if cmd.NArg() > 0 {
 			prefix = cmd.Args().First()
 		}
-		PrintCandidates(FilterByPrefix(StaticPlatformCandidates(), prefix))
+		CompletePackageIDSuggestions(ctx, cmd, prefix)
 	},
 }
 

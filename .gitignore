@@ -50,3 +50,6 @@ AGENTS.md
 
 # Worktrees
 .worktrees
+
+# Generated autocomplete script
+completions

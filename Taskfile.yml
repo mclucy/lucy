@@ -17,6 +17,9 @@ tasks:
   cleanup-release:
     cmds:
       - rm -rf release
+  cleanup-completions:
+    cmds:
+      - rm -rf completions
   build-release:
     desc: Build the release for Windows, Linux, and macOS
     deps: [cleanup-release]
@@ -43,3 +46,14 @@ tasks:
       - task build-dev
     watch: true
     sources: ["./**/*.go", "./go.mod", "./go.sum"]
+  gen-completions:
+    desc: Generate auto-completion scripts for bash, zsh, and fish
+    deps: [cleanup-completions]
+    cmds:
+      - mkdir -p completions
+      - go run main.go completion bash > completions/lucy.sh
+      - go run main.go completion zsh > completions/lucy.zsh
+      - go run main.go completion fish > completions/lucy.fish
+    sources: [./main.go, ./go.mod, ./go.sum]
+    generates:
+      [completions/lucy.sh, completions/lucy.zsh, completions/lucy.fish]
