@@ -82,14 +82,7 @@ var subcmdSearch = &cli.Command{
 		if cmd.NArg() > 0 {
 			prefix = cmd.Args().First()
 		}
-		all := AggregatePackageCandidates()
-		filtered := FilterByPrefix(all, prefix)
-		// Truncate to max 50 to avoid overwhelming the shell
-		const maxCandidates = 50
-		if len(filtered) > maxCandidates {
-			filtered = filtered[:maxCandidates]
-		}
-		PrintCandidates(filtered)
+		PrintCandidates(FilterByPrefix(StaticPlatformCandidates(), prefix))
 	},
 }
 
