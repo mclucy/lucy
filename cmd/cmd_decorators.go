@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mclucy/lucy/tools"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// decoratorBaseCommandFlags provides some the base command `lucy` some necessary
+// decoratorBaseCommandFlags provides the base command `lucy` some necessary
 // flag actions.
 func decoratorBaseCommandFlags(f cli.ActionFunc) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
@@ -18,13 +19,13 @@ func decoratorBaseCommandFlags(f cli.ActionFunc) cli.ActionFunc {
 			tools.TurnOffStyles()
 		}
 		if cmd.Bool(flagLogFileName) {
-			println("Log file at", logger.GetLogFile().Name())
+			fmt.Println("Log file at", logger.GetLogFile().Name())
 		}
 		return f(ctx, cmd)
 	}
 }
 
-// decoratorGlobalFlags is a high-order function that appends global flag actions
+// decoratorGlobalFlags is a higher-order function that appends global flag actions
 // to the action function.
 func decoratorGlobalFlags(f cli.ActionFunc) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
@@ -44,7 +45,7 @@ func decoratorGlobalFlags(f cli.ActionFunc) cli.ActionFunc {
 	}
 }
 
-// decoratorHelpAndExitOnNoArg is a high-order function that takes a cli.ActionFunc and
+// decoratorHelpAndExitOnNoArg is a higher-order function that takes a cli.ActionFunc and
 // returns a cli.ActionFunc that prints help and exit when there's no args specified.
 //
 // This function is not necessarily applicable to every action function, as some
@@ -58,12 +59,23 @@ func decoratorHelpAndExitOnNoArg(f cli.ActionFunc) cli.ActionFunc {
 	}
 }
 
+// hasAnyFlagSet returns true if any flag for this command was explicitly set.
+// It relies on the CLI library's IsSet API instead of inferring from zero values.
+func hasAnyFlagSet(cmd *cli.Command) bool {
+	for _, name := range cmd.FlagNames() {
+		if cmd.IsSet(name) {
+			return true
+		}
+	}
+	return false
+}
+
 // decoratorHelpAndExitOnNoFlag is similar to decoratorHelpAndExitOnNoArg, but
 // it checks for flags instead of args. This is useful for commands that
 // require at least one flag.
 func decoratorHelpAndExitOnNoFlag(f cli.ActionFunc) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
-		if len(cmd.LocalFlagNames()) == 0 {
+		if !hasAnyFlagSet(cmd) {
 			cli.ShowSubcommandHelpAndExit(cmd, 0)
 		}
 		return f(ctx, cmd)
