@@ -8,7 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.1
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/charmbracelet/glamour v1.0.0
-	github.com/charmbracelet/huh v0.8.0
+	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/muesli/reflow v0.3.0
 	github.com/muesli/termenv v0.16.0
