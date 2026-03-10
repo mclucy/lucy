@@ -47,6 +47,7 @@
 
 ## 🪣 Overview
 
+> WHY ARE THERE NO AXOLOTL EMOJI?
 > <https://news.ycombinator.com/item?id=41379902>
 
 `lucy` is a powerful, unified command-line tool to simplify the management of Minecraft server-side content. Whether you're installing plugins, mods, managing dependencies, or coordinating complex modpacks, `lucy` provides an intuitive command-line interface to handle all your package management needs.
