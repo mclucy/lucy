@@ -53,3 +53,6 @@ AGENTS.md
 
 # Generated autocomplete script
 completions
+
+# Env files
+.env

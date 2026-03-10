@@ -22,7 +22,7 @@ tasks:
       - rm -rf completions
   build-release:
     desc: Build the release for Windows, Linux, and macOS
-    deps: [cleanup-release]
+    deps: [cleanup-release, inject-env]
     cmds:
       - GOOS=linux GOARCH=amd64 go build -ldflags="-w -s -X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$(CF_API_KEY)" -tags release -o release/lucy-linux-amd64
       - GOOS=windows GOARCH=amd64 go build -ldflags="-w -s -X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$(CF_API_KEY)" -tags release -o release/lucy-windows-amd64.exe
@@ -31,7 +31,7 @@ tasks:
     sources: [./**/*.go, go.mod, .go.sum]
   build-dev:
     desc: Build a binary for development purposes (on macOS)
-    deps: [cleanup-dist]
+    deps: [cleanup-dist, inject-env]
     cmds:
       - GOOS=darwin GOARCH=arm64 go build -ldflags="-X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$(CF_API_KEY)" -tags debug -o dist/lucy-darwin-arm64-dev
     sources: [./**/*.go, ./go.mod, ./go.sum]
@@ -41,7 +41,7 @@ tasks:
       DELAY: 500ms
   build-watch:
     desc: Build a debug binary on file changes
-    deps: [build-dev]
+    deps: [build-dev, inject-env]
     cmds:
       - task build-dev
     watch: true
@@ -57,3 +57,7 @@ tasks:
     sources: [./main.go, ./go.mod, ./go.sum]
     generates:
       [completions/lucy.sh, completions/lucy.zsh, completions/lucy.fish]
+  inject-env:
+    desc: Inject environment variables
+    cmds:
+      - source .env
