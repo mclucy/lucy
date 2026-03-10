@@ -8,6 +8,7 @@ import (
 // resolveSlug resolves a project slug to its mod data by searching with the
 // slug parameter. CurseForge has no "get by slug" endpoint, so we search with
 // the slug query parameter and look for an exact match.
+// Docs: https://docs.curseforge.com/rest-api/#search-mods
 func resolveSlug(slug types.ProjectName) (*modResponse, error) {
 	u := slugSearchUrl(slug)
 	var resp searchResponse
@@ -35,6 +36,7 @@ func resolveSlug(slug types.ProjectName) (*modResponse, error) {
 }
 
 // getModById fetches a mod by its numeric ID.
+// Docs: https://docs.curseforge.com/rest-api/#get-mod
 func getModById(modId int32) (*modResponse, error) {
 	u := modUrl(modId)
 	var resp modDataResponse

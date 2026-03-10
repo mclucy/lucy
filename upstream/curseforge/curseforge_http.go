@@ -10,11 +10,14 @@ import (
 	"github.com/mclucy/lucy/tools"
 )
 
+// Docs: https://docs.curseforge.com/rest-api/
 const baseUrl = "https://api.curseforge.com"
 
 // ApiKey is injected at build time via ldflags:
 //
 //	go build -ldflags "-X github.com/mclucy/lucy/upstream/curseforge.ApiKey=YOUR_KEY"
+//
+// Docs: https://docs.curseforge.com/rest-api/#authentication
 var ApiKey string
 
 // get performs an authenticated GET request to the CurseForge API and

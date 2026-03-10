@@ -13,6 +13,7 @@ const (
 )
 
 // modLoaderType maps lucy Platform to CurseForge ModLoaderType enum.
+// Docs: https://docs.curseforge.com/rest-api/#search-mods
 func modLoaderType(p types.Platform) int {
 	switch p {
 	case types.PlatformForge:
@@ -28,6 +29,7 @@ func modLoaderType(p types.Platform) int {
 
 // curseforgeSearchSortField maps lucy SearchSort to CurseForge
 // ModsSearchSortField enum.
+// Docs: https://docs.curseforge.com/rest-api/#search-mods
 func curseforgeSearchSortField(sort types.SearchSort) int {
 	switch sort {
 	case types.SearchSortRelevance:
@@ -52,6 +54,7 @@ func searchSortOrder(sort types.SearchSort) string {
 }
 
 // searchUrl builds the search URL for the CurseForge /v1/mods/search endpoint.
+// Docs: https://docs.curseforge.com/rest-api/#search-mods
 func searchUrl(query types.ProjectName, options types.SearchOptions) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
@@ -69,6 +72,7 @@ func searchUrl(query types.ProjectName, options types.SearchOptions) string {
 }
 
 // slugSearchUrl builds a URL to find a mod by its exact slug.
+// Docs: https://docs.curseforge.com/rest-api/#search-mods
 func slugSearchUrl(slug types.ProjectName) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
@@ -79,12 +83,14 @@ func slugSearchUrl(slug types.ProjectName) string {
 }
 
 // modUrl builds the URL for getting a mod by its numeric ID.
+// Docs: https://docs.curseforge.com/rest-api/#get-mod
 func modUrl(modId int32) string {
 	return fmt.Sprintf("%s/v1/mods/%d", baseUrl, modId)
 }
 
 // modFilesUrl builds the URL for listing files of a mod, with optional
 // filtering by game version and mod loader.
+// Docs: https://docs.curseforge.com/rest-api/#get-mod-files
 func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 	params := url.Values{}
 	params.Set("pageSize", "50")

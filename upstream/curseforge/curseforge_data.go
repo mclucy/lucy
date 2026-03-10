@@ -135,18 +135,19 @@ type filesResponse struct {
 
 // fileResponse is the CurseForge File schema.
 type fileResponse struct {
-	Id               int32            `json:"id"`
-	GameId           int32            `json:"gameId"`
-	ModId            int32            `json:"modId"`
-	IsAvailable      bool             `json:"isAvailable"`
-	DisplayName      string           `json:"displayName"`
-	FileName         string           `json:"fileName"`
-	ReleaseType      int32            `json:"releaseType"` // 1=Release, 2=Beta, 3=Alpha
-	FileStatus       int32            `json:"fileStatus"`
-	Hashes           []fileHash       `json:"hashes"`
-	FileDate         string           `json:"fileDate"`
-	FileLength       int64            `json:"fileLength"`
-	DownloadCount    int64            `json:"downloadCount"`
+	Id            int32      `json:"id"`
+	GameId        int32      `json:"gameId"`
+	ModId         int32      `json:"modId"`
+	IsAvailable   bool       `json:"isAvailable"`
+	DisplayName   string     `json:"displayName"`
+	FileName      string     `json:"fileName"`
+	ReleaseType   int32      `json:"releaseType"` // 1=Release, 2=Beta, 3=Alpha
+	FileStatus    int32      `json:"fileStatus"`
+	Hashes        []fileHash `json:"hashes"`
+	FileDate      string     `json:"fileDate"`
+	FileLength    int64      `json:"fileLength"`
+	DownloadCount int64      `json:"downloadCount"`
+	// Docs: https://docs.curseforge.com/rest-api/#get-mod-files
 	DownloadUrl      *string          `json:"downloadUrl"` // CAN BE NULL
 	GameVersions     []string         `json:"gameVersions"`
 	Dependencies     []fileDependency `json:"dependencies"`
