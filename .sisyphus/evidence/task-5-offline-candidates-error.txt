@@ -1,3 +1,0 @@
-$ /tmp/lucy-ac info invalid@@@ --generate-shell-completion
-
-RC_INFO_INVALID=0
