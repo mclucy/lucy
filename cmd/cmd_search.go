@@ -114,16 +114,20 @@ var actionSearch cli.ActionFunc = func(
 
 	results, errs := routing.SearchMany(providers, p.Name, options)
 	for _, err := range errs {
+		providerErr := fmt.Errorf(
+			"search on %s failed: %w",
+			err.Source.Title(),
+			err.Err,
+		)
 		if specifiedSource == types.SourceAuto && len(providers) > 1 {
-			logger.ReportWarn(
-				fmt.Errorf(
-					"search on %s failed: %w",
-					err.Source.Title(),
-					err.Err,
-				),
-			)
+			logger.ReportWarn(providerErr)
 			continue
 		}
+		logger.ReportWarn(providerErr)
+	}
+
+	if err := searchResultError(results, errs); err != nil {
+		return err
 	}
 
 	for _, res := range results {
@@ -132,6 +136,20 @@ var actionSearch cli.ActionFunc = func(
 
 	tui.Flush(out)
 	return nil
+}
+
+func searchResultError(
+	results []types.SearchResults,
+	providerErrors []routing.ProviderError,
+) error {
+	if len(results) > 0 || len(providerErrors) == 0 {
+		return nil
+	}
+	joined := make([]error, 0, len(providerErrors))
+	for _, providerErr := range providerErrors {
+		joined = append(joined, providerErr)
+	}
+	return errors.Join(joined...)
 }
 
 func appendToSearchOutput(
