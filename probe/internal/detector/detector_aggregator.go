@@ -12,21 +12,17 @@ import (
 )
 
 var UnknownExecutable = &types.ExecutableInfo{
-	Path:                   "",
-	GameVersion:            types.VersionUnknown,
-	PrimaryPlatform:        types.UnknownPlatform,
-	PrimaryPlatformVersion: types.VersionUnknown,
-	BootCommand:            nil,
-	Topology:               &types.RuntimeTopology{},
+	Path:        "",
+	GameVersion: types.VersionUnknown,
+	BootCommand: nil,
+	Topology:    &types.RuntimeTopology{},
 }
 
 var NoExecutable = &types.ExecutableInfo{
-	Path:                   "",
-	GameVersion:            types.VersionNone,
-	PrimaryPlatform:        types.PlatformNone,
-	PrimaryPlatformVersion: types.VersionNone,
-	BootCommand:            nil,
-	Topology:               &types.RuntimeTopology{},
+	Path:        "",
+	GameVersion: types.VersionNone,
+	BootCommand: nil,
+	Topology:    &types.RuntimeTopology{},
 }
 
 // Executable analyzes a JAR file using all registered detectors

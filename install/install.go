@@ -125,7 +125,6 @@ func installPlatform(id types.PackageId) error {
 		)
 	}
 
-	id.NormalizeIdentityPackage()
 	switch id.IdentityToPlatform() {
 	case types.PlatformMinecraft:
 		if serverPlatform.Valid() {
@@ -209,30 +208,7 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 				result.RiskLevel,
 			)
 		case types.CompatUnresolved:
-			serverPlatform := serverInfo.Executable.PrimaryPlatform
-			logger.Warn(
-				fmt.Errorf(
-					"topology unresolved for %s, falling back to legacy compatibility check",
-					id.Platform,
-				),
-			)
-
-			switch platform {
-			case types.PlatformForge:
-				if serverPlatform != types.PlatformForge {
-					return fmt.Errorf("forge server not found (topology unresolved)")
-				}
-			case types.PlatformFabric:
-				if serverPlatform != types.PlatformFabric {
-					return fmt.Errorf("fabric server not found (topology unresolved)")
-				}
-			case types.PlatformNeoforge:
-				if serverPlatform != types.PlatformNeoforge {
-					return fmt.Errorf("neoforge server not found (topology unresolved)")
-				}
-			}
-
-			return nil
+			return fmt.Errorf("topology unresolved for %s: cannot determine server compatibility", platform.Title())
 		case types.CompatIncompatible:
 			return fmt.Errorf(
 				"%s server not found (reason: %s, verdict: %s, risk_level: %d)",

@@ -16,8 +16,7 @@ import (
 type VanillaDetector struct{}
 
 func (d *VanillaDetector) Name() string {
-	// TODO implement me
-	panic("implement me")
+	return "vanilla server"
 }
 
 func (d *VanillaDetector) Detect(
@@ -44,10 +43,18 @@ func (d *VanillaDetector) Detect(
 				return nil, err
 			}
 
+			gameVersion := types.RawVersion(obj.Id)
+
 			exec := &types.ExecutableInfo{
-				Path:            filePath,
-				PrimaryPlatform: types.PlatformMinecraft,
-				GameVersion:     types.RawVersion(obj.Id),
+				Path:        filePath,
+				GameVersion: gameVersion,
+				RuntimeIdentities: []types.PackageId{
+					{
+						Platform: types.PlatformMinecraft,
+						Name:     "minecraft",
+						Version:  gameVersion,
+					},
+				},
 				Topology: &types.RuntimeTopology{
 					PrimaryNode: "minecraft",
 					Nodes: []types.RuntimeNode{

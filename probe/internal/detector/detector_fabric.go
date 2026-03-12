@@ -67,11 +67,21 @@ func (d *fabricServerSingleFileDetector) Detect(
 	}
 
 	exec = &types.ExecutableInfo{
-		Path:                   filePath,
-		GameVersion:            gameVersion,
-		PrimaryPlatform:        types.PlatformFabric,
-		PrimaryPlatformVersion: loaderVersion,
-		BootCommand:            nil,
+		Path:        filePath,
+		GameVersion: gameVersion,
+		BootCommand: nil,
+		RuntimeIdentities: []types.PackageId{
+			{
+				Platform: types.PlatformFabric,
+				Name:     "fabric",
+				Version:  loaderVersion,
+			},
+			{
+				Platform: types.PlatformMinecraft,
+				Name:     "minecraft",
+				Version:  gameVersion,
+			},
+		},
 		Topology: &types.RuntimeTopology{
 			PrimaryNode: "fabric",
 			Nodes: []types.RuntimeNode{
@@ -187,11 +197,21 @@ func (d *fabricServerLauncherDetector) Detect(
 			}
 
 			exec = &types.ExecutableInfo{
-				Path:                   filePath,
-				GameVersion:            gameVersion,
-				PrimaryPlatform:        types.PlatformFabric,
-				PrimaryPlatformVersion: loaderVersion,
-				BootCommand:            nil,
+				Path:        filePath,
+				GameVersion: gameVersion,
+				BootCommand: nil,
+				RuntimeIdentities: []types.PackageId{
+					{
+						Platform: types.PlatformFabric,
+						Name:     "fabric",
+						Version:  loaderVersion,
+					},
+					{
+						Platform: types.PlatformMinecraft,
+						Name:     "minecraft",
+						Version:  gameVersion,
+					},
+				},
 				Topology: &types.RuntimeTopology{
 					PrimaryNode: "fabric",
 					Nodes: []types.RuntimeNode{

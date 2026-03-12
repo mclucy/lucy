@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/curseforge"
@@ -78,10 +77,6 @@ func ResolveProviders(
 		return resolveExplicitSource(src)
 	}
 
-	if capability := capabilityForPlatform(platform); capability != "" {
-		return ResolveProvidersFromTopology(topologyForCapability(capability), src)
-	}
-
 	switch platform {
 	case types.PlatformAny:
 		return ListAutoProviders(), nil
@@ -107,8 +102,7 @@ func ResolveProvidersFromTopology(
 	}
 
 	if topology == nil || !topology.Resolved() {
-		logger.Warn(fmt.Errorf("routing: topology unresolved, falling back to auto providers"))
-		return ResolveProviders(types.PlatformAny, src)
+		return nil, fmt.Errorf("routing: topology unresolved, cannot resolve providers")
 	}
 
 	providers := make([]upstream.Provider, 0, 2)
@@ -166,31 +160,4 @@ func resolveExplicitSource(src types.Source) ([]upstream.Provider, error) {
 	}
 
 	return []upstream.Provider{provider}, nil
-}
-
-func capabilityForPlatform(p types.Platform) types.RuntimeCapability {
-	switch p {
-	case types.PlatformFabric:
-		return types.CapabilityFabricMods
-	case types.PlatformForge:
-		return types.CapabilityForgeMods
-	case types.PlatformNeoforge:
-		return types.CapabilityNeoforgeMods
-	case types.PlatformMCDR:
-		return types.CapabilityMCDRPlugins
-	default:
-		return ""
-	}
-}
-
-func topologyForCapability(c types.RuntimeCapability) *types.RuntimeTopology {
-	const legacyNodeID types.RuntimeNodeID = "legacy_platform"
-
-	return &types.RuntimeTopology{
-		PrimaryNode: legacyNodeID,
-		Nodes: []types.RuntimeNode{{
-			ID:           legacyNodeID,
-			Capabilities: []types.RuntimeCapability{c},
-		}},
-	}
 }

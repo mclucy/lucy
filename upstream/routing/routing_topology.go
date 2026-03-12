@@ -10,18 +10,15 @@ import (
 )
 
 // ResolveProvidersByTopology resolves providers using runtime topology
-// capabilities. It falls back to legacy platform routing when topology is
-// nil/unresolved, and explicit source selection always delegates to legacy
-// source routing.
+// capabilities. Returns an error when topology is nil/unresolved.
+// Explicit source selection always delegates to ResolveProviders.
 func ResolveProvidersByTopology(
 	topology *types.RuntimeTopology,
 	platform types.Platform,
 	src types.Source,
 ) ([]upstream.Provider, error) {
 	if topology == nil || !topology.Resolved() {
-		// topology is nil or unresolved - fall back to legacy platform routing.
-		// Callers that need a warning should check topology resolution before calling.
-		return ResolveProviders(platform, src)
+		return nil, fmt.Errorf("routing: topology unresolved, cannot resolve providers")
 	}
 
 	if src != types.SourceAuto {

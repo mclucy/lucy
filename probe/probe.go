@@ -11,9 +11,7 @@ package probe
 
 import (
 	"errors"
-	"fmt"
 	"path"
-	"sort"
 	"sync"
 
 	"github.com/mclucy/lucy/exttype"
@@ -177,6 +175,27 @@ func buildServerInfo() types.ServerInfo {
 	wg.Wait()
 	EnrichTopologyFromPackages(serverInfo.Executable, serverInfo.Packages)
 
+	// Inject runtime identity packages from executable into the package set.
+	// This runs AFTER EnrichTopologyFromPackages so topology enrichment can
+	// use package names for evidence detection first.
+	if serverInfo.Executable != nil && serverInfo.Executable.IsValid() {
+		idx := NewPackageIndex()
+		// First, add all existing packages (they have local paths, so
+		// they take precedence under the first-write-wins policy).
+		idx.Merge(serverInfo.Packages)
+		// Then inject runtime identity packages (no local path — these
+		// are runtime identities, not locally installed files).
+		for _, rid := range serverInfo.Executable.RuntimeIdentities {
+			if rid.Platform == types.PlatformAny {
+				continue
+			}
+			idx.Add(types.Package{
+				Id: rid,
+			})
+		}
+		serverInfo.Packages = idx.Packages()
+	}
+
 	if serverInfo.Executable != nil && serverInfo.Executable.Topology == nil {
 		serverInfo.Executable.Topology = &types.RuntimeTopology{}
 	}
@@ -203,14 +222,6 @@ func buildModPaths() (paths []string) {
 		}
 		if exec.Topology.HasCapability(types.CapabilityBukkitPlugins) {
 			paths = append(paths, path.Join(workPath(), "plugins"))
-		}
-	} else {
-		// Legacy fallback
-		logger.Warn(fmt.Errorf("mod-path: topology unresolved, falling back to legacy PrimaryPlatform check"))
-		if exec.PrimaryPlatform == types.PlatformFabric ||
-			exec.PrimaryPlatform == types.PlatformForge ||
-			exec.PrimaryPlatform == types.PlatformNeoforge {
-			paths = append(paths, path.Join(workPath(), "mods"))
 		}
 	}
 
@@ -270,6 +281,8 @@ func buildSavePath() string {
 var savePath = tools.Memoize(buildSavePath)
 
 func buildInstalledPackages() (mods []types.Package) {
+	idx := NewPackageIndex()
+
 	paths := modPaths()
 	for _, modPath := range paths {
 		jarFiles, err := findJar(modPath)
@@ -281,7 +294,7 @@ func buildInstalledPackages() (mods []types.Package) {
 		for _, jarPath := range jarFiles {
 			analyzed := detector.Packages(jarPath)
 			if analyzed != nil {
-				mods = append(mods, analyzed...)
+				idx.Merge(analyzed)
 			}
 		}
 	}
@@ -298,17 +311,13 @@ func buildInstalledPackages() (mods []types.Package) {
 			for _, pluginFile := range pluginFiles {
 				analyzed := detector.McdrPlugin(pluginFile)
 				if analyzed != nil {
-					mods = append(mods, analyzed...)
+					idx.Merge(analyzed)
 				}
 			}
 		}
 	}
 
-	sort.Slice(
-		mods,
-		func(i, j int) bool { return mods[i].Id.Name < mods[j].Id.Name },
-	)
-	return mods
+	return idx.Packages()
 }
 
 var installedPackages = tools.Memoize(buildInstalledPackages)

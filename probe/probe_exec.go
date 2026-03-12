@@ -26,20 +26,7 @@ const noteSuspectPrePackagedServer = "This is likely a pre-packaged server. Ther
 
 const multiThreadThreshold = 10
 
-// annotateTopology populates exec.Topology by looking up the platform in the
-// runtime registry. If the detector already set a Topology, it is kept as-is.
-// If no matching entry exists, Topology is left nil.
-func annotateTopology(exec *types.ExecutableInfo) {
-	if exec == nil || exec.Topology != nil {
-		return
-	}
-	entry, ok := LookupByPlatform(exec.PrimaryPlatform)
-	if !ok {
-		return
-	}
-	exec.Topology = BuildTopologyFromEntry(entry)
-	NormalizeTopology(exec.Topology)
-}
+func annotateTopology(_ *types.ExecutableInfo) {}
 
 // getExecutableInfo uses the new detector-based architecture to find server executables
 func buildExecutableInfo() *types.ExecutableInfo {
@@ -203,7 +190,7 @@ func executableAnnotation(executable *types.ExecutableInfo) string {
 		"(Minecraft %s, %s %s)",
 		gameVersion,
 		derivedPlatform.Title(),
-		executable.PrimaryPlatformVersion.String(),
+		executable.DerivedLoaderVersion(),
 	)
 }
 
