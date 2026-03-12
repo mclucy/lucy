@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
@@ -132,7 +131,7 @@ func generateStatusOutput(
 			output.Fields, &tui.FieldAnnotatedShortText{
 				Title:      "Platform",
 				Text:       serverPlatform.Title(),
-				Annotation: data.Executable.PrimaryPlatformVersion.String(),
+				Annotation: data.Executable.DerivedLoaderVersion(),
 			},
 		)
 	}
@@ -156,11 +155,6 @@ func generateStatusOutput(
 		showMods = data.Executable.Topology.HasCapability(types.CapabilityFabricMods) ||
 			data.Executable.Topology.HasCapability(types.CapabilityForgeMods) ||
 			data.Executable.Topology.HasCapability(types.CapabilityNeoforgeMods)
-	} else {
-		// Display path: unresolved topology falls back to mod-loader identity to
-		// avoid noisy status warnings while keeping output deterministic.
-		logger.Warn(fmt.Errorf("status-display: topology unresolved, falling back to PrimaryPlatform identity for mod visibility"))
-		showMods = data.Executable.PrimaryPlatform.IsModding()
 	}
 
 	// Collect mod/plugin names and paths for later use. This is to avoid
@@ -181,7 +175,9 @@ func generateStatusOutput(
 			packagePlatform := p.Id.Platform
 			if showMods && packagePlatform == serverPlatform {
 				modNames = append(modNames, packageNameOutput(p))
-				modPaths = append(modPaths, p.Local.Path)
+				if p.Local != nil {
+					modPaths = append(modPaths, p.Local.Path)
+				}
 			}
 			if hasMcdr && packagePlatform == types.PlatformMCDR {
 				mcdrPlugins = append(mcdrPlugins, packageNameOutput(p))
