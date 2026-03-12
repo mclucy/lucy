@@ -172,6 +172,9 @@ func generateStatusOutput(
 	}
 	if showMods || hasMcdr {
 		for _, p := range data.Packages {
+			if p.Id.IsIdentityPackage() {
+				continue
+			}
 			packagePlatform := p.Id.Platform
 			if showMods && packagePlatform == serverPlatform {
 				modNames = append(modNames, packageNameOutput(p))
