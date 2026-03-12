@@ -69,6 +69,7 @@ func Parse(s string) (id types.PackageId) {
 			logger.Fatal(err)
 		}
 	}
+	id.NormalizeIdentityPackage()
 	logger.Debug("parsed input as package: " + id.StringFull())
 	return
 }
@@ -114,8 +115,8 @@ func parseOperatorSlash(s string) (
 		n = types.ProjectName(split[0])
 		if types.Platform(n).Valid() {
 			// Remember, all platforms are also valid packages under themselves.
-			// This literal is for users to specify the platform itself. See the
-			// docs for syntaxtypes.PrimaryPlatform for more information.
+			// This literal is for users to specify the platform itself.
+			// This means the user specified a platform name directly.
 			pl = types.Platform(n)
 			n = types.ProjectName(pl)
 		}

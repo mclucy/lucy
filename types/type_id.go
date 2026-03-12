@@ -197,29 +197,43 @@ func (p PackageId) IsValidIdentityPackage() error {
 		)
 	}
 
-	if _, valid := platformByIdentityPackage[p.Name]; !valid {
-		return ErrInvalidPlatformPackage(p)
+	// Check if platform was explicitly specified and mismatches the identity package's platform
+	if p.Platform != PlatformAny {
+		expectedPlatform, _ := platformByIdentityPackage[p.Name]
+		if p.Platform != expectedPlatform {
+			return ErrInvalidPlatformPackage(p)
+		}
 	}
 
 	return nil
 }
 
-func (p PackageId) NormalizeIdentityPackage() {
+func (p *PackageId) NormalizeIdentityPackage() {
 	if !p.IsIdentityPackage() {
 		return
 	}
 
-	canonicalName, exists := canonicalIdentityPackageByPlatform[p.Platform]
-	if exists || p.Name == canonicalName {
+	platform := p.Platform
+	if platform == PlatformAny {
+		inferred, exists := platformByIdentityPackage[p.Name]
+		if !exists {
+			return
+		}
+		platform = inferred
+		p.Platform = platform
+	}
+
+	canonicalName, exists := canonicalIdentityPackageByPlatform[platform]
+	if !exists {
 		return
 	}
 
-	p.Name = canonicalName
-	if p.Version.CanInfer() {
-		p.Version = VersionCompatible
+	if p.Name != canonicalName {
+		p.Name = canonicalName
+		if p.Version.CanInfer() {
+			p.Version = VersionCompatible
+		}
 	}
-
-	return
 }
 
 func (p PackageId) IdentityToPlatform() Platform {

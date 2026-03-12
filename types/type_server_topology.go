@@ -78,6 +78,8 @@ type RuntimeNode struct {
 	RiskLevel        RuntimeRiskLevel    `json:"risk_level"`
 }
 
+type TopologyNode = RuntimeNode
+
 func (n RuntimeNode) HasCapability(c RuntimeCapability) bool {
 	for _, capability := range n.Capabilities {
 		if capability == c {

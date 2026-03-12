@@ -19,34 +19,70 @@ type ServerInfo struct {
 }
 
 type ExecutableInfo struct {
-	Path                   string           `json:"path"`
-	GameVersion            RawVersion       `json:"game_version"`
-	PrimaryPlatform        Platform         `json:"primary_platform"`
-	PrimaryPlatformVersion RawVersion       `json:"primary_platform_version"`
-	BootCommand            *exec.Cmd        `json:"-"`
-	Topology               *RuntimeTopology `json:"topology,omitempty"`
-	BridgeHints            []string         `json:"bridge_hints,omitempty"`
+	Path              string           `json:"path"`
+	GameVersion       RawVersion       `json:"game_version"`
+	BootCommand       *exec.Cmd        `json:"-"`
+	Topology          *RuntimeTopology `json:"topology,omitempty"`
+	RuntimeIdentities []PackageId      `json:"runtime_identities,omitempty"`
+	BridgeHints       []string         `json:"bridge_hints,omitempty"`
 }
 
 func (e *ExecutableInfo) IsValid() bool {
-	return e.Path != "" && e.GameVersion != "" && e.PrimaryPlatform.Valid()
+	return e != nil && e.Topology != nil
 }
 
-// DerivedModLoader returns the platform representing the primary mod loader.
-// If Topology is set and resolved, it derives the value from the primary node's
-// IdentityPlatform. Otherwise, it returns the legacy PrimaryPlatform field directly.
-func (e *ExecutableInfo) DerivedModLoader() Platform {
-	if e == nil {
-		return PlatformNone
+func (e *ExecutableInfo) RuntimeIdentityPackage(node *TopologyNode) *PackageId {
+	if e == nil || node == nil {
+		return nil
 	}
-	if e.Topology != nil && e.Topology.Resolved() {
-		if primary, ok := e.Topology.PrimaryNodeData(); ok {
-			if primary.IdentityPlatform.Valid() {
-				return primary.IdentityPlatform
-			}
+
+	for i := range e.RuntimeIdentities {
+		pkg := &e.RuntimeIdentities[i]
+		if pkg.IdentityToPlatform() == node.IdentityPlatform {
+			return pkg
 		}
 	}
-	return e.PrimaryPlatform
+
+	return nil
+}
+
+func (e *ExecutableInfo) PrimaryRuntimeIdentity() *PackageId {
+	if e == nil || e.Topology == nil {
+		return nil
+	}
+
+	primaryNode, ok := e.Topology.PrimaryNodeData()
+	if !ok {
+		return nil
+	}
+
+	return e.RuntimeIdentityPackage(&primaryNode)
+}
+
+func (e *ExecutableInfo) DerivedLoaderVersion() string {
+	primaryIdentity := e.PrimaryRuntimeIdentity()
+	if primaryIdentity == nil {
+		return "unknown"
+	}
+
+	return primaryIdentity.Version.String()
+}
+
+func (e *ExecutableInfo) DerivedModLoader() Platform {
+	if e == nil || e.Topology == nil {
+		return PlatformNone
+	}
+
+	primary, ok := e.Topology.PrimaryNodeData()
+	if !ok {
+		return PlatformNone
+	}
+
+	if !primary.IdentityPlatform.Valid() {
+		return PlatformNone
+	}
+
+	return primary.IdentityPlatform
 }
 
 type ServerActivity struct {
