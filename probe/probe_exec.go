@@ -40,7 +40,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 	}
 	for _, jar := range jars {
 		exec := detector.Executable(jar)
-		if exec == nil {
+		if exec == nil || exec == NoExecutable {
 			continue
 		}
 		valid = append(valid, exec)
@@ -69,7 +69,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 
 	for _, jar := range jars {
 		exec := detector.Executable(jar)
-		if exec == nil {
+		if exec == nil || exec == NoExecutable {
 			continue
 		}
 		valid = append(valid, exec)
@@ -100,7 +100,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 		} else {
 			for _, jarPath := range jarPaths {
 				exec := detector.Executable(jarPath)
-				if exec == nil {
+				if exec == nil || exec == NoExecutable {
 					continue
 				}
 				valid = append(valid, exec)
@@ -111,6 +111,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 	// 4. pwd, recursively
 	// Prompt before do so due to the potential large number of files
 	// TODO: Implement
+	
 	switch len(valid) {
 	case 0:
 		logger.Info("no server executable found")
@@ -135,8 +136,8 @@ func init() {
 }
 
 func selectExecutable(
-	executables []*types.ExecutableInfo,
-	notes []string,
+executables []*types.ExecutableInfo,
+notes []string,
 ) int {
 	selection := 0
 	title := "Multiple possible executables detected, select one"
