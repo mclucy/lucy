@@ -224,7 +224,6 @@ func buildModPaths() (paths []string) {
 			paths = append(paths, path.Join(workPath(), "plugins"))
 		}
 	}
-
 	return
 }
 

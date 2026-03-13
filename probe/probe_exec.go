@@ -26,8 +26,6 @@ const noteSuspectPrePackagedServer = "This is likely a pre-packaged server. Ther
 
 const multiThreadThreshold = 10
 
-func annotateTopology(_ *types.ExecutableInfo) {}
-
 // getExecutableInfo uses the new detector-based architecture to find server executables
 func buildExecutableInfo() *types.ExecutableInfo {
 	var valid []*types.ExecutableInfo
@@ -118,14 +116,12 @@ func buildExecutableInfo() *types.ExecutableInfo {
 		logger.Info("no server executable found")
 		return NoExecutable
 	case 1:
-		annotateTopology(valid[0])
 		return valid[0]
 	default:
 		choice := selectExecutable(
 			valid,
 			[]string{noteSuspectPrePackagedServer},
 		)
-		annotateTopology(valid[choice])
 		return valid[choice]
 	}
 }
