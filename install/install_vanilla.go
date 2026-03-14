@@ -87,22 +87,12 @@ func fetchMojangVersionManifest() (
 	*exttype.ApiMojangMinecraftVersionManifest,
 	error,
 ) {
-	result, err := util.CachedDownload(
+	data, err := util.CachedGetBytes(
 		mojang.VersionManifestURL,
-		os.TempDir(),
-		util.DownloadOptions{Kind: cache.KindMetadata},
+		util.BytesRequestOptions{Kind: cache.KindMetadata},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("fetch mojang version manifest failed: %w", err)
-	}
-	defer func() {
-		_ = result.File.Close()
-		_ = os.Remove(result.File.Name())
-	}()
-
-	data, err := os.ReadFile(result.File.Name())
-	if err != nil {
-		return nil, fmt.Errorf("read mojang version manifest failed: %w", err)
 	}
 
 	manifest := &exttype.ApiMojangMinecraftVersionManifest{}
