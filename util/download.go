@@ -138,31 +138,9 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 
 	contentHash := hex.EncodeToString(contentHasher.Sum(nil))
 
-	integrity := cache.Integrity{State: cache.IntegrityUnverified}
-	verified := false
-
-	if integrityHasher != nil && opts.ExpectedHash != "" {
-		actualHex := hex.EncodeToString(integrityHasher.Sum(nil))
-		if actualHex != opts.ExpectedHash {
-			return nil, fmt.Errorf(
-				"integrity verification failed (%s): expected %s, got %s",
-				opts.HashAlgorithm, opts.ExpectedHash, actualHex,
-			)
-		}
-		integrity = cache.Integrity{
-			Algorithm: opts.HashAlgorithm,
-			Expected:  opts.ExpectedHash,
-			Actual:    actualHex,
-			State:     cache.IntegrityVerified,
-		}
-		verified = true
-		logger.Debug(
-			fmt.Sprintf(
-				"integrity verified (%s): %s",
-				opts.HashAlgorithm,
-				url,
-			),
-		)
+	integrity, verified, err := verifyIntegrity(integrityHasher, opts.HashAlgorithm, opts.ExpectedHash, url)
+	if err != nil {
+		return nil, err
 	}
 
 	if filename == "" {
@@ -183,13 +161,7 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 		return nil, fmt.Errorf("failed to write file to destination: %w", err)
 	}
 
-	ttl := cache.DefaultCacheConfig().DownloadKeepFor
-	if opts.Kind == cache.KindMetadata {
-		ttl = cache.DefaultCacheConfig().IndexRefreshAfter
-	}
-	if opts.TTL > 0 {
-		ttl = opts.TTL
-	}
+	ttl := resolveTTL(opts.Kind, opts.TTL)
 
 	if err := cache.Network().IngestEntry(
 		tmpPath, filename, url, size, contentHash,
@@ -203,6 +175,48 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 		CacheHit: false,
 		Verified: verified,
 	}, nil
+}
+
+func resolveTTL(kind cache.EntryKind, customTTL time.Duration) time.Duration {
+	ttl := cache.DefaultCacheConfig().DownloadKeepFor
+	if kind == cache.KindMetadata {
+		ttl = cache.DefaultCacheConfig().IndexRefreshAfter
+	}
+	if customTTL > 0 {
+		ttl = customTTL
+	}
+	return ttl
+}
+
+func verifyIntegrity(hasher hash.Hash, algorithm cache.HashAlgorithm, expectedHash string, url string) (cache.Integrity, bool, error) {
+	integrity := cache.Integrity{State: cache.IntegrityUnverified}
+	verified := false
+
+	if hasher != nil && expectedHash != "" {
+		actualHex := hex.EncodeToString(hasher.Sum(nil))
+		if actualHex != expectedHash {
+			return integrity, false, fmt.Errorf(
+				"integrity verification failed (%s): expected %s, got %s",
+				algorithm, expectedHash, actualHex,
+			)
+		}
+		integrity = cache.Integrity{
+			Algorithm: algorithm,
+			Expected:  expectedHash,
+			Actual:    actualHex,
+			State:     cache.IntegrityVerified,
+		}
+		verified = true
+		logger.Debug(
+			fmt.Sprintf(
+				"integrity verified (%s): %s",
+				algorithm,
+				url,
+			),
+		)
+	}
+
+	return integrity, verified, nil
 }
 
 func newHasher(algo cache.HashAlgorithm) hash.Hash {
