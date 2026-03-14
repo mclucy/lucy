@@ -1,6 +1,7 @@
 # https://taskfile.dev
 
 version: "3"
+interval: 700ms
 
 dotenv:
   - ".env"
@@ -68,21 +69,31 @@ tasks:
       - "./go.sum"
     generates:
       - dist/lucy-darwin-arm64-dev
-    vars:
-      INTERVAL: 1s
-      DELAY: 500ms
+
+  build-dev-incremental:
+    desc: Build the development binary without cleaning dist
+    deps:
+      - warn-cf-api-key-length
+    cmds:
+      - GOOS=darwin GOARCH=arm64 go build -ldflags="{{.DEBUG_LDFLAGS}}" -tags debug -o dist/lucy-darwin-arm64-dev
+    sources:
+      - "./**/*.go"
+      - "./go.mod"
+      - "./go.sum"
+    generates:
+      - dist/lucy-darwin-arm64-dev
+    method: timestamp
 
   build-watch:
     desc: Rebuild the debug binary on Go file changes
-    deps:
-      - build-dev
     cmds:
-      - task build-dev
+      - task build-dev-incremental
     watch: true
     sources:
       - "./**/*.go"
       - "./go.mod"
       - "./go.sum"
+    method: timestamp
 
   gen-completions:
     desc: Generate bash, zsh, and fish completion scripts
