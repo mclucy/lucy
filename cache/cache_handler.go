@@ -269,6 +269,29 @@ func (h *handler) Get(k string) (hit bool, file *os.File, err error) {
 	return true, file, nil
 }
 
+func (h *handler) GetBytes(k string) (hit bool, data []byte, err error) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if !h.on {
+		return false, nil, nil
+	}
+
+	ckey := canonicalizeKey(k)
+	entry, ok := h.index.get(ckey)
+	if !ok {
+		logger.Debug("cache miss: " + k)
+		return false, nil, nil
+	}
+
+	data, err = h.store.ReadBytes(entry.ContentHash, entry.Filename)
+	if err != nil {
+		return false, nil, err
+	}
+	logger.Debug("cache hit: " + k)
+	return true, data, nil
+}
+
 func (h *handler) Remove(k string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -42,6 +42,16 @@ func (s *store) Read(contentHash, filename string) (*os.File, error) {
 	return f, nil
 }
 
+// ReadBytes reads the blob and returns its contents as bytes.
+func (s *store) ReadBytes(contentHash, filename string) ([]byte, error) {
+	p := filepath.Join(s.dir, contentHash, filename)
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read blob: %w", err)
+	}
+	return data, nil
+}
+
 func (s *store) Remove(contentHash string) error {
 	p := filepath.Join(s.dir, contentHash)
 	if err := os.RemoveAll(p); err != nil {
