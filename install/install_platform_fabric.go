@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
 )
@@ -104,9 +102,9 @@ func fetchFabricInstallerVersions() (
 
 func fetchFabricVersionsMeta(endpoint string, target any) (err error) {
 	apiEndpoint := fabricMetaBaseURL + "/v2/versions/" + endpoint
-	res, err := util.CachedDownload(
-		apiEndpoint, os.TempDir(),
-		util.DownloadOptions{
+	data, err := util.CachedGetBytes(
+		apiEndpoint,
+		util.BytesRequestOptions{
 			Kind: cache.KindMetadata,
 			TTL:  3 * 24 * time.Hour,
 		},
@@ -114,15 +112,6 @@ func fetchFabricVersionsMeta(endpoint string, target any) (err error) {
 	if err != nil {
 		return fmt.Errorf(
 			"fetch fabric %s versions meta failed: %w",
-			endpoint, err,
-		)
-	}
-	defer tools.CloseReader(res.File, nil)
-
-	data, err := os.ReadFile(res.File.Name())
-	if err != nil {
-		return fmt.Errorf(
-			"read fabric %s versions meta failed: %w",
 			endpoint, err,
 		)
 	}

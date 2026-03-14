@@ -133,10 +133,9 @@ func resolveMinecraftVersionEntry(
 }
 
 func fetchMojangVersionDetail(versionURL string) (*mojangVersionDetail, error) {
-	result, err := util.CachedDownload(
+	data, err := util.CachedGetBytes(
 		versionURL,
-		os.TempDir(),
-		util.DownloadOptions{
+		util.BytesRequestOptions{
 			Kind: cache.KindMetadata,
 			TTL:  7 * 24 * time.Hour,
 		},
@@ -144,18 +143,6 @@ func fetchMojangVersionDetail(versionURL string) (*mojangVersionDetail, error) {
 	if err != nil {
 		return nil, fmt.Errorf(
 			"fetch minecraft version metadata failed: %w",
-			err,
-		)
-	}
-	defer func() {
-		_ = result.File.Close()
-		_ = os.Remove(result.File.Name())
-	}()
-
-	data, err := os.ReadFile(result.File.Name())
-	if err != nil {
-		return nil, fmt.Errorf(
-			"read minecraft version metadata failed: %w",
 			err,
 		)
 	}
