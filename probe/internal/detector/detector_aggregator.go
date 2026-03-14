@@ -15,7 +15,14 @@ var UnknownExecutable = &types.ExecutableInfo{
 	Path:        "",
 	GameVersion: types.VersionUnknown,
 	BootCommand: nil,
-	Topology:    &types.RuntimeTopology{},
+	Topology: &types.RuntimeTopology{
+		Nodes: []types.RuntimeNode{
+			{
+				ID:   "unknown",
+				Role: types.RuntimeRoleUnknown,
+			},
+		},
+	},
 }
 
 var NoExecutable = &types.ExecutableInfo{
