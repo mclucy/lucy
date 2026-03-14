@@ -11,7 +11,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
+	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
 )
@@ -148,24 +150,45 @@ func installForge(p types.PackageId) error {
 		)
 	}
 
-	forgeVersion, err := fetchForgeVersion(gameVersion)
+	if err := checkJavaAvailability(); err != nil {
+		return err
+	}
+
+	forgeVersion, err := getForgeVersionFromPackageId(p, gameVersion)
 	if err != nil {
 		return err
 	}
+
 	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
-	result, err := util.CachedDownload(fileURL, serverInfo.WorkPath, util.DownloadOptions{})
+	tracker := tuiprogress.NewTracker("forge")
+	result, err := util.CachedDownload(
+		fileURL,
+		serverInfo.WorkPath,
+		util.DownloadOptions{
+			Kind:               cache.KindArtifact,
+			WrapReader:         tracker.ProxyReader,
+			OnCacheHit:         tracker.CacheHit,
+			OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
+		},
+	)
+
+	if result != nil {
+		defer func() { _ = result.File.Close() }()
+	}
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
-	defer func() { _ = result.File.Close() }()
 
-	if err := runForgeInstaller(
-		result.File.Name(),
-		serverInfo.WorkPath,
-	); err != nil {
+	if err := ensureMinecraftEULAAccepted(serverInfo.WorkPath); err != nil {
 		return err
 	}
+
+	if err := runForgeInstaller(result.File.Name(), serverInfo.WorkPath); err != nil {
+		return err
+	}
+
+	probe.Rebuild()
 
 	return nil
 }
