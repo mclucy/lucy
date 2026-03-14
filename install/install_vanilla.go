@@ -199,6 +199,9 @@ func downloadMinecraftServerJar(
 				ExpectedHash:  expectedSha1,
 				HashAlgorithm: cache.HashSHA1,
 				WrapReader:    tracker.ProxyReader,
+				OnResolvedFilename: func(name string) {
+					tracker.SetTitle(name)
+				},
 				OnCacheHit: func() {
 					tracker.Complete("cache hit")
 					time.Sleep(500 * time.Millisecond)
