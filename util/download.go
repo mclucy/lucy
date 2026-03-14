@@ -29,6 +29,14 @@ type DownloadOptions struct {
 	TTL                time.Duration
 }
 
+type BytesRequestOptions struct {
+	Kind          cache.EntryKind
+	ExpectedHash  string
+	HashAlgorithm cache.HashAlgorithm
+	TTL           time.Duration
+	MaxBytes      int64
+}
+
 type DownloadResult struct {
 	File     *os.File
 	CacheHit bool
@@ -78,6 +86,79 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	}
 
 	return downloadAndCache(url, dir, opts)
+}
+
+// CachedGetBytes fetches bytes from url, using the cache for deduplication.
+// On cache hit the bytes are returned directly. On miss the response body is
+// read into memory with a size limit, hashed for content-addressing and
+// integrity verification, then cached.
+func CachedGetBytes(url string, opts BytesRequestOptions) ([]byte, error) {
+	hit, data, err := cache.Network().GetBytes(url)
+	if err != nil {
+		logger.Warn(
+			fmt.Errorf(
+				"cache lookup failed, proceeding with fetch: %w",
+				err,
+			),
+		)
+	}
+	if hit && data != nil {
+		return data, nil
+	}
+
+	maxBytes := opts.MaxBytes
+	if maxBytes == 0 {
+		maxBytes = 50 * 1024 * 1024
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("fetch failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("fetch failed: status %d", resp.StatusCode)
+	}
+
+	contentHasher := sha256.New()
+	limitedReader := io.LimitReader(resp.Body, maxBytes)
+	writers := []io.Writer{contentHasher}
+
+	var integrityHasher hash.Hash
+	if opts.ExpectedHash != "" && opts.HashAlgorithm != cache.HashNone {
+		integrityHasher = newHasher(opts.HashAlgorithm)
+		if integrityHasher != nil {
+			writers = append(writers, integrityHasher)
+		}
+	}
+
+	w := io.MultiWriter(writers...)
+	bytes, err := io.ReadAll(io.TeeReader(limitedReader, w))
+	if err != nil {
+		return nil, fmt.Errorf("read failed: %w", err)
+	}
+
+	if int64(len(bytes)) >= maxBytes {
+		return nil, fmt.Errorf("response too large: exceeded %d bytes", maxBytes)
+	}
+
+	contentHash := hex.EncodeToString(contentHasher.Sum(nil))
+
+	integrity, _, err := verifyIntegrity(integrityHasher, opts.HashAlgorithm, opts.ExpectedHash, url)
+	if err != nil {
+		return nil, err
+	}
+
+	ttl := resolveTTL(opts.Kind, opts.TTL)
+
+	if err := cache.Network().AddEntry(
+		bytes, contentHash, url, opts.Kind, integrity, ttl,
+	); err != nil {
+		logger.Warn(fmt.Errorf("failed to cache bytes: %w", err))
+	}
+
+	return bytes, nil
 }
 
 func downloadAndCache(url, dir string, opts DownloadOptions) (
