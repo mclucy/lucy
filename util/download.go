@@ -19,13 +19,14 @@ import (
 )
 
 type DownloadOptions struct {
-	Kind          cache.EntryKind
-	ExpectedHash  string
-	HashAlgorithm cache.HashAlgorithm
-	Filename      string
-	WrapReader    func(io.Reader, int64) io.Reader
-	OnCacheHit    func()
-	TTL           time.Duration
+	Kind               cache.EntryKind
+	ExpectedHash       string
+	HashAlgorithm      cache.HashAlgorithm
+	Filename           string
+	WrapReader         func(io.Reader, int64) io.Reader
+	OnCacheHit         func()
+	OnResolvedFilename func(string)
+	TTL                time.Duration
 }
 
 type DownloadResult struct {
@@ -54,10 +55,14 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	}
 	if hit && cachedFile != nil {
 		defer cachedFile.Close()
+		resolvedName := path.Base(cachedFile.Name())
+		if opts.OnResolvedFilename != nil {
+			opts.OnResolvedFilename(resolvedName)
+		}
 		if opts.OnCacheHit != nil {
 			opts.OnCacheHit()
 		}
-		destPath := path.Join(dir, path.Base(cachedFile.Name()))
+		destPath := path.Join(dir, resolvedName)
 		destFile, err := tools.CopyFile(cachedFile, destPath)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -92,6 +97,10 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 	filename := opts.Filename
 	if filename == "" {
 		filename = speculateFilename(resp)
+	}
+
+	if opts.OnResolvedFilename != nil && filename != "" {
+		opts.OnResolvedFilename(filename)
 	}
 
 	tmpFile, err := os.CreateTemp("", "lucy-download-*")
