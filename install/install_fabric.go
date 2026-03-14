@@ -1,7 +1,6 @@
 package install
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -36,19 +35,15 @@ func init() {
 }
 
 func installFabric(p types.PackageId) error {
-	if err := guardServerTopologyForFabricPlatform(); err != nil {
-		return err
-	}
+	return installFabricWithOverride(p, false)
+}
+
+func installFabricWithOverride(p types.PackageId, deleteVanilla bool) error {
 	serverInfo := probe.ServerInfo()
 
-	var loaderVersion, gameVersion, installerVersion string
-	var override, deleteVanilla bool
+	var gameVersion string
 	switch serverInfo.Executable.DerivedModLoader() {
 	case types.PlatformVanilla:
-		override, deleteVanilla = promptOverrideVanillaWithFabric()
-		if !override {
-			return errors.New("installation aborted by user")
-		}
 		gameVersion = string(serverInfo.Executable.GameVersion)
 	case types.PlatformNone:
 		gameVersion = promptSelectMinecraftVersionForFabric()
@@ -64,7 +59,7 @@ func installFabric(p types.PackageId) error {
 			return fmt.Errorf("cannot install fabric for game version: %w", err)
 		}
 	}
-	installerVersion, err = getLatestFabricInstallerVersion()
+	installerVersion, err := getLatestFabricInstallerVersion()
 	if err != nil {
 		return fmt.Errorf("cannot get fabric loader version: %w", err)
 	}
