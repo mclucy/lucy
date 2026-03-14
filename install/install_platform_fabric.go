@@ -206,16 +206,3 @@ func promptSelectMinecraftVersionForFabric() (version string) {
 	}
 	return
 }
-
-func guardServerTopologyForFabricPlatform() error {
-	serverInfo := probe.ServerInfo()
-	switch serverInfo.Executable.DerivedModLoader() {
-	case types.PlatformUnknown:
-		return errors.New("unknown mod loader, cannot infer fabric bootstrap artifact")
-	case types.PlatformFabric:
-		return errors.New("fabric server already detected, installation aborted")
-	case types.PlatformForge, types.PlatformNeoforge:
-		return errors.New("forge server detected, cannot install fabric bootstrap")
-	}
-	return nil
-}

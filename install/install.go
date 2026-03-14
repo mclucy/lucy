@@ -139,12 +139,23 @@ func installPlatform(id types.PackageId) error {
 		}
 		return installForge(id)
 	case types.PlatformFabric:
-		// The below function already guards against incompatible server platforms
-		// should we move all the checks into the corresponding installer function and let it handle the user prompt?
-		//
-		// if serverPlatform != types.PlatformVanilla {
-		// 	return errExistingPlatform()
-		// }
+		switch serverPlatform {
+		case types.PlatformUnknown:
+			return errors.New("unknown mod loader, cannot infer fabric bootstrap artifact")
+		case types.PlatformFabric:
+			return errors.New("fabric server already detected, installation aborted")
+		case types.PlatformForge, types.PlatformNeoforge:
+			return errors.New("forge server detected, cannot install fabric bootstrap")
+		case types.PlatformVanilla:
+			override, deleteVanilla := promptOverrideVanillaWithFabric()
+			if !override {
+				return errors.New("installation aborted by user")
+			}
+			return installFabricWithOverride(id, deleteVanilla)
+		case types.PlatformNone:
+		default:
+			return fmt.Errorf("unsupported server platform %s for fabric installation", serverPlatform.Title())
+		}
 		return installFabric(id)
 	case types.PlatformNeoforge:
 		if serverPlatform != types.PlatformVanilla {
