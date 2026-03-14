@@ -24,7 +24,7 @@ const (
 	PlatformNeoforge  Platform = "neoforge"
 	PlatformMCDR      Platform = "mcdr"
 	PlatformNone      Platform = "none"    // PlatformNone is a special platform that is not satisfied by any platform, but it can satisfy all platforms. It is typically used to indicate the absence of a platform, for example, when a package is not compatible with any platform, or when a package does not require a platform.
-	UnknownPlatform   Platform = "unknown" // UnknownPlatform is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
+	PlatformUnknown   Platform = "unknown" // PlatformUnknown is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
 )
 
 func (p Platform) Title() string {
@@ -61,9 +61,9 @@ func (p Platform) Satisfy(p2 Platform) bool {
 	if p2 == PlatformNone {
 		return true
 	}
-	// UnknownPlatform is not satisfied by any platform, and does not satisfy
+	// PlatformUnknown is not satisfied by any platform, and does not satisfy
 	// any platform including itself.
-	if p == UnknownPlatform || p2 == UnknownPlatform {
+	if p == PlatformUnknown || p2 == PlatformUnknown {
 		return false
 	}
 	// When p2 is PlatformAny, it is satisfied by all platforms.
@@ -82,7 +82,7 @@ func (p Platform) Satisfy(p2 Platform) bool {
 // restriction on which one to use.
 //
 // This function does not represent a mathematical equivalence relation, since
-// UnknownPlatform should always be unequal to any platform including itself.
+// PlatformUnknown should always be unequal to any platform including itself.
 // However, rather than using .IsUnknown() function, it is more intuitive to
 // just use an equality operator.
 //
@@ -142,12 +142,12 @@ func (p PackageId) String() string {
 		p.Platform == PlatformAny,
 		"", string(p.Platform)+"/",
 	) +
-		string(p.Name) +
-		tools.Ternary(
-			p.Version == VersionAny,
-			"",
-			"@"+string(p.Version),
-		)
+	string(p.Name) +
+	tools.Ternary(
+		p.Version == VersionAny,
+		"",
+		"@"+string(p.Version),
+	)
 }
 
 func (p PackageId) StringFull() string {
@@ -241,7 +241,7 @@ func (p *PackageId) NormalizeIdentityPackage() {
 func (p PackageId) IdentityToPlatform() Platform {
 	platform, exists := platformByIdentityPackage[p.Name]
 	if !exists {
-		return UnknownPlatform
+		return PlatformUnknown
 	}
 	return platform
 }

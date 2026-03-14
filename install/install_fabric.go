@@ -51,7 +51,7 @@ func installFabric(p types.PackageId) error {
 		}
 		gameVersion = string(serverInfo.Executable.GameVersion)
 	case types.PlatformNone:
-		gameVersion = promptSelectMineraftVersionForFabric()
+		gameVersion = promptSelectMinecraftVersionForFabric()
 	}
 
 	loaderVersion, err := getFabricLoaderVersion(p.Version)

@@ -164,7 +164,7 @@ func promptOverrideVanillaWithFabric() (override bool, deleteVanilla bool) {
 	return
 }
 
-func promptSelectMineraftVersionForFabric() (version string) {
+func promptSelectMinecraftVersionForFabric() (version string) {
 	versions, err := fetchFabricGameVersions()
 	if err != nil || len(versions) == 0 {
 		return "error"
@@ -210,7 +210,7 @@ func promptSelectMineraftVersionForFabric() (version string) {
 func guardServerTopologyForFabricPlatform() error {
 	serverInfo := probe.ServerInfo()
 	switch serverInfo.Executable.DerivedModLoader() {
-	case types.UnknownPlatform:
+	case types.PlatformUnknown:
 		return errors.New("unknown mod loader, cannot infer fabric bootstrap artifact")
 	case types.PlatformFabric:
 		return errors.New("fabric server already detected, installation aborted")
