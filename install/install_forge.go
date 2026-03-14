@@ -14,6 +14,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
@@ -196,22 +197,36 @@ func installForge(p types.PackageId) error {
 	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
 	tracker := tuiprogress.NewTracker("forge")
-	result, err := util.CachedDownload(
-		fileURL,
-		serverInfo.WorkPath,
-		util.DownloadOptions{
-			Kind:               cache.KindArtifact,
-			WrapReader:         tracker.ProxyReader,
-			OnCacheHit:         tracker.CacheHit,
-			OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
-		},
-	)
+
+	var result *util.DownloadResult
+	errCh := make(chan error, 1)
+	go func() {
+		defer tracker.Close()
+		var err error
+		result, err = util.CachedDownload(
+			fileURL,
+			serverInfo.WorkPath,
+			util.DownloadOptions{
+				Kind:               cache.KindArtifact,
+				WrapReader:         tracker.ProxyReader,
+				OnCacheHit:         tracker.CacheHit,
+				OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
+			},
+		)
+		errCh <- err
+	}()
+
+	runErr := tracker.Run()
+	dlErr := <-errCh
+	if runErr != nil {
+		logger.ShowError(fmt.Errorf("progress renderer failed: %w", runErr))
+	}
+	if dlErr != nil {
+		return fmt.Errorf("download failed: %w", dlErr)
+	}
 
 	if result != nil {
 		defer func() { _ = result.File.Close() }()
-	}
-	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
 	}
 
 	if err := ensureMinecraftEULAAccepted(serverInfo.WorkPath); err != nil {
