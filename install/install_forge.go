@@ -16,6 +16,21 @@ import (
 	"github.com/mclucy/lucy/util"
 )
 
+func getForgeVersionFromPackageId(p types.PackageId, gameVersion types.RawVersion) (string, error) {
+	if p.Version != types.VersionLatest && p.Version != types.VersionCompatible && p.Version != types.VersionAny && p.Version != types.VersionUnknown {
+		return p.Version.String(), nil
+	}
+	return fetchForgeVersion(gameVersion)
+}
+
+func checkJavaAvailability() error {
+	_, err := exec.LookPath("java")
+	if err != nil {
+		return errors.New("java not found in PATH, Forge requires Java to install")
+	}
+	return nil
+}
+
 var (
 	forgeDocsURL       = "https://files.minecraftforge.net/"
 	forgePromotionsURL = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json"
