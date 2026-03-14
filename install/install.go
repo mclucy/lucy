@@ -139,10 +139,12 @@ func installPlatform(id types.PackageId) error {
 		}
 		return installForge(id)
 	case types.PlatformFabric:
-		if serverPlatform != types.PlatformVanilla {
-			// TODO: ask if overwrite existing modding platform
-			return errExistingPlatform()
-		}
+		// The below function already guards against incompatible server platforms
+		// should we move all the checks into the corresponding installer function and let it handle the user prompt?
+		//
+		// if serverPlatform != types.PlatformVanilla {
+		// 	return errExistingPlatform()
+		// }
 		return installFabric(id)
 	case types.PlatformNeoforge:
 		if serverPlatform != types.PlatformVanilla {

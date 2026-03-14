@@ -1,15 +1,14 @@
 package install
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
+	"os"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
 )
@@ -25,10 +24,11 @@ type fabricInstallerVersion struct {
 }
 
 type fabricLoaderVersionEntry struct {
-	Loader struct {
-		Version string `json:"version"`
-		Stable  bool   `json:"stable"`
-	} `json:"loader"`
+	_       string `json:"separator"`
+	_       int    `json:"build"`
+	_       string `json:"maven"`
+	Version string `json:"version"`
+	Stable  bool   `json:"stable"`
 }
 
 func init() {
@@ -36,31 +36,55 @@ func init() {
 }
 
 func installFabric(p types.PackageId) error {
-	panic("fabric installation is not implemented yet")
-
-	fileURL := ""
-
+	if err := guardServerTopologyForFabricPlatform(); err != nil {
+		return err
+	}
 	serverInfo := probe.ServerInfo()
-	if serverInfo.Executable == probe.UnknownExecutable {
-		return errors.New("server working directory not found")
+
+	var loaderVersion, gameVersion, installerVersion string
+	var override, deleteVanilla bool
+	switch serverInfo.Executable.DerivedModLoader() {
+	case types.PlatformVanilla:
+		override, deleteVanilla = promptOverrideVanillaWithFabric()
+		if !override {
+			return errors.New("installation aborted by user")
+		}
+		gameVersion = string(serverInfo.Executable.GameVersion)
+	case types.PlatformNone:
+		gameVersion = promptSelectMineraftVersionForFabric()
 	}
 
-	if fileURL == "" {
-		if serverInfo.Executable == nil || serverInfo.Executable == probe.UnknownExecutable {
-			return errors.New("no executable found, cannot infer minecraft version for fabric bootstrap")
-		}
-		if serverInfo.Executable.GameVersion == types.VersionUnknown {
-			return errors.New("unknown minecraft version, cannot infer fabric bootstrap artifact")
-		}
-
-		var err error
-		fileURL, err = resolveFabricServerLaunchJarURL(serverInfo.Executable.GameVersion)
+	loaderVersion, err := getFabricLoaderVersion(p.Version)
+	if err != nil {
+		return fmt.Errorf("resolve fabric loader version failed: %w", err)
+	}
+	if gameVersion == "" {
+		gameVersion, err = getFabricGameVersion(serverInfo.Executable.GameVersion)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot install fabric for game version: %w", err)
 		}
 	}
+	installerVersion, err = getLatestFabricInstallerVersion()
+	if err != nil {
+		return fmt.Errorf("cannot get fabric loader version: %w", err)
+	}
 
-	result, err := util.CachedDownload(fileURL, serverInfo.WorkPath, util.DownloadOptions{})
+	artifactUrl := fmt.Sprintf(
+		"https://meta.fabricmc.net/v2/versions/loader/%s/%s/%s/server/jar",
+		gameVersion, loaderVersion, installerVersion,
+	)
+
+	tracker := progress.NewTracker("fabric")
+	result, err := util.CachedDownload(
+		artifactUrl,
+		serverInfo.WorkPath,
+		util.DownloadOptions{
+			Kind:       cache.KindArtifact,
+			WrapReader: tracker.ProxyReader,
+			OnCacheHit: tracker.CacheHit,
+		},
+	)
+
 	if result != nil {
 		tools.CloseReader(result.File, nil)
 	}
@@ -68,116 +92,14 @@ func installFabric(p types.PackageId) error {
 		return fmt.Errorf("download failed: %w", err)
 	}
 
+	if deleteVanilla {
+		err = os.Remove(serverInfo.Executable.Path)
+	}
+	probe.Rebuild()
+
 	return nil
 }
 
 func installFabricMod(p types.Package) error {
 	return installModLoaderPackage(p, types.PlatformFabric)
-}
-
-func resolveFabricServerLaunchJarURL(gameVersion types.RawVersion) (
-	string,
-	error,
-) {
-	loaderVersion, err := fetchFabricLoaderVersion(gameVersion)
-	if err != nil {
-		return "", err
-	}
-	installerVersion, err := fetchFabricInstallerVersion()
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf(
-		"%s/v2/versions/loader/%s/%s/%s/server/jar",
-		fabricMetaBaseURL,
-		url.PathEscape(gameVersion.String()),
-		url.PathEscape(loaderVersion),
-		url.PathEscape(installerVersion),
-	), nil
-}
-
-func fetchFabricInstallerVersion() (string, error) {
-	res, err := http.Get(fabricMetaBaseURL + "/v2/versions/installer")
-	if err != nil {
-		return "", fmt.Errorf("fetch fabric installer versions failed: %w", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return "", fmt.Errorf(
-			"fetch fabric installer versions failed: status %d",
-			res.StatusCode,
-		)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", fmt.Errorf("read fabric installer versions failed: %w", err)
-	}
-
-	var versions []fabricInstallerVersion
-	if err := json.Unmarshal(body, &versions); err != nil {
-		return "", fmt.Errorf("parse fabric installer versions failed: %w", err)
-	}
-	if len(versions) == 0 {
-		return "", errors.New("no fabric installer versions available")
-	}
-
-	for _, v := range versions {
-		if v.Stable {
-			return v.Version, nil
-		}
-	}
-	return versions[0].Version, nil
-}
-
-func fetchFabricLoaderVersion(gameVersion types.RawVersion) (string, error) {
-	endpoint := fmt.Sprintf(
-		"%s/v2/versions/loader/%s",
-		fabricMetaBaseURL,
-		url.PathEscape(gameVersion.String()),
-	)
-	res, err := http.Get(endpoint)
-	if err != nil {
-		return "", fmt.Errorf("fetch fabric loader versions failed: %w", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return "", fmt.Errorf(
-			"fetch fabric loader versions failed: status %d",
-			res.StatusCode,
-		)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", fmt.Errorf("read fabric loader versions failed: %w", err)
-	}
-
-	var versions []fabricLoaderVersionEntry
-	if err := json.Unmarshal(body, &versions); err != nil {
-		return "", fmt.Errorf("parse fabric loader versions failed: %w", err)
-	}
-	if len(versions) == 0 {
-		return "", fmt.Errorf(
-			"no fabric loader versions for game %s",
-			gameVersion,
-		)
-	}
-
-	for _, v := range versions {
-		if v.Loader.Stable && v.Loader.Version != "" {
-			return v.Loader.Version, nil
-		}
-	}
-	if versions[0].Loader.Version == "" {
-		return "", fmt.Errorf(
-			"no usable fabric loader version for game %s",
-			gameVersion,
-		)
-	}
-
-	return versions[0].Loader.Version, nil
 }

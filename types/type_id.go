@@ -44,10 +44,12 @@ func (p Platform) String() string {
 	return string(p)
 }
 
-// Valid should be edited if you added a new platform.
+// Valid
+//
+// If a platform can be used in a package id, it is a valid platform.
 func (p Platform) Valid() bool {
 	switch p {
-	case PlatformMinecraft, PlatformFabric, PlatformForge, PlatformNeoforge, PlatformMCDR, PlatformAny:
+	case PlatformMinecraft, PlatformFabric, PlatformForge, PlatformNeoforge, PlatformMCDR, PlatformAny, PlatformNone:
 		return true
 	}
 	return false

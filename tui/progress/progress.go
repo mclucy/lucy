@@ -95,6 +95,10 @@ func (t *Tracker) Complete(msg string) {
 	}
 }
 
+func (t *Tracker) CacheHit() {
+	t.Complete("Cache hit")
+}
+
 // ProxyReader wraps r so that every Read call updates this Tracker.
 // total is the expected total byte count (e.g. from Content-Length).
 // If total <= 0 the bar will not be updated (indeterminate).

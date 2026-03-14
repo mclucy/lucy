@@ -6,9 +6,7 @@ import (
 	"github.com/mclucy/lucy/tools"
 )
 
-var (
-	defaultOptions []progress.Option
-)
+var defaultOptions []progress.Option
 
 func init() {
 	defaultOptions = []progress.Option{
