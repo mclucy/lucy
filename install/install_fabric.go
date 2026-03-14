@@ -79,9 +79,10 @@ func installFabric(p types.PackageId) error {
 		artifactUrl,
 		serverInfo.WorkPath,
 		util.DownloadOptions{
-			Kind:       cache.KindArtifact,
-			WrapReader: tracker.ProxyReader,
-			OnCacheHit: tracker.CacheHit,
+			Kind:               cache.KindArtifact,
+			WrapReader:         tracker.ProxyReader,
+			OnCacheHit:         tracker.CacheHit,
+			OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
 		},
 	)
 
