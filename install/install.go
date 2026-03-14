@@ -133,11 +133,13 @@ func installPlatform(id types.PackageId) error {
 		}
 		return installMinecraftServer(id)
 	case types.PlatformForge:
-		if serverPlatform != types.PlatformVanilla {
-			// TODO: ask if overwrite existing modding platform
+		switch serverPlatform {
+		case types.PlatformVanilla, types.PlatformNone:
+			return installForge(id)
+		default:
 			return errExistingPlatform()
 		}
-		return installForge(id)
+
 	case types.PlatformFabric:
 		switch serverPlatform {
 		case types.PlatformUnknown:

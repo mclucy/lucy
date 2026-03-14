@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
@@ -44,39 +45,97 @@ func installForgeMod(p types.Package) error {
 	return installModLoaderPackage(p, types.PlatformForge)
 }
 
-func installForge(p types.PackageId) error {
-	panic("Forge installation is not implemented yet")
+func guardServerTopologyForForgePlatform() error {
+	serverInfo := probe.ServerInfo()
+	serverPlatform := serverInfo.Executable.DerivedModLoader()
 
-	fileURL := ""
+	switch serverPlatform {
+	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
+		return fmt.Errorf(
+			"found an existing server platform %s, installation of forge aborted",
+			serverPlatform.Title(),
+		)
+	}
+	return nil
+}
+
+func promptSelectMinecraftVersionForForge() (version string) {
+	versions, err := fetchFabricGameVersions()
+	if err != nil || len(versions) == 0 {
+		return "error"
+	}
+
+	gameVersions := make([]string, len(versions))
+	for i, v := range versions {
+		gameVersions[i] = v.Version
+	}
+
+	var installLatest bool
+	options := huh.NewOptions[string](gameVersions...)
+	err = huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("No current Minecraft installation found.").
+				Description("Do you want to install forge with its latest supported Minecraft version?").
+				Affirmative("Yes, proceed").
+				Negative("No, select a game version").
+				Value(&installLatest),
+		),
+	).Run()
+	if err != nil {
+		return "none"
+	}
+	if installLatest {
+		return gameVersions[0]
+	}
+	err = huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Select a Minecraft installation").
+				Options(options...).
+				Value(&version),
+		).WithHide(installLatest),
+	).Run()
+	if err != nil {
+		return "none"
+	}
+	return
+}
+
+func installForge(p types.PackageId) error {
+	if err := guardServerTopologyForForgePlatform(); err != nil {
+		return err
+	}
 
 	serverInfo := probe.ServerInfo()
 	if serverInfo.WorkPath == "" {
 		return errors.New("server working directory not found")
 	}
 
-	if fileURL == "" {
-		if serverInfo.Executable == nil || serverInfo.Executable == probe.UnknownExecutable {
-			return fmt.Errorf(
-				"no executable found, cannot infer minecraft version for forge bootstrap; see %s",
-				forgeDocsURL,
-			)
+	var gameVersion types.RawVersion
+	switch serverInfo.Executable.DerivedModLoader() {
+	case types.PlatformVanilla:
+		gameVersion = serverInfo.Executable.GameVersion
+	case types.PlatformNone:
+		selectedVersion := promptSelectMinecraftVersionForForge()
+		if selectedVersion == "none" || selectedVersion == "error" {
+			return errors.New("minecraft version selection cancelled or failed")
 		}
-		if serverInfo.Executable.GameVersion == types.VersionUnknown {
-			return fmt.Errorf(
-				"unknown minecraft version, cannot infer forge bootstrap artifact; see %s",
-				forgeDocsURL,
-			)
-		}
+		gameVersion = types.RawVersion(selectedVersion)
+	}
 
-		forgeVersion, err := fetchForgeVersion(serverInfo.Executable.GameVersion)
-		if err != nil {
-			return err
-		}
-		fileURL = resolveForgeInstallerURL(
-			serverInfo.Executable.GameVersion,
-			forgeVersion,
+	if gameVersion == types.VersionUnknown {
+		return fmt.Errorf(
+			"unknown minecraft version, cannot infer forge bootstrap artifact; see %s",
+			forgeDocsURL,
 		)
 	}
+
+	forgeVersion, err := fetchForgeVersion(gameVersion)
+	if err != nil {
+		return err
+	}
+	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
 	result, err := util.CachedDownload(fileURL, serverInfo.WorkPath, util.DownloadOptions{})
 	if err != nil {
