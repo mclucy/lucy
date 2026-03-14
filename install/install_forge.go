@@ -60,14 +60,16 @@ func guardServerTopologyForForgePlatform() error {
 }
 
 func promptSelectMinecraftVersionForForge() (version string) {
-	versions, err := fetchFabricGameVersions()
-	if err != nil || len(versions) == 0 {
+	manifest, err := fetchMojangVersionManifest()
+	if err != nil || len(manifest.Versions) == 0 {
 		return "error"
 	}
 
-	gameVersions := make([]string, len(versions))
-	for i, v := range versions {
-		gameVersions[i] = v.Version
+	gameVersions := make([]string, 0, 20)
+	for i := 0; i < len(manifest.Versions) && len(gameVersions) < 20; i++ {
+		if manifest.Versions[i].Type == "release" {
+			gameVersions = append(gameVersions, manifest.Versions[i].Id)
+		}
 	}
 
 	var installLatest bool
