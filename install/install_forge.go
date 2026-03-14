@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -121,6 +123,38 @@ func promptSelectMinecraftVersionForForge() (version string) {
 	return
 }
 
+func verifyForgeInstallation(workPath string) error {
+	// Check for modern Forge (1.17+): libraries/ dir + launch script
+	librariesPath := filepath.Join(workPath, "libraries")
+	if _, err := os.Stat(librariesPath); err == nil {
+		// libraries/ exists, check for launch scripts
+		launchScripts := []string{"run.sh", "run.bat", "unix_args.txt", "win_args.txt"}
+		for _, script := range launchScripts {
+			if _, err := os.Stat(filepath.Join(workPath, script)); err == nil {
+				return nil // Modern Forge verified
+			}
+		}
+	}
+
+	// Check for legacy Forge: forge-*-universal.jar or forge-*.jar
+	entries, err := os.ReadDir(workPath)
+	if err != nil {
+		return fmt.Errorf("verify forge installation failed: cannot read work directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.Contains(name, "forge-") && strings.HasSuffix(name, ".jar") {
+			return nil // Legacy Forge verified
+		}
+	}
+
+	return errors.New("forge installation verification failed: no artifacts found (expected libraries/ with launch scripts or forge-*.jar)")
+}
+
 func installForge(p types.PackageId) error {
 	if err := guardServerTopologyForForgePlatform(); err != nil {
 		return err
@@ -185,6 +219,10 @@ func installForge(p types.PackageId) error {
 	}
 
 	if err := runForgeInstaller(result.File.Name(), serverInfo.WorkPath); err != nil {
+		return err
+	}
+
+	if err := verifyForgeInstallation(serverInfo.WorkPath); err != nil {
 		return err
 	}
 
