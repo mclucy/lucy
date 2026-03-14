@@ -13,6 +13,7 @@ type (
 	setPercentMsg    float64
 	incrPercentMsg   float64
 	setMessageMsg    string
+	setTitleMsg      string
 	closeMsg         struct{}
 	completeMsg      string
 	bytesProgressMsg struct {
@@ -57,6 +58,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case setMessageMsg:
 		m.message = string(msg)
+		return m, nil
+
+	case setTitleMsg:
+		m.title = string(msg)
 		return m, nil
 
 	case closeMsg:

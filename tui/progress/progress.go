@@ -81,6 +81,13 @@ func (t *Tracker) SetMessage(msg string) {
 	}
 }
 
+// SetTitle updates the title shown at the top of the progress bar.
+func (t *Tracker) SetTitle(title string) {
+	if t.program != nil {
+		t.program.Send(setTitleMsg(title))
+	}
+}
+
 // Close completes the progress bar (jumps to 100 %) and exits the program.
 func (t *Tracker) Close() {
 	if t.program != nil {
