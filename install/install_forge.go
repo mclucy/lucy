@@ -1,10 +1,12 @@
 package install
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -303,16 +305,131 @@ func resolveForgeInstallerURL(
 	)
 }
 
+// forgeStage represents a phase of the Forge installation process.
+type forgeStage struct {
+	name  string
+	floor float64 // start of stage window [0, 1]
+	span  float64 // width of stage window [0, 1]
+}
+
+// forgeStages defines the ordered installation phases with hardcoded progress windows.
+// Based on observed Forge installer output patterns:
+// 0.00-0.08: Initialization (JVM info, directory setup)
+// 0.08-0.20: Extraction (main jar extraction)
+// 0.20-0.60: Libraries (bulk of work - downloading/validating dependencies)
+// 0.60-0.95: Processors (post-processing, server jar generation)
+// 0.95-1.00: Verification (final checks, reprobe)
+var forgeStages = []forgeStage{
+	{name: "init", floor: 0.00, span: 0.08},
+	{name: "extraction", floor: 0.08, span: 0.12},
+	{name: "libraries", floor: 0.20, span: 0.40},
+	{name: "processors", floor: 0.60, span: 0.35},
+	{name: "verification", floor: 0.95, span: 0.05},
+}
+
+// forgeLogTail holds a bounded buffer of recent installer output lines.
+type forgeLogTail struct {
+	lines []string
+	max   int
+}
+
+func newForgeLogTail(maxLines int) *forgeLogTail {
+	return &forgeLogTail{lines: make([]string, 0, maxLines), max: maxLines}
+}
+
+func (t *forgeLogTail) append(line string) {
+	t.lines = append(t.lines, line)
+	if len(t.lines) > t.max {
+		t.lines = t.lines[1:]
+	}
+}
+
+func (t *forgeLogTail) String() string {
+	return strings.Join(t.lines, "\n")
+}
+
+// classifyForgeLine maps a log line to a stage index and returns whether it's a strong marker.
+// Strong markers (true) advance the active stage; weak markers (false) only contribute to intra-stage progress.
+func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
+	lower := strings.ToLower(line)
+
+	// Init stage markers
+	if strings.Contains(lower, "jvm info") || strings.Contains(lower, "current time") || strings.Contains(lower, "target directory") {
+		return 0, true
+	}
+
+	// Extraction stage markers
+	if strings.Contains(lower, "extracting main jar") || strings.Contains(lower, "extracted successfully") {
+		return 1, true
+	}
+
+	// Libraries stage markers
+	if strings.Contains(lower, "considering library") {
+		return 2, false // weak marker, many per stage
+	}
+	if strings.Contains(lower, "downloading library") || strings.Contains(lower, "checksum validated") {
+		return 2, false
+	}
+
+	// Processors stage markers
+	if strings.Contains(lower, "building processor") || strings.Contains(lower, "mainclass") || strings.Contains(lower, "output") {
+		return 3, false
+	}
+
+	// Verification stage markers
+	if strings.Contains(lower, "successfully downloaded minecraft server") || strings.Contains(lower, "you can delete this installer") {
+		return 4, true
+	}
+
+	// Default: stay in current stage, weak marker
+	return -1, false
+}
+
+// forgeAsymptoticProgress computes intra-stage progress using an asymptotic function.
+// score: cumulative line count within the stage (0+)
+// floor, span: stage window boundaries
+// Returns a value in [floor, floor+span) that approaches floor+span asymptotically.
+func forgeAsymptoticProgress(score float64, floor, span float64) float64 {
+	const k = 0.1 // steepness of asymptotic curve
+	// progress = floor + span * (1 - exp(-k * score))
+	// As score → ∞, progress → floor + span
+	progress := floor + span*(1.0-math.Exp(-k*score))
+	// Clamp to stage window to prevent overshoot
+	if progress > floor+span {
+		progress = floor + span
+	}
+	return progress
+}
+
 func runForgeInstaller(installerPath string, workPath string) error {
 	cmd := exec.Command("java", "-jar", installerPath, "--installServer")
 	cmd.Dir = workPath
-	output, err := cmd.CombinedOutput()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		out := strings.TrimSpace(string(output))
-		if out == "" {
-			return fmt.Errorf("run forge installer failed: %w", err)
-		}
-		return fmt.Errorf("run forge installer failed: %w: %s", err, out)
+		return fmt.Errorf("create stdout pipe failed: %w", err)
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("create stderr pipe failed: %w", err)
+	}
+
+	merged := io.MultiReader(stdout, stderr)
+	scanner := bufio.NewScanner(merged)
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start installer failed: %w", err)
+	}
+
+	tail := newForgeLogTail(50)
+	for scanner.Scan() {
+		line := scanner.Text()
+		tail.append(line)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("run forge installer failed: %w\nRecent output:\n%s", err, tail.String())
+	}
+
 	return nil
 }
