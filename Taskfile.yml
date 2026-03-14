@@ -2,64 +2,102 @@
 
 version: "3"
 
-dotenv: [".env"]
+dotenv:
+  - ".env"
+
+vars:
+  RELEASE_LDFLAGS: "-w -s -X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$CF_API_KEY"
+  DEBUG_LDFLAGS: "-X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$CF_API_KEY"
 
 tasks:
   copyright-add:
     desc: Add missing copyright headers to Go files
     cmds:
       - ./copyright.sh add
+
   copyright-remove:
     desc: Remove copyright headers from Go files
     cmds:
       - ./copyright.sh remove
+
   cleanup-dist:
+    desc: Remove development build artifacts
     cmds:
       - rm -rf dist
+
   cleanup-release:
+    desc: Remove release build artifacts
     cmds:
       - rm -rf release
+
   cleanup-completions:
+    desc: Remove generated shell completion scripts
     cmds:
       - rm -rf completions
+
   warn-cf-api-key-length:
     desc: Warn when CF_API_KEY length is unexpected
     cmds:
       - '[ "${#CF_API_KEY}" -eq 60 ] || printf "[WARN] CF_API_KEY length is %s (expected 60)\n" "${#CF_API_KEY}"'
+
   build-release:
-    desc: Build the release for Windows, Linux, and macOS
-    deps: [cleanup-release, warn-cf-api-key-length]
+    desc: Build release binaries for Windows, Linux, and macOS
+    deps:
+      - cleanup-release
+      - warn-cf-api-key-length
     cmds:
-      - GOOS=linux GOARCH=amd64 go build -ldflags="-w -s -X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$CF_API_KEY" -tags release -o release/lucy-linux-amd64
-      - GOOS=windows GOARCH=amd64 go build -ldflags="-w -s -X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$CF_API_KEY" -tags release -o release/lucy-windows-amd64.exe
-      - GOOS=darwin GOARCH=amd64 go build -ldflags="-w -s -X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$CF_API_KEY" -tags release -o release/lucy-darwin-amd64
-      - GOOS=darwin GOARCH=arm64 go build -ldflags="-w -s -X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$CF_API_KEY" -tags release -o release/lucy-darwin-arm64
-    sources: [./**/*.go, go.mod, .go.sum]
+      - GOOS=linux GOARCH=amd64 go build -ldflags="{{.RELEASE_LDFLAGS}}" -tags release -o release/lucy-linux-amd64
+      - GOOS=windows GOARCH=amd64 go build -ldflags="{{.RELEASE_LDFLAGS}}" -tags release -o release/lucy-windows-amd64.exe
+      - GOOS=darwin GOARCH=amd64 go build -ldflags="{{.RELEASE_LDFLAGS}}" -tags release -o release/lucy-darwin-amd64
+      - GOOS=darwin GOARCH=arm64 go build -ldflags="{{.RELEASE_LDFLAGS}}" -tags release -o release/lucy-darwin-arm64
+    sources:
+      - "./**/*.go"
+      - "./go.mod"
+      - "./go.sum"
+
   build-dev:
-    desc: Build a binary for development purposes (on macOS)
-    deps: [cleanup-dist, warn-cf-api-key-length]
+    desc: Build a development binary for macOS
+    deps:
+      - cleanup-dist
+      - warn-cf-api-key-length
     cmds:
-      - GOOS=darwin GOARCH=arm64 go build -ldflags="-X github.com/mclucy/lucy/upstream/curseforge.ApiKey=$CF_API_KEY" -tags debug -o dist/lucy-darwin-arm64-dev
-    sources: [./**/*.go, ./go.mod, ./go.sum]
-    generates: [dist/lucy-darwin-arm64-dev]
+      - GOOS=darwin GOARCH=arm64 go build -ldflags="{{.DEBUG_LDFLAGS}}" -tags debug -o dist/lucy-darwin-arm64-dev
+    sources:
+      - "./**/*.go"
+      - "./go.mod"
+      - "./go.sum"
+    generates:
+      - dist/lucy-darwin-arm64-dev
     vars:
       INTERVAL: 1s
       DELAY: 500ms
+
   build-watch:
-    desc: Build a debug binary on file changes
-    deps: [build-dev]
+    desc: Rebuild the debug binary on Go file changes
+    deps:
+      - build-dev
     cmds:
       - task build-dev
     watch: true
-    sources: ["./**/*.go", "./go.mod", "./go.sum"]
+    sources:
+      - "./**/*.go"
+      - "./go.mod"
+      - "./go.sum"
+
   gen-completions:
-    desc: Generate auto-completion scripts for bash, zsh, and fish
-    deps: [cleanup-completions]
+    desc: Generate bash, zsh, and fish completion scripts
+    deps:
+      - cleanup-completions
     cmds:
       - mkdir -p completions
       - go run main.go completion bash > completions/lucy.sh
       - go run main.go completion zsh > completions/lucy.zsh
       - go run main.go completion fish > completions/lucy.fish
-    sources: [./main.go, ./go.mod, ./go.sum]
+    sources:
+      - ./main.go
+      - ./go.mod
+      - ./go.sum
     generates:
-      [completions/lucy.sh, completions/lucy.zsh, completions/lucy.fish]
+      - completions/lucy.sh
+      - completions/lucy.zsh
+      - completions/lucy.fish
