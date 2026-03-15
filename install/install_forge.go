@@ -235,6 +235,10 @@ func installForge(p types.PackageId) error {
 		return err
 	}
 
+	if result == nil {
+		return errors.New("download result is nil")
+	}
+
 	installerTracker := tuiprogress.NewTracker("Installing Forge")
 	installerErrCh := make(chan error, 1)
 	go func() {
@@ -474,6 +478,10 @@ func runForgeInstaller(installerPath string, workPath string, tracker *tuiprogre
 			progress := forgeAsymptoticProgress(stageScores[activeStageIdx], stage.floor, stage.span)
 			tracker.SetPercent(progress)
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read installer output failed: %w\nRecent output:\n%s", err, tail.String())
 	}
 
 	if err := cmd.Wait(); err != nil {
