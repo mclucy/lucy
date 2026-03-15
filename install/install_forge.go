@@ -477,11 +477,10 @@ func runForgeInstaller(installerPath string, workPath string, tracker *tuiprogre
 	}
 
 	if err := cmd.Wait(); err != nil {
-		errMsg := fmt.Sprintf("run forge installer failed: %w\nRecent output:\n%s", err, tail.String())
 		if failurePhrase != "" {
-			errMsg = fmt.Sprintf("run forge installer failed: %s\nRecent output:\n%s", failurePhrase, tail.String())
+			return fmt.Errorf("run forge installer failed: %s\nRecent output:\n%s", failurePhrase, tail.String())
 		}
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("run forge installer failed: %w\nRecent output:\n%s", err, tail.String())
 	}
 
 	return nil
