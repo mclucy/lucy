@@ -443,10 +443,23 @@ func runForgeInstaller(installerPath string, workPath string, tracker *tuiprogre
 	tail := newForgeLogTail(50)
 	activeStageIdx := 0
 	stageScores := make([]float64, len(forgeStages))
+	var failurePhrase string
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		tail.append(line)
+
+		// Detect explicit failure phrases
+		lower := strings.ToLower(line)
+		if failurePhrase == "" {
+			if strings.Contains(lower, "there was an error during installation") {
+				failurePhrase = "There was an error during installation"
+			} else if strings.Contains(lower, "processor failed") {
+				failurePhrase = "Processor failed"
+			} else if strings.Contains(lower, "missing jar for processor") {
+				failurePhrase = "Missing Jar for processor"
+			}
+		}
 
 		stageIdx, isStrong := classifyForgeLine(line)
 		if stageIdx >= 0 && stageIdx < len(forgeStages) {
@@ -464,7 +477,11 @@ func runForgeInstaller(installerPath string, workPath string, tracker *tuiprogre
 	}
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("run forge installer failed: %w\nRecent output:\n%s", err, tail.String())
+		errMsg := fmt.Sprintf("run forge installer failed: %w\nRecent output:\n%s", err, tail.String())
+		if failurePhrase != "" {
+			errMsg = fmt.Sprintf("run forge installer failed: %s\nRecent output:\n%s", failurePhrase, tail.String())
+		}
+		return fmt.Errorf(errMsg)
 	}
 
 	return nil
