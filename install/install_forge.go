@@ -235,15 +235,34 @@ func installForge(p types.PackageId) error {
 		return err
 	}
 
-	if err := runForgeInstaller(result.File.Name(), serverInfo.WorkPath); err != nil {
-		return err
-	}
+	installerTracker := tuiprogress.NewTracker("Installing Forge")
+	installerErrCh := make(chan error, 1)
+	go func() {
+		defer installerTracker.Close()
+		if err := runForgeInstaller(result.File.Name(), serverInfo.WorkPath, installerTracker); err != nil {
+			installerErrCh <- err
+			return
+		}
 
-	if err := verifyForgeInstallation(serverInfo.WorkPath); err != nil {
-		return err
-	}
+		installerTracker.SetPercent(0.95)
+		if err := verifyForgeInstallation(serverInfo.WorkPath); err != nil {
+			installerErrCh <- err
+			return
+		}
 
-	probe.Rebuild()
+		probe.Rebuild()
+		installerTracker.Complete("Forge installed")
+		installerErrCh <- nil
+	}()
+
+	instRunErr := installerTracker.Run()
+	instErr := <-installerErrCh
+	if instRunErr != nil {
+		logger.ShowError(fmt.Errorf("progress renderer failed: %w", instRunErr))
+	}
+	if instErr != nil {
+		return instErr
+	}
 
 	return nil
 }
@@ -401,7 +420,7 @@ func forgeAsymptoticProgress(score float64, floor, span float64) float64 {
 	return progress
 }
 
-func runForgeInstaller(installerPath string, workPath string) error {
+func runForgeInstaller(installerPath string, workPath string, tracker *tuiprogress.Tracker) error {
 	cmd := exec.Command("java", "-jar", installerPath, "--installServer")
 	cmd.Dir = workPath
 
@@ -422,9 +441,26 @@ func runForgeInstaller(installerPath string, workPath string) error {
 	}
 
 	tail := newForgeLogTail(50)
+	activeStageIdx := 0
+	stageScores := make([]float64, len(forgeStages))
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		tail.append(line)
+
+		stageIdx, isStrong := classifyForgeLine(line)
+		if stageIdx >= 0 && stageIdx < len(forgeStages) {
+			if isStrong && stageIdx > activeStageIdx {
+				activeStageIdx = stageIdx
+			}
+		}
+
+		if activeStageIdx < len(forgeStages) {
+			stageScores[activeStageIdx]++
+			stage := forgeStages[activeStageIdx]
+			progress := forgeAsymptoticProgress(stageScores[activeStageIdx], stage.floor, stage.span)
+			tracker.SetPercent(progress)
+		}
 	}
 
 	if err := cmd.Wait(); err != nil {
