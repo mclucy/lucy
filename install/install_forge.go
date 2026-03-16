@@ -16,7 +16,6 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
@@ -199,33 +198,21 @@ func installForge(p types.PackageId) error {
 	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
 	tracker := tuiprogress.NewTracker("forge")
+	defer tracker.Close()
 
-	var result *util.DownloadResult
-	errCh := make(chan error, 1)
-	go func() {
-		defer tracker.Close()
-		var err error
-		result, err = util.CachedDownload(
-			fileURL,
-			serverInfo.WorkPath,
-			util.DownloadOptions{
-				Kind:               cache.KindArtifact,
-				WrapReader:         tracker.ProxyReader,
-				OnCacheHit:         tracker.CacheHit,
-				OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
-				FileMode:           0o750,
-			},
-		)
-		errCh <- err
-	}()
-
-	runErr := tracker.Run()
-	dlErr := <-errCh
-	if runErr != nil {
-		logger.ShowError(fmt.Errorf("progress renderer failed: %w", runErr))
-	}
-	if dlErr != nil {
-		return fmt.Errorf("download failed: %w", dlErr)
+	result, err := util.CachedDownload(
+		fileURL,
+		serverInfo.WorkPath,
+		util.DownloadOptions{
+			Kind:               cache.KindArtifact,
+			WrapReader:         tracker.ProxyReader,
+			OnCacheHit:         tracker.CacheHit,
+			OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
+			FileMode:           0o750,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
 	}
 
 	if result != nil {
@@ -241,33 +228,19 @@ func installForge(p types.PackageId) error {
 	}
 
 	installerTracker := tuiprogress.NewTracker("Installing Forge")
-	installerErrCh := make(chan error, 1)
-	go func() {
-		defer installerTracker.Close()
-		if err := runForgeInstaller(result.File.Name(), serverInfo.WorkPath, installerTracker); err != nil {
-			installerErrCh <- err
-			return
-		}
+	defer installerTracker.Close()
 
-		installerTracker.SetPercent(0.95)
-		if err := verifyForgeInstallation(serverInfo.WorkPath); err != nil {
-			installerErrCh <- err
-			return
-		}
-
-		probe.Rebuild()
-		installerTracker.Complete("Forge installed")
-		installerErrCh <- nil
-	}()
-
-	instRunErr := installerTracker.Run()
-	instErr := <-installerErrCh
-	if instRunErr != nil {
-		logger.ShowError(fmt.Errorf("progress renderer failed: %w", instRunErr))
+	if err := runForgeInstaller(result.File.Name(), serverInfo.WorkPath, installerTracker); err != nil {
+		return err
 	}
-	if instErr != nil {
-		return instErr
+
+	installerTracker.SetPercent(0.95)
+	if err := verifyForgeInstallation(serverInfo.WorkPath); err != nil {
+		return err
 	}
+
+	probe.Rebuild()
+	installerTracker.Complete("Forge installed")
 
 	return nil
 }

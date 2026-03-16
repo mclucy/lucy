@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
@@ -164,37 +163,25 @@ func downloadMinecraftServerJar(
 	dir string,
 ) (*os.File, error) {
 	tracker := tuiprogress.NewTracker("Downloading server")
+	defer tracker.Close()
 
-	var result *util.DownloadResult
-	errCh := make(chan error, 1)
-	go func() {
-		defer tracker.Close()
-		var err error
-		result, err = util.CachedDownload(
-			url, dir, util.DownloadOptions{
-				Kind:          cache.KindArtifact,
-				ExpectedHash:  expectedSha1,
-				HashAlgorithm: cache.HashSHA1,
-				WrapReader:    tracker.ProxyReader,
-				OnResolvedFilename: func(name string) {
-					tracker.SetTitle(name)
-				},
-				OnCacheHit: func() {
-					tracker.Complete("cache hit")
-					time.Sleep(500 * time.Millisecond)
-				},
+	result, err := util.CachedDownload(
+		url, dir, util.DownloadOptions{
+			Kind:          cache.KindArtifact,
+			ExpectedHash:  expectedSha1,
+			HashAlgorithm: cache.HashSHA1,
+			WrapReader:    tracker.ProxyReader,
+			OnResolvedFilename: func(name string) {
+				tracker.SetTitle(name)
 			},
-		)
-		errCh <- err
-	}()
-
-	runErr := tracker.Run()
-	dlErr := <-errCh
-	if runErr != nil {
-		logger.ShowError(fmt.Errorf("progress renderer failed: %w", runErr))
-	}
-	if dlErr != nil {
-		return nil, dlErr
+			OnCacheHit: func() {
+				tracker.Complete("cache hit")
+				time.Sleep(500 * time.Millisecond)
+			},
+		},
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	return result.File, nil

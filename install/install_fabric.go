@@ -70,6 +70,8 @@ func installFabricWithOverride(p types.PackageId, deleteVanilla bool) error {
 	)
 
 	tracker := progress.NewTracker("fabric")
+	defer tracker.Close()
+
 	result, err := util.CachedDownload(
 		artifactUrl,
 		serverInfo.WorkPath,
