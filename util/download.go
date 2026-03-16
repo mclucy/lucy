@@ -27,6 +27,7 @@ type DownloadOptions struct {
 	OnCacheHit         func()
 	OnResolvedFilename func(string)
 	TTL                time.Duration
+	FileMode           os.FileMode
 }
 
 type BytesRequestOptions struct {
@@ -52,6 +53,9 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	*DownloadResult,
 	error,
 ) {
+	if opts.FileMode == 0 {
+		opts.FileMode = 0o640
+	}
 	hit, cachedFile, err := cache.Network().Get(url)
 	if err != nil {
 		logger.Warn(
@@ -71,7 +75,7 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 			opts.OnCacheHit()
 		}
 		destPath := path.Join(dir, resolvedName)
-		destFile, err := tools.CopyFile(cachedFile, destPath)
+		destFile, err := tools.CopyFile(cachedFile, destPath, opts.FileMode)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to copy cached file to destination: %w",
@@ -237,7 +241,7 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 	}
 	defer src.Close()
 
-	destFile, err := tools.CopyFile(src, destPath)
+	destFile, err := tools.CopyFile(src, destPath, opts.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write file to destination: %w", err)
 	}
