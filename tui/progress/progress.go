@@ -13,93 +13,56 @@
 //	    reader := t.ProxyReader(resp.Body, resp.ContentLength)
 //	    io.Copy(dst, reader)
 //	}()
-//	if err := t.Run(); err != nil { ... }
 package progress
 
 import (
-	"errors"
 	"io"
-	"os"
-
-	"charm.land/bubbles/v2/progress"
-	tea "charm.land/bubbletea/v2"
 )
 
 // Tracker is a thread-safe progress bar controller.
 //
-// A Tracker is created with [NewTracker] and started with [Tracker.Run].
+// A Tracker is created with [NewTracker] and automatically starts displaying.
 // External goroutines update progress via [Tracker.SetPercent],
 // [Tracker.IncrPercent], and [Tracker.SetMessage].
 // Call [Tracker.Close] to finish and exit the progress bar.
 type Tracker struct {
-	title   string
-	program *tea.Program
+	id entryID
 }
 
-// NewTracker creates a [Tracker] with the given title.
-// Call [Tracker.Run] to display it.
+// NewTracker creates a [Tracker] with the given title and starts displaying it.
 func NewTracker(title string) *Tracker {
-	return &Tracker{title: title}
-}
-
-// Run starts the progress bar and blocks until [Tracker.Close] is called
-// or the user presses Ctrl+C.
-func (t *Tracker) Run() error {
-	options := append(defaultOptions, resolveColorOptions()...)
-	bar := progress.New(options...)
-	m := model{
-		bar:   bar,
-		title: t.title,
-	}
-
-	t.program = tea.NewProgram(m)
-	_, err := t.program.Run()
-	if errors.Is(err, tea.ErrInterrupted) {
-		os.Exit(130)
-	}
-	return err
+	id := globalRuntime.registerEntry(title)
+	return &Tracker{id: id}
 }
 
 // SetPercent sets the current progress to p (clamped to [0, 1]).
 func (t *Tracker) SetPercent(p float64) {
-	if t.program != nil {
-		t.program.Send(setPercentMsg(clamp01(p)))
-	}
+	globalRuntime.send(t.id, setPercentMsg(clamp01(p)))
 }
 
 // IncrPercent adds delta to the current progress.
 func (t *Tracker) IncrPercent(delta float64) {
-	if t.program != nil {
-		t.program.Send(incrPercentMsg(delta))
-	}
+	globalRuntime.send(t.id, incrPercentMsg(delta))
 }
 
 // SetMessage updates the status text shown alongside the bar.
 func (t *Tracker) SetMessage(msg string) {
-	if t.program != nil {
-		t.program.Send(setMessageMsg(msg))
-	}
+	globalRuntime.send(t.id, setMessageMsg(msg))
 }
 
 // SetTitle updates the title shown at the top of the progress bar.
 func (t *Tracker) SetTitle(title string) {
-	if t.program != nil {
-		t.program.Send(setTitleMsg(title))
-	}
+	globalRuntime.send(t.id, setTitleMsg(title))
 }
 
 // Close completes the progress bar (jumps to 100 %) and exits the program.
 func (t *Tracker) Close() {
-	if t.program != nil {
-		t.program.Send(closeMsg{})
-	}
+	globalRuntime.send(t.id, closeMsg{})
 }
 
 // Complete is similar to Close but with visual feedback
 func (t *Tracker) Complete(msg string) {
-	if t.program != nil {
-		t.program.Send(completeMsg(msg))
-	}
+	globalRuntime.send(t.id, completeMsg(msg))
 }
 
 func (t *Tracker) CacheHit() {
@@ -116,7 +79,5 @@ func (t *Tracker) ProxyReader(r io.Reader, total int64) io.Reader {
 // setBytesProgress is an internal method used by proxyReader to send
 // byte-level progress updates to the model.
 func (t *Tracker) setBytesProgress(read, total int64) {
-	if t.program != nil {
-		t.program.Send(bytesProgressMsg{read: read, total: total})
-	}
+	globalRuntime.send(t.id, bytesProgressMsg{read: read, total: total})
 }
