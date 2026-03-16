@@ -11,8 +11,8 @@ func MoveFile(src *os.File, dest string) (err error) {
 	return
 }
 
-func CopyFile(src *os.File, dest string) (file *os.File, err error) {
-	destFile, err := os.Create(dest)
+func CopyFile(src *os.File, dest string, mode os.FileMode) (file *os.File, err error) {
+	destFile, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return nil, err
 	}
