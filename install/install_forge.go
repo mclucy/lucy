@@ -213,6 +213,7 @@ func installForge(p types.PackageId) error {
 				WrapReader:         tracker.ProxyReader,
 				OnCacheHit:         tracker.CacheHit,
 				OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
+				FileMode:           0o750,
 			},
 		)
 		errCh <- err
