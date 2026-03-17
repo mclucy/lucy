@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"github.com/mclucy/lucy/tools"
+	"golang.org/x/term"
 )
 
 type entryID int
@@ -80,14 +81,19 @@ func (m runtimeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entry.message = string(payload)
 			options := append(defaultOptions, resolveCompleteColorOptions()...)
 			entry.bar = progress.New(options...)
-			cmd = tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg {
-				return entryMsg{id: msg.id, payload: closeMsg{}}
-			})
+			cmd = tea.Tick(
+				500*time.Millisecond, func(time.Time) tea.Msg {
+					return entryMsg{id: msg.id, payload: closeMsg{}}
+				},
+			)
 		case closeMsg:
 			delete(m.runtime.entries, msg.id)
 			for i, id := range m.runtime.entryOrder {
 				if id == msg.id {
-					m.runtime.entryOrder = append(m.runtime.entryOrder[:i], m.runtime.entryOrder[i+1:]...)
+					m.runtime.entryOrder = append(
+						m.runtime.entryOrder[:i],
+						m.runtime.entryOrder[i+1:]...,
+					)
 					break
 				}
 			}
@@ -153,7 +159,13 @@ var globalRuntime = &progressRuntime{
 	entries: make(map[entryID]*entryState),
 }
 
+var isTerminal = term.IsTerminal(int(os.Stdout.Fd()))
+
 func (r *progressRuntime) registerEntry(title string) entryID {
+	if !isTerminal {
+		return 0
+	}
+	
 	id := entryID(r.nextID.Add(1))
 
 	r.mu.Lock()
