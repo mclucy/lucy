@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -22,7 +23,10 @@ import (
 	"github.com/mclucy/lucy/util"
 )
 
-func getForgeVersionFromPackageId(p types.PackageId, gameVersion types.RawVersion) (string, error) {
+func getForgeVersionFromPackageId(
+	p types.PackageId,
+	gameVersion types.RawVersion,
+) (string, error) {
 	if p.Version != types.VersionLatest && p.Version != types.VersionCompatible && p.Version != types.VersionAny && p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
 	}
@@ -130,7 +134,9 @@ func verifyForgeInstallation(workPath string) error {
 	librariesPath := filepath.Join(workPath, "libraries")
 	if _, err := os.Stat(librariesPath); err == nil {
 		// libraries/ exists, check for launch scripts
-		launchScripts := []string{"run.sh", "run.bat", "unix_args.txt", "win_args.txt"}
+		launchScripts := []string{
+			"run.sh", "run.bat", "unix_args.txt", "win_args.txt",
+		}
 		for _, script := range launchScripts {
 			if _, err := os.Stat(filepath.Join(workPath, script)); err == nil {
 				return nil // Modern Forge verified
@@ -141,7 +147,10 @@ func verifyForgeInstallation(workPath string) error {
 	// Check for legacy Forge: forge-*-universal.jar or forge-*.jar
 	entries, err := os.ReadDir(workPath)
 	if err != nil {
-		return fmt.Errorf("verify forge installation failed: cannot read work directory: %w", err)
+		return fmt.Errorf(
+			"verify forge installation failed: cannot read work directory: %w",
+			err,
+		)
 	}
 
 	for _, entry := range entries {
@@ -352,12 +361,18 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 	lower := strings.ToLower(line)
 
 	// Init stage markers
-	if strings.Contains(lower, "jvm info") || strings.Contains(lower, "current time") || strings.Contains(lower, "target directory") {
+	if strings.Contains(lower, "jvm info") || strings.Contains(
+		lower,
+		"current time",
+	) || strings.Contains(lower, "target directory") {
 		return 0, true
 	}
 
 	// Extraction stage markers
-	if strings.Contains(lower, "extracting main jar") || strings.Contains(lower, "extracted successfully") {
+	if strings.Contains(lower, "extracting main jar") || strings.Contains(
+		lower,
+		"extracted successfully",
+	) {
 		return 1, true
 	}
 
@@ -365,17 +380,26 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 	if strings.Contains(lower, "considering library") {
 		return 2, false // weak marker, many per stage
 	}
-	if strings.Contains(lower, "downloading library") || strings.Contains(lower, "checksum validated") {
+	if strings.Contains(lower, "downloading library") || strings.Contains(
+		lower,
+		"checksum validated",
+	) {
 		return 2, false
 	}
 
 	// Processors stage markers
-	if strings.Contains(lower, "building processor") || strings.Contains(lower, "mainclass") || strings.Contains(lower, "output") {
+	if strings.Contains(lower, "building processor") || strings.Contains(
+		lower,
+		"mainclass",
+	) || strings.Contains(lower, "output") {
 		return 3, false
 	}
 
 	// Verification stage markers
-	if strings.Contains(lower, "successfully downloaded minecraft server") || strings.Contains(lower, "you can delete this installer") {
+	if strings.Contains(
+		lower,
+		"successfully downloaded minecraft server",
+	) || strings.Contains(lower, "you can delete this installer") {
 		return 4, true
 	}
 
@@ -399,8 +423,6 @@ func forgeAsymptoticProgress(score float64, floor, span float64) float64 {
 	return progress
 }
 
-func runForgeInstaller(installerPath string, workPath string, tracker *tuiprogress.Tracker) error {
-	cmd := exec.Command("java", "-jar", installerPath, "--installServer")
 func runForgeInstaller(
 	installerPath string,
 	tracker *tuiprogress.Tracker,
@@ -437,7 +459,10 @@ func runForgeInstaller(
 		// Detect explicit failure phrases
 		lower := strings.ToLower(line)
 		if failurePhrase == "" {
-			if strings.Contains(lower, "there was an error during installation") {
+			if strings.Contains(
+				lower,
+				"there was an error during installation",
+			) {
 				failurePhrase = "There was an error during installation"
 			} else if strings.Contains(lower, "processor failed") {
 				failurePhrase = "Processor failed"
@@ -456,20 +481,36 @@ func runForgeInstaller(
 		if activeStageIdx < len(forgeStages) {
 			stageScores[activeStageIdx]++
 			stage := forgeStages[activeStageIdx]
-			progress := forgeAsymptoticProgress(stageScores[activeStageIdx], stage.floor, stage.span)
+			progress := forgeAsymptoticProgress(
+				stageScores[activeStageIdx],
+				stage.floor,
+				stage.span,
+			)
 			tracker.SetPercent(progress)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read installer output failed: %w\nRecent output:\n%s", err, tail.String())
+		return fmt.Errorf(
+			"read installer output failed: %w\nRecent output:\n%s",
+			err,
+			tail.String(),
+		)
 	}
 
 	if err := cmd.Wait(); err != nil {
 		if failurePhrase != "" {
-			return fmt.Errorf("run forge installer failed: %s\nRecent output:\n%s", failurePhrase, tail.String())
+			return fmt.Errorf(
+				"run forge installer failed: %s\nRecent output:\n%s",
+				failurePhrase,
+				tail.String(),
+			)
 		}
-		return fmt.Errorf("run forge installer failed: %w\nRecent output:\n%s", err, tail.String())
+		return fmt.Errorf(
+			"run forge installer failed: %w\nRecent output:\n%s",
+			err,
+			tail.String(),
+		)
 	}
 
 	return nil

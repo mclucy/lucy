@@ -142,12 +142,12 @@ func (p PackageId) String() string {
 		p.Platform == PlatformAny,
 		"", string(p.Platform)+"/",
 	) +
-	string(p.Name) +
-	tools.Ternary(
-		p.Version == VersionAny,
-		"",
-		"@"+string(p.Version),
-	)
+		string(p.Name) +
+		tools.Ternary(
+			p.Version == VersionAny,
+			"",
+			"@"+string(p.Version),
+		)
 }
 
 func (p PackageId) StringFull() string {

@@ -165,7 +165,7 @@ func (r *progressRuntime) registerEntry(title string) entryID {
 	if !isTerminal {
 		return 0
 	}
-	
+
 	id := entryID(r.nextID.Add(1))
 
 	r.mu.Lock()
