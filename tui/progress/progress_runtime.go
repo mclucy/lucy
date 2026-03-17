@@ -31,13 +31,18 @@ type entryMsg struct {
 	payload tea.Msg
 }
 
-type runtimeModel struct {
-	runtime *progressRuntime
+type runtime struct {
+	program    *tea.Program
+	entries    map[entryID]*entryState
+	entryOrder []entryID
+	mu         sync.Mutex
+	running    bool
+	nextID     atomic.Int32
 }
 
-func (m runtimeModel) Init() tea.Cmd { return nil }
+func (m *runtime) Init() tea.Cmd { return nil }
 
-func (m runtimeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
@@ -45,18 +50,18 @@ func (m runtimeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		m.runtime.mu.Lock()
+		m.mu.Lock()
 		width := defaultBarWidth(msg.Width)
-		for _, entry := range m.runtime.entries {
+		for _, entry := range m.entries {
 			entry.bar.SetWidth(width)
 		}
-		m.runtime.mu.Unlock()
+		m.mu.Unlock()
 
 	case entryMsg:
-		m.runtime.mu.Lock()
-		entry, ok := m.runtime.entries[msg.id]
+		m.mu.Lock()
+		entry, ok := m.entries[msg.id]
 		if !ok {
-			m.runtime.mu.Unlock()
+			m.mu.Unlock()
 			return m, nil
 		}
 
@@ -87,35 +92,35 @@ func (m runtimeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				},
 			)
 		case closeMsg:
-			delete(m.runtime.entries, msg.id)
-			for i, id := range m.runtime.entryOrder {
+			delete(m.entries, msg.id)
+			for i, id := range m.entryOrder {
 				if id == msg.id {
-					m.runtime.entryOrder = append(
-						m.runtime.entryOrder[:i],
-						m.runtime.entryOrder[i+1:]...,
+					m.entryOrder = append(
+						m.entryOrder[:i],
+						m.entryOrder[i+1:]...,
 					)
 					break
 				}
 			}
-			if len(m.runtime.entries) == 0 {
-				m.runtime.mu.Unlock()
+			if len(m.entries) == 0 {
+				m.mu.Unlock()
 				return m, tea.Quit
 			}
 		}
-		m.runtime.mu.Unlock()
+		m.mu.Unlock()
 		return m, cmd
 	}
 	return m, nil
 }
 
-func (m runtimeModel) View() tea.View {
-	m.runtime.mu.Lock()
-	defer m.runtime.mu.Unlock()
+func (m *runtime) View() tea.View {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	var lines []string
-	for i := len(m.runtime.entryOrder) - 1; i >= 0; i-- {
-		id := m.runtime.entryOrder[i]
-		entry, ok := m.runtime.entries[id]
+	for i := len(m.entryOrder) - 1; i >= 0; i-- {
+		id := m.entryOrder[i]
+		entry, ok := m.entries[id]
 		if !ok {
 			continue
 		}
@@ -146,22 +151,13 @@ func (m runtimeModel) View() tea.View {
 	return tea.NewView(strings.Join(lines, "\n"))
 }
 
-type progressRuntime struct {
-	program    *tea.Program
-	entries    map[entryID]*entryState
-	entryOrder []entryID
-	mu         sync.Mutex
-	running    bool
-	nextID     atomic.Int32
-}
-
-var globalRuntime = &progressRuntime{
+var globalRuntime = &runtime{
 	entries: make(map[entryID]*entryState),
 }
 
 var isTerminal = term.IsTerminal(int(os.Stdout.Fd()))
 
-func (r *progressRuntime) registerEntry(title string) entryID {
+func (r *runtime) registerEntry(title string) entryID {
 	if !isTerminal {
 		return 0
 	}
@@ -185,15 +181,14 @@ func (r *progressRuntime) registerEntry(title string) entryID {
 	return id
 }
 
-func (r *progressRuntime) start() {
+func (r *runtime) start() {
 	r.mu.Lock()
 	if r.running {
 		r.mu.Unlock()
 		return
 	}
 	r.running = true
-	model := runtimeModel{runtime: r}
-	r.program = tea.NewProgram(model)
+	r.program = tea.NewProgram(r)
 	r.mu.Unlock()
 
 	go func() {
@@ -208,7 +203,7 @@ func (r *progressRuntime) start() {
 	}()
 }
 
-func (r *progressRuntime) send(id entryID, msg tea.Msg) {
+func (r *runtime) send(id entryID, msg tea.Msg) {
 	r.mu.Lock()
 	running := r.running
 	program := r.program
