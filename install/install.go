@@ -127,9 +127,9 @@ func installPlatform(id types.PackageId) error {
 
 	switch id.IdentityToPlatform() {
 	case types.PlatformMinecraft:
-		if serverPlatform.Valid() {
+		if serverPlatform != types.PlatformNone {
 			// TODO: ask if overwrite existing server
-			return errors.New("minecraft already installed")
+			return errors.New("a server is already installed")
 		}
 		return installMinecraftServer(id)
 	case types.PlatformForge:
@@ -156,7 +156,10 @@ func installPlatform(id types.PackageId) error {
 			return installFabricWithOverride(id, deleteVanilla)
 		case types.PlatformNone:
 		default:
-			return fmt.Errorf("unsupported server platform %s for fabric installation", serverPlatform.Title())
+			return fmt.Errorf(
+				"unsupported server platform %s for fabric installation",
+				serverPlatform.Title(),
+			)
 		}
 		return installFabric(id)
 	case types.PlatformNeoforge:
@@ -223,7 +226,10 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 				result.RiskLevel,
 			)
 		case types.CompatUnresolved:
-			return fmt.Errorf("topology unresolved for %s: cannot determine server compatibility", platform.Title())
+			return fmt.Errorf(
+				"topology unresolved for %s: cannot determine server compatibility",
+				platform.Title(),
+			)
 		case types.CompatIncompatible:
 			return fmt.Errorf(
 				"%s server not found (reason: %s, verdict: %s, risk_level: %d)",
