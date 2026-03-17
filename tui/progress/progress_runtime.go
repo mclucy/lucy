@@ -198,8 +198,11 @@ func (r *progressRuntime) start() {
 
 func (r *progressRuntime) send(id entryID, msg tea.Msg) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.running && r.program != nil {
-		r.program.Send(entryMsg{id: id, payload: msg})
+	running := r.running
+	program := r.program
+	r.mu.Unlock()
+
+	if running && program != nil {
+		program.Send(entryMsg{id: id, payload: msg})
 	}
 }
