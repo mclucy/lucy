@@ -230,7 +230,8 @@ func installForge(p types.PackageId) error {
 	installerTracker := tuiprogress.NewTracker("Installing Forge")
 	defer installerTracker.Close()
 
-	if err := runForgeInstaller(result.File.Name(), serverInfo.WorkPath, installerTracker); err != nil {
+	installerPath := result.File.Name()
+	if err := runForgeInstaller(installerPath, installerTracker); err != nil {
 		return err
 	}
 
@@ -400,7 +401,13 @@ func forgeAsymptoticProgress(score float64, floor, span float64) float64 {
 
 func runForgeInstaller(installerPath string, workPath string, tracker *tuiprogress.Tracker) error {
 	cmd := exec.Command("java", "-jar", installerPath, "--installServer")
-	cmd.Dir = workPath
+func runForgeInstaller(
+	installerPath string,
+	tracker *tuiprogress.Tracker,
+) error {
+	installerName := path.Base(installerPath)
+	cmd := exec.Command("java", "-jar", installerName, "--installServer")
+	cmd.Dir = path.Dir(installerPath)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
