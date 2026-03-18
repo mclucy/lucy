@@ -6,12 +6,11 @@ import (
 	"github.com/mclucy/lucy/tools"
 )
 
-var defaultOptions []progress.Option
+var globalOptions []progress.Option
 
 func init() {
-	defaultOptions = []progress.Option{
+	globalOptions = []progress.Option{
 		progress.WithFillCharacters('█', '░'),
-		progress.WithWidth(defaultBarWidth(0)),
 	}
 }
 

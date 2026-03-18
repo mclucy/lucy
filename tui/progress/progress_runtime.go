@@ -75,9 +75,10 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.mu.Lock()
-		width := defaultBarWidth(msg.Width)
+		width := getTrackerWidth(msg.Width)
 		for _, entry := range m.entries {
-			entry.bar.SetWidth(width)
+			titleWidth := len(entry.title) + 2
+			entry.bar.SetWidth(width - titleWidth)
 		}
 		m.mu.Unlock()
 
@@ -119,7 +120,7 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entry.percent = 1.0
 			entry.message = string(payload)
 			entry.completed = true
-			options := append(defaultOptions, resolveCompleteColorOptions()...)
+			options := append(globalOptions, resolveCompleteColorOptions()...)
 			entry.bar = progress.New(options...)
 			if m.allCompleted() {
 				m.mu.Unlock()
@@ -216,9 +217,13 @@ func (r *runtime) registerEntry(title string, logCapacity int) entryID {
 	}
 
 	id := entryID(r.nextID.Add(1))
-
+	width := getTrackerWidth(0)
+	titleWidth := len(title) + 2
+	barWidth := width - titleWidth
+	widthOption := progress.WithWidth(barWidth)
+	options := append(globalOptions, resolveColorOptions()...)
+	options = append(options, widthOption)
 	r.mu.Lock()
-	options := append(defaultOptions, resolveColorOptions()...)
 	r.entries[id] = &entryState{
 		title:  title,
 		bar:    progress.New(options...),
