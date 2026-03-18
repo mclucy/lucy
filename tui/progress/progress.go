@@ -27,6 +27,7 @@
 package progress
 
 import (
+	"context"
 	"io"
 )
 
@@ -119,4 +120,11 @@ func (t *Tracker) setBytesProgress(read, total int64) {
 // runtime. The runtime handles newline splitting and partial-line buffering.
 func (t *Tracker) appendLog(data string) {
 	globalRuntime.send(t.id, appendLogMsg(data))
+}
+
+// WaitForShutdown blocks until the progress runtime completes teardown or ctx expires.
+// Returns nil if runtime completes successfully, ctx.Err() on timeout/cancellation.
+// Returns immediately if runtime is not active.
+func WaitForShutdown(ctx context.Context) error {
+	return globalRuntime.waitForShutdown(ctx)
 }

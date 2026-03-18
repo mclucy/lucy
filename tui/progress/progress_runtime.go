@@ -20,6 +20,7 @@
 package progress
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -247,10 +248,12 @@ func (r *runtime) start() {
 		return
 	}
 	r.running = true
+	r.done = make(chan struct{})
 	r.program = tea.NewProgram(r)
 	r.mu.Unlock()
 
 	go func() {
+		defer close(r.done)
 		_, err := r.program.Run()
 		if errors.Is(err, tea.ErrInterrupted) {
 			os.Exit(130)
@@ -274,5 +277,22 @@ func (r *runtime) send(id entryID, msg tea.Msg) {
 
 	if running && program != nil {
 		program.Send(entryMsg{id: id, payload: msg})
+	}
+}
+
+func (r *runtime) waitForShutdown(ctx context.Context) error {
+	r.mu.Lock()
+	done := r.done
+	r.mu.Unlock()
+
+	if done == nil {
+		return nil
+	}
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
