@@ -229,6 +229,7 @@ func installForge(p types.PackageId) error {
 	if err != nil {
 		return err
 	}
+	p.Version = types.RawVersion(forgeVersion)
 
 	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
