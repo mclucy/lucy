@@ -234,11 +234,6 @@ func installForge(p types.PackageId) error {
 	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
 	tracker := tuiprogress.NewTracker("forge")
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = tuiprogress.WaitForShutdown(ctx)
-	}()
 	defer tracker.Close()
 
 	result, err := util.CachedDownload(
