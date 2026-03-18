@@ -204,7 +204,6 @@ func ensureMinecraftEULAAccepted(workPath string) error {
 		),
 	)
 	err := form.Run()
-
 	if err != nil {
 		return fmt.Errorf(
 			"unable to confirm EULA acceptance interactively after reviewing %s: %w",

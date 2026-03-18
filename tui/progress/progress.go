@@ -47,8 +47,8 @@ func NewTracker(title string) *Tracker {
 	return newTracker(title, 5)
 }
 
-// NewTrackerWithLogLimit creates a [Tracker] with custom log line capacity.
-func NewTrackerWithLogLimit(title string, logLimit int) *Tracker {
+// NewTrackerWithLogging creates a [Tracker] with custom log line capacity.
+func NewTrackerWithLogging(title string, logLimit int) *Tracker {
 	return newTracker(title, logLimit)
 }
 

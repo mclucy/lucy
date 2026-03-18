@@ -223,6 +223,7 @@ func installForge(p types.PackageId) error {
 	promptSupportForgeProject()
 
 	forgeVersion, err := getForgeVersionFromPackageId(p, gameVersion)
+	p.Version = types.RawVersion(forgeVersion)
 	if err != nil {
 		return err
 	}
@@ -255,7 +256,8 @@ func installForge(p types.PackageId) error {
 		return errors.New("download result is nil")
 	}
 
-	installerTracker := tuiprogress.NewTrackerWithLogLimit(p.StringFull(), 5)
+	p.NormalizeIdentityPackage()
+	installerTracker := tuiprogress.NewTrackerWithLogging(p.StringFull(), 5)
 	defer installerTracker.Close()
 
 	installerPath := result.File.Name()
