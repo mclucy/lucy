@@ -236,7 +236,7 @@ func installForge(p types.PackageId) error {
 		return errors.New("download result is nil")
 	}
 
-	installerTracker := tuiprogress.NewTracker("Installing Forge")
+	installerTracker := tuiprogress.NewTrackerWithLogLimit("Installing Forge", 5)
 	defer installerTracker.Close()
 
 	installerPath := result.File.Name()
@@ -447,6 +447,7 @@ func runForgeInstaller(
 		return fmt.Errorf("start installer failed: %w", err)
 	}
 
+	logWriter := tracker.LogWriter()
 	tail := newForgeLogTail(50)
 	activeStageIdx := 0
 	stageScores := make([]float64, len(forgeStages))
@@ -454,6 +455,7 @@ func runForgeInstaller(
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		fmt.Fprintln(logWriter, line)
 		tail.append(line)
 
 		// Detect explicit failure phrases
