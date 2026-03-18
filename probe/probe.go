@@ -250,7 +250,7 @@ func buildServerProperties() exttype.FileMinecraftServerProperties {
 	propertiesPath := path.Join(workPath(), "server.properties")
 	file, err := ini.Load(propertiesPath)
 	if err != nil {
-		if exec != UnknownExecutable {
+		if exec != types.UnknownExecutable {
 			logger.Warn(errors.New("this server is missing a server.properties"))
 		}
 		return nil

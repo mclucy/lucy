@@ -11,27 +11,6 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-var UnknownExecutable = &types.ExecutableInfo{
-	Path:        "",
-	GameVersion: types.VersionUnknown,
-	BootCommand: nil,
-	Topology: &types.RuntimeTopology{
-		Nodes: []types.RuntimeNode{
-			{
-				ID:   "unknown",
-				Role: types.RuntimeRoleUnknown,
-			},
-		},
-	},
-}
-
-var NoExecutable = &types.ExecutableInfo{
-	Path:        "",
-	GameVersion: types.VersionNone,
-	BootCommand: nil,
-	Topology:    &types.RuntimeTopology{},
-}
-
 // Executable analyzes a JAR file using all registered detectors
 // and returns the first successful match (in registration order).
 // If multiple detectors match, callers should handle ambiguity separately.
@@ -80,13 +59,13 @@ func Executable(filePath string) *types.ExecutableInfo {
 	}
 
 	if len(candidates) == 0 {
-		return NoExecutable
+		return types.NoExecutable
 	}
 
 	if len(candidates) > 1 {
 		// TODO: Modify this by need to handle multiple matches better
 		logger.Warn(fmt.Errorf("multiple executable detectors matched; marking as unknown"))
-		return UnknownExecutable
+		return types.UnknownExecutable
 	}
 
 	return candidates[0]

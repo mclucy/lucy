@@ -112,6 +112,15 @@ type RuntimeTopology struct {
 	Edges       []RuntimeEdge `json:"edges"`
 }
 
+var (
+	TopologyEmpty   = &RuntimeTopology{}
+	TopologyUnknown = &RuntimeTopology{
+		PrimaryNode: "unknown",
+		Nodes:       []RuntimeNode{{ID: "unknown", Role: RuntimeRoleUnknown}},
+		Edges:       nil,
+	}
+)
+
 func (t *RuntimeTopology) Resolved() bool {
 	return t != nil && t.PrimaryNode != RuntimeNodeUnknown && len(t.Nodes) > 0
 }

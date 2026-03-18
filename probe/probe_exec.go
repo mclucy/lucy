@@ -17,11 +17,6 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-var (
-	UnknownExecutable = detector.UnknownExecutable
-	NoExecutable      = detector.NoExecutable
-)
-
 const noteSuspectPrePackagedServer = "This is likely a pre-packaged server. Therefore, you might want to ignore the paths, and only look for the executable with your expected game version and mod loader."
 
 const multiThreadThreshold = 10
@@ -40,7 +35,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 	}
 	for _, jar := range jars {
 		exec := detector.Executable(jar)
-		if exec == nil || exec == NoExecutable {
+		if exec == nil || exec == types.NoExecutable || exec == types.UnknownExecutable {
 			continue
 		}
 		valid = append(valid, exec)
@@ -69,7 +64,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 
 	for _, jar := range jars {
 		exec := detector.Executable(jar)
-		if exec == nil || exec == NoExecutable {
+		if exec == nil || exec == types.NoExecutable || exec == types.UnknownExecutable {
 			continue
 		}
 		valid = append(valid, exec)
@@ -86,7 +81,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 				wg.Add(1)
 				go func(jarPath string) {
 					exec := detector.Executable(jarPath)
-					if exec == nil {
+					if exec == nil || exec == types.NoExecutable || exec == types.UnknownExecutable {
 						wg.Done()
 						return
 					}
@@ -100,7 +95,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 		} else {
 			for _, jarPath := range jarPaths {
 				exec := detector.Executable(jarPath)
-				if exec == nil || exec == NoExecutable {
+				if exec == nil || exec == types.NoExecutable || exec == types.UnknownExecutable {
 					continue
 				}
 				valid = append(valid, exec)
@@ -115,7 +110,7 @@ func buildExecutableInfo() *types.ExecutableInfo {
 	switch len(valid) {
 	case 0:
 		logger.Info("no server executable found")
-		return NoExecutable
+		return types.NoExecutable
 	case 1:
 		return valid[0]
 	default:

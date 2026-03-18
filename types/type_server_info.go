@@ -27,8 +27,26 @@ type ExecutableInfo struct {
 	BridgeHints       []string         `json:"bridge_hints,omitempty"`
 }
 
+var UnknownExecutable = &ExecutableInfo{
+	Path:        "",
+	GameVersion: VersionUnknown,
+	BootCommand: nil,
+	Topology:    TopologyUnknown,
+}
+
+var NoExecutable = &ExecutableInfo{
+	Path:        "",
+	GameVersion: VersionNone,
+	BootCommand: nil,
+	Topology:    TopologyEmpty,
+}
+
 func (e *ExecutableInfo) IsValid() bool {
 	return e != nil && e.Topology != nil
+}
+
+func (e *ExecutableInfo) Analyzable() bool {
+	return e != nil && e.Topology != nil && len(e.RuntimeIdentities) > 0 && e != NoExecutable && e != UnknownExecutable
 }
 
 func (e *ExecutableInfo) RuntimeIdentityPackage(node *TopologyNode) *PackageId {
