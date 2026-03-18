@@ -99,6 +99,9 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entry.message = string(payload)
 		case setTitleMsg:
 			entry.title = string(payload)
+			width := entry.bar.Width()
+			titleWidth := len(entry.title) + 2
+			entry.bar.SetWidth(width - titleWidth)
 		case bytesProgressMsg:
 			if payload.total > 0 {
 				entry.percent = float64(payload.read) / float64(payload.total)
