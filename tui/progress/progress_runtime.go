@@ -24,6 +24,9 @@ type entryState struct {
 	percent    float64
 	readBytes  int64
 	totalBytes int64
+	logLines   []string
+	partialLog string
+	logCap     int
 }
 
 type entryMsg struct {
@@ -81,6 +84,16 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			entry.readBytes = payload.read
 			entry.totalBytes = payload.total
+		case appendLogMsg:
+			entry.partialLog += string(payload)
+			lines := strings.Split(entry.partialLog, "\n")
+			if len(lines) > 1 {
+				entry.logLines = append(entry.logLines, lines[:len(lines)-1]...)
+				entry.partialLog = lines[len(lines)-1]
+				if entry.logCap > 0 && len(entry.logLines) > entry.logCap {
+					entry.logLines = entry.logLines[len(entry.logLines)-entry.logCap:]
+				}
+			}
 		case completeMsg:
 			entry.percent = 1.0
 			entry.message = string(payload)
@@ -157,7 +170,7 @@ var globalRuntime = &runtime{
 
 var isTerminal = term.IsTerminal(int(os.Stdout.Fd()))
 
-func (r *runtime) registerEntry(title string) entryID {
+func (r *runtime) registerEntry(title string, logCapacity int) entryID {
 	if !isTerminal {
 		return 0
 	}
@@ -167,8 +180,9 @@ func (r *runtime) registerEntry(title string) entryID {
 	r.mu.Lock()
 	options := append(defaultOptions, resolveColorOptions()...)
 	r.entries[id] = &entryState{
-		title: title,
-		bar:   progress.New(options...),
+		title:  title,
+		bar:    progress.New(options...),
+		logCap: logCapacity,
 	}
 	r.entryOrder = append(r.entryOrder, id)
 	needStart := !r.running

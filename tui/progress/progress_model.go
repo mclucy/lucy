@@ -11,4 +11,5 @@ type (
 		read  int64
 		total int64
 	}
+	appendLogMsg string
 )

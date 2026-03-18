@@ -26,13 +26,24 @@ import (
 // [Tracker.IncrPercent], and [Tracker.SetMessage].
 // Call [Tracker.Close] to finish and exit the progress bar.
 type Tracker struct {
-	id entryID
+	id          entryID
+	logCapacity int
 }
 
 // NewTracker creates a [Tracker] with the given title and starts displaying it.
+// Log capacity defaults to 5 lines.
 func NewTracker(title string) *Tracker {
-	id := globalRuntime.registerEntry(title)
-	return &Tracker{id: id}
+	return newTracker(title, 5)
+}
+
+// NewTrackerWithLogLimit creates a [Tracker] with custom log line capacity.
+func NewTrackerWithLogLimit(title string, logLimit int) *Tracker {
+	return newTracker(title, logLimit)
+}
+
+func newTracker(title string, logCapacity int) *Tracker {
+	id := globalRuntime.registerEntry(title, logCapacity)
+	return &Tracker{id: id, logCapacity: logCapacity}
 }
 
 // SetPercent sets the current progress to p (clamped to [0, 1]).
@@ -76,8 +87,22 @@ func (t *Tracker) ProxyReader(r io.Reader, total int64) io.Reader {
 	return &proxyReader{Reader: r, tracker: t, total: total}
 }
 
+// LogWriter returns an io.Writer that ingests streaming bytes, splits by
+// newline, and sends log-update messages to runtime. Partial fragments are
+// preserved between writes and only complete lines are emitted unless the
+// runtime explicitly flushes on close.
+func (t *Tracker) LogWriter() io.Writer {
+	return &logWriter{tracker: t}
+}
+
 // setBytesProgress is an internal method used by proxyReader to send
 // byte-level progress updates to the model.
 func (t *Tracker) setBytesProgress(read, total int64) {
 	globalRuntime.send(t.id, bytesProgressMsg{read: read, total: total})
+}
+
+// appendLog is an internal method used by logWriter to send log data to the
+// runtime. The runtime handles newline splitting and partial-line buffering.
+func (t *Tracker) appendLog(data string) {
+	globalRuntime.send(t.id, appendLogMsg(data))
 }
