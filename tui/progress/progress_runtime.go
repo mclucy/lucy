@@ -182,6 +182,10 @@ func (r *runtime) registerEntry(title string, logCapacity int) entryID {
 		return 0
 	}
 
+	if r.stopped.Load() {
+		return 0
+	}
+
 	id := entryID(r.nextID.Add(1))
 
 	r.mu.Lock()
@@ -195,7 +199,7 @@ func (r *runtime) registerEntry(title string, logCapacity int) entryID {
 	needStart := !r.running
 	r.mu.Unlock()
 
-	if needStart {
+	if needStart && !r.stopped.Load() {
 		r.start()
 	}
 
@@ -225,6 +229,10 @@ func (r *runtime) start() {
 }
 
 func (r *runtime) send(id entryID, msg tea.Msg) {
+	if r.stopped.Load() {
+		return
+	}
+
 	r.mu.Lock()
 	running := r.running
 	program := r.program
