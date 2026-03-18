@@ -4,6 +4,17 @@
 // Unlike the parent tui package which is a one-shot static renderer, this
 // package uses bubbletea for live, interactive progress display.
 //
+// # Lifecycle Invariants
+//
+// The progress runtime does not call os.Exit or terminate the process.
+// The caller controls process lifecycle. On interrupt (Ctrl+C), the runtime
+// sets an internal stopped flag and returns control to the caller.
+//
+// Close() and Complete() are idempotent and mark entries as completed.
+// The renderer stops only when all registered entries have completed.
+// After all-complete shutdown, registering a new tracker resets the stopped
+// flag and restarts the renderer.
+//
 // Usage:
 //
 //	t := progress.NewTracker("Downloading")
@@ -24,7 +35,7 @@ import (
 // A Tracker is created with [NewTracker] and automatically starts displaying.
 // External goroutines update progress via [Tracker.SetPercent],
 // [Tracker.IncrPercent], and [Tracker.SetMessage].
-// Call [Tracker.Close] to finish and exit the progress bar.
+// Call [Tracker.Close] to mark the tracker as completed.
 type Tracker struct {
 	id          entryID
 	logCapacity int
@@ -66,12 +77,15 @@ func (t *Tracker) SetTitle(title string) {
 	globalRuntime.send(t.id, setTitleMsg(title))
 }
 
-// Close completes the progress bar (jumps to 100 %) and exits the program.
+// Close marks this tracker as completed. The renderer stops only when all
+// registered trackers are completed. Close is idempotent.
 func (t *Tracker) Close() {
 	globalRuntime.send(t.id, closeMsg{})
 }
 
-// Complete is similar to Close but with visual feedback
+// Complete marks this tracker as completed and sets the progress to 100%
+// with a completion message. Like Close, the renderer stops only when all
+// registered trackers are completed.
 func (t *Tracker) Complete(msg string) {
 	globalRuntime.send(t.id, completeMsg(msg))
 }

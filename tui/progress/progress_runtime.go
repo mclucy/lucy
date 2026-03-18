@@ -1,3 +1,22 @@
+// Package progress runtime manages the bubbletea program lifecycle.
+//
+// # Lifecycle States
+//
+// The runtime transitions through states: idle -> running -> stopped.
+// The stopped flag is set on interrupt (Ctrl+C) or when all entries complete.
+// After all-complete shutdown, new tracker registration resets stopped and restarts.
+//
+// # Graceful Interrupt
+//
+// On Ctrl+C, the runtime sets the stopped atomic flag and returns control
+// to the caller. The runtime does not call os.Exit - the caller controls
+// process lifecycle.
+//
+// # Idempotent Shutdown
+//
+// The stopped atomic flag ensures shutdown operations are idempotent.
+// Multiple Close() calls or interrupts are safe. Defer-based cleanup in
+// the runtime goroutine ensures fields reset on all exit paths.
 package progress
 
 import (
