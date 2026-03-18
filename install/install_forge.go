@@ -2,6 +2,7 @@ package install
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/cache"
@@ -231,6 +233,11 @@ func installForge(p types.PackageId) error {
 	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
 	tracker := tuiprogress.NewTracker("forge")
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tuiprogress.WaitForShutdown(ctx)
+	}()
 	defer tracker.Close()
 
 	result, err := util.CachedDownload(
@@ -258,6 +265,11 @@ func installForge(p types.PackageId) error {
 
 	p.NormalizeIdentityPackage()
 	installerTracker := tuiprogress.NewTrackerWithLogging(p.StringFull(), 5)
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tuiprogress.WaitForShutdown(ctx)
+	}()
 	defer installerTracker.Close()
 
 	installerPath := result.File.Name()

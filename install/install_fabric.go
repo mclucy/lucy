@@ -1,8 +1,10 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
@@ -70,6 +72,11 @@ func installFabricWithOverride(p types.PackageId, deleteVanilla bool) error {
 	)
 
 	tracker := progress.NewTracker("fabric")
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = progress.WaitForShutdown(ctx)
+	}()
 	defer tracker.Close()
 
 	result, err := util.CachedDownload(

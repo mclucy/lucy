@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -163,6 +164,11 @@ func downloadMinecraftServerJar(
 	dir string,
 ) (*os.File, error) {
 	tracker := tuiprogress.NewTracker("Downloading server")
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tuiprogress.WaitForShutdown(ctx)
+	}()
 	defer tracker.Close()
 
 	result, err := util.CachedDownload(
