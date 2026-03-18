@@ -27,6 +27,7 @@ type entryState struct {
 	logLines   []string
 	partialLog string
 	logCap     int
+	completed  bool
 }
 
 type entryMsg struct {
@@ -41,6 +42,8 @@ type runtime struct {
 	mu         sync.Mutex
 	running    bool
 	nextID     atomic.Int32
+	done       chan struct{}
+	stopped    atomic.Bool
 }
 
 func (m *runtime) Init() tea.Cmd { return nil }
