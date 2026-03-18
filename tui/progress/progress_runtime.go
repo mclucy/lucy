@@ -138,6 +138,10 @@ func (m *runtime) View() tea.View {
 			continue
 		}
 
+		for _, logLine := range entry.logLines {
+			lines = append(lines, tools.Dim(logLine))
+		}
+
 		var sb strings.Builder
 		sb.WriteString(tools.Bold(tools.Magenta(entry.title)))
 		sb.WriteString(strings.Repeat(" ", 2))
