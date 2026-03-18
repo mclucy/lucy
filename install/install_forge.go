@@ -423,11 +423,11 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 // score: cumulative line count within the stage (0+)
 // floor, span: stage window boundaries
 // Returns a value in [floor, floor+span) that approaches floor+span asymptotically.
-func forgeAsymptoticProgress(score float64, floor, span float64) float64 {
-	const k = 0.002 // steepness of asymptotic curve
-	// progress = floor + span * (1 - exp(-k * score))
-	// As score → ∞, progress → floor + span
-	progress := floor + span*math.Tanh(math.Sqrt(math.Sqrt(k*score)))
+func forgeAsymptoticProgress(x float64, floor, span float64) float64 {
+	const k = math.Ln10 * math.Ln2 * 4 // steepness of asymptotic curve
+	// progress = floor + span * (1 - exp(-k * x))
+	// As x → ∞, progress → floor + span
+	progress := floor + span*math.Tanh(math.Log(x+1)/k)
 	// Clamp to stage window to prevent overshoot
 	if progress > floor+span {
 		progress = floor + span
@@ -467,7 +467,7 @@ tracker *tuiprogress.Tracker,
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Fprintln(logWriter, line)
+		_, _ = fmt.Fprintln(logWriter, line)
 		tail.append(line)
 
 		// Detect explicit failure phrases
