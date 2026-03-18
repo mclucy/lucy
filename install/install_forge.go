@@ -199,6 +199,10 @@ func installForge(p types.PackageId) error {
 		return err
 	}
 
+	if err := ensureMinecraftEULAAccepted(serverInfo.WorkPath); err != nil {
+		return err
+	}
+
 	forgeVersion, err := getForgeVersionFromPackageId(p, gameVersion)
 	if err != nil {
 		return err
@@ -226,10 +230,6 @@ func installForge(p types.PackageId) error {
 
 	if result != nil {
 		defer func() { _ = result.File.Close() }()
-	}
-
-	if err := ensureMinecraftEULAAccepted(serverInfo.WorkPath); err != nil {
-		return err
 	}
 
 	if result == nil {

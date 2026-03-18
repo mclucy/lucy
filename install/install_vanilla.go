@@ -193,23 +193,22 @@ func ensureMinecraftEULAAccepted(workPath string) error {
 	}
 
 	accepted := false
-	err := huh.NewForm(
+	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Minecraft EULA consent required").
-				Description(
-					"To install and run the official server, you must agree to Mojang EULA: " + minecraftEULAURL,
-				).
+				Description("To install and run the official server, you must agree to Mojang EULA: " + minecraftEULAURL).
 				Affirmative("I Agree").
 				Negative("Cancel").
 				Value(&accepted),
 		),
-	).Run()
+	)
+	err := form.Run()
+
 	if err != nil {
 		return fmt.Errorf(
 			"unable to confirm EULA acceptance interactively after reviewing %s: %w",
-			minecraftEULAURL,
-			err,
+			minecraftEULAURL, err,
 		)
 	}
 
