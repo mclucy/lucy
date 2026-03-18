@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
@@ -100,25 +99,16 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case completeMsg:
 			entry.percent = 1.0
 			entry.message = string(payload)
+			entry.completed = true
 			options := append(defaultOptions, resolveCompleteColorOptions()...)
 			entry.bar = progress.New(options...)
-			cmd = tea.Tick(
-				500*time.Millisecond, func(time.Time) tea.Msg {
-					return entryMsg{id: msg.id, payload: closeMsg{}}
-				},
-			)
-		case closeMsg:
-			delete(m.entries, msg.id)
-			for i, id := range m.entryOrder {
-				if id == msg.id {
-					m.entryOrder = append(
-						m.entryOrder[:i],
-						m.entryOrder[i+1:]...,
-					)
-					break
-				}
+			if m.allCompleted() {
+				m.mu.Unlock()
+				return m, tea.Quit
 			}
-			if len(m.entries) == 0 {
+		case closeMsg:
+			entry.completed = true
+			if m.allCompleted() {
 				m.mu.Unlock()
 				return m, tea.Quit
 			}
@@ -171,6 +161,15 @@ func (m *runtime) View() tea.View {
 	return tea.NewView(strings.Join(lines, "\n"))
 }
 
+func (m *runtime) allCompleted() bool {
+	for _, entry := range m.entries {
+		if !entry.completed {
+			return false
+		}
+	}
+	return len(m.entries) > 0
+}
+
 var globalRuntime = &runtime{
 	entries: make(map[entryID]*entryState),
 }
@@ -182,8 +181,16 @@ func (r *runtime) registerEntry(title string, logCapacity int) entryID {
 		return 0
 	}
 
-	if r.stopped.Load() {
+	r.mu.Lock()
+	canRestart := len(r.entries) == 0 || r.allCompleted()
+	r.mu.Unlock()
+
+	if r.stopped.Load() && !canRestart {
 		return 0
+	}
+
+	if r.stopped.Load() && canRestart {
+		r.stopped.Store(false)
 	}
 
 	id := entryID(r.nextID.Add(1))
