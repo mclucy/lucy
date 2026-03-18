@@ -3,12 +3,15 @@ package tools
 import (
 	"fmt"
 	"image/color"
+	"os"
 	"sync"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/term"
 )
+
+var IsTerminal = term.IsTerminal(int(os.Stdout.Fd()))
 
 var (
 	Bold      func(any) string

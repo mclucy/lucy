@@ -9,14 +9,18 @@ import (
 var globalOptions []progress.Option
 
 func init() {
-	globalOptions = []progress.Option{
-		progress.WithFillCharacters('█', '░'),
+	if !tools.IsTerminal {
+		return
 	}
+	globalOptions = append(
+		colorOptions(),
+		progress.WithFillCharacters('█', '░'),
+	)
 }
 
-// resolveColorOptions returns color options lazily, ensuring OSC4 probing
+// colorOptions returns color options lazily, ensuring OSC4 probing
 // has been completed first. This is called at first use, not at init time.
-func resolveColorOptions() []progress.Option {
+func colorOptions() []progress.Option {
 	tools.EnsureTermColors()
 	if tools.ValidUserColors {
 		return []progress.Option{
@@ -29,9 +33,9 @@ func resolveColorOptions() []progress.Option {
 	return []progress.Option{progress.WithColors(lipgloss.Magenta)}
 }
 
-// resolveCompleteColorOptions returns color options for completion state,
+// successColorOptions returns color options for success state,
 // lazily ensuring OSC4 probing has been completed first.
-func resolveCompleteColorOptions() []progress.Option {
+func successColorOptions() []progress.Option {
 	tools.EnsureTermColors()
 	if tools.ValidUserColors {
 		return []progress.Option{

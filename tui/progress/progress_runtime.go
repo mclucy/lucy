@@ -30,7 +30,6 @@ import (
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"github.com/mclucy/lucy/tools"
-	"golang.org/x/term"
 )
 
 type entryID int
@@ -120,7 +119,8 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entry.percent = 1.0
 			entry.message = string(payload)
 			entry.completed = true
-			options := append(globalOptions, resolveCompleteColorOptions()...)
+			// order sensitive, set success colors last so they override global options
+			options := append(globalOptions, successColorOptions()...)
 			entry.bar = progress.New(options...)
 			if m.allCompleted() {
 				m.mu.Unlock()
@@ -197,10 +197,8 @@ var globalRuntime = &runtime{
 	entries: make(map[entryID]*entryState),
 }
 
-var isTerminal = term.IsTerminal(int(os.Stdout.Fd()))
-
 func (r *runtime) registerEntry(title string, logCapacity int) entryID {
-	if !isTerminal {
+	if !tools.IsTerminal {
 		return 0
 	}
 
@@ -221,8 +219,7 @@ func (r *runtime) registerEntry(title string, logCapacity int) entryID {
 	titleWidth := len(title) + 2
 	barWidth := width - titleWidth
 	widthOption := progress.WithWidth(barWidth)
-	options := append(globalOptions, resolveColorOptions()...)
-	options = append(options, widthOption)
+	options := append(globalOptions, widthOption)
 	r.mu.Lock()
 	r.entries[id] = &entryState{
 		title:  title,
