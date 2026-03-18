@@ -173,6 +173,9 @@ func (m *runtime) View() tea.View {
 		} else if entry.message != "" {
 			sb.WriteString("  ")
 			sb.WriteString(tools.Dim(entry.message))
+		} else {
+			sb.WriteString("  ")
+			sb.WriteString(tools.Dim(fmt.Sprintf("%.1f%%", entry.percent*100)))
 		}
 
 		lines = append(lines, sb.String())
