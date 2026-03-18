@@ -24,8 +24,8 @@ import (
 )
 
 func getForgeVersionFromPackageId(
-p types.PackageId,
-gameVersion types.RawVersion,
+	p types.PackageId,
+	gameVersion types.RawVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest && p.Version != types.VersionCompatible && p.Version != types.VersionAny && p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
@@ -82,6 +82,23 @@ func guardServerTopologyForForgePlatform() error {
 		)
 	}
 	return nil
+}
+
+func promptSupportForgeProject() {
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Supporting the Forge project").
+				Description(
+					"The Forge project is sustained by ads on the download page. By automating " +
+						"this process, we may reduce ad revenue that supports the project. If you find " +
+						"Forge useful, please consider supporting the project by downloading manually " +
+						"from their official site <https://files.minecraftforge.net>, or support them on " +
+						"Patreon at <https://www.patreon.com/LexManos>",
+				),
+		),
+	).WithWidth(80)
+	_ = form.Run()
 }
 
 func promptSelectMinecraftVersionForForge() (version string) {
@@ -203,6 +220,8 @@ func installForge(p types.PackageId) error {
 		return err
 	}
 
+	promptSupportForgeProject()
+
 	forgeVersion, err := getForgeVersionFromPackageId(p, gameVersion)
 	if err != nil {
 		return err
@@ -299,8 +318,8 @@ func fetchForgeVersion(gameVersion types.RawVersion) (string, error) {
 }
 
 func resolveForgeInstallerURL(
-gameVersion types.RawVersion,
-forgeVersion string,
+	gameVersion types.RawVersion,
+	forgeVersion string,
 ) string {
 	combinedVersion := fmt.Sprintf("%s-%s", gameVersion.String(), forgeVersion)
 	escaped := url.PathEscape(combinedVersion)
@@ -364,14 +383,14 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 
 	// init stage
 	if strings.Contains(lower, "jvm info") ||
-	strings.Contains(lower, "current time") ||
-	strings.Contains(lower, "target directory") {
+		strings.Contains(lower, "current time") ||
+		strings.Contains(lower, "target directory") {
 		return 0, true
 	}
 
 	// libraries stage
 	if strings.Contains(lower, "considering library") ||
-	strings.Contains(lower, "downloading library") {
+		strings.Contains(lower, "downloading library") {
 		return 1, false
 	}
 	if strings.Contains(lower, "downloading libraries") {
@@ -383,7 +402,7 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 		return 2, true
 	}
 	if strings.Contains(lower, "extracted") ||
-	strings.Contains(lower, "output") {
+		strings.Contains(lower, "output") {
 		return 2, false
 	}
 
@@ -397,7 +416,7 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 		return 4, true
 	}
 	if strings.Contains(lower, "reading patch") ||
-	strings.Contains(lower, "checksum") {
+		strings.Contains(lower, "checksum") {
 		return 4, false
 	}
 
@@ -406,7 +425,7 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 		return 5, true
 	}
 	if strings.Contains(lower, "copying") ||
-	strings.Contains(lower, "patching") {
+		strings.Contains(lower, "patching") {
 		return 5, false
 	}
 
@@ -436,8 +455,8 @@ func forgeAsymptoticProgress(x float64, floor, span float64) float64 {
 }
 
 func runForgeInstaller(
-installerPath string,
-tracker *tuiprogress.Tracker,
+	installerPath string,
+	tracker *tuiprogress.Tracker,
 ) error {
 	installerName := path.Base(installerPath)
 	cmd := exec.Command("java", "-jar", installerName, "--installServer")
@@ -487,7 +506,7 @@ tracker *tuiprogress.Tracker,
 
 		stageIdx, isStrong := classifyForgeLine(line)
 		if stageIdx >= 0 && stageIdx < len(forgeStages) &&
-		isStrong && stageIdx > activeStageIdx {
+			isStrong && stageIdx > activeStageIdx {
 			activeStageIdx = stageIdx
 		}
 
