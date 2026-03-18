@@ -24,8 +24,8 @@ import (
 )
 
 func getForgeVersionFromPackageId(
-	p types.PackageId,
-	gameVersion types.RawVersion,
+p types.PackageId,
+gameVersion types.RawVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest && p.Version != types.VersionCompatible && p.Version != types.VersionAny && p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
@@ -236,7 +236,7 @@ func installForge(p types.PackageId) error {
 		return errors.New("download result is nil")
 	}
 
-	installerTracker := tuiprogress.NewTrackerWithLogLimit("Installing Forge", 5)
+	installerTracker := tuiprogress.NewTrackerWithLogLimit(p.StringFull(), 5)
 	defer installerTracker.Close()
 
 	installerPath := result.File.Name()
@@ -244,7 +244,7 @@ func installForge(p types.PackageId) error {
 		return err
 	}
 
-	installerTracker.SetPercent(0.95)
+	installerTracker.SetPercent(0.99)
 	if err := verifyForgeInstallation(serverInfo.WorkPath); err != nil {
 		return err
 	}
@@ -299,8 +299,8 @@ func fetchForgeVersion(gameVersion types.RawVersion) (string, error) {
 }
 
 func resolveForgeInstallerURL(
-	gameVersion types.RawVersion,
-	forgeVersion string,
+gameVersion types.RawVersion,
+forgeVersion string,
 ) string {
 	combinedVersion := fmt.Sprintf("%s-%s", gameVersion.String(), forgeVersion)
 	escaped := url.PathEscape(combinedVersion)
@@ -327,11 +327,13 @@ type forgeStage struct {
 // 0.60-0.95: Processors (post-processing, server jar generation)
 // 0.95-1.00: Verification (final checks, reprobe)
 var forgeStages = []forgeStage{
-	{name: "init", floor: 0.00, span: 0.08},
-	{name: "extraction", floor: 0.08, span: 0.12},
-	{name: "libraries", floor: 0.20, span: 0.40},
-	{name: "processors", floor: 0.60, span: 0.35},
-	{name: "verification", floor: 0.95, span: 0.05},
+	{name: "init", floor: 0.00, span: 0.02},
+	{name: "libraries", floor: 0.02, span: 0.08},
+	{name: "extract", floor: 0.10, span: 0.60},
+	{name: "writing", floor: 0.70, span: 0.2},
+	{name: "checksum", floor: 0.72, span: 0.03},
+	{name: "processing", floor: 0.75, span: 0.22},
+	{name: "completion", floor: 0.97, span: 0},
 }
 
 // forgeLogTail holds a bounded buffer of recent installer output lines.
@@ -360,47 +362,57 @@ func (t *forgeLogTail) String() string {
 func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 	lower := strings.ToLower(line)
 
-	// Init stage markers
-	if strings.Contains(lower, "jvm info") || strings.Contains(
-		lower,
-		"current time",
-	) || strings.Contains(lower, "target directory") {
+	// init stage
+	if strings.Contains(lower, "jvm info") ||
+	strings.Contains(lower, "current time") ||
+	strings.Contains(lower, "target directory") {
 		return 0, true
 	}
 
-	// Extraction stage markers
-	if strings.Contains(lower, "extracting main jar") || strings.Contains(
-		lower,
-		"extracted successfully",
-	) {
+	// libraries stage
+	if strings.Contains(lower, "considering library") ||
+	strings.Contains(lower, "downloading library") {
+		return 1, false
+	}
+	if strings.Contains(lower, "downloading libraries") {
 		return 1, true
 	}
 
-	// Libraries stage markers
-	if strings.Contains(lower, "considering library") {
-		return 2, false // weak marker, many per stage
+	// build & extract libraries stage
+	if strings.Contains(lower, "building processors") {
+		return 2, true
 	}
-	if strings.Contains(lower, "downloading library") || strings.Contains(
-		lower,
-		"checksum validated",
-	) {
+	if strings.Contains(lower, "extracted") ||
+	strings.Contains(lower, "output") {
 		return 2, false
 	}
 
-	// Processors stage markers
-	if strings.Contains(lower, "building processor") || strings.Contains(
-		lower,
-		"mainclass",
-	) || strings.Contains(lower, "output") {
-		return 3, false
+	// writing stage
+	if strings.Contains(lower, "writing output:") {
+		return 3, true
 	}
 
-	// Verification stage markers
-	if strings.Contains(
-		lower,
-		"successfully downloaded minecraft server",
-	) || strings.Contains(lower, "you can delete this installer") {
+	// checksum stage
+	if strings.Contains(lower, "loading patches file:") {
 		return 4, true
+	}
+	if strings.Contains(lower, "reading patch") ||
+	strings.Contains(lower, "checksum") {
+		return 4, false
+	}
+
+	// processing stage
+	if strings.Contains(lower, "processing:") {
+		return 5, true
+	}
+	if strings.Contains(lower, "copying") ||
+	strings.Contains(lower, "patching") {
+		return 5, false
+	}
+
+	// completion stage marker
+	if strings.Contains(lower, "The server installed successfully") {
+		return 6, true
 	}
 
 	// Default: stay in current stage, weak marker
@@ -412,10 +424,10 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 // floor, span: stage window boundaries
 // Returns a value in [floor, floor+span) that approaches floor+span asymptotically.
 func forgeAsymptoticProgress(score float64, floor, span float64) float64 {
-	const k = 0.1 // steepness of asymptotic curve
+	const k = 0.002 // steepness of asymptotic curve
 	// progress = floor + span * (1 - exp(-k * score))
 	// As score → ∞, progress → floor + span
-	progress := floor + span*(1.0-math.Exp(-k*score))
+	progress := floor + span*math.Tanh(math.Sqrt(math.Sqrt(k*score)))
 	// Clamp to stage window to prevent overshoot
 	if progress > floor+span {
 		progress = floor + span
@@ -424,8 +436,8 @@ func forgeAsymptoticProgress(score float64, floor, span float64) float64 {
 }
 
 func runForgeInstaller(
-	installerPath string,
-	tracker *tuiprogress.Tracker,
+installerPath string,
+tracker *tuiprogress.Tracker,
 ) error {
 	installerName := path.Base(installerPath)
 	cmd := exec.Command("java", "-jar", installerName, "--installServer")
@@ -474,10 +486,9 @@ func runForgeInstaller(
 		}
 
 		stageIdx, isStrong := classifyForgeLine(line)
-		if stageIdx >= 0 && stageIdx < len(forgeStages) {
-			if isStrong && stageIdx > activeStageIdx {
-				activeStageIdx = stageIdx
-			}
+		if stageIdx >= 0 && stageIdx < len(forgeStages) &&
+		isStrong && stageIdx > activeStageIdx {
+			activeStageIdx = stageIdx
 		}
 
 		if activeStageIdx < len(forgeStages) {
