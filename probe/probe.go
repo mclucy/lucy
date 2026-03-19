@@ -162,16 +162,6 @@ func buildServerInfo() types.ServerInfo {
 		mu.Unlock()
 	}()
 
-	// Server Mod Path
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		modPath := modPaths()
-		mu.Lock()
-		serverInfo.ModPath = modPath
-		mu.Unlock()
-	}()
-
 	wg.Wait()
 	EnrichTopologyFromPackages(serverInfo.Executable, serverInfo.Packages)
 
@@ -189,9 +179,7 @@ func buildServerInfo() types.ServerInfo {
 			if rid.Platform == types.PlatformAny {
 				continue
 			}
-			idx.Add(types.Package{
-				Id: rid,
-			})
+			idx.Add(types.Package{Id: rid})
 		}
 		serverInfo.Packages = idx.Packages()
 	}
@@ -216,8 +204,8 @@ func buildModPaths() (paths []string) {
 	if exec.Topology != nil && exec.Topology.Resolved() {
 		// Topology-driven path discovery
 		if exec.Topology.HasCapability(types.CapabilityFabricMods) ||
-			exec.Topology.HasCapability(types.CapabilityForgeMods) ||
-			exec.Topology.HasCapability(types.CapabilityNeoforgeMods) {
+		exec.Topology.HasCapability(types.CapabilityForgeMods) ||
+		exec.Topology.HasCapability(types.CapabilityNeoforgeMods) {
 			paths = append(paths, path.Join(workPath(), "mods"))
 		}
 		if exec.Topology.HasCapability(types.CapabilityBukkitPlugins) {
