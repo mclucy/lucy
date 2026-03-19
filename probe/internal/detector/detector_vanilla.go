@@ -20,9 +20,9 @@ func (d *VanillaDetector) Name() string {
 }
 
 func (d *VanillaDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*types.ExecutableInfo, error) {
 	for _, f := range zipReader.File {
 		if f.Name == "version.json" {
@@ -35,6 +35,18 @@ func (d *VanillaDetector) Detect(
 			data, err := io.ReadAll(r)
 			if err != nil {
 				return nil, err
+			}
+
+			// This is to guard against misidentifying Forge installer jars as
+			// vanilla servers, which also contain version.json but with different
+			// structure
+			forgeInstallerGuard := &struct {
+				Comment   []string `json:"_comment"`
+				MainClass string   `json:"mainClass"`
+			}{}
+			err = json.Unmarshal(data, forgeInstallerGuard)
+			if err == nil {
+				return types.NoExecutable, nil
 			}
 
 			obj := exttype.FileMinecraftVersionSpec{}
