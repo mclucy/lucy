@@ -23,7 +23,7 @@ const multiThreadThreshold = 10
 
 // getExecutableInfo uses the new detector-based architecture to find server executables
 func buildExecutableInfo() *types.ExecutableInfo {
-	var valid []*types.ExecutableInfo
+	valid := make([]*types.ExecutableInfo, 0)
 	workPath := workPath()
 
 	// Layered search
@@ -43,8 +43,9 @@ func buildExecutableInfo() *types.ExecutableInfo {
 
 	// 2. Forge/Fabric installation paths
 	// Will break after found
-	fabricLib := path.Join(workPath, "libraries", "net", "fabricmc")
-	forgeLib := path.Join(workPath, "libraries", "net", "minecraftforge")
+	fabricLib, forgeLib :=
+		path.Join(workPath, "libraries", "net", "fabricmc", "fabric-loader"),
+		path.Join(workPath, "libraries", "net", "minecraftforge", "forge")
 	var forgeJars, fabricJars []string
 
 	if stat, err := os.Stat(fabricLib); err == nil && stat.IsDir() {
