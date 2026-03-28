@@ -1,5 +1,3 @@
-# lucy
-
 <div align="center">
 
   <img src="images/banner.png" alt="banner" width="80%" />
@@ -11,7 +9,7 @@
     <div>All in one command.</div>
   </h2>
 
-  <p>The Modern Minecraft Server Package Manager</p>
+  <p>Lucy: The Modern Minecraft Server Package Manager</p>
 
   <img
     src="https://goreportcard.com/badge/github.com/mclucy/lucy"
