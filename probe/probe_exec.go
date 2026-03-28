@@ -17,7 +17,8 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-const noteSuspectPrePackagedServer = "This is likely a pre-packaged server. Therefore, you might want to ignore the paths, and only look for the executable with your expected game version and mod loader."
+const noteIgnorePath = "Some modding platforms are located from the libraries directory. " +
+	"You might want to look at the platform and version, rather than the path."
 
 const multiThreadThreshold = 10
 
@@ -43,9 +44,12 @@ func buildExecutableInfo() *types.ExecutableInfo {
 
 	// 2. Forge/Fabric installation paths
 	// Will break after found
-	fabricLib, forgeLib :=
-		path.Join(workPath, "libraries", "net", "fabricmc", "fabric-loader"),
-		path.Join(workPath, "libraries", "net", "minecraftforge", "forge")
+	fabricLib := path.Join(
+		workPath, "libraries", "net", "fabricmc", "fabric-loader",
+	)
+	forgeLib := path.Join(
+		workPath, "libraries", "net", "minecraftforge", "forge",
+	)
 	var forgeJars, fabricJars []string
 
 	if stat, err := os.Stat(fabricLib); err == nil && stat.IsDir() {
