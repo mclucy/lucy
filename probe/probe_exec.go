@@ -119,9 +119,8 @@ func buildExecutableInfo() *types.ExecutableInfo {
 	case 1:
 		return valid[0]
 	default:
-		choice := selectExecutable(
-			valid,
-			[]string{noteSuspectPrePackagedServer},
+		choice := promptSelectExecutable(
+			valid, []string{noteIgnorePath},
 		)
 		return valid[choice]
 	}
@@ -135,7 +134,7 @@ func init() {
 	}
 }
 
-func selectExecutable(
+func promptSelectExecutable(
 	executables []*types.ExecutableInfo,
 	notes []string,
 ) int {
