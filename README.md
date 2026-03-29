@@ -34,8 +34,7 @@
 
 </div>
 
-> ## 🚧
->
+> [!WARNING]
 > This project is currently **INCOMPLETE** and under active development. Features and functionalities are subject to change.
 > If you're interested in contributing or want to stay updated, please contact <4rcadia.0@gmail.com>, or join the [QQ groupchat](https://qm.qq.com/q/Sf65NVYaAi). A Discord server will be up soon!
 
@@ -58,7 +57,8 @@
 
 ### Installation
 
-> ⚠️ **WARNING**: Do not install before the first beta release unless you intend to test or contribute to the code.
+> [!WARNING]
+> Do not install before the first beta release unless you intend to test or contribute to the code.
 
 ```bash
 go install github.com/mclucy/lucy@latest
