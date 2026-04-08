@@ -178,7 +178,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 		"mods.toml",
 	)
 
-	var mod exttype.FileForgeModIdentifier
+	var mod exttype.FileModLoaderIdentifier
 	if err := toml.Unmarshal(mustReadFile(t, ae2MetaFile), &mod); err != nil {
 		t.Fatalf("unmarshal forge mods.toml: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 		t.Fatalf("missing minecraft dependency range in ae2 sample")
 	}
 
-	expr := parseMavenVersionRange(minecraftRange)
+	expr := parseModLoaderMavenVersionRange(minecraftRange)
 	if len(expr) != 1 || len(expr[0]) != 2 {
 		t.Fatalf(
 			"expected one AND clause with two bounds for %q, got %+v",
@@ -239,7 +239,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 		"META-INF",
 		"mods.toml",
 	)
-	var yungs exttype.FileForgeModIdentifier
+	var yungs exttype.FileModLoaderIdentifier
 	if err := toml.Unmarshal(
 		mustReadFile(t, yungsMetaFile),
 		&yungs,
@@ -258,7 +258,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 		t.Fatalf("missing yungsapi dependency range in YUNG's Extras sample")
 	}
 
-	yungsExpr := parseMavenVersionRange(yungsApiRange)
+	yungsExpr := parseModLoaderMavenVersionRange(yungsApiRange)
 	if len(yungsExpr) == 0 {
 		t.Fatalf("expected parsed expression for %q", yungsApiRange)
 	}
