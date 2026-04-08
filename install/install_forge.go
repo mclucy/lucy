@@ -233,55 +233,11 @@ func installForge(p types.PackageId) error {
 
 	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
-	tracker := tuiprogress.NewTracker("forge")
-	defer tracker.Close()
-
-	result, err := util.CachedDownload(
-		fileURL,
-		serverInfo.WorkPath,
-		util.DownloadOptions{
-			Kind:               cache.KindArtifact,
-			WrapReader:         tracker.ProxyReader,
-			OnCacheHit:         tracker.CacheHit,
-			OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
-			FileMode:           0o750,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-
-	if result != nil {
-		defer func() { _ = result.File.Close() }()
-	}
-
-	if result == nil {
-		return errors.New("download result is nil")
-	}
-
-	p.NormalizeIdentityPackage()
-	installerTracker := tuiprogress.NewTrackerWithLogging(p.StringFull(), 5)
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = tuiprogress.WaitForShutdown(ctx)
-	}()
-	defer installerTracker.Close()
-
-	installerPath := result.File.Name()
-	if err := runForgeInstaller(installerPath, installerTracker); err != nil {
+	if err := runModLoaderInstaller(p, fileURL, serverInfo.WorkPath, "Forge"); err != nil {
 		return err
 	}
 
-	installerTracker.SetPercent(0.99)
-	if err := verifyForgeInstallation(serverInfo.WorkPath); err != nil {
-		return err
-	}
-
-	probe.Rebuild()
-	installerTracker.Complete("Forge installed")
-
-	return nil
+	return verifyForgeInstallation(serverInfo.WorkPath)
 }
 
 func fetchForgeVersion(gameVersion types.RawVersion) (string, error) {
@@ -555,5 +511,55 @@ func runForgeInstaller(
 		)
 	}
 
+	return nil
+}
+
+// runModLoaderInstaller is the shared execution skeleton for mod loader platform
+// installers (Forge, NeoForge). It downloads the installer JAR to workPath,
+// runs java -jar <installer> --installServer with progress tracking, and calls
+// probe.Rebuild on success.
+//
+// platformName is used for user-facing progress labels (e.g. "Forge", "NeoForge").
+func runModLoaderInstaller(
+	id types.PackageId,
+	fileURL string,
+	workPath string,
+	platformName string,
+) error {
+	tracker := tuiprogress.NewTrackerWithLogging(id.StringFull(), 5)
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tuiprogress.WaitForShutdown(ctx)
+	}()
+	defer tracker.Close()
+
+	result, err := util.CachedDownload(
+		fileURL,
+		workPath,
+		util.DownloadOptions{
+			Kind:               cache.KindArtifact,
+			WrapReader:         tracker.ProxyReader,
+			OnCacheHit:         tracker.CacheHit,
+			OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
+			FileMode:           0o750,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+	if result == nil {
+		return errors.New("download result is nil")
+	}
+	defer func() { _ = result.File.Close() }()
+
+	installerPath := result.File.Name()
+	if err := runForgeInstaller(installerPath, tracker); err != nil {
+		return err
+	}
+
+	tracker.SetPercent(0.99)
+	probe.Rebuild()
+	tracker.Complete(platformName + " installed")
 	return nil
 }

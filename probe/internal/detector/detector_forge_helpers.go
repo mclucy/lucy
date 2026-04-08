@@ -48,12 +48,12 @@ func getForgeModVersion(zip *zip.Reader) types.RawVersion {
 	return types.RawVersion(v)
 }
 
-// parseMavenVersionRange parses Forge dependency version ranges.
+// parseModLoaderMavenVersionRange parses Forge dependency version ranges.
 //
 // References:
 //   - https://docs.minecraftforge.net/en/latest/gettingstarted/modfiles/
 //   - https://maven.apache.org/enforcer/enforcer-rules/versionRanges.html
-func parseMavenVersionRange(interval string) [][]types.VersionConstraint {
+func parseModLoaderMavenVersionRange(interval string) [][]types.VersionConstraint {
 	return dependency.ParseRange(
 		interval,
 		dependency.InferRangeDialect(types.PlatformForge),

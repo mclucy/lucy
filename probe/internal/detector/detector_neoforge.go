@@ -156,7 +156,7 @@ func (d *neoforgeModDetector) Detect(
 				return nil, err
 			}
 
-			modIdentifier := &externaltype.FileForgeModIdentifier{}
+			modIdentifier := &externaltype.FileModLoaderIdentifier{}
 			err = toml.Unmarshal(data, modIdentifier)
 			if err != nil {
 				return nil, err
@@ -205,7 +205,7 @@ func (d *neoforgeModDetector) Detect(
 								Platform: types.PlatformNeoforge,
 								Name:     syntax.ToProjectName(dep.ModID),
 							},
-							Constraint: parseMavenVersionRange(dep.VersionRange),
+							Constraint: parseModLoaderMavenVersionRange(dep.VersionRange),
 						},
 					)
 				}

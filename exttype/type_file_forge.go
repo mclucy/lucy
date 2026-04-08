@@ -1,7 +1,7 @@
 package exttype
 
-// FileForgeModIdentifier is for 1.13+ forge & neoforge. This is a toml file.
-type FileForgeModIdentifier struct {
+// FileModLoaderIdentifier is for 1.13+ forge & neoforge mods. This is a toml file.
+type FileModLoaderIdentifier struct {
 	ModLoader       string                            `toml:"modLoader"`
 	LoaderVersion   string                            `toml:"loaderVersion"`
 	IssueTrackerURL string                            `toml:"issueTrackerURL"`

@@ -132,7 +132,7 @@ func (d *forgeModDetector) Detect(
 				return nil, err
 			}
 
-			modIdentifier := &exttype.FileForgeModIdentifier{}
+			modIdentifier := &exttype.FileModLoaderIdentifier{}
 			err = toml.Unmarshal(data, modIdentifier)
 			if err != nil {
 				return nil, err
@@ -181,7 +181,7 @@ func (d *forgeModDetector) Detect(
 								Platform: types.PlatformForge,
 								Name:     syntax.ToProjectName(dep.ModID),
 							},
-							Constraint: parseMavenVersionRange(dep.VersionRange),
+							Constraint: parseModLoaderMavenVersionRange(dep.VersionRange),
 						},
 					)
 				}
