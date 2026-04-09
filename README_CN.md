@@ -11,7 +11,7 @@
     <sup>……一行命令秒了</sup>
   </h2>
 
-  <p>现代化的 Minecraft 服务器包管理器</p>
+  <h3>现代化的 Minecraft 服务器包管理器</h3>
 
   <img
     src="https://goreportcard.com/badge/github.com/mclucy/lucy"
@@ -70,13 +70,11 @@ go install github.com/mclucy/lucy@latest
 
 ```bash
 mkdir my-server && cd my-server
-lucy add fabric/fabric-loader@latest
-lucy add fabric/lithium@latest
+lucy add fabric@latest
+lucy add fabric/lithium@compatible
 lucy status
 java -jar fabric-server.jar
 ```
-
----
 
 ## 🛠️ 命令
 
@@ -109,7 +107,14 @@ lucy add neoforge/create --force
 
 ### `status` - 服务器概览
 
-`lucy status` 是 Minecraft 服务器的 `neofetch`。
+`lucy status` 是 Minecraft 服务器的 `neofetch`。你可以通过这个命令向别人展示你精致的服务器环境：
+
+- 游戏版本
+- 服务端核心
+- 模组平台
+- 模组/插件列表
+- 运行状态
+- ...和更多
 
 <!-- TODO: Add screenshot -->
 

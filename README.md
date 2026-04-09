@@ -9,7 +9,7 @@
     <div>All in one command.</div>
   </h2>
 
-  <p>Lucy: The Modern Minecraft Server Package Manager</p>
+  <h3>Lucy: The Modern Minecraft Server Package Manager</h3>
 
   <img
     src="https://goreportcard.com/badge/github.com/mclucy/lucy"
@@ -68,8 +68,8 @@ go install github.com/mclucy/lucy@latest
 
 ```bash
 mkdir my-server && cd my-server
-lucy add fabric/fabric-loader@latest
-lucy add fabric/lithium@latest
+lucy add fabric@latest
+lucy add fabric/lithium@compatible
 lucy status
 java -jar fabric-server.jar
 ```
@@ -107,7 +107,14 @@ lucy add neoforge/create --force
 
 ### `status` - Server overview
 
-`lucy status` is a `neofetch` for Minecraft servers.
+`lucy status` is a `neofetch` for Minecraft servers. You may show-off your elegantly configured server in a output form of good aesthetics:
+
+- Game version
+- Server core
+- Modding platform
+- List of mods/plugins
+- Running status
+- ...and more
 
 <!-- TODO: Add screenshot -->
 
