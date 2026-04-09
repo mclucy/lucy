@@ -24,8 +24,8 @@ var (
 
 // TODO: This has a chance of causing segmentation faults
 func listVersions(slug types.ProjectName) (
-versions []*versionResponse,
-err error,
+	versions []*versionResponse,
+	err error,
 ) {
 	res, err := http.Get(versionsUrl(slug))
 	if err != nil {
@@ -45,8 +45,8 @@ err error,
 // getVersion is named as so because a Package in lucy is equivalent to a version
 // in SourceModrinth.
 func getVersion(id types.PackageId) (
-v *versionResponse,
-err error,
+	v *versionResponse,
+	err error,
 ) {
 	versions, err := listVersions(id.Name)
 	if err != nil {
@@ -61,7 +61,7 @@ err error,
 	}
 	for _, version := range versions {
 		if types.RawVersion(version.VersionNumber) == id.Version &&
-		versionSupportsLoader(version, id.Platform) {
+			versionSupportsLoader(version, id.Platform) {
 			return version, nil
 		}
 	}
@@ -80,8 +80,8 @@ func getVersionById(id string) (v *versionResponse, err error) {
 }
 
 func versionSupportsLoader(
-version *versionResponse,
-loader types.Platform,
+	version *versionResponse,
+	loader types.Platform,
 ) bool {
 	for _, l := range version.Loaders {
 		if types.Platform(l).Satisfy(loader) {
@@ -92,8 +92,8 @@ loader types.Platform,
 }
 
 func latestVersion(slug types.ProjectName) (
-v *versionResponse,
-err error,
+	v *versionResponse,
+	err error,
 ) {
 	versions, err := listVersions(slug)
 	if err != nil {
@@ -101,7 +101,7 @@ err error,
 	}
 	for _, version := range versions {
 		if version.VersionType == "release" &&
-		(v == nil || version.DatePublished.After(v.DatePublished)) {
+			(v == nil || version.DatePublished.After(v.DatePublished)) {
 			v = version
 		}
 	}
@@ -115,8 +115,8 @@ err error,
 }
 
 func latestCompatibleVersion(slug types.ProjectName) (
-v *versionResponse,
-err error,
+	v *versionResponse,
+	err error,
 ) {
 	versions, err := listVersions(slug)
 	if err != nil {
@@ -134,11 +134,15 @@ err error,
 	for _, version := range versions {
 		for _, gameVersion := range version.GameVersions {
 			if gameVersion == serverInfo.Runtime.GameVersion.String() &&
-			version.VersionType == "release" &&
-			(v == nil || version.DatePublished.After(v.DatePublished)) {
+				version.VersionType == "release" &&
+				(v == nil || version.DatePublished.After(v.DatePublished)) {
 				v = version
 			}
 		}
+	}
+	if v == nil {
+		logger.Info("no compatible version found for " + slug.Title())
+		return nil, ENoVersion
 	}
 	return v, nil
 }
