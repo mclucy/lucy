@@ -51,7 +51,7 @@ var actionAdd cli.ActionFunc = func(
 	cmd *cli.Command,
 ) error {
 	id := syntax.Parse(cmd.Args().First())
-	if id.Version == types.VersionAny || id.Version == types.VersionLatest {
+	if id.Version == types.VersionAny {
 		// override the default parse for empty version to be the latest
 		// compatible version, which is more likely what users want.
 		id.Version = types.VersionCompatible
