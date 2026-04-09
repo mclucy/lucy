@@ -23,7 +23,9 @@ func registerInstaller(platform types.Platform, installer platformInstaller) {
 }
 
 func Install(id types.PackageId, source types.Source) error {
-	p := id.NewPackage()
+	if id.Version == types.VersionAny {
+		id.Version = types.VersionCompatible
+	}
 
 	// route to platform installer if it's an identity package
 	if id.IsIdentityPackage() {
@@ -36,6 +38,7 @@ func Install(id types.PackageId, source types.Source) error {
 		return err
 	}
 
+	p := id.NewPackage()
 	serverInfo := probe.ServerInfo()
 	serverPlatform := serverInfo.Executable.DerivedModLoader()
 	hasMcdr := serverInfo.Environments.Mcdr != nil
@@ -108,14 +111,15 @@ func Install(id types.PackageId, source types.Source) error {
 }
 
 func installPlatform(id types.PackageId) error {
-	serverInfo := probe.ServerInfo()
-	serverPlatform := serverInfo.Executable.DerivedModLoader()
-	hasMcdr := serverInfo.Environments.Mcdr != nil
-
+	id.NormalizeIdentityPackage()
 	err := id.IsValidIdentityPackage()
 	if err != nil {
 		return err
 	}
+
+	serverInfo := probe.ServerInfo()
+	serverPlatform := serverInfo.Executable.DerivedModLoader()
+	hasMcdr := serverInfo.Environments.Mcdr != nil
 
 	errExistingPlatform := func() error {
 		return fmt.Errorf(
@@ -178,79 +182,6 @@ func installPlatform(id types.PackageId) error {
 		return initMcdr()
 	default:
 		return fmt.Errorf("cannot install platform: %s", id.Platform)
-	}
-}
-
-func ensureServerPlatformMatch(id types.PackageId) error {
-	platform := id.Platform
-	serverInfo := probe.ServerInfo()
-
-	switch platform {
-	case types.PlatformAny:
-		return nil
-	case types.PlatformMCDR:
-		if serverInfo.Environments.Mcdr == nil {
-			return errors.New("mcdr not found")
-		}
-		return nil
-	default:
-		if !serverInfo.Executable.IsValid() {
-			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
-		}
-
-		requiredCapability := probe.CapabilityForPlatform(platform)
-		if requiredCapability == "" {
-			return nil
-		}
-
-		topology := serverInfo.Executable.Topology
-		result := probe.EvaluateCompatibility(topology, requiredCapability)
-		switch result.Verdict {
-		case types.CompatCompatible:
-			return nil
-		case types.CompatDegraded:
-			if result.RiskLevel < types.RiskHigh {
-				logger.ShowWarn(
-					fmt.Errorf(
-						"compatibility degraded for %s: %s (reason: %s, risk_level: %d)",
-						platform,
-						result.Detail,
-						result.Reason,
-						result.RiskLevel,
-					),
-				)
-				return nil
-			}
-
-			return fmt.Errorf(
-				"%s server not found (reason: %s, verdict: %s, risk_level: %d)",
-				platform.Title(),
-				result.Reason,
-				result.Verdict,
-				result.RiskLevel,
-			)
-		case types.CompatUnresolved:
-			return fmt.Errorf(
-				"topology unresolved for %s: cannot determine server compatibility",
-				platform.Title(),
-			)
-		case types.CompatIncompatible:
-			return fmt.Errorf(
-				"%s server not found (reason: %s, verdict: %s, risk_level: %d)",
-				platform.Title(),
-				result.Reason,
-				result.Verdict,
-				result.RiskLevel,
-			)
-		default:
-			return fmt.Errorf(
-				"%s server not found (reason: %s, verdict: %s, risk_level: %d)",
-				platform.Title(),
-				result.Reason,
-				result.Verdict,
-				result.RiskLevel,
-			)
-		}
 	}
 }
 
