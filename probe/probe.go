@@ -10,7 +10,6 @@
 package probe
 
 import (
-	"errors"
 	"path"
 	"sync"
 
@@ -239,7 +238,7 @@ func buildServerProperties() exttype.FileMinecraftServerProperties {
 	file, err := ini.Load(propertiesPath)
 	if err != nil {
 		if exec != types.UnknownExecutable {
-			logger.Warn(errors.New("this server is missing a server.properties"))
+			logger.Info("this server is missing a server.properties")
 		}
 		return nil
 	}
