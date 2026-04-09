@@ -1,8 +1,10 @@
+# enable this config by running `git config --local include.path ../.gitconfig`
+
 [merge]
 	ff = only
 
 [pull]
-	ff = only
+	ff = false
 	rebase = true
 
 [rebase]
