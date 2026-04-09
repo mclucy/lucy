@@ -69,16 +69,20 @@ func Install(id types.PackageId, source types.Source) error {
 	}
 
 	remotes, errs := routing.FetchMany(providers, id)
-	for _, err := range errs {
-		if source == types.SourceAuto && len(providers) > 1 {
-			logger.ReportWarn(
-				fmt.Errorf(
-					"search on %s failed: %w",
-					err.Source.Title(),
-					err.Err,
-				),
-			)
-			continue
+
+	// Only report provider errors if no successful results
+	if len(remotes) == 0 {
+		for _, err := range errs {
+			if source == types.SourceAuto && len(providers) > 1 {
+				logger.ReportWarn(
+					fmt.Errorf(
+						"search on %s failed: %w",
+						err.Source.Title(),
+						err.Err,
+					),
+				)
+				continue
+			}
 		}
 	}
 
@@ -186,8 +190,8 @@ func installPlatform(id types.PackageId) error {
 }
 
 func selectFromCandidates(candidates []types.PackageRemote) (
-selected *types.PackageRemote,
-err error,
+	selected *types.PackageRemote,
+	err error,
 ) {
 	options := make([]huh.Option[types.PackageRemote], len(candidates))
 	for i, candidate := range candidates {
