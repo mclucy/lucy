@@ -27,8 +27,8 @@ var subcmdStatus = &cli.Command{
 }
 
 var actionStatus cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
+_ context.Context,
+cmd *cli.Command,
 ) error {
 	serverInfo := probe.ServerInfo()
 	if cmd.Bool(flagJsonName) {
@@ -40,12 +40,12 @@ var actionStatus cli.ActionFunc = func(
 }
 
 func generateStatusOutput(
-	data *types.ServerInfo,
-	cmd *cli.Command,
+data *types.ServerInfo,
+cmd *cli.Command,
 ) (output *tui.Data) {
 	longOutput := cmd.Bool("long")
 	noStyle := cmd.Bool("no-style")
-	serverPlatform := data.Executable.DerivedModLoader()
+	serverPlatform := data.Runtime.DerivedModLoader()
 	hasMcdr := data.Environments.Mcdr != nil
 	hasLucy := data.Environments.Lucy != nil
 
@@ -55,7 +55,7 @@ func generateStatusOutput(
 		func(pkg types.Package) string { return pkg.Id.Name.String() },
 	)
 
-	if data.Executable == nil {
+	if data.Runtime == nil {
 		return &tui.Data{
 			Fields: []tui.Field{
 				&tui.FieldAnnotation{
@@ -94,8 +94,8 @@ func generateStatusOutput(
 		output.Fields,
 		&tui.FieldAnnotatedShortText{
 			Title:      "Game",
-			Text:       data.Executable.GameVersion.String(),
-			Annotation: data.Executable.Path,
+			Text:       data.Runtime.GameVersion.String(),
+			Annotation: data.Runtime.PrimaryEntrance,
 		},
 	)
 
@@ -131,14 +131,14 @@ func generateStatusOutput(
 			output.Fields, &tui.FieldAnnotatedShortText{
 				Title:      "Platform",
 				Text:       serverPlatform.Title(),
-				Annotation: data.Executable.DerivedLoaderVersion(),
+				Annotation: data.Runtime.DerivedLoaderVersion(),
 			},
 		)
 	}
 
 	// If topology is resolved and has meaningful risk, show it
-	if data.Executable.Topology != nil && data.Executable.Topology.Resolved() {
-		primaryNode, ok := data.Executable.Topology.PrimaryNodeData()
+	if data.Runtime.Topology != nil && data.Runtime.Topology.Resolved() {
+		primaryNode, ok := data.Runtime.Topology.PrimaryNodeData()
 		if ok && primaryNode.RiskLevel > types.RiskNone {
 			riskLabel := topologyRiskLabel(primaryNode.RiskLevel, noStyle)
 			output.Fields = append(
@@ -151,10 +151,10 @@ func generateStatusOutput(
 	}
 
 	showMods := false
-	if data.Executable.Topology != nil && data.Executable.Topology.Resolved() {
-		showMods = data.Executable.Topology.HasCapability(types.CapabilityFabricMods) ||
-			data.Executable.Topology.HasCapability(types.CapabilityForgeMods) ||
-			data.Executable.Topology.HasCapability(types.CapabilityNeoforgeMods)
+	if data.Runtime.Topology != nil && data.Runtime.Topology.Resolved() {
+		showMods = data.Runtime.Topology.HasCapability(types.CapabilityFabricMods) ||
+		data.Runtime.Topology.HasCapability(types.CapabilityForgeMods) ||
+		data.Runtime.Topology.HasCapability(types.CapabilityNeoforgeMods)
 	}
 
 	// Collect mod/plugin names and paths for later use. This is to avoid

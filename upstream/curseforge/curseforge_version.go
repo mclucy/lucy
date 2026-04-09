@@ -10,7 +10,7 @@ import (
 // and mod loader type.
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-files
 func listFiles(modId int32, gameVersion string, loaderType int) (
-	[]fileResponse, error,
+[]fileResponse, error,
 ) {
 	u := modFilesUrl(modId, gameVersion, loaderType)
 	var resp filesResponse
@@ -51,18 +51,18 @@ func latestFile(modId int32) (*fileResponse, error) {
 // latestCompatibleFile finds the latest release file compatible with the
 // current server's game version and platform.
 func latestCompatibleFile(modId int32, platform types.Platform) (
-	*fileResponse, error,
+*fileResponse, error,
 ) {
 	serverInfo := probe.ServerInfo()
-	if !serverInfo.Executable.IsValid() {
+	if !serverInfo.Runtime.IsValid() {
 		logger.Info(
 			"no valid server, unable to infer a compatible version. " +
-				"falling back to latest version",
+			"falling back to latest version",
 		)
 		return latestFile(modId)
 	}
 
-	gameVersion := serverInfo.Executable.GameVersion.String()
+	gameVersion := serverInfo.Runtime.GameVersion.String()
 	loaderType := modLoaderType(platform)
 
 	files, err := listFiles(modId, gameVersion, loaderType)
@@ -93,9 +93,9 @@ func latestCompatibleFile(modId int32, platform types.Platform) (
 // getFileByDisplayName finds a file matching a specific version string.
 // It checks DisplayName and FileName for a match.
 func getFileByDisplayName(
-	modId int32,
-	version string,
-	platform types.Platform,
+modId int32,
+version string,
+platform types.Platform,
 ) (*fileResponse, error) {
 	loaderType := modLoaderType(platform)
 	files, err := listFiles(modId, "", loaderType)

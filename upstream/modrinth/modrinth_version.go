@@ -24,8 +24,8 @@ var (
 
 // TODO: This has a chance of causing segmentation faults
 func listVersions(slug types.ProjectName) (
-	versions []*versionResponse,
-	err error,
+versions []*versionResponse,
+err error,
 ) {
 	res, err := http.Get(versionsUrl(slug))
 	if err != nil {
@@ -45,8 +45,8 @@ func listVersions(slug types.ProjectName) (
 // getVersion is named as so because a Package in lucy is equivalent to a version
 // in SourceModrinth.
 func getVersion(id types.PackageId) (
-	v *versionResponse,
-	err error,
+v *versionResponse,
+err error,
 ) {
 	versions, err := listVersions(id.Name)
 	if err != nil {
@@ -61,7 +61,7 @@ func getVersion(id types.PackageId) (
 	}
 	for _, version := range versions {
 		if types.RawVersion(version.VersionNumber) == id.Version &&
-			versionSupportsLoader(version, id.Platform) {
+		versionSupportsLoader(version, id.Platform) {
 			return version, nil
 		}
 	}
@@ -80,8 +80,8 @@ func getVersionById(id string) (v *versionResponse, err error) {
 }
 
 func versionSupportsLoader(
-	version *versionResponse,
-	loader types.Platform,
+version *versionResponse,
+loader types.Platform,
 ) bool {
 	for _, l := range version.Loaders {
 		if types.Platform(l).Satisfy(loader) {
@@ -92,8 +92,8 @@ func versionSupportsLoader(
 }
 
 func latestVersion(slug types.ProjectName) (
-	v *versionResponse,
-	err error,
+v *versionResponse,
+err error,
 ) {
 	versions, err := listVersions(slug)
 	if err != nil {
@@ -101,7 +101,7 @@ func latestVersion(slug types.ProjectName) (
 	}
 	for _, version := range versions {
 		if version.VersionType == "release" &&
-			(v == nil || version.DatePublished.After(v.DatePublished)) {
+		(v == nil || version.DatePublished.After(v.DatePublished)) {
 			v = version
 		}
 	}
@@ -115,15 +115,15 @@ func latestVersion(slug types.ProjectName) (
 }
 
 func latestCompatibleVersion(slug types.ProjectName) (
-	v *versionResponse,
-	err error,
+v *versionResponse,
+err error,
 ) {
 	versions, err := listVersions(slug)
 	if err != nil {
 		return nil, err
 	}
 	serverInfo := probe.ServerInfo()
-	if !serverInfo.Executable.IsValid() {
+	if !serverInfo.Runtime.IsValid() {
 		logger.Info("no valid server, unable to infer a compatible version. falling back to latest version")
 		v, err := latestVersion(slug)
 		if err != nil {
@@ -133,9 +133,9 @@ func latestCompatibleVersion(slug types.ProjectName) (
 	}
 	for _, version := range versions {
 		for _, gameVersion := range version.GameVersions {
-			if gameVersion == serverInfo.Executable.GameVersion.String() &&
-				version.VersionType == "release" &&
-				(v == nil || version.DatePublished.After(v.DatePublished)) {
+			if gameVersion == serverInfo.Runtime.GameVersion.String() &&
+			version.VersionType == "release" &&
+			(v == nil || version.DatePublished.After(v.DatePublished)) {
 				v = version
 			}
 		}

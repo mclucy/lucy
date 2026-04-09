@@ -18,13 +18,13 @@ import (
 )
 
 const noteIgnorePath = "Some modding platforms are located from the libraries directory. " +
-	"You might want to look at the platform and version, rather than the path."
+"You might want to look at the platform and version, rather than the path."
 
 const multiThreadThreshold = 10
 
 // getExecutableInfo uses the new detector-based architecture to find server executables
-func buildExecutableInfo() *types.ExecutableInfo {
-	valid := make([]*types.ExecutableInfo, 0)
+func buildExecutableInfo() *types.RuntimeInfo {
+	valid := make([]*types.RuntimeInfo, 0)
 	workPath := workPath()
 
 	// Layered search
@@ -135,8 +135,8 @@ func init() {
 }
 
 func promptSelectExecutable(
-	executables []*types.ExecutableInfo,
-	notes []string,
+executables []*types.RuntimeInfo,
+notes []string,
 ) int {
 	selection := 0
 	title := "Multiple possible executables detected, select one"
@@ -172,11 +172,11 @@ func generateNotes(notes ...string) string {
 	return note
 }
 
-func executableLabel(executable *types.ExecutableInfo) string {
-	return tools.Bold(executable.Path) + " " + tools.Dim(executableAnnotation(executable))
+func executableLabel(executable *types.RuntimeInfo) string {
+	return tools.Bold(executable.PrimaryEntrance) + " " + tools.Dim(executableAnnotation(executable))
 }
 
-func executableAnnotation(executable *types.ExecutableInfo) string {
+func executableAnnotation(executable *types.RuntimeInfo) string {
 	gameVersion := executable.GameVersion.String()
 	derivedPlatform := executable.DerivedModLoader()
 	if derivedPlatform == types.PlatformMinecraft {

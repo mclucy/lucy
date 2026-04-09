@@ -24,10 +24,10 @@ func (d *forgeServerDetector) Name() string {
 }
 
 func (d *forgeServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*types.ExecutableInfo, error) {
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
+) (*types.RuntimeInfo, error) {
 	forgeVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
 	for _, f := range zipReader.File {
@@ -72,10 +72,10 @@ func (d *forgeServerDetector) Detect(
 			}
 
 			if forgeVersion != types.VersionUnknown && gameVersion != types.VersionUnknown {
-				exec := &types.ExecutableInfo{
-					Path:        filePath,
-					GameVersion: gameVersion,
-					BootCommand: nil,
+				exec := &types.RuntimeInfo{
+					PrimaryEntrance: filePath,
+					GameVersion:     gameVersion,
+					BootCommand:     nil,
 					RuntimeIdentities: []types.PackageId{
 						{
 							Platform: types.PlatformForge,
@@ -116,8 +116,8 @@ func (d *forgeModDetector) Name() string {
 }
 
 func (d *forgeModDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	for _, f := range zipReader.File {
 		if f.Name == "META-INF/mods.toml" {

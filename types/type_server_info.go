@@ -6,20 +6,20 @@ import (
 	"github.com/mclucy/lucy/exttype"
 )
 
-// ServerInfo components that do not exist, use an empty string. Note Executable
+// ServerInfo components that do not exist, use an empty string. Note Runtime
 // must exist, otherwise the program will exit; therefore, it is not a pointer.
 type ServerInfo struct {
 	WorkPath     string          `json:"work_path"`
 	SavePath     string          `json:"save_path"`
 	ModPath      []string        `json:"mod_path"`
 	Packages     []Package       `json:"packages"`
-	Executable   *ExecutableInfo `json:"executable,omitempty"`
+	Runtime      *RuntimeInfo    `json:"runtime,omitempty"`
 	Activity     *ServerActivity `json:"activity,omitempty"`
 	Environments EnvironmentInfo `json:"environments"`
 }
 
-type ExecutableInfo struct {
-	Path              string           `json:"path"`
+type RuntimeInfo struct {
+	PrimaryEntrance   string           `json:"primary_entrance"`
 	GameVersion       RawVersion       `json:"game_version"`
 	BootCommand       *exec.Cmd        `json:"-"`
 	Topology          *RuntimeTopology `json:"topology,omitempty"`
@@ -27,29 +27,29 @@ type ExecutableInfo struct {
 	BridgeHints       []string         `json:"bridge_hints,omitempty"`
 }
 
-var UnknownExecutable = &ExecutableInfo{
-	Path:        "",
-	GameVersion: VersionUnknown,
-	BootCommand: nil,
-	Topology:    TopologyUnknown,
+var UnknownExecutable = &RuntimeInfo{
+	PrimaryEntrance: "",
+	GameVersion:     VersionUnknown,
+	BootCommand:     nil,
+	Topology:        TopologyUnknown,
 }
 
-var NoExecutable = &ExecutableInfo{
-	Path:        "",
-	GameVersion: VersionNone,
-	BootCommand: nil,
-	Topology:    TopologyEmpty,
+var NoExecutable = &RuntimeInfo{
+	PrimaryEntrance: "",
+	GameVersion:     VersionNone,
+	BootCommand:     nil,
+	Topology:        TopologyEmpty,
 }
 
-func (e *ExecutableInfo) IsValid() bool {
+func (e *RuntimeInfo) IsValid() bool {
 	return e != nil && e.Topology != nil
 }
 
-func (e *ExecutableInfo) Analyzable() bool {
+func (e *RuntimeInfo) Analyzable() bool {
 	return e != nil && e.Topology != nil && len(e.RuntimeIdentities) > 0 && e != NoExecutable && e != UnknownExecutable
 }
 
-func (e *ExecutableInfo) RuntimeIdentityPackage(node *TopologyNode) *PackageId {
+func (e *RuntimeInfo) RuntimeIdentityPackage(node *TopologyNode) *PackageId {
 	if e == nil || node == nil {
 		return nil
 	}
@@ -64,7 +64,7 @@ func (e *ExecutableInfo) RuntimeIdentityPackage(node *TopologyNode) *PackageId {
 	return nil
 }
 
-func (e *ExecutableInfo) PrimaryRuntimeIdentity() *PackageId {
+func (e *RuntimeInfo) PrimaryRuntimeIdentity() *PackageId {
 	if e == nil || e.Topology == nil {
 		return nil
 	}
@@ -77,7 +77,7 @@ func (e *ExecutableInfo) PrimaryRuntimeIdentity() *PackageId {
 	return e.RuntimeIdentityPackage(&primaryNode)
 }
 
-func (e *ExecutableInfo) DerivedLoaderVersion() string {
+func (e *RuntimeInfo) DerivedLoaderVersion() string {
 	primaryIdentity := e.PrimaryRuntimeIdentity()
 	if primaryIdentity == nil {
 		return "unknown"
@@ -86,7 +86,7 @@ func (e *ExecutableInfo) DerivedLoaderVersion() string {
 	return primaryIdentity.Version.String()
 }
 
-func (e *ExecutableInfo) DerivedModLoader() Platform {
+func (e *RuntimeInfo) DerivedModLoader() Platform {
 	if e == nil || e.Topology == nil {
 		return PlatformNone
 	}

@@ -23,7 +23,7 @@ func (d *VanillaDetector) Detect(
 filePath string,
 zipReader *zip.Reader,
 fileHandle *os.File,
-) (*types.ExecutableInfo, error) {
+) (*types.RuntimeInfo, error) {
 	for _, f := range zipReader.File {
 		if f.Name == "version.json" {
 			r, err := f.Open()
@@ -57,9 +57,9 @@ fileHandle *os.File,
 
 			gameVersion := types.RawVersion(obj.Id)
 
-			exec := &types.ExecutableInfo{
-				Path:        filePath,
-				GameVersion: gameVersion,
+			exec := &types.RuntimeInfo{
+				PrimaryEntrance: filePath,
+				GameVersion:     gameVersion,
 				RuntimeIdentities: []types.PackageId{
 					{
 						Platform: types.PlatformMinecraft,

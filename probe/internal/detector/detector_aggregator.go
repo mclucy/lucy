@@ -14,7 +14,7 @@ import (
 // Executable analyzes a JAR file using all registered detectors
 // and returns the first successful match (in registration order).
 // If multiple detectors match, callers should handle ambiguity separately.
-func Executable(filePath string) *types.ExecutableInfo {
+func Executable(filePath string) *types.RuntimeInfo {
 	file, err := os.Open(filePath)
 	if err != nil {
 		logger.Debug("Failed to open file: " + err.Error())
@@ -34,7 +34,7 @@ func Executable(filePath string) *types.ExecutableInfo {
 		return nil
 	}
 
-	var candidates []*types.ExecutableInfo
+	var candidates []*types.RuntimeInfo
 	detectors := getExecutableDetectors()
 
 	for _, detector := range detectors {

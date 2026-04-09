@@ -1,13 +1,17 @@
 package probe
 
 import (
-	"github.com/mclucy/lucy/types"
 	"testing"
+
+	"github.com/mclucy/lucy/types"
 )
 
 func TestNormalizeTopology_DeduplicatesNodes(t *testing.T) {
 	nodeA := makeNode("a", types.CapabilityFabricMods)
-	nodeA2 := makeNode("a", types.CapabilityForgeMods) // duplicate ID, different caps
+	nodeA2 := makeNode(
+		"a",
+		types.CapabilityForgeMods,
+	) // duplicate ID, different caps
 	topo := makeTopology("a", []types.RuntimeNode{nodeA, nodeA2}, nil)
 	NormalizeTopology(topo)
 	if len(topo.Nodes) != 1 {
@@ -21,7 +25,8 @@ func TestNormalizeTopology_DeduplicatesNodes(t *testing.T) {
 
 func TestNormalizeTopology_DeduplicatesEdges(t *testing.T) {
 	e := makeEdge("a", "b", types.EdgeBridges, types.RiskHigh)
-	topo := makeTopology("a",
+	topo := makeTopology(
+		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
 		[]types.RuntimeEdge{e, e}, // duplicate
 	)
@@ -32,20 +37,26 @@ func TestNormalizeTopology_DeduplicatesEdges(t *testing.T) {
 }
 
 func TestNormalizeTopology_SortsNodes(t *testing.T) {
-	topo := makeTopology("a", []types.RuntimeNode{
-		makeNode("z"),
-		makeNode("a"),
-		makeNode("m"),
-	}, nil)
+	topo := makeTopology(
+		"a", []types.RuntimeNode{
+			makeNode("z"),
+			makeNode("a"),
+			makeNode("m"),
+		}, nil,
+	)
 	NormalizeTopology(topo)
-	ids := []string{string(topo.Nodes[0].ID), string(topo.Nodes[1].ID), string(topo.Nodes[2].ID)}
+	ids := []string{
+		string(topo.Nodes[0].ID), string(topo.Nodes[1].ID),
+		string(topo.Nodes[2].ID),
+	}
 	if ids[0] != "a" || ids[1] != "m" || ids[2] != "z" {
 		t.Errorf("nodes not sorted: %v", ids)
 	}
 }
 
 func TestNormalizeTopology_SortsEdges(t *testing.T) {
-	topo := makeTopology("a",
+	topo := makeTopology(
+		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b"), makeNode("c")},
 		[]types.RuntimeEdge{
 			makeEdge("b", "c", types.EdgeBridges, 0),
@@ -83,8 +94,13 @@ func TestMergeTopology_SkipsDuplicateNodes(t *testing.T) {
 }
 
 func TestMergeTopology_AddsNewEdges(t *testing.T) {
-	dst := makeTopology("a", []types.RuntimeNode{makeNode("a"), makeNode("b")}, nil)
-	src := makeTopology("a",
+	dst := makeTopology(
+		"a",
+		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
+		nil,
+	)
+	src := makeTopology(
+		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
 		[]types.RuntimeEdge{makeEdge("a", "b", types.EdgeBridges, 0)},
 	)
@@ -96,11 +112,13 @@ func TestMergeTopology_AddsNewEdges(t *testing.T) {
 
 func TestMergeTopology_SkipsDuplicateEdges(t *testing.T) {
 	e := makeEdge("a", "b", types.EdgeBridges, 0)
-	dst := makeTopology("a",
+	dst := makeTopology(
+		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
 		[]types.RuntimeEdge{e},
 	)
-	src := makeTopology("a",
+	src := makeTopology(
+		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
 		[]types.RuntimeEdge{e},
 	)
@@ -123,7 +141,7 @@ func TestEnrichTopologyFromPackages_NilExec(t *testing.T) {
 }
 
 func TestEnrichTopologyFromPackages_NoTopologyNoEvidence(t *testing.T) {
-	exec := &types.ExecutableInfo{}
+	exec := &types.RuntimeInfo{}
 	EnrichTopologyFromPackages(exec, nil)
 	if exec.Topology == nil {
 		t.Error("expected empty topology to be set, got nil")
@@ -131,7 +149,7 @@ func TestEnrichTopologyFromPackages_NoTopologyNoEvidence(t *testing.T) {
 }
 
 func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T) {
-	exec := &types.ExecutableInfo{}
+	exec := &types.RuntimeInfo{}
 	pkgs := []types.Package{
 		makePackage(t, types.PlatformFabric, "sinytra-connector", "1.0.0", ""),
 	}
@@ -151,7 +169,7 @@ func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T
 }
 
 func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
-	exec := &types.ExecutableInfo{}
+	exec := &types.RuntimeInfo{}
 	pkgs := []types.Package{
 		makePackage(t, types.PlatformFabric, "kilt", "1.0.0", ""),
 	}
@@ -168,7 +186,7 @@ func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
 func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 	// Start with a fabric topology, enrich with geyser evidence
 	fabricEntry, _ := DefaultRegistry.FindEntry(RuntimeNodeFabric)
-	exec := &types.ExecutableInfo{
+	exec := &types.RuntimeInfo{
 		Topology: BuildTopologyFromEntry(fabricEntry),
 	}
 	pkgs := []types.Package{
@@ -183,8 +201,8 @@ func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 
 func TestEnrichTopologyFromPackages_BridgeHintsProcessed(t *testing.T) {
 	fabricEntry, _ := DefaultRegistry.FindEntry(RuntimeNodeFabric)
-	exec := &types.ExecutableInfo{
-		Topology:    BuildTopologyFromEntry(fabricEntry),
+	exec := &types.RuntimeInfo{
+		Topology: BuildTopologyFromEntry(fabricEntry),
 		BridgeHints: []string{string(RuntimeNodeConnector)},
 	}
 	EnrichTopologyFromPackages(exec, nil)
@@ -195,7 +213,7 @@ func TestEnrichTopologyFromPackages_BridgeHintsProcessed(t *testing.T) {
 }
 
 func TestEnrichTopologyFromPackages_CaseInsensitiveNameMatching(t *testing.T) {
-	exec := &types.ExecutableInfo{}
+	exec := &types.RuntimeInfo{}
 	pkgs := []types.Package{
 		makePackage(t, types.PlatformFabric, "Velocity", "3.0.0", ""),
 	}
@@ -211,7 +229,7 @@ func TestEnrichTopologyFromPackages_CaseInsensitiveNameMatching(t *testing.T) {
 
 func TestEnrichTopologyFromPackages_TopologyNormalizedAfterEnrich(t *testing.T) {
 	// Add duplicate evidence to verify NormalizeTopology is called
-	exec := &types.ExecutableInfo{}
+	exec := &types.RuntimeInfo{}
 	pkgs := []types.Package{
 		makePackage(t, types.PlatformFabric, "sinytra-connector", "1.0.0", ""),
 		makePackage(t, types.PlatformFabric, "kilt", "1.0.0", ""),

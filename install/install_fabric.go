@@ -44,9 +44,9 @@ func installFabricWithOverride(p types.PackageId, deleteVanilla bool) error {
 	serverInfo := probe.ServerInfo()
 
 	var gameVersion string
-	switch serverInfo.Executable.DerivedModLoader() {
+	switch serverInfo.Runtime.DerivedModLoader() {
 	case types.PlatformVanilla:
-		gameVersion = string(serverInfo.Executable.GameVersion)
+		gameVersion = string(serverInfo.Runtime.GameVersion)
 	case types.PlatformNone:
 		gameVersion = promptSelectMinecraftVersionForFabric()
 	}
@@ -56,7 +56,7 @@ func installFabricWithOverride(p types.PackageId, deleteVanilla bool) error {
 		return fmt.Errorf("resolve fabric loader version failed: %w", err)
 	}
 	if gameVersion == "" {
-		gameVersion, err = getFabricGameVersion(serverInfo.Executable.GameVersion)
+		gameVersion, err = getFabricGameVersion(serverInfo.Runtime.GameVersion)
 		if err != nil {
 			return fmt.Errorf("cannot install fabric for game version: %w", err)
 		}
@@ -98,7 +98,7 @@ func installFabricWithOverride(p types.PackageId, deleteVanilla bool) error {
 	}
 
 	if deleteVanilla {
-		err = os.Remove(serverInfo.Executable.Path)
+		err = os.Remove(serverInfo.Runtime.PrimaryEntrance)
 	}
 	probe.Rebuild()
 

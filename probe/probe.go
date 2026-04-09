@@ -114,7 +114,7 @@ func buildServerInfo() types.ServerInfo {
 		defer wg.Done()
 		executable := getExecutableInfo()
 		mu.Lock()
-		serverInfo.Executable = executable
+		serverInfo.Runtime = executable
 		mu.Unlock()
 	}()
 
@@ -163,19 +163,19 @@ func buildServerInfo() types.ServerInfo {
 	}()
 
 	wg.Wait()
-	EnrichTopologyFromPackages(serverInfo.Executable, serverInfo.Packages)
+	EnrichTopologyFromPackages(serverInfo.Runtime, serverInfo.Packages)
 
 	// Inject runtime identity packages from executable into the package set.
 	// This runs AFTER EnrichTopologyFromPackages so topology enrichment can
 	// use package names for evidence detection first.
-	if serverInfo.Executable != nil && serverInfo.Executable.IsValid() {
+	if serverInfo.Runtime != nil && serverInfo.Runtime.IsValid() {
 		idx := NewPackageIndex()
 		// First, add all existing packages (they have local paths, so
 		// they take precedence under the first-write-wins policy).
 		idx.Merge(serverInfo.Packages)
 		// Then inject runtime identity packages (no local path — these
 		// are runtime identities, not locally installed files).
-		for _, rid := range serverInfo.Executable.RuntimeIdentities {
+		for _, rid := range serverInfo.Runtime.RuntimeIdentities {
 			if rid.Platform == types.PlatformAny {
 				continue
 			}
@@ -184,8 +184,8 @@ func buildServerInfo() types.ServerInfo {
 		serverInfo.Packages = idx.Packages()
 	}
 
-	if serverInfo.Executable != nil && serverInfo.Executable.Topology == nil {
-		serverInfo.Executable.Topology = &types.RuntimeTopology{}
+	if serverInfo.Runtime != nil && serverInfo.Runtime.Topology == nil {
+		serverInfo.Runtime.Topology = &types.RuntimeTopology{}
 	}
 
 	return serverInfo

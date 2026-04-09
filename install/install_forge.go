@@ -26,8 +26,8 @@ import (
 )
 
 func getForgeVersionFromPackageId(
-	p types.PackageId,
-	gameVersion types.RawVersion,
+p types.PackageId,
+gameVersion types.RawVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest && p.Version != types.VersionCompatible && p.Version != types.VersionAny && p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
@@ -74,7 +74,7 @@ func installForgeMod(p types.Package) error {
 
 func guardServerTopologyForForgePlatform() error {
 	serverInfo := probe.ServerInfo()
-	serverPlatform := serverInfo.Executable.DerivedModLoader()
+	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 
 	switch serverPlatform {
 	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
@@ -91,13 +91,13 @@ func promptSupportForgeProject() {
 		huh.NewGroup(
 			huh.NewNote().
 				Title("Supporting the Forge project").
-				Description(
-					"The Forge project is sustained by ads on the download page. By automating " +
-						"this process, we may reduce ad revenue that supports the project. If you find " +
-						"Forge useful, please consider supporting the project by downloading manually " +
-						"from their official site <https://files.minecraftforge.net>, or support them on " +
-						"Patreon at <https://www.patreon.com/LexManos>",
-				),
+			Description(
+				"The Forge project is sustained by ads on the download page. By automating " +
+				"this process, we may reduce ad revenue that supports the project. If you find " +
+				"Forge useful, please consider supporting the project by downloading manually " +
+				"from their official site <https://files.minecraftforge.net>, or support them on " +
+				"Patreon at <https://www.patreon.com/LexManos>",
+			),
 		),
 	).WithWidth(80)
 	_ = form.Run()
@@ -196,9 +196,9 @@ func installForge(p types.PackageId) error {
 	}
 
 	var gameVersion types.RawVersion
-	switch serverInfo.Executable.DerivedModLoader() {
+	switch serverInfo.Runtime.DerivedModLoader() {
 	case types.PlatformVanilla:
-		gameVersion = serverInfo.Executable.GameVersion
+		gameVersion = serverInfo.Runtime.GameVersion
 	case types.PlatformNone:
 		selectedVersion := promptSelectMinecraftVersionForForge()
 		if selectedVersion == "none" || selectedVersion == "error" {
@@ -233,7 +233,12 @@ func installForge(p types.PackageId) error {
 
 	fileURL := resolveForgeInstallerURL(gameVersion, forgeVersion)
 
-	if err := runModLoaderInstaller(p, fileURL, serverInfo.WorkPath, "Forge"); err != nil {
+	if err := runModLoaderInstaller(
+		p,
+		fileURL,
+		serverInfo.WorkPath,
+		"Forge",
+	); err != nil {
 		return err
 	}
 
@@ -284,8 +289,8 @@ func fetchForgeVersion(gameVersion types.RawVersion) (string, error) {
 }
 
 func resolveForgeInstallerURL(
-	gameVersion types.RawVersion,
-	forgeVersion string,
+gameVersion types.RawVersion,
+forgeVersion string,
 ) string {
 	combinedVersion := fmt.Sprintf("%s-%s", gameVersion.String(), forgeVersion)
 	escaped := url.PathEscape(combinedVersion)
@@ -349,14 +354,14 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 
 	// init stage
 	if strings.Contains(lower, "jvm info") ||
-		strings.Contains(lower, "current time") ||
-		strings.Contains(lower, "target directory") {
+	strings.Contains(lower, "current time") ||
+	strings.Contains(lower, "target directory") {
 		return 0, true
 	}
 
 	// libraries stage
 	if strings.Contains(lower, "considering library") ||
-		strings.Contains(lower, "downloading library") {
+	strings.Contains(lower, "downloading library") {
 		return 1, false
 	}
 	if strings.Contains(lower, "downloading libraries") {
@@ -368,7 +373,7 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 		return 2, true
 	}
 	if strings.Contains(lower, "extracted") ||
-		strings.Contains(lower, "output") {
+	strings.Contains(lower, "output") {
 		return 2, false
 	}
 
@@ -382,7 +387,7 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 		return 4, true
 	}
 	if strings.Contains(lower, "reading patch") ||
-		strings.Contains(lower, "checksum") {
+	strings.Contains(lower, "checksum") {
 		return 4, false
 	}
 
@@ -391,7 +396,7 @@ func classifyForgeLine(line string) (stageIdx int, isStrong bool) {
 		return 5, true
 	}
 	if strings.Contains(lower, "copying") ||
-		strings.Contains(lower, "patching") {
+	strings.Contains(lower, "patching") {
 		return 5, false
 	}
 
@@ -421,8 +426,8 @@ func forgeAsymptoticProgress(x float64, floor, span float64) float64 {
 }
 
 func runForgeInstaller(
-	installerPath string,
-	tracker *tuiprogress.Tracker,
+installerPath string,
+tracker *tuiprogress.Tracker,
 ) error {
 	installerName := path.Base(installerPath)
 	cmd := exec.Command("java", "-jar", installerName, "--installServer")
@@ -472,7 +477,7 @@ func runForgeInstaller(
 
 		stageIdx, isStrong := classifyForgeLine(line)
 		if stageIdx >= 0 && stageIdx < len(forgeStages) &&
-			isStrong && stageIdx > activeStageIdx {
+		isStrong && stageIdx > activeStageIdx {
 			activeStageIdx = stageIdx
 		}
 
@@ -521,10 +526,10 @@ func runForgeInstaller(
 //
 // platformName is used for user-facing progress labels (e.g. "Forge", "NeoForge").
 func runModLoaderInstaller(
-	id types.PackageId,
-	fileURL string,
-	workPath string,
-	platformName string,
+id types.PackageId,
+fileURL string,
+workPath string,
+platformName string,
 ) error {
 	tracker := tuiprogress.NewTrackerWithLogging(id.StringFull(), 5)
 	defer func() {

@@ -11,10 +11,10 @@ import (
 // Minecraft servers
 type ExecutableDetector interface {
 	Detect(
-		filePath string,
-		zipReader *zip.Reader,
-		fileHandle *os.File,
-	) (*types.ExecutableInfo, error)
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
+	) (*types.RuntimeInfo, error)
 	Name() string
 }
 

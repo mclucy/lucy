@@ -24,10 +24,10 @@ func (d *neoforgeServerDetector) Name() string {
 }
 
 func (d *neoforgeServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*types.ExecutableInfo, error) {
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
+) (*types.RuntimeInfo, error) {
 	neoforgeLoaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
 
@@ -101,10 +101,10 @@ func (d *neoforgeServerDetector) Detect(
 	}
 
 	// Build and return result (gameVersion may be VersionUnknown if not in manifest)
-	exec := &types.ExecutableInfo{
-		Path:        filePath,
-		GameVersion: gameVersion,
-		BootCommand: nil,
+	exec := &types.RuntimeInfo{
+		PrimaryEntrance: filePath,
+		GameVersion:     gameVersion,
+		BootCommand:     nil,
 		RuntimeIdentities: []types.PackageId{
 			{
 				Platform: types.PlatformNeoforge,
@@ -140,8 +140,8 @@ func (d *neoforgeModDetector) Name() string {
 }
 
 func (d *neoforgeModDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	for _, f := range zipReader.File {
 		if f.Name == "META-INF/neoforge.mods.toml" {

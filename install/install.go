@@ -40,11 +40,11 @@ func Install(id types.PackageId, source types.Source) error {
 
 	p := id.NewPackage()
 	serverInfo := probe.ServerInfo()
-	serverPlatform := serverInfo.Executable.DerivedModLoader()
+	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 	hasMcdr := serverInfo.Environments.Mcdr != nil
 
 	providers, err := routing.ResolveProvidersByTopology(
-		serverInfo.Executable.Topology,
+		serverInfo.Runtime.Topology,
 		serverPlatform,
 		source,
 	)
@@ -118,7 +118,7 @@ func installPlatform(id types.PackageId) error {
 	}
 
 	serverInfo := probe.ServerInfo()
-	serverPlatform := serverInfo.Executable.DerivedModLoader()
+	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 	hasMcdr := serverInfo.Environments.Mcdr != nil
 
 	errExistingPlatform := func() error {
@@ -186,8 +186,8 @@ func installPlatform(id types.PackageId) error {
 }
 
 func selectFromCandidates(candidates []types.PackageRemote) (
-	selected *types.PackageRemote,
-	err error,
+selected *types.PackageRemote,
+err error,
 ) {
 	options := make([]huh.Option[types.PackageRemote], len(candidates))
 	for i, candidate := range candidates {

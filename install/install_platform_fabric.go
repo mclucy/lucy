@@ -77,24 +77,24 @@ func getLatestFabricInstallerVersion() (string, error) {
 }
 
 func fetchFabricLoaderVersions() (
-	loaderVersions []fabricLoaderVersionEntry,
-	err error,
+loaderVersions []fabricLoaderVersionEntry,
+err error,
 ) {
 	err = fetchFabricVersionsMeta("loader", &loaderVersions)
 	return
 }
 
 func fetchFabricGameVersions() (
-	gameVersions []fabricInstallerVersion,
-	err error,
+gameVersions []fabricInstallerVersion,
+err error,
 ) {
 	err = fetchFabricVersionsMeta("game", &gameVersions)
 	return
 }
 
 func fetchFabricInstallerVersions() (
-	installerVersions []fabricInstallerVersion,
-	err error,
+installerVersions []fabricInstallerVersion,
+err error,
 ) {
 	err = fetchFabricVersionsMeta("installer", &installerVersions)
 	return
@@ -128,18 +128,18 @@ func fetchFabricVersionsMeta(endpoint string, target any) (err error) {
 }
 
 func promptOverrideVanillaWithFabric() (override bool, deleteVanilla bool) {
-	path := probe.ServerInfo().Executable.Path
-	version := probe.ServerInfo().Executable.GameVersion
+	path := probe.ServerInfo().Runtime.PrimaryEntrance
+	version := probe.ServerInfo().Runtime.GameVersion
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Vanilla server detected, override it with a corresponding fabric server?").
-				Description(
-					fmt.Sprintf(
-						"Found server at %s, with game version %s",
-						path, version,
-					),
-				).
+			Description(
+				fmt.Sprintf(
+					"Found server at %s, with game version %s",
+					path, version,
+				),
+			).
 				Value(&override),
 		),
 		huh.NewGroup(

@@ -27,7 +27,7 @@ func installNeoForgeMod(p types.Package) error {
 // mod loader is already installed.
 func guardServerTopologyForNeoForgePlatform() error {
 	serverInfo := probe.ServerInfo()
-	serverPlatform := serverInfo.Executable.DerivedModLoader()
+	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 
 	switch serverPlatform {
 	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
@@ -64,9 +64,9 @@ func installNeoForge(id types.PackageId) error {
 	}
 
 	var gameVersion types.RawVersion
-	switch serverInfo.Executable.DerivedModLoader() {
+	switch serverInfo.Runtime.DerivedModLoader() {
 	case types.PlatformVanilla:
-		gameVersion = serverInfo.Executable.GameVersion
+		gameVersion = serverInfo.Runtime.GameVersion
 	case types.PlatformNone:
 		selectedVersion := promptSelectMinecraftVersionForNeoForge()
 		if selectedVersion == "none" || selectedVersion == "error" {
@@ -98,7 +98,12 @@ func installNeoForge(id types.PackageId) error {
 
 	fileURL := resolveNeoForgeInstallerURL(neoForgeVersion)
 
-	if err := runModLoaderInstaller(id, fileURL, serverInfo.WorkPath, "NeoForge"); err != nil {
+	if err := runModLoaderInstaller(
+		id,
+		fileURL,
+		serverInfo.WorkPath,
+		"NeoForge",
+	); err != nil {
 		return err
 	}
 
@@ -109,13 +114,13 @@ func installNeoForge(id types.PackageId) error {
 // If the version is explicit, it is returned as-is.
 // Otherwise, the latest compatible version for the given Minecraft game version is fetched.
 func getNeoForgeVersionFromPackageId(
-	p types.PackageId,
-	gameVersion types.RawVersion,
+p types.PackageId,
+gameVersion types.RawVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest &&
-		p.Version != types.VersionCompatible &&
-		p.Version != types.VersionAny &&
-		p.Version != types.VersionUnknown {
+	p.Version != types.VersionCompatible &&
+	p.Version != types.VersionAny &&
+	p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
 	}
 	return fetchLatestNeoForgeVersion(gameVersion)
@@ -211,7 +216,7 @@ func verifyNeoForgeInstallation(workPath string) error {
 
 	return errors.New(
 		"NeoForge installation verification failed: no artifacts found " +
-			"(expected run.sh/run.bat or libraries/net/neoforged/)",
+		"(expected run.sh/run.bat or libraries/net/neoforged/)",
 	)
 }
 

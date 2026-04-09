@@ -22,7 +22,7 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 		}
 		return nil
 	default:
-		if !serverInfo.Executable.IsValid() {
+		if !serverInfo.Runtime.IsValid() {
 			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
 
@@ -31,7 +31,7 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 			return nil
 		}
 
-		topology := serverInfo.Executable.Topology
+		topology := serverInfo.Runtime.Topology
 		result := probe.EvaluateCompatibility(topology, requiredCapability)
 		switch result.Verdict {
 		case types.CompatCompatible:
