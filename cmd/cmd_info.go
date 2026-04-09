@@ -89,7 +89,7 @@ var actionInfo cli.ActionFunc = func(
 		logger.Fatal(fmt.Errorf("failed to get information: %w", err))
 	}
 
-	p.Information, p.Remote = &infoResult.Information, &infoResult.Remote
+	p.Information, p.Remote = &infoResult.Information, &infoResult.Fetch.Remote
 	out = infoOutput(&p, cmd.Bool(flagLongOutput.Name))
 
 	if cmd.Bool(flagJsonOutput.Name) {

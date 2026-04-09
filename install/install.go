@@ -9,6 +9,7 @@ import (
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
@@ -78,10 +79,10 @@ func Install(id types.PackageId, source types.Source) error {
 		providers = append(providers, mcdrProviders...)
 	}
 
-	remotes, errs := routing.FetchMany(providers, id)
+	fetches, errs := routing.FetchMany(providers, id)
 
 	// Only report provider errors if no successful results
-	if len(remotes) == 0 {
+	if len(fetches) == 0 {
 		for _, err := range errs {
 			if source == types.SourceAuto && len(providers) > 1 {
 				logger.ReportWarn(
@@ -96,25 +97,28 @@ func Install(id types.PackageId, source types.Source) error {
 		}
 	}
 
-	switch len(remotes) {
+	switch len(fetches) {
 	case 0:
 		return fmt.Errorf("no candidates found for %s", id.String())
 	case 1:
 		// good,follow through
-		p.Remote = &remotes[0]
+		p.Id = fetches[0].ResolvedID
+		p.Remote = &fetches[0].Remote
 	default:
 		// prompt user to select one
-		var err error
-		p.Remote, err = selectFromCandidates(remotes)
+		selected, err := selectFromCandidates(fetches)
 		if err != nil {
 			return err
 		}
+		p.Id = selected.ResolvedID
+		p.Remote = &selected.Remote
 	}
 	source = p.Remote.Source
+	resolvedPlatform := p.Id.Platform
 
-	installer := installers[id.Platform]
+	installer := installers[resolvedPlatform]
 	if installer == nil {
-		return fmt.Errorf("no installer found for platform %s", id.Platform)
+		return fmt.Errorf("no installer found for platform %s", resolvedPlatform)
 	}
 	err = installer(p)
 	if err != nil {
@@ -199,20 +203,20 @@ func installPlatform(id types.PackageId) error {
 	}
 }
 
-func selectFromCandidates(candidates []types.PackageRemote) (
-	selected *types.PackageRemote,
+func selectFromCandidates(candidates []upstream.FetchResult) (
+	selected *upstream.FetchResult,
 	err error,
 ) {
-	options := make([]huh.Option[types.PackageRemote], len(candidates))
+	options := make([]huh.Option[upstream.FetchResult], len(candidates))
 	for i, candidate := range candidates {
 		options[i] = huh.NewOption(
-			candidate.Source.Title()+" "+candidate.Filename,
+			candidate.Remote.Source.Title()+" "+candidate.Remote.Filename,
 			candidate,
 		)
 	}
 	err = huh.NewForm(
 		huh.NewGroup(
-			huh.NewSelect[types.PackageRemote]().
+			huh.NewSelect[upstream.FetchResult]().
 				Title("Multiple candidates found, please select one").
 				Options(options...).
 				Value(selected),

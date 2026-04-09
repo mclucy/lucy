@@ -42,11 +42,6 @@ func (p provider) Fetch(id types.PackageId) (
 	remote upstream.RawPackageRemote,
 	err error,
 ) {
-	id, err = p.ParseAmbiguousId(id)
-	if err != nil {
-		return nil, err
-	}
-
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
 		return nil, err

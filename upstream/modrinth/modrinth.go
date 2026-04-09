@@ -85,7 +85,6 @@ func (s provider) Fetch(id types.PackageId) (
 	remote upstream.RawPackageRemote,
 	err error,
 ) {
-	id, err = s.ParseAmbiguousId(id)
 	version, err := getVersion(id)
 	if err != nil {
 		return nil, err

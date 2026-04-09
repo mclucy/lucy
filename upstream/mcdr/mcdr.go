@@ -50,12 +50,6 @@ func (s provider) Fetch(id types.PackageId) (
 	rem upstream.RawPackageRemote,
 	err error,
 ) {
-	if id.Version.CanInfer() {
-		id, err = s.ParseAmbiguousId(id)
-		if err != nil {
-			return nil, err
-		}
-	}
 	rem, err = getRelease(id.Name.Pep8String(), id.Version)
 	return
 }

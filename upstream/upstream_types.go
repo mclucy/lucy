@@ -47,6 +47,11 @@ type Provider interface {
 	Source() types.Source
 }
 
+type FetchResult struct {
+	ResolvedID types.PackageId
+	Remote     types.PackageRemote
+}
+
 // Raw interfaces are internal conversion contracts returned by providers before
 // being normalized into types.* structures.
 

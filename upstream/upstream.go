@@ -30,13 +30,19 @@ import (
 func Fetch(
 	provider Provider,
 	id types.PackageId,
-) (packageRemote types.PackageRemote, err error) {
-	raw, err := provider.Fetch(id)
+) (result FetchResult, err error) {
+	resolvedID, err := provider.ParseAmbiguousId(id)
 	if err != nil {
-		return types.PackageRemote{}, err
+		return FetchResult{}, err
 	}
-	packageRemote = raw.ToPackageRemote()
-	return packageRemote, nil
+
+	raw, err := provider.Fetch(resolvedID)
+	if err != nil {
+		return FetchResult{}, err
+	}
+	result.ResolvedID = resolvedID
+	result.Remote = raw.ToPackageRemote()
+	return result, nil
 }
 
 func Dependencies(

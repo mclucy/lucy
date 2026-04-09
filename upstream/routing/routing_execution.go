@@ -28,7 +28,7 @@ func (e ProviderError) Unwrap() error {
 
 type InfoResult struct {
 	Information types.ProjectInformation
-	Remote      types.PackageRemote
+	Fetch       upstream.FetchResult
 }
 
 // SearchMany executes search on all providers in parallel.
@@ -94,13 +94,13 @@ func SearchMany(
 func FetchMany(
 	providers []upstream.Provider,
 	id types.PackageId,
-) ([]types.PackageRemote, []ProviderError) {
+) ([]upstream.FetchResult, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
 	}
 
 	type slot struct {
-		res    types.PackageRemote
+		res    upstream.FetchResult
 		err    ProviderError
 		ok     bool
 		failed bool
@@ -130,7 +130,7 @@ func FetchMany(
 
 	wg.Wait()
 
-	results := make([]types.PackageRemote, 0, len(providers))
+	results := make([]upstream.FetchResult, 0, len(providers))
 	providerErrors := make([]ProviderError, 0)
 	for _, item := range slots {
 		if item.ok {
@@ -149,7 +149,7 @@ func FetchMany(
 func FirstFetch(
 	providers []upstream.Provider,
 	id types.PackageId,
-) (types.PackageRemote, []ProviderError, error) {
+) (upstream.FetchResult, []ProviderError, error) {
 	// TODO: implement this function in a way that doesn't wait for all providers
 	//  to finish if one has already succeeded
 	panic("not implemented")
@@ -188,7 +188,7 @@ func FirstInfo(
 				return
 			}
 
-			results <- InfoResult{Information: info, Remote: remoteData}
+			results <- InfoResult{Information: info, Fetch: remoteData}
 		}(provider)
 	}
 
