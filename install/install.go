@@ -42,6 +42,7 @@ func Install(id types.PackageId, source types.Source) error {
 
 	p := id.NewPackage()
 	serverInfo := probe.ServerInfo()
+	showFetchStart(id)
 
 	// Create server work path if it doesn't exist and is not "."
 	workPath := serverInfo.WorkPath
@@ -114,6 +115,7 @@ func Install(id types.PackageId, source types.Source) error {
 		p.Remote = &selected.Remote
 	}
 	source = p.Remote.Source
+	showFetchSuccess(p)
 	resolvedPlatform := p.Id.Platform
 
 	installer := installers[resolvedPlatform]

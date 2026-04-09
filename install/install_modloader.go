@@ -29,6 +29,7 @@ func installModLoaderPackage(p types.Package, platform types.Platform) error {
 		return fmt.Errorf("create mod directory failed: %w", err)
 	}
 
+	showDownloadStart(p.Remote.FileUrl)
 	result, err := util.CachedDownload(
 		p.Remote.FileUrl,
 		serverInfo.ModPath[0],
@@ -43,6 +44,7 @@ func installModLoaderPackage(p types.Package, platform types.Platform) error {
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer result.File.Close()
+	showInstallComplete(result.File.Name())
 
 	return nil
 }

@@ -37,6 +37,7 @@ func installMcdrPlugin(p types.Package) error {
 		return fmt.Errorf("create plugin directory failed: %w", err)
 	}
 
+	showDownloadStart(p.Remote.FileUrl)
 	result, err := util.CachedDownload(p.Remote.FileUrl, pluginDirectories[0], util.DownloadOptions{
 		Kind:          cache.KindArtifact,
 		Filename:      p.Remote.Filename,
@@ -47,6 +48,7 @@ func installMcdrPlugin(p types.Package) error {
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer result.File.Close()
+	showInstallComplete(result.File.Name())
 
 	return nil
 }

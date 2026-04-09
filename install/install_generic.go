@@ -18,6 +18,7 @@ func installGenericPackage(p types.Package) error {
 		return errors.New("package remote data is missing")
 	}
 
+	showDownloadStart(p.Remote.FileUrl)
 	result, err := util.CachedDownload(p.Remote.FileUrl, ".", util.DownloadOptions{
 		Kind:          cache.KindArtifact,
 		Filename:      p.Remote.Filename,
@@ -28,6 +29,7 @@ func installGenericPackage(p types.Package) error {
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer result.File.Close()
+	showInstallComplete(result.File.Name())
 
 	return nil
 }
