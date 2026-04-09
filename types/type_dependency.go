@@ -44,7 +44,7 @@ func (v RawVersion) IsInvalid() bool {
 }
 
 var (
-	VersionAny        RawVersion = "all"
+	VersionAny        RawVersion = "any"
 	VersionNone       RawVersion = "none"
 	VersionUnknown    RawVersion = "unknown"
 	VersionLatest     RawVersion = "latest"

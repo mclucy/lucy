@@ -93,7 +93,7 @@ func parseOperatorAt(s string) (
 		v = types.VersionAny
 	} else if len(split) == 2 {
 		v = types.RawVersion(split[1])
-		if v == types.VersionNone || v == types.VersionAny {
+		if v == types.VersionNone {
 			return "", "", "", ESyntax
 		}
 	} else {
