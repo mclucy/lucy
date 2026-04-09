@@ -3,6 +3,7 @@ package install
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/logger"
@@ -40,6 +41,15 @@ func Install(id types.PackageId, source types.Source) error {
 
 	p := id.NewPackage()
 	serverInfo := probe.ServerInfo()
+
+	// Create server work path if it doesn't exist and is not "."
+	workPath := serverInfo.WorkPath
+	if workPath != "." {
+		if err := os.MkdirAll(workPath, 0o755); err != nil {
+			return fmt.Errorf("create server work path failed: %w", err)
+		}
+	}
+
 	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 	hasMcdr := serverInfo.Environments.Mcdr != nil
 

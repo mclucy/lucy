@@ -3,6 +3,7 @@ package install
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
@@ -22,6 +23,10 @@ func installModLoaderPackage(p types.Package, platform types.Platform) error {
 	serverInfo := probe.ServerInfo()
 	if len(serverInfo.ModPath) == 0 {
 		return errors.New("mod directory not found")
+	}
+
+	if err := os.MkdirAll(serverInfo.ModPath[0], 0o755); err != nil {
+		return fmt.Errorf("create mod directory failed: %w", err)
 	}
 
 	result, err := util.CachedDownload(

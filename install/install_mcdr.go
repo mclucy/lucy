@@ -33,6 +33,10 @@ func installMcdrPlugin(p types.Package) error {
 		return errors.New("mcdr plugin directory not found")
 	}
 
+	if err := os.MkdirAll(pluginDirectories[0], 0o755); err != nil {
+		return fmt.Errorf("create plugin directory failed: %w", err)
+	}
+
 	result, err := util.CachedDownload(p.Remote.FileUrl, pluginDirectories[0], util.DownloadOptions{
 		Kind:          cache.KindArtifact,
 		Filename:      p.Remote.Filename,
