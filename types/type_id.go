@@ -96,6 +96,12 @@ func (p Platform) IsModding() bool {
 	return p == PlatformFabric || p == PlatformForge || p == PlatformNeoforge
 }
 
+// CanInfer returns true if the platform is ambiguous and can be resolved
+// from server context.
+func (p Platform) CanInfer() bool {
+	return p == PlatformAny
+}
+
 // ProjectName is the slug of the package, using hyphens as separators. For example,
 // "fabric-api".
 //

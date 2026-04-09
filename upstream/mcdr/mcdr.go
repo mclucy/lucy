@@ -51,7 +51,7 @@ func (s provider) Fetch(id types.PackageId) (
 	err error,
 ) {
 	if id.Version.CanInfer() {
-		id, err = s.ParseAmbiguousVersion(id)
+		id, err = s.ParseAmbiguousId(id)
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +102,7 @@ func (s provider) Support(name types.ProjectName) (
 	panic("implement me")
 }
 
-func (s provider) ParseAmbiguousVersion(id types.PackageId) (
+func (s provider) ParseAmbiguousId(id types.PackageId) (
 	parsed types.PackageId,
 	err error,
 ) {

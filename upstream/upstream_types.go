@@ -39,7 +39,7 @@ type Provider interface {
 		supports RawProjectSupport,
 		err error,
 	)
-	ParseAmbiguousVersion(id types.PackageId) (
+	ParseAmbiguousId(id types.PackageId) (
 		parsed types.PackageId,
 		err error,
 	)

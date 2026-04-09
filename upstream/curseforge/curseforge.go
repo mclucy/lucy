@@ -9,6 +9,7 @@ package curseforge
 
 import (
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -41,7 +42,7 @@ func (p provider) Fetch(id types.PackageId) (
 	remote upstream.RawPackageRemote,
 	err error,
 ) {
-	id, err = p.ParseAmbiguousVersion(id)
+	id, err = p.ParseAmbiguousId(id)
 	if err != nil {
 		return nil, err
 	}
@@ -83,12 +84,16 @@ func (provider) Support(
 	panic("TODO: implement curseforge provider Support")
 }
 
-// ParseAmbiguousVersion resolves abstract version specifiers (latest,
+// ParseAmbiguousId resolves abstract version specifiers (latest,
 // compatible, any) to a concrete version by querying the CurseForge API.
-func (p provider) ParseAmbiguousVersion(id types.PackageId) (
+func (p provider) ParseAmbiguousId(id types.PackageId) (
 	parsed types.PackageId,
 	err error,
 ) {
+	if id.Platform.CanInfer() {
+		serverInfo := probe.ServerInfo()
+		id.Platform = serverInfo.Runtime.DerivedModLoader()
+	}
 	parsed.Platform = id.Platform
 	parsed.Name = id.Name
 

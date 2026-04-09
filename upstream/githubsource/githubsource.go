@@ -44,8 +44,8 @@ func (provider) Support(
 	panic("TODO: implement github provider Support")
 }
 
-func (provider) ParseAmbiguousVersion(
+func (provider) ParseAmbiguousId(
 	id types.PackageId,
 ) (parsed types.PackageId, err error) {
-	panic("TODO: implement github provider ParseAmbiguousVersion")
+	panic("TODO: implement github provider ParseAmbiguousId")
 }

@@ -18,6 +18,7 @@ import (
 	"net/http"
 
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -84,7 +85,7 @@ func (s provider) Fetch(id types.PackageId) (
 	remote upstream.RawPackageRemote,
 	err error,
 ) {
-	id, err = s.ParseAmbiguousVersion(id)
+	id, err = s.ParseAmbiguousId(id)
 	version, err := getVersion(id)
 	if err != nil {
 		return nil, err
@@ -126,10 +127,14 @@ func (s provider) Dependencies(id types.PackageId) (
 	panic("implement me")
 }
 
-func (s provider) ParseAmbiguousVersion(p types.PackageId) (
+func (s provider) ParseAmbiguousId(p types.PackageId) (
 	parsed types.PackageId,
 	err error,
 ) {
+	if p.Platform.CanInfer() {
+		serverInfo := probe.ServerInfo()
+		p.Platform = serverInfo.Runtime.DerivedModLoader()
+	}
 	parsed.Platform = p.Platform
 	parsed.Name = p.Name
 	var v *versionResponse
