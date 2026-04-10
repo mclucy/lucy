@@ -189,7 +189,7 @@ var actionCacheSlugsLs cli.ActionFunc = func(
 	}
 	for _, e := range entries {
 		out.Fields = append(out.Fields, &tui.FieldAnnotatedShortText{
-			Title:      string(e.Source) + "/" + e.LocalId,
+			Title:      e.Source.String() + "/" + e.LocalId,
 			Text:       e.CanonicalSlug,
 			Annotation: e.ResolvedBy,
 		})
