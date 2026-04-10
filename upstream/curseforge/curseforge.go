@@ -12,6 +12,7 @@ import (
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/slugresolve"
 )
 
 type provider struct{}
@@ -90,13 +91,23 @@ func (p provider) ParseAmbiguousId(id types.PackageId) (
 		id.Platform = serverInfo.Runtime.DerivedModLoader()
 	}
 	parsed.Platform = id.Platform
-	parsed.Name = id.Name
+
+	// Resolve canonical slug before any API call
+	resolvedName := types.ProjectName(
+		slugresolve.ResolveSlug(
+			types.SourceCurseForge,
+			string(id.Name),
+			"",
+			nil,
+		),
+	)
+	parsed.Name = resolvedName
 
 	var file *fileResponse
 
 	switch id.Version {
 	case types.VersionCompatible:
-		mod, err := resolveSlug(id.Name)
+		mod, err := resolveSlug(resolvedName)
 		if err != nil {
 			return id, err
 		}
@@ -105,7 +116,7 @@ func (p provider) ParseAmbiguousId(id types.PackageId) (
 			return id, err
 		}
 	case types.VersionAny, types.VersionNone, types.VersionLatest:
-		mod, err := resolveSlug(id.Name)
+		mod, err := resolveSlug(resolvedName)
 		if err != nil {
 			return id, err
 		}

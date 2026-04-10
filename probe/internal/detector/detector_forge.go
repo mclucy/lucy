@@ -12,6 +12,7 @@ import (
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream/slugresolve"
 
 	"github.com/pelletier/go-toml"
 )
@@ -24,9 +25,9 @@ func (d *forgeServerDetector) Name() string {
 }
 
 func (d *forgeServerDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (*types.RuntimeInfo, error) {
 	forgeVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
@@ -116,8 +117,8 @@ func (d *forgeModDetector) Name() string {
 }
 
 func (d *forgeModDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	for _, f := range zipReader.File {
 		if f.Name == "META-INF/mods.toml" {
@@ -207,6 +208,16 @@ fileHandle *os.File,
 				}
 
 				packages = append(packages, p)
+
+				// Pre-populate slugmap for both sources using metadata URLs and file hash
+				var metaURLs []string
+				for _, u := range p.Information.Urls {
+					if u.Url != "" {
+						metaURLs = append(metaURLs, u.Url)
+					}
+				}
+				slugresolve.ResolveSlug(types.SourceModrinth, string(p.Id.Name), fileHandle.Name(), metaURLs)
+				slugresolve.ResolveSlug(types.SourceCurseForge, string(p.Id.Name), fileHandle.Name(), metaURLs)
 			}
 		}
 	}

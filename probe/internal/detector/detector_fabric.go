@@ -13,6 +13,7 @@ import (
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream/slugresolve"
 )
 
 // fabricServerSingleFileDetector detects Fabric single-file servers
@@ -26,9 +27,9 @@ func (d *fabricServerSingleFileDetector) Name() string {
 }
 
 func (d *fabricServerSingleFileDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (exec *types.RuntimeInfo, err error) {
 	loaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
@@ -111,9 +112,9 @@ func (d *fabricServerLauncherDetector) Name() string {
 }
 
 func (d *fabricServerLauncherDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (exec *types.RuntimeInfo, err error) {
 	var valid bool
 	for _, f := range zipReader.File {
@@ -157,13 +158,14 @@ fileHandle *os.File,
 					line,
 					"Class-Path: ",
 				); found {
-					classPathsStr := after
+					var classPathsBuilder strings.Builder
+					classPathsBuilder.WriteString(after)
 					for s.Scan() && !strings.Contains(s.Text(), ":") {
 						line := s.Text()
 						line = strings.TrimSpace(line)
-						classPathsStr += line
+						classPathsBuilder.WriteString(line)
 					}
-					classPaths = strings.Split(classPathsStr, " ")
+					classPaths = strings.Split(classPathsBuilder.String(), " ")
 				}
 			}
 
@@ -240,8 +242,8 @@ func (d *fabricModDetector) Name() string {
 }
 
 func (d *fabricModDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	for _, f := range zipReader.File {
 		if f.Name == "fabric.mod.json" {
@@ -297,6 +299,16 @@ fileHandle *os.File,
 			}
 
 			packages = append(packages, pkg)
+
+			// Pre-populate slugmap for both sources using metadata URLs and file hash
+			var metaURLs []string
+			for _, key := range []string{"homepage", "sources", "issues"} {
+				if u := modInfo.Contact[key]; u != "" {
+					metaURLs = append(metaURLs, u)
+				}
+			}
+			slugresolve.ResolveSlug(types.SourceModrinth, string(pkg.Id.Name), fileHandle.Name(), metaURLs)
+			slugresolve.ResolveSlug(types.SourceCurseForge, string(pkg.Id.Name), fileHandle.Name(), metaURLs)
 		}
 	}
 
@@ -304,10 +316,10 @@ fileHandle *os.File,
 }
 
 func (d *fabricModDetector) buildDependency(
-pkg *types.Package,
-deps map[string]tools.SingleOrSlice[string],
-mandatory bool,
-inverse bool,
+	pkg *types.Package,
+	deps map[string]tools.SingleOrSlice[string],
+	mandatory bool,
+	inverse bool,
 ) {
 	for k, v := range deps {
 		dep := types.Dependency{
