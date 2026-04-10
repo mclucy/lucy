@@ -1,75 +1,80 @@
 package slugresolve
 
 import (
-	"sync"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
+	"os"
 
 	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream/curseforge"
+	"github.com/mclucy/lucy/upstream/modrinth"
 )
 
-// HashLookupFunc is a function that looks up a slug by file hash.
-type HashLookupFunc func(filePath, urlHint string) (slug string, err error)
-
-var (
-	hashLookupMu sync.RWMutex
-	hashLookups  = make(map[types.Source]HashLookupFunc)
-)
-
-// RegisterHashLookup registers a hash lookup function for a source.
-// This is called by provider packages to avoid circular imports.
-func RegisterHashLookup(src types.Source, fn HashLookupFunc) {
-	hashLookupMu.Lock()
-	defer hashLookupMu.Unlock()
-	hashLookups[src] = fn
-}
-
-// ResolveSlug returns the canonical upstream slug for a locally-identified
-// mod. It runs the following pipeline and short-circuits on first success:
-//
-//  1. Cached mapping (slugmap) — only contains hash-verified entries
-//  2. File hash fingerprint (requires filePath != "")
-//     - metadataURLs are used as hints: if a URL yields a candidate slug,
-//     that slug is tried first in the hash lookup to avoid a full scan.
-//     The URL slug itself is never persisted.
-//  3. Fallback: return localId unchanged (not persisted)
-//
-// Only step 2 writes to slugmap.
 func ResolveSlug(
 	src types.Source,
 	localId string,
 	filePath string,
 	metadataURLs []string,
 ) string {
-	// 1. Cache hit (hash-verified)
-	if slug, ok := slugmap.Default().Get(src, localId); ok {
-		return slug
+	var fileHash string
+	if filePath != "" {
+		fileHash = sha256File(filePath)
 	}
 
-	// 2. Hash fingerprint
-	if filePath != "" {
-		// Extract URL hint to try as candidate slug first (avoids full scan).
-		var urlHint string
+	if fileHash != "" {
+		if slug, ok := slugmap.Default().Get(src, localId, fileHash); ok {
+			return slug
+		}
+	}
+
+	hintSlug := ""
+	if slug, ok := slugmap.Default().GetLoose(src, localId); ok {
+		hintSlug = slug
+	}
+
+	if hintSlug == "" {
 		for _, u := range metadataURLs {
 			urlSrc, s, ok := ExtractFromURL(u)
 			if ok && urlSrc == src && s != "" {
-				urlHint = s
+				hintSlug = s
 				break
-			}
-		}
-
-		hashLookupMu.RLock()
-		fn := hashLookups[src]
-		hashLookupMu.RUnlock()
-
-		if fn != nil {
-			slug, err := fn(filePath, urlHint)
-			if err == nil && slug != "" {
-				slugmap.Default().Set(src, localId, slug, "hash")
-				return slug
 			}
 		}
 	}
 
-	// 3. Fallback — not persisted
+	if filePath != "" {
+		var slug string
+		var err error
+		switch src {
+		case types.SourceModrinth:
+			slug, err = modrinth.SlugFromFilePathWithHint(filePath, hintSlug)
+		case types.SourceCurseForge:
+			slug, err = curseforge.SlugFromFilePathWithHint(filePath, hintSlug)
+		}
+		if err == nil && slug != "" {
+			if fileHash != "" {
+				slugmap.Default().Set(src, localId, fileHash, slug, "hash")
+			}
+			return slug
+		}
+	}
+
 	return localId
+}
+
+func sha256File(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+
+	return hex.EncodeToString(h.Sum(nil))
 }
