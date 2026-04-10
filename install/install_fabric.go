@@ -25,9 +25,6 @@ type fabricInstallerVersion struct {
 }
 
 type fabricLoaderVersionEntry struct {
-	_       string `json:"separator"`
-	_       int    `json:"build"`
-	_       string `json:"maven"`
 	Version string `json:"version"`
 	Stable  bool   `json:"stable"`
 }
