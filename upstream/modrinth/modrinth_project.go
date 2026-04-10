@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/syntax"
-
 	"github.com/mclucy/lucy/types"
 )
 
@@ -38,6 +38,9 @@ func getProjectByName(slug types.ProjectName) (
 	project *projectResponse,
 	err error,
 ) {
+	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok {
+		slug = types.ProjectName(canonical)
+	}
 	res, _ := http.Get(projectUrl(string(slug)))
 	data, _ := io.ReadAll(res.Body)
 	project = &projectResponse{}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/logger"
@@ -120,6 +121,7 @@ func (d *forgeModDetector) Detect(
 	zipReader *zip.Reader,
 	fileHandle *os.File,
 ) (packages []types.Package, err error) {
+	var wg sync.WaitGroup
 	for _, f := range zipReader.File {
 		if f.Name == "META-INF/mods.toml" {
 			r, err := f.Open()
@@ -216,12 +218,20 @@ func (d *forgeModDetector) Detect(
 						metaURLs = append(metaURLs, u.Url)
 					}
 				}
-				slugresolve.ResolveSlug(types.SourceModrinth, string(p.Id.Name), fileHandle.Name(), metaURLs)
-				slugresolve.ResolveSlug(types.SourceCurseForge, string(p.Id.Name), fileHandle.Name(), metaURLs)
+				wg.Add(2)
+				go func(name, path string, urls []string) {
+					defer wg.Done()
+					slugresolve.ResolveSlug(types.SourceModrinth, name, path, urls)
+				}(string(p.Id.Name), fileHandle.Name(), metaURLs)
+				go func(name, path string, urls []string) {
+					defer wg.Done()
+					slugresolve.ResolveSlug(types.SourceCurseForge, name, path, urls)
+				}(string(p.Id.Name), fileHandle.Name(), metaURLs)
 			}
 		}
 	}
 
+	wg.Wait()
 	return packages, nil
 }
 

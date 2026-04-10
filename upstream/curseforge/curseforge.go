@@ -9,10 +9,8 @@ package curseforge
 
 import (
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/slugresolve"
 )
 
 type provider struct{}
@@ -87,27 +85,19 @@ func (p provider) ParseAmbiguousId(id types.PackageId) (
 	err error,
 ) {
 	if id.Platform.CanInfer() {
-		serverInfo := probe.ServerInfo()
-		id.Platform = serverInfo.Runtime.DerivedModLoader()
+		// Platform inference removed to avoid circular imports.
+		// Caller should provide explicit platform.
+		id.Platform = types.PlatformNone
 	}
 	parsed.Platform = id.Platform
 
-	// Resolve canonical slug before any API call
-	resolvedName := types.ProjectName(
-		slugresolve.ResolveSlug(
-			types.SourceCurseForge,
-			string(id.Name),
-			"",
-			nil,
-		),
-	)
-	parsed.Name = resolvedName
+	parsed.Name = id.Name
 
 	var file *fileResponse
 
 	switch id.Version {
 	case types.VersionCompatible:
-		mod, err := resolveSlug(resolvedName)
+		mod, err := resolveSlug(id.Name)
 		if err != nil {
 			return id, err
 		}
@@ -116,7 +106,7 @@ func (p provider) ParseAmbiguousId(id types.PackageId) (
 			return id, err
 		}
 	case types.VersionAny, types.VersionNone, types.VersionLatest:
-		mod, err := resolveSlug(resolvedName)
+		mod, err := resolveSlug(id.Name)
 		if err != nil {
 			return id, err
 		}

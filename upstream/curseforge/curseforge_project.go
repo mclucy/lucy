@@ -1,6 +1,7 @@
 package curseforge
 
 import (
+	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 )
@@ -10,6 +11,10 @@ import (
 // the slug query parameter and look for an exact match.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func resolveSlug(slug types.ProjectName) (*modResponse, error) {
+	if canonical, ok := slugmap.Default().GetLoose(types.SourceCurseForge, string(slug)); ok {
+		slug = types.ProjectName(canonical)
+	}
+
 	u := slugSearchUrl(slug)
 	var resp searchResponse
 	if err := get(u, &resp); err != nil {

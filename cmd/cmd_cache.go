@@ -73,6 +73,7 @@ var subcmdCacheSlugs = &cli.Command{
 		subcmdCacheSlugsLs,
 		subcmdCacheSlugsClear,
 	},
+	Aliases:        []string{"slug"},
 	DefaultCommand: "help",
 }
 
@@ -188,10 +189,14 @@ var actionCacheSlugsLs cli.ActionFunc = func(
 		},
 	}
 	for _, e := range entries {
+		shortHash := e.FileHash
+		if len(shortHash) > 12 {
+			shortHash = shortHash[:12]
+		}
 		out.Fields = append(out.Fields, &tui.FieldAnnotatedShortText{
 			Title:      e.Source.String() + "/" + e.LocalId,
 			Text:       e.CanonicalSlug,
-			Annotation: e.ResolvedBy,
+			Annotation: shortHash,
 		})
 	}
 	tui.Flush(out)
