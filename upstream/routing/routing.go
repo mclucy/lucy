@@ -30,13 +30,6 @@ var (
 	ErrInvalidPlatform   = errors.New("cannot find sources for platform")
 )
 
-// autoProviders defines fallback execution order for SourceAuto when the
-// platform allows broad search.
-var autoProviders = []upstream.Provider{
-	modrinth.Provider,
-	mcdr.Provider,
-}
-
 // providerBySource binds semantic Source values to executable Provider
 // implementations.
 //
@@ -44,23 +37,37 @@ var autoProviders = []upstream.Provider{
 //   - Some Source values are policy/sentinel markers (SourceAuto/SourceUnknown).
 //   - A Source can resolve to one provider, many providers, or none.
 var providerBySource = map[types.Source]upstream.Provider{
-	types.SourceCurseForge: curseforge.Provider,
-	types.SourceModrinth:   modrinth.Provider,
-	types.SourceGitHub:     githubsource.Provider,
-	types.SourceMCDR:       mcdr.Provider,
+	types.SourceModrinth: modrinth.Provider,
+	types.SourceGitHub:   githubsource.Provider,
+	types.SourceMCDR:     mcdr.Provider,
+}
+
+func listModProviders() []upstream.Provider {
+	providers := []upstream.Provider{modrinth.Provider}
+	if curseforge.Enabled() {
+		providers = append(providers, curseforge.Provider)
+	}
+	return providers
 }
 
 // ListAutoProviders returns the default ordered provider list used when
 // source=auto and platform=all.
 func ListAutoProviders() []upstream.Provider {
-	res := make([]upstream.Provider, len(autoProviders))
-	copy(res, autoProviders)
-	return res
+	providers := listModProviders()
+	providers = append(providers, mcdr.Provider)
+	return providers
 }
 
-func GetProvider(src types.Source) (upstream.Provider, bool) {
+func GetProvider(src types.Source) (upstream.Provider, bool, error) {
+	if src == types.SourceCurseForge {
+		if err := curseforge.AvailabilityError(); err != nil {
+			return nil, false, err
+		}
+		return curseforge.Provider, true, nil
+	}
+
 	p, ok := providerBySource[src]
-	return p, ok
+	return p, ok, nil
 }
 
 // ResolveProviders resolves ordered provider candidates for a given operation,
@@ -81,7 +88,7 @@ func ResolveProviders(
 	case types.PlatformAny:
 		return ListAutoProviders(), nil
 	case types.PlatformForge, types.PlatformFabric, types.PlatformNeoforge:
-		return []upstream.Provider{modrinth.Provider}, nil
+		return listModProviders(), nil
 	case types.PlatformMCDR:
 		return []upstream.Provider{mcdr.Provider}, nil
 	default:
@@ -128,6 +135,9 @@ func ResolveProvidersFromTopology(
 				types.CapabilityBukkitPlugins:
 				sawKnownCapability = true
 				appendProvider(modrinth.Provider)
+				if capability != types.CapabilityBukkitPlugins && curseforge.Enabled() {
+					appendProvider(curseforge.Provider)
+				}
 			case types.CapabilityMCDRPlugins:
 				sawKnownCapability = true
 				appendProvider(mcdr.Provider)
@@ -154,7 +164,10 @@ func ResolveProvidersFromTopology(
 }
 
 func resolveExplicitSource(src types.Source) ([]upstream.Provider, error) {
-	provider, ok := GetProvider(src)
+	provider, ok, err := GetProvider(src)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}

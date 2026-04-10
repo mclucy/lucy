@@ -5,6 +5,7 @@ import (
 
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/curseforge"
 	"github.com/mclucy/lucy/upstream/mcdr"
 	"github.com/mclucy/lucy/upstream/modrinth"
 )
@@ -54,6 +55,9 @@ func resolveProvidersByCapability(topology *types.RuntimeTopology) []upstream.Pr
 		topology.HasCapability(types.CapabilityForgeMods) ||
 		topology.HasCapability(types.CapabilityNeoforgeMods) {
 		addProvider(modrinth.Provider)
+		if curseforge.Enabled() {
+			addProvider(curseforge.Provider)
+		}
 	}
 
 	if topology.HasCapability(types.CapabilityBukkitPlugins) {

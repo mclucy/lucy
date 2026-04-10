@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
@@ -23,9 +24,11 @@ var ApiKey string
 // get performs an authenticated GET request to the CurseForge API and
 // unmarshals the JSON response into dest.
 func get(url string, dest any) error {
-	if ApiKey == "" {
+	apiKey := strings.TrimSpace(ApiKey)
+	if apiKey == "" {
 		return ErrNoApiKey
 	}
+	ApiKey = apiKey
 
 	logger.Debug("curseforge api: GET " + url)
 
@@ -33,7 +36,7 @@ func get(url string, dest any) error {
 	if err != nil {
 		return fmt.Errorf("curseforge: failed to create request: %w", err)
 	}
-	req.Header.Set("x-api-key", ApiKey)
+	req.Header.Set("x-api-key", apiKey)
 	req.Header.Set("Accept", "application/json")
 
 	res, err := http.DefaultClient.Do(req)
