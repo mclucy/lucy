@@ -93,9 +93,11 @@ func (s *store) GetLoose(src types.Source, localId string) (slug string, ok bool
 func (s *store) All() []Entry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]Entry, 0, len(s.entries))
+	out := make([]Entry, 0, len(s.entries)/2)
 	for _, e := range s.entries {
-		out = append(out, e)
+		if e.FileHash != "" {
+			out = append(out, e)
+		}
 	}
 	return out
 }
