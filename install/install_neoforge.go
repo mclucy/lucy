@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/prompt"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -114,13 +114,13 @@ func installNeoForge(id types.PackageId) error {
 // If the version is explicit, it is returned as-is.
 // Otherwise, the latest compatible version for the given Minecraft game version is fetched.
 func getNeoForgeVersionFromPackageId(
-p types.PackageId,
-gameVersion types.RawVersion,
+	p types.PackageId,
+	gameVersion types.RawVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest &&
-	p.Version != types.VersionCompatible &&
-	p.Version != types.VersionAny &&
-	p.Version != types.VersionUnknown {
+		p.Version != types.VersionCompatible &&
+		p.Version != types.VersionAny &&
+		p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
 	}
 	return fetchLatestNeoForgeVersion(gameVersion)
@@ -216,7 +216,7 @@ func verifyNeoForgeInstallation(workPath string) error {
 
 	return errors.New(
 		"NeoForge installation verification failed: no artifacts found " +
-		"(expected run.sh/run.bat or libraries/net/neoforged/)",
+			"(expected run.sh/run.bat or libraries/net/neoforged/)",
 	)
 }
 
@@ -235,32 +235,23 @@ func promptSelectMinecraftVersionForNeoForge() (version string) {
 		}
 	}
 
-	var installLatest bool
-	options := huh.NewOptions(gameVersions...)
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("No current Minecraft installation found.").
-				Description("Do you want to install NeoForge with its latest supported Minecraft version?").
-				Affirmative("Yes, proceed").
-				Negative("No, select a game version").
-				Value(&installLatest),
-		),
-	).Run()
+	installLatest, err := prompt.Confirm(
+		"No current Minecraft installation found.",
+		"Do you want to install NeoForge with its latest supported Minecraft version?",
+		"Yes, proceed",
+		"No, select a game version",
+	)
 	if err != nil {
 		return "none"
 	}
 	if installLatest {
 		return gameVersions[0]
 	}
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a Minecraft version for NeoForge").
-				Options(options...).
-				Value(&version),
-		).WithHide(installLatest),
-	).Run()
+	version, err = prompt.Select(
+		"Select a Minecraft version for NeoForge",
+		gameVersions,
+		func(v string) string { return v },
+	)
 	if err != nil {
 		return "none"
 	}

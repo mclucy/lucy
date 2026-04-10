@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/prompt"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -209,22 +209,13 @@ func selectFromCandidates(candidates []upstream.FetchResult) (
 	selected *upstream.FetchResult,
 	err error,
 ) {
-	var selectedValue upstream.FetchResult
-	options := make([]huh.Option[upstream.FetchResult], len(candidates))
-	for i, candidate := range candidates {
-		options[i] = huh.NewOption(
-			candidate.Remote.Source.Title()+" "+candidate.Remote.Filename,
-			candidate,
-		)
-	}
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[upstream.FetchResult]().
-				Title("Multiple candidates found, please select one").
-				Options(options...).
-				Value(&selectedValue),
-		),
-	).Run()
+	selectedValue, err := prompt.Select(
+		"Multiple candidates found, please select one",
+		candidates,
+		func(candidate upstream.FetchResult) string {
+			return candidate.Remote.Source.Title() + " " + candidate.Remote.Filename
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
