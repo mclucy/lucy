@@ -7,6 +7,7 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
 
@@ -25,6 +26,7 @@ var subcmdCache = &cli.Command{
 	Commands: []*cli.Command{
 		subcmdCacheLs,
 		subcmdCacheClear,
+		subcmdCacheSlugs,
 	},
 	DefaultCommand: "help",
 }
@@ -53,6 +55,46 @@ var subcmdCacheClear = &cli.Command{
 	},
 	Action: tools.Decorate(
 		actionCacheClear,
+		decoratorGlobalFlags,
+		decoratorLogAndExitOnError,
+	),
+}
+
+var subcmdCacheSlugs = &cli.Command{
+	Name:  "slugs",
+	Usage: "Manage the local slug resolution cache",
+	Action: tools.Decorate(
+		actionEmpty,
+		decoratorGlobalFlags,
+		decoratorHelpAndExitOnNoArg,
+		decoratorHelpAndExitOnError,
+	),
+	Commands: []*cli.Command{
+		subcmdCacheSlugsLs,
+		subcmdCacheSlugsClear,
+	},
+	DefaultCommand: "help",
+}
+
+var subcmdCacheSlugsLs = &cli.Command{
+	Name:    "ls",
+	Aliases: []string{"list"},
+	Usage:   "List slug mappings",
+	Flags:   []cli.Flag{flagJsonOutput, flagNoStyle},
+	Action: tools.Decorate(
+		actionCacheSlugsLs,
+		decoratorGlobalFlags,
+		decoratorLogAndExitOnError,
+	),
+}
+
+var subcmdCacheSlugsClear = &cli.Command{
+	Name:    "clear",
+	Aliases: []string{"rm"},
+	Usage:   "Clear all slug mappings",
+	Flags:   []cli.Flag{flagNoStyle},
+	Action: tools.Decorate(
+		actionCacheSlugsClear,
 		decoratorGlobalFlags,
 		decoratorLogAndExitOnError,
 	),
@@ -122,5 +164,45 @@ var actionCacheClear cli.ActionFunc = func(
 			tools.FormatBytesBinary(report.TotalFreedSize),
 		),
 	)
+	return nil
+}
+
+var actionCacheSlugsLs cli.ActionFunc = func(
+	_ context.Context,
+	cmd *cli.Command,
+) error {
+	entries := slugmap.Default().All()
+	if cmd.Bool(flagJsonName) {
+		tools.PrintAsJson(entries)
+		return nil
+	}
+	if len(entries) == 0 {
+		logger.ShowInfo("Slug map is empty")
+		return nil
+	}
+	out := &tui.Data{
+		Fields: []tui.Field{
+			&tui.FieldAnnotation{
+				Annotation: fmt.Sprintf("(%d entries)", len(entries)),
+			},
+		},
+	}
+	for _, e := range entries {
+		out.Fields = append(out.Fields, &tui.FieldAnnotatedShortText{
+			Title:      string(e.Source) + "/" + e.LocalId,
+			Text:       e.CanonicalSlug,
+			Annotation: e.ResolvedBy,
+		})
+	}
+	tui.Flush(out)
+	return nil
+}
+
+var actionCacheSlugsClear cli.ActionFunc = func(
+	_ context.Context,
+	_ *cli.Command,
+) error {
+	slugmap.Default().Clear()
+	logger.ShowInfo("slug map cleared")
 	return nil
 }
