@@ -18,18 +18,12 @@ import (
 	"net/http"
 
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/slugresolve"
 )
 
 type provider struct{}
-
-func init() {
-	slugresolve.RegisterHashLookup(types.SourceModrinth, SlugFromFilePathWithHint)
-}
 
 func (s provider) Source() types.Source {
 	return types.SourceModrinth
@@ -136,29 +130,21 @@ func (s provider) ParseAmbiguousId(p types.PackageId) (
 	err error,
 ) {
 	if p.Platform.CanInfer() {
-		serverInfo := probe.ServerInfo()
-		p.Platform = serverInfo.Runtime.DerivedModLoader()
+		// Platform inference removed to avoid circular imports.
+		// Caller should provide explicit platform.
+		p.Platform = types.PlatformNone
 	}
 	parsed.Platform = p.Platform
 
-	// Resolve canonical slug before any API call
-	resolvedName := types.ProjectName(
-		slugresolve.ResolveSlug(
-			types.SourceModrinth,
-			string(p.Name),
-			"",
-			nil,
-		),
-	)
-	parsed.Name = resolvedName
+	parsed.Name = p.Name
 
 	var v *versionResponse
 
 	switch p.Version {
 	case types.VersionCompatible:
-		v, err = latestCompatibleVersion(resolvedName)
+		v, err = latestCompatibleVersion(p.Name)
 	case types.VersionAny, types.VersionNone, types.VersionLatest:
-		v, err = latestVersion(resolvedName)
+		v, err = latestVersion(p.Name)
 	default:
 		return p, nil
 	}

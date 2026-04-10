@@ -7,8 +7,6 @@ import (
 	"net/http"
 
 	"github.com/mclucy/lucy/logger"
-
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -122,22 +120,12 @@ func latestCompatibleVersion(slug types.ProjectName) (
 	if err != nil {
 		return nil, err
 	}
-	serverInfo := probe.ServerInfo()
-	if !serverInfo.Runtime.IsValid() {
-		logger.Info("no valid server, unable to infer a compatible version. falling back to latest version")
-		v, err := latestVersion(slug)
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	}
+	// Platform inference removed to avoid circular imports.
+	// Caller should provide explicit platform or this will use latest.
 	for _, version := range versions {
-		for _, gameVersion := range version.GameVersions {
-			if gameVersion == serverInfo.Runtime.GameVersion.String() &&
-				version.VersionType == "release" &&
-				(v == nil || version.DatePublished.After(v.DatePublished)) {
-				v = version
-			}
+		if version.VersionType == "release" &&
+			(v == nil || version.DatePublished.After(v.DatePublished)) {
+			v = version
 		}
 	}
 	if v == nil {
