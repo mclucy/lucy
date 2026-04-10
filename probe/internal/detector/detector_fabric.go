@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	externaltype "github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/logger"
@@ -245,6 +246,7 @@ func (d *fabricModDetector) Detect(
 	zipReader *zip.Reader,
 	fileHandle *os.File,
 ) (packages []types.Package, err error) {
+	var wg sync.WaitGroup
 	for _, f := range zipReader.File {
 		if f.Name == "fabric.mod.json" {
 			r, err := f.Open()
@@ -307,11 +309,19 @@ func (d *fabricModDetector) Detect(
 					metaURLs = append(metaURLs, u)
 				}
 			}
-			slugresolve.ResolveSlug(types.SourceModrinth, string(pkg.Id.Name), fileHandle.Name(), metaURLs)
-			slugresolve.ResolveSlug(types.SourceCurseForge, string(pkg.Id.Name), fileHandle.Name(), metaURLs)
+			wg.Add(2)
+			go func(name, path string, urls []string) {
+				defer wg.Done()
+				slugresolve.ResolveSlug(types.SourceModrinth, name, path, urls)
+			}(string(pkg.Id.Name), fileHandle.Name(), metaURLs)
+			go func(name, path string, urls []string) {
+				defer wg.Done()
+				slugresolve.ResolveSlug(types.SourceCurseForge, name, path, urls)
+			}(string(pkg.Id.Name), fileHandle.Name(), metaURLs)
 		}
 	}
 
+	wg.Wait()
 	return packages, nil
 }
 
