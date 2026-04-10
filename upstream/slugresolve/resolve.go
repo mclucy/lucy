@@ -1,11 +1,27 @@
 package slugresolve
 
 import (
+	"sync"
+
 	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream/curseforge"
-	"github.com/mclucy/lucy/upstream/modrinth"
 )
+
+// HashLookupFunc is a function that looks up a slug by file hash.
+type HashLookupFunc func(filePath, urlHint string) (slug string, err error)
+
+var (
+	hashLookupMu sync.RWMutex
+	hashLookups  = make(map[types.Source]HashLookupFunc)
+)
+
+// RegisterHashLookup registers a hash lookup function for a source.
+// This is called by provider packages to avoid circular imports.
+func RegisterHashLookup(src types.Source, fn HashLookupFunc) {
+	hashLookupMu.Lock()
+	defer hashLookupMu.Unlock()
+	hashLookups[src] = fn
+}
 
 // ResolveSlug returns the canonical upstream slug for a locally-identified
 // mod. It runs the following pipeline and short-circuits on first success:
@@ -41,17 +57,16 @@ func ResolveSlug(
 			}
 		}
 
-		var slug string
-		var err error
-		switch src {
-		case types.SourceModrinth:
-			slug, err = modrinth.SlugFromFilePathWithHint(filePath, urlHint)
-		case types.SourceCurseForge:
-			slug, err = curseforge.SlugFromFilePathWithHint(filePath, urlHint)
-		}
-		if err == nil && slug != "" {
-			slugmap.Default().Set(src, localId, slug, "hash")
-			return slug
+		hashLookupMu.RLock()
+		fn := hashLookups[src]
+		hashLookupMu.RUnlock()
+
+		if fn != nil {
+			slug, err := fn(filePath, urlHint)
+			if err == nil && slug != "" {
+				slugmap.Default().Set(src, localId, slug, "hash")
+				return slug
+			}
 		}
 	}
 

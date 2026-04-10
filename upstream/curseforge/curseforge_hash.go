@@ -10,6 +10,8 @@ import (
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream/slugresolve"
 )
 
 // fingerprintRequest is the body for POST /v1/fingerprints/432.
@@ -129,4 +131,8 @@ func curseForgeFingerprint(data []byte) uint32 {
 
 func isCFWhitespace(b byte) bool {
 	return b == 0x09 || b == 0x0A || b == 0x0D || b == 0x20
+}
+
+func init() {
+	slugresolve.RegisterHashLookup(types.SourceCurseForge, SlugFromFilePathWithHint)
 }
