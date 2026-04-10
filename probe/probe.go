@@ -67,6 +67,16 @@ func Rebuild() {
 	serverInfoReady = true
 }
 
+// InvalidateServerInfo marks the cached ServerInfo as stale so the next call
+// to ServerInfo() will re-probe the server state. This is useful after
+// installing packages (e.g., identity packages like Fabric) to refresh the
+// topology cache without forcing an immediate rebuild.
+func InvalidateServerInfo() {
+	serverInfoMu.Lock()
+	defer serverInfoMu.Unlock()
+	serverInfoReady = false
+}
+
 func resetProbeMemoizedStateLocked() {
 	modPaths = tools.Memoize(buildModPaths)
 	getEnvironment = tools.Memoize(buildEnvironment)
@@ -203,8 +213,8 @@ func buildModPaths() (paths []string) {
 	if exec.Topology != nil && exec.Topology.Resolved() {
 		// Topology-driven path discovery
 		if exec.Topology.HasCapability(types.CapabilityFabricMods) ||
-		exec.Topology.HasCapability(types.CapabilityForgeMods) ||
-		exec.Topology.HasCapability(types.CapabilityNeoforgeMods) {
+			exec.Topology.HasCapability(types.CapabilityForgeMods) ||
+			exec.Topology.HasCapability(types.CapabilityNeoforgeMods) {
 			paths = append(paths, path.Join(workPath(), "mods"))
 		}
 		if exec.Topology.HasCapability(types.CapabilityBukkitPlugins) {
