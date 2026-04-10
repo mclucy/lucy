@@ -12,10 +12,7 @@ func init() {
 	if !tools.IsTerminal {
 		return
 	}
-	globalOptions = append(
-		colorOptions(),
-		progress.WithFillCharacters('█', '░'),
-	)
+	globalOptions = append(globalOptions, progress.WithFillCharacters('█', '░'))
 }
 
 // colorOptions returns color options lazily, ensuring OSC4 probing
