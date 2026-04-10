@@ -209,6 +209,7 @@ func selectFromCandidates(candidates []upstream.FetchResult) (
 	selected *upstream.FetchResult,
 	err error,
 ) {
+	var selectedValue upstream.FetchResult
 	options := make([]huh.Option[upstream.FetchResult], len(candidates))
 	for i, candidate := range candidates {
 		options[i] = huh.NewOption(
@@ -221,12 +222,13 @@ func selectFromCandidates(candidates []upstream.FetchResult) (
 			huh.NewSelect[upstream.FetchResult]().
 				Title("Multiple candidates found, please select one").
 				Options(options...).
-				Value(selected),
+				Value(&selectedValue),
 		),
 	).Run()
 	if err != nil {
 		return nil, err
 	}
 
+	selected = &selectedValue
 	return selected, nil
 }
