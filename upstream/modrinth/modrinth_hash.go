@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
@@ -28,14 +30,55 @@ func SlugFromFilePath(filePath string) (slug string, err error) {
 }
 
 // SlugFromFilePathWithHint is like SlugFromFilePath but accepts an optional
-// urlHint slug. If urlHint is non-empty, the hint is noted but hash always
-// wins — the hash endpoint is always queried for authoritative resolution.
+// urlHint slug. The hint is verified against the project's version file hashes
+// before falling back to the authoritative hash lookup path.
 func SlugFromFilePathWithHint(filePath, urlHint string) (slug string, err error) {
 	sha1hex, err := sha1File(filePath)
 	if err != nil {
 		return "", fmt.Errorf("modrinth hash: %w", err)
 	}
+
+	if urlHint != "" && verifySlugBySha1(urlHint, sha1hex) {
+		return urlHint, nil
+	}
+
 	return SlugFromHash(sha1hex)
+}
+
+func verifySlugBySha1(hintSlug, sha1hex string) bool {
+	u, _ := url.JoinPath(projectUrlPrefix, hintSlug, "version")
+	u += "?include_changelog=false"
+
+	logger.Debug("modrinth hint verification: " + u)
+	resp, err := http.Get(u)
+	if err != nil {
+		return false
+	}
+	defer tools.CloseReader(resp.Body, logger.Warn)
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false
+	}
+
+	var versions []versionResponse
+	if err := json.Unmarshal(data, &versions); err != nil {
+		return false
+	}
+
+	for _, version := range versions {
+		for _, file := range version.Files {
+			if strings.EqualFold(file.Hashes.Sha1, sha1hex) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // SlugFromHash queries Modrinth for a project by SHA-1 hash using the
