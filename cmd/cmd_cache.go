@@ -73,6 +73,7 @@ var subcmdCacheSlugs = &cli.Command{
 		subcmdCacheSlugsLs,
 		subcmdCacheSlugsClear,
 	},
+	Aliases:        []string{"slug"},
 	DefaultCommand: "help",
 }
 
