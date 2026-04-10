@@ -278,6 +278,7 @@ var savePath = tools.Memoize(buildSavePath)
 
 func buildInstalledPackages() (mods []types.Package) {
 	idx := NewPackageIndex()
+	var mu sync.Mutex
 
 	paths := modPaths()
 	for _, modPath := range paths {
@@ -287,12 +288,24 @@ func buildInstalledPackages() (mods []types.Package) {
 			logger.Info("cannot read the mod directory")
 			continue
 		}
+
+		var wg sync.WaitGroup
 		for _, jarPath := range jarFiles {
-			analyzed := detector.Packages(jarPath)
-			if analyzed != nil {
+			wg.Add(1)
+			go func(path string) {
+				defer wg.Done()
+
+				analyzed := detector.Packages(path)
+				if analyzed == nil {
+					return
+				}
+
+				mu.Lock()
 				idx.Merge(analyzed)
-			}
+				mu.Unlock()
+			}(jarPath)
 		}
+		wg.Wait()
 	}
 
 	env := getEnvironment()
