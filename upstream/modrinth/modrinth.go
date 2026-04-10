@@ -22,9 +22,14 @@ import (
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/slugresolve"
 )
 
 type provider struct{}
+
+func init() {
+	slugresolve.RegisterHashLookup(types.SourceModrinth, SlugFromFilePathWithHint)
+}
 
 func (s provider) Source() types.Source {
 	return types.SourceModrinth
@@ -135,14 +140,25 @@ func (s provider) ParseAmbiguousId(p types.PackageId) (
 		p.Platform = serverInfo.Runtime.DerivedModLoader()
 	}
 	parsed.Platform = p.Platform
-	parsed.Name = p.Name
+
+	// Resolve canonical slug before any API call
+	resolvedName := types.ProjectName(
+		slugresolve.ResolveSlug(
+			types.SourceModrinth,
+			string(p.Name),
+			"",
+			nil,
+		),
+	)
+	parsed.Name = resolvedName
+
 	var v *versionResponse
 
 	switch p.Version {
 	case types.VersionCompatible:
-		v, err = latestCompatibleVersion(p.Name)
+		v, err = latestCompatibleVersion(resolvedName)
 	case types.VersionAny, types.VersionNone, types.VersionLatest:
-		v, err = latestVersion(p.Name)
+		v, err = latestVersion(resolvedName)
 	default:
 		return p, nil
 	}
