@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/prompt"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/mojang"
@@ -198,18 +198,12 @@ func ensureMinecraftEULAAccepted(workPath string) error {
 		return nil
 	}
 
-	accepted := false
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Minecraft EULA consent required").
-				Description("To install and run the official server, you must agree to Mojang EULA: " + minecraftEULAURL).
-				Affirmative("I Agree").
-				Negative("Cancel").
-				Value(&accepted),
-		),
+	accepted, err := prompt.Confirm(
+		"Minecraft EULA consent required",
+		"To install and run the official server, you must agree to Mojang EULA: "+minecraftEULAURL,
+		"I Agree",
+		"Cancel",
 	)
-	err := form.Run()
 	if err != nil {
 		return fmt.Errorf(
 			"unable to confirm EULA acceptance interactively after reviewing %s: %w",
