@@ -30,6 +30,7 @@ import (
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/mclucy/lucy/tools"
 )
 
@@ -54,14 +55,15 @@ type entryMsg struct {
 }
 
 type runtime struct {
-	program    *tea.Program
-	entries    map[entryID]*entryState
-	entryOrder []entryID
-	mu         sync.Mutex
-	running    bool
-	nextID     atomic.Int32
-	done       chan struct{}
-	stopped    atomic.Bool
+	program      *tea.Program
+	entries      map[entryID]*entryState
+	entryOrder   []entryID
+	finalMessage string
+	mu           sync.Mutex
+	running      bool
+	nextID       atomic.Int32
+	done         chan struct{}
+	stopped      atomic.Bool
 }
 
 func (m *runtime) Init() tea.Cmd { return nil }
@@ -75,11 +77,7 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.mu.Lock()
-		width := getTrackerWidth(msg.Width)
-		for _, entry := range m.entries {
-			titleWidth := len(entry.title) + 2
-			entry.bar.SetWidth(width - titleWidth)
-		}
+		m.resizeBarsLocked(msg.Width)
 		m.mu.Unlock()
 
 	case entryMsg:
@@ -100,9 +98,7 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entry.message = string(payload)
 		case setTitleMsg:
 			entry.title = string(payload)
-			width := entry.bar.Width()
-			titleWidth := len(entry.title) + 2
-			entry.bar.SetWidth(width - titleWidth)
+			m.resizeBarsLocked(0)
 		case bytesProgressMsg:
 			if payload.total > 0 {
 				entry.percent = float64(payload.read) / float64(payload.total)
@@ -126,13 +122,20 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// order sensitive, set success colors last so they override global options
 			options := append(globalOptions, successColorOptions()...)
 			entry.bar = progress.New(options...)
+			entry.bar.SetWidth(m.barWidthLocked(0))
 			if m.allCompleted() {
+				m.finalMessage = m.buildFinalMessageLocked()
 				m.mu.Unlock()
 				return m, tea.Quit
 			}
 		case closeMsg:
+			entry.percent = 1.0
+			if entry.message == "" {
+				entry.message = "Done"
+			}
 			entry.completed = true
 			if m.allCompleted() {
+				m.finalMessage = m.buildFinalMessageLocked()
 				m.mu.Unlock()
 				return m, tea.Quit
 			}
@@ -148,6 +151,7 @@ func (m *runtime) View() tea.View {
 	defer m.mu.Unlock()
 
 	var lines []string
+	titleWidth := m.maxTitleWidthLocked()
 	for i := len(m.entryOrder) - 1; i >= 0; i-- {
 		id := m.entryOrder[i]
 		entry, ok := m.entries[id]
@@ -160,7 +164,8 @@ func (m *runtime) View() tea.View {
 		}
 
 		var sb strings.Builder
-		sb.WriteString(tools.Bold(tools.Magenta(entry.title)))
+		titleCell := lipgloss.NewStyle().Width(titleWidth).Render(entry.title)
+		sb.WriteString(tools.Bold(tools.Magenta(titleCell)))
 		sb.WriteString(strings.Repeat(" ", 2))
 		sb.WriteString(entry.bar.ViewAs(entry.percent))
 
@@ -184,6 +189,10 @@ func (m *runtime) View() tea.View {
 		}
 
 		lines = append(lines, sb.String())
+	}
+	if m.finalMessage != "" {
+		lines = append(lines, "")
+		lines = append(lines, tools.Green("✓")+" "+tools.Dim(m.finalMessage))
 	}
 	return tea.NewView(strings.Join(lines, "\n"))
 }
@@ -219,18 +228,21 @@ func (r *runtime) registerEntry(title string, logCapacity int) entryID {
 	}
 
 	id := entryID(r.nextID.Add(1))
-	width := getTrackerWidth(0)
-	titleWidth := len(title) + 2
-	barWidth := width - titleWidth
-	widthOption := progress.WithWidth(barWidth)
-	options := append(globalOptions, widthOption)
+	options := append([]progress.Option(nil), globalOptions...)
 	r.mu.Lock()
+	if len(r.entries) > 0 && r.allCompleted() {
+		r.entries = make(map[entryID]*entryState)
+		r.entryOrder = nil
+		r.finalMessage = ""
+	}
 	r.entries[id] = &entryState{
 		title:  title,
 		bar:    progress.New(options...),
 		logCap: logCapacity,
 	}
 	r.entryOrder = append(r.entryOrder, id)
+	r.finalMessage = ""
+	r.resizeBarsLocked(0)
 	needStart := !r.running
 	r.mu.Unlock()
 
@@ -263,6 +275,50 @@ func (r *runtime) start() {
 		r.program = nil
 		r.mu.Unlock()
 	}()
+}
+
+func (m *runtime) resizeBarsLocked(termWidth int) {
+	barWidth := m.barWidthLocked(termWidth)
+	for _, entry := range m.entries {
+		entry.bar.SetWidth(barWidth)
+	}
+}
+
+func (m *runtime) barWidthLocked(termWidth int) int {
+	width := getTrackerWidth(termWidth)
+	barWidth := width - m.maxTitleWidthLocked() - 2
+	if barWidth < 10 {
+		return 10
+	}
+	return barWidth
+}
+
+func (m *runtime) maxTitleWidthLocked() int {
+	maxWidth := 0
+	for _, entry := range m.entries {
+		if width := lipgloss.Width(entry.title); width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
+}
+
+func (m *runtime) buildFinalMessageLocked() string {
+	if len(m.entryOrder) == 1 {
+		entry := m.entries[m.entryOrder[0]]
+		if entry != nil && entry.message != "" {
+			return entry.message
+		}
+		if entry != nil {
+			return entry.title + " completed"
+		}
+	}
+
+	count := len(m.entries)
+	if count == 1 {
+		return "1 task completed"
+	}
+	return fmt.Sprintf("%d tasks completed", count)
 }
 
 func (r *runtime) send(id entryID, msg tea.Msg) {

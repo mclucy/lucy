@@ -26,7 +26,7 @@ var subcmdAdd = &cli.Command{
 		},
 		flagNoStyle,
 	},
-	ArgsUsage: "<package-identifier>",
+	ArgsUsage: "<package-identifier> [package-identifier...]",
 	Action: tools.Decorate(
 		actionAdd,
 		decoratorGlobalFlags,
@@ -40,7 +40,7 @@ var subcmdAdd = &cli.Command{
 
 		token := ""
 		if cmd.NArg() > 0 {
-			token = cmd.Args().First()
+			token = cmd.Args().Get(cmd.NArg() - 1)
 		}
 		CompletePackageIDSuggestions(context.Background(), cmd, token)
 	},
@@ -50,7 +50,17 @@ var actionAdd cli.ActionFunc = func(
 	_ context.Context,
 	cmd *cli.Command,
 ) error {
-	id := syntax.Parse(cmd.Args().First())
+	args := cmd.Args().Slice()
+	ids := make([]types.PackageId, 0, len(args))
+	for _, arg := range args {
+		ids = append(ids, syntax.Parse(arg))
+	}
+
+	if len(ids) > 1 {
+		return install.InstallMany(ids, types.SourceAuto)
+	}
+
+	id := ids[0]
 	if id.Version == types.VersionAny {
 		// override the default parse for empty version to be the latest
 		// compatible version, which is more likely what users want.

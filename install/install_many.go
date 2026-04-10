@@ -37,10 +37,20 @@ func InstallMany(ids []types.PackageId, source types.Source) error {
 
 	if len(identityIds) > 0 {
 		showBatchPhase("Installing platforms", identityIds)
+		succeeded := make([]string, 0, len(identityIds))
 		for _, id := range identityIds {
 			if err := installPlatform(id); err != nil {
-				return err
+				if len(succeeded) > 0 {
+					return fmt.Errorf(
+						"%s: failed to install %s (already installed: %s)",
+						err,
+						id.StringFull(),
+						strings.Join(succeeded, ", "),
+					)
+				}
+				return fmt.Errorf("failed to install %s: %w", id.StringFull(), err)
 			}
+			succeeded = append(succeeded, id.StringFull())
 		}
 		probe.InvalidateServerInfo()
 	}
@@ -193,27 +203,59 @@ func resolveBatchPackages(
 	ids []types.PackageId,
 	providers []upstream.Provider,
 ) ([]types.Package, error) {
+	type slot struct {
+		pkg    types.Package
+		failed bool
+		id     types.PackageId
+		errMsg string
+	}
+
+	slots := make([]slot, len(ids))
+	var wg sync.WaitGroup
+
+	for i, id := range ids {
+		wg.Add(1)
+		go func(index int, id types.PackageId) {
+			defer wg.Done()
+			fetches, errs := routing.FetchMany(providers, id)
+			if len(fetches) == 0 {
+				reasons := make([]string, 0, len(errs))
+				for _, provErr := range errs {
+					reasons = append(reasons, provErr.Err.Error())
+				}
+				errMsg := strings.Join(reasons, "; ")
+				if errMsg == "" {
+					errMsg = "not found on any provider"
+				}
+				slots[index] = slot{failed: true, id: id, errMsg: errMsg}
+				return
+			}
+			fetch := fetches[0]
+			slots[index] = slot{
+				pkg: types.Package{
+					Id:     fetch.ResolvedID,
+					Remote: &fetch.Remote,
+				},
+			}
+		}(i, id)
+	}
+
+	wg.Wait()
+
 	packages := make([]types.Package, 0, len(ids))
 	failures := make([]string, 0)
-
-	for _, id := range ids {
-		fetches, _ := routing.FetchMany(providers, id)
-		if len(fetches) == 0 {
-			failures = append(failures, id.StringFull())
-			continue
+	for _, item := range slots {
+		if item.failed {
+			failures = append(failures, fmt.Sprintf("%s (%s)", item.id.StringFull(), item.errMsg))
+		} else {
+			packages = append(packages, item.pkg)
 		}
-
-		fetch := fetches[0]
-		packages = append(packages, types.Package{
-			Id:     fetch.ResolvedID,
-			Remote: &fetch.Remote,
-		})
 	}
 
 	if len(failures) > 0 {
 		return nil, fmt.Errorf(
-			"no candidates found for %s",
-			strings.Join(failures, ", "),
+			"no candidates found:\n  %s",
+			strings.Join(failures, "\n  "),
 		)
 	}
 
@@ -246,6 +288,9 @@ func downloadBatchPackages(
 	slots := make([]slot, len(packages))
 	var wg sync.WaitGroup
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	for i, p := range packages {
 		tracker := tuiprogress.NewTracker(p.Id.StringFull())
 
@@ -253,6 +298,12 @@ func downloadBatchPackages(
 		go func(index int, pkg types.Package, tracker *tuiprogress.Tracker) {
 			defer wg.Done()
 			defer tracker.Close()
+
+			// Check if already cancelled by a sibling failure
+			if ctx.Err() != nil {
+				slots[index] = slot{failed: true, err: ctx.Err()}
+				return
+			}
 
 			result, err := util.CachedDownload(
 				pkg.Remote.FileUrl,
@@ -270,6 +321,7 @@ func downloadBatchPackages(
 				},
 			)
 			if err != nil {
+				cancel() // signal other goroutines to abort
 				slots[index] = slot{failed: true, err: err}
 				return
 			}
@@ -277,6 +329,7 @@ func downloadBatchPackages(
 			if result.File != nil {
 				pkg.Local = &types.PackageInstallation{Path: result.File.Name()}
 				if err := result.File.Close(); err != nil {
+					cancel() // signal other goroutines to abort
 					slots[index] = slot{failed: true, err: err}
 					return
 				}
@@ -288,11 +341,9 @@ func downloadBatchPackages(
 
 	wg.Wait()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := tuiprogress.WaitForShutdown(ctx); err != nil {
-		return nil, fmt.Errorf("progress shutdown failed: %w", err)
-	}
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	_ = tuiprogress.WaitForShutdown(shutdownCtx)
 
 	downloaded := make([]types.Package, 0, len(packages))
 	failures := make([]string, 0)
