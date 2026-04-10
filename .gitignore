@@ -53,3 +53,7 @@ AGENTS.md
 
 # Generated autocomplete script
 completions
+
+# docs
+docs/*
+!docs/shared
