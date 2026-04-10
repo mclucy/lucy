@@ -11,14 +11,13 @@ import (
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe/internal/detector"
+	"github.com/mclucy/lucy/prompt"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
-
-	"github.com/charmbracelet/huh"
 )
 
 const noteIgnorePath = "Some modding platforms are located from the libraries directory. " +
-"You might want to look at the platform and version, rather than the path."
+	"You might want to look at the platform and version, rather than the path."
 
 const multiThreadThreshold = 10
 
@@ -135,8 +134,8 @@ func init() {
 }
 
 func promptSelectExecutable(
-executables []*types.RuntimeInfo,
-notes []string,
+	executables []*types.RuntimeInfo,
+	notes []string,
 ) int {
 	selection := 0
 	title := "Multiple possible executables detected, select one"
@@ -145,23 +144,21 @@ notes []string,
 		title = title + "\n" + noteText
 	}
 
-	options := make([]huh.Option[int], 0, len(executables))
-	for i, exec := range executables {
-		options = append(options, huh.NewOption(executableLabel(exec), i))
+	indices := make([]int, len(executables))
+	for i := range executables {
+		indices[i] = i
 	}
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[int]().
-				Title(title).
-				Options(options...).
-				Value(&selection),
-		),
+	selected, err := prompt.Select(
+		title,
+		indices,
+		func(index int) string { return executableLabel(executables[index]) },
 	)
-	if err := form.Run(); err != nil {
+	if err != nil {
 		logger.ShowWarn(err)
+		return selection
 	}
-	return selection
+	return selected
 }
 
 func generateNotes(notes ...string) string {

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/prompt"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
 )
@@ -83,24 +83,24 @@ func getLatestFabricInstallerVersion() (string, error) {
 }
 
 func fetchFabricLoaderVersions() (
-loaderVersions []fabricLoaderVersionEntry,
-err error,
+	loaderVersions []fabricLoaderVersionEntry,
+	err error,
 ) {
 	err = fetchFabricVersionsMeta("loader", &loaderVersions)
 	return
 }
 
 func fetchFabricGameVersions() (
-gameVersions []fabricInstallerVersion,
-err error,
+	gameVersions []fabricInstallerVersion,
+	err error,
 ) {
 	err = fetchFabricVersionsMeta("game", &gameVersions)
 	return
 }
 
 func fetchFabricInstallerVersions() (
-installerVersions []fabricInstallerVersion,
-err error,
+	installerVersions []fabricInstallerVersion,
+	err error,
 ) {
 	err = fetchFabricVersionsMeta("installer", &installerVersions)
 	return
@@ -136,26 +136,20 @@ func fetchFabricVersionsMeta(endpoint string, target any) (err error) {
 func promptOverrideVanillaWithFabric() (override bool, deleteVanilla bool) {
 	path := probe.ServerInfo().Runtime.PrimaryEntrance
 	version := probe.ServerInfo().Runtime.GameVersion
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Vanilla server detected, override it with a corresponding fabric server?").
-			Description(
-				fmt.Sprintf(
-					"Found server at %s, with game version %s",
-					path, version,
-				),
-			).
-				Value(&override),
-		),
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Delete vanilla server after fabric installation?").
-				Description(fmt.Sprintf("Will delete %s", path)).
-				Value(&deleteVanilla),
-		).WithHideFunc(func() bool { return !override }),
+	override, _ = prompt.Confirm(
+		"Vanilla server detected, override it with a corresponding fabric server?",
+		fmt.Sprintf("Found server at %s, with game version %s", path, version),
+		"Yes",
+		"No",
 	)
-	_ = form.Run()
+	if override {
+		deleteVanilla, _ = prompt.Confirm(
+			"Delete vanilla server after fabric installation?",
+			fmt.Sprintf("Will delete %s", path),
+			"Yes",
+			"No",
+		)
+	}
 	return
 }
 
@@ -170,32 +164,23 @@ func promptSelectMinecraftVersionForFabric() (version string) {
 		gameVersions[i] = v.Version
 	}
 
-	var installLatest bool
-	options := huh.NewOptions[string](gameVersions...)
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("No current Minecraft installation found.").
-				Description("Do you want to install fabric with its latest supported Minecraft version?").
-				Affirmative("Yes, proceed").
-				Negative("No, select a game version").
-				Value(&installLatest),
-		),
-	).Run()
+	installLatest, err := prompt.Confirm(
+		"No current Minecraft installation found.",
+		"Do you want to install fabric with its latest supported Minecraft version?",
+		"Yes, proceed",
+		"No, select a game version",
+	)
 	if err != nil {
 		return "none"
 	}
 	if installLatest {
 		return gameVersions[0]
 	}
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a Minecraft installation").
-				Options(options...).
-				Value(&version),
-		).WithHide(installLatest),
-	).Run()
+	version, err = prompt.Select(
+		"Select a Minecraft installation",
+		gameVersions,
+		func(v string) string { return v },
+	)
 	if err != nil {
 		return "none"
 	}
