@@ -34,7 +34,7 @@ func newHandler(name string, cfg CacheConfig) (obj *handler) {
 	if err := os.MkdirAll(obj.dir, 0o700); err != nil {
 		logger.Warn(
 			fmt.Errorf(
-				"cannnot create cache directory, disabling %s cache: %w",
+				"cannot create cache directory, disabling %s cache: %w",
 				name, err,
 			),
 		)
