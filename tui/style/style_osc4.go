@@ -21,7 +21,7 @@ func osc4Query(index uint8) color.Color {
 	}
 
 	profile := termenv.ColorProfile()
-	if profile == termenv.Ascii {
+	if !shouldQueryOSC4(profile) {
 		return nil
 	}
 
@@ -106,6 +106,10 @@ func readResponseWithTimeout(
 		}
 		return nil
 	}
+}
+
+func shouldQueryOSC4(profile termenv.Profile) bool {
+	return profile == termenv.TrueColor
 }
 
 func parseOSC4Response(index uint8, data []byte) color.Color {
