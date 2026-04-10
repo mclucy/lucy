@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/prompt"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/util"
@@ -88,20 +88,10 @@ func guardServerTopologyForForgePlatform() error {
 }
 
 func promptSupportForgeProject() {
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title("Supporting the Forge project").
-				Description(
-					"The Forge project is sustained by ads on the download page. By automating " +
-						"this process, we may reduce ad revenue that supports the project. If you find " +
-						"Forge useful, please consider supporting the project by downloading manually " +
-						"from their official site <https://files.minecraftforge.net>, or support them on " +
-						"Patreon at <https://www.patreon.com/LexManos>",
-				),
-		),
-	).WithWidth(80)
-	_ = form.Run()
+	_ = prompt.Note(
+		"Supporting the Forge project",
+		"The Forge project is sustained by ads on the download page. By automating this process, we may reduce ad revenue that supports the project. If you find Forge useful, please consider supporting the project by downloading manually from their official site <https://files.minecraftforge.net>, or support them on Patreon at <https://www.patreon.com/LexManos>",
+	)
 }
 
 func promptSelectMinecraftVersionForForge() (version string) {
@@ -112,32 +102,23 @@ func promptSelectMinecraftVersionForForge() (version string) {
 
 	gameVersions := versions
 
-	var installLatest bool
-	options := huh.NewOptions[string](gameVersions...)
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("No current Minecraft installation found.").
-				Description("Do you want to install forge with its latest supported Minecraft version?").
-				Affirmative("Yes, proceed").
-				Negative("No, select a game version").
-				Value(&installLatest),
-		),
-	).Run()
+	installLatest, err := prompt.Confirm(
+		"No current Minecraft installation found.",
+		"Do you want to install forge with its latest supported Minecraft version?",
+		"Yes, proceed",
+		"No, select a game version",
+	)
 	if err != nil {
 		return "none"
 	}
 	if installLatest {
 		return gameVersions[0]
 	}
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a Minecraft installation").
-				Options(options...).
-				Value(&version),
-		).WithHide(installLatest),
-	).Run()
+	version, err = prompt.Select(
+		"Select a Minecraft installation",
+		gameVersions,
+		func(v string) string { return v },
+	)
 	if err != nil {
 		return "none"
 	}
