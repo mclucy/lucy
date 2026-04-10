@@ -14,6 +14,7 @@ import (
 type Entry struct {
 	Source        types.Source `json:"source"`
 	LocalId       string       `json:"local_id"`
+	FileHash      string       `json:"file_hash"`
 	CanonicalSlug string       `json:"canonical_slug"`
 	// ResolvedBy is always "hash" — only hash-verified slugs are persisted.
 	ResolvedBy string `json:"resolved_by"`
@@ -22,7 +23,7 @@ type Entry struct {
 type store struct {
 	mu      sync.RWMutex
 	path    string
-	entries map[string]Entry // key: source+"/"+localId
+	entries map[string]Entry // key: source+"/"+localId or source+"/"+localId+"/"+fileHash
 }
 
 var defaultStore *store
@@ -41,26 +42,48 @@ func Default() *store {
 	return defaultStore
 }
 
-func key(src types.Source, localId string) string {
+func preciseKey(src types.Source, localId, fileHash string) string {
+	return string(src) + "/" + localId + "/" + fileHash
+}
+
+func looseKey(src types.Source, localId string) string {
 	return string(src) + "/" + localId
 }
 
-func (s *store) Set(src types.Source, localId, canonicalSlug, resolvedBy string) {
+func (s *store) Set(src types.Source, localId, fileHash, canonicalSlug, resolvedBy string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.entries[key(src, localId)] = Entry{
+	s.entries[preciseKey(src, localId, fileHash)] = Entry{
 		Source:        src,
 		LocalId:       localId,
+		FileHash:      fileHash,
+		CanonicalSlug: canonicalSlug,
+		ResolvedBy:    resolvedBy,
+	}
+	s.entries[looseKey(src, localId)] = Entry{
+		Source:        src,
+		LocalId:       localId,
+		FileHash:      "",
 		CanonicalSlug: canonicalSlug,
 		ResolvedBy:    resolvedBy,
 	}
 	_ = s.flush()
 }
 
-func (s *store) Get(src types.Source, localId string) (slug string, ok bool) {
+func (s *store) Get(src types.Source, localId, fileHash string) (slug string, ok bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	e, ok := s.entries[key(src, localId)]
+	e, ok := s.entries[preciseKey(src, localId, fileHash)]
+	if !ok {
+		return "", false
+	}
+	return e.CanonicalSlug, true
+}
+
+func (s *store) GetLoose(src types.Source, localId string) (slug string, ok bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	e, ok := s.entries[looseKey(src, localId)]
 	if !ok {
 		return "", false
 	}
