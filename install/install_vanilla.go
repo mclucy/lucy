@@ -245,6 +245,12 @@ func writeMinecraftEULAFile(workPath string) error {
 		},
 		"\n",
 	)
+	if _, err := os.Stat(path.Join(workPath)); os.IsNotExist(err) {
+		err = os.MkdirAll(path.Join(workPath), 0755)
+		if err != nil {
+			return err
+		}
+	}
 	err := os.WriteFile(path.Join(workPath, "eula.txt"), []byte(content), 0o644)
 	if err != nil {
 		return fmt.Errorf("write eula.txt failed: %w", err)
