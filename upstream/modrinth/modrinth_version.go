@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -26,6 +27,9 @@ func listVersions(slug types.ProjectName) (
 	versions []*versionResponse,
 	err error,
 ) {
+	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok {
+		slug = types.ProjectName(canonical)
+	}
 	res, err := http.Get(versionsUrl(slug))
 	if err != nil {
 		return nil, err
