@@ -121,11 +121,18 @@ func latestVersion(slug types.ProjectName) (
 		}
 	}
 	if v == nil {
-		logger.Info("no release version found for " + slug.Title())
-		return nil, ENoVersion
-	} else {
-		logger.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
+		// No release version found; fall back to the latest pre-release (beta/alpha).
+		logger.Info("no release version found for " + slug.Title() + ", falling back to latest pre-release")
+		for _, version := range versions {
+			if v == nil || version.DatePublished.After(v.DatePublished) {
+				v = version
+			}
+		}
 	}
+	if v == nil {
+		return nil, ENoVersion
+	}
+	logger.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
 	return v, nil
 }
 
@@ -146,7 +153,15 @@ func latestCompatibleVersion(slug types.ProjectName) (
 		}
 	}
 	if v == nil {
-		logger.Info("no compatible version found for " + slug.Title())
+		// No release version found; fall back to the latest pre-release (beta/alpha).
+		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
+		for _, version := range versions {
+			if v == nil || version.DatePublished.After(v.DatePublished) {
+				v = version
+			}
+		}
+	}
+	if v == nil {
 		return nil, ENoVersion
 	}
 	return v, nil
