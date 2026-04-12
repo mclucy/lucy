@@ -3,6 +3,7 @@ package modrinth
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -67,8 +68,20 @@ func getVersion(id types.PackageId) (
 }
 
 func getVersionById(id string) (v *versionResponse, err error) {
-	res, _ := http.Get(versionUrl(id))
-	data, _ := io.ReadAll(res.Body)
+	res, err := http.Get(versionUrl(id))
+	if err != nil {
+		return nil, fmt.Errorf("modrinth: request failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, ENoVersion
+	}
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
+	}
 	v = &versionResponse{}
 	err = json.Unmarshal(data, v)
 	if err != nil {

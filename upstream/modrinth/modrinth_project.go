@@ -3,6 +3,7 @@ package modrinth
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -12,9 +13,21 @@ import (
 )
 
 func getProjectId(slug types.ProjectName) (id string, err error) {
-	res, _ := http.Get(projectUrl(string(slug)))
+	res, err := http.Get(projectUrl(string(slug)))
+	if err != nil {
+		return "", fmt.Errorf("modrinth: request failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return "", ENoProject
+	}
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("modrinth: failed to read response: %w", err)
+	}
 	modrinthProject := projectResponse{}
-	data, _ := io.ReadAll(res.Body)
 	err = json.Unmarshal(data, &modrinthProject)
 	if err != nil {
 		return "", ENoProject
@@ -24,8 +37,20 @@ func getProjectId(slug types.ProjectName) (id string, err error) {
 }
 
 func getProjectById(id string) (project *projectResponse, err error) {
-	res, _ := http.Get(projectUrl(id))
-	data, _ := io.ReadAll(res.Body)
+	res, err := http.Get(projectUrl(id))
+	if err != nil {
+		return nil, fmt.Errorf("modrinth: request failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, ENoProject
+	}
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
+	}
 	project = &projectResponse{}
 	err = json.Unmarshal(data, project)
 	if err != nil {
@@ -41,8 +66,20 @@ func getProjectByName(slug types.ProjectName) (
 	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok {
 		slug = types.ProjectName(canonical)
 	}
-	res, _ := http.Get(projectUrl(string(slug)))
-	data, _ := io.ReadAll(res.Body)
+	res, err := http.Get(projectUrl(string(slug)))
+	if err != nil {
+		return nil, fmt.Errorf("modrinth: request failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, ENoProject
+	}
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
+	}
 	project = &projectResponse{}
 	err = json.Unmarshal(data, project)
 	if err != nil {
@@ -55,8 +92,20 @@ func getProjectMembers(id string) (
 	members []*memberResponse,
 	err error,
 ) {
-	res, _ := http.Get(projectMemberUrl(id))
-	data, _ := io.ReadAll(res.Body)
+	res, err := http.Get(projectMemberUrl(id))
+	if err != nil {
+		return nil, fmt.Errorf("modrinth: request failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, ENoMember
+	}
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
+	}
 	err = json.Unmarshal(data, &members)
 	if err != nil {
 		return nil, ENoMember
@@ -82,15 +131,33 @@ func DependencyToPackage(
 	p.Platform = dependent.Platform
 
 	if dependency.VersionId != "" && dependency.ProjectId != "" {
-		version, _ = getVersionById(dependency.VersionId)
-		project, _ = getProjectById(dependency.ProjectId)
+		version, err = getVersionById(dependency.VersionId)
+		if err != nil {
+			return p, fmt.Errorf("resolve dependency version: %w", err)
+		}
+		project, err = getProjectById(dependency.ProjectId)
+		if err != nil {
+			return p, fmt.Errorf("resolve dependency project: %w", err)
+		}
 	} else if dependency.VersionId != "" {
-		version, _ = getVersionById(dependency.VersionId)
-		project, _ = getProjectById(version.ProjectId)
+		version, err = getVersionById(dependency.VersionId)
+		if err != nil {
+			return p, fmt.Errorf("resolve dependency version: %w", err)
+		}
+		project, err = getProjectById(version.ProjectId)
+		if err != nil {
+			return p, fmt.Errorf("resolve dependency project: %w", err)
+		}
 	} else if dependency.ProjectId != "" {
-		project, _ = getProjectById(dependency.ProjectId)
+		project, err = getProjectById(dependency.ProjectId)
+		if err != nil {
+			return p, fmt.Errorf("resolve dependency project: %w", err)
+		}
 		// This is not safe, TODO: use better inference method
-		version, _ = latestVersion(syntax.ToProjectName(project.Slug))
+		version, err = latestVersion(syntax.ToProjectName(project.Slug))
+		if err != nil {
+			return p, fmt.Errorf("resolve dependency latest version: %w", err)
+		}
 		p.Version = types.VersionLatest
 	} else {
 		return p, ErrorInvalidDependency

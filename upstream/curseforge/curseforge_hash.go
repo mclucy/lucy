@@ -65,6 +65,10 @@ func slugFromFingerprint(fp uint32) (string, error) {
 	}
 	defer tools.CloseReader(resp.Body, logger.Warn)
 
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("curseforge: fingerprint lookup returned status %d", resp.StatusCode)
+	}
+
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err

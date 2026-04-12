@@ -46,7 +46,10 @@ func SlugFromFilePathWithHint(filePath, urlHint string) (slug string, err error)
 }
 
 func verifySlugBySha1(hintSlug, sha1hex string) bool {
-	u, _ := url.JoinPath(projectUrlPrefix, hintSlug, "version")
+	u, err := url.JoinPath(projectUrlPrefix, hintSlug, "version")
+	if err != nil {
+		return false
+	}
 	u += "?include_changelog=false"
 
 	logger.Debug("modrinth hint verification: " + u)
@@ -95,6 +98,9 @@ func SlugFromHash(sha1hex string) (slug string, err error) {
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", ENoProject
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("modrinth: hash lookup returned status %d", resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)
