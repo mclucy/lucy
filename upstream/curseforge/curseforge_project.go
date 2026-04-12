@@ -11,6 +11,7 @@ import (
 // the slug query parameter and look for an exact match.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func resolveSlug(slug types.ProjectName) (*modResponse, error) {
+	// Canonicalize slug-like name to provider canonical slug before search.
 	if canonical, ok := slugmap.Default().GetLoose(types.SourceCurseForge, string(slug)); ok {
 		slug = types.ProjectName(canonical)
 	}
