@@ -31,6 +31,9 @@
     src="https://img.shields.io/github/license/mclucy/lucy"
     alt="License"
   />
+  <a href="https://deepwiki.com/mclucy/lucy">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+  </a>
 
 </div>
 
