@@ -14,6 +14,7 @@ package modrinth
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -64,8 +65,12 @@ func (s provider) Search(
 	// Make the call to Modrinth API
 	logger.Debug("searching via modrinth api: " + searchUrl)
 	httpRes, err := http.Get(searchUrl)
-	defer tools.CloseReader(httpRes.Body, logger.Warn)
 	if err != nil {
+		return nil, fmt.Errorf("modrinth: search request failed: %w", err)
+	}
+	defer tools.CloseReader(httpRes.Body, logger.Warn)
+
+	if httpRes.StatusCode != http.StatusOK {
 		return nil, ErrInvalidAPIResponse
 	}
 	data, err := io.ReadAll(httpRes.Body)

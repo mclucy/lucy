@@ -24,6 +24,9 @@ func getFabricLoaderVersion(loaderVersion types.RawVersion) (string, error) {
 	}
 
 	if loaderVersion == types.VersionLatest || loaderVersion == types.VersionCompatible || loaderVersion == types.VersionAny {
+		if len(versions) == 0 {
+			return "", errors.New("no fabric loader versions available")
+		}
 		return versions[0].Version, nil
 	}
 
@@ -50,6 +53,9 @@ func getFabricGameVersion(gameVersion types.RawVersion) (string, error) {
 	}
 
 	if gameVersion == types.VersionLatest || gameVersion == types.VersionCompatible || gameVersion == types.VersionAny {
+		if len(versions) == 0 {
+			return "", errors.New("no fabric game versions available")
+		}
 		return versions[0].Version, nil
 	}
 
