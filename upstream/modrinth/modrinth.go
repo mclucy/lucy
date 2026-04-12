@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
@@ -93,6 +94,9 @@ func (s provider) Fetch(id types.PackageId) (
 	if err != nil {
 		return nil, err
 	}
+	if len(version.Files) == 0 || path.Ext(version.Files[0].Filename) != ".jar" {
+		return nil, ErrUnsupportedFileType
+	}
 	return version, nil
 }
 
@@ -121,6 +125,10 @@ func (s provider) Support(name types.ProjectName) (
 }
 
 var ErrInvalidAPIResponse = errors.New("invalid data from modrinth api")
+
+// Temporary guard: Modrinth can ship non-JAR artifacts such as .mrpack,
+// but Lucy does not support installing them yet.
+var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported")
 
 func (s provider) Dependencies(id types.PackageId) (
 	deps upstream.RawPackageDependencies,
