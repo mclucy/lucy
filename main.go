@@ -13,6 +13,7 @@ import (
 func main() {
 	defer logger.DumpHistory() // Whether DumpHistory actually does anything depend on the flag.
 	if err := cmd.Cli.Run(context.Background(), os.Args); err != nil {
-		logger.ReportError(err)
+		// Error is already reported by decoratorLogAndExitOnError in commands.
+		// Reporting here again would cause duplicate error messages.
 	}
 }
