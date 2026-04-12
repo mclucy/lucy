@@ -24,7 +24,6 @@ var Cli = &cli.Command{
 		decoratorBaseCommandFlags,
 		decoratorGlobalFlags,
 		decoratorHelpAndExitOnNoArg,
-		decoratorHelpAndExitOnError,
 	),
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
