@@ -23,13 +23,13 @@ func versionsUrl(slug types.ProjectName) (urlString string) {
 const versionUrlPrefix = `https://api.modrinth.com/v2/version/`
 
 func versionUrl(id string) (urlString string) {
-	return versionUrlPrefix + id
+	return versionUrlPrefix + url.PathEscape(id)
 }
 
 // projectUrl returns the URL for a project with the given SourceModrinth project id
 // or slug (package name).
 func projectUrl(suffix string) (urlString string) {
-	return projectUrlPrefix + string(suffix)
+	return projectUrlPrefix + url.PathEscape(suffix)
 }
 
 func projectMemberUrl(suffix string) (urlString string) {
@@ -51,7 +51,7 @@ func searchUrl(
 	err := urlTemplate.Execute(
 		&urlBuilder,
 		map[string]any{
-			"query":  query,
+			"query":  url.QueryEscape(string(query)),
 			"index":  option.index,
 			"facets": url.QueryEscape(serializeFacet(option.facets...)),
 		},
