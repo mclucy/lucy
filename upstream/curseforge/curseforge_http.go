@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
+	"github.com/mclucy/lucy/internal/cipher"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
 )
@@ -14,21 +16,25 @@ import (
 // Docs: https://docs.curseforge.com/rest-api/
 const baseUrl = "https://api.curseforge.com"
 
-// ApiKey is injected at build time via ldflags:
-//
-//	go build -ldflags "-X github.com/mclucy/lucy/upstream/curseforge.ApiKey=YOUR_KEY"
-//
-// Docs: https://docs.curseforge.com/rest-api/#authentication
-var ApiKey string
+var (
+	ApiKey    string
+	apiKeyMut sync.Once
+)
 
 // get performs an authenticated GET request to the CurseForge API and
 // unmarshals the JSON response into dest.
 func get(url string, dest any) error {
-	apiKey := strings.TrimSpace(ApiKey)
-	if apiKey == "" {
+	apiKeyMut.Do(func() {
+		key, err := cipher.Decode()
+		if err != nil {
+			panic(err)
+		}
+		ApiKey = strings.TrimSpace(key)
+	})
+
+	if ApiKey == "" {
 		return ErrNoApiKey
 	}
-	ApiKey = apiKey
 
 	logger.Debug("curseforge api: GET " + url)
 
@@ -36,7 +42,7 @@ func get(url string, dest any) error {
 	if err != nil {
 		return fmt.Errorf("curseforge: failed to create request: %w", err)
 	}
-	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("x-api-key", ApiKey)
 	req.Header.Set("Accept", "application/json")
 
 	res, err := http.DefaultClient.Do(req)
