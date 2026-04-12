@@ -53,7 +53,9 @@ func TestEvaluateCompatibility_Incompatible(t *testing.T) {
 }
 
 func TestEvaluateCompatibility_BridgeCompatible_LowRisk(t *testing.T) {
-	// Build a topology where node A bridges to node B (low risk), B has forge_mods
+	// Build a topology where node A bridges to node B (low risk), B has forge_mods.
+	// The capability is only reachable via the bridge edge, so the result should
+	// come from the bridge path (not the direct scan).
 	nodeA := makeNode("bridge_node")
 	nodeB := makeNode("forge_node", types.CapabilityForgeMods)
 	edge := makeEdge("bridge_node", "forge_node", types.EdgeBridges, types.RiskLow)
@@ -62,8 +64,8 @@ func TestEvaluateCompatibility_BridgeCompatible_LowRisk(t *testing.T) {
 	if result.Verdict != types.CompatCompatible {
 		t.Errorf("expected CompatCompatible for low-risk bridge, got %q", result.Verdict)
 	}
-	if result.Reason != "direct_capability_match" {
-		t.Errorf("unexpected reason: %q", result.Reason)
+	if result.Reason != "bridge_compatibility" {
+		t.Errorf("expected bridge_compatibility reason, got %q", result.Reason)
 	}
 }
 
@@ -73,11 +75,11 @@ func TestEvaluateCompatibility_BridgeCompatible_HighRisk_Degraded(t *testing.T) 
 	edge := makeEdge("bridge_node", "target_node", types.EdgeBridges, types.RiskHigh)
 	topo := makeTopology("bridge_node", []types.RuntimeNode{nodeA, nodeB}, []types.RuntimeEdge{edge})
 	result := EvaluateCompatibility(topo, types.CapabilityForgeMods)
-	if result.Verdict != types.CompatCompatible {
-		t.Errorf("expected CompatCompatible (nodeB in Nodes), got %q", result.Verdict)
+	if result.Verdict != types.CompatDegraded {
+		t.Errorf("expected CompatDegraded for high-risk bridge, got %q", result.Verdict)
 	}
-	if result.Reason != "direct_capability_match" {
-		t.Errorf("unexpected reason: %q", result.Reason)
+	if result.Reason != "bridge_compatibility" {
+		t.Errorf("expected bridge_compatibility reason, got %q", result.Reason)
 	}
 }
 
@@ -90,8 +92,8 @@ func TestEvaluateCompatibility_BridgeEdgeUsedForCompatibility(t *testing.T) {
 	if result.Verdict != types.CompatCompatible {
 		t.Errorf("expected CompatCompatible via bridge, got %q", result.Verdict)
 	}
-	if result.Reason != "direct_capability_match" {
-		t.Errorf("unexpected reason: %q", result.Reason)
+	if result.Reason != "bridge_compatibility" {
+		t.Errorf("expected bridge_compatibility reason, got %q", result.Reason)
 	}
 }
 
@@ -101,8 +103,11 @@ func TestEvaluateCompatibility_BridgeEdgeHighRiskDegraded(t *testing.T) {
 	edge := makeEdge("bridge_node", "target_node", types.EdgeBridges, types.RiskHigh)
 	topo := makeTopology("bridge_node", []types.RuntimeNode{nodeA, nodeB}, []types.RuntimeEdge{edge})
 	result := EvaluateCompatibility(topo, types.CapabilityForgeMods)
-	if result.Verdict != types.CompatCompatible {
-		t.Errorf("expected CompatCompatible (nodeB in Nodes), got %q", result.Verdict)
+	if result.Verdict != types.CompatDegraded {
+		t.Errorf("expected CompatDegraded for high-risk bridge, got %q", result.Verdict)
+	}
+	if result.Reason != "bridge_compatibility" {
+		t.Errorf("expected bridge_compatibility reason, got %q", result.Reason)
 	}
 }
 

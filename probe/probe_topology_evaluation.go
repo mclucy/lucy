@@ -20,7 +20,20 @@ func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability t
 		}
 	}
 
+	// Collect bridge-target node IDs so we can exclude them from the direct
+	// capability scan. Nodes that are only reachable via a bridge edge must
+	// be evaluated through the bridge path (which accounts for risk level).
+	bridgeTargets := make(map[types.RuntimeNodeID]struct{}, len(topology.Edges))
+	for _, edge := range topology.Edges {
+		if edge.Kind == types.EdgeBridges {
+			bridgeTargets[edge.To] = struct{}{}
+		}
+	}
+
 	for _, node := range topology.Nodes {
+		if _, isBridgeTarget := bridgeTargets[node.ID]; isBridgeTarget {
+			continue
+		}
 		if node.HasCapability(requiredCapability) {
 			return types.CompatResult{
 				Verdict:   types.CompatCompatible,
