@@ -76,7 +76,10 @@ func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
 		}
 
 		for depKey, verifiedDep := range verifiedDeps {
-			if verifiedDep.Mandatory {
+			// Embedded deps are physically bundled inside the parent JAR
+			// (e.g. NeoForge JarInJar). They are already present on disk and
+			// do not need to be resolved from upstream package registries.
+			if verifiedDep.Mandatory && !verifiedDep.Embedded {
 				if _, exists := tx.CandidateGraph[depKey]; !exists {
 					missing[depKey] = verifiedDep.Id
 				}
@@ -206,10 +209,12 @@ func reconcileDependencyMap(requester string, deps *types.PackageDependencies) (
 	}
 
 	mandatory := make(map[string]bool)
+	embedded := make(map[string]bool)
 	inputs := make([]ConstraintInput, 0, len(deps.Value))
 	for _, dep := range deps.Value {
 		key := dep.Id.StringPlatformName()
 		mandatory[key] = mandatory[key] || dep.Mandatory
+		embedded[key] = embedded[key] || dep.Embedded
 		inputs = append(inputs, ConstraintInput{Requester: requester, Dependency: dep})
 	}
 
@@ -227,6 +232,7 @@ func reconcileDependencyMap(requester string, deps *types.PackageDependencies) (
 			},
 			Constraint: requirement.Constraint,
 			Mandatory:  mandatory[key],
+			Embedded:   embedded[key],
 		}
 	}
 

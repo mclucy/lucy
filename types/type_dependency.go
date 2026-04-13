@@ -92,10 +92,15 @@ const (
 //
 // Dependency.Constraint is a 2D array. The outer array is OR and the inner
 // array is AND. nil/empty means no constraint (all versions acceptable).
+//
+// Embedded is true when the dependency is physically bundled inside the
+// parent JAR (e.g. NeoForge JarInJar / META-INF/jarjar/). Embedded
+// dependencies are satisfied without a separate file in the mods directory.
 type Dependency struct {
 	Id         PackageId
 	Constraint VersionConstraintExpression
 	Mandatory  bool
+	Embedded   bool
 }
 
 type VersionConstraintExpression [][]VersionConstraint
