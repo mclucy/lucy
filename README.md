@@ -5,7 +5,7 @@
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
 
   <h2>
-    <sub>Build. Inspect. Evolve.</sub>
+    <sub>Build. Audit. Evolve.</sub>
     <div>Minecraft server environments from one CLI.</div>
   </h2>
 
@@ -43,7 +43,7 @@
 
 ## Overview
 
-`lucy` is a server-aware package manager and environment tool for Minecraft servers. It handles dependency resolution, version tracking, source routing, and environment probing through a unified CLI. If you've used `apt`, `brew`, or `npm`, the workflow will feel familiar.
+`lucy` is a server-aware package manager and environment tool for Minecraft servers. It handles dependency resolution, version tracking, source routing, environment probing, and risk-aware environment visibility through a unified CLI. If you've used `apt`, `brew`, or `npm`, the workflow will feel familiar.
 
 ### Core Features
 
@@ -52,6 +52,7 @@
 - Automatic dependency resolution and conflict handling
 - Package access from Modrinth, CurseForge, MCDR Plugin Catalog, and more...
 - Server-aware probing and environment inference
+- Topology-aware status reporting and risk surfacing
 - Non-intrusive design, all operations are independent of server runtime
 - Shell completion for bash, zsh, fish, and pwsh
 - Beautiful CLI output
@@ -82,7 +83,7 @@ java -jar fabric-server.jar
 
 ## 🛠️ Commands
 
-`lucy` provides commands for managing server packages and inspecting server environments. All examples are subject to change during development.
+`lucy` provides commands for managing server packages and auditing server environments. All examples are subject to change during development.
 
 ### `search` - Find packages
 
@@ -100,7 +101,7 @@ lucy search carpet --source modrinth --index downloads
 
 ### `add` - Install packages
 
-Add mods, plugins, or server cores. `lucy` resolves dependencies, verifies platform compatibility, and updates the local environment with minimal intrusion.
+Add mods, plugins, or server cores. `lucy` resolves dependencies, verifies platform compatibility, and updates the local environment with minimal intrusion. This is the primary direct-action workflow.
 
 ```bash
 lucy add fabric/fabric-api@latest
@@ -111,12 +112,13 @@ lucy add neoforge/create --force
 
 ### `status` - Server environment overview
 
-`lucy status` is a `neofetch`-style overview for Minecraft server environments. It is designed to surface what `lucy` can detect and reason about in the current directory:
+`lucy status` is a `neofetch`-style overview for Minecraft server environments. It is designed to surface what `lucy` can detect, audit, and reason about in the current directory:
 
 - Game version
 - Server core
 - Modding platform
 - Detected environment topology
+- Runtime activity and basic risk signals
 - List of mods/plugins
 - ...and more
 
@@ -157,7 +159,7 @@ lucy cache clear
 
 ### Core Definitions
 
-A **platform** modifies the Minecraft vanilla game (e.g., NeoForge, Fabric, MCDR) and serves as a common dependency for groups of packages. A **project** is a piece of software like a mod or plugin that relies on one or more platforms. A **package** is a compiled, ready-to-use instance of a project with a specific platform and version—the entity you actually install. Together, these packages form the local server environment that `lucy` inspects and manages.
+A **platform** modifies the Minecraft vanilla game (e.g., NeoForge, Fabric, MCDR) and serves as a common dependency for groups of packages. A **project** is a piece of software like a mod or plugin that relies on one or more platforms. A **package** is a compiled, ready-to-use instance of a project with a specific platform and version—the entity you actually install. Together, these packages form the local server environment that `lucy` audits and manages.
 
 ### Package Identifiers
 
