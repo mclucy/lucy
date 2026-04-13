@@ -117,7 +117,7 @@ func InstallMany(ids []types.PackageId, source types.Source) error {
 
 		packages := recursiveCandidatePackages(tx)
 		showRecursiveDownloadStart(len(packages))
-		packages, err = downloadBatchPackages(serverInfo.WorkPath, packages)
+		tx.StagingDir, packages, err = downloadBatchPackages(serverInfo.WorkPath, packages)
 		if err != nil {
 			return err
 		}
@@ -416,10 +416,15 @@ func reconcileConstraintInputKey(input ConstraintInput) string {
 func downloadBatchPackages(
 	workPath string,
 	packages []types.Package,
-) ([]types.Package, error) {
+) (stagingDir string, downloaded []types.Package, err error) {
+	stagingDir, err = os.MkdirTemp("", "lucy_*")
+	if err != nil {
+		return "", nil, fmt.Errorf("create staging directory failed: %w", err)
+	}
+
 	if workPath != "." {
 		if err := os.MkdirAll(workPath, 0o755); err != nil {
-			return nil, fmt.Errorf("create server work path failed: %w", err)
+			return stagingDir, nil, fmt.Errorf("create server work path failed: %w", err)
 		}
 	}
 
@@ -458,7 +463,7 @@ func downloadBatchPackages(
 
 			result, err := util.CachedDownload(
 				pkg.Remote.FileUrl,
-				workPath,
+				stagingDir,
 				util.DownloadOptions{
 					Kind:          cache.KindArtifact,
 					Filename:      pkg.Remote.Filename,
@@ -496,7 +501,7 @@ func downloadBatchPackages(
 	defer shutdownCancel()
 	_ = tuiprogress.WaitForShutdown(shutdownCtx)
 
-	downloaded := make([]types.Package, 0, len(packages))
+	downloaded = make([]types.Package, 0, len(packages))
 	failures := make([]string, 0)
 	for i, item := range slots {
 		if item.ok {
@@ -511,11 +516,11 @@ func downloadBatchPackages(
 	}
 
 	if len(failures) > 0 {
-		return nil, fmt.Errorf(
+		return stagingDir, nil, fmt.Errorf(
 			"failed to download packages: %s",
 			strings.Join(failures, "; "),
 		)
 	}
 
-	return downloaded, nil
+	return stagingDir, downloaded, nil
 }

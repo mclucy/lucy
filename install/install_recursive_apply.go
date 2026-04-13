@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
@@ -30,32 +31,27 @@ func ApplyValidatedClosure(tx *RecursiveTransaction, serverInfo types.ServerInfo
 
 	showRecursiveApplyStart(len(tx.Apply.Install))
 
-	applied := 0
-	applyErrors := make([]error, 0)
-
-	for _, pkg := range tx.Apply.Install {
-		installer := installers[pkg.Id.Platform]
-		if installer == nil {
-			installer = installers[types.PlatformAny]
+	if tx.StagingDir != "" && len(tx.Apply.Install) > 0 {
+		var moveErrors []error
+		for _, pkg := range tx.Apply.Install {
+			if pkg.Local == nil || pkg.Local.Path == "" {
+				continue
+			}
+			src := pkg.Local.Path
+			dst := filepath.Join(serverInfo.WorkPath, filepath.Base(src))
+			if err := os.Rename(src, dst); err != nil {
+				moveErrors = append(moveErrors, fmt.Errorf("move %s: %w", pkg.Id.StringFull(), err))
+				continue
+			}
+			pkg.Local.Path = dst
 		}
-		if installer == nil {
-			applyErrors = append(
-				applyErrors,
-				fmt.Errorf("%s: no installer found", pkg.Id.StringFull()),
-			)
-			continue
+		if len(moveErrors) > 0 {
+			return errors.Join(moveErrors...)
 		}
-
-		if err := installer(pkg); err != nil {
-			applyErrors = append(
-				applyErrors,
-				fmt.Errorf("%s: %w", pkg.Id.StringFull(), err),
-			)
-			continue
-		}
-
-		applied++
 	}
+
+	applied := 0
+	var applyErrors []error
 
 	for _, pkg := range tx.Apply.Remove {
 		if pkg.Local == nil || pkg.Local.Path == "" {

@@ -154,6 +154,10 @@ type RecursiveTransaction struct {
 	// Apply holds the finalized operation set. It is set only once, immediately
 	// before advancing to PhaseCommitted.
 	Apply *ApplyPlan
+
+	// StagingDir is the temporary directory where artifacts are downloaded
+	// during the download phase. Used for atomic move to target directory.
+	StagingDir string
 }
 
 // NewRecursiveTransaction constructs a transaction in PhaseCandidate with the
