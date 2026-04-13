@@ -62,7 +62,7 @@ type FileFabricModIdentifier struct {
 	Environment FabricEnvironment `json:"environment"`
 	Jars        []struct {
 		File string `json:"file"`
-	} `json:"-"`
+	} `json:"jars"`
 	Entrypoints      map[string][]string `json:"-"`
 	Mixins           []string            `json:"-"`
 	AccessWidener    string              `json:"accessWidener"`

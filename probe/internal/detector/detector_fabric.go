@@ -280,11 +280,12 @@ func (d *fabricModDetector) Detect(
 			}
 
 			// Parse dependencies
-			d.buildDependency(&pkg, modInfo.Depends, true, false)
-			d.buildDependency(&pkg, modInfo.Recommends, false, false)
-			d.buildDependency(&pkg, modInfo.Suggests, false, false)
-			d.buildDependency(&pkg, modInfo.Breaks, true, true)
-			d.buildDependency(&pkg, modInfo.Conflicts, false, true)
+			embeddedNames := fabricEmbeddedModNames(modInfo)
+			d.buildDependency(&pkg, modInfo.Depends, true, false, embeddedNames)
+			d.buildDependency(&pkg, modInfo.Recommends, false, false, embeddedNames)
+			d.buildDependency(&pkg, modInfo.Suggests, false, false, embeddedNames)
+			d.buildDependency(&pkg, modInfo.Breaks, false, true, embeddedNames)
+			d.buildDependency(&pkg, modInfo.Conflicts, false, true, embeddedNames)
 
 			// Parse info
 			pkg.Information = &types.ProjectInformation{
@@ -330,21 +331,48 @@ func (d *fabricModDetector) buildDependency(
 	deps map[string]tools.SingleOrSlice[string],
 	mandatory bool,
 	inverse bool,
+	embeddedNames map[string]struct{},
 ) {
 	for k, v := range deps {
+		name := syntax.ToProjectName(k)
+		_, embedded := embeddedNames[string(name)]
 		dep := types.Dependency{
 			Id: types.PackageId{
 				Platform: types.PlatformFabric,
-				Name:     syntax.ToProjectName(k),
+				Name:     name,
 			},
 			Constraint: parseFabricVersionRanges(v),
 			Mandatory:  mandatory,
+			Embedded:   embedded,
 		}
 		if inverse {
 			dep.Constraint.Inverse()
 		}
 		pkg.Dependencies.Value = append(pkg.Dependencies.Value, dep)
 	}
+}
+
+func fabricEmbeddedModNames(modInfo *externaltype.FileFabricModIdentifier) map[string]struct{} {
+	depNames := make([]string, 0, len(modInfo.Depends))
+	for k := range modInfo.Depends {
+		depNames = append(depNames, k)
+	}
+
+	names := make(map[string]struct{}, len(modInfo.Jars))
+	for _, jar := range modInfo.Jars {
+		base := jar.File
+		if idx := strings.LastIndex(base, "/"); idx >= 0 {
+			base = base[idx+1:]
+		}
+		base = strings.TrimSuffix(base, ".jar")
+		for _, dep := range depNames {
+			if base == dep || strings.HasPrefix(base, dep+"-") {
+				names[dep] = struct{}{}
+				break
+			}
+		}
+	}
+	return names
 }
 
 func init() {
