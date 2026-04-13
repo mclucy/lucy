@@ -246,7 +246,7 @@ func writeMinecraftEULAFile(workPath string) error {
 		"\n",
 	)
 	if _, err := os.Stat(path.Join(workPath)); os.IsNotExist(err) {
-		err = os.MkdirAll(path.Join(workPath), 0755)
+		err = os.MkdirAll(path.Join(workPath), 0o755)
 		if err != nil {
 			return err
 		}

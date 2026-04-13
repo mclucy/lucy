@@ -8,8 +8,8 @@ import (
 )
 
 func EnrichTopologyFromPackages(
-exec *types.RuntimeInfo,
-packages []types.Package,
+	exec *types.RuntimeInfo,
+	packages []types.Package,
 ) {
 	if exec == nil {
 		return

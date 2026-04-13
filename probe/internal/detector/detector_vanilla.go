@@ -20,9 +20,9 @@ func (d *VanillaDetector) Name() string {
 }
 
 func (d *VanillaDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (*types.RuntimeInfo, error) {
 	for _, f := range zipReader.File {
 		if f.Name == "version.json" {

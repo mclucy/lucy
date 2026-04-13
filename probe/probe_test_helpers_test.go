@@ -1,8 +1,9 @@
 package probe
 
 import (
-	"github.com/mclucy/lucy/types"
 	"testing"
+
+	"github.com/mclucy/lucy/types"
 )
 
 // makePackage builds a minimal types.Package for use in tests.

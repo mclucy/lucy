@@ -5,6 +5,7 @@ import (
 
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 // projectResponse
@@ -85,11 +86,12 @@ func (p *projectResponse) ToProjectSupport() types.PlatformSupport {
 
 func (p *projectResponse) ToProjectInformation() (info types.ProjectInformation) {
 	info = types.ProjectInformation{
-		Title:       p.Title,
-		Brief:       p.Description,
-		Description: p.Body,
-		License:     p.License.Name,
-		Urls:        make([]types.Url, 0),
+		Title:                 p.Title,
+		Brief:                 p.Description,
+		Description:           p.Body,
+		DescriptionIsMarkdown: upstream.LooksLikeMarkdown(p.Body),
+		License:               p.License.Name,
+		Urls:                  make([]types.Url, 0),
 	}
 
 	// Urls

@@ -51,3 +51,12 @@ func getModById(modId int32) (*modResponse, error) {
 	}
 	return &resp.Data, nil
 }
+
+func getModDescription(modId int32) (string, error) {
+	u := modDescriptionUrl(modId, true)
+	var resp stringDataResponse
+	if err := get(u, &resp); err != nil {
+		return "", err
+	}
+	return resp.Data, nil
+}

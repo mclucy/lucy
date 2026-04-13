@@ -11,9 +11,9 @@ import (
 // Minecraft servers
 type ExecutableDetector interface {
 	Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+		filePath string,
+		zipReader *zip.Reader,
+		fileHandle *os.File,
 	) (*types.RuntimeInfo, error)
 	Name() string
 }

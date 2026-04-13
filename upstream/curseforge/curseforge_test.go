@@ -72,6 +72,12 @@ func TestModResponseToProjectInformation(t *testing.T) {
 	if info.Brief != "JEI - View Items and Recipes" {
 		t.Errorf("expected brief, got '%s'", info.Brief)
 	}
+	if info.Description != "" {
+		t.Errorf("expected empty description, got '%s'", info.Description)
+	}
+	if info.DescriptionIsMarkdown {
+		t.Error("expected empty description not to be markdown")
+	}
 	if len(info.Urls) != 4 {
 		t.Errorf("expected 4 URLs, got %d", len(info.Urls))
 	}
@@ -119,6 +125,25 @@ func TestModResponseToProjectInformation_PartialLinks(t *testing.T) {
 	}
 	if info.Urls[0].Type != types.UrlHome {
 		t.Errorf("expected UrlHome, got %v", info.Urls[0].Type)
+	}
+}
+
+func TestRawProjectInformationToProjectInformation(t *testing.T) {
+	mod := &modResponse{
+		Name:    "Markdown Mod",
+		Summary: "Has long description",
+	}
+
+	info := rawProjectInformation{
+		mod:         mod,
+		description: "# Title\n\n- Item one\n- Item two",
+	}.ToProjectInformation()
+
+	if info.Description != "# Title\n\n- Item one\n- Item two" {
+		t.Errorf("expected long description to be preserved, got '%s'", info.Description)
+	}
+	if !info.DescriptionIsMarkdown {
+		t.Error("expected markdown-looking long description to be recognized")
 	}
 }
 
@@ -315,6 +340,20 @@ func TestSlugSearchUrl_ContainsSlug(t *testing.T) {
 	for _, param := range mustContain {
 		if !containsSubstring(u, param) {
 			t.Errorf("slugSearchUrl missing param '%s' in URL: %s", param, u)
+		}
+	}
+}
+
+func TestModDescriptionUrl_Stripped(t *testing.T) {
+	u := modDescriptionUrl(12345, true)
+
+	mustContain := []string{
+		"/v1/mods/12345/description",
+		"stripped=true",
+	}
+	for _, param := range mustContain {
+		if !containsSubstring(u, param) {
+			t.Errorf("modDescriptionUrl missing '%s' in URL: %s", param, u)
 		}
 	}
 }

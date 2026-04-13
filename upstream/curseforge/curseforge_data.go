@@ -3,6 +3,7 @@ package curseforge
 import (
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 // --- API response wrappers ---
@@ -27,6 +28,10 @@ func (s *searchResponse) ToSearchResults() types.SearchResults {
 // modDataResponse wraps /v1/mods/{modId} response.
 type modDataResponse struct {
 	Data modResponse `json:"data"`
+}
+
+type stringDataResponse struct {
+	Data string `json:"data"`
 }
 
 // modResponse is the CurseForge Mod schema.
@@ -56,12 +61,24 @@ type modResponse struct {
 	ThumbsUpCount        int32          `json:"thumbsUpCount"`
 }
 
+type rawProjectInformation struct {
+	mod         *modResponse
+	description string
+}
+
 func (m *modResponse) ToProjectInformation() types.ProjectInformation {
+	return rawProjectInformation{mod: m}.ToProjectInformation()
+}
+
+func (r rawProjectInformation) ToProjectInformation() types.ProjectInformation {
+	m := r.mod
 	info := types.ProjectInformation{
-		Title:   m.Name,
-		Brief:   m.Summary,
-		Urls:    make([]types.Url, 0),
-		Authors: make([]types.Person, 0, len(m.Authors)),
+		Title:                 m.Name,
+		Brief:                 m.Summary,
+		Description:           r.description,
+		DescriptionIsMarkdown: upstream.LooksLikeMarkdown(r.description),
+		Urls:                  make([]types.Url, 0),
+		Authors:               make([]types.Person, 0, len(m.Authors)),
 	}
 
 	if m.Links.WebsiteUrl != "" {

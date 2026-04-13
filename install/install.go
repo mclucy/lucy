@@ -3,6 +3,7 @@ package install
 import (
 	"errors"
 	"fmt"
+
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 )

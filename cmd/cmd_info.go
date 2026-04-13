@@ -131,7 +131,7 @@ func infoOutput(p *types.Package, longOutput bool) *tui.Data {
 					Text:          p.Information.Description,
 					Padding:       true,
 					LineWrap:      true,
-					MaxColumns:    tools.TermWidth() * 8 / 10,
+					MaxColumns:    min(tools.TermWidth()*8/10, 100),
 					MaxLines:      maxLines,
 					UseAlternate:  useAlternate,
 					AlternateText: tools.Underline(p.Information.DescriptionUrl),

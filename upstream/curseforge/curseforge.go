@@ -65,7 +65,11 @@ func (provider) Information(name types.ProjectName) (
 	if err != nil {
 		return nil, err
 	}
-	return mod, nil
+	description, err := getModDescription(mod.Id)
+	if err != nil {
+		return nil, err
+	}
+	return rawProjectInformation{mod: mod, description: description}, nil
 }
 
 func (p provider) Dependencies(

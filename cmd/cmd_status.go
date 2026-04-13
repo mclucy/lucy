@@ -27,8 +27,8 @@ var subcmdStatus = &cli.Command{
 }
 
 var actionStatus cli.ActionFunc = func(
-_ context.Context,
-cmd *cli.Command,
+	_ context.Context,
+	cmd *cli.Command,
 ) error {
 	serverInfo := probe.ServerInfo()
 	if cmd.Bool(flagJsonName) {
@@ -40,8 +40,8 @@ cmd *cli.Command,
 }
 
 func generateStatusOutput(
-data *types.ServerInfo,
-cmd *cli.Command,
+	data *types.ServerInfo,
+	cmd *cli.Command,
 ) (output *tui.Data) {
 	longOutput := cmd.Bool("long")
 	noStyle := cmd.Bool("no-style")
@@ -153,8 +153,8 @@ cmd *cli.Command,
 	showMods := false
 	if data.Runtime.Topology != nil && data.Runtime.Topology.Resolved() {
 		showMods = data.Runtime.Topology.HasCapability(types.CapabilityFabricMods) ||
-		data.Runtime.Topology.HasCapability(types.CapabilityForgeMods) ||
-		data.Runtime.Topology.HasCapability(types.CapabilityNeoforgeMods)
+			data.Runtime.Topology.HasCapability(types.CapabilityForgeMods) ||
+			data.Runtime.Topology.HasCapability(types.CapabilityNeoforgeMods)
 	}
 
 	// Collect mod/plugin names and paths for later use. This is to avoid

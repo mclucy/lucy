@@ -88,6 +88,21 @@ func modUrl(modId int32) string {
 	return fmt.Sprintf("%s/v1/mods/%d", baseUrl, modId)
 }
 
+// modDescriptionUrl builds the URL for getting a mod's long description.
+// Docs: https://docs.curseforge.com/rest-api/#get-mod-description
+func modDescriptionUrl(modId int32, stripped bool) string {
+	params := url.Values{}
+	if stripped {
+		params.Set("stripped", "true")
+	}
+
+	u := fmt.Sprintf("%s/v1/mods/%d/description", baseUrl, modId)
+	if len(params) == 0 {
+		return u
+	}
+	return u + "?" + params.Encode()
+}
+
 // modFilesUrl builds the URL for listing files of a mod, with optional
 // filtering by game version and mod loader.
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-files

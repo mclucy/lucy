@@ -114,13 +114,13 @@ func installNeoForge(id types.PackageId) error {
 // If the version is explicit, it is returned as-is.
 // Otherwise, the latest compatible version for the given Minecraft game version is fetched.
 func getNeoForgeVersionFromPackageId(
-p types.PackageId,
-gameVersion types.RawVersion,
+	p types.PackageId,
+	gameVersion types.RawVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest &&
-	p.Version != types.VersionCompatible &&
-	p.Version != types.VersionAny &&
-	p.Version != types.VersionUnknown {
+		p.Version != types.VersionCompatible &&
+		p.Version != types.VersionAny &&
+		p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
 	}
 	return fetchLatestNeoForgeVersion(gameVersion)
@@ -216,7 +216,7 @@ func verifyNeoForgeInstallation(workPath string) error {
 
 	return errors.New(
 		"NeoForge installation verification failed: no artifacts found " +
-		"(expected run.sh/run.bat or libraries/net/neoforged/)",
+			"(expected run.sh/run.bat or libraries/net/neoforged/)",
 	)
 }
 

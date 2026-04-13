@@ -26,8 +26,10 @@ type store struct {
 	entries map[string]Entry // key: source+"/"+localId or source+"/"+localId+"/"+fileHash
 }
 
-var defaultStore *store
-var once sync.Once
+var (
+	defaultStore *store
+	once         sync.Once
+)
 
 func Default() *store {
 	once.Do(func() {

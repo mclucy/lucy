@@ -1,8 +1,9 @@
 package probe
 
 import (
-	"github.com/mclucy/lucy/types"
 	"testing"
+
+	"github.com/mclucy/lucy/types"
 )
 
 func TestPackageIndex_AddFirstWriteWins(t *testing.T) {

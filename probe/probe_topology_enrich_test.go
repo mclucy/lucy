@@ -202,7 +202,7 @@ func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 func TestEnrichTopologyFromPackages_BridgeHintsProcessed(t *testing.T) {
 	fabricEntry, _ := DefaultRegistry.FindEntry(RuntimeNodeFabric)
 	exec := &types.RuntimeInfo{
-		Topology: BuildTopologyFromEntry(fabricEntry),
+		Topology:    BuildTopologyFromEntry(fabricEntry),
 		BridgeHints: []string{string(RuntimeNodeConnector)},
 	}
 	EnrichTopologyFromPackages(exec, nil)
