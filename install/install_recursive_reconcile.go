@@ -122,7 +122,8 @@ func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
 		}
 		// Treat a platform-wildcard candidate as reachable if a verified node
 		// with the same name exists — they represent the same artifact.
-		if candidateNode.Package.Id.Platform.CanInfer() {
+		p := candidateNode.Package.Id.Platform
+		if p == types.PlatformNone || p == types.PlatformAny || p.CanInfer() {
 			if _, ok := verifiedByName[candidateNode.Package.Id.Name]; ok {
 				continue
 			}
