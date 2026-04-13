@@ -28,6 +28,7 @@ type forgeModInfo struct {
 type forgeModDependencies struct {
 	ModID        string `toml:"modId"`
 	Mandatory    bool   `toml:"mandatory"`
+	Type         string `toml:"type"`
 	VersionRange string `toml:"versionRange"`
 	Ordering     string `toml:"ordering"`
 	Side         string `toml:"side"`

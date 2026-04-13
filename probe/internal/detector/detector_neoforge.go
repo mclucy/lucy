@@ -198,6 +198,16 @@ func (d *neoforgeModDetector) Detect(
 				// add manual dependency/conflict management features.
 				deps := modIdentifier.Dependencies[mod.ModID]
 				for _, dep := range deps {
+					if dep.Type == "incompatible" {
+						continue
+					}
+					if strings.EqualFold(dep.Side, "CLIENT") {
+						continue
+					}
+					switch dep.ModID {
+					case "neoforge", "forge", "minecraft", "java":
+						continue
+					}
 					p.Dependencies.Value = append(
 						p.Dependencies.Value,
 						types.Dependency{
@@ -206,6 +216,7 @@ func (d *neoforgeModDetector) Detect(
 								Name:     syntax.ToProjectName(dep.ModID),
 							},
 							Constraint: parseModLoaderMavenVersionRange(dep.VersionRange),
+							Mandatory:  dep.Type == "required" || dep.Mandatory,
 						},
 					)
 				}
