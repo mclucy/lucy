@@ -3,25 +3,20 @@
 package cmd
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/mclucy/lucy/util"
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
 func init() {
-	Cli.Commands = append(Cli.Commands, subcmdDownload)
+	rootCmd.AddCommand(downloadCmd)
 }
 
-var subcmdDownload = &cli.Command{
-	Name:  "download",
-	Usage: "Download a specified url (for debugging only)",
-	Action: func(_ context.Context, cmd *cli.Command) error {
-		url := cmd.Args().First()
-		if url == "" {
-			return fmt.Errorf("url is required")
-		}
+var downloadCmd = &cobra.Command{
+	Use:   "download",
+	Short: "Download a specified url (for debugging only)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		url := args[0]
 
 		result, err := util.CachedDownload(url, ".", util.DownloadOptions{})
 		if err != nil {

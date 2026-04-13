@@ -1,20 +1,13 @@
 package cmd
 
-import (
-	"context"
+import "github.com/spf13/cobra"
 
-	"github.com/urfave/cli/v3"
-)
-
-var subcmdConfig = &cli.Command{
-	Name:   "config",
-	Usage:  "Manage lucy's configurations",
-	Action: actionEmpty, // tools.Decorate(actionInit, decorator),
-}
-
-var actionConfig cli.ActionFunc = func(
-	ctx context.Context,
-	cmd *cli.Command,
-) error {
-	return nil
+// configCmd is defined but intentionally not registered with rootCmd.
+// It is a stub that preserves the current command surface of exactly 6 top-level subcommands.
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Manage lucy's configurations",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/mclucy/lucy/logger"
@@ -13,8 +12,7 @@ import (
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
-
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -22,85 +20,56 @@ const (
 	flagClientName = "client"
 )
 
-var subcmdSearch = &cli.Command{
-	Name:  "search",
-	Usage: "Search for mods and plugins",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:    flagIndexName,
-			Aliases: []string{"i"},
-			Usage:   "Index search results by `INDEX`",
-			Value:   "relevance",
-			Validator: func(s string) error {
-				if types.SearchSort(s).Valid() {
-					return nil
-				}
-				return errors.New("must be one of \"relevance\", \"downloads\",\"newest\"")
-			},
-		},
-		&cli.BoolFlag{
-			Name:    flagClientName,
-			Aliases: []string{"c"},
-			Usage:   "Also show client-only mods in results",
-			Value:   false,
-		},
-		flagJsonOutput,
-		flagLongOutput,
-		flagNoStyle,
-		flagSource,
+var searchCmd = &cobra.Command{
+	Use:   "search",
+	Short: "Search for mods and plugins",
+	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) >= 1 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return CompletePackageIDSuggestions(context.Background(), "search", toComplete)
 	},
-	ArgsUsage: "<platform/name>",
-	Action: tools.Decorate(
-		actionSearch,
-		decoratorGlobalFlags,
-		decoratorHelpAndExitOnNoArg,
-		decoratorLogAndExitOnError,
-	),
-	ShellComplete: func(ctx context.Context, cmd *cli.Command) {
-		if CompleteFlagNamesIfRequested(cmd) {
-			return
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		index, _ := cmd.Flags().GetString(flagIndexName)
+		if !types.SearchSort(index).Valid() {
+			return errors.New("--index must be one of \"relevance\", \"downloads\", \"newest\"")
 		}
-
-		if len(os.Args) < 2 {
-			return
-		}
-
-		lastArg := ""
-		for i := len(os.Args) - 1; i >= 0; i-- {
-			if os.Args[i] != "--generate-shell-completion" {
-				lastArg = os.Args[i]
-				break
-			}
-		}
-
-		switch lastArg {
-		case "--" + flagIndexName, "-i":
-			PrintCandidates(StaticSortCandidates())
-			return
-		case "--" + flagSourceName, "-s":
-			PrintCandidates(StaticSourceCandidates())
-			return
-		}
-
-		prefix := ""
-		if cmd.NArg() > 0 {
-			prefix = cmd.Args().First()
-		}
-		CompletePackageIDSuggestions(ctx, cmd, prefix)
+		return validateSourceFlag(cmd)
 	},
+	RunE: runWithErrorLogging(actionSearch),
 }
 
-var actionSearch cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
-) error {
-	p := syntax.Parse(cmd.Args().First())
-	options := types.SearchOptions{
-		IncludeClient: cmd.Bool(flagClientName),
-		SortBy:        types.SearchSort(cmd.String(flagIndexName)),
-	}
-	sourceArg := cmd.String(flagSourceName)
+func init() {
+	searchCmd.Flags().StringP(flagIndexName, "i", "relevance", "Index search results by INDEX")
+	searchCmd.Flags().BoolP(flagClientName, "c", false, "Also show client-only mods in results")
+	addJsonFlag(searchCmd)
+	addLongFlag(searchCmd)
+	addNoStyleFlag(searchCmd)
+	addSourceFlag(searchCmd)
+	_ = searchCmd.RegisterFlagCompletionFunc(flagSourceName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		candidates := FilterByPrefix(StaticSourceCandidates(), toComplete)
+		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = searchCmd.RegisterFlagCompletionFunc(flagIndexName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		candidates := FilterByPrefix(StaticSortCandidates(), toComplete)
+		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+	})
+	rootCmd.AddCommand(searchCmd)
+}
+
+func actionSearch(cmd *cobra.Command, args []string) error {
+	p := syntax.Parse(args[0])
+	index, _ := cmd.Flags().GetString(flagIndexName)
+	client, _ := cmd.Flags().GetBool(flagClientName)
+	long, _ := cmd.Flags().GetBool(flagLongName)
+	sourceArg, _ := cmd.Flags().GetString(flagSourceName)
 	specifiedSource := types.ParseSource(sourceArg)
+
+	options := types.SearchOptions{
+		IncludeClient: client,
+		SortBy:        types.SearchSort(index),
+	}
 
 	out := &tui.Data{}
 	providers, err := routing.ResolveProviders(p.Platform, specifiedSource)
@@ -131,7 +100,7 @@ var actionSearch cli.ActionFunc = func(
 	}
 
 	for _, res := range results {
-		appendToSearchOutput(out, cmd.Bool(flagLongName), res)
+		appendToSearchOutput(out, long, res)
 	}
 
 	tui.Flush(out)

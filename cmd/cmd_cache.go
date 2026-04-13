@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"sort"
 
@@ -10,104 +9,75 @@ import (
 	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
-
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
-var subcmdCache = &cli.Command{
-	Name:  "cache",
-	Usage: "Manage the download cache",
-	Action: tools.Decorate(
-		actionEmpty,
-		decoratorGlobalFlags,
-		decoratorHelpAndExitOnNoArg,
-		decoratorHelpAndExitOnError,
-	),
-	Commands: []*cli.Command{
-		subcmdCacheLs,
-		subcmdCacheClear,
-		subcmdCacheSlugs,
+var cacheCmd = &cobra.Command{
+	Use:   "cache",
+	Short: "Manage the download cache",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
 	},
-	DefaultCommand: "help",
 }
 
-var subcmdCacheLs = &cli.Command{
-	Name:    "ls",
+var cacheLsCmd = &cobra.Command{
+	Use:     "ls",
 	Aliases: []string{"list"},
-	Usage:   "List cached entries",
-	Flags: []cli.Flag{
-		flagJsonOutput,
-		flagNoStyle,
-	},
-	Action: tools.Decorate(
-		actionCacheLs,
-		decoratorGlobalFlags,
-		decoratorLogAndExitOnError,
-	),
+	Short:   "List cached entries",
+	RunE:    runWithErrorLogging(actionCacheLs),
 }
 
-var subcmdCacheClear = &cli.Command{
-	Name:    "clear",
+var cacheClearCmd = &cobra.Command{
+	Use:     "clear",
 	Aliases: []string{"rm"},
-	Usage:   "Clear all cached downloads",
-	Flags: []cli.Flag{
-		flagNoStyle,
-	},
-	Action: tools.Decorate(
-		actionCacheClear,
-		decoratorGlobalFlags,
-		decoratorLogAndExitOnError,
-	),
+	Short:   "Clear all cached downloads",
+	RunE:    runWithErrorLogging(actionCacheClear),
 }
 
-var subcmdCacheSlugs = &cli.Command{
-	Name:  "slugs",
-	Usage: "Manage the local slug resolution cache",
-	Action: tools.Decorate(
-		actionEmpty,
-		decoratorGlobalFlags,
-		decoratorHelpAndExitOnNoArg,
-		decoratorHelpAndExitOnError,
-	),
-	Commands: []*cli.Command{
-		subcmdCacheSlugsLs,
-		subcmdCacheSlugsClear,
+var cacheSlugsCmd = &cobra.Command{
+	Use:     "slugs",
+	Aliases: []string{"slug"},
+	Short:   "Manage the local slug resolution cache",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
 	},
-	Aliases:        []string{"slug"},
-	DefaultCommand: "help",
 }
 
-var subcmdCacheSlugsLs = &cli.Command{
-	Name:    "ls",
+var cacheSlugsLsCmd = &cobra.Command{
+	Use:     "ls",
 	Aliases: []string{"list"},
-	Usage:   "List slug mappings",
-	Flags:   []cli.Flag{flagJsonOutput, flagNoStyle},
-	Action: tools.Decorate(
-		actionCacheSlugsLs,
-		decoratorGlobalFlags,
-		decoratorLogAndExitOnError,
-	),
+	Short:   "List slug mappings",
+	RunE:    runWithErrorLogging(actionCacheSlugsLs),
 }
 
-var subcmdCacheSlugsClear = &cli.Command{
-	Name:    "clear",
+var cacheSlugsClearCmd = &cobra.Command{
+	Use:     "clear",
 	Aliases: []string{"rm"},
-	Usage:   "Clear all slug mappings",
-	Flags:   []cli.Flag{flagNoStyle},
-	Action: tools.Decorate(
-		actionCacheSlugsClear,
-		decoratorGlobalFlags,
-		decoratorLogAndExitOnError,
-	),
+	Short:   "Clear all slug mappings",
+	RunE:    runWithErrorLogging(actionCacheSlugsClear),
 }
 
-var actionCacheLs cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
-) error {
+func init() {
+	addJsonFlag(cacheLsCmd)
+	addNoStyleFlag(cacheLsCmd)
+
+	addNoStyleFlag(cacheClearCmd)
+
+	addJsonFlag(cacheSlugsLsCmd)
+	addNoStyleFlag(cacheSlugsLsCmd)
+
+	addNoStyleFlag(cacheSlugsClearCmd)
+
+	cacheCmd.AddCommand(cacheLsCmd, cacheClearCmd, cacheSlugsCmd)
+	cacheSlugsCmd.AddCommand(cacheSlugsLsCmd, cacheSlugsClearCmd)
+	rootCmd.AddCommand(cacheCmd)
+}
+
+func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	entries := cache.Network().All()
+	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
 
-	if cmd.Bool(flagJsonName) {
+	if jsonOutput {
 		tools.PrintAsJson(entries)
 		return nil
 	}
@@ -117,11 +87,9 @@ var actionCacheLs cli.ActionFunc = func(
 		return nil
 	}
 
-	sort.Slice(
-		entries, func(i, j int) bool {
-			return entries[i].CreatedAt.After(entries[j].CreatedAt)
-		},
-	)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].CreatedAt.After(entries[j].CreatedAt)
+	})
 
 	out := &tui.Data{
 		Fields: []tui.Field{
@@ -132,31 +100,27 @@ var actionCacheLs cli.ActionFunc = func(
 	}
 
 	for _, entry := range entries {
-		out.Fields = append(
-			out.Fields, &tui.FieldAnnotatedShortText{
-				Title: entry.Key,
-				Text: fmt.Sprintf(
-					"%s  %s",
-					entry.Kind,
-					tools.FormatBytesBinary(entry.Size),
-				),
-				Annotation: tools.FormatDuration(entry.Expiration),
-			},
-		)
+		out.Fields = append(out.Fields, &tui.FieldAnnotatedShortText{
+			Title: entry.Key,
+			Text: fmt.Sprintf(
+				"%s  %s",
+				entry.Kind,
+				tools.FormatBytesBinary(entry.Size),
+			),
+			Annotation: tools.FormatDuration(entry.Expiration),
+		})
 	}
 
 	tui.Flush(out)
 	return nil
 }
 
-var actionCacheClear cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
-) (err error) {
-	var report cache.ResetReport
-	if report, err = cache.Network().ClearAll(); err != nil {
+func actionCacheClear(_ *cobra.Command, _ []string) error {
+	report, err := cache.Network().ClearAll()
+	if err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
+
 	logger.ShowInfo("all cache items cleared")
 	logger.ShowInfo(
 		fmt.Sprintf(
@@ -168,19 +132,20 @@ var actionCacheClear cli.ActionFunc = func(
 	return nil
 }
 
-var actionCacheSlugsLs cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
-) error {
+func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 	entries := slugmap.Default().All()
-	if cmd.Bool(flagJsonName) {
+	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
+
+	if jsonOutput {
 		tools.PrintAsJson(entries)
 		return nil
 	}
+
 	if len(entries) == 0 {
 		logger.ShowInfo("Slug map is empty")
 		return nil
 	}
+
 	out := &tui.Data{
 		Fields: []tui.Field{
 			&tui.FieldAnnotation{
@@ -188,25 +153,25 @@ var actionCacheSlugsLs cli.ActionFunc = func(
 			},
 		},
 	}
-	for _, e := range entries {
-		shortHash := e.FileHash
+
+	for _, entry := range entries {
+		shortHash := entry.FileHash
 		if len(shortHash) > 12 {
 			shortHash = shortHash[:12]
 		}
+
 		out.Fields = append(out.Fields, &tui.FieldAnnotatedShortText{
-			Title:      e.Source.String() + "/" + e.LocalId,
-			Text:       e.CanonicalSlug,
+			Title:      entry.Source.String() + "/" + entry.LocalId,
+			Text:       entry.CanonicalSlug,
 			Annotation: shortHash,
 		})
 	}
+
 	tui.Flush(out)
 	return nil
 }
 
-var actionCacheSlugsClear cli.ActionFunc = func(
-	_ context.Context,
-	_ *cli.Command,
-) error {
+func actionCacheSlugsClear(_ *cobra.Command, _ []string) error {
 	slugmap.Default().Clear()
 	logger.ShowInfo("slug map cleared")
 	return nil

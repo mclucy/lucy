@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"os"
 
 	"github.com/mclucy/lucy/cmd"
@@ -11,9 +10,8 @@ import (
 )
 
 func main() {
-	defer logger.DumpHistory() // Whether DumpHistory actually does anything depend on the flag.
-	if err := cmd.Cli.Run(context.Background(), os.Args); err != nil {
-		// Error is already reported by decoratorLogAndExitOnError in commands.
-		// Reporting here again would cause duplicate error messages.
+	defer logger.DumpHistory() // Whether DumpHistory actually does anything depends on the flag.
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
 	}
 }

@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/syntax"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -16,65 +16,38 @@ const (
 	flagNoOptionalName   = "no-optional"
 )
 
-var subcmdAdd = &cli.Command{
-	Name:  "add",
-	Usage: "Add new mods, plugins, or server modules",
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    flagForceName,
-			Aliases: []string{"f"},
-			Usage:   "Ignore version, dependency, and platform warnings",
-			Value:   false,
-		},
-		&cli.BoolFlag{
-			Name:  flagWithOptionalName,
-			Usage: "Also install optional upstream dependencies",
-			Value: false,
-		},
-		&cli.BoolFlag{
-			Name:  flagNoOptionalName,
-			Usage: "Skip optional upstream dependencies (default)",
-			Value: false,
-		},
-		flagNoStyle,
+var addCmd = &cobra.Command{
+	Use:   "add",
+	Short: "Add new mods, plugins, or server modules",
+	Args:  cobra.MinimumNArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return CompletePackageIDSuggestions(context.Background(), "add", toComplete)
 	},
-	ArgsUsage: "<package-identifier> [package-identifier...]",
-	Action: tools.Decorate(
-		actionAdd,
-		decoratorGlobalFlags,
-		decoratorHelpAndExitOnNoArg,
-		decoratorLogAndExitOnError,
-	),
-	ShellComplete: func(_ context.Context, cmd *cli.Command) {
-		if CompleteFlagNamesIfRequested(cmd) {
-			return
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
+		noOptional, _ := cmd.Flags().GetBool(flagNoOptionalName)
+		if withOptional && noOptional {
+			return fmt.Errorf("--with-optional and --no-optional cannot be used together")
 		}
-
-		token := ""
-		if cmd.NArg() > 0 {
-			token = cmd.Args().Get(cmd.NArg() - 1)
-		}
-		CompletePackageIDSuggestions(context.Background(), cmd, token)
+		return nil
 	},
+	RunE: runWithErrorLogging(actionAdd),
 }
 
-var actionAdd cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
-) error {
-	withOptional := cmd.Bool(flagWithOptionalName)
-	noOptional := cmd.Bool(flagNoOptionalName)
-	if withOptional && noOptional {
-		return cli.Exit(
-			"--with-optional and --no-optional cannot be used together",
-			1,
-		)
-	}
+func init() {
+	addCmd.Flags().BoolP(flagForceName, "f", false, "Ignore version, dependency, and platform warnings")
+	addCmd.Flags().Bool(flagWithOptionalName, false, "Also install optional upstream dependencies")
+	addCmd.Flags().Bool(flagNoOptionalName, false, "Skip optional upstream dependencies (default)")
+	addNoStyleFlag(addCmd)
+	rootCmd.AddCommand(addCmd)
+}
+
+func actionAdd(cmd *cobra.Command, args []string) error {
+	withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
 
 	options := install.DefaultOptions()
 	options.WithOptional = withOptional
 
-	args := cmd.Args().Slice()
 	ids := make([]types.PackageId, 0, len(args))
 	for _, arg := range args {
 		ids = append(ids, syntax.Parse(arg))
@@ -86,8 +59,6 @@ var actionAdd cli.ActionFunc = func(
 
 	id := ids[0]
 	if id.Version == types.VersionAny {
-		// override the default parse for empty version to be the latest
-		// compatible version, which is more likely what users want.
 		id.Version = types.VersionCompatible
 	}
 	return install.Install(id, types.SourceAuto, options)

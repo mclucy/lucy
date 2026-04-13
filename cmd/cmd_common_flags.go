@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/mclucy/lucy/types"
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -18,34 +18,33 @@ const (
 	flagDumpLogsName  = "dump-logs"
 )
 
-var flagJsonOutput = &cli.BoolFlag{
-	Name:  flagJsonName,
-	Usage: "Print raw JSON response",
-	Value: false,
+// addJsonFlag adds the --json flag to a command.
+func addJsonFlag(cmd *cobra.Command) {
+	cmd.Flags().Bool(flagJsonName, false, "Print raw JSON response")
 }
 
-var flagLongOutput = &cli.BoolFlag{
-	Name:    flagLongName,
-	Usage:   "Show hidden or collapsed output",
-	Value:   false,
-	Aliases: []string{"l"},
+// addLongFlag adds the --long/-l flag to a command.
+func addLongFlag(cmd *cobra.Command) {
+	cmd.Flags().BoolP(flagLongName, "l", false, "Show hidden or collapsed output")
 }
 
-var flagSource = &cli.StringFlag{
-	Name:    flagSourceName,
-	Aliases: []string{"s"},
-	Usage:   "To fetch info from `SOURCE`",
-	Value:   "",
-	Validator: func(s string) error {
-		if types.ParseSource(s) == types.SourceUnknown {
-			return errors.New("unknown source " + s)
-		}
-		return nil
-	},
+// addNoStyleFlag adds the --no-style flag to a command (local, not persistent).
+func addNoStyleFlag(cmd *cobra.Command) {
+	cmd.Flags().Bool(flagNoStyleName, false, "Disable colored and styled output")
 }
 
-var flagNoStyle = &cli.BoolFlag{
-	Name:  flagNoStyleName,
-	Usage: "Disable colored and styled output",
-	Value: false,
+// addSourceFlag adds the --source/-s flag to a command.
+// Validation of the source value is done in PreRunE of each command.
+func addSourceFlag(cmd *cobra.Command) {
+	cmd.Flags().StringP(flagSourceName, "s", "", "To fetch info from SOURCE")
+}
+
+// validateSourceFlag validates the --source flag value.
+// Returns an error if the source is not recognized.
+func validateSourceFlag(cmd *cobra.Command) error {
+	source, _ := cmd.Flags().GetString(flagSourceName)
+	if source != "" && types.ParseSource(source) == types.SourceUnknown {
+		return errors.New("unknown source " + source)
+	}
+	return nil
 }

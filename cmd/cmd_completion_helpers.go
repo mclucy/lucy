@@ -1,29 +1,15 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
-	"github.com/urfave/cli/v3"
 )
 
 // CompletionCandidate holds a value and optional description for shell completion.
 type CompletionCandidate struct {
 	Value       string
 	Description string
-}
-
-// PrintCandidates outputs candidates to stdout in urfave/cli v3 "value:description" format.
-func PrintCandidates(candidates []CompletionCandidate) {
-	for _, c := range candidates {
-		if c.Description != "" {
-			fmt.Printf("%s:%s\n", c.Value, c.Description)
-		} else {
-			fmt.Println(c.Value)
-		}
-	}
 }
 
 // FilterByPrefix returns candidates whose Value starts with prefix (case-insensitive).
@@ -41,24 +27,37 @@ func FilterByPrefix(candidates []CompletionCandidate, prefix string) []Completio
 	return out
 }
 
+// ToCobraCompletions converts CompletionCandidate slice to cobra's "value\tDescription" format.
+func ToCobraCompletions(candidates []CompletionCandidate) []string {
+	out := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		if c.Description != "" {
+			out = append(out, c.Value+"\t"+c.Description)
+		} else {
+			out = append(out, c.Value)
+		}
+	}
+	return out
+}
+
 // StaticPlatformCandidates returns completion candidates for all user-facing platforms.
 func StaticPlatformCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.PlatformMinecraft.String(), Description: ""},
-		{Value: types.PlatformFabric.String(), Description: ""},
-		{Value: types.PlatformForge.String(), Description: ""},
-		{Value: types.PlatformNeoforge.String(), Description: ""},
-		{Value: types.PlatformMCDR.String(), Description: ""},
+		{Value: types.PlatformMinecraft.String(), Description: "Vanilla / Bukkit plugins"},
+		{Value: types.PlatformFabric.String(), Description: "Fabric mods"},
+		{Value: types.PlatformForge.String(), Description: "Forge mods"},
+		{Value: types.PlatformNeoforge.String(), Description: "NeoForge mods"},
+		{Value: types.PlatformMCDR.String(), Description: "MCDR plugins"},
 	}
 }
 
 // StaticSourceCandidates returns completion candidates for concrete upstream sources.
 func StaticSourceCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: "curseforge", Description: ""},
-		{Value: types.SourceModrinth.String(), Description: ""},
-		{Value: types.SourceGitHub.String(), Description: ""},
-		{Value: types.SourceMCDR.String(), Description: ""},
+		{Value: "curseforge", Description: "CurseForge source"},
+		{Value: types.SourceModrinth.String(), Description: "Modrinth source"},
+		{Value: types.SourceGitHub.String(), Description: "GitHub Releases"},
+		{Value: types.SourceMCDR.String(), Description: "MCDR Plugin Catalogue"},
 	}
 }
 
@@ -78,12 +77,11 @@ func StaticSortCandidates() []CompletionCandidate {
 func ParseCompletionToken(token string) (platform, name, version, segment string) {
 	if before, after, ok := strings.Cut(token, "@"); ok {
 		version = after
-		beforeAt := before
-		if slashIdx := strings.Index(beforeAt, "/"); slashIdx >= 0 {
-			platform = beforeAt[:slashIdx]
-			name = beforeAt[slashIdx+1:]
+		if beforeSlash, afterSlash, hasSlash := strings.Cut(before, "/"); hasSlash {
+			platform = beforeSlash
+			name = afterSlash
 		} else {
-			name = beforeAt
+			name = before
 		}
 		segment = "version"
 		return
@@ -99,58 +97,4 @@ func ParseCompletionToken(token string) (platform, name, version, segment string
 	platform = token
 	segment = "platform"
 	return
-}
-
-func currentCompletionToken() string {
-	for i := len(os.Args) - 1; i >= 0; i-- {
-		if os.Args[i] != "--generate-shell-completion" {
-			return os.Args[i]
-		}
-	}
-	return ""
-}
-
-func CompleteFlagNamesIfRequested(cmd *cli.Command) bool {
-	token := currentCompletionToken()
-	if !strings.HasPrefix(token, "-") {
-		return false
-	}
-
-	PrintCandidates(FilterByPrefix(flagCompletionCandidates(cmd), token))
-	return true
-}
-
-func flagCompletionCandidates(cmd *cli.Command) []CompletionCandidate {
-	flags := append([]cli.Flag{}, cmd.VisibleFlags()...)
-	flags = append(flags, cmd.VisiblePersistentFlags()...)
-
-	seen := make(map[string]struct{})
-	out := make([]CompletionCandidate, 0, len(flags)*2)
-
-	for _, flag := range flags {
-		usage := ""
-		if usageProvider, ok := flag.(interface{ GetUsage() string }); ok {
-			usage = usageProvider.GetUsage()
-		}
-
-		for _, name := range flag.Names() {
-			if name == "" {
-				continue
-			}
-			prefix := "--"
-			if len(name) == 1 {
-				prefix = "-"
-			}
-
-			value := prefix + name
-			if _, ok := seen[value]; ok {
-				continue
-			}
-			seen[value] = struct{}{}
-
-			out = append(out, CompletionCandidate{Value: value, Description: usage})
-		}
-	}
-
-	return out
 }

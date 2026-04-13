@@ -1,20 +1,15 @@
 package cmd
 
-import (
-	"context"
+import "github.com/spf13/cobra"
 
-	"github.com/urfave/cli/v3"
-)
-
-var subcmdInit = &cli.Command{
-	Name:   "init",
-	Usage:  "Initialize Lucy on current directory",
-	Action: actionEmpty, // tools.Decorate(actionInit, decorator),
+var initCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Initialize Lucy on current directory",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
 }
 
-var actionInit cli.ActionFunc = func(
-	ctx context.Context,
-	cmd *cli.Command,
-) error {
-	return nil
+func init() {
+	rootCmd.AddCommand(initCmd)
 }

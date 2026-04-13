@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/mclucy/lucy/probe"
@@ -9,42 +8,39 @@ import (
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/types"
 
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
-var subcmdStatus = &cli.Command{
-	Name:  "status",
-	Usage: "Display basic information of the current server",
-	Action: tools.Decorate(
-		actionStatus,
-		decoratorGlobalFlags,
-		decoratorLogAndExitOnError,
-	),
-	Flags: []cli.Flag{
-		flagJsonOutput,
-		flagLongOutput,
-	},
+var statusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Display basic information of the current server",
+	RunE:  runWithErrorLogging(actionStatus),
 }
 
-var actionStatus cli.ActionFunc = func(
-	_ context.Context,
-	cmd *cli.Command,
-) error {
+func init() {
+	addJsonFlag(statusCmd)
+	addLongFlag(statusCmd)
+	rootCmd.AddCommand(statusCmd)
+}
+
+func actionStatus(cmd *cobra.Command, args []string) error {
 	serverInfo := probe.ServerInfo()
-	if cmd.Bool(flagJsonName) {
+	json, _ := cmd.Flags().GetBool(flagJsonName)
+	long, _ := cmd.Flags().GetBool(flagLongName)
+	noStyle, _ := cmd.Flags().GetBool(flagNoStyleName)
+	if json {
 		tools.PrintAsJson(serverInfo)
 	} else {
-		tui.Flush(generateStatusOutput(&serverInfo, cmd))
+		tui.Flush(generateStatusOutput(&serverInfo, long, noStyle))
 	}
 	return nil
 }
 
 func generateStatusOutput(
 	data *types.ServerInfo,
-	cmd *cli.Command,
+	longOutput bool,
+	noStyle bool,
 ) (output *tui.Data) {
-	longOutput := cmd.Bool("long")
-	noStyle := cmd.Bool("no-style")
 	serverPlatform := data.Runtime.DerivedModLoader()
 	hasMcdr := data.Environments.Mcdr != nil
 	hasLucy := data.Environments.Lucy != nil

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sort"
 
-	"github.com/urfave/cli/v3"
+	"github.com/spf13/cobra"
 )
 
 type PackageIDSuggestionContext struct {
@@ -35,16 +35,16 @@ func RegisterPackageIDSuggestionProvider(provider PackageIDSuggestionProvider) {
 	})
 }
 
-func CompletePackageIDSuggestions(ctx context.Context, cmd *cli.Command, token string) {
+func CompletePackageIDSuggestions(ctx context.Context, commandName string, token string) ([]string, cobra.ShellCompDirective) {
 	platform, name, version, segment := ParseCompletionToken(token)
 
 	if segment == "" || segment == "platform" {
-		PrintCandidates(FilterByPrefix(StaticPlatformCandidates(), token))
-		return
+		candidates := FilterByPrefix(StaticPlatformCandidates(), token)
+		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
 	}
 
 	request := PackageIDSuggestionContext{
-		Command:  cmd.Name,
+		Command:  commandName,
 		Token:    token,
 		Platform: platform,
 		Name:     name,
@@ -53,11 +53,7 @@ func CompletePackageIDSuggestions(ctx context.Context, cmd *cli.Command, token s
 	}
 
 	candidates := collectPackageIDSuggestionCandidates(ctx, request)
-	if len(candidates) == 0 {
-		return
-	}
-
-	PrintCandidates(candidates)
+	return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
 }
 
 func collectPackageIDSuggestionCandidates(
