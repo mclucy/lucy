@@ -128,7 +128,7 @@ func promptSelectMinecraftVersionForForge() (version string) {
 		return "none"
 	}
 	if installLatest {
-		return gameVersions[0]
+		return gameVersions[len(gameVersions)-1]
 	}
 	err = huh.NewForm(
 		huh.NewGroup(
