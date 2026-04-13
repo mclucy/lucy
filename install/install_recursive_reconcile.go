@@ -103,6 +103,15 @@ func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
 		return ReconcileDiff{}, err
 	}
 
+	// Build a name-only index of verified nodes to handle platform normalisation:
+	// upstream APIs may return platform=none/any/unknown for a package that the
+	// local detector identifies as forge/fabric/etc. A candidate keyed as
+	// "none/create" is the same artifact as a verified node keyed "forge/create".
+	verifiedByName := make(map[types.ProjectName]struct{}, len(tx.VerifiedGraph))
+	for _, vn := range tx.VerifiedGraph {
+		verifiedByName[vn.Package.Id.Name] = struct{}{}
+	}
+
 	extra := make(map[string]types.PackageId)
 	for key, candidateNode := range tx.CandidateGraph {
 		if !candidateNode.Advisory {
@@ -110,6 +119,13 @@ func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
 		}
 		if _, ok := reachable[key]; ok {
 			continue
+		}
+		// Treat a platform-wildcard candidate as reachable if a verified node
+		// with the same name exists — they represent the same artifact.
+		if candidateNode.Package.Id.Platform.CanInfer() {
+			if _, ok := verifiedByName[candidateNode.Package.Id.Name]; ok {
+				continue
+			}
 		}
 		extra[key] = candidateNode.Package.Id
 	}
