@@ -7,11 +7,11 @@
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
 
   <h2>
-    <div>服务器 · 群组服 · 整合包</div>
-    <sup>……一行命令秒了</sup>
+    <div>构建 · 检查 · 演进</div>
+    <sup>用同一个 CLI 管理 Minecraft 服务器环境</sup>
   </h2>
 
-  <h3>现代化的 Minecraft 服务器包管理器</h3>
+  <h3>现代化的 Minecraft 服务器环境管理器</h3>
 
   <img
     src="https://goreportcard.com/badge/github.com/mclucy/lucy"
@@ -43,7 +43,7 @@
 
 ## 简介
 
-`lucy` 是一个 Minecraft 服务器包管理器。通过统一的命令行界面处理依赖解析、版本追踪和多源包获取。如果你用过 `apt`、`brew` 或 `npm`，上手会很轻松。
+`lucy` 是一个面向 Minecraft 服务器的、具备环境感知能力的包管理与环境工具。它通过统一的命令行界面处理依赖解析、版本追踪、来源路由与环境探测。如果你用过 `apt`、`brew` 或 `npm`，上手会很轻松。
 
 ### 核心特性
 
@@ -51,6 +51,7 @@
 
 - 自动解析依赖、处理冲突
 - 支持 Modrinth、CurseForge、MCDR 插件目录等多个源
+- 支持基于服务器环境的探测与环境推断
 - 非侵入式设计，所有操作独立于服务器运行时
 - 支持 bash、zsh、fish、pwsh 的命令补全
 - 美观的命令行输出
@@ -78,7 +79,7 @@ java -jar fabric-server.jar
 
 ## 🛠️ 命令
 
-`lucy` 提供一系列命令来管理服务器包。所有示例在开发期间可能发生变化。
+`lucy` 提供一系列命令来管理服务器包并检查服务器环境。所有示例在开发期间可能发生变化。
 
 ### `search` - 搜索包
 
@@ -96,7 +97,7 @@ lucy search carpet --source modrinth --index downloads
 
 ### `add` - 安装包
 
-添加模组、插件或服务端核心。`lucy` 会自动解析依赖并校验平台兼容性。
+添加模组、插件或服务端核心。`lucy` 会自动解析依赖、校验平台兼容性，并以尽量非侵入的方式更新本地环境。
 
 ```bash
 lucy add fabric/fabric-api@latest
@@ -105,15 +106,15 @@ lucy add neoforge/create --force
 
 <!-- TODO: Add screenshot -->
 
-### `status` - 服务器概览
+### `status` - 服务器环境概览
 
-`lucy status` 是 Minecraft 服务器的 `neofetch`。你可以通过这个命令向别人展示你精致的服务器环境：
+`lucy status` 是一个面向 Minecraft 服务器环境的 `neofetch` 风格概览。它的目标是展示当前目录下 lucy 能检测和理解到的环境信息：
 
 - 游戏版本
 - 服务端核心
 - 模组平台
+- 探测到的环境拓扑
 - 模组/插件列表
-- 运行状态
 - ...和更多
 
 <!-- TODO: Add screenshot -->
@@ -153,7 +154,7 @@ lucy cache clear
 
 ### 核心定义
 
-**平台（platform）** 是修改 Minecraft 原版游戏的程序（如 NeoForge、Fabric、MCDR），作为一组包的共同依赖。**项目（project）** 是依赖一个或多个平台的软件，比如模组或插件。**包（package）** 是项目在特定平台和版本下的编译实例，也是你实际安装的实体。
+**平台（platform）** 是修改 Minecraft 原版游戏的程序（如 NeoForge、Fabric、MCDR），作为一组包的共同依赖。**项目（project）** 是依赖一个或多个平台的软件，比如模组或插件。**包（package）** 是项目在特定平台和版本下的编译实例，也是你实际安装的实体。这些包共同构成了 `lucy` 会探测、理解并管理的本地服务器环境。
 
 ### 包标识符
 
