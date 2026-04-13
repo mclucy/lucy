@@ -27,6 +27,7 @@ func buildExecutableInfo() *types.RuntimeInfo {
 	valid := make([]*types.RuntimeInfo, 0)
 	workPath := workPath()
 	valid = append(valid, detector.ForgeInstallationRuntimes(workPath)...)
+	valid = append(valid, detector.NeoForgeInstallationRuntimes(workPath)...)
 
 	// Layered search
 	// 1. pwd
@@ -168,11 +169,14 @@ func promptSelectExecutable(
 }
 
 func generateNotes(notes ...string) string {
-	var note string
+	var note strings.Builder
 	for _, n := range notes {
-		note += tools.Cyan("*") + " " + n + "\n"
+		note.WriteString(tools.Cyan("*"))
+		note.WriteString(" ")
+		note.WriteString(n)
+		note.WriteString("\n")
 	}
-	return note
+	return note.String()
 }
 
 func executableLabel(executable *types.RuntimeInfo) string {
