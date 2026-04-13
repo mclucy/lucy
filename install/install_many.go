@@ -87,6 +87,13 @@ func InstallMany(ids []types.PackageId, source types.Source) error {
 	}
 
 	roots := append([]types.PackageId(nil), regularIds...)
+	if serverLoader := serverInfo.Runtime.DerivedModLoader(); serverLoader != types.PlatformAny {
+		for i, id := range roots {
+			if id.Platform == types.PlatformAny {
+				roots[i].Platform = serverLoader
+			}
+		}
+	}
 	excluded := map[string]struct{}{}
 	seedTx := NewRecursiveTransaction(roots, providers)
 	SnapshotInstalledConstraints(seedTx)
