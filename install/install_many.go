@@ -268,6 +268,15 @@ func buildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
 		return ApplyPlan{}, fmt.Errorf("install: nil recursive transaction")
 	}
 
+	// Build a name-only index of candidate nodes to handle platform mismatch
+	// between advisory (e.g. none/create) and verified (e.g. neoforge/create).
+	candidateByName := make(map[types.ProjectName]CandidateNode, len(tx.CandidateGraph))
+	for _, node := range tx.CandidateGraph {
+		if node.Package.Remote != nil {
+			candidateByName[node.Package.Id.Name] = node
+		}
+	}
+
 	keys := make([]string, 0, len(tx.VerifiedGraph))
 	for key := range tx.VerifiedGraph {
 		keys = append(keys, key)
@@ -277,7 +286,11 @@ func buildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
 	install := make([]types.Package, 0, len(keys))
 	for _, key := range keys {
 		verified := tx.VerifiedGraph[key].Package
+
 		candidate, ok := tx.CandidateGraph[key]
+		if !ok || candidate.Package.Remote == nil {
+			candidate, ok = candidateByName[verified.Id.Name]
+		}
 		if !ok || candidate.Package.Remote == nil {
 			return ApplyPlan{}, fmt.Errorf(
 				"install: verified package %s is missing candidate remote metadata",
