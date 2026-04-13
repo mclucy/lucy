@@ -10,6 +10,27 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+func recursiveInstallDestination(
+	serverInfo types.ServerInfo,
+	pkg types.Package,
+) string {
+	if pkg.Id.Platform.IsModding() && len(serverInfo.ModPath) > 0 {
+		return serverInfo.ModPath[0]
+	}
+
+	if pkg.Id.Platform == types.PlatformMCDR &&
+		serverInfo.Environments.Mcdr != nil &&
+		len(serverInfo.Environments.Mcdr.Config.PluginDirectories) > 0 {
+		return serverInfo.Environments.Mcdr.Config.PluginDirectories[0]
+	}
+
+	if len(serverInfo.ModPath) == 1 {
+		return serverInfo.ModPath[0]
+	}
+
+	return serverInfo.WorkPath
+}
+
 // ApplyValidatedClosure executes the finalized install/remove plan after the
 // recursive transaction has been committed.
 func ApplyValidatedClosure(tx *RecursiveTransaction, serverInfo types.ServerInfo) error {
@@ -29,6 +50,8 @@ func ApplyValidatedClosure(tx *RecursiveTransaction, serverInfo types.ServerInfo
 		}
 	}
 
+	applied := 0
+
 	showRecursiveApplyStart(len(tx.Apply.Install))
 
 	if tx.StagingDir != "" && len(tx.Apply.Install) > 0 {
@@ -38,19 +61,26 @@ func ApplyValidatedClosure(tx *RecursiveTransaction, serverInfo types.ServerInfo
 				continue
 			}
 			src := pkg.Local.Path
-			dst := filepath.Join(serverInfo.WorkPath, filepath.Base(src))
+			dstDir := recursiveInstallDestination(serverInfo, pkg)
+			if dstDir != "" && dstDir != "." {
+				if err := os.MkdirAll(dstDir, 0o755); err != nil {
+					moveErrors = append(moveErrors, fmt.Errorf("create install directory for %s: %w", pkg.Id.StringFull(), err))
+					continue
+				}
+			}
+			dst := filepath.Join(dstDir, filepath.Base(src))
 			if err := os.Rename(src, dst); err != nil {
 				moveErrors = append(moveErrors, fmt.Errorf("move %s: %w", pkg.Id.StringFull(), err))
 				continue
 			}
 			pkg.Local.Path = dst
+			applied++
 		}
 		if len(moveErrors) > 0 {
 			return errors.Join(moveErrors...)
 		}
 	}
 
-	applied := 0
 	var applyErrors []error
 
 	for _, pkg := range tx.Apply.Remove {
