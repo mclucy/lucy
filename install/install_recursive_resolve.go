@@ -22,6 +22,7 @@ func BuildCandidateGraph(
 	roots []types.PackageId,
 	providers []upstream.Provider,
 	installedConstraints []InstalledConstraint,
+	options Options,
 ) (*RecursiveTransaction, error) {
 	tx := NewRecursiveTransaction(roots, providers)
 	tx.InstalledConstraints = append([]InstalledConstraint(nil), installedConstraints...)
@@ -98,6 +99,10 @@ func BuildCandidateGraph(
 		for _, dependencySet := range dependencySets {
 			requester := current.id.StringFull()
 			for _, dependency := range dependencySet.Value {
+				if !dependency.Mandatory && !options.WithOptional {
+					continue
+				}
+
 				batchInputs = append(batchInputs, ConstraintInput{
 					Requester:  requester,
 					Dependency: dependency,

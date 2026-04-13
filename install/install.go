@@ -19,11 +19,11 @@ func registerInstaller(platform types.Platform, installer platformInstaller) {
 	installers[platform] = installer
 }
 
-func Install(id types.PackageId, source types.Source) error {
+func Install(id types.PackageId, source types.Source, options Options) error {
 	// for regular (non-identity) packages, delegate to InstallMany to unify
 	// resolver behavior with batch adds
 	if !id.IsIdentityPackage() {
-		return InstallMany([]types.PackageId{id}, source)
+		return InstallMany([]types.PackageId{id}, source, options)
 	}
 
 	// identity packages go through the established platform installer

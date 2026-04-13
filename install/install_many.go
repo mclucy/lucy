@@ -18,7 +18,7 @@ import (
 	"github.com/mclucy/lucy/util"
 )
 
-func InstallMany(ids []types.PackageId, source types.Source) error {
+func InstallMany(ids []types.PackageId, source types.Source, options Options) error {
 	const maxReconcileIterations = 3
 
 	if len(ids) == 0 {
@@ -108,6 +108,7 @@ func InstallMany(ids []types.PackageId, source types.Source) error {
 			roots,
 			providers,
 			mergeReconcileConstraints(baseConstraints, feedbackConstraints),
+			options,
 		)
 		if err != nil {
 			showRecursiveConflict(err)

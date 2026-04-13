@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	flagForceName = "force"
+	flagForceName        = "force"
+	flagWithOptionalName = "with-optional"
+	flagNoOptionalName   = "no-optional"
 )
 
 var subcmdAdd = &cli.Command{
@@ -23,6 +25,16 @@ var subcmdAdd = &cli.Command{
 			Aliases: []string{"f"},
 			Usage:   "Ignore version, dependency, and platform warnings",
 			Value:   false,
+		},
+		&cli.BoolFlag{
+			Name:  flagWithOptionalName,
+			Usage: "Also install optional upstream dependencies",
+			Value: false,
+		},
+		&cli.BoolFlag{
+			Name:  flagNoOptionalName,
+			Usage: "Skip optional upstream dependencies (default)",
+			Value: false,
 		},
 		flagNoStyle,
 	},
@@ -50,6 +62,18 @@ var actionAdd cli.ActionFunc = func(
 	_ context.Context,
 	cmd *cli.Command,
 ) error {
+	withOptional := cmd.Bool(flagWithOptionalName)
+	noOptional := cmd.Bool(flagNoOptionalName)
+	if withOptional && noOptional {
+		return cli.Exit(
+			"--with-optional and --no-optional cannot be used together",
+			1,
+		)
+	}
+
+	options := install.DefaultOptions()
+	options.WithOptional = withOptional
+
 	args := cmd.Args().Slice()
 	ids := make([]types.PackageId, 0, len(args))
 	for _, arg := range args {
@@ -57,7 +81,7 @@ var actionAdd cli.ActionFunc = func(
 	}
 
 	if len(ids) > 1 {
-		return install.InstallMany(ids, types.SourceAuto)
+		return install.InstallMany(ids, types.SourceAuto, options)
 	}
 
 	id := ids[0]
@@ -66,5 +90,5 @@ var actionAdd cli.ActionFunc = func(
 		// compatible version, which is more likely what users want.
 		id.Version = types.VersionCompatible
 	}
-	return install.Install(id, types.SourceAuto)
+	return install.Install(id, types.SourceAuto, options)
 }
