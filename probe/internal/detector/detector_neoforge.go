@@ -24,9 +24,9 @@ func (d *neoforgeServerDetector) Name() string {
 }
 
 func (d *neoforgeServerDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (*types.RuntimeInfo, error) {
 	neoforgeLoaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
@@ -96,7 +96,7 @@ fileHandle *os.File,
 	}
 
 	// Return nil if primary NeoForge signal not found
-	if neoforgeLoaderVersion == types.VersionUnknown {
+	if !hasConcreteVersion(neoforgeLoaderVersion) {
 		return nil, nil
 	}
 
@@ -140,8 +140,8 @@ func (d *neoforgeModDetector) Name() string {
 }
 
 func (d *neoforgeModDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	for _, f := range zipReader.File {
 		if f.Name == "META-INF/neoforge.mods.toml" {

@@ -3,12 +3,23 @@ package detector
 import (
 	"archive/zip"
 	"io"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
+)
+
+var forgeRuntimeVersionDirPattern = regexp.MustCompile(
+	`^(\d+\.\d+(?:\.\d+)?)-(\d+(?:\.\d+)+)$`,
+)
+
+var forgeJarNameVersionPattern = regexp.MustCompile(
+	`^forge-(\d+\.\d+(?:\.\d+)?)-(\d+(?:\.\d+)+)(?:-[a-z]+)?\.jar$`,
 )
 
 // getForgeModVersion extracts the version from a Forge JAR's manifest
@@ -59,4 +70,73 @@ func parseModLoaderMavenVersionRange(interval string) [][]types.VersionConstrain
 		dependency.InferRangeDialect(types.PlatformForge),
 		types.Semver,
 	)
+}
+
+func parseForgeVersionTupleFromPath(
+	filePath string,
+) (gameVersion types.RawVersion, forgeVersion types.RawVersion, ok bool) {
+	parts := strings.Split(filepath.ToSlash(filePath), "/")
+	for i := 0; i < len(parts)-1; i++ {
+		if parts[i] != "forge" {
+			continue
+		}
+		match := forgeRuntimeVersionDirPattern.FindStringSubmatch(parts[i+1])
+		if match == nil {
+			continue
+		}
+		return types.RawVersion(match[1]), types.RawVersion(match[2]), true
+	}
+	if match := forgeJarNameVersionPattern.FindStringSubmatch(filepath.Base(filePath)); match != nil {
+		return types.RawVersion(match[1]), types.RawVersion(match[2]), true
+	}
+	return types.VersionUnknown, types.VersionUnknown, false
+}
+
+func forgeHasSibling(filePath string, siblings ...string) bool {
+	dir := filepath.Dir(filePath)
+	for _, sibling := range siblings {
+		if _, err := os.Stat(filepath.Join(dir, sibling)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func hasConcreteVersion(version types.RawVersion) bool {
+	return version != "" && !version.IsInvalid() && !version.CanInfer()
+}
+
+func buildForgeRuntimeInfo(
+	filePath string,
+	gameVersion types.RawVersion,
+	forgeVersion types.RawVersion,
+) *types.RuntimeInfo {
+	return &types.RuntimeInfo{
+		PrimaryEntrance: filePath,
+		GameVersion:     gameVersion,
+		BootCommand:     nil,
+		RuntimeIdentities: []types.PackageId{
+			{
+				Platform: types.PlatformForge,
+				Name:     "forge",
+				Version:  forgeVersion,
+			},
+			{
+				Platform: types.PlatformMinecraft,
+				Name:     "minecraft",
+				Version:  gameVersion,
+			},
+		},
+		Topology: &types.RuntimeTopology{
+			PrimaryNode: "forge",
+			Nodes: []types.RuntimeNode{
+				{
+					ID:               "forge",
+					Role:             types.RuntimeRoleModLoader,
+					IdentityPlatform: types.PlatformForge,
+					Capabilities:     []types.RuntimeCapability{types.CapabilityForgeMods},
+				},
+			},
+		},
+	}
 }

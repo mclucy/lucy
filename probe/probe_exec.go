@@ -18,7 +18,7 @@ import (
 )
 
 const noteIgnorePath = "Some modding platforms are located from the libraries directory. " +
-"You might want to look at the platform and version, rather than the path."
+	"You might want to look at the platform and version, rather than the path."
 
 const multiThreadThreshold = 10
 
@@ -26,6 +26,7 @@ const multiThreadThreshold = 10
 func buildExecutableInfo() *types.RuntimeInfo {
 	valid := make([]*types.RuntimeInfo, 0)
 	workPath := workPath()
+	valid = append(valid, detector.ForgeInstallationRuntimes(workPath)...)
 
 	// Layered search
 	// 1. pwd
@@ -59,10 +60,12 @@ func buildExecutableInfo() *types.RuntimeInfo {
 		}
 	}
 
-	if stat, err := os.Stat(forgeLib); err == nil && stat.IsDir() {
-		forgeJars, err = findJar(forgeLib)
-		if err != nil {
-			logger.Warn(fmt.Errorf("cannot read forge libraries: %w", err))
+	if len(valid) == 0 {
+		if stat, err := os.Stat(forgeLib); err == nil && stat.IsDir() {
+			forgeJars, err = findJar(forgeLib)
+			if err != nil {
+				logger.Warn(fmt.Errorf("cannot read forge libraries: %w", err))
+			}
 		}
 	}
 	jars = slices.Concat(forgeJars, fabricJars)
@@ -135,8 +138,8 @@ func init() {
 }
 
 func promptSelectExecutable(
-executables []*types.RuntimeInfo,
-notes []string,
+	executables []*types.RuntimeInfo,
+	notes []string,
 ) int {
 	selection := 0
 	title := "Multiple possible executables detected, select one"
