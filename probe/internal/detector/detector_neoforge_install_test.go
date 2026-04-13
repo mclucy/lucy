@@ -3,6 +3,7 @@ package detector
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/mclucy/lucy/types"
@@ -116,9 +117,13 @@ func assertNeoForgeRuntime(
 func stubNeoforgeArtifactHashLookup(
 	fn func(version string, artifact modLoaderArtifactKind, filePath string) (bool, error),
 ) func() {
+	stubMu.Lock()
 	original := neoforgeArtifactHashLookup
 	neoforgeArtifactHashLookup = fn
 	return func() {
 		neoforgeArtifactHashLookup = original
+		stubMu.Unlock()
 	}
 }
+
+var stubMu sync.Mutex

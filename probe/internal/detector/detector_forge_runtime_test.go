@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/mclucy/lucy/types"
@@ -448,12 +449,16 @@ func writeZipFile(t *testing.T, jarPath string, files map[string]string) {
 func stubForgeArtifactHashLookup(
 	fn func(version string, artifact forgeArtifactKind, filePath string) (bool, error),
 ) func() {
+	forgeStubMu.Lock()
 	original := forgeArtifactHashLookup
 	forgeArtifactHashLookup = fn
 	return func() {
 		forgeArtifactHashLookup = original
+		forgeStubMu.Unlock()
 	}
 }
+
+var forgeStubMu sync.Mutex
 
 func writeFile(t *testing.T, path string, data []byte) {
 	t.Helper()
