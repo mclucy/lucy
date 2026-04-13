@@ -8,6 +8,8 @@
 package curseforge
 
 import (
+	"fmt"
+
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -66,10 +68,72 @@ func (provider) Information(name types.ProjectName) (
 	return mod, nil
 }
 
-func (provider) Dependencies(
+func (p provider) Dependencies(
 	id types.PackageId,
 ) (deps upstream.RawPackageDependencies, err error) {
-	panic("TODO: implement curseforge provider Dependencies")
+	// Resolve the mod to get the modId
+	mod, err := resolveSlug(id.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the specific file matching the version
+	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Platform)
+	if err != nil {
+		return nil, err
+	}
+
+	// If no specific version, get latest release
+	if file == nil {
+		file, err = latestCompatibleFile(mod.Id, id.Platform)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &curseforgeDependencies{file: file}, nil
+}
+
+// curseforgeDependencies wraps a fileResponse for dependency
+// normalization. It implements upstream.RawPackageDependencies.
+type curseforgeDependencies struct {
+	file *fileResponse
+}
+
+var _ upstream.RawPackageDependencies = (*curseforgeDependencies)(nil)
+
+func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependencies {
+	result := types.PackageDependencies{
+		Authentic: false,
+	}
+
+	for _, dep := range c.file.Dependencies {
+		// relationType mapping:
+		// 1 = EmbeddedLibrary (skip - embedded in the mod itself)
+		// 2 = OptionalDependency -> Mandatory: false
+		// 3 = RequiredDependency -> Mandatory: true
+		// 4 = Tool (skip - not a runtime dependency)
+		// 5 = Incompatible (skip - breaks compatibility)
+		// 6 = Include (skip - bundled with the mod)
+
+		switch dep.RelationType {
+		case 2: // OptionalDependency
+			result.Value = append(result.Value, types.Dependency{
+				Id:        types.PackageId{Name: types.ProjectName(fmt.Sprintf("%d", dep.ModId))},
+				Mandatory: false,
+			})
+		case 3: // RequiredDependency
+			result.Value = append(result.Value, types.Dependency{
+				Id:        types.PackageId{Name: types.ProjectName(fmt.Sprintf("%d", dep.ModId))},
+				Mandatory: true,
+			})
+		default:
+			// Skip 1, 4, 5, 6 - not runtime dependencies
+			continue
+		}
+	}
+
+	return result
 }
 
 func (provider) Support(

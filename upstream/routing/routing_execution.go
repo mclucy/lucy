@@ -208,6 +208,70 @@ func FirstInfo(
 	return InfoResult{}, providerErrors, joinProviderErrors(providerErrors)
 }
 
+// DependenciesMany executes Dependencies on all providers in parallel and
+// returns all successful results. An error is returned only when every provider
+// fails; partial failures are collected in the returned []ProviderError slice.
+func DependenciesMany(
+	providers []upstream.Provider,
+	id types.PackageId,
+) ([]types.PackageDependencies, []ProviderError) {
+	if len(providers) == 0 {
+		return nil, nil
+	}
+
+	type slot struct {
+		res    types.PackageDependencies
+		err    ProviderError
+		ok     bool
+		failed bool
+	}
+
+	slots := make([]slot, len(providers))
+	var wg sync.WaitGroup
+
+	for i, provider := range providers {
+		wg.Add(1)
+		go func(index int, provider upstream.Provider) {
+			defer wg.Done()
+			deps, err := upstream.Dependencies(provider, id)
+			if err != nil {
+				slots[index] = slot{
+					failed: true,
+					err: ProviderError{
+						Source: provider.Source(),
+						Err:    err,
+					},
+				}
+				return
+			}
+			result := types.PackageDependencies{}
+			if deps != nil {
+				result = *deps
+			}
+			slots[index] = slot{ok: true, res: result}
+		}(i, provider)
+	}
+
+	wg.Wait()
+
+	results := make([]types.PackageDependencies, 0, len(providers))
+	providerErrors := make([]ProviderError, 0)
+	for _, item := range slots {
+		if item.ok {
+			results = append(results, item.res)
+		}
+		if item.failed {
+			providerErrors = append(providerErrors, item.err)
+		}
+	}
+
+	if len(results) == 0 && len(providerErrors) > 0 {
+		return nil, providerErrors
+	}
+
+	return results, providerErrors
+}
+
 func joinProviderErrors(providerErrors []ProviderError) error {
 	if len(providerErrors) == 0 {
 		return ErrNoProviderSucceeded

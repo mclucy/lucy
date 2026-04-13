@@ -77,6 +77,12 @@ func InvalidateServerInfo() {
 	serverInfoReady = false
 }
 
+// DetectPackages analyzes a local artifact file and returns packages detected
+// from its embedded metadata.
+func DetectPackages(filePath string) []types.Package {
+	return detector.Packages(filePath)
+}
+
 func resetProbeMemoizedStateLocked() {
 	modPaths = tools.Memoize(buildModPaths)
 	getEnvironment = tools.Memoize(buildEnvironment)

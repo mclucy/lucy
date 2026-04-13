@@ -2,32 +2,11 @@ package install
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 )
-
-func showFetchStart(id types.PackageId) {
-	logger.ShowInfo(
-		fmt.Sprintf(
-			"fetching package metadata for %s",
-			id.StringFull(),
-		),
-	)
-}
-
-func showFetchSuccess(p types.Package) {
-	if p.Remote == nil {
-		return
-	}
-	logger.ShowInfo(
-		fmt.Sprintf(
-			"package metadata fetched from %s, resolved to %s",
-			p.Remote.Source.String(),
-			p.Id.StringFull(),
-		),
-	)
-}
 
 func showDownloadStart(url string) {
 	logger.ShowInfo(fmt.Sprintf("downloading from %s", url))
@@ -59,10 +38,54 @@ func joinPackageNames(ids []types.PackageId) string {
 	if len(ids) == 2 {
 		return ids[0].StringFull() + " and " + ids[1].StringFull()
 	}
-	result := ""
+	parts := make([]string, 0, len(ids))
 	for i := 0; i < len(ids)-1; i++ {
-		result += ids[i].StringFull() + ", "
+		parts = append(parts, ids[i].StringFull())
 	}
-	result += "and " + ids[len(ids)-1].StringFull()
-	return result
+	return strings.Join(parts, ", ") + ", and " + ids[len(ids)-1].StringFull()
+}
+
+func showRecursiveResolveStart(roots []types.PackageId) {
+	logger.ShowInfo(fmt.Sprintf("resolving dependencies for %s", joinPackageNames(roots)))
+}
+
+func showRecursiveDownloadStart(count int) {
+	logger.ShowInfo(fmt.Sprintf("downloading %d artifacts", count))
+}
+
+func showRecursiveVerifyStart(count int) {
+	logger.ShowInfo(fmt.Sprintf("verifying %d artifacts locally", count))
+}
+
+func showRecursiveReconcileStart() {
+	logger.ShowInfo("reconciling advisory and verified graphs")
+}
+
+func showRecursiveReconcileDiff(diff ReconcileDiff) {
+	verbals := []string{}
+	if len(diff.Missing) > 0 {
+		verbals = append(verbals, fmt.Sprintf("+%d missing", len(diff.Missing)))
+	}
+	if len(diff.Extra) > 0 {
+		verbals = append(verbals, fmt.Sprintf("-%d extra", len(diff.Extra)))
+	}
+	if len(diff.Tightened) > 0 {
+		verbals = append(verbals, fmt.Sprintf("~%d tightened", len(diff.Tightened)))
+	}
+	logger.ShowInfo("reconcile: " + joinStrings(verbals))
+}
+
+func showRecursiveApplyStart(count int) {
+	logger.ShowInfo(fmt.Sprintf("applying %d changes", count))
+}
+
+func showRecursiveConflict(err error) {
+	logger.ShowInfo(fmt.Sprintf("conflict: %s", err.Error()))
+}
+
+func joinStrings(strs []string) string {
+	if len(strs) == 0 {
+		return "none"
+	}
+	return strings.Join(strs, ", ")
 }

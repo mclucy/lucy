@@ -49,8 +49,12 @@ func Dependencies(
 	provider Provider,
 	id types.PackageId,
 ) (deps *types.PackageDependencies, err error) {
-	// TODO: Implement
-	panic("not implemented")
+	raw, err := provider.Dependencies(id)
+	if err != nil {
+		return nil, err
+	}
+	result := raw.ToPackageDependencies()
+	return &result, nil
 }
 
 func PlatformSupport(src types.Source, name types.ProjectName) (

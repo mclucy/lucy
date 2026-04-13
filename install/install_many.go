@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -13,18 +14,15 @@ import (
 	"github.com/mclucy/lucy/probe"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/util"
 )
 
 func InstallMany(ids []types.PackageId, source types.Source) error {
+	const maxReconcileIterations = 3
+
 	if len(ids) == 0 {
 		return nil
-	}
-
-	if len(ids) == 1 {
-		return Install(ids[0], source)
 	}
 
 	prepared := prepareBatchIDs(ids)
@@ -88,56 +86,78 @@ func InstallMany(ids []types.PackageId, source types.Source) error {
 		}
 	}
 
-	packages, err := resolveBatchPackages(regularIds, providers)
-	if err != nil {
-		return err
-	}
+	roots := append([]types.PackageId(nil), regularIds...)
+	excluded := map[string]struct{}{}
+	seedTx := NewRecursiveTransaction(roots, providers)
+	SnapshotInstalledConstraints(seedTx)
+	baseConstraints := append([]InstalledConstraint(nil), seedTx.InstalledConstraints...)
+	feedbackConstraints := []InstalledConstraint{}
+	var tx *RecursiveTransaction
+	var diff ReconcileDiff
 
-	packages, err = downloadBatchPackages(serverInfo.WorkPath, packages)
-	if err != nil {
-		return err
-	}
-
-	installed := len(identityIds)
-	failed := 0
-	installErrors := make([]string, 0)
-	for _, p := range packages {
-		logger.ShowInfo(fmt.Sprintf("==> Installing %s", p.Id.StringFull()))
-
-		installer := installers[p.Id.Platform]
-		if installer == nil {
-			installer = installers[types.PlatformAny]
-		}
-		if installer == nil {
-			failed++
-			installErrors = append(
-				installErrors,
-				fmt.Sprintf("%s: no installer found", p.Id.StringFull()),
-			)
-			continue
-		}
-
-		if err := installer(p); err != nil {
-			failed++
-			installErrors = append(
-				installErrors,
-				fmt.Sprintf("%s: %v", p.Id.StringFull(), err),
-			)
-			continue
-		}
-
-		installed++
-	}
-
-	showBatchSummary(installed, failed)
-	if len(installErrors) > 0 {
-		return fmt.Errorf(
-			"failed to install packages: %s",
-			strings.Join(installErrors, "; "),
+	for iteration := range maxReconcileIterations {
+		showRecursiveResolveStart(roots)
+		tx, err = BuildCandidateGraph(
+			roots,
+			providers,
+			mergeReconcileConstraints(baseConstraints, feedbackConstraints),
 		)
+		if err != nil {
+			showRecursiveConflict(err)
+			return err
+		}
+		pruneRecursiveCandidates(tx, excluded)
+
+		packages := recursiveCandidatePackages(tx)
+		showRecursiveDownloadStart(len(packages))
+		packages, err = downloadBatchPackages(serverInfo.WorkPath, packages)
+		if err != nil {
+			return err
+		}
+		backfillRecursiveDownloads(tx, packages)
+		tx.AdvanceTo(PhaseDownloaded)
+
+		showRecursiveVerifyStart(len(tx.DownloadedArtifacts))
+		if err := VerifyDownloadedArtifacts(tx); err != nil {
+			return err
+		}
+
+		diff, err = ReconcileTransaction(tx)
+		if err != nil {
+			showRecursiveConflict(err)
+			return err
+		}
+		if diff.IsStable() {
+			break
+		}
+
+		if iteration == maxReconcileIterations-1 {
+			return fmt.Errorf(
+				"install: recursive closure did not stabilize after %d iterations: %s",
+				maxReconcileIterations,
+				reconcileDiffSummary(diff),
+			)
+		}
+
+		roots = appendMissingRoots(roots, diff.Missing)
+		feedbackConstraints = mergeReconcileConstraints(
+			feedbackConstraints,
+			tightenedConstraintInputs(diff.Tightened),
+		)
+		excluded = make(map[string]struct{}, len(diff.Extra))
+		for _, id := range diff.Extra {
+			excluded[id.StringPlatformName()] = struct{}{}
+		}
 	}
 
-	return nil
+	plan, err := buildRecursiveApplyPlan(tx)
+	if err != nil {
+		return err
+	}
+	tx.SetApplyPlan(plan)
+	tx.AdvanceTo(PhaseCommitted)
+
+	return ApplyValidatedClosure(tx, serverInfo)
 }
 
 func prepareBatchIDs(ids []types.PackageId) []types.PackageId {
@@ -199,67 +219,178 @@ func validateRegularBatchIDs(ids []types.PackageId) error {
 	)
 }
 
-func resolveBatchPackages(
-	ids []types.PackageId,
-	providers []upstream.Provider,
-) ([]types.Package, error) {
-	type slot struct {
-		pkg    types.Package
-		failed bool
-		id     types.PackageId
-		errMsg string
+func recursiveCandidatePackages(tx *RecursiveTransaction) []types.Package {
+	if tx == nil {
+		return nil
 	}
 
-	slots := make([]slot, len(ids))
-	var wg sync.WaitGroup
+	keys := make([]string, 0, len(tx.CandidateGraph))
+	for key, node := range tx.CandidateGraph {
+		if node.Package.Remote == nil {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
 
-	for i, id := range ids {
-		wg.Add(1)
-		go func(index int, id types.PackageId) {
-			defer wg.Done()
-			fetches, errs := routing.FetchMany(providers, id)
-			if len(fetches) == 0 {
-				reasons := make([]string, 0, len(errs))
-				for _, provErr := range errs {
-					reasons = append(reasons, provErr.Err.Error())
-				}
-				errMsg := strings.Join(reasons, "; ")
-				if errMsg == "" {
-					errMsg = "not found on any provider"
-				}
-				slots[index] = slot{failed: true, id: id, errMsg: errMsg}
-				return
-			}
-			fetch := fetches[0]
-			slots[index] = slot{
-				pkg: types.Package{
-					Id:     fetch.ResolvedID,
-					Remote: &fetch.Remote,
-				},
-			}
-		}(i, id)
+	packages := make([]types.Package, 0, len(keys))
+	for _, key := range keys {
+		packages = append(packages, tx.CandidateGraph[key].Package)
 	}
 
-	wg.Wait()
+	return packages
+}
 
-	packages := make([]types.Package, 0, len(ids))
-	failures := make([]string, 0)
-	for _, item := range slots {
-		if item.failed {
-			failures = append(failures, fmt.Sprintf("%s (%s)", item.id.StringFull(), item.errMsg))
-		} else {
-			packages = append(packages, item.pkg)
+func backfillRecursiveDownloads(tx *RecursiveTransaction, packages []types.Package) {
+	if tx == nil {
+		return
+	}
+
+	for _, pkg := range packages {
+		if pkg.Local == nil {
+			continue
+		}
+
+		tx.DownloadedArtifacts[pkg.Id.StringFull()] = pkg.Local.Path
+
+		key := pkg.Id.StringPlatformName()
+		node, ok := tx.CandidateGraph[key]
+		if !ok {
+			continue
+		}
+		node.Package.Local = pkg.Local
+		tx.CandidateGraph[key] = node
+	}
+}
+
+func buildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
+	if tx == nil {
+		return ApplyPlan{}, fmt.Errorf("install: nil recursive transaction")
+	}
+
+	keys := make([]string, 0, len(tx.VerifiedGraph))
+	for key := range tx.VerifiedGraph {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	install := make([]types.Package, 0, len(keys))
+	for _, key := range keys {
+		verified := tx.VerifiedGraph[key].Package
+		candidate, ok := tx.CandidateGraph[key]
+		if !ok || candidate.Package.Remote == nil {
+			return ApplyPlan{}, fmt.Errorf(
+				"install: verified package %s is missing candidate remote metadata",
+				verified.Id.StringFull(),
+			)
+		}
+
+		pkg := verified
+		pkg.Remote = candidate.Package.Remote
+		install = append(install, pkg)
+	}
+
+	// Collect extra candidate nodes (advisory-only, not in the verified closure)
+	// that have a downloaded local artifact — they must be removed from disk.
+	remove := make([]types.Package, 0)
+	for _, extraId := range tx.ReconcileDiff.Extra {
+		key := extraId.StringPlatformName()
+		node, ok := tx.CandidateGraph[key]
+		if !ok {
+			continue
+		}
+		if node.Package.Local == nil || node.Package.Local.Path == "" {
+			continue
+		}
+		remove = append(remove, node.Package)
+	}
+
+	return ApplyPlan{Install: install, Remove: remove}, nil
+}
+
+func reconcileDiffSummary(diff ReconcileDiff) string {
+	parts := make([]string, 0, 3)
+	if len(diff.Missing) > 0 {
+		parts = append(parts, fmt.Sprintf("missing=%d", len(diff.Missing)))
+	}
+	if len(diff.Extra) > 0 {
+		parts = append(parts, fmt.Sprintf("extra=%d", len(diff.Extra)))
+	}
+	if len(diff.Tightened) > 0 {
+		parts = append(parts, fmt.Sprintf("tightened=%d", len(diff.Tightened)))
+	}
+	if len(parts) == 0 {
+		return "no changes"
+	}
+	return strings.Join(parts, ", ")
+}
+
+func pruneRecursiveCandidates(tx *RecursiveTransaction, excluded map[string]struct{}) {
+	if tx == nil || len(excluded) == 0 {
+		return
+	}
+
+	for key := range excluded {
+		delete(tx.CandidateGraph, key)
+	}
+}
+
+func appendMissingRoots(existing []types.PackageId, missing []types.PackageId) []types.PackageId {
+	if len(missing) == 0 {
+		return existing
+	}
+
+	seen := make(map[string]struct{}, len(existing)+len(missing))
+	updated := make([]types.PackageId, 0, len(existing)+len(missing))
+	for _, id := range existing {
+		key := id.StringPlatformName()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		updated = append(updated, id)
+	}
+	for _, id := range missing {
+		key := id.StringPlatformName()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		updated = append(updated, id)
+	}
+
+	return updated
+}
+
+func mergeReconcileConstraints(groups ...[]InstalledConstraint) []InstalledConstraint {
+	merged := make([]InstalledConstraint, 0)
+	index := make(map[string]int)
+
+	for _, group := range groups {
+		for _, constraint := range group {
+			key := reconcileConstraintInputKey(constraint.ConstraintInput)
+			if pos, ok := index[key]; ok {
+				merged[pos] = constraint
+				continue
+			}
+			index[key] = len(merged)
+			merged = append(merged, constraint)
 		}
 	}
 
-	if len(failures) > 0 {
-		return nil, fmt.Errorf(
-			"no candidates found:\n  %s",
-			strings.Join(failures, "\n  "),
-		)
-	}
+	return merged
+}
 
-	return packages, nil
+func tightenedConstraintInputs(inputs []ConstraintInput) []InstalledConstraint {
+	constraints := make([]InstalledConstraint, 0, len(inputs))
+	for _, input := range inputs {
+		constraints = append(constraints, InstalledConstraint{ConstraintInput: input})
+	}
+	return constraints
+}
+
+func reconcileConstraintInputKey(input ConstraintInput) string {
+	return input.Requester + "|" + input.Dependency.Id.StringPlatformName()
 }
 
 func downloadBatchPackages(

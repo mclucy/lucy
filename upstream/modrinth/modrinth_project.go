@@ -63,29 +63,39 @@ func getProjectByName(slug types.ProjectName) (
 	project *projectResponse,
 	err error,
 ) {
-	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok {
-		slug = types.ProjectName(canonical)
-	}
-	res, err := http.Get(projectUrl(string(slug)))
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: request failed: %w", err)
-	}
-	defer res.Body.Close()
+	tryFetch := func(target types.ProjectName) (*projectResponse, error) {
+		res, err := http.Get(projectUrl(string(target)))
+		if err != nil {
+			return nil, fmt.Errorf("modrinth: request failed: %w", err)
+		}
+		defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		return nil, ENoProject
+		if res.StatusCode != http.StatusOK {
+			return nil, ENoProject
+		}
+
+		data, err := io.ReadAll(res.Body)
+		if err != nil {
+			return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
+		}
+
+		project := &projectResponse{}
+		if err := json.Unmarshal(data, project); err != nil {
+			return nil, ENoProject
+		}
+		return project, nil
 	}
 
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
+	project, err = tryFetch(slug)
+	if err == nil {
+		return project, nil
 	}
-	project = &projectResponse{}
-	err = json.Unmarshal(data, project)
-	if err != nil {
-		return nil, ENoProject
+
+	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok && canonical != string(slug) {
+		return tryFetch(types.ProjectName(canonical))
 	}
-	return
+
+	return nil, err
 }
 
 func getProjectMembers(id string) (

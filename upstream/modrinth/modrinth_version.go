@@ -27,22 +27,39 @@ func listVersions(slug types.ProjectName) (
 	versions []*versionResponse,
 	err error,
 ) {
-	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok {
-		slug = types.ProjectName(canonical)
+	tryFetch := func(target types.ProjectName) ([]*versionResponse, error) {
+		res, err := http.Get(versionsUrl(target))
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			return nil, ENoProject
+		}
+
+		data, err := io.ReadAll(res.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		var out []*versionResponse
+		if err := json.Unmarshal(data, &out); err != nil {
+			return nil, ENoProject
+		}
+		return out, nil
 	}
-	res, err := http.Get(versionsUrl(slug))
-	if err != nil {
-		return nil, err
+
+	versions, err = tryFetch(slug)
+	if err == nil {
+		return versions, nil
 	}
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
+
+	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok && canonical != string(slug) {
+		return tryFetch(types.ProjectName(canonical))
 	}
-	err = json.Unmarshal(data, &versions)
-	if err != nil {
-		return nil, ENoProject
-	}
-	return
+
+	return nil, err
 }
 
 // getVersion is named as so because a Package in lucy is equivalent to a version
@@ -136,7 +153,7 @@ func latestVersion(slug types.ProjectName) (
 	return v, nil
 }
 
-func latestCompatibleVersion(slug types.ProjectName) (
+func latestCompatibleVersion(slug types.ProjectName, platform types.Platform) (
 	v *versionResponse,
 	err error,
 ) {
@@ -144,9 +161,11 @@ func latestCompatibleVersion(slug types.ProjectName) (
 	if err != nil {
 		return nil, err
 	}
-	// Platform inference removed to avoid circular imports.
-	// Caller should provide explicit platform or this will use latest.
+	filterByLoader := platform != types.PlatformAny && platform != types.PlatformNone
 	for _, version := range versions {
+		if filterByLoader && !versionSupportsLoader(version, platform) {
+			continue
+		}
 		if version.VersionType == "release" &&
 			(v == nil || version.DatePublished.After(v.DatePublished)) {
 			v = version
@@ -156,6 +175,9 @@ func latestCompatibleVersion(slug types.ProjectName) (
 		// No release version found; fall back to the latest pre-release (beta/alpha).
 		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
 		for _, version := range versions {
+			if filterByLoader && !versionSupportsLoader(version, platform) {
+				continue
+			}
 			if v == nil || version.DatePublished.After(v.DatePublished) {
 				v = version
 			}
