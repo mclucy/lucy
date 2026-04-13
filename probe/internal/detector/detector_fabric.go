@@ -294,7 +294,7 @@ func (d *fabricModDetector) Detect(
 				Authors: func() []types.Person {
 					authors := make([]types.Person, len(modInfo.Authors))
 					for i, author := range modInfo.Authors {
-						authors[i] = types.Person{Name: author}
+						authors[i] = types.Person{Name: string(author)}
 					}
 					return authors
 				}(),

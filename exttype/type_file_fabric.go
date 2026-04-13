@@ -1,6 +1,10 @@
 package exttype
 
-import "github.com/mclucy/lucy/tools"
+import (
+	"encoding/json"
+
+	"github.com/mclucy/lucy/tools"
+)
 
 type FabricEnvironment string
 
@@ -10,17 +14,37 @@ const (
 	FabricEnvironmentAny    FabricEnvironment = "*"
 )
 
+// FabricAuthor handles both a plain string and a person object {"name": "..."}
+// as allowed by the fabric.mod.json spec.
+type FabricAuthor string
+
+func (a *FabricAuthor) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*a = FabricAuthor(s)
+		return nil
+	}
+	var obj struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+	*a = FabricAuthor(obj.Name)
+	return nil
+}
+
 // FileFabricModIdentifier represents the structure of fabric.mod.json files found
 // in Fabric mods' `.jar` files.
 //
 // Docs: https://fabricmc.net/wiki/documentation:fabric_mod_json_spec
 type FileFabricModIdentifier struct {
-	SchemaVersion int      `json:"schemaVersion"`
-	Id            string   `json:"id"`
-	Version       string   `json:"version"`
-	Name          string   `json:"name"`
-	Description   string   `json:"description"`
-	Authors       []string `json:"authors"`
+	SchemaVersion int            `json:"schemaVersion"`
+	Id            string         `json:"id"`
+	Version       string         `json:"version"`
+	Name          string         `json:"name"`
+	Description   string         `json:"description"`
+	Authors       []FabricAuthor `json:"authors"`
 
 	// Fields officially supported:
 	//   - "email"
