@@ -164,11 +164,13 @@ func DependencyToPackage(
 			return p, fmt.Errorf("resolve dependency project: %w", err)
 		}
 		// This is not safe, TODO: use better inference method
-		version, err = latestVersion(syntax.ToProjectName(project.Slug))
+		version, err = latestCompatibleVersion(syntax.ToProjectName(project.Slug), dependent.Platform)
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency latest version: %w", err)
 		}
-		p.Version = types.VersionLatest
+		p.Name = syntax.ToProjectName(project.Slug)
+		p.Version = types.VersionCompatible
+		return p, nil
 	} else {
 		return p, ErrorInvalidDependency
 	}
