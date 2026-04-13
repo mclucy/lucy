@@ -37,7 +37,7 @@
 
 </div>
 
-> [!WARNING]
+> [!IMPORTANT]
 > This project is currently **INCOMPLETE** and under active development. Features and functionalities are subject to change.
 > If you're interested in contributing or want to stay updated, please contact <4rcadia.0@gmail.com>, or join the [QQ groupchat](https://qm.qq.com/q/Sf65NVYaAi). A Discord server will be up soon!
 
@@ -63,7 +63,7 @@
 ### Installation
 
 > [!WARNING]
-> Do not install before the first beta release unless you intend to test or contribute to the code.
+> Do not install before the first beta release unless you intend to test or contribute to the project. All data lost in production environments is your responsibility.
 
 ```bash
 go install github.com/mclucy/lucy@latest

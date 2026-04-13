@@ -7,11 +7,11 @@
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
 
   <h2>
-    <div>构建 · 审计 · 演进</div>
-    <sup>用同一个 CLI 管理 Minecraft 服务器环境</sup>
+    <div>服务器 · 群组服 · 整合包</div>
+    <sup>……一行命令秒了</sup>
   </h2>
 
-  <h3>现代化的 Minecraft 服务器环境管理器</h3>
+  <h3>现代化的 Minecraft 服务端环境管理器</h3>
 
   <img
     src="https://goreportcard.com/badge/github.com/mclucy/lucy"
@@ -36,14 +36,13 @@
 
 </div>
 
-> ## 🚧
->
+> [!IMPORTANT]
 > 本项目正在开发中且尚未完成。功能可能随时变化。
 > 如有兴趣贡献或了解进展，请联系 <4rcadia.0@gmail.com>，或加入 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)。Discord 服务器即将上线。
 
 ## 简介
 
-`lucy` 是一个面向 Minecraft 服务器的、具备环境感知能力的包管理与环境工具。它通过统一的命令行界面处理依赖解析、版本追踪、来源路由、环境探测与风险感知。如果你用过 `apt`、`brew` 或 `npm`，上手会很轻松。
+`lucy` 是一个面向 Minecraft 服务器的、具备环境感知能力的包管理与环境工具。它通过统一的命令行界面处理依赖解析、版本追踪、环境探测与风险告警。如果你用过 `apt`、`brew` 或 `npm`，`lucy` 对你来说会非常熟悉。
 
 ### 核心特性
 
@@ -62,7 +61,9 @@
 
 ### 安装
 
-> ⚠️ **注意**：在首个测试版发布前，除非你打算参与测试或贡献代码，否则不建议安装。
+> [!WARNING]
+> 在首个 beta 发布前，除非你打算参与测试或贡献代码，否则不要安装。
+> 任何在生产环境造成的数据丢失需要自行负责。
 
 ```bash
 go install github.com/mclucy/lucy@latest
