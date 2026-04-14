@@ -112,6 +112,12 @@ type ApplyPlan struct {
 // operation. It is passed between all pipeline stages (candidate expansion,
 // download, local verification, reconcile, apply) rather than loose slices.
 //
+// Value boundaries:
+//   - PURE fields (no side effects): Phase, Roots, InstalledConstraints,
+//     CandidateGraph, VerifiedGraph, ReconcileDiff, Apply
+//   - ADAPTER-OWNED fields (side-effect capable): Providers (network I/O),
+//     DownloadedArtifacts (filesystem), StagingDir (filesystem paths)
+//
 // Invariants enforced by this type's construction and phase transitions:
 //   - Phase starts at PhaseCandidate; it advances only via AdvanceTo.
 //   - ApplyPlan may only be set when Phase == PhaseVerified.
@@ -119,44 +125,54 @@ type ApplyPlan struct {
 //   - InstalledConstraints are immutable after transaction construction.
 type RecursiveTransaction struct {
 	// Phase is the current lifecycle stage. See RecursivePhase constants.
+	// PURE: no side effects.
 	Phase RecursivePhase
 
 	// Roots are the top-level package IDs requested by the user.
+	// PURE: just data.
 	Roots []types.PackageId
 
 	// InstalledConstraints is a snapshot of currently-installed packages taken
 	// from probe.ServerInfo() at transaction start. These are fixed constraints
 	// that the solver must respect; they are never auto-replaced.
+	// PURE: computed once at transaction creation; no live filesystem/network.
 	InstalledConstraints []InstalledConstraint
 
 	// Providers are the upstream provider instances used for dependency fetches
 	// during candidate graph expansion.
+	// ADAPTER-OWNED: performs network I/O via upstream.Provider interface.
 	Providers []upstream.Provider
 
 	// CandidateGraph is the advisory dependency closure computed from upstream
 	// APIs and installed constraints. Keyed by PackageId.StringPlatformName().
+	// PURE: computed from Provider results (already fetched).
 	CandidateGraph map[string]CandidateNode
 
 	// DownloadedArtifacts maps PackageId.StringFull() to the local file path
 	// of the downloaded JAR. Populated during PhaseDownloaded.
+	// ADAPTER-OWNED: contains filesystem paths.
 	DownloadedArtifacts map[string]string
 
 	// VerifiedGraph is the authoritative dependency closure derived from local
 	// JAR detector analysis. Populated during PhaseVerified. Supersedes
 	// advisory facts in CandidateGraph for conflict and reconcile decisions.
+	// PURE: computed from local JAR analysis results.
 	VerifiedGraph map[string]CandidateNode
 
 	// ReconcileDiff is the latest diff between candidate and verified graphs.
 	// It is updated on each reconcile iteration and must be stable (IsStable())
 	// before the transaction may advance to PhaseVerified.
+	// PURE: computed from graph comparison; no side effects.
 	ReconcileDiff ReconcileDiff
 
 	// Apply holds the finalized operation set. It is set only once, immediately
 	// before advancing to PhaseCommitted.
+	// PURE: computed plan; actual filesystem mutations happen outside this type.
 	Apply *ApplyPlan
 
 	// StagingDir is the temporary directory where artifacts are downloaded
 	// during the download phase. Used for atomic move to target directory.
+	// ADAPTER-OWNED: filesystem path string.
 	StagingDir string
 }
 
