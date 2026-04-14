@@ -11,7 +11,6 @@ import (
 
 	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/slugresolve"
@@ -233,6 +232,53 @@ func compareForgeMajor(version types.RawVersion, target int) int {
 	}
 }
 
+// getForgeModVersion extracts the version from a Forge JAR's manifest
+// when the mod version is set to `${file.jarVersion}`.
+func getForgeModVersion(zipReader *zip.Reader) types.RawVersion {
+	var r io.ReadCloser
+	var err error
+	for _, f := range zipReader.File {
+		if f.Name == "META-INF/MANIFEST.MF" {
+			r, err = f.Open()
+			if err != nil {
+				return types.VersionUnknown
+			}
+			defer tools.CloseReader(r, logger.Warn)
+			break
+		}
+	}
+
+	if r == nil {
+		return types.VersionUnknown
+	}
+
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return types.VersionUnknown
+	}
+	manifest := string(data)
+	const versionField = "Implementation-Version: "
+	idx := strings.Index(manifest, versionField)
+	if idx == -1 {
+		return types.VersionUnknown
+	}
+	i := idx + len(versionField)
+	v := manifest[i:]
+	v = strings.Split(v, "\r")[0]
+	v = strings.Split(v, "\n")[0]
+	return types.RawVersion(v)
+}
+
+func forgeHasSibling(filePath string, siblings ...string) bool {
+	dir := filepath.Dir(filePath)
+	for _, sibling := range siblings {
+		if _, err := os.Stat(filepath.Join(dir, sibling)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // forgeModDetector detects new Forge mods (1.13+)
 type forgeModDetector struct{}
 
@@ -274,51 +320,29 @@ func (d *forgeModDetector) Detect(
 					version = getForgeModVersion(zipReader)
 				}
 
-				p := types.Package{
-					Id: types.PackageId{
-						Platform: types.PlatformForge,
-						Name:     syntax.ToProjectName(mod.ModID),
-						Version:  version,
-					},
-					Local: &types.PackageInstallation{
-						Path: fileHandle.Name(),
-					},
-					Dependencies: &types.PackageDependencies{},
-					Information:  &types.ProjectInformation{},
+				rawDeps := modIdentifier.Dependencies[mod.ModID]
+				depSpecs := make([]modLoaderDependencySpec, 0, len(rawDeps))
+				for _, dep := range rawDeps {
+					depSpecs = append(depSpecs, modLoaderDependencySpec{
+						modID:        dep.ModID,
+						mandatory:    dep.Mandatory,
+						versionRange: dep.VersionRange,
+					})
 				}
 
-				deps := modIdentifier.Dependencies[mod.ModID]
-				for _, dep := range deps {
-					p.Dependencies.Value = append(
-						p.Dependencies.Value,
-						types.Dependency{
-							Id: types.PackageId{
-								Platform: types.PlatformForge,
-								Name:     syntax.ToProjectName(dep.ModID),
-							},
-							Constraint: parseModLoaderMavenVersionRange(dep.VersionRange),
-						},
-					)
-				}
-
-				p.Information = &types.ProjectInformation{
-					Title:   mod.DisplayName,
-					Brief:   mod.Description,
-					Authors: []types.Person{{Name: mod.Authors}},
-					License: modIdentifier.License,
-					Urls: []types.Url{
-						{
-							Name: "URL",
-							Type: types.UrlHome,
-							Url:  mod.DisplayURL,
-						},
-						{
-							Name: "Issue Tracker",
-							Type: types.UrlIssues,
-							Url:  modIdentifier.IssueTrackerURL,
-						},
-					},
-				}
+				p := translateModLoaderPackage(
+					types.PlatformForge,
+					fileHandle.Name(),
+					mod.ModID,
+					version,
+					depSpecs,
+					modIdentifier.License,
+					mod.DisplayName,
+					mod.Description,
+					mod.Authors,
+					mod.DisplayURL,
+					modIdentifier.IssueTrackerURL,
+				)
 
 				packages = append(packages, p)
 

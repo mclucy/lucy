@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 
@@ -77,7 +76,6 @@ func (d *McdrDetector) Detect(dir string, env *types.EnvironmentInfo) {
 		Version: version,
 		Config:  config,
 	}
-	return
 }
 
 func init() {
@@ -113,53 +111,7 @@ func (d *McdrPluginDetector) Detect(
 				return nil, err
 			}
 
-			pkg = types.Package{
-				Id: types.PackageId{
-					Platform: types.PlatformMCDR,
-					Name:     syntax.ToProjectName(pluginInfo.Id),
-					Version:  types.RawVersion(pluginInfo.Version),
-				},
-				Local: &types.PackageInstallation{
-					Path: fileHandle.Name(),
-				},
-				Dependencies: &types.PackageDependencies{},
-				Information:  &types.ProjectInformation{},
-			}
-
-			// Parse dependencies
-			for key, value := range pluginInfo.Dependencies {
-				pkg.Dependencies.Value = append(
-					pkg.Dependencies.Value,
-					types.Dependency{
-						Id: types.PackageId{
-							Platform: types.PlatformMCDR,
-							Name:     syntax.ToProjectName(key),
-						},
-						Constraint: parseNpmVersionRange(value),
-						Mandatory:  true,
-					},
-				)
-			}
-
-			// Parse info
-			pkg.Information.Authors = make(
-				[]types.Person,
-				len(pluginInfo.Author),
-			)
-			for i, author := range pluginInfo.Author {
-				pkg.Information.Authors[i] = types.Person{
-					Name: author,
-				}
-			}
-			pkg.Information.Title = pluginInfo.Name
-			pkg.Information.Brief = pluginInfo.Description.EnUs
-			pkg.Information.Urls = []types.Url{
-				{
-					Name: "Link",
-					Type: types.UrlSource,
-					Url:  pluginInfo.Link,
-				},
-			}
+			pkg = translateMcdrPlugin(pluginInfo, fileHandle.Name())
 		}
 	}
 

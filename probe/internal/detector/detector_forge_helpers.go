@@ -1,18 +1,20 @@
 package detector
 
 import (
-	"archive/zip"
-	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/mclucy/lucy/dependency"
-	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 )
+
+type modLoaderDependencySpec struct {
+	modID        string
+	mandatory    bool
+	versionRange string
+}
 
 var forgeRuntimeVersionDirPattern = regexp.MustCompile(
 	`^(\d+\.\d+(?:\.\d+)?)-(\d+(?:\.\d+)+)$`,
@@ -21,43 +23,6 @@ var forgeRuntimeVersionDirPattern = regexp.MustCompile(
 var forgeJarNameVersionPattern = regexp.MustCompile(
 	`^forge-(\d+\.\d+(?:\.\d+)?)-(\d+(?:\.\d+)+)(?:-[a-z]+)?\.jar$`,
 )
-
-// getForgeModVersion extracts the version from a Forge JAR's manifest
-// when the mod version is set to `${file.jarVersion}`
-func getForgeModVersion(zip *zip.Reader) types.RawVersion {
-	var r io.ReadCloser
-	var err error
-	for _, f := range zip.File {
-		if f.Name == "META-INF/MANIFEST.MF" {
-			r, err = f.Open()
-			if err != nil {
-				return types.VersionUnknown
-			}
-			defer tools.CloseReader(r, logger.Warn)
-			break
-		}
-	}
-
-	if r == nil {
-		return types.VersionUnknown
-	}
-
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return types.VersionUnknown
-	}
-	manifest := string(data)
-	const versionField = "Implementation-Version: "
-	idx := strings.Index(manifest, versionField)
-	if idx == -1 {
-		return types.VersionUnknown
-	}
-	i := idx + len(versionField)
-	v := manifest[i:]
-	v = strings.Split(v, "\r")[0]
-	v = strings.Split(v, "\n")[0]
-	return types.RawVersion(v)
-}
 
 // parseModLoaderMavenVersionRange parses Forge dependency version ranges.
 //
@@ -70,6 +35,73 @@ func parseModLoaderMavenVersionRange(interval string) [][]types.VersionConstrain
 		dependency.InferRangeDialect(types.PlatformForge),
 		types.Semver,
 	)
+}
+
+func translateModLoaderPackage(
+	platform types.Platform,
+	localPath string,
+	modID string,
+	version types.RawVersion,
+	deps []modLoaderDependencySpec,
+	license string,
+	displayName string,
+	description string,
+	authors string,
+	displayURL string,
+	issueTrackerURL string,
+) types.Package {
+	pkg := types.Package{
+		Id: types.PackageId{
+			Platform: platform,
+			Name:     syntax.ToProjectName(modID),
+			Version:  version,
+		},
+		Local: &types.PackageInstallation{
+			Path: localPath,
+		},
+		Dependencies: &types.PackageDependencies{},
+		Information:  &types.ProjectInformation{},
+	}
+	pkg.Dependencies.Value = append(pkg.Dependencies.Value,
+		translateModLoaderDependencies(platform, deps)...,
+	)
+	pkg.Information = &types.ProjectInformation{
+		Title:   displayName,
+		Brief:   description,
+		Authors: []types.Person{{Name: authors}},
+		License: license,
+		Urls: []types.Url{
+			{
+				Name: "URL",
+				Type: types.UrlHome,
+				Url:  displayURL,
+			},
+			{
+				Name: "Issue Tracker",
+				Type: types.UrlIssues,
+				Url:  issueTrackerURL,
+			},
+		},
+	}
+	return pkg
+}
+
+func translateModLoaderDependencies(
+	platform types.Platform,
+	deps []modLoaderDependencySpec,
+) []types.Dependency {
+	translated := make([]types.Dependency, 0, len(deps))
+	for _, dep := range deps {
+		translated = append(translated, types.Dependency{
+			Id: types.PackageId{
+				Platform: platform,
+				Name:     syntax.ToProjectName(dep.modID),
+			},
+			Constraint: parseModLoaderMavenVersionRange(dep.versionRange),
+			Mandatory:  dep.mandatory,
+		})
+	}
+	return translated
 }
 
 func parseForgeVersionTupleFromPath(
@@ -90,16 +122,6 @@ func parseForgeVersionTupleFromPath(
 		return types.RawVersion(match[1]), types.RawVersion(match[2]), true
 	}
 	return types.VersionUnknown, types.VersionUnknown, false
-}
-
-func forgeHasSibling(filePath string, siblings ...string) bool {
-	dir := filepath.Dir(filePath)
-	for _, sibling := range siblings {
-		if _, err := os.Stat(filepath.Join(dir, sibling)); err == nil {
-			return true
-		}
-	}
-	return false
 }
 
 func hasConcreteVersion(version types.RawVersion) bool {

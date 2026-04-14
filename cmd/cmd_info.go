@@ -44,7 +44,10 @@ func init() {
 }
 
 func actionInfo(cmd *cobra.Command, args []string) error {
-	id := syntax.Parse(args[0])
+	id, err := syntax.Parse(args[0])
+	if err != nil {
+		logger.Fatal(err)
+	}
 	p := id.NewPackage()
 	sourceArg, _ := cmd.Flags().GetString(flagSourceName)
 	specifiedSource := types.ParseSource(sourceArg)

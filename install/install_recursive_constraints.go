@@ -118,7 +118,10 @@ func normalizeConstraintExpression(dep types.Dependency) (types.VersionConstrain
 	if dep.Id.Version == "" || dep.Id.Version == types.VersionAny || dep.Id.Version.IsInvalid() || dep.Id.Version.CanInfer() {
 		return types.VersionConstraintExpression{{}}, nil
 	}
-	value := dependency.Parse(dep.Id.Version, defaultVersionScheme(dep.Id))
+	value, err := dependency.Parse(dep.Id.Version, defaultVersionScheme(dep.Id))
+	if err != nil {
+		return nil, fmt.Errorf("install: failed to parse fixed constraint version %q for %s: %w", dep.Id.Version, dep.Id.StringPlatformName(), err)
+	}
 	if value == nil {
 		return nil, fmt.Errorf("install: failed to parse fixed constraint version %q for %s", dep.Id.Version, dep.Id.StringPlatformName())
 	}

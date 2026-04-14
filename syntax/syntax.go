@@ -18,7 +18,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -57,21 +56,16 @@ var (
 )
 
 // Parse is exported to parse a string into a PackageId struct.
-func Parse(s string) (id types.PackageId) {
+// Returns the parsed PackageId and an error if parsing fails.
+func Parse(s string) (id types.PackageId, err error) {
 	s = sanitize(s)
 	id = types.PackageId{}
-	var err error
 	id.Platform, id.Name, id.Version, err = parseOperatorAt(s)
 	if err != nil {
-		if errors.Is(err, ESyntax) {
-			panic(err)
-		} else {
-			logger.Fatal(err)
-		}
+		return types.PackageId{}, err
 	}
 	id.NormalizeIdentityPackage()
-	logger.Debug("parsed input as package: " + id.StringFull())
-	return
+	return id, nil
 }
 
 // parseOperatorAt is called first since '@' operator always occur after '/' (equivalent

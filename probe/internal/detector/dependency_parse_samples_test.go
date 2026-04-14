@@ -302,7 +302,10 @@ func mustReadFile(t *testing.T, path string) []byte {
 
 func mustParseSemver(t *testing.T, raw string) types.ComparableVersion {
 	t.Helper()
-	v := dependency.Parse(types.RawVersion(raw), types.Semver)
+	v, err := dependency.Parse(types.RawVersion(raw), types.Semver)
+	if err != nil {
+		t.Fatalf("parse semver %q failed: %v", raw, err)
+	}
 	if v == nil {
 		t.Fatalf("parse semver %q failed", raw)
 	}

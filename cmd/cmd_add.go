@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -50,7 +51,11 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 
 	ids := make([]types.PackageId, 0, len(args))
 	for _, arg := range args {
-		ids = append(ids, syntax.Parse(arg))
+		id, err := syntax.Parse(arg)
+		if err != nil {
+			logger.Fatal(err)
+		}
+		ids = append(ids, id)
 	}
 
 	if len(ids) > 1 {

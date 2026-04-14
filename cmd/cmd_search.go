@@ -59,7 +59,10 @@ func init() {
 }
 
 func actionSearch(cmd *cobra.Command, args []string) error {
-	p := syntax.Parse(args[0])
+	p, err := syntax.Parse(args[0])
+	if err != nil {
+		logger.Fatal(err)
+	}
 	index, _ := cmd.Flags().GetString(flagIndexName)
 	client, _ := cmd.Flags().GetBool(flagClientName)
 	long, _ := cmd.Flags().GetBool(flagLongName)

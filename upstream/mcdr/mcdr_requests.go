@@ -142,9 +142,13 @@ func getLatestCompatibleRelease(id string) (*release, error) {
 					),
 					Mandatory: true,
 				}
+				localVersion, err := dependency.Parse(localMcdrVersion, types.Semver)
+				if err != nil {
+					return nil, err
+				}
 				if dep.Satisfy(
 					mcdrPackage,
-					dependency.Parse(localMcdrVersion, types.Semver),
+					localVersion,
 				) {
 					return &rel, nil
 				}
