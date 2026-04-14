@@ -178,30 +178,7 @@ func buildServerInfo() types.ServerInfo {
 	}()
 
 	wg.Wait()
-	EnrichTopologyFromPackages(serverInfo.Runtime, serverInfo.Packages)
-
-	// Inject runtime identity packages from executable into the package set.
-	// This runs AFTER EnrichTopologyFromPackages so topology enrichment can
-	// use package names for evidence detection first.
-	if serverInfo.Runtime != nil && serverInfo.Runtime.IsValid() {
-		idx := NewPackageIndex()
-		// First, add all existing packages (they have local paths, so
-		// they take precedence under the first-write-wins policy).
-		idx.Merge(serverInfo.Packages)
-		// Then inject runtime identity packages (no local path — these
-		// are runtime identities, not locally installed files).
-		for _, rid := range serverInfo.Runtime.RuntimeIdentities {
-			if rid.Platform == types.PlatformAny {
-				continue
-			}
-			idx.Add(types.Package{Id: rid})
-		}
-		serverInfo.Packages = idx.Packages()
-	}
-
-	if serverInfo.Runtime != nil && serverInfo.Runtime.Topology == nil {
-		serverInfo.Runtime.Topology = &types.RuntimeTopology{}
-	}
+	serverInfo.Packages = finalizeProbedRuntime(serverInfo.Runtime, serverInfo.Packages)
 
 	return serverInfo
 }
@@ -216,18 +193,7 @@ func buildModPaths() (paths []string) {
 		return
 	}
 
-	if exec.Topology != nil && exec.Topology.Resolved() {
-		// Topology-driven path discovery
-		if exec.Topology.HasCapability(types.CapabilityFabricMods) ||
-			exec.Topology.HasCapability(types.CapabilityForgeMods) ||
-			exec.Topology.HasCapability(types.CapabilityNeoforgeMods) {
-			paths = append(paths, path.Join(workPath(), "mods"))
-		}
-		if exec.Topology.HasCapability(types.CapabilityBukkitPlugins) {
-			paths = append(paths, path.Join(workPath(), "plugins"))
-		}
-	}
-	return
+	return packageSearchPaths(exec, workPath())
 }
 
 var modPaths = tools.Memoize(buildModPaths)

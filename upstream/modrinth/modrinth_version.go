@@ -79,11 +79,8 @@ func getVersion(id types.PackageId) (
 		}
 		return v, nil
 	}
-	for _, version := range versions {
-		if types.RawVersion(version.VersionNumber) == id.Version &&
-			versionSupportsLoader(version, id.Platform) {
-			return version, nil
-		}
+	if selected := selectExactVersion(versions, id); selected != nil {
+		return selected, nil
 	}
 	return nil, ENoVersion
 }
@@ -131,23 +128,13 @@ func latestVersion(slug types.ProjectName) (
 	if err != nil {
 		return nil, err
 	}
-	for _, version := range versions {
-		if version.VersionType == "release" &&
-			(v == nil || version.DatePublished.After(v.DatePublished)) {
-			v = version
-		}
-	}
-	if v == nil {
-		// No release version found; fall back to the latest pre-release (beta/alpha).
-		logger.Info("no release version found for " + slug.Title() + ", falling back to latest pre-release")
-		for _, version := range versions {
-			if v == nil || version.DatePublished.After(v.DatePublished) {
-				v = version
-			}
-		}
-	}
+	v, fellBack := selectLatestVersionCandidate(versions, types.PlatformNone)
 	if v == nil {
 		return nil, ENoVersion
+	}
+	if fellBack {
+		// No release version found; fall back to the latest pre-release (beta/alpha).
+		logger.Info("no release version found for " + slug.Title() + ", falling back to latest pre-release")
 	}
 	logger.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
 	return v, nil
@@ -162,29 +149,19 @@ func latestCompatibleVersion(slug types.ProjectName, platform types.Platform) (
 		return nil, err
 	}
 	filterByLoader := platform != types.PlatformAny && platform != types.PlatformNone
-	for _, version := range versions {
-		if filterByLoader && !versionSupportsLoader(version, platform) {
-			continue
-		}
-		if version.VersionType == "release" &&
-			(v == nil || version.DatePublished.After(v.DatePublished)) {
-			v = version
-		}
-	}
-	if v == nil {
-		// No release version found; fall back to the latest pre-release (beta/alpha).
-		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
-		for _, version := range versions {
-			if filterByLoader && !versionSupportsLoader(version, platform) {
-				continue
-			}
-			if v == nil || version.DatePublished.After(v.DatePublished) {
-				v = version
-			}
-		}
+	if filterByLoader {
+		v, _ = selectLatestCompatibleVersionCandidate(versions, platform)
+	} else {
+		v, _ = selectLatestVersionCandidate(versions, platform)
 	}
 	if v == nil {
 		return nil, ENoVersion
+	}
+	if filterByLoader && latestReleaseVersion(versions, platform, true) == nil {
+		// No release version found; fall back to the latest pre-release (beta/alpha).
+		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
+	} else if !filterByLoader && latestReleaseVersion(versions, platform, false) == nil {
+		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
 	}
 	return v, nil
 }

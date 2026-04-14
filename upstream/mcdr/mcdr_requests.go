@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/github"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 
 	"github.com/sahilm/fuzzy"
@@ -114,47 +112,24 @@ func getLatestRelease(id string) (*release, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &history.Releases[history.LatestVersionIndex], nil
+	rel := selectLatestRelease(history)
+	if rel == nil {
+		return nil, ErrVersionNotFound(id, "latest")
+	}
+	return rel, nil
 }
 
-func getLatestCompatibleRelease(id string) (*release, error) {
-	serverInfo := probe.ServerInfo()
+func getLatestCompatibleRelease(id string, localMcdrVersion types.RawVersion) (*release, error) {
 	history, err := getReleaseHistory(id)
 	if err != nil {
 		return nil, err
 	}
-
-	localMcdrVersion := serverInfo.Environments.Mcdr.Version
-	mcdrPackage := types.PackageId{
-		Platform: types.PlatformMCDR,
-		Name:     "mcdreforged",
-		Version:  localMcdrVersion,
+	rel, err := selectLatestCompatibleRelease(history, localMcdrVersion)
+	if err != nil {
+		return nil, err
 	}
-	for _, rel := range history.Releases {
-		for k, v := range rel.Meta.Dependencies {
-			if k == "mcdreforged" {
-				dep := types.Dependency{
-					Id: mcdrPackage,
-					Constraint: dependency.ParseRange(
-						v,
-						dependency.DialectNpmSemver,
-						types.Semver,
-					),
-					Mandatory: true,
-				}
-				localVersion, err := dependency.Parse(localMcdrVersion, types.Semver)
-				if err != nil {
-					return nil, err
-				}
-				if dep.Satisfy(
-					mcdrPackage,
-					localVersion,
-				) {
-					return &rel, nil
-				}
-				break
-			}
-		}
+	if rel != nil {
+		return rel, nil
 	}
 
 	return nil, ErrVersionNotFound(id, "latest compatible")
@@ -200,27 +175,4 @@ func getRepository(id string) (*pluginRepo, error) {
 		return nil, err
 	}
 	return &repo, nil
-}
-
-func getFactory[T any]() func(id string) (*T, error) {
-	return func(id string) (*T, error) {
-		ghEndpoint := pluginCatalogueRepoEndpoint + id + "/repository.json" + branchMeta
-		err, msg, data := github.GetFileFromGitHub(ghEndpoint)
-		if err != nil {
-			return nil, err
-		}
-		if msg != nil && msg.Message != "" {
-			if msg.Status == "404" {
-				return nil, ErrPluginNotFound(id)
-			}
-			return nil, fmt.Errorf("%w: %s", ErrorGhApi, msg.Message)
-		}
-
-		var res T
-		err = json.Unmarshal(data, &res)
-		if err != nil {
-			return nil, err
-		}
-		return &res, nil
-	}
 }

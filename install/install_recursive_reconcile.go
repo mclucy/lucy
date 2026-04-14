@@ -21,54 +21,61 @@ func ReconcileTransaction(tx *RecursiveTransaction) (ReconcileDiff, error) {
 
 	showRecursiveReconcileStart()
 
-	baseInputs, err := reconcileConstraintInputs(tx)
+	diff, err := reconcileDiffKernel(
+		tx.Roots,
+		tx.InstalledConstraints,
+		tx.CandidateGraph,
+		tx.VerifiedGraph,
+	)
 	if err != nil {
 		return ReconcileDiff{}, err
 	}
 
-	var previousDiff ReconcileDiff
-	havePrevious := false
+	tx.ReconcileDiff = diff
+	showRecursiveReconcileDiff(diff)
 
-	for {
-		diff, diffErr := reconcileDiff(tx)
-		if diffErr != nil {
-			return ReconcileDiff{}, diffErr
-		}
-		tx.ReconcileDiff = diff
-		showRecursiveReconcileDiff(diff)
-
-		if diff.IsStable() {
-			return diff, nil
-		}
-
-		inputs := append([]ConstraintInput(nil), baseInputs...)
-		inputs = append(inputs, diff.Tightened...)
-		_, mergeErr := MergeConstraintGraph(inputs)
-
-		if havePrevious && reconcileProgressStalled(previousDiff, diff) {
-			if mergeErr != nil {
-				return ReconcileDiff{}, fmt.Errorf("install: reconcile made no progress, aborting")
-			}
-			return diff, nil
-		}
-
-		previousDiff = diff
-		havePrevious = true
-	}
+	return diff, nil
 }
 
-func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
+func reconcileDiffKernel(
+	roots []types.PackageId,
+	installed []InstalledConstraint,
+	candidateGraph map[string]CandidateNode,
+	verifiedGraph map[string]CandidateNode,
+) (ReconcileDiff, error) {
+	baseInputs, err := reconcileConstraintInputs(roots, installed, candidateGraph, verifiedGraph)
+	if err != nil {
+		return ReconcileDiff{}, err
+	}
+
+	diff, err := reconcileDiff(candidateGraph, verifiedGraph)
+	if err != nil {
+		return ReconcileDiff{}, err
+	}
+
+	if diff.IsStable() {
+		return diff, nil
+	}
+
+	if err := reconcileValidateTightenedDiff(baseInputs, diff); err != nil {
+		return ReconcileDiff{}, err
+	}
+
+	return diff, nil
+}
+
+func reconcileDiff(candidateGraph map[string]CandidateNode, verifiedGraph map[string]CandidateNode) (ReconcileDiff, error) {
 	missing := make(map[string]types.PackageId)
 	tightened := make(map[string]ConstraintInput)
 
-	for key, verifiedNode := range tx.VerifiedGraph {
+	for key, verifiedNode := range verifiedGraph {
 		verifiedDeps, err := reconcileDependencyMap(verifiedNode.Package.Id.StringFull(), verifiedNode.Package.Dependencies)
 		if err != nil {
 			return ReconcileDiff{}, err
 		}
 
 		advisoryDeps := map[string]types.Dependency{}
-		if advisoryNode, ok := tx.CandidateGraph[key]; ok {
+		if advisoryNode, ok := candidateGraph[key]; ok {
 			advisoryDeps, err = reconcileDependencyMap(advisoryNode.Package.Id.StringFull(), advisoryNode.Package.Dependencies)
 			if err != nil {
 				return ReconcileDiff{}, err
@@ -80,7 +87,7 @@ func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
 			// (e.g. NeoForge JarInJar). They are already present on disk and
 			// do not need to be resolved from upstream package registries.
 			if verifiedDep.Mandatory && !verifiedDep.Embedded {
-				if _, exists := tx.CandidateGraph[depKey]; !exists {
+				if _, exists := candidateGraph[depKey]; !exists {
 					missing[depKey] = verifiedDep.Id
 				}
 			}
@@ -101,7 +108,7 @@ func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
 		}
 	}
 
-	reachable, err := reconcileReachableCandidateClosure(tx)
+	reachable, err := reconcileReachableCandidateClosure(candidateGraph, verifiedGraph)
 	if err != nil {
 		return ReconcileDiff{}, err
 	}
@@ -110,13 +117,13 @@ func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
 	// upstream APIs may return platform=none/any/unknown for a package that the
 	// local detector identifies as forge/fabric/etc. A candidate keyed as
 	// "none/create" is the same artifact as a verified node keyed "forge/create".
-	verifiedByName := make(map[types.ProjectName]struct{}, len(tx.VerifiedGraph))
-	for _, vn := range tx.VerifiedGraph {
+	verifiedByName := make(map[types.ProjectName]struct{}, len(verifiedGraph))
+	for _, vn := range verifiedGraph {
 		verifiedByName[vn.Package.Id.Name] = struct{}{}
 	}
 
 	extra := make(map[string]types.PackageId)
-	for key, candidateNode := range tx.CandidateGraph {
+	for key, candidateNode := range candidateGraph {
 		if !candidateNode.Advisory {
 			continue
 		}
@@ -141,10 +148,29 @@ func reconcileDiff(tx *RecursiveTransaction) (ReconcileDiff, error) {
 	}, nil
 }
 
-func reconcileConstraintInputs(tx *RecursiveTransaction) ([]ConstraintInput, error) {
+func reconcileValidateTightenedDiff(baseInputs []ConstraintInput, diff ReconcileDiff) error {
+	if len(diff.Tightened) == 0 {
+		return nil
+	}
+
+	inputs := append([]ConstraintInput(nil), baseInputs...)
+	inputs = append(inputs, diff.Tightened...)
+	if _, err := MergeConstraintGraph(inputs); err != nil {
+		return fmt.Errorf("install: reconcile made no progress, aborting")
+	}
+
+	return nil
+}
+
+func reconcileConstraintInputs(
+	roots []types.PackageId,
+	installed []InstalledConstraint,
+	candidateGraph map[string]CandidateNode,
+	verifiedGraph map[string]CandidateNode,
+) ([]ConstraintInput, error) {
 	inputs := make([]ConstraintInput, 0)
 
-	for _, root := range tx.Roots {
+	for _, root := range roots {
 		inputs = append(inputs, ConstraintInput{
 			Requester: "root",
 			Dependency: types.Dependency{
@@ -154,15 +180,15 @@ func reconcileConstraintInputs(tx *RecursiveTransaction) ([]ConstraintInput, err
 		})
 	}
 
-	for _, installed := range tx.InstalledConstraints {
+	for _, installed := range installed {
 		inputs = append(inputs, installed.ConstraintInput)
 	}
 
-	keys := make(map[string]struct{}, len(tx.CandidateGraph)+len(tx.VerifiedGraph))
-	for key := range tx.CandidateGraph {
+	keys := make(map[string]struct{}, len(candidateGraph)+len(verifiedGraph))
+	for key := range candidateGraph {
 		keys[key] = struct{}{}
 	}
-	for key := range tx.VerifiedGraph {
+	for key := range verifiedGraph {
 		keys[key] = struct{}{}
 	}
 
@@ -173,9 +199,9 @@ func reconcileConstraintInputs(tx *RecursiveTransaction) ([]ConstraintInput, err
 	slices.Sort(orderedKeys)
 
 	for _, key := range orderedKeys {
-		node, ok := tx.VerifiedGraph[key]
+		node, ok := verifiedGraph[key]
 		if !ok {
-			node, ok = tx.CandidateGraph[key]
+			node, ok = candidateGraph[key]
 		}
 		if !ok {
 			continue
@@ -239,11 +265,14 @@ func reconcileDependencyMap(requester string, deps *types.PackageDependencies) (
 	return merged, nil
 }
 
-func reconcileReachableCandidateClosure(tx *RecursiveTransaction) (map[string]struct{}, error) {
-	reachable := make(map[string]struct{}, len(tx.VerifiedGraph))
-	queue := make([]string, 0, len(tx.VerifiedGraph))
+func reconcileReachableCandidateClosure(
+	candidateGraph map[string]CandidateNode,
+	verifiedGraph map[string]CandidateNode,
+) (map[string]struct{}, error) {
+	reachable := make(map[string]struct{}, len(verifiedGraph))
+	queue := make([]string, 0, len(verifiedGraph))
 
-	for key := range tx.VerifiedGraph {
+	for key := range verifiedGraph {
 		reachable[key] = struct{}{}
 		queue = append(queue, key)
 	}
@@ -252,9 +281,9 @@ func reconcileReachableCandidateClosure(tx *RecursiveTransaction) (map[string]st
 		key := queue[0]
 		queue = queue[1:]
 
-		node, ok := tx.VerifiedGraph[key]
+		node, ok := verifiedGraph[key]
 		if !ok {
-			node, ok = tx.CandidateGraph[key]
+			node, ok = candidateGraph[key]
 		}
 		if !ok {
 			continue
@@ -272,7 +301,7 @@ func reconcileReachableCandidateClosure(tx *RecursiveTransaction) (map[string]st
 		slices.Sort(depKeys)
 
 		for _, depKey := range depKeys {
-			if _, exists := tx.CandidateGraph[depKey]; !exists {
+			if _, exists := candidateGraph[depKey]; !exists {
 				continue
 			}
 			if _, seen := reachable[depKey]; seen {
@@ -313,11 +342,6 @@ func reconcileConstraintTightened(advisory, verified types.Dependency) bool {
 	}
 
 	return reconcileConstraintExpressionKey(entry.Constraint) == reconcileConstraintExpressionKey(verified.Constraint)
-}
-
-func reconcileProgressStalled(previous, current ReconcileDiff) bool {
-	return reconcilePackageIDSetKey(previous.Missing) == reconcilePackageIDSetKey(current.Missing) &&
-		reconcileTightenedSetKey(previous.Tightened) == reconcileTightenedSetKey(current.Tightened)
 }
 
 func reconcileSortedPackageIDs(items map[string]types.PackageId) []types.PackageId {
@@ -362,24 +386,6 @@ func reconcileSortedConstraintInputs(items map[string]ConstraintInput) []Constra
 	})
 
 	return result
-}
-
-func reconcilePackageIDSetKey(ids []types.PackageId) string {
-	parts := make([]string, 0, len(ids))
-	for _, id := range ids {
-		parts = append(parts, id.StringFull())
-	}
-	slices.Sort(parts)
-	return strings.Join(parts, "|")
-}
-
-func reconcileTightenedSetKey(inputs []ConstraintInput) string {
-	parts := make([]string, 0, len(inputs))
-	for _, input := range inputs {
-		parts = append(parts, reconcileTightenedKey(input.Requester, input.Dependency.Id.StringPlatformName())+"="+reconcileConstraintExpressionKey(input.Dependency.Constraint))
-	}
-	slices.Sort(parts)
-	return strings.Join(parts, "|")
 }
 
 func reconcileTightenedKey(requester, depKey string) string {

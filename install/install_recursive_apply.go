@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
@@ -29,6 +30,60 @@ func recursiveInstallDestination(
 	}
 
 	return serverInfo.WorkPath
+}
+
+func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
+	if tx == nil {
+		return ApplyPlan{}, fmt.Errorf("install: nil recursive transaction")
+	}
+
+	candidateByName := make(map[types.ProjectName]CandidateNode, len(tx.CandidateGraph))
+	for _, node := range tx.CandidateGraph {
+		if node.Package.Remote != nil {
+			candidateByName[node.Package.Id.Name] = node
+		}
+	}
+
+	keys := make([]string, 0, len(tx.VerifiedGraph))
+	for key := range tx.VerifiedGraph {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	install := make([]types.Package, 0, len(keys))
+	for _, key := range keys {
+		verified := tx.VerifiedGraph[key].Package
+
+		candidate, ok := tx.CandidateGraph[key]
+		if !ok || candidate.Package.Remote == nil {
+			candidate, ok = candidateByName[verified.Id.Name]
+		}
+		if !ok || candidate.Package.Remote == nil {
+			return ApplyPlan{}, fmt.Errorf(
+				"install: verified package %s is missing candidate remote metadata",
+				verified.Id.StringFull(),
+			)
+		}
+
+		pkg := verified
+		pkg.Remote = candidate.Package.Remote
+		install = append(install, pkg)
+	}
+
+	remove := make([]types.Package, 0)
+	for _, extraId := range tx.ReconcileDiff.Extra {
+		key := extraId.StringPlatformName()
+		node, ok := tx.CandidateGraph[key]
+		if !ok {
+			continue
+		}
+		if node.Package.Local == nil || node.Package.Local.Path == "" {
+			continue
+		}
+		remove = append(remove, node.Package)
+	}
+
+	return ApplyPlan{Install: install, Remove: remove}, nil
 }
 
 // ApplyValidatedClosure executes the finalized install/remove plan after the

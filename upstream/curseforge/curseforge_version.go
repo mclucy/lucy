@@ -25,17 +25,7 @@ func latestFile(modId int32) (*fileResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var latest *fileResponse
-	for i := range files {
-		f := &files[i]
-		if !f.IsAvailable || f.ReleaseType != 1 { // 1 = Release
-			continue
-		}
-		if latest == nil || f.FileDate > latest.FileDate {
-			latest = f
-		}
-	}
+	latest := selectLatestReleaseFile(files)
 
 	if latest == nil {
 		return nil, ErrNoCompatibleFile
@@ -53,21 +43,12 @@ func latestCompatibleFile(modId int32, platform types.Platform) (
 ) {
 	// Platform inference removed to avoid circular imports.
 	// Caller should provide explicit platform or this will use latest.
+	_ = platform
 	files, err := listFiles(modId, "", 0)
 	if err != nil {
 		return nil, err
 	}
-
-	var latest *fileResponse
-	for i := range files {
-		f := &files[i]
-		if !f.IsAvailable || f.ReleaseType != 1 {
-			continue
-		}
-		if latest == nil || f.FileDate > latest.FileDate {
-			latest = f
-		}
-	}
+	latest := selectLatestReleaseFile(files)
 
 	if latest == nil {
 		return nil, ErrNoCompatibleFile
@@ -90,19 +71,12 @@ func getFileByDisplayName(
 	if err != nil {
 		return nil, err
 	}
-
-	for i := range files {
-		f := &files[i]
-		if !f.IsAvailable {
-			continue
-		}
-		if f.DisplayName == version || f.FileName == version {
-			if f.DownloadUrl == nil {
-				return nil, ErrDownloadNotAllowed
-			}
-			return f, nil
-		}
+	selected := selectFileByVersion(files, version)
+	if selected == nil {
+		return nil, ErrNoCompatibleFile
 	}
-
-	return nil, ErrNoCompatibleFile
+	if selected.DownloadUrl == nil {
+		return nil, ErrDownloadNotAllowed
+	}
+	return selected, nil
 }

@@ -1,7 +1,6 @@
 package install
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
@@ -15,6 +14,17 @@ type candidateRequest struct {
 	mandatory      bool
 }
 
+type candidateGraphResolver interface {
+	ResolvePackage(id types.PackageId) (types.Package, error)
+	ResolveDependencies(pkg types.Package) ([]types.PackageDependencies, error)
+}
+
+type candidateGraphPlanner struct {
+	tx               *RecursiveTransaction
+	constraintInputs []ConstraintInput
+	queue            []candidateRequest
+}
+
 // BuildCandidateGraph expands the recursive advisory dependency closure for the
 // requested roots, seeding fixed installed constraints up front and running the
 // constraint merge engine after every newly discovered dependency batch.
@@ -24,6 +34,63 @@ func BuildCandidateGraph(
 	installedConstraints []InstalledConstraint,
 	options Options,
 ) (*RecursiveTransaction, error) {
+	return BuildCandidateGraphWithResolver(
+		roots,
+		providers,
+		installedConstraints,
+		options,
+		providerCandidateResolver{providers: providers},
+	)
+}
+
+// BuildCandidateGraphWithResolver drives candidate-graph expansion using a
+// caller-provided resolver so the planning loop can run without direct provider
+// or routing calls in the planner core.
+func BuildCandidateGraphWithResolver(
+	roots []types.PackageId,
+	providers []upstream.Provider,
+	installedConstraints []InstalledConstraint,
+	options Options,
+	resolver candidateGraphResolver,
+) (*RecursiveTransaction, error) {
+	planner, err := newCandidateGraphPlanner(roots, providers, installedConstraints)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		current, ok := planner.next()
+		if !ok {
+			return planner.transaction(), nil
+		}
+
+		pkg, err := resolver.ResolvePackage(current.id)
+		if err != nil {
+			if current.mandatory {
+				return nil, err
+			}
+			continue
+		}
+
+		dependencySets, err := resolver.ResolveDependencies(pkg)
+		if err != nil {
+			if current.mandatory {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := planner.admit(current, pkg, dependencySets, options); err != nil {
+			return nil, err
+		}
+	}
+}
+
+func newCandidateGraphPlanner(
+	roots []types.PackageId,
+	providers []upstream.Provider,
+	installedConstraints []InstalledConstraint,
+) (*candidateGraphPlanner, error) {
 	tx := NewRecursiveTransaction(roots, providers)
 	tx.InstalledConstraints = append([]InstalledConstraint(nil), installedConstraints...)
 
@@ -58,80 +125,85 @@ func BuildCandidateGraph(
 		})
 	}
 
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
+	return &candidateGraphPlanner{
+		tx:               tx,
+		constraintInputs: constraintInputs,
+		queue:            queue,
+	}, nil
+}
+
+func (planner *candidateGraphPlanner) next() (candidateRequest, bool) {
+	for len(planner.queue) > 0 {
+		current := planner.queue[0]
+		planner.queue = planner.queue[1:]
 
 		key := current.id.StringPlatformName()
-		if _, exists := tx.CandidateGraph[key]; exists {
+		if _, exists := planner.tx.CandidateGraph[key]; exists {
 			continue
 		}
 
-		pkg, err := resolveCandidatePackage(tx.Providers, current.id)
-		if err != nil {
-			if current.mandatory {
-				return nil, err
-			}
-			continue
-		}
-
-		tx.CandidateGraph[key] = CandidateNode{
-			Package:        pkg,
-			ProvenancePath: append([]string(nil), current.provenancePath...),
-			Advisory:       true,
-		}
-
-		dependencyProviders := providersForSource(tx.Providers, pkg.Remote)
-		dependencySets, providerErrors := routing.DependenciesMany(dependencyProviders, pkg.Id)
-		if len(dependencySets) == 0 {
-			if current.mandatory {
-				return nil, fmt.Errorf(
-					"install: failed to resolve mandatory dependency %s: %s",
-					pkg.Id.StringPlatformName(),
-					formatProviderErrors(providerErrors),
-				)
-			}
-			continue
-		}
-
-		batchInputs := make([]ConstraintInput, 0)
-		children := make([]candidateRequest, 0)
-		for _, dependencySet := range dependencySets {
-			requester := current.id.StringFull()
-			for _, dependency := range dependencySet.Value {
-				if !dependency.Mandatory && !options.WithOptional {
-					continue
-				}
-
-				batchInputs = append(batchInputs, ConstraintInput{
-					Requester:  requester,
-					Dependency: dependency,
-				})
-
-				childKey := dependency.Id.StringPlatformName()
-				if _, exists := tx.CandidateGraph[childKey]; exists {
-					continue
-				}
-
-				children = append(children, candidateRequest{
-					id:             dependency.Id,
-					provenancePath: appendPath(current.provenancePath, requester),
-					mandatory:      dependency.Mandatory,
-				})
-			}
-		}
-
-		if len(batchInputs) > 0 {
-			constraintInputs = append(constraintInputs, batchInputs...)
-			if _, err := MergeConstraintGraph(constraintInputs); err != nil {
-				return nil, err
-			}
-		}
-
-		queue = append(queue, children...)
+		return current, true
 	}
 
-	return tx, nil
+	return candidateRequest{}, false
+}
+
+func (planner *candidateGraphPlanner) admit(
+	current candidateRequest,
+	pkg types.Package,
+	dependencySets []types.PackageDependencies,
+	options Options,
+) error {
+	key := current.id.StringPlatformName()
+	planner.tx.CandidateGraph[key] = CandidateNode{
+		Package:        pkg,
+		ProvenancePath: append([]string(nil), current.provenancePath...),
+		Advisory:       true,
+	}
+
+	batchInputs := make([]ConstraintInput, 0)
+	children := make([]candidateRequest, 0)
+	for _, dependencySet := range dependencySets {
+		requester := current.id.StringFull()
+		for _, dependency := range dependencySet.Value {
+			if !dependency.Mandatory && !options.WithOptional {
+				continue
+			}
+
+			batchInputs = append(batchInputs, ConstraintInput{
+				Requester:  requester,
+				Dependency: dependency,
+			})
+
+			childKey := dependency.Id.StringPlatformName()
+			if _, exists := planner.tx.CandidateGraph[childKey]; exists {
+				continue
+			}
+
+			children = append(children, candidateRequest{
+				id:             dependency.Id,
+				provenancePath: appendPath(current.provenancePath, requester),
+				mandatory:      dependency.Mandatory,
+			})
+		}
+	}
+
+	if len(batchInputs) > 0 {
+		planner.constraintInputs = append(planner.constraintInputs, batchInputs...)
+		if _, err := MergeConstraintGraph(planner.constraintInputs); err != nil {
+			return err
+		}
+	}
+
+	planner.queue = append(planner.queue, children...)
+	return nil
+}
+
+func (planner *candidateGraphPlanner) transaction() *RecursiveTransaction {
+	if planner == nil {
+		return nil
+	}
+	return planner.tx
 }
 
 func appendPath(path []string, requester string) []string {
@@ -151,58 +223,4 @@ func formatProviderErrors(providerErrors []routing.ProviderError) string {
 		reasons = append(reasons, providerErr.Error())
 	}
 	return strings.Join(reasons, "; ")
-}
-
-func resolveCandidatePackage(
-	providers []upstream.Provider,
-	id types.PackageId,
-) (types.Package, error) {
-	attempts := []types.PackageId{id}
-	if id.Version == types.VersionCompatible {
-		attempts = append(attempts,
-			types.PackageId{Platform: id.Platform, Name: id.Name, Version: types.VersionLatest},
-			types.PackageId{Platform: id.Platform, Name: id.Name, Version: types.VersionAny},
-		)
-	}
-
-	var lastErrors []routing.ProviderError
-	for _, attempt := range attempts {
-		fetches, providerErrors := routing.FetchMany(providers, attempt)
-		if len(fetches) == 0 {
-			lastErrors = providerErrors
-			continue
-		}
-
-		fetch := fetches[0]
-		return types.Package{
-			Id:     fetch.ResolvedID,
-			Remote: &fetch.Remote,
-		}, nil
-	}
-
-	return types.Package{}, fmt.Errorf(
-		"install: failed to resolve mandatory dependency %s: %s",
-		id.StringPlatformName(),
-		formatProviderErrors(lastErrors),
-	)
-}
-
-func providersForSource(
-	providers []upstream.Provider,
-	remote *types.PackageRemote,
-) []upstream.Provider {
-	if remote == nil {
-		return providers
-	}
-
-	filtered := make([]upstream.Provider, 0, 1)
-	for _, provider := range providers {
-		if provider.Source() == remote.Source {
-			filtered = append(filtered, provider)
-		}
-	}
-	if len(filtered) == 0 {
-		return providers
-	}
-	return filtered
 }

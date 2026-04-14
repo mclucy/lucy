@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -103,7 +104,11 @@ func (s provider) ParseAmbiguousId(id types.PackageId) (
 	var rel *release
 	switch id.Version {
 	case types.VersionCompatible:
-		rel, err = getLatestCompatibleRelease(id.Name.Pep8String())
+		serverInfo := probe.ServerInfo()
+		rel, err = getLatestCompatibleRelease(
+			id.Name.Pep8String(),
+			serverInfo.Environments.Mcdr.Version,
+		)
 	case types.VersionLatest, types.VersionAny:
 		rel, err = getLatestRelease(id.Name.Pep8String())
 		if err != nil {

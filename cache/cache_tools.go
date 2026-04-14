@@ -25,13 +25,7 @@ func setDir(name string) string {
 }
 
 func (h *handler) clearExpiredCache() {
-	now := time.Now()
-	var expired []key
-	for k, entry := range h.index.all() {
-		if entry.Expiration.Before(now) {
-			expired = append(expired, k)
-		}
-	}
+	expired := expiredEntries(h.index.all(), time.Now())
 	for _, k := range expired {
 		logger.Info("removing expired cache item " + k)
 		if err := h.removeEntryLocked(k); err != nil {
@@ -40,41 +34,64 @@ func (h *handler) clearExpiredCache() {
 	}
 }
 
-func (h *handler) maintainCacheLimit() {
-	type sizedEntry struct {
-		key  key
-		kind EntryKind
-		size int64
-		exp  time.Time
+// expiredEntries returns keys of all expired entries.
+func expiredEntries(entries map[key]*CacheEntry, now time.Time) []key {
+	var expired []key
+	for k, entry := range entries {
+		if entry.Expiration.Before(now) {
+			expired = append(expired, k)
+		}
 	}
+	return expired
+}
 
+func (h *handler) maintainCacheLimit() {
+	evicted := evictionCandidates(h.index.all(), h.policy)
+	for _, e := range evicted {
+		logger.Info("removing cache item " + e.key)
+		if err := h.removeEntryLocked(e.key); err != nil {
+			continue
+		}
+	}
+}
+
+type evictionTarget struct {
+	key  key
+	kind EntryKind
+	size int64
+	exp  time.Time
+}
+
+func evictionTargets(entries map[key]*CacheEntry) (map[EntryKind]int64, []evictionTarget) {
 	totals := map[EntryKind]int64{}
-	var entries []sizedEntry
-	for k, entry := range h.index.all() {
+	var targets []evictionTarget
+	for k, entry := range entries {
 		totals[entry.Kind] += entry.Size
-		entries = append(entries, sizedEntry{
+		targets = append(targets, evictionTarget{
 			key:  k,
 			kind: entry.Kind,
 			size: entry.Size,
 			exp:  entry.Expiration,
 		})
 	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].exp.Before(entries[j].exp)
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].exp.Before(targets[j].exp)
 	})
+	return totals, targets
+}
 
-	for _, e := range entries {
-		limit := h.policy.ConfigFor(e.kind).MaxSize
+func evictionCandidates(entries map[key]*CacheEntry, policy Policy) []evictionTarget {
+	totals, targets := evictionTargets(entries)
+	var result []evictionTarget
+	for _, e := range targets {
+		limit := policy.ConfigFor(e.kind).MaxSize
 		if totals[e.kind] <= limit {
 			continue
 		}
-		logger.Info("removing cache item " + e.key)
-		if err := h.removeEntryLocked(e.key); err != nil {
-			continue
-		}
+		result = append(result, e)
 		totals[e.kind] -= e.size
 	}
+	return result
 }
 
 func canonicalizeKey(k string) key {

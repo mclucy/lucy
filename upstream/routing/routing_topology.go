@@ -5,9 +5,6 @@ import (
 
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/curseforge"
-	"github.com/mclucy/lucy/upstream/mcdr"
-	"github.com/mclucy/lucy/upstream/modrinth"
 )
 
 // ResolveProvidersByTopology resolves providers using runtime topology
@@ -30,47 +27,10 @@ func ResolveProvidersByTopology(
 		return ListAutoProviders(), nil
 	}
 
-	providers := resolveProvidersByCapability(topology)
-	if len(providers) == 0 {
+	sources := providerSourcesByCapability(topology)
+	if len(sources) == 0 {
 		return nil, fmt.Errorf("%w: no providers resolved from topology", ErrInvalidPlatform)
 	}
 
-	return providers, nil
-}
-
-func resolveProvidersByCapability(topology *types.RuntimeTopology) []upstream.Provider {
-	providers := make([]upstream.Provider, 0, 2)
-	seen := map[types.Source]struct{}{}
-
-	addProvider := func(provider upstream.Provider) {
-		source := provider.Source()
-		if _, exists := seen[source]; exists {
-			return
-		}
-		seen[source] = struct{}{}
-		providers = append(providers, provider)
-	}
-
-	if topology.HasCapability(types.CapabilityFabricMods) ||
-		topology.HasCapability(types.CapabilityForgeMods) ||
-		topology.HasCapability(types.CapabilityNeoforgeMods) {
-		addProvider(modrinth.Provider)
-		if curseforge.Enabled() {
-			addProvider(curseforge.Provider)
-		}
-	}
-
-	if topology.HasCapability(types.CapabilityBukkitPlugins) {
-		addProvider(modrinth.Provider)
-	}
-
-	if topology.HasCapability(types.CapabilityMCDRPlugins) {
-		addProvider(mcdr.Provider)
-	}
-
-	if topology.HasCapability(types.CapabilityProxying) {
-		addProvider(modrinth.Provider)
-	}
-
-	return providers
+	return providersFromSources(sources)
 }

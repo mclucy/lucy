@@ -43,10 +43,7 @@ var providerBySource = map[types.Source]upstream.Provider{
 }
 
 func listModProviders() []upstream.Provider {
-	providers := []upstream.Provider{modrinth.Provider}
-	if curseforge.Enabled() {
-		providers = append(providers, curseforge.Provider)
-	}
+	providers, _ := providersFromSources(modProviderSources())
 	return providers
 }
 
@@ -54,7 +51,7 @@ func listModProviders() []upstream.Provider {
 // source=auto and platform=all.
 func ListAutoProviders() []upstream.Provider {
 	providers := listModProviders()
-	providers = append(providers, mcdr.Provider)
+	providers, _ = providersFromSources(append(modProviderSources(), types.SourceMCDR))
 	return providers
 }
 
@@ -84,16 +81,11 @@ func ResolveProviders(
 		return resolveExplicitSource(src)
 	}
 
-	switch platform {
-	case types.PlatformAny:
-		return ListAutoProviders(), nil
-	case types.PlatformForge, types.PlatformFabric, types.PlatformNeoforge:
-		return listModProviders(), nil
-	case types.PlatformMCDR:
-		return []upstream.Provider{mcdr.Provider}, nil
-	default:
-		return nil, fmt.Errorf("%w: %s", ErrInvalidPlatform, platform)
+	sources, err := providerSourcesForPlatform(platform)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", err, platform)
 	}
+	return providersFromSources(sources)
 }
 
 func ResolveProvidersFromTopology(
@@ -112,54 +104,13 @@ func ResolveProvidersFromTopology(
 		return nil, fmt.Errorf("routing: topology unresolved, cannot resolve providers")
 	}
 
-	providers := make([]upstream.Provider, 0, 2)
-	seen := make(map[types.Source]struct{}, 2)
-	sawKnownCapability := false
-	sawProxyCapability := false
-
-	appendProvider := func(provider upstream.Provider) {
-		source := provider.Source()
-		if _, ok := seen[source]; ok {
-			return
-		}
-		seen[source] = struct{}{}
-		providers = append(providers, provider)
+	selection := providerSourcesFromTopology(topology)
+	if len(selection.sources) > 0 {
+		return providersFromSources(selection.sources)
 	}
-
-	for _, node := range topology.Nodes {
-		for _, capability := range node.Capabilities {
-			switch capability {
-			case types.CapabilityFabricMods,
-				types.CapabilityForgeMods,
-				types.CapabilityNeoforgeMods,
-				types.CapabilityBukkitPlugins:
-				sawKnownCapability = true
-				appendProvider(modrinth.Provider)
-				if capability != types.CapabilityBukkitPlugins && curseforge.Enabled() {
-					appendProvider(curseforge.Provider)
-				}
-			case types.CapabilityMCDRPlugins:
-				sawKnownCapability = true
-				appendProvider(mcdr.Provider)
-			case types.CapabilityProxying:
-				sawKnownCapability = true
-				sawProxyCapability = true
-			}
-		}
-	}
-
-	if len(providers) > 0 {
-		return providers, nil
-	}
-
-	if sawProxyCapability {
-		return []upstream.Provider{}, nil
-	}
-
-	if !sawKnownCapability {
+	if selection.fallback {
 		return ListAutoProviders(), nil
 	}
-
 	return []upstream.Provider{}, nil
 }
 
@@ -173,4 +124,23 @@ func resolveExplicitSource(src types.Source) ([]upstream.Provider, error) {
 	}
 
 	return []upstream.Provider{provider}, nil
+}
+
+func providersFromSources(sources []types.Source) ([]upstream.Provider, error) {
+	providers := make([]upstream.Provider, 0, len(sources))
+	for _, source := range sources {
+		provider, ok, err := GetProvider(source)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
+		}
+		providers = append(providers, provider)
+	}
+	return providers, nil
+}
+
+func curseforgeAvailable() bool {
+	return curseforge.Enabled()
 }
