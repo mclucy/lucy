@@ -10,7 +10,9 @@ import (
 
 const (
 	ProgramPath = ".lucy"
-	ConfigFile  = ProgramPath + "/config.json"
+	// ConfigFile is Lucy's project-local policy/defaults file. The older
+	// .lucy/config.json path is deprecated in favor of TOML.
+	ConfigFile = ProgramPath + "/config.toml"
 )
 
 func speculateFilename(resp *http.Response) string {
