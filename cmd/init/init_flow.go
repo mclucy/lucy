@@ -8,6 +8,8 @@
 package init
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,7 +66,6 @@ var stepOrder = []InitStep{
 	StepGameVersion,
 	StepPlatform,
 	StepPlatformVersion,
-	StepSources,
 	StepManagedScope,
 	StepReview,
 	StepDone,
@@ -395,6 +396,15 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 	lkPath := string(state.LockFile)
 	if willWrite(lkPath) {
 		lk := state.NewLock()
+		if result.ManifestToWrite != nil {
+			if data, err := state.SerializeManifest(result.ManifestToWrite); err == nil {
+				sum := sha256.Sum256(data)
+				lk.ManifestFingerprint = "sha256:" + hex.EncodeToString(sum[:])
+			}
+			lk.GameVersion = result.ManifestToWrite.Environment.GameVersion
+			lk.Platform = result.ManifestToWrite.Environment.Platform
+			lk.PlatformVersion = result.ManifestToWrite.Environment.PlatformVersion
+		}
 		result.LockToWrite = &lk
 		result.WrittenFiles = append(result.WrittenFiles, lkPath)
 	} else {
@@ -424,5 +434,5 @@ type ErrConflict struct {
 }
 
 func (e *ErrConflict) Error() string {
-	return "init aborted: one or more .lucy/ files already exist (use --conflict-mode=overwrite to replace or --conflict-mode=preserve to keep them)"
+	return "init aborted: one or more .lucy/ files already exist (use --conflict=overwrite to replace or --conflict=preserve to keep them)"
 }

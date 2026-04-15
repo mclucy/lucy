@@ -94,6 +94,12 @@ func runNonInteractiveInit(workDir string, s *lucyinit.InitFlowState) error {
 	if s.GameVersion == "" {
 		s.GameVersion = "1.21"
 	}
+	if s.Platform == "" {
+		s.Platform = "none"
+	}
+	if s.Platform == "none" && s.PlatformVersion == "" {
+		s.PlatformVersion = "none"
+	}
 
 	if !lucyinit.CanProceed(s) {
 		return fmt.Errorf("cannot proceed: managed roots are required for non-interactive init (run interactively or provide explicit roots)")
