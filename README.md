@@ -73,6 +73,7 @@ go install github.com/mclucy/lucy@latest
 
 ```bash
 mkdir my-server && cd my-server
+lucy init
 lucy add fabric@latest
 lucy add fabric/lithium@compatible
 lucy status
@@ -85,6 +86,22 @@ java -jar fabric-server.jar
 
 `lucy` provides commands for managing server packages and auditing server environments. All examples are subject to change during development.
 
+### `init` - Initialize lucy state
+
+Create the project-local state files for a new server directory.
+
+```bash
+lucy init
+lucy init --yes --game-version 1.21.4
+lucy init --conflict abort
+```
+
+`lucy init` creates `.lucy/config.toml`, `.lucy/manifest.toml`, and `.lucy/lock.json`.
+
+- `-y`, `--yes`: Skip prompts and accept defaults
+- `--game-version`: Set the game version for non-interactive init
+- `-c`, `--conflict`: Choose `preserve`, `abort`, or `overwrite` for existing `.lucy` files
+
 ### `search` - Find packages
 
 Search across supported sources with filtering and sorting.
@@ -94,10 +111,10 @@ lucy search fabric/carpet
 lucy search carpet --source modrinth --index downloads
 ```
 
-- `-i`, `--index` — Sort by `relevance`, `downloads`, or `newest`
-- `-c`, `--client` — Include client-only mods
-- `-s`, `--source` — Restrict to a specific source (e.g., `modrinth`)
-- `-l`, `--long` — Show hidden or collapsed output
+- `-i`, `--index`: Sort by `relevance`, `downloads`, or `newest`
+- `-c`, `--client`: Include client-only mods
+- `-s`, `--source`: Restrict to a specific source (e.g., `modrinth`)
+- `-l`, `--long`: Show hidden or collapsed output
 
 ### `add` - Install packages
 
@@ -148,10 +165,10 @@ lucy cache clear
 
 ### Global Flags
 
-- `--debug` — Show debug logs
-- `--log-file` — Output the path to the logfile
-- `--print-logs` — Print logs to console
-- `--no-style` — Disable colored and styled output globally
+- `--debug`: Show debug logs
+- `--log-file`: Output the path to the logfile
+- `--print-logs`: Print logs to console
+- `--no-style`: Disable colored and styled output globally
 
 ---
 
@@ -159,7 +176,7 @@ lucy cache clear
 
 ### Core Definitions
 
-A **platform** modifies the Minecraft vanilla game (e.g., NeoForge, Fabric, MCDR) and serves as a common dependency for groups of packages. A **project** is a piece of software like a mod or plugin that relies on one or more platforms. A **package** is a compiled, ready-to-use instance of a project with a specific platform and version—the entity you actually install. Together, these packages form the local server environment that `lucy` audits and manages.
+A **platform** modifies the Minecraft vanilla game (e.g., NeoForge, Fabric, MCDR) and serves as a common dependency for groups of packages. A **project** is a piece of software like a mod or plugin that relies on one or more platforms. A **package** is a compiled, ready-to-use instance of a project with a specific platform and version, the entity you actually install. Together, these packages form the local server environment that `lucy` audits and manages.
 
 ### Package Identifiers
 
