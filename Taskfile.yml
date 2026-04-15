@@ -9,15 +9,6 @@ dotenv:
   - ".cipher_ciphertext"
 
 vars:
-  CIPHER_KEY:
-    sh: cut -d= -f2 .cipher_key
-  CIPHER_TEXT:
-    sh: cut -d= -f2 .cipher_ciphertext
-  CF_CIPHER_LDFLAGS: >-
-    -X github.com/mclucy/lucy/internal/cipher.Key={{.CIPHER_KEY}}
-    -X github.com/mclucy/lucy/internal/cipher.Ciphertext={{.CIPHER_TEXT}}
-  RELEASE_LDFLAGS: "-w -s {{.CF_CIPHER_LDFLAGS}}"
-  DEBUG_LDFLAGS: "{{.CF_CIPHER_LDFLAGS}}"
   DEV_BINARY: dist/lucy-darwin-arm64-dev
 
 tasks:
@@ -57,10 +48,8 @@ tasks:
     desc: Generate new cipher key and ciphertext from CF_API_KEY
     cmds:
       - |
-        if [ -z "$CF_API_KEY" ]; then
-          echo "[ERROR] CF_API_KEY not set"
-          exit 1
-        fi
+        set -e
+        CF_API_KEY="${CF_API_KEY}"  # Ensure variable is set
         KEY=$(go run ./tools/cipher -keygen | cut -d= -f2)
         CIPHERTEXT=$(go run -ldflags "-X github.com/mclucy/lucy/internal/cipher.Key=$KEY" ./tools/cipher -encrypt "$CF_API_KEY" | cut -d= -f2)
         echo "cipher_key=$KEY" > .cipher_key
@@ -88,10 +77,16 @@ tasks:
       - check:cf-api-key-length
     cmds:
       - |
-        GOOS=linux GOARCH=amd64 go build -ldflags='{{.RELEASE_LDFLAGS}}' -tags release -o release/lucy-linux-amd64
-        GOOS=windows GOARCH=amd64 go build -ldflags='{{.RELEASE_LDFLAGS}}' -tags release -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -ldflags='{{.RELEASE_LDFLAGS}}' -tags release -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -ldflags='{{.RELEASE_LDFLAGS}}' -tags release -o release/lucy-darwin-arm64
+        LDFLAGS=""
+        if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
+          KEY=$(cut -d= -f2 .cipher_key)
+          TEXT=$(cut -d= -f2 .cipher_ciphertext)
+          LDFLAGS="-X github.com/mclucy/lucy/internal/cipher.Key=$KEY -X github.com/mclucy/lucy/internal/cipher.Ciphertext=$TEXT"
+        fi
+        GOOS=linux GOARCH=amd64 go build -ldflags="-w -s $LDFLAGS" -tags release -o release/lucy-linux-amd64
+        GOOS=windows GOARCH=amd64 go build -ldflags="-w -s $LDFLAGS" -tags release -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-w -s $LDFLAGS" -tags release -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-w -s $LDFLAGS" -tags release -o release/lucy-darwin-arm64
     sources:
       - "./**/*.go"
       - "./go.mod"
@@ -102,7 +97,14 @@ tasks:
     deps:
       - check:cf-api-key-length
     cmds:
-      - GOOS=darwin GOARCH=arm64 go build -ldflags='{{.DEBUG_LDFLAGS}}' -tags debug -o {{.DEV_BINARY}}
+      - |
+        LDFLAGS=""
+        if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
+          KEY=$(cut -d= -f2 .cipher_key)
+          TEXT=$(cut -d= -f2 .cipher_ciphertext)
+          LDFLAGS="-X github.com/mclucy/lucy/internal/cipher.Key=$KEY -X github.com/mclucy/lucy/internal/cipher.Ciphertext=$TEXT"
+        fi
+        GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -tags debug -o {{.DEV_BINARY}}
     sources:
       - "./**/*.go"
       - "./go.mod"

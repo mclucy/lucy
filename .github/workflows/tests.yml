@@ -21,6 +21,14 @@ jobs:
 
       - name: Set up Task
         uses: go-task/setup-task@v1
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+
+      - name: Generate cipher files
+        if: env.CF_API_KEY != ''
+        run: task cipher-generate
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
       - name: Run default checks
         run: task check
