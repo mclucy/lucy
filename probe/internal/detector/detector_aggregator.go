@@ -71,7 +71,11 @@ func Executable(filePath string) *types.RuntimeInfo {
 	return candidates[0]
 }
 
-// Packages analyzes a mod/plugin file
+// Packages analyzes a mod/plugin file and returns detected packages.
+// Cross-ecosystem conflicts within a single JAR are resolved here per the
+// precedence policy defined in probe/probe_topology_enrich.go. If detected
+// packages span two incompatible ecosystem families (e.g. proxy + server), the
+// result is nil — callers treat the file as unresolved rather than guessing.
 func Packages(filePath string) (res []types.Package) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -97,6 +101,13 @@ func Packages(filePath string) (res []types.Package) {
 			}
 			res = append(res, result...)
 		}
+		if jarPlatformsConflict(res) {
+			logger.Warn(fmt.Errorf(
+				"ambiguous JAR %q: packages span incompatible ecosystems, treating as unresolved",
+				filePath,
+			))
+			return nil
+		}
 	case ".pyz", ".mcdr":
 		McdrPlugin(filePath)
 	default:
@@ -104,6 +115,69 @@ func Packages(filePath string) (res []types.Package) {
 	}
 
 	return
+}
+
+// jarPlatformsConflict returns true when the detected packages span two or more
+// ecosystem families that cannot coexist in a single deployable JAR.
+//
+// Ecosystem families (mirror the policy in probe/probe_topology_enrich.go):
+//
+//	proxyFamily  – velocity, bungeecord
+//	serverFamily – bukkit, paper, leaves, folia, spigot
+//	modFamily    – fabric, forge, neoforge
+//
+// PlatformAny packages (e.g. Sponge plugins) are intentionally excluded from
+// the conflict check because they do not signal a specific incompatible family.
+func jarPlatformsConflict(pkgs []types.Package) bool {
+	if len(pkgs) == 0 {
+		return false
+	}
+
+	proxyPlatforms := map[types.Platform]struct{}{
+		types.Platform("velocity"):   {},
+		types.Platform("bungeecord"): {},
+	}
+	serverPlatforms := map[types.Platform]struct{}{
+		types.Platform("bukkit"): {},
+		types.Platform("paper"):  {},
+		types.Platform("leaves"): {},
+		types.Platform("folia"):  {},
+		types.Platform("spigot"): {},
+	}
+	modPlatforms := map[types.Platform]struct{}{
+		types.PlatformFabric:   {},
+		types.PlatformForge:    {},
+		types.PlatformNeoforge: {},
+	}
+
+	var hasProxy, hasServer, hasMod bool
+	for _, pkg := range pkgs {
+		p := pkg.Id.Platform
+		if p == types.PlatformAny {
+			continue
+		}
+		if _, ok := proxyPlatforms[p]; ok {
+			hasProxy = true
+		}
+		if _, ok := serverPlatforms[p]; ok {
+			hasServer = true
+		}
+		if _, ok := modPlatforms[p]; ok {
+			hasMod = true
+		}
+	}
+
+	families := 0
+	if hasProxy {
+		families++
+	}
+	if hasServer {
+		families++
+	}
+	if hasMod {
+		families++
+	}
+	return families > 1
 }
 
 func McdrPlugin(filePath string) (res []types.Package) {

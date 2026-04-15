@@ -98,8 +98,16 @@ func CapabilityForPlatform(p types.Platform) types.RuntimeCapability {
 		return types.CapabilityForgeMods
 	case types.PlatformNeoforge:
 		return types.CapabilityNeoforgeMods
+	case types.Platform("bukkit"), types.Platform("paper"), types.Platform("spigot"), types.Platform("folia"), types.Platform("leaves"):
+		return types.CapabilityBukkitPlugins
+	case types.Platform("velocity"):
+		return types.CapabilityVelocityPlugins
+	case types.Platform("bungeecord"), types.Platform("bungee"), types.Platform("waterfall"):
+		return types.CapabilityBungeecordPlugins
 	case types.PlatformMCDR:
 		return types.CapabilityMCDRPlugins
+	case types.Platform("sponge"):
+		return types.CapabilitySpongePlugins
 	default:
 		return ""
 	}

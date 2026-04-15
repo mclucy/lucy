@@ -24,6 +24,10 @@ func TestNormalizeRuntimeID_KnownNames(t *testing.T) {
 		{"NeoForge Server", RuntimeNodeNeoforge},
 		{"mcdr", RuntimeNodeMCDR},
 		{"MCDR Plugin", RuntimeNodeMCDR},
+		{"paper", RuntimeNodePaper},
+		{"spigot", RuntimeNodeSpigot},
+		{"velocity", RuntimeNodeVelocity},
+		{"bungeecord", RuntimeNodeBungeecord},
 	}
 	for _, tc := range cases {
 		got := NormalizeRuntimeID(tc.input)
@@ -35,11 +39,7 @@ func TestNormalizeRuntimeID_KnownNames(t *testing.T) {
 
 func TestNormalizeRuntimeID_UnknownNames(t *testing.T) {
 	cases := []string{
-		"paper",
-		"spigot",
-		"velocity",
 		"unknown_runtime",
-		"bungeecord",
 		"",
 		"   ",
 	}

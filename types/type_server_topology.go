@@ -1,5 +1,7 @@
 package types
 
+import "slices"
+
 type RuntimeNodeID string
 
 const RuntimeNodeUnknown RuntimeNodeID = ""
@@ -20,13 +22,16 @@ const (
 type RuntimeCapability string
 
 const (
-	CapabilityFabricMods     RuntimeCapability = "fabric_mods"
-	CapabilityForgeMods      RuntimeCapability = "forge_mods"
-	CapabilityNeoforgeMods   RuntimeCapability = "neoforge_mods"
-	CapabilityBukkitPlugins  RuntimeCapability = "bukkit_plugins"
-	CapabilityMCDRPlugins    RuntimeCapability = "mcdr_plugins"
-	CapabilityProxying       RuntimeCapability = "proxying"
-	CapabilityProtocolBridge RuntimeCapability = "protocol_bridge"
+	CapabilityFabricMods        RuntimeCapability = "fabric_mods"
+	CapabilityForgeMods         RuntimeCapability = "forge_mods"
+	CapabilityNeoforgeMods      RuntimeCapability = "neoforge_mods"
+	CapabilityBukkitPlugins     RuntimeCapability = "bukkit_plugins"
+	CapabilityVelocityPlugins   RuntimeCapability = "velocity_plugins"
+	CapabilityBungeecordPlugins RuntimeCapability = "bungeecord_plugins"
+	CapabilityMCDRPlugins       RuntimeCapability = "mcdr_plugins"
+	CapabilitySpongePlugins     RuntimeCapability = "sponge_plugins"
+	CapabilityProxying          RuntimeCapability = "proxying"
+	CapabilityProtocolBridge    RuntimeCapability = "protocol_bridge"
 )
 
 type RuntimeRiskLevel int
@@ -81,13 +86,7 @@ type RuntimeNode struct {
 type TopologyNode = RuntimeNode
 
 func (n RuntimeNode) HasCapability(c RuntimeCapability) bool {
-	for _, capability := range n.Capabilities {
-		if capability == c {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(n.Capabilities, c)
 }
 
 type RuntimeEdgeKind string

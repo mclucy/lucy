@@ -157,14 +157,14 @@ func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T
 	if exec.Topology == nil {
 		t.Fatal("expected topology to be built from evidence")
 	}
-	// Connector topology should include connector and forge nodes
+	// Connector topology should include connector and fabric nodes
 	_, hasConnector := exec.Topology.FindNode(RuntimeNodeConnector)
 	if !hasConnector {
 		t.Error("expected connector node in topology")
 	}
-	_, hasForge := exec.Topology.FindNode(RuntimeNodeForge)
-	if !hasForge {
-		t.Error("expected forge node in topology (via connector policy edge)")
+	_, hasFabric := exec.Topology.FindNode(RuntimeNodeFabric)
+	if !hasFabric {
+		t.Error("expected fabric node in topology (via connector policy edge)")
 	}
 }
 

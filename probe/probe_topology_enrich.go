@@ -7,6 +7,49 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+// =============================================================================
+// EVIDENCE PRECEDENCE POLICY
+//
+// This is the single authoritative definition of how conflicting or coexisting
+// detection evidence is resolved. All conflict-resolution logic must trace back
+// to this block. Never add ad-hoc precedence rules elsewhere.
+//
+// ECOSYSTEM FAMILIES (mutually exclusive for a single JAR)
+//
+//   Tier 1 – Authoritative proxy descriptors:
+//     velocity        → velocity-plugin.json (Velocity-specific)
+//     bungeecord      → bungee.yml           (BungeeCord-specific)
+//
+//   Tier 1 – Authoritative server/plugin descriptors:
+//     bukkit          → plugin.yml           (Paper-family generic)
+//     paper           → paper-plugin.yml     (Paper-modern specific)
+//     leaves          → leaves-plugin.json   (Leaves-specific)
+//     folia           → plugin.yml + folia-supported:true
+//
+//   Tier 1 – Authoritative sponge descriptor:
+//     sponge          → META-INF/sponge_plugins.json
+//
+//   Tier 2 – Generic (no ecosystem proof without Tier 1):
+//     plugin.yml alone → bukkit family only; never implies proxy membership
+//
+// CONFLICT RULE
+//   If Tier-1 signals from two DIFFERENT incompatible ecosystem families are
+//   detected in the same JAR (e.g., velocity-plugin.json AND bungee.yml, or
+//   bungee.yml AND plugin.yml), the result for that JAR is unresolved/empty.
+//   We never guess which ecosystem wins. Unresolved is always safer than wrong.
+//
+// INTRA-FAMILY NOTE
+//   Within the Paper-family detector, descriptor precedence is already handled
+//   by leaves-plugin.json > paper-plugin.yml > plugin.yml (early return wins).
+//   That is NOT a conflict – it is expected descriptor layering within one JAR.
+//
+// IMPLEMENTATION
+//   The conflict check is applied in detector_aggregator.go::Packages(), which
+//   is the single point where all jar-detector results are merged. If the merged
+//   platform set spans two incompatible ecosystem families, Packages() returns
+//   nil, causing the caller to treat the JAR as having no recognized packages.
+// =============================================================================
+
 func EnrichTopologyFromPackages(
 	exec *types.RuntimeInfo,
 	packages []types.Package,
@@ -53,6 +96,9 @@ func EnrichTopologyFromPackages(
 	}
 
 	// Topology exists (resolved or not) — enrich with package evidence.
+	// This is additive annotation: bridge/adaptor evidence like Connector augments
+	// the existing host runtime topology without replacing the current primary
+	// runtime identity (for example, NeoForge remains the primary node).
 	for _, nodeID := range evidence {
 		entry, ok := FindEntry(nodeID)
 		if !ok {

@@ -93,7 +93,7 @@ func TestBuildTopologyFromEntry_SimpleNode(t *testing.T) {
 }
 
 func TestBuildTopologyFromEntry_WithPolicyEdges(t *testing.T) {
-	// Connector bridges to Forge
+	// Connector bridges to Fabric
 	entry, ok := DefaultRegistry.FindEntry(RuntimeNodeConnector)
 	if !ok {
 		t.Fatal("connector not in registry")
@@ -102,15 +102,15 @@ func TestBuildTopologyFromEntry_WithPolicyEdges(t *testing.T) {
 	if topo == nil {
 		t.Fatal("expected non-nil topology")
 	}
-	// Should have connector + forge nodes
+	// Should have connector + fabric nodes
 	if len(topo.Nodes) < 2 {
-		t.Errorf("expected at least 2 nodes (connector + forge), got %d", len(topo.Nodes))
+		t.Errorf("expected at least 2 nodes (connector + fabric), got %d", len(topo.Nodes))
 	}
 	if len(topo.Edges) != 1 {
 		t.Errorf("expected 1 edge, got %d", len(topo.Edges))
 	}
 	edge := topo.Edges[0]
-	if edge.From != RuntimeNodeConnector || edge.To != RuntimeNodeForge || edge.Kind != types.EdgeBridges {
+	if edge.From != RuntimeNodeConnector || edge.To != RuntimeNodeFabric || edge.Kind != types.EdgeBridges {
 		t.Errorf("unexpected edge: %+v", edge)
 	}
 }
