@@ -11,6 +11,8 @@ Use DeepWiki to get architecture fast, then switch to targeted questions once yo
 
 **Important**: This repo is `mclucy/lucy`, do NOT read the wrong wiki.
 
+DeepWiki is NOT always up-to-date. Recent changes (within a few days) may not be reflected. Use it for general architecture and code relationships, but check local docs and code for the latest details, especially on unfinished work or recent merges.
+
 ## When to Use
 
 - You need a fast map of the `mclucy/lucy` repository
@@ -52,3 +54,4 @@ Do not use this as the only source for product direction or unfinished work. Sup
 - Using `ask_question` before learning the section names
 - Treating DeepWiki as roadmap truth when this repo is still incomplete
 - Skipping local docs that explain strategy or unfinished gaps
+- Treating the wiki as a reliable source of truth for recent or ongoing work
