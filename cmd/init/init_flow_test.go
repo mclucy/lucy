@@ -269,10 +269,10 @@ func TestBuildSummaryShowsPrimaryAndCompatiblePlatforms(t *testing.T) {
 	}
 
 	summary := buildSummary(s)
-	if want := "Primary runtime: neoforge"; !containsLine(summary, want) {
+	if want := "  Primary runtime: neoforge"; !containsLine(summary, want) {
 		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
 	}
-	if want := "Compatible with: fabric, mcdr, sinytra"; !containsLine(summary, want) {
+	if want := "  Compatible with: fabric, mcdr, sinytra"; !containsLine(summary, want) {
 		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
 	}
 }
@@ -397,4 +397,94 @@ func containsLine(text, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestBuildSummaryShowsObservedFacts(t *testing.T) {
+	s := &InitFlowState{
+		GameVersion:        "1.21.4",
+		Platform:           "fabric",
+		PlatformVersion:    "0.16.10",
+		ManagedRoots:       []string{"mods"},
+		ConflictResolution: PreserveExisting,
+		DiscoveredDefaults: DiscoveredDefaults{
+			Confidence:       ConfidenceHigh,
+			GameVersion:      "1.21.4",
+			Platform:         "fabric",
+			PlatformVersion:  "0.16.10",
+			ManagedRoots:     []string{"mods"},
+			DetectedPackages: []string{"fabric/lithium", "fabric/fabric-api"},
+		},
+	}
+
+	summary := buildSummary(s)
+	if !strings.Contains(summary, "Observed server facts") {
+		t.Fatalf("expected summary to contain observed section header, got:\n%s", summary)
+	}
+	if !strings.Contains(summary, "Proposed manifest intent") {
+		t.Fatalf("expected summary to contain proposed section header, got:\n%s", summary)
+	}
+	if want := "  Confidence:    high"; !containsLine(summary, want) {
+		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
+	}
+	if want := "  Packages:      2 detected"; !containsLine(summary, want) {
+		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
+	}
+}
+
+func TestBuildSummaryShowsConflictsWhenObservedDiffersFromExistingLucy(t *testing.T) {
+	s := &InitFlowState{
+		GameVersion:        "1.21.4",
+		Platform:           "fabric",
+		PlatformVersion:    "0.16.10",
+		ManagedRoots:       []string{"mods"},
+		ConflictResolution: PreserveExisting,
+		ExistingFiles:      []string{".lucy/manifest.toml"},
+		DiscoveredDefaults: DiscoveredDefaults{
+			Confidence:      ConfidenceHigh,
+			GameVersion:     "1.21.4",
+			Platform:        "fabric",
+			PlatformVersion: "0.16.10",
+			ExistingLucy: ExistingLucyHints{
+				ManifestPresent: true,
+				GameVersion:     "1.20.6",
+				Platform:        "neoforge",
+				PlatformVersion: "21.0.0",
+			},
+		},
+	}
+
+	summary := buildSummary(s)
+	if !strings.Contains(summary, "Conflicts") {
+		t.Fatalf("expected conflicts section in summary when observed differs from existing .lucy, got:\n%s", summary)
+	}
+	if !strings.Contains(summary, `observed "1.21.4"`) {
+		t.Fatalf("expected game version divergence in conflicts section, got:\n%s", summary)
+	}
+	if !strings.Contains(summary, `observed "fabric"`) {
+		t.Fatalf("expected platform divergence in conflicts section, got:\n%s", summary)
+	}
+}
+
+func TestBuildSummaryNoConflictsSectionWhenObservedMatchesExisting(t *testing.T) {
+	s := &InitFlowState{
+		GameVersion:        "1.21.4",
+		Platform:           "fabric",
+		ManagedRoots:       []string{"mods"},
+		ConflictResolution: PreserveExisting,
+		DiscoveredDefaults: DiscoveredDefaults{
+			Confidence:  ConfidenceHigh,
+			GameVersion: "1.21.4",
+			Platform:    "fabric",
+			ExistingLucy: ExistingLucyHints{
+				ManifestPresent: true,
+				GameVersion:     "1.21.4",
+				Platform:        "fabric",
+			},
+		},
+	}
+
+	summary := buildSummary(s)
+	if strings.Contains(summary, "Conflicts") {
+		t.Fatalf("expected no conflicts section when observed matches existing .lucy, got:\n%s", summary)
+	}
 }

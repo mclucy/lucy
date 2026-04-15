@@ -132,7 +132,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 					huh.NewOption("Fabric – lightweight, fast-updating mod loader", "fabric"),
 					huh.NewOption("NeoForge – community fork of Forge (recommended for 1.20.2+)", "neoforge"),
 					huh.NewOption("Forge – original mod loader", "forge"),
-					huh.NewOption("MCDR – standalone controller/plugin framework", "mcdr"),
+					huh.NewOption("MCDR – independent controller/plugin framework", "mcdr"),
 					huh.NewOption("None / Vanilla – no modding platform", "none"),
 				).
 				Value(&s.Platform),
@@ -311,72 +311,154 @@ func RunInteractiveInit(s *InitFlowState) error {
 func buildSummary(s *InitFlowState) string {
 	var sb strings.Builder
 
-	_, _ = fmt.Fprintf(&sb, "Game version:    %s\n", s.GameVersion)
-
-	if s.Platform == "" || s.Platform == "none" {
-		sb.WriteString("Primary runtime: none (vanilla)\n")
-	} else {
-		_, _ = fmt.Fprintf(&sb, "Primary runtime: %s\n", s.Platform)
-		if len(s.CompatiblePlatforms) > 0 {
-			_, _ = fmt.Fprintf(&sb, "Compatible with: %s\n", strings.Join(s.CompatiblePlatforms, ", "))
-		}
-		if s.PlatformVersion != "" {
-			_, _ = fmt.Fprintf(&sb, "Loader version:  %s\n", s.PlatformVersion)
-		} else {
-			sb.WriteString("Loader version:  (latest)\n")
-		}
-	}
-
-	if len(s.ManagedRoots) > 0 {
-		_, _ = fmt.Fprintf(&sb, "Managed dirs:    %s\n", strings.Join(s.ManagedRoots, ", "))
-	} else {
-		sb.WriteString("Managed dirs:    (none selected)\n")
-	}
-
-	_, _ = fmt.Fprintf(&sb, "Conflict mode:   %s\n", s.ConflictResolution)
-
-	if len(s.ExistingFiles) > 0 {
-		_, _ = fmt.Fprintf(&sb, "\nExisting files:  %s\n", strings.Join(s.ExistingFiles, ", "))
-	}
-	if len(s.ExistingStateConflicts) > 0 {
-		_, _ = fmt.Fprintf(&sb, "Conflicts:       %s\n", strings.Join(s.ExistingStateConflicts, "; "))
-	}
 	if s.DiscoveredDefaults.Confidence != ConfidenceNone {
-		_, _ = fmt.Fprintf(&sb, "Discovery:       %s\n", describeDiscovery(s.DiscoveredDefaults))
-		if len(s.DiscoveredDefaults.DetectedPackages) > 0 {
-			_, _ = fmt.Fprintf(&sb, "Detected pkgs:   %s\n", strings.Join(s.DiscoveredDefaults.DetectedPackages, ", "))
+		sb.WriteString("Observed server facts\n")
+		sb.WriteString("─────────────────────\n")
+		obs := s.DiscoveredDefaults
+		if obs.GameVersion != "" {
+			_, _ = fmt.Fprintf(&sb, "  Game version:  %s\n", obs.GameVersion)
+		} else {
+			sb.WriteString("  Game version:  (not detected)\n")
+		}
+		if obs.Platform != "" && obs.Platform != "none" {
+			_, _ = fmt.Fprintf(&sb, "  Runtime:       %s", obs.Platform)
+			if obs.PlatformVersion != "" {
+				_, _ = fmt.Fprintf(&sb, " %s", obs.PlatformVersion)
+			}
+			sb.WriteString("\n")
+		} else {
+			sb.WriteString("  Runtime:       (not detected)\n")
+		}
+		if len(obs.ManagedRoots) > 0 {
+			_, _ = fmt.Fprintf(&sb, "  Directories:   %s\n", strings.Join(obs.ManagedRoots, ", "))
+		}
+		if len(obs.DetectedPackages) > 0 {
+			_, _ = fmt.Fprintf(&sb, "  Packages:      %d detected\n", len(obs.DetectedPackages))
+		}
+		_, _ = fmt.Fprintf(&sb, "  Confidence:    %s\n", obs.Confidence)
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("Proposed manifest intent\n")
+	sb.WriteString("────────────────────────\n")
+	_, _ = fmt.Fprintf(&sb, "  Game version:  %s\n", s.GameVersion)
+	if s.Platform == "" || s.Platform == "none" {
+		sb.WriteString("  Primary runtime: none (vanilla)\n")
+	} else {
+		_, _ = fmt.Fprintf(&sb, "  Primary runtime: %s\n", s.Platform)
+		if s.PlatformVersion != "" {
+			_, _ = fmt.Fprintf(&sb, "  Loader version:  %s\n", s.PlatformVersion)
+		} else {
+			sb.WriteString("  Loader version:  (latest)\n")
 		}
 	}
+	if len(s.CompatiblePlatforms) > 0 {
+		_, _ = fmt.Fprintf(&sb, "  Compatible with: %s\n", strings.Join(s.CompatiblePlatforms, ", "))
+	}
+	if len(s.ManagedRoots) > 0 {
+		_, _ = fmt.Fprintf(&sb, "  Managed dirs:    %s\n", strings.Join(s.ManagedRoots, ", "))
+	} else {
+		sb.WriteString("  Managed dirs:    (none selected)\n")
+	}
+	_, _ = fmt.Fprintf(&sb, "  Conflict mode:   %s\n", s.ConflictResolution)
+	if len(s.ExistingFiles) > 0 {
+		_, _ = fmt.Fprintf(&sb, "  Existing files:  %s (will be %s)\n",
+			strings.Join(s.ExistingFiles, ", "),
+			conflictModeVerb(s.ConflictResolution),
+		)
+	}
+	sb.WriteString("\n")
+
 	if len(s.PackageClassifications) > 0 {
+		sb.WriteString("Package roles\n")
+		sb.WriteString("─────────────\n")
 		var required, transitive, ignored []string
 		for _, classification := range s.PackageClassifications {
-			summary := fmt.Sprintf("%s (%s)", classification.ID, packageClassificationKind(classification))
+			entry := fmt.Sprintf("%s (%s)", classification.ID, packageClassificationKind(classification))
 			switch classification.Role {
 			case state.RoleRequired:
-				required = append(required, summary)
+				required = append(required, entry)
 			case state.RoleIgnored:
-				ignored = append(ignored, summary)
+				ignored = append(ignored, entry)
 			default:
-				transitive = append(transitive, summary)
+				transitive = append(transitive, entry)
 			}
 		}
 		if len(required) > 0 {
-			_, _ = fmt.Fprintf(&sb, "Required pkgs:   %s\n", strings.Join(required, ", "))
+			_, _ = fmt.Fprintf(&sb, "  Required:    %s\n", strings.Join(required, ", "))
 		}
 		if len(transitive) > 0 {
-			_, _ = fmt.Fprintf(&sb, "Transitive pkgs: %s\n", strings.Join(transitive, ", "))
+			_, _ = fmt.Fprintf(&sb, "  Transitive:  %s\n", strings.Join(transitive, ", "))
 		}
 		if len(ignored) > 0 {
-			_, _ = fmt.Fprintf(&sb, "Ignored pkgs:    %s\n", strings.Join(ignored, ", "))
+			_, _ = fmt.Fprintf(&sb, "  Ignored:     %s\n", strings.Join(ignored, ", "))
 		}
+		sb.WriteString("\n")
 	}
 
-	sb.WriteString("\nFiles to create:\n")
+	divergences := buildTakeoverDivergences(s)
+	if len(divergences) > 0 || len(s.ExistingStateConflicts) > 0 {
+		sb.WriteString("Conflicts\n")
+		sb.WriteString("─────────\n")
+		for _, d := range divergences {
+			_, _ = fmt.Fprintf(&sb, "  ! %s\n", d)
+		}
+		for _, c := range s.ExistingStateConflicts {
+			_, _ = fmt.Fprintf(&sb, "  ! %s\n", c)
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("Files to create:\n")
 	sb.WriteString("  .lucy/config.toml\n")
 	sb.WriteString("  .lucy/manifest.toml\n")
 	sb.WriteString("  .lucy/lock.json\n")
 
 	return sb.String()
+}
+
+func buildTakeoverDivergences(s *InitFlowState) []string {
+	hints := s.DiscoveredDefaults.ExistingLucy
+	if !hints.HasAny() {
+		return nil
+	}
+	obs := s.DiscoveredDefaults
+
+	var divergences []string
+
+	if obs.GameVersion != "" && hints.GameVersion != "" && obs.GameVersion != hints.GameVersion {
+		divergences = append(divergences, fmt.Sprintf(
+			"Game version: observed %q but existing manifest says %q — will use %q",
+			obs.GameVersion, hints.GameVersion, s.GameVersion,
+		))
+	}
+
+	if obs.Platform != "" && hints.Platform != "" && obs.Platform != hints.Platform {
+		divergences = append(divergences, fmt.Sprintf(
+			"Runtime: observed %q but existing manifest says %q — will use %q",
+			obs.Platform, hints.Platform, s.Platform,
+		))
+	}
+
+	if obs.PlatformVersion != "" && hints.PlatformVersion != "" && obs.PlatformVersion != hints.PlatformVersion {
+		divergences = append(divergences, fmt.Sprintf(
+			"Loader version: observed %q but existing manifest says %q — will use %q",
+			obs.PlatformVersion, hints.PlatformVersion, s.PlatformVersion,
+		))
+	}
+
+	return divergences
+}
+
+func conflictModeVerb(mode ConflictMode) string {
+	switch mode {
+	case OverwriteAll:
+		return "overwritten"
+	case AbortOnConflict:
+		return "preserved (abort if any exist)"
+	default:
+		return "preserved"
+	}
 }
 
 func isUserAbort(err error) bool {
