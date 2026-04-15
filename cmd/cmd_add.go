@@ -96,7 +96,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !hasLucyState || result == nil || len(result.Installed) == 0 {
+	if !hasLucyState {
 		return nil
 	}
 
@@ -135,11 +135,15 @@ func presenceLabel(name string, present bool) string {
 }
 
 func updateAddState(workDir string, stateSvc *state.ProjectStateService, ids []types.PackageId, result *install.Result) error {
-	if stateSvc == nil || result == nil || len(result.Installed) == 0 {
+	if stateSvc == nil {
 		return nil
 	}
 
 	manifestIntent := buildUpdatedManifest(stateSvc.Manifest(), ids)
+	if result == nil || len(result.Installed) == 0 {
+		return state.WriteManifest(workDir, manifestIntent)
+	}
+
 	lock := buildUpdatedLock(workDir, manifestIntent, stateSvc.Lock(), result)
 	manifest := state.UpdateManifestRolesForAdd(stateSvc.Manifest(), ids, lock)
 	if err := state.WriteManifest(workDir, manifest); err != nil {
@@ -147,6 +151,7 @@ func updateAddState(workDir string, stateSvc *state.ProjectStateService, ids []t
 	}
 
 	lock = buildUpdatedLock(workDir, manifest, stateSvc.Lock(), result)
+	lock = state.PruneLockForManifest(lock, manifest)
 	return state.WriteLock(workDir, lock)
 }
 
