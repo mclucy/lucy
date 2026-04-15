@@ -5,8 +5,8 @@
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
 
   <h2>
-    <sub>Build. Audit. Evolve.</sub>
-    <div>Minecraft server environments from one CLI.</div>
+    <sub>Describe your server, not build it from scratch.</sub>
+    <div>Manage your Minecraft server with a unified CLI.</div>
   </h2>
 
   <h3>Lucy: The Modern Minecraft Server Environment Manager</h3>
@@ -43,7 +43,9 @@
 
 ## Overview
 
-`lucy` is a server-aware package manager and environment tool for Minecraft servers. It handles dependency resolution, version tracking, source routing, environment probing, and risk-aware environment visibility through a unified CLI. If you've used `apt`, `brew`, or `npm`, the workflow will feel familiar.
+`lucy` is a server-aware environment manager for Minecraft servers. It helps you inspect an existing server, understand what is actually installed, and decide what part of that environment you want `lucy` to manage. It handles dependency resolution, version tracking, source routing, environment probing, and risk-aware visibility through a unified CLI.
+
+If you've used `apt`, `brew`, or `npm`, some commands will feel familiar. The difference is that `lucy` starts from the server you already run. It does not assume a blank slate, and it does not require you to give up manual control over everything. It is meant to help server administrators get a messy real-world environment under control, one step at a time.
 
 ### Core Features
 
@@ -51,7 +53,9 @@
 
 - Automatic dependency resolution and conflict handling
 - Package access from Modrinth, CurseForge, MCDR Plugin Catalog, and more...
-- Server-aware probing and environment inference
+- Discovery-led server probing and environment inference
+- Take over an existing server before trying to reshape it
+- Keep track of what `lucy` manages without claiming the whole server
 - Topology-aware status reporting and risk surfacing
 - Non-intrusive design, all operations are independent of server runtime
 - Shell completion for bash, zsh, fish, and pwsh
@@ -80,6 +84,8 @@ lucy status
 java -jar fabric-server.jar
 ```
 
+`lucy init` starts by looking at the current directory. If you point it at an existing server, it should help you understand what is already there before you decide what `lucy` should manage.
+
 ---
 
 ## 🛠️ Commands
@@ -88,7 +94,7 @@ java -jar fabric-server.jar
 
 ### `init` - Initialize lucy state
 
-Create the project-local state files for a new server directory.
+Inspect the current directory, aggregate existing server information, and create project-local state files for `lucy` to manage the environment deliberately.
 
 ```bash
 lucy init
@@ -97,6 +103,8 @@ lucy init --conflict abort
 ```
 
 `lucy init` creates `.lucy/config.toml`, `.lucy/manifest.toml`, and `.lucy/lock.json`.
+
+For an existing server, `lucy init` should behave like a takeover flow: discover runtime and package facts first, then let you decide what `lucy` should keep in sync and what should stay outside its scope.
 
 - `-y`, `--yes`: Skip prompts and accept defaults
 - `--game-version`: Set the game version for non-interactive init
@@ -118,7 +126,7 @@ lucy search carpet --source modrinth --index downloads
 
 ### `add` - Install packages
 
-Add mods, plugins, or server cores. `lucy` resolves dependencies, verifies platform compatibility, and updates the local environment with minimal intrusion. This is the primary direct-action workflow.
+Add mods, plugins, or server cores. `lucy` resolves dependencies, verifies platform compatibility, and updates the local environment with minimal intrusion. Over time, `add` is meant to become part of how `lucy` records and maintains managed intent, not just how it drops files into a folder.
 
 ```bash
 lucy add fabric/fabric-api@latest
@@ -176,7 +184,9 @@ lucy cache clear
 
 ### Core Definitions
 
-A **platform** modifies the Minecraft vanilla game (e.g., NeoForge, Fabric, MCDR) and serves as a common dependency for groups of packages. A **project** is a piece of software like a mod or plugin that relies on one or more platforms. A **package** is a compiled, ready-to-use instance of a project with a specific platform and version, the entity you actually install. Together, these packages form the local server environment that `lucy` audits and manages.
+A **platform** is the compatibility or runtime surface a package targets, such as Fabric, Forge, NeoForge, MCDR, or vanilla Minecraft. A **project** is a piece of software like a mod, plugin, or server-side extension. A **package** is a compiled, ready-to-use instance of a project with a specific platform and version — the thing you actually install. Together, these packages form the local server environment that `lucy` inspects, adopts, audits, and manages.
+
+Not every platform plays the same role. For example, MCDR is an independent plugin framework that manages Minecraft servers from the outside; it is not a Bukkit-derived plugin layer.
 
 ### Package Identifiers
 

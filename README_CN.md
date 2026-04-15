@@ -7,8 +7,8 @@
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
 
   <h2>
-    <div>服务器 · 群组服 · 整合包</div>
-    <sup>……一行命令秒了</sup>
+    <div>描述你的 Minecraft 服务器，而不是从头开始构建</div>
+    <sup>……只需要一行命令</sup>
   </h2>
 
   <h3>现代化的 Minecraft 服务端环境管理器</h3>
@@ -42,7 +42,9 @@
 
 ## 简介
 
-`lucy` 是一个面向 Minecraft 服务器的、具备环境感知能力的包管理与环境工具。它通过统一的命令行界面处理依赖解析、版本追踪、环境探测与风险告警。如果你用过 `apt`、`brew` 或 `npm`，`lucy` 对你来说会非常熟悉。
+`lucy` 是一个面向 Minecraft 服务器的环境管理器。它帮助你检查一台已经存在（当然，也可用于新建）的服务器、弄清楚当前环境里到底装了什么，再决定哪些部分交给 `lucy` 管。它通过统一的命令行界面处理依赖解析、版本追踪、环境探测与风险告警。
+
+如果你用过 `apt`、`brew` 或 `npm`，`lucy` 的一部分操作会很熟悉。但它不是建立在“服务器一定是干净新建的”这个前提上，也不是要你把所有手工维护都交出去。它更适合这样一种场景：你已经有一台在跑的服务器，现在想先看清环境，再逐步把真正关心的那部分整理到可控状态。
 
 ### 核心特性
 
@@ -50,7 +52,9 @@
 
 - 自动解析依赖、处理冲突
 - 支持 Modrinth、CurseForge、MCDR 插件目录等多个源
-- 支持基于服务器环境的探测与环境推断
+- 支持以发现事实为先的服务器环境探测与环境推断
+- 支持先接管已有服务器，再逐步整理和同步环境
+- 允许 `lucy` 只管理你关心的那部分环境，而不是强制接管整台服务器
 - 支持基于环境拓扑的状态展示与风险提示
 - 非侵入式设计，所有操作独立于服务器运行时
 - 支持 bash、zsh、fish、pwsh 的命令补全
@@ -73,15 +77,36 @@ go install github.com/mclucy/lucy@latest
 
 ```bash
 mkdir my-server && cd my-server
+lucy init
 lucy add fabric@latest
 lucy add fabric/lithium@compatible
 lucy status
 java -jar fabric-server.jar
 ```
 
+`lucy init` 的会先检查当前目录。如果这里已经是一台在运行或曾经运行过的服务器，`lucy` 会向你展示现状，再决定哪些部分交给它管理。
+
 ## 🛠️ 命令
 
-`lucy` 提供一系列命令来管理服务器包并审计服务器环境。所有示例在开发期间可能发生变化。
+`lucy` 提供一系列命令来管理服务器包并审计服务器环境。*所有示例在开发期间可能发生变化。*
+
+### `init` - 初始化并接管 lucy 状态
+
+检查当前目录、聚合已有服务器信息，并创建 `lucy` 的项目本地状态文件。
+
+```bash
+lucy init
+lucy init --yes --game-version 1.21.4
+lucy init --conflict abort
+```
+
+`lucy init` 会创建 `.lucy/config.toml`、`.lucy/manifest.toml` 和 `.lucy/lock.json`。
+
+对于已有服务器，`lucy init` 更像一个“接管流程”。先发现 runtime、平台、目录与包，再让你决定哪些内容应该保持同步，哪些内容仍然留给人工管理。
+
+- `-y`, `--yes`：跳过提示并接受默认值
+- `--game-version`：在非交互初始化中设置游戏版本
+- `-c`, `--conflict`：为已有 `.lucy` 文件选择 `preserve`、`abort` 或 `overwrite`
 
 ### `search` - 搜索包
 
@@ -99,7 +124,7 @@ lucy search carpet --source modrinth --index downloads
 
 ### `add` - 安装包
 
-添加模组、插件或服务端核心。`lucy` 会自动解析依赖、校验平台兼容性，并以尽量非侵入的方式更新本地环境。这是当前最主要的直接动作工作流。
+添加模组、插件或服务端核心。`lucy` 会自动解析依赖、校验平台兼容性，并以尽量非侵入的方式更新本地环境。`add` 同时会把包纳入服务器的 manifest 和 lock 管理，保持环境的可追踪和可重现。
 
 ```bash
 lucy add fabric/fabric-api@latest
@@ -157,7 +182,9 @@ lucy cache clear
 
 ### 核心定义
 
-**平台（platform）** 是修改 Minecraft 原版游戏的程序（如 NeoForge、Fabric、MCDR），作为一组包的共同依赖。**项目（project）** 是依赖一个或多个平台的软件，比如模组或插件。**包（package）** 是项目在特定平台和版本下的编译实例，也是你实际安装的实体。这些包共同构成了 `lucy` 会探测、审计、理解并管理的本地服务器环境。
+**平台（platform）** 是一个包面向的兼容面或运行面，例如 Fabric、Forge、NeoForge、MCDR 或原版 Minecraft。**项目（project）** 是一段可安装的软件，比如模组、插件或服务端扩展。**包（package）** 是项目在特定平台和版本下的编译实例，也是你真正安装的实体。这些包共同构成了 `lucy` 会探测、接管、审计并管理的本地服务器环境。
+
+不同平台扮演的角色并不完全相同。例如，MCDR 是一个独立的插件框架/控制层，它从服务端进程外部管理 Minecraft 服务器，并不是 Bukkit 的派生插件层。
 
 ### 包标识符
 
