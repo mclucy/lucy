@@ -31,6 +31,8 @@ go.work.sum
 
 # IDE file
 .idea
+.vscode
+launch.json
 
 # System files
 .DS_Store
@@ -39,11 +41,8 @@ go.work.sum
 dist
 release
 
-# Testing server
+# Testing environments
 test_*
-
-# Documents
-documents
 
 # Taskfile
 .task
@@ -59,5 +58,6 @@ AGENTS.md
 completions
 
 # docs
+documents
 docs/*
 !docs/shared

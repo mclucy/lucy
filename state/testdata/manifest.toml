@@ -1,0 +1,52 @@
+[format]
+version = "v1"
+
+[environment]
+game_version = "1.21.1"
+platform = "fabric"
+platform_version = "0.16.10"
+
+[sources]
+[[sources.custom]]
+name = "mirror"
+url = "https://example.com/modrinth/index.json"
+type = "modrinth"
+
+[layout]
+mods_dir = "mods"
+plugins_dir = "plugins"
+config_dir = "config"
+
+[policy]
+managed_roots = ["mods", "plugins", "config"]
+unmanaged_paths = ["world/**", "logs/**"]
+
+[[packages]]
+id = "fabric/fabric-api"
+version = "compatible"
+source = "modrinth"
+side = "both"
+optional = false
+pinned = false
+
+[[packages]]
+id = "fabric/lithium"
+version = "latest"
+source = "github"
+side = "server"
+optional = true
+pinned = true
+
+[[bundles]]
+name = "default-config"
+type = "config"
+path = "config/defaults"
+source = "./defaults/config"
+optional = false
+
+[[bundles]]
+name = "spawn-datapack"
+type = "datapack"
+path = "world/datapacks/spawn"
+source = "./defaults/datapacks/spawn"
+optional = true

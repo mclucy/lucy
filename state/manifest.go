@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -94,7 +95,7 @@ type ManifestBundle struct {
 func ManifestDefaults() Manifest {
 	return Manifest{
 		Format: ManifestFormat{
-			Version: "v1",
+			Version: SupportedVersion,
 		},
 		Environment: ManifestEnvironment{
 			GameVersion:     "",
@@ -119,50 +120,50 @@ func ManifestDefaults() Manifest {
 }
 
 func ValidateManifest(m Manifest) error {
-	if m.Format.Version == "" {
-		return fmt.Errorf("manifest: format.version is required")
-	}
-	if m.Format.Version != "v1" {
-		return fmt.Errorf("manifest: unsupported format.version %q", m.Format.Version)
+	if err := ValidateVersion(m.Format.Version); err != nil {
+		if IsVersionError(err) {
+			return versionStateError(ManifestFile, "format.version", m.Format.Version, ErrVersionUnsupported)
+		}
+		return versionStateError(ManifestFile, "format.version", m.Format.Version, ErrMalformed)
 	}
 
 	if err := validateManifestPlatform(m.Environment.Platform); err != nil {
 		return err
 	}
 	if m.Layout.ModsDir == "" {
-		return fmt.Errorf("manifest: layout.mods_dir is required")
+		return NewStateError(ManifestFile, ErrMalformed, "layout.mods_dir", "layout.mods_dir is required")
 	}
 	if m.Layout.PluginsDir == "" {
-		return fmt.Errorf("manifest: layout.plugins_dir is required")
+		return NewStateError(ManifestFile, ErrMalformed, "layout.plugins_dir", "layout.plugins_dir is required")
 	}
 	if m.Layout.ConfigDir == "" {
-		return fmt.Errorf("manifest: layout.config_dir is required")
+		return NewStateError(ManifestFile, ErrMalformed, "layout.config_dir", "layout.config_dir is required")
 	}
 	if len(m.Policy.ManagedRoots) == 0 {
-		return fmt.Errorf("manifest: policy.managed_roots is required")
+		return NewStateError(ManifestFile, ErrMalformed, "policy.managed_roots", "policy.managed_roots is required")
 	}
 
 	for i, custom := range m.Sources.Custom {
 		if strings.TrimSpace(custom.Name) == "" {
-			return fmt.Errorf("manifest: sources.custom[%d].name is required", i)
+			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("sources.custom[%d].name", i), "name is required")
 		}
 		if strings.TrimSpace(custom.URL) == "" {
-			return fmt.Errorf("manifest: sources.custom[%d].url is required", i)
+			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("sources.custom[%d].url", i), "url is required")
 		}
 		if strings.TrimSpace(custom.Type) == "" {
-			return fmt.Errorf("manifest: sources.custom[%d].type is required", i)
+			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("sources.custom[%d].type", i), "type is required")
 		}
 	}
 
 	for i, pkg := range m.Packages {
 		if err := validateManifestPackage(pkg); err != nil {
-			return fmt.Errorf("manifest: packages[%d]: %w", i, err)
+			return malformedStateError(ManifestFile, fmt.Sprintf("packages[%d]", i), err)
 		}
 	}
 
 	for i, bundle := range m.Bundles {
 		if err := validateManifestBundle(bundle); err != nil {
-			return fmt.Errorf("manifest: bundles[%d]: %w", i, err)
+			return malformedStateError(ManifestFile, fmt.Sprintf("bundles[%d]", i), err)
 		}
 	}
 
@@ -172,14 +173,14 @@ func ValidateManifest(m Manifest) error {
 func validateManifestPlatform(value string) error {
 	platform := types.Platform(strings.TrimSpace(value))
 	if platform == "" {
-		return fmt.Errorf("manifest: environment.platform is required")
+		return fmt.Errorf("environment.platform is required")
 	}
 
 	switch platform {
 	case types.PlatformFabric, types.PlatformNeoforge, types.PlatformForge, types.PlatformMCDR, types.PlatformNone:
 		return nil
 	default:
-		return fmt.Errorf("manifest: invalid environment.platform %q", value)
+		return fmt.Errorf("invalid environment.platform %q", value)
 	}
 }
 
@@ -240,9 +241,72 @@ func validateManifestBundle(bundle ManifestBundle) error {
 }
 
 func (m Manifest) Marshal() ([]byte, error) {
-	return toml.Marshal(m)
+	var buf bytes.Buffer
+	writeTomlSectionHeader(&buf, "format")
+	writeTomlStringField(&buf, "version", m.Format.Version)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "environment")
+	writeTomlStringField(&buf, "game_version", m.Environment.GameVersion)
+	writeTomlStringField(&buf, "platform", m.Environment.Platform)
+	writeTomlStringField(&buf, "platform_version", m.Environment.PlatformVersion)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "sources")
+	for _, custom := range m.Sources.Custom {
+		writeTomlArrayTableHeader(&buf, "sources.custom")
+		writeTomlStringField(&buf, "name", custom.Name)
+		writeTomlStringField(&buf, "url", custom.URL)
+		writeTomlStringField(&buf, "type", custom.Type)
+		buf.WriteString("\n")
+	}
+	trimTrailingBlankLine(&buf)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "layout")
+	writeTomlStringField(&buf, "mods_dir", m.Layout.ModsDir)
+	writeTomlStringField(&buf, "plugins_dir", m.Layout.PluginsDir)
+	writeTomlStringField(&buf, "config_dir", m.Layout.ConfigDir)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "policy")
+	writeTomlStringSliceField(&buf, "managed_roots", m.Policy.ManagedRoots)
+	writeTomlStringSliceField(&buf, "unmanaged_paths", m.Policy.UnmanagedPaths)
+
+	for _, pkg := range m.Packages {
+		buf.WriteString("\n")
+		writeTomlArrayTableHeader(&buf, "packages")
+		writeTomlStringField(&buf, "id", pkg.ID)
+		writeTomlStringField(&buf, "version", pkg.Version)
+		writeTomlStringField(&buf, "source", pkg.Source)
+		writeTomlStringField(&buf, "side", string(pkg.Side))
+		writeTomlBoolField(&buf, "optional", pkg.Optional)
+		writeTomlBoolField(&buf, "pinned", pkg.Pinned)
+	}
+
+	for _, bundle := range m.Bundles {
+		buf.WriteString("\n")
+		writeTomlArrayTableHeader(&buf, "bundles")
+		writeTomlStringField(&buf, "name", bundle.Name)
+		writeTomlStringField(&buf, "type", string(bundle.Type))
+		writeTomlStringField(&buf, "path", bundle.Path)
+		writeTomlStringField(&buf, "source", bundle.Source)
+		writeTomlBoolField(&buf, "optional", bundle.Optional)
+	}
+
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 func (m *Manifest) Unmarshal(data []byte) error {
 	return toml.Unmarshal(data, m)
+}
+
+func trimTrailingBlankLine(buf *bytes.Buffer) {
+	b := buf.Bytes()
+	if len(b) < 2 {
+		return
+	}
+	if bytes.HasSuffix(b, []byte("\n\n")) {
+		buf.Truncate(len(b) - 1)
+	}
 }

@@ -1,7 +1,10 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/pelletier/go-toml"
 )
@@ -103,7 +106,7 @@ type OutputConfig struct {
 func ConfigDefaults() Config {
 	return Config{
 		Meta: MetaConfig{
-			FormatVersion: "v1",
+			FormatVersion: SupportedVersion,
 		},
 		Sources: SourcesConfig{
 			Priority:    []string{"modrinth", "curseforge", "github", "mcdr"},
@@ -137,11 +140,11 @@ func ConfigDefaults() Config {
 // primarily serves as a safeguard against future schema drift.
 func ValidateConfig(c Config) error {
 	// Check that format_version is set and valid
-	if c.Meta.FormatVersion == "" {
-		return fmt.Errorf("config: format_version is required")
-	}
-	if c.Meta.FormatVersion != "v1" {
-		return fmt.Errorf("config: unsupported format_version %q", c.Meta.FormatVersion)
+	if err := ValidateVersion(c.Meta.FormatVersion); err != nil {
+		if IsVersionError(err) {
+			return versionStateError(ConfigFile, "meta.format_version", c.Meta.FormatVersion, ErrVersionUnsupported)
+		}
+		return versionStateError(ConfigFile, "meta.format_version", c.Meta.FormatVersion, ErrMalformed)
 	}
 
 	// Validate source priority contains valid source names
@@ -153,13 +156,13 @@ func ValidateConfig(c Config) error {
 	}
 	for _, src := range c.Sources.Priority {
 		if !validSources[src] {
-			return fmt.Errorf("config: invalid source %q in priority list", src)
+			return NewStateError(ConfigFile, ErrMalformed, "sources.priority", fmt.Sprintf("invalid source %q in priority list", src))
 		}
 	}
 
 	// Validate preferred source
 	if c.Sources.Preferred != "auto" && !validSources[c.Sources.Preferred] {
-		return fmt.Errorf("config: invalid preferred source %q", c.Sources.Preferred)
+		return NewStateError(ConfigFile, ErrMalformed, "sources.preferred", fmt.Sprintf("invalid preferred source %q", c.Sources.Preferred))
 	}
 
 	// Validate upgrade mode
@@ -169,7 +172,7 @@ func ValidateConfig(c Config) error {
 		"pinned":     true,
 	}
 	if !validModes[c.Upgrade.Mode] {
-		return fmt.Errorf("config: invalid upgrade mode %q", c.Upgrade.Mode)
+		return NewStateError(ConfigFile, ErrMalformed, "upgrade.mode", fmt.Sprintf("invalid upgrade mode %q", c.Upgrade.Mode))
 	}
 
 	// Config MUST NOT own these - they belong to manifest/lock
@@ -177,16 +180,84 @@ func ValidateConfig(c Config) error {
 	// a runtime check as a safeguard
 	if c.Meta.FormatVersion == "" {
 		// This should never happen due to type system, but kept as documentation
-		return fmt.Errorf("config: reserved field detected - schema enforces policy domain only")
+		return NewStateError(ConfigFile, ErrBoundaryViolation, "meta.format_version", "reserved field detected - schema enforces policy domain only")
 	}
 
 	return nil
 }
 
 func (c Config) Marshal() ([]byte, error) {
-	return toml.Marshal(c)
+	var buf bytes.Buffer
+	writeTomlSectionHeader(&buf, "meta")
+	writeTomlStringField(&buf, "format_version", c.Meta.FormatVersion)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "sources")
+	writeTomlStringSliceField(&buf, "priority", c.Sources.Priority)
+	writeTomlStringField(&buf, "preferred", c.Sources.Preferred)
+	writeTomlBoolField(&buf, "allow_custom", c.Sources.AllowCustom)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "upgrade")
+	writeTomlStringField(&buf, "mode", c.Upgrade.Mode)
+	writeTomlBoolField(&buf, "allow_major_bumps", c.Upgrade.AllowMajorBumps)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "scope")
+	writeTomlStringSliceField(&buf, "managed_roots", c.Scope.ManagedRoots)
+	writeTomlStringSliceField(&buf, "unmanaged_paths", c.Scope.UnmanagedPaths)
+	writeTomlStringSliceField(&buf, "preserve_on_remove", c.Scope.PreserveOnRemove)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "optional")
+	writeTomlBoolField(&buf, "include_optional", c.Optional.IncludeOptional)
+	writeTomlBoolField(&buf, "client_mods", c.Optional.ClientMods)
+
+	buf.WriteString("\n")
+	writeTomlSectionHeader(&buf, "output")
+	writeTomlBoolField(&buf, "no_style", c.Output.NoStyle)
+	writeTomlBoolField(&buf, "json", c.Output.JSON)
+
+	return buf.Bytes(), nil
 }
 
 func (c *Config) Unmarshal(data []byte) error {
 	return toml.Unmarshal(data, c)
+}
+
+func writeTomlSectionHeader(buf *bytes.Buffer, name string) {
+	buf.WriteString("[")
+	buf.WriteString(name)
+	buf.WriteString("]\n")
+}
+
+func writeTomlArrayTableHeader(buf *bytes.Buffer, name string) {
+	buf.WriteString("[[")
+	buf.WriteString(name)
+	buf.WriteString("]]\n")
+}
+
+func writeTomlStringField(buf *bytes.Buffer, key, value string) {
+	buf.WriteString(key)
+	buf.WriteString(" = ")
+	buf.WriteString(strconv.Quote(value))
+	buf.WriteString("\n")
+}
+
+func writeTomlBoolField(buf *bytes.Buffer, key string, value bool) {
+	buf.WriteString(key)
+	buf.WriteString(" = ")
+	buf.WriteString(strconv.FormatBool(value))
+	buf.WriteString("\n")
+}
+
+func writeTomlStringSliceField(buf *bytes.Buffer, key string, values []string) {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, strconv.Quote(value))
+	}
+	buf.WriteString(key)
+	buf.WriteString(" = [")
+	buf.WriteString(strings.Join(quoted, ", "))
+	buf.WriteString("]\n")
 }

@@ -1,0 +1,54 @@
+{
+  "version": "v1",
+  "generated_at": "2026-04-15T12:34:56Z",
+  "manifest_fingerprint": "sha256:manifest-fixture",
+  "game_version": "1.21.1",
+  "platform": "fabric",
+  "platform_version": "0.16.10",
+  "packages": [
+    {
+      "id": "fabric/fabric-api",
+      "version": "0.110.5+1.21.1",
+      "source": "modrinth",
+      "url": "https://cdn.modrinth.com/data/P7dR8mSH/versions/abc/fabric-api.jar",
+      "filename": "fabric-api-0.110.5+1.21.1.jar",
+      "hash": "deadbeef",
+      "hash_algorithm": "sha512",
+      "install_path": "mods/fabric-api-0.110.5+1.21.1.jar",
+      "side": "both",
+      "optional": false,
+      "embedded": false,
+      "provenance": [
+        "root"
+      ],
+      "requester": "root"
+    },
+    {
+      "id": "fabric/embedded-lib",
+      "version": "1.0.0",
+      "source": "direct",
+      "url": "jar-in-jar://mods/parent.jar!/META-INF/jars/embedded-lib.jar",
+      "filename": "embedded-lib.jar",
+      "hash": "cafebabe",
+      "hash_algorithm": "sha512",
+      "install_path": "mods/parent.jar!/META-INF/jars/embedded-lib.jar",
+      "side": "server",
+      "optional": true,
+      "embedded": true,
+      "embedded_in": "fabric/fabric-api",
+      "provenance": [
+        "root",
+        "fabric/fabric-api@0.110.5+1.21.1"
+      ],
+      "requester": "fabric/fabric-api"
+    }
+  ],
+  "bundles": [
+    {
+      "name": "default-config",
+      "type": "config",
+      "hash": "bundlehash",
+      "install_path": "config/defaults.zip"
+    }
+  ]
+}

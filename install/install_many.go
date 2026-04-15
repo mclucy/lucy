@@ -10,18 +10,18 @@ import (
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
-func InstallMany(ids []types.PackageId, source types.Source, options Options) error {
+func InstallMany(ids []types.PackageId, source types.Source, options Options) (*Result, error) {
 	const maxReconcileIterations = 3
 
 	if len(ids) == 0 {
-		return nil
+		return &Result{}, nil
 	}
 
 	prepared := prepareBatchIDs(ids)
 	identityIds, regularIds := partitionBatchIDs(prepared)
 
 	if err := validateIdentityCompatibility(identityIds); err != nil {
-		return err
+		return nil, err
 	}
 	identityIds = sortIdentityPackages(identityIds)
 
@@ -31,14 +31,14 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) er
 		for _, id := range identityIds {
 			if err := installPlatform(id); err != nil {
 				if len(succeeded) > 0 {
-					return fmt.Errorf(
+					return nil, fmt.Errorf(
 						"%s: failed to install %s (already installed: %s)",
 						err,
 						id.StringFull(),
 						strings.Join(succeeded, ", "),
 					)
 				}
-				return fmt.Errorf("failed to install %s: %w", id.StringFull(), err)
+				return nil, fmt.Errorf("failed to install %s: %w", id.StringFull(), err)
 			}
 			succeeded = append(succeeded, id.StringFull())
 		}
@@ -47,12 +47,12 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) er
 
 	if len(regularIds) == 0 {
 		showBatchSummary(len(identityIds), 0)
-		return nil
+		return &Result{}, nil
 	}
 
 	showBatchPhase("Fetching metadata for", regularIds)
 	if err := validateRegularBatchIDs(regularIds); err != nil {
-		return err
+		return nil, err
 	}
 
 	serverInfo := probe.ServerInfo()
@@ -61,7 +61,7 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) er
 		source,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if serverInfo.Environments.Mcdr != nil {
@@ -102,7 +102,7 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) er
 		)
 		if err != nil {
 			showRecursiveConflict(err)
-			return err
+			return nil, err
 		}
 		pruneRecursiveCandidates(tx, resolvePlan.ExcludedCandidates)
 
@@ -110,27 +110,27 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) er
 		showRecursiveDownloadStart(len(packages))
 		tx.StagingDir, packages, err = downloadBatchPackages(serverInfo.WorkPath, packages)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		backfillRecursiveDownloads(tx, packages)
 		tx.AdvanceTo(PhaseDownloaded)
 
 		showRecursiveVerifyStart(len(tx.DownloadedArtifacts))
 		if err := VerifyDownloadedArtifacts(tx); err != nil {
-			return err
+			return nil, err
 		}
 
 		diff, err = ReconcileTransaction(tx)
 		if err != nil {
 			showRecursiveConflict(err)
-			return err
+			return nil, err
 		}
 		if diff.IsStable() {
 			break
 		}
 
 		if iteration == maxReconcileIterations-1 {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"install: recursive closure did not stabilize after %d iterations: %s",
 				maxReconcileIterations,
 				summarizeReconcileDiff(diff),
@@ -142,12 +142,30 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) er
 
 	plan, err := BuildRecursiveApplyPlan(tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	tx.SetApplyPlan(plan)
 	tx.AdvanceTo(PhaseCommitted)
 
-	return ApplyValidatedClosure(tx, serverInfo)
+	if err := ApplyValidatedClosure(tx, serverInfo); err != nil {
+		return nil, err
+	}
+
+	return buildInstallResult(tx), nil
+}
+
+func buildInstallResult(tx *RecursiveTransaction) *Result {
+	if tx == nil || tx.Apply == nil {
+		return &Result{}
+	}
+
+	installed := append([]types.Package(nil), tx.Apply.Install...)
+	provenance := make(map[string][]string, len(tx.CandidateGraph))
+	for key, node := range tx.CandidateGraph {
+		provenance[key] = append([]string(nil), node.ProvenancePath...)
+	}
+
+	return &Result{Installed: installed, Provenance: provenance}
 }
 
 func prepareBatchIDs(ids []types.PackageId) []types.PackageId {

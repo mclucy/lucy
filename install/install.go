@@ -10,6 +10,11 @@ import (
 
 type platformInstaller func(p types.Package) error
 
+type Result struct {
+	Installed  []types.Package
+	Provenance map[string][]string
+}
+
 var installers = map[types.Platform]platformInstaller{}
 
 func registerInstaller(platform types.Platform, installer platformInstaller) {
@@ -19,7 +24,7 @@ func registerInstaller(platform types.Platform, installer platformInstaller) {
 	installers[platform] = installer
 }
 
-func Install(id types.PackageId, source types.Source, options Options) error {
+func Install(id types.PackageId, source types.Source, options Options) (*Result, error) {
 	// for regular (non-identity) packages, delegate to InstallMany to unify
 	// resolver behavior with batch adds
 	if !id.IsIdentityPackage() {
@@ -31,7 +36,11 @@ func Install(id types.PackageId, source types.Source, options Options) error {
 		id.Version = types.VersionCompatible
 	}
 
-	return installPlatform(id)
+	if err := installPlatform(id); err != nil {
+		return nil, err
+	}
+
+	return &Result{}, nil
 }
 
 func installPlatform(id types.PackageId) error {

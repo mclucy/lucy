@@ -53,7 +53,7 @@ type LockedBundle struct {
 // NewLock returns a new v1 lock with the current timestamp in RFC3339 format.
 func NewLock() Lock {
 	return Lock{
-		Version:     "v1",
+		Version:     SupportedVersion,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Packages:    []LockedPackage{},
 		Bundles:     []LockedBundle{},
@@ -62,40 +62,40 @@ func NewLock() Lock {
 
 // ValidateLock validates required fields and v1 resolved-state invariants.
 func ValidateLock(l Lock) error {
-	if l.Version == "" {
-		return fmt.Errorf("lock: version is required")
-	}
-	if l.Version != "v1" {
-		return fmt.Errorf("lock: unsupported version %q", l.Version)
+	if err := ValidateVersion(l.Version); err != nil {
+		if IsVersionError(err) {
+			return versionStateError(LockFile, "version", l.Version, ErrVersionUnsupported)
+		}
+		return versionStateError(LockFile, "version", l.Version, ErrMalformed)
 	}
 	if l.GeneratedAt == "" {
-		return fmt.Errorf("lock: generated_at is required")
+		return NewStateError(LockFile, ErrMalformed, "generated_at", "generated_at is required")
 	}
 	if _, err := time.Parse(time.RFC3339, l.GeneratedAt); err != nil {
-		return fmt.Errorf("lock: generated_at must be RFC3339: %w", err)
+		return NewStateError(LockFile, ErrMalformed, "generated_at", fmt.Sprintf("generated_at must be RFC3339: %v", err))
 	}
 	if l.ManifestFingerprint == "" {
-		return fmt.Errorf("lock: manifest_fingerprint is required")
+		return NewStateError(LockFile, ErrMalformed, "manifest_fingerprint", "manifest_fingerprint is required")
 	}
 	if l.GameVersion == "" {
-		return fmt.Errorf("lock: game_version is required")
+		return NewStateError(LockFile, ErrMalformed, "game_version", "game_version is required")
 	}
 	if l.Platform == "" {
-		return fmt.Errorf("lock: platform is required")
+		return NewStateError(LockFile, ErrMalformed, "platform", "platform is required")
 	}
 	if l.PlatformVersion == "" {
-		return fmt.Errorf("lock: platform_version is required")
+		return NewStateError(LockFile, ErrMalformed, "platform_version", "platform_version is required")
 	}
 
 	for i, pkg := range l.Packages {
 		if err := validateLockedPackage(pkg); err != nil {
-			return fmt.Errorf("lock: packages[%d]: %w", i, err)
+			return malformedStateError(LockFile, fmt.Sprintf("packages[%d]", i), err)
 		}
 	}
 
 	for i, bundle := range l.Bundles {
 		if err := validateLockedBundle(bundle); err != nil {
-			return fmt.Errorf("lock: bundles[%d]: %w", i, err)
+			return malformedStateError(LockFile, fmt.Sprintf("bundles[%d]", i), err)
 		}
 	}
 
