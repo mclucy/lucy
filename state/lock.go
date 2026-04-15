@@ -3,7 +3,11 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
+
+	"github.com/mclucy/lucy/types"
 )
 
 // Lock represents Lucy's exact resolved state snapshot.
@@ -12,8 +16,11 @@ import (
 //
 // Lock MUST NOT own policy defaults, desired roots, or observed runtime state.
 type Lock struct {
-	Version             string          `json:"version"`
-	GeneratedAt         string          `json:"generated_at"`
+	Version     string `json:"version"`
+	GeneratedAt string `json:"generated_at"`
+	// ManifestFingerprint binds the exact lock facts to one serialized manifest
+	// intent document. If the manifest bytes change, the lock is stale even when
+	// package IDs still overlap.
 	ManifestFingerprint string          `json:"manifest_fingerprint"`
 	GameVersion         string          `json:"game_version"`
 	Platform            string          `json:"platform"`
@@ -25,7 +32,10 @@ type Lock struct {
 // LockedPackage records one exact resolved artifact and how it entered the
 // resolved graph.
 type LockedPackage struct {
-	ID            string   `json:"id"`
+	ID string `json:"id"`
+	// Version is the final concrete version chosen for this resolved artifact.
+	// Lock entries are fact records, so fuzzy selectors and ranges are invalid
+	// here even when the manifest used them as intent.
 	Version       string   `json:"version"`
 	Source        string   `json:"source"`
 	URL           string   `json:"url"`
@@ -83,6 +93,9 @@ func ValidateLock(l Lock) error {
 	if l.Platform == "" {
 		return NewStateError(LockFile, ErrMalformed, "platform", "platform is required")
 	}
+	if err := validateManifestPlatform(l.Platform); err != nil {
+		return NewStateError(LockFile, ErrMalformed, "platform", err.Error())
+	}
 	if l.PlatformVersion == "" {
 		return NewStateError(LockFile, ErrMalformed, "platform_version", "platform_version is required")
 	}
@@ -114,10 +127,18 @@ func validateLockedPackage(pkg LockedPackage) error {
 	if pkg.ID == "" {
 		return fmt.Errorf("id is required")
 	}
+	parts := strings.Split(pkg.ID, "/")
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return fmt.Errorf("id must use platform/name format")
+	}
+	platform := types.Platform(parts[0])
+	if !platform.Valid() || platform == types.PlatformAny || platform == types.PlatformMinecraft || platform == types.PlatformUnknown {
+		return fmt.Errorf("invalid package platform %q", parts[0])
+	}
 	if pkg.Version == "" {
 		return fmt.Errorf("version is required")
 	}
-	if isSpecialLockVersion(pkg.Version) {
+	if !isExactLockVersion(pkg.Version) {
 		return fmt.Errorf("version must be exact, got %q", pkg.Version)
 	}
 	if !isValidLockSource(pkg.Source) {
@@ -178,6 +199,26 @@ func validateLockedBundle(bundle LockedBundle) error {
 	return nil
 }
 
+func isExactLockVersion(version string) bool {
+	if isSpecialLockVersion(version) {
+		return false
+	}
+	for _, token := range []string{" ", "\t", "\n", "\r", ",", "||", "*", "^", "~", ">", "<", "=", "[", "]", "(", ")"} {
+		if strings.Contains(version, token) {
+			return false
+		}
+	}
+	for _, token := range []string{".x", ".X", "-x", "-X", "x.", "X."} {
+		if strings.Contains(version, token) {
+			return false
+		}
+	}
+	if strings.EqualFold(version, "x") {
+		return false
+	}
+	return true
+}
+
 func isSpecialLockVersion(version string) bool {
 	switch version {
 	case "any", "none", "unknown", "latest", "compatible":
@@ -212,4 +253,43 @@ func isValidPackageSide(side string) bool {
 	default:
 		return false
 	}
+}
+
+func CanonicalLockedPackages(packages []LockedPackage) []LockedPackage {
+	canonical := append([]LockedPackage(nil), packages...)
+	sort.Slice(canonical, func(i, j int) bool {
+		if canonical[i].ID != canonical[j].ID {
+			return canonical[i].ID < canonical[j].ID
+		}
+		if canonical[i].Version != canonical[j].Version {
+			return canonical[i].Version < canonical[j].Version
+		}
+		return canonical[i].InstallPath < canonical[j].InstallPath
+	})
+	return canonical
+}
+
+func PruneLockForManifest(lock *Lock, manifest *Manifest) *Lock {
+	if lock == nil {
+		return nil
+	}
+	pruned := *lock
+	pruned.Bundles = append([]LockedBundle(nil), lock.Bundles...)
+	allowed := make(map[string]struct{})
+	if manifest != nil {
+		for _, pkg := range manifest.Packages {
+			if pkg.Role == RoleIgnored {
+				continue
+			}
+			allowed[pkg.ID] = struct{}{}
+		}
+	}
+	packages := make([]LockedPackage, 0, len(lock.Packages))
+	for _, pkg := range lock.Packages {
+		if _, ok := allowed[pkg.ID]; ok {
+			packages = append(packages, pkg)
+		}
+	}
+	pruned.Packages = CanonicalLockedPackages(packages)
+	return &pruned
 }

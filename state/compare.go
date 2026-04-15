@@ -9,6 +9,13 @@ type StateDiff struct {
 	InObservedNotLock []string
 }
 
+// DiffDesiredResolved compares desired membership with resolved membership.
+//
+// It intentionally compares package identity only. Manifest versions may remain
+// fuzzy intent selectors, while lock versions are exact facts. Exact-version
+// drift for the same package ID is tracked by lock staleness
+// (manifest_fingerprint mismatch) and the next resolve/install run, not by this
+// membership diff.
 func DiffDesiredResolved(manifest *Manifest, lock *Lock) StateDiff {
 	diff := StateDiff{}
 
@@ -48,6 +55,9 @@ func DiffDesiredResolved(manifest *Manifest, lock *Lock) StateDiff {
 	return diff
 }
 
+// DiffResolvedObserved compares exact lock install targets with current
+// observed paths. Observed drift is always checked against lock facts, never
+// against fuzzy manifest selectors.
 func DiffResolvedObserved(lock *Lock, observedPaths []string) StateDiff {
 	diff := StateDiff{}
 

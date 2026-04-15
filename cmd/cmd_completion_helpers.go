@@ -43,7 +43,7 @@ func ToCobraCompletions(candidates []CompletionCandidate) []string {
 // StaticPlatformCandidates returns completion candidates for all user-facing platforms.
 func StaticPlatformCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.PlatformMinecraft.String(), Description: "Vanilla / Bukkit plugins"},
+		{Value: types.PlatformMinecraft.String(), Description: "Vanilla / Bukkit / Paper plugins"},
 		{Value: types.PlatformFabric.String(), Description: "Fabric mods"},
 		{Value: types.PlatformForge.String(), Description: "Forge mods"},
 		{Value: types.PlatformNeoforge.String(), Description: "NeoForge mods"},

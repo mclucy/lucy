@@ -1,10 +1,15 @@
 package init
 
 import (
+	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mclucy/lucy/state"
+	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/types"
 )
 
 func TestNewInitFlowState_EmptyWorkDir(t *testing.T) {
@@ -26,14 +31,7 @@ func TestNewInitFlowState_WithExistingConfig(t *testing.T) {
 
 	s := NewInitFlowState(tmpDir)
 
-	found := false
-	for _, f := range s.ExistingFiles {
-		if f == string(state.ConfigFile) {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(s.ExistingFiles, string(state.ConfigFile)) {
 		t.Errorf("expected ExistingFiles to contain %s, got %v", state.ConfigFile, s.ExistingFiles)
 	}
 }
@@ -48,6 +46,7 @@ func TestBuildResult_PreserveExisting(t *testing.T) {
 
 	s := NewInitFlowState(tmpDir)
 	s.GameVersion = "1.21.4"
+	s.Platform = "none"
 	s.ConflictResolution = PreserveExisting
 	s.ManagedRoots = []string{"mods", "plugins"}
 
@@ -60,14 +59,7 @@ func TestBuildResult_PreserveExisting(t *testing.T) {
 		t.Error("expected ConfigToWrite to be nil when preserving existing")
 	}
 
-	skipped := false
-	for _, f := range result.SkippedFiles {
-		if f == string(state.ConfigFile) {
-			skipped = true
-			break
-		}
-	}
-	if !skipped {
+	if !slices.Contains(result.SkippedFiles, string(state.ConfigFile)) {
 		t.Errorf("expected SkippedFiles to contain %s, got %v", state.ConfigFile, result.SkippedFiles)
 	}
 }
@@ -82,6 +74,7 @@ func TestBuildResult_AbortOnConflict(t *testing.T) {
 
 	s := NewInitFlowState(tmpDir)
 	s.GameVersion = "1.21.4"
+	s.Platform = "none"
 	s.ConflictResolution = AbortOnConflict
 	s.ManagedRoots = []string{"mods", "plugins"}
 
@@ -109,6 +102,7 @@ func TestBuildResult_OverwriteAll(t *testing.T) {
 
 	s := NewInitFlowState(tmpDir)
 	s.GameVersion = "1.21.4"
+	s.Platform = "none"
 	s.ConflictResolution = OverwriteAll
 	s.ManagedRoots = []string{"mods", "plugins"}
 
@@ -121,21 +115,43 @@ func TestBuildResult_OverwriteAll(t *testing.T) {
 		t.Error("expected ConfigToWrite to be set when OverwriteAll")
 	}
 
-	written := false
-	for _, f := range result.WrittenFiles {
-		if f == string(state.ConfigFile) {
-			written = true
-			break
-		}
-	}
-	if !written {
+	if !slices.Contains(result.WrittenFiles, string(state.ConfigFile)) {
 		t.Errorf("expected WrittenFiles to contain %s, got %v", state.ConfigFile, result.WrittenFiles)
+	}
+}
+
+func TestBuildResult_PersistsCompatiblePlatforms(t *testing.T) {
+	tmpDir := t.TempDir()
+	s := NewInitFlowState(tmpDir)
+	s.GameVersion = "1.21.4"
+	s.Platform = "neoforge"
+	s.PlatformVersion = "21.1.0"
+	s.CompatiblePlatforms = []string{"fabric", "mcdr", "sinytra"}
+	s.ManagedRoots = []string{"mods", "plugins"}
+
+	result, err := BuildResult(s)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.ManifestToWrite == nil {
+		t.Fatal("expected manifest to be written")
+	}
+	want := []string{"fabric", "mcdr", "sinytra"}
+	if len(result.ManifestToWrite.Environment.CompatiblePlatforms) != len(want) {
+		t.Fatalf("expected %d compatible platforms, got %d", len(want), len(result.ManifestToWrite.Environment.CompatiblePlatforms))
+	}
+	for i, platform := range want {
+		if result.ManifestToWrite.Environment.CompatiblePlatforms[i] != platform {
+			t.Fatalf("compatible platform %d mismatch: got %q want %q", i, result.ManifestToWrite.Environment.CompatiblePlatforms[i], platform)
+		}
 	}
 }
 
 func TestCanProceed_EmptyGameVersion(t *testing.T) {
 	s := &InitFlowState{
 		GameVersion:  "",
+		Platform:     "none",
 		ManagedRoots: []string{"mods", "plugins"},
 	}
 
@@ -147,6 +163,7 @@ func TestCanProceed_EmptyGameVersion(t *testing.T) {
 func TestCanProceed_EmptyManagedRoots(t *testing.T) {
 	s := &InitFlowState{
 		GameVersion:  "1.21.4",
+		Platform:     "none",
 		ManagedRoots: nil,
 	}
 
@@ -158,6 +175,7 @@ func TestCanProceed_EmptyManagedRoots(t *testing.T) {
 func TestCanProceed_ValidState(t *testing.T) {
 	s := &InitFlowState{
 		GameVersion:  "1.21.4",
+		Platform:     "none",
 		ManagedRoots: []string{"mods", "plugins"},
 	}
 
@@ -169,6 +187,7 @@ func TestCanProceed_ValidState(t *testing.T) {
 func TestCanProceed_ValidWithMultipleRoots(t *testing.T) {
 	s := &InitFlowState{
 		GameVersion:  "1.21.4",
+		Platform:     "none",
 		ManagedRoots: []string{"mods", "plugins", "config"},
 	}
 
@@ -192,4 +211,190 @@ func TestConflictMode_String(t *testing.T) {
 			t.Errorf("expected %q, got %q", tc.want, tc.mode)
 		}
 	}
+}
+
+func TestDiscoverServerDefaults_UsesProbeObservedTakeoverCandidates(t *testing.T) {
+	tmpDir := t.TempDir()
+	copyFile(
+		t,
+		filepath.Join("..", "..", "probe", "internal", "detector", "testdata", "fabric", "fabric-server-launch.jar"),
+		filepath.Join(tmpDir, "fabric-server-launch.jar"),
+	)
+
+	defaults := DiscoverServerDefaults(tmpDir)
+
+	if defaults.Platform != string(types.PlatformFabric) {
+		t.Fatalf("expected platform %q, got %q", types.PlatformFabric, defaults.Platform)
+	}
+	if defaults.PlatformVersion == "" {
+		t.Fatal("expected probe-derived platform version to be populated")
+	}
+	if !slices.Contains(defaults.ManagedRoots, "mods") {
+		t.Fatalf("expected mods managed root from probe topology, got %v", defaults.ManagedRoots)
+	}
+	if !slices.Contains(defaults.DetectedPackages, "fabric/fabric") {
+		t.Fatalf("expected runtime identity takeover candidate in detected packages, got %v", defaults.DetectedPackages)
+	}
+	if defaults.Confidence == ConfidenceNone {
+		t.Fatal("expected non-empty discovery confidence")
+	}
+}
+
+func copyFile(t *testing.T, src, dst string) {
+	t.Helper()
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("read %s: %v", src, err)
+	}
+	if err := os.WriteFile(dst, data, 0o644); err != nil {
+		t.Fatalf("write %s: %v", dst, err)
+	}
+}
+
+func TestValidatePlatformSelectionRejectsImpossibleCombination(t *testing.T) {
+	err := ValidatePlatformSelection("fabric", []string{"sinytra"})
+	if err == nil {
+		t.Fatal("expected impossible platform combination to fail")
+	}
+}
+
+func TestBuildSummaryShowsPrimaryAndCompatiblePlatforms(t *testing.T) {
+	s := &InitFlowState{
+		GameVersion:         "1.21.4",
+		Platform:            "neoforge",
+		PlatformVersion:     "21.1.0",
+		CompatiblePlatforms: []string{"fabric", "mcdr", "sinytra"},
+		ManagedRoots:        []string{"mods", "plugins"},
+		ConflictResolution:  PreserveExisting,
+	}
+
+	summary := buildSummary(s)
+	if want := "Primary runtime: neoforge"; !containsLine(summary, want) {
+		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
+	}
+	if want := "Compatible with: fabric, mcdr, sinytra"; !containsLine(summary, want) {
+		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
+	}
+}
+
+func TestBuildTakeoverPackageClassificationsSurfacesNonLeafDependencies(t *testing.T) {
+	packages := []types.Package{
+		testObservedPackage(
+			"fabric/lithium@0.12.7",
+			types.SourceModrinth,
+			[]types.Dependency{{Id: types.PackageId{Platform: types.PlatformFabric, Name: "fabric-api", Version: types.VersionAny}, Mandatory: true}},
+		),
+		testObservedPackage(
+			"fabric/fabric-api@0.119.2+1.21.5",
+			types.SourceModrinth,
+			[]types.Dependency{{Id: types.PackageId{Platform: types.PlatformFabric, Name: "cloth-config", Version: types.VersionAny}, Mandatory: true}},
+		),
+		testObservedPackage("fabric/cloth-config@15.0.140", types.SourceModrinth, nil),
+	}
+
+	classifications := BuildTakeoverPackageClassifications(packages)
+	if len(classifications) != 3 {
+		t.Fatalf("expected 3 classified packages, got %d", len(classifications))
+	}
+
+	byID := make(map[string]TakeoverPackageClassification, len(classifications))
+	for _, classification := range classifications {
+		byID[classification.ID] = classification
+	}
+
+	if got := byID["fabric/lithium"]; !got.Leaf || got.Role != state.RoleRequired {
+		t.Fatalf("expected lithium to be a required leaf, got %#v", got)
+	}
+	if got := byID["fabric/fabric-api"]; got.Leaf || got.Role != state.RoleTransitive {
+		t.Fatalf("expected fabric-api to be a transitive non-leaf, got %#v", got)
+	}
+	if got := byID["fabric/cloth-config"]; got.Leaf || got.Role != state.RoleTransitive {
+		t.Fatalf("expected cloth-config to be a transitive non-leaf, got %#v", got)
+	}
+	if got := byID["fabric/fabric-api"]; !slices.Equal(got.RequiredBy, []string{"fabric/lithium"}) {
+		t.Fatalf("expected fabric-api required-by chain, got %#v", got.RequiredBy)
+	}
+	if got := byID["fabric/cloth-config"]; !slices.Equal(got.RequiredBy, []string{"fabric/fabric-api"}) {
+		t.Fatalf("expected cloth-config required-by chain, got %#v", got.RequiredBy)
+	}
+}
+
+func TestBuildResultIncludesClassifiedPackagesInManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	s := NewInitFlowState(tmpDir)
+	s.GameVersion = "1.21.4"
+	s.Platform = "fabric"
+	s.PlatformVersion = "0.16.10"
+	s.ManagedRoots = []string{"mods"}
+	s.PackageClassifications = []TakeoverPackageClassification{
+		{ID: "fabric/lithium", Version: "0.12.7", Source: "modrinth", Role: state.RoleRequired, Leaf: true},
+		{ID: "fabric/fabric-api", Version: "0.119.2+1.21.5", Source: "modrinth", Role: state.RoleTransitive},
+		{ID: "fabric/cloth-config", Version: "15.0.140", Source: "modrinth", Role: state.RoleIgnored},
+	}
+
+	result, err := BuildResult(s)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ManifestToWrite == nil {
+		t.Fatal("expected manifest to be written")
+	}
+	if len(result.ManifestToWrite.Packages) != 3 {
+		t.Fatalf("expected 3 manifest packages, got %d", len(result.ManifestToWrite.Packages))
+	}
+
+	byID := make(map[string]state.ManifestPackage, len(result.ManifestToWrite.Packages))
+	for _, pkg := range result.ManifestToWrite.Packages {
+		byID[pkg.ID] = pkg
+	}
+	if got := byID["fabric/lithium"].Role; got != state.RoleRequired {
+		t.Fatalf("expected lithium role required, got %q", got)
+	}
+	if got := byID["fabric/fabric-api"].Role; got != state.RoleTransitive {
+		t.Fatalf("expected fabric-api role transitive, got %q", got)
+	}
+	if got := byID["fabric/cloth-config"].Role; got != state.RoleIgnored {
+		t.Fatalf("expected cloth-config role ignored, got %q", got)
+	}
+}
+
+func TestBuildPackageClassificationDescriptionDistinguishesNonLeafNodes(t *testing.T) {
+	s := &InitFlowState{
+		PackageClassifications: []TakeoverPackageClassification{
+			{ID: "fabric/lithium", Version: "0.12.7", Role: state.RoleRequired, Leaf: true},
+			{ID: "fabric/fabric-api", Version: "0.119.2+1.21.5", Role: state.RoleTransitive, RequiredBy: []string{"fabric/lithium"}},
+		},
+	}
+
+	description := buildPackageClassificationDescription(s)
+	if !strings.Contains(description, "[leaf]") {
+		t.Fatalf("expected package classification description to mark leaf nodes, got:\n%s", description)
+	}
+	if !strings.Contains(description, "[dependency]") {
+		t.Fatalf("expected package classification description to mark non-leaf dependency nodes, got:\n%s", description)
+	}
+}
+
+func testObservedPackage(id string, source types.Source, deps []types.Dependency) types.Package {
+	pkgID, err := syntax.Parse(id)
+	if err != nil {
+		panic(err)
+	}
+	pkg := types.Package{Id: pkgID}
+	if source != types.SourceUnknown {
+		pkg.Remote = &types.PackageRemote{Source: source}
+	}
+	if deps != nil {
+		pkg.Dependencies = &types.PackageDependencies{Value: deps, Authentic: true}
+	}
+	return pkg
+}
+
+func containsLine(text, want string) bool {
+	for line := range strings.SplitSeq(text, "\n") {
+		if line == want {
+			return true
+		}
+	}
+	return false
 }

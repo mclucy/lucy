@@ -109,3 +109,34 @@ func TestAtomicWriteFailureLeavesOriginalTargetUntouched(t *testing.T) {
 		t.Fatalf("unexpected leftover temp files after failure: %#v", entries)
 	}
 }
+
+func TestReadWriteManifestPreservesCompatiblePlatforms(t *testing.T) {
+	workDir := t.TempDir()
+	manifest := ManifestDefaults()
+	manifest.Environment.GameVersion = "1.21.1"
+	manifest.Environment.Platform = "neoforge"
+	manifest.Environment.CompatiblePlatforms = []string{"fabric", "mcdr", "sinytra"}
+	manifest.Environment.PlatformVersion = "21.1.0"
+	manifest.Packages = []ManifestPackage{{
+		ID:      "neoforge/connector",
+		Version: "compatible",
+		Source:  "modrinth",
+		Role:    RoleRequired,
+		Side:    SideServer,
+	}}
+
+	if err := WriteManifest(workDir, &manifest); err != nil {
+		t.Fatalf("WriteManifest failed: %v", err)
+	}
+
+	loaded, ok, err := ReadManifest(workDir)
+	if err != nil {
+		t.Fatalf("ReadManifest failed: %v", err)
+	}
+	if !ok || loaded == nil {
+		t.Fatalf("expected manifest file to exist after write")
+	}
+	if !reflect.DeepEqual(*loaded, manifest) {
+		t.Fatalf("manifest mismatch after round-trip\nwant: %#v\ngot: %#v", manifest, *loaded)
+	}
+}

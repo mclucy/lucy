@@ -29,6 +29,31 @@ func TestDiffDesiredResolved(t *testing.T) {
 	}
 }
 
+func TestDiffDesiredResolvedTreatsFuzzyIntentAndExactLockAsSameMembership(t *testing.T) {
+	manifest := &Manifest{
+		Packages: []ManifestPackage{{
+			ID:      "fabric/lithium",
+			Version: "compatible",
+			Source:  "modrinth",
+			Side:    SideBoth,
+		}},
+	}
+	lock := &Lock{
+		ManifestFingerprint: "sha256:stale-or-current",
+		Packages: []LockedPackage{{
+			ID:          "fabric/lithium",
+			Version:     "0.12.7+mc1.21.1",
+			InstallPath: "mods/lithium.jar",
+		}},
+	}
+
+	diff := DiffDesiredResolved(manifest, lock)
+
+	if len(diff.InManifestNotLock) != 0 || len(diff.InLockNotManifest) != 0 {
+		t.Fatalf("expected same package ID to be considered converged membership despite fuzzy manifest intent, got %#v", diff)
+	}
+}
+
 func TestDiffResolvedObserved(t *testing.T) {
 	lock := &Lock{
 		Packages: []LockedPackage{

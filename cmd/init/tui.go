@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/mclucy/lucy/state"
 )
 
 // RunInteractiveInit walks the user through the interactive init flow via huh
@@ -21,7 +22,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 					"lucy init sets up a new Lucy-managed Minecraft server environment in the\n"+
 						"current directory. It will create the following files:\n\n"+
 						"  .lucy/config.toml   – policy and source defaults\n"+
-						"  .lucy/manifest.toml – environment intent (game version, platform, mods)\n"+
+						"  .lucy/manifest.toml – environment intent (game version, runtime, compatible platforms, mods)\n"+
 						"  .lucy/lock.json     – resolved dependency graph\n\n"+
 						"No files will be written until you confirm at the final review step.",
 				),
@@ -125,13 +126,13 @@ func RunInteractiveInit(s *InitFlowState) error {
 	platformForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title("Server platform").
-				Description("Choose the modding platform or server core for this environment.").
+				Title("Primary runtime").
+				Description("Choose the main server runtime Lucy should treat as the primary host environment.").
 				Options(
 					huh.NewOption("Fabric – lightweight, fast-updating mod loader", "fabric"),
 					huh.NewOption("NeoForge – community fork of Forge (recommended for 1.20.2+)", "neoforge"),
 					huh.NewOption("Forge – original mod loader", "forge"),
-					huh.NewOption("MCDR – plugin framework for vanilla/Bukkit servers", "mcdr"),
+					huh.NewOption("MCDR – standalone controller/plugin framework", "mcdr"),
 					huh.NewOption("None / Vanilla – no modding platform", "none"),
 				).
 				Value(&s.Platform),
@@ -145,6 +146,38 @@ func RunInteractiveInit(s *InitFlowState) error {
 		return fmt.Errorf("platform step: %w", err)
 	}
 	s.CurrentStep = StepPlatformVersion
+
+	compatibleOptions := state.CompatiblePlatformOptions(s.Platform)
+	if len(compatibleOptions) > 0 {
+		selected := append([]string(nil), s.CompatiblePlatforms...)
+		options := make([]huh.Option[string], 0, len(compatibleOptions))
+		for _, platform := range compatibleOptions {
+			label := compatiblePlatformLabel(platform)
+			options = append(options, huh.NewOption(label, platform))
+		}
+		compatibleForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewMultiSelect[string]().
+					Title("Additional compatible platforms").
+					Description("Select extra compatibility layers Lucy should record alongside the primary runtime. Only valid combinations for the chosen runtime are shown.").
+					Options(options...).
+					Value(&selected),
+			),
+		)
+		if err := compatibleForm.Run(); err != nil {
+			if isUserAbort(err) {
+				s.Aborted = true
+				return nil
+			}
+			return fmt.Errorf("compatible platforms step: %w", err)
+		}
+		s.CompatiblePlatforms = selected
+	} else {
+		s.CompatiblePlatforms = nil
+	}
+	if err := ValidatePlatformSelection(s.Platform, s.CompatiblePlatforms); err != nil {
+		return fmt.Errorf("platform selection step: %w", err)
+	}
 
 	if s.Platform != "" && s.Platform != "none" {
 		platformVersionForm := huh.NewForm(
@@ -188,6 +221,59 @@ func RunInteractiveInit(s *InitFlowState) error {
 		}
 		return fmt.Errorf("managed scope step: %w", err)
 	}
+
+	if len(s.PackageClassifications) > 0 {
+		s.CurrentStep = StepPackageClassification
+		requiredLeafIDs := make([]string, 0, len(s.PackageClassifications))
+		ignoredIDs := make([]string, 0, len(s.PackageClassifications))
+		leafOptions := make([]huh.Option[string], 0, len(s.PackageClassifications))
+		ignoreOptions := make([]huh.Option[string], 0, len(s.PackageClassifications))
+		for _, classification := range s.PackageClassifications {
+			label := packageClassificationLabel(classification)
+			ignoreOptions = append(ignoreOptions, huh.NewOption(label, classification.ID))
+			if classification.Leaf {
+				leafOptions = append(leafOptions, huh.NewOption(label, classification.ID))
+			}
+			if classification.Leaf && classification.Role == state.RoleRequired {
+				requiredLeafIDs = append(requiredLeafIDs, classification.ID)
+			}
+			if classification.Role == state.RoleIgnored {
+				ignoredIDs = append(ignoredIDs, classification.ID)
+			}
+		}
+
+		fields := []huh.Field{
+			huh.NewNote().
+				Title("Package graph classification").
+				Description(buildPackageClassificationDescription(s)),
+		}
+		if len(leafOptions) > 0 {
+			fields = append(fields,
+				huh.NewMultiSelect[string]().
+					Title("Leaf packages to keep as required").
+					Description("Leaf nodes are packages nothing else in the discovered graph depends on. Selected leaves become required; unselected leaves fall back to transitive.").
+					Options(leafOptions...).
+					Value(&requiredLeafIDs),
+			)
+		}
+		fields = append(fields,
+			huh.NewMultiSelect[string]().
+				Title("Packages Lucy should ignore").
+				Description("Ignored packages remain visible in state, but Lucy will leave them outside managed sync.").
+				Options(ignoreOptions...).
+				Value(&ignoredIDs),
+		)
+
+		classificationForm := huh.NewForm(huh.NewGroup(fields...))
+		if err := classificationForm.Run(); err != nil {
+			if isUserAbort(err) {
+				s.Aborted = true
+				return nil
+			}
+			return fmt.Errorf("package classification step: %w", err)
+		}
+		applyTakeoverPackageSelections(s, requiredLeafIDs, ignoredIDs)
+	}
 	s.CurrentStep = StepReview
 
 	summary := buildSummary(s)
@@ -228,9 +314,12 @@ func buildSummary(s *InitFlowState) string {
 	_, _ = fmt.Fprintf(&sb, "Game version:    %s\n", s.GameVersion)
 
 	if s.Platform == "" || s.Platform == "none" {
-		sb.WriteString("Platform:        none (vanilla)\n")
+		sb.WriteString("Primary runtime: none (vanilla)\n")
 	} else {
-		_, _ = fmt.Fprintf(&sb, "Platform:        %s\n", s.Platform)
+		_, _ = fmt.Fprintf(&sb, "Primary runtime: %s\n", s.Platform)
+		if len(s.CompatiblePlatforms) > 0 {
+			_, _ = fmt.Fprintf(&sb, "Compatible with: %s\n", strings.Join(s.CompatiblePlatforms, ", "))
+		}
 		if s.PlatformVersion != "" {
 			_, _ = fmt.Fprintf(&sb, "Loader version:  %s\n", s.PlatformVersion)
 		} else {
@@ -258,6 +347,29 @@ func buildSummary(s *InitFlowState) string {
 			_, _ = fmt.Fprintf(&sb, "Detected pkgs:   %s\n", strings.Join(s.DiscoveredDefaults.DetectedPackages, ", "))
 		}
 	}
+	if len(s.PackageClassifications) > 0 {
+		var required, transitive, ignored []string
+		for _, classification := range s.PackageClassifications {
+			summary := fmt.Sprintf("%s (%s)", classification.ID, packageClassificationKind(classification))
+			switch classification.Role {
+			case state.RoleRequired:
+				required = append(required, summary)
+			case state.RoleIgnored:
+				ignored = append(ignored, summary)
+			default:
+				transitive = append(transitive, summary)
+			}
+		}
+		if len(required) > 0 {
+			_, _ = fmt.Fprintf(&sb, "Required pkgs:   %s\n", strings.Join(required, ", "))
+		}
+		if len(transitive) > 0 {
+			_, _ = fmt.Fprintf(&sb, "Transitive pkgs: %s\n", strings.Join(transitive, ", "))
+		}
+		if len(ignored) > 0 {
+			_, _ = fmt.Fprintf(&sb, "Ignored pkgs:    %s\n", strings.Join(ignored, ", "))
+		}
+	}
 
 	sb.WriteString("\nFiles to create:\n")
 	sb.WriteString("  .lucy/config.toml\n")
@@ -272,4 +384,45 @@ func isUserAbort(err error) bool {
 		return false
 	}
 	return errors.Is(err, huh.ErrUserAborted)
+}
+
+func compatiblePlatformLabel(platform string) string {
+	switch platform {
+	case "fabric":
+		return "Fabric compatibility – allow Fabric-targeted content through a bridge/runtime layer"
+	case "mcdr":
+		return "MCDR – independent controller/plugin framework"
+	case "sinytra":
+		return "Sinytra – NeoForge bridge layer for Fabric compatibility"
+	default:
+		return platform
+	}
+}
+
+func buildPackageClassificationDescription(s *InitFlowState) string {
+	if len(s.PackageClassifications) == 0 {
+		return "No discovered packages need classification."
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Lucy built a package graph from the current server before writing the manifest. Non-leaf nodes are shown as dependencies only; they do not get a separate persistent role.\n\n")
+	for _, classification := range s.PackageClassifications {
+		_, _ = fmt.Fprintf(&sb, "- %s\n", packageClassificationLabel(classification))
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func packageClassificationLabel(classification TakeoverPackageClassification) string {
+	label := fmt.Sprintf("[%s] %s@%s", packageClassificationKind(classification), classification.ID, classification.Version)
+	if len(classification.RequiredBy) > 0 {
+		label += fmt.Sprintf(" <- %s", strings.Join(classification.RequiredBy, ", "))
+	}
+	return label
+}
+
+func packageClassificationKind(classification TakeoverPackageClassification) string {
+	if classification.Leaf {
+		return "leaf"
+	}
+	return "dependency"
 }

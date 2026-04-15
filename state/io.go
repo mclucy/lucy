@@ -74,6 +74,7 @@ func ReadConfig(workDir string) (*Config, bool, error) {
 }
 
 // ReadManifest reads .lucy/manifest.toml from workDir if present.
+// Manifest is the intent layer, including fuzzy versions and compatible-platform hints.
 func ReadManifest(workDir string) (*Manifest, bool, error) {
 	path := filepath.Join(workDir, string(ManifestFile))
 	data, ok, err := SafeRead(path)
@@ -88,6 +89,7 @@ func ReadManifest(workDir string) (*Manifest, bool, error) {
 }
 
 // ReadLock reads .lucy/lock.json from workDir if present.
+// Lock is the exact fact layer for one resolved environment snapshot.
 func ReadLock(workDir string) (*Lock, bool, error) {
 	path := filepath.Join(workDir, string(LockFile))
 	data, ok, err := SafeRead(path)
@@ -115,6 +117,7 @@ func WriteConfig(workDir string, c *Config) error {
 }
 
 // WriteManifest writes .lucy/manifest.toml atomically.
+// It preserves fuzzy intent instead of rewriting it to exact lock facts.
 func WriteManifest(workDir string, m *Manifest) error {
 	data, err := SerializeManifest(m)
 	if err != nil {
@@ -128,6 +131,7 @@ func WriteManifest(workDir string, m *Manifest) error {
 }
 
 // WriteLock writes .lucy/lock.json atomically.
+// It persists exact resolved environment and package facts.
 func WriteLock(workDir string, l *Lock) error {
 	data, err := SerializeLock(l)
 	if err != nil {

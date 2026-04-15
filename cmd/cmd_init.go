@@ -19,8 +19,14 @@ const (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize Lucy on current directory",
-	Long: `Initialize a new Lucy-managed Minecraft server environment in the current
+	Long: `Initialize Lucy in the current
 directory. Creates .lucy/config.toml, .lucy/manifest.toml, and .lucy/lock.json.
+
+Init is optimized for taking over an existing server before it acts like a
+blank-slate scaffold. Takeover-class init must aggregate live observed server
+facts before it proposes desired intent, treat existing .lucy files as
+informative hints rather than silent authority, and require explicit operator
+confirmation before any persistent intent change is written.
 
 No files are written until you confirm at the final review step. Running init
 on an already-initialized directory is safe by default: existing files are
@@ -144,6 +150,7 @@ func writeInitResult(workDir string, s *lucyinit.InitFlowState) error {
 			return fmt.Errorf("write lock: %w", err)
 		}
 	}
+	lucyinit.RefreshObservedStateAfterInitWrites(workDir)
 
 	printInitSummary(result)
 	return nil

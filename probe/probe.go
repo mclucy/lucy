@@ -10,7 +10,9 @@
 package probe
 
 import (
+	"os"
 	"path"
+	"path/filepath"
 	"sync"
 
 	"github.com/mclucy/lucy/exttype"
@@ -77,6 +79,29 @@ func InvalidateServerInfo() {
 	serverInfoReady = false
 }
 
+// ServerInfoAt probes an explicit working directory without replacing the
+// current process-global ServerInfo cache. This is intended for init-style
+// takeover discovery where the caller may need rich observed state for a target
+// directory that is not the current process working directory.
+func ServerInfoAt(workDir string) types.ServerInfo {
+	serverInfoMu.Lock()
+	defer serverInfoMu.Unlock()
+
+	return buildServerInfoAtLocked(workDir, false)
+}
+
+// RefreshServerInfo refreshes probed state for workDir. When workDir matches
+// the current process working directory, this rebuilds the shared cache so
+// future ServerInfo() calls observe the new state. Otherwise it performs an ad
+// hoc reprobe and returns the refreshed observation without mutating the shared
+// cache.
+func RefreshServerInfo(workDir string) types.ServerInfo {
+	serverInfoMu.Lock()
+	defer serverInfoMu.Unlock()
+
+	return buildServerInfoAtLocked(workDir, true)
+}
+
 // DetectPackages analyzes a local artifact file and returns packages detected
 // from its embedded metadata.
 func DetectPackages(filePath string) []types.Package {
@@ -92,6 +117,63 @@ func resetProbeMemoizedStateLocked() {
 	installedPackages = tools.Memoize(buildInstalledPackages)
 	resetProbeExecCache()
 	resetProbeFileLockCache()
+}
+
+func buildServerInfoAtLocked(workDir string, persistWhenCurrent bool) types.ServerInfo {
+	target, err := filepath.Abs(workDir)
+	if err != nil {
+		return types.ServerInfo{}
+	}
+
+	originalWD, err := os.Getwd()
+	if err != nil {
+		return types.ServerInfo{}
+	}
+	originalTarget, err := filepath.Abs(originalWD)
+	if err != nil {
+		return types.ServerInfo{}
+	}
+
+	savedCache := serverInfoCache
+	savedReady := serverInfoReady
+	shouldRestoreCache := true
+	defer func() {
+		resetProbeMemoizedStateLocked()
+		if shouldRestoreCache {
+			serverInfoCache = savedCache
+			serverInfoReady = savedReady
+		}
+	}()
+
+	if err := os.Chdir(target); err != nil {
+		return types.ServerInfo{}
+	}
+	defer func() {
+		_ = os.Chdir(originalWD)
+	}()
+
+	resetProbeMemoizedStateLocked()
+	info := buildServerInfo()
+
+	if persistWhenCurrent && sameProbePath(target, originalTarget) {
+		serverInfoCache = info
+		serverInfoReady = true
+		shouldRestoreCache = false
+	}
+
+	return info
+}
+
+func sameProbePath(left, right string) bool {
+	leftEval, leftErr := filepath.EvalSymlinks(left)
+	if leftErr != nil {
+		leftEval = left
+	}
+	rightEval, rightErr := filepath.EvalSymlinks(right)
+	if rightErr != nil {
+		rightEval = right
+	}
+	return leftEval == rightEval
 }
 
 // buildServerInfo builds the server information by performing several checks

@@ -3,8 +3,15 @@
 // (--yes) fast path, and conflict-resolution semantics for partial .lucy/
 // directories.
 //
-// This file intentionally contains NO huh/bubbletea TUI code. The flow logic is pure and testable
-// without a terminal.
+// Init is takeover-first: its optimization target is adopting an existing
+// server directory safely, not treating the directory as a mostly blank slate.
+// For takeover-class init, Lucy must aggregate current server facts before it
+// proposes desired intent. Existing .lucy files remain informative context, but
+// they must not silently outrank newer observed reality. Persistent intent
+// changes still require explicit operator confirmation at review time.
+//
+// This file intentionally contains NO huh/bubbletea TUI code. The flow logic is
+// pure and testable without a terminal.
 package init
 
 import (
@@ -13,10 +20,66 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/state"
+	"github.com/mclucy/lucy/types"
 )
+
+// InitOptimizationGoal states what init is trying to optimize for.
+type InitOptimizationGoal string
+
+const (
+	// OptimizationGoalTakeoverExistingServer makes existing-server adoption the
+	// primary target. Init should prefer reconstructing the current environment
+	// over inventing a fresh one.
+	OptimizationGoalTakeoverExistingServer InitOptimizationGoal = "takeover_existing_server"
+)
+
+// InitDiscoveryMode distinguishes sequencing from behavior.
+type InitDiscoveryMode string
+
+const (
+	// DiscoveryFirst means discovery happens early in the sequence, but later
+	// steps may still ignore or overwrite discovered facts.
+	DiscoveryFirst InitDiscoveryMode = "discovery_first"
+
+	// DiscoveryLed means discovery shapes the proposal itself: observed facts are
+	// the primary input to takeover intent, existing .lucy files are hints unless
+	// re-confirmed, and the review step must surface any divergence before writes.
+	DiscoveryLed InitDiscoveryMode = "discovery_led"
+)
+
+// InitFactSource identifies which input layer contributed a proposed init fact.
+type InitFactSource string
+
+const (
+	// FactSourceObserved is live filesystem/probe truth from the current server.
+	FactSourceObserved InitFactSource = "observed"
+
+	// FactSourceUserConfirmed is an explicit operator confirmation or override.
+	// It does not remove the need to observe first; it is the confirmation gate
+	// before persistent desired state is written.
+	FactSourceUserConfirmed InitFactSource = "user_confirmed"
+
+	// FactSourceExistingLucy is inherited context from pre-existing .lucy files.
+	// It is informative for takeover, but never silently authoritative.
+	FactSourceExistingLucy InitFactSource = "existing_lucy"
+)
+
+// TakeoverFactPrecedence returns the contract order for takeover-class init
+// proposals. Testable rule: live observed state is primary, explicit operator
+// confirmation is the approval gate for persisting or overriding, and existing
+// .lucy state is the lowest-precedence hint layer.
+func TakeoverFactPrecedence() []InitFactSource {
+	return []InitFactSource{
+		FactSourceObserved,
+		FactSourceUserConfirmed,
+		FactSourceExistingLucy,
+	}
+}
 
 // Constants and types related to the init flow state machine, result construction,
 
@@ -32,7 +95,7 @@ const (
 	// "1.21.4"). This is the only mandatory question for a minimal init.
 	StepGameVersion InitStep = "game_version"
 
-	// StepPlatform asks which server platform to use.
+	// StepPlatform asks which primary server runtime to use.
 	// Valid values: "fabric", "neoforge", "forge", "mcdr", "none"
 	// "none" means vanilla or an as-yet-unknown platform.
 	StepPlatform InitStep = "platform"
@@ -49,6 +112,11 @@ const (
 	// Lucy should manage (e.g. mods/, plugins/, config/). The default list is
 	// taken from state.ConfigDefaults().Scope.ManagedRoots.
 	StepManagedScope InitStep = "managed_scope"
+
+	// StepPackageClassification lets the user review the detected package graph,
+	// distinguish leaf packages from graph-only dependencies, and classify them
+	// into the existing manifest roles without inventing a new persistent role.
+	StepPackageClassification InitStep = "package_classification"
 
 	// StepReview shows the user a complete summary of what will be written
 	// before any file I/O occurs. Confirmation here sets Confirmed = true.
@@ -67,6 +135,7 @@ var stepOrder = []InitStep{
 	StepPlatform,
 	StepPlatformVersion,
 	StepManagedScope,
+	StepPackageClassification,
 	StepReview,
 	StepDone,
 }
@@ -98,6 +167,13 @@ const (
 // through the init flow. It is passed by pointer through every step so that
 // both the interactive TUI and the non-interactive fast path share one model.
 type InitFlowState struct {
+	// OptimizationGoal declares the contract this init flow is aiming at.
+	OptimizationGoal InitOptimizationGoal
+
+	// DiscoveryMode documents whether init is only ordered discovery-first or is
+	// behaviorally discovery-led for takeover.
+	DiscoveryMode InitDiscoveryMode
+
 	// CurrentStep is the step the flow is currently on.
 	CurrentStep InitStep
 
@@ -112,10 +188,20 @@ type InitFlowState struct {
 	// Empty when Platform == "none" or when the user skips the step.
 	PlatformVersion string
 
+	// CompatiblePlatforms are extra compatible ecosystems/controller layers that
+	// can coexist with the primary runtime. Example: neoforge + fabric + sinytra + mcdr.
+	CompatiblePlatforms []string
+
 	// ManagedRoots is the list of relative directory paths Lucy will manage.
 	// Populated from config defaults on construction; the user may edit it in
 	// StepManagedScope.
 	ManagedRoots []string
+
+	// PackageClassifications is the in-session takeover graph classification.
+	// It surfaces all discovered packages, marks whether each package is a leaf
+	// or a dependency node, and maps operator choices onto the existing manifest
+	// roles: required, transitive, or ignored.
+	PackageClassifications []TakeoverPackageClassification
 
 	// SourcePriority is the ordered list of package sources.
 	// Populated from config defaults on construction; the user may reorder in
@@ -123,7 +209,8 @@ type InitFlowState struct {
 	SourcePriority []string
 
 	// Confirmed is true only after the user explicitly approves the summary at
-	// StepReview. No file I/O must occur before this is true.
+	// StepReview. No file I/O or persistent intent mutation must occur before
+	// this is true.
 	Confirmed bool
 
 	// Aborted is true if the user cancelled the flow before StepReview +
@@ -142,8 +229,10 @@ type InitFlowState struct {
 	// Default: PreserveExisting.
 	ConflictResolution ConflictMode
 
-	// DiscoveredDefaults stores lightweight server-directory guesses that init
-	// can use as scaffolding defaults before any file is written.
+	// DiscoveredDefaults stores takeover inputs that init will use to propose a
+	// starting intent before any file is written. Under the takeover-first
+	// contract, these defaults should come from live observation first and only
+	// fall back to existing .lucy hints when observation is missing.
 	DiscoveredDefaults DiscoveredDefaults
 
 	// workDir is the project root checked during construction.
@@ -158,6 +247,8 @@ func NewInitFlowState(workDir string) *InitFlowState {
 	discovered := DiscoverServerDefaults(workDir)
 
 	s := &InitFlowState{
+		OptimizationGoal:   OptimizationGoalTakeoverExistingServer,
+		DiscoveryMode:      DiscoveryLed,
 		CurrentStep:        StepWelcome,
 		SourcePriority:     defaults.Sources.Priority,
 		ConflictResolution: PreserveExisting,
@@ -201,17 +292,22 @@ func NewInitFlowState(workDir string) *InitFlowState {
 		if err != nil {
 			s.ExistingStateConflicts = append(s.ExistingStateConflicts, formatExistingStateConflict(state.ManifestFile, err))
 		} else if manifest != nil {
-			if strings.TrimSpace(manifest.Environment.GameVersion) != "" {
+			if strings.TrimSpace(s.GameVersion) == "" && strings.TrimSpace(manifest.Environment.GameVersion) != "" {
 				s.GameVersion = strings.TrimSpace(manifest.Environment.GameVersion)
 			}
-			if strings.TrimSpace(manifest.Environment.Platform) != "" {
+			if strings.TrimSpace(s.Platform) == "" && strings.TrimSpace(manifest.Environment.Platform) != "" {
 				s.Platform = strings.TrimSpace(manifest.Environment.Platform)
 			}
-			if strings.TrimSpace(manifest.Environment.PlatformVersion) != "" {
+			if strings.TrimSpace(s.PlatformVersion) == "" && strings.TrimSpace(manifest.Environment.PlatformVersion) != "" {
 				s.PlatformVersion = strings.TrimSpace(manifest.Environment.PlatformVersion)
 			}
+			if len(s.CompatiblePlatforms) == 0 && len(manifest.Environment.CompatiblePlatforms) > 0 {
+				s.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
+			}
 			if len(manifest.Policy.ManagedRoots) > 0 {
-				s.ManagedRoots = append([]string(nil), manifest.Policy.ManagedRoots...)
+				if len(s.ManagedRoots) == 0 {
+					s.ManagedRoots = append([]string(nil), manifest.Policy.ManagedRoots...)
+				}
 			}
 		}
 	}
@@ -236,6 +332,13 @@ func containsExistingFile(files []string, want string) (int, bool) {
 
 func formatExistingStateConflict(file state.StateFile, err error) string {
 	return fmt.Sprintf("%s exists but could not be preserved safely: %v", file, err)
+}
+
+// RefreshObservedStateAfterInitWrites refreshes probe state for the initialized
+// directory so any subsequent takeover/status reads see post-init filesystem
+// reality rather than stale memoized observations.
+func RefreshObservedStateAfterInitWrites(workDir string) {
+	probe.RefreshServerInfo(workDir)
 }
 
 // Step machine logic
@@ -275,8 +378,174 @@ func shouldSkip(s *InitFlowState, step InitStep) bool {
 	case StepPlatformVersion:
 		// Skip if no platform was selected or platform is vanilla/none.
 		return s.Platform == "" || s.Platform == "none"
+	case StepPackageClassification:
+		return len(s.PackageClassifications) == 0
 	}
 	return false
+}
+
+type TakeoverPackageClassification struct {
+	ID         string
+	Version    string
+	Source     string
+	Role       state.ManifestRole
+	Side       state.ManifestSide
+	Optional   bool
+	Pinned     bool
+	Leaf       bool
+	Requires   []string
+	RequiredBy []string
+}
+
+func BuildTakeoverPackageClassifications(packages []types.Package) []TakeoverPackageClassification {
+	classifications := make(map[string]TakeoverPackageClassification, len(packages))
+	nameIndex := make(map[string][]string)
+
+	for _, pkg := range packages {
+		id := pkg.Id.StringPlatformName()
+		if !takeoverPackageIDAllowed(pkg.Id) {
+			continue
+		}
+		classifications[id] = TakeoverPackageClassification{
+			ID:      id,
+			Version: takeoverManifestVersion(pkg.Id.Version),
+			Source:  takeoverManifestSource(pkg.Remote),
+			Role:    state.RoleTransitive,
+			Side:    state.SideUnknown,
+		}
+		name := strings.TrimSpace(pkg.Id.Name.String())
+		nameIndex[name] = append(nameIndex[name], id)
+	}
+
+	for name := range nameIndex {
+		sort.Strings(nameIndex[name])
+	}
+
+	for _, pkg := range packages {
+		fromID := pkg.Id.StringPlatformName()
+		classification, ok := classifications[fromID]
+		if !ok {
+			continue
+		}
+		for _, depID := range resolveTakeoverDependencyTargets(pkg, classifications, nameIndex) {
+			classification.Requires = appendUniqueStrings(classification.Requires, depID)
+			dep := classifications[depID]
+			dep.RequiredBy = appendUniqueStrings(dep.RequiredBy, fromID)
+			classifications[depID] = dep
+		}
+		classifications[fromID] = classification
+	}
+
+	result := make([]TakeoverPackageClassification, 0, len(classifications))
+	for _, classification := range classifications {
+		sort.Strings(classification.Requires)
+		sort.Strings(classification.RequiredBy)
+		classification.Leaf = len(classification.RequiredBy) == 0
+		if classification.Leaf {
+			classification.Role = state.RoleRequired
+		}
+		result = append(result, classification)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ID < result[j].ID
+	})
+	return result
+}
+
+func takeoverPackageIDAllowed(id types.PackageId) bool {
+	if strings.TrimSpace(id.Name.String()) == "" {
+		return false
+	}
+	if !id.Platform.Valid() || id.Platform == types.PlatformAny || id.Platform == types.PlatformUnknown || id.Platform == types.PlatformMinecraft {
+		return false
+	}
+	return true
+}
+
+func resolveTakeoverDependencyTargets(pkg types.Package, classifications map[string]TakeoverPackageClassification, nameIndex map[string][]string) []string {
+	if pkg.Dependencies == nil {
+		return nil
+	}
+
+	targets := make([]string, 0, len(pkg.Dependencies.Value))
+	for _, dep := range pkg.Dependencies.Value {
+		if dep.Embedded {
+			continue
+		}
+		depID := dep.Id.StringPlatformName()
+		if _, ok := classifications[depID]; ok {
+			targets = appendUniqueStrings(targets, depID)
+			continue
+		}
+		if dep.Id.Platform == types.PlatformAny || dep.Id.Platform == types.PlatformUnknown {
+			matches := nameIndex[strings.TrimSpace(dep.Id.Name.String())]
+			if len(matches) == 1 {
+				targets = appendUniqueStrings(targets, matches[0])
+			}
+		}
+	}
+	return targets
+}
+
+func takeoverManifestVersion(version types.RawVersion) string {
+	return state.NormalizeManifestVersionIntent(version)
+}
+
+func takeoverManifestSource(remote *types.PackageRemote) string {
+	if remote == nil {
+		return "auto"
+	}
+	source := strings.TrimSpace(remote.Source.String())
+	if source == "" || source == "unknown" {
+		return "auto"
+	}
+	return source
+}
+
+func appendUniqueStrings(existing []string, values ...string) []string {
+	seen := make(map[string]struct{}, len(existing))
+	for _, value := range existing {
+		seen[value] = struct{}{}
+	}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		existing = append(existing, value)
+		seen[value] = struct{}{}
+	}
+	return existing
+}
+
+func applyTakeoverPackageSelections(s *InitFlowState, requiredLeafIDs, ignoredIDs []string) {
+	requiredSet := make(map[string]struct{}, len(requiredLeafIDs))
+	ignoredSet := make(map[string]struct{}, len(ignoredIDs))
+	for _, id := range requiredLeafIDs {
+		requiredSet[id] = struct{}{}
+	}
+	for _, id := range ignoredIDs {
+		ignoredSet[id] = struct{}{}
+	}
+	for i := range s.PackageClassifications {
+		classification := &s.PackageClassifications[i]
+		if _, ignored := ignoredSet[classification.ID]; ignored {
+			classification.Role = state.RoleIgnored
+			continue
+		}
+		if classification.Leaf {
+			if _, required := requiredSet[classification.ID]; required {
+				classification.Role = state.RoleRequired
+			} else {
+				classification.Role = state.RoleTransitive
+			}
+			continue
+		}
+		classification.Role = state.RoleTransitive
+	}
 }
 
 // CanProceed reports whether enough information has been collected to write
@@ -284,15 +553,26 @@ func shouldSkip(s *InitFlowState, step InitStep) bool {
 // decision on ManagedRoots.
 //
 // CanProceed does NOT check Confirmed; callers must also verify that before
-// performing any I/O.
+// performing any I/O. This preserves the takeover contract distinction between
+// discovery-led proposal building and explicit user-approved persistence.
 func CanProceed(s *InitFlowState) bool {
 	if s.GameVersion == "" {
+		return false
+	}
+	if err := ValidatePlatformSelection(s.Platform, s.CompatiblePlatforms); err != nil {
 		return false
 	}
 	if len(s.ManagedRoots) == 0 {
 		return false
 	}
 	return true
+}
+
+func ValidatePlatformSelection(primary string, compatible []string) error {
+	return state.ValidateManifestEnvironment(state.ManifestEnvironment{
+		Platform:            primary,
+		CompatiblePlatforms: compatible,
+	})
 }
 
 // Types for the final result of the flow and error conditions during result construction.
@@ -385,7 +665,9 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		mf.Environment.GameVersion = s.GameVersion
 		mf.Environment.Platform = s.Platform
 		mf.Environment.PlatformVersion = s.PlatformVersion
+		mf.Environment.CompatiblePlatforms = append([]string(nil), s.CompatiblePlatforms...)
 		mf.Policy.ManagedRoots = s.ManagedRoots
+		mf.Packages = state.ManifestPackagesFromClassified(classifiedPackagesForManifest(s.PackageClassifications))
 		result.ManifestToWrite = &mf
 		result.WrittenFiles = append(result.WrittenFiles, mfPath)
 	} else {
@@ -412,6 +694,22 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 	}
 
 	return result, nil
+}
+
+func classifiedPackagesForManifest(classifications []TakeoverPackageClassification) []state.ClassifiedPackage {
+	packages := make([]state.ClassifiedPackage, 0, len(classifications))
+	for _, classification := range classifications {
+		packages = append(packages, state.ClassifiedPackage{
+			ID:       classification.ID,
+			Version:  classification.Version,
+			Source:   classification.Source,
+			Role:     classification.Role,
+			Side:     classification.Side,
+			Optional: classification.Optional,
+			Pinned:   classification.Pinned,
+		})
+	}
+	return packages
 }
 
 // Errors for flow validation and conflict detection.

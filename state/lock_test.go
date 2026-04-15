@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -225,5 +226,81 @@ func TestValidateLockIgnoresObservedOnlyFieldsAtStructBoundary(t *testing.T) {
 	}
 	if len(decoded.Packages) != 0 {
 		t.Fatalf("expected no packages in invalid fixture decode, got %d", len(decoded.Packages))
+	}
+}
+
+func TestValidateLockRejectsFuzzyVersions(t *testing.T) {
+	tests := []string{
+		"latest",
+		"compatible",
+		">=0.12.0 <0.13.0",
+		"^1.2.3",
+		"1.2.x",
+	}
+
+	for _, version := range tests {
+		t.Run(version, func(t *testing.T) {
+			lock := Lock{
+				Version:             "v1",
+				GeneratedAt:         "2026-04-15T12:34:56Z",
+				ManifestFingerprint: "sha256:manifest",
+				GameVersion:         "1.21.1",
+				Platform:            "fabric",
+				PlatformVersion:     "0.16.10",
+				Packages: []LockedPackage{{
+					ID:            "fabric/lithium",
+					Version:       version,
+					Source:        "modrinth",
+					URL:           "https://example.invalid/lithium.jar",
+					Filename:      "lithium.jar",
+					Hash:          "hash",
+					HashAlgorithm: "sha512",
+					InstallPath:   "mods/lithium.jar",
+					Side:          "server",
+					Provenance:    []string{"root"},
+					Requester:     "root",
+				}},
+			}
+
+			err := ValidateLock(lock)
+			if err == nil {
+				t.Fatalf("expected fuzzy lock version %q to be rejected", version)
+			}
+			if !strings.Contains(err.Error(), "version must be exact") {
+				t.Fatalf("expected exact-version error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateLockRejectsNonExactPackageIdentityFacts(t *testing.T) {
+	lock := Lock{
+		Version:             "v1",
+		GeneratedAt:         "2026-04-15T12:34:56Z",
+		ManifestFingerprint: "sha256:manifest",
+		GameVersion:         "1.21.1",
+		Platform:            "fabric",
+		PlatformVersion:     "0.16.10",
+		Packages: []LockedPackage{{
+			ID:            "lithium",
+			Version:       "0.12.7+mc1.21.1",
+			Source:        "modrinth",
+			URL:           "https://example.invalid/lithium.jar",
+			Filename:      "lithium.jar",
+			Hash:          "hash",
+			HashAlgorithm: "sha512",
+			InstallPath:   "mods/lithium.jar",
+			Side:          "server",
+			Provenance:    []string{"root"},
+			Requester:     "root",
+		}},
+	}
+
+	err := ValidateLock(lock)
+	if err == nil {
+		t.Fatal("expected lock validation to reject package ids without exact platform facts")
+	}
+	if !strings.Contains(err.Error(), "platform/name format") {
+		t.Fatalf("expected exact package identity error, got %v", err)
 	}
 }

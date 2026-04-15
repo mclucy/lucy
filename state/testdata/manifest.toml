@@ -3,8 +3,9 @@ version = "v1"
 
 [environment]
 game_version = "1.21.1"
-platform = "fabric"
-platform_version = "0.16.10"
+platform = "neoforge"
+platform_version = "21.1.0"
+compatible_platforms = ["fabric", "mcdr", "sinytra"]
 
 [sources]
 [[sources.custom]]
@@ -22,17 +23,19 @@ managed_roots = ["mods", "plugins", "config"]
 unmanaged_paths = ["world/**", "logs/**"]
 
 [[packages]]
-id = "fabric/fabric-api"
+id = "neoforge/connector"
 version = "compatible"
 source = "modrinth"
+role = "required"
 side = "both"
 optional = false
 pinned = false
 
 [[packages]]
-id = "fabric/lithium"
+id = "neoforge/lithium"
 version = "latest"
 source = "github"
+role = "transitive"
 side = "server"
 optional = true
 pinned = true

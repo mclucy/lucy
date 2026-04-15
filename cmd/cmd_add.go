@@ -100,8 +100,8 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if err := updateAddLockfile(workDir, stateSvc, result); err != nil {
-		return fmt.Errorf("update lock: %w", err)
+	if err := updateAddState(workDir, stateSvc, ids, result); err != nil {
+		return fmt.Errorf("update state: %w", err)
 	}
 
 	return nil
@@ -134,20 +134,34 @@ func presenceLabel(name string, present bool) string {
 	return name + " absent"
 }
 
-func updateAddLockfile(workDir string, stateSvc *state.ProjectStateService, result *install.Result) error {
+func updateAddState(workDir string, stateSvc *state.ProjectStateService, ids []types.PackageId, result *install.Result) error {
 	if stateSvc == nil || result == nil || len(result.Installed) == 0 {
 		return nil
 	}
 
-	lock := buildUpdatedLock(workDir, stateSvc, result)
+	manifestIntent := buildUpdatedManifest(stateSvc.Manifest(), ids)
+	lock := buildUpdatedLock(workDir, manifestIntent, stateSvc.Lock(), result)
+	manifest := state.UpdateManifestRolesForAdd(stateSvc.Manifest(), ids, lock)
+	if err := state.WriteManifest(workDir, manifest); err != nil {
+		return err
+	}
+
+	lock = buildUpdatedLock(workDir, manifest, stateSvc.Lock(), result)
 	return state.WriteLock(workDir, lock)
 }
 
-func buildUpdatedLock(workDir string, stateSvc *state.ProjectStateService, result *install.Result) *state.Lock {
+func buildUpdatedManifest(existing *state.Manifest, ids []types.PackageId) *state.Manifest {
+	manifest := existing
+	for _, id := range ids {
+		manifest = state.UpsertManifestRequiredIntent(manifest, id, types.SourceAuto.String())
+	}
+	return manifest
+}
+
+func buildUpdatedLock(workDir string, manifest *state.Manifest, existing *state.Lock, result *install.Result) *state.Lock {
 	var lock state.Lock
-	if existing := stateSvc.Lock(); existing != nil {
+	if existing != nil {
 		lock = *existing
-		lock.Packages = append([]state.LockedPackage(nil), existing.Packages...)
 		lock.Bundles = append([]state.LockedBundle(nil), existing.Bundles...)
 	} else {
 		lock = state.NewLock()
@@ -155,15 +169,17 @@ func buildUpdatedLock(workDir string, stateSvc *state.ProjectStateService, resul
 
 	runtime := probe.ServerInfo().Runtime
 	lock.GeneratedAt = state.NewLock().GeneratedAt
-	lock.ManifestFingerprint = manifestFingerprint(stateSvc.Manifest(), lock.ManifestFingerprint)
-	lock.GameVersion = manifestGameVersion(stateSvc.Manifest(), runtime, lock.GameVersion)
-	lock.Platform = manifestPlatform(stateSvc.Manifest(), runtime, lock.Platform)
-	lock.PlatformVersion = manifestPlatformVersion(stateSvc.Manifest(), runtime, lock.PlatformVersion)
+	lock.ManifestFingerprint = manifestFingerprint(manifest, lock.ManifestFingerprint)
+	lock.GameVersion = manifestGameVersion(manifest, runtime, lock.GameVersion)
+	lock.Platform = manifestPlatform(manifest, runtime, lock.Platform)
+	lock.PlatformVersion = manifestPlatformVersion(manifest, runtime, lock.PlatformVersion)
 
+	packages := make([]state.LockedPackage, 0, len(result.Installed))
 	for _, pkg := range result.Installed {
 		locked := lockedPackageFromInstalled(workDir, pkg, result.Provenance[pkg.Id.StringPlatformName()])
-		upsertLockedPackage(&lock, locked)
+		packages = append(packages, locked)
 	}
+	lock.Packages = state.CanonicalLockedPackages(packages)
 
 	return &lock
 }
@@ -290,14 +306,4 @@ func normalizedProvenance(provenance []string) []string {
 		return []string{"root"}
 	}
 	return append([]string(nil), provenance...)
-}
-
-func upsertLockedPackage(lock *state.Lock, pkg state.LockedPackage) {
-	for i := range lock.Packages {
-		if lock.Packages[i].ID == pkg.ID {
-			lock.Packages[i] = pkg
-			return
-		}
-	}
-	lock.Packages = append(lock.Packages, pkg)
 }
