@@ -175,25 +175,11 @@ var defaultRegistryEntries = []RegistryEntry{
 		Role:             types.RuntimeRoleBridge,
 		IdentityPlatform: types.PlatformAny,
 		RiskLevel:        types.RiskHigh,
-		PolicyEdges: []RegistryEdge{
-			{
-				TargetNodeID: RuntimeNodeFabric,
-				Kind:         types.EdgeBridges,
-				Risk:         types.RiskHigh,
-			},
-		},
 	},
 	{
 		NodeID:           RuntimeNodeKilt,
 		Role:             types.RuntimeRoleBridge,
 		IdentityPlatform: types.PlatformAny,
 		RiskLevel:        types.RiskHigh,
-		PolicyEdges: []RegistryEdge{
-			{
-				TargetNodeID: RuntimeNodeForge,
-				Kind:         types.EdgeBridges,
-				Risk:         types.RiskHigh,
-			},
-		},
 	},
 }

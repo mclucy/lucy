@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	internaltopology "github.com/mclucy/lucy/probe/internal/topology"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -91,6 +92,7 @@ func EnrichTopologyFromPackages(
 			mergeTopology(exec.Topology, annotation)
 		}
 
+		applyDeclarativeConnections(exec.Topology, internaltopology.DefaultConnectionRegistry)
 		NormalizeTopology(exec.Topology)
 		return
 	}
@@ -127,7 +129,73 @@ func EnrichTopologyFromPackages(
 		mergeTopology(exec.Topology, annotation)
 	}
 
+	applyDeclarativeConnections(exec.Topology, internaltopology.DefaultConnectionRegistry)
 	NormalizeTopology(exec.Topology)
+}
+
+func applyDeclarativeConnections(
+	t *types.RuntimeTopology,
+	registry internaltopology.ConnectionRegistry,
+) {
+	if t == nil {
+		return
+	}
+
+	seenNodes := make(map[types.RuntimeNodeID]struct{}, len(t.Nodes))
+	queue := make([]types.RuntimeNode, 0, len(t.Nodes))
+	for _, node := range t.Nodes {
+		if _, seen := seenNodes[node.ID]; seen {
+			continue
+		}
+		seenNodes[node.ID] = struct{}{}
+		queue = append(queue, node)
+	}
+
+	seenEdges := make(map[types.RuntimeEdge]struct{}, len(t.Edges))
+	for _, edge := range t.Edges {
+		seenEdges[edge] = struct{}{}
+	}
+
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+
+		definitions := registry.LookupByNodeID(node.ID)
+		for _, capability := range node.Capabilities {
+			definitions = append(definitions, registry.LookupByCapability(capability)...)
+		}
+
+		for _, definition := range definitions {
+			edge := definition.EdgeFrom(node.ID)
+			if _, seen := seenEdges[edge]; seen {
+				continue
+			}
+
+			if _, exists := seenNodes[definition.TargetNodeID]; !exists {
+				entry, ok := FindEntry(definition.TargetNodeID)
+				if !ok {
+					continue
+				}
+
+				targetNode := types.RuntimeNode{
+					ID:               entry.NodeID,
+					Role:             entry.Role,
+					IdentityPlatform: entry.IdentityPlatform,
+					Capabilities: append(
+						[]types.RuntimeCapability(nil),
+						entry.Capabilities...,
+					),
+					RiskLevel: entry.RiskLevel,
+				}
+				t.Nodes = append(t.Nodes, targetNode)
+				seenNodes[targetNode.ID] = struct{}{}
+				queue = append(queue, targetNode)
+			}
+
+			t.Edges = append(t.Edges, edge)
+			seenEdges[edge] = struct{}{}
+		}
+	}
 }
 
 func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {

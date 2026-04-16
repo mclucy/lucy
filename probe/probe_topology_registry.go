@@ -1,8 +1,7 @@
 package probe
 
 import (
-	"sort"
-
+	internaltopology "github.com/mclucy/lucy/probe/internal/topology"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -126,25 +125,16 @@ func BuildTopologyFromEntry(entry RegistryEntry) *types.RuntimeTopology {
 		seenNode[policyEdge.TargetNodeID] = struct{}{}
 	}
 
-	sort.Slice(nodes, func(i, j int) bool {
-		return string(nodes[i].ID) < string(nodes[j].ID)
-	})
-
-	sort.Slice(edges, func(i, j int) bool {
-		if edges[i].From != edges[j].From {
-			return string(edges[i].From) < string(edges[j].From)
-		}
-		if edges[i].To != edges[j].To {
-			return string(edges[i].To) < string(edges[j].To)
-		}
-		return string(edges[i].Kind) < string(edges[j].Kind)
-	})
-
-	return &types.RuntimeTopology{
+	topology := &types.RuntimeTopology{
 		PrimaryNode: entry.NodeID,
 		Nodes:       nodes,
 		Edges:       edges,
 	}
+
+	applyDeclarativeConnections(topology, internaltopology.DefaultConnectionRegistry)
+	NormalizeTopology(topology)
+
+	return topology
 }
 
 func cloneEntry(entry RegistryEntry) RegistryEntry {
