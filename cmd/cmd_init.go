@@ -18,19 +18,22 @@ const (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize Lucy on current directory",
+	Short: "Take over the current server into Lucy state",
 	Long: `Initialize Lucy in the current
 directory. Creates .lucy/config.toml, .lucy/manifest.toml, and .lucy/lock.json.
 
-Init is optimized for taking over an existing server before it acts like a
-blank-slate scaffold. Takeover-class init must aggregate live observed server
-facts before it proposes desired intent, treat existing .lucy files as
-informative hints rather than silent authority, and require explicit operator
-confirmation before any persistent intent change is written.
+Init is optimized for taking over an existing server before it behaves like a
+blank-slate scaffold. Lucy inspects the live server first, records a soft
+manifest intent from those facts, and writes an exact lockfile for the resolved
+managed state.
 
-No files are written until you confirm at the final review step. Running init
-on an already-initialized directory is safe by default: existing files are
-preserved unless you specify --conflict=overwrite.`,
+No files are written until you confirm at the final review step. Existing Lucy
+state is preserved by default, and takeover-style init will show you what is
+already on disk before you decide what Lucy should manage.
+
+Version hints are fuzzy by design: omit a version to mean "compatible", use
+@latest to ask for the newest release, or keep the inferred runtime version
+when you want Lucy to match the current environment.`,
 	RunE: runWithErrorLogging(actionInit),
 }
 

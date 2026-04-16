@@ -10,7 +10,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "lucy",
-	Short:         "The Minecraft server-side package manager",
+	Short:         "The takeover-first Minecraft server package manager",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

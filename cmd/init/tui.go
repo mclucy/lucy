@@ -22,8 +22,8 @@ func RunInteractiveInit(s *InitFlowState) error {
 					"lucy init sets up a new Lucy-managed Minecraft server environment in the\n"+
 						"current directory. It will create the following files:\n\n"+
 						"  .lucy/config.toml   – policy and source defaults\n"+
-						"  .lucy/manifest.toml – environment intent (game version, runtime, compatible platforms, mods)\n"+
-						"  .lucy/lock.json     – resolved dependency graph\n\n"+
+						"  .lucy/manifest.toml – soft environment intent (game version, runtime, compatible platforms, mods)\n"+
+						"  .lucy/lock.json     – exact resolved facts (versions, hashes, paths, provenance)\n\n"+
 						"No files will be written until you confirm at the final review step.",
 				),
 			huh.NewConfirm().
@@ -473,7 +473,7 @@ func compatiblePlatformLabel(platform string) string {
 	case "fabric":
 		return "Fabric compatibility – allow Fabric-targeted content through a bridge/runtime layer"
 	case "mcdr":
-		return "MCDR – independent controller/plugin framework"
+		return "MCDR – independent controller / plugin framework"
 	case "sinytra":
 		return "Sinytra – NeoForge bridge layer for Fabric compatibility"
 	default:

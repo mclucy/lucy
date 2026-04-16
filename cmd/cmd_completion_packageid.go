@@ -42,6 +42,10 @@ func CompletePackageIDSuggestions(ctx context.Context, commandName string, token
 		candidates := FilterByPrefix(StaticPlatformCandidates(), token)
 		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
 	}
+	if segment == "version" {
+		candidates := FilterByPrefix(StaticVersionCandidates(), version)
+		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+	}
 
 	request := PackageIDSuggestionContext{
 		Command:  commandName,

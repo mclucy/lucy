@@ -47,7 +47,15 @@ func StaticPlatformCandidates() []CompletionCandidate {
 		{Value: types.PlatformFabric.String(), Description: "Fabric mods"},
 		{Value: types.PlatformForge.String(), Description: "Forge mods"},
 		{Value: types.PlatformNeoforge.String(), Description: "NeoForge mods"},
-		{Value: types.PlatformMCDR.String(), Description: "MCDR plugins"},
+		{Value: types.PlatformMCDR.String(), Description: "MCDR controller / plugin framework"},
+	}
+}
+
+// StaticVersionCandidates returns completion candidates for fuzzy version hints.
+func StaticVersionCandidates() []CompletionCandidate {
+	return []CompletionCandidate{
+		{Value: types.VersionCompatible.String(), Description: "Use the latest compatible version"},
+		{Value: "latest", Description: "Use the newest available version"},
 	}
 }
 

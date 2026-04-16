@@ -43,7 +43,7 @@
 
 ## Overview
 
-`lucy` is a server-aware environment manager for Minecraft servers. It helps you inspect an existing server, understand what is actually installed, and decide what part of that environment you want `lucy` to manage. It handles dependency resolution, version tracking, source routing, environment probing, and risk-aware visibility through a unified CLI.
+`lucy` is a server-aware environment manager for Minecraft servers. It starts by taking over the server you already run, inspects what is actually installed, and then lets you decide what `lucy` should manage. It separates soft manifest intent from exact lockfile facts, handles dependency resolution, version tracking, source routing, environment probing, and keeps the workflow explicit through a unified CLI.
 
 If you've used `apt`, `brew`, or `npm`, some commands will feel familiar. The difference is that `lucy` starts from the server you already run. It does not assume a blank slate, and it does not require you to give up manual control over everything. It is meant to help server administrators get a messy real-world environment under control, one step at a time.
 
@@ -55,7 +55,7 @@ If you've used `apt`, `brew`, or `npm`, some commands will feel familiar. The di
 - Package access from Modrinth, CurseForge, MCDR Plugin Catalog, and more...
 - Discovery-led server probing and environment inference
 - Take over an existing server before trying to reshape it
-- Keep track of what `lucy` manages without claiming the whole server
+- Keep manifest intent soft while recording exact lockfile facts
 - Topology-aware status reporting and risk surfacing
 - Non-intrusive design, all operations are independent of server runtime
 - Shell completion for bash, zsh, fish, and pwsh
@@ -78,13 +78,15 @@ go install github.com/mclucy/lucy@latest
 ```bash
 mkdir my-server && cd my-server
 lucy init
-lucy add fabric@latest
-lucy add fabric/lithium@compatible
+lucy add fabric-api
+lucy add fabric/lithium@latest
+lucy remove fabric/lithium
+lucy install
 lucy status
 java -jar fabric-server.jar
 ```
 
-`lucy init` starts by looking at the current directory. If you point it at an existing server, it should help you understand what is already there before you decide what `lucy` should manage.
+`lucy init` starts by looking at the current directory. If you point it at an existing server, it takes over from live facts first, then asks what should become managed intent.
 
 ---
 
@@ -104,11 +106,37 @@ lucy init --conflict abort
 
 `lucy init` creates `.lucy/config.toml`, `.lucy/manifest.toml`, and `.lucy/lock.json`.
 
-For an existing server, `lucy init` should behave like a takeover flow: discover runtime and package facts first, then let you decide what `lucy` should keep in sync and what should stay outside its scope.
+For an existing server, `lucy init` behaves like a takeover flow: discover runtime and package facts first, then let you decide what `lucy` should keep in sync and what should stay outside its scope.
 
 - `-y`, `--yes`: Skip prompts and accept defaults
 - `--game-version`: Set the game version for non-interactive init
 - `-c`, `--conflict`: Choose `preserve`, `abort`, or `overwrite` for existing `.lucy` files
+
+### `add` - Add packages
+
+Add mods, plugins, or server cores to manifest intent. `lucy add` resolves dependencies, accepts fuzzy versions, and refreshes the lockfile with exact resolved facts.
+
+```bash
+lucy add fabric-api
+lucy add fabric/lithium@latest
+lucy add mcdr/example-plugin@compatible
+```
+
+### `remove` - Remove packages
+
+Remove packages from required intent and prune no-longer-needed transitive dependencies from the lock.
+
+```bash
+lucy remove fabric/lithium
+```
+
+### `install` - Sync managed runtime state
+
+Apply the lockfile to the managed runtime scope. `lucy install` uses exact lockfile facts when they are current, and falls back to required intent if the lock is stale.
+
+```bash
+lucy install
+```
 
 ### `search` - Find packages
 
@@ -123,17 +151,6 @@ lucy search carpet --source modrinth --index downloads
 - `-c`, `--client`: Include client-only mods
 - `-s`, `--source`: Restrict to a specific source (e.g., `modrinth`)
 - `-l`, `--long`: Show hidden or collapsed output
-
-### `add` - Install packages
-
-Add mods, plugins, or server cores. `lucy` resolves dependencies, verifies platform compatibility, and updates the local environment with minimal intrusion. Over time, `add` is meant to become part of how `lucy` records and maintains managed intent, not just how it drops files into a folder.
-
-```bash
-lucy add fabric/fabric-api@latest
-lucy add neoforge/create --force
-```
-
-<!-- TODO: Add screenshot -->
 
 ### `status` - Server environment overview
 
@@ -186,7 +203,9 @@ lucy cache clear
 
 A **platform** is the compatibility or runtime surface a package targets, such as Fabric, Forge, NeoForge, MCDR, or vanilla Minecraft. A **project** is a piece of software like a mod, plugin, or server-side extension. A **package** is a compiled, ready-to-use instance of a project with a specific platform and version — the thing you actually install. Together, these packages form the local server environment that `lucy` inspects, adopts, audits, and manages.
 
-Not every platform plays the same role. For example, MCDR is an independent plugin framework that manages Minecraft servers from the outside; it is not a Bukkit-derived plugin layer.
+Not every platform plays the same role. For example, MCDR is an independent controller/plugin framework for managing Minecraft servers from the outside; it is not a Bukkit-derived plugin layer.
+
+Managed intent lives in `.lucy/manifest.toml`. Exact resolved facts live in `.lucy/lock.json` and include versions, hashes, install paths, and provenance for the managed closure.
 
 ### Package Identifiers
 
@@ -198,9 +217,13 @@ fabric/fabric-api@1.2.3
 platform  name   version
 ```
 
-All parts are optional except the project name. If you omit the platform, `lucy` infers it from the environment. The project is the name or ID of the mod/plugin. The version can be specific, `@latest`, or `@compatible` (default).
+All parts are optional except the project name. If you omit the platform, `lucy` infers it from the environment. The project is the name or ID of the mod/plugin. The version can be specific, `@latest`, or `@compatible` (the fuzzy default when you omit a version).
+
+`latest` means newest available; `compatible` means newest version that fits the inferred environment.
 
 Supported platforms: `fabric`, `forge`, `neoforge`, `mcdr`, `minecraft`, `none`
+
+Some environments mix multiple compatible platforms at once. For example, a server can have a primary loader plus extra compatible layers that Lucy records in the manifest.
 
 Supported sources: `modrinth`, `curseforge`, `github`, `mcdr`
 

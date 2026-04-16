@@ -26,7 +26,7 @@ const (
 
 var addCmd = &cobra.Command{
 	Use:   "add",
-	Short: "Add new mods, plugins, or server modules",
+	Short: "Add packages to Lucy-managed intent",
 	Args:  cobra.MinimumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return CompletePackageIDSuggestions(context.Background(), "add", toComplete)
