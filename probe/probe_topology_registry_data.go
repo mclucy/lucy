@@ -30,6 +30,7 @@ var normalizedRuntimeIDByName = map[string]types.RuntimeNodeID{
 	"bungee":          RuntimeNodeBungeecord,
 	"waterfall":       RuntimeNodeWaterfall,
 	"sponge":          RuntimeNodeSponge,
+	"arclight":        RuntimeNodeArclight,
 }
 
 func NormalizeRuntimeID(name string) types.RuntimeNodeID {

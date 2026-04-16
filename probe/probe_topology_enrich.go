@@ -227,6 +227,9 @@ func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {
 	if hasAnyName(names, "geyser", "geyser-spigot", "geyser-fabric") {
 		detected = append(detected, RuntimeNodeGeyser)
 	}
+	if hasAnyName(names, "arclight") {
+		detected = append(detected, RuntimeNodeArclight)
+	}
 
 	return detected
 }
