@@ -25,7 +25,7 @@ func (d *geyserStandaloneDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (*types.RuntimeInfo, error) {
+) (*ExecutableEvidence, error) {
 	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func (d *geyserStandaloneDetector) Detect(
 		version = parseGeyserStandaloneVersionFromPath(filePath)
 	}
 
-	return &types.RuntimeInfo{
+	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     types.VersionUnknown,
 		RuntimeIdentities: []types.PackageId{{

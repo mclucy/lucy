@@ -41,7 +41,7 @@ func TestDetectForgeInstallFromVersionDirPrefersHashVerifiedServerJar(t *testing
 		t.Fatalf("expected hash-verified Forge install runtime")
 	}
 
-	assertForgeRuntime(t, runtime, serverJar, "1.21.11", "61.1.0")
+	assertForgeRuntime(t, runtimeInfoFromEvidence(runtime), serverJar, "1.21.11", "61.1.0")
 }
 
 func TestDetectForgeInstallFromVersionDirFallsBackToUnpackVerification(t *testing.T) {
@@ -77,7 +77,7 @@ func TestDetectForgeInstallFromVersionDirFallsBackToUnpackVerification(t *testin
 		t.Fatalf("expected unpack fallback to identify Forge install")
 	}
 
-	assertForgeRuntime(t, runtime, jarPath, "1.20.1", "47.3.22")
+	assertForgeRuntime(t, runtimeInfoFromEvidence(runtime), jarPath, "1.20.1", "47.3.22")
 }
 
 func TestDetectForgeInstallFromVersionDirRejectsShimOnlyLayout(t *testing.T) {
@@ -256,7 +256,7 @@ func TestExecutableRejectsCreateModJar(t *testing.T) {
 	)
 
 	runtime := Executable(jarPath)
-	if runtime != types.NoExecutable {
+	if runtime == nil || !runtime.IsEmpty() {
 		t.Fatalf("expected Create mod jar to be rejected as executable, got %+v", runtime)
 	}
 }
@@ -275,7 +275,7 @@ func TestExecutableRejectsForgeShimJar(t *testing.T) {
 	)
 
 	runtime := Executable(jarPath)
-	if runtime != types.NoExecutable {
+	if runtime == nil || !runtime.IsEmpty() {
 		t.Fatalf("expected Forge shim jar to be rejected as executable, got %+v", runtime)
 	}
 }
@@ -303,12 +303,33 @@ func detectForgeRuntimeWith(
 		t.Fatalf("read zip: %v", err)
 	}
 
-	runtime, err := detector.Detect(jarPath, reader, file)
+	evidence, err := detector.Detect(jarPath, reader, file)
 	if err != nil {
 		t.Fatalf("detect runtime: %v", err)
 	}
 
-	return runtime
+	if evidence == nil {
+		return nil
+	}
+
+	return runtimeInfoFromEvidence(evidence)
+}
+
+func runtimeInfoFromEvidence(evidence *ExecutableEvidence) *types.RuntimeInfo {
+	if evidence == nil {
+		return nil
+	}
+
+	return &types.RuntimeInfo{
+		PrimaryEntrance: evidence.PrimaryEntrance,
+		GameVersion:     evidence.GameVersion,
+		Topology:        evidence.Topology,
+		RuntimeIdentities: append(
+			[]types.PackageId(nil),
+			evidence.RuntimeIdentities...,
+		),
+		BridgeHints: append([]string(nil), evidence.BridgeHints...),
+	}
 }
 
 func assertForgeRuntime(

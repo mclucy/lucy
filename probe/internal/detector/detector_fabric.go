@@ -30,7 +30,7 @@ func (d *fabricServerSingleFileDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (exec *types.RuntimeInfo, err error) {
+) (exec *ExecutableEvidence, err error) {
 	loaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
 	for _, f := range zipReader.File {
@@ -67,10 +67,9 @@ func (d *fabricServerSingleFileDetector) Detect(
 		return nil, nil
 	}
 
-	exec = &types.RuntimeInfo{
+	exec = &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
-		BootCommand:     nil,
 		RuntimeIdentities: []types.PackageId{
 			{
 				Platform: types.PlatformFabric,
@@ -115,7 +114,7 @@ func (d *fabricServerLauncherDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (exec *types.RuntimeInfo, err error) {
+) (exec *ExecutableEvidence, err error) {
 	var valid bool
 	for _, f := range zipReader.File {
 		if f.Name == "fabric-server-launch.properties" {
@@ -198,10 +197,9 @@ func (d *fabricServerLauncherDetector) Detect(
 				continue
 			}
 
-			exec = &types.RuntimeInfo{
+			exec = &ExecutableEvidence{
 				PrimaryEntrance: filePath,
 				GameVersion:     gameVersion,
-				BootCommand:     nil,
 				RuntimeIdentities: []types.PackageId{
 					{
 						Platform: types.PlatformFabric,

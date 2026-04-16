@@ -41,7 +41,7 @@ func detectModLoaderInstallFromVersionDir(
 	versionDir string,
 	spec modLoaderInstallSpec,
 	hashLookup func(version string, artifact modLoaderArtifactKind, filePath string) (bool, error),
-) (*types.RuntimeInfo, error) {
+) (*ExecutableEvidence, error) {
 	version := filepath.Base(versionDir)
 	gameVersion, loaderVersion, ok := parseModLoaderVersionTuple(versionDir, spec.platform)
 	if !ok {
@@ -100,14 +100,14 @@ func parseModLoaderVersionTuple(versionDir string, platform types.Platform) (gam
 	}
 }
 
-func modLoaderInstallationRuntimes(workPath string, spec modLoaderInstallSpec, hashLookup func(version string, artifact modLoaderArtifactKind, filePath string) (bool, error)) []*types.RuntimeInfo {
+func modLoaderInstallationRuntimes(workPath string, spec modLoaderInstallSpec, hashLookup func(version string, artifact modLoaderArtifactKind, filePath string) (bool, error)) []*ExecutableEvidence {
 	libraryRoot := filepath.Join(workPath, spec.libraryRoot)
 	entries, err := os.ReadDir(libraryRoot)
 	if err != nil {
 		return nil
 	}
 
-	runtimes := make([]*types.RuntimeInfo, 0, len(entries))
+	runtimes := make([]*ExecutableEvidence, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -163,12 +163,12 @@ func hashArtifactFile(filePath string, algo cache.HashAlgorithm) (string, error)
 	}
 }
 
-func buildModLoaderRuntimeInfo(platform types.Platform, name string, filePath string, gameVersion types.RawVersion, loaderVersion types.RawVersion) *types.RuntimeInfo {
+func buildModLoaderRuntimeInfo(platform types.Platform, name string, filePath string, gameVersion types.RawVersion, loaderVersion types.RawVersion) *ExecutableEvidence {
 	capability := types.CapabilityForgeMods
 	if platform == types.PlatformNeoforge {
 		capability = types.CapabilityNeoforgeMods
 	}
-	return &types.RuntimeInfo{
+	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
 		RuntimeIdentities: []types.PackageId{

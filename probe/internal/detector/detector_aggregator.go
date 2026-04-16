@@ -11,10 +11,9 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// Executable analyzes a JAR file using all registered detectors
-// and returns the first successful match (in registration order).
-// If multiple detectors match, callers should handle ambiguity separately.
-func Executable(filePath string) *types.RuntimeInfo {
+// Executable analyzes a JAR file using all registered detectors and collects
+// all executable evidence candidates in registration order.
+func Executable(filePath string) *ExecutableCandidates {
 	file, err := os.Open(filePath)
 	if err != nil {
 		logger.Debug("Failed to open file: " + err.Error())
@@ -34,7 +33,10 @@ func Executable(filePath string) *types.RuntimeInfo {
 		return nil
 	}
 
-	var candidates []*types.RuntimeInfo
+	bridgeMarkers := DetectBridgeMarkers(zipReader)
+	candidates := &ExecutableCandidates{
+		Candidates: make([]*ExecutableEvidence, 0),
+	}
 	detectors := getExecutableDetectors()
 
 	for _, detector := range detectors {
@@ -42,33 +44,36 @@ func Executable(filePath string) *types.RuntimeInfo {
 		if err != nil || result == nil {
 			continue
 		}
-		candidates = append(candidates, result)
+		result.BridgeHints = mergeBridgeHints(result.BridgeHints, bridgeMarkers)
+		candidates.Candidates = append(candidates.Candidates, result)
 	}
 
-	if len(candidates) == 1 {
-		bridgeMarkers := DetectBridgeMarkers(zipReader)
-		if len(bridgeMarkers) > 0 {
-			candidates[0].BridgeHints = make([]string, 0, len(bridgeMarkers))
-			for _, marker := range bridgeMarkers {
-				candidates[0].BridgeHints = append(
-					candidates[0].BridgeHints,
-					marker.NodeID,
-				)
-			}
+	return candidates
+}
+
+func mergeBridgeHints(existing []string, markers []BridgeMarker) []string {
+	if len(existing) == 0 && len(markers) == 0 {
+		return nil
+	}
+
+	merged := make([]string, 0, len(existing)+len(markers))
+	seen := make(map[string]struct{}, len(existing)+len(markers))
+	for _, hint := range existing {
+		if _, ok := seen[hint]; ok {
+			continue
 		}
+		seen[hint] = struct{}{}
+		merged = append(merged, hint)
+	}
+	for _, marker := range markers {
+		if _, ok := seen[marker.NodeID]; ok {
+			continue
+		}
+		seen[marker.NodeID] = struct{}{}
+		merged = append(merged, marker.NodeID)
 	}
 
-	if len(candidates) == 0 {
-		return types.NoExecutable
-	}
-
-	if len(candidates) > 1 {
-		// TODO: Modify this by need to handle multiple matches better
-		logger.Warn(fmt.Errorf("multiple executable detectors matched; marking as unknown"))
-		return types.UnknownExecutable
-	}
-
-	return candidates[0]
+	return merged
 }
 
 // Packages analyzes a mod/plugin file and returns detected packages.
@@ -108,6 +113,7 @@ func Packages(filePath string) (res []types.Package) {
 			))
 			return nil
 		}
+		res = aggregateBukkitFamilyPackages(res)
 	case ".pyz", ".mcdr":
 		McdrPlugin(filePath)
 	default:

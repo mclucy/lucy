@@ -27,14 +27,14 @@ const (
 
 var forgeArtifactHashLookup = lookupForgeArtifactHash
 
-func ForgeInstallationRuntimes(workPath string) []*types.RuntimeInfo {
+func ForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 	forgeLib := filepath.Join(workPath, "libraries", "net", "minecraftforge", "forge")
 	entries, err := os.ReadDir(forgeLib)
 	if err != nil {
 		return nil
 	}
 
-	runtimes := make([]*types.RuntimeInfo, 0, len(entries))
+	runtimes := make([]*ExecutableEvidence, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -49,7 +49,7 @@ func ForgeInstallationRuntimes(workPath string) []*types.RuntimeInfo {
 	return runtimes
 }
 
-func detectForgeInstallFromVersionDir(versionDir string) (*types.RuntimeInfo, error) {
+func detectForgeInstallFromVersionDir(versionDir string) (*ExecutableEvidence, error) {
 	version := filepath.Base(versionDir)
 	match := forgeRuntimeVersionDirPattern.FindStringSubmatch(version)
 	if match == nil {

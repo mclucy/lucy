@@ -23,7 +23,7 @@ func (d *VanillaDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (*types.RuntimeInfo, error) {
+) (*ExecutableEvidence, error) {
 	for _, f := range zipReader.File {
 		if f.Name == "version.json" {
 			r, err := f.Open()
@@ -46,7 +46,7 @@ func (d *VanillaDetector) Detect(
 			}{}
 			err = json.Unmarshal(data, forgeInstallerGuard)
 			if err == nil {
-				return types.NoExecutable, nil
+				return nil, nil
 			}
 
 			obj := exttype.FileMinecraftVersionSpec{}
@@ -57,7 +57,7 @@ func (d *VanillaDetector) Detect(
 
 			gameVersion := types.RawVersion(obj.Id)
 
-			exec := &types.RuntimeInfo{
+			exec := &ExecutableEvidence{
 				PrimaryEntrance: filePath,
 				GameVersion:     gameVersion,
 				RuntimeIdentities: []types.PackageId{

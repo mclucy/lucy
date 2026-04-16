@@ -14,7 +14,7 @@ type ExecutableDetector interface {
 		filePath string,
 		zipReader *zip.Reader,
 		fileHandle *os.File,
-	) (*types.RuntimeInfo, error)
+	) (*ExecutableEvidence, error)
 	Name() string
 }
 

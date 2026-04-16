@@ -132,11 +132,10 @@ func buildForgeRuntimeInfo(
 	filePath string,
 	gameVersion types.RawVersion,
 	forgeVersion types.RawVersion,
-) *types.RuntimeInfo {
-	return &types.RuntimeInfo{
+) *ExecutableEvidence {
+	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
-		BootCommand:     nil,
 		RuntimeIdentities: []types.PackageId{
 			{
 				Platform: types.PlatformForge,

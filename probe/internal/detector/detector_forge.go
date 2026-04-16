@@ -31,7 +31,7 @@ func (d *forgeLegacyDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (*types.RuntimeInfo, error) {
+) (*ExecutableEvidence, error) {
 	base := filepath.Base(filePath)
 	if !strings.Contains(base, "forge-") || !strings.Contains(base, "universal") {
 		return nil, nil
@@ -64,7 +64,7 @@ func (d *forgeModernDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (*types.RuntimeInfo, error) {
+) (*ExecutableEvidence, error) {
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(filePath)
 	if !ok || compareForgeMajor(forgeVersion, 61) >= 0 {
 		return nil, nil
@@ -97,7 +97,7 @@ func (d *forgeLatestDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (*types.RuntimeInfo, error) {
+) (*ExecutableEvidence, error) {
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(filePath)
 	if !ok || compareForgeMajor(forgeVersion, 61) < 0 {
 		return nil, nil
@@ -134,7 +134,7 @@ func (d *forgeServerDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (*types.RuntimeInfo, error) {
+) (*ExecutableEvidence, error) {
 	forgeVersion, gameVersion := parseForgeManifest(zipReader)
 	if !hasConcreteVersion(forgeVersion) {
 		return nil, nil

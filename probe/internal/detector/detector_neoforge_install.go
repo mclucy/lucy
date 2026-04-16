@@ -30,7 +30,7 @@ var neoforgeArtifactHashLookup = func(version string, artifact modLoaderArtifact
 //   - https://maven.neoforged.net/releases/net/neoforged/neoforge/
 //   - https://docs.neoforged.net/user/docs/server/
 //   - https://github.com/neoforged/NeoForge/blob/main/CHANGELOG.md
-func NeoForgeInstallationRuntimes(workPath string) []*types.RuntimeInfo {
+func NeoForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 	spec := modLoaderInstallSpec{
 		platform:       types.PlatformNeoforge,
 		name:           "neoforge",

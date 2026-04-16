@@ -24,10 +24,14 @@ const multiThreadThreshold = 10
 
 // getExecutableInfo uses the new detector-based architecture to find server executables
 func buildExecutableInfo() *types.RuntimeInfo {
-	valid := make([]*types.RuntimeInfo, 0)
+	valid := make([]*detector.ExecutableEvidence, 0)
 	workPath := workPath()
-	valid = append(valid, detector.ForgeInstallationRuntimes(workPath)...)
-	valid = append(valid, detector.NeoForgeInstallationRuntimes(workPath)...)
+	for _, evidence := range detector.ForgeInstallationRuntimes(workPath) {
+		valid = append(valid, evidence)
+	}
+	for _, evidence := range detector.NeoForgeInstallationRuntimes(workPath) {
+		valid = append(valid, evidence)
+	}
 
 	// Layered search
 	// 1. pwd
@@ -37,11 +41,11 @@ func buildExecutableInfo() *types.RuntimeInfo {
 		logger.Warn(fmt.Errorf("cannot read server directory: %w", err))
 	}
 	for _, jar := range jars {
-		exec := detector.Executable(jar)
-		if exec == nil || exec == types.NoExecutable || exec == types.UnknownExecutable {
+		candidates := detector.Executable(jar)
+		if candidates == nil || candidates.IsEmpty() || candidates.IsAmbiguous() {
 			continue
 		}
-		valid = append(valid, exec)
+		valid = append(valid, candidates.Single())
 	}
 
 	// 2. Forge/Fabric installation paths
@@ -72,11 +76,11 @@ func buildExecutableInfo() *types.RuntimeInfo {
 	jars = slices.Concat(forgeJars, fabricJars)
 
 	for _, jar := range jars {
-		exec := detector.Executable(jar)
-		if exec == nil || exec == types.NoExecutable || exec == types.UnknownExecutable {
+		candidates := detector.Executable(jar)
+		if candidates == nil || candidates.IsEmpty() || candidates.IsAmbiguous() {
 			continue
 		}
-		valid = append(valid, exec)
+		valid = append(valid, candidates.Single())
 	}
 
 	// 3. Everything under libraries
@@ -89,13 +93,13 @@ func buildExecutableInfo() *types.RuntimeInfo {
 			for _, jarPath := range jarPaths {
 				wg.Add(1)
 				go func(jarPath string) {
-					exec := detector.Executable(jarPath)
-					if exec == nil || exec == types.NoExecutable || exec == types.UnknownExecutable {
+					candidates := detector.Executable(jarPath)
+					if candidates == nil || candidates.IsEmpty() || candidates.IsAmbiguous() {
 						wg.Done()
 						return
 					}
 					mu.Lock()
-					valid = append(valid, exec)
+					valid = append(valid, candidates.Single())
 					mu.Unlock()
 					wg.Done()
 				}(jarPath)
@@ -103,11 +107,11 @@ func buildExecutableInfo() *types.RuntimeInfo {
 			wg.Wait()
 		} else {
 			for _, jarPath := range jarPaths {
-				exec := detector.Executable(jarPath)
-				if exec == nil || exec == types.NoExecutable || exec == types.UnknownExecutable {
+				candidates := detector.Executable(jarPath)
+				if candidates == nil || candidates.IsEmpty() || candidates.IsAmbiguous() {
 					continue
 				}
-				valid = append(valid, exec)
+				valid = append(valid, candidates.Single())
 			}
 		}
 	}
@@ -121,12 +125,16 @@ func buildExecutableInfo() *types.RuntimeInfo {
 		logger.Info("no server executable found")
 		return types.NoExecutable
 	case 1:
-		return valid[0]
+		return materializeRuntimeInfo(valid[0])
 	default:
+		runtimes := make([]*types.RuntimeInfo, 0, len(valid))
+		for _, evidence := range valid {
+			runtimes = append(runtimes, materializeRuntimeInfo(evidence))
+		}
 		choice := promptSelectExecutable(
-			valid, []string{noteIgnorePath},
+			runtimes, []string{noteIgnorePath},
 		)
-		return valid[choice]
+		return materializeRuntimeInfo(valid[choice])
 	}
 }
 

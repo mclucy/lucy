@@ -37,7 +37,7 @@ func TestDetectNeoForgeInstallPrefersHashVerifiedUniversalJar(t *testing.T) {
 		t.Fatalf("expected one hash-verified NeoForge install runtime, got %d", len(runtimes))
 	}
 
-	assertNeoForgeRuntime(t, runtimes[0], universalJar, "1.21.4", "21.4.0")
+	assertNeoForgeRuntime(t, runtimeInfoFromEvidence(runtimes[0]), universalJar, "1.21.4", "21.4.0")
 }
 
 func TestDetectNeoForgeInstallFallsBackToUnpackVerification(t *testing.T) {
@@ -63,7 +63,7 @@ func TestDetectNeoForgeInstallFallsBackToUnpackVerification(t *testing.T) {
 		t.Fatalf("expected unpack fallback to identify NeoForge install, got %d runtimes", len(runtimes))
 	}
 
-	assertNeoForgeRuntime(t, runtimes[0], jarPath, "1.21.4", "21.4.0")
+	assertNeoForgeRuntime(t, runtimeInfoFromEvidence(runtimes[0]), jarPath, "1.21.4", "21.4.0")
 }
 
 func TestDetectNeoForgeInstallRejectsShimOnly(t *testing.T) {

@@ -94,10 +94,23 @@ func detectGeyserStandaloneRuntimeWith(t *testing.T, jarPath string) *types.Runt
 		t.Fatalf("read zip: %v", err)
 	}
 
-	runtime, err := (&geyserStandaloneDetector{}).Detect(jarPath, reader, file)
+	evidence, err := (&geyserStandaloneDetector{}).Detect(jarPath, reader, file)
 	if err != nil {
 		t.Fatalf("detect standalone geyser runtime: %v", err)
 	}
 
-	return runtime
+	if evidence == nil {
+		return nil
+	}
+
+	return &types.RuntimeInfo{
+		PrimaryEntrance: evidence.PrimaryEntrance,
+		GameVersion:     evidence.GameVersion,
+		Topology:        evidence.Topology,
+		RuntimeIdentities: append(
+			[]types.PackageId(nil),
+			evidence.RuntimeIdentities...,
+		),
+		BridgeHints: append([]string(nil), evidence.BridgeHints...),
+	}
 }

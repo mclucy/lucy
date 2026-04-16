@@ -29,7 +29,7 @@ func (d *neoforgeServerDetector) Detect(
 	filePath string,
 	zipReader *zip.Reader,
 	fileHandle *os.File,
-) (*types.RuntimeInfo, error) {
+) (*ExecutableEvidence, error) {
 	neoforgeLoaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
 
@@ -103,10 +103,9 @@ func (d *neoforgeServerDetector) Detect(
 	}
 
 	// Build and return result (gameVersion may be VersionUnknown if not in manifest)
-	exec := &types.RuntimeInfo{
+	exec := &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
-		BootCommand:     nil,
 		RuntimeIdentities: []types.PackageId{
 			{
 				Platform: types.PlatformNeoforge,
