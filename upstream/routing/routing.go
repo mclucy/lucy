@@ -20,8 +20,10 @@ import (
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/curseforge"
 	"github.com/mclucy/lucy/upstream/githubsource"
+	"github.com/mclucy/lucy/upstream/hangar"
 	"github.com/mclucy/lucy/upstream/mcdr"
 	"github.com/mclucy/lucy/upstream/modrinth"
+	"github.com/mclucy/lucy/upstream/spiget"
 )
 
 var (
@@ -40,6 +42,8 @@ var providerBySource = map[types.Source]upstream.Provider{
 	types.SourceModrinth: modrinth.Provider,
 	types.SourceGitHub:   githubsource.Provider,
 	types.SourceMCDR:     mcdr.Provider,
+	types.SourceHangar:   hangar.Provider,
+	types.SourceSpiget:   spiget.Provider,
 }
 
 func listModProviders() []upstream.Provider {
