@@ -62,19 +62,28 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 	}
 }
 
-func TestBuildUpdatedLockRefreshesExactClosureAndPrunesStalePackages(t *testing.T) {
+func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages(t *testing.T) {
 	workDir := t.TempDir()
 	manifest := state.ManifestDefaults()
 	manifest.Environment.GameVersion = "1.21.1"
 	manifest.Environment.Platform = "fabric"
 	manifest.Environment.PlatformVersion = "0.16.10"
-	manifest.Packages = []state.ManifestPackage{{
-		ID:      "fabric/lithium",
-		Version: "latest",
-		Source:  "auto",
-		Role:    state.RoleRequired,
-		Side:    state.SideServer,
-	}}
+	manifest.Packages = []state.ManifestPackage{
+		{
+			ID:      "fabric/lithium",
+			Version: "latest",
+			Source:  "auto",
+			Role:    state.RoleRequired,
+			Side:    state.SideServer,
+		},
+		{
+			ID:      "fabric/fabric-api",
+			Version: "latest",
+			Source:  "auto",
+			Role:    state.RoleTransitive,
+			Side:    state.SideServer,
+		},
+	}
 
 	existingLock := state.NewLock()
 	existingLock.ManifestFingerprint = "sha256:stale"
@@ -82,14 +91,26 @@ func TestBuildUpdatedLockRefreshesExactClosureAndPrunesStalePackages(t *testing.
 	existingLock.Platform = "fabric"
 	existingLock.PlatformVersion = "0.16.9"
 	existingLock.Packages = []state.LockedPackage{{
-		ID:            "fabric/stale-dependency",
+		ID:            "fabric/fabric-api",
 		Version:       "1.0.0",
 		Source:        "modrinth",
-		URL:           "https://example.invalid/stale.jar",
-		Filename:      "stale.jar",
+		URL:           "https://example.invalid/fabric-api-old.jar",
+		Filename:      "fabric-api-old.jar",
 		Hash:          "stalehash",
 		HashAlgorithm: "sha512",
-		InstallPath:   "mods/stale.jar",
+		InstallPath:   "mods/fabric-api-old.jar",
+		Side:          "server",
+		Provenance:    []string{"root"},
+		Requester:     "root",
+	}, {
+		ID:            "fabric/cloth-config",
+		Version:       "15.0.0",
+		Source:        "modrinth",
+		URL:           "https://example.invalid/cloth-config.jar",
+		Filename:      "cloth-config.jar",
+		Hash:          "clothhash",
+		HashAlgorithm: "sha512",
+		InstallPath:   "mods/cloth-config.jar",
 		Side:          "server",
 		Provenance:    []string{"root"},
 		Requester:     "root",
@@ -104,11 +125,9 @@ func TestBuildUpdatedLockRefreshesExactClosureAndPrunesStalePackages(t *testing.
 	result := &install.Result{
 		Installed: []types.Package{
 			lockedResultPackage(t, workDir, "fabric/lithium@0.12.9+mc1.21.1", "lithium.jar"),
-			lockedResultPackage(t, workDir, "fabric/fabric-api@0.119.2+1.21.5", "fabric-api.jar"),
 		},
 		Provenance: map[string][]string{
-			"fabric/lithium":    {"root"},
-			"fabric/fabric-api": {"root", "fabric/lithium@0.12.9+mc1.21.1"},
+			"fabric/lithium": {"root"},
 		},
 	}
 
@@ -117,16 +136,17 @@ func TestBuildUpdatedLockRefreshesExactClosureAndPrunesStalePackages(t *testing.
 		t.Fatal("expected updated lock")
 	}
 
-	if len(updated.Packages) != 2 {
-		t.Fatalf("expected exact lock closure to replace stale packages, got %d entries", len(updated.Packages))
+	if len(updated.Packages) != 3 {
+		t.Fatalf("expected incremental add lock merge to preserve existing entries, got %d entries", len(updated.Packages))
 	}
-	if updated.Packages[0].ID != "fabric/fabric-api" || updated.Packages[1].ID != "fabric/lithium" {
+	if updated.Packages[0].ID != "fabric/cloth-config" || updated.Packages[1].ID != "fabric/fabric-api" || updated.Packages[2].ID != "fabric/lithium" {
 		t.Fatalf("expected lock packages to be canonically sorted, got %#v", updated.Packages)
 	}
-	for _, pkg := range updated.Packages {
-		if pkg.ID == "fabric/stale-dependency" {
-			t.Fatal("expected stale lock entry to be pruned during refresh")
-		}
+	if updated.Packages[1].Version != "1.0.0" {
+		t.Fatalf("expected unmentioned existing package to be preserved as-is, got %#v", updated.Packages[1])
+	}
+	if updated.Packages[2].Version != "0.12.9+mc1.21.1" {
+		t.Fatalf("expected installed package to refresh exact version, got %#v", updated.Packages[2])
 	}
 
 	manifestBytes, err := state.SerializeManifest(&manifest)

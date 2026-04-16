@@ -678,15 +678,7 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 	lkPath := string(state.LockFile)
 	if willWrite(lkPath) {
 		lk := state.NewLock()
-		if result.ManifestToWrite != nil {
-			if data, err := state.SerializeManifest(result.ManifestToWrite); err == nil {
-				sum := sha256.Sum256(data)
-				lk.ManifestFingerprint = "sha256:" + hex.EncodeToString(sum[:])
-			}
-			lk.GameVersion = result.ManifestToWrite.Environment.GameVersion
-			lk.Platform = result.ManifestToWrite.Environment.Platform
-			lk.PlatformVersion = result.ManifestToWrite.Environment.PlatformVersion
-		}
+		populateInitLockMetadata(&lk, s, result.ManifestToWrite)
 		result.LockToWrite = &lk
 		result.WrittenFiles = append(result.WrittenFiles, lkPath)
 	} else {
@@ -694,6 +686,56 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 	}
 
 	return result, nil
+}
+
+func populateInitLockMetadata(lock *state.Lock, s *InitFlowState, manifest *state.Manifest) {
+	if lock == nil || s == nil {
+		return
+	}
+
+	resolvedManifest := manifest
+	if resolvedManifest == nil {
+		if existingManifest, _, err := state.ReadManifest(s.workDir); err == nil && existingManifest != nil {
+			resolvedManifest = existingManifest
+		}
+	}
+
+	if resolvedManifest != nil {
+		if data, err := state.SerializeManifest(resolvedManifest); err == nil {
+			sum := sha256.Sum256(data)
+			lock.ManifestFingerprint = "sha256:" + hex.EncodeToString(sum[:])
+		}
+		lock.GameVersion = strings.TrimSpace(resolvedManifest.Environment.GameVersion)
+		lock.Platform = strings.TrimSpace(resolvedManifest.Environment.Platform)
+		lock.PlatformVersion = strings.TrimSpace(resolvedManifest.Environment.PlatformVersion)
+	}
+
+	if lock.ManifestFingerprint == "" {
+		fallbackManifest := state.ManifestDefaults()
+		fallbackManifest.Environment.GameVersion = lockMetadataValue(s.GameVersion, s.DiscoveredDefaults.GameVersion)
+		fallbackManifest.Environment.Platform = lockMetadataValue(s.Platform, s.DiscoveredDefaults.Platform)
+		fallbackManifest.Environment.PlatformVersion = lockMetadataValue(s.PlatformVersion, s.DiscoveredDefaults.PlatformVersion)
+		fallbackManifest.Environment.CompatiblePlatforms = append([]string(nil), s.CompatiblePlatforms...)
+		fallbackManifest.Policy.ManagedRoots = append([]string(nil), s.ManagedRoots...)
+		fallbackManifest.Packages = state.ManifestPackagesFromClassified(classifiedPackagesForManifest(s.PackageClassifications))
+		if data, err := state.SerializeManifest(&fallbackManifest); err == nil {
+			sum := sha256.Sum256(data)
+			lock.ManifestFingerprint = "sha256:" + hex.EncodeToString(sum[:])
+		}
+	}
+
+	lock.GameVersion = lockMetadataValue(lock.GameVersion, s.GameVersion, s.DiscoveredDefaults.GameVersion, types.VersionUnknown.String())
+	lock.Platform = lockMetadataValue(lock.Platform, s.Platform, s.DiscoveredDefaults.Platform, string(types.PlatformNone))
+	lock.PlatformVersion = lockMetadataValue(lock.PlatformVersion, s.PlatformVersion, s.DiscoveredDefaults.PlatformVersion, types.VersionUnknown.String())
+}
+
+func lockMetadataValue(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func classifiedPackagesForManifest(classifications []TakeoverPackageClassification) []state.ClassifiedPackage {

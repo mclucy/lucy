@@ -168,6 +168,7 @@ func buildUpdatedLock(workDir string, manifest *state.Manifest, existing *state.
 	if existing != nil {
 		lock = *existing
 		lock.Bundles = append([]state.LockedBundle(nil), existing.Bundles...)
+		lock.Packages = append([]state.LockedPackage(nil), existing.Packages...)
 	} else {
 		lock = state.NewLock()
 	}
@@ -179,10 +180,17 @@ func buildUpdatedLock(workDir string, manifest *state.Manifest, existing *state.
 	lock.Platform = manifestPlatform(manifest, runtime, lock.Platform)
 	lock.PlatformVersion = manifestPlatformVersion(manifest, runtime, lock.PlatformVersion)
 
-	packages := make([]state.LockedPackage, 0, len(result.Installed))
+	packagesByID := make(map[string]state.LockedPackage, len(lock.Packages)+len(result.Installed))
+	for _, pkg := range lock.Packages {
+		packagesByID[pkg.ID] = pkg
+	}
 	for _, pkg := range result.Installed {
 		locked := lockedPackageFromInstalled(workDir, pkg, result.Provenance[pkg.Id.StringPlatformName()])
-		packages = append(packages, locked)
+		packagesByID[locked.ID] = locked
+	}
+	packages := make([]state.LockedPackage, 0, len(packagesByID))
+	for _, pkg := range packagesByID {
+		packages = append(packages, pkg)
 	}
 	lock.Packages = state.CanonicalLockedPackages(packages)
 

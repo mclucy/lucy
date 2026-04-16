@@ -1,6 +1,8 @@
 package init
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"slices"
@@ -145,6 +147,57 @@ func TestBuildResult_PersistsCompatiblePlatforms(t *testing.T) {
 		if result.ManifestToWrite.Environment.CompatiblePlatforms[i] != platform {
 			t.Fatalf("compatible platform %d mismatch: got %q want %q", i, result.ManifestToWrite.Environment.CompatiblePlatforms[i], platform)
 		}
+	}
+}
+
+func TestBuildResultPreserveManifestStillPopulatesLockMetadataFromExistingManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	manifest := state.ManifestDefaults()
+	manifest.Environment.GameVersion = "1.21.4"
+	manifest.Environment.Platform = "fabric"
+	manifest.Environment.PlatformVersion = "0.16.10"
+	manifest.Policy.ManagedRoots = []string{"mods"}
+	if err := state.WriteManifest(tmpDir, &manifest); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	s := NewInitFlowState(tmpDir)
+	s.ManagedRoots = []string{"mods"}
+	s.ConflictResolution = PreserveExisting
+
+	result, err := BuildResult(s)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ManifestToWrite != nil {
+		t.Fatal("expected manifest write to be skipped in preserve mode")
+	}
+	if result.LockToWrite == nil {
+		t.Fatal("expected lock skeleton to be written")
+	}
+
+	manifestBytes, err := state.SerializeManifest(&manifest)
+	if err != nil {
+		t.Fatalf("serialize manifest failed: %v", err)
+	}
+	sum := sha256.Sum256(manifestBytes)
+	wantFingerprint := "sha256:" + hex.EncodeToString(sum[:])
+
+	if result.LockToWrite.ManifestFingerprint != wantFingerprint {
+		t.Fatalf("manifest fingerprint mismatch: got %q want %q", result.LockToWrite.ManifestFingerprint, wantFingerprint)
+	}
+	if result.LockToWrite.GameVersion != manifest.Environment.GameVersion {
+		t.Fatalf("game version mismatch: got %q want %q", result.LockToWrite.GameVersion, manifest.Environment.GameVersion)
+	}
+	if result.LockToWrite.Platform != manifest.Environment.Platform {
+		t.Fatalf("platform mismatch: got %q want %q", result.LockToWrite.Platform, manifest.Environment.Platform)
+	}
+	if result.LockToWrite.PlatformVersion != manifest.Environment.PlatformVersion {
+		t.Fatalf("platform version mismatch: got %q want %q", result.LockToWrite.PlatformVersion, manifest.Environment.PlatformVersion)
+	}
+	if err := state.ValidateLock(*result.LockToWrite); err != nil {
+		t.Fatalf("expected preserve-mode lock skeleton to validate: %v", err)
 	}
 }
 
