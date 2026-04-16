@@ -21,6 +21,8 @@ const (
 	SourceModrinth
 	SourceGitHub
 	SourceMCDR
+	SourceHangar
+	SourceSpiget
 	SourceUnknown // sentinel for parse/validation failure
 )
 
@@ -34,6 +36,10 @@ func (s Source) String() string {
 		return "github"
 	case SourceMCDR:
 		return "mcdr"
+	case SourceHangar:
+		return "hangar"
+	case SourceSpiget:
+		return "spiget"
 	default:
 		return "unknown"
 	}
@@ -49,6 +55,10 @@ func (s Source) Title() string {
 		return "GitHub"
 	case SourceMCDR:
 		return "MCDR"
+	case SourceHangar:
+		return "Hangar"
+	case SourceSpiget:
+		return "Spiget"
 	default:
 		return "Unknown"
 	}
@@ -61,6 +71,8 @@ var sourceByString = map[string]Source{
 	"modrinth":   SourceModrinth,
 	"github":     SourceGitHub,
 	"mcdr":       SourceMCDR,
+	"hangar":     SourceHangar,
+	"spiget":     SourceSpiget,
 	"unknown":    SourceUnknown,
 }
 
