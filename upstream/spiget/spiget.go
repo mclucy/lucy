@@ -2,7 +2,9 @@ package spiget
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -19,28 +21,50 @@ func (provider) Search(
 	query string,
 	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
-	return nil, ErrNotImplemented
+	resp, err := searchResources(query, options)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (p provider) Fetch(id types.PackageId) (
 	remote upstream.RawPackageRemote,
 	err error,
 ) {
-	return nil, ErrNotImplemented
+	resource, err := resolveResourceByProjectName(id.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	resolved, err := resolveVersion(resource, id.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	return resolved, nil
 }
 
 func (p provider) Information(name types.ProjectName) (
 	info upstream.RawProjectInformation,
 	err error,
 ) {
-	return nil, ErrNotImplemented
+	resource, err := resolveResourceByProjectName(name)
+	if err != nil {
+		return nil, err
+	}
+	return resource, nil
 }
 
 func (p provider) Support(name types.ProjectName) (
 	supports upstream.RawProjectSupport,
 	err error,
 ) {
-	return nil, ErrNotImplemented
+	resource, err := resolveResourceByProjectName(name)
+	if err != nil {
+		return nil, err
+	}
+	return resource, nil
 }
 
 func (p provider) Dependencies(id types.PackageId) (
@@ -54,7 +78,35 @@ func (p provider) ParseAmbiguousId(id types.PackageId) (
 	parsed types.PackageId,
 	err error,
 ) {
-	return id, ErrNotImplemented
+	parsed = id
+
+	switch id.Version {
+	case "", types.VersionAny, types.VersionNone, types.VersionLatest, types.VersionCompatible:
+	default:
+		return id, nil
+	}
+
+	resource, err := resolveResourceByProjectName(id.Name)
+	if err != nil {
+		return id, err
+	}
+
+	resolved, err := resolveVersion(resource, id.Version)
+	if err != nil {
+		return id, err
+	}
+
+	parsed.Version = resolved.LucyVersion()
+	logger.Debug("parsed from " + id.StringFull() + " to " + parsed.StringFull())
+	return parsed, nil
 }
 
-var ErrNotImplemented = errors.New("spiget: not implemented")
+var (
+	ErrNotImplemented = errors.New("spiget: not implemented")
+	ErrNoProject      = errors.New("spiget: project not found")
+	ErrNoVersion      = errors.New("spiget: version not found")
+)
+
+func unexpectedStatusError(url string, statusCode int) error {
+	return fmt.Errorf("spiget: unexpected status %d for %s", statusCode, url)
+}

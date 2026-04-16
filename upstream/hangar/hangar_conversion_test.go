@@ -1,6 +1,7 @@
 package hangar
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/mclucy/lucy/types"
@@ -91,6 +92,11 @@ func TestHangarProjectToProjectInformationAndSupport(t *testing.T) {
 	if len(info.Urls) < 5 {
 		t.Fatalf("expected project and settings links to map to info URLs, got %d", len(info.Urls))
 	}
+	assertHasHangarURL(t, info.Urls, "Hangar", types.UrlHome, "https://hangar.papermc.io/HelpChat/PlaceholderAPI")
+	assertHasHangarURL(t, info.Urls, "Issues", types.UrlIssues, "https://github.com/PlaceholderAPI/PlaceholderAPI/issues")
+	assertHasHangarURL(t, info.Urls, "Source", types.UrlSource, "https://github.com/PlaceholderAPI/PlaceholderAPI")
+	assertHasHangarURL(t, info.Urls, "Support", types.UrlForum, "https://helpch.at/discord")
+	assertHasHangarURL(t, info.Urls, "Wiki", types.UrlWiki, "https://github.com/PlaceholderAPI/PlaceholderAPI/wiki")
 
 	support := project.ToProjectSupport()
 	if len(support.Platforms) != 1 || support.Platforms[0] != types.Platform("paper") {
@@ -119,7 +125,7 @@ func TestHangarVersionToPackageRemoteAndSupport(t *testing.T) {
 		PlatformDependencies: hangarPlatformVersionMap{
 			"PAPER": {"1.20.6", "1.21", "1.21.1"},
 		},
-		PluginDependencies: map[string]hangarPluginDependency{},
+		PluginDependencies: map[string][]hangarPluginDependency{},
 	}
 
 	remote, ok := version.ToPackageRemoteForPlatform(types.Platform("paper"))
@@ -151,6 +157,76 @@ func TestHangarVersionToPackageRemoteAndSupport(t *testing.T) {
 	}
 }
 
+func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
+	external := "https://downloads.example.com/placeholderapi-bukkit.jar"
+	version := &hangarVersion{
+		Name: "2.12.3",
+		Downloads: map[string]hangarDownload{
+			"PAPER": {
+				DownloadURL: "https://hangarcdn.papermc.io/plugins/HelpChat/PlaceholderAPI/versions/2.12.3/PAPER/PlaceholderAPI-2.12.3-paper.jar",
+				FileInfo: hangarFileInfo{
+					Name:       "PlaceholderAPI-2.12.3-paper.jar",
+					SHA256Hash: "paper-sha256",
+				},
+			},
+			"BUKKIT": {
+				DownloadURL: "https://hangarcdn.papermc.io/plugins/HelpChat/PlaceholderAPI/versions/2.12.3/BUKKIT/PlaceholderAPI-2.12.3-bukkit.jar",
+				ExternalURL: &external,
+				FileInfo: hangarFileInfo{
+					Name:       "PlaceholderAPI-2.12.3-bukkit.jar",
+					SHA256Hash: "bukkit-sha256",
+				},
+			},
+		},
+		PlatformDependencies: hangarPlatformVersionMap{
+			"PAPER":  {"1.21.1", "1.21"},
+			"BUKKIT": {"1.21"},
+		},
+		PluginDependencies: map[string][]hangarPluginDependency{
+			"PAPER": {{Name: "Vault", Required: true}, {Name: "EssentialsX", Required: false}},
+		},
+	}
+
+	defaultRemote := version.ToPackageRemote()
+	if defaultRemote.FileUrl == "" {
+		t.Fatalf("expected ambiguous remote selection to still resolve a fetchable artifact")
+	}
+	if defaultRemote.Filename == "" {
+		t.Fatalf("expected ambiguous remote selection to keep a filename")
+	}
+	if defaultRemote.Hash == "" || defaultRemote.HashAlgorithm != "sha256" {
+		t.Fatalf("expected ambiguous remote selection to preserve sha256 metadata, got hash=%q algo=%q", defaultRemote.Hash, defaultRemote.HashAlgorithm)
+	}
+
+	paperRemote, ok := version.ToPackageRemoteForPlatform(types.Platform("PaPeR"))
+	if !ok {
+		t.Fatalf("expected case-insensitive platform match for paper")
+	}
+	if paperRemote.FileUrl != version.Downloads["PAPER"].DownloadURL {
+		t.Fatalf("expected paper download url, got %q", paperRemote.FileUrl)
+	}
+
+	if _, ok := version.ToPackageRemoteForPlatform(types.Platform("velocity")); ok {
+		t.Fatalf("expected missing platform to remain unresolved")
+	}
+
+	deps := version.PluginDependencyNames()
+	if len(deps) != 2 {
+		t.Fatalf("expected two normalized plugin dependency names, got %#v", deps)
+	}
+	if !slices.Contains(deps, types.ProjectName("essentialsx")) || !slices.Contains(deps, types.ProjectName("vault")) {
+		t.Fatalf("expected normalized plugin dependency names, got %#v", deps)
+	}
+
+	support := version.ToProjectSupport()
+	if len(support.Platforms) != 2 || support.Platforms[0] != "bukkit" || support.Platforms[1] != "paper" {
+		t.Fatalf("expected sorted provider platforms, got %#v", support.Platforms)
+	}
+	if len(support.MinecraftVersions) != 2 || support.MinecraftVersions[0] != "1.21" || support.MinecraftVersions[1] != "1.21.1" {
+		t.Fatalf("expected deduplicated minecraft versions, got %#v", support.MinecraftVersions)
+	}
+}
+
 func TestVersionListAndPlatformVersionScaffolding(t *testing.T) {
 	versions := HangarVersionListResponse{
 		Pagination: hangarPagination{Count: 1, Limit: 1, Offset: 0},
@@ -176,4 +252,17 @@ func TestVersionListAndPlatformVersionScaffolding(t *testing.T) {
 	if len(platformVersions[0].SubVersions) != 2 {
 		t.Fatalf("expected platform version scaffolding to preserve subversions")
 	}
+}
+
+func assertHasHangarURL(t *testing.T, urls []types.Url, name string, kind types.UrlType, value string) {
+	t.Helper()
+	if slices.ContainsFunc(urls, func(u types.Url) bool {
+		if u.Name == name && u.Type == kind && u.Url == value {
+			return true
+		}
+		return false
+	}) {
+		return
+	}
+	t.Fatalf("missing url name=%q type=%v value=%q in %#v", name, kind, value, urls)
 }

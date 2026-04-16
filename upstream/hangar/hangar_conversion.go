@@ -1,6 +1,7 @@
 package hangar
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -103,12 +104,15 @@ func (v *hangarVersion) ToProjectSupport() types.PlatformSupport {
 }
 
 func (v *hangarVersion) ToPackageRemote() types.PackageRemote {
-	platforms := sortedMapKeys(v.Downloads)
-	if len(platforms) == 0 {
-		return types.PackageRemote{Source: types.SourceHangar}
-	}
+	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.PlatformNone))
+	if remote.FileUrl == "" {
+		platforms := sortedMapKeys(v.Downloads)
+		if len(platforms) == 0 {
+			return types.PackageRemote{Source: types.SourceHangar}
+		}
 
-	remote, _ := v.ToPackageRemoteForPlatform(types.Platform(strings.ToLower(platforms[0])))
+		remote, _ = v.ToPackageRemoteForPlatform(types.Platform(strings.ToLower(platforms[0])))
+	}
 	return remote
 }
 
@@ -133,16 +137,60 @@ func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Platform) (typ
 }
 
 func (v *hangarVersion) PluginDependencyNames() []types.ProjectName {
+	depsForPlatform := v.DependenciesForPlatform(types.PlatformNone)
+	if len(depsForPlatform) == 0 {
+		return nil
+	}
+
+	deps := make([]types.ProjectName, 0, len(depsForPlatform))
+	for _, dep := range depsForPlatform {
+		if dep.Name == "" || dep.ExternalURL != nil {
+			continue
+		}
+		deps = append(deps, syntax.ToProjectName(dep.Name))
+	}
+	slices.Sort(deps)
+	return deps
+}
+
+func (v *hangarVersion) DependenciesForPlatform(platform types.Platform) []hangarPluginDependency {
 	if len(v.PluginDependencies) == 0 {
 		return nil
 	}
 
-	keys := sortedMapKeys(v.PluginDependencies)
-	deps := make([]types.ProjectName, 0, len(keys))
-	for _, key := range keys {
-		deps = append(deps, syntax.ToProjectName(key))
+	preferredKey := strings.ToUpper(preferredDownloadPlatform(platform).String())
+	if deps := v.PluginDependencies[preferredKey]; len(deps) > 0 {
+		return deps
 	}
-	return deps
+
+	for _, key := range sortedMapKeys(v.PluginDependencies) {
+		if deps := v.PluginDependencies[key]; len(deps) > 0 {
+			return deps
+		}
+	}
+
+	return nil
+}
+
+func (v *hangarVersion) HasDownloadForPlatform(platform types.Platform) bool {
+	_, ok := v.downloadForPlatform(preferredDownloadPlatform(platform))
+	if ok {
+		return true
+	}
+	return len(v.Downloads) > 0 && platform == types.PlatformNone
+}
+
+func (v *hangarVersion) SupportsPlatform(platform types.Platform) bool {
+	if len(v.PlatformDependencies) == 0 {
+		return false
+	}
+
+	preferredKey := strings.ToUpper(preferredDownloadPlatform(platform).String())
+	if versions := v.PlatformDependencies[preferredKey]; len(versions) > 0 {
+		return true
+	}
+
+	return platform == types.PlatformNone && len(v.PlatformDependencies) > 0
 }
 
 func (v *hangarVersion) downloadForPlatform(platform types.Platform) (hangarDownload, bool) {

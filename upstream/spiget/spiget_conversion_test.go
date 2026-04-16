@@ -65,6 +65,22 @@ func TestResourceResponseToProjectInformation(t *testing.T) {
 	assertHasURL(t, info.Urls, "Donate", types.UrlSponsor, "https://github.com/sponsors/PlaceholderAPI")
 }
 
+func TestResourceResponseToProjectInformation_NormalizesRelativeAndMiscLinks(t *testing.T) {
+	resource := resourceResponse{
+		Name: "PlaceholderAPI",
+		Links: map[string]string{
+			"alternativeSupport": "/threads/placeholderapi.61918/",
+			"custom_docs":        "resources/placeholderapi.6245/",
+			"":                   "https://ignored.example.com",
+		},
+	}
+
+	info := resource.ToProjectInformation()
+
+	assertHasURL(t, info.Urls, "Support", types.UrlForum, "https://www.spigotmc.org/threads/placeholderapi.61918/")
+	assertHasURL(t, info.Urls, "Custom docs", types.UrlMisc, "https://www.spigotmc.org/resources/placeholderapi.6245/")
+}
+
 func TestResourceResponseToProjectInformation_InvalidBase64IsDropped(t *testing.T) {
 	resource := resourceResponse{
 		Name:          "Broken",
@@ -159,6 +175,34 @@ func TestResolvedVersionIdentityPolicy(t *testing.T) {
 	}
 	if resolved.Matches(types.RawVersion("2.12.1")) {
 		t.Fatalf("did not expect mismatched version to match")
+	}
+	if resolved.Matches(types.VersionLatest) {
+		t.Fatalf("did not expect latest alias to count as an exact resolved version")
+	}
+	if resolved.Matches(types.VersionCompatible) {
+		t.Fatalf("did not expect compatible alias to count as an exact resolved version")
+	}
+}
+
+func TestResolvedVersionLatestFallbackPolicy(t *testing.T) {
+	resolved := NewResolvedVersion(
+		resourceResponse{ID: 6245, Name: "PlaceholderAPI", File: resourceFileResponse{Type: "jar"}},
+		versionResponse{ID: 625258},
+	)
+
+	if got := resolved.LucyVersion(); got != types.RawVersion("625258") {
+		t.Fatalf("expected numeric version id fallback for latest/exact resolution, got %q", got)
+	}
+	if !resolved.Matches(types.RawVersion("625258")) {
+		t.Fatalf("expected numeric version id to remain matchable")
+	}
+
+	remote := resolved.ToPackageRemote()
+	if remote.FileUrl != "https://api.spiget.org/v2/resources/6245/versions/625258/download" {
+		t.Fatalf("unexpected fallback file url %q", remote.FileUrl)
+	}
+	if remote.Filename != "placeholderapi-625258.jar" {
+		t.Fatalf("unexpected numeric fallback filename %q", remote.Filename)
 	}
 }
 

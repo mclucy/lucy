@@ -73,16 +73,16 @@ type HangarVersionListResponse struct {
 }
 
 type hangarVersion struct {
-	CreatedAt                     string                            `json:"createdAt"`
-	ID                            int64                             `json:"id"`
-	ProjectID                     int64                             `json:"projectId"`
-	Name                          string                            `json:"name"`
-	Description                   string                            `json:"description"`
-	Author                        string                            `json:"author"`
-	Downloads                     map[string]hangarDownload         `json:"downloads"`
-	PluginDependencies            map[string]hangarPluginDependency `json:"pluginDependencies"`
-	PlatformDependencies          hangarPlatformVersionMap          `json:"platformDependencies"`
-	PlatformDependenciesFormatted hangarPlatformVersionMap          `json:"platformDependenciesFormatted"`
+	CreatedAt                     string                              `json:"createdAt"`
+	ID                            int64                               `json:"id"`
+	ProjectID                     int64                               `json:"projectId"`
+	Name                          string                              `json:"name"`
+	Description                   string                              `json:"description"`
+	Author                        string                              `json:"author"`
+	Downloads                     map[string]hangarDownload           `json:"downloads"`
+	PluginDependencies            map[string][]hangarPluginDependency `json:"pluginDependencies"`
+	PlatformDependencies          hangarPlatformVersionMap            `json:"platformDependencies"`
+	PlatformDependenciesFormatted hangarPlatformVersionMap            `json:"platformDependenciesFormatted"`
 }
 
 type hangarDownload struct {
@@ -97,7 +97,13 @@ type hangarFileInfo struct {
 	SHA256Hash string `json:"sha256Hash"`
 }
 
-type hangarPluginDependency struct{}
+type hangarPluginDependency struct {
+	Name        string  `json:"name"`
+	ProjectID   *int64  `json:"projectId"`
+	Required    bool    `json:"required"`
+	ExternalURL *string `json:"externalUrl"`
+	Platform    string  `json:"platform"`
+}
 
 type HangarPlatformVersion struct {
 	Version     string   `json:"version"`
