@@ -8,25 +8,26 @@ import "github.com/mclucy/lucy/types"
 // rendering strings.
 
 const (
-	RuntimeNodeMinecraft  types.RuntimeNodeID = "minecraft"
-	RuntimeNodeFabric     types.RuntimeNodeID = "fabric"
-	RuntimeNodeForge      types.RuntimeNodeID = "forge"
-	RuntimeNodeNeoforge   types.RuntimeNodeID = "neoforge"
-	RuntimeNodeMCDR       types.RuntimeNodeID = "mcdr"
-	RuntimeNodePaper      types.RuntimeNodeID = "paper"
-	RuntimeNodeSpigot     types.RuntimeNodeID = "spigot"
-	RuntimeNodeBukkit     types.RuntimeNodeID = "bukkit"
-	RuntimeNodeFolia      types.RuntimeNodeID = "folia"
-	RuntimeNodeLeaves     types.RuntimeNodeID = "leaves"
-	RuntimeNodeSponge     types.RuntimeNodeID = "sponge"
-	RuntimeNodeArclight   types.RuntimeNodeID = "arclight"
-	RuntimeNodeYouer      types.RuntimeNodeID = "youer"
-	RuntimeNodeVelocity   types.RuntimeNodeID = "velocity"
-	RuntimeNodeBungeecord types.RuntimeNodeID = "bungeecord"
-	RuntimeNodeWaterfall  types.RuntimeNodeID = "waterfall"
-	RuntimeNodeGeyser     types.RuntimeNodeID = "geyser"
-	RuntimeNodeConnector  types.RuntimeNodeID = "connector"
-	RuntimeNodeKilt       types.RuntimeNodeID = "kilt"
+	RuntimeNodeMinecraft        types.RuntimeNodeID = "minecraft"
+	RuntimeNodeFabric           types.RuntimeNodeID = "fabric"
+	RuntimeNodeForge            types.RuntimeNodeID = "forge"
+	RuntimeNodeNeoforge         types.RuntimeNodeID = "neoforge"
+	RuntimeNodeMCDR             types.RuntimeNodeID = "mcdr"
+	RuntimeNodePaper            types.RuntimeNodeID = "paper"
+	RuntimeNodeSpigot           types.RuntimeNodeID = "spigot"
+	RuntimeNodeBukkit           types.RuntimeNodeID = "bukkit"
+	RuntimeNodeFolia            types.RuntimeNodeID = "folia"
+	RuntimeNodeLeaves           types.RuntimeNodeID = "leaves"
+	RuntimeNodeSponge           types.RuntimeNodeID = "sponge"
+	RuntimeNodeArclight         types.RuntimeNodeID = "arclight"
+	RuntimeNodeYouer            types.RuntimeNodeID = "youer"
+	RuntimeNodeVelocity         types.RuntimeNodeID = "velocity"
+	RuntimeNodeBungeecord       types.RuntimeNodeID = "bungeecord"
+	RuntimeNodeWaterfall        types.RuntimeNodeID = "waterfall"
+	RuntimeNodeGeyser           types.RuntimeNodeID = "geyser"
+	RuntimeNodeGeyserStandalone types.RuntimeNodeID = "geyser_standalone"
+	RuntimeNodeConnector        types.RuntimeNodeID = "connector"
+	RuntimeNodeKilt             types.RuntimeNodeID = "kilt"
 )
 
 var defaultRegistryEntries = []RegistryEntry{
@@ -160,6 +161,15 @@ var defaultRegistryEntries = []RegistryEntry{
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
 			types.CapabilityBungeecordPlugins,
+		},
+	},
+	{
+		NodeID:           RuntimeNodeGeyserStandalone,
+		Role:             types.RuntimeRoleProxy,
+		IdentityPlatform: types.PlatformAny,
+		Capabilities: []types.RuntimeCapability{
+			types.CapabilityProxying,
+			types.CapabilityProtocolBridge,
 		},
 	},
 	{

@@ -593,6 +593,8 @@ func runtimeNodeLabel(id types.RuntimeNodeID) string {
 		return "BungeeCord"
 	case probe.RuntimeNodeWaterfall:
 		return "Waterfall"
+	case probe.RuntimeNodeGeyserStandalone:
+		return "Geyser Standalone"
 	case probe.RuntimeNodeGeyser:
 		return "Geyser"
 	case probe.RuntimeNodeConnector:

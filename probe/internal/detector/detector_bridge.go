@@ -45,9 +45,18 @@ func DetectBridgeMarkers(zipReader *zip.Reader) []BridgeMarker {
 			addMarker("bungeecord", 0)
 		}
 
+		if strings.Contains(entryName, "org/geysermc/geyser/platform/standalone/") {
+			addMarker("geyser_standalone", 1)
+			continue
+		}
+
 		if strings.Contains(entryName, "org/geysermc/geyser/") {
 			addMarker("geyser", 1)
 		}
+	}
+
+	if _, hasStandalone := markers["geyser_standalone"]; hasStandalone {
+		delete(markers, "geyser")
 	}
 
 	if len(markers) == 0 {
@@ -55,7 +64,7 @@ func DetectBridgeMarkers(zipReader *zip.Reader) []BridgeMarker {
 	}
 
 	result := make([]BridgeMarker, 0, len(markers))
-	for _, nodeID := range []string{"connector", "kilt", "velocity", "bungeecord", "geyser"} {
+	for _, nodeID := range []string{"connector", "kilt", "velocity", "bungeecord", "geyser_standalone", "geyser"} {
 		if marker, exists := markers[nodeID]; exists {
 			result = append(result, marker)
 		}

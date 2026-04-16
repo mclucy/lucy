@@ -184,7 +184,7 @@ func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
 }
 
 func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
-	// Start with a fabric topology, enrich with geyser evidence
+	// Start with a fabric topology, enrich with attached geyser evidence
 	fabricEntry, _ := DefaultRegistry.FindEntry(RuntimeNodeFabric)
 	exec := &types.RuntimeInfo{
 		Topology: BuildTopologyFromEntry(fabricEntry),
@@ -196,6 +196,30 @@ func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 	_, hasGeyser := exec.Topology.FindNode(RuntimeNodeGeyser)
 	if !hasGeyser {
 		t.Error("expected geyser node to be merged into existing topology")
+	}
+	if _, hasStandalone := exec.Topology.FindNode(RuntimeNodeGeyserStandalone); hasStandalone {
+		t.Error("did not expect standalone geyser node from attached package evidence")
+	}
+}
+
+func TestEnrichTopologyFromPackages_NoTopologyWithStandaloneGeyserHint(t *testing.T) {
+	exec := &types.RuntimeInfo{
+		BridgeHints: []string{string(RuntimeNodeGeyserStandalone)},
+	}
+
+	EnrichTopologyFromPackages(exec, nil)
+
+	if exec.Topology == nil {
+		t.Fatal("expected topology to be built from standalone geyser hint")
+	}
+	if exec.Topology.PrimaryNode != RuntimeNodeGeyserStandalone {
+		t.Fatalf("expected standalone geyser to be primary node, got %q", exec.Topology.PrimaryNode)
+	}
+	if _, hasStandalone := exec.Topology.FindNode(RuntimeNodeGeyserStandalone); !hasStandalone {
+		t.Error("expected standalone geyser node in topology")
+	}
+	if _, hasAttached := exec.Topology.FindNode(RuntimeNodeGeyser); hasAttached {
+		t.Error("did not expect attached geyser node from standalone hint")
 	}
 }
 

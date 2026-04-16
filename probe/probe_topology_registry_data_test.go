@@ -28,6 +28,7 @@ func TestNormalizeRuntimeID_KnownNames(t *testing.T) {
 		{"spigot", RuntimeNodeSpigot},
 		{"velocity", RuntimeNodeVelocity},
 		{"bungeecord", RuntimeNodeBungeecord},
+		{"geyser", RuntimeNodeGeyser},
 	}
 	for _, tc := range cases {
 		got := NormalizeRuntimeID(tc.input)

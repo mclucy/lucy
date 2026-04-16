@@ -60,6 +60,7 @@ func EnrichTopologyFromPackages(
 	}
 
 	evidence := detectedRuntimeEvidence(packages)
+	evidence = append(evidence, detectedRuntimeEvidenceFromHints(exec.BridgeHints)...)
 
 	if exec.Topology == nil {
 		// No topology yet — attempt to build one from package evidence.
@@ -112,20 +113,6 @@ func EnrichTopologyFromPackages(
 			continue
 		}
 
-		mergeTopology(exec.Topology, annotation)
-	}
-
-	// Also process bridge hints from JAR scanning.
-	for _, hint := range exec.BridgeHints {
-		nodeID := types.RuntimeNodeID(hint)
-		entry, ok := FindEntry(nodeID)
-		if !ok {
-			continue
-		}
-		annotation := BuildTopologyFromEntry(entry)
-		if annotation == nil {
-			continue
-		}
 		mergeTopology(exec.Topology, annotation)
 	}
 
@@ -229,6 +216,27 @@ func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {
 	}
 	if hasAnyName(names, "arclight") {
 		detected = append(detected, RuntimeNodeArclight)
+	}
+
+	return detected
+}
+
+func detectedRuntimeEvidenceFromHints(hints []string) []types.RuntimeNodeID {
+	if len(hints) == 0 {
+		return nil
+	}
+
+	detected := make([]types.RuntimeNodeID, 0, len(hints))
+	for _, hint := range hints {
+		switch types.RuntimeNodeID(hint) {
+		case RuntimeNodeConnector,
+			RuntimeNodeKilt,
+			RuntimeNodeVelocity,
+			RuntimeNodeBungeecord,
+			RuntimeNodeGeyser,
+			RuntimeNodeGeyserStandalone:
+			detected = append(detected, types.RuntimeNodeID(hint))
+		}
 	}
 
 	return detected
