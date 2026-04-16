@@ -6,7 +6,7 @@
 
   <h2>
     <sub>Describe your server, not build it from scratch.</sub>
-    <div>Manage your Minecraft server with a unified CLI.</div>
+    <div>Manage your server with one unified CLI.</div>
   </h2>
 
   <h3>Lucy: The Modern Minecraft Server Environment Manager</h3>

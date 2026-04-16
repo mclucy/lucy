@@ -7,11 +7,11 @@
   <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
 
   <h2>
-    <div>描述你的 Minecraft 服务器，而不是从头开始构建</div>
+    <div>描述你的服务器，而不是从头开始构建</div>
     <sup>……只需要一行命令</sup>
   </h2>
 
-  <h3>现代化的 Minecraft 服务端环境管理器</h3>
+  <h3>Lucy —— 现代化的 Minecraft 服务端环境管理器</h3>
 
   <img
     src="https://goreportcard.com/badge/github.com/mclucy/lucy"
