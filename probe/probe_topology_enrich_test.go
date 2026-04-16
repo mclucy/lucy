@@ -181,6 +181,17 @@ func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
 	if !hasKilt {
 		t.Error("expected kilt node in topology")
 	}
+	if exec.Topology.PrimaryNode != RuntimeNodeFabric {
+		t.Fatalf("expected fabric to remain primary node, got %q", exec.Topology.PrimaryNode)
+	}
+	_, hasFabric := exec.Topology.FindNode(RuntimeNodeFabric)
+	if !hasFabric {
+		t.Error("expected fabric node in topology")
+	}
+	_, hasForge := exec.Topology.FindNode(RuntimeNodeForge)
+	if !hasForge {
+		t.Error("expected forge node in topology via kilt bridge")
+	}
 }
 
 func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {

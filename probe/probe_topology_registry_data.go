@@ -31,6 +31,7 @@ var normalizedRuntimeIDByName = map[string]types.RuntimeNodeID{
 	"waterfall":         RuntimeNodeWaterfall,
 	"sponge":            RuntimeNodeSponge,
 	"arclight":          RuntimeNodeArclight,
+	"kilt":              RuntimeNodeKilt,
 	"geyser":            RuntimeNodeGeyser,
 	"geyser standalone": RuntimeNodeGeyserStandalone,
 }

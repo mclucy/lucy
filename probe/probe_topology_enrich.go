@@ -69,19 +69,24 @@ func EnrichTopologyFromPackages(
 			return
 		}
 
-		// Build from the first evidence node, merge the rest.
-		firstEntry, ok := FindEntry(evidence[0])
-		if !ok {
-			exec.Topology = &types.RuntimeTopology{}
-			return
-		}
-		exec.Topology = BuildTopologyFromEntry(firstEntry)
-		if exec.Topology == nil {
-			exec.Topology = &types.RuntimeTopology{}
-			return
+		if inferred := inferHostTopologyFromAttachedBridgePackages(packages); inferred != nil {
+			exec.Topology = inferred
+		} else {
+
+			// Build from the first evidence node, merge the rest.
+			firstEntry, ok := FindEntry(evidence[0])
+			if !ok {
+				exec.Topology = &types.RuntimeTopology{}
+				return
+			}
+			exec.Topology = BuildTopologyFromEntry(firstEntry)
+			if exec.Topology == nil {
+				exec.Topology = &types.RuntimeTopology{}
+				return
+			}
 		}
 
-		for _, nodeID := range evidence[1:] {
+		for _, nodeID := range evidence {
 			entry, ok := FindEntry(nodeID)
 			if !ok {
 				continue
@@ -219,6 +224,30 @@ func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {
 	}
 
 	return detected
+}
+
+func inferHostTopologyFromAttachedBridgePackages(
+	packages []types.Package,
+) *types.RuntimeTopology {
+	for _, pkg := range packages {
+		name := strings.ToLower(strings.TrimSpace(pkg.Id.Name.String()))
+		if name != "kilt" {
+			continue
+		}
+
+		if pkg.Id.Platform != types.PlatformFabric {
+			continue
+		}
+
+		entry, ok := LookupByPlatform(types.PlatformFabric)
+		if !ok {
+			return nil
+		}
+
+		return BuildTopologyFromEntry(entry)
+	}
+
+	return nil
 }
 
 func detectedRuntimeEvidenceFromHints(hints []string) []types.RuntimeNodeID {
