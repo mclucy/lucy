@@ -23,17 +23,22 @@ var initCmd = &cobra.Command{
 directory. Creates .lucy/config.toml, .lucy/manifest.toml, and .lucy/lock.json.
 
 Init is optimized for taking over an existing server before it behaves like a
-blank-slate scaffold. Lucy inspects the live server first, records a soft
-manifest intent from those facts, and writes an exact lockfile for the resolved
-managed state.
+blank-slate scaffold. Lucy reconstructs the current reality first, then draws
+its managed boundary around the parts the operator wants it to own. It inspects
+the live server first, records a soft manifest intent from those facts, and
+writes an exact lockfile for the resolved managed state.
 
-No files are written until you confirm at the final review step. Existing Lucy
-state is preserved by default, and takeover-style init will show you what is
-already on disk before you decide what Lucy should manage.
+No files are written until you confirm at the final review step. That confirmation
+is mandatory before Lucy persists intent. Existing Lucy state is preserved by
+default, and takeover-style init will show you what is already on disk as an
+advisory hint before you decide what Lucy should manage. Lucy absorbs the
+existing server into a managed boundary instead of claiming total ownership of
+the directory.
 
-Version hints are fuzzy by design: omit a version to mean "compatible", use
-@latest to ask for the newest release, or keep the inferred runtime version
-when you want Lucy to match the current environment.`,
+Version hints are best-effort: omit a version to use "compatible" (newest
+version that appears to fit the current environment), use @latest to request
+the newest available, or keep the inferred runtime version when you want
+Lucy to match the current environment.`,
 	RunE: runWithErrorLogging(actionInit),
 }
 

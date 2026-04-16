@@ -13,7 +13,7 @@ import (
 
 var removeCmd = &cobra.Command{
 	Use:   "remove",
-	Short: "Remove packages from Lucy-managed intent",
+	Short: "Remove packages under explicit operator control",
 	Args:  cobra.MinimumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return CompletePackageIDSuggestions(context.Background(), "remove", toComplete)

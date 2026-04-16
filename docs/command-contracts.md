@@ -1,7 +1,7 @@
 # Lucy command contracts
 
 This document fixes one meaning for `lucy add`, `lucy remove`, and `lucy install`.
-It defines which layer each command owns:
+It keeps the operator in control and defines which layer each command owns:
 
 - manifest = human intent
 - lockfile = exact resolved facts
@@ -19,6 +19,8 @@ exist so later command work can converge without semantic overlap.
   rewrite or delete them.
 - Unmanaged content outside Lucy's managed scope is not a deletion target.
 - `install` does **not** mean "delete everything not in manifest".
+- `install` only synchronizes Lucy-managed scope; manual or ignored content stays
+  outside that boundary unless the operator changes the manifest.
 
 ## Side-effect matrix
 
@@ -32,14 +34,14 @@ exist so later command work can converge without semantic overlap.
 
 ### Contract
 
-`add` inserts or upgrades `required` intent, then resolves the resulting
-closure.
+`add` is an explicit operator action that inserts or upgrades `required`
+intent, then resolves the resulting closure.
 
 ### Manifest side effects
 
 - Insert a new package into manifest intent as `required` when missing.
 - Upgrade the existing `required` intent for the addressed package when present.
-- Do not rewrite unrelated `required` roots.
+- Do not rewrite unrelated `required` roots without the operator asking for it.
 - Do not convert `ignored` content into managed intent.
 
 ### Lockfile side effects
@@ -60,13 +62,14 @@ closure.
 
 ### Contract
 
-`remove` deletes `required` intent, then prunes no-longer-needed `transitive`
-dependencies.
+`remove` is an explicit operator action that deletes `required` intent, then
+prunes no-longer-needed `transitive` dependencies.
 
 ### Manifest side effects
 
 - Remove the addressed package from `required` intent.
-- Leave unrelated `required` roots unchanged.
+- Leave unrelated `required` roots unchanged unless the operator explicitly
+  removes them.
 - Leave `ignored` entries ignored.
 
 ### Lockfile side effects
@@ -85,8 +88,8 @@ dependencies.
 
 ### Contract
 
-`install` synchronizes the current server to manifest intent via exact lockfile
-facts.
+`install` is the explicit convergence step: it synchronizes the current server
+to manifest intent via exact lockfile facts.
 
 ### Manifest side effects
 
@@ -97,6 +100,7 @@ facts.
 - Materialize or refresh the exact resolved closure required by the current
   manifest.
 - Use the lockfile as the exact fact layer for subsequent runtime sync.
+- Do not widen the sync target beyond Lucy-managed scope.
 
 ### Runtime side effects
 

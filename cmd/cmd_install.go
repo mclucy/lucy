@@ -20,7 +20,7 @@ type installSyncPlan struct {
 
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Synchronize managed runtime state from the lockfile",
+	Short: "Converge Lucy-managed runtime state from the lockfile",
 	Args:  cobra.NoArgs,
 	RunE:  runWithErrorLogging(actionInstall),
 }

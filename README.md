@@ -43,9 +43,9 @@
 
 ## Overview
 
-`lucy` is a server-aware environment manager for Minecraft servers. It starts by taking over the server you already run, inspects what is actually installed, and then lets you decide what `lucy` should manage. It separates soft manifest intent from exact lockfile facts, handles dependency resolution, version tracking, source routing, environment probing, and keeps the workflow explicit through a unified CLI.
+`lucy` is a server-aware environment manager for Minecraft servers. It starts by taking over the server you already run, inspects what is actually installed, and then helps you define the scope Lucy should manage. It keeps that managed scope explicit with soft manifest intent and exact lockfile facts, while manual or unmanaged content stays part of the server and outside Lucy's ownership.
 
-If you've used `apt`, `brew`, or `npm`, some commands will feel familiar. The difference is that `lucy` starts from the server you already run. It does not assume a blank slate, and it does not require you to give up manual control over everything. It is meant to help server administrators get a messy real-world environment under control, one step at a time.
+If you've used `apt`, `brew`, or `npm`, some commands will feel familiar. The difference is that `lucy` starts from the server you already run. It does not assume a blank slate, and it does not try to replace everything on disk. Manual and managed content can coexist, and Lucy only claims the parts you place in its scope.
 
 ### Core Features
 
@@ -55,6 +55,7 @@ If you've used `apt`, `brew`, or `npm`, some commands will feel familiar. The di
 - Package access from Modrinth, CurseForge, MCDR Plugin Catalog, and more...
 - Discovery-led server probing and environment inference
 - Take over an existing server before trying to reshape it
+- Keep manual and unmanaged content alongside the managed scope
 - Keep manifest intent soft while recording exact lockfile facts
 - Topology-aware status reporting and risk surfacing
 - Non-intrusive design, all operations are independent of server runtime
@@ -86,7 +87,7 @@ lucy status
 java -jar fabric-server.jar
 ```
 
-`lucy init` starts by looking at the current directory. If you point it at an existing server, it takes over from live facts first, then asks what should become managed intent.
+`lucy init` starts by looking at the current directory. If you point it at an existing server, it takes over from live facts first, then asks what should become managed intent and what should remain manual or unmanaged.
 
 ---
 
@@ -219,7 +220,7 @@ platform  name   version
 
 All parts are optional except the project name. If you omit the platform, `lucy` infers it from the environment. The project is the name or ID of the mod/plugin. The version can be specific, `@latest`, or `@compatible` (the fuzzy default when you omit a version).
 
-`latest` means newest available; `compatible` means newest version that fits the inferred environment.
+`latest` means newest available; `compatible` means newest version that appears to fit the inferred environment under available metadata (best-effort resolution).
 
 Supported platforms: `fabric`, `forge`, `neoforge`, `mcdr`, `minecraft`, `none`
 

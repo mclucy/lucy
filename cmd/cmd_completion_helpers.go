@@ -54,8 +54,8 @@ func StaticPlatformCandidates() []CompletionCandidate {
 // StaticVersionCandidates returns completion candidates for fuzzy version hints.
 func StaticVersionCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.VersionCompatible.String(), Description: "Use the latest compatible version"},
-		{Value: "latest", Description: "Use the newest available version"},
+		{Value: types.VersionCompatible.String(), Description: "Newest version that appears to fit the environment"},
+		{Value: "latest", Description: "Request the newest available version"},
 	}
 }
 
