@@ -59,6 +59,10 @@ func providerSourcesFromTopology(topology *types.RuntimeTopology) topologyResolu
 				if capability != types.CapabilityBukkitPlugins && curseforgeAvailable() {
 					appendSource(types.SourceCurseForge)
 				}
+				if capability == types.CapabilityBukkitPlugins {
+					appendSource(types.SourceHangar)
+					appendSource(types.SourceSpiget)
+				}
 			case types.CapabilityMCDRPlugins:
 				sawKnownCapability = true
 				appendSource(types.SourceMCDR)
@@ -106,6 +110,8 @@ func providerSourcesByCapability(topology *types.RuntimeTopology) []types.Source
 
 	if topology.HasCapability(types.CapabilityBukkitPlugins) {
 		appendSource(types.SourceModrinth)
+		appendSource(types.SourceHangar)
+		appendSource(types.SourceSpiget)
 	}
 
 	if topology.HasCapability(types.CapabilityMCDRPlugins) {
