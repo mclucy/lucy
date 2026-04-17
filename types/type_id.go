@@ -23,15 +23,19 @@ import (
 type Platform string
 
 const (
-	PlatformAny       Platform = "" // PlatformAny is ambiguous but has single-valueness. It does NOT refer to multiple platforms, but rather a single platform that is unknown. Understand this as PlatformAny reduces to a definite platform at evaluation. Again, keep in mind that you should not allow it to be explicitly evaluated as multiple platforms.
-	PlatformMinecraft Platform = "minecraft"
-	PlatformVanilla            = PlatformMinecraft // Alias for Minecraft
-	PlatformFabric    Platform = "fabric"
-	PlatformForge     Platform = "forge"
-	PlatformNeoforge  Platform = "neoforge"
-	PlatformMCDR      Platform = "mcdr"
-	PlatformNone      Platform = "none"    // PlatformNone is a special platform that is not satisfied by any platform, but it can satisfy all platforms. It is typically used to indicate the absence of a platform, for example, when a package is not compatible with any platform, or when a package does not require a platform.
-	PlatformUnknown   Platform = "unknown" // PlatformUnknown is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
+	PlatformAny        Platform = "" // PlatformAny is ambiguous but has single-valueness. It does NOT refer to multiple platforms, but rather a single platform that is unknown. Understand this as PlatformAny reduces to a definite platform at evaluation. Again, keep in mind that you should not allow it to be explicitly evaluated as multiple platforms.
+	PlatformMinecraft  Platform = "minecraft"
+	PlatformVanilla             = PlatformMinecraft // Alias for Minecraft
+	PlatformFabric     Platform = "fabric"
+	PlatformForge      Platform = "forge"
+	PlatformNeoforge   Platform = "neoforge"
+	PlatformMCDR       Platform = "mcdr"
+	PlatformBukkit     Platform = "bukkit" // Can be comsumed by paper/spigot/craftbukkit/etc.
+	PlatformSponge     Platform = "sponge"
+	PlatformVelocity   Platform = "velocity"
+	PlatformBungeecord Platform = "bungeecord" // Can be consumed by both waterfall and bungeecord itself
+	PlatformNone       Platform = "none"       // PlatformNone is a special platform that is not satisfied by any platform, but it can satisfy all platforms. It is typically used to indicate the absence of a platform, for example, when a package is not compatible with any platform, or when a package does not require a platform.
+	PlatformUnknown    Platform = "unknown"    // PlatformUnknown is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
 )
 
 func (p Platform) Title() string {
