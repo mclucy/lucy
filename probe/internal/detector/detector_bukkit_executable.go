@@ -267,7 +267,6 @@ func buildBukkitImplementationEdge(
 		From: from,
 		To:   to,
 		Verb: verb,
-		Risk: types.RiskNone,
 	}
 }
 

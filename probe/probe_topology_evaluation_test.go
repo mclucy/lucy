@@ -36,9 +36,6 @@ func TestEvaluateCompatibility_DirectCapabilityMatch(t *testing.T) {
 	if result.Reason != "direct_capability_match" {
 		t.Errorf("unexpected reason: %q", result.Reason)
 	}
-	if result.RiskLevel != types.RiskNone {
-		t.Errorf("expected RiskNone, got %d", result.RiskLevel)
-	}
 }
 
 func TestEvaluateCompatibility_Incompatible(t *testing.T) {
@@ -53,37 +50,17 @@ func TestEvaluateCompatibility_Incompatible(t *testing.T) {
 	}
 }
 
-func TestEvaluateCompatibility_HostedLayerCapabilityMatch(t *testing.T) {
+func TestEvaluateCompatibility_IndirectHostedCapabilityIsDegraded(t *testing.T) {
 	host := makeNode("neoforge")
 	hosted := makeNode("sinytra", types.CapabilityFabricMods)
-	edge := makeEdge("neoforge", "sinytra", types.EdgeHosts, types.RiskLow)
-	topo := makeTopology("neoforge", []types.RuntimeNode{host, hosted}, []types.RuntimeEdge{edge})
-	result := EvaluateCompatibility(topo, types.CapabilityFabricMods)
-	if result.Verdict != types.CompatCompatible {
-		t.Fatalf("expected hosted capability to satisfy compatibility, got %q", result.Verdict)
-	}
-	if result.Reason != "hosted_layer_capability_match" {
-		t.Fatalf("expected hosted_layer_capability_match reason, got %q", result.Reason)
-	}
-	if result.RiskLevel != types.RiskLow {
-		t.Fatalf("expected hosted layer risk to propagate, got %d", result.RiskLevel)
-	}
-}
-
-func TestEvaluateCompatibility_HostedLayerHighRiskDegraded(t *testing.T) {
-	host := makeNode("neoforge")
-	hosted := makeNode("sinytra", types.CapabilityFabricMods)
-	edge := makeEdge("neoforge", "sinytra", types.EdgeHosts, types.RiskHigh)
+	edge := makeEdge("neoforge", "sinytra", types.EdgeHosts)
 	topo := makeTopology("neoforge", []types.RuntimeNode{host, hosted}, []types.RuntimeEdge{edge})
 	result := EvaluateCompatibility(topo, types.CapabilityFabricMods)
 	if result.Verdict != types.CompatDegraded {
-		t.Fatalf("expected high-risk hosted layer to degrade compatibility, got %q", result.Verdict)
+		t.Fatalf("expected hosted capability to degrade compatibility, got %q", result.Verdict)
 	}
-	if result.Reason != "hosted_layer_capability_match" {
-		t.Fatalf("expected hosted_layer_capability_match reason, got %q", result.Reason)
-	}
-	if result.RiskLevel != types.RiskHigh {
-		t.Fatalf("expected hosted layer risk to propagate, got %d", result.RiskLevel)
+	if result.Reason != "indirect_capability_match" {
+		t.Fatalf("expected indirect_capability_match reason, got %q", result.Reason)
 	}
 }
 

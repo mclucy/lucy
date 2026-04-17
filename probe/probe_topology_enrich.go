@@ -100,6 +100,7 @@ func EnrichTopologyFromPackages(
 
 		applyDeclarativeConnections(exec.Topology, internaltopology.DefaultConnectionRegistry)
 		NormalizeTopology(exec.Topology)
+		FoldTopologyRisk(exec.Topology)
 		return
 	}
 
@@ -123,6 +124,7 @@ func EnrichTopologyFromPackages(
 
 	applyDeclarativeConnections(exec.Topology, internaltopology.DefaultConnectionRegistry)
 	NormalizeTopology(exec.Topology)
+	FoldTopologyRisk(exec.Topology)
 }
 
 func applyDeclarativeConnections(
@@ -318,6 +320,42 @@ func NormalizeTopology(t *types.RuntimeTopology) {
 	t.Edges = dedupedEdges
 
 	sortTopology(t)
+}
+
+// FoldTopologyRisk propagates the maximum node risk level across all connected
+// components by repeatedly folding each edge's endpoints to their maximum risk.
+// Safe to call on nil or unresolved topologies.
+func FoldTopologyRisk(t *types.RuntimeTopology) {
+	if t == nil {
+		return
+	}
+
+	nodeIndex := make(map[types.RuntimeNodeID]int, len(t.Nodes))
+	for i, node := range t.Nodes {
+		nodeIndex[node.ID] = i
+	}
+
+	changed := true
+	for changed {
+		changed = false
+		for _, edge := range t.Edges {
+			from, okFrom := nodeIndex[edge.From]
+			to, okTo := nodeIndex[edge.To]
+			if !okFrom || !okTo {
+				continue
+			}
+
+			maxRisk := max(t.Nodes[from].RiskLevel, t.Nodes[to].RiskLevel)
+			if t.Nodes[from].RiskLevel != maxRisk {
+				t.Nodes[from].RiskLevel = maxRisk
+				changed = true
+			}
+			if t.Nodes[to].RiskLevel != maxRisk {
+				t.Nodes[to].RiskLevel = maxRisk
+				changed = true
+			}
+		}
+	}
 }
 
 func mergeTopology(dst *types.RuntimeTopology, src *types.RuntimeTopology) {

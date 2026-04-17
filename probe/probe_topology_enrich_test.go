@@ -24,7 +24,7 @@ func TestNormalizeTopology_DeduplicatesNodes(t *testing.T) {
 }
 
 func TestNormalizeTopology_DeduplicatesEdges(t *testing.T) {
-	e := makeEdge("a", "b", types.EdgeHosts, types.RiskHigh)
+	e := makeEdge("a", "b", types.EdgeHosts)
 	topo := makeTopology(
 		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
@@ -59,9 +59,9 @@ func TestNormalizeTopology_SortsEdges(t *testing.T) {
 		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b"), makeNode("c")},
 		[]types.RuntimeEdge{
-			makeEdge("b", "c", types.EdgeHosts, 0),
-			makeEdge("a", "c", types.EdgeHosts, 0),
-			makeEdge("a", "b", types.EdgeHosts, 0),
+			makeEdge("b", "c", types.EdgeHosts),
+			makeEdge("a", "c", types.EdgeHosts),
+			makeEdge("a", "b", types.EdgeHosts),
 		},
 	)
 	NormalizeTopology(topo)
@@ -73,6 +73,66 @@ func TestNormalizeTopology_SortsEdges(t *testing.T) {
 func TestNormalizeTopology_NilSafe(t *testing.T) {
 	// Should not panic
 	NormalizeTopology(nil)
+}
+
+func TestFoldTopologyRisk_PropagatesMaximumRiskAcrossConnectedNodes(t *testing.T) {
+	topo := makeTopology(
+		"a",
+		[]types.RuntimeNode{
+			{ID: "a", RiskLevel: types.RiskNone},
+			{ID: "b", RiskLevel: types.RiskHigh},
+		},
+		[]types.RuntimeEdge{makeEdge("a", "b", types.EdgeHosts)},
+	)
+
+	FoldTopologyRisk(topo)
+
+	for _, node := range topo.Nodes {
+		if node.RiskLevel != types.RiskHigh {
+			t.Fatalf("expected node %q to fold to RiskHigh, got %v", node.ID, node.RiskLevel)
+		}
+	}
+}
+
+func TestFoldTopologyRisk_NilSafe(t *testing.T) {
+	FoldTopologyRisk(nil)
+}
+
+func TestFoldTopologyRisk_NoEdges(t *testing.T) {
+	topo := makeTopology(
+		"solo",
+		[]types.RuntimeNode{{ID: "solo", RiskLevel: types.RiskMedium}},
+		nil,
+	)
+
+	FoldTopologyRisk(topo)
+
+	if topo.Nodes[0].RiskLevel != types.RiskMedium {
+		t.Fatalf("expected isolated node risk to remain RiskMedium, got %v", topo.Nodes[0].RiskLevel)
+	}
+}
+
+func TestFoldTopologyRisk_TransitivePropagation(t *testing.T) {
+	topo := makeTopology(
+		"a",
+		[]types.RuntimeNode{
+			{ID: "a", RiskLevel: types.RiskNone},
+			{ID: "b", RiskLevel: types.RiskNone},
+			{ID: "c", RiskLevel: types.RiskHigh},
+		},
+		[]types.RuntimeEdge{
+			makeEdge("a", "b", types.EdgeHosts),
+			makeEdge("b", "c", types.EdgeHosts),
+		},
+	)
+
+	FoldTopologyRisk(topo)
+
+	for _, node := range topo.Nodes {
+		if node.RiskLevel != types.RiskHigh {
+			t.Fatalf("expected transitive fold to set node %q to RiskHigh, got %v", node.ID, node.RiskLevel)
+		}
+	}
 }
 
 func TestMergeTopology_AddsNewNodes(t *testing.T) {
@@ -102,7 +162,7 @@ func TestMergeTopology_AddsNewEdges(t *testing.T) {
 	src := makeTopology(
 		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
-		[]types.RuntimeEdge{makeEdge("a", "b", types.EdgeHosts, 0)},
+		[]types.RuntimeEdge{makeEdge("a", "b", types.EdgeHosts)},
 	)
 	mergeTopology(dst, src)
 	if len(dst.Edges) != 1 {
@@ -111,7 +171,7 @@ func TestMergeTopology_AddsNewEdges(t *testing.T) {
 }
 
 func TestMergeTopology_SkipsDuplicateEdges(t *testing.T) {
-	e := makeEdge("a", "b", types.EdgeHosts, 0)
+	e := makeEdge("a", "b", types.EdgeHosts)
 	dst := makeTopology(
 		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},

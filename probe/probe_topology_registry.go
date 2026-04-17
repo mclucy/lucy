@@ -16,7 +16,6 @@ type RegistryEntry struct {
 type RegistryEdge struct {
 	TargetNodeID types.RuntimeNodeID
 	Kind         types.RuntimeEdgeVerb
-	Risk         types.RuntimeRiskLevel
 }
 
 type RuntimeRegistry struct {
@@ -80,7 +79,6 @@ func BuildTopologyFromEntry(entry RegistryEntry) *types.RuntimeTopology {
 			From: entry.NodeID,
 			To:   policyEdge.TargetNodeID,
 			Verb: policyEdge.Kind,
-			Risk: policyEdge.Risk,
 		})
 
 		if _, alreadyAdded := seenNode[policyEdge.TargetNodeID]; alreadyAdded {
@@ -109,6 +107,7 @@ func BuildTopologyFromEntry(entry RegistryEntry) *types.RuntimeTopology {
 
 	applyDeclarativeConnections(topology, internaltopology.DefaultConnectionRegistry)
 	NormalizeTopology(topology)
+	FoldTopologyRisk(topology)
 
 	return topology
 }

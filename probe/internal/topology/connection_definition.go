@@ -6,7 +6,6 @@ type ConnectionDefinition struct {
 	Source       ConnectionSource
 	TargetNodeID types.RuntimeNodeID
 	Kind         types.RuntimeEdgeVerb
-	Risk         types.RuntimeRiskLevel
 }
 
 func (d ConnectionDefinition) EdgeFrom(sourceNodeID types.RuntimeNodeID) types.RuntimeEdge {
@@ -14,6 +13,5 @@ func (d ConnectionDefinition) EdgeFrom(sourceNodeID types.RuntimeNodeID) types.R
 		From: sourceNodeID,
 		To:   d.TargetNodeID,
 		Verb: d.Kind,
-		Risk: d.Risk,
 	}
 }

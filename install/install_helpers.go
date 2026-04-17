@@ -37,26 +37,15 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 		case types.CompatCompatible:
 			return nil
 		case types.CompatDegraded:
-			if result.RiskLevel < types.RiskHigh {
-				logger.ShowWarn(
-					fmt.Errorf(
-						"compatibility degraded for %s: %s (reason: %s, risk_level: %d)",
-						platform,
-						result.Detail,
-						result.Reason,
-						result.RiskLevel,
-					),
-				)
-				return nil
-			}
-
-			return fmt.Errorf(
-				"%s runtime support is too degraded (reason: %s, verdict: %s, risk_level: %d)",
-				platform.Title(),
+			// CompatDegraded means the ecosystem is reachable only through an indirect
+			// hosted/support path. It is warn-only here; numeric risk gating is node-based.
+			logger.ShowWarn(fmt.Errorf(
+				"compatibility degraded for %s: %s (reason: %s)",
+				platform,
+				result.Detail,
 				result.Reason,
-				result.Verdict,
-				result.RiskLevel,
-			)
+			))
+			return nil
 		case types.CompatUnresolved:
 			return fmt.Errorf(
 				"topology unresolved for %s: cannot determine server compatibility",
@@ -64,19 +53,17 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 			)
 		case types.CompatIncompatible:
 			return fmt.Errorf(
-				"%s packages are incompatible with the current runtime (reason: %s, verdict: %s, risk_level: %d)",
+				"%s packages are incompatible with the current runtime (reason: %s, verdict: %s)",
 				platform.Title(),
 				result.Reason,
 				result.Verdict,
-				result.RiskLevel,
 			)
 		default:
 			return fmt.Errorf(
-				"%s runtime compatibility could not be confirmed (reason: %s, verdict: %s, risk_level: %d)",
+				"%s runtime compatibility could not be confirmed (reason: %s, verdict: %s)",
 				platform.Title(),
 				result.Reason,
 				result.Verdict,
-				result.RiskLevel,
 			)
 		}
 	}

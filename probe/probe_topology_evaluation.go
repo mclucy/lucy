@@ -20,20 +20,21 @@ import (
 // No file I/O, no network calls, no logging, no panic.
 //
 // EvaluateCompatibility evaluates whether a server runtime (described by topology)
-// can host packages of the given capability/ecosystem.
-// Returns a CompatResult with verdict, reason code, and risk level.
-// Never returns nil - always returns a deterministic result.
+// can support the requested ecosystem. Verdict encodes direct support, indirect/hosted
+// support, incompatibility, or unresolved topology. Indirect support is reported as
+// CompatDegraded, while runtime risk remains a node-level topology concern. Never
+// returns nil - always returns a deterministic result.
 func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability types.RuntimeCapability) types.CompatResult {
 	if topology == nil || !topology.Resolved() {
 		return types.CompatResult{
-			Verdict:   types.CompatUnresolved,
-			Reason:    "topology_unresolved",
-			Detail:    "Server runtime topology has not been probed or could not be determined.",
-			RiskLevel: types.RiskMedium,
+			Verdict: types.CompatUnresolved,
+			Reason:  "topology_unresolved",
+			Detail:  "Server runtime topology has not been probed or could not be determined.",
 		}
 	}
 
-	hostedTargets := make(map[types.RuntimeNodeID]types.RuntimeRiskLevel, len(topology.Edges))
+	// Collect nodes reachable only via EdgeHosts (indirect/hosted paths).
+	hostedTargets := make(map[types.RuntimeNodeID]struct{}, len(topology.Edges))
 	for _, edge := range topology.Edges {
 		if edge.Verb != types.EdgeHosts {
 			continue
@@ -44,10 +45,10 @@ func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability t
 			continue
 		}
 
-		hostedRisk := max(edge.Risk, targetNode.RiskLevel)
-		hostedTargets[edge.To] = max(hostedTargets[edge.To], hostedRisk)
+		hostedTargets[edge.To] = struct{}{}
 	}
 
+	// Direct capability match (not via hosted path).
 	for _, node := range topology.Nodes {
 		if _, isHostedTarget := hostedTargets[node.ID]; isHostedTarget {
 			continue
@@ -55,33 +56,26 @@ func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability t
 
 		if node.HasCapability(requiredCapability) {
 			return types.CompatResult{
-				Verdict:   types.CompatCompatible,
-				Reason:    "direct_capability_match",
-				Detail:    fmt.Sprintf("Runtime has direct support for %s.", requiredCapability),
-				RiskLevel: types.RiskNone,
+				Verdict: types.CompatCompatible,
+				Reason:  "direct_capability_match",
+				Detail:  fmt.Sprintf("Runtime has direct support for %s.", requiredCapability),
 			}
 		}
 	}
 
-	for _, hostedRisk := range hostedTargets {
-		verdict := types.CompatCompatible
-		if hostedRisk >= types.RiskMedium {
-			verdict = types.CompatDegraded
-		}
-
+	// Indirect/hosted capability match — always degraded regardless of node risk.
+	if len(hostedTargets) > 0 {
 		return types.CompatResult{
-			Verdict:   verdict,
-			Reason:    "hosted_layer_capability_match",
-			Detail:    fmt.Sprintf("Compatibility provided by a hosted layer with %s support (risk: %d).", requiredCapability, hostedRisk),
-			RiskLevel: hostedRisk,
+			Verdict: types.CompatDegraded,
+			Reason:  "indirect_capability_match",
+			Detail:  fmt.Sprintf("Support for %s is available through a hosted or indirect runtime path.", requiredCapability),
 		}
 	}
 
 	return types.CompatResult{
-		Verdict:   types.CompatIncompatible,
-		Reason:    "no_capability_match",
-		Detail:    fmt.Sprintf("Runtime does not support %s.", requiredCapability),
-		RiskLevel: types.RiskNone,
+		Verdict: types.CompatIncompatible,
+		Reason:  "no_capability_match",
+		Detail:  fmt.Sprintf("Runtime does not support %s.", requiredCapability),
 	}
 }
 

@@ -53,11 +53,12 @@ const (
 	CompatUnresolved   CompatVerdict = "unresolved"
 )
 
+// CompatResult reports only the compatibility verdict and its explanation.
+// Runtime risk is tracked on topology nodes, not on compat results or edges.
 type CompatResult struct {
-	Verdict   CompatVerdict    `json:"verdict"`
-	Reason    string           `json:"reason"`
-	Detail    string           `json:"detail"`
-	RiskLevel RuntimeRiskLevel `json:"risk_level"`
+	Verdict CompatVerdict `json:"verdict"`
+	Reason  string        `json:"reason"`
+	Detail  string        `json:"detail"`
 }
 
 // CompatPolicy describes the compatibility relationship between a server runtime
@@ -69,12 +70,12 @@ type CompatPolicy struct {
 	PackageEcosystem RuntimeCapability `json:"package_ecosystem"`
 	// Verdict is the base verdict for this relationship (without bridge layers).
 	Verdict CompatVerdict `json:"verdict"`
-	// Risk is the risk level for this combination.
-	Risk RuntimeRiskLevel `json:"risk"`
 	// Reason is a machine-readable code for why this verdict was reached.
 	Reason string `json:"reason"`
 }
 
+// RuntimeNode describes a materialized runtime layer. RiskLevel is node-scoped and
+// may be folded across connected topology components during enrichment.
 type RuntimeNode struct {
 	ID           RuntimeNodeID       `json:"id"`
 	Role         RuntimeRole         `json:"role"`
@@ -101,11 +102,12 @@ const (
 	EdgeProxies    RuntimeEdgeVerb = "proxies"    // this is preserved for the capibility of multi-server modelling, e.g. velocity proxying to a paper server. No actual usage of this verb yet.
 )
 
+// RuntimeEdge records only structural relationships between runtime nodes.
+// Compatibility severity is expressed via CompatVerdict, while risk remains node-only.
 type RuntimeEdge struct {
-	From RuntimeNodeID    `json:"from"`
-	To   RuntimeNodeID    `json:"to"`
-	Verb RuntimeEdgeVerb  `json:"verb"`
-	Risk RuntimeRiskLevel `json:"risk"`
+	From RuntimeNodeID   `json:"from"`
+	To   RuntimeNodeID   `json:"to"`
+	Verb RuntimeEdgeVerb `json:"verb"`
 }
 
 type RuntimeTopology struct {

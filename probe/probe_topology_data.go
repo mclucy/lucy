@@ -77,7 +77,6 @@ var defaultRegistryEntries = []RegistryEntry{
 			{
 				TargetNodeID: RuntimeNodeMinecraft,
 				Kind:         types.EdgeModifies,
-				Risk:         types.RiskNone,
 			},
 		},
 	},
@@ -94,7 +93,6 @@ var defaultRegistryEntries = []RegistryEntry{
 			{
 				TargetNodeID: RuntimeNodePaper,
 				Kind:         types.EdgeImplements,
-				Risk:         types.RiskNone,
 			},
 		},
 	},
@@ -110,7 +108,6 @@ var defaultRegistryEntries = []RegistryEntry{
 			{
 				TargetNodeID: RuntimeNodeMinecraft,
 				Kind:         types.EdgeModifies,
-				Risk:         types.RiskNone,
 			},
 		},
 	},
@@ -125,7 +122,6 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{{
 			TargetNodeID: RuntimeNodeMinecraft,
 			Kind:         types.EdgeModifies,
-			Risk:         types.RiskNone,
 		}},
 	},
 	{
@@ -145,7 +141,6 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{{
 			TargetNodeID: RuntimeNodePaper,
 			Kind:         types.EdgeImplements,
-			Risk:         types.RiskMedium,
 		}},
 	},
 	{
@@ -158,7 +153,6 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{{
 			TargetNodeID: RuntimeNodePaper,
 			Kind:         types.EdgeImplements,
-			Risk:         types.RiskNone,
 		}},
 	},
 	{

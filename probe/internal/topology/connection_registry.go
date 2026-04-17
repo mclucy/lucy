@@ -83,7 +83,6 @@ func cloneConnectionDefinition(definition ConnectionDefinition) ConnectionDefini
 		},
 		TargetNodeID: definition.TargetNodeID,
 		Kind:         definition.Kind,
-		Risk:         definition.Risk,
 	}
 }
 
@@ -92,9 +91,6 @@ func sortConnectionDefinitions(definitions []ConnectionDefinition) {
 		if definitions[i].TargetNodeID != definitions[j].TargetNodeID {
 			return string(definitions[i].TargetNodeID) < string(definitions[j].TargetNodeID)
 		}
-		if definitions[i].Kind != definitions[j].Kind {
-			return string(definitions[i].Kind) < string(definitions[j].Kind)
-		}
-		return definitions[i].Risk < definitions[j].Risk
+		return string(definitions[i].Kind) < string(definitions[j].Kind)
 	})
 }
