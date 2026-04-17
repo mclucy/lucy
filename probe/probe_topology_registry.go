@@ -16,7 +16,7 @@ type RegistryEntry struct {
 
 type RegistryEdge struct {
 	TargetNodeID types.RuntimeNodeID
-	Kind         types.RuntimeEdgeKind
+	Kind         types.RuntimeEdgeVerb
 	Risk         types.RuntimeRiskLevel
 }
 
@@ -102,7 +102,7 @@ func BuildTopologyFromEntry(entry RegistryEntry) *types.RuntimeTopology {
 		edges = append(edges, types.RuntimeEdge{
 			From: entry.NodeID,
 			To:   policyEdge.TargetNodeID,
-			Kind: policyEdge.Kind,
+			Verb: policyEdge.Kind,
 			Risk: policyEdge.Risk,
 		})
 

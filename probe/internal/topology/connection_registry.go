@@ -11,22 +11,7 @@ type ConnectionRegistry struct {
 	byCapability map[types.RuntimeCapability][]ConnectionDefinition
 }
 
-var DefaultConnectionRegistry = NewConnectionRegistry(
-	[]ConnectionDefinition{
-		{
-			Source:       SourceNode("connector"),
-			TargetNodeID: "fabric",
-			Kind:         types.EdgeBridges,
-			Risk:         types.RiskHigh,
-		},
-		{
-			Source:       SourceNode("kilt"),
-			TargetNodeID: "forge",
-			Kind:         types.EdgeBridges,
-			Risk:         types.RiskHigh,
-		},
-	},
-)
+var DefaultConnectionRegistry = NewConnectionRegistry(nil)
 
 func NewConnectionRegistry(definitions []ConnectionDefinition) ConnectionRegistry {
 	registry := ConnectionRegistry{

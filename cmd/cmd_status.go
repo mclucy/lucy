@@ -434,7 +434,10 @@ func statusEffectiveRiskLevel(
 	}
 
 	for _, edge := range topology.EdgesFrom(topology.PrimaryNode) {
-		if edge.Kind != types.EdgeBridges && edge.Kind != types.EdgeRoutes && edge.Kind != types.EdgeAdapts {
+		switch edge.Verb {
+		case types.EdgeHosts, types.EdgeImplements, types.EdgeModifies, types.EdgeProxies:
+			// keep - these can carry meaningful risk
+		default:
 			continue
 		}
 		if edge.Risk > effective {
@@ -443,7 +446,10 @@ func statusEffectiveRiskLevel(
 	}
 
 	for _, edge := range topology.EdgesTo(topology.PrimaryNode) {
-		if edge.Kind != types.EdgeBridges && edge.Kind != types.EdgeRoutes && edge.Kind != types.EdgeAdapts {
+		switch edge.Verb {
+		case types.EdgeHosts, types.EdgeImplements, types.EdgeModifies, types.EdgeProxies:
+			// keep - these can carry meaningful risk
+		default:
 			continue
 		}
 		if edge.Risk > effective {
@@ -458,22 +464,22 @@ func runtimeTopologyRelationLabel(topology *types.RuntimeTopology, primaryNode t
 	switch primaryNode.Role {
 	case types.RuntimeRoleProxy:
 		if targets := runtimeTopologyTargets(topology, primaryNode.ID); len(targets) > 0 {
-			return "routes to " + strings.Join(targets, ", ")
+			return "proxies to " + strings.Join(targets, ", ")
 		}
-		return "routes traffic"
+		return "proxies to backends"
 	case types.RuntimeRoleHybrid:
 		if targets := runtimeTopologyTargets(topology, primaryNode.ID); len(targets) > 0 {
-			return "bridges " + strings.Join(targets, ", ")
+			return "hosts " + strings.Join(targets, ", ")
 		}
 		return "hybrid runtime"
 	case types.RuntimeRoleBridge:
 		if targets := runtimeTopologyTargets(topology, primaryNode.ID); len(targets) > 0 {
-			return "bridges to " + strings.Join(targets, ", ")
+			return "hosts compatibility layer"
 		}
-		return "bridge layer"
+		return "compatibility layer"
 	case types.RuntimeRoleProtocolBridge:
 		if targets := runtimeTopologyTargets(topology, primaryNode.ID); len(targets) > 0 {
-			return "protocol bridge to " + strings.Join(targets, ", ")
+			return "provides protocol compatibility for " + strings.Join(targets, ", ")
 		}
 		return "protocol bridge"
 	default:
@@ -489,7 +495,10 @@ func runtimeTopologyTargets(topology *types.RuntimeTopology, nodeID types.Runtim
 	targets := make([]string, 0, 2)
 	seen := make(map[string]struct{}, 2)
 	for _, edge := range topology.EdgesFrom(nodeID) {
-		if edge.Kind != types.EdgeBridges && edge.Kind != types.EdgeRoutes && edge.Kind != types.EdgeAdapts {
+		switch edge.Verb {
+		case types.EdgeHosts, types.EdgeProxies:
+			// keep - these point to meaningful targets
+		default:
 			continue
 		}
 		if target, ok := topology.FindNode(edge.To); ok {

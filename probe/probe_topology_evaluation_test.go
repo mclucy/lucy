@@ -53,76 +53,37 @@ func TestEvaluateCompatibility_Incompatible(t *testing.T) {
 	}
 }
 
-func TestEvaluateCompatibility_BridgeCompatible_LowRisk(t *testing.T) {
-	// Build a topology where node A bridges to node B (low risk), B has forge_mods.
-	// The capability is only reachable via the bridge edge, so the result should
-	// come from the bridge path (not the direct scan).
-	nodeA := makeNode("bridge_node")
-	nodeB := makeNode("forge_node", types.CapabilityForgeMods)
-	edge := makeEdge("bridge_node", "forge_node", types.EdgeBridges, types.RiskLow)
-	topo := makeTopology("bridge_node", []types.RuntimeNode{nodeA, nodeB}, []types.RuntimeEdge{edge})
-	result := EvaluateCompatibility(topo, types.CapabilityForgeMods)
-	if result.Verdict != types.CompatCompatible {
-		t.Errorf("expected CompatCompatible for low-risk bridge, got %q", result.Verdict)
-	}
-	if result.Reason != "bridge_compatibility" {
-		t.Errorf("expected bridge_compatibility reason, got %q", result.Reason)
-	}
-}
-
-func TestEvaluateCompatibility_BridgeCompatible_HighRisk_Degraded(t *testing.T) {
-	nodeA := makeNode("bridge_node")
-	nodeB := makeNode("target_node", types.CapabilityForgeMods)
-	edge := makeEdge("bridge_node", "target_node", types.EdgeBridges, types.RiskHigh)
-	topo := makeTopology("bridge_node", []types.RuntimeNode{nodeA, nodeB}, []types.RuntimeEdge{edge})
-	result := EvaluateCompatibility(topo, types.CapabilityForgeMods)
-	if result.Verdict != types.CompatDegraded {
-		t.Errorf("expected CompatDegraded for high-risk bridge, got %q", result.Verdict)
-	}
-	if result.Reason != "bridge_compatibility" {
-		t.Errorf("expected bridge_compatibility reason, got %q", result.Reason)
-	}
-}
-
-func TestEvaluateCompatibility_BridgeEdgeUsedForCompatibility(t *testing.T) {
-	nodeA := makeNode("bridge_node")
-	nodeB := makeNode("target_node", types.CapabilityFabricMods)
-	edge := makeEdge("bridge_node", "target_node", types.EdgeBridges, types.RiskLow)
-	topo := makeTopology("bridge_node", []types.RuntimeNode{nodeA, nodeB}, []types.RuntimeEdge{edge})
+func TestEvaluateCompatibility_HostedLayerCapabilityMatch(t *testing.T) {
+	host := makeNode("neoforge")
+	hosted := makeNode("sinytra", types.CapabilityFabricMods)
+	edge := makeEdge("neoforge", "sinytra", types.EdgeHosts, types.RiskLow)
+	topo := makeTopology("neoforge", []types.RuntimeNode{host, hosted}, []types.RuntimeEdge{edge})
 	result := EvaluateCompatibility(topo, types.CapabilityFabricMods)
 	if result.Verdict != types.CompatCompatible {
-		t.Errorf("expected CompatCompatible via bridge, got %q", result.Verdict)
+		t.Fatalf("expected hosted capability to satisfy compatibility, got %q", result.Verdict)
 	}
-	if result.Reason != "bridge_compatibility" {
-		t.Errorf("expected bridge_compatibility reason, got %q", result.Reason)
+	if result.Reason != "hosted_layer_capability_match" {
+		t.Fatalf("expected hosted_layer_capability_match reason, got %q", result.Reason)
+	}
+	if result.RiskLevel != types.RiskLow {
+		t.Fatalf("expected hosted layer risk to propagate, got %d", result.RiskLevel)
 	}
 }
 
-func TestEvaluateCompatibility_BridgeEdgeHighRiskDegraded(t *testing.T) {
-	nodeA := makeNode("bridge_node")
-	nodeB := makeNode("target_node", types.CapabilityForgeMods)
-	edge := makeEdge("bridge_node", "target_node", types.EdgeBridges, types.RiskHigh)
-	topo := makeTopology("bridge_node", []types.RuntimeNode{nodeA, nodeB}, []types.RuntimeEdge{edge})
-	result := EvaluateCompatibility(topo, types.CapabilityForgeMods)
+func TestEvaluateCompatibility_HostedLayerHighRiskDegraded(t *testing.T) {
+	host := makeNode("neoforge")
+	hosted := makeNode("sinytra", types.CapabilityFabricMods)
+	edge := makeEdge("neoforge", "sinytra", types.EdgeHosts, types.RiskHigh)
+	topo := makeTopology("neoforge", []types.RuntimeNode{host, hosted}, []types.RuntimeEdge{edge})
+	result := EvaluateCompatibility(topo, types.CapabilityFabricMods)
 	if result.Verdict != types.CompatDegraded {
-		t.Errorf("expected CompatDegraded for high-risk bridge, got %q", result.Verdict)
+		t.Fatalf("expected high-risk hosted layer to degrade compatibility, got %q", result.Verdict)
 	}
-	if result.Reason != "bridge_compatibility" {
-		t.Errorf("expected bridge_compatibility reason, got %q", result.Reason)
+	if result.Reason != "hosted_layer_capability_match" {
+		t.Fatalf("expected hosted_layer_capability_match reason, got %q", result.Reason)
 	}
-}
-
-func TestEvaluateCompatibility_BridgeEdgeWrongKind_Ignored(t *testing.T) {
-	nodeA := makeNode("host_node")
-	nodeB := makeNode("target_node", types.CapabilityForgeMods)
-	edge := makeEdge("host_node", "target_node", types.EdgeHosts, types.RiskNone)
-	topo := makeTopology("host_node", []types.RuntimeNode{nodeA, nodeB}, []types.RuntimeEdge{edge})
-	result := EvaluateCompatibility(topo, types.CapabilityForgeMods)
-	if result.Verdict != types.CompatCompatible {
-		t.Errorf("expected CompatCompatible (nodeB has capability), got %q", result.Verdict)
-	}
-	if result.Reason != "direct_capability_match" {
-		t.Errorf("unexpected reason: %q", result.Reason)
+	if result.RiskLevel != types.RiskHigh {
+		t.Fatalf("expected hosted layer risk to propagate, got %d", result.RiskLevel)
 	}
 }
 

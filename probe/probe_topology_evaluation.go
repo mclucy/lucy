@@ -33,20 +33,26 @@ func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability t
 		}
 	}
 
-	// Collect bridge-target node IDs so we can exclude them from the direct
-	// capability scan. Nodes that are only reachable via a bridge edge must
-	// be evaluated through the bridge path (which accounts for risk level).
-	bridgeTargets := make(map[types.RuntimeNodeID]struct{}, len(topology.Edges))
+	hostedTargets := make(map[types.RuntimeNodeID]types.RuntimeRiskLevel, len(topology.Edges))
 	for _, edge := range topology.Edges {
-		if edge.Kind == types.EdgeBridges {
-			bridgeTargets[edge.To] = struct{}{}
+		if edge.Verb != types.EdgeHosts {
+			continue
 		}
+
+		targetNode, ok := topology.FindNode(edge.To)
+		if !ok || !targetNode.HasCapability(requiredCapability) {
+			continue
+		}
+
+		hostedRisk := max(edge.Risk, targetNode.RiskLevel)
+		hostedTargets[edge.To] = max(hostedTargets[edge.To], hostedRisk)
 	}
 
 	for _, node := range topology.Nodes {
-		if _, isBridgeTarget := bridgeTargets[node.ID]; isBridgeTarget {
+		if _, isHostedTarget := hostedTargets[node.ID]; isHostedTarget {
 			continue
 		}
+
 		if node.HasCapability(requiredCapability) {
 			return types.CompatResult{
 				Verdict:   types.CompatCompatible,
@@ -57,26 +63,17 @@ func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability t
 		}
 	}
 
-	for _, edge := range topology.Edges {
-		if edge.Kind != types.EdgeBridges {
-			continue
-		}
-
-		targetNode, ok := topology.FindNode(edge.To)
-		if !ok || !targetNode.HasCapability(requiredCapability) {
-			continue
-		}
-
+	for _, hostedRisk := range hostedTargets {
 		verdict := types.CompatCompatible
-		if edge.Risk >= types.RiskMedium {
+		if hostedRisk >= types.RiskMedium {
 			verdict = types.CompatDegraded
 		}
 
 		return types.CompatResult{
 			Verdict:   verdict,
-			Reason:    "bridge_compatibility",
-			Detail:    fmt.Sprintf("Compatibility provided via bridge layer (risk: %d).", edge.Risk),
-			RiskLevel: edge.Risk,
+			Reason:    "hosted_layer_capability_match",
+			Detail:    fmt.Sprintf("Compatibility provided by a hosted layer with %s support (risk: %d).", requiredCapability, hostedRisk),
+			RiskLevel: hostedRisk,
 		}
 	}
 

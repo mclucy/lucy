@@ -24,7 +24,7 @@ func TestNormalizeTopology_DeduplicatesNodes(t *testing.T) {
 }
 
 func TestNormalizeTopology_DeduplicatesEdges(t *testing.T) {
-	e := makeEdge("a", "b", types.EdgeBridges, types.RiskHigh)
+	e := makeEdge("a", "b", types.EdgeHosts, types.RiskHigh)
 	topo := makeTopology(
 		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
@@ -59,9 +59,9 @@ func TestNormalizeTopology_SortsEdges(t *testing.T) {
 		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b"), makeNode("c")},
 		[]types.RuntimeEdge{
-			makeEdge("b", "c", types.EdgeBridges, 0),
-			makeEdge("a", "c", types.EdgeBridges, 0),
-			makeEdge("a", "b", types.EdgeBridges, 0),
+			makeEdge("b", "c", types.EdgeHosts, 0),
+			makeEdge("a", "c", types.EdgeHosts, 0),
+			makeEdge("a", "b", types.EdgeHosts, 0),
 		},
 	)
 	NormalizeTopology(topo)
@@ -102,7 +102,7 @@ func TestMergeTopology_AddsNewEdges(t *testing.T) {
 	src := makeTopology(
 		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
-		[]types.RuntimeEdge{makeEdge("a", "b", types.EdgeBridges, 0)},
+		[]types.RuntimeEdge{makeEdge("a", "b", types.EdgeHosts, 0)},
 	)
 	mergeTopology(dst, src)
 	if len(dst.Edges) != 1 {
@@ -111,7 +111,7 @@ func TestMergeTopology_AddsNewEdges(t *testing.T) {
 }
 
 func TestMergeTopology_SkipsDuplicateEdges(t *testing.T) {
-	e := makeEdge("a", "b", types.EdgeBridges, 0)
+	e := makeEdge("a", "b", types.EdgeHosts, 0)
 	dst := makeTopology(
 		"a",
 		[]types.RuntimeNode{makeNode("a"), makeNode("b")},
@@ -157,14 +157,16 @@ func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T
 	if exec.Topology == nil {
 		t.Fatal("expected topology to be built from evidence")
 	}
-	// Connector topology should include connector and fabric nodes
+	if exec.Topology.PrimaryNode != RuntimeNodeConnector {
+		t.Fatalf("expected connector to be primary node, got %q", exec.Topology.PrimaryNode)
+	}
 	_, hasConnector := exec.Topology.FindNode(RuntimeNodeConnector)
 	if !hasConnector {
 		t.Error("expected connector node in topology")
 	}
 	_, hasFabric := exec.Topology.FindNode(RuntimeNodeFabric)
-	if !hasFabric {
-		t.Error("expected fabric node in topology (via connector policy edge)")
+	if hasFabric {
+		t.Error("did not expect fabric node in topology without host evidence")
 	}
 }
 
@@ -189,8 +191,8 @@ func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
 		t.Error("expected fabric node in topology")
 	}
 	_, hasForge := exec.Topology.FindNode(RuntimeNodeForge)
-	if !hasForge {
-		t.Error("expected forge node in topology via kilt bridge")
+	if hasForge {
+		t.Error("did not expect forge node in topology without connection registry bridges")
 	}
 }
 

@@ -21,11 +21,11 @@ const (
 	bukkitSpigotClassPrefix         = "org/spigotmc/"
 	bukkitBeastVersionMarker        = "beast-version.json"
 
-	bukkitNodePaperFork   types.RuntimeNodeID = "paper-fork"
-	bukkitNodePaper       types.RuntimeNodeID = "paper"
-	bukkitNodeSpigot      types.RuntimeNodeID = "spigot"
-	bukkitNodeCraftBukkit types.RuntimeNodeID = "craftbukkit"
-	bukkitNodeBukkit      types.RuntimeNodeID = "bukkit"
+	bukkitNodePaperFork types.RuntimeNodeID = "paper-fork"
+	bukkitNodePaper     types.RuntimeNodeID = "paper"
+	bukkitNodeSpigot    types.RuntimeNodeID = "spigot"
+	bukkitNodeBukkit    types.RuntimeNodeID = "bukkit"
+	bukkitNodeMinecraft types.RuntimeNodeID = "minecraft"
 )
 
 var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
@@ -222,32 +222,24 @@ func buildBukkitExecutableTopologySeed(
 	case bukkitNodePaperFork:
 		addNode(bukkitNodePaperFork)
 		addNode(bukkitNodePaper)
-		addNode(bukkitNodeSpigot)
-		addNode(bukkitNodeCraftBukkit)
+		addNode(bukkitNodeMinecraft)
 		edges = append(edges,
-			buildBukkitLineageEdge(bukkitNodePaperFork, bukkitNodePaper),
-			buildBukkitLineageEdge(bukkitNodePaper, bukkitNodeSpigot),
-			buildBukkitLineageEdge(bukkitNodeSpigot, bukkitNodeCraftBukkit),
+			buildBukkitImplementationEdge(bukkitNodePaperFork, bukkitNodePaper, types.EdgeImplements),
+			buildBukkitImplementationEdge(bukkitNodePaper, bukkitNodeMinecraft, types.EdgeModifies),
 		)
 	case bukkitNodePaper:
 		addNode(bukkitNodePaper)
-		addNode(bukkitNodeSpigot)
-		addNode(bukkitNodeCraftBukkit)
+		addNode(bukkitNodeMinecraft)
 		edges = append(edges,
-			buildBukkitLineageEdge(bukkitNodePaper, bukkitNodeSpigot),
-			buildBukkitLineageEdge(bukkitNodeSpigot, bukkitNodeCraftBukkit),
+			buildBukkitImplementationEdge(bukkitNodePaper, bukkitNodeMinecraft, types.EdgeModifies),
 		)
 	case bukkitNodeSpigot:
 		addNode(bukkitNodeSpigot)
-		addNode(bukkitNodeCraftBukkit)
+		addNode(bukkitNodeMinecraft)
 		edges = append(edges,
-			buildBukkitLineageEdge(bukkitNodeSpigot, bukkitNodeCraftBukkit),
+			buildBukkitImplementationEdge(bukkitNodeSpigot, bukkitNodeMinecraft, types.EdgeModifies),
 		)
 	default:
-		// The lineage chain bottoms out at CraftBukkit because that is the concrete
-		// implementation layer. Bukkit itself is an API/spec identity, so the bare
-		// fallback tier reports a single bukkit node instead of pretending there is
-		// another implementation edge below it.
 		addNode(bukkitNodeBukkit)
 	}
 
@@ -267,14 +259,15 @@ func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
 	}
 }
 
-func buildBukkitLineageEdge(from types.RuntimeNodeID, to types.RuntimeNodeID) types.RuntimeEdge {
+func buildBukkitImplementationEdge(
+	from types.RuntimeNodeID,
+	to types.RuntimeNodeID,
+	verb types.RuntimeEdgeVerb,
+) types.RuntimeEdge {
 	return types.RuntimeEdge{
 		From: from,
 		To:   to,
-		// The topology model does not have a dedicated extends edge yet. EdgeAdapts
-		// is the closest existing relation for "this runtime layer is built on top of
-		// that implementation layer" until the shared edge vocabulary grows.
-		Kind: types.EdgeAdapts,
+		Verb: verb,
 		Risk: types.RiskNone,
 	}
 }

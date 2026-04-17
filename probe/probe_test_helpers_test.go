@@ -32,8 +32,8 @@ func makeNode(id types.RuntimeNodeID, caps ...types.RuntimeCapability) types.Run
 }
 
 // makeEdge builds a RuntimeEdge.
-func makeEdge(from, to types.RuntimeNodeID, kind types.RuntimeEdgeKind, risk types.RuntimeRiskLevel) types.RuntimeEdge {
-	return types.RuntimeEdge{From: from, To: to, Kind: kind, Risk: risk}
+func makeEdge(from, to types.RuntimeNodeID, kind types.RuntimeEdgeVerb, risk types.RuntimeRiskLevel) types.RuntimeEdge {
+	return types.RuntimeEdge{From: from, To: to, Verb: kind, Risk: risk}
 }
 
 // makeTopology builds a RuntimeTopology with the given primary node, nodes, and edges.

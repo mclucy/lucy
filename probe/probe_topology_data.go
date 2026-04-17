@@ -77,12 +77,12 @@ var defaultRegistryEntries = []RegistryEntry{
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
-		// Paper builds on top of Spigot as part of the CraftBukkit patch chain.
-		// This edge expresses the implementation-lineage relationship.
+		// Paper stays anchored to vanilla while Bukkit-family ancestry is folded into
+		// the node's own semantics.
 		PolicyEdges: []RegistryEdge{
 			{
-				TargetNodeID: RuntimeNodeSpigot,
-				Kind:         types.EdgeAdapts,
+				TargetNodeID: RuntimeNodeMinecraft,
+				Kind:         types.EdgeModifies,
 				Risk:         types.RiskNone,
 			},
 		},
@@ -96,12 +96,11 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 		// paper-fork is the extensible, best-effort tier for public Paper forks.
 		// Its primary guarantee is that it hosts the same plugin ecosystem as Paper.
-		// The patch-chain edge to paper expresses that a paper-fork runtime
-		// layer builds on top of the Paper implementation.
+		// Surface only the detectable fork relationship back to Paper.
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: RuntimeNodePaper,
-				Kind:         types.EdgeAdapts,
+				Kind:         types.EdgeImplements,
 				Risk:         types.RiskNone,
 			},
 		},
@@ -113,12 +112,12 @@ var defaultRegistryEntries = []RegistryEntry{
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
-		// Spigot builds on top of CraftBukkit. CraftBukkit is the lowest
-		// concrete implementation layer in the Bukkit family patch chain.
+		// Spigot stays anchored directly to vanilla rather than expanding the old
+		// CraftBukkit lineage chain into separate runtime facts.
 		PolicyEdges: []RegistryEdge{
 			{
-				TargetNodeID: RuntimeNodeCraftBukkit,
-				Kind:         types.EdgeAdapts,
+				TargetNodeID: RuntimeNodeMinecraft,
+				Kind:         types.EdgeModifies,
 				Risk:         types.RiskNone,
 			},
 		},
@@ -130,9 +129,13 @@ var defaultRegistryEntries = []RegistryEntry{
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
-		// craftbukkit is the concrete implementation layer at the bottom of the
-		// Bukkit patch chain. bukkit itself is an API/spec identity; craftbukkit is
-		// the implementation that CraftBukkit, Spigot, and Paper build on.
+		// CraftBukkit is still a concrete implementation identity, so it anchors back
+		// to vanilla without reviving intermediate lineage edges.
+		PolicyEdges: []RegistryEdge{{
+			TargetNodeID: RuntimeNodeMinecraft,
+			Kind:         types.EdgeModifies,
+			Risk:         types.RiskNone,
+		}},
 	},
 	{
 		NodeID:           RuntimeNodeBukkit,
@@ -150,6 +153,11 @@ var defaultRegistryEntries = []RegistryEntry{
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
+		PolicyEdges: []RegistryEdge{{
+			TargetNodeID: RuntimeNodePaper,
+			Kind:         types.EdgeImplements,
+			Risk:         types.RiskMedium,
+		}},
 	},
 	{
 		NodeID:           RuntimeNodeLeaves,
@@ -159,6 +167,11 @@ var defaultRegistryEntries = []RegistryEntry{
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
+		PolicyEdges: []RegistryEdge{{
+			TargetNodeID: RuntimeNodePaper,
+			Kind:         types.EdgeImplements,
+			Risk:         types.RiskNone,
+		}},
 	},
 	{
 		NodeID:           RuntimeNodeSponge,

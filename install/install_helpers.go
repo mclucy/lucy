@@ -51,7 +51,7 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 			}
 
 			return fmt.Errorf(
-				"%s server not found (reason: %s, verdict: %s, risk_level: %d)",
+				"%s runtime support is too degraded (reason: %s, verdict: %s, risk_level: %d)",
 				platform.Title(),
 				result.Reason,
 				result.Verdict,
@@ -64,7 +64,7 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 			)
 		case types.CompatIncompatible:
 			return fmt.Errorf(
-				"%s server not found (reason: %s, verdict: %s, risk_level: %d)",
+				"%s packages are incompatible with the current runtime (reason: %s, verdict: %s, risk_level: %d)",
 				platform.Title(),
 				result.Reason,
 				result.Verdict,
@@ -72,7 +72,7 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 			)
 		default:
 			return fmt.Errorf(
-				"%s server not found (reason: %s, verdict: %s, risk_level: %d)",
+				"%s runtime compatibility could not be confirmed (reason: %s, verdict: %s, risk_level: %d)",
 				platform.Title(),
 				result.Reason,
 				result.Verdict,

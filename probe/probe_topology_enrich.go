@@ -304,12 +304,12 @@ func NormalizeTopology(t *types.RuntimeTopology) {
 	type edgeKey struct {
 		From types.RuntimeNodeID
 		To   types.RuntimeNodeID
-		Kind types.RuntimeEdgeKind
+		Kind types.RuntimeEdgeVerb
 	}
 	seenEdges := make(map[edgeKey]struct{}, len(t.Edges))
 	dedupedEdges := make([]types.RuntimeEdge, 0, len(t.Edges))
 	for _, edge := range t.Edges {
-		key := edgeKey{From: edge.From, To: edge.To, Kind: edge.Kind}
+		key := edgeKey{From: edge.From, To: edge.To, Kind: edge.Verb}
 		if _, exists := seenEdges[key]; exists {
 			continue
 		}
@@ -380,7 +380,7 @@ func sortTopology(t *types.RuntimeTopology) {
 			if t.Edges[i].To != t.Edges[j].To {
 				return string(t.Edges[i].To) < string(t.Edges[j].To)
 			}
-			return string(t.Edges[i].Kind) < string(t.Edges[j].Kind)
+			return string(t.Edges[i].Verb) < string(t.Edges[j].Verb)
 		},
 	)
 }

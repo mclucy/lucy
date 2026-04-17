@@ -5,7 +5,7 @@ import "github.com/mclucy/lucy/types"
 type ConnectionDefinition struct {
 	Source       ConnectionSource
 	TargetNodeID types.RuntimeNodeID
-	Kind         types.RuntimeEdgeKind
+	Kind         types.RuntimeEdgeVerb
 	Risk         types.RuntimeRiskLevel
 }
 
@@ -13,7 +13,7 @@ func (d ConnectionDefinition) EdgeFrom(sourceNodeID types.RuntimeNodeID) types.R
 	return types.RuntimeEdge{
 		From: sourceNodeID,
 		To:   d.TargetNodeID,
-		Kind: d.Kind,
+		Verb: d.Kind,
 		Risk: d.Risk,
 	}
 }

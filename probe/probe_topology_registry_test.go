@@ -93,25 +93,68 @@ func TestBuildTopologyFromEntry_SimpleNode(t *testing.T) {
 }
 
 func TestBuildTopologyFromEntry_WithPolicyEdges(t *testing.T) {
-	// Connector bridges to Fabric
-	entry, ok := DefaultRegistry.FindEntry(RuntimeNodeConnector)
+	entry, ok := DefaultRegistry.FindEntry(RuntimeNodePaperFork)
 	if !ok {
-		t.Fatal("connector not in registry")
+		t.Fatal("paper-fork not in registry")
 	}
 	topo := BuildTopologyFromEntry(entry)
 	if topo == nil {
 		t.Fatal("expected non-nil topology")
 	}
-	// Should have connector + fabric nodes
+	// Should have paper-fork + paper nodes
 	if len(topo.Nodes) < 2 {
-		t.Errorf("expected at least 2 nodes (connector + fabric), got %d", len(topo.Nodes))
+		t.Errorf("expected at least 2 nodes (paper-fork + paper), got %d", len(topo.Nodes))
 	}
 	if len(topo.Edges) != 1 {
 		t.Errorf("expected 1 edge, got %d", len(topo.Edges))
 	}
 	edge := topo.Edges[0]
-	if edge.From != RuntimeNodeConnector || edge.To != RuntimeNodeFabric || edge.Kind != types.EdgeBridges {
+	if edge.From != RuntimeNodePaperFork || edge.To != RuntimeNodePaper || edge.Verb != types.EdgeImplements {
 		t.Errorf("unexpected edge: %+v", edge)
+	}
+}
+
+func TestBuildTopologyFromEntry_PaperUsesVanillaAnchor(t *testing.T) {
+	entry, ok := DefaultRegistry.FindEntry(RuntimeNodePaper)
+	if !ok {
+		t.Fatal("paper not in registry")
+	}
+
+	topo := BuildTopologyFromEntry(entry)
+	if topo == nil {
+		t.Fatal("expected non-nil topology")
+	}
+	if len(topo.Edges) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(topo.Edges))
+	}
+
+	edge := topo.Edges[0]
+	if edge.From != RuntimeNodePaper || edge.To != RuntimeNodeMinecraft || edge.Verb != types.EdgeModifies {
+		t.Errorf("unexpected edge: %+v", edge)
+	}
+}
+
+func TestNewRuntimeRegistry_PolicyEdgesUseSurvivingVerbs(t *testing.T) {
+	for _, nodeID := range []types.RuntimeNodeID{
+		RuntimeNodePaper,
+		RuntimeNodePaperFork,
+		RuntimeNodeSpigot,
+		RuntimeNodeCraftBukkit,
+		RuntimeNodeFolia,
+		RuntimeNodeLeaves,
+	} {
+		entry, ok := DefaultRegistry.FindEntry(nodeID)
+		if !ok {
+			t.Fatalf("missing registry entry for %q", nodeID)
+		}
+
+		for _, edge := range entry.PolicyEdges {
+			switch edge.Kind {
+			case types.EdgeHosts, types.EdgeImplements, types.EdgeModifies, types.EdgeProxies:
+			default:
+				t.Fatalf("entry %q has deprecated policy edge verb %q", nodeID, edge.Kind)
+			}
+		}
 	}
 }
 
@@ -127,7 +170,7 @@ func TestBuildTopologyFromEntry_UnknownNodeID(t *testing.T) {
 }
 
 func TestBuildTopologyFromEntry_NodesSorted(t *testing.T) {
-	entry, _ := DefaultRegistry.FindEntry(RuntimeNodeConnector)
+	entry, _ := DefaultRegistry.FindEntry(RuntimeNodePaperFork)
 	topo := BuildTopologyFromEntry(entry)
 	for i := 1; i < len(topo.Nodes); i++ {
 		if string(topo.Nodes[i-1].ID) > string(topo.Nodes[i].ID) {
