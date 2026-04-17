@@ -22,6 +22,8 @@ var normalizedRuntimeIDByName = map[string]types.RuntimeNodeID{
 	"mcdr plugin":       RuntimeNodeMCDR,
 	"paper":             RuntimeNodePaper,
 	"spigot":            RuntimeNodeSpigot,
+	"paper-fork":        RuntimeNodePaperFork,
+	"craftbukkit":       RuntimeNodeCraftBukkit,
 	"bukkit":            RuntimeNodeBukkit,
 	"folia":             RuntimeNodeFolia,
 	"leaves":            RuntimeNodeLeaves,

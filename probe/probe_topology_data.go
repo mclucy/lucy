@@ -15,6 +15,8 @@ const (
 	RuntimeNodeMCDR             types.RuntimeNodeID = "mcdr"
 	RuntimeNodePaper            types.RuntimeNodeID = "paper"
 	RuntimeNodeSpigot           types.RuntimeNodeID = "spigot"
+	RuntimeNodePaperFork        types.RuntimeNodeID = "paper-fork"
+	RuntimeNodeCraftBukkit      types.RuntimeNodeID = "craftbukkit"
 	RuntimeNodeBukkit           types.RuntimeNodeID = "bukkit"
 	RuntimeNodeFolia            types.RuntimeNodeID = "folia"
 	RuntimeNodeLeaves           types.RuntimeNodeID = "leaves"
@@ -75,6 +77,34 @@ var defaultRegistryEntries = []RegistryEntry{
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
+		// Paper builds on top of Spigot as part of the CraftBukkit patch chain.
+		// This edge expresses the implementation-lineage relationship.
+		PolicyEdges: []RegistryEdge{
+			{
+				TargetNodeID: RuntimeNodeSpigot,
+				Kind:         types.EdgeAdapts,
+				Risk:         types.RiskNone,
+			},
+		},
+	},
+	{
+		NodeID:           RuntimeNodePaperFork,
+		Role:             types.RuntimeRolePluginCore,
+		IdentityPlatform: types.PlatformAny,
+		Capabilities: []types.RuntimeCapability{
+			types.CapabilityBukkitPlugins,
+		},
+		// paper-fork is the extensible, best-effort tier for public Paper forks.
+		// Its primary guarantee is that it hosts the same plugin ecosystem as Paper.
+		// The patch-chain edge to paper expresses that a paper-fork runtime
+		// layer builds on top of the Paper implementation.
+		PolicyEdges: []RegistryEdge{
+			{
+				TargetNodeID: RuntimeNodePaper,
+				Kind:         types.EdgeAdapts,
+				Risk:         types.RiskNone,
+			},
+		},
 	},
 	{
 		NodeID:           RuntimeNodeSpigot,
@@ -83,6 +113,26 @@ var defaultRegistryEntries = []RegistryEntry{
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
+		// Spigot builds on top of CraftBukkit. CraftBukkit is the lowest
+		// concrete implementation layer in the Bukkit family patch chain.
+		PolicyEdges: []RegistryEdge{
+			{
+				TargetNodeID: RuntimeNodeCraftBukkit,
+				Kind:         types.EdgeAdapts,
+				Risk:         types.RiskNone,
+			},
+		},
+	},
+	{
+		NodeID:           RuntimeNodeCraftBukkit,
+		Role:             types.RuntimeRolePluginCore,
+		IdentityPlatform: types.PlatformAny,
+		Capabilities: []types.RuntimeCapability{
+			types.CapabilityBukkitPlugins,
+		},
+		// craftbukkit is the concrete implementation layer at the bottom of the
+		// Bukkit patch chain. bukkit itself is an API/spec identity; craftbukkit is
+		// the implementation that CraftBukkit, Spigot, and Paper build on.
 	},
 	{
 		NodeID:           RuntimeNodeBukkit,
