@@ -33,11 +33,12 @@ const (
 	// hashes, download URLs, or observed runtime facts.
 	ConfigFile StateFile = ".lucy/config.toml"
 
-	// ManifestFile stores desired environment intent. It owns direct roots,
-	// managed-scope declarations, and other descriptive statements about what the
-	// project wants Lucy to converge toward. It must not contain lockfile-only
-	// fields such as exact transitive closures, hashes, or exact download URLs.
-	ManifestFile StateFile = ".lucy/manifest.toml"
+	// ManifestFile stores desired environment intent as JSON. It owns direct
+	// roots, managed-scope declarations, and other descriptive statements about
+	// what the project wants Lucy to converge toward. It must not contain
+	// lockfile-only fields such as exact transitive closures, hashes, or exact
+	// download URLs.
+	ManifestFile StateFile = ".lucy/manifest.json"
 
 	// LockFile stores the exact resolved graph and provenance for a manifest. It
 	// owns exact versions, chosen sources, artifact identity, provenance chains,

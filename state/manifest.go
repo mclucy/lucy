@@ -1,66 +1,35 @@
 package state
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
-	"github.com/pelletier/go-toml"
 )
 
 // Manifest stores the desired environment intent for a Lucy project.
-// It is persisted in .lucy/manifest.toml.
+// It is persisted in .lucy/manifest.json.
 //
 // Manifest OWNS: intent.direct-roots, intent.managed-scope, intent.environment
 // Manifest MUST NOT own: resolution.graph, artifact.hashes,
 // artifact.download-urls
 type Manifest struct {
-	Format      ManifestFormat      `toml:"format"`
-	Environment ManifestEnvironment `toml:"environment"`
-	Sources     ManifestSources     `toml:"sources"`
-	Layout      ManifestLayout      `toml:"layout"`
-	Policy      ManifestPolicy      `toml:"policy"`
-	Packages    []ManifestPackage   `toml:"packages"`
-	Bundles     []ManifestBundle    `toml:"bundles"`
-}
-
-type ManifestFormat struct {
-	Version string `toml:"version"`
+	FormatVersion string              `json:"format_version"`
+	Environment   ManifestEnvironment `json:"environment"`
+	Packages      []ManifestPackage   `json:"packages"`
+	Bundles       []ManifestBundle    `json:"bundles"`
 }
 
 type ManifestEnvironment struct {
-	GameVersion     string `toml:"game_version"`
-	Platform        string `toml:"platform"`
-	PlatformVersion string `toml:"platform_version"`
-	// CompatiblePlatforms lists extra compatibility layers or controller surfaces
-	// that can coexist with the primary runtime without replacing it.
-	//
-	// Example: a NeoForge runtime with Sinytra and MCDR support can be modeled as
-	// platform="neoforge" plus compatible_platforms=["fabric", "mcdr", "sinytra"].
-	CompatiblePlatforms []string `toml:"compatible_platforms"`
-}
-
-type ManifestSources struct {
-	Custom []CustomSource `toml:"custom"`
-}
-
-type CustomSource struct {
-	Name string `toml:"name"`
-	URL  string `toml:"url"`
-	Type string `toml:"type"`
-}
-
-type ManifestLayout struct {
-	ModsDir    string `toml:"mods_dir"`
-	PluginsDir string `toml:"plugins_dir"`
-	ConfigDir  string `toml:"config_dir"`
-}
-
-type ManifestPolicy struct {
-	ManagedRoots   []string `toml:"managed_roots"`
-	UnmanagedPaths []string `toml:"unmanaged_paths"`
+	GameVersion            string   `json:"game_version"`
+	ServerCore             string   `json:"server_core"`
+	ServerCoreVersion      string   `json:"server_core_version"`
+	ModdingPlatform        string   `json:"modding_platform"`
+	ModdingPlatformVersion string   `json:"modding_platform_version"`
+	Mcdr                   bool     `json:"mcdr"`
+	DeclaredCapabilities   []string `json:"declared_capabilities"`
 }
 
 type ManifestSide string
@@ -73,15 +42,15 @@ const (
 )
 
 type ManifestPackage struct {
-	ID string `toml:"id"`
+	ID string `json:"id"`
 	// Version stores version intent exactly as written in the manifest.
 	//
 	// It may be an exact version or a fuzzy selector such as "latest",
 	// "compatible", or a future range/non-exact preference. The manifest is the
 	// intent layer, so Lucy must preserve this string verbatim instead of
 	// rewriting it to the currently resolved exact version.
-	Version string `toml:"version"`
-	Source  string `toml:"source"`
+	Version string `json:"version"`
+	Source  string `json:"source"`
 	// Role defines how Lucy should treat this package in desired state.
 	//
 	// - required: explicit operator intent, including user-selected leaf nodes during adopt
@@ -90,10 +59,10 @@ type ManifestPackage struct {
 	//
 	// Non-leaf nodes remain visible to init/adopt users because Minecraft package
 	// boundaries are often fuzzy, but that visibility must not become a fourth role.
-	Role     ManifestRole `toml:"role"`
-	Side     ManifestSide `toml:"side"`
-	Optional bool         `toml:"optional"`
-	Pinned   bool         `toml:"pinned"`
+	Role     ManifestRole `json:"role"`
+	Side     ManifestSide `json:"side"`
+	Optional bool         `json:"optional"`
+	Pinned   bool         `json:"pinned"`
 }
 
 type ManifestRole string
@@ -125,35 +94,24 @@ const (
 )
 
 type ManifestBundle struct {
-	Name     string     `toml:"name"`
-	Type     BundleType `toml:"type"`
-	Path     string     `toml:"path"`
-	Source   string     `toml:"source"`
-	Optional bool       `toml:"optional"`
+	Name     string     `json:"name"`
+	Type     BundleType `json:"type"`
+	Path     string     `json:"path"`
+	Source   string     `json:"source"`
+	Optional bool       `json:"optional"`
 }
 
 func ManifestDefaults() Manifest {
 	return Manifest{
-		Format: ManifestFormat{
-			Version: SupportedVersion,
-		},
+		FormatVersion: SupportedVersion,
 		Environment: ManifestEnvironment{
-			GameVersion:         "",
-			Platform:            string(types.PlatformNone),
-			PlatformVersion:     "",
-			CompatiblePlatforms: []string{},
-		},
-		Sources: ManifestSources{
-			Custom: []CustomSource{},
-		},
-		Layout: ManifestLayout{
-			ModsDir:    "mods",
-			PluginsDir: "plugins",
-			ConfigDir:  "config",
-		},
-		Policy: ManifestPolicy{
-			ManagedRoots:   []string{"mods", "plugins"},
-			UnmanagedPaths: []string{},
+			GameVersion:            "",
+			ServerCore:             "",
+			ServerCoreVersion:      "",
+			ModdingPlatform:        "",
+			ModdingPlatformVersion: "",
+			Mcdr:                   false,
+			DeclaredCapabilities:   []string{},
 		},
 		Packages: []ManifestPackage{},
 		Bundles:  []ManifestBundle{},
@@ -161,39 +119,15 @@ func ManifestDefaults() Manifest {
 }
 
 func ValidateManifest(m Manifest) error {
-	if err := ValidateVersion(m.Format.Version); err != nil {
+	if err := ValidateVersion(m.FormatVersion); err != nil {
 		if IsVersionError(err) {
-			return versionStateError(ManifestFile, "format.version", m.Format.Version, ErrVersionUnsupported)
+			return versionStateError(ManifestFile, "format_version", m.FormatVersion, ErrVersionUnsupported)
 		}
-		return versionStateError(ManifestFile, "format.version", m.Format.Version, ErrMalformed)
+		return versionStateError(ManifestFile, "format_version", m.FormatVersion, ErrMalformed)
 	}
 
 	if err := ValidateManifestEnvironment(m.Environment); err != nil {
 		return err
-	}
-	if m.Layout.ModsDir == "" {
-		return NewStateError(ManifestFile, ErrMalformed, "layout.mods_dir", "layout.mods_dir is required")
-	}
-	if m.Layout.PluginsDir == "" {
-		return NewStateError(ManifestFile, ErrMalformed, "layout.plugins_dir", "layout.plugins_dir is required")
-	}
-	if m.Layout.ConfigDir == "" {
-		return NewStateError(ManifestFile, ErrMalformed, "layout.config_dir", "layout.config_dir is required")
-	}
-	if len(m.Policy.ManagedRoots) == 0 {
-		return NewStateError(ManifestFile, ErrMalformed, "policy.managed_roots", "policy.managed_roots is required")
-	}
-
-	for i, custom := range m.Sources.Custom {
-		if strings.TrimSpace(custom.Name) == "" {
-			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("sources.custom[%d].name", i), "name is required")
-		}
-		if strings.TrimSpace(custom.URL) == "" {
-			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("sources.custom[%d].url", i), "url is required")
-		}
-		if strings.TrimSpace(custom.Type) == "" {
-			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("sources.custom[%d].type", i), "type is required")
-		}
 	}
 
 	for i, pkg := range m.Packages {
@@ -212,29 +146,26 @@ func ValidateManifest(m Manifest) error {
 }
 
 func ValidateManifestEnvironment(env ManifestEnvironment) error {
-	platform := strings.TrimSpace(env.Platform)
-	if err := validateManifestPlatform(platform); err != nil {
-		return err
-	}
-	if err := validateCompatiblePlatforms(platform, env.CompatiblePlatforms); err != nil {
-		return err
-	}
-	return nil
-}
+	platform := strings.TrimSpace(env.ModdingPlatform)
+	version := strings.TrimSpace(env.ModdingPlatformVersion)
 
-func CompatiblePlatformOptions(primary string) []string {
-	switch types.Platform(strings.TrimSpace(primary)) {
-	case types.PlatformNeoforge:
-		return []string{"fabric", "mcdr", "sinytra"}
-	case types.PlatformFabric, types.PlatformForge, types.PlatformNone:
-		return []string{"mcdr"}
-	case types.PlatformMCDR:
+	if platform == "" {
+		if version != "" {
+			return NewStateError(ManifestFile, ErrMalformed, "environment.modding_platform_version", "environment.modding_platform_version requires environment.modding_platform")
+		}
+		return nil
+	}
+
+	switch platform {
+	case "none", "fabric", "forge", "neoforge":
 		return nil
 	default:
-		return nil
+		return NewStateError(ManifestFile, ErrMalformed, "environment.modding_platform", fmt.Sprintf("invalid environment.modding_platform %q", env.ModdingPlatform))
 	}
 }
 
+// validateManifestPlatform remains as a legacy helper for the pre-Task-2 lock
+// schema, which still validates a single platform field.
 func validateManifestPlatform(value string) error {
 	platform := types.Platform(strings.TrimSpace(value))
 	if platform == "" {
@@ -247,51 +178,6 @@ func validateManifestPlatform(value string) error {
 	default:
 		return fmt.Errorf("invalid environment.platform %q", value)
 	}
-}
-
-func validateCompatiblePlatforms(primary string, platforms []string) error {
-	allowed := CompatiblePlatformOptions(primary)
-	allowedSet := make(map[string]struct{}, len(allowed))
-	for _, platform := range allowed {
-		allowedSet[platform] = struct{}{}
-	}
-
-	seen := make(map[string]struct{}, len(platforms))
-	for i, raw := range platforms {
-		platform := strings.TrimSpace(raw)
-		if platform == "" {
-			return fmt.Errorf("environment.compatible_platforms[%d] is required", i)
-		}
-		if platform == strings.TrimSpace(primary) {
-			return fmt.Errorf("environment.compatible_platforms must not repeat primary platform %q", platform)
-		}
-		if _, ok := seen[platform]; ok {
-			return fmt.Errorf("environment.compatible_platforms contains duplicate %q", platform)
-		}
-		seen[platform] = struct{}{}
-		if _, ok := allowedSet[platform]; !ok {
-			allowedText := "none"
-			if len(allowed) > 0 {
-				allowedText = strings.Join(allowed, ", ")
-			}
-			return fmt.Errorf("environment.compatible_platforms %q is incompatible with primary platform %q; allowed: %s", platform, primary, allowedText)
-		}
-	}
-
-	if slicesContains(platforms, "sinytra") && !slicesContains(platforms, "fabric") {
-		return fmt.Errorf("environment.compatible_platforms " + `"sinytra" requires "fabric" compatibility to also be selected`)
-	}
-
-	return nil
-}
-
-func slicesContains(values []string, want string) bool {
-	for _, value := range values {
-		if strings.TrimSpace(value) == want {
-			return true
-		}
-	}
-	return false
 }
 
 func validateManifestPackage(pkg ManifestPackage) error {
@@ -355,10 +241,7 @@ func UpsertManifestRequiredIntent(manifest *Manifest, id types.PackageId, source
 		manifest = &defaults
 	} else {
 		clone := *manifest
-		clone.Environment.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
-		clone.Sources.Custom = append([]CustomSource(nil), manifest.Sources.Custom...)
-		clone.Policy.ManagedRoots = append([]string(nil), manifest.Policy.ManagedRoots...)
-		clone.Policy.UnmanagedPaths = append([]string(nil), manifest.Policy.UnmanagedPaths...)
+		clone.Environment.DeclaredCapabilities = append([]string(nil), manifest.Environment.DeclaredCapabilities...)
 		clone.Packages = append([]ManifestPackage(nil), manifest.Packages...)
 		clone.Bundles = append([]ManifestBundle(nil), manifest.Bundles...)
 		manifest = &clone
@@ -515,10 +398,7 @@ func cloneManifestOrDefaults(manifest *Manifest) Manifest {
 	}
 
 	cloned := *manifest
-	cloned.Environment.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
-	cloned.Sources.Custom = append([]CustomSource(nil), manifest.Sources.Custom...)
-	cloned.Policy.ManagedRoots = append([]string(nil), manifest.Policy.ManagedRoots...)
-	cloned.Policy.UnmanagedPaths = append([]string(nil), manifest.Policy.UnmanagedPaths...)
+	cloned.Environment.DeclaredCapabilities = append([]string(nil), manifest.Environment.DeclaredCapabilities...)
 	cloned.Packages = append([]ManifestPackage(nil), manifest.Packages...)
 	cloned.Bundles = append([]ManifestBundle(nil), manifest.Bundles...)
 	normalizeManifest(&cloned)
@@ -725,66 +605,11 @@ func resolveIDByName(name types.ProjectName, ids []string) string {
 }
 
 func (m Manifest) Marshal() ([]byte, error) {
-	var buf bytes.Buffer
-	writeTomlSectionHeader(&buf, "format")
-	writeTomlStringField(&buf, "version", m.Format.Version)
-
-	buf.WriteString("\n")
-	writeTomlSectionHeader(&buf, "environment")
-	writeTomlStringField(&buf, "game_version", m.Environment.GameVersion)
-	writeTomlStringField(&buf, "platform", m.Environment.Platform)
-	writeTomlStringField(&buf, "platform_version", m.Environment.PlatformVersion)
-	writeTomlStringSliceField(&buf, "compatible_platforms", m.Environment.CompatiblePlatforms)
-
-	buf.WriteString("\n")
-	writeTomlSectionHeader(&buf, "sources")
-	for _, custom := range m.Sources.Custom {
-		writeTomlArrayTableHeader(&buf, "sources.custom")
-		writeTomlStringField(&buf, "name", custom.Name)
-		writeTomlStringField(&buf, "url", custom.URL)
-		writeTomlStringField(&buf, "type", custom.Type)
-		buf.WriteString("\n")
-	}
-	trimTrailingBlankLine(&buf)
-
-	buf.WriteString("\n")
-	writeTomlSectionHeader(&buf, "layout")
-	writeTomlStringField(&buf, "mods_dir", m.Layout.ModsDir)
-	writeTomlStringField(&buf, "plugins_dir", m.Layout.PluginsDir)
-	writeTomlStringField(&buf, "config_dir", m.Layout.ConfigDir)
-
-	buf.WriteString("\n")
-	writeTomlSectionHeader(&buf, "policy")
-	writeTomlStringSliceField(&buf, "managed_roots", m.Policy.ManagedRoots)
-	writeTomlStringSliceField(&buf, "unmanaged_paths", m.Policy.UnmanagedPaths)
-
-	for _, pkg := range m.Packages {
-		buf.WriteString("\n")
-		writeTomlArrayTableHeader(&buf, "packages")
-		writeTomlStringField(&buf, "id", pkg.ID)
-		writeTomlStringField(&buf, "version", pkg.Version)
-		writeTomlStringField(&buf, "source", pkg.Source)
-		writeTomlStringField(&buf, "role", string(pkg.Role))
-		writeTomlStringField(&buf, "side", string(pkg.Side))
-		writeTomlBoolField(&buf, "optional", pkg.Optional)
-		writeTomlBoolField(&buf, "pinned", pkg.Pinned)
-	}
-
-	for _, bundle := range m.Bundles {
-		buf.WriteString("\n")
-		writeTomlArrayTableHeader(&buf, "bundles")
-		writeTomlStringField(&buf, "name", bundle.Name)
-		writeTomlStringField(&buf, "type", string(bundle.Type))
-		writeTomlStringField(&buf, "path", bundle.Path)
-		writeTomlStringField(&buf, "source", bundle.Source)
-		writeTomlBoolField(&buf, "optional", bundle.Optional)
-	}
-
-	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+	return json.MarshalIndent(m, "", "  ")
 }
 
 func (m *Manifest) Unmarshal(data []byte) error {
-	if err := toml.Unmarshal(data, m); err != nil {
+	if err := json.Unmarshal(data, m); err != nil {
 		return err
 	}
 	normalizeManifest(m)
@@ -795,32 +620,13 @@ func normalizeManifest(m *Manifest) {
 	if m == nil {
 		return
 	}
-	if m.Environment.CompatiblePlatforms == nil {
-		m.Environment.CompatiblePlatforms = []string{}
-	}
-	if m.Sources.Custom == nil {
-		m.Sources.Custom = []CustomSource{}
-	}
-	if m.Policy.ManagedRoots == nil {
-		m.Policy.ManagedRoots = []string{}
-	}
-	if m.Policy.UnmanagedPaths == nil {
-		m.Policy.UnmanagedPaths = []string{}
+	if m.Environment.DeclaredCapabilities == nil {
+		m.Environment.DeclaredCapabilities = []string{}
 	}
 	if m.Packages == nil {
 		m.Packages = []ManifestPackage{}
 	}
 	if m.Bundles == nil {
 		m.Bundles = []ManifestBundle{}
-	}
-}
-
-func trimTrailingBlankLine(buf *bytes.Buffer) {
-	b := buf.Bytes()
-	if len(b) < 2 {
-		return
-	}
-	if bytes.HasSuffix(b, []byte("\n\n")) {
-		buf.Truncate(len(b) - 1)
 	}
 }

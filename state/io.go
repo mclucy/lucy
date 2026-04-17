@@ -73,7 +73,7 @@ func ReadConfig(workDir string) (*Config, bool, error) {
 	return config, true, nil
 }
 
-// ReadManifest reads .lucy/manifest.toml from workDir if present.
+// ReadManifest reads .lucy/manifest.json from workDir if present.
 // Manifest is the intent layer, including fuzzy versions and compatible-platform hints.
 func ReadManifest(workDir string) (*Manifest, bool, error) {
 	path := filepath.Join(workDir, string(ManifestFile))
@@ -116,7 +116,7 @@ func WriteConfig(workDir string, c *Config) error {
 	return AtomicWrite(filepath.Join(workDir, string(ConfigFile)), data, 0o600)
 }
 
-// WriteManifest writes .lucy/manifest.toml atomically.
+// WriteManifest writes .lucy/manifest.json atomically.
 // It preserves fuzzy intent instead of rewriting it to exact lock facts.
 func WriteManifest(workDir string, m *Manifest) error {
 	data, err := SerializeManifest(m)

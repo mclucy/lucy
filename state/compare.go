@@ -167,9 +167,6 @@ func CompareManifestLockObserved(manifest *Manifest, lock *Lock, observedPaths [
 	managedManifest := manifestForComparison(manifest)
 	managedLock := lockForComparison(manifest, lock)
 	scope := NewManagedScope(nil, nil)
-	if manifest != nil {
-		scope = NewManagedScope(manifest.Policy.ManagedRoots, manifest.Policy.UnmanagedPaths)
-	}
 
 	intentDiff := DiffDesiredResolved(managedManifest, managedLock)
 	observedDiff := DiffResolvedObservedInScope(managedLock, observedPaths, scope, IgnoredInstallPaths(manifest, lock))

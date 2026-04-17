@@ -28,7 +28,7 @@ func SerializeConfig(c *Config) ([]byte, error) {
 	return marshalConfigDeterministic(c), nil
 }
 
-// ParseManifest parses TOML manifest bytes into a validated Manifest.
+// ParseManifest parses manifest bytes into a validated Manifest.
 func ParseManifest(data []byte) (*Manifest, error) {
 	var manifest Manifest
 	if err := manifest.Unmarshal(data); err != nil {
@@ -48,7 +48,11 @@ func SerializeManifest(m *Manifest) ([]byte, error) {
 	if err := ValidateManifest(*m); err != nil {
 		return nil, err
 	}
-	return marshalManifestDeterministic(m), nil
+	data, err := m.Marshal()
+	if err != nil {
+		return nil, malformedStateError(ManifestFile, "document", err)
+	}
+	return data, nil
 }
 
 // ParseLock parses JSON lock bytes into a validated Lock.
@@ -131,109 +135,6 @@ func marshalConfigDeterministic(c *Config) []byte {
 	buf.WriteString("json = ")
 	buf.WriteString(strconv.FormatBool(c.Output.JSON))
 	buf.WriteString("\n")
-
-	return buf.Bytes()
-}
-
-func marshalManifestDeterministic(m *Manifest) []byte {
-	var buf bytes.Buffer
-
-	buf.WriteString("[format]\n")
-	buf.WriteString("version = ")
-	buf.WriteString(strconv.Quote(m.Format.Version))
-	buf.WriteString("\n\n")
-
-	buf.WriteString("[environment]\n")
-	buf.WriteString("game_version = ")
-	buf.WriteString(strconv.Quote(m.Environment.GameVersion))
-	buf.WriteString("\n")
-	buf.WriteString("platform = ")
-	buf.WriteString(strconv.Quote(m.Environment.Platform))
-	buf.WriteString("\n")
-	buf.WriteString("platform_version = ")
-	buf.WriteString(strconv.Quote(m.Environment.PlatformVersion))
-	buf.WriteString("\n")
-	buf.WriteString("compatible_platforms = ")
-	buf.WriteString(formatStringArray(m.Environment.CompatiblePlatforms))
-	buf.WriteString("\n\n")
-
-	buf.WriteString("[sources]\n")
-	for _, custom := range m.Sources.Custom {
-		buf.WriteString("[[sources.custom]]\n")
-		buf.WriteString("name = ")
-		buf.WriteString(strconv.Quote(custom.Name))
-		buf.WriteString("\n")
-		buf.WriteString("url = ")
-		buf.WriteString(strconv.Quote(custom.URL))
-		buf.WriteString("\n")
-		buf.WriteString("type = ")
-		buf.WriteString(strconv.Quote(custom.Type))
-		buf.WriteString("\n")
-	}
-	buf.WriteString("\n")
-
-	buf.WriteString("[layout]\n")
-	buf.WriteString("mods_dir = ")
-	buf.WriteString(strconv.Quote(m.Layout.ModsDir))
-	buf.WriteString("\n")
-	buf.WriteString("plugins_dir = ")
-	buf.WriteString(strconv.Quote(m.Layout.PluginsDir))
-	buf.WriteString("\n")
-	buf.WriteString("config_dir = ")
-	buf.WriteString(strconv.Quote(m.Layout.ConfigDir))
-	buf.WriteString("\n\n")
-
-	buf.WriteString("[policy]\n")
-	buf.WriteString("managed_roots = ")
-	buf.WriteString(formatStringArray(m.Policy.ManagedRoots))
-	buf.WriteString("\n")
-	buf.WriteString("unmanaged_paths = ")
-	buf.WriteString(formatStringArray(m.Policy.UnmanagedPaths))
-	buf.WriteString("\n")
-
-	for _, pkg := range m.Packages {
-		buf.WriteString("\n[[packages]]\n")
-		buf.WriteString("id = ")
-		buf.WriteString(strconv.Quote(pkg.ID))
-		buf.WriteString("\n")
-		buf.WriteString("version = ")
-		buf.WriteString(strconv.Quote(pkg.Version))
-		buf.WriteString("\n")
-		buf.WriteString("source = ")
-		buf.WriteString(strconv.Quote(pkg.Source))
-		buf.WriteString("\n")
-		buf.WriteString("role = ")
-		buf.WriteString(strconv.Quote(string(pkg.Role)))
-		buf.WriteString("\n")
-		buf.WriteString("side = ")
-		buf.WriteString(strconv.Quote(string(pkg.Side)))
-		buf.WriteString("\n")
-		buf.WriteString("optional = ")
-		buf.WriteString(strconv.FormatBool(pkg.Optional))
-		buf.WriteString("\n")
-		buf.WriteString("pinned = ")
-		buf.WriteString(strconv.FormatBool(pkg.Pinned))
-		buf.WriteString("\n")
-	}
-
-	for _, bundle := range m.Bundles {
-		buf.WriteString("\n[[bundles]]\n")
-		buf.WriteString("name = ")
-		buf.WriteString(strconv.Quote(bundle.Name))
-		buf.WriteString("\n")
-		buf.WriteString("type = ")
-		buf.WriteString(strconv.Quote(string(bundle.Type)))
-		buf.WriteString("\n")
-		buf.WriteString("path = ")
-		buf.WriteString(strconv.Quote(bundle.Path))
-		buf.WriteString("\n")
-		buf.WriteString("source = ")
-		buf.WriteString(strconv.Quote(bundle.Source))
-		buf.WriteString("\n")
-		buf.WriteString("optional = ")
-		buf.WriteString(strconv.FormatBool(bundle.Optional))
-		buf.WriteString("\n")
-	}
 
 	return buf.Bytes()
 }
