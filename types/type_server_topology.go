@@ -9,14 +9,14 @@ const RuntimeNodeUnknown RuntimeNodeID = ""
 type RuntimeRole string
 
 const (
-	RuntimeRoleModLoader      RuntimeRole = "mod_loader"
-	RuntimeRolePluginCore     RuntimeRole = "plugin_core"
-	RuntimeRoleHybrid         RuntimeRole = "hybrid"
-	RuntimeRoleProxy          RuntimeRole = "proxy"
-	RuntimeRoleBridge         RuntimeRole = "bridge"
-	RuntimeRoleProtocolBridge RuntimeRole = "protocol_bridge"
-	RuntimeRoleVanilla        RuntimeRole = "vanilla"
-	RuntimeRoleUnknown        RuntimeRole = ""
+	RuntimeRoleModLoader      RuntimeRole = "mod_loader"      // jvm-injecting mod loaders
+	RuntimeRolePluginCore     RuntimeRole = "plugin_core"     // cores based on exposed NMS APIs, e.g. craftbukkit derivatives, velocity, sponge. MCDR is included here for now unless there's a strong reason to separate it.
+	RuntimeRoleHybrid         RuntimeRole = "hybrid"          // complex runtimes
+	RuntimeRoleProxy          RuntimeRole = "proxy"           // proxy servers that do not actually host a Minecraft runtime, e.g. velocity, bungeecord
+	RuntimeRoleBridge         RuntimeRole = "bridge"          // bridge layers, e.g. sinytra connector and kilt
+	RuntimeRoleProtocolBridge RuntimeRole = "protocol_bridge" // Java <-> Bedrock bridges, dedicated for geyser for now
+	RuntimeRoleVanilla        RuntimeRole = "vanilla"         // self-explanatory
+	RuntimeRoleUnknown        RuntimeRole = ""                // sentinel value
 )
 
 type RuntimeCapability string
