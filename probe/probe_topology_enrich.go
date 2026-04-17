@@ -170,9 +170,8 @@ func applyDeclarativeConnections(
 				}
 
 				targetNode := types.RuntimeNode{
-					ID:               entry.NodeID,
-					Role:             entry.Role,
-					IdentityPlatform: entry.IdentityPlatform,
+					ID:   entry.NodeID,
+					Role: entry.Role,
 					Capabilities: append(
 						[]types.RuntimeCapability(nil),
 						entry.Capabilities...,
@@ -239,7 +238,7 @@ func inferHostTopologyFromAttachedBridgePackages(
 			continue
 		}
 
-		entry, ok := LookupByPlatform(types.PlatformFabric)
+		entry, ok := FindEntry(RuntimeNodeFabric)
 		if !ok {
 			return nil
 		}

@@ -56,7 +56,7 @@ func (e *RuntimeInfo) RuntimeIdentityPackage(node *TopologyNode) *PackageId {
 
 	for i := range e.RuntimeIdentities {
 		pkg := &e.RuntimeIdentities[i]
-		if pkg.IdentityToPlatform() == node.IdentityPlatform {
+		if string(pkg.Name) == string(node.ID) {
 			return pkg
 		}
 	}
@@ -96,11 +96,20 @@ func (e *RuntimeInfo) DerivedModLoader() Platform {
 		return PlatformNone
 	}
 
-	if !primary.IdentityPlatform.Valid() {
-		return PlatformNone
+	return DeclaredModdingPlatformForNode(primary.ID)
+}
+
+func (e *RuntimeInfo) DerivedServerCore() string {
+	if e == nil || e.Topology == nil {
+		return ""
 	}
 
-	return primary.IdentityPlatform
+	primary, ok := e.Topology.PrimaryNodeData()
+	if !ok {
+		return ""
+	}
+
+	return string(primary.ID)
 }
 
 type ServerActivity struct {

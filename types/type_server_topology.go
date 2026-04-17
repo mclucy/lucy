@@ -76,11 +76,10 @@ type CompatPolicy struct {
 }
 
 type RuntimeNode struct {
-	ID               RuntimeNodeID       `json:"id"`
-	Role             RuntimeRole         `json:"role"`
-	IdentityPlatform Platform            `json:"identity_platform"`
-	Capabilities     []RuntimeCapability `json:"capabilities"`
-	RiskLevel        RuntimeRiskLevel    `json:"risk_level"`
+	ID           RuntimeNodeID       `json:"id"`
+	Role         RuntimeRole         `json:"role"`
+	Capabilities []RuntimeCapability `json:"capabilities"`
+	RiskLevel    RuntimeRiskLevel    `json:"risk_level"`
 }
 
 type TopologyNode = RuntimeNode

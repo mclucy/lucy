@@ -66,9 +66,8 @@ func (d *geyserStandaloneDetector) Detect(
 		Topology: &types.RuntimeTopology{
 			PrimaryNode: "geyser_standalone",
 			Nodes: []types.RuntimeNode{{
-				ID:               "geyser_standalone",
-				Role:             types.RuntimeRoleProxy,
-				IdentityPlatform: types.PlatformAny,
+				ID:   "geyser_standalone",
+				Role: types.RuntimeRoleProxy,
 				Capabilities: []types.RuntimeCapability{
 					types.CapabilityProxying,
 					types.CapabilityProtocolBridge,

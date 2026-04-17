@@ -252,10 +252,9 @@ func buildBukkitExecutableTopologySeed(
 
 func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
 	return types.RuntimeNode{
-		ID:               id,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
-		Capabilities:     []types.RuntimeCapability{types.CapabilityBukkitPlugins},
+		ID:           id,
+		Role:         types.RuntimeRolePluginCore,
+		Capabilities: []types.RuntimeCapability{types.CapabilityBukkitPlugins},
 	}
 }
 

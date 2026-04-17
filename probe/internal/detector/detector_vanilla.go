@@ -71,9 +71,8 @@ func (d *VanillaDetector) Detect(
 					PrimaryNode: "minecraft",
 					Nodes: []types.RuntimeNode{
 						{
-							ID:               "minecraft",
-							Role:             types.RuntimeRoleVanilla,
-							IdentityPlatform: types.PlatformMinecraft,
+							ID:   "minecraft",
+							Role: types.RuntimeRoleVanilla,
 						},
 					},
 				},

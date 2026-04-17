@@ -1,6 +1,8 @@
 package probe
 
 import (
+	"strings"
+
 	"github.com/mclucy/lucy/probe/internal/detector"
 	"github.com/mclucy/lucy/types"
 )
@@ -40,7 +42,12 @@ func materializeRuntimeTopology(
 	}
 
 	for _, identity := range evidence.RuntimeIdentities {
-		entry, ok := LookupByPlatform(identity.Platform)
+		nodeID, ok := RuntimeIdentityNode(identity)
+		if !ok {
+			continue
+		}
+
+		entry, ok := FindEntry(nodeID)
 		if !ok {
 			continue
 		}
@@ -48,6 +55,23 @@ func materializeRuntimeTopology(
 	}
 
 	return nil
+}
+
+func RuntimeIdentityNode(identity types.PackageId) (types.RuntimeNodeID, bool) {
+	switch strings.ToLower(strings.TrimSpace(string(identity.Name))) {
+	case "fabric", "fabric-loader":
+		return RuntimeNodeFabric, true
+	case "forge":
+		return RuntimeNodeForge, true
+	case "neoforge":
+		return RuntimeNodeNeoforge, true
+	case "mcdreforged", "mcdr":
+		return RuntimeNodeMCDR, true
+	case "minecraft", "mc":
+		return RuntimeNodeMinecraft, true
+	default:
+		return "", false
+	}
 }
 
 func cloneRuntimeTopology(topology *types.RuntimeTopology) *types.RuntimeTopology {

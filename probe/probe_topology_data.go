@@ -34,46 +34,40 @@ const (
 
 var defaultRegistryEntries = []RegistryEntry{
 	{
-		NodeID:           RuntimeNodeMinecraft,
-		Role:             types.RuntimeRoleVanilla,
-		IdentityPlatform: types.PlatformMinecraft,
+		NodeID: RuntimeNodeMinecraft,
+		Role:   types.RuntimeRoleVanilla,
 	},
 	{
-		NodeID:           RuntimeNodeFabric,
-		Role:             types.RuntimeRoleModLoader,
-		IdentityPlatform: types.PlatformFabric,
+		NodeID: RuntimeNodeFabric,
+		Role:   types.RuntimeRoleModLoader,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityFabricMods,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeForge,
-		Role:             types.RuntimeRoleModLoader,
-		IdentityPlatform: types.PlatformForge,
+		NodeID: RuntimeNodeForge,
+		Role:   types.RuntimeRoleModLoader,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityForgeMods,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeNeoforge,
-		Role:             types.RuntimeRoleModLoader,
-		IdentityPlatform: types.PlatformNeoforge,
+		NodeID: RuntimeNodeNeoforge,
+		Role:   types.RuntimeRoleModLoader,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityNeoforgeMods,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeMCDR,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformMCDR,
+		NodeID: RuntimeNodeMCDR,
+		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityMCDRPlugins,
 		},
 	},
 	{
-		NodeID:           RuntimeNodePaper,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodePaper,
+		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
@@ -88,9 +82,8 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID:           RuntimeNodePaperFork,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodePaperFork,
+		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
@@ -106,9 +99,8 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID:           RuntimeNodeSpigot,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeSpigot,
+		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
@@ -123,9 +115,8 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID:           RuntimeNodeCraftBukkit,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeCraftBukkit,
+		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
@@ -138,18 +129,16 @@ var defaultRegistryEntries = []RegistryEntry{
 		}},
 	},
 	{
-		NodeID:           RuntimeNodeBukkit,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeBukkit,
+		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeFolia,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
-		RiskLevel:        types.RiskMedium,
+		NodeID:    RuntimeNodeFolia,
+		Role:      types.RuntimeRolePluginCore,
+		RiskLevel: types.RiskMedium,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
@@ -160,10 +149,9 @@ var defaultRegistryEntries = []RegistryEntry{
 		}},
 	},
 	{
-		NodeID:           RuntimeNodeLeaves,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
-		RiskLevel:        types.RiskNone,
+		NodeID:    RuntimeNodeLeaves,
+		Role:      types.RuntimeRolePluginCore,
+		RiskLevel: types.RiskNone,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
@@ -174,85 +162,75 @@ var defaultRegistryEntries = []RegistryEntry{
 		}},
 	},
 	{
-		NodeID:           RuntimeNodeSponge,
-		Role:             types.RuntimeRolePluginCore,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeSponge,
+		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilitySpongePlugins,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeArclight,
-		Role:             types.RuntimeRoleHybrid,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeArclight,
+		Role:   types.RuntimeRoleHybrid,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityForgeMods,
 			types.CapabilityBukkitPlugins,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeYouer,
-		Role:             types.RuntimeRoleHybrid,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeYouer,
+		Role:   types.RuntimeRoleHybrid,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityNeoforgeMods,
 			types.CapabilityBukkitPlugins,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeVelocity,
-		Role:             types.RuntimeRoleProxy,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeVelocity,
+		Role:   types.RuntimeRoleProxy,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
 			types.CapabilityVelocityPlugins,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeBungeecord,
-		Role:             types.RuntimeRoleProxy,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeBungeecord,
+		Role:   types.RuntimeRoleProxy,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
 			types.CapabilityBungeecordPlugins,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeWaterfall,
-		Role:             types.RuntimeRoleProxy,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeWaterfall,
+		Role:   types.RuntimeRoleProxy,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
 			types.CapabilityBungeecordPlugins,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeGeyserStandalone,
-		Role:             types.RuntimeRoleProxy,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeGeyserStandalone,
+		Role:   types.RuntimeRoleProxy,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
 			types.CapabilityProtocolBridge,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeGeyser,
-		Role:             types.RuntimeRoleProtocolBridge,
-		IdentityPlatform: types.PlatformAny,
+		NodeID: RuntimeNodeGeyser,
+		Role:   types.RuntimeRoleProtocolBridge,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProtocolBridge,
 		},
 	},
 	{
-		NodeID:           RuntimeNodeConnector,
-		Role:             types.RuntimeRoleBridge,
-		IdentityPlatform: types.PlatformAny,
-		RiskLevel:        types.RiskHigh,
+		NodeID:    RuntimeNodeConnector,
+		Role:      types.RuntimeRoleBridge,
+		RiskLevel: types.RiskHigh,
 	},
 	{
-		NodeID:           RuntimeNodeKilt,
-		Role:             types.RuntimeRoleBridge,
-		IdentityPlatform: types.PlatformAny,
-		RiskLevel:        types.RiskHigh,
+		NodeID:    RuntimeNodeKilt,
+		Role:      types.RuntimeRoleBridge,
+		RiskLevel: types.RiskHigh,
 	},
 }

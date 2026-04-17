@@ -178,10 +178,9 @@ func buildModLoaderRuntimeInfo(platform types.Platform, name string, filePath st
 		Topology: &types.RuntimeTopology{
 			PrimaryNode: types.RuntimeNodeID(name),
 			Nodes: []types.RuntimeNode{{
-				ID:               types.RuntimeNodeID(name),
-				Role:             types.RuntimeRoleModLoader,
-				IdentityPlatform: platform,
-				Capabilities:     []types.RuntimeCapability{capability},
+				ID:           types.RuntimeNodeID(name),
+				Role:         types.RuntimeRoleModLoader,
+				Capabilities: []types.RuntimeCapability{capability},
 			}},
 		},
 	}

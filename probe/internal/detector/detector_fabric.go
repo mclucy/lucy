@@ -86,10 +86,9 @@ func (d *fabricServerSingleFileDetector) Detect(
 			PrimaryNode: "fabric",
 			Nodes: []types.RuntimeNode{
 				{
-					ID:               "fabric",
-					Role:             types.RuntimeRoleModLoader,
-					IdentityPlatform: types.PlatformFabric,
-					Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
+					ID:           "fabric",
+					Role:         types.RuntimeRoleModLoader,
+					Capabilities: []types.RuntimeCapability{types.CapabilityFabricMods},
 				},
 			},
 		},
@@ -216,10 +215,9 @@ func (d *fabricServerLauncherDetector) Detect(
 					PrimaryNode: "fabric",
 					Nodes: []types.RuntimeNode{
 						{
-							ID:               "fabric",
-							Role:             types.RuntimeRoleModLoader,
-							IdentityPlatform: types.PlatformFabric,
-							Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
+							ID:           "fabric",
+							Role:         types.RuntimeRoleModLoader,
+							Capabilities: []types.RuntimeCapability{types.CapabilityFabricMods},
 						},
 					},
 				},

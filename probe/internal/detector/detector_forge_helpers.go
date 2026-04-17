@@ -152,10 +152,9 @@ func buildForgeRuntimeInfo(
 			PrimaryNode: "forge",
 			Nodes: []types.RuntimeNode{
 				{
-					ID:               "forge",
-					Role:             types.RuntimeRoleModLoader,
-					IdentityPlatform: types.PlatformForge,
-					Capabilities:     []types.RuntimeCapability{types.CapabilityForgeMods},
+					ID:           "forge",
+					Role:         types.RuntimeRoleModLoader,
+					Capabilities: []types.RuntimeCapability{types.CapabilityForgeMods},
 				},
 			},
 		},

@@ -46,31 +46,6 @@ func TestNewRuntimeRegistry_FindEntry_ReturnsCopy(t *testing.T) {
 	}
 }
 
-func TestNewRuntimeRegistry_LookupByPlatform_Known(t *testing.T) {
-	entry, ok := DefaultRegistry.LookupByPlatform(types.PlatformFabric)
-	if !ok {
-		t.Fatal("expected to find entry for PlatformFabric")
-	}
-	if entry.NodeID != RuntimeNodeFabric {
-		t.Errorf("wrong node: %q", entry.NodeID)
-	}
-}
-
-func TestNewRuntimeRegistry_LookupByPlatform_PlatformAnyNotIndexed(t *testing.T) {
-	// PlatformAny nodes (Paper, Spigot, etc.) should NOT be in byPlatform index
-	_, ok := DefaultRegistry.LookupByPlatform(types.PlatformAny)
-	if ok {
-		t.Error("PlatformAny should not be indexed in byPlatform")
-	}
-}
-
-func TestNewRuntimeRegistry_LookupByPlatform_Unknown(t *testing.T) {
-	_, ok := DefaultRegistry.LookupByPlatform("nonexistent")
-	if ok {
-		t.Error("expected not found for unknown platform")
-	}
-}
-
 func TestBuildTopologyFromEntry_SimpleNode(t *testing.T) {
 	entry := RegistryEntry{
 		NodeID:       RuntimeNodeFabric,
@@ -182,10 +157,9 @@ func TestBuildTopologyFromEntry_NodesSorted(t *testing.T) {
 func TestNewRuntimeRegistry_CustomRegistry(t *testing.T) {
 	entries := []RegistryEntry{
 		{
-			NodeID:           "custom_node",
-			Role:             types.RuntimeRoleModLoader,
-			IdentityPlatform: types.PlatformFabric,
-			Capabilities:     []types.RuntimeCapability{types.CapabilityFabricMods},
+			NodeID:       "custom_node",
+			Role:         types.RuntimeRoleModLoader,
+			Capabilities: []types.RuntimeCapability{types.CapabilityFabricMods},
 		},
 	}
 	reg := NewRuntimeRegistry(entries)

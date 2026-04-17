@@ -107,6 +107,23 @@ func (p Platform) IsModding() bool {
 	return p == PlatformFabric || p == PlatformForge || p == PlatformNeoforge
 }
 
+func DeclaredModdingPlatformForNode(id RuntimeNodeID) Platform {
+	switch id {
+	case "fabric":
+		return PlatformFabric
+	case "forge", "arclight":
+		return PlatformForge
+	case "neoforge", "youer":
+		return PlatformNeoforge
+	case "mcdr":
+		return PlatformMCDR
+	case "minecraft":
+		return PlatformMinecraft
+	default:
+		return PlatformNone
+	}
+}
+
 // CanInfer returns true if the platform is ambiguous and can be resolved
 // from server context.
 func (p Platform) CanInfer() bool {

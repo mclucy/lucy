@@ -79,9 +79,8 @@ func (d *arclightServerDetector) Detect(
 			PrimaryNode: "arclight",
 			Nodes: []types.RuntimeNode{
 				{
-					ID:               "arclight",
-					Role:             types.RuntimeRoleHybrid,
-					IdentityPlatform: types.PlatformAny,
+					ID:   "arclight",
+					Role: types.RuntimeRoleHybrid,
 					Capabilities: []types.RuntimeCapability{
 						types.CapabilityForgeMods,
 						types.CapabilityBukkitPlugins,

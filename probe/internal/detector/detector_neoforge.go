@@ -122,10 +122,9 @@ func (d *neoforgeServerDetector) Detect(
 			PrimaryNode: "neoforge",
 			Nodes: []types.RuntimeNode{
 				{
-					ID:               "neoforge",
-					Role:             types.RuntimeRoleModLoader,
-					IdentityPlatform: types.PlatformNeoforge,
-					Capabilities:     []types.RuntimeCapability{types.CapabilityNeoforgeMods},
+					ID:           "neoforge",
+					Role:         types.RuntimeRoleModLoader,
+					Capabilities: []types.RuntimeCapability{types.CapabilityNeoforgeMods},
 				},
 			},
 		},
