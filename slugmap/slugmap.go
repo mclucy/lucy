@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/mclucy/lucy/global"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -32,15 +31,17 @@ var (
 )
 
 func Default() *store {
-	once.Do(func() {
-		dir, err := os.UserConfigDir()
-		if err != nil {
-			dir = os.TempDir()
-		}
-		p := filepath.Join(dir, global.ProgramName, "slugmap.json")
-		defaultStore = &store{path: p, entries: make(map[string]Entry)}
-		_ = defaultStore.load()
-	})
+	once.Do(
+		func() {
+			dir, err := os.UserConfigDir()
+			if err != nil {
+				dir = os.TempDir()
+			}
+			p := filepath.Join(dir, "lucy", "slugmap.json")
+			defaultStore = &store{path: p, entries: make(map[string]Entry)}
+			_ = defaultStore.load()
+		},
+	)
 	return defaultStore
 }
 

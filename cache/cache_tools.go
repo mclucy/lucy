@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/global"
 	"github.com/mclucy/lucy/logger"
 )
 
@@ -21,7 +20,7 @@ func setDir(name string) string {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return path.Join(dir, global.ProgramName, name)
+	return path.Join(dir, "lucy", name)
 }
 
 func (h *handler) clearExpiredCache() {
