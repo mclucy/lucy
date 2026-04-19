@@ -1,12 +1,13 @@
 package detector
 
 import (
+	"strings"
+
 	"github.com/mclucy/lucy/dependency"
 	externaltype "github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
-	"strings"
 )
 
 // parseFabricVersionRanges parses a Fabric VersionRange value where each item
