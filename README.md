@@ -155,7 +155,7 @@ lucy search carpet --source modrinth --index downloads
 
 ### `status` - Server environment overview
 
-`lucy status` is a `neofetch`-style overview for Minecraft server environments. It is designed to surface what `lucy` can detect, audit, and reason about in the current directory:
+`lucy status` is a [`neofetch`](https://github.com/dylanaraps/neofetch)/[`fastfetch`](https://github.com/fastfetch-cli/fastfetch)-style overview for Minecraft server environments. It is designed to surface what `lucy` can detect, audit, and reason about in the current directory:
 
 - Game version
 - Server core
