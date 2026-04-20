@@ -48,6 +48,9 @@ test_*
 .task
 
 # Code agents
+.agents
+.codex
+.claude
 .sisyphus
 AGENTS.md
 
