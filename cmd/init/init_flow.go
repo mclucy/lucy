@@ -295,19 +295,14 @@ func NewInitFlowState(workDir string) *InitFlowState {
 			if strings.TrimSpace(s.GameVersion) == "" && strings.TrimSpace(manifest.Environment.GameVersion) != "" {
 				s.GameVersion = strings.TrimSpace(manifest.Environment.GameVersion)
 			}
-			if strings.TrimSpace(s.Platform) == "" && strings.TrimSpace(manifest.Environment.Platform) != "" {
-				s.Platform = strings.TrimSpace(manifest.Environment.Platform)
+			if strings.TrimSpace(s.Platform) == "" && strings.TrimSpace(manifest.Environment.ModdingPlatform) != "" {
+				s.Platform = strings.TrimSpace(manifest.Environment.ModdingPlatform)
 			}
-			if strings.TrimSpace(s.PlatformVersion) == "" && strings.TrimSpace(manifest.Environment.PlatformVersion) != "" {
-				s.PlatformVersion = strings.TrimSpace(manifest.Environment.PlatformVersion)
+			if strings.TrimSpace(s.PlatformVersion) == "" && strings.TrimSpace(manifest.Environment.ModdingPlatformVersion) != "" {
+				s.PlatformVersion = strings.TrimSpace(manifest.Environment.ModdingPlatformVersion)
 			}
 			if len(s.CompatiblePlatforms) == 0 && len(manifest.Environment.CompatiblePlatforms) > 0 {
 				s.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
-			}
-			if len(manifest.Policy.ManagedRoots) > 0 {
-				if len(s.ManagedRoots) == 0 {
-					s.ManagedRoots = append([]string(nil), manifest.Policy.ManagedRoots...)
-				}
 			}
 		}
 	}
@@ -570,7 +565,7 @@ func CanProceed(s *InitFlowState) bool {
 
 func ValidatePlatformSelection(primary string, compatible []string) error {
 	return state.ValidateManifestEnvironment(state.ManifestEnvironment{
-		Platform:            primary,
+		ModdingPlatform:     primary,
 		CompatiblePlatforms: compatible,
 	})
 }
@@ -590,7 +585,7 @@ type InitFlowResult struct {
 	ConfigToWrite *state.Config
 
 	// ManifestToWrite is the Manifest that init will marshal to
-	// .lucy/manifest.toml. Nil means preserve existing.
+	// .lucy/manifest.json. Nil means preserve existing.
 	ManifestToWrite *Manifest
 
 	// LockToWrite is the empty Lock skeleton that init scaffolds in
@@ -658,15 +653,14 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		result.SkippedFiles = append(result.SkippedFiles, cfgPath)
 	}
 
-	// manifest.toml
+	// manifest.json
 	mfPath := string(state.ManifestFile)
 	if willWrite(mfPath) {
 		mf := state.ManifestDefaults()
 		mf.Environment.GameVersion = s.GameVersion
-		mf.Environment.Platform = s.Platform
-		mf.Environment.PlatformVersion = s.PlatformVersion
+		mf.Environment.ModdingPlatform = s.Platform
+		mf.Environment.ModdingPlatformVersion = s.PlatformVersion
 		mf.Environment.CompatiblePlatforms = append([]string(nil), s.CompatiblePlatforms...)
-		mf.Policy.ManagedRoots = s.ManagedRoots
 		mf.Packages = state.ManifestPackagesFromClassified(classifiedPackagesForManifest(s.PackageClassifications))
 		result.ManifestToWrite = &mf
 		result.WrittenFiles = append(result.WrittenFiles, mfPath)
@@ -706,17 +700,16 @@ func populateInitLockMetadata(lock *state.Lock, s *InitFlowState, manifest *stat
 			lock.ManifestFingerprint = "sha256:" + hex.EncodeToString(sum[:])
 		}
 		lock.GameVersion = strings.TrimSpace(resolvedManifest.Environment.GameVersion)
-		lock.Platform = strings.TrimSpace(resolvedManifest.Environment.Platform)
-		lock.PlatformVersion = strings.TrimSpace(resolvedManifest.Environment.PlatformVersion)
+		lock.Platform = strings.TrimSpace(resolvedManifest.Environment.ModdingPlatform)
+		lock.PlatformVersion = strings.TrimSpace(resolvedManifest.Environment.ModdingPlatformVersion)
 	}
 
 	if lock.ManifestFingerprint == "" {
 		fallbackManifest := state.ManifestDefaults()
 		fallbackManifest.Environment.GameVersion = lockMetadataValue(s.GameVersion, s.DiscoveredDefaults.GameVersion)
-		fallbackManifest.Environment.Platform = lockMetadataValue(s.Platform, s.DiscoveredDefaults.Platform)
-		fallbackManifest.Environment.PlatformVersion = lockMetadataValue(s.PlatformVersion, s.DiscoveredDefaults.PlatformVersion)
+		fallbackManifest.Environment.ModdingPlatform = lockMetadataValue(s.Platform, s.DiscoveredDefaults.Platform)
+		fallbackManifest.Environment.ModdingPlatformVersion = lockMetadataValue(s.PlatformVersion, s.DiscoveredDefaults.PlatformVersion)
 		fallbackManifest.Environment.CompatiblePlatforms = append([]string(nil), s.CompatiblePlatforms...)
-		fallbackManifest.Policy.ManagedRoots = append([]string(nil), s.ManagedRoots...)
 		fallbackManifest.Packages = state.ManifestPackagesFromClassified(classifiedPackagesForManifest(s.PackageClassifications))
 		if data, err := state.SerializeManifest(&fallbackManifest); err == nil {
 			sum := sha256.Sum256(data)

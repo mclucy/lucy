@@ -103,9 +103,8 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 	if manifestErr == nil && manifestExists && manifest != nil {
 		defaults.ExistingLucy.ManifestPresent = true
 		defaults.ExistingLucy.GameVersion = strings.TrimSpace(manifest.Environment.GameVersion)
-		defaults.ExistingLucy.Platform = strings.TrimSpace(manifest.Environment.Platform)
-		defaults.ExistingLucy.PlatformVersion = strings.TrimSpace(manifest.Environment.PlatformVersion)
-		defaults.ExistingLucy.ManagedRoots = appendUnique(defaults.ExistingLucy.ManagedRoots, manifest.Policy.ManagedRoots...)
+		defaults.ExistingLucy.Platform = strings.TrimSpace(manifest.Environment.ModdingPlatform)
+		defaults.ExistingLucy.PlatformVersion = strings.TrimSpace(manifest.Environment.ModdingPlatformVersion)
 	}
 
 	config, configExists, configErr := state.ReadConfig(workDir)

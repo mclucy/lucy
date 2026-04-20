@@ -114,9 +114,9 @@ func TestReadWriteManifestPreservesCompatiblePlatforms(t *testing.T) {
 	workDir := t.TempDir()
 	manifest := ManifestDefaults()
 	manifest.Environment.GameVersion = "1.21.1"
-	manifest.Environment.Platform = "neoforge"
+	manifest.Environment.ModdingPlatform = "neoforge"
 	manifest.Environment.CompatiblePlatforms = []string{"fabric", "mcdr", "sinytra"}
-	manifest.Environment.PlatformVersion = "21.1.0"
+	manifest.Environment.ModdingPlatformVersion = "21.1.0"
 	manifest.Packages = []ManifestPackage{{
 		ID:      "neoforge/connector",
 		Version: "compatible",

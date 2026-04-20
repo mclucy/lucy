@@ -125,7 +125,6 @@ func TestIgnoredInstallPaths(t *testing.T) {
 
 func TestCompareManifestLockObservedSeparatesIntentFactAndObservedLayers(t *testing.T) {
 	manifest := &Manifest{
-		Policy: ManifestPolicy{ManagedRoots: []string{"mods"}, UnmanagedPaths: []string{"world/**"}},
 		Packages: []ManifestPackage{
 			{ID: "fabric/a", Role: RoleRequired},
 			{ID: "fabric/b", Role: RoleRequired},

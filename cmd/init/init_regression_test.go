@@ -115,7 +115,7 @@ func TestMultiPlatformSelection_NeoforgePlusFabricPlusMCDR(t *testing.T) {
 	if result.ManifestToWrite == nil {
 		t.Fatal("expected manifest")
 	}
-	if got := result.ManifestToWrite.Environment.Platform; got != "neoforge" {
+	if got := result.ManifestToWrite.Environment.ModdingPlatform; got != "neoforge" {
 		t.Fatalf("expected primary platform neoforge, got %q", got)
 	}
 	if len(result.ManifestToWrite.Environment.CompatiblePlatforms) != 2 {
@@ -209,11 +209,11 @@ func TestMCDRPlatform_WordingAndModelCompatibility(t *testing.T) {
 	if result.ManifestToWrite == nil {
 		t.Fatal("expected manifest")
 	}
-	if got := result.ManifestToWrite.Environment.Platform; got != "mcdr" {
+	if got := result.ManifestToWrite.Environment.ModdingPlatform; got != "mcdr" {
 		t.Fatalf("expected platform mcdr, got %q", got)
 	}
-	if result.ManifestToWrite.Environment.PlatformVersion != "2.12.0" {
-		t.Fatalf("expected platform version 2.12.0, got %q", result.ManifestToWrite.Environment.PlatformVersion)
+	if result.ManifestToWrite.Environment.ModdingPlatformVersion != "2.12.0" {
+		t.Fatalf("expected platform version 2.12.0, got %q", result.ManifestToWrite.Environment.ModdingPlatformVersion)
 	}
 }
 

@@ -45,7 +45,7 @@ func TestParseSerializeConfigRoundTripFixture(t *testing.T) {
 }
 
 func TestParseSerializeManifestRoundTripFixture(t *testing.T) {
-	fixture := mustReadStateFixture(t, "manifest.toml")
+	fixture := mustReadStateFixture(t, "manifest.json")
 
 	parsed, err := ParseManifest(fixture)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestParseSerializeManifestRoundTripFixture(t *testing.T) {
 		t.Fatalf("manifest serialization is not deterministic\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
 
-	if !bytes.Equal(first, fixture) {
+	if !bytes.Equal(append(first, '\n'), fixture) {
 		t.Fatalf("manifest serialization does not match golden fixture\nwant:\n%s\ngot:\n%s", fixture, first)
 	}
 }
@@ -135,7 +135,7 @@ func TestSerializeDeterministicAcrossCalls(t *testing.T) {
 		t.Fatalf("SerializeConfig output differs between runs")
 	}
 
-	manifestFixture := mustReadStateFixture(t, "manifest.toml")
+	manifestFixture := mustReadStateFixture(t, "manifest.json")
 	manifest, err := ParseManifest(manifestFixture)
 	if err != nil {
 		t.Fatalf("ParseManifest failed: %v", err)

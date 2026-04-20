@@ -227,8 +227,8 @@ func manifestGameVersion(manifest *state.Manifest, runtime *types.RuntimeInfo, f
 }
 
 func manifestPlatform(manifest *state.Manifest, runtime *types.RuntimeInfo, fallback string) string {
-	if manifest != nil && manifest.Environment.Platform != "" {
-		return manifest.Environment.Platform
+	if manifest != nil && manifest.Environment.ModdingPlatform != "" {
+		return manifest.Environment.ModdingPlatform
 	}
 	if runtime != nil {
 		if platform := runtime.DerivedModLoader().String(); platform != "" {
@@ -242,8 +242,8 @@ func manifestPlatform(manifest *state.Manifest, runtime *types.RuntimeInfo, fall
 }
 
 func manifestPlatformVersion(manifest *state.Manifest, runtime *types.RuntimeInfo, fallback string) string {
-	if manifest != nil && manifest.Environment.PlatformVersion != "" {
-		return manifest.Environment.PlatformVersion
+	if manifest != nil && manifest.Environment.ModdingPlatformVersion != "" {
+		return manifest.Environment.ModdingPlatformVersion
 	}
 	if runtime != nil {
 		if version := runtime.DerivedLoaderVersion(); version != "" {

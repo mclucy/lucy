@@ -10,14 +10,9 @@ import (
 
 func TestBuildInstallSyncPlanUsesExactLockClosureWithinManagedScope(t *testing.T) {
 	manifest := &state.Manifest{
-		Format: state.ManifestDefaults().Format,
+		FormatVersion: state.ManifestDefaults().FormatVersion,
 		Environment: state.ManifestEnvironment{
-			Platform: string(types.PlatformFabric),
-		},
-		Layout: state.ManifestDefaults().Layout,
-		Policy: state.ManifestPolicy{
-			ManagedRoots:   []string{"mods"},
-			UnmanagedPaths: []string{"mods/ignored/**"},
+			ModdingPlatform: string(types.PlatformFabric),
 		},
 		Packages: []state.ManifestPackage{
 			{ID: "fabric/root", Version: "compatible", Source: "auto", Role: state.RoleRequired, Side: state.SideBoth},
@@ -34,8 +29,11 @@ func TestBuildInstallSyncPlanUsesExactLockClosureWithinManagedScope(t *testing.T
 			{ID: "fabric/unmanaged", Version: "0.0.1", InstallPath: "world/datapacks/extra.jar"},
 		},
 	}
+	config := state.ConfigDefaults()
+	config.Scope.ManagedRoots = []string{"mods"}
+	config.Scope.UnmanagedPaths = []string{"mods/ignored/**"}
 
-	plan, err := buildInstallSyncPlan(manifest, lock)
+	plan, err := buildInstallSyncPlan(manifest, lock, &config)
 	if err != nil {
 		t.Fatalf("build install sync plan: %v", err)
 	}
@@ -56,12 +54,10 @@ func TestBuildInstallSyncPlanUsesExactLockClosureWithinManagedScope(t *testing.T
 
 func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing.T) {
 	manifest := &state.Manifest{
-		Format: state.ManifestDefaults().Format,
+		FormatVersion: state.ManifestDefaults().FormatVersion,
 		Environment: state.ManifestEnvironment{
-			Platform: string(types.PlatformFabric),
+			ModdingPlatform: string(types.PlatformFabric),
 		},
-		Layout: state.ManifestDefaults().Layout,
-		Policy: state.ManifestDefaults().Policy,
 		Packages: []state.ManifestPackage{
 			{ID: "fabric/root", Version: "compatible", Source: "auto", Role: state.RoleRequired, Side: state.SideBoth},
 			{ID: "fabric/dependency", Version: "1.0.0", Source: "modrinth", Role: state.RoleTransitive, Side: state.SideBoth},
@@ -76,7 +72,7 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 		},
 	}
 
-	plan, err := buildInstallSyncPlan(manifest, lock)
+	plan, err := buildInstallSyncPlan(manifest, lock, nil)
 	if err != nil {
 		t.Fatalf("build install sync plan: %v", err)
 	}

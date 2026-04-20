@@ -155,9 +155,8 @@ func TestBuildResultPreserveManifestStillPopulatesLockMetadataFromExistingManife
 
 	manifest := state.ManifestDefaults()
 	manifest.Environment.GameVersion = "1.21.4"
-	manifest.Environment.Platform = "fabric"
-	manifest.Environment.PlatformVersion = "0.16.10"
-	manifest.Policy.ManagedRoots = []string{"mods"}
+	manifest.Environment.ModdingPlatform = "fabric"
+	manifest.Environment.ModdingPlatformVersion = "0.16.10"
 	if err := state.WriteManifest(tmpDir, &manifest); err != nil {
 		t.Fatalf("failed to write manifest: %v", err)
 	}
@@ -190,11 +189,11 @@ func TestBuildResultPreserveManifestStillPopulatesLockMetadataFromExistingManife
 	if result.LockToWrite.GameVersion != manifest.Environment.GameVersion {
 		t.Fatalf("game version mismatch: got %q want %q", result.LockToWrite.GameVersion, manifest.Environment.GameVersion)
 	}
-	if result.LockToWrite.Platform != manifest.Environment.Platform {
-		t.Fatalf("platform mismatch: got %q want %q", result.LockToWrite.Platform, manifest.Environment.Platform)
+	if result.LockToWrite.Platform != manifest.Environment.ModdingPlatform {
+		t.Fatalf("platform mismatch: got %q want %q", result.LockToWrite.Platform, manifest.Environment.ModdingPlatform)
 	}
-	if result.LockToWrite.PlatformVersion != manifest.Environment.PlatformVersion {
-		t.Fatalf("platform version mismatch: got %q want %q", result.LockToWrite.PlatformVersion, manifest.Environment.PlatformVersion)
+	if result.LockToWrite.PlatformVersion != manifest.Environment.ModdingPlatformVersion {
+		t.Fatalf("platform version mismatch: got %q want %q", result.LockToWrite.PlatformVersion, manifest.Environment.ModdingPlatformVersion)
 	}
 	if err := state.ValidateLock(*result.LockToWrite); err != nil {
 		t.Fatalf("expected preserve-mode lock skeleton to validate: %v", err)

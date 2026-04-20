@@ -28,6 +28,7 @@ type ManifestEnvironment struct {
 	ServerCoreVersion      string   `json:"server_core_version"`
 	ModdingPlatform        string   `json:"modding_platform"`
 	ModdingPlatformVersion string   `json:"modding_platform_version"`
+	CompatiblePlatforms    []string `json:"compatible_platforms"`
 	Mcdr                   bool     `json:"mcdr"`
 	DeclaredCapabilities   []string `json:"declared_capabilities"`
 }
@@ -110,6 +111,7 @@ func ManifestDefaults() Manifest {
 			ServerCoreVersion:      "",
 			ModdingPlatform:        "",
 			ModdingPlatformVersion: "",
+			CompatiblePlatforms:    []string{},
 			Mcdr:                   false,
 			DeclaredCapabilities:   []string{},
 		},
@@ -153,15 +155,47 @@ func ValidateManifestEnvironment(env ManifestEnvironment) error {
 		if version != "" {
 			return NewStateError(ManifestFile, ErrMalformed, "environment.modding_platform_version", "environment.modding_platform_version requires environment.modding_platform")
 		}
+		if len(env.CompatiblePlatforms) > 0 {
+			return NewStateError(ManifestFile, ErrMalformed, "environment.compatible_platforms", "environment.compatible_platforms requires environment.modding_platform")
+		}
 		return nil
 	}
 
 	switch platform {
-	case "none", "fabric", "forge", "neoforge":
-		return nil
+	case "none", "fabric", "forge", "neoforge", "mcdr":
 	default:
 		return NewStateError(ManifestFile, ErrMalformed, "environment.modding_platform", fmt.Sprintf("invalid environment.modding_platform %q", env.ModdingPlatform))
 	}
+
+	if platform == "none" && len(env.CompatiblePlatforms) > 0 {
+		return NewStateError(ManifestFile, ErrMalformed, "environment.compatible_platforms", "environment.compatible_platforms requires a non-vanilla environment.modding_platform")
+	}
+
+	seen := make(map[string]struct{}, len(env.CompatiblePlatforms))
+	for i, raw := range env.CompatiblePlatforms {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("environment.compatible_platforms[%d]", i), "environment.compatible_platforms entries must be non-empty")
+		}
+		switch value {
+		case "fabric", "forge", "neoforge", "mcdr", "sinytra":
+		default:
+			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("environment.compatible_platforms[%d]", i), fmt.Sprintf("invalid compatible platform %q", raw))
+		}
+		if value == platform {
+			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("environment.compatible_platforms[%d]", i), fmt.Sprintf("compatible platform %q duplicates environment.modding_platform", raw))
+		}
+		if _, ok := seen[value]; ok {
+			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("environment.compatible_platforms[%d]", i), fmt.Sprintf("duplicate compatible platform %q", raw))
+		}
+		seen[value] = struct{}{}
+	}
+
+	if _, hasSinytra := seen["sinytra"]; hasSinytra && platform != "neoforge" {
+		return NewStateError(ManifestFile, ErrMalformed, "environment.compatible_platforms", "environment.compatible_platforms cannot include \"sinytra\" unless environment.modding_platform is \"neoforge\"")
+	}
+
+	return nil
 }
 
 // validateManifestPlatform remains as a legacy helper for the pre-Task-2 lock
@@ -225,6 +259,17 @@ func validateManifestPackage(pkg ManifestPackage) error {
 	return nil
 }
 
+func CompatiblePlatformOptions(primary string) []string {
+	switch strings.TrimSpace(primary) {
+	case "neoforge":
+		return []string{"fabric", "mcdr", "sinytra"}
+	case "fabric", "forge":
+		return []string{"mcdr"}
+	default:
+		return nil
+	}
+}
+
 func NormalizeManifestVersionIntent(version types.RawVersion) string {
 	trimmed := strings.TrimSpace(version.String())
 	switch trimmed {
@@ -241,6 +286,7 @@ func UpsertManifestRequiredIntent(manifest *Manifest, id types.PackageId, source
 		manifest = &defaults
 	} else {
 		clone := *manifest
+		clone.Environment.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
 		clone.Environment.DeclaredCapabilities = append([]string(nil), manifest.Environment.DeclaredCapabilities...)
 		clone.Packages = append([]ManifestPackage(nil), manifest.Packages...)
 		clone.Bundles = append([]ManifestBundle(nil), manifest.Bundles...)
@@ -398,6 +444,7 @@ func cloneManifestOrDefaults(manifest *Manifest) Manifest {
 	}
 
 	cloned := *manifest
+	cloned.Environment.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
 	cloned.Environment.DeclaredCapabilities = append([]string(nil), manifest.Environment.DeclaredCapabilities...)
 	cloned.Packages = append([]ManifestPackage(nil), manifest.Packages...)
 	cloned.Bundles = append([]ManifestBundle(nil), manifest.Bundles...)
@@ -622,6 +669,9 @@ func normalizeManifest(m *Manifest) {
 	}
 	if m.Environment.DeclaredCapabilities == nil {
 		m.Environment.DeclaredCapabilities = []string{}
+	}
+	if m.Environment.CompatiblePlatforms == nil {
+		m.Environment.CompatiblePlatforms = []string{}
 	}
 	if m.Packages == nil {
 		m.Packages = []ManifestPackage{}

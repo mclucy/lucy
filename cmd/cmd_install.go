@@ -52,7 +52,7 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("manifest is required for install")
 	}
 
-	plan, err := buildInstallSyncPlan(stateSvc.Manifest(), stateSvc.Lock())
+	plan, err := buildInstallSyncPlan(stateSvc.Manifest(), stateSvc.Lock(), stateSvc.Config())
 	if err != nil {
 		return err
 	}
@@ -71,16 +71,16 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	lock := buildUpdatedLock(workDir, stateSvc.Manifest(), stateSvc.Lock(), result)
-	lock = filteredManagedLock(stateSvc.Manifest(), lock)
+	lock = filteredManagedLock(stateSvc.Config(), stateSvc.Manifest(), lock)
 	return state.WriteLock(workDir, lock)
 }
 
-func buildInstallSyncPlan(manifest *state.Manifest, lock *state.Lock) (installSyncPlan, error) {
+func buildInstallSyncPlan(manifest *state.Manifest, lock *state.Lock, config *state.Config) (installSyncPlan, error) {
 	if manifest == nil {
 		return installSyncPlan{}, fmt.Errorf("manifest is required for install")
 	}
 
-	exact, ok, err := exactSyncPackageIDs(manifest, lock)
+	exact, ok, err := exactSyncPackageIDs(manifest, lock, config)
 	if err != nil {
 		return installSyncPlan{}, err
 	}
@@ -95,7 +95,7 @@ func buildInstallSyncPlan(manifest *state.Manifest, lock *state.Lock) (installSy
 	return installSyncPlan{Requested: required, UsesExactLock: false, Stable: false}, nil
 }
 
-func exactSyncPackageIDs(manifest *state.Manifest, lock *state.Lock) ([]types.PackageId, bool, error) {
+func exactSyncPackageIDs(manifest *state.Manifest, lock *state.Lock, config *state.Config) ([]types.PackageId, bool, error) {
 	if manifest == nil || lock == nil || len(lock.Packages) == 0 {
 		return nil, false, nil
 	}
@@ -103,7 +103,7 @@ func exactSyncPackageIDs(manifest *state.Manifest, lock *state.Lock) ([]types.Pa
 		return nil, false, nil
 	}
 
-	filteredLock := filteredManagedLock(manifest, lock)
+	filteredLock := filteredManagedLock(config, manifest, lock)
 	if len(filteredLock.Packages) == 0 {
 		return nil, false, nil
 	}
@@ -167,7 +167,7 @@ func managedManifest(manifest *state.Manifest) *state.Manifest {
 	return &cloned
 }
 
-func filteredManagedLock(manifest *state.Manifest, lock *state.Lock) *state.Lock {
+func filteredManagedLock(config *state.Config, manifest *state.Manifest, lock *state.Lock) *state.Lock {
 	if lock == nil {
 		return nil
 	}
@@ -178,8 +178,10 @@ func filteredManagedLock(manifest *state.Manifest, lock *state.Lock) *state.Lock
 
 	ignored := make(map[string]struct{})
 	scope := state.NewManagedScope(nil, nil)
+	if config != nil {
+		scope = state.NewManagedScope(config.Scope.ManagedRoots, config.Scope.UnmanagedPaths)
+	}
 	if manifest != nil {
-		scope = state.NewManagedScope(manifest.Policy.ManagedRoots, manifest.Policy.UnmanagedPaths)
 		for _, pkg := range manifest.Packages {
 			if pkg.Role == state.RoleIgnored {
 				ignored[pkg.ID] = struct{}{}

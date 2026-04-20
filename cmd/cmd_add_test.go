@@ -66,8 +66,8 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 	workDir := t.TempDir()
 	manifest := state.ManifestDefaults()
 	manifest.Environment.GameVersion = "1.21.1"
-	manifest.Environment.Platform = "fabric"
-	manifest.Environment.PlatformVersion = "0.16.10"
+	manifest.Environment.ModdingPlatform = "fabric"
+	manifest.Environment.ModdingPlatformVersion = "0.16.10"
 	manifest.Packages = []state.ManifestPackage{
 		{
 			ID:      "fabric/lithium",
@@ -158,7 +158,7 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 	if updated.ManifestFingerprint != wantFingerprint {
 		t.Fatalf("manifest fingerprint mismatch: got %q want %q", updated.ManifestFingerprint, wantFingerprint)
 	}
-	if updated.PlatformVersion != manifest.Environment.PlatformVersion {
+	if updated.PlatformVersion != manifest.Environment.ModdingPlatformVersion {
 		t.Fatalf("expected lock metadata to refresh from manifest, got %q", updated.PlatformVersion)
 	}
 	if len(updated.Bundles) != 1 || updated.Bundles[0] != existingLock.Bundles[0] {
