@@ -72,14 +72,15 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	options := types.SearchOptions{
 		IncludeClient: client,
 		SortBy:        types.SearchSort(index),
+		FilterPlatform: p.Platform,
 	}
 
 	out := &tui.Data{}
-	providers, err := routing.ResolveProviders(p.Platform, specifiedSource)
+	providers, err := routing.ResolveSearchProviders(options.FilterPlatform, specifiedSource)
 	if err != nil {
 		errArg := sourceArg
 		if specifiedSource == types.SourceAuto {
-			errArg = p.Platform.String()
+			errArg = options.FilterPlatform.String()
 		}
 		logger.Fatal(fmt.Errorf("%w: %s", err, errArg))
 	}

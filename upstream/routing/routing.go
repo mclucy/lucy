@@ -92,6 +92,36 @@ func ResolveProviders(
 	return providersFromSources(sources)
 }
 
+// ResolveSearchProviders resolves providers for search operations. When a
+// specific platform filter is active, routing validates explicit source
+// selection and uses source capability data as the authority for automatic
+// selection.
+func ResolveSearchProviders(
+	platform types.Platform,
+	src types.Source,
+) ([]upstream.Provider, error) {
+	if src == types.SourceUnknown {
+		return nil, ErrUnknownSource
+	}
+
+	if src != types.SourceAuto {
+		if err := validateSearchSourcePlatform(src, platform); err != nil {
+			return nil, err
+		}
+		return resolveExplicitSource(src)
+	}
+
+	if !platform.IsSearchPlatform() {
+		return ResolveProviders(platform, src)
+	}
+
+	sources := providerSourcesForSearchPlatform(platform)
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidPlatform, platform)
+	}
+	return providersFromSources(sources)
+}
+
 func ResolveProvidersFromTopology(
 	topology *types.RuntimeTopology,
 	src types.Source,
@@ -128,6 +158,19 @@ func resolveExplicitSource(src types.Source) ([]upstream.Provider, error) {
 	}
 
 	return []upstream.Provider{provider}, nil
+}
+
+func validateSearchSourcePlatform(src types.Source, platform types.Platform) error {
+	if !platform.IsSearchPlatform() {
+		return nil
+	}
+
+	support, ok := PlatformSupportedBy(src, platform)
+	if ok && support.Supported {
+		return nil
+	}
+
+	return fmt.Errorf("source %s does not support platform %s", src, platform)
 }
 
 func providersFromSources(sources []types.Source) ([]upstream.Provider, error) {

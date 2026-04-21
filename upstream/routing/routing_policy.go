@@ -2,6 +2,13 @@ package routing
 
 import "github.com/mclucy/lucy/types"
 
+var searchProviderSourcesInPriorityOrder = []types.Source{
+	types.SourceModrinth,
+	types.SourceCurseForge,
+	types.SourceHangar,
+	types.SourceSpiget,
+}
+
 func autoProviderSources() []types.Source {
 	return append(modProviderSources(), types.SourceMCDR)
 }
@@ -18,15 +25,30 @@ func providerSourcesForPlatform(platform types.Platform) ([]types.Source, error)
 	switch platform {
 	case types.PlatformAny:
 		return autoProviderSources(), nil
-	case types.PlatformForge, types.PlatformFabric, types.PlatformNeoforge:
-		return modProviderSources(), nil
-	case types.PlatformBukkit:
-		return []types.Source{types.SourceModrinth, types.SourceHangar, types.SourceSpiget}, nil
 	case types.PlatformMCDR:
 		return []types.Source{types.SourceMCDR}, nil
+	case types.PlatformForge, types.PlatformFabric, types.PlatformNeoforge, types.PlatformBukkit:
+		return providerSourcesForSearchPlatform(platform), nil
 	default:
 		return nil, ErrInvalidPlatform
 	}
+}
+
+func providerSourcesForSearchPlatform(platform types.Platform) []types.Source {
+	sources := make([]types.Source, 0, len(searchProviderSourcesInPriorityOrder))
+	for _, source := range searchProviderSourcesInPriorityOrder {
+		if source == types.SourceCurseForge && !curseforgeAvailable() {
+			continue
+		}
+
+		support, ok := PlatformSupportedBy(source, platform)
+		if !ok || !support.Supported {
+			continue
+		}
+
+		sources = append(sources, source)
+	}
+	return sources
 }
 
 type topologyResolution struct {
