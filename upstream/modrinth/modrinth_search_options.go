@@ -141,6 +141,11 @@ var facetAllLoaders = facetItems{
 		Operation: operationEq,
 		Value:     "neoforge",
 	},
+	{
+		Type:      "categories",
+		Operation: operationEq,
+		Value:     "bukkit",
+	},
 }
 
 var facetForgeOnly = facetItems{
@@ -156,6 +161,22 @@ var facetFabricOnly = facetItems{
 		Type:      "categories",
 		Operation: operationEq,
 		Value:     "fabric",
+	},
+}
+
+var facetNeoforgeOnly = facetItems{
+	{
+		Type:      "categories",
+		Operation: operationEq,
+		Value:     "neoforge",
+	},
+}
+
+var facetBukkitOnly = facetItems{
+	{
+		Type:      "categories",
+		Operation: operationEq,
+		Value:     "bukkit",
 	},
 }
 

@@ -51,6 +51,16 @@ func StaticPlatformCandidates() []CompletionCandidate {
 	}
 }
 
+// StaticSearchPlatformCandidates returns completion candidates for search-enabled platforms (rollout set).
+func StaticSearchPlatformCandidates() []CompletionCandidate {
+	return []CompletionCandidate{
+		{Value: types.PlatformFabric.String(), Description: "Fabric mods"},
+		{Value: types.PlatformForge.String(), Description: "Forge mods"},
+		{Value: types.PlatformNeoforge.String(), Description: "NeoForge mods"},
+		{Value: "bukkit", Description: "Bukkit/Paper/Spigot plugins"},
+	}
+}
+
 // StaticVersionCandidates returns completion candidates for fuzzy version hints.
 func StaticVersionCandidates() []CompletionCandidate {
 	return []CompletionCandidate{

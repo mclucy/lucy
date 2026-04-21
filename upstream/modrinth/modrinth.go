@@ -47,6 +47,10 @@ func (s provider) Search(
 		facets = append(facets, facetForgeOnly)
 	case types.PlatformFabric:
 		facets = append(facets, facetFabricOnly)
+	case types.PlatformNeoforge:
+		facets = append(facets, facetNeoforgeOnly)
+	case types.PlatformBukkit:
+		facets = append(facets, facetBukkitOnly)
 	case types.PlatformAny:
 		fallthrough
 	default:

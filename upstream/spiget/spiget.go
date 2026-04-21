@@ -21,6 +21,10 @@ func (provider) Search(
 	query string,
 	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
+	if options.FilterPlatform == types.PlatformBukkit {
+		logger.Debug("spiget: platform filter is not supported upstream; search will run without a platform query parameter")
+	}
+
 	resp, err := searchResources(query, options)
 	if err != nil {
 		return nil, err

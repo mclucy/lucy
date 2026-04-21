@@ -18,6 +18,7 @@ import (
 const (
 	flagIndexName  = "index"
 	flagClientName = "client"
+	flagPlatformName = "platform"
 )
 
 var searchCmd = &cobra.Command{
@@ -35,6 +36,10 @@ var searchCmd = &cobra.Command{
 		if !types.SearchSort(index).Valid() {
 			return errors.New("--index must be one of \"relevance\", \"downloads\", \"newest\"")
 		}
+		platform, _ := cmd.Flags().GetString(flagPlatformName)
+		if platform != "" && !types.Platform(platform).IsSearchPlatform() {
+			return errors.New("--platform must be one of \"fabric\", \"forge\", \"neoforge\", \"bukkit\"")
+		}
 		return validateSourceFlag(cmd)
 	},
 	RunE: runWithErrorLogging(actionSearch),
@@ -43,6 +48,7 @@ var searchCmd = &cobra.Command{
 func init() {
 	searchCmd.Flags().StringP(flagIndexName, "i", "relevance", "Index search results by INDEX")
 	searchCmd.Flags().BoolP(flagClientName, "c", false, "Also show client-only mods in results")
+	searchCmd.Flags().String(flagPlatformName, "", "Filter results by platform (fabric, forge, neoforge, bukkit)")
 	addJsonFlag(searchCmd)
 	addLongFlag(searchCmd)
 	addNoStyleFlag(searchCmd)
@@ -53,6 +59,10 @@ func init() {
 	})
 	_ = searchCmd.RegisterFlagCompletionFunc(flagIndexName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		candidates := FilterByPrefix(StaticSortCandidates(), toComplete)
+		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = searchCmd.RegisterFlagCompletionFunc(flagPlatformName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		candidates := FilterByPrefix(StaticSearchPlatformCandidates(), toComplete)
 		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
 	})
 	rootCmd.AddCommand(searchCmd)
@@ -67,12 +77,18 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	client, _ := cmd.Flags().GetBool(flagClientName)
 	long, _ := cmd.Flags().GetBool(flagLongName)
 	sourceArg, _ := cmd.Flags().GetString(flagSourceName)
+	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
 	specifiedSource := types.ParseSource(sourceArg)
 
+	resolvedPlatform, err := ResolvePlatform(p.Platform, platformArg)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
 	options := types.SearchOptions{
-		IncludeClient: client,
-		SortBy:        types.SearchSort(index),
-		FilterPlatform: p.Platform,
+		IncludeClient:    client,
+		SortBy:           types.SearchSort(index),
+		FilterPlatform:   resolvedPlatform,
 	}
 
 	out := &tui.Data{}

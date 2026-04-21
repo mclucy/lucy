@@ -158,9 +158,11 @@ func withQuery(base string, params url.Values) string {
 
 func searchPlatform(platform types.Platform) string {
 	switch platform {
+	case types.PlatformBukkit:
+		return hangarPreferredPlatform
 	case types.PlatformAny, types.PlatformNone, types.PlatformUnknown:
 		return hangarPreferredPlatform
 	default:
-		return hangarPreferredPlatform
+		return ""
 	}
 }
