@@ -123,7 +123,13 @@ func generateStatusOutput(
 
 	// Show modding platform if detected, even if no mods found, to differentiate
 	// between modded and vanilla servers
-	if platformLabel := statusRuntimePlatformLabel(data.Runtime.Topology, data.Packages, serverPlatform, hasPrimaryNode, primaryNode); platformLabel != "" {
+	if platformLabel := statusRuntimePlatformLabel(
+		data.Runtime.Topology,
+		data.Packages,
+		serverPlatform,
+		hasPrimaryNode,
+		primaryNode,
+	); platformLabel != "" {
 		output.Fields = append(
 			output.Fields, &tui.FieldAnnotatedShortText{
 				Title:      "Platform",
@@ -133,12 +139,20 @@ func generateStatusOutput(
 		)
 	}
 
-	if topologyField := statusTopologyField(data.Runtime.Topology, hasPrimaryNode, primaryNode); topologyField != nil {
+	if topologyField := statusTopologyField(
+		data.Runtime.Topology,
+		hasPrimaryNode,
+		primaryNode,
+	); topologyField != nil {
 		output.Fields = append(output.Fields, topologyField)
 	}
 
 	// If topology is resolved and has meaningful risk, show it.
-	if riskLevel := statusEffectiveRiskLevel(data.Runtime.Topology, hasPrimaryNode, primaryNode); riskLevel > types.RiskNone {
+	if riskLevel := statusEffectiveRiskLevel(
+		data.Runtime.Topology,
+		hasPrimaryNode,
+		primaryNode,
+	); riskLevel > types.RiskNone {
 		output.Fields = append(
 			output.Fields, &tui.FieldShortText{
 				Title: "Risk",
@@ -305,7 +319,10 @@ func generateStatusOutput(
 	return output
 }
 
-func topologyPrimaryNodeData(topology *types.RuntimeTopology) (types.RuntimeNode, bool) {
+func topologyPrimaryNodeData(topology *types.RuntimeTopology) (
+	types.RuntimeNode,
+	bool,
+) {
 	if topology == nil || !topology.Resolved() {
 		return types.RuntimeNode{}, false
 	}
@@ -343,18 +360,27 @@ func statusRuntimePlatformLabel(
 		return ""
 	}
 
-	if addons := statusPackageAddonLabels(packages, primaryNode); len(addons) > 0 {
+	if addons := statusPackageAddonLabels(
+		packages,
+		primaryNode,
+	); len(addons) > 0 {
 		label += " + " + strings.Join(addons, " + ")
 	}
 
-	if extras := runtimeTopologyAddonLabels(topology, primaryNode.ID); len(extras) > 0 {
+	if extras := runtimeTopologyAddonLabels(
+		topology,
+		primaryNode.ID,
+	); len(extras) > 0 {
 		label += " + " + strings.Join(extras, " + ")
 	}
 
 	return label
 }
 
-func statusPackageAddonLabels(packages []types.Package, primaryNode types.RuntimeNode) []string {
+func statusPackageAddonLabels(
+	packages []types.Package,
+	primaryNode types.RuntimeNode,
+) []string {
 	labels := make([]string, 0, len(packages))
 	seen := map[string]struct{}{}
 	for _, pkg := range packages {
@@ -494,26 +520,44 @@ func statusEffectiveRiskLevel(
 	return effective
 }
 
-func runtimeTopologyRelationLabel(topology *types.RuntimeTopology, primaryNode types.RuntimeNode) string {
+func runtimeTopologyRelationLabel(
+	topology *types.RuntimeTopology,
+	primaryNode types.RuntimeNode,
+) string {
 	switch primaryNode.Role {
 	case types.RuntimeRoleProxy:
-		if targets := runtimeTopologyTargets(topology, primaryNode.ID); len(targets) > 0 {
+		if targets := runtimeTopologyTargets(
+			topology,
+			primaryNode.ID,
+		); len(targets) > 0 {
 			return "proxies to " + strings.Join(targets, ", ")
 		}
 		return "proxies to backends"
 	case types.RuntimeRoleHybrid:
-		if targets := runtimeTopologyTargets(topology, primaryNode.ID); len(targets) > 0 {
+		if targets := runtimeTopologyTargets(
+			topology,
+			primaryNode.ID,
+		); len(targets) > 0 {
 			return "hosts " + strings.Join(targets, ", ")
 		}
 		return "hybrid runtime"
 	case types.RuntimeRoleBridge:
-		if targets := runtimeTopologyTargets(topology, primaryNode.ID); len(targets) > 0 {
+		if targets := runtimeTopologyTargets(
+			topology,
+			primaryNode.ID,
+		); len(targets) > 0 {
 			return "hosts compatibility layer"
 		}
 		return "compatibility layer"
 	case types.RuntimeRoleProtocolBridge:
-		if targets := runtimeTopologyTargets(topology, primaryNode.ID); len(targets) > 0 {
-			return "provides protocol compatibility for " + strings.Join(targets, ", ")
+		if targets := runtimeTopologyTargets(
+			topology,
+			primaryNode.ID,
+		); len(targets) > 0 {
+			return "provides protocol compatibility for " + strings.Join(
+				targets,
+				", ",
+			)
 		}
 		return "protocol bridge"
 	default:
@@ -521,7 +565,10 @@ func runtimeTopologyRelationLabel(topology *types.RuntimeTopology, primaryNode t
 	}
 }
 
-func runtimeTopologyTargets(topology *types.RuntimeTopology, nodeID types.RuntimeNodeID) []string {
+func runtimeTopologyTargets(
+	topology *types.RuntimeTopology,
+	nodeID types.RuntimeNodeID,
+) []string {
 	if topology == nil {
 		return nil
 	}
@@ -550,7 +597,10 @@ func runtimeTopologyTargets(topology *types.RuntimeTopology, nodeID types.Runtim
 	return targets
 }
 
-func runtimeTopologyAddonLabels(topology *types.RuntimeTopology, primaryNodeID types.RuntimeNodeID) []string {
+func runtimeTopologyAddonLabels(
+	topology *types.RuntimeTopology,
+	primaryNodeID types.RuntimeNodeID,
+) []string {
 	if topology == nil {
 		return nil
 	}
@@ -645,7 +695,15 @@ func runtimeNodeLabel(id types.RuntimeNodeID) string {
 	case probe.RuntimeNodeKilt:
 		return "Kilt"
 	default:
-		return tools.Capitalize(strings.ReplaceAll(strings.ReplaceAll(string(id), "-", " "), "_", " "))
+		return tools.Capitalize(
+			strings.ReplaceAll(
+				strings.ReplaceAll(
+					string(id),
+					"-",
+					" ",
+				), "_", " ",
+			),
+		)
 	}
 }
 
