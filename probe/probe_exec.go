@@ -164,10 +164,12 @@ func promptSelectExecutable(
 
 	form := huh.NewForm(
 		huh.NewGroup(
-			huh.NewSelect[int]().
-				Title(title).
-				Options(options...).
-				Value(&selection),
+huh.NewSelect[int]().
+			Title(title).
+			Options(options...).
+			Filtering(true).
+			Height(10).
+			Value(&selection),
 		),
 	)
 	if err := form.Run(); err != nil {
