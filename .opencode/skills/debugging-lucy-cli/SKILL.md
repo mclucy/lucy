@@ -15,8 +15,8 @@ Lucy is a Minecraft server-side package manager CLI written in Go. Debugging req
 
 ### Finding a Valid Server Directory
 
-1. **Prioritize `test_general`** - Contains a working Fabric 1.20.5 server with MCDR
-2. Check directories matching `test_*` in the project root
+1. Prioritize `test_general`, this is the sandbox server where you can freely do whatever you want.
+2. Check directories matching `test_*` in the project root.
 3. Use `lucy status` to verify a directory is valid:
 
 ```bash
