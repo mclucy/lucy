@@ -253,6 +253,8 @@ func RunInteractiveInit(s *InitFlowState) error {
 					Title("Leaf packages to keep as required").
 					Description("Leaf nodes are packages nothing else in the discovered graph depends on. Selected leaves become required; unselected leaves fall back to transitive.").
 					Options(leafOptions...).
+					Filtering(true).
+					Height(10).
 					Value(&requiredLeafIDs),
 			)
 		}
@@ -261,6 +263,8 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Title("Packages Lucy should ignore").
 				Description("Ignored packages remain visible in state, but Lucy will leave them outside managed sync.").
 				Options(ignoreOptions...).
+				Filtering(true).
+				Height(10).
 				Value(&ignoredIDs),
 		)
 
