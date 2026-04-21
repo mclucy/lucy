@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "golang-error-handling": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "computedHash": "4c0d3f294044d3287ba183d2c06ac5381b99ef74d0b4c5485583c7e5505cdf5a"
+    },
     "golang-patterns": {
       "source": "affaan-m/everything-claude-code",
       "sourceType": "github",
