@@ -20,6 +20,8 @@ func providerSourcesForPlatform(platform types.Platform) ([]types.Source, error)
 		return autoProviderSources(), nil
 	case types.PlatformForge, types.PlatformFabric, types.PlatformNeoforge:
 		return modProviderSources(), nil
+	case types.PlatformBukkit:
+		return []types.Source{types.SourceModrinth, types.SourceHangar, types.SourceSpiget}, nil
 	case types.PlatformMCDR:
 		return []types.Source{types.SourceMCDR}, nil
 	default:

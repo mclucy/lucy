@@ -60,10 +60,19 @@ func (p Platform) String() string {
 // If a platform can be used in a package id, it is a valid platform.
 func (p Platform) Valid() bool {
 	switch p {
-	case PlatformMinecraft, PlatformFabric, PlatformForge, PlatformNeoforge, PlatformMCDR, PlatformAny, PlatformNone:
+	case PlatformMinecraft, PlatformFabric, PlatformForge, PlatformNeoforge, PlatformMCDR, PlatformBukkit, PlatformAny, PlatformNone:
 		return true
 	}
 	return false
+}
+
+func (p Platform) IsSearchPlatform() bool {
+	switch p {
+	case PlatformFabric, PlatformForge, PlatformNeoforge, PlatformBukkit:
+		return true
+	default:
+		return false
+	}
 }
 
 // Satisfy returns true if p satisfies the requirement of p2.
