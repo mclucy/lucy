@@ -3,6 +3,8 @@ package detector
 import (
 	"archive/zip"
 	"bufio"
+	"encoding/xml"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -43,9 +45,9 @@ func (d *craftBukkitFamilyDetector) Name() string {
 }
 
 func (d *craftBukkitFamilyDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	_ = fileHandle
 
@@ -64,7 +66,10 @@ func (d *craftBukkitFamilyDetector) Detect(
 	// implementation branding. Without one of these, we should not claim a
 	// Bukkit-lineage server executable.
 	if signals.mainClass != bukkitManifestMainClass &&
-		!strings.EqualFold(signals.implementationTitle, bukkitImplementationCraftBukkit) {
+	!strings.EqualFold(
+		signals.implementationTitle,
+		bukkitImplementationCraftBukkit,
+	) {
 		return nil, nil
 	}
 
@@ -125,17 +130,35 @@ func parseBukkitManifest(data []byte) bukkitManifestSignals {
 		line := scanner.Text()
 		switch {
 		case strings.HasPrefix(line, "Main-Class: "):
-			signals.mainClass = strings.TrimSpace(strings.TrimPrefix(line, "Main-Class: "))
+			signals.mainClass = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Main-Class: ",
+				),
+			)
 		case strings.HasPrefix(line, "Implementation-Title: "):
-			signals.implementationTitle = strings.TrimSpace(strings.TrimPrefix(line, "Implementation-Title: "))
+			signals.implementationTitle = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Implementation-Title: ",
+				),
+			)
 		case strings.HasPrefix(line, "Implementation-Version: "):
-			signals.implementationVer = strings.TrimSpace(strings.TrimPrefix(line, "Implementation-Version: "))
+			signals.implementationVer = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Implementation-Version: ",
+				),
+			)
 		}
 	}
 	return signals
 }
 
-func classifyBukkitServerLayer(zipReader *zip.Reader) (hasPaper bool, hasSpigot bool) {
+func classifyBukkitServerLayer(zipReader *zip.Reader) (
+hasPaper bool,
+hasSpigot bool,
+) {
 	for _, file := range zipReader.File {
 		// Plugin descriptors describe what plugins can run on a server, not which
 		// server implementation produced the executable jar. Class trees are the
@@ -144,7 +167,10 @@ func classifyBukkitServerLayer(zipReader *zip.Reader) (hasPaper bool, hasSpigot 
 		// io/papermc/paper/ and com/destroystokyo/paper/ are the Paper-specific
 		// implementation packages across the modern and legacy package layouts, so
 		// either prefix is enough to prove Paper-lineage internals are present.
-		case strings.HasPrefix(file.Name, bukkitPaperClassPrefix), strings.HasPrefix(file.Name, bukkitLegacyPaperClassPrefix):
+		case strings.HasPrefix(
+			file.Name,
+			bukkitPaperClassPrefix,
+		), strings.HasPrefix(file.Name, bukkitLegacyPaperClassPrefix):
 			hasPaper = true
 		case strings.HasPrefix(file.Name, bukkitSpigotClassPrefix):
 			// org/spigotmc/ is Spigot-owned implementation space. It distinguishes
@@ -162,9 +188,9 @@ func classifyBukkitServerLayer(zipReader *zip.Reader) (hasPaper bool, hasSpigot 
 }
 
 func detectBukkitPaperForkBrand(
-	filePath string,
-	zipReader *zip.Reader,
-	signals bukkitManifestSignals,
+filePath string,
+zipReader *zip.Reader,
+signals bukkitManifestSignals,
 ) (string, error) {
 	// Public Paper forks are often repackaged with upstream CraftBukkit metadata,
 	// so fork-brand identification must stay best-effort. If the fork cannot be
@@ -177,14 +203,79 @@ func detectBukkitPaperForkBrand(
 	if err != nil {
 		return "", err
 	}
-	if hasBeastVersion || strings.Contains(strings.ToLower(filepath.Base(filePath)), "beast") {
+	if hasBeastVersion || strings.Contains(
+		strings.ToLower(filepath.Base(filePath)),
+		"beast",
+	) {
 		return "beast", nil
 	}
 
 	for _, file := range zipReader.File {
 		base := strings.ToLower(filepath.Base(file.Name))
-		if strings.Contains(base, "beast") && strings.Contains(base, "version") {
+		if strings.Contains(base, "beast") && strings.Contains(
+			base,
+			"version",
+		) {
 			return "beast", nil
+		}
+	}
+
+	brand, err := speculatePaperForkBrandFromMavenPom(zipReader)
+	if err != nil {
+		return "", err
+	}
+	if brand != "" {
+		return brand, nil
+	}
+
+	return "", nil
+}
+
+type paperForkMavenPom struct {
+	ArtifactID string `xml:"artifactId"`
+	Properties struct {
+		MinecraftVersion       string `xml:"minecraft.version"`
+		MinecraftVersionLegacy string `xml:"minecraft_version"`
+	} `xml:"properties"`
+}
+
+func speculatePaperForkBrandFromMavenPom(zipReader *zip.Reader) (
+string,
+error,
+) {
+	for _, file := range zipReader.File {
+		if !strings.HasPrefix(
+			file.Name,
+			"META-INF/maven/",
+		) || !strings.HasSuffix(file.Name, "/pom.xml") {
+			continue
+		}
+
+		r, err := file.Open()
+		if err != nil {
+			continue
+		}
+
+		data, readErr := io.ReadAll(r)
+		_ = r.Close()
+		if readErr != nil {
+			continue
+		}
+
+		var pom paperForkMavenPom
+		if err := xml.Unmarshal(data, &pom); err != nil {
+			continue
+		}
+
+		if strings.TrimSpace(pom.Properties.MinecraftVersion) != "" {
+			if artifactID := strings.TrimSpace(pom.ArtifactID); artifactID != "" {
+				return artifactID, nil
+			}
+		}
+		if strings.TrimSpace(pom.Properties.MinecraftVersionLegacy) != "" {
+			if artifactID := strings.TrimSpace(pom.ArtifactID); artifactID != "" {
+				return artifactID, nil
+			}
 		}
 	}
 
@@ -192,8 +283,8 @@ func detectBukkitPaperForkBrand(
 }
 
 func isOfficialPaperDistribution(
-	filePath string,
-	signals bukkitManifestSignals,
+filePath string,
+signals bukkitManifestSignals,
 ) bool {
 	title := strings.ToLower(signals.implementationTitle)
 	base := strings.ToLower(filepath.Base(filePath))
@@ -209,7 +300,7 @@ func parseBukkitGameVersion(implementationVersion string) types.RawVersion {
 }
 
 func buildBukkitExecutableTopologySeed(
-	primaryNode types.RuntimeNodeID,
+primaryNode types.RuntimeNodeID,
 ) *ExecutableTopologySeed {
 	nodes := []types.RuntimeNode{}
 	edges := []types.RuntimeEdge{}
@@ -223,21 +314,40 @@ func buildBukkitExecutableTopologySeed(
 		addNode(bukkitNodePaperFork)
 		addNode(bukkitNodePaper)
 		addNode(bukkitNodeMinecraft)
-		edges = append(edges,
-			buildBukkitImplementationEdge(bukkitNodePaperFork, bukkitNodePaper, types.EdgeImplements),
-			buildBukkitImplementationEdge(bukkitNodePaper, bukkitNodeMinecraft, types.EdgeModifies),
+		edges = append(
+			edges,
+			buildBukkitImplementationEdge(
+				bukkitNodePaperFork,
+				bukkitNodePaper,
+				types.EdgeImplements,
+			),
+			buildBukkitImplementationEdge(
+				bukkitNodePaper,
+				bukkitNodeMinecraft,
+				types.EdgeModifies,
+			),
 		)
 	case bukkitNodePaper:
 		addNode(bukkitNodePaper)
 		addNode(bukkitNodeMinecraft)
-		edges = append(edges,
-			buildBukkitImplementationEdge(bukkitNodePaper, bukkitNodeMinecraft, types.EdgeModifies),
+		edges = append(
+			edges,
+			buildBukkitImplementationEdge(
+				bukkitNodePaper,
+				bukkitNodeMinecraft,
+				types.EdgeModifies,
+			),
 		)
 	case bukkitNodeSpigot:
 		addNode(bukkitNodeSpigot)
 		addNode(bukkitNodeMinecraft)
-		edges = append(edges,
-			buildBukkitImplementationEdge(bukkitNodeSpigot, bukkitNodeMinecraft, types.EdgeModifies),
+		edges = append(
+			edges,
+			buildBukkitImplementationEdge(
+				bukkitNodeSpigot,
+				bukkitNodeMinecraft,
+				types.EdgeModifies,
+			),
 		)
 	default:
 		addNode(bukkitNodeBukkit)
@@ -259,9 +369,9 @@ func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
 }
 
 func buildBukkitImplementationEdge(
-	from types.RuntimeNodeID,
-	to types.RuntimeNodeID,
-	verb types.RuntimeEdgeVerb,
+from types.RuntimeNodeID,
+to types.RuntimeNodeID,
+verb types.RuntimeEdgeVerb,
 ) types.RuntimeEdge {
 	return types.RuntimeEdge{
 		From: from,
