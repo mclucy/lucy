@@ -258,6 +258,8 @@ func promptSelectMinecraftVersionForNeoForge() (version string) {
 			huh.NewSelect[string]().
 				Title("Select a Minecraft version for NeoForge").
 				Options(options...).
+				Filtering(true).
+				Height(10).
 				Value(&version),
 		).WithHide(installLatest),
 	).Run()
