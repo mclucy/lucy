@@ -77,18 +77,15 @@ fileHandle *os.File,
 	brand := ""
 	primaryNode := bukkitNodeBukkit
 	if hasPaperClasses {
-		brand, err = detectBukkitPaperForkBrand(filePath, zipReader, signals)
-		if err != nil {
-			return nil, err
-		}
-		if brand != "" {
-			primaryNode = bukkitNodePaperFork
-		} else if isOfficialPaperDistribution(filePath, signals) {
+		if isOfficialPaperDistribution(filePath, signals) {
 			primaryNode = bukkitNodePaper
 			brand = "paper"
 		} else {
 			primaryNode = bukkitNodePaperFork
-			brand = "paper-fork"
+			brand, err = detectBukkitPaperForkBrand(zipReader, signals)
+			if err != nil || brand == "" {
+				brand = "paper-fork"
+			}
 		}
 	} else if hasSpigotClasses {
 		primaryNode = bukkitNodeSpigot
@@ -188,40 +185,15 @@ hasSpigot bool,
 }
 
 func detectBukkitPaperForkBrand(
-filePath string,
 zipReader *zip.Reader,
 signals bukkitManifestSignals,
 ) (string, error) {
-	// Public Paper forks are often repackaged with upstream CraftBukkit metadata,
-	// so fork-brand identification must stay best-effort. If the fork cannot be
-	// proven from explicit markers, we fall back to the generic paper-fork brand.
-	if strings.Contains(strings.ToLower(signals.implementationTitle), "beast") {
-		return "beast", nil
+	// use implementation title
+	if signals.implementationTitle != "bukkit" {
+		return signals.implementationTitle, nil
 	}
 
-	brand, err := speculatePaperForkBrandFromMavenPom(zipReader)
-	if err != nil {
-		return "", err
-	}
-	if brand != "" {
-		return brand, nil
-	}
-
-	return "", nil
-}
-
-type paperForkMavenPom struct {
-	ArtifactID string `xml:"artifactId"`
-	Properties struct {
-		MinecraftVersion       string `xml:"minecraft.version"`
-		MinecraftVersionLegacy string `xml:"minecraft_version"`
-	} `xml:"properties"`
-}
-
-func speculatePaperForkBrandFromMavenPom(zipReader *zip.Reader) (
-string,
-error,
-) {
+	// speculate from pom.xml
 	for _, file := range zipReader.File {
 		if !strings.HasPrefix(
 			file.Name,
@@ -259,6 +231,14 @@ error,
 	}
 
 	return "", nil
+}
+
+type paperForkMavenPom struct {
+	ArtifactID string `xml:"artifactId"`
+	Properties struct {
+		MinecraftVersion       string `xml:"minecraft.version"`
+		MinecraftVersionLegacy string `xml:"minecraft_version"`
+	} `xml:"properties"`
 }
 
 func isOfficialPaperDistribution(
