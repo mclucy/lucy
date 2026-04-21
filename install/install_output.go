@@ -80,7 +80,7 @@ func showRecursiveApplyStart(count int) {
 }
 
 func showRecursiveConflict(err error) {
-	logger.ShowInfo(fmt.Sprintf("conflict: %s", err.Error()))
+	logger.ShowInfo(fmt.Sprintf("conflict:\n%s", err.Error()))
 }
 
 func joinStrings(strs []string) string {

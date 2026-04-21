@@ -1,6 +1,7 @@
 package install
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
@@ -220,7 +221,7 @@ func formatProviderErrors(providerErrors []routing.ProviderError) string {
 
 	reasons := make([]string, 0, len(providerErrors))
 	for _, providerErr := range providerErrors {
-		reasons = append(reasons, providerErr.Error())
+		reasons = append(reasons, fmt.Sprintf("  - %s", providerErr.Error()))
 	}
-	return strings.Join(reasons, "; ")
+	return "provider failures:\n" + strings.Join(reasons, "\n")
 }
