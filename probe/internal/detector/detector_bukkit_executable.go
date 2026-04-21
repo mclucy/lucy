@@ -199,27 +199,6 @@ signals bukkitManifestSignals,
 		return "beast", nil
 	}
 
-	hasBeastVersion, err := archiveContains(zipReader, bukkitBeastVersionMarker)
-	if err != nil {
-		return "", err
-	}
-	if hasBeastVersion || strings.Contains(
-		strings.ToLower(filepath.Base(filePath)),
-		"beast",
-	) {
-		return "beast", nil
-	}
-
-	for _, file := range zipReader.File {
-		base := strings.ToLower(filepath.Base(file.Name))
-		if strings.Contains(base, "beast") && strings.Contains(
-			base,
-			"version",
-		) {
-			return "beast", nil
-		}
-	}
-
 	brand, err := speculatePaperForkBrandFromMavenPom(zipReader)
 	if err != nil {
 		return "", err
