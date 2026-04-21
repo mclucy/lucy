@@ -221,6 +221,48 @@ func generateStatusOutput(
 		}
 	}
 
+	showPlugins := false
+	if data.Runtime.Topology != nil && data.Runtime.Topology.Resolved() {
+		showPlugins = data.Runtime.Topology.HasCapability(types.CapabilityBukkitPlugins)
+	}
+
+	// List plugins if server can load plugins
+	if showPlugins {
+		pluginNames := make([]string, 0, len(data.Packages))
+		for _, p := range data.Packages {
+			if p.Id.IsIdentityPackage() {
+				continue
+			}
+			if p.Id.Platform == types.PlatformBukkit {
+				pluginNames = append(pluginNames, packageNameOutput(p))
+			}
+		}
+
+		pluginListTitle := tools.Ternary(
+			noStyle,
+			"Plugins",
+			"└── Plugins",
+		)
+
+		if len(pluginNames) == 0 {
+			output.Fields = append(
+				output.Fields, &tui.FieldShortText{
+					Title: pluginListTitle,
+					Text:  tools.Dim("(None)"),
+				},
+			)
+		} else {
+			output.Fields = append(
+				output.Fields, &tui.FieldDynamicColumnLabels{
+					Title:     pluginListTitle,
+					Labels:    pluginNames,
+					MaxLines:  0,
+					ShowTotal: true,
+				},
+			)
+		}
+	}
+
 	// List MCDR plugins if MCDR environment detected
 	if hasMcdr {
 		mcdrPluginListTitle := tools.Ternary(
