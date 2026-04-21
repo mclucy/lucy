@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/probe"

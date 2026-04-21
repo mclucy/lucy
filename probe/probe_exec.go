@@ -14,7 +14,7 @@ import (
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 )
 
 const noteIgnorePath = "Some modding platforms are located from the libraries directory. " +

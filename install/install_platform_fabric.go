@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
@@ -193,6 +193,8 @@ func promptSelectMinecraftVersionForFabric() (version string) {
 			huh.NewSelect[string]().
 				Title("Select a Minecraft installation").
 				Options(options...).
+				Filtering(true).
+				Height(10).
 				Value(&version),
 		).WithHide(installLatest),
 	).Run()
