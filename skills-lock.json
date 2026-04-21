@@ -10,6 +10,16 @@
       "source": "jeffallan/claude-skills",
       "sourceType": "github",
       "computedHash": "c90a0798a12ea2d9191508439ec3191dd96713310615260ebe82ec5a09a4a434"
+    },
+    "minecraft-bukkit-pro": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "afb56869425b6d963792e92b14ade4d4bc2eda07541c351300074a0a1d6d5281"
+    },
+    "minecraft-fabric-dev": {
+      "source": "mcdxai/meteor-rejects-v2",
+      "sourceType": "github",
+      "computedHash": "6f5f6e2edca415ba7fb2b57228f66f2cbc35154a79c4c69bd16d6183d8063c3d"
     }
   }
 }
