@@ -321,7 +321,7 @@ func hasStrictYouerBukkitConfirmation(signals bukkitManifestSignals) bool {
 }
 
 func hasStrictReaperObservationBrand(obs paperObservations) bool {
-	return strings.Contains(obs.patchProperties["patch"], paperPatchReaperToken) || obs.hasPaperMCPatch
+	return strings.Contains(obs.patchProperties["patch"], paperPatchReaperToken)
 }
 
 func observationLinesContain(lines []string, want string) bool {
@@ -386,10 +386,15 @@ func projectPaperJudgment(
 				primaryNode = bukkitNodeSpigot
 				brand = "spigot"
 				judgment.addReason("weak paper-family evidence projected to spigot runtime")
-			default:
-				judgment.addReason("family miss remains non-terminal but projects to baseline bukkit runtime")
-			}
+default:
+			judgment.addReason("family miss remains non-terminal but projects to baseline bukkit runtime")
 		}
+	case brandContradiction:
+		// contradictionState is set by resolvePaperContradictions; projection
+		// already withheld above via the contradictionState guard. This arm
+		// makes the switch exhaustive over all paperBrandResult values.
+		judgment.addReason("brand contradiction: projection falls back to bukkit baseline")
+	}
 	}
 
 	return &ExecutableEvidence{
