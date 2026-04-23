@@ -47,6 +47,7 @@ type paperObservations struct {
 	hasLeaperNamespace           bool
 	hasLeavesclipNamespace       bool
 	hasPaperclipNamespace        bool
+	hasLegacyPaperclipNamespace  bool
 	hasYouerNamespace            bool
 }
 
@@ -56,7 +57,7 @@ type paperJudgment struct {
 	familyResult       paperFamilyResult
 	brandResult        paperBrandResult
 	brandName          string
-	contradictionState bool
+	contradictionState string
 	fastPathUsed       bool
 	reasons            []string
 }

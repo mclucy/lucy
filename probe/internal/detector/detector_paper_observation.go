@@ -27,6 +27,7 @@ const (
 	paperLeaperNamespacePrefix  = "cn/dreeam/leaper/"
 	paperLeavesclipNamespace    = "org/leavesmc/leavesclip/"
 	paperPaperclipNamespace     = "io/papermc/paperclip/"
+	paperLegacyPaperclipPrefix  = "paperclip/"
 	paperYouerNamespace         = "com/mohistmc/launcher/youer/"
 	paperLibraryPaperToken      = "io.papermc.paper:paper-api:"
 	paperLibraryFoliaToken      = "dev.folia:folia-api:"
@@ -72,6 +73,8 @@ func extractPaperObservations(
 			obs.hasLeavesclipNamespace = true
 		case strings.HasPrefix(name, paperPaperclipNamespace):
 			obs.hasPaperclipNamespace = true
+		case strings.HasPrefix(name, paperLegacyPaperclipPrefix):
+			obs.hasLegacyPaperclipNamespace = true
 		case strings.HasPrefix(name, paperYouerNamespace):
 			obs.hasYouerNamespace = true
 		}

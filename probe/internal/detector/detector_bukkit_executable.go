@@ -3,9 +3,11 @@ package detector
 import (
 	"archive/zip"
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/syntax"
@@ -133,13 +135,28 @@ func reasonPaperFamily(judgment *paperJudgment) {
 	case judgment.observations.hasPaperClasses:
 		judgment.familyResult = familyStrong
 		judgment.addReason("paper-family confirmed by bundled paper classes")
-	case judgment.observations.hasSpigotClasses:
+	case hasModernPaperclipMetadataCluster(judgment.observations):
+		judgment.familyResult = familyStrong
+		judgment.addReason("paper-family confirmed by modern paperclip metadata cluster")
+	case hasConcreteVersion(judgment.observations.versionJSONID):
 		judgment.familyResult = familyWeak
-		judgment.addReason("paper-family remains possible from spigot-lineage classes")
+		judgment.addReason("paper-family remains likely from root version.json metadata")
+	case len(judgment.observations.patchProperties) > 0 || judgment.observations.hasPaperMCPatch:
+		judgment.familyResult = familyWeak
+		judgment.addReason("paper-family remains likely from legacy paper patch traces")
+	case judgment.observations.hasPaperclipNamespace || judgment.observations.hasLegacyPaperclipNamespace:
+		judgment.familyResult = familyWeak
+		judgment.addReason("paper-family remains likely from paperclip launcher namespaces")
 	default:
 		judgment.familyResult = familyMiss
-		judgment.addReason("paper-family classes missing after bukkit confirmation; continuing to brand attribution")
+		judgment.addReason("paper-family evidence missing after bukkit confirmation; continuing to brand attribution")
 	}
+}
+
+func hasModernPaperclipMetadataCluster(obs paperObservations) bool {
+	return strings.TrimSpace(obs.downloadContext) != "" &&
+		len(obs.librariesListEntries) > 0 &&
+		strings.TrimSpace(obs.metaMainClass) != ""
 }
 
 func attributePaperBrand(judgment *paperJudgment) {
@@ -147,27 +164,20 @@ func attributePaperBrand(judgment *paperJudgment) {
 		return
 	}
 
-	forkBrand := normalizePaperBrandName(inferPaperObservationBrand(judgment.observations))
-	officialPaper := inferOfficialPaperDistribution(judgment.observations)
+	brands := inferPaperObservationBrands(judgment.observations)
 
 	switch {
-	case officialPaper && forkBrand != "" && forkBrand != "paper":
+	case len(brands) > 1:
 		judgment.brandResult = brandContradiction
-		judgment.brandName = forkBrand
-		judgment.addReason("official paper markers conflict with non-paper fork brand")
-	case officialPaper:
+		judgment.brandName = strings.Join(brands, ",")
+		judgment.addReason(fmt.Sprintf("contradictory paper brands detected: %s", strings.Join(brands, ", ")))
+	case len(brands) == 1 && brands[0] == "paper":
 		judgment.brandResult = brandPaper
 		judgment.brandName = "paper"
 		judgment.addReason("brand attributed to official paper distribution")
-	case forkBrand != "":
-		if forkBrand == "paper" {
-			judgment.brandResult = brandPaper
-			judgment.brandName = forkBrand
-			judgment.addReason("brand attributed to paper")
-			return
-		}
+	case len(brands) == 1:
 		judgment.brandResult = brandFork
-		judgment.brandName = forkBrand
+		judgment.brandName = brands[0]
 		judgment.addReason("brand attributed to paper fork")
 	default:
 		judgment.brandResult = brandUnknown
@@ -175,36 +185,48 @@ func attributePaperBrand(judgment *paperJudgment) {
 	}
 }
 
-func inferOfficialPaperDistribution(obs paperObservations) bool {
-	if !observationLinesContain(obs.librariesListEntries, paperLibraryPaperToken) {
-		return false
+func inferPaperObservationBrands(obs paperObservations) []string {
+	brands := make([]string, 0, 8)
+	seen := make(map[string]struct{}, 8)
+	add := func(name string) {
+		normalized := normalizePaperBrandName(name)
+		if normalized == "" {
+			return
+		}
+		if _, ok := seen[normalized]; ok {
+			return
+		}
+		seen[normalized] = struct{}{}
+		brands = append(brands, normalized)
 	}
 
-	return normalizePaperBrandName(inferPaperObservationBrand(obs)) == "paper"
-}
-
-func inferPaperObservationBrand(obs paperObservations) string {
-	switch {
-	case observationLinesContain(obs.librariesListEntries, paperLibraryFoliaToken):
-		return "folia"
-	case observationLinesContain(obs.librariesListEntries, paperLibraryDivineToken):
-		return "divine"
-	case observationLinesContain(obs.librariesListEntries, paperLibraryPurpurToken):
-		return "purpur"
-	case observationLinesContain(obs.librariesListEntries, paperLibraryLeafToken), obs.hasLeaperNamespace:
-		return "leaf"
-	case observationLinesContain(obs.librariesListEntries, paperLibraryLeavesToken), obs.hasLeavesclipNamespace, obs.leavesclipVersion != "", strings.HasPrefix(obs.buildInfo, "Leaves\t"):
-		return "leaves"
-	case obs.hasYouerNamespace,
-		strings.EqualFold(obs.manifestSpecificationTitle, "Youer"),
-		strings.EqualFold(obs.manifestImplementationTitle, "Youer"),
-		strings.Contains(strings.ToLower(obs.manifestMainClass), "youer"):
-		return "youer"
-	case observationLinesContain(obs.librariesListEntries, paperLibraryPaperToken):
-		return "paper"
-	default:
-		return ""
+	if observationLinesContain(obs.librariesListEntries, paperLibraryPaperToken) {
+		add("paper")
 	}
+	if observationLinesContain(obs.librariesListEntries, paperLibraryFoliaToken) {
+		add("folia")
+	}
+	if observationLinesContain(obs.librariesListEntries, paperLibraryDivineToken) {
+		add("divine")
+	}
+	if observationLinesContain(obs.librariesListEntries, paperLibraryPurpurToken) {
+		add("purpur")
+	}
+	if observationLinesContain(obs.librariesListEntries, paperLibraryLeafToken) || obs.hasLeaperNamespace {
+		add("leaf")
+	}
+	if observationLinesContain(obs.librariesListEntries, paperLibraryLeavesToken) || obs.hasLeavesclipNamespace || obs.leavesclipVersion != "" || strings.HasPrefix(obs.buildInfo, "Leaves\t") {
+		add("leaves")
+	}
+	if obs.hasYouerNamespace ||
+		strings.EqualFold(obs.manifestSpecificationTitle, "Youer") ||
+		strings.EqualFold(obs.manifestImplementationTitle, "Youer") ||
+		strings.Contains(strings.ToLower(obs.manifestMainClass), "youer") {
+		add("youer")
+	}
+
+	slices.Sort(brands)
+	return brands
 }
 
 func observationLinesContain(lines []string, want string) bool {
@@ -221,10 +243,18 @@ func resolvePaperContradictions(judgment *paperJudgment) {
 		return
 	}
 
-	if judgment.familyResult == familyContradiction || judgment.brandResult == brandContradiction {
-		judgment.contradictionState = true
+	if judgment.brandResult == brandContradiction {
+		judgment.familyResult = familyContradiction
+		judgment.contradictionState = fmt.Sprintf(
+			"brand contradiction after bukkit confirmation: %s",
+			nonEmptyPaperBrandName(judgment.brandName, "unknown"),
+		)
 	}
-	if judgment.contradictionState {
+	if judgment.familyResult == familyContradiction && judgment.contradictionState == "" {
+		judgment.contradictionState = "paper family contradiction after bukkit confirmation"
+	}
+	if judgment.contradictionState != "" {
+		judgment.addReason(judgment.contradictionState)
 		judgment.addReason("contradictory paper evidence resolved fail-closed to bukkit lineage")
 	}
 }
@@ -241,7 +271,7 @@ func projectPaperJudgment(
 	primaryNode := bukkitNodeBukkit
 	brand := "bukkit"
 
-	if judgment.contradictionState {
+	if judgment.contradictionState != "" {
 		judgment.addReason("runtime projection withheld paper promotion due to contradiction state")
 	} else {
 		switch judgment.brandResult {
