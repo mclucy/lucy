@@ -4,7 +4,7 @@
 
   <img src="images/banner.png" alt="banner" width="80%" />
 
-  <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
+  <h3><a href="README.md">English</a> | <a href="README_CN.md">中文</a></h3>
 
   <h2>
     <div>描述你的服务器，而不是从头开始构建</div>
