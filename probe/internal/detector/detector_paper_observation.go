@@ -21,7 +21,8 @@ const (
 	paperDownloadContextPath    = "META-INF/download-context"
 	paperVersionJSONPath        = "version.json"
 	paperPatchPropertiesPath    = "patch.properties"
-	paperPatchFilePath          = "paperMC.patch"
+	paperPatchReaperToken       = "paperMC.patch"
+	paperPatchFilePath          = paperPatchReaperToken
 	paperBuildInfoPath          = "META-INF/build-info"
 	paperLeavesclipVersionPath  = "META-INF/leavesclip-version"
 	paperLeaperNamespacePrefix  = "cn/dreeam/leaper/"
@@ -29,6 +30,8 @@ const (
 	paperPaperclipNamespace     = "io/papermc/paperclip/"
 	paperLegacyPaperclipPrefix  = "paperclip/"
 	paperYouerNamespace         = "com/mohistmc/launcher/youer/"
+	paperManifestYouerToken     = "Youer"
+	paperMainClassYouerToken    = "youer"
 	paperLibraryPaperToken      = "io.papermc.paper:paper-api:"
 	paperLibraryFoliaToken      = "dev.folia:folia-api:"
 	paperLibraryDivineToken     = "org.bxteam.divinemc:divinemc-api:"

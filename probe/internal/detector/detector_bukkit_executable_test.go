@@ -7,6 +7,78 @@ import (
 	"testing"
 )
 
+func TestCraftBukkitFamilyDetector_PaperFixtureClassifiesAsPaper(t *testing.T) {
+	t.Parallel()
+
+	fixtureRoot := paperFamilyFixtureRoot(t)
+	paperDir := filepath.Join(fixtureRoot, "test_paper", "paper")
+
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(paperDir, nil, nil)
+	if err != nil {
+		t.Fatalf("detect paper fixture: %v", err)
+	}
+	if evidence == nil {
+		t.Fatalf("expected paper fixture evidence")
+	}
+	if len(evidence.RuntimeIdentities) == 0 {
+		t.Fatalf("expected runtime identities for paper fixture")
+	}
+	if evidence.RuntimeIdentities[0].Name != "paper" {
+		t.Fatalf("expected primary runtime identity paper, got %+v", evidence.RuntimeIdentities)
+	}
+	if evidence.TopologySeed == nil {
+		t.Fatalf("expected topology seed for paper fixture")
+	}
+	if evidence.TopologySeed.PrimaryNode != bukkitNodePaper {
+		t.Fatalf("expected primary topology node %q, got %+v", bukkitNodePaper, evidence.TopologySeed)
+	}
+}
+
+func TestCraftBukkitFamilyDetector_KnownPaperForkBrands(t *testing.T) {
+	t.Parallel()
+
+	fixtureRoot := paperFamilyFixtureRoot(t)
+	tests := []struct {
+		name  string
+		brand string
+	}{
+		{name: "folia", brand: "folia"},
+		{name: "divine", brand: "divine"},
+		{name: "purpur", brand: "purpur"},
+		{name: "leaf", brand: "leaf"},
+		{name: "leaves", brand: "leaves"},
+		{name: "reaper", brand: "reaper"},
+		{name: "youer", brand: "youer"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			brandDir := filepath.Join(fixtureRoot, "test_"+tt.brand, tt.brand)
+			evidence, err := (&craftBukkitFamilyDetector{}).Detect(brandDir, nil, nil)
+			if err != nil {
+				t.Fatalf("detect %s fixture: %v", tt.brand, err)
+			}
+			if evidence == nil {
+				t.Fatalf("expected evidence for %s fixture", tt.brand)
+			}
+			if evidence.TopologySeed == nil {
+				t.Fatalf("expected topology seed for %s fixture", tt.brand)
+			}
+			if evidence.TopologySeed.PrimaryNode != bukkitNodePaperFork {
+				t.Fatalf("expected primary topology node %q for %s, got %+v", bukkitNodePaperFork, tt.brand, evidence.TopologySeed)
+			}
+			if len(evidence.RuntimeIdentities) == 0 {
+				t.Fatalf("expected runtime identities for %s fixture", tt.brand)
+			}
+			if string(evidence.RuntimeIdentities[0].Name) != tt.brand {
+				t.Fatalf("expected primary runtime identity %q, got %+v", tt.brand, evidence.RuntimeIdentities)
+			}
+		})
+	}
+}
+
 func TestCraftBukkitFamilyDetector_RequiresBukkitConfirmation(t *testing.T) {
 	t.Parallel()
 

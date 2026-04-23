@@ -64,15 +64,29 @@ func (d *craftBukkitFamilyDetector) Detect(
 	}
 
 	signals := parseBukkitManifest(manifest)
+	metaMainClass, err := readBukkitExecutableSidecar(filePath, zipReader, paperMetaMainClassPath)
+	if err != nil {
+		return nil, err
+	}
+	reaperPatchProperties, err := readBukkitExecutablePatchProperties(filePath, zipReader)
+	if err != nil {
+		return nil, err
+	}
 
 	// Stage 1: Bukkit Confirmation
 	// CraftBukkit-derived servers consistently launch through
 	// org.bukkit.craftbukkit.Main, while Implementation-Title: CraftBukkit is the
 	// fallback family marker seen in repackaged jars that keep the canonical
-	// implementation branding. Without one of these, we should not claim a
-	// Bukkit-lineage server executable.
+	// implementation branding. Extracted modern Paper fixtures keep the decisive
+	// Bukkit entrypoint in META-INF/main-class, while strict launcher-heavy Reaper
+	// and Youer fixtures only expose definitive Paper-fork proof via patch or
+	// manifest identity. Without one of these strict signals, we should not claim
+	// a Bukkit-lineage server executable.
 	judgment.bukkitConfirmed = signals.mainClass == bukkitManifestMainClass ||
-		strings.EqualFold(signals.implementationTitle, bukkitImplementationCraftBukkit)
+		strings.EqualFold(signals.implementationTitle, bukkitImplementationCraftBukkit) ||
+		metaMainClass == bukkitManifestMainClass ||
+		hasStrictReaperBukkitConfirmation(reaperPatchProperties) ||
+		hasStrictYouerBukkitConfirmation(signals)
 	if !judgment.bukkitConfirmed {
 		return nil, nil
 	}
@@ -200,33 +214,114 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 		brands = append(brands, normalized)
 	}
 
+	// Fixture citation: test_paper_family/test_paper/paper/META-INF/libraries.list
 	if observationLinesContain(obs.librariesListEntries, paperLibraryPaperToken) {
 		add("paper")
 	}
+	// Fixture citation: test_paper_family/test_folia/folia/META-INF/libraries.list:25
 	if observationLinesContain(obs.librariesListEntries, paperLibraryFoliaToken) {
 		add("folia")
 	}
+	// Fixture citation: test_paper_family/test_divine/divine/META-INF/libraries.list:103
 	if observationLinesContain(obs.librariesListEntries, paperLibraryDivineToken) {
 		add("divine")
 	}
+	// Fixture citation: test_paper_family/test_purpur/purpur/META-INF/libraries.list:112
 	if observationLinesContain(obs.librariesListEntries, paperLibraryPurpurToken) {
 		add("purpur")
 	}
+	// Fixture citation: test_paper_family/test_leaf/leaf/META-INF/libraries.list:3 and META-INF/MANIFEST.MF:2
 	if observationLinesContain(obs.librariesListEntries, paperLibraryLeafToken) || obs.hasLeaperNamespace {
 		add("leaf")
 	}
+	// Fixture citation: test_paper_family/test_leaves/leaves/META-INF/libraries.list:111, META-INF/build-info:1, META-INF/leavesclip-version:1
 	if observationLinesContain(obs.librariesListEntries, paperLibraryLeavesToken) || obs.hasLeavesclipNamespace || obs.leavesclipVersion != "" || strings.HasPrefix(obs.buildInfo, "Leaves\t") {
 		add("leaves")
 	}
+	// Fixture citation: test_paper_family/test_reaper/reaper/patch.properties:3-7
+	if hasStrictReaperObservationBrand(obs) {
+		add("reaper")
+	}
+	// Fixture citation: test_paper_family/test_youer/youer/META-INF/MANIFEST.MF:2-11
 	if obs.hasYouerNamespace ||
-		strings.EqualFold(obs.manifestSpecificationTitle, "Youer") ||
-		strings.EqualFold(obs.manifestImplementationTitle, "Youer") ||
-		strings.Contains(strings.ToLower(obs.manifestMainClass), "youer") {
+		strings.EqualFold(obs.manifestSpecificationTitle, paperManifestYouerToken) ||
+		strings.EqualFold(obs.manifestImplementationTitle, paperManifestYouerToken) ||
+		strings.Contains(strings.ToLower(obs.manifestMainClass), paperMainClassYouerToken) {
 		add("youer")
 	}
 
 	slices.Sort(brands)
 	return brands
+}
+
+func readBukkitExecutableSidecar(
+	filePath string,
+	zipReader *zip.Reader,
+	entryPath string,
+) (string, error) {
+	var (
+		data []byte
+		ok   bool
+		err  error
+	)
+
+	if zipReader != nil {
+		data, ok, err = readArchiveEntry(zipReader, entryPath)
+	} else {
+		data, ok, err = readDirectoryEntry(filePath, entryPath)
+	}
+	if err != nil || !ok {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(data)), nil
+}
+
+func readBukkitExecutablePatchProperties(
+	filePath string,
+	zipReader *zip.Reader,
+) (map[string]string, error) {
+	var (
+		data []byte
+		ok   bool
+		err  error
+	)
+
+	if zipReader != nil {
+		data, ok, err = readArchiveEntry(zipReader, paperPatchPropertiesPath)
+	} else {
+		data, ok, err = readDirectoryEntry(filePath, paperPatchPropertiesPath)
+	}
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	return parsePaperPatchProperties(data), nil
+}
+
+func readDirectoryEntry(root string, entryPath string) ([]byte, bool, error) {
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(entryPath)))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return data, true, nil
+}
+
+func hasStrictReaperBukkitConfirmation(properties map[string]string) bool {
+	return strings.Contains(properties["patch"], paperPatchReaperToken)
+}
+
+func hasStrictYouerBukkitConfirmation(signals bukkitManifestSignals) bool {
+	return strings.EqualFold(signals.specificationTitle, paperManifestYouerToken) ||
+		strings.EqualFold(signals.implementationTitle, paperManifestYouerToken) ||
+		strings.Contains(strings.ToLower(signals.mainClass), paperMainClassYouerToken)
+}
+
+func hasStrictReaperObservationBrand(obs paperObservations) bool {
+	return strings.Contains(obs.patchProperties["patch"], paperPatchReaperToken) || obs.hasPaperMCPatch
 }
 
 func observationLinesContain(lines []string, want string) bool {
