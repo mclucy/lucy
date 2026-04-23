@@ -214,35 +214,35 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 		brands = append(brands, normalized)
 	}
 
-	// Fixture citation: test_paper_family/test_paper/paper/META-INF/libraries.list
+	// Fixture citation: probe/internal/detector/testdata/paper_family/test_paper/paper/META-INF/libraries.list
 	if observationLinesContain(obs.librariesListEntries, paperLibraryPaperToken) {
 		add("paper")
 	}
-	// Fixture citation: test_paper_family/test_folia/folia/META-INF/libraries.list:25
+	// Fixture citation: probe/internal/detector/testdata/paper_family/test_folia/folia/META-INF/libraries.list
 	if observationLinesContain(obs.librariesListEntries, paperLibraryFoliaToken) {
 		add("folia")
 	}
-	// Fixture citation: test_paper_family/test_divine/divine/META-INF/libraries.list:103
+	// Fixture citation: probe/internal/detector/testdata/paper_family/test_divine/divine/META-INF/libraries.list
 	if observationLinesContain(obs.librariesListEntries, paperLibraryDivineToken) {
 		add("divine")
 	}
-	// Fixture citation: test_paper_family/test_purpur/purpur/META-INF/libraries.list:112
+	// Fixture citation: probe/internal/detector/testdata/paper_family/test_purpur/purpur/META-INF/libraries.list
 	if observationLinesContain(obs.librariesListEntries, paperLibraryPurpurToken) {
 		add("purpur")
 	}
-	// Fixture citation: test_paper_family/test_leaf/leaf/META-INF/libraries.list:3 and META-INF/MANIFEST.MF:2
+	// Fixture citation: probe/internal/detector/testdata/paper_family/test_leaf/leaf/META-INF/libraries.list and cn/dreeam/leaper/*
 	if observationLinesContain(obs.librariesListEntries, paperLibraryLeafToken) || obs.hasLeaperNamespace {
 		add("leaf")
 	}
-	// Fixture citation: test_paper_family/test_leaves/leaves/META-INF/libraries.list:111, META-INF/build-info:1, META-INF/leavesclip-version:1
+	// Fixture citation: probe/internal/detector/testdata/paper_family/test_leaves/leaves/META-INF/libraries.list, META-INF/build-info, META-INF/leavesclip-version
 	if observationLinesContain(obs.librariesListEntries, paperLibraryLeavesToken) || obs.hasLeavesclipNamespace || obs.leavesclipVersion != "" || strings.HasPrefix(obs.buildInfo, "Leaves\t") {
 		add("leaves")
 	}
-	// Fixture citation: test_paper_family/test_reaper/reaper/patch.properties:3-7
+	// Fixture citation: probe/internal/detector/testdata/paper_family/test_reaper/reaper/patch.properties
 	if hasStrictReaperObservationBrand(obs) {
 		add("reaper")
 	}
-	// Fixture citation: test_paper_family/test_youer/youer/META-INF/MANIFEST.MF:2-11
+	// Fixture citation: probe/internal/detector/testdata/paper_family/test_youer/youer/META-INF/MANIFEST.MF
 	if obs.hasYouerNamespace ||
 		strings.EqualFold(obs.manifestSpecificationTitle, paperManifestYouerToken) ||
 		strings.EqualFold(obs.manifestImplementationTitle, paperManifestYouerToken) ||

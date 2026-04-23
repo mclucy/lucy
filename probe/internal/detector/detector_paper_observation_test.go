@@ -16,7 +16,7 @@ func TestPaperObservationCollector_AnchorsFixtureRoot(t *testing.T) {
 	t.Parallel()
 
 	root := paperFamilyFixtureRoot(t)
-	if filepath.Base(root) != "test_paper_family" {
+	if filepath.Base(root) != "paper_family" {
 		t.Fatalf("fixture root mismatch: %s", root)
 	}
 
@@ -255,7 +255,7 @@ func paperFamilyFixtureRoot(t *testing.T) string {
 	if !ok {
 		t.Fatalf("cannot locate test file path")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "test_paper_family"))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "testdata", "paper_family"))
 }
 
 func paperFamilyFixturePath(t *testing.T, brand string, parts ...string) string {

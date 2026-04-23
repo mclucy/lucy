@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Main-Class: com.mohistmc.launcher.youer.Main
+Specification-Title: Youer
+Specification-Vendor: MohistMC
+Implementation-Title: Youer
+Implementation-Version: 1.21.1-6567a49c
+Implementation-Vendor: MohistMC

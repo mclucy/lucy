@@ -98,7 +98,7 @@ func probePaperFixtureRoot(t *testing.T) string {
 	if !ok {
 		t.Fatalf("cannot locate test file path")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "test_paper_family"))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "internal", "detector", "testdata", "paper_family"))
 }
 
 func writeProbeFixtureJar(t *testing.T, sourceDir string, name string) string {

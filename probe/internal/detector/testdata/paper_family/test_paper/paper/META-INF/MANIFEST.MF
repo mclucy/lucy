@@ -1,0 +1,3 @@
+Manifest-Version: 1.0
+Main-Class: io.papermc.paperclip.Main
+Implementation-Version: 1.21.11-130-ver
