@@ -77,14 +77,11 @@ go install github.com/mclucy/lucy@latest
 ### Quick Start
 
 ```bash
-mkdir my-server && cd my-server
-lucy init
-lucy add fabric-api
-lucy add fabric/lithium@latest
-lucy remove fabric/lithium
-lucy install
-lucy status
-java -jar fabric-server.jar
+mkdir my-server && cd my-server # Create server directory
+lucy init # Manage this server with lucy
+lucy add neoforge/create-aeronautics@latest # Install mods, dependencies are automatically resolved
+lucy status # Check your server status
+lucy run # Boot the server
 ```
 
 `lucy init` starts by looking at the current directory. If you point it at an existing server, it takes over from live facts first, then asks what should become managed intent and what should remain manual or unmanaged.
