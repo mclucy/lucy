@@ -3,8 +3,6 @@ package detector
 import (
 	"archive/zip"
 	"bufio"
-	"encoding/xml"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,7 +19,6 @@ const (
 	bukkitPaperClassPrefix          = "io/papermc/paper/"
 	bukkitLegacyPaperClassPrefix    = "com/destroystokyo/paper/"
 	bukkitSpigotClassPrefix         = "org/spigotmc/"
-	bukkitBeastVersionMarker        = "beast-version.json"
 
 	bukkitNodePaperFork types.RuntimeNodeID = "paper-fork"
 	bukkitNodePaper     types.RuntimeNodeID = "paper"
@@ -35,9 +32,12 @@ var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
 type craftBukkitFamilyDetector struct{}
 
 type bukkitManifestSignals struct {
-	mainClass           string
-	implementationTitle string
-	implementationVer   string
+	mainClass             string
+	specificationTitle    string
+	specificationVendor   string
+	implementationTitle   string
+	implementationVendor  string
+	implementationVer     string
 }
 
 func (d *craftBukkitFamilyDetector) Name() string {
@@ -45,13 +45,15 @@ func (d *craftBukkitFamilyDetector) Name() string {
 }
 
 func (d *craftBukkitFamilyDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	_ = fileHandle
 
-	manifest, ok, err := readArchiveEntry(zipReader, bukkitManifestPath)
+	judgment := newPaperJudgment()
+
+	manifest, ok, err := readBukkitExecutableManifest(filePath, zipReader)
 	if err != nil {
 		return nil, err
 	}
@@ -60,43 +62,209 @@ fileHandle *os.File,
 	}
 
 	signals := parseBukkitManifest(manifest)
+
+	// Stage 1: Bukkit Confirmation
 	// CraftBukkit-derived servers consistently launch through
 	// org.bukkit.craftbukkit.Main, while Implementation-Title: CraftBukkit is the
 	// fallback family marker seen in repackaged jars that keep the canonical
 	// implementation branding. Without one of these, we should not claim a
 	// Bukkit-lineage server executable.
-	if signals.mainClass != bukkitManifestMainClass &&
-	!strings.EqualFold(
-		signals.implementationTitle,
-		bukkitImplementationCraftBukkit,
-	) {
+	judgment.bukkitConfirmed = signals.mainClass == bukkitManifestMainClass ||
+		strings.EqualFold(signals.implementationTitle, bukkitImplementationCraftBukkit)
+	if !judgment.bukkitConfirmed {
+		return nil, nil
+	}
+	judgment.addReason("bukkit confirmation satisfied")
+
+	// Stage 2: Observation Extraction
+	judgment.observations, err = extractPaperObservations(filePath, zipReader)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stage 3: Family Reasoning
+	reasonPaperFamily(&judgment)
+
+	// Stage 4: Brand Attribution
+	attributePaperBrand(&judgment)
+
+	// Stage 5: Contradiction Resolution
+	resolvePaperContradictions(&judgment)
+
+	// Stage 6: Runtime Projection
+	gameVersion := judgment.observations.gameVersion
+	if !hasConcreteVersion(gameVersion) {
+		gameVersion = types.VersionUnknown
+	}
+	evidence := projectPaperJudgment(filePath, gameVersion, judgment)
+	if evidence == nil {
 		return nil, nil
 	}
 
-	hasPaperClasses, hasSpigotClasses := classifyBukkitServerLayer(zipReader)
-	brand := ""
-	primaryNode := bukkitNodeBukkit
-	if hasPaperClasses {
-		if isOfficialPaperDistribution(filePath, signals) {
-			primaryNode = bukkitNodePaper
-			brand = "paper"
-		} else {
-			primaryNode = bukkitNodePaperFork
-			brand, err = detectBukkitPaperForkBrand(zipReader, signals)
-			if err != nil || brand == "" {
-				brand = "paper-fork"
-			}
-		}
-	} else if hasSpigotClasses {
-		primaryNode = bukkitNodeSpigot
-		brand = "spigot"
-	} else {
-		brand = "bukkit"
+	return evidence, nil
+}
+
+func readBukkitExecutableManifest(
+	filePath string,
+	zipReader *zip.Reader,
+) ([]byte, bool, error) {
+	if zipReader != nil {
+		return readArchiveEntry(zipReader, bukkitManifestPath)
 	}
 
-	gameVersion := parseBukkitGameVersion(signals.implementationVer)
-	if !hasConcreteVersion(gameVersion) {
-		gameVersion = types.VersionUnknown
+	manifestPath := filepath.Join(filePath, filepath.FromSlash(bukkitManifestPath))
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	return data, true, nil
+}
+
+func reasonPaperFamily(judgment *paperJudgment) {
+	if judgment == nil {
+		return
+	}
+
+	switch {
+	case judgment.observations.hasPaperClasses:
+		judgment.familyResult = familyStrong
+		judgment.addReason("paper-family confirmed by bundled paper classes")
+	case judgment.observations.hasSpigotClasses:
+		judgment.familyResult = familyWeak
+		judgment.addReason("paper-family remains possible from spigot-lineage classes")
+	default:
+		judgment.familyResult = familyMiss
+		judgment.addReason("paper-family classes missing after bukkit confirmation; continuing to brand attribution")
+	}
+}
+
+func attributePaperBrand(judgment *paperJudgment) {
+	if judgment == nil {
+		return
+	}
+
+	forkBrand := normalizePaperBrandName(inferPaperObservationBrand(judgment.observations))
+	officialPaper := inferOfficialPaperDistribution(judgment.observations)
+
+	switch {
+	case officialPaper && forkBrand != "" && forkBrand != "paper":
+		judgment.brandResult = brandContradiction
+		judgment.brandName = forkBrand
+		judgment.addReason("official paper markers conflict with non-paper fork brand")
+	case officialPaper:
+		judgment.brandResult = brandPaper
+		judgment.brandName = "paper"
+		judgment.addReason("brand attributed to official paper distribution")
+	case forkBrand != "":
+		if forkBrand == "paper" {
+			judgment.brandResult = brandPaper
+			judgment.brandName = forkBrand
+			judgment.addReason("brand attributed to paper")
+			return
+		}
+		judgment.brandResult = brandFork
+		judgment.brandName = forkBrand
+		judgment.addReason("brand attributed to paper fork")
+	default:
+		judgment.brandResult = brandUnknown
+		judgment.addReason("no specific paper-family brand attribution available")
+	}
+}
+
+func inferOfficialPaperDistribution(obs paperObservations) bool {
+	if !observationLinesContain(obs.librariesListEntries, paperLibraryPaperToken) {
+		return false
+	}
+
+	return normalizePaperBrandName(inferPaperObservationBrand(obs)) == "paper"
+}
+
+func inferPaperObservationBrand(obs paperObservations) string {
+	switch {
+	case observationLinesContain(obs.librariesListEntries, paperLibraryFoliaToken):
+		return "folia"
+	case observationLinesContain(obs.librariesListEntries, paperLibraryDivineToken):
+		return "divine"
+	case observationLinesContain(obs.librariesListEntries, paperLibraryPurpurToken):
+		return "purpur"
+	case observationLinesContain(obs.librariesListEntries, paperLibraryLeafToken), obs.hasLeaperNamespace:
+		return "leaf"
+	case observationLinesContain(obs.librariesListEntries, paperLibraryLeavesToken), obs.hasLeavesclipNamespace, obs.leavesclipVersion != "", strings.HasPrefix(obs.buildInfo, "Leaves\t"):
+		return "leaves"
+	case obs.hasYouerNamespace,
+		strings.EqualFold(obs.manifestSpecificationTitle, "Youer"),
+		strings.EqualFold(obs.manifestImplementationTitle, "Youer"),
+		strings.Contains(strings.ToLower(obs.manifestMainClass), "youer"):
+		return "youer"
+	case observationLinesContain(obs.librariesListEntries, paperLibraryPaperToken):
+		return "paper"
+	default:
+		return ""
+	}
+}
+
+func observationLinesContain(lines []string, want string) bool {
+	for _, line := range lines {
+		if strings.Contains(line, want) {
+			return true
+		}
+	}
+	return false
+}
+
+func resolvePaperContradictions(judgment *paperJudgment) {
+	if judgment == nil {
+		return
+	}
+
+	if judgment.familyResult == familyContradiction || judgment.brandResult == brandContradiction {
+		judgment.contradictionState = true
+	}
+	if judgment.contradictionState {
+		judgment.addReason("contradictory paper evidence resolved fail-closed to bukkit lineage")
+	}
+}
+
+func projectPaperJudgment(
+	filePath string,
+	gameVersion types.RawVersion,
+	judgment paperJudgment,
+) *ExecutableEvidence {
+	if !judgment.bukkitConfirmed {
+		return nil
+	}
+
+	primaryNode := bukkitNodeBukkit
+	brand := "bukkit"
+
+	if judgment.contradictionState {
+		judgment.addReason("runtime projection withheld paper promotion due to contradiction state")
+	} else {
+		switch judgment.brandResult {
+		case brandPaper:
+			primaryNode = bukkitNodePaper
+			brand = nonEmptyPaperBrandName(judgment.brandName, "paper")
+		case brandFork:
+			primaryNode = bukkitNodePaperFork
+			brand = nonEmptyPaperBrandName(judgment.brandName, "paper-fork")
+		case brandUnknown:
+			switch judgment.familyResult {
+			case familyStrong:
+				primaryNode = bukkitNodePaperFork
+				brand = "paper-fork"
+				judgment.addReason("strong paper-family evidence projected to generic paper-fork runtime")
+			case familyWeak:
+				primaryNode = bukkitNodeSpigot
+				brand = "spigot"
+				judgment.addReason("weak paper-family evidence projected to spigot runtime")
+			default:
+				judgment.addReason("family miss remains non-terminal but projects to baseline bukkit runtime")
+			}
+		}
 	}
 
 	return &ExecutableEvidence{
@@ -115,9 +283,30 @@ fileHandle *os.File,
 		},
 		TopologySeed: buildBukkitExecutableTopologySeed(primaryNode),
 		Provenance: ExecutableDetectorProvenance{
-			DetectorName: d.Name(),
+			DetectorName: (&craftBukkitFamilyDetector{}).Name(),
 		},
-	}, nil
+	}
+}
+
+func normalizePaperBrandName(name string) string {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	if normalized == "" {
+		return ""
+	}
+
+	switch normalized {
+	case "craftbukkit", "bukkit":
+		return ""
+	default:
+		return normalized
+	}
+}
+
+func nonEmptyPaperBrandName(name string, fallback string) string {
+	if normalized := normalizePaperBrandName(name); normalized != "" {
+		return normalized
+	}
+	return fallback
 }
 
 func parseBukkitManifest(data []byte) bukkitManifestSignals {
@@ -140,6 +329,20 @@ func parseBukkitManifest(data []byte) bukkitManifestSignals {
 					"Implementation-Title: ",
 				),
 			)
+		case strings.HasPrefix(line, "Specification-Title: "):
+			signals.specificationTitle = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Specification-Title: ",
+				),
+			)
+		case strings.HasPrefix(line, "Specification-Vendor: "):
+			signals.specificationVendor = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Specification-Vendor: ",
+				),
+			)
 		case strings.HasPrefix(line, "Implementation-Version: "):
 			signals.implementationVer = strings.TrimSpace(
 				strings.TrimPrefix(
@@ -147,107 +350,16 @@ func parseBukkitManifest(data []byte) bukkitManifestSignals {
 					"Implementation-Version: ",
 				),
 			)
+		case strings.HasPrefix(line, "Implementation-Vendor: "):
+			signals.implementationVendor = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Implementation-Vendor: ",
+				),
+			)
 		}
 	}
 	return signals
-}
-
-func classifyBukkitServerLayer(zipReader *zip.Reader) (
-hasPaper bool,
-hasSpigot bool,
-) {
-	for _, file := range zipReader.File {
-		// Plugin descriptors describe what plugins can run on a server, not which
-		// server implementation produced the executable jar. Class trees are the
-		// durable signal because they reflect the bundled server implementation.
-		switch {
-		// io/papermc/paper/ and com/destroystokyo/paper/ are the Paper-specific
-		// implementation packages across the modern and legacy package layouts, so
-		// either prefix is enough to prove Paper-lineage internals are present.
-		case strings.HasPrefix(
-			file.Name,
-			bukkitPaperClassPrefix,
-		), strings.HasPrefix(file.Name, bukkitLegacyPaperClassPrefix):
-			hasPaper = true
-		case strings.HasPrefix(file.Name, bukkitSpigotClassPrefix):
-			// org/spigotmc/ is Spigot-owned implementation space. It distinguishes
-			// Spigot-lineage server internals from bare CraftBukkit family jars when
-			// no Paper-specific packages are present.
-			hasSpigot = true
-		}
-
-		if hasPaper && hasSpigot {
-			break
-		}
-	}
-
-	return hasPaper, hasSpigot
-}
-
-func detectBukkitPaperForkBrand(
-zipReader *zip.Reader,
-signals bukkitManifestSignals,
-) (string, error) {
-	// use implementation title
-	if signals.implementationTitle != "bukkit" {
-		return signals.implementationTitle, nil
-	}
-
-	// speculate from pom.xml
-	for _, file := range zipReader.File {
-		if !strings.HasPrefix(
-			file.Name,
-			"META-INF/maven/",
-		) || !strings.HasSuffix(file.Name, "/pom.xml") {
-			continue
-		}
-
-		r, err := file.Open()
-		if err != nil {
-			continue
-		}
-
-		data, readErr := io.ReadAll(r)
-		_ = r.Close()
-		if readErr != nil {
-			continue
-		}
-
-		var pom paperForkMavenPom
-		if err := xml.Unmarshal(data, &pom); err != nil {
-			continue
-		}
-
-		if strings.TrimSpace(pom.Properties.MinecraftVersion) != "" {
-			if artifactID := strings.TrimSpace(pom.ArtifactID); artifactID != "" {
-				return artifactID, nil
-			}
-		}
-		if strings.TrimSpace(pom.Properties.MinecraftVersionLegacy) != "" {
-			if artifactID := strings.TrimSpace(pom.ArtifactID); artifactID != "" {
-				return artifactID, nil
-			}
-		}
-	}
-
-	return "", nil
-}
-
-type paperForkMavenPom struct {
-	ArtifactID string `xml:"artifactId"`
-	Properties struct {
-		MinecraftVersion       string `xml:"minecraft.version"`
-		MinecraftVersionLegacy string `xml:"minecraft_version"`
-	} `xml:"properties"`
-}
-
-func isOfficialPaperDistribution(
-filePath string,
-signals bukkitManifestSignals,
-) bool {
-	title := strings.ToLower(signals.implementationTitle)
-	base := strings.ToLower(filepath.Base(filePath))
-	return strings.Contains(title, "paper") || strings.Contains(base, "paper")
 }
 
 func parseBukkitGameVersion(implementationVersion string) types.RawVersion {
@@ -259,7 +371,7 @@ func parseBukkitGameVersion(implementationVersion string) types.RawVersion {
 }
 
 func buildBukkitExecutableTopologySeed(
-primaryNode types.RuntimeNodeID,
+	primaryNode types.RuntimeNodeID,
 ) *ExecutableTopologySeed {
 	nodes := []types.RuntimeNode{}
 	edges := []types.RuntimeEdge{}
@@ -328,9 +440,9 @@ func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
 }
 
 func buildBukkitImplementationEdge(
-from types.RuntimeNodeID,
-to types.RuntimeNodeID,
-verb types.RuntimeEdgeVerb,
+	from types.RuntimeNodeID,
+	to types.RuntimeNodeID,
+	verb types.RuntimeEdgeVerb,
 ) types.RuntimeEdge {
 	return types.RuntimeEdge{
 		From: from,
