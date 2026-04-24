@@ -10,11 +10,10 @@
 
 ### Lucy: The Modern Minecraft Server Environment Manager
 
-  [![Go Report Card](https://goreportcard.com/badge/github.com/mclucy/lucy)](https://goreportcard.com/report/github.com/mclucy/lucy)
   [![Build](https://github.com/mclucy/lucy/actions/workflows/build.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/build.yml)
   [![Tests](https://github.com/mclucy/lucy/actions/workflows/tests.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/tests.yml)
-  [![CodeQL](https://github.com/mclucy/lucy/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/github-code-scanning/codeql)
   [![Coverage](https://github.com/mclucy/lucy/wiki/dev/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html)
+  [![Go Report Card](https://goreportcard.com/badge/github.com/mclucy/lucy)](https://goreportcard.com/report/github.com/mclucy/lucy)
   [![Last Commit](https://img.shields.io/github/last-commit/mclucy/lucy)](https://github.com/mclucy/lucy/commits/main/)
   [![Code Size](https://img.shields.io/github/languages/code-size/mclucy/lucy)](main.go)
   [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE)
