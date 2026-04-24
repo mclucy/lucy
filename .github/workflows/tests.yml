@@ -32,3 +32,6 @@ jobs:
 
       - name: Run default checks
         run: task check
+        
+      - name: Generate coverage badge
+        uses: ncruces/go-coverage-report@v0.3.2
