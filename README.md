@@ -1,39 +1,24 @@
 <div align="center">
-
   <img src="images/banner.png" alt="banner" width="80%" />
 
-  <a href="README.md">English</a> | <a href="README_CN.md">中文</a>
+#### English | [中文](README_CN.md)
 
   <h2>
     <sub>Describe your server, not build it from scratch.</sub>
     <div>Manage your server with one unified CLI.</div>
   </h2>
 
-  <h3>Lucy: The Modern Minecraft Server Environment Manager</h3>
+### Lucy: The Modern Minecraft Server Environment Manager
 
-  <img
-    src="https://goreportcard.com/badge/github.com/mclucy/lucy"
-    alt="Go Report Card"
-  />
-  <img
-    src="https://github.com/mclucy/lucy/actions/workflows/github-code-scanning/codeql/badge.svg"
-    alt="CodeQL"
-  />
-  <img
-    src="https://img.shields.io/github/last-commit/mclucy/lucy"
-    alt="Last Commit"
-  />
-  <img
-    src="https://img.shields.io/github/languages/code-size/mclucy/lucy"
-    alt="Code Size"
-  />
-  <img
-    src="https://img.shields.io/github/license/mclucy/lucy"
-    alt="License"
-  />
-  <a href="https://deepwiki.com/mclucy/lucy">
-    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
-  </a>
+  ![Go Report Card](https://goreportcard.com/badge/github.com/mclucy/lucy)
+  [![Build](https://github.com/mclucy/lucy/actions/workflows/build.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/build.yml)
+  [![Tests](https://github.com/mclucy/lucy/actions/workflows/tests.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/tests.yml)
+  [![CodeQL](https://github.com/mclucy/lucy/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/github-code-scanning/codeql)
+  [![Coverage](https://github.com/mclucy/lucy/wiki/dev/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html)
+  ![Last Commit](https://img.shields.io/github/last-commit/mclucy/lucy)
+  ![Code Size](https://img.shields.io/github/languages/code-size/mclucy/lucy)
+  ![License](https://img.shields.io/github/license/mclucy/lucy)
+  [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mclucy/lucy)
 
 </div>
 
