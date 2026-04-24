@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions: write-all
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -35,3 +37,7 @@ jobs:
         
       - name: Generate coverage badge
         uses: ncruces/go-coverage-report@v0.3.2
+        with:
+          output-dir: dev
+          badge-title: Coverage
+          amend: true
