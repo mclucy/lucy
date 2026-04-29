@@ -27,25 +27,18 @@
 
 ## Overview
 
-`lucy` is a server-aware environment manager for Minecraft servers. It starts by taking over the server you already run, inspects what is actually installed, and then helps you define the scope Lucy should manage. It keeps that managed scope explicit with soft manifest intent and exact lockfile facts, while manual or unmanaged content stays part of the server and outside Lucy's ownership.
+`lucy` is a server-aware environment manager for Minecraft servers. It does not assume a blank slate: it starts from the directory you already have, probes live files, detects the environment topology, and lets you decide the boundary Lucy should manage.
 
-If you've used `apt`, `brew`, or `npm`, some commands will feel familiar. The difference is that `lucy` starts from the server you already run. It does not assume a blank slate, and it does not try to replace everything on disk. Manual and managed content can coexist, and Lucy only claims the parts you place in its scope.
+If you've used `apt`, `brew`, or `npm`, some commands will feel familiar. Lucy borrows the same ideas of intent, resolution, locks, and sync, then adapts them for messy Minecraft servers where manual jars, generated worlds, external tools, and managed content may legitimately coexist.
 
-### Core Features
+### Design Philosophy
 
-<!-- TODO: Replace this section with .gif demo -->
-
-- Automatic dependency resolution and conflict handling
-- Package access from Modrinth, CurseForge, MCDR Plugin Catalog, and more...
-- Discovery-led server probing and environment inference
-- Take over an existing server before trying to reshape it
-- Keep manual and unmanaged content alongside the managed scope
-- Keep manifest intent soft while recording exact lockfile facts
-- Topology-aware status reporting and risk surfacing
-- Non-intrusive design, all operations are independent of server runtime
-- Shell completion for bash, zsh, fish, and pwsh
-- Beautiful CLI output
-- Machine-readable output formats for CI/CD pipelines and shell scripts
+- Manage Minecraft server environments as stateful, semantic systems you can reason about, not just downloadable files.
+- Model complex server state with a powerful topology model.
+- Operators only need fuzzy intent (manifest); `lucy` resolves it into reproducible exact results (lock file).
+- Ensure automated management does not interfere with manual management.
+- CLI output with high aesthetic standards.
+- Machine-readable output for CI/CD and other toolchain integrations.
 
 ## 🚀 Getting Started
 
