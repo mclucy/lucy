@@ -30,6 +30,12 @@
       "source": "mcdxai/meteor-rejects-v2",
       "sourceType": "github",
       "computedHash": "6f5f6e2edca415ba7fb2b57228f66f2cbc35154a79c4c69bd16d6183d8063c3d"
+    },
+    "writing-adrs": {
+      "source": "arcadi4/skills",
+      "sourceType": "github",
+      "skillPath": "writing-adrs/SKILL.md",
+      "computedHash": "941d372fdb73ebdb4fd7a81ea4d3a1320e18aad85d080120491cad79cdbf7e1b"
     }
   }
 }
