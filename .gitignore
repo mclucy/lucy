@@ -18,18 +18,18 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
+# Go workspace
 go.work
 go.work.sum
 
-# env file
+# Environment variables and secrets
 .env
 
 # Cipher key files
 .cipher_key
 .cipher_ciphertext
 
-# IDE file
+# IDEs
 .idea
 .vscode
 launch.json
@@ -43,32 +43,33 @@ release
 
 # Testing environments
 test_*
-!probe/internal/detector/testdata/paper_family/
-!probe/internal/detector/testdata/paper_family/**
+!**/testdata
+!**/testdata/**
 
-# Taskfile
+# Task generated
 .task
 
-# Code agents
+# Coding agents
 .agents
 .codex
 .claude
 .sisyphus
 AGENTS.md
+CLAUDE.md
 
-# Worktrees
+# Worktree
 .worktrees
 
 # Generated autocomplete script
 completions
 
-# docs
+# Documentations
 documents
 docs/*
 !docs/shared
 
-# gitnexus
+# GitNexus
 .gitnexus
 
-# logs
+# Logs
 *.log
