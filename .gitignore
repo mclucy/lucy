@@ -67,5 +67,8 @@ documents
 docs/*
 !docs/shared
 
+# gitnexus
+.gitnexus
+
 # logs
 *.log
