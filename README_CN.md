@@ -5,8 +5,8 @@
 #### [English](README.md) | 中文
 
   <h2>
-    <sub>描述你的服务器，而不是从零开始搭建。</sub>
-    <div>用一个统一的 CLI 管理你的服务器。</div>
+    <sub>服务器·整合包·群组服</sub>
+    <div>...一行命令秒了</div>
   </h2>
 
 ### Lucy: 现代化的 Minecraft 服务器环境管理器
