@@ -4,38 +4,44 @@
     "golang-error-handling": {
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
-      "computedHash": "4c0d3f294044d3287ba183d2c06ac5381b99ef74d0b4c5485583c7e5505cdf5a"
+      "skillPath": "skills/golang-error-handling/SKILL.md",
+      "computedHash": "34c52432d26a41f7ecda55d245a3920a0d87920107f12c2b39d4f2398ae90914"
     },
     "golang-patterns": {
       "source": "affaan-m/everything-claude-code",
       "sourceType": "github",
+      "skillPath": "skills/golang-patterns/SKILL.md",
       "computedHash": "67c25e95cec3f3166c2efefd5f4502863a1246c6f742b8cbcd2e2864d2a8182a"
     },
     "golang-pro": {
       "source": "jeffallan/claude-skills",
       "sourceType": "github",
-      "computedHash": "c90a0798a12ea2d9191508439ec3191dd96713310615260ebe82ec5a09a4a434"
+      "skillPath": "skills/golang-pro/SKILL.md",
+      "computedHash": "12b4cac8f65228f82cbc26f0da9232aba87ffa45ccd01afa3998fb8ec61dc288"
     },
     "golang-testing": {
       "source": "affaan-m/everything-claude-code",
       "sourceType": "github",
+      "skillPath": "skills/golang-testing/SKILL.md",
       "computedHash": "db6e910031d9c289f91697cf2397b8a3f717c6fdeae7a115e811a32544d99e11"
     },
     "minecraft-bukkit-pro": {
       "source": "sickn33/antigravity-awesome-skills",
       "sourceType": "github",
+      "skillPath": "skills/minecraft-bukkit-pro/SKILL.md",
       "computedHash": "afb56869425b6d963792e92b14ade4d4bc2eda07541c351300074a0a1d6d5281"
     },
     "minecraft-fabric-dev": {
       "source": "mcdxai/meteor-rejects-v2",
       "sourceType": "github",
+      "skillPath": ".claude/skills/minecraft-fabric-dev/SKILL.md",
       "computedHash": "6f5f6e2edca415ba7fb2b57228f66f2cbc35154a79c4c69bd16d6183d8063c3d"
     },
     "writing-adrs": {
       "source": "arcadi4/skills",
       "sourceType": "github",
       "skillPath": "writing-adrs/SKILL.md",
-      "computedHash": "941d372fdb73ebdb4fd7a81ea4d3a1320e18aad85d080120491cad79cdbf7e1b"
+      "computedHash": "ae7c2400b4bf5ffd36b432df66f13745cee7517051e5cd7615a890cd6798ac10"
     }
   }
 }
