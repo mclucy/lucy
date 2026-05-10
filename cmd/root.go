@@ -10,7 +10,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "lucy",
-	Short:         "The takeover-first Minecraft server package manager",
+	Short: "The Minecraft server package manager",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -35,22 +35,45 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().Bool(flagDebugName, false, "Show debug logs")
-	rootCmd.PersistentFlags().Bool(flagLogFileName, false, "Output the path to logfile")
-	rootCmd.PersistentFlags().Bool(flagPrintLogsName, false, "Print logs to console")
-	rootCmd.PersistentFlags().Bool(flagDumpLogsName, false, "Dump the log history to console before exit")
+	rootCmd.PersistentFlags().Bool(
+		flagLogFileName,
+		false,
+		"Output the path to logfile",
+	)
+	rootCmd.PersistentFlags().Bool(
+		flagPrintLogsName,
+		false,
+		"Print logs to console",
+	)
+	rootCmd.PersistentFlags().Bool(
+		flagDumpLogsName,
+		false,
+		"Dump the log history to console before exit",
+	)
 	_ = rootCmd.PersistentFlags().MarkHidden(flagDumpLogsName)
-	rootCmd.PersistentFlags().Bool(flagNoStyleName, false, "Disable colored and styled output")
+	rootCmd.PersistentFlags().Bool(
+		flagNoStyleName,
+		false,
+		"Disable colored and styled output",
+	)
 
-	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
-		fmt.Fprintln(cmd.ErrOrStderr(), err)
-		cmd.Usage()
-		return err
-	})
+	rootCmd.SetFlagErrorFunc(
+		func(cmd *cobra.Command, err error) error {
+			fmt.Fprintln(cmd.ErrOrStderr(), err)
+			cmd.Usage()
+			return err
+		},
+	)
 }
 
 // runWithErrorLogging wraps a RunE function to log errors via logger.ReportError.
 // It replaces the decoratorLogAndExitOnError decorator.
-func runWithErrorLogging(fn func(cmd *cobra.Command, args []string) error) func(cmd *cobra.Command, args []string) error {
+func runWithErrorLogging(
+fn func(
+cmd *cobra.Command,
+args []string,
+) error,
+) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		err := fn(cmd, args)
 		if err != nil {
