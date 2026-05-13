@@ -64,7 +64,7 @@ CLAUDE.md
 completions
 
 # Documentations
-documents
+docs/others
 docs/*
 !docs/shared
 
