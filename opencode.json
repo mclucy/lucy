@@ -3,7 +3,19 @@
   "mcp": {
     "goland": {
       "type": "remote",
-      "url": "http://127.0.0.1:64343/sse"
+      "url": "http://127.0.0.1:64342/sse"
+    },
+    "godoc": {
+      "type": "local",
+      "command": ["godoc-mcp"]
+    },
+    "codegraph": {
+      "type": "local",
+      "command": ["codegraph", "serve", "--mcp"],
+      "enabled": true
+    },
+    "gitnexus": {
+      "enabled": false
     }
   }
 }
