@@ -14,6 +14,10 @@
       "command": ["codegraph", "serve", "--mcp"],
       "enabled": true
     },
+    "gopls": {
+      "type": "local",
+      "command": ["gopls", "mcp"]
+    },
     "gitnexus": {
       "enabled": false
     }
