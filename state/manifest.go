@@ -1,7 +1,7 @@
 package state
 
 import (
-	"encoding/json"
+	"gopkg.in/yaml.v3"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,25 +12,22 @@ import (
 // Manifest stores the desired environment intent for a Lucy project.
 // It is persisted in .lucy/manifest.json.
 //
-// Manifest OWNS: intent.direct-roots, intent.managed-scope, intent.environment
-// Manifest MUST NOT own: resolution.graph, artifact.hashes,
-// artifact.download-urls
 type Manifest struct {
-	FormatVersion string              `json:"format_version"`
-	Environment   ManifestEnvironment `json:"environment"`
-	Packages      []ManifestPackage   `json:"packages"`
-	Bundles       []ManifestBundle    `json:"bundles"`
+	FormatVersion string              `yaml:"format_version"`
+	Environment   ManifestEnvironment `yaml:"environment"`
+	Packages      []ManifestPackage   `yaml:"packages"`
+	Bundles       []ManifestBundle    `yaml:"bundles"`
 }
 
 type ManifestEnvironment struct {
-	GameVersion            string   `json:"game_version"`
-	ServerCore             string   `json:"server_core"`
-	ServerCoreVersion      string   `json:"server_core_version"`
-	ModdingPlatform        string   `json:"modding_platform"`
-	ModdingPlatformVersion string   `json:"modding_platform_version"`
-	CompatiblePlatforms    []string `json:"compatible_platforms"`
-	Mcdr                   bool     `json:"mcdr"`
-	DeclaredCapabilities   []string `json:"declared_capabilities"`
+	GameVersion            string   `yaml:"game_version"`
+	ServerCore             string   `yaml:"server_core"`
+	ServerCoreVersion      string   `yaml:"server_core_version"`
+	ModdingPlatform        string   `yaml:"modding_platform"`
+	ModdingPlatformVersion string   `yaml:"modding_platform_version"`
+	CompatiblePlatforms    []string `yaml:"compatible_platforms"`
+	Mcdr                   bool     `yaml:"mcdr"`
+	DeclaredCapabilities   []string `yaml:"declared_capabilities"`
 }
 
 type ManifestSide string
@@ -43,15 +40,15 @@ const (
 )
 
 type ManifestPackage struct {
-	ID string `json:"id"`
+	ID string `yaml:"id"`
 	// Version stores version intent exactly as written in the manifest.
 	//
 	// It may be an exact version or a fuzzy selector such as "latest",
 	// "compatible", or a future range/non-exact preference. The manifest is the
 	// intent layer, so Lucy must preserve this string verbatim instead of
 	// rewriting it to the currently resolved exact version.
-	Version string `json:"version"`
-	Source  string `json:"source"`
+	Version string `yaml:"version"`
+	Source  string `yaml:"source"`
 	// Role defines how Lucy should treat this package in desired state.
 	//
 	// - required: explicit operator intent, including user-selected leaf nodes during adopt
@@ -60,10 +57,10 @@ type ManifestPackage struct {
 	//
 	// Non-leaf nodes remain visible to init/adopt users because Minecraft package
 	// boundaries are often fuzzy, but that visibility must not become a fourth role.
-	Role     ManifestRole `json:"role"`
-	Side     ManifestSide `json:"side"`
-	Optional bool         `json:"optional"`
-	Pinned   bool         `json:"pinned"`
+	Role     ManifestRole `yaml:"role"`
+	Side     ManifestSide `yaml:"side"`
+	Optional bool         `yaml:"optional"`
+	Pinned   bool         `yaml:"pinned"`
 }
 
 type ManifestRole string
@@ -95,11 +92,11 @@ const (
 )
 
 type ManifestBundle struct {
-	Name     string     `json:"name"`
-	Type     BundleType `json:"type"`
-	Path     string     `json:"path"`
-	Source   string     `json:"source"`
-	Optional bool       `json:"optional"`
+	Name     string     `yaml:"name"`
+	Type     BundleType `yaml:"type"`
+	Path     string     `yaml:"path"`
+	Source   string     `yaml:"source"`
+	Optional bool       `yaml:"optional"`
 }
 
 func ManifestDefaults() Manifest {
@@ -793,11 +790,11 @@ func resolveIDByName(name types.PackageName, ids []string) string {
 }
 
 func (m Manifest) Marshal() ([]byte, error) {
-	return json.MarshalIndent(m, "", "  ")
+	return yaml.Marshal(m)
 }
 
 func (m *Manifest) Unmarshal(data []byte) error {
-	if err := json.Unmarshal(data, m); err != nil {
+	if err := yaml.Unmarshal(data, m); err != nil {
 		return err
 	}
 	normalizeManifest(m)

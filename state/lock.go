@@ -1,7 +1,7 @@
 package state
 
 import (
-	"encoding/json"
+	"gopkg.in/yaml.v3"
 	"fmt"
 	"sort"
 	"strings"
@@ -11,53 +11,50 @@ import (
 )
 
 // Lock represents Lucy's exact resolved state snapshot.
-// It is persisted in .lucy/lock.json and owns resolution.graph,
-// resolution.provenance, artifact.hashes, and artifact.download-urls.
-//
-// Lock MUST NOT own policy defaults, desired roots, or observed runtime state.
+// It is persisted in .lucy/lock.json.
 type Lock struct {
-	Version     string `json:"version"`
-	GeneratedAt string `json:"generated_at"`
+	Version     string `yaml:"version"`
+	GeneratedAt string `yaml:"generated_at"`
 	// ManifestFingerprint binds the exact lock facts to one serialized manifest
 	// intent document. If the manifest bytes change, the lock is stale even when
 	// package IDs still overlap.
-	ManifestFingerprint string          `json:"manifest_fingerprint"`
-	GameVersion         string          `json:"game_version"`
-	Platform            string          `json:"platform"`
-	PlatformVersion     string          `json:"platform_version"`
-	Packages            []LockedPackage `json:"packages"`
-	Bundles             []LockedBundle  `json:"bundles"`
+	ManifestFingerprint string          `yaml:"manifest_fingerprint"`
+	GameVersion         string          `yaml:"game_version"`
+	Platform            string          `yaml:"platform"`
+	PlatformVersion     string          `yaml:"platform_version"`
+	Packages            []LockedPackage `yaml:"packages"`
+	Bundles             []LockedBundle  `yaml:"bundles"`
 }
 
 // LockedPackage records one exact resolved artifact and how it entered the
 // resolved graph.
 type LockedPackage struct {
-	ID string `json:"id"`
+	ID string `yaml:"id"`
 	// Version is the final concrete version chosen for this resolved artifact.
 	// Lock entries are fact records, so fuzzy selectors and ranges are invalid
 	// here even when the manifest used them as intent.
-	Version       string   `json:"version"`
-	Source        string   `json:"source"`
-	URL           string   `json:"url"`
-	Filename      string   `json:"filename"`
-	Hash          string   `json:"hash"`
-	HashAlgorithm string   `json:"hash_algorithm"`
-	InstallPath   string   `json:"install_path"`
-	Side          string   `json:"side"`
-	Optional      bool     `json:"optional"`
-	Embedded      bool     `json:"embedded"`
-	EmbeddedIn    string   `json:"embedded_in,omitempty"`
-	Provenance    []string `json:"provenance,omitempty"`
-	Requester     string   `json:"requester"`
+	Version       string   `yaml:"version"`
+	Source        string   `yaml:"source"`
+	URL           string   `yaml:"url"`
+	Filename      string   `yaml:"filename"`
+	Hash          string   `yaml:"hash"`
+	HashAlgorithm string   `yaml:"hash_algorithm"`
+	InstallPath   string   `yaml:"install_path"`
+	Side          string   `yaml:"side"`
+	Optional      bool     `yaml:"optional"`
+	Embedded      bool     `yaml:"embedded"`
+	EmbeddedIn    string   `yaml:"embedded_in,omitempty"`
+	Provenance    []string `yaml:"provenance,omitempty"`
+	Requester     string   `yaml:"requester"`
 }
 
 // LockedBundle records one non-package managed artifact bundle tracked in the
 // resolved state.
 type LockedBundle struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Hash        string `json:"hash"`
-	InstallPath string `json:"install_path"`
+	Name        string `yaml:"name"`
+	Type        string `yaml:"type"`
+	Hash        string `yaml:"hash"`
+	InstallPath string `yaml:"install_path"`
 }
 
 // NewLock returns a new v1 lock with the current timestamp in RFC3339 format.
@@ -116,11 +113,11 @@ func ValidateLock(l Lock) error {
 }
 
 func (l Lock) Marshal() ([]byte, error) {
-	return json.MarshalIndent(l, "", "  ")
+	return yaml.Marshal(l)
 }
 
 func (l *Lock) Unmarshal(data []byte) error {
-	return json.Unmarshal(data, l)
+	return yaml.Unmarshal(data, l)
 }
 
 func validateLockedPackage(pkg LockedPackage) error {
