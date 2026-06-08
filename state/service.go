@@ -30,10 +30,15 @@ func (s *ProjectStateService) Load(ctx context.Context) error {
 		return ioStateError("", "workDir", "workDir is required", nil)
 	}
 
+	globalCfg, _, err := ReadGlobalConfig()
+	if err != nil {
+		return err
+	}
 	cfg, err := loadConfig(ctx, s.workDir)
 	if err != nil {
 		return err
 	}
+	cfg = MergeConfig(globalCfg, cfg)
 	manifest, err := loadManifest(ctx, s.workDir)
 	if err != nil {
 		return err
