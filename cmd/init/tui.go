@@ -3,11 +3,23 @@ package init
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"charm.land/huh/v2"
+	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/state"
 )
+
+// applyAccessible sets accessible mode on a form when stdin is not a TTY.
+// Accessible mode bypasses bubbletea entirely (plain line reads), preventing
+// hangs on Windows PowerShell where bubbletea's raw-mode console setup blocks.
+func applyAccessible(f *huh.Form) *huh.Form {
+	if !term.IsTerminal(os.Stdin.Fd()) {
+		return f.WithAccessible(true)
+	}
+	return f
+}
 
 // RunInteractiveInit walks the user through the interactive init flow via huh
 // forms, populating s in-place. Sets s.Aborted=true on cancellation at any
@@ -33,7 +45,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Value(&continueInit),
 		),
 	)
-	if err := welcomeForm.Run(); err != nil {
+	if err := applyAccessible(welcomeForm).Run(); err != nil {
 		if isUserAbort(err) {
 			s.Aborted = true
 			return nil
@@ -71,7 +83,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 					Value(&conflictMode),
 			),
 		)
-		if err := conflictForm.Run(); err != nil {
+		if err := applyAccessible(conflictForm).Run(); err != nil {
 			if isUserAbort(err) {
 				s.Aborted = true
 				return nil
@@ -113,7 +125,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Value(&s.GameVersion),
 		),
 	)
-	if err := gameVersionForm.Run(); err != nil {
+	if err := applyAccessible(gameVersionForm).Run(); err != nil {
 		if isUserAbort(err) {
 			s.Aborted = true
 			return nil
@@ -138,7 +150,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Value(&s.Platform),
 		),
 	)
-	if err := platformForm.Run(); err != nil {
+	if err := applyAccessible(platformForm).Run(); err != nil {
 		if isUserAbort(err) {
 			s.Aborted = true
 			return nil
@@ -164,7 +176,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 					Value(&selected),
 			),
 		)
-		if err := compatibleForm.Run(); err != nil {
+		if err := applyAccessible(compatibleForm).Run(); err != nil {
 			if isUserAbort(err) {
 				s.Aborted = true
 				return nil
@@ -189,7 +201,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 					Value(&s.PlatformVersion),
 			),
 		)
-		if err := platformVersionForm.Run(); err != nil {
+		if err := applyAccessible(platformVersionForm).Run(); err != nil {
 			if isUserAbort(err) {
 				s.Aborted = true
 				return nil
@@ -214,7 +226,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Value(&s.ManagedRoots),
 		),
 	)
-	if err := managedRootsForm.Run(); err != nil {
+	if err := applyAccessible(managedRootsForm).Run(); err != nil {
 		if isUserAbort(err) {
 			s.Aborted = true
 			return nil
@@ -269,7 +281,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 		)
 
 		classificationForm := huh.NewForm(huh.NewGroup(fields...))
-		if err := classificationForm.Run(); err != nil {
+		if err := applyAccessible(classificationForm).Run(); err != nil {
 			if isUserAbort(err) {
 				s.Aborted = true
 				return nil
@@ -294,7 +306,7 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Value(&confirmWrite),
 		),
 	)
-	if err := reviewForm.Run(); err != nil {
+	if err := applyAccessible(reviewForm).Run(); err != nil {
 		if isUserAbort(err) {
 			s.Aborted = true
 			return nil
