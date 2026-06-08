@@ -135,14 +135,14 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 }
 
 func lucyStateDirExists(workDir string) (bool, error) {
-	info, err := os.Stat(filepath.Join(workDir, ".lucy"))
+	info, err := os.Stat(filepath.Join(workDir, "lucy.yaml"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("stat .lucy directory: %w", err)
+		return false, fmt.Errorf("stat lucy.yaml: %w", err)
 	}
-	return info.IsDir(), nil
+	return !info.IsDir(), nil
 }
 
 func formatStateSummary(stateSvc *state.ProjectStateService) string {

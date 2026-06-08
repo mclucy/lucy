@@ -32,7 +32,6 @@ type DiscoveredDefaults struct {
 	GameVersion            string
 	Platform               string
 	PlatformVersion        string
-	ManagedRoots           []string
 	DetectedPackages       []string
 	PackageClassifications []TakeoverPackageClassification
 	Confidence             DiscoveryConfidence
@@ -46,14 +45,13 @@ type ExistingLucyHints struct {
 	GameVersion     string
 	Platform        string
 	PlatformVersion string
-	ManagedRoots    []string
 	ConfigPresent   bool
 	ManifestPresent bool
 	LockPresent     bool
 }
 
 func (h ExistingLucyHints) HasAny() bool {
-	return h.ConfigPresent || h.ManifestPresent || h.LockPresent || h.GameVersion != "" || h.Platform != "" || h.PlatformVersion != "" || len(h.ManagedRoots) > 0
+	return h.ConfigPresent || h.ManifestPresent || h.LockPresent || h.GameVersion != "" || h.Platform != "" || h.PlatformVersion != ""
 }
 
 // DiscoverServerDefaults is the takeover aggregator used by the current init
@@ -98,14 +96,6 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 		)
 	}
 
-	defaults.ManagedRoots = appendUnique(
-		defaults.ManagedRoots,
-		detectManagedRoots(workDir)...,
-	)
-	if len(defaults.ManagedRoots) > 0 && defaults.Confidence == ConfidenceNone {
-		defaults.Confidence = ConfidenceLow
-	}
-
 	defaults.DetectedPackages = appendUnique(
 		defaults.DetectedPackages,
 		discoverPackages(workDir)...,
@@ -125,10 +115,6 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 	config, configExists, configErr := state.ReadConfig(workDir)
 	if configErr == nil && configExists && config != nil {
 		defaults.ExistingLucy.ConfigPresent = true
-		defaults.ExistingLucy.ManagedRoots = appendUnique(
-			defaults.ExistingLucy.ManagedRoots,
-			config.Scope.ManagedRoots...,
-		)
 	}
 
 	if _, lockExists, lockErr := state.ReadLock(workDir); lockErr == nil && lockExists {
@@ -143,12 +129,6 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 	}
 	if defaults.PlatformVersion == "" {
 		defaults.PlatformVersion = defaults.ExistingLucy.PlatformVersion
-	}
-	if len(defaults.ManagedRoots) == 0 {
-		defaults.ManagedRoots = appendUnique(
-			defaults.ManagedRoots,
-			defaults.ExistingLucy.ManagedRoots...,
-		)
 	}
 	if defaults.Confidence == ConfidenceNone && defaults.ExistingLucy.HasAny() {
 		defaults.Confidence = ConfidenceLow
@@ -180,10 +160,6 @@ observed types.ServerInfo,
 				defaults.Confidence,
 				ConfidenceHigh,
 			)
-			defaults.ManagedRoots = appendUnique(
-				defaults.ManagedRoots,
-				defaultManagedRootsForPlatform(string(platform))...,
-			)
 			if identity := runtimeIdentityPackage(string(platform)); identity != "" {
 				defaults.DetectedPackages = appendUnique(
 					defaults.DetectedPackages,
@@ -211,23 +187,6 @@ observed types.ServerInfo,
 		}
 	}
 
-	defaults.ManagedRoots = appendUnique(
-		defaults.ManagedRoots,
-		managedRootsFromObservedPaths(workDir, observed.ModPath)...,
-	)
-	if observed.Environments.Mcdr != nil && observed.Environments.Mcdr.Config != nil {
-		defaults.ManagedRoots = appendUnique(
-			defaults.ManagedRoots,
-			managedRootsFromObservedPaths(
-				workDir,
-				observed.Environments.Mcdr.Config.PluginDirectories,
-			)...,
-		)
-	}
-	if len(defaults.ManagedRoots) > 0 {
-		defaults.Confidence = maxConfidence(defaults.Confidence, ConfidenceHigh)
-	}
-
 	defaults.PackageClassifications = BuildTakeoverPackageClassifications(observed.Packages)
 	defaults.DetectedPackages = appendUnique(
 		defaults.DetectedPackages,
@@ -244,41 +203,6 @@ observed types.ServerInfo,
 	}
 }
 
-func managedRootsFromObservedPaths(workDir string, paths []string) []string {
-	roots := make([]string, 0, len(paths))
-	for _, candidate := range paths {
-		root := normalizeObservedRoot(workDir, candidate)
-		if root == "" {
-			continue
-		}
-		roots = append(roots, root)
-	}
-	sort.Strings(roots)
-	return uniqueStrings(roots)
-}
-
-func normalizeObservedRoot(workDir, candidate string) string {
-	candidate = strings.TrimSpace(candidate)
-	if candidate == "" {
-		return ""
-	}
-	if !filepath.IsAbs(candidate) {
-		candidate = filepath.Join(workDir, candidate)
-	}
-	rel, err := filepath.Rel(workDir, candidate)
-	if err != nil {
-		return ""
-	}
-	rel = filepath.Clean(rel)
-	if rel == "." || rel == ".." || strings.HasPrefix(
-		rel,
-		".."+string(filepath.Separator),
-	) {
-		return ""
-	}
-	return filepath.ToSlash(rel)
-}
-
 func packageCandidatesFromObserved(packages []types.Package) []string {
 	candidates := make([]string, 0, len(packages))
 	for _, pkg := range packages {
@@ -289,17 +213,6 @@ func packageCandidatesFromObserved(packages []types.Package) []string {
 	}
 	sort.Strings(candidates)
 	return uniqueStrings(candidates)
-}
-
-func defaultManagedRootsForPlatform(platform string) []string {
-	switch types.Platform(strings.TrimSpace(platform)) {
-	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
-		return []string{"mods"}
-	case types.PlatformMCDR:
-		return []string{"plugins"}
-	default:
-		return nil
-	}
 }
 
 func runtimeIdentityPackage(platform string) string {
@@ -357,9 +270,6 @@ func ApplyDiscoveredDefaults(s *InitFlowState, defaults DiscoveredDefaults) {
 	}
 	if strings.TrimSpace(s.PlatformVersion) == "" {
 		s.PlatformVersion = strings.TrimSpace(defaults.PlatformVersion)
-	}
-	if len(s.ManagedRoots) == 0 {
-		s.ManagedRoots = append([]string(nil), defaults.ManagedRoots...)
 	}
 	if len(s.PackageClassifications) == 0 {
 		s.PackageClassifications = append(
@@ -508,18 +418,6 @@ func trimVersionFromManifestClasspath(line, marker string) string {
 	}
 	version, _, _ := strings.Cut(rest, "/")
 	return sanitizeObservedVersion(version)
-}
-
-func detectManagedRoots(workDir string) []string {
-	roots := make([]string, 0, 5)
-	for _, root := range []string{
-		"mods", "plugins", "config", "datapacks", "resourcepacks", "kubejs",
-	} {
-		if dirExists(filepath.Join(workDir, root)) {
-			roots = append(roots, root)
-		}
-	}
-	return roots
 }
 
 func discoverPackages(workDir string) []string {
@@ -802,12 +700,6 @@ func describeDiscovery(defaults DiscoveredDefaults) string {
 	}
 	if defaults.Platform != "" {
 		parts = append(parts, fmt.Sprintf("platform=%s", defaults.Platform))
-	}
-	if len(defaults.ManagedRoots) > 0 {
-		parts = append(
-			parts,
-			fmt.Sprintf("roots=%s", strings.Join(defaults.ManagedRoots, ",")),
-		)
 	}
 	if len(defaults.DetectedPackages) > 0 {
 		parts = append(

@@ -1,12 +1,12 @@
 // Package init defines the UX contract and state machine for the lucy init
 // command. It covers the interactive multi-step flow, the non-interactive
-// (--yes) fast path, and conflict-resolution semantics for partial .lucy/
-// directories.
+// (--yes) fast path, and conflict-resolution semantics for partial lucy.yaml /
+// lucy-lock.yaml state.
 //
 // Init is takeover-first: its optimization target is adopting an existing
 // server directory safely, not treating the directory as a mostly blank slate.
 // For takeover-class init, Lucy must aggregate current server facts before it
-// proposes desired intent. Existing .lucy files remain informative context, but
+// proposes desired intent. Existing lucy.yaml files remain informative context, but
 // they must not silently outrank newer observed reality. Persistent intent
 // changes still require explicit operator confirmation at review time.
 //
@@ -47,7 +47,7 @@ const (
 	DiscoveryFirst InitDiscoveryMode = "discovery_first"
 
 	// DiscoveryLed means discovery shapes the proposal itself: observed facts are
-	// the primary input to takeover intent, existing .lucy files are hints unless
+	// the primary input to takeover intent, existing lucy.yaml files are hints unless
 	// re-confirmed, and the review step must surface any divergence before writes.
 	DiscoveryLed InitDiscoveryMode = "discovery_led"
 )
@@ -64,7 +64,7 @@ const (
 	// before persistent desired state is written.
 	FactSourceUserConfirmed InitFactSource = "user_confirmed"
 
-	// FactSourceExistingLucy is inherited context from pre-existing .lucy files.
+	// FactSourceExistingLucy is inherited context from pre-existing lucy.yaml files.
 	// It is informative for takeover, but never silently authoritative.
 	FactSourceExistingLucy InitFactSource = "existing_lucy"
 )
@@ -72,7 +72,7 @@ const (
 // TakeoverFactPrecedence returns the contract order for takeover-class init
 // proposals. Testable rule: live observed state is primary, explicit operator
 // confirmation is the approval gate for persisting or overriding, and existing
-// .lucy state is the lowest-precedence hint layer.
+// lucy.yaml state is the lowest-precedence hint layer.
 func TakeoverFactPrecedence() []InitFactSource {
 	return []InitFactSource{
 		FactSourceObserved,
@@ -108,9 +108,8 @@ const (
 	// github, mcdr). This step is optional and may be skipped in minimal flows.
 	StepSources InitStep = "sources"
 
-	// StepManagedScope lets the user confirm or modify which root directories
-	// Lucy should manage (e.g. mods/, plugins/, config/). The default list is
-	// taken from state.ConfigDefaults().Scope.ManagedRoots.
+	// StepManagedScope is retained for compatibility with older init flow tests;
+	// current init no longer collects managed-root configuration.
 	StepManagedScope InitStep = "managed_scope"
 
 	// StepPackageClassification lets the user review the detected package graph,
@@ -134,16 +133,15 @@ var stepOrder = []InitStep{
 	StepGameVersion,
 	StepPlatform,
 	StepPlatformVersion,
-	StepManagedScope,
 	StepPackageClassification,
 	StepReview,
 	StepDone,
 }
 
-// Constants for conflict resolution when pre-existing .lucy/ files are detected.
+// Constants for conflict resolution when pre-existing lucy.yaml / lucy-lock.yaml files are detected.
 
 // ConflictMode determines how init behaves when it detects that one or more
-// .lucy/ files already exist.
+// lucy.yaml / lucy-lock.yaml files already exist.
 type ConflictMode string
 
 const (
@@ -192,21 +190,11 @@ type InitFlowState struct {
 	// can coexist with the primary runtime. Example: neoforge + fabric + sinytra + mcdr.
 	CompatiblePlatforms []string
 
-	// ManagedRoots is the list of relative directory paths Lucy will manage.
-	// Populated from config defaults on construction; the user may edit it in
-	// StepManagedScope.
-	ManagedRoots []string
-
 	// PackageClassifications is the in-session takeover graph classification.
 	// It surfaces all discovered packages, marks whether each package is a leaf
 	// or a dependency node, and maps operator choices onto the existing manifest
 	// roles: required, transitive, or ignored.
 	PackageClassifications []TakeoverPackageClassification
-
-	// SourcePriority is the ordered list of package sources.
-	// Populated from config defaults on construction; the user may reorder in
-	// StepSources.
-	SourcePriority []string
 
 	// Confirmed is true only after the user explicitly approves the summary at
 	// StepReview. No file I/O or persistent intent mutation must occur before
@@ -217,7 +205,7 @@ type InitFlowState struct {
 	// Confirmed=true. When true, no files have been written.
 	Aborted bool
 
-	// ExistingFiles lists the .lucy/ state files that were already present on
+	// ExistingFiles lists the lucy.yaml / lucy-lock.yaml state files that were already present on
 	// disk when NewInitFlowState was called.
 	ExistingFiles []string
 
@@ -232,7 +220,7 @@ type InitFlowState struct {
 	// DiscoveredDefaults stores takeover inputs that init will use to propose a
 	// starting intent before any file is written. Under the takeover-first
 	// contract, these defaults should come from live observation first and only
-	// fall back to existing .lucy hints when observation is missing.
+	// fall back to existing lucy.yaml hints when observation is missing.
 	DiscoveredDefaults DiscoveredDefaults
 
 	// workDir is the project root checked during construction.
@@ -240,25 +228,20 @@ type InitFlowState struct {
 }
 
 // NewInitFlowState constructs an InitFlowState for the given working directory.
-// It probes the .lucy/ directory for pre-existing files and populates defaults
-// from state.ConfigDefaults().
+// It probes for pre-existing lucy.yaml / lucy-lock.yaml files and populates
+// takeover defaults from discovery.
 func NewInitFlowState(workDir string) *InitFlowState {
-	defaults := state.ConfigDefaults()
 	discovered := DiscoverServerDefaults(workDir)
 
 	s := &InitFlowState{
 		OptimizationGoal:   OptimizationGoalTakeoverExistingServer,
 		DiscoveryMode:      DiscoveryLed,
 		CurrentStep:        StepWelcome,
-		SourcePriority:     defaults.Sources.Priority,
 		ConflictResolution: PreserveExisting,
 		DiscoveredDefaults: discovered,
 		workDir:            workDir,
 	}
 	ApplyDiscoveredDefaults(s, discovered)
-	if len(s.ManagedRoots) == 0 {
-		s.ManagedRoots = append([]string(nil), defaults.Scope.ManagedRoots...)
-	}
 
 	// Discover which target state files already exist.
 	targets := []string{
@@ -277,25 +260,11 @@ func NewInitFlowState(workDir string) *InitFlowState {
 		s.ExistingFiles,
 		string(state.ConfigFile),
 	); exists {
-		config, _, err := state.ReadConfig(workDir)
-		if err != nil {
+		if _, _, err := state.ReadConfig(workDir); err != nil {
 			s.ExistingStateConflicts = append(
 				s.ExistingStateConflicts,
 				formatExistingStateConflict(state.ConfigFile, err),
 			)
-		} else if config != nil {
-			if len(s.ManagedRoots) == 0 && len(config.Scope.ManagedRoots) > 0 {
-				s.ManagedRoots = append(
-					[]string(nil),
-					config.Scope.ManagedRoots...,
-				)
-			}
-			if len(config.Sources.Priority) > 0 {
-				s.SourcePriority = append(
-					[]string(nil),
-					config.Sources.Priority...,
-				)
-			}
 		}
 	}
 
@@ -501,9 +470,9 @@ func takeoverPackageIDAllowed(id types.PackageId) bool {
 }
 
 func resolveTakeoverDependencyTargets(
-pkg types.Package,
-classifications map[string]TakeoverPackageClassification,
-nameIndex map[string][]string,
+	pkg types.Package,
+	classifications map[string]TakeoverPackageClassification,
+	nameIndex map[string][]string,
 ) []string {
 	if pkg.Dependencies == nil {
 		return nil
@@ -564,8 +533,8 @@ func appendUniqueStrings(existing []string, values ...string) []string {
 }
 
 func applyTakeoverPackageSelections(
-s *InitFlowState,
-requiredLeafIDs, ignoredIDs []string,
+	s *InitFlowState,
+	requiredLeafIDs, ignoredIDs []string,
 ) {
 	requiredSet := make(map[string]struct{}, len(requiredLeafIDs))
 	ignoredSet := make(map[string]struct{}, len(ignoredIDs))
@@ -594,8 +563,7 @@ requiredLeafIDs, ignoredIDs []string,
 }
 
 // CanProceed reports whether enough information has been collected to write
-// valid state files. The minimum required fields are GameVersion and a
-// decision on ManagedRoots.
+// valid state files. The minimum required field is GameVersion.
 //
 // CanProceed does NOT check Confirmed; callers must also verify that before
 // performing any I/O. This preserves the takeover contract distinction between
@@ -608,9 +576,6 @@ func CanProceed(s *InitFlowState) bool {
 		s.Platform,
 		s.CompatiblePlatforms,
 	); err != nil {
-		return false
-	}
-	if len(s.ManagedRoots) == 0 {
 		return false
 	}
 	return true
@@ -635,16 +600,16 @@ type Lock = state.Lock
 // describes exactly what will be written and what will be preserved.
 type InitFlowResult struct {
 	// ConfigToWrite is the Config value that init will marshal to
-	// .lucy/config.toml. Nil means the existing file will be preserved
+	// lucy.yaml. Nil means the existing file will be preserved
 	// (ConflictResolution == PreserveExisting and the file was found).
 	ConfigToWrite *state.Config
 
 	// ManifestToWrite is the Manifest that init will marshal to
-	// .lucy/manifest.json. Nil means preserve existing.
+	// lucy.yaml. Nil means preserve existing.
 	ManifestToWrite *Manifest
 
 	// LockToWrite is the empty Lock skeleton that init scaffolds in
-	// .lucy/lock.json. Nil means preserve existing.
+	// lucy-lock.yaml. Nil means preserve existing.
 	LockToWrite *Lock
 
 	// SkippedFiles lists the state-file paths that were preserved because
@@ -696,19 +661,17 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		return !existingSet[rel]
 	}
 
-	// config.toml
+	// lucy.yaml config
 	cfgPath := string(state.ConfigFile)
 	if willWrite(cfgPath) {
 		cfg := state.ConfigDefaults()
-		cfg.Scope.ManagedRoots = s.ManagedRoots
-		cfg.Sources.Priority = s.SourcePriority
 		result.ConfigToWrite = &cfg
 		result.WrittenFiles = append(result.WrittenFiles, cfgPath)
 	} else {
 		result.SkippedFiles = append(result.SkippedFiles, cfgPath)
 	}
 
-	// manifest.json
+	// lucy.yaml manifest
 	mfPath := string(state.ManifestFile)
 	if willWrite(mfPath) {
 		mf := state.ManifestDefaults()
@@ -726,7 +689,7 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		result.SkippedFiles = append(result.SkippedFiles, mfPath)
 	}
 
-	// lock.json
+	// lucy-lock.yaml
 	lkPath := string(state.LockFile)
 	if willWrite(lkPath) {
 		lk := state.NewLock()
@@ -741,9 +704,9 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 }
 
 func populateInitLockMetadata(
-lock *state.Lock,
-s *InitFlowState,
-manifest *state.Manifest,
+	lock *state.Lock,
+	s *InitFlowState,
+	manifest *state.Manifest,
 ) {
 	if lock == nil || s == nil {
 		return
@@ -847,7 +810,7 @@ type ErrFlowIncomplete struct {
 }
 
 func (e *ErrFlowIncomplete) Error() string {
-	return "init flow is incomplete: game version and managed roots are required"
+	return "init flow is incomplete: game version is required"
 }
 
 // ErrConflict is returned when ConflictResolution == AbortOnConflict and one
@@ -858,5 +821,5 @@ type ErrConflict struct {
 }
 
 func (e *ErrConflict) Error() string {
-	return "init aborted: one or more .lucy/ files already exist (use --conflict=overwrite to replace or --conflict=preserve to keep them)"
+	return "init aborted: one or more lucy.yaml / lucy-lock.yaml files already exist (use --conflict=overwrite to replace or --conflict=preserve to keep them)"
 }

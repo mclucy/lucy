@@ -33,9 +33,8 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Description(
 					"lucy init sets up a new Lucy-managed Minecraft server environment in the\n"+
 						"current directory. It will create the following files:\n\n"+
-						"  .lucy/config.toml   – policy and source defaults\n"+
-						"  .lucy/manifest.toml – soft environment intent (game version, runtime, compatible platforms, mods)\n"+
-						"  .lucy/lock.json     – exact resolved facts (versions, hashes, paths, provenance)\n\n"+
+				"  lucy.yaml      – environment intent and policy (game version, runtime, packages)\n"+
+					"  lucy-lock.yaml – exact resolved facts (versions, hashes, paths, provenance)\n\n"+
 						"No files will be written until you confirm at the final review step.",
 				),
 			huh.NewConfirm().
@@ -210,30 +209,6 @@ func RunInteractiveInit(s *InitFlowState) error {
 		}
 		s.PlatformVersion = strings.TrimSpace(s.PlatformVersion)
 	}
-	s.CurrentStep = StepManagedScope
-
-	allRoots := []string{"mods", "plugins", "config", "datapacks", "resourcepacks"}
-	managedOpts := make([]huh.Option[string], len(allRoots))
-	for i, root := range allRoots {
-		managedOpts[i] = huh.NewOption(root, root)
-	}
-	managedRootsForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("Managed directories").
-				Description("Select which directories Lucy should track and manage.").
-				Options(managedOpts...).
-				Value(&s.ManagedRoots),
-		),
-	)
-	if err := applyAccessible(managedRootsForm).Run(); err != nil {
-		if isUserAbort(err) {
-			s.Aborted = true
-			return nil
-		}
-		return fmt.Errorf("managed scope step: %w", err)
-	}
-
 	if len(s.PackageClassifications) > 0 {
 		s.CurrentStep = StepPackageClassification
 		requiredLeafIDs := make([]string, 0, len(s.PackageClassifications))
@@ -345,9 +320,6 @@ func buildSummary(s *InitFlowState) string {
 		} else {
 			sb.WriteString("  Runtime:       (not detected)\n")
 		}
-		if len(obs.ManagedRoots) > 0 {
-			_, _ = fmt.Fprintf(&sb, "  Directories:   %s\n", strings.Join(obs.ManagedRoots, ", "))
-		}
 		if len(obs.DetectedPackages) > 0 {
 			_, _ = fmt.Fprintf(&sb, "  Packages:      %d detected\n", len(obs.DetectedPackages))
 		}
@@ -370,11 +342,6 @@ func buildSummary(s *InitFlowState) string {
 	}
 	if len(s.CompatiblePlatforms) > 0 {
 		_, _ = fmt.Fprintf(&sb, "  Compatible with: %s\n", strings.Join(s.CompatiblePlatforms, ", "))
-	}
-	if len(s.ManagedRoots) > 0 {
-		_, _ = fmt.Fprintf(&sb, "  Managed dirs:    %s\n", strings.Join(s.ManagedRoots, ", "))
-	} else {
-		sb.WriteString("  Managed dirs:    (none selected)\n")
 	}
 	_, _ = fmt.Fprintf(&sb, "  Conflict mode:   %s\n", s.ConflictResolution)
 	if len(s.ExistingFiles) > 0 {
@@ -426,9 +393,8 @@ func buildSummary(s *InitFlowState) string {
 	}
 
 	sb.WriteString("Files to create:\n")
-	sb.WriteString("  .lucy/config.toml\n")
-	sb.WriteString("  .lucy/manifest.toml\n")
-	sb.WriteString("  .lucy/lock.json\n")
+	sb.WriteString("  lucy.yaml\n")
+	sb.WriteString("  lucy-lock.yaml\n")
 
 	return sb.String()
 }
