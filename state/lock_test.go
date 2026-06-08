@@ -1,7 +1,6 @@
 package state
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -42,13 +41,13 @@ func TestLockRoundTrip(t *testing.T) {
 		},
 	}
 
-	data, err := json.Marshal(original)
+	data, err := original.Marshal()
 	if err != nil {
 		t.Fatalf("marshal failed: %v", err)
 	}
 
 	var decoded Lock
-	if err := json.Unmarshal(data, &decoded); err != nil {
+	if err := decoded.Unmarshal(data); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
@@ -179,13 +178,13 @@ func TestLockProvenanceRoundTrip(t *testing.T) {
 		},
 	}
 
-	data, err := json.Marshal(original)
+	data, err := original.Marshal()
 	if err != nil {
 		t.Fatalf("marshal failed: %v", err)
 	}
 
 	var decoded Lock
-	if err := json.Unmarshal(data, &decoded); err != nil {
+	if err := decoded.Unmarshal(data); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
@@ -215,9 +214,9 @@ func TestValidateLockIgnoresObservedOnlyFieldsAtStructBoundary(t *testing.T) {
 		t.Fatalf("expected schema-level validation only, got error: %v", err)
 	}
 
-	invalidFixture := []byte(`{"version":"v1","generated_at":"2026-04-15T12:34:56Z","manifest_fingerprint":"sha256:manifest","game_version":"1.21.1","platform":"fabric","platform_version":"0.16.10","player_count":12}`)
+	invalidFixture := []byte("version: v1\ngenerated_at: \"2026-04-15T12:34:56Z\"\nmanifest_fingerprint: sha256:manifest\ngame_version: \"1.21.1\"\nplatform: fabric\nplatform_version: \"0.16.10\"\nplayer_count: 12\n")
 	var decoded Lock
-	if err := json.Unmarshal(invalidFixture, &decoded); err != nil {
+	if err := decoded.Unmarshal(invalidFixture); err != nil {
 		t.Fatalf("unexpected unmarshal error: %v", err)
 	}
 

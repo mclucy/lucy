@@ -12,7 +12,6 @@ func TestBuildResultKeepsFuzzyManifestIntentAndExactLockSkeleton(t *testing.T) {
 	s.GameVersion = "1.21.4"
 	s.Platform = "fabric"
 	s.PlatformVersion = "0.16.10"
-	s.ManagedRoots = []string{"mods"}
 	s.PackageClassifications = []TakeoverPackageClassification{{
 		ID:      "fabric/lithium",
 		Version: ">=0.12.0 <0.13.0",

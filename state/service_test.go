@@ -14,7 +14,7 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 	dirB := t.TempDir()
 
 	cfgA := ConfigDefaults()
-	cfgA.Output.NoStyle = true
+	cfgA.Sources.Preferred = "github"
 	manifestA := ManifestDefaults()
 	manifestA.Environment.GameVersion = "1.21.1"
 	lockA := NewLock()
@@ -32,7 +32,6 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 	}
 
 	cfgB := ConfigDefaults()
-	cfgB.Output.JSON = true
 	manifestB := ManifestDefaults()
 	manifestB.Environment.GameVersion = "1.20.6"
 	lockB := NewLock()
@@ -88,7 +87,7 @@ func TestProjectStateServiceSaveThenReloadReadsConfigBack(t *testing.T) {
 	ctx := context.Background()
 	service := NewProjectStateService(t.TempDir())
 	cfg := ConfigDefaults()
-	cfg.Output.JSON = true
+	cfg.Sources.Preferred = "mcdr"
 
 	if err := service.Save(ctx, &cfg, nil, nil); err != nil {
 		t.Fatalf("save failed: %v", err)
@@ -101,11 +100,14 @@ func TestProjectStateServiceSaveThenReloadReadsConfigBack(t *testing.T) {
 	if service.Config() == nil {
 		t.Fatal("expected config after reload")
 	}
-	if !service.Config().Output.JSON {
+	if service.Config().Sources.Preferred != "mcdr" {
 		t.Fatal("expected saved config to round-trip through reload")
 	}
-	if service.Manifest() != nil || service.Lock() != nil {
-		t.Fatal("expected unrelated files to remain nil")
+	if service.Manifest() == nil {
+		t.Fatal("expected config save to materialize lucy.yaml manifest")
+	}
+	if service.Lock() != nil {
+		t.Fatal("expected lock file to remain nil")
 	}
 }
 
@@ -129,11 +131,8 @@ func TestProjectStateServiceLoadRejectsEmptyWorkDir(t *testing.T) {
 
 func TestProjectStateServiceLoadRejectsMalformedExistingFile(t *testing.T) {
 	workDir := t.TempDir()
-	stateDir := filepath.Join(workDir, ".lucy")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatalf("mkdir failed: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(workDir, string(ConfigFile)), []byte("[meta]\nformat_version = 12\n"), 0o644); err != nil {
+	malformedConfig := []byte("format_version: v1\nenvironment: {}\npackages: []\nbundles: []\nconfig:\n  sources:\n    priority:\n      - invalid\n    preferred: auto\n  upgrade:\n    mode: compatible\n")
+	if err := os.WriteFile(filepath.Join(workDir, string(ConfigFile)), malformedConfig, 0o644); err != nil {
 		t.Fatalf("write malformed config failed: %v", err)
 	}
 

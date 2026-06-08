@@ -75,7 +75,7 @@ func TestDiffResolvedObserved(t *testing.T) {
 	}
 }
 
-func TestDiffResolvedObservedDistinguishesManagedDriftFromIgnoredAndUnmanagedContent(t *testing.T) {
+func TestDiffResolvedObservedDistinguishesRuntimeDriftFromIgnoredContent(t *testing.T) {
 	lock := &Lock{
 		Packages: []LockedPackage{{
 			ID:          "fabric/a",
@@ -83,22 +83,21 @@ func TestDiffResolvedObservedDistinguishesManagedDriftFromIgnoredAndUnmanagedCon
 		}},
 	}
 
-	scope := NewManagedScope([]string{"mods", "plugins"}, []string{"world/**"})
 	diff := DiffResolvedObservedInScope(lock, []string{
 		"mods/a.jar",
 		"mods/extra.jar",
 		"mods/manual.jar",
 		"world/level.dat",
-	}, scope, []string{"mods/manual.jar"})
+	}, nil, []string{"mods/manual.jar"})
 
-	if !reflect.DeepEqual(diff.InObservedNotLock, []string{"mods/extra.jar"}) {
+	if !reflect.DeepEqual(diff.InObservedNotLock, []string{"mods/extra.jar", "world/level.dat"}) {
 		t.Fatalf("expected managed observed drift only, got %#v", diff.InObservedNotLock)
 	}
 	if !reflect.DeepEqual(diff.IgnoredObserved, []string{"mods/manual.jar"}) {
 		t.Fatalf("expected ignored/manual observed content to stay visible but separate, got %#v", diff.IgnoredObserved)
 	}
-	if !reflect.DeepEqual(diff.UnmanagedObserved, []string{"world/level.dat"}) {
-		t.Fatalf("expected unmanaged observed content to stay separate, got %#v", diff.UnmanagedObserved)
+	if len(diff.UnmanagedObserved) != 0 {
+		t.Fatalf("expected scope-less comparison to produce no unmanaged content, got %#v", diff.UnmanagedObserved)
 	}
 }
 
@@ -155,14 +154,14 @@ func TestCompareManifestLockObservedSeparatesIntentFactAndObservedLayers(t *test
 	if !reflect.DeepEqual(diff.InLockNotObserved, []string{"mods/transitive.jar"}) {
 		t.Fatalf("expected lock-vs-observed drift for managed path, got %#v", diff.InLockNotObserved)
 	}
-	if !reflect.DeepEqual(diff.InObservedNotLock, []string{"mods/extra.jar"}) {
+	if !reflect.DeepEqual(diff.InObservedNotLock, []string{"mods/extra.jar", "world/level.dat"}) {
 		t.Fatalf("expected managed observed extra, got %#v", diff.InObservedNotLock)
 	}
 	if !reflect.DeepEqual(diff.IgnoredObserved, []string{"mods/manual.jar"}) {
 		t.Fatalf("expected ignored observed content to stay separate, got %#v", diff.IgnoredObserved)
 	}
-	if !reflect.DeepEqual(diff.UnmanagedObserved, []string{"world/level.dat"}) {
-		t.Fatalf("expected unmanaged observed content to stay separate, got %#v", diff.UnmanagedObserved)
+	if len(diff.UnmanagedObserved) != 0 {
+		t.Fatalf("expected scope-less comparison to produce no unmanaged content, got %#v", diff.UnmanagedObserved)
 	}
 }
 

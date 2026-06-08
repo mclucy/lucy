@@ -155,7 +155,7 @@ func TestManifestSupportsCompatiblePlatformsAndPreservesIntent(t *testing.T) {
 	if got, want := reparsed.Environment.CompatiblePlatforms, []string{"fabric", "mcdr", "sinytra"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("round-trip environment compatible platforms mismatch: got %#v want %#v", got, want)
 	}
-	if !bytes.Contains(data, []byte(`"compatible_platforms": [`)) {
+	if !bytes.Contains(data, []byte("compatible_platforms:")) {
 		t.Fatalf("serialized manifest missing compatible_platforms: %s", data)
 	}
 }

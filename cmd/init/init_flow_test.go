@@ -50,7 +50,6 @@ func TestBuildResult_PreserveExisting(t *testing.T) {
 	s.GameVersion = "1.21.4"
 	s.Platform = "none"
 	s.ConflictResolution = PreserveExisting
-	s.ManagedRoots = []string{"mods", "plugins"}
 
 	result, err := BuildResult(s)
 	if err != nil {
@@ -78,7 +77,6 @@ func TestBuildResult_AbortOnConflict(t *testing.T) {
 	s.GameVersion = "1.21.4"
 	s.Platform = "none"
 	s.ConflictResolution = AbortOnConflict
-	s.ManagedRoots = []string{"mods", "plugins"}
 
 	_, err := BuildResult(s)
 	if err == nil {
@@ -106,7 +104,6 @@ func TestBuildResult_OverwriteAll(t *testing.T) {
 	s.GameVersion = "1.21.4"
 	s.Platform = "none"
 	s.ConflictResolution = OverwriteAll
-	s.ManagedRoots = []string{"mods", "plugins"}
 
 	result, err := BuildResult(s)
 	if err != nil {
@@ -129,7 +126,6 @@ func TestBuildResult_PersistsCompatiblePlatforms(t *testing.T) {
 	s.Platform = "neoforge"
 	s.PlatformVersion = "21.1.0"
 	s.CompatiblePlatforms = []string{"fabric", "mcdr", "sinytra"}
-	s.ManagedRoots = []string{"mods", "plugins"}
 
 	result, err := BuildResult(s)
 	if err != nil {
@@ -162,7 +158,6 @@ func TestBuildResultPreserveManifestStillPopulatesLockMetadataFromExistingManife
 	}
 
 	s := NewInitFlowState(tmpDir)
-	s.ManagedRoots = []string{"mods"}
 	s.ConflictResolution = PreserveExisting
 
 	result, err := BuildResult(s)
@@ -202,9 +197,8 @@ func TestBuildResultPreserveManifestStillPopulatesLockMetadataFromExistingManife
 
 func TestCanProceed_EmptyGameVersion(t *testing.T) {
 	s := &InitFlowState{
-		GameVersion:  "",
-		Platform:     "none",
-		ManagedRoots: []string{"mods", "plugins"},
+		GameVersion: "",
+		Platform:    "none",
 	}
 
 	if CanProceed(s) {
@@ -212,23 +206,10 @@ func TestCanProceed_EmptyGameVersion(t *testing.T) {
 	}
 }
 
-func TestCanProceed_EmptyManagedRoots(t *testing.T) {
-	s := &InitFlowState{
-		GameVersion:  "1.21.4",
-		Platform:     "none",
-		ManagedRoots: nil,
-	}
-
-	if CanProceed(s) {
-		t.Error("expected CanProceed to return false when ManagedRoots is empty")
-	}
-}
-
 func TestCanProceed_ValidState(t *testing.T) {
 	s := &InitFlowState{
-		GameVersion:  "1.21.4",
-		Platform:     "none",
-		ManagedRoots: []string{"mods", "plugins"},
+		GameVersion: "1.21.4",
+		Platform:    "none",
 	}
 
 	if !CanProceed(s) {
@@ -238,13 +219,13 @@ func TestCanProceed_ValidState(t *testing.T) {
 
 func TestCanProceed_ValidWithMultipleRoots(t *testing.T) {
 	s := &InitFlowState{
-		GameVersion:  "1.21.4",
-		Platform:     "none",
-		ManagedRoots: []string{"mods", "plugins", "config"},
+		GameVersion:         "1.21.4",
+		Platform:            "neoforge",
+		CompatiblePlatforms: []string{"fabric", "mcdr"},
 	}
 
 	if !CanProceed(s) {
-		t.Error("expected CanProceed to return true for valid state with multiple roots")
+		t.Error("expected CanProceed to return true for valid state with compatible platforms")
 	}
 }
 
@@ -281,9 +262,6 @@ func TestDiscoverServerDefaults_UsesProbeObservedTakeoverCandidates(t *testing.T
 	if defaults.PlatformVersion == "" {
 		t.Fatal("expected probe-derived platform version to be populated")
 	}
-	if !slices.Contains(defaults.ManagedRoots, "mods") {
-		t.Fatalf("expected mods managed root from probe topology, got %v", defaults.ManagedRoots)
-	}
 	if !slices.Contains(defaults.DetectedPackages, "fabric/fabric") {
 		t.Fatalf("expected runtime identity takeover candidate in detected packages, got %v", defaults.DetectedPackages)
 	}
@@ -316,7 +294,6 @@ func TestBuildSummaryShowsPrimaryAndCompatiblePlatforms(t *testing.T) {
 		Platform:            "neoforge",
 		PlatformVersion:     "21.1.0",
 		CompatiblePlatforms: []string{"fabric", "mcdr", "sinytra"},
-		ManagedRoots:        []string{"mods", "plugins"},
 		ConflictResolution:  PreserveExisting,
 	}
 
@@ -377,7 +354,6 @@ func TestBuildResultIncludesClassifiedPackagesInManifest(t *testing.T) {
 	s.GameVersion = "1.21.4"
 	s.Platform = "fabric"
 	s.PlatformVersion = "0.16.10"
-	s.ManagedRoots = []string{"mods"}
 	s.PackageClassifications = []TakeoverPackageClassification{
 		{ID: "fabric/lithium", Version: "0.12.7", Source: "modrinth", Role: state.RoleRequired, Leaf: true},
 		{ID: "fabric/fabric-api", Version: "0.119.2+1.21.5", Source: "modrinth", Role: state.RoleTransitive},
@@ -456,14 +432,12 @@ func TestBuildSummaryShowsObservedFacts(t *testing.T) {
 		GameVersion:        "1.21.4",
 		Platform:           "fabric",
 		PlatformVersion:    "0.16.10",
-		ManagedRoots:       []string{"mods"},
 		ConflictResolution: PreserveExisting,
 		DiscoveredDefaults: DiscoveredDefaults{
 			Confidence:       ConfidenceHigh,
 			GameVersion:      "1.21.4",
 			Platform:         "fabric",
 			PlatformVersion:  "0.16.10",
-			ManagedRoots:     []string{"mods"},
 			DetectedPackages: []string{"fabric/lithium", "fabric/fabric-api"},
 		},
 	}
@@ -488,9 +462,8 @@ func TestBuildSummaryShowsConflictsWhenObservedDiffersFromExistingLucy(t *testin
 		GameVersion:        "1.21.4",
 		Platform:           "fabric",
 		PlatformVersion:    "0.16.10",
-		ManagedRoots:       []string{"mods"},
 		ConflictResolution: PreserveExisting,
-		ExistingFiles:      []string{".lucy/manifest.toml"},
+		ExistingFiles:      []string{"lucy.yaml"},
 		DiscoveredDefaults: DiscoveredDefaults{
 			Confidence:      ConfidenceHigh,
 			GameVersion:     "1.21.4",
@@ -507,7 +480,7 @@ func TestBuildSummaryShowsConflictsWhenObservedDiffersFromExistingLucy(t *testin
 
 	summary := buildSummary(s)
 	if !strings.Contains(summary, "Conflicts") {
-		t.Fatalf("expected conflicts section in summary when observed differs from existing .lucy, got:\n%s", summary)
+		t.Fatalf("expected conflicts section in summary when observed differs from existing lucy.yaml, got:\n%s", summary)
 	}
 	if !strings.Contains(summary, `observed "1.21.4"`) {
 		t.Fatalf("expected game version divergence in conflicts section, got:\n%s", summary)
@@ -521,7 +494,6 @@ func TestBuildSummaryNoConflictsSectionWhenObservedMatchesExisting(t *testing.T)
 	s := &InitFlowState{
 		GameVersion:        "1.21.4",
 		Platform:           "fabric",
-		ManagedRoots:       []string{"mods"},
 		ConflictResolution: PreserveExisting,
 		DiscoveredDefaults: DiscoveredDefaults{
 			Confidence:  ConfidenceHigh,
@@ -537,6 +509,6 @@ func TestBuildSummaryNoConflictsSectionWhenObservedMatchesExisting(t *testing.T)
 
 	summary := buildSummary(s)
 	if strings.Contains(summary, "Conflicts") {
-		t.Fatalf("expected no conflicts section when observed matches existing .lucy, got:\n%s", summary)
+		t.Fatalf("expected no conflicts section when observed matches existing lucy.yaml, got:\n%s", summary)
 	}
 }

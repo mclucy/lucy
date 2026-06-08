@@ -25,15 +25,9 @@ func TestBuildInstallSyncPlanUsesExactLockClosureWithinManagedScope(t *testing.T
 		Packages: []state.LockedPackage{
 			{ID: "fabric/root", Version: "1.2.3", InstallPath: "mods/root.jar"},
 			{ID: "fabric/dependency", Version: "4.5.6", InstallPath: "mods/dependency.jar"},
-			{ID: "fabric/manual", Version: "7.8.9", InstallPath: "mods/ignored/manual.jar"},
-			{ID: "fabric/unmanaged", Version: "0.0.1", InstallPath: "world/datapacks/extra.jar"},
 		},
 	}
-	config := state.ConfigDefaults()
-	config.Scope.ManagedRoots = []string{"mods"}
-	config.Scope.UnmanagedPaths = []string{"mods/ignored/**"}
-
-	plan, err := buildInstallSyncPlan(manifest, lock, &config)
+	plan, err := buildInstallSyncPlan(manifest, lock)
 	if err != nil {
 		t.Fatalf("build install sync plan: %v", err)
 	}
@@ -72,7 +66,7 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 		},
 	}
 
-	plan, err := buildInstallSyncPlan(manifest, lock, nil)
+	plan, err := buildInstallSyncPlan(manifest, lock)
 	if err != nil {
 		t.Fatalf("build install sync plan: %v", err)
 	}

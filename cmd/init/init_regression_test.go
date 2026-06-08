@@ -16,10 +16,9 @@ import (
 func TestTakeoverWithPartialExistingLucyState_RespectsObservationPrecedence(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create partial .lucy/ state: config exists but manifest/lock are missing
+	// Create partial Lucy state: lucy.yaml exists but lucy-lock.yaml is missing
 	// This simulates a server that was previously partially initialized.
 	cfg := state.ConfigDefaults()
-	cfg.Scope.ManagedRoots = []string{"mods", "plugins", "config"}
 	if err := state.WriteConfig(tmpDir, &cfg); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -48,10 +47,11 @@ func TestTakeoverWithPartialExistingLucyState_RespectsObservationPrecedence(t *t
 		t.Errorf("expected config to be skipped, got %v", result.SkippedFiles)
 	}
 
-	// Manifest and lock should still be scaffolded since they don't exist.
-	if result.ManifestToWrite == nil {
-		t.Error("expected manifest to be scaffolded")
+	// Manifest is merged into lucy.yaml, so preserve mode keeps it with config.
+	if result.ManifestToWrite != nil {
+		t.Error("expected manifest to be preserved with existing lucy.yaml")
 	}
+	// Lock should still be scaffolded since it doesn't exist.
 	if result.LockToWrite == nil {
 		t.Error("expected lock skeleton to be scaffolded")
 	}
@@ -64,16 +64,12 @@ func TestTakeoverWithInconsistentExistingState_TracksConflicts(t *testing.T) {
 	if err := state.WriteConfig(tmpDir, &cfg); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	malformedManifest := []byte(`
-[format]
-version = "v1"
-
-[environment]
-game_version = "1.21.4"
-platform = "invalid-platform"
-
-[policy]
-managed_roots = ["mods"]
+	malformedManifest := []byte(`format_version: v1
+environment:
+  game_version: 1.21.4
+  modding_platform: invalid-platform
+packages: []
+bundles: []
 `)
 	if err := os.WriteFile(
 		filepath.Join(tmpDir, string(state.ManifestFile)),
@@ -90,7 +86,6 @@ managed_roots = ["mods"]
 
 	s.GameVersion = "1.21.4"
 	s.Platform = "none"
-	s.ManagedRoots = []string{"mods"}
 
 	_, err := BuildResult(s)
 	if err == nil {
@@ -104,7 +99,6 @@ func TestMultiPlatformSelection_NeoforgePlusFabricPlusMCDR(t *testing.T) {
 		Platform:            "neoforge",
 		PlatformVersion:     "21.1.0",
 		CompatiblePlatforms: []string{"fabric", "mcdr"},
-		ManagedRoots:        []string{"mods", "plugins"},
 	}
 
 	if err := ValidatePlatformSelection(
@@ -139,7 +133,6 @@ func TestMultiPlatformSelection_ForgePlusMCDR(t *testing.T) {
 		Platform:            "forge",
 		PlatformVersion:     "47.1.0",
 		CompatiblePlatforms: []string{"mcdr"},
-		ManagedRoots:        []string{"plugins"},
 	}
 
 	if err := ValidatePlatformSelection(
@@ -163,7 +156,6 @@ func TestFuzzyVersionIntent_PreservedInManifestAndSkeletalLockUntilResolved(t *t
 	s.GameVersion = "1.21.4"
 	s.Platform = "fabric"
 	s.PlatformVersion = "0.16.10"
-	s.ManagedRoots = []string{"mods"}
 	s.PackageClassifications = []TakeoverPackageClassification{
 		{
 			ID:      "fabric/lithium",
@@ -210,7 +202,6 @@ func TestMCDRPlatform_WordingAndModelCompatibility(t *testing.T) {
 		GameVersion:     "1.21.4",
 		Platform:        "mcdr",
 		PlatformVersion: "2.12.0",
-		ManagedRoots:    []string{"plugins"},
 	}
 
 	// MCDR is a valid platform.
@@ -243,11 +234,8 @@ func TestMCDRPlatform_WordingAndModelCompatibility(t *testing.T) {
 
 func TestMCDRPlusFabric_ValidCoexistence(t *testing.T) {
 	s := &InitFlowState{
-		GameVersion:         "1.21.4",
 		Platform:            "fabric",
-		PlatformVersion:     "0.16.10",
 		CompatiblePlatforms: []string{"mcdr"},
-		ManagedRoots:        []string{"mods", "plugins"},
 	}
 
 	if err := ValidatePlatformSelection(
@@ -263,7 +251,6 @@ func TestMixedManagedAndIgnoredContent_ClassificationsPreservedInManifest(t *tes
 	s.GameVersion = "1.21.4"
 	s.Platform = "fabric"
 	s.PlatformVersion = "0.16.10"
-	s.ManagedRoots = []string{"mods"}
 	s.PackageClassifications = []TakeoverPackageClassification{
 		{
 			ID:      "fabric/lithium",
@@ -329,7 +316,6 @@ func TestMixedManualAndManaged_OnlyManualJarsInManifestAsIgnored(t *testing.T) {
 	s.GameVersion = "1.21.4"
 	s.Platform = "fabric"
 	s.PlatformVersion = "0.16.10"
-	s.ManagedRoots = []string{"mods"}
 	s.PackageClassifications = []TakeoverPackageClassification{
 		{
 			ID:      "fabric/lithium",

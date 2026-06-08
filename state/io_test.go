@@ -10,7 +10,7 @@ import (
 
 func TestAtomicWriteReplacesFileAndLeavesNoTempFiles(t *testing.T) {
 	workDir := t.TempDir()
-	target := filepath.Join(workDir, "state.json")
+	target := filepath.Join(workDir, "state.yaml")
 
 	if err := os.WriteFile(target, []byte("old"), 0o600); err != nil {
 		t.Fatalf("seed target: %v", err)
@@ -32,13 +32,13 @@ func TestAtomicWriteReplacesFileAndLeavesNoTempFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read dir: %v", err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "state.json" {
+	if len(entries) != 1 || entries[0].Name() != "state.yaml" {
 		t.Fatalf("unexpected leftover temp files: %#v", entries)
 	}
 }
 
 func TestSafeReadMissingFileIsNotError(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "missing.toml")
+	path := filepath.Join(t.TempDir(), "missing.yaml")
 
 	data, ok, err := SafeRead(path)
 	if err != nil {
@@ -55,7 +55,7 @@ func TestSafeReadMissingFileIsNotError(t *testing.T) {
 func TestReadWriteConfigRoundTrip(t *testing.T) {
 	workDir := t.TempDir()
 	config := ConfigDefaults()
-	config.Scope.ManagedRoots = []string{"mods", "plugins", "config"}
+	config.Sources.Preferred = "curseforge"
 
 	if err := WriteConfig(workDir, &config); err != nil {
 		t.Fatalf("WriteConfig failed: %v", err)
