@@ -8,7 +8,7 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func TestBuildInstallSyncPlanUsesExactLockClosureWithinManagedScope(t *testing.T) {
+func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 	manifest := &state.Manifest{
 		FormatVersion: state.ManifestDefaults().FormatVersion,
 		Environment: state.ManifestEnvironment{

@@ -65,13 +65,13 @@ func DiffDesiredResolved(manifest *Manifest, lock *Lock) StateDiff {
 // observed paths. Observed drift is always checked against lock facts, never
 // against fuzzy manifest selectors.
 func DiffResolvedObserved(lock *Lock, observedPaths []string) StateDiff {
-	return DiffResolvedObservedInScope(lock, observedPaths, nil, nil)
+	return DiffResolvedObservedInScope(lock, observedPaths, nil)
 }
 
 // DiffResolvedObservedInScope compares exact lock install targets with observed
 // paths while separating Lucy-managed drift from ignored/manual content and
 // content outside managed sync scope.
-func DiffResolvedObservedInScope(lock *Lock, observedPaths []string, scope any, ignoredPaths []string) StateDiff {
+func DiffResolvedObservedInScope(lock *Lock, observedPaths []string, ignoredPaths []string) StateDiff {
 	diff := StateDiff{}
 
 	lockPaths := make(map[string]struct{})
@@ -165,7 +165,7 @@ func CompareManifestLockObserved(manifest *Manifest, lock *Lock, observedPaths [
 	managedLock := lockForComparison(manifest, lock)
 
 	intentDiff := DiffDesiredResolved(managedManifest, managedLock)
-	observedDiff := DiffResolvedObservedInScope(managedLock, observedPaths, nil, IgnoredInstallPaths(manifest, lock))
+	observedDiff := DiffResolvedObservedInScope(managedLock, observedPaths, IgnoredInstallPaths(manifest, lock))
 
 	return StateDiff{
 		InManifestNotLock: intentDiff.InManifestNotLock,

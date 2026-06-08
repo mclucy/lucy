@@ -38,7 +38,7 @@ type DiscoveredDefaults struct {
 	ExistingLucy           ExistingLucyHints
 }
 
-// ExistingLucyHints captures pre-existing .lucy state as advisory context.
+// ExistingLucyHints captures pre-existing Lucy state as advisory context.
 // Under takeover-first init, these hints may fill observation gaps or explain
 // drift, but they must not silently outrank live observed state.
 type ExistingLucyHints struct {
@@ -59,12 +59,12 @@ func (h ExistingLucyHints) HasAny() bool {
 // information before it proposes desired intent:
 //   - discovery-first is only about sequence: discover before asking
 //   - discovery-led is about behavior: observed facts become the primary input
-//     to the proposal, and stale .lucy files are demoted to advisory hints
+//     to the proposal, and stale state files are demoted to advisory hints
 //
 // probe.ServerInfoAt(workDir) now provides the primary observed-state layer so
 // takeover candidates come from the richer probe/runtime model first. Local
 // file/archive heuristics remain fallback-only for gaps the probe could not
-// explain. Existing .lucy state is recorded separately and only fills gaps when
+// explain. Existing state is recorded separately and only fills gaps when
 // no live observation is available.
 func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 	defaults := DiscoveredDefaults{Confidence: ConfidenceNone}
@@ -708,7 +708,7 @@ func describeDiscovery(defaults DiscoveredDefaults) string {
 		)
 	}
 	if defaults.ExistingLucy.HasAny() {
-		parts = append(parts, "existing-.lucy=advisory")
+		parts = append(parts, "existing-state=advisory")
 	}
 	if len(parts) == 0 {
 		return "No server defaults detected"

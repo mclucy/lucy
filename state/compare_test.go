@@ -88,7 +88,7 @@ func TestDiffResolvedObservedDistinguishesRuntimeDriftFromIgnoredContent(t *test
 		"mods/extra.jar",
 		"mods/manual.jar",
 		"world/level.dat",
-	}, nil, []string{"mods/manual.jar"})
+	}, []string{"mods/manual.jar"})
 
 	if !reflect.DeepEqual(diff.InObservedNotLock, []string{"mods/extra.jar", "world/level.dat"}) {
 		t.Fatalf("expected managed observed drift only, got %#v", diff.InObservedNotLock)

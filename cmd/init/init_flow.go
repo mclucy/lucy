@@ -108,10 +108,6 @@ const (
 	// github, mcdr). This step is optional and may be skipped in minimal flows.
 	StepSources InitStep = "sources"
 
-	// StepManagedScope is retained for compatibility with older init flow tests;
-	// current init no longer collects managed-root configuration.
-	StepManagedScope InitStep = "managed_scope"
-
 	// StepPackageClassification lets the user review the detected package graph,
 	// distinguish leaf packages from graph-only dependencies, and classify them
 	// into the existing manifest roles without inventing a new persistent role.
