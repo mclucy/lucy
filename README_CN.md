@@ -60,7 +60,7 @@ lucy init --yes --game-version 1.21.4
 lucy init --conflict abort
 ```
 
-创建 `.lucy/config.toml`、`.lucy/manifest.json` 和 `.lucy/lock.json`。
+在项目根目录创建 `lucy.yaml` 和 `lucy-lock.yaml`。
 
 | 参数               | 描述                                     |
 | ------------------ | ---------------------------------------- |
@@ -229,7 +229,7 @@ manifest 中接受的平台：`none`、`fabric`、`forge`、`neoforge`、`mcdr`
 
 ### 状态文件
 
-意图存放在 `.lucy/manifest.json`。解析后的精确结果（版本、哈希、安装路径、来源）存放在 `.lucy/lock.json`。配置存放在 `.lucy/config.toml`。
+意图和配置存放在 `lucy.yaml`。解析后的精确结果（版本、哈希、安装路径、来源）存放在 `lucy-lock.yaml`。
 
 ### 运行时拓扑
 

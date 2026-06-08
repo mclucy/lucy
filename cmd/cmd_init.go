@@ -20,7 +20,7 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Take over the current server into Lucy state",
 	Long: `Initialize Lucy in the current
-directory. Creates .lucy/config.toml, .lucy/manifest.toml, and .lucy/lock.json.
+directory. Creates lucy.yaml (manifest + optional config overrides) and lucy-lock.yaml (resolved graph) in the project root.
 
 Init is optimized for taking over an existing server before it behaves like a
 blank-slate scaffold. Lucy reconstructs the current reality first, then draws

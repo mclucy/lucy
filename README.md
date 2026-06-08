@@ -60,7 +60,7 @@ lucy init --yes --game-version 1.21.4
 lucy init --conflict abort
 ```
 
-Creates `.lucy/config.toml`, `.lucy/manifest.json`, and `.lucy/lock.json`.
+Creates `lucy.yaml` and `lucy-lock.yaml` in the project root.
 
 | Flag               | Description                                             |
 | ------------------ | ------------------------------------------------------- |
@@ -229,7 +229,7 @@ Data sources: `modrinth`, `curseforge`, `github`, `mcdr` (`hangar` and `spiget` 
 
 ### State Files
 
-Intent lives in `.lucy/manifest.json`. Resolved facts (versions, hashes, install paths, provenance) live in `.lucy/lock.json`. Config lives in `.lucy/config.toml`.
+Intent and config live in `lucy.yaml`. Resolved facts (versions, hashes, install paths, provenance) live in `lucy-lock.yaml`.
 
 ### Runtime Topology
 
