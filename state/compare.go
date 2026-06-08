@@ -1,6 +1,7 @@
 package state
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -64,13 +65,13 @@ func DiffDesiredResolved(manifest *Manifest, lock *Lock) StateDiff {
 // observed paths. Observed drift is always checked against lock facts, never
 // against fuzzy manifest selectors.
 func DiffResolvedObserved(lock *Lock, observedPaths []string) StateDiff {
-	return DiffResolvedObservedInScope(lock, observedPaths, NewManagedScope(nil, nil), nil)
+	return DiffResolvedObservedInScope(lock, observedPaths, nil, nil)
 }
 
 // DiffResolvedObservedInScope compares exact lock install targets with observed
 // paths while separating Lucy-managed drift from ignored/manual content and
 // content outside managed sync scope.
-func DiffResolvedObservedInScope(lock *Lock, observedPaths []string, scope ManagedScope, ignoredPaths []string) StateDiff {
+func DiffResolvedObservedInScope(lock *Lock, observedPaths []string, scope any, ignoredPaths []string) StateDiff {
 	diff := StateDiff{}
 
 	lockPaths := make(map[string]struct{})
@@ -113,10 +114,6 @@ func DiffResolvedObservedInScope(lock *Lock, observedPaths []string, scope Manag
 		}
 		if _, ok := ignored[path]; ok {
 			diff.IgnoredObserved = append(diff.IgnoredObserved, path)
-			continue
-		}
-		if !IsManaged(scope, path) {
-			diff.UnmanagedObserved = append(diff.UnmanagedObserved, path)
 			continue
 		}
 		diff.InObservedNotLock = append(diff.InObservedNotLock, path)
@@ -166,10 +163,9 @@ func IgnoredInstallPaths(manifest *Manifest, lock *Lock) []string {
 func CompareManifestLockObserved(manifest *Manifest, lock *Lock, observedPaths []string) StateDiff {
 	managedManifest := manifestForComparison(manifest)
 	managedLock := lockForComparison(manifest, lock)
-	scope := NewManagedScope(nil, nil)
 
 	intentDiff := DiffDesiredResolved(managedManifest, managedLock)
-	observedDiff := DiffResolvedObservedInScope(managedLock, observedPaths, scope, IgnoredInstallPaths(manifest, lock))
+	observedDiff := DiffResolvedObservedInScope(managedLock, observedPaths, nil, IgnoredInstallPaths(manifest, lock))
 
 	return StateDiff{
 		InManifestNotLock: intentDiff.InManifestNotLock,
@@ -179,6 +175,10 @@ func CompareManifestLockObserved(manifest *Manifest, lock *Lock, observedPaths [
 		IgnoredObserved:   observedDiff.IgnoredObserved,
 		UnmanagedObserved: observedDiff.UnmanagedObserved,
 	}
+}
+
+func normalizeRelativePath(path string) string {
+	return filepath.ToSlash(filepath.Clean(path))
 }
 
 func manifestForComparison(manifest *Manifest) *Manifest {

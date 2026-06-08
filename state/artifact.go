@@ -14,7 +14,6 @@ type ManagedArtifact struct {
 	ID            string
 	Version       string
 	InstallPath   string
-	Class         ArtifactClass
 	Side          string
 	Optional      bool
 	Embedded      bool
@@ -43,7 +42,6 @@ func LockToArtifactSet(lock *Lock) ArtifactSet {
 		return ArtifactSet{}
 	}
 
-	scope := NewManagedScope(nil, nil)
 	artifacts := ArtifactSet{
 		Packages:  make([]ManagedArtifact, 0, len(lock.Packages)),
 		Bundles:   make([]BundleArtifact, 0, len(lock.Bundles)),
@@ -51,16 +49,10 @@ func LockToArtifactSet(lock *Lock) ArtifactSet {
 	}
 
 	for _, pkg := range lock.Packages {
-		class := ClassifyPath(scope, pkg.InstallPath)
-		if pkg.Embedded {
-			class = ClassEmbedded
-		}
-
 		artifacts.Packages = append(artifacts.Packages, ManagedArtifact{
 			ID:            pkg.ID,
 			Version:       pkg.Version,
 			InstallPath:   pkg.InstallPath,
-			Class:         class,
 			Side:          pkg.Side,
 			Optional:      pkg.Optional,
 			Embedded:      pkg.Embedded,
@@ -95,7 +87,7 @@ func LockToArtifactSet(lock *Lock) ArtifactSet {
 func ManagedPackages(as ArtifactSet) []ManagedArtifact {
 	packages := make([]ManagedArtifact, 0, len(as.Packages))
 	for _, pkg := range as.Packages {
-		if pkg.Embedded || pkg.Class == ClassUnmanaged {
+		if pkg.Embedded {
 			continue
 		}
 		packages = append(packages, pkg)

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +13,7 @@ import (
 type DataSource int
 
 const (
-	// SourceLock means data was read from .lucy/lock.json.
+	// SourceLock means data was read from lucy-lock.yaml.
 	SourceLock DataSource = iota
 
 	// SourceProbe means data was obtained by probing the live server directory.
@@ -39,18 +38,18 @@ func (ds DataSource) String() string {
 // invalid the directory is probed as a fallback.
 func LoadDependencyData(workDir string, forceLive bool) (*DependencyGraph, DataSource, error) {
 	if !forceLive {
-		lockPath := filepath.Join(workDir, ".lucy", "lock.json")
+		lockPath := filepath.Join(workDir, string(state.LockFile))
 		data, err := os.ReadFile(lockPath)
 		if err == nil {
 			var lock state.Lock
-			if err := json.Unmarshal(data, &lock); err == nil {
+			if err := lock.Unmarshal(data); err == nil {
 				graph, err := BuildGraphFromLock(lock)
 				if err != nil {
 					return nil, 0, fmt.Errorf("failed to build graph from lock: %w", err)
 				}
 				return graph, SourceLock, nil
 			}
-			// Invalid lock JSON — fall through to probe.
+			// Invalid lock file — fall through to probe.
 		}
 		// Lock file missing — fall through to probe.
 	}

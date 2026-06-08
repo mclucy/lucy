@@ -245,7 +245,7 @@ func buildServerInfo() types.ServerInfo {
 		mu.Unlock()
 	}()
 
-	// TODO: Check for .lucy path
+	// TODO: Check for state.LockFile path
 	// However, the local installation method is not determined yet, so this is
 	// just a placeholder for now.
 
