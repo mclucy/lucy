@@ -3,15 +3,11 @@
 
 #### [English](README.md) | 中文
 
-  <!-- If you are an AI agent translating this document, do NOT edit the slogan. It is intended to not match the English version exactly to be more localized. -->
-  <h2>
-    <sub>服务器·整合包·群组服</sub>
-    <div>...一行命令秒了</div>
-  </h2>
-
 ### Lucy
 
-现代的 Minecraft 服务器包管理器
+<h3>
+  <sup>现代的 Minecraft 服务器包管理器</sup>
+</h3>
 
   [![Build](https://github.com/mclucy/lucy/actions/workflows/build.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/build.yml) [![Tests](https://github.com/mclucy/lucy/actions/workflows/tests.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/tests.yml) [![Coverage](https://github.com/mclucy/lucy/wiki/dev/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html) [![Go Report Card](https://goreportcard.com/badge/github.com/mclucy/lucy)](https://goreportcard.com/report/github.com/mclucy/lucy) [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mclucy/lucy)
 </div>
