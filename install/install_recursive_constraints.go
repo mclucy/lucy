@@ -78,8 +78,8 @@ func MergeConstraintGraph(inputs []ConstraintInput) (ConstraintGraph, error) {
 
 // IsSatisfied reports whether the merged requirement for id accepts version.
 func (g ConstraintGraph) IsSatisfied(
-id types.PackageId,
-version types.ResolvableVersion,
+	id types.PackageId,
+	version types.ResolvableVersion,
 ) bool {
 	entry, ok := g[id.StringPlatformName()]
 	if !ok {
@@ -92,9 +92,9 @@ version types.ResolvableVersion,
 }
 
 func mergeRequirementVariants(
-id types.PackageId,
-left []constraintVariant,
-right []constraintVariant,
+	id types.PackageId,
+	left []constraintVariant,
+	right []constraintVariant,
 ) ([]constraintVariant, error) {
 	if len(left) == 0 {
 		left = []constraintVariant{{}}
@@ -137,9 +137,25 @@ right []constraintVariant,
 	return merged, nil
 }
 
+func compareConstraintVersions(
+	left types.ResolvableVersion,
+	right types.ResolvableVersion,
+) (int, bool) {
+	if left == nil || right == nil {
+		return 0, false
+	}
+	if cmp, ok := left.Compare(right); ok {
+		return cmp, true
+	}
+	if cmp, ok := right.Compare(left); ok {
+		return -cmp, true
+	}
+	return 0, false
+}
+
 func conjunctionSatisfiable(
-id types.PackageId,
-clauses []ConstraintProvenance,
+	id types.PackageId,
+	clauses []ConstraintProvenance,
 ) (bool, *ConstraintConflictError) {
 	var eq *ConstraintProvenance
 	var lower *boundConstraint
@@ -154,7 +170,10 @@ clauses []ConstraintProvenance,
 				eq = &clause
 				continue
 			}
-			cmp, ok := eq.Constraint.Value.Compare(clause.Constraint.Value)
+			cmp, ok := compareConstraintVersions(
+				eq.Constraint.Value,
+				clause.Constraint.Value,
+			)
 			if ok && cmp != 0 {
 				return false, conflictFor(id, *eq, clause)
 			}
@@ -184,7 +203,10 @@ clauses []ConstraintProvenance,
 
 	if eq != nil {
 		for _, neq := range neqs {
-			cmp, ok := eq.Constraint.Value.Compare(neq.Constraint.Value)
+			cmp, ok := compareConstraintVersions(
+				eq.Constraint.Value,
+				neq.Constraint.Value,
+			)
 			if ok && cmp == 0 {
 				return false, conflictFor(id, *eq, neq)
 			}
@@ -202,7 +224,10 @@ clauses []ConstraintProvenance,
 	}
 
 	if lower != nil && upper != nil {
-		cmp, ok := lower.Clause.Constraint.Value.Compare(upper.Clause.Constraint.Value)
+		cmp, ok := compareConstraintVersions(
+			lower.Clause.Constraint.Value,
+			upper.Clause.Constraint.Value,
+		)
 		if ok {
 			if cmp > 0 {
 				return false, conflictFor(id, lower.Clause, upper.Clause)
@@ -217,13 +242,16 @@ clauses []ConstraintProvenance,
 }
 
 func strongerLower(
-current *boundConstraint,
-candidate boundConstraint,
+	current *boundConstraint,
+	candidate boundConstraint,
 ) *boundConstraint {
 	if current == nil {
 		return &candidate
 	}
-	cmp, ok := current.Clause.Constraint.Value.Compare(candidate.Clause.Constraint.Value)
+	cmp, ok := compareConstraintVersions(
+		current.Clause.Constraint.Value,
+		candidate.Clause.Constraint.Value,
+	)
 	if !ok {
 		return current
 	}
@@ -240,13 +268,16 @@ candidate boundConstraint,
 }
 
 func strongerUpper(
-current *boundConstraint,
-candidate boundConstraint,
+	current *boundConstraint,
+	candidate boundConstraint,
 ) *boundConstraint {
 	if current == nil {
 		return &candidate
 	}
-	cmp, ok := current.Clause.Constraint.Value.Compare(candidate.Clause.Constraint.Value)
+	cmp, ok := compareConstraintVersions(
+		current.Clause.Constraint.Value,
+		candidate.Clause.Constraint.Value,
+	)
 	if !ok {
 		return current
 	}
@@ -263,8 +294,8 @@ candidate boundConstraint,
 }
 
 func conflictFor(
-id types.PackageId,
-left, right ConstraintProvenance,
+	id types.PackageId,
+	left, right ConstraintProvenance,
 ) *ConstraintConflictError {
 	return &ConstraintConflictError{
 		PackageId: id,

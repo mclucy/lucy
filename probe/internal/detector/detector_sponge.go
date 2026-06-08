@@ -28,8 +28,8 @@ func (d *spongeDetector) Name() string {
 }
 
 func (d *spongeDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) ([]types.Package, error) {
 	for _, f := range zipReader.File {
 		if f.Name != spongePluginMetadataPath {
@@ -80,8 +80,8 @@ fileHandle *os.File,
 
 func validSpongeMetadata(metadata *externaltype.FileSpongePluginsIdentifier) bool {
 	if strings.TrimSpace(metadata.Loader.Name) == "" ||
-	strings.TrimSpace(metadata.Loader.Version) == "" ||
-	len(metadata.Plugins) == 0 {
+		strings.TrimSpace(metadata.Loader.Version) == "" ||
+		len(metadata.Plugins) == 0 {
 		return false
 	}
 
@@ -95,8 +95,8 @@ func validSpongeMetadata(metadata *externaltype.FileSpongePluginsIdentifier) boo
 }
 
 func hasConcreteSpongePluginIdentity(
-metadata *externaltype.FileSpongePluginsIdentifier,
-plugin externaltype.FileSpongePluginMetadata,
+	metadata *externaltype.FileSpongePluginsIdentifier,
+	plugin externaltype.FileSpongePluginMetadata,
 ) bool {
 	if strings.TrimSpace(plugin.ID) == "" || strings.TrimSpace(plugin.Entrypoint) == "" {
 		return false
@@ -105,9 +105,9 @@ plugin externaltype.FileSpongePluginMetadata,
 }
 
 func translateSpongePlugin(
-metadata *externaltype.FileSpongePluginsIdentifier,
-plugin externaltype.FileSpongePluginMetadata,
-localPath string,
+	metadata *externaltype.FileSpongePluginsIdentifier,
+	plugin externaltype.FileSpongePluginMetadata,
+	localPath string,
 ) (types.Package, bool) {
 	if !hasConcreteSpongePluginIdentity(metadata, plugin) {
 		return types.Package{}, false
@@ -152,8 +152,8 @@ localPath string,
 }
 
 func resolveSpongePluginVersion(
-metadata *externaltype.FileSpongePluginsIdentifier,
-plugin externaltype.FileSpongePluginMetadata,
+	metadata *externaltype.FileSpongePluginsIdentifier,
+	plugin externaltype.FileSpongePluginMetadata,
 ) string {
 	if version := strings.TrimSpace(plugin.Version); version != "" {
 		return version
@@ -162,8 +162,8 @@ plugin externaltype.FileSpongePluginMetadata,
 }
 
 func resolveSpongePluginLinks(
-metadata *externaltype.FileSpongePluginsIdentifier,
-plugin externaltype.FileSpongePluginMetadata,
+	metadata *externaltype.FileSpongePluginsIdentifier,
+	plugin externaltype.FileSpongePluginMetadata,
 ) struct {
 	Homepage string
 	Source   string
@@ -191,8 +191,8 @@ plugin externaltype.FileSpongePluginMetadata,
 }
 
 func resolveSpongePluginContributors(
-metadata *externaltype.FileSpongePluginsIdentifier,
-plugin externaltype.FileSpongePluginMetadata,
+	metadata *externaltype.FileSpongePluginsIdentifier,
+	plugin externaltype.FileSpongePluginMetadata,
 ) []struct {
 	Name        string
 	Description string
@@ -222,8 +222,8 @@ plugin externaltype.FileSpongePluginMetadata,
 }
 
 func resolveSpongePluginDependencies(
-metadata *externaltype.FileSpongePluginsIdentifier,
-plugin externaltype.FileSpongePluginMetadata,
+	metadata *externaltype.FileSpongePluginsIdentifier,
+	plugin externaltype.FileSpongePluginMetadata,
 ) []struct {
 	ID        string
 	Version   string
@@ -261,10 +261,10 @@ plugin externaltype.FileSpongePluginMetadata,
 }
 
 func translateSpongeContributors(
-contributors []struct {
-	Name        string
-	Description string
-},
+	contributors []struct {
+		Name        string
+		Description string
+	},
 ) []types.Person {
 	people := make([]types.Person, 0, len(contributors))
 	for _, contributor := range contributors {
@@ -282,11 +282,11 @@ contributors []struct {
 }
 
 func translateSpongeLinks(
-links struct {
-	Homepage string
-	Source   string
-	Issues   string
-},
+	links struct {
+		Homepage string
+		Source   string
+		Issues   string
+	},
 ) []types.Url {
 	urls := make([]types.Url, 0, 3)
 	if homepage := strings.TrimSpace(links.Homepage); homepage != "" {
@@ -311,12 +311,12 @@ links struct {
 }
 
 func translateSpongeDependencies(
-deps []struct {
-	ID        string
-	Version   string
-	LoadOrder string
-	Optional  bool
-},
+	deps []struct {
+		ID        string
+		Version   string
+		LoadOrder string
+		Optional  bool
+	},
 ) []types.Dependency {
 	translated := make([]types.Dependency, 0, len(deps))
 	for _, dep := range deps {
@@ -334,7 +334,7 @@ deps []struct {
 				Constraint: dependency.ParseRange(
 					version,
 					dependency.DialectMavenRange,
-					types.Semver,
+					types.Maven,
 				),
 				Mandatory: !dep.Optional,
 			},

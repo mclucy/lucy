@@ -87,6 +87,7 @@ type VersionScheme uint8
 
 const (
 	Semver VersionScheme = iota
+	Maven
 
 	// MinecraftSnapshot docs:
 	// https://zh.minecraft.wiki/w/%E7%89%88%E6%9C%AC%E6%A0%BC%E5%BC%8F#%E5%BF%AB%E7%85%A7%EF%BC%88Snapshot%EF%BC%89
@@ -191,7 +192,11 @@ func compareByOperator(op VersionOperator, p1, p2 ResolvableVersion) bool {
 	}
 	cmp, ok := p1.Compare(p2)
 	if !ok {
-		return false
+		reverseCmp, reverseOK := p2.Compare(p1)
+		if !reverseOK {
+			return false
+		}
+		cmp = -reverseCmp
 	}
 	switch op {
 	case OpEq:

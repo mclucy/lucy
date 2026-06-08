@@ -8,8 +8,8 @@ import (
 )
 
 func constraintInputVariants(input ConstraintInput) (
-[]constraintVariant,
-error,
+	[]constraintVariant,
+	error,
 ) {
 	expr, err := normalizeConstraintExpression(input.Dependency)
 	if err != nil {
@@ -47,8 +47,8 @@ error,
 }
 
 func normalizeConstraintExpression(dep types.Dependency) (
-types.VersionExpr,
-error,
+	types.VersionExpr,
+	error,
 ) {
 	if len(dep.Constraint) > 0 {
 		return cloneConstraintExpression(dep.Constraint), nil
@@ -83,15 +83,19 @@ error,
 }
 
 func defaultVersionScheme(id types.PackageId) types.VersionScheme {
-	if id.Platform == types.PlatformMinecraft {
+	switch id.Platform {
+	case types.PlatformMinecraft:
 		return types.MinecraftRelease
+	case types.PlatformForge, types.PlatformNeoforge:
+		return types.Maven
+	default:
+		return types.Semver
 	}
-	return types.Semver
 }
 
 func expandConstraint(clause types.VersionSubExpr) (
-[]types.VersionSubExpr,
-error,
+	[]types.VersionSubExpr,
+	error,
 ) {
 	switch clause.Operator {
 	case types.OpWeakEq:
@@ -129,8 +133,8 @@ type semverTuple interface {
 }
 
 func semverWindow(
-value types.ResolvableVersion,
-tilde bool,
+	value types.ResolvableVersion,
+	tilde bool,
 ) (types.ResolvableVersion, types.ResolvableVersion, bool) {
 	if value == nil || value.Scheme() != types.Semver {
 		return nil, nil, false

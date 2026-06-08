@@ -33,22 +33,22 @@ func parseModLoaderMavenVersionRange(interval string) [][]types.VersionSubExpr {
 	return dependency.ParseRange(
 		interval,
 		dependency.InferRangeDialect(types.PlatformForge),
-		types.Semver,
+		types.Maven,
 	)
 }
 
 func translateModLoaderPackage(
-platform types.Platform,
-localPath string,
-modID string,
-version types.BareVersion,
-deps []modLoaderDependencySpec,
-license string,
-displayName string,
-description string,
-authors string,
-displayURL string,
-issueTrackerURL string,
+	platform types.Platform,
+	localPath string,
+	modID string,
+	version types.BareVersion,
+	deps []modLoaderDependencySpec,
+	license string,
+	displayName string,
+	description string,
+	authors string,
+	displayURL string,
+	issueTrackerURL string,
 ) types.Package {
 	pkg := types.Package{
 		Id: types.PackageId{
@@ -88,8 +88,8 @@ issueTrackerURL string,
 }
 
 func translateModLoaderDependencies(
-platform types.Platform,
-deps []modLoaderDependencySpec,
+	platform types.Platform,
+	deps []modLoaderDependencySpec,
 ) []types.Dependency {
 	translated := make([]types.Dependency, 0, len(deps))
 	for _, dep := range deps {
@@ -108,7 +108,7 @@ deps []modLoaderDependencySpec,
 }
 
 func parseForgeVersionTupleFromPath(
-filePath string,
+	filePath string,
 ) (gameVersion types.BareVersion, forgeVersion types.BareVersion, ok bool) {
 	parts := strings.Split(filepath.ToSlash(filePath), "/")
 	for i := 0; i < len(parts)-1; i++ {
@@ -132,9 +132,9 @@ func hasConcreteVersion(version types.BareVersion) bool {
 }
 
 func buildForgeRuntimeInfo(
-filePath string,
-gameVersion types.BareVersion,
-forgeVersion types.BareVersion,
+	filePath string,
+	gameVersion types.BareVersion,
+	forgeVersion types.BareVersion,
 ) *ExecutableEvidence {
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
