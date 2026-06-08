@@ -6,6 +6,30 @@ import (
 	"path/filepath"
 )
 
+// StateFile identifies one persistent Lucy state file.
+type StateFile string
+
+const (
+	// ConfigFile stores policy and defaults for this project. It may include
+	// operator preferences, source or safety defaults, and command behavior
+	// settings, but it must not declare desired package roots, exact artifact
+	// hashes, download URLs, or observed runtime facts.
+	ConfigFile StateFile = "lucy.yaml"
+
+	// ManifestFile stores desired environment intent as YAML. It owns direct
+	// roots, managed-scope declarations, and other descriptive statements about
+	// what the project wants Lucy to converge toward. It must not contain
+	// lockfile-only fields such as exact transitive closures, hashes, or exact
+	// download URLs.
+	ManifestFile StateFile = "lucy.yaml"
+
+	// LockFile stores the exact resolved graph and provenance for a manifest. It
+	// owns exact versions, chosen sources, artifact identity, provenance chains,
+	// and other reproducibility data. It must not become a dump of live probe
+	// facts, user policy defaults, or procedural orchestration state.
+	LockFile StateFile = "lucy-lock.yaml"
+)
+
 // AtomicWrite writes data to path via a temp file in the same directory and
 // atomically renames it into place.
 func AtomicWrite(path string, data []byte, perm os.FileMode) (err error) {
@@ -59,21 +83,24 @@ func EnsureDir(path string) error {
 	return nil
 }
 
-// ReadConfig reads .lucy/config.toml from workDir if present.
+// ReadConfig reads the config section from lucy.yaml in workDir if present.
 func ReadConfig(workDir string) (*Config, bool, error) {
 	path := filepath.Join(workDir, string(ConfigFile))
 	data, ok, err := SafeRead(path)
 	if err != nil || !ok {
 		return nil, ok, err
 	}
-	config, err := ParseConfig(data)
+	manifest, err := ParseManifest(data)
 	if err != nil {
 		return nil, false, err
 	}
-	return config, true, nil
+	if manifest.Config == nil {
+		return nil, false, nil
+	}
+	return manifest.Config, true, nil
 }
 
-// ReadManifest reads .lucy/manifest.json from workDir if present.
+// ReadManifest reads lucy.yaml from workDir if present.
 // Manifest is the intent layer, including fuzzy versions and compatible-platform hints.
 func ReadManifest(workDir string) (*Manifest, bool, error) {
 	path := filepath.Join(workDir, string(ManifestFile))
@@ -88,7 +115,7 @@ func ReadManifest(workDir string) (*Manifest, bool, error) {
 	return manifest, true, nil
 }
 
-// ReadLock reads .lucy/lock.json from workDir if present.
+// ReadLock reads lucy-lock.yaml from workDir if present.
 // Lock is the exact fact layer for one resolved environment snapshot.
 func ReadLock(workDir string) (*Lock, bool, error) {
 	path := filepath.Join(workDir, string(LockFile))
@@ -103,42 +130,46 @@ func ReadLock(workDir string) (*Lock, bool, error) {
 	return lock, true, nil
 }
 
-// WriteConfig writes .lucy/config.toml atomically.
+// WriteConfig writes the config section in lucy.yaml atomically.
 func WriteConfig(workDir string, c *Config) error {
-	data, err := SerializeConfig(c)
+	manifest, _, err := ReadManifest(workDir)
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(workDir, ".lucy")
-	if err := EnsureDir(dir); err != nil {
+	if manifest == nil {
+		defaults := ManifestDefaults()
+		manifest = &defaults
+	}
+	manifest.Config = c
+	data, err := SerializeManifest(manifest)
+	if err != nil {
 		return err
 	}
 	return AtomicWrite(filepath.Join(workDir, string(ConfigFile)), data, 0o600)
 }
 
-// WriteManifest writes .lucy/manifest.json atomically.
+// WriteManifest writes lucy.yaml atomically.
 // It preserves fuzzy intent instead of rewriting it to exact lock facts.
 func WriteManifest(workDir string, m *Manifest) error {
-	data, err := SerializeManifest(m)
+	config, _, err := ReadConfig(workDir)
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(workDir, ".lucy")
-	if err := EnsureDir(dir); err != nil {
+	if config != nil && m != nil {
+		m.Config = config
+	}
+	data, err := SerializeManifest(m)
+	if err != nil {
 		return err
 	}
 	return AtomicWrite(filepath.Join(workDir, string(ManifestFile)), data, 0o600)
 }
 
-// WriteLock writes .lucy/lock.json atomically.
+// WriteLock writes lucy-lock.yaml atomically.
 // It persists exact resolved environment and package facts.
 func WriteLock(workDir string, l *Lock) error {
 	data, err := SerializeLock(l)
 	if err != nil {
-		return err
-	}
-	dir := filepath.Join(workDir, ".lucy")
-	if err := EnsureDir(dir); err != nil {
 		return err
 	}
 	return AtomicWrite(filepath.Join(workDir, string(LockFile)), data, 0o600)

@@ -10,7 +10,6 @@ type ErrorKind string
 
 const (
 	ErrMalformed          ErrorKind = "malformed"
-	ErrBoundaryViolation  ErrorKind = "boundary_violation"
 	ErrVersionUnsupported ErrorKind = "version_unsupported"
 	ErrIOFailure          ErrorKind = "io_failure"
 )

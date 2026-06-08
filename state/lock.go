@@ -11,7 +11,7 @@ import (
 )
 
 // Lock represents Lucy's exact resolved state snapshot.
-// It is persisted in .lucy/lock.json.
+// It is persisted in lucy-lock.yaml.
 type Lock struct {
 	Version     string `yaml:"version"`
 	GeneratedAt string `yaml:"generated_at"`

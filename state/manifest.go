@@ -1,22 +1,23 @@
 package state
 
 import (
-	"gopkg.in/yaml.v3"
 	"fmt"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/mclucy/lucy/types"
 )
 
 // Manifest stores the desired environment intent for a Lucy project.
-// It is persisted in .lucy/manifest.json.
-//
+// It is persisted in lucy.yaml.
 type Manifest struct {
 	FormatVersion string              `yaml:"format_version"`
 	Environment   ManifestEnvironment `yaml:"environment"`
 	Packages      []ManifestPackage   `yaml:"packages"`
 	Bundles       []ManifestBundle    `yaml:"bundles"`
+	Config        *Config             `yaml:"config,omitempty"`
 }
 
 type ManifestEnvironment struct {
@@ -156,6 +157,12 @@ func ValidateManifest(m Manifest) error {
 				fmt.Sprintf("bundles[%d]", i),
 				err,
 			)
+		}
+	}
+
+	if m.Config != nil {
+		if err := ValidateConfig(*m.Config); err != nil {
+			return err
 		}
 	}
 
@@ -350,9 +357,9 @@ func NormalizeManifestVersionIntent(version types.BareVersion) string {
 }
 
 func UpsertManifestRequiredIntent(
-manifest *Manifest,
-req types.PackageRequest,
-source string,
+	manifest *Manifest,
+	req types.PackageRequest,
+	source string,
 ) *Manifest {
 	if manifest == nil {
 		defaults := ManifestDefaults()
@@ -479,9 +486,9 @@ func ManifestPackagesFromClassified(classified []ClassifiedPackage) []ManifestPa
 }
 
 func UpdateManifestRolesForAdd(
-manifest *Manifest,
-requested []types.PackageRequest,
-lock *Lock,
+	manifest *Manifest,
+	requested []types.PackageRequest,
+	lock *Lock,
 ) *Manifest {
 	base := cloneManifestOrDefaults(manifest)
 	required := manifestPackagesByRole(base.Packages, RoleRequired)
@@ -521,9 +528,9 @@ lock *Lock,
 }
 
 func UpdateManifestRolesForRemove(
-manifest *Manifest,
-removed []types.PackageId,
-lock *Lock,
+	manifest *Manifest,
+	removed []types.PackageId,
+	lock *Lock,
 ) *Manifest {
 	base := cloneManifestOrDefaults(manifest)
 	required := manifestPackagesByRole(base.Packages, RoleRequired)
@@ -565,8 +572,8 @@ func cloneManifestOrDefaults(manifest *Manifest) Manifest {
 }
 
 func manifestPackagesByRole(
-packages []ManifestPackage,
-role ManifestRole,
+	packages []ManifestPackage,
+	role ManifestRole,
 ) map[string]ManifestPackage {
 	indexed := make(map[string]ManifestPackage)
 	for _, pkg := range packages {
@@ -579,8 +586,8 @@ role ManifestRole,
 }
 
 func manifestPackageByID(
-packages []ManifestPackage,
-id string,
+	packages []ManifestPackage,
+	id string,
 ) (ManifestPackage, bool) {
 	for _, pkg := range packages {
 		if pkg.ID == id {
@@ -591,9 +598,9 @@ id string,
 }
 
 func rebuildManifestPackages(
-required map[string]ManifestPackage,
-ignored map[string]ManifestPackage,
-lock *Lock,
+	required map[string]ManifestPackage,
+	ignored map[string]ManifestPackage,
+	lock *Lock,
 ) []ManifestPackage {
 	classified := make([]ClassifiedPackage, 0, len(required)+len(ignored))
 	requiredIDs := make(map[string]struct{}, len(required))
@@ -657,8 +664,8 @@ lock *Lock,
 }
 
 func lockedPackageReachableFromRequired(
-pkg LockedPackage,
-required map[string]struct{},
+	pkg LockedPackage,
+	required map[string]struct{},
 ) bool {
 	for _, step := range pkg.Provenance {
 		id := normalizeProvenanceStep(step)
@@ -729,9 +736,9 @@ func defaultManifestPackageForID(id string) ManifestPackage {
 }
 
 func resolveManifestPackageID(
-id types.PackageId,
-manifest *Manifest,
-lock *Lock,
+	id types.PackageId,
+	manifest *Manifest,
+	lock *Lock,
 ) string {
 	if id.IsIdentityPackage() {
 		id.NormalizeIdentityPackage()

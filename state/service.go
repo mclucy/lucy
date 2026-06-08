@@ -76,23 +76,20 @@ func (s *ProjectStateService) Save(ctx context.Context, cfg *Config, m *Manifest
 		return ioStateError("", "workDir", "workDir is required", nil)
 	}
 
-	if cfg != nil {
-		data, err := SerializeConfig(cfg)
+	if cfg != nil || m != nil {
+		manifest, err := mergedManifest(ctx, s.workDir, cfg, m)
 		if err != nil {
 			return err
 		}
-		if err := writeStateFile(ctx, filepath.Join(s.workDir, string(ConfigFile)), ConfigFile, data); err != nil {
-			return err
-		}
-	}
-	if m != nil {
-		data, err := SerializeManifest(m)
+		data, err := SerializeManifest(manifest)
 		if err != nil {
 			return err
 		}
 		if err := writeStateFile(ctx, filepath.Join(s.workDir, string(ManifestFile)), ManifestFile, data); err != nil {
 			return err
 		}
+		cfg = manifest.Config
+		m = manifest
 	}
 	if l != nil {
 		data, err := SerializeLock(l)
@@ -116,11 +113,11 @@ func loadConfig(ctx context.Context, workDir string) (*Config, error) {
 	if err != nil || data == nil {
 		return nil, err
 	}
-	config, err := ParseConfig(data)
+	manifest, err := ParseManifest(data)
 	if err != nil {
 		return nil, malformedStateError(ConfigFile, "document", err)
 	}
-	return config, nil
+	return manifest.Config, nil
 }
 
 func loadManifest(ctx context.Context, workDir string) (*Manifest, error) {
@@ -145,6 +142,34 @@ func loadLock(ctx context.Context, workDir string) (*Lock, error) {
 		return nil, malformedStateError(LockFile, "document", err)
 	}
 	return lock, nil
+}
+
+func mergedManifest(ctx context.Context, workDir string, cfg *Config, m *Manifest) (*Manifest, error) {
+	if m == nil {
+		existing, err := loadManifest(ctx, workDir)
+		if err != nil {
+			return nil, err
+		}
+		if existing == nil {
+			defaults := ManifestDefaults()
+			existing = &defaults
+		}
+		m = existing
+	}
+
+	if cfg == nil {
+		cfg = m.Config
+	}
+	if cfg == nil {
+		existing, err := loadConfig(ctx, workDir)
+		if err != nil {
+			return nil, err
+		}
+		cfg = existing
+	}
+	m.Config = cfg
+
+	return m, nil
 }
 
 func readStateFile(ctx context.Context, path string, file StateFile) ([]byte, error) {
