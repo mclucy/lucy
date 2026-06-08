@@ -153,7 +153,7 @@ func (f *FieldLongText) Render() string {
 
 			// Use default fold notice if FoldNotice is empty
 			if f.FoldNotice == "" {
-				f.FoldNotice = renderDim(fmt.Sprintf("full text not shown, use --long or expand the terminal"))
+				f.FoldNotice = renderDim("full text not shown, use --long or expand the terminal")
 			}
 			rendered += renderTab() + renderDim(f.FoldNotice)
 			return rendered
@@ -364,7 +364,7 @@ func (f *FieldDynamicColumnLabels) Render() string {
 		if lastAmongAll {
 			if f.ShowTotal {
 				sb.WriteString("\n")
-				if lastInRow && !f.NoTitle {
+				if !f.NoTitle {
 					sb.WriteString(renderTab())
 				}
 				sb.WriteString(
