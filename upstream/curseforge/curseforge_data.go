@@ -17,7 +17,7 @@ type searchResponse struct {
 func (s *searchResponse) ToSearchResults() types.SearchResults {
 	res := types.SearchResults{
 		Source:   types.SourceCurseForge,
-		Projects: make([]types.ProjectName, 0, len(s.Data)),
+		Projects: make([]types.PackageName, 0, len(s.Data)),
 	}
 	for _, mod := range s.Data {
 		res.Projects = append(res.Projects, syntax.ToProjectName(mod.Slug))
@@ -66,13 +66,13 @@ type rawProjectInformation struct {
 	description string
 }
 
-func (m *modResponse) ToProjectInformation() types.ProjectInformation {
+func (m *modResponse) ToProjectInformation() types.Metadata {
 	return rawProjectInformation{mod: m}.ToProjectInformation()
 }
 
-func (r rawProjectInformation) ToProjectInformation() types.ProjectInformation {
+func (r rawProjectInformation) ToProjectInformation() types.Metadata {
 	m := r.mod
-	info := types.ProjectInformation{
+	info := types.Metadata{
 		Title:                 m.Name,
 		Brief:                 m.Summary,
 		Description:           r.description,
@@ -82,39 +82,49 @@ func (r rawProjectInformation) ToProjectInformation() types.ProjectInformation {
 	}
 
 	if m.Links.WebsiteUrl != "" {
-		info.Urls = append(info.Urls, types.Url{
-			Name: "Website",
-			Type: types.UrlHome,
-			Url:  m.Links.WebsiteUrl,
-		})
+		info.Urls = append(
+			info.Urls, types.Url{
+				Name: "Website",
+				Type: types.UrlHome,
+				Url:  m.Links.WebsiteUrl,
+			},
+		)
 	}
 	if m.Links.WikiUrl != "" {
-		info.Urls = append(info.Urls, types.Url{
-			Name: "Wiki",
-			Type: types.UrlWiki,
-			Url:  m.Links.WikiUrl,
-		})
+		info.Urls = append(
+			info.Urls, types.Url{
+				Name: "Wiki",
+				Type: types.UrlWiki,
+				Url:  m.Links.WikiUrl,
+			},
+		)
 	}
 	if m.Links.IssuesUrl != "" {
-		info.Urls = append(info.Urls, types.Url{
-			Name: "Issues",
-			Type: types.UrlIssues,
-			Url:  m.Links.IssuesUrl,
-		})
+		info.Urls = append(
+			info.Urls, types.Url{
+				Name: "Issues",
+				Type: types.UrlIssues,
+				Url:  m.Links.IssuesUrl,
+			},
+		)
 	}
 	if m.Links.SourceUrl != "" {
-		info.Urls = append(info.Urls, types.Url{
-			Name: "Source",
-			Type: types.UrlSource,
-			Url:  m.Links.SourceUrl,
-		})
+		info.Urls = append(
+			info.Urls, types.Url{
+				Name: "Source",
+				Type: types.UrlSource,
+				Url:  m.Links.SourceUrl,
+			},
+		)
 	}
 
 	for _, author := range m.Authors {
-		info.Authors = append(info.Authors, types.Person{
-			Name: author.Name,
-			Url:  author.Url,
-		})
+		info.Authors = append(
+			info.Authors, types.Person{
+				Name: author.Name,
+				Url:  author.Url,
+			},
+		)
 	}
 
 	return info

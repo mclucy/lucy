@@ -23,11 +23,11 @@ var (
 )
 
 // TODO: This has a chance of causing segmentation faults
-func listVersions(slug types.ProjectName) (
-	versions []*versionResponse,
-	err error,
+func listVersions(slug types.PackageName) (
+versions []*versionResponse,
+err error,
 ) {
-	tryFetch := func(target types.ProjectName) ([]*versionResponse, error) {
+	tryFetch := func(target types.PackageName) ([]*versionResponse, error) {
 		res, err := http.Get(versionsUrl(target))
 		if err != nil {
 			return nil, err
@@ -55,8 +55,11 @@ func listVersions(slug types.ProjectName) (
 		return versions, nil
 	}
 
-	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok && canonical != string(slug) {
-		return tryFetch(types.ProjectName(canonical))
+	if canonical, ok := slugmap.Default().GetLoose(
+		types.SourceModrinth,
+		string(slug),
+	); ok && canonical != string(slug) {
+		return tryFetch(types.PackageName(canonical))
 	}
 
 	return nil, err
@@ -65,8 +68,8 @@ func listVersions(slug types.ProjectName) (
 // getVersion is named as so because a Package in lucy is equivalent to a version
 // in SourceModrinth.
 func getVersion(id types.PackageId) (
-	v *versionResponse,
-	err error,
+v *versionResponse,
+err error,
 ) {
 	versions, err := listVersions(id.Name)
 	if err != nil {
@@ -109,8 +112,8 @@ func getVersionById(id string) (v *versionResponse, err error) {
 }
 
 func versionSupportsLoader(
-	version *versionResponse,
-	loader types.Platform,
+version *versionResponse,
+loader types.Platform,
 ) bool {
 	for _, l := range version.Loaders {
 		if types.Platform(l).Satisfy(loader) {
@@ -120,9 +123,9 @@ func versionSupportsLoader(
 	return false
 }
 
-func latestVersion(slug types.ProjectName) (
-	v *versionResponse,
-	err error,
+func latestVersion(slug types.PackageName) (
+v *versionResponse,
+err error,
 ) {
 	versions, err := listVersions(slug)
 	if err != nil {
@@ -140,9 +143,9 @@ func latestVersion(slug types.ProjectName) (
 	return v, nil
 }
 
-func latestCompatibleVersion(slug types.ProjectName, platform types.Platform) (
-	v *versionResponse,
-	err error,
+func latestCompatibleVersion(slug types.PackageName, platform types.Platform) (
+v *versionResponse,
+err error,
 ) {
 	versions, err := listVersions(slug)
 	if err != nil {
@@ -160,7 +163,11 @@ func latestCompatibleVersion(slug types.ProjectName, platform types.Platform) (
 	if filterByLoader && latestReleaseVersion(versions, platform, true) == nil {
 		// No release version found; fall back to the latest pre-release (beta/alpha).
 		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
-	} else if !filterByLoader && latestReleaseVersion(versions, platform, false) == nil {
+	} else if !filterByLoader && latestReleaseVersion(
+		versions,
+		platform,
+		false,
+	) == nil {
 		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
 	}
 	return v, nil

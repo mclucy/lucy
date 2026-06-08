@@ -13,14 +13,14 @@ import (
 	"github.com/mclucy/lucy/tools"
 )
 
-// RawVersion is the version of a package. Here we expect mods and plugins
+// BareVersion is the version of a package. Here we expect mods and plugins
 // use semver (which they should). A known exception is Minecraft snapshots.
 //
 // There are several special constants for ambiguous(adaptive) versions.
-// You MUST call upstream.InferVersion() before parsing them to ComparableVersion.
-type RawVersion string
+// You MUST call upstream.InferVersion() before parsing them to ResolvableVersion.
+type BareVersion string
 
-func (v RawVersion) String() string {
+func (v BareVersion) String() string {
 	switch v {
 	case VersionAny, "":
 		return "any"
@@ -36,7 +36,7 @@ func (v RawVersion) String() string {
 	return string(v)
 }
 
-func (v RawVersion) CanInfer() bool {
+func (v BareVersion) CanInfer() bool {
 	switch v {
 	case VersionAny, VersionLatest, VersionCompatible:
 		return true
@@ -44,7 +44,7 @@ func (v RawVersion) CanInfer() bool {
 	return false
 }
 
-func (v RawVersion) IsInvalid() bool {
+func (v BareVersion) IsInvalid() bool {
 	switch v {
 	case VersionNone, VersionUnknown:
 		return true
@@ -53,20 +53,20 @@ func (v RawVersion) IsInvalid() bool {
 }
 
 var (
-	VersionAny        RawVersion = "any"
-	VersionNone       RawVersion = "none"
-	VersionUnknown    RawVersion = "unknown"
-	VersionLatest     RawVersion = "latest"
-	VersionCompatible RawVersion = "compatible"
+	VersionAny        BareVersion = "any"
+	VersionNone       BareVersion = "none"
+	VersionUnknown    BareVersion = "unknown"
+	VersionLatest     BareVersion = "latest"
+	VersionCompatible BareVersion = "compatible"
 )
 
-// ComparableVersion is an interface for comparable parsed versions.
+// ResolvableVersion is an interface for comparable parsed versions.
 //
-// A nil ComparableVersion represents an invalid or unparseable version.
+// A nil ResolvableVersion represents an invalid or unparseable version.
 //
 // In principle, you cannot compare two versions with different schemes.
 // Implementations should return false for cross-scheme comparisons.
-type ComparableVersion interface {
+type ResolvableVersion interface {
 	// Compare compares this version with v2.
 	// It returns:
 	//   - -1 if this version < v2
@@ -74,7 +74,7 @@ type ComparableVersion interface {
 	//   -  1 if this version > v2
 	// The second return value is false when the two versions are not comparable
 	// (for example, cross-scheme comparisons).
-	Compare(v2 ComparableVersion) (int, bool)
+	Compare(v2 ResolvableVersion) (int, bool)
 
 	// Validate returns whether this version has valid, non-zero components.
 	Validate() bool
@@ -107,20 +107,20 @@ const (
 // dependencies are satisfied without a separate file in the mods directory.
 type Dependency struct {
 	Id         PackageId
-	Constraint VersionConstraintExpression
+	Constraint VersionExpr
 	Mandatory  bool
 	Embedded   bool
 }
 
-type VersionConstraintExpression [][]VersionConstraint
+type VersionExpr [][]VersionSubExpr
 
-type VersionConstraint struct {
-	Value    ComparableVersion
+type VersionSubExpr struct {
+	Value    ResolvableVersion
 	Operator VersionOperator
 }
 
 // Inverse inverts the version constraint expression in-place.
-func (exps VersionConstraintExpression) Inverse() VersionConstraintExpression {
+func (exps VersionExpr) Inverse() VersionExpr {
 	for i := range exps {
 		for j := range exps[i] {
 			exps[i][j].Inverse()
@@ -130,7 +130,7 @@ func (exps VersionConstraintExpression) Inverse() VersionConstraintExpression {
 }
 
 // Inverse inverts the version constraint in-place.
-func (exp *VersionConstraint) Inverse() {
+func (exp *VersionSubExpr) Inverse() {
 	switch exp.Operator {
 	case OpEq:
 		exp.Operator = OpNeq
@@ -147,7 +147,7 @@ func (exp *VersionConstraint) Inverse() {
 	}
 }
 
-func (d Dependency) Satisfy(id PackageId, v ComparableVersion) bool {
+func (d Dependency) Satisfy(id PackageId, v ResolvableVersion) bool {
 	if (id.Platform != d.Id.Platform) || (id.Name != d.Id.Name) {
 		return false
 	}
@@ -177,7 +177,7 @@ func (d Dependency) Satisfy(id PackageId, v ComparableVersion) bool {
 
 type VersionOperator uint8
 
-type VersionComparator func(p1, p2 ComparableVersion) bool
+type VersionComparator func(p1, p2 ResolvableVersion) bool
 
 type semverTuple interface {
 	Major() uint64
@@ -185,7 +185,7 @@ type semverTuple interface {
 	Patch() uint64
 }
 
-func compareByOperator(op VersionOperator, p1, p2 ComparableVersion) bool {
+func compareByOperator(op VersionOperator, p1, p2 ResolvableVersion) bool {
 	if p1 == nil || p2 == nil {
 		return false
 	}
@@ -211,7 +211,7 @@ func compareByOperator(op VersionOperator, p1, p2 ComparableVersion) bool {
 	}
 }
 
-func compareSemverWeakEq(p1, p2 ComparableVersion) bool {
+func compareSemverWeakEq(p1, p2 ResolvableVersion) bool {
 	if p1 == nil || p2 == nil {
 		return false
 	}
@@ -229,7 +229,7 @@ func compareSemverWeakEq(p1, p2 ComparableVersion) bool {
 	return candidate.Major() == base.Major() && candidate.Minor() == base.Minor()
 }
 
-func compareSemverWeakGt(p1, p2 ComparableVersion) bool {
+func compareSemverWeakGt(p1, p2 ResolvableVersion) bool {
 	if p1 == nil || p2 == nil {
 		return false
 	}
@@ -248,7 +248,7 @@ func compareSemverWeakGt(p1, p2 ComparableVersion) bool {
 }
 
 var operatorFunctions = map[VersionOperator]VersionComparator{
-	OpEq: func(p1, p2 ComparableVersion) bool {
+	OpEq: func(p1, p2 ResolvableVersion) bool {
 		return compareByOperator(
 			OpEq,
 			p1,
@@ -256,14 +256,14 @@ var operatorFunctions = map[VersionOperator]VersionComparator{
 		)
 	},
 	OpWeakEq: compareSemverWeakEq,
-	OpNeq: func(p1, p2 ComparableVersion) bool {
+	OpNeq: func(p1, p2 ResolvableVersion) bool {
 		return compareByOperator(
 			OpNeq,
 			p1,
 			p2,
 		)
 	},
-	OpGt: func(p1, p2 ComparableVersion) bool {
+	OpGt: func(p1, p2 ResolvableVersion) bool {
 		return compareByOperator(
 			OpGt,
 			p1,
@@ -271,21 +271,21 @@ var operatorFunctions = map[VersionOperator]VersionComparator{
 		)
 	},
 	OpWeakGt: compareSemverWeakGt,
-	OpGte: func(p1, p2 ComparableVersion) bool {
+	OpGte: func(p1, p2 ResolvableVersion) bool {
 		return compareByOperator(
 			OpGte,
 			p1,
 			p2,
 		)
 	},
-	OpLt: func(p1, p2 ComparableVersion) bool {
+	OpLt: func(p1, p2 ResolvableVersion) bool {
 		return compareByOperator(
 			OpLt,
 			p1,
 			p2,
 		)
 	},
-	OpLte: func(p1, p2 ComparableVersion) bool {
+	OpLte: func(p1, p2 ResolvableVersion) bool {
 		return compareByOperator(
 			OpLte,
 			p1,

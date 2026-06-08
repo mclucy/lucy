@@ -22,7 +22,7 @@ type semverRangeOptions struct {
 // metadata docs: space-separated criteria (AND) with operators
 // >=, >, <=, <, =, ==, ^, ~ and wildcard base versions.
 // Reference: https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
-func parseMcdrSemverRange(raw string) types.VersionConstraintExpression {
+func parseMcdrSemverRange(raw string) types.VersionExpr {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardToken(raw) {
 		return nil
@@ -33,7 +33,7 @@ func parseMcdrSemverRange(raw string) types.VersionConstraintExpression {
 		return nil
 	}
 
-	andConstraints := make([]types.VersionConstraint, 0, len(tokens))
+	andConstraints := make([]types.VersionSubExpr, 0, len(tokens))
 	for _, token := range tokens {
 		constraints, ok := parseMcdrSemverCriterion(token)
 		if !ok {
@@ -45,10 +45,10 @@ func parseMcdrSemverRange(raw string) types.VersionConstraintExpression {
 	if len(andConstraints) == 0 {
 		return nil
 	}
-	return types.VersionConstraintExpression{andConstraints}
+	return types.VersionExpr{andConstraints}
 }
 
-func parseMcdrSemverCriterion(raw string) ([]types.VersionConstraint, bool) {
+func parseMcdrSemverCriterion(raw string) ([]types.VersionSubExpr, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardToken(raw) {
 		return nil, true
@@ -81,38 +81,38 @@ func parseMcdrSemverCriterion(raw string) ([]types.VersionConstraint, bool) {
 		}
 	}
 
-	lower := parseSemver(types.RawVersion(versionToken))
+	lower := parseSemver(types.BareVersion(versionToken))
 	if lower == nil {
 		return nil, false
 	}
 
 	switch operator {
 	case "", "=", "==":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpEq,
 			},
 		}, true
 	case ">":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpGt,
 			},
 		}, true
 	case ">=":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpGte,
 			},
 		}, true
 	case "<":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpLt,
 			},
 		}, true
 	case "<=":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpLte,
 			},
@@ -129,16 +129,16 @@ func parseMcdrSemverCriterion(raw string) ([]types.VersionConstraint, bool) {
 }
 
 func parseSemverRange(
-	raw string,
-	options semverRangeOptions,
-) types.VersionConstraintExpression {
+raw string,
+options semverRangeOptions,
+) types.VersionExpr {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardToken(raw) {
 		return nil
 	}
 
 	orParts := strings.Split(raw, "||")
-	result := make(types.VersionConstraintExpression, 0, len(orParts))
+	result := make(types.VersionExpr, 0, len(orParts))
 
 	for _, part := range orParts {
 		part = strings.TrimSpace(part)
@@ -160,7 +160,7 @@ func parseSemverRange(
 			continue
 		}
 
-		andConstraints := make([]types.VersionConstraint, 0, len(tokens))
+		andConstraints := make([]types.VersionSubExpr, 0, len(tokens))
 		valid := true
 		for _, token := range tokens {
 			tokenConstraints, ok := parseSemverToken(token, options)
@@ -187,26 +187,26 @@ func parseSemverRange(
 	return result
 }
 
-func parseSemverHyphenRange(raw string) []types.VersionConstraint {
+func parseSemverHyphenRange(raw string) []types.VersionSubExpr {
 	tokens := strings.SplitN(raw, " - ", 2)
 	if len(tokens) != 2 {
 		return nil
 	}
-	left := parseSemver(types.RawVersion(strings.TrimSpace(tokens[0])))
-	right := parseSemver(types.RawVersion(strings.TrimSpace(tokens[1])))
+	left := parseSemver(types.BareVersion(strings.TrimSpace(tokens[0])))
+	right := parseSemver(types.BareVersion(strings.TrimSpace(tokens[1])))
 	if left == nil || right == nil {
 		return nil
 	}
-	return []types.VersionConstraint{
+	return []types.VersionSubExpr{
 		{Value: left, Operator: types.OpGte},
 		{Value: right, Operator: types.OpLte},
 	}
 }
 
 func parseSemverToken(
-	raw string,
-	options semverRangeOptions,
-) ([]types.VersionConstraint, bool) {
+raw string,
+options semverRangeOptions,
+) ([]types.VersionSubExpr, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardToken(raw) {
 		return nil, true
@@ -215,7 +215,7 @@ func parseSemverToken(
 	// comma-separated comparators within one token are treated as AND
 	if strings.Contains(raw, ",") {
 		parts := strings.Split(raw, ",")
-		all := make([]types.VersionConstraint, 0, len(parts))
+		all := make([]types.VersionSubExpr, 0, len(parts))
 		for _, part := range parts {
 			constraints, ok := parseSemverToken(part, options)
 			if !ok {
@@ -246,18 +246,18 @@ func parseSemverToken(
 		return constraints, true
 	}
 
-	v := parseSemver(types.RawVersion(raw))
+	v := parseSemver(types.BareVersion(raw))
 	if v == nil {
 		return nil, false
 	}
-	return []types.VersionConstraint{{Value: v, Operator: types.OpEq}}, true
+	return []types.VersionSubExpr{{Value: v, Operator: types.OpEq}}, true
 }
 
 func parseSemverOperator(
-	op string,
-	versionToken string,
-	options semverRangeOptions,
-) ([]types.VersionConstraint, bool) {
+op string,
+versionToken string,
+options semverRangeOptions,
+) ([]types.VersionSubExpr, bool) {
 	if strings.ContainsAny(versionToken, "xX*") {
 		switch op {
 		case "=":
@@ -273,7 +273,7 @@ func parseSemverOperator(
 		}
 	}
 
-	lower := parseSemver(types.RawVersion(versionToken))
+	lower := parseSemver(types.BareVersion(versionToken))
 	if lower == nil && strings.ContainsAny(versionToken, "xX*") {
 		lower = parseSemverLowerBoundFromWildcard(versionToken)
 	}
@@ -283,43 +283,43 @@ func parseSemverOperator(
 
 	switch op {
 	case "==":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpEq,
 			},
 		}, true
 	case "=":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpEq,
 			},
 		}, true
 	case "!=":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpNeq,
 			},
 		}, true
 	case ">":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpGt,
 			},
 		}, true
 	case ">=":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpGte,
 			},
 		}, true
 	case "<":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpLt,
 			},
 		}, true
 	case "<=":
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{
 				Value: lower, Operator: types.OpLte,
 			},
@@ -334,9 +334,9 @@ func parseSemverOperator(
 }
 
 func parseCaretRangeFromSemver(
-	lower types.ComparableVersion,
-	mode caretMode,
-) []types.VersionConstraint {
+lower types.ResolvableVersion,
+mode caretMode,
+) []types.VersionSubExpr {
 	sv, ok := lower.(*SemverVersion)
 	if !ok {
 		return nil
@@ -346,7 +346,7 @@ func parseCaretRangeFromSemver(
 	minor := sv.Minor()
 	patch := sv.Patch()
 
-	var upper types.ComparableVersion
+	var upper types.ResolvableVersion
 	if mode == caretModeNpm {
 		if major > 0 {
 			upper = NewSemver(major+1, 0, 0)
@@ -363,16 +363,16 @@ func parseCaretRangeFromSemver(
 		return nil
 	}
 
-	return []types.VersionConstraint{
+	return []types.VersionSubExpr{
 		{Value: lower, Operator: types.OpGte},
 		{Value: upper, Operator: types.OpLt},
 	}
 }
 
 func parseTildeRangeFromSemver(
-	lower types.ComparableVersion,
-	raw string,
-) []types.VersionConstraint {
+lower types.ResolvableVersion,
+raw string,
+) []types.VersionSubExpr {
 	sv, ok := lower.(*SemverVersion)
 	if !ok {
 		return nil
@@ -381,7 +381,7 @@ func parseTildeRangeFromSemver(
 	parts := strings.Split(strings.TrimSpace(raw), ".")
 	hasMinorSpecified := len(parts) >= 2 && !isWildcardToken(parts[1])
 
-	var upper types.ComparableVersion
+	var upper types.ResolvableVersion
 	if !hasMinorSpecified {
 		upper = NewSemver(sv.Major()+1, 0, 0)
 	} else {
@@ -391,13 +391,13 @@ func parseTildeRangeFromSemver(
 		return nil
 	}
 
-	return []types.VersionConstraint{
+	return []types.VersionSubExpr{
 		{Value: lower, Operator: types.OpGte},
 		{Value: upper, Operator: types.OpLt},
 	}
 }
 
-func parseXRange(raw string) []types.VersionConstraint {
+func parseXRange(raw string) []types.VersionSubExpr {
 	raw = strings.TrimSpace(raw)
 	if isWildcardToken(raw) {
 		return nil
@@ -427,7 +427,7 @@ func parseXRange(raw string) []types.VersionConstraint {
 		if lower == nil || upper == nil {
 			return nil
 		}
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{Value: lower, Operator: types.OpGte},
 			{Value: upper, Operator: types.OpLt},
 		}
@@ -443,7 +443,7 @@ func parseXRange(raw string) []types.VersionConstraint {
 		if lower == nil || upper == nil {
 			return nil
 		}
-		return []types.VersionConstraint{
+		return []types.VersionSubExpr{
 			{Value: lower, Operator: types.OpGte},
 			{Value: upper, Operator: types.OpLt},
 		}
@@ -452,7 +452,7 @@ func parseXRange(raw string) []types.VersionConstraint {
 	return nil
 }
 
-func parseSemverLowerBoundFromWildcard(raw string) types.ComparableVersion {
+func parseSemverLowerBoundFromWildcard(raw string) types.ResolvableVersion {
 	parts := strings.Split(strings.TrimSpace(raw), ".")
 	if len(parts) == 0 {
 		return nil
@@ -468,7 +468,7 @@ func parseSemverLowerBoundFromWildcard(raw string) types.ComparableVersion {
 	if len(parts) > 3 {
 		parts = parts[:3]
 	}
-	return parseSemver(types.RawVersion(strings.Join(parts, ".")))
+	return parseSemver(types.BareVersion(strings.Join(parts, ".")))
 }
 
 func isWildcardToken(token string) bool {

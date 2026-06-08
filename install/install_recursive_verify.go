@@ -19,7 +19,10 @@ func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
 	for _, path := range tx.DownloadedArtifacts {
 		packages := probe.DetectPackages(path)
 		if len(packages) == 0 {
-			return fmt.Errorf("install: artifact verification failed for %s: unreadable or corrupt", path)
+			return fmt.Errorf(
+				"install: artifact verification failed for %s: unreadable or corrupt",
+				path,
+			)
 		}
 		allPackages = append(allPackages, packages...)
 	}
@@ -32,9 +35,9 @@ func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
 		}
 
 		verified[pkg.Id.StringPlatformName()] = CandidateNode{
-			Package:        pkg,
+			Package: pkg,
 			ProvenancePath: []string{"verified"},
-			Advisory:       false,
+			Advisory: false,
 		}
 	}
 
@@ -51,7 +54,7 @@ func normalizeVerifiedPackage(pkg *types.Package) {
 	}
 
 	if slug, ok := sm.GetLoose(src, string(pkg.Id.Name)); ok {
-		pkg.Id.Name = types.ProjectName(slug)
+		pkg.Id.Name = types.PackageName(slug)
 	}
 
 	if pkg.Dependencies == nil {
@@ -63,7 +66,7 @@ func normalizeVerifiedPackage(pkg *types.Package) {
 			continue
 		}
 		if slug, ok := sm.GetLoose(depSrc, string(dep.Id.Name)); ok {
-			pkg.Dependencies.Value[i].Id.Name = types.ProjectName(slug)
+			pkg.Dependencies.Value[i].Id.Name = types.PackageName(slug)
 		}
 	}
 }

@@ -24,11 +24,16 @@ func registerInstaller(platform types.Platform, installer platformInstaller) {
 	installers[platform] = installer
 }
 
-func Install(id types.PackageId, source types.Source, options Options) (*Result, error) {
+func Install(req types.PackageRequest, options Options) (*Result, error) {
+	// TODO(package-ref-migration): remove PackageId/source extraction once identity installers accept PackageRequest.
+	id := types.PackageId{Platform: req.Ref.Platform, Name: req.Ref.Name, Version: req.Version}
+	source := req.Source
+	_ = source
+
 	// for regular (non-identity) packages, delegate to InstallMany to unify
 	// resolver behavior with batch adds
 	if !id.IsIdentityPackage() {
-		return InstallMany([]types.PackageId{id}, source, options)
+		return InstallMany([]types.PackageRequest{req}, options)
 	}
 
 	// identity packages go through the established platform installer

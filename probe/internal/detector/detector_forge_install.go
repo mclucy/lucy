@@ -20,15 +20,21 @@ const forgeMavenArtifactBaseURL = "https://maven.minecraftforge.net/net/minecraf
 type forgeArtifactKind string
 
 const (
-	forgeArtifactServer    forgeArtifactKind = "server"
+	forgeArtifactServer forgeArtifactKind    = "server"
 	forgeArtifactUniversal forgeArtifactKind = "universal"
-	forgeArtifactShim      forgeArtifactKind = "shim"
+	forgeArtifactShim forgeArtifactKind      = "shim"
 )
 
 var forgeArtifactHashLookup = lookupForgeArtifactHash
 
 func ForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
-	forgeLib := filepath.Join(workPath, "libraries", "net", "minecraftforge", "forge")
+	forgeLib := filepath.Join(
+		workPath,
+		"libraries",
+		"net",
+		"minecraftforge",
+		"forge",
+	)
 	entries, err := os.ReadDir(forgeLib)
 	if err != nil {
 		return nil
@@ -39,7 +45,12 @@ func ForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 		if !entry.IsDir() {
 			continue
 		}
-		runtime, err := detectForgeInstallFromVersionDir(filepath.Join(forgeLib, entry.Name()))
+		runtime, err := detectForgeInstallFromVersionDir(
+			filepath.Join(
+				forgeLib,
+				entry.Name(),
+			),
+		)
 		if err != nil || runtime == nil {
 			continue
 		}
@@ -49,34 +60,58 @@ func ForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 	return runtimes
 }
 
-func detectForgeInstallFromVersionDir(versionDir string) (*ExecutableEvidence, error) {
+func detectForgeInstallFromVersionDir(versionDir string) (
+*ExecutableEvidence,
+error,
+) {
 	version := filepath.Base(versionDir)
 	match := forgeRuntimeVersionDirPattern.FindStringSubmatch(version)
 	if match == nil {
 		return nil, nil
 	}
 
-	gameVersion := types.RawVersion(match[1])
-	forgeVersion := types.RawVersion(match[2])
+	gameVersion := types.BareVersion(match[1])
+	forgeVersion := types.BareVersion(match[2])
 	candidates := []struct {
 		kind forgeArtifactKind
 		path string
 	}{
-		{forgeArtifactServer, filepath.Join(versionDir, fmt.Sprintf("forge-%s-server.jar", version))},
-		{forgeArtifactUniversal, filepath.Join(versionDir, fmt.Sprintf("forge-%s-universal.jar", version))},
-		{forgeArtifactShim, filepath.Join(versionDir, fmt.Sprintf("forge-%s-shim.jar", version))},
+		{
+			forgeArtifactServer, filepath.Join(
+			versionDir,
+			fmt.Sprintf("forge-%s-server.jar", version),
+		),
+		},
+		{
+			forgeArtifactUniversal, filepath.Join(
+			versionDir,
+			fmt.Sprintf("forge-%s-universal.jar", version),
+		),
+		},
+		{
+			forgeArtifactShim,
+			filepath.Join(versionDir, fmt.Sprintf("forge-%s-shim.jar", version)),
+		},
 	}
 
 	for _, candidate := range candidates {
 		if !fileExists(candidate.path) {
 			continue
 		}
-		verified, err := forgeArtifactHashLookup(version, candidate.kind, candidate.path)
+		verified, err := forgeArtifactHashLookup(
+			version,
+			candidate.kind,
+			candidate.path,
+		)
 		if err == nil && verified {
 			if candidate.kind == forgeArtifactShim {
 				continue
 			}
-			return buildForgeRuntimeInfo(candidate.path, gameVersion, forgeVersion), nil
+			return buildForgeRuntimeInfo(
+				candidate.path,
+				gameVersion,
+				forgeVersion,
+			), nil
 		}
 	}
 
@@ -84,21 +119,30 @@ func detectForgeInstallFromVersionDir(versionDir string) (*ExecutableEvidence, e
 		if !fileExists(candidate.path) {
 			continue
 		}
-		ok, err := verifyForgeArtifactByUnpack(candidate.path, candidate.kind, gameVersion, forgeVersion)
+		ok, err := verifyForgeArtifactByUnpack(
+			candidate.path,
+			candidate.kind,
+			gameVersion,
+			forgeVersion,
+		)
 		if err != nil || !ok {
 			continue
 		}
-		return buildForgeRuntimeInfo(candidate.path, gameVersion, forgeVersion), nil
+		return buildForgeRuntimeInfo(
+			candidate.path,
+			gameVersion,
+			forgeVersion,
+		), nil
 	}
 
 	return nil, nil
 }
 
 func verifyForgeArtifactByUnpack(
-	jarPath string,
-	kind forgeArtifactKind,
-	gameVersion types.RawVersion,
-	forgeVersion types.RawVersion,
+jarPath string,
+kind forgeArtifactKind,
+gameVersion types.BareVersion,
+forgeVersion types.BareVersion,
 ) (bool, error) {
 	file, err := os.Open(jarPath)
 	if err != nil {
@@ -123,7 +167,10 @@ func verifyForgeArtifactByUnpack(
 
 	if kind == forgeArtifactServer {
 		if compareForgeMajor(forgeVersion, 61) >= 0 {
-			shimPath := filepath.Join(filepath.Dir(jarPath), fmt.Sprintf("forge-%s-%s-shim.jar", gameVersion, forgeVersion))
+			shimPath := filepath.Join(
+				filepath.Dir(jarPath),
+				fmt.Sprintf("forge-%s-%s-shim.jar", gameVersion, forgeVersion),
+			)
 			if !fileExists(shimPath) {
 				return false, nil
 			}
@@ -168,18 +215,43 @@ func verifyForgeShimJar(jarPath string) (bool, error) {
 	return hasProperties && hasList, nil
 }
 
-func lookupForgeArtifactHash(version string, artifact forgeArtifactKind, filePath string) (bool, error) {
-	sha1URL := fmt.Sprintf("%s/%s/%s.sha1", forgeMavenArtifactBaseURL, version, filepath.Base(filePath))
-	if ok, err := verifyForgeArtifactHash(filePath, sha1URL, cache.HashSHA1); ok || err != nil {
+func lookupForgeArtifactHash(
+version string,
+artifact forgeArtifactKind,
+filePath string,
+) (bool, error) {
+	sha1URL := fmt.Sprintf(
+		"%s/%s/%s.sha1",
+		forgeMavenArtifactBaseURL,
+		version,
+		filepath.Base(filePath),
+	)
+	if ok, err := verifyForgeArtifactHash(
+		filePath,
+		sha1URL,
+		cache.HashSHA1,
+	); ok || err != nil {
 		return ok, err
 	}
 
-	sha256URL := fmt.Sprintf("%s/%s/%s.sha256", forgeMavenArtifactBaseURL, version, filepath.Base(filePath))
+	sha256URL := fmt.Sprintf(
+		"%s/%s/%s.sha256",
+		forgeMavenArtifactBaseURL,
+		version,
+		filepath.Base(filePath),
+	)
 	return verifyForgeArtifactHash(filePath, sha256URL, cache.HashSHA256)
 }
 
-func verifyForgeArtifactHash(filePath string, checksumURL string, algo cache.HashAlgorithm) (bool, error) {
-	data, err := util.CachedGetBytes(checksumURL, util.BytesRequestOptions{Kind: cache.KindMetadata, MaxBytes: 256})
+func verifyForgeArtifactHash(
+filePath string,
+checksumURL string,
+algo cache.HashAlgorithm,
+) (bool, error) {
+	data, err := util.CachedGetBytes(
+		checksumURL,
+		util.BytesRequestOptions{Kind: cache.KindMetadata, MaxBytes: 256},
+	)
 	if err != nil {
 		return false, nil
 	}
@@ -194,7 +266,10 @@ func verifyForgeArtifactHash(filePath string, checksumURL string, algo cache.Has
 	return strings.EqualFold(actual, expected), nil
 }
 
-func hashForgeArtifact(filePath string, algo cache.HashAlgorithm) (string, error) {
+func hashForgeArtifact(filePath string, algo cache.HashAlgorithm) (
+string,
+error,
+) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
@@ -207,7 +282,10 @@ func hashForgeArtifact(filePath string, algo cache.HashAlgorithm) (string, error
 		sum := sha256.Sum256(data)
 		return hex.EncodeToString(sum[:]), nil
 	default:
-		return "", fmt.Errorf("unsupported forge artifact hash algorithm: %s", algo)
+		return "", fmt.Errorf(
+			"unsupported forge artifact hash algorithm: %s",
+			algo,
+		)
 	}
 }
 

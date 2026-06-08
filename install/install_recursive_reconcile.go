@@ -38,12 +38,17 @@ func ReconcileTransaction(tx *RecursiveTransaction) (ReconcileDiff, error) {
 }
 
 func reconcileDiffKernel(
-	roots []types.PackageId,
-	installed []InstalledConstraint,
-	candidateGraph map[string]CandidateNode,
-	verifiedGraph map[string]CandidateNode,
+roots []types.PackageId,
+installed []InstalledConstraint,
+candidateGraph map[string]CandidateNode,
+verifiedGraph map[string]CandidateNode,
 ) (ReconcileDiff, error) {
-	baseInputs, err := reconcileConstraintInputs(roots, installed, candidateGraph, verifiedGraph)
+	baseInputs, err := reconcileConstraintInputs(
+		roots,
+		installed,
+		candidateGraph,
+		verifiedGraph,
+	)
 	if err != nil {
 		return ReconcileDiff{}, err
 	}
@@ -64,19 +69,28 @@ func reconcileDiffKernel(
 	return diff, nil
 }
 
-func reconcileDiff(candidateGraph map[string]CandidateNode, verifiedGraph map[string]CandidateNode) (ReconcileDiff, error) {
+func reconcileDiff(
+candidateGraph map[string]CandidateNode,
+verifiedGraph map[string]CandidateNode,
+) (ReconcileDiff, error) {
 	missing := make(map[string]types.PackageId)
 	tightened := make(map[string]ConstraintInput)
 
 	for key, verifiedNode := range verifiedGraph {
-		verifiedDeps, err := reconcileDependencyMap(verifiedNode.Package.Id.StringFull(), verifiedNode.Package.Dependencies)
+		verifiedDeps, err := reconcileDependencyMap(
+			verifiedNode.Package.Id.StringFull(),
+			verifiedNode.Package.Dependencies,
+		)
 		if err != nil {
 			return ReconcileDiff{}, err
 		}
 
 		advisoryDeps := map[string]types.Dependency{}
 		if advisoryNode, ok := candidateGraph[key]; ok {
-			advisoryDeps, err = reconcileDependencyMap(advisoryNode.Package.Id.StringFull(), advisoryNode.Package.Dependencies)
+			advisoryDeps, err = reconcileDependencyMap(
+				advisoryNode.Package.Id.StringFull(),
+				advisoryNode.Package.Dependencies,
+			)
 			if err != nil {
 				return ReconcileDiff{}, err
 			}
@@ -101,14 +115,20 @@ func reconcileDiff(candidateGraph map[string]CandidateNode, verifiedGraph map[st
 				continue
 			}
 
-			tightened[reconcileTightenedKey(verifiedNode.Package.Id.StringFull(), depKey)] = ConstraintInput{
+			tightened[reconcileTightenedKey(
+				verifiedNode.Package.Id.StringFull(),
+				depKey,
+			)] = ConstraintInput{
 				Requester:  verifiedNode.Package.Id.StringFull(),
 				Dependency: verifiedDep,
 			}
 		}
 	}
 
-	reachable, err := reconcileReachableCandidateClosure(candidateGraph, verifiedGraph)
+	reachable, err := reconcileReachableCandidateClosure(
+		candidateGraph,
+		verifiedGraph,
+	)
 	if err != nil {
 		return ReconcileDiff{}, err
 	}
@@ -117,7 +137,7 @@ func reconcileDiff(candidateGraph map[string]CandidateNode, verifiedGraph map[st
 	// upstream APIs may return platform=none/any/unknown for a package that the
 	// local detector identifies as forge/fabric/etc. A candidate keyed as
 	// "none/create" is the same artifact as a verified node keyed "forge/create".
-	verifiedByName := make(map[types.ProjectName]struct{}, len(verifiedGraph))
+	verifiedByName := make(map[types.PackageName]struct{}, len(verifiedGraph))
 	for _, vn := range verifiedGraph {
 		verifiedByName[vn.Package.Id.Name] = struct{}{}
 	}
@@ -133,7 +153,7 @@ func reconcileDiff(candidateGraph map[string]CandidateNode, verifiedGraph map[st
 		// Treat a platform-wildcard candidate as reachable if a verified node
 		// with the same name exists — they represent the same artifact.
 		p := candidateNode.Package.Id.Platform
-		if p == types.PlatformNone || p == types.PlatformAny || p.CanInfer() {
+		if p == types.PlatformNone || p == types.PlatformAny || p.IsSelector() {
 			if _, ok := verifiedByName[candidateNode.Package.Id.Name]; ok {
 				continue
 			}
@@ -148,7 +168,10 @@ func reconcileDiff(candidateGraph map[string]CandidateNode, verifiedGraph map[st
 	}, nil
 }
 
-func reconcileValidateTightenedDiff(baseInputs []ConstraintInput, diff ReconcileDiff) error {
+func reconcileValidateTightenedDiff(
+baseInputs []ConstraintInput,
+diff ReconcileDiff,
+) error {
 	if len(diff.Tightened) == 0 {
 		return nil
 	}
@@ -163,21 +186,23 @@ func reconcileValidateTightenedDiff(baseInputs []ConstraintInput, diff Reconcile
 }
 
 func reconcileConstraintInputs(
-	roots []types.PackageId,
-	installed []InstalledConstraint,
-	candidateGraph map[string]CandidateNode,
-	verifiedGraph map[string]CandidateNode,
+roots []types.PackageId,
+installed []InstalledConstraint,
+candidateGraph map[string]CandidateNode,
+verifiedGraph map[string]CandidateNode,
 ) ([]ConstraintInput, error) {
 	inputs := make([]ConstraintInput, 0)
 
 	for _, root := range roots {
-		inputs = append(inputs, ConstraintInput{
-			Requester: "root",
-			Dependency: types.Dependency{
-				Id:        root,
-				Mandatory: true,
+		inputs = append(
+			inputs, ConstraintInput{
+				Requester: "root",
+				Dependency: types.Dependency{
+					Id:        root,
+					Mandatory: true,
+				},
 			},
-		})
+		)
 	}
 
 	for _, installed := range installed {
@@ -207,7 +232,10 @@ func reconcileConstraintInputs(
 			continue
 		}
 
-		deps, err := reconcileDependencyMap(node.Package.Id.StringFull(), node.Package.Dependencies)
+		deps, err := reconcileDependencyMap(
+			node.Package.Id.StringFull(),
+			node.Package.Dependencies,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -219,17 +247,22 @@ func reconcileConstraintInputs(
 		slices.Sort(depKeys)
 
 		for _, depKey := range depKeys {
-			inputs = append(inputs, ConstraintInput{
-				Requester:  node.Package.Id.StringFull(),
-				Dependency: deps[depKey],
-			})
+			inputs = append(
+				inputs, ConstraintInput{
+					Requester:  node.Package.Id.StringFull(),
+					Dependency: deps[depKey],
+				},
+			)
 		}
 	}
 
 	return inputs, nil
 }
 
-func reconcileDependencyMap(requester string, deps *types.PackageDependencies) (map[string]types.Dependency, error) {
+func reconcileDependencyMap(
+requester string,
+deps *types.PackageDependencies,
+) (map[string]types.Dependency, error) {
 	if deps == nil || len(deps.Value) == 0 {
 		return map[string]types.Dependency{}, nil
 	}
@@ -241,7 +274,10 @@ func reconcileDependencyMap(requester string, deps *types.PackageDependencies) (
 		key := dep.Id.StringPlatformName()
 		mandatory[key] = mandatory[key] || dep.Mandatory
 		embedded[key] = embedded[key] || dep.Embedded
-		inputs = append(inputs, ConstraintInput{Requester: requester, Dependency: dep})
+		inputs = append(
+			inputs,
+			ConstraintInput{Requester: requester, Dependency: dep},
+		)
 	}
 
 	graph, err := MergeConstraintGraph(inputs)
@@ -266,8 +302,8 @@ func reconcileDependencyMap(requester string, deps *types.PackageDependencies) (
 }
 
 func reconcileReachableCandidateClosure(
-	candidateGraph map[string]CandidateNode,
-	verifiedGraph map[string]CandidateNode,
+candidateGraph map[string]CandidateNode,
+verifiedGraph map[string]CandidateNode,
 ) (map[string]struct{}, error) {
 	reachable := make(map[string]struct{}, len(verifiedGraph))
 	queue := make([]string, 0, len(verifiedGraph))
@@ -289,7 +325,10 @@ func reconcileReachableCandidateClosure(
 			continue
 		}
 
-		deps, err := reconcileDependencyMap(node.Package.Id.StringFull(), node.Package.Dependencies)
+		deps, err := reconcileDependencyMap(
+			node.Package.Id.StringFull(),
+			node.Package.Dependencies,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -328,10 +367,12 @@ func reconcileConstraintTightened(advisory, verified types.Dependency) bool {
 		return false
 	}
 
-	merged, err := MergeConstraintGraph([]ConstraintInput{
-		{Requester: "advisory", Dependency: advisory},
-		{Requester: "verified", Dependency: verified},
-	})
+	merged, err := MergeConstraintGraph(
+		[]ConstraintInput{
+			{Requester: "advisory", Dependency: advisory},
+			{Requester: "verified", Dependency: verified},
+		},
+	)
 	if err != nil {
 		return true
 	}
@@ -350,15 +391,17 @@ func reconcileSortedPackageIDs(items map[string]types.PackageId) []types.Package
 		result = append(result, id)
 	}
 
-	slices.SortFunc(result, func(a, b types.PackageId) int {
-		if a.Platform != b.Platform {
-			return strings.Compare(a.Platform.String(), b.Platform.String())
-		}
-		if a.Name != b.Name {
-			return strings.Compare(a.Name.String(), b.Name.String())
-		}
-		return strings.Compare(a.Version.String(), b.Version.String())
-	})
+	slices.SortFunc(
+		result, func(a, b types.PackageId) int {
+			if a.Platform != b.Platform {
+				return strings.Compare(a.Platform.String(), b.Platform.String())
+			}
+			if a.Name != b.Name {
+				return strings.Compare(a.Name.String(), b.Name.String())
+			}
+			return strings.Compare(a.Version.String(), b.Version.String())
+		},
+	)
 
 	return result
 }
@@ -369,21 +412,29 @@ func reconcileSortedConstraintInputs(items map[string]ConstraintInput) []Constra
 		result = append(result, input)
 	}
 
-	slices.SortFunc(result, func(a, b ConstraintInput) int {
-		if a.Requester != b.Requester {
-			return strings.Compare(a.Requester, b.Requester)
-		}
-		if a.Dependency.Id.Platform != b.Dependency.Id.Platform {
-			return strings.Compare(a.Dependency.Id.Platform.String(), b.Dependency.Id.Platform.String())
-		}
-		if a.Dependency.Id.Name != b.Dependency.Id.Name {
-			return strings.Compare(a.Dependency.Id.Name.String(), b.Dependency.Id.Name.String())
-		}
-		return strings.Compare(
-			reconcileConstraintExpressionKey(a.Dependency.Constraint),
-			reconcileConstraintExpressionKey(b.Dependency.Constraint),
-		)
-	})
+	slices.SortFunc(
+		result, func(a, b ConstraintInput) int {
+			if a.Requester != b.Requester {
+				return strings.Compare(a.Requester, b.Requester)
+			}
+			if a.Dependency.Id.Platform != b.Dependency.Id.Platform {
+				return strings.Compare(
+					a.Dependency.Id.Platform.String(),
+					b.Dependency.Id.Platform.String(),
+				)
+			}
+			if a.Dependency.Id.Name != b.Dependency.Id.Name {
+				return strings.Compare(
+					a.Dependency.Id.Name.String(),
+					b.Dependency.Id.Name.String(),
+				)
+			}
+			return strings.Compare(
+				reconcileConstraintExpressionKey(a.Dependency.Constraint),
+				reconcileConstraintExpressionKey(b.Dependency.Constraint),
+			)
+		},
+	)
 
 	return result
 }
@@ -392,7 +443,7 @@ func reconcileTightenedKey(requester, depKey string) string {
 	return requester + "->" + depKey
 }
 
-func reconcileConstraintExpressionKey(expr types.VersionConstraintExpression) string {
+func reconcileConstraintExpressionKey(expr types.VersionExpr) string {
 	if len(expr) == 0 {
 		return "any"
 	}

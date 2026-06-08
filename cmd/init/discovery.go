@@ -76,25 +76,40 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 		if defaults.GameVersion == "" {
 			defaults.GameVersion = version
 		}
-		defaults.Confidence = maxConfidence(defaults.Confidence, ConfidenceMedium)
+		defaults.Confidence = maxConfidence(
+			defaults.Confidence,
+			ConfidenceMedium,
+		)
 	}
 
 	platform, platformVersion, platformConfidence := discoverPlatform(workDir)
 	if platform != "" && defaults.Platform == "" {
 		defaults.Platform = platform
-		defaults.Confidence = maxConfidence(defaults.Confidence, platformConfidence)
+		defaults.Confidence = maxConfidence(
+			defaults.Confidence,
+			platformConfidence,
+		)
 	}
 	if platformVersion != "" && defaults.PlatformVersion == "" {
 		defaults.PlatformVersion = platformVersion
-		defaults.Confidence = maxConfidence(defaults.Confidence, platformConfidence)
+		defaults.Confidence = maxConfidence(
+			defaults.Confidence,
+			platformConfidence,
+		)
 	}
 
-	defaults.ManagedRoots = appendUnique(defaults.ManagedRoots, detectManagedRoots(workDir)...)
+	defaults.ManagedRoots = appendUnique(
+		defaults.ManagedRoots,
+		detectManagedRoots(workDir)...,
+	)
 	if len(defaults.ManagedRoots) > 0 && defaults.Confidence == ConfidenceNone {
 		defaults.Confidence = ConfidenceLow
 	}
 
-	defaults.DetectedPackages = appendUnique(defaults.DetectedPackages, discoverPackages(workDir)...)
+	defaults.DetectedPackages = appendUnique(
+		defaults.DetectedPackages,
+		discoverPackages(workDir)...,
+	)
 	if len(defaults.DetectedPackages) > 0 && defaults.Confidence == ConfidenceNone {
 		defaults.Confidence = ConfidenceLow
 	}
@@ -110,7 +125,10 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 	config, configExists, configErr := state.ReadConfig(workDir)
 	if configErr == nil && configExists && config != nil {
 		defaults.ExistingLucy.ConfigPresent = true
-		defaults.ExistingLucy.ManagedRoots = appendUnique(defaults.ExistingLucy.ManagedRoots, config.Scope.ManagedRoots...)
+		defaults.ExistingLucy.ManagedRoots = appendUnique(
+			defaults.ExistingLucy.ManagedRoots,
+			config.Scope.ManagedRoots...,
+		)
 	}
 
 	if _, lockExists, lockErr := state.ReadLock(workDir); lockErr == nil && lockExists {
@@ -127,7 +145,10 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 		defaults.PlatformVersion = defaults.ExistingLucy.PlatformVersion
 	}
 	if len(defaults.ManagedRoots) == 0 {
-		defaults.ManagedRoots = appendUnique(defaults.ManagedRoots, defaults.ExistingLucy.ManagedRoots...)
+		defaults.ManagedRoots = appendUnique(
+			defaults.ManagedRoots,
+			defaults.ExistingLucy.ManagedRoots...,
+		)
 	}
 	if defaults.Confidence == ConfidenceNone && defaults.ExistingLucy.HasAny() {
 		defaults.Confidence = ConfidenceLow
@@ -136,7 +157,11 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 	return defaults
 }
 
-func applyObservedDefaults(defaults *DiscoveredDefaults, workDir string, observed types.ServerInfo) {
+func applyObservedDefaults(
+defaults *DiscoveredDefaults,
+workDir string,
+observed types.ServerInfo,
+) {
 	if defaults == nil {
 		return
 	}
@@ -144,39 +169,75 @@ func applyObservedDefaults(defaults *DiscoveredDefaults, workDir string, observe
 	if runtime := observed.Runtime; runtime != nil {
 		if gameVersion := sanitizeObservedVersion(runtime.GameVersion.String()); gameVersion != "" {
 			defaults.GameVersion = gameVersion
-			defaults.Confidence = maxConfidence(defaults.Confidence, ConfidenceHigh)
+			defaults.Confidence = maxConfidence(
+				defaults.Confidence,
+				ConfidenceHigh,
+			)
 		}
 		if platform := runtime.DerivedModLoader(); platform.Valid() && platform != types.PlatformMinecraft {
 			defaults.Platform = string(platform)
-			defaults.Confidence = maxConfidence(defaults.Confidence, ConfidenceHigh)
-			defaults.ManagedRoots = appendUnique(defaults.ManagedRoots, defaultManagedRootsForPlatform(string(platform))...)
+			defaults.Confidence = maxConfidence(
+				defaults.Confidence,
+				ConfidenceHigh,
+			)
+			defaults.ManagedRoots = appendUnique(
+				defaults.ManagedRoots,
+				defaultManagedRootsForPlatform(string(platform))...,
+			)
 			if identity := runtimeIdentityPackage(string(platform)); identity != "" {
-				defaults.DetectedPackages = appendUnique(defaults.DetectedPackages, identity)
+				defaults.DetectedPackages = appendUnique(
+					defaults.DetectedPackages,
+					identity,
+				)
 			}
 		}
 		if version := sanitizeObservedVersion(runtime.DerivedLoaderVersion()); version != "" {
 			defaults.PlatformVersion = version
-			defaults.Confidence = maxConfidence(defaults.Confidence, ConfidenceHigh)
+			defaults.Confidence = maxConfidence(
+				defaults.Confidence,
+				ConfidenceHigh,
+			)
 		} else if defaults.Platform != "" {
-			if version := discoverObservedLoaderVersion(workDir, types.Platform(defaults.Platform)); version != "" {
+			if version := discoverObservedLoaderVersion(
+				workDir,
+				types.Platform(defaults.Platform),
+			); version != "" {
 				defaults.PlatformVersion = version
-				defaults.Confidence = maxConfidence(defaults.Confidence, ConfidenceHigh)
+				defaults.Confidence = maxConfidence(
+					defaults.Confidence,
+					ConfidenceHigh,
+				)
 			}
 		}
 	}
 
-	defaults.ManagedRoots = appendUnique(defaults.ManagedRoots, managedRootsFromObservedPaths(workDir, observed.ModPath)...)
+	defaults.ManagedRoots = appendUnique(
+		defaults.ManagedRoots,
+		managedRootsFromObservedPaths(workDir, observed.ModPath)...,
+	)
 	if observed.Environments.Mcdr != nil && observed.Environments.Mcdr.Config != nil {
-		defaults.ManagedRoots = appendUnique(defaults.ManagedRoots, managedRootsFromObservedPaths(workDir, observed.Environments.Mcdr.Config.PluginDirectories)...)
+		defaults.ManagedRoots = appendUnique(
+			defaults.ManagedRoots,
+			managedRootsFromObservedPaths(
+				workDir,
+				observed.Environments.Mcdr.Config.PluginDirectories,
+			)...,
+		)
 	}
 	if len(defaults.ManagedRoots) > 0 {
 		defaults.Confidence = maxConfidence(defaults.Confidence, ConfidenceHigh)
 	}
 
 	defaults.PackageClassifications = BuildTakeoverPackageClassifications(observed.Packages)
-	defaults.DetectedPackages = appendUnique(defaults.DetectedPackages, packageCandidatesFromObserved(observed.Packages)...)
+	defaults.DetectedPackages = appendUnique(
+		defaults.DetectedPackages,
+		packageCandidatesFromObserved(observed.Packages)...,
+	)
 	for _, classification := range defaults.PackageClassifications {
-		defaults.DetectedPackages = appendUnique(defaults.DetectedPackages, classification.ID)
+		defaults.DetectedPackages = appendUnique(
+			defaults.DetectedPackages,
+			classification.ID,
+		)
 	}
 	if len(defaults.DetectedPackages) > 0 || len(defaults.PackageClassifications) > 0 {
 		defaults.Confidence = maxConfidence(defaults.Confidence, ConfidenceHigh)
@@ -209,7 +270,10 @@ func normalizeObservedRoot(workDir, candidate string) string {
 		return ""
 	}
 	rel = filepath.Clean(rel)
-	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if rel == "." || rel == ".." || strings.HasPrefix(
+		rel,
+		".."+string(filepath.Separator),
+	) {
 		return ""
 	}
 	return filepath.ToSlash(rel)
@@ -243,19 +307,30 @@ func runtimeIdentityPackage(platform string) string {
 	if p == types.PlatformNone || !p.Valid() {
 		return ""
 	}
-	return types.PackageId{Platform: p, Name: types.ProjectName(p.String())}.StringPlatformName()
+	return types.PackageId{
+		Platform: p, Name: types.PackageName(p.String()),
+	}.StringPlatformName()
 }
 
-func discoverObservedLoaderVersion(workDir string, platform types.Platform) string {
+func discoverObservedLoaderVersion(
+workDir string,
+platform types.Platform,
+) string {
 	entries, err := os.ReadDir(workDir)
 	if err != nil {
 		return ""
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".jar") {
+		if entry.IsDir() || !strings.HasSuffix(
+			strings.ToLower(entry.Name()),
+			".jar",
+		) {
 			continue
 		}
-		version := discoverLoaderVersion(filepath.Join(workDir, entry.Name()), platform)
+		version := discoverLoaderVersion(
+			filepath.Join(workDir, entry.Name()),
+			platform,
+		)
 		if version != "" {
 			return version
 		}
@@ -287,7 +362,10 @@ func ApplyDiscoveredDefaults(s *InitFlowState, defaults DiscoveredDefaults) {
 		s.ManagedRoots = append([]string(nil), defaults.ManagedRoots...)
 	}
 	if len(s.PackageClassifications) == 0 {
-		s.PackageClassifications = append([]TakeoverPackageClassification(nil), defaults.PackageClassifications...)
+		s.PackageClassifications = append(
+			[]TakeoverPackageClassification(nil),
+			defaults.PackageClassifications...,
+		)
 	}
 }
 
@@ -322,8 +400,18 @@ func discoverPlatform(workDir string) (string, string, DiscoveryConfidence) {
 	}
 
 	hasLibraries := dirExists(filepath.Join(workDir, "libraries"))
-	hasRunScript := fileExists(filepath.Join(workDir, "run.sh")) || fileExists(filepath.Join(workDir, "run.bat"))
-	hasMcdrConfig := fileExists(filepath.Join(workDir, "pyproject.toml")) || dirExists(filepath.Join(workDir, "mcs_config"))
+	hasRunScript := fileExists(
+		filepath.Join(
+			workDir,
+			"run.sh",
+		),
+	) || fileExists(filepath.Join(workDir, "run.bat"))
+	hasMcdrConfig := fileExists(
+		filepath.Join(
+			workDir,
+			"pyproject.toml",
+		),
+	) || dirExists(filepath.Join(workDir, "mcs_config"))
 
 	if hasMcdrConfig {
 		return string(types.PlatformMCDR), "", ConfidenceMedium
@@ -335,11 +423,20 @@ func discoverPlatform(workDir string) (string, string, DiscoveryConfidence) {
 		}
 		name := strings.ToLower(entry.Name())
 		switch {
-		case strings.HasPrefix(name, "fabric-server") && strings.HasSuffix(name, ".jar"):
+		case strings.HasPrefix(name, "fabric-server") && strings.HasSuffix(
+			name,
+			".jar",
+		):
 			return string(types.PlatformFabric), "", ConfidenceHigh
-		case strings.Contains(name, "fabric") && strings.HasSuffix(name, ".jar"):
+		case strings.Contains(name, "fabric") && strings.HasSuffix(
+			name,
+			".jar",
+		):
 			return string(types.PlatformFabric), "", ConfidenceMedium
-		case strings.Contains(name, "neoforge") && strings.HasSuffix(name, ".jar"):
+		case strings.Contains(name, "neoforge") && strings.HasSuffix(
+			name,
+			".jar",
+		):
 			return string(types.PlatformNeoforge), "", ConfidenceHigh
 		case strings.Contains(name, "forge") && strings.HasSuffix(name, ".jar"):
 			return string(types.PlatformForge), "", ConfidenceHigh
@@ -378,15 +475,24 @@ func discoverLoaderVersion(path string, platform types.Platform) string {
 		line = strings.TrimSpace(line)
 		switch platform {
 		case types.PlatformFabric:
-			if version := trimVersionFromManifestClasspath(line, "libraries/net/fabricmc/fabric-loader/"); version != "" {
+			if version := trimVersionFromManifestClasspath(
+				line,
+				"libraries/net/fabricmc/fabric-loader/",
+			); version != "" {
 				return version
 			}
 		case types.PlatformNeoforge:
-			if version := trimVersionFromManifestClasspath(line, "libraries/net/neoforged/neoforge/"); version != "" {
+			if version := trimVersionFromManifestClasspath(
+				line,
+				"libraries/net/neoforged/neoforge/",
+			); version != "" {
 				return version
 			}
 		case types.PlatformForge:
-			if version := trimVersionFromManifestClasspath(line, "libraries/net/minecraftforge/forge/"); version != "" {
+			if version := trimVersionFromManifestClasspath(
+				line,
+				"libraries/net/minecraftforge/forge/",
+			); version != "" {
 				return version
 			}
 		}
@@ -406,7 +512,9 @@ func trimVersionFromManifestClasspath(line, marker string) string {
 
 func detectManagedRoots(workDir string) []string {
 	roots := make([]string, 0, 5)
-	for _, root := range []string{"mods", "plugins", "config", "datapacks", "resourcepacks", "kubejs"} {
+	for _, root := range []string{
+		"mods", "plugins", "config", "datapacks", "resourcepacks", "kubejs",
+	} {
 		if dirExists(filepath.Join(workDir, root)) {
 			roots = append(roots, root)
 		}
@@ -437,7 +545,10 @@ func discoverPackages(workDir string) []string {
 func detectPackageIDs(path string) []string {
 	lower := strings.ToLower(path)
 	switch {
-	case strings.HasSuffix(lower, ".jar"), strings.HasSuffix(lower, ".pyz"), strings.HasSuffix(lower, ".mcdr"):
+	case strings.HasSuffix(lower, ".jar"), strings.HasSuffix(
+		lower,
+		".pyz",
+	), strings.HasSuffix(lower, ".mcdr"):
 		return detectArchivePackages(path)
 	case strings.HasSuffix(lower, ".jar.disabled"):
 		return detectArchivePackages(path)
@@ -454,33 +565,63 @@ func detectArchivePackages(path string) []string {
 	defer reader.Close()
 
 	packages := make([]string, 0)
-	if fabricMeta, ok := readArchiveFile(&reader.Reader, "fabric.mod.json"); ok {
+	if fabricMeta, ok := readArchiveFile(
+		&reader.Reader,
+		"fabric.mod.json",
+	); ok {
 		var mod exttype.FileFabricModIdentifier
-		if json.Unmarshal(fabricMeta, &mod) == nil && strings.TrimSpace(mod.Id) != "" {
-			packages = append(packages, types.PackageId{Platform: types.PlatformFabric, Name: types.ProjectName(strings.TrimSpace(mod.Id))}.StringPlatformName())
+		if json.Unmarshal(
+			fabricMeta,
+			&mod,
+		) == nil && strings.TrimSpace(mod.Id) != "" {
+			packages = append(
+				packages,
+				types.PackageId{
+					Platform: types.PlatformFabric,
+					Name: types.PackageName(strings.TrimSpace(mod.Id)),
+				}.StringPlatformName(),
+			)
 		}
 	}
 
-	if neoMeta, ok := readArchiveFile(&reader.Reader, "META-INF/neoforge.mods.toml"); ok {
+	if neoMeta, ok := readArchiveFile(
+		&reader.Reader,
+		"META-INF/neoforge.mods.toml",
+	); ok {
 		var mod exttype.FileModLoaderIdentifier
 		if toml.Unmarshal(neoMeta, &mod) == nil {
 			for _, item := range mod.Mods {
 				if strings.TrimSpace(item.ModID) == "" {
 					continue
 				}
-				packages = append(packages, types.PackageId{Platform: types.PlatformNeoforge, Name: types.ProjectName(strings.TrimSpace(item.ModID))}.StringPlatformName())
+				packages = append(
+					packages,
+					types.PackageId{
+						Platform: types.PlatformNeoforge,
+						Name: types.PackageName(strings.TrimSpace(item.ModID)),
+					}.StringPlatformName(),
+				)
 			}
 		}
 	}
 
-	if forgeMeta, ok := readArchiveFile(&reader.Reader, "META-INF/mods.toml"); ok {
+	if forgeMeta, ok := readArchiveFile(
+		&reader.Reader,
+		"META-INF/mods.toml",
+	); ok {
 		var mod exttype.FileModLoaderIdentifier
 		if toml.Unmarshal(forgeMeta, &mod) == nil {
 			for _, item := range mod.Mods {
 				if strings.TrimSpace(item.ModID) == "" {
 					continue
 				}
-				packages = append(packages, types.PackageId{Platform: types.PlatformForge, Name: types.ProjectName(strings.TrimSpace(item.ModID))}.StringPlatformName())
+				packages = append(
+					packages,
+					types.PackageId{
+						Platform: types.PlatformForge,
+						Name: types.PackageName(strings.TrimSpace(item.ModID)),
+					}.StringPlatformName(),
+				)
 			}
 		}
 	}
@@ -492,26 +633,57 @@ func detectArchivePackages(path string) []string {
 				if strings.TrimSpace(item.ModId) == "" {
 					continue
 				}
-				packages = append(packages, types.PackageId{Platform: types.PlatformForge, Name: types.ProjectName(strings.TrimSpace(item.ModId))}.StringPlatformName())
+				packages = append(
+					packages,
+					types.PackageId{
+						Platform: types.PlatformForge,
+						Name: types.PackageName(strings.TrimSpace(item.ModId)),
+					}.StringPlatformName(),
+				)
 			}
 		}
 	}
 
-	if mcdrMeta, ok := readArchiveFile(&reader.Reader, "mcdreforged.plugin.json"); ok {
+	if mcdrMeta, ok := readArchiveFile(
+		&reader.Reader,
+		"mcdreforged.plugin.json",
+	); ok {
 		var plugin exttype.FileMcdrPluginIdentifier
-		if json.Unmarshal(mcdrMeta, &plugin) == nil && strings.TrimSpace(plugin.Id) != "" {
-			packages = append(packages, types.PackageId{Platform: types.PlatformMCDR, Name: types.ProjectName(strings.TrimSpace(plugin.Id))}.StringPlatformName())
+		if json.Unmarshal(
+			mcdrMeta,
+			&plugin,
+		) == nil && strings.TrimSpace(plugin.Id) != "" {
+			packages = append(
+				packages,
+				types.PackageId{
+					Platform: types.PlatformMCDR,
+					Name: types.PackageName(strings.TrimSpace(plugin.Id)),
+				}.StringPlatformName(),
+			)
 		}
 	}
 
 	if pluginMeta, ok := readArchiveFile(&reader.Reader, "plugin.yml"); ok {
 		if id := parsePluginYAMLName(pluginMeta); id != "" {
-			packages = append(packages, types.PackageId{Platform: types.PlatformNone, Name: types.ProjectName(id)}.StringPlatformName())
+			packages = append(
+				packages,
+				types.PackageId{
+					Platform: types.PlatformNone, Name: types.PackageName(id),
+				}.StringPlatformName(),
+			)
 		}
 	}
-	if paperMeta, ok := readArchiveFile(&reader.Reader, "paper-plugin.yml"); ok {
+	if paperMeta, ok := readArchiveFile(
+		&reader.Reader,
+		"paper-plugin.yml",
+	); ok {
 		if id := parsePluginYAMLName(paperMeta); id != "" {
-			packages = append(packages, types.PackageId{Platform: types.PlatformNone, Name: types.ProjectName(id)}.StringPlatformName())
+			packages = append(
+				packages,
+				types.PackageId{
+					Platform: types.PlatformNone, Name: types.PackageName(id),
+				}.StringPlatformName(),
+			)
 		}
 	}
 
@@ -632,10 +804,16 @@ func describeDiscovery(defaults DiscoveredDefaults) string {
 		parts = append(parts, fmt.Sprintf("platform=%s", defaults.Platform))
 	}
 	if len(defaults.ManagedRoots) > 0 {
-		parts = append(parts, fmt.Sprintf("roots=%s", strings.Join(defaults.ManagedRoots, ",")))
+		parts = append(
+			parts,
+			fmt.Sprintf("roots=%s", strings.Join(defaults.ManagedRoots, ",")),
+		)
 	}
 	if len(defaults.DetectedPackages) > 0 {
-		parts = append(parts, fmt.Sprintf("packages=%d", len(defaults.DetectedPackages)))
+		parts = append(
+			parts,
+			fmt.Sprintf("packages=%d", len(defaults.DetectedPackages)),
+		)
 	}
 	if defaults.ExistingLucy.HasAny() {
 		parts = append(parts, "existing-.lucy=advisory")
@@ -643,5 +821,9 @@ func describeDiscovery(defaults DiscoveredDefaults) string {
 	if len(parts) == 0 {
 		return "No server defaults detected"
 	}
-	return fmt.Sprintf("Detected defaults (%s confidence): %s", defaults.Confidence, strings.Join(parts, "; "))
+	return fmt.Sprintf(
+		"Detected defaults (%s confidence): %s",
+		defaults.Confidence,
+		strings.Join(parts, "; "),
+	)
 }

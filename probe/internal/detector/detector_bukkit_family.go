@@ -38,7 +38,11 @@ func aggregateBukkitFamilyPackages(pkgs []types.Package) []types.Package {
 	}
 
 	aggregated := pkgs[bestIndex]
-	aggregated.Supports = mergeBukkitFamilySupport(pkgs, bukkitIndexes, bestRank.fallback)
+	aggregated.Supports = mergeBukkitFamilySupport(
+		pkgs,
+		bukkitIndexes,
+		bestRank.fallback,
+	)
 
 	resolved := make([]types.Package, 0, len(pkgs)-len(bukkitIndexes)+1)
 	inserted := false
@@ -58,14 +62,14 @@ func aggregateBukkitFamilyPackages(pkgs []types.Package) []types.Package {
 }
 
 func mergeBukkitFamilySupport(
-	pkgs []types.Package,
-	indexes []int,
-	fallback types.Platform,
+pkgs []types.Package,
+indexes []int,
+fallback types.Platform,
 ) *types.PlatformSupport {
 	platforms := make([]types.Platform, 0, len(indexes)*2)
 	seen := make(map[types.Platform]struct{}, len(indexes)*2+1)
 	authentic := false
-	versions := make([]types.RawVersion, 0)
+	versions := make([]types.BareVersion, 0)
 
 	addPlatform := func(platform types.Platform) {
 		if !platform.Valid() {

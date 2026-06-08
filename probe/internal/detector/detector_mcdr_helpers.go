@@ -15,7 +15,7 @@ import (
 //
 // Note: call sites remain unchanged in detector; the parser implementation is
 // centralized in the dependency package.
-func parseNpmVersionRange(s string) types.VersionConstraintExpression {
+func parseNpmVersionRange(s string) types.VersionExpr {
 	return dependency.ParseRange(
 		s,
 		dependency.InferRangeDialect(types.PlatformMCDR),
@@ -24,22 +24,23 @@ func parseNpmVersionRange(s string) types.VersionConstraintExpression {
 }
 
 func translateMcdrPlugin(
-	pluginInfo *exttype.FileMcdrPluginIdentifier,
-	localPath string,
+pluginInfo *exttype.FileMcdrPluginIdentifier,
+localPath string,
 ) types.Package {
 	pkg := types.Package{
 		Id: types.PackageId{
 			Platform: types.PlatformMCDR,
 			Name:     syntax.ToProjectName(pluginInfo.Id),
-			Version:  types.RawVersion(pluginInfo.Version),
+			Version:  types.BareVersion(pluginInfo.Version),
 		},
 		Local: &types.PackageInstallation{
 			Path: localPath,
 		},
 		Dependencies: &types.PackageDependencies{},
-		Information:  &types.ProjectInformation{},
+		Information:  &types.Metadata{},
 	}
-	pkg.Dependencies.Value = append(pkg.Dependencies.Value,
+	pkg.Dependencies.Value = append(
+		pkg.Dependencies.Value,
 		translateMcdrDependencies(pluginInfo.Dependencies)...,
 	)
 	pkg.Information.Authors = make([]types.Person, len(pluginInfo.Author))
@@ -48,25 +49,29 @@ func translateMcdrPlugin(
 	}
 	pkg.Information.Title = pluginInfo.Name
 	pkg.Information.Brief = pluginInfo.Description.EnUs
-	pkg.Information.Urls = []types.Url{{
-		Name: "Link",
-		Type: types.UrlSource,
-		Url:  pluginInfo.Link,
-	}}
+	pkg.Information.Urls = []types.Url{
+		{
+			Name: "Link",
+			Type: types.UrlSource,
+			Url:  pluginInfo.Link,
+		},
+	}
 	return pkg
 }
 
 func translateMcdrDependencies(deps map[string]string) []types.Dependency {
 	translated := make([]types.Dependency, 0, len(deps))
 	for key, value := range deps {
-		translated = append(translated, types.Dependency{
-			Id: types.PackageId{
-				Platform: types.PlatformMCDR,
-				Name:     syntax.ToProjectName(key),
+		translated = append(
+			translated, types.Dependency{
+				Id: types.PackageId{
+					Platform: types.PlatformMCDR,
+					Name:     syntax.ToProjectName(key),
+				},
+				Constraint: parseNpmVersionRange(value),
+				Mandatory:  true,
 			},
-			Constraint: parseNpmVersionRange(value),
-			Mandatory:  true,
-		})
+		)
 	}
 	return translated
 }

@@ -75,7 +75,11 @@ platform = "invalid-platform"
 [policy]
 managed_roots = ["mods"]
 `)
-	if err := os.WriteFile(filepath.Join(tmpDir, string(state.ManifestFile)), malformedManifest, 0o644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(tmpDir, string(state.ManifestFile)),
+		malformedManifest,
+		0o644,
+	); err != nil {
 		t.Fatalf("write malformed manifest: %v", err)
 	}
 
@@ -103,7 +107,10 @@ func TestMultiPlatformSelection_NeoforgePlusFabricPlusMCDR(t *testing.T) {
 		ManagedRoots:        []string{"mods", "plugins"},
 	}
 
-	if err := ValidatePlatformSelection(s.Platform, s.CompatiblePlatforms); err != nil {
+	if err := ValidatePlatformSelection(
+		s.Platform,
+		s.CompatiblePlatforms,
+	); err != nil {
 		t.Fatalf("platform selection should be valid: %v", err)
 	}
 
@@ -119,7 +126,10 @@ func TestMultiPlatformSelection_NeoforgePlusFabricPlusMCDR(t *testing.T) {
 		t.Fatalf("expected primary platform neoforge, got %q", got)
 	}
 	if len(result.ManifestToWrite.Environment.CompatiblePlatforms) != 2 {
-		t.Fatalf("expected 2 compatible platforms, got %d", len(result.ManifestToWrite.Environment.CompatiblePlatforms))
+		t.Fatalf(
+			"expected 2 compatible platforms, got %d",
+			len(result.ManifestToWrite.Environment.CompatiblePlatforms),
+		)
 	}
 }
 
@@ -132,7 +142,10 @@ func TestMultiPlatformSelection_ForgePlusMCDR(t *testing.T) {
 		ManagedRoots:        []string{"plugins"},
 	}
 
-	if err := ValidatePlatformSelection(s.Platform, s.CompatiblePlatforms); err != nil {
+	if err := ValidatePlatformSelection(
+		s.Platform,
+		s.CompatiblePlatforms,
+	); err != nil {
 		t.Fatalf("forge+mcdr should be valid: %v", err)
 	}
 
@@ -151,13 +164,15 @@ func TestFuzzyVersionIntent_PreservedInManifestAndSkeletalLockUntilResolved(t *t
 	s.Platform = "fabric"
 	s.PlatformVersion = "0.16.10"
 	s.ManagedRoots = []string{"mods"}
-	s.PackageClassifications = []TakeoverPackageClassification{{
-		ID:      "fabric/lithium",
-		Version: ">=0.12.0 <0.13.0",
-		Source:  "modrinth",
-		Role:    state.RoleRequired,
-		Leaf:    true,
-	}}
+	s.PackageClassifications = []TakeoverPackageClassification{
+		{
+			ID:      "fabric/lithium",
+			Version: ">=0.12.0 <0.13.0",
+			Source:  "modrinth",
+			Role:    state.RoleRequired,
+			Leaf:    true,
+		},
+	}
 
 	result, err := BuildResult(s)
 	if err != nil {
@@ -169,7 +184,10 @@ func TestFuzzyVersionIntent_PreservedInManifestAndSkeletalLockUntilResolved(t *t
 		t.Fatal("expected manifest")
 	}
 	if len(result.ManifestToWrite.Packages) != 1 {
-		t.Fatalf("expected 1 package, got %d", len(result.ManifestToWrite.Packages))
+		t.Fatalf(
+			"expected 1 package, got %d",
+			len(result.ManifestToWrite.Packages),
+		)
 	}
 	if got := result.ManifestToWrite.Packages[0].Version; got != ">=0.12.0 <0.13.0" {
 		t.Fatalf("expected fuzzy version preserved, got %q", got)
@@ -180,7 +198,10 @@ func TestFuzzyVersionIntent_PreservedInManifestAndSkeletalLockUntilResolved(t *t
 		t.Fatal("expected lock skeleton")
 	}
 	if len(result.LockToWrite.Packages) != 0 {
-		t.Fatalf("expected empty lock until resolution, got %d packages", len(result.LockToWrite.Packages))
+		t.Fatalf(
+			"expected empty lock until resolution, got %d packages",
+			len(result.LockToWrite.Packages),
+		)
 	}
 }
 
@@ -213,7 +234,10 @@ func TestMCDRPlatform_WordingAndModelCompatibility(t *testing.T) {
 		t.Fatalf("expected platform mcdr, got %q", got)
 	}
 	if result.ManifestToWrite.Environment.ModdingPlatformVersion != "2.12.0" {
-		t.Fatalf("expected platform version 2.12.0, got %q", result.ManifestToWrite.Environment.ModdingPlatformVersion)
+		t.Fatalf(
+			"expected platform version 2.12.0, got %q",
+			result.ManifestToWrite.Environment.ModdingPlatformVersion,
+		)
 	}
 }
 
@@ -226,7 +250,10 @@ func TestMCDRPlusFabric_ValidCoexistence(t *testing.T) {
 		ManagedRoots:        []string{"mods", "plugins"},
 	}
 
-	if err := ValidatePlatformSelection(s.Platform, s.CompatiblePlatforms); err != nil {
+	if err := ValidatePlatformSelection(
+		s.Platform,
+		s.CompatiblePlatforms,
+	); err != nil {
 		t.Fatalf("fabric+mcdr should be valid: %v", err)
 	}
 }
@@ -268,10 +295,16 @@ func TestMixedManagedAndIgnoredContent_ClassificationsPreservedInManifest(t *tes
 	}
 
 	if len(result.ManifestToWrite.Packages) != 3 {
-		t.Fatalf("expected 3 packages in manifest, got %d", len(result.ManifestToWrite.Packages))
+		t.Fatalf(
+			"expected 3 packages in manifest, got %d",
+			len(result.ManifestToWrite.Packages),
+		)
 	}
 
-	byID := make(map[string]state.ManifestPackage, len(result.ManifestToWrite.Packages))
+	byID := make(
+		map[string]state.ManifestPackage,
+		len(result.ManifestToWrite.Packages),
+	)
 	for _, pkg := range result.ManifestToWrite.Packages {
 		byID[pkg.ID] = pkg
 	}
@@ -320,7 +353,10 @@ func TestMixedManualAndManaged_OnlyManualJarsInManifestAsIgnored(t *testing.T) {
 	}
 
 	// Both should appear in manifest with their respective roles.
-	byID := make(map[string]state.ManifestPackage, len(result.ManifestToWrite.Packages))
+	byID := make(
+		map[string]state.ManifestPackage,
+		len(result.ManifestToWrite.Packages),
+	)
 	for _, pkg := range result.ManifestToWrite.Packages {
 		byID[pkg.ID] = pkg
 	}
@@ -339,7 +375,7 @@ func TestMCDRPluginDetectedAsPackage_ClassifiedCorrectly(t *testing.T) {
 		{
 			Id: types.PackageId{
 				Platform: types.PlatformMCDR,
-				Name:     types.ProjectName("primebackup"),
+				Name:     types.PackageName("primebackup"),
 			},
 			Remote: &types.PackageRemote{
 				Source: types.SourceMCDR,
@@ -357,7 +393,10 @@ func TestMCDRPluginDetectedAsPackage_ClassifiedCorrectly(t *testing.T) {
 		t.Error("expected MCDR plugin to be classified as leaf")
 	}
 	if classifications[0].Role != state.RoleRequired {
-		t.Fatalf("expected default role required for leaf, got %q", classifications[0].Role)
+		t.Fatalf(
+			"expected default role required for leaf, got %q",
+			classifications[0].Role,
+		)
 	}
 }
 

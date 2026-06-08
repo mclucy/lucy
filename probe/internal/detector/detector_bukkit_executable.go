@@ -34,12 +34,12 @@ var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
 type craftBukkitFamilyDetector struct{}
 
 type bukkitManifestSignals struct {
-	mainClass             string
-	specificationTitle    string
-	specificationVendor   string
-	implementationTitle   string
-	implementationVendor  string
-	implementationVer     string
+	mainClass            string
+	specificationTitle   string
+	specificationVendor  string
+	implementationTitle  string
+	implementationVendor string
+	implementationVer    string
 }
 
 func (d *craftBukkitFamilyDetector) Name() string {
@@ -47,9 +47,9 @@ func (d *craftBukkitFamilyDetector) Name() string {
 }
 
 func (d *craftBukkitFamilyDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	_ = fileHandle
 
@@ -64,11 +64,18 @@ func (d *craftBukkitFamilyDetector) Detect(
 	}
 
 	signals := parseBukkitManifest(manifest)
-	metaMainClass, err := readBukkitExecutableSidecar(filePath, zipReader, paperMetaMainClassPath)
+	metaMainClass, err := readBukkitExecutableSidecar(
+		filePath,
+		zipReader,
+		paperMetaMainClassPath,
+	)
 	if err != nil {
 		return nil, err
 	}
-	reaperPatchProperties, err := readBukkitExecutablePatchProperties(filePath, zipReader)
+	reaperPatchProperties, err := readBukkitExecutablePatchProperties(
+		filePath,
+		zipReader,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -83,10 +90,13 @@ func (d *craftBukkitFamilyDetector) Detect(
 	// manifest identity. Without one of these strict signals, we should not claim
 	// a Bukkit-lineage server executable.
 	judgment.bukkitConfirmed = signals.mainClass == bukkitManifestMainClass ||
-		strings.EqualFold(signals.implementationTitle, bukkitImplementationCraftBukkit) ||
-		metaMainClass == bukkitManifestMainClass ||
-		hasStrictReaperBukkitConfirmation(reaperPatchProperties) ||
-		hasStrictYouerBukkitConfirmation(signals)
+	strings.EqualFold(
+		signals.implementationTitle,
+		bukkitImplementationCraftBukkit,
+	) ||
+	metaMainClass == bukkitManifestMainClass ||
+	hasStrictReaperBukkitConfirmation(reaperPatchProperties) ||
+	hasStrictYouerBukkitConfirmation(signals)
 	if !judgment.bukkitConfirmed {
 		return nil, nil
 	}
@@ -121,14 +131,17 @@ func (d *craftBukkitFamilyDetector) Detect(
 }
 
 func readBukkitExecutableManifest(
-	filePath string,
-	zipReader *zip.Reader,
+filePath string,
+zipReader *zip.Reader,
 ) ([]byte, bool, error) {
 	if zipReader != nil {
 		return readArchiveEntry(zipReader, bukkitManifestPath)
 	}
 
-	manifestPath := filepath.Join(filePath, filepath.FromSlash(bukkitManifestPath))
+	manifestPath := filepath.Join(
+		filePath,
+		filepath.FromSlash(bukkitManifestPath),
+	)
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -169,8 +182,8 @@ func reasonPaperFamily(judgment *paperJudgment) {
 
 func hasModernPaperclipMetadataCluster(obs paperObservations) bool {
 	return strings.TrimSpace(obs.downloadContext) != "" &&
-		len(obs.librariesListEntries) > 0 &&
-		strings.TrimSpace(obs.metaMainClass) != ""
+	len(obs.librariesListEntries) > 0 &&
+	strings.TrimSpace(obs.metaMainClass) != ""
 }
 
 func attributePaperBrand(judgment *paperJudgment) {
@@ -184,7 +197,12 @@ func attributePaperBrand(judgment *paperJudgment) {
 	case len(brands) > 1:
 		judgment.brandResult = brandContradiction
 		judgment.brandName = strings.Join(brands, ",")
-		judgment.addReason(fmt.Sprintf("contradictory paper brands detected: %s", strings.Join(brands, ", ")))
+		judgment.addReason(
+			fmt.Sprintf(
+				"contradictory paper brands detected: %s",
+				strings.Join(brands, ", "),
+			),
+		)
 	case len(brands) == 1 && brands[0] == "paper":
 		judgment.brandResult = brandPaper
 		judgment.brandName = "paper"
@@ -215,27 +233,48 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 	}
 
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_paper/paper/META-INF/libraries.list
-	if observationLinesContain(obs.librariesListEntries, paperLibraryPaperToken) {
+	if observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryPaperToken,
+	) {
 		add("paper")
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_folia/folia/META-INF/libraries.list
-	if observationLinesContain(obs.librariesListEntries, paperLibraryFoliaToken) {
+	if observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryFoliaToken,
+	) {
 		add("folia")
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_divine/divine/META-INF/libraries.list
-	if observationLinesContain(obs.librariesListEntries, paperLibraryDivineToken) {
+	if observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryDivineToken,
+	) {
 		add("divine")
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_purpur/purpur/META-INF/libraries.list
-	if observationLinesContain(obs.librariesListEntries, paperLibraryPurpurToken) {
+	if observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryPurpurToken,
+	) {
 		add("purpur")
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_leaf/leaf/META-INF/libraries.list and cn/dreeam/leaper/*
-	if observationLinesContain(obs.librariesListEntries, paperLibraryLeafToken) || obs.hasLeaperNamespace {
+	if observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryLeafToken,
+	) || obs.hasLeaperNamespace {
 		add("leaf")
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_leaves/leaves/META-INF/libraries.list, META-INF/build-info, META-INF/leavesclip-version
-	if observationLinesContain(obs.librariesListEntries, paperLibraryLeavesToken) || obs.hasLeavesclipNamespace || obs.leavesclipVersion != "" || strings.HasPrefix(obs.buildInfo, "Leaves\t") {
+	if observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryLeavesToken,
+	) || obs.hasLeavesclipNamespace || obs.leavesclipVersion != "" || strings.HasPrefix(
+		obs.buildInfo,
+		"Leaves\t",
+	) {
 		add("leaves")
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_reaper/reaper/patch.properties
@@ -244,9 +283,18 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_youer/youer/META-INF/MANIFEST.MF
 	if obs.hasYouerNamespace ||
-		strings.EqualFold(obs.manifestSpecificationTitle, paperManifestYouerToken) ||
-		strings.EqualFold(obs.manifestImplementationTitle, paperManifestYouerToken) ||
-		strings.Contains(strings.ToLower(obs.manifestMainClass), paperMainClassYouerToken) {
+	strings.EqualFold(
+		obs.manifestSpecificationTitle,
+		paperManifestYouerToken,
+	) ||
+	strings.EqualFold(
+		obs.manifestImplementationTitle,
+		paperManifestYouerToken,
+	) ||
+	strings.Contains(
+		strings.ToLower(obs.manifestMainClass),
+		paperMainClassYouerToken,
+	) {
 		add("youer")
 	}
 
@@ -255,9 +303,9 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 }
 
 func readBukkitExecutableSidecar(
-	filePath string,
-	zipReader *zip.Reader,
-	entryPath string,
+filePath string,
+zipReader *zip.Reader,
+entryPath string,
 ) (string, error) {
 	var (
 		data []byte
@@ -278,8 +326,8 @@ func readBukkitExecutableSidecar(
 }
 
 func readBukkitExecutablePatchProperties(
-	filePath string,
-	zipReader *zip.Reader,
+filePath string,
+zipReader *zip.Reader,
 ) (map[string]string, error) {
 	var (
 		data []byte
@@ -315,9 +363,15 @@ func hasStrictReaperBukkitConfirmation(properties map[string]string) bool {
 }
 
 func hasStrictYouerBukkitConfirmation(signals bukkitManifestSignals) bool {
-	return strings.EqualFold(signals.specificationTitle, paperManifestYouerToken) ||
-		strings.EqualFold(signals.implementationTitle, paperManifestYouerToken) ||
-		strings.Contains(strings.ToLower(signals.mainClass), paperMainClassYouerToken)
+	return strings.EqualFold(
+		signals.specificationTitle,
+		paperManifestYouerToken,
+	) ||
+	strings.EqualFold(signals.implementationTitle, paperManifestYouerToken) ||
+	strings.Contains(
+		strings.ToLower(signals.mainClass),
+		paperMainClassYouerToken,
+	)
 }
 
 func hasStrictReaperObservationBrand(obs paperObservations) bool {
@@ -355,9 +409,9 @@ func resolvePaperContradictions(judgment *paperJudgment) {
 }
 
 func projectPaperJudgment(
-	filePath string,
-	gameVersion types.RawVersion,
-	judgment paperJudgment,
+filePath string,
+gameVersion types.BareVersion,
+judgment paperJudgment,
 ) *ExecutableEvidence {
 	if !judgment.bukkitConfirmed {
 		return nil
@@ -386,15 +440,15 @@ func projectPaperJudgment(
 				primaryNode = bukkitNodeSpigot
 				brand = "spigot"
 				judgment.addReason("weak paper-family evidence projected to spigot runtime")
-default:
-			judgment.addReason("family miss remains non-terminal but projects to baseline bukkit runtime")
+			default:
+				judgment.addReason("family miss remains non-terminal but projects to baseline bukkit runtime")
+			}
+		case brandContradiction:
+			// contradictionState is set by resolvePaperContradictions; projection
+			// already withheld above via the contradictionState guard. This arm
+			// makes the switch exhaustive over all paperBrandResult values.
+			judgment.addReason("brand contradiction: projection falls back to bukkit baseline")
 		}
-	case brandContradiction:
-		// contradictionState is set by resolvePaperContradictions; projection
-		// already withheld above via the contradictionState guard. This arm
-		// makes the switch exhaustive over all paperBrandResult values.
-		judgment.addReason("brand contradiction: projection falls back to bukkit baseline")
-	}
 	}
 
 	return &ExecutableEvidence{
@@ -492,16 +546,16 @@ func parseBukkitManifest(data []byte) bukkitManifestSignals {
 	return signals
 }
 
-func parseBukkitGameVersion(implementationVersion string) types.RawVersion {
+func parseBukkitGameVersion(implementationVersion string) types.BareVersion {
 	match := bukkitVersionPrefixPattern.FindStringSubmatch(strings.TrimSpace(implementationVersion))
 	if len(match) < 2 || !isMinecraftReleaseVersion(match[1]) {
 		return types.VersionUnknown
 	}
-	return types.RawVersion(match[1])
+	return types.BareVersion(match[1])
 }
 
 func buildBukkitExecutableTopologySeed(
-	primaryNode types.RuntimeNodeID,
+primaryNode types.RuntimeNodeID,
 ) *ExecutableTopologySeed {
 	nodes := []types.RuntimeNode{}
 	edges := []types.RuntimeEdge{}
@@ -570,9 +624,9 @@ func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
 }
 
 func buildBukkitImplementationEdge(
-	from types.RuntimeNodeID,
-	to types.RuntimeNodeID,
-	verb types.RuntimeEdgeVerb,
+from types.RuntimeNodeID,
+to types.RuntimeNodeID,
+verb types.RuntimeEdgeVerb,
 ) types.RuntimeEdge {
 	return types.RuntimeEdge{
 		From: from,

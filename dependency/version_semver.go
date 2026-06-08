@@ -7,11 +7,11 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// SemverVersion implements types.ComparableVersion using Masterminds semver.
+// SemverVersion implements types.ResolvableVersion using Masterminds semver.
 type SemverVersion semverlib.Version
 
 // NewSemver creates a SemverVersion from explicit major, minor, patch values.
-func NewSemver(major, minor, patch uint64) types.ComparableVersion {
+func NewSemver(major, minor, patch uint64) types.ResolvableVersion {
 	v, err := semverlib.StrictNewVersion(
 		fmt.Sprintf("%d.%d.%d", major, minor, patch),
 	)
@@ -22,7 +22,7 @@ func NewSemver(major, minor, patch uint64) types.ComparableVersion {
 }
 
 // parseSemver parses a semver string.
-func parseSemver(s types.RawVersion) types.ComparableVersion {
+func parseSemver(s types.BareVersion) types.ResolvableVersion {
 	v, err := semverlib.NewVersion(string(s))
 	if err != nil {
 		return nil
@@ -62,7 +62,7 @@ func (s *SemverVersion) Scheme() types.VersionScheme {
 	return types.Semver
 }
 
-func (s *SemverVersion) Compare(other types.ComparableVersion) (int, bool) {
+func (s *SemverVersion) Compare(other types.ResolvableVersion) (int, bool) {
 	if s == nil || other == nil {
 		return 0, false
 	}

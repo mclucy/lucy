@@ -23,9 +23,9 @@ type Pre26MinecraftSnapshotVersion struct {
 	Index     uint8 // the letter, stored as ASCII values directly
 }
 
-func (v1 *Pre26MinecraftSnapshotVersion) Compare(v2 types.ComparableVersion) (
-	int,
-	bool,
+func (v1 *Pre26MinecraftSnapshotVersion) Compare(v2 types.ResolvableVersion) (
+int,
+bool,
 ) {
 	o, ok := v2.(*Pre26MinecraftSnapshotVersion)
 	if !ok || v1 == nil || o == nil {
@@ -45,8 +45,8 @@ func (v1 *Pre26MinecraftSnapshotVersion) Validate() bool {
 		return false
 	}
 	return v1.Year != 0 &&
-		v1.WorkCycle > 0 && v1.WorkCycle <= maxSnapshotWeek &&
-		v1.Index >= minSnapshotIndex && v1.Index <= maxSnapshotIndex
+	v1.WorkCycle > 0 && v1.WorkCycle <= maxSnapshotWeek &&
+	v1.Index >= minSnapshotIndex && v1.Index <= maxSnapshotIndex
 }
 
 func (v1 *Pre26MinecraftSnapshotVersion) Scheme() types.VersionScheme {
@@ -61,9 +61,9 @@ type Post26MinecraftSnapshotVersion struct {
 	SnapshotN uint8
 }
 
-func (v1 *Post26MinecraftSnapshotVersion) Compare(v2 types.ComparableVersion) (
-	int,
-	bool,
+func (v1 *Post26MinecraftSnapshotVersion) Compare(v2 types.ResolvableVersion) (
+int,
+bool,
 ) {
 	o, ok := v2.(*Post26MinecraftSnapshotVersion)
 	if !ok || v1 == nil || o == nil {
@@ -83,8 +83,8 @@ func (v1 *Post26MinecraftSnapshotVersion) Validate() bool {
 		return false
 	}
 	return v1.Year >= minPost26ReleaseYear &&
-		v1.Update > 0 &&
-		v1.SnapshotN > 0
+	v1.Update > 0 &&
+	v1.SnapshotN > 0
 }
 
 func (v1 *Post26MinecraftSnapshotVersion) Scheme() types.VersionScheme {
@@ -131,7 +131,7 @@ func (v *MinecraftVersion) Title() string {
 	return base
 }
 
-func (v1 *MinecraftVersion) Compare(v2 types.ComparableVersion) (int, bool) {
+func (v1 *MinecraftVersion) Compare(v2 types.ResolvableVersion) (int, bool) {
 	o, ok := v2.(*MinecraftVersion)
 	if !ok || v1 == nil || o == nil {
 		return 0, false

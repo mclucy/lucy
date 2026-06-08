@@ -13,8 +13,8 @@ import (
 // parseFabricVersionRanges parses a Fabric VersionRange value where each item
 // in the outer slice is an OR alternative.
 func parseFabricVersionRanges(
-	ranges tools.SingleOrSlice[string],
-) types.VersionConstraintExpression {
+ranges tools.SingleOrSlice[string],
+) types.VersionExpr {
 	return dependency.ParseRanges(
 		[]string(ranges),
 		dependency.InferRangeDialect(types.PlatformFabric),
@@ -23,40 +23,70 @@ func parseFabricVersionRanges(
 }
 
 func translateFabricMod(
-	modInfo *externaltype.FileFabricModIdentifier,
-	localPath string,
+modInfo *externaltype.FileFabricModIdentifier,
+localPath string,
 ) types.Package {
 	pkg := types.Package{
 		Id: types.PackageId{
 			Platform: types.PlatformFabric,
 			Name:     syntax.ToProjectName(modInfo.Id),
-			Version:  types.RawVersion(modInfo.Version),
+			Version:  types.BareVersion(modInfo.Version),
 		},
 		Local: &types.PackageInstallation{
 			Path: localPath,
 		},
 		Dependencies: &types.PackageDependencies{},
-		Information:  &types.ProjectInformation{},
+		Information:  &types.Metadata{},
 	}
 
 	embeddedNames := fabricEmbeddedModNames(modInfo)
-	pkg.Dependencies.Value = append(pkg.Dependencies.Value,
-		translateFabricDependencyMap(modInfo.Depends, true, false, embeddedNames)...,
+	pkg.Dependencies.Value = append(
+		pkg.Dependencies.Value,
+		translateFabricDependencyMap(
+			modInfo.Depends,
+			true,
+			false,
+			embeddedNames,
+		)...,
 	)
-	pkg.Dependencies.Value = append(pkg.Dependencies.Value,
-		translateFabricDependencyMap(modInfo.Recommends, false, false, embeddedNames)...,
+	pkg.Dependencies.Value = append(
+		pkg.Dependencies.Value,
+		translateFabricDependencyMap(
+			modInfo.Recommends,
+			false,
+			false,
+			embeddedNames,
+		)...,
 	)
-	pkg.Dependencies.Value = append(pkg.Dependencies.Value,
-		translateFabricDependencyMap(modInfo.Suggests, false, false, embeddedNames)...,
+	pkg.Dependencies.Value = append(
+		pkg.Dependencies.Value,
+		translateFabricDependencyMap(
+			modInfo.Suggests,
+			false,
+			false,
+			embeddedNames,
+		)...,
 	)
-	pkg.Dependencies.Value = append(pkg.Dependencies.Value,
-		translateFabricDependencyMap(modInfo.Breaks, false, true, embeddedNames)...,
+	pkg.Dependencies.Value = append(
+		pkg.Dependencies.Value,
+		translateFabricDependencyMap(
+			modInfo.Breaks,
+			false,
+			true,
+			embeddedNames,
+		)...,
 	)
-	pkg.Dependencies.Value = append(pkg.Dependencies.Value,
-		translateFabricDependencyMap(modInfo.Conflicts, false, true, embeddedNames)...,
+	pkg.Dependencies.Value = append(
+		pkg.Dependencies.Value,
+		translateFabricDependencyMap(
+			modInfo.Conflicts,
+			false,
+			true,
+			embeddedNames,
+		)...,
 	)
 
-	pkg.Information = &types.ProjectInformation{
+	pkg.Information = &types.Metadata{
 		Title:       modInfo.Name,
 		Description: modInfo.Description,
 		License:     modInfo.License,
@@ -73,10 +103,10 @@ func translateFabricMod(
 }
 
 func translateFabricDependencyMap(
-	deps map[string]tools.SingleOrSlice[string],
-	mandatory bool,
-	inverse bool,
-	embeddedNames map[string]struct{},
+deps map[string]tools.SingleOrSlice[string],
+mandatory bool,
+inverse bool,
+embeddedNames map[string]struct{},
 ) []types.Dependency {
 	translated := make([]types.Dependency, 0, len(deps))
 	for k, v := range deps {

@@ -6,7 +6,7 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func parseMavenRange(raw string) types.VersionConstraintExpression {
+func parseMavenRange(raw string) types.VersionExpr {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "*" || strings.EqualFold(raw, "none") {
 		return nil
@@ -17,7 +17,7 @@ func parseMavenRange(raw string) types.VersionConstraintExpression {
 		parts = []string{raw}
 	}
 
-	result := make(types.VersionConstraintExpression, 0, len(parts))
+	result := make(types.VersionExpr, 0, len(parts))
 	for _, part := range parts {
 		constraints := parseMavenSingleRange(strings.TrimSpace(part))
 		if len(constraints) == 0 {
@@ -63,7 +63,7 @@ func splitMavenUnions(raw string) []string {
 	return out
 }
 
-func parseMavenSingleRange(raw string) []types.VersionConstraint {
+func parseMavenSingleRange(raw string) []types.VersionSubExpr {
 	if raw == "" {
 		return nil
 	}
@@ -88,9 +88,9 @@ func parseMavenSingleRange(raw string) []types.VersionConstraint {
 				bounds := strings.SplitN(body, ",", 2)
 				lowerToken := strings.TrimSpace(bounds[0])
 				upperToken := strings.TrimSpace(bounds[1])
-				out := make([]types.VersionConstraint, 0, 2)
+				out := make([]types.VersionSubExpr, 0, 2)
 				if lowerToken != "" {
-					lower := parseSemver(types.RawVersion(lowerToken))
+					lower := parseSemver(types.BareVersion(lowerToken))
 					if lower == nil {
 						return nil
 					}
@@ -100,11 +100,11 @@ func parseMavenSingleRange(raw string) []types.VersionConstraint {
 					}
 					out = append(
 						out,
-						types.VersionConstraint{Value: lower, Operator: op},
+						types.VersionSubExpr{Value: lower, Operator: op},
 					)
 				}
 				if upperToken != "" {
-					upper := parseSemver(types.RawVersion(upperToken))
+					upper := parseSemver(types.BareVersion(upperToken))
 					if upper == nil {
 						return nil
 					}
@@ -114,7 +114,7 @@ func parseMavenSingleRange(raw string) []types.VersionConstraint {
 					}
 					out = append(
 						out,
-						types.VersionConstraint{Value: upper, Operator: op},
+						types.VersionSubExpr{Value: upper, Operator: op},
 					)
 				}
 				if len(out) == 0 {
@@ -125,11 +125,11 @@ func parseMavenSingleRange(raw string) []types.VersionConstraint {
 
 			// Exact value form: [1.0]
 			if left == '[' && right == ']' && body != "" {
-				v := parseSemver(types.RawVersion(body))
+				v := parseSemver(types.BareVersion(body))
 				if v == nil {
 					return nil
 				}
-				return []types.VersionConstraint{
+				return []types.VersionSubExpr{
 					{
 						Value: v, Operator: types.OpEq,
 					},
@@ -158,9 +158,9 @@ func parseMavenSingleRange(raw string) []types.VersionConstraint {
 			break
 		}
 	}
-	v := parseSemver(types.RawVersion(versionToken))
+	v := parseSemver(types.BareVersion(versionToken))
 	if v == nil {
 		return nil
 	}
-	return []types.VersionConstraint{{Value: v, Operator: operator}}
+	return []types.VersionSubExpr{{Value: v, Operator: operator}}
 }

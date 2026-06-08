@@ -25,16 +25,18 @@ func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
 			return
 		}
 		seen[key] = struct{}{}
-		constraints = append(constraints, InstalledConstraint{
-			Package: pkg,
-			ConstraintInput: ConstraintInput{
-				Requester: requester,
-				Dependency: types.Dependency{
-					Id:        pkg.Id,
-					Mandatory: true,
+		constraints = append(
+			constraints, InstalledConstraint{
+				Package: pkg,
+				ConstraintInput: ConstraintInput{
+					Requester: requester,
+					Dependency: types.Dependency{
+						Id: pkg.Id,
+						Mandatory: true,
+					},
 				},
 			},
-		})
+		)
 	}
 
 	for _, pkg := range si.Packages {
@@ -45,32 +47,49 @@ func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
 		loader := si.Runtime.DerivedModLoader()
 		if loader.Valid() && loader != types.PlatformNone && loader != types.PlatformUnknown {
 			if !si.Runtime.GameVersion.IsInvalid() && si.Runtime.GameVersion != types.VersionAny {
-				appendConstraint(types.Package{
-					Id: types.PackageId{
-						Platform: loader,
-						Name:     types.ProjectName("minecraft"),
-						Version:  si.Runtime.GameVersion,
+				appendConstraint(
+					types.Package{
+						Id: types.PackageId{
+							Platform: loader,
+							Name:     types.PackageName("minecraft"),
+							Version:  si.Runtime.GameVersion,
+						},
 					},
-				}, fmt.Sprintf("runtime:%s/minecraft@%s", loader, si.Runtime.GameVersion))
+					fmt.Sprintf(
+						"runtime:%s/minecraft@%s",
+						loader,
+						si.Runtime.GameVersion,
+					),
+				)
 			}
 
-			appendConstraint(types.Package{
-				Id: types.PackageId{
-					Platform: loader,
-					Name:     types.ProjectName("java"),
-					Version:  types.VersionAny,
-				},
-			}, fmt.Sprintf("runtime:%s/java", loader))
+			appendConstraint(
+				types.Package{
+					Id: types.PackageId{
+						Platform: loader,
+						Name:     types.PackageName("java"),
+						Version:  types.VersionAny,
+					},
+				}, fmt.Sprintf("runtime:%s/java", loader),
+			)
 
 			if primary := si.Runtime.PrimaryRuntimeIdentity(); primary != nil {
 				if alias := runtimeLoaderAliasName(primary.IdentityToPlatform()); alias != "" {
-					appendConstraint(types.Package{
-						Id: types.PackageId{
-							Platform: loader,
-							Name:     alias,
-							Version:  primary.Version,
+					appendConstraint(
+						types.Package{
+							Id: types.PackageId{
+								Platform: loader,
+								Name:     alias,
+								Version:  primary.Version,
+							},
 						},
-					}, fmt.Sprintf("runtime:%s/%s@%s", loader, alias, primary.Version))
+						fmt.Sprintf(
+							"runtime:%s/%s@%s",
+							loader,
+							alias,
+							primary.Version,
+						),
+					)
 				}
 			}
 		}
@@ -79,14 +98,14 @@ func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
 	tx.InstalledConstraints = constraints
 }
 
-func runtimeLoaderAliasName(platform types.Platform) types.ProjectName {
+func runtimeLoaderAliasName(platform types.Platform) types.PackageName {
 	switch platform {
 	case types.PlatformFabric:
-		return types.ProjectName("fabricloader")
+		return types.PackageName("fabricloader")
 	case types.PlatformForge:
-		return types.ProjectName("forge")
+		return types.PackageName("forge")
 	case types.PlatformNeoforge:
-		return types.ProjectName("neoforge")
+		return types.PackageName("neoforge")
 	default:
 		return ""
 	}
@@ -95,7 +114,10 @@ func runtimeLoaderAliasName(platform types.Platform) types.ProjectName {
 // FindCompatibleInstalled searches the installed-constraint snapshot for any
 // package with the same platform and name as the requested ID, returning all
 // matches. Results are informational only; the solver must not auto-select them.
-func FindCompatibleInstalled(tx *RecursiveTransaction, id types.PackageId) []types.Package {
+func FindCompatibleInstalled(
+tx *RecursiveTransaction,
+id types.PackageId,
+) []types.Package {
 	var matches []types.Package
 	for _, ic := range tx.InstalledConstraints {
 		pkg := ic.Package
@@ -116,9 +138,11 @@ func FindCompatibleInstalled(tx *RecursiveTransaction, id types.PackageId) []typ
 func ReportCompatibleInstalled(tx *RecursiveTransaction, id types.PackageId) {
 	matches := FindCompatibleInstalled(tx, id)
 	for _, pkg := range matches {
-		logger.ShowInfo(fmt.Sprintf(
-			"[recursive] compatible installed version found: %s (not auto-selected)",
-			pkg.Id.StringFull(),
-		))
+		logger.ShowInfo(
+			fmt.Sprintf(
+				"[recursive] compatible installed version found: %s (not auto-selected)",
+				pkg.Id.StringFull(),
+			),
+		)
 	}
 }

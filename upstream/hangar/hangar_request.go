@@ -23,7 +23,7 @@ var (
 	ErrNoDownload         = errors.New("hangar: download not found")
 )
 
-func getProject(name types.ProjectName) (*hangarProject, error) {
+func getProject(name types.PackageName) (*hangarProject, error) {
 	if project, err := getProjectByPath(string(name)); err == nil {
 		if project.ProjectRef().CanonicalName() == name {
 			return project, nil
@@ -59,7 +59,10 @@ func getProjectByPath(path string) (*hangarProject, error) {
 	return project, nil
 }
 
-func searchProjects(query string, options types.SearchOptions) (*projectSearchResponse, error) {
+func searchProjects(
+query string,
+options types.SearchOptions,
+) (*projectSearchResponse, error) {
 	params := url.Values{}
 	if query != "" {
 		params.Set("query", query)
@@ -83,13 +86,18 @@ func getVersion(id types.PackageId) (*hangarVersion, error) {
 	}
 
 	version := &hangarVersion{}
-	if err := getJSON(hangarVersionURL(project.ProjectRef(), id.Version.String()), version); err != nil {
+	if err := getJSON(
+		hangarVersionURL(
+			project.ProjectRef(),
+			id.Version.String(),
+		), version,
+	); err != nil {
 		return nil, err
 	}
 	return version, nil
 }
 
-func listVersions(name types.ProjectName) ([]hangarVersion, error) {
+func listVersions(name types.PackageName) ([]hangarVersion, error) {
 	project, err := getProject(name)
 	if err != nil {
 		return nil, err
@@ -99,7 +107,10 @@ func listVersions(name types.ProjectName) ([]hangarVersion, error) {
 	params.Set("limit", "25")
 
 	res := &HangarVersionListResponse{}
-	if err := getJSON(hangarVersionsURL(project.ProjectRef(), params), res); err != nil {
+	if err := getJSON(
+		hangarVersionsURL(project.ProjectRef(), params),
+		res,
+	); err != nil {
 		return nil, err
 	}
 	if len(res.Result) == 0 {

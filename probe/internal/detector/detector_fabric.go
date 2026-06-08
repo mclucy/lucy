@@ -27,9 +27,9 @@ func (d *fabricServerSingleFileDetector) Name() string {
 }
 
 func (d *fabricServerSingleFileDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (exec *ExecutableEvidence, err error) {
 	loaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
@@ -48,12 +48,12 @@ func (d *fabricServerSingleFileDetector) Detect(
 					line,
 					"fabric-loader-version=",
 				); found {
-					loaderVersion = types.RawVersion(after)
+					loaderVersion = types.BareVersion(after)
 				} else if after, found := strings.CutPrefix(
 					line,
 					"game-version=",
 				); found {
-					gameVersion = types.RawVersion(after)
+					gameVersion = types.BareVersion(after)
 				}
 			}
 			if loaderVersion == types.VersionUnknown || gameVersion == types.VersionUnknown {
@@ -110,9 +110,9 @@ func (d *fabricServerLauncherDetector) Name() string {
 }
 
 func (d *fabricServerLauncherDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (exec *ExecutableEvidence, err error) {
 	var valid bool
 	for _, f := range zipReader.File {
@@ -179,14 +179,14 @@ func (d *fabricServerLauncherDetector) Detect(
 					path,
 					"libraries/net/fabricmc/fabric-loader/",
 				); found {
-					loaderVersion = types.RawVersion(
+					loaderVersion = types.BareVersion(
 						strings.Split(after, "/")[0],
 					)
 				} else if after, found := strings.CutPrefix(
 					path,
 					"libraries/net/fabricmc/intermediary/",
 				); found {
-					gameVersion = types.RawVersion(
+					gameVersion = types.BareVersion(
 						strings.Split(after, "/")[0],
 					)
 				}
@@ -238,8 +238,8 @@ func (d *fabricModDetector) Name() string {
 }
 
 func (d *fabricModDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	var wg sync.WaitGroup
 	for _, f := range zipReader.File {
@@ -279,7 +279,12 @@ func (d *fabricModDetector) Detect(
 			}(string(pkg.Id.Name), fileHandle.Name(), metaURLs)
 			go func(name, path string, urls []string) {
 				defer wg.Done()
-				slugresolve.ResolveSlug(types.SourceCurseForge, name, path, urls)
+				slugresolve.ResolveSlug(
+					types.SourceCurseForge,
+					name,
+					path,
+					urls,
+				)
 			}(string(pkg.Id.Name), fileHandle.Name(), metaURLs)
 		}
 	}

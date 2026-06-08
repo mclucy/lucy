@@ -71,7 +71,7 @@ func (d *McdrDetector) Detect(dir string, env *types.EnvironmentInfo) {
 	}
 
 	// `mcdreforged --version` output is like "MCDReforged 2.13.2"
-	version := types.RawVersion(strings.Split(string(bytes), " ")[1])
+	version := types.BareVersion(strings.Split(string(bytes), " ")[1])
 	env.Mcdr = &types.McdrEnv{
 		Version: version,
 		Config:  config,
@@ -90,8 +90,8 @@ func (d *McdrPluginDetector) Name() string {
 }
 
 func (d *McdrPluginDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	var pkg types.Package
 	for _, f := range zipReader.File {

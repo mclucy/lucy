@@ -38,8 +38,8 @@ var Provider provider
 // For Modrinth search API, see:
 // https://docs.modrinth.com/api/operations/searchprojects/
 func (s provider) Search(
-	query string,
-	options types.SearchOptions,
+query string,
+options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
 	var facets []facetItems
 	switch options.FilterPlatform {
@@ -65,7 +65,7 @@ func (s provider) Search(
 		index:  modrinthSearchSortingString(options.SortBy),
 		facets: facets,
 	}
-	searchUrl := searchUrl(types.ProjectName(query), internalOptions)
+	searchUrl := searchUrl(types.PackageName(query), internalOptions)
 
 	// Make the call to Modrinth API
 	logger.Debug("searching via modrinth api: " + searchUrl)
@@ -91,8 +91,8 @@ func (s provider) Search(
 }
 
 func (s provider) Fetch(id types.PackageId) (
-	remote upstream.RawPackageRemote,
-	err error,
+remote upstream.RawPackageRemote,
+err error,
 ) {
 	version, err := getVersion(id)
 	if err != nil {
@@ -104,9 +104,9 @@ func (s provider) Fetch(id types.PackageId) (
 	return version, nil
 }
 
-func (s provider) Information(name types.ProjectName) (
-	info upstream.RawProjectInformation,
-	err error,
+func (s provider) Metadata(name types.PackageName) (
+info upstream.RawProjectInformation,
+err error,
 ) {
 	project, err := getProjectByName(name)
 	if err != nil {
@@ -117,9 +117,9 @@ func (s provider) Information(name types.ProjectName) (
 
 // Support from Modrinth API is extremely unreliable. A local check (if any
 // files were downloaded) is recommended.
-func (s provider) Support(name types.ProjectName) (
-	supports upstream.RawProjectSupport,
-	err error,
+func (s provider) Support(name types.PackageName) (
+supports upstream.RawProjectSupport,
+err error,
 ) {
 	project, err := getProjectByName(name)
 	if err != nil {
@@ -135,8 +135,8 @@ var ErrInvalidAPIResponse = errors.New("invalid data from modrinth api")
 var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported")
 
 func (s provider) Dependencies(id types.PackageId) (
-	deps upstream.RawPackageDependencies,
-	err error,
+deps upstream.RawPackageDependencies,
+err error,
 ) {
 	version, err := getVersion(id)
 	if err != nil {
@@ -146,10 +146,10 @@ func (s provider) Dependencies(id types.PackageId) (
 }
 
 func (s provider) ParseAmbiguousId(p types.PackageId) (
-	parsed types.PackageId,
-	err error,
+parsed types.PackageId,
+err error,
 ) {
-	if p.Platform.CanInfer() {
+	if p.Platform.IsSelector() {
 		// Platform inference removed to avoid circular imports.
 		// Caller should provide explicit platform.
 		p.Platform = types.PlatformNone
@@ -171,7 +171,7 @@ func (s provider) ParseAmbiguousId(p types.PackageId) (
 	if err != nil {
 		return p, err
 	}
-	parsed.Version = types.RawVersion(v.VersionNumber)
+	parsed.Version = types.BareVersion(v.VersionNumber)
 
 	return parsed, nil
 }

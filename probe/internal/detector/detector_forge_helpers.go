@@ -29,7 +29,7 @@ var forgeJarNameVersionPattern = regexp.MustCompile(
 // References:
 //   - https://docs.minecraftforge.net/en/latest/gettingstarted/modfiles/
 //   - https://maven.apache.org/enforcer/enforcer-rules/versionRanges.html
-func parseModLoaderMavenVersionRange(interval string) [][]types.VersionConstraint {
+func parseModLoaderMavenVersionRange(interval string) [][]types.VersionSubExpr {
 	return dependency.ParseRange(
 		interval,
 		dependency.InferRangeDialect(types.PlatformForge),
@@ -38,17 +38,17 @@ func parseModLoaderMavenVersionRange(interval string) [][]types.VersionConstrain
 }
 
 func translateModLoaderPackage(
-	platform types.Platform,
-	localPath string,
-	modID string,
-	version types.RawVersion,
-	deps []modLoaderDependencySpec,
-	license string,
-	displayName string,
-	description string,
-	authors string,
-	displayURL string,
-	issueTrackerURL string,
+platform types.Platform,
+localPath string,
+modID string,
+version types.BareVersion,
+deps []modLoaderDependencySpec,
+license string,
+displayName string,
+description string,
+authors string,
+displayURL string,
+issueTrackerURL string,
 ) types.Package {
 	pkg := types.Package{
 		Id: types.PackageId{
@@ -60,12 +60,13 @@ func translateModLoaderPackage(
 			Path: localPath,
 		},
 		Dependencies: &types.PackageDependencies{},
-		Information:  &types.ProjectInformation{},
+		Information:  &types.Metadata{},
 	}
-	pkg.Dependencies.Value = append(pkg.Dependencies.Value,
+	pkg.Dependencies.Value = append(
+		pkg.Dependencies.Value,
 		translateModLoaderDependencies(platform, deps)...,
 	)
-	pkg.Information = &types.ProjectInformation{
+	pkg.Information = &types.Metadata{
 		Title:   displayName,
 		Brief:   description,
 		Authors: []types.Person{{Name: authors}},
@@ -87,26 +88,28 @@ func translateModLoaderPackage(
 }
 
 func translateModLoaderDependencies(
-	platform types.Platform,
-	deps []modLoaderDependencySpec,
+platform types.Platform,
+deps []modLoaderDependencySpec,
 ) []types.Dependency {
 	translated := make([]types.Dependency, 0, len(deps))
 	for _, dep := range deps {
-		translated = append(translated, types.Dependency{
-			Id: types.PackageId{
-				Platform: platform,
-				Name:     syntax.ToProjectName(dep.modID),
+		translated = append(
+			translated, types.Dependency{
+				Id: types.PackageId{
+					Platform: platform,
+					Name:     syntax.ToProjectName(dep.modID),
+				},
+				Constraint: parseModLoaderMavenVersionRange(dep.versionRange),
+				Mandatory:  dep.mandatory,
 			},
-			Constraint: parseModLoaderMavenVersionRange(dep.versionRange),
-			Mandatory:  dep.mandatory,
-		})
+		)
 	}
 	return translated
 }
 
 func parseForgeVersionTupleFromPath(
-	filePath string,
-) (gameVersion types.RawVersion, forgeVersion types.RawVersion, ok bool) {
+filePath string,
+) (gameVersion types.BareVersion, forgeVersion types.BareVersion, ok bool) {
 	parts := strings.Split(filepath.ToSlash(filePath), "/")
 	for i := 0; i < len(parts)-1; i++ {
 		if parts[i] != "forge" {
@@ -116,22 +119,22 @@ func parseForgeVersionTupleFromPath(
 		if match == nil {
 			continue
 		}
-		return types.RawVersion(match[1]), types.RawVersion(match[2]), true
+		return types.BareVersion(match[1]), types.BareVersion(match[2]), true
 	}
 	if match := forgeJarNameVersionPattern.FindStringSubmatch(filepath.Base(filePath)); match != nil {
-		return types.RawVersion(match[1]), types.RawVersion(match[2]), true
+		return types.BareVersion(match[1]), types.BareVersion(match[2]), true
 	}
 	return types.VersionUnknown, types.VersionUnknown, false
 }
 
-func hasConcreteVersion(version types.RawVersion) bool {
+func hasConcreteVersion(version types.BareVersion) bool {
 	return version != "" && !version.IsInvalid() && !version.CanInfer()
 }
 
 func buildForgeRuntimeInfo(
-	filePath string,
-	gameVersion types.RawVersion,
-	forgeVersion types.RawVersion,
+filePath string,
+gameVersion types.BareVersion,
+forgeVersion types.BareVersion,
 ) *ExecutableEvidence {
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,

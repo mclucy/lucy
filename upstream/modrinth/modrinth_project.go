@@ -12,7 +12,7 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func getProjectId(slug types.ProjectName) (id string, err error) {
+func getProjectId(slug types.PackageName) (id string, err error) {
 	res, err := http.Get(projectUrl(string(slug)))
 	if err != nil {
 		return "", fmt.Errorf("modrinth: request failed: %w", err)
@@ -59,11 +59,11 @@ func getProjectById(id string) (project *projectResponse, err error) {
 	return
 }
 
-func getProjectByName(slug types.ProjectName) (
-	project *projectResponse,
-	err error,
+func getProjectByName(slug types.PackageName) (
+project *projectResponse,
+err error,
 ) {
-	tryFetch := func(target types.ProjectName) (*projectResponse, error) {
+	tryFetch := func(target types.PackageName) (*projectResponse, error) {
 		res, err := http.Get(projectUrl(string(target)))
 		if err != nil {
 			return nil, fmt.Errorf("modrinth: request failed: %w", err)
@@ -91,16 +91,19 @@ func getProjectByName(slug types.ProjectName) (
 		return project, nil
 	}
 
-	if canonical, ok := slugmap.Default().GetLoose(types.SourceModrinth, string(slug)); ok && canonical != string(slug) {
-		return tryFetch(types.ProjectName(canonical))
+	if canonical, ok := slugmap.Default().GetLoose(
+		types.SourceModrinth,
+		string(slug),
+	); ok && canonical != string(slug) {
+		return tryFetch(types.PackageName(canonical))
 	}
 
 	return nil, err
 }
 
 func getProjectMembers(id string) (
-	members []*memberResponse,
-	err error,
+members []*memberResponse,
+err error,
 ) {
 	res, err := http.Get(projectMemberUrl(id))
 	if err != nil {
@@ -126,11 +129,11 @@ func getProjectMembers(id string) (
 var ErrorInvalidDependency = errors.New("invalid dependency")
 
 func DependencyToPackage(
-	dependent types.PackageId,
-	dependency *dependenciesResponse,
+dependent types.PackageId,
+dependency *dependenciesResponse,
 ) (
-	p types.PackageId,
-	err error,
+p types.PackageId,
+err error,
 ) {
 	var version *versionResponse
 	var project *projectResponse
@@ -164,7 +167,10 @@ func DependencyToPackage(
 			return p, fmt.Errorf("resolve dependency project: %w", err)
 		}
 		// This is not safe, TODO: use better inference method
-		version, err = latestCompatibleVersion(syntax.ToProjectName(project.Slug), dependent.Platform)
+		version, err = latestCompatibleVersion(
+			syntax.ToProjectName(project.Slug),
+			dependent.Platform,
+		)
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency latest version: %w", err)
 		}
@@ -176,7 +182,7 @@ func DependencyToPackage(
 	}
 
 	p.Name = syntax.ToProjectName(project.Slug)
-	p.Version = types.RawVersion(version.VersionNumber)
+	p.Version = types.BareVersion(version.VersionNumber)
 
 	return p, nil
 }

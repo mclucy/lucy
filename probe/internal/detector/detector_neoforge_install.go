@@ -15,8 +15,16 @@ import (
 // Source: https://maven.neoforged.net/releases/net/neoforged/neoforge/
 const neoForgeMavenArtifactBaseURL = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
 
-var neoforgeArtifactHashLookup = func(version string, artifact modLoaderArtifactKind, filePath string) (bool, error) {
-	return lookupModLoaderArtifactHash(version, modLoaderCandidate{kind: artifact, path: filePath}, neoForgeMavenArtifactBaseURL)
+var neoforgeArtifactHashLookup = func(
+version string,
+artifact modLoaderArtifactKind,
+filePath string,
+) (bool, error) {
+	return lookupModLoaderArtifactHash(
+		version,
+		modLoaderCandidate{kind: artifact, path: filePath},
+		neoForgeMavenArtifactBaseURL,
+	)
 }
 
 // NeoForgeInstallationRuntimes scans libraries/net/neoforged/neoforge/ for installed
@@ -34,26 +42,50 @@ func NeoForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 	spec := modLoaderInstallSpec{
 		platform:       types.PlatformNeoforge,
 		name:           "neoforge",
-		libraryRoot:    filepath.Join("libraries", "net", "neoforged", "neoforge"),
+		libraryRoot:    filepath.Join(
+			"libraries",
+			"net",
+			"neoforged",
+			"neoforge",
+		),
 		mavenBaseURL:   neoForgeMavenArtifactBaseURL,
 		candidateNames: neoForgeCandidateNames,
 		unpackVerify:   verifyNeoForgeArtifactByUnpack,
 	}
-	return modLoaderInstallationRuntimes(workPath, spec, neoforgeArtifactHashLookup)
+	return modLoaderInstallationRuntimes(
+		workPath,
+		spec,
+		neoforgeArtifactHashLookup,
+	)
 }
 
 func neoForgeCandidateNames(versionDir, version string) []modLoaderCandidate {
 	return []modLoaderCandidate{
-		{kind: modLoaderArtifactServer, path: filepath.Join(versionDir, fmt.Sprintf("neoforge-%s-server.jar", version))},
-		{kind: modLoaderArtifactUniversal, path: filepath.Join(versionDir, fmt.Sprintf("neoforge-%s-universal.jar", version))},
-		{kind: modLoaderArtifactShim, path: filepath.Join(versionDir, fmt.Sprintf("neoforge-%s-shim.jar", version))},
+		{
+			kind: modLoaderArtifactServer, path: filepath.Join(
+			versionDir,
+			fmt.Sprintf("neoforge-%s-server.jar", version),
+		),
+		},
+		{
+			kind: modLoaderArtifactUniversal, path: filepath.Join(
+			versionDir,
+			fmt.Sprintf("neoforge-%s-universal.jar", version),
+		),
+		},
+		{
+			kind: modLoaderArtifactShim, path: filepath.Join(
+			versionDir,
+			fmt.Sprintf("neoforge-%s-shim.jar", version),
+		),
+		},
 	}
 }
 
 func verifyNeoForgeArtifactByUnpack(
-	candidate modLoaderCandidate,
-	gameVersion types.RawVersion,
-	loaderVersion types.RawVersion,
+candidate modLoaderCandidate,
+gameVersion types.BareVersion,
+loaderVersion types.BareVersion,
 ) (bool, error) {
 	file, err := os.Open(candidate.path)
 	if err != nil {
@@ -81,7 +113,10 @@ func verifyNeoForgeArtifactByUnpack(
 	}
 }
 
-func verifyNeoForgeUniversalManifest(reader *zip.Reader, loaderVersion types.RawVersion) (bool, error) {
+func verifyNeoForgeUniversalManifest(
+reader *zip.Reader,
+loaderVersion types.BareVersion,
+) (bool, error) {
 	manifest, ok, err := readZipFile(reader, "META-INF/MANIFEST.MF")
 	if err != nil || !ok {
 		return false, err
@@ -91,7 +126,10 @@ func verifyNeoForgeUniversalManifest(reader *zip.Reader, loaderVersion types.Raw
 		return true, nil
 	}
 
-	classpathEntry := fmt.Sprintf("libraries/net/neoforged/neoforge/%s/", loaderVersion)
+	classpathEntry := fmt.Sprintf(
+		"libraries/net/neoforged/neoforge/%s/",
+		loaderVersion,
+	)
 	return strings.Contains(manifest, classpathEntry), nil
 }
 

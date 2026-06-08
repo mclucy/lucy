@@ -12,16 +12,16 @@ import (
 )
 
 func recursiveInstallDestination(
-	serverInfo types.ServerInfo,
-	pkg types.Package,
+serverInfo types.ServerInfo,
+pkg types.Package,
 ) string {
 	if pkg.Id.Platform.IsModding() && len(serverInfo.ModPath) > 0 {
 		return serverInfo.ModPath[0]
 	}
 
 	if pkg.Id.Platform == types.PlatformMCDR &&
-		serverInfo.Environments.Mcdr != nil &&
-		len(serverInfo.Environments.Mcdr.Config.PluginDirectories) > 0 {
+	serverInfo.Environments.Mcdr != nil &&
+	len(serverInfo.Environments.Mcdr.Config.PluginDirectories) > 0 {
 		return serverInfo.Environments.Mcdr.Config.PluginDirectories[0]
 	}
 
@@ -37,7 +37,10 @@ func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
 		return ApplyPlan{}, fmt.Errorf("install: nil recursive transaction")
 	}
 
-	candidateByName := make(map[types.ProjectName]CandidateNode, len(tx.CandidateGraph))
+	candidateByName := make(
+		map[types.PackageName]CandidateNode,
+		len(tx.CandidateGraph),
+	)
 	for _, node := range tx.CandidateGraph {
 		if node.Package.Remote != nil {
 			candidateByName[node.Package.Id.Name] = node
@@ -88,12 +91,18 @@ func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
 
 // ApplyValidatedClosure executes the finalized install/remove plan after the
 // recursive transaction has been committed.
-func ApplyValidatedClosure(tx *RecursiveTransaction, serverInfo types.ServerInfo) error {
+func ApplyValidatedClosure(
+tx *RecursiveTransaction,
+serverInfo types.ServerInfo,
+) error {
 	if tx == nil {
 		return errors.New("install: recursive transaction is nil")
 	}
 	if tx.Phase != PhaseCommitted {
-		return fmt.Errorf("install: apply requires committed phase, got %d", tx.Phase)
+		return fmt.Errorf(
+			"install: apply requires committed phase, got %d",
+			tx.Phase,
+		)
 	}
 	if tx.Apply == nil {
 		return errors.New("install: apply requires a validated apply plan")
@@ -119,13 +128,23 @@ func ApplyValidatedClosure(tx *RecursiveTransaction, serverInfo types.ServerInfo
 			dstDir := recursiveInstallDestination(serverInfo, pkg)
 			if dstDir != "" && dstDir != "." {
 				if err := os.MkdirAll(dstDir, 0o755); err != nil {
-					moveErrors = append(moveErrors, fmt.Errorf("create install directory for %s: %w", pkg.Id.StringFull(), err))
+					moveErrors = append(
+						moveErrors,
+						fmt.Errorf(
+							"create install directory for %s: %w",
+							pkg.Id.StringFull(),
+							err,
+						),
+					)
 					continue
 				}
 			}
 			dst := filepath.Join(dstDir, filepath.Base(src))
 			if err := os.Rename(src, dst); err != nil {
-				moveErrors = append(moveErrors, fmt.Errorf("move %s: %w", pkg.Id.StringFull(), err))
+				moveErrors = append(
+					moveErrors,
+					fmt.Errorf("move %s: %w", pkg.Id.StringFull(), err),
+				)
 				continue
 			}
 			pkg.Local.Path = dst

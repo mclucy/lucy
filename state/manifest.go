@@ -123,9 +123,19 @@ func ManifestDefaults() Manifest {
 func ValidateManifest(m Manifest) error {
 	if err := ValidateVersion(m.FormatVersion); err != nil {
 		if IsVersionError(err) {
-			return versionStateError(ManifestFile, "format_version", m.FormatVersion, ErrVersionUnsupported)
+			return versionStateError(
+				ManifestFile,
+				"format_version",
+				m.FormatVersion,
+				ErrVersionUnsupported,
+			)
 		}
-		return versionStateError(ManifestFile, "format_version", m.FormatVersion, ErrMalformed)
+		return versionStateError(
+			ManifestFile,
+			"format_version",
+			m.FormatVersion,
+			ErrMalformed,
+		)
 	}
 
 	if err := ValidateManifestEnvironment(m.Environment); err != nil {
@@ -134,13 +144,21 @@ func ValidateManifest(m Manifest) error {
 
 	for i, pkg := range m.Packages {
 		if err := validateManifestPackage(pkg); err != nil {
-			return malformedStateError(ManifestFile, fmt.Sprintf("packages[%d]", i), err)
+			return malformedStateError(
+				ManifestFile,
+				fmt.Sprintf("packages[%d]", i),
+				err,
+			)
 		}
 	}
 
 	for i, bundle := range m.Bundles {
 		if err := validateManifestBundle(bundle); err != nil {
-			return malformedStateError(ManifestFile, fmt.Sprintf("bundles[%d]", i), err)
+			return malformedStateError(
+				ManifestFile,
+				fmt.Sprintf("bundles[%d]", i),
+				err,
+			)
 		}
 	}
 
@@ -153,10 +171,20 @@ func ValidateManifestEnvironment(env ManifestEnvironment) error {
 
 	if platform == "" {
 		if version != "" {
-			return NewStateError(ManifestFile, ErrMalformed, "environment.modding_platform_version", "environment.modding_platform_version requires environment.modding_platform")
+			return NewStateError(
+				ManifestFile,
+				ErrMalformed,
+				"environment.modding_platform_version",
+				"environment.modding_platform_version requires environment.modding_platform",
+			)
 		}
 		if len(env.CompatiblePlatforms) > 0 {
-			return NewStateError(ManifestFile, ErrMalformed, "environment.compatible_platforms", "environment.compatible_platforms requires environment.modding_platform")
+			return NewStateError(
+				ManifestFile,
+				ErrMalformed,
+				"environment.compatible_platforms",
+				"environment.compatible_platforms requires environment.modding_platform",
+			)
 		}
 		return nil
 	}
@@ -164,35 +192,76 @@ func ValidateManifestEnvironment(env ManifestEnvironment) error {
 	switch platform {
 	case "none", "fabric", "forge", "neoforge", "mcdr":
 	default:
-		return NewStateError(ManifestFile, ErrMalformed, "environment.modding_platform", fmt.Sprintf("invalid environment.modding_platform %q", env.ModdingPlatform))
+		return NewStateError(
+			ManifestFile,
+			ErrMalformed,
+			"environment.modding_platform",
+			fmt.Sprintf(
+				"invalid environment.modding_platform %q",
+				env.ModdingPlatform,
+			),
+		)
 	}
 
 	if platform == "none" && len(env.CompatiblePlatforms) > 0 {
-		return NewStateError(ManifestFile, ErrMalformed, "environment.compatible_platforms", "environment.compatible_platforms requires a non-vanilla environment.modding_platform")
+		return NewStateError(
+			ManifestFile,
+			ErrMalformed,
+			"environment.compatible_platforms",
+			"environment.compatible_platforms requires a non-vanilla environment.modding_platform",
+		)
 	}
 
 	seen := make(map[string]struct{}, len(env.CompatiblePlatforms))
 	for i, raw := range env.CompatiblePlatforms {
 		value := strings.TrimSpace(raw)
 		if value == "" {
-			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("environment.compatible_platforms[%d]", i), "environment.compatible_platforms entries must be non-empty")
+			return NewStateError(
+				ManifestFile,
+				ErrMalformed,
+				fmt.Sprintf("environment.compatible_platforms[%d]", i),
+				"environment.compatible_platforms entries must be non-empty",
+			)
 		}
 		switch value {
 		case "fabric", "forge", "neoforge", "mcdr", "sinytra":
 		default:
-			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("environment.compatible_platforms[%d]", i), fmt.Sprintf("invalid compatible platform %q", raw))
+			return NewStateError(
+				ManifestFile,
+				ErrMalformed,
+				fmt.Sprintf("environment.compatible_platforms[%d]", i),
+				fmt.Sprintf("invalid compatible platform %q", raw),
+			)
 		}
 		if value == platform {
-			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("environment.compatible_platforms[%d]", i), fmt.Sprintf("compatible platform %q duplicates environment.modding_platform", raw))
+			return NewStateError(
+				ManifestFile,
+				ErrMalformed,
+				fmt.Sprintf("environment.compatible_platforms[%d]", i),
+				fmt.Sprintf(
+					"compatible platform %q duplicates environment.modding_platform",
+					raw,
+				),
+			)
 		}
 		if _, ok := seen[value]; ok {
-			return NewStateError(ManifestFile, ErrMalformed, fmt.Sprintf("environment.compatible_platforms[%d]", i), fmt.Sprintf("duplicate compatible platform %q", raw))
+			return NewStateError(
+				ManifestFile,
+				ErrMalformed,
+				fmt.Sprintf("environment.compatible_platforms[%d]", i),
+				fmt.Sprintf("duplicate compatible platform %q", raw),
+			)
 		}
 		seen[value] = struct{}{}
 	}
 
 	if _, hasSinytra := seen["sinytra"]; hasSinytra && platform != "neoforge" {
-		return NewStateError(ManifestFile, ErrMalformed, "environment.compatible_platforms", "environment.compatible_platforms cannot include \"sinytra\" unless environment.modding_platform is \"neoforge\"")
+		return NewStateError(
+			ManifestFile,
+			ErrMalformed,
+			"environment.compatible_platforms",
+			"environment.compatible_platforms cannot include \"sinytra\" unless environment.modding_platform is \"neoforge\"",
+		)
 	}
 
 	return nil
@@ -233,7 +302,7 @@ func validateManifestPackage(pkg ManifestPackage) error {
 	if strings.TrimSpace(pkg.Version) == "" {
 		return fmt.Errorf("version is required")
 	}
-	version := types.RawVersion(pkg.Version)
+	version := types.BareVersion(pkg.Version)
 	if version.IsInvalid() {
 		return fmt.Errorf("invalid version %q", pkg.Version)
 	}
@@ -247,7 +316,10 @@ func validateManifestPackage(pkg ManifestPackage) error {
 	case "":
 		return fmt.Errorf("role is required")
 	default:
-		return fmt.Errorf("invalid role %q; expected one of required, transitive, ignored", pkg.Role)
+		return fmt.Errorf(
+			"invalid role %q; expected one of required, transitive, ignored",
+			pkg.Role,
+		)
 	}
 
 	switch pkg.Side {
@@ -270,7 +342,7 @@ func CompatiblePlatformOptions(primary string) []string {
 	}
 }
 
-func NormalizeManifestVersionIntent(version types.RawVersion) string {
+func NormalizeManifestVersionIntent(version types.BareVersion) string {
 	trimmed := strings.TrimSpace(version.String())
 	switch trimmed {
 	case "", "any", "none", "unknown":
@@ -280,14 +352,24 @@ func NormalizeManifestVersionIntent(version types.RawVersion) string {
 	}
 }
 
-func UpsertManifestRequiredIntent(manifest *Manifest, id types.PackageId, source string) *Manifest {
+func UpsertManifestRequiredIntent(
+manifest *Manifest,
+req types.PackageRequest,
+source string,
+) *Manifest {
 	if manifest == nil {
 		defaults := ManifestDefaults()
 		manifest = &defaults
 	} else {
 		clone := *manifest
-		clone.Environment.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
-		clone.Environment.DeclaredCapabilities = append([]string(nil), manifest.Environment.DeclaredCapabilities...)
+		clone.Environment.CompatiblePlatforms = append(
+			[]string(nil),
+			manifest.Environment.CompatiblePlatforms...,
+		)
+		clone.Environment.DeclaredCapabilities = append(
+			[]string(nil),
+			manifest.Environment.DeclaredCapabilities...,
+		)
 		clone.Packages = append([]ManifestPackage(nil), manifest.Packages...)
 		clone.Bundles = append([]ManifestBundle(nil), manifest.Bundles...)
 		manifest = &clone
@@ -297,34 +379,43 @@ func UpsertManifestRequiredIntent(manifest *Manifest, id types.PackageId, source
 	if types.ParseSource(resolvedSource) == types.SourceUnknown {
 		resolvedSource = "auto"
 	}
-	intentVersion := NormalizeManifestVersionIntent(id.Version)
+	intentVersion := NormalizeManifestVersionIntent(req.Version)
+	refID := string(req.Ref.Platform) + "/" + string(req.Ref.Name)
 
 	for i := range manifest.Packages {
-		if manifest.Packages[i].ID != id.StringPlatformName() {
+		if manifest.Packages[i].ID != refID {
 			continue
 		}
 		manifest.Packages[i].Version = intentVersion
 		manifest.Packages[i].Source = resolvedSource
 		manifest.Packages[i].Role = RoleRequired
+		manifest.Packages[i].Optional = req.Optional
 		if manifest.Packages[i].Side == "" {
 			manifest.Packages[i].Side = SideUnknown
 		}
-		sort.Slice(manifest.Packages, func(i, j int) bool {
-			return manifest.Packages[i].ID < manifest.Packages[j].ID
-		})
+		sort.Slice(
+			manifest.Packages, func(i, j int) bool {
+				return manifest.Packages[i].ID < manifest.Packages[j].ID
+			},
+		)
 		return manifest
 	}
 
-	manifest.Packages = append(manifest.Packages, ManifestPackage{
-		ID:      id.StringPlatformName(),
-		Version: intentVersion,
-		Source:  resolvedSource,
-		Role:    RoleRequired,
-		Side:    SideUnknown,
-	})
-	sort.Slice(manifest.Packages, func(i, j int) bool {
-		return manifest.Packages[i].ID < manifest.Packages[j].ID
-	})
+	manifest.Packages = append(
+		manifest.Packages, ManifestPackage{
+			ID:       refID,
+			Version:  intentVersion,
+			Source:   resolvedSource,
+			Role:     RoleRequired,
+			Side:     SideUnknown,
+			Optional: req.Optional,
+		},
+	)
+	sort.Slice(
+		manifest.Packages, func(i, j int) bool {
+			return manifest.Packages[i].ID < manifest.Packages[j].ID
+		},
+	)
 	return manifest
 }
 
@@ -370,29 +461,42 @@ func ManifestPackagesFromClassified(classified []ClassifiedPackage) []ManifestPa
 		if side == "" {
 			side = SideUnknown
 		}
-		packages = append(packages, ManifestPackage{
-			ID:       id,
-			Version:  version,
-			Source:   source,
-			Role:     role,
-			Side:     side,
-			Optional: pkg.Optional,
-			Pinned:   pkg.Pinned,
-		})
+		packages = append(
+			packages, ManifestPackage{
+				ID:       id,
+				Version:  version,
+				Source:   source,
+				Role:     role,
+				Side:     side,
+				Optional: pkg.Optional,
+				Pinned:   pkg.Pinned,
+			},
+		)
 	}
-	sort.Slice(packages, func(i, j int) bool {
-		return packages[i].ID < packages[j].ID
-	})
+	sort.Slice(
+		packages, func(i, j int) bool {
+			return packages[i].ID < packages[j].ID
+		},
+	)
 	return packages
 }
 
-func UpdateManifestRolesForAdd(manifest *Manifest, requested []types.PackageId, lock *Lock) *Manifest {
+func UpdateManifestRolesForAdd(
+manifest *Manifest,
+requested []types.PackageRequest,
+lock *Lock,
+) *Manifest {
 	base := cloneManifestOrDefaults(manifest)
 	required := manifestPackagesByRole(base.Packages, RoleRequired)
 	ignored := manifestPackagesByRole(base.Packages, RoleIgnored)
 
-	for _, id := range requested {
-		resolvedID := resolveManifestPackageID(id, &base, lock)
+	for _, req := range requested {
+		// TODO: migrate resolveManifestPackageID to accept PackageRef directly
+		pid := types.PackageId{
+			Platform: req.Ref.Platform,
+			Name:     req.Ref.Name,
+		}
+		resolvedID := resolveManifestPackageID(pid, &base, lock)
 		if resolvedID == "" {
 			continue
 		}
@@ -406,11 +510,12 @@ func UpdateManifestRolesForAdd(manifest *Manifest, requested []types.PackageId, 
 		}
 		pkg.ID = resolvedID
 		pkg.Role = RoleRequired
-		pkg.Version = requestedManifestVersion(id, pkg.Version)
+		pkg.Version = requestedManifestVersion(req.Version, pkg.Version)
 		pkg.Source = normalizedManifestSource(pkg.Source)
 		if pkg.Side == "" {
 			pkg.Side = SideUnknown
 		}
+		pkg.Optional = req.Optional
 		required[resolvedID] = pkg
 	}
 
@@ -418,7 +523,11 @@ func UpdateManifestRolesForAdd(manifest *Manifest, requested []types.PackageId, 
 	return &base
 }
 
-func UpdateManifestRolesForRemove(manifest *Manifest, removed []types.PackageId, lock *Lock) *Manifest {
+func UpdateManifestRolesForRemove(
+manifest *Manifest,
+removed []types.PackageId,
+lock *Lock,
+) *Manifest {
 	base := cloneManifestOrDefaults(manifest)
 	required := manifestPackagesByRole(base.Packages, RoleRequired)
 	ignored := manifestPackagesByRole(base.Packages, RoleIgnored)
@@ -444,15 +553,24 @@ func cloneManifestOrDefaults(manifest *Manifest) Manifest {
 	}
 
 	cloned := *manifest
-	cloned.Environment.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
-	cloned.Environment.DeclaredCapabilities = append([]string(nil), manifest.Environment.DeclaredCapabilities...)
+	cloned.Environment.CompatiblePlatforms = append(
+		[]string(nil),
+		manifest.Environment.CompatiblePlatforms...,
+	)
+	cloned.Environment.DeclaredCapabilities = append(
+		[]string(nil),
+		manifest.Environment.DeclaredCapabilities...,
+	)
 	cloned.Packages = append([]ManifestPackage(nil), manifest.Packages...)
 	cloned.Bundles = append([]ManifestBundle(nil), manifest.Bundles...)
 	normalizeManifest(&cloned)
 	return cloned
 }
 
-func manifestPackagesByRole(packages []ManifestPackage, role ManifestRole) map[string]ManifestPackage {
+func manifestPackagesByRole(
+packages []ManifestPackage,
+role ManifestRole,
+) map[string]ManifestPackage {
 	indexed := make(map[string]ManifestPackage)
 	for _, pkg := range packages {
 		if pkg.Role != role {
@@ -463,7 +581,10 @@ func manifestPackagesByRole(packages []ManifestPackage, role ManifestRole) map[s
 	return indexed
 }
 
-func manifestPackageByID(packages []ManifestPackage, id string) (ManifestPackage, bool) {
+func manifestPackageByID(
+packages []ManifestPackage,
+id string,
+) (ManifestPackage, bool) {
 	for _, pkg := range packages {
 		if pkg.ID == id {
 			return pkg, true
@@ -472,34 +593,42 @@ func manifestPackageByID(packages []ManifestPackage, id string) (ManifestPackage
 	return ManifestPackage{}, false
 }
 
-func rebuildManifestPackages(required map[string]ManifestPackage, ignored map[string]ManifestPackage, lock *Lock) []ManifestPackage {
+func rebuildManifestPackages(
+required map[string]ManifestPackage,
+ignored map[string]ManifestPackage,
+lock *Lock,
+) []ManifestPackage {
 	classified := make([]ClassifiedPackage, 0, len(required)+len(ignored))
 	requiredIDs := make(map[string]struct{}, len(required))
 	ignoredIDs := make(map[string]struct{}, len(ignored))
 
 	for id, pkg := range required {
 		requiredIDs[id] = struct{}{}
-		classified = append(classified, ClassifiedPackage{
-			ID:       id,
-			Version:  pkg.Version,
-			Source:   normalizedManifestSource(pkg.Source),
-			Role:     RoleRequired,
-			Side:     normalizedManifestSide(pkg.Side),
-			Optional: pkg.Optional,
-			Pinned:   pkg.Pinned,
-		})
+		classified = append(
+			classified, ClassifiedPackage{
+				ID:       id,
+				Version:  pkg.Version,
+				Source:   normalizedManifestSource(pkg.Source),
+				Role:     RoleRequired,
+				Side:     normalizedManifestSide(pkg.Side),
+				Optional: pkg.Optional,
+				Pinned:   pkg.Pinned,
+			},
+		)
 	}
 	for id, pkg := range ignored {
 		ignoredIDs[id] = struct{}{}
-		classified = append(classified, ClassifiedPackage{
-			ID:       id,
-			Version:  pkg.Version,
-			Source:   normalizedManifestSource(pkg.Source),
-			Role:     RoleIgnored,
-			Side:     normalizedManifestSide(pkg.Side),
-			Optional: pkg.Optional,
-			Pinned:   pkg.Pinned,
-		})
+		classified = append(
+			classified, ClassifiedPackage{
+				ID:       id,
+				Version:  pkg.Version,
+				Source:   normalizedManifestSource(pkg.Source),
+				Role:     RoleIgnored,
+				Side:     normalizedManifestSide(pkg.Side),
+				Optional: pkg.Optional,
+				Pinned:   pkg.Pinned,
+			},
+		)
 	}
 
 	if lock != nil {
@@ -514,21 +643,26 @@ func rebuildManifestPackages(required map[string]ManifestPackage, ignored map[st
 				continue
 			}
 
-			classified = append(classified, ClassifiedPackage{
-				ID:       locked.ID,
-				Version:  locked.Version,
-				Source:   normalizedManifestSource(locked.Source),
-				Role:     RoleTransitive,
-				Side:     normalizedManifestSide(ManifestSide(locked.Side)),
-				Optional: locked.Optional,
-			})
+			classified = append(
+				classified, ClassifiedPackage{
+					ID:       locked.ID,
+					Version:  locked.Version,
+					Source:   normalizedManifestSource(locked.Source),
+					Role:     RoleTransitive,
+					Side:     normalizedManifestSide(ManifestSide(locked.Side)),
+					Optional: locked.Optional,
+				},
+			)
 		}
 	}
 
 	return ManifestPackagesFromClassified(classified)
 }
 
-func lockedPackageReachableFromRequired(pkg LockedPackage, required map[string]struct{}) bool {
+func lockedPackageReachableFromRequired(
+pkg LockedPackage,
+required map[string]struct{},
+) bool {
 	for _, step := range pkg.Provenance {
 		id := normalizeProvenanceStep(step)
 		if id == "" || id == "root" {
@@ -558,14 +692,14 @@ func normalizeProvenanceStep(step string) string {
 	return trimmed
 }
 
-func requestedManifestVersion(id types.PackageId, fallback string) string {
-	if id.Version == types.VersionAny {
+func requestedManifestVersion(version types.BareVersion, fallback string) string {
+	if version == types.VersionAny {
 		if strings.TrimSpace(fallback) != "" {
 			return fallback
 		}
 		return types.VersionCompatible.String()
 	}
-	return id.Version.String()
+	return version.String()
 }
 
 func normalizedManifestSource(source string) string {
@@ -597,7 +731,11 @@ func defaultManifestPackageForID(id string) ManifestPackage {
 	}
 }
 
-func resolveManifestPackageID(id types.PackageId, manifest *Manifest, lock *Lock) string {
+func resolveManifestPackageID(
+id types.PackageId,
+manifest *Manifest,
+lock *Lock,
+) string {
 	if id.IsIdentityPackage() {
 		id.NormalizeIdentityPackage()
 	}
@@ -606,7 +744,10 @@ func resolveManifestPackageID(id types.PackageId, manifest *Manifest, lock *Lock
 	}
 
 	if manifest != nil {
-		candidate := resolveIDByName(id.Name, manifestPackageIDs(manifest.Packages))
+		candidate := resolveIDByName(
+			id.Name,
+			manifestPackageIDs(manifest.Packages),
+		)
 		if candidate != "" {
 			return candidate
 		}
@@ -633,7 +774,7 @@ func manifestPackageIDs(packages []ManifestPackage) []string {
 	return ids
 }
 
-func resolveIDByName(name types.ProjectName, ids []string) string {
+func resolveIDByName(name types.PackageName, ids []string) string {
 	var match string
 	for _, id := range ids {
 		parts := strings.Split(id, "/")

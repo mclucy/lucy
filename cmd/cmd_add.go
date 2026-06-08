@@ -28,8 +28,16 @@ var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add packages under explicit operator control",
 	Args:  cobra.MinimumNArgs(1),
-	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return CompletePackageIDSuggestions(context.Background(), "add", toComplete)
+	ValidArgsFunction: func(
+		cmd *cobra.Command,
+		args []string,
+		toComplete string,
+	) ([]string, cobra.ShellCompDirective) {
+		return CompletePackageIDSuggestions(
+			context.Background(),
+			"add",
+			toComplete,
+		)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
@@ -43,21 +51,34 @@ var addCmd = &cobra.Command{
 }
 
 func init() {
-	addCmd.Flags().BoolP(flagForceName, "f", false, "Ignore version, dependency, and platform warnings")
-	addCmd.Flags().Bool(flagWithOptionalName, false, "Also install optional upstream dependencies")
-	addCmd.Flags().Bool(flagNoOptionalName, false, "Skip optional upstream dependencies (default)")
+	addCmd.Flags().BoolP(
+		flagForceName,
+		"f",
+		false,
+		"Ignore version, dependency, and platform warnings",
+	)
+	addCmd.Flags().Bool(
+		flagWithOptionalName,
+		false,
+		"Also install optional upstream dependencies",
+	)
+	addCmd.Flags().Bool(
+		flagNoOptionalName,
+		false,
+		"Skip optional upstream dependencies (default)",
+	)
 	addNoStyleFlag(addCmd)
 	rootCmd.AddCommand(addCmd)
 }
 
 func actionAdd(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
+	workspace, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return fmt.Errorf("unable to get current directory: %w", err)
 	}
 
-	stateSvc := state.NewProjectStateService(workDir)
-	hasLucyState, err := lucyStateDirExists(workDir)
+	stateSvc := state.NewProjectStateService(workspace)
+	hasLucyState, err := lucyStateDirExists(workspace)
 	if err != nil {
 		return err
 	}
@@ -69,28 +90,29 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
+	source, _ := cmd.Flags().GetString("source")
 
 	options := install.DefaultOptions()
 	options.WithOptional = withOptional
 
-	ids := make([]types.PackageId, 0, len(args))
+	requests := make([]types.PackageRequest, 0, len(args))
 	for _, arg := range args {
-		id, err := syntax.Parse(arg)
+		req, err := syntax.ParsePackageRequest(arg, source, false)
 		if err != nil {
-			logger.Fatal(err)
+			logger.Fatal(fmt.Errorf("stopping package addition: %w", err))
 		}
-		ids = append(ids, id)
+		requests = append(requests, req)
 	}
 
 	var result *install.Result
-	if len(ids) > 1 {
-		result, err = install.InstallMany(ids, types.SourceAuto, options)
+	if len(requests) > 1 {
+		result, err = install.InstallMany(requests, options)
 	} else {
-		id := ids[0]
-		if id.Version == types.VersionAny {
-			id.Version = types.VersionCompatible
+		req := requests[0]
+		if req.Version == types.VersionAny {
+			req.Version = types.VersionCompatible
 		}
-		result, err = install.Install(id, types.SourceAuto, options)
+		result, err = install.Install(req, options)
 	}
 	if err != nil {
 		return err
@@ -100,7 +122,12 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if err := updateAddState(workDir, stateSvc, ids, result); err != nil {
+	if err := updateAddState(
+		workspace,
+		stateSvc,
+		requests,
+		result,
+	); err != nil {
 		return fmt.Errorf("update state: %w", err)
 	}
 
@@ -134,18 +161,23 @@ func presenceLabel(name string, present bool) string {
 	return name + " absent"
 }
 
-func updateAddState(workDir string, stateSvc *state.ProjectStateService, ids []types.PackageId, result *install.Result) error {
+func updateAddState(
+	workDir string,
+	stateSvc *state.ProjectStateService,
+	requests []types.PackageRequest,
+	result *install.Result,
+) error {
 	if stateSvc == nil {
 		return nil
 	}
 
-	manifestIntent := buildUpdatedManifest(stateSvc.Manifest(), ids)
+	manifestIntent := buildUpdatedManifest(stateSvc.Manifest(), requests)
 	if result == nil || len(result.Installed) == 0 {
 		return state.WriteManifest(workDir, manifestIntent)
 	}
 
 	lock := buildUpdatedLock(workDir, manifestIntent, stateSvc.Lock(), result)
-	manifest := state.UpdateManifestRolesForAdd(stateSvc.Manifest(), ids, lock)
+	manifest := state.UpdateManifestRolesForAdd(stateSvc.Manifest(), requests, lock)
 	if err := state.WriteManifest(workDir, manifest); err != nil {
 		return err
 	}
@@ -155,15 +187,27 @@ func updateAddState(workDir string, stateSvc *state.ProjectStateService, ids []t
 	return state.WriteLock(workDir, lock)
 }
 
-func buildUpdatedManifest(existing *state.Manifest, ids []types.PackageId) *state.Manifest {
+func buildUpdatedManifest(
+	existing *state.Manifest,
+	requests []types.PackageRequest,
+) *state.Manifest {
 	manifest := existing
-	for _, id := range ids {
-		manifest = state.UpsertManifestRequiredIntent(manifest, id, types.SourceAuto.String())
+	for _, req := range requests {
+		manifest = state.UpsertManifestRequiredIntent(
+			manifest,
+			req,
+			types.SourceAuto.String(),
+		)
 	}
 	return manifest
 }
 
-func buildUpdatedLock(workDir string, manifest *state.Manifest, existing *state.Lock, result *install.Result) *state.Lock {
+func buildUpdatedLock(
+	workDir string,
+	manifest *state.Manifest,
+	existing *state.Lock,
+	result *install.Result,
+) *state.Lock {
 	var lock state.Lock
 	if existing != nil {
 		lock = *existing
@@ -175,17 +219,31 @@ func buildUpdatedLock(workDir string, manifest *state.Manifest, existing *state.
 
 	runtime := probe.ServerInfo().Runtime
 	lock.GeneratedAt = state.NewLock().GeneratedAt
-	lock.ManifestFingerprint = manifestFingerprint(manifest, lock.ManifestFingerprint)
+	lock.ManifestFingerprint = manifestFingerprint(
+		manifest,
+		lock.ManifestFingerprint,
+	)
 	lock.GameVersion = manifestGameVersion(manifest, runtime, lock.GameVersion)
 	lock.Platform = manifestPlatform(manifest, runtime, lock.Platform)
-	lock.PlatformVersion = manifestPlatformVersion(manifest, runtime, lock.PlatformVersion)
+	lock.PlatformVersion = manifestPlatformVersion(
+		manifest,
+		runtime,
+		lock.PlatformVersion,
+	)
 
-	packagesByID := make(map[string]state.LockedPackage, len(lock.Packages)+len(result.Installed))
+	packagesByID := make(
+		map[string]state.LockedPackage,
+		len(lock.Packages)+len(result.Installed),
+	)
 	for _, pkg := range lock.Packages {
 		packagesByID[pkg.ID] = pkg
 	}
 	for _, pkg := range result.Installed {
-		locked := lockedPackageFromInstalled(workDir, pkg, result.Provenance[pkg.Id.StringPlatformName()])
+		locked := lockedPackageFromInstalled(
+			workDir,
+			pkg,
+			result.Provenance[pkg.Id.StringPlatformName()],
+		)
 		packagesByID[locked.ID] = locked
 	}
 	packages := make([]state.LockedPackage, 0, len(packagesByID))
@@ -211,7 +269,11 @@ func manifestFingerprint(manifest *state.Manifest, fallback string) string {
 	return "sha256:absent"
 }
 
-func manifestGameVersion(manifest *state.Manifest, runtime *types.RuntimeInfo, fallback string) string {
+func manifestGameVersion(
+	manifest *state.Manifest,
+	runtime *types.RuntimeInfo,
+	fallback string,
+) string {
 	if manifest != nil && manifest.Environment.GameVersion != "" {
 		return manifest.Environment.GameVersion
 	}
@@ -226,7 +288,11 @@ func manifestGameVersion(manifest *state.Manifest, runtime *types.RuntimeInfo, f
 	return types.VersionUnknown.String()
 }
 
-func manifestPlatform(manifest *state.Manifest, runtime *types.RuntimeInfo, fallback string) string {
+func manifestPlatform(
+	manifest *state.Manifest,
+	runtime *types.RuntimeInfo,
+	fallback string,
+) string {
 	if manifest != nil && manifest.Environment.ModdingPlatform != "" {
 		return manifest.Environment.ModdingPlatform
 	}
@@ -241,7 +307,11 @@ func manifestPlatform(manifest *state.Manifest, runtime *types.RuntimeInfo, fall
 	return string(types.PlatformNone)
 }
 
-func manifestPlatformVersion(manifest *state.Manifest, runtime *types.RuntimeInfo, fallback string) string {
+func manifestPlatformVersion(
+	manifest *state.Manifest,
+	runtime *types.RuntimeInfo,
+	fallback string,
+) string {
 	if manifest != nil && manifest.Environment.ModdingPlatformVersion != "" {
 		return manifest.Environment.ModdingPlatformVersion
 	}
@@ -256,7 +326,11 @@ func manifestPlatformVersion(manifest *state.Manifest, runtime *types.RuntimeInf
 	return types.VersionUnknown.String()
 }
 
-func lockedPackageFromInstalled(workDir string, pkg types.Package, provenance []string) state.LockedPackage {
+func lockedPackageFromInstalled(
+	workDir string,
+	pkg types.Package,
+	provenance []string,
+) state.LockedPackage {
 	requester := "root"
 	if len(provenance) > 0 {
 		requester = provenance[len(provenance)-1]

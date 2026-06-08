@@ -10,7 +10,7 @@ import (
 // an irreconcilable merged constraint.
 type ConstraintConflictSource struct {
 	Requester  string
-	Constraint types.VersionConstraint
+	Constraint types.VersionSubExpr
 }
 
 // ConstraintConflictError reports that merged requirements for one package

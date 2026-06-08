@@ -10,13 +10,22 @@ import (
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
-func InstallMany(ids []types.PackageId, source types.Source, options Options) (*Result, error) {
+func InstallMany(requests []types.PackageRequest, options Options) (
+*Result,
+error,
+) {
 	const maxReconcileIterations = 3
 
-	if len(ids) == 0 {
+	if len(requests) == 0 {
 		return &Result{}, nil
 	}
 
+	batchSource := types.SourceAuto
+	if len(requests) > 0 {
+		batchSource = requests[0].Source
+	}
+
+	ids := requestsToIds(requests)
 	prepared := prepareBatchIDs(ids)
 	identityIds, regularIds := partitionBatchIDs(prepared)
 
@@ -38,7 +47,11 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) (*
 						strings.Join(succeeded, ", "),
 					)
 				}
-				return nil, fmt.Errorf("failed to install %s: %w", id.StringFull(), err)
+				return nil, fmt.Errorf(
+					"failed to install %s: %w",
+					id.StringFull(),
+					err,
+				)
 			}
 			succeeded = append(succeeded, id.StringFull())
 		}
@@ -58,7 +71,7 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) (*
 	serverInfo := probe.ServerInfo()
 	providers, err := routing.ResolveProvidersFromTopology(
 		serverInfo.Runtime.Topology,
-		source,
+		batchSource,
 	)
 	if err != nil {
 		return nil, err
@@ -88,7 +101,10 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) (*
 	}
 	seedTx := NewRecursiveTransaction(roots, providers)
 	SnapshotInstalledConstraints(seedTx)
-	resolvePlan := newRecursiveResolutionPlan(roots, seedTx.InstalledConstraints)
+	resolvePlan := newRecursiveResolutionPlan(
+		roots,
+		seedTx.InstalledConstraints,
+	)
 	var tx *RecursiveTransaction
 	var diff ReconcileDiff
 
@@ -108,7 +124,10 @@ func InstallMany(ids []types.PackageId, source types.Source, options Options) (*
 
 		packages := recursiveCandidatePackages(tx)
 		showRecursiveDownloadStart(len(packages))
-		tx.StagingDir, packages, err = downloadBatchPackages(serverInfo.WorkPath, packages)
+		tx.StagingDir, packages, err = downloadBatchPackages(
+			serverInfo.WorkPath,
+			packages,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -168,6 +187,15 @@ func buildInstallResult(tx *RecursiveTransaction) *Result {
 	return &Result{Installed: installed, Provenance: provenance}
 }
 
+// TODO(package-ref-migration) — boundary conversion; pipeline internals still use PackageId
+func requestsToIds(requests []types.PackageRequest) []types.PackageId {
+	ids := make([]types.PackageId, len(requests))
+	for i, req := range requests {
+		ids[i] = types.PackageId{Platform: req.Ref.Platform, Name: req.Ref.Name, Version: req.Version}
+	}
+	return ids
+}
+
 func prepareBatchIDs(ids []types.PackageId) []types.PackageId {
 	seen := make(map[string]struct{}, len(ids))
 	prepared := make([]types.PackageId, 0, len(ids))
@@ -193,7 +221,10 @@ func prepareBatchIDs(ids []types.PackageId) []types.PackageId {
 	return prepared
 }
 
-func partitionBatchIDs(ids []types.PackageId) ([]types.PackageId, []types.PackageId) {
+func partitionBatchIDs(ids []types.PackageId) (
+	[]types.PackageId,
+	[]types.PackageId,
+) {
 	identityIds := make([]types.PackageId, 0, len(ids))
 	regularIds := make([]types.PackageId, 0, len(ids))
 
@@ -213,7 +244,10 @@ func validateRegularBatchIDs(ids []types.PackageId) error {
 
 	for _, id := range ids {
 		if err := ensureServerPlatformMatch(id); err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", id.StringFull(), err))
+			failures = append(
+				failures,
+				fmt.Sprintf("%s: %v", id.StringFull(), err),
+			)
 		}
 	}
 

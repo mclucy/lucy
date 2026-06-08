@@ -31,22 +31,27 @@ func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies
 		parentId := types.PackageId{
 			Platform: m.platform,
 			Name:     syntax.ToProjectName(m.version.Id),
-			Version:  types.RawVersion(m.version.VersionNumber),
+			Version:  types.BareVersion(m.version.VersionNumber),
 		}
 
 		depId, err := DependencyToPackage(parentId, &dep)
 		if err != nil {
-			logger.ShowInfo(fmt.Sprintf(
-				"[modrinth] skipping dependency with resolution error: %v", err,
-			))
+			logger.ShowInfo(
+				fmt.Sprintf(
+					"[modrinth] skipping dependency with resolution error: %v",
+					err,
+				),
+			)
 			continue
 		}
 
 		mandatory := dep.DependencyType == required
-		result.Value = append(result.Value, types.Dependency{
-			Id:        depId,
-			Mandatory: mandatory,
-		})
+		result.Value = append(
+			result.Value, types.Dependency{
+				Id:        depId,
+				Mandatory: mandatory,
+			},
+		)
 	}
 
 	return result

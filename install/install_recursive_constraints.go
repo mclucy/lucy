@@ -11,7 +11,7 @@ type ConstraintGraph map[string]ConstraintRequirement
 // requester that contributed each atomic clause.
 type ConstraintRequirement struct {
 	Id         types.PackageId
-	Constraint types.VersionConstraintExpression
+	Constraint types.VersionExpr
 	Provenance []ConstraintProvenance
 
 	variants []constraintVariant
@@ -21,7 +21,7 @@ type ConstraintRequirement struct {
 // introduced it.
 type ConstraintProvenance struct {
 	Requester  string
-	Constraint types.VersionConstraint
+	Constraint types.VersionSubExpr
 }
 
 type constraintVariant struct {
@@ -58,7 +58,11 @@ func MergeConstraintGraph(inputs []ConstraintInput) (ConstraintGraph, error) {
 			return nil, err
 		}
 
-		mergedVariants, mergeErr := mergeRequirementVariants(entry.Id, entry.variants, variants)
+		mergedVariants, mergeErr := mergeRequirementVariants(
+			entry.Id,
+			entry.variants,
+			variants,
+		)
 		if mergeErr != nil {
 			return nil, mergeErr
 		}
@@ -73,19 +77,24 @@ func MergeConstraintGraph(inputs []ConstraintInput) (ConstraintGraph, error) {
 }
 
 // IsSatisfied reports whether the merged requirement for id accepts version.
-func (g ConstraintGraph) IsSatisfied(id types.PackageId, version types.ComparableVersion) bool {
+func (g ConstraintGraph) IsSatisfied(
+id types.PackageId,
+version types.ResolvableVersion,
+) bool {
 	entry, ok := g[id.StringPlatformName()]
 	if !ok {
 		return false
 	}
-	dep := types.Dependency{Id: entry.Id, Constraint: entry.Constraint, Mandatory: true}
+	dep := types.Dependency{
+		Id: entry.Id, Constraint: entry.Constraint, Mandatory: true,
+	}
 	return dep.Satisfy(id, version)
 }
 
 func mergeRequirementVariants(
-	id types.PackageId,
-	left []constraintVariant,
-	right []constraintVariant,
+id types.PackageId,
+left []constraintVariant,
+right []constraintVariant,
 ) ([]constraintVariant, error) {
 	if len(left) == 0 {
 		left = []constraintVariant{{}}
@@ -98,7 +107,13 @@ func mergeRequirementVariants(
 	var firstConflict *ConstraintConflictError
 	for _, leftVariant := range left {
 		for _, rightVariant := range right {
-			combined := constraintVariant{Clauses: make([]ConstraintProvenance, 0, len(leftVariant.Clauses)+len(rightVariant.Clauses))}
+			combined := constraintVariant{
+				Clauses: make(
+					[]ConstraintProvenance,
+					0,
+					len(leftVariant.Clauses)+len(rightVariant.Clauses),
+				),
+			}
 			combined.Clauses = append(combined.Clauses, leftVariant.Clauses...)
 			combined.Clauses = append(combined.Clauses, rightVariant.Clauses...)
 			ok, conflict := conjunctionSatisfiable(id, combined.Clauses)
@@ -122,7 +137,10 @@ func mergeRequirementVariants(
 	return merged, nil
 }
 
-func conjunctionSatisfiable(id types.PackageId, clauses []ConstraintProvenance) (bool, *ConstraintConflictError) {
+func conjunctionSatisfiable(
+id types.PackageId,
+clauses []ConstraintProvenance,
+) (bool, *ConstraintConflictError) {
 	var eq *ConstraintProvenance
 	var lower *boundConstraint
 	var upper *boundConstraint
@@ -143,13 +161,24 @@ func conjunctionSatisfiable(id types.PackageId, clauses []ConstraintProvenance) 
 		case types.OpNeq:
 			neqs = append(neqs, clause)
 		case types.OpGt:
-			lower = strongerLower(lower, boundConstraint{Clause: clause, LowerBound: true})
+			lower = strongerLower(
+				lower,
+				boundConstraint{Clause: clause, LowerBound: true},
+			)
 		case types.OpGte:
-			lower = strongerLower(lower, boundConstraint{Clause: clause, Inclusive: true, LowerBound: true})
+			lower = strongerLower(
+				lower,
+				boundConstraint{
+					Clause: clause, Inclusive: true, LowerBound: true,
+				},
+			)
 		case types.OpLt:
 			upper = strongerUpper(upper, boundConstraint{Clause: clause})
 		case types.OpLte:
-			upper = strongerUpper(upper, boundConstraint{Clause: clause, Inclusive: true})
+			upper = strongerUpper(
+				upper,
+				boundConstraint{Clause: clause, Inclusive: true},
+			)
 		}
 	}
 
@@ -187,7 +216,10 @@ func conjunctionSatisfiable(id types.PackageId, clauses []ConstraintProvenance) 
 	return true, nil
 }
 
-func strongerLower(current *boundConstraint, candidate boundConstraint) *boundConstraint {
+func strongerLower(
+current *boundConstraint,
+candidate boundConstraint,
+) *boundConstraint {
 	if current == nil {
 		return &candidate
 	}
@@ -207,7 +239,10 @@ func strongerLower(current *boundConstraint, candidate boundConstraint) *boundCo
 	return current
 }
 
-func strongerUpper(current *boundConstraint, candidate boundConstraint) *boundConstraint {
+func strongerUpper(
+current *boundConstraint,
+candidate boundConstraint,
+) *boundConstraint {
 	if current == nil {
 		return &candidate
 	}
@@ -227,10 +262,17 @@ func strongerUpper(current *boundConstraint, candidate boundConstraint) *boundCo
 	return current
 }
 
-func conflictFor(id types.PackageId, left, right ConstraintProvenance) *ConstraintConflictError {
+func conflictFor(
+id types.PackageId,
+left, right ConstraintProvenance,
+) *ConstraintConflictError {
 	return &ConstraintConflictError{
 		PackageId: id,
-		Left:      ConstraintConflictSource{Requester: left.Requester, Constraint: left.Constraint},
-		Right:     ConstraintConflictSource{Requester: right.Requester, Constraint: right.Constraint},
+		Left: ConstraintConflictSource{
+			Requester: left.Requester, Constraint: left.Constraint,
+		},
+		Right: ConstraintConflictSource{
+			Requester: right.Requester, Constraint: right.Constraint,
+		},
 	}
 }

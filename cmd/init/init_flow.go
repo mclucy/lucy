@@ -273,24 +273,42 @@ func NewInitFlowState(workDir string) *InitFlowState {
 		}
 	}
 
-	if _, exists := containsExistingFile(s.ExistingFiles, string(state.ConfigFile)); exists {
+	if _, exists := containsExistingFile(
+		s.ExistingFiles,
+		string(state.ConfigFile),
+	); exists {
 		config, _, err := state.ReadConfig(workDir)
 		if err != nil {
-			s.ExistingStateConflicts = append(s.ExistingStateConflicts, formatExistingStateConflict(state.ConfigFile, err))
+			s.ExistingStateConflicts = append(
+				s.ExistingStateConflicts,
+				formatExistingStateConflict(state.ConfigFile, err),
+			)
 		} else if config != nil {
 			if len(s.ManagedRoots) == 0 && len(config.Scope.ManagedRoots) > 0 {
-				s.ManagedRoots = append([]string(nil), config.Scope.ManagedRoots...)
+				s.ManagedRoots = append(
+					[]string(nil),
+					config.Scope.ManagedRoots...,
+				)
 			}
 			if len(config.Sources.Priority) > 0 {
-				s.SourcePriority = append([]string(nil), config.Sources.Priority...)
+				s.SourcePriority = append(
+					[]string(nil),
+					config.Sources.Priority...,
+				)
 			}
 		}
 	}
 
-	if _, exists := containsExistingFile(s.ExistingFiles, string(state.ManifestFile)); exists {
+	if _, exists := containsExistingFile(
+		s.ExistingFiles,
+		string(state.ManifestFile),
+	); exists {
 		manifest, _, err := state.ReadManifest(workDir)
 		if err != nil {
-			s.ExistingStateConflicts = append(s.ExistingStateConflicts, formatExistingStateConflict(state.ManifestFile, err))
+			s.ExistingStateConflicts = append(
+				s.ExistingStateConflicts,
+				formatExistingStateConflict(state.ManifestFile, err),
+			)
 		} else if manifest != nil {
 			if strings.TrimSpace(s.GameVersion) == "" && strings.TrimSpace(manifest.Environment.GameVersion) != "" {
 				s.GameVersion = strings.TrimSpace(manifest.Environment.GameVersion)
@@ -302,14 +320,23 @@ func NewInitFlowState(workDir string) *InitFlowState {
 				s.PlatformVersion = strings.TrimSpace(manifest.Environment.ModdingPlatformVersion)
 			}
 			if len(s.CompatiblePlatforms) == 0 && len(manifest.Environment.CompatiblePlatforms) > 0 {
-				s.CompatiblePlatforms = append([]string(nil), manifest.Environment.CompatiblePlatforms...)
+				s.CompatiblePlatforms = append(
+					[]string(nil),
+					manifest.Environment.CompatiblePlatforms...,
+				)
 			}
 		}
 	}
 
-	if _, exists := containsExistingFile(s.ExistingFiles, string(state.LockFile)); exists {
+	if _, exists := containsExistingFile(
+		s.ExistingFiles,
+		string(state.LockFile),
+	); exists {
 		if _, _, err := state.ReadLock(workDir); err != nil {
-			s.ExistingStateConflicts = append(s.ExistingStateConflicts, formatExistingStateConflict(state.LockFile, err))
+			s.ExistingStateConflicts = append(
+				s.ExistingStateConflicts,
+				formatExistingStateConflict(state.LockFile, err),
+			)
 		}
 	}
 
@@ -326,7 +353,11 @@ func containsExistingFile(files []string, want string) (int, bool) {
 }
 
 func formatExistingStateConflict(file state.StateFile, err error) string {
-	return fmt.Sprintf("%s exists but could not be preserved safely: %v", file, err)
+	return fmt.Sprintf(
+		"%s exists but could not be preserved safely: %v",
+		file,
+		err,
+	)
 }
 
 // RefreshObservedStateAfterInitWrites refreshes probe state for the initialized
@@ -393,7 +424,10 @@ type TakeoverPackageClassification struct {
 }
 
 func BuildTakeoverPackageClassifications(packages []types.Package) []TakeoverPackageClassification {
-	classifications := make(map[string]TakeoverPackageClassification, len(packages))
+	classifications := make(
+		map[string]TakeoverPackageClassification,
+		len(packages),
+	)
 	nameIndex := make(map[string][]string)
 
 	for _, pkg := range packages {
@@ -422,8 +456,15 @@ func BuildTakeoverPackageClassifications(packages []types.Package) []TakeoverPac
 		if !ok {
 			continue
 		}
-		for _, depID := range resolveTakeoverDependencyTargets(pkg, classifications, nameIndex) {
-			classification.Requires = appendUniqueStrings(classification.Requires, depID)
+		for _, depID := range resolveTakeoverDependencyTargets(
+			pkg,
+			classifications,
+			nameIndex,
+		) {
+			classification.Requires = appendUniqueStrings(
+				classification.Requires,
+				depID,
+			)
 			dep := classifications[depID]
 			dep.RequiredBy = appendUniqueStrings(dep.RequiredBy, fromID)
 			classifications[depID] = dep
@@ -441,9 +482,11 @@ func BuildTakeoverPackageClassifications(packages []types.Package) []TakeoverPac
 		}
 		result = append(result, classification)
 	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].ID < result[j].ID
-	})
+	sort.Slice(
+		result, func(i, j int) bool {
+			return result[i].ID < result[j].ID
+		},
+	)
 	return result
 }
 
@@ -457,7 +500,11 @@ func takeoverPackageIDAllowed(id types.PackageId) bool {
 	return true
 }
 
-func resolveTakeoverDependencyTargets(pkg types.Package, classifications map[string]TakeoverPackageClassification, nameIndex map[string][]string) []string {
+func resolveTakeoverDependencyTargets(
+pkg types.Package,
+classifications map[string]TakeoverPackageClassification,
+nameIndex map[string][]string,
+) []string {
 	if pkg.Dependencies == nil {
 		return nil
 	}
@@ -482,7 +529,7 @@ func resolveTakeoverDependencyTargets(pkg types.Package, classifications map[str
 	return targets
 }
 
-func takeoverManifestVersion(version types.RawVersion) string {
+func takeoverManifestVersion(version types.BareVersion) string {
 	return state.NormalizeManifestVersionIntent(version)
 }
 
@@ -516,7 +563,10 @@ func appendUniqueStrings(existing []string, values ...string) []string {
 	return existing
 }
 
-func applyTakeoverPackageSelections(s *InitFlowState, requiredLeafIDs, ignoredIDs []string) {
+func applyTakeoverPackageSelections(
+s *InitFlowState,
+requiredLeafIDs, ignoredIDs []string,
+) {
 	requiredSet := make(map[string]struct{}, len(requiredLeafIDs))
 	ignoredSet := make(map[string]struct{}, len(ignoredIDs))
 	for _, id := range requiredLeafIDs {
@@ -554,7 +604,10 @@ func CanProceed(s *InitFlowState) bool {
 	if s.GameVersion == "" {
 		return false
 	}
-	if err := ValidatePlatformSelection(s.Platform, s.CompatiblePlatforms); err != nil {
+	if err := ValidatePlatformSelection(
+		s.Platform,
+		s.CompatiblePlatforms,
+	); err != nil {
 		return false
 	}
 	if len(s.ManagedRoots) == 0 {
@@ -564,10 +617,12 @@ func CanProceed(s *InitFlowState) bool {
 }
 
 func ValidatePlatformSelection(primary string, compatible []string) error {
-	return state.ValidateManifestEnvironment(state.ManifestEnvironment{
-		ModdingPlatform:     primary,
-		CompatiblePlatforms: compatible,
-	})
+	return state.ValidateManifestEnvironment(
+		state.ManifestEnvironment{
+			ModdingPlatform:     primary,
+			CompatiblePlatforms: compatible,
+		},
+	)
 }
 
 // Types for the final result of the flow and error conditions during result construction.
@@ -660,7 +715,10 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		mf.Environment.GameVersion = s.GameVersion
 		mf.Environment.ModdingPlatform = s.Platform
 		mf.Environment.ModdingPlatformVersion = s.PlatformVersion
-		mf.Environment.CompatiblePlatforms = append([]string(nil), s.CompatiblePlatforms...)
+		mf.Environment.CompatiblePlatforms = append(
+			[]string(nil),
+			s.CompatiblePlatforms...,
+		)
 		mf.Packages = state.ManifestPackagesFromClassified(classifiedPackagesForManifest(s.PackageClassifications))
 		result.ManifestToWrite = &mf
 		result.WrittenFiles = append(result.WrittenFiles, mfPath)
@@ -682,7 +740,11 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 	return result, nil
 }
 
-func populateInitLockMetadata(lock *state.Lock, s *InitFlowState, manifest *state.Manifest) {
+func populateInitLockMetadata(
+lock *state.Lock,
+s *InitFlowState,
+manifest *state.Manifest,
+) {
 	if lock == nil || s == nil {
 		return
 	}
@@ -706,10 +768,22 @@ func populateInitLockMetadata(lock *state.Lock, s *InitFlowState, manifest *stat
 
 	if lock.ManifestFingerprint == "" {
 		fallbackManifest := state.ManifestDefaults()
-		fallbackManifest.Environment.GameVersion = lockMetadataValue(s.GameVersion, s.DiscoveredDefaults.GameVersion)
-		fallbackManifest.Environment.ModdingPlatform = lockMetadataValue(s.Platform, s.DiscoveredDefaults.Platform)
-		fallbackManifest.Environment.ModdingPlatformVersion = lockMetadataValue(s.PlatformVersion, s.DiscoveredDefaults.PlatformVersion)
-		fallbackManifest.Environment.CompatiblePlatforms = append([]string(nil), s.CompatiblePlatforms...)
+		fallbackManifest.Environment.GameVersion = lockMetadataValue(
+			s.GameVersion,
+			s.DiscoveredDefaults.GameVersion,
+		)
+		fallbackManifest.Environment.ModdingPlatform = lockMetadataValue(
+			s.Platform,
+			s.DiscoveredDefaults.Platform,
+		)
+		fallbackManifest.Environment.ModdingPlatformVersion = lockMetadataValue(
+			s.PlatformVersion,
+			s.DiscoveredDefaults.PlatformVersion,
+		)
+		fallbackManifest.Environment.CompatiblePlatforms = append(
+			[]string(nil),
+			s.CompatiblePlatforms...,
+		)
 		fallbackManifest.Packages = state.ManifestPackagesFromClassified(classifiedPackagesForManifest(s.PackageClassifications))
 		if data, err := state.SerializeManifest(&fallbackManifest); err == nil {
 			sum := sha256.Sum256(data)
@@ -717,9 +791,24 @@ func populateInitLockMetadata(lock *state.Lock, s *InitFlowState, manifest *stat
 		}
 	}
 
-	lock.GameVersion = lockMetadataValue(lock.GameVersion, s.GameVersion, s.DiscoveredDefaults.GameVersion, types.VersionUnknown.String())
-	lock.Platform = lockMetadataValue(lock.Platform, s.Platform, s.DiscoveredDefaults.Platform, string(types.PlatformNone))
-	lock.PlatformVersion = lockMetadataValue(lock.PlatformVersion, s.PlatformVersion, s.DiscoveredDefaults.PlatformVersion, types.VersionUnknown.String())
+	lock.GameVersion = lockMetadataValue(
+		lock.GameVersion,
+		s.GameVersion,
+		s.DiscoveredDefaults.GameVersion,
+		types.VersionUnknown.String(),
+	)
+	lock.Platform = lockMetadataValue(
+		lock.Platform,
+		s.Platform,
+		s.DiscoveredDefaults.Platform,
+		string(types.PlatformNone),
+	)
+	lock.PlatformVersion = lockMetadataValue(
+		lock.PlatformVersion,
+		s.PlatformVersion,
+		s.DiscoveredDefaults.PlatformVersion,
+		types.VersionUnknown.String(),
+	)
 }
 
 func lockMetadataValue(values ...string) string {
@@ -734,15 +823,17 @@ func lockMetadataValue(values ...string) string {
 func classifiedPackagesForManifest(classifications []TakeoverPackageClassification) []state.ClassifiedPackage {
 	packages := make([]state.ClassifiedPackage, 0, len(classifications))
 	for _, classification := range classifications {
-		packages = append(packages, state.ClassifiedPackage{
-			ID:       classification.ID,
-			Version:  classification.Version,
-			Source:   classification.Source,
-			Role:     classification.Role,
-			Side:     classification.Side,
-			Optional: classification.Optional,
-			Pinned:   classification.Pinned,
-		})
+		packages = append(
+			packages, state.ClassifiedPackage{
+				ID:       classification.ID,
+				Version:  classification.Version,
+				Source:   classification.Source,
+				Role:     classification.Role,
+				Side:     classification.Side,
+				Optional: classification.Optional,
+				Pinned:   classification.Pinned,
+			},
+		)
 	}
 	return packages
 }

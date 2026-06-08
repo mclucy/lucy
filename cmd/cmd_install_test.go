@@ -91,10 +91,10 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 	}
 }
 
-func packageIDsToStrings(ids []types.PackageId) []string {
-	out := make([]string, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, id.StringFull())
+func packageIDsToStrings(requests []types.PackageRequest) []string {
+	out := make([]string, 0, len(requests))
+	for _, req := range requests {
+		out = append(out, string(req.Ref.Platform)+"/"+string(req.Ref.Name)+"@"+req.Version.String())
 	}
 	return out
 }

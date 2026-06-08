@@ -38,26 +38,29 @@ type resolvedVersion struct {
 func (s searchResponse) ToSearchResults() types.SearchResults {
 	results := types.SearchResults{
 		Source:   types.SourceSpiget,
-		Projects: make([]types.ProjectName, 0, len(s)),
+		Projects: make([]types.PackageName, 0, len(s)),
 	}
 
 	for _, resource := range s {
 		if resource.Name == "" {
 			continue
 		}
-		results.Projects = append(results.Projects, normalizedProjectName(resource.Name))
+		results.Projects = append(
+			results.Projects,
+			normalizedProjectName(resource.Name),
+		)
 	}
 
 	return results
 }
 
-func (r resourceResponse) ToProjectInformation() types.ProjectInformation {
+func (r resourceResponse) ToProjectInformation() types.Metadata {
 	description := combineHTMLSections(
 		decodeBase64HTML(r.Description),
 		decodeBase64HTML(r.Documentation),
 	)
 
-	info := types.ProjectInformation{
+	info := types.Metadata{
 		Title:                 r.Name,
 		Brief:                 r.Tag,
 		Description:           description,
@@ -67,10 +70,20 @@ func (r resourceResponse) ToProjectInformation() types.ProjectInformation {
 
 	appendLinkURLs(&info, r.Links)
 	if r.SourceCodeLink != "" {
-		info.Urls = append(info.Urls, types.Url{Name: "Source", Type: types.UrlSource, Url: r.SourceCodeLink})
+		info.Urls = append(
+			info.Urls,
+			types.Url{
+				Name: "Source", Type: types.UrlSource, Url: r.SourceCodeLink,
+			},
+		)
 	}
 	if r.DonationLink != "" {
-		info.Urls = append(info.Urls, types.Url{Name: "Donate", Type: types.UrlSponsor, Url: r.DonationLink})
+		info.Urls = append(
+			info.Urls,
+			types.Url{
+				Name: "Donate", Type: types.UrlSponsor, Url: r.DonationLink,
+			},
+		)
 	}
 
 	return info
@@ -78,7 +91,7 @@ func (r resourceResponse) ToProjectInformation() types.ProjectInformation {
 
 func (r resourceResponse) ToProjectSupport() types.PlatformSupport {
 	support := types.PlatformSupport{
-		MinecraftVersions: make([]types.RawVersion, 0, len(r.TestedVersions)),
+		MinecraftVersions: make([]types.BareVersion, 0, len(r.TestedVersions)),
 		Platforms:         make([]types.Platform, 0),
 		Authentic:         false,
 	}
@@ -87,7 +100,10 @@ func (r resourceResponse) ToProjectSupport() types.PlatformSupport {
 		if version == "" {
 			continue
 		}
-		support.MinecraftVersions = append(support.MinecraftVersions, types.RawVersion(version))
+		support.MinecraftVersions = append(
+			support.MinecraftVersions,
+			types.BareVersion(version),
+		)
 	}
 
 	return support
@@ -95,7 +111,10 @@ func (r resourceResponse) ToProjectSupport() types.PlatformSupport {
 
 // NewResolvedVersion preserves both Lucy-facing human versions and Spiget's
 // numeric resource/version identifiers for later exact download resolution.
-func NewResolvedVersion(resource resourceResponse, version versionResponse) resolvedVersion {
+func NewResolvedVersion(
+resource resourceResponse,
+version versionResponse,
+) resolvedVersion {
 	return resolvedVersion{
 		ResourceID:  resource.ID,
 		VersionID:   version.ID,
@@ -108,17 +127,17 @@ func NewResolvedVersion(resource resourceResponse, version versionResponse) reso
 	}
 }
 
-func (r resolvedVersion) LucyVersion() types.RawVersion {
+func (r resolvedVersion) LucyVersion() types.BareVersion {
 	if r.VersionName != "" {
-		return types.RawVersion(r.VersionName)
+		return types.BareVersion(r.VersionName)
 	}
 	if r.VersionID != 0 {
-		return types.RawVersion(strconv.FormatInt(r.VersionID, 10))
+		return types.BareVersion(strconv.FormatInt(r.VersionID, 10))
 	}
 	return types.VersionUnknown
 }
 
-func (r resolvedVersion) Matches(version types.RawVersion) bool {
+func (r resolvedVersion) Matches(version types.BareVersion) bool {
 	requested := strings.TrimSpace(version.String())
 	if requested == "" || requested == types.VersionAny.String() {
 		return false
@@ -206,14 +225,17 @@ func combineHTMLSections(description, documentation decodedHTML) string {
 	}
 }
 
-func appendLinkURLs(info *types.ProjectInformation, links map[string]string) {
+func appendLinkURLs(info *types.Metadata, links map[string]string) {
 	for key, rawValue := range links {
 		value := normalizeSpigetURL(rawValue)
 		if value == "" {
 			continue
 		}
 		name, kind := classifySpigetLink(key)
-		info.Urls = append(info.Urls, types.Url{Name: name, Type: kind, Url: value})
+		info.Urls = append(
+			info.Urls,
+			types.Url{Name: name, Type: kind, Url: value},
+		)
 	}
 }
 
@@ -228,7 +250,10 @@ func normalizeSpigetURL(raw string) string {
 	if strings.HasPrefix(raw, "/") {
 		return spigotWebsiteBaseURL[:len(spigotWebsiteBaseURL)-1] + raw
 	}
-	if strings.HasPrefix(raw, "threads/") || strings.HasPrefix(raw, "resources/") || strings.HasPrefix(raw, "members/") {
+	if strings.HasPrefix(raw, "threads/") || strings.HasPrefix(
+		raw,
+		"resources/",
+	) || strings.HasPrefix(raw, "members/") {
 		return spigotWebsiteBaseURL + raw
 	}
 	return raw
@@ -265,7 +290,7 @@ func prettifyLinkName(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
 
-func normalizedProjectName(name string) types.ProjectName {
+func normalizedProjectName(name string) types.PackageName {
 	name = syntax.ToProjectName(name).String()
 	var b strings.Builder
 	b.Grow(len(name))
@@ -282,5 +307,5 @@ func normalizedProjectName(name string) types.ProjectName {
 		}
 	}
 
-	return types.ProjectName(strings.Trim(b.String(), "-"))
+	return types.PackageName(strings.Trim(b.String(), "-"))
 }

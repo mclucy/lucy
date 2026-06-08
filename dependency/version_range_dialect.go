@@ -46,10 +46,10 @@ func InferRangeDialect(platform types.Platform) VersionRangeDialect {
 // '^' and '~'. It expands these operators into basic comparison constraints
 // (>, >=, <, <=, =, !=) so that the evaluator layer stays dialect-agnostic.
 func ParseRange(
-	raw string,
-	dialect VersionRangeDialect,
-	scheme types.VersionScheme,
-) types.VersionConstraintExpression {
+raw string,
+dialect VersionRangeDialect,
+scheme types.VersionScheme,
+) types.VersionExpr {
 	if strings.TrimSpace(raw) == "" {
 		return nil
 	}
@@ -90,15 +90,15 @@ func ParseRange(
 // If any item resolves to an unconstrained expression (nil/empty), the result
 // is unconstrained (nil), because one OR branch already matches all versions.
 func ParseRanges(
-	raws []string,
-	dialect VersionRangeDialect,
-	scheme types.VersionScheme,
-) types.VersionConstraintExpression {
+raws []string,
+dialect VersionRangeDialect,
+scheme types.VersionScheme,
+) types.VersionExpr {
 	if len(raws) == 0 {
 		return nil
 	}
 
-	merged := make(types.VersionConstraintExpression, 0, len(raws))
+	merged := make(types.VersionExpr, 0, len(raws))
 	for _, raw := range raws {
 		expr := ParseRange(raw, dialect, scheme)
 		if len(expr) == 0 {

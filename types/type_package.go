@@ -1,41 +1,5 @@
 package types
 
-type UrlType uint8
-
-const (
-	UrlFile UrlType = iota
-	UrlHome
-	UrlSource
-	UrlWiki
-	UrlForum
-	UrlIssues
-	UrlSponsor
-	UrlMisc
-)
-
-func (p UrlType) String() string {
-	switch p {
-	case UrlFile:
-		return "File"
-	case UrlHome:
-		return "Homepage"
-	case UrlSource:
-		return "Source"
-	case UrlWiki:
-		return "Wiki"
-	case UrlMisc:
-		return "URL"
-	default:
-		return "Unknown"
-	}
-}
-
-type Url struct {
-	Name string
-	Type UrlType
-	Url  string
-}
-
 // Package is a package identifier with its related information. In principle,
 // only packages remote and local can provide a Package.
 //
@@ -54,7 +18,7 @@ type Package struct {
 
 	// Project data
 	Supports    *PlatformSupport
-	Information *ProjectInformation
+	Information *Metadata
 }
 
 // PackageDependencies is one of the optional attributions that can be added to
@@ -65,51 +29,29 @@ type PackageDependencies struct {
 	Authentic bool
 }
 
-// ProjectInformation is a struct that contains informational data about the
-// package. It is typically used in `lucy info`.
-type ProjectInformation struct {
-	Title                 string
-	Brief                 string
-	Description           string
-	DescriptionUrl        string
-	DescriptionIsMarkdown bool
-	Authors               []Person
-	Urls                  []Url
-	License               string
+// PackageInstallation is an optional attribution to types.Package. It is
+// used for packages that are known to be installed in the local filesystem.
+type PackageInstallation struct {
+	Path string
 }
 
-type (
-	Person struct {
-		Name  string
-		Role  string
-		Url   string
-		Email string
-	}
+// PackageRemote is an optional attribution to types.Package. It is used to
+// represent package's presence in a remote source.
+type PackageRemote struct {
+	// Source is the semantic origin label of this package metadata/artifact.
+	// It is stored and displayed as provenance, not used as an executable
+	// provider identifier.
+	Source        Source
+	FileUrl       string
+	Filename      string
+	Hash          string // upstream-provided digest; empty if unavailable
+	HashAlgorithm string // e.g. "sha1", "sha512"; empty if Hash is empty
+}
 
-	// PackageInstallation is an optional attribution to types.Package. It is
-	// used for packages that are known to be installed in the local filesystem.
-	PackageInstallation struct {
-		Path string
-	}
-
-	// PackageRemote is an optional attribution to types.Package. It is used to
-	// represent package's presence in a remote source.
-	PackageRemote struct {
-		// Source is the semantic origin label of this package metadata/artifact.
-		// It is stored and displayed as provenance, not used as an executable
-		// provider identifier.
-		Source        Source
-		FileUrl       string
-		Filename      string
-		Hash          string // upstream-provided digest; empty if unavailable
-		HashAlgorithm string // e.g. "sha1", "sha512"; empty if Hash is empty
-	}
-
-	// PlatformSupport reflects the support information of the whole project. For
-	// specific dependency of a single package, use the PackageDependencies struct.
-	PlatformSupport struct {
-		MinecraftVersions []RawVersion
-		Platforms         []Platform
-		Authentic         bool
-	}
-)
+// PlatformSupport reflects the support information of the whole project. For
+// specific dependency of a single package, use the PackageDependencies struct.
+type PlatformSupport struct {
+	MinecraftVersions []BareVersion
+	Platforms         []Platform
+	Authentic         bool
+}

@@ -22,9 +22,9 @@ func (d *geyserStandaloneDetector) Name() string {
 // - https://geysermc.org/wiki/geyser/setup/self/proxy-servers
 // - https://geysermc.org/wiki/geyser/faq/
 func (d *geyserStandaloneDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
 	if err != nil {
@@ -58,21 +58,25 @@ func (d *geyserStandaloneDetector) Detect(
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     types.VersionUnknown,
-		RuntimeIdentities: []types.PackageId{{
-			Platform: types.PlatformAny,
-			Name:     syntax.ToProjectName("geyser"),
-			Version:  version,
-		}},
+		RuntimeIdentities: []types.PackageId{
+			{
+				Platform: types.PlatformAny,
+				Name:     syntax.ToProjectName("geyser"),
+				Version:  version,
+			},
+		},
 		Topology: &types.RuntimeTopology{
 			PrimaryNode: "geyser_standalone",
-			Nodes: []types.RuntimeNode{{
-				ID:   "geyser_standalone",
-				Role: types.RuntimeRoleProxy,
-				Capabilities: []types.RuntimeCapability{
-					types.CapabilityProxying,
-					types.CapabilityProtocolBridge,
+			Nodes: []types.RuntimeNode{
+				{
+					ID: "geyser_standalone",
+					Role: types.RuntimeRoleProxy,
+					Capabilities: []types.RuntimeCapability{
+						types.CapabilityProxying,
+						types.CapabilityProtocolBridge,
+					},
 				},
-			}},
+			},
 		},
 		BridgeHints: []string{"geyser_standalone"},
 	}, nil
@@ -80,7 +84,7 @@ func (d *geyserStandaloneDetector) Detect(
 
 type geyserStandaloneManifestSignals struct {
 	mainClass string
-	version   types.RawVersion
+	version   types.BareVersion
 }
 
 func (s geyserStandaloneManifestSignals) valid() bool {
@@ -94,17 +98,32 @@ func parseGeyserStandaloneManifest(data []byte) geyserStandaloneManifestSignals 
 		line := scanner.Text()
 		switch {
 		case strings.HasPrefix(line, "Main-Class: "):
-			signals.mainClass = strings.TrimSpace(strings.TrimPrefix(line, "Main-Class: "))
+			signals.mainClass = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Main-Class: ",
+				),
+			)
 		case strings.HasPrefix(line, "Implementation-Version: "):
-			signals.version = types.RawVersion(strings.TrimSpace(strings.TrimPrefix(line, "Implementation-Version: ")))
+			signals.version = types.BareVersion(
+				strings.TrimSpace(
+					strings.TrimPrefix(
+						line,
+						"Implementation-Version: ",
+					),
+				),
+			)
 		}
 	}
 	return signals
 }
 
-func parseGeyserStandaloneVersionFromPath(filePath string) types.RawVersion {
+func parseGeyserStandaloneVersionFromPath(filePath string) types.BareVersion {
 	base := strings.ToLower(filepath.Base(filePath))
-	if strings.Contains(base, "geyser") && strings.Contains(base, "standalone") {
+	if strings.Contains(base, "geyser") && strings.Contains(
+		base,
+		"standalone",
+	) {
 		return types.VersionUnknown
 	}
 	return types.VersionUnknown

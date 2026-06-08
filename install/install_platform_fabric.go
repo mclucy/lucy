@@ -13,7 +13,7 @@ import (
 	"github.com/mclucy/lucy/util"
 )
 
-func getFabricLoaderVersion(loaderVersion types.RawVersion) (string, error) {
+func getFabricLoaderVersion(loaderVersion types.BareVersion) (string, error) {
 	if loaderVersion == types.VersionUnknown {
 		return "", errors.New("unknown game version, cannot resolve fabric loader version")
 	}
@@ -42,7 +42,7 @@ func getFabricLoaderVersion(loaderVersion types.RawVersion) (string, error) {
 	)
 }
 
-func getFabricGameVersion(gameVersion types.RawVersion) (string, error) {
+func getFabricGameVersion(gameVersion types.BareVersion) (string, error) {
 	if gameVersion == types.VersionUnknown {
 		return "", errors.New("unknown game version, cannot resolve fabric game version")
 	}
@@ -83,24 +83,24 @@ func getLatestFabricInstallerVersion() (string, error) {
 }
 
 func fetchFabricLoaderVersions() (
-	loaderVersions []fabricLoaderVersionEntry,
-	err error,
+loaderVersions []fabricLoaderVersionEntry,
+err error,
 ) {
 	err = fetchFabricVersionsMeta("loader", &loaderVersions)
 	return
 }
 
 func fetchFabricGameVersions() (
-	gameVersions []fabricInstallerVersion,
-	err error,
+gameVersions []fabricInstallerVersion,
+err error,
 ) {
 	err = fetchFabricVersionsMeta("game", &gameVersions)
 	return
 }
 
 func fetchFabricInstallerVersions() (
-	installerVersions []fabricInstallerVersion,
-	err error,
+installerVersions []fabricInstallerVersion,
+err error,
 ) {
 	err = fetchFabricVersionsMeta("installer", &installerVersions)
 	return
@@ -140,12 +140,12 @@ func promptOverrideVanillaWithFabric() (override bool, deleteVanilla bool) {
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Vanilla server detected, override it with a corresponding fabric server?").
-				Description(
-					fmt.Sprintf(
-						"Found server at %s, with game version %s",
-						path, version,
-					),
-				).
+			Description(
+				fmt.Sprintf(
+					"Found server at %s, with game version %s",
+					path, version,
+				),
+			).
 				Value(&override),
 		),
 		huh.NewGroup(

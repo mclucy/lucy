@@ -25,7 +25,7 @@ func (n hangarProjectNamespace) ProjectRef() hangarProjectRef {
 	return hangarProjectRef{Owner: n.Owner, Slug: n.Slug}
 }
 
-func (r hangarProjectRef) CanonicalName() types.ProjectName {
+func (r hangarProjectRef) CanonicalName() types.PackageName {
 	return syntax.ToProjectName(r.Slug)
 }
 
@@ -46,33 +46,44 @@ func (r hangarProjectRef) ProjectURL() string {
 func (s *projectSearchResponse) ToSearchResults() types.SearchResults {
 	res := types.SearchResults{
 		Source:   types.SourceHangar,
-		Projects: make([]types.ProjectName, 0, len(s.Result)),
+		Projects: make([]types.PackageName, 0, len(s.Result)),
 	}
 
 	for _, project := range s.Result {
-		res.Projects = append(res.Projects, project.ProjectRef().CanonicalName())
+		res.Projects = append(
+			res.Projects,
+			project.ProjectRef().CanonicalName(),
+		)
 	}
 
 	return res
 }
 
-func (p *hangarProject) ToProjectInformation() types.ProjectInformation {
-	info := types.ProjectInformation{
-		Title:                 p.Name,
-		Brief:                 p.Description,
-		Description:           p.MainPageContent,
-		DescriptionIsMarkdown: p.MainPageContent != "" && (upstream.LooksLikeMarkdown(p.MainPageContent) || strings.Contains(p.MainPageContent, "#")),
-		License:               firstNonEmpty(p.Settings.License.Name, p.Settings.License.Type),
-		Authors:               make([]types.Person, 0, len(p.MemberNames)),
-		Urls:                  make([]types.Url, 0, len(p.Settings.Links)+1),
+func (p *hangarProject) ToProjectInformation() types.Metadata {
+	info := types.Metadata{
+		Title:       p.Name,
+		Brief:       p.Description,
+		Description: p.MainPageContent,
+		DescriptionIsMarkdown: p.MainPageContent != "" && (upstream.LooksLikeMarkdown(p.MainPageContent) || strings.Contains(
+			p.MainPageContent,
+			"#",
+		)),
+		License: firstNonEmpty(
+			p.Settings.License.Name,
+			p.Settings.License.Type,
+		),
+		Authors: make([]types.Person, 0, len(p.MemberNames)),
+		Urls:    make([]types.Url, 0, len(p.Settings.Links)+1),
 	}
 
 	if projectURL := p.ProjectRef().ProjectURL(); projectURL != "" {
-		info.Urls = append(info.Urls, types.Url{
-			Name: "Hangar",
-			Type: types.UrlHome,
-			Url:  projectURL,
-		})
+		info.Urls = append(
+			info.Urls, types.Url{
+				Name: "Hangar",
+				Type: types.UrlHome,
+				Url:  projectURL,
+			},
+		)
 	}
 
 	for _, memberName := range p.MemberNames {
@@ -84,11 +95,13 @@ func (p *hangarProject) ToProjectInformation() types.ProjectInformation {
 			if link.URL == "" {
 				continue
 			}
-			info.Urls = append(info.Urls, types.Url{
-				Name: link.Name,
-				Type: classifyHangarURL(link.Name),
-				Url:  link.URL,
-			})
+			info.Urls = append(
+				info.Urls, types.Url{
+					Name: link.Name,
+					Type: classifyHangarURL(link.Name),
+					Url:  link.URL,
+				},
+			)
 		}
 	}
 
@@ -116,7 +129,10 @@ func (v *hangarVersion) ToPackageRemote() types.PackageRemote {
 	return remote
 }
 
-func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Platform) (types.PackageRemote, bool) {
+func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Platform) (
+types.PackageRemote,
+bool,
+) {
 	download, ok := v.downloadForPlatform(platform)
 	if !ok {
 		return types.PackageRemote{Source: types.SourceHangar}, false
@@ -136,13 +152,13 @@ func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Platform) (typ
 	return remote, true
 }
 
-func (v *hangarVersion) PluginDependencyNames() []types.ProjectName {
+func (v *hangarVersion) PluginDependencyNames() []types.PackageName {
 	depsForPlatform := v.DependenciesForPlatform(types.PlatformNone)
 	if len(depsForPlatform) == 0 {
 		return nil
 	}
 
-	deps := make([]types.ProjectName, 0, len(depsForPlatform))
+	deps := make([]types.PackageName, 0, len(depsForPlatform))
 	for _, dep := range depsForPlatform {
 		if dep.Name == "" || dep.ExternalURL != nil {
 			continue
@@ -193,7 +209,10 @@ func (v *hangarVersion) SupportsPlatform(platform types.Platform) bool {
 	return platform == types.PlatformNone && len(v.PlatformDependencies) > 0
 }
 
-func (v *hangarVersion) downloadForPlatform(platform types.Platform) (hangarDownload, bool) {
+func (v *hangarVersion) downloadForPlatform(platform types.Platform) (
+hangarDownload,
+bool,
+) {
 	if len(v.Downloads) == 0 {
 		return hangarDownload{}, false
 	}
@@ -217,20 +236,26 @@ func (d hangarDownload) URL() string {
 
 func platformSupportFromMap(platformVersions hangarPlatformVersionMap) types.PlatformSupport {
 	support := types.PlatformSupport{
-		MinecraftVersions: make([]types.RawVersion, 0),
+		MinecraftVersions: make([]types.BareVersion, 0),
 		Platforms:         make([]types.Platform, 0, len(platformVersions)),
 		Authentic:         true,
 	}
 
 	seenVersions := make(map[string]struct{})
 	for _, platformKey := range sortedMapKeys(platformVersions) {
-		support.Platforms = append(support.Platforms, types.Platform(strings.ToLower(platformKey)))
+		support.Platforms = append(
+			support.Platforms,
+			types.Platform(strings.ToLower(platformKey)),
+		)
 		for _, version := range platformVersions[platformKey] {
 			if _, exists := seenVersions[version]; exists {
 				continue
 			}
 			seenVersions[version] = struct{}{}
-			support.MinecraftVersions = append(support.MinecraftVersions, types.RawVersion(version))
+			support.MinecraftVersions = append(
+				support.MinecraftVersions,
+				types.BareVersion(version),
+			)
 		}
 	}
 

@@ -23,17 +23,17 @@ const (
 )
 
 type paperObservations struct {
-	hasPaperClasses      bool
-	hasSpigotClasses     bool
-	officialDistribution bool
-	detectedBrand        string
-	gameVersion          types.RawVersion
+	hasPaperClasses              bool
+	hasSpigotClasses             bool
+	officialDistribution         bool
+	detectedBrand                string
+	gameVersion                  types.BareVersion
 	metaMainClass                string
 	librariesListEntries         []string
 	versionsListEntries          []string
 	patchesListEntries           []string
 	downloadContext              string
-	versionJSONID                types.RawVersion
+	versionJSONID                types.BareVersion
 	patchProperties              map[string]string
 	hasPaperMCPatch              bool
 	buildInfo                    string

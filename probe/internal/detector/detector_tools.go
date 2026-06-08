@@ -11,8 +11,8 @@ import (
 // analyzeForgeArgFile parses Forge argument files to extract version information
 // This is a helper function used by ForgeDetector
 func analyzeForgeArgFile(file *os.File) (
-	forgeVersion types.RawVersion,
-	mcVersion types.RawVersion,
+forgeVersion types.BareVersion,
+mcVersion types.BareVersion,
 ) {
 	data, _ := io.ReadAll(file)
 	s := string(data)
@@ -21,7 +21,7 @@ func analyzeForgeArgFile(file *os.File) (
 		if strings.HasPrefix(line, "--fml.forgeVersion") {
 			split := strings.Split(line, " ")
 			if len(split) == 2 {
-				forgeVersion = types.RawVersion(split[1])
+				forgeVersion = types.BareVersion(split[1])
 				continue
 			}
 			forgeVersion = types.VersionUnknown
@@ -29,7 +29,7 @@ func analyzeForgeArgFile(file *os.File) (
 		if strings.HasPrefix(line, "--fml.mcVersion") {
 			split := strings.Split(line, " ")
 			if len(split) == 2 {
-				mcVersion = types.RawVersion(split[1])
+				mcVersion = types.BareVersion(split[1])
 				continue
 			}
 			mcVersion = types.VersionUnknown

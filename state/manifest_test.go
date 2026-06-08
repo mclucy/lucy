@@ -243,7 +243,12 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 		{ID: "fabric/new-dependency", Version: "2.1.0", Source: "modrinth", URL: "https://example.com/new-dependency.jar", Filename: "new-dependency.jar", Hash: "jkl", HashAlgorithm: "sha1", InstallPath: "mods/new-dependency.jar", Side: "both", Provenance: []string{"root", "fabric/new-root@2.0.0"}, Requester: "fabric/new-root"},
 	}}
 
-	updated := UpdateManifestRolesForAdd(manifest, []types.PackageId{{Platform: types.PlatformFabric, Name: "new-root", Version: types.VersionLatest}}, lock)
+	updated := UpdateManifestRolesForAdd(manifest, []types.PackageRequest{
+		{
+			Ref:     types.PackageRef{Platform: types.PlatformFabric, Name: "new-root"},
+			Version: types.VersionLatest,
+		},
+	}, lock)
 
 	if len(updated.Packages) != 5 {
 		t.Fatalf("expected 5 manifest packages after add, got %d", len(updated.Packages))

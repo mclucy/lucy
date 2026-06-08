@@ -7,14 +7,14 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func parseMinecraftSnapshot(s types.RawVersion) types.ComparableVersion {
+func parseMinecraftSnapshot(s types.BareVersion) types.ResolvableVersion {
 	if v := parsePre26WeekSnapshot(s); v != nil {
 		return v
 	}
 	return parsePost26MinecraftSnapshot(s)
 }
 
-func parsePre26WeekSnapshot(s types.RawVersion) types.ComparableVersion {
+func parsePre26WeekSnapshot(s types.BareVersion) types.ResolvableVersion {
 	if len(s) < 4 {
 		return nil
 	}
@@ -33,7 +33,7 @@ func parsePre26WeekSnapshot(s types.RawVersion) types.ComparableVersion {
 	return v
 }
 
-func parseSnapshotWorkCycle(s types.RawVersion) *Pre26MinecraftSnapshotVersion {
+func parseSnapshotWorkCycle(s types.BareVersion) *Pre26MinecraftSnapshotVersion {
 	tokens := strings.Split(string(s), "w")
 	if len(tokens) != 2 {
 		return nil
@@ -53,7 +53,7 @@ func parseSnapshotWorkCycle(s types.RawVersion) *Pre26MinecraftSnapshotVersion {
 	}
 }
 
-func parsePost26MinecraftSnapshot(s types.RawVersion) types.ComparableVersion {
+func parsePost26MinecraftSnapshot(s types.BareVersion) types.ResolvableVersion {
 	str := string(s)
 	if !strings.Contains(str, "-snapshot-") {
 		return nil
@@ -89,14 +89,14 @@ func parsePost26MinecraftSnapshot(s types.RawVersion) types.ComparableVersion {
 	return v
 }
 
-func parseMinecraftRelease(s types.RawVersion) types.ComparableVersion {
+func parseMinecraftRelease(s types.BareVersion) types.ResolvableVersion {
 	if v := parsePost26MinecraftRelease(s); v != nil {
 		return v
 	}
 	return parsePre26MinecraftRelease(s)
 }
 
-func parsePost26MinecraftRelease(s types.RawVersion) types.ComparableVersion {
+func parsePost26MinecraftRelease(s types.BareVersion) types.ResolvableVersion {
 	str := string(s)
 	if str == "" || strings.Contains(str, "-snapshot-") {
 		return nil
@@ -141,7 +141,7 @@ func parsePost26MinecraftRelease(s types.RawVersion) types.ComparableVersion {
 	return v
 }
 
-func parsePre26MinecraftRelease(s types.RawVersion) types.ComparableVersion {
+func parsePre26MinecraftRelease(s types.BareVersion) types.ResolvableVersion {
 	str := string(s)
 	if str == "" {
 		return nil
@@ -196,9 +196,9 @@ func splitCoreAndSuffix(raw string) (core string, suffix string) {
 }
 
 func parseMinecraftPrereleaseSuffix(suffix string) (
-	PrereleaseType,
-	uint8,
-	bool,
+PrereleaseType,
+uint8,
+bool,
 ) {
 	if strings.HasPrefix(suffix, "pre") {
 		number, ok := parsePrereleaseNumber(strings.TrimPrefix(suffix, "pre"))

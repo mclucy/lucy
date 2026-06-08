@@ -16,9 +16,9 @@ var ErrAmbiguousVersion = fmt.Errorf("attempting to parse an ambiguous version")
 //
 // It dispatches parsing by version scheme and returns nil when parsing fails.
 func Parse(
-	raw types.RawVersion,
-	scheme types.VersionScheme,
-) (types.ComparableVersion, error) {
+raw types.BareVersion,
+scheme types.VersionScheme,
+) (types.ResolvableVersion, error) {
 	switch raw {
 	case types.VersionLatest, types.VersionCompatible, types.VersionNone, types.VersionAny, types.VersionUnknown:
 		return nil, fmt.Errorf("%w: %s", ErrAmbiguousVersion, raw)

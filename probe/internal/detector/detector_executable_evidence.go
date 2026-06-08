@@ -24,7 +24,7 @@ type ExecutableTopologySeed struct {
 // the current detector package compatible during the refactor.
 type ExecutableEvidence struct {
 	PrimaryEntrance   string
-	GameVersion       types.RawVersion
+	GameVersion       types.BareVersion
 	Topology          *types.RuntimeTopology
 	TopologySeed      *ExecutableTopologySeed
 	RuntimeIdentities []types.PackageId
@@ -47,15 +47,24 @@ func executableEvidenceFromRuntimeInfo(runtime *types.RuntimeInfo) *ExecutableEv
 		PrimaryEntrance:   runtime.PrimaryEntrance,
 		GameVersion:       runtime.GameVersion,
 		Topology:          runtime.Topology,
-		RuntimeIdentities: append([]types.PackageId(nil), runtime.RuntimeIdentities...),
+		RuntimeIdentities: append(
+			[]types.PackageId(nil),
+			runtime.RuntimeIdentities...,
+		),
 		BridgeHints:       append([]string(nil), runtime.BridgeHints...),
 	}
 
 	if runtime.Topology != nil {
 		evidence.TopologySeed = &ExecutableTopologySeed{
 			PrimaryNode: runtime.Topology.PrimaryNode,
-			Nodes:       append([]types.RuntimeNode(nil), runtime.Topology.Nodes...),
-			Edges:       append([]types.RuntimeEdge(nil), runtime.Topology.Edges...),
+			Nodes:       append(
+				[]types.RuntimeNode(nil),
+				runtime.Topology.Nodes...,
+			),
+			Edges:       append(
+				[]types.RuntimeEdge(nil),
+				runtime.Topology.Edges...,
+			),
 		}
 	}
 

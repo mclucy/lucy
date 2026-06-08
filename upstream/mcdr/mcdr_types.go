@@ -111,8 +111,8 @@ type rawProjectInformation struct {
 	Repository *pluginRepo
 }
 
-func (r rawProjectInformation) ToProjectInformation() types.ProjectInformation {
-	info := types.ProjectInformation{
+func (r rawProjectInformation) ToProjectInformation() types.Metadata {
+	info := types.Metadata{
 		Title:                 r.Meta.Name,
 		Brief:                 r.Meta.Description.EnUs,
 		Description:           r.Repository.Readme,

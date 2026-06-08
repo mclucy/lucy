@@ -6,18 +6,27 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func resolveResourceByProjectName(name types.ProjectName) (*resourceResponse, error) {
+func resolveResourceByProjectName(name types.PackageName) (
+*resourceResponse,
+error,
+) {
 	if id, ok := parseNumericResourceID(name); ok {
 		return getResource(id)
 	}
 
-	results, err := searchResources(name.String(), types.SearchOptions{SortBy: types.SearchSortRelevance})
+	results, err := searchResources(
+		name.String(),
+		types.SearchOptions{SortBy: types.SearchSortRelevance},
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, candidate := range results {
-		if normalizedProjectName(candidate.Name) == name || strings.EqualFold(candidate.Name, name.String()) {
+		if normalizedProjectName(candidate.Name) == name || strings.EqualFold(
+			candidate.Name,
+			name.String(),
+		) {
 			return getResource(candidate.ID)
 		}
 	}
@@ -29,7 +38,10 @@ func resolveResourceByProjectName(name types.ProjectName) (*resourceResponse, er
 	return nil, ErrNoProject
 }
 
-func resolveVersion(resource *resourceResponse, requested types.RawVersion) (resolvedVersion, error) {
+func resolveVersion(
+resource *resourceResponse,
+requested types.BareVersion,
+) (resolvedVersion, error) {
 	switch requested {
 	case "", types.VersionAny, types.VersionNone, types.VersionLatest, types.VersionCompatible:
 		latest, err := getLatestVersion(resource.ID)

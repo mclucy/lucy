@@ -5,7 +5,7 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func parseRequiredVersion(s string) (reqs []types.VersionConstraint) {
+func parseRequiredVersion(s string) (reqs []types.VersionSubExpr) {
 	// MCDR metadata dependency requirements are AND criteria split by spaces.
 	// References:
 	//   - https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html

@@ -26,11 +26,20 @@ func TestDetectForgeInstallFromVersionDirPrefersHashVerifiedServerJar(t *testing
 	}
 	serverJar := filepath.Join(versionDir, "forge-1.21.11-61.1.0-server.jar")
 	writeFile(t, serverJar, []byte("official-server"))
-	writeFile(t, filepath.Join(versionDir, "forge-1.21.11-61.1.0-universal.jar"), []byte("official-universal"))
+	writeFile(
+		t,
+		filepath.Join(versionDir, "forge-1.21.11-61.1.0-universal.jar"),
+		[]byte("official-universal"),
+	)
 
-	restore := stubForgeArtifactHashLookup(func(version string, artifact forgeArtifactKind, filePath string) (bool, error) {
-		return artifact == forgeArtifactServer && filepath.Base(filePath) == filepath.Base(serverJar), nil
-	})
+	restore := stubForgeArtifactHashLookup(
+		func(version string, artifact forgeArtifactKind, filePath string) (
+		bool,
+		error,
+		) {
+			return artifact == forgeArtifactServer && filepath.Base(filePath) == filepath.Base(serverJar), nil
+		},
+	)
 	defer restore()
 
 	runtime, err := detectForgeInstallFromVersionDir(versionDir)
@@ -41,7 +50,13 @@ func TestDetectForgeInstallFromVersionDirPrefersHashVerifiedServerJar(t *testing
 		t.Fatalf("expected hash-verified Forge install runtime")
 	}
 
-	assertForgeRuntime(t, runtimeInfoFromEvidence(runtime), serverJar, "1.21.11", "61.1.0")
+	assertForgeRuntime(
+		t,
+		runtimeInfoFromEvidence(runtime),
+		serverJar,
+		"1.21.11",
+		"61.1.0",
+	)
 }
 
 func TestDetectForgeInstallFromVersionDirFallsBackToUnpackVerification(t *testing.T) {
@@ -58,15 +73,26 @@ func TestDetectForgeInstallFromVersionDirFallsBackToUnpackVerification(t *testin
 	if err := os.MkdirAll(versionDir, 0o755); err != nil {
 		t.Fatalf("mkdir version dir: %v", err)
 	}
-	writeFile(t, filepath.Join(versionDir, "unix_args.txt"), []byte("--launchTarget forge_server"))
+	writeFile(
+		t,
+		filepath.Join(versionDir, "unix_args.txt"),
+		[]byte("--launchTarget forge_server"),
+	)
 	jarPath := filepath.Join(versionDir, "forge-1.20.1-47.3.22-universal.jar")
-	writeZipFile(t, jarPath, map[string]string{
-		"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nSpecification-Title: Forge\nImplementation-Title: net.minecraftforge\nImplementation-Version: 47.3.22\nSpecification-Version: 1.20.1\n",
-	})
+	writeZipFile(
+		t, jarPath, map[string]string{
+			"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nSpecification-Title: Forge\nImplementation-Title: net.minecraftforge\nImplementation-Version: 47.3.22\nSpecification-Version: 1.20.1\n",
+		},
+	)
 
-	restore := stubForgeArtifactHashLookup(func(version string, artifact forgeArtifactKind, filePath string) (bool, error) {
-		return false, nil
-	})
+	restore := stubForgeArtifactHashLookup(
+		func(version string, artifact forgeArtifactKind, filePath string) (
+		bool,
+		error,
+		) {
+			return false, nil
+		},
+	)
 	defer restore()
 
 	runtime, err := detectForgeInstallFromVersionDir(versionDir)
@@ -77,7 +103,13 @@ func TestDetectForgeInstallFromVersionDirFallsBackToUnpackVerification(t *testin
 		t.Fatalf("expected unpack fallback to identify Forge install")
 	}
 
-	assertForgeRuntime(t, runtimeInfoFromEvidence(runtime), jarPath, "1.20.1", "47.3.22")
+	assertForgeRuntime(
+		t,
+		runtimeInfoFromEvidence(runtime),
+		jarPath,
+		"1.20.1",
+		"47.3.22",
+	)
 }
 
 func TestDetectForgeInstallFromVersionDirRejectsShimOnlyLayout(t *testing.T) {
@@ -94,14 +126,23 @@ func TestDetectForgeInstallFromVersionDirRejectsShimOnlyLayout(t *testing.T) {
 	if err := os.MkdirAll(versionDir, 0o755); err != nil {
 		t.Fatalf("mkdir version dir: %v", err)
 	}
-	writeZipFile(t, filepath.Join(versionDir, "forge-1.21.11-61.1.0-shim.jar"), map[string]string{
-		"META-INF/MANIFEST.MF":      "Manifest-Version: 1.0\nAutomatic-Module-Name: net.minecraftforge.bootstrap.shim\nSpecification-Title: BootStrap-Shim\nImplementation-Title: bs-shim\nImplementation-Version: 2.1.8\n",
-		"bootstrap-shim.properties": "mainClass=net.minecraftforge.bootstrap.shim.Main\n",
-	})
+	writeZipFile(
+		t,
+		filepath.Join(versionDir, "forge-1.21.11-61.1.0-shim.jar"),
+		map[string]string{
+			"META-INF/MANIFEST.MF":      "Manifest-Version: 1.0\nAutomatic-Module-Name: net.minecraftforge.bootstrap.shim\nSpecification-Title: BootStrap-Shim\nImplementation-Title: bs-shim\nImplementation-Version: 2.1.8\n",
+			"bootstrap-shim.properties": "mainClass=net.minecraftforge.bootstrap.shim.Main\n",
+		},
+	)
 
-	restore := stubForgeArtifactHashLookup(func(version string, artifact forgeArtifactKind, filePath string) (bool, error) {
-		return artifact == forgeArtifactShim, nil
-	})
+	restore := stubForgeArtifactHashLookup(
+		func(version string, artifact forgeArtifactKind, filePath string) (
+		bool,
+		error,
+		) {
+			return artifact == forgeArtifactShim, nil
+		},
+	)
 	defer restore()
 
 	runtime, err := detectForgeInstallFromVersionDir(versionDir)
@@ -126,18 +167,21 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected to parse legacy jar path: %s", jarPath)
 	}
-	if gameVersion != types.RawVersion("1.20.1") || forgeVersion != types.RawVersion("47.3.22") {
+	if gameVersion != types.BareVersion("1.20.1") || forgeVersion != types.BareVersion("47.3.22") {
 		t.Fatalf(
 			"unexpected path parse: game=%q forge=%q",
 			gameVersion,
 			forgeVersion,
 		)
 	}
-	manifestForgeVersion, manifestGameVersion := parseForgeManifestFromFile(t, jarPath)
-	if manifestForgeVersion != types.RawVersion("47.3.22") {
+	manifestForgeVersion, manifestGameVersion := parseForgeManifestFromFile(
+		t,
+		jarPath,
+	)
+	if manifestForgeVersion != types.BareVersion("47.3.22") {
 		t.Fatalf("unexpected manifest forge version: %q", manifestForgeVersion)
 	}
-	if manifestGameVersion != types.RawVersion("1.20.1") {
+	if manifestGameVersion != types.BareVersion("1.20.1") {
 		t.Fatalf("unexpected manifest game version: %q", manifestGameVersion)
 	}
 
@@ -157,9 +201,9 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 }
 
 func parseForgeManifestFromFile(
-	t *testing.T,
-	jarPath string,
-) (types.RawVersion, types.RawVersion) {
+t *testing.T,
+jarPath string,
+) (types.BareVersion, types.BareVersion) {
 	t.Helper()
 
 	file, err := os.Open(jarPath)
@@ -214,8 +258,16 @@ func TestForgeLatestDetectorDetectsForge61ServerJar(t *testing.T) {
 			"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nMain-Class: net.minecraft.server.Main\n",
 		},
 	)
-	writeFile(t, filepath.Join(filepath.Dir(jarPath), "forge-1.21.11-61.1.0-shim.jar"), []byte("shim"))
-	writeFile(t, filepath.Join(filepath.Dir(jarPath), "unix_args.txt"), []byte("--launchTarget forge_server"))
+	writeFile(
+		t,
+		filepath.Join(filepath.Dir(jarPath), "forge-1.21.11-61.1.0-shim.jar"),
+		[]byte("shim"),
+	)
+	writeFile(
+		t,
+		filepath.Join(filepath.Dir(jarPath), "unix_args.txt"),
+		[]byte("--launchTarget forge_server"),
+	)
 
 	runtime := detectForgeRuntimeWith(t, &forgeLatestDetector{}, jarPath)
 	if runtime == nil {
@@ -239,7 +291,10 @@ func TestForgeLatestDetectorRejectsIncompleteLayout(t *testing.T) {
 
 	runtime := detectForgeRuntimeWith(t, &forgeLatestDetector{}, jarPath)
 	if runtime != nil {
-		t.Fatalf("expected latest Forge detector to reject incomplete layout, got %+v", runtime)
+		t.Fatalf(
+			"expected latest Forge detector to reject incomplete layout, got %+v",
+			runtime,
+		)
 	}
 }
 
@@ -257,7 +312,10 @@ func TestExecutableRejectsCreateModJar(t *testing.T) {
 
 	runtime := Executable(jarPath)
 	if runtime == nil || !runtime.IsEmpty() {
-		t.Fatalf("expected Create mod jar to be rejected as executable, got %+v", runtime)
+		t.Fatalf(
+			"expected Create mod jar to be rejected as executable, got %+v",
+			runtime,
+		)
 	}
 }
 
@@ -276,14 +334,17 @@ func TestExecutableRejectsForgeShimJar(t *testing.T) {
 
 	runtime := Executable(jarPath)
 	if runtime == nil || !runtime.IsEmpty() {
-		t.Fatalf("expected Forge shim jar to be rejected as executable, got %+v", runtime)
+		t.Fatalf(
+			"expected Forge shim jar to be rejected as executable, got %+v",
+			runtime,
+		)
 	}
 }
 
 func detectForgeRuntimeWith(
-	t *testing.T,
-	detector ExecutableDetector,
-	jarPath string,
+t *testing.T,
+detector ExecutableDetector,
+jarPath string,
 ) *types.RuntimeInfo {
 	t.Helper()
 
@@ -333,18 +394,22 @@ func runtimeInfoFromEvidence(evidence *ExecutableEvidence) *types.RuntimeInfo {
 }
 
 func assertForgeRuntime(
-	t *testing.T,
-	runtime *types.RuntimeInfo,
-	primary string,
-	gameVersion string,
-	forgeVersion string,
+t *testing.T,
+runtime *types.RuntimeInfo,
+primary string,
+gameVersion string,
+forgeVersion string,
 ) {
 	t.Helper()
 
-	wantGameVersion := types.RawVersion(gameVersion)
+	wantGameVersion := types.BareVersion(gameVersion)
 
 	if runtime.PrimaryEntrance != primary {
-		t.Fatalf("primary entrance mismatch: got %q want %q", runtime.PrimaryEntrance, primary)
+		t.Fatalf(
+			"primary entrance mismatch: got %q want %q",
+			runtime.PrimaryEntrance,
+			primary,
+		)
 	}
 	if runtime.GameVersion != wantGameVersion {
 		t.Fatalf(
@@ -356,7 +421,11 @@ func assertForgeRuntime(
 		)
 	}
 	if got := runtime.DerivedModLoader(); got != types.PlatformForge {
-		t.Fatalf("derived mod loader mismatch: got %s want %s", got, types.PlatformForge)
+		t.Fatalf(
+			"derived mod loader mismatch: got %s want %s",
+			got,
+			types.PlatformForge,
+		)
 	}
 	if got := runtime.DerivedLoaderVersion(); got != forgeVersion {
 		t.Fatalf("forge version mismatch: got %q want %q", got, forgeVersion)
@@ -364,10 +433,10 @@ func assertForgeRuntime(
 }
 
 func writeTestJar(
-	t *testing.T,
-	versionDir string,
-	baseName string,
-	files map[string]string,
+t *testing.T,
+versionDir string,
+baseName string,
+files map[string]string,
 ) string {
 	t.Helper()
 
@@ -410,7 +479,11 @@ func writeTestJar(
 	return jarPath
 }
 
-func writeRootJar(t *testing.T, baseName string, files map[string]string) string {
+func writeRootJar(
+t *testing.T,
+baseName string,
+files map[string]string,
+) string {
 	t.Helper()
 
 	root := t.TempDir()
@@ -468,7 +541,10 @@ func writeZipFile(t *testing.T, jarPath string, files map[string]string) {
 }
 
 func stubForgeArtifactHashLookup(
-	fn func(version string, artifact forgeArtifactKind, filePath string) (bool, error),
+fn func(version string, artifact forgeArtifactKind, filePath string) (
+bool,
+error,
+),
 ) func() {
 	forgeStubMu.Lock()
 	original := forgeArtifactHashLookup

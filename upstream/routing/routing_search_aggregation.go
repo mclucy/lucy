@@ -9,8 +9,8 @@ type SearchAggregateOptions struct {
 // MaybeAggregateSearchResults is an optional post-processing utility. It is
 // disabled by default and intentionally decoupled from SearchMany.
 func MaybeAggregateSearchResults(
-	results []types.SearchResults,
-	options SearchAggregateOptions,
+results []types.SearchResults,
+options SearchAggregateOptions,
 ) []types.SearchResults {
 	if !options.Enabled || len(results) <= 1 {
 		return results
@@ -24,7 +24,7 @@ func MaybeAggregateSearchResults(
 func AggregateSearchResults(results []types.SearchResults) types.SearchResults {
 	aggregated := types.SearchResults{
 		Source:   types.SourceAuto,
-		Projects: make([]types.ProjectName, 0),
+		Projects: make([]types.PackageName, 0),
 	}
 	for _, res := range results {
 		aggregated.Projects = append(aggregated.Projects, res.Projects...)

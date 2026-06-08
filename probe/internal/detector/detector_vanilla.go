@@ -20,9 +20,9 @@ func (d *VanillaDetector) Name() string {
 }
 
 func (d *VanillaDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	for _, f := range zipReader.File {
 		if f.Name == "version.json" {
@@ -55,7 +55,7 @@ func (d *VanillaDetector) Detect(
 				return nil, err
 			}
 
-			gameVersion := types.RawVersion(obj.Id)
+			gameVersion := types.BareVersion(obj.Id)
 
 			exec := &ExecutableEvidence{
 				PrimaryEntrance: filePath,

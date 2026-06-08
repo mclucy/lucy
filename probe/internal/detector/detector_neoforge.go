@@ -26,9 +26,9 @@ func (d *neoforgeServerDetector) Name() string {
 }
 
 func (d *neoforgeServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	neoforgeLoaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
@@ -61,7 +61,7 @@ func (d *neoforgeServerDetector) Detect(
 						line,
 						"Specification-Version: ",
 					); found {
-						gameVersion = types.RawVersion(after)
+						gameVersion = types.BareVersion(after)
 					}
 				}
 
@@ -86,7 +86,7 @@ func (d *neoforgeServerDetector) Detect(
 					path,
 					"libraries/net/neoforged/neoforge/",
 				); found {
-					neoforgeLoaderVersion = types.RawVersion(
+					neoforgeLoaderVersion = types.BareVersion(
 						strings.Split(after, "/")[0],
 					)
 					break
@@ -140,8 +140,8 @@ func (d *neoforgeModDetector) Name() string {
 }
 
 func (d *neoforgeModDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	// Read jarjar metadata once; used for both embedded modId set and dep list.
 	jarjarMeta := readJarjarMeta(zipReader)
@@ -174,7 +174,7 @@ func (d *neoforgeModDetector) Detect(
 				}
 
 				// Version
-				version := types.RawVersion(mod.Version)
+				version := types.BareVersion(mod.Version)
 				if version == "${file.jarVersion}" {
 					version = getForgeModVersion(zipReader)
 				}
@@ -190,7 +190,7 @@ func (d *neoforgeModDetector) Detect(
 						Path: fileHandle.Name(),
 					},
 					Dependencies: &types.PackageDependencies{},
-					Information:  &types.ProjectInformation{},
+					Information:  &types.Metadata{},
 				}
 
 				// Parse dependencies
@@ -227,7 +227,7 @@ func (d *neoforgeModDetector) Detect(
 				}
 
 				// Parse info
-				p.Information = &types.ProjectInformation{
+				p.Information = &types.Metadata{
 					Title:   mod.DisplayName,
 					Brief:   mod.Description,
 					Authors: []types.Person{{Name: mod.Authors}},
@@ -299,7 +299,10 @@ func readJarjarMeta(zipReader *zip.Reader) *externaltype.FileNeoforgeJarjar {
 //
 // This is how the NeoForge mod loader itself resolves which modId a JarInJar
 // entry satisfies: it reads the embedded JAR's mods.toml, not the artifact name.
-func jarjarEmbeddedModIds(zipReader *zip.Reader, meta *externaltype.FileNeoforgeJarjar) map[string]bool {
+func jarjarEmbeddedModIds(
+zipReader *zip.Reader,
+meta *externaltype.FileNeoforgeJarjar,
+) map[string]bool {
 	if meta == nil {
 		return nil
 	}
@@ -330,7 +333,10 @@ func jarjarEmbeddedModIds(zipReader *zip.Reader, meta *externaltype.FileNeoforge
 			continue
 		}
 
-		nestedZip, err := zip.NewReader(bytes.NewReader(jarBytes), int64(len(jarBytes)))
+		nestedZip, err := zip.NewReader(
+			bytes.NewReader(jarBytes),
+			int64(len(jarBytes)),
+		)
 		if err != nil {
 			logger.Warn(err)
 			continue
@@ -377,15 +383,17 @@ func jarjarEmbeddedDeps(meta *externaltype.FileNeoforgeJarjar) []types.Dependenc
 	deps := make([]types.Dependency, 0, len(meta.Jars))
 	for _, entry := range meta.Jars {
 		name := syntax.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact)
-		deps = append(deps, types.Dependency{
-			Id: types.PackageId{
-				Platform: types.PlatformNone,
-				Name:     name,
+		deps = append(
+			deps, types.Dependency{
+				Id: types.PackageId{
+					Platform: types.PlatformNone,
+					Name:     name,
+				},
+				Constraint: parseModLoaderMavenVersionRange(entry.Version.Range),
+				Mandatory:  true,
+				Embedded:   true,
 			},
-			Constraint: parseModLoaderMavenVersionRange(entry.Version.Range),
-			Mandatory:  true,
-			Embedded:   true,
-		})
+		)
 	}
 	return deps
 }

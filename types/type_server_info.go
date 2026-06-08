@@ -20,7 +20,7 @@ type ServerInfo struct {
 
 type RuntimeInfo struct {
 	PrimaryEntrance   string           `json:"primary_entrance"`
-	GameVersion       RawVersion       `json:"game_version"`
+	GameVersion       BareVersion      `json:"game_version"`
 	BootCommand       *exec.Cmd        `json:"-"`
 	Topology          *RuntimeTopology `json:"topology,omitempty"`
 	RuntimeIdentities []PackageId      `json:"runtime_identities,omitempty"`
@@ -123,7 +123,7 @@ type EnvironmentInfo struct {
 }
 
 type McdrEnv struct {
-	Version RawVersion              `json:"version"`
+	Version BareVersion             `json:"version"`
 	Config  *exttype.FileMcdrConfig `json:"config,omitempty"`
 }
 

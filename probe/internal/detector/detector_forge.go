@@ -28,12 +28,15 @@ func (d *forgeLegacyDetector) Name() string {
 // - https://docs.minecraftforge.net/en/1.16.x/gettingstarted/
 // - https://forums.minecraftforge.net/topic/102544-forge-370-minecraft-1171/
 func (d *forgeLegacyDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	base := filepath.Base(filePath)
-	if !strings.Contains(base, "forge-") || !strings.Contains(base, "universal") {
+	if !strings.Contains(base, "forge-") || !strings.Contains(
+		base,
+		"universal",
+	) {
 		return nil, nil
 	}
 
@@ -61,9 +64,9 @@ func (d *forgeModernDetector) Name() string {
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://forums.minecraftforge.net/topic/102544-forge-370-minecraft-1171/
 func (d *forgeModernDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(filePath)
 	if !ok || compareForgeMajor(forgeVersion, 61) >= 0 {
@@ -74,7 +77,10 @@ func (d *forgeModernDetector) Detect(
 	if !strings.HasPrefix(base, "forge-") {
 		return nil, nil
 	}
-	if !strings.Contains(base, "-server") && !strings.Contains(base, "-universal") {
+	if !strings.Contains(base, "-server") && !strings.Contains(
+		base,
+		"-universal",
+	) {
 		return nil, nil
 	}
 	if !forgeHasSibling(filePath, "unix_args.txt", "win_args.txt") {
@@ -94,9 +100,9 @@ func (d *forgeLatestDetector) Name() string {
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://forums.minecraftforge.net/topic/154652-how-to-install-forge-6110-for-1211-server/
 func (d *forgeLatestDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(filePath)
 	if !ok || compareForgeMajor(forgeVersion, 61) < 0 {
@@ -104,7 +110,10 @@ func (d *forgeLatestDetector) Detect(
 	}
 
 	base := filepath.Base(filePath)
-	if !strings.HasPrefix(base, "forge-") || !strings.Contains(base, "-server") {
+	if !strings.HasPrefix(base, "forge-") || !strings.Contains(
+		base,
+		"-server",
+	) {
 		return nil, nil
 	}
 	if !forgeHasSibling(
@@ -131,9 +140,9 @@ func (d *forgeServerDetector) Name() string {
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://docs.minecraftforge.net/en/1.16.x/gettingstarted/
 func (d *forgeServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	forgeVersion, gameVersion := parseForgeManifest(zipReader)
 	if !hasConcreteVersion(forgeVersion) {
@@ -153,8 +162,8 @@ func (d *forgeServerDetector) Detect(
 }
 
 func parseForgeManifest(
-	zipReader *zip.Reader,
-) (forgeVersion types.RawVersion, gameVersion types.RawVersion) {
+zipReader *zip.Reader,
+) (forgeVersion types.BareVersion, gameVersion types.BareVersion) {
 	for _, f := range zipReader.File {
 		if f.Name != "META-INF/MANIFEST.MF" {
 			continue
@@ -177,7 +186,7 @@ func parseForgeManifest(
 					s.Text(),
 					"Implementation-Version: ",
 				); found {
-					forgeVersion = types.RawVersion(after)
+					forgeVersion = types.BareVersion(after)
 				}
 			}
 			if strings.HasPrefix(line, "Specification-Version: ") {
@@ -185,7 +194,7 @@ func parseForgeManifest(
 					line,
 					"Specification-Version: ",
 				); found && isMinecraftReleaseVersion(after) {
-					gameVersion = types.RawVersion(after)
+					gameVersion = types.BareVersion(after)
 				}
 			}
 		}
@@ -208,7 +217,7 @@ func isMinecraftReleaseVersion(version string) bool {
 	return true
 }
 
-func compareForgeMajor(version types.RawVersion, target int) int {
+func compareForgeMajor(version types.BareVersion, target int) int {
 	major := strings.Split(string(version), ".")[0]
 	switch major {
 	case "":
@@ -234,7 +243,7 @@ func compareForgeMajor(version types.RawVersion, target int) int {
 
 // getForgeModVersion extracts the version from a Forge JAR's manifest
 // when the mod version is set to `${file.jarVersion}`.
-func getForgeModVersion(zipReader *zip.Reader) types.RawVersion {
+func getForgeModVersion(zipReader *zip.Reader) types.BareVersion {
 	var r io.ReadCloser
 	var err error
 	for _, f := range zipReader.File {
@@ -266,7 +275,7 @@ func getForgeModVersion(zipReader *zip.Reader) types.RawVersion {
 	v := manifest[i:]
 	v = strings.Split(v, "\r")[0]
 	v = strings.Split(v, "\n")[0]
-	return types.RawVersion(v)
+	return types.BareVersion(v)
 }
 
 func forgeHasSibling(filePath string, siblings ...string) bool {
@@ -287,8 +296,8 @@ func (d *forgeModDetector) Name() string {
 }
 
 func (d *forgeModDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	var wg sync.WaitGroup
 	for _, f := range zipReader.File {
@@ -315,7 +324,7 @@ func (d *forgeModDetector) Detect(
 					continue
 				}
 
-				version := types.RawVersion(mod.Version)
+				version := types.BareVersion(mod.Version)
 				if version == "${file.jarVersion}" {
 					version = getForgeModVersion(zipReader)
 				}
@@ -323,11 +332,13 @@ func (d *forgeModDetector) Detect(
 				rawDeps := modIdentifier.Dependencies[mod.ModID]
 				depSpecs := make([]modLoaderDependencySpec, 0, len(rawDeps))
 				for _, dep := range rawDeps {
-					depSpecs = append(depSpecs, modLoaderDependencySpec{
-						modID:        dep.ModID,
-						mandatory:    dep.Mandatory,
-						versionRange: dep.VersionRange,
-					})
+					depSpecs = append(
+						depSpecs, modLoaderDependencySpec{
+							modID:        dep.ModID,
+							mandatory:    dep.Mandatory,
+							versionRange: dep.VersionRange,
+						},
+					)
 				}
 
 				p := translateModLoaderPackage(
@@ -355,11 +366,21 @@ func (d *forgeModDetector) Detect(
 				wg.Add(2)
 				go func(name, path string, urls []string) {
 					defer wg.Done()
-					slugresolve.ResolveSlug(types.SourceModrinth, name, path, urls)
+					slugresolve.ResolveSlug(
+						types.SourceModrinth,
+						name,
+						path,
+						urls,
+					)
 				}(string(p.Id.Name), fileHandle.Name(), metaURLs)
 				go func(name, path string, urls []string) {
 					defer wg.Done()
-					slugresolve.ResolveSlug(types.SourceCurseForge, name, path, urls)
+					slugresolve.ResolveSlug(
+						types.SourceCurseForge,
+						name,
+						path,
+						urls,
+					)
 				}(string(p.Id.Name), fileHandle.Name(), metaURLs)
 			}
 		}

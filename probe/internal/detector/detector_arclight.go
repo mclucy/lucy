@@ -26,9 +26,9 @@ func (d *arclightServerDetector) Name() string {
 // - https://arclight.izzel.io/
 // - https://deepwiki.com/IzzelAliz/Arclight/1-overview
 func (d *arclightServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+filePath string,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
 	if err != nil {
@@ -43,7 +43,10 @@ func (d *arclightServerDetector) Detect(
 		return nil, nil
 	}
 
-	hasLaunchProps, err := archiveContains(zipReader, "arclight-server-launch.properties")
+	hasLaunchProps, err := archiveContains(
+		zipReader,
+		"arclight-server-launch.properties",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -95,14 +98,14 @@ type arclightManifestSignals struct {
 	mainClass      string
 	implementation string
 	mixinConnector string
-	loaderVersion  types.RawVersion
-	gameVersion    types.RawVersion
+	loaderVersion  types.BareVersion
+	gameVersion    types.BareVersion
 }
 
 func (s arclightManifestSignals) valid() bool {
 	return s.mainClass == "io.izzel.arclight.server.Launcher" &&
-		s.implementation == "Arclight" &&
-		s.mixinConnector == "io.izzel.arclight.common.mod.ArclightConnector"
+	s.implementation == "Arclight" &&
+	s.mixinConnector == "io.izzel.arclight.common.mod.ArclightConnector"
 }
 
 func parseArclightManifest(data []byte) arclightManifestSignals {
@@ -112,23 +115,43 @@ func parseArclightManifest(data []byte) arclightManifestSignals {
 		line := scanner.Text()
 		switch {
 		case strings.HasPrefix(line, "Main-Class: "):
-			signals.mainClass = strings.TrimSpace(strings.TrimPrefix(line, "Main-Class: "))
+			signals.mainClass = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Main-Class: ",
+				),
+			)
 		case strings.HasPrefix(line, "Implementation-Title: "):
-			signals.implementation = strings.TrimSpace(strings.TrimPrefix(line, "Implementation-Title: "))
+			signals.implementation = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Implementation-Title: ",
+				),
+			)
 		case strings.HasPrefix(line, "Implementation-Version: "):
-			version := strings.TrimSpace(strings.TrimPrefix(line, "Implementation-Version: "))
-			signals.loaderVersion = types.RawVersion(version)
+			version := strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"Implementation-Version: ",
+				),
+			)
+			signals.loaderVersion = types.BareVersion(version)
 			if parsedGameVersion := parseArclightGameVersionFromImplementation(version); hasConcreteVersion(parsedGameVersion) {
 				signals.gameVersion = parsedGameVersion
 			}
 		case strings.HasPrefix(line, "MixinConnector: "):
-			signals.mixinConnector = strings.TrimSpace(strings.TrimPrefix(line, "MixinConnector: "))
+			signals.mixinConnector = strings.TrimSpace(
+				strings.TrimPrefix(
+					line,
+					"MixinConnector: ",
+				),
+			)
 		}
 	}
 	return signals
 }
 
-func parseArclightGameVersionFromImplementation(version string) types.RawVersion {
+func parseArclightGameVersionFromImplementation(version string) types.BareVersion {
 	if !strings.HasPrefix(version, "arclight-") {
 		return types.VersionUnknown
 	}
@@ -137,15 +160,15 @@ func parseArclightGameVersionFromImplementation(version string) types.RawVersion
 	if len(parts) == 0 || !isMinecraftReleaseVersion(parts[0]) {
 		return types.VersionUnknown
 	}
-	return types.RawVersion(parts[0])
+	return types.BareVersion(parts[0])
 }
 
-func parseArclightGameVersionFromPath(filePath string) types.RawVersion {
+func parseArclightGameVersionFromPath(filePath string) types.BareVersion {
 	match := arclightJarNamePattern.FindStringSubmatch(filepath.Base(filePath))
 	if match == nil {
 		return types.VersionUnknown
 	}
-	return types.RawVersion(match[1])
+	return types.BareVersion(match[1])
 }
 
 func archiveContains(zipReader *zip.Reader, name string) (bool, error) {

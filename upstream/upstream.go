@@ -28,8 +28,8 @@ import (
 // IoC via dependency injection
 
 func Fetch(
-	provider Provider,
-	id types.PackageId,
+provider Provider,
+id types.PackageId,
 ) (result FetchResult, err error) {
 	resolvedID, err := provider.ParseAmbiguousId(id)
 	if err != nil {
@@ -46,8 +46,8 @@ func Fetch(
 }
 
 func Dependencies(
-	provider Provider,
-	id types.PackageId,
+provider Provider,
+id types.PackageId,
 ) (deps *types.PackageDependencies, err error) {
 	raw, err := provider.Dependencies(id)
 	if err != nil {
@@ -57,30 +57,31 @@ func Dependencies(
 	return &result, nil
 }
 
-func PlatformSupport(src types.Source, name types.ProjectName) (
-	supports *types.PlatformSupport,
-	err error,
+func PlatformSupport(src types.Source, name types.PackageName) (
+supports *types.PlatformSupport,
+err error,
 ) {
 	// TODO: Implement
 	panic("not implemented")
 }
 
-func Information(
-	provider Provider,
-	name types.ProjectName,
-) (info types.ProjectInformation, err error) {
-	raw, err := provider.Information(name)
+func Metadata(
+provider Provider,
+name types.PackageName,
+) (info types.Metadata, err error) {
+	raw, err := provider.Metadata(name)
 	if err != nil {
-		return types.ProjectInformation{}, err
+		return types.Metadata{}, err
 	}
 	info = raw.ToProjectInformation()
+	info.From = provider.Source()
 	return info, nil
 }
 
 func Search(
-	provider Provider,
-	query types.ProjectName,
-	option types.SearchOptions,
+provider Provider,
+query types.PackageName,
+option types.SearchOptions,
 ) (res types.SearchResults, err error) {
 	raw, err := provider.Search(string(query), option)
 	if err != nil {
@@ -99,8 +100,8 @@ func Search(
 //
 // TODO: Remove, infer version should not be exposed. All inference will be done in providers.
 func InferVersion(
-	provider Provider,
-	id types.PackageId,
+provider Provider,
+id types.PackageId,
 ) (infer types.PackageId) {
 	return id
 }

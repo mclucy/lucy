@@ -40,7 +40,10 @@ func requestJSON(requestURL string, out any, notFound error) error {
 	return nil
 }
 
-func searchResources(query string, options types.SearchOptions) (searchResponse, error) {
+func searchResources(query string, options types.SearchOptions) (
+searchResponse,
+error,
+) {
 	u := searchResourcesURL(query, options)
 	resp := searchResponse{}
 	if err := requestJSON(u, &resp, nil); err != nil {
@@ -59,7 +62,11 @@ func getResource(id int64) (*resourceResponse, error) {
 
 func getLatestVersion(resourceID int64) (*versionResponse, error) {
 	resp := &versionResponse{}
-	if err := requestJSON(latestVersionURL(resourceID), resp, ErrNoVersion); err != nil {
+	if err := requestJSON(
+		latestVersionURL(resourceID),
+		resp,
+		ErrNoVersion,
+	); err != nil {
 		return nil, err
 	}
 	return resp, nil
@@ -67,7 +74,11 @@ func getLatestVersion(resourceID int64) (*versionResponse, error) {
 
 func listVersions(resourceID int64) ([]versionResponse, error) {
 	resp := []versionResponse{}
-	if err := requestJSON(versionsURL(resourceID), &resp, ErrNoVersion); err != nil {
+	if err := requestJSON(
+		versionsURL(resourceID),
+		&resp,
+		ErrNoVersion,
+	); err != nil {
 		return nil, err
 	}
 	return resp, nil
@@ -110,7 +121,7 @@ func spigetSearchSort(sort types.SearchSort) string {
 	}
 }
 
-func parseNumericResourceID(name types.ProjectName) (int64, bool) {
+func parseNumericResourceID(name types.PackageName) (int64, bool) {
 	trimmed := strings.TrimSpace(name.String())
 	if trimmed == "" {
 		return 0, false

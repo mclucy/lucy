@@ -24,9 +24,9 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 		Pinned:   true,
 	}}
 
-	requested := []types.PackageId{
-		mustParsePackageID(t, "fabric/lithium@>=0.12.0 <0.13.0"),
-		mustParsePackageID(t, "fabric/fabric-api"),
+	requested := []types.PackageRequest{
+		mustParsePackageRequest(t, "fabric/lithium@>=0.12.0 <0.13.0"),
+		mustParsePackageRequest(t, "fabric/fabric-api"),
 	}
 
 	updated := buildUpdatedManifest(&existing, requested)
@@ -46,8 +46,8 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 	if lithium.Role != state.RoleRequired {
 		t.Fatalf("expected lithium role required, got %q", lithium.Role)
 	}
-	if lithium.Side != state.SideServer || !lithium.Optional || !lithium.Pinned {
-		t.Fatalf("expected existing package metadata to be preserved, got %#v", lithium)
+	if lithium.Side != state.SideServer || lithium.Optional || !lithium.Pinned {
+		t.Fatalf("expected existing package metadata to be preserved (Optional overwritten by request), got %#v", lithium)
 	}
 
 	fabricAPI := byID["fabric/fabric-api"]
@@ -176,6 +176,15 @@ func mustParsePackageID(t *testing.T, raw string) types.PackageId {
 		t.Fatalf("parse %q: %v", raw, err)
 	}
 	return id
+}
+
+func mustParsePackageRequest(t *testing.T, raw string) types.PackageRequest {
+	t.Helper()
+	req, err := syntax.ParsePackageRequest(raw, "", false)
+	if err != nil {
+		t.Fatalf("parse request %q: %v", raw, err)
+	}
+	return req
 }
 
 func lockedResultPackage(t *testing.T, workDir, rawID, filename string) types.Package {

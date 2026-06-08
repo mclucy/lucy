@@ -133,41 +133,30 @@ func DeclaredModdingPlatformForNode(id RuntimeNodeID) Platform {
 	}
 }
 
-// CanInfer returns true if the platform is ambiguous and can be resolved
+// IsSelector returns true if the platform is ambiguous and can be resolved
 // from server context.
-func (p Platform) CanInfer() bool {
+func (p Platform) IsSelector() bool {
 	return p == PlatformAny
 }
 
-// ProjectName is the slug of the package, using hyphens as separators. For example,
-// "fabric-api".
-//
-// It is non-case-sensitive, though lowercase is recommended. Underlines '_' are
-// equivalent to hyphens.
-//
-// A slug from an upstream API is preferred, if possible. Otherwise, the slug is
-// obtained from the executable file. No exceptions since a package must either
-// exist on a remote API or user's local files.
-type ProjectName string
-
 // Title Replaces underlines or hyphens with spaces, then capitalize the first
 // letter.
-func (n ProjectName) Title() string {
+func (n PackageName) Title() string {
 	return tools.Capitalize(strings.ReplaceAll(string(n), "-", " "))
 }
 
-func (n ProjectName) String() string {
+func (n PackageName) String() string {
 	return string(n)
 }
 
-func (n ProjectName) Pep8String() string {
+func (n PackageName) Pep8String() string {
 	return strings.ReplaceAll(string(n), "-", "_")
 }
 
 type PackageId struct {
 	Platform Platform
-	Name     ProjectName
-	Version  RawVersion
+	Name     PackageName
+	Version  BareVersion
 }
 
 func (p PackageId) NewPackage() Package {
@@ -185,12 +174,12 @@ func (p PackageId) String() string {
 		p.Platform == PlatformAny,
 		"", string(p.Platform)+"/",
 	) +
-		string(p.Name) +
-		tools.Ternary(
-			p.Version == VersionAny,
-			"",
-			"@"+string(p.Version),
-		)
+	string(p.Name) +
+	tools.Ternary(
+		p.Version == VersionAny,
+		"",
+		"@"+string(p.Version),
+	)
 }
 
 func (p PackageId) StringFull() string {
@@ -205,7 +194,7 @@ func (p PackageId) StringPlatformName() string {
 	return string(p.Platform) + "/" + string(p.Name)
 }
 
-var platformByIdentityPackage = map[ProjectName]Platform{
+var platformByIdentityPackage = map[PackageName]Platform{
 	"minecraft":     PlatformMinecraft,
 	"mc":            PlatformMinecraft,
 	"fabric":        PlatformFabric,
@@ -216,7 +205,7 @@ var platformByIdentityPackage = map[ProjectName]Platform{
 	"mcdr":          PlatformMCDR,
 }
 
-var canonicalIdentityPackageByPlatform = map[Platform]ProjectName{
+var canonicalIdentityPackageByPlatform = map[Platform]PackageName{
 	PlatformMinecraft: "minecraft",
 	PlatformFabric:    "fabric",
 	PlatformForge:     "forge",

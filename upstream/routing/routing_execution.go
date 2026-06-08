@@ -27,7 +27,7 @@ func (e ProviderError) Unwrap() error {
 }
 
 type InfoResult struct {
-	Information types.ProjectInformation
+	Information types.Metadata
 	Fetch       upstream.FetchResult
 }
 
@@ -36,9 +36,9 @@ type InfoResult struct {
 // Default behavior is non-aggregated: each provider contributes one
 // types.SearchResults item in the returned slice.
 func SearchMany(
-	providers []upstream.Provider,
-	query types.ProjectName,
-	options types.SearchOptions,
+providers []upstream.Provider,
+query types.PackageName,
+options types.SearchOptions,
 ) ([]types.SearchResults, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
@@ -92,8 +92,8 @@ func SearchMany(
 // FetchMany executes fetch on all providers in parallel and returns all
 // successful results.
 func FetchMany(
-	providers []upstream.Provider,
-	id types.PackageId,
+providers []upstream.Provider,
+id types.PackageId,
 ) ([]upstream.FetchResult, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
@@ -144,51 +144,30 @@ func FetchMany(
 	return results, providerErrors
 }
 
-// FirstFetch executes fetch on all providers in parallel and returns the first
-// successful result.
-func FirstFetch(
-	providers []upstream.Provider,
-	id types.PackageId,
-) (upstream.FetchResult, []ProviderError, error) {
-	// TODO: implement this function in a way that doesn't wait for all providers
-	//  to finish if one has already succeeded
-	panic("not implemented")
-}
-
-// FirstInfo executes info+fetch on all providers in parallel and returns the
+// GetMedataHedged executes info+fetch on all providers in parallel and returns the
 // first successful result.
-func FirstInfo(
-	providers []upstream.Provider,
-	id types.PackageId,
-) (InfoResult, []ProviderError, error) {
+func GetMedataHedged(
+providers []upstream.Provider,
+ref types.PackageRef,
+) (types.Metadata, []ProviderError, error) {
 	if len(providers) == 0 {
-		return InfoResult{}, nil, ErrNoProviderSucceeded
+		return types.Metadata{}, nil, ErrNoProviderSucceeded
 	}
 
-	results := make(chan InfoResult, len(providers))
-	errorsChan := make(chan ProviderError, len(providers))
+	resChan := make(chan types.Metadata, len(providers))
+	errChan := make(chan ProviderError, len(providers))
 
 	for _, provider := range providers {
 		go func(provider upstream.Provider) {
-			info, err := upstream.Information(provider, id.Name)
+			res, err := upstream.Metadata(provider, ref.Name)
 			if err != nil {
-				errorsChan <- ProviderError{
+				errChan <- ProviderError{
 					Source: provider.Source(),
 					Err:    fmt.Errorf("information failed: %w", err),
 				}
 				return
 			}
-
-			remoteData, err := upstream.Fetch(provider, id)
-			if err != nil {
-				errorsChan <- ProviderError{
-					Source: provider.Source(),
-					Err:    fmt.Errorf("fetch failed: %w", err),
-				}
-				return
-			}
-
-			results <- InfoResult{Information: info, Fetch: remoteData}
+			resChan <- res
 		}(provider)
 	}
 
@@ -197,23 +176,23 @@ func FirstInfo(
 
 	for pending > 0 {
 		select {
-		case result := <-results:
+		case result := <-resChan:
 			return result, providerErrors, nil
-		case providerErr := <-errorsChan:
+		case providerErr := <-errChan:
 			providerErrors = append(providerErrors, providerErr)
 			pending--
 		}
 	}
 
-	return InfoResult{}, providerErrors, joinProviderErrors(providerErrors)
+	return types.Metadata{}, providerErrors, joinProviderErrors(providerErrors)
 }
 
 // DependenciesMany executes Dependencies on all providers in parallel and
 // returns all successful results. An error is returned only when every provider
 // fails; partial failures are collected in the returned []ProviderError slice.
 func DependenciesMany(
-	providers []upstream.Provider,
-	id types.PackageId,
+providers []upstream.Provider,
+id types.PackageId,
 ) ([]types.PackageDependencies, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil

@@ -55,12 +55,15 @@ func searchSortOrder(sort types.SearchSort) string {
 
 // searchUrl builds the search URL for the CurseForge /v1/mods/search endpoint.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func searchUrl(query types.ProjectName, options types.SearchOptions) string {
+func searchUrl(query types.PackageName, options types.SearchOptions) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
 	params.Set("classId", fmt.Sprintf("%d", modsClassId))
 	params.Set("searchFilter", string(query))
-	params.Set("sortField", fmt.Sprintf("%d", curseforgeSearchSortField(options.SortBy)))
+	params.Set(
+		"sortField",
+		fmt.Sprintf("%d", curseforgeSearchSortField(options.SortBy)),
+	)
 	params.Set("sortOrder", searchSortOrder(options.SortBy))
 	params.Set("pageSize", "50")
 
@@ -73,7 +76,7 @@ func searchUrl(query types.ProjectName, options types.SearchOptions) string {
 
 // slugSearchUrl builds a URL to find a mod by its exact slug.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func slugSearchUrl(slug types.ProjectName) string {
+func slugSearchUrl(slug types.PackageName) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
 	params.Set("classId", fmt.Sprintf("%d", modsClassId))
@@ -117,5 +120,10 @@ func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 		params.Set("modLoaderType", fmt.Sprintf("%d", loaderType))
 	}
 
-	return fmt.Sprintf("%s/v1/mods/%d/files?%s", baseUrl, modId, params.Encode())
+	return fmt.Sprintf(
+		"%s/v1/mods/%d/files?%s",
+		baseUrl,
+		modId,
+		params.Encode(),
+	)
 }

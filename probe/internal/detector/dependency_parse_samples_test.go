@@ -300,9 +300,9 @@ func mustReadFile(t *testing.T, path string) []byte {
 	return b
 }
 
-func mustParseSemver(t *testing.T, raw string) types.ComparableVersion {
+func mustParseSemver(t *testing.T, raw string) types.ResolvableVersion {
 	t.Helper()
-	v, err := dependency.Parse(types.RawVersion(raw), types.Semver)
+	v, err := dependency.Parse(types.BareVersion(raw), types.Semver)
 	if err != nil {
 		t.Fatalf("parse semver %q failed: %v", raw, err)
 	}
@@ -313,16 +313,16 @@ func mustParseSemver(t *testing.T, raw string) types.ComparableVersion {
 }
 
 func assertConstraintSatisfy(
-	t *testing.T,
-	expr types.VersionConstraintExpression,
-	platform types.Platform,
-	name string,
-	version string,
-	want bool,
-	label string,
+t *testing.T,
+expr types.VersionExpr,
+platform types.Platform,
+name string,
+version string,
+want bool,
+label string,
 ) {
 	t.Helper()
-	id := types.PackageId{Platform: platform, Name: types.ProjectName(name)}
+	id := types.PackageId{Platform: platform, Name: types.PackageName(name)}
 	depSpec := types.Dependency{Id: id, Constraint: expr, Mandatory: true}
 	got := depSpec.Satisfy(id, mustParseSemver(t, version))
 	t.Logf(

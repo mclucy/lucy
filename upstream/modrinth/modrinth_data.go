@@ -64,14 +64,14 @@ type projectResponse struct {
 
 func (p *projectResponse) ToProjectSupport() types.PlatformSupport {
 	supports := types.PlatformSupport{
-		MinecraftVersions: make([]types.RawVersion, 0),
+		MinecraftVersions: make([]types.BareVersion, 0),
 		Platforms:         make([]types.Platform, 0),
 	}
 
 	for _, version := range p.GameVersions {
 		supports.MinecraftVersions = append(
 			supports.MinecraftVersions,
-			types.RawVersion(version),
+			types.BareVersion(version),
 		)
 	}
 
@@ -84,8 +84,8 @@ func (p *projectResponse) ToProjectSupport() types.PlatformSupport {
 	return supports
 }
 
-func (p *projectResponse) ToProjectInformation() (info types.ProjectInformation) {
-	info = types.ProjectInformation{
+func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
+	info = types.Metadata{
 		Title:                 p.Title,
 		Brief:                 p.Description,
 		Description:           p.Body,
@@ -187,7 +187,7 @@ type searchResultResponse struct {
 func (s *searchResultResponse) ToSearchResults() types.SearchResults {
 	res := types.SearchResults{
 		Source:   types.SourceModrinth,
-		Projects: make([]types.ProjectName, 0, s.TotalHits),
+		Projects: make([]types.PackageName, 0, s.TotalHits),
 	}
 
 	// The hits should already be sorted by whatever index passed in.

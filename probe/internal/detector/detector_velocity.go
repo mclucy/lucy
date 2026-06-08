@@ -52,8 +52,8 @@ func (d *bungeecordDetector) Name() string {
 }
 
 func (d *velocityDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) ([]types.Package, error) {
 	for _, f := range zipReader.File {
 		if f.Name != "velocity-plugin.json" {
@@ -76,15 +76,20 @@ func (d *velocityDetector) Detect(
 			return nil, err
 		}
 
-		return []types.Package{translateVelocityPlugin(descriptor, fileHandle.Name())}, nil
+		return []types.Package{
+			translateVelocityPlugin(
+				descriptor,
+				fileHandle.Name(),
+			),
+		}, nil
 	}
 
 	return nil, nil
 }
 
 func (d *bungeecordDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
+zipReader *zip.Reader,
+fileHandle *os.File,
 ) ([]types.Package, error) {
 	for _, f := range zipReader.File {
 		if f.Name != "bungee.yml" {
@@ -107,15 +112,20 @@ func (d *bungeecordDetector) Detect(
 			return nil, err
 		}
 
-		return []types.Package{translateBungeecordPlugin(descriptor, fileHandle.Name())}, nil
+		return []types.Package{
+			translateBungeecordPlugin(
+				descriptor,
+				fileHandle.Name(),
+			),
+		}, nil
 	}
 
 	return nil, nil
 }
 
 func translateVelocityPlugin(
-	descriptor *velocityPluginDescriptor,
-	localPath string,
+descriptor *velocityPluginDescriptor,
+localPath string,
 ) types.Package {
 	authors := make([]types.Person, 0, len(descriptor.Authors))
 	for _, author := range descriptor.Authors {
@@ -124,23 +134,25 @@ func translateVelocityPlugin(
 
 	urls := make([]types.Url, 0, 1)
 	if descriptor.URL != "" {
-		urls = append(urls, types.Url{
-			Name: "Homepage",
-			Type: types.UrlHome,
-			Url:  descriptor.URL,
-		})
+		urls = append(
+			urls, types.Url{
+				Name: "Homepage",
+				Type: types.UrlHome,
+				Url:  descriptor.URL,
+			},
+		)
 	}
 
 	return types.Package{
 		Id: types.PackageId{
 			Platform: types.Platform("velocity"),
 			Name:     syntax.ToProjectName(descriptor.ID),
-			Version:  types.RawVersion(descriptor.Version),
+			Version:  types.BareVersion(descriptor.Version),
 		},
 		Local: &types.PackageInstallation{
 			Path: localPath,
 		},
-		Information: &types.ProjectInformation{
+		Information: &types.Metadata{
 			Title:       descriptor.Name,
 			Description: descriptor.Description,
 			Authors:     authors,
@@ -150,8 +162,8 @@ func translateVelocityPlugin(
 }
 
 func translateBungeecordPlugin(
-	descriptor *bungeecordPluginDescriptor,
-	localPath string,
+descriptor *bungeecordPluginDescriptor,
+localPath string,
 ) types.Package {
 	authors := make([]types.Person, 0, len(descriptor.Authors)+1)
 	if descriptor.Author != "" {
@@ -163,23 +175,25 @@ func translateBungeecordPlugin(
 
 	urls := make([]types.Url, 0, 1)
 	if descriptor.Website != "" {
-		urls = append(urls, types.Url{
-			Name: "Website",
-			Type: types.UrlHome,
-			Url:  descriptor.Website,
-		})
+		urls = append(
+			urls, types.Url{
+				Name: "Website",
+				Type: types.UrlHome,
+				Url:  descriptor.Website,
+			},
+		)
 	}
 
 	return types.Package{
 		Id: types.PackageId{
 			Platform: types.Platform("bungeecord"),
 			Name:     syntax.ToProjectName(descriptor.Name),
-			Version:  types.RawVersion(descriptor.Version),
+			Version:  types.BareVersion(descriptor.Version),
 		},
 		Local: &types.PackageInstallation{
 			Path: localPath,
 		},
-		Information: &types.ProjectInformation{
+		Information: &types.Metadata{
 			Title:       descriptor.Name,
 			Description: descriptor.Description,
 			Authors:     authors,

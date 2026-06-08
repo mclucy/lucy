@@ -63,7 +63,7 @@ func installNeoForge(id types.PackageId) error {
 		return errors.New("server working directory not found")
 	}
 
-	var gameVersion types.RawVersion
+	var gameVersion types.BareVersion
 	switch serverInfo.Runtime.DerivedModLoader() {
 	case types.PlatformVanilla:
 		gameVersion = serverInfo.Runtime.GameVersion
@@ -72,7 +72,7 @@ func installNeoForge(id types.PackageId) error {
 		if selectedVersion == "none" || selectedVersion == "error" {
 			return errors.New("minecraft version selection cancelled or failed")
 		}
-		gameVersion = types.RawVersion(selectedVersion)
+		gameVersion = types.BareVersion(selectedVersion)
 	}
 
 	if gameVersion == types.VersionUnknown {
@@ -94,7 +94,7 @@ func installNeoForge(id types.PackageId) error {
 	if err != nil {
 		return err
 	}
-	id.Version = types.RawVersion(neoForgeVersion)
+	id.Version = types.BareVersion(neoForgeVersion)
 
 	fileURL := resolveNeoForgeInstallerURL(neoForgeVersion)
 
@@ -114,13 +114,13 @@ func installNeoForge(id types.PackageId) error {
 // If the version is explicit, it is returned as-is.
 // Otherwise, the latest compatible version for the given Minecraft game version is fetched.
 func getNeoForgeVersionFromPackageId(
-	p types.PackageId,
-	gameVersion types.RawVersion,
+p types.PackageId,
+gameVersion types.BareVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest &&
-		p.Version != types.VersionCompatible &&
-		p.Version != types.VersionAny &&
-		p.Version != types.VersionUnknown {
+	p.Version != types.VersionCompatible &&
+	p.Version != types.VersionAny &&
+	p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
 	}
 	return fetchLatestNeoForgeVersion(gameVersion)
@@ -131,7 +131,7 @@ func getNeoForgeVersionFromPackageId(
 //
 // NeoForge version scheme: MAJOR.MINOR.PATCH where MAJOR = MC minor version,
 // MINOR = MC patch version. E.g. NeoForge 21.4.x is for Minecraft 1.21.4.
-func fetchLatestNeoForgeVersion(gameVersion types.RawVersion) (string, error) {
+func fetchLatestNeoForgeVersion(gameVersion types.BareVersion) (string, error) {
 	res, err := http.Get(neoForgeMetadataURL)
 	if err != nil {
 		return "", fmt.Errorf("fetch NeoForge metadata failed: %w", err)
@@ -216,7 +216,7 @@ func verifyNeoForgeInstallation(workPath string) error {
 
 	return errors.New(
 		"NeoForge installation verification failed: no artifacts found " +
-			"(expected run.sh/run.bat or libraries/net/neoforged/)",
+		"(expected run.sh/run.bat or libraries/net/neoforged/)",
 	)
 }
 
