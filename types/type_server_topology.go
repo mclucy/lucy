@@ -6,6 +6,31 @@ type RuntimeNodeID string
 
 const RuntimeNodeUnknown RuntimeNodeID = ""
 
+const (
+	RuntimeNodeMinecraft        RuntimeNodeID = "minecraft"
+	RuntimeNodeFabric           RuntimeNodeID = "fabric"
+	RuntimeNodeForge            RuntimeNodeID = "forge"
+	RuntimeNodeNeoforge         RuntimeNodeID = "neoforge"
+	RuntimeNodeMCDR             RuntimeNodeID = "mcdr"
+	RuntimeNodePaper            RuntimeNodeID = "paper"
+	RuntimeNodeSpigot           RuntimeNodeID = "spigot"
+	RuntimeNodePaperFork        RuntimeNodeID = "paper-fork"
+	RuntimeNodeCraftBukkit      RuntimeNodeID = "craftbukkit"
+	RuntimeNodeBukkit           RuntimeNodeID = "bukkit"
+	RuntimeNodeFolia            RuntimeNodeID = "folia"
+	RuntimeNodeLeaves           RuntimeNodeID = "leaves"
+	RuntimeNodeSponge           RuntimeNodeID = "sponge"
+	RuntimeNodeArclight         RuntimeNodeID = "arclight"
+	RuntimeNodeYouer            RuntimeNodeID = "youer"
+	RuntimeNodeVelocity         RuntimeNodeID = "velocity"
+	RuntimeNodeBungeecord       RuntimeNodeID = "bungeecord"
+	RuntimeNodeWaterfall        RuntimeNodeID = "waterfall"
+	RuntimeNodeGeyser           RuntimeNodeID = "geyser"
+	RuntimeNodeGeyserStandalone RuntimeNodeID = "geyser_standalone"
+	RuntimeNodeConnector        RuntimeNodeID = "connector"
+	RuntimeNodeKilt             RuntimeNodeID = "kilt"
+)
+
 type RuntimeRole string
 
 const (

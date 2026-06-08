@@ -8,28 +8,28 @@ import "github.com/mclucy/lucy/types"
 // rendering strings.
 
 const (
-	RuntimeNodeMinecraft        types.RuntimeNodeID = "minecraft"
-	RuntimeNodeFabric           types.RuntimeNodeID = "fabric"
-	RuntimeNodeForge            types.RuntimeNodeID = "forge"
-	RuntimeNodeNeoforge         types.RuntimeNodeID = "neoforge"
-	RuntimeNodeMCDR             types.RuntimeNodeID = "mcdr"
-	RuntimeNodePaper            types.RuntimeNodeID = "paper"
-	RuntimeNodeSpigot           types.RuntimeNodeID = "spigot"
-	RuntimeNodePaperFork        types.RuntimeNodeID = "paper-fork"
-	RuntimeNodeCraftBukkit      types.RuntimeNodeID = "craftbukkit"
-	RuntimeNodeBukkit           types.RuntimeNodeID = "bukkit"
-	RuntimeNodeFolia            types.RuntimeNodeID = "folia"
-	RuntimeNodeLeaves           types.RuntimeNodeID = "leaves"
-	RuntimeNodeSponge           types.RuntimeNodeID = "sponge"
-	RuntimeNodeArclight         types.RuntimeNodeID = "arclight"
-	RuntimeNodeYouer            types.RuntimeNodeID = "youer"
-	RuntimeNodeVelocity         types.RuntimeNodeID = "velocity"
-	RuntimeNodeBungeecord       types.RuntimeNodeID = "bungeecord"
-	RuntimeNodeWaterfall        types.RuntimeNodeID = "waterfall"
-	RuntimeNodeGeyser           types.RuntimeNodeID = "geyser"
-	RuntimeNodeGeyserStandalone types.RuntimeNodeID = "geyser_standalone"
-	RuntimeNodeConnector        types.RuntimeNodeID = "connector"
-	RuntimeNodeKilt             types.RuntimeNodeID = "kilt"
+	RuntimeNodeMinecraft        = types.RuntimeNodeMinecraft
+	RuntimeNodeFabric           = types.RuntimeNodeFabric
+	RuntimeNodeForge            = types.RuntimeNodeForge
+	RuntimeNodeNeoforge         = types.RuntimeNodeNeoforge
+	RuntimeNodeMCDR             = types.RuntimeNodeMCDR
+	RuntimeNodePaper            = types.RuntimeNodePaper
+	RuntimeNodeSpigot           = types.RuntimeNodeSpigot
+	RuntimeNodePaperFork        = types.RuntimeNodePaperFork
+	RuntimeNodeCraftBukkit      = types.RuntimeNodeCraftBukkit
+	RuntimeNodeBukkit           = types.RuntimeNodeBukkit
+	RuntimeNodeFolia            = types.RuntimeNodeFolia
+	RuntimeNodeLeaves           = types.RuntimeNodeLeaves
+	RuntimeNodeSponge           = types.RuntimeNodeSponge
+	RuntimeNodeArclight         = types.RuntimeNodeArclight
+	RuntimeNodeYouer            = types.RuntimeNodeYouer
+	RuntimeNodeVelocity         = types.RuntimeNodeVelocity
+	RuntimeNodeBungeecord       = types.RuntimeNodeBungeecord
+	RuntimeNodeWaterfall        = types.RuntimeNodeWaterfall
+	RuntimeNodeGeyser           = types.RuntimeNodeGeyser
+	RuntimeNodeGeyserStandalone = types.RuntimeNodeGeyserStandalone
+	RuntimeNodeConnector        = types.RuntimeNodeConnector
+	RuntimeNodeKilt             = types.RuntimeNodeKilt
 )
 
 var defaultRegistryEntries = []RegistryEntry{
