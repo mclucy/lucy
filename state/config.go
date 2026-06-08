@@ -7,6 +7,7 @@ import "fmt"
 type Config struct {
 	Sources SourcesConfig `yaml:"sources"`
 	Upgrade UpgradeConfig `yaml:"upgrade"`
+	Debug   DebugConfig   `yaml:"debug"`
 }
 
 // SourcesConfig defines source selection and priority rules.
@@ -20,6 +21,31 @@ type UpgradeConfig struct {
 	Mode string `yaml:"mode"`
 }
 
+// DebugConfig defines debug command settings.
+type DebugConfig struct {
+	// IdentityPackages lists package IDs (in "platform/name" format) that are
+	// treated as server platform/loader packages rather than user mods. They are
+	// excluded from the debug binary-search list.
+	IdentityPackages []string `yaml:"identity_packages"`
+}
+
+// DebugConfigDefaults returns default debug settings.
+func DebugConfigDefaults() DebugConfig {
+	return DebugConfig{
+		IdentityPackages: []string{
+			"minecraft/minecraft",
+			"minecraft/mc",
+			"minecraft/vanilla",
+			"fabric/fabric",
+			"fabric/fabric-loader",
+			"forge/forge",
+			"neoforge/neoforge",
+			"mcdr/mcdreforged",
+			"mcdr/mcdr",
+		},
+	}
+}
+
 // ConfigDefaults returns a Config value with default settings.
 func ConfigDefaults() Config {
 	return Config{
@@ -30,6 +56,7 @@ func ConfigDefaults() Config {
 		Upgrade: UpgradeConfig{
 			Mode: "compatible",
 		},
+		Debug: DebugConfigDefaults(),
 	}
 }
 
@@ -54,3 +81,4 @@ func ValidateConfig(c Config) error {
 	}
 	return nil
 }
+

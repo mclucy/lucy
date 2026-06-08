@@ -168,3 +168,40 @@ func (g *DependencyGraph) GetLeaves() []*GraphNode {
 func (g *DependencyGraph) GetRoots() []*GraphNode {
 	return g.Roots
 }
+
+// TopologicalSort returns nodes in dependency-first topological order
+// (dependencies before dependents). Identity packages (minecraft, fabric, etc.)
+// are excluded. Returns nil if a cycle is detected.
+func (g *DependencyGraph) TopologicalSort() []*GraphNode {
+	// outDeg counts how many dependencies each node has (len(Children)).
+	// Nodes with 0 dependencies appear first.
+	outDeg := make(map[string]int, len(g.Nodes))
+	for id := range g.Nodes {
+		outDeg[id] = len(g.Nodes[id].Children)
+	}
+
+	queue := make([]string, 0, len(g.Nodes))
+	for id, deg := range outDeg {
+		if deg == 0 {
+			queue = append(queue, id)
+		}
+	}
+
+	result := make([]*GraphNode, 0, len(g.Nodes))
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		result = append(result, g.Nodes[id])
+		for _, parent := range g.Nodes[id].Parents {
+			outDeg[parent.ID]--
+			if outDeg[parent.ID] == 0 {
+				queue = append(queue, parent.ID)
+			}
+		}
+	}
+
+	if len(result) != len(g.Nodes) {
+		return nil
+	}
+	return result
+}
