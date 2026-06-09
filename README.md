@@ -184,6 +184,13 @@ lucy cache slugs clear     # Clear slug mappings
 | `slugs ls`    | `--json` |
 | `slugs clear` |          |
 
+### `lucy bisect`
+```bash
+lucy bisect start          # Start a binary-search session
+lucy bisect good           # Mark current midpoint as good (bad mod is in right half)
+lucy bisect bad            # Mark current midpoint as bad (bad mod is in left half)
+```
+
 ### Stubs
 
 Registered but not yet implemented:

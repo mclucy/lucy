@@ -184,6 +184,13 @@ lucy cache slugs clear     # 清除 slug 映射
 | `slugs ls`    | `--json` |
 | `slugs clear` |          |
 
+### `lucy bisect`
+```bash
+lucy bisect start          # 开启一个二分会话
+lucy bisect good           # 标记当前的中点是好的 (坏的在右半部分)
+lucy bisect bad            # 标记当前的中点是坏的 (坏的包在左半部分)
+```
+
 ### 未实现
 
 已注册但尚未实现的命令：
