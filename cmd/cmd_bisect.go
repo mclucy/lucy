@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var debugCmd = &cobra.Command{
-	Use:   "debug",
+var bisectCmd = &cobra.Command{
+	Use:   "bisect",
 	Short: "Use algorithm find mods have bug smartly",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -21,74 +21,74 @@ var debugCmd = &cobra.Command{
 	},
 }
 
-var debugStartCmd = &cobra.Command{
+var bisectStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start a binary-search debug session",
+	Short: "Start a binary-search session",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionDebugStart),
+	RunE:  runWithErrorLogging(actionBisectStart),
 }
 
-var debugGoodCmd = &cobra.Command{
+var bisectGoodCmd = &cobra.Command{
 	Use:   "good",
 	Short: "Mark current midpoint as good (bad mod is in right half)",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionDebugGood),
+	RunE:  runWithErrorLogging(actionBisectGood),
 }
 
-var debugBadCmd = &cobra.Command{
+var bisectBadCmd = &cobra.Command{
 	Use:   "bad",
 	Short: "Mark current midpoint as bad (bad mod is in left half)",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionDebugBad),
+	RunE:  runWithErrorLogging(actionBisectBad),
 }
 
 func init() {
-	debugCmd.AddCommand(debugStartCmd, debugGoodCmd, debugBadCmd)
-	rootCmd.AddCommand(debugCmd)
+	bisectCmd.AddCommand(bisectStartCmd, bisectGoodCmd, bisectBadCmd)
+	rootCmd.AddCommand(bisectCmd)
 }
 
-type debugMod struct {
+type bisectMod struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
 	Path    string `json:"path"`
 }
 
-type debugState struct {
-	Mods []debugMod `json:"mods"`
-	L    int        `json:"l"`
-	R    int        `json:"r"`
+type bisectState struct {
+	Mods []bisectMod `json:"mods"`
+	L    int         `json:"l"`
+	R    int         `json:"r"`
 }
 
-func debugFilePath(workDir string) string {
-	return filepath.Join(workDir, ".lucy", "debug.json")
+func bisectFilePath(workDir string) string {
+	return filepath.Join(workDir, ".lucy", "bisect.json")
 }
 
-func readDebugState(workDir string) (*debugState, error) {
-	data, err := os.ReadFile(debugFilePath(workDir))
+func readBisectState(workDir string) (*bisectState, error) {
+	data, err := os.ReadFile(bisectFilePath(workDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("no debug session found, run `lucy debug start` first")
+			return nil, fmt.Errorf("no bisect session found, run `lucy bisect start` first")
 		}
-		return nil, fmt.Errorf("failed to read debug state: %w", err)
+		return nil, fmt.Errorf("failed to read bisect state: %w", err)
 	}
-	var state debugState
+	var state bisectState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, fmt.Errorf("failed to parse debug state: %w", err)
+		return nil, fmt.Errorf("failed to parse bisect state: %w", err)
 	}
 	return &state, nil
 }
 
-func writeDebugState(workDir string, state *debugState) error {
+func writeBisectState(workDir string, state *bisectState) error {
 	lucyDir := filepath.Join(workDir, ".lucy")
 	if err := os.MkdirAll(lucyDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create .lucy directory: %w", err)
 	}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to serialize debug state: %w", err)
+		return fmt.Errorf("failed to serialize bisect state: %w", err)
 	}
-	if err := os.WriteFile(debugFilePath(workDir), data, 0o600); err != nil {
-		return fmt.Errorf("failed to write debug state: %w", err)
+	if err := os.WriteFile(bisectFilePath(workDir), data, 0o600); err != nil {
+		return fmt.Errorf("failed to write bisect state: %w", err)
 	}
 	return nil
 }
@@ -111,7 +111,7 @@ func disableMod(path string) error {
 	return os.Rename(path, dp)
 }
 
-func applyDebugRange(mods []debugMod, mid int) (enabled, disabled int) {
+func applyBisectRange(mods []bisectMod, mid int) (enabled, disabled int) {
 	for i, m := range mods {
 		if m.Path == "" {
 			continue
@@ -129,17 +129,17 @@ func applyDebugRange(mods []debugMod, mid int) (enabled, disabled int) {
 	return
 }
 
-func printRange(state *debugState, mid int, enabled, disabled int) {
+func printRange(state *bisectState, mid int, enabled, disabled int) {
 	if enabled > 0 {
 		fmt.Printf("Enabled %d mods in range [0, %d]\n", enabled, mid)
 	}
 	if disabled > 0 {
 		fmt.Printf("Disabled %d mods in range [%d, %d]\n", disabled, mid+1, state.R)
 	}
-	fmt.Printf("Test your server, then run `lucy debug good` or `lucy debug bad`\n")
+	fmt.Printf("Test your server, then run `lucy bisect good` or `lucy bisect bad`\n")
 }
 
-func actionDebugStart(cmd *cobra.Command, args []string) error {
+func actionBisectStart(cmd *cobra.Command, args []string) error {
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
@@ -156,8 +156,8 @@ func actionDebugStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
 
-	identitySet := make(map[string]bool, len(cfg.Debug.IdentityPackages))
-	for _, id := range cfg.Debug.IdentityPackages {
+	identitySet := make(map[string]bool, len(cfg.Bisect.IdentityPackages))
+	for _, id := range cfg.Bisect.IdentityPackages {
 		identitySet[id] = true
 	}
 
@@ -186,12 +186,12 @@ func actionDebugStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	mods := make([]debugMod, 0, len(sorted))
+	mods := make([]bisectMod, 0, len(sorted))
 	for _, node := range sorted {
 		if identitySet[node.ID] {
 			continue
 		}
-		mods = append(mods, debugMod{
+		mods = append(mods, bisectMod{
 			ID:      node.ID,
 			Version: node.Version,
 			Path:    pathByID[node.ID],
@@ -203,38 +203,38 @@ func actionDebugStart(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	state := &debugState{
+	state := &bisectState{
 		Mods: mods,
 		L:    0,
 		R:    len(mods) - 1,
 	}
-	if err := writeDebugState(workDir, state); err != nil {
+	if err := writeBisectState(workDir, state); err != nil {
 		return err
 	}
 
 	mid := (state.L + state.R) / 2
-	enabled, disabled := applyDebugRange(mods, mid)
+	enabled, disabled := applyBisectRange(mods, mid)
 
-	fmt.Printf("Debug session started\n")
+	fmt.Printf("Bisect session started\n")
 	fmt.Printf("Mods: %d (topologically sorted)\n", len(mods))
 	printRange(state, mid, enabled, disabled)
 	return nil
 }
 
-func actionDebugGood(cmd *cobra.Command, args []string) error {
+func actionBisectGood(cmd *cobra.Command, args []string) error {
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	state, err := readDebugState(workDir)
+	state, err := readBisectState(workDir)
 	if err != nil {
 		return err
 	}
 
 	if state.L > state.R {
-		fmt.Println("Debug session complete: no bad mod found")
-		fmt.Println("Run `lucy debug start` to begin a new debug session")
+		fmt.Println("Bisect session complete: no bad mod found")
+		fmt.Println("Run `lucy bisect start` to begin a new bisect session")
 		return nil
 	}
 
@@ -244,26 +244,26 @@ func actionDebugGood(cmd *cobra.Command, args []string) error {
 	state.L = mid + 1
 	if state.L > state.R {
 		fmt.Println("All remaining mods are good. No bad mod found.")
-		fmt.Println("Run `lucy debug start` to begin a new debug session")
-		_ = writeDebugState(workDir, state)
+		fmt.Println("Run `lucy bisect start` to begin a new bisect session")
+		_ = writeBisectState(workDir, state)
 		return nil
 	}
 
 	newMid := (state.L + state.R) / 2
-	enabled, disabled := applyDebugRange(state.Mods, newMid)
+	enabled, disabled := applyBisectRange(state.Mods, newMid)
 	fmt.Printf("New range: [%d, %d]\n", state.L, state.R)
 	printRange(state, newMid, enabled, disabled)
 
-	return writeDebugState(workDir, state)
+	return writeBisectState(workDir, state)
 }
 
-func actionDebugBad(cmd *cobra.Command, args []string) error {
+func actionBisectBad(cmd *cobra.Command, args []string) error {
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	state, err := readDebugState(workDir)
+	state, err := readBisectState(workDir)
 	if err != nil {
 		return err
 	}
@@ -288,20 +288,20 @@ func actionDebugBad(cmd *cobra.Command, args []string) error {
 				}
 			}
 		}
-		_ = writeDebugState(workDir, state)
+		_ = writeBisectState(workDir, state)
 		fmt.Printf("\nFound bad mod: %s@%s\n", badMod.ID, badMod.Version)
 		if badMod.Path != "" {
 			fmt.Printf("File: %s\n", badMod.Path)
 		}
 		fmt.Printf("Disabled 1 mod (the bad one), enabled all other %d mods\n", restored)
-		fmt.Println("Run `lucy debug start` to begin a new debug session")
+		fmt.Println("Run `lucy bisect start` to begin a new bisect session")
 		return nil
 	}
 
 	newMid := (state.L + state.R) / 2
-	enabled, disabled := applyDebugRange(state.Mods, newMid)
+	enabled, disabled := applyBisectRange(state.Mods, newMid)
 	fmt.Printf("New range: [%d, %d]\n", state.L, state.R)
 	printRange(state, newMid, enabled, disabled)
 
-	return writeDebugState(workDir, state)
+	return writeBisectState(workDir, state)
 }

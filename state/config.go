@@ -7,7 +7,7 @@ import "fmt"
 type Config struct {
 	Sources SourcesConfig `yaml:"sources"`
 	Upgrade UpgradeConfig `yaml:"upgrade"`
-	Debug   DebugConfig   `yaml:"debug"`
+	Bisect  BisectConfig  `yaml:"bisect"`
 }
 
 // SourcesConfig defines source selection and priority rules.
@@ -21,17 +21,17 @@ type UpgradeConfig struct {
 	Mode string `yaml:"mode"`
 }
 
-// DebugConfig defines debug command settings.
-type DebugConfig struct {
+// BisectConfig defines debug command settings.
+type BisectConfig struct {
 	// IdentityPackages lists package IDs (in "platform/name" format) that are
 	// treated as server platform/loader packages rather than user mods. They are
 	// excluded from the debug binary-search list.
 	IdentityPackages []string `yaml:"identity_packages"`
 }
 
-// DebugConfigDefaults returns default debug settings.
-func DebugConfigDefaults() DebugConfig {
-	return DebugConfig{
+// BisectConfigDefaults returns default debug settings.
+func BisectConfigDefaults() BisectConfig {
+	return BisectConfig{
 		IdentityPackages: []string{
 			"minecraft/minecraft",
 			"minecraft/mc",
@@ -56,7 +56,7 @@ func ConfigDefaults() Config {
 		Upgrade: UpgradeConfig{
 			Mode: "compatible",
 		},
-		Debug: DebugConfigDefaults(),
+		Bisect: BisectConfigDefaults(),
 	}
 }
 
@@ -81,4 +81,3 @@ func ValidateConfig(c Config) error {
 	}
 	return nil
 }
-
