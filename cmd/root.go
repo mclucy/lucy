@@ -2,15 +2,23 @@ package cmd
 
 import (
 	"fmt"
+	"runtime/debug"
+	"strings"
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
 	"github.com/spf13/cobra"
 )
 
+var (
+	version string
+	commit  string
+)
+
 var rootCmd = &cobra.Command{
 	Use:           "lucy",
 	Short:         "The Minecraft server package manager",
+	Version:       buildVersion(),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -34,6 +42,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.SetVersionTemplate("{{.Version}}\n")
+
 	rootCmd.PersistentFlags().Bool(flagDebugName, false, "Show debug logs")
 	rootCmd.PersistentFlags().Bool(
 		flagLogFileName,
@@ -86,4 +96,24 @@ func runWithErrorLogging(
 // Execute runs the root command.
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+func buildVersion() string {
+	if version != "" {
+		return version
+	}
+	if commit != "" {
+		return commit
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" && strings.TrimSpace(setting.Value) != "" {
+				return setting.Value
+			}
+		}
+		if info.Main.Version != "" && info.Main.Version != "(devel)" {
+			return info.Main.Version
+		}
+	}
+	return "unknown"
 }
