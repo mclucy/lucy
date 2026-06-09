@@ -8,7 +8,7 @@ import (
 	"sort"
 
 	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/state"
+	"github.com/mclucy/lucy/syntax"
 	"github.com/spf13/cobra"
 )
 
@@ -130,7 +130,12 @@ func printRange(state *bisectState, mid int, enabled, disabled int) {
 		fmt.Printf("Enabled %d mods in range [0, %d]\n", enabled, mid)
 	}
 	if disabled > 0 {
-		fmt.Printf("Disabled %d mods in range [%d, %d]\n", disabled, mid+1, state.R)
+		fmt.Printf(
+			"Disabled %d mods in range [%d, %d]\n",
+			disabled,
+			mid+1,
+			state.R,
+		)
 	}
 	fmt.Printf("Test your server, then run `lucy bisect good` or `lucy bisect bad`\n")
 }
@@ -147,16 +152,6 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	cfg, _, err := state.ReadConfig(workDir)
-	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
-	}
-
-	identitySet := make(map[string]bool, len(cfg.Bisect.IdentityPackages))
-	for _, id := range cfg.Bisect.IdentityPackages {
-		identitySet[id] = true
-	}
-
 	graph, err := BuildGraphFromProbe(info)
 	if err != nil {
 		return fmt.Errorf("failed to build dependency graph: %w", err)
@@ -169,9 +164,11 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 		for _, node := range graph.Nodes {
 			sorted = append(sorted, node)
 		}
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].ID < sorted[j].ID
-		})
+		sort.Slice(
+			sorted, func(i, j int) bool {
+				return sorted[i].ID < sorted[j].ID
+			},
+		)
 	}
 
 	pathByID := make(map[string]string, len(info.Packages))
@@ -184,14 +181,20 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 
 	mods := make([]bisectMod, 0, len(sorted))
 	for _, node := range sorted {
-		if identitySet[node.ID] {
+		packageId, err := syntax.Parse(node.ID)
+		if err != nil {
 			continue
 		}
-		mods = append(mods, bisectMod{
-			ID:      node.ID,
-			Version: node.Version,
-			Path:    pathByID[node.ID],
-		})
+		if packageId.IsIdentityPackage() {
+			continue
+		}
+		mods = append(
+			mods, bisectMod{
+				ID:      node.ID,
+				Version: node.Version,
+				Path:    pathByID[node.ID],
+			},
+		)
 	}
 
 	if len(mods) == 0 {
@@ -235,7 +238,12 @@ func actionBisectGood(cmd *cobra.Command, args []string) error {
 	}
 
 	mid := (state.L + state.R) / 2
-	fmt.Printf("Midpoint %d (%s@%s) is GOOD\n", mid, state.Mods[mid].ID, state.Mods[mid].Version)
+	fmt.Printf(
+		"Midpoint %d (%s@%s) is GOOD\n",
+		mid,
+		state.Mods[mid].ID,
+		state.Mods[mid].Version,
+	)
 
 	state.L = mid + 1
 	if state.L > state.R {
@@ -265,7 +273,12 @@ func actionBisectBad(cmd *cobra.Command, args []string) error {
 	}
 
 	mid := (state.L + state.R) / 2
-	fmt.Printf("Midpoint %d (%s@%s) is BAD\n", mid, state.Mods[mid].ID, state.Mods[mid].Version)
+	fmt.Printf(
+		"Midpoint %d (%s@%s) is BAD\n",
+		mid,
+		state.Mods[mid].ID,
+		state.Mods[mid].Version,
+	)
 
 	state.R = mid
 	if state.L == state.R {
@@ -289,7 +302,10 @@ func actionBisectBad(cmd *cobra.Command, args []string) error {
 		if badMod.Path != "" {
 			fmt.Printf("File: %s\n", badMod.Path)
 		}
-		fmt.Printf("Disabled 1 mod (the bad one), enabled all other %d mods\n", restored)
+		fmt.Printf(
+			"Disabled 1 mod (the bad one), enabled all other %d mods\n",
+			restored,
+		)
 		fmt.Println("Run `lucy bisect start` to begin a new bisect session")
 		return nil
 	}
