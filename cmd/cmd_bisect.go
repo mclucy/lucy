@@ -60,7 +60,7 @@ type bisectState struct {
 }
 
 func bisectFilePath(workDir string) string {
-	return filepath.Join(workDir, ".lucy", "bisect.json")
+	return filepath.Join(workDir, "bisect.json")
 }
 
 func readBisectState(workDir string) (*bisectState, error) {
@@ -79,10 +79,6 @@ func readBisectState(workDir string) (*bisectState, error) {
 }
 
 func writeBisectState(workDir string, state *bisectState) error {
-	lucyDir := filepath.Join(workDir, ".lucy")
-	if err := os.MkdirAll(lucyDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create .lucy directory: %w", err)
-	}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to serialize bisect state: %w", err)
