@@ -1,15 +1,13 @@
-package detector
+package artifact
 
 import (
 	"archive/zip"
 	"encoding/json"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/mclucy/lucy/dependency"
-	externaltype "github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
@@ -17,68 +15,57 @@ import (
 
 const spongePluginMetadataPath = "META-INF/sponge_plugins.json"
 
-type spongeDetector struct{}
+type spongeReader struct{}
 
-func newSpongeDetector() *spongeDetector {
-	return &spongeDetector{}
+func newSpongeReader() Reader {
+	return &spongeReader{}
 }
 
-func (d *spongeDetector) Name() string {
-	return "sponge plugin"
-}
-
-func (d *spongeDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) ([]types.Package, error) {
-	for _, f := range zipReader.File {
+func (r *spongeReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error) {
+	for _, f := range zipRdr.File {
 		if f.Name != spongePluginMetadataPath {
 			continue
 		}
 
-		r, err := f.Open()
+		rc, err := f.Open()
 		if err != nil {
 			return nil, err
 		}
-		defer tools.CloseReader(r, logger.Warn)
+		defer rc.Close()
 
-		data, err := io.ReadAll(r)
+		data, err := io.ReadAll(rc)
 		if err != nil {
 			return nil, err
 		}
 
-		var metadata externaltype.FileSpongePluginsIdentifier
+		var metadata exttype.FileSpongePluginsIdentifier
 		if err := json.Unmarshal(data, &metadata); err != nil {
 			return nil, err
 		}
 
 		if !validSpongeMetadata(&metadata) {
-			return []types.Package{}, nil
+			return []ArtifactInfo{}, nil
 		}
 
-		packages := make([]types.Package, 0, len(metadata.Plugins))
+		infos := make([]ArtifactInfo, 0, len(metadata.Plugins))
 		for _, plugin := range metadata.Plugins {
-			pkg, ok := translateSpongePlugin(
-				&metadata,
-				plugin,
-				fileHandle.Name(),
-			)
+			info, ok := translateSpongePlugin(&metadata, plugin, filePath)
 			if !ok {
 				continue
 			}
-			packages = append(packages, pkg)
+			infos = append(infos, info)
 		}
 
-		if len(packages) == 0 {
-			return []types.Package{}, nil
+		if len(infos) == 0 {
+			return []ArtifactInfo{}, nil
 		}
-		return packages, nil
+		return infos, nil
 	}
 
 	return nil, nil
 }
 
-func validSpongeMetadata(metadata *externaltype.FileSpongePluginsIdentifier) bool {
+func validSpongeMetadata(metadata *exttype.FileSpongePluginsIdentifier) bool {
 	if strings.TrimSpace(metadata.Loader.Name) == "" ||
 		strings.TrimSpace(metadata.Loader.Version) == "" ||
 		len(metadata.Plugins) == 0 {
@@ -95,8 +82,8 @@ func validSpongeMetadata(metadata *externaltype.FileSpongePluginsIdentifier) boo
 }
 
 func hasConcreteSpongePluginIdentity(
-	metadata *externaltype.FileSpongePluginsIdentifier,
-	plugin externaltype.FileSpongePluginMetadata,
+	metadata *exttype.FileSpongePluginsIdentifier,
+	plugin exttype.FileSpongePluginMetadata,
 ) bool {
 	if strings.TrimSpace(plugin.ID) == "" || strings.TrimSpace(plugin.Entrypoint) == "" {
 		return false
@@ -105,55 +92,48 @@ func hasConcreteSpongePluginIdentity(
 }
 
 func translateSpongePlugin(
-	metadata *externaltype.FileSpongePluginsIdentifier,
-	plugin externaltype.FileSpongePluginMetadata,
+	metadata *exttype.FileSpongePluginsIdentifier,
+	plugin exttype.FileSpongePluginMetadata,
 	localPath string,
-) (types.Package, bool) {
+) (ArtifactInfo, bool) {
 	if !hasConcreteSpongePluginIdentity(metadata, plugin) {
-		return types.Package{}, false
+		return ArtifactInfo{}, false
 	}
 
 	version := resolveSpongePluginVersion(metadata, plugin)
-	pkg := types.Package{
-		Id: types.PackageId{
-			Platform: types.PlatformAny,
+	info := ArtifactInfo{
+		Ref: types.PackageRef{
+			Platform: types.PlatformSponge,
 			Name:     syntax.ToProjectName(plugin.ID),
-			Version:  types.BareVersion(version),
 		},
-		Local: &types.PackageInstallation{Path: localPath},
-		Dependencies: &types.PackageDependencies{
-			Value: translateSpongeDependencies(
-				resolveSpongePluginDependencies(
-					metadata,
-					plugin,
-				),
-			),
-		},
-		Information: &types.Metadata{
+		Version:  types.BareVersion(version),
+		FilePath: localPath,
+		Metadata: types.Metadata{
 			Title:   tools.Ternary(plugin.Name != "", plugin.Name, plugin.ID),
 			Brief:   plugin.Description,
 			License: metadata.License,
 			Authors: translateSpongeContributors(
-				resolveSpongePluginContributors(
-					metadata,
-					plugin,
-				),
+				resolveSpongePluginContributors(metadata, plugin),
 			),
 			Urls: translateSpongeLinks(
-				resolveSpongePluginLinks(
-					metadata,
-					plugin,
-				),
+				resolveSpongePluginLinks(metadata, plugin),
 			),
 		},
 	}
 
-	return pkg, true
+	deps := translateSpongeDependencies(
+		resolveSpongePluginDependencies(metadata, plugin),
+	)
+	if len(deps) > 0 {
+		info.Dependencies = deps
+	}
+
+	return info, true
 }
 
 func resolveSpongePluginVersion(
-	metadata *externaltype.FileSpongePluginsIdentifier,
-	plugin externaltype.FileSpongePluginMetadata,
+	metadata *exttype.FileSpongePluginsIdentifier,
+	plugin exttype.FileSpongePluginMetadata,
 ) string {
 	if version := strings.TrimSpace(plugin.Version); version != "" {
 		return version
@@ -162,8 +142,8 @@ func resolveSpongePluginVersion(
 }
 
 func resolveSpongePluginLinks(
-	metadata *externaltype.FileSpongePluginsIdentifier,
-	plugin externaltype.FileSpongePluginMetadata,
+	metadata *exttype.FileSpongePluginsIdentifier,
+	plugin exttype.FileSpongePluginMetadata,
 ) struct {
 	Homepage string
 	Source   string
@@ -191,8 +171,8 @@ func resolveSpongePluginLinks(
 }
 
 func resolveSpongePluginContributors(
-	metadata *externaltype.FileSpongePluginsIdentifier,
-	plugin externaltype.FileSpongePluginMetadata,
+	metadata *exttype.FileSpongePluginsIdentifier,
+	plugin exttype.FileSpongePluginMetadata,
 ) []struct {
 	Name        string
 	Description string
@@ -222,8 +202,8 @@ func resolveSpongePluginContributors(
 }
 
 func resolveSpongePluginDependencies(
-	metadata *externaltype.FileSpongePluginsIdentifier,
-	plugin externaltype.FileSpongePluginMetadata,
+	metadata *exttype.FileSpongePluginsIdentifier,
+	plugin exttype.FileSpongePluginMetadata,
 ) []struct {
 	ID        string
 	Version   string
@@ -317,8 +297,8 @@ func translateSpongeDependencies(
 		LoadOrder string
 		Optional  bool
 	},
-) []types.Dependency {
-	translated := make([]types.Dependency, 0, len(deps))
+) []ArtifactDep {
+	translated := make([]ArtifactDep, 0, len(deps))
 	for _, dep := range deps {
 		id := strings.TrimSpace(dep.ID)
 		version := strings.TrimSpace(dep.Version)
@@ -326,9 +306,9 @@ func translateSpongeDependencies(
 			continue
 		}
 		translated = append(
-			translated, types.Dependency{
-				Id: types.PackageId{
-					Platform: types.PlatformAny,
+			translated, ArtifactDep{
+				Ref: types.PackageRef{
+					Platform: types.PlatformSponge,
 					Name:     syntax.ToProjectName(id),
 				},
 				Constraint: dependency.ParseRange(
@@ -341,8 +321,4 @@ func translateSpongeDependencies(
 		)
 	}
 	return translated
-}
-
-func init() {
-	registerModDetector(newSpongeDetector())
 }

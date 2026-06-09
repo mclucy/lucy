@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/probe/internal/detector"
 	"gopkg.in/ini.v1"
 
 	"github.com/mclucy/lucy/logger"
@@ -104,7 +104,11 @@ func RefreshServerInfo(workDir string) Workspace {
 // DetectPackages analyzes a local artifact file and returns packages detected
 // from its embedded metadata.
 func DetectPackages(filePath string) []types.Package {
-	return detector.Packages(filePath)
+	infos, err := artifact.Analyze(filePath)
+	if err != nil || len(infos) == 0 {
+		return nil
+	}
+	return artifactInfoToPackage(infos)
 }
 
 func resetProbeMemoizedStateLocked() {
@@ -331,6 +335,51 @@ func buildSavePath() string {
 
 var savePath = tools.Memoize(buildSavePath)
 
+// artifactInfoToPackage converts artifact detection results into the legacy
+// types.Package format used by PackageIndex. This is temporary glue until
+// types.Package is fully replaced.
+func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
+	if len(infos) == 0 {
+		return nil
+	}
+	pkgs := make([]types.Package, 0, len(infos))
+	for _, info := range infos {
+		pkg := types.Package{
+			Id: types.PackageId{
+				Platform: info.Ref.Platform,
+				Name:     info.Ref.Name,
+				Version:  info.Version,
+			},
+			Supports:    info.Supports,
+			Information: &info.Metadata,
+			Local: &types.PackageInstallation{
+				Path: info.FilePath,
+			},
+		}
+		if len(info.Dependencies) > 0 {
+			deps := make([]types.Dependency, 0, len(info.Dependencies))
+			for _, dep := range info.Dependencies {
+				deps = append(
+					deps, types.Dependency{
+						Id: types.PackageId{
+							Platform: dep.Ref.Platform,
+							Name:     dep.Ref.Name,
+						},
+						Constraint: dep.Constraint,
+						Mandatory:  dep.Mandatory,
+						Embedded:   dep.Embedded,
+					},
+				)
+			}
+			pkg.Dependencies = &types.PackageDependencies{
+				Value: deps,
+			}
+		}
+		pkgs = append(pkgs, pkg)
+	}
+	return pkgs
+}
+
 func buildInstalledPackages() (mods []types.Package) {
 	idx := NewPackageIndex()
 	var mu sync.Mutex
@@ -350,13 +399,14 @@ func buildInstalledPackages() (mods []types.Package) {
 			go func(path string) {
 				defer wg.Done()
 
-				analyzed := detector.Packages(path)
-				if analyzed == nil {
+				analyzed, err := artifact.Analyze(path)
+				if err != nil || len(analyzed) == 0 {
 					return
 				}
+				pkgs := artifactInfoToPackage(analyzed)
 
 				mu.Lock()
-				idx.Merge(analyzed)
+				idx.Merge(pkgs)
 				mu.Unlock()
 			}(jarPath)
 		}
@@ -373,9 +423,10 @@ func buildInstalledPackages() (mods []types.Package) {
 				continue
 			}
 			for _, pluginFile := range pluginFiles {
-				analyzed := detector.McdrPlugin(pluginFile)
-				if analyzed != nil {
-					idx.Merge(analyzed)
+				analyzed, err := artifact.Analyze(pluginFile)
+				if err == nil && len(analyzed) > 0 {
+					pkgs := artifactInfoToPackage(analyzed)
+					idx.Merge(pkgs)
 				}
 			}
 		}

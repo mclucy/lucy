@@ -3,7 +3,7 @@ package install
 import (
 	"fmt"
 
-	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/types"
 )
@@ -17,14 +17,14 @@ func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
 
 	allPackages := make([]types.Package, 0, len(tx.DownloadedArtifacts))
 	for _, path := range tx.DownloadedArtifacts {
-		packages := probe.DetectPackages(path)
-		if len(packages) == 0 {
+		infos, err := artifact.Analyze(path)
+		if err != nil || len(infos) == 0 {
 			return fmt.Errorf(
 				"install: artifact verification failed for %s: unreadable or corrupt",
 				path,
 			)
 		}
-		allPackages = append(allPackages, packages...)
+		allPackages = append(allPackages, artifactInfoToPackage(infos)...)
 	}
 
 	verified := make(map[string]CandidateNode, len(allPackages))
@@ -44,6 +44,48 @@ func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
 	tx.VerifiedGraph = verified
 	tx.AdvanceTo(PhaseVerified)
 	return nil
+}
+
+func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
+	if len(infos) == 0 {
+		return nil
+	}
+	pkgs := make([]types.Package, 0, len(infos))
+	for _, info := range infos {
+		pkg := types.Package{
+			Id: types.PackageId{
+				Platform: info.Ref.Platform,
+				Name:     info.Ref.Name,
+				Version:  info.Version,
+			},
+			Supports:    info.Supports,
+			Information: &info.Metadata,
+			Local: &types.PackageInstallation{
+				Path: info.FilePath,
+			},
+		}
+		if len(info.Dependencies) > 0 {
+			deps := make([]types.Dependency, 0, len(info.Dependencies))
+			for _, dep := range info.Dependencies {
+				deps = append(
+					deps, types.Dependency{
+						Id: types.PackageId{
+							Platform: dep.Ref.Platform,
+							Name:     dep.Ref.Name,
+						},
+						Constraint: dep.Constraint,
+						Mandatory:  dep.Mandatory,
+						Embedded:   dep.Embedded,
+					},
+				)
+			}
+			pkg.Dependencies = &types.PackageDependencies{
+				Value: deps,
+			}
+		}
+		pkgs = append(pkgs, pkg)
+	}
+	return pkgs
 }
 
 func normalizeVerifiedPackage(pkg *types.Package) {

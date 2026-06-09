@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"archive/zip"
 	"io"
 	"os"
 	"strings"
@@ -37,4 +38,26 @@ func analyzeForgeArgFile(file *os.File) (
 	}
 
 	return forgeVersion, mcVersion
+}
+
+func readArchiveEntry(zipReader *zip.Reader, name string) ([]byte, bool, error) {
+	for _, file := range zipReader.File {
+		if file.Name != name {
+			continue
+		}
+
+		r, err := file.Open()
+		if err != nil {
+			return nil, false, err
+		}
+		defer r.Close()
+
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return nil, false, err
+		}
+		return data, true, nil
+	}
+
+	return nil, false, nil
 }

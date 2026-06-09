@@ -3,23 +3,15 @@ package detector
 import (
 	"archive/zip"
 	"bufio"
-	"encoding/json"
-	"io"
 	"os"
 	"strings"
-	"sync"
 
-	externaltype "github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream/slugresolve"
 )
 
-// fabricServerSingleFileDetector detects Fabric single-file servers
-// This is one of the two methods of Fabric installation. One larger .jar file
-// it placed at the root of the server directory. It handles the initialization
-// and the downloading of the required libraries and minecraft version.
+// fabricServerSingleFileDetector detects Fabric single-file servers.
 type fabricServerSingleFileDetector struct{}
 
 func (d *fabricServerSingleFileDetector) Name() string {
@@ -97,12 +89,7 @@ func (d *fabricServerSingleFileDetector) Detect(
 	return exec, nil
 }
 
-// fabricServerLauncherDetector detects Fabric server launchers
-// This is one of the two methods of Fabric installation. A lightweight
-// launcher .jar file is placed at the root of the server directory. It only
-// records the paths to the required libraries.
-//
-// The detection process is rather complicated.
+// fabricServerLauncherDetector detects Fabric server launchers.
 type fabricServerLauncherDetector struct{}
 
 func (d *fabricServerLauncherDetector) Name() string {
@@ -167,13 +154,6 @@ func (d *fabricServerLauncherDetector) Detect(
 				}
 			}
 
-			// Here we just parse the paths to find the versions.
-			//
-			// Although been seemingly unreliable, this is a justified method.
-			// The lightweight launcher .jar's idea is to not restrictively
-			// specify anything but only the paths to the libraries(classes).
-			// Besides, it is the user's responsibility to ensure the presence
-			// of the required libraries.
 			for _, path := range classPaths {
 				if after, found := strings.CutPrefix(
 					path,
@@ -230,71 +210,7 @@ func (d *fabricServerLauncherDetector) Detect(
 	return nil, nil
 }
 
-// fabricModDetector detects Fabric mods in JAR files
-type fabricModDetector struct{}
-
-func (d *fabricModDetector) Name() string {
-	return "fabric mod"
-}
-
-func (d *fabricModDetector) Detect(
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (packages []types.Package, err error) {
-	var wg sync.WaitGroup
-	for _, f := range zipReader.File {
-		if f.Name == "fabric.mod.json" {
-			r, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer tools.CloseReader(r, logger.Warn)
-
-			data, err := io.ReadAll(r)
-			if err != nil {
-				return nil, err
-			}
-
-			modInfo := &externaltype.FileFabricModIdentifier{}
-			err = json.Unmarshal(data, modInfo)
-			if err != nil {
-				return nil, err
-			}
-
-			pkg := translateFabricMod(modInfo, fileHandle.Name())
-
-			packages = append(packages, pkg)
-
-			// Pre-populate slugmap for both sources using metadata URLs and file hash
-			var metaURLs []string
-			for _, key := range []string{"homepage", "sources", "issues"} {
-				if u := modInfo.Contact[key]; u != "" {
-					metaURLs = append(metaURLs, u)
-				}
-			}
-			wg.Add(2)
-			go func(name, path string, urls []string) {
-				defer wg.Done()
-				slugresolve.ResolveSlug(types.SourceModrinth, name, path, urls)
-			}(string(pkg.Id.Name), fileHandle.Name(), metaURLs)
-			go func(name, path string, urls []string) {
-				defer wg.Done()
-				slugresolve.ResolveSlug(
-					types.SourceCurseForge,
-					name,
-					path,
-					urls,
-				)
-			}(string(pkg.Id.Name), fileHandle.Name(), metaURLs)
-		}
-	}
-
-	wg.Wait()
-	return packages, nil
-}
-
 func init() {
 	registerExecutableDetector(&fabricServerSingleFileDetector{})
 	registerExecutableDetector(&fabricServerLauncherDetector{})
-	registerModDetector(&fabricModDetector{})
 }
