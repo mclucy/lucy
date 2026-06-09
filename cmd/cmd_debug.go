@@ -50,6 +50,7 @@ func init() {
 type debugMod struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
+	Path    string `json:"path"`
 }
 
 type debugState struct {
@@ -92,6 +93,52 @@ func writeDebugState(workDir string, state *debugState) error {
 	return nil
 }
 
+func enableMod(path string) error {
+	dp := path + ".disabled"
+	if _, err := os.Stat(dp); os.IsNotExist(err) {
+		return nil
+	}
+	_ = os.Remove(path)
+	return os.Rename(dp, path)
+}
+
+func disableMod(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
+	dp := path + ".disabled"
+	_ = os.Remove(dp)
+	return os.Rename(path, dp)
+}
+
+func applyDebugRange(mods []debugMod, mid int) (enabled, disabled int) {
+	for i, m := range mods {
+		if m.Path == "" {
+			continue
+		}
+		if i <= mid {
+			if err := enableMod(m.Path); err == nil {
+				enabled++
+			}
+		} else {
+			if err := disableMod(m.Path); err == nil {
+				disabled++
+			}
+		}
+	}
+	return
+}
+
+func printRange(state *debugState, mid int, enabled, disabled int) {
+	if enabled > 0 {
+		fmt.Printf("Enabled %d mods in range [0, %d]\n", enabled, mid)
+	}
+	if disabled > 0 {
+		fmt.Printf("Disabled %d mods in range [%d, %d]\n", disabled, mid+1, state.R)
+	}
+	fmt.Printf("Test your server, then run `lucy debug good` or `lucy debug bad`\n")
+}
+
 func actionDebugStart(cmd *cobra.Command, args []string) error {
 	workDir, err := os.Getwd()
 	if err != nil {
@@ -131,11 +178,24 @@ func actionDebugStart(cmd *cobra.Command, args []string) error {
 		})
 	}
 
+	pathByID := make(map[string]string, len(info.Packages))
+	for _, p := range info.Packages {
+		key := string(p.Id.Platform) + "/" + string(p.Id.Name)
+		if p.Local != nil && p.Local.Path != "" {
+			pathByID[key] = p.Local.Path
+		}
+	}
+
 	mods := make([]debugMod, 0, len(sorted))
 	for _, node := range sorted {
-		if !identitySet[node.ID] {
-			mods = append(mods, debugMod{ID: node.ID, Version: node.Version})
+		if identitySet[node.ID] {
+			continue
 		}
+		mods = append(mods, debugMod{
+			ID:      node.ID,
+			Version: node.Version,
+			Path:    pathByID[node.ID],
+		})
 	}
 
 	if len(mods) == 0 {
@@ -153,11 +213,11 @@ func actionDebugStart(cmd *cobra.Command, args []string) error {
 	}
 
 	mid := (state.L + state.R) / 2
+	enabled, disabled := applyDebugRange(mods, mid)
+
 	fmt.Printf("Debug session started\n")
 	fmt.Printf("Mods: %d (topologically sorted)\n", len(mods))
-	fmt.Printf("Range: [%d, %d]\n", state.L, state.R)
-	fmt.Printf("Midpoint: %d (%s@%s)\n", mid, mods[mid].ID, mods[mid].Version)
-	fmt.Printf("\nTest with all mods up to index %d enabled, then run `lucy debug good` or `lucy debug bad`\n", mid)
+	printRange(state, mid, enabled, disabled)
 	return nil
 }
 
@@ -190,8 +250,9 @@ func actionDebugGood(cmd *cobra.Command, args []string) error {
 	}
 
 	newMid := (state.L + state.R) / 2
+	enabled, disabled := applyDebugRange(state.Mods, newMid)
 	fmt.Printf("New range: [%d, %d]\n", state.L, state.R)
-	fmt.Printf("Next midpoint: %d (%s@%s)\n", newMid, state.Mods[newMid].ID, state.Mods[newMid].Version)
+	printRange(state, newMid, enabled, disabled)
 
 	return writeDebugState(workDir, state)
 }
@@ -213,15 +274,34 @@ func actionDebugBad(cmd *cobra.Command, args []string) error {
 	state.R = mid
 	if state.L == state.R {
 		badMod := state.Mods[state.L]
-		fmt.Printf("\nFound bad mod: %s@%s\n", badMod.ID, badMod.Version)
-		fmt.Println("Run `lucy debug start` to begin a new debug session")
+		// Restore all mods except the bad one
+		var restored int
+		for i, m := range state.Mods {
+			if m.Path == "" {
+				continue
+			}
+			if i == state.L {
+				_ = disableMod(m.Path)
+			} else {
+				if err := enableMod(m.Path); err == nil {
+					restored++
+				}
+			}
+		}
 		_ = writeDebugState(workDir, state)
+		fmt.Printf("\nFound bad mod: %s@%s\n", badMod.ID, badMod.Version)
+		if badMod.Path != "" {
+			fmt.Printf("File: %s\n", badMod.Path)
+		}
+		fmt.Printf("Disabled 1 mod (the bad one), enabled all other %d mods\n", restored)
+		fmt.Println("Run `lucy debug start` to begin a new debug session")
 		return nil
 	}
 
 	newMid := (state.L + state.R) / 2
+	enabled, disabled := applyDebugRange(state.Mods, newMid)
 	fmt.Printf("New range: [%d, %d]\n", state.L, state.R)
-	fmt.Printf("Next midpoint: %d (%s@%s)\n", newMid, state.Mods[newMid].ID, state.Mods[newMid].Version)
+	printRange(state, newMid, enabled, disabled)
 
 	return writeDebugState(workDir, state)
 }
