@@ -52,7 +52,7 @@ import (
 // =============================================================================
 
 func EnrichTopologyFromPackages(
-	exec *types.RuntimeInfo,
+	exec *ServerRuntime,
 	packages []types.Package,
 ) {
 	if exec == nil {
@@ -60,7 +60,10 @@ func EnrichTopologyFromPackages(
 	}
 
 	evidence := detectedRuntimeEvidence(packages)
-	evidence = append(evidence, detectedRuntimeEvidenceFromHints(exec.BridgeHints)...)
+	evidence = append(
+		evidence,
+		detectedRuntimeEvidenceFromHints(exec.BridgeHints)...,
+	)
 
 	if exec.Topology == nil {
 		// No topology yet — attempt to build one from package evidence.
@@ -98,7 +101,10 @@ func EnrichTopologyFromPackages(
 			mergeTopology(exec.Topology, annotation)
 		}
 
-		applyDeclarativeConnections(exec.Topology, internaltopology.DefaultConnectionRegistry)
+		applyDeclarativeConnections(
+			exec.Topology,
+			internaltopology.DefaultConnectionRegistry,
+		)
 		NormalizeTopology(exec.Topology)
 		FoldTopologyRisk(exec.Topology)
 		return
@@ -122,7 +128,10 @@ func EnrichTopologyFromPackages(
 		mergeTopology(exec.Topology, annotation)
 	}
 
-	applyDeclarativeConnections(exec.Topology, internaltopology.DefaultConnectionRegistry)
+	applyDeclarativeConnections(
+		exec.Topology,
+		internaltopology.DefaultConnectionRegistry,
+	)
 	NormalizeTopology(exec.Topology)
 	FoldTopologyRisk(exec.Topology)
 }
@@ -156,7 +165,10 @@ func applyDeclarativeConnections(
 
 		definitions := registry.LookupByNodeID(node.ID)
 		for _, capability := range node.Capabilities {
-			definitions = append(definitions, registry.LookupByCapability(capability)...)
+			definitions = append(
+				definitions,
+				registry.LookupByCapability(capability)...,
+			)
 		}
 
 		for _, definition := range definitions {
@@ -203,25 +215,25 @@ func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {
 
 	detected := make([]types.RuntimeNodeID, 0, 6)
 	if hasAnyName(names, "sinytra-connector") {
-		detected = append(detected, RuntimeNodeConnector)
+		detected = append(detected, types.RuntimeNodeConnector)
 	}
 	if hasAnyName(names, "kilt") {
-		detected = append(detected, RuntimeNodeKilt)
+		detected = append(detected, types.RuntimeNodeKilt)
 	}
 	if hasAnyName(names, "velocity") {
-		detected = append(detected, RuntimeNodeVelocity)
+		detected = append(detected, types.RuntimeNodeVelocity)
 	}
 	if hasAnyName(names, "bungeecord") {
-		detected = append(detected, RuntimeNodeBungeecord)
+		detected = append(detected, types.RuntimeNodeBungeecord)
 	}
 	if hasAnyName(names, "waterfall") {
-		detected = append(detected, RuntimeNodeWaterfall)
+		detected = append(detected, types.RuntimeNodeWaterfall)
 	}
 	if hasAnyName(names, "geyser", "geyser-spigot", "geyser-fabric") {
-		detected = append(detected, RuntimeNodeGeyser)
+		detected = append(detected, types.RuntimeNodeGeyser)
 	}
 	if hasAnyName(names, "arclight") {
-		detected = append(detected, RuntimeNodeArclight)
+		detected = append(detected, types.RuntimeNodeArclight)
 	}
 
 	return detected
@@ -240,7 +252,7 @@ func inferHostTopologyFromAttachedBridgePackages(
 			continue
 		}
 
-		entry, ok := FindEntry(RuntimeNodeFabric)
+		entry, ok := FindEntry(types.RuntimeNodeFabric)
 		if !ok {
 			return nil
 		}
@@ -259,12 +271,12 @@ func detectedRuntimeEvidenceFromHints(hints []string) []types.RuntimeNodeID {
 	detected := make([]types.RuntimeNodeID, 0, len(hints))
 	for _, hint := range hints {
 		switch types.RuntimeNodeID(hint) {
-		case RuntimeNodeConnector,
-			RuntimeNodeKilt,
-			RuntimeNodeVelocity,
-			RuntimeNodeBungeecord,
-			RuntimeNodeGeyser,
-			RuntimeNodeGeyserStandalone:
+		case types.RuntimeNodeConnector,
+			types.RuntimeNodeKilt,
+			types.RuntimeNodeVelocity,
+			types.RuntimeNodeBungeecord,
+			types.RuntimeNodeGeyser,
+			types.RuntimeNodeGeyserStandalone:
 			detected = append(detected, types.RuntimeNodeID(hint))
 		}
 	}

@@ -19,9 +19,9 @@ var infoCmd = &cobra.Command{
 	Short: "Display information of a mod or plugin",
 	Args:  cobra.ExactArgs(1),
 	ValidArgsFunction: func(
-	cmd *cobra.Command,
-	args []string,
-	toComplete string,
+		cmd *cobra.Command,
+		args []string,
+		toComplete string,
 	) ([]string, cobra.ShellCompDirective) {
 		if len(args) >= 1 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -46,8 +46,8 @@ func init() {
 	_ = infoCmd.RegisterFlagCompletionFunc(
 		flagSourceName,
 		func(cmd *cobra.Command, args []string, toComplete string) (
-		[]string,
-		cobra.ShellCompDirective,
+			[]string,
+			cobra.ShellCompDirective,
 		) {
 			candidates := FilterByPrefix(StaticSourceCandidates(), toComplete)
 			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp

@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	flagIndexName  = "index"
-	flagClientName = "client"
+	flagIndexName    = "index"
+	flagClientName   = "client"
 	flagPlatformName = "platform"
 )
 
@@ -86,9 +86,9 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	options := types.SearchOptions{
-		IncludeClient:    client,
-		SortBy:           types.SearchSort(index),
-		FilterPlatform:   resolvedPlatform,
+		IncludeClient:  client,
+		SortBy:         types.SearchSort(index),
+		FilterPlatform: resolvedPlatform,
 	}
 
 	out := &tui.Data{}

@@ -18,8 +18,8 @@ func (provider) Source() types.Source {
 }
 
 func (provider) Search(
-query string,
-options types.SearchOptions,
+	query string,
+	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
 	if options.FilterPlatform == types.PlatformBukkit {
 		logger.Debug("spiget: platform filter is not supported upstream; search will run without a platform query parameter")
@@ -33,8 +33,8 @@ options types.SearchOptions,
 }
 
 func (p provider) Fetch(id types.PackageId) (
-remote upstream.RawPackageRemote,
-err error,
+	remote upstream.RawPackageRemote,
+	err error,
 ) {
 	resource, err := resolveResourceByProjectName(id.Name)
 	if err != nil {
@@ -50,8 +50,8 @@ err error,
 }
 
 func (p provider) Metadata(name types.PackageName) (
-info upstream.RawProjectInformation,
-err error,
+	info upstream.RawProjectInformation,
+	err error,
 ) {
 	resource, err := resolveResourceByProjectName(name)
 	if err != nil {
@@ -61,8 +61,8 @@ err error,
 }
 
 func (p provider) Support(name types.PackageName) (
-supports upstream.RawProjectSupport,
-err error,
+	supports upstream.RawProjectSupport,
+	err error,
 ) {
 	resource, err := resolveResourceByProjectName(name)
 	if err != nil {
@@ -72,15 +72,15 @@ err error,
 }
 
 func (p provider) Dependencies(id types.PackageId) (
-deps upstream.RawPackageDependencies,
-err error,
+	deps upstream.RawPackageDependencies,
+	err error,
 ) {
 	return nil, ErrNotImplemented
 }
 
 func (p provider) ParseAmbiguousId(id types.PackageId) (
-parsed types.PackageId,
-err error,
+	parsed types.PackageId,
+	err error,
 ) {
 	parsed = id
 

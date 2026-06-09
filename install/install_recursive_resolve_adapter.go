@@ -17,7 +17,8 @@ func (resolver providerCandidateResolver) ResolvePackage(
 ) (types.Package, error) {
 	attempts := []types.PackageId{id}
 	if id.Version == types.VersionCompatible {
-		attempts = append(attempts,
+		attempts = append(
+			attempts,
 			types.PackageId{Platform: id.Platform, Name: id.Name, Version: types.VersionLatest},
 			types.PackageId{Platform: id.Platform, Name: id.Name, Version: types.VersionAny},
 		)

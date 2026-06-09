@@ -7,8 +7,8 @@ import (
 )
 
 func resolveResourceByProjectName(name types.PackageName) (
-*resourceResponse,
-error,
+	*resourceResponse,
+	error,
 ) {
 	if id, ok := parseNumericResourceID(name); ok {
 		return getResource(id)
@@ -39,8 +39,8 @@ error,
 }
 
 func resolveVersion(
-resource *resourceResponse,
-requested types.BareVersion,
+	resource *resourceResponse,
+	requested types.BareVersion,
 ) (resolvedVersion, error) {
 	switch requested {
 	case "", types.VersionAny, types.VersionNone, types.VersionLatest, types.VersionCompatible:

@@ -130,8 +130,8 @@ func (v *hangarVersion) ToPackageRemote() types.PackageRemote {
 }
 
 func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Platform) (
-types.PackageRemote,
-bool,
+	types.PackageRemote,
+	bool,
 ) {
 	download, ok := v.downloadForPlatform(platform)
 	if !ok {
@@ -210,8 +210,8 @@ func (v *hangarVersion) SupportsPlatform(platform types.Platform) bool {
 }
 
 func (v *hangarVersion) downloadForPlatform(platform types.Platform) (
-hangarDownload,
-bool,
+	hangarDownload,
+	bool,
 ) {
 	if len(v.Downloads) == 0 {
 		return hangarDownload{}, false

@@ -23,9 +23,9 @@ import (
 	"path"
 
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/types"
 
 	"github.com/mclucy/lucy/tools"
-	"github.com/mclucy/lucy/types"
 	"golang.org/x/sys/windows"
 )
 

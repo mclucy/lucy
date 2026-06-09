@@ -2,10 +2,11 @@ package state
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/mclucy/lucy/types"
 )

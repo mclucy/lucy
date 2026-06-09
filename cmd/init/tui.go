@@ -33,8 +33,8 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Description(
 					"lucy init sets up a new Lucy-managed Minecraft server environment in the\n"+
 						"current directory. It will create the following files:\n\n"+
-				"  lucy.yaml      – environment intent and policy (game version, runtime, packages)\n"+
-					"  lucy-lock.yaml – exact resolved facts (versions, hashes, paths, provenance)\n\n"+
+						"  lucy.yaml      – environment intent and policy (game version, runtime, packages)\n"+
+						"  lucy-lock.yaml – exact resolved facts (versions, hashes, paths, provenance)\n\n"+
 						"No files will be written until you confirm at the final review step.",
 				),
 			huh.NewConfirm().
@@ -235,7 +235,8 @@ func RunInteractiveInit(s *InitFlowState) error {
 				Description(buildPackageClassificationDescription(s)),
 		}
 		if len(leafOptions) > 0 {
-			fields = append(fields,
+			fields = append(
+				fields,
 				huh.NewMultiSelect[string]().
 					Title("Leaf packages to keep as required").
 					Description("Leaf nodes are packages nothing else in the discovered graph depends on. Selected leaves become required; unselected leaves fall back to transitive.").
@@ -245,7 +246,8 @@ func RunInteractiveInit(s *InitFlowState) error {
 					Value(&requiredLeafIDs),
 			)
 		}
-		fields = append(fields,
+		fields = append(
+			fields,
 			huh.NewMultiSelect[string]().
 				Title("Packages Lucy should ignore").
 				Description("Ignored packages remain visible in state, but Lucy will leave them outside managed sync.").
@@ -345,7 +347,8 @@ func buildSummary(s *InitFlowState) string {
 	}
 	_, _ = fmt.Fprintf(&sb, "  Conflict mode:   %s\n", s.ConflictResolution)
 	if len(s.ExistingFiles) > 0 {
-		_, _ = fmt.Fprintf(&sb, "  Existing files:  %s (will be %s)\n",
+		_, _ = fmt.Fprintf(
+			&sb, "  Existing files:  %s (will be %s)\n",
 			strings.Join(s.ExistingFiles, ", "),
 			conflictModeVerb(s.ConflictResolution),
 		)

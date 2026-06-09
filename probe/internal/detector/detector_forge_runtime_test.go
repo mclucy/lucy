@@ -34,8 +34,8 @@ func TestDetectForgeInstallFromVersionDirPrefersHashVerifiedServerJar(t *testing
 
 	restore := stubForgeArtifactHashLookup(
 		func(version string, artifact forgeArtifactKind, filePath string) (
-		bool,
-		error,
+			bool,
+			error,
 		) {
 			return artifact == forgeArtifactServer && filepath.Base(filePath) == filepath.Base(serverJar), nil
 		},
@@ -52,7 +52,7 @@ func TestDetectForgeInstallFromVersionDirPrefersHashVerifiedServerJar(t *testing
 
 	assertForgeRuntime(
 		t,
-		runtimeInfoFromEvidence(runtime),
+		runtime,
 		serverJar,
 		"1.21.11",
 		"61.1.0",
@@ -87,8 +87,8 @@ func TestDetectForgeInstallFromVersionDirFallsBackToUnpackVerification(t *testin
 
 	restore := stubForgeArtifactHashLookup(
 		func(version string, artifact forgeArtifactKind, filePath string) (
-		bool,
-		error,
+			bool,
+			error,
 		) {
 			return false, nil
 		},
@@ -105,7 +105,7 @@ func TestDetectForgeInstallFromVersionDirFallsBackToUnpackVerification(t *testin
 
 	assertForgeRuntime(
 		t,
-		runtimeInfoFromEvidence(runtime),
+		runtime,
 		jarPath,
 		"1.20.1",
 		"47.3.22",
@@ -137,8 +137,8 @@ func TestDetectForgeInstallFromVersionDirRejectsShimOnlyLayout(t *testing.T) {
 
 	restore := stubForgeArtifactHashLookup(
 		func(version string, artifact forgeArtifactKind, filePath string) (
-		bool,
-		error,
+			bool,
+			error,
 		) {
 			return artifact == forgeArtifactShim, nil
 		},
@@ -201,8 +201,8 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 }
 
 func parseForgeManifestFromFile(
-t *testing.T,
-jarPath string,
+	t *testing.T,
+	jarPath string,
 ) (types.BareVersion, types.BareVersion) {
 	t.Helper()
 
@@ -342,10 +342,10 @@ func TestExecutableRejectsForgeShimJar(t *testing.T) {
 }
 
 func detectForgeRuntimeWith(
-t *testing.T,
-detector ExecutableDetector,
-jarPath string,
-) *types.RuntimeInfo {
+	t *testing.T,
+	detector ExecutableDetector,
+	jarPath string,
+) *ExecutableEvidence {
 	t.Helper()
 
 	file, err := os.Open(jarPath)
@@ -369,36 +369,15 @@ jarPath string,
 		t.Fatalf("detect runtime: %v", err)
 	}
 
-	if evidence == nil {
-		return nil
-	}
-
-	return runtimeInfoFromEvidence(evidence)
-}
-
-func runtimeInfoFromEvidence(evidence *ExecutableEvidence) *types.RuntimeInfo {
-	if evidence == nil {
-		return nil
-	}
-
-	return &types.RuntimeInfo{
-		PrimaryEntrance: evidence.PrimaryEntrance,
-		GameVersion:     evidence.GameVersion,
-		Topology:        evidence.Topology,
-		RuntimeIdentities: append(
-			[]types.PackageId(nil),
-			evidence.RuntimeIdentities...,
-		),
-		BridgeHints: append([]string(nil), evidence.BridgeHints...),
-	}
+	return evidence
 }
 
 func assertForgeRuntime(
-t *testing.T,
-runtime *types.RuntimeInfo,
-primary string,
-gameVersion string,
-forgeVersion string,
+	t *testing.T,
+	runtime *ExecutableEvidence,
+	primary string,
+	gameVersion string,
+	forgeVersion string,
 ) {
 	t.Helper()
 
@@ -420,23 +399,46 @@ forgeVersion string,
 			wantGameVersion.String(),
 		)
 	}
-	if got := runtime.DerivedModLoader(); got != types.PlatformForge {
+	if runtime.Topology == nil {
+		t.Fatalf("expected topology on Forge runtime evidence")
+	}
+	primaryNode, ok := runtime.Topology.PrimaryNodeData()
+	if !ok {
+		t.Fatalf("expected primary topology node on Forge runtime evidence")
+	}
+	if got := types.DeclaredModdingPlatformForNode(primaryNode.ID); got != types.PlatformForge {
 		t.Fatalf(
 			"derived mod loader mismatch: got %s want %s",
 			got,
 			types.PlatformForge,
 		)
 	}
-	if got := runtime.DerivedLoaderVersion(); got != forgeVersion {
+	if got := runtimeIdentityVersion(runtime, types.PlatformForge, "forge"); got != forgeVersion {
 		t.Fatalf("forge version mismatch: got %q want %q", got, forgeVersion)
 	}
 }
 
+func runtimeIdentityVersion(
+	runtime *ExecutableEvidence,
+	platform types.Platform,
+	name types.PackageName,
+) string {
+	if runtime == nil {
+		return ""
+	}
+	for _, identity := range runtime.RuntimeIdentities {
+		if identity.Platform == platform && identity.Name == name {
+			return identity.Version.String()
+		}
+	}
+	return ""
+}
+
 func writeTestJar(
-t *testing.T,
-versionDir string,
-baseName string,
-files map[string]string,
+	t *testing.T,
+	versionDir string,
+	baseName string,
+	files map[string]string,
 ) string {
 	t.Helper()
 
@@ -480,9 +482,9 @@ files map[string]string,
 }
 
 func writeRootJar(
-t *testing.T,
-baseName string,
-files map[string]string,
+	t *testing.T,
+	baseName string,
+	files map[string]string,
 ) string {
 	t.Helper()
 
@@ -541,10 +543,10 @@ func writeZipFile(t *testing.T, jarPath string, files map[string]string) {
 }
 
 func stubForgeArtifactHashLookup(
-fn func(version string, artifact forgeArtifactKind, filePath string) (
-bool,
-error,
-),
+	fn func(version string, artifact forgeArtifactKind, filePath string) (
+		bool,
+		error,
+	),
 ) func() {
 	forgeStubMu.Lock()
 	original := forgeArtifactHashLookup

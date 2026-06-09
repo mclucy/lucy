@@ -7,18 +7,21 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *types.RuntimeInfo {
+func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerRuntime {
 	if evidence == nil {
 		return nil
 	}
 
-	return &types.RuntimeInfo{
-		PrimaryEntrance:   evidence.PrimaryEntrance,
-		GameVersion:       evidence.GameVersion,
-		BootCommand:       nil,
-		Topology:          materializeRuntimeTopology(evidence),
-		RuntimeIdentities: append([]types.PackageId(nil), evidence.RuntimeIdentities...),
-		BridgeHints:       append([]string(nil), evidence.BridgeHints...),
+	return &ServerRuntime{
+		PrimaryEntrance: evidence.PrimaryEntrance,
+		GameVersion:     evidence.GameVersion,
+		BootCommand:     nil,
+		Topology:        materializeRuntimeTopology(evidence),
+		RuntimeIdentities: append(
+			[]types.PackageId(nil),
+			evidence.RuntimeIdentities...,
+		),
+		BridgeHints: append([]string(nil), evidence.BridgeHints...),
 	}
 }
 
@@ -36,8 +39,14 @@ func materializeRuntimeTopology(
 	if evidence.TopologySeed != nil {
 		return &types.RuntimeTopology{
 			PrimaryNode: evidence.TopologySeed.PrimaryNode,
-			Nodes:       append([]types.RuntimeNode(nil), evidence.TopologySeed.Nodes...),
-			Edges:       append([]types.RuntimeEdge(nil), evidence.TopologySeed.Edges...),
+			Nodes: append(
+				[]types.RuntimeNode(nil),
+				evidence.TopologySeed.Nodes...,
+			),
+			Edges: append(
+				[]types.RuntimeEdge(nil),
+				evidence.TopologySeed.Edges...,
+			),
 		}
 	}
 
@@ -60,15 +69,15 @@ func materializeRuntimeTopology(
 func RuntimeIdentityNode(identity types.PackageId) (types.RuntimeNodeID, bool) {
 	switch strings.ToLower(strings.TrimSpace(string(identity.Name))) {
 	case "fabric", "fabric-loader":
-		return RuntimeNodeFabric, true
+		return types.RuntimeNodeFabric, true
 	case "forge":
-		return RuntimeNodeForge, true
+		return types.RuntimeNodeForge, true
 	case "neoforge":
-		return RuntimeNodeNeoforge, true
+		return types.RuntimeNodeNeoforge, true
 	case "mcdreforged", "mcdr":
-		return RuntimeNodeMCDR, true
+		return types.RuntimeNodeMCDR, true
 	case "minecraft", "mc":
-		return RuntimeNodeMinecraft, true
+		return types.RuntimeNodeMinecraft, true
 	default:
 		return "", false
 	}

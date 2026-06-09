@@ -33,8 +33,8 @@ func (m mcdrSearchResult) ToSearchResults() types.SearchResults {
 // TODO: handle search options
 
 func (s provider) Search(
-query string,
-options types.SearchOptions,
+	query string,
+	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
 	if options.FilterPlatform != types.PlatformMCDR && options.FilterPlatform != types.PlatformAny {
 		return nil, fmt.Errorf(
@@ -48,16 +48,16 @@ options types.SearchOptions,
 }
 
 func (s provider) Fetch(id types.PackageId) (
-rem upstream.RawPackageRemote,
-err error,
+	rem upstream.RawPackageRemote,
+	err error,
 ) {
 	rem, err = getRelease(id.Name.Pep8String(), id.Version)
 	return
 }
 
 func (s provider) Metadata(name types.PackageName) (
-info upstream.RawProjectInformation,
-err error,
+	info upstream.RawProjectInformation,
+	err error,
 ) {
 	plugin, err := getInfo(name.Pep8String())
 	if err != nil {
@@ -82,24 +82,24 @@ err error,
 }
 
 func (s provider) Dependencies(id types.PackageId) (
-upstream.RawPackageDependencies,
-error,
+	upstream.RawPackageDependencies,
+	error,
 ) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (s provider) Support(name types.PackageName) (
-supports upstream.RawProjectSupport,
-err error,
+	supports upstream.RawProjectSupport,
+	err error,
 ) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (s provider) ParseAmbiguousId(id types.PackageId) (
-parsed types.PackageId,
-err error,
+	parsed types.PackageId,
+	err error,
 ) {
 	var rel *release
 	switch id.Version {

@@ -11,8 +11,8 @@ import (
 )
 
 func InstallMany(requests []types.PackageRequest, options Options) (
-*Result,
-error,
+	*Result,
+	error,
 ) {
 	const maxReconcileIterations = 3
 
@@ -125,7 +125,7 @@ error,
 		packages := recursiveCandidatePackages(tx)
 		showRecursiveDownloadStart(len(packages))
 		tx.StagingDir, packages, err = downloadBatchPackages(
-			serverInfo.WorkPath,
+			serverInfo.Root,
 			packages,
 		)
 		if err != nil {
@@ -191,7 +191,9 @@ func buildInstallResult(tx *RecursiveTransaction) *Result {
 func requestsToIds(requests []types.PackageRequest) []types.PackageId {
 	ids := make([]types.PackageId, len(requests))
 	for i, req := range requests {
-		ids[i] = types.PackageId{Platform: req.Ref.Platform, Name: req.Ref.Name, Version: req.Version}
+		ids[i] = types.PackageId{
+			Platform: req.Ref.Platform, Name: req.Ref.Name, Version: req.Version,
+		}
 	}
 	return ids
 }

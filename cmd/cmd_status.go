@@ -38,7 +38,7 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 }
 
 func generateStatusOutput(
-	data *types.ServerInfo,
+	data *probe.Workspace,
 	longOutput bool,
 	noStyle bool,
 ) (output *tui.Data) {
@@ -654,45 +654,45 @@ func runtimeRoleLabel(role types.RuntimeRole) string {
 
 func runtimeNodeLabel(id types.RuntimeNodeID) string {
 	switch id {
-	case probe.RuntimeNodeMinecraft:
+	case types.RuntimeNodeMinecraft:
 		return "Vanilla"
-	case probe.RuntimeNodeFabric:
+	case types.RuntimeNodeFabric:
 		return "Fabric"
-	case probe.RuntimeNodeForge:
+	case types.RuntimeNodeForge:
 		return "Forge"
-	case probe.RuntimeNodeNeoforge:
+	case types.RuntimeNodeNeoforge:
 		return "NeoForge"
-	case probe.RuntimeNodeMCDR:
+	case types.RuntimeNodeMCDR:
 		return "MCDR"
-	case probe.RuntimeNodePaper:
+	case types.RuntimeNodePaper:
 		return "Paper"
-	case probe.RuntimeNodeSpigot:
+	case types.RuntimeNodeSpigot:
 		return "Spigot"
-	case probe.RuntimeNodeBukkit:
+	case types.RuntimeNodeBukkit:
 		return "Bukkit"
-	case probe.RuntimeNodeFolia:
+	case types.RuntimeNodeFolia:
 		return "Folia"
-	case probe.RuntimeNodeLeaves:
+	case types.RuntimeNodeLeaves:
 		return "Leaves"
-	case probe.RuntimeNodeSponge:
+	case types.RuntimeNodeSponge:
 		return "Sponge"
-	case probe.RuntimeNodeArclight:
+	case types.RuntimeNodeArclight:
 		return "Arclight"
-	case probe.RuntimeNodeYouer:
+	case types.RuntimeNodeYouer:
 		return "Youer"
-	case probe.RuntimeNodeVelocity:
+	case types.RuntimeNodeVelocity:
 		return "Velocity"
-	case probe.RuntimeNodeBungeecord:
+	case types.RuntimeNodeBungeecord:
 		return "BungeeCord"
-	case probe.RuntimeNodeWaterfall:
+	case types.RuntimeNodeWaterfall:
 		return "Waterfall"
-	case probe.RuntimeNodeGeyserStandalone:
+	case types.RuntimeNodeGeyserStandalone:
 		return "Geyser Standalone"
-	case probe.RuntimeNodeGeyser:
+	case types.RuntimeNodeGeyser:
 		return "Geyser"
-	case probe.RuntimeNodeConnector:
+	case types.RuntimeNodeConnector:
 		return "Connector"
-	case probe.RuntimeNodeKilt:
+	case types.RuntimeNodeKilt:
 		return "Kilt"
 	default:
 		return tools.Capitalize(

@@ -313,13 +313,13 @@ func mustParseSemver(t *testing.T, raw string) types.ResolvableVersion {
 }
 
 func assertConstraintSatisfy(
-t *testing.T,
-expr types.VersionExpr,
-platform types.Platform,
-name string,
-version string,
-want bool,
-label string,
+	t *testing.T,
+	expr types.VersionExpr,
+	platform types.Platform,
+	name string,
+	version string,
+	want bool,
+	label string,
 ) {
 	t.Helper()
 	id := types.PackageId{Platform: platform, Name: types.PackageName(name)}

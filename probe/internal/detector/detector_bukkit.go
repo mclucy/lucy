@@ -71,8 +71,8 @@ func (d *bukkitDetector) Name() string {
 }
 
 func (d *bukkitDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) ([]types.Package, error) {
 	if data, ok, err := readArchiveEntry(
 		zipReader,
@@ -117,8 +117,8 @@ fileHandle *os.File,
 }
 
 func readArchiveEntry(
-zipReader *zip.Reader,
-name string,
+	zipReader *zip.Reader,
+	name string,
 ) ([]byte, bool, error) {
 	for _, file := range zipReader.File {
 		if file.Name != name {
@@ -143,8 +143,8 @@ name string,
 }
 
 func parseBukkitPluginDescriptor(
-data []byte,
-localPath string,
+	data []byte,
+	localPath string,
 ) (*types.Package, error) {
 	var descriptor bukkitPluginDescriptor
 	if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&descriptor); err != nil {
@@ -152,8 +152,8 @@ localPath string,
 	}
 
 	if strings.TrimSpace(descriptor.Name) == "" ||
-	strings.TrimSpace(descriptor.Version) == "" ||
-	strings.TrimSpace(descriptor.Main) == "" {
+		strings.TrimSpace(descriptor.Version) == "" ||
+		strings.TrimSpace(descriptor.Main) == "" {
 		return nil, nil
 	}
 
@@ -181,8 +181,8 @@ localPath string,
 }
 
 func parsePaperPluginDescriptor(
-data []byte,
-localPath string,
+	data []byte,
+	localPath string,
 ) (*types.Package, error) {
 	var descriptor paperPluginDescriptor
 	if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&descriptor); err != nil {
@@ -190,9 +190,9 @@ localPath string,
 	}
 
 	if strings.TrimSpace(descriptor.Name) == "" ||
-	strings.TrimSpace(descriptor.Version) == "" ||
-	strings.TrimSpace(descriptor.Main) == "" ||
-	strings.TrimSpace(descriptor.APIVersion) == "" {
+		strings.TrimSpace(descriptor.Version) == "" ||
+		strings.TrimSpace(descriptor.Main) == "" ||
+		strings.TrimSpace(descriptor.APIVersion) == "" {
 		return nil, nil
 	}
 
@@ -211,8 +211,8 @@ localPath string,
 }
 
 func parseLeavesPluginDescriptor(
-data []byte,
-localPath string,
+	data []byte,
+	localPath string,
 ) (*types.Package, error) {
 	var descriptor leavesPluginDescriptor
 	if err := json.Unmarshal(data, &descriptor); err != nil {
@@ -220,8 +220,8 @@ localPath string,
 	}
 
 	if strings.TrimSpace(descriptor.Name) == "" ||
-	strings.TrimSpace(descriptor.Version) == "" ||
-	strings.TrimSpace(descriptor.Main) == "" {
+		strings.TrimSpace(descriptor.Version) == "" ||
+		strings.TrimSpace(descriptor.Main) == "" {
 		return nil, nil
 	}
 
@@ -240,14 +240,14 @@ localPath string,
 }
 
 func buildPaperFamilyPackage(
-platform types.Platform,
-name string,
-version string,
-localPath string,
-description string,
-authors []types.Person,
-website string,
-supportedPlatforms []types.Platform,
+	platform types.Platform,
+	name string,
+	version string,
+	localPath string,
+	description string,
+	authors []types.Person,
+	website string,
+	supportedPlatforms []types.Platform,
 ) types.Package {
 	return types.Package{
 		Id: types.PackageId{

@@ -14,38 +14,38 @@ func (provider) Source() types.Source {
 }
 
 func (provider) Search(
-query string,
-options types.SearchOptions,
+	query string,
+	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
 	panic("TODO: implement github provider Search")
 }
 
 func (provider) Fetch(
-id types.PackageId,
+	id types.PackageId,
 ) (remote upstream.RawPackageRemote, err error) {
 	panic("TODO: implement github provider Fetch")
 }
 
 func (provider) Metadata(
-name types.PackageName,
+	name types.PackageName,
 ) (info upstream.RawProjectInformation, err error) {
 	panic("TODO: implement github provider Information")
 }
 
 func (provider) Dependencies(
-id types.PackageId,
+	id types.PackageId,
 ) (deps upstream.RawPackageDependencies, err error) {
 	panic("TODO: implement github provider Dependencies")
 }
 
 func (provider) Support(
-name types.PackageName,
+	name types.PackageName,
 ) (supports upstream.RawProjectSupport, err error) {
 	panic("TODO: implement github provider Support")
 }
 
 func (provider) ParseAmbiguousId(
-id types.PackageId,
+	id types.PackageId,
 ) (parsed types.PackageId, err error) {
 	panic("TODO: implement github provider ParseAmbiguousId")
 }

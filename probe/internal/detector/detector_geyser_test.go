@@ -75,7 +75,7 @@ func TestDetectBridgeMarkersPrefersStandaloneGeyserMarker(t *testing.T) {
 	}
 }
 
-func detectGeyserStandaloneRuntimeWith(t *testing.T, jarPath string) *types.RuntimeInfo {
+func detectGeyserStandaloneRuntimeWith(t *testing.T, jarPath string) *ExecutableEvidence {
 	t.Helper()
 
 	file, err := os.Open(jarPath)
@@ -99,18 +99,5 @@ func detectGeyserStandaloneRuntimeWith(t *testing.T, jarPath string) *types.Runt
 		t.Fatalf("detect standalone geyser runtime: %v", err)
 	}
 
-	if evidence == nil {
-		return nil
-	}
-
-	return &types.RuntimeInfo{
-		PrimaryEntrance: evidence.PrimaryEntrance,
-		GameVersion:     evidence.GameVersion,
-		Topology:        evidence.Topology,
-		RuntimeIdentities: append(
-			[]types.PackageId(nil),
-			evidence.RuntimeIdentities...,
-		),
-		BridgeHints: append([]string(nil), evidence.BridgeHints...),
-	}
+	return evidence
 }

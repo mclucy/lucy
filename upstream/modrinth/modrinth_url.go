@@ -43,8 +43,8 @@ func projectDependencyUrl(suffix string) (urlString string) {
 const searchUrlTemplate = `https://api.modrinth.com/v2/search?query={{.query}}&limit=100&index={{.index}}&facets={{.facets}}`
 
 func searchUrl(
-query types.PackageName,
-option searchOptions,
+	query types.PackageName,
+	option searchOptions,
 ) (urlString string) {
 	urlTemplate, _ := template.New("modrinth_search_url").Parse(searchUrlTemplate)
 	urlBuilder := strings.Builder{}

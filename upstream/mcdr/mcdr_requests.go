@@ -18,7 +18,7 @@ const (
 )
 
 func search(query string) (mcdrSearchResult, error) {
-	ghEndpoint := pluginCatalogueRepoEndpoint + ("plugins/") + branchCatalogue
+	ghEndpoint := pluginCatalogueRepoEndpoint + "plugins/" + branchCatalogue
 	err, msg, items := github.GetDirectoryFromGitHub(ghEndpoint)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func search(query string) (mcdrSearchResult, error) {
 }
 
 func getInfo(id string) (*pluginInfo, error) {
-	ghEndpoint := pluginCatalogueRepoEndpoint + ("plugins/") + id + "/plugin_info.json" + branchMaster
+	ghEndpoint := pluginCatalogueRepoEndpoint + "plugins/" + id + "/plugin_info.json" + branchMaster
 	var data []byte
 	err, msg, data := github.GetFileFromGitHub(ghEndpoint)
 	if err != nil {
@@ -120,8 +120,8 @@ func getLatestRelease(id string) (*release, error) {
 }
 
 func getLatestCompatibleRelease(
-id string,
-localMcdrVersion types.BareVersion,
+	id string,
+	localMcdrVersion types.BareVersion,
 ) (*release, error) {
 	history, err := getReleaseHistory(id)
 	if err != nil {

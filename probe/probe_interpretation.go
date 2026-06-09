@@ -7,7 +7,7 @@ import (
 )
 
 func finalizeProbedRuntime(
-	runtime *types.RuntimeInfo,
+	runtime *ServerRuntime,
 	packages []types.Package,
 ) []types.Package {
 	EnrichTopologyFromPackages(runtime, packages)
@@ -15,7 +15,7 @@ func finalizeProbedRuntime(
 	return packagesWithRuntimeIdentities(packages, runtime)
 }
 
-func ensureRuntimeTopology(runtime *types.RuntimeInfo) {
+func ensureRuntimeTopology(runtime *ServerRuntime) {
 	if runtime == nil || runtime.Topology != nil {
 		return
 	}
@@ -25,7 +25,7 @@ func ensureRuntimeTopology(runtime *types.RuntimeInfo) {
 
 func packagesWithRuntimeIdentities(
 	packages []types.Package,
-	runtime *types.RuntimeInfo,
+	runtime *ServerRuntime,
 ) []types.Package {
 	if runtime == nil || !runtime.IsValid() {
 		return packages
@@ -43,7 +43,10 @@ func packagesWithRuntimeIdentities(
 	return idx.Packages()
 }
 
-func packageSearchPaths(runtime *types.RuntimeInfo, workingDirectory string) []string {
+func packageSearchPaths(
+	runtime *ServerRuntime,
+	workingDirectory string,
+) []string {
 	if runtime == nil {
 		return nil
 	}

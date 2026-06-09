@@ -78,7 +78,7 @@ func installFabricWithOverride(p types.PackageId, deleteVanilla bool) error {
 
 	result, err := util.CachedDownload(
 		artifactUrl,
-		serverInfo.WorkPath,
+		serverInfo.Root,
 		util.DownloadOptions{
 			Kind:               cache.KindArtifact,
 			WrapReader:         tracker.ProxyReader,

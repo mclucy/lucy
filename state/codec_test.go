@@ -38,7 +38,6 @@ func TestParseSerializeConfigRoundTripFixture(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatalf("config serialization is not deterministic\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
-
 }
 
 func TestParseSerializeManifestRoundTripFixture(t *testing.T) {
@@ -71,7 +70,6 @@ func TestParseSerializeManifestRoundTripFixture(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatalf("manifest serialization is not deterministic\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
-
 }
 
 func TestParseSerializeLockRoundTripFixture(t *testing.T) {
@@ -104,7 +102,6 @@ func TestParseSerializeLockRoundTripFixture(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatalf("lock serialization is not deterministic\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
-
 }
 
 func TestSerializeDeterministicAcrossCalls(t *testing.T) {

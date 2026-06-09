@@ -47,9 +47,9 @@ func (d *craftBukkitFamilyDetector) Name() string {
 }
 
 func (d *craftBukkitFamilyDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	_ = fileHandle
 
@@ -90,13 +90,13 @@ fileHandle *os.File,
 	// manifest identity. Without one of these strict signals, we should not claim
 	// a Bukkit-lineage server executable.
 	judgment.bukkitConfirmed = signals.mainClass == bukkitManifestMainClass ||
-	strings.EqualFold(
-		signals.implementationTitle,
-		bukkitImplementationCraftBukkit,
-	) ||
-	metaMainClass == bukkitManifestMainClass ||
-	hasStrictReaperBukkitConfirmation(reaperPatchProperties) ||
-	hasStrictYouerBukkitConfirmation(signals)
+		strings.EqualFold(
+			signals.implementationTitle,
+			bukkitImplementationCraftBukkit,
+		) ||
+		metaMainClass == bukkitManifestMainClass ||
+		hasStrictReaperBukkitConfirmation(reaperPatchProperties) ||
+		hasStrictYouerBukkitConfirmation(signals)
 	if !judgment.bukkitConfirmed {
 		return nil, nil
 	}
@@ -131,8 +131,8 @@ fileHandle *os.File,
 }
 
 func readBukkitExecutableManifest(
-filePath string,
-zipReader *zip.Reader,
+	filePath string,
+	zipReader *zip.Reader,
 ) ([]byte, bool, error) {
 	if zipReader != nil {
 		return readArchiveEntry(zipReader, bukkitManifestPath)
@@ -182,8 +182,8 @@ func reasonPaperFamily(judgment *paperJudgment) {
 
 func hasModernPaperclipMetadataCluster(obs paperObservations) bool {
 	return strings.TrimSpace(obs.downloadContext) != "" &&
-	len(obs.librariesListEntries) > 0 &&
-	strings.TrimSpace(obs.metaMainClass) != ""
+		len(obs.librariesListEntries) > 0 &&
+		strings.TrimSpace(obs.metaMainClass) != ""
 }
 
 func attributePaperBrand(judgment *paperJudgment) {
@@ -283,18 +283,18 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_youer/youer/META-INF/MANIFEST.MF
 	if obs.hasYouerNamespace ||
-	strings.EqualFold(
-		obs.manifestSpecificationTitle,
-		paperManifestYouerToken,
-	) ||
-	strings.EqualFold(
-		obs.manifestImplementationTitle,
-		paperManifestYouerToken,
-	) ||
-	strings.Contains(
-		strings.ToLower(obs.manifestMainClass),
-		paperMainClassYouerToken,
-	) {
+		strings.EqualFold(
+			obs.manifestSpecificationTitle,
+			paperManifestYouerToken,
+		) ||
+		strings.EqualFold(
+			obs.manifestImplementationTitle,
+			paperManifestYouerToken,
+		) ||
+		strings.Contains(
+			strings.ToLower(obs.manifestMainClass),
+			paperMainClassYouerToken,
+		) {
 		add("youer")
 	}
 
@@ -303,9 +303,9 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 }
 
 func readBukkitExecutableSidecar(
-filePath string,
-zipReader *zip.Reader,
-entryPath string,
+	filePath string,
+	zipReader *zip.Reader,
+	entryPath string,
 ) (string, error) {
 	var (
 		data []byte
@@ -326,8 +326,8 @@ entryPath string,
 }
 
 func readBukkitExecutablePatchProperties(
-filePath string,
-zipReader *zip.Reader,
+	filePath string,
+	zipReader *zip.Reader,
 ) (map[string]string, error) {
 	var (
 		data []byte
@@ -367,11 +367,11 @@ func hasStrictYouerBukkitConfirmation(signals bukkitManifestSignals) bool {
 		signals.specificationTitle,
 		paperManifestYouerToken,
 	) ||
-	strings.EqualFold(signals.implementationTitle, paperManifestYouerToken) ||
-	strings.Contains(
-		strings.ToLower(signals.mainClass),
-		paperMainClassYouerToken,
-	)
+		strings.EqualFold(signals.implementationTitle, paperManifestYouerToken) ||
+		strings.Contains(
+			strings.ToLower(signals.mainClass),
+			paperMainClassYouerToken,
+		)
 }
 
 func hasStrictReaperObservationBrand(obs paperObservations) bool {
@@ -409,9 +409,9 @@ func resolvePaperContradictions(judgment *paperJudgment) {
 }
 
 func projectPaperJudgment(
-filePath string,
-gameVersion types.BareVersion,
-judgment paperJudgment,
+	filePath string,
+	gameVersion types.BareVersion,
+	judgment paperJudgment,
 ) *ExecutableEvidence {
 	if !judgment.bukkitConfirmed {
 		return nil
@@ -555,7 +555,7 @@ func parseBukkitGameVersion(implementationVersion string) types.BareVersion {
 }
 
 func buildBukkitExecutableTopologySeed(
-primaryNode types.RuntimeNodeID,
+	primaryNode types.RuntimeNodeID,
 ) *ExecutableTopologySeed {
 	nodes := []types.RuntimeNode{}
 	edges := []types.RuntimeEdge{}
@@ -624,9 +624,9 @@ func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
 }
 
 func buildBukkitImplementationEdge(
-from types.RuntimeNodeID,
-to types.RuntimeNodeID,
-verb types.RuntimeEdgeVerb,
+	from types.RuntimeNodeID,
+	to types.RuntimeNodeID,
+	verb types.RuntimeEdgeVerb,
 ) types.RuntimeEdge {
 	return types.RuntimeEdge{
 		From: from,

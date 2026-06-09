@@ -16,9 +16,9 @@ import (
 const neoForgeMavenArtifactBaseURL = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
 
 var neoforgeArtifactHashLookup = func(
-version string,
-artifact modLoaderArtifactKind,
-filePath string,
+	version string,
+	artifact modLoaderArtifactKind,
+	filePath string,
 ) (bool, error) {
 	return lookupModLoaderArtifactHash(
 		version,
@@ -40,9 +40,9 @@ filePath string,
 //   - https://github.com/neoforged/NeoForge/blob/main/CHANGELOG.md
 func NeoForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 	spec := modLoaderInstallSpec{
-		platform:       types.PlatformNeoforge,
-		name:           "neoforge",
-		libraryRoot:    filepath.Join(
+		platform: types.PlatformNeoforge,
+		name:     "neoforge",
+		libraryRoot: filepath.Join(
 			"libraries",
 			"net",
 			"neoforged",
@@ -63,29 +63,29 @@ func neoForgeCandidateNames(versionDir, version string) []modLoaderCandidate {
 	return []modLoaderCandidate{
 		{
 			kind: modLoaderArtifactServer, path: filepath.Join(
-			versionDir,
-			fmt.Sprintf("neoforge-%s-server.jar", version),
-		),
+				versionDir,
+				fmt.Sprintf("neoforge-%s-server.jar", version),
+			),
 		},
 		{
 			kind: modLoaderArtifactUniversal, path: filepath.Join(
-			versionDir,
-			fmt.Sprintf("neoforge-%s-universal.jar", version),
-		),
+				versionDir,
+				fmt.Sprintf("neoforge-%s-universal.jar", version),
+			),
 		},
 		{
 			kind: modLoaderArtifactShim, path: filepath.Join(
-			versionDir,
-			fmt.Sprintf("neoforge-%s-shim.jar", version),
-		),
+				versionDir,
+				fmt.Sprintf("neoforge-%s-shim.jar", version),
+			),
 		},
 	}
 }
 
 func verifyNeoForgeArtifactByUnpack(
-candidate modLoaderCandidate,
-gameVersion types.BareVersion,
-loaderVersion types.BareVersion,
+	candidate modLoaderCandidate,
+	gameVersion types.BareVersion,
+	loaderVersion types.BareVersion,
 ) (bool, error) {
 	file, err := os.Open(candidate.path)
 	if err != nil {
@@ -114,8 +114,8 @@ loaderVersion types.BareVersion,
 }
 
 func verifyNeoForgeUniversalManifest(
-reader *zip.Reader,
-loaderVersion types.BareVersion,
+	reader *zip.Reader,
+	loaderVersion types.BareVersion,
 ) (bool, error) {
 	manifest, ok, err := readZipFile(reader, "META-INF/MANIFEST.MF")
 	if err != nil || !ok {

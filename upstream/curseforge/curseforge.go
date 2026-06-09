@@ -25,8 +25,8 @@ func (provider) Source() types.Source {
 
 // Search queries the CurseForge /v1/mods/search endpoint.
 func (provider) Search(
-query string,
-options types.SearchOptions,
+	query string,
+	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
 	u := searchUrl(types.PackageName(query), options)
 	logger.Debug("searching via curseforge api: " + u)
@@ -40,8 +40,8 @@ options types.SearchOptions,
 
 // Fetch resolves the package version, then fetches the corresponding file.
 func (p provider) Fetch(id types.PackageId) (
-remote upstream.RawPackageRemote,
-err error,
+	remote upstream.RawPackageRemote,
+	err error,
 ) {
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
@@ -58,8 +58,8 @@ err error,
 
 // Information resolves a project slug and returns project metadata.
 func (provider) Metadata(name types.PackageName) (
-info upstream.RawProjectInformation,
-err error,
+	info upstream.RawProjectInformation,
+	err error,
 ) {
 	mod, err := resolveSlug(name)
 	if err != nil {
@@ -73,7 +73,7 @@ err error,
 }
 
 func (p provider) Dependencies(
-id types.PackageId,
+	id types.PackageId,
 ) (deps upstream.RawPackageDependencies, err error) {
 	// Resolve the mod to get the modId
 	mod, err := resolveSlug(id.Name)
@@ -159,7 +159,7 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 }
 
 func (provider) Support(
-name types.PackageName,
+	name types.PackageName,
 ) (supports upstream.RawProjectSupport, err error) {
 	panic("TODO: implement curseforge provider Support")
 }
@@ -167,8 +167,8 @@ name types.PackageName,
 // ParseAmbiguousId resolves abstract version specifiers (latest,
 // compatible, any) to a concrete version by querying the CurseForge API.
 func (p provider) ParseAmbiguousId(id types.PackageId) (
-parsed types.PackageId,
-err error,
+	parsed types.PackageId,
+	err error,
 ) {
 	if id.Platform.IsSelector() {
 		// Platform inference removed to avoid circular imports.

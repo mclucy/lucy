@@ -7,11 +7,11 @@ import (
 )
 
 func TestNewRuntimeRegistry_FindEntry_KnownNode(t *testing.T) {
-	entry, ok := DefaultRegistry.FindEntry(RuntimeNodeFabric)
+	entry, ok := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	if !ok {
 		t.Fatal("expected to find fabric entry")
 	}
-	if entry.NodeID != RuntimeNodeFabric {
+	if entry.NodeID != types.RuntimeNodeFabric {
 		t.Errorf("wrong node ID: %q", entry.NodeID)
 	}
 	if entry.Role != types.RuntimeRoleModLoader {
@@ -36,9 +36,9 @@ func TestNewRuntimeRegistry_FindEntry_UnknownNode(t *testing.T) {
 }
 
 func TestNewRuntimeRegistry_FindEntry_ReturnsCopy(t *testing.T) {
-	entry, _ := DefaultRegistry.FindEntry(RuntimeNodeFabric)
+	entry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	entry.Capabilities = append(entry.Capabilities, "mutated")
-	original, _ := DefaultRegistry.FindEntry(RuntimeNodeFabric)
+	original, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	for _, cap := range original.Capabilities {
 		if cap == "mutated" {
 			t.Error("FindEntry returned a reference, not a copy")
@@ -48,7 +48,7 @@ func TestNewRuntimeRegistry_FindEntry_ReturnsCopy(t *testing.T) {
 
 func TestBuildTopologyFromEntry_SimpleNode(t *testing.T) {
 	entry := RegistryEntry{
-		NodeID:       RuntimeNodeFabric,
+		NodeID:       types.RuntimeNodeFabric,
 		Role:         types.RuntimeRoleModLoader,
 		Capabilities: []types.RuntimeCapability{types.CapabilityFabricMods},
 	}
@@ -56,7 +56,7 @@ func TestBuildTopologyFromEntry_SimpleNode(t *testing.T) {
 	if topo == nil {
 		t.Fatal("expected non-nil topology")
 	}
-	if topo.PrimaryNode != RuntimeNodeFabric {
+	if topo.PrimaryNode != types.RuntimeNodeFabric {
 		t.Errorf("wrong primary node: %q", topo.PrimaryNode)
 	}
 	if len(topo.Nodes) != 1 {
@@ -68,7 +68,7 @@ func TestBuildTopologyFromEntry_SimpleNode(t *testing.T) {
 }
 
 func TestBuildTopologyFromEntry_WithPolicyEdges(t *testing.T) {
-	entry, ok := DefaultRegistry.FindEntry(RuntimeNodePaperFork)
+	entry, ok := DefaultRegistry.FindEntry(types.RuntimeNodePaperFork)
 	if !ok {
 		t.Fatal("paper-fork not in registry")
 	}
@@ -84,13 +84,13 @@ func TestBuildTopologyFromEntry_WithPolicyEdges(t *testing.T) {
 		t.Errorf("expected 1 edge, got %d", len(topo.Edges))
 	}
 	edge := topo.Edges[0]
-	if edge.From != RuntimeNodePaperFork || edge.To != RuntimeNodePaper || edge.Verb != types.EdgeImplements {
+	if edge.From != types.RuntimeNodePaperFork || edge.To != types.RuntimeNodePaper || edge.Verb != types.EdgeImplements {
 		t.Errorf("unexpected edge: %+v", edge)
 	}
 }
 
 func TestBuildTopologyFromEntry_PaperUsesVanillaAnchor(t *testing.T) {
-	entry, ok := DefaultRegistry.FindEntry(RuntimeNodePaper)
+	entry, ok := DefaultRegistry.FindEntry(types.RuntimeNodePaper)
 	if !ok {
 		t.Fatal("paper not in registry")
 	}
@@ -104,19 +104,19 @@ func TestBuildTopologyFromEntry_PaperUsesVanillaAnchor(t *testing.T) {
 	}
 
 	edge := topo.Edges[0]
-	if edge.From != RuntimeNodePaper || edge.To != RuntimeNodeMinecraft || edge.Verb != types.EdgeModifies {
+	if edge.From != types.RuntimeNodePaper || edge.To != types.RuntimeNodeMinecraft || edge.Verb != types.EdgeModifies {
 		t.Errorf("unexpected edge: %+v", edge)
 	}
 }
 
 func TestNewRuntimeRegistry_PolicyEdgesUseSurvivingVerbs(t *testing.T) {
 	for _, nodeID := range []types.RuntimeNodeID{
-		RuntimeNodePaper,
-		RuntimeNodePaperFork,
-		RuntimeNodeSpigot,
-		RuntimeNodeCraftBukkit,
-		RuntimeNodeFolia,
-		RuntimeNodeLeaves,
+		types.RuntimeNodePaper,
+		types.RuntimeNodePaperFork,
+		types.RuntimeNodeSpigot,
+		types.RuntimeNodeCraftBukkit,
+		types.RuntimeNodeFolia,
+		types.RuntimeNodeLeaves,
 	} {
 		entry, ok := DefaultRegistry.FindEntry(nodeID)
 		if !ok {
@@ -145,7 +145,7 @@ func TestBuildTopologyFromEntry_UnknownNodeID(t *testing.T) {
 }
 
 func TestBuildTopologyFromEntry_NodesSorted(t *testing.T) {
-	entry, _ := DefaultRegistry.FindEntry(RuntimeNodePaperFork)
+	entry, _ := DefaultRegistry.FindEntry(types.RuntimeNodePaperFork)
 	topo := BuildTopologyFromEntry(entry)
 	for i := 1; i < len(topo.Nodes); i++ {
 		if string(topo.Nodes[i-1].ID) > string(topo.Nodes[i].ID) {

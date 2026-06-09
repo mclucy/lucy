@@ -38,39 +38,6 @@ type ExecutableCandidates struct {
 	Candidates []*ExecutableEvidence
 }
 
-func executableEvidenceFromRuntimeInfo(runtime *types.RuntimeInfo) *ExecutableEvidence {
-	if runtime == nil || runtime == types.NoExecutable || runtime == types.UnknownExecutable {
-		return nil
-	}
-
-	evidence := &ExecutableEvidence{
-		PrimaryEntrance:   runtime.PrimaryEntrance,
-		GameVersion:       runtime.GameVersion,
-		Topology:          runtime.Topology,
-		RuntimeIdentities: append(
-			[]types.PackageId(nil),
-			runtime.RuntimeIdentities...,
-		),
-		BridgeHints:       append([]string(nil), runtime.BridgeHints...),
-	}
-
-	if runtime.Topology != nil {
-		evidence.TopologySeed = &ExecutableTopologySeed{
-			PrimaryNode: runtime.Topology.PrimaryNode,
-			Nodes:       append(
-				[]types.RuntimeNode(nil),
-				runtime.Topology.Nodes...,
-			),
-			Edges:       append(
-				[]types.RuntimeEdge(nil),
-				runtime.Topology.Edges...,
-			),
-		}
-	}
-
-	return evidence
-}
-
 func (c *ExecutableCandidates) IsEmpty() bool {
 	return c == nil || len(c.Candidates) == 0
 }
@@ -85,5 +52,3 @@ func (c *ExecutableCandidates) Single() *ExecutableEvidence {
 	}
 	return c.Candidates[0]
 }
-
-var _ = executableEvidenceFromRuntimeInfo

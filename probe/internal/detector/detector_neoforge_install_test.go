@@ -33,9 +33,9 @@ func TestDetectNeoForgeInstallPrefersHashVerifiedUniversalJar(t *testing.T) {
 
 	restore := stubNeoforgeArtifactHashLookup(
 		func(
-		version string,
-		artifact modLoaderArtifactKind,
-		filePath string,
+			version string,
+			artifact modLoaderArtifactKind,
+			filePath string,
 		) (bool, error) {
 			return artifact == modLoaderArtifactUniversal && filepath.Base(filePath) == filepath.Base(universalJar), nil
 		},
@@ -52,7 +52,7 @@ func TestDetectNeoForgeInstallPrefersHashVerifiedUniversalJar(t *testing.T) {
 
 	assertNeoForgeRuntime(
 		t,
-		runtimeInfoFromEvidence(runtimes[0]),
+		runtimes[0],
 		universalJar,
 		"1.21.4",
 		"21.4.0",
@@ -83,9 +83,9 @@ func TestDetectNeoForgeInstallFallsBackToUnpackVerification(t *testing.T) {
 
 	restore := stubNeoforgeArtifactHashLookup(
 		func(
-		version string,
-		artifact modLoaderArtifactKind,
-		filePath string,
+			version string,
+			artifact modLoaderArtifactKind,
+			filePath string,
 		) (bool, error) {
 			return false, nil
 		},
@@ -102,7 +102,7 @@ func TestDetectNeoForgeInstallFallsBackToUnpackVerification(t *testing.T) {
 
 	assertNeoForgeRuntime(
 		t,
-		runtimeInfoFromEvidence(runtimes[0]),
+		runtimes[0],
 		jarPath,
 		"1.21.4",
 		"21.4.0",
@@ -134,9 +134,9 @@ func TestDetectNeoForgeInstallRejectsShimOnly(t *testing.T) {
 
 	restore := stubNeoforgeArtifactHashLookup(
 		func(
-		version string,
-		artifact modLoaderArtifactKind,
-		filePath string,
+			version string,
+			artifact modLoaderArtifactKind,
+			filePath string,
 		) (bool, error) {
 			return artifact == modLoaderArtifactShim, nil
 		},
@@ -153,11 +153,11 @@ func TestDetectNeoForgeInstallRejectsShimOnly(t *testing.T) {
 }
 
 func assertNeoForgeRuntime(
-t *testing.T,
-runtime *types.RuntimeInfo,
-primary string,
-gameVersion string,
-loaderVersion string,
+	t *testing.T,
+	runtime *ExecutableEvidence,
+	primary string,
+	gameVersion string,
+	loaderVersion string,
 ) {
 	t.Helper()
 
@@ -177,14 +177,21 @@ loaderVersion string,
 			wantGameVersion,
 		)
 	}
-	if got := runtime.DerivedModLoader(); got != types.PlatformNeoforge {
+	if runtime.Topology == nil {
+		t.Fatalf("expected topology on NeoForge runtime evidence")
+	}
+	primaryNode, ok := runtime.Topology.PrimaryNodeData()
+	if !ok {
+		t.Fatalf("expected primary topology node on NeoForge runtime evidence")
+	}
+	if got := types.DeclaredModdingPlatformForNode(primaryNode.ID); got != types.PlatformNeoforge {
 		t.Fatalf(
 			"derived mod loader mismatch: got %s want %s",
 			got,
 			types.PlatformNeoforge,
 		)
 	}
-	if got := runtime.DerivedLoaderVersion(); got != loaderVersion {
+	if got := runtimeIdentityVersion(runtime, types.PlatformNeoforge, "neoforge"); got != loaderVersion {
 		t.Fatalf(
 			"neoforge version mismatch: got %q want %q",
 			got,
@@ -194,10 +201,10 @@ loaderVersion string,
 }
 
 func stubNeoforgeArtifactHashLookup(
-fn func(version string, artifact modLoaderArtifactKind, filePath string) (
-bool,
-error,
-),
+	fn func(version string, artifact modLoaderArtifactKind, filePath string) (
+		bool,
+		error,
+	),
 ) func() {
 	stubMu.Lock()
 	original := neoforgeArtifactHashLookup

@@ -20,28 +20,28 @@ import "github.com/mclucy/lucy/types"
 //     outside this file.
 type Provider interface {
 	Search(query string, options types.SearchOptions) (
-	res RawSearchResults,
-	err error,
+		res RawSearchResults,
+		err error,
 	)
 	Fetch(id types.PackageId) (
-	remote RawPackageRemote,
-	err error,
+		remote RawPackageRemote,
+		err error,
 	)
 	Metadata(name types.PackageName) (
-	info RawProjectInformation,
-	err error,
+		info RawProjectInformation,
+		err error,
 	)
 	Dependencies(id types.PackageId) (
-	deps RawPackageDependencies,
-	err error,
+		deps RawPackageDependencies,
+		err error,
 	)
 	Support(name types.PackageName) (
-	supports RawProjectSupport,
-	err error,
+		supports RawProjectSupport,
+		err error,
 	)
 	ParseAmbiguousId(id types.PackageId) (
-	parsed types.PackageId,
-	err error,
+		parsed types.PackageId,
+		err error,
 	)
 	// Source returns the semantic source identity represented by this provider.
 	Source() types.Source

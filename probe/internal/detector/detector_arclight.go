@@ -26,9 +26,9 @@ func (d *arclightServerDetector) Name() string {
 // - https://arclight.izzel.io/
 // - https://deepwiki.com/IzzelAliz/Arclight/1-overview
 func (d *arclightServerDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
 	if err != nil {
@@ -104,8 +104,8 @@ type arclightManifestSignals struct {
 
 func (s arclightManifestSignals) valid() bool {
 	return s.mainClass == "io.izzel.arclight.server.Launcher" &&
-	s.implementation == "Arclight" &&
-	s.mixinConnector == "io.izzel.arclight.common.mod.ArclightConnector"
+		s.implementation == "Arclight" &&
+		s.mixinConnector == "io.izzel.arclight.common.mod.ArclightConnector"
 }
 
 func parseArclightManifest(data []byte) arclightManifestSignals {

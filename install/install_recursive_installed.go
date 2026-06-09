@@ -31,7 +31,7 @@ func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
 				ConstraintInput: ConstraintInput{
 					Requester: requester,
 					Dependency: types.Dependency{
-						Id: pkg.Id,
+						Id:        pkg.Id,
 						Mandatory: true,
 					},
 				},
@@ -115,8 +115,8 @@ func runtimeLoaderAliasName(platform types.Platform) types.PackageName {
 // package with the same platform and name as the requested ID, returning all
 // matches. Results are informational only; the solver must not auto-select them.
 func FindCompatibleInstalled(
-tx *RecursiveTransaction,
-id types.PackageId,
+	tx *RecursiveTransaction,
+	id types.PackageId,
 ) []types.Package {
 	var matches []types.Package
 	for _, ic := range tx.InstalledConstraints {

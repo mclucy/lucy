@@ -3,8 +3,8 @@ package cmd
 import (
 	"sort"
 
+	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/state"
-	"github.com/mclucy/lucy/types"
 )
 
 // GraphNode represents a single package in the dependency graph.
@@ -89,7 +89,7 @@ func BuildGraphFromLock(lock state.Lock) (*DependencyGraph, error) {
 // Root nodes are identified as packages that are not listed as a dependency of
 // any other package. Parent-child relationships are established via each package's
 // Dependencies field.
-func BuildGraphFromProbe(info types.ServerInfo) (*DependencyGraph, error) {
+func BuildGraphFromProbe(info probe.Workspace) (*DependencyGraph, error) {
 	graph := &DependencyGraph{
 		Nodes: make(map[string]*GraphNode),
 	}
@@ -155,9 +155,11 @@ func (g *DependencyGraph) GetLeaves() []*GraphNode {
 		}
 	}
 
-	sort.Slice(leaves, func(i, j int) bool {
-		return leaves[i].ID < leaves[j].ID
-	})
+	sort.Slice(
+		leaves, func(i, j int) bool {
+			return leaves[i].ID < leaves[j].ID
+		},
+	)
 
 	return leaves
 }

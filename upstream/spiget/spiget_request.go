@@ -41,8 +41,8 @@ func requestJSON(requestURL string, out any, notFound error) error {
 }
 
 func searchResources(query string, options types.SearchOptions) (
-searchResponse,
-error,
+	searchResponse,
+	error,
 ) {
 	u := searchResourcesURL(query, options)
 	resp := searchResponse{}

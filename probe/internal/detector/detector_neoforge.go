@@ -26,9 +26,9 @@ func (d *neoforgeServerDetector) Name() string {
 }
 
 func (d *neoforgeServerDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	neoforgeLoaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
@@ -140,8 +140,8 @@ func (d *neoforgeModDetector) Name() string {
 }
 
 func (d *neoforgeModDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	// Read jarjar metadata once; used for both embedded modId set and dep list.
 	jarjarMeta := readJarjarMeta(zipReader)
@@ -300,8 +300,8 @@ func readJarjarMeta(zipReader *zip.Reader) *externaltype.FileNeoforgeJarjar {
 // This is how the NeoForge mod loader itself resolves which modId a JarInJar
 // entry satisfies: it reads the embedded JAR's mods.toml, not the artifact name.
 func jarjarEmbeddedModIds(
-zipReader *zip.Reader,
-meta *externaltype.FileNeoforgeJarjar,
+	zipReader *zip.Reader,
+	meta *externaltype.FileNeoforgeJarjar,
 ) map[string]bool {
 	if meta == nil {
 		return nil

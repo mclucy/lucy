@@ -112,8 +112,8 @@ func (r resourceResponse) ToProjectSupport() types.PlatformSupport {
 // NewResolvedVersion preserves both Lucy-facing human versions and Spiget's
 // numeric resource/version identifiers for later exact download resolution.
 func NewResolvedVersion(
-resource resourceResponse,
-version versionResponse,
+	resource resourceResponse,
+	version versionResponse,
 ) resolvedVersion {
 	return resolvedVersion{
 		ResourceID:  resource.ID,

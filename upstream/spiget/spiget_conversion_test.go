@@ -276,11 +276,11 @@ func TestResolvedVersionLatestFallbackPolicy(t *testing.T) {
 }
 
 func assertHasURL(
-t *testing.T,
-urls []types.Url,
-name string,
-kind types.UrlType,
-value string,
+	t *testing.T,
+	urls []types.Url,
+	name string,
+	kind types.UrlType,
+	value string,
 ) {
 	t.Helper()
 	for _, url := range urls {

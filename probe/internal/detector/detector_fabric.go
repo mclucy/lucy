@@ -27,9 +27,9 @@ func (d *fabricServerSingleFileDetector) Name() string {
 }
 
 func (d *fabricServerSingleFileDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (exec *ExecutableEvidence, err error) {
 	loaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
@@ -110,9 +110,9 @@ func (d *fabricServerLauncherDetector) Name() string {
 }
 
 func (d *fabricServerLauncherDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (exec *ExecutableEvidence, err error) {
 	var valid bool
 	for _, f := range zipReader.File {
@@ -238,8 +238,8 @@ func (d *fabricModDetector) Name() string {
 }
 
 func (d *fabricModDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (packages []types.Package, err error) {
 	var wg sync.WaitGroup
 	for _, f := range zipReader.File {

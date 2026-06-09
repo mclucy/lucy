@@ -212,12 +212,3 @@ func McdrPlugin(filePath string) (res []types.Package) {
 
 	return
 }
-
-// Environment checks for environment indicators (like MCDR)
-func Environment(dir string) (env types.EnvironmentInfo) {
-	detectors := getEnvironmentDetectors()
-	for _, detector := range detectors {
-		detector.Detect(dir, &env)
-	}
-	return
-}

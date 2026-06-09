@@ -98,11 +98,11 @@ func printTree(node *GraphNode, depth int, isLast bool, prefix string, visited m
 }
 
 type treeNode struct {
-	ID       string     `json:"id"`
-	Version  string     `json:"version"`
-	Source   string     `json:"source,omitempty"`
-	Optional bool       `json:"optional,omitempty"`
-	Embedded bool       `json:"embedded,omitempty"`
+	ID       string      `json:"id"`
+	Version  string      `json:"version"`
+	Source   string      `json:"source,omitempty"`
+	Optional bool        `json:"optional,omitempty"`
+	Embedded bool        `json:"embedded,omitempty"`
 	Children []*treeNode `json:"children,omitempty"`
 }
 

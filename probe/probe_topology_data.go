@@ -7,66 +7,41 @@ import "github.com/mclucy/lucy/types"
 // not contain probe/evidence parsing logic, detection heuristics, or status
 // rendering strings.
 
-const (
-	RuntimeNodeMinecraft        = types.RuntimeNodeMinecraft
-	RuntimeNodeFabric           = types.RuntimeNodeFabric
-	RuntimeNodeForge            = types.RuntimeNodeForge
-	RuntimeNodeNeoforge         = types.RuntimeNodeNeoforge
-	RuntimeNodeMCDR             = types.RuntimeNodeMCDR
-	RuntimeNodePaper            = types.RuntimeNodePaper
-	RuntimeNodeSpigot           = types.RuntimeNodeSpigot
-	RuntimeNodePaperFork        = types.RuntimeNodePaperFork
-	RuntimeNodeCraftBukkit      = types.RuntimeNodeCraftBukkit
-	RuntimeNodeBukkit           = types.RuntimeNodeBukkit
-	RuntimeNodeFolia            = types.RuntimeNodeFolia
-	RuntimeNodeLeaves           = types.RuntimeNodeLeaves
-	RuntimeNodeSponge           = types.RuntimeNodeSponge
-	RuntimeNodeArclight         = types.RuntimeNodeArclight
-	RuntimeNodeYouer            = types.RuntimeNodeYouer
-	RuntimeNodeVelocity         = types.RuntimeNodeVelocity
-	RuntimeNodeBungeecord       = types.RuntimeNodeBungeecord
-	RuntimeNodeWaterfall        = types.RuntimeNodeWaterfall
-	RuntimeNodeGeyser           = types.RuntimeNodeGeyser
-	RuntimeNodeGeyserStandalone = types.RuntimeNodeGeyserStandalone
-	RuntimeNodeConnector        = types.RuntimeNodeConnector
-	RuntimeNodeKilt             = types.RuntimeNodeKilt
-)
-
 var defaultRegistryEntries = []RegistryEntry{
 	{
-		NodeID: RuntimeNodeMinecraft,
+		NodeID: types.RuntimeNodeMinecraft,
 		Role:   types.RuntimeRoleVanilla,
 	},
 	{
-		NodeID: RuntimeNodeFabric,
+		NodeID: types.RuntimeNodeFabric,
 		Role:   types.RuntimeRoleModLoader,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityFabricMods,
 		},
 	},
 	{
-		NodeID: RuntimeNodeForge,
+		NodeID: types.RuntimeNodeForge,
 		Role:   types.RuntimeRoleModLoader,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityForgeMods,
 		},
 	},
 	{
-		NodeID: RuntimeNodeNeoforge,
+		NodeID: types.RuntimeNodeNeoforge,
 		Role:   types.RuntimeRoleModLoader,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityNeoforgeMods,
 		},
 	},
 	{
-		NodeID: RuntimeNodeMCDR,
+		NodeID: types.RuntimeNodeMCDR,
 		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityMCDRPlugins,
 		},
 	},
 	{
-		NodeID: RuntimeNodePaper,
+		NodeID: types.RuntimeNodePaper,
 		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
@@ -75,13 +50,13 @@ var defaultRegistryEntries = []RegistryEntry{
 		// the node's own semantics.
 		PolicyEdges: []RegistryEdge{
 			{
-				TargetNodeID: RuntimeNodeMinecraft,
+				TargetNodeID: types.RuntimeNodeMinecraft,
 				Kind:         types.EdgeModifies,
 			},
 		},
 	},
 	{
-		NodeID: RuntimeNodePaperFork,
+		NodeID: types.RuntimeNodePaperFork,
 		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
@@ -91,13 +66,13 @@ var defaultRegistryEntries = []RegistryEntry{
 		// Surface only the detectable fork relationship back to Paper.
 		PolicyEdges: []RegistryEdge{
 			{
-				TargetNodeID: RuntimeNodePaper,
+				TargetNodeID: types.RuntimeNodePaper,
 				Kind:         types.EdgeImplements,
 			},
 		},
 	},
 	{
-		NodeID: RuntimeNodeSpigot,
+		NodeID: types.RuntimeNodeSpigot,
 		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
@@ -106,13 +81,13 @@ var defaultRegistryEntries = []RegistryEntry{
 		// CraftBukkit lineage chain into separate runtime facts.
 		PolicyEdges: []RegistryEdge{
 			{
-				TargetNodeID: RuntimeNodeMinecraft,
+				TargetNodeID: types.RuntimeNodeMinecraft,
 				Kind:         types.EdgeModifies,
 			},
 		},
 	},
 	{
-		NodeID: RuntimeNodeCraftBukkit,
+		NodeID: types.RuntimeNodeCraftBukkit,
 		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
@@ -120,50 +95,50 @@ var defaultRegistryEntries = []RegistryEntry{
 		// CraftBukkit is still a concrete implementation identity, so it anchors back
 		// to vanilla without reviving intermediate lineage edges.
 		PolicyEdges: []RegistryEdge{{
-			TargetNodeID: RuntimeNodeMinecraft,
+			TargetNodeID: types.RuntimeNodeMinecraft,
 			Kind:         types.EdgeModifies,
 		}},
 	},
 	{
-		NodeID: RuntimeNodeBukkit,
+		NodeID: types.RuntimeNodeBukkit,
 		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
 	},
 	{
-		NodeID:    RuntimeNodeFolia,
+		NodeID:    types.RuntimeNodeFolia,
 		Role:      types.RuntimeRolePluginCore,
 		RiskLevel: types.RiskMedium,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
 		PolicyEdges: []RegistryEdge{{
-			TargetNodeID: RuntimeNodePaper,
+			TargetNodeID: types.RuntimeNodePaper,
 			Kind:         types.EdgeImplements,
 		}},
 	},
 	{
-		NodeID:    RuntimeNodeLeaves,
+		NodeID:    types.RuntimeNodeLeaves,
 		Role:      types.RuntimeRolePluginCore,
 		RiskLevel: types.RiskNone,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityBukkitPlugins,
 		},
 		PolicyEdges: []RegistryEdge{{
-			TargetNodeID: RuntimeNodePaper,
+			TargetNodeID: types.RuntimeNodePaper,
 			Kind:         types.EdgeImplements,
 		}},
 	},
 	{
-		NodeID: RuntimeNodeSponge,
+		NodeID: types.RuntimeNodeSponge,
 		Role:   types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilitySpongePlugins,
 		},
 	},
 	{
-		NodeID: RuntimeNodeArclight,
+		NodeID: types.RuntimeNodeArclight,
 		Role:   types.RuntimeRoleHybrid,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityForgeMods,
@@ -171,7 +146,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: RuntimeNodeYouer,
+		NodeID: types.RuntimeNodeYouer,
 		Role:   types.RuntimeRoleHybrid,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityNeoforgeMods,
@@ -179,7 +154,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: RuntimeNodeVelocity,
+		NodeID: types.RuntimeNodeVelocity,
 		Role:   types.RuntimeRoleProxy,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
@@ -187,7 +162,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: RuntimeNodeBungeecord,
+		NodeID: types.RuntimeNodeBungeecord,
 		Role:   types.RuntimeRoleProxy,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
@@ -195,7 +170,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: RuntimeNodeWaterfall,
+		NodeID: types.RuntimeNodeWaterfall,
 		Role:   types.RuntimeRoleProxy,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
@@ -203,7 +178,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: RuntimeNodeGeyserStandalone,
+		NodeID: types.RuntimeNodeGeyserStandalone,
 		Role:   types.RuntimeRoleProxy,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProxying,
@@ -211,19 +186,19 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: RuntimeNodeGeyser,
+		NodeID: types.RuntimeNodeGeyser,
 		Role:   types.RuntimeRoleProtocolBridge,
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityProtocolBridge,
 		},
 	},
 	{
-		NodeID:    RuntimeNodeConnector,
+		NodeID:    types.RuntimeNodeConnector,
 		Role:      types.RuntimeRoleBridge,
 		RiskLevel: types.RiskHigh,
 	},
 	{
-		NodeID:    RuntimeNodeKilt,
+		NodeID:    types.RuntimeNodeKilt,
 		Role:      types.RuntimeRoleBridge,
 		RiskLevel: types.RiskHigh,
 	},

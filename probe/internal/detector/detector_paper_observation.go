@@ -50,8 +50,8 @@ type paperObservationSource interface {
 }
 
 func extractPaperObservations(
-filePath string,
-zipReader *zip.Reader,
+	filePath string,
+	zipReader *zip.Reader,
 ) (paperObservations, error) {
 	obs := paperObservations{
 		patchProperties: make(map[string]string),
@@ -173,8 +173,8 @@ zipReader *zip.Reader,
 }
 
 func newPaperObservationSource(
-filePath string,
-zipReader *zip.Reader,
+	filePath string,
+	zipReader *zip.Reader,
 ) (paperObservationSource, error) {
 	if zipReader != nil {
 		return paperObservationZipSource{reader: zipReader}, nil

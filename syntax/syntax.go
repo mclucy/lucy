@@ -57,8 +57,8 @@ var (
 )
 
 func ParsePackageRequest(s string, bareSource string, optional bool) (
-req types.PackageRequest,
-err error,
+	req types.PackageRequest,
+	err error,
 ) {
 	s = sanitize(s)
 	req = types.PackageRequest{}
@@ -127,10 +127,10 @@ func Parse(s string) (id types.PackageId, err error) {
 // parseOperatorAt is called first since '@' operator always occur after '/' (equivalent
 // to a lower priority).
 func parseOperatorAt(s string) (
-pl types.Platform,
-n types.PackageName,
-v types.BareVersion,
-err error,
+	pl types.Platform,
+	n types.PackageName,
+	v types.BareVersion,
+	err error,
 ) {
 	split := strings.Split(s, "@")
 
@@ -154,9 +154,9 @@ err error,
 }
 
 func parseOperatorSlash(s string) (
-pl types.Platform,
-n types.PackageName,
-err error,
+	pl types.Platform,
+	n types.PackageName,
+	err error,
 ) {
 	split := strings.Split(s, "/")
 

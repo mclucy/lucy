@@ -38,10 +38,10 @@ func ReconcileTransaction(tx *RecursiveTransaction) (ReconcileDiff, error) {
 }
 
 func reconcileDiffKernel(
-roots []types.PackageId,
-installed []InstalledConstraint,
-candidateGraph map[string]CandidateNode,
-verifiedGraph map[string]CandidateNode,
+	roots []types.PackageId,
+	installed []InstalledConstraint,
+	candidateGraph map[string]CandidateNode,
+	verifiedGraph map[string]CandidateNode,
 ) (ReconcileDiff, error) {
 	baseInputs, err := reconcileConstraintInputs(
 		roots,
@@ -70,8 +70,8 @@ verifiedGraph map[string]CandidateNode,
 }
 
 func reconcileDiff(
-candidateGraph map[string]CandidateNode,
-verifiedGraph map[string]CandidateNode,
+	candidateGraph map[string]CandidateNode,
+	verifiedGraph map[string]CandidateNode,
 ) (ReconcileDiff, error) {
 	missing := make(map[string]types.PackageId)
 	tightened := make(map[string]ConstraintInput)
@@ -169,8 +169,8 @@ verifiedGraph map[string]CandidateNode,
 }
 
 func reconcileValidateTightenedDiff(
-baseInputs []ConstraintInput,
-diff ReconcileDiff,
+	baseInputs []ConstraintInput,
+	diff ReconcileDiff,
 ) error {
 	if len(diff.Tightened) == 0 {
 		return nil
@@ -186,10 +186,10 @@ diff ReconcileDiff,
 }
 
 func reconcileConstraintInputs(
-roots []types.PackageId,
-installed []InstalledConstraint,
-candidateGraph map[string]CandidateNode,
-verifiedGraph map[string]CandidateNode,
+	roots []types.PackageId,
+	installed []InstalledConstraint,
+	candidateGraph map[string]CandidateNode,
+	verifiedGraph map[string]CandidateNode,
 ) ([]ConstraintInput, error) {
 	inputs := make([]ConstraintInput, 0)
 
@@ -260,8 +260,8 @@ verifiedGraph map[string]CandidateNode,
 }
 
 func reconcileDependencyMap(
-requester string,
-deps *types.PackageDependencies,
+	requester string,
+	deps *types.PackageDependencies,
 ) (map[string]types.Dependency, error) {
 	if deps == nil || len(deps.Value) == 0 {
 		return map[string]types.Dependency{}, nil
@@ -302,8 +302,8 @@ deps *types.PackageDependencies,
 }
 
 func reconcileReachableCandidateClosure(
-candidateGraph map[string]CandidateNode,
-verifiedGraph map[string]CandidateNode,
+	candidateGraph map[string]CandidateNode,
+	verifiedGraph map[string]CandidateNode,
 ) (map[string]struct{}, error) {
 	reachable := make(map[string]struct{}, len(verifiedGraph))
 	queue := make([]string, 0, len(verifiedGraph))

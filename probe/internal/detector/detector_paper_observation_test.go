@@ -355,9 +355,9 @@ func assertPaperFixtureObservations(t *testing.T, obs paperObservations) {
 }
 
 func extractFixtureObservations(
-t *testing.T,
-brand string,
-parts ...string,
+	t *testing.T,
+	brand string,
+	parts ...string,
 ) paperObservations {
 	t.Helper()
 
@@ -390,9 +390,9 @@ func paperFamilyFixtureRoot(t *testing.T) string {
 }
 
 func paperFamilyFixturePath(
-t *testing.T,
-brand string,
-parts ...string,
+	t *testing.T,
+	brand string,
+	parts ...string,
 ) string {
 	t.Helper()
 	segments := append([]string{paperFamilyFixtureRoot(t), brand}, parts...)

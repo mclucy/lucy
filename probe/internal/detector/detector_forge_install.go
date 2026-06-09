@@ -20,9 +20,9 @@ const forgeMavenArtifactBaseURL = "https://maven.minecraftforge.net/net/minecraf
 type forgeArtifactKind string
 
 const (
-	forgeArtifactServer forgeArtifactKind    = "server"
+	forgeArtifactServer    forgeArtifactKind = "server"
 	forgeArtifactUniversal forgeArtifactKind = "universal"
-	forgeArtifactShim forgeArtifactKind      = "shim"
+	forgeArtifactShim      forgeArtifactKind = "shim"
 )
 
 var forgeArtifactHashLookup = lookupForgeArtifactHash
@@ -61,8 +61,8 @@ func ForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 }
 
 func detectForgeInstallFromVersionDir(versionDir string) (
-*ExecutableEvidence,
-error,
+	*ExecutableEvidence,
+	error,
 ) {
 	version := filepath.Base(versionDir)
 	match := forgeRuntimeVersionDirPattern.FindStringSubmatch(version)
@@ -78,15 +78,15 @@ error,
 	}{
 		{
 			forgeArtifactServer, filepath.Join(
-			versionDir,
-			fmt.Sprintf("forge-%s-server.jar", version),
-		),
+				versionDir,
+				fmt.Sprintf("forge-%s-server.jar", version),
+			),
 		},
 		{
 			forgeArtifactUniversal, filepath.Join(
-			versionDir,
-			fmt.Sprintf("forge-%s-universal.jar", version),
-		),
+				versionDir,
+				fmt.Sprintf("forge-%s-universal.jar", version),
+			),
 		},
 		{
 			forgeArtifactShim,
@@ -139,10 +139,10 @@ error,
 }
 
 func verifyForgeArtifactByUnpack(
-jarPath string,
-kind forgeArtifactKind,
-gameVersion types.BareVersion,
-forgeVersion types.BareVersion,
+	jarPath string,
+	kind forgeArtifactKind,
+	gameVersion types.BareVersion,
+	forgeVersion types.BareVersion,
 ) (bool, error) {
 	file, err := os.Open(jarPath)
 	if err != nil {
@@ -216,9 +216,9 @@ func verifyForgeShimJar(jarPath string) (bool, error) {
 }
 
 func lookupForgeArtifactHash(
-version string,
-artifact forgeArtifactKind,
-filePath string,
+	version string,
+	artifact forgeArtifactKind,
+	filePath string,
 ) (bool, error) {
 	sha1URL := fmt.Sprintf(
 		"%s/%s/%s.sha1",
@@ -244,9 +244,9 @@ filePath string,
 }
 
 func verifyForgeArtifactHash(
-filePath string,
-checksumURL string,
-algo cache.HashAlgorithm,
+	filePath string,
+	checksumURL string,
+	algo cache.HashAlgorithm,
 ) (bool, error) {
 	data, err := util.CachedGetBytes(
 		checksumURL,
@@ -267,8 +267,8 @@ algo cache.HashAlgorithm,
 }
 
 func hashForgeArtifact(filePath string, algo cache.HashAlgorithm) (
-string,
-error,
+	string,
+	error,
 ) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {

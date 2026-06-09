@@ -3,12 +3,12 @@ package modrinth
 import "github.com/mclucy/lucy/types"
 
 func selectExactVersion(
-versions []*versionResponse,
-id types.PackageId,
+	versions []*versionResponse,
+	id types.PackageId,
 ) *versionResponse {
 	for _, version := range versions {
 		if types.BareVersion(version.VersionNumber) == id.Version &&
-		versionSupportsLoader(version, id.Platform) {
+			versionSupportsLoader(version, id.Platform) {
 			return version
 		}
 	}
@@ -16,23 +16,23 @@ id types.PackageId,
 }
 
 func selectLatestVersionCandidate(
-versions []*versionResponse,
-platform types.Platform,
+	versions []*versionResponse,
+	platform types.Platform,
 ) (*versionResponse, bool) {
 	return selectLatestVersionByLoader(versions, platform, false)
 }
 
 func selectLatestCompatibleVersionCandidate(
-versions []*versionResponse,
-platform types.Platform,
+	versions []*versionResponse,
+	platform types.Platform,
 ) (*versionResponse, bool) {
 	return selectLatestVersionByLoader(versions, platform, true)
 }
 
 func selectLatestVersionByLoader(
-versions []*versionResponse,
-platform types.Platform,
-filterByLoader bool,
+	versions []*versionResponse,
+	platform types.Platform,
+	filterByLoader bool,
 ) (*versionResponse, bool) {
 	selected := latestReleaseVersion(versions, platform, filterByLoader)
 	if selected != nil {
@@ -42,9 +42,9 @@ filterByLoader bool,
 }
 
 func latestReleaseVersion(
-versions []*versionResponse,
-platform types.Platform,
-filterByLoader bool,
+	versions []*versionResponse,
+	platform types.Platform,
+	filterByLoader bool,
 ) *versionResponse {
 	var selected *versionResponse
 	for _, version := range versions {
@@ -52,7 +52,7 @@ filterByLoader bool,
 			continue
 		}
 		if version.VersionType == "release" &&
-		(selected == nil || version.DatePublished.After(selected.DatePublished)) {
+			(selected == nil || version.DatePublished.After(selected.DatePublished)) {
 			selected = version
 		}
 	}
@@ -60,9 +60,9 @@ filterByLoader bool,
 }
 
 func latestAnyVersion(
-versions []*versionResponse,
-platform types.Platform,
-filterByLoader bool,
+	versions []*versionResponse,
+	platform types.Platform,
+	filterByLoader bool,
 ) *versionResponse {
 	var selected *versionResponse
 	for _, version := range versions {

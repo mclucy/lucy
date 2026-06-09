@@ -129,8 +129,8 @@ func parseMcdrSemverCriterion(raw string) ([]types.VersionSubExpr, bool) {
 }
 
 func parseSemverRange(
-raw string,
-options semverRangeOptions,
+	raw string,
+	options semverRangeOptions,
 ) types.VersionExpr {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardToken(raw) {
@@ -204,8 +204,8 @@ func parseSemverHyphenRange(raw string) []types.VersionSubExpr {
 }
 
 func parseSemverToken(
-raw string,
-options semverRangeOptions,
+	raw string,
+	options semverRangeOptions,
 ) ([]types.VersionSubExpr, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardToken(raw) {
@@ -254,9 +254,9 @@ options semverRangeOptions,
 }
 
 func parseSemverOperator(
-op string,
-versionToken string,
-options semverRangeOptions,
+	op string,
+	versionToken string,
+	options semverRangeOptions,
 ) ([]types.VersionSubExpr, bool) {
 	if strings.ContainsAny(versionToken, "xX*") {
 		switch op {
@@ -334,8 +334,8 @@ options semverRangeOptions,
 }
 
 func parseCaretRangeFromSemver(
-lower types.ResolvableVersion,
-mode caretMode,
+	lower types.ResolvableVersion,
+	mode caretMode,
 ) []types.VersionSubExpr {
 	sv, ok := lower.(*SemverVersion)
 	if !ok {
@@ -370,8 +370,8 @@ mode caretMode,
 }
 
 func parseTildeRangeFromSemver(
-lower types.ResolvableVersion,
-raw string,
+	lower types.ResolvableVersion,
+	raw string,
 ) []types.VersionSubExpr {
 	sv, ok := lower.(*SemverVersion)
 	if !ok {

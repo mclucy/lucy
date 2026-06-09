@@ -13,7 +13,7 @@ import (
 // parseFabricVersionRanges parses a Fabric VersionRange value where each item
 // in the outer slice is an OR alternative.
 func parseFabricVersionRanges(
-ranges tools.SingleOrSlice[string],
+	ranges tools.SingleOrSlice[string],
 ) types.VersionExpr {
 	return dependency.ParseRanges(
 		[]string(ranges),
@@ -23,8 +23,8 @@ ranges tools.SingleOrSlice[string],
 }
 
 func translateFabricMod(
-modInfo *externaltype.FileFabricModIdentifier,
-localPath string,
+	modInfo *externaltype.FileFabricModIdentifier,
+	localPath string,
 ) types.Package {
 	pkg := types.Package{
 		Id: types.PackageId{
@@ -103,10 +103,10 @@ localPath string,
 }
 
 func translateFabricDependencyMap(
-deps map[string]tools.SingleOrSlice[string],
-mandatory bool,
-inverse bool,
-embeddedNames map[string]struct{},
+	deps map[string]tools.SingleOrSlice[string],
+	mandatory bool,
+	inverse bool,
+	embeddedNames map[string]struct{},
 ) []types.Dependency {
 	translated := make([]types.Dependency, 0, len(deps))
 	for k, v := range deps {

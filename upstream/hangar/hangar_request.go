@@ -60,8 +60,8 @@ func getProjectByPath(path string) (*hangarProject, error) {
 }
 
 func searchProjects(
-query string,
-options types.SearchOptions,
+	query string,
+	options types.SearchOptions,
 ) (*projectSearchResponse, error) {
 	params := url.Values{}
 	if query != "" {

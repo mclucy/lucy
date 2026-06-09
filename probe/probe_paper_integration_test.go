@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/mclucy/lucy/types"
 )
 
 func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T) {
@@ -42,8 +44,8 @@ func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T
 	if observed.Runtime.Topology == nil {
 		t.Fatalf("expected runtime topology for paper fixture")
 	}
-	if got := observed.Runtime.Topology.PrimaryNode; got != RuntimeNodePaper {
-		t.Fatalf("expected primary runtime node %q, got %q", RuntimeNodePaper, got)
+	if got := observed.Runtime.Topology.PrimaryNode; got != types.RuntimeNodePaper {
+		t.Fatalf("expected primary runtime node %q, got %q", types.RuntimeNodePaper, got)
 	}
 }
 
@@ -81,7 +83,7 @@ func TestPaperDetectorIntegration_ContradictoryEvidenceDoesNotProducePaperRuntim
 		t.Fatalf("expected runtime topology for contradiction fixture")
 	}
 
-	if got := observed.Runtime.Topology.PrimaryNode; got == RuntimeNodePaper || got == RuntimeNodePaperFork {
+	if got := observed.Runtime.Topology.PrimaryNode; got == types.RuntimeNodePaper || got == types.RuntimeNodePaperFork {
 		t.Fatalf("expected contradiction to avoid paper lineage, got primary node %q", got)
 	}
 

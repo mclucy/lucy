@@ -16,15 +16,15 @@ func (provider) Source() types.Source {
 }
 
 func (provider) Search(
-query string,
-options types.SearchOptions,
+	query string,
+	options types.SearchOptions,
 ) (res upstream.RawSearchResults, err error) {
 	return searchProjects(query, options)
 }
 
 func (p provider) Fetch(id types.PackageId) (
-remote upstream.RawPackageRemote,
-err error,
+	remote upstream.RawPackageRemote,
+	err error,
 ) {
 	version, err := getVersion(id)
 	if err != nil {
@@ -42,22 +42,22 @@ err error,
 }
 
 func (p provider) Metadata(name types.PackageName) (
-info upstream.RawProjectInformation,
-err error,
+	info upstream.RawProjectInformation,
+	err error,
 ) {
 	return getProject(name)
 }
 
 func (p provider) Support(name types.PackageName) (
-supports upstream.RawProjectSupport,
-err error,
+	supports upstream.RawProjectSupport,
+	err error,
 ) {
 	return getProject(name)
 }
 
 func (p provider) Dependencies(id types.PackageId) (
-deps upstream.RawPackageDependencies,
-err error,
+	deps upstream.RawPackageDependencies,
+	err error,
 ) {
 	version, err := getVersion(id)
 	if err != nil {
@@ -67,8 +67,8 @@ err error,
 }
 
 func (p provider) ParseAmbiguousId(id types.PackageId) (
-parsed types.PackageId,
-err error,
+	parsed types.PackageId,
+	err error,
 ) {
 	if id.Platform.IsSelector() {
 		id.Platform = types.PlatformNone

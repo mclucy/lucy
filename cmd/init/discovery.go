@@ -138,9 +138,9 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 }
 
 func applyObservedDefaults(
-defaults *DiscoveredDefaults,
-workDir string,
-observed types.ServerInfo,
+	defaults *DiscoveredDefaults,
+	workDir string,
+	observed probe.Workspace,
 ) {
 	if defaults == nil {
 		return
@@ -226,8 +226,8 @@ func runtimeIdentityPackage(platform string) string {
 }
 
 func discoverObservedLoaderVersion(
-workDir string,
-platform types.Platform,
+	workDir string,
+	platform types.Platform,
 ) string {
 	entries, err := os.ReadDir(workDir)
 	if err != nil {
@@ -476,7 +476,7 @@ func detectArchivePackages(path string) []string {
 				packages,
 				types.PackageId{
 					Platform: types.PlatformFabric,
-					Name: types.PackageName(strings.TrimSpace(mod.Id)),
+					Name:     types.PackageName(strings.TrimSpace(mod.Id)),
 				}.StringPlatformName(),
 			)
 		}
@@ -496,7 +496,7 @@ func detectArchivePackages(path string) []string {
 					packages,
 					types.PackageId{
 						Platform: types.PlatformNeoforge,
-						Name: types.PackageName(strings.TrimSpace(item.ModID)),
+						Name:     types.PackageName(strings.TrimSpace(item.ModID)),
 					}.StringPlatformName(),
 				)
 			}
@@ -517,7 +517,7 @@ func detectArchivePackages(path string) []string {
 					packages,
 					types.PackageId{
 						Platform: types.PlatformForge,
-						Name: types.PackageName(strings.TrimSpace(item.ModID)),
+						Name:     types.PackageName(strings.TrimSpace(item.ModID)),
 					}.StringPlatformName(),
 				)
 			}
@@ -535,7 +535,7 @@ func detectArchivePackages(path string) []string {
 					packages,
 					types.PackageId{
 						Platform: types.PlatformForge,
-						Name: types.PackageName(strings.TrimSpace(item.ModId)),
+						Name:     types.PackageName(strings.TrimSpace(item.ModId)),
 					}.StringPlatformName(),
 				)
 			}
@@ -555,7 +555,7 @@ func detectArchivePackages(path string) []string {
 				packages,
 				types.PackageId{
 					Platform: types.PlatformMCDR,
-					Name: types.PackageName(strings.TrimSpace(plugin.Id)),
+					Name:     types.PackageName(strings.TrimSpace(plugin.Id)),
 				}.StringPlatformName(),
 			)
 		}

@@ -27,7 +27,7 @@ func TestEvaluateCompatibility_UnresolvedTopology(t *testing.T) {
 }
 
 func TestEvaluateCompatibility_DirectCapabilityMatch(t *testing.T) {
-	fabricEntry, _ := DefaultRegistry.FindEntry(RuntimeNodeFabric)
+	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	topo := BuildTopologyFromEntry(fabricEntry)
 	result := EvaluateCompatibility(topo, types.CapabilityFabricMods)
 	if result.Verdict != types.CompatCompatible {
@@ -39,7 +39,7 @@ func TestEvaluateCompatibility_DirectCapabilityMatch(t *testing.T) {
 }
 
 func TestEvaluateCompatibility_Incompatible(t *testing.T) {
-	fabricEntry, _ := DefaultRegistry.FindEntry(RuntimeNodeFabric)
+	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	topo := BuildTopologyFromEntry(fabricEntry)
 	result := EvaluateCompatibility(topo, types.CapabilityForgeMods)
 	if result.Verdict != types.CompatIncompatible {
@@ -66,7 +66,7 @@ func TestEvaluateCompatibility_IndirectHostedCapabilityIsDegraded(t *testing.T) 
 
 func TestEvaluateCompatibility_HybridNode_MultipleCapabilities(t *testing.T) {
 	// Arclight has both ForgeMods and BukkitPlugins
-	arclightEntry, _ := DefaultRegistry.FindEntry(RuntimeNodeArclight)
+	arclightEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeArclight)
 	topo := BuildTopologyFromEntry(arclightEntry)
 
 	forgeResult := EvaluateCompatibility(topo, types.CapabilityForgeMods)

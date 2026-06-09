@@ -62,9 +62,9 @@ func aggregateBukkitFamilyPackages(pkgs []types.Package) []types.Package {
 }
 
 func mergeBukkitFamilySupport(
-pkgs []types.Package,
-indexes []int,
-fallback types.Platform,
+	pkgs []types.Package,
+	indexes []int,
+	fallback types.Platform,
 ) *types.PlatformSupport {
 	platforms := make([]types.Platform, 0, len(indexes)*2)
 	seen := make(map[types.Platform]struct{}, len(indexes)*2+1)

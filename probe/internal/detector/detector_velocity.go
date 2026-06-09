@@ -52,8 +52,8 @@ func (d *bungeecordDetector) Name() string {
 }
 
 func (d *velocityDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) ([]types.Package, error) {
 	for _, f := range zipReader.File {
 		if f.Name != "velocity-plugin.json" {
@@ -88,8 +88,8 @@ fileHandle *os.File,
 }
 
 func (d *bungeecordDetector) Detect(
-zipReader *zip.Reader,
-fileHandle *os.File,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) ([]types.Package, error) {
 	for _, f := range zipReader.File {
 		if f.Name != "bungee.yml" {
@@ -124,8 +124,8 @@ fileHandle *os.File,
 }
 
 func translateVelocityPlugin(
-descriptor *velocityPluginDescriptor,
-localPath string,
+	descriptor *velocityPluginDescriptor,
+	localPath string,
 ) types.Package {
 	authors := make([]types.Person, 0, len(descriptor.Authors))
 	for _, author := range descriptor.Authors {
@@ -162,8 +162,8 @@ localPath string,
 }
 
 func translateBungeecordPlugin(
-descriptor *bungeecordPluginDescriptor,
-localPath string,
+	descriptor *bungeecordPluginDescriptor,
+	localPath string,
 ) types.Package {
 	authors := make([]types.Person, 0, len(descriptor.Authors)+1)
 	if descriptor.Author != "" {

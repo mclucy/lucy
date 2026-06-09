@@ -17,7 +17,6 @@ import (
 
 	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/probe/internal/detector"
-
 	"gopkg.in/ini.v1"
 
 	"github.com/mclucy/lucy/logger"
@@ -27,7 +26,7 @@ import (
 
 var (
 	serverInfoMu    sync.RWMutex
-	serverInfoCache types.ServerInfo
+	serverInfoCache Workspace
 	serverInfoReady bool
 
 	resetProbeExecCache     = func() {}
@@ -37,7 +36,7 @@ var (
 // ServerInfo is the exposed function for external packages to get serverInfo.
 // The value is cached after the first build, and read access is blocked while
 // Rebuild refreshes the cache.
-func ServerInfo() types.ServerInfo {
+func ServerInfo() Workspace {
 	serverInfoMu.RLock()
 	if serverInfoReady {
 		cached := serverInfoCache
@@ -83,7 +82,7 @@ func InvalidateServerInfo() {
 // current process-global ServerInfo cache. This is intended for init-style
 // takeover discovery where the caller may need rich observed state for a target
 // directory that is not the current process working directory.
-func ServerInfoAt(workDir string) types.ServerInfo {
+func ServerInfoAt(workDir string) Workspace {
 	serverInfoMu.Lock()
 	defer serverInfoMu.Unlock()
 
@@ -95,7 +94,7 @@ func ServerInfoAt(workDir string) types.ServerInfo {
 // future ServerInfo() calls observe the new state. Otherwise it performs an ad
 // hoc reprobe and returns the refreshed observation without mutating the shared
 // cache.
-func RefreshServerInfo(workDir string) types.ServerInfo {
+func RefreshServerInfo(workDir string) Workspace {
 	serverInfoMu.Lock()
 	defer serverInfoMu.Unlock()
 
@@ -119,19 +118,22 @@ func resetProbeMemoizedStateLocked() {
 	resetProbeFileLockCache()
 }
 
-func buildServerInfoAtLocked(workDir string, persistWhenCurrent bool) types.ServerInfo {
+func buildServerInfoAtLocked(
+	workDir string,
+	persistWhenCurrent bool,
+) Workspace {
 	target, err := filepath.Abs(workDir)
 	if err != nil {
-		return types.ServerInfo{}
+		return Workspace{}
 	}
 
 	originalWD, err := os.Getwd()
 	if err != nil {
-		return types.ServerInfo{}
+		return Workspace{}
 	}
 	originalTarget, err := filepath.Abs(originalWD)
 	if err != nil {
-		return types.ServerInfo{}
+		return Workspace{}
 	}
 
 	savedCache := serverInfoCache
@@ -146,7 +148,7 @@ func buildServerInfoAtLocked(workDir string, persistWhenCurrent bool) types.Serv
 	}()
 
 	if err := os.Chdir(target); err != nil {
-		return types.ServerInfo{}
+		return Workspace{}
 	}
 	defer func() {
 		_ = os.Chdir(originalWD)
@@ -180,10 +182,10 @@ func sameProbePath(left, right string) bool {
 // and gathering data from various sources. It uses goroutines to perform these
 // tasks concurrently and a sync.Mutex to ensure thread-safe updates to the
 // serverInfo struct.
-func buildServerInfo() types.ServerInfo {
+func buildServerInfo() Workspace {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var serverInfo types.ServerInfo
+	var serverInfo Workspace
 
 	// Environment stage
 	wg.Add(1)
@@ -201,7 +203,7 @@ func buildServerInfo() types.ServerInfo {
 		defer wg.Done()
 		workPath := workPath()
 		mu.Lock()
-		serverInfo.WorkPath = workPath
+		serverInfo.Root = workPath
 		mu.Unlock()
 	}()
 
@@ -260,7 +262,10 @@ func buildServerInfo() types.ServerInfo {
 	}()
 
 	wg.Wait()
-	serverInfo.Packages = finalizeProbedRuntime(serverInfo.Runtime, serverInfo.Packages)
+	serverInfo.Packages = finalizeProbedRuntime(
+		serverInfo.Runtime,
+		serverInfo.Packages,
+	)
 
 	return serverInfo
 }
@@ -280,10 +285,6 @@ func buildModPaths() (paths []string) {
 
 var modPaths = tools.Memoize(buildModPaths)
 
-func buildEnvironment() types.EnvironmentInfo {
-	return detector.Environment(".")
-}
-
 var getEnvironment = tools.Memoize(buildEnvironment)
 
 func buildWorkPath() string {
@@ -301,7 +302,7 @@ func buildServerProperties() exttype.FileMinecraftServerProperties {
 	propertiesPath := path.Join(workPath(), "server.properties")
 	file, err := ini.Load(propertiesPath)
 	if err != nil {
-		if exec != types.UnknownExecutable {
+		if exec != UnknownExecutable {
 			logger.Info("this server is missing a server.properties")
 		}
 		return nil

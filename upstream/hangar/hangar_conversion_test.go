@@ -352,11 +352,11 @@ func TestVersionListAndPlatformVersionScaffolding(t *testing.T) {
 }
 
 func assertHasHangarURL(
-t *testing.T,
-urls []types.Url,
-name string,
-kind types.UrlType,
-value string,
+	t *testing.T,
+	urls []types.Url,
+	name string,
+	kind types.UrlType,
+	value string,
 ) {
 	t.Helper()
 	if slices.ContainsFunc(

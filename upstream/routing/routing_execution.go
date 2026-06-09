@@ -36,9 +36,9 @@ type InfoResult struct {
 // Default behavior is non-aggregated: each provider contributes one
 // types.SearchResults item in the returned slice.
 func SearchMany(
-providers []upstream.Provider,
-query types.PackageName,
-options types.SearchOptions,
+	providers []upstream.Provider,
+	query types.PackageName,
+	options types.SearchOptions,
 ) ([]types.SearchResults, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
@@ -92,8 +92,8 @@ options types.SearchOptions,
 // FetchMany executes fetch on all providers in parallel and returns all
 // successful results.
 func FetchMany(
-providers []upstream.Provider,
-id types.PackageId,
+	providers []upstream.Provider,
+	id types.PackageId,
 ) ([]upstream.FetchResult, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
@@ -147,8 +147,8 @@ id types.PackageId,
 // GetMedataHedged executes info+fetch on all providers in parallel and returns the
 // first successful result.
 func GetMedataHedged(
-providers []upstream.Provider,
-ref types.PackageRef,
+	providers []upstream.Provider,
+	ref types.PackageRef,
 ) (types.Metadata, []ProviderError, error) {
 	if len(providers) == 0 {
 		return types.Metadata{}, nil, ErrNoProviderSucceeded
@@ -191,8 +191,8 @@ ref types.PackageRef,
 // returns all successful results. An error is returned only when every provider
 // fails; partial failures are collected in the returned []ProviderError slice.
 func DependenciesMany(
-providers []upstream.Provider,
-id types.PackageId,
+	providers []upstream.Provider,
+	id types.PackageId,
 ) ([]types.PackageDependencies, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil

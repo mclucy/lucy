@@ -22,9 +22,9 @@ func (d *geyserStandaloneDetector) Name() string {
 // - https://geysermc.org/wiki/geyser/setup/self/proxy-servers
 // - https://geysermc.org/wiki/geyser/faq/
 func (d *geyserStandaloneDetector) Detect(
-filePath string,
-zipReader *zip.Reader,
-fileHandle *os.File,
+	filePath string,
+	zipReader *zip.Reader,
+	fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
 	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
 	if err != nil {
@@ -69,7 +69,7 @@ fileHandle *os.File,
 			PrimaryNode: "geyser_standalone",
 			Nodes: []types.RuntimeNode{
 				{
-					ID: "geyser_standalone",
+					ID:   "geyser_standalone",
 					Role: types.RuntimeRoleProxy,
 					Capabilities: []types.RuntimeCapability{
 						types.CapabilityProxying,

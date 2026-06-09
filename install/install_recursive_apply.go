@@ -12,16 +12,16 @@ import (
 )
 
 func recursiveInstallDestination(
-serverInfo types.ServerInfo,
-pkg types.Package,
+	serverInfo probe.Workspace,
+	pkg types.Package,
 ) string {
 	if pkg.Id.Platform.IsModding() && len(serverInfo.ModPath) > 0 {
 		return serverInfo.ModPath[0]
 	}
 
 	if pkg.Id.Platform == types.PlatformMCDR &&
-	serverInfo.Environments.Mcdr != nil &&
-	len(serverInfo.Environments.Mcdr.Config.PluginDirectories) > 0 {
+		serverInfo.Environments.Mcdr != nil &&
+		len(serverInfo.Environments.Mcdr.Config.PluginDirectories) > 0 {
 		return serverInfo.Environments.Mcdr.Config.PluginDirectories[0]
 	}
 
@@ -29,7 +29,7 @@ pkg types.Package,
 		return serverInfo.ModPath[0]
 	}
 
-	return serverInfo.WorkPath
+	return serverInfo.Root
 }
 
 func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
@@ -92,8 +92,8 @@ func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
 // ApplyValidatedClosure executes the finalized install/remove plan after the
 // recursive transaction has been committed.
 func ApplyValidatedClosure(
-tx *RecursiveTransaction,
-serverInfo types.ServerInfo,
+	tx *RecursiveTransaction,
+	serverInfo probe.Workspace,
 ) error {
 	if tx == nil {
 		return errors.New("install: recursive transaction is nil")
@@ -108,8 +108,8 @@ serverInfo types.ServerInfo,
 		return errors.New("install: apply requires a validated apply plan")
 	}
 
-	if serverInfo.WorkPath != "" && serverInfo.WorkPath != "." {
-		if err := os.MkdirAll(serverInfo.WorkPath, 0o755); err != nil {
+	if serverInfo.Root != "" && serverInfo.Root != "." {
+		if err := os.MkdirAll(serverInfo.Root, 0o755); err != nil {
 			return fmt.Errorf("create server work path failed: %w", err)
 		}
 	}

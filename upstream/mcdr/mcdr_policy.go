@@ -13,8 +13,8 @@ func selectLatestRelease(history *pluginRelease) *release {
 }
 
 func selectLatestCompatibleRelease(
-history *pluginRelease,
-localMcdrVersion types.BareVersion,
+	history *pluginRelease,
+	localMcdrVersion types.BareVersion,
 ) (*release, error) {
 	if history == nil {
 		return nil, nil

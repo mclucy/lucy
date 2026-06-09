@@ -60,8 +60,8 @@ func getProjectById(id string) (project *projectResponse, err error) {
 }
 
 func getProjectByName(slug types.PackageName) (
-project *projectResponse,
-err error,
+	project *projectResponse,
+	err error,
 ) {
 	tryFetch := func(target types.PackageName) (*projectResponse, error) {
 		res, err := http.Get(projectUrl(string(target)))
@@ -102,8 +102,8 @@ err error,
 }
 
 func getProjectMembers(id string) (
-members []*memberResponse,
-err error,
+	members []*memberResponse,
+	err error,
 ) {
 	res, err := http.Get(projectMemberUrl(id))
 	if err != nil {
@@ -129,11 +129,11 @@ err error,
 var ErrorInvalidDependency = errors.New("invalid dependency")
 
 func DependencyToPackage(
-dependent types.PackageId,
-dependency *dependenciesResponse,
+	dependent types.PackageId,
+	dependency *dependenciesResponse,
 ) (
-p types.PackageId,
-err error,
+	p types.PackageId,
+	err error,
 ) {
 	var version *versionResponse
 	var project *projectResponse

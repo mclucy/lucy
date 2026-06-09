@@ -24,8 +24,8 @@ func parseNpmVersionRange(s string) types.VersionExpr {
 }
 
 func translateMcdrPlugin(
-pluginInfo *exttype.FileMcdrPluginIdentifier,
-localPath string,
+	pluginInfo *exttype.FileMcdrPluginIdentifier,
+	localPath string,
 ) types.Package {
 	pkg := types.Package{
 		Id: types.PackageId{

@@ -24,8 +24,8 @@ var (
 
 // TODO: This has a chance of causing segmentation faults
 func listVersions(slug types.PackageName) (
-versions []*versionResponse,
-err error,
+	versions []*versionResponse,
+	err error,
 ) {
 	tryFetch := func(target types.PackageName) ([]*versionResponse, error) {
 		res, err := http.Get(versionsUrl(target))
@@ -68,8 +68,8 @@ err error,
 // getVersion is named as so because a Package in lucy is equivalent to a version
 // in SourceModrinth.
 func getVersion(id types.PackageId) (
-v *versionResponse,
-err error,
+	v *versionResponse,
+	err error,
 ) {
 	versions, err := listVersions(id.Name)
 	if err != nil {
@@ -112,8 +112,8 @@ func getVersionById(id string) (v *versionResponse, err error) {
 }
 
 func versionSupportsLoader(
-version *versionResponse,
-loader types.Platform,
+	version *versionResponse,
+	loader types.Platform,
 ) bool {
 	for _, l := range version.Loaders {
 		if types.Platform(l).Satisfy(loader) {
@@ -124,8 +124,8 @@ loader types.Platform,
 }
 
 func latestVersion(slug types.PackageName) (
-v *versionResponse,
-err error,
+	v *versionResponse,
+	err error,
 ) {
 	versions, err := listVersions(slug)
 	if err != nil {
@@ -144,8 +144,8 @@ err error,
 }
 
 func latestCompatibleVersion(slug types.PackageName, platform types.Platform) (
-v *versionResponse,
-err error,
+	v *versionResponse,
+	err error,
 ) {
 	versions, err := listVersions(slug)
 	if err != nil {

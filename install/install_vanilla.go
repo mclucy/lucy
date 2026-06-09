@@ -57,7 +57,7 @@ func installMinecraftServer(id types.PackageId) error {
 		)
 	}
 
-	workPath := probe.ServerInfo().WorkPath
+	workPath := probe.ServerInfo().Root
 	if workPath == "" {
 		workPath = "."
 	}
@@ -84,8 +84,8 @@ func installMinecraftServer(id types.PackageId) error {
 }
 
 func fetchMojangVersionManifest() (
-*exttype.ApiMojangMinecraftVersionManifest,
-error,
+	*exttype.ApiMojangMinecraftVersionManifest,
+	error,
 ) {
 	data, err := util.CachedGetBytes(
 		mojang.VersionManifestURL,
@@ -108,8 +108,8 @@ error,
 }
 
 func resolveMinecraftVersionEntry(
-manifest *exttype.ApiMojangMinecraftVersionManifest,
-targetVersion types.BareVersion,
+	manifest *exttype.ApiMojangMinecraftVersionManifest,
+	targetVersion types.BareVersion,
 ) (string, string, error) {
 	selected := targetVersion.String()
 	if targetVersion == "" || targetVersion.CanInfer() || targetVersion == types.VersionUnknown {
@@ -159,9 +159,9 @@ func fetchMojangVersionDetail(versionURL string) (*mojangVersionDetail, error) {
 }
 
 func downloadMinecraftServerJar(
-url string,
-expectedSha1 string,
-dir string,
+	url string,
+	expectedSha1 string,
+	dir string,
 ) (*os.File, error) {
 	tracker := tuiprogress.NewTracker("Downloading server")
 	defer func() {

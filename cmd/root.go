@@ -10,7 +10,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "lucy",
-	Short: "The Minecraft server package manager",
+	Short:         "The Minecraft server package manager",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -69,10 +69,10 @@ func init() {
 // runWithErrorLogging wraps a RunE function to log errors via logger.ReportError.
 // It replaces the decoratorLogAndExitOnError decorator.
 func runWithErrorLogging(
-fn func(
-cmd *cobra.Command,
-args []string,
-) error,
+	fn func(
+		cmd *cobra.Command,
+		args []string,
+	) error,
 ) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		err := fn(cmd, args)

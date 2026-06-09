@@ -23,7 +23,7 @@ const noteIgnorePath = "Some modding platforms are located from the libraries di
 const multiThreadThreshold = 10
 
 // getExecutableInfo uses the new detector-based architecture to find server executables
-func buildExecutableInfo() *types.RuntimeInfo {
+func buildExecutableInfo() *ServerRuntime {
 	valid := make([]*detector.ExecutableEvidence, 0)
 	workPath := workPath()
 	for _, evidence := range detector.ForgeInstallationRuntimes(workPath) {
@@ -122,11 +122,11 @@ func buildExecutableInfo() *types.RuntimeInfo {
 	switch len(valid) {
 	case 0:
 		logger.Info("no server executable found")
-		return types.NoExecutable
+		return NoExecutable
 	case 1:
 		return materializeRuntimeInfo(valid[0])
 	default:
-		runtimes := make([]*types.RuntimeInfo, 0, len(valid))
+		runtimes := make([]*ServerRuntime, 0, len(valid))
 		for _, evidence := range valid {
 			runtimes = append(runtimes, materializeRuntimeInfo(evidence))
 		}
@@ -146,7 +146,7 @@ func init() {
 }
 
 func promptSelectExecutable(
-	executables []*types.RuntimeInfo,
+	executables []*ServerRuntime,
 	notes []string,
 ) int {
 	selection := 0
@@ -188,11 +188,11 @@ func generateNotes(notes ...string) string {
 	return note.String()
 }
 
-func executableLabel(executable *types.RuntimeInfo) string {
+func executableLabel(executable *ServerRuntime) string {
 	return tools.Bold(executable.PrimaryEntrance) + " " + tools.Dim(executableAnnotation(executable))
 }
 
-func executableAnnotation(executable *types.RuntimeInfo) string {
+func executableAnnotation(executable *ServerRuntime) string {
 	gameVersion := executable.GameVersion.String()
 	derivedPlatform := executable.DerivedModLoader()
 	if derivedPlatform == types.PlatformMinecraft {
@@ -243,13 +243,13 @@ func findJarRecursive(dir string) (jarFiles []string) {
 	jarFiles = []string{}
 	entries, _ := os.ReadDir(dir)
 	var wg sync.WaitGroup
-	var fileCount int32
+	var fileCount atomic.Int32
 	var mu sync.Mutex
 
 	sem := make(chan struct{}, 64)
 
 	for _, entry := range entries {
-		if atomic.LoadInt32(&fileCount) >= fileCountThreshold {
+		if fileCount.Load() >= fileCountThreshold {
 			logger.Info("file count threshold reached, stopping search")
 			break
 		}
@@ -265,7 +265,7 @@ func findJarRecursive(dir string) (jarFiles []string) {
 				mu.Unlock()
 			}(path.Join(dir, entry.Name()))
 		} else {
-			atomic.AddInt32(&fileCount, 1)
+			fileCount.Add(1)
 			if path.Ext(entry.Name()) == ".jar" {
 				mu.Lock()
 				jarFiles = append(jarFiles, path.Join(dir, entry.Name()))

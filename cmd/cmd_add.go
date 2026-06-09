@@ -177,7 +177,11 @@ func updateAddState(
 	}
 
 	lock := buildUpdatedLock(workDir, manifestIntent, stateSvc.Lock(), result)
-	manifest := state.UpdateManifestRolesForAdd(stateSvc.Manifest(), requests, lock)
+	manifest := state.UpdateManifestRolesForAdd(
+		stateSvc.Manifest(),
+		requests,
+		lock,
+	)
 	if err := state.WriteManifest(workDir, manifest); err != nil {
 		return err
 	}
@@ -271,7 +275,7 @@ func manifestFingerprint(manifest *state.Manifest, fallback string) string {
 
 func manifestGameVersion(
 	manifest *state.Manifest,
-	runtime *types.RuntimeInfo,
+	runtime *probe.ServerRuntime,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.GameVersion != "" {
@@ -290,7 +294,7 @@ func manifestGameVersion(
 
 func manifestPlatform(
 	manifest *state.Manifest,
-	runtime *types.RuntimeInfo,
+	runtime *probe.ServerRuntime,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.ModdingPlatform != "" {
@@ -309,7 +313,7 @@ func manifestPlatform(
 
 func manifestPlatformVersion(
 	manifest *state.Manifest,
-	runtime *types.RuntimeInfo,
+	runtime *probe.ServerRuntime,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.ModdingPlatformVersion != "" {

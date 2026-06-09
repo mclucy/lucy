@@ -30,8 +30,8 @@ type modLoaderInstallSpec struct {
 	mavenBaseURL   string
 	candidateNames func(versionDir, version string) []modLoaderCandidate
 	unpackVerify   func(
-	candidate modLoaderCandidate,
-	gameVersion, loaderVersion types.BareVersion,
+		candidate modLoaderCandidate,
+		gameVersion, loaderVersion types.BareVersion,
 	) (bool, error)
 }
 
@@ -41,13 +41,13 @@ type modLoaderCandidate struct {
 }
 
 func detectModLoaderInstallFromVersionDir(
-versionDir string,
-spec modLoaderInstallSpec,
-hashLookup func(
-version string,
-artifact modLoaderArtifactKind,
-filePath string,
-) (bool, error),
+	versionDir string,
+	spec modLoaderInstallSpec,
+	hashLookup func(
+		version string,
+		artifact modLoaderArtifactKind,
+		filePath string,
+	) (bool, error),
 ) (*ExecutableEvidence, error) {
 	version := filepath.Base(versionDir)
 	gameVersion, loaderVersion, ok := parseModLoaderVersionTuple(
@@ -101,8 +101,8 @@ filePath string,
 var neoforgeVersionDirPattern = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.\d+)*$`)
 
 func parseModLoaderVersionTuple(
-versionDir string,
-platform types.Platform,
+	versionDir string,
+	platform types.Platform,
 ) (gameVersion, loaderVersion types.BareVersion, ok bool) {
 	name := filepath.Base(versionDir)
 
@@ -126,13 +126,13 @@ platform types.Platform,
 }
 
 func modLoaderInstallationRuntimes(
-workPath string,
-spec modLoaderInstallSpec,
-hashLookup func(
-version string,
-artifact modLoaderArtifactKind,
-filePath string,
-) (bool, error),
+	workPath string,
+	spec modLoaderInstallSpec,
+	hashLookup func(
+		version string,
+		artifact modLoaderArtifactKind,
+		filePath string,
+	) (bool, error),
 ) []*ExecutableEvidence {
 	libraryRoot := filepath.Join(workPath, spec.libraryRoot)
 	entries, err := os.ReadDir(libraryRoot)
@@ -160,9 +160,9 @@ filePath string,
 }
 
 func lookupModLoaderArtifactHash(
-version string,
-candidate modLoaderCandidate,
-mavenBaseURL string,
+	version string,
+	candidate modLoaderCandidate,
+	mavenBaseURL string,
 ) (bool, error) {
 	sha1URL := fmt.Sprintf(
 		"%s/%s/%s.sha1",
@@ -187,9 +187,9 @@ mavenBaseURL string,
 }
 
 func verifyArtifactHash(
-filePath string,
-checksumURL string,
-algo cache.HashAlgorithm,
+	filePath string,
+	checksumURL string,
+	algo cache.HashAlgorithm,
 ) (bool, error) {
 	data, err := util.CachedGetBytes(
 		checksumURL,
@@ -210,8 +210,8 @@ algo cache.HashAlgorithm,
 }
 
 func hashArtifactFile(filePath string, algo cache.HashAlgorithm) (
-string,
-error,
+	string,
+	error,
 ) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -230,11 +230,11 @@ error,
 }
 
 func buildModLoaderRuntimeInfo(
-platform types.Platform,
-name string,
-filePath string,
-gameVersion types.BareVersion,
-loaderVersion types.BareVersion,
+	platform types.Platform,
+	name string,
+	filePath string,
+	gameVersion types.BareVersion,
+	loaderVersion types.BareVersion,
 ) *ExecutableEvidence {
 	capability := types.CapabilityForgeMods
 	if platform == types.PlatformNeoforge {

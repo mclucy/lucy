@@ -196,9 +196,9 @@ func splitCoreAndSuffix(raw string) (core string, suffix string) {
 }
 
 func parseMinecraftPrereleaseSuffix(suffix string) (
-PrereleaseType,
-uint8,
-bool,
+	PrereleaseType,
+	uint8,
+	bool,
 ) {
 	if strings.HasPrefix(suffix, "pre") {
 		number, ok := parsePrereleaseNumber(strings.TrimPrefix(suffix, "pre"))

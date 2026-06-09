@@ -11,8 +11,8 @@ import (
 // analyzeForgeArgFile parses Forge argument files to extract version information
 // This is a helper function used by ForgeDetector
 func analyzeForgeArgFile(file *os.File) (
-forgeVersion types.BareVersion,
-mcVersion types.BareVersion,
+	forgeVersion types.BareVersion,
+	mcVersion types.BareVersion,
 ) {
 	data, _ := io.ReadAll(file)
 	s := string(data)
