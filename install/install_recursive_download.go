@@ -37,7 +37,10 @@ func recursiveCandidatePackages(tx *RecursiveTransaction) []types.Package {
 	return packages
 }
 
-func pruneRecursiveCandidates(tx *RecursiveTransaction, excluded map[string]struct{}) {
+func pruneRecursiveCandidates(
+	tx *RecursiveTransaction,
+	excluded map[string]struct{},
+) {
 	if tx == nil || len(excluded) == 0 {
 		return
 	}
@@ -47,7 +50,10 @@ func pruneRecursiveCandidates(tx *RecursiveTransaction, excluded map[string]stru
 	}
 }
 
-func backfillRecursiveDownloads(tx *RecursiveTransaction, packages []types.Package) {
+func backfillRecursiveDownloads(
+	tx *RecursiveTransaction,
+	packages []types.Package,
+) {
 	if tx == nil {
 		return
 	}
@@ -80,11 +86,14 @@ func downloadBatchPackages(
 
 	if workPath != "." {
 		if err := os.MkdirAll(workPath, 0o755); err != nil {
-			return stagingDir, nil, fmt.Errorf("create server work path failed: %w", err)
+			return stagingDir, nil, fmt.Errorf(
+				"create server work path failed: %w",
+				err,
+			)
 		}
 	}
 
-	resolvedIds := make([]types.PackageId, len(packages))
+	resolvedIds := make([]types.VersionedPackageRef, len(packages))
 	for i, p := range packages {
 		resolvedIds[i] = p.Id
 	}
@@ -152,7 +161,10 @@ func downloadBatchPackages(
 
 	wg.Wait()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
 	defer shutdownCancel()
 	_ = tuiprogress.WaitForShutdown(shutdownCtx)
 
@@ -163,7 +175,10 @@ func downloadBatchPackages(
 			downloaded = append(downloaded, item.pkg)
 		}
 		if item.failed {
-			failures = append(failures, fmt.Sprintf("%s: %v", packages[i].Id.StringFull(), item.err))
+			failures = append(
+				failures,
+				fmt.Sprintf("%s: %v", packages[i].Id.StringFull(), item.err),
+			)
 		}
 	}
 

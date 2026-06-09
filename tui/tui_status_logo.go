@@ -30,7 +30,7 @@ const (
 // but its primary API is the Lines / Width / Height helpers which the
 // layout compositor uses to build the neofetch-style side-by-side view.
 type FieldLogo struct {
-	Platform types.Platform // TODO: this is not limited to platform
+	Platform types.PlatformId // TODO: this is not limited to platform
 	NoColor  bool
 }
 

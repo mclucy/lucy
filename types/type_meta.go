@@ -3,7 +3,7 @@ package types
 // Metadata is a struct that contains informational data about the
 // package. It is typically used in `lucy info`.
 type Metadata struct {
-	From                  Source
+	From                  SourceId
 	Title                 string
 	Brief                 string // short
 	Description           string // prose or Markdown

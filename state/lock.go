@@ -72,41 +72,84 @@ func NewLock() Lock {
 func ValidateLock(l Lock) error {
 	if err := ValidateVersion(l.Version); err != nil {
 		if IsVersionError(err) {
-			return versionStateError(LockFile, "version", l.Version, ErrVersionUnsupported)
+			return versionStateError(
+				LockFile,
+				"version",
+				l.Version,
+				ErrVersionUnsupported,
+			)
 		}
 		return versionStateError(LockFile, "version", l.Version, ErrMalformed)
 	}
 	if l.GeneratedAt == "" {
-		return NewStateError(LockFile, ErrMalformed, "generated_at", "generated_at is required")
+		return NewStateError(
+			LockFile,
+			ErrMalformed,
+			"generated_at",
+			"generated_at is required",
+		)
 	}
 	if _, err := time.Parse(time.RFC3339, l.GeneratedAt); err != nil {
-		return NewStateError(LockFile, ErrMalformed, "generated_at", fmt.Sprintf("generated_at must be RFC3339: %v", err))
+		return NewStateError(
+			LockFile,
+			ErrMalformed,
+			"generated_at",
+			fmt.Sprintf("generated_at must be RFC3339: %v", err),
+		)
 	}
 	if l.ManifestFingerprint == "" {
-		return NewStateError(LockFile, ErrMalformed, "manifest_fingerprint", "manifest_fingerprint is required")
+		return NewStateError(
+			LockFile,
+			ErrMalformed,
+			"manifest_fingerprint",
+			"manifest_fingerprint is required",
+		)
 	}
 	if l.GameVersion == "" {
-		return NewStateError(LockFile, ErrMalformed, "game_version", "game_version is required")
+		return NewStateError(
+			LockFile,
+			ErrMalformed,
+			"game_version",
+			"game_version is required",
+		)
 	}
 	if l.Platform == "" {
-		return NewStateError(LockFile, ErrMalformed, "platform", "platform is required")
+		return NewStateError(
+			LockFile,
+			ErrMalformed,
+			"platform",
+			"platform is required",
+		)
 	}
 	if err := validateManifestPlatform(l.Platform); err != nil {
 		return NewStateError(LockFile, ErrMalformed, "platform", err.Error())
 	}
 	if l.PlatformVersion == "" {
-		return NewStateError(LockFile, ErrMalformed, "platform_version", "platform_version is required")
+		return NewStateError(
+			LockFile,
+			ErrMalformed,
+			"platform_version",
+			"platform_version is required",
+		)
 	}
 
 	for i, pkg := range l.Packages {
 		if err := validateLockedPackage(pkg); err != nil {
-			return malformedStateError(LockFile, fmt.Sprintf("packages[%d]", i), err)
+			return malformedStateError(
+				LockFile,
+				fmt.Sprintf("packages[%d]", i),
+				err,
+			)
 		}
 	}
 
 	for i, bundle := range l.Bundles {
 		if err := validateLockedBundle(bundle); err != nil {
-			return malformedStateError(LockFile, fmt.Sprintf("bundles[%d]", i), err)
+			return malformedStateError(
+				LockFile,
+				fmt.Sprintf("bundles[%d]", i),
+				err,
+			)
 		}
 	}
 
@@ -129,7 +172,7 @@ func validateLockedPackage(pkg LockedPackage) error {
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
 		return fmt.Errorf("id must use platform/name format")
 	}
-	platform := types.Platform(parts[0])
+	platform := types.PlatformId(parts[0])
 	if !platform.Valid() || platform == types.PlatformAny || platform == types.PlatformMinecraft || platform == types.PlatformUnknown {
 		return fmt.Errorf("invalid package platform %q", parts[0])
 	}
@@ -201,7 +244,10 @@ func isExactLockVersion(version string) bool {
 	if isSpecialLockVersion(version) {
 		return false
 	}
-	for _, token := range []string{" ", "\t", "\n", "\r", ",", "||", "*", "^", "~", ">", "<", "=", "[", "]", "(", ")"} {
+	for _, token := range []string{
+		" ", "\t", "\n", "\r", ",", "||", "*", "^", "~", ">", "<", "=", "[",
+		"]", "(", ")",
+	} {
 		if strings.Contains(version, token) {
 			return false
 		}
@@ -255,15 +301,17 @@ func isValidPackageSide(side string) bool {
 
 func CanonicalLockedPackages(packages []LockedPackage) []LockedPackage {
 	canonical := append([]LockedPackage(nil), packages...)
-	sort.Slice(canonical, func(i, j int) bool {
-		if canonical[i].ID != canonical[j].ID {
-			return canonical[i].ID < canonical[j].ID
-		}
-		if canonical[i].Version != canonical[j].Version {
-			return canonical[i].Version < canonical[j].Version
-		}
-		return canonical[i].InstallPath < canonical[j].InstallPath
-	})
+	sort.Slice(
+		canonical, func(i, j int) bool {
+			if canonical[i].ID != canonical[j].ID {
+				return canonical[i].ID < canonical[j].ID
+			}
+			if canonical[i].Version != canonical[j].Version {
+				return canonical[i].Version < canonical[j].Version
+			}
+			return canonical[i].InstallPath < canonical[j].InstallPath
+		},
+	)
 	return canonical
 }
 

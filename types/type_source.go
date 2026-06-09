@@ -2,21 +2,21 @@ package types
 
 import "strings"
 
-// Source identifies an upstream catalog where package metadata and artifacts can
+// SourceId identifies an upstream catalog where package metadata and artifacts can
 // be fetched.
 //
-// Source is a stable semantic identifier used by CLI/config/storage. It is not
+// SourceId is a stable semantic identifier used by CLI/config/storage. It is not
 // an execution object.
-//   - In user input, Source can express either a concrete upstream
+//   - In user input, SourceId can express either a concrete upstream
 //     (SourceModrinth) or a routing policy marker (SourceAuto).
-//   - In result payloads, Source records where data came from.
-//   - In routing, Source is the key that resolves to one or more providers.
+//   - In result payloads, SourceId records where data came from.
+//   - In routing, SourceId is the key that resolves to one or more providers.
 //
 // Execution of native upstream APIs is implemented by upstream.Provider.
-type Source uint8
+type SourceId uint8
 
 const (
-	SourceAuto Source = iota // policy marker: let routing choose providers
+	SourceAuto SourceId = iota // policy marker: let routing choose providers
 	SourceCurseForge
 	SourceModrinth
 	SourceGitHub
@@ -26,7 +26,7 @@ const (
 	SourceUnknown // sentinel for parse/validation failure
 )
 
-func (s Source) String() string {
+func (s SourceId) String() string {
 	switch s {
 	case SourceCurseForge:
 		return "curseforge"
@@ -45,7 +45,7 @@ func (s Source) String() string {
 	}
 }
 
-func (s Source) Title() string {
+func (s SourceId) Title() string {
 	switch s {
 	case SourceCurseForge:
 		return "CurseForge"
@@ -64,7 +64,7 @@ func (s Source) Title() string {
 	}
 }
 
-var sourceByString = map[string]Source{
+var sourceByString = map[string]SourceId{
 	"auto":       SourceAuto,
 	"":           SourceAuto,
 	"curseforge": SourceCurseForge,
@@ -76,7 +76,7 @@ var sourceByString = map[string]Source{
 	"unknown":    SourceUnknown,
 }
 
-func ParseSource(s string) Source {
+func ParseSource(s string) SourceId {
 	s = strings.ToLower(s)
 	if v, ok := sourceByString[s]; ok {
 		return v

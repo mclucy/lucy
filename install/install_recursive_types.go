@@ -77,11 +77,11 @@ type CandidateNode struct {
 type ReconcileDiff struct {
 	// Missing are packages present in the verified graph but absent from the
 	// current candidate graph. They must be added and downloaded before apply.
-	Missing []types.PackageId
+	Missing []types.VersionedPackageRef
 
 	// Extra are candidate nodes present only in the advisory upstream graph but
 	// not reachable from the verified closure. They must be dropped before apply.
-	Extra []types.PackageId
+	Extra []types.VersionedPackageRef
 
 	// Tightened are packages whose verified constraints are stricter than the
 	// advisory upstream constraints. The constraint engine must be re-run with
@@ -130,7 +130,7 @@ type RecursiveTransaction struct {
 
 	// Roots are the top-level package IDs requested by the user.
 	// PURE: just data.
-	Roots []types.PackageId
+	Roots []types.VersionedPackageRef
 
 	// InstalledConstraints is a snapshot of currently-installed packages taken
 	// from probe.ServerInfo() at transaction start. These are fixed constraints
@@ -180,7 +180,7 @@ type RecursiveTransaction struct {
 // given root IDs and provider list. The installed constraints snapshot must
 // be populated by the caller from probe.ServerInfo() before expansion begins.
 func NewRecursiveTransaction(
-	roots []types.PackageId,
+	roots []types.VersionedPackageRef,
 	providers []upstream.Provider,
 ) *RecursiveTransaction {
 	return &RecursiveTransaction{

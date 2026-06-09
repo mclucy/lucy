@@ -107,7 +107,7 @@ const (
 // parent JAR (e.g. NeoForge JarInJar / META-INF/jarjar/). Embedded
 // dependencies are satisfied without a separate file in the mods directory.
 type Dependency struct {
-	Id         PackageId
+	Id         VersionedPackageRef
 	Constraint VersionExpr
 	Mandatory  bool
 	Embedded   bool
@@ -148,7 +148,7 @@ func (exp *VersionSubExpr) Inverse() {
 	}
 }
 
-func (d Dependency) Satisfy(id PackageId, v ResolvableVersion) bool {
+func (d Dependency) Satisfy(id VersionedPackageRef, v ResolvableVersion) bool {
 	if (id.Platform != d.Id.Platform) || (id.Name != d.Id.Name) {
 		return false
 	}

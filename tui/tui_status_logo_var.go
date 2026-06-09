@@ -27,7 +27,7 @@ var (
 	neoforgeNoColorSmall string
 )
 
-func GetLogo(platform types.Platform, variant LogoVariant) string {
+func GetLogo(platform types.PlatformId, variant LogoVariant) string {
 	switch platform {
 	case types.PlatformFabric:
 		switch variant {

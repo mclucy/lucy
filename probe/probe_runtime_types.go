@@ -7,12 +7,12 @@ import (
 )
 
 type ServerRuntime struct {
-	PrimaryEntrance   string                 `json:"primary_entrance"`
-	GameVersion       types.BareVersion      `json:"game_version"`
-	BootCommand       *exec.Cmd              `json:"-"`
-	Topology          *types.RuntimeTopology `json:"topology,omitempty"`
-	RuntimeIdentities []types.PackageId      `json:"runtime_identities,omitempty"`
-	BridgeHints       []string               `json:"bridge_hints,omitempty"`
+	PrimaryEntrance   string                      `json:"primary_entrance"`
+	GameVersion       types.BareVersion           `json:"game_version"`
+	BootCommand       *exec.Cmd                   `json:"-"`
+	Topology          *types.RuntimeTopology      `json:"topology,omitempty"`
+	RuntimeIdentities []types.VersionedPackageRef `json:"runtime_identities,omitempty"`
+	BridgeHints       []string                    `json:"bridge_hints,omitempty"`
 }
 
 var UnknownExecutable = &ServerRuntime{
@@ -37,7 +37,7 @@ func (e *ServerRuntime) Analyzable() bool {
 	return e != nil && e.Topology != nil && len(e.RuntimeIdentities) > 0 && e != NoExecutable && e != UnknownExecutable
 }
 
-func (e *ServerRuntime) RuntimeIdentityPackage(node *types.TopologyNode) *types.PackageId {
+func (e *ServerRuntime) RuntimeIdentityPackage(node *types.TopologyNode) *types.VersionedPackageRef {
 	if e == nil || node == nil {
 		return nil
 	}
@@ -52,7 +52,7 @@ func (e *ServerRuntime) RuntimeIdentityPackage(node *types.TopologyNode) *types.
 	return nil
 }
 
-func (e *ServerRuntime) PrimaryRuntimeIdentity() *types.PackageId {
+func (e *ServerRuntime) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
 	if e == nil || e.Topology == nil {
 		return nil
 	}
@@ -74,7 +74,7 @@ func (e *ServerRuntime) DerivedLoaderVersion() string {
 	return primaryIdentity.Version.String()
 }
 
-func (e *ServerRuntime) DerivedModLoader() types.Platform {
+func (e *ServerRuntime) DerivedModLoader() types.PlatformId {
 	if e == nil || e.Topology == nil {
 		return types.PlatformNone
 	}

@@ -454,7 +454,7 @@ func projectPaperJudgment(
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.PackageId{
+		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				Platform: types.PlatformAny,
 				Name:     syntax.ToProjectName(brand),

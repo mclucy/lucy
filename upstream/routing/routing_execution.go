@@ -14,7 +14,7 @@ var ErrNoProviderSucceeded = errors.New("no provider succeeded")
 type ProviderError struct {
 	// Source identifies the semantic upstream label for user-facing diagnostics.
 	// The failed runtime executor is a Provider implementation.
-	Source types.Source
+	Source types.SourceId
 	Err    error
 }
 
@@ -34,18 +34,18 @@ type InfoResult struct {
 // SearchMany executes search on all providers in parallel.
 //
 // Default behavior is non-aggregated: each provider contributes one
-// types.SearchResults item in the returned slice.
+// upstream.SearchResponse item in the returned slice.
 func SearchMany(
-	providers []upstream.Provider,
-	query types.PackageName,
+	providers []SearchProvider,
+	query types.BarePackageName,
 	options types.SearchOptions,
-) ([]types.SearchResults, []ProviderError) {
+) ([]upstream.SearchResponse, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
 	}
 
 	type slot struct {
-		res    types.SearchResults
+		res    upstream.SearchResponse
 		err    ProviderError
 		ok     bool
 		failed bool
@@ -56,18 +56,26 @@ func SearchMany(
 
 	for i, provider := range providers {
 		wg.Add(1)
-		go func(index int, provider upstream.Provider) {
+		go func(index int, provider SearchProvider) {
 			defer wg.Done()
-			res, err := upstream.Search(provider, query, options)
+			res, err := upstream.Search(provider.Searcher, upstream.Query{
+				Keyword:        query.String(),
+				SortBy:         options.SortBy,
+				ExcludeClient:  !options.IncludeClient,
+				FilterPlatform: options.FilterPlatform,
+			})
 			if err != nil {
 				slots[index] = slot{
 					failed: true,
 					err: ProviderError{
-						Source: provider.Source(),
+						Source: provider.Source,
 						Err:    err,
 					},
 				}
 				return
+			}
+			if res.Source == types.SourceUnknown {
+				res.Source = provider.Source
 			}
 			slots[index] = slot{ok: true, res: res}
 		}(i, provider)
@@ -75,7 +83,7 @@ func SearchMany(
 
 	wg.Wait()
 
-	results := make([]types.SearchResults, 0, len(providers))
+	results := make([]upstream.SearchResponse, 0, len(providers))
 	providerErrors := make([]ProviderError, 0)
 	for _, item := range slots {
 		if item.ok {
@@ -93,7 +101,7 @@ func SearchMany(
 // successful results.
 func FetchMany(
 	providers []upstream.Provider,
-	id types.PackageId,
+	id types.VersionedPackageRef,
 ) ([]upstream.FetchResult, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
@@ -118,7 +126,7 @@ func FetchMany(
 				slots[index] = slot{
 					failed: true,
 					err: ProviderError{
-						Source: provider.Source(),
+						Source: provider.Id(),
 						Err:    err,
 					},
 				}
@@ -144,10 +152,10 @@ func FetchMany(
 	return results, providerErrors
 }
 
-// GetMedataHedged executes info+fetch on all providers in parallel and returns the
+// GetInfoHedged executes info on all providers in parallel and returns the
 // first successful result.
-func GetMedataHedged(
-	providers []upstream.Provider,
+func GetInfoHedged(
+	providers []InfoProvider,
 	ref types.PackageRef,
 ) (types.Metadata, []ProviderError, error) {
 	if len(providers) == 0 {
@@ -158,11 +166,11 @@ func GetMedataHedged(
 	errChan := make(chan ProviderError, len(providers))
 
 	for _, provider := range providers {
-		go func(provider upstream.Provider) {
-			res, err := upstream.Metadata(provider, ref.Name)
+		go func(provider InfoProvider) {
+			res, err := upstream.Info(provider.Informer, ref)
 			if err != nil {
 				errChan <- ProviderError{
-					Source: provider.Source(),
+					Source: provider.Source,
 					Err:    fmt.Errorf("information failed: %w", err),
 				}
 				return
@@ -192,7 +200,7 @@ func GetMedataHedged(
 // fails; partial failures are collected in the returned []ProviderError slice.
 func DependenciesMany(
 	providers []upstream.Provider,
-	id types.PackageId,
+	id types.VersionedPackageRef,
 ) ([]types.PackageDependencies, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
@@ -217,7 +225,7 @@ func DependenciesMany(
 				slots[index] = slot{
 					failed: true,
 					err: ProviderError{
-						Source: provider.Source(),
+						Source: provider.Id(),
 						Err:    err,
 					},
 				}

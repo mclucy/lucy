@@ -315,14 +315,16 @@ func mustParseSemver(t *testing.T, raw string) types.ResolvableVersion {
 func assertConstraintSatisfy(
 	t *testing.T,
 	expr types.VersionExpr,
-	platform types.Platform,
+	platform types.PlatformId,
 	name string,
 	version string,
 	want bool,
 	label string,
 ) {
 	t.Helper()
-	id := types.PackageId{Platform: platform, Name: types.PackageName(name)}
+	id := types.VersionedPackageRef{
+		Platform: platform, Name: types.BarePackageName(name),
+	}
 	depSpec := types.Dependency{Id: id, Constraint: expr, Mandatory: true}
 	got := depSpec.Satisfy(id, mustParseSemver(t, version))
 	t.Logf(

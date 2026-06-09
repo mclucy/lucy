@@ -11,10 +11,10 @@ import (
 
 // Entry is one resolved mapping.
 type Entry struct {
-	Source        types.Source `json:"source"`
-	LocalId       string       `json:"local_id"`
-	FileHash      string       `json:"file_hash"`
-	CanonicalSlug string       `json:"canonical_slug"`
+	Source        types.SourceId `json:"source"`
+	LocalId       string         `json:"local_id"`
+	FileHash      string         `json:"file_hash"`
+	CanonicalSlug string         `json:"canonical_slug"`
 	// ResolvedBy is always "hash" — only hash-verified slugs are persisted.
 	ResolvedBy string `json:"resolved_by"`
 }
@@ -45,15 +45,18 @@ func Default() *store {
 	return defaultStore
 }
 
-func preciseKey(src types.Source, localId, fileHash string) string {
+func preciseKey(src types.SourceId, localId, fileHash string) string {
 	return string(src) + "/" + localId + "/" + fileHash
 }
 
-func looseKey(src types.Source, localId string) string {
+func looseKey(src types.SourceId, localId string) string {
 	return string(src) + "/" + localId
 }
 
-func (s *store) Set(src types.Source, localId, fileHash, canonicalSlug, resolvedBy string) {
+func (s *store) Set(
+	src types.SourceId,
+	localId, fileHash, canonicalSlug, resolvedBy string,
+) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.entries[preciseKey(src, localId, fileHash)] = Entry{
@@ -73,7 +76,10 @@ func (s *store) Set(src types.Source, localId, fileHash, canonicalSlug, resolved
 	_ = s.flush()
 }
 
-func (s *store) Get(src types.Source, localId, fileHash string) (slug string, ok bool) {
+func (s *store) Get(src types.SourceId, localId, fileHash string) (
+	slug string,
+	ok bool,
+) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	e, ok := s.entries[preciseKey(src, localId, fileHash)]
@@ -83,7 +89,10 @@ func (s *store) Get(src types.Source, localId, fileHash string) (slug string, ok
 	return e.CanonicalSlug, true
 }
 
-func (s *store) GetLoose(src types.Source, localId string) (slug string, ok bool) {
+func (s *store) GetLoose(src types.SourceId, localId string) (
+	slug string,
+	ok bool,
+) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	e, ok := s.entries[looseKey(src, localId)]

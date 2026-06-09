@@ -53,7 +53,7 @@ type neoForgeMavenMetadata struct {
 	} `xml:"versioning"`
 }
 
-func installNeoForge(id types.PackageId) error {
+func installNeoForge(id types.VersionedPackageRef) error {
 	if err := guardServerTopologyForNeoForgePlatform(); err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func installNeoForge(id types.PackageId) error {
 // If the version is explicit, it is returned as-is.
 // Otherwise, the latest compatible version for the given Minecraft game version is fetched.
 func getNeoForgeVersionFromPackageId(
-	p types.PackageId,
+	p types.VersionedPackageRef,
 	gameVersion types.BareVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest &&

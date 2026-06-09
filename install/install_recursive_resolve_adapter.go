@@ -13,20 +13,28 @@ type providerCandidateResolver struct {
 }
 
 func (resolver providerCandidateResolver) ResolvePackage(
-	id types.PackageId,
+	id types.VersionedPackageRef,
 ) (types.Package, error) {
-	attempts := []types.PackageId{id}
+	attempts := []types.VersionedPackageRef{id}
 	if id.Version == types.VersionCompatible {
 		attempts = append(
 			attempts,
-			types.PackageId{Platform: id.Platform, Name: id.Name, Version: types.VersionLatest},
-			types.PackageId{Platform: id.Platform, Name: id.Name, Version: types.VersionAny},
+			types.VersionedPackageRef{
+				Platform: id.Platform, Name: id.Name,
+				Version: types.VersionLatest,
+			},
+			types.VersionedPackageRef{
+				Platform: id.Platform, Name: id.Name, Version: types.VersionAny,
+			},
 		)
 	}
 
 	var lastErrors []routing.ProviderError
 	for _, attempt := range attempts {
-		fetches, providerErrors := routing.FetchMany(resolver.providers, attempt)
+		fetches, providerErrors := routing.FetchMany(
+			resolver.providers,
+			attempt,
+		)
 		if len(fetches) == 0 {
 			lastErrors = providerErrors
 			continue
@@ -50,7 +58,10 @@ func (resolver providerCandidateResolver) ResolveDependencies(
 	pkg types.Package,
 ) ([]types.PackageDependencies, error) {
 	providers := providersForSource(resolver.providers, pkg.Remote)
-	dependencySets, providerErrors := routing.DependenciesMany(providers, pkg.Id)
+	dependencySets, providerErrors := routing.DependenciesMany(
+		providers,
+		pkg.Id,
+	)
 	if len(dependencySets) > 0 {
 		return dependencySets, nil
 	}
@@ -72,7 +83,7 @@ func providersForSource(
 
 	filtered := make([]upstream.Provider, 0, 1)
 	for _, provider := range providers {
-		if provider.Source() == remote.Source {
+		if provider.Id() == remote.Source {
 			filtered = append(filtered, provider)
 		}
 	}

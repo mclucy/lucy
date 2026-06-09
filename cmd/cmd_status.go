@@ -66,7 +66,7 @@ func generateStatusOutput(
 
 	// logo display strategy:
 	// custom client > mod loader > mcdr > lucy > vanilla
-	var logoPlatform types.Platform
+	var logoPlatform types.PlatformId
 	if serverPlatform == types.PlatformVanilla {
 		if hasMcdr {
 			logoPlatform = types.PlatformMCDR
@@ -333,7 +333,7 @@ func topologyPrimaryNodeData(topology *types.RuntimeTopology) (
 func statusRuntimePlatformLabel(
 	topology *types.RuntimeTopology,
 	packages []types.Package,
-	fallback types.Platform,
+	fallback types.PlatformId,
 	hasPrimaryNode bool,
 	primaryNode types.RuntimeNode,
 ) string {
@@ -407,21 +407,21 @@ func packageRuntimeLabel(pkg types.Package) string {
 		return "NeoForge"
 	case types.PlatformMCDR:
 		return "MCDR"
-	case types.Platform("paper"):
+	case types.PlatformId("paper"):
 		return "Paper"
-	case types.Platform("bukkit"):
+	case types.PlatformId("bukkit"):
 		return "Bukkit"
-	case types.Platform("folia"):
+	case types.PlatformId("folia"):
 		return "Folia"
-	case types.Platform("leaves"):
+	case types.PlatformId("leaves"):
 		return "Leaves"
-	case types.Platform("velocity"):
+	case types.PlatformId("velocity"):
 		return "Velocity"
-	case types.Platform("bungeecord"):
+	case types.PlatformId("bungeecord"):
 		return "BungeeCord"
-	case types.Platform("waterfall"):
+	case types.PlatformId("waterfall"):
 		return "Waterfall"
-	case types.Platform("sponge"):
+	case types.PlatformId("sponge"):
 		return "Sponge"
 	case types.PlatformAny:
 		switch pkg.Id.Name.String() {

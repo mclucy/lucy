@@ -27,7 +27,7 @@ const (
 )
 
 // InferRangeDialect infers the range dialect from package platform.
-func InferRangeDialect(platform types.Platform) VersionRangeDialect {
+func InferRangeDialect(platform types.PlatformId) VersionRangeDialect {
 	switch platform {
 	case types.PlatformMCDR:
 		return DialectNpmSemver

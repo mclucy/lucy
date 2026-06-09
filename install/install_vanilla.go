@@ -16,7 +16,7 @@ import (
 	"github.com/mclucy/lucy/probe"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream/mojang"
+	"github.com/mclucy/lucy/upstream/providers/mojang"
 	"github.com/mclucy/lucy/util"
 )
 
@@ -31,7 +31,7 @@ type mojangVersionDetail struct {
 	} `json:"downloads"`
 }
 
-func installMinecraftServer(id types.PackageId) error {
+func installMinecraftServer(id types.VersionedPackageRef) error {
 	manifest, err := fetchMojangVersionManifest()
 	if err != nil {
 		return err

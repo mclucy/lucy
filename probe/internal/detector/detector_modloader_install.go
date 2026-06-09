@@ -24,7 +24,7 @@ const (
 )
 
 type modLoaderInstallSpec struct {
-	platform       types.Platform
+	platform       types.PlatformId
 	name           string
 	libraryRoot    string
 	mavenBaseURL   string
@@ -102,7 +102,7 @@ var neoforgeVersionDirPattern = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.\d+)*$`)
 
 func parseModLoaderVersionTuple(
 	versionDir string,
-	platform types.Platform,
+	platform types.PlatformId,
 ) (gameVersion, loaderVersion types.BareVersion, ok bool) {
 	name := filepath.Base(versionDir)
 
@@ -230,7 +230,7 @@ func hashArtifactFile(filePath string, algo cache.HashAlgorithm) (
 }
 
 func buildModLoaderRuntimeInfo(
-	platform types.Platform,
+	platform types.PlatformId,
 	name string,
 	filePath string,
 	gameVersion types.BareVersion,
@@ -243,9 +243,9 @@ func buildModLoaderRuntimeInfo(
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.PackageId{
+		RuntimeIdentities: []types.VersionedPackageRef{
 			{
-				Platform: platform, Name: types.PackageName(name),
+				Platform: platform, Name: types.BarePackageName(name),
 				Version: loaderVersion,
 			},
 			{

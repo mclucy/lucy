@@ -455,7 +455,7 @@ func BuildTakeoverPackageClassifications(packages []types.Package) []TakeoverPac
 	return result
 }
 
-func takeoverPackageIDAllowed(id types.PackageId) bool {
+func takeoverPackageIDAllowed(id types.VersionedPackageRef) bool {
 	if strings.TrimSpace(id.Name.String()) == "" {
 		return false
 	}

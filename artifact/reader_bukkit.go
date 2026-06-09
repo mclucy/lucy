@@ -36,7 +36,11 @@ type bukkitPluginDescriptor struct {
 
 func newBukkitReader() Reader { return &bukkitReader{} }
 
-func (r *bukkitReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error) {
+func (r *bukkitReader) Read(
+	zipRdr *zip.Reader,
+	filePath string,
+	resolver SlugResolver,
+) ([]ArtifactInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != bukkitPluginDescriptorPath {
 			continue
@@ -75,8 +79,11 @@ func (r *bukkitReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugRe
 			Metadata: types.Metadata{
 				Title:       strings.TrimSpace(descriptor.Name),
 				Description: strings.TrimSpace(descriptor.Description),
-				Authors:     bukkitDescriptorAuthors(descriptor.Author, descriptor.Authors),
-				Urls:        bukkitDescriptorURLs(descriptor.Website),
+				Authors: bukkitDescriptorAuthors(
+					descriptor.Author,
+					descriptor.Authors,
+				),
+				Urls: bukkitDescriptorURLs(descriptor.Website),
 			},
 			Supports: bukkitDescriptorSupport(platform, descriptor),
 		}
@@ -91,63 +98,97 @@ func (r *bukkitReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugRe
 	return nil, nil
 }
 
-func detectBukkitPluginPlatform(descriptor *bukkitPluginDescriptor) types.Platform {
-	signals := strings.ToLower(strings.Join(append(
-		append(
-			append([]string{
-				descriptor.APIVersion,
-				descriptor.PaperPluginLoader,
-			}, descriptor.API...),
-			descriptor.Depend...,
+func detectBukkitPluginPlatform(descriptor *bukkitPluginDescriptor) types.PlatformId {
+	signals := strings.ToLower(
+		strings.Join(
+			append(
+				append(
+					append(
+						[]string{
+							descriptor.APIVersion,
+							descriptor.PaperPluginLoader,
+						}, descriptor.API...,
+					),
+					descriptor.Depend...,
+				),
+				append(descriptor.SoftDepend, descriptor.Libraries...)...,
+			), " ",
 		),
-		append(descriptor.SoftDepend, descriptor.Libraries...)...,
-	), " "))
+	)
 
 	switch {
 	case strings.Contains(signals, "leaves"):
-		return types.Platform("leaves")
+		return types.PlatformId("leaves")
 	case descriptor.FoliaSupported || strings.Contains(signals, "folia"):
-		return types.Platform("folia")
-	case strings.Contains(signals, "paper") || descriptor.PaperPluginLoader != "" || len(descriptor.Libraries) > 0:
-		return types.Platform("paper")
+		return types.PlatformId("folia")
+	case strings.Contains(
+		signals,
+		"paper",
+	) || descriptor.PaperPluginLoader != "" || len(descriptor.Libraries) > 0:
+		return types.PlatformId("paper")
 	case strings.Contains(signals, "spigot") || descriptor.APIVersion != "":
-		return types.Platform("spigot")
+		return types.PlatformId("spigot")
 	default:
 		return types.PlatformBukkit
 	}
 }
 
-func bukkitDescriptorDeps(platform types.Platform, descriptor *bukkitPluginDescriptor) []ArtifactDep {
-	deps := make([]ArtifactDep, 0, len(descriptor.Depend)+len(descriptor.SoftDepend))
+func bukkitDescriptorDeps(
+	platform types.PlatformId,
+	descriptor *bukkitPluginDescriptor,
+) []ArtifactDep {
+	deps := make(
+		[]ArtifactDep,
+		0,
+		len(descriptor.Depend)+len(descriptor.SoftDepend),
+	)
 	deps = appendBukkitDescriptorDeps(deps, platform, descriptor.Depend, true)
-	deps = appendBukkitDescriptorDeps(deps, platform, descriptor.SoftDepend, false)
+	deps = appendBukkitDescriptorDeps(
+		deps,
+		platform,
+		descriptor.SoftDepend,
+		false,
+	)
 	return deps
 }
 
-func appendBukkitDescriptorDeps(deps []ArtifactDep, platform types.Platform, names []string, mandatory bool) []ArtifactDep {
+func appendBukkitDescriptorDeps(
+	deps []ArtifactDep,
+	platform types.PlatformId,
+	names []string,
+	mandatory bool,
+) []ArtifactDep {
 	for _, name := range names {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
-		deps = append(deps, ArtifactDep{
-			Ref: types.PackageRef{
-				Platform: platform,
-				Name:     syntax.ToProjectName(name),
+		deps = append(
+			deps, ArtifactDep{
+				Ref: types.PackageRef{
+					Platform: platform,
+					Name:     syntax.ToProjectName(name),
+				},
+				Mandatory: mandatory,
 			},
-			Mandatory: mandatory,
-		})
+		)
 	}
 	return deps
 }
 
-func bukkitDescriptorSupport(platform types.Platform, descriptor *bukkitPluginDescriptor) *types.PlatformSupport {
-	platforms := []types.Platform{platform}
+func bukkitDescriptorSupport(
+	platform types.PlatformId,
+	descriptor *bukkitPluginDescriptor,
+) *types.PlatformSupport {
+	platforms := []types.PlatformId{platform}
 	if platform != types.PlatformBukkit {
 		platforms = append(platforms, types.PlatformBukkit)
 	}
-	if descriptor.FoliaSupported && platform != types.Platform("folia") {
-		platforms = append([]types.Platform{types.Platform("folia")}, platforms...)
+	if descriptor.FoliaSupported && platform != types.PlatformId("folia") {
+		platforms = append(
+			[]types.PlatformId{types.PlatformId("folia")},
+			platforms...,
+		)
 	}
 
 	return &types.PlatformSupport{

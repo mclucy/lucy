@@ -91,7 +91,7 @@ func InstallMany(requests []types.PackageRequest, options Options) (
 		}
 	}
 
-	roots := append([]types.PackageId(nil), regularIds...)
+	roots := append([]types.VersionedPackageRef(nil), regularIds...)
 	if serverLoader := serverInfo.Runtime.DerivedModLoader(); serverLoader != types.PlatformAny {
 		for i, id := range roots {
 			if id.Platform == types.PlatformAny {
@@ -188,19 +188,20 @@ func buildInstallResult(tx *RecursiveTransaction) *Result {
 }
 
 // TODO(package-ref-migration) — boundary conversion; pipeline internals still use PackageId
-func requestsToIds(requests []types.PackageRequest) []types.PackageId {
-	ids := make([]types.PackageId, len(requests))
+func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef {
+	ids := make([]types.VersionedPackageRef, len(requests))
 	for i, req := range requests {
-		ids[i] = types.PackageId{
-			Platform: req.Ref.Platform, Name: req.Ref.Name, Version: req.Version,
+		ids[i] = types.VersionedPackageRef{
+			Platform: req.Ref.Platform, Name: req.Ref.Name,
+			Version: req.Version,
 		}
 	}
 	return ids
 }
 
-func prepareBatchIDs(ids []types.PackageId) []types.PackageId {
+func prepareBatchIDs(ids []types.VersionedPackageRef) []types.VersionedPackageRef {
 	seen := make(map[string]struct{}, len(ids))
-	prepared := make([]types.PackageId, 0, len(ids))
+	prepared := make([]types.VersionedPackageRef, 0, len(ids))
 
 	for _, id := range ids {
 		if id.Version == types.VersionAny {
@@ -223,12 +224,12 @@ func prepareBatchIDs(ids []types.PackageId) []types.PackageId {
 	return prepared
 }
 
-func partitionBatchIDs(ids []types.PackageId) (
-	[]types.PackageId,
-	[]types.PackageId,
+func partitionBatchIDs(ids []types.VersionedPackageRef) (
+	[]types.VersionedPackageRef,
+	[]types.VersionedPackageRef,
 ) {
-	identityIds := make([]types.PackageId, 0, len(ids))
-	regularIds := make([]types.PackageId, 0, len(ids))
+	identityIds := make([]types.VersionedPackageRef, 0, len(ids))
+	regularIds := make([]types.VersionedPackageRef, 0, len(ids))
 
 	for _, id := range ids {
 		if id.IsIdentityPackage() {
@@ -241,7 +242,7 @@ func partitionBatchIDs(ids []types.PackageId) (
 	return identityIds, regularIds
 }
 
-func validateRegularBatchIDs(ids []types.PackageId) error {
+func validateRegularBatchIDs(ids []types.VersionedPackageRef) error {
 	failures := make([]string, 0)
 
 	for _, id := range ids {

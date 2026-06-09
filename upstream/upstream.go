@@ -10,7 +10,7 @@
 //   - This package defines interfaces and normalized conversion contracts.
 //   - Concrete providers (modrinth, mcdr, curseforge, githubsource) implement
 //     Provider and depend on these contracts, not the other way around.
-//   - Callers pass Provider into Fetch/Search/Information. Core logic depends on
+//   - Callers pass Provider into Fetch/Search/Info. Core logic depends on
 //     abstractions rather than concrete upstream implementations.
 //
 // Boundary:
@@ -29,7 +29,7 @@ import (
 
 func Fetch(
 	provider Provider,
-	id types.PackageId,
+	id types.VersionedPackageRef,
 ) (result FetchResult, err error) {
 	resolvedID, err := provider.ParseAmbiguousId(id)
 	if err != nil {
@@ -47,7 +47,7 @@ func Fetch(
 
 func Dependencies(
 	provider Provider,
-	id types.PackageId,
+	id types.VersionedPackageRef,
 ) (deps *types.PackageDependencies, err error) {
 	raw, err := provider.Dependencies(id)
 	if err != nil {
@@ -57,51 +57,23 @@ func Dependencies(
 	return &result, nil
 }
 
-func PlatformSupport(src types.Source, name types.PackageName) (
-	supports *types.PlatformSupport,
-	err error,
-) {
-	// TODO: Implement
-	panic("not implemented")
-}
-
-func Metadata(
-	provider Provider,
-	name types.PackageName,
+func Info(
+	informer Informer,
+	ref types.PackageRef,
 ) (info types.Metadata, err error) {
-	raw, err := provider.Metadata(name)
-	if err != nil {
-		return types.Metadata{}, err
-	}
-	info = raw.ToProjectInformation()
-	info.From = provider.Source()
-	return info, nil
+	return informer.Info(ref)
 }
 
 func Search(
-	provider Provider,
-	query types.PackageName,
-	option types.SearchOptions,
-) (res types.SearchResults, err error) {
-	raw, err := provider.Search(string(query), option)
+	searcher Searcher,
+	query Query,
+) (res SearchResponse, err error) {
+	res, err = searcher.Search(query)
 	if err != nil {
 		return res, err
 	}
-	res = raw.ToSearchResults()
-	if len(res.Projects) == 0 {
-		return res, fmt.Errorf("no projects found for \"%s\"", query)
+	if len(res.Items) == 0 {
+		return res, fmt.Errorf("no projects found for \"%s\"", query.Keyword)
 	}
 	return res, nil
-}
-
-// InferVersion replaces inferable version constants with their inferred versions
-// through sources. You should call this function before parsing the version to
-// ComparableVersion.
-//
-// TODO: Remove, infer version should not be exposed. All inference will be done in providers.
-func InferVersion(
-	provider Provider,
-	id types.PackageId,
-) (infer types.PackageId) {
-	return id
 }

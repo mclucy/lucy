@@ -359,9 +359,9 @@ func TestMixedManualAndManaged_OnlyManualJarsInManifestAsIgnored(t *testing.T) {
 func TestMCDRPluginDetectedAsPackage_ClassifiedCorrectly(t *testing.T) {
 	pkgs := []types.Package{
 		{
-			Id: types.PackageId{
+			Id: types.VersionedPackageRef{
 				Platform: types.PlatformMCDR,
-				Name:     types.PackageName("primebackup"),
+				Name:     types.BarePackageName("primebackup"),
 			},
 			Remote: &types.PackageRemote{
 				Source: types.SourceMCDR,

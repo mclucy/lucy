@@ -24,7 +24,10 @@ import (
 // support, incompatibility, or unresolved topology. Indirect support is reported as
 // CompatDegraded, while runtime risk remains a node-level topology concern. Never
 // returns nil - always returns a deterministic result.
-func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability types.RuntimeCapability) types.CompatResult {
+func EvaluateCompatibility(
+	topology *types.RuntimeTopology,
+	requiredCapability types.RuntimeCapability,
+) types.CompatResult {
 	if topology == nil || !topology.Resolved() {
 		return types.CompatResult{
 			Verdict: types.CompatUnresolved,
@@ -58,7 +61,10 @@ func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability t
 			return types.CompatResult{
 				Verdict: types.CompatCompatible,
 				Reason:  "direct_capability_match",
-				Detail:  fmt.Sprintf("Runtime has direct support for %s.", requiredCapability),
+				Detail: fmt.Sprintf(
+					"Runtime has direct support for %s.",
+					requiredCapability,
+				),
 			}
 		}
 	}
@@ -68,20 +74,26 @@ func EvaluateCompatibility(topology *types.RuntimeTopology, requiredCapability t
 		return types.CompatResult{
 			Verdict: types.CompatDegraded,
 			Reason:  "indirect_capability_match",
-			Detail:  fmt.Sprintf("Support for %s is available through a hosted or indirect runtime path.", requiredCapability),
+			Detail: fmt.Sprintf(
+				"Support for %s is available through a hosted or indirect runtime path.",
+				requiredCapability,
+			),
 		}
 	}
 
 	return types.CompatResult{
 		Verdict: types.CompatIncompatible,
 		Reason:  "no_capability_match",
-		Detail:  fmt.Sprintf("Runtime does not support %s.", requiredCapability),
+		Detail: fmt.Sprintf(
+			"Runtime does not support %s.",
+			requiredCapability,
+		),
 	}
 }
 
 // CapabilityForPlatform maps a package's Platform identity to the RuntimeCapability
 // it requires in the host server's topology. Returns empty string if no mapping exists.
-func CapabilityForPlatform(p types.Platform) types.RuntimeCapability {
+func CapabilityForPlatform(p types.PlatformId) types.RuntimeCapability {
 	switch p {
 	case types.PlatformFabric:
 		return types.CapabilityFabricMods
@@ -89,15 +101,15 @@ func CapabilityForPlatform(p types.Platform) types.RuntimeCapability {
 		return types.CapabilityForgeMods
 	case types.PlatformNeoforge:
 		return types.CapabilityNeoforgeMods
-	case types.Platform("bukkit"), types.Platform("paper"), types.Platform("spigot"), types.Platform("folia"), types.Platform("leaves"):
+	case types.PlatformId("bukkit"), types.PlatformId("paper"), types.PlatformId("spigot"), types.PlatformId("folia"), types.PlatformId("leaves"):
 		return types.CapabilityBukkitPlugins
-	case types.Platform("velocity"):
+	case types.PlatformId("velocity"):
 		return types.CapabilityVelocityPlugins
-	case types.Platform("bungeecord"), types.Platform("bungee"), types.Platform("waterfall"):
+	case types.PlatformId("bungeecord"), types.PlatformId("bungee"), types.PlatformId("waterfall"):
 		return types.CapabilityBungeecordPlugins
 	case types.PlatformMCDR:
 		return types.CapabilityMCDRPlugins
-	case types.Platform("sponge"):
+	case types.PlatformId("sponge"):
 		return types.CapabilitySpongePlugins
 	default:
 		return ""

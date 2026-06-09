@@ -9,7 +9,7 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func ensureServerPlatformMatch(id types.PackageId) error {
+func ensureServerPlatformMatch(id types.VersionedPackageRef) error {
 	platform := id.Platform
 	serverInfo := probe.ServerInfo()
 
@@ -39,12 +39,14 @@ func ensureServerPlatformMatch(id types.PackageId) error {
 		case types.CompatDegraded:
 			// CompatDegraded means the ecosystem is reachable only through an indirect
 			// hosted/support path. It is warn-only here; numeric risk gating is node-based.
-			logger.ShowWarn(fmt.Errorf(
-				"compatibility degraded for %s: %s (reason: %s)",
-				platform,
-				result.Detail,
-				result.Reason,
-			))
+			logger.ShowWarn(
+				fmt.Errorf(
+					"compatibility degraded for %s: %s (reason: %s)",
+					platform,
+					result.Detail,
+					result.Reason,
+				),
+			)
 			return nil
 		case types.CompatUnresolved:
 			return fmt.Errorf(

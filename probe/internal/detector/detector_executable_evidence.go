@@ -27,7 +27,7 @@ type ExecutableEvidence struct {
 	GameVersion       types.BareVersion
 	Topology          *types.RuntimeTopology
 	TopologySeed      *ExecutableTopologySeed
-	RuntimeIdentities []types.PackageId
+	RuntimeIdentities []types.VersionedPackageRef
 	BridgeHints       []string
 	Provenance        ExecutableDetectorProvenance
 }

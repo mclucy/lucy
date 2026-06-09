@@ -2,31 +2,34 @@ package routing
 
 import "github.com/mclucy/lucy/types"
 
-var searchProviderSourcesInPriorityOrder = []types.Source{
+var searchProviderSourcesInPriorityOrder = []types.SourceId{
 	types.SourceModrinth,
 	types.SourceCurseForge,
 	types.SourceHangar,
 	types.SourceSpiget,
 }
 
-func autoProviderSources() []types.Source {
+func autoProviderSources() []types.SourceId {
 	return append(modProviderSources(), types.SourceMCDR)
 }
 
-func modProviderSources() []types.Source {
-	sources := []types.Source{types.SourceModrinth}
+func modProviderSources() []types.SourceId {
+	sources := []types.SourceId{types.SourceModrinth}
 	if curseforgeAvailable() {
 		sources = append(sources, types.SourceCurseForge)
 	}
 	return sources
 }
 
-func providerSourcesForPlatform(platform types.Platform) ([]types.Source, error) {
+func providerSourcesForPlatform(platform types.PlatformId) (
+	[]types.SourceId,
+	error,
+) {
 	switch platform {
 	case types.PlatformAny:
 		return autoProviderSources(), nil
 	case types.PlatformMCDR:
-		return []types.Source{types.SourceMCDR}, nil
+		return []types.SourceId{types.SourceMCDR}, nil
 	case types.PlatformForge, types.PlatformFabric, types.PlatformNeoforge, types.PlatformBukkit:
 		return providerSourcesForSearchPlatform(platform), nil
 	default:
@@ -34,8 +37,12 @@ func providerSourcesForPlatform(platform types.Platform) ([]types.Source, error)
 	}
 }
 
-func providerSourcesForSearchPlatform(platform types.Platform) []types.Source {
-	sources := make([]types.Source, 0, len(searchProviderSourcesInPriorityOrder))
+func providerSourcesForSearchPlatform(platform types.PlatformId) []types.SourceId {
+	sources := make(
+		[]types.SourceId,
+		0,
+		len(searchProviderSourcesInPriorityOrder),
+	)
 	for _, source := range searchProviderSourcesInPriorityOrder {
 		if source == types.SourceCurseForge && !curseforgeAvailable() {
 			continue
@@ -52,18 +59,18 @@ func providerSourcesForSearchPlatform(platform types.Platform) []types.Source {
 }
 
 type topologyResolution struct {
-	sources  []types.Source
+	sources  []types.SourceId
 	fallback bool
 	empty    bool
 }
 
 func providerSourcesFromTopology(topology *types.RuntimeTopology) topologyResolution {
 	selection := topologyResolution{}
-	seen := map[types.Source]struct{}{}
+	seen := map[types.SourceId]struct{}{}
 	sawKnownCapability := false
 	sawProxyCapability := false
 
-	appendSource := func(source types.Source) {
+	appendSource := func(source types.SourceId) {
 		if _, ok := seen[source]; ok {
 			return
 		}
@@ -111,11 +118,11 @@ func providerSourcesFromTopology(topology *types.RuntimeTopology) topologyResolu
 	return selection
 }
 
-func providerSourcesByCapability(topology *types.RuntimeTopology) []types.Source {
-	sources := make([]types.Source, 0, 2)
-	seen := map[types.Source]struct{}{}
+func providerSourcesByCapability(topology *types.RuntimeTopology) []types.SourceId {
+	sources := make([]types.SourceId, 0, 2)
+	seen := map[types.SourceId]struct{}{}
 
-	appendSource := func(source types.Source) {
+	appendSource := func(source types.SourceId) {
 		if _, exists := seen[source]; exists {
 			return
 		}

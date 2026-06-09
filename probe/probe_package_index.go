@@ -79,17 +79,19 @@ func (idx *PackageIndex) Packages() []types.Package {
 		result = append(result, pkg)
 	}
 
-	sort.Slice(result, func(i, j int) bool {
-		pi, pj := result[i].Id, result[j].Id
+	sort.Slice(
+		result, func(i, j int) bool {
+			pi, pj := result[i].Id, result[j].Id
 
-		if pi.Platform != pj.Platform {
-			return pi.Platform.String() < pj.Platform.String()
-		}
-		if pi.Name != pj.Name {
-			return pi.Name.String() < pj.Name.String()
-		}
-		return pi.Version.String() < pj.Version.String()
-	})
+			if pi.Platform != pj.Platform {
+				return pi.Platform.String() < pj.Platform.String()
+			}
+			if pi.Name != pj.Name {
+				return pi.Name.String() < pj.Name.String()
+			}
+			return pi.Version.String() < pj.Version.String()
+		},
+	)
 
 	return result
 }
@@ -97,7 +99,10 @@ func (idx *PackageIndex) Packages() []types.Package {
 // LookupByID performs an exact lookup by the full package identifier
 // (PackageId.StringFull()). Returns the package and true if found, or a zero
 // Package and false otherwise.
-func (idx *PackageIndex) LookupByID(id types.PackageId) (types.Package, bool) {
+func (idx *PackageIndex) LookupByID(id types.VersionedPackageRef) (
+	types.Package,
+	bool,
+) {
 	pkg, ok := idx.pkgs[id.StringFull()]
 	return pkg, ok
 }
@@ -107,7 +112,10 @@ func (idx *PackageIndex) LookupByID(id types.PackageId) (types.Package, bool) {
 // nil.
 //
 // This method never exposes map iteration order; results are always sorted.
-func (idx *PackageIndex) LookupByPlatformName(platform types.Platform, name string) []types.Package {
+func (idx *PackageIndex) LookupByPlatformName(
+	platform types.PlatformId,
+	name string,
+) []types.Package {
 	var matches []types.Package
 	for _, pkg := range idx.pkgs {
 		if pkg.Id.Platform == platform && pkg.Id.Name.String() == name {
@@ -119,9 +127,11 @@ func (idx *PackageIndex) LookupByPlatformName(platform types.Platform, name stri
 		return nil
 	}
 
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].Id.Version.String() < matches[j].Id.Version.String()
-	})
+	sort.Slice(
+		matches, func(i, j int) bool {
+			return matches[i].Id.Version.String() < matches[j].Id.Version.String()
+		},
+	)
 
 	return matches
 }

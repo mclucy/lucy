@@ -33,11 +33,14 @@ func init() {
 	registerInstaller(types.PlatformFabric, installFabricMod)
 }
 
-func installFabric(p types.PackageId) error {
+func installFabric(p types.VersionedPackageRef) error {
 	return installFabricWithOverride(p, false)
 }
 
-func installFabricWithOverride(p types.PackageId, deleteVanilla bool) error {
+func installFabricWithOverride(
+	p types.VersionedPackageRef,
+	deleteVanilla bool,
+) error {
 	serverInfo := probe.ServerInfo()
 
 	var gameVersion string

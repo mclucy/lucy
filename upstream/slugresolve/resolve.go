@@ -8,12 +8,12 @@ import (
 
 	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream/curseforge"
-	"github.com/mclucy/lucy/upstream/modrinth"
+	"github.com/mclucy/lucy/upstream/providers/curseforge"
+	"github.com/mclucy/lucy/upstream/providers/modrinth"
 )
 
 func ResolveSlug(
-	src types.Source,
+	src types.SourceId,
 	localId string,
 	filePath string,
 	metadataURLs []string,

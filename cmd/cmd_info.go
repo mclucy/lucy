@@ -65,7 +65,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	sourceStr, _ := cmd.Flags().GetString(flagSourceName)
 	source := types.ParseSource(sourceStr)
 
-	providers, err := routing.ResolveProviders(ref.Platform, source)
+	providers, err := routing.ResolveInfoProviders(ref.Platform, source)
 	if err != nil {
 		errArg := sourceStr
 		if source == types.SourceAuto {
@@ -75,7 +75,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	meta, providerErrors, err := routing.GetMedataHedged(providers, ref)
+	meta, providerErrors, err := routing.GetInfoHedged(providers, ref)
 	if err != nil {
 		logger.Fatal(fmt.Errorf("failed to get information: %w", err))
 	}

@@ -34,7 +34,11 @@ func TestNewInitFlowState_WithExistingConfig(t *testing.T) {
 	s := NewInitFlowState(tmpDir)
 
 	if !slices.Contains(s.ExistingFiles, string(state.ConfigFile)) {
-		t.Errorf("expected ExistingFiles to contain %s, got %v", state.ConfigFile, s.ExistingFiles)
+		t.Errorf(
+			"expected ExistingFiles to contain %s, got %v",
+			state.ConfigFile,
+			s.ExistingFiles,
+		)
 	}
 }
 
@@ -61,7 +65,11 @@ func TestBuildResult_PreserveExisting(t *testing.T) {
 	}
 
 	if !slices.Contains(result.SkippedFiles, string(state.ConfigFile)) {
-		t.Errorf("expected SkippedFiles to contain %s, got %v", state.ConfigFile, result.SkippedFiles)
+		t.Errorf(
+			"expected SkippedFiles to contain %s, got %v",
+			state.ConfigFile,
+			result.SkippedFiles,
+		)
 	}
 }
 
@@ -115,7 +123,11 @@ func TestBuildResult_OverwriteAll(t *testing.T) {
 	}
 
 	if !slices.Contains(result.WrittenFiles, string(state.ConfigFile)) {
-		t.Errorf("expected WrittenFiles to contain %s, got %v", state.ConfigFile, result.WrittenFiles)
+		t.Errorf(
+			"expected WrittenFiles to contain %s, got %v",
+			state.ConfigFile,
+			result.WrittenFiles,
+		)
 	}
 }
 
@@ -137,11 +149,20 @@ func TestBuildResult_PersistsCompatiblePlatforms(t *testing.T) {
 	}
 	want := []string{"fabric", "mcdr", "sinytra"}
 	if len(result.ManifestToWrite.Environment.CompatiblePlatforms) != len(want) {
-		t.Fatalf("expected %d compatible platforms, got %d", len(want), len(result.ManifestToWrite.Environment.CompatiblePlatforms))
+		t.Fatalf(
+			"expected %d compatible platforms, got %d",
+			len(want),
+			len(result.ManifestToWrite.Environment.CompatiblePlatforms),
+		)
 	}
 	for i, platform := range want {
 		if result.ManifestToWrite.Environment.CompatiblePlatforms[i] != platform {
-			t.Fatalf("compatible platform %d mismatch: got %q want %q", i, result.ManifestToWrite.Environment.CompatiblePlatforms[i], platform)
+			t.Fatalf(
+				"compatible platform %d mismatch: got %q want %q",
+				i,
+				result.ManifestToWrite.Environment.CompatiblePlatforms[i],
+				platform,
+			)
 		}
 	}
 }
@@ -179,16 +200,32 @@ func TestBuildResultPreserveManifestStillPopulatesLockMetadataFromExistingManife
 	wantFingerprint := "sha256:" + hex.EncodeToString(sum[:])
 
 	if result.LockToWrite.ManifestFingerprint != wantFingerprint {
-		t.Fatalf("manifest fingerprint mismatch: got %q want %q", result.LockToWrite.ManifestFingerprint, wantFingerprint)
+		t.Fatalf(
+			"manifest fingerprint mismatch: got %q want %q",
+			result.LockToWrite.ManifestFingerprint,
+			wantFingerprint,
+		)
 	}
 	if result.LockToWrite.GameVersion != manifest.Environment.GameVersion {
-		t.Fatalf("game version mismatch: got %q want %q", result.LockToWrite.GameVersion, manifest.Environment.GameVersion)
+		t.Fatalf(
+			"game version mismatch: got %q want %q",
+			result.LockToWrite.GameVersion,
+			manifest.Environment.GameVersion,
+		)
 	}
 	if result.LockToWrite.Platform != manifest.Environment.ModdingPlatform {
-		t.Fatalf("platform mismatch: got %q want %q", result.LockToWrite.Platform, manifest.Environment.ModdingPlatform)
+		t.Fatalf(
+			"platform mismatch: got %q want %q",
+			result.LockToWrite.Platform,
+			manifest.Environment.ModdingPlatform,
+		)
 	}
 	if result.LockToWrite.PlatformVersion != manifest.Environment.ModdingPlatformVersion {
-		t.Fatalf("platform version mismatch: got %q want %q", result.LockToWrite.PlatformVersion, manifest.Environment.ModdingPlatformVersion)
+		t.Fatalf(
+			"platform version mismatch: got %q want %q",
+			result.LockToWrite.PlatformVersion,
+			manifest.Environment.ModdingPlatformVersion,
+		)
 	}
 	if err := state.ValidateLock(*result.LockToWrite); err != nil {
 		t.Fatalf("expected preserve-mode lock skeleton to validate: %v", err)
@@ -250,20 +287,36 @@ func TestDiscoverServerDefaults_UsesProbeObservedTakeoverCandidates(t *testing.T
 	tmpDir := t.TempDir()
 	copyFile(
 		t,
-		filepath.Join("..", "..", "probe", "internal", "detector", "testdata", "fabric", "fabric-server-launch.jar"),
+		filepath.Join(
+			"..",
+			"..",
+			"probe",
+			"internal",
+			"detector",
+			"testdata",
+			"fabric",
+			"fabric-server-launch.jar",
+		),
 		filepath.Join(tmpDir, "fabric-server-launch.jar"),
 	)
 
 	defaults := DiscoverServerDefaults(tmpDir)
 
 	if defaults.Platform != string(types.PlatformFabric) {
-		t.Fatalf("expected platform %q, got %q", types.PlatformFabric, defaults.Platform)
+		t.Fatalf(
+			"expected platform %q, got %q",
+			types.PlatformFabric,
+			defaults.Platform,
+		)
 	}
 	if defaults.PlatformVersion == "" {
 		t.Fatal("expected probe-derived platform version to be populated")
 	}
 	if !slices.Contains(defaults.DetectedPackages, "fabric/fabric") {
-		t.Fatalf("expected runtime identity takeover candidate in detected packages, got %v", defaults.DetectedPackages)
+		t.Fatalf(
+			"expected runtime identity takeover candidate in detected packages, got %v",
+			defaults.DetectedPackages,
+		)
 	}
 	if defaults.Confidence == ConfidenceNone {
 		t.Fatal("expected non-empty discovery confidence")
@@ -301,7 +354,10 @@ func TestBuildSummaryShowsPrimaryAndCompatiblePlatforms(t *testing.T) {
 	if want := "  Primary runtime: neoforge"; !containsLine(summary, want) {
 		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
 	}
-	if want := "  Compatible with: fabric, mcdr, sinytra"; !containsLine(summary, want) {
+	if want := "  Compatible with: fabric, mcdr, sinytra"; !containsLine(
+		summary,
+		want,
+	) {
 		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
 	}
 }
@@ -311,14 +367,32 @@ func TestBuildTakeoverPackageClassificationsSurfacesNonLeafDependencies(t *testi
 		testObservedPackage(
 			"fabric/lithium@0.12.7",
 			types.SourceModrinth,
-			[]types.Dependency{{Id: types.PackageId{Platform: types.PlatformFabric, Name: "fabric-api", Version: types.VersionAny}, Mandatory: true}},
+			[]types.Dependency{
+				{
+					Id: types.VersionedPackageRef{
+						Platform: types.PlatformFabric, Name: "fabric-api",
+						Version: types.VersionAny,
+					}, Mandatory: true,
+				},
+			},
 		),
 		testObservedPackage(
 			"fabric/fabric-api@0.119.2+1.21.5",
 			types.SourceModrinth,
-			[]types.Dependency{{Id: types.PackageId{Platform: types.PlatformFabric, Name: "cloth-config", Version: types.VersionAny}, Mandatory: true}},
+			[]types.Dependency{
+				{
+					Id: types.VersionedPackageRef{
+						Platform: types.PlatformFabric, Name: "cloth-config",
+						Version: types.VersionAny,
+					}, Mandatory: true,
+				},
+			},
 		),
-		testObservedPackage("fabric/cloth-config@15.0.140", types.SourceModrinth, nil),
+		testObservedPackage(
+			"fabric/cloth-config@15.0.140",
+			types.SourceModrinth,
+			nil,
+		),
 	}
 
 	classifications := BuildTakeoverPackageClassifications(packages)
@@ -335,16 +409,34 @@ func TestBuildTakeoverPackageClassificationsSurfacesNonLeafDependencies(t *testi
 		t.Fatalf("expected lithium to be a required leaf, got %#v", got)
 	}
 	if got := byID["fabric/fabric-api"]; got.Leaf || got.Role != state.RoleTransitive {
-		t.Fatalf("expected fabric-api to be a transitive non-leaf, got %#v", got)
+		t.Fatalf(
+			"expected fabric-api to be a transitive non-leaf, got %#v",
+			got,
+		)
 	}
 	if got := byID["fabric/cloth-config"]; got.Leaf || got.Role != state.RoleTransitive {
-		t.Fatalf("expected cloth-config to be a transitive non-leaf, got %#v", got)
+		t.Fatalf(
+			"expected cloth-config to be a transitive non-leaf, got %#v",
+			got,
+		)
 	}
-	if got := byID["fabric/fabric-api"]; !slices.Equal(got.RequiredBy, []string{"fabric/lithium"}) {
-		t.Fatalf("expected fabric-api required-by chain, got %#v", got.RequiredBy)
+	if got := byID["fabric/fabric-api"]; !slices.Equal(
+		got.RequiredBy,
+		[]string{"fabric/lithium"},
+	) {
+		t.Fatalf(
+			"expected fabric-api required-by chain, got %#v",
+			got.RequiredBy,
+		)
 	}
-	if got := byID["fabric/cloth-config"]; !slices.Equal(got.RequiredBy, []string{"fabric/fabric-api"}) {
-		t.Fatalf("expected cloth-config required-by chain, got %#v", got.RequiredBy)
+	if got := byID["fabric/cloth-config"]; !slices.Equal(
+		got.RequiredBy,
+		[]string{"fabric/fabric-api"},
+	) {
+		t.Fatalf(
+			"expected cloth-config required-by chain, got %#v",
+			got.RequiredBy,
+		)
 	}
 }
 
@@ -355,9 +447,18 @@ func TestBuildResultIncludesClassifiedPackagesInManifest(t *testing.T) {
 	s.Platform = "fabric"
 	s.PlatformVersion = "0.16.10"
 	s.PackageClassifications = []TakeoverPackageClassification{
-		{ID: "fabric/lithium", Version: "0.12.7", Source: "modrinth", Role: state.RoleRequired, Leaf: true},
-		{ID: "fabric/fabric-api", Version: "0.119.2+1.21.5", Source: "modrinth", Role: state.RoleTransitive},
-		{ID: "fabric/cloth-config", Version: "15.0.140", Source: "modrinth", Role: state.RoleIgnored},
+		{
+			ID: "fabric/lithium", Version: "0.12.7", Source: "modrinth",
+			Role: state.RoleRequired, Leaf: true,
+		},
+		{
+			ID: "fabric/fabric-api", Version: "0.119.2+1.21.5",
+			Source: "modrinth", Role: state.RoleTransitive,
+		},
+		{
+			ID: "fabric/cloth-config", Version: "15.0.140", Source: "modrinth",
+			Role: state.RoleIgnored,
+		},
 	}
 
 	result, err := BuildResult(s)
@@ -368,10 +469,16 @@ func TestBuildResultIncludesClassifiedPackagesInManifest(t *testing.T) {
 		t.Fatal("expected manifest to be written")
 	}
 	if len(result.ManifestToWrite.Packages) != 3 {
-		t.Fatalf("expected 3 manifest packages, got %d", len(result.ManifestToWrite.Packages))
+		t.Fatalf(
+			"expected 3 manifest packages, got %d",
+			len(result.ManifestToWrite.Packages),
+		)
 	}
 
-	byID := make(map[string]state.ManifestPackage, len(result.ManifestToWrite.Packages))
+	byID := make(
+		map[string]state.ManifestPackage,
+		len(result.ManifestToWrite.Packages),
+	)
 	for _, pkg := range result.ManifestToWrite.Packages {
 		byID[pkg.ID] = pkg
 	}
@@ -389,21 +496,38 @@ func TestBuildResultIncludesClassifiedPackagesInManifest(t *testing.T) {
 func TestBuildPackageClassificationDescriptionDistinguishesNonLeafNodes(t *testing.T) {
 	s := &InitFlowState{
 		PackageClassifications: []TakeoverPackageClassification{
-			{ID: "fabric/lithium", Version: "0.12.7", Role: state.RoleRequired, Leaf: true},
-			{ID: "fabric/fabric-api", Version: "0.119.2+1.21.5", Role: state.RoleTransitive, RequiredBy: []string{"fabric/lithium"}},
+			{
+				ID: "fabric/lithium", Version: "0.12.7",
+				Role: state.RoleRequired, Leaf: true,
+			},
+			{
+				ID: "fabric/fabric-api", Version: "0.119.2+1.21.5",
+				Role:       state.RoleTransitive,
+				RequiredBy: []string{"fabric/lithium"},
+			},
 		},
 	}
 
 	description := buildPackageClassificationDescription(s)
 	if !strings.Contains(description, "[leaf]") {
-		t.Fatalf("expected package classification description to mark leaf nodes, got:\n%s", description)
+		t.Fatalf(
+			"expected package classification description to mark leaf nodes, got:\n%s",
+			description,
+		)
 	}
 	if !strings.Contains(description, "[dependency]") {
-		t.Fatalf("expected package classification description to mark non-leaf dependency nodes, got:\n%s", description)
+		t.Fatalf(
+			"expected package classification description to mark non-leaf dependency nodes, got:\n%s",
+			description,
+		)
 	}
 }
 
-func testObservedPackage(id string, source types.Source, deps []types.Dependency) types.Package {
+func testObservedPackage(
+	id string,
+	source types.SourceId,
+	deps []types.Dependency,
+) types.Package {
 	pkgID, err := syntax.Parse(id)
 	if err != nil {
 		panic(err)
@@ -413,7 +537,9 @@ func testObservedPackage(id string, source types.Source, deps []types.Dependency
 		pkg.Remote = &types.PackageRemote{Source: source}
 	}
 	if deps != nil {
-		pkg.Dependencies = &types.PackageDependencies{Value: deps, Authentic: true}
+		pkg.Dependencies = &types.PackageDependencies{
+			Value: deps, Authentic: true,
+		}
 	}
 	return pkg
 }
@@ -444,10 +570,16 @@ func TestBuildSummaryShowsObservedFacts(t *testing.T) {
 
 	summary := buildSummary(s)
 	if !strings.Contains(summary, "Observed server facts") {
-		t.Fatalf("expected summary to contain observed section header, got:\n%s", summary)
+		t.Fatalf(
+			"expected summary to contain observed section header, got:\n%s",
+			summary,
+		)
 	}
 	if !strings.Contains(summary, "Proposed manifest intent") {
-		t.Fatalf("expected summary to contain proposed section header, got:\n%s", summary)
+		t.Fatalf(
+			"expected summary to contain proposed section header, got:\n%s",
+			summary,
+		)
 	}
 	if want := "  Confidence:    high"; !containsLine(summary, want) {
 		t.Fatalf("expected summary to contain %q, got:\n%s", want, summary)
@@ -480,13 +612,22 @@ func TestBuildSummaryShowsConflictsWhenObservedDiffersFromExistingLucy(t *testin
 
 	summary := buildSummary(s)
 	if !strings.Contains(summary, "Conflicts") {
-		t.Fatalf("expected conflicts section in summary when observed differs from existing lucy.yaml, got:\n%s", summary)
+		t.Fatalf(
+			"expected conflicts section in summary when observed differs from existing lucy.yaml, got:\n%s",
+			summary,
+		)
 	}
 	if !strings.Contains(summary, `observed "1.21.4"`) {
-		t.Fatalf("expected game version divergence in conflicts section, got:\n%s", summary)
+		t.Fatalf(
+			"expected game version divergence in conflicts section, got:\n%s",
+			summary,
+		)
 	}
 	if !strings.Contains(summary, `observed "fabric"`) {
-		t.Fatalf("expected platform divergence in conflicts section, got:\n%s", summary)
+		t.Fatalf(
+			"expected platform divergence in conflicts section, got:\n%s",
+			summary,
+		)
 	}
 }
 
@@ -509,6 +650,9 @@ func TestBuildSummaryNoConflictsSectionWhenObservedMatchesExisting(t *testing.T)
 
 	summary := buildSummary(s)
 	if strings.Contains(summary, "Conflicts") {
-		t.Fatalf("expected no conflicts section when observed matches existing lucy.yaml, got:\n%s", summary)
+		t.Fatalf(
+			"expected no conflicts section when observed matches existing lucy.yaml, got:\n%s",
+			summary,
+		)
 	}
 }

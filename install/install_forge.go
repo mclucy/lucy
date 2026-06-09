@@ -27,7 +27,7 @@ import (
 )
 
 func getForgeVersionFromPackageId(
-	p types.PackageId,
+	p types.VersionedPackageRef,
 	gameVersion types.BareVersion,
 ) (string, error) {
 	if p.Version != types.VersionLatest && p.Version != types.VersionCompatible && p.Version != types.VersionAny && p.Version != types.VersionUnknown {
@@ -259,7 +259,7 @@ func verifyForgeInstallation(workPath string) error {
 	return errors.New("forge installation verification failed: no artifacts found (expected libraries/ with launch scripts or forge-*.jar)")
 }
 
-func installForge(p types.PackageId) error {
+func installForge(p types.VersionedPackageRef) error {
 	if err := guardServerTopologyForForgePlatform(); err != nil {
 		return err
 	}
@@ -600,7 +600,7 @@ func runForgeInstaller(
 //
 // platformName is used for user-facing progress labels (e.g. "Forge", "NeoForge").
 func runModLoaderInstaller(
-	id types.PackageId,
+	id types.VersionedPackageRef,
 	fileURL string,
 	workPath string,
 	platformName string,

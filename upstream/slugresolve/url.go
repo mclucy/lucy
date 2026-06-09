@@ -18,7 +18,7 @@ import (
 //	https://modrinth.com/datapack/<slug>
 //	https://www.curseforge.com/minecraft/mc-mods/<slug>
 //	https://curseforge.com/minecraft/mc-mods/<slug>
-func ExtractFromURL(rawURL string) (src types.Source, slug string, ok bool) {
+func ExtractFromURL(rawURL string) (src types.SourceId, slug string, ok bool) {
 	if rawURL == "" {
 		return types.SourceAuto, "", false
 	}

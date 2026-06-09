@@ -15,8 +15,16 @@ var removeCmd = &cobra.Command{
 	Use:   "remove",
 	Short: "Remove packages under explicit operator control",
 	Args:  cobra.MinimumNArgs(1),
-	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return CompletePackageIDSuggestions(context.Background(), "remove", toComplete)
+	ValidArgsFunction: func(
+		cmd *cobra.Command,
+		args []string,
+		toComplete string,
+	) ([]string, cobra.ShellCompDirective) {
+		return CompletePackageIDSuggestions(
+			context.Background(),
+			"remove",
+			toComplete,
+		)
 	},
 	RunE: runWithErrorLogging(actionRemove),
 }
@@ -48,7 +56,7 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("manifest is required for remove")
 	}
 
-	ids := make([]types.PackageId, 0, len(args))
+	ids := make([]types.VersionedPackageRef, 0, len(args))
 	for _, arg := range args {
 		id, err := syntax.Parse(arg)
 		if err != nil {
@@ -57,7 +65,11 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		ids = append(ids, id)
 	}
 
-	manifest := state.UpdateManifestRolesForRemove(stateSvc.Manifest(), ids, stateSvc.Lock())
+	manifest := state.UpdateManifestRolesForRemove(
+		stateSvc.Manifest(),
+		ids,
+		stateSvc.Lock(),
+	)
 	if err := state.WriteManifest(workDir, manifest); err != nil {
 		return fmt.Errorf("update manifest: %w", err)
 	}

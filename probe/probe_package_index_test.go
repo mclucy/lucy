@@ -8,8 +8,20 @@ import (
 
 func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 	idx := NewPackageIndex()
-	first := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "/mods/sodium-0.5.0.jar")
-	second := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "/mods/sodium-other.jar")
+	first := makePackage(
+		t,
+		types.PlatformFabric,
+		"sodium",
+		"0.5.0",
+		"/mods/sodium-0.5.0.jar",
+	)
+	second := makePackage(
+		t,
+		types.PlatformFabric,
+		"sodium",
+		"0.5.0",
+		"/mods/sodium-other.jar",
+	)
 	idx.Add(first)
 	idx.Add(second)
 	pkgs := idx.Packages()
@@ -24,7 +36,13 @@ func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 func TestPackageIndex_AddLocalPathEnrichment(t *testing.T) {
 	idx := NewPackageIndex()
 	remote := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
-	local := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "/mods/sodium-0.5.0.jar")
+	local := makePackage(
+		t,
+		types.PlatformFabric,
+		"sodium",
+		"0.5.0",
+		"/mods/sodium-0.5.0.jar",
+	)
 	idx.Add(remote)
 	idx.Add(local)
 	pkgs := idx.Packages()
@@ -38,7 +56,13 @@ func TestPackageIndex_AddLocalPathEnrichment(t *testing.T) {
 
 func TestPackageIndex_AddLocalPathNotOverwrittenByRemote(t *testing.T) {
 	idx := NewPackageIndex()
-	local := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "/mods/sodium-0.5.0.jar")
+	local := makePackage(
+		t,
+		types.PlatformFabric,
+		"sodium",
+		"0.5.0",
+		"/mods/sodium-0.5.0.jar",
+	)
 	remote := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
 	idx.Add(local)
 	idx.Add(remote)
@@ -74,7 +98,13 @@ func TestPackageIndex_MergeBulk(t *testing.T) {
 	pkgs := []types.Package{
 		makePackage(t, types.PlatformFabric, "sodium", "0.5.0", ""),
 		makePackage(t, types.PlatformFabric, "lithium", "0.11.0", ""),
-		makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "/mods/sodium.jar"), // enrichment
+		makePackage(
+			t,
+			types.PlatformFabric,
+			"sodium",
+			"0.5.0",
+			"/mods/sodium.jar",
+		), // enrichment
 	}
 	idx.Merge(pkgs)
 	result := idx.Packages()
@@ -98,7 +128,9 @@ func TestPackageIndex_LookupByID_Found(t *testing.T) {
 
 func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
 	idx := NewPackageIndex()
-	id := types.PackageId{Platform: types.PlatformFabric, Name: "missing", Version: "1.0.0"}
+	id := types.VersionedPackageRef{
+		Platform: types.PlatformFabric, Name: "missing", Version: "1.0.0",
+	}
 	_, ok := idx.LookupByID(id)
 	if ok {
 		t.Fatal("expected not found")
@@ -116,7 +148,10 @@ func TestPackageIndex_LookupByPlatformName_MultipleVersions(t *testing.T) {
 	}
 	// sorted by version string ascending: 0.5.0 < 0.6.0
 	if results[0].Id.Version.String() != "0.5.0" {
-		t.Errorf("wrong version sort: got %q first", results[0].Id.Version.String())
+		t.Errorf(
+			"wrong version sort: got %q first",
+			results[0].Id.Version.String(),
+		)
 	}
 }
 

@@ -15,30 +15,30 @@ import (
 	"github.com/mclucy/lucy/tools"
 )
 
-// Platform is an enum of several string constants.
+// PlatformId is an enum of several string constants.
 //
 // All platform is a package under itself, for example, "fabric/fabric" is a
 // valid package, and is equivalent to "fabric". This literal is typically used
 // when installing/upgrading a platform itself.
-type Platform string
+type PlatformId string
 
 const (
-	PlatformAny        Platform = "" // PlatformAny is ambiguous but has single-valueness. It does NOT refer to multiple platforms, but rather a single platform that is unknown. Understand this as PlatformAny reduces to a definite platform at evaluation. Again, keep in mind that you should not allow it to be explicitly evaluated as multiple platforms.
-	PlatformMinecraft  Platform = "minecraft"
-	PlatformVanilla             = PlatformMinecraft // Alias for Minecraft
-	PlatformFabric     Platform = "fabric"
-	PlatformForge      Platform = "forge"
-	PlatformNeoforge   Platform = "neoforge"
-	PlatformMCDR       Platform = "mcdr"
-	PlatformBukkit     Platform = "bukkit" // Can be comsumed by paper/spigot/craftbukkit/etc.
-	PlatformSponge     Platform = "sponge"
-	PlatformVelocity   Platform = "velocity"
-	PlatformBungeecord Platform = "bungeecord" // Can be consumed by both waterfall and bungeecord itself
-	PlatformNone       Platform = "none"       // PlatformNone is a special platform that is not satisfied by any platform, but it can satisfy all platforms. It is typically used to indicate the absence of a platform, for example, when a package is not compatible with any platform, or when a package does not require a platform.
-	PlatformUnknown    Platform = "unknown"    // PlatformUnknown is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
+	PlatformAny        PlatformId = "" // PlatformAny is ambiguous but has single-valueness. It does NOT refer to multiple platforms, but rather a single platform that is unknown. Understand this as PlatformAny reduces to a definite platform at evaluation. Again, keep in mind that you should not allow it to be explicitly evaluated as multiple platforms.
+	PlatformMinecraft  PlatformId = "minecraft"
+	PlatformVanilla               = PlatformMinecraft // Alias for Minecraft
+	PlatformFabric     PlatformId = "fabric"
+	PlatformForge      PlatformId = "forge"
+	PlatformNeoforge   PlatformId = "neoforge"
+	PlatformMCDR       PlatformId = "mcdr"
+	PlatformBukkit     PlatformId = "bukkit" // Can be comsumed by paper/spigot/craftbukkit/etc.
+	PlatformSponge     PlatformId = "sponge"
+	PlatformVelocity   PlatformId = "velocity"
+	PlatformBungeecord PlatformId = "bungeecord" // Can be consumed by both waterfall and bungeecord itself
+	PlatformNone       PlatformId = "none"       // PlatformNone is a special platform that is not satisfied by any platform, but it can satisfy all platforms. It is typically used to indicate the absence of a platform, for example, when a package is not compatible with any platform, or when a package does not require a platform.
+	PlatformUnknown    PlatformId = "unknown"    // PlatformUnknown is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
 )
 
-func (p Platform) Title() string {
+func (p PlatformId) Title() string {
 	if p == PlatformAny {
 		return "Any"
 	}
@@ -48,7 +48,7 @@ func (p Platform) Title() string {
 	return "Unknown"
 }
 
-func (p Platform) String() string {
+func (p PlatformId) String() string {
 	if p == PlatformAny {
 		return "any"
 	}
@@ -58,7 +58,7 @@ func (p Platform) String() string {
 // Valid
 //
 // If a platform can be used in a package id, it is a valid platform.
-func (p Platform) Valid() bool {
+func (p PlatformId) Valid() bool {
 	switch p {
 	case PlatformMinecraft, PlatformFabric, PlatformForge, PlatformNeoforge, PlatformMCDR, PlatformBukkit, PlatformAny, PlatformNone:
 		return true
@@ -66,7 +66,7 @@ func (p Platform) Valid() bool {
 	return false
 }
 
-func (p Platform) IsSearchPlatform() bool {
+func (p PlatformId) IsSearchPlatform() bool {
 	switch p {
 	case PlatformFabric, PlatformForge, PlatformNeoforge, PlatformBukkit:
 		return true
@@ -76,7 +76,7 @@ func (p Platform) IsSearchPlatform() bool {
 }
 
 // Satisfy returns true if p satisfies the requirement of p2.
-func (p Platform) Satisfy(p2 Platform) bool {
+func (p PlatformId) Satisfy(p2 PlatformId) bool {
 	// When p2 is PlatformNone, it is satisfied by all platforms.
 	if p2 == PlatformNone {
 		return true
@@ -108,15 +108,15 @@ func (p Platform) Satisfy(p2 Platform) bool {
 //
 // This is created to differentiate the meaning of "satisfy" and "is".
 // For example, "fabric" satisfies "minecraft", but does not "is" "minecraft".
-func (p Platform) Is(p2 Platform) bool {
+func (p PlatformId) Is(p2 PlatformId) bool {
 	return p == p2
 }
 
-func (p Platform) IsModding() bool {
+func (p PlatformId) IsModding() bool {
 	return p == PlatformFabric || p == PlatformForge || p == PlatformNeoforge
 }
 
-func DeclaredModdingPlatformForNode(id RuntimeNodeID) Platform {
+func DeclaredModdingPlatformForNode(id RuntimeNodeID) PlatformId {
 	switch id {
 	case "fabric":
 		return PlatformFabric
@@ -135,33 +135,27 @@ func DeclaredModdingPlatformForNode(id RuntimeNodeID) Platform {
 
 // IsSelector returns true if the platform is ambiguous and can be resolved
 // from server context.
-func (p Platform) IsSelector() bool {
+func (p PlatformId) IsSelector() bool {
 	return p == PlatformAny
 }
 
 // Title Replaces underlines or hyphens with spaces, then capitalize the first
 // letter.
-func (n PackageName) Title() string {
+func (n BarePackageName) Title() string {
 	return tools.Capitalize(strings.ReplaceAll(string(n), "-", " "))
 }
 
-func (n PackageName) String() string {
+func (n BarePackageName) String() string {
 	return string(n)
 }
 
-func (n PackageName) Pep8String() string {
+func (n BarePackageName) Pep8String() string {
 	return strings.ReplaceAll(string(n), "-", "_")
 }
 
-type PackageId struct {
-	Platform Platform
-	Name     PackageName
-	Version  BareVersion
-}
-
-func (p PackageId) NewPackage() Package {
+func (p VersionedPackageRef) NewPackage() Package {
 	return Package{
-		Id: PackageId{
+		Id: VersionedPackageRef{
 			Platform: p.Platform,
 			Name:     p.Name,
 			Version:  p.Version,
@@ -169,7 +163,7 @@ func (p PackageId) NewPackage() Package {
 	}
 }
 
-func (p PackageId) String() string {
+func (p VersionedPackageRef) String() string {
 	return tools.Ternary(
 		p.Platform == PlatformAny,
 		"", string(p.Platform)+"/",
@@ -182,19 +176,19 @@ func (p PackageId) String() string {
 		)
 }
 
-func (p PackageId) StringFull() string {
+func (p VersionedPackageRef) StringFull() string {
 	return p.Platform.String() + "/" + p.StringNameVersion()
 }
 
-func (p PackageId) StringNameVersion() string {
+func (p VersionedPackageRef) StringNameVersion() string {
 	return string(p.Name) + "@" + p.Version.String()
 }
 
-func (p PackageId) StringPlatformName() string {
+func (p VersionedPackageRef) StringPlatformName() string {
 	return string(p.Platform) + "/" + string(p.Name)
 }
 
-var platformByIdentityPackage = map[PackageName]Platform{
+var platformByIdentityPackage = map[BarePackageName]PlatformId{
 	"minecraft":     PlatformMinecraft,
 	"mc":            PlatformMinecraft,
 	"fabric":        PlatformFabric,
@@ -205,7 +199,7 @@ var platformByIdentityPackage = map[PackageName]Platform{
 	"mcdr":          PlatformMCDR,
 }
 
-var canonicalIdentityPackageByPlatform = map[Platform]PackageName{
+var canonicalIdentityPackageByPlatform = map[PlatformId]BarePackageName{
 	PlatformMinecraft: "minecraft",
 	PlatformFabric:    "fabric",
 	PlatformForge:     "forge",
@@ -213,17 +207,17 @@ var canonicalIdentityPackageByPlatform = map[Platform]PackageName{
 	PlatformMCDR:      "mcdreforged",
 }
 
-func (p PackageId) IsIdentityPackage() bool {
+func (p VersionedPackageRef) IsIdentityPackage() bool {
 	_, exists := platformByIdentityPackage[p.Name]
 	return exists
 }
 
-func (p PackageId) IsValidIdentityPackage() error {
+func (p VersionedPackageRef) IsValidIdentityPackage() error {
 	if !p.IsIdentityPackage() {
 		return nil
 	}
 
-	ErrInvalidPlatformPackage := func(p PackageId) error {
+	ErrInvalidPlatformPackage := func(p VersionedPackageRef) error {
 		return fmt.Errorf(
 			"mismatch in an identity package: %s under %s",
 			p.Name,
@@ -242,7 +236,7 @@ func (p PackageId) IsValidIdentityPackage() error {
 	return nil
 }
 
-func (p *PackageId) NormalizeIdentityPackage() {
+func (p *VersionedPackageRef) NormalizeIdentityPackage() {
 	if !p.IsIdentityPackage() {
 		return
 	}
@@ -270,7 +264,7 @@ func (p *PackageId) NormalizeIdentityPackage() {
 	}
 }
 
-func (p PackageId) IdentityToPlatform() Platform {
+func (p VersionedPackageRef) IdentityToPlatform() PlatformId {
 	platform, exists := platformByIdentityPackage[p.Name]
 	if !exists {
 		return PlatformUnknown

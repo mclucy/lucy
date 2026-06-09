@@ -53,7 +53,7 @@ func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
 	pkgs := make([]types.Package, 0, len(infos))
 	for _, info := range infos {
 		pkg := types.Package{
-			Id: types.PackageId{
+			Id: types.VersionedPackageRef{
 				Platform: info.Ref.Platform,
 				Name:     info.Ref.Name,
 				Version:  info.Version,
@@ -69,7 +69,7 @@ func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
 			for _, dep := range info.Dependencies {
 				deps = append(
 					deps, types.Dependency{
-						Id: types.PackageId{
+						Id: types.VersionedPackageRef{
 							Platform: dep.Ref.Platform,
 							Name:     dep.Ref.Name,
 						},
@@ -96,7 +96,7 @@ func normalizeVerifiedPackage(pkg *types.Package) {
 	}
 
 	if slug, ok := sm.GetLoose(src, string(pkg.Id.Name)); ok {
-		pkg.Id.Name = types.PackageName(slug)
+		pkg.Id.Name = types.BarePackageName(slug)
 	}
 
 	if pkg.Dependencies == nil {
@@ -108,12 +108,12 @@ func normalizeVerifiedPackage(pkg *types.Package) {
 			continue
 		}
 		if slug, ok := sm.GetLoose(depSrc, string(dep.Id.Name)); ok {
-			pkg.Dependencies.Value[i].Id.Name = types.PackageName(slug)
+			pkg.Dependencies.Value[i].Id.Name = types.BarePackageName(slug)
 		}
 	}
 }
 
-func sourceForPlatform(p types.Platform) types.Source {
+func sourceForPlatform(p types.PlatformId) types.SourceId {
 	switch p {
 	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
 		return types.SourceModrinth

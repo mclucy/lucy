@@ -38,7 +38,7 @@ func ReconcileTransaction(tx *RecursiveTransaction) (ReconcileDiff, error) {
 }
 
 func reconcileDiffKernel(
-	roots []types.PackageId,
+	roots []types.VersionedPackageRef,
 	installed []InstalledConstraint,
 	candidateGraph map[string]CandidateNode,
 	verifiedGraph map[string]CandidateNode,
@@ -73,7 +73,7 @@ func reconcileDiff(
 	candidateGraph map[string]CandidateNode,
 	verifiedGraph map[string]CandidateNode,
 ) (ReconcileDiff, error) {
-	missing := make(map[string]types.PackageId)
+	missing := make(map[string]types.VersionedPackageRef)
 	tightened := make(map[string]ConstraintInput)
 
 	for key, verifiedNode := range verifiedGraph {
@@ -137,12 +137,15 @@ func reconcileDiff(
 	// upstream APIs may return platform=none/any/unknown for a package that the
 	// local detector identifies as forge/fabric/etc. A candidate keyed as
 	// "none/create" is the same artifact as a verified node keyed "forge/create".
-	verifiedByName := make(map[types.PackageName]struct{}, len(verifiedGraph))
+	verifiedByName := make(
+		map[types.BarePackageName]struct{},
+		len(verifiedGraph),
+	)
 	for _, vn := range verifiedGraph {
 		verifiedByName[vn.Package.Id.Name] = struct{}{}
 	}
 
-	extra := make(map[string]types.PackageId)
+	extra := make(map[string]types.VersionedPackageRef)
 	for key, candidateNode := range candidateGraph {
 		if !candidateNode.Advisory {
 			continue
@@ -186,7 +189,7 @@ func reconcileValidateTightenedDiff(
 }
 
 func reconcileConstraintInputs(
-	roots []types.PackageId,
+	roots []types.VersionedPackageRef,
 	installed []InstalledConstraint,
 	candidateGraph map[string]CandidateNode,
 	verifiedGraph map[string]CandidateNode,
@@ -288,7 +291,7 @@ func reconcileDependencyMap(
 	merged := make(map[string]types.Dependency, len(graph))
 	for key, requirement := range graph {
 		merged[key] = types.Dependency{
-			Id: types.PackageId{
+			Id: types.VersionedPackageRef{
 				Platform: requirement.Id.Platform,
 				Name:     requirement.Id.Name,
 			},
@@ -385,14 +388,14 @@ func reconcileConstraintTightened(advisory, verified types.Dependency) bool {
 	return reconcileConstraintExpressionKey(entry.Constraint) == reconcileConstraintExpressionKey(verified.Constraint)
 }
 
-func reconcileSortedPackageIDs(items map[string]types.PackageId) []types.PackageId {
-	result := make([]types.PackageId, 0, len(items))
+func reconcileSortedPackageIDs(items map[string]types.VersionedPackageRef) []types.VersionedPackageRef {
+	result := make([]types.VersionedPackageRef, 0, len(items))
 	for _, id := range items {
 		result = append(result, id)
 	}
 
 	slices.SortFunc(
-		result, func(a, b types.PackageId) int {
+		result, func(a, b types.VersionedPackageRef) int {
 			if a.Platform != b.Platform {
 				return strings.Compare(a.Platform.String(), b.Platform.String())
 			}

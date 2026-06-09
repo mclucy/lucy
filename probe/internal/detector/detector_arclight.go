@@ -66,7 +66,7 @@ func (d *arclightServerDetector) Detect(
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.PackageId{
+		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				Platform: types.PlatformAny,
 				Name:     syntax.ToProjectName("arclight"),

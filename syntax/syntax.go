@@ -22,35 +22,6 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func ToProjectName(s string) types.PackageName {
-	return types.PackageName(sanitize(s))
-}
-
-// sanitize tolerates some common interchangeability between characters. This
-// includes underscores, chinese full stops, and backslashes. It also converts
-// uppercase characters to lowercase.
-func sanitize(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-
-	for _, char := range s {
-		switch {
-		case char == '_':
-			b.WriteByte('-')
-		case char == '\\':
-			b.WriteByte('/')
-		case char == '。':
-			b.WriteByte('.')
-		case 'A' <= char && char <= 'Z':
-			b.WriteRune(char + 'a' - 'A')
-		default:
-			b.WriteRune(char)
-		}
-	}
-
-	return b.String()
-}
-
 var (
 	ESyntax   = errors.New("invalid syntax")
 	EPlatform = errors.New("invalid platform")
@@ -60,7 +31,7 @@ func ParsePackageRequest(s string, bareSource string, optional bool) (
 	req types.PackageRequest,
 	err error,
 ) {
-	s = sanitize(s)
+	s = strings.TrimSpace(strings.ToLower(s))
 	req = types.PackageRequest{}
 
 	var ref types.PackageRef
@@ -76,7 +47,7 @@ func ParsePackageRequest(s string, bareSource string, optional bool) (
 		version = types.VersionAny
 	}
 
-	var parsedSource types.Source
+	var parsedSource types.SourceId
 	parsedSource = types.ParseSource(bareSource)
 
 	req.Ref = ref
@@ -91,16 +62,15 @@ func ParsePackageRef(s string) (ref types.PackageRef, err error) {
 	ref = types.PackageRef{}
 
 	s = strings.TrimSpace(s)
-	s = sanitize(s)
 	s = strings.Split(s, "@")[0] // strip and ignore version specifiers
 
 	switch len(strings.Split(s, "/")) {
 	case 1:
 		ref.Platform = types.PlatformAny
-		ref.Name = types.PackageName(s)
+		ref.Name = types.BarePackageName(s)
 	case 2:
-		ref.Platform = types.Platform(strings.Split(s, "/")[0])
-		ref.Name = types.PackageName(strings.Split(s, "/")[1])
+		ref.Platform = types.PlatformId(strings.Split(s, "/")[0])
+		ref.Name = types.BarePackageName(strings.Split(s, "/")[1])
 	default:
 		return types.PackageRef{}, fmt.Errorf(
 			"%w: multiple '/' found in specifier %s, maximum 1 is allowed",
@@ -113,22 +83,29 @@ func ParsePackageRef(s string) (ref types.PackageRef, err error) {
 
 // Parse is exported to parse a string into a PackageId struct.
 // Returns the parsed PackageId and an error if parsing fails.
-func Parse(s string) (id types.PackageId, err error) {
-	s = sanitize(s)
-	id = types.PackageId{}
-	id.Platform, id.Name, id.Version, err = parseOperatorAt(s)
+func Parse(s string) (id types.VersionedPackageRef, err error) {
+	text := strings.TrimSpace(strings.ToLower(s))
+	id = types.VersionedPackageRef{}
+	id.Platform, id.Name, id.Version, err = parseOperatorAt(text)
 	if err != nil {
-		return types.PackageId{}, err
+		return types.VersionedPackageRef{}, err
 	}
 	id.NormalizeIdentityPackage()
 	return id, nil
 }
 
+func ToProjectName(s string) types.BarePackageName {
+	s = strings.TrimSpace(strings.ToLower(s))
+	s = strings.ReplaceAll(s, "_", "-")
+	s = strings.ReplaceAll(s, " ", "-")
+	return types.BarePackageName(s)
+}
+
 // parseOperatorAt is called first since '@' operator always occur after '/' (equivalent
 // to a lower priority).
 func parseOperatorAt(s string) (
-	pl types.Platform,
-	n types.PackageName,
+	pl types.PlatformId,
+	n types.BarePackageName,
 	v types.BareVersion,
 	err error,
 ) {
@@ -154,30 +131,28 @@ func parseOperatorAt(s string) (
 }
 
 func parseOperatorSlash(s string) (
-	pl types.Platform,
-	n types.PackageName,
+	pl types.PlatformId,
+	n types.BarePackageName,
 	err error,
 ) {
-	split := strings.Split(s, "/")
+	split := strings.SplitN(s, "/", 2)
 
 	if len(split) == 1 {
 		pl = types.PlatformAny
-		n = types.PackageName(split[0])
-		if types.Platform(n).Valid() {
+		n = types.BarePackageName(split[0])
+		if types.PlatformId(n).Valid() {
 			// Remember, all platforms are also valid packages under themselves.
 			// This literal is for users to specify the platform itself.
 			// This means the user specified a platform name directly.
-			pl = types.Platform(n)
-			n = types.PackageName(pl)
+			pl = types.PlatformId(n)
+			n = types.BarePackageName(pl)
 		}
-	} else if len(split) == 2 {
-		pl = types.Platform(split[0])
+	} else {
+		pl = types.PlatformId(split[0])
 		if !pl.Valid() {
 			return "", "", EPlatform
 		}
-		n = types.PackageName(split[1])
-	} else {
-		return "", "", ESyntax
+		n = types.BarePackageName(split[1])
 	}
 
 	return

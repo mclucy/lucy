@@ -16,7 +16,7 @@ func showInstallComplete(path string) {
 	logger.ShowInfo(fmt.Sprintf("installed package to %s", path))
 }
 
-func showBatchPhase(header string, ids []types.PackageId) {
+func showBatchPhase(header string, ids []types.VersionedPackageRef) {
 	logger.ShowInfo(fmt.Sprintf("==> %s: %s", header, joinPackageNames(ids)))
 }
 
@@ -24,11 +24,17 @@ func showBatchSummary(installed int, failed int) {
 	if failed == 0 {
 		logger.ShowInfo(fmt.Sprintf("%d packages installed", installed))
 	} else {
-		logger.ShowInfo(fmt.Sprintf("%d installed, %d failed", installed, failed))
+		logger.ShowInfo(
+			fmt.Sprintf(
+				"%d installed, %d failed",
+				installed,
+				failed,
+			),
+		)
 	}
 }
 
-func joinPackageNames(ids []types.PackageId) string {
+func joinPackageNames(ids []types.VersionedPackageRef) string {
 	if len(ids) == 0 {
 		return ""
 	}
@@ -45,8 +51,13 @@ func joinPackageNames(ids []types.PackageId) string {
 	return strings.Join(parts, ", ") + ", and " + ids[len(ids)-1].StringFull()
 }
 
-func showRecursiveResolveStart(roots []types.PackageId) {
-	logger.ShowInfo(fmt.Sprintf("resolving dependencies for %s", joinPackageNames(roots)))
+func showRecursiveResolveStart(roots []types.VersionedPackageRef) {
+	logger.ShowInfo(
+		fmt.Sprintf(
+			"resolving dependencies for %s",
+			joinPackageNames(roots),
+		),
+	)
 }
 
 func showRecursiveDownloadStart(count int) {
@@ -70,7 +81,10 @@ func showRecursiveReconcileDiff(diff ReconcileDiff) {
 		verbals = append(verbals, fmt.Sprintf("-%d extra", len(diff.Extra)))
 	}
 	if len(diff.Tightened) > 0 {
-		verbals = append(verbals, fmt.Sprintf("~%d tightened", len(diff.Tightened)))
+		verbals = append(
+			verbals,
+			fmt.Sprintf("~%d tightened", len(diff.Tightened)),
+		)
 	}
 	logger.ShowInfo("reconcile: " + joinStrings(verbals))
 }

@@ -16,7 +16,7 @@ type ConstraintConflictSource struct {
 // ConstraintConflictError reports that merged requirements for one package
 // identity have no satisfiable intersection.
 type ConstraintConflictError struct {
-	PackageId types.PackageId
+	PackageId types.VersionedPackageRef
 	Left      ConstraintConflictSource
 	Right     ConstraintConflictSource
 }

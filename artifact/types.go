@@ -16,9 +16,9 @@ import (
 // Injected via WithSlugResolver option. Nil means no resolution.
 type SlugResolver func(
 	ctx context.Context,
-	platform types.Platform,
-	name types.PackageName,
-) (types.PackageName, error)
+	platform types.PlatformId,
+	name types.BarePackageName,
+) (types.BarePackageName, error)
 
 // ArtifactDep represents a dependency detected from an artifact file.
 type ArtifactDep struct {

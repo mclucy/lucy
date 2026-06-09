@@ -22,12 +22,12 @@ func (s SearchSort) Valid() bool {
 type SearchOptions struct {
 	IncludeClient  bool
 	SortBy         SearchSort
-	FilterPlatform Platform
+	FilterPlatform PlatformId
 }
 
 type SearchResults struct {
 	// Source labels which upstream catalog produced this result set.
 	// It is a semantic provenance marker, not a provider instance.
-	Source   Source
-	Projects []PackageName
+	Source   SourceId
+	Projects []BarePackageName
 }

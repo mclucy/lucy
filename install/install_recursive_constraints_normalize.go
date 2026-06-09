@@ -82,7 +82,7 @@ func normalizeConstraintExpression(dep types.Dependency) (
 	}, nil
 }
 
-func defaultVersionScheme(id types.PackageId) types.VersionScheme {
+func defaultVersionScheme(id types.VersionedPackageRef) types.VersionScheme {
 	switch id.Platform {
 	case types.PlatformMinecraft:
 		return types.MinecraftRelease

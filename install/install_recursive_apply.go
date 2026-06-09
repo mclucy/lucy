@@ -38,7 +38,7 @@ func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
 	}
 
 	candidateByName := make(
-		map[types.PackageName]CandidateNode,
+		map[types.BarePackageName]CandidateNode,
 		len(tx.CandidateGraph),
 	)
 	for _, node := range tx.CandidateGraph {

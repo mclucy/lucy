@@ -17,14 +17,14 @@ type SearchPlatformSupport struct {
 // This is a struct instead of an interface so additional capability dimensions
 // can be added later without breaking callers.
 type SourceSearchCapability struct {
-	Platforms map[types.Platform]SearchPlatformSupport
+	Platforms map[types.PlatformId]SearchPlatformSupport
 }
 
 var unsupportedSearchPlatform = SearchPlatformSupport{}
 
-var searchCapabilityBySource = map[types.Source]SourceSearchCapability{
+var searchCapabilityBySource = map[types.SourceId]SourceSearchCapability{
 	types.SourceModrinth: {
-		Platforms: map[types.Platform]SearchPlatformSupport{
+		Platforms: map[types.PlatformId]SearchPlatformSupport{
 			types.PlatformFabric:   {Supported: true, UpstreamFilterable: true},
 			types.PlatformForge:    {Supported: true, UpstreamFilterable: true},
 			types.PlatformNeoforge: {Supported: true, UpstreamFilterable: true},
@@ -32,7 +32,7 @@ var searchCapabilityBySource = map[types.Source]SourceSearchCapability{
 		},
 	},
 	types.SourceCurseForge: {
-		Platforms: map[types.Platform]SearchPlatformSupport{
+		Platforms: map[types.PlatformId]SearchPlatformSupport{
 			types.PlatformFabric:   {Supported: true, UpstreamFilterable: true},
 			types.PlatformForge:    {Supported: true, UpstreamFilterable: true},
 			types.PlatformNeoforge: {Supported: true, UpstreamFilterable: true},
@@ -40,7 +40,7 @@ var searchCapabilityBySource = map[types.Source]SourceSearchCapability{
 		},
 	},
 	types.SourceHangar: {
-		Platforms: map[types.Platform]SearchPlatformSupport{
+		Platforms: map[types.PlatformId]SearchPlatformSupport{
 			types.PlatformFabric:   unsupportedSearchPlatform,
 			types.PlatformForge:    unsupportedSearchPlatform,
 			types.PlatformNeoforge: unsupportedSearchPlatform,
@@ -48,15 +48,18 @@ var searchCapabilityBySource = map[types.Source]SourceSearchCapability{
 		},
 	},
 	types.SourceSpiget: {
-		Platforms: map[types.Platform]SearchPlatformSupport{
+		Platforms: map[types.PlatformId]SearchPlatformSupport{
 			types.PlatformFabric:   unsupportedSearchPlatform,
 			types.PlatformForge:    unsupportedSearchPlatform,
 			types.PlatformNeoforge: unsupportedSearchPlatform,
-			types.PlatformBukkit:   {Supported: true, UpstreamFilterable: false},
+			types.PlatformBukkit: {
+				Supported:          true,
+				UpstreamFilterable: false,
+			},
 		},
 	},
 	types.SourceMCDR: {
-		Platforms: map[types.Platform]SearchPlatformSupport{
+		Platforms: map[types.PlatformId]SearchPlatformSupport{
 			types.PlatformFabric:   unsupportedSearchPlatform,
 			types.PlatformForge:    unsupportedSearchPlatform,
 			types.PlatformNeoforge: unsupportedSearchPlatform,
@@ -66,14 +69,17 @@ var searchCapabilityBySource = map[types.Source]SourceSearchCapability{
 }
 
 // SearchCapabilityFor returns static search capability metadata for a source.
-func SearchCapabilityFor(src types.Source) (SourceSearchCapability, bool) {
+func SearchCapabilityFor(src types.SourceId) (SourceSearchCapability, bool) {
 	capability, ok := searchCapabilityBySource[src]
 	return capability, ok
 }
 
 // PlatformSupportedBy returns the search support details for one source and
 // platform combination.
-func PlatformSupportedBy(src types.Source, platform types.Platform) (SearchPlatformSupport, bool) {
+func PlatformSupportedBy(
+	src types.SourceId,
+	platform types.PlatformId,
+) (SearchPlatformSupport, bool) {
 	capability, ok := SearchCapabilityFor(src)
 	if !ok {
 		return SearchPlatformSupport{}, false

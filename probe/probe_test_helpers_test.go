@@ -10,14 +10,14 @@ import (
 // localPath may be "" to simulate a remote-only entry.
 func makePackage(
 	t *testing.T,
-	platform types.Platform,
+	platform types.PlatformId,
 	name, version, localPath string,
 ) types.Package {
 	t.Helper()
 	pkg := types.Package{
-		Id: types.PackageId{
+		Id: types.VersionedPackageRef{
 			Platform: platform,
-			Name:     types.PackageName(name),
+			Name:     types.BarePackageName(name),
 			Version:  types.BareVersion(version),
 		},
 	}

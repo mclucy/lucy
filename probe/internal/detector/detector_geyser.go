@@ -58,7 +58,7 @@ func (d *geyserStandaloneDetector) Detect(
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     types.VersionUnknown,
-		RuntimeIdentities: []types.PackageId{
+		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				Platform: types.PlatformAny,
 				Name:     syntax.ToProjectName("geyser"),

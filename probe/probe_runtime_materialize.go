@@ -18,7 +18,7 @@ func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerRuntim
 		BootCommand:     nil,
 		Topology:        materializeRuntimeTopology(evidence),
 		RuntimeIdentities: append(
-			[]types.PackageId(nil),
+			[]types.VersionedPackageRef(nil),
 			evidence.RuntimeIdentities...,
 		),
 		BridgeHints: append([]string(nil), evidence.BridgeHints...),
@@ -66,7 +66,10 @@ func materializeRuntimeTopology(
 	return nil
 }
 
-func RuntimeIdentityNode(identity types.PackageId) (types.RuntimeNodeID, bool) {
+func RuntimeIdentityNode(identity types.VersionedPackageRef) (
+	types.RuntimeNodeID,
+	bool,
+) {
 	switch strings.ToLower(strings.TrimSpace(string(identity.Name))) {
 	case "fabric", "fabric-loader":
 		return types.RuntimeNodeFabric, true

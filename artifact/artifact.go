@@ -88,7 +88,7 @@ func applySlugResolver(results []ArtifactInfo, resolver SlugResolver) {
 			results[i].Ref.Name,
 		)
 		if err == nil && normalized != "" {
-			results[i].Ref.Name = types.PackageName(normalized)
+			results[i].Ref.Name = types.BarePackageName(normalized)
 		}
 	}
 }
@@ -108,18 +108,18 @@ func jarPlatformsConflict(infos []ArtifactInfo) bool {
 		return false
 	}
 
-	proxyPlatforms := map[types.Platform]struct{}{
-		types.Platform("velocity"):   {},
-		types.Platform("bungeecord"): {},
+	proxyPlatforms := map[types.PlatformId]struct{}{
+		types.PlatformId("velocity"):   {},
+		types.PlatformId("bungeecord"): {},
 	}
-	serverPlatforms := map[types.Platform]struct{}{
-		types.Platform("bukkit"): {},
-		types.Platform("paper"):  {},
-		types.Platform("leaves"): {},
-		types.Platform("folia"):  {},
-		types.Platform("spigot"): {},
+	serverPlatforms := map[types.PlatformId]struct{}{
+		types.PlatformId("bukkit"): {},
+		types.PlatformId("paper"):  {},
+		types.PlatformId("leaves"): {},
+		types.PlatformId("folia"):  {},
+		types.PlatformId("spigot"): {},
 	}
-	modPlatforms := map[types.Platform]struct{}{
+	modPlatforms := map[types.PlatformId]struct{}{
 		types.PlatformFabric:   {},
 		types.PlatformForge:    {},
 		types.PlatformNeoforge: {},
@@ -157,7 +157,7 @@ func jarPlatformsConflict(infos []ArtifactInfo) bool {
 
 type bukkitFamilyRank struct {
 	priority int
-	fallback types.Platform
+	fallback types.PlatformId
 }
 
 func aggregateBukkitFamilyPackages(infos []ArtifactInfo) []ArtifactInfo {
@@ -213,14 +213,14 @@ func aggregateBukkitFamilyPackages(infos []ArtifactInfo) []ArtifactInfo {
 func mergeBukkitFamilySupport(
 	infos []ArtifactInfo,
 	indexes []int,
-	fallback types.Platform,
+	fallback types.PlatformId,
 ) *types.PlatformSupport {
-	platforms := make([]types.Platform, 0, len(indexes)*2)
-	seen := make(map[types.Platform]struct{}, len(indexes)*2+1)
+	platforms := make([]types.PlatformId, 0, len(indexes)*2)
+	seen := make(map[types.PlatformId]struct{}, len(indexes)*2+1)
 	authentic := false
 	versions := make([]types.BareVersion, 0)
 
-	addPlatform := func(platform types.Platform) {
+	addPlatform := func(platform types.PlatformId) {
 		if !platform.Valid() {
 			return
 		}
@@ -260,14 +260,14 @@ func mergeBukkitFamilySupport(
 	}
 }
 
-func orderBukkitFamilyPlatforms(platforms []types.Platform) []types.Platform {
-	ordered := make([]types.Platform, 0, len(platforms))
-	for _, candidate := range []types.Platform{
-		types.Platform("leaves"),
-		types.Platform("folia"),
-		types.Platform("paper"),
-		types.Platform("spigot"),
-		types.Platform("bukkit"),
+func orderBukkitFamilyPlatforms(platforms []types.PlatformId) []types.PlatformId {
+	ordered := make([]types.PlatformId, 0, len(platforms))
+	for _, candidate := range []types.PlatformId{
+		types.PlatformId("leaves"),
+		types.PlatformId("folia"),
+		types.PlatformId("paper"),
+		types.PlatformId("spigot"),
+		types.PlatformId("bukkit"),
 	} {
 		for _, platform := range platforms {
 			if platform == candidate {
@@ -279,22 +279,30 @@ func orderBukkitFamilyPlatforms(platforms []types.Platform) []types.Platform {
 	return ordered
 }
 
-func rankBukkitFamilyPlatform(platform types.Platform) bukkitFamilyRank {
+func rankBukkitFamilyPlatform(platform types.PlatformId) bukkitFamilyRank {
 	switch platform {
-	case types.Platform("leaves"), types.Platform("folia"):
-		return bukkitFamilyRank{priority: 4, fallback: types.Platform("paper")}
-	case types.Platform("paper"):
-		return bukkitFamilyRank{priority: 3, fallback: types.Platform("paper")}
-	case types.Platform("spigot"):
-		return bukkitFamilyRank{priority: 2, fallback: types.Platform("spigot")}
-	case types.Platform("bukkit"):
-		return bukkitFamilyRank{priority: 1, fallback: types.Platform("bukkit")}
+	case types.PlatformId("leaves"), types.PlatformId("folia"):
+		return bukkitFamilyRank{
+			priority: 4, fallback: types.PlatformId("paper"),
+		}
+	case types.PlatformId("paper"):
+		return bukkitFamilyRank{
+			priority: 3, fallback: types.PlatformId("paper"),
+		}
+	case types.PlatformId("spigot"):
+		return bukkitFamilyRank{
+			priority: 2, fallback: types.PlatformId("spigot"),
+		}
+	case types.PlatformId("bukkit"):
+		return bukkitFamilyRank{
+			priority: 1, fallback: types.PlatformId("bukkit"),
+		}
 	default:
 		return bukkitFamilyRank{}
 	}
 }
 
-func isBukkitFamilyPlatform(platform types.Platform) bool {
+func isBukkitFamilyPlatform(platform types.PlatformId) bool {
 	_, ok := bukkitFamilyPlatforms[platform]
 	return ok
 }
@@ -303,10 +311,10 @@ func isIndexSelected(indexes []int, candidate int) bool {
 	return slices.Contains(indexes, candidate)
 }
 
-var bukkitFamilyPlatforms = map[types.Platform]struct{}{
-	types.Platform("bukkit"): {},
-	types.Platform("spigot"): {},
-	types.Platform("paper"):  {},
-	types.Platform("folia"):  {},
-	types.Platform("leaves"): {},
+var bukkitFamilyPlatforms = map[types.PlatformId]struct{}{
+	types.PlatformId("bukkit"): {},
+	types.PlatformId("spigot"): {},
+	types.PlatformId("paper"):  {},
+	types.PlatformId("folia"):  {},
+	types.PlatformId("leaves"): {},
 }

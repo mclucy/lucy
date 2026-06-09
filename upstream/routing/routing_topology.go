@@ -12,8 +12,8 @@ import (
 // Explicit source selection always delegates to ResolveProviders.
 func ResolveProvidersByTopology(
 	topology *types.RuntimeTopology,
-	platform types.Platform,
-	src types.Source,
+	platform types.PlatformId,
+	src types.SourceId,
 ) ([]upstream.Provider, error) {
 	if topology == nil || !topology.Resolved() {
 		return nil, fmt.Errorf("routing: topology unresolved, cannot resolve providers")
@@ -29,7 +29,10 @@ func ResolveProvidersByTopology(
 
 	sources := providerSourcesByCapability(topology)
 	if len(sources) == 0 {
-		return nil, fmt.Errorf("%w: no providers resolved from topology", ErrInvalidPlatform)
+		return nil, fmt.Errorf(
+			"%w: no providers resolved from topology",
+			ErrInvalidPlatform,
+		)
 	}
 
 	return providersFromSources(sources)

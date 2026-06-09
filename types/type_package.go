@@ -9,7 +9,7 @@ package types
 // such as its dependencies, installation path, and remote source.
 type Package struct {
 	// Id is the basic package identifier
-	Id PackageId
+	Id VersionedPackageRef
 
 	// Package specific data
 	Dependencies *PackageDependencies
@@ -41,7 +41,7 @@ type PackageRemote struct {
 	// Source is the semantic origin label of this package metadata/artifact.
 	// It is stored and displayed as provenance, not used as an executable
 	// provider identifier.
-	Source        Source
+	Source        SourceId
 	FileUrl       string
 	Filename      string
 	Hash          string // upstream-provided digest; empty if unavailable
@@ -52,6 +52,6 @@ type PackageRemote struct {
 // specific dependency of a single package, use the PackageDependencies struct.
 type PlatformSupport struct {
 	MinecraftVersions []BareVersion
-	Platforms         []Platform
+	Platforms         []PlatformId
 	Authentic         bool
 }

@@ -143,7 +143,7 @@ func buildForgeRuntimeInfo(
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.PackageId{
+		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				Platform: types.PlatformForge,
 				Name:     "forge",

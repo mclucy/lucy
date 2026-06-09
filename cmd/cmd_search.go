@@ -11,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
 )
@@ -25,11 +26,19 @@ var searchCmd = &cobra.Command{
 	Use:   "search",
 	Short: "Search for mods and plugins",
 	Args:  cobra.ExactArgs(1),
-	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	ValidArgsFunction: func(
+		cmd *cobra.Command,
+		args []string,
+		toComplete string,
+	) ([]string, cobra.ShellCompDirective) {
 		if len(args) >= 1 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return CompletePackageIDSuggestions(context.Background(), "search", toComplete)
+		return CompletePackageIDSuggestions(
+			context.Background(),
+			"search",
+			toComplete,
+		)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		index, _ := cmd.Flags().GetString(flagIndexName)
@@ -37,7 +46,7 @@ var searchCmd = &cobra.Command{
 			return errors.New("--index must be one of \"relevance\", \"downloads\", \"newest\"")
 		}
 		platform, _ := cmd.Flags().GetString(flagPlatformName)
-		if platform != "" && !types.Platform(platform).IsSearchPlatform() {
+		if platform != "" && !types.PlatformId(platform).IsSearchPlatform() {
 			return errors.New("--platform must be one of \"fabric\", \"forge\", \"neoforge\", \"bukkit\"")
 		}
 		return validateSourceFlag(cmd)
@@ -46,25 +55,60 @@ var searchCmd = &cobra.Command{
 }
 
 func init() {
-	searchCmd.Flags().StringP(flagIndexName, "i", "relevance", "Index search results by INDEX")
-	searchCmd.Flags().BoolP(flagClientName, "c", false, "Also show client-only mods in results")
-	searchCmd.Flags().String(flagPlatformName, "", "Filter results by platform (fabric, forge, neoforge, bukkit)")
+	searchCmd.Flags().StringP(
+		flagIndexName,
+		"i",
+		"relevance",
+		"Index search results by INDEX",
+	)
+	searchCmd.Flags().BoolP(
+		flagClientName,
+		"c",
+		false,
+		"Also show client-only mods in results",
+	)
+	searchCmd.Flags().String(
+		flagPlatformName,
+		"",
+		"Filter results by platform (fabric, forge, neoforge, bukkit)",
+	)
 	addJsonFlag(searchCmd)
 	addLongFlag(searchCmd)
 	addNoStyleFlag(searchCmd)
 	addSourceFlag(searchCmd)
-	_ = searchCmd.RegisterFlagCompletionFunc(flagSourceName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		candidates := FilterByPrefix(StaticSourceCandidates(), toComplete)
-		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
-	})
-	_ = searchCmd.RegisterFlagCompletionFunc(flagIndexName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		candidates := FilterByPrefix(StaticSortCandidates(), toComplete)
-		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
-	})
-	_ = searchCmd.RegisterFlagCompletionFunc(flagPlatformName, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		candidates := FilterByPrefix(StaticSearchPlatformCandidates(), toComplete)
-		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
-	})
+	_ = searchCmd.RegisterFlagCompletionFunc(
+		flagSourceName,
+		func(cmd *cobra.Command, args []string, toComplete string) (
+			[]string,
+			cobra.ShellCompDirective,
+		) {
+			candidates := FilterByPrefix(StaticSourceCandidates(), toComplete)
+			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+		},
+	)
+	_ = searchCmd.RegisterFlagCompletionFunc(
+		flagIndexName,
+		func(cmd *cobra.Command, args []string, toComplete string) (
+			[]string,
+			cobra.ShellCompDirective,
+		) {
+			candidates := FilterByPrefix(StaticSortCandidates(), toComplete)
+			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+		},
+	)
+	_ = searchCmd.RegisterFlagCompletionFunc(
+		flagPlatformName,
+		func(cmd *cobra.Command, args []string, toComplete string) (
+			[]string,
+			cobra.ShellCompDirective,
+		) {
+			candidates := FilterByPrefix(
+				StaticSearchPlatformCandidates(),
+				toComplete,
+			)
+			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+		},
+	)
 	rootCmd.AddCommand(searchCmd)
 }
 
@@ -92,7 +136,10 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	out := &tui.Data{}
-	providers, err := routing.ResolveSearchProviders(options.FilterPlatform, specifiedSource)
+	providers, err := routing.ResolveSearchProviders(
+		options.FilterPlatform,
+		specifiedSource,
+	)
 	if err != nil {
 		errArg := sourceArg
 		if specifiedSource == types.SourceAuto {
@@ -128,7 +175,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 }
 
 func searchResultError(
-	results []types.SearchResults,
+	results []upstream.SearchResponse,
 	providerErrors []routing.ProviderError,
 ) error {
 	if len(results) > 0 || len(providerErrors) == 0 {
@@ -144,11 +191,11 @@ func searchResultError(
 func appendToSearchOutput(
 	out *tui.Data,
 	showAll bool,
-	res types.SearchResults,
+	res upstream.SearchResponse,
 ) {
 	var results []string
-	for _, r := range res.Projects {
-		results = append(results, r.String())
+	for _, r := range res.Items {
+		results = append(results, r.RemoteName)
 	}
 
 	if len(out.Fields) != 0 {
@@ -167,7 +214,7 @@ func appendToSearchOutput(
 		},
 	)
 
-	if res.Source == types.SourceModrinth && len(res.Projects) == 100 {
+	if res.Source == types.SourceModrinth && len(res.Items) == 100 {
 		out.Fields = append(
 			out.Fields,
 			&tui.FieldAnnotation{
@@ -180,7 +227,7 @@ func appendToSearchOutput(
 		out.Fields,
 		&tui.FieldShortText{
 			Title: "#  ",
-			Text:  strconv.Itoa(len(res.Projects)),
+			Text:  strconv.Itoa(len(res.Items)),
 		},
 		&tui.FieldDynamicColumnLabels{
 			Title:  ">>>",

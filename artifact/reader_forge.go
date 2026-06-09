@@ -73,7 +73,7 @@ func readForgeModsToml(
 			infos, ArtifactInfo{
 				Ref: types.PackageRef{
 					Platform: types.PlatformForge,
-					Name:     types.PackageName(mod.ModID),
+					Name:     types.BarePackageName(mod.ModID),
 				},
 				Version:      version,
 				FilePath:     filePath,
@@ -115,7 +115,7 @@ func forgeDependencies(
 			translated, ArtifactDep{
 				Ref: types.PackageRef{
 					Platform: types.PlatformForge,
-					Name:     types.PackageName(dep.ModID),
+					Name:     types.BarePackageName(dep.ModID),
 				},
 				Constraint: forgeVersionRange(dep.VersionRange),
 				Mandatory:  dep.Mandatory,

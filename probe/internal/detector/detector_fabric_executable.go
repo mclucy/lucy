@@ -62,7 +62,7 @@ func (d *fabricServerSingleFileDetector) Detect(
 	exec = &ExecutableEvidence{
 		PrimaryEntrance: filePath,
 		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.PackageId{
+		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				Platform: types.PlatformFabric,
 				Name:     "fabric",
@@ -179,7 +179,7 @@ func (d *fabricServerLauncherDetector) Detect(
 			exec = &ExecutableEvidence{
 				PrimaryEntrance: filePath,
 				GameVersion:     gameVersion,
-				RuntimeIdentities: []types.PackageId{
+				RuntimeIdentities: []types.VersionedPackageRef{
 					{
 						Platform: types.PlatformFabric,
 						Name:     "fabric",

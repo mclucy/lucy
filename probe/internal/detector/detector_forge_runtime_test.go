@@ -413,15 +413,19 @@ func assertForgeRuntime(
 			types.PlatformForge,
 		)
 	}
-	if got := runtimeIdentityVersion(runtime, types.PlatformForge, "forge"); got != forgeVersion {
+	if got := runtimeIdentityVersion(
+		runtime,
+		types.PlatformForge,
+		"forge",
+	); got != forgeVersion {
 		t.Fatalf("forge version mismatch: got %q want %q", got, forgeVersion)
 	}
 }
 
 func runtimeIdentityVersion(
 	runtime *ExecutableEvidence,
-	platform types.Platform,
-	name types.PackageName,
+	platform types.PlatformId,
+	name types.BarePackageName,
 ) string {
 	if runtime == nil {
 		return ""

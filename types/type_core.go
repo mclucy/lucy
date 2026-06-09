@@ -1,19 +1,18 @@
 package types
 
-// PackageName is the slug of the package, using hyphens as separators. For example,
-// "fabric-api".
-//
-// It is non-case-sensitive, though lowercase is recommended. Underlines '_' are
-// equivalent to hyphens.
-//
-// A slug from an upstream API is preferred, if possible. Otherwise, the slug is
-// obtained from the executable file. No exceptions since a package must either
-// exist on a remote API or user's local files.
-type PackageName string
+// BarePackageName is an untrusted package name. Usually from user input. It might
+// be invalid.
+type BarePackageName string
 
 type PackageRef struct {
-	Platform Platform
-	Name     PackageName
+	Platform PlatformId
+	Name     BarePackageName
+}
+
+type VersionedPackageRef struct {
+	Platform PlatformId
+	Name     BarePackageName
+	Version  BareVersion
 }
 
 // PackageRequest is the universal desired state descriptor.
@@ -28,5 +27,5 @@ type PackageRequest struct {
 	Ref      PackageRef
 	Version  BareVersion
 	Optional bool
-	Source   Source
+	Source   SourceId
 }

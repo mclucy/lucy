@@ -60,7 +60,7 @@ func (d *VanillaDetector) Detect(
 			exec := &ExecutableEvidence{
 				PrimaryEntrance: filePath,
 				GameVersion:     gameVersion,
-				RuntimeIdentities: []types.PackageId{
+				RuntimeIdentities: []types.VersionedPackageRef{
 					{
 						Platform: types.PlatformMinecraft,
 						Name:     "minecraft",
