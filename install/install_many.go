@@ -10,7 +10,7 @@ import (
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
-func InstallMany(requests []types.PackageRequest, options Options) (
+func InstallMany(requests []PackageRequest, options Options) (
 	*Result,
 	error,
 ) {
@@ -188,7 +188,7 @@ func buildInstallResult(tx *RecursiveTransaction) *Result {
 }
 
 // TODO(package-ref-migration) — boundary conversion; pipeline internals still use PackageId
-func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef {
+func requestsToIds(requests []PackageRequest) []types.VersionedPackageRef {
 	ids := make([]types.VersionedPackageRef, len(requests))
 	for i, req := range requests {
 		ids[i] = types.VersionedPackageRef{
@@ -212,7 +212,7 @@ func prepareBatchIDs(ids []types.VersionedPackageRef) []types.VersionedPackageRe
 			id.NormalizeIdentityPackage()
 		}
 
-		key := id.StringPlatformName()
+		key := id.StringBase()
 		if _, ok := seen[key]; ok {
 			continue
 		}

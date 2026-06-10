@@ -31,10 +31,6 @@ type Provider interface {
 		supports RawProjectSupport,
 		err error,
 	)
-	ParseAmbiguousId(id types.VersionedPackageRef) (
-		parsed types.VersionedPackageRef,
-		err error,
-	)
 	// Id returns the semantic source identity represented by this provider.
 	Id() types.SourceId
 }

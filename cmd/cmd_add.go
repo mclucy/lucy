@@ -13,7 +13,6 @@ import (
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/state"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -95,9 +94,9 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	options := install.DefaultOptions()
 	options.WithOptional = withOptional
 
-	requests := make([]types.PackageRequest, 0, len(args))
+	requests := make([]install.PackageRequest, 0, len(args))
 	for _, arg := range args {
-		req, err := syntax.ParsePackageRequest(arg, source, false)
+		req, err := install.ParsePackageRequest(arg, source, false)
 		if err != nil {
 			logger.Fatal(fmt.Errorf("stopping package addition: %w", err))
 		}
@@ -164,7 +163,7 @@ func presenceLabel(name string, present bool) string {
 func updateAddState(
 	workDir string,
 	stateSvc *state.ProjectStateService,
-	requests []types.PackageRequest,
+	requests []install.PackageRequest,
 	result *install.Result,
 ) error {
 	if stateSvc == nil {
@@ -193,7 +192,7 @@ func updateAddState(
 
 func buildUpdatedManifest(
 	existing *state.Manifest,
-	requests []types.PackageRequest,
+	requests []install.PackageRequest,
 ) *state.Manifest {
 	manifest := existing
 	for _, req := range requests {
@@ -246,7 +245,7 @@ func buildUpdatedLock(
 		locked := lockedPackageFromInstalled(
 			workDir,
 			pkg,
-			result.Provenance[pkg.Id.StringPlatformName()],
+			result.Provenance[pkg.Id.StringBase()],
 		)
 		packagesByID[locked.ID] = locked
 	}
@@ -368,7 +367,7 @@ func lockedPackageFromInstalled(
 	}
 
 	return state.LockedPackage{
-		ID:            pkg.Id.StringPlatformName(),
+		ID:            pkg.Id.StringBase(),
 		Version:       pkg.Id.Version.String(),
 		Source:        source,
 		URL:           url,

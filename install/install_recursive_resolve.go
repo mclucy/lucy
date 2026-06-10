@@ -113,7 +113,7 @@ func newCandidateGraphPlanner(
 		if installed.Package.Id.Platform == "" || installed.Package.Id.Name == "" {
 			continue
 		}
-		key := installed.Package.Id.StringPlatformName()
+		key := installed.Package.Id.StringBase()
 		if _, exists := tx.CandidateGraph[key]; exists {
 			continue
 		}
@@ -152,7 +152,7 @@ func (planner *candidateGraphPlanner) next() (candidateRequest, bool) {
 		current := planner.queue[0]
 		planner.queue = planner.queue[1:]
 
-		key := current.id.StringPlatformName()
+		key := current.id.StringBase()
 		if _, exists := planner.tx.CandidateGraph[key]; exists {
 			continue
 		}
@@ -169,7 +169,7 @@ func (planner *candidateGraphPlanner) admit(
 	dependencySets []types.PackageDependencies,
 	options Options,
 ) error {
-	key := current.id.StringPlatformName()
+	key := current.id.StringBase()
 	planner.tx.CandidateGraph[key] = CandidateNode{
 		Package:        pkg,
 		ProvenancePath: append([]string(nil), current.provenancePath...),
@@ -192,7 +192,7 @@ func (planner *candidateGraphPlanner) admit(
 				},
 			)
 
-			childKey := dependency.Id.StringPlatformName()
+			childKey := dependency.Id.StringBase()
 			if _, exists := planner.tx.CandidateGraph[childKey]; exists {
 				continue
 			}

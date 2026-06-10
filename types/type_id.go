@@ -153,16 +153,6 @@ func (n BarePackageName) Pep8String() string {
 	return strings.ReplaceAll(string(n), "-", "_")
 }
 
-func (p VersionedPackageRef) NewPackage() Package {
-	return Package{
-		Id: VersionedPackageRef{
-			Platform: p.Platform,
-			Name:     p.Name,
-			Version:  p.Version,
-		},
-	}
-}
-
 func (p VersionedPackageRef) String() string {
 	return tools.Ternary(
 		p.Platform == PlatformAny,
@@ -177,14 +167,10 @@ func (p VersionedPackageRef) String() string {
 }
 
 func (p VersionedPackageRef) StringFull() string {
-	return p.Platform.String() + "/" + p.StringNameVersion()
+	return p.Platform.String() + "/" + p.Name.String() + "@" + p.Version.String()
 }
 
-func (p VersionedPackageRef) StringNameVersion() string {
-	return string(p.Name) + "@" + p.Version.String()
-}
-
-func (p VersionedPackageRef) StringPlatformName() string {
+func (p VersionedPackageRef) StringBase() string {
 	return string(p.Platform) + "/" + string(p.Name)
 }
 

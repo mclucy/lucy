@@ -1,6 +1,10 @@
 package upstream
 
-import "github.com/mclucy/lucy/types"
+import (
+	"crypto/sha1"
+
+	"github.com/mclucy/lucy/types"
+)
 
 type SupportedPlatformsReporter interface {
 	SupportedPlatforms() []types.PlatformId
@@ -11,11 +15,16 @@ type DependencyResolver interface {
 }
 
 type ArtifactMapper interface {
-	NameByHash(artifact Hashable) RemotePackageName
-	VersionedRefByHash(artifact Hashable) types.VersionedPackageRef
+	NameByHash(artifact Hashable) (
+		name RemotePackageName,
+		hash string,
+		err error,
+	)
 }
 
-type Hashable interface{}
+type Hashable interface {
+	Sha1() [sha1.Size]byte
+}
 
 type ArtifactResolver interface {
 	ResolveArtifact() ResolvedArtifact
@@ -31,4 +40,9 @@ type ResolvedArtifact struct {
 	HashAlgorithm string
 }
 
-type VersionSelectorResolver interface{}
+type VersionSelectorResolver interface {
+	ResolveVersionSelector(ref types.VersionedPackageRef) (
+		resolved types.VersionedPackageRef,
+		err error,
+	)
+}

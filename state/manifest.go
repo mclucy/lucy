@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mclucy/lucy/install"
 	"gopkg.in/yaml.v3"
 
 	"github.com/mclucy/lucy/types"
@@ -358,7 +359,7 @@ func NormalizeManifestVersionIntent(version types.BareVersion) string {
 
 func UpsertManifestRequiredIntent(
 	manifest *Manifest,
-	req types.PackageRequest,
+	req install.PackageRequest,
 	source string,
 ) *Manifest {
 	if manifest == nil {
@@ -487,7 +488,7 @@ func ManifestPackagesFromClassified(classified []ClassifiedPackage) []ManifestPa
 
 func UpdateManifestRolesForAdd(
 	manifest *Manifest,
-	requested []types.PackageRequest,
+	requested []install.PackageRequest,
 	lock *Lock,
 ) *Manifest {
 	base := cloneManifestOrDefaults(manifest)
@@ -747,7 +748,7 @@ func resolveManifestPackageID(
 		id.NormalizeIdentityPackage()
 	}
 	if id.Platform != types.PlatformAny && id.Platform != types.PlatformUnknown {
-		return id.StringPlatformName()
+		return id.StringBase()
 	}
 
 	if manifest != nil {
@@ -770,7 +771,7 @@ func resolveManifestPackageID(
 		}
 	}
 
-	return id.StringPlatformName()
+	return id.StringBase()
 }
 
 func manifestPackageIDs(packages []ManifestPackage) []string {

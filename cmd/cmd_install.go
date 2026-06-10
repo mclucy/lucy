@@ -13,7 +13,7 @@ import (
 )
 
 type installSyncPlan struct {
-	Requested     []types.PackageRequest
+	Requested     []install.PackageRequest
 	UsesExactLock bool
 	Stable        bool
 }
@@ -67,11 +67,19 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	lock := buildUpdatedLock(workDir, stateSvc.Manifest(), stateSvc.Lock(), result)
+	lock := buildUpdatedLock(
+		workDir,
+		stateSvc.Manifest(),
+		stateSvc.Lock(),
+		result,
+	)
 	return state.WriteLock(workDir, lock)
 }
 
-func buildInstallSyncPlan(manifest *state.Manifest, lock *state.Lock) (installSyncPlan, error) {
+func buildInstallSyncPlan(
+	manifest *state.Manifest,
+	lock *state.Lock,
+) (installSyncPlan, error) {
 	if manifest == nil {
 		return installSyncPlan{}, fmt.Errorf("manifest is required for install")
 	}
@@ -81,17 +89,24 @@ func buildInstallSyncPlan(manifest *state.Manifest, lock *state.Lock) (installSy
 		return installSyncPlan{}, err
 	}
 	if ok {
-		return installSyncPlan{Requested: exact, UsesExactLock: true, Stable: true}, nil
+		return installSyncPlan{
+			Requested: exact, UsesExactLock: true, Stable: true,
+		}, nil
 	}
 
 	required, err := manifestRequiredPackageIDs(manifest)
 	if err != nil {
 		return installSyncPlan{}, err
 	}
-	return installSyncPlan{Requested: required, UsesExactLock: false, Stable: false}, nil
+	return installSyncPlan{
+		Requested: required, UsesExactLock: false, Stable: false,
+	}, nil
 }
 
-func exactSyncPackageIDs(manifest *state.Manifest, lock *state.Lock) ([]types.PackageRequest, bool, error) {
+func exactSyncPackageIDs(
+	manifest *state.Manifest,
+	lock *state.Lock,
+) ([]install.PackageRequest, bool, error) {
 	if manifest == nil || lock == nil || len(lock.Packages) == 0 {
 		return nil, false, nil
 	}
@@ -108,33 +123,44 @@ func exactSyncPackageIDs(manifest *state.Manifest, lock *state.Lock) ([]types.Pa
 		return nil, false, nil
 	}
 
-	requested := make([]types.PackageRequest, 0, len(lock.Packages))
+	requested := make([]install.PackageRequest, 0, len(lock.Packages))
 	for _, pkg := range lock.Packages {
 		id, err := syntax.Parse(pkg.ID + "@" + pkg.Version)
 		if err != nil {
-			return nil, false, fmt.Errorf("parse locked package %s: %w", pkg.ID, err)
+			return nil, false, fmt.Errorf(
+				"parse locked package %s: %w",
+				pkg.ID,
+				err,
+			)
 		}
 		// TODO(package-ref-migration): remove wrapping once lock parsing returns PackageRequest.
-		requested = append(requested, types.PackageRequest{
-			Ref:     types.PackageRef{Platform: id.Platform, Name: id.Name},
-			Version: id.Version,
-		})
+		requested = append(
+			requested, install.PackageRequest{
+				Ref:     types.PackageRef{Platform: id.Platform, Name: id.Name},
+				Version: id.Version,
+			},
+		)
 	}
 
-	sort.Slice(requested, func(i, j int) bool {
-		left := string(requested[i].Ref.Platform) + "/" + string(requested[i].Ref.Name)
-		right := string(requested[j].Ref.Platform) + "/" + string(requested[j].Ref.Name)
-		if left != right {
-			return left < right
-		}
-		return requested[i].Version.String() < requested[j].Version.String()
-	})
+	sort.Slice(
+		requested, func(i, j int) bool {
+			left := string(requested[i].Ref.Platform) + "/" + string(requested[i].Ref.Name)
+			right := string(requested[j].Ref.Platform) + "/" + string(requested[j].Ref.Name)
+			if left != right {
+				return left < right
+			}
+			return requested[i].Version.String() < requested[j].Version.String()
+		},
+	)
 
 	return requested, true, nil
 }
 
-func manifestRequiredPackageIDs(manifest *state.Manifest) ([]types.PackageRequest, error) {
-	requested := make([]types.PackageRequest, 0, len(manifest.Packages))
+func manifestRequiredPackageIDs(manifest *state.Manifest) (
+	[]install.PackageRequest,
+	error,
+) {
+	requested := make([]install.PackageRequest, 0, len(manifest.Packages))
 	for _, pkg := range manifest.Packages {
 		if pkg.Role != state.RoleRequired {
 			continue
@@ -144,17 +170,21 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) ([]types.PackageReques
 			return nil, fmt.Errorf("parse manifest package %s: %w", pkg.ID, err)
 		}
 		// TODO(package-ref-migration): remove wrapping once manifest parsing returns PackageRequest.
-		requested = append(requested, types.PackageRequest{
-			Ref:     types.PackageRef{Platform: id.Platform, Name: id.Name},
-			Version: id.Version,
-		})
+		requested = append(
+			requested, install.PackageRequest{
+				Ref:     types.PackageRef{Platform: id.Platform, Name: id.Name},
+				Version: id.Version,
+			},
+		)
 	}
 
-	sort.Slice(requested, func(i, j int) bool {
-		left := string(requested[i].Ref.Platform) + "/" + string(requested[i].Ref.Name)
-		right := string(requested[j].Ref.Platform) + "/" + string(requested[j].Ref.Name)
-		return left < right
-	})
+	sort.Slice(
+		requested, func(i, j int) bool {
+			left := string(requested[i].Ref.Platform) + "/" + string(requested[i].Ref.Name)
+			right := string(requested[j].Ref.Platform) + "/" + string(requested[j].Ref.Name)
+			return left < right
+		},
+	)
 	return requested, nil
 }
 

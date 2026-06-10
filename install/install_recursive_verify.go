@@ -34,7 +34,7 @@ func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
 			pkg.Dependencies.Authentic = true
 		}
 
-		verified[pkg.Id.StringPlatformName()] = CandidateNode{
+		verified[pkg.Id.StringBase()] = CandidateNode{
 			Package:        pkg,
 			ProvenancePath: []string{"verified"},
 			Advisory:       false,

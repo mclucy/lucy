@@ -29,9 +29,10 @@ import (
 
 func Fetch(
 	provider Provider,
+	resolver VersionSelectorResolver,
 	id types.VersionedPackageRef,
 ) (result FetchResult, err error) {
-	resolvedID, err := provider.ParseAmbiguousId(id)
+	resolvedID, err := resolver.ResolveVersionSelector(id)
 	if err != nil {
 		return FetchResult{}, err
 	}

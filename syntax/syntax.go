@@ -27,37 +27,6 @@ var (
 	EPlatform = errors.New("invalid platform")
 )
 
-func ParsePackageRequest(s string, bareSource string, optional bool) (
-	req types.PackageRequest,
-	err error,
-) {
-	s = strings.TrimSpace(strings.ToLower(s))
-	req = types.PackageRequest{}
-
-	var ref types.PackageRef
-	ref, err = ParsePackageRef(s)
-	if err != nil {
-		return req, err
-	}
-
-	var version types.BareVersion
-	if len(strings.Split(s, "@")) > 1 {
-		version = types.BareVersion(strings.Split(s, "@")[1])
-	} else {
-		version = types.VersionAny
-	}
-
-	var parsedSource types.SourceId
-	parsedSource = types.ParseSource(bareSource)
-
-	req.Ref = ref
-	req.Version = version
-	req.Source = parsedSource
-	req.Optional = optional
-
-	return req, nil
-}
-
 func ParsePackageRef(s string) (ref types.PackageRef, err error) {
 	ref = types.PackageRef{}
 

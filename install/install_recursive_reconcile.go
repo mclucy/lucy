@@ -274,7 +274,7 @@ func reconcileDependencyMap(
 	embedded := make(map[string]bool)
 	inputs := make([]ConstraintInput, 0, len(deps.Value))
 	for _, dep := range deps.Value {
-		key := dep.Id.StringPlatformName()
+		key := dep.Id.StringBase()
 		mandatory[key] = mandatory[key] || dep.Mandatory
 		embedded[key] = embedded[key] || dep.Embedded
 		inputs = append(
@@ -380,7 +380,7 @@ func reconcileConstraintTightened(advisory, verified types.Dependency) bool {
 		return true
 	}
 
-	entry, ok := merged[verified.Id.StringPlatformName()]
+	entry, ok := merged[verified.Id.StringBase()]
 	if !ok {
 		return false
 	}

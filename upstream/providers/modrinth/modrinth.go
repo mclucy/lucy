@@ -154,7 +154,7 @@ func (s provider) Dependencies(id types.VersionedPackageRef) (
 	return &modrinthDependencies{version: version, platform: id.Platform}, nil
 }
 
-func (s provider) ParseAmbiguousId(p types.VersionedPackageRef) (
+func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
 	parsed types.VersionedPackageRef,
 	err error,
 ) {

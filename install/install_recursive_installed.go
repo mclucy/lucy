@@ -20,7 +20,7 @@ func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
 		if pkg.Id.Version.IsInvalid() {
 			return
 		}
-		key := pkg.Id.StringPlatformName()
+		key := pkg.Id.StringBase()
 		if _, ok := seen[key]; ok {
 			return
 		}

@@ -67,7 +67,7 @@ func summarizeReconcileDiff(diff ReconcileDiff) string {
 func excludedCandidateKeys(ids []types.VersionedPackageRef) map[string]struct{} {
 	excluded := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
-		excluded[id.StringPlatformName()] = struct{}{}
+		excluded[id.StringBase()] = struct{}{}
 	}
 	return excluded
 }
@@ -83,7 +83,7 @@ func appendMissingRoots(
 	seen := make(map[string]struct{}, len(existing)+len(missing))
 	updated := make([]types.VersionedPackageRef, 0, len(existing)+len(missing))
 	for _, id := range existing {
-		key := id.StringPlatformName()
+		key := id.StringBase()
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -91,7 +91,7 @@ func appendMissingRoots(
 		updated = append(updated, id)
 	}
 	for _, id := range missing {
-		key := id.StringPlatformName()
+		key := id.StringBase()
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -133,5 +133,5 @@ func tightenedConstraintInputs(inputs []ConstraintInput) []InstalledConstraint {
 }
 
 func reconcileConstraintInputKey(input ConstraintInput) string {
-	return input.Requester + "|" + input.Dependency.Id.StringPlatformName()
+	return input.Requester + "|" + input.Dependency.Id.StringBase()
 }

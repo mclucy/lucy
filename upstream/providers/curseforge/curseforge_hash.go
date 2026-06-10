@@ -7,10 +7,16 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/upstream"
 )
+
+type fingerprintable interface {
+	CurseForgeFingerprint() uint32
+}
 
 // fingerprintRequest is the body for POST /v1/fingerprints/432.
 type fingerprintRequest struct {
@@ -46,6 +52,30 @@ func SlugFromFilePathWithHint(filePath, urlHint string) (slug string, err error)
 	}
 	fp := curseForgeFingerprint(data)
 	return slugFromFingerprint(fp)
+}
+
+func (p provider) NameByHash(artifact upstream.Hashable) (
+	name upstream.RemotePackageName,
+	hash string,
+	err error,
+) {
+	fingerprinted, ok := artifact.(fingerprintable)
+	if !ok {
+		return name, hash, fmt.Errorf("curseforge: artifact does not expose fingerprint")
+	}
+
+	fingerprint := fingerprinted.CurseForgeFingerprint()
+	hash = strconv.FormatUint(uint64(fingerprint), 10)
+	slug, err := slugFromFingerprint(fingerprint)
+	if err != nil {
+		return name, hash, err
+	}
+
+	name = upstream.RemotePackageName{
+		RemoteName: slug,
+		Source:     p.Id(),
+	}
+	return name, hash, nil
 }
 
 func slugFromFingerprint(fp uint32) (string, error) {

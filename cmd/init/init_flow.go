@@ -396,7 +396,7 @@ func BuildTakeoverPackageClassifications(packages []types.Package) []TakeoverPac
 	nameIndex := make(map[string][]string)
 
 	for _, pkg := range packages {
-		id := pkg.Id.StringPlatformName()
+		id := pkg.Id.StringBase()
 		if !takeoverPackageIDAllowed(pkg.Id) {
 			continue
 		}
@@ -416,7 +416,7 @@ func BuildTakeoverPackageClassifications(packages []types.Package) []TakeoverPac
 	}
 
 	for _, pkg := range packages {
-		fromID := pkg.Id.StringPlatformName()
+		fromID := pkg.Id.StringBase()
 		classification, ok := classifications[fromID]
 		if !ok {
 			continue
@@ -479,7 +479,7 @@ func resolveTakeoverDependencyTargets(
 		if dep.Embedded {
 			continue
 		}
-		depID := dep.Id.StringPlatformName()
+		depID := dep.Id.StringBase()
 		if _, ok := classifications[depID]; ok {
 			targets = appendUniqueStrings(targets, depID)
 			continue

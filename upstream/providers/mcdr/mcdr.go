@@ -97,7 +97,7 @@ func (s provider) Support(name types.BarePackageName) (
 	panic("implement me")
 }
 
-func (s provider) ParseAmbiguousId(id types.VersionedPackageRef) (
+func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	parsed types.VersionedPackageRef,
 	err error,
 ) {

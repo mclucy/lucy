@@ -121,7 +121,22 @@ func FetchMany(
 		wg.Add(1)
 		go func(index int, provider upstream.Provider) {
 			defer wg.Done()
-			remoteData, err := upstream.Fetch(provider, id)
+			resolver, ok, err := GetVersionSelectorResolver(provider.Id())
+			if err == nil && !ok {
+				err = fmt.Errorf("%w: %s", ErrUnsupportedSource, provider.Id())
+			}
+			if err != nil {
+				slots[index] = slot{
+					failed: true,
+					err: ProviderError{
+						Source: provider.Id(),
+						Err:    err,
+					},
+				}
+				return
+			}
+
+			remoteData, err := upstream.Fetch(provider, resolver.Resolver, id)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,

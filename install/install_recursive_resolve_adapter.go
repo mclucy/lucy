@@ -49,7 +49,7 @@ func (resolver providerCandidateResolver) ResolvePackage(
 
 	return types.Package{}, fmt.Errorf(
 		"install: failed to resolve mandatory dependency %s: %s",
-		id.StringPlatformName(),
+		id.StringBase(),
 		formatProviderErrors(lastErrors),
 	)
 }
@@ -68,7 +68,7 @@ func (resolver providerCandidateResolver) ResolveDependencies(
 
 	return nil, fmt.Errorf(
 		"install: failed to resolve mandatory dependency %s: %s",
-		pkg.Id.StringPlatformName(),
+		pkg.Id.StringBase(),
 		formatProviderErrors(providerErrors),
 	)
 }

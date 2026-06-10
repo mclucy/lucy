@@ -46,7 +46,7 @@ func MergeConstraintGraph(inputs []ConstraintInput) (ConstraintGraph, error) {
 
 	for _, input := range inputs {
 		id := input.Dependency.Id
-		key := id.StringPlatformName()
+		key := id.StringBase()
 		entry := graph[key]
 		if entry.Id.Name == "" {
 			entry.Id = types.VersionedPackageRef{
@@ -83,7 +83,7 @@ func (g ConstraintGraph) IsSatisfied(
 	id types.VersionedPackageRef,
 	version types.ResolvableVersion,
 ) bool {
-	entry, ok := g[id.StringPlatformName()]
+	entry, ok := g[id.StringBase()]
 	if !ok {
 		return false
 	}

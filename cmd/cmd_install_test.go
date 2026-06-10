@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 )
@@ -15,16 +16,28 @@ func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 			ModdingPlatform: string(types.PlatformFabric),
 		},
 		Packages: []state.ManifestPackage{
-			{ID: "fabric/root", Version: "compatible", Source: "auto", Role: state.RoleRequired, Side: state.SideBoth},
-			{ID: "fabric/dependency", Version: "1.0.0", Source: "modrinth", Role: state.RoleTransitive, Side: state.SideBoth},
-			{ID: "fabric/manual", Version: "1.0.0", Source: "github", Role: state.RoleIgnored, Side: state.SideBoth},
+			{
+				ID: "fabric/root", Version: "compatible", Source: "auto",
+				Role: state.RoleRequired, Side: state.SideBoth,
+			},
+			{
+				ID: "fabric/dependency", Version: "1.0.0", Source: "modrinth",
+				Role: state.RoleTransitive, Side: state.SideBoth,
+			},
+			{
+				ID: "fabric/manual", Version: "1.0.0", Source: "github",
+				Role: state.RoleIgnored, Side: state.SideBoth,
+			},
 		},
 	}
 	lock := &state.Lock{
 		ManifestFingerprint: manifestFingerprint(manifest, ""),
 		Packages: []state.LockedPackage{
 			{ID: "fabric/root", Version: "1.2.3", InstallPath: "mods/root.jar"},
-			{ID: "fabric/dependency", Version: "4.5.6", InstallPath: "mods/dependency.jar"},
+			{
+				ID: "fabric/dependency", Version: "4.5.6",
+				InstallPath: "mods/dependency.jar",
+			},
 		},
 	}
 	plan, err := buildInstallSyncPlan(manifest, lock)
@@ -39,7 +52,11 @@ func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 	got := packageIDsToStrings(plan.Requested)
 	want := []string{"fabric/dependency@4.5.6", "fabric/root@1.2.3"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("unexpected exact sync request set: got %#v want %#v", got, want)
+		t.Fatalf(
+			"unexpected exact sync request set: got %#v want %#v",
+			got,
+			want,
+		)
 	}
 	if !plan.Stable {
 		t.Fatal("expected exact lock sync plan to be marked stable")
@@ -53,16 +70,28 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 			ModdingPlatform: string(types.PlatformFabric),
 		},
 		Packages: []state.ManifestPackage{
-			{ID: "fabric/root", Version: "compatible", Source: "auto", Role: state.RoleRequired, Side: state.SideBoth},
-			{ID: "fabric/dependency", Version: "1.0.0", Source: "modrinth", Role: state.RoleTransitive, Side: state.SideBoth},
-			{ID: "fabric/manual", Version: "1.0.0", Source: "github", Role: state.RoleIgnored, Side: state.SideBoth},
+			{
+				ID: "fabric/root", Version: "compatible", Source: "auto",
+				Role: state.RoleRequired, Side: state.SideBoth,
+			},
+			{
+				ID: "fabric/dependency", Version: "1.0.0", Source: "modrinth",
+				Role: state.RoleTransitive, Side: state.SideBoth,
+			},
+			{
+				ID: "fabric/manual", Version: "1.0.0", Source: "github",
+				Role: state.RoleIgnored, Side: state.SideBoth,
+			},
 		},
 	}
 	lock := &state.Lock{
 		ManifestFingerprint: "sha256:stale",
 		Packages: []state.LockedPackage{
 			{ID: "fabric/root", Version: "9.9.9", InstallPath: "mods/root.jar"},
-			{ID: "fabric/dependency", Version: "8.8.8", InstallPath: "mods/dependency.jar"},
+			{
+				ID: "fabric/dependency", Version: "8.8.8",
+				InstallPath: "mods/dependency.jar",
+			},
 		},
 	}
 
@@ -78,17 +107,24 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 	got := packageIDsToStrings(plan.Requested)
 	want := []string{"fabric/root@compatible"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("unexpected manifest fallback request set: got %#v want %#v", got, want)
+		t.Fatalf(
+			"unexpected manifest fallback request set: got %#v want %#v",
+			got,
+			want,
+		)
 	}
 	if plan.Stable {
 		t.Fatal("expected stale lock sync plan to require lock refresh")
 	}
 }
 
-func packageIDsToStrings(requests []types.PackageRequest) []string {
+func packageIDsToStrings(requests []install.PackageRequest) []string {
 	out := make([]string, 0, len(requests))
 	for _, req := range requests {
-		out = append(out, string(req.Ref.Platform)+"/"+string(req.Ref.Name)+"@"+req.Version.String())
+		out = append(
+			out,
+			string(req.Ref.Platform)+"/"+string(req.Ref.Name)+"@"+req.Version.String(),
+		)
 	}
 	return out
 }

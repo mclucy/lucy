@@ -65,7 +65,7 @@ func backfillRecursiveDownloads(
 
 		tx.DownloadedArtifacts[pkg.Id.StringFull()] = pkg.Local.Path
 
-		key := pkg.Id.StringPlatformName()
+		key := pkg.Id.StringBase()
 		node, ok := tx.CandidateGraph[key]
 		if !ok {
 			continue

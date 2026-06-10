@@ -165,9 +165,9 @@ func (provider) Support(
 	panic("TODO: implement curseforge provider Support")
 }
 
-// ParseAmbiguousId resolves abstract version specifiers (latest,
+// ResolveVersionSelector resolves abstract version specifiers (latest,
 // compatible, any) to a concrete version by querying the CurseForge API.
-func (p provider) ParseAmbiguousId(id types.VersionedPackageRef) (
+func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	parsed types.VersionedPackageRef,
 	err error,
 ) {

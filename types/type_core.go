@@ -15,17 +15,7 @@ type VersionedPackageRef struct {
 	Version  BareVersion
 }
 
-// PackageRequest is the universal desired state descriptor.
-// This includes:
-//   - via `lucy add`
-//   - resolving from manifest
-//
-// This is data only. Ownership roles such as required/transitive/ignored, and
-// relation roles such as dependency/embedded, are supplied by the surrounding
-// context rather than stored here.
-type PackageRequest struct {
-	Ref      PackageRef
-	Version  BareVersion
-	Optional bool
-	Source   SourceId
+type StringablePackageRef interface {
+	StringFull() string
+	StringBase() string
 }

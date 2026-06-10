@@ -75,7 +75,7 @@ func (p provider) Dependencies(id types.VersionedPackageRef) (
 	return &hangarDependencies{version: version, platform: id.Platform}, nil
 }
 
-func (p provider) ParseAmbiguousId(id types.VersionedPackageRef) (
+func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	parsed types.VersionedPackageRef,
 	err error,
 ) {

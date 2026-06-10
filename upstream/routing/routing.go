@@ -56,6 +56,16 @@ type InfoProvider struct {
 	Informer upstream.Informer
 }
 
+type ArtifactMapperProvider struct {
+	Source types.SourceId
+	Mapper upstream.ArtifactMapper
+}
+
+type VersionSelectorProvider struct {
+	Source   types.SourceId
+	Resolver upstream.VersionSelectorResolver
+}
+
 var searcherBySource = map[types.SourceId]upstream.Searcher{
 	types.SourceModrinth:   modrinth.Provider,
 	types.SourceCurseForge: curseforge2.Provider,
@@ -66,6 +76,20 @@ var searcherBySource = map[types.SourceId]upstream.Searcher{
 }
 
 var informerBySource = map[types.SourceId]upstream.Informer{
+	types.SourceModrinth:   modrinth.Provider,
+	types.SourceCurseForge: curseforge2.Provider,
+	types.SourceGitHub:     githubsource.Provider,
+	types.SourceMCDR:       mcdr.Provider,
+	types.SourceHangar:     hangar.Provider,
+	types.SourceSpiget:     spiget.Provider,
+}
+
+var artifactMapperBySource = map[types.SourceId]upstream.ArtifactMapper{
+	types.SourceModrinth:   modrinth.Provider,
+	types.SourceCurseForge: curseforge2.Provider,
+}
+
+var versionSelectorResolverBySource = map[types.SourceId]upstream.VersionSelectorResolver{
 	types.SourceModrinth:   modrinth.Provider,
 	types.SourceCurseForge: curseforge2.Provider,
 	types.SourceGitHub:     githubsource.Provider,
@@ -130,6 +154,34 @@ func GetInformer(src types.SourceId) (InfoProvider, bool, error) {
 		return InfoProvider{}, false, nil
 	}
 	return InfoProvider{Source: src, Informer: informer}, true, nil
+}
+
+func GetArtifactMapper(src types.SourceId) (ArtifactMapperProvider, bool, error) {
+	if src == types.SourceCurseForge {
+		if err := curseforge2.AvailabilityError(); err != nil {
+			return ArtifactMapperProvider{}, false, err
+		}
+	}
+
+	mapper, ok := artifactMapperBySource[src]
+	if !ok {
+		return ArtifactMapperProvider{}, false, nil
+	}
+	return ArtifactMapperProvider{Source: src, Mapper: mapper}, true, nil
+}
+
+func GetVersionSelectorResolver(src types.SourceId) (VersionSelectorProvider, bool, error) {
+	if src == types.SourceCurseForge {
+		if err := curseforge2.AvailabilityError(); err != nil {
+			return VersionSelectorProvider{}, false, err
+		}
+	}
+
+	resolver, ok := versionSelectorResolverBySource[src]
+	if !ok {
+		return VersionSelectorProvider{}, false, nil
+	}
+	return VersionSelectorProvider{Source: src, Resolver: resolver}, true, nil
 }
 
 // ResolveProviders resolves ordered provider candidates for a given operation,

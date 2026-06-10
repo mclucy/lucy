@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -334,7 +335,7 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 	}
 
 	updated := UpdateManifestRolesForAdd(
-		manifest, []types.PackageRequest{
+		manifest, []install.PackageRequest{
 			{
 				Ref: types.PackageRef{
 					Platform: types.PlatformFabric, Name: "new-root",
