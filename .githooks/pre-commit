@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v gofumpt >/dev/null 2>&1; then
+	printf 'pre-commit: gofumpt is required but was not found in PATH\n' >&2
+	printf 'pre-commit: install it with: go install mvdan.cc/gofumpt@latest\n' >&2
+	exit 1
+fi
+
+files=()
+while IFS= read -r -d '' file; do
+	files+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.go')
+
+if ((${#files[@]} == 0)); then
+	exit 0
+fi
+
+tmpdir=$(mktemp -d)
+clean_dir=$(mktemp -d)
+cleanup() {
+	rm -rf "$tmpdir" "$clean_dir"
+}
+trap cleanup EXIT
+
+for file in "${files[@]}"; do
+	index_file="$tmpdir/$file"
+	mkdir -p "$(dirname "$index_file")"
+	git show ":$file" > "$index_file"
+
+	if git diff --quiet -- "$file"; then
+		clean_file="$clean_dir/$file"
+		mkdir -p "$(dirname "$clean_file")"
+		touch "$clean_file"
+	fi
+done
+
+was_worktree_clean() {
+	local candidate=$1
+	[[ -e "$clean_dir/$candidate" ]]
+}
+
+gofumpt -w -- "${files[@]/#/$tmpdir/}"
+
+for file in "${files[@]}"; do
+	index_file="$tmpdir/$file"
+	read -r mode _ < <(git ls-files --stage -- "$file")
+	blob=$(git hash-object -w "$index_file")
+	git update-index --cacheinfo "$mode,$blob,$file"
+
+	if ! was_worktree_clean "$file"; then
+		printf 'pre-commit: formatted staged snapshot for %s; unstaged worktree changes were preserved\n' "$file" >&2
+		continue
+	fi
+
+	cp "$index_file" "$file"
+done

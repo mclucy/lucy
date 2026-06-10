@@ -1,5 +1,8 @@
 # enable this config by running `git config --local include.path ../.gitconfig`
 
+[core]
+	hooksPath = .githooks
+
 [merge]
 	ff = only
 
