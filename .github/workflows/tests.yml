@@ -10,6 +10,7 @@ permissions: write-all
 
 jobs:
   test:
+    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
