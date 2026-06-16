@@ -413,6 +413,7 @@ func UpsertManifestRequiredIntent(
 			Source:  resolvedSource,
 			Role:    RoleRequired,
 			Side:    SideUnknown,
+			Optional: false,
 		},
 	)
 	sort.Slice(
