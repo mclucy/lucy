@@ -33,7 +33,7 @@ func BuildCandidateGraph(
 	roots []types.VersionedPackageRef,
 	providers []upstream.Provider,
 	installedConstraints []InstalledConstraint,
-	options Options,
+	options InstallOptions,
 ) (*RecursiveTransaction, error) {
 	return BuildCandidateGraphWithResolver(
 		roots,
@@ -51,7 +51,7 @@ func BuildCandidateGraphWithResolver(
 	roots []types.VersionedPackageRef,
 	providers []upstream.Provider,
 	installedConstraints []InstalledConstraint,
-	options Options,
+	options InstallOptions,
 	resolver candidateGraphResolver,
 ) (*RecursiveTransaction, error) {
 	planner, err := newCandidateGraphPlanner(
@@ -167,7 +167,7 @@ func (planner *candidateGraphPlanner) admit(
 	current candidateRequest,
 	pkg types.Package,
 	dependencySets []types.PackageDependencies,
-	options Options,
+	options InstallOptions,
 ) error {
 	key := current.id.StringBase()
 	planner.tx.CandidateGraph[key] = CandidateNode{
