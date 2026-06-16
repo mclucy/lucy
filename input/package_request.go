@@ -16,8 +16,8 @@ func ParsePackageRequest(s string, sourceHint string) (types.ScopedPackageRef, t
 
 	scope := types.SourceAuto
 	if sourceHint != "" {
-		parsedScope := types.SourceId(sourceHint)
-		if !parsedScope.Valid() {
+		parsedScope := types.ParseSource(sourceHint)
+		if parsedScope == types.SourceUnknown {
 			return types.ScopedPackageRef{}, types.VersionNone, fmt.Errorf("invalid source: %s", sourceHint)
 		}
 		scope = parsedScope

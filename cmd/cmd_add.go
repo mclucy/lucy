@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
