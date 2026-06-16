@@ -9,10 +9,27 @@ type PackageRef struct {
 	Name     BarePackageName
 }
 
+func (p PackageRef) IsIdentityPackage() bool {
+	_, exists := platformByIdentityPackage[p.Name]
+	return exists
+}
+
+func (p PackageRef) StringFull() string {
+	return p.StringBase()
+}
+
+func (p PackageRef) StringBase() string {
+	return p.Platform.String() + "/" + p.Name.String()
+}
+
 type VersionedPackageRef struct {
-	Platform PlatformId
-	Name     BarePackageName
-	Version  BareVersion
+	PackageRef
+	Version BareVersion
+}
+
+type ScopedPackageRef struct {
+	PackageRef
+	Scope SourceId
 }
 
 type StringablePackageRef interface {

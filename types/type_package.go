@@ -7,6 +7,8 @@ package types
 // interface for both local and remote packages. It is used to represent a
 // package in the system, and can be used to store information about the package
 // such as its dependencies, installation path, and remote source.
+//
+// Deprecated: The goal is to eliminate the need for this type by using more specific types such as LocalPackage and RemotePackage.
 type Package struct {
 	// Id is the basic package identifier
 	Id VersionedPackageRef
