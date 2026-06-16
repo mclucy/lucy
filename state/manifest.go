@@ -394,6 +394,7 @@ func UpsertManifestRequiredIntent(
 		manifest.Packages[i].Version = intentVersion
 		manifest.Packages[i].Source = resolvedSource
 		manifest.Packages[i].Role = RoleRequired
+		manifest.Packages[i].Optional = false
 		if manifest.Packages[i].Side == "" {
 			manifest.Packages[i].Side = SideUnknown
 		}
