@@ -221,7 +221,10 @@ func runtimeIdentityPackage(platform string) string {
 		return ""
 	}
 	return types.VersionedPackageRef{
-		Platform: p, Name: types.BarePackageName(p.String()),
+		PackageRef: types.PackageRef{
+			Platform: p,
+			Name:     types.BarePackageName(p.String()),
+		},
 	}.StringBase()
 }
 
@@ -475,8 +478,10 @@ func detectArchivePackages(path string) []string {
 			packages = append(
 				packages,
 				types.VersionedPackageRef{
-					Platform: types.PlatformFabric,
-					Name:     types.BarePackageName(strings.TrimSpace(mod.Id)),
+					PackageRef: types.PackageRef{
+						Platform: types.PlatformFabric,
+						Name:     types.BarePackageName(strings.TrimSpace(mod.Id)),
+					},
 				}.StringBase(),
 			)
 		}
@@ -495,8 +500,10 @@ func detectArchivePackages(path string) []string {
 				packages = append(
 					packages,
 					types.VersionedPackageRef{
-						Platform: types.PlatformNeoforge,
-						Name:     types.BarePackageName(strings.TrimSpace(item.ModID)),
+						PackageRef: types.PackageRef{
+							Platform: types.PlatformNeoforge,
+							Name:     types.BarePackageName(strings.TrimSpace(item.ModID)),
+						},
 					}.StringBase(),
 				)
 			}
@@ -516,8 +523,10 @@ func detectArchivePackages(path string) []string {
 				packages = append(
 					packages,
 					types.VersionedPackageRef{
-						Platform: types.PlatformForge,
-						Name:     types.BarePackageName(strings.TrimSpace(item.ModID)),
+						PackageRef: types.PackageRef{
+							Platform: types.PlatformForge,
+							Name:     types.BarePackageName(strings.TrimSpace(item.ModID)),
+						},
 					}.StringBase(),
 				)
 			}
@@ -534,8 +543,10 @@ func detectArchivePackages(path string) []string {
 				packages = append(
 					packages,
 					types.VersionedPackageRef{
-						Platform: types.PlatformForge,
-						Name:     types.BarePackageName(strings.TrimSpace(item.ModId)),
+						PackageRef: types.PackageRef{
+							Platform: types.PlatformForge,
+							Name:     types.BarePackageName(strings.TrimSpace(item.ModId)),
+						},
 					}.StringBase(),
 				)
 			}
@@ -554,8 +565,10 @@ func detectArchivePackages(path string) []string {
 			packages = append(
 				packages,
 				types.VersionedPackageRef{
-					Platform: types.PlatformMCDR,
-					Name:     types.BarePackageName(strings.TrimSpace(plugin.Id)),
+					PackageRef: types.PackageRef{
+						Platform: types.PlatformMCDR,
+						Name:     types.BarePackageName(strings.TrimSpace(plugin.Id)),
+					},
 				}.StringBase(),
 			)
 		}
@@ -566,8 +579,10 @@ func detectArchivePackages(path string) []string {
 			packages = append(
 				packages,
 				types.VersionedPackageRef{
-					Platform: types.PlatformNone,
-					Name:     types.BarePackageName(id),
+					PackageRef: types.PackageRef{
+						Platform: types.PlatformNone,
+						Name:     types.BarePackageName(id),
+					},
 				}.StringBase(),
 			)
 		}
@@ -580,8 +595,10 @@ func detectArchivePackages(path string) []string {
 			packages = append(
 				packages,
 				types.VersionedPackageRef{
-					Platform: types.PlatformNone,
-					Name:     types.BarePackageName(id),
+					PackageRef: types.PackageRef{
+						Platform: types.PlatformNone,
+						Name:     types.BarePackageName(id),
+					},
 				}.StringBase(),
 			)
 		}

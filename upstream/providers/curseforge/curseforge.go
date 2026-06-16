@@ -126,12 +126,14 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 			result.Value = append(
 				result.Value, types.Dependency{
 					Id: types.VersionedPackageRef{
-						Name: types.BarePackageName(
-							fmt.Sprintf(
-								"%d",
-								dep.ModId,
+						PackageRef: types.PackageRef{
+							Name: types.BarePackageName(
+								fmt.Sprintf(
+									"%d",
+									dep.ModId,
+								),
 							),
-						),
+						},
 					},
 					Mandatory: false,
 				},
@@ -140,12 +142,14 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 			result.Value = append(
 				result.Value, types.Dependency{
 					Id: types.VersionedPackageRef{
-						Name: types.BarePackageName(
-							fmt.Sprintf(
-								"%d",
-								dep.ModId,
+						PackageRef: types.PackageRef{
+							Name: types.BarePackageName(
+								fmt.Sprintf(
+									"%d",
+									dep.ModId,
+								),
 							),
-						),
+						},
 					},
 					Mandatory: true,
 				},

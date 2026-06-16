@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -26,7 +26,7 @@ func (n hangarProjectNamespace) ProjectRef() hangarProjectRef {
 }
 
 func (r hangarProjectRef) CanonicalName() types.BarePackageName {
-	return syntax.ToProjectName(r.Slug)
+	return input.ToProjectName(r.Slug)
 }
 
 func (r hangarProjectRef) LookupPath() string {
@@ -50,10 +50,12 @@ func (s *projectSearchResponse) ToSearchResults(source types.SourceId) upstream.
 	}
 
 	for _, project := range s.Result {
-		res.Items = append(res.Items, upstream.RemotePackageName{
-			RemoteName: project.ProjectRef().CanonicalName().String(),
-			Source:     source,
-		})
+		res.Items = append(
+			res.Items, upstream.RemotePackageName{
+				RemoteName: project.ProjectRef().CanonicalName().String(),
+				Source:     source,
+			},
+		)
 	}
 
 	return res
@@ -163,7 +165,7 @@ func (v *hangarVersion) PluginDependencyNames() []types.BarePackageName {
 		if dep.Name == "" || dep.ExternalURL != nil {
 			continue
 		}
-		deps = append(deps, syntax.ToProjectName(dep.Name))
+		deps = append(deps, input.ToProjectName(dep.Name))
 	}
 	slices.Sort(deps)
 	return deps

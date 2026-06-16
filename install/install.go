@@ -27,14 +27,18 @@ func registerInstaller(platform types.PlatformId, installer platformInstaller) {
 func Install(req PackageRequest, options Options) (*Result, error) {
 	// TODO(package-ref-migration): remove PackageId/source extraction once identity installers accept PackageRequest.
 	id := types.VersionedPackageRef{
-		Platform: req.Ref.Platform, Name: req.Ref.Name, Version: req.Version,
+		PackageRef: types.PackageRef{
+			Platform: req.Ref.Platform,
+			Name:     req.Ref.Name,
+		},
+		Version: req.Version,
 	}
 	source := req.Source
 	_ = source
 
 	// for regular (non-identity) packages, delegate to InstallMany to unify
 	// resolver behavior with batch adds
-	if !id.IsIdentityPackage() {
+	if !types.IsIdentityPackage(id.PackageRef) {
 		return InstallMany([]PackageRequest{req}, options)
 	}
 
@@ -51,12 +55,6 @@ func Install(req PackageRequest, options Options) (*Result, error) {
 }
 
 func installPlatform(id types.VersionedPackageRef) error {
-	id.NormalizeIdentityPackage()
-	err := id.IsValidIdentityPackage()
-	if err != nil {
-		return err
-	}
-
 	serverInfo := probe.ServerInfo()
 	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 	hasMcdr := serverInfo.Environments.Mcdr != nil
@@ -69,7 +67,7 @@ func installPlatform(id types.VersionedPackageRef) error {
 		)
 	}
 
-	switch id.IdentityToPlatform() {
+	switch id.Platform {
 	case types.PlatformMinecraft:
 		if serverPlatform != types.PlatformNone {
 			// TODO: ask if overwrite existing server

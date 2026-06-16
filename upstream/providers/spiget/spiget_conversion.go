@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -46,10 +46,12 @@ func (s searchResponse) ToSearchResults(source types.SourceId) upstream.SearchRe
 		if resource.Name == "" {
 			continue
 		}
-		results.Items = append(results.Items, upstream.RemotePackageName{
-			RemoteName: normalizedProjectName(resource.Name).String(),
-			Source:     source,
-		})
+		results.Items = append(
+			results.Items, upstream.RemotePackageName{
+				RemoteName: normalizedProjectName(resource.Name).String(),
+				Source:     source,
+			},
+		)
 	}
 
 	return results
@@ -292,7 +294,7 @@ func prettifyLinkName(name string) string {
 }
 
 func normalizedProjectName(name string) types.BarePackageName {
-	name = syntax.ToProjectName(name).String()
+	name = input.ToProjectName(name).String()
 	var b strings.Builder
 	b.Grow(len(name))
 	lastHyphen := false

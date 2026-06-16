@@ -7,7 +7,7 @@ import (
 
 	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -19,7 +19,11 @@ func newMcdrReader() Reader {
 
 // Read extracts artifact metadata from mcdreforged.plugin.json inside an MCDR
 // plugin archive (.pyz or .mcdr).
-func (r *mcdrReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error) {
+func (r *mcdrReader) Read(
+	zipRdr *zip.Reader,
+	filePath string,
+	resolver SlugResolver,
+) ([]ArtifactInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "mcdreforged.plugin.json" {
 			continue
@@ -48,17 +52,19 @@ func (r *mcdrReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugReso
 
 		urls := make([]types.Url, 0, 1)
 		if pluginInfo.Link != "" {
-			urls = append(urls, types.Url{
-				Name: "Link",
-				Type: types.UrlSource,
-				Url:  pluginInfo.Link,
-			})
+			urls = append(
+				urls, types.Url{
+					Name: "Link",
+					Type: types.UrlSource,
+					Url:  pluginInfo.Link,
+				},
+			)
 		}
 
 		info := ArtifactInfo{
 			Ref: types.PackageRef{
 				Platform: types.PlatformMCDR,
-				Name:     syntax.ToProjectName(pluginInfo.Id),
+				Name:     input.ToProjectName(pluginInfo.Id),
 			},
 			Version:  types.BareVersion(pluginInfo.Version),
 			FilePath: filePath,
@@ -73,18 +79,20 @@ func (r *mcdrReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugReso
 		if len(pluginInfo.Dependencies) > 0 {
 			deps := make([]ArtifactDep, 0, len(pluginInfo.Dependencies))
 			for key, value := range pluginInfo.Dependencies {
-				deps = append(deps, ArtifactDep{
-					Ref: types.PackageRef{
-						Platform: types.PlatformMCDR,
-						Name:     syntax.ToProjectName(key),
+				deps = append(
+					deps, ArtifactDep{
+						Ref: types.PackageRef{
+							Platform: types.PlatformMCDR,
+							Name:     input.ToProjectName(key),
+						},
+						Constraint: dependency.ParseRange(
+							value,
+							dependency.InferRangeDialect(types.PlatformMCDR),
+							types.Semver,
+						),
+						Mandatory: true,
 					},
-					Constraint: dependency.ParseRange(
-						value,
-						dependency.InferRangeDialect(types.PlatformMCDR),
-						types.Semver,
-					),
-					Mandatory: true,
-				})
+				)
 			}
 			info.Dependencies = deps
 		}

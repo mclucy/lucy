@@ -62,9 +62,11 @@ func (d *VanillaDetector) Detect(
 				GameVersion:     gameVersion,
 				RuntimeIdentities: []types.VersionedPackageRef{
 					{
-						Platform: types.PlatformMinecraft,
-						Name:     "minecraft",
-						Version:  gameVersion,
+						PackageRef: types.PackageRef{
+							Platform: types.PlatformMinecraft,
+							Name:     "minecraft",
+						},
+						Version: gameVersion,
 					},
 				},
 				Topology: &types.RuntimeTopology{

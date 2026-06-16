@@ -18,7 +18,7 @@ func sortIdentityPackages(ids []types.VersionedPackageRef) []types.VersionedPack
 	seen := make(map[types.PlatformId]bool)
 	deduped := make([]types.VersionedPackageRef, 0, len(ids))
 	for _, id := range ids {
-		platform := id.IdentityToPlatform()
+		platform := id.Platform
 		if !seen[platform] {
 			seen[platform] = true
 			deduped = append(deduped, id)
@@ -28,8 +28,8 @@ func sortIdentityPackages(ids []types.VersionedPackageRef) []types.VersionedPack
 	// Sort by tier
 	slices.SortStableFunc(
 		deduped, func(a, b types.VersionedPackageRef) int {
-			tierA := getTier(a.IdentityToPlatform())
-			tierB := getTier(b.IdentityToPlatform())
+			tierA := getTier(a.Platform)
+			tierB := getTier(b.Platform)
 			if tierA < tierB {
 				return -1
 			}
@@ -50,7 +50,7 @@ func validateIdentityCompatibility(ids []types.VersionedPackageRef) error {
 	tier1Platforms := make([]types.VersionedPackageRef, 0)
 
 	for _, id := range ids {
-		platform := id.IdentityToPlatform()
+		platform := id.Platform
 		tier := getTier(platform)
 		if tier == 1 {
 			tier1Platforms = append(tier1Platforms, id)

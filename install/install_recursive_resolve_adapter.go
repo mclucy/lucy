@@ -20,11 +20,18 @@ func (resolver providerCandidateResolver) ResolvePackage(
 		attempts = append(
 			attempts,
 			types.VersionedPackageRef{
-				Platform: id.Platform, Name: id.Name,
+				PackageRef: types.PackageRef{
+					Platform: id.Platform,
+					Name:     id.Name,
+				},
 				Version: types.VersionLatest,
 			},
 			types.VersionedPackageRef{
-				Platform: id.Platform, Name: id.Name, Version: types.VersionAny,
+				PackageRef: types.PackageRef{
+					Platform: id.Platform,
+					Name:     id.Name,
+				},
+				Version: types.VersionAny,
 			},
 		)
 	}

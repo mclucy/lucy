@@ -360,8 +360,10 @@ func TestMCDRPluginDetectedAsPackage_ClassifiedCorrectly(t *testing.T) {
 	pkgs := []types.Package{
 		{
 			Id: types.VersionedPackageRef{
-				Platform: types.PlatformMCDR,
-				Name:     types.BarePackageName("primebackup"),
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformMCDR,
+					Name:     types.BarePackageName("primebackup"),
+				},
 			},
 			Remote: &types.PackageRemote{
 				Source: types.SourceMCDR,

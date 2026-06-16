@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -68,14 +68,18 @@ func (d *arclightServerDetector) Detect(
 		GameVersion:     gameVersion,
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
-				Platform: types.PlatformAny,
-				Name:     syntax.ToProjectName("arclight"),
-				Version:  manifestSignals.loaderVersion,
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformAny,
+					Name:     input.ToProjectName("arclight"),
+				},
+				Version: manifestSignals.loaderVersion,
 			},
 			{
-				Platform: types.PlatformMinecraft,
-				Name:     syntax.ToProjectName("minecraft"),
-				Version:  gameVersion,
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformMinecraft,
+					Name:     input.ToProjectName("minecraft"),
+				},
+				Version: gameVersion,
 			},
 		},
 		Topology: &types.RuntimeTopology{

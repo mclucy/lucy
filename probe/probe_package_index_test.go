@@ -129,7 +129,11 @@ func TestPackageIndex_LookupByID_Found(t *testing.T) {
 func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
 	idx := NewPackageIndex()
 	id := types.VersionedPackageRef{
-		Platform: types.PlatformFabric, Name: "missing", Version: "1.0.0",
+		PackageRef: types.PackageRef{
+			Platform: types.PlatformFabric,
+			Name:     "missing",
+		},
+		Version: "1.0.0",
 	}
 	_, ok := idx.LookupByID(id)
 	if ok {

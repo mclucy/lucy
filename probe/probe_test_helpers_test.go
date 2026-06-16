@@ -16,9 +16,11 @@ func makePackage(
 	t.Helper()
 	pkg := types.Package{
 		Id: types.VersionedPackageRef{
-			Platform: platform,
-			Name:     types.BarePackageName(name),
-			Version:  types.BareVersion(version),
+			PackageRef: types.PackageRef{
+				Platform: platform,
+				Name:     types.BarePackageName(name),
+			},
+			Version: types.BareVersion(version),
 		},
 	}
 	if localPath != "" {

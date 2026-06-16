@@ -9,7 +9,6 @@
 package types
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/mclucy/lucy/tools"
@@ -172,88 +171,4 @@ func (p VersionedPackageRef) StringFull() string {
 
 func (p VersionedPackageRef) StringBase() string {
 	return string(p.Platform) + "/" + string(p.Name)
-}
-
-var platformByIdentityPackage = map[BarePackageName]PlatformId{
-	"minecraft":     PlatformMinecraft,
-	"mc":            PlatformMinecraft,
-	"fabric":        PlatformFabric,
-	"fabric-loader": PlatformFabric,
-	"forge":         PlatformForge,
-	"neoforge":      PlatformNeoforge,
-	"mcdreforged":   PlatformMCDR,
-	"mcdr":          PlatformMCDR,
-}
-
-var canonicalIdentityPackageByPlatform = map[PlatformId]BarePackageName{
-	PlatformMinecraft: "minecraft",
-	PlatformFabric:    "fabric",
-	PlatformForge:     "forge",
-	PlatformNeoforge:  "neoforge",
-	PlatformMCDR:      "mcdreforged",
-}
-
-func (p VersionedPackageRef) IsIdentityPackage() bool {
-	_, exists := platformByIdentityPackage[p.Name]
-	return exists
-}
-
-func (p VersionedPackageRef) IsValidIdentityPackage() error {
-	if !p.IsIdentityPackage() {
-		return nil
-	}
-
-	ErrInvalidPlatformPackage := func(p VersionedPackageRef) error {
-		return fmt.Errorf(
-			"mismatch in an identity package: %s under %s",
-			p.Name,
-			p.Platform,
-		)
-	}
-
-	// Check if platform was explicitly specified and mismatches the identity package's platform
-	if p.Platform != PlatformAny {
-		expectedPlatform, _ := platformByIdentityPackage[p.Name]
-		if p.Platform != expectedPlatform {
-			return ErrInvalidPlatformPackage(p)
-		}
-	}
-
-	return nil
-}
-
-func (p *VersionedPackageRef) NormalizeIdentityPackage() {
-	if !p.IsIdentityPackage() {
-		return
-	}
-
-	platform := p.Platform
-	if platform == PlatformAny {
-		inferred, exists := platformByIdentityPackage[p.Name]
-		if !exists {
-			return
-		}
-		platform = inferred
-		p.Platform = platform
-	}
-
-	canonicalName, exists := canonicalIdentityPackageByPlatform[platform]
-	if !exists {
-		return
-	}
-
-	if p.Name != canonicalName {
-		p.Name = canonicalName
-		if p.Version.CanInfer() {
-			p.Version = VersionCompatible
-		}
-	}
-}
-
-func (p VersionedPackageRef) IdentityToPlatform() PlatformId {
-	platform, exists := platformByIdentityPackage[p.Name]
-	if !exists {
-		return PlatformUnknown
-	}
-	return platform
 }

@@ -9,7 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 
 	"github.com/pelletier/go-toml"
@@ -25,7 +25,11 @@ func newNeoforgeReader() Reader {
 	return &neoforgeReader{}
 }
 
-func (r *neoforgeReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error) {
+func (r *neoforgeReader) Read(
+	zipRdr *zip.Reader,
+	filePath string,
+	resolver SlugResolver,
+) ([]ArtifactInfo, error) {
 	raw, err := readZipEntry(zipRdr, neoforgeModsTomlPath)
 	if err != nil {
 		return nil, err
@@ -57,7 +61,7 @@ func (r *neoforgeReader) Read(zipRdr *zip.Reader, filePath string, resolver Slug
 		info := ArtifactInfo{
 			Ref: types.PackageRef{
 				Platform: types.PlatformNeoforge,
-				Name:     syntax.ToProjectName(mod.ModID),
+				Name:     input.ToProjectName(mod.ModID),
 			},
 			Version:  version,
 			FilePath: filePath,
@@ -95,15 +99,17 @@ func (r *neoforgeReader) Read(zipRdr *zip.Reader, filePath string, resolver Slug
 				continue
 			}
 
-			info.Dependencies = append(info.Dependencies, ArtifactDep{
-				Ref: types.PackageRef{
-					Platform: types.PlatformNeoforge,
-					Name:     syntax.ToProjectName(dep.ModID),
+			info.Dependencies = append(
+				info.Dependencies, ArtifactDep{
+					Ref: types.PackageRef{
+						Platform: types.PlatformNeoforge,
+						Name:     input.ToProjectName(dep.ModID),
+					},
+					Constraint: parseNeoforgeMavenVersionRange(dep.VersionRange),
+					Mandatory:  dep.Type == "required" || dep.Mandatory,
+					Embedded:   embeddedModIds[dep.ModID],
 				},
-				Constraint: parseNeoforgeMavenVersionRange(dep.VersionRange),
-				Mandatory:  dep.Type == "required" || dep.Mandatory,
-				Embedded:   embeddedModIds[dep.ModID],
-			})
+			)
 		}
 		info.Dependencies = append(info.Dependencies, embeddedDeps...)
 
@@ -195,7 +201,10 @@ func neoforgeJarjarEmbeddedModIds(
 			continue
 		}
 
-		nestedZip, err := zip.NewReader(bytes.NewReader(jarBytes), int64(len(jarBytes)))
+		nestedZip, err := zip.NewReader(
+			bytes.NewReader(jarBytes),
+			int64(len(jarBytes)),
+		)
 		if err != nil {
 			continue
 		}
@@ -226,15 +235,17 @@ func neoforgeJarjarEmbeddedDeps(meta *exttype.FileNeoforgeJarjar) []ArtifactDep 
 
 	deps := make([]ArtifactDep, 0, len(meta.Jars))
 	for _, entry := range meta.Jars {
-		deps = append(deps, ArtifactDep{
-			Ref: types.PackageRef{
-				Platform: types.PlatformNone,
-				Name:     syntax.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact),
+		deps = append(
+			deps, ArtifactDep{
+				Ref: types.PackageRef{
+					Platform: types.PlatformNone,
+					Name:     input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact),
+				},
+				Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),
+				Mandatory:  true,
+				Embedded:   true,
 			},
-			Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),
-			Mandatory:  true,
-			Embedded:   true,
-		})
+		)
 	}
 	return deps
 }

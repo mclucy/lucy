@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
@@ -42,7 +42,11 @@ func newBungeeCordReader() Reader {
 
 // Read extracts artifact metadata from velocity-plugin.json inside a Velocity
 // plugin JAR.
-func (r *velocityReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error) {
+func (r *velocityReader) Read(
+	zipRdr *zip.Reader,
+	filePath string,
+	resolver SlugResolver,
+) ([]ArtifactInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "velocity-plugin.json" {
 			continue
@@ -71,18 +75,20 @@ func (r *velocityReader) Read(zipRdr *zip.Reader, filePath string, resolver Slug
 
 		urls := make([]types.Url, 0, 1)
 		if descriptor.URL != "" {
-			urls = append(urls, types.Url{
-				Name: "Homepage",
-				Type: types.UrlHome,
-				Url:  descriptor.URL,
-			})
+			urls = append(
+				urls, types.Url{
+					Name: "Homepage",
+					Type: types.UrlHome,
+					Url:  descriptor.URL,
+				},
+			)
 		}
 
 		return []ArtifactInfo{
 			{
 				Ref: types.PackageRef{
 					Platform: types.PlatformVelocity,
-					Name:     syntax.ToProjectName(descriptor.ID),
+					Name:     input.ToProjectName(descriptor.ID),
 				},
 				Version:  types.BareVersion(descriptor.Version),
 				FilePath: filePath,
@@ -101,7 +107,11 @@ func (r *velocityReader) Read(zipRdr *zip.Reader, filePath string, resolver Slug
 
 // Read extracts artifact metadata from bungee.yml inside a BungeeCord plugin
 // JAR.
-func (r *bungeeCordReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error) {
+func (r *bungeeCordReader) Read(
+	zipRdr *zip.Reader,
+	filePath string,
+	resolver SlugResolver,
+) ([]ArtifactInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "bungee.yml" {
 			continue
@@ -133,18 +143,20 @@ func (r *bungeeCordReader) Read(zipRdr *zip.Reader, filePath string, resolver Sl
 
 		urls := make([]types.Url, 0, 1)
 		if descriptor.Website != "" {
-			urls = append(urls, types.Url{
-				Name: "Website",
-				Type: types.UrlHome,
-				Url:  descriptor.Website,
-			})
+			urls = append(
+				urls, types.Url{
+					Name: "Website",
+					Type: types.UrlHome,
+					Url:  descriptor.Website,
+				},
+			)
 		}
 
 		return []ArtifactInfo{
 			{
 				Ref: types.PackageRef{
 					Platform: types.PlatformBungeecord,
-					Name:     syntax.ToProjectName(descriptor.Name),
+					Name:     input.ToProjectName(descriptor.Name),
 				},
 				Version:  types.BareVersion(descriptor.Version),
 				FilePath: filePath,

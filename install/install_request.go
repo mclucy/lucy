@@ -3,7 +3,7 @@ package install
 import (
 	"strings"
 
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -31,7 +31,7 @@ func ParsePackageRequest(s string, bareSource string, optional bool) (
 	req = PackageRequest{}
 
 	var ref types.PackageRef
-	ref, err = syntax.ParsePackageRef(s)
+	ref, err = input.ParsePackageRef(s)
 	if err != nil {
 		return req, err
 	}

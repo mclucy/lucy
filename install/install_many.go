@@ -192,7 +192,10 @@ func requestsToIds(requests []PackageRequest) []types.VersionedPackageRef {
 	ids := make([]types.VersionedPackageRef, len(requests))
 	for i, req := range requests {
 		ids[i] = types.VersionedPackageRef{
-			Platform: req.Ref.Platform, Name: req.Ref.Name,
+			PackageRef: types.PackageRef{
+				Platform: req.Ref.Platform,
+				Name:     req.Ref.Name,
+			},
 			Version: req.Version,
 		}
 	}
@@ -206,10 +209,6 @@ func prepareBatchIDs(ids []types.VersionedPackageRef) []types.VersionedPackageRe
 	for _, id := range ids {
 		if id.Version == types.VersionAny {
 			id.Version = types.VersionCompatible
-		}
-
-		if id.IsIdentityPackage() {
-			id.NormalizeIdentityPackage()
 		}
 
 		key := id.StringBase()
@@ -232,7 +231,7 @@ func partitionBatchIDs(ids []types.VersionedPackageRef) (
 	regularIds := make([]types.VersionedPackageRef, 0, len(ids))
 
 	for _, id := range ids {
-		if id.IsIdentityPackage() {
+		if types.IsIdentityPackage(id.PackageRef) {
 			identityIds = append(identityIds, id)
 			continue
 		}

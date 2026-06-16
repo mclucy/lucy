@@ -8,7 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/dependency"
 	externaltype "github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 )
@@ -67,29 +67,54 @@ func translateFabricArtifact(
 	)
 	dependencies = append(
 		dependencies,
-		translateFabricArtifactDependencyMap(modInfo.Depends, true, false, embeddedNames)...,
+		translateFabricArtifactDependencyMap(
+			modInfo.Depends,
+			true,
+			false,
+			embeddedNames,
+		)...,
 	)
 	dependencies = append(
 		dependencies,
-		translateFabricArtifactDependencyMap(modInfo.Recommends, false, false, embeddedNames)...,
+		translateFabricArtifactDependencyMap(
+			modInfo.Recommends,
+			false,
+			false,
+			embeddedNames,
+		)...,
 	)
 	dependencies = append(
 		dependencies,
-		translateFabricArtifactDependencyMap(modInfo.Suggests, false, false, embeddedNames)...,
+		translateFabricArtifactDependencyMap(
+			modInfo.Suggests,
+			false,
+			false,
+			embeddedNames,
+		)...,
 	)
 	dependencies = append(
 		dependencies,
-		translateFabricArtifactDependencyMap(modInfo.Breaks, false, true, embeddedNames)...,
+		translateFabricArtifactDependencyMap(
+			modInfo.Breaks,
+			false,
+			true,
+			embeddedNames,
+		)...,
 	)
 	dependencies = append(
 		dependencies,
-		translateFabricArtifactDependencyMap(modInfo.Conflicts, false, true, embeddedNames)...,
+		translateFabricArtifactDependencyMap(
+			modInfo.Conflicts,
+			false,
+			true,
+			embeddedNames,
+		)...,
 	)
 
 	return ArtifactInfo{
 		Ref: types.PackageRef{
 			Platform: types.PlatformFabric,
-			Name:     syntax.ToProjectName(modInfo.Id),
+			Name:     input.ToProjectName(modInfo.Id),
 		},
 		Version:      types.BareVersion(modInfo.Version),
 		FilePath:     filePath,
@@ -112,7 +137,7 @@ func translateFabricArtifactDependencyMap(
 ) []ArtifactDep {
 	translated := make([]ArtifactDep, 0, len(deps))
 	for id, ranges := range deps {
-		name := syntax.ToProjectName(id)
+		name := input.ToProjectName(id)
 		_, embedded := embeddedNames[string(name)]
 		dep := ArtifactDep{
 			Ref: types.PackageRef{
@@ -191,11 +216,13 @@ func fabricArtifactURLs(contact map[string]string) []types.Url {
 		if url == "" {
 			continue
 		}
-		urls = append(urls, types.Url{
-			Name: spec.name,
-			Type: spec.urlType,
-			Url:  url,
-		})
+		urls = append(
+			urls, types.Url{
+				Name: spec.name,
+				Type: spec.urlType,
+				Url:  url,
+			},
+		)
 	}
 	return urls
 }

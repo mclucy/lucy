@@ -1,8 +1,8 @@
 package curseforge
 
 import (
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/slugmap"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -36,7 +36,7 @@ func resolveSlug(slug types.BarePackageName) (*modResponse, error) {
 
 	// Multiple results — find exact slug match.
 	for i := range resp.Data {
-		if syntax.ToProjectName(resp.Data[i].Slug) == slug {
+		if input.ToProjectName(resp.Data[i].Slug) == slug {
 			return &resp.Data[i], nil
 		}
 	}

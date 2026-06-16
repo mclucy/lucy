@@ -3,9 +3,9 @@ package mcdr
 import (
 	"fmt"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -24,10 +24,12 @@ type mcdrSearchResult []string
 func (m mcdrSearchResult) ToSearchResults(source types.SourceId) upstream.SearchResponse {
 	res := upstream.SearchResponse{Source: source}
 	for _, id := range m {
-		res.Items = append(res.Items, upstream.RemotePackageName{
-			RemoteName: syntax.ToProjectName(id).String(),
-			Source:     source,
-		})
+		res.Items = append(
+			res.Items, upstream.RemotePackageName{
+				RemoteName: input.ToProjectName(id).String(),
+				Source:     source,
+			},
+		)
 	}
 	return res
 }
@@ -125,9 +127,11 @@ func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 		return id, err
 	}
 	parsed = types.VersionedPackageRef{
-		Platform: types.PlatformMCDR,
-		Name:     id.Name,
-		Version:  types.BareVersion(rel.Meta.Version),
+		PackageRef: types.PackageRef{
+			Platform: types.PlatformMCDR,
+			Name:     id.Name,
+		},
+		Version: types.BareVersion(rel.Meta.Version),
 	}
 	logger.Debug("parsed from" + id.StringFull() + " to " + parsed.StringFull())
 	return parsed, nil

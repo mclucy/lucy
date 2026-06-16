@@ -8,7 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 )
@@ -21,7 +21,11 @@ func newSpongeReader() Reader {
 	return &spongeReader{}
 }
 
-func (r *spongeReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error) {
+func (r *spongeReader) Read(
+	zipRdr *zip.Reader,
+	filePath string,
+	resolver SlugResolver,
+) ([]ArtifactInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != spongePluginMetadataPath {
 			continue
@@ -104,7 +108,7 @@ func translateSpongePlugin(
 	info := ArtifactInfo{
 		Ref: types.PackageRef{
 			Platform: types.PlatformSponge,
-			Name:     syntax.ToProjectName(plugin.ID),
+			Name:     input.ToProjectName(plugin.ID),
 		},
 		Version:  types.BareVersion(version),
 		FilePath: localPath,
@@ -309,7 +313,7 @@ func translateSpongeDependencies(
 			translated, ArtifactDep{
 				Ref: types.PackageRef{
 					Platform: types.PlatformSponge,
-					Name:     syntax.ToProjectName(id),
+					Name:     input.ToProjectName(id),
 				},
 				Constraint: dependency.ParseRange(
 					version,

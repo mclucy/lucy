@@ -245,11 +245,17 @@ func buildModLoaderRuntimeInfo(
 		GameVersion:     gameVersion,
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
-				Platform: platform, Name: types.BarePackageName(name),
+				PackageRef: types.PackageRef{
+					Platform: platform,
+					Name:     types.BarePackageName(name),
+				},
 				Version: loaderVersion,
 			},
 			{
-				Platform: types.PlatformMinecraft, Name: "minecraft",
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformMinecraft,
+					Name:     "minecraft",
+				},
 				Version: gameVersion,
 			},
 		},

@@ -9,11 +9,6 @@ type PackageRef struct {
 	Name     BarePackageName
 }
 
-func (p PackageRef) IsIdentityPackage() bool {
-	_, exists := platformByIdentityPackage[p.Name]
-	return exists
-}
-
 func (p PackageRef) StringFull() string {
 	return p.StringBase()
 }

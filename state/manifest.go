@@ -498,8 +498,7 @@ func UpdateManifestRolesForAdd(
 	for _, req := range requested {
 		// TODO: migrate resolveManifestPackageID to accept PackageRef directly
 		pid := types.VersionedPackageRef{
-			Platform: req.Ref.Platform,
-			Name:     req.Ref.Name,
+			PackageRef: req.Ref,
 		}
 		resolvedID := resolveManifestPackageID(pid, &base, lock)
 		if resolvedID == "" {
@@ -744,8 +743,12 @@ func resolveManifestPackageID(
 	manifest *Manifest,
 	lock *Lock,
 ) string {
-	if id.IsIdentityPackage() {
-		id.NormalizeIdentityPackage()
+	if types.IsIdentityPackage(id.PackageRef) {
+		var ok bool
+		id.PackageRef, ok = types.NormalizeIdentityPackage(id.PackageRef)
+		if !ok {
+			return ""
+		}
 	}
 	if id.Platform != types.PlatformAny && id.Platform != types.PlatformUnknown {
 		return id.StringBase()

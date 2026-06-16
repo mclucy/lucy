@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/types"
@@ -57,7 +57,7 @@ func init() {
 }
 
 func actionInfo(cmd *cobra.Command, args []string) error {
-	ref, err := syntax.ParsePackageRef(args[0])
+	ref, err := input.ParsePackageRef(args[0])
 	if err != nil {
 		logger.Fatal(err)
 	}

@@ -64,14 +64,18 @@ func (d *fabricServerSingleFileDetector) Detect(
 		GameVersion:     gameVersion,
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
-				Platform: types.PlatformFabric,
-				Name:     "fabric",
-				Version:  loaderVersion,
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformFabric,
+					Name:     "fabric",
+				},
+				Version: loaderVersion,
 			},
 			{
-				Platform: types.PlatformMinecraft,
-				Name:     "minecraft",
-				Version:  gameVersion,
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformMinecraft,
+					Name:     "minecraft",
+				},
+				Version: gameVersion,
 			},
 		},
 		Topology: &types.RuntimeTopology{
@@ -181,14 +185,18 @@ func (d *fabricServerLauncherDetector) Detect(
 				GameVersion:     gameVersion,
 				RuntimeIdentities: []types.VersionedPackageRef{
 					{
-						Platform: types.PlatformFabric,
-						Name:     "fabric",
-						Version:  loaderVersion,
+						PackageRef: types.PackageRef{
+							Platform: types.PlatformFabric,
+							Name:     "fabric",
+						},
+						Version: loaderVersion,
 					},
 					{
-						Platform: types.PlatformMinecraft,
-						Name:     "minecraft",
-						Version:  gameVersion,
+						PackageRef: types.PackageRef{
+							Platform: types.PlatformMinecraft,
+							Name:     "minecraft",
+						},
+						Version: gameVersion,
 					},
 				},
 				Topology: &types.RuntimeTopology{

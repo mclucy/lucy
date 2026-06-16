@@ -21,9 +21,11 @@ func selectLatestCompatibleRelease(
 	}
 
 	mcdrPackage := types.VersionedPackageRef{
-		Platform: types.PlatformMCDR,
-		Name:     "mcdreforged",
-		Version:  localMcdrVersion,
+		PackageRef: types.PackageRef{
+			Platform: types.PlatformMCDR,
+			Name:     "mcdreforged",
+		},
+		Version: localMcdrVersion,
 	}
 	localVersion, err := dependency.Parse(localMcdrVersion, types.Semver)
 	if err != nil {

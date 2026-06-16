@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/state"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -58,7 +58,7 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 
 	ids := make([]types.VersionedPackageRef, 0, len(args))
 	for _, arg := range args {
-		id, err := syntax.Parse(arg)
+		id, err := input.Parse(arg)
 		if err != nil {
 			return err
 		}

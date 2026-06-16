@@ -5,9 +5,9 @@ import (
 	"os"
 	"sort"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/state"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -125,7 +125,7 @@ func exactSyncPackageIDs(
 
 	requested := make([]install.PackageRequest, 0, len(lock.Packages))
 	for _, pkg := range lock.Packages {
-		id, err := syntax.Parse(pkg.ID + "@" + pkg.Version)
+		id, err := input.Parse(pkg.ID + "@" + pkg.Version)
 		if err != nil {
 			return nil, false, fmt.Errorf(
 				"parse locked package %s: %w",
@@ -165,7 +165,7 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 		if pkg.Role != state.RoleRequired {
 			continue
 		}
-		id, err := syntax.Parse(pkg.ID + "@" + pkg.Version)
+		id, err := input.Parse(pkg.ID + "@" + pkg.Version)
 		if err != nil {
 			return nil, fmt.Errorf("parse manifest package %s: %w", pkg.ID, err)
 		}

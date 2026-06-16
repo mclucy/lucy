@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/state"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -216,7 +216,7 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 
 func mustParsePackageID(t *testing.T, raw string) types.VersionedPackageRef {
 	t.Helper()
-	id, err := syntax.Parse(raw)
+	id, err := input.Parse(raw)
 	if err != nil {
 		t.Fatalf("parse %q: %v", raw, err)
 	}

@@ -1,7 +1,7 @@
 package curseforge
 
 import (
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -20,10 +20,12 @@ func (s *searchResponse) ToSearchResults(source types.SourceId) upstream.SearchR
 		Items:  make([]upstream.RemotePackageName, 0, len(s.Data)),
 	}
 	for _, mod := range s.Data {
-		res.Items = append(res.Items, upstream.RemotePackageName{
-			RemoteName: syntax.ToProjectName(mod.Slug).String(),
-			Source:     source,
-		})
+		res.Items = append(
+			res.Items, upstream.RemotePackageName{
+				RemoteName: input.ToProjectName(mod.Slug).String(),
+				Source:     source,
+			},
+		)
 	}
 	return res
 }

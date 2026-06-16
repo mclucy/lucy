@@ -1,6 +1,10 @@
 package upstream
 
-import "github.com/mclucy/lucy/types"
+import (
+	"strings"
+
+	"github.com/mclucy/lucy/types"
+)
 
 // Provider is the inversion boundary between core upstream orchestration and
 // concrete upstream integrations.
@@ -58,4 +62,11 @@ type (
 type RemotePackageName struct {
 	RemoteName string
 	Source     types.SourceId
+}
+
+func (r RemotePackageName) FormattedName() string {
+	if r.Source == types.SourceMCDR {
+		return strings.ReplaceAll(r.RemoteName, "_", "-")
+	}
+	return r.RemoteName
 }

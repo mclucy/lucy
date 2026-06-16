@@ -25,6 +25,7 @@ import (
 var (
 	ESyntax   = errors.New("invalid syntax")
 	EPlatform = errors.New("invalid platform")
+	EIdentity = errors.New("invalid identity package")
 )
 
 func ParsePackageRef(s string) (ref types.PackageRef, err error) {
@@ -59,7 +60,10 @@ func Parse(s string) (id types.VersionedPackageRef, err error) {
 	if err != nil {
 		return types.VersionedPackageRef{}, err
 	}
-	id.NormalizeIdentityPackage()
+	identity, ok := types.NormalizeIdentityPackage(id.PackageRef)
+	if ok {
+		id.PackageRef = identity
+	}
 	return id, nil
 }
 

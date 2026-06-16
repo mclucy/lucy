@@ -1,7 +1,7 @@
 package hangar
 
 import (
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -24,8 +24,10 @@ func (h *hangarDependencies) ToPackageDependencies() types.PackageDependencies {
 		result.Value = append(
 			result.Value, types.Dependency{
 				Id: types.VersionedPackageRef{
-					Platform: types.PlatformNone,
-					Name:     syntax.ToProjectName(dep.Name),
+					PackageRef: types.PackageRef{
+						Platform: types.PlatformNone,
+						Name:     input.ToProjectName(dep.Name),
+					},
 				},
 				Mandatory: dep.Required,
 			},

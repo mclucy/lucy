@@ -292,8 +292,10 @@ func reconcileDependencyMap(
 	for key, requirement := range graph {
 		merged[key] = types.Dependency{
 			Id: types.VersionedPackageRef{
-				Platform: requirement.Id.Platform,
-				Name:     requirement.Id.Name,
+				PackageRef: types.PackageRef{
+					Platform: requirement.Id.Platform,
+					Name:     requirement.Id.Name,
+				},
 			},
 			Constraint: requirement.Constraint,
 			Mandatory:  mandatory[key],

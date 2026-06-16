@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -16,7 +16,11 @@ func newForgeLegacyReader() Reader {
 	return &forgeLegacyReader{}
 }
 
-func (r *forgeLegacyReader) Read(zipRdr *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error) {
+func (r *forgeLegacyReader) Read(
+	zipRdr *zip.Reader,
+	filePath string,
+	resolver SlugResolver,
+) ([]ArtifactInfo, error) {
 	var raw []byte
 	for _, f := range zipRdr.File {
 		if f.Name != "mcmod.info" {
@@ -52,7 +56,7 @@ func (r *forgeLegacyReader) Read(zipRdr *zip.Reader, filePath string, resolver S
 		info := ArtifactInfo{
 			Ref: types.PackageRef{
 				Platform: types.PlatformForge,
-				Name:     syntax.ToProjectName(m.ModId),
+				Name:     input.ToProjectName(m.ModId),
 			},
 			Version:  types.BareVersion(m.Version),
 			FilePath: filePath,
@@ -65,13 +69,15 @@ func (r *forgeLegacyReader) Read(zipRdr *zip.Reader, filePath string, resolver S
 				if !ok || depStr == "" {
 					continue
 				}
-				deps = append(deps, ArtifactDep{
-					Ref: types.PackageRef{
-						Platform: types.PlatformForge,
-						Name:     syntax.ToProjectName(depStr),
+				deps = append(
+					deps, ArtifactDep{
+						Ref: types.PackageRef{
+							Platform: types.PlatformForge,
+							Name:     input.ToProjectName(depStr),
+						},
+						Mandatory: true,
 					},
-					Mandatory: true,
-				})
+				)
 			}
 			if len(deps) > 0 {
 				info.Dependencies = deps

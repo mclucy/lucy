@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
@@ -72,7 +72,7 @@ func (r *bukkitReader) Read(
 		info := ArtifactInfo{
 			Ref: types.PackageRef{
 				Platform: platform,
-				Name:     syntax.ToProjectName(descriptor.Name),
+				Name:     input.ToProjectName(descriptor.Name),
 			},
 			Version:  types.BareVersion(strings.TrimSpace(descriptor.Version)),
 			FilePath: filePath,
@@ -167,7 +167,7 @@ func appendBukkitDescriptorDeps(
 			deps, ArtifactDep{
 				Ref: types.PackageRef{
 					Platform: platform,
-					Name:     syntax.ToProjectName(name),
+					Name:     input.ToProjectName(name),
 				},
 				Mandatory: mandatory,
 			},

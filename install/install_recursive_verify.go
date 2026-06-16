@@ -54,9 +54,11 @@ func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
 	for _, info := range infos {
 		pkg := types.Package{
 			Id: types.VersionedPackageRef{
-				Platform: info.Ref.Platform,
-				Name:     info.Ref.Name,
-				Version:  info.Version,
+				PackageRef: types.PackageRef{
+					Platform: info.Ref.Platform,
+					Name:     info.Ref.Name,
+				},
+				Version: info.Version,
 			},
 			Supports:    info.Supports,
 			Information: &info.Metadata,
@@ -70,8 +72,10 @@ func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
 				deps = append(
 					deps, types.Dependency{
 						Id: types.VersionedPackageRef{
-							Platform: dep.Ref.Platform,
-							Name:     dep.Ref.Name,
+							PackageRef: types.PackageRef{
+								Platform: dep.Ref.Platform,
+								Name:     dep.Ref.Name,
+							},
 						},
 						Constraint: dep.Constraint,
 						Mandatory:  dep.Mandatory,

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/state"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -370,7 +370,10 @@ func TestBuildTakeoverPackageClassificationsSurfacesNonLeafDependencies(t *testi
 			[]types.Dependency{
 				{
 					Id: types.VersionedPackageRef{
-						Platform: types.PlatformFabric, Name: "fabric-api",
+						PackageRef: types.PackageRef{
+							Platform: types.PlatformFabric,
+							Name:     "fabric-api",
+						},
 						Version: types.VersionAny,
 					}, Mandatory: true,
 				},
@@ -382,7 +385,10 @@ func TestBuildTakeoverPackageClassificationsSurfacesNonLeafDependencies(t *testi
 			[]types.Dependency{
 				{
 					Id: types.VersionedPackageRef{
-						Platform: types.PlatformFabric, Name: "cloth-config",
+						PackageRef: types.PackageRef{
+							Platform: types.PlatformFabric,
+							Name:     "cloth-config",
+						},
 						Version: types.VersionAny,
 					}, Mandatory: true,
 				},
@@ -528,7 +534,7 @@ func testObservedPackage(
 	source types.SourceId,
 	deps []types.Dependency,
 ) types.Package {
-	pkgID, err := syntax.Parse(id)
+	pkgID, err := input.Parse(id)
 	if err != nil {
 		panic(err)
 	}

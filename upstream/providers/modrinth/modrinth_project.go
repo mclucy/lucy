@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/slugmap"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -171,20 +171,20 @@ func DependencyToPackage(
 		}
 		// This is not safe, TODO: use better inference method
 		version, err = latestCompatibleVersion(
-			syntax.ToProjectName(project.Slug),
+			input.ToProjectName(project.Slug),
 			dependent.Platform,
 		)
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency latest version: %w", err)
 		}
-		p.Name = syntax.ToProjectName(project.Slug)
+		p.Name = input.ToProjectName(project.Slug)
 		p.Version = types.VersionCompatible
 		return p, nil
 	} else {
 		return p, ErrorInvalidDependency
 	}
 
-	p.Name = syntax.ToProjectName(project.Slug)
+	p.Name = input.ToProjectName(project.Slug)
 	p.Version = types.BareVersion(version.VersionNumber)
 
 	return p, nil

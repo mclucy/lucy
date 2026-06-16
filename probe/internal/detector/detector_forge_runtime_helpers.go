@@ -145,14 +145,18 @@ func buildForgeRuntimeInfo(
 		GameVersion:     gameVersion,
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
-				Platform: types.PlatformForge,
-				Name:     "forge",
-				Version:  forgeVersion,
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformForge,
+					Name:     "forge",
+				},
+				Version: forgeVersion,
 			},
 			{
-				Platform: types.PlatformMinecraft,
-				Name:     "minecraft",
-				Version:  gameVersion,
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformMinecraft,
+					Name:     "minecraft",
+				},
+				Version: gameVersion,
 			},
 		},
 		Topology: &types.RuntimeTopology{

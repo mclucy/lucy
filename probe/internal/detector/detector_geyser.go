@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/syntax"
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -60,9 +60,11 @@ func (d *geyserStandaloneDetector) Detect(
 		GameVersion:     types.VersionUnknown,
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
-				Platform: types.PlatformAny,
-				Name:     syntax.ToProjectName("geyser"),
-				Version:  version,
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformAny,
+					Name:     input.ToProjectName("geyser"),
+				},
+				Version: version,
 			},
 		},
 		Topology: &types.RuntimeTopology{

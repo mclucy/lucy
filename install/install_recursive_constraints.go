@@ -50,7 +50,10 @@ func MergeConstraintGraph(inputs []ConstraintInput) (ConstraintGraph, error) {
 		entry := graph[key]
 		if entry.Id.Name == "" {
 			entry.Id = types.VersionedPackageRef{
-				Platform: id.Platform, Name: id.Name,
+				PackageRef: types.PackageRef{
+					Platform: id.Platform,
+					Name:     id.Name,
+				},
 			}
 			entry.variants = []constraintVariant{{}}
 		}

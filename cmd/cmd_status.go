@@ -183,7 +183,7 @@ func generateStatusOutput(
 	}
 	if showMods || hasMcdr {
 		for _, p := range data.Packages {
-			if p.Id.IsIdentityPackage() {
+			if types.IsIdentityPackage(p.Id.PackageRef) {
 				continue
 			}
 			packagePlatform := p.Id.Platform
@@ -244,7 +244,7 @@ func generateStatusOutput(
 	if showPlugins {
 		pluginNames := make([]string, 0, len(data.Packages))
 		for _, p := range data.Packages {
-			if p.Id.IsIdentityPackage() {
+			if types.IsIdentityPackage(p.Id.PackageRef) {
 				continue
 			}
 			if p.Id.Platform == types.PlatformBukkit {

@@ -3,8 +3,8 @@ package modrinth
 import (
 	"fmt"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/syntax"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -29,9 +29,11 @@ func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies
 		}
 
 		parentId := types.VersionedPackageRef{
-			Platform: m.platform,
-			Name:     syntax.ToProjectName(m.version.Id),
-			Version:  types.BareVersion(m.version.VersionNumber),
+			PackageRef: types.PackageRef{
+				Platform: m.platform,
+				Name:     input.ToProjectName(m.version.Id),
+			},
+			Version: types.BareVersion(m.version.VersionNumber),
 		}
 
 		depId, err := DependencyToPackage(parentId, &dep)
