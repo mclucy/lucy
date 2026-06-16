@@ -22,7 +22,7 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 
 	batchSource := types.SourceAuto
 	if len(requests) > 0 {
-		batchSource = requests[0].Source
+		batchSource = requests[0].Scope
 	}
 
 	ids := requestsToIds(requests)
@@ -192,11 +192,8 @@ func requestsToIds(requests []PackageRequest) []types.VersionedPackageRef {
 	ids := make([]types.VersionedPackageRef, len(requests))
 	for i, req := range requests {
 		ids[i] = types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Platform: req.Ref.Platform,
-				Name:     req.Ref.Name,
-			},
-			Version: req.Version,
+			PackageRef: req.PackageRef,
+			Version:    req.Version,
 		}
 	}
 	return ids

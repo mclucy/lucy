@@ -27,13 +27,10 @@ func registerInstaller(platform types.PlatformId, installer platformInstaller) {
 func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 	// TODO(package-ref-migration): remove PackageId/source extraction once identity installers accept PackageRequest.
 	id := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Platform: req.Ref.Platform,
-			Name:     req.Ref.Name,
-		},
-		Version: req.Version,
+		PackageRef: req.PackageRef,
+		Version:    req.Version,
 	}
-	source := req.Source
+	source := req.Scope
 	_ = source
 
 	// for regular (non-identity) packages, delegate to InstallMany to unify

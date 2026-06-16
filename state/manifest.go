@@ -385,7 +385,7 @@ func UpsertManifestRequiredIntent(
 		resolvedSource = "auto"
 	}
 	intentVersion := NormalizeManifestVersionIntent(req.Version)
-	refID := string(req.Ref.Platform) + "/" + string(req.Ref.Name)
+	refID := req.Platform.String() + "/" + string(req.Name)
 
 	for i := range manifest.Packages {
 		if manifest.Packages[i].ID != refID {
@@ -394,7 +394,6 @@ func UpsertManifestRequiredIntent(
 		manifest.Packages[i].Version = intentVersion
 		manifest.Packages[i].Source = resolvedSource
 		manifest.Packages[i].Role = RoleRequired
-		manifest.Packages[i].Optional = req.Optional
 		if manifest.Packages[i].Side == "" {
 			manifest.Packages[i].Side = SideUnknown
 		}
@@ -408,12 +407,11 @@ func UpsertManifestRequiredIntent(
 
 	manifest.Packages = append(
 		manifest.Packages, ManifestPackage{
-			ID:       refID,
-			Version:  intentVersion,
-			Source:   resolvedSource,
-			Role:     RoleRequired,
-			Side:     SideUnknown,
-			Optional: req.Optional,
+			ID:      refID,
+			Version: intentVersion,
+			Source:  resolvedSource,
+			Role:    RoleRequired,
+			Side:    SideUnknown,
 		},
 	)
 	sort.Slice(
@@ -498,7 +496,7 @@ func UpdateManifestRolesForAdd(
 	for _, req := range requested {
 		// TODO: migrate resolveManifestPackageID to accept PackageRef directly
 		pid := types.VersionedPackageRef{
-			PackageRef: req.Ref,
+			PackageRef: req.PackageRef,
 		}
 		resolvedID := resolveManifestPackageID(pid, &base, lock)
 		if resolvedID == "" {
@@ -519,7 +517,6 @@ func UpdateManifestRolesForAdd(
 		if pkg.Side == "" {
 			pkg.Side = SideUnknown
 		}
-		pkg.Optional = req.Optional
 		required[resolvedID] = pkg
 	}
 

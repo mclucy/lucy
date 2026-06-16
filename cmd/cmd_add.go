@@ -96,11 +96,14 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 
 	requests := make([]install.PackageRequest, 0, len(args))
 	for _, arg := range args {
-		req, err := install.ParsePackageRequest(arg, source, false)
+		scoped, version, err := input.ParsePackageRequest(arg, source)
 		if err != nil {
 			logger.Fatal(fmt.Errorf("stopping package addition: %w", err))
 		}
-		requests = append(requests, req)
+		requests = append(requests, install.PackageRequest{
+			ScopedPackageRef: scoped,
+			Version:          version,
+		})
 	}
 
 	var result *install.Result

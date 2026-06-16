@@ -136,7 +136,10 @@ func exactSyncPackageIDs(
 		// TODO(package-ref-migration): remove wrapping once lock parsing returns PackageRequest.
 		requested = append(
 			requested, install.PackageRequest{
-				Ref:     types.PackageRef{Platform: id.Platform, Name: id.Name},
+				ScopedPackageRef: types.ScopedPackageRef{
+					PackageRef: id.PackageRef,
+					Scope:      types.SourceAuto,
+				},
 				Version: id.Version,
 			},
 		)
@@ -144,8 +147,8 @@ func exactSyncPackageIDs(
 
 	sort.Slice(
 		requested, func(i, j int) bool {
-			left := string(requested[i].Ref.Platform) + "/" + string(requested[i].Ref.Name)
-			right := string(requested[j].Ref.Platform) + "/" + string(requested[j].Ref.Name)
+			left := requested[i].Platform.String() + "/" + string(requested[i].Name)
+			right := requested[j].Platform.String() + "/" + string(requested[j].Name)
 			if left != right {
 				return left < right
 			}
@@ -172,7 +175,10 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 		// TODO(package-ref-migration): remove wrapping once manifest parsing returns PackageRequest.
 		requested = append(
 			requested, install.PackageRequest{
-				Ref:     types.PackageRef{Platform: id.Platform, Name: id.Name},
+				ScopedPackageRef: types.ScopedPackageRef{
+					PackageRef: id.PackageRef,
+					Scope:      types.SourceAuto,
+				},
 				Version: id.Version,
 			},
 		)
@@ -180,8 +186,8 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 
 	sort.Slice(
 		requested, func(i, j int) bool {
-			left := string(requested[i].Ref.Platform) + "/" + string(requested[i].Ref.Name)
-			right := string(requested[j].Ref.Platform) + "/" + string(requested[j].Ref.Name)
+			left := requested[i].Platform.String() + "/" + string(requested[i].Name)
+			right := requested[j].Platform.String() + "/" + string(requested[j].Name)
 			return left < right
 		},
 	)

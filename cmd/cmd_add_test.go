@@ -225,11 +225,14 @@ func mustParsePackageID(t *testing.T, raw string) types.VersionedPackageRef {
 
 func mustParsePackageRequest(t *testing.T, raw string) install.PackageRequest {
 	t.Helper()
-	req, err := install.ParsePackageRequest(raw, "", false)
+	scoped, version, err := input.ParsePackageRequest(raw, "")
 	if err != nil {
 		t.Fatalf("parse request %q: %v", raw, err)
 	}
-	return req
+	return install.PackageRequest{
+		ScopedPackageRef: scoped,
+		Version:          version,
+	}
 }
 
 func lockedResultPackage(
