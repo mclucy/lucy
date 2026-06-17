@@ -85,6 +85,12 @@
       "skillPath": "skills/golang-how-to/SKILL.md",
       "computedHash": "17ffc87a42966cee3ade839aa444e4c7702c4e13178539bf8a1f34951f1eb8a8"
     },
+    "golang-lint": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-lint/SKILL.md",
+      "computedHash": "81a462768bbf77cef21743c95a086ab3554380e39d04e5be158c27b2dfc65e80"
+    },
     "golang-modernize": {
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
@@ -96,6 +102,12 @@
       "sourceType": "github",
       "skillPath": "skills/golang-naming/SKILL.md",
       "computedHash": "ff16e3aaf991819ba51c4f3c4665c524990e710cdbcab65e772d081310293fea"
+    },
+    "golang-observability": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-observability/SKILL.md",
+      "computedHash": "065aa8805a05211ea94a4bfd141749583f51c7b44441a5ef6c18ba36a65d6428"
     },
     "golang-performance": {
       "source": "samber/cc-skills-golang",
