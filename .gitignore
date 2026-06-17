@@ -73,3 +73,7 @@ docs/*
 
 # Logs
 *.log
+
+# Lucy ephemeral sessions
+bisect.json
+*.disabled
