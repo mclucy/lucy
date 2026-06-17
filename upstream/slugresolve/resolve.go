@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/mclucy/lucy/slugmap"
+	"github.com/mclucy/lucy/internal/slugmap"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 )
@@ -71,7 +71,13 @@ func ResolveSlug(
 				if resolvedHash != "" {
 					fileHash = resolvedHash
 				}
-				slugmap.Default().Set(src, localId, fileHash, remote.RemoteName, "hash")
+				slugmap.Default().Set(
+					src,
+					localId,
+					fileHash,
+					remote.RemoteName,
+					"hash",
+				)
 				return remote.RemoteName
 			}
 		}

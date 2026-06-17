@@ -13,10 +13,9 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/util"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func CheckJavaAvailability() error {
@@ -158,7 +157,10 @@ func runInstallerJar(installerPath string, tracker *progress.Tracker) error {
 
 		lower := strings.ToLower(line)
 		if failurePhrase == "" {
-			if strings.Contains(lower, "there was an error during installation") {
+			if strings.Contains(
+				lower,
+				"there was an error during installation",
+			) {
 				failurePhrase = "There was an error during installation"
 			} else if strings.Contains(lower, "processor failed") {
 				failurePhrase = "Processor failed"
@@ -225,10 +227,10 @@ func RunInstaller(
 	}()
 	defer tracker.Close()
 
-	result, err := util.CachedDownload(
+	result, err := cache.CachedDownload(
 		fileURL,
 		workPath,
-		util.DownloadOptions{
+		cache.DownloadOptions{
 			Kind:               cache.KindArtifact,
 			WrapReader:         tracker.ProxyReader,
 			OnCacheHit:         tracker.CacheHit,
@@ -249,7 +251,7 @@ func RunInstaller(
 	}
 
 	tracker.SetPercent(0.99)
-	probe.Rebuild()
+	workspace.Rebuild()
 	tracker.Complete(platformName + " installed")
 	return nil
 }

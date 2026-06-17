@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/mclucy/lucy/internal/slugmap"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/slugmap"
 	"github.com/mclucy/lucy/types"
 )
 

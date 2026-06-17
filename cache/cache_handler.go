@@ -65,16 +65,16 @@ func newHandler(name string, cfg CacheConfig) (obj *handler) {
 	return obj
 }
 
-func (h *handler) Add(
+func (handler *handler) Add(
 	data []byte,
 	filename string,
 	k string,
 	expiration time.Duration,
 ) error {
 	if expiration == 0 {
-		expiration = h.policy.Artifact.TTL
+		expiration = handler.policy.Artifact.TTL
 	}
-	return h.AddEntry(
+	return handler.AddEntry(
 		data,
 		filename,
 		k,
@@ -84,7 +84,7 @@ func (h *handler) Add(
 	)
 }
 
-func (h *handler) AddEntry(
+func (handler *handler) AddEntry(
 	data []byte,
 	filename string,
 	k string,
@@ -92,33 +92,33 @@ func (h *handler) AddEntry(
 	integrity Integrity,
 	expiration time.Duration,
 ) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
 
-	if !h.on {
+	if !handler.on {
 		return nil
 	}
 
 	if expiration == 0 {
-		expiration = h.policy.ConfigFor(kind).TTL
+		expiration = handler.policy.ConfigFor(kind).TTL
 	}
 
 	ckey := canonicalizeKey(k)
-	contentHash := hash(data)
+	contentHash := h(data)
 	if filename == "" {
 		filename = contentHash
 	}
 	filename = sanitizeFilename(filename, contentHash)
 
-	if existing, ok := h.index.get(ckey); ok {
+	if existing, ok := handler.index.get(ckey); ok {
 		if existing.ContentHash == contentHash {
 			return nil
 		}
-		_ = h.store.Remove(existing.ContentHash)
-		h.index.delete(ckey)
+		_ = handler.store.Remove(existing.ContentHash)
+		handler.index.delete(ckey)
 	}
 
-	if err := h.store.Write(contentHash, filename, data); err != nil {
+	if err := handler.store.Write(contentHash, filename, data); err != nil {
 		return err
 	}
 
@@ -131,7 +131,7 @@ func (h *handler) AddEntry(
 		),
 	)
 
-	h.index.put(
+	handler.index.put(
 		ckey, &CacheEntry{
 			Kind:        kind,
 			Filename:    filename,
@@ -144,7 +144,7 @@ func (h *handler) AddEntry(
 		},
 	)
 
-	if err := h.index.flush(); err != nil {
+	if err := handler.index.flush(); err != nil {
 		logger.Warn(
 			fmt.Errorf("failed to update index after adding item: %w", err),
 		)
@@ -155,7 +155,7 @@ func (h *handler) AddEntry(
 // IngestEntry is a file-path variant of AddEntry for large files that should
 // not be loaded into memory. The source file at srcPath is moved into the
 // content-addressed store; contentHash must be pre-computed by the caller.
-func (h *handler) IngestEntry(
+func (handler *handler) IngestEntry(
 	srcPath string,
 	filename string,
 	k string,
@@ -165,15 +165,15 @@ func (h *handler) IngestEntry(
 	integrity Integrity,
 	expiration time.Duration,
 ) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
 
-	if !h.on {
+	if !handler.on {
 		return nil
 	}
 
 	if expiration == 0 {
-		expiration = h.policy.ConfigFor(kind).TTL
+		expiration = handler.policy.ConfigFor(kind).TTL
 	}
 
 	ckey := canonicalizeKey(k)
@@ -182,15 +182,15 @@ func (h *handler) IngestEntry(
 	}
 	filename = sanitizeFilename(filename, contentHash)
 
-	if existing, ok := h.index.get(ckey); ok {
+	if existing, ok := handler.index.get(ckey); ok {
 		if existing.ContentHash == contentHash {
 			return nil
 		}
-		_ = h.store.Remove(existing.ContentHash)
-		h.index.delete(ckey)
+		_ = handler.store.Remove(existing.ContentHash)
+		handler.index.delete(ckey)
 	}
 
-	if err := h.store.Ingest(contentHash, filename, srcPath); err != nil {
+	if err := handler.store.Ingest(contentHash, filename, srcPath); err != nil {
 		return err
 	}
 
@@ -203,7 +203,7 @@ func (h *handler) IngestEntry(
 		),
 	)
 
-	h.index.put(
+	handler.index.put(
 		ckey, &CacheEntry{
 			Kind:        kind,
 			Filename:    filename,
@@ -216,7 +216,7 @@ func (h *handler) IngestEntry(
 		},
 	)
 
-	if err := h.index.flush(); err != nil {
+	if err := handler.index.flush(); err != nil {
 		logger.Warn(
 			fmt.Errorf("failed to update index after ingesting item: %w", err),
 		)
@@ -224,44 +224,44 @@ func (h *handler) IngestEntry(
 	return nil
 }
 
-func (h *handler) Flush() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if !h.on {
+func (handler *handler) Flush() error {
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
+	if !handler.on {
 		return nil
 	}
-	return h.index.flush()
+	return handler.index.flush()
 }
 
-func (h *handler) Exist(k string) bool {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.existLocked(k)
+func (handler *handler) Exist(k string) bool {
+	handler.mu.RLock()
+	defer handler.mu.RUnlock()
+	return handler.existLocked(k)
 }
 
-func (h *handler) existLocked(k string) bool {
-	if !h.on {
+func (handler *handler) existLocked(k string) bool {
+	if !handler.on {
 		return false
 	}
-	return h.index.exists(canonicalizeKey(k))
+	return handler.index.exists(canonicalizeKey(k))
 }
 
-func (h *handler) Get(k string) (hit bool, file *os.File, err error) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+func (handler *handler) Get(k string) (hit bool, file *os.File, err error) {
+	handler.mu.RLock()
+	defer handler.mu.RUnlock()
 
-	if !h.on {
+	if !handler.on {
 		return false, nil, nil
 	}
 
 	ckey := canonicalizeKey(k)
-	entry, ok := h.index.get(ckey)
+	entry, ok := handler.index.get(ckey)
 	if !ok {
 		logger.Debug("cache miss: " + k)
 		return false, nil, nil
 	}
 
-	file, err = h.store.Read(entry.ContentHash, entry.Filename)
+	file, err = handler.store.Read(entry.ContentHash, entry.Filename)
 	if err != nil {
 		return false, nil, err
 	}
@@ -269,22 +269,22 @@ func (h *handler) Get(k string) (hit bool, file *os.File, err error) {
 	return true, file, nil
 }
 
-func (h *handler) GetBytes(k string) (hit bool, data []byte, err error) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+func (handler *handler) GetBytes(k string) (hit bool, data []byte, err error) {
+	handler.mu.RLock()
+	defer handler.mu.RUnlock()
 
-	if !h.on {
+	if !handler.on {
 		return false, nil, nil
 	}
 
 	ckey := canonicalizeKey(k)
-	entry, ok := h.index.get(ckey)
+	entry, ok := handler.index.get(ckey)
 	if !ok {
 		logger.Debug("cache miss: " + k)
 		return false, nil, nil
 	}
 
-	data, err = h.store.ReadBytes(entry.ContentHash, entry.Filename)
+	data, err = handler.store.ReadBytes(entry.ContentHash, entry.Filename)
 	if err != nil {
 		return false, nil, err
 	}
@@ -292,17 +292,17 @@ func (h *handler) GetBytes(k string) (hit bool, data []byte, err error) {
 	return true, data, nil
 }
 
-func (h *handler) Remove(k string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.removeLocked(canonicalizeKey(k))
+func (handler *handler) Remove(k string) error {
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
+	return handler.removeLocked(canonicalizeKey(k))
 }
 
-func (h *handler) removeLocked(k key) error {
-	if err := h.removeEntryLocked(k); err != nil {
+func (handler *handler) removeLocked(k key) error {
+	if err := handler.removeEntryLocked(k); err != nil {
 		return err
 	}
-	if err := h.index.flush(); err != nil {
+	if err := handler.index.flush(); err != nil {
 		logger.Warn(
 			fmt.Errorf("failed to update index after removing item: %w", err),
 		)
@@ -310,28 +310,28 @@ func (h *handler) removeLocked(k key) error {
 	return nil
 }
 
-func (h *handler) removeEntryLocked(k key) error {
-	if !h.on {
+func (handler *handler) removeEntryLocked(k key) error {
+	if !handler.on {
 		return nil
 	}
-	entry, ok := h.index.get(k)
+	entry, ok := handler.index.get(k)
 	if !ok {
 		return nil
 	}
-	if err := h.store.Remove(entry.ContentHash); err != nil {
+	if err := handler.store.Remove(entry.ContentHash); err != nil {
 		return err
 	}
-	h.index.delete(k)
+	handler.index.delete(k)
 	return nil
 }
 
-func (h *handler) All() []*CacheEntry {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if !h.on {
+func (handler *handler) All() []*CacheEntry {
+	handler.mu.RLock()
+	defer handler.mu.RUnlock()
+	if !handler.on {
 		return nil
 	}
-	entries := h.index.all()
+	entries := handler.index.all()
 	result := make([]*CacheEntry, 0, len(entries))
 	for _, entry := range entries {
 		result = append(result, entry)
@@ -339,24 +339,24 @@ func (h *handler) All() []*CacheEntry {
 	return result
 }
 
-func (h *handler) ClearAll() (report ResetReport, err error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (handler *handler) ClearAll() (report ResetReport, err error) {
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
 
-	if !h.on {
+	if !handler.on {
 		return ResetReport{}, nil
 	}
 
-	if report, err = resetCache(h.index.path, true); err != nil {
+	if report, err = resetCache(handler.index.path, true); err != nil {
 		return ResetReport{}, fmt.Errorf("failed to clear cache: %w", err)
 	}
 	logger.Info("cache cleared")
 
-	idx := newIndex(h.index.path)
+	idx := newIndex(handler.index.path)
 	if !idx.create() {
 		return ResetReport{}, fmt.Errorf("failed to create new index after clearing cache")
 	}
-	h.index = idx
+	handler.index = idx
 
 	return report, nil
 }

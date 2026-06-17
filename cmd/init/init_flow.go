@@ -23,9 +23,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 )
 
 // InitOptimizationGoal states what init is trying to optimize for.
@@ -329,7 +329,7 @@ func formatExistingStateConflict(file state.StateFile, err error) string {
 // directory so any subsequent takeover/status reads see post-init filesystem
 // reality rather than stale memoized observations.
 func RefreshObservedStateAfterInitWrites(workDir string) {
-	probe.RefreshServerInfo(workDir)
+	workspace.RefreshServerInfo(workDir)
 }
 
 // Step machine logic

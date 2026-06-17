@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 )
 
 const indexVersion = 2
@@ -39,7 +39,7 @@ func (idx *index) load() bool {
 	} else if err != nil {
 		return false
 	}
-	defer tools.CloseReader(file, logger.Warn)
+	defer fn.CloseReader(file, logger.Warn)
 
 	data, err := io.ReadAll(file)
 	if err != nil {

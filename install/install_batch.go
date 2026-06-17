@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func InstallMany(requests []PackageRequest, options InstallOptions) (
@@ -51,7 +51,7 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 			}
 			succeeded = append(succeeded, id.StringFull())
 		}
-		probe.InvalidateServerInfo()
+		workspace.InvalidateServerInfo()
 	}
 
 	if len(regularIds) == 0 {
@@ -64,7 +64,7 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 		return nil, err
 	}
 
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 	providers, err := routing.ResolveProvidersFromTopology(
 		serverInfo.Runtime.Topology,
 		types.SourceAuto,
@@ -252,7 +252,10 @@ func rootScopedProviders(
 				rootProviders[rootKey] = providers
 				break
 			}
-			scoped, err := routing.ResolveProvidersFromTopology(topology, req.Scope)
+			scoped, err := routing.ResolveProvidersFromTopology(
+				topology,
+				req.Scope,
+			)
 			if err != nil {
 				return nil, err
 			}

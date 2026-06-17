@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 )
 
 // checkGitHubMessage checks if the response data is a GitHub API error message
@@ -30,7 +30,7 @@ func GetFileFromGitHub(apiEndpoint string) (
 	if err != nil {
 		return err, nil, nil
 	}
-	defer tools.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, logger.Warn)
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err, nil, nil
@@ -50,7 +50,7 @@ func GetFileFromGitHub(apiEndpoint string) (
 	if err != nil {
 		return err, nil, nil
 	}
-	defer tools.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, logger.Warn)
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err, nil, nil
@@ -68,7 +68,7 @@ func GetDirectoryFromGitHub(apiEndpoint string) (
 	if err != nil {
 		return err, nil, nil
 	}
-	defer tools.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, logger.Warn)
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err, nil, nil

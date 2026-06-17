@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/state"
+	"github.com/mclucy/lucy/workspace"
 )
 
 // DataSource indicates where dependency data was loaded from.
@@ -36,7 +36,11 @@ func (ds DataSource) String() string {
 // When forceLive is true, the lock file is skipped and the server directory is
 // probed directly. Otherwise the lock file is tried first; if it is missing or
 // invalid the directory is probed as a fallback.
-func LoadDependencyData(workDir string, forceLive bool) (*DependencyGraph, DataSource, error) {
+func LoadDependencyData(workDir string, forceLive bool) (
+	*DependencyGraph,
+	DataSource,
+	error,
+) {
 	if !forceLive {
 		lockPath := filepath.Join(workDir, string(state.LockFile))
 		data, err := os.ReadFile(lockPath)
@@ -45,7 +49,10 @@ func LoadDependencyData(workDir string, forceLive bool) (*DependencyGraph, DataS
 			if err := lock.Unmarshal(data); err == nil {
 				graph, err := BuildGraphFromLock(lock)
 				if err != nil {
-					return nil, 0, fmt.Errorf("failed to build graph from lock: %w", err)
+					return nil, 0, fmt.Errorf(
+						"failed to build graph from lock: %w",
+						err,
+					)
 				}
 				return graph, SourceLock, nil
 			}
@@ -54,7 +61,7 @@ func LoadDependencyData(workDir string, forceLive bool) (*DependencyGraph, DataS
 		// Lock file missing — fall through to probe.
 	}
 
-	info := probe.ServerInfoAt(workDir)
+	info := workspace.ServerInfoAt(workDir)
 	graph, err := BuildGraphFromProbe(info)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to build graph from probe: %w", err)

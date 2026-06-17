@@ -133,7 +133,7 @@ type RecursiveTransaction struct {
 	Roots []types.VersionedPackageRef
 
 	// InstalledConstraints is a snapshot of currently-installed packages taken
-	// from probe.ServerInfo() at transaction start. These are fixed constraints
+	// from workspace.ServerInfo() at transaction start. These are fixed constraints
 	// that the solver must respect; they are never auto-replaced.
 	// PURE: computed once at transaction creation; no live filesystem/network.
 	InstalledConstraints []InstalledConstraint
@@ -178,7 +178,7 @@ type RecursiveTransaction struct {
 
 // NewRecursiveTransaction constructs a transaction in PhaseCandidate with the
 // given root IDs and provider list. The installed constraints snapshot must
-// be populated by the caller from probe.ServerInfo() before expansion begins.
+// be populated by the caller from workspace.ServerInfo() before expansion begins.
 func NewRecursiveTransaction(
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,

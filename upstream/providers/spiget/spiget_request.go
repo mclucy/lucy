@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -21,7 +21,7 @@ func requestJSON(requestURL string, out any, notFound error) error {
 	if err != nil {
 		return fmt.Errorf("spiget: request failed: %w", err)
 	}
-	defer tools.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, logger.Warn)
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound && notFound != nil {

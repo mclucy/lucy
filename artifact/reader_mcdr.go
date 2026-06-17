@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/mclucy/lucy/dependency"
-	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 type mcdrReader struct{}
@@ -40,7 +40,7 @@ func (r *mcdrReader) Read(
 			return nil, err
 		}
 
-		pluginInfo := &exttype.FileMcdrPluginIdentifier{}
+		pluginInfo := &fileschema.FileMcdrPluginIdentifier{}
 		if err := json.Unmarshal(raw, pluginInfo); err != nil {
 			return nil, err
 		}
@@ -85,9 +85,9 @@ func (r *mcdrReader) Read(
 							Platform: types.PlatformMCDR,
 							Name:     input.ToProjectName(key),
 						},
-						Constraint: dependency.ParseRange(
+						Constraint: version.ParseRange(
 							value,
-							dependency.InferRangeDialect(types.PlatformMCDR),
+							version.InferRangeDialect(types.PlatformMCDR),
 							types.Semver,
 						),
 						Mandatory: true,

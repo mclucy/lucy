@@ -1,11 +1,8 @@
 package types
 
-import "github.com/mclucy/lucy/exttype"
-
-type ServerActivity struct {
-	Active bool `json:"active"`
-	Pid    int  `json:"pid"`
-}
+import (
+	"github.com/mclucy/lucy/internal/fileschema"
+)
 
 type EnvironmentInfo struct {
 	Lucy *LucyEnv `json:"lucy,omitempty"`
@@ -13,8 +10,8 @@ type EnvironmentInfo struct {
 }
 
 type McdrEnv struct {
-	Version BareVersion             `json:"version"`
-	Config  *exttype.FileMcdrConfig `json:"config,omitempty"`
+	Version BareVersion                `json:"version"`
+	Config  *fileschema.FileMcdrConfig `json:"config,omitempty"`
 }
 
 // LucyEnv is a placeholder for Lucy environment; currently just a boolean

@@ -6,12 +6,17 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/internal/fn"
 )
 
 func writeToFile(e *entry) {
 	timestamp := e.Time.Format("2006-01-02 15:04:05")
-	_, _ = fmt.Fprintln(getLogFile(), timestamp, e.Level.prefix(false), e.Content)
+	_, _ = fmt.Fprintln(
+		getLogFile(),
+		timestamp,
+		e.Level.prefix(false),
+		e.Content,
+	)
 }
 
 func writeToConsole(e *entry) {
@@ -24,7 +29,7 @@ func record(e *entry) {
 	mu.Unlock()
 }
 
-var getLogFile = tools.Memoize(logFile)
+var getLogFile = fn.Memoize(logFile)
 
 // GetLogFile returns the log file handle, creating it on first call.
 func GetLogFile() *os.File {

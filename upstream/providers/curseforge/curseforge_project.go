@@ -2,7 +2,7 @@ package curseforge
 
 import (
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/slugmap"
+	"github.com/mclucy/lucy/internal/slugmap"
 	"github.com/mclucy/lucy/types"
 )
 

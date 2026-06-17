@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/tools"
+	probe2 "github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/tui"
+	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 
 	"github.com/spf13/cobra"
 )
@@ -25,12 +26,12 @@ func init() {
 }
 
 func actionStatus(cmd *cobra.Command, args []string) error {
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 	json, _ := cmd.Flags().GetBool(flagJsonName)
 	long, _ := cmd.Flags().GetBool(flagLongName)
 	noStyle, _ := cmd.Flags().GetBool(flagNoStyleName)
 	if json {
-		tools.PrintAsJson(serverInfo)
+		style.PrintAsJson(serverInfo)
 	} else {
 		tui.Flush(generateStatusOutput(&serverInfo, long, noStyle))
 	}
@@ -38,11 +39,11 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 }
 
 func generateStatusOutput(
-	data *probe.Workspace,
+	data *workspace.Workspace,
 	longOutput bool,
 	noStyle bool,
 ) (output *tui.Data) {
-	packageNameOutput := tools.Ternary(
+	packageNameOutput := probe2.Ternary(
 		longOutput,
 		func(pkg types.Package) string { return pkg.Id.StringFull() },
 		func(pkg types.Package) string { return pkg.Id.Name.String() },
@@ -100,12 +101,12 @@ func generateStatusOutput(
 		output.Fields = append(
 			output.Fields, &tui.FieldAnnotatedShortText{
 				Title: "Activity",
-				Text: tools.Ternary(
+				Text: probe2.Ternary(
 					data.Activity.Active,
 					"Active",
 					"Inactive",
 				),
-				Annotation: tools.Ternary(
+				Annotation: probe2.Ternary(
 					data.Activity.Active,
 					fmt.Sprintf("PID %d", data.Activity.Pid),
 					"",
@@ -116,7 +117,7 @@ func generateStatusOutput(
 		output.Fields = append(
 			output.Fields, &tui.FieldShortText{
 				Title: "Activity",
-				Text:  tools.Dim("(Unknown)"),
+				Text:  style.Dim("(Unknown)"),
 			},
 		)
 	}
@@ -201,7 +202,7 @@ func generateStatusOutput(
 
 	// Modding related fields only shown when modding platform detected
 	if showMods {
-		modListTitle := tools.Ternary(
+		modListTitle := probe2.Ternary(
 			noStyle,
 			"Mods",
 			"└── Mods",
@@ -210,13 +211,13 @@ func generateStatusOutput(
 			output.Fields = append(
 				output.Fields, &tui.FieldShortText{
 					Title: modListTitle,
-					Text:  tools.Dim("(None)"),
+					Text:  style.Dim("(None)"),
 				},
 			)
 		} else {
 			output.Fields = append(
 				output.Fields,
-				tools.Ternary[tui.Field](
+				probe2.Ternary[tui.Field](
 					longOutput,
 					&tui.FieldMultiAnnotatedShortText{
 						Title:       modListTitle,
@@ -252,7 +253,7 @@ func generateStatusOutput(
 			}
 		}
 
-		pluginListTitle := tools.Ternary(
+		pluginListTitle := probe2.Ternary(
 			noStyle,
 			"Plugins",
 			"└── Plugins",
@@ -262,7 +263,7 @@ func generateStatusOutput(
 			output.Fields = append(
 				output.Fields, &tui.FieldShortText{
 					Title: pluginListTitle,
-					Text:  tools.Dim("(None)"),
+					Text:  style.Dim("(None)"),
 				},
 			)
 		} else {
@@ -279,7 +280,7 @@ func generateStatusOutput(
 
 	// List MCDR plugins if MCDR environment detected
 	if hasMcdr {
-		mcdrPluginListTitle := tools.Ternary(
+		mcdrPluginListTitle := probe2.Ternary(
 			noStyle,
 			"MCDR Plugins",
 			"└── Plugins",
@@ -289,10 +290,10 @@ func generateStatusOutput(
 		output.Fields = append(
 			output.Fields, &tui.FieldShortText{
 				Title: "MCDR",
-				Text: "Installed" + tools.Ternary(
+				Text: "Installed" + probe2.Ternary(
 					noStyle,
 					"",
-					tools.Green(" ✓"),
+					style.Green(" ✓"),
 				),
 			},
 		)
@@ -301,7 +302,7 @@ func generateStatusOutput(
 			output.Fields = append(
 				output.Fields, &tui.FieldShortText{
 					Title: mcdrPluginListTitle,
-					Text:  tools.Dim("(None)"),
+					Text:  style.Dim("(None)"),
 				},
 			)
 		} else {
@@ -455,14 +456,14 @@ func statusTopologyField(
 	if !topology.Resolved() {
 		return &tui.FieldShortText{
 			Title: "Topology",
-			Text:  tools.Dim("(Unresolved)"),
+			Text:  style.Dim("(Unresolved)"),
 		}
 	}
 
 	if !hasPrimaryNode {
 		return &tui.FieldShortText{
 			Title: "Topology",
-			Text:  tools.Dim("(Unknown)"),
+			Text:  style.Dim("(Unknown)"),
 		}
 	}
 
@@ -695,7 +696,7 @@ func runtimeNodeLabel(id types.RuntimeNodeID) string {
 	case types.RuntimeNodeKilt:
 		return "Kilt"
 	default:
-		return tools.Capitalize(
+		return style.Capitalize(
 			strings.ReplaceAll(
 				strings.ReplaceAll(
 					string(id),
@@ -712,11 +713,11 @@ func topologyRiskLabel(level types.RuntimeRiskLevel, noStyle bool) string {
 	case types.RiskLow:
 		return "Low"
 	case types.RiskMedium:
-		return "Medium" + tools.Ternary(noStyle, "", " ⚠")
+		return "Medium" + probe2.Ternary(noStyle, "", " ⚠")
 	case types.RiskHigh:
-		return "High" + tools.Ternary(noStyle, "", " ⚠⚠")
+		return "High" + probe2.Ternary(noStyle, "", " ⚠⚠")
 	case types.RiskCritical:
-		return "Critical" + tools.Ternary(noStyle, "", " ✗")
+		return "Critical" + probe2.Ternary(noStyle, "", " ✗")
 	default:
 		return "None"
 	}

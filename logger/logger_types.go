@@ -3,7 +3,7 @@ package logger
 import (
 	"time"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/style"
 )
 
 // Level represents the severity of a log entry.
@@ -37,11 +37,11 @@ func (l Level) String() string {
 
 // levelColor maps each level to a styling function.
 var levelColor = map[Level]func(any) string{
-	LevelDebug: tools.Green,
-	LevelInfo:  tools.Cyan,
-	LevelWarn:  tools.Yellow,
-	LevelError: tools.Red,
-	LevelFatal: tools.Red,
+	LevelDebug: style.Green,
+	LevelInfo:  style.Cyan,
+	LevelWarn:  style.Yellow,
+	LevelError: style.Red,
+	LevelFatal: style.Red,
 }
 
 // prefix returns the bracketed level tag, optionally colored.

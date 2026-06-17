@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func ensureServerPlatformMatch(id types.VersionedPackageRef) error {
 	platform := id.Platform
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 
 	switch platform {
 	case types.PlatformAny:
@@ -26,13 +26,13 @@ func ensureServerPlatformMatch(id types.VersionedPackageRef) error {
 			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
 
-		requiredCapability := probe.CapabilityForPlatform(platform)
+		requiredCapability := workspace.CapabilityForPlatform(platform)
 		if requiredCapability == "" {
 			return nil
 		}
 
 		topology := serverInfo.Runtime.Topology
-		result := probe.EvaluateCompatibility(topology, requiredCapability)
+		result := workspace.EvaluateCompatibility(topology, requiredCapability)
 		switch result.Verdict {
 		case types.CompatCompatible:
 			return nil

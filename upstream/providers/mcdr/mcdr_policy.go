@@ -1,8 +1,8 @@
 package mcdr
 
 import (
-	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 func selectLatestRelease(history *pluginRelease) *release {
@@ -27,7 +27,7 @@ func selectLatestCompatibleRelease(
 		},
 		Version: localMcdrVersion,
 	}
-	localVersion, err := dependency.Parse(localMcdrVersion, types.Semver)
+	localVersion, err := version.Parse(localMcdrVersion, types.Semver)
 	if err != nil {
 		return nil, err
 	}
@@ -40,9 +40,9 @@ func selectLatestCompatibleRelease(
 		}
 		dep := types.Dependency{
 			Id: mcdrPackage,
-			Constraint: dependency.ParseRange(
+			Constraint: version.ParseRange(
 				rangeExpr,
-				dependency.DialectNpmSemver,
+				version.DialectNpmSemver,
 				types.Semver,
 			),
 			Mandatory: true,

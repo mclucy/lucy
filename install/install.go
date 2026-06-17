@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/workspace"
 )
 
 type platformInstaller func(p types.Package) error
@@ -42,7 +42,7 @@ func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 }
 
 func installPlatform(id types.VersionedPackageRef) error {
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 	if id.Platform == types.PlatformMCDR {
 		if serverInfo.Environments.Mcdr != nil {
 			return errors.New("mcdr already installed")

@@ -13,7 +13,12 @@ import (
 	"github.com/mclucy/lucy/logger"
 )
 
-var hash = func(data []byte) string { return fmt.Sprintf("%x", sha256.Sum256(data)) }
+var h = func(data []byte) string {
+	return fmt.Sprintf(
+		"%x",
+		sha256.Sum256(data),
+	)
+}
 
 func setDir(name string) string {
 	dir, err := os.UserCacheDir()
@@ -23,11 +28,11 @@ func setDir(name string) string {
 	return path.Join(dir, "lucy", name)
 }
 
-func (h *handler) clearExpiredCache() {
-	expired := expiredEntries(h.index.all(), time.Now())
+func (handler *handler) clearExpiredCache() {
+	expired := expiredEntries(handler.index.all(), time.Now())
 	for _, k := range expired {
 		logger.Info("removing expired cache item " + k)
-		if err := h.removeEntryLocked(k); err != nil {
+		if err := handler.removeEntryLocked(k); err != nil {
 			continue
 		}
 	}
@@ -44,11 +49,11 @@ func expiredEntries(entries map[key]*CacheEntry, now time.Time) []key {
 	return expired
 }
 
-func (h *handler) maintainCacheLimit() {
-	evicted := evictionCandidates(h.index.all(), h.policy)
+func (handler *handler) maintainCacheLimit() {
+	evicted := evictionCandidates(handler.index.all(), handler.policy)
 	for _, e := range evicted {
 		logger.Info("removing cache item " + e.key)
-		if err := h.removeEntryLocked(e.key); err != nil {
+		if err := handler.removeEntryLocked(e.key); err != nil {
 			continue
 		}
 	}
@@ -61,25 +66,35 @@ type evictionTarget struct {
 	exp  time.Time
 }
 
-func evictionTargets(entries map[key]*CacheEntry) (map[EntryKind]int64, []evictionTarget) {
+func evictionTargets(entries map[key]*CacheEntry) (
+	map[EntryKind]int64,
+	[]evictionTarget,
+) {
 	totals := map[EntryKind]int64{}
 	var targets []evictionTarget
 	for k, entry := range entries {
 		totals[entry.Kind] += entry.Size
-		targets = append(targets, evictionTarget{
-			key:  k,
-			kind: entry.Kind,
-			size: entry.Size,
-			exp:  entry.Expiration,
-		})
+		targets = append(
+			targets, evictionTarget{
+				key:  k,
+				kind: entry.Kind,
+				size: entry.Size,
+				exp:  entry.Expiration,
+			},
+		)
 	}
-	sort.Slice(targets, func(i, j int) bool {
-		return targets[i].exp.Before(targets[j].exp)
-	})
+	sort.Slice(
+		targets, func(i, j int) bool {
+			return targets[i].exp.Before(targets[j].exp)
+		},
+	)
 	return totals, targets
 }
 
-func evictionCandidates(entries map[key]*CacheEntry, policy Policy) []evictionTarget {
+func evictionCandidates(
+	entries map[key]*CacheEntry,
+	policy Policy,
+) []evictionTarget {
 	totals, targets := evictionTargets(entries)
 	var result []evictionTarget
 	for _, e := range targets {

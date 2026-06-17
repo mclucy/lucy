@@ -1,8 +1,8 @@
 package mcdr
 
 import (
-	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 func parseRequiredVersion(s string) (reqs []types.VersionSubExpr) {
@@ -10,9 +10,9 @@ func parseRequiredVersion(s string) (reqs []types.VersionSubExpr) {
 	// References:
 	//   - https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
 	//   - https://docs.npmjs.com/about-semantic-versioning
-	expr := dependency.ParseRange(
+	expr := version.ParseRange(
 		s,
-		dependency.InferRangeDialect(types.PlatformMCDR),
+		version.InferRangeDialect(types.PlatformMCDR),
 		types.Semver,
 	)
 	if len(expr) == 0 {

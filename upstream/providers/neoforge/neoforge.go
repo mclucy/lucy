@@ -11,10 +11,10 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/providers/modloader"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
+	"github.com/mclucy/lucy/workspace"
 )
 
 var (
@@ -70,7 +70,7 @@ func (p provider) InstallPlatform(
 		return err
 	}
 
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 	workPath := serverDir
 	if workPath == "" {
 		workPath = serverInfo.Root
@@ -120,7 +120,7 @@ func (p provider) InstallPlatform(
 }
 
 func minecraftVersionForInstall() (types.BareVersion, error) {
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 	switch serverInfo.Runtime.DerivedModLoader() {
 	case types.PlatformVanilla:
 		return serverInfo.Runtime.GameVersion, nil
@@ -149,7 +149,7 @@ func neoForgeVersionFromPackageRef(
 }
 
 func guardServerTopology() error {
-	serverPlatform := probe.ServerInfo().Runtime.DerivedModLoader()
+	serverPlatform := workspace.ServerInfo().Runtime.DerivedModLoader()
 
 	switch serverPlatform {
 	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:

@@ -3,8 +3,8 @@ package install
 import (
 	"fmt"
 
-	"github.com/mclucy/lucy/dependency"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 func constraintInputVariants(input ConstraintInput) (
@@ -56,7 +56,7 @@ func normalizeConstraintExpression(dep types.Dependency) (
 	if dep.Id.Version == "" || dep.Id.Version == types.VersionAny || dep.Id.Version.IsInvalid() || dep.Id.Version.CanInfer() {
 		return types.VersionExpr{{}}, nil
 	}
-	value, err := dependency.Parse(dep.Id.Version, defaultVersionScheme(dep.Id))
+	value, err := version.Parse(dep.Id.Version, defaultVersionScheme(dep.Id))
 	if err != nil {
 		return nil, fmt.Errorf(
 			"install: failed to parse fixed constraint version %q for %s: %w",
@@ -145,11 +145,11 @@ func semverWindow(
 	}
 	if tilde {
 		if sv.Minor() == 0 && sv.Patch() == 0 {
-			return value, dependency.NewSemver(sv.Major()+1, 0, 0), true
+			return value, version.NewSemver(sv.Major()+1, 0, 0), true
 		}
-		return value, dependency.NewSemver(sv.Major(), sv.Minor()+1, 0), true
+		return value, version.NewSemver(sv.Major(), sv.Minor()+1, 0), true
 	}
-	return value, dependency.NewSemver(sv.Major()+1, 0, 0), true
+	return value, version.NewSemver(sv.Major()+1, 0, 0), true
 }
 
 func variantsToExpression(variants []constraintVariant) types.VersionExpr {

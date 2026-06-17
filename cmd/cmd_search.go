@@ -7,9 +7,10 @@ import (
 	"strconv"
 
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
+	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -232,10 +233,10 @@ func appendToSearchOutput(
 		&tui.FieldDynamicColumnLabels{
 			Title:  ">>>",
 			Labels: results,
-			MaxLines: tools.Ternary(
+			MaxLines: fn.Ternary(
 				showAll,
 				0,
-				tools.TermHeight()-6,
+				style.TermHeight()-6,
 			),
 		},
 	)

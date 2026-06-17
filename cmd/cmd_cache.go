@@ -5,10 +5,10 @@ import (
 	"sort"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/internal/slugmap"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/slugmap"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
+	"github.com/mclucy/lucy/tui/style"
 	"github.com/spf13/cobra"
 )
 
@@ -78,7 +78,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
 
 	if jsonOutput {
-		tools.PrintAsJson(entries)
+		style.PrintAsJson(entries)
 		return nil
 	}
 
@@ -87,9 +87,11 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].CreatedAt.After(entries[j].CreatedAt)
-	})
+	sort.Slice(
+		entries, func(i, j int) bool {
+			return entries[i].CreatedAt.After(entries[j].CreatedAt)
+		},
+	)
 
 	out := &tui.Data{
 		Fields: []tui.Field{
@@ -100,15 +102,17 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	}
 
 	for _, entry := range entries {
-		out.Fields = append(out.Fields, &tui.FieldAnnotatedShortText{
-			Title: entry.Key,
-			Text: fmt.Sprintf(
-				"%s  %s",
-				entry.Kind,
-				tools.FormatBytesBinary(entry.Size),
-			),
-			Annotation: tools.FormatDuration(entry.Expiration),
-		})
+		out.Fields = append(
+			out.Fields, &tui.FieldAnnotatedShortText{
+				Title: entry.Key,
+				Text: fmt.Sprintf(
+					"%s  %s",
+					entry.Kind,
+					style.FormatBytesBinary(entry.Size),
+				),
+				Annotation: style.FormatDuration(entry.Expiration),
+			},
+		)
 	}
 
 	tui.Flush(out)
@@ -126,7 +130,7 @@ func actionCacheClear(_ *cobra.Command, _ []string) error {
 		fmt.Sprintf(
 			"removed %d files, freed up %s of space",
 			report.FileCount,
-			tools.FormatBytesBinary(report.TotalFreedSize),
+			style.FormatBytesBinary(report.TotalFreedSize),
 		),
 	)
 	return nil
@@ -137,7 +141,7 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
 
 	if jsonOutput {
-		tools.PrintAsJson(entries)
+		style.PrintAsJson(entries)
 		return nil
 	}
 
@@ -160,11 +164,13 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 			shortHash = shortHash[:12]
 		}
 
-		out.Fields = append(out.Fields, &tui.FieldAnnotatedShortText{
-			Title:      entry.Source.String() + "/" + entry.LocalId,
-			Text:       entry.CanonicalSlug,
-			Annotation: shortHash,
-		})
+		out.Fields = append(
+			out.Fields, &tui.FieldAnnotatedShortText{
+				Title:      entry.Source.String() + "/" + entry.LocalId,
+				Text:       entry.CanonicalSlug,
+				Annotation: shortHash,
+			},
+		)
 	}
 
 	tui.Flush(out)

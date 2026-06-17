@@ -10,11 +10,10 @@ import (
 
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/probe"
-	"github.com/mclucy/lucy/tools"
+	probe2 "github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/util"
+	"github.com/mclucy/lucy/workspace"
 )
 
 const metaBaseURL = "https://meta.fabricmc.net"
@@ -58,7 +57,7 @@ func (p provider) InstallPlatform(
 	id types.VersionedPackageRef,
 	serverDir string,
 ) error {
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 
 	switch serverPlatform {
@@ -91,7 +90,7 @@ func installWithOverride(
 	serverDir string,
 	deleteVanilla bool,
 ) error {
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 
 	workPath := serverDir
 	if workPath == "" {
@@ -137,10 +136,10 @@ func installWithOverride(
 	}()
 	defer tracker.Close()
 
-	result, err := util.CachedDownload(
+	result, err := cache.CachedDownload(
 		artifactURL,
 		workPath,
-		util.DownloadOptions{
+		cache.DownloadOptions{
 			Kind:               cache.KindArtifact,
 			WrapReader:         tracker.ProxyReader,
 			OnCacheHit:         tracker.CacheHit,
@@ -149,7 +148,7 @@ func installWithOverride(
 	)
 
 	if result != nil {
-		tools.CloseReader(result.File, nil)
+		probe2.CloseReader(result.File, nil)
 	}
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
@@ -161,7 +160,7 @@ func installWithOverride(
 			return fmt.Errorf("delete vanilla server failed: %w", err)
 		}
 	}
-	probe.Rebuild()
+	workspace.Rebuild()
 
 	return nil
 }
@@ -261,9 +260,9 @@ func fetchInstallerVersions() (
 
 func fetchVersionsMeta(endpoint string, target any) (err error) {
 	apiEndpoint := metaBaseURL + "/v2/versions/" + endpoint
-	data, err := util.CachedGetBytes(
+	data, err := cache.CachedGetBytes(
 		apiEndpoint,
-		util.BytesRequestOptions{
+		cache.BytesRequestOptions{
 			Kind: cache.KindMetadata,
 			TTL:  3 * 24 * time.Hour,
 		},
@@ -287,8 +286,8 @@ func fetchVersionsMeta(endpoint string, target any) (err error) {
 }
 
 func promptOverrideVanilla() (override bool, deleteVanilla bool) {
-	path := probe.ServerInfo().Runtime.PrimaryEntrance
-	version := probe.ServerInfo().Runtime.GameVersion
+	path := workspace.ServerInfo().Runtime.PrimaryEntrance
+	version := workspace.ServerInfo().Runtime.GameVersion
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().

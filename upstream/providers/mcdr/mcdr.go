@@ -5,9 +5,9 @@ import (
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/workspace"
 )
 
 type provider struct{}
@@ -51,7 +51,10 @@ func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return res.ToSearchResults(s.Id()), nil
 }
 
-func (s provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+func (s provider) Fetch(id types.VersionedPackageRef) (
+	upstream.FetchResult,
+	error,
+) {
 	rel, err := getRelease(id.Name.Pep8String(), id.Version)
 	if err != nil {
 		return upstream.FetchResult{}, err
@@ -96,7 +99,7 @@ func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	var rel *release
 	switch id.Version {
 	case types.VersionCompatible:
-		serverInfo := probe.ServerInfo()
+		serverInfo := workspace.ServerInfo()
 		rel, err = getLatestCompatibleRelease(
 			id.Name.Pep8String(),
 			serverInfo.Environments.Mcdr.Version,

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/style"
 
 	"github.com/spf13/cobra"
 )
@@ -17,8 +17,16 @@ var treeCmd = &cobra.Command{
 }
 
 func init() {
-	treeCmd.Flags().Bool("live", false, "Probe live server instead of reading lock")
-	treeCmd.Flags().Int("depth", 0, "Limit dependency tree depth (0 = unlimited)")
+	treeCmd.Flags().Bool(
+		"live",
+		false,
+		"Probe live server instead of reading lock",
+	)
+	treeCmd.Flags().Int(
+		"depth",
+		0,
+		"Limit dependency tree depth (0 = unlimited)",
+	)
 	addJsonFlag(treeCmd)
 	addNoStyleFlag(treeCmd)
 	rootCmd.AddCommand(treeCmd)
@@ -55,7 +63,14 @@ func actionTree(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printTree(node *GraphNode, depth int, isLast bool, prefix string, visited map[string]bool, maxDepth int) {
+func printTree(
+	node *GraphNode,
+	depth int,
+	isLast bool,
+	prefix string,
+	visited map[string]bool,
+	maxDepth int,
+) {
 	branch := "├── "
 	if isLast {
 		branch = "└── "
@@ -91,7 +106,14 @@ func printTree(node *GraphNode, depth int, isLast bool, prefix string, visited m
 	}
 
 	for i, child := range node.Children {
-		printTree(child, depth+1, i == len(node.Children)-1, childPrefix, visited, maxDepth)
+		printTree(
+			child,
+			depth+1,
+			i == len(node.Children)-1,
+			childPrefix,
+			visited,
+			maxDepth,
+		)
 	}
 
 	delete(visited, node.ID)
@@ -118,7 +140,7 @@ func outputTreeJSON(graph *DependencyGraph, source DataSource) error {
 		"source": source.String(),
 		"roots":  jsonRoots,
 	}
-	tools.PrintAsJson(output)
+	style.PrintAsJson(output)
 	return nil
 }
 

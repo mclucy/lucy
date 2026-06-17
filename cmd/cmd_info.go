@@ -5,9 +5,10 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/tui"
+	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 
@@ -93,7 +94,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	long, _ := cmd.Flags().GetBool(flagLongName)
 
 	if json {
-		tools.PrintAsJson(meta)
+		style.PrintAsJson(meta)
 	} else {
 		var out *tui.Data
 		out = infoOutput(meta, long)
@@ -103,10 +104,10 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 }
 
 func infoOutput(data types.Metadata, longOutput bool) *tui.Data {
-	maxLines := tools.Ternary(
+	maxLines := fn.Ternary(
 		longOutput,
 		0,
-		tools.TermHeight()*3/2,
+		style.TermHeight()*3/2,
 	)
 	useAlternate := !longOutput
 	o := &tui.Data{
@@ -122,17 +123,17 @@ func infoOutput(data types.Metadata, longOutput bool) *tui.Data {
 				Title: "Description",
 				Text:  data.Brief,
 			},
-			tools.Ternary[tui.Field](
+			fn.Ternary[tui.Field](
 				data.DescriptionIsMarkdown,
 				&tui.FieldMarkdown{
 					Title:         "Information",
 					Text:          data.Description,
 					Padding:       true,
 					LineWrap:      true,
-					MaxColumns:    min(tools.TermWidth()*8/10, 100),
+					MaxColumns:    min(style.TermWidth()*8/10, 100),
 					MaxLines:      maxLines,
 					UseAlternate:  useAlternate,
-					AlternateText: tools.Underline(data.DescriptionUrl),
+					AlternateText: style.Underline(data.DescriptionUrl),
 					FoldNotice:    "",
 				},
 				&tui.FieldLongText{
@@ -140,10 +141,10 @@ func infoOutput(data types.Metadata, longOutput bool) *tui.Data {
 					Text:          data.Description,
 					Padding:       true,
 					LineWrap:      true,
-					MaxColumns:    tools.TermWidth() * 8 / 10,
+					MaxColumns:    style.TermWidth() * 8 / 10,
 					MaxLines:      maxLines,
 					UseAlternate:  useAlternate,
-					AlternateText: tools.Underline(data.DescriptionUrl),
+					AlternateText: style.Underline(data.DescriptionUrl),
 				},
 			),
 		},
@@ -178,7 +179,7 @@ func infoOutput(data types.Metadata, longOutput bool) *tui.Data {
 		o.Fields = append(
 			o.Fields, &tui.FieldShortText{
 				Title: url.Name,
-				Text:  tools.Underline(url.Url),
+				Text:  style.Underline(url.Url),
 			},
 		)
 	}

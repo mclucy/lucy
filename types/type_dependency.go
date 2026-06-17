@@ -10,7 +10,7 @@ package types
 // All functions should be deterministic and side-effect free.
 
 import (
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/internal/fn"
 )
 
 // BareVersion is the version of a package. Here we expect mods and plugins
@@ -153,7 +153,7 @@ func (d Dependency) Satisfy(id VersionedPackageRef, v ResolvableVersion) bool {
 		return false
 	}
 
-	if d.Constraint == nil || tools.IsEmptyVector(d.Constraint) {
+	if d.Constraint == nil || fn.IsEmptyVector(d.Constraint) {
 		return true
 	}
 

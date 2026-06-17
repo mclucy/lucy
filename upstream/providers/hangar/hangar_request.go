@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -125,7 +125,7 @@ func getJSON(rawURL string, out any) error {
 	if err != nil {
 		return fmt.Errorf("hangar: request failed: %w", err)
 	}
-	defer tools.CloseReader(res.Body, logger.Warn)
+	defer fn.CloseReader(res.Body, logger.Warn)
 
 	if res.StatusCode == http.StatusNotFound {
 		return ErrNoProject

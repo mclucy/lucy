@@ -5,9 +5,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mclucy/lucy/dependency"
-	"github.com/mclucy/lucy/exttype"
+	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 
 	"github.com/pelletier/go-toml"
 )
@@ -53,7 +53,7 @@ func readForgeModsToml(
 		return nil, err
 	}
 
-	var modIdentifier exttype.FileModLoaderIdentifier
+	var modIdentifier fileschema.FileModLoaderIdentifier
 	if err := toml.Unmarshal(data, &modIdentifier); err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func readForgeModsToml(
 }
 
 func forgeDependencies(
-	modIdentifier exttype.FileModLoaderIdentifier,
+	modIdentifier fileschema.FileModLoaderIdentifier,
 	modID string,
 ) []ArtifactDep {
 	deps := modIdentifier.Dependencies[modID]
@@ -126,9 +126,9 @@ func forgeDependencies(
 }
 
 func forgeVersionRange(versionRange string) types.VersionExpr {
-	return dependency.ParseRange(
+	return version.ParseRange(
 		versionRange,
-		dependency.InferRangeDialect(types.PlatformForge),
+		version.InferRangeDialect(types.PlatformForge),
 		types.Maven,
 	)
 }
