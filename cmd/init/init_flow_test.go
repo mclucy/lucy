@@ -290,7 +290,7 @@ func TestDiscoverServerDefaults_UsesProbeObservedTakeoverCandidates(t *testing.T
 		filepath.Join(
 			"..",
 			"..",
-			"probe",
+			"workspace",
 			"internal",
 			"detector",
 			"testdata",
