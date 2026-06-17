@@ -14,7 +14,7 @@ func ResolveProvidersByTopology(
 	topology *types.RuntimeTopology,
 	platform types.PlatformId,
 	src types.SourceId,
-) ([]upstream.Provider, error) {
+) ([]upstream.PackageSource, error) {
 	if topology == nil || !topology.Resolved() {
 		return nil, fmt.Errorf("routing: topology unresolved, cannot resolve providers")
 	}

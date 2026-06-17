@@ -34,21 +34,18 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return resp.ToSearchResults(p.Id()), nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (
-	remote upstream.RawPackageRemote,
-	err error,
-) {
+func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
 	resource, err := resolveResourceByProjectName(id.Name)
 	if err != nil {
-		return nil, err
+		return upstream.FetchResult{}, err
 	}
 
 	resolved, err := resolveVersion(resource, id.Version)
 	if err != nil {
-		return nil, err
+		return upstream.FetchResult{}, err
 	}
 
-	return resolved, nil
+	return upstream.NewFetchResult(resolved.ToPackageRemote()), nil
 }
 
 func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
@@ -61,22 +58,18 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	return info, nil
 }
 
-func (p provider) Support(name types.BarePackageName) (
-	supports upstream.RawProjectSupport,
-	err error,
-) {
+func (p provider) Support(name types.BarePackageName) (types.PlatformSupport, error) {
 	resource, err := resolveResourceByProjectName(name)
 	if err != nil {
-		return nil, err
+		return types.PlatformSupport{}, err
 	}
-	return resource, nil
+	return resource.ToProjectSupport(), nil
 }
 
-func (p provider) Dependencies(id types.VersionedPackageRef) (
-	deps upstream.RawPackageDependencies,
-	err error,
-) {
-	return nil, ErrNotImplemented
+func (p provider) Dependencies(
+	id types.VersionedPackageRef,
+) (*types.PackageDependencies, error) {
+	return &types.PackageDependencies{Authentic: false}, nil
 }
 
 func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
@@ -107,9 +100,8 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 }
 
 var (
-	ErrNotImplemented = errors.New("spiget: not implemented")
-	ErrNoProject      = errors.New("spiget: project not found")
-	ErrNoVersion      = errors.New("spiget: version not found")
+	ErrNoProject = errors.New("spiget: project not found")
+	ErrNoVersion = errors.New("spiget: version not found")
 )
 
 func unexpectedStatusError(url string, statusCode int) error {

@@ -15,14 +15,19 @@ package routing
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
-	curseforge2 "github.com/mclucy/lucy/upstream/providers/curseforge"
+	"github.com/mclucy/lucy/upstream/providers/curseforge"
+	"github.com/mclucy/lucy/upstream/providers/fabric"
+	"github.com/mclucy/lucy/upstream/providers/forge"
 	"github.com/mclucy/lucy/upstream/providers/githubsource"
 	"github.com/mclucy/lucy/upstream/providers/hangar"
 	"github.com/mclucy/lucy/upstream/providers/mcdr"
 	"github.com/mclucy/lucy/upstream/providers/modrinth"
+	"github.com/mclucy/lucy/upstream/providers/mojang"
+	"github.com/mclucy/lucy/upstream/providers/neoforge"
 	"github.com/mclucy/lucy/upstream/providers/spiget"
 )
 
@@ -32,156 +37,154 @@ var (
 	ErrInvalidPlatform   = errors.New("cannot find sources for platform")
 )
 
-// providerBySource binds semantic Source values to executable Provider
-// implementations.
-//
-// Source and Provider are intentionally not synonyms:
-//   - Some Source values are policy/sentinel markers (SourceAuto/SourceUnknown).
-//   - A Source can resolve to one provider, many providers, or none.
-var providerBySource = map[types.SourceId]upstream.Provider{
-	types.SourceModrinth: modrinth.Provider,
-	types.SourceGitHub:   githubsource.Provider,
-	types.SourceMCDR:     mcdr.Provider,
-	types.SourceHangar:   hangar.Provider,
-	types.SourceSpiget:   spiget.Provider,
+type Registry struct {
+	entries []entry
 }
 
-type SearchProvider struct {
-	Source   types.SourceId
-	Searcher upstream.Searcher
+type entry struct {
+	source types.SourceId
+	impl   any
 }
 
-type InfoProvider struct {
-	Source   types.SourceId
-	Informer upstream.Informer
+var defaultRegistry = sync.OnceValue(NewRegistry)
+
+func DefaultRegistry() *Registry {
+	return defaultRegistry()
 }
 
-type ArtifactMapperProvider struct {
-	Source types.SourceId
-	Mapper upstream.ArtifactMapper
+func NewRegistry() *Registry {
+	r := &Registry{}
+	r.register(types.SourceModrinth, modrinth.Provider)
+	r.register(types.SourceGitHub, githubsource.Provider)
+	r.register(types.SourceMCDR, mcdr.Provider)
+	r.register(types.SourceHangar, hangar.Provider)
+	r.register(types.SourceSpiget, spiget.Provider)
+	r.register(types.SourceMojang, mojang.Provider)
+	r.register(types.SourceForge, forge.Provider)
+	r.register(types.SourceNeoForge, neoforge.Provider)
+	r.register(types.SourceFabric, fabric.Provider)
+	if curseforge.Enabled() {
+		r.register(types.SourceCurseForge, curseforge.Provider)
+	}
+	return r
 }
 
-type VersionSelectorProvider struct {
-	Source   types.SourceId
-	Resolver upstream.VersionSelectorResolver
+func (r *Registry) register(source types.SourceId, impl any) {
+	if impl == nil {
+		return
+	}
+	r.entries = append(r.entries, entry{source: source, impl: impl})
 }
 
-var searcherBySource = map[types.SourceId]upstream.Searcher{
-	types.SourceModrinth:   modrinth.Provider,
-	types.SourceCurseForge: curseforge2.Provider,
-	types.SourceGitHub:     githubsource.Provider,
-	types.SourceMCDR:       mcdr.Provider,
-	types.SourceHangar:     hangar.Provider,
-	types.SourceSpiget:     spiget.Provider,
+func (r *Registry) has(source types.SourceId) bool {
+	_, ok := r.entry(source)
+	return ok
 }
 
-var informerBySource = map[types.SourceId]upstream.Informer{
-	types.SourceModrinth:   modrinth.Provider,
-	types.SourceCurseForge: curseforge2.Provider,
-	types.SourceGitHub:     githubsource.Provider,
-	types.SourceMCDR:       mcdr.Provider,
-	types.SourceHangar:     hangar.Provider,
-	types.SourceSpiget:     spiget.Provider,
+func (r *Registry) entry(source types.SourceId) (entry, bool) {
+	for _, e := range r.entries {
+		if e.source == source {
+			return e, true
+		}
+	}
+	return entry{}, false
 }
 
-var artifactMapperBySource = map[types.SourceId]upstream.ArtifactMapper{
-	types.SourceModrinth:   modrinth.Provider,
-	types.SourceCurseForge: curseforge2.Provider,
+func (r *Registry) PackageSource(
+	source types.SourceId,
+) (upstream.PackageSource, bool) {
+	e, ok := r.entry(source)
+	if !ok {
+		return nil, false
+	}
+	provider, ok := e.impl.(upstream.PackageSource)
+	return provider, ok
 }
 
-var versionSelectorResolverBySource = map[types.SourceId]upstream.VersionSelectorResolver{
-	types.SourceModrinth:   modrinth.Provider,
-	types.SourceCurseForge: curseforge2.Provider,
-	types.SourceGitHub:     githubsource.Provider,
-	types.SourceMCDR:       mcdr.Provider,
-	types.SourceHangar:     hangar.Provider,
-	types.SourceSpiget:     spiget.Provider,
+func (r *Registry) Searcher(
+	source types.SourceId,
+) (upstream.SearchSource, bool) {
+	e, ok := r.entry(source)
+	if !ok {
+		return nil, false
+	}
+	provider, ok := e.impl.(upstream.SearchSource)
+	return provider, ok
 }
 
-func listModProviders() []upstream.Provider {
+func (r *Registry) Informer(
+	source types.SourceId,
+) (upstream.InfoSource, bool) {
+	e, ok := r.entry(source)
+	if !ok {
+		return nil, false
+	}
+	provider, ok := e.impl.(upstream.InfoSource)
+	return provider, ok
+}
+
+func (r *Registry) ArtifactMapper(
+	source types.SourceId,
+) (upstream.ArtifactMapSource, bool) {
+	e, ok := r.entry(source)
+	if !ok {
+		return nil, false
+	}
+	provider, ok := e.impl.(upstream.ArtifactMapSource)
+	return provider, ok
+}
+
+func (r *Registry) PlatformInstaller(
+	source types.SourceId,
+) (upstream.PlatformInstaller, bool) {
+	e, ok := r.entry(source)
+	if !ok {
+		return nil, false
+	}
+	installer, ok := e.impl.(upstream.PlatformInstaller)
+	return installer, ok
+}
+
+func listModProviders() []upstream.PackageSource {
 	providers, _ := providersFromSources(modProviderSources())
 	return providers
 }
 
 // ListAutoProviders returns the default ordered provider list used when
 // source=auto and platform=all.
-func ListAutoProviders() []upstream.Provider {
-	providers := listModProviders()
-	providers, _ = providersFromSources(
-		append(
-			modProviderSources(),
-			types.SourceMCDR,
-		),
-	)
+func ListAutoProviders() []upstream.PackageSource {
+	providers, _ := providersFromSources(autoProviderSources())
 	return providers
 }
 
-func GetProvider(src types.SourceId) (upstream.Provider, bool, error) {
-	if src == types.SourceCurseForge {
-		if err := curseforge2.AvailabilityError(); err != nil {
-			return nil, false, err
-		}
-		return curseforge2.Provider, true, nil
-	}
-
-	p, ok := providerBySource[src]
-	return p, ok, nil
+func GetArtifactMapper(src types.SourceId) (upstream.ArtifactMapSource, bool, error) {
+	mapper, ok := DefaultRegistry().ArtifactMapper(src)
+	return mapper, ok, nil
 }
 
-func GetSearcher(src types.SourceId) (SearchProvider, bool, error) {
-	if src == types.SourceCurseForge {
-		if err := curseforge2.AvailabilityError(); err != nil {
-			return SearchProvider{}, false, err
-		}
-	}
-
-	searcher, ok := searcherBySource[src]
+func PlatformInstallerFor(
+	platform types.PlatformId,
+) (upstream.PlatformInstaller, bool) {
+	source, ok := platformInstallerSource(platform)
 	if !ok {
-		return SearchProvider{}, false, nil
+		return nil, false
 	}
-	return SearchProvider{Source: src, Searcher: searcher}, true, nil
+	return DefaultRegistry().PlatformInstaller(source)
 }
 
-func GetInformer(src types.SourceId) (InfoProvider, bool, error) {
-	if src == types.SourceCurseForge {
-		if err := curseforge2.AvailabilityError(); err != nil {
-			return InfoProvider{}, false, err
-		}
+func platformInstallerSource(platform types.PlatformId) (types.SourceId, bool) {
+	switch platform {
+	case types.PlatformMinecraft:
+		return types.SourceMojang, true
+	case types.PlatformForge:
+		return types.SourceForge, true
+	case types.PlatformNeoforge:
+		return types.SourceNeoForge, true
+	case types.PlatformFabric:
+		return types.SourceFabric, true
+	default:
+		return types.SourceUnknown, false
 	}
-
-	informer, ok := informerBySource[src]
-	if !ok {
-		return InfoProvider{}, false, nil
-	}
-	return InfoProvider{Source: src, Informer: informer}, true, nil
-}
-
-func GetArtifactMapper(src types.SourceId) (ArtifactMapperProvider, bool, error) {
-	if src == types.SourceCurseForge {
-		if err := curseforge2.AvailabilityError(); err != nil {
-			return ArtifactMapperProvider{}, false, err
-		}
-	}
-
-	mapper, ok := artifactMapperBySource[src]
-	if !ok {
-		return ArtifactMapperProvider{}, false, nil
-	}
-	return ArtifactMapperProvider{Source: src, Mapper: mapper}, true, nil
-}
-
-func GetVersionSelectorResolver(src types.SourceId) (VersionSelectorProvider, bool, error) {
-	if src == types.SourceCurseForge {
-		if err := curseforge2.AvailabilityError(); err != nil {
-			return VersionSelectorProvider{}, false, err
-		}
-	}
-
-	resolver, ok := versionSelectorResolverBySource[src]
-	if !ok {
-		return VersionSelectorProvider{}, false, nil
-	}
-	return VersionSelectorProvider{Source: src, Resolver: resolver}, true, nil
 }
 
 // ResolveProviders resolves ordered provider candidates for a given operation,
@@ -189,7 +192,7 @@ func GetVersionSelectorResolver(src types.SourceId) (VersionSelectorProvider, bo
 func ResolveProviders(
 	platform types.PlatformId,
 	src types.SourceId,
-) ([]upstream.Provider, error) {
+) ([]upstream.PackageSource, error) {
 	if src == types.SourceUnknown {
 		return nil, ErrUnknownSource
 	}
@@ -212,7 +215,7 @@ func ResolveProviders(
 func ResolveSearchProviders(
 	platform types.PlatformId,
 	src types.SourceId,
-) ([]SearchProvider, error) {
+) ([]upstream.SearchSource, error) {
 	if src == types.SourceUnknown {
 		return nil, ErrUnknownSource
 	}
@@ -242,7 +245,7 @@ func ResolveSearchProviders(
 func ResolveInfoProviders(
 	platform types.PlatformId,
 	src types.SourceId,
-) ([]InfoProvider, error) {
+) ([]upstream.InfoSource, error) {
 	if src == types.SourceUnknown {
 		return nil, ErrUnknownSource
 	}
@@ -258,34 +261,26 @@ func ResolveInfoProviders(
 	return informersFromSources(sources)
 }
 
-func resolveExplicitInformer(src types.SourceId) ([]InfoProvider, error) {
-	provider, ok, err := GetInformer(src)
-	if err != nil {
-		return nil, err
-	}
+func resolveExplicitInformer(src types.SourceId) ([]upstream.InfoSource, error) {
+	provider, ok := DefaultRegistry().Informer(src)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
-
-	return []InfoProvider{provider}, nil
+	return []upstream.InfoSource{provider}, nil
 }
 
-func resolveExplicitSearcher(src types.SourceId) ([]SearchProvider, error) {
-	provider, ok, err := GetSearcher(src)
-	if err != nil {
-		return nil, err
-	}
+func resolveExplicitSearcher(src types.SourceId) ([]upstream.SearchSource, error) {
+	provider, ok := DefaultRegistry().Searcher(src)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
-
-	return []SearchProvider{provider}, nil
+	return []upstream.SearchSource{provider}, nil
 }
 
 func ResolveProvidersFromTopology(
 	topology *types.RuntimeTopology,
 	src types.SourceId,
-) ([]upstream.Provider, error) {
+) ([]upstream.PackageSource, error) {
 	if src == types.SourceUnknown {
 		return nil, ErrUnknownSource
 	}
@@ -305,19 +300,15 @@ func ResolveProvidersFromTopology(
 	if selection.fallback {
 		return ListAutoProviders(), nil
 	}
-	return []upstream.Provider{}, nil
+	return []upstream.PackageSource{}, nil
 }
 
-func resolveExplicitSource(src types.SourceId) ([]upstream.Provider, error) {
-	provider, ok, err := GetProvider(src)
-	if err != nil {
-		return nil, err
-	}
+func resolveExplicitSource(src types.SourceId) ([]upstream.PackageSource, error) {
+	provider, ok := DefaultRegistry().PackageSource(src)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
-
-	return []upstream.Provider{provider}, nil
+	return []upstream.PackageSource{provider}, nil
 }
 
 func validateSearchSourcePlatform(
@@ -337,15 +328,12 @@ func validateSearchSourcePlatform(
 }
 
 func providersFromSources(sources []types.SourceId) (
-	[]upstream.Provider,
+	[]upstream.PackageSource,
 	error,
 ) {
-	providers := make([]upstream.Provider, 0, len(sources))
+	providers := make([]upstream.PackageSource, 0, len(sources))
 	for _, source := range sources {
-		provider, ok, err := GetProvider(source)
-		if err != nil {
-			return nil, err
-		}
+		provider, ok := DefaultRegistry().PackageSource(source)
 		if !ok {
 			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
 		}
@@ -355,15 +343,12 @@ func providersFromSources(sources []types.SourceId) (
 }
 
 func searchersFromSources(sources []types.SourceId) (
-	[]SearchProvider,
+	[]upstream.SearchSource,
 	error,
 ) {
-	providers := make([]SearchProvider, 0, len(sources))
+	providers := make([]upstream.SearchSource, 0, len(sources))
 	for _, source := range sources {
-		provider, ok, err := GetSearcher(source)
-		if err != nil {
-			return nil, err
-		}
+		provider, ok := DefaultRegistry().Searcher(source)
 		if !ok {
 			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
 		}
@@ -373,15 +358,12 @@ func searchersFromSources(sources []types.SourceId) (
 }
 
 func informersFromSources(sources []types.SourceId) (
-	[]InfoProvider,
+	[]upstream.InfoSource,
 	error,
 ) {
-	providers := make([]InfoProvider, 0, len(sources))
+	providers := make([]upstream.InfoSource, 0, len(sources))
 	for _, source := range sources {
-		provider, ok, err := GetInformer(source)
-		if err != nil {
-			return nil, err
-		}
+		provider, ok := DefaultRegistry().Informer(source)
 		if !ok {
 			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
 		}
@@ -391,5 +373,5 @@ func informersFromSources(sources []types.SourceId) (
 }
 
 func curseforgeAvailable() bool {
-	return curseforge2.Enabled()
+	return DefaultRegistry().has(types.SourceCurseForge)
 }

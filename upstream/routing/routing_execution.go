@@ -36,7 +36,7 @@ type InfoResult struct {
 // Default behavior is non-aggregated: each provider contributes one
 // upstream.SearchResponse item in the returned slice.
 func SearchMany(
-	providers []SearchProvider,
+	providers []upstream.SearchSource,
 	query types.BarePackageName,
 	options types.SearchOptions,
 ) ([]upstream.SearchResponse, []ProviderError) {
@@ -56,9 +56,9 @@ func SearchMany(
 
 	for i, provider := range providers {
 		wg.Add(1)
-		go func(index int, provider SearchProvider) {
+		go func(index int, provider upstream.SearchSource) {
 			defer wg.Done()
-			res, err := upstream.Search(provider.Searcher, upstream.Query{
+			res, err := upstream.Search(provider, upstream.Query{
 				Keyword:        query.String(),
 				SortBy:         options.SortBy,
 				ExcludeClient:  !options.IncludeClient,
@@ -68,14 +68,14 @@ func SearchMany(
 				slots[index] = slot{
 					failed: true,
 					err: ProviderError{
-						Source: provider.Source,
+						Source: provider.Id(),
 						Err:    err,
 					},
 				}
 				return
 			}
 			if res.Source == types.SourceUnknown {
-				res.Source = provider.Source
+				res.Source = provider.Id()
 			}
 			slots[index] = slot{ok: true, res: res}
 		}(i, provider)
@@ -100,7 +100,7 @@ func SearchMany(
 // FetchMany executes fetch on all providers in parallel and returns all
 // successful results.
 func FetchMany(
-	providers []upstream.Provider,
+	providers []upstream.PackageSource,
 	id types.VersionedPackageRef,
 ) ([]upstream.FetchResult, []ProviderError) {
 	if len(providers) == 0 {
@@ -119,12 +119,9 @@ func FetchMany(
 
 	for i, provider := range providers {
 		wg.Add(1)
-		go func(index int, provider upstream.Provider) {
+		go func(index int, provider upstream.PackageSource) {
 			defer wg.Done()
-			resolver, ok, err := GetVersionSelectorResolver(provider.Id())
-			if err == nil && !ok {
-				err = fmt.Errorf("%w: %s", ErrUnsupportedSource, provider.Id())
-			}
+			resolvedID, err := provider.ResolveVersionSelector(id)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,
@@ -136,7 +133,7 @@ func FetchMany(
 				return
 			}
 
-			remoteData, err := upstream.Fetch(provider, resolver.Resolver, id)
+			remoteData, err := provider.Fetch(resolvedID)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,
@@ -146,6 +143,10 @@ func FetchMany(
 					},
 				}
 				return
+			}
+			remoteData.ResolvedID = resolvedID
+			if remoteData.Source == types.SourceUnknown {
+				remoteData.Source = provider.Id()
 			}
 			slots[index] = slot{ok: true, res: remoteData}
 		}(i, provider)
@@ -170,7 +171,7 @@ func FetchMany(
 // GetInfoHedged executes info on all providers in parallel and returns the
 // first successful result.
 func GetInfoHedged(
-	providers []InfoProvider,
+	providers []upstream.InfoSource,
 	ref types.PackageRef,
 ) (types.Metadata, []ProviderError, error) {
 	if len(providers) == 0 {
@@ -181,11 +182,11 @@ func GetInfoHedged(
 	errChan := make(chan ProviderError, len(providers))
 
 	for _, provider := range providers {
-		go func(provider InfoProvider) {
-			res, err := upstream.Info(provider.Informer, ref)
+		go func(provider upstream.InfoSource) {
+			res, err := upstream.Info(provider, ref)
 			if err != nil {
 				errChan <- ProviderError{
-					Source: provider.Source,
+					Source: provider.Id(),
 					Err:    fmt.Errorf("information failed: %w", err),
 				}
 				return
@@ -214,7 +215,7 @@ func GetInfoHedged(
 // returns all successful results. An error is returned only when every provider
 // fails; partial failures are collected in the returned []ProviderError slice.
 func DependenciesMany(
-	providers []upstream.Provider,
+	providers []upstream.PackageSource,
 	id types.VersionedPackageRef,
 ) ([]types.PackageDependencies, []ProviderError) {
 	if len(providers) == 0 {
@@ -233,9 +234,9 @@ func DependenciesMany(
 
 	for i, provider := range providers {
 		wg.Add(1)
-		go func(index int, provider upstream.Provider) {
+		go func(index int, provider upstream.PackageSource) {
 			defer wg.Done()
-			deps, err := upstream.Dependencies(provider, id)
+			deps, err := provider.Dependencies(id)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,

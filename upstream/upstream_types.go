@@ -6,58 +6,87 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// Provider is the inversion boundary between core upstream orchestration and
-// concrete upstream integrations.
-//
-// Provider is an executable capability boundary: implementations perform actual
-// native API calls and adapt upstream-specific data into raw contracts.
-//
-// Provider is intentionally not the same concept as types.Source:
-//   - types.Source is a stable semantic identifier exposed to users and storage.
-//   - Provider is the runtime executor selected by routing logic.
-//
-// Rules:
-//   - Core code depends on this interface, never on concrete provider packages.
-//   - Provider packages implement this interface and perform upstream-specific
-//     API/data handling.
-//   - Source selection/fallback policy is handled by dedicated resolver logic
-//     outside this file.
-type Provider interface {
-	Fetch(id types.VersionedPackageRef) (
-		remote RawPackageRemote,
-		err error,
-	)
-	Dependencies(id types.VersionedPackageRef) (
-		deps RawPackageDependencies,
-		err error,
-	)
-	Support(name types.BarePackageName) (
-		supports RawProjectSupport,
-		err error,
-	)
-	// Id returns the semantic source identity represented by this provider.
+// SourceIdentifier returns the semantic source identity represented by a
+// provider capability.
+type SourceIdentifier interface {
 	Id() types.SourceId
+}
+
+type Fetcher interface {
+	Fetch(id types.VersionedPackageRef) (FetchResult, error)
+}
+
+type DependencyLister interface {
+	Dependencies(id types.VersionedPackageRef) (*types.PackageDependencies, error)
+}
+
+type SupportReporter interface {
+	Support(name types.BarePackageName) (types.PlatformSupport, error)
+}
+
+type PackageResolver interface {
+	SourceIdentifier
+	VersionSelectorResolver
+	Fetcher
+}
+
+type PackageSource interface {
+	PackageResolver
+	DependencyLister
+}
+
+type SearchSource interface {
+	SourceIdentifier
+	Searcher
+}
+
+type InfoSource interface {
+	SourceIdentifier
+	Informer
+}
+
+type ArtifactMapSource interface {
+	SourceIdentifier
+	ArtifactMapper
+}
+
+type PlatformInstaller interface {
+	SourceIdentifier
+	VersionSelectorResolver
+	InstallPlatform(id types.VersionedPackageRef, serverDir string) error
 }
 
 type FetchResult struct {
 	ResolvedID types.VersionedPackageRef
-	Remote     types.PackageRemote
+	Source     types.SourceId
+	FileURL    string
+	Filename   string
+	Hash       string
+
+	// HashAlgorithm names the upstream-provided digest algorithm, such as
+	// "sha1" or "sha512". Empty means Hash is unavailable.
+	HashAlgorithm string
 }
 
-// Raw interfaces are internal conversion contracts returned by providers before
-// being normalized into types.* structures.
+func NewFetchResult(remote types.PackageRemote) FetchResult {
+	return FetchResult{
+		Source:        remote.Source,
+		FileURL:       remote.FileUrl,
+		Filename:      remote.Filename,
+		Hash:          remote.Hash,
+		HashAlgorithm: remote.HashAlgorithm,
+	}
+}
 
-type (
-	RawProjectSupport interface {
-		ToProjectSupport() types.PlatformSupport
+func (r FetchResult) PackageRemote() types.PackageRemote {
+	return types.PackageRemote{
+		Source:        r.Source,
+		FileUrl:       r.FileURL,
+		Filename:      r.Filename,
+		Hash:          r.Hash,
+		HashAlgorithm: r.HashAlgorithm,
 	}
-	RawPackageRemote interface {
-		ToPackageRemote() types.PackageRemote
-	}
-	RawPackageDependencies interface {
-		ToPackageDependencies() types.PackageDependencies
-	}
-)
+}
 
 type RemotePackageName struct {
 	RemoteName string

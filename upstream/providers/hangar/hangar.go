@@ -28,23 +28,20 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return res.ToSearchResults(p.Id()), nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (
-	remote upstream.RawPackageRemote,
-	err error,
-) {
+func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
 	version, err := getVersion(id)
 	if err != nil {
-		return nil, err
+		return upstream.FetchResult{}, err
 	}
 
 	preferredPlatform := preferredDownloadPlatform(id.Platform)
-	if _, ok := version.ToPackageRemoteForPlatform(preferredPlatform); ok {
-		return version, nil
+	if remote, ok := version.ToPackageRemoteForPlatform(preferredPlatform); ok {
+		return upstream.NewFetchResult(remote), nil
 	}
 	if remote := version.ToPackageRemote(); remote.FileUrl != "" {
-		return version, nil
+		return upstream.NewFetchResult(remote), nil
 	}
-	return nil, ErrNoDownload
+	return upstream.FetchResult{}, ErrNoDownload
 }
 
 func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
@@ -57,22 +54,26 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	return info, nil
 }
 
-func (p provider) Support(name types.BarePackageName) (
-	supports upstream.RawProjectSupport,
-	err error,
-) {
-	return getProject(name)
+func (p provider) Support(name types.BarePackageName) (types.PlatformSupport, error) {
+	project, err := getProject(name)
+	if err != nil {
+		return types.PlatformSupport{}, err
+	}
+	return project.ToProjectSupport(), nil
 }
 
-func (p provider) Dependencies(id types.VersionedPackageRef) (
-	deps upstream.RawPackageDependencies,
-	err error,
-) {
+func (p provider) Dependencies(
+	id types.VersionedPackageRef,
+) (*types.PackageDependencies, error) {
 	version, err := getVersion(id)
 	if err != nil {
 		return nil, fmt.Errorf("hangar: dependencies fetch failed: %w", err)
 	}
-	return &hangarDependencies{version: version, platform: id.Platform}, nil
+	deps := (&hangarDependencies{
+		version:  version,
+		platform: id.Platform,
+	}).ToPackageDependencies()
+	return &deps, nil
 }
 
 func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (

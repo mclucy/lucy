@@ -31,7 +31,7 @@ type candidateGraphPlanner struct {
 // constraint merge engine after every newly discovered dependency batch.
 func BuildCandidateGraph(
 	roots []types.VersionedPackageRef,
-	providers []upstream.Provider,
+	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
 	options InstallOptions,
 ) (*RecursiveTransaction, error) {
@@ -49,7 +49,7 @@ func BuildCandidateGraph(
 // or routing calls in the planner core.
 func BuildCandidateGraphWithResolver(
 	roots []types.VersionedPackageRef,
-	providers []upstream.Provider,
+	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
 	options InstallOptions,
 	resolver candidateGraphResolver,
@@ -98,7 +98,7 @@ func BuildCandidateGraphWithResolver(
 
 func newCandidateGraphPlanner(
 	roots []types.VersionedPackageRef,
-	providers []upstream.Provider,
+	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
 ) (*candidateGraphPlanner, error) {
 	tx := NewRecursiveTransaction(roots, providers)

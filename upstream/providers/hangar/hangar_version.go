@@ -3,7 +3,6 @@ package hangar
 import (
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 )
 
 const hangarPreferredPlatform = "PAPER"
@@ -12,8 +11,6 @@ type hangarDependencies struct {
 	version  *hangarVersion
 	platform types.PlatformId
 }
-
-var _ upstream.RawPackageDependencies = (*hangarDependencies)(nil)
 
 func (h *hangarDependencies) ToPackageDependencies() types.PackageDependencies {
 	result := types.PackageDependencies{Authentic: true}

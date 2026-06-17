@@ -9,8 +9,8 @@ import (
 )
 
 type providerCandidateResolver struct {
-	providers       []upstream.Provider
-	rootProviders   map[string][]upstream.Provider
+	providers       []upstream.PackageSource
+	rootProviders   map[string][]upstream.PackageSource
 	rootProviderSet map[string]struct{}
 }
 
@@ -51,9 +51,10 @@ func (resolver providerCandidateResolver) ResolvePackage(
 		}
 
 		fetch := fetches[0]
+		remote := fetch.PackageRemote()
 		return types.Package{
 			Id:     fetch.ResolvedID,
-			Remote: &fetch.Remote,
+			Remote: &remote,
 		}, nil
 	}
 
@@ -66,7 +67,7 @@ func (resolver providerCandidateResolver) ResolvePackage(
 
 func (resolver providerCandidateResolver) providersForPackage(
 	id types.VersionedPackageRef,
-) []upstream.Provider {
+) []upstream.PackageSource {
 	key := id.StringBase()
 	if _, ok := resolver.rootProviderSet[key]; ok {
 		if providers := resolver.rootProviders[key]; len(providers) > 0 {
@@ -96,14 +97,14 @@ func (resolver providerCandidateResolver) ResolveDependencies(
 }
 
 func providersForSource(
-	providers []upstream.Provider,
+	providers []upstream.PackageSource,
 	remote *types.PackageRemote,
-) []upstream.Provider {
+) []upstream.PackageSource {
 	if remote == nil {
 		return providers
 	}
 
-	filtered := make([]upstream.Provider, 0, 1)
+	filtered := make([]upstream.PackageSource, 0, 1)
 	for _, provider := range providers {
 		if provider.Id() == remote.Source {
 			filtered = append(filtered, provider)

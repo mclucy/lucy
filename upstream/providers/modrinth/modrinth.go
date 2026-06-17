@@ -100,18 +100,15 @@ func (s provider) Id() types.SourceId {
 
 var Provider provider
 
-func (s provider) Fetch(id types.VersionedPackageRef) (
-	remote upstream.RawPackageRemote,
-	err error,
-) {
+func (s provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
 	version, err := getVersion(id)
 	if err != nil {
-		return nil, err
+		return upstream.FetchResult{}, err
 	}
 	if len(version.Files) == 0 || path.Ext(version.Files[0].Filename) != ".jar" {
-		return nil, ErrUnsupportedFileType
+		return upstream.FetchResult{}, ErrUnsupportedFileType
 	}
-	return version, nil
+	return upstream.NewFetchResult(version.ToPackageRemote()), nil
 }
 
 func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
@@ -126,15 +123,12 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 
 // Support from Modrinth API is extremely unreliable. A local check (if any
 // files were downloaded) is recommended.
-func (s provider) Support(name types.BarePackageName) (
-	supports upstream.RawProjectSupport,
-	err error,
-) {
+func (s provider) Support(name types.BarePackageName) (types.PlatformSupport, error) {
 	project, err := getProjectByName(name)
 	if err != nil {
-		return nil, err
+		return types.PlatformSupport{}, err
 	}
-	return project, nil
+	return project.ToProjectSupport(), nil
 }
 
 var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api")
@@ -143,15 +137,18 @@ var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api"
 // but Lucy does not support installing them yet.
 var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported")
 
-func (s provider) Dependencies(id types.VersionedPackageRef) (
-	deps upstream.RawPackageDependencies,
-	err error,
-) {
+func (s provider) Dependencies(
+	id types.VersionedPackageRef,
+) (*types.PackageDependencies, error) {
 	version, err := getVersion(id)
 	if err != nil {
 		return nil, fmt.Errorf("modrinth: dependencies fetch failed: %w", err)
 	}
-	return &modrinthDependencies{version: version, platform: id.Platform}, nil
+	deps := (&modrinthDependencies{
+		version:  version,
+		platform: id.Platform,
+	}).ToPackageDependencies()
+	return &deps, nil
 }
 
 func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
