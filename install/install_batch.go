@@ -7,6 +7,7 @@ import (
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
@@ -18,11 +19,6 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 
 	if len(requests) == 0 {
 		return &Result{}, nil
-	}
-
-	batchSource := types.SourceAuto
-	if len(requests) > 0 {
-		batchSource = requests[0].Source
 	}
 
 	ids := requestsToIds(requests)
@@ -71,7 +67,7 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 	serverInfo := probe.ServerInfo()
 	providers, err := routing.ResolveProvidersFromTopology(
 		serverInfo.Runtime.Topology,
-		batchSource,
+		types.SourceAuto,
 	)
 	if err != nil {
 		return nil, err
@@ -92,12 +88,23 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 	}
 
 	roots := append([]types.VersionedPackageRef(nil), regularIds...)
-	if serverLoader := serverInfo.Runtime.DerivedModLoader(); serverLoader != types.PlatformAny {
+	serverLoader := serverInfo.Runtime.DerivedModLoader()
+	if serverLoader != types.PlatformAny {
 		for i, id := range roots {
 			if id.Platform == types.PlatformAny {
 				roots[i].Platform = serverLoader
 			}
 		}
+	}
+	rootProviders, err := rootScopedProviders(
+		serverInfo.Runtime.Topology,
+		requests,
+		roots,
+		serverLoader,
+		providers,
+	)
+	if err != nil {
+		return nil, err
 	}
 	seedTx := NewRecursiveTransaction(roots, providers)
 	SnapshotInstalledConstraints(seedTx)
@@ -110,11 +117,16 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 
 	for iteration := range maxReconcileIterations {
 		showRecursiveResolveStart(resolvePlan.Roots)
-		tx, err = BuildCandidateGraph(
+		tx, err = BuildCandidateGraphWithResolver(
 			resolvePlan.Roots,
 			providers,
 			resolvePlan.InstalledConstraints,
 			options,
+			providerCandidateResolver{
+				providers:       providers,
+				rootProviders:   rootProviders,
+				rootProviderSet: keyedRoots(resolvePlan.Roots),
+			},
 		)
 		if err != nil {
 			showRecursiveConflict(err)
@@ -193,13 +205,70 @@ func requestsToIds(requests []PackageRequest) []types.VersionedPackageRef {
 	for i, req := range requests {
 		ids[i] = types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Platform: req.Ref.Platform,
-				Name:     req.Ref.Name,
+				Platform: req.Platform,
+				Name:     req.Name,
 			},
 			Version: req.Version,
 		}
 	}
 	return ids
+}
+
+func rootScopedProviders(
+	topology *types.RuntimeTopology,
+	requests []PackageRequest,
+	roots []types.VersionedPackageRef,
+	serverLoader types.PlatformId,
+	providers []upstream.Provider,
+) (map[string][]upstream.Provider, error) {
+	rootKeys := keyedRoots(roots)
+	rootProviders := make(map[string][]upstream.Provider, len(rootKeys))
+	rootScopes := make(map[string]types.SourceId, len(rootKeys))
+	for _, req := range requests {
+		id := types.VersionedPackageRef{
+			PackageRef: req.PackageRef,
+			Version:    req.Version,
+		}
+		if id.Version == types.VersionAny {
+			id.Version = types.VersionCompatible
+		}
+		if id.Platform == types.PlatformAny && serverLoader != types.PlatformAny {
+			id.Platform = serverLoader
+		}
+		for rootKey := range rootKeys {
+			if rootKey != id.StringBase() {
+				continue
+			}
+			if existing, ok := rootScopes[rootKey]; ok && existing != req.Scope {
+				return nil, fmt.Errorf(
+					"install: conflicting sources for %s: %s and %s",
+					rootKey,
+					existing,
+					req.Scope,
+				)
+			}
+			rootScopes[rootKey] = req.Scope
+			if req.Scope == types.SourceAuto {
+				rootProviders[rootKey] = providers
+				break
+			}
+			scoped, err := routing.ResolveProvidersFromTopology(topology, req.Scope)
+			if err != nil {
+				return nil, err
+			}
+			rootProviders[rootKey] = scoped
+			break
+		}
+	}
+	return rootProviders, nil
+}
+
+func keyedRoots(roots []types.VersionedPackageRef) map[string]struct{} {
+	keys := make(map[string]struct{}, len(roots))
+	for _, root := range roots {
+		keys[root.StringBase()] = struct{}{}
+	}
+	return keys
 }
 
 func prepareBatchIDs(ids []types.VersionedPackageRef) []types.VersionedPackageRef {

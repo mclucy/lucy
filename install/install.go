@@ -10,30 +10,16 @@ import (
 
 type platformInstaller func(p types.Package) error
 
-type Result struct {
-	Installed  []types.Package
-	Provenance map[string][]string
-}
-
-var installers = map[types.PlatformId]platformInstaller{}
-
-func registerInstaller(platform types.PlatformId, installer platformInstaller) {
-	if installer == nil {
-		panic("install: nil installer")
-	}
-	installers[platform] = installer
-}
-
 func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 	// TODO(package-ref-migration): remove PackageId/source extraction once identity installers accept PackageRequest.
 	id := types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: req.Ref.Platform,
-			Name:     req.Ref.Name,
+			Platform: req.Platform,
+			Name:     req.Name,
 		},
 		Version: req.Version,
 	}
-	source := req.Source
+	source := req.Scope
 	_ = source
 
 	// for regular (non-identity) packages, delegate to InstallMany to unify

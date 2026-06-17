@@ -123,7 +123,7 @@ func packageIDsToStrings(requests []install.PackageRequest) []string {
 	for _, req := range requests {
 		out = append(
 			out,
-			string(req.Ref.Platform)+"/"+string(req.Ref.Name)+"@"+req.Version.String(),
+			req.PackageRef.StringBase()+"@"+req.Version.String(),
 		)
 	}
 	return out

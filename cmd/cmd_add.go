@@ -39,6 +39,9 @@ var addCmd = &cobra.Command{
 		)
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateSourceFlag(cmd); err != nil {
+			return err
+		}
 		withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
 		noOptional, _ := cmd.Flags().GetBool(flagNoOptionalName)
 		if withOptional && noOptional {
@@ -66,6 +69,7 @@ func init() {
 		false,
 		"Skip optional upstream dependencies (default)",
 	)
+	addSourceFlag(addCmd)
 	addNoStyleFlag(addCmd)
 	rootCmd.AddCommand(addCmd)
 }
@@ -96,7 +100,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 
 	requests := make([]install.PackageRequest, 0, len(args))
 	for _, arg := range args {
-		req, err := install.ParsePackageRequest(arg, source, false)
+		req, err := packageRequestFromInput(arg, source)
 		if err != nil {
 			logger.Fatal(fmt.Errorf("stopping package addition: %w", err))
 		}
@@ -199,7 +203,7 @@ func buildUpdatedManifest(
 		manifest = state.UpsertManifestRequiredIntent(
 			manifest,
 			req,
-			types.SourceAuto.String(),
+			req.Scope.String(),
 		)
 	}
 	return manifest

@@ -9,7 +9,9 @@ import (
 )
 
 type providerCandidateResolver struct {
-	providers []upstream.Provider
+	providers       []upstream.Provider
+	rootProviders   map[string][]upstream.Provider
+	rootProviderSet map[string]struct{}
 }
 
 func (resolver providerCandidateResolver) ResolvePackage(
@@ -38,8 +40,9 @@ func (resolver providerCandidateResolver) ResolvePackage(
 
 	var lastErrors []routing.ProviderError
 	for _, attempt := range attempts {
+		providers := resolver.providersForPackage(attempt)
 		fetches, providerErrors := routing.FetchMany(
-			resolver.providers,
+			providers,
 			attempt,
 		)
 		if len(fetches) == 0 {
@@ -59,6 +62,18 @@ func (resolver providerCandidateResolver) ResolvePackage(
 		id.StringBase(),
 		formatProviderErrors(lastErrors),
 	)
+}
+
+func (resolver providerCandidateResolver) providersForPackage(
+	id types.VersionedPackageRef,
+) []upstream.Provider {
+	key := id.StringBase()
+	if _, ok := resolver.rootProviderSet[key]; ok {
+		if providers := resolver.rootProviders[key]; len(providers) > 0 {
+			return providers
+		}
+	}
+	return resolver.providers
 }
 
 func (resolver providerCandidateResolver) ResolveDependencies(
