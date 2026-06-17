@@ -11,7 +11,8 @@ package types
 import (
 	"strings"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/tui/style"
 )
 
 // PlatformId is an enum of several string constants.
@@ -141,7 +142,7 @@ func (p PlatformId) IsSelector() bool {
 // Title Replaces underlines or hyphens with spaces, then capitalize the first
 // letter.
 func (n BarePackageName) Title() string {
-	return tools.Capitalize(strings.ReplaceAll(string(n), "-", " "))
+	return style.Capitalize(strings.ReplaceAll(string(n), "-", " "))
 }
 
 func (n BarePackageName) String() string {
@@ -153,12 +154,12 @@ func (n BarePackageName) Pep8String() string {
 }
 
 func (p VersionedPackageRef) String() string {
-	return tools.Ternary(
+	return fn.Ternary(
 		p.Platform == PlatformAny,
 		"", string(p.Platform)+"/",
 	) +
 		string(p.Name) +
-		tools.Ternary(
+		fn.Ternary(
 			p.Version == VersionAny,
 			"",
 			"@"+string(p.Version),

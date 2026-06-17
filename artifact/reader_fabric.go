@@ -6,11 +6,11 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mclucy/lucy/dependency"
-	externaltype "github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/internal/fileschema"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 type fabricReader struct{}
@@ -44,7 +44,7 @@ func (r *fabricReader) Read(
 			return nil, err
 		}
 
-		modInfo := &externaltype.FileFabricModIdentifier{}
+		modInfo := &fileschema.FileFabricModIdentifier{}
 		if err := json.Unmarshal(data, modInfo); err != nil {
 			return nil, err
 		}
@@ -56,7 +56,7 @@ func (r *fabricReader) Read(
 }
 
 func translateFabricArtifact(
-	modInfo *externaltype.FileFabricModIdentifier,
+	modInfo *fileschema.FileFabricModIdentifier,
 	filePath string,
 ) ArtifactInfo {
 	embeddedNames := fabricArtifactEmbeddedModNames(modInfo)
@@ -130,7 +130,7 @@ func translateFabricArtifact(
 }
 
 func translateFabricArtifactDependencyMap(
-	deps map[string]tools.SingleOrSlice[string],
+	deps map[string]fn.SingleOrSlice[string],
 	mandatory bool,
 	inverse bool,
 	embeddedNames map[string]struct{},
@@ -157,17 +157,17 @@ func translateFabricArtifactDependencyMap(
 }
 
 func parseFabricArtifactVersionRanges(
-	ranges tools.SingleOrSlice[string],
+	ranges fn.SingleOrSlice[string],
 ) types.VersionExpr {
-	return dependency.ParseRanges(
+	return version.ParseRanges(
 		[]string(ranges),
-		dependency.InferRangeDialect(types.PlatformFabric),
+		version.InferRangeDialect(types.PlatformFabric),
 		types.Semver,
 	)
 }
 
 func fabricArtifactEmbeddedModNames(
-	modInfo *externaltype.FileFabricModIdentifier,
+	modInfo *fileschema.FileFabricModIdentifier,
 ) map[string]struct{} {
 	depNames := make([]string, 0, len(modInfo.Depends))
 	for id := range modInfo.Depends {
@@ -191,7 +191,7 @@ func fabricArtifactEmbeddedModNames(
 	return names
 }
 
-func fabricArtifactAuthors(authors []externaltype.FabricAuthor) []types.Person {
+func fabricArtifactAuthors(authors []fileschema.FabricAuthor) []types.Person {
 	translated := make([]types.Person, len(authors))
 	for i, author := range authors {
 		translated[i] = types.Person{Name: string(author)}

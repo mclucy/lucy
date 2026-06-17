@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/style"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,7 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if noStyle, _ := cmd.Flags().GetBool(flagNoStyleName); noStyle {
-			tools.TurnOffStyles()
+			style.TurnOffStyles()
 		}
 		if logFile, _ := cmd.Flags().GetBool(flagLogFileName); logFile {
 			fmt.Println("Log file at", logger.GetLogFile().Name())

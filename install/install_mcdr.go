@@ -7,9 +7,8 @@ import (
 	"os/exec"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/util"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func init() {
@@ -24,7 +23,7 @@ func installMcdrPlugin(p types.Package) error {
 		return errors.New("package remote data is missing")
 	}
 
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 	if serverInfo.Environments.Mcdr == nil {
 		return errors.New("mcdr not found")
 	}
@@ -38,12 +37,14 @@ func installMcdrPlugin(p types.Package) error {
 	}
 
 	showDownloadStart(p.Remote.FileUrl)
-	result, err := util.CachedDownload(p.Remote.FileUrl, pluginDirectories[0], util.DownloadOptions{
-		Kind:          cache.KindArtifact,
-		Filename:      p.Remote.Filename,
-		ExpectedHash:  p.Remote.Hash,
-		HashAlgorithm: cache.ParseHashAlgorithm(p.Remote.HashAlgorithm),
-	})
+	result, err := cache.CachedDownload(
+		p.Remote.FileUrl, pluginDirectories[0], cache.DownloadOptions{
+			Kind:          cache.KindArtifact,
+			Filename:      p.Remote.Filename,
+			ExpectedHash:  p.Remote.Hash,
+			HashAlgorithm: cache.ParseHashAlgorithm(p.Remote.HashAlgorithm),
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
@@ -93,7 +94,7 @@ func initMcdr() error {
 	}
 
 	// rebuild server info
-	probe.Rebuild()
+	workspace.Rebuild()
 
 	return nil
 }

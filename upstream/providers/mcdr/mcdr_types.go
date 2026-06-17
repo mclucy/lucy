@@ -3,7 +3,7 @@ package mcdr
 import (
 	"time"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -119,7 +119,7 @@ func (r rawProjectInformation) ToProjectInformation() types.Metadata {
 		DescriptionIsMarkdown: true,
 		Authors:               nil,
 		Urls:                  nil,
-		License: tools.Ternary(
+		License: fn.Ternary(
 			r.Repository.License != nil,
 			r.Repository.License.Name,
 			"n/a",

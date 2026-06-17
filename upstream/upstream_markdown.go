@@ -3,7 +3,7 @@ package upstream
 import (
 	"strings"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/style"
 )
 
 // LooksLikeMarkdown returns true when rendering the text as markdown produces a
@@ -14,7 +14,7 @@ func LooksLikeMarkdown(text string) bool {
 		return false
 	}
 
-	rendered := strings.TrimSpace(tools.MarkdownToAnsi(trimmed, 80))
+	rendered := strings.TrimSpace(style.MarkdownToAnsi(trimmed, 80))
 	if rendered == "" || rendered == trimmed {
 		return false
 	}

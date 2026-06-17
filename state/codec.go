@@ -84,4 +84,3 @@ func SerializeLock(l *Lock) ([]byte, error) {
 	}
 	return data, nil
 }
-

@@ -31,7 +31,7 @@ import (
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/style"
 )
 
 type entryID int
@@ -160,39 +160,39 @@ func (m *runtime) View() tea.View {
 		}
 
 		for _, logLine := range entry.logLines {
-			lines = append(lines, tools.Dim(logLine))
+			lines = append(lines, style.Dim(logLine))
 		}
 
 		var sb strings.Builder
 		titleCell := lipgloss.NewStyle().Width(titleWidth).Render(entry.title)
-		sb.WriteString(tools.Bold(tools.Magenta(titleCell)))
+		sb.WriteString(style.Bold(style.Magenta(titleCell)))
 		sb.WriteString(strings.Repeat(" ", 2))
 		sb.WriteString(entry.bar.ViewAs(entry.percent))
 
 		if entry.totalBytes > 0 {
 			sb.WriteString("  ")
 			sb.WriteString(
-				tools.Dim(
+				style.Dim(
 					fmt.Sprintf(
 						"%s / %s",
-						tools.FormatBytesBinary(entry.readBytes),
-						tools.FormatBytesBinary(entry.totalBytes),
+						style.FormatBytesBinary(entry.readBytes),
+						style.FormatBytesBinary(entry.totalBytes),
 					),
 				),
 			)
 		} else if entry.message != "" {
 			sb.WriteString("  ")
-			sb.WriteString(tools.Dim(entry.message))
+			sb.WriteString(style.Dim(entry.message))
 		} else {
 			sb.WriteString("  ")
-			sb.WriteString(tools.Dim(fmt.Sprintf("%.1f%%", entry.percent*100)))
+			sb.WriteString(style.Dim(fmt.Sprintf("%.1f%%", entry.percent*100)))
 		}
 
 		lines = append(lines, sb.String())
 	}
 	if m.finalMessage != "" {
 		lines = append(lines, "")
-		lines = append(lines, tools.Green("✓")+" "+tools.Dim(m.finalMessage))
+		lines = append(lines, style.Green("✓")+" "+style.Dim(m.finalMessage))
 	}
 	return tea.NewView(strings.Join(lines, "\n"))
 }
@@ -211,7 +211,7 @@ var globalRuntime = &runtime{
 }
 
 func (r *runtime) registerEntry(title string, logCapacity int) entryID {
-	if !tools.IsTerminal {
+	if !style.IsTerminal {
 		return 0
 	}
 

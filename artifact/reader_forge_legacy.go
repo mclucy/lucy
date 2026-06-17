@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -42,7 +42,7 @@ func (r *forgeLegacyReader) Read(
 		return nil, nil
 	}
 
-	var mods exttype.FileForgeModIdentifierOld
+	var mods fileschema.FileForgeModIdentifierOld
 	if err := json.Unmarshal(raw, &mods); err != nil {
 		return nil, err
 	}

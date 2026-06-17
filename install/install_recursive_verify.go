@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/slugmap"
+	"github.com/mclucy/lucy/internal/slugmap"
 	"github.com/mclucy/lucy/types"
 )
 

@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -57,7 +57,7 @@ func verifySlugBySha1(hintSlug, sha1hex string) bool {
 	if err != nil {
 		return false
 	}
-	defer tools.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, logger.Warn)
 
 	if resp.StatusCode != http.StatusOK {
 		return false
@@ -94,7 +94,7 @@ func SlugFromHash(sha1hex string) (slug string, err error) {
 	if err != nil {
 		return "", err
 	}
-	defer tools.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, logger.Warn)
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", ENoProject
@@ -154,7 +154,7 @@ func (s provider) NameByHash(artifact upstream.Hashable) (
 	if err != nil {
 		return
 	}
-	defer tools.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, logger.Warn)
 
 	if resp.StatusCode == http.StatusNotFound {
 		return name, hash, ENoProject

@@ -9,8 +9,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -45,7 +45,10 @@ func SlugFromFilePath(filePath string) (slug string, err error) {
 
 // SlugFromFilePathWithHint is like SlugFromFilePath but accepts an optional
 // urlHint slug. URL hint is never trusted on its own — fingerprint always wins.
-func SlugFromFilePathWithHint(filePath, urlHint string) (slug string, err error) {
+func SlugFromFilePathWithHint(filePath, urlHint string) (
+	slug string,
+	err error,
+) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("curseforge hash: %w", err)
@@ -80,7 +83,11 @@ func (p provider) NameByHash(artifact upstream.Hashable) (
 
 func slugFromFingerprint(fp uint32) (string, error) {
 	body, _ := json.Marshal(fingerprintRequest{Fingerprints: []uint32{fp}})
-	req, err := http.NewRequest(http.MethodPost, baseUrl+"/v1/fingerprints/432", bytes.NewReader(body))
+	req, err := http.NewRequest(
+		http.MethodPost,
+		baseUrl+"/v1/fingerprints/432",
+		bytes.NewReader(body),
+	)
 	if err != nil {
 		return "", err
 	}
@@ -93,10 +100,13 @@ func slugFromFingerprint(fp uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer tools.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, logger.Warn)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("curseforge: fingerprint lookup returned status %d", resp.StatusCode)
+		return "", fmt.Errorf(
+			"curseforge: fingerprint lookup returned status %d",
+			resp.StatusCode,
+		)
 	}
 
 	raw, err := io.ReadAll(resp.Body)

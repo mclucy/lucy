@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/style"
 
 	"github.com/spf13/cobra"
 )
@@ -17,7 +17,11 @@ var leavesCmd = &cobra.Command{
 }
 
 func init() {
-	leavesCmd.Flags().Bool("live", false, "Probe live server instead of reading lock")
+	leavesCmd.Flags().Bool(
+		"live",
+		false,
+		"Probe live server instead of reading lock",
+	)
 	addJsonFlag(leavesCmd)
 	addNoStyleFlag(leavesCmd)
 	rootCmd.AddCommand(leavesCmd)
@@ -77,19 +81,21 @@ func outputLeavesJSON(graph *DependencyGraph, source DataSource) error {
 	leaves := graph.GetLeaves()
 	jsonLeaves := make([]leafNode, 0, len(leaves))
 	for _, leaf := range leaves {
-		jsonLeaves = append(jsonLeaves, leafNode{
-			ID:       leaf.ID,
-			Version:  leaf.Version,
-			Source:   leaf.Source,
-			Optional: leaf.Optional,
-			Embedded: leaf.Embedded,
-		})
+		jsonLeaves = append(
+			jsonLeaves, leafNode{
+				ID:       leaf.ID,
+				Version:  leaf.Version,
+				Source:   leaf.Source,
+				Optional: leaf.Optional,
+				Embedded: leaf.Embedded,
+			},
+		)
 	}
 
 	output := map[string]interface{}{
 		"source": source.String(),
 		"leaves": jsonLeaves,
 	}
-	tools.PrintAsJson(output)
+	style.PrintAsJson(output)
 	return nil
 }

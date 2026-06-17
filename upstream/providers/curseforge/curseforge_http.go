@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/mclucy/lucy/internal/cipher"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 )
 
 // Docs: https://docs.curseforge.com/rest-api/
@@ -24,13 +24,15 @@ var (
 // get performs an authenticated GET request to the CurseForge API and
 // unmarshals the JSON response into dest.
 func get(url string, dest any) error {
-	apiKeyMut.Do(func() {
-		key, err := cipher.Decode()
-		if err != nil {
-			panic(err)
-		}
-		ApiKey = strings.TrimSpace(key)
-	})
+	apiKeyMut.Do(
+		func() {
+			key, err := cipher.Decode()
+			if err != nil {
+				panic(err)
+			}
+			ApiKey = strings.TrimSpace(key)
+		},
+	)
 
 	if ApiKey == "" {
 		return ErrNoApiKey
@@ -49,7 +51,7 @@ func get(url string, dest any) error {
 	if err != nil {
 		return fmt.Errorf("curseforge: request failed: %w", err)
 	}
-	defer tools.CloseReader(res.Body, logger.Warn)
+	defer fn.CloseReader(res.Body, logger.Warn)
 
 	if res.StatusCode != http.StatusOK {
 		return ErrApiResponse(res.StatusCode)

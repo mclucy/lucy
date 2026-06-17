@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 )
 
 // SnapshotInstalledConstraints reads installed packages from the probe snapshot
@@ -13,7 +13,7 @@ import (
 // Each installed package is treated as an immutable anchor during recursive
 // solving; it will never be auto-replaced by the solver.
 func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
-	si := probe.ServerInfo()
+	si := workspace.ServerInfo()
 	constraints := make([]InstalledConstraint, 0, len(si.Packages)+3)
 	seen := make(map[string]struct{}, len(si.Packages)+3)
 	appendConstraint := func(pkg types.Package, requester string) {

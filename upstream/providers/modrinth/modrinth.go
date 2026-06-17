@@ -19,8 +19,8 @@ import (
 	"net/http"
 	"path"
 
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/tools"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -63,7 +63,7 @@ func (s provider) Search(q upstream.Query) (
 	if err != nil {
 		return resp, fmt.Errorf("modrinth: search request failed: %w", err)
 	}
-	defer tools.CloseReader(httpRes.Body, logger.Warn)
+	defer fn.CloseReader(httpRes.Body, logger.Warn)
 	if httpRes.StatusCode != http.StatusOK {
 		return resp, fmt.Errorf("%w: %s", ErrInvalidAPIResponse, httpRes.Status)
 	}
@@ -100,7 +100,10 @@ func (s provider) Id() types.SourceId {
 
 var Provider provider
 
-func (s provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+func (s provider) Fetch(id types.VersionedPackageRef) (
+	upstream.FetchResult,
+	error,
+) {
 	version, err := getVersion(id)
 	if err != nil {
 		return upstream.FetchResult{}, err
@@ -123,7 +126,10 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 
 // Support from Modrinth API is extremely unreliable. A local check (if any
 // files were downloaded) is recommended.
-func (s provider) Support(name types.BarePackageName) (types.PlatformSupport, error) {
+func (s provider) Support(name types.BarePackageName) (
+	types.PlatformSupport,
+	error,
+) {
 	project, err := getProjectByName(name)
 	if err != nil {
 		return types.PlatformSupport{}, err

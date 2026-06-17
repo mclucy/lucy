@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func recursiveInstallDestination(
-	serverInfo probe.Workspace,
+	serverInfo workspace.Workspace,
 	pkg types.Package,
 ) string {
 	if pkg.Id.Platform.IsModding() && len(serverInfo.ModPath) > 0 {
@@ -93,7 +93,7 @@ func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
 // recursive transaction has been committed.
 func ApplyValidatedClosure(
 	tx *RecursiveTransaction,
-	serverInfo probe.Workspace,
+	serverInfo workspace.Workspace,
 ) error {
 	if tx == nil {
 		return errors.New("install: recursive transaction is nil")
@@ -178,6 +178,6 @@ func ApplyValidatedClosure(
 		return errors.Join(applyErrors...)
 	}
 
-	probe.InvalidateServerInfo()
+	workspace.InvalidateServerInfo()
 	return nil
 }

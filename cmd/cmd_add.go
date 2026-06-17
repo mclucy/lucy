@@ -11,9 +11,9 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/logger"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -224,7 +224,7 @@ func buildUpdatedLock(
 		lock = state.NewLock()
 	}
 
-	runtime := probe.ServerInfo().Runtime
+	runtime := workspace.ServerInfo().Runtime
 	lock.GeneratedAt = state.NewLock().GeneratedAt
 	lock.ManifestFingerprint = manifestFingerprint(
 		manifest,
@@ -278,7 +278,7 @@ func manifestFingerprint(manifest *state.Manifest, fallback string) string {
 
 func manifestGameVersion(
 	manifest *state.Manifest,
-	runtime *probe.ServerRuntime,
+	runtime *workspace.ServerRuntime,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.GameVersion != "" {
@@ -297,7 +297,7 @@ func manifestGameVersion(
 
 func manifestPlatform(
 	manifest *state.Manifest,
-	runtime *probe.ServerRuntime,
+	runtime *workspace.ServerRuntime,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.ModdingPlatform != "" {
@@ -316,7 +316,7 @@ func manifestPlatform(
 
 func manifestPlatformVersion(
 	manifest *state.Manifest,
-	runtime *probe.ServerRuntime,
+	runtime *workspace.ServerRuntime,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.ModdingPlatformVersion != "" {

@@ -3,7 +3,8 @@ package progress
 import (
 	"math"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/tui/style"
 )
 
 func clamp01(v float64) float64 {
@@ -13,9 +14,9 @@ func clamp01(v float64) float64 {
 func getTrackerWidth(termWidth int) (w int) {
 	if termWidth <= 0 {
 		// unset or invalid width
-		termWidth = tools.TermWidth()
+		termWidth = style.TermWidth()
 	}
-	w = tools.Ternary(termWidth >= 125, 100, termWidth-50)
-	w = tools.Ternary(w < 10, 10, w)
+	w = fn.Ternary(termWidth >= 125, 100, termWidth-50)
+	w = fn.Ternary(w < 10, 10, w)
 	return w
 }

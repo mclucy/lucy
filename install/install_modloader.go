@@ -6,9 +6,8 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/util"
+	"github.com/mclucy/lucy/workspace"
 )
 
 // installModLoaderPackage is a unified function to handle the installation of mods
@@ -20,7 +19,7 @@ func installModLoaderPackage(p types.Package, platform types.PlatformId) error {
 	if p.Remote == nil {
 		return errors.New("package remote data is missing")
 	}
-	serverInfo := probe.ServerInfo()
+	serverInfo := workspace.ServerInfo()
 	if len(serverInfo.ModPath) == 0 {
 		return errors.New("mod directory not found")
 	}
@@ -30,10 +29,10 @@ func installModLoaderPackage(p types.Package, platform types.PlatformId) error {
 	}
 
 	showDownloadStart(p.Remote.FileUrl)
-	result, err := util.CachedDownload(
+	result, err := cache.CachedDownload(
 		p.Remote.FileUrl,
 		serverInfo.ModPath[0],
-		util.DownloadOptions{
+		cache.DownloadOptions{
 			Kind:          cache.KindArtifact,
 			Filename:      p.Remote.Filename,
 			ExpectedHash:  p.Remote.Hash,

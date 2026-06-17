@@ -6,7 +6,6 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/util"
 )
 
 func init() {
@@ -19,12 +18,14 @@ func installGenericPackage(p types.Package) error {
 	}
 
 	showDownloadStart(p.Remote.FileUrl)
-	result, err := util.CachedDownload(p.Remote.FileUrl, ".", util.DownloadOptions{
-		Kind:          cache.KindArtifact,
-		Filename:      p.Remote.Filename,
-		ExpectedHash:  p.Remote.Hash,
-		HashAlgorithm: cache.ParseHashAlgorithm(p.Remote.HashAlgorithm),
-	})
+	result, err := cache.CachedDownload(
+		p.Remote.FileUrl, ".", cache.DownloadOptions{
+			Kind:          cache.KindArtifact,
+			Filename:      p.Remote.Filename,
+			ExpectedHash:  p.Remote.Hash,
+			HashAlgorithm: cache.ParseHashAlgorithm(p.Remote.HashAlgorithm),
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}

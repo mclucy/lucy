@@ -7,10 +7,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mclucy/lucy/dependency"
-	"github.com/mclucy/lucy/exttype"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 
 	"github.com/pelletier/go-toml"
 )
@@ -38,7 +38,7 @@ func (r *neoforgeReader) Read(
 		return nil, nil
 	}
 
-	var modIdentifier exttype.FileModLoaderIdentifier
+	var modIdentifier fileschema.FileModLoaderIdentifier
 	if err := toml.Unmarshal(raw, &modIdentifier); err != nil {
 		return nil, err
 	}
@@ -158,13 +158,13 @@ func readNeoforgeManifestVersion(zipRdr *zip.Reader) types.BareVersion {
 	return types.BareVersion(version)
 }
 
-func readNeoforgeJarjarMeta(zipRdr *zip.Reader) *exttype.FileNeoforgeJarjar {
+func readNeoforgeJarjarMeta(zipRdr *zip.Reader) *fileschema.FileNeoforgeJarjar {
 	raw, err := readZipEntry(zipRdr, "META-INF/jarjar/metadata.json")
 	if err != nil || raw == nil {
 		return nil
 	}
 
-	var meta exttype.FileNeoforgeJarjar
+	var meta fileschema.FileNeoforgeJarjar
 	if err := json.Unmarshal(raw, &meta); err != nil {
 		return nil
 	}
@@ -173,7 +173,7 @@ func readNeoforgeJarjarMeta(zipRdr *zip.Reader) *exttype.FileNeoforgeJarjar {
 
 func neoforgeJarjarEmbeddedModIds(
 	zipRdr *zip.Reader,
-	meta *exttype.FileNeoforgeJarjar,
+	meta *fileschema.FileNeoforgeJarjar,
 ) map[string]bool {
 	if meta == nil {
 		return nil
@@ -214,7 +214,7 @@ func neoforgeJarjarEmbeddedModIds(
 			continue
 		}
 
-		var inner exttype.FileModLoaderIdentifier
+		var inner fileschema.FileModLoaderIdentifier
 		if err := toml.Unmarshal(raw, &inner); err != nil {
 			continue
 		}
@@ -228,7 +228,7 @@ func neoforgeJarjarEmbeddedModIds(
 	return modIds
 }
 
-func neoforgeJarjarEmbeddedDeps(meta *exttype.FileNeoforgeJarjar) []ArtifactDep {
+func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []ArtifactDep {
 	if meta == nil {
 		return nil
 	}
@@ -251,9 +251,9 @@ func neoforgeJarjarEmbeddedDeps(meta *exttype.FileNeoforgeJarjar) []ArtifactDep 
 }
 
 func parseNeoforgeMavenVersionRange(interval string) types.VersionExpr {
-	return dependency.ParseRange(
+	return version.ParseRange(
 		interval,
-		dependency.InferRangeDialect(types.PlatformForge),
+		version.InferRangeDialect(types.PlatformForge),
 		types.Maven,
 	)
 }

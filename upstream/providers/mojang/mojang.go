@@ -12,11 +12,10 @@ import (
 
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/util"
+	"github.com/mclucy/lucy/workspace"
 )
 
 const (
@@ -42,18 +41,18 @@ type versionDetail struct {
 }
 
 func FetchVersionManifest() (
-	*exttype.ApiMojangMinecraftVersionManifest,
+	*fileschema.ApiMojangMinecraftVersionManifest,
 	error,
 ) {
-	data, err := util.CachedGetBytes(
+	data, err := cache.CachedGetBytes(
 		VersionManifestURL,
-		util.BytesRequestOptions{Kind: cache.KindMetadata},
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("fetch mojang version manifest failed: %w", err)
 	}
 
-	manifest := &exttype.ApiMojangMinecraftVersionManifest{}
+	manifest := &fileschema.ApiMojangMinecraftVersionManifest{}
 	if err := json.Unmarshal(data, manifest); err != nil {
 		return nil, fmt.Errorf("parse mojang version manifest failed: %w", err)
 	}
@@ -66,7 +65,7 @@ func FetchVersionManifest() (
 }
 
 func ResolveVersionEntry(
-	manifest *exttype.ApiMojangMinecraftVersionManifest,
+	manifest *fileschema.ApiMojangMinecraftVersionManifest,
 	targetVersion types.BareVersion,
 ) (string, string, error) {
 	selected := targetVersion.String()
@@ -117,7 +116,7 @@ func (p provider) InstallPlatform(
 	id types.VersionedPackageRef,
 	serverDir string,
 ) error {
-	if probe.ServerInfo().Runtime.DerivedModLoader() != types.PlatformNone {
+	if workspace.ServerInfo().Runtime.DerivedModLoader() != types.PlatformNone {
 		return errors.New("a server is already installed")
 	}
 
@@ -145,7 +144,7 @@ func (p provider) InstallPlatform(
 
 	workPath := serverDir
 	if workPath == "" {
-		workPath = probe.ServerInfo().Root
+		workPath = workspace.ServerInfo().Root
 	}
 	if workPath == "" {
 		workPath = "."
@@ -169,14 +168,14 @@ func (p provider) InstallPlatform(
 		return err
 	}
 
-	probe.Rebuild()
+	workspace.Rebuild()
 	return nil
 }
 
 func fetchVersionDetail(versionURL string) (*versionDetail, error) {
-	data, err := util.CachedGetBytes(
+	data, err := cache.CachedGetBytes(
 		versionURL,
-		util.BytesRequestOptions{
+		cache.BytesRequestOptions{
 			Kind: cache.KindMetadata,
 			TTL:  7 * 24 * time.Hour,
 		},
@@ -212,8 +211,8 @@ func downloadServerJar(
 	}()
 	defer tracker.Close()
 
-	result, err := util.CachedDownload(
-		url, dir, util.DownloadOptions{
+	result, err := cache.CachedDownload(
+		url, dir, cache.DownloadOptions{
 			Kind:          cache.KindArtifact,
 			ExpectedHash:  expectedSha1,
 			HashAlgorithm: cache.HashSHA1,

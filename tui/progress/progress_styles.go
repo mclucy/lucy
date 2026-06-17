@@ -3,13 +3,13 @@ package progress
 import (
 	"charm.land/bubbles/v2/progress"
 	"charm.land/lipgloss/v2"
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/style"
 )
 
 var globalOptions []progress.Option
 
 func init() {
-	if !tools.IsTerminal {
+	if !style.IsTerminal {
 		return
 	}
 	globalOptions = append(globalOptions, progress.WithFillCharacters('█', '░'))
@@ -18,12 +18,12 @@ func init() {
 // colorOptions returns color options lazily, ensuring OSC4 probing
 // has been completed first. This is called at first use, not at init time.
 func colorOptions() []progress.Option {
-	tools.EnsureTermColors()
-	if tools.ValidUserColors {
+	style.EnsureTermColors()
+	if style.ValidUserColors {
 		return []progress.Option{
 			progress.WithColors(
-				tools.UserColors[lipgloss.Magenta],
-				tools.UserColors[lipgloss.BrightMagenta],
+				style.UserColors[lipgloss.Magenta],
+				style.UserColors[lipgloss.BrightMagenta],
 			),
 		}
 	}
@@ -33,13 +33,13 @@ func colorOptions() []progress.Option {
 // successColorOptions returns color options for success state,
 // lazily ensuring OSC4 probing has been completed first.
 func successColorOptions() []progress.Option {
-	tools.EnsureTermColors()
-	if tools.ValidUserColors {
+	style.EnsureTermColors()
+	if style.ValidUserColors {
 		return []progress.Option{
 			progress.WithColors(
-				tools.UserColors[lipgloss.Magenta],
-				tools.UserColors[lipgloss.Blue],
-				tools.UserColors[lipgloss.BrightBlue],
+				style.UserColors[lipgloss.Magenta],
+				style.UserColors[lipgloss.Blue],
+				style.UserColors[lipgloss.BrightBlue],
 			),
 		}
 	}

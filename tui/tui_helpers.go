@@ -4,8 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/tui/style"
 )
 
 // keyColumnWidth takes the longest key label in the current context and adds
@@ -19,7 +18,7 @@ const keyColPadding = 2
 
 // renderKey renders a styled key label with fixed-width padding for alignment.
 func renderKey(title string) string {
-	styled := tools.Bold(tools.Magenta(title))
+	styled := style.Bold(style.Magenta(title))
 	visualWidth := lipgloss.Width(styled)
 	padding := keyColumnWidth - visualWidth
 	if padding < 2 {
@@ -30,12 +29,12 @@ func renderKey(title string) string {
 
 // renderDim renders text with a dimmed/faint style.
 func renderDim(text string) string {
-	return tools.Dim(text)
+	return style.Dim(text)
 }
 
 // renderAnnot renders an inline annotation (dimmed, with leading spacing).
 func renderAnnot(annotation string) string {
-	return "  " + tools.Dim(annotation)
+	return "  " + style.Dim(annotation)
 }
 
 // renderTab returns whitespace matching the key column width, used for
@@ -49,8 +48,8 @@ func renderTab() string {
 // A zero-length separator is allowed and will not render anything. However,
 // lengths longer than the terminal width will be truncated to fit.
 func renderSeparator(length int, dim bool) string {
-	if length > tools.TermWidth() {
-		length = tools.TermWidth()
+	if length > style.TermWidth() {
+		length = style.TermWidth()
 	}
 	sep := strings.Repeat("-", length)
 	if dim {

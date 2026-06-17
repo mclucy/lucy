@@ -11,10 +11,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mclucy/lucy/exttype"
-	"github.com/mclucy/lucy/probe"
+	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 	"github.com/pelletier/go-toml"
 	"gopkg.in/yaml.v3"
 )
@@ -61,14 +61,14 @@ func (h ExistingLucyHints) HasAny() bool {
 //   - discovery-led is about behavior: observed facts become the primary input
 //     to the proposal, and stale state files are demoted to advisory hints
 //
-// probe.ServerInfoAt(workDir) now provides the primary observed-state layer so
+// workspace.ServerInfoAt(workDir) now provides the primary observed-state layer so
 // takeover candidates come from the richer probe/runtime model first. Local
 // file/archive heuristics remain fallback-only for gaps the probe could not
 // explain. Existing state is recorded separately and only fills gaps when
 // no live observation is available.
 func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 	defaults := DiscoveredDefaults{Confidence: ConfidenceNone}
-	applyObservedDefaults(&defaults, workDir, probe.ServerInfoAt(workDir))
+	applyObservedDefaults(&defaults, workDir, workspace.ServerInfoAt(workDir))
 
 	if version := discoverGameVersion(workDir); version != "" {
 		if defaults.GameVersion == "" {
@@ -140,7 +140,7 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 func applyObservedDefaults(
 	defaults *DiscoveredDefaults,
 	workDir string,
-	observed probe.Workspace,
+	observed workspace.Workspace,
 ) {
 	if defaults == nil {
 		return
@@ -470,7 +470,7 @@ func detectArchivePackages(path string) []string {
 		&reader.Reader,
 		"fabric.mod.json",
 	); ok {
-		var mod exttype.FileFabricModIdentifier
+		var mod fileschema.FileFabricModIdentifier
 		if json.Unmarshal(
 			fabricMeta,
 			&mod,
@@ -491,7 +491,7 @@ func detectArchivePackages(path string) []string {
 		&reader.Reader,
 		"META-INF/neoforge.mods.toml",
 	); ok {
-		var mod exttype.FileModLoaderIdentifier
+		var mod fileschema.FileModLoaderIdentifier
 		if toml.Unmarshal(neoMeta, &mod) == nil {
 			for _, item := range mod.Mods {
 				if strings.TrimSpace(item.ModID) == "" {
@@ -514,7 +514,7 @@ func detectArchivePackages(path string) []string {
 		&reader.Reader,
 		"META-INF/mods.toml",
 	); ok {
-		var mod exttype.FileModLoaderIdentifier
+		var mod fileschema.FileModLoaderIdentifier
 		if toml.Unmarshal(forgeMeta, &mod) == nil {
 			for _, item := range mod.Mods {
 				if strings.TrimSpace(item.ModID) == "" {
@@ -534,7 +534,7 @@ func detectArchivePackages(path string) []string {
 	}
 
 	if oldForgeMeta, ok := readArchiveFile(&reader.Reader, "mcmod.info"); ok {
-		var mods exttype.FileForgeModIdentifierOld
+		var mods fileschema.FileForgeModIdentifierOld
 		if json.Unmarshal(oldForgeMeta, &mods) == nil {
 			for _, item := range mods {
 				if strings.TrimSpace(item.ModId) == "" {
@@ -557,7 +557,7 @@ func detectArchivePackages(path string) []string {
 		&reader.Reader,
 		"mcdreforged.plugin.json",
 	); ok {
-		var plugin exttype.FileMcdrPluginIdentifier
+		var plugin fileschema.FileMcdrPluginIdentifier
 		if json.Unmarshal(
 			mcdrMeta,
 			&plugin,

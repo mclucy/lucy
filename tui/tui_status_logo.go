@@ -4,7 +4,8 @@ import (
 	_ "embed"
 	"strings"
 
-	"github.com/mclucy/lucy/tools"
+	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -37,10 +38,10 @@ type FieldLogo struct {
 // Render returns the large logo as a plain string. This is a fallback for
 // callers that are not layout-aware and simply iterate over Fields.
 func (f *FieldLogo) Render() string {
-	variant := tools.Ternary(
+	variant := fn.Ternary(
 		useLargeLogo(),
-		tools.Ternary(f.NoColor, LogoLargePlain, LogoLargeColored),
-		tools.Ternary(f.NoColor, LogoSmallPlain, LogoSmallColored),
+		fn.Ternary(f.NoColor, LogoLargePlain, LogoLargeColored),
+		fn.Ternary(f.NoColor, LogoSmallPlain, LogoSmallColored),
 	)
 	logo := GetLogo(f.Platform, variant)
 	return strings.Join(normalizeLines(logo), "\n")
@@ -74,7 +75,7 @@ func (f *FieldLogo) Height(variant LogoVariant) int {
 }
 
 func useLargeLogo() bool {
-	termWidth := tools.TermWidth()
+	termWidth := style.TermWidth()
 	return termWidth >= logoLargeMaxWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth
 }
 

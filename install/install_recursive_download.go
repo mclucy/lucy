@@ -12,7 +12,6 @@ import (
 	"github.com/mclucy/lucy/cache"
 	tuiprogress "github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/util"
 )
 
 func recursiveCandidatePackages(tx *RecursiveTransaction) []types.Package {
@@ -125,10 +124,10 @@ func downloadBatchPackages(
 				return
 			}
 
-			result, err := util.CachedDownload(
+			result, err := cache.CachedDownload(
 				pkg.Remote.FileUrl,
 				stagingDir,
-				util.DownloadOptions{
+				cache.DownloadOptions{
 					Kind:          cache.KindArtifact,
 					Filename:      pkg.Remote.Filename,
 					ExpectedHash:  pkg.Remote.Hash,

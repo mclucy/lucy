@@ -17,11 +17,10 @@ import (
 	"strconv"
 	"strings"
 
-	lipgloss "charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/mclucy/lucy/tui/style"
 	"github.com/muesli/reflow/wrap"
 	"golang.org/x/term"
-
-	"github.com/mclucy/lucy/tools"
 )
 
 // Data is a collection of Field values to be rendered together.
@@ -56,10 +55,10 @@ func (f *FieldSeparator) KeyLength() int {
 
 func (f *FieldSeparator) Render() string {
 	if f.Proportional {
-		f.Length = f.Length * tools.TermWidth() / 100
+		f.Length = f.Length * style.TermWidth() / 100
 	}
 	if f.Length == 0 {
-		f.Length = tools.TermWidth() * 8 / 10
+		f.Length = style.TermWidth() * 8 / 10
 	}
 	return renderSeparator(f.Length, f.Dim)
 }
@@ -100,7 +99,7 @@ func (f *FieldMarkdown) KeyLength() int {
 
 func (f *FieldMarkdown) Render() string {
 	long := FieldLongText(*f)
-	long.Text = tools.MarkdownToAnsi(f.Text, f.MaxColumns)
+	long.Text = style.MarkdownToAnsi(f.Text, f.MaxColumns)
 	long.LineWrap = false
 	return long.Render() + "\n"
 }
@@ -245,7 +244,7 @@ func (f *FieldLabels) Render() string {
 
 	maxW := f.MaxWidth
 	if maxW == 0 {
-		maxW = max(33*tools.TermWidth()/100, 40)
+		maxW = max(33*style.TermWidth()/100, 40)
 	}
 
 	width := 0
@@ -313,7 +312,7 @@ func (f *FieldDynamicColumnLabels) Render() string {
 	}
 
 	colWidth := longestLabel + 2
-	columnNumber := (tools.TermWidth() - keyColumnWidth) / colWidth
+	columnNumber := (style.TermWidth() - keyColumnWidth) / colWidth
 	if columnNumber <= 0 {
 		columnNumber = 1
 	}
@@ -486,11 +485,11 @@ func (f *FieldCheckBox) KeyLength() int {
 func (f *FieldCheckBox) Render() string {
 	trueText := f.TrueText
 	if trueText == "" {
-		trueText = tools.Green("\u2713") // ✓
+		trueText = style.Green("\u2713") // ✓
 	}
 	falseText := f.FalseText
 	if falseText == "" {
-		falseText = tools.Red("\u2717") // ✗
+		falseText = style.Red("\u2717") // ✗
 	}
 
 	var sb strings.Builder
@@ -581,7 +580,7 @@ func Flush(data *Data) {
 
 	isTTY := term.IsTerminal(1)
 	params := NegotiateStatusLayout(
-		tools.TermWidth(),
+		style.TermWidth(),
 		logoField.Width(LogoLargePlain),
 		logoField.Width(LogoSmallPlain),
 		isTTY,
