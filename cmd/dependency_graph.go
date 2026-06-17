@@ -95,7 +95,7 @@ func BuildGraphFromProbe(info probe.Workspace) (*DependencyGraph, error) {
 	}
 
 	for _, p := range info.Packages {
-		id := string(p.Id.Platform) + "/" + string(p.Id.Name)
+		id := p.Id.StringBase()
 		node := &GraphNode{
 			ID:      id,
 			Version: string(p.Id.Version),
@@ -106,14 +106,14 @@ func BuildGraphFromProbe(info probe.Workspace) (*DependencyGraph, error) {
 	isDependency := make(map[string]bool)
 
 	for _, p := range info.Packages {
-		parentID := string(p.Id.Platform) + "/" + string(p.Id.Name)
+		parentID := p.Id.StringBase()
 
 		if p.Dependencies == nil {
 			continue
 		}
 
 		for _, dep := range p.Dependencies.Value {
-			depID := string(dep.Id.Platform) + "/" + string(dep.Id.Name)
+			depID := dep.Id.StringBase()
 			isDependency[depID] = true
 
 			parent, parentOK := graph.Nodes[parentID]
