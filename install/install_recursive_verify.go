@@ -16,8 +16,10 @@ func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
 	}
 
 	allPackages := make([]types.Package, 0, len(tx.DownloadedArtifacts))
+	expectedPlatforms := downloadedArtifactPlatforms(tx)
 	for _, path := range tx.DownloadedArtifacts {
 		infos, err := artifact.Analyze(path)
+		infos = selectArtifactInfosForPlatform(infos, expectedPlatforms[path])
 		if err != nil || len(infos) == 0 {
 			return fmt.Errorf(
 				"install: artifact verification failed for %s: unreadable or corrupt",
@@ -44,6 +46,42 @@ func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
 	tx.VerifiedGraph = verified
 	tx.AdvanceTo(PhaseVerified)
 	return nil
+}
+
+func downloadedArtifactPlatforms(tx *RecursiveTransaction) map[string]types.PlatformId {
+	platforms := make(map[string]types.PlatformId, len(tx.DownloadedArtifacts))
+	for _, node := range tx.CandidateGraph {
+		if node.Package.Local == nil || node.Package.Local.Path == "" {
+			continue
+		}
+		platforms[node.Package.Local.Path] = node.Package.Id.Platform
+	}
+	return platforms
+}
+
+func selectArtifactInfosForPlatform(
+	infos []artifact.ArtifactInfo,
+	platform types.PlatformId,
+) []artifact.ArtifactInfo {
+	// Cross-loader Forge/NeoForge jars can advertise both loader dependencies in
+	// one descriptor; install verification keeps the identity matching the resolved
+	// candidate so a single downloaded file is applied once.
+	// Forge docs: https://docs.minecraftforge.net/en/1.21.x/gettingstarted/modfiles/
+	// NeoForge docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
+	if len(infos) == 0 || !platform.IsModding() {
+		return infos
+	}
+
+	selected := make([]artifact.ArtifactInfo, 0, len(infos))
+	for _, info := range infos {
+		if info.Ref.Platform == platform {
+			selected = append(selected, info)
+		}
+	}
+	if len(selected) == 0 {
+		return infos
+	}
+	return selected
 }
 
 func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {

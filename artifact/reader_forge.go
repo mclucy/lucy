@@ -57,6 +57,13 @@ func readForgeModsToml(
 	if err := toml.Unmarshal(data, &modIdentifier); err != nil {
 		return nil, err
 	}
+	// Forge and legacy NeoForge share META-INF/mods.toml. Forge docs identify the
+	// loader with modId="forge"; legacy NeoForge uses modId="neoforge" instead.
+	// Docs: https://docs.minecraftforge.net/en/1.21.x/gettingstarted/modfiles/
+	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
+	if isNeoforgeModIdentifier(modIdentifier) && !hasLoaderDependency(modIdentifier, "forge") {
+		return nil, nil
+	}
 
 	infos := make([]ArtifactInfo, 0, len(modIdentifier.Mods))
 	for _, mod := range modIdentifier.Mods {
