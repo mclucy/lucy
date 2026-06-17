@@ -50,7 +50,6 @@ test_*
 .task
 
 # Coding agents
-.agents
 .codex
 .claude
 .sisyphus
