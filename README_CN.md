@@ -189,6 +189,8 @@ lucy cache slugs clear     # 清除 slug 映射
 lucy bisect start          # 开启一个二分会话
 lucy bisect good           # 标记当前的中点是好的 (坏的在右半部分)
 lucy bisect bad            # 标记当前的中点是坏的 (坏的包在左半部分)
+lucy bisect status         # 显示当前二分会话
+lucy bisect reset          # 中止会话并重新启用模组
 ```
 
 ### 未实现
