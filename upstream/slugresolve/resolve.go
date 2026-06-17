@@ -66,7 +66,7 @@ func ResolveSlug(
 	if filePath != "" && fileHash != "" {
 		provider, ok, err := routing.GetArtifactMapper(src)
 		if err == nil && ok {
-			remote, resolvedHash, err := provider.Mapper.NameByHash(artifact)
+			remote, resolvedHash, err := provider.NameByHash(artifact)
 			if err == nil && remote.RemoteName != "" {
 				if resolvedHash != "" {
 					fileHash = resolvedHash

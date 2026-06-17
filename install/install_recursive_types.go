@@ -138,14 +138,14 @@ type RecursiveTransaction struct {
 	// PURE: computed once at transaction creation; no live filesystem/network.
 	InstalledConstraints []InstalledConstraint
 
-	// Providers are the upstream provider instances used for dependency fetches
+	// Providers are the upstream package sources used for dependency fetches
 	// during candidate graph expansion.
-	// ADAPTER-OWNED: performs network I/O via upstream.Provider interface.
-	Providers []upstream.Provider
+	// ADAPTER-OWNED: performs network I/O via upstream.PackageSource.
+	Providers []upstream.PackageSource
 
 	// CandidateGraph is the advisory dependency closure computed from upstream
 	// APIs and installed constraints. Keyed by PackageId.StringPlatformName().
-	// PURE: computed from Provider results (already fetched).
+	// PURE: computed from package source results (already fetched).
 	CandidateGraph map[string]CandidateNode
 
 	// DownloadedArtifacts maps PackageId.StringFull() to the local file path
@@ -181,7 +181,7 @@ type RecursiveTransaction struct {
 // be populated by the caller from probe.ServerInfo() before expansion begins.
 func NewRecursiveTransaction(
 	roots []types.VersionedPackageRef,
-	providers []upstream.Provider,
+	providers []upstream.PackageSource,
 ) *RecursiveTransaction {
 	return &RecursiveTransaction{
 		Phase:               PhaseCandidate,

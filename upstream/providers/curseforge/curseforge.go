@@ -41,21 +41,18 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 }
 
 // Fetch resolves the package version, then fetches the corresponding file.
-func (p provider) Fetch(id types.VersionedPackageRef) (
-	remote upstream.RawPackageRemote,
-	err error,
-) {
+func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
-		return nil, err
+		return upstream.FetchResult{}, err
 	}
 
 	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Platform)
 	if err != nil {
-		return nil, err
+		return upstream.FetchResult{}, err
 	}
 
-	return file, nil
+	return upstream.NewFetchResult(file.ToPackageRemote()), nil
 }
 
 // Info resolves a project slug and returns project metadata.
@@ -75,7 +72,7 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 
 func (p provider) Dependencies(
 	id types.VersionedPackageRef,
-) (deps upstream.RawPackageDependencies, err error) {
+) (*types.PackageDependencies, error) {
 	// Resolve the mod to get the modId
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
@@ -96,16 +93,15 @@ func (p provider) Dependencies(
 		}
 	}
 
-	return &curseforgeDependencies{file: file}, nil
+	deps := (&curseforgeDependencies{file: file}).ToPackageDependencies()
+	return &deps, nil
 }
 
 // curseforgeDependencies wraps a fileResponse for dependency
-// normalization. It implements upstream.RawPackageDependencies.
+// normalization.
 type curseforgeDependencies struct {
 	file *fileResponse
 }
-
-var _ upstream.RawPackageDependencies = (*curseforgeDependencies)(nil)
 
 func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependencies {
 	result := types.PackageDependencies{
@@ -161,12 +157,6 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 	}
 
 	return result
-}
-
-func (provider) Support(
-	name types.BarePackageName,
-) (supports upstream.RawProjectSupport, err error) {
-	panic("TODO: implement curseforge provider Support")
 }
 
 // ResolveVersionSelector resolves abstract version specifiers (latest,

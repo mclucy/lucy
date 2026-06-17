@@ -12,7 +12,8 @@ import "strings"
 //   - In result payloads, SourceId records where data came from.
 //   - In routing, SourceId is the key that resolves to one or more providers.
 //
-// Execution of native upstream APIs is implemented by upstream.Provider.
+// Execution of native upstream APIs is implemented by upstream capability
+// interfaces.
 type SourceId uint8
 
 const (
@@ -23,6 +24,10 @@ const (
 	SourceMCDR
 	SourceHangar
 	SourceSpiget
+	SourceMojang
+	SourceForge
+	SourceNeoForge
+	SourceFabric
 	SourceUnknown // sentinel for parse/validation failure
 )
 
@@ -40,6 +45,14 @@ func (s SourceId) String() string {
 		return "hangar"
 	case SourceSpiget:
 		return "spiget"
+	case SourceMojang:
+		return "mojang"
+	case SourceForge:
+		return "forge"
+	case SourceNeoForge:
+		return "neoforge"
+	case SourceFabric:
+		return "fabric"
 	default:
 		return "unknown"
 	}
@@ -59,6 +72,14 @@ func (s SourceId) Title() string {
 		return "Hangar"
 	case SourceSpiget:
 		return "Spiget"
+	case SourceMojang:
+		return "Mojang"
+	case SourceForge:
+		return "Forge"
+	case SourceNeoForge:
+		return "NeoForge"
+	case SourceFabric:
+		return "Fabric"
 	default:
 		return "Unknown"
 	}
@@ -73,6 +94,10 @@ var sourceByString = map[string]SourceId{
 	"mcdr":       SourceMCDR,
 	"hangar":     SourceHangar,
 	"spiget":     SourceSpiget,
+	"mojang":     SourceMojang,
+	"forge":      SourceForge,
+	"neoforge":   SourceNeoForge,
+	"fabric":     SourceFabric,
 	"unknown":    SourceUnknown,
 }
 

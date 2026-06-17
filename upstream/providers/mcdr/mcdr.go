@@ -51,12 +51,12 @@ func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return res.ToSearchResults(s.Id()), nil
 }
 
-func (s provider) Fetch(id types.VersionedPackageRef) (
-	rem upstream.RawPackageRemote,
-	err error,
-) {
-	rem, err = getRelease(id.Name.Pep8String(), id.Version)
-	return
+func (s provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+	rel, err := getRelease(id.Name.Pep8String(), id.Version)
+	if err != nil {
+		return upstream.FetchResult{}, err
+	}
+	return upstream.NewFetchResult(rel.ToPackageRemote()), nil
 }
 
 func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
@@ -83,20 +83,10 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	return info, nil
 }
 
-func (s provider) Dependencies(id types.VersionedPackageRef) (
-	upstream.RawPackageDependencies,
-	error,
-) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (s provider) Support(name types.BarePackageName) (
-	supports upstream.RawProjectSupport,
-	err error,
-) {
-	// TODO implement me
-	panic("implement me")
+func (s provider) Dependencies(
+	id types.VersionedPackageRef,
+) (*types.PackageDependencies, error) {
+	return &types.PackageDependencies{Authentic: false}, nil
 }
 
 func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (

@@ -219,10 +219,10 @@ func rootScopedProviders(
 	requests []PackageRequest,
 	roots []types.VersionedPackageRef,
 	serverLoader types.PlatformId,
-	providers []upstream.Provider,
-) (map[string][]upstream.Provider, error) {
+	providers []upstream.PackageSource,
+) (map[string][]upstream.PackageSource, error) {
 	rootKeys := keyedRoots(roots)
-	rootProviders := make(map[string][]upstream.Provider, len(rootKeys))
+	rootProviders := make(map[string][]upstream.PackageSource, len(rootKeys))
 	rootScopes := make(map[string]types.SourceId, len(rootKeys))
 	for _, req := range requests {
 		id := types.VersionedPackageRef{

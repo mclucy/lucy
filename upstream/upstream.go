@@ -2,16 +2,17 @@
 //
 // Architecture overview:
 //   - types.Source is a stable user-facing identifier (CLI/config/storage).
-//   - Provider is a behavior interface that executes upstream operations.
+//   - Provider capabilities execute upstream operations.
 //   - Source selection policy lives outside this package in a dedicated resolver
 //     package under upstream (currently upstream/routing).
 //
 // Dependency inversion:
 //   - This package defines interfaces and normalized conversion contracts.
 //   - Concrete providers (modrinth, mcdr, curseforge, githubsource) implement
-//     Provider and depend on these contracts, not the other way around.
-//   - Callers pass Provider into Fetch/Search/Info. Core logic depends on
-//     abstractions rather than concrete upstream implementations.
+//     small capability interfaces and depend on these contracts, not the other
+//     way around.
+//   - Callers pass capability interfaces into Search/Info. Core logic depends
+//     on abstractions rather than concrete upstream implementations.
 //
 // Boundary:
 //   - upstream package executes provider capabilities and normalizes outputs.
@@ -24,39 +25,6 @@ import (
 
 	"github.com/mclucy/lucy/types"
 )
-
-// IoC via dependency injection
-
-func Fetch(
-	provider Provider,
-	resolver VersionSelectorResolver,
-	id types.VersionedPackageRef,
-) (result FetchResult, err error) {
-	resolvedID, err := resolver.ResolveVersionSelector(id)
-	if err != nil {
-		return FetchResult{}, err
-	}
-
-	raw, err := provider.Fetch(resolvedID)
-	if err != nil {
-		return FetchResult{}, err
-	}
-	result.ResolvedID = resolvedID
-	result.Remote = raw.ToPackageRemote()
-	return result, nil
-}
-
-func Dependencies(
-	provider Provider,
-	id types.VersionedPackageRef,
-) (deps *types.PackageDependencies, err error) {
-	raw, err := provider.Dependencies(id)
-	if err != nil {
-		return nil, err
-	}
-	result := raw.ToPackageDependencies()
-	return &result, nil
-}
 
 func Info(
 	informer Informer,

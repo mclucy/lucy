@@ -6,17 +6,14 @@ import (
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 )
 
 // modrinthDependencies wraps a Modrinth versionResponse for dependency
-// normalization. It implements upstream.RawPackageDependencies.
+// normalization.
 type modrinthDependencies struct {
 	version  *versionResponse
 	platform types.PlatformId
 }
-
-var _ upstream.RawPackageDependencies = (*modrinthDependencies)(nil)
 
 func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies {
 	result := types.PackageDependencies{
