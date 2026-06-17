@@ -15,7 +15,10 @@ import (
 	"github.com/pelletier/go-toml"
 )
 
-const neoforgeModsTomlPath = "META-INF/mods.toml"
+const (
+	neoforgeModsTomlPath       = "META-INF/neoforge.mods.toml"
+	legacyNeoforgeModsTomlPath = "META-INF/mods.toml"
+)
 
 type neoforgeReader struct{}
 
@@ -30,7 +33,7 @@ func (r *neoforgeReader) Read(
 	filePath string,
 	resolver SlugResolver,
 ) ([]ArtifactInfo, error) {
-	raw, err := readZipEntry(zipRdr, neoforgeModsTomlPath)
+	raw, err := readNeoforgeModsToml(zipRdr)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +120,53 @@ func (r *neoforgeReader) Read(
 	}
 
 	return infos, nil
+}
+
+func readNeoforgeModsToml(zipRdr *zip.Reader) ([]byte, error) {
+	// NeoForge 1.20.5+ uses META-INF/neoforge.mods.toml; earlier 1.20.3-1.20.4
+	// used META-INF/mods.toml before the rename.
+	// Docs: https://docs.neoforged.net/docs/gettingstarted/modfiles/
+	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
+	// Rename note: https://neoforged.net/news/20.5release/
+	raw, err := readZipEntry(zipRdr, neoforgeModsTomlPath)
+	if err != nil || raw != nil {
+		return raw, err
+	}
+
+	raw, err = readZipEntry(zipRdr, legacyNeoforgeModsTomlPath)
+	if err != nil || raw == nil {
+		return raw, err
+	}
+
+	var modIdentifier fileschema.FileModLoaderIdentifier
+	if err := toml.Unmarshal(raw, &modIdentifier); err != nil {
+		return nil, err
+	}
+	if !isNeoforgeModIdentifier(modIdentifier) {
+		return nil, nil
+	}
+	return raw, nil
+}
+
+func isNeoforgeModIdentifier(modIdentifier fileschema.FileModLoaderIdentifier) bool {
+	// Legacy NeoForge and Forge both use mods.toml, so loader identity comes from
+	// the dependency target: NeoForge docs use modId="neoforge".
+	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
+	return hasLoaderDependency(modIdentifier, "neoforge")
+}
+
+func hasLoaderDependency(
+	modIdentifier fileschema.FileModLoaderIdentifier,
+	modID string,
+) bool {
+	for _, deps := range modIdentifier.Dependencies {
+		for _, dep := range deps {
+			if dep.ModID == modID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func readZipEntry(zipRdr *zip.Reader, name string) ([]byte, error) {
@@ -209,7 +259,7 @@ func neoforgeJarjarEmbeddedModIds(
 			continue
 		}
 
-		raw, err := readZipEntry(nestedZip, neoforgeModsTomlPath)
+		raw, err := readNeoforgeModsToml(nestedZip)
 		if err != nil || raw == nil {
 			continue
 		}
