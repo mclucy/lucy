@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/probe"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream/routing"
 )
 
 type platformInstaller func(p types.Package) error
@@ -42,69 +43,16 @@ func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 
 func installPlatform(id types.VersionedPackageRef) error {
 	serverInfo := probe.ServerInfo()
-	serverPlatform := serverInfo.Runtime.DerivedModLoader()
-	hasMcdr := serverInfo.Environments.Mcdr != nil
-
-	errExistingPlatform := func() error {
-		return fmt.Errorf(
-			"found an existing server platform %s, installation of %s aborted",
-			serverPlatform.Title(),
-			id.Platform.Title(),
-		)
-	}
-
-	switch id.Platform {
-	case types.PlatformMinecraft:
-		if serverPlatform != types.PlatformNone {
-			// TODO: ask if overwrite existing server
-			return errors.New("a server is already installed")
-		}
-		return installMinecraftServer(id)
-	case types.PlatformForge:
-		switch serverPlatform {
-		case types.PlatformVanilla, types.PlatformNone:
-			return installForge(id)
-		default:
-			return errExistingPlatform()
-		}
-
-	case types.PlatformFabric:
-		switch serverPlatform {
-		case types.PlatformUnknown:
-			return errors.New("unknown mod loader, cannot infer fabric bootstrap artifact")
-		case types.PlatformFabric:
-			return errors.New("fabric server already detected, installation aborted")
-		case types.PlatformForge:
-			return errors.New("Forge server detected, cannot install Fabric bootstrap")
-		case types.PlatformNeoforge:
-			return errors.New("NeoForge server detected, cannot install Fabric bootstrap")
-		case types.PlatformVanilla:
-			override, deleteVanilla := promptOverrideVanillaWithFabric()
-			if !override {
-				return errors.New("installation aborted by user")
-			}
-			return installFabricWithOverride(id, deleteVanilla)
-		case types.PlatformNone:
-		default:
-			return fmt.Errorf(
-				"unsupported server platform %s for fabric installation",
-				serverPlatform.Title(),
-			)
-		}
-		return installFabric(id)
-	case types.PlatformNeoforge:
-		switch serverPlatform {
-		case types.PlatformVanilla, types.PlatformNone:
-			return installNeoForge(id)
-		default:
-			return errExistingPlatform()
-		}
-	case types.PlatformMCDR:
-		if hasMcdr {
+	if id.Platform == types.PlatformMCDR {
+		if serverInfo.Environments.Mcdr != nil {
 			return errors.New("mcdr already installed")
 		}
 		return initMcdr()
-	default:
+	}
+
+	installer, ok := routing.PlatformInstallerFor(id.Platform)
+	if !ok {
 		return fmt.Errorf("cannot install platform: %s", id.Platform)
 	}
+	return installer.InstallPlatform(id, serverInfo.Root)
 }
