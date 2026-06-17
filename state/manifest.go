@@ -824,10 +824,33 @@ func normalizeManifest(m *Manifest) {
 	if m.Environment.CompatiblePlatforms == nil {
 		m.Environment.CompatiblePlatforms = []string{}
 	}
-	if m.Packages == nil {
-		m.Packages = []ManifestPackage{}
-	}
+	m.Packages = normalizeManifestPackages(m.Packages)
 	if m.Bundles == nil {
 		m.Bundles = []ManifestBundle{}
 	}
+}
+
+func normalizeManifestPackages(packages []ManifestPackage) []ManifestPackage {
+	if packages == nil {
+		return []ManifestPackage{}
+	}
+
+	compacted := packages[:0]
+	for _, pkg := range packages {
+		if isBlankManifestPackage(pkg) {
+			continue
+		}
+		compacted = append(compacted, pkg)
+	}
+	return compacted
+}
+
+func isBlankManifestPackage(pkg ManifestPackage) bool {
+	return strings.TrimSpace(pkg.ID) == "" &&
+		strings.TrimSpace(pkg.Version) == "" &&
+		strings.TrimSpace(pkg.Source) == "" &&
+		pkg.Role == "" &&
+		pkg.Side == "" &&
+		!pkg.Optional &&
+		!pkg.Pinned
 }
