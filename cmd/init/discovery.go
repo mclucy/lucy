@@ -107,14 +107,10 @@ func DiscoverServerDefaults(workDir string) DiscoveredDefaults {
 	manifest, manifestExists, manifestErr := state.ReadManifest(workDir)
 	if manifestErr == nil && manifestExists && manifest != nil {
 		defaults.ExistingLucy.ManifestPresent = true
+		defaults.ExistingLucy.ConfigPresent = manifest.Config != nil
 		defaults.ExistingLucy.GameVersion = strings.TrimSpace(manifest.Environment.GameVersion)
 		defaults.ExistingLucy.Platform = strings.TrimSpace(manifest.Environment.ModdingPlatform)
 		defaults.ExistingLucy.PlatformVersion = strings.TrimSpace(manifest.Environment.ModdingPlatformVersion)
-	}
-
-	config, configExists, configErr := state.ReadConfig(workDir)
-	if configErr == nil && configExists && config != nil {
-		defaults.ExistingLucy.ConfigPresent = true
 	}
 
 	if _, lockExists, lockErr := state.ReadLock(workDir); lockErr == nil && lockExists {

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -43,10 +44,28 @@ Lucy to match the current environment.`,
 }
 
 func init() {
-	initCmd.Flags().BoolP(flagInitYesName, "y", false, "Non-interactive mode: accept all defaults without prompting")
-	initCmd.Flags().StringP(flagInitConflictName, "c", "preserve", "Conflict mode for existing files: preserve, abort, overwrite")
-	initCmd.Flags().String(flagInitWorkDirName, "", "Override working directory (for testing)")
-	initCmd.Flags().String(flagInitGameVersion, "1.21", "Game version for non-interactive init (e.g., 1.21.4)")
+	initCmd.Flags().BoolP(
+		flagInitYesName,
+		"y",
+		false,
+		"Non-interactive mode: accept all defaults without prompting",
+	)
+	initCmd.Flags().StringP(
+		flagInitConflictName,
+		"c",
+		"preserve",
+		"Conflict mode for existing files: preserve, abort, overwrite",
+	)
+	initCmd.Flags().String(
+		flagInitWorkDirName,
+		"",
+		"Override working directory (for testing)",
+	)
+	initCmd.Flags().String(
+		flagInitGameVersion,
+		"1.21",
+		"Game version for non-interactive init (e.g., 1.21.4)",
+	)
 	_ = initCmd.Flags().MarkHidden(flagInitWorkDirName)
 	rootCmd.AddCommand(initCmd)
 }
@@ -100,7 +119,10 @@ func parseConflictMode(s string) (lucyinit.ConflictMode, error) {
 	case "overwrite":
 		return lucyinit.OverwriteAll, nil
 	default:
-		return "", fmt.Errorf("unknown conflict mode %q: must be preserve, abort, or overwrite", s)
+		return "", fmt.Errorf(
+			"unknown conflict mode %q: must be preserve, abort, or overwrite",
+			s,
+		)
 	}
 }
 
@@ -143,20 +165,13 @@ func writeInitResult(workDir string, s *lucyinit.InitFlowState) error {
 		return fmt.Errorf("build init plan: %w", err)
 	}
 
-	if result.ConfigToWrite != nil {
-		if err := state.WriteConfig(workDir, result.ConfigToWrite); err != nil {
-			return fmt.Errorf("write config: %w", err)
-		}
-	}
-	if result.ManifestToWrite != nil {
-		if err := state.WriteManifest(workDir, result.ManifestToWrite); err != nil {
-			return fmt.Errorf("write manifest: %w", err)
-		}
-	}
-	if result.LockToWrite != nil {
-		if err := state.WriteLock(workDir, result.LockToWrite); err != nil {
-			return fmt.Errorf("write lock: %w", err)
-		}
+	stateSvc := state.NewProjectStateService(workDir)
+	if err := stateSvc.Save(
+		context.Background(),
+		result.ManifestToWrite,
+		result.LockToWrite,
+	); err != nil {
+		return fmt.Errorf("write state: %w", err)
 	}
 	lucyinit.RefreshObservedStateAfterInitWrites(workDir)
 

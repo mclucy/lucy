@@ -73,7 +73,7 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 		stateSvc.Lock(),
 		result,
 	)
-	return state.WriteLock(workDir, lock)
+	return stateSvc.Save(cmd.Context(), nil, lock)
 }
 
 func buildInstallSyncPlan(
@@ -137,8 +137,10 @@ func exactSyncPackageIDs(
 		requested = append(
 			requested, install.PackageRequest{
 				ScopedPackageRef: types.ScopedPackageRef{
-					PackageRef: types.PackageRef{Platform: id.Platform, Name: id.Name},
-					Scope:      types.ParseSource(pkg.Source),
+					PackageRef: types.PackageRef{
+						Platform: id.Platform, Name: id.Name,
+					},
+					Scope: types.ParseSource(pkg.Source),
 				},
 				Version: id.Version,
 			},
@@ -176,8 +178,10 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 		requested = append(
 			requested, install.PackageRequest{
 				ScopedPackageRef: types.ScopedPackageRef{
-					PackageRef: types.PackageRef{Platform: id.Platform, Name: id.Name},
-					Scope:      types.ParseSource(pkg.Source),
+					PackageRef: types.PackageRef{
+						Platform: id.Platform, Name: id.Name,
+					},
+					Scope: types.ParseSource(pkg.Source),
 				},
 				Version: id.Version,
 			},

@@ -60,7 +60,10 @@ func MergeConfig(global, workspace *Config) *Config {
 		return &merged
 	}
 
-	mergeNonZeroFields(reflect.ValueOf(&merged).Elem(), reflect.ValueOf(*workspace))
+	mergeNonZeroFields(
+		reflect.ValueOf(&merged).Elem(),
+		reflect.ValueOf(*workspace),
+	)
 	return &merged
 }
 
@@ -72,8 +75,16 @@ func mergeNonZeroFields(dst, src reflect.Value) {
 			mergeNonZeroFields(dstField, srcField)
 			continue
 		}
-		if !srcField.IsZero() {
-			dstField.Set(srcField)
+		if configFieldIsZero(srcField) {
+			continue
 		}
+		dstField.Set(srcField)
 	}
+}
+
+func configFieldIsZero(field reflect.Value) bool {
+	if field.Kind() == reflect.Slice {
+		return field.Len() == 0
+	}
+	return field.IsZero()
 }

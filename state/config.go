@@ -41,7 +41,7 @@ func ValidateConfig(c Config) error {
 	for _, src := range c.Sources.Priority {
 		if !validSources[src] {
 			return NewStateError(
-				ConfigFile,
+				ManifestFile,
 				ErrMalformed,
 				"sources.priority",
 				fmt.Sprintf("invalid source %q in priority list", src),
@@ -50,7 +50,7 @@ func ValidateConfig(c Config) error {
 	}
 	if c.Sources.Preferred != "auto" && !validSources[c.Sources.Preferred] {
 		return NewStateError(
-			ConfigFile,
+			ManifestFile,
 			ErrMalformed,
 			"sources.preferred",
 			fmt.Sprintf("invalid preferred source %q", c.Sources.Preferred),
@@ -61,7 +61,7 @@ func ValidateConfig(c Config) error {
 	}
 	if c.Upgrade.Mode != "" && !validModes[c.Upgrade.Mode] {
 		return NewStateError(
-			ConfigFile,
+			ManifestFile,
 			ErrMalformed,
 			"upgrade.mode",
 			fmt.Sprintf("invalid upgrade mode %q", c.Upgrade.Mode),
