@@ -34,21 +34,20 @@ func (s *ProjectStateService) Load(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := loadConfig(ctx, s.workDir)
-	if err != nil {
-		return err
-	}
-	cfg = MergeConfig(globalCfg, cfg)
 	manifest, err := loadManifest(ctx, s.workDir)
 	if err != nil {
 		return err
+	}
+	var workspaceCfg *Config
+	if manifest != nil {
+		workspaceCfg = manifest.Config
 	}
 	lock, err := loadLock(ctx, s.workDir)
 	if err != nil {
 		return err
 	}
 
-	s.config = cfg
+	s.config = MergeConfig(globalCfg, workspaceCfg)
 	s.manifest = manifest
 	s.lock = lock
 	s.loaded = true
@@ -73,7 +72,11 @@ func (s *ProjectStateService) Manifest() *Manifest { return s.manifest }
 
 func (s *ProjectStateService) Lock() *Lock { return s.lock }
 
-func (s *ProjectStateService) Save(ctx context.Context, cfg *Config, m *Manifest, l *Lock) error {
+func (s *ProjectStateService) Save(
+	ctx context.Context,
+	m *Manifest,
+	l *Lock,
+) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -81,52 +84,48 @@ func (s *ProjectStateService) Save(ctx context.Context, cfg *Config, m *Manifest
 		return ioStateError("", "workDir", "workDir is required", nil)
 	}
 
-	if cfg != nil || m != nil {
-		manifest, err := mergedManifest(ctx, s.workDir, cfg, m)
+	if m != nil {
+		data, err := SerializeManifest(m)
 		if err != nil {
 			return err
 		}
-		data, err := SerializeManifest(manifest)
-		if err != nil {
+		if err := writeStateFile(
+			ctx,
+			filepath.Join(s.workDir, string(ManifestFile)),
+			ManifestFile,
+			data,
+		); err != nil {
 			return err
 		}
-		if err := writeStateFile(ctx, filepath.Join(s.workDir, string(ManifestFile)), ManifestFile, data); err != nil {
-			return err
-		}
-		cfg = manifest.Config
-		m = manifest
+		s.manifest = m
+		s.config = m.Config
 	}
 	if l != nil {
 		data, err := SerializeLock(l)
 		if err != nil {
 			return err
 		}
-		if err := writeStateFile(ctx, filepath.Join(s.workDir, string(LockFile)), LockFile, data); err != nil {
+		if err := writeStateFile(
+			ctx,
+			filepath.Join(s.workDir, string(LockFile)),
+			LockFile,
+			data,
+		); err != nil {
 			return err
 		}
+		s.lock = l
 	}
 
-	s.config = cfg
-	s.manifest = m
-	s.lock = l
 	s.loaded = true
 	return nil
 }
 
-func loadConfig(ctx context.Context, workDir string) (*Config, error) {
-	data, err := readStateFile(ctx, filepath.Join(workDir, string(ConfigFile)), ConfigFile)
-	if err != nil || data == nil {
-		return nil, err
-	}
-	manifest, err := ParseManifest(data)
-	if err != nil {
-		return nil, malformedStateError(ConfigFile, "document", err)
-	}
-	return manifest.Config, nil
-}
-
 func loadManifest(ctx context.Context, workDir string) (*Manifest, error) {
-	data, err := readStateFile(ctx, filepath.Join(workDir, string(ManifestFile)), ManifestFile)
+	data, err := readStateFile(
+		ctx,
+		filepath.Join(workDir, string(ManifestFile)),
+		ManifestFile,
+	)
 	if err != nil || data == nil {
 		return nil, err
 	}
@@ -138,7 +137,11 @@ func loadManifest(ctx context.Context, workDir string) (*Manifest, error) {
 }
 
 func loadLock(ctx context.Context, workDir string) (*Lock, error) {
-	data, err := readStateFile(ctx, filepath.Join(workDir, string(LockFile)), LockFile)
+	data, err := readStateFile(
+		ctx,
+		filepath.Join(workDir, string(LockFile)),
+		LockFile,
+	)
 	if err != nil || data == nil {
 		return nil, err
 	}
@@ -149,35 +152,10 @@ func loadLock(ctx context.Context, workDir string) (*Lock, error) {
 	return lock, nil
 }
 
-func mergedManifest(ctx context.Context, workDir string, cfg *Config, m *Manifest) (*Manifest, error) {
-	if m == nil {
-		existing, err := loadManifest(ctx, workDir)
-		if err != nil {
-			return nil, err
-		}
-		if existing == nil {
-			defaults := ManifestDefaults()
-			existing = &defaults
-		}
-		m = existing
-	}
-
-	if cfg == nil {
-		cfg = m.Config
-	}
-	if cfg == nil {
-		existing, err := loadConfig(ctx, workDir)
-		if err != nil {
-			return nil, err
-		}
-		cfg = existing
-	}
-	m.Config = cfg
-
-	return m, nil
-}
-
-func readStateFile(ctx context.Context, path string, file StateFile) ([]byte, error) {
+func readStateFile(ctx context.Context, path string, file StateFile) (
+	[]byte,
+	error,
+) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -191,7 +169,12 @@ func readStateFile(ctx context.Context, path string, file StateFile) ([]byte, er
 	return data, nil
 }
 
-func writeStateFile(ctx context.Context, path string, file StateFile, data []byte) error {
+func writeStateFile(
+	ctx context.Context,
+	path string,
+	file StateFile,
+	data []byte,
+) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

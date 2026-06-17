@@ -52,30 +52,6 @@ func TestSafeReadMissingFileIsNotError(t *testing.T) {
 	}
 }
 
-func TestReadWriteConfigRoundTrip(t *testing.T) {
-	workDir := t.TempDir()
-	config := ConfigDefaults()
-	config.Sources.Preferred = "curseforge"
-
-	if err := WriteConfig(workDir, &config); err != nil {
-		t.Fatalf("WriteConfig failed: %v", err)
-	}
-
-	loaded, ok, err := ReadConfig(workDir)
-	if err != nil {
-		t.Fatalf("ReadConfig failed: %v", err)
-	}
-	if !ok {
-		t.Fatalf("ReadConfig should report file exists")
-	}
-	if loaded == nil {
-		t.Fatalf("ReadConfig returned nil config")
-	}
-	if !reflect.DeepEqual(*loaded, config) {
-		t.Fatalf("config mismatch after round-trip\nwant: %#v\ngot: %#v", config, *loaded)
-	}
-}
-
 func TestAtomicWriteFailureLeavesOriginalTargetUntouched(t *testing.T) {
 	workDir := t.TempDir()
 	target := filepath.Join(workDir, "protected")
@@ -115,15 +91,19 @@ func TestReadWriteManifestPreservesCompatiblePlatforms(t *testing.T) {
 	manifest := ManifestDefaults()
 	manifest.Environment.GameVersion = "1.21.1"
 	manifest.Environment.ModdingPlatform = "neoforge"
-	manifest.Environment.CompatiblePlatforms = []string{"fabric", "mcdr", "sinytra"}
+	manifest.Environment.CompatiblePlatforms = []string{
+		"fabric", "mcdr", "sinytra",
+	}
 	manifest.Environment.ModdingPlatformVersion = "21.1.0"
-	manifest.Packages = []ManifestPackage{{
-		ID:      "neoforge/connector",
-		Version: "compatible",
-		Source:  "modrinth",
-		Role:    RoleRequired,
-		Side:    SideServer,
-	}}
+	manifest.Packages = []ManifestPackage{
+		{
+			ID:      "neoforge/connector",
+			Version: "compatible",
+			Source:  "modrinth",
+			Role:    RoleRequired,
+			Side:    SideServer,
+		},
+	}
 
 	if err := WriteManifest(workDir, &manifest); err != nil {
 		t.Fatalf("WriteManifest failed: %v", err)
@@ -137,6 +117,10 @@ func TestReadWriteManifestPreservesCompatiblePlatforms(t *testing.T) {
 		t.Fatalf("expected manifest file to exist after write")
 	}
 	if !reflect.DeepEqual(*loaded, manifest) {
-		t.Fatalf("manifest mismatch after round-trip\nwant: %#v\ngot: %#v", manifest, *loaded)
+		t.Fatalf(
+			"manifest mismatch after round-trip\nwant: %#v\ngot: %#v",
+			manifest,
+			*loaded,
+		)
 	}
 }

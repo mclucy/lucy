@@ -70,17 +70,13 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		ids,
 		stateSvc.Lock(),
 	)
-	if err := state.WriteManifest(workDir, manifest); err != nil {
-		return fmt.Errorf("update manifest: %w", err)
-	}
-
 	if stateSvc.Lock() == nil {
-		return nil
+		return stateSvc.Save(cmd.Context(), manifest, nil)
 	}
 
 	lock := state.PruneLockForManifest(stateSvc.Lock(), manifest)
-	if err := state.WriteLock(workDir, lock); err != nil {
-		return fmt.Errorf("update lock: %w", err)
+	if err := stateSvc.Save(cmd.Context(), manifest, lock); err != nil {
+		return fmt.Errorf("update state: %w", err)
 	}
 
 	return nil

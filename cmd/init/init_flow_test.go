@@ -23,20 +23,21 @@ func TestNewInitFlowState_EmptyWorkDir(t *testing.T) {
 	}
 }
 
-func TestNewInitFlowState_WithExistingConfig(t *testing.T) {
+func TestNewInitFlowState_WithExistingManifestConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	_ = filepath.Join(tmpDir, string(state.ConfigFile))
+	manifest := state.ManifestDefaults()
 	cfg := state.ConfigDefaults()
-	if err := state.WriteConfig(tmpDir, &cfg); err != nil {
-		t.Fatalf("failed to write config: %v", err)
+	manifest.Config = &cfg
+	if err := state.WriteManifest(tmpDir, &manifest); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
 	}
 
 	s := NewInitFlowState(tmpDir)
 
-	if !slices.Contains(s.ExistingFiles, string(state.ConfigFile)) {
+	if !slices.Contains(s.ExistingFiles, string(state.ManifestFile)) {
 		t.Errorf(
 			"expected ExistingFiles to contain %s, got %v",
-			state.ConfigFile,
+			state.ManifestFile,
 			s.ExistingFiles,
 		)
 	}
@@ -44,10 +45,11 @@ func TestNewInitFlowState_WithExistingConfig(t *testing.T) {
 
 func TestBuildResult_PreserveExisting(t *testing.T) {
 	tmpDir := t.TempDir()
-	_ = filepath.Join(tmpDir, string(state.ConfigFile))
+	manifest := state.ManifestDefaults()
 	cfg := state.ConfigDefaults()
-	if err := state.WriteConfig(tmpDir, &cfg); err != nil {
-		t.Fatalf("failed to write config: %v", err)
+	manifest.Config = &cfg
+	if err := state.WriteManifest(tmpDir, &manifest); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
 	}
 
 	s := NewInitFlowState(tmpDir)
@@ -60,14 +62,14 @@ func TestBuildResult_PreserveExisting(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.ConfigToWrite != nil {
-		t.Error("expected ConfigToWrite to be nil when preserving existing")
+	if result.ManifestToWrite != nil {
+		t.Error("expected ManifestToWrite to be nil when preserving existing")
 	}
 
-	if !slices.Contains(result.SkippedFiles, string(state.ConfigFile)) {
+	if !slices.Contains(result.SkippedFiles, string(state.ManifestFile)) {
 		t.Errorf(
 			"expected SkippedFiles to contain %s, got %v",
-			state.ConfigFile,
+			state.ManifestFile,
 			result.SkippedFiles,
 		)
 	}
@@ -75,10 +77,11 @@ func TestBuildResult_PreserveExisting(t *testing.T) {
 
 func TestBuildResult_AbortOnConflict(t *testing.T) {
 	tmpDir := t.TempDir()
-	_ = filepath.Join(tmpDir, string(state.ConfigFile))
+	manifest := state.ManifestDefaults()
 	cfg := state.ConfigDefaults()
-	if err := state.WriteConfig(tmpDir, &cfg); err != nil {
-		t.Fatalf("failed to write config: %v", err)
+	manifest.Config = &cfg
+	if err := state.WriteManifest(tmpDir, &manifest); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
 	}
 
 	s := NewInitFlowState(tmpDir)
@@ -102,10 +105,11 @@ func TestBuildResult_AbortOnConflict(t *testing.T) {
 
 func TestBuildResult_OverwriteAll(t *testing.T) {
 	tmpDir := t.TempDir()
-	_ = filepath.Join(tmpDir, string(state.ConfigFile))
+	manifest := state.ManifestDefaults()
 	cfg := state.ConfigDefaults()
-	if err := state.WriteConfig(tmpDir, &cfg); err != nil {
-		t.Fatalf("failed to write config: %v", err)
+	manifest.Config = &cfg
+	if err := state.WriteManifest(tmpDir, &manifest); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
 	}
 
 	s := NewInitFlowState(tmpDir)
@@ -118,14 +122,29 @@ func TestBuildResult_OverwriteAll(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.ConfigToWrite == nil {
-		t.Error("expected ConfigToWrite to be set when OverwriteAll")
+	if result.ManifestToWrite == nil || result.ManifestToWrite.Config == nil {
+		t.Error("expected manifest config to be set when OverwriteAll")
 	}
 
-	if !slices.Contains(result.WrittenFiles, string(state.ConfigFile)) {
+	if !slices.Contains(result.WrittenFiles, string(state.ManifestFile)) {
 		t.Errorf(
 			"expected WrittenFiles to contain %s, got %v",
-			state.ConfigFile,
+			state.ManifestFile,
+			result.WrittenFiles,
+		)
+	}
+	if got, want := len(result.WrittenFiles), 2; got != want {
+		t.Fatalf(
+			"expected %d unique written files, got %d: %v",
+			want,
+			got,
+			result.WrittenFiles,
+		)
+	}
+	if !slices.Contains(result.WrittenFiles, string(state.LockFile)) {
+		t.Errorf(
+			"expected WrittenFiles to contain %s, got %v",
+			state.LockFile,
 			result.WrittenFiles,
 		)
 	}

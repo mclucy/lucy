@@ -8,7 +8,7 @@ import (
 func ParseConfig(data []byte) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, malformedStateError(ConfigFile, "document", err)
+		return nil, malformedStateError(ManifestFile, "document", err)
 	}
 	if err := ValidateConfig(cfg); err != nil {
 		return nil, err
@@ -19,14 +19,19 @@ func ParseConfig(data []byte) (*Config, error) {
 // SerializeConfig serializes a validated Config deterministically.
 func SerializeConfig(c *Config) ([]byte, error) {
 	if c == nil {
-		return nil, NewStateError(ConfigFile, ErrMalformed, "document", "config is nil")
+		return nil, NewStateError(
+			ManifestFile,
+			ErrMalformed,
+			"document",
+			"config is nil",
+		)
 	}
 	if err := ValidateConfig(*c); err != nil {
 		return nil, err
 	}
 	data, err := yaml.Marshal(c)
 	if err != nil {
-		return nil, malformedStateError(ConfigFile, "document", err)
+		return nil, malformedStateError(ManifestFile, "document", err)
 	}
 	return data, nil
 }
@@ -46,7 +51,12 @@ func ParseManifest(data []byte) (*Manifest, error) {
 // SerializeManifest serializes a validated Manifest deterministically.
 func SerializeManifest(m *Manifest) ([]byte, error) {
 	if m == nil {
-		return nil, NewStateError(ManifestFile, ErrMalformed, "document", "manifest is nil")
+		return nil, NewStateError(
+			ManifestFile,
+			ErrMalformed,
+			"document",
+			"manifest is nil",
+		)
 	}
 	if err := ValidateManifest(*m); err != nil {
 		return nil, err
@@ -73,7 +83,12 @@ func ParseLock(data []byte) (*Lock, error) {
 // SerializeLock serializes a validated Lock deterministically.
 func SerializeLock(l *Lock) ([]byte, error) {
 	if l == nil {
-		return nil, NewStateError(LockFile, ErrMalformed, "document", "lock is nil")
+		return nil, NewStateError(
+			LockFile,
+			ErrMalformed,
+			"document",
+			"lock is nil",
+		)
 	}
 	if err := ValidateLock(*l); err != nil {
 		return nil, err

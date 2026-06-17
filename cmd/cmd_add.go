@@ -150,7 +150,10 @@ func lucyStateDirExists(workDir string) (bool, error) {
 
 func formatStateSummary(stateSvc *state.ProjectStateService) string {
 	status := []string{
-		presenceLabel("config", stateSvc.Config() != nil),
+		presenceLabel(
+			"config",
+			stateSvc.Manifest() != nil && stateSvc.Manifest().Config != nil,
+		),
 		presenceLabel("manifest", stateSvc.Manifest() != nil),
 		presenceLabel("lock", stateSvc.Lock() != nil),
 	}
@@ -176,7 +179,7 @@ func updateAddState(
 
 	manifestIntent := buildUpdatedManifest(stateSvc.Manifest(), requests)
 	if result == nil || len(result.Installed) == 0 {
-		return state.WriteManifest(workDir, manifestIntent)
+		return stateSvc.Save(context.Background(), manifestIntent, nil)
 	}
 
 	lock := buildUpdatedLock(workDir, manifestIntent, stateSvc.Lock(), result)
@@ -185,13 +188,7 @@ func updateAddState(
 		requests,
 		lock,
 	)
-	if err := state.WriteManifest(workDir, manifest); err != nil {
-		return err
-	}
-
-	lock = buildUpdatedLock(workDir, manifest, stateSvc.Lock(), result)
-	lock = state.PruneLockForManifest(lock, manifest)
-	return state.WriteLock(workDir, lock)
+	return stateSvc.Save(context.Background(), manifest, lock)
 }
 
 func buildUpdatedManifest(

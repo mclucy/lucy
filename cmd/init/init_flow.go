@@ -241,7 +241,6 @@ func NewInitFlowState(workDir string) *InitFlowState {
 
 	// Discover which target state files already exist.
 	targets := []string{
-		string(state.ConfigFile),
 		string(state.ManifestFile),
 		string(state.LockFile),
 	}
@@ -249,18 +248,6 @@ func NewInitFlowState(workDir string) *InitFlowState {
 		abs := filepath.Join(workDir, rel)
 		if _, err := os.Stat(abs); err == nil {
 			s.ExistingFiles = append(s.ExistingFiles, rel)
-		}
-	}
-
-	if _, exists := containsExistingFile(
-		s.ExistingFiles,
-		string(state.ConfigFile),
-	); exists {
-		if _, _, err := state.ReadConfig(workDir); err != nil {
-			s.ExistingStateConflicts = append(
-				s.ExistingStateConflicts,
-				formatExistingStateConflict(state.ConfigFile, err),
-			)
 		}
 	}
 
@@ -595,11 +582,6 @@ type Lock = state.Lock
 // InitFlowResult is returned by BuildResult once the user has confirmed. It
 // describes exactly what will be written and what will be preserved.
 type InitFlowResult struct {
-	// ConfigToWrite is the Config value that init will marshal to
-	// lucy.yaml. Nil means the existing file will be preserved
-	// (ConflictResolution == PreserveExisting and the file was found).
-	ConfigToWrite *state.Config
-
 	// ManifestToWrite is the Manifest that init will marshal to
 	// lucy.yaml. Nil means preserve existing.
 	ManifestToWrite *Manifest
@@ -657,20 +639,12 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		return !existingSet[rel]
 	}
 
-	// lucy.yaml config
-	cfgPath := string(state.ConfigFile)
-	if willWrite(cfgPath) {
-		cfg := state.ConfigDefaults()
-		result.ConfigToWrite = &cfg
-		result.WrittenFiles = append(result.WrittenFiles, cfgPath)
-	} else {
-		result.SkippedFiles = append(result.SkippedFiles, cfgPath)
-	}
-
 	// lucy.yaml manifest
 	mfPath := string(state.ManifestFile)
 	if willWrite(mfPath) {
 		mf := state.ManifestDefaults()
+		cfg := state.ConfigDefaults()
+		mf.Config = &cfg
 		mf.Environment.GameVersion = s.GameVersion
 		mf.Environment.ModdingPlatform = s.Platform
 		mf.Environment.ModdingPlatformVersion = s.PlatformVersion
@@ -680,9 +654,9 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		)
 		mf.Packages = state.ManifestPackagesFromClassified(classifiedPackagesForManifest(s.PackageClassifications))
 		result.ManifestToWrite = &mf
-		result.WrittenFiles = append(result.WrittenFiles, mfPath)
+		result.WrittenFiles = appendUnique(result.WrittenFiles, mfPath)
 	} else {
-		result.SkippedFiles = append(result.SkippedFiles, mfPath)
+		result.SkippedFiles = appendUnique(result.SkippedFiles, mfPath)
 	}
 
 	// lucy-lock.yaml
@@ -691,9 +665,9 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		lk := state.NewLock()
 		populateInitLockMetadata(&lk, s, result.ManifestToWrite)
 		result.LockToWrite = &lk
-		result.WrittenFiles = append(result.WrittenFiles, lkPath)
+		result.WrittenFiles = appendUnique(result.WrittenFiles, lkPath)
 	} else {
-		result.SkippedFiles = append(result.SkippedFiles, lkPath)
+		result.SkippedFiles = appendUnique(result.SkippedFiles, lkPath)
 	}
 
 	return result, nil

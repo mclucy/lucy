@@ -16,6 +16,7 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 	cfgA := ConfigDefaults()
 	cfgA.Sources.Preferred = "github"
 	manifestA := ManifestDefaults()
+	manifestA.Config = &cfgA
 	manifestA.Environment.GameVersion = "1.21.1"
 	lockA := NewLock()
 	lockA.ManifestFingerprint = "sha256:a"
@@ -24,7 +25,7 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 	lockA.PlatformVersion = "0.16.10"
 
 	serviceA := NewProjectStateService(dirA)
-	if err := serviceA.Save(ctx, &cfgA, &manifestA, &lockA); err != nil {
+	if err := serviceA.Save(ctx, &manifestA, &lockA); err != nil {
 		t.Fatalf("save A failed: %v", err)
 	}
 	if err := serviceA.Load(ctx); err != nil {
@@ -33,6 +34,7 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 
 	cfgB := ConfigDefaults()
 	manifestB := ManifestDefaults()
+	manifestB.Config = &cfgB
 	manifestB.Environment.GameVersion = "1.20.6"
 	lockB := NewLock()
 	lockB.ManifestFingerprint = "sha256:b"
@@ -41,15 +43,19 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 	lockB.PlatformVersion = "21.1.0"
 
 	serviceB := NewProjectStateService(dirB)
-	if err := serviceB.Save(ctx, &cfgB, &manifestB, &lockB); err != nil {
+	if err := serviceB.Save(ctx, &manifestB, &lockB); err != nil {
 		t.Fatalf("save B failed: %v", err)
 	}
 	if err := serviceB.Load(ctx); err != nil {
 		t.Fatalf("load B failed: %v", err)
 	}
 
-	serviceB.Config().Upgrade.Mode = "latest"
-	if err := serviceB.Save(ctx, serviceB.Config(), serviceB.Manifest(), serviceB.Lock()); err != nil {
+	serviceB.Manifest().Config.Upgrade.Mode = "latest"
+	if err := serviceB.Save(
+		ctx,
+		serviceB.Manifest(),
+		serviceB.Lock(),
+	); err != nil {
 		t.Fatalf("second save B failed: %v", err)
 	}
 	if err := serviceB.Reload(ctx); err != nil {
@@ -60,16 +66,28 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 		t.Fatal("expected both services to hold configs")
 	}
 	if serviceA.Config().Upgrade.Mode != "compatible" {
-		t.Fatalf("expected A to remain unchanged, got %q", serviceA.Config().Upgrade.Mode)
+		t.Fatalf(
+			"expected A to remain unchanged, got %q",
+			serviceA.Config().Upgrade.Mode,
+		)
 	}
 	if serviceB.Config().Upgrade.Mode != "latest" {
-		t.Fatalf("expected B mutation to persist, got %q", serviceB.Config().Upgrade.Mode)
+		t.Fatalf(
+			"expected B mutation to persist, got %q",
+			serviceB.Config().Upgrade.Mode,
+		)
 	}
 	if serviceA.Manifest().Environment.GameVersion != "1.21.1" {
-		t.Fatalf("expected A manifest to remain isolated, got %q", serviceA.Manifest().Environment.GameVersion)
+		t.Fatalf(
+			"expected A manifest to remain isolated, got %q",
+			serviceA.Manifest().Environment.GameVersion,
+		)
 	}
 	if serviceB.Manifest().Environment.GameVersion != "1.20.6" {
-		t.Fatalf("expected B manifest to remain isolated, got %q", serviceB.Manifest().Environment.GameVersion)
+		t.Fatalf(
+			"expected B manifest to remain isolated, got %q",
+			serviceB.Manifest().Environment.GameVersion,
+		)
 	}
 }
 
@@ -83,13 +101,15 @@ func TestProjectStateServiceLoadMissingFilesReturnsNilState(t *testing.T) {
 	}
 }
 
-func TestProjectStateServiceSaveThenReloadReadsConfigBack(t *testing.T) {
+func TestProjectStateServiceSaveThenReloadReadsManifestConfigBack(t *testing.T) {
 	ctx := context.Background()
 	service := NewProjectStateService(t.TempDir())
 	cfg := ConfigDefaults()
 	cfg.Sources.Preferred = "mcdr"
+	manifest := ManifestDefaults()
+	manifest.Config = &cfg
 
-	if err := service.Save(ctx, &cfg, nil, nil); err != nil {
+	if err := service.Save(ctx, &manifest, nil); err != nil {
 		t.Fatalf("save failed: %v", err)
 	}
 	service.Invalidate()
@@ -104,10 +124,56 @@ func TestProjectStateServiceSaveThenReloadReadsConfigBack(t *testing.T) {
 		t.Fatal("expected saved config to round-trip through reload")
 	}
 	if service.Manifest() == nil {
-		t.Fatal("expected config save to materialize lucy.yaml manifest")
+		t.Fatal("expected lucy.yaml manifest")
 	}
 	if service.Lock() != nil {
 		t.Fatal("expected lock file to remain nil")
+	}
+}
+
+func TestProjectStateServiceLoadMergesGlobalConfigUnderWorkspaceConfig(t *testing.T) {
+	ctx := context.Background()
+	configHome := t.TempDir()
+	t.Setenv("HOME", configHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(configHome, "xdg"))
+
+	globalCfg := ConfigDefaults()
+	globalCfg.Sources.Preferred = "curseforge"
+	globalCfg.Upgrade.Mode = "latest"
+	if err := WriteGlobalConfig(&globalCfg); err != nil {
+		t.Fatalf("write global config: %v", err)
+	}
+
+	workspaceDir := t.TempDir()
+	workspaceCfg := Config{
+		Sources: SourcesConfig{
+			Preferred: "modrinth",
+		},
+	}
+	manifest := ManifestDefaults()
+	manifest.Config = &workspaceCfg
+	if err := WriteManifest(workspaceDir, &manifest); err != nil {
+		t.Fatalf("write workspace manifest: %v", err)
+	}
+
+	service := NewProjectStateService(workspaceDir)
+	if err := service.Load(ctx); err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+	if service.Config() == nil {
+		t.Fatal("expected merged config")
+	}
+	if got := service.Config().Sources.Preferred; got != "modrinth" {
+		t.Fatalf(
+			"expected workspace preferred source to override global, got %q",
+			got,
+		)
+	}
+	if got := service.Config().Upgrade.Mode; got != "latest" {
+		t.Fatalf("expected global upgrade mode to be preserved, got %q", got)
+	}
+	if got := service.Config().Sources.Priority; len(got) != len(globalCfg.Sources.Priority) {
+		t.Fatalf("expected global source priority to be preserved, got %v", got)
 	}
 }
 
@@ -132,7 +198,11 @@ func TestProjectStateServiceLoadRejectsEmptyWorkDir(t *testing.T) {
 func TestProjectStateServiceLoadRejectsMalformedExistingFile(t *testing.T) {
 	workDir := t.TempDir()
 	malformedConfig := []byte("format_version: v1\nenvironment: {}\npackages: []\nbundles: []\nconfig:\n  sources:\n    priority:\n      - invalid\n    preferred: auto\n  upgrade:\n    mode: compatible\n")
-	if err := os.WriteFile(filepath.Join(workDir, string(ConfigFile)), malformedConfig, 0o644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(workDir, string(ManifestFile)),
+		malformedConfig,
+		0o644,
+	); err != nil {
 		t.Fatalf("write malformed config failed: %v", err)
 	}
 
@@ -145,7 +215,7 @@ func TestProjectStateServiceLoadRejectsMalformedExistingFile(t *testing.T) {
 	if !errors.As(err, &stateErr) {
 		t.Fatalf("expected StateError, got %T", err)
 	}
-	if stateErr.File != ConfigFile {
+	if stateErr.File != ManifestFile {
 		t.Fatalf("expected config file error, got %q", stateErr.File)
 	}
 	if stateErr.Kind != ErrMalformed {

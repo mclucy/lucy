@@ -18,9 +18,11 @@ func TestTakeoverWithPartialExistingLucyState_RespectsObservationPrecedence(t *t
 
 	// Create partial Lucy state: lucy.yaml exists but lucy-lock.yaml is missing
 	// This simulates a server that was previously partially initialized.
+	manifest := state.ManifestDefaults()
 	cfg := state.ConfigDefaults()
-	if err := state.WriteConfig(tmpDir, &cfg); err != nil {
-		t.Fatalf("write config: %v", err)
+	manifest.Config = &cfg
+	if err := state.WriteManifest(tmpDir, &manifest); err != nil {
+		t.Fatalf("write manifest: %v", err)
 	}
 	// Create the mods dir to satisfy managed root existence not strictly required but realistic.
 	if err := os.MkdirAll(filepath.Join(tmpDir, "mods"), 0o755); err != nil {
@@ -39,12 +41,8 @@ func TestTakeoverWithPartialExistingLucyState_RespectsObservationPrecedence(t *t
 		t.Fatalf("build result: %v", err)
 	}
 
-	// ConfigToWrite should be nil because preserve mode keeps existing.
-	if result.ConfigToWrite != nil {
-		t.Error("expected ConfigToWrite to be nil in preserve mode when config exists")
-	}
-	if !slices.Contains(result.SkippedFiles, string(state.ConfigFile)) {
-		t.Errorf("expected config to be skipped, got %v", result.SkippedFiles)
+	if !slices.Contains(result.SkippedFiles, string(state.ManifestFile)) {
+		t.Errorf("expected manifest to be skipped, got %v", result.SkippedFiles)
 	}
 
 	// Manifest is merged into lucy.yaml, so preserve mode keeps it with config.
@@ -60,9 +58,11 @@ func TestTakeoverWithPartialExistingLucyState_RespectsObservationPrecedence(t *t
 func TestTakeoverWithInconsistentExistingState_TracksConflicts(t *testing.T) {
 	tmpDir := t.TempDir()
 
+	manifest := state.ManifestDefaults()
 	cfg := state.ConfigDefaults()
-	if err := state.WriteConfig(tmpDir, &cfg); err != nil {
-		t.Fatalf("write config: %v", err)
+	manifest.Config = &cfg
+	if err := state.WriteManifest(tmpDir, &manifest); err != nil {
+		t.Fatalf("write manifest: %v", err)
 	}
 	malformedManifest := []byte(`format_version: v1
 environment:
