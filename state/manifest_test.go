@@ -278,6 +278,29 @@ func TestManifestDefaults(t *testing.T) {
 	}
 }
 
+func TestManifestBlankPackageEntryMeansEmptyPackages(t *testing.T) {
+	manifest, err := ParseManifest(
+		[]byte(`format_version: v1
+environment:
+  game_version: "1.21.4"
+  compatible_platforms: []
+  declared_capabilities: []
+packages:
+  -
+bundles: []
+`),
+	)
+	if err != nil {
+		t.Fatalf(
+			"blank package entry should parse as empty package list: %v",
+			err,
+		)
+	}
+	if len(manifest.Packages) != 0 {
+		t.Fatalf("expected no packages, got %#v", manifest.Packages)
+	}
+}
+
 func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t *testing.T) {
 	manifest := &Manifest{
 		FormatVersion: ManifestDefaults().FormatVersion,
