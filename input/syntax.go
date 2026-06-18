@@ -1,8 +1,18 @@
-// Package syntax defines the syntax for specifying packages and platforms.
+// Package input defines the syntax for specifying packages and platforms.
 //
 // A package can either be specified by a string in the format of
-// "platform/name@version". Only the name is required, both platform and version
-// can be omitted.
+// "scope:platform/name@version". Only the name is required; scope, platform,
+// and version can all be omitted.
+//
+// The operators, from lowest to highest priority:
+//
+//	:   scope delimiter     (outermost — split first)
+//	@   version delimiter
+//	/   platform delimiter  (innermost — split last)
+//
+// The ':' operator only acts on the leftmost colon that appears before any '/'
+// or '@'. Colons inside the version (e.g., Maven "group:artifact:version"
+// coordinates after '@') are preserved.
 //
 // Valid Examples:
 //   - carpet
@@ -12,6 +22,9 @@
 //   - minecraft@1.19 (recommended)
 //   - minecraft/minecraft@1.16.5 (= minecraft@1.16.5)
 //   - 1.8.9 (= minecraft@1.8.9)
+//   - modrinth:fabric/jade@1.0.0
+//   - modrinth:jade
+//   - auto:fabric-api
 package input
 
 import (
@@ -51,20 +64,33 @@ func ParsePackageRef(s string) (ref types.PackageRef, err error) {
 	return ref, nil
 }
 
-// Parse is exported to parse a string into a PackageId struct.
-// Returns the parsed PackageId and an error if parsing fails.
-func Parse(s string) (id types.VersionedPackageRef, err error) {
+// Parse parses a scoped package specifier ("scope:platform/name@version") into a
+// ScopedPackageRef and a BareVersion. An omitted scope defaults to SourceAuto;
+// an omitted version defaults to VersionAny. Identity aliases are normalized
+// the same way as in ParsePackageRef.
+func Parse(s string) (ref types.ScopedPackageRef, version types.BareVersion, err error) {
 	text := strings.TrimSpace(strings.ToLower(s))
-	id = types.VersionedPackageRef{}
-	id.Platform, id.Name, id.Version, err = parseOperatorAt(text)
+	ref = types.ScopedPackageRef{}
+	version = types.VersionAny
+
+	scope, remainder, err := parseOperatorColon(text)
 	if err != nil {
-		return types.VersionedPackageRef{}, err
+		return types.ScopedPackageRef{}, "", err
 	}
-	identity, ok := types.NormalizeIdentityPackage(id.PackageRef)
-	if ok {
-		id.PackageRef = identity
+
+	pl, n, v, err := parseOperatorAt(remainder)
+	if err != nil {
+		return types.ScopedPackageRef{}, "", err
 	}
-	return id, nil
+
+	ref.PackageRef = types.PackageRef{Platform: pl, Name: n}
+	ref.Scope = scope
+	version = v
+
+	if identity, ok := types.NormalizeIdentityPackage(ref.PackageRef); ok {
+		ref.PackageRef = identity
+	}
+	return ref, version, nil
 }
 
 func ToProjectName(s string) types.BarePackageName {
@@ -72,6 +98,39 @@ func ToProjectName(s string) types.BarePackageName {
 	s = strings.ReplaceAll(s, "_", "-")
 	s = strings.ReplaceAll(s, " ", "-")
 	return types.BarePackageName(s)
+}
+
+// parseOperatorColon splits on the scope delimiter ':' — the outermost operator.
+// Only the leftmost ':' before the first '/' or '@' is the delimiter; colons
+// after '@' (Maven version coordinates) are preserved. No ':' defaults to
+// SourceAuto.
+func parseOperatorColon(s string) (
+	scope types.SourceId,
+	remainder string,
+	err error,
+) {
+	// Scope zone: prefix before the first '/' or '@'. A ':' here is the delimiter.
+	boundary := len(s)
+	if i := strings.IndexByte(s, '/'); i >= 0 && i < boundary {
+		boundary = i
+	}
+	if i := strings.IndexByte(s, '@'); i >= 0 && i < boundary {
+		boundary = i
+	}
+
+	colonIdx := strings.IndexByte(s[:boundary], ':')
+	if colonIdx < 0 {
+		return types.SourceAuto, s, nil
+	}
+
+	scope = types.ParseSource(s[:colonIdx])
+	if scope == types.SourceUnknown {
+		return types.SourceUnknown, "", fmt.Errorf(
+			"%w: unknown source %q",
+			ESyntax, s[:colonIdx],
+		)
+	}
+	return scope, s[colonIdx+1:], nil
 }
 
 // parseOperatorAt is called first since '@' operator always occur after '/' (equivalent

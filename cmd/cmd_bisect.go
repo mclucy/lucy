@@ -376,16 +376,16 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 
 	mods := make([]bisectMod, 0, len(sorted))
 	for _, node := range sorted {
-		packageID, err := input.Parse(node.ID)
+		ref, _, err := input.Parse(node.ID)
 		if err != nil {
 			continue
 		}
-		if types.IsIdentityPackage(packageID.PackageRef) {
+		if types.IsIdentityPackage(ref.PackageRef) {
 			continue
 		}
 		mods = append(
 			mods, bisectMod{
-				ID:      packageID.PackageRef,
+				ID:      ref.PackageRef,
 				Version: types.BareVersion(node.Version),
 				Path:    pathByID[node.ID],
 			},

@@ -114,7 +114,7 @@ func init() {
 }
 
 func actionSearch(cmd *cobra.Command, args []string) error {
-	p, err := input.Parse(args[0])
+	ref, _, err := input.Parse(args[0])
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -124,8 +124,11 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	sourceArg, _ := cmd.Flags().GetString(flagSourceName)
 	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
 	specifiedSource := types.ParseSource(sourceArg)
+	if sourceArg == "" {
+		specifiedSource = ref.Scope
+	}
 
-	resolvedPlatform, err := ResolvePlatform(p.Platform, platformArg)
+	resolvedPlatform, err := ResolvePlatform(ref.PackageRef.Platform, platformArg)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -149,7 +152,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		logger.Fatal(fmt.Errorf("%w: %s", err, errArg))
 	}
 
-	results, errs := routing.SearchMany(providers, p.Name, options)
+	results, errs := routing.SearchMany(providers, ref.PackageRef.Name, options)
 	for _, err := range errs {
 		providerErr := fmt.Errorf(
 			"search on %s failed: %w",

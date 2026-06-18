@@ -58,11 +58,14 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 
 	ids := make([]types.VersionedPackageRef, 0, len(args))
 	for _, arg := range args {
-		id, err := input.Parse(arg)
+		ref, version, err := input.Parse(arg)
 		if err != nil {
 			return err
 		}
-		ids = append(ids, id)
+		ids = append(ids, types.VersionedPackageRef{
+			PackageRef: ref.PackageRef,
+			Version:    version,
+		})
 	}
 
 	manifest := state.UpdateManifestRolesForRemove(

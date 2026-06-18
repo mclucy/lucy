@@ -125,7 +125,7 @@ func exactSyncPackageIDs(
 
 	requested := make([]install.PackageRequest, 0, len(lock.Packages))
 	for _, pkg := range lock.Packages {
-		id, err := input.Parse(pkg.ID + "@" + pkg.Version)
+		ref, version, err := input.Parse(pkg.ID + "@" + pkg.Version)
 		if err != nil {
 			return nil, false, fmt.Errorf(
 				"parse locked package %s: %w",
@@ -133,15 +133,12 @@ func exactSyncPackageIDs(
 				err,
 			)
 		}
-		// TODO(package-ref-migration): remove wrapping once lock parsing returns PackageRequest.
 		requested = append(
 			requested, install.PackageRequest{
 				FullPackageRef: types.FullPackageRef{
-					PackageRef: types.PackageRef{
-						Platform: id.Platform, Name: id.Name,
-					},
-					Version: id.Version,
-					Scope:   types.ParseSource(pkg.Source),
+					PackageRef: ref.PackageRef,
+					Version:    version,
+					Scope:      types.ParseSource(pkg.Source),
 				},
 			},
 		)
@@ -170,19 +167,16 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 		if pkg.Role != state.RoleRequired {
 			continue
 		}
-		id, err := input.Parse(pkg.ID + "@" + pkg.Version)
+		ref, version, err := input.Parse(pkg.ID + "@" + pkg.Version)
 		if err != nil {
 			return nil, fmt.Errorf("parse manifest package %s: %w", pkg.ID, err)
 		}
-		// TODO(package-ref-migration): remove wrapping once manifest parsing returns PackageRequest.
 		requested = append(
 			requested, install.PackageRequest{
 				FullPackageRef: types.FullPackageRef{
-					PackageRef: types.PackageRef{
-						Platform: id.Platform, Name: id.Name,
-					},
-					Version: id.Version,
-					Scope:   types.ParseSource(pkg.Source),
+					PackageRef: ref.PackageRef,
+					Version:    version,
+					Scope:      types.ParseSource(pkg.Source),
 				},
 			},
 		)

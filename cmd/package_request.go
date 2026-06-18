@@ -10,21 +10,24 @@ import (
 )
 
 func packageRequestFromInput(raw string, rawSource string) (install.PackageRequest, error) {
-	id, err := input.Parse(strings.TrimSpace(raw))
+	ref, version, err := input.Parse(strings.TrimSpace(raw))
 	if err != nil {
 		return install.PackageRequest{}, err
 	}
 
-	scope := types.ParseSource(strings.TrimSpace(rawSource))
-	if scope == types.SourceUnknown {
-		return install.PackageRequest{}, fmt.Errorf("unknown source %s", rawSource)
+	if rawSource != "" {
+		scope := types.ParseSource(strings.TrimSpace(rawSource))
+		if scope == types.SourceUnknown {
+			return install.PackageRequest{}, fmt.Errorf("unknown source %s", rawSource)
+		}
+		ref.Scope = scope
 	}
 
 	return install.PackageRequest{
 		FullPackageRef: types.FullPackageRef{
-			PackageRef: id.PackageRef,
-			Version:    id.Version,
-			Scope:      scope,
+			PackageRef: ref.PackageRef,
+			Version:    version,
+			Scope:      ref.Scope,
 		},
 	}, nil
 }

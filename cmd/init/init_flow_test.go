@@ -553,11 +553,14 @@ func testObservedPackage(
 	source types.SourceId,
 	deps []types.Dependency,
 ) types.Package {
-	pkgID, err := input.Parse(id)
+	ref, version, err := input.Parse(id)
 	if err != nil {
 		panic(err)
 	}
-	pkg := types.Package{Id: pkgID}
+	pkg := types.Package{Id: types.VersionedPackageRef{
+		PackageRef: ref.PackageRef,
+		Version:    version,
+	}}
 	if source != types.SourceUnknown {
 		pkg.Remote = &types.PackageRemote{Source: source}
 	}
