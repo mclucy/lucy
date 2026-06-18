@@ -6,6 +6,5 @@ import "github.com/mclucy/lucy/types"
 // only after package input has been parsed into a concrete package ref and a
 // source scope has been chosen.
 type PackageRequest struct {
-	types.ScopedPackageRef
-	Version types.BareVersion
+	types.FullPackageRef
 }
