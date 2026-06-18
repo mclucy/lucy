@@ -216,11 +216,14 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 
 func mustParsePackageID(t *testing.T, raw string) types.VersionedPackageRef {
 	t.Helper()
-	id, err := input.Parse(raw)
+	ref, version, err := input.Parse(raw)
 	if err != nil {
 		t.Fatalf("parse %q: %v", raw, err)
 	}
-	return id
+	return types.VersionedPackageRef{
+		PackageRef: ref.PackageRef,
+		Version:    version,
+	}
 }
 
 func mustParsePackageRequest(t *testing.T, raw string) install.PackageRequest {
