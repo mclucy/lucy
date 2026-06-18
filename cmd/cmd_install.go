@@ -136,13 +136,13 @@ func exactSyncPackageIDs(
 		// TODO(package-ref-migration): remove wrapping once lock parsing returns PackageRequest.
 		requested = append(
 			requested, install.PackageRequest{
-				ScopedPackageRef: types.ScopedPackageRef{
+				FullPackageRef: types.FullPackageRef{
 					PackageRef: types.PackageRef{
 						Platform: id.Platform, Name: id.Name,
 					},
-					Scope: types.ParseSource(pkg.Source),
+					Version: id.Version,
+					Scope:   types.ParseSource(pkg.Source),
 				},
-				Version: id.Version,
 			},
 		)
 	}
@@ -177,13 +177,13 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 		// TODO(package-ref-migration): remove wrapping once manifest parsing returns PackageRequest.
 		requested = append(
 			requested, install.PackageRequest{
-				ScopedPackageRef: types.ScopedPackageRef{
+				FullPackageRef: types.FullPackageRef{
 					PackageRef: types.PackageRef{
 						Platform: id.Platform, Name: id.Name,
 					},
-					Scope: types.ParseSource(pkg.Source),
+					Version: id.Version,
+					Scope:   types.ParseSource(pkg.Source),
 				},
-				Version: id.Version,
 			},
 		)
 	}

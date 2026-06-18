@@ -360,13 +360,13 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 	updated := UpdateManifestRolesForAdd(
 		manifest, []install.PackageRequest{
 			{
-				ScopedPackageRef: types.ScopedPackageRef{
+				FullPackageRef: types.FullPackageRef{
 					PackageRef: types.PackageRef{
 						Platform: types.PlatformFabric, Name: "new-root",
 					},
-					Scope: types.SourceModrinth,
+					Version: types.VersionLatest,
+					Scope:   types.SourceModrinth,
 				},
-				Version: types.VersionLatest,
 			},
 		}, lock,
 	)

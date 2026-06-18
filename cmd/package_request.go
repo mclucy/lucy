@@ -21,10 +21,10 @@ func packageRequestFromInput(raw string, rawSource string) (install.PackageReque
 	}
 
 	return install.PackageRequest{
-		ScopedPackageRef: types.ScopedPackageRef{
+		FullPackageRef: types.FullPackageRef{
 			PackageRef: id.PackageRef,
+			Version:    id.Version,
 			Scope:      scope,
 		},
-		Version: id.Version,
 	}, nil
 }
