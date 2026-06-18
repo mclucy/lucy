@@ -8,15 +8,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream/providers/modloader"
-	"github.com/mclucy/lucy/upstream/providers/mojang"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -62,63 +59,37 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) InstallPlatform(
-	id types.VersionedPackageRef,
-	serverDir string,
-) error {
-	if err := guardServerTopology(); err != nil {
-		return err
-	}
-
-	serverInfo := workspace.ServerInfo()
-	workPath := serverDir
-	if workPath == "" {
-		workPath = serverInfo.Root
-	}
-	if workPath == "" {
-		return errors.New("server working directory not found")
-	}
-
+func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
 	gameVersion, err := minecraftVersionForInstall()
 	if err != nil {
-		return err
+		return upstream.FetchResult{}, err
 	}
 
 	if gameVersion == types.VersionUnknown {
-		return fmt.Errorf(
+		return upstream.FetchResult{}, fmt.Errorf(
 			"unknown minecraft version, cannot infer forge bootstrap artifact; see %s",
 			docsURL,
 		)
 	}
 
-	if err := modloader.CheckJavaAvailability(); err != nil {
-		return err
-	}
-
-	if err := mojang.EnsureEULAAccepted(workPath); err != nil {
-		return err
-	}
-
-	promptSupportProject()
-
 	forgeVersion, err := forgeVersionFromPackageRef(id, gameVersion)
 	if err != nil {
-		return err
+		return upstream.FetchResult{}, err
 	}
-	id.Version = types.BareVersion(forgeVersion)
 
 	fileURL := installerURL(gameVersion, forgeVersion)
 
-	if err := modloader.RunInstaller(
-		id,
-		fileURL,
-		workPath,
-		"Forge",
-	); err != nil {
-		return err
-	}
-
-	return verifyInstallation(workPath)
+	return upstream.FetchResult{
+		Source:  types.SourceForge,
+		FileURL: fileURL,
+		Filename: fmt.Sprintf(
+			"forge-%s-%s-installer.jar",
+			gameVersion.String(),
+			forgeVersion,
+		),
+		Hash:          "",
+		HashAlgorithm: "",
+	}, nil
 }
 
 func minecraftVersionForInstall() (types.BareVersion, error) {
@@ -150,36 +121,6 @@ func forgeVersionFromPackageRef(
 	return fetchVersion(gameVersion)
 }
 
-func guardServerTopology() error {
-	serverPlatform := workspace.ServerInfo().Runtime.DerivedModLoader()
-
-	switch serverPlatform {
-	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
-		return fmt.Errorf(
-			"found an existing server platform %s, installation of forge aborted",
-			serverPlatform.Title(),
-		)
-	}
-	return nil
-}
-
-func promptSupportProject() {
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title("Supporting the Forge project").
-				Description(
-					"The Forge project is sustained by ads on the download page. By automating " +
-						"this process, we may reduce ad revenue that supports the project. If you find " +
-						"Forge useful, please consider supporting the project by downloading manually " +
-						"from their official site <https://files.minecraftforge.net>, or support them on " +
-						"Patreon at <https://www.patreon.com/LexManos>",
-				),
-		),
-	).WithWidth(80)
-	_ = form.Run()
-}
-
 func promptSelectMinecraftVersion() (version string) {
 	versions, err := fetchSupportedMinecraftVersions()
 	if err != nil || len(versions) == 0 {
@@ -189,7 +130,7 @@ func promptSelectMinecraftVersion() (version string) {
 	gameVersions := versions
 
 	var installLatest bool
-	options := huh.NewOptions[string](gameVersions...)
+	options := huh.NewOptions(gameVersions...)
 	err = huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
@@ -353,38 +294,4 @@ func installerURL(
 		escaped,
 		escaped,
 	)
-}
-
-func verifyInstallation(workPath string) error {
-	librariesPath := filepath.Join(workPath, "libraries")
-	if _, err := os.Stat(librariesPath); err == nil {
-		launchScripts := []string{
-			"run.sh", "run.bat", "unix_args.txt", "win_args.txt",
-		}
-		for _, script := range launchScripts {
-			if _, err := os.Stat(filepath.Join(workPath, script)); err == nil {
-				return nil
-			}
-		}
-	}
-
-	entries, err := os.ReadDir(workPath)
-	if err != nil {
-		return fmt.Errorf(
-			"verify forge installation failed: cannot read work directory: %w",
-			err,
-		)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if strings.Contains(name, "forge-") && strings.HasSuffix(name, ".jar") {
-			return nil
-		}
-	}
-
-	return errors.New("forge installation verification failed: no artifacts found (expected libraries/ with launch scripts or forge-*.jar)")
 }

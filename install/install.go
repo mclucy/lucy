@@ -43,6 +43,8 @@ func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 
 func installPlatform(id types.VersionedPackageRef) error {
 	serverInfo := workspace.ServerInfo()
+
+	// MCDR is not a PlatformInstaller provider — handled separately.
 	if id.Platform == types.PlatformMCDR {
 		if serverInfo.Environments.Mcdr != nil {
 			return errors.New("mcdr already installed")
@@ -54,5 +56,29 @@ func installPlatform(id types.VersionedPackageRef) error {
 	if !ok {
 		return fmt.Errorf("cannot install platform: %s", id.Platform)
 	}
-	return installer.InstallPlatform(id, serverInfo.Root)
+
+	resolved, err := installer.ResolveVersionSelector(id)
+	if err != nil {
+		return fmt.Errorf("resolve version failed: %w", err)
+	}
+
+	fetched, err := installer.Fetch(resolved)
+	if err != nil {
+		return fmt.Errorf("fetch platform artifact failed: %w", err)
+	}
+
+	serverDir := serverInfo.Root
+
+	switch id.Platform {
+	case types.PlatformMinecraft:
+		return installMojangPlatform(resolved, fetched, serverDir)
+	case types.PlatformFabric:
+		return installFabricPlatform(resolved, fetched, serverDir)
+	case types.PlatformForge:
+		return installForgePlatform(resolved, fetched, serverDir)
+	case types.PlatformNeoforge:
+		return installNeoforgePlatform(resolved, fetched, serverDir)
+	default:
+		return fmt.Errorf("unsupported platform for installation: %s", id.Platform)
+	}
 }
