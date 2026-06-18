@@ -27,6 +27,12 @@ type ScopedPackageRef struct {
 	Scope SourceId
 }
 
+type FullPackageRef struct {
+	PackageRef
+	Version BareVersion
+	Scope   SourceId
+}
+
 type StringablePackageRef interface {
 	StringFull() string
 	StringBase() string
