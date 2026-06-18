@@ -53,7 +53,7 @@ type ArtifactMapSource interface {
 type PlatformInstaller interface {
 	SourceIdentifier
 	VersionSelectorResolver
-	InstallPlatform(id types.VersionedPackageRef, serverDir string) error
+	Fetcher
 }
 
 type FetchResult struct {

@@ -1,8 +1,7 @@
-package modloader
+package install
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,15 +9,11 @@ import (
 	"os/exec"
 	"path"
 	"strings"
-	"time"
 
-	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/tui/progress"
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/workspace"
 )
 
-func CheckJavaAvailability() error {
+func checkJavaAvailability() error {
 	_, err := exec.LookPath("java")
 	if err != nil {
 		return errors.New("java not found in PATH, mod loader installer requires Java")
@@ -210,48 +205,5 @@ func runInstallerJar(installerPath string, tracker *progress.Tracker) error {
 		)
 	}
 
-	return nil
-}
-
-func RunInstaller(
-	id types.VersionedPackageRef,
-	fileURL string,
-	workPath string,
-	platformName string,
-) error {
-	tracker := progress.NewTrackerWithLogging(id.StringFull(), 5)
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = progress.WaitForShutdown(ctx)
-	}()
-	defer tracker.Close()
-
-	result, err := cache.CachedDownload(
-		fileURL,
-		workPath,
-		cache.DownloadOptions{
-			Kind:               cache.KindArtifact,
-			WrapReader:         tracker.ProxyReader,
-			OnCacheHit:         tracker.CacheHit,
-			OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
-			FileMode:           0o750,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-	if result == nil {
-		return errors.New("download result is nil")
-	}
-	defer func() { _ = result.File.Close() }()
-
-	if err := runInstallerJar(result.File.Name(), tracker); err != nil {
-		return err
-	}
-
-	tracker.SetPercent(0.99)
-	workspace.Rebuild()
-	tracker.Complete(platformName + " installed")
 	return nil
 }

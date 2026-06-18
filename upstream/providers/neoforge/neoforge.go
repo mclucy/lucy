@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream/providers/modloader"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -62,61 +60,36 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) InstallPlatform(
-	id types.VersionedPackageRef,
-	serverDir string,
-) error {
-	if err := guardServerTopology(); err != nil {
-		return err
-	}
-
-	serverInfo := workspace.ServerInfo()
-	workPath := serverDir
-	if workPath == "" {
-		workPath = serverInfo.Root
-	}
-	if workPath == "" {
-		return errors.New("server working directory not found")
-	}
-
+func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
 	gameVersion, err := minecraftVersionForInstall()
 	if err != nil {
-		return err
+		return upstream.FetchResult{}, err
 	}
 
 	if gameVersion == types.VersionUnknown {
-		return fmt.Errorf(
+		return upstream.FetchResult{}, fmt.Errorf(
 			"unknown minecraft version, cannot infer NeoForge bootstrap artifact; see %s",
 			docsURL,
 		)
 	}
 
-	if err := modloader.CheckJavaAvailability(); err != nil {
-		return err
-	}
-
-	if err := mojang.EnsureEULAAccepted(workPath); err != nil {
-		return err
-	}
-
 	neoForgeVersion, err := neoForgeVersionFromPackageRef(id, gameVersion)
 	if err != nil {
-		return err
+		return upstream.FetchResult{}, err
 	}
-	id.Version = types.BareVersion(neoForgeVersion)
 
 	fileURL := installerURL(neoForgeVersion)
 
-	if err := modloader.RunInstaller(
-		id,
-		fileURL,
-		workPath,
-		"NeoForge",
-	); err != nil {
-		return err
-	}
-
-	return verifyInstallation(workPath)
+	return upstream.FetchResult{
+		Source:  types.SourceNeoForge,
+		FileURL: fileURL,
+		Filename: fmt.Sprintf(
+			"neoforge-%s-installer.jar",
+			neoForgeVersion,
+		),
+		Hash:          "",
+		HashAlgorithm: "",
+	}, nil
 }
 
 func minecraftVersionForInstall() (types.BareVersion, error) {
@@ -146,19 +119,6 @@ func neoForgeVersionFromPackageRef(
 		return p.Version.String(), nil
 	}
 	return fetchLatestVersion(gameVersion)
-}
-
-func guardServerTopology() error {
-	serverPlatform := workspace.ServerInfo().Runtime.DerivedModLoader()
-
-	switch serverPlatform {
-	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
-		return fmt.Errorf(
-			"found an existing server platform %s, installation of NeoForge aborted",
-			serverPlatform.Title(),
-		)
-	}
-	return nil
 }
 
 func fetchLatestVersion(gameVersion types.BareVersion) (string, error) {
@@ -217,25 +177,6 @@ func installerURL(neoForgeVersion string) string {
 		mavenBaseURL,
 		neoForgeVersion,
 		neoForgeVersion,
-	)
-}
-
-func verifyInstallation(workPath string) error {
-	launchScripts := []string{"run.sh", "run.bat"}
-	for _, script := range launchScripts {
-		if _, err := os.Stat(filepath.Join(workPath, script)); err == nil {
-			return nil
-		}
-	}
-
-	neoLibPath := filepath.Join(workPath, "libraries", "net", "neoforged")
-	if _, err := os.Stat(neoLibPath); err == nil {
-		return nil
-	}
-
-	return errors.New(
-		"NeoForge installation verification failed: no artifacts found " +
-			"(expected run.sh/run.bat or libraries/net/neoforged/)",
 	)
 }
 

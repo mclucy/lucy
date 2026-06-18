@@ -1,18 +1,15 @@
 package fabric
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
-	probe2 "github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -53,116 +50,45 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) InstallPlatform(
-	id types.VersionedPackageRef,
-	serverDir string,
-) error {
+func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
 	serverInfo := workspace.ServerInfo()
 	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 
-	switch serverPlatform {
-	case types.PlatformUnknown:
-		return errors.New("unknown mod loader, cannot infer fabric bootstrap artifact")
-	case types.PlatformFabric:
-		return errors.New("fabric server already detected, installation aborted")
-	case types.PlatformForge:
-		return errors.New("Forge server detected, cannot install Fabric bootstrap")
-	case types.PlatformNeoforge:
-		return errors.New("NeoForge server detected, cannot install Fabric bootstrap")
-	case types.PlatformVanilla:
-		override, deleteVanilla := promptOverrideVanilla()
-		if !override {
-			return errors.New("installation aborted by user")
-		}
-		return installWithOverride(id, serverDir, deleteVanilla)
-	case types.PlatformNone:
-	default:
-		return fmt.Errorf(
-			"unsupported server platform %s for fabric installation",
-			serverPlatform.Title(),
-		)
-	}
-	return installWithOverride(id, serverDir, false)
-}
-
-func installWithOverride(
-	p types.VersionedPackageRef,
-	serverDir string,
-	deleteVanilla bool,
-) error {
-	serverInfo := workspace.ServerInfo()
-
-	workPath := serverDir
-	if workPath == "" {
-		workPath = serverInfo.Root
-	}
-	if workPath == "" {
-		workPath = "."
-	}
-
 	var gameVersionID string
-	switch serverInfo.Runtime.DerivedModLoader() {
+	switch serverPlatform {
 	case types.PlatformVanilla:
 		gameVersionID = string(serverInfo.Runtime.GameVersion)
 	case types.PlatformNone:
 		gameVersionID = promptSelectMinecraftVersion()
+	default:
+		return upstream.FetchResult{}, fmt.Errorf(
+			"unsupported server platform %s for fabric bootstrap",
+			serverPlatform.Title(),
+		)
 	}
 
-	loaderVersion, err := loaderVersion(p.Version)
+	loaderVer, err := loaderVersion(id.Version)
 	if err != nil {
-		return fmt.Errorf("resolve fabric loader version failed: %w", err)
-	}
-	if gameVersionID == "" {
-		gameVersionID, err = gameVersion(serverInfo.Runtime.GameVersion)
-		if err != nil {
-			return fmt.Errorf("cannot install fabric for game version: %w", err)
-		}
-	}
-	installerVersion, err := latestInstallerVersion()
-	if err != nil {
-		return fmt.Errorf("cannot get fabric loader version: %w", err)
+		return upstream.FetchResult{}, fmt.Errorf("resolve fabric loader version failed: %w", err)
 	}
 
-	artifactURL := fmt.Sprintf(
+	installerVer, err := latestInstallerVersion()
+	if err != nil {
+		return upstream.FetchResult{}, fmt.Errorf("resolve fabric installer version failed: %w", err)
+	}
+
+	url := fmt.Sprintf(
 		"https://meta.fabricmc.net/v2/versions/loader/%s/%s/%s/server/jar",
-		gameVersionID, loaderVersion, installerVersion,
+		gameVersionID, loaderVer, installerVer,
 	)
 
-	tracker := progress.NewTracker("fabric")
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = progress.WaitForShutdown(ctx)
-	}()
-	defer tracker.Close()
-
-	result, err := cache.CachedDownload(
-		artifactURL,
-		workPath,
-		cache.DownloadOptions{
-			Kind:               cache.KindArtifact,
-			WrapReader:         tracker.ProxyReader,
-			OnCacheHit:         tracker.CacheHit,
-			OnResolvedFilename: func(title string) { tracker.SetTitle(title) },
-		},
-	)
-
-	if result != nil {
-		probe2.CloseReader(result.File, nil)
-	}
-	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-
-	if deleteVanilla {
-		err = os.Remove(serverInfo.Runtime.PrimaryEntrance)
-		if err != nil {
-			return fmt.Errorf("delete vanilla server failed: %w", err)
-		}
-	}
-	workspace.Rebuild()
-
-	return nil
+	return upstream.FetchResult{
+		Source:        types.SourceFabric,
+		FileURL:       url,
+		Filename:      fmt.Sprintf("fabric-server-mc%s-loader%s-launcher%s.jar", gameVersionID, loaderVer, installerVer),
+		Hash:          "",
+		HashAlgorithm: "",
+	}, nil
 }
 
 func loaderVersion(loaderVersion types.BareVersion) (string, error) {
@@ -282,32 +208,6 @@ func fetchVersionsMeta(endpoint string, target any) (err error) {
 		)
 	}
 
-	return
-}
-
-func promptOverrideVanilla() (override bool, deleteVanilla bool) {
-	path := workspace.ServerInfo().Runtime.PrimaryEntrance
-	version := workspace.ServerInfo().Runtime.GameVersion
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Vanilla server detected, override it with a corresponding fabric server?").
-				Description(
-					fmt.Sprintf(
-						"Found server at %s, with game version %s",
-						path, version,
-					),
-				).
-				Value(&override),
-		),
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Delete vanilla server after fabric installation?").
-				Description(fmt.Sprintf("Will delete %s", path)).
-				Value(&deleteVanilla),
-		).WithHideFunc(func() bool { return !override }),
-	)
-	_ = form.Run()
 	return
 }
 
