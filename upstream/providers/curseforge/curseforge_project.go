@@ -12,7 +12,7 @@ import (
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func resolveSlug(slug types.BarePackageName) (*modResponse, error) {
 	// Canonicalize slug-like name to provider canonical slug before search.
-	if canonical, ok := knownpkgs.Default().GetLoose(
+	if canonical, ok := knownpkgs.Default().Session().Lookup(
 		types.SourceCurseForge,
 		string(slug),
 	); ok {

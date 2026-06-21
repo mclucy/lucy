@@ -58,7 +58,7 @@ func listVersions(slug types.BarePackageName) (
 		return versions, nil
 	}
 
-	if canonical, ok := knownpkgs.Default().GetLoose(
+	if canonical, ok := knownpkgs.Default().Session().Lookup(
 		types.SourceModrinth,
 		string(slug),
 	); ok && canonical != string(slug) {

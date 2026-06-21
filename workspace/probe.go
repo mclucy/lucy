@@ -440,17 +440,23 @@ func buildInstalledPackages() (mods []types.Package) {
 
 // knownPackagesSlugResolver returns a slug resolver that consults the knownpkgs
 // session for a canonical name matching the detected platform/local name.
-// Returns the original name when no mapping is known.
+//
+// On hit, the mapping is promoted into the session cache via Record so that
+// subsequent resolutions in the same invocation see the freshly discovered
+// mapping without re-querying.
 func knownPackagesSlugResolver(session *knownpkgs.Session) artifact.SlugResolver {
 	return func(
 		ctx context.Context,
 		platform types.PlatformId,
 		name types.BarePackageName,
 	) (types.BarePackageName, error) {
-		canonical, _, ok := session.LookupAny(string(name))
-		if !ok {
+		canonical, src, ok := session.LookupAny(string(name))
+		if !ok || canonical == string(name) {
 			return name, nil
 		}
+		// Resolver runs on the local name only, not on file contents — the
+		// persisted store already holds this mapping (LookupAny hit it).
+		session.Record(src, string(name), "", canonical, "hash")
 		return types.BarePackageName(canonical), nil
 	}
 }
