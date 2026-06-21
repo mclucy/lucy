@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"crypto/sha1"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
@@ -16,8 +17,11 @@ type Fetcher interface {
 	Fetch(id types.VersionedPackageRef) (FetchResult, error)
 }
 
-type DependencyLister interface {
-	Dependencies(id types.VersionedPackageRef) (*types.PackageDependencies, error)
+type DependencyResolver interface {
+	Dependencies(id types.VersionedPackageRef) (
+		*types.PackageDependencies,
+		error,
+	)
 }
 
 type SupportReporter interface {
@@ -32,7 +36,7 @@ type PackageResolver interface {
 
 type PackageSource interface {
 	PackageResolver
-	DependencyLister
+	DependencyResolver
 }
 
 type SearchSource interface {
@@ -54,6 +58,68 @@ type PlatformInstaller interface {
 	SourceIdentifier
 	VersionSelectorResolver
 	Fetcher
+}
+
+type SupportedPlatformsReporter interface {
+	SupportedPlatforms() []types.PlatformId
+}
+
+type ArtifactMapper interface {
+	NameByHash(artifact Hashable) (
+		name RemotePackageName,
+		hash string,
+		err error,
+	)
+}
+
+type Hashable interface {
+	Sha1() [sha1.Size]byte
+}
+
+type ArtifactResolver interface {
+	ResolveArtifact() ResolvedArtifact
+}
+
+type ResolvedArtifact struct {
+	Ref           types.PackageRef
+	Version       types.BareVersion
+	Source        types.SourceId
+	FileURL       string
+	Filename      string
+	Hash          string
+	HashAlgorithm string
+}
+
+type VersionSelectorResolver interface {
+	ResolveVersionSelector(ref types.VersionedPackageRef) (
+		resolved types.VersionedPackageRef,
+		err error,
+	)
+}
+
+type Searcher interface {
+	Search(q Query) (resp SearchResponse, err error)
+}
+
+type Query struct {
+	Keyword        string
+	SortBy         types.SearchSort
+	ExcludeClient  bool
+	FilterPlatform types.PlatformId
+	Tags           []string
+	Limit          int
+}
+
+type SearchResponse struct {
+	// Source labels which upstream catalog produced this result set.
+	// It is a semantic provenance marker, not a provider instance.
+	Source   types.SourceId
+	Items    []RemotePackageName
+	Warnings []error
+}
+
+type Informer interface {
+	Info(ref types.PackageRef) (info types.Metadata, err error)
 }
 
 type FetchResult struct {
