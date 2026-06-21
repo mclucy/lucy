@@ -60,9 +60,9 @@ func downloadedArtifactPlatforms(tx *RecursiveTransaction) map[string]types.Plat
 }
 
 func selectArtifactInfosForPlatform(
-	infos []artifact.ArtifactInfo,
+	infos []artifact.Info,
 	platform types.PlatformId,
-) []artifact.ArtifactInfo {
+) []artifact.Info {
 	// Cross-loader Forge/NeoForge jars can advertise both loader dependencies in
 	// one descriptor; install verification keeps the identity matching the resolved
 	// candidate so a single downloaded file is applied once.
@@ -72,7 +72,7 @@ func selectArtifactInfosForPlatform(
 		return infos
 	}
 
-	selected := make([]artifact.ArtifactInfo, 0, len(infos))
+	selected := make([]artifact.Info, 0, len(infos))
 	for _, info := range infos {
 		if info.Ref.Platform == platform {
 			selected = append(selected, info)
@@ -84,7 +84,7 @@ func selectArtifactInfosForPlatform(
 	return selected
 }
 
-func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
+func artifactInfoToPackage(infos []artifact.Info) []types.Package {
 	if len(infos) == 0 {
 		return nil
 	}

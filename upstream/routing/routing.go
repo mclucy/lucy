@@ -136,12 +136,12 @@ func (r *Registry) ArtifactMapper(
 
 func (r *Registry) PlatformInstaller(
 	source types.SourceId,
-) (upstream.PlatformInstaller, bool) {
+) (upstream.PlatformProvider, bool) {
 	e, ok := r.entry(source)
 	if !ok {
 		return nil, false
 	}
-	installer, ok := e.impl.(upstream.PlatformInstaller)
+	installer, ok := e.impl.(upstream.PlatformProvider)
 	return installer, ok
 }
 
@@ -157,14 +157,18 @@ func ListAutoProviders() []upstream.PackageSource {
 	return providers
 }
 
-func GetArtifactMapper(src types.SourceId) (upstream.ArtifactMapSource, bool, error) {
+func GetArtifactMapper(src types.SourceId) (
+	upstream.ArtifactMapSource,
+	bool,
+	error,
+) {
 	mapper, ok := DefaultRegistry().ArtifactMapper(src)
 	return mapper, ok, nil
 }
 
 func PlatformInstallerFor(
 	platform types.PlatformId,
-) (upstream.PlatformInstaller, bool) {
+) (upstream.PlatformProvider, bool) {
 	source, ok := platformInstallerSource(platform)
 	if !ok {
 		return nil, false
@@ -261,7 +265,10 @@ func ResolveInfoProviders(
 	return informersFromSources(sources)
 }
 
-func resolveExplicitInformer(src types.SourceId) ([]upstream.InfoSource, error) {
+func resolveExplicitInformer(src types.SourceId) (
+	[]upstream.InfoSource,
+	error,
+) {
 	provider, ok := DefaultRegistry().Informer(src)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
@@ -269,7 +276,10 @@ func resolveExplicitInformer(src types.SourceId) ([]upstream.InfoSource, error) 
 	return []upstream.InfoSource{provider}, nil
 }
 
-func resolveExplicitSearcher(src types.SourceId) ([]upstream.SearchSource, error) {
+func resolveExplicitSearcher(src types.SourceId) (
+	[]upstream.SearchSource,
+	error,
+) {
 	provider, ok := DefaultRegistry().Searcher(src)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
@@ -303,7 +313,10 @@ func ResolveProvidersFromTopology(
 	return []upstream.PackageSource{}, nil
 }
 
-func resolveExplicitSource(src types.SourceId) ([]upstream.PackageSource, error) {
+func resolveExplicitSource(src types.SourceId) (
+	[]upstream.PackageSource,
+	error,
+) {
 	provider, ok := DefaultRegistry().PackageSource(src)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
