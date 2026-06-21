@@ -2,7 +2,7 @@ package curseforge
 
 import (
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/internal/slugmap"
+	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -12,7 +12,7 @@ import (
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func resolveSlug(slug types.BarePackageName) (*modResponse, error) {
 	// Canonicalize slug-like name to provider canonical slug before search.
-	if canonical, ok := slugmap.Default().GetLoose(
+	if canonical, ok := knownpkgs.Default().GetLoose(
 		types.SourceCurseForge,
 		string(slug),
 	); ok {

@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/internal/slugmap"
+	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/tui/style"
@@ -137,7 +137,7 @@ func actionCacheClear(_ *cobra.Command, _ []string) error {
 }
 
 func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
-	entries := slugmap.Default().All()
+	entries := knownpkgs.Default().All()
 	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
 
 	if jsonOutput {
@@ -167,7 +167,7 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 		out.Fields = append(
 			out.Fields, &tui.FieldAnnotatedShortText{
 				Title:      entry.Source.String() + "/" + entry.LocalId,
-				Text:       entry.CanonicalSlug,
+				Text:       entry.CanonicalId,
 				Annotation: shortHash,
 			},
 		)
@@ -178,7 +178,7 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 }
 
 func actionCacheSlugsClear(_ *cobra.Command, _ []string) error {
-	slugmap.Default().Clear()
+	knownpkgs.Default().Clear()
 	logger.ShowInfo("slug map cleared")
 	return nil
 }

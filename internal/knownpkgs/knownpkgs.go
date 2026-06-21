@@ -1,4 +1,4 @@
-package slugmap
+package knownpkgs
 
 import (
 	"encoding/json"
@@ -11,10 +11,10 @@ import (
 
 // Entry is one resolved mapping.
 type Entry struct {
-	Source        types.SourceId `json:"source"`
-	LocalId       string         `json:"local_id"`
-	FileHash      string         `json:"file_hash"`
-	CanonicalSlug string         `json:"canonical_slug"`
+	Source      types.SourceId `json:"source"`
+	LocalId     string         `json:"local_id"`
+	FileHash    string         `json:"file_hash"`
+	CanonicalId string         `json:"canonical_id"`
 	// ResolvedBy is always "hash" — only hash-verified slugs are persisted.
 	ResolvedBy string `json:"resolved_by"`
 }
@@ -37,7 +37,7 @@ func Default() *store {
 			if err != nil {
 				dir = os.TempDir()
 			}
-			p := filepath.Join(dir, "lucy", "slugmap.json")
+			p := filepath.Join(dir, "lucy", "knownpkgs.json")
 			defaultStore = &store{path: p, entries: make(map[string]Entry)}
 			_ = defaultStore.load()
 		},
@@ -55,29 +55,29 @@ func looseKey(src types.SourceId, localId string) string {
 
 func (s *store) Set(
 	src types.SourceId,
-	localId, fileHash, canonicalSlug, resolvedBy string,
+	localId, fileHash, canonicalId, resolvedBy string,
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.entries[preciseKey(src, localId, fileHash)] = Entry{
-		Source:        src,
-		LocalId:       localId,
-		FileHash:      fileHash,
-		CanonicalSlug: canonicalSlug,
-		ResolvedBy:    resolvedBy,
+		Source:      src,
+		LocalId:     localId,
+		FileHash:    fileHash,
+		CanonicalId: canonicalId,
+		ResolvedBy:  resolvedBy,
 	}
 	s.entries[looseKey(src, localId)] = Entry{
-		Source:        src,
-		LocalId:       localId,
-		FileHash:      "",
-		CanonicalSlug: canonicalSlug,
-		ResolvedBy:    resolvedBy,
+		Source:      src,
+		LocalId:     localId,
+		FileHash:    "",
+		CanonicalId: canonicalId,
+		ResolvedBy:  resolvedBy,
 	}
 	_ = s.flush()
 }
 
 func (s *store) Get(src types.SourceId, localId, fileHash string) (
-	slug string,
+	canonicalId string,
 	ok bool,
 ) {
 	s.mu.RLock()
@@ -86,11 +86,11 @@ func (s *store) Get(src types.SourceId, localId, fileHash string) (
 	if !ok {
 		return "", false
 	}
-	return e.CanonicalSlug, true
+	return e.CanonicalId, true
 }
 
 func (s *store) GetLoose(src types.SourceId, localId string) (
-	slug string,
+	canonicalId string,
 	ok bool,
 ) {
 	s.mu.RLock()
@@ -99,7 +99,7 @@ func (s *store) GetLoose(src types.SourceId, localId string) (
 	if !ok {
 		return "", false
 	}
-	return e.CanonicalSlug, true
+	return e.CanonicalId, true
 }
 
 func (s *store) All() []Entry {
