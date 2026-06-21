@@ -54,7 +54,7 @@ type ArtifactMapSource interface {
 	ArtifactMapper
 }
 
-type PlatformInstaller interface {
+type PlatformProvider interface {
 	SourceIdentifier
 	VersionSelectorResolver
 	Fetcher
