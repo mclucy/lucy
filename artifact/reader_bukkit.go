@@ -40,7 +40,7 @@ func (r *bukkitReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != bukkitPluginDescriptorPath {
 			continue
@@ -69,7 +69,7 @@ func (r *bukkitReader) Read(
 		}
 
 		platform := detectBukkitPluginPlatform(descriptor)
-		info := ArtifactInfo{
+		info := Info{
 			Ref: types.PackageRef{
 				Platform: platform,
 				Name:     input.ToProjectName(descriptor.Name),
@@ -92,7 +92,7 @@ func (r *bukkitReader) Read(
 			info.Dependencies = deps
 		}
 
-		return []ArtifactInfo{info}, nil
+		return []Info{info}, nil
 	}
 
 	return nil, nil
@@ -136,9 +136,9 @@ func detectBukkitPluginPlatform(descriptor *bukkitPluginDescriptor) types.Platfo
 func bukkitDescriptorDeps(
 	platform types.PlatformId,
 	descriptor *bukkitPluginDescriptor,
-) []ArtifactDep {
+) []Dependency {
 	deps := make(
-		[]ArtifactDep,
+		[]Dependency,
 		0,
 		len(descriptor.Depend)+len(descriptor.SoftDepend),
 	)
@@ -153,18 +153,18 @@ func bukkitDescriptorDeps(
 }
 
 func appendBukkitDescriptorDeps(
-	deps []ArtifactDep,
+	deps []Dependency,
 	platform types.PlatformId,
 	names []string,
 	mandatory bool,
-) []ArtifactDep {
+) []Dependency {
 	for _, name := range names {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
 		deps = append(
-			deps, ArtifactDep{
+			deps, Dependency{
 				Ref: types.PackageRef{
 					Platform: platform,
 					Name:     input.ToProjectName(name),

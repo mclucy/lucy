@@ -23,7 +23,7 @@ func (r *mcdrReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "mcdreforged.plugin.json" {
 			continue
@@ -61,7 +61,7 @@ func (r *mcdrReader) Read(
 			)
 		}
 
-		info := ArtifactInfo{
+		info := Info{
 			Ref: types.PackageRef{
 				Platform: types.PlatformMCDR,
 				Name:     input.ToProjectName(pluginInfo.Id),
@@ -77,10 +77,10 @@ func (r *mcdrReader) Read(
 		}
 
 		if len(pluginInfo.Dependencies) > 0 {
-			deps := make([]ArtifactDep, 0, len(pluginInfo.Dependencies))
+			deps := make([]Dependency, 0, len(pluginInfo.Dependencies))
 			for key, value := range pluginInfo.Dependencies {
 				deps = append(
-					deps, ArtifactDep{
+					deps, Dependency{
 						Ref: types.PackageRef{
 							Platform: types.PlatformMCDR,
 							Name:     input.ToProjectName(key),
@@ -97,7 +97,7 @@ func (r *mcdrReader) Read(
 			info.Dependencies = deps
 		}
 
-		return []ArtifactInfo{info}, nil
+		return []Info{info}, nil
 	}
 
 	return nil, nil
