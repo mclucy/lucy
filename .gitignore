@@ -49,13 +49,6 @@ test_*
 # Task generated
 .task
 
-# Coding agents
-.codex
-.claude
-.sisyphus
-AGENTS.md
-CLAUDE.md
-
 # Worktree
 .worktrees
 
