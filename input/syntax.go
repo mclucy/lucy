@@ -93,6 +93,18 @@ func Parse(s string) (ref types.ScopedPackageRef, version types.BareVersion, err
 	return ref, version, nil
 }
 
+func ParseFullPackageRef(s string) (types.FullPackageRef, error) {
+	ref, version, err := Parse(s)
+	if err != nil {
+		return types.FullPackageRef{}, err
+	}
+	return types.FullPackageRef{
+		PackageRef: ref.PackageRef,
+		Version:    version,
+		Scope:      ref.Scope,
+	}, nil
+}
+
 func ToProjectName(s string) types.BarePackageName {
 	s = strings.TrimSpace(strings.ToLower(s))
 	s = strings.ReplaceAll(s, "_", "-")

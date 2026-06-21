@@ -477,19 +477,21 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 
 	updated := UpdateManifestRolesForRemove(
 		manifest,
-		[]types.VersionedPackageRef{
+		[]types.FullPackageRef{
 			{
 				PackageRef: types.PackageRef{
 					Platform: types.PlatformFabric,
 					Name:     "root-a",
 				},
 				Version: types.VersionCompatible,
+				Scope:   types.SourceAuto,
 			}, {
 				PackageRef: types.PackageRef{
 					Platform: types.PlatformFabric,
 					Name:     "manual-jar",
 				},
 				Version: types.VersionCompatible,
+				Scope:   types.SourceAuto,
 			},
 		},
 		lock,

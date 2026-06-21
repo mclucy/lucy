@@ -27,10 +27,26 @@ type ScopedPackageRef struct {
 	Scope SourceId
 }
 
+func (p ScopedPackageRef) StringBase() string {
+	return p.PackageRef.StringBase()
+}
+
+func (p ScopedPackageRef) StringFull() string {
+	return p.Scope.String() + ":" + p.PackageRef.StringFull()
+}
+
 type FullPackageRef struct {
 	PackageRef
 	Version BareVersion
 	Scope   SourceId
+}
+
+func (p FullPackageRef) StringBase() string {
+	return p.PackageRef.StringBase()
+}
+
+func (p FullPackageRef) StringFull() string {
+	return p.Scope.String() + ":" + p.PackageRef.StringFull()
 }
 
 type StringablePackageRef interface {

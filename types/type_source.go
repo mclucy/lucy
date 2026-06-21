@@ -33,6 +33,8 @@ const (
 
 func (s SourceId) String() string {
 	switch s {
+	case SourceAuto:
+		return "auto"
 	case SourceCurseForge:
 		return "curseforge"
 	case SourceModrinth:
@@ -53,6 +55,8 @@ func (s SourceId) String() string {
 		return "neoforge"
 	case SourceFabric:
 		return "fabric"
+	case SourceUnknown:
+		return "unknown"
 	default:
 		return "unknown"
 	}
@@ -60,6 +64,8 @@ func (s SourceId) String() string {
 
 func (s SourceId) Title() string {
 	switch s {
+	case SourceAuto:
+		return "Auto"
 	case SourceCurseForge:
 		return "CurseForge"
 	case SourceModrinth:
@@ -80,6 +86,8 @@ func (s SourceId) Title() string {
 		return "NeoForge"
 	case SourceFabric:
 		return "Fabric"
+	case SourceUnknown:
+		return "Unknown"
 	default:
 		return "Unknown"
 	}
