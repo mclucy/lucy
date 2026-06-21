@@ -129,13 +129,13 @@ func artifactInfoToPackage(infos []artifact.Info) []types.Package {
 }
 
 func normalizeVerifiedPackage(pkg *types.Package) {
-	sm := knownpkgs.Default()
+	sess := knownpkgs.Default().Session()
 	src := sourceForPlatform(pkg.Id.Platform)
 	if src == types.SourceUnknown {
 		return
 	}
 
-	if slug, ok := sm.GetLoose(src, string(pkg.Id.Name)); ok {
+	if slug, ok := sess.Lookup(src, string(pkg.Id.Name)); ok {
 		pkg.Id.Name = types.BarePackageName(slug)
 	}
 
@@ -147,7 +147,7 @@ func normalizeVerifiedPackage(pkg *types.Package) {
 		if depSrc == types.SourceUnknown {
 			continue
 		}
-		if slug, ok := sm.GetLoose(depSrc, string(dep.Id.Name)); ok {
+		if slug, ok := sess.Lookup(depSrc, string(dep.Id.Name)); ok {
 			pkg.Dependencies.Value[i].Id.Name = types.BarePackageName(slug)
 		}
 	}

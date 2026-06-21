@@ -94,7 +94,7 @@ func getProjectByName(slug types.BarePackageName) (
 		return project, nil
 	}
 
-	if canonical, ok := knownpkgs.Default().GetLoose(
+	if canonical, ok := knownpkgs.Default().Session().Lookup(
 		types.SourceModrinth,
 		string(slug),
 	); ok && canonical != string(slug) {
