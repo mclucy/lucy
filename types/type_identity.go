@@ -1,5 +1,7 @@
 package types
 
+import "strings"
+
 // IdentityEntry defines one canonical identity package.
 type IdentityEntry struct {
 	Name     BarePackageName
@@ -54,9 +56,11 @@ var identityRegistry = []IdentityEntry{
 }
 
 // NormalizeIdentityPackage rewrites aliases to their canonical form.
+// Identity package names are always lowercase by spec; the lookup is
+// case-insensitive on the input name.
 // Returns (canonical, true) if the ref is an identity package, (zero, false) otherwise.
 func NormalizeIdentityPackage(p PackageRef) (PackageRef, bool) {
-	entry, ok := nameToIdentity[p.Name]
+	entry, ok := nameToIdentity[BarePackageName(strings.ToLower(string(p.Name)))]
 	if !ok {
 		return PackageRef{}, false
 	}
@@ -67,6 +71,6 @@ func NormalizeIdentityPackage(p PackageRef) (PackageRef, bool) {
 }
 
 func IsIdentityPackage(p PackageRef) bool {
-	_, exists := nameToIdentity[p.Name]
+	_, exists := nameToIdentity[BarePackageName(strings.ToLower(string(p.Name)))]
 	return exists
 }

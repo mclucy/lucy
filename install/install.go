@@ -12,7 +12,6 @@ import (
 type platformInstaller func(p types.Package) error
 
 func Install(req PackageRequest, options InstallOptions) (*Result, error) {
-	// TODO(package-ref-migration): remove PackageId/source extraction once identity installers accept PackageRequest.
 	id := types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
 			Platform: req.Platform,
@@ -20,8 +19,6 @@ func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 		},
 		Version: req.Version,
 	}
-	source := req.Scope
-	_ = source
 
 	// for regular (non-identity) packages, delegate to InstallMany to unify
 	// resolver behavior with batch adds

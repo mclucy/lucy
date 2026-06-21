@@ -41,35 +41,12 @@ var (
 	EIdentity = errors.New("invalid identity package")
 )
 
-func ParsePackageRef(s string) (ref types.PackageRef, err error) {
-	ref = types.PackageRef{}
-
-	s = strings.TrimSpace(s)
-	s = strings.Split(s, "@")[0] // strip and ignore version specifiers
-
-	switch len(strings.Split(s, "/")) {
-	case 1:
-		ref.Platform = types.PlatformAny
-		ref.Name = types.BarePackageName(s)
-	case 2:
-		ref.Platform = types.PlatformId(strings.Split(s, "/")[0])
-		ref.Name = types.BarePackageName(strings.Split(s, "/")[1])
-	default:
-		return types.PackageRef{}, fmt.Errorf(
-			"%w: multiple '/' found in specifier %s, maximum 1 is allowed",
-			ESyntax, s,
-		)
-	}
-
-	return ref, nil
-}
-
 // Parse parses a scoped package specifier ("scope:platform/name@version") into a
 // ScopedPackageRef and a BareVersion. An omitted scope defaults to SourceAuto;
 // an omitted version defaults to VersionAny. Identity aliases are normalized
 // the same way as in ParsePackageRef.
 func Parse(s string) (ref types.ScopedPackageRef, version types.BareVersion, err error) {
-	text := strings.TrimSpace(strings.ToLower(s))
+	text := strings.TrimSpace(s)
 	ref = types.ScopedPackageRef{}
 	version = types.VersionAny
 
@@ -121,7 +98,6 @@ func parseOperatorColon(s string) (
 	remainder string,
 	err error,
 ) {
-	// Scope zone: prefix before the first '/' or '@'. A ':' here is the delimiter.
 	boundary := len(s)
 	if i := strings.IndexByte(s, '/'); i >= 0 && i < boundary {
 		boundary = i
@@ -135,7 +111,7 @@ func parseOperatorColon(s string) (
 		return types.SourceAuto, s, nil
 	}
 
-	scope = types.ParseSource(s[:colonIdx])
+	scope = types.ParseSource(strings.ToLower(s[:colonIdx]))
 	if scope == types.SourceUnknown {
 		return types.SourceUnknown, "", fmt.Errorf(
 			"%w: unknown source %q",
@@ -184,15 +160,12 @@ func parseOperatorSlash(s string) (
 	if len(split) == 1 {
 		pl = types.PlatformAny
 		n = types.BarePackageName(split[0])
-		if types.PlatformId(n).Valid() {
-			// Remember, all platforms are also valid packages under themselves.
-			// This literal is for users to specify the platform itself.
-			// This means the user specified a platform name directly.
-			pl = types.PlatformId(n)
+		if candidate := types.PlatformId(strings.ToLower(split[0])); candidate.Valid() {
+			pl = candidate
 			n = types.BarePackageName(pl)
 		}
 	} else {
-		pl = types.PlatformId(split[0])
+		pl = types.PlatformId(strings.ToLower(split[0]))
 		if !pl.Valid() {
 			return "", "", EPlatform
 		}
