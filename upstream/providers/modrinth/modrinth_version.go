@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/mclucy/lucy/internal/slugmap"
+	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 )
@@ -58,7 +58,7 @@ func listVersions(slug types.BarePackageName) (
 		return versions, nil
 	}
 
-	if canonical, ok := slugmap.Default().GetLoose(
+	if canonical, ok := knownpkgs.Default().GetLoose(
 		types.SourceModrinth,
 		string(slug),
 	); ok && canonical != string(slug) {

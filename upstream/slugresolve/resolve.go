@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/mclucy/lucy/internal/slugmap"
+	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 )
@@ -58,7 +58,7 @@ func ResolveSlug(
 	}
 
 	if fileHash != "" {
-		if slug, ok := slugmap.Default().Get(src, localId, fileHash); ok {
+		if slug, ok := knownpkgs.Default().Get(src, localId, fileHash); ok {
 			return slug
 		}
 	}
@@ -71,7 +71,7 @@ func ResolveSlug(
 				if resolvedHash != "" {
 					fileHash = resolvedHash
 				}
-				slugmap.Default().Set(
+				knownpkgs.Default().Set(
 					src,
 					localId,
 					fileHash,

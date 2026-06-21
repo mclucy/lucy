@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/internal/slugmap"
+	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -94,7 +94,7 @@ func getProjectByName(slug types.BarePackageName) (
 		return project, nil
 	}
 
-	if canonical, ok := slugmap.Default().GetLoose(
+	if canonical, ok := knownpkgs.Default().GetLoose(
 		types.SourceModrinth,
 		string(slug),
 	); ok && canonical != string(slug) {

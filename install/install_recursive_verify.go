@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/internal/slugmap"
+	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -131,7 +131,7 @@ func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
 }
 
 func normalizeVerifiedPackage(pkg *types.Package) {
-	sm := slugmap.Default()
+	sm := knownpkgs.Default()
 	src := sourceForPlatform(pkg.Id.Platform)
 	if src == types.SourceUnknown {
 		return
