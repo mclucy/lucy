@@ -120,35 +120,6 @@ func loaderVersion(loaderVersion types.BareVersion) (string, error) {
 	)
 }
 
-func gameVersion(gameVersion types.BareVersion) (string, error) {
-	if gameVersion == types.VersionUnknown {
-		return "", errors.New("unknown game version, cannot resolve fabric game version")
-	}
-
-	versions, err := fetchGameVersions()
-	if err != nil {
-		return "", err
-	}
-
-	if gameVersion == types.VersionLatest || gameVersion == types.VersionCompatible || gameVersion == types.VersionAny {
-		if len(versions) == 0 {
-			return "", errors.New("no fabric game versions available")
-		}
-		return versions[0].Version, nil
-	}
-
-	for _, v := range versions {
-		if v.Version == gameVersion.String() {
-			return v.Version, nil
-		}
-	}
-
-	return "", fmt.Errorf(
-		"fabric game version %s not found",
-		gameVersion.String(),
-	)
-}
-
 func latestInstallerVersion() (string, error) {
 	versions, err := fetchInstallerVersions()
 	if err != nil {

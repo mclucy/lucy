@@ -21,9 +21,7 @@ import (
 // persisted data.
 type Session struct {
 	store  *store
-	memory map[sessionKey]string // src/localId -> canonicalId (in-memory only)
-	known  map[sessionKey]bool   // keys already known to be in the persistent store
-	once   bool
+	memory map[sessionKey]string
 }
 
 type sessionKey struct {
@@ -42,8 +40,6 @@ func (s *store) Session() *Session {
 	sess := &Session{
 		store:  s,
 		memory: make(map[sessionKey]string),
-		known:  make(map[sessionKey]bool),
-		once:   true,
 	}
 	if sessions == nil {
 		sessions = make(map[*store]*Session)
@@ -64,9 +60,7 @@ func (sess *Session) Lookup(src types.SourceId, localId string) (string, bool) {
 	}
 	canon, ok := sess.store.GetLoose(src, localId)
 	if ok {
-		// Promote to session so subsequent lookups skip the store.
 		sess.memory[k] = canon
-		sess.known[k] = true
 	}
 	return canon, ok
 }
@@ -102,5 +96,4 @@ func (sess *Session) Record(
 ) {
 	sess.memory[sessionKey{src: src, localId: localId}] = canonicalId
 	sess.store.Set(src, localId, fileHash, canonicalId, resolvedBy)
-	sess.known[sessionKey{src: src, localId: localId}] = true
 }

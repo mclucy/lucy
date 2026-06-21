@@ -76,20 +76,6 @@ type Hashable interface {
 	Sha1() [sha1.Size]byte
 }
 
-type ArtifactResolver interface {
-	ResolveArtifact() ResolvedArtifact
-}
-
-type ResolvedArtifact struct {
-	Ref           types.PackageRef
-	Version       types.BareVersion
-	Source        types.SourceId
-	FileURL       string
-	Filename      string
-	Hash          string
-	HashAlgorithm string
-}
-
 type VersionSelectorResolver interface {
 	ResolveVersionSelector(ref types.VersionedPackageRef) (
 		resolved types.VersionedPackageRef,
