@@ -27,7 +27,6 @@ task test               # go test ./...
 task test:race          # go test -race ./...
 task check              # Both test + test:race
 task clean              # Remove dist/release/completions directories
-task generate:completions  # Generate bash/zsh/fish shell completions
 task cipher-generate    # Generate cipher files from CF_API_KEY env var
 task copyright-add      # Add Apache 2.0 license headers
 task copyright-remove   # Remove license headers
