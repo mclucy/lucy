@@ -1,6 +1,6 @@
 module github.com/mclucy/lucy
 
-go 1.25.8
+go 1.26.4
 
 require (
 	charm.land/bubbles/v2 v2.1.0
