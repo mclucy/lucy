@@ -1,25 +1,80 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "goland": {
-      "type": "remote",
-      "url": "http://127.0.0.1:64342/sse"
-    },
-    "godoc": {
-      "type": "local",
-      "command": ["godoc-mcp"]
-    },
     "codegraph": {
       "type": "local",
       "command": ["codegraph", "serve", "--mcp"],
       "enabled": true
     },
-    "gopls": {
-      "type": "local",
-      "command": ["gopls", "mcp"]
-    },
     "gitnexus": {
       "enabled": false
+    },
+    "godoc": {
+      "type": "local",
+      "command": ["godoc-mcp"]
+    },
+    "goland": {
+      "type": "remote",
+      "url": "http://127.0.0.1:64342/sse"
+    },
+    "gopls": {
+      "type": "local",
+      "command": ["gopls", "mcp"],
+      "enabled": false
+    }
+  },
+  "references": {
+    "brew": {
+      "description": "Use Homebrew as a design reference. This path is indexed via codegraph.",
+      "path": "../brew"
+    },
+    "cargo": {
+      "description": "Use Cargo as a design reference. This path is indexed via codegraph.",
+      "path": "../cargo"
+    },
+    "folia": {
+      "branch": "ver/26.1.x",
+      "description": "Use this while working on Folia integration.",
+      "repository": "PaperMC/Folia"
+    },
+    "mcdr-core": {
+      "branch": "master",
+      "description": "Use this while working on MCDR integration.",
+      "repository": "MCDReforged/MCDReforged"
+    },
+    "mcdr-plugin-catalog": {
+      "branch": "meta",
+      "description": "Use this while working on MCDR integration.",
+      "repository": "MCDReforged/PluginCatalogue"
+    },
+    "modrinth": {
+      "branch": "main",
+      "description": "Use this while working on Modrinth integration.",
+      "repository": "modrinth/code"
+    },
+    "paper": {
+      "branch": "main",
+      "description": "Use this while working on Paper integration.",
+      "repository": "PaperMC/Paper"
+    },
+    "paper-docs": {
+      "branch": "main",
+      "description": "Use this while working on Paper documentation.",
+      "repository": "PaperMC/docs"
+    },
+    "pnpm": {
+      "description": "Use pnpm as a design reference. This path is indexed via codegraph.",
+      "path": "../pnpm"
+    },
+    "velocity": {
+      "branch": "dev/3.0.0",
+      "description": "Use this while working on Velocity integration.",
+      "repository": "VelocityPowered/Velocity"
+    },
+    "waterfall": {
+      "branch": "master",
+      "description": "Use this while working on Waterfall integration.",
+      "repository": "PaperMC/Waterfall"
     }
   }
 }
