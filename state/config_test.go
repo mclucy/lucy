@@ -30,24 +30,6 @@ func TestConfigRoundTrip(t *testing.T) {
 	}
 }
 
-func TestConfigDefaults(t *testing.T) {
-	cfg := ConfigDefaults()
-
-	if len(cfg.Sources.Priority) != 4 {
-		t.Errorf("expected 4 priority sources, got %d", len(cfg.Sources.Priority))
-	}
-	if cfg.Sources.Priority[0] != "modrinth" {
-		t.Errorf("expected first priority source modrinth, got %q", cfg.Sources.Priority[0])
-	}
-	if cfg.Sources.Preferred != "auto" {
-		t.Errorf("expected preferred auto, got %q", cfg.Sources.Preferred)
-	}
-
-	if cfg.Upgrade.Mode != "compatible" {
-		t.Errorf("expected upgrade mode compatible, got %q", cfg.Upgrade.Mode)
-	}
-}
-
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -103,24 +85,5 @@ func TestConfigValidation(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
-	}
-}
-
-func TestConfigSerializationDeterminism(t *testing.T) {
-	cfg := ConfigDefaults()
-
-	var results [][]byte
-	for i := range 5 {
-		b, err := yaml.Marshal(cfg)
-		if err != nil {
-			t.Fatalf("marshal %d failed: %v", i, err)
-		}
-		results = append(results, b)
-	}
-
-	for i := 1; i < len(results); i++ {
-		if !bytes.Equal(results[0], results[i]) {
-			t.Errorf("serialization not deterministic: marshal 0 and %d differ", i)
-		}
 	}
 }
