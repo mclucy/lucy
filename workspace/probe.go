@@ -10,6 +10,7 @@
 package workspace
 
 import (
+	"context"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,7 +18,8 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/internal/fileschema"
-	probe2 "github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/internal/knownpkgs"
 	"gopkg.in/ini.v1"
 
 	"github.com/mclucy/lucy/logger"
@@ -101,23 +103,13 @@ func RefreshServerInfo(workDir string) Workspace {
 	return buildServerInfoAtLocked(workDir, true)
 }
 
-// DetectPackages analyzes a local artifact file and returns packages detected
-// from its embedded metadata.
-func DetectPackages(filePath string) []types.Package {
-	infos, err := artifact.Analyze(filePath)
-	if err != nil || len(infos) == 0 {
-		return nil
-	}
-	return artifactInfoToPackage(infos)
-}
-
 func resetProbeMemoizedStateLocked() {
-	modPaths = probe2.Memoize(buildModPaths)
-	getEnvironment = probe2.Memoize(buildEnvironment)
-	workPath = probe2.Memoize(buildWorkPath)
-	serverProperties = probe2.Memoize(buildServerProperties)
-	savePath = probe2.Memoize(buildSavePath)
-	installedPackages = probe2.Memoize(buildInstalledPackages)
+	modPaths = fn.Memoize(buildModPaths)
+	getEnvironment = fn.Memoize(buildEnvironment)
+	workPath = fn.Memoize(buildWorkPath)
+	serverProperties = fn.Memoize(buildServerProperties)
+	savePath = fn.Memoize(buildSavePath)
+	installedPackages = fn.Memoize(buildInstalledPackages)
 	resetProbeExecCache()
 	resetProbeFileLockCache()
 }
@@ -287,9 +279,9 @@ func buildModPaths() (paths []string) {
 	return packageSearchPaths(exec, workPath())
 }
 
-var modPaths = probe2.Memoize(buildModPaths)
+var modPaths = fn.Memoize(buildModPaths)
 
-var getEnvironment = probe2.Memoize(buildEnvironment)
+var getEnvironment = fn.Memoize(buildEnvironment)
 
 func buildWorkPath() string {
 	env := getEnvironment()
@@ -299,7 +291,7 @@ func buildWorkPath() string {
 	return "."
 }
 
-var workPath = probe2.Memoize(buildWorkPath)
+var workPath = fn.Memoize(buildWorkPath)
 
 func buildServerProperties() fileschema.FileMinecraftServerProperties {
 	exec := getExecutableInfo()
@@ -322,7 +314,7 @@ func buildServerProperties() fileschema.FileMinecraftServerProperties {
 	return properties
 }
 
-var serverProperties = probe2.Memoize(buildServerProperties)
+var serverProperties = fn.Memoize(buildServerProperties)
 
 func buildSavePath() string {
 	serverProperties := serverProperties()
@@ -333,12 +325,12 @@ func buildSavePath() string {
 	return path.Join(workPath(), levelName)
 }
 
-var savePath = probe2.Memoize(buildSavePath)
+var savePath = fn.Memoize(buildSavePath)
 
 // artifactInfoToPackage converts artifact detection results into the legacy
 // types.Package format used by PackageIndex. This is temporary glue until
 // types.Package is fully replaced.
-func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
+func artifactInfoToPackage(infos []artifact.Info) []types.Package {
 	if len(infos) == 0 {
 		return nil
 	}
@@ -386,6 +378,9 @@ func buildInstalledPackages() (mods []types.Package) {
 	idx := NewPackageIndex()
 	var mu sync.Mutex
 
+	sess := knownpkgs.Default().Session()
+	resolver := knownPackagesSlugResolver(sess)
+
 	paths := modPaths()
 	for _, modPath := range paths {
 		jarFiles, err := findJar(modPath)
@@ -401,7 +396,10 @@ func buildInstalledPackages() (mods []types.Package) {
 			go func(path string) {
 				defer wg.Done()
 
-				analyzed, err := artifact.Analyze(path)
+				analyzed, err := artifact.Analyze(
+					path,
+					artifact.WithSlugResolver(resolver),
+				)
 				if err != nil || len(analyzed) == 0 {
 					return
 				}
@@ -425,7 +423,10 @@ func buildInstalledPackages() (mods []types.Package) {
 				continue
 			}
 			for _, pluginFile := range pluginFiles {
-				analyzed, err := artifact.Analyze(pluginFile)
+				analyzed, err := artifact.Analyze(
+					pluginFile,
+					artifact.WithSlugResolver(resolver),
+				)
 				if err == nil && len(analyzed) > 0 {
 					pkgs := artifactInfoToPackage(analyzed)
 					idx.Merge(pkgs)
@@ -437,4 +438,21 @@ func buildInstalledPackages() (mods []types.Package) {
 	return idx.Packages()
 }
 
-var installedPackages = probe2.Memoize(buildInstalledPackages)
+// knownPackagesSlugResolver returns a slug resolver that consults the knownpkgs
+// session for a canonical name matching the detected platform/local name.
+// Returns the original name when no mapping is known.
+func knownPackagesSlugResolver(session *knownpkgs.Session) artifact.SlugResolver {
+	return func(
+		ctx context.Context,
+		platform types.PlatformId,
+		name types.BarePackageName,
+	) (types.BarePackageName, error) {
+		canonical, _, ok := session.LookupAny(string(name))
+		if !ok {
+			return name, nil
+		}
+		return types.BarePackageName(canonical), nil
+	}
+}
+
+var installedPackages = fn.Memoize(buildInstalledPackages)

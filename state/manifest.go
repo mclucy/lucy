@@ -528,7 +528,7 @@ func UpdateManifestRolesForAdd(
 
 func UpdateManifestRolesForRemove(
 	manifest *Manifest,
-	removed []types.VersionedPackageRef,
+	removed []types.FullPackageRef,
 	lock *Lock,
 ) *Manifest {
 	base := cloneManifestOrDefaults(manifest)
@@ -536,7 +536,7 @@ func UpdateManifestRolesForRemove(
 	ignored := manifestPackagesByRole(base.Packages, RoleIgnored)
 
 	for _, id := range removed {
-		resolvedID := resolveManifestPackageID(id, &base, lock)
+		resolvedID := resolveManifestPackageIDWithScope(id, &base, lock)
 		if resolvedID == "" {
 			continue
 		}
@@ -742,6 +742,22 @@ func resolveManifestPackageID(
 	manifest *Manifest,
 	lock *Lock,
 ) string {
+	return resolveManifestPackageIDWithScope(
+		types.FullPackageRef{
+			PackageRef: id.PackageRef,
+			Version:    id.Version,
+			Scope:      types.SourceAuto,
+		},
+		manifest,
+		lock,
+	)
+}
+
+func resolveManifestPackageIDWithScope(
+	id types.FullPackageRef,
+	manifest *Manifest,
+	lock *Lock,
+) string {
 	if types.IsIdentityPackage(id.PackageRef) {
 		var ok bool
 		id.PackageRef, ok = types.NormalizeIdentityPackage(id.PackageRef)
@@ -750,13 +766,28 @@ func resolveManifestPackageID(
 		}
 	}
 	if id.Platform != types.PlatformAny && id.Platform != types.PlatformUnknown {
+		if id.Scope != types.SourceAuto && id.Scope != types.SourceUnknown {
+			if pkg, ok := manifestPackageByID(manifest.Packages, id.StringBase()); ok && pkg.Source == id.Scope.String() {
+				return id.StringBase()
+			}
+			if lock != nil {
+				for _, pkg := range lock.Packages {
+					if pkg.ID == id.StringBase() && types.ParseSource(pkg.Source) == id.Scope {
+						return id.StringBase()
+					}
+				}
+			}
+			return ""
+		}
 		return id.StringBase()
 	}
 
 	if manifest != nil {
-		candidate := resolveIDByName(
+		candidate := resolveIDByNameAndSource(
 			id.Name,
+			id.Scope,
 			manifestPackageIDs(manifest.Packages),
+			manifest.Packages,
 		)
 		if candidate != "" {
 			return candidate
@@ -767,7 +798,7 @@ func resolveManifestPackageID(
 		for _, pkg := range lock.Packages {
 			ids = append(ids, pkg.ID)
 		}
-		candidate := resolveIDByName(id.Name, ids)
+		candidate := resolveIDByNameAndSource(id.Name, id.Scope, ids, nil)
 		if candidate != "" {
 			return candidate
 		}
@@ -800,6 +831,48 @@ func resolveIDByName(name types.BarePackageName, ids []string) string {
 		match = id
 	}
 	return match
+}
+
+func resolveIDByNameAndSource(
+	name types.BarePackageName,
+	scope types.SourceId,
+	ids []string,
+	packages []ManifestPackage,
+) string {
+	if scope == types.SourceAuto || scope == types.SourceUnknown {
+		return resolveIDByName(name, ids)
+	}
+
+	var match string
+	for _, id := range ids {
+		parts := strings.Split(id, "/")
+		if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
+			continue
+		}
+		if parts[1] != name.String() {
+			continue
+		}
+		if scopeMatchesManifestPackage(id, scope, packages) {
+			if match != "" && match != id {
+				return ""
+			}
+			match = id
+		}
+	}
+	return match
+}
+
+func scopeMatchesManifestPackage(id string, scope types.SourceId, packages []ManifestPackage) bool {
+	if packages == nil {
+		return true
+	}
+	for _, pkg := range packages {
+		if pkg.ID != id {
+			continue
+		}
+		return types.ParseSource(pkg.Source) == scope
+	}
+	return false
 }
 
 func (m Manifest) Marshal() ([]byte, error) {

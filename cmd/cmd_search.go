@@ -114,7 +114,7 @@ func init() {
 }
 
 func actionSearch(cmd *cobra.Command, args []string) error {
-	ref, _, err := input.Parse(args[0])
+	ref, err := input.ParseFullPackageRef(args[0])
 	if err != nil {
 		logger.Fatal(err)
 	}

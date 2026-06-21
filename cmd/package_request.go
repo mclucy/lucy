@@ -10,12 +10,12 @@ import (
 )
 
 func packageRequestFromInput(raw string, rawSource string) (install.PackageRequest, error) {
-	ref, version, err := input.Parse(strings.TrimSpace(raw))
+	ref, err := input.ParseFullPackageRef(raw)
 	if err != nil {
 		return install.PackageRequest{}, err
 	}
 
-	if rawSource != "" {
+	if rawSource != "" && ref.Scope == types.SourceAuto {
 		scope := types.ParseSource(strings.TrimSpace(rawSource))
 		if scope == types.SourceUnknown {
 			return install.PackageRequest{}, fmt.Errorf("unknown source %s", rawSource)
@@ -23,11 +23,5 @@ func packageRequestFromInput(raw string, rawSource string) (install.PackageReque
 		ref.Scope = scope
 	}
 
-	return install.PackageRequest{
-		FullPackageRef: types.FullPackageRef{
-			PackageRef: ref.PackageRef,
-			Version:    version,
-			Scope:      ref.Scope,
-		},
-	}, nil
+	return install.PackageRequest{FullPackageRef: ref}, nil
 }
