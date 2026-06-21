@@ -17,10 +17,6 @@ type Package struct {
 	Dependencies *PackageDependencies
 	Local        *PackageInstallation
 	Remote       *PackageRemote
-
-	// Project data
-	Supports    *PlatformSupport
-	Information *Metadata
 }
 
 // PackageDependencies is one of the optional attributions that can be added to

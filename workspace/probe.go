@@ -352,8 +352,6 @@ func artifactInfoToPackage(infos []artifact.ArtifactInfo) []types.Package {
 				},
 				Version: info.Version,
 			},
-			Supports:    info.Supports,
-			Information: &info.Metadata,
 			Local: &types.PackageInstallation{
 				Path: info.FilePath,
 			},
