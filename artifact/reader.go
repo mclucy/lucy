@@ -7,7 +7,7 @@ import "archive/zip"
 type Reader interface {
 	// Read analyzes the ZIP contents and returns detected artifacts.
 	// The resolver parameter may be nil if no slug resolver was configured.
-	Read(r *zip.Reader, filePath string, resolver SlugResolver) ([]ArtifactInfo, error)
+	Read(r *zip.Reader, filePath string, resolver SlugResolver) ([]Info, error)
 }
 
 // readers is the explicit ordered list of all platform readers.

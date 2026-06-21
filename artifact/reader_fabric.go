@@ -25,7 +25,7 @@ func (r *fabricReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "fabric.mod.json" {
 			continue
@@ -49,7 +49,7 @@ func (r *fabricReader) Read(
 			return nil, err
 		}
 
-		return []ArtifactInfo{translateFabricArtifact(modInfo, filePath)}, nil
+		return []Info{translateFabricArtifact(modInfo, filePath)}, nil
 	}
 
 	return nil, nil
@@ -58,10 +58,10 @@ func (r *fabricReader) Read(
 func translateFabricArtifact(
 	modInfo *fileschema.FileFabricModIdentifier,
 	filePath string,
-) ArtifactInfo {
+) Info {
 	embeddedNames := fabricArtifactEmbeddedModNames(modInfo)
 	dependencies := make(
-		[]ArtifactDep, 0,
+		[]Dependency, 0,
 		len(modInfo.Depends)+len(modInfo.Recommends)+len(modInfo.Suggests)+
 			len(modInfo.Breaks)+len(modInfo.Conflicts),
 	)
@@ -111,7 +111,7 @@ func translateFabricArtifact(
 		)...,
 	)
 
-	return ArtifactInfo{
+	return Info{
 		Ref: types.PackageRef{
 			Platform: types.PlatformFabric,
 			Name:     input.ToProjectName(modInfo.Id),
@@ -134,12 +134,12 @@ func translateFabricArtifactDependencyMap(
 	mandatory bool,
 	inverse bool,
 	embeddedNames map[string]struct{},
-) []ArtifactDep {
-	translated := make([]ArtifactDep, 0, len(deps))
+) []Dependency {
+	translated := make([]Dependency, 0, len(deps))
 	for id, ranges := range deps {
 		name := input.ToProjectName(id)
 		_, embedded := embeddedNames[string(name)]
-		dep := ArtifactDep{
+		dep := Dependency{
 			Ref: types.PackageRef{
 				Platform: types.PlatformFabric,
 				Name:     name,

@@ -22,7 +22,7 @@ func (r *forgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	_ = r
 	_ = resolver
 
@@ -41,7 +41,7 @@ func readForgeModsToml(
 	zipRdr *zip.Reader,
 	file *zip.File,
 	filePath string,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	reader, err := file.Open()
 	if err != nil {
 		return nil, err
@@ -61,11 +61,14 @@ func readForgeModsToml(
 	// loader with modId="forge"; legacy NeoForge uses modId="neoforge" instead.
 	// Docs: https://docs.minecraftforge.net/en/1.21.x/gettingstarted/modfiles/
 	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
-	if isNeoforgeModIdentifier(modIdentifier) && !hasLoaderDependency(modIdentifier, "forge") {
+	if isNeoforgeModIdentifier(modIdentifier) && !hasLoaderDependency(
+		modIdentifier,
+		"forge",
+	) {
 		return nil, nil
 	}
 
-	infos := make([]ArtifactInfo, 0, len(modIdentifier.Mods))
+	infos := make([]Info, 0, len(modIdentifier.Mods))
 	for _, mod := range modIdentifier.Mods {
 		if mod.ModID == "forge" {
 			continue
@@ -77,7 +80,7 @@ func readForgeModsToml(
 		}
 
 		infos = append(
-			infos, ArtifactInfo{
+			infos, Info{
 				Ref: types.PackageRef{
 					Platform: types.PlatformForge,
 					Name:     types.BarePackageName(mod.ModID),
@@ -114,12 +117,12 @@ func readForgeModsToml(
 func forgeDependencies(
 	modIdentifier fileschema.FileModLoaderIdentifier,
 	modID string,
-) []ArtifactDep {
+) []Dependency {
 	deps := modIdentifier.Dependencies[modID]
-	translated := make([]ArtifactDep, 0, len(deps))
+	translated := make([]Dependency, 0, len(deps))
 	for _, dep := range deps {
 		translated = append(
-			translated, ArtifactDep{
+			translated, Dependency{
 				Ref: types.PackageRef{
 					Platform: types.PlatformForge,
 					Name:     types.BarePackageName(dep.ModID),

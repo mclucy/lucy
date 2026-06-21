@@ -46,7 +46,7 @@ func (r *velocityReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "velocity-plugin.json" {
 			continue
@@ -84,7 +84,7 @@ func (r *velocityReader) Read(
 			)
 		}
 
-		return []ArtifactInfo{
+		return []Info{
 			{
 				Ref: types.PackageRef{
 					Platform: types.PlatformVelocity,
@@ -111,7 +111,7 @@ func (r *bungeeCordReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "bungee.yml" {
 			continue
@@ -152,7 +152,7 @@ func (r *bungeeCordReader) Read(
 			)
 		}
 
-		return []ArtifactInfo{
+		return []Info{
 			{
 				Ref: types.PackageRef{
 					Platform: types.PlatformBungeecord,

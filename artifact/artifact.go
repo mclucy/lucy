@@ -14,7 +14,7 @@ import (
 // Analyze extracts package metadata from an artifact file.
 // It opens the file internally and routes to appropriate readers based on file extension.
 // For .jar/.zip files, all readers are tried. For .pyz/.mcdr, only the MCDR reader runs.
-func Analyze(filePath string, opts ...Option) ([]ArtifactInfo, error) {
+func Analyze(filePath string, opts ...Option) ([]Info, error) {
 	o := &options{}
 	for _, opt := range opts {
 		opt(o)
@@ -43,7 +43,7 @@ func Analyze(filePath string, opts ...Option) ([]ArtifactInfo, error) {
 		return nil, fmt.Errorf("read zip: %w", err)
 	}
 
-	var results []ArtifactInfo
+	var results []Info
 
 	if ext == ".pyz" || ext == ".mcdr" {
 		mcdrReader := newMcdrReader()
@@ -75,7 +75,7 @@ func Analyze(filePath string, opts ...Option) ([]ArtifactInfo, error) {
 	return results, nil
 }
 
-func applySlugResolver(results []ArtifactInfo, resolver SlugResolver) {
+func applySlugResolver(results []Info, resolver SlugResolver) {
 	if resolver == nil {
 		return
 	}
@@ -103,7 +103,7 @@ func applySlugResolver(results []ArtifactInfo, resolver SlugResolver) {
 //	modFamily    – fabric, forge, neoforge
 //
 // PlatformAny artifacts are excluded from the conflict check.
-func jarPlatformsConflict(infos []ArtifactInfo) bool {
+func jarPlatformsConflict(infos []Info) bool {
 	if len(infos) == 0 {
 		return false
 	}
@@ -160,7 +160,7 @@ type bukkitFamilyRank struct {
 	fallback types.PlatformId
 }
 
-func aggregateBukkitFamilyPackages(infos []ArtifactInfo) []ArtifactInfo {
+func aggregateBukkitFamilyPackages(infos []Info) []Info {
 	if len(infos) < 2 {
 		return infos
 	}
@@ -193,7 +193,7 @@ func aggregateBukkitFamilyPackages(infos []ArtifactInfo) []ArtifactInfo {
 		bestRank.fallback,
 	)
 
-	resolved := make([]ArtifactInfo, 0, len(infos)-len(bukkitIndexes)+1)
+	resolved := make([]Info, 0, len(infos)-len(bukkitIndexes)+1)
 	inserted := false
 	for i, info := range infos {
 		if !isIndexSelected(bukkitIndexes, i) {
@@ -211,7 +211,7 @@ func aggregateBukkitFamilyPackages(infos []ArtifactInfo) []ArtifactInfo {
 }
 
 func mergeBukkitFamilySupport(
-	infos []ArtifactInfo,
+	infos []Info,
 	indexes []int,
 	fallback types.PlatformId,
 ) *types.PlatformSupport {

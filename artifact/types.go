@@ -20,21 +20,21 @@ type SlugResolver func(
 	name types.BarePackageName,
 ) (types.BarePackageName, error)
 
-// ArtifactDep represents a dependency detected from an artifact file.
-type ArtifactDep struct {
+// Dependency represents a dependency detected from an artifact file.
+type Dependency struct {
 	Ref        types.PackageRef
 	Constraint types.VersionExpr
 	Mandatory  bool
 	Embedded   bool
 }
 
-// ArtifactInfo represents metadata extracted from a single artifact file
+// Info represents metadata extracted from a single artifact file
 // (JAR/ZIP/PYZ/MCDR).
-type ArtifactInfo struct {
+type Info struct {
 	Ref          types.PackageRef
 	Version      types.BareVersion
 	FilePath     string
-	Dependencies []ArtifactDep
+	Dependencies []Dependency
 	Metadata     types.Metadata
 	Supports     *types.PlatformSupport
 }

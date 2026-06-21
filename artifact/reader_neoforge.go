@@ -32,7 +32,7 @@ func (r *neoforgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	raw, err := readNeoforgeModsToml(zipRdr)
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func (r *neoforgeReader) Read(
 	embeddedModIds := neoforgeJarjarEmbeddedModIds(zipRdr, jarjarMeta)
 	embeddedDeps := neoforgeJarjarEmbeddedDeps(jarjarMeta)
 
-	infos := make([]ArtifactInfo, 0, len(modIdentifier.Mods))
+	infos := make([]Info, 0, len(modIdentifier.Mods))
 	for _, mod := range modIdentifier.Mods {
 		if mod.ModID == "neoforge" {
 			continue
@@ -61,7 +61,7 @@ func (r *neoforgeReader) Read(
 			version = readNeoforgeManifestVersion(zipRdr)
 		}
 
-		info := ArtifactInfo{
+		info := Info{
 			Ref: types.PackageRef{
 				Platform: types.PlatformNeoforge,
 				Name:     input.ToProjectName(mod.ModID),
@@ -89,7 +89,7 @@ func (r *neoforgeReader) Read(
 		}
 
 		deps := modIdentifier.Dependencies[mod.ModID]
-		info.Dependencies = make([]ArtifactDep, 0, len(deps)+len(embeddedDeps))
+		info.Dependencies = make([]Dependency, 0, len(deps)+len(embeddedDeps))
 		for _, dep := range deps {
 			if dep.Type == "incompatible" {
 				continue
@@ -103,7 +103,7 @@ func (r *neoforgeReader) Read(
 			}
 
 			info.Dependencies = append(
-				info.Dependencies, ArtifactDep{
+				info.Dependencies, Dependency{
 					Ref: types.PackageRef{
 						Platform: types.PlatformNeoforge,
 						Name:     input.ToProjectName(dep.ModID),
@@ -278,15 +278,15 @@ func neoforgeJarjarEmbeddedModIds(
 	return modIds
 }
 
-func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []ArtifactDep {
+func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependency {
 	if meta == nil {
 		return nil
 	}
 
-	deps := make([]ArtifactDep, 0, len(meta.Jars))
+	deps := make([]Dependency, 0, len(meta.Jars))
 	for _, entry := range meta.Jars {
 		deps = append(
-			deps, ArtifactDep{
+			deps, Dependency{
 				Ref: types.PackageRef{
 					Platform: types.PlatformNone,
 					Name:     input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact),

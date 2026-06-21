@@ -26,7 +26,7 @@ func (r *spongeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != spongePluginMetadataPath {
 			continue
@@ -49,10 +49,10 @@ func (r *spongeReader) Read(
 		}
 
 		if !validSpongeMetadata(&metadata) {
-			return []ArtifactInfo{}, nil
+			return []Info{}, nil
 		}
 
-		infos := make([]ArtifactInfo, 0, len(metadata.Plugins))
+		infos := make([]Info, 0, len(metadata.Plugins))
 		for _, plugin := range metadata.Plugins {
 			info, ok := translateSpongePlugin(&metadata, plugin, filePath)
 			if !ok {
@@ -62,7 +62,7 @@ func (r *spongeReader) Read(
 		}
 
 		if len(infos) == 0 {
-			return []ArtifactInfo{}, nil
+			return []Info{}, nil
 		}
 		return infos, nil
 	}
@@ -100,13 +100,13 @@ func translateSpongePlugin(
 	metadata *fileschema.FileSpongePluginsIdentifier,
 	plugin fileschema.FileSpongePluginMetadata,
 	localPath string,
-) (ArtifactInfo, bool) {
+) (Info, bool) {
 	if !hasConcreteSpongePluginIdentity(metadata, plugin) {
-		return ArtifactInfo{}, false
+		return Info{}, false
 	}
 
 	v := resolveSpongePluginVersion(metadata, plugin)
-	info := ArtifactInfo{
+	info := Info{
 		Ref: types.PackageRef{
 			Platform: types.PlatformSponge,
 			Name:     input.ToProjectName(plugin.ID),
@@ -302,8 +302,8 @@ func translateSpongeDependencies(
 		LoadOrder string
 		Optional  bool
 	},
-) []ArtifactDep {
-	translated := make([]ArtifactDep, 0, len(deps))
+) []Dependency {
+	translated := make([]Dependency, 0, len(deps))
 	for _, dep := range deps {
 		id := strings.TrimSpace(dep.ID)
 		v := strings.TrimSpace(dep.Version)
@@ -311,7 +311,7 @@ func translateSpongeDependencies(
 			continue
 		}
 		translated = append(
-			translated, ArtifactDep{
+			translated, Dependency{
 				Ref: types.PackageRef{
 					Platform: types.PlatformSponge,
 					Name:     input.ToProjectName(id),

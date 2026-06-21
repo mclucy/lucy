@@ -20,7 +20,7 @@ func (r *forgeLegacyReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
 	resolver SlugResolver,
-) ([]ArtifactInfo, error) {
+) ([]Info, error) {
 	var raw []byte
 	for _, f := range zipRdr.File {
 		if f.Name != "mcmod.info" {
@@ -47,13 +47,13 @@ func (r *forgeLegacyReader) Read(
 		return nil, err
 	}
 
-	infos := make([]ArtifactInfo, 0, len(mods))
+	infos := make([]Info, 0, len(mods))
 	for _, m := range mods {
 		if m.ModId == "forge" || m.ModId == "minecraft" || m.ModId == "mcp" {
 			continue
 		}
 
-		info := ArtifactInfo{
+		info := Info{
 			Ref: types.PackageRef{
 				Platform: types.PlatformForge,
 				Name:     input.ToProjectName(m.ModId),
@@ -63,14 +63,14 @@ func (r *forgeLegacyReader) Read(
 		}
 
 		if len(m.Dependencies) > 0 {
-			deps := make([]ArtifactDep, 0, len(m.Dependencies))
+			deps := make([]Dependency, 0, len(m.Dependencies))
 			for _, rawDep := range m.Dependencies {
 				depStr, ok := rawDep.(string)
 				if !ok || depStr == "" {
 					continue
 				}
 				deps = append(
-					deps, ArtifactDep{
+					deps, Dependency{
 						Ref: types.PackageRef{
 							Platform: types.PlatformForge,
 							Name:     input.ToProjectName(depStr),
