@@ -1,4 +1,4 @@
-package install
+package bootstrap
 
 import (
 	"context"
@@ -16,11 +16,9 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func installForgePlatform(
-	resolved types.VersionedPackageRef,
-	fetched types.ResolvedPackage,
-	serverDir string,
-) error {
+type forgeBootstrapper struct{}
+
+func (b forgeBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
 	if err := guardForgeServerTopology(); err != nil {
 		return err
 	}
@@ -44,7 +42,7 @@ func installForgePlatform(
 
 	promptSupportProject()
 
-	tracker := progress.NewTrackerWithLogging(resolved.StringFull(), 5)
+	tracker := progress.NewTrackerWithLogging(fetched.Filename, 5)
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -84,6 +82,10 @@ func installForgePlatform(
 	workspace.Rebuild()
 	tracker.Complete("Forge installed")
 	return nil
+}
+
+func init() {
+	bootstrappers[types.PlatformForge] = forgeBootstrapper{}
 }
 
 func guardForgeServerTopology() error {

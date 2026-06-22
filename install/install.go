@@ -1,9 +1,10 @@
 package install
 
 import (
-	"errors"
+	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
@@ -38,13 +39,15 @@ func Install(req types.PackageRequest, options InstallOptions) (*Result, error) 
 
 func installPlatform(id types.VersionedPackageRef) error {
 	serverInfo := workspace.ServerInfo()
+	serverDir := serverInfo.Root
 
-	// MCDR is not a PlatformInstaller provider — handled separately.
+	bootstrapper, err := bootstrap.For(id.Platform)
+	if err != nil {
+		return err
+	}
+
 	if id.Platform == types.PlatformMCDR {
-		if serverInfo.Environments.Mcdr != nil {
-			return errors.New("mcdr already installed")
-		}
-		return initMcdr()
+		return bootstrapper.Bootstrap(context.Background(), types.ResolvedPackage{}, serverDir)
 	}
 
 	installer, ok := routing.PlatformInstallerFor(id.Platform)
@@ -62,18 +65,5 @@ func installPlatform(id types.VersionedPackageRef) error {
 		return fmt.Errorf("fetch platform artifact failed: %w", err)
 	}
 
-	serverDir := serverInfo.Root
-
-	switch id.Platform {
-	case types.PlatformMinecraft:
-		return installMojangPlatform(resolved, fetched, serverDir)
-	case types.PlatformFabric:
-		return installFabricPlatform(resolved, fetched, serverDir)
-	case types.PlatformForge:
-		return installForgePlatform(resolved, fetched, serverDir)
-	case types.PlatformNeoforge:
-		return installNeoforgePlatform(resolved, fetched, serverDir)
-	default:
-		return fmt.Errorf("unsupported platform for installation: %s", id.Platform)
-	}
+	return bootstrapper.Bootstrap(context.Background(), fetched, serverDir)
 }

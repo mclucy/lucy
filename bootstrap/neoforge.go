@@ -1,4 +1,4 @@
-package install
+package bootstrap
 
 import (
 	"context"
@@ -14,11 +14,9 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func installNeoforgePlatform(
-	resolved types.VersionedPackageRef,
-	fetched types.ResolvedPackage,
-	serverDir string,
-) error {
+type neoforgeBootstrapper struct{}
+
+func (b neoforgeBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
 	if err := guardNeoforgeServerTopology(); err != nil {
 		return err
 	}
@@ -40,7 +38,7 @@ func installNeoforgePlatform(
 		return err
 	}
 
-	tracker := progress.NewTrackerWithLogging(resolved.StringFull(), 5)
+	tracker := progress.NewTrackerWithLogging(fetched.Filename, 5)
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -80,6 +78,10 @@ func installNeoforgePlatform(
 	workspace.Rebuild()
 	tracker.Complete("NeoForge installed")
 	return nil
+}
+
+func init() {
+	bootstrappers[types.PlatformNeoforge] = neoforgeBootstrapper{}
 }
 
 func guardNeoforgeServerTopology() error {

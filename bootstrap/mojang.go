@@ -1,4 +1,4 @@
-package install
+package bootstrap
 
 import (
 	"context"
@@ -13,11 +13,9 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func installMojangPlatform(
-	resolved types.VersionedPackageRef,
-	fetched types.ResolvedPackage,
-	serverDir string,
-) error {
+type mojangBootstrapper struct{}
+
+func (b mojangBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
 	if workspace.ServerInfo().Runtime.DerivedModLoader() != types.PlatformNone {
 		return errors.New("a server is already installed")
 	}
@@ -73,8 +71,11 @@ func installMojangPlatform(
 	}
 
 	workspace.Rebuild()
-	_ = resolved
 	return nil
+}
+
+func init() {
+	bootstrappers[types.PlatformMinecraft] = mojangBootstrapper{}
 }
 
 func addExecutePermission(file *os.File) error {

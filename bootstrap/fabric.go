@@ -1,4 +1,4 @@
-package install
+package bootstrap
 
 import (
 	"context"
@@ -15,11 +15,9 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func installFabricPlatform(
-	resolved types.VersionedPackageRef,
-	fetched types.ResolvedPackage,
-	serverDir string,
-) error {
+type fabricBootstrapper struct{}
+
+func (b fabricBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
 	serverInfo := workspace.ServerInfo()
 	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 
@@ -88,8 +86,11 @@ func installFabricPlatform(
 	}
 
 	workspace.Rebuild()
-	_ = resolved
 	return nil
+}
+
+func init() {
+	bootstrappers[types.PlatformFabric] = fabricBootstrapper{}
 }
 
 func promptOverrideVanilla() (override bool, deleteVanilla bool) {
