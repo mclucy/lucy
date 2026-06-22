@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/mclucy/lucy/internal/fsutil"
@@ -243,6 +244,7 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 	if filename == "" {
 		filename = contentHash
 	}
+	filename = filepath.Base(filename)
 
 	destPath := path.Join(dir, filename)
 	tmpFile.Close()
