@@ -116,7 +116,9 @@ cobra v1.10.2, bubbletea v2, huh v2, lipgloss v2, semver v3, go-toml, glamour, f
 2. Tests will always be prompted as isolated tasks.
 3. You are always allowed to use `go test` to audit.
 
-Test files exist across `cmd/`, `state/`, `workspace/`, `install/`, `upstream/`. Test fixtures use `test_*` directories at the project root (gitignored).
+## Debugging
+
+You may find `test_*` directories under the project root. They are sandbox servers for smoke tests. They are .gitignored so you might not be able to find them with provided `grep` or `glob`, use `ls` to discover them instead.
 
 ## Common Gotchas
 
