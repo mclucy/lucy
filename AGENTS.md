@@ -19,17 +19,23 @@ Users declare desired packages in a manifest. Lucy resolves versions and depende
 Uses **Taskfile** (`task`), not Make.
 
 ```bash
-task build              # Dev binary → dist/lucy-darwin-arm64-dev (-tags debug)
+task build              # Clean + build debug binary → dist/lucy-{os}-{arch}-dev
 task dev                # Same as build
-task build:watch        # File watcher, auto-rebuilds on change
+task run -- [args]      # Build + run debug binary with CLI args
+task build:dev-core     # Incremental build (no clean) for fast iteration
+task build:watch        # Rebuild on Go file changes (file watcher)
 task build:release      # Cross-compile all platforms (-tags release -w -s)
 task test               # go test ./...
 task test:race          # go test -race ./...
-task check              # Both test + test:race
-task clean              # Remove dist/release/completions directories
+task check              # build:dev-core + test + test:race
+task smoke              # Build + verify CLI entrypoints parse
+task verify             # check + smoke (full pre-commit gate)
+task clean              # Remove dist/ and release/ directories
+task clean:dist         # Remove dist/ only
+task clean:release      # Remove release/ only
 task cipher-generate    # Generate cipher files from CF_API_KEY env var
 task copyright-add      # Add Apache 2.0 license headers
-task copyright-remove   # Remove license headers
+task copyright-remove   # Remove copyright headers
 ```
 
 Build uses ldflags to inject cipher key+ciphertext via `-X github.com/mclucy/lucy/internal/cipher.Key=$KEY`. Dotenv loads `.env`, `.cipher_key`, `.cipher_ciphertext`.
