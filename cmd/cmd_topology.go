@@ -102,7 +102,11 @@ func buildNodeLabel(
 ) string {
 	label := runtimeNodeLabel(node.ID)
 	if node.ID == primary {
-		label += " (primary)"
+		if longOut {
+			label += " (primary)"
+		} else {
+			label += " *"
+		}
 	}
 
 	if !longOut {

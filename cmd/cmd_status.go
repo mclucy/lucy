@@ -618,7 +618,7 @@ func runtimeNodeLabel(id types.RuntimeNodeID) string {
 	case types.RuntimeNodeGeyser:
 		return "Geyser"
 	case types.RuntimeNodeConnector:
-		return "Connector"
+		return "Sinytra Connector"
 	case types.RuntimeNodeKilt:
 		return "Kilt"
 	default:
