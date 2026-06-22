@@ -150,7 +150,7 @@ func applyObservedDefaults(
 				ConfidenceHigh,
 			)
 		}
-		if platform := runtime.DerivedModLoader(); platform.Valid() && platform != types.PlatformMinecraft {
+		if platform := observed.DerivedModLoader(); platform.Valid() && platform != types.PlatformMinecraft {
 			defaults.Platform = string(platform)
 			defaults.Confidence = maxConfidence(
 				defaults.Confidence,
@@ -163,7 +163,7 @@ func applyObservedDefaults(
 				)
 			}
 		}
-		if version := sanitizeObservedVersion(runtime.DerivedLoaderVersion()); version != "" {
+		if version := sanitizeObservedVersion(observed.DerivedLoaderVersion()); version != "" {
 			defaults.PlatformVersion = version
 			defaults.Confidence = maxConfidence(
 				defaults.Confidence,

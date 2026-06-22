@@ -61,10 +61,10 @@ func generateStatusOutput(
 	}
 
 	output = &tui.Data{Fields: []tui.Field{}}
-	serverPlatform := data.Runtime.DerivedModLoader()
+	serverPlatform := data.DerivedModLoader()
 	hasMcdr := data.Environments.Mcdr != nil
 	hasLucy := data.Environments.Lucy != nil
-	primaryNode, hasPrimaryNode := topologyPrimaryNodeData(data.Runtime.Topology)
+	primaryNode, hasPrimaryNode := topologyPrimaryNodeData(data.Topology)
 
 	// logo display strategy:
 	// custom client > mod loader > mcdr > lucy > vanilla
@@ -126,7 +126,7 @@ func generateStatusOutput(
 	// Show modding platform if detected, even if no mods found, to differentiate
 	// between modded and vanilla servers
 	if platformLabel := statusRuntimePlatformLabel(
-		data.Runtime.Topology,
+		data.Topology,
 		serverPlatform,
 		hasPrimaryNode,
 		primaryNode,
@@ -135,13 +135,13 @@ func generateStatusOutput(
 			output.Fields, &tui.FieldAnnotatedShortText{
 				Title:      "Platform",
 				Text:       platformLabel,
-				Annotation: data.Runtime.DerivedLoaderVersion(),
+				Annotation: data.DerivedLoaderVersion(),
 			},
 		)
 	}
 
 	if topologyField := statusTopologyField(
-		data.Runtime.Topology,
+		data.Topology,
 		hasPrimaryNode,
 		primaryNode,
 	); topologyField != nil {
@@ -150,7 +150,7 @@ func generateStatusOutput(
 
 	// If topology is resolved and has meaningful risk, show it.
 	if riskLevel := statusEffectiveRiskLevel(
-		data.Runtime.Topology,
+		data.Topology,
 		hasPrimaryNode,
 		primaryNode,
 	); riskLevel > types.RiskNone {
@@ -163,10 +163,10 @@ func generateStatusOutput(
 	}
 
 	showMods := false
-	if data.Runtime.Topology != nil && data.Runtime.Topology.Resolved() {
-		showMods = data.Runtime.Topology.HasCapability(types.CapabilityFabricMods) ||
-			data.Runtime.Topology.HasCapability(types.CapabilityForgeMods) ||
-			data.Runtime.Topology.HasCapability(types.CapabilityNeoforgeMods)
+	if data.Topology != nil && data.Topology.Resolved() {
+		showMods = data.Topology.HasCapability(types.CapabilityFabricMods) ||
+			data.Topology.HasCapability(types.CapabilityForgeMods) ||
+			data.Topology.HasCapability(types.CapabilityNeoforgeMods)
 	}
 
 	// Collect mod/plugin names and paths for later use. This is to avoid
@@ -237,8 +237,8 @@ func generateStatusOutput(
 	}
 
 	showPlugins := false
-	if data.Runtime.Topology != nil && data.Runtime.Topology.Resolved() {
-		showPlugins = data.Runtime.Topology.HasCapability(types.CapabilityBukkitPlugins)
+	if data.Topology != nil && data.Topology.Resolved() {
+		showPlugins = data.Topology.HasCapability(types.CapabilityBukkitPlugins)
 	}
 
 	// List plugins if server can load plugins

@@ -100,14 +100,14 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 		return nil, installError(CategoryResolution, err, nil)
 	}
 
-	if serverInfo.Runtime == nil || serverInfo.Runtime.Topology == nil || !serverInfo.Runtime.Topology.Resolved() {
+	if serverInfo.Runtime == nil || serverInfo.Topology == nil || !serverInfo.Topology.Resolved() {
 		return nil, installError(
 			CategoryResolution,
 			fmt.Errorf("runtime topology is unavailable"),
 			nil,
 		)
 	}
-	providers := options.Providers(*serverInfo.Runtime.Topology)
+	providers := options.Providers(*serverInfo.Topology)
 	if providers == nil {
 		providers = []upstream.PackageSource{}
 	}
@@ -127,7 +127,7 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 	}
 
 	roots := append([]types.VersionedPackageRef(nil), regularIds...)
-	serverLoader := serverInfo.Runtime.DerivedModLoader()
+	serverLoader := serverInfo.DerivedModLoader()
 	if serverLoader != types.PlatformAny {
 		for i, id := range roots {
 			if id.Platform == types.PlatformAny {
@@ -136,7 +136,7 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 		}
 	}
 	rootProviders, err := rootScopedProviders(
-		serverInfo.Runtime.Topology,
+		serverInfo.Topology,
 		requests,
 		roots,
 		serverLoader,

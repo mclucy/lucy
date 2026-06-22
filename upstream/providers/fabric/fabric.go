@@ -51,7 +51,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 
 func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
 	serverInfo := workspace.ServerInfo()
-	serverPlatform := serverInfo.Runtime.DerivedModLoader()
+	serverPlatform := serverInfo.DerivedModLoader()
 
 	var gameVersionID string
 	switch serverPlatform {

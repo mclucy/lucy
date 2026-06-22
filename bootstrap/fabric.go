@@ -19,7 +19,7 @@ type fabricBootstrapper struct{}
 
 func (b fabricBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
 	serverInfo := workspace.ServerInfo()
-	serverPlatform := serverInfo.Runtime.DerivedModLoader()
+	serverPlatform := serverInfo.DerivedModLoader()
 
 	deleteVanilla := false
 	switch serverPlatform {
