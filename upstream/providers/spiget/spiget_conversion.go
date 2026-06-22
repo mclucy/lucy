@@ -151,9 +151,9 @@ func (r resolvedVersion) Matches(version types.BareVersion) bool {
 	return r.VersionID != 0 && requested == strconv.FormatInt(r.VersionID, 10)
 }
 
-func (r resolvedVersion) ToPackageRemote() types.PackageRemote {
-	return types.PackageRemote{
-		Source:   types.SourceSpiget,
+func (r resolvedVersion) ToPackageRemote() types.ResolvedPackage {
+	return types.ResolvedPackage{
+		Id:       types.FullPackageRef{Scope: types.SourceSpiget},
 		FileUrl:  r.downloadURL(),
 		Filename: r.filename(),
 	}
