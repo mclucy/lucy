@@ -49,13 +49,12 @@ tasks:
     cmds:
       - rm -rf release
 
-  link:
-    desc: Print shell code that shadows lucy with the current development binary
+  run:
+    desc: Run the local development binary for testing and debugging. Use `task run -- --help` to pass arguments to the binary.
     deps:
       - build:dev-core
     cmds:
-      - |
-        printf "alias lucy='%s/{{.DEV_BINARY}}'\n" "$PWD"
+      - "$PWD/{{.DEV_BINARY}} {{.CLI_ARGS}}"
 
   cipher-generate:
     desc: Generate new cipher key and ciphertext from CF_API_KEY
