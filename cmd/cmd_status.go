@@ -16,6 +16,7 @@ import (
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Display basic information of the current server",
+	Args:  cobra.NoArgs,
 	RunE:  runWithErrorLogging(actionStatus),
 }
 
@@ -126,7 +127,6 @@ func generateStatusOutput(
 	// between modded and vanilla servers
 	if platformLabel := statusRuntimePlatformLabel(
 		data.Runtime.Topology,
-		data.Packages,
 		serverPlatform,
 		hasPrimaryNode,
 		primaryNode,
@@ -333,7 +333,6 @@ func topologyPrimaryNodeData(topology *types.RuntimeTopology) (
 
 func statusRuntimePlatformLabel(
 	topology *types.RuntimeTopology,
-	packages []types.Package,
 	fallback types.PlatformId,
 	hasPrimaryNode bool,
 	primaryNode types.RuntimeNode,
@@ -361,13 +360,6 @@ func statusRuntimePlatformLabel(
 		return ""
 	}
 
-	if addons := statusPackageAddonLabels(
-		packages,
-		primaryNode,
-	); len(addons) > 0 {
-		label += " + " + strings.Join(addons, " + ")
-	}
-
 	if extras := runtimeTopologyAddonLabels(
 		topology,
 		primaryNode.ID,
@@ -376,72 +368,6 @@ func statusRuntimePlatformLabel(
 	}
 
 	return label
-}
-
-func statusPackageAddonLabels(
-	packages []types.Package,
-	primaryNode types.RuntimeNode,
-) []string {
-	labels := make([]string, 0, len(packages))
-	seen := map[string]struct{}{}
-	for _, pkg := range packages {
-		label := packageRuntimeLabel(pkg)
-		if label == "" || label == runtimeNodeLabel(primaryNode.ID) {
-			continue
-		}
-		if _, exists := seen[label]; exists {
-			continue
-		}
-		seen[label] = struct{}{}
-		labels = append(labels, label)
-	}
-	return labels
-}
-
-func packageRuntimeLabel(pkg types.Package) string {
-	switch pkg.Id.Platform {
-	case types.PlatformFabric:
-		return "Fabric"
-	case types.PlatformForge:
-		return "Forge"
-	case types.PlatformNeoforge:
-		return "NeoForge"
-	case types.PlatformMCDR:
-		return "MCDR"
-	case types.PlatformId("paper"):
-		return "Paper"
-	case types.PlatformId("bukkit"):
-		return "Bukkit"
-	case types.PlatformId("folia"):
-		return "Folia"
-	case types.PlatformId("leaves"):
-		return "Leaves"
-	case types.PlatformId("velocity"):
-		return "Velocity"
-	case types.PlatformId("bungeecord"):
-		return "BungeeCord"
-	case types.PlatformId("waterfall"):
-		return "Waterfall"
-	case types.PlatformId("sponge"):
-		return "Sponge"
-	case types.PlatformAny:
-		switch pkg.Id.Name.String() {
-		case "connector":
-			return "Connector"
-		case "kilt":
-			return "Kilt"
-		case "geyser":
-			return "Geyser"
-		case "sponge":
-			return "Sponge"
-		case "arclight":
-			return "Arclight"
-		case "youer":
-			return "Youer"
-		}
-	}
-
-	return ""
 }
 
 func statusTopologyField(
