@@ -41,18 +41,24 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 }
 
 // Fetch resolves the package version, then fetches the corresponding file.
-func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
 	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Platform)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
-	return upstream.NewFetchResult(file.ToPackageRemote()), nil
+	r := file.ToPackageRemote()
+	return types.ResolvedPackage{
+		FileUrl:       r.FileUrl,
+		Filename:      r.Filename,
+		Hash:          r.Hash,
+		HashAlgorithm: r.HashAlgorithm,
+	}, nil
 }
 
 // Info resolves a project slug and returns project metadata.

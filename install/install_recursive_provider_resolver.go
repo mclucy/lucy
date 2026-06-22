@@ -51,9 +51,18 @@ func (resolver providerCandidateResolver) ResolvePackage(
 		}
 
 		fetch := fetches[0]
-		remote := fetch.PackageRemote()
+		remote := types.PackageRemote{
+			Source:        fetch.Id.Scope,
+			FileUrl:       fetch.FileUrl,
+			Filename:      fetch.Filename,
+			Hash:          fetch.Hash,
+			HashAlgorithm: fetch.HashAlgorithm,
+		}
 		return types.Package{
-			Id:     fetch.ResolvedID,
+			Id: types.VersionedPackageRef{
+				PackageRef: fetch.Id.PackageRef,
+				Version:    fetch.Id.Version,
+			},
 			Remote: &remote,
 		}, nil
 	}

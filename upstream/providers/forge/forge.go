@@ -13,7 +13,6 @@ import (
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -59,14 +58,14 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
 	gameVersion, err := minecraftVersionForInstall()
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
 	if gameVersion == types.VersionUnknown {
-		return upstream.FetchResult{}, fmt.Errorf(
+		return types.ResolvedPackage{}, fmt.Errorf(
 			"unknown minecraft version, cannot infer forge bootstrap artifact; see %s",
 			docsURL,
 		)
@@ -74,21 +73,18 @@ func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, err
 
 	forgeVersion, err := forgeVersionFromPackageRef(id, gameVersion)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
 	fileURL := installerURL(gameVersion, forgeVersion)
 
-	return upstream.FetchResult{
-		Source:  types.SourceForge,
-		FileURL: fileURL,
+	return types.ResolvedPackage{
+		FileUrl: fileURL,
 		Filename: fmt.Sprintf(
 			"forge-%s-%s-installer.jar",
 			gameVersion.String(),
 			forgeVersion,
 		),
-		Hash:          "",
-		HashAlgorithm: "",
 	}, nil
 }
 

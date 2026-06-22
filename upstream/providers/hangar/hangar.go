@@ -28,20 +28,30 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return res.ToSearchResults(p.Id()), nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
 	version, err := getVersion(id)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
 	preferredPlatform := preferredDownloadPlatform(id.Platform)
 	if remote, ok := version.ToPackageRemoteForPlatform(preferredPlatform); ok {
-		return upstream.NewFetchResult(remote), nil
+		return types.ResolvedPackage{
+			FileUrl:       remote.FileUrl,
+			Filename:      remote.Filename,
+			Hash:          remote.Hash,
+			HashAlgorithm: remote.HashAlgorithm,
+		}, nil
 	}
 	if remote := version.ToPackageRemote(); remote.FileUrl != "" {
-		return upstream.NewFetchResult(remote), nil
+		return types.ResolvedPackage{
+			FileUrl:       remote.FileUrl,
+			Filename:      remote.Filename,
+			Hash:          remote.Hash,
+			HashAlgorithm: remote.HashAlgorithm,
+		}, nil
 	}
-	return upstream.FetchResult{}, ErrNoDownload
+	return types.ResolvedPackage{}, ErrNoDownload
 }
 
 func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {

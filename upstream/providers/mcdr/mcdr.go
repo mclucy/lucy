@@ -52,14 +52,20 @@ func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 }
 
 func (s provider) Fetch(id types.VersionedPackageRef) (
-	upstream.FetchResult,
+	types.ResolvedPackage,
 	error,
 ) {
 	rel, err := getRelease(id.Name.Pep8String(), id.Version)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
-	return upstream.NewFetchResult(rel.ToPackageRemote()), nil
+	r := rel.ToPackageRemote()
+	return types.ResolvedPackage{
+		FileUrl:       r.FileUrl,
+		Filename:      r.Filename,
+		Hash:          r.Hash,
+		HashAlgorithm: r.HashAlgorithm,
+	}, nil
 }
 
 func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {

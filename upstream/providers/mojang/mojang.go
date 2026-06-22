@@ -10,7 +10,6 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 )
 
 const VersionManifestURL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
@@ -104,32 +103,31 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
 	manifest, err := FetchVersionManifest()
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
 	versionID, versionURL, err := ResolveVersionEntry(manifest, id.Version)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
 	detail, err := fetchVersionDetail(versionURL)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
 	if detail.Downloads.Server == nil {
-		return upstream.FetchResult{}, fmt.Errorf(
+		return types.ResolvedPackage{}, fmt.Errorf(
 			"minecraft version %s does not provide a dedicated server jar",
 			versionID,
 		)
 	}
 
-	return upstream.FetchResult{
-		Source:        types.SourceMojang,
-		FileURL:       detail.Downloads.Server.Url,
+	return types.ResolvedPackage{
+		FileUrl:       detail.Downloads.Server.Url,
 		Filename:      "server.jar",
 		Hash:          detail.Downloads.Server.Sha1,
 		HashAlgorithm: "sha1",

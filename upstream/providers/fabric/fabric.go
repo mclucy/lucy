@@ -9,7 +9,6 @@ import (
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -50,7 +49,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
 	serverInfo := workspace.ServerInfo()
 	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 
@@ -61,7 +60,7 @@ func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, err
 	case types.PlatformNone:
 		gameVersionID = promptSelectMinecraftVersion()
 	default:
-		return upstream.FetchResult{}, fmt.Errorf(
+		return types.ResolvedPackage{}, fmt.Errorf(
 			"unsupported server platform %s for fabric bootstrap",
 			serverPlatform.Title(),
 		)
@@ -69,12 +68,12 @@ func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, err
 
 	loaderVer, err := loaderVersion(id.Version)
 	if err != nil {
-		return upstream.FetchResult{}, fmt.Errorf("resolve fabric loader version failed: %w", err)
+		return types.ResolvedPackage{}, fmt.Errorf("resolve fabric loader version failed: %w", err)
 	}
 
 	installerVer, err := latestInstallerVersion()
 	if err != nil {
-		return upstream.FetchResult{}, fmt.Errorf("resolve fabric installer version failed: %w", err)
+		return types.ResolvedPackage{}, fmt.Errorf("resolve fabric installer version failed: %w", err)
 	}
 
 	url := fmt.Sprintf(
@@ -82,12 +81,9 @@ func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, err
 		gameVersionID, loaderVer, installerVer,
 	)
 
-	return upstream.FetchResult{
-		Source:        types.SourceFabric,
-		FileURL:       url,
-		Filename:      fmt.Sprintf("fabric-server-mc%s-loader%s-launcher%s.jar", gameVersionID, loaderVer, installerVer),
-		Hash:          "",
-		HashAlgorithm: "",
+	return types.ResolvedPackage{
+		FileUrl:  url,
+		Filename: fmt.Sprintf("fabric-server-mc%s-loader%s-launcher%s.jar", gameVersionID, loaderVer, installerVer),
 	}, nil
 }
 

@@ -101,17 +101,17 @@ func (s provider) Id() types.SourceId {
 var Provider provider
 
 func (s provider) Fetch(id types.VersionedPackageRef) (
-	upstream.FetchResult,
+	types.ResolvedPackage,
 	error,
 ) {
 	version, err := getVersion(id)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 	if len(version.Files) == 0 || path.Ext(version.Files[0].Filename) != ".jar" {
-		return upstream.FetchResult{}, ErrUnsupportedFileType
+		return types.ResolvedPackage{}, ErrUnsupportedFileType
 	}
-	return upstream.NewFetchResult(version.ToPackageRemote()), nil
+	return resolvedPackageFromVersion(*version), nil
 }
 
 func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
