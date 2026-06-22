@@ -29,6 +29,7 @@ type candidateGraphPlanner struct {
 	candidateGraph       map[string]CandidateNode
 	constraintInputs     []resolve.ConstraintInput
 	queue                []candidateRequest
+	ambient              AmbientDependencies
 }
 
 // BuildCandidateGraph expands the recursive advisory dependency closure for the
@@ -46,6 +47,7 @@ func BuildCandidateGraph(
 		roots,
 		providers,
 		installedConstraints,
+		AmbientDependencies{},
 		options,
 		providerCandidateResolver{providers: providers},
 	)
@@ -56,6 +58,7 @@ func resolveClosure(
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
 	installed []InstalledConstraint,
+	ambient AmbientDependencies,
 	options InstallOptions,
 	resolver candidateGraphResolver,
 ) (ResolvedClosure, error) {
@@ -64,6 +67,7 @@ func resolveClosure(
 		roots,
 		providers,
 		installed,
+		ambient,
 		options,
 		resolver,
 	)
@@ -77,6 +81,7 @@ func BuildCandidateGraphWithResolver(
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
+	ambient AmbientDependencies,
 	options InstallOptions,
 	resolver candidateGraphResolver,
 ) (ResolvedClosure, error) {
@@ -85,6 +90,7 @@ func BuildCandidateGraphWithResolver(
 		roots,
 		providers,
 		installedConstraints,
+		ambient,
 	)
 	if err != nil {
 		return ResolvedClosure{}, err
@@ -131,6 +137,7 @@ func newCandidateGraphPlanner(
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
+	ambient AmbientDependencies,
 ) (*candidateGraphPlanner, error) {
 	candidateGraph := make(map[string]CandidateNode)
 	installedConstraints = append(
@@ -180,6 +187,7 @@ func newCandidateGraphPlanner(
 		candidateGraph:       candidateGraph,
 		constraintInputs:     constraintInputs,
 		queue:                queue,
+		ambient:              ambient,
 	}, nil
 }
 
@@ -215,6 +223,7 @@ func (planner *candidateGraphPlanner) admit(
 			if !dependency.Mandatory && !options.WithOptional {
 				continue
 			}
+			dependency = planner.ambient.Mark(dependency)
 			dependencies = append(dependencies, dependency)
 
 			batchInputs = append(
@@ -223,6 +232,10 @@ func (planner *candidateGraphPlanner) admit(
 					Dependency: dependency,
 				},
 			)
+
+			if dependency.DependencyType() != types.Regular {
+				continue
+			}
 
 			childKey := dependency.Id.StringBase()
 			if _, exists := planner.candidateGraph[childKey]; exists {
@@ -293,6 +306,7 @@ func (planner *candidateGraphPlanner) resolvedClosure() ResolvedClosure {
 		CandidateGraph:       cloneCandidateGraph(planner.candidateGraph),
 		InstalledConstraints: append([]InstalledConstraint(nil), planner.installedConstraints...),
 		Providers:            append([]upstream.PackageSource(nil), planner.providers...),
+		Ambient:              planner.ambient,
 	}
 }
 

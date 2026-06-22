@@ -146,6 +146,10 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 		return nil, installError(CategoryResolution, err, nil)
 	}
 	installedConstraints := snapshotInstalledConstraints(serverInfo)
+	ambient, err := buildAmbientDependencies(ctx, serverInfo)
+	if err != nil {
+		return nil, installError(CategoryResolution, err, nil)
+	}
 	resolvePlan := newRecursiveResolutionPlan(
 		roots,
 		installedConstraints,
@@ -159,6 +163,7 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 			resolvePlan.Roots,
 			providers,
 			resolvePlan.InstalledConstraints,
+			ambient,
 			options,
 			providerCandidateResolver{
 				providers:       providers,

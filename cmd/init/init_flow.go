@@ -463,7 +463,7 @@ func resolveTakeoverDependencyTargets(
 
 	targets := make([]string, 0, len(pkg.Dependencies.Value))
 	for _, dep := range pkg.Dependencies.Value {
-		if dep.Embedded {
+		if dep.IsEmbedded() || dep.IsAmbient() {
 			continue
 		}
 		depID := dep.Id.StringBase()

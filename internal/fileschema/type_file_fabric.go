@@ -60,6 +60,7 @@ type FileFabricModIdentifier struct {
 
 	Icon        string            `json:"icon"`
 	Environment FabricEnvironment `json:"environment"`
+	Provides    []string          `json:"provides"`
 	Jars        []struct {
 		File string `json:"file"`
 	} `json:"jars"`
