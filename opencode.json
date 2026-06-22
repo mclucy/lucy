@@ -53,6 +53,11 @@
       "description": "Use this while working on Folia integration.",
       "repository": "PaperMC/Folia"
     },
+    "forge": {
+      "branch": "26.1.2",
+      "description": "Use this while working on Forge integration. Note that the branch is on 26.1.2. For newer versions, you should switch branches.",
+      "repository": "MinecraftForge/MinecraftForge"
+    },
     "HMCL": {
       "description": "HMCL is a popular Minecraft launcher in China. It might provide useful Minecraft domain knowledge. However, note that HMCL is primarily client-oriented, so it may not be as relevant for server-side development This repo is indexed via codegraph.",
       "path": "../HMCL"
@@ -71,6 +76,11 @@
       "branch": "main",
       "description": "Use this while working on Modrinth integration.",
       "repository": "modrinth/code"
+    },
+    "neoforge": {
+      "branch": "26.2.x",
+      "description": "Use this while working on NeoForge integration. Note that the branch is on 26.2.x. For older versions, you should switch branches.",
+      "repository": "neoforged/NeoForge"
     },
     "nix": {
       "description": "Nix takes a purely functional approach. It might be insightful at specific cases where we want to introduce functional programming hacks. This repo is indexed via codegraph.",
