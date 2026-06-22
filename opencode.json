@@ -24,13 +24,29 @@
     }
   },
   "references": {
+    "apt": {
+      "description": "Use APT as a design reference. This repo is indexed via codegraph.",
+      "path": "../apt"
+    },
     "brew": {
-      "description": "Use Homebrew as a design reference. This path is indexed via codegraph.",
+      "description": "Use Homebrew as a design reference. This repo is indexed via codegraph.",
       "path": "../brew"
     },
     "cargo": {
-      "description": "Use Cargo as a design reference. This path is indexed via codegraph.",
+      "description": "Use Cargo as a design reference. This repo is indexed via codegraph.",
       "path": "../cargo"
+    },
+    "fabric-api": {
+      "description": "Essential hooks for Fabric modding. Use this while working on Fabric-related tasks.",
+      "repository": "FabricMC/fabric-api"
+    },
+    "fabric-docs": {
+      "description": "Official documentation for Fabric.",
+      "repository": "FabricMC/fabric-docs"
+    },
+    "fabric-loader": {
+      "description": "The core of the Fabric ecosystem. Loads fabric mods and provides useful abstractions.",
+      "repository": "FabricMC/fabric-loader"
     },
     "folia": {
       "branch": "ver/26.1.x",
@@ -52,6 +68,14 @@
       "description": "Use this while working on Modrinth integration.",
       "repository": "modrinth/code"
     },
+    "nix": {
+      "description": "Nix takes a purely functional approach. It might be insightful at specific cases where we want to introduce functional programming hacks. This repo is indexed via codegraph.",
+      "path": "../nix"
+    },
+    "pacman": {
+      "description": "Use Pacman as a design reference. This repo is indexed via codegraph.",
+      "path": "../pacman"
+    },
     "paper": {
       "branch": "main",
       "description": "Use this while working on Paper integration.",
@@ -63,7 +87,7 @@
       "repository": "PaperMC/docs"
     },
     "pnpm": {
-      "description": "Use pnpm as a design reference. This path is indexed via codegraph.",
+      "description": "Use pnpm as a design reference. This repo is indexed via codegraph.",
       "path": "../pnpm"
     },
     "velocity": {
@@ -75,6 +99,10 @@
       "branch": "master",
       "description": "Use this while working on Waterfall integration.",
       "repository": "PaperMC/Waterfall"
+    },
+    "yarn": {
+      "description": "Use yarn v4 as a design reference. This repo is indexed via codegraph.",
+      "path": "../yarn"
     }
   }
 }
