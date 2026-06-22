@@ -4,8 +4,6 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// Workspace components that do not exist, use an empty string. Note Runtime
-// must exist, otherwise the program will exit; therefore, it is not a pointer.
 type Workspace struct {
 	Root         string                 `json:"root"` // if found lucy on upperworkspace
 	SavePath     string                 `json:"save_path"`
@@ -24,8 +22,43 @@ func (w Workspace) RuntimeIdentityPackage(node *types.TopologyNode) *types.Versi
 		return nil
 	}
 
-	for i := range w.Runtime.RuntimeIdentities {
-		pkg := &w.Runtime.RuntimeIdentities[i]
+	return runtimeIdentityPackage(w.Runtime.RuntimeIdentities, node)
+}
+
+func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
+	if w.Runtime == nil {
+		return nil
+	}
+
+	return primaryRuntimeIdentity(w.Topology, w.Runtime.RuntimeIdentities)
+}
+
+func (w Workspace) DerivedLoaderVersion() string {
+	if w.Runtime == nil {
+		return derivedLoaderVersion(nil, nil)
+	}
+
+	return derivedLoaderVersion(w.Topology, w.Runtime.RuntimeIdentities)
+}
+
+func (w Workspace) DerivedModLoader() types.PlatformId {
+	return derivedModLoader(w.Topology)
+}
+
+func (w Workspace) DerivedServerCore() string {
+	return derivedServerCore(w.Topology)
+}
+
+func runtimeIdentityPackage(
+	identities []types.VersionedPackageRef,
+	node *types.TopologyNode,
+) *types.VersionedPackageRef {
+	if node == nil {
+		return nil
+	}
+
+	for i := range identities {
+		pkg := &identities[i]
 		if string(pkg.Name) == string(node.ID) {
 			return pkg
 		}
@@ -34,21 +67,27 @@ func (w Workspace) RuntimeIdentityPackage(node *types.TopologyNode) *types.Versi
 	return nil
 }
 
-func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
-	if w.Topology == nil {
+func primaryRuntimeIdentity(
+	topology *types.RuntimeTopology,
+	identities []types.VersionedPackageRef,
+) *types.VersionedPackageRef {
+	if topology == nil {
 		return nil
 	}
 
-	primaryNode, ok := w.Topology.PrimaryNodeData()
+	primaryNode, ok := topology.PrimaryNodeData()
 	if !ok {
 		return nil
 	}
 
-	return w.RuntimeIdentityPackage(&primaryNode)
+	return runtimeIdentityPackage(identities, &primaryNode)
 }
 
-func (w Workspace) DerivedLoaderVersion() string {
-	primaryIdentity := w.PrimaryRuntimeIdentity()
+func derivedLoaderVersion(
+	topology *types.RuntimeTopology,
+	identities []types.VersionedPackageRef,
+) string {
+	primaryIdentity := primaryRuntimeIdentity(topology, identities)
 	if primaryIdentity == nil {
 		return "unknown"
 	}
@@ -56,12 +95,12 @@ func (w Workspace) DerivedLoaderVersion() string {
 	return primaryIdentity.Version.String()
 }
 
-func (w Workspace) DerivedModLoader() types.PlatformId {
-	if w.Topology == nil {
+func derivedModLoader(topology *types.RuntimeTopology) types.PlatformId {
+	if topology == nil {
 		return types.PlatformNone
 	}
 
-	primary, ok := w.Topology.PrimaryNodeData()
+	primary, ok := topology.PrimaryNodeData()
 	if !ok {
 		return types.PlatformNone
 	}
@@ -69,12 +108,12 @@ func (w Workspace) DerivedModLoader() types.PlatformId {
 	return types.DeclaredModdingPlatformForNode(primary.ID)
 }
 
-func (w Workspace) DerivedServerCore() string {
-	if w.Topology == nil {
+func derivedServerCore(topology *types.RuntimeTopology) string {
+	if topology == nil {
 		return ""
 	}
 
-	primary, ok := w.Topology.PrimaryNodeData()
+	primary, ok := topology.PrimaryNodeData()
 	if !ok {
 		return ""
 	}
