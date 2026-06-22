@@ -77,6 +77,7 @@ func backfillRecursiveDownloads(
 func downloadBatchPackages(
 	workPath string,
 	packages []types.Package,
+	journal Journal,
 ) (stagingDir string, downloaded []types.Package, err error) {
 	stagingDir, err = os.MkdirTemp("", "lucy_*")
 	if err != nil {
@@ -96,7 +97,7 @@ func downloadBatchPackages(
 	for i, p := range packages {
 		resolvedIds[i] = p.Id
 	}
-	showBatchPhase("Downloading", resolvedIds)
+	recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Downloading", IDs: resolvedIds})
 
 	type slot struct {
 		pkg    types.Package

@@ -116,7 +116,7 @@ func ApplyValidatedClosure(
 
 	applied := 0
 
-	showRecursiveApplyStart(len(tx.Apply.Install))
+	recordEvent(tx.Journal, Event{Kind: EventApplyStart, Count: len(tx.Apply.Install)})
 
 	if tx.StagingDir != "" && len(tx.Apply.Install) > 0 {
 		var moveErrors []error
@@ -173,7 +173,7 @@ func ApplyValidatedClosure(
 		applied++
 	}
 
-	showBatchSummary(applied, len(applyErrors))
+	recordEvent(tx.Journal, Event{Kind: EventBatchSummary, Count: applied, Failed: len(applyErrors)})
 	if len(applyErrors) > 0 {
 		return errors.Join(applyErrors...)
 	}
