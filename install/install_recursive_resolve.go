@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -17,8 +18,8 @@ type candidateRequest struct {
 }
 
 type candidateGraphResolver interface {
-	ResolvePackage(id types.VersionedPackageRef) (types.Package, error)
-	ResolveDependencies(pkg types.Package) ([]types.PackageDependencies, error)
+	ResolvePackage(ctx context.Context, id types.VersionedPackageRef) (types.Package, error)
+	ResolveDependencies(ctx context.Context, pkg types.Package) ([]types.PackageDependencies, error)
 }
 
 type candidateGraphPlanner struct {
@@ -34,12 +35,14 @@ type candidateGraphPlanner struct {
 // requested roots, seeding fixed installed constraints up front and running the
 // constraint merge engine after every newly discovered dependency batch.
 func BuildCandidateGraph(
+	ctx context.Context,
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
 	options InstallOptions,
 ) (ResolvedClosure, error) {
 	return resolveClosure(
+		ctx,
 		roots,
 		providers,
 		installedConstraints,
@@ -49,6 +52,7 @@ func BuildCandidateGraph(
 }
 
 func resolveClosure(
+	ctx context.Context,
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
 	installed []InstalledConstraint,
@@ -56,6 +60,7 @@ func resolveClosure(
 	resolver candidateGraphResolver,
 ) (ResolvedClosure, error) {
 	return BuildCandidateGraphWithResolver(
+		ctx,
 		roots,
 		providers,
 		installed,
@@ -68,6 +73,7 @@ func resolveClosure(
 // caller-provided resolver so the planning loop can run without direct provider
 // or routing calls in the planner core.
 func BuildCandidateGraphWithResolver(
+	ctx context.Context,
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
@@ -85,12 +91,16 @@ func BuildCandidateGraphWithResolver(
 	}
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return ResolvedClosure{}, err
+		}
+
 		current, ok := planner.next()
 		if !ok {
 			return planner.resolvedClosure(), nil
 		}
 
-		pkg, err := resolver.ResolvePackage(current.id)
+		pkg, err := resolver.ResolvePackage(ctx, current.id)
 		if err != nil {
 			if current.mandatory {
 				return ResolvedClosure{}, err
@@ -98,7 +108,7 @@ func BuildCandidateGraphWithResolver(
 			continue
 		}
 
-		dependencySets, err := resolver.ResolveDependencies(pkg)
+		dependencySets, err := resolver.ResolveDependencies(ctx, pkg)
 		if err != nil {
 			if current.mandatory {
 				return ResolvedClosure{}, err

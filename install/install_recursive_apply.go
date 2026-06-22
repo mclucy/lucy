@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -33,10 +34,19 @@ func recursiveInstallDestination(
 }
 
 func planApply(
+	ctx context.Context,
 	verified VerifiedClosure,
 	_ []InstalledConstraint,
 ) (ApplyPlan, error) {
+	if err := ctx.Err(); err != nil {
+		return ApplyPlan{}, err
+	}
+
 	candidateGraph := verified.Downloaded.Resolved.CandidateGraph
+	provenance := make(map[string][]string, len(candidateGraph))
+	for key, node := range candidateGraph {
+		provenance[key] = append([]string(nil), node.ProvenancePath...)
+	}
 
 	candidateByName := make(
 		map[types.BarePackageName]CandidateNode,
@@ -87,14 +97,19 @@ func planApply(
 		remove = append(remove, node.Package)
 	}
 
-	return ApplyPlan{Install: install, Remove: remove}, nil
+	return ApplyPlan{Install: install, Remove: remove, Provenance: provenance}, nil
 }
 
 func applyPlan(
+	ctx context.Context,
 	plan ApplyPlan,
 	serverInfo workspace.Workspace,
 	journal Journal,
 ) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	if serverInfo.Root != "" && serverInfo.Root != "." {
 		if err := os.MkdirAll(serverInfo.Root, 0o755); err != nil {
 			return fmt.Errorf("create server work path failed: %w", err)
@@ -108,6 +123,10 @@ func applyPlan(
 	if len(plan.Install) > 0 {
 		var moveErrors []error
 		for _, pkg := range plan.Install {
+			if err := ctx.Err(); err != nil {
+				moveErrors = append(moveErrors, err)
+				break
+			}
 			if pkg.Local == nil || pkg.Local.Path == "" {
 				continue
 			}
@@ -145,6 +164,10 @@ func applyPlan(
 	var applyErrors []error
 
 	for _, pkg := range plan.Remove {
+		if err := ctx.Err(); err != nil {
+			applyErrors = append(applyErrors, err)
+			break
+		}
 		if pkg.Local == nil || pkg.Local.Path == "" {
 			continue
 		}

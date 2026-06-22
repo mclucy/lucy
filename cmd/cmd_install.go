@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -62,8 +64,12 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 
 	options := install.DefaultOptions()
 
-	result, err := install.InstallMany(plan.Requested, options)
+	result, err := install.InstallMany(cmd.Context(), plan.Requested, options)
 	if err != nil {
+		var conflictErr *resolve.ConstraintConflictError
+		if errors.As(err, &conflictErr) {
+			return formatConstraintConflict(conflictErr)
+		}
 		return err
 	}
 

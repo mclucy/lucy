@@ -15,16 +15,24 @@ import (
 )
 
 func downloadArtifacts(
+	ctx context.Context,
 	resolved ResolvedClosure,
 	serverRoot string,
+	options InstallOptions,
 	journal Journal,
 ) (DownloadedClosure, error) {
+	if err := ctx.Err(); err != nil {
+		return DownloadedClosure{}, err
+	}
+
 	packages := recursiveCandidatePackages(resolved.CandidateGraph)
 	recordEvent(journal, Event{Kind: EventDownloadStart, Count: len(packages)})
 
 	stagingDir, packages, err := downloadBatchPackages(
+		ctx,
 		serverRoot,
 		packages,
+		options,
 		journal,
 	)
 	if err != nil {
@@ -109,10 +117,17 @@ func cloneCandidateGraph(source map[string]CandidateNode) map[string]CandidateNo
 }
 
 func downloadBatchPackages(
+	ctx context.Context,
 	workPath string,
 	packages []types.Package,
+	options InstallOptions,
 	journal Journal,
 ) (stagingDir string, downloaded []types.Package, err error) {
+	options = options.withDefaults()
+	if err := ctx.Err(); err != nil {
+		return "", nil, err
+	}
+
 	stagingDir, err = os.MkdirTemp("", "lucy_*")
 	if err != nil {
 		return "", nil, fmt.Errorf("create staging directory failed: %w", err)
@@ -143,7 +158,7 @@ func downloadBatchPackages(
 	slots := make([]slot, len(packages))
 	var wg sync.WaitGroup
 
-	ctx, cancel := context.WithCancel(context.Background())
+	downloadCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	for i, p := range packages {
@@ -154,12 +169,12 @@ func downloadBatchPackages(
 			defer wg.Done()
 			defer tracker.Close()
 
-			if ctx.Err() != nil {
-				slots[index] = slot{failed: true, err: ctx.Err()}
+			if downloadCtx.Err() != nil {
+				slots[index] = slot{failed: true, err: downloadCtx.Err()}
 				return
 			}
 
-			result, err := cache.CachedDownload(
+			result, err := options.Cache(
 				pkg.Remote.FileUrl,
 				stagingDir,
 				cache.DownloadOptions{
@@ -195,10 +210,7 @@ func downloadBatchPackages(
 
 	wg.Wait()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(
-		context.Background(),
-		10*time.Second,
-	)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer shutdownCancel()
 	_ = tuiprogress.WaitForShutdown(shutdownCtx)
 

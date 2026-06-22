@@ -9,9 +9,8 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func ensureServerPlatformMatch(id types.VersionedPackageRef) error {
+func ensureServerPlatformMatch(id types.VersionedPackageRef, serverInfo workspace.Workspace) error {
 	platform := id.Platform
-	serverInfo := workspace.ServerInfo()
 
 	switch platform {
 	case types.PlatformAny:

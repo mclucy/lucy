@@ -63,6 +63,9 @@ func (d ReconcileDiff) IsStable() bool {
 // ApplyPlan is the final, immutable set of operations to execute. It is
 // constructed only after reconcile has produced a stable validated closure.
 type ApplyPlan struct {
+	Resolved             ResolvedClosure
+	InstalledConstraints []InstalledConstraint
+
 	// Install is the ordered list of packages to install.
 	Install []types.Package
 
@@ -70,6 +73,8 @@ type ApplyPlan struct {
 	// the validated closure. Only packages within this transaction's scope are
 	// eligible for removal.
 	Remove []types.Package
+
+	Provenance map[string][]string
 }
 
 // ResolvedClosure is the output of the resolve stage.

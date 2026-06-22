@@ -14,7 +14,10 @@ import (
 // Each installed package is treated as an immutable anchor during recursive
 // solving; it will never be auto-replaced by the solver.
 func SnapshotInstalledConstraints() []InstalledConstraint {
-	si := workspace.ServerInfo()
+	return snapshotInstalledConstraints(workspace.ServerInfo())
+}
+
+func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint {
 	constraints := make([]InstalledConstraint, 0, len(si.Packages)+3)
 	seen := make(map[string]struct{}, len(si.Packages)+3)
 	appendConstraint := func(pkg types.Package, requester string) {

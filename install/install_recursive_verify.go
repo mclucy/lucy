@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/mclucy/lucy/artifact"
@@ -9,9 +10,14 @@ import (
 )
 
 func verifyArtifacts(
+	ctx context.Context,
 	downloaded DownloadedClosure,
 	journal Journal,
 ) (VerifiedClosure, error) {
+	if err := ctx.Err(); err != nil {
+		return VerifiedClosure{}, err
+	}
+
 	verifiedGraph, err := verifyDownloadedArtifacts(downloaded)
 	if err != nil {
 		return VerifiedClosure{}, err
