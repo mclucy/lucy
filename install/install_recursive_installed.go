@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -28,7 +29,7 @@ func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
 		constraints = append(
 			constraints, InstalledConstraint{
 				Package: pkg,
-				ConstraintInput: ConstraintInput{
+				ConstraintInput: resolve.ConstraintInput{
 					Requester: requester,
 					Dependency: types.Dependency{
 						Id:        pkg.Id,

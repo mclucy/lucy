@@ -1,4 +1,4 @@
-package install
+package resolve
 
 import (
 	"fmt"
@@ -23,14 +23,14 @@ type ConstraintConflictError struct {
 
 func (e *ConstraintConflictError) Error() string {
 	if e == nil {
-		return "install: constraint conflict"
+		return "resolve: constraint conflict"
 	}
 	return fmt.Sprintf(
-		"install: constraint conflict for %s between %q (%s) and %q (%s)",
+		"resolve: constraint conflict for %s between %q (%s) and %q (%s)",
 		e.PackageId.StringBase(),
 		e.Left.Requester,
-		formatVersionConstraint(e.Left.Constraint),
+		FormatVersionConstraint(e.Left.Constraint),
 		e.Right.Requester,
-		formatVersionConstraint(e.Right.Constraint),
+		FormatVersionConstraint(e.Right.Constraint),
 	)
 }

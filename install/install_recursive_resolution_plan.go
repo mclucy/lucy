@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -121,7 +122,7 @@ func mergeReconcileConstraints(groups ...[]InstalledConstraint) []InstalledConst
 	return merged
 }
 
-func tightenedConstraintInputs(inputs []ConstraintInput) []InstalledConstraint {
+func tightenedConstraintInputs(inputs []resolve.ConstraintInput) []InstalledConstraint {
 	constraints := make([]InstalledConstraint, 0, len(inputs))
 	for _, input := range inputs {
 		constraints = append(
@@ -132,6 +133,6 @@ func tightenedConstraintInputs(inputs []ConstraintInput) []InstalledConstraint {
 	return constraints
 }
 
-func reconcileConstraintInputKey(input ConstraintInput) string {
+func reconcileConstraintInputKey(input resolve.ConstraintInput) string {
 	return input.Requester + "|" + input.Dependency.Id.StringBase()
 }

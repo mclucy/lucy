@@ -1,4 +1,4 @@
-package install
+package resolve
 
 import (
 	"fmt"
@@ -59,7 +59,7 @@ func normalizeConstraintExpression(dep types.Dependency) (
 	value, err := version.Parse(dep.Id.Version, defaultVersionScheme(dep.Id))
 	if err != nil {
 		return nil, fmt.Errorf(
-			"install: failed to parse fixed constraint version %q for %s: %w",
+			"resolve: failed to parse fixed constraint version %q for %s: %w",
 			dep.Id.Version,
 			dep.Id.StringBase(),
 			err,
@@ -67,7 +67,7 @@ func normalizeConstraintExpression(dep types.Dependency) (
 	}
 	if value == nil {
 		return nil, fmt.Errorf(
-			"install: failed to parse fixed constraint version %q for %s",
+			"resolve: failed to parse fixed constraint version %q for %s",
 			dep.Id.Version,
 			dep.Id.StringBase(),
 		)

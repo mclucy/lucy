@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -22,7 +23,7 @@ type candidateGraphResolver interface {
 
 type candidateGraphPlanner struct {
 	tx               *RecursiveTransaction
-	constraintInputs []ConstraintInput
+	constraintInputs []resolve.ConstraintInput
 	queue            []candidateRequest
 }
 
@@ -54,6 +55,7 @@ func BuildCandidateGraphWithResolver(
 	options InstallOptions,
 	resolver candidateGraphResolver,
 ) (*RecursiveTransaction, error) {
+	options = options.withDefaults()
 	planner, err := newCandidateGraphPlanner(
 		roots,
 		providers,
@@ -62,6 +64,7 @@ func BuildCandidateGraphWithResolver(
 	if err != nil {
 		return nil, err
 	}
+	planner.tx.Journal = options.Journal
 
 	for {
 		current, ok := planner.next()
@@ -107,7 +110,7 @@ func newCandidateGraphPlanner(
 		installedConstraints...,
 	)
 
-	constraintInputs := make([]ConstraintInput, 0, len(installedConstraints))
+	constraintInputs := make([]resolve.ConstraintInput, 0, len(installedConstraints))
 	for _, installed := range installedConstraints {
 		constraintInputs = append(constraintInputs, installed.ConstraintInput)
 		if installed.Package.Id.Platform == "" || installed.Package.Id.Name == "" {
@@ -124,7 +127,7 @@ func newCandidateGraphPlanner(
 		}
 	}
 
-	if _, err := MergeConstraintGraph(constraintInputs); err != nil {
+	if _, err := resolve.MergeConstraintGraph(constraintInputs); err != nil {
 		return nil, err
 	}
 
@@ -176,7 +179,7 @@ func (planner *candidateGraphPlanner) admit(
 		Advisory:       true,
 	}
 
-	batchInputs := make([]ConstraintInput, 0)
+	batchInputs := make([]resolve.ConstraintInput, 0)
 	children := make([]candidateRequest, 0)
 	for _, dependencySet := range dependencySets {
 		requester := current.id.StringFull()
@@ -186,7 +189,7 @@ func (planner *candidateGraphPlanner) admit(
 			}
 
 			batchInputs = append(
-				batchInputs, ConstraintInput{
+				batchInputs, resolve.ConstraintInput{
 					Requester:  requester,
 					Dependency: dependency,
 				},
@@ -215,7 +218,7 @@ func (planner *candidateGraphPlanner) admit(
 			planner.constraintInputs,
 			batchInputs...,
 		)
-		if _, err := MergeConstraintGraph(planner.constraintInputs); err != nil {
+		if _, err := resolve.MergeConstraintGraph(planner.constraintInputs); err != nil {
 			return err
 		}
 	}

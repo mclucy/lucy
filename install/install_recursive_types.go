@@ -1,6 +1,7 @@
 package install
 
 import (
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -29,18 +30,6 @@ const (
 	PhaseCommitted
 )
 
-// ConstraintInput is a single advisory or installed dependency edge fed into
-// the constraint merge engine. It carries the requester identity for conflict
-// provenance reporting.
-type ConstraintInput struct {
-	// Requester is a human-readable label identifying which package or root
-	// requested this dependency (e.g. "root", "fabric-api@0.97.2+1.21.1").
-	Requester string
-
-	// Dependency is the dependency constraint being asserted by Requester.
-	Dependency types.Dependency
-}
-
 // InstalledConstraint represents a currently-installed package treated as a
 // fixed constraint during recursive solving. The package must not be replaced
 // automatically; it only contributes as a fixed version anchor.
@@ -50,7 +39,7 @@ type InstalledConstraint struct {
 
 	// ConstraintInput is the fixed constraint edge derived from this installed
 	// package, used as an immutable lower-bound in the constraint engine.
-	ConstraintInput ConstraintInput
+	ConstraintInput resolve.ConstraintInput
 }
 
 // CandidateNode is a package that has been admitted into the candidate graph.
@@ -86,7 +75,7 @@ type ReconcileDiff struct {
 	// Tightened are packages whose verified constraints are stricter than the
 	// advisory upstream constraints. The constraint engine must be re-run with
 	// the tighter constraints.
-	Tightened []ConstraintInput
+	Tightened []resolve.ConstraintInput
 }
 
 // IsStable returns true when the diff has no pending changes, indicating the
@@ -174,6 +163,8 @@ type RecursiveTransaction struct {
 	// during the download phase. Used for atomic move to target directory.
 	// ADAPTER-OWNED: filesystem path string.
 	StagingDir string
+
+	Journal Journal
 }
 
 // NewRecursiveTransaction constructs a transaction in PhaseCandidate with the
@@ -187,6 +178,7 @@ func NewRecursiveTransaction(
 		Phase:               PhaseCandidate,
 		Roots:               roots,
 		Providers:           providers,
+		Journal:             logJournal{},
 		CandidateGraph:      make(map[string]CandidateNode),
 		DownloadedArtifacts: make(map[string]string),
 		VerifiedGraph:       make(map[string]CandidateNode),

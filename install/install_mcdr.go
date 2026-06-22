@@ -1,58 +1,11 @@
 package install
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 
-	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
 )
-
-func init() {
-	registerInstaller(types.PlatformMCDR, installMcdrPlugin)
-}
-
-func installMcdrPlugin(p types.Package) error {
-	if p.Id.Platform != types.PlatformMCDR {
-		return fmt.Errorf("unsupported platform: %s", p.Id.Platform)
-	}
-	if p.Remote == nil {
-		return errors.New("package remote data is missing")
-	}
-
-	serverInfo := workspace.ServerInfo()
-	if serverInfo.Environments.Mcdr == nil {
-		return errors.New("mcdr not found")
-	}
-	pluginDirectories := serverInfo.Environments.Mcdr.Config.PluginDirectories
-	if len(pluginDirectories) == 0 {
-		return errors.New("mcdr plugin directory not found")
-	}
-
-	if err := os.MkdirAll(pluginDirectories[0], 0o755); err != nil {
-		return fmt.Errorf("create plugin directory failed: %w", err)
-	}
-
-	showDownloadStart(p.Remote.FileUrl)
-	result, err := cache.CachedDownload(
-		p.Remote.FileUrl, pluginDirectories[0], cache.DownloadOptions{
-			Kind:          cache.KindArtifact,
-			Filename:      p.Remote.Filename,
-			ExpectedHash:  p.Remote.Hash,
-			HashAlgorithm: cache.ParseHashAlgorithm(p.Remote.HashAlgorithm),
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-	defer result.File.Close()
-	showInstallComplete(result.File.Name())
-
-	return nil
-}
 
 func initMcdr() error {
 	err := exec.Command(

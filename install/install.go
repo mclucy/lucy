@@ -9,9 +9,7 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-type platformInstaller func(p types.Package) error
-
-func Install(req PackageRequest, options InstallOptions) (*Result, error) {
+func Install(req types.PackageRequest, options InstallOptions) (*Result, error) {
 	id := types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
 			Platform: req.Platform,
@@ -23,7 +21,7 @@ func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 	// for regular (non-identity) packages, delegate to InstallMany to unify
 	// resolver behavior with batch adds
 	if !types.IsIdentityPackage(id.PackageRef) {
-		return InstallMany([]PackageRequest{req}, options)
+		return InstallMany([]types.PackageRequest{req}, options)
 	}
 
 	// identity packages go through the established platform installer
