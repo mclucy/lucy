@@ -204,13 +204,8 @@ func (planner *candidateGraphPlanner) admit(
 	options InstallOptions,
 ) error {
 	key := current.id.StringBase()
-	planner.candidateGraph[key] = CandidateNode{
-		Package:        pkg,
-		ProvenancePath: append([]string(nil), current.provenancePath...),
-		Advisory:       true,
-	}
-
 	batchInputs := make([]resolve.ConstraintInput, 0)
+	dependencies := make([]types.Dependency, 0)
 	children := make([]candidateRequest, 0)
 	for _, dependencySet := range dependencySets {
 		requester := current.id.StringFull()
@@ -218,6 +213,7 @@ func (planner *candidateGraphPlanner) admit(
 			if !dependency.Mandatory && !options.WithOptional {
 				continue
 			}
+			dependencies = append(dependencies, dependency)
 
 			batchInputs = append(
 				batchInputs, resolve.ConstraintInput{
@@ -242,6 +238,15 @@ func (planner *candidateGraphPlanner) admit(
 				},
 			)
 		}
+	}
+	if len(dependencies) > 0 {
+		pkg.Dependencies = &types.PackageDependencies{Value: dependencies}
+	}
+
+	planner.candidateGraph[key] = CandidateNode{
+		Package:        pkg,
+		ProvenancePath: append([]string(nil), current.provenancePath...),
+		Advisory:       true,
 	}
 
 	if len(batchInputs) > 0 {

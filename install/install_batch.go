@@ -151,8 +151,6 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 		installedConstraints,
 	)
 	var resolved ResolvedClosure
-	var downloaded DownloadedClosure
-	var verified VerifiedClosure
 
 	for iteration := range maxReconcileIterations {
 		recordEvent(journal, Event{Kind: EventResolveStart, Roots: resolvePlan.Roots})
@@ -174,18 +172,12 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 		}
 		pruneRecursiveCandidates(&resolved, resolvePlan.ExcludedCandidates)
 
-		downloaded, err = downloadArtifacts(ctx, resolved, serverInfo.Root, options, journal)
-		if err != nil {
-			return nil, installError(CategoryDownload, err, nil)
-		}
-
-		recordEvent(journal, Event{Kind: EventVerifyStart, Count: len(downloaded.DownloadedArtifacts)})
-		verified, err = verifyArtifacts(ctx, downloaded, journal)
+		diff, err := computeReconcileDiff(resolved, resolvePlan.InstalledConstraints, journal)
 		if err != nil {
 			recordEvent(journal, Event{Kind: EventConflict, Err: err})
-			return nil, installError(CategoryVerify, err, nil)
+			return nil, installError(CategoryResolution, err, nil)
 		}
-		if verified.ReconcileDiff.IsStable() {
+		if diff.IsStable() {
 			break
 		}
 
@@ -193,11 +185,11 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 			return nil, fmt.Errorf(
 				"install: recursive closure did not stabilize after %d iterations: %s",
 				maxReconcileIterations,
-				summarizeReconcileDiff(verified.ReconcileDiff),
+				summarizeReconcileDiff(diff),
 			)
 		}
 
-		resolvePlan = refineRecursiveResolutionPlan(resolvePlan, verified.ReconcileDiff)
+		resolvePlan = refineRecursiveResolutionPlan(resolvePlan, diff)
 	}
 
 	return &ApplyPlan{

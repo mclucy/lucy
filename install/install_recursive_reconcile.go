@@ -31,6 +31,28 @@ func reconcileClosure(
 	return diff, nil
 }
 
+func computeReconcileDiff(
+	resolved ResolvedClosure,
+	installed []InstalledConstraint,
+	journal Journal,
+) (ReconcileDiff, error) {
+	recordEvent(journal, Event{Kind: EventReconcileStart})
+
+	diff, err := reconcileDiffKernel(
+		resolved.Roots,
+		installed,
+		resolved.CandidateGraph,
+		resolved.CandidateGraph,
+	)
+	if err != nil {
+		return ReconcileDiff{}, err
+	}
+
+	recordEvent(journal, Event{Kind: EventReconcileDiff, Diff: diff})
+
+	return diff, nil
+}
+
 func reconcileDiffKernel(
 	roots []types.VersionedPackageRef,
 	installed []InstalledConstraint,
