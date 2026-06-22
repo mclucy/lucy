@@ -53,3 +53,32 @@ type PlatformSupport struct {
 	Platforms         []PlatformId
 	Authentic         bool
 }
+
+// ResolvedPackage — upstream identity + download info. No local state, no deps.
+// Produced by: upstream providers (FetchResult assembly)
+// Consumed by: install/ resolve/download stages
+type ResolvedPackage struct {
+	Id            FullPackageRef
+	FileUrl       string
+	Filename      string
+	Hash          string
+	HashAlgorithm string
+}
+
+// DiscoveredPackage — found on disk via jar scanning.
+// Produced by: workspace/probe
+// Consumed by: cmd/init/, cmd/cmd_status.go
+type DiscoveredPackage struct {
+	Id           VersionedPackageRef
+	Path         string
+	Dependencies PackageDependencies // authentic, from jar analysis
+}
+
+// InstalledPackage — resolved + placed + verified.
+// Produced by: install/ apply stage
+// Consumed by: cmd/cmd_add.go (lock file writer)
+type InstalledPackage struct {
+	Id           FullPackageRef
+	Path         string
+	Dependencies PackageDependencies // authentic, from jar analysis
+}

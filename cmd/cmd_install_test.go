@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 )
@@ -118,7 +117,7 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 	}
 }
 
-func packageIDsToStrings(requests []install.PackageRequest) []string {
+func packageIDsToStrings(requests []types.PackageRequest) []string {
 	out := make([]string, 0, len(requests))
 	for _, req := range requests {
 		out = append(

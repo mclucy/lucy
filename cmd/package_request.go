@@ -5,23 +5,22 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/types"
 )
 
-func packageRequestFromInput(raw string, rawSource string) (install.PackageRequest, error) {
+func packageRequestFromInput(raw string, rawSource string) (types.PackageRequest, error) {
 	ref, err := input.ParseFullPackageRef(raw)
 	if err != nil {
-		return install.PackageRequest{}, err
+		return types.PackageRequest{}, err
 	}
 
 	if rawSource != "" && ref.Scope == types.SourceAuto {
 		scope := types.ParseSource(strings.TrimSpace(rawSource))
 		if scope == types.SourceUnknown {
-			return install.PackageRequest{}, fmt.Errorf("unknown source %s", rawSource)
+			return types.PackageRequest{}, fmt.Errorf("unknown source %s", rawSource)
 		}
 		ref.Scope = scope
 	}
 
-	return install.PackageRequest{FullPackageRef: ref}, nil
+	return types.PackageRequest{FullPackageRef: ref}, nil
 }

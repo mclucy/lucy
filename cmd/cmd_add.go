@@ -98,7 +98,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	options := install.DefaultOptions()
 	options.WithOptional = withOptional
 
-	requests := make([]install.PackageRequest, 0, len(args))
+	requests := make([]types.PackageRequest, 0, len(args))
 	for _, arg := range args {
 		req, err := packageRequestFromInput(arg, source)
 		if err != nil {
@@ -170,7 +170,7 @@ func presenceLabel(name string, present bool) string {
 func updateAddState(
 	workDir string,
 	stateSvc *state.ProjectStateService,
-	requests []install.PackageRequest,
+	requests []types.PackageRequest,
 	result *install.Result,
 ) error {
 	if stateSvc == nil {
@@ -193,7 +193,7 @@ func updateAddState(
 
 func buildUpdatedManifest(
 	existing *state.Manifest,
-	requests []install.PackageRequest,
+	requests []types.PackageRequest,
 ) *state.Manifest {
 	manifest := existing
 	for _, req := range requests {

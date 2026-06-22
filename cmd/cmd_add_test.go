@@ -26,7 +26,7 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 		},
 	}
 
-	requested := []install.PackageRequest{
+	requested := []types.PackageRequest{
 		mustParsePackageRequest(t, "fabric/lithium@>=0.12.0 <0.13.0"),
 		mustParsePackageRequest(t, "fabric/fabric-api"),
 	}
@@ -226,7 +226,7 @@ func mustParsePackageID(t *testing.T, raw string) types.VersionedPackageRef {
 	}
 }
 
-func mustParsePackageRequest(t *testing.T, raw string) install.PackageRequest {
+func mustParsePackageRequest(t *testing.T, raw string) types.PackageRequest {
 	t.Helper()
 	req, err := packageRequestFromInput(raw, "")
 	if err != nil {

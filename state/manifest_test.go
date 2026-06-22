@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -358,7 +357,7 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 	}
 
 	updated := UpdateManifestRolesForAdd(
-		manifest, []install.PackageRequest{
+		manifest, []types.PackageRequest{
 			{
 				FullPackageRef: types.FullPackageRef{
 					PackageRef: types.PackageRef{

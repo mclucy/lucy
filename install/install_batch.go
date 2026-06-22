@@ -11,11 +11,13 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func InstallMany(requests []PackageRequest, options InstallOptions) (
+func InstallMany(requests []types.PackageRequest, options InstallOptions) (
 	*Result,
 	error,
 ) {
 	const maxReconcileIterations = 3
+	options = options.withDefaults()
+	journal := options.Journal
 
 	if len(requests) == 0 {
 		return &Result{}, nil
@@ -31,7 +33,7 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 	identityIds = sortIdentityPackages(identityIds)
 
 	if len(identityIds) > 0 {
-		showBatchPhase("Installing platforms", identityIds)
+		recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Installing platforms", IDs: identityIds})
 		succeeded := make([]string, 0, len(identityIds))
 		for _, id := range identityIds {
 			if err := installPlatform(id); err != nil {
@@ -55,11 +57,11 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 	}
 
 	if len(regularIds) == 0 {
-		showBatchSummary(len(identityIds), 0)
+		recordEvent(journal, Event{Kind: EventBatchSummary, Count: len(identityIds)})
 		return &Result{}, nil
 	}
 
-	showBatchPhase("Fetching metadata for", regularIds)
+	recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Fetching metadata for", IDs: regularIds})
 	if err := validateRegularBatchIDs(regularIds); err != nil {
 		return nil, err
 	}
@@ -116,7 +118,7 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 	var diff ReconcileDiff
 
 	for iteration := range maxReconcileIterations {
-		showRecursiveResolveStart(resolvePlan.Roots)
+		recordEvent(journal, Event{Kind: EventResolveStart, Roots: resolvePlan.Roots})
 		tx, err = BuildCandidateGraphWithResolver(
 			resolvePlan.Roots,
 			providers,
@@ -129,16 +131,18 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 			},
 		)
 		if err != nil {
-			showRecursiveConflict(err)
+			recordEvent(journal, Event{Kind: EventConflict, Err: err})
 			return nil, err
 		}
+		tx.Journal = journal
 		pruneRecursiveCandidates(tx, resolvePlan.ExcludedCandidates)
 
 		packages := recursiveCandidatePackages(tx)
-		showRecursiveDownloadStart(len(packages))
+		recordEvent(journal, Event{Kind: EventDownloadStart, Count: len(packages)})
 		tx.StagingDir, packages, err = downloadBatchPackages(
 			serverInfo.Root,
 			packages,
+			journal,
 		)
 		if err != nil {
 			return nil, err
@@ -146,14 +150,14 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 		backfillRecursiveDownloads(tx, packages)
 		tx.AdvanceTo(PhaseDownloaded)
 
-		showRecursiveVerifyStart(len(tx.DownloadedArtifacts))
+		recordEvent(journal, Event{Kind: EventVerifyStart, Count: len(tx.DownloadedArtifacts)})
 		if err := VerifyDownloadedArtifacts(tx); err != nil {
 			return nil, err
 		}
 
 		diff, err = ReconcileTransaction(tx)
 		if err != nil {
-			showRecursiveConflict(err)
+			recordEvent(journal, Event{Kind: EventConflict, Err: err})
 			return nil, err
 		}
 		if diff.IsStable() {
@@ -200,7 +204,7 @@ func buildInstallResult(tx *RecursiveTransaction) *Result {
 }
 
 // TODO(package-ref-migration) — boundary conversion; pipeline internals still use PackageId
-func requestsToIds(requests []PackageRequest) []types.VersionedPackageRef {
+func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef {
 	ids := make([]types.VersionedPackageRef, len(requests))
 	for i, req := range requests {
 		ids[i] = types.VersionedPackageRef{
@@ -216,7 +220,7 @@ func requestsToIds(requests []PackageRequest) []types.VersionedPackageRef {
 
 func rootScopedProviders(
 	topology *types.RuntimeTopology,
-	requests []PackageRequest,
+	requests []types.PackageRequest,
 	roots []types.VersionedPackageRef,
 	serverLoader types.PlatformId,
 	providers []upstream.PackageSource,
