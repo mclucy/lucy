@@ -4,16 +4,20 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
 )
 
 // SnapshotInstalledConstraints reads installed packages from the probe snapshot
-// and converts them into fixed InstalledConstraint entries for the transaction.
+// and converts them into fixed InstalledConstraint entries.
 // Each installed package is treated as an immutable anchor during recursive
 // solving; it will never be auto-replaced by the solver.
-func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
-	si := workspace.ServerInfo()
+func SnapshotInstalledConstraints() []InstalledConstraint {
+	return snapshotInstalledConstraints(workspace.ServerInfo())
+}
+
+func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint {
 	constraints := make([]InstalledConstraint, 0, len(si.Packages)+3)
 	seen := make(map[string]struct{}, len(si.Packages)+3)
 	appendConstraint := func(pkg types.Package, requester string) {
@@ -28,7 +32,7 @@ func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
 		constraints = append(
 			constraints, InstalledConstraint{
 				Package: pkg,
-				ConstraintInput: ConstraintInput{
+				ConstraintInput: resolve.ConstraintInput{
 					Requester: requester,
 					Dependency: types.Dependency{
 						Id:        pkg.Id,
@@ -101,7 +105,7 @@ func SnapshotInstalledConstraints(tx *RecursiveTransaction) {
 		}
 	}
 
-	tx.InstalledConstraints = constraints
+	return constraints
 }
 
 func runtimeLoaderAliasName(platform types.PlatformId) types.BarePackageName {
@@ -121,11 +125,11 @@ func runtimeLoaderAliasName(platform types.PlatformId) types.BarePackageName {
 // package with the same platform and name as the requested ID, returning all
 // matches. Results are informational only; the solver must not auto-select them.
 func FindCompatibleInstalled(
-	tx *RecursiveTransaction,
+	installedConstraints []InstalledConstraint,
 	id types.VersionedPackageRef,
 ) []types.Package {
 	var matches []types.Package
-	for _, ic := range tx.InstalledConstraints {
+	for _, ic := range installedConstraints {
 		pkg := ic.Package
 		if pkg.Id.Platform != id.Platform {
 			continue
@@ -142,10 +146,10 @@ func FindCompatibleInstalled(
 // compatible with the given package ID. This is an informational-only report;
 // no automatic selection occurs.
 func ReportCompatibleInstalled(
-	tx *RecursiveTransaction,
+	installedConstraints []InstalledConstraint,
 	id types.VersionedPackageRef,
 ) {
-	matches := FindCompatibleInstalled(tx, id)
+	matches := FindCompatibleInstalled(installedConstraints, id)
 	for _, pkg := range matches {
 		logger.ShowInfo(
 			fmt.Sprintf(

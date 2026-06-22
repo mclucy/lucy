@@ -1,19 +1,21 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
 
 type installSyncPlan struct {
-	Requested     []install.PackageRequest
+	Requested     []types.PackageRequest
 	UsesExactLock bool
 	Stable        bool
 }
@@ -62,8 +64,12 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 
 	options := install.DefaultOptions()
 
-	result, err := install.InstallMany(plan.Requested, options)
+	result, err := install.InstallMany(cmd.Context(), plan.Requested, options)
 	if err != nil {
+		var conflictErr *resolve.ConstraintConflictError
+		if errors.As(err, &conflictErr) {
+			return formatConstraintConflict(conflictErr)
+		}
 		return err
 	}
 
@@ -106,7 +112,7 @@ func buildInstallSyncPlan(
 func exactSyncPackageIDs(
 	manifest *state.Manifest,
 	lock *state.Lock,
-) ([]install.PackageRequest, bool, error) {
+) ([]types.PackageRequest, bool, error) {
 	if manifest == nil || lock == nil || len(lock.Packages) == 0 {
 		return nil, false, nil
 	}
@@ -123,7 +129,7 @@ func exactSyncPackageIDs(
 		return nil, false, nil
 	}
 
-	requested := make([]install.PackageRequest, 0, len(lock.Packages))
+	requested := make([]types.PackageRequest, 0, len(lock.Packages))
 	for _, pkg := range lock.Packages {
 		ref, version, err := input.Parse(pkg.ID + "@" + pkg.Version)
 		if err != nil {
@@ -134,7 +140,7 @@ func exactSyncPackageIDs(
 			)
 		}
 		requested = append(
-			requested, install.PackageRequest{
+			requested, types.PackageRequest{
 				FullPackageRef: types.FullPackageRef{
 					PackageRef: ref.PackageRef,
 					Version:    version,
@@ -159,10 +165,10 @@ func exactSyncPackageIDs(
 }
 
 func manifestRequiredPackageIDs(manifest *state.Manifest) (
-	[]install.PackageRequest,
+	[]types.PackageRequest,
 	error,
 ) {
-	requested := make([]install.PackageRequest, 0, len(manifest.Packages))
+	requested := make([]types.PackageRequest, 0, len(manifest.Packages))
 	for _, pkg := range manifest.Packages {
 		if pkg.Role != state.RoleRequired {
 			continue
@@ -172,7 +178,7 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 			return nil, fmt.Errorf("parse manifest package %s: %w", pkg.ID, err)
 		}
 		requested = append(
-			requested, install.PackageRequest{
+			requested, types.PackageRequest{
 				FullPackageRef: types.FullPackageRef{
 					PackageRef: ref.PackageRef,
 					Version:    version,

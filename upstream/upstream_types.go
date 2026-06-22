@@ -14,7 +14,7 @@ type SourceIdentifier interface {
 }
 
 type Fetcher interface {
-	Fetch(id types.VersionedPackageRef) (FetchResult, error)
+	Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error)
 }
 
 type DependencyResolver interface {
@@ -106,38 +106,6 @@ type SearchResponse struct {
 
 type Informer interface {
 	Info(ref types.PackageRef) (info types.Metadata, err error)
-}
-
-type FetchResult struct {
-	ResolvedID types.VersionedPackageRef
-	Source     types.SourceId
-	FileURL    string
-	Filename   string
-	Hash       string
-
-	// HashAlgorithm names the upstream-provided digest algorithm, such as
-	// "sha1" or "sha512". Empty means Hash is unavailable.
-	HashAlgorithm string
-}
-
-func NewFetchResult(remote types.PackageRemote) FetchResult {
-	return FetchResult{
-		Source:        remote.Source,
-		FileURL:       remote.FileUrl,
-		Filename:      remote.Filename,
-		Hash:          remote.Hash,
-		HashAlgorithm: remote.HashAlgorithm,
-	}
-}
-
-func (r FetchResult) PackageRemote() types.PackageRemote {
-	return types.PackageRemote{
-		Source:        r.Source,
-		FileUrl:       r.FileURL,
-		Filename:      r.Filename,
-		Hash:          r.Hash,
-		HashAlgorithm: r.HashAlgorithm,
-	}
 }
 
 type RemotePackageName struct {

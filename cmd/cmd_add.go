@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
@@ -93,12 +95,14 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
+	force, _ := cmd.Flags().GetBool(flagForceName)
 	source, _ := cmd.Flags().GetString("source")
 
 	options := install.DefaultOptions()
 	options.WithOptional = withOptional
+	options.Force = force
 
-	requests := make([]install.PackageRequest, 0, len(args))
+	requests := make([]types.PackageRequest, 0, len(args))
 	for _, arg := range args {
 		req, err := packageRequestFromInput(arg, source)
 		if err != nil {
@@ -109,15 +113,19 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 
 	var result *install.Result
 	if len(requests) > 1 {
-		result, err = install.InstallMany(requests, options)
+		result, err = install.InstallMany(cmd.Context(), requests, options)
 	} else {
 		req := requests[0]
 		if req.Version == types.VersionAny {
 			req.Version = types.VersionCompatible
 		}
-		result, err = install.Install(req, options)
+		result, err = install.Install(cmd.Context(), req, options)
 	}
 	if err != nil {
+		var conflictErr *resolve.ConstraintConflictError
+		if errors.As(err, &conflictErr) {
+			return formatConstraintConflict(conflictErr)
+		}
 		return err
 	}
 
@@ -126,6 +134,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := updateAddState(
+		cmd.Context(),
 		workspace,
 		stateSvc,
 		requests,
@@ -168,9 +177,10 @@ func presenceLabel(name string, present bool) string {
 }
 
 func updateAddState(
+	ctx context.Context,
 	workDir string,
 	stateSvc *state.ProjectStateService,
-	requests []install.PackageRequest,
+	requests []types.PackageRequest,
 	result *install.Result,
 ) error {
 	if stateSvc == nil {
@@ -179,7 +189,7 @@ func updateAddState(
 
 	manifestIntent := buildUpdatedManifest(stateSvc.Manifest(), requests)
 	if result == nil || len(result.Installed) == 0 {
-		return stateSvc.Save(context.Background(), manifestIntent, nil)
+		return stateSvc.Save(ctx, manifestIntent, nil)
 	}
 
 	lock := buildUpdatedLock(workDir, manifestIntent, stateSvc.Lock(), result)
@@ -188,12 +198,27 @@ func updateAddState(
 		requests,
 		lock,
 	)
-	return stateSvc.Save(context.Background(), manifest, lock)
+	return stateSvc.Save(ctx, manifest, lock)
+}
+
+func formatConstraintConflict(err *resolve.ConstraintConflictError) error {
+	if err == nil {
+		return fmt.Errorf("dependency constraints conflict")
+	}
+
+	return fmt.Errorf(
+		"dependency constraints conflict for %s: %s requires %s, %s requires %s",
+		err.PackageId.StringBase(),
+		err.Left.Requester,
+		resolve.FormatVersionConstraint(err.Left.Constraint),
+		err.Right.Requester,
+		resolve.FormatVersionConstraint(err.Right.Constraint),
+	)
 }
 
 func buildUpdatedManifest(
 	existing *state.Manifest,
-	requests []install.PackageRequest,
+	requests []types.PackageRequest,
 ) *state.Manifest {
 	manifest := existing
 	for _, req := range requests {

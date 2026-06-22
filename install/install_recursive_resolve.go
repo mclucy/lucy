@@ -1,9 +1,11 @@
 package install
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -16,26 +18,31 @@ type candidateRequest struct {
 }
 
 type candidateGraphResolver interface {
-	ResolvePackage(id types.VersionedPackageRef) (types.Package, error)
-	ResolveDependencies(pkg types.Package) ([]types.PackageDependencies, error)
+	ResolvePackage(ctx context.Context, id types.VersionedPackageRef) (types.Package, error)
+	ResolveDependencies(ctx context.Context, pkg types.Package) ([]types.PackageDependencies, error)
 }
 
 type candidateGraphPlanner struct {
-	tx               *RecursiveTransaction
-	constraintInputs []ConstraintInput
-	queue            []candidateRequest
+	roots                []types.VersionedPackageRef
+	providers            []upstream.PackageSource
+	installedConstraints []InstalledConstraint
+	candidateGraph       map[string]CandidateNode
+	constraintInputs     []resolve.ConstraintInput
+	queue                []candidateRequest
 }
 
 // BuildCandidateGraph expands the recursive advisory dependency closure for the
 // requested roots, seeding fixed installed constraints up front and running the
 // constraint merge engine after every newly discovered dependency batch.
 func BuildCandidateGraph(
+	ctx context.Context,
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
 	options InstallOptions,
-) (*RecursiveTransaction, error) {
-	return BuildCandidateGraphWithResolver(
+) (ResolvedClosure, error) {
+	return resolveClosure(
+		ctx,
 		roots,
 		providers,
 		installedConstraints,
@@ -44,43 +51,67 @@ func BuildCandidateGraph(
 	)
 }
 
+func resolveClosure(
+	ctx context.Context,
+	roots []types.VersionedPackageRef,
+	providers []upstream.PackageSource,
+	installed []InstalledConstraint,
+	options InstallOptions,
+	resolver candidateGraphResolver,
+) (ResolvedClosure, error) {
+	return BuildCandidateGraphWithResolver(
+		ctx,
+		roots,
+		providers,
+		installed,
+		options,
+		resolver,
+	)
+}
+
 // BuildCandidateGraphWithResolver drives candidate-graph expansion using a
 // caller-provided resolver so the planning loop can run without direct provider
 // or routing calls in the planner core.
 func BuildCandidateGraphWithResolver(
+	ctx context.Context,
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
 	options InstallOptions,
 	resolver candidateGraphResolver,
-) (*RecursiveTransaction, error) {
+) (ResolvedClosure, error) {
+	options = options.withDefaults()
 	planner, err := newCandidateGraphPlanner(
 		roots,
 		providers,
 		installedConstraints,
 	)
 	if err != nil {
-		return nil, err
+		return ResolvedClosure{}, err
 	}
 
 	for {
-		current, ok := planner.next()
-		if !ok {
-			return planner.transaction(), nil
+		if err := ctx.Err(); err != nil {
+			return ResolvedClosure{}, err
 		}
 
-		pkg, err := resolver.ResolvePackage(current.id)
+		current, ok := planner.next()
+		if !ok {
+			return planner.resolvedClosure(), nil
+		}
+
+		pkg, err := resolver.ResolvePackage(ctx, current.id)
 		if err != nil {
 			if current.mandatory {
-				return nil, err
+				return ResolvedClosure{}, err
 			}
 			continue
 		}
 
-		dependencySets, err := resolver.ResolveDependencies(pkg)
+		dependencySets, err := resolver.ResolveDependencies(ctx, pkg)
 		if err != nil {
 			if current.mandatory {
-				return nil, err
+				return ResolvedClosure{}, err
 			}
 			continue
 		}
@@ -91,7 +122,7 @@ func BuildCandidateGraphWithResolver(
 			dependencySets,
 			options,
 		); err != nil {
-			return nil, err
+			return ResolvedClosure{}, err
 		}
 	}
 }
@@ -101,36 +132,36 @@ func newCandidateGraphPlanner(
 	providers []upstream.PackageSource,
 	installedConstraints []InstalledConstraint,
 ) (*candidateGraphPlanner, error) {
-	tx := NewRecursiveTransaction(roots, providers)
-	tx.InstalledConstraints = append(
+	candidateGraph := make(map[string]CandidateNode)
+	installedConstraints = append(
 		[]InstalledConstraint(nil),
 		installedConstraints...,
 	)
 
-	constraintInputs := make([]ConstraintInput, 0, len(installedConstraints))
+	constraintInputs := make([]resolve.ConstraintInput, 0, len(installedConstraints))
 	for _, installed := range installedConstraints {
 		constraintInputs = append(constraintInputs, installed.ConstraintInput)
 		if installed.Package.Id.Platform == "" || installed.Package.Id.Name == "" {
 			continue
 		}
 		key := installed.Package.Id.StringBase()
-		if _, exists := tx.CandidateGraph[key]; exists {
+		if _, exists := candidateGraph[key]; exists {
 			continue
 		}
-		tx.CandidateGraph[key] = CandidateNode{
+		candidateGraph[key] = CandidateNode{
 			Package:        installed.Package,
 			ProvenancePath: []string{installed.ConstraintInput.Requester},
 			Advisory:       false,
 		}
 	}
 
-	if _, err := MergeConstraintGraph(constraintInputs); err != nil {
+	if _, err := resolve.MergeConstraintGraph(constraintInputs); err != nil {
 		return nil, err
 	}
 
 	queue := make([]candidateRequest, 0, len(roots))
 	for _, root := range roots {
-		ReportCompatibleInstalled(tx, root)
+		ReportCompatibleInstalled(installedConstraints, root)
 		queue = append(
 			queue, candidateRequest{
 				id:             root,
@@ -141,9 +172,12 @@ func newCandidateGraphPlanner(
 	}
 
 	return &candidateGraphPlanner{
-		tx:               tx,
-		constraintInputs: constraintInputs,
-		queue:            queue,
+		roots:                append([]types.VersionedPackageRef(nil), roots...),
+		providers:            append([]upstream.PackageSource(nil), providers...),
+		installedConstraints: installedConstraints,
+		candidateGraph:       candidateGraph,
+		constraintInputs:     constraintInputs,
+		queue:                queue,
 	}, nil
 }
 
@@ -153,7 +187,7 @@ func (planner *candidateGraphPlanner) next() (candidateRequest, bool) {
 		planner.queue = planner.queue[1:]
 
 		key := current.id.StringBase()
-		if _, exists := planner.tx.CandidateGraph[key]; exists {
+		if _, exists := planner.candidateGraph[key]; exists {
 			continue
 		}
 
@@ -170,13 +204,8 @@ func (planner *candidateGraphPlanner) admit(
 	options InstallOptions,
 ) error {
 	key := current.id.StringBase()
-	planner.tx.CandidateGraph[key] = CandidateNode{
-		Package:        pkg,
-		ProvenancePath: append([]string(nil), current.provenancePath...),
-		Advisory:       true,
-	}
-
-	batchInputs := make([]ConstraintInput, 0)
+	batchInputs := make([]resolve.ConstraintInput, 0)
+	dependencies := make([]types.Dependency, 0)
 	children := make([]candidateRequest, 0)
 	for _, dependencySet := range dependencySets {
 		requester := current.id.StringFull()
@@ -184,16 +213,17 @@ func (planner *candidateGraphPlanner) admit(
 			if !dependency.Mandatory && !options.WithOptional {
 				continue
 			}
+			dependencies = append(dependencies, dependency)
 
 			batchInputs = append(
-				batchInputs, ConstraintInput{
+				batchInputs, resolve.ConstraintInput{
 					Requester:  requester,
 					Dependency: dependency,
 				},
 			)
 
 			childKey := dependency.Id.StringBase()
-			if _, exists := planner.tx.CandidateGraph[childKey]; exists {
+			if _, exists := planner.candidateGraph[childKey]; exists {
 				continue
 			}
 
@@ -209,13 +239,22 @@ func (planner *candidateGraphPlanner) admit(
 			)
 		}
 	}
+	if len(dependencies) > 0 {
+		pkg.Dependencies = &types.PackageDependencies{Value: dependencies}
+	}
+
+	planner.candidateGraph[key] = CandidateNode{
+		Package:        pkg,
+		ProvenancePath: append([]string(nil), current.provenancePath...),
+		Advisory:       true,
+	}
 
 	if len(batchInputs) > 0 {
 		planner.constraintInputs = append(
 			planner.constraintInputs,
 			batchInputs...,
 		)
-		if _, err := MergeConstraintGraph(planner.constraintInputs); err != nil {
+		if _, err := resolve.MergeConstraintGraph(planner.constraintInputs); err != nil {
 			return err
 		}
 	}
@@ -224,11 +263,16 @@ func (planner *candidateGraphPlanner) admit(
 	return nil
 }
 
-func (planner *candidateGraphPlanner) transaction() *RecursiveTransaction {
+func (planner *candidateGraphPlanner) resolvedClosure() ResolvedClosure {
 	if planner == nil {
-		return nil
+		return ResolvedClosure{}
 	}
-	return planner.tx
+	return ResolvedClosure{
+		Roots:                append([]types.VersionedPackageRef(nil), planner.roots...),
+		CandidateGraph:       cloneCandidateGraph(planner.candidateGraph),
+		InstalledConstraints: append([]InstalledConstraint(nil), planner.installedConstraints...),
+		Providers:            append([]upstream.PackageSource(nil), planner.providers...),
+	}
 }
 
 func appendPath(path []string, requester string) []string {

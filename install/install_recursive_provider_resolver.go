@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/mclucy/lucy/types"
@@ -15,6 +16,7 @@ type providerCandidateResolver struct {
 }
 
 func (resolver providerCandidateResolver) ResolvePackage(
+	ctx context.Context,
 	id types.VersionedPackageRef,
 ) (types.Package, error) {
 	attempts := []types.VersionedPackageRef{id}
@@ -40,6 +42,10 @@ func (resolver providerCandidateResolver) ResolvePackage(
 
 	var lastErrors []routing.ProviderError
 	for _, attempt := range attempts {
+		if err := ctx.Err(); err != nil {
+			return types.Package{}, err
+		}
+
 		providers := resolver.providersForPackage(attempt)
 		fetches, providerErrors := routing.FetchMany(
 			providers,
@@ -51,9 +57,18 @@ func (resolver providerCandidateResolver) ResolvePackage(
 		}
 
 		fetch := fetches[0]
-		remote := fetch.PackageRemote()
+		remote := types.PackageRemote{
+			Source:        fetch.Id.Scope,
+			FileUrl:       fetch.FileUrl,
+			Filename:      fetch.Filename,
+			Hash:          fetch.Hash,
+			HashAlgorithm: fetch.HashAlgorithm,
+		}
 		return types.Package{
-			Id:     fetch.ResolvedID,
+			Id: types.VersionedPackageRef{
+				PackageRef: fetch.Id.PackageRef,
+				Version:    fetch.Id.Version,
+			},
 			Remote: &remote,
 		}, nil
 	}
@@ -78,8 +93,13 @@ func (resolver providerCandidateResolver) providersForPackage(
 }
 
 func (resolver providerCandidateResolver) ResolveDependencies(
+	ctx context.Context,
 	pkg types.Package,
 ) ([]types.PackageDependencies, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	providers := providersForSource(resolver.providers, pkg.Remote)
 	dependencySets, providerErrors := routing.DependenciesMany(
 		providers,

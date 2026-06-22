@@ -1,17 +1,16 @@
 package install
 
 import (
-	"errors"
+	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
-	"github.com/mclucy/lucy/workspace"
 )
 
-type platformInstaller func(p types.Package) error
-
-func Install(req PackageRequest, options InstallOptions) (*Result, error) {
+func Install(ctx context.Context, req types.PackageRequest, options InstallOptions) (*Result, error) {
+	options = options.withDefaults()
 	id := types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
 			Platform: req.Platform,
@@ -23,7 +22,7 @@ func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 	// for regular (non-identity) packages, delegate to InstallMany to unify
 	// resolver behavior with batch adds
 	if !types.IsIdentityPackage(id.PackageRef) {
-		return InstallMany([]PackageRequest{req}, options)
+		return InstallMany(ctx, []types.PackageRequest{req}, options)
 	}
 
 	// identity packages go through the established platform installer
@@ -31,51 +30,64 @@ func Install(req PackageRequest, options InstallOptions) (*Result, error) {
 		id.Version = types.VersionCompatible
 	}
 
-	if err := installPlatform(id); err != nil {
+	if err := installPlatform(ctx, id, options); err != nil {
 		return nil, err
 	}
 
 	return &Result{}, nil
 }
 
-func installPlatform(id types.VersionedPackageRef) error {
-	serverInfo := workspace.ServerInfo()
+func installPlatform(ctx context.Context, id types.VersionedPackageRef, options InstallOptions) error {
+	if err := ctx.Err(); err != nil {
+		return installError(CategoryApply, err, map[string]any{"package": id.StringFull()})
+	}
 
-	// MCDR is not a PlatformInstaller provider — handled separately.
+	serverInfo := options.ServerInfo()
+	serverDir := serverInfo.Root
+
+	bootstrapper, err := bootstrap.For(id.Platform)
+	if err != nil {
+		return installError(CategoryResolution, err, map[string]any{"platform": id.Platform})
+	}
+
 	if id.Platform == types.PlatformMCDR {
-		if serverInfo.Environments.Mcdr != nil {
-			return errors.New("mcdr already installed")
-		}
-		return initMcdr()
+		return installError(
+			CategoryApply,
+			bootstrapper.Bootstrap(ctx, types.ResolvedPackage{}, serverDir),
+			map[string]any{"package": id.StringFull()},
+		)
 	}
 
 	installer, ok := routing.PlatformInstallerFor(id.Platform)
 	if !ok {
-		return fmt.Errorf("cannot install platform: %s", id.Platform)
+		return installError(
+			CategoryResolution,
+			fmt.Errorf("cannot install platform: %s", id.Platform),
+			map[string]any{"platform": id.Platform},
+		)
 	}
 
 	resolved, err := installer.ResolveVersionSelector(id)
 	if err != nil {
-		return fmt.Errorf("resolve version failed: %w", err)
+		return installError(
+			CategoryResolution,
+			fmt.Errorf("resolve version failed: %w", err),
+			map[string]any{"package": id.StringFull()},
+		)
 	}
 
 	fetched, err := installer.Fetch(resolved)
 	if err != nil {
-		return fmt.Errorf("fetch platform artifact failed: %w", err)
+		return installError(
+			CategoryDownload,
+			fmt.Errorf("fetch platform artifact failed: %w", err),
+			map[string]any{"package": id.StringFull()},
+		)
 	}
 
-	serverDir := serverInfo.Root
-
-	switch id.Platform {
-	case types.PlatformMinecraft:
-		return installMojangPlatform(resolved, fetched, serverDir)
-	case types.PlatformFabric:
-		return installFabricPlatform(resolved, fetched, serverDir)
-	case types.PlatformForge:
-		return installForgePlatform(resolved, fetched, serverDir)
-	case types.PlatformNeoforge:
-		return installNeoforgePlatform(resolved, fetched, serverDir)
-	default:
-		return fmt.Errorf("unsupported platform for installation: %s", id.Platform)
-	}
+	return installError(
+		CategoryApply,
+		bootstrapper.Bootstrap(ctx, fetched, serverDir),
+		map[string]any{"package": id.StringFull()},
+	)
 }

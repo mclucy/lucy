@@ -28,7 +28,7 @@ func (e ProviderError) Unwrap() error {
 
 type InfoResult struct {
 	Information types.Metadata
-	Fetch       upstream.FetchResult
+	Fetch       types.ResolvedPackage
 }
 
 // SearchMany executes search on all providers in parallel.
@@ -102,13 +102,13 @@ func SearchMany(
 func FetchMany(
 	providers []upstream.PackageSource,
 	id types.VersionedPackageRef,
-) ([]upstream.FetchResult, []ProviderError) {
+) ([]types.ResolvedPackage, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
 	}
 
 	type slot struct {
-		res    upstream.FetchResult
+		res    types.ResolvedPackage
 		err    ProviderError
 		ok     bool
 		failed bool
@@ -144,9 +144,14 @@ func FetchMany(
 				}
 				return
 			}
-			remoteData.ResolvedID = resolvedID
-			if remoteData.Source == types.SourceUnknown {
-				remoteData.Source = provider.Id()
+			// Providers receive a VersionedPackageRef (no scope) and thus
+			// cannot fill Id.Scope themselves. Routing supplies the scope
+			// from the provider identity, and the platform/name/version
+			// from the resolvedID returned by ResolveVersionSelector.
+			remoteData.Id = types.FullPackageRef{
+				PackageRef: resolvedID.PackageRef,
+				Version:    resolvedID.Version,
+				Scope:      provider.Id(),
 			}
 			slots[index] = slot{ok: true, res: remoteData}
 		}(i, provider)
@@ -154,7 +159,7 @@ func FetchMany(
 
 	wg.Wait()
 
-	results := make([]upstream.FetchResult, 0, len(providers))
+	results := make([]types.ResolvedPackage, 0, len(providers))
 	providerErrors := make([]ProviderError, 0)
 	for _, item := range slots {
 		if item.ok {

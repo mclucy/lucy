@@ -5,34 +5,50 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 )
 
-// ReconcileTransaction compares advisory candidate facts with authoritative
-// verified facts, computes a stable diff, and validates tightened local
-// constraints through the merge engine.
-func ReconcileTransaction(tx *RecursiveTransaction) (ReconcileDiff, error) {
-	if tx == nil {
-		return ReconcileDiff{}, fmt.Errorf("install: nil recursive transaction")
-	}
-	if tx.Phase != PhaseVerified {
-		return ReconcileDiff{}, fmt.Errorf("install: reconcile requires PhaseVerified transaction")
-	}
-
-	showRecursiveReconcileStart()
+func reconcileClosure(
+	resolved ResolvedClosure,
+	verifiedGraph map[string]CandidateNode,
+	journal Journal,
+) (ReconcileDiff, error) {
+	recordEvent(journal, Event{Kind: EventReconcileStart})
 
 	diff, err := reconcileDiffKernel(
-		tx.Roots,
-		tx.InstalledConstraints,
-		tx.CandidateGraph,
-		tx.VerifiedGraph,
+		resolved.Roots,
+		resolved.InstalledConstraints,
+		resolved.CandidateGraph,
+		verifiedGraph,
 	)
 	if err != nil {
 		return ReconcileDiff{}, err
 	}
 
-	tx.ReconcileDiff = diff
-	showRecursiveReconcileDiff(diff)
+	recordEvent(journal, Event{Kind: EventReconcileDiff, Diff: diff})
+
+	return diff, nil
+}
+
+func computeReconcileDiff(
+	resolved ResolvedClosure,
+	installed []InstalledConstraint,
+	journal Journal,
+) (ReconcileDiff, error) {
+	recordEvent(journal, Event{Kind: EventReconcileStart})
+
+	diff, err := reconcileDiffKernel(
+		resolved.Roots,
+		installed,
+		resolved.CandidateGraph,
+		resolved.CandidateGraph,
+	)
+	if err != nil {
+		return ReconcileDiff{}, err
+	}
+
+	recordEvent(journal, Event{Kind: EventReconcileDiff, Diff: diff})
 
 	return diff, nil
 }
@@ -74,7 +90,7 @@ func reconcileDiff(
 	verifiedGraph map[string]CandidateNode,
 ) (ReconcileDiff, error) {
 	missing := make(map[string]types.VersionedPackageRef)
-	tightened := make(map[string]ConstraintInput)
+	tightened := make(map[string]resolve.ConstraintInput)
 
 	for key, verifiedNode := range verifiedGraph {
 		verifiedDeps, err := reconcileDependencyMap(
@@ -118,7 +134,7 @@ func reconcileDiff(
 			tightened[reconcileTightenedKey(
 				verifiedNode.Package.Id.StringFull(),
 				depKey,
-			)] = ConstraintInput{
+			)] = resolve.ConstraintInput{
 				Requester:  verifiedNode.Package.Id.StringFull(),
 				Dependency: verifiedDep,
 			}
@@ -172,16 +188,16 @@ func reconcileDiff(
 }
 
 func reconcileValidateTightenedDiff(
-	baseInputs []ConstraintInput,
+	baseInputs []resolve.ConstraintInput,
 	diff ReconcileDiff,
 ) error {
 	if len(diff.Tightened) == 0 {
 		return nil
 	}
 
-	inputs := append([]ConstraintInput(nil), baseInputs...)
+	inputs := append([]resolve.ConstraintInput(nil), baseInputs...)
 	inputs = append(inputs, diff.Tightened...)
-	if _, err := MergeConstraintGraph(inputs); err != nil {
+	if _, err := resolve.MergeConstraintGraph(inputs); err != nil {
 		return fmt.Errorf("install: reconcile made no progress, aborting")
 	}
 
@@ -193,12 +209,12 @@ func reconcileConstraintInputs(
 	installed []InstalledConstraint,
 	candidateGraph map[string]CandidateNode,
 	verifiedGraph map[string]CandidateNode,
-) ([]ConstraintInput, error) {
-	inputs := make([]ConstraintInput, 0)
+) ([]resolve.ConstraintInput, error) {
+	inputs := make([]resolve.ConstraintInput, 0)
 
 	for _, root := range roots {
 		inputs = append(
-			inputs, ConstraintInput{
+			inputs, resolve.ConstraintInput{
 				Requester: "root",
 				Dependency: types.Dependency{
 					Id:        root,
@@ -251,7 +267,7 @@ func reconcileConstraintInputs(
 
 		for _, depKey := range depKeys {
 			inputs = append(
-				inputs, ConstraintInput{
+				inputs, resolve.ConstraintInput{
 					Requester:  node.Package.Id.StringFull(),
 					Dependency: deps[depKey],
 				},
@@ -272,18 +288,18 @@ func reconcileDependencyMap(
 
 	mandatory := make(map[string]bool)
 	embedded := make(map[string]bool)
-	inputs := make([]ConstraintInput, 0, len(deps.Value))
+	inputs := make([]resolve.ConstraintInput, 0, len(deps.Value))
 	for _, dep := range deps.Value {
 		key := dep.Id.StringBase()
 		mandatory[key] = mandatory[key] || dep.Mandatory
 		embedded[key] = embedded[key] || dep.Embedded
 		inputs = append(
 			inputs,
-			ConstraintInput{Requester: requester, Dependency: dep},
+			resolve.ConstraintInput{Requester: requester, Dependency: dep},
 		)
 	}
 
-	graph, err := MergeConstraintGraph(inputs)
+	graph, err := resolve.MergeConstraintGraph(inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -372,8 +388,8 @@ func reconcileConstraintTightened(advisory, verified types.Dependency) bool {
 		return false
 	}
 
-	merged, err := MergeConstraintGraph(
-		[]ConstraintInput{
+	merged, err := resolve.MergeConstraintGraph(
+		[]resolve.ConstraintInput{
 			{Requester: "advisory", Dependency: advisory},
 			{Requester: "verified", Dependency: verified},
 		},
@@ -411,14 +427,14 @@ func reconcileSortedPackageIDs(items map[string]types.VersionedPackageRef) []typ
 	return result
 }
 
-func reconcileSortedConstraintInputs(items map[string]ConstraintInput) []ConstraintInput {
-	result := make([]ConstraintInput, 0, len(items))
+func reconcileSortedConstraintInputs(items map[string]resolve.ConstraintInput) []resolve.ConstraintInput {
+	result := make([]resolve.ConstraintInput, 0, len(items))
 	for _, input := range items {
 		result = append(result, input)
 	}
 
 	slices.SortFunc(
-		result, func(a, b ConstraintInput) int {
+		result, func(a, b resolve.ConstraintInput) int {
 			if a.Requester != b.Requester {
 				return strings.Compare(a.Requester, b.Requester)
 			}
@@ -462,7 +478,7 @@ func reconcileConstraintExpressionKey(expr types.VersionExpr) string {
 
 		clauses := make([]string, 0, len(group))
 		for _, clause := range group {
-			clauses = append(clauses, formatVersionConstraint(clause))
+			clauses = append(clauses, resolve.FormatVersionConstraint(clause))
 		}
 		slices.Sort(clauses)
 		groups = append(groups, strings.Join(clauses, "&"))

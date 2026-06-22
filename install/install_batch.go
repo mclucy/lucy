@@ -1,21 +1,30 @@
 package install
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
 )
 
-func InstallMany(requests []PackageRequest, options InstallOptions) (
+const maxReconcileIterations = 3
+
+func InstallMany(ctx context.Context, requests []types.PackageRequest, options InstallOptions) (
 	*Result,
 	error,
 ) {
-	const maxReconcileIterations = 3
+	options = options.withDefaults()
+	journal := options.Journal
+	if err := ctx.Err(); err != nil {
+		return nil, installError(CategoryApply, err, nil)
+	}
 
 	if len(requests) == 0 {
 		return &Result{}, nil
@@ -26,18 +35,18 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 	identityIds, regularIds := partitionBatchIDs(prepared)
 
 	if err := validateIdentityCompatibility(identityIds); err != nil {
-		return nil, err
+		return nil, installError(CategoryResolution, err, nil)
 	}
 	identityIds = sortIdentityPackages(identityIds)
 
 	if len(identityIds) > 0 {
-		showBatchPhase("Installing platforms", identityIds)
+		recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Installing platforms", IDs: identityIds})
 		succeeded := make([]string, 0, len(identityIds))
 		for _, id := range identityIds {
-			if err := installPlatform(id); err != nil {
+			if err := installPlatform(ctx, id, options); err != nil {
 				if len(succeeded) > 0 {
 					return nil, fmt.Errorf(
-						"%s: failed to install %s (already installed: %s)",
+						"%w: failed to install %s (already installed: %s)",
 						err,
 						id.StringFull(),
 						strings.Join(succeeded, ", "),
@@ -55,22 +64,52 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 	}
 
 	if len(regularIds) == 0 {
-		showBatchSummary(len(identityIds), 0)
+		recordEvent(journal, Event{Kind: EventBatchSummary, Count: len(identityIds)})
 		return &Result{}, nil
 	}
 
-	showBatchPhase("Fetching metadata for", regularIds)
-	if err := validateRegularBatchIDs(regularIds); err != nil {
+	plan, err := Plan(ctx, requests, options)
+	if err != nil {
 		return nil, err
 	}
 
-	serverInfo := workspace.ServerInfo()
-	providers, err := routing.ResolveProvidersFromTopology(
-		serverInfo.Runtime.Topology,
-		types.SourceAuto,
-	)
-	if err != nil {
-		return nil, err
+	return Apply(ctx, *plan, options)
+}
+
+func Plan(ctx context.Context, requests []types.PackageRequest, options InstallOptions) (*ApplyPlan, error) {
+	options = options.withDefaults()
+	journal := options.Journal
+	if err := ctx.Err(); err != nil {
+		return nil, installError(CategoryApply, err, nil)
+	}
+
+	if len(requests) == 0 {
+		return &ApplyPlan{}, nil
+	}
+
+	ids := requestsToIds(requests)
+	prepared := prepareBatchIDs(ids)
+	_, regularIds := partitionBatchIDs(prepared)
+	if len(regularIds) == 0 {
+		return &ApplyPlan{}, nil
+	}
+
+	serverInfo := options.ServerInfo()
+	recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Fetching metadata for", IDs: regularIds})
+	if err := validateRegularBatchIDs(regularIds, serverInfo); err != nil {
+		return nil, installError(CategoryResolution, err, nil)
+	}
+
+	if serverInfo.Runtime == nil || serverInfo.Runtime.Topology == nil || !serverInfo.Runtime.Topology.Resolved() {
+		return nil, installError(
+			CategoryResolution,
+			fmt.Errorf("runtime topology is unavailable"),
+			nil,
+		)
+	}
+	providers := options.Providers(*serverInfo.Runtime.Topology)
+	if providers == nil {
+		providers = []upstream.PackageSource{}
 	}
 
 	if serverInfo.Environments.Mcdr != nil {
@@ -104,20 +143,19 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 		providers,
 	)
 	if err != nil {
-		return nil, err
+		return nil, installError(CategoryResolution, err, nil)
 	}
-	seedTx := NewRecursiveTransaction(roots, providers)
-	SnapshotInstalledConstraints(seedTx)
+	installedConstraints := snapshotInstalledConstraints(serverInfo)
 	resolvePlan := newRecursiveResolutionPlan(
 		roots,
-		seedTx.InstalledConstraints,
+		installedConstraints,
 	)
-	var tx *RecursiveTransaction
-	var diff ReconcileDiff
+	var resolved ResolvedClosure
 
 	for iteration := range maxReconcileIterations {
-		showRecursiveResolveStart(resolvePlan.Roots)
-		tx, err = BuildCandidateGraphWithResolver(
+		recordEvent(journal, Event{Kind: EventResolveStart, Roots: resolvePlan.Roots})
+		resolved, err = resolveClosure(
+			ctx,
 			resolvePlan.Roots,
 			providers,
 			resolvePlan.InstalledConstraints,
@@ -129,32 +167,15 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 			},
 		)
 		if err != nil {
-			showRecursiveConflict(err)
-			return nil, err
+			recordEvent(journal, Event{Kind: EventConflict, Err: err})
+			return nil, resolutionError(err)
 		}
-		pruneRecursiveCandidates(tx, resolvePlan.ExcludedCandidates)
+		pruneRecursiveCandidates(&resolved, resolvePlan.ExcludedCandidates)
 
-		packages := recursiveCandidatePackages(tx)
-		showRecursiveDownloadStart(len(packages))
-		tx.StagingDir, packages, err = downloadBatchPackages(
-			serverInfo.Root,
-			packages,
-		)
+		diff, err := computeReconcileDiff(resolved, resolvePlan.InstalledConstraints, journal)
 		if err != nil {
-			return nil, err
-		}
-		backfillRecursiveDownloads(tx, packages)
-		tx.AdvanceTo(PhaseDownloaded)
-
-		showRecursiveVerifyStart(len(tx.DownloadedArtifacts))
-		if err := VerifyDownloadedArtifacts(tx); err != nil {
-			return nil, err
-		}
-
-		diff, err = ReconcileTransaction(tx)
-		if err != nil {
-			showRecursiveConflict(err)
-			return nil, err
+			recordEvent(journal, Event{Kind: EventConflict, Err: err})
+			return nil, installError(CategoryResolution, err, nil)
 		}
 		if diff.IsStable() {
 			break
@@ -171,36 +192,65 @@ func InstallMany(requests []PackageRequest, options InstallOptions) (
 		resolvePlan = refineRecursiveResolutionPlan(resolvePlan, diff)
 	}
 
-	plan, err := BuildRecursiveApplyPlan(tx)
-	if err != nil {
-		return nil, err
-	}
-	tx.SetApplyPlan(plan)
-	tx.AdvanceTo(PhaseCommitted)
-
-	if err := ApplyValidatedClosure(tx, serverInfo); err != nil {
-		return nil, err
-	}
-
-	return buildInstallResult(tx), nil
+	return &ApplyPlan{
+		Resolved:             resolved,
+		InstalledConstraints: append([]InstalledConstraint(nil), installedConstraints...),
+	}, nil
 }
 
-func buildInstallResult(tx *RecursiveTransaction) *Result {
-	if tx == nil || tx.Apply == nil {
-		return &Result{}
+func Apply(ctx context.Context, plan ApplyPlan, options InstallOptions) (*Result, error) {
+	options = options.withDefaults()
+	if err := ctx.Err(); err != nil {
+		return nil, installError(CategoryApply, err, nil)
 	}
 
-	installed := append([]types.Package(nil), tx.Apply.Install...)
-	provenance := make(map[string][]string, len(tx.CandidateGraph))
-	for key, node := range tx.CandidateGraph {
-		provenance[key] = append([]string(nil), node.ProvenancePath...)
+	serverInfo := options.ServerInfo()
+	concretePlan := plan
+	if len(plan.Resolved.CandidateGraph) > 0 {
+		downloaded, err := downloadArtifacts(ctx, plan.Resolved, serverInfo.Root, options, options.Journal)
+		if err != nil {
+			return nil, installError(CategoryDownload, err, nil)
+		}
+
+		recordEvent(options.Journal, Event{Kind: EventVerifyStart, Count: len(downloaded.DownloadedArtifacts)})
+		verified, err := verifyArtifacts(ctx, downloaded, options.Journal)
+		if err != nil {
+			return nil, installError(CategoryVerify, err, nil)
+		}
+
+		concretePlan, err = planApply(ctx, verified, plan.InstalledConstraints)
+		if err != nil {
+			return nil, installError(CategoryApply, err, nil)
+		}
+	}
+
+	if err := applyPlan(ctx, concretePlan, serverInfo, options.Journal); err != nil {
+		return nil, installError(CategoryApply, err, nil)
+	}
+
+	return buildInstallResultFromPlan(concretePlan), nil
+}
+
+func buildInstallResultFromPlan(plan ApplyPlan) *Result {
+	installed := append([]types.Package(nil), plan.Install...)
+	provenance := make(map[string][]string, len(plan.Provenance))
+	for key, path := range plan.Provenance {
+		provenance[key] = append([]string(nil), path...)
 	}
 
 	return &Result{Installed: installed, Provenance: provenance}
 }
 
+func resolutionError(err error) error {
+	var conflictErr *resolve.ConstraintConflictError
+	if errors.As(err, &conflictErr) {
+		return installError(CategoryConflict, err, nil)
+	}
+	return installError(CategoryResolution, err, nil)
+}
+
 // TODO(package-ref-migration) — boundary conversion; pipeline internals still use PackageId
-func requestsToIds(requests []PackageRequest) []types.VersionedPackageRef {
+func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef {
 	ids := make([]types.VersionedPackageRef, len(requests))
 	for i, req := range requests {
 		ids[i] = types.VersionedPackageRef{
@@ -216,7 +266,7 @@ func requestsToIds(requests []PackageRequest) []types.VersionedPackageRef {
 
 func rootScopedProviders(
 	topology *types.RuntimeTopology,
-	requests []PackageRequest,
+	requests []types.PackageRequest,
 	roots []types.VersionedPackageRef,
 	serverLoader types.PlatformId,
 	providers []upstream.PackageSource,
@@ -313,11 +363,11 @@ func partitionBatchIDs(ids []types.VersionedPackageRef) (
 	return identityIds, regularIds
 }
 
-func validateRegularBatchIDs(ids []types.VersionedPackageRef) error {
+func validateRegularBatchIDs(ids []types.VersionedPackageRef, serverInfo workspace.Workspace) error {
 	failures := make([]string, 0)
 
 	for _, id := range ids {
-		if err := ensureServerPlatformMatch(id); err != nil {
+		if err := ensureServerPlatformMatch(id, serverInfo); err != nil {
 			failures = append(
 				failures,
 				fmt.Sprintf("%s: %v", id.StringFull(), err),

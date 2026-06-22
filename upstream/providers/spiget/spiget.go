@@ -34,18 +34,24 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return resp.ToSearchResults(p.Id()), nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (upstream.FetchResult, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
 	resource, err := resolveResourceByProjectName(id.Name)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
 	resolved, err := resolveVersion(resource, id.Version)
 	if err != nil {
-		return upstream.FetchResult{}, err
+		return types.ResolvedPackage{}, err
 	}
 
-	return upstream.NewFetchResult(resolved.ToPackageRemote()), nil
+	r := resolved.ToPackageRemote()
+	return types.ResolvedPackage{
+		FileUrl:       r.FileUrl,
+		Filename:      r.Filename,
+		Hash:          r.Hash,
+		HashAlgorithm: r.HashAlgorithm,
+	}, nil
 }
 
 func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {

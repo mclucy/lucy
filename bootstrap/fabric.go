@@ -1,4 +1,4 @@
-package install
+package bootstrap
 
 import (
 	"context"
@@ -12,15 +12,12 @@ import (
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/workspace"
 )
 
-func installFabricPlatform(
-	resolved types.VersionedPackageRef,
-	fetched upstream.FetchResult,
-	serverDir string,
-) error {
+type fabricBootstrapper struct{}
+
+func (b fabricBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
 	serverInfo := workspace.ServerInfo()
 	serverPlatform := serverInfo.Runtime.DerivedModLoader()
 
@@ -65,7 +62,7 @@ func installFabricPlatform(
 	defer tracker.Close()
 
 	result, err := cache.CachedDownload(
-		fetched.FileURL,
+		fetched.FileUrl,
 		workPath,
 		cache.DownloadOptions{
 			Kind:               cache.KindArtifact,
@@ -89,8 +86,11 @@ func installFabricPlatform(
 	}
 
 	workspace.Rebuild()
-	_ = resolved
 	return nil
+}
+
+func init() {
+	bootstrappers[types.PlatformFabric] = fabricBootstrapper{}
 }
 
 func promptOverrideVanilla() (override bool, deleteVanilla bool) {

@@ -238,6 +238,16 @@ func (v versionResponse) ToPackageRemote() types.PackageRemote {
 	return remote
 }
 
+func resolvedPackageFromVersion(v versionResponse) types.ResolvedPackage {
+	r := v.ToPackageRemote()
+	return types.ResolvedPackage{
+		FileUrl:       r.FileUrl,
+		Filename:      r.Filename,
+		Hash:          r.Hash,
+		HashAlgorithm: r.HashAlgorithm,
+	}
+}
+
 type dependencyType string
 
 const (

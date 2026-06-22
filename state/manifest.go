@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mclucy/lucy/install"
 	"gopkg.in/yaml.v3"
 
 	"github.com/mclucy/lucy/types"
@@ -359,7 +358,7 @@ func NormalizeManifestVersionIntent(version types.BareVersion) string {
 
 func UpsertManifestRequiredIntent(
 	manifest *Manifest,
-	req install.PackageRequest,
+	req types.PackageRequest,
 	source string,
 ) *Manifest {
 	if manifest == nil {
@@ -487,7 +486,7 @@ func ManifestPackagesFromClassified(classified []ClassifiedPackage) []ManifestPa
 
 func UpdateManifestRolesForAdd(
 	manifest *Manifest,
-	requested []install.PackageRequest,
+	requested []types.PackageRequest,
 	lock *Lock,
 ) *Manifest {
 	base := cloneManifestOrDefaults(manifest)

@@ -1,4 +1,4 @@
-package install
+package bootstrap
 
 import (
 	"context"
@@ -10,15 +10,12 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/tui/progress"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/workspace"
 )
 
-func installMojangPlatform(
-	resolved types.VersionedPackageRef,
-	fetched upstream.FetchResult,
-	serverDir string,
-) error {
+type mojangBootstrapper struct{}
+
+func (b mojangBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
 	if workspace.ServerInfo().Runtime.DerivedModLoader() != types.PlatformNone {
 		return errors.New("a server is already installed")
 	}
@@ -44,7 +41,7 @@ func installMojangPlatform(
 	defer tracker.Close()
 
 	result, err := cache.CachedDownload(
-		fetched.FileURL,
+		fetched.FileUrl,
 		workPath,
 		cache.DownloadOptions{
 			Kind:          cache.KindArtifact,
@@ -74,8 +71,11 @@ func installMojangPlatform(
 	}
 
 	workspace.Rebuild()
-	_ = resolved
 	return nil
+}
+
+func init() {
+	bootstrappers[types.PlatformMinecraft] = mojangBootstrapper{}
 }
 
 func addExecutePermission(file *os.File) error {

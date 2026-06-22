@@ -1,4 +1,4 @@
-package install
+package resolve
 
 import "github.com/mclucy/lucy/types"
 
