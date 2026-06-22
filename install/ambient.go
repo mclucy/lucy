@@ -25,6 +25,10 @@ type AmbientDependencies struct {
 	aliases map[string]string
 }
 
+// Ambient dependencies are dependency ids already contributed by the server
+// environment before Lucy resolves requested packages. They are separate from
+// topology identity packages: topology describes the server shape, while this
+// set describes what the mod loader can satisfy during dependency resolution.
 func buildAmbientDependencies(
 	ctx context.Context,
 	serverInfo workspace.Workspace,
@@ -38,6 +42,9 @@ func buildAmbientDependencies(
 		return ambient, nil
 	}
 
+	// Fabric creates minecraft/java as synthetic builtin mods and exposes the
+	// loader itself as fabricloader. These ids appear in fabric.mod.json depends
+	// maps, so they must be available before package artifacts are analyzed.
 	loaderVersion := serverInfo.Runtime.DerivedLoaderVersion()
 	ambient.Add(types.VersionedPackageRef{
 		PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabricloader"},
@@ -55,6 +62,9 @@ func buildAmbientDependencies(
 		})
 	}
 
+	// Fabric Loader can also contribute real Fabric mods from its own artifact.
+	// Loader 0.15+ uses this path for MixinExtras, and future nested loader mods
+	// should be discovered from metadata rather than added as a name list.
 	loaderPath := fabricLoaderArtifactPath(serverInfo.Root, loaderVersion)
 	if loaderPath == "" {
 		return ambient, nil
@@ -178,6 +188,9 @@ func addFabricZipAmbientDependencies(
 	}
 	ambient.Add(id)
 	for _, provided := range modInfo.Provides {
+		// Fabric provides[] entries are aliases in the loader resolver, similar to
+		// Debian/RPM virtual package provides. They satisfy dependency ids without
+		// requiring a separate downloaded package.
 		ambient.AddAlias(
 			types.PackageRef{Platform: types.PlatformFabric, Name: input.ToProjectName(provided)},
 			id,
