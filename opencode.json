@@ -53,6 +53,10 @@
       "description": "Use this while working on Folia integration.",
       "repository": "PaperMC/Folia"
     },
+    "HMCL": {
+      "description": "HMCL is a popular Minecraft launcher in China. It might provide useful Minecraft domain knowledge. However, note that HMCL is primarily client-oriented, so it may not be as relevant for server-side development This repo is indexed via codegraph.",
+      "path": "../HMCL"
+    },
     "mcdr-core": {
       "branch": "master",
       "description": "Use this while working on MCDR integration.",
@@ -85,6 +89,10 @@
       "branch": "main",
       "description": "Use this while working on Paper documentation.",
       "repository": "PaperMC/docs"
+    },
+    "PCL": {
+      "description": "PCL is a popular Minecraft launcher in China. It might provide useful Minecraft domain knowledge. However, note that PCL is primarily client-oriented, so it may not be as relevant for server-side development This repo is indexed via codegraph.",
+      "path": "../PCL"
     },
     "pnpm": {
       "description": "Use pnpm as a design reference. This repo is indexed via codegraph.",
