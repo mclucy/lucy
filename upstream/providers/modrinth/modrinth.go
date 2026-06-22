@@ -111,7 +111,10 @@ func (s provider) Fetch(id types.VersionedPackageRef) (
 	if len(version.Files) == 0 || path.Ext(version.Files[0].Filename) != ".jar" {
 		return types.ResolvedPackage{}, ErrUnsupportedFileType
 	}
-	return resolvedPackageFromVersion(*version), nil
+	resolved := resolvedPackageFromVersion(*version)
+	resolved.Id.PackageRef = id.PackageRef
+	resolved.Id.Version = id.Version
+	return resolved, nil
 }
 
 func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {

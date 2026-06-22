@@ -10,16 +10,23 @@
 package workspace
 
 import (
+	"archive/zip"
 	"context"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/internal/knownpkgs"
+	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/providers/curseforge"
+	"github.com/mclucy/lucy/upstream/providers/modrinth"
 	"gopkg.in/ini.v1"
 
 	"github.com/mclucy/lucy/logger"
@@ -401,6 +408,13 @@ func buildInstalledPackages() (mods []types.Package) {
 					artifact.WithSlugResolver(resolver),
 				)
 				if err != nil || len(analyzed) == 0 {
+					pkg, ok := packageByArtifactHash(path)
+					if !ok {
+						return
+					}
+					mu.Lock()
+					idx.Add(pkg)
+					mu.Unlock()
 					return
 				}
 				pkgs := artifactInfoToPackage(analyzed)
@@ -436,6 +450,75 @@ func buildInstalledPackages() (mods []types.Package) {
 	}
 
 	return idx.Packages()
+}
+
+func packageByArtifactHash(filePath string) (types.Package, bool) {
+	providers := []upstream.ArtifactMapSource{modrinth.Provider}
+	if curseforge.Enabled() {
+		providers = append(providers, curseforge.Provider)
+	}
+	for _, mapper := range providers {
+		name, _, err := mapper.NameByHash(artifacthash.File{Path: filePath})
+		if err != nil || name.RemoteName == "" {
+			continue
+		}
+		return packageFromArtifactSlug(filePath, name.FormattedName()), true
+	}
+	if isSinytraConnectorArtifact(filePath) {
+		return packageFromArtifactSlug(filePath, "connector"), true
+	}
+	return types.Package{}, false
+}
+
+func packageFromArtifactSlug(filePath, slug string) types.Package {
+	return types.Package{
+		Id: types.VersionedPackageRef{
+			PackageRef: types.PackageRef{
+				Platform: types.PlatformForge,
+				Name:     types.BarePackageName(slug),
+			},
+			Version: types.VersionUnknown,
+		},
+		Local: &types.PackageInstallation{Path: filePath},
+	}
+}
+
+func isSinytraConnectorArtifact(filePath string) bool {
+	r, err := zip.OpenReader(filePath)
+	if err != nil {
+		return false
+	}
+	defer r.Close()
+
+	return zipEntryContains(
+		r.File,
+		"META-INF/services/net.minecraftforge.forgespi.locating.IDependencyLocator",
+		"org.sinytra.connector.locator.ConnectorLocator",
+	) && zipEntryContains(
+		r.File,
+		"META-INF/services/net.minecraftforge.forgespi.locating.IModLocator",
+		"org.sinytra.connector.locator.ConnectorEarlyLocator",
+	)
+}
+
+func zipEntryContains(files []*zip.File, name, needle string) bool {
+	raw, err := readZipFileEntry(files, name)
+	return err == nil && strings.Contains(string(raw), needle)
+}
+
+func readZipFileEntry(files []*zip.File, name string) ([]byte, error) {
+	for _, f := range files {
+		if f.Name != name {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer rc.Close()
+		return io.ReadAll(rc)
+	}
+	return nil, os.ErrNotExist
 }
 
 // knownPackagesSlugResolver returns a slug resolver that consults the knownpkgs

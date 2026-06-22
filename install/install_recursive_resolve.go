@@ -158,7 +158,6 @@ func newCandidateGraphPlanner(
 		candidateGraph[key] = CandidateNode{
 			Package:        resolvedPackageFromInstalled(installed.Package),
 			Path:           installedPath(installed.Package),
-			Dependencies:   installed.Package.Dependencies,
 			ProvenancePath: []string{installed.ConstraintInput.Requester},
 			Advisory:       false,
 		}

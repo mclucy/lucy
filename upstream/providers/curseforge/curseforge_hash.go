@@ -9,14 +9,11 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/upstream"
 )
-
-type fingerprintable interface {
-	CurseForgeFingerprint() uint32
-}
 
 // fingerprintRequest is the body for POST /v1/fingerprints/432.
 type fingerprintRequest struct {
@@ -53,7 +50,7 @@ func SlugFromFilePathWithHint(filePath, urlHint string) (
 	if err != nil {
 		return "", fmt.Errorf("curseforge hash: %w", err)
 	}
-	fp := curseForgeFingerprint(data)
+	fp := artifacthash.Bytes(data).MurmurHash()
 	return slugFromFingerprint(fp)
 }
 
@@ -62,12 +59,7 @@ func (p provider) NameByHash(artifact upstream.Hashable) (
 	hash string,
 	err error,
 ) {
-	fingerprinted, ok := artifact.(fingerprintable)
-	if !ok {
-		return name, hash, fmt.Errorf("curseforge: artifact does not expose fingerprint")
-	}
-
-	fingerprint := fingerprinted.CurseForgeFingerprint()
+	fingerprint := artifact.MurmurHash()
 	hash = strconv.FormatUint(uint64(fingerprint), 10)
 	slug, err := slugFromFingerprint(fingerprint)
 	if err != nil {
@@ -128,49 +120,4 @@ func slugFromFingerprint(fp uint32) (string, error) {
 		return "", err
 	}
 	return mod.Slug, nil
-}
-
-// curseForgeFingerprint computes the CurseForge custom MurmurHash2 fingerprint.
-// Algorithm: strip whitespace bytes (0x09, 0x0A, 0x0D, 0x20), then apply
-// a custom MurmurHash2-like mixing with multiplex=1540483477.
-// Reference: https://github.com/meza/curseforge-fingerprint
-func curseForgeFingerprint(data []byte) uint32 {
-	const multiplex uint32 = 1540483477
-
-	normalizedLen := uint32(0)
-	for _, b := range data {
-		if !isCFWhitespace(b) {
-			normalizedLen++
-		}
-	}
-
-	h := uint32(1) ^ normalizedLen
-	var pending uint32
-	var pendingBits uint32
-
-	for _, b := range data {
-		if isCFWhitespace(b) {
-			continue
-		}
-		pending |= uint32(b) << pendingBits
-		pendingBits += 8
-		if pendingBits == 32 {
-			k := pending * multiplex
-			k = (k ^ k>>24) * multiplex
-			h = h*multiplex ^ k
-			pending = 0
-			pendingBits = 0
-		}
-	}
-
-	if pendingBits > 0 {
-		h = (h ^ pending) * multiplex
-	}
-
-	h = (h ^ h>>13) * multiplex
-	return h ^ h>>15
-}
-
-func isCFWhitespace(b byte) bool {
-	return b == 0x09 || b == 0x0A || b == 0x0D || b == 0x20
 }

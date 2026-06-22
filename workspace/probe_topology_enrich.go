@@ -105,6 +105,7 @@ func EnrichTopologyFromPackages(
 			exec.Topology,
 			internaltopology.DefaultConnectionRegistry,
 		)
+		addConnectorHostEdges(exec.Topology)
 		NormalizeTopology(exec.Topology)
 		FoldTopologyRisk(exec.Topology)
 		return
@@ -132,8 +133,38 @@ func EnrichTopologyFromPackages(
 		exec.Topology,
 		internaltopology.DefaultConnectionRegistry,
 	)
+	addConnectorHostEdges(exec.Topology)
 	NormalizeTopology(exec.Topology)
 	FoldTopologyRisk(exec.Topology)
+}
+
+func addConnectorHostEdges(t *types.RuntimeTopology) {
+	if t == nil {
+		return
+	}
+	if _, ok := t.FindNode(types.RuntimeNodeConnector); !ok {
+		return
+	}
+	for _, hostID := range []types.RuntimeNodeID{types.RuntimeNodeForge, types.RuntimeNodeNeoforge} {
+		host, ok := t.FindNode(hostID)
+		if !ok || !host.HasCapability(types.CapabilityForgeMods) && !host.HasCapability(types.CapabilityNeoforgeMods) {
+			continue
+		}
+		edge := types.RuntimeEdge{From: hostID, To: types.RuntimeNodeConnector, Verb: types.EdgeHosts}
+		if topologyHasEdge(t, edge) {
+			continue
+		}
+		t.Edges = append(t.Edges, edge)
+	}
+}
+
+func topologyHasEdge(t *types.RuntimeTopology, edge types.RuntimeEdge) bool {
+	for _, existing := range t.Edges {
+		if existing == edge {
+			return true
+		}
+	}
+	return false
 }
 
 func applyDeclarativeConnections(
@@ -214,7 +245,7 @@ func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {
 	}
 
 	detected := make([]types.RuntimeNodeID, 0, 6)
-	if hasAnyName(names, "sinytra-connector") {
+	if hasAnyName(names, "sinytra-connector", "connector", "connectormod") {
 		detected = append(detected, types.RuntimeNodeConnector)
 	}
 	if hasAnyName(names, "kilt") {

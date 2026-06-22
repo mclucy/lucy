@@ -202,6 +202,9 @@ var defaultRegistryEntries = []RegistryEntry{
 		NodeID:    types.RuntimeNodeConnector,
 		Role:      types.RuntimeRoleBridge,
 		RiskLevel: types.RiskHigh,
+		Capabilities: []types.RuntimeCapability{
+			types.CapabilityFabricMods,
+		},
 	},
 	{
 		NodeID:    types.RuntimeNodeKilt,

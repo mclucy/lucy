@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream/routing"
 )
 
 func verifyArtifacts(
@@ -39,17 +41,37 @@ func verifyDownloadedArtifacts(
 	downloaded DownloadedClosure,
 ) (map[string]CandidateNode, error) {
 	allPackages := make([]types.Package, 0, len(downloaded.DownloadedArtifacts))
-	expectedPlatforms := downloadedArtifactPlatforms(
+	expectedPackages := downloadedArtifactPackages(
 		downloaded.Resolved.CandidateGraph,
 	)
 	for _, path := range downloaded.DownloadedArtifacts {
 		infos, err := artifact.Analyze(path)
-		infos = selectArtifactInfosForPlatform(infos, expectedPlatforms[path])
-		if err != nil || len(infos) == 0 {
+		expected, hasExpected := expectedPackages[path]
+		if hasExpected {
+			infos = selectArtifactInfosForPlatform(infos, expected.Id.Platform)
+		}
+		if err != nil {
 			return nil, fmt.Errorf(
 				"install: artifact verification failed for %s: unreadable or corrupt",
 				path,
 			)
+		}
+		if len(infos) == 0 {
+			if !hasExpected || !hashMatchesResolvedPackage(path, expected) {
+				return nil, fmt.Errorf(
+					"install: artifact verification failed for %s: unreadable or corrupt",
+					path,
+				)
+			}
+			allPackages = append(allPackages, packageFromResolvedArtifact(path, expected))
+			continue
+		}
+		if hasExpected {
+			allPackages = append(
+				allPackages,
+				artifactInfoToResolvedPackages(infos, expected)...,
+			)
+			continue
 		}
 		allPackages = append(allPackages, artifactInfoToPackage(infos)...)
 	}
@@ -73,17 +95,17 @@ func verifyDownloadedArtifacts(
 	return verified, nil
 }
 
-func downloadedArtifactPlatforms(
+func downloadedArtifactPackages(
 	candidateGraph map[string]CandidateNode,
-) map[string]types.PlatformId {
-	platforms := make(map[string]types.PlatformId, len(candidateGraph))
+) map[string]types.ResolvedPackage {
+	packages := make(map[string]types.ResolvedPackage, len(candidateGraph))
 	for _, node := range candidateGraph {
 		if node.Path == "" {
 			continue
 		}
-		platforms[node.Path] = node.Package.Id.Platform
+		packages[node.Path] = node.Package
 	}
-	return platforms
+	return packages
 }
 
 func selectArtifactInfosForPlatform(
@@ -153,6 +175,60 @@ func artifactInfoToPackage(infos []artifact.Info) []types.Package {
 		pkgs = append(pkgs, pkg)
 	}
 	return pkgs
+}
+
+func artifactInfoToResolvedPackages(
+	infos []artifact.Info,
+	resolved types.ResolvedPackage,
+) []types.Package {
+	packages := artifactInfoToPackage(infos)
+	for i := range packages {
+		if shouldPreserveResolvedIdentity(packages[i].Id, resolved.Id) {
+			packages[i].Id = types.VersionedPackageRef{
+				PackageRef: resolved.Id.PackageRef,
+				Version:    resolved.Id.Version,
+			}
+		}
+	}
+	return packages
+}
+
+func shouldPreserveResolvedIdentity(
+	verified types.VersionedPackageRef,
+	resolved types.FullPackageRef,
+) bool {
+	if resolved.Name == "" || resolved.Version == "" {
+		return false
+	}
+	if verified.Platform != resolved.Platform {
+		return false
+	}
+	return verified.Name != resolved.Name
+}
+
+func packageFromResolvedArtifact(
+	path string,
+	resolved types.ResolvedPackage,
+) types.Package {
+	return types.Package{
+		Id: types.VersionedPackageRef{
+			PackageRef: resolved.Id.PackageRef,
+			Version:    resolved.Id.Version,
+		},
+		Local: &types.PackageInstallation{Path: path},
+	}
+}
+
+func hashMatchesResolvedPackage(path string, resolved types.ResolvedPackage) bool {
+	mapper, ok, err := routing.GetArtifactMapper(resolved.Id.Scope)
+	if err != nil || !ok {
+		return false
+	}
+	name, _, err := mapper.NameByHash(artifacthash.File{Path: path})
+	if err != nil {
+		return false
+	}
+	return name.RemoteName == string(resolved.Id.Name)
 }
 
 func normalizeVerifiedPackage(pkg *types.Package) {

@@ -52,13 +52,10 @@ func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, er
 		return types.ResolvedPackage{}, err
 	}
 
-	r := file.ToPackageRemote()
-	return types.ResolvedPackage{
-		FileUrl:       r.FileUrl,
-		Filename:      r.Filename,
-		Hash:          r.Hash,
-		HashAlgorithm: r.HashAlgorithm,
-	}, nil
+	resolved := file.ToPackageRemote()
+	resolved.Id.PackageRef = id.PackageRef
+	resolved.Id.Version = id.Version
+	return resolved, nil
 }
 
 // Info resolves a project slug and returns project metadata.
