@@ -108,6 +108,10 @@
       "description": "Use pnpm as a design reference. This repo is indexed via codegraph.",
       "path": "../pnpm"
     },
+    "sinytra-connector": {
+      "description": "Sinytra Connector is a Forge/NeoForge mod that serves as a bridge to Fabric mods. It serves as a special node in lucy's topology model.",
+      "repository": "Sinytra/Connector"
+    },
     "velocity": {
       "branch": "dev/3.0.0",
       "description": "Use this while working on Velocity integration.",
