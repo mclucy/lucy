@@ -127,6 +127,22 @@ lucy status
 lucy status --json --long
 ```
 
+### `lucy topology`
+
+Render the detected server runtime topology as an ASCII diagram.
+
+```bash
+lucy topology
+lucy topology --long
+lucy topology --json
+```
+
+| Flag                | Description                                              |
+| ------------------- | -------------------------------------------------------- |
+| `-l`, `--long`      | Show role, capabilities, and risk level inside each node |
+| `--json`            | Output the raw topology data and generated Mermaid source |
+| `--no-style`        | Render with plain ASCII instead of box-drawing characters |
+
 ### `lucy info`
 
 Get metadata, description, authors, and version history for a package.
