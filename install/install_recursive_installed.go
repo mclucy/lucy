@@ -48,7 +48,7 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 	}
 
 	if si.Runtime != nil {
-		loader := si.Runtime.DerivedModLoader()
+		loader := si.DerivedModLoader()
 		if loader.Valid() && loader != types.PlatformNone && loader != types.PlatformUnknown {
 			if !si.Runtime.GameVersion.IsInvalid() && si.Runtime.GameVersion != types.VersionAny {
 				appendConstraint(
@@ -81,7 +81,7 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 				}, fmt.Sprintf("runtime:%s/java", loader),
 			)
 
-			if primary := si.Runtime.PrimaryRuntimeIdentity(); primary != nil {
+			if primary := si.PrimaryRuntimeIdentity(); primary != nil {
 				if alias := runtimeLoaderAliasName(primary.Platform); alias != "" {
 					appendConstraint(
 						types.Package{

@@ -30,7 +30,7 @@ func ensureServerPlatformMatch(id types.VersionedPackageRef, serverInfo workspac
 			return nil
 		}
 
-		topology := serverInfo.Runtime.Topology
+		topology := serverInfo.Topology
 		result := workspace.EvaluateCompatibility(topology, requiredCapability)
 		switch result.Verdict {
 		case types.CompatCompatible:

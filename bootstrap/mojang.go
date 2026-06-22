@@ -16,7 +16,7 @@ import (
 type mojangBootstrapper struct{}
 
 func (b mojangBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
-	if workspace.ServerInfo().Runtime.DerivedModLoader() != types.PlatformNone {
+	if workspace.ServerInfo().DerivedModLoader() != types.PlatformNone {
 		return errors.New("a server is already installed")
 	}
 

@@ -10,7 +10,7 @@ type ServerRuntime struct {
 	PrimaryEntrance   string                      `json:"primary_entrance"`
 	GameVersion       types.BareVersion           `json:"game_version"`
 	BootCommand       *exec.Cmd                   `json:"-"`
-	Topology          *types.RuntimeTopology      `json:"topology,omitempty"`
+	Topology          *types.RuntimeTopology      `json:"-"`
 	RuntimeIdentities []types.VersionedPackageRef `json:"runtime_identities,omitempty"`
 	BridgeHints       []string                    `json:"bridge_hints,omitempty"`
 }
@@ -42,60 +42,37 @@ func (e *ServerRuntime) RuntimeIdentityPackage(node *types.TopologyNode) *types.
 		return nil
 	}
 
-	for i := range e.RuntimeIdentities {
-		pkg := &e.RuntimeIdentities[i]
-		if string(pkg.Name) == string(node.ID) {
-			return pkg
-		}
-	}
-
-	return nil
+	return runtimeIdentityPackage(e.RuntimeIdentities, node)
 }
 
 func (e *ServerRuntime) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
-	if e == nil || e.Topology == nil {
+	if e == nil {
 		return nil
 	}
 
-	primaryNode, ok := e.Topology.PrimaryNodeData()
-	if !ok {
-		return nil
-	}
-
-	return e.RuntimeIdentityPackage(&primaryNode)
+	return primaryRuntimeIdentity(e.Topology, e.RuntimeIdentities)
 }
 
 func (e *ServerRuntime) DerivedLoaderVersion() string {
-	primaryIdentity := e.PrimaryRuntimeIdentity()
-	if primaryIdentity == nil {
-		return "unknown"
+	if e == nil {
+		return derivedLoaderVersion(nil, nil)
 	}
 
-	return primaryIdentity.Version.String()
+	return derivedLoaderVersion(e.Topology, e.RuntimeIdentities)
 }
 
 func (e *ServerRuntime) DerivedModLoader() types.PlatformId {
-	if e == nil || e.Topology == nil {
-		return types.PlatformNone
+	if e == nil {
+		return derivedModLoader(nil)
 	}
 
-	primary, ok := e.Topology.PrimaryNodeData()
-	if !ok {
-		return types.PlatformNone
-	}
-
-	return types.DeclaredModdingPlatformForNode(primary.ID)
+	return derivedModLoader(e.Topology)
 }
 
 func (e *ServerRuntime) DerivedServerCore() string {
-	if e == nil || e.Topology == nil {
-		return ""
+	if e == nil {
+		return derivedServerCore(nil)
 	}
 
-	primary, ok := e.Topology.PrimaryNodeData()
-	if !ok {
-		return ""
-	}
-
-	return string(primary.ID)
+	return derivedServerCore(e.Topology)
 }

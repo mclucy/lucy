@@ -89,7 +89,7 @@ func init() {
 }
 
 func guardForgeServerTopology() error {
-	serverPlatform := workspace.ServerInfo().Runtime.DerivedModLoader()
+	serverPlatform := workspace.ServerInfo().DerivedModLoader()
 
 	switch serverPlatform {
 	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:

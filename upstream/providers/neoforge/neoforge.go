@@ -90,7 +90,7 @@ func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, er
 
 func minecraftVersionForInstall() (types.BareVersion, error) {
 	serverInfo := workspace.ServerInfo()
-	switch serverInfo.Runtime.DerivedModLoader() {
+	switch serverInfo.DerivedModLoader() {
 	case types.PlatformVanilla:
 		return serverInfo.Runtime.GameVersion, nil
 	case types.PlatformNone:

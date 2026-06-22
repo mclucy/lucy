@@ -38,11 +38,11 @@ func buildAmbientDependencies(
 		aliases: make(map[string]string),
 	}
 
-	if serverInfo.Runtime == nil || !serverInfo.Runtime.Topology.HasCapability(types.CapabilityFabricMods) {
+	if serverInfo.Runtime == nil || serverInfo.Topology == nil || !serverInfo.Topology.HasCapability(types.CapabilityFabricMods) {
 		return ambient, nil
 	}
 
-	loaderVersion := serverInfo.Runtime.DerivedLoaderVersion()
+	loaderVersion := serverInfo.DerivedLoaderVersion()
 	if loaderVersion != "" && loaderVersion != types.VersionUnknown.String() {
 		ambient.Add(types.VersionedPackageRef{
 			PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabricloader"},

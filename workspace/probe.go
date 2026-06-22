@@ -269,6 +269,9 @@ func buildServerInfo() Workspace {
 		serverInfo.Runtime,
 		serverInfo.Packages,
 	)
+	if serverInfo.Runtime != nil {
+		serverInfo.Topology = serverInfo.Runtime.Topology
+	}
 
 	return serverInfo
 }

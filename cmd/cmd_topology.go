@@ -31,11 +31,11 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 
 	info := workspace.ServerInfo()
 
-	if info.Runtime == nil || info.Runtime.Topology == nil {
+	if info.Runtime == nil || info.Topology == nil {
 		return fmt.Errorf("no server runtime detected in current directory")
 	}
 
-	topology := info.Runtime.Topology
+	topology := info.Topology
 
 	if !topology.Resolved() {
 		return fmt.Errorf("server topology is unresolved")
