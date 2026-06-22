@@ -38,21 +38,28 @@ func buildAmbientDependencies(
 		aliases: make(map[string]string),
 	}
 
-	if serverInfo.Runtime == nil || serverInfo.Runtime.DerivedModLoader() != types.PlatformFabric {
+	if serverInfo.Runtime == nil || !serverInfo.Runtime.Topology.HasCapability(types.CapabilityFabricMods) {
 		return ambient, nil
 	}
 
-	// Fabric creates minecraft/java as synthetic builtin mods and exposes the
-	// loader itself as fabricloader. These ids appear in fabric.mod.json depends
-	// maps, so they must be available before package artifacts are analyzed.
 	loaderVersion := serverInfo.Runtime.DerivedLoaderVersion()
-	ambient.Add(types.VersionedPackageRef{
-		PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabricloader"},
-		Version:    types.BareVersion(loaderVersion),
-	})
+	if loaderVersion != "" && loaderVersion != types.VersionUnknown.String() {
+		ambient.Add(types.VersionedPackageRef{
+			PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabricloader"},
+			Version:    types.BareVersion(loaderVersion),
+		})
+	}
 	ambient.Add(types.VersionedPackageRef{
 		PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "minecraft"},
 		Version:    serverInfo.Runtime.GameVersion,
+	})
+	ambient.Add(types.VersionedPackageRef{
+		PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabric"},
+		Version:    types.VersionAny,
+	})
+	ambient.Add(types.VersionedPackageRef{
+		PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabric-api"},
+		Version:    types.VersionAny,
 	})
 
 	if javaVersion, ok := currentJavaSpecVersion(ctx); ok {
@@ -117,6 +124,9 @@ func (a AmbientDependencies) Satisfies(dep types.Dependency) bool {
 		return false
 	}
 	if dep.Constraint == nil {
+		return true
+	}
+	if id.Version == types.VersionAny {
 		return true
 	}
 	parsed, err := version.Parse(id.Version, types.Semver)

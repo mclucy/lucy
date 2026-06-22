@@ -74,6 +74,7 @@ type ArtifactMapper interface {
 
 type Hashable interface {
 	Sha1() [sha1.Size]byte
+	MurmurHash() uint32
 }
 
 type VersionSelectorResolver interface {
