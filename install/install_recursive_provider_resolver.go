@@ -18,7 +18,7 @@ type providerCandidateResolver struct {
 func (resolver providerCandidateResolver) ResolvePackage(
 	ctx context.Context,
 	id types.VersionedPackageRef,
-) (types.Package, error) {
+) (types.ResolvedPackage, error) {
 	attempts := []types.VersionedPackageRef{id}
 	if id.Version == types.VersionCompatible {
 		attempts = append(
@@ -43,7 +43,7 @@ func (resolver providerCandidateResolver) ResolvePackage(
 	var lastErrors []routing.ProviderError
 	for _, attempt := range attempts {
 		if err := ctx.Err(); err != nil {
-			return types.Package{}, err
+			return types.ResolvedPackage{}, err
 		}
 
 		providers := resolver.providersForPackage(attempt)
@@ -56,24 +56,10 @@ func (resolver providerCandidateResolver) ResolvePackage(
 			continue
 		}
 
-		fetch := fetches[0]
-		remote := types.PackageRemote{
-			Source:        fetch.Id.Scope,
-			FileUrl:       fetch.FileUrl,
-			Filename:      fetch.Filename,
-			Hash:          fetch.Hash,
-			HashAlgorithm: fetch.HashAlgorithm,
-		}
-		return types.Package{
-			Id: types.VersionedPackageRef{
-				PackageRef: fetch.Id.PackageRef,
-				Version:    fetch.Id.Version,
-			},
-			Remote: &remote,
-		}, nil
+		return fetches[0], nil
 	}
 
-	return types.Package{}, fmt.Errorf(
+	return types.ResolvedPackage{}, fmt.Errorf(
 		"install: failed to resolve mandatory dependency %s: %s",
 		id.StringBase(),
 		formatProviderErrors(lastErrors),
@@ -94,16 +80,16 @@ func (resolver providerCandidateResolver) providersForPackage(
 
 func (resolver providerCandidateResolver) ResolveDependencies(
 	ctx context.Context,
-	pkg types.Package,
+	pkg types.ResolvedPackage,
 ) ([]types.PackageDependencies, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	providers := providersForSource(resolver.providers, pkg.Remote)
+	providers := providersForSource(resolver.providers, pkg.Id.Scope)
 	dependencySets, providerErrors := routing.DependenciesMany(
 		providers,
-		pkg.Id,
+		versionedResolvedID(pkg),
 	)
 	if len(dependencySets) > 0 {
 		return dependencySets, nil
@@ -111,22 +97,22 @@ func (resolver providerCandidateResolver) ResolveDependencies(
 
 	return nil, fmt.Errorf(
 		"install: failed to resolve mandatory dependency %s: %s",
-		pkg.Id.StringBase(),
+		pkg.Id.PackageRef.StringBase(),
 		formatProviderErrors(providerErrors),
 	)
 }
 
 func providersForSource(
 	providers []upstream.PackageSource,
-	remote *types.PackageRemote,
+	source types.SourceId,
 ) []upstream.PackageSource {
-	if remote == nil {
+	if source == types.SourceUnknown {
 		return providers
 	}
 
 	filtered := make([]upstream.PackageSource, 0, 1)
 	for _, provider := range providers {
-		if provider.Id() == remote.Source {
+		if provider.Id() == source {
 			filtered = append(filtered, provider)
 		}
 	}

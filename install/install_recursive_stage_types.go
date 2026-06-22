@@ -22,9 +22,9 @@ type InstalledConstraint struct {
 // A node may be advisory (from upstream APIs) or verified (from local JARs).
 // Advisory nodes MUST NOT trigger file-system mutations.
 type CandidateNode struct {
-	// Package holds the package metadata. In ResolvedClosure, only Remote may be
-	// populated. In VerifiedClosure, Local.Path will be set.
-	Package types.Package
+	Package      types.ResolvedPackage
+	Path         string
+	Dependencies *types.PackageDependencies
 
 	// ProvenancePath records the chain of requesters that caused this node to
 	// enter the graph, starting from a root request. This is used by conflict
@@ -67,12 +67,12 @@ type ApplyPlan struct {
 	InstalledConstraints []InstalledConstraint
 
 	// Install is the ordered list of packages to install.
-	Install []types.Package
+	Install []types.InstalledPackage
 
 	// Remove is the list of locally-installed packages proven unreachable from
 	// the validated closure. Only packages within this transaction's scope are
 	// eligible for removal.
-	Remove []types.Package
+	Remove []types.InstalledPackage
 
 	Provenance map[string][]string
 }
@@ -92,9 +92,25 @@ type DownloadedClosure struct {
 	DownloadedArtifacts map[string]string
 }
 
+type downloadedPackage struct {
+	Package types.ResolvedPackage
+	Path    string
+}
+
 // VerifiedClosure is the output of the verify stage.
 type VerifiedClosure struct {
 	Downloaded    DownloadedClosure
 	VerifiedGraph map[string]CandidateNode
 	ReconcileDiff ReconcileDiff
+}
+
+func versionedResolvedID(pkg types.ResolvedPackage) types.VersionedPackageRef {
+	return types.VersionedPackageRef{
+		PackageRef: pkg.Id.PackageRef,
+		Version:    pkg.Id.Version,
+	}
+}
+
+func resolvedPackageLabel(pkg types.ResolvedPackage) string {
+	return versionedResolvedID(pkg).StringFull()
 }

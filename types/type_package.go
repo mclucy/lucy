@@ -16,7 +16,7 @@ type Package struct {
 	// Package specific data
 	Dependencies *PackageDependencies
 	Local        *PackageInstallation
-	Remote       *PackageRemote
+	Remote       *ResolvedPackage
 }
 
 // PackageDependencies is one of the optional attributions that can be added to
@@ -31,19 +31,6 @@ type PackageDependencies struct {
 // used for packages that are known to be installed in the local filesystem.
 type PackageInstallation struct {
 	Path string
-}
-
-// PackageRemote is an optional attribution to types.Package. It is used to
-// represent package's presence in a remote source.
-type PackageRemote struct {
-	// Source is the semantic origin label of this package metadata/artifact.
-	// It is stored and displayed as provenance, not used as an executable
-	// provider identifier.
-	Source        SourceId
-	FileUrl       string
-	Filename      string
-	Hash          string // upstream-provided digest; empty if unavailable
-	HashAlgorithm string // e.g. "sha1", "sha512"; empty if Hash is empty
 }
 
 // PlatformSupport reflects the support information of the whole project. For
@@ -78,7 +65,7 @@ type DiscoveredPackage struct {
 // Produced by: install/ apply stage
 // Consumed by: cmd/cmd_add.go (lock file writer)
 type InstalledPackage struct {
-	Id           FullPackageRef
+	ResolvedPackage
 	Path         string
 	Dependencies PackageDependencies // authentic, from jar analysis
 }

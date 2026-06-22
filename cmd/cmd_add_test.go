@@ -141,7 +141,7 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 	}
 
 	result := &install.Result{
-		Installed: []types.Package{
+		Installed: []types.InstalledPackage{
 			lockedResultPackage(
 				t,
 				workDir,
@@ -238,20 +238,21 @@ func mustParsePackageRequest(t *testing.T, raw string) types.PackageRequest {
 func lockedResultPackage(
 	t *testing.T,
 	workDir, rawID, filename string,
-) types.Package {
+) types.InstalledPackage {
 	t.Helper()
 	id := mustParsePackageID(t, rawID)
-	return types.Package{
-		Id: id,
-		Local: &types.PackageInstallation{
-			Path: filepath.Join(workDir, "mods", filename),
-		},
-		Remote: &types.PackageRemote{
-			Source:        types.SourceModrinth,
+	return types.InstalledPackage{
+		ResolvedPackage: types.ResolvedPackage{
+			Id: types.FullPackageRef{
+				PackageRef: id.PackageRef,
+				Version:    id.Version,
+				Scope:      types.SourceModrinth,
+			},
 			FileUrl:       "https://example.invalid/" + filename,
 			Filename:      filename,
 			Hash:          "deadbeef",
 			HashAlgorithm: "sha512",
 		},
+		Path: filepath.Join(workDir, "mods", filename),
 	}
 }

@@ -62,7 +62,9 @@ func verifyDownloadedArtifacts(
 		}
 
 		verified[pkg.Id.StringBase()] = CandidateNode{
-			Package:        pkg,
+			Package:        resolvedPackageFromVerified(pkg),
+			Path:           installedPath(pkg),
+			Dependencies:   pkg.Dependencies,
 			ProvenancePath: []string{"verified"},
 			Advisory:       false,
 		}
@@ -76,10 +78,10 @@ func downloadedArtifactPlatforms(
 ) map[string]types.PlatformId {
 	platforms := make(map[string]types.PlatformId, len(candidateGraph))
 	for _, node := range candidateGraph {
-		if node.Package.Local == nil || node.Package.Local.Path == "" {
+		if node.Path == "" {
 			continue
 		}
-		platforms[node.Package.Local.Path] = node.Package.Id.Platform
+		platforms[node.Path] = node.Package.Id.Platform
 	}
 	return platforms
 }
@@ -186,5 +188,15 @@ func sourceForPlatform(p types.PlatformId) types.SourceId {
 		return types.SourceMCDR
 	default:
 		return types.SourceUnknown
+	}
+}
+
+func resolvedPackageFromVerified(pkg types.Package) types.ResolvedPackage {
+	return types.ResolvedPackage{
+		Id: types.FullPackageRef{
+			PackageRef: pkg.Id.PackageRef,
+			Version:    pkg.Id.Version,
+			Scope:      types.SourceUnknown,
+		},
 	}
 }

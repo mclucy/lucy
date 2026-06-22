@@ -18,8 +18,8 @@ type candidateRequest struct {
 }
 
 type candidateGraphResolver interface {
-	ResolvePackage(ctx context.Context, id types.VersionedPackageRef) (types.Package, error)
-	ResolveDependencies(ctx context.Context, pkg types.Package) ([]types.PackageDependencies, error)
+	ResolvePackage(ctx context.Context, id types.VersionedPackageRef) (types.ResolvedPackage, error)
+	ResolveDependencies(ctx context.Context, pkg types.ResolvedPackage) ([]types.PackageDependencies, error)
 }
 
 type candidateGraphPlanner struct {
@@ -149,7 +149,9 @@ func newCandidateGraphPlanner(
 			continue
 		}
 		candidateGraph[key] = CandidateNode{
-			Package:        installed.Package,
+			Package:        resolvedPackageFromInstalled(installed.Package),
+			Path:           installedPath(installed.Package),
+			Dependencies:   installed.Package.Dependencies,
 			ProvenancePath: []string{installed.ConstraintInput.Requester},
 			Advisory:       false,
 		}
@@ -199,7 +201,7 @@ func (planner *candidateGraphPlanner) next() (candidateRequest, bool) {
 
 func (planner *candidateGraphPlanner) admit(
 	current candidateRequest,
-	pkg types.Package,
+	pkg types.ResolvedPackage,
 	dependencySets []types.PackageDependencies,
 	options InstallOptions,
 ) error {
@@ -239,12 +241,14 @@ func (planner *candidateGraphPlanner) admit(
 			)
 		}
 	}
+	var packageDependencies *types.PackageDependencies
 	if len(dependencies) > 0 {
-		pkg.Dependencies = &types.PackageDependencies{Value: dependencies}
+		packageDependencies = &types.PackageDependencies{Value: dependencies}
 	}
 
 	planner.candidateGraph[key] = CandidateNode{
 		Package:        pkg,
+		Dependencies:   packageDependencies,
 		ProvenancePath: append([]string(nil), current.provenancePath...),
 		Advisory:       true,
 	}
@@ -261,6 +265,23 @@ func (planner *candidateGraphPlanner) admit(
 
 	planner.queue = append(planner.queue, children...)
 	return nil
+}
+
+func resolvedPackageFromInstalled(pkg types.Package) types.ResolvedPackage {
+	return types.ResolvedPackage{
+		Id: types.FullPackageRef{
+			PackageRef: pkg.Id.PackageRef,
+			Version:    pkg.Id.Version,
+			Scope:      types.SourceUnknown,
+		},
+	}
+}
+
+func installedPath(pkg types.Package) string {
+	if pkg.Local == nil {
+		return ""
+	}
+	return pkg.Local.Path
 }
 
 func (planner *candidateGraphPlanner) resolvedClosure() ResolvedClosure {
