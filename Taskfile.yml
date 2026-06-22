@@ -50,11 +50,12 @@ tasks:
       - rm -rf release
 
   run:
+    dir: "{{.USER_WORKING_DIR}}"
     desc: Run the local development binary for testing and debugging. Use `task run -- --help` to pass arguments to the binary.
     deps:
       - build:dev-core
     cmds:
-      - "$PWD/{{.DEV_BINARY}} {{.CLI_ARGS}}"
+      - "{{.TASKFILE_DIR}}/{{.DEV_BINARY}} {{.CLI_ARGS}}"
 
   cipher-generate:
     desc: Generate new cipher key and ciphertext from CF_API_KEY
