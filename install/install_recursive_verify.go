@@ -8,20 +8,39 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// VerifyDownloadedArtifacts analyzes locally-downloaded artifacts and replaces
-// advisory dependency facts with authoritative detector output.
-func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
-	if tx == nil {
-		return fmt.Errorf("install: nil recursive transaction")
+func verifyArtifacts(
+	downloaded DownloadedClosure,
+	journal Journal,
+) (VerifiedClosure, error) {
+	verifiedGraph, err := verifyDownloadedArtifacts(downloaded)
+	if err != nil {
+		return VerifiedClosure{}, err
 	}
 
-	allPackages := make([]types.Package, 0, len(tx.DownloadedArtifacts))
-	expectedPlatforms := downloadedArtifactPlatforms(tx)
-	for _, path := range tx.DownloadedArtifacts {
+	diff, err := reconcileClosure(downloaded.Resolved, verifiedGraph, journal)
+	if err != nil {
+		return VerifiedClosure{}, err
+	}
+
+	return VerifiedClosure{
+		Downloaded:    downloaded,
+		VerifiedGraph: verifiedGraph,
+		ReconcileDiff: diff,
+	}, nil
+}
+
+func verifyDownloadedArtifacts(
+	downloaded DownloadedClosure,
+) (map[string]CandidateNode, error) {
+	allPackages := make([]types.Package, 0, len(downloaded.DownloadedArtifacts))
+	expectedPlatforms := downloadedArtifactPlatforms(
+		downloaded.Resolved.CandidateGraph,
+	)
+	for _, path := range downloaded.DownloadedArtifacts {
 		infos, err := artifact.Analyze(path)
 		infos = selectArtifactInfosForPlatform(infos, expectedPlatforms[path])
 		if err != nil || len(infos) == 0 {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"install: artifact verification failed for %s: unreadable or corrupt",
 				path,
 			)
@@ -43,14 +62,14 @@ func VerifyDownloadedArtifacts(tx *RecursiveTransaction) error {
 		}
 	}
 
-	tx.VerifiedGraph = verified
-	tx.AdvanceTo(PhaseVerified)
-	return nil
+	return verified, nil
 }
 
-func downloadedArtifactPlatforms(tx *RecursiveTransaction) map[string]types.PlatformId {
-	platforms := make(map[string]types.PlatformId, len(tx.DownloadedArtifacts))
-	for _, node := range tx.CandidateGraph {
+func downloadedArtifactPlatforms(
+	candidateGraph map[string]CandidateNode,
+) map[string]types.PlatformId {
+	platforms := make(map[string]types.PlatformId, len(candidateGraph))
+	for _, node := range candidateGraph {
 		if node.Package.Local == nil || node.Package.Local.Path == "" {
 			continue
 		}

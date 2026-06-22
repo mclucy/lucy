@@ -108,18 +108,18 @@ func InstallMany(requests []types.PackageRequest, options InstallOptions) (
 	if err != nil {
 		return nil, err
 	}
-	seedTx := NewRecursiveTransaction(roots, providers)
-	SnapshotInstalledConstraints(seedTx)
+	installedConstraints := SnapshotInstalledConstraints()
 	resolvePlan := newRecursiveResolutionPlan(
 		roots,
-		seedTx.InstalledConstraints,
+		installedConstraints,
 	)
-	var tx *RecursiveTransaction
-	var diff ReconcileDiff
+	var resolved ResolvedClosure
+	var downloaded DownloadedClosure
+	var verified VerifiedClosure
 
 	for iteration := range maxReconcileIterations {
 		recordEvent(journal, Event{Kind: EventResolveStart, Roots: resolvePlan.Roots})
-		tx, err = BuildCandidateGraphWithResolver(
+		resolved, err = resolveClosure(
 			resolvePlan.Roots,
 			providers,
 			resolvePlan.InstalledConstraints,
@@ -134,33 +134,20 @@ func InstallMany(requests []types.PackageRequest, options InstallOptions) (
 			recordEvent(journal, Event{Kind: EventConflict, Err: err})
 			return nil, err
 		}
-		tx.Journal = journal
-		pruneRecursiveCandidates(tx, resolvePlan.ExcludedCandidates)
+		pruneRecursiveCandidates(&resolved, resolvePlan.ExcludedCandidates)
 
-		packages := recursiveCandidatePackages(tx)
-		recordEvent(journal, Event{Kind: EventDownloadStart, Count: len(packages)})
-		tx.StagingDir, packages, err = downloadBatchPackages(
-			serverInfo.Root,
-			packages,
-			journal,
-		)
+		downloaded, err = downloadArtifacts(resolved, serverInfo.Root, journal)
 		if err != nil {
 			return nil, err
 		}
-		backfillRecursiveDownloads(tx, packages)
-		tx.AdvanceTo(PhaseDownloaded)
 
-		recordEvent(journal, Event{Kind: EventVerifyStart, Count: len(tx.DownloadedArtifacts)})
-		if err := VerifyDownloadedArtifacts(tx); err != nil {
-			return nil, err
-		}
-
-		diff, err = ReconcileTransaction(tx)
+		recordEvent(journal, Event{Kind: EventVerifyStart, Count: len(downloaded.DownloadedArtifacts)})
+		verified, err = verifyArtifacts(downloaded, journal)
 		if err != nil {
 			recordEvent(journal, Event{Kind: EventConflict, Err: err})
 			return nil, err
 		}
-		if diff.IsStable() {
+		if verified.ReconcileDiff.IsStable() {
 			break
 		}
 
@@ -168,35 +155,32 @@ func InstallMany(requests []types.PackageRequest, options InstallOptions) (
 			return nil, fmt.Errorf(
 				"install: recursive closure did not stabilize after %d iterations: %s",
 				maxReconcileIterations,
-				summarizeReconcileDiff(diff),
+				summarizeReconcileDiff(verified.ReconcileDiff),
 			)
 		}
 
-		resolvePlan = refineRecursiveResolutionPlan(resolvePlan, diff)
+		resolvePlan = refineRecursiveResolutionPlan(resolvePlan, verified.ReconcileDiff)
 	}
 
-	plan, err := BuildRecursiveApplyPlan(tx)
+	plan, err := planApply(verified, installedConstraints)
 	if err != nil {
 		return nil, err
 	}
-	tx.SetApplyPlan(plan)
-	tx.AdvanceTo(PhaseCommitted)
 
-	if err := ApplyValidatedClosure(tx, serverInfo); err != nil {
+	if err := applyPlan(plan, serverInfo, journal); err != nil {
 		return nil, err
 	}
 
-	return buildInstallResult(tx), nil
+	return buildInstallResultFromPlan(plan, resolved.CandidateGraph), nil
 }
 
-func buildInstallResult(tx *RecursiveTransaction) *Result {
-	if tx == nil || tx.Apply == nil {
-		return &Result{}
-	}
-
-	installed := append([]types.Package(nil), tx.Apply.Install...)
-	provenance := make(map[string][]string, len(tx.CandidateGraph))
-	for key, node := range tx.CandidateGraph {
+func buildInstallResultFromPlan(
+	plan ApplyPlan,
+	candidateGraph map[string]CandidateNode,
+) *Result {
+	installed := append([]types.Package(nil), plan.Install...)
+	provenance := make(map[string][]string, len(candidateGraph))
+	for key, node := range candidateGraph {
 		provenance[key] = append([]string(nil), node.ProvenancePath...)
 	}
 

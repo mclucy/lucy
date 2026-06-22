@@ -14,13 +14,39 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func recursiveCandidatePackages(tx *RecursiveTransaction) []types.Package {
-	if tx == nil {
-		return nil
+func downloadArtifacts(
+	resolved ResolvedClosure,
+	serverRoot string,
+	journal Journal,
+) (DownloadedClosure, error) {
+	packages := recursiveCandidatePackages(resolved.CandidateGraph)
+	recordEvent(journal, Event{Kind: EventDownloadStart, Count: len(packages)})
+
+	stagingDir, packages, err := downloadBatchPackages(
+		serverRoot,
+		packages,
+		journal,
+	)
+	if err != nil {
+		return DownloadedClosure{}, err
 	}
 
-	keys := make([]string, 0, len(tx.CandidateGraph))
-	for key, node := range tx.CandidateGraph {
+	resolved.CandidateGraph = cloneCandidateGraph(resolved.CandidateGraph)
+	resolved.StagingDir = stagingDir
+	downloadedArtifacts := backfillRecursiveDownloads(
+		resolved.CandidateGraph,
+		packages,
+	)
+
+	return DownloadedClosure{
+		Resolved:            resolved,
+		DownloadedArtifacts: downloadedArtifacts,
+	}, nil
+}
+
+func recursiveCandidatePackages(candidateGraph map[string]CandidateNode) []types.Package {
+	keys := make([]string, 0, len(candidateGraph))
+	for key, node := range candidateGraph {
 		if node.Package.Remote == nil {
 			continue
 		}
@@ -30,48 +56,56 @@ func recursiveCandidatePackages(tx *RecursiveTransaction) []types.Package {
 
 	packages := make([]types.Package, 0, len(keys))
 	for _, key := range keys {
-		packages = append(packages, tx.CandidateGraph[key].Package)
+		packages = append(packages, candidateGraph[key].Package)
 	}
 
 	return packages
 }
 
 func pruneRecursiveCandidates(
-	tx *RecursiveTransaction,
+	resolved *ResolvedClosure,
 	excluded map[string]struct{},
 ) {
-	if tx == nil || len(excluded) == 0 {
+	if resolved == nil || len(excluded) == 0 {
 		return
 	}
 
 	for key := range excluded {
-		delete(tx.CandidateGraph, key)
+		delete(resolved.CandidateGraph, key)
 	}
 }
 
 func backfillRecursiveDownloads(
-	tx *RecursiveTransaction,
+	candidateGraph map[string]CandidateNode,
 	packages []types.Package,
-) {
-	if tx == nil {
-		return
-	}
-
+) map[string]string {
+	downloadedArtifacts := make(map[string]string, len(packages))
 	for _, pkg := range packages {
 		if pkg.Local == nil {
 			continue
 		}
 
-		tx.DownloadedArtifacts[pkg.Id.StringFull()] = pkg.Local.Path
+		downloadedArtifacts[pkg.Id.StringFull()] = pkg.Local.Path
 
 		key := pkg.Id.StringBase()
-		node, ok := tx.CandidateGraph[key]
+		node, ok := candidateGraph[key]
 		if !ok {
 			continue
 		}
 		node.Package.Local = pkg.Local
-		tx.CandidateGraph[key] = node
+		candidateGraph[key] = node
 	}
+
+	return downloadedArtifacts
+}
+
+func cloneCandidateGraph(source map[string]CandidateNode) map[string]CandidateNode {
+	clone := make(map[string]CandidateNode, len(source))
+	for key, node := range source {
+		node.ProvenancePath = append([]string(nil), node.ProvenancePath...)
+		clone[key] = node
+	}
+	return clone
 }
 
 func downloadBatchPackages(

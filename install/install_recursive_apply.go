@@ -32,51 +32,52 @@ func recursiveInstallDestination(
 	return serverInfo.Root
 }
 
-func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
-	if tx == nil {
-		return ApplyPlan{}, fmt.Errorf("install: nil recursive transaction")
-	}
+func planApply(
+	verified VerifiedClosure,
+	_ []InstalledConstraint,
+) (ApplyPlan, error) {
+	candidateGraph := verified.Downloaded.Resolved.CandidateGraph
 
 	candidateByName := make(
 		map[types.BarePackageName]CandidateNode,
-		len(tx.CandidateGraph),
+		len(candidateGraph),
 	)
-	for _, node := range tx.CandidateGraph {
+	for _, node := range candidateGraph {
 		if node.Package.Remote != nil {
 			candidateByName[node.Package.Id.Name] = node
 		}
 	}
 
-	keys := make([]string, 0, len(tx.VerifiedGraph))
-	for key := range tx.VerifiedGraph {
+	keys := make([]string, 0, len(verified.VerifiedGraph))
+	for key := range verified.VerifiedGraph {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
 
 	install := make([]types.Package, 0, len(keys))
 	for _, key := range keys {
-		verified := tx.VerifiedGraph[key].Package
+		verifiedPkg := verified.VerifiedGraph[key].Package
 
-		candidate, ok := tx.CandidateGraph[key]
+		candidate, ok := candidateGraph[key]
 		if !ok || candidate.Package.Remote == nil {
-			candidate, ok = candidateByName[verified.Id.Name]
+			candidate, ok = candidateByName[verifiedPkg.Id.Name]
 		}
 		if !ok || candidate.Package.Remote == nil {
 			return ApplyPlan{}, fmt.Errorf(
 				"install: verified package %s is missing candidate remote metadata",
-				verified.Id.StringFull(),
+				verifiedPkg.Id.StringFull(),
 			)
 		}
 
-		pkg := verified
+		pkg := verifiedPkg
 		pkg.Remote = candidate.Package.Remote
 		install = append(install, pkg)
 	}
 
 	remove := make([]types.Package, 0)
-	for _, extraId := range tx.ReconcileDiff.Extra {
+	for _, extraId := range verified.ReconcileDiff.Extra {
 		key := extraId.StringBase()
-		node, ok := tx.CandidateGraph[key]
+		node, ok := candidateGraph[key]
 		if !ok {
 			continue
 		}
@@ -89,25 +90,11 @@ func BuildRecursiveApplyPlan(tx *RecursiveTransaction) (ApplyPlan, error) {
 	return ApplyPlan{Install: install, Remove: remove}, nil
 }
 
-// ApplyValidatedClosure executes the finalized install/remove plan after the
-// recursive transaction has been committed.
-func ApplyValidatedClosure(
-	tx *RecursiveTransaction,
+func applyPlan(
+	plan ApplyPlan,
 	serverInfo workspace.Workspace,
+	journal Journal,
 ) error {
-	if tx == nil {
-		return errors.New("install: recursive transaction is nil")
-	}
-	if tx.Phase != PhaseCommitted {
-		return fmt.Errorf(
-			"install: apply requires committed phase, got %d",
-			tx.Phase,
-		)
-	}
-	if tx.Apply == nil {
-		return errors.New("install: apply requires a validated apply plan")
-	}
-
 	if serverInfo.Root != "" && serverInfo.Root != "." {
 		if err := os.MkdirAll(serverInfo.Root, 0o755); err != nil {
 			return fmt.Errorf("create server work path failed: %w", err)
@@ -116,11 +103,11 @@ func ApplyValidatedClosure(
 
 	applied := 0
 
-	recordEvent(tx.Journal, Event{Kind: EventApplyStart, Count: len(tx.Apply.Install)})
+	recordEvent(journal, Event{Kind: EventApplyStart, Count: len(plan.Install)})
 
-	if tx.StagingDir != "" && len(tx.Apply.Install) > 0 {
+	if len(plan.Install) > 0 {
 		var moveErrors []error
-		for _, pkg := range tx.Apply.Install {
+		for _, pkg := range plan.Install {
 			if pkg.Local == nil || pkg.Local.Path == "" {
 				continue
 			}
@@ -157,7 +144,7 @@ func ApplyValidatedClosure(
 
 	var applyErrors []error
 
-	for _, pkg := range tx.Apply.Remove {
+	for _, pkg := range plan.Remove {
 		if pkg.Local == nil || pkg.Local.Path == "" {
 			continue
 		}
@@ -173,7 +160,7 @@ func ApplyValidatedClosure(
 		applied++
 	}
 
-	recordEvent(tx.Journal, Event{Kind: EventBatchSummary, Count: applied, Failed: len(applyErrors)})
+	recordEvent(journal, Event{Kind: EventBatchSummary, Count: applied, Failed: len(applyErrors)})
 	if len(applyErrors) > 0 {
 		return errors.Join(applyErrors...)
 	}

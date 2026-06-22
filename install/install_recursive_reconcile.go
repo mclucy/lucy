@@ -9,31 +9,24 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// ReconcileTransaction compares advisory candidate facts with authoritative
-// verified facts, computes a stable diff, and validates tightened local
-// constraints through the merge engine.
-func ReconcileTransaction(tx *RecursiveTransaction) (ReconcileDiff, error) {
-	if tx == nil {
-		return ReconcileDiff{}, fmt.Errorf("install: nil recursive transaction")
-	}
-	if tx.Phase != PhaseVerified {
-		return ReconcileDiff{}, fmt.Errorf("install: reconcile requires PhaseVerified transaction")
-	}
-
-	recordEvent(tx.Journal, Event{Kind: EventReconcileStart})
+func reconcileClosure(
+	resolved ResolvedClosure,
+	verifiedGraph map[string]CandidateNode,
+	journal Journal,
+) (ReconcileDiff, error) {
+	recordEvent(journal, Event{Kind: EventReconcileStart})
 
 	diff, err := reconcileDiffKernel(
-		tx.Roots,
-		tx.InstalledConstraints,
-		tx.CandidateGraph,
-		tx.VerifiedGraph,
+		resolved.Roots,
+		resolved.InstalledConstraints,
+		resolved.CandidateGraph,
+		verifiedGraph,
 	)
 	if err != nil {
 		return ReconcileDiff{}, err
 	}
 
-	tx.ReconcileDiff = diff
-	recordEvent(tx.Journal, Event{Kind: EventReconcileDiff, Diff: diff})
+	recordEvent(journal, Event{Kind: EventReconcileDiff, Diff: diff})
 
 	return diff, nil
 }
