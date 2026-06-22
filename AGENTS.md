@@ -94,14 +94,6 @@ To run the built binary against a test server directory:
 
 cobra v1.10.2, bubbletea v2, huh v2, lipgloss v2, semver v3, go-toml, glamour, fuzzy, ini.v1, yaml.v3
 
-## Code Style
-
-- **Error handling:** Wrap with `%w`, check with `errors.Is`/`errors.As`. Define sentinel errors where appropriate.
-- **Naming:** CamelCase for exports, snake_case for TOML/JSON struct tags.
-- **Formatting:** `gofumpt` is used periodically but not required on every commit. You can run it if you want.
-- **New types/enums/structs:** Must justify the design when adding them. Explain why the shape is what it is.
-- **New packages:** Ask before adding external dependencies. Search web or go.dev if you suspect a helpful package exists. Use latest versions unless stability is a concern.
-
 ## Researching and Designing
 
 1. If your task is not general, i.e., the ones applicable and universal to almost any program, you should consider doing some research to know about the specific context.
@@ -110,6 +102,7 @@ cobra v1.10.2, bubbletea v2, huh v2, lipgloss v2, semver v3, go-toml, glamour, f
 4. If the task is highly Minecraft-related, it is very likely that you don't have the most-updated or correct knowledge about it. Either do some research or ask me if you are not sure about something.
 5. Whenever you are adding new types/enums/structs, you must elaborate and justify your design.
 6. I am open to adding new packages if you think they will greatly simplify the code. Ask me before doing that.
+7. You must always justify your design. Elaborate your architecture's shape and why is it.
 
 ## Testing
 
@@ -127,7 +120,7 @@ Test files exist across `cmd/`, `state/`, `workspace/`, `install/`, `upstream/`.
 - **Minecraft knowledge is unreliable.** Don't assume you know how mod loaders, plugin systems, or server internals work. Research or ask.
 - **Upstream providers are routed by Source enum.** `hangar` and `spiget` are defined but not wired into the resolver. Don't assume they work.
 - **The cipher system embeds API keys at build time.** `task cipher-generate` requires `CF_API_KEY` in the environment. Without it, CurseForge integration won't work.
-- **Package identifiers are `[platform/]name[@version]`.** Platform and version are optional. Lucy infers platform from the server environment.
+- **Package identifiers are `[source]:[platform/]name[@version]`.** Platform and version are optional. Lucy infers platform from the server environment.
 
 ## Other Rules
 
