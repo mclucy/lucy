@@ -357,7 +357,7 @@ func manifestPlatformVersion(
 
 func lockedPackageFromInstalled(
 	workDir string,
-	pkg types.Package,
+	pkg types.InstalledPackage,
 	provenance []string,
 ) state.LockedPackage {
 	requester := "root"
@@ -365,42 +365,32 @@ func lockedPackageFromInstalled(
 		requester = provenance[len(provenance)-1]
 	}
 
-	installPath := ""
-	filename := ""
-	if pkg.Local != nil {
-		filename = filepath.Base(pkg.Local.Path)
-		installPath = relativeInstallPath(workDir, pkg.Local.Path)
-	}
-
 	source := "direct"
-	url := ""
 	hash := "unknown"
 	hashAlgorithm := "sha1"
-	if pkg.Remote != nil {
-		if src := pkg.Remote.Source.String(); src != "unknown" {
-			source = src
-		}
-		url = pkg.Remote.FileUrl
-		if pkg.Remote.Filename != "" {
-			filename = pkg.Remote.Filename
-		}
-		if pkg.Remote.Hash != "" {
-			hash = pkg.Remote.Hash
-		}
-		if pkg.Remote.HashAlgorithm != "" {
-			hashAlgorithm = pkg.Remote.HashAlgorithm
-		}
+	if src := pkg.Id.Scope.String(); src != "unknown" {
+		source = src
+	}
+	filename := filepath.Base(pkg.Path)
+	if pkg.Filename != "" {
+		filename = pkg.Filename
+	}
+	if pkg.Hash != "" {
+		hash = pkg.Hash
+	}
+	if pkg.HashAlgorithm != "" {
+		hashAlgorithm = pkg.HashAlgorithm
 	}
 
 	return state.LockedPackage{
 		ID:            pkg.Id.StringBase(),
 		Version:       pkg.Id.Version.String(),
 		Source:        source,
-		URL:           url,
+		URL:           pkg.FileUrl,
 		Filename:      filename,
 		Hash:          hash,
 		HashAlgorithm: hashAlgorithm,
-		InstallPath:   installPath,
+		InstallPath:   relativeInstallPath(workDir, pkg.Path),
 		Side:          string(state.SideBoth),
 		Provenance:    normalizedProvenance(provenance),
 		Requester:     requester,

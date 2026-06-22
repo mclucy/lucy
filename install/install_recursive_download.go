@@ -28,7 +28,7 @@ func downloadArtifacts(
 	packages := recursiveCandidatePackages(resolved.CandidateGraph)
 	recordEvent(journal, Event{Kind: EventDownloadStart, Count: len(packages)})
 
-	stagingDir, packages, err := downloadBatchPackages(
+	stagingDir, downloadedPackages, err := downloadBatchPackages(
 		ctx,
 		serverRoot,
 		packages,
@@ -43,7 +43,7 @@ func downloadArtifacts(
 	resolved.StagingDir = stagingDir
 	downloadedArtifacts := backfillRecursiveDownloads(
 		resolved.CandidateGraph,
-		packages,
+		downloadedPackages,
 	)
 
 	return DownloadedClosure{
@@ -52,17 +52,17 @@ func downloadArtifacts(
 	}, nil
 }
 
-func recursiveCandidatePackages(candidateGraph map[string]CandidateNode) []types.Package {
+func recursiveCandidatePackages(candidateGraph map[string]CandidateNode) []types.ResolvedPackage {
 	keys := make([]string, 0, len(candidateGraph))
 	for key, node := range candidateGraph {
-		if node.Package.Remote == nil {
+		if node.Package.FileUrl == "" {
 			continue
 		}
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
 
-	packages := make([]types.Package, 0, len(keys))
+	packages := make([]types.ResolvedPackage, 0, len(keys))
 	for _, key := range keys {
 		packages = append(packages, candidateGraph[key].Package)
 	}
@@ -85,22 +85,22 @@ func pruneRecursiveCandidates(
 
 func backfillRecursiveDownloads(
 	candidateGraph map[string]CandidateNode,
-	packages []types.Package,
+	packages []downloadedPackage,
 ) map[string]string {
 	downloadedArtifacts := make(map[string]string, len(packages))
 	for _, pkg := range packages {
-		if pkg.Local == nil {
+		if pkg.Path == "" {
 			continue
 		}
 
-		downloadedArtifacts[pkg.Id.StringFull()] = pkg.Local.Path
+		downloadedArtifacts[resolvedPackageLabel(pkg.Package)] = pkg.Path
 
-		key := pkg.Id.StringBase()
+		key := pkg.Package.Id.StringBase()
 		node, ok := candidateGraph[key]
 		if !ok {
 			continue
 		}
-		node.Package.Local = pkg.Local
+		node.Path = pkg.Path
 		candidateGraph[key] = node
 	}
 
@@ -119,10 +119,10 @@ func cloneCandidateGraph(source map[string]CandidateNode) map[string]CandidateNo
 func downloadBatchPackages(
 	ctx context.Context,
 	workPath string,
-	packages []types.Package,
+	packages []types.ResolvedPackage,
 	options InstallOptions,
 	journal Journal,
-) (stagingDir string, downloaded []types.Package, err error) {
+) (stagingDir string, downloaded []downloadedPackage, err error) {
 	options = options.withDefaults()
 	if err := ctx.Err(); err != nil {
 		return "", nil, err
@@ -144,12 +144,12 @@ func downloadBatchPackages(
 
 	resolvedIds := make([]types.VersionedPackageRef, len(packages))
 	for i, p := range packages {
-		resolvedIds[i] = p.Id
+		resolvedIds[i] = versionedResolvedID(p)
 	}
 	recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Downloading", IDs: resolvedIds})
 
 	type slot struct {
-		pkg    types.Package
+		pkg    downloadedPackage
 		err    error
 		ok     bool
 		failed bool
@@ -165,7 +165,7 @@ func downloadBatchPackages(
 		tracker := tuiprogress.NewTracker(p.Id.StringFull())
 
 		wg.Add(1)
-		go func(index int, pkg types.Package, tracker *tuiprogress.Tracker) {
+		go func(index int, pkg types.ResolvedPackage, tracker *tuiprogress.Tracker) {
 			defer wg.Done()
 			defer tracker.Close()
 
@@ -175,13 +175,13 @@ func downloadBatchPackages(
 			}
 
 			result, err := options.Cache(
-				pkg.Remote.FileUrl,
+				pkg.FileUrl,
 				stagingDir,
 				cache.DownloadOptions{
 					Kind:          cache.KindArtifact,
-					Filename:      pkg.Remote.Filename,
-					ExpectedHash:  pkg.Remote.Hash,
-					HashAlgorithm: cache.ParseHashAlgorithm(pkg.Remote.HashAlgorithm),
+					Filename:      pkg.Filename,
+					ExpectedHash:  pkg.Hash,
+					HashAlgorithm: cache.ParseHashAlgorithm(pkg.HashAlgorithm),
 					WrapReader:    tracker.ProxyReader,
 					OnResolvedFilename: func(name string) {
 						tracker.SetTitle(name)
@@ -195,8 +195,9 @@ func downloadBatchPackages(
 				return
 			}
 
+			downloadedPkg := downloadedPackage{Package: pkg}
 			if result.File != nil {
-				pkg.Local = &types.PackageInstallation{Path: result.File.Name()}
+				downloadedPkg.Path = result.File.Name()
 				if err := result.File.Close(); err != nil {
 					cancel()
 					slots[index] = slot{failed: true, err: err}
@@ -204,7 +205,7 @@ func downloadBatchPackages(
 				}
 			}
 
-			slots[index] = slot{ok: true, pkg: pkg}
+			slots[index] = slot{ok: true, pkg: downloadedPkg}
 		}(i, p, tracker)
 	}
 
@@ -214,7 +215,7 @@ func downloadBatchPackages(
 	defer shutdownCancel()
 	_ = tuiprogress.WaitForShutdown(shutdownCtx)
 
-	downloaded = make([]types.Package, 0, len(packages))
+	downloaded = make([]downloadedPackage, 0, len(packages))
 	failures := make([]string, 0)
 	for i, item := range slots {
 		if item.ok {
@@ -223,7 +224,7 @@ func downloadBatchPackages(
 		if item.failed {
 			failures = append(
 				failures,
-				fmt.Sprintf("%s: %v", packages[i].Id.StringFull(), item.err),
+				fmt.Sprintf("%s: %v", resolvedPackageLabel(packages[i]), item.err),
 			)
 		}
 	}

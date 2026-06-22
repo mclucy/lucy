@@ -220,9 +220,9 @@ type versionResponse struct {
 	Dependencies    []dependenciesResponse `json:"dependencies"`
 }
 
-func (v versionResponse) ToPackageRemote() types.PackageRemote {
-	remote := types.PackageRemote{
-		Source:   types.SourceModrinth,
+func (v versionResponse) ToPackageRemote() types.ResolvedPackage {
+	remote := types.ResolvedPackage{
+		Id:       types.FullPackageRef{Scope: types.SourceModrinth},
 		FileUrl:  v.Files[0].Url,
 		Filename: v.Files[0].Filename,
 	}

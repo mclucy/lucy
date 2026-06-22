@@ -485,11 +485,11 @@ func takeoverManifestVersion(version types.BareVersion) string {
 	return state.NormalizeManifestVersionIntent(version)
 }
 
-func takeoverManifestSource(remote *types.PackageRemote) string {
+func takeoverManifestSource(remote *types.ResolvedPackage) string {
 	if remote == nil {
 		return "auto"
 	}
-	source := strings.TrimSpace(remote.Source.String())
+	source := strings.TrimSpace(remote.Id.Scope.String())
 	if source == "" || source == "unknown" {
 		return "auto"
 	}

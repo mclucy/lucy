@@ -562,7 +562,7 @@ func testObservedPackage(
 		Version:    version,
 	}}
 	if source != types.SourceUnknown {
-		pkg.Remote = &types.PackageRemote{Source: source}
+		pkg.Remote = &types.ResolvedPackage{Id: types.FullPackageRef{Scope: source}}
 	}
 	if deps != nil {
 		pkg.Dependencies = &types.PackageDependencies{

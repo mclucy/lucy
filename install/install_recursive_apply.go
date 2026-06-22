@@ -14,7 +14,7 @@ import (
 
 func recursiveInstallDestination(
 	serverInfo workspace.Workspace,
-	pkg types.Package,
+	pkg types.InstalledPackage,
 ) string {
 	if pkg.Id.Platform.IsModding() && len(serverInfo.ModPath) > 0 {
 		return serverInfo.ModPath[0]
@@ -53,7 +53,7 @@ func planApply(
 		len(candidateGraph),
 	)
 	for _, node := range candidateGraph {
-		if node.Package.Remote != nil {
+		if node.Package.FileUrl != "" {
 			candidateByName[node.Package.Id.Name] = node
 		}
 	}
@@ -64,37 +64,53 @@ func planApply(
 	}
 	slices.Sort(keys)
 
-	install := make([]types.Package, 0, len(keys))
+	install := make([]types.InstalledPackage, 0, len(keys))
 	for _, key := range keys {
-		verifiedPkg := verified.VerifiedGraph[key].Package
+		verifiedNode := verified.VerifiedGraph[key]
+		verifiedPkg := verifiedNode.Package
 
 		candidate, ok := candidateGraph[key]
-		if !ok || candidate.Package.Remote == nil {
+		if !ok || candidate.Package.FileUrl == "" {
 			candidate, ok = candidateByName[verifiedPkg.Id.Name]
 		}
-		if !ok || candidate.Package.Remote == nil {
+		if !ok || candidate.Package.FileUrl == "" {
 			return ApplyPlan{}, fmt.Errorf(
 				"install: verified package %s is missing candidate remote metadata",
-				verifiedPkg.Id.StringFull(),
+				resolvedPackageLabel(verifiedPkg),
 			)
 		}
 
-		pkg := verifiedPkg
-		pkg.Remote = candidate.Package.Remote
+		resolved := candidate.Package
+		resolved.Id = types.FullPackageRef{
+			PackageRef: verifiedPkg.Id.PackageRef,
+			Version:    verifiedPkg.Id.Version,
+			Scope:      candidate.Package.Id.Scope,
+		}
+
+		pkg := types.InstalledPackage{
+			ResolvedPackage: resolved,
+			Path:            verifiedNode.Path,
+		}
+		if verifiedNode.Dependencies != nil {
+			pkg.Dependencies = *verifiedNode.Dependencies
+		}
 		install = append(install, pkg)
 	}
 
-	remove := make([]types.Package, 0)
+	remove := make([]types.InstalledPackage, 0)
 	for _, extraId := range verified.ReconcileDiff.Extra {
 		key := extraId.StringBase()
 		node, ok := candidateGraph[key]
 		if !ok {
 			continue
 		}
-		if node.Package.Local == nil || node.Package.Local.Path == "" {
+		if node.Path == "" {
 			continue
 		}
-		remove = append(remove, node.Package)
+		remove = append(remove, types.InstalledPackage{
+			ResolvedPackage: node.Package,
+			Path:            node.Path,
+		})
 	}
 
 	return ApplyPlan{Install: install, Remove: remove, Provenance: provenance}, nil
@@ -105,14 +121,14 @@ func applyPlan(
 	plan ApplyPlan,
 	serverInfo workspace.Workspace,
 	journal Journal,
-) error {
+) (ApplyPlan, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return plan, err
 	}
 
 	if serverInfo.Root != "" && serverInfo.Root != "." {
 		if err := os.MkdirAll(serverInfo.Root, 0o755); err != nil {
-			return fmt.Errorf("create server work path failed: %w", err)
+			return plan, fmt.Errorf("create server work path failed: %w", err)
 		}
 	}
 
@@ -122,15 +138,15 @@ func applyPlan(
 
 	if len(plan.Install) > 0 {
 		var moveErrors []error
-		for _, pkg := range plan.Install {
+		for i, pkg := range plan.Install {
 			if err := ctx.Err(); err != nil {
 				moveErrors = append(moveErrors, err)
 				break
 			}
-			if pkg.Local == nil || pkg.Local.Path == "" {
+			if pkg.Path == "" {
 				continue
 			}
-			src := pkg.Local.Path
+			src := pkg.Path
 			dstDir := recursiveInstallDestination(serverInfo, pkg)
 			if dstDir != "" && dstDir != "." {
 				if err := os.MkdirAll(dstDir, 0o755); err != nil {
@@ -138,7 +154,7 @@ func applyPlan(
 						moveErrors,
 						fmt.Errorf(
 							"create install directory for %s: %w",
-							pkg.Id.StringFull(),
+							resolvedPackageLabel(pkg.ResolvedPackage),
 							err,
 						),
 					)
@@ -149,15 +165,15 @@ func applyPlan(
 			if err := os.Rename(src, dst); err != nil {
 				moveErrors = append(
 					moveErrors,
-					fmt.Errorf("move %s: %w", pkg.Id.StringFull(), err),
+					fmt.Errorf("move %s: %w", resolvedPackageLabel(pkg.ResolvedPackage), err),
 				)
 				continue
 			}
-			pkg.Local.Path = dst
+			plan.Install[i].Path = dst
 			applied++
 		}
 		if len(moveErrors) > 0 {
-			return errors.Join(moveErrors...)
+			return plan, errors.Join(moveErrors...)
 		}
 	}
 
@@ -168,14 +184,14 @@ func applyPlan(
 			applyErrors = append(applyErrors, err)
 			break
 		}
-		if pkg.Local == nil || pkg.Local.Path == "" {
+		if pkg.Path == "" {
 			continue
 		}
 
-		if err := os.Remove(pkg.Local.Path); err != nil {
+		if err := os.Remove(pkg.Path); err != nil {
 			applyErrors = append(
 				applyErrors,
-				fmt.Errorf("remove %s: %w", pkg.Id.StringFull(), err),
+				fmt.Errorf("remove %s: %w", resolvedPackageLabel(pkg.ResolvedPackage), err),
 			)
 			continue
 		}
@@ -185,9 +201,9 @@ func applyPlan(
 
 	recordEvent(journal, Event{Kind: EventBatchSummary, Count: applied, Failed: len(applyErrors)})
 	if len(applyErrors) > 0 {
-		return errors.Join(applyErrors...)
+		return plan, errors.Join(applyErrors...)
 	}
 
 	workspace.InvalidateServerInfo()
-	return nil
+	return plan, nil
 }

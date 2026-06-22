@@ -94,8 +94,8 @@ func reconcileDiff(
 
 	for key, verifiedNode := range verifiedGraph {
 		verifiedDeps, err := reconcileDependencyMap(
-			verifiedNode.Package.Id.StringFull(),
-			verifiedNode.Package.Dependencies,
+			resolvedPackageLabel(verifiedNode.Package),
+			verifiedNode.Dependencies,
 		)
 		if err != nil {
 			return ReconcileDiff{}, err
@@ -104,8 +104,8 @@ func reconcileDiff(
 		advisoryDeps := map[string]types.Dependency{}
 		if advisoryNode, ok := candidateGraph[key]; ok {
 			advisoryDeps, err = reconcileDependencyMap(
-				advisoryNode.Package.Id.StringFull(),
-				advisoryNode.Package.Dependencies,
+				resolvedPackageLabel(advisoryNode.Package),
+				advisoryNode.Dependencies,
 			)
 			if err != nil {
 				return ReconcileDiff{}, err
@@ -132,10 +132,10 @@ func reconcileDiff(
 			}
 
 			tightened[reconcileTightenedKey(
-				verifiedNode.Package.Id.StringFull(),
+				resolvedPackageLabel(verifiedNode.Package),
 				depKey,
 			)] = resolve.ConstraintInput{
-				Requester:  verifiedNode.Package.Id.StringFull(),
+				Requester:  resolvedPackageLabel(verifiedNode.Package),
 				Dependency: verifiedDep,
 			}
 		}
@@ -177,7 +177,7 @@ func reconcileDiff(
 				continue
 			}
 		}
-		extra[key] = candidateNode.Package.Id
+		extra[key] = versionedResolvedID(candidateNode.Package)
 	}
 
 	return ReconcileDiff{
@@ -252,8 +252,8 @@ func reconcileConstraintInputs(
 		}
 
 		deps, err := reconcileDependencyMap(
-			node.Package.Id.StringFull(),
-			node.Package.Dependencies,
+			resolvedPackageLabel(node.Package),
+			node.Dependencies,
 		)
 		if err != nil {
 			return nil, err
@@ -268,7 +268,7 @@ func reconcileConstraintInputs(
 		for _, depKey := range depKeys {
 			inputs = append(
 				inputs, resolve.ConstraintInput{
-					Requester:  node.Package.Id.StringFull(),
+					Requester:  resolvedPackageLabel(node.Package),
 					Dependency: deps[depKey],
 				},
 			)
@@ -347,8 +347,8 @@ func reconcileReachableCandidateClosure(
 		}
 
 		deps, err := reconcileDependencyMap(
-			node.Package.Id.StringFull(),
-			node.Package.Dependencies,
+			resolvedPackageLabel(node.Package),
+			node.Dependencies,
 		)
 		if err != nil {
 			return nil, err

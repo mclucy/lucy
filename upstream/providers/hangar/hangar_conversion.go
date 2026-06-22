@@ -118,12 +118,12 @@ func (v *hangarVersion) ToProjectSupport() types.PlatformSupport {
 	return platformSupportFromMap(v.PlatformDependencies)
 }
 
-func (v *hangarVersion) ToPackageRemote() types.PackageRemote {
+func (v *hangarVersion) ToPackageRemote() types.ResolvedPackage {
 	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.PlatformNone))
 	if remote.FileUrl == "" {
 		platforms := sortedMapKeys(v.Downloads)
 		if len(platforms) == 0 {
-			return types.PackageRemote{Source: types.SourceHangar}
+			return types.ResolvedPackage{Id: types.FullPackageRef{Scope: types.SourceHangar}}
 		}
 
 		remote, _ = v.ToPackageRemoteForPlatform(types.PlatformId(strings.ToLower(platforms[0])))
@@ -132,16 +132,16 @@ func (v *hangarVersion) ToPackageRemote() types.PackageRemote {
 }
 
 func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.PlatformId) (
-	types.PackageRemote,
+	types.ResolvedPackage,
 	bool,
 ) {
 	download, ok := v.downloadForPlatform(platform)
 	if !ok {
-		return types.PackageRemote{Source: types.SourceHangar}, false
+		return types.ResolvedPackage{Id: types.FullPackageRef{Scope: types.SourceHangar}}, false
 	}
 
-	remote := types.PackageRemote{
-		Source:   types.SourceHangar,
+	remote := types.ResolvedPackage{
+		Id:       types.FullPackageRef{Scope: types.SourceHangar},
 		FileUrl:  download.URL(),
 		Filename: download.FileInfo.Name,
 	}

@@ -194,8 +194,8 @@ func TestHangarVersionToPackageRemoteAndSupport(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected PAPER download to resolve")
 	}
-	if remote.Source != types.SourceHangar {
-		t.Fatalf("expected Hangar source, got %v", remote.Source)
+	if remote.Id.Scope != types.SourceHangar {
+		t.Fatalf("expected Hangar source, got %v", remote.Id.Scope)
 	}
 	if remote.FileUrl != version.Downloads["PAPER"].DownloadURL {
 		t.Fatalf(

@@ -47,9 +47,9 @@ type release struct {
 	Meta        pluginMeta `json:"meta"`
 }
 
-func (r release) ToPackageRemote() types.PackageRemote {
-	remote := types.PackageRemote{
-		Source:   types.SourceMCDR,
+func (r release) ToPackageRemote() types.ResolvedPackage {
+	remote := types.ResolvedPackage{
+		Id:       types.FullPackageRef{Scope: types.SourceMCDR},
 		FileUrl:  r.Asset.BrowserDownloadUrl,
 		Filename: r.Asset.Name,
 	}

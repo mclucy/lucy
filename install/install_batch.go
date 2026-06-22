@@ -23,7 +23,7 @@ func InstallMany(ctx context.Context, requests []types.PackageRequest, options I
 	options = options.withDefaults()
 	journal := options.Journal
 	if err := ctx.Err(); err != nil {
-		return nil, installError(CategoryApply, err, nil)
+		return nil, installError(CategoryResolution, err, nil)
 	}
 
 	if len(requests) == 0 {
@@ -80,7 +80,7 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 	options = options.withDefaults()
 	journal := options.Journal
 	if err := ctx.Err(); err != nil {
-		return nil, installError(CategoryApply, err, nil)
+		return nil, installError(CategoryResolution, err, nil)
 	}
 
 	if len(requests) == 0 {
@@ -206,6 +206,7 @@ func Apply(ctx context.Context, plan ApplyPlan, options InstallOptions) (*Result
 
 	serverInfo := options.ServerInfo()
 	concretePlan := plan
+	var err error
 	if len(plan.Resolved.CandidateGraph) > 0 {
 		downloaded, err := downloadArtifacts(ctx, plan.Resolved, serverInfo.Root, options, options.Journal)
 		if err != nil {
@@ -224,7 +225,8 @@ func Apply(ctx context.Context, plan ApplyPlan, options InstallOptions) (*Result
 		}
 	}
 
-	if err := applyPlan(ctx, concretePlan, serverInfo, options.Journal); err != nil {
+	concretePlan, err = applyPlan(ctx, concretePlan, serverInfo, options.Journal)
+	if err != nil {
 		return nil, installError(CategoryApply, err, nil)
 	}
 
@@ -232,7 +234,7 @@ func Apply(ctx context.Context, plan ApplyPlan, options InstallOptions) (*Result
 }
 
 func buildInstallResultFromPlan(plan ApplyPlan) *Result {
-	installed := append([]types.Package(nil), plan.Install...)
+	installed := append([]types.InstalledPackage(nil), plan.Install...)
 	provenance := make(map[string][]string, len(plan.Provenance))
 	for key, path := range plan.Provenance {
 		provenance[key] = append([]string(nil), path...)
@@ -249,7 +251,6 @@ func resolutionError(err error) error {
 	return installError(CategoryResolution, err, nil)
 }
 
-// TODO(package-ref-migration) — boundary conversion; pipeline internals still use PackageId
 func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef {
 	ids := make([]types.VersionedPackageRef, len(requests))
 	for i, req := range requests {

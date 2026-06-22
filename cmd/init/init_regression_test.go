@@ -365,9 +365,7 @@ func TestMCDRPluginDetectedAsPackage_ClassifiedCorrectly(t *testing.T) {
 					Name:     types.BarePackageName("primebackup"),
 				},
 			},
-			Remote: &types.PackageRemote{
-				Source: types.SourceMCDR,
-			},
+			Remote: &types.ResolvedPackage{Id: types.FullPackageRef{Scope: types.SourceMCDR}},
 		},
 	}
 

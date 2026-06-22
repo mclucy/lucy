@@ -187,9 +187,9 @@ type fileResponse struct {
 	ServerPackFileId *int32           `json:"serverPackFileId"`
 }
 
-func (f *fileResponse) ToPackageRemote() types.PackageRemote {
-	remote := types.PackageRemote{
-		Source:   types.SourceCurseForge,
+func (f *fileResponse) ToPackageRemote() types.ResolvedPackage {
+	remote := types.ResolvedPackage{
+		Id:       types.FullPackageRef{Scope: types.SourceCurseForge},
 		Filename: f.FileName,
 	}
 
