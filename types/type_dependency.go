@@ -102,15 +102,43 @@ const (
 //
 // Dependency.Constraint is a 2D array. The outer array is OR and the inner
 // array is AND. nil/empty means no constraint (all versions acceptable).
-//
-// Embedded is true when the dependency is physically bundled inside the
-// parent JAR (e.g. NeoForge JarInJar / META-INF/jarjar/). Embedded
-// dependencies are satisfied without a separate file in the mods directory.
+type DependencyType string
+
+const (
+	Regular  DependencyType = "regular"
+	Ambient  DependencyType = "ambient"
+	Embedded DependencyType = "embedded"
+)
+
+// DependencyType returns Regular for legacy zero-value dependency records.
+func (d Dependency) DependencyType() DependencyType {
+	return NormalizeDependencyType(d.Type)
+}
+
+func NormalizeDependencyType(t DependencyType) DependencyType {
+	if t == "" {
+		return Regular
+	}
+	return t
+}
+
+func (d Dependency) IsAmbient() bool {
+	return d.DependencyType() == Ambient
+}
+
+func (d Dependency) IsEmbedded() bool {
+	return d.DependencyType() == Embedded
+}
+
+// Type records how the dependency is satisfied. Regular dependencies resolve
+// through upstream sources, ambient dependencies are supplied by the server
+// environment, and embedded dependencies are physically bundled inside the
+// parent artifact (e.g. Fabric jars[] or NeoForge JarInJar).
 type Dependency struct {
 	Id         VersionedPackageRef
 	Constraint VersionExpr
 	Mandatory  bool
-	Embedded   bool
+	Type       DependencyType
 }
 
 type VersionExpr [][]VersionSubExpr

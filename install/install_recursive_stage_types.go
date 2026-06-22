@@ -84,6 +84,7 @@ type ResolvedClosure struct {
 	InstalledConstraints []InstalledConstraint
 	Providers            []upstream.PackageSource
 	StagingDir           string
+	Ambient              AmbientDependencies
 }
 
 // DownloadedClosure is the output of the download stage.

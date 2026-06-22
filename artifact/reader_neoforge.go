@@ -110,7 +110,7 @@ func (r *neoforgeReader) Read(
 					},
 					Constraint: parseNeoforgeMavenVersionRange(dep.VersionRange),
 					Mandatory:  dep.Type == "required" || dep.Mandatory,
-					Embedded:   embeddedModIds[dep.ModID],
+					Type:       dependencyTypeForEmbedded(embeddedModIds[dep.ModID]),
 				},
 			)
 		}
@@ -293,7 +293,7 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependenc
 				},
 				Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),
 				Mandatory:  true,
-				Embedded:   true,
+				Type:       types.Embedded,
 			},
 		)
 	}

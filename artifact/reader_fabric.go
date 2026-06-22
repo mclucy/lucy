@@ -2,6 +2,7 @@ package artifact
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"io"
 	"strings"
@@ -49,17 +50,26 @@ func (r *fabricReader) Read(
 			return nil, err
 		}
 
-		return []Info{translateFabricArtifact(modInfo, filePath)}, nil
+		info, err := translateFabricArtifact(zipRdr, modInfo, filePath)
+		if err != nil {
+			return nil, err
+		}
+
+		return []Info{info}, nil
 	}
 
 	return nil, nil
 }
 
 func translateFabricArtifact(
+	zipRdr *zip.Reader,
 	modInfo *fileschema.FileFabricModIdentifier,
 	filePath string,
-) Info {
-	embeddedNames := fabricArtifactEmbeddedModNames(modInfo)
+) (Info, error) {
+	embeddedNames, err := fabricArtifactEmbeddedModNames(zipRdr, modInfo)
+	if err != nil {
+		return Info{}, err
+	}
 	dependencies := make(
 		[]Dependency, 0,
 		len(modInfo.Depends)+len(modInfo.Recommends)+len(modInfo.Suggests)+
@@ -126,7 +136,7 @@ func translateFabricArtifact(
 			Authors:     fabricArtifactAuthors(modInfo.Authors),
 			Urls:        fabricArtifactURLs(modInfo.Contact),
 		},
-	}
+	}, nil
 }
 
 func translateFabricArtifactDependencyMap(
@@ -146,7 +156,7 @@ func translateFabricArtifactDependencyMap(
 			},
 			Constraint: parseFabricArtifactVersionRanges(ranges),
 			Mandatory:  mandatory,
-			Embedded:   embedded,
+			Type:       dependencyTypeForEmbedded(embedded),
 		}
 		if inverse {
 			dep.Constraint.Inverse()
@@ -167,8 +177,9 @@ func parseFabricArtifactVersionRanges(
 }
 
 func fabricArtifactEmbeddedModNames(
+	zipRdr *zip.Reader,
 	modInfo *fileschema.FileFabricModIdentifier,
-) map[string]struct{} {
+) (map[string]struct{}, error) {
 	depNames := make([]string, 0, len(modInfo.Depends))
 	for id := range modInfo.Depends {
 		depNames = append(depNames, id)
@@ -176,6 +187,18 @@ func fabricArtifactEmbeddedModNames(
 
 	names := make(map[string]struct{}, len(modInfo.Jars))
 	for _, jar := range modInfo.Jars {
+		nestedInfo, err := fabricNestedModInfo(zipRdr, jar.File)
+		if err != nil {
+			return nil, err
+		}
+		if nestedInfo != nil {
+			fabricRecordEmbeddedName(names, nestedInfo.Id)
+			for _, provided := range nestedInfo.Provides {
+				fabricRecordEmbeddedName(names, provided)
+			}
+			continue
+		}
+
 		base := jar.File
 		if idx := strings.LastIndex(base, "/"); idx >= 0 {
 			base = base[idx+1:]
@@ -188,7 +211,54 @@ func fabricArtifactEmbeddedModNames(
 			}
 		}
 	}
-	return names
+	return names, nil
+}
+
+func fabricNestedModInfo(
+	zipRdr *zip.Reader,
+	filePath string,
+) (*fileschema.FileFabricModIdentifier, error) {
+	raw, err := readZipEntry(zipRdr, filePath)
+	if err != nil || raw == nil {
+		return nil, err
+	}
+
+	nestedZip, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range nestedZip.File {
+		if f.Name != "fabric.mod.json" {
+			continue
+		}
+		reader, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		data, err := io.ReadAll(reader)
+		if closeErr := reader.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		modInfo := &fileschema.FileFabricModIdentifier{}
+		if err := json.Unmarshal(data, modInfo); err != nil {
+			return nil, err
+		}
+		return modInfo, nil
+	}
+
+	return nil, nil
+}
+
+func fabricRecordEmbeddedName(names map[string]struct{}, id string) {
+	if id == "" {
+		return
+	}
+	names[string(input.ToProjectName(id))] = struct{}{}
 }
 
 func fabricArtifactAuthors(authors []fileschema.FabricAuthor) []types.Person {

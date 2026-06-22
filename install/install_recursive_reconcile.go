@@ -12,6 +12,7 @@ import (
 func reconcileClosure(
 	resolved ResolvedClosure,
 	verifiedGraph map[string]CandidateNode,
+	ambient AmbientDependencies,
 	journal Journal,
 ) (ReconcileDiff, error) {
 	recordEvent(journal, Event{Kind: EventReconcileStart})
@@ -21,6 +22,7 @@ func reconcileClosure(
 		resolved.InstalledConstraints,
 		resolved.CandidateGraph,
 		verifiedGraph,
+		ambient,
 	)
 	if err != nil {
 		return ReconcileDiff{}, err
@@ -43,6 +45,7 @@ func computeReconcileDiff(
 		installed,
 		resolved.CandidateGraph,
 		resolved.CandidateGraph,
+		resolved.Ambient,
 	)
 	if err != nil {
 		return ReconcileDiff{}, err
@@ -58,18 +61,20 @@ func reconcileDiffKernel(
 	installed []InstalledConstraint,
 	candidateGraph map[string]CandidateNode,
 	verifiedGraph map[string]CandidateNode,
+	ambient AmbientDependencies,
 ) (ReconcileDiff, error) {
 	baseInputs, err := reconcileConstraintInputs(
 		roots,
 		installed,
 		candidateGraph,
 		verifiedGraph,
+		ambient,
 	)
 	if err != nil {
 		return ReconcileDiff{}, err
 	}
 
-	diff, err := reconcileDiff(candidateGraph, verifiedGraph)
+	diff, err := reconcileDiff(candidateGraph, verifiedGraph, ambient)
 	if err != nil {
 		return ReconcileDiff{}, err
 	}
@@ -88,6 +93,7 @@ func reconcileDiffKernel(
 func reconcileDiff(
 	candidateGraph map[string]CandidateNode,
 	verifiedGraph map[string]CandidateNode,
+	ambient AmbientDependencies,
 ) (ReconcileDiff, error) {
 	missing := make(map[string]types.VersionedPackageRef)
 	tightened := make(map[string]resolve.ConstraintInput)
@@ -113,10 +119,8 @@ func reconcileDiff(
 		}
 
 		for depKey, verifiedDep := range verifiedDeps {
-			// Embedded deps are physically bundled inside the parent JAR
-			// (e.g. NeoForge JarInJar). They are already present on disk and
-			// do not need to be resolved from upstream package registries.
-			if verifiedDep.Mandatory && !verifiedDep.Embedded {
+			verifiedDep = ambient.Mark(verifiedDep)
+			if verifiedDep.Mandatory && verifiedDep.DependencyType() == types.Regular {
 				if _, exists := candidateGraph[depKey]; !exists {
 					missing[depKey] = verifiedDep.Id
 				}
@@ -209,6 +213,7 @@ func reconcileConstraintInputs(
 	installed []InstalledConstraint,
 	candidateGraph map[string]CandidateNode,
 	verifiedGraph map[string]CandidateNode,
+	ambient AmbientDependencies,
 ) ([]resolve.ConstraintInput, error) {
 	inputs := make([]resolve.ConstraintInput, 0)
 
@@ -266,10 +271,11 @@ func reconcileConstraintInputs(
 		slices.Sort(depKeys)
 
 		for _, depKey := range depKeys {
+			dep := ambient.Mark(deps[depKey])
 			inputs = append(
 				inputs, resolve.ConstraintInput{
 					Requester:  resolvedPackageLabel(node.Package),
-					Dependency: deps[depKey],
+					Dependency: dep,
 				},
 			)
 		}
@@ -287,12 +293,12 @@ func reconcileDependencyMap(
 	}
 
 	mandatory := make(map[string]bool)
-	embedded := make(map[string]bool)
+	depTypes := make(map[string]types.DependencyType)
 	inputs := make([]resolve.ConstraintInput, 0, len(deps.Value))
 	for _, dep := range deps.Value {
 		key := dep.Id.StringBase()
 		mandatory[key] = mandatory[key] || dep.Mandatory
-		embedded[key] = embedded[key] || dep.Embedded
+		depTypes[key] = mergeDependencyType(depTypes[key], dep.DependencyType())
 		inputs = append(
 			inputs,
 			resolve.ConstraintInput{Requester: requester, Dependency: dep},
@@ -315,11 +321,24 @@ func reconcileDependencyMap(
 			},
 			Constraint: requirement.Constraint,
 			Mandatory:  mandatory[key],
-			Embedded:   embedded[key],
+			Type:       depTypes[key],
 		}
 	}
 
 	return merged, nil
+}
+
+func mergeDependencyType(left, right types.DependencyType) types.DependencyType {
+	if left == "" || left == types.Regular {
+		return right
+	}
+	if right == "" || right == types.Regular {
+		return left
+	}
+	if left == types.Ambient || right == types.Ambient {
+		return types.Ambient
+	}
+	return left
 }
 
 func reconcileReachableCandidateClosure(

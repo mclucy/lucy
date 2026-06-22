@@ -25,7 +25,7 @@ type Dependency struct {
 	Ref        types.PackageRef
 	Constraint types.VersionExpr
 	Mandatory  bool
-	Embedded   bool
+	Type       types.DependencyType
 }
 
 // Info represents metadata extracted from a single artifact file
@@ -37,4 +37,11 @@ type Info struct {
 	Dependencies []Dependency
 	Metadata     types.Metadata
 	Supports     *types.PlatformSupport
+}
+
+func dependencyTypeForEmbedded(embedded bool) types.DependencyType {
+	if embedded {
+		return types.Embedded
+	}
+	return types.Regular
 }

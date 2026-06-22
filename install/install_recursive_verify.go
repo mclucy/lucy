@@ -23,7 +23,7 @@ func verifyArtifacts(
 		return VerifiedClosure{}, err
 	}
 
-	diff, err := reconcileClosure(downloaded.Resolved, verifiedGraph, journal)
+	diff, err := reconcileClosure(downloaded.Resolved, verifiedGraph, downloaded.Resolved.Ambient, journal)
 	if err != nil {
 		return VerifiedClosure{}, err
 	}
@@ -142,7 +142,7 @@ func artifactInfoToPackage(infos []artifact.Info) []types.Package {
 						},
 						Constraint: dep.Constraint,
 						Mandatory:  dep.Mandatory,
-						Embedded:   dep.Embedded,
+						Type:       types.NormalizeDependencyType(dep.Type),
 					},
 				)
 			}
