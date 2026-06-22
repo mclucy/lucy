@@ -238,9 +238,16 @@ func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T
 	if !hasConnector {
 		t.Error("expected connector node in topology")
 	}
+	connector, _ := exec.Topology.FindNode(types.RuntimeNodeConnector)
+	if !connector.HasCapability(types.CapabilityFabricMods) {
+		t.Error("expected connector to expose fabric mod capability")
+	}
 	_, hasFabric := exec.Topology.FindNode(types.RuntimeNodeFabric)
 	if hasFabric {
-		t.Error("did not expect fabric node in topology without host evidence")
+		t.Error("did not expect virtual fabric environment node")
+	}
+	if len(exec.Topology.EdgesFrom(types.RuntimeNodeConnector)) != 0 {
+		t.Error("did not expect connector to expand virtual environment edges")
 	}
 }
 
@@ -269,7 +276,7 @@ func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
 	}
 	_, hasForge := exec.Topology.FindNode(types.RuntimeNodeForge)
 	if hasForge {
-		t.Error("did not expect forge node in topology without connection registry bridges")
+		t.Error("did not expect forge node in topology without connection registry relationships")
 	}
 }
 

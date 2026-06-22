@@ -118,9 +118,6 @@ func (n RuntimeNode) HasCapability(c RuntimeCapability) bool {
 type RuntimeEdgeVerb string
 
 const (
-	EdgeAdapts     RuntimeEdgeVerb = "adapts"     // marked for removal; the adapted environment will be represented as a runtime capability rather than a separate node in the topology
-	EdgeBridges    RuntimeEdgeVerb = "bridges"    // meaningless; marked for removal
-	EdgeRoutes     RuntimeEdgeVerb = "routes"     // meaningless; marked for removal
 	EdgeHosts      RuntimeEdgeVerb = "hosts"      // when a node hosts another node, e.g. a neoforge server hosting a sinytra layer
 	EdgeImplements RuntimeEdgeVerb = "implements" // a full implementation of another runtime, e.g. purpur implementing paper. this type of relationship is sometimes folded into the node's runtime role and capabilities. one example is that paper -> spigot -> craftbukkit, where paper will be a single node with a role of plugin_core and capabilities of both paper, spigot, and craftbukkit rather than separate nodes for each layer. This should be used iff. the from node is a noticeble fork of the to node, e.g. purpur -> paper.
 	EdgeModifies   RuntimeEdgeVerb = "modifies"   // dedicated for the edge pointing to the vanilla node

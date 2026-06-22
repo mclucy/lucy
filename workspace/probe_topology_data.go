@@ -202,6 +202,8 @@ var defaultRegistryEntries = []RegistryEntry{
 		NodeID:    types.RuntimeNodeConnector,
 		Role:      types.RuntimeRoleBridge,
 		RiskLevel: types.RiskHigh,
+		// RuntimeNode is still homogeneous, so adapted environments are folded into
+		// the adapter's capabilities instead of being expanded as virtual nodes.
 		Capabilities: []types.RuntimeCapability{
 			types.CapabilityFabricMods,
 		},
