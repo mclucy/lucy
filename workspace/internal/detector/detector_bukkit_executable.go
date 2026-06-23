@@ -627,10 +627,30 @@ func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
 			Role: types.RuntimeRoleVanilla,
 		}
 	}
+
+	// Anchor capabilities to the runtime's own declared rung and let Populate()
+	// expand the Bukkit-family ancestry. This mirrors the policy-side ladder in
+	// probe_topology_data.go so detector-produced seeds and registry-produced
+	// facts share the same tier model.
+	//
+	// bukkitNodePaperFork is intentionally conservative at the Paper tier rather
+	// than Purpur: detected Paper-fork servers may implement the Purpur API
+	// surface, but detection alone is not enough to claim the Purpur rung —
+	// Purpur-specific packages can be opted into separately by routing.
+	var capabilities []types.RuntimeCapability
+	switch id {
+	case bukkitNodeSpigot:
+		capabilities = types.CapabilitySpigotPlugins.Populate()
+	case bukkitNodePaper, bukkitNodePaperFork:
+		capabilities = types.CapabilityPaperPlugins.Populate()
+	case bukkitNodeBukkit:
+		capabilities = []types.RuntimeCapability{types.CapabilityBukkitPlugins}
+	}
+
 	return types.RuntimeNode{
 		ID:           id,
 		Role:         types.RuntimeRolePluginCore,
-		Capabilities: []types.RuntimeCapability{types.CapabilityBukkitPlugins},
+		Capabilities: capabilities,
 	}
 }
 
