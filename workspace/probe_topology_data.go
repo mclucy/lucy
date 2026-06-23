@@ -166,6 +166,14 @@ var defaultRegistryEntries = []RegistryEntry{
 			types.CapabilityNeoforgeMods,
 			types.CapabilityBukkitPlugins,
 		},
+		// Youer is Purpur/Paper compatible, making it the highest rank in the
+		// Bukkit family
+		PolicyEdges: []RegistryEdge{
+			{
+				TargetNodeID: types.RuntimeNodePaper,
+				Kind:         types.EdgeImplements,
+			},
+		},
 	},
 	{
 		NodeID: types.RuntimeNodeVelocity,
