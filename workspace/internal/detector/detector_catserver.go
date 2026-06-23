@@ -66,10 +66,10 @@ func (d *catServerDetector) Detect(
 				{
 					ID:   types.RuntimeNodeCatServer,
 					Role: types.RuntimeRoleHybrid,
-					Capabilities: []types.RuntimeCapability{
-						types.CapabilityForgeMods,
-						types.CapabilityBukkitPlugins,
-					},
+					Capabilities: append(
+						[]types.RuntimeCapability{types.CapabilityForgeMods},
+						types.CapabilitySpigotPlugins.Populate()...,
+					),
 				},
 				{
 					ID:   types.RuntimeNodeMinecraft,

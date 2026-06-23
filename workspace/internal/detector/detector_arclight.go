@@ -179,7 +179,11 @@ func parseArclightGameVersionFromPath(filePath string) types.BareVersion {
 }
 
 func arclightCapabilities(filePath string, launchProps []byte) []types.RuntimeCapability {
-	capabilities := []types.RuntimeCapability{types.CapabilityBukkitPlugins}
+	// Arclight implements the Bukkit/Spigot tier (not Paper) per its FAQ.
+	// Populate() expands the Spigot rung into its Bukkit ancestry so the
+	// detector-produced seed matches the registry-side ladder in
+	// probe_topology_data.go::RuntimeNodeArclight.
+	capabilities := types.CapabilitySpigotPlugins.Populate()
 	if loaderCapability, ok := arclightLoaderCapabilityFromLaunchProps(launchProps); ok {
 		return append([]types.RuntimeCapability{loaderCapability}, capabilities...)
 	}
