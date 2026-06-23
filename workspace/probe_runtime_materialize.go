@@ -129,7 +129,7 @@ func RuntimeIdentityNode(identity types.VersionedPackageRef) (
 		return types.RuntimeNodeMinecraft, true
 	case "paper":
 		return types.RuntimeNodePaper, true
-	case "paper-fork":
+	case "paper-fork", "divine", "leaf":
 		return types.RuntimeNodePaperFork, true
 	case "bukkit":
 		return types.RuntimeNodeBukkit, true
@@ -145,6 +145,10 @@ func RuntimeIdentityNode(identity types.VersionedPackageRef) (
 		return types.RuntimeNodeYouer, true
 	case "purpur", "reaper":
 		return types.RuntimeNodePaperFork, true
+	case "arclight":
+		return types.RuntimeNodeArclight, true
+	case "geyser":
+		return types.RuntimeNodeGeyserStandalone, true
 	default:
 		return "", false
 	}
