@@ -214,7 +214,7 @@ func TestEnrichTopologyFromPackages_NilExec(t *testing.T) {
 func TestEnrichTopologyFromPackages_NoTopologyNoEvidence(t *testing.T) {
 	exec := &ServerRuntime{}
 	EnrichTopologyFromPackages(exec, nil)
-	if exec.Topology == nil {
+	if exec.topology == nil {
 		t.Error("expected empty topology to be set, got nil")
 	}
 }
@@ -225,28 +225,28 @@ func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T
 		makePackage(t, types.PlatformFabric, "sinytra-connector", "1.0.0", ""),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
-	if exec.Topology == nil {
+	if exec.topology == nil {
 		t.Fatal("expected topology to be built from evidence")
 	}
-	if exec.Topology.PrimaryNode != types.RuntimeNodeConnector {
+	if exec.topology.PrimaryNode != types.RuntimeNodeConnector {
 		t.Fatalf(
 			"expected connector to be primary node, got %q",
-			exec.Topology.PrimaryNode,
+			exec.topology.PrimaryNode,
 		)
 	}
-	_, hasConnector := exec.Topology.FindNode(types.RuntimeNodeConnector)
+	_, hasConnector := exec.topology.FindNode(types.RuntimeNodeConnector)
 	if !hasConnector {
 		t.Error("expected connector node in topology")
 	}
-	connector, _ := exec.Topology.FindNode(types.RuntimeNodeConnector)
+	connector, _ := exec.topology.FindNode(types.RuntimeNodeConnector)
 	if !connector.HasCapability(types.CapabilityFabricMods) {
 		t.Error("expected connector to expose fabric mod capability")
 	}
-	_, hasFabric := exec.Topology.FindNode(types.RuntimeNodeFabric)
+	_, hasFabric := exec.topology.FindNode(types.RuntimeNodeFabric)
 	if hasFabric {
 		t.Error("did not expect virtual fabric environment node")
 	}
-	if len(exec.Topology.EdgesFrom(types.RuntimeNodeConnector)) != 0 {
+	if len(exec.topology.EdgesFrom(types.RuntimeNodeConnector)) != 0 {
 		t.Error("did not expect connector to expand virtual environment edges")
 	}
 }
@@ -257,24 +257,24 @@ func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
 		makePackage(t, types.PlatformFabric, "kilt", "1.0.0", ""),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
-	if exec.Topology == nil {
+	if exec.topology == nil {
 		t.Fatal("expected topology to be built")
 	}
-	_, hasKilt := exec.Topology.FindNode(types.RuntimeNodeKilt)
+	_, hasKilt := exec.topology.FindNode(types.RuntimeNodeKilt)
 	if !hasKilt {
 		t.Error("expected kilt node in topology")
 	}
-	if exec.Topology.PrimaryNode != types.RuntimeNodeFabric {
+	if exec.topology.PrimaryNode != types.RuntimeNodeFabric {
 		t.Fatalf(
 			"expected fabric to remain primary node, got %q",
-			exec.Topology.PrimaryNode,
+			exec.topology.PrimaryNode,
 		)
 	}
-	_, hasFabric := exec.Topology.FindNode(types.RuntimeNodeFabric)
+	_, hasFabric := exec.topology.FindNode(types.RuntimeNodeFabric)
 	if !hasFabric {
 		t.Error("expected fabric node in topology")
 	}
-	_, hasForge := exec.Topology.FindNode(types.RuntimeNodeForge)
+	_, hasForge := exec.topology.FindNode(types.RuntimeNodeForge)
 	if hasForge {
 		t.Error("did not expect forge node in topology without connection registry relationships")
 	}
@@ -284,17 +284,17 @@ func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 	// Start with a fabric topology, enrich with attached geyser evidence
 	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	exec := &ServerRuntime{
-		Topology: BuildTopologyFromEntry(fabricEntry),
+		topology: BuildTopologyFromEntry(fabricEntry),
 	}
 	pkgs := []types.Package{
 		makePackage(t, types.PlatformFabric, "geyser-fabric", "2.0.0", ""),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
-	_, hasGeyser := exec.Topology.FindNode(types.RuntimeNodeGeyser)
+	_, hasGeyser := exec.topology.FindNode(types.RuntimeNodeGeyser)
 	if !hasGeyser {
 		t.Error("expected geyser node to be merged into existing topology")
 	}
-	if _, hasStandalone := exec.Topology.FindNode(types.RuntimeNodeGeyserStandalone); hasStandalone {
+	if _, hasStandalone := exec.topology.FindNode(types.RuntimeNodeGeyserStandalone); hasStandalone {
 		t.Error("did not expect standalone geyser node from attached package evidence")
 	}
 }
@@ -306,19 +306,19 @@ func TestEnrichTopologyFromPackages_NoTopologyWithStandaloneGeyserHint(t *testin
 
 	EnrichTopologyFromPackages(exec, nil)
 
-	if exec.Topology == nil {
+	if exec.topology == nil {
 		t.Fatal("expected topology to be built from standalone geyser hint")
 	}
-	if exec.Topology.PrimaryNode != types.RuntimeNodeGeyserStandalone {
+	if exec.topology.PrimaryNode != types.RuntimeNodeGeyserStandalone {
 		t.Fatalf(
 			"expected standalone geyser to be primary node, got %q",
-			exec.Topology.PrimaryNode,
+			exec.topology.PrimaryNode,
 		)
 	}
-	if _, hasStandalone := exec.Topology.FindNode(types.RuntimeNodeGeyserStandalone); !hasStandalone {
+	if _, hasStandalone := exec.topology.FindNode(types.RuntimeNodeGeyserStandalone); !hasStandalone {
 		t.Error("expected standalone geyser node in topology")
 	}
-	if _, hasAttached := exec.Topology.FindNode(types.RuntimeNodeGeyser); hasAttached {
+	if _, hasAttached := exec.topology.FindNode(types.RuntimeNodeGeyser); hasAttached {
 		t.Error("did not expect attached geyser node from standalone hint")
 	}
 }
@@ -326,11 +326,11 @@ func TestEnrichTopologyFromPackages_NoTopologyWithStandaloneGeyserHint(t *testin
 func TestEnrichTopologyFromPackages_BridgeHintsProcessed(t *testing.T) {
 	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	exec := &ServerRuntime{
-		Topology:    BuildTopologyFromEntry(fabricEntry),
+		topology:    BuildTopologyFromEntry(fabricEntry),
 		BridgeHints: []string{string(types.RuntimeNodeConnector)},
 	}
 	EnrichTopologyFromPackages(exec, nil)
-	_, hasConnector := exec.Topology.FindNode(types.RuntimeNodeConnector)
+	_, hasConnector := exec.topology.FindNode(types.RuntimeNodeConnector)
 	if !hasConnector {
 		t.Error("expected connector node from BridgeHints")
 	}
@@ -342,10 +342,10 @@ func TestEnrichTopologyFromPackages_CaseInsensitiveNameMatching(t *testing.T) {
 		makePackage(t, types.PlatformFabric, "Velocity", "3.0.0", ""),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
-	if exec.Topology == nil {
+	if exec.topology == nil {
 		t.Fatal("expected topology")
 	}
-	_, hasVelocity := exec.Topology.FindNode(types.RuntimeNodeVelocity)
+	_, hasVelocity := exec.topology.FindNode(types.RuntimeNodeVelocity)
 	if !hasVelocity {
 		t.Error("expected velocity node (case-insensitive name match)")
 	}
@@ -361,7 +361,7 @@ func TestEnrichTopologyFromPackages_TopologyNormalizedAfterEnrich(t *testing.T) 
 	EnrichTopologyFromPackages(exec, pkgs)
 	// Verify no duplicate nodes
 	seen := map[types.RuntimeNodeID]int{}
-	for _, n := range exec.Topology.Nodes {
+	for _, n := range exec.topology.Nodes {
 		seen[n.ID]++
 		if seen[n.ID] > 1 {
 			t.Errorf("duplicate node %q after enrich", n.ID)

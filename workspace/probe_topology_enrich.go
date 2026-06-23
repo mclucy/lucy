@@ -65,26 +65,26 @@ func EnrichTopologyFromPackages(
 		detectedRuntimeEvidenceFromHints(exec.BridgeHints)...,
 	)
 
-	if exec.Topology == nil {
+	if exec.topology == nil {
 		// No topology yet — attempt to build one from package evidence.
 		if len(evidence) == 0 {
-			exec.Topology = &types.RuntimeTopology{}
+			exec.topology = &types.RuntimeTopology{}
 			return
 		}
 
 		if inferred := inferHostTopologyFromAttachedBridgePackages(packages); inferred != nil {
-			exec.Topology = inferred
+			exec.topology = inferred
 		} else {
 
 			// Build from the first evidence node, merge the rest.
 			firstEntry, ok := FindEntry(evidence[0])
 			if !ok {
-				exec.Topology = &types.RuntimeTopology{}
+				exec.topology = &types.RuntimeTopology{}
 				return
 			}
-			exec.Topology = BuildTopologyFromEntry(firstEntry)
-			if exec.Topology == nil {
-				exec.Topology = &types.RuntimeTopology{}
+			exec.topology = BuildTopologyFromEntry(firstEntry)
+			if exec.topology == nil {
+				exec.topology = &types.RuntimeTopology{}
 				return
 			}
 		}
@@ -98,16 +98,16 @@ func EnrichTopologyFromPackages(
 			if annotation == nil {
 				continue
 			}
-			mergeTopology(exec.Topology, annotation)
+			mergeTopology(exec.topology, annotation)
 		}
 
 		applyDeclarativeConnections(
-			exec.Topology,
+			exec.topology,
 			internaltopology.DefaultConnectionRegistry,
 		)
-		addConnectorHostEdges(exec.Topology)
-		NormalizeTopology(exec.Topology)
-		FoldTopologyRisk(exec.Topology)
+		addConnectorHostEdges(exec.topology)
+		NormalizeTopology(exec.topology)
+		FoldTopologyRisk(exec.topology)
 		return
 	}
 
@@ -126,16 +126,16 @@ func EnrichTopologyFromPackages(
 			continue
 		}
 
-		mergeTopology(exec.Topology, annotation)
+		mergeTopology(exec.topology, annotation)
 	}
 
 	applyDeclarativeConnections(
-		exec.Topology,
+		exec.topology,
 		internaltopology.DefaultConnectionRegistry,
 	)
-	addConnectorHostEdges(exec.Topology)
-	NormalizeTopology(exec.Topology)
-	FoldTopologyRisk(exec.Topology)
+	addConnectorHostEdges(exec.topology)
+	NormalizeTopology(exec.topology)
+	FoldTopologyRisk(exec.topology)
 }
 
 func addConnectorHostEdges(t *types.RuntimeTopology) {

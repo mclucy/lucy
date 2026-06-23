@@ -270,7 +270,7 @@ func buildServerInfo() Workspace {
 		serverInfo.Packages,
 	)
 	if serverInfo.Runtime != nil {
-		serverInfo.Topology = serverInfo.Runtime.Topology
+		serverInfo.Topology = serverInfo.Runtime.topology
 	}
 
 	return serverInfo

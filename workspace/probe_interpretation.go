@@ -16,11 +16,11 @@ func finalizeProbedRuntime(
 }
 
 func ensureRuntimeTopology(runtime *ServerRuntime) {
-	if runtime == nil || runtime.Topology != nil {
+	if runtime == nil || runtime.topology != nil {
 		return
 	}
 
-	runtime.Topology = &types.RuntimeTopology{}
+	runtime.topology = &types.RuntimeTopology{}
 }
 
 func packagesWithRuntimeIdentities(
@@ -33,7 +33,7 @@ func packagesWithRuntimeIdentities(
 
 	idx := NewPackageIndex()
 	idx.Merge(packages)
-	for _, rid := range runtime.Topology.AllIdentities() {
+	for _, rid := range runtime.topology.AllIdentities() {
 		if rid.Platform == types.PlatformAny {
 			continue
 		}
@@ -51,7 +51,7 @@ func packageSearchPaths(
 		return nil
 	}
 
-	return packageSearchPathsForTopology(runtime.Topology, workingDirectory)
+	return packageSearchPathsForTopology(runtime.topology, workingDirectory)
 }
 
 func packageSearchPathsForTopology(
