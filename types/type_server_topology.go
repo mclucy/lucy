@@ -100,12 +100,15 @@ type CompatPolicy struct {
 }
 
 // RuntimeNode describes a materialized runtime layer. RiskLevel is node-scoped and
-// may be folded across connected topology components during enrichment.
+// may be folded across connected topology components during enrichment. Identities
+// holds the versioned package refs the node itself provides, so layers that bundle
+// multiple runtime packages (e.g. connector with fabricloader) keep that association.
 type RuntimeNode struct {
-	ID           RuntimeNodeID       `json:"id"`
-	Role         RuntimeRole         `json:"role"`
-	Capabilities []RuntimeCapability `json:"capabilities"`
-	RiskLevel    RuntimeRiskLevel    `json:"risk_level"`
+	ID           RuntimeNodeID         `json:"id"`
+	Role         RuntimeRole           `json:"role"`
+	Capabilities []RuntimeCapability   `json:"capabilities"`
+	Identities   []VersionedPackageRef `json:"identities,omitempty"`
+	RiskLevel    RuntimeRiskLevel      `json:"risk_level"`
 }
 
 type TopologyNode = RuntimeNode
@@ -252,4 +255,34 @@ func (t *RuntimeTopology) PrimaryCapabilities() []RuntimeCapability {
 	}
 
 	return append([]RuntimeCapability(nil), primaryNode.Capabilities...)
+}
+
+// NodeIdentities returns the versioned package refs attached to the node with the
+// given id. Returns an empty slice if the topology is nil or the node is absent.
+func (t *RuntimeTopology) NodeIdentities(id RuntimeNodeID) []VersionedPackageRef {
+	if t == nil {
+		return []VersionedPackageRef{}
+	}
+
+	node, ok := t.FindNode(id)
+	if !ok {
+		return []VersionedPackageRef{}
+	}
+
+	return append([]VersionedPackageRef(nil), node.Identities...)
+}
+
+// AllIdentities collects versioned package refs from every node in the topology
+// in node order. Returns an empty slice if the topology is nil.
+func (t *RuntimeTopology) AllIdentities() []VersionedPackageRef {
+	if t == nil {
+		return []VersionedPackageRef{}
+	}
+
+	identities := make([]VersionedPackageRef, 0)
+	for _, node := range t.Nodes {
+		identities = append(identities, node.Identities...)
+	}
+
+	return identities
 }
