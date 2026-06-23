@@ -1,8 +1,10 @@
 package workspace
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
@@ -17,11 +19,7 @@ func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerRuntim
 		GameVersion:     evidence.GameVersion,
 		BootCommand:     nil,
 		Topology:        materializeRuntimeTopology(evidence),
-		RuntimeIdentities: append(
-			[]types.VersionedPackageRef(nil),
-			evidence.RuntimeIdentities...,
-		),
-		BridgeHints: append([]string(nil), evidence.BridgeHints...),
+		BridgeHints:     append([]string(nil), evidence.BridgeHints...),
 	}
 }
 
@@ -32,12 +30,13 @@ func materializeRuntimeTopology(
 		return nil
 	}
 
-	if evidence.Topology != nil {
-		return cloneRuntimeTopology(evidence.Topology)
-	}
+	var topology *types.RuntimeTopology
 
-	if evidence.TopologySeed != nil {
-		return &types.RuntimeTopology{
+	switch {
+	case evidence.Topology != nil:
+		topology = cloneRuntimeTopology(evidence.Topology)
+	case evidence.TopologySeed != nil:
+		topology = &types.RuntimeTopology{
 			PrimaryNode: evidence.TopologySeed.PrimaryNode,
 			Nodes: append(
 				[]types.RuntimeNode(nil),
@@ -48,22 +47,69 @@ func materializeRuntimeTopology(
 				evidence.TopologySeed.Edges...,
 			),
 		}
+	default:
+		for _, identity := range evidence.RuntimeIdentities {
+			nodeID, ok := RuntimeIdentityNode(identity)
+			if !ok {
+				continue
+			}
+
+			entry, ok := FindEntry(nodeID)
+			if !ok {
+				continue
+			}
+			topology = BuildTopologyFromEntry(entry)
+			break
+		}
 	}
 
-	for _, identity := range evidence.RuntimeIdentities {
+	if topology == nil {
+		return nil
+	}
+
+	distributeRuntimeIdentities(topology, evidence.RuntimeIdentities)
+	return topology
+}
+
+func distributeRuntimeIdentities(
+	topology *types.RuntimeTopology,
+	identities []types.VersionedPackageRef,
+) {
+	if topology == nil {
+		return
+	}
+
+	for _, identity := range identities {
 		nodeID, ok := RuntimeIdentityNode(identity)
 		if !ok {
+			logger.Warn(fmt.Errorf(
+				"unmatched runtime identity %q: no node mapping",
+				identity.Name,
+			))
 			continue
 		}
 
-		entry, ok := FindEntry(nodeID)
-		if !ok {
+		index := -1
+		for i := range topology.Nodes {
+			if topology.Nodes[i].ID == nodeID {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			logger.Warn(fmt.Errorf(
+				"unmatched runtime identity %q: topology has no node %q",
+				identity.Name,
+				nodeID,
+			))
 			continue
 		}
-		return BuildTopologyFromEntry(entry)
+
+		topology.Nodes[index].Identities = append(
+			topology.Nodes[index].Identities,
+			identity,
+		)
 	}
-
-	return nil
 }
 
 func RuntimeIdentityNode(identity types.VersionedPackageRef) (
@@ -81,6 +127,24 @@ func RuntimeIdentityNode(identity types.VersionedPackageRef) (
 		return types.RuntimeNodeMCDR, true
 	case "minecraft", "mc":
 		return types.RuntimeNodeMinecraft, true
+	case "paper":
+		return types.RuntimeNodePaper, true
+	case "paper-fork":
+		return types.RuntimeNodePaperFork, true
+	case "bukkit":
+		return types.RuntimeNodeBukkit, true
+	case "craftbukkit":
+		return types.RuntimeNodeCraftBukkit, true
+	case "spigot":
+		return types.RuntimeNodeSpigot, true
+	case "folia":
+		return types.RuntimeNodeFolia, true
+	case "leaves":
+		return types.RuntimeNodeLeaves, true
+	case "youer":
+		return types.RuntimeNodeYouer, true
+	case "purpur", "reaper":
+		return types.RuntimeNodePaperFork, true
 	default:
 		return "", false
 	}

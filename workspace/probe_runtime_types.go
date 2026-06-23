@@ -7,12 +7,11 @@ import (
 )
 
 type ServerRuntime struct {
-	PrimaryEntrance   string                      `json:"primary_entrance"`
-	GameVersion       types.BareVersion           `json:"game_version"`
-	BootCommand       *exec.Cmd                   `json:"-"`
-	Topology          *types.RuntimeTopology      `json:"-"`
-	RuntimeIdentities []types.VersionedPackageRef `json:"runtime_identities,omitempty"`
-	BridgeHints       []string                    `json:"bridge_hints,omitempty"`
+	PrimaryEntrance string                 `json:"primary_entrance"`
+	GameVersion     types.BareVersion      `json:"game_version"`
+	BootCommand     *exec.Cmd              `json:"-"`
+	Topology        *types.RuntimeTopology `json:"-"`
+	BridgeHints     []string               `json:"bridge_hints,omitempty"`
 }
 
 var UnknownExecutable = &ServerRuntime{
@@ -34,7 +33,7 @@ func (e *ServerRuntime) IsValid() bool {
 }
 
 func (e *ServerRuntime) Analyzable() bool {
-	return e != nil && e.Topology != nil && len(e.RuntimeIdentities) > 0 && e != NoExecutable && e != UnknownExecutable
+	return e != nil && e.Topology != nil && len(e.Topology.AllIdentities()) > 0 && e != NoExecutable && e != UnknownExecutable
 }
 
 func (e *ServerRuntime) RuntimeIdentityPackage(node *types.TopologyNode) *types.VersionedPackageRef {
@@ -42,7 +41,7 @@ func (e *ServerRuntime) RuntimeIdentityPackage(node *types.TopologyNode) *types.
 		return nil
 	}
 
-	return runtimeIdentityPackage(e.RuntimeIdentities, node)
+	return runtimeIdentityPackage(e.Topology, node)
 }
 
 func (e *ServerRuntime) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
@@ -50,15 +49,15 @@ func (e *ServerRuntime) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
 		return nil
 	}
 
-	return primaryRuntimeIdentity(e.Topology, e.RuntimeIdentities)
+	return primaryRuntimeIdentity(e.Topology)
 }
 
 func (e *ServerRuntime) DerivedLoaderVersion() string {
 	if e == nil {
-		return derivedLoaderVersion(nil, nil)
+		return derivedLoaderVersion(nil)
 	}
 
-	return derivedLoaderVersion(e.Topology, e.RuntimeIdentities)
+	return derivedLoaderVersion(e.Topology)
 }
 
 func (e *ServerRuntime) DerivedModLoader() types.PlatformId {

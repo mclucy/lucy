@@ -33,7 +33,7 @@ func packagesWithRuntimeIdentities(
 
 	idx := NewPackageIndex()
 	idx.Merge(packages)
-	for _, rid := range runtime.RuntimeIdentities {
+	for _, rid := range runtime.Topology.AllIdentities() {
 		if rid.Platform == types.PlatformAny {
 			continue
 		}

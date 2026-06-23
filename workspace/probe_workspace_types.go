@@ -22,7 +22,7 @@ func (w Workspace) RuntimeIdentityPackage(node *types.TopologyNode) *types.Versi
 		return nil
 	}
 
-	return runtimeIdentityPackage(w.Runtime.RuntimeIdentities, node)
+	return runtimeIdentityPackage(w.Runtime.Topology, node)
 }
 
 func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
@@ -30,15 +30,15 @@ func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
 		return nil
 	}
 
-	return primaryRuntimeIdentity(w.Topology, w.Runtime.RuntimeIdentities)
+	return primaryRuntimeIdentity(w.Topology)
 }
 
 func (w Workspace) DerivedLoaderVersion() string {
 	if w.Runtime == nil {
-		return derivedLoaderVersion(nil, nil)
+		return derivedLoaderVersion(nil)
 	}
 
-	return derivedLoaderVersion(w.Topology, w.Runtime.RuntimeIdentities)
+	return derivedLoaderVersion(w.Topology)
 }
 
 func (w Workspace) DerivedModLoader() types.PlatformId {
@@ -50,13 +50,14 @@ func (w Workspace) DerivedServerCore() string {
 }
 
 func runtimeIdentityPackage(
-	identities []types.VersionedPackageRef,
+	topology *types.RuntimeTopology,
 	node *types.TopologyNode,
 ) *types.VersionedPackageRef {
-	if node == nil {
+	if topology == nil || node == nil {
 		return nil
 	}
 
+	identities := topology.NodeIdentities(node.ID)
 	for i := range identities {
 		pkg := &identities[i]
 		if string(pkg.Name) == string(node.ID) {
@@ -67,27 +68,24 @@ func runtimeIdentityPackage(
 	return nil
 }
 
-func primaryRuntimeIdentity(
-	topology *types.RuntimeTopology,
-	identities []types.VersionedPackageRef,
-) *types.VersionedPackageRef {
+func primaryRuntimeIdentity(topology *types.RuntimeTopology) *types.VersionedPackageRef {
 	if topology == nil {
 		return nil
 	}
 
-	primaryNode, ok := topology.PrimaryNodeData()
-	if !ok {
-		return nil
+	identities := topology.NodeIdentities(topology.PrimaryNode)
+	for i := range identities {
+		pkg := &identities[i]
+		if string(pkg.Name) == string(topology.PrimaryNode) {
+			return pkg
+		}
 	}
 
-	return runtimeIdentityPackage(identities, &primaryNode)
+	return nil
 }
 
-func derivedLoaderVersion(
-	topology *types.RuntimeTopology,
-	identities []types.VersionedPackageRef,
-) string {
-	primaryIdentity := primaryRuntimeIdentity(topology, identities)
+func derivedLoaderVersion(topology *types.RuntimeTopology) string {
+	primaryIdentity := primaryRuntimeIdentity(topology)
 	if primaryIdentity == nil {
 		return "unknown"
 	}
