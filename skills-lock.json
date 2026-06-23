@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "debugging-lucy-cli": {
+      "source": "mclucy/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/debugging-lucy-cli/SKILL.md",
+      "computedHash": "0ba8af246b646916ed77dc7352072268bc8abac5a4c6938620e122ab25d2b6ac"
+    },
     "golang-benchmark": {
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
@@ -180,6 +186,12 @@
       "sourceType": "github",
       "skillPath": "skills/minecraft-bukkit-pro/SKILL.md",
       "computedHash": "afb56869425b6d963792e92b14ade4d4bc2eda07541c351300074a0a1d6d5281"
+    },
+    "minecraft-ecosystem": {
+      "source": "mclucy/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/minecraft-ecosystem/SKILL.md",
+      "computedHash": "dc02f67d7074a6b6c0b226d4f1b9f5c62855bedae10d052ad523ac40c458b265"
     },
     "minecraft-fabric-dev": {
       "source": "mcdxai/meteor-rejects-v2",
