@@ -3,13 +3,12 @@ package spiget
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
-	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 )
@@ -17,11 +16,13 @@ import (
 func requestJSON(requestURL string, out any, notFound error) error {
 	logger.Debug("spiget api: GET " + requestURL)
 
-	resp, err := http.Get(requestURL)
+	resp, err := cache.CachedGetRequest(
+		requestURL,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
 	if err != nil {
 		return fmt.Errorf("spiget: request failed: %w", err)
 	}
-	defer fn.CloseReader(resp.Body, logger.Warn)
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound && notFound != nil {
@@ -30,11 +31,7 @@ func requestJSON(requestURL string, out any, notFound error) error {
 		return unexpectedStatusError(requestURL, resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("spiget: failed to read response: %w", err)
-	}
-	if err := json.Unmarshal(data, out); err != nil {
+	if err := json.Unmarshal(resp.Data, out); err != nil {
 		return fmt.Errorf("spiget: failed to decode response: %w", err)
 	}
 	return nil

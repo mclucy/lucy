@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"strings"
 
@@ -236,22 +234,12 @@ func parseSupportedMinecraftVersions(data []byte) ([]string, error) {
 }
 
 func fetchVersion(gameVersion types.BareVersion) (string, error) {
-	res, err := http.Get(promotionsURL)
+	body, err := cache.CachedGetBytes(
+		promotionsURL,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
 	if err != nil {
 		return "", fmt.Errorf("fetch forge promotions failed: %w", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return "", fmt.Errorf(
-			"fetch forge promotions failed: status %d",
-			res.StatusCode,
-		)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", fmt.Errorf("read forge promotions failed: %w", err)
 	}
 
 	var data promotions

@@ -3,13 +3,12 @@ package curseforge
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/cipher"
-	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
 )
 
@@ -40,29 +39,25 @@ func get(url string, dest any) error {
 
 	logger.Debug("curseforge api: GET " + url)
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("curseforge: failed to create request: %w", err)
-	}
-	req.Header.Set("x-api-key", ApiKey)
-	req.Header.Set("Accept", "application/json")
-
-	res, err := http.DefaultClient.Do(req)
+	headers := http.Header{}
+	headers.Set("x-api-key", ApiKey)
+	headers.Set("Accept", "application/json")
+	res, err := cache.CachedGetRequest(
+		url,
+		cache.BytesRequestOptions{
+			Kind:    cache.KindMetadata,
+			Headers: headers,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("curseforge: request failed: %w", err)
 	}
-	defer fn.CloseReader(res.Body, logger.Warn)
 
 	if res.StatusCode != http.StatusOK {
 		return ErrApiResponse(res.StatusCode)
 	}
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return fmt.Errorf("curseforge: failed to read response: %w", err)
-	}
-
-	if err := json.Unmarshal(body, dest); err != nil {
+	if err := json.Unmarshal(res.Data, dest); err != nil {
 		return fmt.Errorf("curseforge: failed to parse response: %w", err)
 	}
 

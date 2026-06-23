@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
 )
@@ -121,11 +120,13 @@ func listVersions(name types.BarePackageName) ([]hangarVersion, error) {
 
 func getJSON(rawURL string, out any) error {
 	logger.Debug("hangar request: " + rawURL)
-	res, err := http.Get(rawURL)
+	res, err := cache.CachedGetRequest(
+		rawURL,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
 	if err != nil {
 		return fmt.Errorf("hangar: request failed: %w", err)
 	}
-	defer fn.CloseReader(res.Body, logger.Warn)
 
 	if res.StatusCode == http.StatusNotFound {
 		return ErrNoProject
@@ -134,11 +135,7 @@ func getJSON(rawURL string, out any) error {
 		return fmt.Errorf("hangar: unexpected status %d", res.StatusCode)
 	}
 
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return fmt.Errorf("hangar: failed to read response: %w", err)
-	}
-	if err := json.Unmarshal(data, out); err != nil {
+	if err := json.Unmarshal(res.Data, out); err != nil {
 		return fmt.Errorf("hangar: failed to decode response: %w", err)
 	}
 	return nil

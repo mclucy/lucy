@@ -1,11 +1,7 @@
 package modrinth
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
 
 	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/logger"
@@ -31,23 +27,8 @@ func listVersions(slug types.BarePackageName) (
 		[]*versionResponse,
 		error,
 	) {
-		res, err := http.Get(versionsUrl(target))
-		if err != nil {
-			return nil, err
-		}
-		defer res.Body.Close()
-
-		if res.StatusCode != http.StatusOK {
-			return nil, ENoProject
-		}
-
-		data, err := io.ReadAll(res.Body)
-		if err != nil {
-			return nil, err
-		}
-
 		var out []*versionResponse
-		if err := json.Unmarshal(data, &out); err != nil {
+		if err := requestJSON(versionsUrl(target), &out, ENoProject); err != nil {
 			return nil, ENoProject
 		}
 		return out, nil
@@ -92,23 +73,8 @@ func getVersion(id types.VersionedPackageRef) (
 }
 
 func getVersionById(id string) (v *versionResponse, err error) {
-	res, err := http.Get(versionUrl(id))
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: request failed: %w", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return nil, ENoVersion
-	}
-
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
-	}
 	v = &versionResponse{}
-	err = json.Unmarshal(data, v)
-	if err != nil {
+	if err := requestJSON(versionUrl(id), v, ENoVersion); err != nil {
 		return nil, ENoVersion
 	}
 	return
