@@ -118,6 +118,8 @@ func TestCapabilityForPlatform_KnownPlatforms(t *testing.T) {
 		{types.PlatformFabric, types.CapabilityFabricMods},
 		{types.PlatformForge, types.CapabilityForgeMods},
 		{types.PlatformNeoforge, types.CapabilityNeoforgeMods},
+		{types.PlatformBukkit, types.CapabilityBukkitPlugins},
+		{types.PlatformPaper, types.CapabilityPaperPlugins},
 		{types.PlatformMCDR, types.CapabilityMCDRPlugins},
 	}
 	for _, tc := range cases {
@@ -138,6 +140,16 @@ func TestCapabilityForPlatform_UnknownPlatform(t *testing.T) {
 		types.PlatformMinecraft,
 		types.PlatformAny,
 		types.PlatformNone,
+		types.PlatformUnknown,
+		// Topology-only/proxy platforms have no package capability mapping.
+		types.PlatformVelocity,
+		types.PlatformBungeecord,
+		types.PlatformSponge,
+		"bungee",
+		"waterfall",
+		"spigot",
+		"folia",
+		"leaves",
 		"unknown_platform",
 	}
 	for _, p := range cases {

@@ -92,7 +92,9 @@ func EvaluateCompatibility(
 }
 
 // CapabilityForPlatform maps a package's Platform identity to the RuntimeCapability
-// it requires in the host server's topology. Returns empty string if no mapping exists.
+// it requires in the host server's topology. Returns the empty RuntimeCapability when
+// no mapping exists, including for topology-only/proxy platforms (velocity,
+// bungeecord, waterfall, sponge) and unknown platforms.
 func CapabilityForPlatform(p types.PlatformId) types.RuntimeCapability {
 	switch p {
 	case types.PlatformFabric:
@@ -101,16 +103,12 @@ func CapabilityForPlatform(p types.PlatformId) types.RuntimeCapability {
 		return types.CapabilityForgeMods
 	case types.PlatformNeoforge:
 		return types.CapabilityNeoforgeMods
-	case types.PlatformId("bukkit"), types.PlatformId("paper"), types.PlatformId("spigot"), types.PlatformId("folia"), types.PlatformId("leaves"):
+	case types.PlatformBukkit:
 		return types.CapabilityBukkitPlugins
-	case types.PlatformId("velocity"):
-		return types.CapabilityVelocityPlugins
-	case types.PlatformId("bungeecord"), types.PlatformId("bungee"), types.PlatformId("waterfall"):
-		return types.CapabilityBungeecordPlugins
+	case types.PlatformPaper:
+		return types.CapabilityPaperPlugins
 	case types.PlatformMCDR:
 		return types.CapabilityMCDRPlugins
-	case types.PlatformId("sponge"):
-		return types.CapabilitySpongePlugins
 	default:
 		return ""
 	}

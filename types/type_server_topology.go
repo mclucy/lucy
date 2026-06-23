@@ -1,6 +1,12 @@
 package types
 
-import "slices"
+import (
+	"slices"
+	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+)
 
 type RuntimeNodeID string
 
@@ -52,6 +58,10 @@ const (
 	CapabilityForgeMods         RuntimeCapability = "forge_mods"
 	CapabilityNeoforgeMods      RuntimeCapability = "neoforge_mods"
 	CapabilityBukkitPlugins     RuntimeCapability = "bukkit_plugins"
+	CapabilitySpigotPlugins     RuntimeCapability = "spigot_plugins"
+	CapabilityPaperPlugins      RuntimeCapability = "paper_plugins"
+	CapabilityPurpurPlugins     RuntimeCapability = "purpur_plugins"
+	CapabilityFoliaPlugins      RuntimeCapability = "folia_plugins"
 	CapabilityVelocityPlugins   RuntimeCapability = "velocity_plugins"
 	CapabilityBungeecordPlugins RuntimeCapability = "bungeecord_plugins"
 	CapabilityMCDRPlugins       RuntimeCapability = "mcdr_plugins"
@@ -59,6 +69,39 @@ const (
 	CapabilityProxying          RuntimeCapability = "proxying"
 	CapabilityProtocolBridge    RuntimeCapability = "protocol_bridge"
 )
+
+func (c RuntimeCapability) String() string {
+	return cases.Title(language.English).String(
+		strings.ReplaceAll(string(c), "_", " "),
+	)
+}
+
+func (c RuntimeCapability) Populate() []RuntimeCapability {
+	switch c {
+	case CapabilitySpigotPlugins:
+		return []RuntimeCapability{
+			CapabilitySpigotPlugins, CapabilityBukkitPlugins,
+		}
+	case CapabilityPaperPlugins:
+		caps := []RuntimeCapability{CapabilityPaperPlugins}
+		caps = append(caps, CapabilitySpigotPlugins.Populate()...)
+		return caps
+	case CapabilityPurpurPlugins:
+		caps := []RuntimeCapability{CapabilityPurpurPlugins}
+		caps = append(caps, CapabilityPaperPlugins.Populate()...)
+		return caps
+	case CapabilityFoliaPlugins:
+		// folia compatibility is opt-in by a field in the plugin metadata.
+		// however, we will still mark folia having lower rank bukkit
+		// capabilities here. wether to enforce compatibility policy or not
+		// is up to higher level consumers.
+		caps := []RuntimeCapability{CapabilityFoliaPlugins}
+		caps = append(caps, CapabilityPaperPlugins.Populate()...)
+		return caps
+	default:
+		return []RuntimeCapability{c}
+	}
+}
 
 type RuntimeRiskLevel int
 

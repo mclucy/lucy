@@ -5,7 +5,7 @@
 //   - NO filesystem access (os.)
 //   - NO panics (panic())
 //
-// All functions should be deterministic and side-effect free.
+// All functions should be deterministic and side effect free.
 package types
 
 import (
@@ -23,19 +23,47 @@ import (
 type PlatformId string
 
 const (
-	PlatformAny        PlatformId = "" // PlatformAny is ambiguous but has single-valueness. It does NOT refer to multiple platforms, but rather a single platform that is unknown. Understand this as PlatformAny reduces to a definite platform at evaluation. Again, keep in mind that you should not allow it to be explicitly evaluated as multiple platforms.
-	PlatformMinecraft  PlatformId = "minecraft"
-	PlatformVanilla               = PlatformMinecraft // Alias for Minecraft
-	PlatformFabric     PlatformId = "fabric"
-	PlatformForge      PlatformId = "forge"
-	PlatformNeoforge   PlatformId = "neoforge"
-	PlatformMCDR       PlatformId = "mcdr"
-	PlatformBukkit     PlatformId = "bukkit" // Can be comsumed by paper/spigot/craftbukkit/etc.
+	// special selectors
+
+	// PlatformAny is ambiguous but has single-valueness. It does NOT refer
+	// to multiple platforms, but rather a single platform that is unknown.
+	// Understand this as PlatformAny reduces to a definite platform at
+	// evaluation. Again, keep in mind that you should not allow it to be
+	// explicitly evaluated as multiple platforms.
+	PlatformAny PlatformId = ""
+
+	// PlatformNone is a special platform that is not satisfied by any platform,
+	// but it can satisfy all platforms. It is typically used to indicate the
+	// absence of a platform, for example, when a package is not compatible with
+	// any platform, or when a package does not require a platform.
+	PlatformNone PlatformId = "none"
+
+	// PlatformUnknown is the only constant with no single-valueness, it can
+	// refer to multiple platforms other than the ones defined here.
+	PlatformUnknown PlatformId = "unknown"
+
+	// vanilla
+
+	PlatformMinecraft PlatformId = "minecraft"
+	PlatformVanilla              = PlatformMinecraft // alias
+
+	// modding platforms
+
+	PlatformFabric   PlatformId = "fabric"
+	PlatformForge    PlatformId = "forge"
+	PlatformNeoforge PlatformId = "neoforge"
+
+	// mcdr
+
+	PlatformMCDR PlatformId = "mcdr"
+
+	// bukkit family
+
+	PlatformBukkit     PlatformId = "bukkit" // Bukkit or spigot plugins
+	PlatformPaper      PlatformId = "paper"  // Paper and its forks' plugins
 	PlatformSponge     PlatformId = "sponge"
 	PlatformVelocity   PlatformId = "velocity"
 	PlatformBungeecord PlatformId = "bungeecord" // Can be consumed by both waterfall and bungeecord itself
-	PlatformNone       PlatformId = "none"       // PlatformNone is a special platform that is not satisfied by any platform, but it can satisfy all platforms. It is typically used to indicate the absence of a platform, for example, when a package is not compatible with any platform, or when a package does not require a platform.
-	PlatformUnknown    PlatformId = "unknown"    // PlatformUnknown is the only constant with no single-valueness, it can refer to multiple platforms other than the ones defined here.
 )
 
 func (p PlatformId) Title() string {
