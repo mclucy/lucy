@@ -78,6 +78,10 @@
       "description": "Minecraft modding framework. Note that the branch is on 26.1.2. For other versions, switch branches",
       "repository": "MinecraftForge/MinecraftForge"
     },
+    "geyser": {
+      "description": "Protocol bridge between a Java Edition Minecraft server and Bedrock Edition clients. Docs: https://geysermc.org/wiki/geyser",
+      "repository": "GeyserMC/Geyser"
+    },
     "HMCL": {
       "description": "HMCL is a popular Minecraft launcher in China. Might provide useful Minecraft domain knowledge. This repo is indexed via codegraph",
       "path": "../HMCL"
