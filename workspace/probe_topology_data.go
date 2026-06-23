@@ -152,6 +152,14 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
+		NodeID: types.RuntimeNodeCatServer,
+		Role:   types.RuntimeRoleHybrid,
+		Capabilities: []types.RuntimeCapability{
+			types.CapabilityForgeMods,
+			types.CapabilityBukkitPlugins,
+		},
+	},
+	{
 		NodeID: types.RuntimeNodeYouer,
 		Role:   types.RuntimeRoleHybrid,
 		Capabilities: []types.RuntimeCapability{

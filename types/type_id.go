@@ -120,7 +120,7 @@ func DeclaredModdingPlatformForNode(id RuntimeNodeID) PlatformId {
 	switch id {
 	case "fabric":
 		return PlatformFabric
-	case "forge", "arclight":
+	case "forge", "arclight", "catserver":
 		return PlatformForge
 	case "neoforge", "youer":
 		return PlatformNeoforge
