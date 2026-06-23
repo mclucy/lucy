@@ -41,13 +41,11 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: types.RuntimeNodePaper,
-		Role:   types.RuntimeRolePluginCore,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilityBukkitPlugins,
-		},
+		NodeID:       types.RuntimeNodePaper,
+		Role:         types.RuntimeRolePluginCore,
+		Capabilities: types.CapabilityPaperPlugins.Populate(),
 		// Paper stays anchored to vanilla while Bukkit-family ancestry is folded into
-		// the node's own semantics.
+		// the node's own semantics via Populate().
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodeMinecraft,
@@ -56,14 +54,13 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: types.RuntimeNodePaperFork,
-		Role:   types.RuntimeRolePluginCore,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilityBukkitPlugins,
-		},
-		// paper-fork is the extensible, best-effort tier for public Paper forks.
-		// Its primary guarantee is that it hosts the same plugin ecosystem as Paper.
-		// Surface only the detectable fork relationship back to Paper.
+		NodeID:       types.RuntimeNodePaperFork,
+		Role:         types.RuntimeRolePluginCore,
+		Capabilities: types.CapabilityPurpurPlugins.Populate(),
+		// paper-fork is the extensible, best-effort tier for public Paper forks
+		// that extend the full Purpur API surface (Purpur itself, Folia without
+		// the threading model, Leaves, Leaf, etc.). Declared rung is Purpur;
+		// Populate() expands the lower Bukkit/Spigot/Paper ancestry.
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodePaper,
@@ -72,11 +69,9 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID: types.RuntimeNodeSpigot,
-		Role:   types.RuntimeRolePluginCore,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilityBukkitPlugins,
-		},
+		NodeID:       types.RuntimeNodeSpigot,
+		Role:         types.RuntimeRolePluginCore,
+		Capabilities: types.CapabilitySpigotPlugins.Populate(),
 		// Spigot stays anchored directly to vanilla rather than expanding the old
 		// CraftBukkit lineage chain into separate runtime facts.
 		PolicyEdges: []RegistryEdge{
@@ -109,12 +104,14 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID:    types.RuntimeNodeFolia,
-		Role:      types.RuntimeRolePluginCore,
-		RiskLevel: types.RiskMedium,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilityBukkitPlugins,
-		},
+		NodeID:       types.RuntimeNodeFolia,
+		Role:         types.RuntimeRolePluginCore,
+		RiskLevel:    types.RiskMedium,
+		Capabilities: types.CapabilityFoliaPlugins.Populate(),
+		// Folia inverts compatibility: Paper plugins may fail to load without the
+		// `folia-supported: true` opt-in. Populate() still expands the Bukkit
+		// ancestry (Folia can host lower-rung plugins), but the install/compat
+		// layer enforces the opt-in separately.
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodePaper,
@@ -123,12 +120,13 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID:    types.RuntimeNodeLeaves,
-		Role:      types.RuntimeRolePluginCore,
-		RiskLevel: types.RiskNone,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilityBukkitPlugins,
-		},
+		NodeID:       types.RuntimeNodeLeaves,
+		Role:         types.RuntimeRolePluginCore,
+		RiskLevel:    types.RiskNone,
+		Capabilities: types.CapabilityPurpurPlugins.Populate(),
+		// Leaves is a Purpur fork (LeavesMC/Leaves) and inherits the full Purpur
+		// API surface plus its own additions. Declared rung is Purpur; Populate()
+		// expands the Bukkit/Spigot/Paper ancestry.
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodePaper,
@@ -146,28 +144,33 @@ var defaultRegistryEntries = []RegistryEntry{
 	{
 		NodeID: types.RuntimeNodeArclight,
 		Role:   types.RuntimeRoleHybrid,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilityForgeMods,
-			types.CapabilityBukkitPlugins,
-		},
+		Capabilities: append(
+			types.CapabilityForgeMods.Populate(),
+			types.CapabilitySpigotPlugins.Populate()...,
+		),
+		// Arclight implements the Bukkit/Spigot tier (not Paper) per its FAQ.
+		// Paper API support is in progress as of 2025.
 	},
 	{
 		NodeID: types.RuntimeNodeCatServer,
 		Role:   types.RuntimeRoleHybrid,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilityForgeMods,
-			types.CapabilityBukkitPlugins,
-		},
+		Capabilities: append(
+			types.CapabilityForgeMods.Populate(),
+			types.CapabilitySpigotPlugins.Populate()...,
+		),
+		// CatServer implements the Bukkit/Spigot tier (not Paper).
 	},
 	{
 		NodeID: types.RuntimeNodeYouer,
 		Role:   types.RuntimeRoleHybrid,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilityNeoforgeMods,
-			types.CapabilityBukkitPlugins,
-		},
-		// Youer is Purpur/Paper compatible, making it the highest rank in the
-		// Bukkit family
+		Capabilities: append(
+			types.CapabilityNeoforgeMods.Populate(),
+			types.CapabilityPurpurPlugins.Populate()...,
+		),
+		// Youer integrates the full Bukkit-family chain (Bukkit/CraftBukkit/Spigot/
+		// Paper/Purpur) on top of NeoForge. Anchoring to Paper captures the highest
+		// rung of plugin API support and distinguishes Youer from Arclight/CatServer,
+		// which only implement the Bukkit/Spigot tier.
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodePaper,
