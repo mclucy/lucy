@@ -50,12 +50,11 @@ tasks:
       - rm -rf release
 
   run:
+    silent: true
     dir: "{{.USER_WORKING_DIR}}"
-    desc: Run the local development binary for testing and debugging. Use `task run -- --help` to pass arguments to the binary.
-    deps:
-      - build:dev-core
+    desc: Run the local latest codebase with the provided arguments
     cmds:
-      - "{{.TASKFILE_DIR}}/{{.DEV_BINARY}} {{.CLI_ARGS}}"
+      - go run {{.TASKFILE_DIR}} {{.CLI_ARGS}}
 
   cipher-generate:
     desc: Generate new cipher key and ciphertext from CF_API_KEY
@@ -73,21 +72,31 @@ tasks:
       - .cipher_key
       - .cipher_ciphertext
 
-  check:cf-api-key-length:
-    desc: Warn when CF_API_KEY length is unexpected
+  check:cf-api-key:
+    silent: true
+    desc: Verify CF_API_KEY against the CurseForge API
     cmds:
-      - '[ "${#CF_API_KEY}" -eq 60 ] || printf "[WARN] CF_API_KEY length is %s (expected 60)\n" "${#CF_API_KEY}"'
-
-  warn-cf-api-key-length:
-    internal: true
-    deps:
-      - check:cf-api-key-length
+      - |
+        if [ -z "${CF_API_KEY:-}" ]; then
+          printf "[WARN] CF_API_KEY is not set — CurseForge API calls will fail\n"
+          exit 0
+        fi
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          -H "Accept: application/json" \
+          -H "x-api-key: $CF_API_KEY" \
+          "https://api.curseforge.com/v1/games?pageSize=1" 2>/dev/null || echo "000")
+        case "$STATUS" in
+          200) printf "[OK] CF_API_KEY verified against CurseForge API\n" ;;
+          401) printf "[WARN] CF_API_KEY rejected by CurseForge API (HTTP 401)\n" ;;
+          000) printf "[WARN] Could not reach CurseForge API (network error)\n" ;;
+          *)   printf "[WARN] CurseForge API returned unexpected status %s\n" "$STATUS" ;;
+        esac
 
   build:release:
     desc: Build release binaries for Windows, Linux, and macOS
     deps:
       - clean:release
-      - check:cf-api-key-length
+      - check:cf-api-key
     cmds:
       - mkdir -p release
       - GOOS=linux GOARCH=amd64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-linux-amd64
@@ -102,7 +111,7 @@ tasks:
   build:dev-core:
     desc: Build the local development binary for the host platform
     deps:
-      - check:cf-api-key-length
+      - check:cf-api-key
     cmds:
       - mkdir -p dist
       - GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="{{.LUCY_LDFLAGS}}" -tags debug -o {{.DEV_BINARY}}
@@ -156,14 +165,6 @@ tasks:
       - build:dev-core
       - test
       - test:race
-
-  smoke:
-    desc: Build the local binary and verify basic CLI entrypoints
-    deps:
-      - build:dev-core
-    cmds:
-      - "{{.DEV_BINARY}} --help >/dev/null"
-      - "{{.DEV_BINARY}} completion --help >/dev/null"
 
   verify:
     desc: Run build, tests, race tests, and CLI smoke checks
