@@ -64,6 +64,21 @@ type topologyResolution struct {
 	empty    bool
 }
 
+// isBukkitFamilyCapability reports whether capability is a Bukkit-family
+// plugin capability. Routing policy, not a type-system property.
+func isBukkitFamilyCapability(capability types.RuntimeCapability) bool {
+	switch capability {
+	case types.CapabilityBukkitPlugins,
+		types.CapabilitySpigotPlugins,
+		types.CapabilityPaperPlugins,
+		types.CapabilityPurpurPlugins,
+		types.CapabilityFoliaPlugins:
+		return true
+	default:
+		return false
+	}
+}
+
 func providerSourcesFromTopology(topology *types.RuntimeTopology) topologyResolution {
 	selection := topologyResolution{}
 	seen := map[types.SourceId]struct{}{}
@@ -83,14 +98,20 @@ func providerSourcesFromTopology(topology *types.RuntimeTopology) topologyResolu
 			switch capability {
 			case types.CapabilityFabricMods,
 				types.CapabilityForgeMods,
-				types.CapabilityNeoforgeMods,
-				types.CapabilityBukkitPlugins:
+				types.CapabilityNeoforgeMods:
 				sawKnownCapability = true
 				appendSource(types.SourceModrinth)
-				if capability != types.CapabilityBukkitPlugins && curseforgeAvailable() {
+				if curseforgeAvailable() {
 					appendSource(types.SourceCurseForge)
 				}
-				if capability == types.CapabilityBukkitPlugins {
+			case types.CapabilityBukkitPlugins,
+				types.CapabilitySpigotPlugins,
+				types.CapabilityPaperPlugins,
+				types.CapabilityPurpurPlugins,
+				types.CapabilityFoliaPlugins:
+				sawKnownCapability = true
+				appendSource(types.SourceModrinth)
+				if isBukkitFamilyCapability(capability) {
 					appendSource(types.SourceHangar)
 					appendSource(types.SourceSpiget)
 				}
