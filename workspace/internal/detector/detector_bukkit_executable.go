@@ -621,6 +621,12 @@ func buildBukkitExecutableTopologySeed(
 }
 
 func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
+	if id == bukkitNodeMinecraft {
+		return types.RuntimeNode{
+			ID:   id,
+			Role: types.RuntimeRoleVanilla,
+		}
+	}
 	return types.RuntimeNode{
 		ID:           id,
 		Role:         types.RuntimeRolePluginCore,
