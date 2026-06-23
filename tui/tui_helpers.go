@@ -10,7 +10,10 @@ import (
 // keyColumnWidth takes the longest key label in the current context and adds
 // padding to ensure alignment of values in a two-column layout. It is set by
 // while Flush() is rendering the current view.
-var keyColumnWidth int
+var (
+	keyColumnWidth           int
+	renderContinuationPrefix string
+)
 
 // keyColPadding is the fixed padding (in characters) added to the key column width
 // to ensure minimum spacing between keys and values.
@@ -40,6 +43,14 @@ func renderAnnot(annotation string) string {
 // renderTab returns whitespace matching the key column width, used for
 // continuation lines that need to align with the value column.
 func renderTab() string {
+	if renderContinuationPrefix != "" && keyColumnWidth > 0 {
+		prefix := style.Bold(style.Magenta(renderContinuationPrefix))
+		padding := keyColumnWidth - lipgloss.Width(prefix)
+		if padding < 0 {
+			padding = 0
+		}
+		return prefix + strings.Repeat(" ", padding)
+	}
 	return strings.Repeat(" ", keyColumnWidth)
 }
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	probe2 "github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
@@ -44,12 +44,6 @@ func generateStatusOutput(
 	longOutput bool,
 	noStyle bool,
 ) (output *tui.Data) {
-	packageNameOutput := probe2.Ternary(
-		longOutput,
-		func(pkg types.Package) string { return pkg.Id.StringFull() },
-		func(pkg types.Package) string { return pkg.Id.Name.String() },
-	)
-
 	if data.Runtime == nil {
 		return &tui.Data{
 			Fields: []tui.Field{
@@ -62,9 +56,30 @@ func generateStatusOutput(
 
 	output = &tui.Data{Fields: []tui.Field{}}
 	serverPlatform := data.DerivedModLoader()
+	modPlatforms := statusModPlatforms(data.Topology, serverPlatform)
+	showPlatformQualifiedMods := len(modPlatforms) > 1
+	packageNameOutput := func(pkg types.Package) string {
+		if longOutput {
+			return pkg.Id.StringFull()
+		}
+		if showPlatformQualifiedMods {
+			return pkg.Id.StringBase()
+		}
+		return pkg.Id.Name.String()
+	}
 	hasMcdr := data.Environments.Mcdr != nil
 	hasLucy := data.Environments.Lucy != nil
 	primaryNode, hasPrimaryNode := topologyPrimaryNodeData(data.Topology)
+	showMods := len(modPlatforms) > 0
+	showPlugins := data.Topology != nil && data.Topology.Resolved() && data.Topology.HasCapability(types.CapabilityBukkitPlugins)
+	modNames, modPaths, pluginNames, mcdrPlugins := statusPackageSections(
+		data.Packages,
+		modPlatforms,
+		packageNameOutput,
+		showMods,
+		showPlugins,
+		hasMcdr,
+	)
 
 	// logo display strategy:
 	// custom client > mod loader > mcdr > lucy > vanilla
@@ -102,12 +117,12 @@ func generateStatusOutput(
 		output.Fields = append(
 			output.Fields, &tui.FieldAnnotatedShortText{
 				Title: "Activity",
-				Text: probe2.Ternary(
+				Text: fn.Ternary(
 					data.Activity.Active,
 					"Active",
 					"Inactive",
 				),
-				Annotation: probe2.Ternary(
+				Annotation: fn.Ternary(
 					data.Activity.Active,
 					fmt.Sprintf("PID %d", data.Activity.Pid),
 					"",
@@ -123,19 +138,42 @@ func generateStatusOutput(
 		)
 	}
 
-	// Show modding platform if detected, even if no mods found, to differentiate
-	// between modded and vanilla servers
 	if platformLabel := statusRuntimePlatformLabel(
 		data.Topology,
 		serverPlatform,
 		hasPrimaryNode,
 		primaryNode,
 	); platformLabel != "" {
+		children := make([]tui.TreeNode, 0, 2)
+		if showMods {
+			children = append(
+				children,
+				tui.TreeNode{
+					Title: "Mods",
+					Field: statusPackageListField(
+						modNames,
+						modPaths,
+						longOutput,
+					),
+				},
+			)
+		}
+		if showPlugins {
+			children = append(
+				children,
+				tui.TreeNode{
+					Title: "Plugins",
+					Field: statusPackageListField(pluginNames, nil, false),
+				},
+			)
+		}
+
 		output.Fields = append(
-			output.Fields, &tui.FieldAnnotatedShortText{
+			output.Fields, &tui.FieldTree{
 				Title:      "Platform",
 				Text:       platformLabel,
 				Annotation: data.DerivedLoaderVersion(),
+				Children:   children,
 			},
 		)
 	}
@@ -145,179 +183,167 @@ func generateStatusOutput(
 		hasPrimaryNode,
 		primaryNode,
 	); topologyField != nil {
-		output.Fields = append(output.Fields, topologyField)
-	}
-
-	// If topology is resolved and has meaningful risk, show it.
-	if riskLevel := statusEffectiveRiskLevel(
-		data.Topology,
-		hasPrimaryNode,
-		primaryNode,
-	); riskLevel > types.RiskNone {
 		output.Fields = append(
-			output.Fields, &tui.FieldShortText{
-				Title: "Risk",
-				Text:  topologyRiskLabel(riskLevel, noStyle),
-			},
-		)
-	}
-
-	showMods := false
-	if data.Topology != nil && data.Topology.Resolved() {
-		showMods = data.Topology.HasCapability(types.CapabilityFabricMods) ||
-			data.Topology.HasCapability(types.CapabilityForgeMods) ||
-			data.Topology.HasCapability(types.CapabilityNeoforgeMods)
-	}
-
-	// Collect mod/plugin names and paths for later use. This is to avoid
-	// traversing the package list multiple times, which can be costly when
-	// there are many packages.
-	var modNames []string
-	var modPaths []string
-	var mcdrPlugins []string
-	if showMods {
-		modNames = make([]string, 0, len(data.Packages))
-		modPaths = make([]string, 0, len(data.Packages))
-	}
-	if hasMcdr {
-		mcdrPlugins = make([]string, 0, len(data.Packages))
-	}
-	if showMods || hasMcdr {
-		for _, p := range data.Packages {
-			if types.IsIdentityPackage(p.Id.PackageRef) {
-				continue
-			}
-			packagePlatform := p.Id.Platform
-			if showMods && packagePlatform == serverPlatform {
-				modNames = append(modNames, packageNameOutput(p))
-				if p.Local != nil {
-					modPaths = append(modPaths, p.Local.Path)
-				}
-			}
-			if hasMcdr && packagePlatform == types.PlatformMCDR {
-				mcdrPlugins = append(mcdrPlugins, packageNameOutput(p))
-			}
-		}
-	}
-
-	// Modding related fields only shown when modding platform detected
-	if showMods {
-		modListTitle := probe2.Ternary(
-			noStyle,
-			"Mods",
-			"└── Mods",
-		)
-		if len(modNames) == 0 {
-			output.Fields = append(
-				output.Fields, &tui.FieldShortText{
-					Title: modListTitle,
-					Text:  style.Dim("(None)"),
-				},
-			)
-		} else {
-			output.Fields = append(
-				output.Fields,
-				probe2.Ternary[tui.Field](
-					longOutput,
-					&tui.FieldMultiAnnotatedShortText{
-						Title:       modListTitle,
-						Texts:       modNames,
-						Annotations: modPaths,
-						ShowTotal:   true,
-					},
-					&tui.FieldDynamicColumnLabels{
-						Title:     modListTitle,
-						Labels:    modNames,
-						MaxLines:  0,
-						ShowTotal: true,
-					},
+			output.Fields,
+			statusTopologyTreeField(
+				topologyField,
+				statusEffectiveRiskLevel(
+					data.Topology,
+					hasPrimaryNode,
+					primaryNode,
 				),
-			)
-		}
-	}
-
-	showPlugins := false
-	if data.Topology != nil && data.Topology.Resolved() {
-		showPlugins = data.Topology.HasCapability(types.CapabilityBukkitPlugins)
-	}
-
-	// List plugins if server can load plugins
-	if showPlugins {
-		pluginNames := make([]string, 0, len(data.Packages))
-		for _, p := range data.Packages {
-			if types.IsIdentityPackage(p.Id.PackageRef) {
-				continue
-			}
-			if p.Id.Platform == types.PlatformBukkit {
-				pluginNames = append(pluginNames, packageNameOutput(p))
-			}
-		}
-
-		pluginListTitle := probe2.Ternary(
-			noStyle,
-			"Plugins",
-			"└── Plugins",
+				noStyle,
+			),
 		)
-
-		if len(pluginNames) == 0 {
-			output.Fields = append(
-				output.Fields, &tui.FieldShortText{
-					Title: pluginListTitle,
-					Text:  style.Dim("(None)"),
-				},
-			)
-		} else {
-			output.Fields = append(
-				output.Fields, &tui.FieldDynamicColumnLabels{
-					Title:     pluginListTitle,
-					Labels:    pluginNames,
-					MaxLines:  0,
-					ShowTotal: true,
-				},
-			)
-		}
 	}
 
-	// List MCDR plugins if MCDR environment detected
 	if hasMcdr {
-		mcdrPluginListTitle := probe2.Ternary(
-			noStyle,
-			"MCDR Plugins",
-			"└── Plugins",
-		)
-
-		// Tell users that MCDR is installed
+		children := []tui.TreeNode{
+			{
+				Title: "Plugins",
+				Field: statusPackageListField(mcdrPlugins, nil, false),
+			},
+		}
 		output.Fields = append(
-			output.Fields, &tui.FieldShortText{
+			output.Fields, &tui.FieldTree{
 				Title: "MCDR",
-				Text: "Installed" + probe2.Ternary(
+				Text: "Installed" + fn.Ternary(
 					noStyle,
 					"",
 					style.Green(" ✓"),
 				),
+				Children: children,
 			},
 		)
-
-		if len(mcdrPlugins) == 0 {
-			output.Fields = append(
-				output.Fields, &tui.FieldShortText{
-					Title: mcdrPluginListTitle,
-					Text:  style.Dim("(None)"),
-				},
-			)
-		} else {
-			output.Fields = append(
-				output.Fields, &tui.FieldDynamicColumnLabels{
-					Title:     mcdrPluginListTitle,
-					Labels:    mcdrPlugins,
-					MaxLines:  0,
-					ShowTotal: true,
-				},
-			)
-		}
 	}
 
 	return output
+}
+
+func statusPackageListField(
+	names []string,
+	paths []string,
+	longOutput bool,
+) tui.Field {
+	if len(names) == 0 {
+		return &tui.FieldShortText{Text: style.Dim("(None)")}
+	}
+	if longOutput {
+		return &tui.FieldMultiAnnotatedShortText{
+			Texts:       names,
+			Annotations: paths,
+			ShowTotal:   true,
+		}
+	}
+	return &tui.FieldDynamicColumnLabels{
+		Labels:    names,
+		MaxLines:  0,
+		ShowTotal: true,
+	}
+}
+
+func statusTopologyTreeField(
+	field tui.Field,
+	riskLevel types.RuntimeRiskLevel,
+	noStyle bool,
+) tui.Field {
+	children := make([]tui.TreeNode, 0, 1)
+	if riskLevel > types.RiskNone {
+		children = append(
+			children,
+			tui.TreeNode{
+				Title: "Risk",
+				Field: &tui.FieldShortText{
+					Text: topologyRiskLabel(
+						riskLevel,
+						noStyle,
+					),
+				},
+			},
+		)
+	}
+
+	switch statusField := field.(type) {
+	case *tui.FieldAnnotatedShortText:
+		return &tui.FieldTree{
+			Title:      statusField.Title,
+			Text:       statusField.Text,
+			Annotation: statusField.Annotation,
+			Children:   children,
+		}
+	case *tui.FieldShortText:
+		return &tui.FieldTree{
+			Title:    statusField.Title,
+			Text:     statusField.Text,
+			Children: children,
+		}
+	default:
+		return field
+	}
+}
+
+func statusPackageSections(
+	packages []types.Package,
+	modPlatforms map[types.PlatformId]bool,
+	packageNameOutput func(types.Package) string,
+	showMods bool,
+	showPlugins bool,
+	hasMcdr bool,
+) ([]string, []string, []string, []string) {
+	modNames := make([]string, 0, len(packages))
+	modPaths := make([]string, 0, len(packages))
+	pluginNames := make([]string, 0, len(packages))
+	mcdrPlugins := make([]string, 0, len(packages))
+
+	for _, pkg := range packages {
+		if types.IsIdentityPackage(pkg.Id.PackageRef) {
+			continue
+		}
+
+		packagePlatform := pkg.Id.Platform
+		if showMods && modPlatforms[packagePlatform] {
+			modNames = append(modNames, packageNameOutput(pkg))
+			if pkg.Local != nil {
+				modPaths = append(modPaths, pkg.Local.Path)
+			}
+		}
+		if showPlugins && packagePlatform == types.PlatformBukkit {
+			pluginNames = append(pluginNames, packageNameOutput(pkg))
+		}
+		if hasMcdr && packagePlatform == types.PlatformMCDR {
+			mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
+		}
+	}
+
+	return modNames, modPaths, pluginNames, mcdrPlugins
+}
+
+func statusModPlatforms(
+	topology *types.RuntimeTopology,
+	serverPlatform types.PlatformId,
+) map[types.PlatformId]bool {
+	platforms := make(map[types.PlatformId]bool, 3)
+	if topology == nil || !topology.Resolved() {
+		return platforms
+	}
+
+	if serverPlatform.IsModding() {
+		platforms[serverPlatform] = true
+	}
+	if serverPlatform == types.PlatformNeoforge {
+		platforms[types.PlatformForge] = true
+	}
+	if topology.HasCapability(types.CapabilityFabricMods) {
+		platforms[types.PlatformFabric] = true
+	}
+	if topology.HasCapability(types.CapabilityForgeMods) {
+		platforms[types.PlatformForge] = true
+	}
+	if topology.HasCapability(types.CapabilityNeoforgeMods) {
+		platforms[types.PlatformNeoforge] = true
+	}
+
+	return platforms
 }
 
 func topologyPrimaryNodeData(topology *types.RuntimeTopology) (
@@ -639,11 +665,11 @@ func topologyRiskLabel(level types.RuntimeRiskLevel, noStyle bool) string {
 	case types.RiskLow:
 		return "Low"
 	case types.RiskMedium:
-		return "Medium" + probe2.Ternary(noStyle, "", " ⚠")
+		return fn.Ternary(noStyle, " !", " ⚠") + " Medium"
 	case types.RiskHigh:
-		return "High" + probe2.Ternary(noStyle, "", " ⚠⚠")
+		return fn.Ternary(noStyle, "!!", "⚠⚠") + " High"
 	case types.RiskCritical:
-		return "Critical" + probe2.Ternary(noStyle, "", " ✗")
+		return fn.Ternary(noStyle, " x", " ✗") + " Critical"
 	default:
 		return "None"
 	}

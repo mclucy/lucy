@@ -209,6 +209,92 @@ func (f *FieldAnnotatedShortText) Render() string {
 	return sb.String()
 }
 
+type FieldTree struct {
+	Title      string
+	Text       string
+	Annotation string
+	Children   []TreeNode
+}
+
+type TreeNode struct {
+	Title string
+	Field Field
+}
+
+func (f *FieldTree) KeyLength() int {
+	maxLength := len(f.Title)
+	for _, child := range f.Children {
+		if length := lipgloss.Width(treeBranchTitle(child.Title, true)); length > maxLength {
+			maxLength = length
+		}
+	}
+	return maxLength
+}
+
+func (f *FieldTree) Render() string {
+	var sb strings.Builder
+	sb.WriteString(renderKey(f.Title))
+	sb.WriteString(f.Text)
+	if f.Annotation != "" {
+		sb.WriteString(renderAnnot(f.Annotation))
+	}
+	sb.WriteString("\n")
+
+	for i, child := range f.Children {
+		continues := i != len(f.Children)-1
+		sb.WriteString(renderTreeNode(child, continues))
+	}
+	return sb.String()
+}
+
+func renderTreeNode(node TreeNode, continues bool) string {
+	if node.Field == nil {
+		return ""
+	}
+
+	branchTitle := treeBranchTitle(node.Title, continues)
+	continuationPrefix := ""
+	if continues {
+		continuationPrefix = "│"
+	}
+
+	savedPrefix := renderContinuationPrefix
+	renderContinuationPrefix = continuationPrefix
+	defer func() { renderContinuationPrefix = savedPrefix }()
+
+	switch field := node.Field.(type) {
+	case *FieldShortText:
+		copy := *field
+		copy.Title = branchTitle
+		return copy.Render()
+	case *FieldAnnotatedShortText:
+		copy := *field
+		copy.Title = branchTitle
+		return copy.Render()
+	case *FieldDynamicColumnLabels:
+		copy := *field
+		copy.Title = branchTitle
+		return copy.Render()
+	case *FieldMultiAnnotatedShortText:
+		copy := *field
+		copy.Title = branchTitle
+		return copy.Render()
+	case *FieldMultiShortText:
+		copy := *field
+		copy.Title = branchTitle
+		return copy.Render()
+	default:
+		return node.Field.Render()
+	}
+}
+
+func treeBranchTitle(title string, continues bool) string {
+	if continues {
+		return "├── " + title
+	}
+	return "└── " + title
+}
+
 // FieldNil is a no-op field that renders nothing.
 var FieldNil = &fieldNil{}
 

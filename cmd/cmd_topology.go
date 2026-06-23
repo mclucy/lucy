@@ -41,7 +41,7 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("server topology is unresolved")
 	}
 
-	mermaidSource := buildMermaidTopology(topology, longOut)
+	mermaidSource := buildMermaidTopology(topology, "LR", longOut)
 
 	if jsonOut {
 		style.PrintAsJson(map[string]any{
@@ -63,10 +63,11 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 // string that mermaid-ascii can render.
 func buildMermaidTopology(
 	topology *types.RuntimeTopology,
+	direction string,
 	longOut bool,
 ) string {
 	var b strings.Builder
-	b.WriteString("graph TD\n")
+	fmt.Fprintf(&b, "graph %s\n", direction)
 
 	nodeIDs := make(map[types.RuntimeNodeID]string, len(topology.Nodes))
 	for i, node := range topology.Nodes {
@@ -86,7 +87,7 @@ func buildMermaidTopology(
 
 		verb := string(edge.Verb)
 		if verb != "" {
-			fmt.Fprintf(&b, "  %s -->|\"%s\"| %s\n", fromID, verb, toID)
+			fmt.Fprintf(&b, "  %s -->|%s| %s\n", fromID, verb, toID)
 		} else {
 			fmt.Fprintf(&b, "  %s --> %s\n", fromID, toID)
 		}
@@ -124,7 +125,7 @@ func buildNodeLabel(
 		parts = append(parts, topologyRiskLabel(node.RiskLevel, true))
 	}
 
-	return strings.Join(parts, "\\n")
+	return strings.Join(parts, "\n")
 }
 
 func capabilitiesLabel(caps []types.RuntimeCapability) string {
