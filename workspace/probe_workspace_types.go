@@ -22,7 +22,7 @@ func (w Workspace) RuntimeIdentityPackage(node *types.TopologyNode) *types.Versi
 		return nil
 	}
 
-	return runtimeIdentityPackage(w.Runtime.topology, node)
+	return runtimeIdentityPackage(w.Topology, node)
 }
 
 func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {

@@ -167,9 +167,18 @@ func cloneRuntimeTopology(topology *types.RuntimeTopology) *types.RuntimeTopolog
 		return nil
 	}
 
+	// Keep cloned node identities separate before adding more.
+	nodes := append([]types.RuntimeNode(nil), topology.Nodes...)
+	for i := range nodes {
+		nodes[i].Identities = append(
+			[]types.VersionedPackageRef(nil),
+			nodes[i].Identities...,
+		)
+	}
+
 	return &types.RuntimeTopology{
 		PrimaryNode: topology.PrimaryNode,
-		Nodes:       append([]types.RuntimeNode(nil), topology.Nodes...),
+		Nodes:       nodes,
 		Edges:       append([]types.RuntimeEdge(nil), topology.Edges...),
 	}
 }
