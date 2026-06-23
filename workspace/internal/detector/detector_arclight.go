@@ -16,6 +16,10 @@ var arclightJarNamePattern = regexp.MustCompile(
 	`^arclight-(?:forge|neoforge|fabric)-(\d+\.\d+(?:\.\d+)?)(?:[-.].*)?\.jar$`,
 )
 
+var arclightDistributionNamePattern = regexp.MustCompile(
+	`^arclight-(forge|neoforge|fabric)-`,
+)
+
 type arclightServerDetector struct{}
 
 func (d *arclightServerDetector) Name() string {
@@ -43,7 +47,7 @@ func (d *arclightServerDetector) Detect(
 		return nil, nil
 	}
 
-	hasLaunchProps, err := archiveContains(
+	launchProps, hasLaunchProps, err := readArchiveEntry(
 		zipReader,
 		"arclight-server-launch.properties",
 	)
@@ -83,15 +87,23 @@ func (d *arclightServerDetector) Detect(
 			},
 		},
 		Topology: &types.RuntimeTopology{
-			PrimaryNode: "arclight",
+			PrimaryNode: types.RuntimeNodeArclight,
 			Nodes: []types.RuntimeNode{
 				{
-					ID:   "arclight",
-					Role: types.RuntimeRoleHybrid,
-					Capabilities: []types.RuntimeCapability{
-						types.CapabilityForgeMods,
-						types.CapabilityBukkitPlugins,
-					},
+					ID:           types.RuntimeNodeArclight,
+					Role:         types.RuntimeRoleHybrid,
+					Capabilities: arclightCapabilities(filePath, launchProps),
+				},
+				{
+					ID:   types.RuntimeNodeMinecraft,
+					Role: types.RuntimeRoleVanilla,
+				},
+			},
+			Edges: []types.RuntimeEdge{
+				{
+					From: types.RuntimeNodeArclight,
+					To:   types.RuntimeNodeMinecraft,
+					Verb: types.EdgeModifies,
 				},
 			},
 		},
@@ -101,15 +113,13 @@ func (d *arclightServerDetector) Detect(
 type arclightManifestSignals struct {
 	mainClass      string
 	implementation string
-	mixinConnector string
 	loaderVersion  types.BareVersion
 	gameVersion    types.BareVersion
 }
 
 func (s arclightManifestSignals) valid() bool {
 	return s.mainClass == "io.izzel.arclight.server.Launcher" &&
-		s.implementation == "Arclight" &&
-		s.mixinConnector == "io.izzel.arclight.common.mod.ArclightConnector"
+		s.implementation == "Arclight"
 }
 
 func parseArclightManifest(data []byte) arclightManifestSignals {
@@ -143,13 +153,6 @@ func parseArclightManifest(data []byte) arclightManifestSignals {
 			if parsedGameVersion := parseArclightGameVersionFromImplementation(version); hasConcreteVersion(parsedGameVersion) {
 				signals.gameVersion = parsedGameVersion
 			}
-		case strings.HasPrefix(line, "MixinConnector: "):
-			signals.mixinConnector = strings.TrimSpace(
-				strings.TrimPrefix(
-					line,
-					"MixinConnector: ",
-				),
-			)
 		}
 	}
 	return signals
@@ -173,6 +176,55 @@ func parseArclightGameVersionFromPath(filePath string) types.BareVersion {
 		return types.VersionUnknown
 	}
 	return types.BareVersion(match[1])
+}
+
+func arclightCapabilities(filePath string, launchProps []byte) []types.RuntimeCapability {
+	capabilities := []types.RuntimeCapability{types.CapabilityBukkitPlugins}
+	if loaderCapability, ok := arclightLoaderCapabilityFromLaunchProps(launchProps); ok {
+		return append([]types.RuntimeCapability{loaderCapability}, capabilities...)
+	}
+
+	match := arclightDistributionNamePattern.FindStringSubmatch(
+		strings.ToLower(filepath.Base(filePath)),
+	)
+	if match == nil {
+		return append([]types.RuntimeCapability{types.CapabilityForgeMods}, capabilities...)
+	}
+
+	switch match[1] {
+	case "fabric":
+		return append([]types.RuntimeCapability{types.CapabilityFabricMods}, capabilities...)
+	case "neoforge":
+		return append([]types.RuntimeCapability{types.CapabilityNeoforgeMods}, capabilities...)
+	default:
+		return append([]types.RuntimeCapability{types.CapabilityForgeMods}, capabilities...)
+	}
+}
+
+func arclightLoaderCapabilityFromLaunchProps(data []byte) (types.RuntimeCapability, bool) {
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) != "launch.mainClass" {
+			continue
+		}
+
+		switch strings.TrimSpace(value) {
+		case "io.izzel.arclight.boot.fabric.application.Main_Fabric":
+			return types.CapabilityFabricMods, true
+		case "io.izzel.arclight.boot.neoforge.application.Main_Neoforge":
+			return types.CapabilityNeoforgeMods, true
+		case "io.izzel.arclight.boot.forge.application.Main_Forge":
+			return types.CapabilityForgeMods, true
+		}
+	}
+
+	return "", false
 }
 
 func archiveContains(zipReader *zip.Reader, name string) (bool, error) {

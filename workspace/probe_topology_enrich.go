@@ -189,15 +189,12 @@ func addConnectorHostEdges(t *types.RuntimeTopology) {
 	if _, ok := t.FindNode(types.RuntimeNodeConnector); !ok {
 		return
 	}
-	for _, hostID := range []types.RuntimeNodeID{
-		types.RuntimeNodeForge, types.RuntimeNodeNeoforge,
-	} {
-		host, ok := t.FindNode(hostID)
-		if !ok || !host.HasCapability(types.CapabilityForgeMods) && !host.HasCapability(types.CapabilityNeoforgeMods) {
+	for _, host := range t.Nodes {
+		if !host.HasCapability(types.CapabilityForgeMods) && !host.HasCapability(types.CapabilityNeoforgeMods) {
 			continue
 		}
 		edge := types.RuntimeEdge{
-			From: hostID, To: types.RuntimeNodeConnector, Verb: types.EdgeHosts,
+			From: host.ID, To: types.RuntimeNodeConnector, Verb: types.EdgeHosts,
 		}
 		if topologyHasEdge(t, edge) {
 			continue
