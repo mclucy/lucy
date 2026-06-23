@@ -631,6 +631,8 @@ func runtimeNodeLabel(id types.RuntimeNodeID) string {
 		return "Sponge"
 	case types.RuntimeNodeArclight:
 		return "Arclight"
+	case types.RuntimeNodeCatServer:
+		return "CatServer"
 	case types.RuntimeNodeYouer:
 		return "Youer"
 	case types.RuntimeNodeVelocity:

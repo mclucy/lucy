@@ -21,6 +21,7 @@ const (
 	RuntimeNodeLeaves           RuntimeNodeID = "leaves"
 	RuntimeNodeSponge           RuntimeNodeID = "sponge"
 	RuntimeNodeArclight         RuntimeNodeID = "arclight"
+	RuntimeNodeCatServer        RuntimeNodeID = "catserver"
 	RuntimeNodeYouer            RuntimeNodeID = "youer"
 	RuntimeNodeVelocity         RuntimeNodeID = "velocity"
 	RuntimeNodeBungeecord       RuntimeNodeID = "bungeecord"
