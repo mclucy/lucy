@@ -65,26 +65,26 @@ func EnrichTopologyFromPackages(
 		detectedRuntimeEvidenceFromHints(exec.BridgeHints)...,
 	)
 
-	if exec.Topology == nil {
+	if exec.topology == nil {
 		// No topology yet — attempt to build one from package evidence.
 		if len(evidence) == 0 {
-			exec.Topology = &types.RuntimeTopology{}
+			exec.topology = &types.RuntimeTopology{}
 			return
 		}
 
 		if inferred := inferHostTopologyFromAttachedBridgePackages(packages); inferred != nil {
-			exec.Topology = inferred
+			exec.topology = inferred
 		} else {
 
 			// Build from the first evidence node, merge the rest.
 			firstEntry, ok := FindEntry(evidence[0])
 			if !ok {
-				exec.Topology = &types.RuntimeTopology{}
+				exec.topology = &types.RuntimeTopology{}
 				return
 			}
-			exec.Topology = BuildTopologyFromEntry(firstEntry)
-			if exec.Topology == nil {
-				exec.Topology = &types.RuntimeTopology{}
+			exec.topology = BuildTopologyFromEntry(firstEntry)
+			if exec.topology == nil {
+				exec.topology = &types.RuntimeTopology{}
 				return
 			}
 		}
@@ -98,16 +98,17 @@ func EnrichTopologyFromPackages(
 			if annotation == nil {
 				continue
 			}
-			mergeTopology(exec.Topology, annotation)
+			mergeTopology(exec.topology, annotation)
 		}
 
 		applyDeclarativeConnections(
-			exec.Topology,
+			exec.topology,
 			internaltopology.DefaultConnectionRegistry,
 		)
-		addConnectorHostEdges(exec.Topology)
-		NormalizeTopology(exec.Topology)
-		FoldTopologyRisk(exec.Topology)
+		addConnectorHostEdges(exec.topology)
+		NormalizeTopology(exec.topology)
+		attachRuntimePackageIdentities(exec.topology, packages)
+		FoldTopologyRisk(exec.topology)
 		return
 	}
 
@@ -126,16 +127,59 @@ func EnrichTopologyFromPackages(
 			continue
 		}
 
-		mergeTopology(exec.Topology, annotation)
+		mergeTopology(exec.topology, annotation)
 	}
 
 	applyDeclarativeConnections(
-		exec.Topology,
+		exec.topology,
 		internaltopology.DefaultConnectionRegistry,
 	)
-	addConnectorHostEdges(exec.Topology)
-	NormalizeTopology(exec.Topology)
-	FoldTopologyRisk(exec.Topology)
+	addConnectorHostEdges(exec.topology)
+	NormalizeTopology(exec.topology)
+	attachRuntimePackageIdentities(exec.topology, packages)
+	FoldTopologyRisk(exec.topology)
+}
+
+func attachRuntimePackageIdentities(
+	topology *types.RuntimeTopology,
+	packages []types.Package,
+) {
+	if topology == nil {
+		return
+	}
+
+	for _, pkg := range packages {
+		nodeID, ok := RuntimeIdentityNode(pkg.Id)
+		if !ok {
+			continue
+		}
+
+		for i := range topology.Nodes {
+			if topology.Nodes[i].ID != nodeID {
+				continue
+			}
+			if runtimeNodeHasIdentity(topology.Nodes[i], pkg.Id) {
+				break
+			}
+			topology.Nodes[i].Identities = append(
+				topology.Nodes[i].Identities,
+				pkg.Id,
+			)
+			break
+		}
+	}
+}
+
+func runtimeNodeHasIdentity(
+	node types.RuntimeNode,
+	identity types.VersionedPackageRef,
+) bool {
+	for _, existing := range node.Identities {
+		if existing.Platform == identity.Platform && existing.Name == identity.Name && existing.Version == identity.Version {
+			return true
+		}
+	}
+	return false
 }
 
 func addConnectorHostEdges(t *types.RuntimeTopology) {
@@ -145,12 +189,16 @@ func addConnectorHostEdges(t *types.RuntimeTopology) {
 	if _, ok := t.FindNode(types.RuntimeNodeConnector); !ok {
 		return
 	}
-	for _, hostID := range []types.RuntimeNodeID{types.RuntimeNodeForge, types.RuntimeNodeNeoforge} {
+	for _, hostID := range []types.RuntimeNodeID{
+		types.RuntimeNodeForge, types.RuntimeNodeNeoforge,
+	} {
 		host, ok := t.FindNode(hostID)
 		if !ok || !host.HasCapability(types.CapabilityForgeMods) && !host.HasCapability(types.CapabilityNeoforgeMods) {
 			continue
 		}
-		edge := types.RuntimeEdge{From: hostID, To: types.RuntimeNodeConnector, Verb: types.EdgeHosts}
+		edge := types.RuntimeEdge{
+			From: hostID, To: types.RuntimeNodeConnector, Verb: types.EdgeHosts,
+		}
 		if topologyHasEdge(t, edge) {
 			continue
 		}

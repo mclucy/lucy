@@ -44,7 +44,7 @@ func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T
 		t.Fatalf(
 			"expected paper runtime identity, got %q (%+v)",
 			got,
-			observed.Runtime.RuntimeIdentities,
+			observed.Topology.AllIdentities(),
 		)
 	}
 	if observed.Topology == nil {
