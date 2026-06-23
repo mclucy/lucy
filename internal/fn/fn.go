@@ -2,7 +2,6 @@ package fn
 
 import (
 	"io"
-	"slices"
 	"sync"
 )
 
@@ -76,20 +75,8 @@ func Decorate[T interface{}](f T, decorators ...func(T) T) T {
 	return f
 }
 
-// KeyValue works together with SortAndExtract to sort a slice of Item
-// with their corresponding Index.
-type KeyValue[T, Ti any] struct {
-	Item  T
-	Index Ti
-}
-
-func SortAndExtract[T, Ti any](
-	arr []KeyValue[T, Ti],
-	cmp func(a, b KeyValue[T, Ti]) int,
-) (res []T) {
-	slices.SortFunc(arr, cmp)
-	for _, item := range arr {
-		res = append(res, item.Item)
+func Compose[Tx any, Ty any, Tz any](x func(Tx) Ty, y func(Ty) Tz) func(Tx) Tz {
+	return func(t Tx) Tz {
+		return y(x(t))
 	}
-	return res
 }

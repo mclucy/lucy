@@ -1,6 +1,9 @@
 package fn
 
-import "reflect"
+import (
+	"reflect"
+	"slices"
+)
 
 // Exists checks if an element exists in a slice. It returns true if the element
 // is found, and false otherwise.
@@ -13,27 +16,9 @@ func Exists[T comparable](arr []T, elem T) bool {
 	return false
 }
 
-func Count[T comparable](arr []T, elem T) int {
-	count := 0
-	for _, v := range arr {
-		if v == elem {
-			count++
-		}
-	}
-	return count
-}
-
 func ForEach[T any](arr []T, fn func(T)) {
 	for _, v := range arr {
 		fn(v)
-	}
-}
-
-func ForEachOnMatrix[T any](mat [][]T, fn func(T)) {
-	for _, row := range mat {
-		for _, v := range row {
-			fn(v)
-		}
 	}
 }
 
@@ -65,4 +50,33 @@ func isEmptyVectorValue(v reflect.Value) bool {
 		}
 	}
 	return true
+}
+
+func Dedupe[T comparable](arr []T) (res []T) {
+	set := map[T]struct{}{}
+	for _, item := range arr {
+		set[item] = struct{}{}
+	}
+	for item := range set {
+		res = append(res, item)
+	}
+	return res
+}
+
+// KeyValue works together with SortAndExtract to sort a slice of Item
+// with their corresponding Index.
+type KeyValue[T, Ti any] struct {
+	Item  T
+	Index Ti
+}
+
+func SortAndExtract[T, Ti any](
+	arr []KeyValue[T, Ti],
+	cmp func(a, b KeyValue[T, Ti]) int,
+) (res []T) {
+	slices.SortFunc(arr, cmp)
+	for _, item := range arr {
+		res = append(res, item.Item)
+	}
+	return res
 }
