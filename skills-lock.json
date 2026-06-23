@@ -47,7 +47,7 @@
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-data-structures/SKILL.md",
-      "computedHash": "d763a58a87637b327f347feeb29d54fb26aa7c7c76848ffba05a3877c203fb25"
+      "computedHash": "ca5e6e98f6b9c375aab12c6108a48be1b4e08f68d1020337338603ce3668338b"
     },
     "golang-database": {
       "source": "samber/cc-skills-golang",
@@ -65,7 +65,7 @@
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-dependency-management/SKILL.md",
-      "computedHash": "ffd555d5725caccd12580da345de21be78e79a9d77edd90654feb24c3d284591"
+      "computedHash": "2a308393ed1d6624e6c5c59a12a9aab25431d237e1e543d03aa97f1121950ab3"
     },
     "golang-design-patterns": {
       "source": "samber/cc-skills-golang",
@@ -77,7 +77,7 @@
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-documentation/SKILL.md",
-      "computedHash": "99edf0e397d4823328f9a12e453bf3c0acc73159349bdd6667e4e025802e66c5"
+      "computedHash": "8118a4dda5a30efcb60037520451b860c16c9f7f7e83e109476e155786f9e996"
     },
     "golang-error-handling": {
       "source": "samber/cc-skills-golang",
@@ -89,7 +89,7 @@
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-how-to/SKILL.md",
-      "computedHash": "17ffc87a42966cee3ade839aa444e4c7702c4e13178539bf8a1f34951f1eb8a8"
+      "computedHash": "e71d7d1bc396ad3858371ee8db472efe66bff19c03a2054ff2aabb12bc2a1c16"
     },
     "golang-lint": {
       "source": "samber/cc-skills-golang",
@@ -125,7 +125,7 @@
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-popular-libraries/SKILL.md",
-      "computedHash": "8823c753fa3822f99ba0e324d8e90903a92e2ed589daebb1989b4319bc3c6286"
+      "computedHash": "7edd8c4dc5588cc0d09cb95b0e29577fffe9078caec62f67ae51519910580ad2"
     },
     "golang-project-layout": {
       "source": "samber/cc-skills-golang",
@@ -143,25 +143,25 @@
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-security/SKILL.md",
-      "computedHash": "5513da820ab46896b74c078d9efe2656d8f079059209ffdc7c69c4931921ced5"
+      "computedHash": "5f394ea7559a5c719616f23d6e3bbb565e5dadd97426cd1f21e023b1c95ce28d"
     },
     "golang-spf13-cobra": {
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-spf13-cobra/SKILL.md",
-      "computedHash": "0642d6df8e2aa05c964b71fbffc6ed4a534ded619ae16720d62a8a4c2755f333"
+      "computedHash": "41fb531be537729ee4dd831dfba9fda3117cc7b447ed164aa646e987ae9c938b"
     },
     "golang-spf13-viper": {
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-spf13-viper/SKILL.md",
-      "computedHash": "28364d5eb33bd19945388c24fb14f69f3c129d072b9a31f292592ce113470292"
+      "computedHash": "fcb378d58d06eabf9743bbdaf9dbfd8737151bbf51c96c9ded805cf342078dca"
     },
     "golang-stay-updated": {
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-stay-updated/SKILL.md",
-      "computedHash": "07f53000a2440f34201aa45d07aac098f922d185cd42f151224c06ccc84b2a6e"
+      "computedHash": "76ad4a471595b1e2ff49a1cfe3ce813e9909c0d220524a956c2fa586910ef376"
     },
     "golang-structs-interfaces": {
       "source": "samber/cc-skills-golang",
