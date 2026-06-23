@@ -3,11 +3,9 @@ package github
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/cache"
 )
 
 // checkGitHubMessage checks if the response data is a GitHub API error message
@@ -26,15 +24,14 @@ func GetFileFromGitHub(apiEndpoint string) (
 	msg *GhApiMessage,
 	data []byte,
 ) {
-	resp, err := http.Get(apiEndpoint)
+	res, err := cachedGithubGet(apiEndpoint)
 	if err != nil {
 		return err, nil, nil
 	}
-	defer fn.CloseReader(resp.Body, logger.Warn)
-	data, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err, nil, nil
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("github: request failed: status %d", res.StatusCode), nil, nil
 	}
+	data = res.Data
 
 	// Check if the response is an error message from GitHub API
 	if msg := checkGitHubMessage(data); msg != nil {
@@ -46,15 +43,14 @@ func GetFileFromGitHub(apiEndpoint string) (
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrCannotDecode, err), nil, nil
 	}
-	resp, err = http.Get(item.DownloadUrl)
+	res, err = cachedGithubGet(item.DownloadUrl)
 	if err != nil {
 		return err, nil, nil
 	}
-	defer fn.CloseReader(resp.Body, logger.Warn)
-	data, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err, nil, nil
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("github: download failed: status %d", res.StatusCode), nil, nil
 	}
+	data = res.Data
 
 	return nil, nil, data
 }
@@ -64,25 +60,31 @@ func GetDirectoryFromGitHub(apiEndpoint string) (
 	msg *GhApiMessage,
 	items []GhItem,
 ) {
-	resp, err := http.Get(apiEndpoint)
+	res, err := cachedGithubGet(apiEndpoint)
 	if err != nil {
 		return err, nil, nil
 	}
-	defer fn.CloseReader(resp.Body, logger.Warn)
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err, nil, nil
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("github: request failed: status %d", res.StatusCode), nil, nil
 	}
+	data := res.Data
 
 	// Check if the response is an error message from GitHub API
 	if msg := checkGitHubMessage(data); msg != nil {
 		return nil, msg, nil
 	}
 
-	var res []GhItem
-	err = json.Unmarshal(data, &res)
+	var decodedItems []GhItem
+	err = json.Unmarshal(data, &decodedItems)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrCannotDecode, err), nil, nil
 	}
-	return nil, nil, res
+	return nil, nil, decodedItems
+}
+
+func cachedGithubGet(rawURL string) (*cache.BytesResponse, error) {
+	return cache.CachedGetRequest(
+		rawURL,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
 }

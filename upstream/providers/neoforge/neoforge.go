@@ -4,11 +4,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
 	"charm.land/huh/v2"
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
 	"github.com/mclucy/lucy/workspace"
@@ -118,22 +117,12 @@ func neoForgeVersionFromPackageRef(
 }
 
 func fetchLatestVersion(gameVersion types.BareVersion) (string, error) {
-	res, err := http.Get(metadataURL)
+	body, err := cache.CachedGetBytes(
+		metadataURL,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
 	if err != nil {
 		return "", fmt.Errorf("fetch NeoForge metadata failed: %w", err)
-	}
-	defer func() { _ = res.Body.Close() }()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return "", fmt.Errorf(
-			"fetch NeoForge metadata failed: status %d",
-			res.StatusCode,
-		)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", fmt.Errorf("read NeoForge metadata failed: %w", err)
 	}
 
 	var meta mavenMetadata

@@ -6,12 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
-	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -53,23 +51,17 @@ func verifySlugBySha1(hintSlug, sha1hex string) bool {
 	u += "?include_changelog=false"
 
 	logger.Debug("modrinth hint verification: " + u)
-	resp, err := http.Get(u)
+	res, err := requestBytes(u)
 	if err != nil {
 		return false
 	}
-	defer fn.CloseReader(resp.Body, logger.Warn)
 
-	if resp.StatusCode != http.StatusOK {
-		return false
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
+	if res.StatusCode != 200 {
 		return false
 	}
 
 	var versions []versionResponse
-	if err := json.Unmarshal(data, &versions); err != nil {
+	if err := json.Unmarshal(res.Data, &versions); err != nil {
 		return false
 	}
 
@@ -90,30 +82,24 @@ func SlugFromHash(sha1hex string) (slug string, err error) {
 	u := versionFileUrlPrefix + sha1hex + "?algorithm=sha1"
 
 	logger.Debug("modrinth hash lookup: " + u)
-	resp, err := http.Get(u)
+	res, err := requestBytes(u)
 	if err != nil {
 		return "", err
 	}
-	defer fn.CloseReader(resp.Body, logger.Warn)
 
-	if resp.StatusCode == http.StatusNotFound {
+	if res.StatusCode == 404 {
 		return "", ENoProject
 	}
-	if resp.StatusCode != http.StatusOK {
+	if res.StatusCode != 200 {
 		return "", fmt.Errorf(
 			"modrinth: hash lookup returned status %d",
-			resp.StatusCode,
+			res.StatusCode,
 		)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
 	}
 
 	var version versionFileResponse
 	if err := json.Unmarshal(
-		data,
+		res.Data,
 		&version,
 	); err != nil || version.ProjectId == "" {
 		return "", ENoProject
@@ -150,29 +136,23 @@ func (s provider) NameByHash(artifact upstream.Hashable) (
 
 	logger.Debug("modrinth hash lookup: " + u)
 
-	resp, err := http.Get(u)
+	res, err := requestBytes(u)
 	if err != nil {
 		return
 	}
-	defer fn.CloseReader(resp.Body, logger.Warn)
 
-	if resp.StatusCode == http.StatusNotFound {
+	if res.StatusCode == 404 {
 		return name, hash, ENoProject
 	}
-	if resp.StatusCode != http.StatusOK {
+	if res.StatusCode != 200 {
 		return name, hash, fmt.Errorf(
 			"modrinth: hash lookup returned status %d",
-			resp.StatusCode,
+			res.StatusCode,
 		)
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-
 	var version versionFileResponse
-	err = json.Unmarshal(data, &version)
+	err = json.Unmarshal(res.Data, &version)
 	if err != nil || version.ProjectId == "" {
 		return name, hash, ENoProject
 	}

@@ -32,10 +32,17 @@ type DownloadOptions struct {
 
 type BytesRequestOptions struct {
 	Kind          EntryKind
+	Headers       http.Header
 	ExpectedHash  string
 	HashAlgorithm HashAlgorithm
 	TTL           time.Duration
 	MaxBytes      int64
+}
+
+type BytesResponse struct {
+	StatusCode int
+	Data       []byte
+	CacheHit   bool
 }
 
 type DownloadResult struct {
@@ -97,6 +104,19 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 // read into memory with a size limit, hashed for content-addressing and
 // integrity verification, then cached.
 func CachedGetBytes(url string, opts BytesRequestOptions) ([]byte, error) {
+	res, err := CachedGetRequest(url, opts)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, fmt.Errorf("fetch failed: status %d", res.StatusCode)
+	}
+	return res.Data, nil
+}
+
+// CachedGetRequest fetches bytes from url and returns the HTTP status code
+// separately from transport/read/cache errors. Non-2xx responses are not cached.
+func CachedGetRequest(url string, opts BytesRequestOptions) (*BytesResponse, error) {
 	hit, data, err := Network().GetBytes(url)
 	if err != nil {
 		logger.Warn(
@@ -107,7 +127,11 @@ func CachedGetBytes(url string, opts BytesRequestOptions) ([]byte, error) {
 		)
 	}
 	if hit && data != nil {
-		return data, nil
+		return &BytesResponse{
+			StatusCode: http.StatusOK,
+			Data:       data,
+			CacheHit:   true,
+		}, nil
 	}
 
 	maxBytes := opts.MaxBytes
@@ -115,14 +139,28 @@ func CachedGetBytes(url string, opts BytesRequestOptions) ([]byte, error) {
 		maxBytes = 50 * 1024 * 1024
 	}
 
-	resp, err := http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create fetch request failed: %w", err)
+	}
+	for key, values := range opts.Headers {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("fetch failed: status %d", resp.StatusCode)
+		bytes, err := readLimitedBytes(resp.Body, maxBytes)
+		if err != nil {
+			return nil, err
+		}
+		return &BytesResponse{StatusCode: resp.StatusCode, Data: bytes}, nil
 	}
 
 	contentHasher := sha256.New()
@@ -170,6 +208,24 @@ func CachedGetBytes(url string, opts BytesRequestOptions) ([]byte, error) {
 		logger.Warn(fmt.Errorf("failed to cache bytes: %w", err))
 	}
 
+	return &BytesResponse{
+		StatusCode: resp.StatusCode,
+		Data:       bytes,
+		CacheHit:   false,
+	}, nil
+}
+
+func readLimitedBytes(reader io.Reader, maxBytes int64) ([]byte, error) {
+	bytes, err := io.ReadAll(io.LimitReader(reader, maxBytes))
+	if err != nil {
+		return nil, fmt.Errorf("read failed: %w", err)
+	}
+	if int64(len(bytes)) >= maxBytes {
+		return nil, fmt.Errorf(
+			"response too large: exceeded %d bytes",
+			maxBytes,
+		)
+	}
 	return bytes, nil
 }
 

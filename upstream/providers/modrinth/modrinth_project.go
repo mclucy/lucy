@@ -1,11 +1,8 @@
 package modrinth
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/knownpkgs"
@@ -13,23 +10,8 @@ import (
 )
 
 func getProjectId(slug types.BarePackageName) (id string, err error) {
-	res, err := http.Get(projectUrl(string(slug)))
-	if err != nil {
-		return "", fmt.Errorf("modrinth: request failed: %w", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return "", ENoProject
-	}
-
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", fmt.Errorf("modrinth: failed to read response: %w", err)
-	}
 	modrinthProject := projectResponse{}
-	err = json.Unmarshal(data, &modrinthProject)
-	if err != nil {
+	if err := requestJSON(projectUrl(string(slug)), &modrinthProject, ENoProject); err != nil {
 		return "", ENoProject
 	}
 	id = modrinthProject.Id
@@ -37,23 +19,8 @@ func getProjectId(slug types.BarePackageName) (id string, err error) {
 }
 
 func getProjectById(id string) (project *projectResponse, err error) {
-	res, err := http.Get(projectUrl(id))
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: request failed: %w", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return nil, ENoProject
-	}
-
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
-	}
 	project = &projectResponse{}
-	err = json.Unmarshal(data, project)
-	if err != nil {
+	if err := requestJSON(projectUrl(id), project, ENoProject); err != nil {
 		return nil, ENoProject
 	}
 	return
@@ -67,23 +34,8 @@ func getProjectByName(slug types.BarePackageName) (
 		*projectResponse,
 		error,
 	) {
-		res, err := http.Get(projectUrl(string(target)))
-		if err != nil {
-			return nil, fmt.Errorf("modrinth: request failed: %w", err)
-		}
-		defer res.Body.Close()
-
-		if res.StatusCode != http.StatusOK {
-			return nil, ENoProject
-		}
-
-		data, err := io.ReadAll(res.Body)
-		if err != nil {
-			return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
-		}
-
 		project := &projectResponse{}
-		if err := json.Unmarshal(data, project); err != nil {
+		if err := requestJSON(projectUrl(string(target)), project, ENoProject); err != nil {
 			return nil, ENoProject
 		}
 		return project, nil
@@ -108,22 +60,7 @@ func getProjectMembers(id string) (
 	members []*memberResponse,
 	err error,
 ) {
-	res, err := http.Get(projectMemberUrl(id))
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: request failed: %w", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return nil, ENoMember
-	}
-
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("modrinth: failed to read response: %w", err)
-	}
-	err = json.Unmarshal(data, &members)
-	if err != nil {
+	if err := requestJSON(projectMemberUrl(id), &members, ENoMember); err != nil {
 		return nil, ENoMember
 	}
 	return members, nil
