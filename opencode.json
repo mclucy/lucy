@@ -20,111 +20,183 @@
     "gopls": {
       "type": "local",
       "command": ["gopls", "mcp"],
-      "enabled": false
+      "enabled": true
     }
   },
   "references": {
     "apt": {
-      "description": "Use APT as a design reference. This repo is indexed via codegraph.",
+      "description": "Use APT as a design reference. This repo is indexed via codegraph",
       "path": "../apt"
     },
+    "arclight": {
+      "description": "Bukkit server implementation with Fabric/Forge/NeoForge support",
+      "repository": "IzzelAliz/Arclight"
+    },
     "brew": {
-      "description": "Use Homebrew as a design reference. This repo is indexed via codegraph.",
+      "description": "Use Homebrew as a design reference. This repo is indexed via codegraph",
       "path": "../brew"
     },
+    "bukkit": {
+      "description": "Minecraft plugin API",
+      "repository": "https://hub.spigotmc.org/stash/scm/spigot/bukkit.git"
+    },
+    "bungeecord": {
+      "description": "Minecraft server proxy",
+      "repository": "SpigotMC/BungeeCord"
+    },
     "cargo": {
-      "description": "Use Cargo as a design reference. This repo is indexed via codegraph.",
+      "description": "Use Cargo as a design reference. This repo is indexed via codegraph",
       "path": "../cargo"
     },
+    "catserver": {
+      "description": "high performance and compatibility Forge+Bukkit+Spigot server on 1.12.2/1.16.5/1.18.2",
+      "repository": "Luohuayu/CatServer"
+    },
+    "craftbukkit": {
+      "description": "An implementation of the Bukkit plugin API for Minecraft servers",
+      "repository": "https://hub.spigotmc.org/stash/scm/spigot/craftbukkit.git"
+    },
     "fabric-api": {
-      "description": "Essential hooks for Fabric modding. Use this while working on Fabric-related tasks.",
+      "description": "Essential hooks for Fabric modding",
       "repository": "FabricMC/fabric-api"
     },
     "fabric-docs": {
-      "description": "Official documentation for Fabric.",
+      "description": "Official documentation for Fabric",
       "repository": "FabricMC/fabric-docs"
     },
     "fabric-loader": {
-      "description": "The core of the Fabric ecosystem. Loads fabric mods and provides useful abstractions.",
+      "description": "The core of the Fabric ecosystem. Loads fabric mods and provides useful abstractions",
       "repository": "FabricMC/fabric-loader"
     },
     "folia": {
       "branch": "ver/26.1.x",
-      "description": "Use this while working on Folia integration.",
+      "description": "Fork of Paper which adds regionised multithreading to the dedicated server",
       "repository": "PaperMC/Folia"
     },
     "forge": {
       "branch": "26.1.2",
-      "description": "Use this while working on Forge integration. Note that the branch is on 26.1.2. For newer versions, you should switch branches.",
+      "description": "Minecraft modding framework. Note that the branch is on 26.1.2. For other versions, switch branches",
       "repository": "MinecraftForge/MinecraftForge"
     },
     "HMCL": {
-      "description": "HMCL is a popular Minecraft launcher in China. It might provide useful Minecraft domain knowledge. However, note that HMCL is primarily client-oriented, so it may not be as relevant for server-side development This repo is indexed via codegraph.",
+      "description": "HMCL is a popular Minecraft launcher in China. Might provide useful Minecraft domain knowledge. This repo is indexed via codegraph",
       "path": "../HMCL"
     },
-    "mcdr-core": {
+    "leaf": {
+      "description": "A Paper fork focused on finding the balance between performance, vanilla mechanics, and stability. Docs: https://www.leafmc.one",
+      "repository": "Winds-Studio/Leaf"
+    },
+    "leaves": {
+      "description": "Fork of Paper aims at repairing broken vanilla properties",
+      "repository": "LeavesMC/Leaves"
+    },
+    "lophine": {
+      "description": "A fork of Luminol with better support for technical Minecraft servers",
+      "repository": "LuminolMC/Lophine"
+    },
+    "luminol": {
+      "description": "A fork of Folia with optimizations, bug fixes, and configurable vanilla features",
+      "repository": "LuminolMC/Luminol"
+    },
+    "mcdr": {
       "branch": "master",
-      "description": "Use this while working on MCDR integration.",
+      "description": "Non-intrusive Minecraft plugin framework",
       "repository": "MCDReforged/MCDReforged"
     },
     "mcdr-plugin-catalog": {
       "branch": "meta",
-      "description": "Use this while working on MCDR integration.",
+      "description": "Catalog of MCDReforged plugins",
       "repository": "MCDReforged/PluginCatalogue"
     },
     "modrinth": {
       "branch": "main",
-      "description": "Use this while working on Modrinth integration.",
+      "description": "Use this while working on Modrinth integration",
       "repository": "modrinth/code"
+    },
+    "mohist": {
+      "description": "Tenet, formerly known as Mohist. Forge Hybrid server implementing Spigot/Bukkit API. Docs: https://mohistmc.cn/docs/mohist",
+      "repository": "Teneted/Tenet"
     },
     "neoforge": {
       "branch": "26.2.x",
-      "description": "Use this while working on NeoForge integration. Note that the branch is on 26.2.x. For older versions, you should switch branches.",
+      "description": "Community fork of Forge. Note that the branch is on 26.2.x. For older versions, you should switch branches",
       "repository": "neoforged/NeoForge"
     },
     "nix": {
-      "description": "Nix takes a purely functional approach. It might be insightful at specific cases where we want to introduce functional programming hacks. This repo is indexed via codegraph.",
+      "description": "Nix might be insightful at specific cases where we want to introduce functional programming hacks. This repo is indexed via codegraph",
       "path": "../nix"
     },
     "pacman": {
-      "description": "Use Pacman as a design reference. This repo is indexed via codegraph.",
+      "description": "Use Pacman as a design reference. This repo is indexed via codegraph",
       "path": "../pacman"
     },
     "paper": {
       "branch": "main",
-      "description": "Use this while working on Paper integration.",
+      "description": "High performance Minecraft server that aims to fix gameplay and mechanics inconsistencies",
       "repository": "PaperMC/Paper"
     },
     "paper-docs": {
       "branch": "main",
-      "description": "Use this while working on Paper documentation.",
+      "description": "Documentation for all PaperMC projects",
       "repository": "PaperMC/docs"
     },
     "PCL": {
-      "description": "PCL is a popular Minecraft launcher in China. It might provide useful Minecraft domain knowledge. However, note that PCL is primarily client-oriented, so it may not be as relevant for server-side development This repo is indexed via codegraph.",
+      "description": "A popular Minecraft launcher in China. Might provide useful Minecraft domain knowledge",
       "path": "../PCL"
     },
     "pnpm": {
-      "description": "Use pnpm as a design reference. This repo is indexed via codegraph.",
+      "description": "Use pnpm as a design reference. This repo is indexed via codegraph",
       "path": "../pnpm"
     },
+    "pumpkin": {
+      "description": "Minecraft server written in Rust. Docs: https://docs.pumpkinmc.org",
+      "repository": "Pumpkin-MC/Pumpkin"
+    },
+    "purpur": {
+      "description": "Replacement of Paper with additional features",
+      "repository": "PurpurMC/Purpur"
+    },
+    "silkard": {
+      "description": "Fabric hybrid server implementing Spigot API",
+      "repository": "MohistMC/Silkard"
+    },
     "sinytra-connector": {
-      "description": "Sinytra Connector is a Forge/NeoForge mod that serves as a bridge to Fabric mods. It serves as a special node in lucy's topology model.",
+      "description": "Sinytra Connector is a Forge/NeoForge mod that serves as a bridge to Fabric mods. It serves as a special node in lucy's topology model",
       "repository": "Sinytra/Connector"
+    },
+    "spigot": {
+      "description": "High performance Minecraft server implementation",
+      "repository": "https://hub.spigotmc.org/stash/scm/spigot/spigot.git"
+    },
+    "sponge": {
+      "description": "Implementation of the Sponge API on vanilla, Forge, or NeoForge.",
+      "repository": "SpongePowered/Sponge"
+    },
+    "sponge-api": {
+      "description": "The sponge plugin API.",
+      "repository": "SpongePowered/SpongeAPI"
+    },
+    "sponge-docs": {
+      "description": "Documentations for the Sponge API.",
+      "repository": "SpongePowered/SpongeDocs"
     },
     "velocity": {
       "branch": "dev/3.0.0",
-      "description": "Use this while working on Velocity integration.",
+      "description": "The modern, next-generation Minecraft server proxy",
       "repository": "VelocityPowered/Velocity"
     },
     "waterfall": {
       "branch": "master",
-      "description": "Use this while working on Waterfall integration.",
+      "description": "BungeeCord fork that aims to improve performance and stability",
       "repository": "PaperMC/Waterfall"
     },
     "yarn": {
-      "description": "Use yarn v4 as a design reference. This repo is indexed via codegraph.",
+      "description": "Use yarn v4 as a design reference. This repo is indexed via codegraph",
       "path": "../yarn"
+    },
+    "youer": {
+      "description": "NeoForge Hybrid server implementing Paper/Purpur. Docs: https://mohistmc.cn/docs/youer",
+      "repository": "MohistMC/Youer"
     }
   }
 }
