@@ -82,10 +82,12 @@ func distributeRuntimeIdentities(
 	for _, identity := range identities {
 		nodeID, ok := RuntimeIdentityNode(identity)
 		if !ok {
-			logger.Warn(fmt.Errorf(
-				"unmatched runtime identity %q: no node mapping",
-				identity.Name,
-			))
+			logger.Warn(
+				fmt.Errorf(
+					"unmatched runtime identity %q: no node mapping",
+					identity.Name,
+				),
+			)
 			continue
 		}
 
@@ -97,11 +99,13 @@ func distributeRuntimeIdentities(
 			}
 		}
 		if index < 0 {
-			logger.Warn(fmt.Errorf(
-				"unmatched runtime identity %q: topology has no node %q",
-				identity.Name,
-				nodeID,
-			))
+			logger.Warn(
+				fmt.Errorf(
+					"unmatched runtime identity %q: topology has no node %q",
+					identity.Name,
+					nodeID,
+				),
+			)
 			continue
 		}
 
@@ -127,6 +131,8 @@ func RuntimeIdentityNode(identity types.VersionedPackageRef) (
 		return types.RuntimeNodeMCDR, true
 	case "minecraft", "mc":
 		return types.RuntimeNodeMinecraft, true
+	case "connector", "sinytra-connector", "connectormod":
+		return types.RuntimeNodeConnector, true
 	case "paper":
 		return types.RuntimeNodePaper, true
 	case "paper-fork", "divine", "leaf":
