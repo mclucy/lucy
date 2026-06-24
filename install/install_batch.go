@@ -95,6 +95,10 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 	}
 
 	serverInfo := options.ServerInfo()
+	if serverInfo.Topology == nil || !serverInfo.Topology.Resolved() {
+		workspace.Rebuild()
+		serverInfo = options.ServerInfo()
+	}
 	recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Fetching metadata for", IDs: regularIds})
 	if err := validateRegularBatchIDs(regularIds, serverInfo); err != nil {
 		return nil, installError(CategoryResolution, err, nil)
