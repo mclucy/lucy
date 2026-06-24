@@ -46,6 +46,9 @@ test_*
 !**/testdata
 !**/testdata/**
 
+# Installed skills
+.agents/skills
+
 # Task generated
 .task
 
