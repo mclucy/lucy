@@ -166,12 +166,6 @@ tasks:
       - test
       - test:race
 
-  verify:
-    desc: Run build, tests, race tests, and CLI smoke checks
-    deps:
-      - check
-      - smoke
-
   build-release:
     internal: true
     deps:
