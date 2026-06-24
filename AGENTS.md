@@ -28,8 +28,6 @@ task build:release      # Cross-compile all platforms (-tags release -w -s)
 task test               # go test ./...
 task test:race          # go test -race ./...
 task check              # build:dev-core + test + test:race
-task smoke              # Build + verify CLI entrypoints parse
-task verify             # check + smoke (full pre-commit gate)
 task clean              # Remove dist/ and release/ directories
 task clean:dist         # Remove dist/ only
 task clean:release      # Remove release/ only
