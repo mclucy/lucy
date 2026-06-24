@@ -1,0 +1,171 @@
+{
+  "repo_notes": [
+    {
+      "content": "Lucy is a Minecraft server package manager written in Go 1.26.4 (module github.com/mclucy/lucy). It is to Minecraft servers what apt or cargo is to OS packages: users declare desired mods/plugins/server cores in a manifest (lucy.yaml), Lucy resolves exact versions and dependencies into a lock file (lucy-lock.yaml), and `lucy install` syncs the managed scope into a Minecraft server directory. The entry point is main.go, which calls cmd.Execute() (Cobra CLI). Apache 2.0 licensed. The project is pre-beta and under active development.",
+      "author": "Maintainer"
+    },
+    {
+      "content": "Strict architectural rules to preserve when documenting: (1) types/ is a zero-dependency pure domain layer — never import anything into types/. All other packages depend on types, never the reverse. (2) State ownership is exclusive to ProjectStateService in state/ — no other code may read or write lucy.yaml or lucy-lock.yaml directly. (3) Upstream sources (upstream/providers) implement atomic capability interfaces (Searcher, Informer, ArtifactMapper, VersionSelectorResolver) defined in upstream/upstream_types.go; composite interfaces (PackageResolver, PackageSource) are formed by consumers via type assertion. The install/ package consumes providers purely through interfaces, never concrete types. (4) Three-tier logger in logger/ — never use fmt.Println for user-facing output. (5) Upstream providers are routed by the Source enum in upstream/routing; note that hangar and spiget are defined but NOT wired into the resolver yet."
+    },
+    {
+      "content": "Two-file state model in state/: lucy.yaml holds declared package intent plus optional config overrides (the manifest, owned by state/manifest.go); lucy-lock.yaml holds the resolved dependency graph — exact versions, checksums, install paths, provenance (owned by state/lock.go). ProjectStateService (state/service.go) is the single owner of all reads/writes and enforces atomicity. A global config lives at os.UserConfigDir()/lucy/config.yaml (state/global.go). codec.go handles YAML (de)serialization; compare.go computes manifest/lock diffs; io.go is the file I/O boundary."
+    },
+    {
+      "content": "Package identifiers are central to the domain and follow the form [source]:[platform/]name[@version]. Only the name is required. Platform (none, fabric, forge, neoforge, mcdr) is inferred from the server environment when omitted. Version defaults to @compatible (best-effort match against detected runtime); @latest is the newest available. See types/type_id.go and input/syntax.go. Platforms bukkit, sponge, velocity, bungeecord exist in the type system (types/type_server_topology.go) for runtime topology detection only and cannot yet be set as the primary platform."
+    },
+    {
+      "content": "The runtime topology system in workspace/ builds a graph of the detected Minecraft server runtime. Each node (Fabric, Forge, NeoForge, Paper, MCDR, Geyser, Velocity, BungeeCord, Sponge, etc.) carries a role, a set of capabilities (fabric_mods, bukkit_plugins, mcdr_plugins, ...), and a risk level. Edges describe how nodes relate (one adapts another, one bridges to another). This graph powers `lucy status`, init discovery, and compatibility resolution. probe.go is the main entry; probe_topology_*.go handle registry, enrichment, and evaluation; probe_exec.go runs the server to gather runtime facts; probe_package_index.go scans installed jars. workspace/detector/ holds declarative runtime node detection rules."
+    },
+    {
+      "content": "The install pipeline in install/ is a phased recursive state machine: Candidate -> Downloaded -> Verified -> Committed. install_recursive_*.go implement each stage (resolve, download, verify, reconcile, apply). install_batch.go orchestrates concurrent installs; install_recursive_reconcile.go handles diffing against the existing managed scope. Ambient packages (install/ambient.go) are jars present on disk but not managed by Lucy. install/journal.go logs install operations. Providers are resolved per-package via install_recursive_provider_resolver.go."
+    },
+    {
+      "content": "Version handling in version/ is split across concerns: version_semver.go (semver v3 parsing), version_minecraft_parse.go + version_minecraft_types.go (Minecraft release/snapshot ordering), version_maven.go and version_range_maven.go (Maven version ranges used by Forge/NeoForge metadata), version_range_semver.go and version_range_dialect.go (cross-format range translation). version_comparison.go and version_dependency.go are facade files re-exporting comparisons."
+    },
+    {
+      "content": "The artifact/ package reads jar metadata across all supported mod/plugin ecosystems: reader_fabric.go (fabric.mod.json), reader_forge.go + reader_forge_legacy.go (mods.toml and the legacy mcmod.info), reader_neoforge.go (NeoForge mods.toml with jarjar), reader_bukkit.go (plugin.yml), reader_sponge.go (sponge_plugins.json), reader_mcdr.go (mcdreforged.plugin.json), reader_velocity.go (velocity-plugin.json). artifact.go is the dispatcher; types.go holds the unified metadata shape. This metadata feeds topology detection and dependency resolution."
+    },
+    {
+      "content": "The cache/ package is a three-layer network cache: store.go (blob storage on disk), index.go (key->metadata index), policy.go (eviction/validity policy). download.go performs cached HTTP downloads; cache_handler.go and cache_manifest.go integrate with the install pipeline; domain.go holds cache-specific types. internal/networkutil/ wraps cache downloads for higher-level callers. internal/slugmap/ (referenced from cmd_cache.go as `cache slugs`) maintains remote-slug to local package ID mappings."
+    },
+    {
+      "content": "Build and tooling: the project uses Taskfile (Taskfile.yml), not Make. Key tasks: `task build` (clean + debug binary to dist/lucy-{os}-{arch}-dev), `task build:dev-core` (incremental), `task test`, `task test:race`, `task check` (build+test+race), `task verify` (check + smoke), `task build:release` (cross-compile with -tags release -w -s). Build injects a cipher key+ciphertext via ldflags -X into internal/cipher (task cipher-generate requires CF_API_KEY in env, used for CurseForge API key embedding). copyright.sh + task copyright-add/remove manage Apache 2.0 license headers. The dist/ and release/ directories are build outputs; test_* directories at the repo root are gitignored sandbox servers used for smoke tests (discover with ls, not glob)."
+    },
+    {
+      "content": "The cmd/ package holds all Cobra CLI command implementations (cmd_*.go) plus the cmd/init/ sub-package which is a state machine driving `lucy init` discovery and onboarding (init_flow.go orchestrates, tui.go renders huh v2 / bubbletea v2 prompts). command_contracts.go and data_source.go define shared command wiring; dependency_graph.go and package_request.go support the add/tree/leaves commands; cmd_completion_*.go provide shell completion. Stub commands (cmd_doctor.go, cmd_export.go, cmd_upgrade.go) are registered but not yet implemented."
+    },
+    {
+      "content": "The resolve/ package (resolve/solver.go) implements dependency resolution: given a manifest it produces a consistent set of locked packages, normalizing constraints (normalize.go), formatting errors (errors.go, format.go) and surfacing them through types.go. It sits between the manifest in state/ and the install pipeline."
+    },
+    {
+      "content": "Bootstrap server launchers in bootstrap/ (fabric.go, forge.go, neoforge.go, mcdr.go, mojang.go) know how to start a vanilla or modded server for runtime probing (used by workspace/probe_exec.go). java_runner.go wraps the JVM invocation; eula.go handles EULA acceptance automation; bootstrap.go is the dispatcher."
+    },
+    {
+      "content": "The tui/ package renders the terminal UI with bubbletea v2, lipgloss v2, huh v2, and glamour. tui.go is the main program; tui_status_layout.go and tui_status_logo.go (plus tui_status_logo_var.go) render the `lucy status` screen including the ASCII axolotl logo. progress/ holds progress widgets; style/ holds shared lipgloss styles; assets/ holds embedded resources."
+    },
+    {
+      "content": "internal/ sub-packages: cipher/ (ChaCha20Poly1305 encryption for build-time API key embedding), fileschema/ (typed Minecraft metadata file formats — fabric.mod.json, mods.toml, plugin.yml, mcdreforged.plugin.json, sponge_plugins.json, neoforge jarjar, etc. — consumed by artifact/), fn/ (generic helpers: Ternary, Memoize, slice utilities), fsutil/ (filesystem helpers like CloseReader and path utilities), algo/ (graph operations and data structure utilities used by topology and dependency graphs), artifacthash/ (jar content hashing), knownpkgs/ (curated known-package overrides and session-scoped lookups), networkutil/ (network helpers wrapping cache downloads)."
+    },
+    {
+      "content": "Shared GitHub API infrastructure lives in github/ (gh.go, gh_type.go, gh_error.go) and is reused by the githubsource provider in upstream/providers/githubsource. All upstream providers live under upstream/providers/<source>/ and implement the atomic capability interfaces from upstream/upstream_types.go. upstream/routing/ (routing.go, routing_capability.go, routing_execution.go, routing_policy.go, routing_search_aggregation.go) decides which provider serves a given request based on the Source enum and declared capabilities."
+    }
+  ],
+  "pages": [
+    {
+      "title": "Lucy Overview",
+      "purpose": "High-level introduction to Lucy as a Minecraft server package manager: what it does, the manifest+lock two-file model, the declare-resolve-install workflow, and how it differs from manual jar management. Reference the README and AGENTS.md."
+    },
+    {
+      "title": "Architecture and Package Layout",
+      "purpose": "Document the top-level Go package layout (cmd/, types/, state/, upstream/, upstream/providers/, upstream/routing/, workspace/, workspace/detector/, install/, input/, cache/, version/, artifact/, logger/, tui/, github/, resolve/, bootstrap/, internal/) and the dependency direction between them. Emphasize the strict rules: types/ has zero dependencies, state/ is the sole owner of state files, upstream/ exposes atomic capability interfaces consumed via type assertion, and user output must go through the three-tier logger."
+    },
+    {
+      "title": "CLI Commands",
+      "purpose": "Document every command implemented in cmd/: init, add, remove, install, search, status, topology, info, tree, leaves, cache (with slugs subcommands), and bisect, plus the stub commands (doctor, export, upgrade). Cover their flags, exit behavior, and the shared wiring in command_contracts.go, data_source.go, dependency_graph.go, package_request.go, and cmd_completion_*.go.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Init Flow State Machine",
+      "purpose": "Document the cmd/init/ sub-package: how init_flow.go orchestrates directory probing, runtime detection, package discovery, and onboarding, and how tui.go renders the huh v2 / bubbletea v2 prompts. Explain how it consumes workspace/probe.go and writes initial state via ProjectStateService.",
+      "parent": "CLI Commands"
+    },
+    {
+      "title": "Domain Types",
+      "purpose": "Document the contents of types/ as the project's pure domain layer: Package, Core, Dependency, Identity, Meta, Source, ServerRuntime, ServerTopology, and the package ID grammar ([source]:[platform/]name[@version]). Reinforce that nothing may be imported into types/.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "State Model and ProjectStateService",
+      "purpose": "Document the state/ package in depth: the lucy.yaml manifest (manifest.go) vs lucy-lock.yaml lock (lock.go), the ProjectStateService singleton (service.go) that owns all reads/writes, the codec layer (codec.go), diffing (compare.go), file I/O (io.go), global config (global.go), and config overrides (config.go). Explain atomicity guarantees and why direct file access is forbidden.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Upstream Sources and Capability Interfaces",
+      "purpose": "Document the upstream/ package: the atomic capability interfaces (Searcher, Informer, ArtifactMapper, VersionSelectorResolver) in upstream_types.go, how composite interfaces (PackageResolver, PackageSource) emerge via type assertion, and the contract in upstream.go. List every provider under upstream/providers/ (modrinth, curseforge, github, fabric, forge, neoforge, mojang, mcdr, hangar, spiget) and note which are wired into the resolver (modrinth, curseforge, github, mcdr) vs defined but not routed (hangar, spiget).",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Source Routing",
+      "purpose": "Document upstream/routing/: how routing.go maps a Source enum to providers, routing_capability.go builds composite interfaces from atomic capabilities, routing_policy.go chooses between providers when multiple qualify, routing_execution.go dispatches requests, and routing_search_aggregation.go merges search results across sources.",
+      "parent": "Upstream Sources and Capability Interfaces"
+    },
+    {
+      "title": "Workspace Runtime Detection",
+      "purpose": "Document the workspace/ package: probe.go as the entry point, the probe_topology_*.go family (registry, registry_data, enrich, evaluation) that builds the runtime topology graph, probe_exec.go that launches the server to collect runtime facts, probe_package_index.go that scans installed jars, probe_runtime_materialize.go and probe_runtime_types.go that materialize detected nodes, and probe_environment.go for ambient environment detection. Explain how the resulting topology graph feeds `lucy status`, init discovery, and compatibility resolution.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Declarative Node Detection",
+      "purpose": "Document workspace/detector/ as the declarative rule layer used by workspace/probe_topology_registry*.go to recognize runtime nodes (Fabric, Forge, NeoForge, Paper, MCDR, Geyser, Velocity, BungeeCord, Sponge, etc.), assign roles, capabilities, and risk levels, and declare edges between nodes (adapts, bridges).",
+      "parent": "Workspace Runtime Detection"
+    },
+    {
+      "title": "Install Pipeline",
+      "purpose": "Document the install/ package as a recursive phased state machine (Candidate -> Downloaded -> Verified -> Committed) implemented across install_recursive_resolve.go, install_recursive_download.go, install_recursive_verify.go, install_recursive_apply.go, install_recursive_reconcile.go, install_recursive_resolution_plan.go, install_recursive_stage_types.go, and install_recursive_provider_resolver.go. Cover install_batch.go (concurrent orchestration), install/ambient.go (unmanaged jars), install/journal.go + journal_log.go (operation log), install_errors.go, and install_options.go.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Dependency Resolution",
+      "purpose": "Document the resolve/ package: how resolve/solver.go turns a manifest into a consistent locked package set, how normalize.go canonicalizes constraints, how format.go and errors.go surface conflicts to the user, and how the solver cooperates with upstream/ capabilities and version/ ranges.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Version Parsing and Ranges",
+      "purpose": "Document the version/ package across all formats: version_semver.go (semver v3), version_minecraft_parse.go + version_minecraft_types.go (Minecraft release/snapshot ordering), version_maven.go + version_range_maven.go (Maven ranges used by Forge/NeoForge), version_range_semver.go + version_range_dialect.go (cross-format range translation), and the version_comparison.go / version_dependency.go facades.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Artifact Metadata Readers",
+      "purpose": "Document the artifact/ package and how it reads jar metadata across ecosystems: artifact.go (dispatcher), types.go (unified shape), reader_fabric.go (fabric.mod.json via internal/fileschema), reader_forge.go + reader_forge_legacy.go (mods.toml, mcmod.info), reader_neoforge.go (NeoForge mods.toml + jarjar), reader_bukkit.go (plugin.yml), reader_sponge.go (sponge_plugins.json), reader_mcdr.go (mcdreforged.plugin.json), reader_velocity.go (velocity-plugin.json). Explain how this metadata feeds topology detection and dependency resolution.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Minecraft File Schemas",
+      "purpose": "Document internal/fileschema/ as the typed schema layer for Minecraft metadata files: type_file_fabric.go, type_file_forge.go, type_file_neoforge_jarjar.go, type_file_mcdr.go, type_file_sponge.go, type_file_minecraft.go (server metadata), plus the API-only types type_api_mcdr.go and type_api_mojang.go. Note that artifact/ consumes these schemas and they are the canonical source of truth for on-disk metadata shapes.",
+      "parent": "Artifact Metadata Readers"
+    },
+    {
+      "title": "Three-Layer Cache",
+      "purpose": "Document the cache/ package: store.go (blob storage on disk), index.go (key to metadata index), policy.go (eviction/validity), download.go (cached HTTP downloads), cache_handler.go + cache_manifest.go (install pipeline integration), domain.go (cache types), and cache.go (package facade). Cover internal/networkutil/ as the higher-level wrapper, internal/slugmap/ as the remote-slug to package-ID mapping surfaced via `lucy cache slugs`, and how `lucy cache ls|clear|slugs ls|slugs clear` map onto these internals.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Input Parsing and Trust Boundary",
+      "purpose": "Document the input/ package as the trust boundary for external package references: input/syntax.go parses [source]:[platform/]name[@version] strings into typed requests (input_types.go), validating platform and version syntax before they reach state/ or resolve/.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Logger and Diagnostics",
+      "purpose": "Document the logger/ package: logger.go (three-tier logger — file-only, user-display, both), logger_init.go (setup), logger_io.go (writer adapter), logger_types.go (level/tier types), and the DumpHistory() history buffer used for post-mortem dumps on fatal errors (deferred in main.go). Reference the global flags --debug, --log-file, --print-logs.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Terminal UI",
+      "purpose": "Document the tui/ package: tui.go (bubbletea v2 program), tui_helpers.go, tui_status_layout.go and tui_status_logo.go (+ tui_status_logo_var.go) that render `lucy status` including the ASCII axolotl logo, and the progress/, style/, and assets/ sub-packages. Note the dependencies on bubbletea v2, lipgloss v2, huh v2, and glamour, and the --no-style global flag.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Bootstrap Server Launchers",
+      "purpose": "Document the bootstrap/ package: bootstrap.go (dispatcher), fabric.go, forge.go, neoforge.go, mcdr.go, mojang.go (per-platform launchers), java_runner.go (JVM invocation wrapper), and eula.go (EULA acceptance). Explain how workspace/probe_exec.go uses these to launch a server for runtime probing.",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "Internal Utilities",
+      "purpose": "Document the remaining internal/ sub-packages: cipher/ (ChaCha20Poly1305 build-time API key embedding, wired via ldflags -X and the task cipher-generate workflow), fn/ (generic helpers — Ternary, Memoize, slice utilities in fn.go, fn_slices.go, fn_types.go), fsutil/ (CloseReader and path utilities), algo/ (graph operations and data structure utilities consumed by topology and dependency graphs), artifacthash/ (jar content hashing), knownpkgs/ (curated known-package overrides and session-scoped lookups — see internal/knownpkgs/AGENTS.md), and networkutil/ (higher-level cached download wrapper).",
+      "parent": "Architecture and Package Layout"
+    },
+    {
+      "title": "GitHub API Infrastructure",
+      "purpose": "Document the github/ package (gh.go, gh_type.go, gh_error.go) as shared GitHub API infrastructure reused by upstream/providers/githubsource. Cover authentication, rate limiting, error handling, and how it integrates with cache/ for response caching.",
+      "parent": "Upstream Sources and Capability Interfaces"
+    },
+    {
+      "title": "Build, Taskfile, and Release",
+      "purpose": "Document the build system: Taskfile.yml targets (build, build:dev-core, build:watch, build:release, test, test:race, check, smoke, verify, clean, clean:dist, clean:release, cipher-generate, copyright-add, copyright-remove), the ldflags-based cipher key injection into internal/cipher, the dist/ (debug binaries) and release/ (cross-compiled artifacts) output directories, copyright.sh for Apache 2.0 headers, and the .env / .cipher_key / .cipher_ciphertext dotenv loading."
+    },
+    {
+      "title": "Testing and Smoke Fixtures",
+      "purpose": "Document the testing strategy: unit tests live alongside source (cmd_*_test.go, state/*_test.go, etc.), race detection via `task test:race`, and the gitignored test_* directories at the repo root (test_arclight_fabric, test_arclight_neoforge, test_empty, test_fabric_launcher_114, test_fabric_launcher_121, test_fabric_single_121, test_general, test_gtnh, test_luminol, test_mohist, test_neoforge, test_paper_family, test_proprietary, test_server_artifacts, test_sponge, test_sponge_forge, test_sponge_neoforge) which are sandbox Minecraft server directories used by `task smoke`. Note these must be discovered with ls, not glob."
+    }
+  ]
+}
