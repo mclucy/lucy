@@ -26,6 +26,7 @@ func init() {
 
 func actionTopology(cmd *cobra.Command, args []string) error {
 	jsonOut, _ := cmd.Flags().GetBool(flagJsonName)
+	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
 	longOut, _ := cmd.Flags().GetBool(flagLongName)
 	noStyle, _ := cmd.Flags().GetBool(flagNoStyleName)
 
@@ -43,14 +44,20 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 
 	mermaidSource := buildMermaidTopology(topology, "LR", longOut)
 
-	if jsonOut {
-		style.PrintAsJson(map[string]any{
-			"game_version": info.Runtime.GameVersion.String(),
-			"primary_node": topology.PrimaryNode,
-			"nodes":        topology.Nodes,
-			"edges":        topology.Edges,
-			"mermaid":      mermaidSource,
-		})
+	output := map[string]any{
+		"game_version": info.Runtime.GameVersion.String(),
+		"primary_node": topology.PrimaryNode,
+		"nodes":        topology.Nodes,
+		"edges":        topology.Edges,
+		"mermaid":      mermaidSource,
+	}
+
+	if jsonOut || jsonCompact {
+		if jsonCompact {
+			style.PrintAsJsonCompact(output)
+		} else {
+			style.PrintAsJson(output)
+		}
 		return nil
 	}
 

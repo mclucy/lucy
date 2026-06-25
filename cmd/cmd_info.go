@@ -94,10 +94,15 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	json, _ := cmd.Flags().GetBool(flagJsonName)
+	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
 	long, _ := cmd.Flags().GetBool(flagLongName)
 
-	if json {
-		style.PrintAsJson(meta)
+	if json || jsonCompact {
+		if jsonCompact {
+			style.PrintAsJsonCompact(meta)
+		} else {
+			style.PrintAsJson(meta)
+		}
 	} else {
 		var out *tui.Data
 		out = infoOutput(meta, long)

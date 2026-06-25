@@ -8,19 +8,24 @@ import (
 )
 
 const (
-	flagJsonName      = "json"
-	flagLongName      = "long"
-	flagNoStyleName   = "no-style"
-	flagSourceName    = "source"
-	flagLogFileName   = "log-file"
-	flagPrintLogsName = "print-logs"
-	flagDebugName     = "debug"
-	flagDumpLogsName  = "dump-logs"
+	flagJsonName        = "json"
+	flagJsonCompactName = "json-compact"
+	flagLongName        = "long"
+	flagNoStyleName     = "no-style"
+	flagSourceName      = "source"
+	flagLogFileName     = "log-file"
+	flagPrintLogsName   = "print-logs"
+	flagDebugName       = "debug"
+	flagDumpLogsName    = "dump-logs"
 )
 
 // addJsonFlag adds the --json flag to a command.
 func addJsonFlag(cmd *cobra.Command) {
 	cmd.Flags().Bool(flagJsonName, false, "Print raw JSON response")
+}
+
+func addJsonCompactFlag(cmd *cobra.Command) {
+	cmd.Flags().Bool(flagJsonCompactName, false, "Print raw JSON response without indentation")
 }
 
 // addLongFlag adds the --long/-l flag to a command.
