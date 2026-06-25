@@ -24,6 +24,14 @@ func (d *VanillaDetector) Detect(
 	zipReader *zip.Reader,
 	fileHandle *os.File,
 ) (*ExecutableEvidence, error) {
+	data, ok, err := readArchiveEntry(zipReader, fabricLaunchPropertiesPath)
+	if err != nil {
+		return nil, err
+	}
+	if ok && fabricLauncherPropertiesAreServer(data) {
+		return nil, nil
+	}
+
 	for _, f := range zipReader.File {
 		if f.Name == "version.json" {
 			r, err := f.Open()
