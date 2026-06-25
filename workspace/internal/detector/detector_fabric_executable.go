@@ -10,7 +10,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -40,7 +40,7 @@ func (d *fabricServerSingleFileDetector) Detect(
 			if err != nil {
 				continue
 			}
-			defer fn.CloseReader(r, logger.Warn)
+			defer fn.CloseReader(r, log.Warn)
 
 			scanner := bufio.NewScanner(r)
 			for scanner.Scan() {
@@ -71,7 +71,11 @@ func (d *fabricServerSingleFileDetector) Detect(
 		return nil, nil
 	}
 
-	return newFabricExecutableEvidence(filePath, loaderVersion, gameVersion), nil
+	return newFabricExecutableEvidence(
+		filePath,
+		loaderVersion,
+		gameVersion,
+	), nil
 }
 
 // fabricServerLauncherDetector detects Fabric server launchers.
@@ -105,7 +109,11 @@ func (d *fabricServerLauncherDetector) Detect(
 		return nil, nil
 	}
 
-	return newFabricExecutableEvidence(filePath, loaderVersion, gameVersion), nil
+	return newFabricExecutableEvidence(
+		filePath,
+		loaderVersion,
+		gameVersion,
+	), nil
 }
 
 func fabricLauncherPropertiesAreServer(data []byte) bool {
@@ -131,7 +139,7 @@ func parseFabricLauncherManifestVersions(zipReader *zip.Reader) (
 			if err != nil {
 				continue
 			}
-			defer fn.CloseReader(r, logger.Warn)
+			defer fn.CloseReader(r, log.Warn)
 
 			var classPaths []string
 			s := bufio.NewScanner(r)
@@ -197,7 +205,12 @@ func parseFabricLauncherBundledLoaderVersion(zipReader *zip.Reader) types.BareVe
 }
 
 func parseFabricLauncherSidecarGameVersion(filePath string) types.BareVersion {
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filePath), "version.json"))
+	data, err := os.ReadFile(
+		filepath.Join(
+			filepath.Dir(filePath),
+			"version.json",
+		),
+	)
 	if err != nil {
 		return types.VersionUnknown
 	}

@@ -29,7 +29,7 @@ import (
 	"github.com/mclucy/lucy/upstream/providers/modrinth"
 	"gopkg.in/ini.v1"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -309,7 +309,7 @@ func buildServerProperties() fileschema.FileMinecraftServerProperties {
 	file, err := ini.Load(propertiesPath)
 	if err != nil {
 		if exec != UnknownExecutable {
-			logger.Info("this server is missing a server.properties")
+			log.Info("this server is missing a server.properties")
 		}
 		return nil
 	}
@@ -395,8 +395,8 @@ func buildInstalledPackages() (mods []types.Package) {
 	for _, modPath := range paths {
 		jarFiles, err := findJar(modPath)
 		if err != nil {
-			logger.Warn(err)
-			logger.Info("cannot read the mod directory")
+			log.Warn(err)
+			log.Info("cannot read the mod directory")
 			continue
 		}
 
@@ -435,8 +435,8 @@ func buildInstalledPackages() (mods []types.Package) {
 		for _, dir := range env.Mcdr.Config.PluginDirectories {
 			pluginFiles, err := findFileWithExt(dir, ".pyz", ".mcdr")
 			if err != nil {
-				logger.Warn(err)
-				logger.Info("cannot read the MCDR plugin directory")
+				log.Warn(err)
+				log.Info("cannot read the MCDR plugin directory")
 				continue
 			}
 			for _, pluginFile := range pluginFiles {

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 type handler struct {
@@ -32,7 +32,7 @@ func newHandler(name string, cfg CacheConfig) (obj *handler) {
 	}
 
 	if err := os.MkdirAll(obj.dir, 0o700); err != nil {
-		logger.Warn(
+		log.Warn(
 			fmt.Errorf(
 				"cannot create cache directory, disabling %s cache: %w",
 				name, err,
@@ -53,7 +53,7 @@ func newHandler(name string, cfg CacheConfig) (obj *handler) {
 		obj.clearExpiredCache()
 		obj.maintainCacheLimit()
 		if err := obj.index.flush(); err != nil {
-			logger.Warn(
+			log.Warn(
 				fmt.Errorf(
 					"failed to update index on initialization: %w",
 					err,
@@ -122,7 +122,7 @@ func (handler *handler) AddEntry(
 		return err
 	}
 
-	logger.Debug(
+	log.Debug(
 		fmt.Sprintf(
 			"cache store: %s (%s, %s)",
 			k,
@@ -145,7 +145,7 @@ func (handler *handler) AddEntry(
 	)
 
 	if err := handler.index.flush(); err != nil {
-		logger.Warn(
+		log.Warn(
 			fmt.Errorf("failed to update index after adding item: %w", err),
 		)
 	}
@@ -194,7 +194,7 @@ func (handler *handler) IngestEntry(
 		return err
 	}
 
-	logger.Debug(
+	log.Debug(
 		fmt.Sprintf(
 			"cache ingest: %s (%s, %s)",
 			k,
@@ -217,7 +217,7 @@ func (handler *handler) IngestEntry(
 	)
 
 	if err := handler.index.flush(); err != nil {
-		logger.Warn(
+		log.Warn(
 			fmt.Errorf("failed to update index after ingesting item: %w", err),
 		)
 	}
@@ -257,7 +257,7 @@ func (handler *handler) Get(k string) (hit bool, file *os.File, err error) {
 	ckey := canonicalizeKey(k)
 	entry, ok := handler.index.get(ckey)
 	if !ok {
-		logger.Debug("cache miss: " + k)
+		log.Debug("cache miss: " + k)
 		return false, nil, nil
 	}
 
@@ -265,7 +265,7 @@ func (handler *handler) Get(k string) (hit bool, file *os.File, err error) {
 	if err != nil {
 		return false, nil, err
 	}
-	logger.Debug("cache hit: " + k)
+	log.Debug("cache hit: " + k)
 	return true, file, nil
 }
 
@@ -280,7 +280,7 @@ func (handler *handler) GetBytes(k string) (hit bool, data []byte, err error) {
 	ckey := canonicalizeKey(k)
 	entry, ok := handler.index.get(ckey)
 	if !ok {
-		logger.Debug("cache miss: " + k)
+		log.Debug("cache miss: " + k)
 		return false, nil, nil
 	}
 
@@ -288,7 +288,7 @@ func (handler *handler) GetBytes(k string) (hit bool, data []byte, err error) {
 	if err != nil {
 		return false, nil, err
 	}
-	logger.Debug("cache hit: " + k)
+	log.Debug("cache hit: " + k)
 	return true, data, nil
 }
 
@@ -303,7 +303,7 @@ func (handler *handler) removeLocked(k key) error {
 		return err
 	}
 	if err := handler.index.flush(); err != nil {
-		logger.Warn(
+		log.Warn(
 			fmt.Errorf("failed to update index after removing item: %w", err),
 		)
 	}
@@ -350,7 +350,7 @@ func (handler *handler) ClearAll() (report ResetReport, err error) {
 	if report, err = resetCache(handler.index.path, true); err != nil {
 		return ResetReport{}, fmt.Errorf("failed to clear cache: %w", err)
 	}
-	logger.Info("cache cleared")
+	log.Info("cache cleared")
 
 	idx := newIndex(handler.index.path)
 	if !idx.create() {

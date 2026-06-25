@@ -9,7 +9,7 @@ import (
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 )
@@ -36,7 +36,7 @@ func (r *spongeReader) Read(
 		if err != nil {
 			return nil, err
 		}
-		fn.CloseReader(rc, logger.Warn)
+		fn.CloseReader(rc, log.Warn)
 
 		data, err := io.ReadAll(rc)
 		if err != nil {

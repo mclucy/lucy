@@ -9,7 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/cipher"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 // Docs: https://docs.curseforge.com/rest-api/
@@ -37,7 +37,7 @@ func get(url string, dest any) error {
 		return ErrNoApiKey
 	}
 
-	logger.Debug("curseforge api: GET " + url)
+	log.Debug("curseforge api: GET " + url)
 
 	headers := http.Header{}
 	headers.Set("x-api-key", ApiKey)

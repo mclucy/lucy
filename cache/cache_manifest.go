@@ -7,7 +7,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 const (
@@ -43,7 +43,7 @@ func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
 		var size int64
 		size, err = calculateSize(entryPath)
 		if err != nil {
-			logger.Debug(
+			log.Debug(
 				fmt.Sprintf(
 					"failed to calculate size for %s: %v",
 					entryPath,
@@ -54,14 +54,14 @@ func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
 		}
 
 		if err := os.RemoveAll(entryPath); err != nil {
-			logger.Warn(
+			log.Warn(
 				fmt.Errorf(
 					"failed to remove cache item %s: %w",
 					entryPath, err,
 				),
 			)
 		} else if verbose {
-			logger.ShowInfo(fmt.Sprintf("removed %s", entryPath))
+			log.ShowInfo(fmt.Sprintf("removed %s", entryPath))
 		}
 
 		report.TotalFreedSize += size

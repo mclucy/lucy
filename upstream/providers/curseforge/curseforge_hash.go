@@ -11,7 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -87,12 +87,12 @@ func slugFromFingerprint(fp uint32) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	logger.Debug("curseforge fingerprint lookup")
+	log.Debug("curseforge fingerprint lookup")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
-	defer fn.CloseReader(resp.Body, logger.Warn)
+	defer fn.CloseReader(resp.Body, log.Warn)
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf(

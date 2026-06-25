@@ -3,7 +3,7 @@ package install
 import (
 	"fmt"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
@@ -151,7 +151,7 @@ func ReportCompatibleInstalled(
 ) {
 	matches := FindCompatibleInstalled(installedConstraints, id)
 	for _, pkg := range matches {
-		logger.ShowInfo(
+		log.ShowInfo(
 			fmt.Sprintf(
 				"[recursive] compatible installed version found: %s (not auto-selected)",
 				pkg.Id.StringFull(),

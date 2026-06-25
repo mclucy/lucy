@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -55,13 +55,17 @@ func (s provider) Search(q upstream.Query) (
 	searchUrl := searchUrl(q.Keyword, internalOptions)
 
 	// Make the call to Modrinth API
-	logger.Debug("searching via modrinth api: " + searchUrl)
+	log.Debug("searching via modrinth api: " + searchUrl)
 	res, err := requestBytes(searchUrl)
 	if err != nil {
 		return resp, fmt.Errorf("modrinth: search request failed: %w", err)
 	}
 	if res.StatusCode != 200 {
-		return resp, fmt.Errorf("%w: status %d", ErrInvalidAPIResponse, res.StatusCode)
+		return resp, fmt.Errorf(
+			"%w: status %d",
+			ErrInvalidAPIResponse,
+			res.StatusCode,
+		)
 	}
 	result := &searchResultResponse{}
 	err = json.Unmarshal(res.Data, result)

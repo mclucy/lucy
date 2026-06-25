@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"charm.land/fang/v2"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/spf13/cobra"
 )
@@ -21,19 +21,19 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if noStyle, _ := cmd.Flags().GetBool(flagNoStyleName); noStyle {
 			style.TurnOffStyles()
-			logger.TurnOffStyles()
+			log.TurnOffStyles()
 		}
 		if logFile, _ := cmd.Flags().GetBool(flagLogFileName); logFile {
-			fmt.Println("Log file at", logger.GetLogFile().Name())
+			fmt.Println("Log file at", log.GetLogFile().Name())
 		}
 		if printLogs, _ := cmd.Flags().GetBool(flagPrintLogsName); printLogs {
-			logger.EnablePrintLogs()
+			log.EnablePrintLogs()
 		}
 		if debug, _ := cmd.Flags().GetBool(flagDebugName); debug {
-			logger.EnableDebug()
+			log.EnableDebug()
 		}
 		if dumpLogs, _ := cmd.Flags().GetBool(flagDumpLogsName); dumpLogs {
-			logger.EnableDumpHistory()
+			log.EnableDumpHistory()
 		}
 		return nil
 	},
@@ -69,7 +69,7 @@ func init() {
 	)
 }
 
-// runWithErrorLogging wraps a RunE function to log errors via logger.ReportError.
+// runWithErrorLogging wraps a RunE function to log errors via log.ReportError.
 // It replaces the decoratorLogAndExitOnError decorator.
 func runWithErrorLogging(
 	fn func(
@@ -80,7 +80,7 @@ func runWithErrorLogging(
 	return func(cmd *cobra.Command, args []string) error {
 		err := fn(cmd, args)
 		if err != nil {
-			logger.ReportError(err)
+			log.ReportError(err)
 		}
 		return err
 	}

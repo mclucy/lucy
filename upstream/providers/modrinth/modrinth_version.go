@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/mclucy/lucy/internal/knownpkgs"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -28,7 +28,11 @@ func listVersions(slug types.BarePackageName) (
 		error,
 	) {
 		var out []*versionResponse
-		if err := requestJSON(versionsUrl(target), &out, ENoProject); err != nil {
+		if err := requestJSON(
+			versionsUrl(target),
+			&out,
+			ENoProject,
+		); err != nil {
 			return nil, ENoProject
 		}
 		return out, nil
@@ -106,9 +110,9 @@ func latestVersion(slug types.BarePackageName) (
 	}
 	if fellBack {
 		// No release version found; fall back to the latest pre-release (beta/alpha).
-		logger.Info("no release version found for " + slug.Title() + ", falling back to latest pre-release")
+		log.Info("no release version found for " + slug.Title() + ", falling back to latest pre-release")
 	}
-	logger.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
+	log.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
 	return v, nil
 }
 
@@ -134,13 +138,13 @@ func latestCompatibleVersion(
 	}
 	if filterByLoader && latestReleaseVersion(versions, platform, true) == nil {
 		// No release version found; fall back to the latest pre-release (beta/alpha).
-		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
+		log.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
 	} else if !filterByLoader && latestReleaseVersion(
 		versions,
 		platform,
 		false,
 	) == nil {
-		logger.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
+		log.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
 	}
 	return v, nil
 }

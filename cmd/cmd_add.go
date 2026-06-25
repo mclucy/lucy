@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
@@ -91,7 +91,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		if err := stateSvc.Load(cmd.Context()); err != nil {
 			return fmt.Errorf("load lucy state: %w", err)
 		}
-		logger.ShowInfo(formatStateSummary(stateSvc))
+		log.ShowInfo(formatStateSummary(stateSvc))
 	}
 
 	withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
@@ -106,7 +106,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	for _, arg := range args {
 		req, err := packageRequestFromInput(arg, source)
 		if err != nil {
-			logger.Fatal(fmt.Errorf("stopping package addition: %w", err))
+			log.Fatal(fmt.Errorf("stopping package addition: %w", err))
 		}
 		requests = append(requests, req)
 	}

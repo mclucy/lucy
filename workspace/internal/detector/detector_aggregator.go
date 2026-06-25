@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 // Executable analyzes a JAR file using all registered detectors and collects
@@ -13,20 +13,20 @@ import (
 func Executable(filePath string) *ExecutableCandidates {
 	file, err := os.Open(filePath)
 	if err != nil {
-		logger.Debug("Failed to open file: " + err.Error())
+		log.Debug("Failed to open file: " + err.Error())
 		return nil
 	}
-	defer fn.CloseReader(file, logger.Warn)
+	defer fn.CloseReader(file, log.Warn)
 
 	stat, err := file.Stat()
 	if err != nil {
-		logger.Debug("Failed to stat file: " + err.Error())
+		log.Debug("Failed to stat file: " + err.Error())
 		return nil
 	}
 
 	zipReader, err := zip.NewReader(file, stat.Size())
 	if err != nil {
-		logger.Debug("Failed to read JAR file: " + err.Error())
+		log.Debug("Failed to read JAR file: " + err.Error())
 		return nil
 	}
 

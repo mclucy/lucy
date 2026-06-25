@@ -23,7 +23,7 @@ import (
 	"path"
 
 	probe2 "github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"golang.org/x/sys/windows"
 )
 
@@ -35,7 +35,7 @@ func buildServerFileLockStatus() *ServerActivity {
 		"session.lock",
 	)
 	file, err := os.OpenFile(lockPath, os.O_RDWR, 0o666)
-	defer probe2.CloseReader(file, logger.Warn)
+	defer probe2.CloseReader(file, log.Warn)
 
 	if err != nil {
 		return nil

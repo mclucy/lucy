@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -120,7 +120,7 @@ func listVersions(name types.BarePackageName) ([]hangarVersion, error) {
 }
 
 func getJSON(rawURL string, out any) error {
-	logger.Debug("hangar request: " + rawURL)
+	log.Debug("hangar request: " + rawURL)
 	res, err := cache.CachedGetRequest(
 		rawURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},

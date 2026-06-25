@@ -10,7 +10,7 @@ package curseforge
 import (
 	"fmt"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -30,7 +30,7 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 		FilterPlatform: q.FilterPlatform,
 	}
 	u := searchUrl(types.BarePackageName(q.Keyword), options)
-	logger.Debug("searching via curseforge api: " + u)
+	log.Debug("searching via curseforge api: " + u)
 
 	resp := &searchResponse{}
 	if err := get(u, resp); err != nil {

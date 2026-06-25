@@ -1,4 +1,4 @@
-// Package logger provides structured logging with clear separation between
+// Package log provides structured logging with clear separation between
 // log-file entries (operational diagnostics) and user-facing messages
 // (displayed on stderr).
 //
@@ -14,7 +14,7 @@
 // Logging is backed by charmbracelet/log. A history buffer records every
 // file-written entry so that [DumpHistory] can replay them to the console
 // at program exit for post-mortem inspection.
-package logger
+package log
 
 import (
 	"fmt"
@@ -169,12 +169,14 @@ func DumpHistory() {
 		style.Muted("── Log history ("+getLogFile().Name()+") ──"),
 	)
 
-	// Create a temporary logger for replay with time-only timestamps.
-	replay := log.NewWithOptions(os.Stderr, log.Options{
-		ReportTimestamp: true,
-		TimeFormat:      "15:04:05",
-		Level:           log.DebugLevel,
-	})
+	// Create a temporary log for replay with time-only timestamps.
+	replay := log.NewWithOptions(
+		os.Stderr, log.Options{
+			ReportTimestamp: true,
+			TimeFormat:      "15:04:05",
+			Level:           log.DebugLevel,
+		},
+	)
 	for _, e := range history {
 		replay.SetTimeFunction(func(_ time.Time) time.Time { return e.Time })
 		replay.Log(e.Level, fmt.Sprint(e.Content))

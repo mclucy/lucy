@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -34,7 +34,7 @@ func parseForgeManifest(
 		if err != nil {
 			continue
 		}
-		defer fn.CloseReader(r, logger.Warn)
+		defer fn.CloseReader(r, log.Warn)
 
 		var inForgeSection bool
 		s := bufio.NewScanner(r)

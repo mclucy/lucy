@@ -5,7 +5,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -57,7 +57,7 @@ func searchUrl(
 		},
 	)
 	if err != nil {
-		logger.Error(err)
+		log.Error(err)
 	}
 
 	urlString = urlBuilder.String()

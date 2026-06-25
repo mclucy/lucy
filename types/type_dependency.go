@@ -3,7 +3,7 @@ package types
 // Package types is a general package for all types used in Lucy.
 //
 // This package contains ONLY pure domain semantics. It must have no side effects:
-//   - NO logging (logger.)
+//   - NO logging (log.)
 //   - NO filesystem access (os.)
 //   - NO panics (panic())
 //

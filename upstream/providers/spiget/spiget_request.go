@@ -9,13 +9,13 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
 
 func requestJSON(requestURL string, out any, notFound error) error {
-	logger.Debug("spiget api: GET " + requestURL)
+	log.Debug("spiget api: GET " + requestURL)
 
 	resp, err := cache.CachedGetRequest(
 		requestURL,
