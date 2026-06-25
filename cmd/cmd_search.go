@@ -16,7 +16,6 @@ import (
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
-	"github.com/muesli/reflow/wrap"
 	"github.com/spf13/cobra"
 )
 
@@ -290,7 +289,7 @@ func renderSearchLong(res upstream.SearchResponse) string {
 			desc := strings.ReplaceAll(item.Description, "\n", " ")
 			desc = strings.ReplaceAll(desc, "\r", "")
 			wrapWidth := min(80, style.TermWidth()) - 2
-			wrapped := wrap.String(desc, wrapWidth)
+			wrapped := lipgloss.Wrap(desc, wrapWidth, "")
 			for _, line := range strings.Split(wrapped, "\n") {
 				sb.WriteString("  " + line + "\n")
 			}

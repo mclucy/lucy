@@ -21,7 +21,6 @@ import (
 	"charm.land/lipgloss/v2/table"
 	"charm.land/lipgloss/v2/tree"
 	"github.com/mclucy/lucy/tui/style"
-	"github.com/muesli/reflow/wrap"
 	"golang.org/x/term"
 )
 
@@ -178,7 +177,7 @@ func (f *FieldLongText) Render() string {
 func (f *FieldLongText) RenderRow() (key, value string) {
 	text := f.Text
 	if f.LineWrap {
-		text = wrap.String(text, f.maxColumns())
+		text = lipgloss.Wrap(text, f.maxColumns(), "")
 	}
 	lines := strings.Split(text, "\n")
 	lineNumber := len(lines)

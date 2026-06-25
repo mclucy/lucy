@@ -10,7 +10,6 @@ import (
 	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/muesli/reflow/wrap"
 )
 
 const CRLF = "\r\n"
@@ -50,7 +49,7 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 	lines := strings.Split(rendered, "\n")
 	for i, line := range lines {
 		if lipgloss.Width(line) > maxWidth {
-			lines[i] = wrap.String(line, maxWidth)
+			lines[i] = lipgloss.Wrap(line, maxWidth, "")
 		}
 	}
 	return strings.Join(lines, "\n")

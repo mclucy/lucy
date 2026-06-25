@@ -15,7 +15,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
-	"github.com/muesli/reflow/wrap"
 	"github.com/spf13/cobra"
 )
 
@@ -139,7 +138,7 @@ func renderInfo(
 	out.WriteString(style.Muted(installID))
 	out.WriteString("\n")
 	briefWidth := min(80, style.TermWidth()) - 2
-	briefWrapped := wrap.String(data.Brief, briefWidth)
+	briefWrapped := lipgloss.Wrap(data.Brief, briefWidth, "")
 	out.WriteString(briefWrapped)
 	out.WriteString("\n")
 
@@ -211,7 +210,7 @@ func renderInfoReadme(data types.Metadata, longOutput bool) string {
 	if data.DescriptionIsMarkdown {
 		displayText = style.MarkdownToAnsi(description, maxWidth)
 	} else {
-		displayText = wrap.String(description, maxWidth)
+		displayText = lipgloss.Wrap(description, maxWidth, "")
 	}
 
 	truncatedText, truncated := truncateInfoText(displayText, maxLines)
