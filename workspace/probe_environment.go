@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fileschema"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
@@ -31,31 +31,31 @@ func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
 
 	configFile, err := os.Open(configPath)
 	if err != nil {
-		logger.Warn(err)
+		log.Warn(err)
 		return
 	}
 	defer func(configFile io.ReadCloser) {
 		err := configFile.Close()
 		if err != nil {
-			logger.Warn(err)
+			log.Warn(err)
 		}
 	}(configFile)
 
 	configData, err := io.ReadAll(configFile)
 	if err != nil {
-		logger.Warn(err)
+		log.Warn(err)
 		return
 	}
 
 	config := &fileschema.FileMcdrConfig{}
 	if err := yaml.Unmarshal(configData, config); err != nil {
-		logger.Warn(err)
+		log.Warn(err)
 		return
 	}
 
 	bytes, err := exec.Command("mcdreforged", "--version").Output()
 	if err != nil {
-		logger.ReportWarn(
+		log.ReportWarn(
 			fmt.Errorf(
 				"cannot execute mcdr, it is in your $PATH?: %w",
 				err,

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -16,7 +16,11 @@ import (
 
 const maxReconcileIterations = 3
 
-func InstallMany(ctx context.Context, requests []types.PackageRequest, options InstallOptions) (
+func InstallMany(
+	ctx context.Context,
+	requests []types.PackageRequest,
+	options InstallOptions,
+) (
 	*Result,
 	error,
 ) {
@@ -40,7 +44,13 @@ func InstallMany(ctx context.Context, requests []types.PackageRequest, options I
 	identityIds = sortIdentityPackages(identityIds)
 
 	if len(identityIds) > 0 {
-		recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Installing platforms", IDs: identityIds})
+		recordEvent(
+			journal,
+			Event{
+				Kind: EventBatchPhase, Header: "Installing platforms",
+				IDs: identityIds,
+			},
+		)
 		succeeded := make([]string, 0, len(identityIds))
 		for _, id := range identityIds {
 			if err := installPlatform(ctx, id, options); err != nil {
@@ -64,7 +74,10 @@ func InstallMany(ctx context.Context, requests []types.PackageRequest, options I
 	}
 
 	if len(regularIds) == 0 {
-		recordEvent(journal, Event{Kind: EventBatchSummary, Count: len(identityIds)})
+		recordEvent(
+			journal,
+			Event{Kind: EventBatchSummary, Count: len(identityIds)},
+		)
 		return &Result{}, nil
 	}
 
@@ -76,7 +89,11 @@ func InstallMany(ctx context.Context, requests []types.PackageRequest, options I
 	return Apply(ctx, *plan, options)
 }
 
-func Plan(ctx context.Context, requests []types.PackageRequest, options InstallOptions) (*ApplyPlan, error) {
+func Plan(
+	ctx context.Context,
+	requests []types.PackageRequest,
+	options InstallOptions,
+) (*ApplyPlan, error) {
 	options = options.withDefaults()
 	journal := options.Journal
 	if err := ctx.Err(); err != nil {
@@ -95,7 +112,13 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 	}
 
 	serverInfo := options.ServerInfo()
-	recordEvent(journal, Event{Kind: EventBatchPhase, Header: "Fetching metadata for", IDs: regularIds})
+	recordEvent(
+		journal,
+		Event{
+			Kind: EventBatchPhase, Header: "Fetching metadata for",
+			IDs: regularIds,
+		},
+	)
 	if err := validateRegularBatchIDs(regularIds, serverInfo); err != nil {
 		return nil, installError(CategoryResolution, err, nil)
 	}
@@ -118,7 +141,7 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 			types.SourceAuto,
 		)
 		if err != nil {
-			logger.ShowInfo(
+			log.ShowInfo(
 				fmt.Errorf("failed to resolve MCDR provider: %w", err),
 			)
 		} else {
@@ -157,7 +180,10 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 	var resolved ResolvedClosure
 
 	for iteration := range maxReconcileIterations {
-		recordEvent(journal, Event{Kind: EventResolveStart, Roots: resolvePlan.Roots})
+		recordEvent(
+			journal,
+			Event{Kind: EventResolveStart, Roots: resolvePlan.Roots},
+		)
 		resolved, err = resolveClosure(
 			ctx,
 			resolvePlan.Roots,
@@ -177,7 +203,11 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 		}
 		pruneRecursiveCandidates(&resolved, resolvePlan.ExcludedCandidates)
 
-		diff, err := computeReconcileDiff(resolved, resolvePlan.InstalledConstraints, journal)
+		diff, err := computeReconcileDiff(
+			resolved,
+			resolvePlan.InstalledConstraints,
+			journal,
+		)
 		if err != nil {
 			recordEvent(journal, Event{Kind: EventConflict, Err: err})
 			return nil, installError(CategoryResolution, err, nil)
@@ -198,12 +228,19 @@ func Plan(ctx context.Context, requests []types.PackageRequest, options InstallO
 	}
 
 	return &ApplyPlan{
-		Resolved:             resolved,
-		InstalledConstraints: append([]InstalledConstraint(nil), installedConstraints...),
+		Resolved: resolved,
+		InstalledConstraints: append(
+			[]InstalledConstraint(nil),
+			installedConstraints...,
+		),
 	}, nil
 }
 
-func Apply(ctx context.Context, plan ApplyPlan, options InstallOptions) (*Result, error) {
+func Apply(
+	ctx context.Context,
+	plan ApplyPlan,
+	options InstallOptions,
+) (*Result, error) {
 	options = options.withDefaults()
 	if err := ctx.Err(); err != nil {
 		return nil, installError(CategoryApply, err, nil)
@@ -213,12 +250,24 @@ func Apply(ctx context.Context, plan ApplyPlan, options InstallOptions) (*Result
 	concretePlan := plan
 	var err error
 	if len(plan.Resolved.CandidateGraph) > 0 {
-		downloaded, err := downloadArtifacts(ctx, plan.Resolved, serverInfo.Root, options, options.Journal)
+		downloaded, err := downloadArtifacts(
+			ctx,
+			plan.Resolved,
+			serverInfo.Root,
+			options,
+			options.Journal,
+		)
 		if err != nil {
 			return nil, installError(CategoryDownload, err, nil)
 		}
 
-		recordEvent(options.Journal, Event{Kind: EventVerifyStart, Count: len(downloaded.DownloadedArtifacts)})
+		recordEvent(
+			options.Journal,
+			Event{
+				Kind:  EventVerifyStart,
+				Count: len(downloaded.DownloadedArtifacts),
+			},
+		)
 		verified, err := verifyArtifacts(ctx, downloaded, options.Journal)
 		if err != nil {
 			return nil, installError(CategoryVerify, err, nil)
@@ -230,7 +279,12 @@ func Apply(ctx context.Context, plan ApplyPlan, options InstallOptions) (*Result
 		}
 	}
 
-	concretePlan, err = applyPlan(ctx, concretePlan, serverInfo, options.Journal)
+	concretePlan, err = applyPlan(
+		ctx,
+		concretePlan,
+		serverInfo,
+		options.Journal,
+	)
 	if err != nil {
 		return nil, installError(CategoryApply, err, nil)
 	}
@@ -369,7 +423,10 @@ func partitionBatchIDs(ids []types.VersionedPackageRef) (
 	return identityIds, regularIds
 }
 
-func validateRegularBatchIDs(ids []types.VersionedPackageRef, serverInfo workspace.Workspace) error {
+func validateRegularBatchIDs(
+	ids []types.VersionedPackageRef,
+	serverInfo workspace.Workspace,
+) error {
 	failures := make([]string, 0)
 
 	for _, id := range ids {

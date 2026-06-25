@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/workspace"
@@ -132,6 +132,6 @@ func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 		},
 		Version: types.BareVersion(rel.Meta.Version),
 	}
-	logger.Debug("parsed from" + id.StringFull() + " to " + parsed.StringFull())
+	log.Debug("parsed from" + id.StringFull() + " to " + parsed.StringFull())
 	return parsed, nil
 }

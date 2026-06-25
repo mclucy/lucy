@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 
 	probe2 "github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace/internal/detector"
@@ -39,7 +39,7 @@ func buildExecutableInfo() *ServerRuntime {
 	// Proceed to step 2 no matter the result
 	jars, err := findJar(workPath)
 	if err != nil {
-		logger.Warn(fmt.Errorf("cannot read server directory: %w", err))
+		log.Warn(fmt.Errorf("cannot read server directory: %w", err))
 	}
 	for _, jar := range jars {
 		candidates := detector.Executable(jar)
@@ -62,7 +62,7 @@ func buildExecutableInfo() *ServerRuntime {
 	if stat, err := os.Stat(fabricLib); err == nil && stat.IsDir() {
 		fabricJars, err = findJar(fabricLib)
 		if err != nil {
-			logger.Warn(fmt.Errorf("cannot read fabric libraries: %w", err))
+			log.Warn(fmt.Errorf("cannot read fabric libraries: %w", err))
 		}
 	}
 
@@ -70,7 +70,7 @@ func buildExecutableInfo() *ServerRuntime {
 		if stat, err := os.Stat(forgeLib); err == nil && stat.IsDir() {
 			forgeJars, err = findJar(forgeLib)
 			if err != nil {
-				logger.Warn(fmt.Errorf("cannot read forge libraries: %w", err))
+				log.Warn(fmt.Errorf("cannot read forge libraries: %w", err))
 			}
 		}
 	}
@@ -86,7 +86,7 @@ func buildExecutableInfo() *ServerRuntime {
 
 	// 3. Everything under libraries
 	if len(valid) == 0 {
-		logger.Info("no valid jar found yet, trying to find under libraries")
+		log.Info("no valid jar found yet, trying to find under libraries")
 		jarPaths := findJarRecursive(path.Join(workPath, "libraries"))
 		if len(jarPaths) >= multiThreadThreshold {
 			mu := sync.Mutex{}
@@ -122,7 +122,7 @@ func buildExecutableInfo() *ServerRuntime {
 
 	switch len(valid) {
 	case 0:
-		logger.Info("no server executable found")
+		log.Info("no server executable found")
 		return NoExecutable
 	case 1:
 		return materializeRuntimeInfo(valid[0])
@@ -173,7 +173,7 @@ func promptSelectExecutable(
 		),
 	)
 	if err := form.Run(); err != nil {
-		logger.ShowWarn(err)
+		log.ShowWarn(err)
 	}
 	return selection
 }
@@ -251,7 +251,7 @@ func findJarRecursive(dir string) (jarFiles []string) {
 
 	for _, entry := range entries {
 		if fileCount.Load() >= fileCountThreshold {
-			logger.Info("file count threshold reached, stopping search")
+			log.Info("file count threshold reached, stopping search")
 			break
 		}
 		if entry.IsDir() {

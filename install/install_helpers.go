@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
 )
 
-func ensureServerPlatformMatch(id types.VersionedPackageRef, serverInfo workspace.Workspace) error {
+func ensureServerPlatformMatch(
+	id types.VersionedPackageRef,
+	serverInfo workspace.Workspace,
+) error {
 	platform := id.Platform
 
 	switch platform {
@@ -38,7 +41,7 @@ func ensureServerPlatformMatch(id types.VersionedPackageRef, serverInfo workspac
 		case types.CompatDegraded:
 			// CompatDegraded means the ecosystem is reachable only through an indirect
 			// hosted/support path. It is warn-only here; numeric risk gating is node-based.
-			logger.ShowWarn(
+			log.ShowWarn(
 				fmt.Errorf(
 					"compatibility degraded for %s: %s (reason: %s)",
 					platform,

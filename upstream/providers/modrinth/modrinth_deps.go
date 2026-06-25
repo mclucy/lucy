@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -35,7 +35,7 @@ func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies
 
 		depId, err := DependencyToPackage(parentId, &dep)
 		if err != nil {
-			logger.ShowInfo(
+			log.ShowInfo(
 				fmt.Sprintf(
 					"[modrinth] skipping dependency with resolution error: %v",
 					err,

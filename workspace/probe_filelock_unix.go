@@ -30,7 +30,7 @@ import (
 	"syscall"
 
 	probe2 "github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 func buildServerFileLockStatus() *ServerActivity {
@@ -52,22 +52,22 @@ func buildServerFileLockStatus() *ServerActivity {
 	}
 
 	file, err := os.OpenFile(lockPath, os.O_RDWR|os.O_APPEND, 0o666)
-	defer probe2.CloseReader(file, logger.Warn)
+	defer probe2.CloseReader(file, log.Warn)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return inactive
 	} else if err != nil {
 		return nil
 	}
 
-	logger.Debug("checking lock on: " + file.Name())
+	log.Debug("checking lock on: " + file.Name())
 	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	if err != nil && errors.Is(err, syscall.EWOULDBLOCK) {
-		logger.Debug("found a lock on the file: " + err.Error())
+		log.Debug("found a lock on the file: " + err.Error())
 		fl := syscall.Flock_t{
 			Type: syscall.F_WRLCK,
 		}
 		err = syscall.FcntlFlock(file.Fd(), syscall.F_GETLK, &fl)
-		logger.Warn(
+		log.Warn(
 			fmt.Errorf("activity detected but cannot get pid: %w", err),
 		)
 		if err != nil {
@@ -78,10 +78,10 @@ func buildServerFileLockStatus() *ServerActivity {
 		return nil
 	}
 
-	logger.Debug("no lock found on the file: " + file.Name())
+	log.Debug("no lock found on the file: " + file.Name())
 	err = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
 	if err != nil {
-		logger.Warn(err)
+		log.Warn(err)
 	}
 
 	return inactive
@@ -103,7 +103,7 @@ func lsof(filePath string) (pid int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	logger.Debug("got output from lsof:\n" + out.String())
+	log.Debug("got output from lsof:\n" + out.String())
 
 	lines := strings.Split(out.String(), "\n")
 	outputBegin := 0

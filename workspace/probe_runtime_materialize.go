@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
@@ -82,7 +82,7 @@ func distributeRuntimeIdentities(
 	for _, identity := range identities {
 		nodeID, ok := RuntimeIdentityNode(identity)
 		if !ok {
-			logger.Warn(
+			log.Warn(
 				fmt.Errorf(
 					"unmatched runtime identity %q: no node mapping",
 					identity.Name,
@@ -99,7 +99,7 @@ func distributeRuntimeIdentities(
 			}
 		}
 		if index < 0 {
-			logger.Warn(
+			log.Warn(
 				fmt.Errorf(
 					"unmatched runtime identity %q: topology has no node %q",
 					identity.Name,

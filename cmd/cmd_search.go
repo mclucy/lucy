@@ -11,7 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -120,7 +120,7 @@ func init() {
 func actionSearch(cmd *cobra.Command, args []string) error {
 	ref, err := input.ParseFullPackageRef(args[0])
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 	index, _ := cmd.Flags().GetString(flagIndexName)
 	client, _ := cmd.Flags().GetBool(flagClientName)
@@ -137,7 +137,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		platformArg,
 	)
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 
 	options := upstream.SearchOptions{
@@ -154,7 +154,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		if specifiedSource == types.SourceAuto {
 			errArg = options.FilterPlatform.String()
 		}
-		logger.Fatal(fmt.Errorf("%w: %s", err, errArg))
+		log.Fatal(fmt.Errorf("%w: %s", err, errArg))
 	}
 
 	results, errs := routing.SearchMany(providers, ref.PackageRef.Name, options)
@@ -171,7 +171,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			err.Source.Title(),
 			err.Err,
 		)
-		logger.ReportWarn(providerErr)
+		log.ReportWarn(providerErr)
 	}
 
 	if err := searchResultError(results, errs); err != nil {

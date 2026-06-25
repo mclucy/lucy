@@ -6,11 +6,11 @@ import (
 	"net/http"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 func requestBytes(rawURL string) (*cache.BytesResponse, error) {
-	logger.Debug("modrinth api: GET " + rawURL)
+	log.Debug("modrinth api: GET " + rawURL)
 	return cache.CachedGetRequest(
 		rawURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
@@ -26,7 +26,11 @@ func requestJSON(rawURL string, out any, notFound error) error {
 		return notFound
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: status %d", ErrInvalidAPIResponse, res.StatusCode)
+		return fmt.Errorf(
+			"%w: status %d",
+			ErrInvalidAPIResponse,
+			res.StatusCode,
+		)
 	}
 	if err := json.Unmarshal(res.Data, out); err != nil {
 		return notFound

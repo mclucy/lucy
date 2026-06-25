@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
@@ -23,7 +23,7 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 		FilterPlatform: q.FilterPlatform,
 	}
 	if options.FilterPlatform == types.PlatformBukkit {
-		logger.Debug("spiget: platform filter is not supported upstream; search will run without a platform query parameter")
+		log.Debug("spiget: platform filter is not supported upstream; search will run without a platform query parameter")
 	}
 
 	resp, err := searchResources(q.Keyword, options)
@@ -106,7 +106,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}
 
 	parsed.Version = resolved.LucyVersion()
-	logger.Debug("parsed from " + id.StringFull() + " to " + parsed.StringFull())
+	log.Debug("parsed from " + id.StringFull() + " to " + parsed.StringFull())
 	return parsed, nil
 }
 

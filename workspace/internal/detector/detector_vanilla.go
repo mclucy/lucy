@@ -8,7 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -38,7 +38,7 @@ func (d *VanillaDetector) Detect(
 			if err != nil {
 				return nil, err
 			}
-			defer fn.CloseReader(r, logger.Warn)
+			defer fn.CloseReader(r, log.Warn)
 
 			data, err := io.ReadAll(r)
 			if err != nil {

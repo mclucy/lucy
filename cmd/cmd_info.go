@@ -6,7 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
@@ -60,7 +60,7 @@ func init() {
 func actionInfo(cmd *cobra.Command, args []string) error {
 	ref, err := input.ParseFullPackageRef(args[0])
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 
 	sourceStr, _ := cmd.Flags().GetString(flagSourceName)
@@ -75,16 +75,19 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		if source == types.SourceAuto {
 			errArg = ref.Platform.String()
 		}
-		logger.ReportError(fmt.Errorf("%w: %s", err, errArg))
+		log.ReportError(fmt.Errorf("%w: %s", err, errArg))
 		return err
 	}
 
-	meta, providerErrors, err := routing.GetInfoHedged(providers, ref.PackageRef)
+	meta, providerErrors, err := routing.GetInfoHedged(
+		providers,
+		ref.PackageRef,
+	)
 	if err != nil {
-		logger.Fatal(fmt.Errorf("failed to get information: %w", err))
+		log.Fatal(fmt.Errorf("failed to get information: %w", err))
 	}
 	for _, providerErr := range providerErrors {
-		logger.ReportWarn(
+		log.ReportWarn(
 			fmt.Errorf(
 				"info on %s failed: %w",
 				providerErr.Source.Title(),

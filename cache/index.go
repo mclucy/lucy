@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 const indexVersion = 2
@@ -39,7 +39,7 @@ func (idx *index) load() bool {
 	} else if err != nil {
 		return false
 	}
-	defer fn.CloseReader(file, logger.Warn)
+	defer fn.CloseReader(file, log.Warn)
 
 	data, err := io.ReadAll(file)
 	if err != nil {
@@ -70,7 +70,7 @@ func (idx *index) tryLoadV2(data []byte) bool {
 func (idx *index) create() bool {
 	dir := filepath.Dir(idx.path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		logger.Warn(
+		log.Warn(
 			fmt.Errorf(
 				"failed to create index directory %s: %w",
 				dir,
@@ -81,7 +81,7 @@ func (idx *index) create() bool {
 	}
 	idx.entries = make(map[key]*CacheEntry)
 	if err := idx.flush(); err != nil {
-		logger.Warn(fmt.Errorf("failed to write initial index: %w", err))
+		log.Warn(fmt.Errorf("failed to write initial index: %w", err))
 		return false
 	}
 	return true
@@ -99,12 +99,12 @@ func (idx *index) flush() error {
 
 	tempFile := idx.path + ".tmp"
 	if err := os.WriteFile(tempFile, data, 0o600); err != nil {
-		logger.Warn(os.Remove(tempFile))
+		log.Warn(os.Remove(tempFile))
 		return fmt.Errorf("failed to write temporary index file: %w", err)
 	}
 
 	if err := os.Rename(tempFile, idx.path); err != nil {
-		logger.Warn(os.Remove(tempFile))
+		log.Warn(os.Remove(tempFile))
 		return fmt.Errorf("failed to replace index file: %w", err)
 	}
 	return nil

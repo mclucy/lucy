@@ -1,6 +1,6 @@
 //go:build debug
 
-package logger
+package log
 
 func init() {
 	EnableDebug()

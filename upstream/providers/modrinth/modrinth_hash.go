@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -50,7 +50,7 @@ func verifySlugBySha1(hintSlug, sha1hex string) bool {
 	}
 	u += "?include_changelog=false"
 
-	logger.Debug("modrinth hint verification: " + u)
+	log.Debug("modrinth hint verification: " + u)
 	res, err := requestBytes(u)
 	if err != nil {
 		return false
@@ -81,7 +81,7 @@ func verifySlugBySha1(hintSlug, sha1hex string) bool {
 func SlugFromHash(sha1hex string) (slug string, err error) {
 	u := versionFileUrlPrefix + sha1hex + "?algorithm=sha1"
 
-	logger.Debug("modrinth hash lookup: " + u)
+	log.Debug("modrinth hash lookup: " + u)
 	res, err := requestBytes(u)
 	if err != nil {
 		return "", err
@@ -134,7 +134,7 @@ func (s provider) NameByHash(artifact upstream.Hashable) (
 	hash = hex.EncodeToString(hashBytes[:])
 	u := versionFileUrlPrefix + hash + "?algorithm=sha1"
 
-	logger.Debug("modrinth hash lookup: " + u)
+	log.Debug("modrinth hash lookup: " + u)
 
 	res, err := requestBytes(u)
 	if err != nil {

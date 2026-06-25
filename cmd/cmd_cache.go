@@ -6,7 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/knownpkgs"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/spf13/cobra"
@@ -90,7 +90,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	}
 
 	if len(entries) == 0 {
-		logger.ShowInfo("Cache is empty")
+		log.ShowInfo("Cache is empty")
 		return nil
 	}
 
@@ -132,8 +132,8 @@ func actionCacheClear(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
 
-	logger.ShowInfo("all cache items cleared")
-	logger.ShowInfo(
+	log.ShowInfo("all cache items cleared")
+	log.ShowInfo(
 		fmt.Sprintf(
 			"removed %d files, freed up %s of space",
 			report.FileCount,
@@ -158,7 +158,7 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 	}
 
 	if len(entries) == 0 {
-		logger.ShowInfo("Slug map is empty")
+		log.ShowInfo("Slug map is empty")
 		return nil
 	}
 
@@ -191,6 +191,6 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 
 func actionCacheSlugsClear(_ *cobra.Command, _ []string) error {
 	knownpkgs.Default().Clear()
-	logger.ShowInfo("slug map cleared")
+	log.ShowInfo("slug map cleared")
 	return nil
 }

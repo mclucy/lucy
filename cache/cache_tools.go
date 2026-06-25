@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 var h = func(data []byte) string {
@@ -31,7 +31,7 @@ func setDir(name string) string {
 func (handler *handler) clearExpiredCache() {
 	expired := expiredEntries(handler.index.all(), time.Now())
 	for _, k := range expired {
-		logger.Info("removing expired cache item " + k)
+		log.Info("removing expired cache item " + k)
 		if err := handler.removeEntryLocked(k); err != nil {
 			continue
 		}
@@ -52,7 +52,7 @@ func expiredEntries(entries map[key]*CacheEntry, now time.Time) []key {
 func (handler *handler) maintainCacheLimit() {
 	evicted := evictionCandidates(handler.index.all(), handler.policy)
 	for _, e := range evicted {
-		logger.Info("removing cache item " + e.key)
+		log.Info("removing cache item " + e.key)
 		if err := handler.removeEntryLocked(e.key); err != nil {
 			continue
 		}

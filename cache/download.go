@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 )
 
 type DownloadOptions struct {
@@ -65,7 +65,7 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	}
 	hit, cachedFile, err := Network().Get(url)
 	if err != nil {
-		logger.Warn(
+		log.Warn(
 			fmt.Errorf(
 				"cache lookup failed, proceeding with download: %w",
 				err,
@@ -116,10 +116,13 @@ func CachedGetBytes(url string, opts BytesRequestOptions) ([]byte, error) {
 
 // CachedGetRequest fetches bytes from url and returns the HTTP status code
 // separately from transport/read/cache errors. Non-2xx responses are not cached.
-func CachedGetRequest(url string, opts BytesRequestOptions) (*BytesResponse, error) {
+func CachedGetRequest(url string, opts BytesRequestOptions) (
+	*BytesResponse,
+	error,
+) {
 	hit, data, err := Network().GetBytes(url)
 	if err != nil {
-		logger.Warn(
+		log.Warn(
 			fmt.Errorf(
 				"cache lookup failed, proceeding with fetch: %w",
 				err,
@@ -205,7 +208,7 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (*BytesResponse, err
 	if err := Network().AddEntry(
 		bytes, contentHash, url, opts.Kind, integrity, ttl,
 	); err != nil {
-		logger.Warn(fmt.Errorf("failed to cache bytes: %w", err))
+		log.Warn(fmt.Errorf("failed to cache bytes: %w", err))
 	}
 
 	return &BytesResponse{
@@ -322,7 +325,7 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 		tmpPath, filename, url, size, contentHash,
 		opts.Kind, integrity, ttl,
 	); err != nil {
-		logger.Warn(fmt.Errorf("failed to cache downloaded file: %w", err))
+		log.Warn(fmt.Errorf("failed to cache downloaded file: %w", err))
 	}
 
 	return &DownloadResult{
@@ -367,7 +370,7 @@ func verifyIntegrity(
 			State:     IntegrityVerified,
 		}
 		verified = true
-		logger.Debug(
+		log.Debug(
 			fmt.Sprintf(
 				"integrity verified (%s): %s",
 				algorithm,

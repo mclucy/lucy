@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/logger"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
@@ -271,7 +271,7 @@ func outputBisect(cmd *cobra.Command, output bisectOutput) error {
 		}
 		return nil
 	}
-	logger.ShowInfo(formatBisectOutput(output))
+	log.ShowInfo(formatBisectOutput(output))
 	return nil
 }
 
