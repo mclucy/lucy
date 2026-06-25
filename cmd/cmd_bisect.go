@@ -262,8 +262,13 @@ func currentBisectView(state *bisectState) *bisectView {
 
 func outputBisect(cmd *cobra.Command, output bisectOutput) error {
 	jsonOut, _ := cmd.Flags().GetBool(flagJsonName)
-	if jsonOut {
-		style.PrintAsJson(output)
+	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
+	if jsonOut || jsonCompact {
+		if jsonCompact {
+			style.PrintAsJsonCompact(output)
+		} else {
+			style.PrintAsJson(output)
+		}
 		return nil
 	}
 	logger.ShowInfo(formatBisectOutput(output))

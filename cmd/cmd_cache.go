@@ -59,11 +59,13 @@ var cacheSlugsClearCmd = &cobra.Command{
 
 func init() {
 	addJsonFlag(cacheLsCmd)
+	addJsonCompactFlag(cacheLsCmd)
 	addNoStyleFlag(cacheLsCmd)
 
 	addNoStyleFlag(cacheClearCmd)
 
 	addJsonFlag(cacheSlugsLsCmd)
+	addJsonCompactFlag(cacheSlugsLsCmd)
 	addNoStyleFlag(cacheSlugsLsCmd)
 
 	addNoStyleFlag(cacheSlugsClearCmd)
@@ -76,9 +78,14 @@ func init() {
 func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	entries := cache.Network().All()
 	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
+	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
 
-	if jsonOutput {
-		style.PrintAsJson(entries)
+	if jsonOutput || jsonCompact {
+		if jsonCompact {
+			style.PrintAsJsonCompact(entries)
+		} else {
+			style.PrintAsJson(entries)
+		}
 		return nil
 	}
 
@@ -139,9 +146,14 @@ func actionCacheClear(_ *cobra.Command, _ []string) error {
 func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 	entries := knownpkgs.Default().All()
 	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
+	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
 
-	if jsonOutput {
-		style.PrintAsJson(entries)
+	if jsonOutput || jsonCompact {
+		if jsonCompact {
+			style.PrintAsJsonCompact(entries)
+		} else {
+			style.PrintAsJson(entries)
+		}
 		return nil
 	}
 

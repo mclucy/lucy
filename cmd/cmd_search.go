@@ -77,6 +77,7 @@ func init() {
 		"Filter results by platform (fabric, forge, neoforge, bukkit)",
 	)
 	addJsonFlag(searchCmd)
+	addJsonCompactFlag(searchCmd)
 	addLongFlag(searchCmd)
 	addNoStyleFlag(searchCmd)
 	addSourceFlag(searchCmd)

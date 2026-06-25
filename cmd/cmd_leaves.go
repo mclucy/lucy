@@ -23,6 +23,7 @@ func init() {
 		"Probe live server instead of reading lock",
 	)
 	addJsonFlag(leavesCmd)
+	addJsonCompactFlag(leavesCmd)
 	addNoStyleFlag(leavesCmd)
 	rootCmd.AddCommand(leavesCmd)
 }
@@ -40,8 +41,10 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 	}
 
 	jsonOut, _ := cmd.Flags().GetBool(flagJsonName)
-	if jsonOut {
-		return outputLeavesJSON(graph, source)
+	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
+
+	if jsonOut || jsonCompact {
+		return outputLeavesJSON(graph, source, jsonCompact)
 	}
 
 	fmt.Printf("Using data from: %s\n\n", source.String())
@@ -77,7 +80,7 @@ type leafNode struct {
 	Embedded bool   `json:"embedded,omitempty"`
 }
 
-func outputLeavesJSON(graph *DependencyGraph, source DataSource) error {
+func outputLeavesJSON(graph *DependencyGraph, source DataSource, compact bool) error {
 	leaves := graph.GetLeaves()
 	jsonLeaves := make([]leafNode, 0, len(leaves))
 	for _, leaf := range leaves {
@@ -96,6 +99,10 @@ func outputLeavesJSON(graph *DependencyGraph, source DataSource) error {
 		"source": source.String(),
 		"leaves": jsonLeaves,
 	}
-	style.PrintAsJson(output)
+	if compact {
+		style.PrintAsJsonCompact(output)
+	} else {
+		style.PrintAsJson(output)
+	}
 	return nil
 }

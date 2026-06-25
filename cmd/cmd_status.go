@@ -29,10 +29,15 @@ func init() {
 func actionStatus(cmd *cobra.Command, args []string) error {
 	serverInfo := workspace.ServerInfo()
 	json, _ := cmd.Flags().GetBool(flagJsonName)
+	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
 	long, _ := cmd.Flags().GetBool(flagLongName)
 	noStyle, _ := cmd.Flags().GetBool(flagNoStyleName)
-	if json {
-		style.PrintAsJson(serverInfo)
+	if json || jsonCompact {
+		if jsonCompact {
+			style.PrintAsJsonCompact(serverInfo)
+		} else {
+			style.PrintAsJson(serverInfo)
+		}
 	} else {
 		tui.Flush(generateStatusOutput(&serverInfo, long, noStyle))
 	}

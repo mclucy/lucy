@@ -50,6 +50,15 @@ func PrintAsJson(v interface{}) {
 	fmt.Println(string(data))
 }
 
+func PrintAsJsonCompact(v interface{}) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(string(data))
+}
+
 func Capitalize(v any) string {
 	s, ok := v.(string)
 	if !ok {

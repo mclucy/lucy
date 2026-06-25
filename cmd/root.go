@@ -61,6 +61,11 @@ func init() {
 		false,
 		"Disable colored and styled output",
 	)
+	rootCmd.PersistentFlags().Bool(
+		flagJsonCompactName,
+		false,
+		"Print raw JSON response without indentation",
+	)
 }
 
 // runWithErrorLogging wraps a RunE function to log errors via logger.ReportError.
