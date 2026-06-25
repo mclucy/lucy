@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
@@ -12,8 +13,8 @@ import (
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/muesli/reflow/wrap"
 	"github.com/spf13/cobra"
 )
@@ -203,15 +204,16 @@ func renderInfoReadme(data types.Metadata, longOutput bool) string {
 		displayText = wrap.String(description, maxWidth)
 	}
 
-	totalLines := len(strings.Split(displayText, "\n"))
-	lineCount := min(maxLines, totalLines)
 	truncatedText, truncated := truncateInfoText(displayText, maxLines)
+	totalLines := len(strings.Split(displayText, "\n"))
+	displayedLines := len(strings.Split(truncatedText, "\n"))
+	truncatedLines := totalLines - displayedLines
 
 	var out strings.Builder
 	out.WriteString(
 		renderInfoSectionHeader(
 			"README",
-			lineCount,
+			displayedLines,
 			totalLines,
 			maxWidth,
 			truncated,
@@ -219,11 +221,28 @@ func renderInfoReadme(data types.Metadata, longOutput bool) string {
 	)
 	out.WriteString("\n\n")
 	out.WriteString(indentInfoBlock(truncatedText))
-	if truncated && data.DescriptionUrl != "" {
+	if truncated {
 		out.WriteString("\n\n")
+		out.WriteString(
+			style.Muted(
+				fmt.Sprintf("  [... %d lines truncated]", truncatedLines),
+			),
+		)
+		out.WriteString("\n")
 		out.WriteString("  ")
-		out.WriteString(style.Muted("Full README: "))
-		out.WriteString(style.Link(data.DescriptionUrl))
+		if data.DescriptionUrl != "" {
+			out.WriteString(style.Muted("Full README -> "))
+			out.WriteString(style.Link(data.DescriptionUrl))
+		} else {
+			out.WriteString(
+				style.Muted(
+					fmt.Sprintf(
+						"(%d more lines, use --long to expand)",
+						totalLines-displayedLines,
+					),
+				),
+			)
+		}
 	}
 	return out.String()
 }
@@ -284,7 +303,8 @@ func renderInfoLinks(data types.Metadata) string {
 		if url.Url == "" {
 			continue
 		}
-		rows = append(rows, []string{url.Name, url.Url})
+		linked := ansi.SetHyperlink(url.Url) + url.Url + ansi.ResetHyperlink()
+		rows = append(rows, []string{url.Name, linked})
 	}
 	if len(rows) == 0 {
 		return ""
@@ -298,8 +318,6 @@ func renderInfoLinks(data types.Metadata) string {
 				switch col {
 				case 0:
 					return lipgloss.NewStyle().Bold(true)
-				case 1:
-					return lipgloss.NewStyle().Underline(true)
 				default:
 					return lipgloss.NewStyle()
 				}

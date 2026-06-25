@@ -4,6 +4,7 @@ import (
 	"os"
 	"sync"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/term"
 )
@@ -29,6 +30,10 @@ func TermWidth() int {
 func TermHeight() int {
 	_, height, _ := term.GetSize(0)
 	return height
+}
+
+func HasDarkBackground() bool {
+	return lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
 }
 
 func getTermProfileColors() {
