@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/tree"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/muesli/reflow/wrap"
 	"golang.org/x/term"
@@ -62,6 +63,8 @@ func (f *FieldSeparator) Render() string {
 	}
 	return renderSeparator(f.Length, f.Dim)
 }
+
+var borderChar = lipgloss.NormalBorder().Bottom
 
 // FieldAnnotation renders a single line of dimmed annotation text.
 type FieldAnnotation struct {
@@ -224,7 +227,7 @@ type TreeNode struct {
 func (f *FieldTree) KeyLength() int {
 	maxLength := len(f.Title)
 	for _, child := range f.Children {
-		if length := lipgloss.Width(treeBranchTitle(child.Title, true)); length > maxLength {
+		if length := len(child.Title); length > maxLength {
 			maxLength = length
 		}
 	}
@@ -240,59 +243,53 @@ func (f *FieldTree) Render() string {
 	}
 	sb.WriteString("\n")
 
-	for i, child := range f.Children {
-		continues := i != len(f.Children)-1
-		sb.WriteString(renderTreeNode(child, continues))
+	if len(f.Children) == 0 {
+		return sb.String()
 	}
+
+	t := tree.New()
+	for _, child := range f.Children {
+		if child.Field == nil {
+			continue
+		}
+		label := treeChildLabel(child)
+		t.Child(label)
+	}
+	sb.WriteString(t.String())
 	return sb.String()
 }
 
-func renderTreeNode(node TreeNode, continues bool) string {
-	if node.Field == nil {
-		return ""
-	}
-
-	branchTitle := treeBranchTitle(node.Title, continues)
-	continuationPrefix := ""
-	if continues {
-		continuationPrefix = "│"
-	}
-
-	savedPrefix := renderContinuationPrefix
-	renderContinuationPrefix = continuationPrefix
-	defer func() { renderContinuationPrefix = savedPrefix }()
-
+func treeChildLabel(node TreeNode) string {
+	key := renderKey(node.Title)
 	switch field := node.Field.(type) {
 	case *FieldShortText:
-		copy := *field
-		copy.Title = branchTitle
-		return copy.Render()
+		return key + field.Text
 	case *FieldAnnotatedShortText:
-		copy := *field
-		copy.Title = branchTitle
-		return copy.Render()
+		if field.Annotation != "" {
+			return key + field.Text + renderAnnot(field.Annotation)
+		}
+		return key + field.Text
 	case *FieldDynamicColumnLabels:
-		copy := *field
-		copy.Title = branchTitle
-		return copy.Render()
+		if len(field.Labels) > 0 {
+			return key + field.Labels[0]
+		}
+		return key
 	case *FieldMultiAnnotatedShortText:
-		copy := *field
-		copy.Title = branchTitle
-		return copy.Render()
+		if len(field.Texts) > 0 {
+			if len(field.Annotations) > 0 {
+				return key + field.Texts[0] + renderAnnot(field.Annotations[0])
+			}
+			return key + field.Texts[0]
+		}
+		return key
 	case *FieldMultiShortText:
-		copy := *field
-		copy.Title = branchTitle
-		return copy.Render()
+		if len(field.Texts) > 0 {
+			return key + field.Texts[0]
+		}
+		return key
 	default:
 		return node.Field.Render()
 	}
-}
-
-func treeBranchTitle(title string, continues bool) string {
-	if continues {
-		return "├── " + title
-	}
-	return "└── " + title
 }
 
 // FieldNil is a no-op field that renders nothing.
