@@ -39,6 +39,6 @@ jobs:
       - name: Generate coverage badge
         uses: ncruces/go-coverage-report@v0.3.2
         with:
-          output-dir: dev
+          output-dir: badge
           badge-title: Coverage
           amend: true
