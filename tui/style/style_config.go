@@ -39,6 +39,7 @@ func updateStyles() {
 			}
 		}
 		Bold, Dim, Italic, Underline, Red, Green, Yellow, Blue, Magenta, Cyan = noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle
+		Key, Muted, Accent, Success, Failure, Warning, Link, Note = noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle, noStyle
 		return
 	}
 
@@ -52,6 +53,15 @@ func updateStyles() {
 	Blue = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Blue))
 	Magenta = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Magenta))
 	Cyan = lsStyle(lipgloss.NewStyle().Foreground(lipgloss.Cyan))
+
+	Key = lsStyle(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Magenta))
+	Muted = Dim
+	Accent = Bold
+	Success = Green
+	Failure = Red
+	Warning = Yellow
+	Link = Underline
+	Note = Cyan
 }
 
 // lsStyle wraps a lipgloss.Style into a func(any) string, matching the

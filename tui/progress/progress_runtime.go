@@ -160,19 +160,19 @@ func (m *runtime) View() tea.View {
 		}
 
 		for _, logLine := range entry.logLines {
-			lines = append(lines, style.Dim(logLine))
+			lines = append(lines, style.Muted(logLine))
 		}
 
 		var sb strings.Builder
 		titleCell := lipgloss.NewStyle().Width(titleWidth).Render(entry.title)
-		sb.WriteString(style.Bold(style.Magenta(titleCell)))
+		sb.WriteString(style.Key(titleCell))
 		sb.WriteString(strings.Repeat(" ", 2))
 		sb.WriteString(entry.bar.ViewAs(entry.percent))
 
 		if entry.totalBytes > 0 {
 			sb.WriteString("  ")
 			sb.WriteString(
-				style.Dim(
+				style.Muted(
 					fmt.Sprintf(
 						"%s / %s",
 						style.FormatBytesBinary(entry.readBytes),
@@ -182,17 +182,17 @@ func (m *runtime) View() tea.View {
 			)
 		} else if entry.message != "" {
 			sb.WriteString("  ")
-			sb.WriteString(style.Dim(entry.message))
+			sb.WriteString(style.Muted(entry.message))
 		} else {
 			sb.WriteString("  ")
-			sb.WriteString(style.Dim(fmt.Sprintf("%.1f%%", entry.percent*100)))
+			sb.WriteString(style.Muted(fmt.Sprintf("%.1f%%", entry.percent*100)))
 		}
 
 		lines = append(lines, sb.String())
 	}
 	if m.finalMessage != "" {
 		lines = append(lines, "")
-		lines = append(lines, style.Green("✓")+" "+style.Dim(m.finalMessage))
+		lines = append(lines, style.Success("✓")+" "+style.Muted(m.finalMessage))
 	}
 	return tea.NewView(strings.Join(lines, "\n"))
 }

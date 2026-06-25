@@ -10,22 +10,22 @@ import (
 const keyColPadding = 2
 
 func renderKeyStyled(title string) string {
-	return style.Bold(style.Magenta(title))
+	return style.Key(title)
 }
 
 func renderKeyFixed(title string, width int) string {
-	styled := style.Bold(style.Magenta(title))
+	styled := style.Key(title)
 	visualWidth := lipgloss.Width(styled)
 	padding := max(width-visualWidth, keyColPadding)
 	return styled + strings.Repeat(" ", padding)
 }
 
 func renderDim(text string) string {
-	return style.Dim(text)
+	return style.Muted(text)
 }
 
 func renderAnnot(annotation string) string {
-	return "  " + style.Dim(annotation)
+	return "  " + style.Muted(annotation)
 }
 
 func renderSeparator(length int, dim bool) string {

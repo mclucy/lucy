@@ -668,11 +668,11 @@ func (f *FieldCheckBox) Render() string {
 func (f *FieldCheckBox) RenderRow() (key, value string) {
 	trueText := f.TrueText
 	if trueText == "" {
-		trueText = style.Green("\u2713") // ✓
+		trueText = style.Success("\u2713") // ✓
 	}
 	falseText := f.FalseText
 	if falseText == "" {
-		falseText = style.Red("\u2717") // ✗
+		falseText = style.Failure("\u2717") // ✗
 	}
 
 	if f.Boolean {
