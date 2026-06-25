@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"charm.land/lipgloss/v2/tree"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/muesli/reflow/wrap"
@@ -33,7 +34,24 @@ type Data struct {
 // implementation returns its formatted string representation from Render.
 type Field interface {
 	Render() string
+	RenderRow() (key, value string)
 	KeyLength() int
+}
+
+// WidthAware is implemented by fields that need the value-column width before
+// rendering multi-line or grid content.
+type WidthAware interface {
+	SetAvailableWidth(width int)
+}
+
+type segment struct {
+	rows       []tableRow
+	standalone string
+}
+
+type tableRow struct {
+	key   string
+	value string
 }
 
 // FieldSeparator renders a horizontal separator line. A Length of 0 produces
@@ -55,13 +73,18 @@ func (f *FieldSeparator) KeyLength() int {
 }
 
 func (f *FieldSeparator) Render() string {
+	_, value := f.RenderRow()
+	return value
+}
+
+func (f *FieldSeparator) RenderRow() (key, value string) {
 	if f.Proportional {
 		f.Length = f.Length * style.TermWidth() / 100
 	}
 	if f.Length == 0 {
 		f.Length = style.TermWidth() * 8 / 10
 	}
-	return renderSeparator(f.Length, f.Dim)
+	return "", renderSeparator(f.Length, f.Dim)
 }
 
 var borderChar = lipgloss.NormalBorder().Bottom
@@ -76,7 +99,12 @@ func (f *FieldAnnotation) KeyLength() int {
 }
 
 func (f *FieldAnnotation) Render() string {
-	return renderDim(f.Annotation) + "\n"
+	_, value := f.RenderRow()
+	return value
+}
+
+func (f *FieldAnnotation) RenderRow() (key, value string) {
+	return "", renderDim(f.Annotation) + "\n"
 }
 
 // FieldShortText renders a key-value pair on one line.
@@ -90,7 +118,12 @@ func (f *FieldShortText) KeyLength() int {
 }
 
 func (f *FieldShortText) Render() string {
-	return renderKey(f.Title) + f.Text + "\n"
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldShortText) RenderRow() (key, value string) {
+	return renderKeyStyled(f.Title), f.Text
 }
 
 // FieldMarkdown renders Markdown content as styled ANSI terminal output.
@@ -101,10 +134,19 @@ func (f *FieldMarkdown) KeyLength() int {
 }
 
 func (f *FieldMarkdown) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldMarkdown) RenderRow() (key, value string) {
 	long := FieldLongText(*f)
 	long.Text = style.MarkdownToAnsi(f.Text, f.MaxColumns)
 	long.LineWrap = false
-	return long.Render() + "\n"
+	return long.RenderRow()
+}
+
+func (f *FieldMarkdown) SetAvailableWidth(width int) {
+	(*FieldLongText)(f).SetAvailableWidth(width)
 }
 
 // FieldLongText renders multi-line text content with optional word-wrapping
@@ -118,9 +160,10 @@ type FieldLongText struct {
 	MaxColumns int
 	MaxLines   int
 
-	UseAlternate  bool   // UseAlternate shows AlternateText instead of the text body if it is truncated
-	AlternateText string // AlternateText is shown instead of the text body if it is truncated
-	FoldNotice    string // FoldNotice is a dimmed message shown after the text body if it is truncated, left empty for default message
+	UseAlternate   bool   // UseAlternate shows AlternateText instead of the text body if it is truncated
+	AlternateText  string // AlternateText is shown instead of the text body if it is truncated
+	FoldNotice     string // FoldNotice is a dimmed message shown after the text body if it is truncated, left empty for default message
+	availableWidth int
 }
 
 func (f *FieldLongText) KeyLength() int {
@@ -128,55 +171,47 @@ func (f *FieldLongText) KeyLength() int {
 }
 
 func (f *FieldLongText) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldLongText) RenderRow() (key, value string) {
 	text := f.Text
 	if f.LineWrap {
-		text = wrap.String(text, f.MaxColumns)
+		text = wrap.String(text, f.maxColumns())
 	}
 	lines := strings.Split(text, "\n")
 	lineNumber := len(lines)
-	// lineNumberAnnotation shows the full line count, regardless of truncation.
 	lineNumberAnnotation := renderDim(
 		fmt.Sprintf("(total %d lines)", lineNumber),
 	)
 
-	// If MaxLines is set and the text exceeds it, truncate or show alternate text.
 	truncated := f.MaxLines != 0 && len(lines) > f.MaxLines
 	if truncated {
-		// If UseAlternate is true, show AlternateText instead of the truncated text body.
 		if f.UseAlternate {
 			if f.AlternateText == "" {
-				return ""
+				return "", ""
 			}
-			alternateText := FieldShortText{
-				Title: f.Title,
-				Text:  f.AlternateText + " " + lineNumberAnnotation,
+			foldNotice := f.FoldNotice
+			if foldNotice == "" {
+				foldNotice = "full text not shown, use --long or expand the terminal"
 			}
-			rendered := alternateText.Render()
-
-			// Use default fold notice if FoldNotice is empty
-			if f.FoldNotice == "" {
-				f.FoldNotice = renderDim("full text not shown, use --long or expand the terminal")
-			}
-			rendered += renderTab() + renderDim(f.FoldNotice)
-			return rendered
+			value := f.AlternateText + " " + lineNumberAnnotation + "\n" + renderDim(foldNotice)
+			return renderKeyStyled(f.Title), value
 		}
 
-		// Use default fold notice if FoldNotice is empty
-		if f.FoldNotice == "" {
-			f.FoldNotice = fmt.Sprintf(
+		foldNotice := f.FoldNotice
+		if foldNotice == "" {
+			foldNotice = fmt.Sprintf(
 				"...\n%d lines left, use --long or expand the terminal\n",
 				lineNumber-f.MaxLines,
 			)
 		}
-		f.FoldNotice = renderDim(f.FoldNotice)
-		// Truncate to MaxLines
 		lines = lines[:f.MaxLines]
-		// Append fold notice after truncated text
-		lines = append(lines, f.FoldNotice)
+		lines = append(lines, renderDim(foldNotice))
 	}
 
 	var sb strings.Builder
-	sb.WriteString(renderKey(f.Title))
 	sb.WriteString(lineNumberAnnotation)
 	sb.WriteString("\n")
 	if f.Padding {
@@ -186,7 +221,18 @@ func (f *FieldLongText) Render() string {
 		sb.WriteString(line)
 		sb.WriteString("\n")
 	}
-	return sb.String()
+	return renderKeyStyled(f.Title), strings.TrimSuffix(sb.String(), "\n")
+}
+
+func (f *FieldLongText) SetAvailableWidth(width int) {
+	f.availableWidth = width
+}
+
+func (f *FieldLongText) maxColumns() int {
+	if f.availableWidth > 0 && (f.MaxColumns == 0 || f.availableWidth < f.MaxColumns) {
+		return f.availableWidth
+	}
+	return f.MaxColumns
 }
 
 // FieldAnnotatedShortText renders a key-value pair with a dimmed annotation
@@ -202,14 +248,17 @@ func (f *FieldAnnotatedShortText) KeyLength() int {
 }
 
 func (f *FieldAnnotatedShortText) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldAnnotatedShortText) RenderRow() (key, value string) {
 	var sb strings.Builder
-	sb.WriteString(renderKey(f.Title))
 	sb.WriteString(f.Text)
 	if f.Annotation != "" {
 		sb.WriteString(renderAnnot(f.Annotation))
 	}
-	sb.WriteString("\n")
-	return sb.String()
+	return renderKeyStyled(f.Title), sb.String()
 }
 
 type FieldTree struct {
@@ -235,32 +284,52 @@ func (f *FieldTree) KeyLength() int {
 }
 
 func (f *FieldTree) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldTree) RenderRow() (key, value string) {
 	var sb strings.Builder
-	sb.WriteString(renderKey(f.Title))
 	sb.WriteString(f.Text)
 	if f.Annotation != "" {
 		sb.WriteString(renderAnnot(f.Annotation))
 	}
-	sb.WriteString("\n")
 
 	if len(f.Children) == 0 {
-		return sb.String()
+		return renderKeyStyled(f.Title), sb.String()
 	}
 
+	childKeyWidth := f.childKeyWidth()
 	t := tree.New()
 	for _, child := range f.Children {
 		if child.Field == nil {
 			continue
 		}
-		label := treeChildLabel(child)
+		label := treeChildLabel(child, childKeyWidth)
 		t.Child(label)
 	}
+	if sb.Len() > 0 {
+		sb.WriteString("\n")
+	}
 	sb.WriteString(t.String())
-	return sb.String()
+	return renderKeyStyled(f.Title), sb.String()
 }
 
-func treeChildLabel(node TreeNode) string {
-	key := renderKey(node.Title)
+func (f *FieldTree) childKeyWidth() int {
+	width := 0
+	for _, child := range f.Children {
+		if child.Field == nil {
+			continue
+		}
+		if length := len(child.Title); length > width {
+			width = length
+		}
+	}
+	return width + keyColPadding
+}
+
+func treeChildLabel(node TreeNode, keyWidth int) string {
+	key := renderKeyFixed(node.Title, keyWidth)
 	switch field := node.Field.(type) {
 	case *FieldShortText:
 		return key + field.Text
@@ -288,7 +357,7 @@ func treeChildLabel(node TreeNode) string {
 		}
 		return key
 	default:
-		return node.Field.Render()
+		return strings.TrimSuffix(node.Field.Render(), "\n")
 	}
 }
 
@@ -303,14 +372,17 @@ func (f *fieldNil) KeyLength() int {
 
 func (f *fieldNil) Render() string { return "" }
 
+func (f *fieldNil) RenderRow() (key, value string) { return "", "" }
+
 // FieldLabels renders a title followed by a comma-separated list of labels
 // that wraps across lines. If MaxWidth is 0, it defaults to
 // max(33% of terminal width, 40).
 type FieldLabels struct {
-	Title    string
-	Labels   []string
-	MaxWidth int
-	MaxLines int
+	Title          string
+	Labels         []string
+	MaxWidth       int
+	MaxLines       int
+	availableWidth int
 }
 
 func (f *FieldLabels) KeyLength() int {
@@ -318,17 +390,18 @@ func (f *FieldLabels) KeyLength() int {
 }
 
 func (f *FieldLabels) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldLabels) RenderRow() (key, value string) {
 	if len(f.Labels) == 0 {
-		return ""
+		return "", ""
 	}
 
 	var sb strings.Builder
-	sb.WriteString(renderKey(f.Title))
 
-	maxW := f.MaxWidth
-	if maxW == 0 {
-		maxW = max(33*style.TermWidth()/100, 40)
-	}
+	maxW := f.maxWidth()
 
 	width := 0
 	lines := 1
@@ -340,22 +413,30 @@ func (f *FieldLabels) Render() string {
 		width += len(label) + 2
 		if width >= maxW && i != len(f.Labels)-1 {
 			sb.WriteString("\n")
-			sb.WriteString(renderTab())
 			width = 0
 			lines++
 			if f.MaxLines != 0 && lines > f.MaxLines {
 				sb.WriteString(renderDim("(" + strconv.Itoa(len(f.Labels)-i-1) + " more, use --long to show all)"))
-				sb.WriteString("\n")
-				return sb.String()
+				return renderKeyStyled(f.Title), sb.String()
 			}
 		}
 	}
 
-	if width != 0 {
-		sb.WriteString("\n")
-	}
+	return renderKeyStyled(f.Title), sb.String()
+}
 
-	return sb.String()
+func (f *FieldLabels) SetAvailableWidth(width int) {
+	f.availableWidth = width
+}
+
+func (f *FieldLabels) maxWidth() int {
+	if f.MaxWidth != 0 {
+		return f.MaxWidth
+	}
+	if f.availableWidth > 0 {
+		return f.availableWidth
+	}
+	return max(33*style.TermWidth()/100, 40)
 }
 
 // FieldDynamicColumnLabels renders labels in a dynamic grid whose column
@@ -364,28 +445,33 @@ func (f *FieldLabels) Render() string {
 // NoTitle renders a label-only grid without a key column, useful for search
 // results and similar content.
 type FieldDynamicColumnLabels struct {
-	Title      string
-	Labels     []string
-	MaxLines   int
-	MaxColumns int
-	ShowTotal  bool
-	NoTitle    bool
+	Title          string
+	Labels         []string
+	MaxLines       int
+	MaxColumns     int
+	ShowTotal      bool
+	NoTitle        bool
+	availableWidth int
 }
 
 func (f *FieldDynamicColumnLabels) KeyLength() int {
+	if f.NoTitle {
+		return 0
+	}
 	return len(f.Title)
 }
 
 func (f *FieldDynamicColumnLabels) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldDynamicColumnLabels) RenderRow() (key, value string) {
 	if len(f.Labels) == 0 {
-		return ""
+		return "", ""
 	}
 
 	var sb strings.Builder
-
-	if !f.NoTitle {
-		sb.WriteString(renderKey(f.Title))
-	}
 
 	longestLabel := 0
 	for _, label := range f.Labels {
@@ -395,7 +481,14 @@ func (f *FieldDynamicColumnLabels) Render() string {
 	}
 
 	colWidth := longestLabel + 2
-	columnNumber := (style.TermWidth() - keyColumnWidth) / colWidth
+	availableWidth := f.availableWidth
+	if availableWidth <= 0 {
+		availableWidth = style.TermWidth()
+		if !f.NoTitle {
+			availableWidth -= f.KeyLength() + keyColPadding
+		}
+	}
+	columnNumber := availableWidth / colWidth
 	if columnNumber <= 0 {
 		columnNumber = 1
 	}
@@ -415,9 +508,6 @@ func (f *FieldDynamicColumnLabels) Render() string {
 		// remaining labels and stop rendering more.
 		if f.MaxLines != 0 && currentLine == f.MaxLines && lastInRow {
 			sb.WriteString("\n")
-			if !f.NoTitle {
-				sb.WriteString(renderTab())
-			}
 			if f.ShowTotal {
 				sb.WriteString(
 					renderDim(
@@ -438,17 +528,13 @@ func (f *FieldDynamicColumnLabels) Render() string {
 					),
 				)
 			}
-			sb.WriteString("\n")
-			return sb.String()
+			return f.renderRowKey(), sb.String()
 		}
 
 		// If this is the last label, optionally show a total count of all labels.
 		if lastAmongAll {
 			if f.ShowTotal {
 				sb.WriteString("\n")
-				if !f.NoTitle {
-					sb.WriteString(renderTab())
-				}
 				sb.WriteString(
 					renderDim(
 						fmt.Sprintf(
@@ -458,21 +544,28 @@ func (f *FieldDynamicColumnLabels) Render() string {
 					),
 				)
 			}
-			sb.WriteString("\n")
-			return sb.String()
+			return f.renderRowKey(), sb.String()
 		}
 
 		// For the last label in a row, add a newline and indentation for the next row.
 		if lastInRow {
 			sb.WriteString("\n")
 			currentLine++
-			if !f.NoTitle {
-				sb.WriteString(renderTab())
-			}
 		}
 	}
 
-	return sb.String()
+	return f.renderRowKey(), sb.String()
+}
+
+func (f *FieldDynamicColumnLabels) SetAvailableWidth(width int) {
+	f.availableWidth = width
+}
+
+func (f *FieldDynamicColumnLabels) renderRowKey() string {
+	if f.NoTitle {
+		return ""
+	}
+	return renderKeyStyled(f.Title)
 }
 
 // FieldMultiAnnotatedShortText renders multiple annotated lines under one key.
@@ -489,31 +582,32 @@ func (f *FieldMultiAnnotatedShortText) KeyLength() int {
 }
 
 func (f *FieldMultiAnnotatedShortText) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldMultiAnnotatedShortText) RenderRow() (key, value string) {
 	if len(f.Texts) == 0 {
-		return ""
+		return "", ""
 	}
 
 	var sb strings.Builder
 	for i, t := range f.Texts {
-		if i == 0 {
-			sb.WriteString(renderKey(f.Title))
-		} else {
-			sb.WriteString(renderTab())
+		if i > 0 {
+			sb.WriteString("\n")
 		}
 		sb.WriteString(t)
 		if f.Annotations != nil && i < len(f.Annotations) {
 			sb.WriteString(renderAnnot(f.Annotations[i]))
 		}
-		sb.WriteString("\n")
 	}
 
 	if f.ShowTotal {
-		sb.WriteString(renderTab())
-		sb.WriteString(renderDim("(" + strconv.Itoa(len(f.Texts)) + " total)"))
 		sb.WriteString("\n")
+		sb.WriteString(renderDim("(" + strconv.Itoa(len(f.Texts)) + " total)"))
 	}
 
-	return sb.String()
+	return renderKeyStyled(f.Title), sb.String()
 }
 
 // FieldMultiShortText renders multiple values under a single key, one per line.
@@ -528,28 +622,29 @@ func (f *FieldMultiShortText) KeyLength() int {
 }
 
 func (f *FieldMultiShortText) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldMultiShortText) RenderRow() (key, value string) {
 	if len(f.Texts) == 0 {
-		return ""
+		return "", ""
 	}
 
 	var sb strings.Builder
 	for i, t := range f.Texts {
-		if i == 0 {
-			sb.WriteString(renderKey(f.Title))
-		} else {
-			sb.WriteString(renderTab())
+		if i > 0 {
+			sb.WriteString("\n")
 		}
 		sb.WriteString(t)
-		sb.WriteString("\n")
 	}
 
 	if f.ShowTotal {
-		sb.WriteString(renderTab())
-		sb.WriteString(renderDim("(" + strconv.Itoa(len(f.Texts)) + " total)"))
 		sb.WriteString("\n")
+		sb.WriteString(renderDim("(" + strconv.Itoa(len(f.Texts)) + " total)"))
 	}
 
-	return sb.String()
+	return renderKeyStyled(f.Title), sb.String()
 }
 
 // FieldCheckBox renders a boolean value as a check mark (✓) or cross (✗).
@@ -566,6 +661,11 @@ func (f *FieldCheckBox) KeyLength() int {
 }
 
 func (f *FieldCheckBox) Render() string {
+	key, value := f.RenderRow()
+	return renderRow(key, value)
+}
+
+func (f *FieldCheckBox) RenderRow() (key, value string) {
 	trueText := f.TrueText
 	if trueText == "" {
 		trueText = style.Green("\u2713") // ✓
@@ -575,15 +675,21 @@ func (f *FieldCheckBox) Render() string {
 		falseText = style.Red("\u2717") // ✗
 	}
 
-	var sb strings.Builder
-	sb.WriteString(renderKey(f.Title))
 	if f.Boolean {
-		sb.WriteString(trueText)
-	} else {
-		sb.WriteString(falseText)
+		return renderKeyStyled(f.Title), trueText
 	}
-	sb.WriteString("\n")
-	return sb.String()
+	return renderKeyStyled(f.Title), falseText
+}
+
+func (f *FieldLogo) RenderRow() (key, value string) {
+	return "", f.Render()
+}
+
+func renderRow(key, value string) string {
+	if key == "" && value == "" {
+		return ""
+	}
+	return key + value + "\n"
 }
 
 // clipLines truncates each line in s to at most maxWidth runes.
@@ -613,53 +719,11 @@ func Flush(data *Data) {
 	}
 
 	if logoField == nil {
-		for _, field := range data.Fields {
-			if field.KeyLength() > keyColumnWidth {
-				keyColumnWidth = field.KeyLength()
-			}
-		}
-		keyColumnWidth += keyColPadding
-
-		var sb strings.Builder
-		for _, field := range data.Fields {
-			if field != nil {
-				sb.WriteString(field.Render())
-			}
-		}
-		sb.WriteString("\n")
-		fmt.Print(sb.String())
+		keyWidth := keyColumnWidth(data.Fields)
+		infoBlock := renderSegments(buildSegments(data.Fields, 0, keyWidth), 0, keyWidth)
+		fmt.Println(infoBlock)
 		return
 	}
-
-	// LOGO BRANCH: uses a local key width; does not corrupt the global.
-
-	localKeyWidth := 0
-	for _, field := range data.Fields {
-		if _, ok := field.(*FieldLogo); ok {
-			continue
-		}
-		if field.KeyLength() > localKeyWidth {
-			localKeyWidth = field.KeyLength()
-		}
-	}
-	localKeyWidth += keyColPadding
-
-	// Save/restore keyColumnWidth so existing Render() methods pick up our
-	// local width without permanently corrupting the global.
-	savedKeyColumnWidth := keyColumnWidth
-	keyColumnWidth = localKeyWidth
-	defer func() { keyColumnWidth = savedKeyColumnWidth }()
-	var infoSb strings.Builder
-	for _, field := range data.Fields {
-		if field == nil {
-			continue
-		}
-		if _, ok := field.(*FieldLogo); ok {
-			continue
-		}
-		infoSb.WriteString(field.Render())
-	}
-	infoBlock := infoSb.String()
 
 	isTTY := term.IsTerminal(1)
 	params := NegotiateStatusLayout(
@@ -668,6 +732,9 @@ func Flush(data *Data) {
 		logoField.Width(LogoSmallPlain),
 		isTTY,
 	)
+	infoFields := fieldsWithoutLogo(data.Fields)
+	keyWidth := keyColumnWidth(infoFields)
+	infoBlock := renderSegments(buildSegments(infoFields, params.InfoWidth, keyWidth), params.InfoWidth, keyWidth)
 
 	var output string
 	switch params.Mode {
@@ -700,4 +767,135 @@ func Flush(data *Data) {
 	}
 	fmt.Print(output)
 	fmt.Println()
+}
+
+func fieldsWithoutLogo(fields []Field) []Field {
+	filtered := make([]Field, 0, len(fields))
+	for _, field := range fields {
+		if field == nil {
+			continue
+		}
+		if _, ok := field.(*FieldLogo); ok {
+			continue
+		}
+		filtered = append(filtered, field)
+	}
+	return filtered
+}
+
+func keyColumnWidth(fields []Field) int {
+	width := 0
+	for _, field := range fields {
+		if field == nil {
+			continue
+		}
+		if length := field.KeyLength(); length > width {
+			width = length
+		}
+	}
+	if width == 0 {
+		return 0
+	}
+	return width + keyColPadding
+}
+
+func buildSegments(fields []Field, totalWidth int, keyWidth int) []segment {
+	segments := []segment{}
+	rows := []tableRow{}
+	flushRows := func() {
+		if len(rows) == 0 {
+			return
+		}
+		segments = append(segments, segment{rows: rows})
+		rows = []tableRow{}
+	}
+
+	for _, field := range fields {
+		if field == nil {
+			continue
+		}
+		switch typed := field.(type) {
+		case *FieldSeparator:
+			flushRows()
+			_, value := typed.RenderRow()
+			if value != "" {
+				segments = append(segments, segment{standalone: value})
+			}
+			continue
+		case *FieldAnnotation:
+			flushRows()
+			_, value := typed.RenderRow()
+			if value != "" {
+				segments = append(segments, segment{standalone: value})
+			}
+			continue
+		}
+
+		if widthAware, ok := field.(WidthAware); ok {
+			widthAware.SetAvailableWidth(valueColumnWidth(totalWidth, keyWidth))
+		}
+		key, value := field.RenderRow()
+		if key == "" && value == "" {
+			continue
+		}
+		rows = append(rows, tableRow{key: key, value: value})
+	}
+	flushRows()
+	return segments
+}
+
+func valueColumnWidth(totalWidth int, keyWidth int) int {
+	if totalWidth <= 0 {
+		totalWidth = style.TermWidth()
+	}
+	width := totalWidth - keyWidth
+	if width <= 0 {
+		return 1
+	}
+	return width
+}
+
+func renderSegments(segments []segment, totalWidth int, keyWidth int) string {
+	parts := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		var rendered string
+		if len(segment.rows) > 0 {
+			rendered = buildTable(segment.rows, totalWidth, keyWidth)
+		} else {
+			rendered = segment.standalone
+		}
+		rendered = strings.TrimSuffix(rendered, "\n")
+		if rendered != "" {
+			parts = append(parts, rendered)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func buildTable(rows []tableRow, totalWidth int, keyWidth int) string {
+	t := table.New().
+		Border(lipgloss.HiddenBorder()).
+		BorderTop(false).
+		BorderBottom(false).
+		BorderLeft(false).
+		BorderRight(false).
+		BorderColumn(false).
+		BorderRow(false).
+		BorderHeader(false).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if col == 0 && keyWidth > 0 {
+				return lipgloss.NewStyle().Width(keyWidth)
+			}
+			return lipgloss.NewStyle()
+		})
+
+	for _, row := range rows {
+		t.Row(row.key, row.value)
+	}
+
+	if totalWidth > 0 {
+		t.Width(totalWidth)
+	}
+
+	return t.String()
 }

@@ -7,17 +7,16 @@ import (
 	"github.com/mclucy/lucy/tui/style"
 )
 
-var keyColumnWidth int
-
 const keyColPadding = 2
 
-func renderKey(title string) string {
+func renderKeyStyled(title string) string {
+	return style.Bold(style.Magenta(title))
+}
+
+func renderKeyFixed(title string, width int) string {
 	styled := style.Bold(style.Magenta(title))
 	visualWidth := lipgloss.Width(styled)
-	padding := keyColumnWidth - visualWidth
-	if padding < 2 {
-		padding = 2
-	}
+	padding := max(width-visualWidth, keyColPadding)
 	return styled + strings.Repeat(" ", padding)
 }
 
@@ -27,10 +26,6 @@ func renderDim(text string) string {
 
 func renderAnnot(annotation string) string {
 	return "  " + style.Dim(annotation)
-}
-
-func renderTab() string {
-	return strings.Repeat(" ", keyColumnWidth)
 }
 
 func renderSeparator(length int, dim bool) string {
