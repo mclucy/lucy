@@ -52,6 +52,38 @@
       "description": "high performance and compatibility Forge+Bukkit+Spigot server on 1.12.2/1.16.5/1.18.2",
       "repository": "Luohuayu/CatServer"
     },
+    "charmbracelet-bubbles": {
+      "description": "Component library for Bubble Tea",
+      "repository": "charmbracelet/bubbles"
+    },
+    "charmbracelet-bubbletea": {
+      "description": "The Charm TUI ecosystem's core framework",
+      "repository": "charmbracelet/bubbletea"
+    },
+    "charmbracelet-colorprofile": {
+      "description": "Terminal color profile handling library",
+      "repository": "charmbracelet/colorprofile"
+    },
+    "charmbracelet-fang": {
+      "description": "A CLI framework built on cobra",
+      "repository": "charmbracelet/fang"
+    },
+    "charmbracelet-glamour": {
+      "description": "CLI Makrdown rendering library",
+      "repository": "charmbracelet/glamour"
+    },
+    "charmbracelet-huh": {
+      "description": "CLI form library",
+      "repository": "charmbracelet/huh"
+    },
+    "charmbracelet-lipgloss": {
+      "description": "Charm TUI ecosystem's style and layout toolkit",
+      "repository": "charmbracelet/lipgloss"
+    },
+    "charmbracelet-log": {
+      "description": "Logging library",
+      "repository": "charmbracelet/log"
+    },
     "craftbukkit": {
       "description": "An implementation of the Bukkit plugin API for Minecraft servers",
       "repository": "https://hub.spigotmc.org/stash/scm/spigot/craftbukkit.git"
