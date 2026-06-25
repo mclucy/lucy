@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 const (
@@ -27,47 +28,20 @@ func modLoaderType(p types.PlatformId) int {
 	}
 }
 
-// curseforgeSearchSortField maps lucy SearchSort to CurseForge
-// ModsSearchSortField enum.
-// Docs: https://docs.curseforge.com/rest-api/#search-mods
-func curseforgeSearchSortField(sort types.SearchSort) int {
-	switch sort {
-	case types.SearchSortRelevance:
-		return 2 // Popularity
-	case types.SearchSortDownloads:
-		return 6 // TotalDownloads
-	case types.SearchSortNewest:
-		return 11 // ReleasedDate
-	case types.SearchSortName:
-		return 4 // Name
-	default:
-		return 2 // Popularity
-	}
-}
-
-// searchSortOrder returns the sort order string for the given sort.
-func searchSortOrder(sort types.SearchSort) string {
-	if sort == types.SearchSortName {
-		return "asc"
-	}
-	return "desc"
-}
-
 // searchUrl builds the search URL for the CurseForge /v1/mods/search endpoint.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func searchUrl(
 	query types.BarePackageName,
-	options types.SearchOptions,
+	options upstream.SearchOptions,
 ) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
 	params.Set("classId", fmt.Sprintf("%d", modsClassId))
 	params.Set("searchFilter", string(query))
-	params.Set(
-		"sortField",
-		fmt.Sprintf("%d", curseforgeSearchSortField(options.SortBy)),
-	)
-	params.Set("sortOrder", searchSortOrder(options.SortBy))
+	// sortField=2 maps to Popularity in CurseForge ModsSearchSortField enum;
+	// sortOrder=desc is its required direction. See Docs link above.
+	params.Set("sortField", "2")
+	params.Set("sortOrder", "desc")
 	params.Set("pageSize", "50")
 
 	if loader := modLoaderType(options.FilterPlatform); loader != 0 {

@@ -39,7 +39,7 @@ type resolvedVersion struct {
 func (s searchResponse) ToSearchResults(source types.SourceId) upstream.SearchResponse {
 	results := upstream.SearchResponse{
 		Source: source,
-		Items:  make([]upstream.RemotePackageName, 0, len(s)),
+		Items:  make([]upstream.SearchResult, 0, len(s)),
 	}
 
 	for _, resource := range s {
@@ -47,7 +47,7 @@ func (s searchResponse) ToSearchResults(source types.SourceId) upstream.SearchRe
 			continue
 		}
 		results.Items = append(
-			results.Items, upstream.RemotePackageName{
+			results.Items, upstream.SearchResult{
 				RemoteName: normalizedProjectName(resource.Name).String(),
 				Source:     source,
 			},

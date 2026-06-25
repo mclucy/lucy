@@ -49,7 +49,7 @@ func (s provider) Search(q upstream.Query) (
 	}
 
 	internalOptions := searchOptions{
-		index:  modrinthSearchSortingString(q.SortBy),
+		index:  "relevance",
 		facets: facets,
 	}
 	searchUrl := searchUrl(q.Keyword, internalOptions)
@@ -69,11 +69,15 @@ func (s provider) Search(q upstream.Query) (
 		return resp, err
 	}
 
-	items := make([]upstream.RemotePackageName, len(result.Hits))
+	items := make([]upstream.SearchResult, len(result.Hits))
 	for i, hit := range result.Hits {
-		items[i] = upstream.RemotePackageName{
-			RemoteName: hit.Slug,
-			Source:     s.Id(),
+		items[i] = upstream.SearchResult{
+			RemoteName:  hit.Slug,
+			Source:      s.Id(),
+			Title:       hit.Title,
+			Description: hit.Description,
+			Downloads:   int64(hit.Downloads),
+			LastUpdated: hit.DateModified,
 		}
 	}
 	resp = upstream.SearchResponse{

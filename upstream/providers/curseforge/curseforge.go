@@ -25,9 +25,8 @@ func (provider) Id() types.SourceId {
 
 // Search queries the CurseForge /v1/mods/search endpoint.
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
-	options := types.SearchOptions{
+	options := upstream.SearchOptions{
 		IncludeClient:  !q.ExcludeClient,
-		SortBy:         q.SortBy,
 		FilterPlatform: q.FilterPlatform,
 	}
 	u := searchUrl(types.BarePackageName(q.Keyword), options)
@@ -41,7 +40,10 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 }
 
 // Fetch resolves the package version, then fetches the corresponding file.
-func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (
+	types.ResolvedPackage,
+	error,
+) {
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -68,7 +70,9 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	if err != nil {
 		return types.Metadata{}, err
 	}
-	info := rawProjectInformation{mod: mod, description: description}.ToProjectInformation()
+	info := rawProjectInformation{
+		mod: mod, description: description,
+	}.ToProjectInformation()
 	info.From = p.Id()
 	return info, nil
 }

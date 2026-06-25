@@ -43,7 +43,7 @@ var searchCmd = &cobra.Command{
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		index, _ := cmd.Flags().GetString(flagIndexName)
-		if !types.SearchSort(index).Valid() {
+		if !SearchSort(index).Valid() {
 			return errors.New("--index must be one of \"relevance\", \"downloads\", \"newest\"")
 		}
 		platform, _ := cmd.Flags().GetString(flagPlatformName)
@@ -128,14 +128,16 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		specifiedSource = ref.Scope
 	}
 
-	resolvedPlatform, err := ResolvePlatform(ref.PackageRef.Platform, platformArg)
+	resolvedPlatform, err := ResolvePlatform(
+		ref.PackageRef.Platform,
+		platformArg,
+	)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	options := types.SearchOptions{
+	options := upstream.SearchOptions{
 		IncludeClient:  client,
-		SortBy:         types.SearchSort(index),
 		FilterPlatform: resolvedPlatform,
 	}
 
@@ -153,6 +155,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	results, errs := routing.SearchMany(providers, ref.PackageRef.Name, options)
+	applySearchSort(results, SearchSort(index))
 	for _, err := range errs {
 		providerErr := fmt.Errorf(
 			"search on %s failed: %w",

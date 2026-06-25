@@ -18,9 +18,8 @@ func (provider) Id() types.SourceId {
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
-	options := types.SearchOptions{
+	options := upstream.SearchOptions{
 		IncludeClient:  !q.ExcludeClient,
-		SortBy:         q.SortBy,
 		FilterPlatform: q.FilterPlatform,
 	}
 	if options.FilterPlatform == types.PlatformBukkit {
@@ -34,7 +33,10 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return resp.ToSearchResults(p.Id()), nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (
+	types.ResolvedPackage,
+	error,
+) {
 	resource, err := resolveResourceByProjectName(id.Name)
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -64,7 +66,10 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	return info, nil
 }
 
-func (p provider) Support(name types.BarePackageName) (types.PlatformSupport, error) {
+func (p provider) Support(name types.BarePackageName) (
+	types.PlatformSupport,
+	error,
+) {
 	resource, err := resolveResourceByProjectName(name)
 	if err != nil {
 		return types.PlatformSupport{}, err

@@ -13,7 +13,10 @@ type CompletionCandidate struct {
 }
 
 // FilterByPrefix returns candidates whose Value starts with prefix (case-insensitive).
-func FilterByPrefix(candidates []CompletionCandidate, prefix string) []CompletionCandidate {
+func FilterByPrefix(
+	candidates []CompletionCandidate,
+	prefix string,
+) []CompletionCandidate {
 	if prefix == "" {
 		return candidates
 	}
@@ -43,11 +46,17 @@ func ToCobraCompletions(candidates []CompletionCandidate) []string {
 // StaticPlatformCandidates returns completion candidates for all user-facing platforms.
 func StaticPlatformCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.PlatformMinecraft.String(), Description: "Vanilla / Bukkit / Paper plugins"},
+		{
+			Value:       types.PlatformMinecraft.String(),
+			Description: "Vanilla / Bukkit / Paper plugins",
+		},
 		{Value: types.PlatformFabric.String(), Description: "Fabric mods"},
 		{Value: types.PlatformForge.String(), Description: "Forge mods"},
 		{Value: types.PlatformNeoforge.String(), Description: "NeoForge mods"},
-		{Value: types.PlatformMCDR.String(), Description: "MCDR controller / plugin framework"},
+		{
+			Value:       types.PlatformMCDR.String(),
+			Description: "MCDR controller / plugin framework",
+		},
 	}
 }
 
@@ -64,7 +73,10 @@ func StaticSearchPlatformCandidates() []CompletionCandidate {
 // StaticVersionCandidates returns completion candidates for fuzzy version hints.
 func StaticVersionCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.VersionCompatible.String(), Description: "Newest version that appears to fit the environment"},
+		{
+			Value:       types.VersionCompatible.String(),
+			Description: "Newest version that appears to fit the environment",
+		},
 		{Value: "latest", Description: "Request the newest available version"},
 	}
 }
@@ -75,16 +87,19 @@ func StaticSourceCandidates() []CompletionCandidate {
 		{Value: "curseforge", Description: "CurseForge source"},
 		{Value: types.SourceModrinth.String(), Description: "Modrinth source"},
 		{Value: types.SourceGitHub.String(), Description: "GitHub Releases"},
-		{Value: types.SourceMCDR.String(), Description: "MCDR Plugin Catalogue"},
+		{
+			Value:       types.SourceMCDR.String(),
+			Description: "MCDR Plugin Catalogue",
+		},
 	}
 }
 
 // StaticSortCandidates returns completion candidates for search sort options.
 func StaticSortCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: string(types.SearchSortRelevance), Description: "Sort by relevance"},
-		{Value: string(types.SearchSortDownloads), Description: "Sort by download count"},
-		{Value: string(types.SearchSortNewest), Description: "Sort by newest"},
+		{Value: string(SearchSortRelevance), Description: "Sort by relevance"},
+		{Value: string(SearchSortDownloads), Description: "Sort by download count"},
+		{Value: string(SearchSortNewest), Description: "Sort by newest"},
 	}
 }
 
@@ -95,7 +110,10 @@ func StaticSortCandidates() []CompletionCandidate {
 func ParseCompletionToken(token string) (platform, name, version, segment string) {
 	if before, after, ok := strings.Cut(token, "@"); ok {
 		version = after
-		if beforeSlash, afterSlash, hasSlash := strings.Cut(before, "/"); hasSlash {
+		if beforeSlash, afterSlash, hasSlash := strings.Cut(
+			before,
+			"/",
+		); hasSlash {
 			platform = beforeSlash
 			name = afterSlash
 		} else {

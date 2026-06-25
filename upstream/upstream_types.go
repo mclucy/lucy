@@ -3,6 +3,7 @@ package upstream
 import (
 	"crypto/sha1"
 	"strings"
+	"time"
 
 	"github.com/mclucy/lucy/types"
 )
@@ -90,7 +91,6 @@ type Searcher interface {
 
 type Query struct {
 	Keyword        string
-	SortBy         types.SearchSort
 	ExcludeClient  bool
 	FilterPlatform types.PlatformId
 	Tags           []string
@@ -101,7 +101,7 @@ type SearchResponse struct {
 	// Source labels which upstream catalog produced this result set.
 	// It is a semantic provenance marker, not a provider instance.
 	Source   types.SourceId
-	Items    []RemotePackageName
+	Items    []SearchResult
 	Warnings []error
 }
 
@@ -115,6 +115,31 @@ type RemotePackageName struct {
 }
 
 func (r RemotePackageName) FormattedName() string {
+	if r.Source == types.SourceMCDR {
+		return strings.ReplaceAll(r.RemoteName, "_", "-")
+	}
+	return r.RemoteName
+}
+
+type SearchOptions struct {
+	IncludeClient  bool
+	FilterPlatform types.PlatformId
+}
+
+// SearchResult represents a single search result with optional metadata.
+// Providers populate what their API returns; display layer handles zero values.
+type SearchResult struct {
+	RemoteName string
+	Source     types.SourceId
+
+	// Optional metadata — zero value means unavailable.
+	Title       string
+	Description string
+	Downloads   int64
+	LastUpdated time.Time
+}
+
+func (r SearchResult) FormattedName() string {
 	if r.Source == types.SourceMCDR {
 		return strings.ReplaceAll(r.RemoteName, "_", "-")
 	}

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 func TestSearchResponseToSearchResults(t *testing.T) {
@@ -27,7 +28,10 @@ func TestSearchResponseToSearchResults(t *testing.T) {
 		t.Errorf("expected 'jei', got '%s'", results.Items[0].RemoteName)
 	}
 	if results.Items[1].RemoteName != "just-enough-items" {
-		t.Errorf("expected 'just-enough-items', got '%s'", results.Items[1].RemoteName)
+		t.Errorf(
+			"expected 'just-enough-items', got '%s'",
+			results.Items[1].RemoteName,
+		)
 	}
 	if results.Items[2].RemoteName != "rei" {
 		t.Errorf("expected 'rei', got '%s'", results.Items[2].RemoteName)
@@ -266,46 +270,8 @@ func TestModLoaderType(t *testing.T) {
 	}
 }
 
-func TestCurseforgeSearchSortField(t *testing.T) {
-	tests := []struct {
-		sort     types.SearchSort
-		expected int
-	}{
-		{types.SearchSortRelevance, 2},
-		{types.SearchSortDownloads, 6},
-		{types.SearchSortNewest, 11},
-		{types.SearchSortName, 4},
-	}
-
-	for _, tt := range tests {
-		got := curseforgeSearchSortField(tt.sort)
-		if got != tt.expected {
-			t.Errorf(
-				"curseforgeSearchSortField(%s) = %d, want %d",
-				tt.sort, got, tt.expected,
-			)
-		}
-	}
-}
-
-func TestSearchSortOrder(t *testing.T) {
-	if got := searchSortOrder(types.SearchSortName); got != "asc" {
-		t.Errorf("searchSortOrder(Name) = %s, want asc", got)
-	}
-	if got := searchSortOrder(types.SearchSortRelevance); got != "desc" {
-		t.Errorf("searchSortOrder(Relevance) = %s, want desc", got)
-	}
-	if got := searchSortOrder(types.SearchSortDownloads); got != "desc" {
-		t.Errorf("searchSortOrder(Downloads) = %s, want desc", got)
-	}
-	if got := searchSortOrder(types.SearchSortNewest); got != "desc" {
-		t.Errorf("searchSortOrder(Newest) = %s, want desc", got)
-	}
-}
-
 func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
-	options := types.SearchOptions{
-		SortBy:         types.SearchSortDownloads,
+	options := upstream.SearchOptions{
 		FilterPlatform: types.PlatformFabric,
 	}
 
@@ -316,7 +282,7 @@ func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
 		"gameId=432",
 		"classId=6",
 		"searchFilter=fabric-api",
-		"sortField=6",
+		"sortField=2",
 		"sortOrder=desc",
 		"pageSize=50",
 		"modLoaderType=4",
@@ -329,8 +295,7 @@ func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
 }
 
 func TestSearchUrl_NoLoaderForPlatformAny(t *testing.T) {
-	options := types.SearchOptions{
-		SortBy:         types.SearchSortRelevance,
+	options := upstream.SearchOptions{
 		FilterPlatform: types.PlatformAny,
 	}
 
