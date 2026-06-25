@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 func resolveResourceByProjectName(name types.BarePackageName) (
@@ -16,7 +17,7 @@ func resolveResourceByProjectName(name types.BarePackageName) (
 
 	results, err := searchResources(
 		name.String(),
-		types.SearchOptions{SortBy: types.SearchSortRelevance},
+		upstream.SearchOptions{},
 	)
 	if err != nil {
 		return nil, err

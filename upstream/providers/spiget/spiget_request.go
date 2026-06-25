@@ -11,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 func requestJSON(requestURL string, out any, notFound error) error {
@@ -37,7 +38,7 @@ func requestJSON(requestURL string, out any, notFound error) error {
 	return nil
 }
 
-func searchResources(query string, options types.SearchOptions) (
+func searchResources(query string, options upstream.SearchOptions) (
 	searchResponse,
 	error,
 ) {
@@ -81,12 +82,9 @@ func listVersions(resourceID int64) ([]versionResponse, error) {
 	return resp, nil
 }
 
-func searchResourcesURL(query string, options types.SearchOptions) string {
+func searchResourcesURL(query string, options upstream.SearchOptions) string {
 	values := url.Values{}
 	values.Set("size", "20")
-	if sort := spigetSearchSort(options.SortBy); sort != "" {
-		values.Set("sort", sort)
-	}
 	return spigetAPIBaseURL + "/search/resources/" + url.PathEscape(query) + "?" + values.Encode()
 }
 
@@ -103,19 +101,6 @@ func versionsURL(resourceID int64) string {
 	values.Set("size", "1000")
 	values.Set("sort", "-releaseDate")
 	return resourceURL(resourceID) + "/versions?" + values.Encode()
-}
-
-func spigetSearchSort(sort types.SearchSort) string {
-	switch sort {
-	case types.SearchSortDownloads:
-		return "-downloads"
-	case types.SearchSortNewest:
-		return "-updateDate"
-	case types.SearchSortName:
-		return "+name"
-	default:
-		return ""
-	}
 }
 
 func parseNumericResourceID(name types.BarePackageName) (int64, bool) {

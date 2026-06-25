@@ -46,12 +46,12 @@ func (r hangarProjectRef) ProjectURL() string {
 func (s *projectSearchResponse) ToSearchResults(source types.SourceId) upstream.SearchResponse {
 	res := upstream.SearchResponse{
 		Source: source,
-		Items:  make([]upstream.RemotePackageName, 0, len(s.Result)),
+		Items:  make([]upstream.SearchResult, 0, len(s.Result)),
 	}
 
 	for _, project := range s.Result {
 		res.Items = append(
-			res.Items, upstream.RemotePackageName{
+			res.Items, upstream.SearchResult{
 				RemoteName: project.ProjectRef().CanonicalName().String(),
 				Source:     source,
 			},

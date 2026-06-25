@@ -1,6 +1,8 @@
 package curseforge
 
 import (
+	"time"
+
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -17,17 +19,34 @@ type searchResponse struct {
 func (s *searchResponse) ToSearchResults(source types.SourceId) upstream.SearchResponse {
 	res := upstream.SearchResponse{
 		Source: source,
-		Items:  make([]upstream.RemotePackageName, 0, len(s.Data)),
+		Items:  make([]upstream.SearchResult, 0, len(s.Data)),
 	}
 	for _, mod := range s.Data {
 		res.Items = append(
-			res.Items, upstream.RemotePackageName{
-				RemoteName: input.ToProjectName(mod.Slug).String(),
-				Source:     source,
+			res.Items, upstream.SearchResult{
+				RemoteName:  input.ToProjectName(mod.Slug).String(),
+				Source:      source,
+				Title:       mod.Name,
+				Description: mod.Summary,
+				Downloads:   mod.DownloadCount,
+				LastUpdated: parseCurseforgeDate(mod.DateModified),
 			},
 		)
 	}
 	return res
+}
+
+// parseCurseforgeDate parses CurseForge's RFC3339 timestamp.
+// Returns zero time on failure or empty input.
+func parseCurseforgeDate(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // modDataResponse wraps /v1/mods/{modId} response.

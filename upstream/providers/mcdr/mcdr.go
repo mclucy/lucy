@@ -25,7 +25,7 @@ func (m mcdrSearchResult) ToSearchResults(source types.SourceId) upstream.Search
 	res := upstream.SearchResponse{Source: source}
 	for _, id := range m {
 		res.Items = append(
-			res.Items, upstream.RemotePackageName{
+			res.Items, upstream.SearchResult{
 				RemoteName: input.ToProjectName(id).String(),
 				Source:     source,
 			},

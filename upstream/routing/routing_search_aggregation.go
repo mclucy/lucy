@@ -27,7 +27,7 @@ func MaybeAggregateSearchResults(
 func AggregateSearchResults(results []upstream.SearchResponse) upstream.SearchResponse {
 	aggregated := upstream.SearchResponse{
 		Source: types.SourceAuto,
-		Items:  make([]upstream.RemotePackageName, 0),
+		Items:  make([]upstream.SearchResult, 0),
 	}
 	for _, res := range results {
 		aggregated.Items = append(aggregated.Items, res.Items...)

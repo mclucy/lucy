@@ -38,7 +38,7 @@ type InfoResult struct {
 func SearchMany(
 	providers []upstream.SearchSource,
 	query types.BarePackageName,
-	options types.SearchOptions,
+	options upstream.SearchOptions,
 ) ([]upstream.SearchResponse, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
@@ -58,12 +58,13 @@ func SearchMany(
 		wg.Add(1)
 		go func(index int, provider upstream.SearchSource) {
 			defer wg.Done()
-			res, err := upstream.Search(provider, upstream.Query{
-				Keyword:        query.String(),
-				SortBy:         options.SortBy,
-				ExcludeClient:  !options.IncludeClient,
-				FilterPlatform: options.FilterPlatform,
-			})
+			res, err := upstream.Search(
+				provider, upstream.Query{
+					Keyword:        query.String(),
+					ExcludeClient:  !options.IncludeClient,
+					FilterPlatform: options.FilterPlatform,
+				},
+			)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,

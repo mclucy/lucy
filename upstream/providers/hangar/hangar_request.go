@@ -11,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 const hangarAPIBaseURL = "https://hangar.papermc.io/api/v1"
@@ -29,7 +30,7 @@ func getProject(name types.BarePackageName) (*hangarProject, error) {
 		}
 	}
 
-	search, err := searchProjects(string(name), types.SearchOptions{})
+	search, err := searchProjects(string(name), upstream.SearchOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ func getProjectByPath(path string) (*hangarProject, error) {
 
 func searchProjects(
 	query string,
-	options types.SearchOptions,
+	options upstream.SearchOptions,
 ) (*projectSearchResponse, error) {
 	params := url.Values{}
 	if query != "" {
