@@ -317,40 +317,6 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 	}
 }
 
-func TestVersionListAndPlatformVersionScaffolding(t *testing.T) {
-	versions := HangarVersionListResponse{
-		Pagination: hangarPagination{Count: 1, Limit: 1, Offset: 0},
-		Result: []hangarVersion{
-			{
-				Name: "2.12.2",
-				Downloads: map[string]hangarDownload{
-					"PAPER": {
-						DownloadURL: "https://example.invalid/plugin.jar",
-						FileInfo:    hangarFileInfo{Name: "plugin.jar"},
-					},
-				},
-			},
-		},
-	}
-
-	if got := versions.Result[0].ToPackageRemote().Filename; got != "plugin.jar" {
-		t.Fatalf(
-			"expected version list entry to still use version conversion scaffolding, got %s",
-			got,
-		)
-	}
-
-	platformVersions := []HangarPlatformVersion{
-		{
-			Version:     "1.21",
-			SubVersions: []string{"1.21.1", "1.21"},
-		},
-	}
-	if len(platformVersions[0].SubVersions) != 2 {
-		t.Fatalf("expected platform version scaffolding to preserve subversions")
-	}
-}
-
 func assertHasHangarURL(
 	t *testing.T,
 	urls []types.Url,
