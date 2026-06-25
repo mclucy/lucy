@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"runtime/debug"
-	"strings"
 
+	"charm.land/fang/v2"
 	"github.com/mclucy/lucy/logger"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/spf13/cobra"
@@ -16,11 +16,8 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:           "lucy",
-	Short:         "The Minecraft server package manager",
-	Version:       buildVersion(),
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	Use:   "lucy",
+	Short: "The Minecraft server package manager",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if noStyle, _ := cmd.Flags().GetBool(flagNoStyleName); noStyle {
 			style.TurnOffStyles()
@@ -42,8 +39,6 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.SetVersionTemplate("{{.Version}}\n")
-
 	rootCmd.PersistentFlags().Bool(flagDebugName, false, "Show debug logs")
 	rootCmd.PersistentFlags().Bool(
 		flagLogFileName,
@@ -66,14 +61,6 @@ func init() {
 		false,
 		"Disable colored and styled output",
 	)
-
-	rootCmd.SetFlagErrorFunc(
-		func(cmd *cobra.Command, err error) error {
-			fmt.Fprintln(cmd.ErrOrStderr(), err)
-			cmd.Usage()
-			return err
-		},
-	)
 }
 
 // runWithErrorLogging wraps a RunE function to log errors via logger.ReportError.
@@ -95,25 +82,10 @@ func runWithErrorLogging(
 
 // Execute runs the root command.
 func Execute() error {
-	return rootCmd.Execute()
-}
-
-func buildVersion() string {
-	if version != "" {
-		return version
-	}
-	if commit != "" {
-		return commit
-	}
-	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, setting := range info.Settings {
-			if setting.Key == "vcs.revision" && strings.TrimSpace(setting.Value) != "" {
-				return setting.Value
-			}
-		}
-		if info.Main.Version != "" && info.Main.Version != "(devel)" {
-			return info.Main.Version
-		}
-	}
-	return "unknown"
+	return fang.Execute(
+		context.Background(),
+		rootCmd,
+		fang.WithVersion(version),
+		fang.WithCommit(commit),
+	)
 }
