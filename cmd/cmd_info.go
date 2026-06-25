@@ -141,7 +141,7 @@ func infoOutput(data types.Metadata, longOutput bool) *tui.Data {
 					MaxColumns:    min(style.TermWidth()*8/10, 100),
 					MaxLines:      maxLines,
 					UseAlternate:  useAlternate,
-					AlternateText: style.Underline(data.DescriptionUrl),
+					AlternateText: style.Link(data.DescriptionUrl),
 					FoldNotice:    "",
 				},
 				&tui.FieldLongText{
@@ -152,7 +152,7 @@ func infoOutput(data types.Metadata, longOutput bool) *tui.Data {
 					MaxColumns:    style.TermWidth() * 8 / 10,
 					MaxLines:      maxLines,
 					UseAlternate:  useAlternate,
-					AlternateText: style.Underline(data.DescriptionUrl),
+					AlternateText: style.Link(data.DescriptionUrl),
 				},
 			),
 		},
@@ -187,7 +187,7 @@ func infoOutput(data types.Metadata, longOutput bool) *tui.Data {
 		o.Fields = append(
 			o.Fields, &tui.FieldShortText{
 				Title: url.Name,
-				Text:  style.Underline(url.Url),
+				Text:  style.Link(url.Url),
 			},
 		)
 	}

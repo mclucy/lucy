@@ -191,9 +191,9 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 	if len(noResultSources) > 0 {
 		sb.WriteString(
-			"\n" +
-				style.Dim("No results from "+strings.Join(noResultSources, ", ")) +
-				"\n",
+			style.Muted(
+				"No results from "+strings.Join(noResultSources, ", "),
+			) + "\n",
 		)
 	}
 	fmt.Print(sb.String())
@@ -231,7 +231,7 @@ func renderSearchCompact(res upstream.SearchResponse) string {
 	sb.WriteString(searchSectionHeader(res))
 
 	if len(res.Items) == 0 {
-		sb.WriteString(style.Dim("  (no results)") + "\n")
+		sb.WriteString(style.Muted("  (no results)") + "\n")
 		return sb.String()
 	}
 
@@ -272,7 +272,7 @@ func renderSearchLong(res upstream.SearchResponse) string {
 	sb.WriteString(searchSectionHeader(res))
 
 	if len(res.Items) == 0 {
-		sb.WriteString(style.Dim("  (no results)") + "\n")
+		sb.WriteString(style.Muted("  (no results)") + "\n")
 		return sb.String()
 	}
 
@@ -284,7 +284,7 @@ func renderSearchLong(res upstream.SearchResponse) string {
 		if item.Title != "" && item.Title != item.RemoteName {
 			displayName = item.Title
 		}
-		sb.WriteString("  " + style.Bold(displayName) + "\n")
+		sb.WriteString("  " + style.Accent(displayName) + "\n")
 
 		if item.Description != "" {
 			desc := strings.ReplaceAll(item.Description, "\n", " ")
@@ -298,24 +298,24 @@ func renderSearchLong(res upstream.SearchResponse) string {
 
 		stats := searchStatsLine(item)
 		if stats != "" {
-			sb.WriteString("  " + style.Dim(stats) + "\n")
+			sb.WriteString("  " + style.Muted(stats) + "\n")
 		}
 
 		installID := item.Source.String() + ":" + item.FormattedName()
-		sb.WriteString("  " + style.Dim(installID) + "\n")
+		sb.WriteString("  " + style.Muted(installID) + "\n")
 	}
 	return sb.String()
 }
 
 func searchSectionHeader(res upstream.SearchResponse) string {
-	header := style.Dim(
+	header := style.Muted(
 		"Results from " + res.Source.Title() +
 			" (" + strconv.Itoa(len(res.Items)) + ")",
 	)
 	var sb strings.Builder
 	sb.WriteString(header + "\n")
 	if res.Source == types.SourceModrinth && len(res.Items) == 100 {
-		sb.WriteString(style.Dim("* only showing the top 100") + "\n")
+		sb.WriteString(style.Muted("* only showing the top 100") + "\n")
 	}
 	return sb.String()
 }

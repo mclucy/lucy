@@ -138,7 +138,7 @@ func generateStatusOutput(
 		output.Fields = append(
 			output.Fields, &tui.FieldShortText{
 				Title: "Activity",
-				Text:  style.Dim("(Unknown)"),
+				Text:  style.Muted("(Unknown)"),
 			},
 		)
 	}
@@ -215,7 +215,7 @@ func generateStatusOutput(
 				Text: "Installed" + fn.Ternary(
 					noStyle,
 					"",
-					style.Green(" ✓"),
+					style.Success(" ✓"),
 				),
 				Children: children,
 			},
@@ -231,7 +231,7 @@ func statusPackageListField(
 	longOutput bool,
 ) tui.Field {
 	if len(names) == 0 {
-		return &tui.FieldShortText{Text: style.Dim("(None)")}
+		return &tui.FieldShortText{Text: style.Muted("(None)")}
 	}
 	if longOutput {
 		return &tui.FieldMultiAnnotatedShortText{
@@ -413,14 +413,14 @@ func statusTopologyField(
 	if !topology.Resolved() {
 		return &tui.FieldShortText{
 			Title: "Topology",
-			Text:  style.Dim("(Unresolved)"),
+			Text:  style.Muted("(Unresolved)"),
 		}
 	}
 
 	if !hasPrimaryNode {
 		return &tui.FieldShortText{
 			Title: "Topology",
-			Text:  style.Dim("(Unknown)"),
+			Text:  style.Muted("(Unknown)"),
 		}
 	}
 
