@@ -52,36 +52,32 @@
       "description": "high performance and compatibility Forge+Bukkit+Spigot server on 1.12.2/1.16.5/1.18.2",
       "repository": "Luohuayu/CatServer"
     },
-    "charmbracelet-bubbles": {
-      "description": "Component library for Bubble Tea",
+    "charm-bubbles": {
+      "description": "Bubbles, the component library for Bubble Tea",
       "repository": "charmbracelet/bubbles"
     },
-    "charmbracelet-bubbletea": {
-      "description": "The Charm TUI ecosystem's core framework",
+    "charm-bubbletea": {
+      "description": "Bubble Tea, the Charm TUI ecosystem's core framework",
       "repository": "charmbracelet/bubbletea"
     },
-    "charmbracelet-colorprofile": {
+    "charm-colorprofile": {
       "description": "Terminal color profile handling library",
       "repository": "charmbracelet/colorprofile"
     },
-    "charmbracelet-fang": {
-      "description": "A CLI framework built on cobra",
-      "repository": "charmbracelet/fang"
-    },
-    "charmbracelet-glamour": {
-      "description": "CLI Makrdown rendering library",
+    "charm-glamour": {
+      "description": "CLI Makrdown rendering library in the charm ecosystem",
       "repository": "charmbracelet/glamour"
     },
-    "charmbracelet-huh": {
-      "description": "CLI form library",
+    "charm-huh": {
+      "description": "CLI form library in the charm ecosystem",
       "repository": "charmbracelet/huh"
     },
-    "charmbracelet-lipgloss": {
+    "charm-lipgloss": {
       "description": "Charm TUI ecosystem's style and layout toolkit",
       "repository": "charmbracelet/lipgloss"
     },
-    "charmbracelet-log": {
-      "description": "Logging library",
+    "charm-log": {
+      "description": "Logging library in the charm ecosystem",
       "repository": "charmbracelet/log"
     },
     "craftbukkit": {
