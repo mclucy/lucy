@@ -143,9 +143,8 @@ func parseFabricLauncherManifestVersions(zipReader *zip.Reader) (
 				); found {
 					var classPathsBuilder strings.Builder
 					classPathsBuilder.WriteString(after)
-					for s.Scan() && !strings.Contains(s.Text(), ":") {
-						line := s.Text()
-						line = strings.TrimSpace(line)
+					for s.Scan() && strings.HasPrefix(s.Text(), " ") {
+						line := strings.TrimSpace(s.Text())
 						classPathsBuilder.WriteString(line)
 					}
 					classPaths = strings.Split(classPathsBuilder.String(), " ")

@@ -27,8 +27,7 @@ func DetectBridgeMarkers(zipReader *zip.Reader) []BridgeMarker {
 	for _, entry := range zipReader.File {
 		entryName := entry.Name
 
-		if strings.Contains(entryName, "dev/su5ed/sinytra/connector/") ||
-			strings.Contains(entryName, "META-INF/services/dev.su5ed.sinytra.connector.api.ConnectorPlugin") ||
+		if strings.Contains(entryName, "org/sinytra/connector/") ||
 			strings.Contains(entryName, "connector.mixins.json") {
 			addMarker("connector", 3)
 		}
