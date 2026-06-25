@@ -181,7 +181,7 @@ func promptSelectExecutable(
 func generateNotes(notes ...string) string {
 	var note strings.Builder
 	for _, n := range notes {
-		note.WriteString(style.Cyan("*"))
+		note.WriteString(style.Note("*"))
 		note.WriteString(" ")
 		note.WriteString(n)
 		note.WriteString("\n")
@@ -190,7 +190,7 @@ func generateNotes(notes ...string) string {
 }
 
 func executableLabel(executable *ServerRuntime) string {
-	return style.Bold(executable.PrimaryEntrance) + " " + style.Dim(executableAnnotation(executable))
+	return style.Accent(executable.PrimaryEntrance) + " " + style.Muted(executableAnnotation(executable))
 }
 
 func executableAnnotation(executable *ServerRuntime) string {
