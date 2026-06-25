@@ -285,20 +285,32 @@ func (f *FieldTree) KeyLength() int {
 
 func (f *FieldTree) Render() string {
 	key, value := f.RenderRow()
-	return renderRow(key, value)
+	out := renderRow(key, value)
+	if children := f.RenderChildren(); children != "" {
+		out += children
+	}
+	return out
 }
 
+// RenderRow returns the parent row only (key + value + annotation), without
+// any children. Children are rendered separately via RenderChildren so that
+// the tree can be emitted as a standalone segment aligned at column 0,
+// matching the parent's key column instead of the value column.
 func (f *FieldTree) RenderRow() (key, value string) {
 	var sb strings.Builder
 	sb.WriteString(f.Text)
 	if f.Annotation != "" {
 		sb.WriteString(renderAnnot(f.Annotation))
 	}
+	return renderKeyStyled(f.Title), sb.String()
+}
 
+// RenderChildren renders the children subtree as a standalone string aligned
+// at column 0. Returns an empty string when there are no children.
+func (f *FieldTree) RenderChildren() string {
 	if len(f.Children) == 0 {
-		return renderKeyStyled(f.Title), sb.String()
+		return ""
 	}
-
 	childKeyWidth := f.childKeyWidth()
 	t := tree.New()
 	for _, child := range f.Children {
@@ -308,11 +320,14 @@ func (f *FieldTree) RenderRow() (key, value string) {
 		label := treeChildLabel(child, childKeyWidth)
 		t.Child(label)
 	}
-	if sb.Len() > 0 {
-		sb.WriteString("\n")
-	}
-	sb.WriteString(t.String())
-	return renderKeyStyled(f.Title), sb.String()
+	return t.String()
+}
+
+// HasChildren reports whether this field has child nodes to render as a
+// subtree. Used by buildSegments to decide whether to emit a standalone
+// tree segment after the parent row.
+func (f *FieldTree) HasChildren() bool {
+	return len(f.Children) > 0
 }
 
 func (f *FieldTree) childKeyWidth() int {
@@ -829,6 +844,16 @@ func buildSegments(fields []Field, totalWidth int, keyWidth int) []segment {
 				segments = append(segments, segment{standalone: value})
 			}
 			continue
+		case *FieldTree:
+			if typed.HasChildren() {
+				key, value := typed.RenderRow()
+				rows = append(rows, tableRow{key: key, value: value})
+				flushRows()
+				if children := typed.RenderChildren(); children != "" {
+					segments = append(segments, segment{standalone: children})
+				}
+				continue
+			}
 		}
 
 		if widthAware, ok := field.(WidthAware); ok {
