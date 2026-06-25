@@ -6,8 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/glamour"
+	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/styles"
+	"charm.land/lipgloss/v2"
 	"github.com/mclucy/lucy/internal/fn"
+	"github.com/muesli/reflow/wrap"
 )
 
 const CRLF = "\r\n"
@@ -25,7 +28,13 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 		glamour.WithWordWrap(maxWidth),
 	}
 	if StylesEnabled() {
-		options = append(options, glamour.WithAutoStyle())
+		if HasDarkBackground() {
+			options = append(options, glamour.WithStandardStyle(styles.DarkStyle))
+		} else {
+			options = append(options, glamour.WithStandardStyle(styles.LightStyle))
+		}
+	} else {
+		options = append(options, glamour.WithStandardStyle(styles.NoTTYStyle))
 	}
 
 	renderer, err := glamour.NewTermRenderer(options...)
@@ -37,7 +46,14 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 	if err != nil {
 		return trimmed
 	}
-	return strings.TrimRight(rendered, "\n")
+	rendered = strings.TrimRight(rendered, "\n")
+	lines := strings.Split(rendered, "\n")
+	for i, line := range lines {
+		if lipgloss.Width(line) > maxWidth {
+			lines[i] = wrap.String(line, maxWidth)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // PrintAsJson is usually used for debugging purposes
