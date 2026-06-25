@@ -45,15 +45,16 @@ func (d *VanillaDetector) Detect(
 				return nil, err
 			}
 
-			// This is to guard against misidentifying Forge installer jars as
-			// vanilla servers, which also contain version.json but with different
-			// structure
+			// Guard against Forge installer jars, which also contain version.json
+			// but with _comment and/or mainClass. encoding/json ignores unknown
+			// fields, so we must check that the guard fields are populated.
 			forgeInstallerGuard := &struct {
 				Comment   []string `json:"_comment"`
 				MainClass string   `json:"mainClass"`
 			}{}
-			err = json.Unmarshal(data, forgeInstallerGuard)
-			if err == nil {
+			if err := json.Unmarshal(data, forgeInstallerGuard); err == nil &&
+				(len(forgeInstallerGuard.Comment) > 0 ||
+					forgeInstallerGuard.MainClass != "") {
 				return nil, nil
 			}
 

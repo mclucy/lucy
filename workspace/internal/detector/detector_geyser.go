@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/mclucy/lucy/input"
@@ -120,15 +121,18 @@ func parseGeyserStandaloneManifest(data []byte) geyserStandaloneManifestSignals 
 	return signals
 }
 
+var geyserStandaloneVersionPattern = regexp.MustCompile(
+	`geyser-standalone-(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)\.jar`,
+)
+
 func parseGeyserStandaloneVersionFromPath(filePath string) types.BareVersion {
-	base := strings.ToLower(filepath.Base(filePath))
-	if strings.Contains(base, "geyser") && strings.Contains(
-		base,
-		"standalone",
-	) {
+	match := geyserStandaloneVersionPattern.FindStringSubmatch(
+		strings.ToLower(filepath.Base(filePath)),
+	)
+	if match == nil {
 		return types.VersionUnknown
 	}
-	return types.VersionUnknown
+	return types.BareVersion(match[1])
 }
 
 func init() {

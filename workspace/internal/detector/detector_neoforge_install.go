@@ -73,12 +73,6 @@ func neoForgeCandidateNames(versionDir, version string) []modLoaderCandidate {
 				fmt.Sprintf("neoforge-%s-universal.jar", version),
 			),
 		},
-		{
-			kind: modLoaderArtifactShim, path: filepath.Join(
-				versionDir,
-				fmt.Sprintf("neoforge-%s-shim.jar", version),
-			),
-		},
 	}
 }
 
@@ -107,7 +101,7 @@ func verifyNeoForgeArtifactByUnpack(
 	case modLoaderArtifactUniversal:
 		return verifyNeoForgeUniversalManifest(reader, loaderVersion)
 	case modLoaderArtifactServer:
-		return forgeHasSibling(candidate.path, "run.sh", "run.bat"), nil
+		return forgeHasSibling(candidate.path, "unix_args.txt", "win_args.txt"), nil
 	default:
 		return false, nil
 	}
@@ -122,7 +116,7 @@ func verifyNeoForgeUniversalManifest(
 		return false, err
 	}
 
-	if strings.Contains(manifest, "Specification-Title: neoforge") {
+	if strings.Contains(manifest, "FML-System-Mods: neoforge") {
 		return true, nil
 	}
 

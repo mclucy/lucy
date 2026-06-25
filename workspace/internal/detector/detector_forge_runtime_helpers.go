@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fn"
@@ -35,27 +36,31 @@ func parseForgeManifest(
 		}
 		defer fn.CloseReader(r, logger.Warn)
 
+		var inForgeSection bool
 		s := bufio.NewScanner(r)
 		for s.Scan() {
 			line := s.Text()
-			if line == "Implementation-Title: net.minecraftforge" {
-				if !s.Scan() {
-					continue
+			switch {
+			case line == "Implementation-Title: net.minecraftforge":
+				inForgeSection = true
+			case strings.HasPrefix(line, "Implementation-Version: "):
+				if inForgeSection {
+					if after, found := strings.CutPrefix(
+						line,
+						"Implementation-Version: ",
+					); found {
+						forgeVersion = types.BareVersion(after)
+					}
 				}
-				if after, found := strings.CutPrefix(
-					s.Text(),
-					"Implementation-Version: ",
-				); found {
-					forgeVersion = types.BareVersion(after)
-				}
-			}
-			if strings.HasPrefix(line, "Specification-Version: ") {
+			case strings.HasPrefix(line, "Specification-Version: "):
 				if after, found := strings.CutPrefix(
 					line,
 					"Specification-Version: ",
 				); found && isMinecraftReleaseVersion(after) {
 					gameVersion = types.BareVersion(after)
 				}
+			case strings.HasPrefix(line, "Name: "):
+				inForgeSection = false
 			}
 		}
 
@@ -103,25 +108,20 @@ func hasConcreteVersion(version types.BareVersion) bool {
 
 func compareForgeMajor(version types.BareVersion, target int) int {
 	major := strings.Split(string(version), ".")[0]
-	switch major {
-	case "":
+	if major == "" {
 		return -1
-	case "61":
-		if target == 61 {
-			return 0
-		}
-		if target < 61 {
-			return 1
-		}
+	}
+	n, err := strconv.Atoi(major)
+	if err != nil {
 		return -1
+	}
+	switch {
+	case n < target:
+		return -1
+	case n > target:
+		return 1
 	default:
-		if major > "61" {
-			if target <= 61 {
-				return 1
-			}
-			return -1
-		}
-		return -1
+		return 0
 	}
 }
 

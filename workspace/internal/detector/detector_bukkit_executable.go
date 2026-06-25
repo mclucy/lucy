@@ -277,6 +277,18 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 	) {
 		add("leaves")
 	}
+	if observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryLuminolToken,
+	) {
+		add("luminol")
+	}
+	if observationLinesContain(
+		obs.librariesListEntries,
+		paperLibraryLophineToken,
+	) {
+		add("lophine")
+	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_reaper/reaper/patch.properties
 	if hasStrictReaperObservationBrand(obs) {
 		add("reaper")
