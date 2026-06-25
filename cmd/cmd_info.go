@@ -90,7 +90,13 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		log.Fatal(fmt.Errorf("failed to get information: %w", err))
 	}
+
+	var noResultSources []string
 	for _, providerErr := range providerErrors {
+		if strings.Contains(providerErr.Err.Error(), "not found") {
+			noResultSources = append(noResultSources, providerErr.Source.Title())
+			continue
+		}
 		log.ReportWarn(
 			fmt.Errorf(
 				"info on %s failed: %w",
@@ -111,7 +117,11 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 			style.PrintAsJson(meta)
 		}
 	} else {
-		fmt.Print(renderInfo(meta, ref.PackageRef.Name.String(), long))
+		output := renderInfo(meta, ref.PackageRef.Name.String(), long)
+		if len(noResultSources) > 0 {
+			output += style.Muted("  Not found on "+strings.Join(noResultSources, ", ")) + "\n"
+		}
+		fmt.Print(output)
 	}
 	return nil
 }
