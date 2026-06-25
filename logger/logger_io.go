@@ -1,27 +1,12 @@
 package logger
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"github.com/mclucy/lucy/internal/fn"
 )
-
-func writeToFile(e *entry) {
-	timestamp := e.Time.Format("2006-01-02 15:04:05")
-	_, _ = fmt.Fprintln(
-		getLogFile(),
-		timestamp,
-		e.Level.prefix(false),
-		e.Content,
-	)
-}
-
-func writeToConsole(e *entry) {
-	_, _ = fmt.Fprintln(os.Stderr, e.Level.prefix(true), e.Content)
-}
 
 func record(e *entry) {
 	mu.Lock()

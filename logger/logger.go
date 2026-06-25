@@ -11,9 +11,9 @@
 //	Both           ReportInfo  ReportWarn  ReportError → written to log file AND printed to stderr
 //	Fatal          Fatal   → logged + displayed + os.Exit(1)
 //
-// All writes to the log file are synchronous (no queue). A history buffer
-// records every file-written entry so that [DumpHistory] can replay them to
-// the console at program exit for post-mortem inspection.
+// Logging is backed by charmbracelet/log. A history buffer records every
+// file-written entry so that [DumpHistory] can replay them to the console
+// at program exit for post-mortem inspection.
 package logger
 
 import (
@@ -21,19 +21,21 @@ import (
 	"os"
 	"time"
 
+	"charm.land/log/v2"
+
 	"github.com/mclucy/lucy/tui/style"
 )
 
-// Logging only functions
+// ── File-only functions ─────────────────────────────────────────────────
 
 // Info logs an informational entry to the log file.
 // In verboseWrite mode the entry is also printed to the console.
 func Info(content any) {
-	e := &entry{Time: time.Now(), Level: LevelInfo, Content: content}
+	e := &entry{Time: time.Now(), Level: log.InfoLevel, Content: content}
 	record(e)
-	writeToFile(e)
-	if verboseWrite && LevelInfo >= VerboseLevel {
-		writeToConsole(e)
+	getFileLog().Info(fmt.Sprint(content))
+	if verboseWrite {
+		consoleLog.Info(fmt.Sprint(content))
 	}
 }
 
@@ -43,11 +45,11 @@ func Warn(content error) {
 	if content == nil {
 		return
 	}
-	e := &entry{Time: time.Now(), Level: LevelWarn, Content: content}
+	e := &entry{Time: time.Now(), Level: log.WarnLevel, Content: content}
 	record(e)
-	writeToFile(e)
-	if verboseWrite && LevelWarn >= VerboseLevel {
-		writeToConsole(e)
+	getFileLog().Warn(content.Error())
+	if verboseWrite {
+		consoleLog.Warn(content.Error())
 	}
 }
 
@@ -57,61 +59,58 @@ func Error(content error) {
 	if content == nil {
 		return
 	}
-	e := &entry{Time: time.Now(), Level: LevelError, Content: content}
+	e := &entry{Time: time.Now(), Level: log.ErrorLevel, Content: content}
 	record(e)
-	writeToFile(e)
-	if verboseWrite && LevelError >= VerboseLevel {
-		writeToConsole(e)
+	getFileLog().Error(content.Error())
+	if verboseWrite {
+		consoleLog.Error(content.Error())
 	}
 }
 
 // Debug logs a debug entry to the log file. No-op unless debug mode is on.
-// In verboseWrite mode (implied by debug) the entry is also printed to the console.
+// In verboseWrite mode the entry is also printed to the console.
 func Debug(content any) {
 	if !debug {
 		return
 	}
-	e := &entry{Time: time.Now(), Level: LevelDebug, Content: content}
+	e := &entry{Time: time.Now(), Level: log.DebugLevel, Content: content}
 	record(e)
-	writeToFile(e)
+	getFileLog().Debug(fmt.Sprint(content))
 	if verboseWrite {
-		writeToConsole(e)
+		consoleLog.Debug(fmt.Sprint(content))
 	}
 }
 
-// User-display only functions
+// ── User-display only functions ─────────────────────────────────────────
 
 // ShowInfo displays an informational message to the user on stderr.
 // The message is NOT written to the log file.
 func ShowInfo(content any) {
-	writeToConsole(&entry{Time: time.Now(), Level: LevelInfo, Content: content})
+	consoleLog.Info(fmt.Sprint(content))
 }
 
 // ShowWarn displays a warning to the user on stderr.
 // The message is NOT written to the log file.
 func ShowWarn(content error) {
-	writeToConsole(&entry{Time: time.Now(), Level: LevelWarn, Content: content})
+	consoleLog.Warn(content.Error())
 }
 
 // ShowError displays an error to the user on stderr.
 // The message is NOT written to the log file.
 func ShowError(content error) {
-	writeToConsole(
-		&entry{
-			Time: time.Now(), Level: LevelError, Content: content,
-		},
-	)
+	consoleLog.Error(content.Error())
 }
 
-// Both file and user-display functions
+// ── Both file and user-display functions ────────────────────────────────
 
 // ReportInfo logs an informational message to the file AND displays it to
 // the user on stderr.
 func ReportInfo(content any) {
-	e := &entry{Time: time.Now(), Level: LevelInfo, Content: content}
+	e := &entry{Time: time.Now(), Level: log.InfoLevel, Content: content}
 	record(e)
-	writeToFile(e)
-	writeToConsole(e)
+	msg := fmt.Sprint(content)
+	getFileLog().Info(msg)
+	consoleLog.Info(msg)
 }
 
 // ReportWarn logs a warning to the file AND displays it to the user on
@@ -120,10 +119,10 @@ func ReportWarn(content error) {
 	if content == nil {
 		return
 	}
-	e := &entry{Time: time.Now(), Level: LevelWarn, Content: content}
+	e := &entry{Time: time.Now(), Level: log.WarnLevel, Content: content}
 	record(e)
-	writeToFile(e)
-	writeToConsole(e)
+	getFileLog().Warn(content.Error())
+	consoleLog.Warn(content.Error())
 }
 
 // ReportError logs an error to the file AND displays it to the user on
@@ -132,24 +131,26 @@ func ReportError(content error) {
 	if content == nil {
 		return
 	}
-	e := &entry{Time: time.Now(), Level: LevelError, Content: content}
+	e := &entry{Time: time.Now(), Level: log.ErrorLevel, Content: content}
 	record(e)
-	writeToFile(e)
-	writeToConsole(e)
+	getFileLog().Error(content.Error())
+	consoleLog.Error(content.Error())
 }
 
-// Fatal logs a fatal error to the file, displays it to the user, then
+// ── Fatal ───────────────────────────────────────────────────────────────
 
 // Fatal logs a fatal error to the file, displays it to the user, then
 // calls os.Exit(1). Pending history is dumped before exit.
 func Fatal(content error) {
-	e := &entry{Time: time.Now(), Level: LevelFatal, Content: content}
+	e := &entry{Time: time.Now(), Level: log.FatalLevel, Content: content}
 	record(e)
-	writeToFile(e)
-	writeToConsole(e)
+	getFileLog().Error(content.Error()) // write to file at error level (Fatal would exit)
+	consoleLog.Error(content.Error())   // show to user
 	DumpHistory()
 	os.Exit(1)
 }
+
+// ── History ─────────────────────────────────────────────────────────────
 
 // DumpHistory replays all recorded log entries to the console. This is
 // intended to be called from a deferred function in main for post-mortem
@@ -167,13 +168,15 @@ func DumpHistory() {
 		os.Stderr,
 		style.Muted("── Log history ("+getLogFile().Name()+") ──"),
 	)
+
+	// Create a temporary logger for replay with time-only timestamps.
+	replay := log.NewWithOptions(os.Stderr, log.Options{
+		ReportTimestamp: true,
+		TimeFormat:      "15:04:05",
+		Level:           log.DebugLevel,
+	})
 	for _, e := range history {
-		timestamp := style.Muted(e.Time.Format("15:04:05"))
-		_, _ = fmt.Fprintln(
-			os.Stderr,
-			timestamp,
-			e.Level.prefix(true),
-			e.Content,
-		)
+		replay.SetTimeFunction(func(_ time.Time) time.Time { return e.Time })
+		replay.Log(e.Level, fmt.Sprint(e.Content))
 	}
 }

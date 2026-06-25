@@ -21,6 +21,7 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if noStyle, _ := cmd.Flags().GetBool(flagNoStyleName); noStyle {
 			style.TurnOffStyles()
+			logger.TurnOffStyles()
 		}
 		if logFile, _ := cmd.Flags().GetBool(flagLogFileName); logFile {
 			fmt.Println("Log file at", logger.GetLogFile().Name())

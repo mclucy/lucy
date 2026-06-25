@@ -3,58 +3,13 @@ package logger
 import (
 	"time"
 
-	"github.com/mclucy/lucy/tui/style"
+	"charm.land/log/v2"
 )
 
-// Level represents the severity of a log entry.
-// Levels are ordered from least to most severe: Debug < Info < Warn < Error < Fatal.
-type Level uint8
-
-const (
-	LevelDebug Level = iota
-	LevelInfo
-	LevelWarn
-	LevelError
-	LevelFatal
-)
-
-func (l Level) String() string {
-	switch l {
-	case LevelDebug:
-		return "DEBUG"
-	case LevelInfo:
-		return "INFO"
-	case LevelWarn:
-		return "WARN"
-	case LevelError:
-		return "ERROR"
-	case LevelFatal:
-		return "FATAL"
-	default:
-		return "UNKNOWN"
-	}
-}
-
-// levelColor maps each level to a styling function.
-var levelColor = map[Level]func(any) string{
-	LevelDebug: style.Green,
-	LevelInfo:  style.Cyan,
-	LevelWarn:  style.Yellow,
-	LevelError: style.Red,
-	LevelFatal: style.Red,
-}
-
-// prefix returns the bracketed level tag, optionally colored.
-func (l Level) prefix(colored bool) string {
-	if colored {
-		return "[" + levelColor[l](l.String()) + "]"
-	}
-	return "[" + l.String() + "]"
-}
-
-// Entry represents a single log item with its timestamp, level, and content. This is used internally for recording history and is not exposed to users of the logger package.
+// entry represents a single log item for the history buffer.
+// Uses charm/log's Level type directly.
 type entry struct {
 	Time    time.Time
-	Level   Level
+	Level   log.Level
 	Content any
 }
