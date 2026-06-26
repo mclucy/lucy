@@ -29,9 +29,8 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
       - name: Generate coverage badge
-        uses: ncruces/go-coverage-report@v0.3.2
+        uses: ncruces/go-coverage-report@v0
         with:
-          output-dir: badge
           badge-title: Coverage
           amend: true
 
