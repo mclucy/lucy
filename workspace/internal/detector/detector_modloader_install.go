@@ -97,7 +97,7 @@ func detectModLoaderInstallFromVersionDir(
 	return nil, nil
 }
 
-var neoforgeVersionDirPattern = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.\d+)*(?:-[a-zA-Z0-9.]+)?$`)
+var neoforgeVersionDirPattern = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.\d+)*(?:-[a-zA-Z0-9.]+)*$`)
 
 func parseModLoaderVersionTuple(
 	versionDir string,
