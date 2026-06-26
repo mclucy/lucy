@@ -120,6 +120,8 @@ func TestCraftBukkitFamilyDetector_KnownPaperForkBrands(t *testing.T) {
 		{name: "leaves", brand: "leaves"},
 		{name: "reaper", brand: "reaper"},
 		{name: "youer", brand: "youer"},
+		{name: "luminol", brand: "luminol"},
+		{name: "lophine", brand: "lophine"},
 	}
 
 	for _, tt := range tests {
