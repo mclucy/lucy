@@ -37,19 +37,29 @@ func parseForgeManifest(
 		defer fn.CloseReader(r, log.Warn)
 
 		var inForgeSection bool
+		var pendingImplVersion string
 		s := bufio.NewScanner(r)
 		for s.Scan() {
 			line := s.Text()
 			switch {
+			case strings.HasPrefix(line, "Name: "):
+				inForgeSection = false
 			case line == "Implementation-Title: net.minecraftforge":
 				inForgeSection = true
+				if pendingImplVersion != "" {
+					forgeVersion = types.BareVersion(pendingImplVersion)
+					pendingImplVersion = ""
+				}
 			case strings.HasPrefix(line, "Implementation-Version: "):
-				if inForgeSection {
-					if after, found := strings.CutPrefix(
-						line,
-						"Implementation-Version: ",
-					); found {
+				if after, found := strings.CutPrefix(
+					line,
+					"Implementation-Version: ",
+				); found {
+					switch {
+					case inForgeSection:
 						forgeVersion = types.BareVersion(after)
+					case !inForgeSection && forgeVersion == "" && pendingImplVersion == "":
+						pendingImplVersion = after
 					}
 				}
 			case strings.HasPrefix(line, "Specification-Version: "):
@@ -59,8 +69,6 @@ func parseForgeManifest(
 				); found && isMinecraftReleaseVersion(after) {
 					gameVersion = types.BareVersion(after)
 				}
-			case strings.HasPrefix(line, "Name: "):
-				inForgeSection = false
 			}
 		}
 

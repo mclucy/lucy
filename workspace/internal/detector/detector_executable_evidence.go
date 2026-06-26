@@ -43,12 +43,58 @@ func (c *ExecutableCandidates) IsEmpty() bool {
 }
 
 func (c *ExecutableCandidates) IsAmbiguous() bool {
-	return c != nil && len(c.Candidates) > 1
+	return c != nil && len(c.resolved()) > 1
 }
 
 func (c *ExecutableCandidates) Single() *ExecutableEvidence {
-	if c == nil || len(c.Candidates) != 1 {
+	resolved := c.resolved()
+	if len(resolved) != 1 {
 		return nil
 	}
-	return c.Candidates[0]
+	return resolved[0]
+}
+
+// resolved returns candidates after dropping generic fallback evidence when
+// more specific detectors also fired on the same jar. This lets the vanilla
+// catch-all (RuntimeNodeMinecraft) yield to Paper, Forge, Fabric, etc. without
+// producing false ambiguity.
+func (c *ExecutableCandidates) resolved() []*ExecutableEvidence {
+	if c == nil || len(c.Candidates) <= 1 {
+		if c == nil {
+			return nil
+		}
+		return c.Candidates
+	}
+
+	hasSpecific := false
+	for _, cand := range c.Candidates {
+		if !isVanillaEvidence(cand) {
+			hasSpecific = true
+			break
+		}
+	}
+	if !hasSpecific {
+		return c.Candidates
+	}
+
+	resolved := make([]*ExecutableEvidence, 0, len(c.Candidates))
+	for _, cand := range c.Candidates {
+		if !isVanillaEvidence(cand) {
+			resolved = append(resolved, cand)
+		}
+	}
+	return resolved
+}
+
+func isVanillaEvidence(cand *ExecutableEvidence) bool {
+	if cand == nil {
+		return false
+	}
+	if cand.Topology != nil && cand.Topology.PrimaryNode == types.RuntimeNodeMinecraft {
+		return true
+	}
+	if cand.TopologySeed != nil && cand.TopologySeed.PrimaryNode == types.RuntimeNodeMinecraft {
+		return true
+	}
+	return false
 }
