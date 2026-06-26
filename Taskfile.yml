@@ -166,6 +166,28 @@ tasks:
       - test
       - test:race
 
+  ci:test:
+    desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks
+    cmds:
+      - |
+        if [ -n "${CF_API_KEY:-}" ]; then
+          task cipher-generate
+        fi
+      - task: check
+
+  ci:build:
+    desc: Build release artifacts for CI (for GitHub Actions); conditionally generates cipher files
+    cmds:
+      - |
+        if [ -n "${CF_API_KEY:-}" ]; then
+          task cipher-generate
+        fi
+      - task: build:release
+      - gzip -f release/lucy-linux-amd64
+      - gzip -f release/lucy-windows-amd64.exe
+      - gzip -f release/lucy-darwin-amd64
+      - gzip -f release/lucy-darwin-arm64
+
   build-release:
     internal: true
     deps:
