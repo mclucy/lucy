@@ -7,6 +7,12 @@ if ! command -v gofumpt >/dev/null 2>&1; then
 	exit 1
 fi
 
+if ! command -v gotestsum >/dev/null 2>&1; then
+	printf 'pre-commit: gotestsum is required but was not found in PATH\n' >&2
+	printf 'pre-commit: install it with: go install gotest.tools/gotestsum@latest\n' >&2
+	exit 1
+fi
+
 files=()
 while IFS= read -r -d '' file; do
 	files+=("$file")
@@ -55,3 +61,5 @@ for file in "${files[@]}"; do
 
 	cp "$index_file" "$file"
 done
+
+gotestsum -- ./...
