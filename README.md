@@ -12,6 +12,9 @@
 [![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml) [![Coverage](https://github.com/mclucy/lucy/wiki/dev/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html) [![Go Report Card](https://goreportcard.com/badge/github.com/mclucy/lucy)](https://goreportcard.com/report/github.com/mclucy/lucy) [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mclucy/lucy)
 </div>
 
+> ![WARNING}
+> DeepWiki is currently stale
+
 > [!IMPORTANT]
 > This project is under active development and incomplete. Everything may change. Contact <4rcadia.0@gmail.com> or join the [QQ group](https://qm.qq.com/q/Sf65NVYaAi) to contribute or stay updated. \
 > ⭐️ If you like this project, star the repo!
