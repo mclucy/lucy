@@ -21,6 +21,11 @@
       "type": "local",
       "command": ["gopls", "mcp"],
       "enabled": true
+    },
+    "github-lucy": {
+      "headers": { "Authorization": "Bearer {env:LUCY_GITHUB_TOKEN}" },
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp"
     }
   },
   "references": {
