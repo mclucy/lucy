@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/mclucy/lucy/log"
@@ -27,7 +26,7 @@ func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
 		return ResetReport{}, err
 	}
 
-	cacheDir := path.Dir(manifestPath)
+	cacheDir := filepath.Dir(manifestPath)
 	entries, err := os.ReadDir(cacheDir)
 	if err != nil {
 		return ResetReport{}, err
@@ -38,7 +37,7 @@ func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
 		if entry.Name() == manifestFilename {
 			continue
 		}
-		entryPath := path.Join(cacheDir, entry.Name())
+		entryPath := filepath.Join(cacheDir, entry.Name())
 
 		var size int64
 		size, err = calculateSize(entryPath)
