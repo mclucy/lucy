@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 
@@ -74,14 +73,14 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	}
 	if hit && cachedFile != nil {
 		defer cachedFile.Close()
-		resolvedName := path.Base(cachedFile.Name())
+		resolvedName := filepath.Base(cachedFile.Name())
 		if opts.OnResolvedFilename != nil {
 			opts.OnResolvedFilename(resolvedName)
 		}
 		if opts.OnCacheHit != nil {
 			opts.OnCacheHit()
 		}
-		destPath := path.Join(dir, resolvedName)
+		destPath := filepath.Join(dir, resolvedName)
 		destFile, err := fsutil.CopyFile(cachedFile, destPath, opts.FileMode)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -305,7 +304,7 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 	}
 	filename = filepath.Base(filename)
 
-	destPath := path.Join(dir, filename)
+	destPath := filepath.Join(dir, filename)
 	tmpFile.Close()
 
 	src, err := os.Open(tmpPath)

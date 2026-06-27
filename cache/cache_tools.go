@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ func setDir(name string) string {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return path.Join(dir, "lucy", name)
+	return filepath.Join(dir, "lucy", name)
 }
 
 func (handler *handler) clearExpiredCache() {
