@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -42,7 +43,7 @@ func newHandler(name string, cfg CacheConfig) (obj *handler) {
 		return obj
 	}
 
-	idx := newIndex(fmt.Sprintf("%s/%s", obj.dir, manifestFilename))
+	idx := newIndex(filepath.Join(obj.dir, manifestFilename))
 	if !idx.load() {
 		obj.on = false
 		return obj
