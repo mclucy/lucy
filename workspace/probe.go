@@ -350,6 +350,10 @@ var modPaths = fn.Memoize(buildModPaths)
 
 var getEnvironment = fn.Memoize(buildEnvironment)
 
+// buildWorkPath returns the absolute server working directory. Returning an
+// absolute path here (rather than ".") is a crucial behavior: every downstream
+// path.Join(workPath(), ...) and findJar(workPath()-derived modPath) inherits
+// this anchor, so Workspace stays valid after the probe chdir's back.
 func buildWorkPath() string {
 	env := getEnvironment()
 	if env.Mcdr != nil {
