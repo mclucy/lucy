@@ -14,6 +14,7 @@ type providerCandidateResolver struct {
 	rootProviders    map[string][]upstream.PackageSource
 	rootProviderSet  map[string]struct{}
 	defaultEcosystem types.Ecosystem
+	isCompatible     upstream.CompatibilityFunc
 }
 
 func (resolver providerCandidateResolver) ResolvePackage(
@@ -115,7 +116,11 @@ func (resolver providerCandidateResolver) fetchMany(
 				routing.ProviderError{Err: err},
 			)
 		}
-		fetches, errors := routing.FetchMany(group.providers, group.id)
+		fetches, errors := routing.FetchManyCompatible(
+			group.providers,
+			group.id,
+			resolver.isCompatible,
+		)
 		results = append(results, fetches...)
 		providerErrors = append(providerErrors, errors...)
 	}

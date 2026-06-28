@@ -14,6 +14,45 @@ type PackageInstallation struct {
 	Path string
 }
 
+type ReleaseType uint8
+
+const (
+	ReleaseTypeUnknown ReleaseType = iota
+	ReleaseTypeRelease
+	ReleaseTypeBeta
+	ReleaseTypeAlpha
+)
+
+func ParseReleaseType(value string) ReleaseType {
+	switch value {
+	case "release":
+		return ReleaseTypeRelease
+	case "beta":
+		return ReleaseTypeBeta
+	case "alpha":
+		return ReleaseTypeAlpha
+	default:
+		return ReleaseTypeUnknown
+	}
+}
+
+func (r ReleaseType) String() string {
+	switch r {
+	case ReleaseTypeRelease:
+		return "release"
+	case ReleaseTypeBeta:
+		return "beta"
+	case ReleaseTypeAlpha:
+		return "alpha"
+	default:
+		return "unknown"
+	}
+}
+
+func (r ReleaseType) IsStable() bool {
+	return r == ReleaseTypeRelease
+}
+
 // ResolvedPackage — upstream identity + download info. No local state, no deps.
 // Produced by: upstream providers (FetchResult assembly)
 // Consumed by: install/ resolve/download stages

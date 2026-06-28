@@ -103,6 +103,27 @@ func (p provider) Dependencies(
 	return new((&curseforgeDependencies{file: file}).ToPackageDependencies()), nil
 }
 
+func (p provider) ListVersions(ref types.PackageRef) ([]upstream.VersionInfo, error) {
+	mod, err := resolveSlug(ref.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	files, err := listFiles(mod.Id, "", 0)
+	if err != nil {
+		return nil, err
+	}
+
+	infos := make([]upstream.VersionInfo, 0, len(files))
+	for i := range files {
+		if !files[i].IsAvailable {
+			continue
+		}
+		infos = append(infos, files[i].ToVersionInfo())
+	}
+	return infos, nil
+}
+
 // curseforgeDependencies wraps a fileResponse for dependency
 // normalization.
 type curseforgeDependencies struct {

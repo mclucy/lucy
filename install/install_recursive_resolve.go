@@ -48,6 +48,7 @@ func BuildCandidateGraph(
 	installedConstraints []InstalledConstraint,
 	options InstallOptions,
 ) (ResolvedClosure, error) {
+	options = options.withDefaults()
 	return resolveClosure(
 		ctx,
 		roots,
@@ -55,7 +56,10 @@ func BuildCandidateGraph(
 		installedConstraints,
 		AmbientDependencies{},
 		options,
-		providerCandidateResolver{providers: providers},
+		providerCandidateResolver{
+			providers:    providers,
+			isCompatible: makeWorkspaceCompatibilityFunc(options.Workspace()),
+		},
 	)
 }
 

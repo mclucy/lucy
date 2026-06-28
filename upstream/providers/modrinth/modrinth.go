@@ -126,6 +126,22 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	return info, nil
 }
 
+func (s provider) ListVersions(ref types.PackageRef) ([]upstream.VersionInfo, error) {
+	versions, err := listVersions(ref.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	infos := make([]upstream.VersionInfo, 0, len(versions))
+	for _, version := range versions {
+		if version == nil {
+			continue
+		}
+		infos = append(infos, version.ToVersionInfo())
+	}
+	return infos, nil
+}
+
 var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api")
 
 // Temporary guard: Modrinth can ship non-JAR artifacts such as .mrpack,

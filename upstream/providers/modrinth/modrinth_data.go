@@ -198,6 +198,28 @@ type versionResponse struct {
 	Dependencies    []dependenciesResponse `json:"dependencies"`
 }
 
+func (v versionResponse) ToVersionInfo() upstream.VersionInfo {
+	gameVersions := make([]types.BareVersion, 0, len(v.GameVersions))
+	for _, gameVersion := range v.GameVersions {
+		gameVersions = append(gameVersions, types.BareVersion(gameVersion))
+	}
+
+	loaders := make([]types.Ecosystem, 0, len(v.Loaders))
+	for _, loader := range v.Loaders {
+		loaders = append(loaders, types.Ecosystem(loader))
+	}
+
+	return upstream.VersionInfo{
+		Candidate: upstream.VersionCandidate{
+			Version:      types.BareVersion(v.VersionNumber),
+			GameVersions: gameVersions,
+			Loaders:      loaders,
+		},
+		ReleaseType: types.ParseReleaseType(v.VersionType),
+		PublishedAt: v.DatePublished,
+	}
+}
+
 func (v versionResponse) ToPackageRemote() types.ResolvedPackage {
 	remote := types.ResolvedPackage{
 		Id:       types.FullPackageRef{Scope: types.SourceModrinth},

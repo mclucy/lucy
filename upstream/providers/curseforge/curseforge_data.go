@@ -237,6 +237,54 @@ func (f *fileResponse) ToPackageRemote() types.ResolvedPackage {
 	return remote
 }
 
+func (f *fileResponse) ToVersionInfo() upstream.VersionInfo {
+	gameVersions := make([]types.BareVersion, 0, len(f.GameVersions))
+	loaders := make([]types.Ecosystem, 0)
+	for _, gameVersion := range f.GameVersions {
+		if platform, ok := curseforgeLoaderPlatform(gameVersion); ok {
+			loaders = append(loaders, platform)
+			continue
+		}
+		gameVersions = append(gameVersions, types.BareVersion(gameVersion))
+	}
+
+	return upstream.VersionInfo{
+		Candidate: upstream.VersionCandidate{
+			Version:      types.BareVersion(f.FileName),
+			GameVersions: gameVersions,
+			Loaders:      loaders,
+		},
+		ReleaseType: curseforgeReleaseType(f.ReleaseType),
+		PublishedAt: parseCurseforgeDate(f.FileDate),
+	}
+}
+
+func curseforgeReleaseType(value int32) types.ReleaseType {
+	switch value {
+	case 1:
+		return types.ReleaseTypeRelease
+	case 2:
+		return types.ReleaseTypeBeta
+	case 3:
+		return types.ReleaseTypeAlpha
+	default:
+		return types.ReleaseTypeUnknown
+	}
+}
+
+func curseforgeLoaderPlatform(value string) (types.Ecosystem, bool) {
+	switch value {
+	case "Forge":
+		return types.EcoForge, true
+	case "Fabric":
+		return types.EcoFabric, true
+	case "NeoForge":
+		return types.EcoNeoforge, true
+	default:
+		return types.EcoUnknown, false
+	}
+}
+
 type fileHash struct {
 	Value string `json:"value"`
 	Algo  int32  `json:"algo"` // 1=Sha1, 2=Md5

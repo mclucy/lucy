@@ -187,6 +187,7 @@ func Plan(
 				rootProviders:    rootProviders,
 				rootProviderSet:  keyedRoots(resolvePlan.Roots),
 				defaultEcosystem: serverLoader,
+				isCompatible:     makeWorkspaceCompatibilityFunc(ws),
 			},
 		)
 		if err != nil {

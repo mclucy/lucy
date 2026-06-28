@@ -57,6 +57,24 @@ type EcosystemProvider interface {
 	Fetcher
 }
 
+type VersionCandidate struct {
+	Version      types.BareVersion
+	GameVersions []types.BareVersion
+	Loaders      []types.Ecosystem
+}
+
+type VersionInfo struct {
+	Candidate   VersionCandidate
+	ReleaseType types.ReleaseType
+	PublishedAt time.Time
+}
+
+type CompatibilityFunc func(VersionCandidate) bool
+
+type VersionLister interface {
+	ListVersions(ref types.PackageRef) ([]VersionInfo, error)
+}
+
 type SupportedEcosystemsReporter interface {
 	SupportedEcosystems() []types.Ecosystem
 }

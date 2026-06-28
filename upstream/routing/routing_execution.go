@@ -3,6 +3,7 @@ package routing
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/mclucy/lucy/types"
@@ -104,6 +105,16 @@ func FetchMany(
 	providers []upstream.PackageSource,
 	id types.VersionedPackageRef,
 ) ([]types.ResolvedPackage, []ProviderError) {
+	return FetchManyCompatible(providers, id, nil)
+}
+
+// FetchManyCompatible resolves compatible selectors using caller-owned
+// compatibility logic before fetching concrete provider artifacts.
+func FetchManyCompatible(
+	providers []upstream.PackageSource,
+	id types.VersionedPackageRef,
+	isCompatible upstream.CompatibilityFunc,
+) ([]types.ResolvedPackage, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
 	}
@@ -122,7 +133,7 @@ func FetchMany(
 		wg.Add(1)
 		go func(index int, provider upstream.PackageSource) {
 			defer wg.Done()
-			resolvedID, err := provider.ResolveVersionSelector(id)
+			resolvedID, err := resolveVersion(provider, id, isCompatible)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,
@@ -172,6 +183,58 @@ func FetchMany(
 	}
 
 	return results, providerErrors
+}
+
+func resolveVersion(
+	provider upstream.PackageSource,
+	id types.VersionedPackageRef,
+	isCompatible upstream.CompatibilityFunc,
+) (types.VersionedPackageRef, error) {
+	if id.Version != types.VersionCompatible || isCompatible == nil {
+		return provider.ResolveVersionSelector(id)
+	}
+
+	lister, ok := provider.(upstream.VersionLister)
+	if !ok {
+		return provider.ResolveVersionSelector(id)
+	}
+
+	versions, err := lister.ListVersions(id.PackageRef)
+	if err != nil {
+		return id, err
+	}
+	selected, ok := SelectCompatibleVersion(versions, isCompatible)
+	if !ok {
+		return id, fmt.Errorf("%w: %s", ErrNoProviderSucceeded, id.StringBase())
+	}
+	id.Version = selected.Candidate.Version
+	return id, nil
+}
+
+func SelectCompatibleVersion(
+	versions []upstream.VersionInfo,
+	isCompatible upstream.CompatibilityFunc,
+) (upstream.VersionInfo, bool) {
+	candidates := make([]upstream.VersionInfo, 0, len(versions))
+	for _, version := range versions {
+		if isCompatible(version.Candidate) {
+			candidates = append(candidates, version)
+		}
+	}
+	if len(candidates) == 0 {
+		return upstream.VersionInfo{}, false
+	}
+
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left := candidates[i]
+		right := candidates[j]
+		if left.ReleaseType.IsStable() != right.ReleaseType.IsStable() {
+			return left.ReleaseType.IsStable()
+		}
+		return left.PublishedAt.After(right.PublishedAt)
+	})
+
+	return candidates[0], true
 }
 
 // GetInfoHedged executes info on all providers in parallel and returns the
