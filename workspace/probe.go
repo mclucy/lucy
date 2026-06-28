@@ -92,6 +92,56 @@ func InvalidateServerInfo() {
 	serverInfoReady = false
 }
 
+// buildAbsolutizedServerInfo builds ServerInfo against the current working
+// directory and normalizes every filesystem path field to an absolute path.
+// It is the shared producer behind ServerInfo() and Rebuild().
+//
+// Workspace path fields MUST be absolute at the boundary so consumers in any
+// working directory resolve them identically. The raw probe builds paths
+// relative to the probe directory (often "."), which is correct only while
+// the probe's cwd is still active; absolutization here removes that latent
+// chdir coupling.
+func buildAbsolutizedServerInfo() Workspace {
+	anchor, err := os.Getwd()
+	if err != nil {
+		// os.Getwd failing is extraordinary; return the raw probe result
+		// rather than fabricating an anchor we cannot verify.
+		return buildServerInfo()
+	}
+	return absolutizeWorkspace(buildServerInfo(), anchor)
+}
+
+// absolutizeWorkspace returns a copy of ws with every filesystem path field
+// anchored at anchorDir. anchorDir must be absolute. Empty and already-absolute
+// paths are preserved unchanged.
+//
+// This is the single boundary where Workspace paths cross the os.Chdir
+// restore in ServerInfoAt / RefreshServerInfo. Every consumer receives paths
+// that are valid in any working directory, eliminating the relative-path leak
+// behind GitHub issue #55.
+func absolutizeWorkspace(ws Workspace, anchorDir string) Workspace {
+	rel := func(p string) string {
+		if p == "" || filepath.IsAbs(p) {
+			return p
+		}
+		return filepath.Join(anchorDir, p)
+	}
+	ws.Root = rel(ws.Root)
+	ws.SavePath = rel(ws.SavePath)
+	for i := range ws.ModPath {
+		ws.ModPath[i] = rel(ws.ModPath[i])
+	}
+	for i := range ws.Packages {
+		if ws.Packages[i].Local != nil {
+			ws.Packages[i].Local.Path = rel(ws.Packages[i].Local.Path)
+		}
+	}
+	if ws.Runtime != nil {
+		ws.Runtime.PrimaryEntrance = rel(ws.Runtime.PrimaryEntrance)
+	}
+	return ws
+}
+
 // ServerInfoAt probes an explicit working directory without replacing the
 // current process-global ServerInfo cache. This is intended for init-style
 // takeover discovery where the caller may need rich observed state for a target
@@ -165,6 +215,7 @@ func buildServerInfoAtLocked(
 
 	resetProbeMemoizedStateLocked()
 	info := buildServerInfo()
+	info = absolutizeWorkspace(info, target)
 
 	if persistWhenCurrent && sameProbePath(target, originalTarget) {
 		serverInfoCache = info
