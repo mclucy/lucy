@@ -1,7 +1,7 @@
 package workspace
 
 import (
-	"path"
+	"path/filepath"
 
 	"github.com/mclucy/lucy/types"
 )
@@ -65,10 +65,10 @@ func packageSearchPathsForTopology(
 	if topology.HasCapability(types.CapabilityFabricMods) ||
 		topology.HasCapability(types.CapabilityForgeMods) ||
 		topology.HasCapability(types.CapabilityNeoforgeMods) {
-		paths = append(paths, path.Join(workingDirectory, "mods"))
+		paths = append(paths, filepath.Join(workingDirectory, "mods"))
 	}
 	if topology.HasCapability(types.CapabilityBukkitPlugins) {
-		paths = append(paths, path.Join(workingDirectory, "plugins"))
+		paths = append(paths, filepath.Join(workingDirectory, "plugins"))
 	}
 
 	return paths

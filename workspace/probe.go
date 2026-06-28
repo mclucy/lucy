@@ -14,7 +14,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -42,6 +41,10 @@ var (
 	resetProbeFileLockCache = func() {}
 )
 
+// probeAnchor is the absolute server directory that buildWorkPath returns as
+// the workspace root. Set under serverInfoMu before buildServerInfo() runs.
+var probeAnchor string
+
 // ServerInfo is the exposed function for external packages to get serverInfo.
 // The value is cached after the first build, and read access is blocked while
 // Rebuild refreshes the cache.
@@ -59,6 +62,7 @@ func ServerInfo() Workspace {
 
 	if !serverInfoReady {
 		resetProbeMemoizedStateLocked()
+		probeAnchor, _ = os.Getwd()
 		serverInfoCache = buildServerInfo()
 		serverInfoReady = true
 	}
@@ -73,6 +77,7 @@ func Rebuild() {
 	defer serverInfoMu.Unlock()
 
 	resetProbeMemoizedStateLocked()
+	probeAnchor, _ = os.Getwd()
 	serverInfoCache = buildServerInfo()
 	serverInfoReady = true
 }
@@ -150,6 +155,7 @@ func buildServerInfoAtLocked(
 		}
 	}()
 
+	probeAnchor = target
 	if err := os.Chdir(target); err != nil {
 		return Workspace{}
 	}
@@ -296,16 +302,20 @@ var getEnvironment = fn.Memoize(buildEnvironment)
 func buildWorkPath() string {
 	env := getEnvironment()
 	if env.Mcdr != nil {
-		return env.Mcdr.Config.WorkingDirectory
+		wd := env.Mcdr.Config.WorkingDirectory
+		if filepath.IsAbs(wd) {
+			return wd
+		}
+		return filepath.Join(probeAnchor, wd)
 	}
-	return "."
+	return probeAnchor
 }
 
 var workPath = fn.Memoize(buildWorkPath)
 
 func buildServerProperties() fileschema.FileMinecraftServerProperties {
 	exec := getExecutableInfo()
-	propertiesPath := path.Join(workPath(), "server.properties")
+	propertiesPath := filepath.Join(workPath(), "server.properties")
 	file, err := ini.Load(propertiesPath)
 	if err != nil {
 		if exec != UnknownExecutable {
@@ -332,7 +342,7 @@ func buildSavePath() string {
 		return ""
 	}
 	levelName := serverProperties["level-name"]
-	return path.Join(workPath(), levelName)
+	return filepath.Join(workPath(), levelName)
 }
 
 var savePath = fn.Memoize(buildSavePath)

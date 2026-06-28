@@ -61,9 +61,9 @@ func TestServerInfoAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 			observed.DerivedModLoader(),
 		)
 	}
-	if len(observed.ModPath) == 0 || observed.ModPath[0] != "mods" {
+	if len(observed.ModPath) == 0 || observed.ModPath[0] != filepath.Join(targetDir, "mods") {
 		t.Fatalf(
-			"expected fabric mod path candidate from target dir topology, got %v",
+			"expected absolute fabric mod path from target dir topology, got %v",
 			observed.ModPath,
 		)
 	}

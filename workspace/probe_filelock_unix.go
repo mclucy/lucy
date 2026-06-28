@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -40,7 +40,7 @@ func buildServerFileLockStatus() *ServerActivity {
 		return inactive
 	}
 
-	lockPath := path.Join(
+	lockPath := filepath.Join(
 		savePath(),
 		"session.lock",
 	)

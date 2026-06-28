@@ -3,7 +3,7 @@ package workspace
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -51,10 +51,10 @@ func buildExecutableInfo() *ServerRuntime {
 
 	// 2. Forge/Fabric installation paths
 	// Will break after found
-	fabricLib := path.Join(
+	fabricLib := filepath.Join(
 		workPath, "libraries", "net", "fabricmc", "fabric-loader",
 	)
-	forgeLib := path.Join(
+	forgeLib := filepath.Join(
 		workPath, "libraries", "net", "minecraftforge", "forge",
 	)
 	var forgeJars, fabricJars []string
@@ -87,7 +87,7 @@ func buildExecutableInfo() *ServerRuntime {
 	// 3. Everything under libraries
 	if len(valid) == 0 {
 		log.Info("no valid jar found yet, trying to find under libraries")
-		jarPaths := findJarRecursive(path.Join(workPath, "libraries"))
+		jarPaths := findJarRecursive(filepath.Join(workPath, "libraries"))
 		if len(jarPaths) >= multiThreadThreshold {
 			mu := sync.Mutex{}
 			wg := sync.WaitGroup{}
@@ -230,8 +230,8 @@ func findFileWithExt(dir string, ext ...string) (files []string, err error) {
 		if entry.IsDir() {
 			continue
 		}
-		if probe2.Exists(ext, path.Ext(entry.Name())) {
-			files = append(files, path.Join(dir, entry.Name()))
+		if probe2.Exists(ext, filepath.Ext(entry.Name())) {
+			files = append(files, filepath.Join(dir, entry.Name()))
 		}
 	}
 
@@ -264,12 +264,12 @@ func findJarRecursive(dir string) (jarFiles []string) {
 				mu.Lock()
 				jarFiles = append(jarFiles, subJarFiles...)
 				mu.Unlock()
-			}(path.Join(dir, entry.Name()))
+			}(filepath.Join(dir, entry.Name()))
 		} else {
 			fileCount.Add(1)
-			if path.Ext(entry.Name()) == ".jar" {
+			if filepath.Ext(entry.Name()) == ".jar" {
 				mu.Lock()
-				jarFiles = append(jarFiles, path.Join(dir, entry.Name()))
+				jarFiles = append(jarFiles, filepath.Join(dir, entry.Name()))
 				mu.Unlock()
 			}
 		}

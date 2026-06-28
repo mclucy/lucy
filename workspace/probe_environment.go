@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fileschema"
@@ -23,7 +23,7 @@ func buildEnvironment() types.EnvironmentInfo {
 }
 
 func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
-	configPath := path.Join(dir, mcdrConfigFileName)
+	configPath := filepath.Join(dir, mcdrConfigFileName)
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return

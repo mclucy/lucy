@@ -3,7 +3,7 @@ package bootstrap
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -46,7 +46,7 @@ func ensureEULAAccepted(workPath string) error {
 }
 
 func hasAcceptedEULA(workPath string) bool {
-	data, err := os.ReadFile(path.Join(workPath, "eula.txt"))
+	data, err := os.ReadFile(filepath.Join(workPath, "eula.txt"))
 	if err != nil {
 		return false
 	}
@@ -63,13 +63,13 @@ func writeEULAFile(workPath string) error {
 		},
 		"\n",
 	)
-	if _, err := os.Stat(path.Join(workPath)); os.IsNotExist(err) {
-		err = os.MkdirAll(path.Join(workPath), 0o755)
+	if _, err := os.Stat(workPath); os.IsNotExist(err) {
+		err = os.MkdirAll(workPath, 0o755)
 		if err != nil {
 			return err
 		}
 	}
-	err := os.WriteFile(path.Join(workPath, "eula.txt"), []byte(content), 0o644)
+	err := os.WriteFile(filepath.Join(workPath, "eula.txt"), []byte(content), 0o644)
 	if err != nil {
 		return fmt.Errorf("write eula.txt failed: %w", err)
 	}
