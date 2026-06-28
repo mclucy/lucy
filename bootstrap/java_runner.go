@@ -7,7 +7,7 @@ import (
 	"io"
 	"math"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/tui/progress"
@@ -119,9 +119,9 @@ func asymptoticProgress(x float64, floor, span float64) float64 {
 }
 
 func runInstallerJar(installerPath string, tracker *progress.Tracker) error {
-	installerName := path.Base(installerPath)
+	installerName := filepath.Base(installerPath)
 	cmd := exec.Command("java", "-jar", installerName, "--installServer")
-	cmd.Dir = path.Dir(installerPath)
+	cmd.Dir = filepath.Dir(installerPath)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

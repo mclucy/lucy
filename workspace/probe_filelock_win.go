@@ -20,7 +20,7 @@ package workspace
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 
 	probe2 "github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
@@ -30,7 +30,7 @@ import (
 // This is AI generated code, please check it before use. I have no knowledge to
 // Windows syscall.
 func buildServerFileLockStatus() *ServerActivity {
-	lockPath := path.Join(
+	lockPath := filepath.Join(
 		savePath(),
 		"session.lock",
 	)
