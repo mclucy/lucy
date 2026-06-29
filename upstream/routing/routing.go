@@ -34,7 +34,7 @@ import (
 var (
 	ErrUnknownSource     = errors.New("unknown source")
 	ErrUnsupportedSource = errors.New("unsupported source")
-	ErrInvalidPlatform   = errors.New("cannot find sources for platform")
+	ErrInvalidEcosystem  = errors.New("cannot find sources for ecosystem")
 )
 
 type Registry struct {
@@ -134,14 +134,14 @@ func (r *Registry) ArtifactMapper(
 	return provider, ok
 }
 
-func (r *Registry) PlatformInstaller(
+func (r *Registry) EcosystemInstaller(
 	source types.SourceId,
-) (upstream.PlatformProvider, bool) {
+) (upstream.EcosystemProvider, bool) {
 	e, ok := r.entry(source)
 	if !ok {
 		return nil, false
 	}
-	installer, ok := e.impl.(upstream.PlatformProvider)
+	installer, ok := e.impl.(upstream.EcosystemProvider)
 	return installer, ok
 }
 
@@ -166,25 +166,25 @@ func GetArtifactMapper(src types.SourceId) (
 	return mapper, ok, nil
 }
 
-func PlatformInstallerFor(
-	platform types.PlatformId,
-) (upstream.PlatformProvider, bool) {
-	source, ok := platformInstallerSource(platform)
+func EcosystemInstallerFor(
+	ecosystem types.Ecosystem,
+) (upstream.EcosystemProvider, bool) {
+	source, ok := ecosystemInstallerSource(ecosystem)
 	if !ok {
 		return nil, false
 	}
-	return DefaultRegistry().PlatformInstaller(source)
+	return DefaultRegistry().EcosystemInstaller(source)
 }
 
-func platformInstallerSource(platform types.PlatformId) (types.SourceId, bool) {
-	switch platform {
-	case types.PlatformMinecraft:
+func ecosystemInstallerSource(ecosystem types.Ecosystem) (types.SourceId, bool) {
+	switch ecosystem {
+	case types.EcoMinecraft:
 		return types.SourceMojang, true
-	case types.PlatformForge:
+	case types.EcoForge:
 		return types.SourceForge, true
-	case types.PlatformNeoforge:
+	case types.EcoNeoforge:
 		return types.SourceNeoForge, true
-	case types.PlatformFabric:
+	case types.EcoFabric:
 		return types.SourceFabric, true
 	default:
 		return types.SourceUnknown, false
@@ -194,7 +194,7 @@ func platformInstallerSource(platform types.PlatformId) (types.SourceId, bool) {
 // ResolveProviders resolves ordered provider candidates for a given operation,
 // platform, and user-specified source.
 func ResolveProviders(
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	src types.SourceId,
 ) ([]upstream.PackageSource, error) {
 	if src == types.SourceUnknown {
@@ -205,7 +205,7 @@ func ResolveProviders(
 		return resolveExplicitSource(src)
 	}
 
-	sources, err := providerSourcesForPlatform(platform)
+	sources, err := providerSourcesForEcosystem(platform)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", err, platform)
 	}
@@ -217,7 +217,7 @@ func ResolveProviders(
 // selection and uses source capability data as the authority for automatic
 // selection.
 func ResolveSearchProviders(
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	src types.SourceId,
 ) ([]upstream.SearchSource, error) {
 	if src == types.SourceUnknown {
@@ -225,29 +225,29 @@ func ResolveSearchProviders(
 	}
 
 	if src != types.SourceAuto {
-		if err := validateSearchSourcePlatform(src, platform); err != nil {
+		if err := validateSearchSourceEcosystem(src, platform); err != nil {
 			return nil, err
 		}
 		return resolveExplicitSearcher(src)
 	}
 
-	if !platform.IsSearchPlatform() {
-		sources, err := providerSourcesForPlatform(platform)
+	if !platform.IsSearchEcosystem() {
+		sources, err := providerSourcesForEcosystem(platform)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", err, platform)
 		}
 		return searchersFromSources(sources)
 	}
 
-	sources := providerSourcesForSearchPlatform(platform)
+	sources := providerSourcesForSearchEcosystem(platform)
 	if len(sources) == 0 {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidPlatform, platform)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidEcosystem, platform)
 	}
 	return searchersFromSources(sources)
 }
 
 func ResolveInfoProviders(
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	src types.SourceId,
 ) ([]upstream.InfoSource, error) {
 	if src == types.SourceUnknown {
@@ -258,7 +258,7 @@ func ResolveInfoProviders(
 		return resolveExplicitInformer(src)
 	}
 
-	sources, err := providerSourcesForPlatform(platform)
+	sources, err := providerSourcesForEcosystem(platform)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", err, platform)
 	}
@@ -324,15 +324,15 @@ func resolveExplicitSource(src types.SourceId) (
 	return []upstream.PackageSource{provider}, nil
 }
 
-func validateSearchSourcePlatform(
+func validateSearchSourceEcosystem(
 	src types.SourceId,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) error {
-	if !platform.IsSearchPlatform() {
+	if !platform.IsSearchEcosystem() {
 		return nil
 	}
 
-	support, ok := PlatformSupportedBy(src, platform)
+	support, ok := EcosystemSupportedBy(src, platform)
 	if ok && support.Supported {
 		return nil
 	}

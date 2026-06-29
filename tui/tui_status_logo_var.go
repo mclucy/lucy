@@ -27,9 +27,9 @@ var (
 	neoforgeNoColorSmall string
 )
 
-func GetLogo(platform types.PlatformId, variant LogoVariant) string {
+func GetLogo(platform types.Ecosystem, variant LogoVariant) string {
 	switch platform {
-	case types.PlatformFabric:
+	case types.EcoFabric:
 		switch variant {
 		case LogoLargePlain:
 			return fabricNoColorLarge
@@ -38,7 +38,7 @@ func GetLogo(platform types.PlatformId, variant LogoVariant) string {
 		default:
 			return ""
 		}
-	case types.PlatformForge:
+	case types.EcoForge:
 		switch variant {
 		case LogoLargePlain:
 			return forgeNoColorLarge
@@ -47,7 +47,7 @@ func GetLogo(platform types.PlatformId, variant LogoVariant) string {
 		default:
 			return ""
 		}
-	case types.PlatformNeoforge:
+	case types.EcoNeoforge:
 		switch variant {
 		case LogoLargePlain:
 			return neoforgeNoColorLarge

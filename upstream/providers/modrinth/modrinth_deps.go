@@ -12,7 +12,7 @@ import (
 // normalization.
 type modrinthDependencies struct {
 	version  *versionResponse
-	platform types.PlatformId
+	platform types.Ecosystem
 }
 
 func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies {
@@ -27,8 +27,8 @@ func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies
 
 		parentId := types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Platform: m.platform,
-				Name:     input.ToProjectName(m.version.Id),
+				Eco:  m.platform,
+				Name: input.ToProjectName(m.version.Id),
 			},
 			Version: types.BareVersion(m.version.VersionNumber),
 		}

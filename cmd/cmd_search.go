@@ -49,7 +49,7 @@ var searchCmd = &cobra.Command{
 			return errors.New("--index must be one of \"relevance\", \"downloads\", \"newest\"")
 		}
 		platform, _ := cmd.Flags().GetString(flagPlatformName)
-		if platform != "" && !types.PlatformId(platform).IsSearchPlatform() {
+		if platform != "" && !types.Ecosystem(platform).IsSearchEcosystem() {
 			return errors.New("--platform must be one of \"fabric\", \"forge\", \"neoforge\", \"bukkit\"")
 		}
 		return validateSourceFlag(cmd)
@@ -107,7 +107,7 @@ func init() {
 			cobra.ShellCompDirective,
 		) {
 			candidates := FilterByPrefix(
-				StaticSearchPlatformCandidates(),
+				StaticSearchEcosystemCandidates(),
 				toComplete,
 			)
 			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
@@ -131,8 +131,8 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		specifiedSource = ref.Scope
 	}
 
-	resolvedPlatform, err := ResolvePlatform(
-		ref.PackageRef.Platform,
+	resolvedPlatform, err := ResolveEcosystem(
+		ref.PackageRef.Eco,
 		platformArg,
 	)
 	if err != nil {
@@ -140,18 +140,18 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	options := upstream.SearchOptions{
-		IncludeClient:  client,
-		FilterPlatform: resolvedPlatform,
+		IncludeClient:   client,
+		FilterEcosystem: resolvedPlatform,
 	}
 
 	providers, err := routing.ResolveSearchProviders(
-		options.FilterPlatform,
+		options.FilterEcosystem,
 		specifiedSource,
 	)
 	if err != nil {
 		errArg := sourceArg
 		if specifiedSource == types.SourceAuto {
-			errArg = options.FilterPlatform.String()
+			errArg = options.FilterEcosystem.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
 	}

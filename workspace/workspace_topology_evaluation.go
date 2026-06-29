@@ -83,23 +83,23 @@ func EvaluateCompatibility(
 	}
 }
 
-// CapabilityForPlatform maps a package's Platform identity to the RuntimeCapability
+// CapabilityForEcosystem maps a package's Platform identity to the RuntimeCapability
 // it requires in the host server's topology. Returns the empty RuntimeCapability when
 // no mapping exists, including for topology-only/proxy platforms (velocity,
 // bungeecord, waterfall, sponge) and unknown platforms.
-func CapabilityForPlatform(p types.PlatformId) types.RuntimeCapability {
+func CapabilityForEcosystem(p types.Ecosystem) types.RuntimeCapability {
 	switch p {
-	case types.PlatformFabric:
+	case types.EcoFabric:
 		return types.CapabilityFabricMods
-	case types.PlatformForge:
+	case types.EcoForge:
 		return types.CapabilityForgeMods
-	case types.PlatformNeoforge:
+	case types.EcoNeoforge:
 		return types.CapabilityNeoforgeMods
-	case types.PlatformBukkit:
+	case types.EcoBukkit:
 		return types.CapabilityBukkitPlugins
-	case types.PlatformPaper:
+	case types.EcoPaper:
 		return types.CapabilityPaperPlugins
-	case types.PlatformMCDR:
+	case types.EcoMcdr:
 		return types.CapabilityMCDRPlugins
 	default:
 		return ""

@@ -68,8 +68,8 @@ func searchProjects(
 		params.Set("query", query)
 	}
 	params.Set("limit", "25")
-	if platform := searchPlatform(options.FilterPlatform); platform != "" {
-		params.Set("platform", platform)
+	if eco := searchEcosystem(options.FilterEcosystem); eco != "" {
+		params.Set("platform", eco)
 	}
 
 	res := &projectSearchResponse{}
@@ -165,11 +165,11 @@ func withQuery(base string, params url.Values) string {
 	return base + "?" + params.Encode()
 }
 
-func searchPlatform(platform types.PlatformId) string {
-	switch platform {
-	case types.PlatformBukkit:
+func searchEcosystem(ecosystem types.Ecosystem) string {
+	switch ecosystem {
+	case types.EcoBukkit:
 		return hangarPreferredPlatform
-	case types.PlatformAny, types.PlatformNone, types.PlatformUnknown:
+	case types.EcoAny, types.EcoBare, types.EcoUnknown:
 		return hangarPreferredPlatform
 	default:
 		return ""

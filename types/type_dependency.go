@@ -177,7 +177,7 @@ func (exp *VersionSubExpr) Inverse() {
 }
 
 func (d Dependency) Satisfy(id VersionedPackageRef, v ResolvableVersion) bool {
-	if (id.Platform != d.Id.Platform) || (id.Name != d.Id.Name) {
+	if (id.Eco != d.Id.Eco) || (id.Name != d.Id.Name) {
 		return false
 	}
 

@@ -15,13 +15,13 @@ const (
 
 // modLoaderType maps lucy Platform to CurseForge ModLoaderType enum.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func modLoaderType(p types.PlatformId) int {
+func modLoaderType(p types.Ecosystem) int {
 	switch p {
-	case types.PlatformForge:
+	case types.EcoForge:
 		return 1
-	case types.PlatformFabric:
+	case types.EcoFabric:
 		return 4
-	case types.PlatformNeoforge:
+	case types.EcoNeoforge:
 		return 6
 	default:
 		return 0 // Any
@@ -44,7 +44,7 @@ func searchUrl(
 	params.Set("sortOrder", "desc")
 	params.Set("pageSize", "50")
 
-	if loader := modLoaderType(options.FilterPlatform); loader != 0 {
+	if loader := modLoaderType(options.FilterEcosystem); loader != 0 {
 		params.Set("modLoaderType", fmt.Sprintf("%d", loader))
 	}
 

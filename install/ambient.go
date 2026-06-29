@@ -41,8 +41,8 @@ func buildAmbientDependencies(
 		ambient.Add(
 			types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformMCDR,
-					Name:     "mcdreforged",
+					Eco:  types.EcoMcdr,
+					Name: "mcdreforged",
 				},
 				Version: types.BareVersion(strings.TrimSpace(ws.Environments.Mcdr.Version.String())),
 			},
@@ -58,7 +58,7 @@ func buildAmbientDependencies(
 		ambient.Add(
 			types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformFabric, Name: "fabricloader",
+					Eco: types.EcoFabric, Name: "fabricloader",
 				},
 				Version: types.BareVersion(loaderVersion),
 			},
@@ -67,7 +67,7 @@ func buildAmbientDependencies(
 	ambient.Add(
 		types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Platform: types.PlatformFabric, Name: "minecraft",
+				Eco: types.EcoFabric, Name: "minecraft",
 			},
 			Version: ws.Runtime.GameVersion,
 		},
@@ -75,7 +75,7 @@ func buildAmbientDependencies(
 	ambient.Add(
 		types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Platform: types.PlatformFabric, Name: "fabric",
+				Eco: types.EcoFabric, Name: "fabric",
 			},
 			Version: types.VersionAny,
 		},
@@ -83,7 +83,7 @@ func buildAmbientDependencies(
 	ambient.Add(
 		types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Platform: types.PlatformFabric, Name: "fabric-api",
+				Eco: types.EcoFabric, Name: "fabric-api",
 			},
 			Version: types.VersionAny,
 		},
@@ -93,7 +93,7 @@ func buildAmbientDependencies(
 		ambient.Add(
 			types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformFabric, Name: "java",
+					Eco: types.EcoFabric, Name: "java",
 				},
 				Version: javaVersion,
 			},
@@ -118,7 +118,7 @@ func buildAmbientDependencies(
 }
 
 func (a *AmbientDependencies) Add(id types.VersionedPackageRef) {
-	if id.Platform == "" || id.Name == "" {
+	if id.Eco == "" || id.Name == "" {
 		return
 	}
 	if a.entries == nil {
@@ -131,7 +131,7 @@ func (a *AmbientDependencies) AddAlias(
 	alias types.PackageRef,
 	target types.VersionedPackageRef,
 ) {
-	if alias.Platform == "" || alias.Name == "" || target.Platform == "" || target.Name == "" {
+	if alias.Eco == "" || alias.Name == "" || target.Eco == "" || target.Name == "" {
 		return
 	}
 	if a.aliases == nil {
@@ -227,8 +227,8 @@ func addFabricZipAmbientDependencies(
 
 	id := types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: types.PlatformFabric,
-			Name:     input.ToProjectName(modInfo.Id),
+			Eco:  types.EcoFabric,
+			Name: input.ToProjectName(modInfo.Id),
 		},
 		Version: types.BareVersion(modInfo.Version),
 	}
@@ -239,8 +239,8 @@ func addFabricZipAmbientDependencies(
 		// requiring a separate downloaded package.
 		ambient.AddAlias(
 			types.PackageRef{
-				Platform: types.PlatformFabric,
-				Name:     input.ToProjectName(provided),
+				Eco:  types.EcoFabric,
+				Name: input.ToProjectName(provided),
 			},
 			id,
 		)

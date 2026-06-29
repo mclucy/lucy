@@ -354,8 +354,8 @@ func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPa
 		pkg := types.DiscoveredPackage{
 			Id: types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: info.Ref.Platform,
-					Name:     info.Ref.Name,
+					Eco:  info.Ref.Eco,
+					Name: info.Ref.Name,
 				},
 				Version: info.Version,
 			},
@@ -368,8 +368,8 @@ func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPa
 					deps, types.Dependency{
 						Id: types.VersionedPackageRef{
 							PackageRef: types.PackageRef{
-								Platform: dep.Ref.Platform,
-								Name:     dep.Ref.Name,
+								Eco:  dep.Ref.Eco,
+								Name: dep.Ref.Name,
 							},
 						},
 						Constraint: dep.Constraint,
@@ -466,9 +466,9 @@ func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
 		if err != nil || !ok || ref.Name == "" {
 			continue
 		}
-		platform := ref.Platform
-		if platform == types.PlatformNone || platform == types.PlatformAny {
-			platform = types.PlatformForge
+		platform := ref.Eco
+		if platform == types.EcoBare || platform == types.EcoAny {
+			platform = types.EcoForge
 		}
 		version := ref.Version
 		if version == "" {
@@ -483,8 +483,8 @@ func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
 		return types.DiscoveredPackage{
 			Id: types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: platform,
-					Name:     pkgName,
+					Eco:  platform,
+					Name: pkgName,
 				},
 				Version: version,
 			},
@@ -503,7 +503,7 @@ func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
 func knownPackagesSlugResolver(session *knownpkgs.Session) artifact.SlugResolver {
 	return func(
 		ctx context.Context,
-		platform types.PlatformId,
+		platform types.Ecosystem,
 		name types.BarePackageName,
 	) (types.BarePackageName, error) {
 		canonical, src, ok := session.LookupAny(string(name))

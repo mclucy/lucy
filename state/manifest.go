@@ -194,7 +194,7 @@ func ValidateManifestEnvironment(env ManifestEnvironment) error {
 	}
 
 	switch platform {
-	case "none", "fabric", "forge", "neoforge", "mcdr":
+	case "bare", "none", "fabric", "forge", "neoforge", "mcdr":
 	default:
 		return NewStateError(
 			ManifestFile,
@@ -207,7 +207,7 @@ func ValidateManifestEnvironment(env ManifestEnvironment) error {
 		)
 	}
 
-	if platform == "none" && len(env.CompatiblePlatforms) > 0 {
+	if (platform == "bare" || platform == "none") && len(env.CompatiblePlatforms) > 0 {
 		return NewStateError(
 			ManifestFile,
 			ErrMalformed,
@@ -271,16 +271,16 @@ func ValidateManifestEnvironment(env ManifestEnvironment) error {
 	return nil
 }
 
-// validateManifestPlatform remains as a legacy helper for the pre-Task-2 lock
+// validateManifestEcosystem remains as a legacy helper for the pre-Task-2 lock
 // schema, which still validates a single platform field.
-func validateManifestPlatform(value string) error {
-	platform := types.PlatformId(strings.TrimSpace(value))
+func validateManifestEcosystem(value string) error {
+	platform := types.Ecosystem(strings.TrimSpace(value))
 	if platform == "" {
 		return fmt.Errorf("environment.platform is required")
 	}
 
 	switch platform {
-	case types.PlatformFabric, types.PlatformNeoforge, types.PlatformForge, types.PlatformMCDR, types.PlatformNone:
+	case types.EcoFabric, types.EcoNeoforge, types.EcoForge, types.EcoMcdr, types.EcoBare:
 		return nil
 	default:
 		return fmt.Errorf("invalid environment.platform %q", value)
@@ -298,9 +298,9 @@ func validateManifestPackage(pkg ManifestPackage) error {
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
 		return fmt.Errorf("id must use platform/name format")
 	}
-	platform := types.PlatformId(parts[0])
-	if !platform.Valid() || platform == types.PlatformAny || platform == types.PlatformMinecraft || platform == types.PlatformUnknown {
-		return fmt.Errorf("invalid package platform %q", parts[0])
+	platform := types.Ecosystem(parts[0])
+	if !platform.Valid() || platform == types.EcoAny || platform == types.EcoMinecraft || platform == types.EcoUnknown {
+		return fmt.Errorf("invalid package ecosystem %q", parts[0])
 	}
 
 	if strings.TrimSpace(pkg.Version) == "" {
@@ -764,9 +764,12 @@ func resolveManifestPackageIDWithScope(
 			return ""
 		}
 	}
-	if id.Platform != types.PlatformAny && id.Platform != types.PlatformUnknown {
+	if id.Eco != types.EcoAny && id.Eco != types.EcoUnknown {
 		if id.Scope != types.SourceAuto && id.Scope != types.SourceUnknown {
-			if pkg, ok := manifestPackageByID(manifest.Packages, id.StringBase()); ok && pkg.Source == id.Scope.String() {
+			if pkg, ok := manifestPackageByID(
+				manifest.Packages,
+				id.StringBase(),
+			); ok && pkg.Source == id.Scope.String() {
 				return id.StringBase()
 			}
 			if lock != nil {
@@ -861,7 +864,11 @@ func resolveIDByNameAndSource(
 	return match
 }
 
-func scopeMatchesManifestPackage(id string, scope types.SourceId, packages []ManifestPackage) bool {
+func scopeMatchesManifestPackage(
+	id string,
+	scope types.SourceId,
+	packages []ManifestPackage,
+) bool {
 	if packages == nil {
 		return true
 	}

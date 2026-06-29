@@ -25,7 +25,12 @@ func verifyArtifacts(
 		return VerifiedClosure{}, err
 	}
 
-	diff, err := reconcileClosure(downloaded.Resolved, verifiedGraph, downloaded.Resolved.Ambient, journal)
+	diff, err := reconcileClosure(
+		downloaded.Resolved,
+		verifiedGraph,
+		downloaded.Resolved.Ambient,
+		journal,
+	)
 	if err != nil {
 		return VerifiedClosure{}, err
 	}
@@ -40,7 +45,11 @@ func verifyArtifacts(
 func verifyDownloadedArtifacts(
 	downloaded DownloadedClosure,
 ) (map[string]CandidateNode, error) {
-	allPackages := make([]types.DiscoveredPackage, 0, len(downloaded.DownloadedArtifacts))
+	allPackages := make(
+		[]types.DiscoveredPackage,
+		0,
+		len(downloaded.DownloadedArtifacts),
+	)
 	expectedPackages := downloadedArtifactPackages(
 		downloaded.Resolved.CandidateGraph,
 	)
@@ -48,7 +57,7 @@ func verifyDownloadedArtifacts(
 		infos, err := artifact.Analyze(path)
 		expected, hasExpected := expectedPackages[path]
 		if hasExpected {
-			infos = selectArtifactInfosForPlatform(infos, expected.Id.Platform)
+			infos = selectArtifactInfosForEcosystem(infos, expected.Id.Eco)
 		}
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -63,7 +72,10 @@ func verifyDownloadedArtifacts(
 					path,
 				)
 			}
-			allPackages = append(allPackages, discoveredFromResolvedArtifact(path, expected))
+			allPackages = append(
+				allPackages,
+				discoveredFromResolvedArtifact(path, expected),
+			)
 			continue
 		}
 		if hasExpected {
@@ -73,7 +85,10 @@ func verifyDownloadedArtifacts(
 			)
 			continue
 		}
-		allPackages = append(allPackages, artifactInfoToDiscoveredPackages(infos)...)
+		allPackages = append(
+			allPackages,
+			artifactInfoToDiscoveredPackages(infos)...,
+		)
 	}
 
 	verified := make(map[string]CandidateNode, len(allPackages))
@@ -112,9 +127,9 @@ func downloadedArtifactPackages(
 	return packages
 }
 
-func selectArtifactInfosForPlatform(
+func selectArtifactInfosForEcosystem(
 	infos []artifact.Info,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) []artifact.Info {
 	// Cross-loader Forge/NeoForge jars can advertise both loader dependencies in
 	// one descriptor; install verification keeps the identity matching the resolved
@@ -127,7 +142,7 @@ func selectArtifactInfosForPlatform(
 
 	selected := make([]artifact.Info, 0, len(infos))
 	for _, info := range infos {
-		if info.Ref.Platform == platform {
+		if info.Ref.Eco == platform {
 			selected = append(selected, info)
 		}
 	}
@@ -146,8 +161,8 @@ func artifactInfoToDiscoveredPackages(infos []artifact.Info) []types.DiscoveredP
 		pkg := types.DiscoveredPackage{
 			Id: types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: info.Ref.Platform,
-					Name:     info.Ref.Name,
+					Eco:  info.Ref.Eco,
+					Name: info.Ref.Name,
 				},
 				Version: info.Version,
 			},
@@ -184,8 +199,8 @@ func packageDependenciesFromArtifact(deps []artifact.Dependency) types.PackageDe
 			out, types.Dependency{
 				Id: types.VersionedPackageRef{
 					PackageRef: types.PackageRef{
-						Platform: dep.Ref.Platform,
-						Name:     dep.Ref.Name,
+						Eco:  dep.Ref.Eco,
+						Name: dep.Ref.Name,
 					},
 				},
 				Constraint: dep.Constraint,
@@ -204,7 +219,7 @@ func shouldPreserveResolvedIdentity(
 	if resolved.Name == "" || resolved.Version == "" {
 		return false
 	}
-	if verified.Platform != resolved.Platform {
+	if verified.Eco != resolved.Eco {
 		return false
 	}
 	return verified.Name != resolved.Name
@@ -223,7 +238,10 @@ func discoveredFromResolvedArtifact(
 	}
 }
 
-func hashMatchesResolvedPackage(path string, resolved types.ResolvedPackage) bool {
+func hashMatchesResolvedPackage(
+	path string,
+	resolved types.ResolvedPackage,
+) bool {
 	mapper, ok, err := routing.GetArtifactMapper(resolved.Id.Scope)
 	if err != nil || !ok {
 		return false
@@ -237,7 +255,7 @@ func hashMatchesResolvedPackage(path string, resolved types.ResolvedPackage) boo
 
 func normalizeVerifiedDiscoveredPackage(pkg *types.DiscoveredPackage) {
 	sess := knownpkgs.Default().Session()
-	src := sourceForPlatform(pkg.Id.Platform)
+	src := sourceForEcosystem(pkg.Id.Eco)
 	if src == types.SourceUnknown {
 		return
 	}
@@ -247,7 +265,7 @@ func normalizeVerifiedDiscoveredPackage(pkg *types.DiscoveredPackage) {
 	}
 
 	for i, dep := range pkg.Dependencies.Value {
-		depSrc := sourceForPlatform(dep.Id.Platform)
+		depSrc := sourceForEcosystem(dep.Id.Eco)
 		if depSrc == types.SourceUnknown {
 			continue
 		}
@@ -257,11 +275,11 @@ func normalizeVerifiedDiscoveredPackage(pkg *types.DiscoveredPackage) {
 	}
 }
 
-func sourceForPlatform(p types.PlatformId) types.SourceId {
+func sourceForEcosystem(p types.Ecosystem) types.SourceId {
 	switch p {
-	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
+	case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
 		return types.SourceModrinth
-	case types.PlatformMCDR:
+	case types.EcoMcdr:
 		return types.SourceMCDR
 	default:
 		return types.SourceUnknown

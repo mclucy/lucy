@@ -38,7 +38,7 @@ func latestFile(modId int32) (*fileResponse, error) {
 
 // latestCompatibleFile finds the latest release file compatible with the
 // current server's game version and platform.
-func latestCompatibleFile(modId int32, platform types.PlatformId) (
+func latestCompatibleFile(modId int32, platform types.Ecosystem) (
 	*fileResponse, error,
 ) {
 	// Platform inference removed to avoid circular imports.
@@ -64,7 +64,7 @@ func latestCompatibleFile(modId int32, platform types.PlatformId) (
 func getFileByDisplayName(
 	modId int32,
 	version string,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) (*fileResponse, error) {
 	loaderType := modLoaderType(platform)
 	files, err := listFiles(modId, "", loaderType)

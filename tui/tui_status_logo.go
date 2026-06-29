@@ -31,8 +31,8 @@ const (
 // but its primary API is the Lines / Width / Height helpers which the
 // layout compositor uses to build the neofetch-style side-by-side view.
 type FieldLogo struct {
-	Platform types.PlatformId // TODO: this is not limited to platform
-	NoColor  bool
+	Eco     types.Ecosystem
+	NoColor bool
 }
 
 // Render returns the large logo as a plain string. This is a fallback for
@@ -43,7 +43,7 @@ func (f *FieldLogo) Render() string {
 		fn.Ternary(f.NoColor, LogoLargePlain, LogoLargeColored),
 		fn.Ternary(f.NoColor, LogoSmallPlain, LogoSmallColored),
 	)
-	logo := GetLogo(f.Platform, variant)
+	logo := GetLogo(f.Eco, variant)
 	return strings.Join(normalizeLines(logo), "\n")
 }
 
@@ -56,13 +56,13 @@ func (f *FieldLogo) KeyLength() int {
 // Each line is padded with trailing spaces so that all lines share the
 // same width, making grid-based composition straightforward.
 func (f *FieldLogo) Lines(variant LogoVariant) []string {
-	return normalizeLines(GetLogo(f.Platform, variant))
+	return normalizeLines(GetLogo(f.Eco, variant))
 }
 
 // Width returns the uniform width (in runes) of every line for the given
 // logo variant.
 func (f *FieldLogo) Width(variant LogoVariant) int {
-	lines := normalizeLines(GetLogo(f.Platform, variant))
+	lines := normalizeLines(GetLogo(f.Eco, variant))
 	if len(lines) == 0 {
 		return 0
 	}
@@ -71,7 +71,7 @@ func (f *FieldLogo) Width(variant LogoVariant) int {
 
 // Height returns the number of lines for the given logo variant.
 func (f *FieldLogo) Height(variant LogoVariant) int {
-	return len(normalizeLines(GetLogo(f.Platform, variant)))
+	return len(normalizeLines(GetLogo(f.Eco, variant)))
 }
 
 func useLargeLogo() bool {

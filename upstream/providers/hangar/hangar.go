@@ -17,8 +17,8 @@ func (provider) Id() types.SourceId {
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	options := upstream.SearchOptions{
-		IncludeClient:  !q.ExcludeClient,
-		FilterPlatform: q.FilterPlatform,
+		IncludeClient:   !q.ExcludeClient,
+		FilterEcosystem: q.FilterEcosystem,
 	}
 	res, err := searchProjects(q.Keyword, options)
 	if err != nil {
@@ -36,7 +36,7 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 		return types.ResolvedPackage{}, err
 	}
 
-	preferredPlatform := preferredDownloadPlatform(id.Platform)
+	preferredPlatform := preferredDownloadPlatform(id.Eco)
 	if remote, ok := version.ToPackageRemoteForPlatform(preferredPlatform); ok {
 		return types.ResolvedPackage{
 			FileUrl:       remote.FileUrl,
@@ -75,7 +75,7 @@ func (p provider) Dependencies(
 	}
 	deps := (&hangarDependencies{
 		version:  version,
-		platform: id.Platform,
+		platform: id.Eco,
 	}).ToPackageDependencies()
 	return &deps, nil
 }
@@ -84,8 +84,8 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	parsed types.VersionedPackageRef,
 	err error,
 ) {
-	if id.Platform.IsSelector() {
-		id.Platform = types.PlatformNone
+	if id.Eco.IsSelector() {
+		id.Eco = types.EcoBare
 	}
 
 	if !id.Version.CanInfer() {

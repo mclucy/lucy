@@ -49,14 +49,14 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 
 	if si.Runtime != nil {
 		loader := si.DerivedModLoader()
-		if loader.Valid() && loader != types.PlatformNone && loader != types.PlatformUnknown {
+		if loader.Valid() && loader != types.EcoBare && loader != types.EcoUnknown {
 			if !si.Runtime.GameVersion.IsInvalid() && si.Runtime.GameVersion != types.VersionAny {
 				appendConstraint(
 					types.DiscoveredPackage{
 						Id: types.VersionedPackageRef{
 							PackageRef: types.PackageRef{
-								Platform: loader,
-								Name:     types.BarePackageName("minecraft"),
+								Eco:  loader,
+								Name: types.BarePackageName("minecraft"),
 							},
 							Version: si.Runtime.GameVersion,
 						},
@@ -73,8 +73,8 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 				types.DiscoveredPackage{
 					Id: types.VersionedPackageRef{
 						PackageRef: types.PackageRef{
-							Platform: loader,
-							Name:     types.BarePackageName("java"),
+							Eco:  loader,
+							Name: types.BarePackageName("java"),
 						},
 						Version: types.VersionAny,
 					},
@@ -82,13 +82,13 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 			)
 
 			if primary := si.PrimaryRuntimeIdentity(); primary != nil {
-				if alias := runtimeLoaderAliasName(primary.Platform); alias != "" {
+				if alias := runtimeLoaderAliasName(primary.Eco); alias != "" {
 					appendConstraint(
 						types.DiscoveredPackage{
 							Id: types.VersionedPackageRef{
 								PackageRef: types.PackageRef{
-									Platform: loader,
-									Name:     alias,
+									Eco:  loader,
+									Name: alias,
 								},
 								Version: primary.Version,
 							},
@@ -108,13 +108,13 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 	return constraints
 }
 
-func runtimeLoaderAliasName(platform types.PlatformId) types.BarePackageName {
+func runtimeLoaderAliasName(platform types.Ecosystem) types.BarePackageName {
 	switch platform {
-	case types.PlatformFabric:
+	case types.EcoFabric:
 		return types.BarePackageName("fabricloader")
-	case types.PlatformForge:
+	case types.EcoForge:
 		return types.BarePackageName("forge")
-	case types.PlatformNeoforge:
+	case types.EcoNeoforge:
 		return types.BarePackageName("neoforge")
 	default:
 		return ""
@@ -131,7 +131,7 @@ func FindCompatibleInstalled(
 	var matches []types.DiscoveredPackage
 	for _, ic := range installedConstraints {
 		pkg := ic.Package
-		if pkg.Id.Platform != id.Platform {
+		if pkg.Id.Eco != id.Eco {
 			continue
 		}
 		if pkg.Id.Name != id.Name {

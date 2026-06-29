@@ -121,7 +121,7 @@ func ValidateLock(l Lock) error {
 			"platform is required",
 		)
 	}
-	if err := validateManifestPlatform(l.Platform); err != nil {
+	if err := validateManifestEcosystem(l.Platform); err != nil {
 		return NewStateError(LockFile, ErrMalformed, "platform", err.Error())
 	}
 	if l.PlatformVersion == "" {
@@ -172,8 +172,8 @@ func validateLockedPackage(pkg LockedPackage) error {
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
 		return fmt.Errorf("id must use platform/name format")
 	}
-	platform := types.PlatformId(parts[0])
-	if !platform.Valid() || platform == types.PlatformAny || platform == types.PlatformMinecraft || platform == types.PlatformUnknown {
+	platform := types.Ecosystem(parts[0])
+	if !platform.Valid() || platform == types.EcoAny || platform == types.EcoMinecraft || platform == types.EcoUnknown {
 		return fmt.Errorf("invalid package platform %q", parts[0])
 	}
 	if pkg.Version == "" {

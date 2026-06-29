@@ -18,8 +18,14 @@ type candidateRequest struct {
 }
 
 type candidateGraphResolver interface {
-	ResolvePackage(ctx context.Context, id types.VersionedPackageRef) (types.ResolvedPackage, error)
-	ResolveDependencies(ctx context.Context, pkg types.ResolvedPackage) ([]types.PackageDependencies, error)
+	ResolvePackage(
+		ctx context.Context,
+		id types.VersionedPackageRef,
+	) (types.ResolvedPackage, error)
+	ResolveDependencies(
+		ctx context.Context,
+		pkg types.ResolvedPackage,
+	) ([]types.PackageDependencies, error)
 }
 
 type candidateGraphPlanner struct {
@@ -145,10 +151,14 @@ func newCandidateGraphPlanner(
 		installedConstraints...,
 	)
 
-	constraintInputs := make([]resolve.ConstraintInput, 0, len(installedConstraints))
+	constraintInputs := make(
+		[]resolve.ConstraintInput,
+		0,
+		len(installedConstraints),
+	)
 	for _, installed := range installedConstraints {
 		constraintInputs = append(constraintInputs, installed.ConstraintInput)
-		if installed.Package.Id.Platform == "" || installed.Package.Id.Name == "" {
+		if installed.Package.Id.Eco == "" || installed.Package.Id.Name == "" {
 			continue
 		}
 		key := installed.Package.Id.StringBase()
@@ -180,8 +190,14 @@ func newCandidateGraphPlanner(
 	}
 
 	return &candidateGraphPlanner{
-		roots:                append([]types.VersionedPackageRef(nil), roots...),
-		providers:            append([]upstream.PackageSource(nil), providers...),
+		roots: append(
+			[]types.VersionedPackageRef(nil),
+			roots...,
+		),
+		providers: append(
+			[]upstream.PackageSource(nil),
+			providers...,
+		),
 		installedConstraints: installedConstraints,
 		candidateGraph:       candidateGraph,
 		constraintInputs:     constraintInputs,
@@ -302,11 +318,20 @@ func (planner *candidateGraphPlanner) resolvedClosure() ResolvedClosure {
 		return ResolvedClosure{}
 	}
 	return ResolvedClosure{
-		Roots:                append([]types.VersionedPackageRef(nil), planner.roots...),
-		CandidateGraph:       cloneCandidateGraph(planner.candidateGraph),
-		InstalledConstraints: append([]InstalledConstraint(nil), planner.installedConstraints...),
-		Providers:            append([]upstream.PackageSource(nil), planner.providers...),
-		Ambient:              planner.ambient,
+		Roots: append(
+			[]types.VersionedPackageRef(nil),
+			planner.roots...,
+		),
+		CandidateGraph: cloneCandidateGraph(planner.candidateGraph),
+		InstalledConstraints: append(
+			[]InstalledConstraint(nil),
+			planner.installedConstraints...,
+		),
+		Providers: append(
+			[]upstream.PackageSource(nil),
+			planner.providers...,
+		),
+		Ambient: planner.ambient,
 	}
 }
 

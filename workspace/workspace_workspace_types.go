@@ -41,7 +41,7 @@ func (w Workspace) DerivedLoaderVersion() string {
 	return derivedLoaderVersion(w.Topology)
 }
 
-func (w Workspace) DerivedModLoader() types.PlatformId {
+func (w Workspace) DerivedModLoader() types.Ecosystem {
 	return derivedModLoader(w.Topology)
 }
 
@@ -93,17 +93,17 @@ func derivedLoaderVersion(topology *types.RuntimeTopology) string {
 	return primaryIdentity.Version.String()
 }
 
-func derivedModLoader(topology *types.RuntimeTopology) types.PlatformId {
+func derivedModLoader(topology *types.RuntimeTopology) types.Ecosystem {
 	if topology == nil {
-		return types.PlatformNone
+		return types.EcoBare
 	}
 
 	primary, ok := topology.PrimaryNodeData()
 	if !ok {
-		return types.PlatformNone
+		return types.EcoBare
 	}
 
-	return types.DeclaredModdingPlatformForNode(primary.ID)
+	return types.DeclaredModdingEcosystemForNode(primary.ID)
 }
 
 func derivedServerCore(topology *types.RuntimeTopology) string {

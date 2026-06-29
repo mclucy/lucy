@@ -167,8 +167,8 @@ func (s provider) PackageByHash(artifact upstream.Hashable) (
 
 	ref = types.FullPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: platformFromModrinthLoaders(version.Loaders),
-			Name:     types.BarePackageName(project.Slug),
+			Eco:  ecosystemFromModrinthLoaders(version.Loaders),
+			Name: types.BarePackageName(project.Slug),
 		},
 		Version: types.BareVersion(version.VersionNumber),
 		Scope:   s.Id(),
@@ -176,15 +176,15 @@ func (s provider) PackageByHash(artifact upstream.Hashable) (
 	return ref, hash, true, nil
 }
 
-func platformFromModrinthLoaders(loaders []string) types.PlatformId {
+func ecosystemFromModrinthLoaders(loaders []string) types.Ecosystem {
 	for _, loader := range loaders {
-		p := types.PlatformId(loader)
-		if p.IsModding() || p == types.PlatformBukkit {
+		p := types.Ecosystem(loader)
+		if p.IsModding() || p == types.EcoBukkit {
 			return p
 		}
 	}
 	if len(loaders) > 0 {
-		return types.PlatformId(loaders[0])
+		return types.Ecosystem(loaders[0])
 	}
-	return types.PlatformNone
+	return types.EcoBare
 }

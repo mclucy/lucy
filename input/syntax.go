@@ -36,16 +36,20 @@ import (
 )
 
 var (
-	ESyntax   = errors.New("invalid syntax")
-	EPlatform = errors.New("invalid platform")
-	EIdentity = errors.New("invalid identity package")
+	ESyntax    = errors.New("invalid syntax")
+	EEcosystem = errors.New("invalid ecosystem")
+	EIdentity  = errors.New("invalid identity package")
 )
 
 // Parse parses a scoped package specifier ("scope:platform/name@version") into a
 // ScopedPackageRef and a BareVersion. An omitted scope defaults to SourceAuto;
 // an omitted version defaults to VersionAny. Identity aliases are normalized
 // the same way as in ParsePackageRef.
-func Parse(s string) (ref types.ScopedPackageRef, version types.BareVersion, err error) {
+func Parse(s string) (
+	ref types.ScopedPackageRef,
+	version types.BareVersion,
+	err error,
+) {
 	text := strings.TrimSpace(s)
 	ref = types.ScopedPackageRef{}
 	version = types.VersionAny
@@ -60,7 +64,7 @@ func Parse(s string) (ref types.ScopedPackageRef, version types.BareVersion, err
 		return types.ScopedPackageRef{}, "", err
 	}
 
-	ref.PackageRef = types.PackageRef{Platform: pl, Name: n}
+	ref.PackageRef = types.PackageRef{Eco: pl, Name: n}
 	ref.Scope = scope
 	version = v
 
@@ -124,14 +128,14 @@ func parseOperatorColon(s string) (
 // parseOperatorAt is called first since '@' operator always occur after '/' (equivalent
 // to a lower priority).
 func parseOperatorAt(s string) (
-	pl types.PlatformId,
+	e types.Ecosystem,
 	n types.BarePackageName,
 	v types.BareVersion,
 	err error,
 ) {
 	split := strings.Split(s, "@")
 
-	pl, n, err = parseOperatorSlash(split[0])
+	e, n, err = parseOperatorSlash(split[0])
 	if err != nil {
 		return "", "", "", ESyntax
 	}
@@ -151,23 +155,23 @@ func parseOperatorAt(s string) (
 }
 
 func parseOperatorSlash(s string) (
-	pl types.PlatformId,
+	e types.Ecosystem,
 	n types.BarePackageName,
 	err error,
 ) {
 	split := strings.SplitN(s, "/", 2)
 
 	if len(split) == 1 {
-		pl = types.PlatformAny
+		e = types.EcoAny
 		n = types.BarePackageName(split[0])
-		if candidate := types.PlatformId(strings.ToLower(split[0])); candidate.Valid() {
-			pl = candidate
-			n = types.BarePackageName(pl)
+		if candidate := types.Ecosystem(strings.ToLower(split[0])); candidate.Valid() {
+			e = candidate
+			n = types.BarePackageName(e)
 		}
 	} else {
-		pl = types.PlatformId(strings.ToLower(split[0]))
-		if !pl.Valid() {
-			return "", "", EPlatform
+		e = types.Ecosystem(strings.ToLower(split[0]))
+		if !e.Valid() {
+			return "", "", EEcosystem
 		}
 		n = types.BarePackageName(split[1])
 	}

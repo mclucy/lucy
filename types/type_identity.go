@@ -4,9 +4,9 @@ import "strings"
 
 // IdentityEntry defines one canonical identity package.
 type IdentityEntry struct {
-	Name     BarePackageName
-	Platform PlatformId
-	Aliases  []BarePackageName
+	Name    BarePackageName
+	Eco     Ecosystem
+	Aliases []BarePackageName
 }
 
 func init() {
@@ -14,8 +14,8 @@ func init() {
 		map[BarePackageName]*IdentityEntry,
 		len(identityRegistry)*2,
 	)
-	platformToIdentity = make(
-		map[PlatformId]*IdentityEntry,
+	ecosystemToIdentity = make(
+		map[Ecosystem]*IdentityEntry,
 		len(identityRegistry),
 	)
 	for i := range identityRegistry {
@@ -24,30 +24,30 @@ func init() {
 		for _, alias := range e.Aliases {
 			nameToIdentity[alias] = e
 		}
-		if e.Platform != PlatformNone {
-			platformToIdentity[e.Platform] = e
+		if e.Eco != EcoBare {
+			ecosystemToIdentity[e.Eco] = e
 		}
 	}
 }
 
 var (
-	nameToIdentity     map[BarePackageName]*IdentityEntry // aliases + canonical name → entry
-	platformToIdentity map[PlatformId]*IdentityEntry      // platform → entry (only for non-None)
+	nameToIdentity      map[BarePackageName]*IdentityEntry // aliases + canonical name → entry
+	ecosystemToIdentity map[Ecosystem]*IdentityEntry       // platform → entry (only for non-None)
 )
 
 var identityRegistry = []IdentityEntry{
 	{
-		Name: "minecraft", Platform: PlatformMinecraft,
+		Name: "minecraft", Eco: EcoMinecraft,
 		Aliases: []BarePackageName{"mc"},
 	},
 	{
-		Name: "fabric", Platform: PlatformFabric,
+		Name: "fabric", Eco: EcoFabric,
 		Aliases: []BarePackageName{"fabric-loader"},
 	},
-	{Name: "forge", Platform: PlatformForge, Aliases: nil},
-	{Name: "neoforge", Platform: PlatformNeoforge, Aliases: nil},
+	{Name: "forge", Eco: EcoForge, Aliases: nil},
+	{Name: "neoforge", Eco: EcoNeoforge, Aliases: nil},
 	{
-		Name: "mcdreforged", Platform: PlatformMCDR,
+		Name: "mcdreforged", Eco: EcoMcdr,
 		Aliases: []BarePackageName{"mcdr"},
 	},
 	// Server cores — platform is not meaningful here
@@ -65,8 +65,8 @@ func NormalizeIdentityPackage(p PackageRef) (PackageRef, bool) {
 		return PackageRef{}, false
 	}
 	return PackageRef{
-		Platform: entry.Platform,
-		Name:     entry.Name,
+		Eco:  entry.Eco,
+		Name: entry.Name,
 	}, true
 }
 

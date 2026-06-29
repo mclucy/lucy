@@ -243,15 +243,15 @@ func newFabricExecutableEvidence(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformFabric,
-					Name:     "fabric",
+					Eco:  types.EcoFabric,
+					Name: "fabric",
 				},
 				Version: loaderVersion,
 			},
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformMinecraft,
-					Name:     "minecraft",
+					Eco:  types.EcoMinecraft,
+					Name: "minecraft",
 				},
 				Version: gameVersion,
 			},

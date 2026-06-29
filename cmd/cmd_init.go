@@ -130,11 +130,11 @@ func runNonInteractiveInit(workDir string, s *lucyinit.InitFlowState) error {
 	if s.GameVersion == "" {
 		s.GameVersion = "1.21"
 	}
-	if s.Platform == "" {
-		s.Platform = "none"
+	if s.Ecosystem == "" {
+		s.Ecosystem = "bare"
 	}
-	if s.Platform == "none" && s.PlatformVersion == "" {
-		s.PlatformVersion = "none"
+	if (s.Ecosystem == "bare" || s.Ecosystem == "none") && s.EcosystemVersion == "" {
+		s.EcosystemVersion = "bare"
 	}
 
 	if !lucyinit.CanProceed(s) {

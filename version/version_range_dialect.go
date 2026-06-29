@@ -26,14 +26,14 @@ const (
 	DialectMavenRange
 )
 
-// InferRangeDialect infers the range dialect from package platform.
-func InferRangeDialect(platform types.PlatformId) VersionRangeDialect {
-	switch platform {
-	case types.PlatformMCDR:
+// InferRangeDialect infers the range dialect from package ecosystem.
+func InferRangeDialect(ecosystem types.Ecosystem) VersionRangeDialect {
+	switch ecosystem {
+	case types.EcoMcdr:
 		return DialectNpmSemver
-	case types.PlatformFabric:
+	case types.EcoFabric:
 		return DialectFabricSemver
-	case types.PlatformForge, types.PlatformNeoforge:
+	case types.EcoForge, types.EcoNeoforge:
 		return DialectMavenRange
 	default:
 		return DialectUnknown

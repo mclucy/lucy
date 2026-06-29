@@ -8,15 +8,15 @@ import (
 
 func makeDiscoveredPackage(
 	t *testing.T,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	name, version, path string,
 ) types.DiscoveredPackage {
 	t.Helper()
 	return types.DiscoveredPackage{
 		Id: types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Platform: platform,
-				Name:     types.BarePackageName(name),
+				Eco:  platform,
+				Name: types.BarePackageName(name),
 			},
 			Version: types.BareVersion(version),
 		},

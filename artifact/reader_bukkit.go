@@ -71,8 +71,8 @@ func (r *bukkitReader) Read(
 		platform := detectBukkitPluginPlatform(descriptor)
 		info := Info{
 			Ref: types.PackageRef{
-				Platform: platform,
-				Name:     input.ToProjectName(descriptor.Name),
+				Eco:  platform,
+				Name: input.ToProjectName(descriptor.Name),
 			},
 			Version:  types.BareVersion(strings.TrimSpace(descriptor.Version)),
 			FilePath: filePath,
@@ -97,7 +97,7 @@ func (r *bukkitReader) Read(
 	return nil, nil
 }
 
-func detectBukkitPluginPlatform(descriptor *bukkitPluginDescriptor) types.PlatformId {
+func detectBukkitPluginPlatform(descriptor *bukkitPluginDescriptor) types.Ecosystem {
 	signals := strings.ToLower(
 		strings.Join(
 			append(
@@ -117,23 +117,23 @@ func detectBukkitPluginPlatform(descriptor *bukkitPluginDescriptor) types.Platfo
 
 	switch {
 	case strings.Contains(signals, "leaves"):
-		return types.PlatformId("leaves")
+		return types.Ecosystem("leaves")
 	case descriptor.FoliaSupported || strings.Contains(signals, "folia"):
-		return types.PlatformId("folia")
+		return types.Ecosystem("folia")
 	case strings.Contains(
 		signals,
 		"paper",
 	) || descriptor.PaperPluginLoader != "" || len(descriptor.Libraries) > 0:
-		return types.PlatformId("paper")
+		return types.Ecosystem("paper")
 	case strings.Contains(signals, "spigot") || descriptor.APIVersion != "":
-		return types.PlatformId("spigot")
+		return types.Ecosystem("spigot")
 	default:
-		return types.PlatformBukkit
+		return types.EcoBukkit
 	}
 }
 
 func bukkitDescriptorDeps(
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	descriptor *bukkitPluginDescriptor,
 ) []Dependency {
 	deps := make(
@@ -153,7 +153,7 @@ func bukkitDescriptorDeps(
 
 func appendBukkitDescriptorDeps(
 	deps []Dependency,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	names []string,
 	mandatory bool,
 ) []Dependency {
@@ -165,8 +165,8 @@ func appendBukkitDescriptorDeps(
 		deps = append(
 			deps, Dependency{
 				Ref: types.PackageRef{
-					Platform: platform,
-					Name:     input.ToProjectName(name),
+					Eco:  platform,
+					Name: input.ToProjectName(name),
 				},
 				Mandatory: mandatory,
 			},

@@ -19,10 +19,10 @@ func (provider) Id() types.SourceId {
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	options := upstream.SearchOptions{
-		IncludeClient:  !q.ExcludeClient,
-		FilterPlatform: q.FilterPlatform,
+		IncludeClient:   !q.ExcludeClient,
+		FilterEcosystem: q.FilterEcosystem,
 	}
-	if options.FilterPlatform == types.PlatformBukkit {
+	if options.FilterEcosystem == types.EcoBukkit {
 		log.Debug("spiget: platform filter is not supported upstream; search will run without a platform query parameter")
 	}
 

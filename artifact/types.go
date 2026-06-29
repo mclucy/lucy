@@ -16,7 +16,7 @@ import (
 // Injected via WithSlugResolver option. Nil means no resolution.
 type SlugResolver func(
 	ctx context.Context,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	name types.BarePackageName,
 ) (types.BarePackageName, error)
 

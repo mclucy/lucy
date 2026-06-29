@@ -51,14 +51,14 @@ type ArtifactMapSource interface {
 	ArtifactMapper
 }
 
-type PlatformProvider interface {
+type EcosystemProvider interface {
 	SourceIdentifier
 	VersionSelectorResolver
 	Fetcher
 }
 
-type SupportedPlatformsReporter interface {
-	SupportedPlatforms() []types.PlatformId
+type SupportedEcosystemsReporter interface {
+	SupportedEcosystems() []types.Ecosystem
 }
 
 type ArtifactMapper interface {
@@ -87,11 +87,11 @@ type Searcher interface {
 }
 
 type Query struct {
-	Keyword        string
-	ExcludeClient  bool
-	FilterPlatform types.PlatformId
-	Tags           []string
-	Limit          int
+	Keyword         string
+	ExcludeClient   bool
+	FilterEcosystem types.Ecosystem
+	Tags            []string
+	Limit           int
 }
 
 type SearchResponse struct {
@@ -107,8 +107,8 @@ type Informer interface {
 }
 
 type SearchOptions struct {
-	IncludeClient  bool
-	FilterPlatform types.PlatformId
+	IncludeClient   bool
+	FilterEcosystem types.Ecosystem
 }
 
 // SearchResult represents a single search result with optional metadata.

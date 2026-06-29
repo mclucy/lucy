@@ -15,10 +15,10 @@ import (
 // Duplicates (same platform) are deduplicated, keeping the first occurrence.
 func sortIdentityPackages(ids []types.VersionedPackageRef) []types.VersionedPackageRef {
 	// Deduplicate by platform: keep first occurrence of each platform
-	seen := make(map[types.PlatformId]bool)
+	seen := make(map[types.Ecosystem]bool)
 	deduped := make([]types.VersionedPackageRef, 0, len(ids))
 	for _, id := range ids {
-		platform := id.Platform
+		platform := id.Eco
 		if !seen[platform] {
 			seen[platform] = true
 			deduped = append(deduped, id)
@@ -28,8 +28,8 @@ func sortIdentityPackages(ids []types.VersionedPackageRef) []types.VersionedPack
 	// Sort by tier
 	slices.SortStableFunc(
 		deduped, func(a, b types.VersionedPackageRef) int {
-			tierA := getTier(a.Platform)
-			tierB := getTier(b.Platform)
+			tierA := getTier(a.Eco)
+			tierB := getTier(b.Eco)
 			if tierA < tierB {
 				return -1
 			}
@@ -50,7 +50,7 @@ func validateIdentityCompatibility(ids []types.VersionedPackageRef) error {
 	tier1Platforms := make([]types.VersionedPackageRef, 0)
 
 	for _, id := range ids {
-		platform := id.Platform
+		platform := id.Eco
 		tier := getTier(platform)
 		if tier == 1 {
 			tier1Platforms = append(tier1Platforms, id)
@@ -73,13 +73,13 @@ func validateIdentityCompatibility(ids []types.VersionedPackageRef) error {
 }
 
 // getTier returns the dependency tier for a platform.
-func getTier(platform types.PlatformId) int {
+func getTier(platform types.Ecosystem) int {
 	switch platform {
-	case types.PlatformMinecraft:
+	case types.EcoMinecraft:
 		return 0
-	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
+	case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
 		return 1
-	case types.PlatformMCDR:
+	case types.EcoMcdr:
 		return 2
 	default:
 		return 3 // unknown platforms go last

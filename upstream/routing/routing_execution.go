@@ -60,9 +60,9 @@ func SearchMany(
 			defer wg.Done()
 			res, err := upstream.Search(
 				provider, upstream.Query{
-					Keyword:        query.String(),
-					ExcludeClient:  !options.IncludeClient,
-					FilterPlatform: options.FilterPlatform,
+					Keyword:         query.String(),
+					ExcludeClient:   !options.IncludeClient,
+					FilterEcosystem: options.FilterEcosystem,
 				},
 			)
 			if err != nil {

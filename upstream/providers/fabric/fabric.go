@@ -42,8 +42,8 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}
 	return types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: types.PlatformFabric,
-			Name:     "fabric",
+			Eco:  types.EcoFabric,
+			Name: "fabric",
 		},
 		Version: types.BareVersion(loaderVersion),
 	}, nil
@@ -58,9 +58,9 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 
 	var gameVersionID string
 	switch serverPlatform {
-	case types.PlatformVanilla:
+	case types.EcoVanilla:
 		gameVersionID = string(ws.Runtime.GameVersion)
-	case types.PlatformNone:
+	case types.EcoBare:
 		gameVersionID = promptSelectMinecraftVersion()
 	default:
 		return types.ResolvedPackage{}, fmt.Errorf(

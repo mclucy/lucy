@@ -9,7 +9,7 @@ const hangarPreferredPlatform = "PAPER"
 
 type hangarDependencies struct {
 	version  *hangarVersion
-	platform types.PlatformId
+	platform types.Ecosystem
 }
 
 func (h *hangarDependencies) ToPackageDependencies() types.PackageDependencies {
@@ -22,8 +22,8 @@ func (h *hangarDependencies) ToPackageDependencies() types.PackageDependencies {
 			result.Value, types.Dependency{
 				Id: types.VersionedPackageRef{
 					PackageRef: types.PackageRef{
-						Platform: types.PlatformNone,
-						Name:     input.ToProjectName(dep.Name),
+						Eco:  types.EcoBare,
+						Name: input.ToProjectName(dep.Name),
 					},
 				},
 				Mandatory: dep.Required,
@@ -41,9 +41,9 @@ func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 
 	switch id.Version {
 	case types.VersionAny, types.VersionNone, types.VersionLatest:
-		return selectLatestVersion(versions, id.Platform)
+		return selectLatestVersion(versions, id.Eco)
 	case types.VersionCompatible:
-		return selectLatestCompatibleVersion(versions, id.Platform)
+		return selectLatestCompatibleVersion(versions, id.Eco)
 	default:
 		for i := range versions {
 			if versions[i].Name == id.Version.String() {
@@ -56,7 +56,7 @@ func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 
 func selectLatestVersion(
 	versions []hangarVersion,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) (*hangarVersion, error) {
 	if version := firstVersionMatching(
 		versions,
@@ -67,7 +67,7 @@ func selectLatestVersion(
 	}
 	if version := firstVersionMatching(
 		versions,
-		types.PlatformNone,
+		types.EcoBare,
 		false,
 	); version != nil {
 		return version, nil
@@ -77,7 +77,7 @@ func selectLatestVersion(
 
 func selectLatestCompatibleVersion(
 	versions []hangarVersion,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) (*hangarVersion, error) {
 	if version := firstVersionMatching(
 		versions,
@@ -91,7 +91,7 @@ func selectLatestCompatibleVersion(
 
 func firstVersionMatching(
 	versions []hangarVersion,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	requireCompatibility bool,
 ) *hangarVersion {
 	for i := range versions {
@@ -107,9 +107,9 @@ func firstVersionMatching(
 	return nil
 }
 
-func preferredDownloadPlatform(platform types.PlatformId) types.PlatformId {
-	if platform == types.PlatformAny || platform == types.PlatformNone || platform == types.PlatformUnknown {
-		return types.PlatformId("paper")
+func preferredDownloadPlatform(platform types.Ecosystem) types.Ecosystem {
+	if platform == types.EcoAny || platform == types.EcoBare || platform == types.EcoUnknown {
+		return types.Ecosystem("paper")
 	}
-	return types.PlatformId("paper")
+	return types.Ecosystem("paper")
 }

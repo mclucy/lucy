@@ -184,14 +184,18 @@ func assertNeoForgeRuntime(
 	if !ok {
 		t.Fatalf("expected primary topology node on NeoForge runtime evidence")
 	}
-	if got := types.DeclaredModdingPlatformForNode(primaryNode.ID); got != types.PlatformNeoforge {
+	if got := types.DeclaredModdingEcosystemForNode(primaryNode.ID); got != types.EcoNeoforge {
 		t.Fatalf(
 			"derived mod loader mismatch: got %s want %s",
 			got,
-			types.PlatformNeoforge,
+			types.EcoNeoforge,
 		)
 	}
-	if got := runtimeIdentityVersion(runtime, types.PlatformNeoforge, "neoforge"); got != loaderVersion {
+	if got := runtimeIdentityVersion(
+		runtime,
+		types.EcoNeoforge,
+		"neoforge",
+	); got != loaderVersion {
 		t.Fatalf(
 			"neoforge version mismatch: got %q want %q",
 			got,

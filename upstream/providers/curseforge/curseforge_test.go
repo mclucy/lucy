@@ -249,14 +249,14 @@ func TestFileResponseToPackageRemote_NoHashes(t *testing.T) {
 
 func TestModLoaderType(t *testing.T) {
 	tests := []struct {
-		platform types.PlatformId
+		platform types.Ecosystem
 		expected int
 	}{
-		{types.PlatformForge, 1},
-		{types.PlatformFabric, 4},
-		{types.PlatformNeoforge, 6},
-		{types.PlatformAny, 0},
-		{types.PlatformMCDR, 0},
+		{types.EcoForge, 1},
+		{types.EcoFabric, 4},
+		{types.EcoNeoforge, 6},
+		{types.EcoAny, 0},
+		{types.EcoMcdr, 0},
 	}
 
 	for _, tt := range tests {
@@ -272,7 +272,7 @@ func TestModLoaderType(t *testing.T) {
 
 func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
 	options := upstream.SearchOptions{
-		FilterPlatform: types.PlatformFabric,
+		FilterEcosystem: types.EcoFabric,
 	}
 
 	u := searchUrl("fabric-api", options)
@@ -296,7 +296,7 @@ func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
 
 func TestSearchUrl_NoLoaderForPlatformAny(t *testing.T) {
 	options := upstream.SearchOptions{
-		FilterPlatform: types.PlatformAny,
+		FilterEcosystem: types.EcoAny,
 	}
 
 	u := searchUrl("test", options)

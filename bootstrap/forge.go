@@ -89,14 +89,14 @@ func (b forgeBootstrapper) Bootstrap(
 }
 
 func init() {
-	bootstrappers[types.PlatformForge] = forgeBootstrapper{}
+	bootstrappers[types.EcoForge] = forgeBootstrapper{}
 }
 
 func guardForgeServerTopology() error {
 	serverPlatform := workspace.New().DerivedModLoader()
 
 	switch serverPlatform {
-	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:
+	case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
 		return fmt.Errorf(
 			"found an existing server platform %s, installation of forge aborted",
 			serverPlatform.Title(),

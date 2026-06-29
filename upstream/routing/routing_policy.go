@@ -21,23 +21,23 @@ func modProviderSources() []types.SourceId {
 	return sources
 }
 
-func providerSourcesForPlatform(platform types.PlatformId) (
+func providerSourcesForEcosystem(ecosystem types.Ecosystem) (
 	[]types.SourceId,
 	error,
 ) {
-	switch platform {
-	case types.PlatformAny:
+	switch ecosystem {
+	case types.EcoAny:
 		return autoProviderSources(), nil
-	case types.PlatformMCDR:
+	case types.EcoMcdr:
 		return []types.SourceId{types.SourceMCDR}, nil
-	case types.PlatformForge, types.PlatformFabric, types.PlatformNeoforge, types.PlatformBukkit:
-		return providerSourcesForSearchPlatform(platform), nil
+	case types.EcoForge, types.EcoFabric, types.EcoNeoforge, types.EcoBukkit:
+		return providerSourcesForSearchEcosystem(ecosystem), nil
 	default:
-		return nil, ErrInvalidPlatform
+		return nil, ErrInvalidEcosystem
 	}
 }
 
-func providerSourcesForSearchPlatform(platform types.PlatformId) []types.SourceId {
+func providerSourcesForSearchEcosystem(ecosystem types.Ecosystem) []types.SourceId {
 	sources := make(
 		[]types.SourceId,
 		0,
@@ -48,7 +48,7 @@ func providerSourcesForSearchPlatform(platform types.PlatformId) []types.SourceI
 			continue
 		}
 
-		support, ok := PlatformSupportedBy(source, platform)
+		support, ok := EcosystemSupportedBy(source, ecosystem)
 		if !ok || !support.Supported {
 			continue
 		}

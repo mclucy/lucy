@@ -27,21 +27,21 @@ func (b fabricBootstrapper) Bootstrap(
 
 	deleteVanilla := false
 	switch serverPlatform {
-	case types.PlatformUnknown:
+	case types.EcoUnknown:
 		return errors.New("unknown mod loader, cannot infer fabric bootstrap artifact")
-	case types.PlatformFabric:
+	case types.EcoFabric:
 		return errors.New("fabric server already detected, installation aborted")
-	case types.PlatformForge:
+	case types.EcoForge:
 		return errors.New("Forge server detected, cannot install Fabric bootstrap")
-	case types.PlatformNeoforge:
+	case types.EcoNeoforge:
 		return errors.New("NeoForge server detected, cannot install Fabric bootstrap")
-	case types.PlatformVanilla:
+	case types.EcoVanilla:
 		override, shouldDeleteVanilla := promptOverrideVanilla()
 		if !override {
 			return errors.New("installation aborted by user")
 		}
 		deleteVanilla = shouldDeleteVanilla
-	case types.PlatformNone:
+	case types.EcoBare:
 	default:
 		return fmt.Errorf(
 			"unsupported server platform %s for fabric installation",
@@ -94,7 +94,7 @@ func (b fabricBootstrapper) Bootstrap(
 }
 
 func init() {
-	bootstrappers[types.PlatformFabric] = fabricBootstrapper{}
+	bootstrappers[types.EcoFabric] = fabricBootstrapper{}
 }
 
 func promptOverrideVanilla() (override bool, deleteVanilla bool) {

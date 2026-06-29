@@ -17,8 +17,8 @@ func Install(
 	options = options.withDefaults()
 	id := types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: req.Platform,
-			Name:     req.Name,
+			Eco:  req.Eco,
+			Name: req.Name,
 		},
 		Version: req.Version,
 	}
@@ -34,14 +34,14 @@ func Install(
 		id.Version = types.VersionCompatible
 	}
 
-	if err := installPlatform(ctx, id, options); err != nil {
+	if err := installEcosystem(ctx, id, options); err != nil {
 		return nil, err
 	}
 
 	return &Result{}, nil
 }
 
-func installPlatform(
+func installEcosystem(
 	ctx context.Context,
 	id types.VersionedPackageRef,
 	options InstallOptions,
@@ -57,16 +57,16 @@ func installPlatform(
 	ws := options.Workspace()
 	serverDir := ws.Root
 
-	bootstrapper, err := bootstrap.For(id.Platform)
+	bootstrapper, err := bootstrap.ForEcosystem(id.Eco)
 	if err != nil {
 		return installError(
 			CategoryResolution,
 			err,
-			map[string]any{"platform": id.Platform},
+			map[string]any{"platform": id.Eco},
 		)
 	}
 
-	if id.Platform == types.PlatformMCDR {
+	if id.Eco == types.EcoMcdr {
 		return installError(
 			CategoryApply,
 			bootstrapper.Bootstrap(ctx, types.ResolvedPackage{}, serverDir),
@@ -74,12 +74,12 @@ func installPlatform(
 		)
 	}
 
-	installer, ok := routing.PlatformInstallerFor(id.Platform)
+	installer, ok := routing.EcosystemInstallerFor(id.Eco)
 	if !ok {
 		return installError(
 			CategoryResolution,
-			fmt.Errorf("cannot install platform: %s", id.Platform),
-			map[string]any{"platform": id.Platform},
+			fmt.Errorf("cannot install platform: %s", id.Eco),
+			map[string]any{"platform": id.Eco},
 		)
 	}
 

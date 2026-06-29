@@ -82,8 +82,8 @@ func readForgeModsToml(
 		infos = append(
 			infos, Info{
 				Ref: types.PackageRef{
-					Platform: types.PlatformForge,
-					Name:     types.BarePackageName(mod.ModID),
+					Eco:  types.EcoForge,
+					Name: types.BarePackageName(mod.ModID),
 				},
 				Version:      version,
 				FilePath:     filePath,
@@ -124,8 +124,8 @@ func forgeDependencies(
 		translated = append(
 			translated, Dependency{
 				Ref: types.PackageRef{
-					Platform: types.PlatformForge,
-					Name:     types.BarePackageName(dep.ModID),
+					Eco:  types.EcoForge,
+					Name: types.BarePackageName(dep.ModID),
 				},
 				Constraint: forgeVersionRange(dep.VersionRange),
 				Mandatory:  dep.Mandatory,
@@ -138,7 +138,7 @@ func forgeDependencies(
 func forgeVersionRange(versionRange string) types.VersionExpr {
 	return version.ParseRange(
 		versionRange,
-		version.InferRangeDialect(types.PlatformForge),
+		version.InferRangeDialect(types.EcoForge),
 		types.Maven,
 	)
 }

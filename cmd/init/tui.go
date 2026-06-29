@@ -44,13 +44,13 @@ func RunInteractiveInit(s *InitFlowState) error {
 	if err := runGameVersion(s); err != nil {
 		return err
 	}
-	if err := runPlatform(s); err != nil {
+	if err := runEcosystem(s); err != nil {
 		return err
 	}
 	if err := runCompatiblePlatforms(s); err != nil {
 		return err
 	}
-	if err := runPlatformVersion(s); err != nil {
+	if err := runEcosystemVersion(s); err != nil {
 		return err
 	}
 	return runReview(s)
@@ -108,9 +108,18 @@ func runConflictResolution(s *InitFlowState) error {
 			huh.NewSelect[string]().
 				Title("Conflict resolution").
 				Options(
-					huh.NewOption("Keep existing files, only scaffold missing ones (recommended)", string(PreserveExisting)),
-					huh.NewOption("Abort if any file exists – do nothing", string(AbortOnConflict)),
-					huh.NewOption("Overwrite everything – replace all existing files", string(OverwriteAll)),
+					huh.NewOption(
+						"Keep existing files, only scaffold missing ones (recommended)",
+						string(PreserveExisting),
+					),
+					huh.NewOption(
+						"Abort if any file exists – do nothing",
+						string(AbortOnConflict),
+					),
+					huh.NewOption(
+						"Overwrite everything – replace all existing files",
+						string(OverwriteAll),
+					),
 				).
 				Value(&mode),
 		),
@@ -138,12 +147,14 @@ func runGameVersion(s *InitFlowState) error {
 				Title("Minecraft game version").
 				Description("Enter the Minecraft server version this environment targets (e.g. 1.21.4).").
 				Placeholder("1.21.4").
-				Validate(func(v string) error {
-					if strings.TrimSpace(v) == "" {
-						return errors.New("game version is required")
-					}
-					return nil
-				}).
+				Validate(
+					func(v string) error {
+						if strings.TrimSpace(v) == "" {
+							return errors.New("game version is required")
+						}
+						return nil
+					},
+				).
 				Value(&s.GameVersion),
 		),
 	)
@@ -158,20 +169,29 @@ func runGameVersion(s *InitFlowState) error {
 	return nil
 }
 
-func runPlatform(s *InitFlowState) error {
+func runEcosystem(s *InitFlowState) error {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Primary runtime").
 				Description("Choose the main server runtime Lucy should treat as the primary host environment.").
 				Options(
-					huh.NewOption("Fabric – lightweight, fast-updating mod loader", "fabric"),
-					huh.NewOption("NeoForge – community fork of Forge (recommended for 1.20.2+)", "neoforge"),
+					huh.NewOption(
+						"Fabric – lightweight, fast-updating mod loader",
+						"fabric",
+					),
+					huh.NewOption(
+						"NeoForge – community fork of Forge (recommended for 1.20.2+)",
+						"neoforge",
+					),
 					huh.NewOption("Forge – original mod loader", "forge"),
-					huh.NewOption("MCDR – independent controller/plugin framework", "mcdr"),
+					huh.NewOption(
+						"MCDR – independent controller/plugin framework",
+						"mcdr",
+					),
 					huh.NewOption("None / Vanilla – no modding platform", "none"),
 				).
-				Value(&s.Platform),
+				Value(&s.Ecosystem),
 		),
 	)
 	if err := applyAccessible(form).Run(); err != nil {
@@ -185,7 +205,7 @@ func runPlatform(s *InitFlowState) error {
 }
 
 func runCompatiblePlatforms(s *InitFlowState) error {
-	options := state.CompatiblePlatformOptions(s.Platform)
+	options := state.CompatiblePlatformOptions(s.Ecosystem)
 	if len(options) == 0 {
 		s.CompatiblePlatforms = nil
 		return nil
@@ -194,7 +214,10 @@ func runCompatiblePlatforms(s *InitFlowState) error {
 	selected := append([]string(nil), s.CompatiblePlatforms...)
 	fields := make([]huh.Option[string], 0, len(options))
 	for _, platform := range options {
-		fields = append(fields, huh.NewOption(compatiblePlatformLabel(platform), platform))
+		fields = append(
+			fields,
+			huh.NewOption(compatibleEcosystemLabel(platform), platform),
+		)
 	}
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -213,24 +236,32 @@ func runCompatiblePlatforms(s *InitFlowState) error {
 		return fmt.Errorf("compatible platforms step: %w", err)
 	}
 	s.CompatiblePlatforms = selected
-	if err := ValidatePlatformSelection(s.Platform, s.CompatiblePlatforms); err != nil {
+	if err := ValidateEcosystemSelection(
+		s.Ecosystem,
+		s.CompatiblePlatforms,
+	); err != nil {
 		return fmt.Errorf("platform selection step: %w", err)
 	}
 	return nil
 }
 
-func runPlatformVersion(s *InitFlowState) error {
-	if s.Platform == "" || s.Platform == "none" {
-		s.PlatformVersion = ""
+func runEcosystemVersion(s *InitFlowState) error {
+	if s.Ecosystem == "" || s.Ecosystem == "none" {
+		s.EcosystemVersion = ""
 		return nil
 	}
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Platform loader version").
-				Description(fmt.Sprintf("Enter the %s loader version, or leave blank to use the latest.", s.Platform)).
+				Description(
+					fmt.Sprintf(
+						"Enter the %s loader version, or leave blank to use the latest.",
+						s.Ecosystem,
+					),
+				).
 				Placeholder("latest").
-				Value(&s.PlatformVersion),
+				Value(&s.EcosystemVersion),
 		),
 	)
 	if err := applyAccessible(form).Run(); err != nil {
@@ -240,7 +271,7 @@ func runPlatformVersion(s *InitFlowState) error {
 		}
 		return fmt.Errorf("platform version step: %w", err)
 	}
-	s.PlatformVersion = strings.TrimSpace(s.PlatformVersion)
+	s.EcosystemVersion = strings.TrimSpace(s.EcosystemVersion)
 	return nil
 }
 
@@ -278,18 +309,22 @@ func buildSummary(s *InitFlowState) string {
 	sb.WriteString("Proposed manifest intent\n")
 	sb.WriteString("────────────────────────\n")
 	fmt.Fprintf(&sb, "  Game version:  %s\n", s.GameVersion)
-	if s.Platform == "" || s.Platform == "none" {
+	if s.Ecosystem == "" || s.Ecosystem == "none" {
 		sb.WriteString("  Primary runtime: none (vanilla)\n")
 	} else {
-		fmt.Fprintf(&sb, "  Primary runtime: %s\n", s.Platform)
-		if s.PlatformVersion != "" {
-			fmt.Fprintf(&sb, "  Loader version:  %s\n", s.PlatformVersion)
+		fmt.Fprintf(&sb, "  Primary runtime: %s\n", s.Ecosystem)
+		if s.EcosystemVersion != "" {
+			fmt.Fprintf(&sb, "  Loader version:  %s\n", s.EcosystemVersion)
 		} else {
 			sb.WriteString("  Loader version:  (latest)\n")
 		}
 	}
 	if len(s.CompatiblePlatforms) > 0 {
-		fmt.Fprintf(&sb, "  Compatible with: %s\n", strings.Join(s.CompatiblePlatforms, ", "))
+		fmt.Fprintf(
+			&sb,
+			"  Compatible with: %s\n",
+			strings.Join(s.CompatiblePlatforms, ", "),
+		)
 	}
 	fmt.Fprintf(&sb, "  Conflict mode:   %s\n", s.ConflictResolution)
 	if len(s.ExistingFiles) > 0 {
@@ -320,7 +355,7 @@ func isUserAbort(err error) bool {
 	return err != nil && errors.Is(err, huh.ErrUserAborted)
 }
 
-func compatiblePlatformLabel(platform string) string {
+func compatibleEcosystemLabel(platform string) string {
 	switch platform {
 	case "fabric":
 		return "Fabric compatibility – allow Fabric-targeted content through a bridge/runtime layer"

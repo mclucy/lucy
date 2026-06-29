@@ -2,7 +2,7 @@
 
 Local→remote identity bridge for the Lucy package manager.
 
-For background on why Minecraft package identity is split across two authorities (remote slugs vs local loader IDs), see `types/AGENTS.md` § "The Identity Problem". This document covers how `knownpkgs` alleviates the bridging problem, not why it exists.
+ForEcosystem background on why Minecraft package identity is split across two authorities (remote slugs vs local loader IDs), see `types/AGENTS.md` § "The Identity Problem". This document covers how `knownpkgs` alleviates the bridging problem, not why it exists.
 
 ## The Problem
 

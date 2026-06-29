@@ -35,15 +35,15 @@ The constraint solver (`MergeConstraintGraph`) is a pure function with zero I/O.
 
 The solver operates on DNF (disjunctive normal form) version expressions: each package's version constraint is a 2D array (outer OR, inner AND) of version sub-expressions. Merging two constraints takes their Cartesian product of variants, checks each conjunction for satisfiability, and prunes dead branches.
 
-### Platform Normalization
+### Ecosystem normalization (formerly platform)
 
-The Minecraft ecosystem has ambiguous platform identifiers. A package may declare `platform: any` or `platform: none` meaning different things in different contexts. The reconcile stage normalizes these during graph comparison — a candidate with `platform: none` can match a verified node with a specific platform, as long as the package name matches.
+Package refs use `Eco` (`EcoAny`, `EcoBare`, …). Reconcile treats wildcard/absent ecosystems as matching a concrete verified `Eco` when the name aligns.
 
 ## Package Lifecycle
 
 A package goes through these stages during installation:
 
-1. **Requested** — user input parsed into a `PackageRequest` (source + platform + name + version)
+1. **Requested** — user input parsed into a `PackageRequest` (source + ecosystem + name + version)
 2. **Resolved** — upstream provider returns version metadata and download URL
 3. **Downloaded** — artifact fetched to a staging directory via the network cache
 4. **Verified** — jar metadata read, dependencies extracted, checksums confirmed
@@ -65,7 +65,7 @@ The two paths share no operational logic. They are separate concerns that happen
 
 - **The reconcile loop can fail.** If advisory and verified metadata never converge, the loop hits a bounded iteration limit. This is not a bug — it means the upstream metadata is so wrong that resolution cannot stabilize. The error should guide the user to report the upstream metadata issue.
 - **Downloads happen inside the reconcile loop.** The current design downloads artifacts before knowing whether the graph is stable. This means some downloads may be wasted if the graph changes on the next iteration. Fixing this requires separating metadata-only resolution from artifact download.
-- **Platform installers need Java.** Forge and NeoForge installers require a `java` binary on PATH. The pipeline checks for this and fails fast if unavailable.
+- **Ecosystem installers need Java.** Forge and NeoForge installers require a `java` binary on PATH. The pipeline checks for this and fails fast if unavailable.
 - **MCDR breaks the pattern.** MCDReforged's installation path is special-cased because its plugin system differs significantly from Java mod loaders.
 - **The constraint solver is pure.** `MergeConstraintGraph` has zero I/O — it imports only `types`. Keep it that way. All probing, routing, logging, and output belong outside the solver boundary.
 - **Workspace access is a singleton.** `workspace.ServerInfo()` is a cached singleton. The install pipeline reads it to determine server platform, version, and directory layout. Changes to the server (like installing a platform identity package) require `workspace.InvalidateServerInfo()` to refresh the cache.

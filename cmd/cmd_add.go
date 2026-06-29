@@ -77,13 +77,13 @@ func init() {
 }
 
 func actionAdd(cmd *cobra.Command, args []string) error {
-	workspace, err := os.Getwd()
+	ws, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("unable to get current directory: %w", err)
 	}
 
-	stateSvc := state.NewProjectStateService(workspace)
-	hasLucyState, err := lucyStateDirExists(workspace)
+	stateSvc := state.NewProjectStateService(ws)
+	hasLucyState, err := lucyStateDirExists(ws)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 
 	if err := updateAddState(
 		cmd.Context(),
-		workspace,
+		ws,
 		stateSvc,
 		requests,
 		result,
@@ -254,8 +254,8 @@ func buildUpdatedLock(
 		lock.ManifestFingerprint,
 	)
 	lock.GameVersion = manifestGameVersion(manifest, runtime, lock.GameVersion)
-	lock.Platform = manifestPlatform(manifest, ws, lock.Platform)
-	lock.PlatformVersion = manifestPlatformVersion(
+	lock.Platform = manifestEcosystem(manifest, ws, lock.Platform)
+	lock.PlatformVersion = manifestEcosystemVersion(
 		manifest,
 		ws,
 		lock.PlatformVersion,
@@ -318,7 +318,7 @@ func manifestGameVersion(
 	return types.VersionUnknown.String()
 }
 
-func manifestPlatform(
+func manifestEcosystem(
 	manifest *state.Manifest,
 	ws workspace.Workspace,
 	fallback string,
@@ -334,10 +334,10 @@ func manifestPlatform(
 	if fallback != "" {
 		return fallback
 	}
-	return string(types.PlatformNone)
+	return string(types.EcoBare)
 }
 
-func manifestPlatformVersion(
+func manifestEcosystemVersion(
 	manifest *state.Manifest,
 	ws workspace.Workspace,
 	fallback string,

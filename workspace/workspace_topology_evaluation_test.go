@@ -108,25 +108,25 @@ func TestEvaluateCompatibility_HybridNode_MultipleCapabilities(t *testing.T) {
 	}
 }
 
-// --- CapabilityForPlatform ---
+// --- CapabilityForEcosystem ---
 
-func TestCapabilityForPlatform_KnownPlatforms(t *testing.T) {
+func TestCapabilityForEcosystem_KnownPlatforms(t *testing.T) {
 	cases := []struct {
-		platform types.PlatformId
+		platform types.Ecosystem
 		want     types.RuntimeCapability
 	}{
-		{types.PlatformFabric, types.CapabilityFabricMods},
-		{types.PlatformForge, types.CapabilityForgeMods},
-		{types.PlatformNeoforge, types.CapabilityNeoforgeMods},
-		{types.PlatformBukkit, types.CapabilityBukkitPlugins},
-		{types.PlatformPaper, types.CapabilityPaperPlugins},
-		{types.PlatformMCDR, types.CapabilityMCDRPlugins},
+		{types.EcoFabric, types.CapabilityFabricMods},
+		{types.EcoForge, types.CapabilityForgeMods},
+		{types.EcoNeoforge, types.CapabilityNeoforgeMods},
+		{types.EcoBukkit, types.CapabilityBukkitPlugins},
+		{types.EcoPaper, types.CapabilityPaperPlugins},
+		{types.EcoMcdr, types.CapabilityMCDRPlugins},
 	}
 	for _, tc := range cases {
-		got := CapabilityForPlatform(tc.platform)
+		got := CapabilityForEcosystem(tc.platform)
 		if got != tc.want {
 			t.Errorf(
-				"CapabilityForPlatform(%q) = %q, want %q",
+				"CapabilityForEcosystem(%q) = %q, want %q",
 				tc.platform,
 				got,
 				tc.want,
@@ -135,16 +135,16 @@ func TestCapabilityForPlatform_KnownPlatforms(t *testing.T) {
 	}
 }
 
-func TestCapabilityForPlatform_UnknownPlatform(t *testing.T) {
-	cases := []types.PlatformId{
-		types.PlatformMinecraft,
-		types.PlatformAny,
-		types.PlatformNone,
-		types.PlatformUnknown,
+func TestCapabilityForEcosystem_UnknownPlatform(t *testing.T) {
+	cases := []types.Ecosystem{
+		types.EcoMinecraft,
+		types.EcoAny,
+		types.EcoBare,
+		types.EcoUnknown,
 		// Topology-only/proxy platforms have no package capability mapping.
-		types.PlatformVelocity,
-		types.PlatformBungeecord,
-		types.PlatformSponge,
+		types.EcoVelocity,
+		types.EcoBungeecord,
+		types.EcoSponge,
 		"bungee",
 		"waterfall",
 		"spigot",
@@ -153,10 +153,10 @@ func TestCapabilityForPlatform_UnknownPlatform(t *testing.T) {
 		"unknown_platform",
 	}
 	for _, p := range cases {
-		got := CapabilityForPlatform(p)
+		got := CapabilityForEcosystem(p)
 		if got != "" {
 			t.Errorf(
-				"CapabilityForPlatform(%q) = %q, want empty string",
+				"CapabilityForEcosystem(%q) = %q, want empty string",
 				p,
 				got,
 			)

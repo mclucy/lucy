@@ -43,29 +43,29 @@ func ToCobraCompletions(candidates []CompletionCandidate) []string {
 	return out
 }
 
-// StaticPlatformCandidates returns completion candidates for all user-facing platforms.
-func StaticPlatformCandidates() []CompletionCandidate {
+// StaticEcosystemCandidates returns completion candidates for all user-facing platforms.
+func StaticEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{
-			Value:       types.PlatformMinecraft.String(),
+			Value:       types.EcoMinecraft.String(),
 			Description: "Vanilla / Bukkit / Paper plugins",
 		},
-		{Value: types.PlatformFabric.String(), Description: "Fabric mods"},
-		{Value: types.PlatformForge.String(), Description: "Forge mods"},
-		{Value: types.PlatformNeoforge.String(), Description: "NeoForge mods"},
+		{Value: types.EcoFabric.String(), Description: "Fabric mods"},
+		{Value: types.EcoForge.String(), Description: "Forge mods"},
+		{Value: types.EcoNeoforge.String(), Description: "NeoForge mods"},
 		{
-			Value:       types.PlatformMCDR.String(),
+			Value:       types.EcoMcdr.String(),
 			Description: "MCDR controller / plugin framework",
 		},
 	}
 }
 
-// StaticSearchPlatformCandidates returns completion candidates for search-enabled platforms (rollout set).
-func StaticSearchPlatformCandidates() []CompletionCandidate {
+// StaticSearchEcosystemCandidates returns completion candidates for search-enabled platforms (rollout set).
+func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.PlatformFabric.String(), Description: "Fabric mods"},
-		{Value: types.PlatformForge.String(), Description: "Forge mods"},
-		{Value: types.PlatformNeoforge.String(), Description: "NeoForge mods"},
+		{Value: types.EcoFabric.String(), Description: "Fabric mods"},
+		{Value: types.EcoForge.String(), Description: "Forge mods"},
+		{Value: types.EcoNeoforge.String(), Description: "NeoForge mods"},
 		{Value: "bukkit", Description: "Bukkit/Paper/Spigot plugins"},
 	}
 }
@@ -98,7 +98,10 @@ func StaticSourceCandidates() []CompletionCandidate {
 func StaticSortCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{Value: string(SearchSortRelevance), Description: "Sort by relevance"},
-		{Value: string(SearchSortDownloads), Description: "Sort by download count"},
+		{
+			Value:       string(SearchSortDownloads),
+			Description: "Sort by download count",
+		},
 		{Value: string(SearchSortNewest), Description: "Sort by newest"},
 	}
 }
@@ -107,14 +110,14 @@ func StaticSortCandidates() []CompletionCandidate {
 // Returns parsed components and the active segment ("platform", "name", or "version").
 //
 // Uses manual string splitting instead of syntax.Parse which panics on partial input.
-func ParseCompletionToken(token string) (platform, name, version, segment string) {
+func ParseCompletionToken(token string) (eco, name, version, segment string) {
 	if before, after, ok := strings.Cut(token, "@"); ok {
 		version = after
 		if beforeSlash, afterSlash, hasSlash := strings.Cut(
 			before,
 			"/",
 		); hasSlash {
-			platform = beforeSlash
+			eco = beforeSlash
 			name = afterSlash
 		} else {
 			name = before
@@ -124,13 +127,13 @@ func ParseCompletionToken(token string) (platform, name, version, segment string
 	}
 
 	if before, after, ok := strings.Cut(token, "/"); ok {
-		platform = before
+		eco = before
 		name = after
 		segment = "name"
 		return
 	}
 
-	platform = token
-	segment = "platform"
+	eco = token
+	segment = "ecosystem"
 	return
 }

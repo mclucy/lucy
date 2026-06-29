@@ -38,11 +38,11 @@ func (m mcdrSearchResult) ToSearchResults(source types.SourceId) upstream.Search
 // TODO: handle search options
 
 func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
-	if q.FilterPlatform != types.PlatformMCDR && q.FilterPlatform != types.PlatformAny {
+	if q.FilterEcosystem != types.EcoMcdr && q.FilterEcosystem != types.EcoAny {
 		return upstream.SearchResponse{}, fmt.Errorf(
 			"invalid search platform: expected %s, got %s",
-			types.PlatformMCDR,
-			q.FilterPlatform,
+			types.EcoMcdr,
+			q.FilterEcosystem,
 		)
 	}
 	res, err := search(q.Keyword)
@@ -124,13 +124,13 @@ func mcdrDependenciesFromMeta(meta pluginMeta) types.PackageDependencies {
 			deps.Value, types.Dependency{
 				Id: types.VersionedPackageRef{
 					PackageRef: types.PackageRef{
-						Platform: types.PlatformMCDR,
-						Name:     input.ToProjectName(name),
+						Eco:  types.EcoMcdr,
+						Name: input.ToProjectName(name),
 					},
 				},
 				Constraint: version.ParseRange(
 					constraint,
-					version.InferRangeDialect(types.PlatformMCDR),
+					version.InferRangeDialect(types.EcoMcdr),
 					types.Semver,
 				),
 				Mandatory: true,
@@ -169,8 +169,8 @@ func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}
 	parsed = types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: types.PlatformMCDR,
-			Name:     id.Name,
+			Eco:  types.EcoMcdr,
+			Name: id.Name,
 		},
 		Version: types.BareVersion(rel.Meta.Version),
 	}

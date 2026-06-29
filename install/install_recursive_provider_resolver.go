@@ -10,10 +10,10 @@ import (
 )
 
 type providerCandidateResolver struct {
-	providers       []upstream.PackageSource
-	rootProviders   map[string][]upstream.PackageSource
-	rootProviderSet map[string]struct{}
-	defaultPlatform types.PlatformId
+	providers        []upstream.PackageSource
+	rootProviders    map[string][]upstream.PackageSource
+	rootProviderSet  map[string]struct{}
+	defaultEcosystem types.Ecosystem
 }
 
 func (resolver providerCandidateResolver) ResolvePackage(
@@ -26,15 +26,15 @@ func (resolver providerCandidateResolver) ResolvePackage(
 			attempts,
 			types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: id.Platform,
-					Name:     id.Name,
+					Eco:  id.Eco,
+					Name: id.Name,
 				},
 				Version: types.VersionLatest,
 			},
 			types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: id.Platform,
-					Name:     id.Name,
+					Eco:  id.Eco,
+					Name: id.Name,
 				},
 				Version: types.VersionAny,
 			},
@@ -98,17 +98,22 @@ func (resolver providerCandidateResolver) fetchMany(
 			continue
 		}
 		groupIndexes[key] = len(groups)
-		groups = append(groups, providerFetchGroup{
-			id:        requestID,
-			providers: []upstream.PackageSource{provider},
-		})
+		groups = append(
+			groups, providerFetchGroup{
+				id:        requestID,
+				providers: []upstream.PackageSource{provider},
+			},
+		)
 	}
 
 	results := make([]types.ResolvedPackage, 0, len(providers))
 	providerErrors := make([]routing.ProviderError, 0)
 	for _, group := range groups {
 		if err := ctx.Err(); err != nil {
-			return results, append(providerErrors, routing.ProviderError{Err: err})
+			return results, append(
+				providerErrors,
+				routing.ProviderError{Err: err},
+			)
 		}
 		fetches, errors := routing.FetchMany(group.providers, group.id)
 		results = append(results, fetches...)
@@ -129,25 +134,25 @@ func (resolver providerCandidateResolver) requestIDForProvider(
 	requestID := id
 	switch source {
 	case types.SourceMCDR:
-		if id.Platform.IsModding() {
+		if id.Eco.IsModding() {
 			return types.VersionedPackageRef{}, false
 		}
-		if id.Platform == types.PlatformAny || id.Platform == types.PlatformNone {
-			requestID.Platform = types.PlatformMCDR
+		if id.Eco == types.EcoAny || id.Eco == types.EcoBare {
+			requestID.Eco = types.EcoMcdr
 		}
 	case types.SourceModrinth, types.SourceCurseForge:
-		if id.Platform == types.PlatformMCDR {
+		if id.Eco == types.EcoMcdr {
 			return types.VersionedPackageRef{}, false
 		}
-		if id.Platform == types.PlatformAny && resolver.defaultPlatform != types.PlatformAny {
-			requestID.Platform = resolver.defaultPlatform
+		if id.Eco == types.EcoAny && resolver.defaultEcosystem != types.EcoAny {
+			requestID.Eco = resolver.defaultEcosystem
 		}
 	case types.SourceHangar, types.SourceSpiget:
-		if id.Platform == types.PlatformMCDR || id.Platform.IsModding() {
+		if id.Eco == types.EcoMcdr || id.Eco.IsModding() {
 			return types.VersionedPackageRef{}, false
 		}
-		if id.Platform == types.PlatformAny || id.Platform == types.PlatformNone {
-			requestID.Platform = types.PlatformBukkit
+		if id.Eco == types.EcoAny || id.Eco == types.EcoBare {
+			requestID.Eco = types.EcoBukkit
 		}
 	}
 	return requestID, true

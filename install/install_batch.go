@@ -53,7 +53,7 @@ func InstallMany(
 		)
 		succeeded := make([]string, 0, len(identityIds))
 		for _, id := range identityIds {
-			if err := installPlatform(ctx, id, options); err != nil {
+			if err := installEcosystem(ctx, id, options); err != nil {
 				if len(succeeded) > 0 {
 					return nil, fmt.Errorf(
 						"%w: failed to install %s (already installed: %s)",
@@ -137,7 +137,7 @@ func Plan(
 
 	if ws.Environments.Mcdr != nil {
 		mcdrProviders, err := routing.ResolveProviders(
-			types.PlatformMCDR,
+			types.EcoMcdr,
 			types.SourceAuto,
 		)
 		if err != nil {
@@ -183,10 +183,10 @@ func Plan(
 			ambient,
 			options,
 			providerCandidateResolver{
-				providers:       providers,
-				rootProviders:   rootProviders,
-				rootProviderSet: keyedRoots(resolvePlan.Roots),
-				defaultPlatform: serverLoader,
+				providers:        providers,
+				rootProviders:    rootProviders,
+				rootProviderSet:  keyedRoots(resolvePlan.Roots),
+				defaultEcosystem: serverLoader,
 			},
 		)
 		if err != nil {
@@ -307,8 +307,8 @@ func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef 
 	for i, req := range requests {
 		ids[i] = types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Platform: req.Platform,
-				Name:     req.Name,
+				Eco:  req.Eco,
+				Name: req.Name,
 			},
 			Version: req.Version,
 		}
@@ -320,7 +320,7 @@ func rootScopedProviders(
 	topology *types.RuntimeTopology,
 	requests []types.PackageRequest,
 	roots []types.VersionedPackageRef,
-	serverLoader types.PlatformId,
+	serverLoader types.Ecosystem,
 	providers []upstream.PackageSource,
 ) (map[string][]upstream.PackageSource, error) {
 	rootKeys := keyedRoots(roots)
@@ -419,7 +419,7 @@ func validateRegularBatchIDs(
 	failures := make([]string, 0)
 
 	for _, id := range ids {
-		if err := ensureServerPlatformMatch(id, ws); err != nil {
+		if err := ensureServerEcosystemMatch(id, ws); err != nil {
 			failures = append(
 				failures,
 				fmt.Sprintf("%s: %v", id.StringFull(), err),
