@@ -72,4 +72,4 @@ Lucy supports multiple versioning schemes because the Minecraft ecosystem uses t
 
 - `Dependency.Id.Version` is always empty — never read it. Only `Id.Platform` and `Id.Name` identify the dependency target; the constraint is in `Dependency.Constraint`.
 - `PlatformAny` is not a wildcard — it is an ambiguous-but-single-valued platform that must reduce to a definite platform during evaluation. Do not treat it as "matches everything."
-- `Package` (in `type_package.go`) is a legacy composite struct. It bundles remote metadata, local install state, dependencies, support info, and metadata into one type. It is being phased out in favor of lifecycle-specific types.
+- `Package` (in `type_package.go`) is a legacy composite struct. It bundles remote metadata, local install state, and dependencies into one type. It is being phased out in favor of lifecycle-specific types.

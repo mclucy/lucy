@@ -14,14 +14,6 @@ type PackageInstallation struct {
 	Path string
 }
 
-// PlatformSupport reflects the support information of the whole project. For
-// specific dependency of a single package, use the PackageDependencies struct.
-type PlatformSupport struct {
-	MinecraftVersions []BareVersion
-	Platforms         []PlatformId
-	Authentic         bool
-}
-
 // ResolvedPackage — upstream identity + download info. No local state, no deps.
 // Produced by: upstream providers (FetchResult assembly)
 // Consumed by: install/ resolve/download stages

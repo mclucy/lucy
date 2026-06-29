@@ -110,14 +110,6 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 	return info
 }
 
-func (p *hangarProject) ToProjectSupport() types.PlatformSupport {
-	return platformSupportFromMap(p.SupportedPlatforms)
-}
-
-func (v *hangarVersion) ToProjectSupport() types.PlatformSupport {
-	return platformSupportFromMap(v.PlatformDependencies)
-}
-
 func (v *hangarVersion) ToPackageRemote() types.ResolvedPackage {
 	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.PlatformNone))
 	if remote.FileUrl == "" {
@@ -234,34 +226,6 @@ func (d hangarDownload) URL() string {
 		return *d.ExternalURL
 	}
 	return d.DownloadURL
-}
-
-func platformSupportFromMap(platformVersions hangarPlatformVersionMap) types.PlatformSupport {
-	support := types.PlatformSupport{
-		MinecraftVersions: make([]types.BareVersion, 0),
-		Platforms:         make([]types.PlatformId, 0, len(platformVersions)),
-		Authentic:         true,
-	}
-
-	seenVersions := make(map[string]struct{})
-	for _, platformKey := range sortedMapKeys(platformVersions) {
-		support.Platforms = append(
-			support.Platforms,
-			types.PlatformId(strings.ToLower(platformKey)),
-		)
-		for _, version := range platformVersions[platformKey] {
-			if _, exists := seenVersions[version]; exists {
-				continue
-			}
-			seenVersions[version] = struct{}{}
-			support.MinecraftVersions = append(
-				support.MinecraftVersions,
-				types.BareVersion(version),
-			)
-		}
-	}
-
-	return support
 }
 
 func classifyHangarURL(name string) types.UrlType {

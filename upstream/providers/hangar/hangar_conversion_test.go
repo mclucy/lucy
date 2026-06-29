@@ -57,7 +57,7 @@ func TestProjectSearchResponseToSearchResults(t *testing.T) {
 	}
 }
 
-func TestHangarProjectToProjectInformationAndSupport(t *testing.T) {
+func TestHangarProjectToProjectInformation(t *testing.T) {
 	project := &hangarProject{
 		Name:        "PlaceholderAPI",
 		Description: "A resource that allows information from your favorite plugins be shown practically anywhere!",
@@ -156,23 +156,9 @@ func TestHangarProjectToProjectInformationAndSupport(t *testing.T) {
 		types.UrlWiki,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI/wiki",
 	)
-
-	support := project.ToProjectSupport()
-	if len(support.Platforms) != 1 || support.Platforms[0] != types.PlatformId("paper") {
-		t.Fatalf("expected paper support, got %+v", support.Platforms)
-	}
-	if len(support.MinecraftVersions) != 3 || support.MinecraftVersions[0] != types.BareVersion("1.20.6") {
-		t.Fatalf(
-			"expected paper minecraft versions to be preserved, got %+v",
-			support.MinecraftVersions,
-		)
-	}
-	if !support.Authentic {
-		t.Fatalf("expected Hangar support metadata to be authentic")
-	}
 }
 
-func TestHangarVersionToPackageRemoteAndSupport(t *testing.T) {
+func TestHangarVersionToPackageRemote(t *testing.T) {
 	version := &hangarVersion{
 		Name: "2.12.2",
 		Downloads: map[string]hangarDownload{
@@ -213,13 +199,6 @@ func TestHangarVersionToPackageRemoteAndSupport(t *testing.T) {
 		t.Fatalf("expected sha256 hash to be preserved, got %s", remote.Hash)
 	}
 
-	support := version.ToProjectSupport()
-	if len(support.Platforms) != 1 || support.Platforms[0] != types.PlatformId("paper") {
-		t.Fatalf(
-			"expected version support for paper, got %+v",
-			support.Platforms,
-		)
-	}
 	if len(version.PluginDependencyNames()) != 0 {
 		t.Fatalf(
 			"expected no plugin dependency names, got %+v",
@@ -300,20 +279,6 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 		types.BarePackageName("essentialsx"),
 	) || !slices.Contains(deps, types.BarePackageName("vault")) {
 		t.Fatalf("expected normalized plugin dependency names, got %#v", deps)
-	}
-
-	support := version.ToProjectSupport()
-	if len(support.Platforms) != 2 || support.Platforms[0] != "bukkit" || support.Platforms[1] != "paper" {
-		t.Fatalf(
-			"expected sorted provider platforms, got %#v",
-			support.Platforms,
-		)
-	}
-	if len(support.MinecraftVersions) != 2 || support.MinecraftVersions[0] != "1.21" || support.MinecraftVersions[1] != "1.21.1" {
-		t.Fatalf(
-			"expected deduplicated minecraft versions, got %#v",
-			support.MinecraftVersions,
-		)
 	}
 }
 

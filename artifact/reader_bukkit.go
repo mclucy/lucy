@@ -85,7 +85,6 @@ func (r *bukkitReader) Read(
 				),
 				Urls: bukkitDescriptorURLs(descriptor.Website),
 			},
-			Supports: bukkitDescriptorSupport(platform, descriptor),
 		}
 
 		if deps := bukkitDescriptorDeps(platform, descriptor); len(deps) > 0 {
@@ -174,27 +173,6 @@ func appendBukkitDescriptorDeps(
 		)
 	}
 	return deps
-}
-
-func bukkitDescriptorSupport(
-	platform types.PlatformId,
-	descriptor *bukkitPluginDescriptor,
-) *types.PlatformSupport {
-	platforms := []types.PlatformId{platform}
-	if platform != types.PlatformBukkit {
-		platforms = append(platforms, types.PlatformBukkit)
-	}
-	if descriptor.FoliaSupported && platform != types.PlatformId("folia") {
-		platforms = append(
-			[]types.PlatformId{types.PlatformId("folia")},
-			platforms...,
-		)
-	}
-
-	return &types.PlatformSupport{
-		Platforms: platforms,
-		Authentic: true,
-	}
 }
 
 func bukkitDescriptorAuthors(author string, authors []string) []types.Person {
