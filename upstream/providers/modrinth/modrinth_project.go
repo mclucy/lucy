@@ -11,8 +11,8 @@ import (
 
 func getProjectId(slug types.BarePackageName) (id string, err error) {
 	modrinthProject := projectResponse{}
-	if err := requestJSON(projectUrl(string(slug)), &modrinthProject, ENoProject); err != nil {
-		return "", ENoProject
+	if err := requestJSON(projectUrl(string(slug)), &modrinthProject, ErrNoProject); err != nil {
+		return "", err
 	}
 	id = modrinthProject.Id
 	return
@@ -20,8 +20,8 @@ func getProjectId(slug types.BarePackageName) (id string, err error) {
 
 func getProjectById(id string) (project *projectResponse, err error) {
 	project = &projectResponse{}
-	if err := requestJSON(projectUrl(id), project, ENoProject); err != nil {
-		return nil, ENoProject
+	if err := requestJSON(projectUrl(id), project, ErrNoProject); err != nil {
+		return nil, err
 	}
 	return
 }
@@ -35,8 +35,8 @@ func getProjectByName(slug types.BarePackageName) (
 		error,
 	) {
 		project := &projectResponse{}
-		if err := requestJSON(projectUrl(string(target)), project, ENoProject); err != nil {
-			return nil, ENoProject
+		if err := requestJSON(projectUrl(string(target)), project, ErrNoProject); err != nil {
+			return nil, err
 		}
 		return project, nil
 	}
@@ -60,13 +60,13 @@ func getProjectMembers(id string) (
 	members []*memberResponse,
 	err error,
 ) {
-	if err := requestJSON(projectMemberUrl(id), &members, ENoMember); err != nil {
-		return nil, ENoMember
+	if err := requestJSON(projectMemberUrl(id), &members, ErrNoMember); err != nil {
+		return nil, err
 	}
 	return members, nil
 }
 
-var ErrorInvalidDependency = errors.New("invalid dependency")
+var ErrInvalidDependency = errors.New("modrinth: invalid dependency")
 
 func DependencyToPackage(
 	dependent types.VersionedPackageRef,
@@ -118,7 +118,7 @@ func DependencyToPackage(
 		p.Version = types.VersionCompatible
 		return p, nil
 	} else {
-		return p, ErrorInvalidDependency
+		return p, ErrInvalidDependency
 	}
 
 	p.Name = input.ToProjectName(project.Slug)

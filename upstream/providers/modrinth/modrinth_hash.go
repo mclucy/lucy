@@ -88,7 +88,7 @@ func SlugFromHash(sha1hex string) (slug string, err error) {
 	}
 
 	if res.StatusCode == 404 {
-		return "", ENoProject
+		return "", ErrNoProject
 	}
 	if res.StatusCode != 200 {
 		return "", fmt.Errorf(
@@ -102,7 +102,7 @@ func SlugFromHash(sha1hex string) (slug string, err error) {
 		res.Data,
 		&version,
 	); err != nil || version.ProjectId == "" {
-		return "", ENoProject
+		return "", ErrNoProject
 	}
 
 	project, err := getProjectById(version.ProjectId)
@@ -142,7 +142,7 @@ func (s provider) NameByHash(artifact upstream.Hashable) (
 	}
 
 	if res.StatusCode == 404 {
-		return name, hash, ENoProject
+		return name, hash, ErrNoProject
 	}
 	if res.StatusCode != 200 {
 		return name, hash, fmt.Errorf(
@@ -154,7 +154,7 @@ func (s provider) NameByHash(artifact upstream.Hashable) (
 	var version versionFileResponse
 	err = json.Unmarshal(res.Data, &version)
 	if err != nil || version.ProjectId == "" {
-		return name, hash, ENoProject
+		return name, hash, ErrNoProject
 	}
 
 	project, err := getProjectById(version.ProjectId)

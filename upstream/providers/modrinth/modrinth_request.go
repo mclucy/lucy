@@ -33,7 +33,10 @@ func requestJSON(rawURL string, out any, notFound error) error {
 		)
 	}
 	if err := json.Unmarshal(res.Data, out); err != nil {
-		return notFound
+		if notFound != nil {
+			return fmt.Errorf("%w: %w", notFound, err)
+		}
+		return fmt.Errorf("modrinth: failed to parse response: %w", err)
 	}
 	return nil
 }
