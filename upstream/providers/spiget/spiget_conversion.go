@@ -92,26 +92,6 @@ func (r resourceResponse) ToProjectInformation() types.Metadata {
 	return info
 }
 
-func (r resourceResponse) ToProjectSupport() types.PlatformSupport {
-	support := types.PlatformSupport{
-		MinecraftVersions: make([]types.BareVersion, 0, len(r.TestedVersions)),
-		Platforms:         make([]types.PlatformId, 0),
-		Authentic:         false,
-	}
-
-	for _, version := range r.TestedVersions {
-		if version == "" {
-			continue
-		}
-		support.MinecraftVersions = append(
-			support.MinecraftVersions,
-			types.BareVersion(version),
-		)
-	}
-
-	return support
-}
-
 // NewResolvedVersion preserves both Lucy-facing human versions and Spiget's
 // numeric resource/version identifiers for later exact download resolution.
 func NewResolvedVersion(

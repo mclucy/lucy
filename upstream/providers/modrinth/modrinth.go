@@ -126,19 +126,6 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	return info, nil
 }
 
-// Support from Modrinth API is extremely unreliable. A local check (if any
-// files were downloaded) is recommended.
-func (s provider) Support(name types.BarePackageName) (
-	types.PlatformSupport,
-	error,
-) {
-	project, err := getProjectByName(name)
-	if err != nil {
-		return types.PlatformSupport{}, err
-	}
-	return project.ToProjectSupport(), nil
-}
-
 var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api")
 
 // Temporary guard: Modrinth can ship non-JAR artifacts such as .mrpack,

@@ -187,11 +187,6 @@ func aggregateBukkitFamilyPackages(infos []Info) []Info {
 	}
 
 	aggregated := infos[bestIndex]
-	aggregated.Supports = mergeBukkitFamilySupport(
-		infos,
-		bukkitIndexes,
-		bestRank.fallback,
-	)
 
 	resolved := make([]Info, 0, len(infos)-len(bukkitIndexes)+1)
 	inserted := false
@@ -208,75 +203,6 @@ func aggregateBukkitFamilyPackages(infos []Info) []Info {
 	}
 
 	return resolved
-}
-
-func mergeBukkitFamilySupport(
-	infos []Info,
-	indexes []int,
-	fallback types.PlatformId,
-) *types.PlatformSupport {
-	platforms := make([]types.PlatformId, 0, len(indexes)*2)
-	seen := make(map[types.PlatformId]struct{}, len(indexes)*2+1)
-	authentic := false
-	versions := make([]types.BareVersion, 0)
-
-	addPlatform := func(platform types.PlatformId) {
-		if !platform.Valid() {
-			return
-		}
-		if _, ok := seen[platform]; ok {
-			return
-		}
-		seen[platform] = struct{}{}
-		platforms = append(platforms, platform)
-	}
-
-	for _, idx := range indexes {
-		info := infos[idx]
-		addPlatform(info.Ref.Platform)
-		if info.Supports == nil {
-			continue
-		}
-		authentic = authentic || info.Supports.Authentic
-		for _, platform := range info.Supports.Platforms {
-			addPlatform(platform)
-		}
-		versions = append(versions, info.Supports.MinecraftVersions...)
-	}
-
-	if len(platforms) == 0 {
-		addPlatform(fallback)
-	}
-
-	ordered := orderBukkitFamilyPlatforms(platforms)
-	if len(ordered) == 0 {
-		return nil
-	}
-
-	return &types.PlatformSupport{
-		MinecraftVersions: versions,
-		Platforms:         ordered,
-		Authentic:         authentic,
-	}
-}
-
-func orderBukkitFamilyPlatforms(platforms []types.PlatformId) []types.PlatformId {
-	ordered := make([]types.PlatformId, 0, len(platforms))
-	for _, candidate := range []types.PlatformId{
-		types.PlatformId("leaves"),
-		types.PlatformId("folia"),
-		types.PlatformId("paper"),
-		types.PlatformId("spigot"),
-		types.PlatformId("bukkit"),
-	} {
-		for _, platform := range platforms {
-			if platform == candidate {
-				ordered = append(ordered, platform)
-				break
-			}
-		}
-	}
-	return ordered
 }
 
 func rankBukkitFamilyPlatform(platform types.PlatformId) bukkitFamilyRank {

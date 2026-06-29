@@ -66,17 +66,6 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	return info, nil
 }
 
-func (p provider) Support(name types.BarePackageName) (
-	types.PlatformSupport,
-	error,
-) {
-	project, err := getProject(name)
-	if err != nil {
-		return types.PlatformSupport{}, err
-	}
-	return project.ToProjectSupport(), nil
-}
-
 func (p provider) Dependencies(
 	id types.VersionedPackageRef,
 ) (*types.PackageDependencies, error) {

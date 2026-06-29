@@ -61,28 +61,6 @@ type projectResponse struct {
 	MonetizationStatus string        `json:"monetization_status"`
 }
 
-func (p *projectResponse) ToProjectSupport() types.PlatformSupport {
-	supports := types.PlatformSupport{
-		MinecraftVersions: make([]types.BareVersion, 0),
-		Platforms:         make([]types.PlatformId, 0),
-	}
-
-	for _, version := range p.GameVersions {
-		supports.MinecraftVersions = append(
-			supports.MinecraftVersions,
-			types.BareVersion(version),
-		)
-	}
-
-	for _, platform := range p.Loaders {
-		supports.Platforms = append(
-			supports.Platforms,
-			types.PlatformId(platform),
-		)
-	}
-	return supports
-}
-
 func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
 	info = types.Metadata{
 		Title:                 p.Title,

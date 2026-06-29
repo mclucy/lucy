@@ -36,7 +36,6 @@ type Info struct {
 	FilePath     string
 	Dependencies []Dependency
 	Metadata     types.Metadata
-	Supports     *types.PlatformSupport
 }
 
 func dependencyTypeForEmbedded(embedded bool) types.DependencyType {

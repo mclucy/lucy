@@ -144,30 +144,6 @@ func TestResourceResponseToProjectInformation_InvalidBase64IsDropped(t *testing.
 	}
 }
 
-func TestResourceResponseToProjectSupport_TestedVersionsAreNonAuthentic(t *testing.T) {
-	resource := resourceResponse{
-		TestedVersions: []string{"1.20.6", "1.21"},
-	}
-
-	support := resource.ToProjectSupport()
-
-	if support.Authentic {
-		t.Fatalf("expected testedVersions mapping to remain non-authentic")
-	}
-	if len(support.Platforms) != 0 {
-		t.Fatalf(
-			"expected no platform claims from Spiget testedVersions, got %v",
-			support.Platforms,
-		)
-	}
-	if len(support.MinecraftVersions) != 2 || support.MinecraftVersions[0] != "1.20.6" || support.MinecraftVersions[1] != "1.21" {
-		t.Fatalf(
-			"unexpected minecraft versions: %#v",
-			support.MinecraftVersions,
-		)
-	}
-}
-
 func TestResolvedVersionToPackageRemote(t *testing.T) {
 	remote := NewResolvedVersion(
 		resourceResponse{

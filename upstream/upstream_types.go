@@ -25,10 +25,6 @@ type DependencyResolver interface {
 	)
 }
 
-type SupportReporter interface {
-	Support(name types.BarePackageName) (types.PlatformSupport, error)
-}
-
 type PackageResolver interface {
 	SourceIdentifier
 	VersionSelectorResolver
