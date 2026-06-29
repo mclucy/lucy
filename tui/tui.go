@@ -358,17 +358,11 @@ func treeChildLabel(node TreeNode, keyWidth int) string {
 		}
 		_, value := field.RenderRow()
 		value = strings.TrimSuffix(value, "\n")
-		if value == "" {
-			return key
-		}
-		return key + value
+		return treeChildKeyWithMultilineValue(key, value, keyWidth)
 	case *FieldMultiAnnotatedShortText:
 		_, value := field.RenderRow()
 		value = strings.TrimSuffix(value, "\n")
-		if value == "" {
-			return key
-		}
-		return key + value
+		return treeChildKeyWithMultilineValue(key, value, keyWidth)
 	case *FieldMultiShortText:
 		if len(field.Texts) > 0 {
 			return key + field.Texts[0]
@@ -377,6 +371,26 @@ func treeChildLabel(node TreeNode, keyWidth int) string {
 	default:
 		return strings.TrimSuffix(node.Field.Render(), "\n")
 	}
+}
+
+func treeChildKeyWithMultilineValue(key, value string, keyWidth int) string {
+	if value == "" {
+		return key
+	}
+	lines := strings.Split(value, "\n")
+	if len(lines) == 1 {
+		return key + lines[0]
+	}
+	indent := strings.Repeat(" ", keyWidth)
+	var sb strings.Builder
+	sb.WriteString(key)
+	sb.WriteString(lines[0])
+	for _, line := range lines[1:] {
+		sb.WriteString("\n")
+		sb.WriteString(indent)
+		sb.WriteString(line)
+	}
+	return sb.String()
 }
 
 // FieldNil is a no-op field that renders nothing.
