@@ -207,10 +207,9 @@ func TestFileResponseToPackageRemote_NilDownloadUrl(t *testing.T) {
 }
 
 func TestFileResponseToPackageRemote_Md5Only(t *testing.T) {
-	downloadUrl := "https://edge.forgecdn.net/files/12345/mod.jar"
 	f := &fileResponse{
 		FileName:    "mod.jar",
-		DownloadUrl: &downloadUrl,
+		DownloadUrl: new("https://edge.forgecdn.net/files/12345/mod.jar"),
 		Hashes: []fileHash{
 			{Value: "md5hash", Algo: 2},
 		},
@@ -227,10 +226,9 @@ func TestFileResponseToPackageRemote_Md5Only(t *testing.T) {
 }
 
 func TestFileResponseToPackageRemote_NoHashes(t *testing.T) {
-	downloadUrl := "https://edge.forgecdn.net/files/mod.jar"
 	f := &fileResponse{
 		FileName:    "mod.jar",
-		DownloadUrl: &downloadUrl,
+		DownloadUrl: new("https://edge.forgecdn.net/files/mod.jar"),
 		Hashes:      []fileHash{},
 	}
 

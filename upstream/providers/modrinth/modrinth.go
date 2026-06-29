@@ -139,11 +139,12 @@ func (s provider) Dependencies(
 	if err != nil {
 		return nil, fmt.Errorf("modrinth: dependencies fetch failed: %w", err)
 	}
-	deps := (&modrinthDependencies{
-		version:  version,
-		platform: id.Eco,
-	}).ToPackageDependencies()
-	return &deps, nil
+	return new(
+		(&modrinthDependencies{
+			version:  version,
+			platform: id.Eco,
+		}).ToPackageDependencies(),
+	), nil
 }
 
 func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (

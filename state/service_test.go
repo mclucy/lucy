@@ -32,9 +32,8 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 		t.Fatalf("load A failed: %v", err)
 	}
 
-	cfgB := ConfigDefaults()
 	manifestB := ManifestDefaults()
-	manifestB.Config = &cfgB
+	manifestB.Config = new(ConfigDefaults())
 	manifestB.Environment.GameVersion = "1.20.6"
 	lockB := NewLock()
 	lockB.ManifestFingerprint = "sha256:b"

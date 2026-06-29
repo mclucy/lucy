@@ -73,11 +73,12 @@ func (p provider) Dependencies(
 	if err != nil {
 		return nil, fmt.Errorf("hangar: dependencies fetch failed: %w", err)
 	}
-	deps := (&hangarDependencies{
-		version:  version,
-		platform: id.Eco,
-	}).ToPackageDependencies()
-	return &deps, nil
+	return new(
+		(&hangarDependencies{
+			version:  version,
+			platform: id.Eco,
+		}).ToPackageDependencies(),
+	), nil
 }
 
 func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (

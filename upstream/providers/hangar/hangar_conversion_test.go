@@ -208,7 +208,6 @@ func TestHangarVersionToPackageRemote(t *testing.T) {
 }
 
 func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
-	external := "https://downloads.example.com/placeholderapi-bukkit.jar"
 	version := &hangarVersion{
 		Name: "2.12.3",
 		Downloads: map[string]hangarDownload{
@@ -221,7 +220,7 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 			},
 			"BUKKIT": {
 				DownloadURL: "https://hangarcdn.papermc.io/plugins/HelpChat/PlaceholderAPI/versions/2.12.3/BUKKIT/PlaceholderAPI-2.12.3-bukkit.jar",
-				ExternalURL: &external,
+				ExternalURL: new("https://downloads.example.com/placeholderapi-bukkit.jar"),
 				FileInfo: hangarFileInfo{
 					Name:       "PlaceholderAPI-2.12.3-bukkit.jar",
 					SHA256Hash: "bukkit-sha256",

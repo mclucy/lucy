@@ -188,8 +188,7 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 
 	if mfPath := string(state.ManifestFile); willWrite(mfPath) {
 		mf := state.ManifestDefaults()
-		cfg := state.ConfigDefaults()
-		mf.Config = &cfg
+		mf.Config = new(state.ConfigDefaults())
 		mf.Environment.GameVersion = s.GameVersion
 		mf.Environment.ModdingPlatform = s.Ecosystem
 		mf.Environment.ModdingPlatformVersion = s.EcosystemVersion
