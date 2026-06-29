@@ -18,13 +18,31 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Display basic information of the current server",
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionStatus),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		logo, _ := cmd.Flags().GetString(cli.FlagLogo)
+		if _, ok := tui.ParseStatusLogoMode(logo); !ok {
+			return fmt.Errorf("--logo must be one of none, small, large")
+		}
+		return nil
+	},
+	RunE: cli.WithErrorLogging(actionStatus),
 }
 
 // NewCommand wires and returns the `lucy status` command.
 func NewCommand() *cobra.Command {
 	cli.AddJSONFlag(statusCmd)
 	cli.AddLongFlag(statusCmd)
+	cli.AddLogoFlag(statusCmd)
+	_ = statusCmd.RegisterFlagCompletionFunc(
+		cli.FlagLogo,
+		func(cmd *cobra.Command, args []string, toComplete string) (
+			[]string,
+			cobra.ShellCompDirective,
+		) {
+			candidates := cli.FilterByPrefix(cli.StaticStatusLogoCandidates(), toComplete)
+			return cli.ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+		},
+	)
 	return statusCmd
 }
 
@@ -41,7 +59,9 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 			style.PrintAsJson(ws)
 		}
 	} else {
-		tui.Flush(generateStatusOutput(&ws, long, noStyle))
+		logo, _ := cmd.Flags().GetString(cli.FlagLogo)
+		logoMode, _ := tui.ParseStatusLogoMode(logo)
+		tui.Flush(generateStatusOutput(&ws, long, noStyle, logoMode))
 	}
 	return nil
 }
@@ -50,6 +70,7 @@ func generateStatusOutput(
 	data *workspace.Workspace,
 	longOutput bool,
 	noStyle bool,
+	logoMode tui.StatusLogoMode,
 ) (output *tui.Data) {
 	server := data.Server()
 	hasServer := server != nil
@@ -64,7 +85,7 @@ func generateStatusOutput(
 		}
 	}
 
-	output = &tui.Data{Fields: []tui.Field{}}
+	output = &tui.Data{Fields: []tui.Field{}, LogoMode: logoMode}
 	var effectiveEcosystems []workspace.EffectiveEcosystem
 	var runtimeComponents []types.VersionedPackageRef
 	if hasServer {
@@ -113,12 +134,14 @@ func generateStatusOutput(
 	if logoEco == types.EcoUnspecified && hasMcdr {
 		logoEco = types.EcoMcdr
 	}
-	if logoEco != types.EcoUnspecified {
+	if logoMode != tui.StatusLogoNone &&
+		logoEco != types.EcoUnspecified {
 		output.Fields = append(
 			output.Fields,
 			&tui.FieldLogo{
 				Eco:     logoEco,
 				NoColor: noStyle,
+				Mode:    logoMode,
 			},
 		)
 	}

@@ -26,7 +26,8 @@ import (
 
 // Data is a collection of Field values to be rendered together.
 type Data struct {
-	Fields []Field
+	Fields   []Field
+	LogoMode StatusLogoMode
 }
 
 // Field is the interface for all renderable output elements. Each
@@ -778,12 +779,15 @@ func Flush(data *Data) {
 		return
 	}
 
+	logoMode := data.LogoMode
+
 	isTTY := term.IsTerminal(1)
 	params := NegotiateStatusLayout(
 		style.TermWidth(),
 		logoField.Width(LogoLargePlain),
 		logoField.Width(LogoSmallPlain),
 		isTTY,
+		logoMode,
 	)
 	infoFields := fieldsWithoutLogo(data.Fields)
 	keyWidth := keyColumnWidth(infoFields)
@@ -809,7 +813,11 @@ func Flush(data *Data) {
 		)
 
 	case LayoutVertical:
-		logoLines := logoField.Lines(LogoLargePlain)
+		variant := LogoLargePlain
+		if logoMode == StatusLogoSmall {
+			variant = LogoSmallPlain
+		}
+		logoLines := logoField.Lines(variant)
 		output = strings.Join(logoLines, "\n") + "\n\n" + infoBlock
 
 	case LayoutClipped:
