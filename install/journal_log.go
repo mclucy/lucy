@@ -69,7 +69,9 @@ func (l logJournal) Record(event Event) {
 	case EventApplyStart:
 		log.ShowInfo(fmt.Sprintf("applying %d changes", event.Count))
 	case EventConflict:
-		log.ShowInfo(fmt.Sprintf("conflict:\n%s", event.Err.Error()))
+		if event.Err != nil {
+			log.Error(event.Err)
+		}
 	}
 }
 

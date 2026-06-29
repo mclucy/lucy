@@ -141,9 +141,7 @@ func Plan(
 			types.SourceAuto,
 		)
 		if err != nil {
-			log.ShowInfo(
-				fmt.Errorf("failed to resolve MCDR provider: %w", err),
-			)
+			log.Warn(fmt.Errorf("failed to resolve MCDR provider: %w", err))
 		} else {
 			providers = append(providers, mcdrProviders...)
 		}
