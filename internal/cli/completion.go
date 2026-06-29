@@ -60,6 +60,14 @@ func StaticEcosystemCandidates() []CompletionCandidate {
 	}
 }
 
+func StaticStatusLogoCandidates() []CompletionCandidate {
+	return []CompletionCandidate{
+		{Value: "small", Description: "Compact logo (default)"},
+		{Value: "none", Description: "Hide the logo"},
+		{Value: "large", Description: "Full-size logo"},
+	}
+}
+
 // StaticSearchEcosystemCandidates returns completion candidates for search-enabled platforms (rollout set).
 func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{

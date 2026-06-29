@@ -18,7 +18,7 @@ const (
 	// width. Used when the terminal is narrower than minInfoWidth.
 	LayoutClipped
 	// LayoutInfoOnly renders only the info block with no logo at all.
-	// Used in non-TTY (piped) contexts.
+	// Used in non-TTY (piped) contexts and when --logo=none.
 	LayoutInfoOnly
 )
 
@@ -41,30 +41,19 @@ type StatusLayoutParams struct {
 }
 
 // NegotiateStatusLayout decides which layout mode to use given the terminal
-// width, the widths of the two logo variants, and whether the output is a
-// TTY. It returns the mode together with pixel-budget details so that the
+// width, the widths of the two logo variants, TTY detection, and logo mode.
+// It returns the mode together with pixel-budget details so that the
 // compositor can render without further arithmetic.
-func NegotiateStatusLayout(termWidth int, logoLargeWidth int, logoSmallWidth int, isTTY bool) StatusLayoutParams {
-	if !isTTY {
-		return StatusLayoutParams{
-			Mode:      LayoutInfoOnly,
-			LogoWidth: 0,
-			InfoWidth: termWidth,
-			GapWidth:  0,
-		}
+func statusLayoutInfoOnly(termWidth int) StatusLayoutParams {
+	return StatusLayoutParams{
+		Mode:      LayoutInfoOnly,
+		LogoWidth: 0,
+		InfoWidth: termWidth,
+		GapWidth:  0,
 	}
+}
 
-	// Large logo side-by-side: logo + gap + info (>= minInfoWidth).
-	if termWidth >= logoLargeWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth {
-		return StatusLayoutParams{
-			Mode:      LayoutLargeLogoSideBySide,
-			LogoWidth: logoLargeWidth,
-			InfoWidth: termWidth - logoLargeWidth - statusLayoutGapWidth,
-			GapWidth:  statusLayoutGapWidth,
-		}
-	}
-
-	// Small logo side-by-side.
+func statusLayoutSmallLogo(termWidth int, logoSmallWidth int) StatusLayoutParams {
 	if termWidth >= logoSmallWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth {
 		return StatusLayoutParams{
 			Mode:      LayoutSmallLogoSideBySide,
@@ -73,8 +62,31 @@ func NegotiateStatusLayout(termWidth int, logoLargeWidth int, logoSmallWidth int
 			GapWidth:  statusLayoutGapWidth,
 		}
 	}
+	if termWidth >= statusLayoutMinInfoWidth {
+		return StatusLayoutParams{
+			Mode:      LayoutVertical,
+			LogoWidth: logoSmallWidth,
+			InfoWidth: termWidth,
+			GapWidth:  0,
+		}
+	}
+	return StatusLayoutParams{
+		Mode:      LayoutClipped,
+		LogoWidth: 0,
+		InfoWidth: termWidth,
+		GapWidth:  0,
+	}
+}
 
-	// Vertical: logo stacked above info. Requires at least minInfoWidth.
+func statusLayoutLargeLogo(termWidth int, logoLargeWidth int) StatusLayoutParams {
+	if termWidth >= logoLargeWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth {
+		return StatusLayoutParams{
+			Mode:      LayoutLargeLogoSideBySide,
+			LogoWidth: logoLargeWidth,
+			InfoWidth: termWidth - logoLargeWidth - statusLayoutGapWidth,
+			GapWidth:  statusLayoutGapWidth,
+		}
+	}
 	if termWidth >= statusLayoutMinInfoWidth {
 		return StatusLayoutParams{
 			Mode:      LayoutVertical,
@@ -83,12 +95,29 @@ func NegotiateStatusLayout(termWidth int, logoLargeWidth int, logoSmallWidth int
 			GapWidth:  0,
 		}
 	}
-
-	// Clipped: terminal too narrow even for minInfoWidth.
 	return StatusLayoutParams{
 		Mode:      LayoutClipped,
 		LogoWidth: 0,
 		InfoWidth: termWidth,
 		GapWidth:  0,
 	}
+}
+
+func NegotiateStatusLayout(
+	termWidth int,
+	logoLargeWidth int,
+	logoSmallWidth int,
+	isTTY bool,
+	logoMode StatusLogoMode,
+) StatusLayoutParams {
+	if logoMode == StatusLogoNone {
+		return statusLayoutInfoOnly(termWidth)
+	}
+	if !isTTY {
+		return statusLayoutInfoOnly(termWidth)
+	}
+	if logoMode == StatusLogoLarge {
+		return statusLayoutLargeLogo(termWidth, logoLargeWidth)
+	}
+	return statusLayoutSmallLogo(termWidth, logoSmallWidth)
 }

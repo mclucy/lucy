@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -33,18 +32,21 @@ const (
 type FieldLogo struct {
 	Eco     types.Ecosystem
 	NoColor bool
+	Mode    StatusLogoMode
 }
 
 // Render returns the large logo as a plain string. This is a fallback for
 // callers that are not layout-aware and simply iterate over Fields.
 func (f *FieldLogo) Render() string {
-	variant := fn.Ternary(
-		useLargeLogo(),
-		fn.Ternary(f.NoColor, LogoLargePlain, LogoLargeColored),
-		fn.Ternary(f.NoColor, LogoSmallPlain, LogoSmallColored),
-	)
-	logo := GetLogo(f.Eco, variant)
+	logo := GetLogo(f.Eco, f.renderVariant())
 	return strings.Join(normalizeLines(logo), "\n")
+}
+
+func (f *FieldLogo) renderVariant() LogoVariant {
+	if f.Mode == StatusLogoLarge {
+		return fn.Ternary(f.NoColor, LogoLargePlain, LogoLargeColored)
+	}
+	return fn.Ternary(f.NoColor, LogoSmallPlain, LogoSmallColored)
 }
 
 // KeyLength returns 0 because the logo is not a key-value field.
@@ -72,11 +74,6 @@ func (f *FieldLogo) Width(variant LogoVariant) int {
 // Height returns the number of lines for the given logo variant.
 func (f *FieldLogo) Height(variant LogoVariant) int {
 	return len(normalizeLines(GetLogo(f.Eco, variant)))
-}
-
-func useLargeLogo() bool {
-	termWidth := style.TermWidth()
-	return termWidth >= logoLargeMaxWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth
 }
 
 // normalizeLines splits the raw logo text into lines, strips \r characters,

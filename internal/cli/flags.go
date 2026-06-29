@@ -9,6 +9,7 @@ const (
 	FlagJSONCompact = "json-compact"
 	FlagLong        = "long"
 	FlagNoStyle     = "no-style"
+	FlagLogo        = "logo"
 	FlagLogFile     = "log-file"
 	FlagPrintLogs   = "print-logs"
 	FlagDebug       = "debug"
@@ -32,4 +33,13 @@ func AddLongFlag(cmd *cobra.Command) {
 // AddNoStyleFlag adds the --no-style flag to a command (local, not persistent).
 func AddNoStyleFlag(cmd *cobra.Command) {
 	cmd.Flags().Bool(FlagNoStyle, false, "Disable colored and styled output")
+}
+
+// AddLogoFlag adds the --logo flag to a command.
+func AddLogoFlag(cmd *cobra.Command) {
+	cmd.Flags().String(
+		FlagLogo,
+		"small",
+		"Status ASCII logo: none, small, or large (large is opt-in)",
+	)
 }
