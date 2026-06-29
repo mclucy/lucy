@@ -212,12 +212,16 @@ func (planner *candidateGraphPlanner) admit(
 	dependencySets []types.PackageDependencies,
 	options InstallOptions,
 ) error {
-	key := current.id.StringBase()
+	key := pkg.Id.PackageRef.StringBase()
+	if _, exists := planner.candidateGraph[key]; exists {
+		return nil
+	}
+
 	batchInputs := make([]resolve.ConstraintInput, 0)
 	dependencies := make([]types.Dependency, 0)
 	children := make([]candidateRequest, 0)
 	for _, dependencySet := range dependencySets {
-		requester := current.id.StringFull()
+		requester := resolvedPackageLabel(pkg)
 		for _, dependency := range dependencySet.Value {
 			if !dependency.Mandatory && !options.WithOptional {
 				continue

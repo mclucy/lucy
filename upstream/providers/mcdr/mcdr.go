@@ -7,6 +7,7 @@ import (
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -95,7 +96,48 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 func (s provider) Dependencies(
 	id types.VersionedPackageRef,
 ) (*types.PackageDependencies, error) {
-	return &types.PackageDependencies{Authentic: false}, nil
+	if id.Version == "" || id.Version.CanInfer() {
+		resolved, err := s.ResolveVersionSelector(id)
+		if err != nil {
+			return nil, err
+		}
+		id = resolved
+	}
+
+	rel, err := getRelease(id.Name.Pep8String(), id.Version)
+	if err != nil {
+		return nil, err
+	}
+	deps := mcdrDependenciesFromMeta(rel.Meta)
+	return &deps, nil
+}
+
+func mcdrDependenciesFromMeta(meta pluginMeta) types.PackageDependencies {
+	deps := types.PackageDependencies{Authentic: true}
+	if len(meta.Dependencies) == 0 {
+		return deps
+	}
+
+	deps.Value = make([]types.Dependency, 0, len(meta.Dependencies))
+	for name, constraint := range meta.Dependencies {
+		deps.Value = append(
+			deps.Value, types.Dependency{
+				Id: types.VersionedPackageRef{
+					PackageRef: types.PackageRef{
+						Platform: types.PlatformMCDR,
+						Name:     input.ToProjectName(name),
+					},
+				},
+				Constraint: version.ParseRange(
+					constraint,
+					version.InferRangeDialect(types.PlatformMCDR),
+					types.Semver,
+				),
+				Mandatory: true,
+			},
+		)
+	}
+	return deps
 }
 
 func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
@@ -105,12 +147,12 @@ func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	var rel *release
 	switch id.Version {
 	case types.VersionCompatible:
-		serverInfo := workspace.ServerInfo()
+		ws := workspace.New()
 		rel, err = getLatestCompatibleRelease(
 			id.Name.Pep8String(),
-			serverInfo.Environments.Mcdr.Version,
+			ws.Environments.Mcdr.Version,
 		)
-	case types.VersionLatest, types.VersionAny:
+	case "", types.VersionLatest, types.VersionAny:
 		rel, err = getLatestRelease(id.Name.Pep8String())
 		if err != nil {
 			return id, err

@@ -13,6 +13,7 @@ type providerCandidateResolver struct {
 	providers       []upstream.PackageSource
 	rootProviders   map[string][]upstream.PackageSource
 	rootProviderSet map[string]struct{}
+	defaultPlatform types.PlatformId
 }
 
 func (resolver providerCandidateResolver) ResolvePackage(
@@ -46,11 +47,7 @@ func (resolver providerCandidateResolver) ResolvePackage(
 			return types.ResolvedPackage{}, err
 		}
 
-		providers := resolver.providersForPackage(attempt)
-		fetches, providerErrors := routing.FetchMany(
-			providers,
-			attempt,
-		)
+		fetches, providerErrors := resolver.fetchMany(ctx, attempt)
 		if len(fetches) == 0 {
 			lastErrors = providerErrors
 			continue
@@ -75,7 +72,85 @@ func (resolver providerCandidateResolver) providersForPackage(
 			return providers
 		}
 	}
+
 	return resolver.providers
+}
+
+func (resolver providerCandidateResolver) fetchMany(
+	ctx context.Context,
+	id types.VersionedPackageRef,
+) ([]types.ResolvedPackage, []routing.ProviderError) {
+	providers := resolver.providersForPackage(id)
+	if len(providers) == 0 {
+		return nil, nil
+	}
+
+	groups := make([]providerFetchGroup, 0, len(providers))
+	groupIndexes := map[string]int{}
+	for _, provider := range providers {
+		requestID, ok := resolver.requestIDForProvider(id, provider.Id())
+		if !ok {
+			continue
+		}
+		key := requestID.StringFull()
+		if index, ok := groupIndexes[key]; ok {
+			groups[index].providers = append(groups[index].providers, provider)
+			continue
+		}
+		groupIndexes[key] = len(groups)
+		groups = append(groups, providerFetchGroup{
+			id:        requestID,
+			providers: []upstream.PackageSource{provider},
+		})
+	}
+
+	results := make([]types.ResolvedPackage, 0, len(providers))
+	providerErrors := make([]routing.ProviderError, 0)
+	for _, group := range groups {
+		if err := ctx.Err(); err != nil {
+			return results, append(providerErrors, routing.ProviderError{Err: err})
+		}
+		fetches, errors := routing.FetchMany(group.providers, group.id)
+		results = append(results, fetches...)
+		providerErrors = append(providerErrors, errors...)
+	}
+	return results, providerErrors
+}
+
+type providerFetchGroup struct {
+	id        types.VersionedPackageRef
+	providers []upstream.PackageSource
+}
+
+func (resolver providerCandidateResolver) requestIDForProvider(
+	id types.VersionedPackageRef,
+	source types.SourceId,
+) (types.VersionedPackageRef, bool) {
+	requestID := id
+	switch source {
+	case types.SourceMCDR:
+		if id.Platform.IsModding() {
+			return types.VersionedPackageRef{}, false
+		}
+		if id.Platform == types.PlatformAny || id.Platform == types.PlatformNone {
+			requestID.Platform = types.PlatformMCDR
+		}
+	case types.SourceModrinth, types.SourceCurseForge:
+		if id.Platform == types.PlatformMCDR {
+			return types.VersionedPackageRef{}, false
+		}
+		if id.Platform == types.PlatformAny && resolver.defaultPlatform != types.PlatformAny {
+			requestID.Platform = resolver.defaultPlatform
+		}
+	case types.SourceHangar, types.SourceSpiget:
+		if id.Platform == types.PlatformMCDR || id.Platform.IsModding() {
+			return types.VersionedPackageRef{}, false
+		}
+		if id.Platform == types.PlatformAny || id.Platform == types.PlatformNone {
+			requestID.Platform = types.PlatformBukkit
+		}
+	}
+	return requestID, true
 }
 
 func (resolver providerCandidateResolver) ResolveDependencies(

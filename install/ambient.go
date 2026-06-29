@@ -31,52 +31,86 @@ type AmbientDependencies struct {
 // set describes what the mod loader can satisfy during dependency resolution.
 func buildAmbientDependencies(
 	ctx context.Context,
-	serverInfo workspace.Workspace,
+	ws workspace.Workspace,
 ) (AmbientDependencies, error) {
 	ambient := AmbientDependencies{
 		entries: make(map[string]types.VersionedPackageRef),
 		aliases: make(map[string]string),
 	}
+	if ws.Environments.Mcdr != nil {
+		ambient.Add(
+			types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformMCDR,
+					Name:     "mcdreforged",
+				},
+				Version: types.BareVersion(strings.TrimSpace(ws.Environments.Mcdr.Version.String())),
+			},
+		)
+	}
 
-	if serverInfo.Runtime == nil || serverInfo.Topology == nil || !serverInfo.Topology.HasCapability(types.CapabilityFabricMods) {
+	if ws.Runtime == nil || ws.Topology == nil || !ws.Topology.HasCapability(types.CapabilityFabricMods) {
 		return ambient, nil
 	}
 
-	loaderVersion := serverInfo.DerivedLoaderVersion()
+	loaderVersion := ws.DerivedLoaderVersion()
 	if loaderVersion != "" && loaderVersion != types.VersionUnknown.String() {
-		ambient.Add(types.VersionedPackageRef{
-			PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabricloader"},
-			Version:    types.BareVersion(loaderVersion),
-		})
+		ambient.Add(
+			types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformFabric, Name: "fabricloader",
+				},
+				Version: types.BareVersion(loaderVersion),
+			},
+		)
 	}
-	ambient.Add(types.VersionedPackageRef{
-		PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "minecraft"},
-		Version:    serverInfo.Runtime.GameVersion,
-	})
-	ambient.Add(types.VersionedPackageRef{
-		PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabric"},
-		Version:    types.VersionAny,
-	})
-	ambient.Add(types.VersionedPackageRef{
-		PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "fabric-api"},
-		Version:    types.VersionAny,
-	})
+	ambient.Add(
+		types.VersionedPackageRef{
+			PackageRef: types.PackageRef{
+				Platform: types.PlatformFabric, Name: "minecraft",
+			},
+			Version: ws.Runtime.GameVersion,
+		},
+	)
+	ambient.Add(
+		types.VersionedPackageRef{
+			PackageRef: types.PackageRef{
+				Platform: types.PlatformFabric, Name: "fabric",
+			},
+			Version: types.VersionAny,
+		},
+	)
+	ambient.Add(
+		types.VersionedPackageRef{
+			PackageRef: types.PackageRef{
+				Platform: types.PlatformFabric, Name: "fabric-api",
+			},
+			Version: types.VersionAny,
+		},
+	)
 
 	if javaVersion, ok := currentJavaSpecVersion(ctx); ok {
-		ambient.Add(types.VersionedPackageRef{
-			PackageRef: types.PackageRef{Platform: types.PlatformFabric, Name: "java"},
-			Version:    javaVersion,
-		})
+		ambient.Add(
+			types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformFabric, Name: "java",
+				},
+				Version: javaVersion,
+			},
+		)
 	}
 
 	// Fabric Loader can also contribute real Fabric mods from its own artifact.
 	// Loader 0.15+ uses this path for MixinExtras, and future nested loader mods
 	// should be discovered from metadata rather than added as a name list.
-	loaderPath := fabricLoaderArtifactPath(serverInfo.Root, loaderVersion)
+	loaderPath := fabricLoaderArtifactPath(ws.Root, loaderVersion)
 	if loaderPath == "" {
 		return ambient, nil
 	}
-	if err := addFabricArtifactAmbientDependencies(&ambient, loaderPath); err != nil {
+	if err := addFabricArtifactAmbientDependencies(
+		&ambient,
+		loaderPath,
+	); err != nil {
 		return AmbientDependencies{}, err
 	}
 
@@ -134,7 +168,9 @@ func (a AmbientDependencies) Satisfies(dep types.Dependency) bool {
 		return false
 	}
 	return dep.Satisfy(
-		types.VersionedPackageRef{PackageRef: dep.Id.PackageRef, Version: id.Version},
+		types.VersionedPackageRef{
+			PackageRef: dep.Id.PackageRef, Version: id.Version,
+		},
 		parsed,
 	)
 }
@@ -202,7 +238,10 @@ func addFabricZipAmbientDependencies(
 		// Debian/RPM virtual package provides. They satisfy dependency ids without
 		// requiring a separate downloaded package.
 		ambient.AddAlias(
-			types.PackageRef{Platform: types.PlatformFabric, Name: input.ToProjectName(provided)},
+			types.PackageRef{
+				Platform: types.PlatformFabric,
+				Name:     input.ToProjectName(provided),
+			},
 			id,
 		)
 	}
@@ -221,7 +260,10 @@ func addFabricZipAmbientDependencies(
 		if err != nil {
 			return err
 		}
-		if err := addFabricZipAmbientDependencies(ambient, nestedZip); err != nil {
+		if err := addFabricZipAmbientDependencies(
+			ambient,
+			nestedZip,
+		); err != nil {
 			return err
 		}
 	}
