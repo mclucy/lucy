@@ -69,8 +69,8 @@ func init() {
 	)
 }
 
-// runWithErrorLogging wraps a RunE function to log errors via log.ReportError.
-// It replaces the decoratorLogAndExitOnError decorator.
+// runWithErrorLogging records command failures in the log file only.
+// User-facing errors are returned to fang/cobra for a single stderr presentation.
 func runWithErrorLogging(
 	fn func(
 		cmd *cobra.Command,
@@ -80,7 +80,7 @@ func runWithErrorLogging(
 	return func(cmd *cobra.Command, args []string) error {
 		err := fn(cmd, args)
 		if err != nil {
-			log.ReportError(err)
+			log.Error(err)
 		}
 		return err
 	}
