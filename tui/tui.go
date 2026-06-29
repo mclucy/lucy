@@ -265,6 +265,8 @@ type FieldTree struct {
 	Text       string
 	Annotation string
 	Children   []TreeNode
+
+	availableWidth int
 }
 
 type TreeNode struct {
@@ -316,7 +318,7 @@ func (f *FieldTree) RenderChildren() string {
 		if child.Field == nil {
 			continue
 		}
-		label := treeChildLabel(child, childKeyWidth)
+		label := treeChildLabel(child, childKeyWidth, f.availableWidth)
 		t.Child(label)
 	}
 	return t.String()
@@ -327,6 +329,10 @@ func (f *FieldTree) RenderChildren() string {
 // tree segment after the parent row.
 func (f *FieldTree) HasChildren() bool {
 	return len(f.Children) > 0
+}
+
+func (f *FieldTree) SetAvailableWidth(width int) {
+	f.availableWidth = width
 }
 
 func (f *FieldTree) childKeyWidth() int {
@@ -342,7 +348,22 @@ func (f *FieldTree) childKeyWidth() int {
 	return width + keyColPadding
 }
 
-func treeChildLabel(node TreeNode, keyWidth int) string {
+func treeChildValueWidth(keyWidth int, blockWidth int) int {
+	if blockWidth > 0 {
+		w := blockWidth - keyWidth
+		if w > 0 {
+			return w
+		}
+		return 1
+	}
+	w := style.TermWidth() - keyWidth
+	if w > 0 {
+		return w
+	}
+	return 1
+}
+
+func treeChildLabel(node TreeNode, keyWidth int, blockWidth int) string {
 	key := renderKeyFixed(node.Title, keyWidth)
 	switch field := node.Field.(type) {
 	case *FieldShortText:
@@ -354,7 +375,7 @@ func treeChildLabel(node TreeNode, keyWidth int) string {
 		return key + field.Text
 	case *FieldDynamicColumnLabels:
 		if widthAware, ok := any(field).(WidthAware); ok {
-			widthAware.SetAvailableWidth(style.TermWidth() - keyWidth)
+			widthAware.SetAvailableWidth(treeChildValueWidth(keyWidth, blockWidth))
 		}
 		_, value := field.RenderRow()
 		value = strings.TrimSuffix(value, "\n")
@@ -862,6 +883,9 @@ func buildSegments(fields []Field, totalWidth int, keyWidth int) []segment {
 			}
 			continue
 		case *FieldTree:
+			if widthAware, ok := any(typed).(WidthAware); ok {
+				widthAware.SetAvailableWidth(valueColumnWidth(totalWidth, keyWidth))
+			}
 			if typed.HasChildren() {
 				key, value := typed.RenderRow()
 				rows = append(rows, tableRow{key: key, value: value})
