@@ -70,6 +70,7 @@ const (
 	CoreInvalid Core = iota
 
 	// Cores whose node has RuntimeRoleVanilla or RuntimeRoleModLoader.
+
 	CoreVanilla
 	CoreFabricLoader
 	CoreForge
@@ -78,6 +79,7 @@ const (
 	// Cores whose node has RuntimeRolePluginCore, ordered by Bukkit-family
 	// ancestry rank (lowest rung first). The ordering lets callers compare
 	// Cores within the Bukkit family to determine plugin-API compatibility.
+
 	CoreBukkit
 	CoreCraftBukkit
 	CoreSpigot
@@ -88,20 +90,22 @@ const (
 	CoreSponge
 
 	// Cores whose node has RuntimeRoleHybrid.
+
 	CoreArclight
 	CoreCatServer
 	CoreYouer
 
 	// Cores whose node has RuntimeRoleProxy. Proxies are cores because they
 	// are standalone JVM artifacts that boot on their own; this is required
-	// for future multi-server modelling where a proxy fronts backend servers.
+	// for future multiserver modeling where a proxy fronts backend servers.
+
 	CoreVelocity
 	CoreBungeecord
 	CoreWaterfall
 	CoreGeyserStandalone
 
 	// CoreMCDR runs the server as a subprocess via stdin/stdout orchestration.
-	// It is modelled as a core because it boots as a standalone JVM, even
+	// It is modeled as a core because it boots as a standalone JVM, even
 	// though architecturally it is an external orchestrator rather than a
 	// mod loader in the traditional sense.
 	CoreMCDR
