@@ -86,6 +86,10 @@ func normalizeLines(raw string) []string {
 	raw = strings.ReplaceAll(raw, "\r", "")
 	lines := strings.Split(raw, "\n")
 
+	for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+		lines = lines[1:]
+	}
+
 	// Trim trailing empty lines.
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
