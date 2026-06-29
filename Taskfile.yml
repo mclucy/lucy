@@ -23,12 +23,12 @@ vars:
       fi
 
 tasks:
-  copyright-add:
+  copyright:add:
     desc: Add missing copyright headers to Go files
     cmds:
       - ./copyright.sh add
 
-  copyright-remove:
+  copyright:rm:
     desc: Remove copyright headers from Go files
     cmds:
       - ./copyright.sh remove
@@ -56,7 +56,7 @@ tasks:
     cmds:
       - go run {{.TASKFILE_DIR}} {{.CLI_ARGS}}
 
-  cipher-generate:
+  cipher:generate:
     desc: Generate new cipher key and ciphertext from CF_API_KEY
     cmds:
       - |
@@ -108,7 +108,7 @@ tasks:
       - "./go.mod"
       - "./go.sum"
 
-  build:dev-core:
+  build:dev:
     desc: Build the local development binary for the host platform
     deps:
       - check:cf-api-key
@@ -122,16 +122,10 @@ tasks:
     generates:
       - "{{.DEV_BINARY}}"
 
-  build:dev:
-    desc: Clean and build the local host development binary
-    deps:
-      - clean:dist
-      - build:dev-core
-
   build:watch:
     desc: Rebuild the local debug binary on Go file changes
     cmds:
-      - task build:dev-core
+      - task build:dev
     watch: true
     sources:
       - "./**/*.go"
@@ -162,7 +156,7 @@ tasks:
   check:
     desc: Run the default local verification tasks
     deps:
-      - build:dev-core
+      - build:dev
       - test
       - test:race
 
@@ -171,7 +165,7 @@ tasks:
     cmds:
       - |
         if [ -n "${CF_API_KEY:-}" ]; then
-          task cipher-generate
+          task cipher:generate
         fi
       - task: check
 
@@ -180,40 +174,10 @@ tasks:
     cmds:
       - |
         if [ -n "${CF_API_KEY:-}" ]; then
-          task cipher-generate
+          task cipher:generate
         fi
       - task: build:release
       - gzip -f release/lucy-linux-amd64
       - gzip -f release/lucy-windows-amd64.exe
       - gzip -f release/lucy-darwin-amd64
       - gzip -f release/lucy-darwin-arm64
-
-  build-release:
-    internal: true
-    deps:
-      - build:release
-
-  build-dev:
-    internal: true
-    deps:
-      - build:dev
-
-  build-dev-incremental:
-    internal: true
-    deps:
-      - build:dev-core
-
-  build-watch:
-    internal: true
-    deps:
-      - build:watch
-
-  cleanup-dist:
-    internal: true
-    deps:
-      - clean:dist
-
-  cleanup-release:
-    internal: true
-    deps:
-      - clean:release
