@@ -63,7 +63,7 @@ func init() {
 func actionInfo(cmd *cobra.Command, args []string) error {
 	ref, err := input.ParseFullPackageRef(args[0])
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	sourceStr, _ := cmd.Flags().GetString(flagSourceName)
@@ -78,8 +78,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		if source == types.SourceAuto {
 			errArg = ref.Platform.String()
 		}
-		log.ReportError(fmt.Errorf("%w: %s", err, errArg))
-		return err
+		return fmt.Errorf("%w: %s", err, errArg)
 	}
 
 	meta, providerErrors, err := routing.GetInfoHedged(
@@ -87,7 +86,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		ref.PackageRef,
 	)
 	if err != nil {
-		log.Fatal(fmt.Errorf("failed to get information: %w", err))
+		return fmt.Errorf("failed to get information: %w", err)
 	}
 
 	var noResultSources []string

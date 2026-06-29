@@ -106,7 +106,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	for _, arg := range args {
 		req, err := packageRequestFromInput(arg, source)
 		if err != nil {
-			log.Fatal(fmt.Errorf("stopping package addition: %w", err))
+			return fmt.Errorf("stopping package addition: %w", err)
 		}
 		requests = append(requests, req)
 	}
