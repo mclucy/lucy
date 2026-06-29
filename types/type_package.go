@@ -1,24 +1,5 @@
 package types
 
-// Package is a package identifier with its related information. In principle,
-// only packages remote and local can provide a Package.
-//
-// This is an adapter type that uses composition method to provide a unified
-// interface for both local and remote packages. It is used to represent a
-// package in the system, and can be used to store information about the package
-// such as its dependencies, installation path, and remote source.
-//
-// Deprecated: The goal is to eliminate the need for this type by using more specific types such as LocalPackage and RemotePackage.
-type Package struct {
-	// Id is the basic package identifier
-	Id VersionedPackageRef
-
-	// Package specific data
-	Dependencies *PackageDependencies
-	Local        *PackageInstallation
-	Remote       *ResolvedPackage
-}
-
 // PackageDependencies is one of the optional attributions that can be added to
 // a Package struct. It is usually used in any command that requires operating
 // local packages, such as `lucy install` or `lucy remove`.
@@ -27,8 +8,8 @@ type PackageDependencies struct {
 	Authentic bool
 }
 
-// PackageInstallation is an optional attribution to types.Package. It is
-// used for packages that are known to be installed in the local filesystem.
+// PackageInstallation records a local filesystem path for a package.
+// Deprecated: use DiscoveredPackage.Path or InstalledPackage.Path instead.
 type PackageInstallation struct {
 	Path string
 }
