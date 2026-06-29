@@ -1,4 +1,4 @@
-// Package probe provides functionality to gather and manage server information
+// Package workspace provides functionality to gather and manage server information
 // for a Minecraft server. It includes methods to retrieve server configuration,
 // mod list, executable information, and other relevant details. The package
 // utilizes memoization to avoid redundant calculations and resolve any data
@@ -10,12 +10,9 @@
 package workspace
 
 import (
-	"archive/zip"
 	"context"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
@@ -468,63 +465,18 @@ func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
 		if err != nil || name.RemoteName == "" {
 			continue
 		}
-		return packageFromArtifactSlug(filePath, name.FormattedName()), true
-	}
-	if isSinytraConnectorArtifact(filePath) {
-		return packageFromArtifactSlug(filePath, "connector"), true
+		return types.DiscoveredPackage{
+			Id: types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Platform: types.PlatformForge,
+					Name:     types.BarePackageName(name.FormattedName()),
+				},
+				Version: types.VersionUnknown,
+			},
+			Path: filePath,
+		}, true
 	}
 	return types.DiscoveredPackage{}, false
-}
-
-func packageFromArtifactSlug(filePath, slug string) types.DiscoveredPackage {
-	return types.DiscoveredPackage{
-		Id: types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Platform: types.PlatformForge,
-				Name:     types.BarePackageName(slug),
-			},
-			Version: types.VersionUnknown,
-		},
-		Path: filePath,
-	}
-}
-
-func isSinytraConnectorArtifact(filePath string) bool {
-	r, err := zip.OpenReader(filePath)
-	if err != nil {
-		return false
-	}
-	defer r.Close()
-
-	return zipEntryContains(
-		r.File,
-		"META-INF/services/net.minecraftforge.forgespi.locating.IDependencyLocator",
-		"org.sinytra.connector.locator.ConnectorLocator",
-	) && zipEntryContains(
-		r.File,
-		"META-INF/services/net.minecraftforge.forgespi.locating.IModLocator",
-		"org.sinytra.connector.locator.ConnectorEarlyLocator",
-	)
-}
-
-func zipEntryContains(files []*zip.File, name, needle string) bool {
-	raw, err := readZipFileEntry(files, name)
-	return err == nil && strings.Contains(string(raw), needle)
-}
-
-func readZipFileEntry(files []*zip.File, name string) ([]byte, error) {
-	for _, f := range files {
-		if f.Name != name {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-		defer rc.Close()
-		return io.ReadAll(rc)
-	}
-	return nil, os.ErrNotExist
 }
 
 // knownPackagesSlugResolver returns a slug resolver that consults the knownpkgs
