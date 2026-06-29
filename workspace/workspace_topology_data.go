@@ -49,7 +49,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodeMinecraft,
-				Kind:         types.EdgeModifies,
+				Kind:         types.EdgeExtends,
 			},
 		},
 	},
@@ -64,7 +64,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodePaper,
-				Kind:         types.EdgeImplements,
+				Kind:         types.EdgeExtends,
 			},
 		},
 	},
@@ -77,7 +77,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodeMinecraft,
-				Kind:         types.EdgeModifies,
+				Kind:         types.EdgeExtends,
 			},
 		},
 	},
@@ -92,7 +92,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodeMinecraft,
-				Kind:         types.EdgeModifies,
+				Kind:         types.EdgeExtends,
 			},
 		},
 	},
@@ -115,7 +115,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodePaper,
-				Kind:         types.EdgeImplements,
+				Kind:         types.EdgeExtends,
 			},
 		},
 	},
@@ -130,7 +130,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodePaper,
-				Kind:         types.EdgeImplements,
+				Kind:         types.EdgeExtends,
 			},
 		},
 	},
@@ -174,7 +174,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		PolicyEdges: []RegistryEdge{
 			{
 				TargetNodeID: types.RuntimeNodePaper,
-				Kind:         types.EdgeImplements,
+				Kind:         types.EdgeExtends,
 			},
 		},
 	},

@@ -591,12 +591,12 @@ func buildBukkitExecutableTopologySeed(
 			buildBukkitImplementationEdge(
 				bukkitNodePaperFork,
 				bukkitNodePaper,
-				types.EdgeImplements,
+				types.EdgeExtends,
 			),
 			buildBukkitImplementationEdge(
 				bukkitNodePaper,
 				bukkitNodeMinecraft,
-				types.EdgeModifies,
+				types.EdgeExtends,
 			),
 		)
 	case bukkitNodePaper:
@@ -607,7 +607,7 @@ func buildBukkitExecutableTopologySeed(
 			buildBukkitImplementationEdge(
 				bukkitNodePaper,
 				bukkitNodeMinecraft,
-				types.EdgeModifies,
+				types.EdgeExtends,
 			),
 		)
 	case bukkitNodeSpigot:
@@ -618,7 +618,7 @@ func buildBukkitExecutableTopologySeed(
 			buildBukkitImplementationEdge(
 				bukkitNodeSpigot,
 				bukkitNodeMinecraft,
-				types.EdgeModifies,
+				types.EdgeExtends,
 			),
 		)
 	default:

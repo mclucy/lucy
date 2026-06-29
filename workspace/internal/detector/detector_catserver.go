@@ -80,7 +80,7 @@ func (d *catServerDetector) Detect(
 				{
 					From: types.RuntimeNodeCatServer,
 					To:   types.RuntimeNodeMinecraft,
-					Verb: types.EdgeModifies,
+					Verb: types.EdgeExtends,
 				},
 			},
 		},

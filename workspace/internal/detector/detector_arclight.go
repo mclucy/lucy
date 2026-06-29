@@ -103,7 +103,7 @@ func (d *arclightServerDetector) Detect(
 				{
 					From: types.RuntimeNodeArclight,
 					To:   types.RuntimeNodeMinecraft,
-					Verb: types.EdgeModifies,
+					Verb: types.EdgeExtends,
 				},
 			},
 		},
