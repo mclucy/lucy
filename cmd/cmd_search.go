@@ -119,7 +119,7 @@ func init() {
 func actionSearch(cmd *cobra.Command, args []string) error {
 	ref, err := input.ParseFullPackageRef(args[0])
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	index, _ := cmd.Flags().GetString(flagIndexName)
 	client, _ := cmd.Flags().GetBool(flagClientName)
@@ -136,7 +136,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		platformArg,
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	options := upstream.SearchOptions{
@@ -153,7 +153,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		if specifiedSource == types.SourceAuto {
 			errArg = options.FilterPlatform.String()
 		}
-		log.Fatal(fmt.Errorf("%w: %s", err, errArg))
+		return fmt.Errorf("%w: %s", err, errArg)
 	}
 
 	results, errs := routing.SearchMany(providers, ref.PackageRef.Name, options)
