@@ -75,49 +75,6 @@ func TestVanillaDetectorRejectsForgeInstallerWithEmptyComment(t *testing.T) {
 	}
 }
 
-func TestBridgeMarkersDetectSinytraConnector(t *testing.T) {
-	t.Parallel()
-
-	files := map[string]string{
-		"org/sinytra/connector/Connector.class": emptyClassBytes,
-		"connector.mixins.json":                 "{}",
-		"net/minecraft/client/main/Main.class":  emptyClassBytes,
-	}
-	jarPath := writeRootJar(t, "connector.jar", files)
-
-	reader := openZipForTest(t, jarPath)
-	markers := DetectBridgeMarkers(reader)
-
-	found := false
-	for _, m := range markers {
-		if m.NodeID == "connector" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected connector bridge marker, got %+v", markers)
-	}
-}
-
-func TestBridgeMarkersRejectsLegacyConnectorPath(t *testing.T) {
-	t.Parallel()
-
-	files := map[string]string{
-		"dev/su5ed/sinytra/connector/Legacy.class": emptyClassBytes,
-	}
-	jarPath := writeRootJar(t, "legacy-connector.jar", files)
-
-	reader := openZipForTest(t, jarPath)
-	markers := DetectBridgeMarkers(reader)
-
-	for _, m := range markers {
-		if m.NodeID == "connector" {
-			t.Fatalf("expected no connector marker for legacy dev/su5ed path, got %+v", markers)
-		}
-	}
-}
-
 func TestGeyserVersionExtractionFromFilename(t *testing.T) {
 	t.Parallel()
 

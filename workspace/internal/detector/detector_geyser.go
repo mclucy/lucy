@@ -81,7 +81,6 @@ func (d *geyserStandaloneDetector) Detect(
 				},
 			},
 		},
-		BridgeHints: []string{"geyser_standalone"},
 	}, nil
 }
 

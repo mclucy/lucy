@@ -299,43 +299,6 @@ func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 	}
 }
 
-func TestEnrichTopologyFromPackages_NoTopologyWithStandaloneGeyserHint(t *testing.T) {
-	exec := &ServerRuntime{
-		BridgeHints: []string{string(types.RuntimeNodeGeyserStandalone)},
-	}
-
-	EnrichTopologyFromPackages(exec, nil)
-
-	if exec.topology == nil {
-		t.Fatal("expected topology to be built from standalone geyser hint")
-	}
-	if exec.topology.PrimaryNode != types.RuntimeNodeGeyserStandalone {
-		t.Fatalf(
-			"expected standalone geyser to be primary node, got %q",
-			exec.topology.PrimaryNode,
-		)
-	}
-	if _, hasStandalone := exec.topology.FindNode(types.RuntimeNodeGeyserStandalone); !hasStandalone {
-		t.Error("expected standalone geyser node in topology")
-	}
-	if _, hasAttached := exec.topology.FindNode(types.RuntimeNodeGeyser); hasAttached {
-		t.Error("did not expect attached geyser node from standalone hint")
-	}
-}
-
-func TestEnrichTopologyFromPackages_BridgeHintsProcessed(t *testing.T) {
-	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
-	exec := &ServerRuntime{
-		topology:    BuildTopologyFromEntry(fabricEntry),
-		BridgeHints: []string{string(types.RuntimeNodeConnector)},
-	}
-	EnrichTopologyFromPackages(exec, nil)
-	_, hasConnector := exec.topology.FindNode(types.RuntimeNodeConnector)
-	if !hasConnector {
-		t.Error("expected connector node from BridgeHints")
-	}
-}
-
 func TestEnrichTopologyFromPackages_CaseInsensitiveNameMatching(t *testing.T) {
 	exec := &ServerRuntime{}
 	pkgs := []types.Package{

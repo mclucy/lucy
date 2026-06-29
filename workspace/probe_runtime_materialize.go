@@ -19,7 +19,6 @@ func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerRuntim
 		GameVersion:     evidence.GameVersion,
 		BootCommand:     nil,
 		topology:        materializeRuntimeTopology(evidence),
-		BridgeHints:     append([]string(nil), evidence.BridgeHints...),
 	}
 }
 
