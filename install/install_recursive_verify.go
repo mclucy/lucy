@@ -40,7 +40,7 @@ func verifyArtifacts(
 func verifyDownloadedArtifacts(
 	downloaded DownloadedClosure,
 ) (map[string]CandidateNode, error) {
-	allPackages := make([]types.Package, 0, len(downloaded.DownloadedArtifacts))
+	allPackages := make([]types.DiscoveredPackage, 0, len(downloaded.DownloadedArtifacts))
 	expectedPackages := downloadedArtifactPackages(
 		downloaded.Resolved.CandidateGraph,
 	)
@@ -63,30 +63,34 @@ func verifyDownloadedArtifacts(
 					path,
 				)
 			}
-			allPackages = append(allPackages, packageFromResolvedArtifact(path, expected))
+			allPackages = append(allPackages, discoveredFromResolvedArtifact(path, expected))
 			continue
 		}
 		if hasExpected {
 			allPackages = append(
 				allPackages,
-				artifactInfoToResolvedPackages(infos, expected)...,
+				artifactInfoToResolvedDiscoveredPackages(infos, expected)...,
 			)
 			continue
 		}
-		allPackages = append(allPackages, artifactInfoToPackage(infos)...)
+		allPackages = append(allPackages, artifactInfoToDiscoveredPackages(infos)...)
 	}
 
 	verified := make(map[string]CandidateNode, len(allPackages))
 	for _, pkg := range allPackages {
-		normalizeVerifiedPackage(&pkg)
-		if pkg.Dependencies != nil {
-			pkg.Dependencies.Authentic = true
+		normalizeVerifiedDiscoveredPackage(&pkg)
+		var deps *types.PackageDependencies
+		if len(pkg.Dependencies.Value) > 0 {
+			d := pkg.Dependencies
+			d.Authentic = true
+			deps = &d
 		}
 
-		verified[pkg.Id.StringBase()] = CandidateNode{
-			Package:        resolvedPackageFromVerified(pkg),
-			Path:           legacyPackagePath(pkg),
-			Dependencies:   pkg.Dependencies,
+		key := pkg.Id.StringBase()
+		verified[key] = CandidateNode{
+			Package:        resolvedPackageFromVerifiedDiscovered(pkg),
+			Path:           pkg.Path,
+			Dependencies:   deps,
 			ProvenancePath: []string{"verified"},
 			Advisory:       false,
 		}
@@ -106,13 +110,6 @@ func downloadedArtifactPackages(
 		packages[node.Path] = node.Package
 	}
 	return packages
-}
-
-func legacyPackagePath(pkg types.Package) string {
-	if pkg.Local == nil {
-		return ""
-	}
-	return pkg.Local.Path
 }
 
 func selectArtifactInfosForPlatform(
@@ -140,13 +137,13 @@ func selectArtifactInfosForPlatform(
 	return selected
 }
 
-func artifactInfoToPackage(infos []artifact.Info) []types.Package {
+func artifactInfoToDiscoveredPackages(infos []artifact.Info) []types.DiscoveredPackage {
 	if len(infos) == 0 {
 		return nil
 	}
-	pkgs := make([]types.Package, 0, len(infos))
+	pkgs := make([]types.DiscoveredPackage, 0, len(infos))
 	for _, info := range infos {
-		pkg := types.Package{
+		pkg := types.DiscoveredPackage{
 			Id: types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
 					Platform: info.Ref.Platform,
@@ -154,41 +151,21 @@ func artifactInfoToPackage(infos []artifact.Info) []types.Package {
 				},
 				Version: info.Version,
 			},
-			Local: &types.PackageInstallation{
-				Path: info.FilePath,
-			},
+			Path: info.FilePath,
 		}
 		if len(info.Dependencies) > 0 {
-			deps := make([]types.Dependency, 0, len(info.Dependencies))
-			for _, dep := range info.Dependencies {
-				deps = append(
-					deps, types.Dependency{
-						Id: types.VersionedPackageRef{
-							PackageRef: types.PackageRef{
-								Platform: dep.Ref.Platform,
-								Name:     dep.Ref.Name,
-							},
-						},
-						Constraint: dep.Constraint,
-						Mandatory:  dep.Mandatory,
-						Type:       types.NormalizeDependencyType(dep.Type),
-					},
-				)
-			}
-			pkg.Dependencies = &types.PackageDependencies{
-				Value: deps,
-			}
+			pkg.Dependencies = packageDependenciesFromArtifact(info.Dependencies)
 		}
 		pkgs = append(pkgs, pkg)
 	}
 	return pkgs
 }
 
-func artifactInfoToResolvedPackages(
+func artifactInfoToResolvedDiscoveredPackages(
 	infos []artifact.Info,
 	resolved types.ResolvedPackage,
-) []types.Package {
-	packages := artifactInfoToPackage(infos)
+) []types.DiscoveredPackage {
+	packages := artifactInfoToDiscoveredPackages(infos)
 	for i := range packages {
 		if shouldPreserveResolvedIdentity(packages[i].Id, resolved.Id) {
 			packages[i].Id = types.VersionedPackageRef{
@@ -198,6 +175,26 @@ func artifactInfoToResolvedPackages(
 		}
 	}
 	return packages
+}
+
+func packageDependenciesFromArtifact(deps []artifact.Dependency) types.PackageDependencies {
+	out := make([]types.Dependency, 0, len(deps))
+	for _, dep := range deps {
+		out = append(
+			out, types.Dependency{
+				Id: types.VersionedPackageRef{
+					PackageRef: types.PackageRef{
+						Platform: dep.Ref.Platform,
+						Name:     dep.Ref.Name,
+					},
+				},
+				Constraint: dep.Constraint,
+				Mandatory:  dep.Mandatory,
+				Type:       types.NormalizeDependencyType(dep.Type),
+			},
+		)
+	}
+	return types.PackageDependencies{Value: out}
 }
 
 func shouldPreserveResolvedIdentity(
@@ -213,16 +210,16 @@ func shouldPreserveResolvedIdentity(
 	return verified.Name != resolved.Name
 }
 
-func packageFromResolvedArtifact(
+func discoveredFromResolvedArtifact(
 	path string,
 	resolved types.ResolvedPackage,
-) types.Package {
-	return types.Package{
+) types.DiscoveredPackage {
+	return types.DiscoveredPackage{
 		Id: types.VersionedPackageRef{
 			PackageRef: resolved.Id.PackageRef,
 			Version:    resolved.Id.Version,
 		},
-		Local: &types.PackageInstallation{Path: path},
+		Path: path,
 	}
 }
 
@@ -238,7 +235,7 @@ func hashMatchesResolvedPackage(path string, resolved types.ResolvedPackage) boo
 	return name.RemoteName == string(resolved.Id.Name)
 }
 
-func normalizeVerifiedPackage(pkg *types.Package) {
+func normalizeVerifiedDiscoveredPackage(pkg *types.DiscoveredPackage) {
 	sess := knownpkgs.Default().Session()
 	src := sourceForPlatform(pkg.Id.Platform)
 	if src == types.SourceUnknown {
@@ -249,9 +246,6 @@ func normalizeVerifiedPackage(pkg *types.Package) {
 		pkg.Id.Name = types.BarePackageName(slug)
 	}
 
-	if pkg.Dependencies == nil {
-		return
-	}
 	for i, dep := range pkg.Dependencies.Value {
 		depSrc := sourceForPlatform(dep.Id.Platform)
 		if depSrc == types.SourceUnknown {
@@ -274,7 +268,7 @@ func sourceForPlatform(p types.PlatformId) types.SourceId {
 	}
 }
 
-func resolvedPackageFromVerified(pkg types.Package) types.ResolvedPackage {
+func resolvedPackageFromVerifiedDiscovered(pkg types.DiscoveredPackage) types.ResolvedPackage {
 	return types.ResolvedPackage{
 		Id: types.FullPackageRef{
 			PackageRef: pkg.Id.PackageRef,
