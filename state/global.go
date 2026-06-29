@@ -52,8 +52,7 @@ func MergeConfig(global, workspace *Config) *Config {
 		return nil
 	}
 	if global == nil {
-		merged := *workspace
-		return &merged
+		return new(*workspace)
 	}
 	merged := *global
 	if workspace == nil {

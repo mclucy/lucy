@@ -108,8 +108,7 @@ func (s provider) Dependencies(
 	if err != nil {
 		return nil, err
 	}
-	deps := mcdrDependenciesFromMeta(rel.Meta)
-	return &deps, nil
+	return new(mcdrDependenciesFromMeta(rel.Meta)), nil
 }
 
 func mcdrDependenciesFromMeta(meta pluginMeta) types.PackageDependencies {

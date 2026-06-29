@@ -13,9 +13,11 @@ var (
 )
 
 func AvailabilityError() error {
-	availabilityOnce.Do(func() {
-		availabilityErr = validateAvailability()
-	})
+	availabilityOnce.Do(
+		func() {
+			availabilityErr = validateAvailability()
+		},
+	)
 
 	return availabilityErr
 }
@@ -38,8 +40,7 @@ func validateAvailability() error {
 		return err
 	}
 
-	var apiErr ApiResponseError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[ApiResponseError](err); ok {
 		if apiErr.StatusCode == http.StatusBadRequest ||
 			apiErr.StatusCode == http.StatusForbidden {
 			return fmt.Errorf("%w: %w", ErrInvalidApiKey, err)

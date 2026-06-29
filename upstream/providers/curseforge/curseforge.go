@@ -100,8 +100,7 @@ func (p provider) Dependencies(
 		}
 	}
 
-	deps := (&curseforgeDependencies{file: file}).ToPackageDependencies()
-	return &deps, nil
+	return new((&curseforgeDependencies{file: file}).ToPackageDependencies()), nil
 }
 
 // curseforgeDependencies wraps a fileResponse for dependency

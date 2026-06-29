@@ -362,8 +362,7 @@ func UpsertManifestRequiredIntent(
 	source string,
 ) *Manifest {
 	if manifest == nil {
-		defaults := ManifestDefaults()
-		manifest = &defaults
+		manifest = new(ManifestDefaults())
 	} else {
 		clone := *manifest
 		clone.Environment.CompatiblePlatforms = append(

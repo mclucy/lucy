@@ -513,7 +513,6 @@ func actionBisectBad(cmd *cobra.Command, args []string) error {
 	mid := (state.L + state.R) / 2
 	state.R = mid
 	if state.L == state.R {
-		badMod := state.Mods[state.L]
 		var restored int
 		for i, m := range state.Mods {
 			if m.Path == "" {
@@ -537,7 +536,7 @@ func actionBisectBad(cmd *cobra.Command, args []string) error {
 			cmd, bisectOutput{
 				Message:  "found bad mod",
 				Complete: true,
-				Found:    &badMod,
+				Found:    new(state.Mods[state.L]),
 				State:    currentBisectView(state),
 				Disabled: 1,
 				Restored: restored,

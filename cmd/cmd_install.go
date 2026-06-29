@@ -66,8 +66,7 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 
 	result, err := install.InstallMany(cmd.Context(), plan.Requested, options)
 	if err != nil {
-		var conflictErr *resolve.ConstraintConflictError
-		if errors.As(err, &conflictErr) {
+		if conflictErr, ok := errors.AsType[*resolve.ConstraintConflictError](err); ok {
 			return formatConstraintConflict(conflictErr)
 		}
 		return err

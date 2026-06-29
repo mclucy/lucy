@@ -122,8 +122,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		result, err = install.Install(cmd.Context(), req, options)
 	}
 	if err != nil {
-		var conflictErr *resolve.ConstraintConflictError
-		if errors.As(err, &conflictErr) {
+		if conflictErr, ok := errors.AsType[*resolve.ConstraintConflictError](err); ok {
 			return formatConstraintConflict(conflictErr)
 		}
 		return err

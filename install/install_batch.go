@@ -295,8 +295,7 @@ func buildInstallResultFromPlan(plan ApplyPlan) *Result {
 }
 
 func resolutionError(err error) error {
-	var conflictErr *resolve.ConstraintConflictError
-	if errors.As(err, &conflictErr) {
+	if _, ok := errors.AsType[*resolve.ConstraintConflictError](err); ok {
 		return installError(CategoryConflict, err, nil)
 	}
 	return installError(CategoryResolution, err, nil)
