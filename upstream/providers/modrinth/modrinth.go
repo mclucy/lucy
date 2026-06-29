@@ -29,16 +29,16 @@ func (s provider) Search(q upstream.Query) (
 	err error,
 ) {
 	var facets []facetItems
-	switch q.FilterPlatform {
-	case types.PlatformForge:
+	switch q.FilterEcosystem {
+	case types.EcoForge:
 		facets = append(facets, facetForgeOnly)
-	case types.PlatformFabric:
+	case types.EcoFabric:
 		facets = append(facets, facetFabricOnly)
-	case types.PlatformNeoforge:
+	case types.EcoNeoforge:
 		facets = append(facets, facetNeoforgeOnly)
-	case types.PlatformBukkit:
+	case types.EcoBukkit:
 		facets = append(facets, facetBukkitOnly)
-	case types.PlatformAny:
+	case types.EcoAny:
 		fallthrough
 	default:
 		facets = append(facets, facetAllLoaders)
@@ -141,7 +141,7 @@ func (s provider) Dependencies(
 	}
 	deps := (&modrinthDependencies{
 		version:  version,
-		platform: id.Platform,
+		platform: id.Eco,
 	}).ToPackageDependencies()
 	return &deps, nil
 }
@@ -150,12 +150,12 @@ func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
 	parsed types.VersionedPackageRef,
 	err error,
 ) {
-	if p.Platform.IsSelector() {
+	if p.Eco.IsSelector() {
 		// Platform inference removed to avoid circular imports.
 		// Caller should provide explicit platform.
-		p.Platform = types.PlatformNone
+		p.Eco = types.EcoBare
 	}
-	parsed.Platform = p.Platform
+	parsed.Eco = p.Eco
 
 	parsed.Name = p.Name
 
@@ -163,7 +163,7 @@ func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
 
 	switch p.Version {
 	case types.VersionCompatible:
-		v, err = latestCompatibleVersion(p.Name, p.Platform)
+		v, err = latestCompatibleVersion(p.Name, p.Eco)
 	case types.VersionAny, types.VersionNone, types.VersionLatest:
 		v, err = latestVersion(p.Name)
 	default:

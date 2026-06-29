@@ -108,8 +108,8 @@ func translateSpongePlugin(
 	v := resolveSpongePluginVersion(metadata, plugin)
 	info := Info{
 		Ref: types.PackageRef{
-			Platform: types.PlatformSponge,
-			Name:     input.ToProjectName(plugin.ID),
+			Eco:  types.EcoSponge,
+			Name: input.ToProjectName(plugin.ID),
 		},
 		Version:  types.BareVersion(v),
 		FilePath: localPath,
@@ -313,8 +313,8 @@ func translateSpongeDependencies(
 		translated = append(
 			translated, Dependency{
 				Ref: types.PackageRef{
-					Platform: types.PlatformSponge,
-					Name:     input.ToProjectName(id),
+					Eco:  types.EcoSponge,
+					Name: input.ToProjectName(id),
 				},
 				Constraint: version.ParseRange(
 					v,

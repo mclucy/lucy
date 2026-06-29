@@ -86,10 +86,10 @@ func getVersionById(id string) (v *versionResponse, err error) {
 
 func versionSupportsLoader(
 	version *versionResponse,
-	loader types.PlatformId,
+	loader types.Ecosystem,
 ) bool {
 	for _, l := range version.Loaders {
-		if types.PlatformId(l).Satisfy(loader) {
+		if types.Ecosystem(l).Satisfy(loader) {
 			return true
 		}
 	}
@@ -104,7 +104,7 @@ func latestVersion(slug types.BarePackageName) (
 	if err != nil {
 		return nil, err
 	}
-	v, fellBack := selectLatestVersionCandidate(versions, types.PlatformNone)
+	v, fellBack := selectLatestVersionCandidate(versions, types.EcoBare)
 	if v == nil {
 		return nil, ErrNoVersion
 	}
@@ -118,7 +118,7 @@ func latestVersion(slug types.BarePackageName) (
 
 func latestCompatibleVersion(
 	slug types.BarePackageName,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) (
 	v *versionResponse,
 	err error,
@@ -127,7 +127,7 @@ func latestCompatibleVersion(
 	if err != nil {
 		return nil, err
 	}
-	filterByLoader := platform != types.PlatformAny && platform != types.PlatformNone
+	filterByLoader := platform != types.EcoAny && platform != types.EcoBare
 	if filterByLoader {
 		v, _ = selectLatestCompatibleVersionCandidate(versions, platform)
 	} else {

@@ -62,8 +62,8 @@ func (d *geyserStandaloneDetector) Detect(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformAny,
-					Name:     input.ToProjectName("geyser"),
+					Eco:  types.EcoAny,
+					Name: input.ToProjectName("geyser"),
 				},
 				Version: version,
 			},

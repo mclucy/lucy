@@ -5,8 +5,8 @@ package types
 type BarePackageName string
 
 type PackageRef struct {
-	Platform PlatformId
-	Name     BarePackageName
+	Eco  Ecosystem
+	Name BarePackageName
 }
 
 func (p PackageRef) StringFull() string {
@@ -14,7 +14,7 @@ func (p PackageRef) StringFull() string {
 }
 
 func (p PackageRef) StringBase() string {
-	return p.Platform.String() + "/" + p.Name.String()
+	return p.Eco.String() + "/" + p.Name.String()
 }
 
 type VersionedPackageRef struct {

@@ -47,15 +47,15 @@ func (d *catServerDetector) Detect(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformAny,
-					Name:     input.ToProjectName("catserver"),
+					Eco:  types.EcoAny,
+					Name: input.ToProjectName("catserver"),
 				},
 				Version: signals.version,
 			},
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformMinecraft,
-					Name:     input.ToProjectName("minecraft"),
+					Eco:  types.EcoMinecraft,
+					Name: input.ToProjectName("minecraft"),
 				},
 				Version: signals.gameVersion,
 			},

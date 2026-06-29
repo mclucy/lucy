@@ -15,59 +15,56 @@ import (
 	"github.com/mclucy/lucy/tui/style"
 )
 
-// PlatformId is an enum of several string constants.
+// Ecosystem is an enum of several string constants.
 //
 // All platform is a package under itself, for example, "fabric/fabric" is a
 // valid package, and is equivalent to "fabric". This literal is typically used
 // when installing/upgrading a platform itself.
-type PlatformId string
+type Ecosystem string
 
 const (
 	// special selectors
 
-	// PlatformAny is ambiguous but has single-valueness. It does NOT refer
+	// EcoAny is ambiguous but has single-valueness. It does NOT refer
 	// to multiple platforms, but rather a single platform that is unknown.
-	// Understand this as PlatformAny reduces to a definite platform at
+	// Understand this as EcoAny reduces to a definite platform at
 	// evaluation. Again, keep in mind that you should not allow it to be
 	// explicitly evaluated as multiple platforms.
-	PlatformAny PlatformId = ""
+	EcoAny Ecosystem = ""
 
-	// PlatformNone is a special platform that is not satisfied by any platform,
+	// EcoBare is a special platform that is not satisfied by any platform,
 	// but it can satisfy all platforms. It is typically used to indicate the
 	// absence of a platform, for example, when a package is not compatible with
 	// any platform, or when a package does not require a platform.
-	PlatformNone PlatformId = "none"
+	EcoBare Ecosystem = "bare"
 
-	// PlatformUnknown is the only constant with no single-valueness, it can
+	// EcoUnknown is the only constant with no single-valueness, it can
 	// refer to multiple platforms other than the ones defined here.
-	PlatformUnknown PlatformId = "unknown"
+	EcoUnknown Ecosystem = "unknown"
 
 	// vanilla
 
-	PlatformMinecraft PlatformId = "minecraft"
-	PlatformVanilla              = PlatformMinecraft // alias
+	EcoMinecraft Ecosystem = "minecraft"
+	EcoVanilla             = EcoMinecraft // alias
 
 	// modding platforms
 
-	PlatformFabric   PlatformId = "fabric"
-	PlatformForge    PlatformId = "forge"
-	PlatformNeoforge PlatformId = "neoforge"
+	EcoFabric   Ecosystem = "fabric"
+	EcoForge    Ecosystem = "forge"
+	EcoNeoforge Ecosystem = "neoforge"
 
-	// mcdr
+	// others
 
-	PlatformMCDR PlatformId = "mcdr"
-
-	// bukkit family
-
-	PlatformBukkit     PlatformId = "bukkit" // Bukkit or spigot plugins
-	PlatformPaper      PlatformId = "paper"  // Paper and its forks' plugins
-	PlatformSponge     PlatformId = "sponge"
-	PlatformVelocity   PlatformId = "velocity"
-	PlatformBungeecord PlatformId = "bungeecord" // Can be consumed by both waterfall and bungeecord itself
+	EcoBukkit     Ecosystem = "bukkit"     // Bukkit or spigot plugins
+	EcoPaper      Ecosystem = "paper"      // Paper and its forks' plugins
+	EcoBungeecord Ecosystem = "bungeecord" // Can be consumed by both waterfall and bungeecord itself
+	EcoVelocity   Ecosystem = "velocity"
+	EcoSponge     Ecosystem = "sponge"
+	EcoMcdr       Ecosystem = "mcdr"
 )
 
-func (p PlatformId) Title() string {
-	if p == PlatformAny {
+func (p Ecosystem) Title() string {
+	if p == EcoAny {
 		return "Any"
 	}
 	if p.Valid() {
@@ -76,8 +73,8 @@ func (p PlatformId) Title() string {
 	return "Unknown"
 }
 
-func (p PlatformId) String() string {
-	if p == PlatformAny {
+func (p Ecosystem) String() string {
+	if p == EcoAny {
 		return "any"
 	}
 	return string(p)
@@ -86,17 +83,17 @@ func (p PlatformId) String() string {
 // Valid
 //
 // If a platform can be used in a package id, it is a valid platform.
-func (p PlatformId) Valid() bool {
+func (p Ecosystem) Valid() bool {
 	switch p {
-	case PlatformMinecraft, PlatformFabric, PlatformForge, PlatformNeoforge, PlatformMCDR, PlatformBukkit, PlatformAny, PlatformNone:
+	case EcoMinecraft, EcoFabric, EcoForge, EcoNeoforge, EcoMcdr, EcoBukkit, EcoAny, EcoBare:
 		return true
 	}
 	return false
 }
 
-func (p PlatformId) IsSearchPlatform() bool {
+func (p Ecosystem) IsSearchEcosystem() bool {
 	switch p {
-	case PlatformFabric, PlatformForge, PlatformNeoforge, PlatformBukkit:
+	case EcoFabric, EcoForge, EcoNeoforge, EcoBukkit:
 		return true
 	default:
 		return false
@@ -104,22 +101,22 @@ func (p PlatformId) IsSearchPlatform() bool {
 }
 
 // Satisfy returns true if p satisfies the requirement of p2.
-func (p PlatformId) Satisfy(p2 PlatformId) bool {
+func (p Ecosystem) Satisfy(p2 Ecosystem) bool {
 	// When p2 is PlatformNone, it is satisfied by all platforms.
-	if p2 == PlatformNone {
+	if p2 == EcoBare {
 		return true
 	}
 	// PlatformUnknown is not satisfied by any platform, and does not satisfy
 	// any platform including itself.
-	if p == PlatformUnknown || p2 == PlatformUnknown {
+	if p == EcoUnknown || p2 == EcoUnknown {
 		return false
 	}
 	// When p2 is PlatformAny, it is satisfied by all platforms.
-	if p2 == PlatformAny {
+	if p2 == EcoAny {
 		return true
 	}
 	// When p is PlatformAny, it does not satisfy any platform except itself.
-	if p == PlatformAny {
+	if p == EcoAny {
 		return false
 	}
 	// Trivial cases
@@ -130,41 +127,41 @@ func (p PlatformId) Satisfy(p2 PlatformId) bool {
 // restriction on which one to use.
 //
 // This function does not represent a mathematical equivalence relation, since
-// PlatformUnknown should always be unequal to any platform including itself.
+// EcoUnknown should always be unequal to any platform including itself.
 // However, rather than using .IsUnknown() function, it is more intuitive to
 // just use an equality operator.
 //
 // This is created to differentiate the meaning of "satisfy" and "is".
 // For example, "fabric" satisfies "minecraft", but does not "is" "minecraft".
-func (p PlatformId) Is(p2 PlatformId) bool {
+func (p Ecosystem) Is(p2 Ecosystem) bool {
 	return p == p2
 }
 
-func (p PlatformId) IsModding() bool {
-	return p == PlatformFabric || p == PlatformForge || p == PlatformNeoforge
+func (p Ecosystem) IsModding() bool {
+	return p == EcoFabric || p == EcoForge || p == EcoNeoforge
 }
 
-func DeclaredModdingPlatformForNode(id RuntimeNodeID) PlatformId {
+func DeclaredModdingEcosystemForNode(id RuntimeNodeID) Ecosystem {
 	switch id {
 	case "fabric":
-		return PlatformFabric
+		return EcoFabric
 	case "forge", "arclight", "catserver":
-		return PlatformForge
+		return EcoForge
 	case "neoforge", "youer":
-		return PlatformNeoforge
+		return EcoNeoforge
 	case "mcdr":
-		return PlatformMCDR
+		return EcoMcdr
 	case "minecraft":
-		return PlatformMinecraft
+		return EcoMinecraft
 	default:
-		return PlatformNone
+		return EcoBare
 	}
 }
 
 // IsSelector returns true if the platform is ambiguous and can be resolved
 // from server context.
-func (p PlatformId) IsSelector() bool {
-	return p == PlatformAny
+func (p Ecosystem) IsSelector() bool {
+	return p == EcoAny
 }
 
 // Title Replaces underlines or hyphens with spaces, then capitalize the first
@@ -183,8 +180,8 @@ func (n BarePackageName) Pep8String() string {
 
 func (p VersionedPackageRef) String() string {
 	return fn.Ternary(
-		p.Platform == PlatformAny,
-		"", string(p.Platform)+"/",
+		p.Eco == EcoAny,
+		"", string(p.Eco)+"/",
 	) +
 		string(p.Name) +
 		fn.Ternary(
@@ -195,9 +192,9 @@ func (p VersionedPackageRef) String() string {
 }
 
 func (p VersionedPackageRef) StringFull() string {
-	return p.Platform.String() + "/" + p.Name.String() + "@" + p.Version.String()
+	return p.Eco.String() + "/" + p.Name.String() + "@" + p.Version.String()
 }
 
 func (p VersionedPackageRef) StringBase() string {
-	return string(p.Platform) + "/" + string(p.Name)
+	return string(p.Eco) + "/" + string(p.Name)
 }

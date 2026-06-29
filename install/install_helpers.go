@@ -9,16 +9,16 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func ensureServerPlatformMatch(
+func ensureServerEcosystemMatch(
 	id types.VersionedPackageRef,
 	ws workspace.Workspace,
 ) error {
-	platform := id.Platform
+	platform := id.Eco
 
 	switch platform {
-	case types.PlatformAny:
+	case types.EcoAny:
 		return nil
-	case types.PlatformMCDR:
+	case types.EcoMcdr:
 		if ws.Environments.Mcdr == nil {
 			return errors.New("mcdr not found")
 		}
@@ -28,7 +28,7 @@ func ensureServerPlatformMatch(
 			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
 
-		requiredCapability := workspace.CapabilityForPlatform(platform)
+		requiredCapability := workspace.CapabilityForEcosystem(platform)
 		if requiredCapability == "" {
 			return nil
 		}

@@ -146,7 +146,10 @@ func parseSpongeManifest(data []byte) spongeManifestSignals {
 		}
 	}
 
-	signals.flavor, signals.gameVersion, signals.loaderVersion, signals.spongeVersion = parseSpongeImplementationVersion(signals.title, signals.version)
+	signals.flavor, signals.gameVersion, signals.loaderVersion, signals.spongeVersion = parseSpongeImplementationVersion(
+		signals.title,
+		signals.version,
+	)
 
 	return signals
 }
@@ -201,15 +204,15 @@ func buildSpongeExecutableEvidence(
 	identities := []types.VersionedPackageRef{
 		{
 			PackageRef: types.PackageRef{
-				Platform: types.PlatformSponge,
-				Name:     input.ToProjectName("sponge"),
+				Eco:  types.EcoSponge,
+				Name: input.ToProjectName("sponge"),
 			},
 			Version: signals.spongeVersion,
 		},
 		{
 			PackageRef: types.PackageRef{
-				Platform: types.PlatformMinecraft,
-				Name:     input.ToProjectName("minecraft"),
+				Eco:  types.EcoMinecraft,
+				Name: input.ToProjectName("minecraft"),
 			},
 			Version: signals.gameVersion,
 		},
@@ -233,13 +236,15 @@ func buildSpongeExecutableEvidence(
 			types.CapabilityForgeMods.Populate()...,
 		)
 		nodes[0] = spongeNode
-		identities = append(identities, types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Platform: types.PlatformForge,
-				Name:     input.ToProjectName("forge"),
+		identities = append(
+			identities, types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Eco:  types.EcoForge,
+					Name: input.ToProjectName("forge"),
+				},
+				Version: signals.loaderVersion,
 			},
-			Version: signals.loaderVersion,
-		})
+		)
 	case spongeFlavorNeo:
 		spongeNode.Role = types.RuntimeRoleHybrid
 		spongeNode.Capabilities = append(
@@ -247,13 +252,15 @@ func buildSpongeExecutableEvidence(
 			types.CapabilityNeoforgeMods.Populate()...,
 		)
 		nodes[0] = spongeNode
-		identities = append(identities, types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Platform: types.PlatformNeoforge,
-				Name:     input.ToProjectName("neoforge"),
+		identities = append(
+			identities, types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Eco:  types.EcoNeoforge,
+					Name: input.ToProjectName("neoforge"),
+				},
+				Version: signals.loaderVersion,
 			},
-			Version: signals.loaderVersion,
-		})
+		)
 	}
 
 	return &ExecutableEvidence{

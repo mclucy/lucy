@@ -87,8 +87,8 @@ func (r *velocityReader) Read(
 		return []Info{
 			{
 				Ref: types.PackageRef{
-					Platform: types.PlatformVelocity,
-					Name:     input.ToProjectName(descriptor.ID),
+					Eco:  types.EcoVelocity,
+					Name: input.ToProjectName(descriptor.ID),
 				},
 				Version:  types.BareVersion(descriptor.Version),
 				FilePath: filePath,
@@ -155,8 +155,8 @@ func (r *bungeeCordReader) Read(
 		return []Info{
 			{
 				Ref: types.PackageRef{
-					Platform: types.PlatformBungeecord,
-					Name:     input.ToProjectName(descriptor.Name),
+					Eco:  types.EcoBungeecord,
+					Name: input.ToProjectName(descriptor.Name),
 				},
 				Version:  types.BareVersion(descriptor.Version),
 				FilePath: filePath,

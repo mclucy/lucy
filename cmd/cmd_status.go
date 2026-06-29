@@ -61,7 +61,7 @@ func generateStatusOutput(
 
 	output = &tui.Data{Fields: []tui.Field{}}
 	serverPlatform := data.DerivedModLoader()
-	modPlatforms := statusModPlatforms(data.Topology, serverPlatform)
+	modPlatforms := statusModEcosystems(data.Topology, serverPlatform)
 	showPlatformQualifiedMods := len(modPlatforms) > 1
 	packageNameOutput := func(pkg types.DiscoveredPackage) string {
 		if longOutput {
@@ -88,23 +88,23 @@ func generateStatusOutput(
 
 	// logo display strategy:
 	// custom client > mod loader > mcdr > lucy > vanilla
-	var logoPlatform types.PlatformId
-	if serverPlatform == types.PlatformVanilla {
+	var logoEco types.Ecosystem
+	if serverPlatform == types.EcoVanilla {
 		if hasMcdr {
-			logoPlatform = types.PlatformMCDR
+			logoEco = types.EcoMcdr
 		} else if hasLucy {
-			// logoPlatform =
+			// logoEco =
 			// lucy is not supposed to be a platform, needs refactor
 			// also need structural support for all other custom server clients
 		} else {
-			logoPlatform = types.PlatformVanilla
+			logoEco = types.EcoVanilla
 		}
 	} else if serverPlatform.IsModding() {
 		output.Fields = append(
 			output.Fields,
 			&tui.FieldLogo{
-				Platform: logoPlatform,
-				NoColor:  noStyle,
+				Eco:     logoEco,
+				NoColor: noStyle,
 			},
 		)
 	}
@@ -143,7 +143,7 @@ func generateStatusOutput(
 		)
 	}
 
-	if platformLabel := statusRuntimePlatformLabel(
+	if platformLabel := statusRuntimeEcosystemLabel(
 		data.Topology,
 		serverPlatform,
 		hasPrimaryNode,
@@ -289,7 +289,7 @@ func statusTopologyTreeField(
 
 func statusPackageSections(
 	packages []types.DiscoveredPackage,
-	modPlatforms map[types.PlatformId]bool,
+	modPlatforms map[types.Ecosystem]bool,
 	packageNameOutput func(types.DiscoveredPackage) string,
 	showMods bool,
 	showPlugins bool,
@@ -305,17 +305,17 @@ func statusPackageSections(
 			continue
 		}
 
-		packagePlatform := pkg.Id.Platform
+		packagePlatform := pkg.Id.Eco
 		if showMods && modPlatforms[packagePlatform] {
 			modNames = append(modNames, packageNameOutput(pkg))
 			if pkg.Path != "" {
 				modPaths = append(modPaths, pkg.Path)
 			}
 		}
-		if showPlugins && packagePlatform == types.PlatformBukkit {
+		if showPlugins && packagePlatform == types.EcoBukkit {
 			pluginNames = append(pluginNames, packageNameOutput(pkg))
 		}
-		if hasMcdr && packagePlatform == types.PlatformMCDR {
+		if hasMcdr && packagePlatform == types.EcoMcdr {
 			mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
 		}
 	}
@@ -323,11 +323,11 @@ func statusPackageSections(
 	return modNames, modPaths, pluginNames, mcdrPlugins
 }
 
-func statusModPlatforms(
+func statusModEcosystems(
 	topology *types.RuntimeTopology,
-	serverPlatform types.PlatformId,
-) map[types.PlatformId]bool {
-	platforms := make(map[types.PlatformId]bool, 3)
+	serverPlatform types.Ecosystem,
+) map[types.Ecosystem]bool {
+	platforms := make(map[types.Ecosystem]bool, 3)
 	if topology == nil || !topology.Resolved() {
 		return platforms
 	}
@@ -335,17 +335,17 @@ func statusModPlatforms(
 	if serverPlatform.IsModding() {
 		platforms[serverPlatform] = true
 	}
-	if serverPlatform == types.PlatformNeoforge {
-		platforms[types.PlatformForge] = true
+	if serverPlatform == types.EcoNeoforge {
+		platforms[types.EcoForge] = true
 	}
 	if topology.HasCapability(types.CapabilityFabricMods) {
-		platforms[types.PlatformFabric] = true
+		platforms[types.EcoFabric] = true
 	}
 	if topology.HasCapability(types.CapabilityForgeMods) {
-		platforms[types.PlatformForge] = true
+		platforms[types.EcoForge] = true
 	}
 	if topology.HasCapability(types.CapabilityNeoforgeMods) {
-		platforms[types.PlatformNeoforge] = true
+		platforms[types.EcoNeoforge] = true
 	}
 
 	return platforms
@@ -362,16 +362,16 @@ func topologyPrimaryNodeData(topology *types.RuntimeTopology) (
 	return topology.PrimaryNodeData()
 }
 
-func statusRuntimePlatformLabel(
+func statusRuntimeEcosystemLabel(
 	topology *types.RuntimeTopology,
-	fallback types.PlatformId,
+	fallback types.Ecosystem,
 	hasPrimaryNode bool,
 	primaryNode types.RuntimeNode,
 ) string {
 	label := ""
 	if hasPrimaryNode {
 		if primaryNode.Role != types.RuntimeRoleHybrid {
-			if platform := types.DeclaredModdingPlatformForNode(primaryNode.ID); platform != types.PlatformNone && platform != types.PlatformMinecraft {
+			if platform := types.DeclaredModdingEcosystemForNode(primaryNode.ID); platform != types.EcoBare && platform != types.EcoMinecraft {
 				label = platform.Title()
 			}
 		}
@@ -383,7 +383,7 @@ func statusRuntimePlatformLabel(
 		}
 	}
 
-	if label == "" && topology != nil && topology.Resolved() && fallback != types.PlatformMinecraft && fallback != types.PlatformAny {
+	if label == "" && topology != nil && topology.Resolved() && fallback != types.EcoMinecraft && fallback != types.EcoAny {
 		label = fallback.Title()
 	}
 

@@ -40,7 +40,7 @@ var neoforgeArtifactHashLookup = func(
 //   - https://github.com/neoforged/NeoForge/blob/main/CHANGELOG.md
 func NeoForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 	spec := modLoaderInstallSpec{
-		platform: types.PlatformNeoforge,
+		platform: types.EcoNeoforge,
 		name:     "neoforge",
 		libraryRoot: filepath.Join(
 			"libraries",
@@ -101,7 +101,11 @@ func verifyNeoForgeArtifactByUnpack(
 	case modLoaderArtifactUniversal:
 		return verifyNeoForgeUniversalManifest(reader, loaderVersion)
 	case modLoaderArtifactServer:
-		return forgeHasSibling(candidate.path, "unix_args.txt", "win_args.txt"), nil
+		return forgeHasSibling(
+			candidate.path,
+			"unix_args.txt",
+			"win_args.txt",
+		), nil
 	default:
 		return false, nil
 	}

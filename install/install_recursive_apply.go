@@ -16,11 +16,11 @@ func recursiveInstallDestination(
 	ws workspace.Workspace,
 	pkg types.InstalledPackage,
 ) string {
-	if pkg.Id.Platform.IsModding() && len(ws.ModPath) > 0 {
+	if pkg.Id.Eco.IsModding() && len(ws.ModPath) > 0 {
 		return ws.ModPath[0]
 	}
 
-	if pkg.Id.Platform == types.PlatformMCDR &&
+	if pkg.Id.Eco == types.EcoMcdr &&
 		ws.Environments.Mcdr != nil &&
 		len(ws.Environments.Mcdr.Config.PluginDirectories) > 0 {
 		return ws.Environments.Mcdr.Config.PluginDirectories[0]

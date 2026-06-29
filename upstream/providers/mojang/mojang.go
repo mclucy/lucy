@@ -96,14 +96,17 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 
 	return types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: types.PlatformMinecraft,
-			Name:     "minecraft",
+			Eco:  types.EcoMinecraft,
+			Name: "minecraft",
 		},
 		Version: types.BareVersion(versionID),
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (
+	types.ResolvedPackage,
+	error,
+) {
 	manifest, err := FetchVersionManifest()
 	if err != nil {
 		return types.ResolvedPackage{}, err

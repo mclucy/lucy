@@ -222,7 +222,13 @@ func TestEnrichTopologyFromPackages_NoTopologyNoEvidence(t *testing.T) {
 func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T) {
 	exec := &ServerRuntime{}
 	pkgs := []types.DiscoveredPackage{
-		makeDiscoveredPackage(t, types.PlatformFabric, "sinytra-connector", "1.0.0", ""),
+		makeDiscoveredPackage(
+			t,
+			types.EcoFabric,
+			"sinytra-connector",
+			"1.0.0",
+			"",
+		),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
 	if exec.topology == nil {
@@ -254,7 +260,7 @@ func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T
 func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
 	exec := &ServerRuntime{}
 	pkgs := []types.DiscoveredPackage{
-		makeDiscoveredPackage(t, types.PlatformFabric, "kilt", "1.0.0", ""),
+		makeDiscoveredPackage(t, types.EcoFabric, "kilt", "1.0.0", ""),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
 	if exec.topology == nil {
@@ -287,7 +293,7 @@ func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 		topology: BuildTopologyFromEntry(fabricEntry),
 	}
 	pkgs := []types.DiscoveredPackage{
-		makeDiscoveredPackage(t, types.PlatformFabric, "geyser-fabric", "2.0.0", ""),
+		makeDiscoveredPackage(t, types.EcoFabric, "geyser-fabric", "2.0.0", ""),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
 	_, hasGeyser := exec.topology.FindNode(types.RuntimeNodeGeyser)
@@ -302,7 +308,7 @@ func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 func TestEnrichTopologyFromPackages_CaseInsensitiveNameMatching(t *testing.T) {
 	exec := &ServerRuntime{}
 	pkgs := []types.DiscoveredPackage{
-		makeDiscoveredPackage(t, types.PlatformFabric, "Velocity", "3.0.0", ""),
+		makeDiscoveredPackage(t, types.EcoFabric, "Velocity", "3.0.0", ""),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
 	if exec.topology == nil {
@@ -318,8 +324,14 @@ func TestEnrichTopologyFromPackages_TopologyNormalizedAfterEnrich(t *testing.T) 
 	// Add duplicate evidence to verify NormalizeTopology is called
 	exec := &ServerRuntime{}
 	pkgs := []types.DiscoveredPackage{
-		makeDiscoveredPackage(t, types.PlatformFabric, "sinytra-connector", "1.0.0", ""),
-		makeDiscoveredPackage(t, types.PlatformFabric, "kilt", "1.0.0", ""),
+		makeDiscoveredPackage(
+			t,
+			types.EcoFabric,
+			"sinytra-connector",
+			"1.0.0",
+			"",
+		),
+		makeDiscoveredPackage(t, types.EcoFabric, "kilt", "1.0.0", ""),
 	}
 	EnrichTopologyFromPackages(exec, pkgs)
 	// Verify no duplicate nodes

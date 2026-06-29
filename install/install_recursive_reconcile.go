@@ -175,8 +175,8 @@ func reconcileDiff(
 		}
 		// Treat a platform-wildcard candidate as reachable if a verified node
 		// with the same name exists — they represent the same artifact.
-		p := candidateNode.Package.Id.Platform
-		if p == types.PlatformNone || p == types.PlatformAny || p.IsSelector() {
+		p := candidateNode.Package.Id.Eco
+		if p == types.EcoBare || p == types.EcoAny || p.IsSelector() {
 			if _, ok := verifiedByName[candidateNode.Package.Id.Name]; ok {
 				continue
 			}
@@ -315,8 +315,8 @@ func reconcileDependencyMap(
 		merged[key] = types.Dependency{
 			Id: types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: requirement.Id.Platform,
-					Name:     requirement.Id.Name,
+					Eco:  requirement.Id.Eco,
+					Name: requirement.Id.Name,
 				},
 			},
 			Constraint: requirement.Constraint,
@@ -433,8 +433,8 @@ func reconcileSortedPackageIDs(items map[string]types.VersionedPackageRef) []typ
 
 	slices.SortFunc(
 		result, func(a, b types.VersionedPackageRef) int {
-			if a.Platform != b.Platform {
-				return strings.Compare(a.Platform.String(), b.Platform.String())
+			if a.Eco != b.Eco {
+				return strings.Compare(a.Eco.String(), b.Eco.String())
 			}
 			if a.Name != b.Name {
 				return strings.Compare(a.Name.String(), b.Name.String())
@@ -457,10 +457,10 @@ func reconcileSortedConstraintInputs(items map[string]resolve.ConstraintInput) [
 			if a.Requester != b.Requester {
 				return strings.Compare(a.Requester, b.Requester)
 			}
-			if a.Dependency.Id.Platform != b.Dependency.Id.Platform {
+			if a.Dependency.Id.Eco != b.Dependency.Id.Eco {
 				return strings.Compare(
-					a.Dependency.Id.Platform.String(),
-					b.Dependency.Id.Platform.String(),
+					a.Dependency.Id.Eco.String(),
+					b.Dependency.Id.Eco.String(),
 				)
 			}
 			if a.Dependency.Id.Name != b.Dependency.Id.Name {

@@ -111,19 +111,19 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 }
 
 func (v *hangarVersion) ToPackageRemote() types.ResolvedPackage {
-	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.PlatformNone))
+	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.EcoBare))
 	if remote.FileUrl == "" {
 		platforms := sortedMapKeys(v.Downloads)
 		if len(platforms) == 0 {
 			return types.ResolvedPackage{Id: types.FullPackageRef{Scope: types.SourceHangar}}
 		}
 
-		remote, _ = v.ToPackageRemoteForPlatform(types.PlatformId(strings.ToLower(platforms[0])))
+		remote, _ = v.ToPackageRemoteForPlatform(types.Ecosystem(strings.ToLower(platforms[0])))
 	}
 	return remote
 }
 
-func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.PlatformId) (
+func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Ecosystem) (
 	types.ResolvedPackage,
 	bool,
 ) {
@@ -147,7 +147,7 @@ func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.PlatformId) (
 }
 
 func (v *hangarVersion) PluginDependencyNames() []types.BarePackageName {
-	depsForPlatform := v.DependenciesForPlatform(types.PlatformNone)
+	depsForPlatform := v.DependenciesForPlatform(types.EcoBare)
 	if len(depsForPlatform) == 0 {
 		return nil
 	}
@@ -163,7 +163,7 @@ func (v *hangarVersion) PluginDependencyNames() []types.BarePackageName {
 	return deps
 }
 
-func (v *hangarVersion) DependenciesForPlatform(platform types.PlatformId) []hangarPluginDependency {
+func (v *hangarVersion) DependenciesForPlatform(platform types.Ecosystem) []hangarPluginDependency {
 	if len(v.PluginDependencies) == 0 {
 		return nil
 	}
@@ -182,15 +182,15 @@ func (v *hangarVersion) DependenciesForPlatform(platform types.PlatformId) []han
 	return nil
 }
 
-func (v *hangarVersion) HasDownloadForPlatform(platform types.PlatformId) bool {
+func (v *hangarVersion) HasDownloadForPlatform(platform types.Ecosystem) bool {
 	_, ok := v.downloadForPlatform(preferredDownloadPlatform(platform))
 	if ok {
 		return true
 	}
-	return len(v.Downloads) > 0 && platform == types.PlatformNone
+	return len(v.Downloads) > 0 && platform == types.EcoBare
 }
 
-func (v *hangarVersion) SupportsPlatform(platform types.PlatformId) bool {
+func (v *hangarVersion) SupportsPlatform(platform types.Ecosystem) bool {
 	if len(v.PlatformDependencies) == 0 {
 		return false
 	}
@@ -200,10 +200,10 @@ func (v *hangarVersion) SupportsPlatform(platform types.PlatformId) bool {
 		return true
 	}
 
-	return platform == types.PlatformNone && len(v.PlatformDependencies) > 0
+	return platform == types.EcoBare && len(v.PlatformDependencies) > 0
 }
 
-func (v *hangarVersion) downloadForPlatform(platform types.PlatformId) (
+func (v *hangarVersion) downloadForPlatform(platform types.Ecosystem) (
 	hangarDownload,
 	bool,
 ) {

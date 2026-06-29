@@ -124,5 +124,5 @@ func runMCDRInit(ctx context.Context, workDir string) (string, error) {
 }
 
 func init() {
-	bootstrappers[types.PlatformMCDR] = mcdrBootstrapper{}
+	bootstrappers[types.EcoMcdr] = mcdrBootstrapper{}
 }

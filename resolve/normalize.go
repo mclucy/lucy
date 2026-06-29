@@ -83,10 +83,10 @@ func normalizeConstraintExpression(dep types.Dependency) (
 }
 
 func defaultVersionScheme(id types.VersionedPackageRef) types.VersionScheme {
-	switch id.Platform {
-	case types.PlatformMinecraft:
+	switch id.Eco {
+	case types.EcoMinecraft:
 		return types.MinecraftRelease
-	case types.PlatformForge, types.PlatformNeoforge:
+	case types.EcoForge, types.EcoNeoforge:
 		return types.Maven
 	default:
 		return types.Semver

@@ -40,12 +40,12 @@ Without a working local→remote bridge, scoped syntax only gives users a way to
 The reference types form a hierarchy of increasing specificity:
 
 - `BarePackageName` — just a name string (`fabric-api`)
-- `PackageRef` — platform + name (`fabric/fabric-api`)
-- `VersionedPackageRef` — platform + name + version (`fabric/fabric-api@0.100.0`)
-- `ScopedPackageRef` — source + platform + name (`modrinth:fabric/fabric-api`)
-- `FullPackageRef` — source + platform + name + version (`modrinth:fabric/fabric-api@0.100.0`)
+- `PackageRef` — ecosystem + name (`fabric/fabric-api`); field `Eco`
+- `VersionedPackageRef` — ecosystem + name + version (`fabric/fabric-api@0.100.0`)
+- `ScopedPackageRef` — source + ecosystem + name (`modrinth:fabric/fabric-api`)
+- `FullPackageRef` — source + ecosystem + name + version (`modrinth:fabric/fabric-api@0.100.0`)
 
-`PlatformId` is an enum that can be definite (Fabric, Forge, NeoForge, MCDR, Bukkit, ...), ambiguous (`PlatformAny` — context-dependent, reduces to a definite platform during evaluation), or structural (`PlatformNone` — identity packages like the Minecraft server itself).
+`Ecosystem` (formerly **Platform** / `PlatformId`) is an enum: definite loaders (Fabric, Forge, NeoForge, MCDR, Bukkit, …), ambiguous (`EcoAny`), or structural (`EcoBare` — no mod loader; manifest may still use legacy `none`). Alias `EcoVanilla` = `EcoMinecraft`.
 
 `SourceId` identifies which upstream provider a package comes from (Modrinth, CurseForge, GitHub, MCDR, Hangar, Spiget, etc.). `SourceAuto` means "let Lucy choose."
 
@@ -70,6 +70,6 @@ Lucy supports multiple versioning schemes because the Minecraft ecosystem uses t
 
 ## Gotchas
 
-- `Dependency.Id.Version` is always empty — never read it. Only `Id.Platform` and `Id.Name` identify the dependency target; the constraint is in `Dependency.Constraint`.
-- `PlatformAny` is not a wildcard — it is an ambiguous-but-single-valued platform that must reduce to a definite platform during evaluation. Do not treat it as "matches everything."
+- `Dependency.Id.Version` is always empty — never read it. Only `Id.Eco` and `Id.Name` identify the dependency target; the constraint is in `Dependency.Constraint`.
+- `EcoAny` is not a wildcard — it is ambiguous-but-single-valued and must reduce to a definite ecosystem during evaluation. Do not treat it as "matches everything."
 - `Package` (in `type_package.go`) is a legacy composite struct. It bundles remote metadata, local install state, and dependencies into one type. It is being phased out in favor of lifecycle-specific types.

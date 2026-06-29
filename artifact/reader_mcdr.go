@@ -63,8 +63,8 @@ func (r *mcdrReader) Read(
 
 		info := Info{
 			Ref: types.PackageRef{
-				Platform: types.PlatformMCDR,
-				Name:     input.ToProjectName(pluginInfo.Id),
+				Eco:  types.EcoMcdr,
+				Name: input.ToProjectName(pluginInfo.Id),
 			},
 			Version:  types.BareVersion(pluginInfo.Version),
 			FilePath: filePath,
@@ -82,12 +82,12 @@ func (r *mcdrReader) Read(
 				deps = append(
 					deps, Dependency{
 						Ref: types.PackageRef{
-							Platform: types.PlatformMCDR,
-							Name:     input.ToProjectName(key),
+							Eco:  types.EcoMcdr,
+							Name: input.ToProjectName(key),
 						},
 						Constraint: version.ParseRange(
 							value,
-							version.InferRangeDialect(types.PlatformMCDR),
+							version.InferRangeDialect(types.EcoMcdr),
 							types.Semver,
 						),
 						Mandatory: true,

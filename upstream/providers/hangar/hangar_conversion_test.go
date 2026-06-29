@@ -176,7 +176,7 @@ func TestHangarVersionToPackageRemote(t *testing.T) {
 		PluginDependencies: map[string][]hangarPluginDependency{},
 	}
 
-	remote, ok := version.ToPackageRemoteForPlatform(types.PlatformId("paper"))
+	remote, ok := version.ToPackageRemoteForPlatform(types.Ecosystem("paper"))
 	if !ok {
 		t.Fatalf("expected PAPER download to resolve")
 	}
@@ -255,7 +255,7 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 		)
 	}
 
-	paperRemote, ok := version.ToPackageRemoteForPlatform(types.PlatformId("PaPeR"))
+	paperRemote, ok := version.ToPackageRemoteForPlatform(types.Ecosystem("PaPeR"))
 	if !ok {
 		t.Fatalf("expected case-insensitive platform match for paper")
 	}
@@ -263,7 +263,7 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 		t.Fatalf("expected paper download url, got %q", paperRemote.FileUrl)
 	}
 
-	if _, ok := version.ToPackageRemoteForPlatform(types.PlatformId("velocity")); ok {
+	if _, ok := version.ToPackageRemoteForPlatform(types.Ecosystem("velocity")); ok {
 		t.Fatalf("expected missing platform to remain unresolved")
 	}
 

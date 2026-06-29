@@ -46,13 +46,11 @@ type InitFlowState struct {
 	// GameVersion is the Minecraft game version the user entered (e.g. "1.21.4").
 	GameVersion string
 
-	// Platform is the chosen server platform identifier.
-	// Valid values: "fabric", "neoforge", "forge", "mcdr", "none".
-	Platform string
+	// Ecosystem is the chosen modding ecosystem identifier.
+	// Valid values: "fabric", "neoforge", "forge", "mcdr", "bare", "none" (legacy).
+	Ecosystem string
 
-	// PlatformVersion is the chosen loader/platform version. Empty when
-	// Platform == "none" or when the user leaves it to "latest".
-	PlatformVersion string
+	EcosystemVersion string
 
 	// CompatiblePlatforms are extra compatible ecosystems/controller layers
 	// that can coexist with the primary runtime (e.g. neoforge + sinytra).
@@ -110,12 +108,10 @@ func CanProceed(s *InitFlowState) bool {
 	if s.GameVersion == "" {
 		return false
 	}
-	return ValidatePlatformSelection(s.Platform, s.CompatiblePlatforms) == nil
+	return ValidateEcosystemSelection(s.Ecosystem, s.CompatiblePlatforms) == nil
 }
 
-// ValidatePlatformSelection delegates to state-level validation so init stays
-// consistent with the manifest rules for primary + compatible platforms.
-func ValidatePlatformSelection(primary string, compatible []string) error {
+func ValidateEcosystemSelection(primary string, compatible []string) error {
 	return state.ValidateManifestEnvironment(
 		state.ManifestEnvironment{
 			ModdingPlatform:     primary,
@@ -195,8 +191,8 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 		cfg := state.ConfigDefaults()
 		mf.Config = &cfg
 		mf.Environment.GameVersion = s.GameVersion
-		mf.Environment.ModdingPlatform = s.Platform
-		mf.Environment.ModdingPlatformVersion = s.PlatformVersion
+		mf.Environment.ModdingPlatform = s.Ecosystem
+		mf.Environment.ModdingPlatformVersion = s.EcosystemVersion
 		mf.Environment.CompatiblePlatforms = append(
 			[]string(nil),
 			s.CompatiblePlatforms...,
@@ -210,8 +206,8 @@ func BuildResult(s *InitFlowState) (InitFlowResult, error) {
 	if lkPath := string(state.LockFile); willWrite(lkPath) {
 		lk := state.NewLock()
 		lk.GameVersion = s.GameVersion
-		lk.Platform = s.Platform
-		lk.PlatformVersion = s.PlatformVersion
+		lk.Platform = s.Ecosystem
+		lk.PlatformVersion = s.EcosystemVersion
 		result.LockToWrite = &lk
 		result.WrittenFiles = append(result.WrittenFiles, lkPath)
 	} else {

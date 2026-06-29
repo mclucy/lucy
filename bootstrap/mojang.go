@@ -20,7 +20,7 @@ func (b mojangBootstrapper) Bootstrap(
 	fetched types.ResolvedPackage,
 	serverDir string,
 ) error {
-	if workspace.New().DerivedModLoader() != types.PlatformNone {
+	if workspace.New().DerivedModLoader() != types.EcoBare {
 		return errors.New("a server is already installed")
 	}
 
@@ -79,7 +79,7 @@ func (b mojangBootstrapper) Bootstrap(
 }
 
 func init() {
-	bootstrappers[types.PlatformMinecraft] = mojangBootstrapper{}
+	bootstrappers[types.EcoMinecraft] = mojangBootstrapper{}
 }
 
 func addExecutePermission(file *os.File) error {

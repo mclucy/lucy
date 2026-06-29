@@ -26,8 +26,8 @@ func (provider) Id() types.SourceId {
 // Search queries the CurseForge /v1/mods/search endpoint.
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	options := upstream.SearchOptions{
-		IncludeClient:  !q.ExcludeClient,
-		FilterPlatform: q.FilterPlatform,
+		IncludeClient:   !q.ExcludeClient,
+		FilterEcosystem: q.FilterEcosystem,
 	}
 	u := searchUrl(types.BarePackageName(q.Keyword), options)
 	log.Debug("searching via curseforge api: " + u)
@@ -49,7 +49,7 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 		return types.ResolvedPackage{}, err
 	}
 
-	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Platform)
+	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Eco)
 	if err != nil {
 		return types.ResolvedPackage{}, err
 	}
@@ -87,14 +87,14 @@ func (p provider) Dependencies(
 	}
 
 	// Get the specific file matching the version
-	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Platform)
+	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Eco)
 	if err != nil {
 		return nil, err
 	}
 
 	// If no specific version, get latest release
 	if file == nil {
-		file, err = latestCompatibleFile(mod.Id, id.Platform)
+		file, err = latestCompatibleFile(mod.Id, id.Eco)
 		if err != nil {
 			return nil, err
 		}
@@ -172,12 +172,12 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	parsed types.VersionedPackageRef,
 	err error,
 ) {
-	if id.Platform.IsSelector() {
+	if id.Eco.IsSelector() {
 		// Platform inference removed to avoid circular imports.
 		// Caller should provide explicit platform.
-		id.Platform = types.PlatformNone
+		id.Eco = types.EcoBare
 	}
-	parsed.Platform = id.Platform
+	parsed.Eco = id.Eco
 
 	parsed.Name = id.Name
 
@@ -189,7 +189,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 		if err != nil {
 			return id, err
 		}
-		file, err = latestCompatibleFile(mod.Id, id.Platform)
+		file, err = latestCompatibleFile(mod.Id, id.Eco)
 		if err != nil {
 			return id, err
 		}

@@ -63,8 +63,8 @@ func (r *neoforgeReader) Read(
 
 		info := Info{
 			Ref: types.PackageRef{
-				Platform: types.PlatformNeoforge,
-				Name:     input.ToProjectName(mod.ModID),
+				Eco:  types.EcoNeoforge,
+				Name: input.ToProjectName(mod.ModID),
 			},
 			Version:  version,
 			FilePath: filePath,
@@ -105,8 +105,8 @@ func (r *neoforgeReader) Read(
 			info.Dependencies = append(
 				info.Dependencies, Dependency{
 					Ref: types.PackageRef{
-						Platform: types.PlatformNeoforge,
-						Name:     input.ToProjectName(dep.ModID),
+						Eco:  types.EcoNeoforge,
+						Name: input.ToProjectName(dep.ModID),
 					},
 					Constraint: parseNeoforgeMavenVersionRange(dep.VersionRange),
 					Mandatory:  dep.Type == "required" || dep.Mandatory,
@@ -288,8 +288,8 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependenc
 		deps = append(
 			deps, Dependency{
 				Ref: types.PackageRef{
-					Platform: types.PlatformNone,
-					Name:     input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact),
+					Eco:  types.EcoBare,
+					Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact),
 				},
 				Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),
 				Mandatory:  true,
@@ -303,7 +303,7 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependenc
 func parseNeoforgeMavenVersionRange(interval string) types.VersionExpr {
 	return version.ParseRange(
 		interval,
-		version.InferRangeDialect(types.PlatformForge),
+		version.InferRangeDialect(types.EcoForge),
 		types.Maven,
 	)
 }

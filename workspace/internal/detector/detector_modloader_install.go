@@ -23,7 +23,7 @@ const (
 )
 
 type modLoaderInstallSpec struct {
-	platform       types.PlatformId
+	platform       types.Ecosystem
 	name           string
 	libraryRoot    string
 	mavenBaseURL   string
@@ -101,18 +101,18 @@ var neoforgeVersionDirPattern = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.\d+)*(?:-[
 
 func parseModLoaderVersionTuple(
 	versionDir string,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) (gameVersion, loaderVersion types.BareVersion, ok bool) {
 	name := filepath.Base(versionDir)
 
 	switch platform {
-	case types.PlatformForge:
+	case types.EcoForge:
 		match := forgeRuntimeVersionDirPattern.FindStringSubmatch(name)
 		if match == nil {
 			return types.VersionUnknown, types.VersionUnknown, false
 		}
 		return types.BareVersion(match[1]), types.BareVersion(match[2]), true
-	case types.PlatformNeoforge:
+	case types.EcoNeoforge:
 		match := neoforgeVersionDirPattern.FindStringSubmatch(name)
 		if match == nil {
 			return types.VersionUnknown, types.VersionUnknown, false
@@ -229,14 +229,14 @@ func hashArtifactFile(filePath string, algo cache.HashAlgorithm) (
 }
 
 func buildModLoaderRuntimeInfo(
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	name string,
 	filePath string,
 	gameVersion types.BareVersion,
 	loaderVersion types.BareVersion,
 ) *ExecutableEvidence {
 	capability := types.CapabilityForgeMods
-	if platform == types.PlatformNeoforge {
+	if platform == types.EcoNeoforge {
 		capability = types.CapabilityNeoforgeMods
 	}
 	return &ExecutableEvidence{
@@ -245,15 +245,15 @@ func buildModLoaderRuntimeInfo(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Platform: platform,
-					Name:     types.BarePackageName(name),
+					Eco:  platform,
+					Name: types.BarePackageName(name),
 				},
 				Version: loaderVersion,
 			},
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformMinecraft,
-					Name:     "minecraft",
+					Eco:  types.EcoMinecraft,
+					Name: "minecraft",
 				},
 				Version: gameVersion,
 			},

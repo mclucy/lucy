@@ -73,15 +73,15 @@ func (d *arclightServerDetector) Detect(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformAny,
-					Name:     input.ToProjectName("arclight"),
+					Eco:  types.EcoAny,
+					Name: input.ToProjectName("arclight"),
 				},
 				Version: manifestSignals.loaderVersion,
 			},
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformMinecraft,
-					Name:     input.ToProjectName("minecraft"),
+					Eco:  types.EcoMinecraft,
+					Name: input.ToProjectName("minecraft"),
 				},
 				Version: gameVersion,
 			},
@@ -178,34 +178,55 @@ func parseArclightGameVersionFromPath(filePath string) types.BareVersion {
 	return types.BareVersion(match[1])
 }
 
-func arclightCapabilities(filePath string, launchProps []byte) []types.RuntimeCapability {
+func arclightCapabilities(
+	filePath string,
+	launchProps []byte,
+) []types.RuntimeCapability {
 	// Arclight implements the Bukkit/Spigot tier (not Paper) per its FAQ.
 	// Populate() expands the Spigot rung into its Bukkit ancestry so the
 	// detector-produced seed matches the registry-side ladder in
 	// probe_topology_data.go::RuntimeNodeArclight.
 	capabilities := types.CapabilitySpigotPlugins.Populate()
 	if loaderCapability, ok := arclightLoaderCapabilityFromLaunchProps(launchProps); ok {
-		return append([]types.RuntimeCapability{loaderCapability}, capabilities...)
+		return append(
+			[]types.RuntimeCapability{loaderCapability},
+			capabilities...,
+		)
 	}
 
 	match := arclightDistributionNamePattern.FindStringSubmatch(
 		strings.ToLower(filepath.Base(filePath)),
 	)
 	if match == nil {
-		return append([]types.RuntimeCapability{types.CapabilityForgeMods}, capabilities...)
+		return append(
+			[]types.RuntimeCapability{types.CapabilityForgeMods},
+			capabilities...,
+		)
 	}
 
 	switch match[1] {
 	case "fabric":
-		return append([]types.RuntimeCapability{types.CapabilityFabricMods}, capabilities...)
+		return append(
+			[]types.RuntimeCapability{types.CapabilityFabricMods},
+			capabilities...,
+		)
 	case "neoforge":
-		return append([]types.RuntimeCapability{types.CapabilityNeoforgeMods}, capabilities...)
+		return append(
+			[]types.RuntimeCapability{types.CapabilityNeoforgeMods},
+			capabilities...,
+		)
 	default:
-		return append([]types.RuntimeCapability{types.CapabilityForgeMods}, capabilities...)
+		return append(
+			[]types.RuntimeCapability{types.CapabilityForgeMods},
+			capabilities...,
+		)
 	}
 }
 
-func arclightLoaderCapabilityFromLaunchProps(data []byte) (types.RuntimeCapability, bool) {
+func arclightLoaderCapabilityFromLaunchProps(data []byte) (
+	types.RuntimeCapability,
+	bool,
+) {
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())

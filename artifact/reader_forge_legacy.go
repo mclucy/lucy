@@ -55,8 +55,8 @@ func (r *forgeLegacyReader) Read(
 
 		info := Info{
 			Ref: types.PackageRef{
-				Platform: types.PlatformForge,
-				Name:     input.ToProjectName(m.ModId),
+				Eco:  types.EcoForge,
+				Name: input.ToProjectName(m.ModId),
 			},
 			Version:  types.BareVersion(m.Version),
 			FilePath: filePath,
@@ -72,8 +72,8 @@ func (r *forgeLegacyReader) Read(
 				deps = append(
 					deps, Dependency{
 						Ref: types.PackageRef{
-							Platform: types.PlatformForge,
-							Name:     input.ToProjectName(depStr),
+							Eco:  types.EcoForge,
+							Name: input.ToProjectName(depStr),
 						},
 						Mandatory: true,
 					},

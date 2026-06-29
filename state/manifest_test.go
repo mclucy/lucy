@@ -211,10 +211,10 @@ func TestManifestRejectsIncompatibleEnvironmentCompatiblePlatforms(t *testing.T)
 func TestManifestBundlesRemainSeparateFromPackages(t *testing.T) {
 	manifest := ManifestDefaults()
 	manifest.Environment.GameVersion = "1.20.6"
-	manifest.Environment.ModdingPlatform = "none"
+	manifest.Environment.ModdingPlatform = "bare"
 	manifest.Packages = []ManifestPackage{
 		{
-			ID:      "none/luckperms",
+			ID:      "bare/luckperms",
 			Version: "latest",
 			Source:  "curseforge",
 			Role:    RoleRequired,
@@ -304,7 +304,7 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 	manifest := &Manifest{
 		FormatVersion: ManifestDefaults().FormatVersion,
 		Environment: ManifestEnvironment{
-			ModdingPlatform: string(types.PlatformFabric),
+			ModdingPlatform: string(types.EcoFabric),
 		},
 		Packages: []ManifestPackage{
 			{
@@ -361,7 +361,7 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 			{
 				FullPackageRef: types.FullPackageRef{
 					PackageRef: types.PackageRef{
-						Platform: types.PlatformFabric, Name: "new-root",
+						Eco: types.EcoFabric, Name: "new-root",
 					},
 					Version: types.VersionLatest,
 					Scope:   types.SourceModrinth,
@@ -412,7 +412,7 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 	manifest := &Manifest{
 		FormatVersion: ManifestDefaults().FormatVersion,
 		Environment: ManifestEnvironment{
-			ModdingPlatform: string(types.PlatformFabric),
+			ModdingPlatform: string(types.EcoFabric),
 		},
 		Packages: []ManifestPackage{
 			{
@@ -479,15 +479,15 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 		[]types.FullPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformFabric,
-					Name:     "root-a",
+					Eco:  types.EcoFabric,
+					Name: "root-a",
 				},
 				Version: types.VersionCompatible,
 				Scope:   types.SourceAuto,
 			}, {
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformFabric,
-					Name:     "manual-jar",
+					Eco:  types.EcoFabric,
+					Name: "manual-jar",
 				},
 				Version: types.VersionCompatible,
 				Scope:   types.SourceAuto,

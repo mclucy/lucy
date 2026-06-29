@@ -49,8 +49,8 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 
 	return types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: types.PlatformForge,
-			Name:     "forge",
+			Eco:  types.EcoForge,
+			Name: "forge",
 		},
 		Version: types.BareVersion(forgeVersion),
 	}, nil
@@ -92,9 +92,9 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 func minecraftVersionForInstall() (types.BareVersion, error) {
 	ws := workspace.New()
 	switch ws.DerivedModLoader() {
-	case types.PlatformVanilla:
+	case types.EcoVanilla:
 		return ws.Runtime.GameVersion, nil
-	case types.PlatformNone:
+	case types.EcoBare:
 		selectedVersion := promptSelectMinecraftVersion()
 		if selectedVersion == "none" || selectedVersion == "error" {
 			return "", errors.New("minecraft version selection cancelled or failed")

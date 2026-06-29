@@ -71,7 +71,10 @@ func TestVanillaDetectorRejectsForgeInstallerWithEmptyComment(t *testing.T) {
 		t.Fatalf("detect: %v", err)
 	}
 	if evidence != nil {
-		t.Fatalf("expected nil evidence for forge installer with mainClass set, got %+v", evidence)
+		t.Fatalf(
+			"expected nil evidence for forge installer with mainClass set, got %+v",
+			evidence,
+		)
 	}
 }
 
@@ -91,14 +94,21 @@ func TestGeyserVersionExtractionFromFilename(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.filename, func(t *testing.T) {
-			t.Parallel()
+		t.Run(
+			tt.filename, func(t *testing.T) {
+				t.Parallel()
 
-			got := parseGeyserStandaloneVersionFromPath(tt.filename)
-			if got != tt.want {
-				t.Fatalf("parseGeyserStandaloneVersionFromPath(%q) = %q, want %q", tt.filename, got, tt.want)
-			}
-		})
+				got := parseGeyserStandaloneVersionFromPath(tt.filename)
+				if got != tt.want {
+					t.Fatalf(
+						"parseGeyserStandaloneVersionFromPath(%q) = %q, want %q",
+						tt.filename,
+						got,
+						tt.want,
+					)
+				}
+			},
+		)
 	}
 }
 
@@ -121,23 +131,34 @@ func TestCompareForgeMajorNumeric(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(string(tt.version), func(t *testing.T) {
-			t.Parallel()
+		t.Run(
+			string(tt.version), func(t *testing.T) {
+				t.Parallel()
 
-			got := compareForgeMajor(types.BareVersion(tt.version), tt.target)
-			sign := func(n int) int {
-				if n < 0 {
-					return -1
+				got := compareForgeMajor(
+					types.BareVersion(tt.version),
+					tt.target,
+				)
+				sign := func(n int) int {
+					if n < 0 {
+						return -1
+					}
+					if n > 0 {
+						return 1
+					}
+					return 0
+				}(got)
+				if sign != tt.want {
+					t.Fatalf(
+						"compareForgeMajor(%q, %d) sign = %d, want %d",
+						tt.version,
+						tt.target,
+						sign,
+						tt.want,
+					)
 				}
-				if n > 0 {
-					return 1
-				}
-				return 0
-			}(got)
-			if sign != tt.want {
-				t.Fatalf("compareForgeMajor(%q, %d) sign = %d, want %d", tt.version, tt.target, sign, tt.want)
-			}
-		})
+			},
+		)
 	}
 }
 
@@ -161,17 +182,25 @@ func TestNeoForgeVersionRegexAllowsBetaSuffix(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			t.Parallel()
+		t.Run(
+			tt.input, func(t *testing.T) {
+				t.Parallel()
 
-			gameVersion, _, ok := parseModLoaderVersionTuple(
-				filepath.Join("fake", "neoforge", tt.input),
-				types.PlatformNeoforge,
-			)
-			if ok != tt.want {
-				t.Fatalf("parseModLoaderVersionTuple(%q) ok = %v, want %v (gameVersion=%q)", tt.input, ok, tt.want, gameVersion)
-			}
-		})
+				gameVersion, _, ok := parseModLoaderVersionTuple(
+					filepath.Join("fake", "neoforge", tt.input),
+					types.EcoNeoforge,
+				)
+				if ok != tt.want {
+					t.Fatalf(
+						"parseModLoaderVersionTuple(%q) ok = %v, want %v (gameVersion=%q)",
+						tt.input,
+						ok,
+						tt.want,
+						gameVersion,
+					)
+				}
+			},
+		)
 	}
 }
 
@@ -230,7 +259,10 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 		Topology: &types.RuntimeTopology{
 			PrimaryNode: types.RuntimeNodeMinecraft,
 			Nodes: []types.RuntimeNode{
-				{ID: types.RuntimeNodeMinecraft, Role: types.RuntimeRoleVanilla},
+				{
+					ID:   types.RuntimeNodeMinecraft,
+					Role: types.RuntimeRoleVanilla,
+				},
 			},
 		},
 	}
@@ -242,52 +274,63 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 		},
 	}
 
-	t.Run("ambiguous_without_resolution", func(t *testing.T) {
-		t.Parallel()
+	t.Run(
+		"ambiguous_without_resolution", func(t *testing.T) {
+			t.Parallel()
 
-		candidates := &ExecutableCandidates{
-			Candidates: []*ExecutableEvidence{vanillaEvidence, paperEvidence},
-		}
-		if candidates.IsAmbiguous() {
-			t.Fatalf("expected resolved (non-ambiguous) after dropping vanilla")
-		}
-		single := candidates.Single()
-		if single == nil {
-			t.Fatalf("expected single specific candidate, got nil")
-		}
-		if single.Topology.PrimaryNode != types.RuntimeNodePaper {
-			t.Fatalf("expected paper to win, got %q", single.Topology.PrimaryNode)
-		}
-	})
+			candidates := &ExecutableCandidates{
+				Candidates: []*ExecutableEvidence{
+					vanillaEvidence, paperEvidence,
+				},
+			}
+			if candidates.IsAmbiguous() {
+				t.Fatalf("expected resolved (non-ambiguous) after dropping vanilla")
+			}
+			single := candidates.Single()
+			if single == nil {
+				t.Fatalf("expected single specific candidate, got nil")
+			}
+			if single.Topology.PrimaryNode != types.RuntimeNodePaper {
+				t.Fatalf(
+					"expected paper to win, got %q",
+					single.Topology.PrimaryNode,
+				)
+			}
+		},
+	)
 
-	t.Run("all_vanilla_still_single", func(t *testing.T) {
-		t.Parallel()
+	t.Run(
+		"all_vanilla_still_single", func(t *testing.T) {
+			t.Parallel()
 
-		candidates := &ExecutableCandidates{
-			Candidates: []*ExecutableEvidence{vanillaEvidence},
-		}
-		single := candidates.Single()
-		if single == nil {
-			t.Fatalf("expected vanilla candidate when only vanilla exists")
-		}
-	})
+			candidates := &ExecutableCandidates{
+				Candidates: []*ExecutableEvidence{vanillaEvidence},
+			}
+			single := candidates.Single()
+			if single == nil {
+				t.Fatalf("expected vanilla candidate when only vanilla exists")
+			}
+		},
+	)
 
-	t.Run("two_specific_still_ambiguous", func(t *testing.T) {
-		t.Parallel()
+	t.Run(
+		"two_specific_still_ambiguous", func(t *testing.T) {
+			t.Parallel()
 
-		forgeEvidence := &ExecutableEvidence{
-			PrimaryEntrance: "/fake/forge.jar",
-			Topology: &types.RuntimeTopology{
-				PrimaryNode: types.RuntimeNodeID("forge"),
-			},
-		}
-		candidates := &ExecutableCandidates{
-			Candidates: []*ExecutableEvidence{paperEvidence, forgeEvidence},
-		}
-		if !candidates.IsAmbiguous() {
-			t.Fatalf("expected ambiguous when two specific candidates exist")
-		}
-	})
+			forgeEvidence := &ExecutableEvidence{
+				PrimaryEntrance: "/fake/forge.jar",
+				Topology: &types.RuntimeTopology{
+					PrimaryNode: types.RuntimeNodeID("forge"),
+				},
+			}
+			candidates := &ExecutableCandidates{
+				Candidates: []*ExecutableEvidence{paperEvidence, forgeEvidence},
+			}
+			if !candidates.IsAmbiguous() {
+				t.Fatalf("expected ambiguous when two specific candidates exist")
+			}
+		},
+	)
 }
 
 const emptyClassBytes = "\xCA\xFE\xBA\xBE\x00\x00\x00\x34"

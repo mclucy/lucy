@@ -71,8 +71,8 @@ func (idx *PackageIndex) Packages() []types.DiscoveredPackage {
 		result, func(i, j int) bool {
 			pi, pj := result[i].Id, result[j].Id
 
-			if pi.Platform != pj.Platform {
-				return pi.Platform.String() < pj.Platform.String()
+			if pi.Eco != pj.Eco {
+				return pi.Eco.String() < pj.Eco.String()
 			}
 			if pi.Name != pj.Name {
 				return pi.Name.String() < pj.Name.String()
@@ -95,18 +95,18 @@ func (idx *PackageIndex) LookupByID(id types.VersionedPackageRef) (
 	return pkg, ok
 }
 
-// LookupByPlatformName returns all packages matching the given platform and
+// LookupByEcosystemName returns all packages matching the given platform and
 // name, sorted by Version (string ascending). If no packages match, returns
 // nil.
 //
 // This method never exposes map iteration order; results are always sorted.
-func (idx *PackageIndex) LookupByPlatformName(
-	platform types.PlatformId,
+func (idx *PackageIndex) LookupByEcosystemName(
+	platform types.Ecosystem,
 	name string,
 ) []types.DiscoveredPackage {
 	var matches []types.DiscoveredPackage
 	for _, pkg := range idx.pkgs {
-		if pkg.Id.Platform == platform && pkg.Id.Name.String() == name {
+		if pkg.Id.Eco == platform && pkg.Id.Name.String() == name {
 			matches = append(matches, pkg)
 		}
 	}

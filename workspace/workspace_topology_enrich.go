@@ -171,7 +171,7 @@ func runtimeNodeHasIdentity(
 	identity types.VersionedPackageRef,
 ) bool {
 	for _, existing := range node.Identities {
-		if existing.Platform == identity.Platform && existing.Name == identity.Name && existing.Version == identity.Version {
+		if existing.Eco == identity.Eco && existing.Name == identity.Name && existing.Version == identity.Version {
 			return true
 		}
 	}
@@ -190,7 +190,8 @@ func addConnectorHostEdges(t *types.RuntimeTopology) {
 			continue
 		}
 		edge := types.RuntimeEdge{
-			From: host.ID, To: types.RuntimeNodeConnector, Verb: types.EdgeHosts,
+			From: host.ID, To: types.RuntimeNodeConnector,
+			Verb: types.EdgeHosts,
 		}
 		if topologyHasEdge(t, edge) {
 			continue
@@ -320,7 +321,7 @@ func inferHostTopologyFromAttachedBridgePackages(
 			continue
 		}
 
-		if pkg.Id.Platform != types.PlatformFabric {
+		if pkg.Id.Eco != types.EcoFabric {
 			continue
 		}
 

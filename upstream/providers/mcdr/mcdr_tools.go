@@ -12,7 +12,7 @@ func parseRequiredVersion(s string) (reqs []types.VersionSubExpr) {
 	//   - https://docs.npmjs.com/about-semantic-versioning
 	expr := version.ParseRange(
 		s,
-		version.InferRangeDialect(types.PlatformMCDR),
+		version.InferRangeDialect(types.EcoMcdr),
 		types.Semver,
 	)
 	if len(expr) == 0 {

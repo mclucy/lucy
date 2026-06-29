@@ -8,7 +8,7 @@ func selectExactVersion(
 ) *versionResponse {
 	for _, version := range versions {
 		if types.BareVersion(version.VersionNumber) == id.Version &&
-			versionSupportsLoader(version, id.Platform) {
+			versionSupportsLoader(version, id.Eco) {
 			return version
 		}
 	}
@@ -17,21 +17,21 @@ func selectExactVersion(
 
 func selectLatestVersionCandidate(
 	versions []*versionResponse,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) (*versionResponse, bool) {
 	return selectLatestVersionByLoader(versions, platform, false)
 }
 
 func selectLatestCompatibleVersionCandidate(
 	versions []*versionResponse,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 ) (*versionResponse, bool) {
 	return selectLatestVersionByLoader(versions, platform, true)
 }
 
 func selectLatestVersionByLoader(
 	versions []*versionResponse,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	filterByLoader bool,
 ) (*versionResponse, bool) {
 	selected := latestReleaseVersion(versions, platform, filterByLoader)
@@ -43,7 +43,7 @@ func selectLatestVersionByLoader(
 
 func latestReleaseVersion(
 	versions []*versionResponse,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	filterByLoader bool,
 ) *versionResponse {
 	var selected *versionResponse
@@ -61,7 +61,7 @@ func latestReleaseVersion(
 
 func latestAnyVersion(
 	versions []*versionResponse,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	filterByLoader bool,
 ) *versionResponse {
 	var selected *versionResponse

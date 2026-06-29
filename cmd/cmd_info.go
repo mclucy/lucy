@@ -72,11 +72,11 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		source = ref.Scope
 	}
 
-	providers, err := routing.ResolveInfoProviders(ref.Platform, source)
+	providers, err := routing.ResolveInfoProviders(ref.Eco, source)
 	if err != nil {
 		errArg := sourceStr
 		if source == types.SourceAuto {
-			errArg = ref.Platform.String()
+			errArg = ref.Eco.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
 	}
@@ -92,7 +92,10 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	var noResultSources []string
 	for _, providerErr := range providerErrors {
 		if strings.Contains(providerErr.Err.Error(), "not found") {
-			noResultSources = append(noResultSources, providerErr.Source.Title())
+			noResultSources = append(
+				noResultSources,
+				providerErr.Source.Title(),
+			)
 			continue
 		}
 		log.ReportWarn(
@@ -117,7 +120,12 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	} else {
 		output := renderInfo(meta, ref.PackageRef.Name.String(), long)
 		if len(noResultSources) > 0 {
-			output += style.Muted("  Not found on "+strings.Join(noResultSources, ", ")) + "\n"
+			output += style.Muted(
+				"  Not found on "+strings.Join(
+					noResultSources,
+					", ",
+				),
+			) + "\n"
 		}
 		fmt.Print(output)
 	}

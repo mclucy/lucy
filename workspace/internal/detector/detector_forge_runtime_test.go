@@ -406,16 +406,16 @@ func assertForgeRuntime(
 	if !ok {
 		t.Fatalf("expected primary topology node on Forge runtime evidence")
 	}
-	if got := types.DeclaredModdingPlatformForNode(primaryNode.ID); got != types.PlatformForge {
+	if got := types.DeclaredModdingEcosystemForNode(primaryNode.ID); got != types.EcoForge {
 		t.Fatalf(
 			"derived mod loader mismatch: got %s want %s",
 			got,
-			types.PlatformForge,
+			types.EcoForge,
 		)
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.PlatformForge,
+		types.EcoForge,
 		"forge",
 	); got != forgeVersion {
 		t.Fatalf("forge version mismatch: got %q want %q", got, forgeVersion)
@@ -424,14 +424,14 @@ func assertForgeRuntime(
 
 func runtimeIdentityVersion(
 	runtime *ExecutableEvidence,
-	platform types.PlatformId,
+	platform types.Ecosystem,
 	name types.BarePackageName,
 ) string {
 	if runtime == nil {
 		return ""
 	}
 	for _, identity := range runtime.RuntimeIdentities {
-		if identity.Platform == platform && identity.Name == name {
+		if identity.Eco == platform && identity.Name == name {
 			return identity.Version.String()
 		}
 	}

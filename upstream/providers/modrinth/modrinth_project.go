@@ -11,7 +11,11 @@ import (
 
 func getProjectId(slug types.BarePackageName) (id string, err error) {
 	modrinthProject := projectResponse{}
-	if err := requestJSON(projectUrl(string(slug)), &modrinthProject, ErrNoProject); err != nil {
+	if err := requestJSON(
+		projectUrl(string(slug)),
+		&modrinthProject,
+		ErrNoProject,
+	); err != nil {
 		return "", err
 	}
 	id = modrinthProject.Id
@@ -35,7 +39,11 @@ func getProjectByName(slug types.BarePackageName) (
 		error,
 	) {
 		project := &projectResponse{}
-		if err := requestJSON(projectUrl(string(target)), project, ErrNoProject); err != nil {
+		if err := requestJSON(
+			projectUrl(string(target)),
+			project,
+			ErrNoProject,
+		); err != nil {
 			return nil, err
 		}
 		return project, nil
@@ -60,7 +68,11 @@ func getProjectMembers(id string) (
 	members []*memberResponse,
 	err error,
 ) {
-	if err := requestJSON(projectMemberUrl(id), &members, ErrNoMember); err != nil {
+	if err := requestJSON(
+		projectMemberUrl(id),
+		&members,
+		ErrNoMember,
+	); err != nil {
 		return nil, err
 	}
 	return members, nil
@@ -81,7 +93,7 @@ func DependencyToPackage(
 	// I don't see a case where a package would depend on a project on another
 	// platform. So, we can safely assume that the platform of the dependent
 	// package is the same as the platform of the dependency.
-	p.Platform = dependent.Platform
+	p.Eco = dependent.Eco
 
 	if dependency.VersionId != "" && dependency.ProjectId != "" {
 		version, err = getVersionById(dependency.VersionId)
@@ -109,7 +121,7 @@ func DependencyToPackage(
 		// This is not safe, TODO: use better inference method
 		version, err = latestCompatibleVersion(
 			input.ToProjectName(project.Slug),
-			dependent.Platform,
+			dependent.Eco,
 		)
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency latest version: %w", err)

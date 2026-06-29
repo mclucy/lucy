@@ -13,7 +13,7 @@ func parseFabricVersionRanges(
 ) types.VersionExpr {
 	return version.ParseRanges(
 		[]string(ranges),
-		version.InferRangeDialect(types.PlatformFabric),
+		version.InferRangeDialect(types.EcoFabric),
 		types.Semver,
 	)
 }
@@ -26,7 +26,7 @@ func parseFabricVersionRanges(
 func parseModLoaderMavenVersionRange(interval string) [][]types.VersionSubExpr {
 	return version.ParseRange(
 		interval,
-		version.InferRangeDialect(types.PlatformForge),
+		version.InferRangeDialect(types.EcoForge),
 		types.Maven,
 	)
 }
@@ -39,7 +39,7 @@ func parseModLoaderMavenVersionRange(interval string) [][]types.VersionSubExpr {
 func parseNpmVersionRange(s string) types.VersionExpr {
 	return version.ParseRange(
 		s,
-		version.InferRangeDialect(types.PlatformMCDR),
+		version.InferRangeDialect(types.EcoMcdr),
 		types.Semver,
 	)
 }

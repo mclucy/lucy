@@ -10,14 +10,14 @@ func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 	idx := NewPackageIndex()
 	first := makeDiscoveredPackage(
 		t,
-		types.PlatformFabric,
+		types.EcoFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-0.5.0.jar",
 	)
 	second := makeDiscoveredPackage(
 		t,
-		types.PlatformFabric,
+		types.EcoFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-other.jar",
@@ -35,10 +35,10 @@ func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 
 func TestPackageIndex_AddLocalPathEnrichment(t *testing.T) {
 	idx := NewPackageIndex()
-	remote := makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
+	remote := makeDiscoveredPackage(t, types.EcoFabric, "sodium", "0.5.0", "")
 	local := makeDiscoveredPackage(
 		t,
-		types.PlatformFabric,
+		types.EcoFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-0.5.0.jar",
@@ -58,37 +58,40 @@ func TestPackageIndex_AddLocalPathNotOverwrittenByRemote(t *testing.T) {
 	idx := NewPackageIndex()
 	local := makeDiscoveredPackage(
 		t,
-		types.PlatformFabric,
+		types.EcoFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-0.5.0.jar",
 	)
-	remote := makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
+	remote := makeDiscoveredPackage(t, types.EcoFabric, "sodium", "0.5.0", "")
 	idx.Add(local)
 	idx.Add(remote)
 	pkgs := idx.Packages()
 	if pkgs[0].Path != "/mods/sodium-0.5.0.jar" {
-		t.Errorf("local path was overwritten by remote: got path %q", pkgs[0].Path)
+		t.Errorf(
+			"local path was overwritten by remote: got path %q",
+			pkgs[0].Path,
+		)
 	}
 }
 
 func TestPackageIndex_PackagesSortOrder(t *testing.T) {
 	idx := NewPackageIndex()
-	idx.Add(makeDiscoveredPackage(t, types.PlatformForge, "jei", "1.0.0", ""))
-	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", ""))
-	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "lithium", "0.11.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.EcoForge, "jei", "1.0.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.EcoFabric, "sodium", "0.5.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.EcoFabric, "lithium", "0.11.0", ""))
 	pkgs := idx.Packages()
 	if len(pkgs) != 3 {
 		t.Fatalf("expected 3 packages, got %d", len(pkgs))
 	}
 	// fabric < forge by string; within fabric: lithium < sodium
-	if string(pkgs[0].Id.Platform) != "fabric" || pkgs[0].Id.Name.String() != "lithium" {
+	if string(pkgs[0].Id.Eco) != "fabric" || pkgs[0].Id.Name.String() != "lithium" {
 		t.Errorf("wrong sort order at [0]: %+v", pkgs[0].Id)
 	}
-	if string(pkgs[1].Id.Platform) != "fabric" || pkgs[1].Id.Name.String() != "sodium" {
+	if string(pkgs[1].Id.Eco) != "fabric" || pkgs[1].Id.Name.String() != "sodium" {
 		t.Errorf("wrong sort order at [1]: %+v", pkgs[1].Id)
 	}
-	if string(pkgs[2].Id.Platform) != "forge" {
+	if string(pkgs[2].Id.Eco) != "forge" {
 		t.Errorf("wrong sort order at [2]: %+v", pkgs[2].Id)
 	}
 }
@@ -96,11 +99,11 @@ func TestPackageIndex_PackagesSortOrder(t *testing.T) {
 func TestPackageIndex_MergeBulk(t *testing.T) {
 	idx := NewPackageIndex()
 	pkgs := []types.DiscoveredPackage{
-		makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", ""),
-		makeDiscoveredPackage(t, types.PlatformFabric, "lithium", "0.11.0", ""),
+		makeDiscoveredPackage(t, types.EcoFabric, "sodium", "0.5.0", ""),
+		makeDiscoveredPackage(t, types.EcoFabric, "lithium", "0.11.0", ""),
 		makeDiscoveredPackage(
 			t,
-			types.PlatformFabric,
+			types.EcoFabric,
 			"sodium",
 			"0.5.0",
 			"/mods/sodium.jar",
@@ -115,7 +118,7 @@ func TestPackageIndex_MergeBulk(t *testing.T) {
 
 func TestPackageIndex_LookupByID_Found(t *testing.T) {
 	idx := NewPackageIndex()
-	pkg := makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
+	pkg := makeDiscoveredPackage(t, types.EcoFabric, "sodium", "0.5.0", "")
 	idx.Add(pkg)
 	found, ok := idx.LookupByID(pkg.Id)
 	if !ok {
@@ -130,8 +133,8 @@ func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
 	idx := NewPackageIndex()
 	id := types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: types.PlatformFabric,
-			Name:     "missing",
+			Eco:  types.EcoFabric,
+			Name: "missing",
 		},
 		Version: "1.0.0",
 	}
@@ -141,12 +144,12 @@ func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
 	}
 }
 
-func TestPackageIndex_LookupByPlatformName_MultipleVersions(t *testing.T) {
+func TestPackageIndex_LookupByEcosystemName_MultipleVersions(t *testing.T) {
 	idx := NewPackageIndex()
-	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.6.0", ""))
-	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", ""))
-	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "lithium", "0.11.0", ""))
-	results := idx.LookupByPlatformName(types.PlatformFabric, "sodium")
+	idx.Add(makeDiscoveredPackage(t, types.EcoFabric, "sodium", "0.6.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.EcoFabric, "sodium", "0.5.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.EcoFabric, "lithium", "0.11.0", ""))
+	results := idx.LookupByEcosystemName(types.EcoFabric, "sodium")
 	if len(results) != 2 {
 		t.Fatalf("expected 2 sodium versions, got %d", len(results))
 	}
@@ -159,9 +162,9 @@ func TestPackageIndex_LookupByPlatformName_MultipleVersions(t *testing.T) {
 	}
 }
 
-func TestPackageIndex_LookupByPlatformName_NoneFound(t *testing.T) {
+func TestPackageIndex_LookupByEcosystemName_NoneFound(t *testing.T) {
 	idx := NewPackageIndex()
-	results := idx.LookupByPlatformName(types.PlatformFabric, "nonexistent")
+	results := idx.LookupByEcosystemName(types.EcoFabric, "nonexistent")
 	if results != nil {
 		t.Errorf("expected nil for no matches, got %v", results)
 	}

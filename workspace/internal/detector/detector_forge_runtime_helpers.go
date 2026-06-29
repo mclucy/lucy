@@ -154,15 +154,15 @@ func buildForgeRuntimeInfo(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformForge,
-					Name:     "forge",
+					Eco:  types.EcoForge,
+					Name: "forge",
 				},
 				Version: forgeVersion,
 			},
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformMinecraft,
-					Name:     "minecraft",
+					Eco:  types.EcoMinecraft,
+					Name: "minecraft",
 				},
 				Version: gameVersion,
 			},

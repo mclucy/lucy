@@ -72,8 +72,8 @@ func (d *VanillaDetector) Detect(
 				RuntimeIdentities: []types.VersionedPackageRef{
 					{
 						PackageRef: types.PackageRef{
-							Platform: types.PlatformMinecraft,
-							Name:     "minecraft",
+							Eco:  types.EcoMinecraft,
+							Name: "minecraft",
 						},
 						Version: gameVersion,
 					},

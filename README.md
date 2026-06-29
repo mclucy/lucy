@@ -236,22 +236,22 @@ Registered but not yet implemented:
 ### Package Identifiers
 
 ```text
-[platform/]name[@version]
+[eco/]name[@version]
 ```
 
-Only the name is required. Omit the platform and Lucy infers it from the environment. Omit the version to get `@compatible` (newest match for your server).
+Only the name is required. Omit the ecosystem prefix and Lucy infers it from the environment (formerly called “platform”). Omit the version to get `@compatible` (newest match for your server).
 
 ```text
 fabric/fabric-api@1.2.3
    ↑       ↑        ↑
-platform  name   version
+ecosystem name   version
 ```
 
 `@latest` is the newest available. `@compatible` is the default — best-effort match against the detected environment.
 
-Platforms accepted in the manifest: `none`, `fabric`, `forge`, `neoforge`, `mcdr`
+Primary modding ecosystem in `lucy.yaml` (`modding_platform`): `bare` (vanilla; legacy `none`), `fabric`, `forge`, `neoforge`, `mcdr`
 
-The type system also knows `bukkit`, `sponge`, `velocity`, and `bungeecord` for topology detection, but you can't set these as the primary platform yet.
+The type system also knows `bukkit`, `sponge`, `velocity`, and `bungeecord` for topology detection, but you can't set these as the primary ecosystem yet.
 
 Data sources: `modrinth`, `curseforge`, `github`, `mcdr` (`hangar` and `spiget` are defined but not yet wired into the resolver).
 

@@ -76,8 +76,8 @@ func (p provider) PackageByHash(artifact upstream.Hashable) (
 
 	ref = types.FullPackageRef{
 		PackageRef: types.PackageRef{
-			Platform: platformFromCurseForgeFile(mod, file),
-			Name:     types.BarePackageName(mod.Slug),
+			Eco:  platformFromCurseForgeFile(mod, file),
+			Name: types.BarePackageName(mod.Slug),
 		},
 		Version: types.BareVersion(file.DisplayName),
 		Scope:   p.Id(),
@@ -151,24 +151,27 @@ func slugFromFingerprint(fp uint32) (string, error) {
 	return mod.Slug, nil
 }
 
-func platformFromCurseForgeFile(mod *modResponse, file *fileResponse) types.PlatformId {
+func platformFromCurseForgeFile(
+	mod *modResponse,
+	file *fileResponse,
+) types.Ecosystem {
 	for _, idx := range mod.LatestFilesIndexes {
 		if idx.FileId == file.Id && idx.ModLoader != nil {
 			return platformFromCurseForgeModLoader(*idx.ModLoader)
 		}
 	}
-	return types.PlatformNone
+	return types.EcoBare
 }
 
-func platformFromCurseForgeModLoader(loader int32) types.PlatformId {
+func platformFromCurseForgeModLoader(loader int32) types.Ecosystem {
 	switch loader {
 	case 1:
-		return types.PlatformForge
+		return types.EcoForge
 	case 4:
-		return types.PlatformFabric
+		return types.EcoFabric
 	case 6:
-		return types.PlatformNeoforge
+		return types.EcoNeoforge
 	default:
-		return types.PlatformNone
+		return types.EcoBare
 	}
 }

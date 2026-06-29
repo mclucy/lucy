@@ -470,14 +470,14 @@ func projectPaperJudgment(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformAny,
-					Name:     input.ToProjectName(brand),
+					Eco:  types.EcoAny,
+					Name: input.ToProjectName(brand),
 				},
 			},
 			{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformMinecraft,
-					Name:     input.ToProjectName("minecraft"),
+					Eco:  types.EcoMinecraft,
+					Name: input.ToProjectName("minecraft"),
 				},
 				Version: gameVersion,
 			},
