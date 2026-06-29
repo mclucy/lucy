@@ -228,11 +228,11 @@ func hashMatchesResolvedPackage(path string, resolved types.ResolvedPackage) boo
 	if err != nil || !ok {
 		return false
 	}
-	name, _, err := mapper.NameByHash(artifacthash.File{Path: path})
-	if err != nil {
+	ref, _, ok, err := mapper.PackageByHash(artifacthash.File{Path: path})
+	if err != nil || !ok {
 		return false
 	}
-	return name.RemoteName == string(resolved.Id.Name)
+	return ref.Name == resolved.Id.Name
 }
 
 func normalizeVerifiedDiscoveredPackage(pkg *types.DiscoveredPackage) {
