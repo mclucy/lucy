@@ -70,7 +70,7 @@ func InstallMany(
 			}
 			succeeded = append(succeeded, id.StringFull())
 		}
-		workspace.InvalidateServerInfo()
+		workspace.Invalidate()
 	}
 
 	if len(regularIds) == 0 {
@@ -111,7 +111,7 @@ func Plan(
 		return &ApplyPlan{}, nil
 	}
 
-	serverInfo := options.ServerInfo()
+	ws := options.Workspace()
 	recordEvent(
 		journal,
 		Event{
@@ -119,23 +119,23 @@ func Plan(
 			IDs: regularIds,
 		},
 	)
-	if err := validateRegularBatchIDs(regularIds, serverInfo); err != nil {
+	if err := validateRegularBatchIDs(regularIds, ws); err != nil {
 		return nil, installError(CategoryResolution, err, nil)
 	}
 
-	if serverInfo.Runtime == nil || serverInfo.Topology == nil || !serverInfo.Topology.Resolved() {
+	if ws.Runtime == nil || ws.Topology == nil || !ws.Topology.Resolved() {
 		return nil, installError(
 			CategoryResolution,
 			fmt.Errorf("runtime topology is unavailable"),
 			nil,
 		)
 	}
-	providers := options.Providers(*serverInfo.Topology)
+	providers := options.Providers(*ws.Topology)
 	if providers == nil {
 		providers = []upstream.PackageSource{}
 	}
 
-	if serverInfo.Environments.Mcdr != nil {
+	if ws.Environments.Mcdr != nil {
 		mcdrProviders, err := routing.ResolveProviders(
 			types.PlatformMCDR,
 			types.SourceAuto,
@@ -148,16 +148,9 @@ func Plan(
 	}
 
 	roots := append([]types.VersionedPackageRef(nil), regularIds...)
-	serverLoader := serverInfo.DerivedModLoader()
-	if serverLoader != types.PlatformAny {
-		for i, id := range roots {
-			if id.Platform == types.PlatformAny {
-				roots[i].Platform = serverLoader
-			}
-		}
-	}
+	serverLoader := ws.DerivedModLoader()
 	rootProviders, err := rootScopedProviders(
-		serverInfo.Topology,
+		ws.Topology,
 		requests,
 		roots,
 		serverLoader,
@@ -166,8 +159,8 @@ func Plan(
 	if err != nil {
 		return nil, installError(CategoryResolution, err, nil)
 	}
-	installedConstraints := snapshotInstalledConstraints(serverInfo)
-	ambient, err := buildAmbientDependencies(ctx, serverInfo)
+	installedConstraints := snapshotInstalledConstraints(ws)
+	ambient, err := buildAmbientDependencies(ctx, ws)
 	if err != nil {
 		return nil, installError(CategoryResolution, err, nil)
 	}
@@ -193,6 +186,7 @@ func Plan(
 				providers:       providers,
 				rootProviders:   rootProviders,
 				rootProviderSet: keyedRoots(resolvePlan.Roots),
+				defaultPlatform: serverLoader,
 			},
 		)
 		if err != nil {
@@ -244,14 +238,14 @@ func Apply(
 		return nil, installError(CategoryApply, err, nil)
 	}
 
-	serverInfo := options.ServerInfo()
+	ws := options.Workspace()
 	concretePlan := plan
 	var err error
 	if len(plan.Resolved.CandidateGraph) > 0 {
 		downloaded, err := downloadArtifacts(
 			ctx,
 			plan.Resolved,
-			serverInfo.Root,
+			ws.Root,
 			options,
 			options.Journal,
 		)
@@ -280,7 +274,7 @@ func Apply(
 	concretePlan, err = applyPlan(
 		ctx,
 		concretePlan,
-		serverInfo,
+		ws,
 		options.Journal,
 	)
 	if err != nil {
@@ -339,9 +333,6 @@ func rootScopedProviders(
 		}
 		if id.Version == types.VersionAny {
 			id.Version = types.VersionCompatible
-		}
-		if id.Platform == types.PlatformAny && serverLoader != types.PlatformAny {
-			id.Platform = serverLoader
 		}
 		for rootKey := range rootKeys {
 			if rootKey != id.StringBase() {
@@ -423,12 +414,12 @@ func partitionBatchIDs(ids []types.VersionedPackageRef) (
 
 func validateRegularBatchIDs(
 	ids []types.VersionedPackageRef,
-	serverInfo workspace.Workspace,
+	ws workspace.Workspace,
 ) error {
 	failures := make([]string, 0)
 
 	for _, id := range ids {
-		if err := ensureServerPlatformMatch(id, serverInfo); err != nil {
+		if err := ensureServerPlatformMatch(id, ws); err != nil {
 			failures = append(
 				failures,
 				fmt.Sprintf("%s: %v", id.StringFull(), err),
