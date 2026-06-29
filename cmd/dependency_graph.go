@@ -108,7 +108,7 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 	for _, p := range info.Packages {
 		parentID := p.Id.StringBase()
 
-		if p.Dependencies == nil {
+		if len(p.Dependencies.Value) == 0 {
 			continue
 		}
 

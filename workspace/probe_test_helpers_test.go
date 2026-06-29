@@ -6,15 +6,13 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// makePackage builds a minimal types.Package for use in tests.
-// localPath may be "" to simulate a remote-only entry.
-func makePackage(
+func makeDiscoveredPackage(
 	t *testing.T,
 	platform types.PlatformId,
-	name, version, localPath string,
-) types.Package {
+	name, version, path string,
+) types.DiscoveredPackage {
 	t.Helper()
-	pkg := types.Package{
+	return types.DiscoveredPackage{
 		Id: types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
 				Platform: platform,
@@ -22,11 +20,8 @@ func makePackage(
 			},
 			Version: types.BareVersion(version),
 		},
+		Path: path,
 	}
-	if localPath != "" {
-		pkg.Local = &types.PackageInstallation{Path: localPath}
-	}
-	return pkg
 }
 
 // makeNode builds a RuntimeNode for topology construction in tests.

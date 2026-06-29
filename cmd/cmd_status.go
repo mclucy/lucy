@@ -63,7 +63,7 @@ func generateStatusOutput(
 	serverPlatform := data.DerivedModLoader()
 	modPlatforms := statusModPlatforms(data.Topology, serverPlatform)
 	showPlatformQualifiedMods := len(modPlatforms) > 1
-	packageNameOutput := func(pkg types.Package) string {
+	packageNameOutput := func(pkg types.DiscoveredPackage) string {
 		if longOutput {
 			return pkg.Id.StringFull()
 		}
@@ -288,9 +288,9 @@ func statusTopologyTreeField(
 }
 
 func statusPackageSections(
-	packages []types.Package,
+	packages []types.DiscoveredPackage,
 	modPlatforms map[types.PlatformId]bool,
-	packageNameOutput func(types.Package) string,
+	packageNameOutput func(types.DiscoveredPackage) string,
 	showMods bool,
 	showPlugins bool,
 	hasMcdr bool,
@@ -308,8 +308,8 @@ func statusPackageSections(
 		packagePlatform := pkg.Id.Platform
 		if showMods && modPlatforms[packagePlatform] {
 			modNames = append(modNames, packageNameOutput(pkg))
-			if pkg.Local != nil {
-				modPaths = append(modPaths, pkg.Local.Path)
+			if pkg.Path != "" {
+				modPaths = append(modPaths, pkg.Path)
 			}
 		}
 		if showPlugins && packagePlatform == types.PlatformBukkit {

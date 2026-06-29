@@ -53,7 +53,7 @@ import (
 
 func EnrichTopologyFromPackages(
 	exec *ServerRuntime,
-	packages []types.Package,
+	packages []types.DiscoveredPackage,
 ) {
 	if exec == nil {
 		return
@@ -138,7 +138,7 @@ func EnrichTopologyFromPackages(
 
 func attachRuntimePackageIdentities(
 	topology *types.RuntimeTopology,
-	packages []types.Package,
+	packages []types.DiscoveredPackage,
 ) {
 	if topology == nil {
 		return
@@ -275,7 +275,7 @@ func applyDeclarativeConnections(
 	}
 }
 
-func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {
+func detectedRuntimeEvidence(packages []types.DiscoveredPackage) []types.RuntimeNodeID {
 	names := make(map[string]struct{}, len(packages))
 	for _, pkg := range packages {
 		normalized := strings.ToLower(strings.TrimSpace(pkg.Id.Name.String()))
@@ -312,7 +312,7 @@ func detectedRuntimeEvidence(packages []types.Package) []types.RuntimeNodeID {
 }
 
 func inferHostTopologyFromAttachedBridgePackages(
-	packages []types.Package,
+	packages []types.DiscoveredPackage,
 ) *types.RuntimeTopology {
 	for _, pkg := range packages {
 		name := strings.ToLower(strings.TrimSpace(pkg.Id.Name.String()))

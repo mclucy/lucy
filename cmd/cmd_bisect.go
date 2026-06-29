@@ -374,8 +374,8 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 
 	pathByID := make(map[string]string, len(info.Packages))
 	for _, p := range info.Packages {
-		if p.Local != nil && p.Local.Path != "" {
-			pathByID[p.Id.StringBase()] = p.Local.Path
+		if p.Path != "" {
+			pathByID[p.Id.StringBase()] = p.Path
 		}
 	}
 

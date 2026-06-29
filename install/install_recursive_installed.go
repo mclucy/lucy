@@ -20,7 +20,7 @@ func SnapshotInstalledConstraints() []InstalledConstraint {
 func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint {
 	constraints := make([]InstalledConstraint, 0, len(si.Packages)+3)
 	seen := make(map[string]struct{}, len(si.Packages)+3)
-	appendConstraint := func(pkg types.Package, requester string) {
+	appendConstraint := func(pkg types.DiscoveredPackage, requester string) {
 		if pkg.Id.Version.IsInvalid() {
 			return
 		}
@@ -52,7 +52,7 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 		if loader.Valid() && loader != types.PlatformNone && loader != types.PlatformUnknown {
 			if !si.Runtime.GameVersion.IsInvalid() && si.Runtime.GameVersion != types.VersionAny {
 				appendConstraint(
-					types.Package{
+					types.DiscoveredPackage{
 						Id: types.VersionedPackageRef{
 							PackageRef: types.PackageRef{
 								Platform: loader,
@@ -70,7 +70,7 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 			}
 
 			appendConstraint(
-				types.Package{
+				types.DiscoveredPackage{
 					Id: types.VersionedPackageRef{
 						PackageRef: types.PackageRef{
 							Platform: loader,
@@ -84,7 +84,7 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 			if primary := si.PrimaryRuntimeIdentity(); primary != nil {
 				if alias := runtimeLoaderAliasName(primary.Platform); alias != "" {
 					appendConstraint(
-						types.Package{
+						types.DiscoveredPackage{
 							Id: types.VersionedPackageRef{
 								PackageRef: types.PackageRef{
 									Platform: loader,
@@ -127,8 +127,8 @@ func runtimeLoaderAliasName(platform types.PlatformId) types.BarePackageName {
 func FindCompatibleInstalled(
 	installedConstraints []InstalledConstraint,
 	id types.VersionedPackageRef,
-) []types.Package {
-	var matches []types.Package
+) []types.DiscoveredPackage {
+	var matches []types.DiscoveredPackage
 	for _, ic := range installedConstraints {
 		pkg := ic.Package
 		if pkg.Id.Platform != id.Platform {

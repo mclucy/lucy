@@ -347,16 +347,13 @@ func buildSavePath() string {
 
 var savePath = fn.Memoize(buildSavePath)
 
-// artifactInfoToPackage converts artifact detection results into the legacy
-// types.Package format used by PackageIndex. This is temporary glue until
-// types.Package is fully replaced.
-func artifactInfoToPackage(infos []artifact.Info) []types.Package {
+func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPackage {
 	if len(infos) == 0 {
 		return nil
 	}
-	pkgs := make([]types.Package, 0, len(infos))
+	pkgs := make([]types.DiscoveredPackage, 0, len(infos))
 	for _, info := range infos {
-		pkg := types.Package{
+		pkg := types.DiscoveredPackage{
 			Id: types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
 					Platform: info.Ref.Platform,
@@ -364,9 +361,7 @@ func artifactInfoToPackage(infos []artifact.Info) []types.Package {
 				},
 				Version: info.Version,
 			},
-			Local: &types.PackageInstallation{
-				Path: info.FilePath,
-			},
+			Path: info.FilePath,
 		}
 		if len(info.Dependencies) > 0 {
 			deps := make([]types.Dependency, 0, len(info.Dependencies))
@@ -385,16 +380,14 @@ func artifactInfoToPackage(infos []artifact.Info) []types.Package {
 					},
 				)
 			}
-			pkg.Dependencies = &types.PackageDependencies{
-				Value: deps,
-			}
+			pkg.Dependencies = types.PackageDependencies{Value: deps}
 		}
 		pkgs = append(pkgs, pkg)
 	}
 	return pkgs
 }
 
-func buildInstalledPackages() (mods []types.Package) {
+func buildInstalledPackages() (mods []types.DiscoveredPackage) {
 	idx := NewPackageIndex()
 	var mu sync.Mutex
 
@@ -430,7 +423,7 @@ func buildInstalledPackages() (mods []types.Package) {
 					mu.Unlock()
 					return
 				}
-				pkgs := artifactInfoToPackage(analyzed)
+				pkgs := artifactInfoToDiscoveredPackage(analyzed)
 
 				mu.Lock()
 				idx.Merge(pkgs)
@@ -455,7 +448,7 @@ func buildInstalledPackages() (mods []types.Package) {
 					artifact.WithSlugResolver(resolver),
 				)
 				if err == nil && len(analyzed) > 0 {
-					pkgs := artifactInfoToPackage(analyzed)
+					pkgs := artifactInfoToDiscoveredPackage(analyzed)
 					idx.Merge(pkgs)
 				}
 			}
@@ -465,7 +458,7 @@ func buildInstalledPackages() (mods []types.Package) {
 	return idx.Packages()
 }
 
-func packageByArtifactHash(filePath string) (types.Package, bool) {
+func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
 	providers := []upstream.ArtifactMapSource{modrinth.Provider}
 	if curseforge.Enabled() {
 		providers = append(providers, curseforge.Provider)
@@ -480,11 +473,11 @@ func packageByArtifactHash(filePath string) (types.Package, bool) {
 	if isSinytraConnectorArtifact(filePath) {
 		return packageFromArtifactSlug(filePath, "connector"), true
 	}
-	return types.Package{}, false
+	return types.DiscoveredPackage{}, false
 }
 
-func packageFromArtifactSlug(filePath, slug string) types.Package {
-	return types.Package{
+func packageFromArtifactSlug(filePath, slug string) types.DiscoveredPackage {
+	return types.DiscoveredPackage{
 		Id: types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
 				Platform: types.PlatformForge,
@@ -492,7 +485,7 @@ func packageFromArtifactSlug(filePath, slug string) types.Package {
 			},
 			Version: types.VersionUnknown,
 		},
-		Local: &types.PackageInstallation{Path: filePath},
+		Path: filePath,
 	}
 }
 

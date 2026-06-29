@@ -85,7 +85,7 @@ func verifyDownloadedArtifacts(
 
 		verified[pkg.Id.StringBase()] = CandidateNode{
 			Package:        resolvedPackageFromVerified(pkg),
-			Path:           installedPath(pkg),
+			Path:           legacyPackagePath(pkg),
 			Dependencies:   pkg.Dependencies,
 			ProvenancePath: []string{"verified"},
 			Advisory:       false,
@@ -106,6 +106,13 @@ func downloadedArtifactPackages(
 		packages[node.Path] = node.Package
 	}
 	return packages
+}
+
+func legacyPackagePath(pkg types.Package) string {
+	if pkg.Local == nil {
+		return ""
+	}
+	return pkg.Local.Path
 }
 
 func selectArtifactInfosForPlatform(

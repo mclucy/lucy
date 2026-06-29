@@ -13,13 +13,13 @@ import (
 //
 // PackageIndex does NOT expose raw map iteration order to any caller.
 type PackageIndex struct {
-	pkgs map[string]types.Package
+	pkgs map[string]types.DiscoveredPackage
 }
 
 // NewPackageIndex creates a new, empty PackageIndex ready for use.
 func NewPackageIndex() *PackageIndex {
 	return &PackageIndex{
-		pkgs: make(map[string]types.Package),
+		pkgs: make(map[string]types.DiscoveredPackage),
 	}
 }
 
@@ -27,30 +27,18 @@ func NewPackageIndex() *PackageIndex {
 //
 //   - First-write wins: if a package with the same full ID already exists, the
 //     new entry is ignored.
-//   - EXCEPTION: if the existing entry has an empty Local.Path (i.e., it was
+//   - EXCEPTION: if the existing entry has an empty Path (i.e., it was
 //     discovered without a local installation path) AND the new package has a
-//     non-empty Local.Path, the new package replaces the existing one. This
-//     allows local-path enrichment to take precedence over remote-only entries.
+//     non-empty Path, the new package replaces the existing one. This
+//     allows local-path enrichment to take precedence over pathless entries.
 //
 // The dedupe key is pkg.Id.StringFull(), which encodes platform/name@version.
-func (idx *PackageIndex) Add(pkg types.Package) {
+func (idx *PackageIndex) Add(pkg types.DiscoveredPackage) {
 	key := pkg.Id.StringFull()
 
 	existing, exists := idx.pkgs[key]
 	if exists {
-		// First-write wins, UNLESS the existing entry lacks a local path
-		// and the incoming package provides one — in that case, the new
-		// entry replaces the old so that local-path information is preserved.
-		existingPath := ""
-		if existing.Local != nil {
-			existingPath = existing.Local.Path
-		}
-		newPath := ""
-		if pkg.Local != nil {
-			newPath = pkg.Local.Path
-		}
-
-		if existingPath != "" || newPath == "" {
+		if existing.Path != "" || pkg.Path == "" {
 			return
 		}
 	}
@@ -60,7 +48,7 @@ func (idx *PackageIndex) Add(pkg types.Package) {
 
 // Merge bulk-adds a slice of packages into the index. Each package is subject
 // to the same dedupe policy as Add.
-func (idx *PackageIndex) Merge(pkgs []types.Package) {
+func (idx *PackageIndex) Merge(pkgs []types.DiscoveredPackage) {
 	for _, pkg := range pkgs {
 		idx.Add(pkg)
 	}
@@ -73,8 +61,8 @@ func (idx *PackageIndex) Merge(pkgs []types.Package) {
 //  3. Version (string)
 //
 // This method never exposes map iteration order; results are always sorted.
-func (idx *PackageIndex) Packages() []types.Package {
-	result := make([]types.Package, 0, len(idx.pkgs))
+func (idx *PackageIndex) Packages() []types.DiscoveredPackage {
+	result := make([]types.DiscoveredPackage, 0, len(idx.pkgs))
 	for _, pkg := range idx.pkgs {
 		result = append(result, pkg)
 	}
@@ -98,9 +86,9 @@ func (idx *PackageIndex) Packages() []types.Package {
 
 // LookupByID performs an exact lookup by the full package identifier
 // (PackageId.StringFull()). Returns the package and true if found, or a zero
-// Package and false otherwise.
+// DiscoveredPackage and false otherwise.
 func (idx *PackageIndex) LookupByID(id types.VersionedPackageRef) (
-	types.Package,
+	types.DiscoveredPackage,
 	bool,
 ) {
 	pkg, ok := idx.pkgs[id.StringFull()]
@@ -115,8 +103,8 @@ func (idx *PackageIndex) LookupByID(id types.VersionedPackageRef) (
 func (idx *PackageIndex) LookupByPlatformName(
 	platform types.PlatformId,
 	name string,
-) []types.Package {
-	var matches []types.Package
+) []types.DiscoveredPackage {
+	var matches []types.DiscoveredPackage
 	for _, pkg := range idx.pkgs {
 		if pkg.Id.Platform == platform && pkg.Id.Name.String() == name {
 			matches = append(matches, pkg)

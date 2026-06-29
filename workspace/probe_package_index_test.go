@@ -8,14 +8,14 @@ import (
 
 func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 	idx := NewPackageIndex()
-	first := makePackage(
+	first := makeDiscoveredPackage(
 		t,
 		types.PlatformFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-0.5.0.jar",
 	)
-	second := makePackage(
+	second := makeDiscoveredPackage(
 		t,
 		types.PlatformFabric,
 		"sodium",
@@ -28,15 +28,15 @@ func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 	if len(pkgs) != 1 {
 		t.Fatalf("expected 1 package, got %d", len(pkgs))
 	}
-	if pkgs[0].Local.Path != "/mods/sodium-0.5.0.jar" {
-		t.Errorf("first-write-wins violated: got path %q", pkgs[0].Local.Path)
+	if pkgs[0].Path != "/mods/sodium-0.5.0.jar" {
+		t.Errorf("first-write-wins violated: got path %q", pkgs[0].Path)
 	}
 }
 
 func TestPackageIndex_AddLocalPathEnrichment(t *testing.T) {
 	idx := NewPackageIndex()
-	remote := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
-	local := makePackage(
+	remote := makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
+	local := makeDiscoveredPackage(
 		t,
 		types.PlatformFabric,
 		"sodium",
@@ -49,34 +49,34 @@ func TestPackageIndex_AddLocalPathEnrichment(t *testing.T) {
 	if len(pkgs) != 1 {
 		t.Fatalf("expected 1 package, got %d", len(pkgs))
 	}
-	if pkgs[0].Local == nil || pkgs[0].Local.Path != "/mods/sodium-0.5.0.jar" {
-		t.Errorf("local-path enrichment failed: got %+v", pkgs[0].Local)
+	if pkgs[0].Path != "/mods/sodium-0.5.0.jar" {
+		t.Errorf("local-path enrichment failed: got path %q", pkgs[0].Path)
 	}
 }
 
 func TestPackageIndex_AddLocalPathNotOverwrittenByRemote(t *testing.T) {
 	idx := NewPackageIndex()
-	local := makePackage(
+	local := makeDiscoveredPackage(
 		t,
 		types.PlatformFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-0.5.0.jar",
 	)
-	remote := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
+	remote := makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
 	idx.Add(local)
 	idx.Add(remote)
 	pkgs := idx.Packages()
-	if pkgs[0].Local == nil || pkgs[0].Local.Path != "/mods/sodium-0.5.0.jar" {
-		t.Errorf("local path was overwritten by remote: got %+v", pkgs[0].Local)
+	if pkgs[0].Path != "/mods/sodium-0.5.0.jar" {
+		t.Errorf("local path was overwritten by remote: got path %q", pkgs[0].Path)
 	}
 }
 
 func TestPackageIndex_PackagesSortOrder(t *testing.T) {
 	idx := NewPackageIndex()
-	idx.Add(makePackage(t, types.PlatformForge, "jei", "1.0.0", ""))
-	idx.Add(makePackage(t, types.PlatformFabric, "sodium", "0.5.0", ""))
-	idx.Add(makePackage(t, types.PlatformFabric, "lithium", "0.11.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.PlatformForge, "jei", "1.0.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "lithium", "0.11.0", ""))
 	pkgs := idx.Packages()
 	if len(pkgs) != 3 {
 		t.Fatalf("expected 3 packages, got %d", len(pkgs))
@@ -95,10 +95,10 @@ func TestPackageIndex_PackagesSortOrder(t *testing.T) {
 
 func TestPackageIndex_MergeBulk(t *testing.T) {
 	idx := NewPackageIndex()
-	pkgs := []types.Package{
-		makePackage(t, types.PlatformFabric, "sodium", "0.5.0", ""),
-		makePackage(t, types.PlatformFabric, "lithium", "0.11.0", ""),
-		makePackage(
+	pkgs := []types.DiscoveredPackage{
+		makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", ""),
+		makeDiscoveredPackage(t, types.PlatformFabric, "lithium", "0.11.0", ""),
+		makeDiscoveredPackage(
 			t,
 			types.PlatformFabric,
 			"sodium",
@@ -115,7 +115,7 @@ func TestPackageIndex_MergeBulk(t *testing.T) {
 
 func TestPackageIndex_LookupByID_Found(t *testing.T) {
 	idx := NewPackageIndex()
-	pkg := makePackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
+	pkg := makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", "")
 	idx.Add(pkg)
 	found, ok := idx.LookupByID(pkg.Id)
 	if !ok {
@@ -143,9 +143,9 @@ func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
 
 func TestPackageIndex_LookupByPlatformName_MultipleVersions(t *testing.T) {
 	idx := NewPackageIndex()
-	idx.Add(makePackage(t, types.PlatformFabric, "sodium", "0.6.0", ""))
-	idx.Add(makePackage(t, types.PlatformFabric, "sodium", "0.5.0", ""))
-	idx.Add(makePackage(t, types.PlatformFabric, "lithium", "0.11.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.6.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "sodium", "0.5.0", ""))
+	idx.Add(makeDiscoveredPackage(t, types.PlatformFabric, "lithium", "0.11.0", ""))
 	results := idx.LookupByPlatformName(types.PlatformFabric, "sodium")
 	if len(results) != 2 {
 		t.Fatalf("expected 2 sodium versions, got %d", len(results))
