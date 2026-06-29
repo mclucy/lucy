@@ -17,9 +17,13 @@ import (
 
 type fabricBootstrapper struct{}
 
-func (b fabricBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
-	serverInfo := workspace.ServerInfo()
-	serverPlatform := serverInfo.DerivedModLoader()
+func (b fabricBootstrapper) Bootstrap(
+	_ context.Context,
+	fetched types.ResolvedPackage,
+	serverDir string,
+) error {
+	ws := workspace.New()
+	serverPlatform := ws.DerivedModLoader()
 
 	deleteVanilla := false
 	switch serverPlatform {
@@ -47,7 +51,7 @@ func (b fabricBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedP
 
 	workPath := serverDir
 	if workPath == "" {
-		workPath = serverInfo.Root
+		workPath = ws.Root
 	}
 	if workPath == "" {
 		workPath = "."
@@ -80,7 +84,7 @@ func (b fabricBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedP
 	}
 
 	if deleteVanilla {
-		if err := os.Remove(serverInfo.Runtime.PrimaryEntrance); err != nil {
+		if err := os.Remove(ws.Runtime.PrimaryEntrance); err != nil {
 			return fmt.Errorf("delete vanilla server failed: %w", err)
 		}
 	}
@@ -94,8 +98,8 @@ func init() {
 }
 
 func promptOverrideVanilla() (override bool, deleteVanilla bool) {
-	path := workspace.ServerInfo().Runtime.PrimaryEntrance
-	version := workspace.ServerInfo().Runtime.GameVersion
+	path := workspace.New().Runtime.PrimaryEntrance
+	version := workspace.New().Runtime.GameVersion
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().

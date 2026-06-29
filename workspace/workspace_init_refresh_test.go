@@ -8,7 +8,7 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func TestServerInfoAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
+func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -24,7 +24,7 @@ func TestServerInfoAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	t.Cleanup(
 		func() {
 			_ = os.Chdir(originalWD)
-			InvalidateServerInfo()
+			Invalidate()
 		},
 	)
 
@@ -32,8 +32,8 @@ func TestServerInfoAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	if err := os.Chdir(cacheDir); err != nil {
 		t.Fatalf("chdir cache dir: %v", err)
 	}
-	InvalidateServerInfo()
-	baseline := ServerInfo()
+	Invalidate()
+	baseline := New()
 	if baseline.Runtime == nil {
 		t.Fatal("expected baseline runtime info")
 	}
@@ -51,7 +51,7 @@ func TestServerInfoAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 		filepath.Join(targetDir, "fabric-server-launch.jar"),
 	)
 
-	observed := ServerInfoAt(targetDir)
+	observed := NewAt(targetDir)
 	if observed.Runtime == nil {
 		t.Fatal("expected observed runtime info")
 	}
@@ -61,14 +61,17 @@ func TestServerInfoAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 			observed.DerivedModLoader(),
 		)
 	}
-	if len(observed.ModPath) == 0 || observed.ModPath[0] != filepath.Join(targetDir, "mods") {
+	if len(observed.ModPath) == 0 || observed.ModPath[0] != filepath.Join(
+		targetDir,
+		"mods",
+	) {
 		t.Fatalf(
 			"expected absolute fabric mod path from target dir topology, got %v",
 			observed.ModPath,
 		)
 	}
 
-	cachedAgain := ServerInfo()
+	cachedAgain := New()
 	if cachedAgain.Runtime == nil {
 		t.Fatal("expected cached runtime info")
 	}
@@ -80,7 +83,7 @@ func TestServerInfoAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	}
 }
 
-func TestRefreshServerInfoRebuildsCurrentDirCache(t *testing.T) {
+func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -96,7 +99,7 @@ func TestRefreshServerInfoRebuildsCurrentDirCache(t *testing.T) {
 	t.Cleanup(
 		func() {
 			_ = os.Chdir(originalWD)
-			InvalidateServerInfo()
+			Invalidate()
 		},
 	)
 
@@ -104,8 +107,8 @@ func TestRefreshServerInfoRebuildsCurrentDirCache(t *testing.T) {
 	if err := os.Chdir(workDir); err != nil {
 		t.Fatalf("chdir work dir: %v", err)
 	}
-	InvalidateServerInfo()
-	before := ServerInfo()
+	Invalidate()
+	before := New()
 	if before.Runtime == nil {
 		t.Fatal("expected pre-refresh runtime info")
 	}
@@ -122,7 +125,7 @@ func TestRefreshServerInfoRebuildsCurrentDirCache(t *testing.T) {
 		filepath.Join(workDir, "fabric-server-launch.jar"),
 	)
 
-	refreshed := RefreshServerInfo(workDir)
+	refreshed := Refresh(workDir)
 	if refreshed.Runtime == nil {
 		t.Fatal("expected refreshed runtime info")
 	}
@@ -133,7 +136,7 @@ func TestRefreshServerInfoRebuildsCurrentDirCache(t *testing.T) {
 		)
 	}
 
-	cached := ServerInfo()
+	cached := New()
 	if cached.Runtime == nil {
 		t.Fatal("expected cached runtime after refresh")
 	}

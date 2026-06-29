@@ -341,7 +341,7 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	info := workspace.ServerInfoAt(workDir)
+	info := workspace.NewAt(workDir)
 	if len(info.Packages) == 0 {
 		return outputBisect(
 			cmd,

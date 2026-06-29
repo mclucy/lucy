@@ -9,7 +9,11 @@ import (
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
-func Install(ctx context.Context, req types.PackageRequest, options InstallOptions) (*Result, error) {
+func Install(
+	ctx context.Context,
+	req types.PackageRequest,
+	options InstallOptions,
+) (*Result, error) {
 	options = options.withDefaults()
 	id := types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
@@ -37,17 +41,29 @@ func Install(ctx context.Context, req types.PackageRequest, options InstallOptio
 	return &Result{}, nil
 }
 
-func installPlatform(ctx context.Context, id types.VersionedPackageRef, options InstallOptions) error {
+func installPlatform(
+	ctx context.Context,
+	id types.VersionedPackageRef,
+	options InstallOptions,
+) error {
 	if err := ctx.Err(); err != nil {
-		return installError(CategoryApply, err, map[string]any{"package": id.StringFull()})
+		return installError(
+			CategoryApply,
+			err,
+			map[string]any{"package": id.StringFull()},
+		)
 	}
 
-	serverInfo := options.ServerInfo()
-	serverDir := serverInfo.Root
+	ws := options.Workspace()
+	serverDir := ws.Root
 
 	bootstrapper, err := bootstrap.For(id.Platform)
 	if err != nil {
-		return installError(CategoryResolution, err, map[string]any{"platform": id.Platform})
+		return installError(
+			CategoryResolution,
+			err,
+			map[string]any{"platform": id.Platform},
+		)
 	}
 
 	if id.Platform == types.PlatformMCDR {

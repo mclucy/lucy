@@ -27,19 +27,19 @@ func init() {
 }
 
 func actionStatus(cmd *cobra.Command, args []string) error {
-	serverInfo := workspace.ServerInfo()
+	ws := workspace.New()
 	json, _ := cmd.Flags().GetBool(flagJsonName)
 	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
 	long, _ := cmd.Flags().GetBool(flagLongName)
 	noStyle, _ := cmd.Flags().GetBool(flagNoStyleName)
 	if json || jsonCompact {
 		if jsonCompact {
-			style.PrintAsJsonCompact(serverInfo)
+			style.PrintAsJsonCompact(ws)
 		} else {
-			style.PrintAsJson(serverInfo)
+			style.PrintAsJson(ws)
 		}
 	} else {
-		tui.Flush(generateStatusOutput(&serverInfo, long, noStyle))
+		tui.Flush(generateStatusOutput(&ws, long, noStyle))
 	}
 	return nil
 }

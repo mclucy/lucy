@@ -58,7 +58,10 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
+func (p provider) Fetch(id types.VersionedPackageRef) (
+	types.ResolvedPackage,
+	error,
+) {
 	gameVersion, err := minecraftVersionForInstall()
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -88,10 +91,10 @@ func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, er
 }
 
 func minecraftVersionForInstall() (types.BareVersion, error) {
-	serverInfo := workspace.ServerInfo()
-	switch serverInfo.DerivedModLoader() {
+	ws := workspace.New()
+	switch ws.DerivedModLoader() {
 	case types.PlatformVanilla:
-		return serverInfo.Runtime.GameVersion, nil
+		return ws.Runtime.GameVersion, nil
 	case types.PlatformNone:
 		selectedVersion := promptSelectMinecraftVersion()
 		if selectedVersion == "none" || selectedVersion == "error" {
@@ -99,7 +102,7 @@ func minecraftVersionForInstall() (types.BareVersion, error) {
 		}
 		return types.BareVersion(selectedVersion), nil
 	default:
-		return serverInfo.Runtime.GameVersion, nil
+		return ws.Runtime.GameVersion, nil
 	}
 }
 

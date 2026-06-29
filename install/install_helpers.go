@@ -11,7 +11,7 @@ import (
 
 func ensureServerPlatformMatch(
 	id types.VersionedPackageRef,
-	serverInfo workspace.Workspace,
+	ws workspace.Workspace,
 ) error {
 	platform := id.Platform
 
@@ -19,12 +19,12 @@ func ensureServerPlatformMatch(
 	case types.PlatformAny:
 		return nil
 	case types.PlatformMCDR:
-		if serverInfo.Environments.Mcdr == nil {
+		if ws.Environments.Mcdr == nil {
 			return errors.New("mcdr not found")
 		}
 		return nil
 	default:
-		if !serverInfo.Runtime.IsValid() {
+		if !ws.Runtime.IsValid() {
 			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
 
@@ -33,7 +33,7 @@ func ensureServerPlatformMatch(
 			return nil
 		}
 
-		topology := serverInfo.Topology
+		topology := ws.Topology
 		result := workspace.EvaluateCompatibility(topology, requiredCapability)
 		switch result.Verdict {
 		case types.CompatCompatible:

@@ -4,9 +4,9 @@
 // utilizes memoization to avoid redundant calculations and resolve any data
 // dependencies issues. Therefore, all probe functions are 100% concurrent-safe.
 //
-// The main exposed function is ServerInfo, which returns a comprehensive
-// ServerInfo struct containing all the gathered information. To avoid side
-// effects, the ServerInfo struct is returned as a copy, rather than reference.
+// The main exposed function is New, which returns a comprehensive
+// Workspace struct containing all the gathered information. To avoid side
+// effects, the Workspace struct is returned as a copy, rather than reference.
 package workspace
 
 import (
@@ -30,86 +30,86 @@ import (
 )
 
 var (
-	serverInfoMu    sync.RWMutex
-	serverInfoCache Workspace
-	serverInfoReady bool
+	mu    sync.RWMutex
+	cache Workspace
+	ready bool
 
 	resetProbeExecCache     = func() {}
 	resetProbeFileLockCache = func() {}
 )
 
 // probeAnchor is the absolute server directory that buildWorkPath returns as
-// the workspace root. Set under serverInfoMu before buildServerInfo() runs.
+// the workspace root. Set under mu before build() runs.
 var probeAnchor string
 
-// ServerInfo is the exposed function for external packages to get serverInfo.
+// New is the exposed function for external packages to get Workspace.
 // The value is cached after the first build, and read access is blocked while
 // Rebuild refreshes the cache.
-func ServerInfo() Workspace {
-	serverInfoMu.RLock()
-	if serverInfoReady {
-		cached := serverInfoCache
-		serverInfoMu.RUnlock()
+func New() Workspace {
+	mu.RLock()
+	if ready {
+		cached := cache
+		mu.RUnlock()
 		return cached
 	}
-	serverInfoMu.RUnlock()
+	mu.RUnlock()
 
-	serverInfoMu.Lock()
-	defer serverInfoMu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 
-	if !serverInfoReady {
+	if !ready {
 		resetProbeMemoizedStateLocked()
 		probeAnchor, _ = os.Getwd()
-		serverInfoCache = buildServerInfo()
-		serverInfoReady = true
+		cache = build()
+		ready = true
 	}
 
-	return serverInfoCache
+	return cache
 }
 
-// Rebuild forces ServerInfo to be regenerated and blocks all readers while
+// Rebuild forces Workspace to be regenerated and blocks all readers while
 // rebuilding.
 func Rebuild() {
-	serverInfoMu.Lock()
-	defer serverInfoMu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 
 	resetProbeMemoizedStateLocked()
 	probeAnchor, _ = os.Getwd()
-	serverInfoCache = buildServerInfo()
-	serverInfoReady = true
+	cache = build()
+	ready = true
 }
 
-// InvalidateServerInfo marks the cached ServerInfo as stale so the next call
-// to ServerInfo() will re-probe the server state. This is useful after
+// Invalidate marks the cached Workspace as stale so the next call
+// to New() will re-probe the server state. This is useful after
 // installing packages (e.g., identity packages like Fabric) to refresh the
 // topology cache without forcing an immediate rebuild.
-func InvalidateServerInfo() {
-	serverInfoMu.Lock()
-	defer serverInfoMu.Unlock()
-	serverInfoReady = false
+func Invalidate() {
+	mu.Lock()
+	defer mu.Unlock()
+	ready = false
 }
 
-// ServerInfoAt probes an explicit working directory without replacing the
-// current process-global ServerInfo cache. This is intended for init-style
+// NewAt probes an explicit working directory without replacing the
+// current process-global Workspace cache. This is intended for init-style
 // takeover discovery where the caller may need rich observed state for a target
 // directory that is not the current process working directory.
-func ServerInfoAt(workDir string) Workspace {
-	serverInfoMu.Lock()
-	defer serverInfoMu.Unlock()
+func NewAt(workDir string) Workspace {
+	mu.Lock()
+	defer mu.Unlock()
 
-	return buildServerInfoAtLocked(workDir, false)
+	return buildAtLocked(workDir, false)
 }
 
-// RefreshServerInfo refreshes probed state for workDir. When workDir matches
+// Refresh refreshes probed state for workDir. When workDir matches
 // the current process working directory, this rebuilds the shared cache so
-// future ServerInfo() calls observe the new state. Otherwise it performs an ad
+// future New() calls observe the new state. Otherwise it performs an ad
 // hoc reprobe and returns the refreshed observation without mutating the shared
 // cache.
-func RefreshServerInfo(workDir string) Workspace {
-	serverInfoMu.Lock()
-	defer serverInfoMu.Unlock()
+func Refresh(workDir string) Workspace {
+	mu.Lock()
+	defer mu.Unlock()
 
-	return buildServerInfoAtLocked(workDir, true)
+	return buildAtLocked(workDir, true)
 }
 
 func resetProbeMemoizedStateLocked() {
@@ -123,7 +123,7 @@ func resetProbeMemoizedStateLocked() {
 	resetProbeFileLockCache()
 }
 
-func buildServerInfoAtLocked(
+func buildAtLocked(
 	workDir string,
 	persistWhenCurrent bool,
 ) Workspace {
@@ -141,14 +141,14 @@ func buildServerInfoAtLocked(
 		return Workspace{}
 	}
 
-	savedCache := serverInfoCache
-	savedReady := serverInfoReady
+	savedCache := cache
+	savedReady := ready
 	shouldRestoreCache := true
 	defer func() {
 		resetProbeMemoizedStateLocked()
 		if shouldRestoreCache {
-			serverInfoCache = savedCache
-			serverInfoReady = savedReady
+			cache = savedCache
+			ready = savedReady
 		}
 	}()
 
@@ -161,11 +161,11 @@ func buildServerInfoAtLocked(
 	}()
 
 	resetProbeMemoizedStateLocked()
-	info := buildServerInfo()
+	info := build()
 
 	if persistWhenCurrent && sameProbePath(target, originalTarget) {
-		serverInfoCache = info
-		serverInfoReady = true
+		cache = info
+		ready = true
 		shouldRestoreCache = false
 	}
 
@@ -184,14 +184,14 @@ func sameProbePath(left, right string) bool {
 	return leftEval == rightEval
 }
 
-// buildServerInfo builds the server information by performing several checks
+// build builds the server information by performing several checks
 // and gathering data from various sources. It uses goroutines to perform these
 // tasks concurrently and a sync.Mutex to ensure thread-safe updates to the
-// serverInfo struct.
-func buildServerInfo() Workspace {
+// Workspace struct.
+func build() Workspace {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var serverInfo Workspace
+	var ws Workspace
 
 	// Environment stage
 	wg.Add(1)
@@ -199,7 +199,7 @@ func buildServerInfo() Workspace {
 		defer wg.Done()
 		env := getEnvironment()
 		mu.Lock()
-		serverInfo.Environments = env
+		ws.Environments = env
 		mu.Unlock()
 	}()
 
@@ -209,7 +209,7 @@ func buildServerInfo() Workspace {
 		defer wg.Done()
 		workPath := workPath()
 		mu.Lock()
-		serverInfo.Root = workPath
+		ws.Root = workPath
 		mu.Unlock()
 	}()
 
@@ -219,7 +219,7 @@ func buildServerInfo() Workspace {
 		defer wg.Done()
 		executable := getExecutableInfo()
 		mu.Lock()
-		serverInfo.Runtime = executable
+		ws.Runtime = executable
 		mu.Unlock()
 	}()
 
@@ -229,7 +229,7 @@ func buildServerInfo() Workspace {
 		defer wg.Done()
 		modPath := modPaths()
 		mu.Lock()
-		serverInfo.ModPath = modPath
+		ws.ModPath = modPath
 		mu.Unlock()
 	}()
 
@@ -239,7 +239,7 @@ func buildServerInfo() Workspace {
 		defer wg.Done()
 		packages := installedPackages()
 		mu.Lock()
-		serverInfo.Packages = packages
+		ws.Packages = packages
 		mu.Unlock()
 	}()
 
@@ -249,7 +249,7 @@ func buildServerInfo() Workspace {
 		defer wg.Done()
 		savePath := savePath()
 		mu.Lock()
-		serverInfo.SavePath = savePath
+		ws.SavePath = savePath
 		mu.Unlock()
 	}()
 
@@ -263,25 +263,25 @@ func buildServerInfo() Workspace {
 		defer wg.Done()
 		activity := checkServerFileLock()
 		mu.Lock()
-		serverInfo.Activity = activity
+		ws.Activity = activity
 		mu.Unlock()
 	}()
 
 	wg.Wait()
-	serverInfo.Packages = finalizeProbedRuntime(
-		serverInfo.Runtime,
-		serverInfo.Packages,
+	ws.Packages = finalizeProbedRuntime(
+		ws.Runtime,
+		ws.Packages,
 	)
-	if serverInfo.Runtime != nil {
-		serverInfo.Topology = serverInfo.Runtime.topology
+	if ws.Runtime != nil {
+		ws.Topology = ws.Runtime.topology
 	}
 
-	return serverInfo
+	return ws
 }
 
 // Some functions that gets a single piece of information. They are not exported,
-// as ServerInfo() applies a memoization mechanism. Every time a serverInfo
-// is needed, just call ServerInfo() without the concern of redundant calculation.
+// as New() applies a memoization mechanism. Every time a workspace
+// is needed, just call Workspace() without the concern of redundant calculation.
 
 func buildModPaths() (paths []string) {
 	exec := getExecutableInfo()

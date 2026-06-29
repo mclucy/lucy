@@ -49,14 +49,17 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error) {
-	serverInfo := workspace.ServerInfo()
-	serverPlatform := serverInfo.DerivedModLoader()
+func (p provider) Fetch(id types.VersionedPackageRef) (
+	types.ResolvedPackage,
+	error,
+) {
+	ws := workspace.New()
+	serverPlatform := ws.DerivedModLoader()
 
 	var gameVersionID string
 	switch serverPlatform {
 	case types.PlatformVanilla:
-		gameVersionID = string(serverInfo.Runtime.GameVersion)
+		gameVersionID = string(ws.Runtime.GameVersion)
 	case types.PlatformNone:
 		gameVersionID = promptSelectMinecraftVersion()
 	default:
@@ -68,12 +71,18 @@ func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, er
 
 	loaderVer, err := loaderVersion(id.Version)
 	if err != nil {
-		return types.ResolvedPackage{}, fmt.Errorf("resolve fabric loader version failed: %w", err)
+		return types.ResolvedPackage{}, fmt.Errorf(
+			"resolve fabric loader version failed: %w",
+			err,
+		)
 	}
 
 	installerVer, err := latestInstallerVersion()
 	if err != nil {
-		return types.ResolvedPackage{}, fmt.Errorf("resolve fabric installer version failed: %w", err)
+		return types.ResolvedPackage{}, fmt.Errorf(
+			"resolve fabric installer version failed: %w",
+			err,
+		)
 	}
 
 	url := fmt.Sprintf(
@@ -82,8 +91,13 @@ func (p provider) Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, er
 	)
 
 	return types.ResolvedPackage{
-		FileUrl:  url,
-		Filename: fmt.Sprintf("fabric-server-mc%s-loader%s-launcher%s.jar", gameVersionID, loaderVer, installerVer),
+		FileUrl: url,
+		Filename: fmt.Sprintf(
+			"fabric-server-mc%s-loader%s-launcher%s.jar",
+			gameVersionID,
+			loaderVer,
+			installerVer,
+		),
 	}, nil
 }
 
