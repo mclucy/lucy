@@ -13,6 +13,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
@@ -461,17 +462,31 @@ func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
 		providers = append(providers, curseforge.Provider)
 	}
 	for _, mapper := range providers {
-		name, _, err := mapper.NameByHash(artifacthash.File{Path: filePath})
-		if err != nil || name.RemoteName == "" {
+		ref, _, ok, err := mapper.PackageByHash(artifacthash.File{Path: filePath})
+		if err != nil || !ok || ref.Name == "" {
 			continue
+		}
+		platform := ref.Platform
+		if platform == types.PlatformNone || platform == types.PlatformAny {
+			platform = types.PlatformForge
+		}
+		version := ref.Version
+		if version == "" {
+			version = types.VersionUnknown
+		}
+		pkgName := ref.Name
+		if ref.Scope == types.SourceMCDR {
+			pkgName = types.BarePackageName(
+				strings.ReplaceAll(string(ref.Name), "_", "-"),
+			)
 		}
 		return types.DiscoveredPackage{
 			Id: types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: types.PlatformForge,
-					Name:     types.BarePackageName(name.FormattedName()),
+					Platform: platform,
+					Name:     pkgName,
 				},
-				Version: types.VersionUnknown,
+				Version: version,
 			},
 			Path: filePath,
 		}, true

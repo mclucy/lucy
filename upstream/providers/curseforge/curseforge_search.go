@@ -104,3 +104,9 @@ func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 		params.Encode(),
 	)
 }
+
+// modFileUrl builds the URL for a single mod file.
+// Docs: https://docs.curseforge.com/rest-api/#get-mod-file
+func modFileUrl(modId, fileId int32) string {
+	return fmt.Sprintf("%s/v1/mods/%d/files/%d", baseUrl, modId, fileId)
+}

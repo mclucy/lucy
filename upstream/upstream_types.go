@@ -62,9 +62,10 @@ type SupportedPlatformsReporter interface {
 }
 
 type ArtifactMapper interface {
-	NameByHash(artifact Hashable) (
-		name RemotePackageName,
+	PackageByHash(artifact Hashable) (
+		ref types.FullPackageRef,
 		hash string,
+		ok bool,
 		err error,
 	)
 }
@@ -103,18 +104,6 @@ type SearchResponse struct {
 
 type Informer interface {
 	Info(ref types.PackageRef) (info types.Metadata, err error)
-}
-
-type RemotePackageName struct {
-	RemoteName string
-	Source     types.SourceId
-}
-
-func (r RemotePackageName) FormattedName() string {
-	if r.Source == types.SourceMCDR {
-		return strings.ReplaceAll(r.RemoteName, "_", "-")
-	}
-	return r.RemoteName
 }
 
 type SearchOptions struct {

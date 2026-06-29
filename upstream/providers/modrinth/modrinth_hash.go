@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -20,8 +21,9 @@ const versionFileUrlPrefix = "https://api.modrinth.com/v2/version_file/"
 
 // versionFileResponse is the response from GET /v2/version_file/{hash}.
 type versionFileResponse struct {
-	ProjectId     string `json:"project_id"`
-	VersionNumber string `json:"version_number"`
+	ProjectId     string   `json:"project_id"`
+	VersionNumber string   `json:"version_number"`
+	Loaders       []string `json:"loaders"`
 }
 
 // SlugFromFilePathWithHint is like SlugFromFilePath but accepts an optional
@@ -125,9 +127,10 @@ func sha1File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func (s provider) NameByHash(artifact upstream.Hashable) (
-	name upstream.RemotePackageName,
+func (s provider) PackageByHash(artifact upstream.Hashable) (
+	ref types.FullPackageRef,
 	hash string,
+	ok bool,
 	err error,
 ) {
 	hashBytes := artifact.Sha1()
@@ -138,14 +141,14 @@ func (s provider) NameByHash(artifact upstream.Hashable) (
 
 	res, err := requestBytes(u)
 	if err != nil {
-		return
+		return ref, hash, false, err
 	}
 
 	if res.StatusCode == 404 {
-		return name, hash, ErrNoProject
+		return ref, hash, false, nil
 	}
 	if res.StatusCode != 200 {
-		return name, hash, fmt.Errorf(
+		return ref, hash, false, fmt.Errorf(
 			"modrinth: hash lookup returned status %d",
 			res.StatusCode,
 		)
@@ -154,18 +157,34 @@ func (s provider) NameByHash(artifact upstream.Hashable) (
 	var version versionFileResponse
 	err = json.Unmarshal(res.Data, &version)
 	if err != nil || version.ProjectId == "" {
-		return name, hash, ErrNoProject
+		return ref, hash, false, nil
 	}
 
 	project, err := getProjectById(version.ProjectId)
 	if err != nil {
-		return
+		return ref, hash, false, err
 	}
 
-	name = upstream.RemotePackageName{
-		RemoteName: project.Slug,
-		Source:     s.Id(),
+	ref = types.FullPackageRef{
+		PackageRef: types.PackageRef{
+			Platform: platformFromModrinthLoaders(version.Loaders),
+			Name:     types.BarePackageName(project.Slug),
+		},
+		Version: types.BareVersion(version.VersionNumber),
+		Scope:   s.Id(),
 	}
+	return ref, hash, true, nil
+}
 
-	return
+func platformFromModrinthLoaders(loaders []string) types.PlatformId {
+	for _, loader := range loaders {
+		p := types.PlatformId(loader)
+		if p.IsModding() || p == types.PlatformBukkit {
+			return p
+		}
+	}
+	if len(loaders) > 0 {
+		return types.PlatformId(loaders[0])
+	}
+	return types.PlatformNone
 }

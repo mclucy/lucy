@@ -80,3 +80,16 @@ func getFileByDisplayName(
 	}
 	return selected, nil
 }
+
+type modFileDataResponse struct {
+	Data fileResponse `json:"data"`
+}
+
+func getModFileById(modId, fileId int32) (*fileResponse, error) {
+	u := modFileUrl(modId, fileId)
+	var resp modFileDataResponse
+	if err := get(u, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}

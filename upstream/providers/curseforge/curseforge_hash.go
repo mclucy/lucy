@@ -3,6 +3,7 @@ package curseforge
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -33,13 +35,6 @@ type fingerprintResponse struct {
 	} `json:"data"`
 }
 
-// SlugFromFilePath computes the CurseForge fingerprint of the file at path,
-// queries POST /v1/fingerprints/432, and returns the project slug.
-// Returns ("", ErrProjectNotFound) if the file is not found on CurseForge.
-func SlugFromFilePath(filePath string) (slug string, err error) {
-	return SlugFromFilePathWithHint(filePath, "")
-}
-
 // SlugFromFilePathWithHint is like SlugFromFilePath but accepts an optional
 // urlHint slug. URL hint is never trusted on its own — fingerprint always wins.
 func SlugFromFilePathWithHint(filePath, urlHint string) (
@@ -54,26 +49,49 @@ func SlugFromFilePathWithHint(filePath, urlHint string) (
 	return slugFromFingerprint(fp)
 }
 
-func (p provider) NameByHash(artifact upstream.Hashable) (
-	name upstream.RemotePackageName,
+func (p provider) PackageByHash(artifact upstream.Hashable) (
+	ref types.FullPackageRef,
 	hash string,
+	ok bool,
 	err error,
 ) {
 	fingerprint := artifact.MurmurHash()
 	hash = strconv.FormatUint(uint64(fingerprint), 10)
-	slug, err := slugFromFingerprint(fingerprint)
+	match, err := fingerprintMatch(fingerprint)
 	if err != nil {
-		return name, hash, err
+		if errors.Is(err, ErrProjectNotFound) {
+			return ref, hash, false, nil
+		}
+		return ref, hash, false, err
 	}
 
-	name = upstream.RemotePackageName{
-		RemoteName: slug,
-		Source:     p.Id(),
+	mod, err := getModById(match.ModId)
+	if err != nil {
+		return ref, hash, false, err
 	}
-	return name, hash, nil
+	file, err := getModFileById(match.ModId, match.FileId)
+	if err != nil {
+		return ref, hash, false, err
+	}
+
+	ref = types.FullPackageRef{
+		PackageRef: types.PackageRef{
+			Platform: platformFromCurseForgeFile(mod, file),
+			Name:     types.BarePackageName(mod.Slug),
+		},
+		Version: types.BareVersion(file.DisplayName),
+		Scope:   p.Id(),
+	}
+	return ref, hash, true, nil
 }
 
-func slugFromFingerprint(fp uint32) (string, error) {
+type fingerprintMatchResult struct {
+	ModId  int32
+	FileId int32
+}
+
+func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
+	var zero fingerprintMatchResult
 	body, _ := json.Marshal(fingerprintRequest{Fingerprints: []uint32{fp}})
 	req, err := http.NewRequest(
 		http.MethodPost,
@@ -81,7 +99,7 @@ func slugFromFingerprint(fp uint32) (string, error) {
 		bytes.NewReader(body),
 	)
 	if err != nil {
-		return "", err
+		return zero, err
 	}
 	req.Header.Set("x-api-key", ApiKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -90,12 +108,12 @@ func slugFromFingerprint(fp uint32) (string, error) {
 	log.Debug("curseforge fingerprint lookup")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return zero, err
 	}
 	defer fn.CloseReader(resp.Body, log.Warn)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(
+		return zero, fmt.Errorf(
 			"curseforge: fingerprint lookup returned status %d",
 			resp.StatusCode,
 		)
@@ -103,21 +121,54 @@ func slugFromFingerprint(fp uint32) (string, error) {
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return zero, err
 	}
 
 	var result fingerprintResponse
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return "", ErrProjectNotFound
+		return zero, ErrProjectNotFound
 	}
 	if len(result.Data.ExactMatches) == 0 {
-		return "", ErrProjectNotFound
+		return zero, ErrProjectNotFound
 	}
 
-	modId := result.Data.ExactMatches[0].File.ModId
-	mod, err := getModById(modId)
+	m := result.Data.ExactMatches[0]
+	return fingerprintMatchResult{
+		ModId:  m.File.ModId,
+		FileId: int32(m.Id),
+	}, nil
+}
+
+func slugFromFingerprint(fp uint32) (string, error) {
+	match, err := fingerprintMatch(fp)
+	if err != nil {
+		return "", err
+	}
+	mod, err := getModById(match.ModId)
 	if err != nil {
 		return "", err
 	}
 	return mod.Slug, nil
+}
+
+func platformFromCurseForgeFile(mod *modResponse, file *fileResponse) types.PlatformId {
+	for _, idx := range mod.LatestFilesIndexes {
+		if idx.FileId == file.Id && idx.ModLoader != nil {
+			return platformFromCurseForgeModLoader(*idx.ModLoader)
+		}
+	}
+	return types.PlatformNone
+}
+
+func platformFromCurseForgeModLoader(loader int32) types.PlatformId {
+	switch loader {
+	case 1:
+		return types.PlatformForge
+	case 4:
+		return types.PlatformFabric
+	case 6:
+		return types.PlatformNeoforge
+	default:
+		return types.PlatformNone
+	}
 }
