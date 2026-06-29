@@ -18,15 +18,19 @@ import (
 
 type forgeBootstrapper struct{}
 
-func (b forgeBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
+func (b forgeBootstrapper) Bootstrap(
+	_ context.Context,
+	fetched types.ResolvedPackage,
+	serverDir string,
+) error {
 	if err := guardForgeServerTopology(); err != nil {
 		return err
 	}
 
-	serverInfo := workspace.ServerInfo()
+	ws := workspace.New()
 	workPath := serverDir
 	if workPath == "" {
-		workPath = serverInfo.Root
+		workPath = ws.Root
 	}
 	if workPath == "" {
 		return errors.New("server working directory not found")
@@ -89,7 +93,7 @@ func init() {
 }
 
 func guardForgeServerTopology() error {
-	serverPlatform := workspace.ServerInfo().DerivedModLoader()
+	serverPlatform := workspace.New().DerivedModLoader()
 
 	switch serverPlatform {
 	case types.PlatformFabric, types.PlatformForge, types.PlatformNeoforge:

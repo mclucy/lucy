@@ -128,7 +128,7 @@ func ValidatePlatformSelection(primary string, compatible []string) error {
 // directory so subsequent takeover/status reads see post-init filesystem reality
 // rather than stale memoized observations.
 func RefreshObservedStateAfterInitWrites(workDir string) {
-	workspace.RefreshServerInfo(workDir)
+	workspace.Refresh(workDir)
 }
 
 // Type aliases kept so cmd/cmd_init.go and any future consumers don't have to

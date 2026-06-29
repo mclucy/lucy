@@ -16,14 +16,18 @@ import (
 
 type mcdrBootstrapper struct{}
 
-func (b mcdrBootstrapper) Bootstrap(ctx context.Context, _ types.ResolvedPackage, serverDir string) error {
-	if workspace.ServerInfo().Environments.Mcdr != nil {
+func (b mcdrBootstrapper) Bootstrap(
+	ctx context.Context,
+	_ types.ResolvedPackage,
+	serverDir string,
+) error {
+	if workspace.New().Environments.Mcdr != nil {
 		return errors.New("mcdr already installed")
 	}
 
 	workPath := serverDir
 	if workPath == "" {
-		workPath = workspace.ServerInfo().Root
+		workPath = workspace.New().Root
 	}
 	if workPath == "" {
 		workPath = "."
@@ -35,7 +39,10 @@ func (b mcdrBootstrapper) Bootstrap(ctx context.Context, _ types.ResolvedPackage
 	}
 
 	log.ShowInfo("Preparing MCDReforged layout")
-	if err := os.Mkdir(filepath.Join(workPath, "server"), 0o755); err != nil && !os.IsExist(err) {
+	if err := os.Mkdir(
+		filepath.Join(workPath, "server"),
+		0o755,
+	); err != nil && !os.IsExist(err) {
 		return fmt.Errorf("create server directory failed: %w", err)
 	}
 
@@ -53,7 +60,12 @@ func (b mcdrBootstrapper) Bootstrap(ctx context.Context, _ types.ResolvedPackage
 	}
 
 	if len(movable) > 0 {
-		log.ShowInfo(fmt.Sprintf("Moving %d item(s) into server/", len(movable)))
+		log.ShowInfo(
+			fmt.Sprintf(
+				"Moving %d item(s) into server/",
+				len(movable),
+			),
+		)
 	}
 	for _, file := range movable {
 		src := filepath.Join(workPath, file.Name())

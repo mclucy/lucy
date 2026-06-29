@@ -246,18 +246,18 @@ func buildUpdatedLock(
 		lock = state.NewLock()
 	}
 
-	serverInfo := workspace.ServerInfo()
-	runtime := serverInfo.Runtime
+	ws := workspace.New()
+	runtime := ws.Runtime
 	lock.GeneratedAt = state.NewLock().GeneratedAt
 	lock.ManifestFingerprint = manifestFingerprint(
 		manifest,
 		lock.ManifestFingerprint,
 	)
 	lock.GameVersion = manifestGameVersion(manifest, runtime, lock.GameVersion)
-	lock.Platform = manifestPlatform(manifest, serverInfo, lock.Platform)
+	lock.Platform = manifestPlatform(manifest, ws, lock.Platform)
 	lock.PlatformVersion = manifestPlatformVersion(
 		manifest,
-		serverInfo,
+		ws,
 		lock.PlatformVersion,
 	)
 
@@ -320,14 +320,14 @@ func manifestGameVersion(
 
 func manifestPlatform(
 	manifest *state.Manifest,
-	serverInfo workspace.Workspace,
+	ws workspace.Workspace,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.ModdingPlatform != "" {
 		return manifest.Environment.ModdingPlatform
 	}
-	if serverInfo.Runtime != nil {
-		if platform := serverInfo.DerivedModLoader().String(); platform != "" {
+	if ws.Runtime != nil {
+		if platform := ws.DerivedModLoader().String(); platform != "" {
 			return platform
 		}
 	}
@@ -339,14 +339,14 @@ func manifestPlatform(
 
 func manifestPlatformVersion(
 	manifest *state.Manifest,
-	serverInfo workspace.Workspace,
+	ws workspace.Workspace,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.ModdingPlatformVersion != "" {
 		return manifest.Environment.ModdingPlatformVersion
 	}
-	if serverInfo.Runtime != nil {
-		if version := serverInfo.DerivedLoaderVersion(); version != "" {
+	if ws.Runtime != nil {
+		if version := ws.DerivedLoaderVersion(); version != "" {
 			return version
 		}
 	}

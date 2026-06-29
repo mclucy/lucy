@@ -30,7 +30,7 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 	longOut, _ := cmd.Flags().GetBool(flagLongName)
 	noStyle, _ := cmd.Flags().GetBool(flagNoStyleName)
 
-	info := workspace.ServerInfo()
+	info := workspace.New()
 
 	if info.Runtime == nil || info.Topology == nil {
 		return fmt.Errorf("no server runtime detected in current directory")

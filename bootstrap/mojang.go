@@ -15,14 +15,18 @@ import (
 
 type mojangBootstrapper struct{}
 
-func (b mojangBootstrapper) Bootstrap(_ context.Context, fetched types.ResolvedPackage, serverDir string) error {
-	if workspace.ServerInfo().DerivedModLoader() != types.PlatformNone {
+func (b mojangBootstrapper) Bootstrap(
+	_ context.Context,
+	fetched types.ResolvedPackage,
+	serverDir string,
+) error {
+	if workspace.New().DerivedModLoader() != types.PlatformNone {
 		return errors.New("a server is already installed")
 	}
 
 	workPath := serverDir
 	if workPath == "" {
-		workPath = workspace.ServerInfo().Root
+		workPath = workspace.New().Root
 	}
 	if workPath == "" {
 		workPath = "."

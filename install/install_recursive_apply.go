@@ -13,24 +13,24 @@ import (
 )
 
 func recursiveInstallDestination(
-	serverInfo workspace.Workspace,
+	ws workspace.Workspace,
 	pkg types.InstalledPackage,
 ) string {
-	if pkg.Id.Platform.IsModding() && len(serverInfo.ModPath) > 0 {
-		return serverInfo.ModPath[0]
+	if pkg.Id.Platform.IsModding() && len(ws.ModPath) > 0 {
+		return ws.ModPath[0]
 	}
 
 	if pkg.Id.Platform == types.PlatformMCDR &&
-		serverInfo.Environments.Mcdr != nil &&
-		len(serverInfo.Environments.Mcdr.Config.PluginDirectories) > 0 {
-		return serverInfo.Environments.Mcdr.Config.PluginDirectories[0]
+		ws.Environments.Mcdr != nil &&
+		len(ws.Environments.Mcdr.Config.PluginDirectories) > 0 {
+		return ws.Environments.Mcdr.Config.PluginDirectories[0]
 	}
 
-	if len(serverInfo.ModPath) == 1 {
-		return serverInfo.ModPath[0]
+	if len(ws.ModPath) == 1 {
+		return ws.ModPath[0]
 	}
 
-	return serverInfo.Root
+	return ws.Root
 }
 
 func planApply(
@@ -107,27 +107,31 @@ func planApply(
 		if node.Path == "" {
 			continue
 		}
-		remove = append(remove, types.InstalledPackage{
-			ResolvedPackage: node.Package,
-			Path:            node.Path,
-		})
+		remove = append(
+			remove, types.InstalledPackage{
+				ResolvedPackage: node.Package,
+				Path:            node.Path,
+			},
+		)
 	}
 
-	return ApplyPlan{Install: install, Remove: remove, Provenance: provenance}, nil
+	return ApplyPlan{
+		Install: install, Remove: remove, Provenance: provenance,
+	}, nil
 }
 
 func applyPlan(
 	ctx context.Context,
 	plan ApplyPlan,
-	serverInfo workspace.Workspace,
+	ws workspace.Workspace,
 	journal Journal,
 ) (ApplyPlan, error) {
 	if err := ctx.Err(); err != nil {
 		return plan, err
 	}
 
-	if serverInfo.Root != "" && serverInfo.Root != "." {
-		if err := os.MkdirAll(serverInfo.Root, 0o755); err != nil {
+	if ws.Root != "" && ws.Root != "." {
+		if err := os.MkdirAll(ws.Root, 0o755); err != nil {
 			return plan, fmt.Errorf("create server work path failed: %w", err)
 		}
 	}
@@ -147,7 +151,7 @@ func applyPlan(
 				continue
 			}
 			src := pkg.Path
-			dstDir := recursiveInstallDestination(serverInfo, pkg)
+			dstDir := recursiveInstallDestination(ws, pkg)
 			if dstDir != "" && dstDir != "." {
 				if err := os.MkdirAll(dstDir, 0o755); err != nil {
 					moveErrors = append(
@@ -165,7 +169,11 @@ func applyPlan(
 			if err := os.Rename(src, dst); err != nil {
 				moveErrors = append(
 					moveErrors,
-					fmt.Errorf("move %s: %w", resolvedPackageLabel(pkg.ResolvedPackage), err),
+					fmt.Errorf(
+						"move %s: %w",
+						resolvedPackageLabel(pkg.ResolvedPackage),
+						err,
+					),
 				)
 				continue
 			}
@@ -191,7 +199,11 @@ func applyPlan(
 		if err := os.Remove(pkg.Path); err != nil {
 			applyErrors = append(
 				applyErrors,
-				fmt.Errorf("remove %s: %w", resolvedPackageLabel(pkg.ResolvedPackage), err),
+				fmt.Errorf(
+					"remove %s: %w",
+					resolvedPackageLabel(pkg.ResolvedPackage),
+					err,
+				),
 			)
 			continue
 		}
@@ -199,11 +211,16 @@ func applyPlan(
 		applied++
 	}
 
-	recordEvent(journal, Event{Kind: EventBatchSummary, Count: applied, Failed: len(applyErrors)})
+	recordEvent(
+		journal,
+		Event{
+			Kind: EventBatchSummary, Count: applied, Failed: len(applyErrors),
+		},
+	)
 	if len(applyErrors) > 0 {
 		return plan, errors.Join(applyErrors...)
 	}
 
-	workspace.InvalidateServerInfo()
+	workspace.Invalidate()
 	return plan, nil
 }

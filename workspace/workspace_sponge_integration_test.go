@@ -10,15 +10,33 @@ import (
 )
 
 func TestSpongeDetectorIntegration_VanillaFixture(t *testing.T) {
-	runSpongeIntegrationProbe(t, "test_sponge", types.CapabilitySpongePlugins, false, false)
+	runSpongeIntegrationProbe(
+		t,
+		"test_sponge",
+		types.CapabilitySpongePlugins,
+		false,
+		false,
+	)
 }
 
 func TestSpongeDetectorIntegration_ForgeFixture(t *testing.T) {
-	runSpongeIntegrationProbe(t, "test_sponge_forge", types.CapabilitySpongePlugins, true, false)
+	runSpongeIntegrationProbe(
+		t,
+		"test_sponge_forge",
+		types.CapabilitySpongePlugins,
+		true,
+		false,
+	)
 }
 
 func TestSpongeDetectorIntegration_NeoFixture(t *testing.T) {
-	runSpongeIntegrationProbe(t, "test_sponge_neoforge", types.CapabilitySpongePlugins, false, true)
+	runSpongeIntegrationProbe(
+		t,
+		"test_sponge_neoforge",
+		types.CapabilitySpongePlugins,
+		false,
+		true,
+	)
 }
 
 func runSpongeIntegrationProbe(
@@ -34,16 +52,18 @@ func runSpongeIntegrationProbe(
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = os.Chdir(originalWD)
-		InvalidateServerInfo()
-	})
+	t.Cleanup(
+		func() {
+			_ = os.Chdir(originalWD)
+			Invalidate()
+		},
+	)
 
 	jarPath := spongeIntegrationFixtureJar(t, fixtureDir)
 	workDir := t.TempDir()
 	copyProbeFixture(t, jarPath, filepath.Join(workDir, filepath.Base(jarPath)))
 
-	observed := ServerInfoAt(workDir)
+	observed := NewAt(workDir)
 	if observed.Runtime == nil {
 		t.Fatal("expected runtime info for sponge fixture")
 	}

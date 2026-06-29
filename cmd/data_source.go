@@ -61,7 +61,7 @@ func LoadDependencyData(workDir string, forceLive bool) (
 		// Lock file missing — fall through to probe.
 	}
 
-	info := workspace.ServerInfoAt(workDir)
+	info := workspace.NewAt(workDir)
 	graph, err := BuildGraphFromProbe(info)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to build graph from probe: %w", err)

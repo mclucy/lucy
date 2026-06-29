@@ -14,7 +14,7 @@ import (
 // Each installed package is treated as an immutable anchor during recursive
 // solving; it will never be auto-replaced by the solver.
 func SnapshotInstalledConstraints() []InstalledConstraint {
-	return snapshotInstalledConstraints(workspace.ServerInfo())
+	return snapshotInstalledConstraints(workspace.New())
 }
 
 func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint {

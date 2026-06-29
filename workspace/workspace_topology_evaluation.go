@@ -1,12 +1,8 @@
-// Package probe provides functionality to gather and manage server information
-// for a Minecraft server. It includes methods to retrieve server configuration,
-// mod list, executable information, and other relevant details. The package
-// utilizes memoization to avoid redundant calculations and resolve any data
-// dependencies issues. Therefore, all probe functions are 100% concurrent-safe.
+// Package workspace is a pure policy layer
+// These evaluators are deterministic and side-effect free. They take topology
+// values as input and return compatibility verdicts.
 //
-// The main exposed function is ServerInfo, which returns a comprehensive
-// ServerInfo struct containing all the gathered information. To avoid side
-// effects, the ServerInfo struct is returned as a copy, rather than reference.
+// No file I/O, no network calls, no logging, no panic.
 package workspace
 
 import (
@@ -15,10 +11,6 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// PURE POLICY LAYER: These evaluators are deterministic and side-effect free.
-// They take topology values as input and return compatibility verdicts.
-// No file I/O, no network calls, no logging, no panic.
-//
 // EvaluateCompatibility evaluates whether a server runtime (described by topology)
 // can support the requested ecosystem. Verdict encodes direct support, indirect/hosted
 // support, incompatibility, or unresolved topology. Indirect support is reported as

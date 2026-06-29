@@ -19,7 +19,7 @@ func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T
 	t.Cleanup(
 		func() {
 			_ = os.Chdir(originalWD)
-			InvalidateServerInfo()
+			Invalidate()
 		},
 	)
 
@@ -31,7 +31,7 @@ func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T
 	)
 	copyProbeFixture(t, paperJar, filepath.Join(workDir, "paper.jar"))
 
-	observed := ServerInfoAt(workDir)
+	observed := NewAt(workDir)
 	if observed.Runtime == nil {
 		t.Fatal("expected runtime info for paper fixture")
 	}
@@ -67,7 +67,7 @@ func TestPaperDetectorIntegration_ContradictoryEvidenceDoesNotProducePaperRuntim
 	t.Cleanup(
 		func() {
 			_ = os.Chdir(originalWD)
-			InvalidateServerInfo()
+			Invalidate()
 		},
 	)
 
@@ -91,7 +91,7 @@ func TestPaperDetectorIntegration_ContradictoryEvidenceDoesNotProducePaperRuntim
 		filepath.Join(workDir, "contradiction.jar"),
 	)
 
-	observed := ServerInfoAt(workDir)
+	observed := NewAt(workDir)
 	if observed.Runtime == nil {
 		t.Fatal("expected runtime info for contradiction fixture")
 	}
