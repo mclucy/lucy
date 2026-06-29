@@ -60,10 +60,6 @@ func EnrichTopologyFromPackages(
 	}
 
 	evidence := detectedRuntimeEvidence(packages)
-	evidence = append(
-		evidence,
-		detectedRuntimeEvidenceFromHints(exec.BridgeHints)...,
-	)
 
 	if exec.topology == nil {
 		// No topology yet — attempt to build one from package evidence.
@@ -337,27 +333,6 @@ func inferHostTopologyFromAttachedBridgePackages(
 	}
 
 	return nil
-}
-
-func detectedRuntimeEvidenceFromHints(hints []string) []types.RuntimeNodeID {
-	if len(hints) == 0 {
-		return nil
-	}
-
-	detected := make([]types.RuntimeNodeID, 0, len(hints))
-	for _, hint := range hints {
-		switch types.RuntimeNodeID(hint) {
-		case types.RuntimeNodeConnector,
-			types.RuntimeNodeKilt,
-			types.RuntimeNodeVelocity,
-			types.RuntimeNodeBungeecord,
-			types.RuntimeNodeGeyser,
-			types.RuntimeNodeGeyserStandalone:
-			detected = append(detected, types.RuntimeNodeID(hint))
-		}
-	}
-
-	return detected
 }
 
 func hasAnyName(names map[string]struct{}, candidates ...string) bool {

@@ -28,7 +28,6 @@ type ExecutableEvidence struct {
 	Topology          *types.RuntimeTopology
 	TopologySeed      *ExecutableTopologySeed
 	RuntimeIdentities []types.VersionedPackageRef
-	BridgeHints       []string
 	Provenance        ExecutableDetectorProvenance
 }
 

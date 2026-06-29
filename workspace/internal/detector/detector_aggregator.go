@@ -30,7 +30,6 @@ func Executable(filePath string) *ExecutableCandidates {
 		return nil
 	}
 
-	bridgeMarkers := DetectBridgeMarkers(zipReader)
 	candidates := &ExecutableCandidates{
 		Candidates: make([]*ExecutableEvidence, 0),
 	}
@@ -41,34 +40,8 @@ func Executable(filePath string) *ExecutableCandidates {
 		if err != nil || result == nil {
 			continue
 		}
-		result.BridgeHints = mergeBridgeHints(result.BridgeHints, bridgeMarkers)
 		candidates.Candidates = append(candidates.Candidates, result)
 	}
 
 	return candidates
-}
-
-func mergeBridgeHints(existing []string, markers []BridgeMarker) []string {
-	if len(existing) == 0 && len(markers) == 0 {
-		return nil
-	}
-
-	merged := make([]string, 0, len(existing)+len(markers))
-	seen := make(map[string]struct{}, len(existing)+len(markers))
-	for _, hint := range existing {
-		if _, ok := seen[hint]; ok {
-			continue
-		}
-		seen[hint] = struct{}{}
-		merged = append(merged, hint)
-	}
-	for _, marker := range markers {
-		if _, ok := seen[marker.NodeID]; ok {
-			continue
-		}
-		seen[marker.NodeID] = struct{}{}
-		merged = append(merged, marker.NodeID)
-	}
-
-	return merged
 }

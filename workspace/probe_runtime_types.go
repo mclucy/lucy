@@ -11,7 +11,6 @@ type ServerRuntime struct {
 	GameVersion     types.BareVersion      `json:"game_version"`
 	BootCommand     *exec.Cmd              `json:"-"`
 	topology        *types.RuntimeTopology `json:"-"`
-	BridgeHints     []string               `json:"bridge_hints,omitempty"`
 }
 
 var UnknownExecutable = &ServerRuntime{
