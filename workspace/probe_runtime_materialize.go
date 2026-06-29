@@ -152,6 +152,8 @@ func RuntimeIdentityNode(identity types.VersionedPackageRef) (
 		return types.RuntimeNodePaperFork, true
 	case "arclight":
 		return types.RuntimeNodeArclight, true
+	case "sponge":
+		return types.RuntimeNodeSponge, true
 	case "geyser-spigot", "geyser-fabric":
 		return types.RuntimeNodeGeyser, true
 	case "geyser":
