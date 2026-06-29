@@ -8,8 +8,8 @@ import (
 
 func finalizeProbedRuntime(
 	runtime *ServerRuntime,
-	packages []types.Package,
-) []types.Package {
+	packages []types.DiscoveredPackage,
+) []types.DiscoveredPackage {
 	EnrichTopologyFromPackages(runtime, packages)
 	ensureRuntimeTopology(runtime)
 	return packagesWithRuntimeIdentities(packages, runtime)
@@ -24,9 +24,9 @@ func ensureRuntimeTopology(runtime *ServerRuntime) {
 }
 
 func packagesWithRuntimeIdentities(
-	packages []types.Package,
+	packages []types.DiscoveredPackage,
 	runtime *ServerRuntime,
-) []types.Package {
+) []types.DiscoveredPackage {
 	if runtime == nil || !runtime.IsValid() {
 		return packages
 	}
@@ -37,7 +37,7 @@ func packagesWithRuntimeIdentities(
 		if rid.Platform == types.PlatformAny {
 			continue
 		}
-		idx.Add(types.Package{Id: rid})
+		idx.Add(types.DiscoveredPackage{Id: rid})
 	}
 
 	return idx.Packages()

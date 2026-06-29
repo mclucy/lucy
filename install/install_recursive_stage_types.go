@@ -11,7 +11,7 @@ import (
 // automatically; it only contributes as a fixed version anchor.
 type InstalledConstraint struct {
 	// Package is the installed package with its local installation path.
-	Package types.Package
+	Package types.DiscoveredPackage
 
 	// ConstraintInput is the fixed constraint edge derived from this installed
 	// package, used as an immutable lower-bound in the constraint engine.

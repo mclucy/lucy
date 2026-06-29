@@ -279,7 +279,7 @@ func (planner *candidateGraphPlanner) admit(
 	return nil
 }
 
-func resolvedPackageFromInstalled(pkg types.Package) types.ResolvedPackage {
+func resolvedPackageFromInstalled(pkg types.DiscoveredPackage) types.ResolvedPackage {
 	return types.ResolvedPackage{
 		Id: types.FullPackageRef{
 			PackageRef: pkg.Id.PackageRef,
@@ -289,11 +289,8 @@ func resolvedPackageFromInstalled(pkg types.Package) types.ResolvedPackage {
 	}
 }
 
-func installedPath(pkg types.Package) string {
-	if pkg.Local == nil {
-		return ""
-	}
-	return pkg.Local.Path
+func installedPath(pkg types.DiscoveredPackage) string {
+	return pkg.Path
 }
 
 func (planner *candidateGraphPlanner) resolvedClosure() ResolvedClosure {

@@ -5,16 +5,16 @@ import (
 )
 
 type Workspace struct {
-	Root         string                 `json:"root"` // if found lucy on upperworkspace
-	SavePath     string                 `json:"save_path"`
-	ModPath      []string               `json:"mod_path"`
-	Packages     []types.Package        `json:"packages"`
-	Runtime      *ServerRuntime         `json:"runtime,omitempty"`
-	Topology     *types.RuntimeTopology `json:"topology,omitempty"`
-	Activity     *ServerActivity        `json:"activity,omitempty"`
-	Environments types.EnvironmentInfo  `json:"environments"`
-	McdrRoot     string                 `json:"mcdr_root"`
-	LucyRoot     string                 `json:"lucy_root"`
+	Root         string                    `json:"root"` // if found lucy on upperworkspace
+	SavePath     string                    `json:"save_path"`
+	ModPath      []string                  `json:"mod_path"`
+	Packages     []types.DiscoveredPackage `json:"packages"`
+	Runtime      *ServerRuntime            `json:"runtime,omitempty"`
+	Topology     *types.RuntimeTopology    `json:"topology,omitempty"`
+	Activity     *ServerActivity           `json:"activity,omitempty"`
+	Environments types.EnvironmentInfo     `json:"environments"`
+	McdrRoot     string                    `json:"mcdr_root"`
+	LucyRoot     string                    `json:"lucy_root"`
 }
 
 func (w Workspace) RuntimeIdentityPackage(node *types.TopologyNode) *types.VersionedPackageRef {
