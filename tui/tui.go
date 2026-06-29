@@ -353,18 +353,22 @@ func treeChildLabel(node TreeNode, keyWidth int) string {
 		}
 		return key + field.Text
 	case *FieldDynamicColumnLabels:
-		if len(field.Labels) > 0 {
-			return key + field.Labels[0]
+		if widthAware, ok := any(field).(WidthAware); ok {
+			widthAware.SetAvailableWidth(style.TermWidth() - keyWidth)
 		}
-		return key
+		_, value := field.RenderRow()
+		value = strings.TrimSuffix(value, "\n")
+		if value == "" {
+			return key
+		}
+		return key + value
 	case *FieldMultiAnnotatedShortText:
-		if len(field.Texts) > 0 {
-			if len(field.Annotations) > 0 {
-				return key + field.Texts[0] + renderAnnot(field.Annotations[0])
-			}
-			return key + field.Texts[0]
+		_, value := field.RenderRow()
+		value = strings.TrimSuffix(value, "\n")
+		if value == "" {
+			return key
 		}
-		return key
+		return key + value
 	case *FieldMultiShortText:
 		if len(field.Texts) > 0 {
 			return key + field.Texts[0]
