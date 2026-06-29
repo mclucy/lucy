@@ -146,9 +146,7 @@ func (handler *handler) AddEntry(
 	)
 
 	if err := handler.index.flush(); err != nil {
-		log.Warn(
-			fmt.Errorf("failed to update index after adding item: %w", err),
-		)
+		return fmt.Errorf("failed to update index after adding item: %w", err)
 	}
 	return nil
 }
@@ -218,9 +216,7 @@ func (handler *handler) IngestEntry(
 	)
 
 	if err := handler.index.flush(); err != nil {
-		log.Warn(
-			fmt.Errorf("failed to update index after ingesting item: %w", err),
-		)
+		return fmt.Errorf("failed to update index after ingesting item: %w", err)
 	}
 	return nil
 }
@@ -304,9 +300,7 @@ func (handler *handler) removeLocked(k key) error {
 		return err
 	}
 	if err := handler.index.flush(); err != nil {
-		log.Warn(
-			fmt.Errorf("failed to update index after removing item: %w", err),
-		)
+		return fmt.Errorf("failed to update index after removing item: %w", err)
 	}
 	return nil
 }

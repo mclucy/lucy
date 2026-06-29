@@ -13,9 +13,9 @@ import (
 // easier to test.
 
 var (
-	ENoVersion = errors.New("modrinth version not found")
-	ENoProject = errors.New("modrinth project not found")
-	ENoMember  = errors.New("modrinth project memberResponse not found")
+	ErrNoVersion = errors.New("modrinth version not found")
+	ErrNoProject = errors.New("modrinth project not found")
+	ErrNoMember  = errors.New("modrinth project member not found")
 )
 
 // TODO: This has a chance of causing segmentation faults
@@ -31,9 +31,9 @@ func listVersions(slug types.BarePackageName) (
 		if err := requestJSON(
 			versionsUrl(target),
 			&out,
-			ENoProject,
+			ErrNoProject,
 		); err != nil {
-			return nil, ENoProject
+			return nil, err
 		}
 		return out, nil
 	}
@@ -73,13 +73,13 @@ func getVersion(id types.VersionedPackageRef) (
 	if selected := selectExactVersion(versions, id); selected != nil {
 		return selected, nil
 	}
-	return nil, ENoVersion
+	return nil, ErrNoVersion
 }
 
 func getVersionById(id string) (v *versionResponse, err error) {
 	v = &versionResponse{}
-	if err := requestJSON(versionUrl(id), v, ENoVersion); err != nil {
-		return nil, ENoVersion
+	if err := requestJSON(versionUrl(id), v, ErrNoVersion); err != nil {
+		return nil, err
 	}
 	return
 }
@@ -106,7 +106,7 @@ func latestVersion(slug types.BarePackageName) (
 	}
 	v, fellBack := selectLatestVersionCandidate(versions, types.PlatformNone)
 	if v == nil {
-		return nil, ENoVersion
+		return nil, ErrNoVersion
 	}
 	if fellBack {
 		// No release version found; fall back to the latest pre-release (beta/alpha).
@@ -134,7 +134,7 @@ func latestCompatibleVersion(
 		v, _ = selectLatestVersionCandidate(versions, platform)
 	}
 	if v == nil {
-		return nil, ENoVersion
+		return nil, ErrNoVersion
 	}
 	if filterByLoader && latestReleaseVersion(versions, platform, true) == nil {
 		// No release version found; fall back to the latest pre-release (beta/alpha).
