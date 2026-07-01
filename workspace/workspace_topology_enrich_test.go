@@ -7,10 +7,10 @@ import (
 )
 
 func TestNormalizeTopology_DeduplicatesNodes(t *testing.T) {
-	nodeA := makeNode("a", types.CapabilityFabricMods)
+	nodeA := makeNode("a", types.CapabilityFabricLoader)
 	nodeA2 := makeNode(
 		"a",
-		types.CapabilityForgeMods,
+		types.CapabilityForge,
 	) // duplicate ID, different caps
 	topo := makeTopology("a", []types.RuntimeNode{nodeA, nodeA2}, nil)
 	NormalizeTopology(topo)
@@ -18,7 +18,7 @@ func TestNormalizeTopology_DeduplicatesNodes(t *testing.T) {
 		t.Errorf("expected 1 node after dedup, got %d", len(topo.Nodes))
 	}
 	// last-write-wins: nodeA2 should survive
-	if !topo.Nodes[0].HasCapability(types.CapabilityForgeMods) {
+	if !topo.Nodes[0].HasCapability(types.CapabilityForge) {
 		t.Error("last-write-wins violated: expected nodeA2 (ForgeMods) to survive")
 	}
 }
@@ -212,7 +212,7 @@ func TestEnrichTopologyFromPackages_NilExec(t *testing.T) {
 }
 
 func TestEnrichTopologyFromPackages_NoTopologyNoEvidence(t *testing.T) {
-	exec := &ServerRuntime{}
+	exec := &ServerInstance{}
 	EnrichTopologyFromPackages(exec, nil)
 	if exec.topology == nil {
 		t.Error("expected empty topology to be set, got nil")
@@ -220,7 +220,7 @@ func TestEnrichTopologyFromPackages_NoTopologyNoEvidence(t *testing.T) {
 }
 
 func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T) {
-	exec := &ServerRuntime{}
+	exec := &ServerInstance{}
 	pkgs := []types.DiscoveredPackage{
 		makeDiscoveredPackage(
 			t,
@@ -245,7 +245,7 @@ func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T
 		t.Error("expected connector node in topology")
 	}
 	connector, _ := exec.topology.FindNode(types.RuntimeNodeConnector)
-	if !connector.HasCapability(types.CapabilityFabricMods) {
+	if !connector.HasCapability(types.CapabilityFabricLoader) {
 		t.Error("expected connector to expose fabric mod capability")
 	}
 	_, hasFabric := exec.topology.FindNode(types.RuntimeNodeFabric)
@@ -258,7 +258,7 @@ func TestEnrichTopologyFromPackages_NoTopologyWithConnectorEvidence(t *testing.T
 }
 
 func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
-	exec := &ServerRuntime{}
+	exec := &ServerInstance{}
 	pkgs := []types.DiscoveredPackage{
 		makeDiscoveredPackage(t, types.EcoFabric, "kilt", "1.0.0", ""),
 	}
@@ -289,7 +289,7 @@ func TestEnrichTopologyFromPackages_NoTopologyWithKiltEvidence(t *testing.T) {
 func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 	// Start with a fabric topology, enrich with attached geyser evidence
 	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
-	exec := &ServerRuntime{
+	exec := &ServerInstance{
 		topology: BuildTopologyFromEntry(fabricEntry),
 	}
 	pkgs := []types.DiscoveredPackage{
@@ -306,7 +306,7 @@ func TestEnrichTopologyFromPackages_ExistingTopologyEnriched(t *testing.T) {
 }
 
 func TestEnrichTopologyFromPackages_CaseInsensitiveNameMatching(t *testing.T) {
-	exec := &ServerRuntime{}
+	exec := &ServerInstance{}
 	pkgs := []types.DiscoveredPackage{
 		makeDiscoveredPackage(t, types.EcoFabric, "Velocity", "3.0.0", ""),
 	}
@@ -322,7 +322,7 @@ func TestEnrichTopologyFromPackages_CaseInsensitiveNameMatching(t *testing.T) {
 
 func TestEnrichTopologyFromPackages_TopologyNormalizedAfterEnrich(t *testing.T) {
 	// Add duplicate evidence to verify NormalizeTopology is called
-	exec := &ServerRuntime{}
+	exec := &ServerInstance{}
 	pkgs := []types.DiscoveredPackage{
 		makeDiscoveredPackage(
 			t,

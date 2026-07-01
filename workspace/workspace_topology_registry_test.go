@@ -19,7 +19,7 @@ func TestNewRuntimeRegistry_FindEntry_KnownNode(t *testing.T) {
 	}
 	found := false
 	for _, cap := range entry.Capabilities {
-		if cap == types.CapabilityFabricMods {
+		if cap == types.CapabilityFabricLoader {
 			found = true
 		}
 	}
@@ -50,7 +50,7 @@ func TestBuildTopologyFromEntry_SimpleNode(t *testing.T) {
 	entry := RegistryEntry{
 		NodeID:       types.RuntimeNodeFabric,
 		Role:         types.RuntimeRoleModLoader,
-		Capabilities: []types.RuntimeCapability{types.CapabilityFabricMods},
+		Capabilities: []types.RuntimeCapability{types.CapabilityFabricLoader},
 	}
 	topo := BuildTopologyFromEntry(entry)
 	if topo == nil {
@@ -171,7 +171,7 @@ func TestNewRuntimeRegistry_CustomRegistry(t *testing.T) {
 		{
 			NodeID:       "custom_node",
 			Role:         types.RuntimeRoleModLoader,
-			Capabilities: []types.RuntimeCapability{types.CapabilityFabricMods},
+			Capabilities: []types.RuntimeCapability{types.CapabilityFabricLoader},
 		},
 	}
 	reg := NewRuntimeRegistry(entries)

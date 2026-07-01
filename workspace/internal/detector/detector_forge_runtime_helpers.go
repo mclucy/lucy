@@ -167,13 +167,13 @@ func buildForgeRuntimeInfo(
 				Version: gameVersion,
 			},
 		},
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: "forge",
 			Nodes: []types.RuntimeNode{
 				{
 					ID:           "forge",
 					Role:         types.RuntimeRoleModLoader,
-					Capabilities: []types.RuntimeCapability{types.CapabilityForgeMods},
+					Capabilities: []types.RuntimeCapability{types.CapabilityForge},
 				},
 			},
 		},

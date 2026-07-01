@@ -17,7 +17,7 @@ import (
 // CompatDegraded, while runtime risk remains a node-level topology concern. Never
 // returns nil - always returns a deterministic result.
 func EvaluateCompatibility(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	requiredCapability types.RuntimeCapability,
 ) types.CompatResult {
 	if topology == nil || !topology.Resolved() {
@@ -90,17 +90,17 @@ func EvaluateCompatibility(
 func CapabilityForEcosystem(p types.Ecosystem) types.RuntimeCapability {
 	switch p {
 	case types.EcoFabric:
-		return types.CapabilityFabricMods
+		return types.CapabilityFabricLoader
 	case types.EcoForge:
-		return types.CapabilityForgeMods
+		return types.CapabilityForge
 	case types.EcoNeoforge:
-		return types.CapabilityNeoforgeMods
+		return types.CapabilityNeoforge
 	case types.EcoBukkit:
-		return types.CapabilityBukkitPlugins
+		return types.CapabilityBukkitAPI
 	case types.EcoPaper:
-		return types.CapabilityPaperPlugins
+		return types.CapabilityPaperAPI
 	case types.EcoMcdr:
-		return types.CapabilityMCDRPlugins
+		return types.CapabilityMcdr
 	default:
 		return ""
 	}

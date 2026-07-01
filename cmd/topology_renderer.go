@@ -9,7 +9,7 @@ import (
 )
 
 func renderTopologyASCII(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	direction string,
 	noStyle bool,
 	longOut bool,

@@ -24,7 +24,7 @@ const noteIgnorePath = "Some modding platforms are located from the libraries di
 const multiThreadThreshold = 10
 
 // getExecutableInfo uses the new detector-based architecture to find server executables
-func buildExecutableInfo() *ServerRuntime {
+func buildExecutableInfo() *ServerInstance {
 	valid := make([]*detector.ExecutableEvidence, 0)
 	workPath := workPath()
 	for _, evidence := range detector.ForgeInstallationRuntimes(workPath) {
@@ -127,7 +127,7 @@ func buildExecutableInfo() *ServerRuntime {
 	case 1:
 		return materializeRuntimeInfo(valid[0])
 	default:
-		runtimes := make([]*ServerRuntime, 0, len(valid))
+		runtimes := make([]*ServerInstance, 0, len(valid))
 		for _, evidence := range valid {
 			runtimes = append(runtimes, materializeRuntimeInfo(evidence))
 		}
@@ -147,7 +147,7 @@ func init() {
 }
 
 func promptSelectExecutable(
-	executables []*ServerRuntime,
+	executables []*ServerInstance,
 	notes []string,
 ) int {
 	selection := 0
@@ -189,11 +189,11 @@ func generateNotes(notes ...string) string {
 	return note.String()
 }
 
-func executableLabel(executable *ServerRuntime) string {
+func executableLabel(executable *ServerInstance) string {
 	return style.Accent(executable.PrimaryEntrance) + " " + style.Muted(executableAnnotation(executable))
 }
 
-func executableAnnotation(executable *ServerRuntime) string {
+func executableAnnotation(executable *ServerInstance) string {
 	gameVersion := executable.GameVersion.String()
 	derivedPlatform := derivedModLoader(executable.topology)
 	if derivedPlatform == types.EcoMinecraft {

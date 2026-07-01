@@ -24,7 +24,7 @@ func ensureServerEcosystemMatch(
 		}
 		return nil
 	default:
-		if !ws.Runtime.IsValid() {
+		if !ws.Server.IsValid() {
 			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
 

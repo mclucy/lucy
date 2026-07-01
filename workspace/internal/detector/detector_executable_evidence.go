@@ -25,7 +25,7 @@ type ExecutableTopologySeed struct {
 type ExecutableEvidence struct {
 	PrimaryEntrance   string
 	GameVersion       types.BareVersion
-	Topology          *types.RuntimeTopology
+	Topology          *types.ServerTopology
 	TopologySeed      *ExecutableTopologySeed
 	RuntimeIdentities []types.VersionedPackageRef
 	Provenance        ExecutableDetectorProvenance

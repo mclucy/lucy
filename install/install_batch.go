@@ -123,7 +123,7 @@ func Plan(
 		return nil, installError(CategoryResolution, err, nil)
 	}
 
-	if ws.Runtime == nil || ws.Topology == nil || !ws.Topology.Resolved() {
+	if ws.Server == nil || ws.Topology == nil || !ws.Topology.Resolved() {
 		return nil, installError(
 			CategoryResolution,
 			fmt.Errorf("runtime topology is unavailable"),
@@ -316,7 +316,7 @@ func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef 
 }
 
 func rootScopedProviders(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	requests []types.PackageRequest,
 	roots []types.VersionedPackageRef,
 	serverLoader types.Ecosystem,

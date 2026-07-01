@@ -48,8 +48,8 @@ func makeTopology(
 	primary types.RuntimeNodeID,
 	nodes []types.RuntimeNode,
 	edges []types.RuntimeEdge,
-) *types.RuntimeTopology {
-	return &types.RuntimeTopology{
+) *types.ServerTopology {
+	return &types.ServerTopology{
 		PrimaryNode: primary,
 		Nodes:       nodes,
 		Edges:       edges,

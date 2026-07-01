@@ -9,7 +9,7 @@ import (
 // --- EvaluateCompatibility ---
 
 func TestEvaluateCompatibility_NilTopology(t *testing.T) {
-	result := EvaluateCompatibility(nil, types.CapabilityFabricMods)
+	result := EvaluateCompatibility(nil, types.CapabilityFabricLoader)
 	if result.Verdict != types.CompatUnresolved {
 		t.Errorf(
 			"expected CompatUnresolved for nil topology, got %q",
@@ -22,8 +22,8 @@ func TestEvaluateCompatibility_NilTopology(t *testing.T) {
 }
 
 func TestEvaluateCompatibility_UnresolvedTopology(t *testing.T) {
-	topo := &types.RuntimeTopology{} // empty = unresolved (no PrimaryNode, no Nodes)
-	result := EvaluateCompatibility(topo, types.CapabilityFabricMods)
+	topo := &types.ServerTopology{} // empty = unresolved (no PrimaryNode, no Nodes)
+	result := EvaluateCompatibility(topo, types.CapabilityFabricLoader)
 	if result.Verdict != types.CompatUnresolved {
 		t.Errorf(
 			"expected CompatUnresolved for empty topology, got %q",
@@ -35,7 +35,7 @@ func TestEvaluateCompatibility_UnresolvedTopology(t *testing.T) {
 func TestEvaluateCompatibility_DirectCapabilityMatch(t *testing.T) {
 	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	topo := BuildTopologyFromEntry(fabricEntry)
-	result := EvaluateCompatibility(topo, types.CapabilityFabricMods)
+	result := EvaluateCompatibility(topo, types.CapabilityFabricLoader)
 	if result.Verdict != types.CompatCompatible {
 		t.Errorf(
 			"expected CompatCompatible for fabric+fabric_mods, got %q",
@@ -50,7 +50,7 @@ func TestEvaluateCompatibility_DirectCapabilityMatch(t *testing.T) {
 func TestEvaluateCompatibility_Incompatible(t *testing.T) {
 	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
 	topo := BuildTopologyFromEntry(fabricEntry)
-	result := EvaluateCompatibility(topo, types.CapabilityForgeMods)
+	result := EvaluateCompatibility(topo, types.CapabilityForge)
 	if result.Verdict != types.CompatIncompatible {
 		t.Errorf(
 			"expected CompatIncompatible for fabric+forge_mods, got %q",
@@ -64,14 +64,14 @@ func TestEvaluateCompatibility_Incompatible(t *testing.T) {
 
 func TestEvaluateCompatibility_IndirectHostedCapabilityIsDegraded(t *testing.T) {
 	host := makeNode("neoforge")
-	hosted := makeNode("sinytra", types.CapabilityFabricMods)
+	hosted := makeNode("sinytra", types.CapabilityFabricLoader)
 	edge := makeEdge("neoforge", "sinytra", types.EdgeHosts)
 	topo := makeTopology(
 		"neoforge",
 		[]types.RuntimeNode{host, hosted},
 		[]types.RuntimeEdge{edge},
 	)
-	result := EvaluateCompatibility(topo, types.CapabilityFabricMods)
+	result := EvaluateCompatibility(topo, types.CapabilityFabricLoader)
 	if result.Verdict != types.CompatDegraded {
 		t.Fatalf(
 			"expected hosted capability to degrade compatibility, got %q",
@@ -91,7 +91,7 @@ func TestEvaluateCompatibility_HybridNode_MultipleCapabilities(t *testing.T) {
 	arclightEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeArclight)
 	topo := BuildTopologyFromEntry(arclightEntry)
 
-	forgeResult := EvaluateCompatibility(topo, types.CapabilityForgeMods)
+	forgeResult := EvaluateCompatibility(topo, types.CapabilityForge)
 	if forgeResult.Verdict != types.CompatCompatible {
 		t.Errorf(
 			"arclight should support forge_mods, got %q",
@@ -99,7 +99,7 @@ func TestEvaluateCompatibility_HybridNode_MultipleCapabilities(t *testing.T) {
 		)
 	}
 
-	bukkitResult := EvaluateCompatibility(topo, types.CapabilityBukkitPlugins)
+	bukkitResult := EvaluateCompatibility(topo, types.CapabilityBukkitAPI)
 	if bukkitResult.Verdict != types.CompatCompatible {
 		t.Errorf(
 			"arclight should support bukkit_plugins, got %q",
@@ -115,12 +115,12 @@ func TestCapabilityForEcosystem_KnownPlatforms(t *testing.T) {
 		platform types.Ecosystem
 		want     types.RuntimeCapability
 	}{
-		{types.EcoFabric, types.CapabilityFabricMods},
-		{types.EcoForge, types.CapabilityForgeMods},
-		{types.EcoNeoforge, types.CapabilityNeoforgeMods},
-		{types.EcoBukkit, types.CapabilityBukkitPlugins},
-		{types.EcoPaper, types.CapabilityPaperPlugins},
-		{types.EcoMcdr, types.CapabilityMCDRPlugins},
+		{types.EcoFabric, types.CapabilityFabricLoader},
+		{types.EcoForge, types.CapabilityForge},
+		{types.EcoNeoforge, types.CapabilityNeoforge},
+		{types.EcoBukkit, types.CapabilityBukkitAPI},
+		{types.EcoPaper, types.CapabilityPaperAPI},
+		{types.EcoMcdr, types.CapabilityMcdr},
 	}
 	for _, tc := range cases {
 		got := CapabilityForEcosystem(tc.platform)

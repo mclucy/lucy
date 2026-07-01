@@ -32,7 +32,7 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 
 	info := workspace.New()
 
-	if info.Runtime == nil || info.Topology == nil {
+	if info.Server == nil || info.Topology == nil {
 		return fmt.Errorf("no server runtime detected in current directory")
 	}
 
@@ -45,7 +45,7 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 	mermaidSource := buildMermaidTopology(topology, "LR", longOut)
 
 	output := map[string]any{
-		"game_version": info.Runtime.GameVersion.String(),
+		"game_version": info.Server.GameVersion.String(),
 		"primary_node": topology.PrimaryNode,
 		"nodes":        topology.Nodes,
 		"edges":        topology.Edges,
@@ -69,7 +69,7 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 // buildMermaidTopology converts a RuntimeTopology into a Mermaid graph source
 // string that mermaid-ascii can render.
 func buildMermaidTopology(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	direction string,
 	longOut bool,
 ) string {

@@ -9,12 +9,12 @@ import (
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
-func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerRuntime {
+func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerInstance {
 	if evidence == nil {
 		return nil
 	}
 
-	return &ServerRuntime{
+	return &ServerInstance{
 		PrimaryEntrance: evidence.PrimaryEntrance,
 		GameVersion:     evidence.GameVersion,
 		BootCommand:     nil,
@@ -24,18 +24,18 @@ func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerRuntim
 
 func materializeRuntimeTopology(
 	evidence *detector.ExecutableEvidence,
-) *types.RuntimeTopology {
+) *types.ServerTopology {
 	if evidence == nil {
 		return nil
 	}
 
-	var topology *types.RuntimeTopology
+	var topology *types.ServerTopology
 
 	switch {
 	case evidence.Topology != nil:
 		topology = cloneRuntimeTopology(evidence.Topology)
 	case evidence.TopologySeed != nil:
-		topology = &types.RuntimeTopology{
+		topology = &types.ServerTopology{
 			PrimaryNode: evidence.TopologySeed.PrimaryNode,
 			Nodes: append(
 				[]types.RuntimeNode(nil),
@@ -71,7 +71,7 @@ func materializeRuntimeTopology(
 }
 
 func distributeRuntimeIdentities(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	identities []types.VersionedPackageRef,
 ) {
 	if topology == nil {
@@ -163,7 +163,7 @@ func RuntimeIdentityNode(identity types.VersionedPackageRef) (
 	}
 }
 
-func cloneRuntimeTopology(topology *types.RuntimeTopology) *types.RuntimeTopology {
+func cloneRuntimeTopology(topology *types.ServerTopology) *types.ServerTopology {
 	if topology == nil {
 		return nil
 	}
@@ -177,7 +177,7 @@ func cloneRuntimeTopology(topology *types.RuntimeTopology) *types.RuntimeTopolog
 		)
 	}
 
-	return &types.RuntimeTopology{
+	return &types.ServerTopology{
 		PrimaryNode: topology.PrimaryNode,
 		Nodes:       nodes,
 		Edges:       append([]types.RuntimeEdge(nil), topology.Edges...),

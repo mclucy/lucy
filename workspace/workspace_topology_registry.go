@@ -65,9 +65,9 @@ func FindEntry(id types.RuntimeNodeID) (RegistryEntry, bool) {
 
 // BuildTopologyFromEntry constructs a RuntimeTopology with a single primary node
 // from a registry entry, plus any policy edges listed.
-func BuildTopologyFromEntry(entry RegistryEntry) *types.RuntimeTopology {
+func BuildTopologyFromEntry(entry RegistryEntry) *types.ServerTopology {
 	if entry.NodeID == types.RuntimeNodeUnknown {
-		return &types.RuntimeTopology{}
+		return &types.ServerTopology{}
 	}
 
 	nodes := []types.RuntimeNode{
@@ -117,7 +117,7 @@ func BuildTopologyFromEntry(entry RegistryEntry) *types.RuntimeTopology {
 		seenNode[policyEdge.TargetNodeID] = struct{}{}
 	}
 
-	topology := &types.RuntimeTopology{
+	topology := &types.ServerTopology{
 		PrimaryNode: entry.NodeID,
 		Nodes:       nodes,
 		Edges:       edges,

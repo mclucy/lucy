@@ -7,7 +7,7 @@ import (
 )
 
 func finalizeProbedRuntime(
-	runtime *ServerRuntime,
+	runtime *ServerInstance,
 	packages []types.DiscoveredPackage,
 ) []types.DiscoveredPackage {
 	EnrichTopologyFromPackages(runtime, packages)
@@ -15,17 +15,17 @@ func finalizeProbedRuntime(
 	return packagesWithRuntimeIdentities(packages, runtime)
 }
 
-func ensureRuntimeTopology(runtime *ServerRuntime) {
+func ensureRuntimeTopology(runtime *ServerInstance) {
 	if runtime == nil || runtime.topology != nil {
 		return
 	}
 
-	runtime.topology = &types.RuntimeTopology{}
+	runtime.topology = &types.ServerTopology{}
 }
 
 func packagesWithRuntimeIdentities(
 	packages []types.DiscoveredPackage,
-	runtime *ServerRuntime,
+	runtime *ServerInstance,
 ) []types.DiscoveredPackage {
 	if runtime == nil || !runtime.IsValid() {
 		return packages
@@ -44,7 +44,7 @@ func packagesWithRuntimeIdentities(
 }
 
 func packageSearchPaths(
-	runtime *ServerRuntime,
+	runtime *ServerInstance,
 	workingDirectory string,
 ) []string {
 	if runtime == nil {
@@ -55,19 +55,19 @@ func packageSearchPaths(
 }
 
 func packageSearchPathsForTopology(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	workingDirectory string,
 ) (paths []string) {
 	if topology == nil || !topology.Resolved() {
 		return nil
 	}
 
-	if topology.HasCapability(types.CapabilityFabricMods) ||
-		topology.HasCapability(types.CapabilityForgeMods) ||
-		topology.HasCapability(types.CapabilityNeoforgeMods) {
+	if topology.HasCapability(types.CapabilityFabricLoader) ||
+		topology.HasCapability(types.CapabilityForge) ||
+		topology.HasCapability(types.CapabilityNeoforge) {
 		paths = append(paths, filepath.Join(workingDirectory, "mods"))
 	}
-	if topology.HasCapability(types.CapabilityBukkitPlugins) {
+	if topology.HasCapability(types.CapabilityBukkitAPI) {
 		paths = append(paths, filepath.Join(workingDirectory, "plugins"))
 	}
 

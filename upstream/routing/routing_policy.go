@@ -68,18 +68,18 @@ type topologyResolution struct {
 // plugin capability. Routing policy, not a type-system property.
 func isBukkitFamilyCapability(capability types.RuntimeCapability) bool {
 	switch capability {
-	case types.CapabilityBukkitPlugins,
-		types.CapabilitySpigotPlugins,
-		types.CapabilityPaperPlugins,
-		types.CapabilityPurpurPlugins,
-		types.CapabilityFoliaPlugins:
+	case types.CapabilityBukkitAPI,
+		types.CapabilitySpigotAPI,
+		types.CapabilityPaperAPI,
+		types.CapabilityPurpurAPI,
+		types.CapabilityFoliaAPI:
 		return true
 	default:
 		return false
 	}
 }
 
-func providerSourcesFromTopology(topology *types.RuntimeTopology) topologyResolution {
+func providerSourcesFromTopology(topology *types.ServerTopology) topologyResolution {
 	selection := topologyResolution{}
 	seen := map[types.SourceId]struct{}{}
 	sawKnownCapability := false
@@ -96,29 +96,29 @@ func providerSourcesFromTopology(topology *types.RuntimeTopology) topologyResolu
 	for _, node := range topology.Nodes {
 		for _, capability := range node.Capabilities {
 			switch capability {
-			case types.CapabilityFabricMods,
-				types.CapabilityForgeMods,
-				types.CapabilityNeoforgeMods:
+			case types.CapabilityFabricLoader,
+				types.CapabilityForge,
+				types.CapabilityNeoforge:
 				sawKnownCapability = true
 				appendSource(types.SourceModrinth)
 				if curseforgeAvailable() {
 					appendSource(types.SourceCurseForge)
 				}
-			case types.CapabilityBukkitPlugins,
-				types.CapabilitySpigotPlugins,
-				types.CapabilityPaperPlugins,
-				types.CapabilityPurpurPlugins,
-				types.CapabilityFoliaPlugins:
+			case types.CapabilityBukkitAPI,
+				types.CapabilitySpigotAPI,
+				types.CapabilityPaperAPI,
+				types.CapabilityPurpurAPI,
+				types.CapabilityFoliaAPI:
 				sawKnownCapability = true
 				appendSource(types.SourceModrinth)
 				if isBukkitFamilyCapability(capability) {
 					appendSource(types.SourceHangar)
 					appendSource(types.SourceSpiget)
 				}
-			case types.CapabilityMCDRPlugins:
+			case types.CapabilityMcdr:
 				sawKnownCapability = true
 				appendSource(types.SourceMCDR)
-			case types.CapabilityProxying:
+			case types.CapabilityReversedProxy:
 				sawKnownCapability = true
 				sawProxyCapability = true
 			}

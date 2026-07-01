@@ -256,7 +256,7 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 	vanillaEvidence := &ExecutableEvidence{
 		PrimaryEntrance: "/fake/vanilla.jar",
 		GameVersion:     "1.21.4",
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: types.RuntimeNodeMinecraft,
 			Nodes: []types.RuntimeNode{
 				{
@@ -269,7 +269,7 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 	paperEvidence := &ExecutableEvidence{
 		PrimaryEntrance: "/fake/paper.jar",
 		GameVersion:     "1.21.4",
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: types.RuntimeNodePaper,
 		},
 	}
@@ -319,7 +319,7 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 
 			forgeEvidence := &ExecutableEvidence{
 				PrimaryEntrance: "/fake/forge.jar",
-				Topology: &types.RuntimeTopology{
+				Topology: &types.ServerTopology{
 					PrimaryNode: types.RuntimeNodeID("forge"),
 				},
 			}

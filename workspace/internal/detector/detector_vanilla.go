@@ -78,7 +78,7 @@ func (d *VanillaDetector) Detect(
 						Version: gameVersion,
 					},
 				},
-				Topology: &types.RuntimeTopology{
+				Topology: &types.ServerTopology{
 					PrimaryNode: "minecraft",
 					Nodes: []types.RuntimeNode{
 						{
