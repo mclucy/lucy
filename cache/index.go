@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
 )
 
@@ -33,18 +31,12 @@ func newIndex(manifestPath string) *index {
 }
 
 func (idx *index) load() bool {
-	file, err := os.Open(idx.path)
+	data, err := os.ReadFile(idx.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return idx.create()
-	} else if err != nil {
-		return false
 	}
-	defer fn.CloseReader(file, log.Warn)
-
-	data, err := io.ReadAll(file)
 	if err != nil {
-		_, _ = resetCache(idx.path, false)
-		return idx.create()
+		return false
 	}
 
 	if idx.tryLoadV2(data) {

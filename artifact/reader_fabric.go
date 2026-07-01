@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
-	"io"
 	"strings"
 
 	"github.com/mclucy/lucy/input"
@@ -37,17 +36,14 @@ func (r *fabricReader) Read(
 			return nil, err
 		}
 
-		data, err := io.ReadAll(reader)
-		if closeErr := reader.Close(); err == nil && closeErr != nil {
-			err = closeErr
-		}
-		if err != nil {
-			return nil, err
-		}
-
 		modInfo := &fileschema.FileFabricModIdentifier{}
-		if err := json.Unmarshal(data, modInfo); err != nil {
-			return nil, err
+		decodeErr := json.NewDecoder(reader).Decode(modInfo)
+		closeErr := reader.Close()
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
 		}
 
 		info, err := translateFabricArtifact(zipRdr, modInfo, filePath)
@@ -236,17 +232,14 @@ func fabricNestedModInfo(
 		if err != nil {
 			return nil, err
 		}
-		data, err := io.ReadAll(reader)
-		if closeErr := reader.Close(); err == nil && closeErr != nil {
-			err = closeErr
-		}
-		if err != nil {
-			return nil, err
-		}
-
 		modInfo := &fileschema.FileFabricModIdentifier{}
-		if err := json.Unmarshal(data, modInfo); err != nil {
-			return nil, err
+		decodeErr := json.NewDecoder(reader).Decode(modInfo)
+		closeErr := reader.Close()
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
 		}
 		return modInfo, nil
 	}

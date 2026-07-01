@@ -3,11 +3,11 @@ package detector
 import (
 	"archive/zip"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -142,7 +142,7 @@ func readZipFile(reader *zip.Reader, name string) (string, bool, error) {
 		}
 		defer r.Close()
 
-		data, err := io.ReadAll(r)
+		data, err := fsutil.CopyBytes(r, fsutil.MaxZipEntryBytes)
 		if err != nil {
 			return "", false, err
 		}

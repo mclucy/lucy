@@ -1,5 +1,3 @@
-// TODO: REPLACE ALL io.ReadAll WITH STREAMING METHODS
-
 package main
 
 import (

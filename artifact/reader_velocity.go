@@ -3,7 +3,6 @@ package artifact
 import (
 	"archive/zip"
 	"encoding/json"
-	"io"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
@@ -57,15 +56,14 @@ func (r *velocityReader) Read(
 			return nil, err
 		}
 
-		raw, err := io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
-			return nil, err
-		}
-
 		descriptor := &velocityPluginDescriptor{}
-		if err := json.Unmarshal(raw, descriptor); err != nil {
-			return nil, err
+		decodeErr := json.NewDecoder(rc).Decode(descriptor)
+		closeErr := rc.Close()
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
 		}
 
 		authors := make([]types.Person, 0, len(descriptor.Authors))
@@ -122,14 +120,12 @@ func (r *bungeeCordReader) Read(
 			return nil, err
 		}
 
-		raw, err := io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
+		descriptor := &bungeeCordPluginDescriptor{}
+		if err := yaml.NewDecoder(rc).Decode(descriptor); err != nil {
+			_ = rc.Close()
 			return nil, err
 		}
-
-		descriptor := &bungeeCordPluginDescriptor{}
-		if err := yaml.Unmarshal(raw, descriptor); err != nil {
+		if err := rc.Close(); err != nil {
 			return nil, err
 		}
 

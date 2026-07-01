@@ -3,11 +3,11 @@ package detector
 import (
 	"archive/zip"
 	"encoding/json"
-	"io"
 	"os"
 
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
@@ -40,7 +40,7 @@ func (d *VanillaDetector) Detect(
 			}
 			defer fn.CloseReader(r, log.Warn)
 
-			data, err := io.ReadAll(r)
+			data, err := fsutil.CopyBytes(r, fsutil.MaxZipEntryBytes)
 			if err != nil {
 				return nil, err
 			}

@@ -6,13 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/types"
@@ -249,7 +249,7 @@ func addFabricZipAmbientDependencies(
 	for _, nested := range modInfo.Jars {
 		// Fabric Loader 0.15+ exposes MixinExtras this way; scan actual jars[] so
 		// future loader-provided nested mods are discovered without a name list.
-		raw, err := readZipEntry(zipRdr, nested.File)
+		raw, err := artifact.ReadZipEntryBytes(zipRdr, nested.File)
 		if err != nil {
 			return err
 		}
@@ -274,7 +274,7 @@ func addFabricZipAmbientDependencies(
 func readFabricModJSON(
 	zipRdr *zip.Reader,
 ) (*fileschema.FileFabricModIdentifier, error) {
-	raw, err := readZipEntry(zipRdr, "fabric.mod.json")
+	raw, err := artifact.ReadZipEntryBytes(zipRdr, "fabric.mod.json")
 	if err != nil || raw == nil {
 		return nil, err
 	}
@@ -314,25 +314,4 @@ func currentJavaSpecVersion(ctx context.Context) (types.BareVersion, bool) {
 	}
 
 	return "", false
-}
-
-func readZipEntry(zipRdr *zip.Reader, name string) ([]byte, error) {
-	for _, f := range zipRdr.File {
-		if f.Name != name {
-			continue
-		}
-		r, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-		data, err := io.ReadAll(r)
-		if closeErr := r.Close(); err == nil && closeErr != nil {
-			err = closeErr
-		}
-		if err != nil {
-			return nil, err
-		}
-		return data, nil
-	}
-	return nil, nil
 }
