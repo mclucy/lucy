@@ -266,7 +266,7 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependenc
 		deps = append(
 			deps, Dependency{
 				Ref: types.PackageRef{
-					Eco:  types.EcoBare,
+					Eco:  types.EcoUnspecified,
 					Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact),
 				},
 				Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),

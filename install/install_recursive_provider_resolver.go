@@ -137,21 +137,21 @@ func (resolver providerCandidateResolver) requestIDForProvider(
 		if id.Eco.IsModding() {
 			return types.VersionedPackageRef{}, false
 		}
-		if id.Eco == types.EcoAny || id.Eco == types.EcoBare {
+		if id.Eco == types.EcoUnspecified {
 			requestID.Eco = types.EcoMcdr
 		}
 	case types.SourceModrinth, types.SourceCurseForge:
 		if id.Eco == types.EcoMcdr {
 			return types.VersionedPackageRef{}, false
 		}
-		if id.Eco == types.EcoAny && resolver.defaultEcosystem != types.EcoAny {
+		if id.Eco == types.EcoUnspecified && resolver.defaultEcosystem != types.EcoUnspecified {
 			requestID.Eco = resolver.defaultEcosystem
 		}
 	case types.SourceHangar, types.SourceSpiget:
 		if id.Eco == types.EcoMcdr || id.Eco.IsModding() {
 			return types.VersionedPackageRef{}, false
 		}
-		if id.Eco == types.EcoAny || id.Eco == types.EcoBare {
+		if id.Eco == types.EcoUnspecified {
 			requestID.Eco = types.EcoBukkit
 		}
 	}

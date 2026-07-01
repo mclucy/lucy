@@ -169,7 +169,7 @@ func searchEcosystem(ecosystem types.Ecosystem) string {
 	switch ecosystem {
 	case types.EcoBukkit:
 		return hangarPreferredPlatform
-	case types.EcoAny, types.EcoBare, types.EcoUnknown:
+	case types.EcoUnspecified:
 		return hangarPreferredPlatform
 	default:
 		return ""

@@ -60,7 +60,7 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 	switch serverPlatform {
 	case types.EcoVanilla:
 		gameVersionID = string(ws.Server.GameVersion)
-	case types.EcoBare:
+	case types.EcoUnspecified:
 		gameVersionID = promptSelectMinecraftVersion()
 	default:
 		return types.ResolvedPackage{}, fmt.Errorf(

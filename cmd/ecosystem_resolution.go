@@ -17,15 +17,18 @@ func ResolveEcosystem(
 
 	platform := types.Ecosystem(strings.ToLower(strings.TrimSpace(fromFlag)))
 	if !platform.IsSearchEcosystem() {
-		return types.EcoAny, fmt.Errorf("invalid --platform %s", fromFlag)
+		return types.EcoUnspecified, fmt.Errorf(
+			"invalid --platform %s",
+			fromFlag,
+		)
 	}
 
-	if fromQuery == types.EcoAny {
+	if fromQuery == types.EcoUnspecified {
 		return platform, nil
 	}
 
 	if fromQuery != platform {
-		return types.EcoAny, fmt.Errorf(
+		return types.EcoUnspecified, fmt.Errorf(
 			"--platform %s conflicts with query prefix %s",
 			platform,
 			fromQuery,

@@ -73,7 +73,7 @@ func (d *arclightServerDetector) Detect(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Eco:  types.EcoAny,
+					Eco:  types.EcoUnspecified,
 					Name: input.ToProjectName("arclight"),
 				},
 				Version: manifestSignals.loaderVersion,

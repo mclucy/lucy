@@ -26,7 +26,7 @@ func providerSourcesForEcosystem(ecosystem types.Ecosystem) (
 	error,
 ) {
 	switch ecosystem {
-	case types.EcoAny:
+	case types.EcoUnspecified:
 		return autoProviderSources(), nil
 	case types.EcoMcdr:
 		return []types.SourceId{types.SourceMCDR}, nil

@@ -93,12 +93,12 @@ func derivedLoaderVersion(topology *types.ServerTopology) string {
 
 func derivedModLoader(topology *types.ServerTopology) types.Ecosystem {
 	if topology == nil {
-		return types.EcoBare
+		return types.EcoUnspecified
 	}
 
 	primary, ok := topology.PrimaryNodeData()
 	if !ok {
-		return types.EcoBare
+		return types.EcoUnspecified
 	}
 
 	return types.DeclaredModdingEcosystemForNode(primary.ID)

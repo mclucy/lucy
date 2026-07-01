@@ -26,7 +26,7 @@ func EvaluateCompatibility(
 		}
 	}
 
-	if required == types.EcoAny || required == types.EcoBare {
+	if required == types.EcoUnspecified {
 		return types.CompatResult{
 			Verdict: types.CompatCompatible,
 			Reason:  "no_ecosystem_requirement",

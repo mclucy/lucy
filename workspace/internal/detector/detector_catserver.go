@@ -47,7 +47,7 @@ func (d *catServerDetector) Detect(
 		RuntimeIdentities: []types.VersionedPackageRef{
 			{
 				PackageRef: types.PackageRef{
-					Eco:  types.EcoAny,
+					Eco:  types.EcoUnspecified,
 					Name: input.ToProjectName("catserver"),
 				},
 				Version: signals.version,

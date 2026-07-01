@@ -49,14 +49,14 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 
 	if si.Server != nil {
 		loader := si.DerivedModLoader()
-		if loader.Valid() && loader != types.EcoBare && loader != types.EcoUnknown {
+		if loader.Valid() && loader != types.EcoUnspecified {
 			if !si.Server.GameVersion.IsInvalid() && si.Server.GameVersion != types.VersionAny {
 				appendConstraint(
 					types.DiscoveredPackage{
 						Id: types.VersionedPackageRef{
 							PackageRef: types.PackageRef{
 								Eco:  loader,
-								Name: types.BarePackageName("minecraft"),
+								Name: "minecraft",
 							},
 							Version: si.Server.GameVersion,
 						},
@@ -74,7 +74,7 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 					Id: types.VersionedPackageRef{
 						PackageRef: types.PackageRef{
 							Eco:  loader,
-							Name: types.BarePackageName("java"),
+							Name: "java",
 						},
 						Version: types.VersionAny,
 					},
@@ -111,11 +111,11 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 func runtimeLoaderAliasName(platform types.Ecosystem) types.BarePackageName {
 	switch platform {
 	case types.EcoFabric:
-		return types.BarePackageName("fabricloader")
+		return "fabricloader"
 	case types.EcoForge:
-		return types.BarePackageName("forge")
+		return "forge"
 	case types.EcoNeoforge:
-		return types.BarePackageName("neoforge")
+		return "neoforge"
 	default:
 		return ""
 	}

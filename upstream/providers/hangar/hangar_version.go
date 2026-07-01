@@ -22,7 +22,7 @@ func (h *hangarDependencies) ToPackageDependencies() types.PackageDependencies {
 			result.Value, types.Dependency{
 				Id: types.VersionedPackageRef{
 					PackageRef: types.PackageRef{
-						Eco:  types.EcoBare,
+						Eco:  types.EcoUnspecified,
 						Name: input.ToProjectName(dep.Name),
 					},
 				},
@@ -67,7 +67,7 @@ func selectLatestVersion(
 	}
 	if version := firstVersionMatching(
 		versions,
-		types.EcoBare,
+		types.EcoUnspecified,
 		false,
 	); version != nil {
 		return version, nil
@@ -108,8 +108,8 @@ func firstVersionMatching(
 }
 
 func preferredDownloadPlatform(platform types.Ecosystem) types.Ecosystem {
-	if platform == types.EcoAny || platform == types.EcoBare || platform == types.EcoUnknown {
-		return types.Ecosystem("paper")
+	if platform == types.EcoUnspecified {
+		return "paper"
 	}
-	return types.Ecosystem("paper")
+	return "paper"
 }

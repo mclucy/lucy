@@ -186,5 +186,5 @@ func ecosystemFromModrinthLoaders(loaders []string) types.Ecosystem {
 	if len(loaders) > 0 {
 		return types.Ecosystem(loaders[0])
 	}
-	return types.EcoBare
+	return types.EcoUnspecified
 }

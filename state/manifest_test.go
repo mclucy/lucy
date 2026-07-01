@@ -211,10 +211,10 @@ func TestManifestRejectsIncompatibleEnvironmentCompatiblePlatforms(t *testing.T)
 func TestManifestBundlesRemainSeparateFromPackages(t *testing.T) {
 	manifest := ManifestDefaults()
 	manifest.Environment.GameVersion = "1.20.6"
-	manifest.Environment.ModdingPlatform = "bare"
+	manifest.Environment.ModdingPlatform = ""
 	manifest.Packages = []ManifestPackage{
 		{
-			ID:      "bare/luckperms",
+			ID:      "forge/luckperms",
 			Version: "latest",
 			Source:  "curseforge",
 			Role:    RoleRequired,

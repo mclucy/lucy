@@ -467,7 +467,7 @@ func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
 			continue
 		}
 		platform := ref.Eco
-		if platform == types.EcoBare || platform == types.EcoAny {
+		if platform == types.EcoUnspecified {
 			platform = types.EcoForge
 		}
 		version := ref.Version

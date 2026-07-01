@@ -24,7 +24,7 @@ func init() {
 		for _, alias := range e.Aliases {
 			nameToIdentity[alias] = e
 		}
-		if e.Eco != EcoBare {
+		if e.Eco != EcoUnspecified {
 			ecosystemToIdentity[e.Eco] = e
 		}
 	}

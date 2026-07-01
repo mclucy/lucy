@@ -328,7 +328,7 @@ func manifestEcosystem(
 	if fallback != "" {
 		return fallback
 	}
-	return string(types.EcoBare)
+	return string(types.EcoUnspecified)
 }
 
 func manifestEcosystemVersion(

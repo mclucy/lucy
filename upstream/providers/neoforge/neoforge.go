@@ -95,7 +95,7 @@ func minecraftVersionForInstall() (types.BareVersion, error) {
 	switch ws.DerivedModLoader() {
 	case types.EcoVanilla:
 		return ws.Server.GameVersion, nil
-	case types.EcoBare:
+	case types.EcoUnspecified:
 		selectedVersion := promptSelectMinecraftVersion()
 		if selectedVersion == "none" || selectedVersion == "error" {
 			return "", errors.New("minecraft version selection cancelled or failed")

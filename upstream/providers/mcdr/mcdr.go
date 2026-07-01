@@ -38,7 +38,7 @@ func (m mcdrSearchResult) ToSearchResults(source types.SourceId) upstream.Search
 // TODO: handle search options
 
 func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
-	if q.FilterEcosystem != types.EcoMcdr && q.FilterEcosystem != types.EcoAny {
+	if q.FilterEcosystem != types.EcoMcdr && q.FilterEcosystem != types.EcoUnspecified {
 		return upstream.SearchResponse{}, fmt.Errorf(
 			"invalid search platform: expected %s, got %s",
 			types.EcoMcdr,

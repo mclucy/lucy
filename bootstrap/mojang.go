@@ -20,7 +20,7 @@ func (b mojangBootstrapper) Bootstrap(
 	fetched types.ResolvedPackage,
 	serverDir string,
 ) error {
-	if workspace.New().DerivedModLoader() != types.EcoBare {
+	if workspace.New().DerivedModLoader() != types.EcoUnspecified {
 		return errors.New("a server is already installed")
 	}
 
