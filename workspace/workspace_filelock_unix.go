@@ -29,7 +29,7 @@ import (
 	"strings"
 	"syscall"
 
-	probe2 "github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
 )
 
@@ -52,7 +52,7 @@ func buildServerFileLockStatus() *ServerActivity {
 	}
 
 	file, err := os.OpenFile(lockPath, os.O_RDWR|os.O_APPEND, 0o666)
-	defer probe2.CloseReader(file, log.Warn)
+	defer fn.CloseReader(file, log.Warn)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return inactive
 	} else if err != nil {
@@ -87,11 +87,11 @@ func buildServerFileLockStatus() *ServerActivity {
 	return inactive
 }
 
-var checkServerFileLock = probe2.Memoize(buildServerFileLockStatus)
+var checkServerFileLock = fn.Memoize(buildServerFileLockStatus)
 
 func init() {
 	resetProbeFileLockCache = func() {
-		checkServerFileLock = probe2.Memoize(buildServerFileLockStatus)
+		checkServerFileLock = fn.Memoize(buildServerFileLockStatus)
 	}
 }
 
