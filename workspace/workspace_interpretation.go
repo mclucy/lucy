@@ -12,7 +12,11 @@ func finalizeProbedRuntime(
 ) []types.DiscoveredPackage {
 	EnrichTopologyFromPackages(runtime, packages)
 	ensureRuntimeTopology(runtime)
-	return packagesWithRuntimeIdentities(packages, runtime)
+	out := packagesWithRuntimeIdentities(packages, runtime)
+	if runtime != nil {
+		runtime.Packages = out
+	}
+	return out
 }
 
 func ensureRuntimeTopology(runtime *ServerInstance) {

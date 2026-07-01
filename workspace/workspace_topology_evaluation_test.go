@@ -46,15 +46,20 @@ func TestEvaluateCompatibility_Incompatible(t *testing.T) {
 }
 
 func TestEvaluateCompatibility_HostedEcosystemIsDegraded(t *testing.T) {
-	host := makeNode("neoforge")
-	hosted := makeNode("sinytra", types.CapabilityFabricLoader)
-	edge := makeEdge("neoforge", "sinytra", types.EdgeHosts)
-	topo := makeTopology(
-		"neoforge",
-		[]types.RuntimeNode{host, hosted},
-		[]types.RuntimeEdge{edge},
-	)
+	neoforgeEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeNeoforge)
+	topo := BuildTopologyFromEntry(neoforgeEntry)
 	exec := serverFromTopology(topo)
+	exec.Packages = []types.DiscoveredPackage{
+		{
+			Id: types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Eco:  types.EcoUnspecified,
+					Name: "sinytra-connector",
+				},
+				Version: "1.0.0",
+			},
+		},
+	}
 	result := EvaluateCompatibility(exec, types.EcoFabric)
 	if result.Verdict != types.CompatDegraded {
 		t.Fatalf("expected hosted fabric to degrade, got %q", result.Verdict)
@@ -74,8 +79,8 @@ func TestEvaluateCompatibility_HybridNode(t *testing.T) {
 	arclightEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeArclight)
 	exec := serverFromTopology(BuildTopologyFromEntry(arclightEntry))
 
-	if r := EvaluateCompatibility(exec, types.EcoForge); r.Verdict != types.CompatCompatible {
-		t.Errorf("arclight+forge: got %q", r.Verdict)
+	if r := EvaluateCompatibility(exec, types.EcoNeoforge); r.Verdict != types.CompatCompatible {
+		t.Errorf("arclight+neoforge: got %q", r.Verdict)
 	}
 	if r := EvaluateCompatibility(exec, types.EcoBukkit); r.Verdict != types.CompatCompatible {
 		t.Errorf("arclight+bukkit: got %q", r.Verdict)
