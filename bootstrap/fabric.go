@@ -84,7 +84,7 @@ func (b fabricBootstrapper) Bootstrap(
 	}
 
 	if deleteVanilla {
-		if err := os.Remove(ws.Runtime.PrimaryEntrance); err != nil {
+		if err := os.Remove(ws.Server.PrimaryEntrance); err != nil {
 			return fmt.Errorf("delete vanilla server failed: %w", err)
 		}
 	}
@@ -98,8 +98,8 @@ func init() {
 }
 
 func promptOverrideVanilla() (override bool, deleteVanilla bool) {
-	path := workspace.New().Runtime.PrimaryEntrance
-	version := workspace.New().Runtime.GameVersion
+	path := workspace.New().Server.PrimaryEntrance
+	version := workspace.New().Server.GameVersion
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().

@@ -54,20 +54,20 @@ const (
 type RuntimeCapability string
 
 const (
-	CapabilityFabricMods        RuntimeCapability = "fabric_mods"
-	CapabilityForgeMods         RuntimeCapability = "forge_mods"
-	CapabilityNeoforgeMods      RuntimeCapability = "neoforge_mods"
-	CapabilityBukkitPlugins     RuntimeCapability = "bukkit_plugins"
-	CapabilitySpigotPlugins     RuntimeCapability = "spigot_plugins"
-	CapabilityPaperPlugins      RuntimeCapability = "paper_plugins"
-	CapabilityPurpurPlugins     RuntimeCapability = "purpur_plugins"
-	CapabilityFoliaPlugins      RuntimeCapability = "folia_plugins"
-	CapabilityVelocityPlugins   RuntimeCapability = "velocity_plugins"
-	CapabilityBungeecordPlugins RuntimeCapability = "bungeecord_plugins"
-	CapabilityMCDRPlugins       RuntimeCapability = "mcdr_plugins"
-	CapabilitySpongePlugins     RuntimeCapability = "sponge_plugins"
-	CapabilityProxying          RuntimeCapability = "proxying"
-	CapabilityProtocolBridge    RuntimeCapability = "protocol_bridge"
+	CapabilityFabricLoader  RuntimeCapability = "fabric_mods"
+	CapabilityForge         RuntimeCapability = "forge_mods"
+	CapabilityNeoforge      RuntimeCapability = "neoforge_mods"
+	CapabilityBukkitAPI     RuntimeCapability = "bukkit_plugins"
+	CapabilitySpigotAPI     RuntimeCapability = "spigot_plugins"
+	CapabilityPaperAPI      RuntimeCapability = "paper_plugins"
+	CapabilityPurpurAPI     RuntimeCapability = "purpur_plugins"
+	CapabilityFoliaAPI      RuntimeCapability = "folia_plugins"
+	CapabilityVelocity      RuntimeCapability = "velocity_plugins"
+	CapabilityBungeecord    RuntimeCapability = "bungeecord_plugins"
+	CapabilityMcdr          RuntimeCapability = "mcdr_plugins"
+	CapabilitySpongeAPI     RuntimeCapability = "sponge_plugins"
+	CapabilityReversedProxy RuntimeCapability = "proxying"
+	CapabilityBedrockBridge RuntimeCapability = "protocol_bridge"
 )
 
 func (c RuntimeCapability) String() string {
@@ -78,25 +78,25 @@ func (c RuntimeCapability) String() string {
 
 func (c RuntimeCapability) Populate() []RuntimeCapability {
 	switch c {
-	case CapabilitySpigotPlugins:
+	case CapabilitySpigotAPI:
 		return []RuntimeCapability{
-			CapabilitySpigotPlugins, CapabilityBukkitPlugins,
+			CapabilitySpigotAPI, CapabilityBukkitAPI,
 		}
-	case CapabilityPaperPlugins:
-		caps := []RuntimeCapability{CapabilityPaperPlugins}
-		caps = append(caps, CapabilitySpigotPlugins.Populate()...)
+	case CapabilityPaperAPI:
+		caps := []RuntimeCapability{CapabilityPaperAPI}
+		caps = append(caps, CapabilitySpigotAPI.Populate()...)
 		return caps
-	case CapabilityPurpurPlugins:
-		caps := []RuntimeCapability{CapabilityPurpurPlugins}
-		caps = append(caps, CapabilityPaperPlugins.Populate()...)
+	case CapabilityPurpurAPI:
+		caps := []RuntimeCapability{CapabilityPurpurAPI}
+		caps = append(caps, CapabilityPaperAPI.Populate()...)
 		return caps
-	case CapabilityFoliaPlugins:
+	case CapabilityFoliaAPI:
 		// folia compatibility is opt-in by a field in the plugin metadata.
 		// however, we will still mark folia having lower rank bukkit
 		// capabilities here. wether to enforce compatibility policy or not
 		// is up to higher level consumers.
-		caps := []RuntimeCapability{CapabilityFoliaPlugins}
-		caps = append(caps, CapabilityPaperPlugins.Populate()...)
+		caps := []RuntimeCapability{CapabilityFoliaAPI}
+		caps = append(caps, CapabilityPaperAPI.Populate()...)
 		return caps
 	default:
 		return []RuntimeCapability{c}
@@ -178,26 +178,26 @@ type RuntimeEdge struct {
 	Verb RuntimeEdgeVerb `json:"verb"`
 }
 
-type RuntimeTopology struct {
+type ServerTopology struct {
 	PrimaryNode RuntimeNodeID `json:"primary_node"`
 	Nodes       []RuntimeNode `json:"nodes"`
 	Edges       []RuntimeEdge `json:"edges"`
 }
 
 var (
-	TopologyEmpty   = &RuntimeTopology{}
-	TopologyUnknown = &RuntimeTopology{
+	TopologyEmpty   = &ServerTopology{}
+	TopologyUnknown = &ServerTopology{
 		PrimaryNode: "unknown",
 		Nodes:       []RuntimeNode{{ID: "unknown", Role: RuntimeRoleUnknown}},
 		Edges:       nil,
 	}
 )
 
-func (t *RuntimeTopology) Resolved() bool {
+func (t *ServerTopology) Resolved() bool {
 	return t != nil && t.PrimaryNode != RuntimeNodeUnknown && len(t.Nodes) > 0
 }
 
-func (t *RuntimeTopology) FindNode(id RuntimeNodeID) (RuntimeNode, bool) {
+func (t *ServerTopology) FindNode(id RuntimeNodeID) (RuntimeNode, bool) {
 	if t == nil {
 		return RuntimeNode{}, false
 	}
@@ -211,7 +211,7 @@ func (t *RuntimeTopology) FindNode(id RuntimeNodeID) (RuntimeNode, bool) {
 	return RuntimeNode{}, false
 }
 
-func (t *RuntimeTopology) HasCapability(c RuntimeCapability) bool {
+func (t *ServerTopology) HasCapability(c RuntimeCapability) bool {
 	if t == nil {
 		return false
 	}
@@ -225,7 +225,7 @@ func (t *RuntimeTopology) HasCapability(c RuntimeCapability) bool {
 	return false
 }
 
-func (t *RuntimeTopology) PrimaryNodeData() (RuntimeNode, bool) {
+func (t *ServerTopology) PrimaryNodeData() (RuntimeNode, bool) {
 	if t == nil {
 		return RuntimeNode{}, false
 	}
@@ -234,7 +234,7 @@ func (t *RuntimeTopology) PrimaryNodeData() (RuntimeNode, bool) {
 }
 
 // EdgesFrom returns all edges originating from a given node.
-func (t *RuntimeTopology) EdgesFrom(id RuntimeNodeID) []RuntimeEdge {
+func (t *ServerTopology) EdgesFrom(id RuntimeNodeID) []RuntimeEdge {
 	if t == nil {
 		return []RuntimeEdge{}
 	}
@@ -250,7 +250,7 @@ func (t *RuntimeTopology) EdgesFrom(id RuntimeNodeID) []RuntimeEdge {
 }
 
 // EdgesTo returns all edges pointing to a given node.
-func (t *RuntimeTopology) EdgesTo(id RuntimeNodeID) []RuntimeEdge {
+func (t *ServerTopology) EdgesTo(id RuntimeNodeID) []RuntimeEdge {
 	if t == nil {
 		return []RuntimeEdge{}
 	}
@@ -266,7 +266,7 @@ func (t *RuntimeTopology) EdgesTo(id RuntimeNodeID) []RuntimeEdge {
 }
 
 // NodesWithCapability returns all nodes that have the given capability.
-func (t *RuntimeTopology) NodesWithCapability(c RuntimeCapability) []RuntimeNode {
+func (t *ServerTopology) NodesWithCapability(c RuntimeCapability) []RuntimeNode {
 	if t == nil {
 		return []RuntimeNode{}
 	}
@@ -283,7 +283,7 @@ func (t *RuntimeTopology) NodesWithCapability(c RuntimeCapability) []RuntimeNode
 
 // PrimaryCapabilities returns the capabilities of the primary node only.
 // Returns nil if topology is unresolved.
-func (t *RuntimeTopology) PrimaryCapabilities() []RuntimeCapability {
+func (t *ServerTopology) PrimaryCapabilities() []RuntimeCapability {
 	if t == nil {
 		return []RuntimeCapability{}
 	}
@@ -302,7 +302,7 @@ func (t *RuntimeTopology) PrimaryCapabilities() []RuntimeCapability {
 
 // NodeIdentities returns the versioned package refs attached to the node with the
 // given id. Returns an empty slice if the topology is nil or the node is absent.
-func (t *RuntimeTopology) NodeIdentities(id RuntimeNodeID) []VersionedPackageRef {
+func (t *ServerTopology) NodeIdentities(id RuntimeNodeID) []VersionedPackageRef {
 	if t == nil {
 		return []VersionedPackageRef{}
 	}
@@ -317,7 +317,7 @@ func (t *RuntimeTopology) NodeIdentities(id RuntimeNodeID) []VersionedPackageRef
 
 // AllIdentities collects versioned package refs from every node in the topology
 // in node order. Returns an empty slice if the topology is nil.
-func (t *RuntimeTopology) AllIdentities() []VersionedPackageRef {
+func (t *ServerTopology) AllIdentities() []VersionedPackageRef {
 	if t == nil {
 		return []VersionedPackageRef{}
 	}

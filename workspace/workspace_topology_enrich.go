@@ -52,7 +52,7 @@ import (
 // =============================================================================
 
 func EnrichTopologyFromPackages(
-	exec *ServerRuntime,
+	exec *ServerInstance,
 	packages []types.DiscoveredPackage,
 ) {
 	if exec == nil {
@@ -64,7 +64,7 @@ func EnrichTopologyFromPackages(
 	if exec.topology == nil {
 		// No topology yet — attempt to build one from package evidence.
 		if len(evidence) == 0 {
-			exec.topology = &types.RuntimeTopology{}
+			exec.topology = &types.ServerTopology{}
 			return
 		}
 
@@ -75,12 +75,12 @@ func EnrichTopologyFromPackages(
 			// Build from the first evidence node, merge the rest.
 			firstEntry, ok := FindEntry(evidence[0])
 			if !ok {
-				exec.topology = &types.RuntimeTopology{}
+				exec.topology = &types.ServerTopology{}
 				return
 			}
 			exec.topology = BuildTopologyFromEntry(firstEntry)
 			if exec.topology == nil {
-				exec.topology = &types.RuntimeTopology{}
+				exec.topology = &types.ServerTopology{}
 				return
 			}
 		}
@@ -137,7 +137,7 @@ func EnrichTopologyFromPackages(
 }
 
 func attachRuntimePackageIdentities(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	packages []types.DiscoveredPackage,
 ) {
 	if topology == nil {
@@ -178,7 +178,7 @@ func runtimeNodeHasIdentity(
 	return false
 }
 
-func addConnectorHostEdges(t *types.RuntimeTopology) {
+func addConnectorHostEdges(t *types.ServerTopology) {
 	if t == nil {
 		return
 	}
@@ -186,7 +186,7 @@ func addConnectorHostEdges(t *types.RuntimeTopology) {
 		return
 	}
 	for _, host := range t.Nodes {
-		if !host.HasCapability(types.CapabilityForgeMods) && !host.HasCapability(types.CapabilityNeoforgeMods) {
+		if !host.HasCapability(types.CapabilityForge) && !host.HasCapability(types.CapabilityNeoforge) {
 			continue
 		}
 		edge := types.RuntimeEdge{
@@ -200,7 +200,7 @@ func addConnectorHostEdges(t *types.RuntimeTopology) {
 	}
 }
 
-func topologyHasEdge(t *types.RuntimeTopology, edge types.RuntimeEdge) bool {
+func topologyHasEdge(t *types.ServerTopology, edge types.RuntimeEdge) bool {
 	for _, existing := range t.Edges {
 		if existing == edge {
 			return true
@@ -210,7 +210,7 @@ func topologyHasEdge(t *types.RuntimeTopology, edge types.RuntimeEdge) bool {
 }
 
 func applyDeclarativeConnections(
-	t *types.RuntimeTopology,
+	t *types.ServerTopology,
 	registry internaltopology.ConnectionRegistry,
 ) {
 	if t == nil {
@@ -314,7 +314,7 @@ func detectedRuntimeEvidence(packages []types.DiscoveredPackage) []types.Runtime
 
 func inferHostTopologyFromAttachedBridgePackages(
 	packages []types.DiscoveredPackage,
-) *types.RuntimeTopology {
+) *types.ServerTopology {
 	for _, pkg := range packages {
 		name := strings.ToLower(strings.TrimSpace(pkg.Id.Name.String()))
 		if name != "kilt" {
@@ -349,7 +349,7 @@ func hasAnyName(names map[string]struct{}, candidates ...string) bool {
 // NormalizeTopology deduplicates nodes (by ID, last-write wins) and edges
 // (by From+To+Kind triple), then sorts both slices for deterministic output.
 // Safe to call on nil or unresolved topologies.
-func NormalizeTopology(t *types.RuntimeTopology) {
+func NormalizeTopology(t *types.ServerTopology) {
 	if t == nil {
 		return
 	}
@@ -389,7 +389,7 @@ func NormalizeTopology(t *types.RuntimeTopology) {
 // FoldTopologyRisk propagates the maximum node risk level across all connected
 // components by repeatedly folding each edge's endpoints to their maximum risk.
 // Safe to call on nil or unresolved topologies.
-func FoldTopologyRisk(t *types.RuntimeTopology) {
+func FoldTopologyRisk(t *types.ServerTopology) {
 	if t == nil {
 		return
 	}
@@ -422,7 +422,7 @@ func FoldTopologyRisk(t *types.RuntimeTopology) {
 	}
 }
 
-func mergeTopology(dst *types.RuntimeTopology, src *types.RuntimeTopology) {
+func mergeTopology(dst *types.ServerTopology, src *types.ServerTopology) {
 	if dst == nil || src == nil {
 		return
 	}
@@ -462,7 +462,7 @@ func mergeTopology(dst *types.RuntimeTopology, src *types.RuntimeTopology) {
 	sortTopology(dst)
 }
 
-func sortTopology(t *types.RuntimeTopology) {
+func sortTopology(t *types.ServerTopology) {
 	if t == nil {
 		return
 	}

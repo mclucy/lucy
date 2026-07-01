@@ -86,7 +86,7 @@ func (d *arclightServerDetector) Detect(
 				Version: gameVersion,
 			},
 		},
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: types.RuntimeNodeArclight,
 			Nodes: []types.RuntimeNode{
 				{
@@ -186,7 +186,7 @@ func arclightCapabilities(
 	// Populate() expands the Spigot rung into its Bukkit ancestry so the
 	// detector-produced seed matches the registry-side ladder in
 	// probe_topology_data.go::RuntimeNodeArclight.
-	capabilities := types.CapabilitySpigotPlugins.Populate()
+	capabilities := types.CapabilitySpigotAPI.Populate()
 	if loaderCapability, ok := arclightLoaderCapabilityFromLaunchProps(launchProps); ok {
 		return append(
 			[]types.RuntimeCapability{loaderCapability},
@@ -199,7 +199,7 @@ func arclightCapabilities(
 	)
 	if match == nil {
 		return append(
-			[]types.RuntimeCapability{types.CapabilityForgeMods},
+			[]types.RuntimeCapability{types.CapabilityForge},
 			capabilities...,
 		)
 	}
@@ -207,17 +207,17 @@ func arclightCapabilities(
 	switch match[1] {
 	case "fabric":
 		return append(
-			[]types.RuntimeCapability{types.CapabilityFabricMods},
+			[]types.RuntimeCapability{types.CapabilityFabricLoader},
 			capabilities...,
 		)
 	case "neoforge":
 		return append(
-			[]types.RuntimeCapability{types.CapabilityNeoforgeMods},
+			[]types.RuntimeCapability{types.CapabilityNeoforge},
 			capabilities...,
 		)
 	default:
 		return append(
-			[]types.RuntimeCapability{types.CapabilityForgeMods},
+			[]types.RuntimeCapability{types.CapabilityForge},
 			capabilities...,
 		)
 	}
@@ -241,11 +241,11 @@ func arclightLoaderCapabilityFromLaunchProps(data []byte) (
 
 		switch strings.TrimSpace(value) {
 		case "io.izzel.arclight.boot.fabric.application.Main_Fabric":
-			return types.CapabilityFabricMods, true
+			return types.CapabilityFabricLoader, true
 		case "io.izzel.arclight.boot.neoforge.application.Main_Neoforge":
-			return types.CapabilityNeoforgeMods, true
+			return types.CapabilityNeoforge, true
 		case "io.izzel.arclight.boot.forge.application.Main_Forge":
-			return types.CapabilityForgeMods, true
+			return types.CapabilityForge, true
 		}
 	}
 

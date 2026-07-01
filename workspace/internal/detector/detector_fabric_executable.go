@@ -256,13 +256,13 @@ func newFabricExecutableEvidence(
 				Version: gameVersion,
 			},
 		},
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: "fabric",
 			Nodes: []types.RuntimeNode{
 				{
 					ID:           "fabric",
 					Role:         types.RuntimeRoleModLoader,
-					Capabilities: []types.RuntimeCapability{types.CapabilityFabricMods},
+					Capabilities: []types.RuntimeCapability{types.CapabilityFabricLoader},
 				},
 			},
 		},

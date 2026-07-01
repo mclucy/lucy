@@ -220,7 +220,7 @@ func build() Workspace {
 		defer wg.Done()
 		executable := getExecutableInfo()
 		mu.Lock()
-		ws.Runtime = executable
+		ws.Server = executable
 		mu.Unlock()
 	}()
 
@@ -270,11 +270,11 @@ func build() Workspace {
 
 	wg.Wait()
 	ws.Packages = finalizeProbedRuntime(
-		ws.Runtime,
+		ws.Server,
 		ws.Packages,
 	)
-	if ws.Runtime != nil {
-		ws.Topology = ws.Runtime.topology
+	if ws.Server != nil {
+		ws.Topology = ws.Server.topology
 	}
 
 	return ws

@@ -49,7 +49,7 @@ func generateStatusOutput(
 	longOutput bool,
 	noStyle bool,
 ) (output *tui.Data) {
-	if data.Runtime == nil {
+	if data.Server == nil {
 		return &tui.Data{
 			Fields: []tui.Field{
 				&tui.FieldAnnotation{
@@ -76,7 +76,7 @@ func generateStatusOutput(
 	hasLucy := data.Environments.Lucy != nil
 	primaryNode, hasPrimaryNode := topologyPrimaryNodeData(data.Topology)
 	showMods := len(modPlatforms) > 0
-	showPlugins := data.Topology != nil && data.Topology.Resolved() && data.Topology.HasCapability(types.CapabilityBukkitPlugins)
+	showPlugins := data.Topology != nil && data.Topology.Resolved() && data.Topology.HasCapability(types.CapabilityBukkitAPI)
 	modNames, modPaths, pluginNames, mcdrPlugins := statusPackageSections(
 		data.Packages,
 		modPlatforms,
@@ -113,8 +113,8 @@ func generateStatusOutput(
 		output.Fields,
 		&tui.FieldAnnotatedShortText{
 			Title:      "Game",
-			Text:       data.Runtime.GameVersion.String(),
-			Annotation: data.Runtime.PrimaryEntrance,
+			Text:       data.Server.GameVersion.String(),
+			Annotation: data.Server.PrimaryEntrance,
 		},
 	)
 
@@ -324,7 +324,7 @@ func statusPackageSections(
 }
 
 func statusModEcosystems(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	serverPlatform types.Ecosystem,
 ) map[types.Ecosystem]bool {
 	platforms := make(map[types.Ecosystem]bool, 3)
@@ -338,20 +338,20 @@ func statusModEcosystems(
 	if serverPlatform == types.EcoNeoforge {
 		platforms[types.EcoForge] = true
 	}
-	if topology.HasCapability(types.CapabilityFabricMods) {
+	if topology.HasCapability(types.CapabilityFabricLoader) {
 		platforms[types.EcoFabric] = true
 	}
-	if topology.HasCapability(types.CapabilityForgeMods) {
+	if topology.HasCapability(types.CapabilityForge) {
 		platforms[types.EcoForge] = true
 	}
-	if topology.HasCapability(types.CapabilityNeoforgeMods) {
+	if topology.HasCapability(types.CapabilityNeoforge) {
 		platforms[types.EcoNeoforge] = true
 	}
 
 	return platforms
 }
 
-func topologyPrimaryNodeData(topology *types.RuntimeTopology) (
+func topologyPrimaryNodeData(topology *types.ServerTopology) (
 	types.RuntimeNode,
 	bool,
 ) {
@@ -363,7 +363,7 @@ func topologyPrimaryNodeData(topology *types.RuntimeTopology) (
 }
 
 func statusRuntimeEcosystemLabel(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	fallback types.Ecosystem,
 	hasPrimaryNode bool,
 	primaryNode types.RuntimeNode,
@@ -402,7 +402,7 @@ func statusRuntimeEcosystemLabel(
 }
 
 func statusTopologyField(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	hasPrimaryNode bool,
 	primaryNode types.RuntimeNode,
 ) tui.Field {
@@ -450,7 +450,7 @@ func statusTopologyField(
 // statusEffectiveRiskLevel derives a display risk from the primary runtime node and
 // its directly connected neighboring nodes. Edges themselves are structural only.
 func statusEffectiveRiskLevel(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	hasPrimaryNode bool,
 	primaryNode types.RuntimeNode,
 ) types.RuntimeRiskLevel {
@@ -479,7 +479,7 @@ func statusEffectiveRiskLevel(
 }
 
 func runtimeTopologyRelationLabel(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	primaryNode types.RuntimeNode,
 ) string {
 	switch primaryNode.Role {
@@ -524,7 +524,7 @@ func runtimeTopologyRelationLabel(
 }
 
 func runtimeTopologyTargets(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	nodeID types.RuntimeNodeID,
 ) []string {
 	if topology == nil {
@@ -556,7 +556,7 @@ func runtimeTopologyTargets(
 }
 
 func runtimeTopologyAddonLabels(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	primaryNodeID types.RuntimeNodeID,
 ) []string {
 	if topology == nil {

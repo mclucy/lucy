@@ -17,7 +17,7 @@ type InstallOptions struct {
 		url, destDir string,
 		opts cache.DownloadOptions,
 	) (*cache.DownloadResult, error)
-	Providers func(types.RuntimeTopology) []upstream.PackageSource
+	Providers func(types.ServerTopology) []upstream.PackageSource
 }
 
 func DefaultOptions() InstallOptions {
@@ -35,7 +35,7 @@ func (o InstallOptions) withDefaults() InstallOptions {
 		o.Cache = cache.CachedDownload
 	}
 	if o.Providers == nil {
-		o.Providers = func(topology types.RuntimeTopology) []upstream.PackageSource {
+		o.Providers = func(topology types.ServerTopology) []upstream.PackageSource {
 			providers, err := routing.ResolveProvidersFromTopology(
 				&topology,
 				types.SourceAuto,

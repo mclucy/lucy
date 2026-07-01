@@ -176,7 +176,10 @@ func EcosystemInstallerFor(
 	return DefaultRegistry().EcosystemInstaller(source)
 }
 
-func ecosystemInstallerSource(ecosystem types.Ecosystem) (types.SourceId, bool) {
+func ecosystemInstallerSource(ecosystem types.Ecosystem) (
+	types.SourceId,
+	bool,
+) {
 	switch ecosystem {
 	case types.EcoMinecraft:
 		return types.SourceMojang, true
@@ -288,7 +291,7 @@ func resolveExplicitSearcher(src types.SourceId) (
 }
 
 func ResolveProvidersFromTopology(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	src types.SourceId,
 ) ([]upstream.PackageSource, error) {
 	if src == types.SourceUnknown {

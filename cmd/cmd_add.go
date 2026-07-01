@@ -241,7 +241,7 @@ func buildUpdatedLock(
 	}
 
 	ws := workspace.New()
-	runtime := ws.Runtime
+	runtime := ws.Server
 	lock.GeneratedAt = state.NewLock().GeneratedAt
 	lock.ManifestFingerprint = manifestFingerprint(
 		manifest,
@@ -295,7 +295,7 @@ func manifestFingerprint(manifest *state.Manifest, fallback string) string {
 
 func manifestGameVersion(
 	manifest *state.Manifest,
-	runtime *workspace.ServerRuntime,
+	runtime *workspace.ServerInstance,
 	fallback string,
 ) string {
 	if manifest != nil && manifest.Environment.GameVersion != "" {
@@ -320,7 +320,7 @@ func manifestEcosystem(
 	if manifest != nil && manifest.Environment.ModdingPlatform != "" {
 		return manifest.Environment.ModdingPlatform
 	}
-	if ws.Runtime != nil {
+	if ws.Server != nil {
 		if platform := ws.DerivedModLoader().String(); platform != "" {
 			return platform
 		}
@@ -339,7 +339,7 @@ func manifestEcosystemVersion(
 	if manifest != nil && manifest.Environment.ModdingPlatformVersion != "" {
 		return manifest.Environment.ModdingPlatformVersion
 	}
-	if ws.Runtime != nil {
+	if ws.Server != nil {
 		if version := ws.DerivedLoaderVersion(); version != "" {
 			return version
 		}

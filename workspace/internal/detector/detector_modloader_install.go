@@ -235,9 +235,9 @@ func buildModLoaderRuntimeInfo(
 	gameVersion types.BareVersion,
 	loaderVersion types.BareVersion,
 ) *ExecutableEvidence {
-	capability := types.CapabilityForgeMods
+	capability := types.CapabilityForge
 	if platform == types.EcoNeoforge {
-		capability = types.CapabilityNeoforgeMods
+		capability = types.CapabilityNeoforge
 	}
 	return &ExecutableEvidence{
 		PrimaryEntrance: filePath,
@@ -258,7 +258,7 @@ func buildModLoaderRuntimeInfo(
 				Version: gameVersion,
 			},
 		},
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: types.RuntimeNodeID(name),
 			Nodes: []types.RuntimeNode{
 				{

@@ -222,7 +222,7 @@ func buildSpongeExecutableEvidence(
 		ID:   types.RuntimeNodeSponge,
 		Role: types.RuntimeRolePluginCore,
 		Capabilities: []types.RuntimeCapability{
-			types.CapabilitySpongePlugins,
+			types.CapabilitySpongeAPI,
 		},
 	}
 
@@ -232,8 +232,8 @@ func buildSpongeExecutableEvidence(
 	case spongeFlavorForge:
 		spongeNode.Role = types.RuntimeRoleHybrid
 		spongeNode.Capabilities = append(
-			[]types.RuntimeCapability{types.CapabilitySpongePlugins},
-			types.CapabilityForgeMods.Populate()...,
+			[]types.RuntimeCapability{types.CapabilitySpongeAPI},
+			types.CapabilityForge.Populate()...,
 		)
 		nodes[0] = spongeNode
 		identities = append(
@@ -248,8 +248,8 @@ func buildSpongeExecutableEvidence(
 	case spongeFlavorNeo:
 		spongeNode.Role = types.RuntimeRoleHybrid
 		spongeNode.Capabilities = append(
-			[]types.RuntimeCapability{types.CapabilitySpongePlugins},
-			types.CapabilityNeoforgeMods.Populate()...,
+			[]types.RuntimeCapability{types.CapabilitySpongeAPI},
+			types.CapabilityNeoforge.Populate()...,
 		)
 		nodes[0] = spongeNode
 		identities = append(
@@ -267,7 +267,7 @@ func buildSpongeExecutableEvidence(
 		PrimaryEntrance:   filePath,
 		GameVersion:       signals.gameVersion,
 		RuntimeIdentities: identities,
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: types.RuntimeNodeSponge,
 			Nodes:       nodes,
 		},

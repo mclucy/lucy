@@ -49,7 +49,7 @@ func buildAmbientDependencies(
 		)
 	}
 
-	if ws.Runtime == nil || ws.Topology == nil || !ws.Topology.HasCapability(types.CapabilityFabricMods) {
+	if ws.Server == nil || ws.Topology == nil || !ws.Topology.HasCapability(types.CapabilityFabricLoader) {
 		return ambient, nil
 	}
 
@@ -69,7 +69,7 @@ func buildAmbientDependencies(
 			PackageRef: types.PackageRef{
 				Eco: types.EcoFabric, Name: "minecraft",
 			},
-			Version: ws.Runtime.GameVersion,
+			Version: ws.Server.GameVersion,
 		},
 	)
 	ambient.Add(

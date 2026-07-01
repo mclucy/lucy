@@ -68,15 +68,15 @@ func (d *geyserStandaloneDetector) Detect(
 				Version: version,
 			},
 		},
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: "geyser_standalone",
 			Nodes: []types.RuntimeNode{
 				{
 					ID:   "geyser_standalone",
 					Role: types.RuntimeRoleProxy,
 					Capabilities: []types.RuntimeCapability{
-						types.CapabilityProxying,
-						types.CapabilityProtocolBridge,
+						types.CapabilityReversedProxy,
+						types.CapabilityBedrockBridge,
 					},
 				},
 			},

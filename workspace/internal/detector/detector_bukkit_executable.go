@@ -652,11 +652,11 @@ func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
 	var capabilities []types.RuntimeCapability
 	switch id {
 	case bukkitNodeSpigot:
-		capabilities = types.CapabilitySpigotPlugins.Populate()
+		capabilities = types.CapabilitySpigotAPI.Populate()
 	case bukkitNodePaper, bukkitNodePaperFork:
-		capabilities = types.CapabilityPaperPlugins.Populate()
+		capabilities = types.CapabilityPaperAPI.Populate()
 	case bukkitNodeBukkit:
-		capabilities = []types.RuntimeCapability{types.CapabilityBukkitPlugins}
+		capabilities = []types.RuntimeCapability{types.CapabilityBukkitAPI}
 	}
 
 	return types.RuntimeNode{

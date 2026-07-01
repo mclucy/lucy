@@ -7,8 +7,8 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func topologyWithCapability(capability types.RuntimeCapability) *types.RuntimeTopology {
-	return &types.RuntimeTopology{
+func topologyWithCapability(capability types.RuntimeCapability) *types.ServerTopology {
+	return &types.ServerTopology{
 		PrimaryNode: types.RuntimeNodeBukkit,
 		Nodes: []types.RuntimeNode{
 			{
@@ -20,8 +20,8 @@ func topologyWithCapability(capability types.RuntimeCapability) *types.RuntimeTo
 	}
 }
 
-func topologyWithCapabilities(capabilities ...types.RuntimeCapability) *types.RuntimeTopology {
-	return &types.RuntimeTopology{
+func topologyWithCapabilities(capabilities ...types.RuntimeCapability) *types.ServerTopology {
+	return &types.ServerTopology{
 		PrimaryNode: types.RuntimeNodeBukkit,
 		Nodes: []types.RuntimeNode{
 			{
@@ -39,33 +39,35 @@ func TestIsBukkitFamilyCapability(t *testing.T) {
 		capability types.RuntimeCapability
 		want       bool
 	}{
-		{"bukkit", types.CapabilityBukkitPlugins, true},
-		{"spigot", types.CapabilitySpigotPlugins, true},
-		{"paper", types.CapabilityPaperPlugins, true},
-		{"purpur", types.CapabilityPurpurPlugins, true},
-		{"folia", types.CapabilityFoliaPlugins, true},
-		{"fabric mods", types.CapabilityFabricMods, false},
-		{"forge mods", types.CapabilityForgeMods, false},
-		{"neoforge mods", types.CapabilityNeoforgeMods, false},
-		{"mcdr", types.CapabilityMCDRPlugins, false},
-		{"velocity", types.CapabilityVelocityPlugins, false},
-		{"bungeecord", types.CapabilityBungeecordPlugins, false},
-		{"sponge", types.CapabilitySpongePlugins, false},
-		{"proxying", types.CapabilityProxying, false},
-		{"protocol bridge", types.CapabilityProtocolBridge, false},
+		{"bukkit", types.CapabilityBukkitAPI, true},
+		{"spigot", types.CapabilitySpigotAPI, true},
+		{"paper", types.CapabilityPaperAPI, true},
+		{"purpur", types.CapabilityPurpurAPI, true},
+		{"folia", types.CapabilityFoliaAPI, true},
+		{"fabric mods", types.CapabilityFabricLoader, false},
+		{"forge mods", types.CapabilityForge, false},
+		{"neoforge mods", types.CapabilityNeoforge, false},
+		{"mcdr", types.CapabilityMcdr, false},
+		{"velocity", types.CapabilityVelocity, false},
+		{"bungeecord", types.CapabilityBungeecord, false},
+		{"sponge", types.CapabilitySpongeAPI, false},
+		{"proxying", types.CapabilityReversedProxy, false},
+		{"protocol bridge", types.CapabilityBedrockBridge, false},
 	}
 	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isBukkitFamilyCapability(tt.capability)
-			if got != tt.want {
-				t.Fatalf(
-					"isBukkitFamilyCapability(%q) = %v, want %v",
-					tt.capability,
-					got,
-					tt.want,
-				)
-			}
-		})
+		t.Run(
+			tt.name, func(t *testing.T) {
+				got := isBukkitFamilyCapability(tt.capability)
+				if got != tt.want {
+					t.Fatalf(
+						"isBukkitFamilyCapability(%q) = %v, want %v",
+						tt.capability,
+						got,
+						tt.want,
+					)
+				}
+			},
+		)
 	}
 }
 
@@ -76,80 +78,82 @@ func TestProviderSourcesFromTopology_BukkitFamily(t *testing.T) {
 		name       string
 		capability types.RuntimeCapability
 	}{
-		{"bukkit plugins", types.CapabilityBukkitPlugins},
-		{"spigot plugins", types.CapabilitySpigotPlugins},
-		{"paper plugins", types.CapabilityPaperPlugins},
-		{"purpur plugins", types.CapabilityPurpurPlugins},
-		{"folia plugins", types.CapabilityFoliaPlugins},
+		{"bukkit plugins", types.CapabilityBukkitAPI},
+		{"spigot plugins", types.CapabilitySpigotAPI},
+		{"paper plugins", types.CapabilityPaperAPI},
+		{"purpur plugins", types.CapabilityPurpurAPI},
+		{"folia plugins", types.CapabilityFoliaAPI},
 	}
 
 	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
+		t.Run(
+			tt.name, func(t *testing.T) {
+				resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
 
-			if resolution.fallback {
-				t.Fatalf(
-					"unexpected fallback for Bukkit-family capability %q",
-					tt.capability,
-				)
-			}
-			if resolution.empty {
-				t.Fatalf(
-					"unexpected empty resolution for Bukkit-family capability %q",
-					tt.capability,
-				)
-			}
+				if resolution.fallback {
+					t.Fatalf(
+						"unexpected fallback for Bukkit-family capability %q",
+						tt.capability,
+					)
+				}
+				if resolution.empty {
+					t.Fatalf(
+						"unexpected empty resolution for Bukkit-family capability %q",
+						tt.capability,
+					)
+				}
 
-			mustContain := []types.SourceId{
-				types.SourceModrinth,
-				types.SourceHangar,
-				types.SourceSpiget,
-			}
-			for _, source := range mustContain {
-				if !slices.Contains(resolution.sources, source) {
+				mustContain := []types.SourceId{
+					types.SourceModrinth,
+					types.SourceHangar,
+					types.SourceSpiget,
+				}
+				for _, source := range mustContain {
+					if !slices.Contains(resolution.sources, source) {
+						t.Errorf(
+							"expected source %s in result, got %v",
+							source,
+							resolution.sources,
+						)
+					}
+				}
+
+				if slices.Contains(resolution.sources, types.SourceCurseForge) {
 					t.Errorf(
-						"expected source %s in result, got %v",
-						source,
+						"CurseForge must never appear for Bukkit-family routing, got %v",
 						resolution.sources,
 					)
 				}
-			}
 
-			if slices.Contains(resolution.sources, types.SourceCurseForge) {
-				t.Errorf(
-					"CurseForge must never appear for Bukkit-family routing, got %v",
-					resolution.sources,
-				)
-			}
+				if slices.Contains(resolution.sources, types.SourceMCDR) {
+					t.Errorf(
+						"MCDR must never appear for Bukkit-family routing, got %v",
+						resolution.sources,
+					)
+				}
 
-			if slices.Contains(resolution.sources, types.SourceMCDR) {
-				t.Errorf(
-					"MCDR must never appear for Bukkit-family routing, got %v",
-					resolution.sources,
-				)
-			}
+				if curseforgePresent {
+					t.Logf(
+						"curseforge available in this build; verified it stays excluded for %q",
+						tt.capability,
+					)
+				}
 
-			if curseforgePresent {
-				t.Logf(
-					"curseforge available in this build; verified it stays excluded for %q",
-					tt.capability,
-				)
-			}
-
-			expectedOrder := []types.SourceId{
-				types.SourceModrinth,
-				types.SourceHangar,
-				types.SourceSpiget,
-			}
-			if !slices.Equal(resolution.sources, expectedOrder) {
-				t.Errorf(
-					"source order changed for %q: got %v, want %v",
-					tt.capability,
-					resolution.sources,
-					expectedOrder,
-				)
-			}
-		})
+				expectedOrder := []types.SourceId{
+					types.SourceModrinth,
+					types.SourceHangar,
+					types.SourceSpiget,
+				}
+				if !slices.Equal(resolution.sources, expectedOrder) {
+					t.Errorf(
+						"source order changed for %q: got %v, want %v",
+						tt.capability,
+						resolution.sources,
+						expectedOrder,
+					)
+				}
+			},
+		)
 	}
 }
 
@@ -160,66 +164,77 @@ func TestProviderSourcesFromTopology_ModLoaders(t *testing.T) {
 		name       string
 		capability types.RuntimeCapability
 	}{
-		{"fabric mods", types.CapabilityFabricMods},
-		{"forge mods", types.CapabilityForgeMods},
-		{"neoforge mods", types.CapabilityNeoforgeMods},
+		{"fabric mods", types.CapabilityFabricLoader},
+		{"forge mods", types.CapabilityForge},
+		{"neoforge mods", types.CapabilityNeoforge},
 	}
 
 	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
+		t.Run(
+			tt.name, func(t *testing.T) {
+				resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
 
-			if resolution.fallback {
-				t.Fatalf("unexpected fallback for mod-loader capability %q", tt.capability)
-			}
-			if resolution.empty {
-				t.Fatalf("unexpected empty resolution for mod-loader capability %q", tt.capability)
-			}
-			if !slices.Contains(resolution.sources, types.SourceModrinth) {
-				t.Errorf(
-					"expected Modrinth for mod-loader capability %q, got %v",
-					tt.capability,
-					resolution.sources,
-				)
-			}
+				if resolution.fallback {
+					t.Fatalf(
+						"unexpected fallback for mod-loader capability %q",
+						tt.capability,
+					)
+				}
+				if resolution.empty {
+					t.Fatalf(
+						"unexpected empty resolution for mod-loader capability %q",
+						tt.capability,
+					)
+				}
+				if !slices.Contains(resolution.sources, types.SourceModrinth) {
+					t.Errorf(
+						"expected Modrinth for mod-loader capability %q, got %v",
+						tt.capability,
+						resolution.sources,
+					)
+				}
 
-			hasCurse := slices.Contains(resolution.sources, types.SourceCurseForge)
-			if curseforgePresent && !hasCurse {
-				t.Errorf(
-					"expected CurseForge for mod-loader %q (available in build), got %v",
-					tt.capability,
+				hasCurse := slices.Contains(
 					resolution.sources,
+					types.SourceCurseForge,
 				)
-			}
-			if !curseforgePresent && hasCurse {
-				t.Errorf(
-					"unexpected CurseForge for mod-loader %q (not available in build), got %v",
-					tt.capability,
-					resolution.sources,
-				)
-			}
+				if curseforgePresent && !hasCurse {
+					t.Errorf(
+						"expected CurseForge for mod-loader %q (available in build), got %v",
+						tt.capability,
+						resolution.sources,
+					)
+				}
+				if !curseforgePresent && hasCurse {
+					t.Errorf(
+						"unexpected CurseForge for mod-loader %q (not available in build), got %v",
+						tt.capability,
+						resolution.sources,
+					)
+				}
 
-			if slices.Contains(resolution.sources, types.SourceHangar) {
-				t.Errorf(
-					"Hangar must not appear for mod-loader capability %q, got %v",
-					tt.capability,
-					resolution.sources,
-				)
-			}
-			if slices.Contains(resolution.sources, types.SourceSpiget) {
-				t.Errorf(
-					"Spiget must not appear for mod-loader capability %q, got %v",
-					tt.capability,
-					resolution.sources,
-				)
-			}
-		})
+				if slices.Contains(resolution.sources, types.SourceHangar) {
+					t.Errorf(
+						"Hangar must not appear for mod-loader capability %q, got %v",
+						tt.capability,
+						resolution.sources,
+					)
+				}
+				if slices.Contains(resolution.sources, types.SourceSpiget) {
+					t.Errorf(
+						"Spiget must not appear for mod-loader capability %q, got %v",
+						tt.capability,
+						resolution.sources,
+					)
+				}
+			},
+		)
 	}
 }
 
 func TestProviderSourcesFromTopology_MCDR(t *testing.T) {
 	resolution := providerSourcesFromTopology(
-		topologyWithCapability(types.CapabilityMCDRPlugins),
+		topologyWithCapability(types.CapabilityMcdr),
 	)
 
 	if resolution.fallback {
@@ -237,7 +252,7 @@ func TestProviderSourcesFromTopology_MCDR(t *testing.T) {
 
 func TestProviderSourcesFromTopology_ProxyOnly(t *testing.T) {
 	resolution := providerSourcesFromTopology(
-		topologyWithCapability(types.CapabilityProxying),
+		topologyWithCapability(types.CapabilityReversedProxy),
 	)
 
 	if !resolution.empty {
@@ -259,51 +274,53 @@ func TestProviderSourcesFromTopology_NonBukkitPluginCapabilities(t *testing.T) {
 		name       string
 		capability types.RuntimeCapability
 	}{
-		{"velocity", types.CapabilityVelocityPlugins},
-		{"bungeecord", types.CapabilityBungeecordPlugins},
-		{"sponge", types.CapabilitySpongePlugins},
-		{"protocol bridge", types.CapabilityProtocolBridge},
+		{"velocity", types.CapabilityVelocity},
+		{"bungeecord", types.CapabilityBungeecord},
+		{"sponge", types.CapabilitySpongeAPI},
+		{"protocol bridge", types.CapabilityBedrockBridge},
 	}
 
 	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
+		t.Run(
+			tt.name, func(t *testing.T) {
+				resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
 
-			if len(resolution.sources) != 0 {
-				t.Errorf(
-					"%s capability must not produce sources, got %v",
-					tt.name,
-					resolution.sources,
-				)
-			}
-			if !resolution.fallback {
-				t.Errorf(
-					"%s capability must trigger fallback (unknown capability)",
-					tt.name,
-				)
-			}
-		})
+				if len(resolution.sources) != 0 {
+					t.Errorf(
+						"%s capability must not produce sources, got %v",
+						tt.name,
+						resolution.sources,
+					)
+				}
+				if !resolution.fallback {
+					t.Errorf(
+						"%s capability must trigger fallback (unknown capability)",
+						tt.name,
+					)
+				}
+			},
+		)
 	}
 }
 
 func TestProviderSourcesFromTopology_MultipleBukkitFamilyNodes(t *testing.T) {
 	// Multiple Bukkit-family nodes (e.g. Paper primary + Folia bridge) must
 	// not produce duplicate sources and must keep the canonical order.
-	topology := &types.RuntimeTopology{
+	topology := &types.ServerTopology{
 		PrimaryNode: types.RuntimeNodePaper,
 		Nodes: []types.RuntimeNode{
 			{
 				ID:   types.RuntimeNodePaper,
 				Role: types.RuntimeRolePluginCore,
 				Capabilities: []types.RuntimeCapability{
-					types.CapabilityPaperPlugins,
+					types.CapabilityPaperAPI,
 				},
 			},
 			{
 				ID:   types.RuntimeNodeFolia,
 				Role: types.RuntimeRolePluginCore,
 				Capabilities: []types.RuntimeCapability{
-					types.CapabilityFoliaPlugins,
+					types.CapabilityFoliaAPI,
 				},
 			},
 		},
@@ -326,7 +343,11 @@ func TestProviderSourcesFromTopology_MultipleBukkitFamilyNodes(t *testing.T) {
 		types.SourceSpiget,
 	}
 	if !slices.Equal(resolution.sources, want) {
-		t.Errorf("multi-node Bukkit-family: got %v, want %v", resolution.sources, want)
+		t.Errorf(
+			"multi-node Bukkit-family: got %v, want %v",
+			resolution.sources,
+			want,
+		)
 	}
 }
 
@@ -337,8 +358,8 @@ func TestProviderSourcesFromTopology_MixedBukkitAndModLoader(t *testing.T) {
 	// portion.
 	resolution := providerSourcesFromTopology(
 		topologyWithCapabilities(
-			types.CapabilityFabricMods,
-			types.CapabilityPaperPlugins,
+			types.CapabilityFabricLoader,
+			types.CapabilityPaperAPI,
 		),
 	)
 

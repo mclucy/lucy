@@ -32,13 +32,13 @@ func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T
 	copyProbeFixture(t, paperJar, filepath.Join(workDir, "paper.jar"))
 
 	observed := NewAt(workDir)
-	if observed.Runtime == nil {
+	if observed.Server == nil {
 		t.Fatal("expected runtime info for paper fixture")
 	}
 
 	primary := observed.PrimaryRuntimeIdentity()
 	if primary == nil {
-		t.Fatalf("expected primary runtime identity, got %+v", observed.Runtime)
+		t.Fatalf("expected primary runtime identity, got %+v", observed.Server)
 	}
 	if got := string(primary.Name); got != "paper" {
 		t.Fatalf(
@@ -92,7 +92,7 @@ func TestPaperDetectorIntegration_ContradictoryEvidenceDoesNotProducePaperRuntim
 	)
 
 	observed := NewAt(workDir)
-	if observed.Runtime == nil {
+	if observed.Server == nil {
 		t.Fatal("expected runtime info for contradiction fixture")
 	}
 	if observed.Topology == nil {

@@ -9,16 +9,14 @@ type Workspace struct {
 	SavePath     string                    `json:"save_path"`
 	ModPath      []string                  `json:"mod_path"`
 	Packages     []types.DiscoveredPackage `json:"packages"`
-	Runtime      *ServerRuntime            `json:"runtime,omitempty"`
-	Topology     *types.RuntimeTopology    `json:"topology,omitempty"`
+	Server       *ServerInstance           `json:"server,omitempty"`
+	Topology     *types.ServerTopology     `json:"topology,omitempty"`
 	Activity     *ServerActivity           `json:"activity,omitempty"`
 	Environments types.EnvironmentInfo     `json:"environments"`
-	McdrRoot     string                    `json:"mcdr_root"`
-	LucyRoot     string                    `json:"lucy_root"`
 }
 
 func (w Workspace) RuntimeIdentityPackage(node *types.TopologyNode) *types.VersionedPackageRef {
-	if w.Runtime == nil || node == nil {
+	if w.Server == nil || node == nil {
 		return nil
 	}
 
@@ -26,7 +24,7 @@ func (w Workspace) RuntimeIdentityPackage(node *types.TopologyNode) *types.Versi
 }
 
 func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
-	if w.Runtime == nil {
+	if w.Server == nil {
 		return nil
 	}
 
@@ -34,7 +32,7 @@ func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
 }
 
 func (w Workspace) DerivedLoaderVersion() string {
-	if w.Runtime == nil {
+	if w.Server == nil {
 		return derivedLoaderVersion(nil)
 	}
 
@@ -50,7 +48,7 @@ func (w Workspace) DerivedServerCore() string {
 }
 
 func runtimeIdentityPackage(
-	topology *types.RuntimeTopology,
+	topology *types.ServerTopology,
 	node *types.TopologyNode,
 ) *types.VersionedPackageRef {
 	if topology == nil || node == nil {
@@ -68,7 +66,7 @@ func runtimeIdentityPackage(
 	return nil
 }
 
-func primaryRuntimeIdentity(topology *types.RuntimeTopology) *types.VersionedPackageRef {
+func primaryRuntimeIdentity(topology *types.ServerTopology) *types.VersionedPackageRef {
 	if topology == nil {
 		return nil
 	}
@@ -84,7 +82,7 @@ func primaryRuntimeIdentity(topology *types.RuntimeTopology) *types.VersionedPac
 	return nil
 }
 
-func derivedLoaderVersion(topology *types.RuntimeTopology) string {
+func derivedLoaderVersion(topology *types.ServerTopology) string {
 	primaryIdentity := primaryRuntimeIdentity(topology)
 	if primaryIdentity == nil {
 		return "unknown"
@@ -93,7 +91,7 @@ func derivedLoaderVersion(topology *types.RuntimeTopology) string {
 	return primaryIdentity.Version.String()
 }
 
-func derivedModLoader(topology *types.RuntimeTopology) types.Ecosystem {
+func derivedModLoader(topology *types.ServerTopology) types.Ecosystem {
 	if topology == nil {
 		return types.EcoBare
 	}
@@ -106,7 +104,7 @@ func derivedModLoader(topology *types.RuntimeTopology) types.Ecosystem {
 	return types.DeclaredModdingEcosystemForNode(primary.ID)
 }
 
-func derivedServerCore(topology *types.RuntimeTopology) string {
+func derivedServerCore(topology *types.ServerTopology) string {
 	if topology == nil {
 		return ""
 	}

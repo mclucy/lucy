@@ -60,15 +60,15 @@ func (d *catServerDetector) Detect(
 				Version: signals.gameVersion,
 			},
 		},
-		Topology: &types.RuntimeTopology{
+		Topology: &types.ServerTopology{
 			PrimaryNode: types.RuntimeNodeCatServer,
 			Nodes: []types.RuntimeNode{
 				{
 					ID:   types.RuntimeNodeCatServer,
 					Role: types.RuntimeRoleHybrid,
 					Capabilities: append(
-						[]types.RuntimeCapability{types.CapabilityForgeMods},
-						types.CapabilitySpigotPlugins.Populate()...,
+						[]types.RuntimeCapability{types.CapabilityForge},
+						types.CapabilitySpigotAPI.Populate()...,
 					),
 				},
 				{
