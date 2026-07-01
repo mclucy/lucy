@@ -188,18 +188,7 @@ func generateStatusOutput(
 		hasPrimaryNode,
 		primaryNode,
 	); topologyField != nil {
-		output.Fields = append(
-			output.Fields,
-			statusTopologyTreeField(
-				topologyField,
-				statusEffectiveRiskLevel(
-					data.Topology,
-					hasPrimaryNode,
-					primaryNode,
-				),
-				noStyle,
-			),
-		)
+		output.Fields = append(output.Fields, topologyField)
 	}
 
 	if hasMcdr {
@@ -244,46 +233,6 @@ func statusPackageListField(
 		Labels:    names,
 		MaxLines:  0,
 		ShowTotal: true,
-	}
-}
-
-func statusTopologyTreeField(
-	field tui.Field,
-	riskLevel types.RuntimeRiskLevel,
-	noStyle bool,
-) tui.Field {
-	children := make([]tui.TreeNode, 0, 1)
-	if riskLevel > types.RiskNone {
-		children = append(
-			children,
-			tui.TreeNode{
-				Title: "Risk",
-				Field: &tui.FieldShortText{
-					Text: topologyRiskLabel(
-						riskLevel,
-						noStyle,
-					),
-				},
-			},
-		)
-	}
-
-	switch statusField := field.(type) {
-	case *tui.FieldAnnotatedShortText:
-		return &tui.FieldTree{
-			Title:      statusField.Title,
-			Text:       statusField.Text,
-			Annotation: statusField.Annotation,
-			Children:   children,
-		}
-	case *tui.FieldShortText:
-		return &tui.FieldTree{
-			Title:    statusField.Title,
-			Text:     statusField.Text,
-			Children: children,
-		}
-	default:
-		return field
 	}
 }
 
@@ -445,37 +394,6 @@ func statusTopologyField(
 		Text:       roleLabel,
 		Annotation: annotation,
 	}
-}
-
-// statusEffectiveRiskLevel derives a display risk from the primary runtime node and
-// its directly connected neighboring nodes. Edges themselves are structural only.
-func statusEffectiveRiskLevel(
-	topology *types.ServerTopology,
-	hasPrimaryNode bool,
-	primaryNode types.RuntimeNode,
-) types.RuntimeRiskLevel {
-	effective := types.RiskNone
-	if hasPrimaryNode {
-		effective = primaryNode.RiskLevel
-	}
-
-	if topology == nil {
-		return effective
-	}
-
-	for _, edge := range topology.EdgesFrom(topology.PrimaryNode) {
-		if target, ok := topology.FindNode(edge.To); ok && target.RiskLevel > effective {
-			effective = target.RiskLevel
-		}
-	}
-
-	for _, edge := range topology.EdgesTo(topology.PrimaryNode) {
-		if source, ok := topology.FindNode(edge.From); ok && source.RiskLevel > effective {
-			effective = source.RiskLevel
-		}
-	}
-
-	return effective
 }
 
 func runtimeTopologyRelationLabel(
@@ -664,20 +582,5 @@ func runtimeNodeLabel(id types.RuntimeNodeID) string {
 				), "_", " ",
 			),
 		)
-	}
-}
-
-func topologyRiskLabel(level types.RuntimeRiskLevel, noStyle bool) string {
-	switch level {
-	case types.RiskLow:
-		return "Low"
-	case types.RiskMedium:
-		return fn.Ternary(noStyle, " !", " ⚠") + " Medium"
-	case types.RiskHigh:
-		return fn.Ternary(noStyle, "!!", "⚠⚠") + " High"
-	case types.RiskCritical:
-		return fn.Ternary(noStyle, " x", " ✗") + " Critical"
-	default:
-		return "None"
 	}
 }

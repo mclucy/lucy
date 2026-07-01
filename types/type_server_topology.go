@@ -103,16 +103,6 @@ func (c RuntimeCapability) Populate() []RuntimeCapability {
 	}
 }
 
-type RuntimeRiskLevel int
-
-const (
-	RiskNone     RuntimeRiskLevel = 0
-	RiskLow      RuntimeRiskLevel = 1
-	RiskMedium   RuntimeRiskLevel = 2
-	RiskHigh     RuntimeRiskLevel = 3
-	RiskCritical RuntimeRiskLevel = 4
-)
-
 type CompatVerdict string
 
 const (
@@ -123,7 +113,6 @@ const (
 )
 
 // CompatResult reports only the compatibility verdict and its explanation.
-// Runtime risk is tracked on topology nodes, not on compat results or edges.
 type CompatResult struct {
 	Verdict CompatVerdict `json:"verdict"`
 	Reason  string        `json:"reason"`
@@ -143,16 +132,14 @@ type CompatPolicy struct {
 	Reason string `json:"reason"`
 }
 
-// RuntimeNode describes a materialized runtime layer. RiskLevel is node-scoped and
-// may be folded across connected topology components during enrichment. Identities
-// holds the versioned package refs the node itself provides, so layers that bundle
-// multiple runtime packages (e.g. connector with fabricloader) keep that association.
+// RuntimeNode describes a materialized runtime layer. Identities holds the versioned
+// package refs the node itself provides, so layers that bundle multiple runtime
+// packages (e.g. connector with fabricloader) keep that association.
 type RuntimeNode struct {
 	ID           RuntimeNodeID         `json:"id"`
 	Role         RuntimeRole           `json:"role"`
 	Capabilities []RuntimeCapability   `json:"capabilities"`
 	Identities   []VersionedPackageRef `json:"identities,omitempty"`
-	RiskLevel    RuntimeRiskLevel      `json:"risk_level"`
 }
 
 type TopologyNode = RuntimeNode
@@ -171,7 +158,6 @@ const (
 )
 
 // RuntimeEdge records only structural relationships between runtime nodes.
-// Compatibility severity is expressed via CompatVerdict, while risk remains node-only.
 type RuntimeEdge struct {
 	From RuntimeNodeID   `json:"from"`
 	To   RuntimeNodeID   `json:"to"`
