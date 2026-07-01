@@ -36,27 +36,14 @@ var infoCmd = &cobra.Command{
 			toComplete,
 		)
 	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return validateSourceFlag(cmd)
-	},
+
 	RunE: runWithErrorLogging(actionInfo),
 }
 
 func init() {
-	addSourceFlag(infoCmd)
 	addJsonFlag(infoCmd)
 	addLongFlag(infoCmd)
 	addNoStyleFlag(infoCmd)
-	_ = infoCmd.RegisterFlagCompletionFunc(
-		flagSourceName,
-		func(cmd *cobra.Command, args []string, toComplete string) (
-			[]string,
-			cobra.ShellCompDirective,
-		) {
-			candidates := FilterByPrefix(StaticSourceCandidates(), toComplete)
-			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
-		},
-	)
 	rootCmd.AddCommand(infoCmd)
 }
 
@@ -66,17 +53,13 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sourceStr, _ := cmd.Flags().GetString(flagSourceName)
-	source := types.ParseSource(sourceStr)
-	if sourceStr == "" {
-		source = ref.Scope
-	}
+	source := ref.Scope
 
 	providers, err := routing.ResolveInfoProviders(ref.Eco, source)
 	if err != nil {
-		errArg := sourceStr
-		if source == types.SourceAuto {
-			errArg = ref.Eco.String()
+		errArg := ref.Eco.String()
+		if source != types.SourceAuto {
+			errArg = source.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
 	}

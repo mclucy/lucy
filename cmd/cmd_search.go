@@ -52,7 +52,7 @@ var searchCmd = &cobra.Command{
 		if platform != "" && !types.Ecosystem(platform).IsSearchEcosystem() {
 			return errors.New("--platform must be one of \"fabric\", \"forge\", \"neoforge\", \"bukkit\"")
 		}
-		return validateSourceFlag(cmd)
+		return nil
 	},
 	RunE: runWithErrorLogging(actionSearch),
 }
@@ -79,17 +79,6 @@ func init() {
 	addJsonCompactFlag(searchCmd)
 	addLongFlag(searchCmd)
 	addNoStyleFlag(searchCmd)
-	addSourceFlag(searchCmd)
-	_ = searchCmd.RegisterFlagCompletionFunc(
-		flagSourceName,
-		func(cmd *cobra.Command, args []string, toComplete string) (
-			[]string,
-			cobra.ShellCompDirective,
-		) {
-			candidates := FilterByPrefix(StaticSourceCandidates(), toComplete)
-			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
-		},
-	)
 	_ = searchCmd.RegisterFlagCompletionFunc(
 		flagIndexName,
 		func(cmd *cobra.Command, args []string, toComplete string) (
@@ -124,12 +113,8 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	index, _ := cmd.Flags().GetString(flagIndexName)
 	client, _ := cmd.Flags().GetBool(flagClientName)
 	long, _ := cmd.Flags().GetBool(flagLongName)
-	sourceArg, _ := cmd.Flags().GetString(flagSourceName)
 	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
-	specifiedSource := types.ParseSource(sourceArg)
-	if sourceArg == "" {
-		specifiedSource = ref.Scope
-	}
+	specifiedSource := ref.Scope
 
 	resolvedPlatform, err := ResolveEcosystem(
 		ref.PackageRef.Eco,
@@ -149,9 +134,9 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		specifiedSource,
 	)
 	if err != nil {
-		errArg := sourceArg
-		if specifiedSource == types.SourceAuto {
-			errArg = options.FilterEcosystem.String()
+		errArg := options.FilterEcosystem.String()
+		if specifiedSource != types.SourceAuto {
+			errArg = specifiedSource.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
 	}

@@ -228,7 +228,7 @@ func mustParsePackageID(t *testing.T, raw string) types.VersionedPackageRef {
 
 func mustParsePackageRequest(t *testing.T, raw string) types.PackageRequest {
 	t.Helper()
-	req, err := packageRequestFromInput(raw, "")
+	req, err := packageRequestFromInput(raw)
 	if err != nil {
 		t.Fatalf("parse request %q: %v", raw, err)
 	}

@@ -109,15 +109,14 @@ lucy install
 
 ```bash
 lucy search fabric/carpet
-lucy search carpet --source modrinth --index downloads --platform fabric
+lucy search modrinth:carpet --index downloads --platform fabric
 ```
 
-| 参数             | 说明                                                   |
-| ---------------- | ------------------------------------------------------ |
-| `-i`, `--index`  | 排序：`relevance`、`downloads`、`newest`               |
-| `-c`, `--client` | 包含仅客户端模组                                       |
-| `-s`, `--source` | 限定数据源：`modrinth`、`curseforge`、`github`、`mcdr` |
-| `--platform`     | 平台过滤：`fabric`、`forge`、`neoforge`、`bukkit`      |
+| 参数             | 说明                                              |
+| ---------------- | ------------------------------------------------- |
+| `-i`, `--index`  | 排序：`relevance`、`downloads`、`newest`          |
+| `-c`, `--client` | 包含仅客户端模组                                  |
+| `--platform`     | 平台过滤：`fabric`、`forge`、`neoforge`、`bukkit` |
 | `-l`, `--long`   | 完整输出                                               |
 | `--json`         | 原始 JSON                                              |
 
@@ -154,11 +153,10 @@ lucy topology --json
 lucy info fabric/fabric-api@latest --long
 ```
 
-| 参数             | 说明       |
-| ---------------- | ---------- |
-| `-s`, `--source` | 指定数据源 |
-| `-l`, `--long`   | 完整输出   |
-| `--json`         | 原始 JSON  |
+| 参数           | 说明      |
+| -------------- | --------- |
+| `-l`, `--long` | 完整输出  |
+| `--json`       | 原始 JSON |
 
 ### `lucy tree`
 
