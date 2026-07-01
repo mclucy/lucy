@@ -81,19 +81,6 @@ func StaticVersionCandidates() []CompletionCandidate {
 	}
 }
 
-// StaticSourceCandidates returns completion candidates for concrete upstream sources.
-func StaticSourceCandidates() []CompletionCandidate {
-	return []CompletionCandidate{
-		{Value: "curseforge", Description: "CurseForge source"},
-		{Value: types.SourceModrinth.String(), Description: "Modrinth source"},
-		{Value: types.SourceGitHub.String(), Description: "GitHub Releases"},
-		{
-			Value:       types.SourceMCDR.String(),
-			Description: "MCDR Plugin Catalogue",
-		},
-	}
-}
-
 // StaticSortCandidates returns completion candidates for search sort options.
 func StaticSortCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
