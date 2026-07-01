@@ -100,6 +100,7 @@ tasks:
     cmds:
       - mkdir -p release
       - GOOS=linux GOARCH=amd64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-linux-amd64
+      - GOOS=linux GOARCH=arm64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-linux-arm64
       - GOOS=windows GOARCH=amd64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-windows-amd64.exe
       - GOOS=darwin GOARCH=amd64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-darwin-amd64
       - GOOS=darwin GOARCH=arm64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-darwin-arm64
@@ -178,6 +179,7 @@ tasks:
         fi
       - task: build:release
       - gzip -f release/lucy-linux-amd64
+      - gzip -f release/lucy-linux-arm64
       - gzip -f release/lucy-windows-amd64.exe
       - gzip -f release/lucy-darwin-amd64
       - gzip -f release/lucy-darwin-arm64
