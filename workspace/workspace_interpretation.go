@@ -21,6 +21,7 @@ func ensureRuntimeTopology(runtime *ServerInstance) {
 	}
 
 	runtime.topology = &types.ServerTopology{}
+	SyncServerInstanceFromTopology(runtime)
 }
 
 func packagesWithRuntimeIdentities(

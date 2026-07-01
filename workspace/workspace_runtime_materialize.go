@@ -14,12 +14,13 @@ func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerInstan
 		return nil
 	}
 
-	return &ServerInstance{
+	exec := &ServerInstance{
 		PrimaryEntrance: evidence.PrimaryEntrance,
 		GameVersion:     evidence.GameVersion,
-		BootCommand:     nil,
 		topology:        materializeRuntimeTopology(evidence),
 	}
+	SyncServerInstanceFromTopology(exec)
+	return exec
 }
 
 func materializeRuntimeTopology(

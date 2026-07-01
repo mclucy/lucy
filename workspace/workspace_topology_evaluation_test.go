@@ -6,63 +6,46 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// --- EvaluateCompatibility ---
+func serverFromTopology(topo *types.ServerTopology) *ServerInstance {
+	exec := &ServerInstance{topology: topo}
+	SyncServerInstanceFromTopology(exec)
+	return exec
+}
 
-func TestEvaluateCompatibility_NilTopology(t *testing.T) {
-	result := EvaluateCompatibility(nil, types.CapabilityFabricLoader)
+func TestEvaluateCompatibility_NilServer(t *testing.T) {
+	result := EvaluateCompatibility(nil, types.EcoFabric)
 	if result.Verdict != types.CompatUnresolved {
-		t.Errorf(
-			"expected CompatUnresolved for nil topology, got %q",
-			result.Verdict,
-		)
-	}
-	if result.Reason != "topology_unresolved" {
-		t.Errorf("unexpected reason: %q", result.Reason)
+		t.Errorf("expected CompatUnresolved for nil server, got %q", result.Verdict)
 	}
 }
 
-func TestEvaluateCompatibility_UnresolvedTopology(t *testing.T) {
-	topo := &types.ServerTopology{} // empty = unresolved (no PrimaryNode, no Nodes)
-	result := EvaluateCompatibility(topo, types.CapabilityFabricLoader)
+func TestEvaluateCompatibility_UnresolvedServer(t *testing.T) {
+	exec := serverFromTopology(&types.ServerTopology{})
+	result := EvaluateCompatibility(exec, types.EcoFabric)
 	if result.Verdict != types.CompatUnresolved {
-		t.Errorf(
-			"expected CompatUnresolved for empty topology, got %q",
-			result.Verdict,
-		)
+		t.Errorf("expected CompatUnresolved for empty topology, got %q", result.Verdict)
 	}
 }
 
-func TestEvaluateCompatibility_DirectCapabilityMatch(t *testing.T) {
+func TestEvaluateCompatibility_DirectEcosystemMatch(t *testing.T) {
 	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
-	topo := BuildTopologyFromEntry(fabricEntry)
-	result := EvaluateCompatibility(topo, types.CapabilityFabricLoader)
+	exec := serverFromTopology(BuildTopologyFromEntry(fabricEntry))
+	result := EvaluateCompatibility(exec, types.EcoFabric)
 	if result.Verdict != types.CompatCompatible {
-		t.Errorf(
-			"expected CompatCompatible for fabric+fabric_mods, got %q",
-			result.Verdict,
-		)
-	}
-	if result.Reason != "direct_capability_match" {
-		t.Errorf("unexpected reason: %q", result.Reason)
+		t.Errorf("expected CompatCompatible, got %q", result.Verdict)
 	}
 }
 
 func TestEvaluateCompatibility_Incompatible(t *testing.T) {
 	fabricEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeFabric)
-	topo := BuildTopologyFromEntry(fabricEntry)
-	result := EvaluateCompatibility(topo, types.CapabilityForge)
+	exec := serverFromTopology(BuildTopologyFromEntry(fabricEntry))
+	result := EvaluateCompatibility(exec, types.EcoForge)
 	if result.Verdict != types.CompatIncompatible {
-		t.Errorf(
-			"expected CompatIncompatible for fabric+forge_mods, got %q",
-			result.Verdict,
-		)
-	}
-	if result.Reason != "no_capability_match" {
-		t.Errorf("unexpected reason: %q", result.Reason)
+		t.Errorf("expected CompatIncompatible, got %q", result.Verdict)
 	}
 }
 
-func TestEvaluateCompatibility_IndirectHostedCapabilityIsDegraded(t *testing.T) {
+func TestEvaluateCompatibility_HostedEcosystemIsDegraded(t *testing.T) {
 	host := makeNode("neoforge")
 	hosted := makeNode("sinytra", types.CapabilityFabricLoader)
 	edge := makeEdge("neoforge", "sinytra", types.EdgeHosts)
@@ -71,95 +54,30 @@ func TestEvaluateCompatibility_IndirectHostedCapabilityIsDegraded(t *testing.T) 
 		[]types.RuntimeNode{host, hosted},
 		[]types.RuntimeEdge{edge},
 	)
-	result := EvaluateCompatibility(topo, types.CapabilityFabricLoader)
+	exec := serverFromTopology(topo)
+	result := EvaluateCompatibility(exec, types.EcoFabric)
 	if result.Verdict != types.CompatDegraded {
-		t.Fatalf(
-			"expected hosted capability to degrade compatibility, got %q",
-			result.Verdict,
-		)
-	}
-	if result.Reason != "indirect_capability_match" {
-		t.Fatalf(
-			"expected indirect_capability_match reason, got %q",
-			result.Reason,
-		)
+		t.Fatalf("expected hosted fabric to degrade, got %q", result.Verdict)
 	}
 }
 
-func TestEvaluateCompatibility_HybridNode_MultipleCapabilities(t *testing.T) {
-	// Arclight has both ForgeMods and BukkitPlugins
+func TestEvaluateCompatibility_PaperSatisfiesBukkit(t *testing.T) {
+	paperEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodePaper)
+	exec := serverFromTopology(BuildTopologyFromEntry(paperEntry))
+	result := EvaluateCompatibility(exec, types.EcoBukkit)
+	if result.Verdict != types.CompatCompatible {
+		t.Errorf("paper server should satisfy bukkit packages, got %q", result.Verdict)
+	}
+}
+
+func TestEvaluateCompatibility_HybridNode(t *testing.T) {
 	arclightEntry, _ := DefaultRegistry.FindEntry(types.RuntimeNodeArclight)
-	topo := BuildTopologyFromEntry(arclightEntry)
+	exec := serverFromTopology(BuildTopologyFromEntry(arclightEntry))
 
-	forgeResult := EvaluateCompatibility(topo, types.CapabilityForge)
-	if forgeResult.Verdict != types.CompatCompatible {
-		t.Errorf(
-			"arclight should support forge_mods, got %q",
-			forgeResult.Verdict,
-		)
+	if r := EvaluateCompatibility(exec, types.EcoForge); r.Verdict != types.CompatCompatible {
+		t.Errorf("arclight+forge: got %q", r.Verdict)
 	}
-
-	bukkitResult := EvaluateCompatibility(topo, types.CapabilityBukkitAPI)
-	if bukkitResult.Verdict != types.CompatCompatible {
-		t.Errorf(
-			"arclight should support bukkit_plugins, got %q",
-			bukkitResult.Verdict,
-		)
-	}
-}
-
-// --- CapabilityForEcosystem ---
-
-func TestCapabilityForEcosystem_KnownPlatforms(t *testing.T) {
-	cases := []struct {
-		platform types.Ecosystem
-		want     types.RuntimeCapability
-	}{
-		{types.EcoFabric, types.CapabilityFabricLoader},
-		{types.EcoForge, types.CapabilityForge},
-		{types.EcoNeoforge, types.CapabilityNeoforge},
-		{types.EcoBukkit, types.CapabilityBukkitAPI},
-		{types.EcoPaper, types.CapabilityPaperAPI},
-		{types.EcoMcdr, types.CapabilityMcdr},
-	}
-	for _, tc := range cases {
-		got := CapabilityForEcosystem(tc.platform)
-		if got != tc.want {
-			t.Errorf(
-				"CapabilityForEcosystem(%q) = %q, want %q",
-				tc.platform,
-				got,
-				tc.want,
-			)
-		}
-	}
-}
-
-func TestCapabilityForEcosystem_UnknownPlatform(t *testing.T) {
-	cases := []types.Ecosystem{
-		types.EcoMinecraft,
-		types.EcoAny,
-		types.EcoBare,
-		types.EcoUnknown,
-		// Topology-only/proxy platforms have no package capability mapping.
-		types.EcoVelocity,
-		types.EcoBungeecord,
-		types.EcoSponge,
-		"bungee",
-		"waterfall",
-		"spigot",
-		"folia",
-		"leaves",
-		"unknown_platform",
-	}
-	for _, p := range cases {
-		got := CapabilityForEcosystem(p)
-		if got != "" {
-			t.Errorf(
-				"CapabilityForEcosystem(%q) = %q, want empty string",
-				p,
-				got,
-			)
-		}
+	if r := EvaluateCompatibility(exec, types.EcoBukkit); r.Verdict != types.CompatCompatible {
+		t.Errorf("arclight+bukkit: got %q", r.Verdict)
 	}
 }
