@@ -234,7 +234,7 @@ func build() Workspace {
 		mu.Unlock()
 	}()
 
-	// Mod List
+	// Installed Packages
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	probe2 "github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
@@ -138,11 +138,11 @@ func buildExecutableInfo() *ServerRuntime {
 	}
 }
 
-var getExecutableInfo = probe2.Memoize(buildExecutableInfo)
+var getExecutableInfo = fn.Memoize(buildExecutableInfo)
 
 func init() {
 	resetProbeExecCache = func() {
-		getExecutableInfo = probe2.Memoize(buildExecutableInfo)
+		getExecutableInfo = fn.Memoize(buildExecutableInfo)
 	}
 }
 
@@ -230,7 +230,7 @@ func findFileWithExt(dir string, ext ...string) (files []string, err error) {
 		if entry.IsDir() {
 			continue
 		}
-		if probe2.Exists(ext, filepath.Ext(entry.Name())) {
+		if fn.Exists(ext, filepath.Ext(entry.Name())) {
 			files = append(files, filepath.Join(dir, entry.Name()))
 		}
 	}
