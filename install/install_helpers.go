@@ -28,13 +28,12 @@ func ensureServerEcosystemMatch(
 			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
 		}
 
-		requiredCapability := workspace.CapabilityForEcosystem(platform)
-		if requiredCapability == "" {
+		switch platform {
+		case types.EcoVelocity, types.EcoBungeecord, types.EcoSponge:
 			return nil
 		}
 
-		topology := ws.Topology
-		result := workspace.EvaluateCompatibility(topology, requiredCapability)
+		result := workspace.EvaluateCompatibility(ws.Server, platform)
 		switch result.Verdict {
 		case types.CompatCompatible:
 			return nil

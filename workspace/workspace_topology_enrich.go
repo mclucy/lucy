@@ -65,6 +65,7 @@ func EnrichTopologyFromPackages(
 		// No topology yet — attempt to build one from package evidence.
 		if len(evidence) == 0 {
 			exec.topology = &types.ServerTopology{}
+			SyncServerInstanceFromTopology(exec)
 			return
 		}
 
@@ -104,6 +105,7 @@ func EnrichTopologyFromPackages(
 		addConnectorHostEdges(exec.topology)
 		NormalizeTopology(exec.topology)
 		attachRuntimePackageIdentities(exec.topology, packages)
+		SyncServerInstanceFromTopology(exec)
 		return
 	}
 
@@ -132,6 +134,7 @@ func EnrichTopologyFromPackages(
 	addConnectorHostEdges(exec.topology)
 	NormalizeTopology(exec.topology)
 	attachRuntimePackageIdentities(exec.topology, packages)
+	SyncServerInstanceFromTopology(exec)
 }
 
 func attachRuntimePackageIdentities(

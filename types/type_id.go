@@ -119,6 +119,10 @@ func (p Ecosystem) Satisfy(p2 Ecosystem) bool {
 	if p == EcoAny {
 		return false
 	}
+	if p2 == EcoBukkit && p == EcoPaper {
+		return true
+	}
+
 	// Trivial cases
 	return p == p2
 }
