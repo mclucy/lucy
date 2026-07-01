@@ -4,83 +4,61 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func ecosystemsForCapability(c types.RuntimeCapability) []types.Ecosystem {
-	switch c {
-	case types.CapabilityFabricLoader:
-		return []types.Ecosystem{types.EcoFabric}
-	case types.CapabilityForge:
-		return []types.Ecosystem{types.EcoForge}
-	case types.CapabilityNeoforge:
-		return []types.Ecosystem{types.EcoNeoforge}
-	case types.CapabilityBukkitAPI, types.CapabilitySpigotAPI:
-		return []types.Ecosystem{types.EcoBukkit}
-	case types.CapabilityPaperAPI,
-		types.CapabilityPurpurAPI,
-		types.CapabilityFoliaAPI:
-		return []types.Ecosystem{types.EcoPaper}
-	case types.CapabilityMcdr:
-		return []types.Ecosystem{types.EcoMcdr}
-	default:
-		return nil
+func hostedRuntimeNodeIDs(topology *types.ServerTopology) map[types.RuntimeNodeID]struct{} {
+	out := map[types.RuntimeNodeID]struct{}{}
+	if topology == nil {
+		return out
 	}
-}
-
-func projectEcosystemsFromTopology(
-	topology *types.ServerTopology,
-) (native, hosted []types.Ecosystem, identities []types.VersionedPackageRef) {
-	if topology == nil || !topology.Resolved() {
-		return nil, nil, nil
-	}
-
-	hostedNodeIDs := make(map[types.RuntimeNodeID]struct{})
 	for _, edge := range topology.Edges {
 		if edge.Verb != types.EdgeHosts {
 			continue
 		}
-		hostedNodeIDs[edge.To] = struct{}{}
-	}
-
-	nativeSet := map[types.Ecosystem]struct{}{}
-	hostedSet := map[types.Ecosystem]struct{}{}
-
-	for _, node := range topology.Nodes {
-		_, onHostedPath := hostedNodeIDs[node.ID]
-		for _, cap := range node.Capabilities {
-			for _, eco := range ecosystemsForCapability(cap) {
-				if onHostedPath {
-					hostedSet[eco] = struct{}{}
-				} else {
-					nativeSet[eco] = struct{}{}
-				}
-			}
-		}
-	}
-
-	native = ecosystemsFromSet(nativeSet)
-	hosted = ecosystemsFromSet(hostedSet)
-	identities = topology.AllIdentities()
-	return native, hosted, identities
-}
-
-func ecosystemsFromSet(set map[types.Ecosystem]struct{}) []types.Ecosystem {
-	if len(set) == 0 {
-		return nil
-	}
-	out := make([]types.Ecosystem, 0, len(set))
-	for eco := range set {
-		out = append(out, eco)
+		out[edge.To] = struct{}{}
 	}
 	return out
 }
 
+func coreRefFromRuntimeNodeID(id types.RuntimeNodeID) (types.VersionedPackageRef, bool) {
+	if id == types.RuntimeNodeUnknown || id == "" {
+		return types.VersionedPackageRef{}, false
+	}
+	candidates := []types.PackageRef{
+		{Eco: types.EcoUnspecified, Name: types.BarePackageName(id)},
+		{Eco: types.DeclaredModdingEcosystemForNode(id), Name: types.BarePackageName(id)},
+	}
+	for _, ref := range candidates {
+		if _, ok := types.LookupCore(ref); ok {
+			return types.VersionedPackageRef{
+				PackageRef: ref,
+				Version:    types.VersionUnknown,
+			}, true
+		}
+	}
+	return types.VersionedPackageRef{}, false
+}
+
+func coreRefsFromTopology(topology *types.ServerTopology) []types.VersionedPackageRef {
+	if topology == nil || !topology.Resolved() {
+		return nil
+	}
+	hosted := hostedRuntimeNodeIDs(topology)
+	var out []types.VersionedPackageRef
+	for _, node := range topology.Nodes {
+		if _, onHosted := hosted[node.ID]; onHosted {
+			continue
+		}
+		if ref, ok := coreRefFromRuntimeNodeID(node.ID); ok {
+			out = append(out, ref)
+		}
+	}
+	return mergeCoreRefs(nil, append(out, topology.AllIdentities()...))
+}
+
 func SyncServerInstanceFromTopology(exec *ServerInstance) {
-	if exec == nil {
+	if exec == nil || exec.topology == nil {
 		return
 	}
-	native, hosted, identities := projectEcosystemsFromTopology(exec.topology)
-	exec.primaryEcosystems = native
-	exec.secondaryEcosystems = hosted
-	exec.Cores = mergeCoreRefs(exec.Cores, identities)
+	exec.Cores = mergeCoreRefs(exec.Cores, coreRefsFromTopology(exec.topology))
 }
 
 func mergeCoreRefs(

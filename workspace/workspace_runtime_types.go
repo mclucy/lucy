@@ -9,52 +9,24 @@ type ServerInstance struct {
 	Cores           []types.VersionedPackageRef `json:"cores,omitempty"`
 	Packages        []types.DiscoveredPackage   `json:"packages,omitempty"`
 	topology        *types.ServerTopology       `json:"-"`
-
-	primaryEcosystems   []types.Ecosystem
-	secondaryEcosystems []types.Ecosystem
 }
 
 func (s *ServerInstance) PrimaryEcosystem() []types.Ecosystem {
 	if s == nil {
 		return nil
 	}
-	if len(s.primaryEcosystems) > 0 {
-		return append([]types.Ecosystem(nil), s.primaryEcosystems...)
-	}
-	if len(s.Cores) == 0 {
-		return nil
-	}
-	seen := map[types.Ecosystem]struct{}{}
-	var out []types.Ecosystem
-	add := func(ecos []types.Ecosystem) {
-		for _, eco := range ecos {
-			if eco == types.EcoUnspecified {
-				continue
-			}
-			if _, ok := seen[eco]; ok {
-				continue
-			}
-			seen[eco] = struct{}{}
-			out = append(out, eco)
-		}
-	}
-	for _, ref := range s.Cores {
-		if core, ok := types.LookupCore(ref.PackageRef); ok {
-			add(core.SupportedEcosystems())
-			continue
-		}
-		if ref.Eco != types.EcoUnspecified {
-			add([]types.Ecosystem{ref.Eco})
-		}
-	}
-	return out
+	return append([]types.Ecosystem(nil), ecosystemsFromCoreRefs(s.Cores)...)
 }
 
 func (s *ServerInstance) SecondaryEcosystem() []types.Ecosystem {
 	if s == nil {
 		return nil
 	}
-	return append([]types.Ecosystem(nil), s.secondaryEcosystems...)
+	primary := s.PrimaryEcosystem()
+	return append(
+		[]types.Ecosystem(nil),
+		secondaryEcosystemsFromPackages(primary, s.Packages)...,
+	)
 }
 
 func (s *ServerInstance) GameVersion() types.BareVersion {
