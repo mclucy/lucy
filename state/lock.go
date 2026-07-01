@@ -173,7 +173,7 @@ func validateLockedPackage(pkg LockedPackage) error {
 		return fmt.Errorf("id must use platform/name format")
 	}
 	platform := types.Ecosystem(parts[0])
-	if !platform.Valid() || platform == types.EcoAny || platform == types.EcoMinecraft || platform == types.EcoUnknown {
+	if !platform.Valid() || platform == types.EcoUnspecified || platform == types.EcoMinecraft {
 		return fmt.Errorf("invalid package platform %q", parts[0])
 	}
 	if pkg.Version == "" {

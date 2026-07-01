@@ -162,7 +162,7 @@ func parseOperatorSlash(s string) (
 	split := strings.SplitN(s, "/", 2)
 
 	if len(split) == 1 {
-		e = types.EcoAny
+		e = types.EcoUnspecified
 		n = types.BarePackageName(split[0])
 		if candidate := types.Ecosystem(strings.ToLower(split[0])); candidate.Valid() {
 			e = candidate

@@ -37,7 +37,7 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	if baseline.Server == nil {
 		t.Fatal("expected baseline runtime info")
 	}
-	if baseline.DerivedModLoader() != types.EcoBare {
+	if baseline.DerivedModLoader() != types.EcoUnspecified {
 		t.Fatalf(
 			"expected empty dir baseline to look vanilla/none, got %s",
 			baseline.DerivedModLoader(),
@@ -75,7 +75,7 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	if cachedAgain.Server == nil {
 		t.Fatal("expected cached runtime info")
 	}
-	if cachedAgain.DerivedModLoader() != types.EcoBare {
+	if cachedAgain.DerivedModLoader() != types.EcoUnspecified {
 		t.Fatalf(
 			"expected global cache to remain on cache dir, got %s",
 			cachedAgain.DerivedModLoader(),
@@ -112,7 +112,7 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	if before.Server == nil {
 		t.Fatal("expected pre-refresh runtime info")
 	}
-	if before.DerivedModLoader() != types.EcoBare {
+	if before.DerivedModLoader() != types.EcoUnspecified {
 		t.Fatalf(
 			"expected empty dir baseline to look vanilla/none, got %s",
 			before.DerivedModLoader(),

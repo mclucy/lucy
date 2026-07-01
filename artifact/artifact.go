@@ -128,7 +128,7 @@ func jarEcosystemsConflict(infos []Info) bool {
 	var hasProxy, hasServer, hasMod bool
 	for _, info := range infos {
 		p := info.Ref.Eco
-		if p == types.EcoAny {
+		if p == types.EcoUnspecified {
 			continue
 		}
 		if _, ok := proxyPlatforms[p]; ok {

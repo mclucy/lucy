@@ -38,7 +38,7 @@ func (s provider) Search(q upstream.Query) (
 		facets = append(facets, facetNeoforgeOnly)
 	case types.EcoBukkit:
 		facets = append(facets, facetBukkitOnly)
-	case types.EcoAny:
+	case types.EcoUnspecified:
 		fallthrough
 	default:
 		facets = append(facets, facetAllLoaders)
@@ -154,7 +154,7 @@ func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
 	if p.Eco.IsSelector() {
 		// Platform inference removed to avoid circular imports.
 		// Caller should provide explicit platform.
-		p.Eco = types.EcoBare
+		p.Eco = types.EcoUnspecified
 	}
 	parsed.Eco = p.Eco
 

@@ -176,7 +176,7 @@ func reconcileDiff(
 		// Treat a platform-wildcard candidate as reachable if a verified node
 		// with the same name exists — they represent the same artifact.
 		p := candidateNode.Package.Id.Eco
-		if p == types.EcoBare || p == types.EcoAny || p.IsSelector() {
+		if p == types.EcoUnspecified || p.IsSelector() {
 			if _, ok := verifiedByName[candidateNode.Package.Id.Name]; ok {
 				continue
 			}

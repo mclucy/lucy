@@ -253,7 +253,7 @@ func TestModLoaderType(t *testing.T) {
 		{types.EcoForge, 1},
 		{types.EcoFabric, 4},
 		{types.EcoNeoforge, 6},
-		{types.EcoAny, 0},
+		{types.EcoUnspecified, 0},
 		{types.EcoMcdr, 0},
 	}
 
@@ -294,7 +294,7 @@ func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
 
 func TestSearchUrl_NoLoaderForPlatformAny(t *testing.T) {
 	options := upstream.SearchOptions{
-		FilterEcosystem: types.EcoAny,
+		FilterEcosystem: types.EcoUnspecified,
 	}
 
 	u := searchUrl("test", options)

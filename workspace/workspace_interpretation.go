@@ -35,7 +35,7 @@ func packagesWithRuntimeIdentities(
 	idx := NewPackageIndex()
 	idx.Merge(packages)
 	for _, rid := range runtime.topology.AllIdentities() {
-		if rid.Eco == types.EcoAny {
+		if rid.Eco == types.EcoUnspecified {
 			continue
 		}
 		idx.Add(types.DiscoveredPackage{Id: rid})

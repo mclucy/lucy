@@ -86,7 +86,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	err error,
 ) {
 	if id.Eco.IsSelector() {
-		id.Eco = types.EcoBare
+		id.Eco = types.EcoUnspecified
 	}
 
 	if !id.Version.CanInfer() {

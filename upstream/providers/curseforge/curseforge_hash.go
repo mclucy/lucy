@@ -161,7 +161,7 @@ func platformFromCurseForgeFile(
 			return platformFromCurseForgeModLoader(*idx.ModLoader)
 		}
 	}
-	return types.EcoBare
+	return types.EcoUnspecified
 }
 
 func platformFromCurseForgeModLoader(loader int32) types.Ecosystem {
@@ -173,6 +173,6 @@ func platformFromCurseForgeModLoader(loader int32) types.Ecosystem {
 	case 6:
 		return types.EcoNeoforge
 	default:
-		return types.EcoBare
+		return types.EcoUnspecified
 	}
 }

@@ -174,7 +174,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	if id.Eco.IsSelector() {
 		// Platform inference removed to avoid circular imports.
 		// Caller should provide explicit platform.
-		id.Eco = types.EcoBare
+		id.Eco = types.EcoUnspecified
 	}
 	parsed.Eco = id.Eco
 

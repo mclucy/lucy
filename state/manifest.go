@@ -280,7 +280,7 @@ func validateManifestEcosystem(value string) error {
 	}
 
 	switch platform {
-	case types.EcoFabric, types.EcoNeoforge, types.EcoForge, types.EcoMcdr, types.EcoBare:
+	case types.EcoFabric, types.EcoNeoforge, types.EcoForge, types.EcoMcdr, types.EcoUnspecified:
 		return nil
 	default:
 		return fmt.Errorf("invalid environment.platform %q", value)
@@ -299,7 +299,7 @@ func validateManifestPackage(pkg ManifestPackage) error {
 		return fmt.Errorf("id must use platform/name format")
 	}
 	platform := types.Ecosystem(parts[0])
-	if !platform.Valid() || platform == types.EcoAny || platform == types.EcoMinecraft || platform == types.EcoUnknown {
+	if !platform.Valid() || platform == types.EcoUnspecified || platform == types.EcoMinecraft {
 		return fmt.Errorf("invalid package ecosystem %q", parts[0])
 	}
 
@@ -763,7 +763,7 @@ func resolveManifestPackageIDWithScope(
 			return ""
 		}
 	}
-	if id.Eco != types.EcoAny && id.Eco != types.EcoUnknown {
+	if id.Eco != types.EcoUnspecified {
 		if id.Scope != types.SourceAuto && id.Scope != types.SourceUnknown {
 			if pkg, ok := manifestPackageByID(
 				manifest.Packages,

@@ -16,7 +16,7 @@ func ensureServerEcosystemMatch(
 	platform := id.Eco
 
 	switch platform {
-	case types.EcoAny:
+	case types.EcoUnspecified:
 		return nil
 	case types.EcoMcdr:
 		if ws.Environments.Mcdr == nil {

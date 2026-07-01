@@ -320,7 +320,7 @@ func statusRuntimeEcosystemLabel(
 	label := ""
 	if hasPrimaryNode {
 		if primaryNode.Role != types.RuntimeRoleHybrid {
-			if platform := types.DeclaredModdingEcosystemForNode(primaryNode.ID); platform != types.EcoBare && platform != types.EcoMinecraft {
+			if platform := types.DeclaredModdingEcosystemForNode(primaryNode.ID); platform != types.EcoUnspecified && platform != types.EcoMinecraft {
 				label = platform.Title()
 			}
 		}
@@ -332,7 +332,7 @@ func statusRuntimeEcosystemLabel(
 		}
 	}
 
-	if label == "" && topology != nil && topology.Resolved() && fallback != types.EcoMinecraft && fallback != types.EcoAny {
+	if label == "" && topology != nil && topology.Resolved() && fallback != types.EcoMinecraft && fallback != types.EcoUnspecified {
 		label = fallback.Title()
 	}
 

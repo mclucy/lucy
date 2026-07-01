@@ -25,24 +25,12 @@ type Ecosystem string
 const (
 	// special selectors
 
-	// EcoAny is ambiguous but has single-valueness. It does NOT refer
+	// EcoUnspecified is ambiguous but has single-valueness. It does NOT refer
 	// to multiple platforms, but rather a single platform that is unknown.
-	// Understand this as EcoAny reduces to a definite platform at
+	// Understand this as EcoUnspecified reduces to a definite platform at
 	// evaluation. Again, keep in mind that you should not allow it to be
 	// explicitly evaluated as multiple platforms.
-	EcoAny Ecosystem = ""
-
-	// EcoBare is a special platform that is not satisfied by any platform,
-	// but it can satisfy all platforms. It is typically used to indicate the
-	// absence of a platform, for example, when a package is not compatible with
-	// any platform, or when a package does not require a platform.
-	EcoBare Ecosystem = "bare"
-
-	// EcoUnknown is the only constant with no single-valueness, it can
-	// refer to multiple platforms other than the ones defined here.
-	EcoUnknown Ecosystem = "unknown"
-
-	// vanilla
+	EcoUnspecified Ecosystem = ""
 
 	EcoMinecraft Ecosystem = "minecraft"
 	EcoVanilla             = EcoMinecraft // alias
@@ -63,36 +51,36 @@ const (
 	EcoMcdr       Ecosystem = "mcdr"
 )
 
-func (p Ecosystem) Title() string {
-	if p == EcoAny {
+func (e Ecosystem) Title() string {
+	if e == EcoUnspecified {
 		return "Any"
 	}
-	if p.Valid() {
-		return strings.ToUpper(string(p)[0:1]) + string(p)[1:]
+	if e.Valid() {
+		return strings.ToUpper(string(e)[0:1]) + string(e)[1:]
 	}
 	return "Unknown"
 }
 
-func (p Ecosystem) String() string {
-	if p == EcoAny {
+func (e Ecosystem) String() string {
+	if e == EcoUnspecified {
 		return "any"
 	}
-	return string(p)
+	return string(e)
 }
 
 // Valid
 //
 // If a platform can be used in a package id, it is a valid platform.
-func (p Ecosystem) Valid() bool {
-	switch p {
-	case EcoMinecraft, EcoFabric, EcoForge, EcoNeoforge, EcoMcdr, EcoBukkit, EcoAny, EcoBare:
+func (e Ecosystem) Valid() bool {
+	switch e {
+	case EcoMinecraft, EcoFabric, EcoForge, EcoNeoforge, EcoMcdr, EcoBukkit, EcoUnspecified:
 		return true
 	}
 	return false
 }
 
-func (p Ecosystem) IsSearchEcosystem() bool {
-	switch p {
+func (e Ecosystem) IsSearchEcosystem() bool {
+	switch e {
 	case EcoFabric, EcoForge, EcoNeoforge, EcoBukkit:
 		return true
 	default:
@@ -101,48 +89,25 @@ func (p Ecosystem) IsSearchEcosystem() bool {
 }
 
 // Satisfy returns true if p satisfies the requirement of p2.
-func (p Ecosystem) Satisfy(p2 Ecosystem) bool {
+func (e Ecosystem) Satisfy(e2 Ecosystem) bool {
 	// When p2 is PlatformNone, it is satisfied by all platforms.
-	if p2 == EcoBare {
-		return true
-	}
-	// PlatformUnknown is not satisfied by any platform, and does not satisfy
-	// any platform including itself.
-	if p == EcoUnknown || p2 == EcoUnknown {
-		return false
-	}
-	// When p2 is PlatformAny, it is satisfied by all platforms.
-	if p2 == EcoAny {
+	if e2 == EcoUnspecified {
 		return true
 	}
 	// When p is PlatformAny, it does not satisfy any platform except itself.
-	if p == EcoAny {
+	if e == EcoUnspecified {
 		return false
 	}
-	if p2 == EcoBukkit && p == EcoPaper {
+	if e2 == EcoBukkit && e == EcoPaper {
 		return true
 	}
 
 	// Trivial cases
-	return p == p2
+	return e == e2
 }
 
-// Is is just an alias for `==`, they are fully interchangeable. There's no
-// restriction on which one to use.
-//
-// This function does not represent a mathematical equivalence relation, since
-// EcoUnknown should always be unequal to any platform including itself.
-// However, rather than using .IsUnknown() function, it is more intuitive to
-// just use an equality operator.
-//
-// This is created to differentiate the meaning of "satisfy" and "is".
-// For example, "fabric" satisfies "minecraft", but does not "is" "minecraft".
-func (p Ecosystem) Is(p2 Ecosystem) bool {
-	return p == p2
-}
-
-func (p Ecosystem) IsModding() bool {
-	return p == EcoFabric || p == EcoForge || p == EcoNeoforge
+func (e Ecosystem) IsModding() bool {
+	return e == EcoFabric || e == EcoForge || e == EcoNeoforge
 }
 
 func DeclaredModdingEcosystemForNode(id RuntimeNodeID) Ecosystem {
@@ -158,14 +123,14 @@ func DeclaredModdingEcosystemForNode(id RuntimeNodeID) Ecosystem {
 	case "minecraft":
 		return EcoMinecraft
 	default:
-		return EcoBare
+		return EcoUnspecified
 	}
 }
 
 // IsSelector returns true if the platform is ambiguous and can be resolved
 // from server context.
-func (p Ecosystem) IsSelector() bool {
-	return p == EcoAny
+func (e Ecosystem) IsSelector() bool {
+	return e == EcoUnspecified
 }
 
 // Title Replaces underlines or hyphens with spaces, then capitalize the first
@@ -184,7 +149,7 @@ func (n BarePackageName) Pep8String() string {
 
 func (p VersionedPackageRef) String() string {
 	return fn.Ternary(
-		p.Eco == EcoAny,
+		p.Eco == EcoUnspecified,
 		"", string(p.Eco)+"/",
 	) +
 		string(p.Name) +

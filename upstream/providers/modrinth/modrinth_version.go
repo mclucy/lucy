@@ -104,7 +104,7 @@ func latestVersion(slug types.BarePackageName) (
 	if err != nil {
 		return nil, err
 	}
-	v, fellBack := selectLatestVersionCandidate(versions, types.EcoBare)
+	v, fellBack := selectLatestVersionCandidate(versions, types.EcoUnspecified)
 	if v == nil {
 		return nil, ErrNoVersion
 	}
@@ -127,7 +127,7 @@ func latestCompatibleVersion(
 	if err != nil {
 		return nil, err
 	}
-	filterByLoader := platform != types.EcoAny && platform != types.EcoBare
+	filterByLoader := platform != types.EcoUnspecified
 	if filterByLoader {
 		v, _ = selectLatestCompatibleVersionCandidate(versions, platform)
 	} else {

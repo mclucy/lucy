@@ -111,7 +111,7 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 }
 
 func (v *hangarVersion) ToPackageRemote() types.ResolvedPackage {
-	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.EcoBare))
+	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.EcoUnspecified))
 	if remote.FileUrl == "" {
 		platforms := sortedMapKeys(v.Downloads)
 		if len(platforms) == 0 {
@@ -147,7 +147,7 @@ func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Ecosystem) (
 }
 
 func (v *hangarVersion) PluginDependencyNames() []types.BarePackageName {
-	depsForPlatform := v.DependenciesForPlatform(types.EcoBare)
+	depsForPlatform := v.DependenciesForPlatform(types.EcoUnspecified)
 	if len(depsForPlatform) == 0 {
 		return nil
 	}
@@ -187,7 +187,7 @@ func (v *hangarVersion) HasDownloadForPlatform(platform types.Ecosystem) bool {
 	if ok {
 		return true
 	}
-	return len(v.Downloads) > 0 && platform == types.EcoBare
+	return len(v.Downloads) > 0 && platform == types.EcoUnspecified
 }
 
 func (v *hangarVersion) SupportsPlatform(platform types.Ecosystem) bool {
@@ -200,7 +200,7 @@ func (v *hangarVersion) SupportsPlatform(platform types.Ecosystem) bool {
 		return true
 	}
 
-	return platform == types.EcoBare && len(v.PlatformDependencies) > 0
+	return platform == types.EcoUnspecified && len(v.PlatformDependencies) > 0
 }
 
 func (v *hangarVersion) downloadForPlatform(platform types.Ecosystem) (

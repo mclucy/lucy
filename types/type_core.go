@@ -71,15 +71,17 @@ const (
 	CoreForge    Core = "forge"
 	CoreNeoforge Core = "neoforge"
 
-	CoreMcdr        Core = "mcdr"
-	CoreCraftBukkit Core = "craftbukkit"
-	CoreSpigot      Core = "spigot"
-	CorePaper       Core = "paper"
-	CoreFolia       Core = "folia"
-	CoreLeaves      Core = "leaves"
-	CoreArclight    Core = "arclight"
-	CoreCatserver   Core = "catserver"
-	CoreYouer       Core = "youer"
+	CoreMcdr             Core = "mcdr"
+	CoreCraftBukkit      Core = "craftbukkit"
+	CoreSpigot           Core = "spigot"
+	CorePaper            Core = "paper"
+	CoreFolia            Core = "folia"
+	CoreLeaves           Core = "leaves"
+	CoreArclightForge    Core = "arclight-forge"
+	CoreArclightNeoforge Core = "arclight-neoforge"
+	CoreArclightFabric   Core = "arclight-fabric"
+	CoreCatserver        Core = "catserver"
+	CoreYouer            Core = "youer"
 
 	CoreSpongeVanilla Core = "spongevanilla"
 	CoreSpongeForge   Core = "spongeforge"
@@ -108,17 +110,20 @@ var Cores = map[PackageRef]Core{
 
 	{Eco: EcoMcdr, Name: "mcdreforged"}: CoreMcdr,
 
-	{Eco: EcoUnspecified, Name: "bukkit"}:      CoreCraftBukkit,
-	{Eco: EcoUnspecified, Name: "craftbukkit"}: CoreCraftBukkit,
-	{Eco: EcoUnspecified, Name: "spigot"}:      CoreSpigot,
-	{Eco: EcoPaper, Name: "paper"}:             CorePaper,
-	{Eco: EcoUnspecified, Name: "paper"}:       CorePaper,
-	{Eco: EcoUnspecified, Name: "folia"}:       CoreFolia,
-	{Eco: EcoUnspecified, Name: "leaves"}:      CoreLeaves,
-	{Eco: EcoUnspecified, Name: "arclight"}:    CoreArclight,
-	{Eco: EcoUnspecified, Name: "catserver"}:   CoreCatserver,
-	{Eco: EcoUnspecified, Name: "youer"}:       CoreYouer,
-	{Eco: EcoVelocity, Name: "velocity"}:       CoreVelocity,
+	{Eco: EcoUnspecified, Name: "bukkit"}:            CoreCraftBukkit,
+	{Eco: EcoUnspecified, Name: "craftbukkit"}:       CoreCraftBukkit,
+	{Eco: EcoUnspecified, Name: "spigot"}:            CoreSpigot,
+	{Eco: EcoPaper, Name: "paper"}:                   CorePaper,
+	{Eco: EcoUnspecified, Name: "paper"}:             CorePaper,
+	{Eco: EcoUnspecified, Name: "folia"}:             CoreFolia,
+	{Eco: EcoUnspecified, Name: "leaves"}:            CoreLeaves,
+	{Eco: EcoUnspecified, Name: "arclight"}:          CoreArclightNeoforge,
+	{Eco: EcoUnspecified, Name: "arclight-forge"}:    CoreArclightForge,
+	{Eco: EcoUnspecified, Name: "arclight-neoforge"}: CoreArclightNeoforge,
+	{Eco: EcoUnspecified, Name: "arclight-fabric"}:   CoreArclightFabric,
+	{Eco: EcoUnspecified, Name: "catserver"}:         CoreCatserver,
+	{Eco: EcoUnspecified, Name: "youer"}:             CoreYouer,
+	{Eco: EcoVelocity, Name: "velocity"}:             CoreVelocity,
 
 	{Eco: EcoSponge, Name: "spongevanilla"}:      CoreSpongeVanilla,
 	{Eco: EcoUnspecified, Name: "spongevanilla"}: CoreSpongeVanilla,
