@@ -45,7 +45,7 @@ func actionTopology(cmd *cobra.Command, args []string) error {
 	mermaidSource := buildMermaidTopology(topology, "LR", longOut)
 
 	output := map[string]any{
-		"game_version": info.Server.GameVersion.String(),
+		"game_version": info.Server.GameVersion().String(),
 		"primary_node": topology.PrimaryNode,
 		"nodes":        topology.Nodes,
 		"edges":        topology.Edges,

@@ -34,7 +34,7 @@ func EvaluateCompatibility(
 		}
 	}
 
-	for _, offered := range server.PrimaryEcosystems {
+	for _, offered := range server.PrimaryEcosystem() {
 		if offered.Satisfy(required) {
 			return types.CompatResult{
 				Verdict: types.CompatCompatible,
@@ -48,7 +48,7 @@ func EvaluateCompatibility(
 		}
 	}
 
-	for _, offered := range server.SecondaryEcosystems {
+	for _, offered := range server.SecondaryEcosystem() {
 		if offered.Satisfy(required) {
 			return types.CompatResult{
 				Verdict: types.CompatDegraded,

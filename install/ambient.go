@@ -69,7 +69,7 @@ func buildAmbientDependencies(
 			PackageRef: types.PackageRef{
 				Eco: types.EcoFabric, Name: "minecraft",
 			},
-			Version: ws.Server.GameVersion,
+			Version: ws.Server.GameVersion(),
 		},
 	)
 	ambient.Add(

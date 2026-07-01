@@ -50,7 +50,8 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 	if si.Server != nil {
 		loader := si.DerivedModLoader()
 		if loader.Valid() && loader != types.EcoUnspecified {
-			if !si.Server.GameVersion.IsInvalid() && si.Server.GameVersion != types.VersionAny {
+			gv := si.Server.GameVersion()
+			if !gv.IsInvalid() && gv != types.VersionAny {
 				appendConstraint(
 					types.DiscoveredPackage{
 						Id: types.VersionedPackageRef{
@@ -58,13 +59,13 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 								Eco:  loader,
 								Name: "minecraft",
 							},
-							Version: si.Server.GameVersion,
+							Version: gv,
 						},
 					},
 					fmt.Sprintf(
 						"runtime:%s/minecraft@%s",
 						loader,
-						si.Server.GameVersion,
+						gv,
 					),
 				)
 			}
