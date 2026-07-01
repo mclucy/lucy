@@ -106,7 +106,6 @@ var defaultRegistryEntries = []RegistryEntry{
 	{
 		NodeID:       types.RuntimeNodeFolia,
 		Role:         types.RuntimeRolePluginCore,
-		RiskLevel:    types.RiskMedium,
 		Capabilities: types.CapabilityFoliaAPI.Populate(),
 		// Folia inverts compatibility: Paper plugins may fail to load without the
 		// `folia-supported: true` opt-in. Populate() still expands the Bukkit
@@ -122,7 +121,6 @@ var defaultRegistryEntries = []RegistryEntry{
 	{
 		NodeID:       types.RuntimeNodeLeaves,
 		Role:         types.RuntimeRolePluginCore,
-		RiskLevel:    types.RiskNone,
 		Capabilities: types.CapabilityPurpurAPI.Populate(),
 		// Leaves is a Purpur fork (LeavesMC/Leaves) and inherits the full Purpur
 		// API surface plus its own additions. Declared rung is Purpur; Populate()
@@ -218,9 +216,8 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID:    types.RuntimeNodeConnector,
-		Role:      types.RuntimeRoleBridge,
-		RiskLevel: types.RiskHigh,
+		NodeID: types.RuntimeNodeConnector,
+		Role:   types.RuntimeRoleBridge,
 		// RuntimeNode is still homogeneous, so adapted environments are folded into
 		// the adapter's capabilities instead of being expanded as virtual nodes.
 		Capabilities: []types.RuntimeCapability{
@@ -228,8 +225,7 @@ var defaultRegistryEntries = []RegistryEntry{
 		},
 	},
 	{
-		NodeID:    types.RuntimeNodeKilt,
-		Role:      types.RuntimeRoleBridge,
-		RiskLevel: types.RiskHigh,
+		NodeID: types.RuntimeNodeKilt,
+		Role:   types.RuntimeRoleBridge,
 	},
 }

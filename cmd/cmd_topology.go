@@ -128,9 +128,6 @@ func buildNodeLabel(
 	if len(node.Capabilities) > 0 {
 		parts = append(parts, capabilitiesLabel(node.Capabilities))
 	}
-	if node.RiskLevel > types.RiskNone {
-		parts = append(parts, topologyRiskLabel(node.RiskLevel, true))
-	}
 
 	return strings.Join(parts, "\n")
 }

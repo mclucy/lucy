@@ -9,7 +9,6 @@ type RegistryEntry struct {
 	NodeID       types.RuntimeNodeID
 	Role         types.RuntimeRole
 	Capabilities []types.RuntimeCapability
-	RiskLevel    types.RuntimeRiskLevel
 	PolicyEdges  []RegistryEdge
 }
 
@@ -37,7 +36,6 @@ func NewRuntimeRegistry(entries []RegistryEntry) RuntimeRegistry {
 				[]types.RuntimeCapability(nil),
 				entry.Capabilities...,
 			),
-			RiskLevel:   entry.RiskLevel,
 			PolicyEdges: append([]RegistryEdge(nil), entry.PolicyEdges...),
 		}
 
@@ -78,7 +76,6 @@ func BuildTopologyFromEntry(entry RegistryEntry) *types.ServerTopology {
 				[]types.RuntimeCapability(nil),
 				entry.Capabilities...,
 			),
-			RiskLevel: entry.RiskLevel,
 		},
 	}
 
@@ -111,7 +108,6 @@ func BuildTopologyFromEntry(entry RegistryEntry) *types.ServerTopology {
 					[]types.RuntimeCapability(nil),
 					target.Capabilities...,
 				),
-				RiskLevel: target.RiskLevel,
 			},
 		)
 		seenNode[policyEdge.TargetNodeID] = struct{}{}
@@ -128,7 +124,6 @@ func BuildTopologyFromEntry(entry RegistryEntry) *types.ServerTopology {
 		internaltopology.DefaultConnectionRegistry,
 	)
 	NormalizeTopology(topology)
-	FoldTopologyRisk(topology)
 
 	return topology
 }
@@ -141,7 +136,6 @@ func cloneEntry(entry RegistryEntry) RegistryEntry {
 			[]types.RuntimeCapability(nil),
 			entry.Capabilities...,
 		),
-		RiskLevel:   entry.RiskLevel,
 		PolicyEdges: append([]RegistryEdge(nil), entry.PolicyEdges...),
 	}
 }
