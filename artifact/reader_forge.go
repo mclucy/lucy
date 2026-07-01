@@ -2,10 +2,10 @@ package artifact
 
 import (
 	"archive/zip"
-	"io"
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fileschema"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 
@@ -48,7 +48,7 @@ func readForgeModsToml(
 	}
 	defer reader.Close()
 
-	data, err := io.ReadAll(reader)
+	data, err := fsutil.CopyBytes(reader, fsutil.MaxZipEntryBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -154,11 +154,12 @@ func forgeJarVersion(zipRdr *zip.Reader) types.BareVersion {
 			return types.VersionUnknown
 		}
 
-		data, err := io.ReadAll(reader)
-		if closeErr := reader.Close(); err == nil && closeErr != nil {
-			err = closeErr
-		}
+		data, err := fsutil.CopyBytes(reader, fsutil.MaxZipEntryBytes)
+		closeErr := reader.Close()
 		if err != nil {
+			return types.VersionUnknown
+		}
+		if closeErr != nil {
 			return types.VersionUnknown
 		}
 

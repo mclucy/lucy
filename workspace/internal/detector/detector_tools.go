@@ -2,10 +2,10 @@ package detector
 
 import (
 	"archive/zip"
-	"io"
 	"os"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -15,7 +15,7 @@ func analyzeForgeArgFile(file *os.File) (
 	forgeVersion types.BareVersion,
 	mcVersion types.BareVersion,
 ) {
-	data, _ := io.ReadAll(file)
+	data, _ := fsutil.CopyBytes(file, fsutil.MaxZipEntryBytes)
 	s := string(data)
 	lines := strings.Split(s, "\n")
 	for _, line := range lines {
@@ -52,7 +52,7 @@ func readArchiveEntry(zipReader *zip.Reader, name string) ([]byte, bool, error) 
 		}
 		defer r.Close()
 
-		data, err := io.ReadAll(r)
+		data, err := fsutil.CopyBytes(r, fsutil.MaxZipEntryBytes)
 		if err != nil {
 			return nil, false, err
 		}

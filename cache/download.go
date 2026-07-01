@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -178,10 +179,11 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (
 	}
 
 	w := io.MultiWriter(writers...)
-	bytes, err := io.ReadAll(io.TeeReader(limitedReader, w))
-	if err != nil {
+	var bodyBuf bytes.Buffer
+	if _, err := io.Copy(&bodyBuf, io.TeeReader(limitedReader, w)); err != nil {
 		return nil, fmt.Errorf("read failed: %w", err)
 	}
+	bytes := bodyBuf.Bytes()
 
 	if int64(len(bytes)) >= maxBytes {
 		return nil, fmt.Errorf(
@@ -218,15 +220,9 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (
 }
 
 func readLimitedBytes(reader io.Reader, maxBytes int64) ([]byte, error) {
-	bytes, err := io.ReadAll(io.LimitReader(reader, maxBytes))
+	bytes, err := fsutil.CopyBytes(reader, maxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read failed: %w", err)
-	}
-	if int64(len(bytes)) >= maxBytes {
-		return nil, fmt.Errorf(
-			"response too large: exceeded %d bytes",
-			maxBytes,
-		)
 	}
 	return bytes, nil
 }

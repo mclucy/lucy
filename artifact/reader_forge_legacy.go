@@ -3,7 +3,6 @@ package artifact
 import (
 	"archive/zip"
 	"encoding/json"
-	"io"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
@@ -21,7 +20,6 @@ func (r *forgeLegacyReader) Read(
 	filePath string,
 	resolver SlugResolver,
 ) ([]Info, error) {
-	var raw []byte
 	for _, f := range zipRdr.File {
 		if f.Name != "mcmod.info" {
 			continue
@@ -30,62 +28,58 @@ func (r *forgeLegacyReader) Read(
 		if err != nil {
 			return nil, err
 		}
-		raw, err = io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
-			return nil, err
+		var mods fileschema.FileForgeModIdentifierOld
+		decodeErr := json.NewDecoder(rc).Decode(&mods)
+		closeErr := rc.Close()
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
-		break
-	}
-
-	if raw == nil {
-		return nil, nil
-	}
-
-	var mods fileschema.FileForgeModIdentifierOld
-	if err := json.Unmarshal(raw, &mods); err != nil {
-		return nil, err
-	}
-
-	infos := make([]Info, 0, len(mods))
-	for _, m := range mods {
-		if m.ModId == "forge" || m.ModId == "minecraft" || m.ModId == "mcp" {
-			continue
+		if closeErr != nil {
+			return nil, closeErr
 		}
 
-		info := Info{
-			Ref: types.PackageRef{
-				Eco:  types.EcoForge,
-				Name: input.ToProjectName(m.ModId),
-			},
-			Version:  types.BareVersion(m.Version),
-			FilePath: filePath,
-		}
+		infos := make([]Info, 0, len(mods))
+		for _, m := range mods {
+			if m.ModId == "forge" || m.ModId == "minecraft" || m.ModId == "mcp" {
+				continue
+			}
 
-		if len(m.Dependencies) > 0 {
-			deps := make([]Dependency, 0, len(m.Dependencies))
-			for _, rawDep := range m.Dependencies {
-				depStr, ok := rawDep.(string)
-				if !ok || depStr == "" {
-					continue
-				}
-				deps = append(
-					deps, Dependency{
-						Ref: types.PackageRef{
-							Eco:  types.EcoForge,
-							Name: input.ToProjectName(depStr),
+			info := Info{
+				Ref: types.PackageRef{
+					Eco:  types.EcoForge,
+					Name: input.ToProjectName(m.ModId),
+				},
+				Version:  types.BareVersion(m.Version),
+				FilePath: filePath,
+			}
+
+			if len(m.Dependencies) > 0 {
+				deps := make([]Dependency, 0, len(m.Dependencies))
+				for _, rawDep := range m.Dependencies {
+					depStr, ok := rawDep.(string)
+					if !ok || depStr == "" {
+						continue
+					}
+					deps = append(
+						deps, Dependency{
+							Ref: types.PackageRef{
+								Eco:  types.EcoForge,
+								Name: input.ToProjectName(depStr),
+							},
+							Mandatory: true,
 						},
-						Mandatory: true,
-					},
-				)
+					)
+				}
+				if len(deps) > 0 {
+					info.Dependencies = deps
+				}
 			}
-			if len(deps) > 0 {
-				info.Dependencies = deps
-			}
+
+			infos = append(infos, info)
 		}
 
-		infos = append(infos, info)
+		return infos, nil
 	}
 
-	return infos, nil
+	return nil, nil
 }

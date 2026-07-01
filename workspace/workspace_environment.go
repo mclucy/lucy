@@ -41,14 +41,8 @@ func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
 		}
 	}(configFile)
 
-	configData, err := io.ReadAll(configFile)
-	if err != nil {
-		log.Warn(err)
-		return
-	}
-
 	config := &fileschema.FileMcdrConfig{}
-	if err := yaml.Unmarshal(configData, config); err != nil {
+	if err := yaml.NewDecoder(configFile).Decode(config); err != nil {
 		log.Warn(err)
 		return
 	}

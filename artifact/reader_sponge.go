@@ -3,7 +3,6 @@ package artifact
 import (
 	"archive/zip"
 	"encoding/json"
-	"io"
 	"strings"
 
 	"github.com/mclucy/lucy/input"
@@ -36,16 +35,12 @@ func (r *spongeReader) Read(
 		if err != nil {
 			return nil, err
 		}
-		fn.CloseReader(rc, log.Warn)
-
-		data, err := io.ReadAll(rc)
-		if err != nil {
-			return nil, err
-		}
 
 		var metadata fileschema.FileSpongePluginsIdentifier
-		if err := json.Unmarshal(data, &metadata); err != nil {
-			return nil, err
+		decodeErr := json.NewDecoder(rc).Decode(&metadata)
+		fn.CloseReader(rc, log.Warn)
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
 
 		if !validSpongeMetadata(&metadata) {

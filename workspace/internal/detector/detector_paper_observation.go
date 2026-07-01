@@ -4,12 +4,12 @@ import (
 	"archive/zip"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -216,7 +216,7 @@ func (s paperObservationZipSource) Walk(fn func(paperObservationEntry) error) er
 						return nil, err
 					}
 					defer r.Close()
-					return io.ReadAll(r)
+					return fsutil.CopyBytes(r, fsutil.MaxZipEntryBytes)
 				},
 			},
 		); err != nil {

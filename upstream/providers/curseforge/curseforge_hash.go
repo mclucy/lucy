@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -119,7 +119,8 @@ func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
 		)
 	}
 
-	raw, err := io.ReadAll(resp.Body)
+	const maxFingerprintResponseBytes = 4 * 1024 * 1024
+	raw, err := fsutil.CopyBytes(resp.Body, maxFingerprintResponseBytes)
 	if err != nil {
 		return zero, err
 	}

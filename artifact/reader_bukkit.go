@@ -2,8 +2,6 @@ package artifact
 
 import (
 	"archive/zip"
-	"bytes"
-	"io"
 	"strings"
 
 	"github.com/mclucy/lucy/input"
@@ -51,14 +49,12 @@ func (r *bukkitReader) Read(
 			return nil, err
 		}
 
-		raw, err := io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
+		descriptor := &bukkitPluginDescriptor{}
+		if err := yaml.NewDecoder(rc).Decode(descriptor); err != nil {
+			_ = rc.Close()
 			return nil, err
 		}
-
-		descriptor := &bukkitPluginDescriptor{}
-		if err := yaml.NewDecoder(bytes.NewReader(raw)).Decode(descriptor); err != nil {
+		if err := rc.Close(); err != nil {
 			return nil, err
 		}
 

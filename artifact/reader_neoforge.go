@@ -4,11 +4,11 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
-	"io"
 	"strings"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 
@@ -169,28 +169,6 @@ func hasLoaderDependency(
 	return false
 }
 
-func readZipEntry(zipRdr *zip.Reader, name string) ([]byte, error) {
-	for _, f := range zipRdr.File {
-		if f.Name != name {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-		raw, err := io.ReadAll(rc)
-		closeErr := rc.Close()
-		if err != nil {
-			return nil, err
-		}
-		if closeErr != nil {
-			return nil, closeErr
-		}
-		return raw, nil
-	}
-	return nil, nil
-}
-
 func readNeoforgeManifestVersion(zipRdr *zip.Reader) types.BareVersion {
 	raw, err := readZipEntry(zipRdr, "META-INF/MANIFEST.MF")
 	if err != nil || raw == nil {
@@ -245,7 +223,7 @@ func neoforgeJarjarEmbeddedModIds(
 		if err != nil {
 			continue
 		}
-		jarBytes, err := io.ReadAll(rc)
+		jarBytes, err := fsutil.CopyBytes(rc, fsutil.MaxZipEntryBytes)
 		_ = rc.Close()
 		if err != nil {
 			continue
