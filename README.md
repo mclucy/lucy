@@ -6,7 +6,7 @@
 ### Lucy
 
 <h3>
-  <sup>The modern Minecraft server package manager</sup>
+  <sup>The Minecraft server package manager.</sup>
 </h3>
 
 [![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml) [![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html) [![Go Report Card](https://goreportcard.com/badge/github.com/mclucy/lucy)](https://goreportcard.com/report/github.com/mclucy/lucy) [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mclucy/lucy)
@@ -21,7 +21,7 @@
 
 ## Overview
 
-Mange mods, plugins, and server components with one command.
+Turn your server into stable, manageable, and reproducible workspaces. Manage mods and plugings with just one command. Make mass deployment of Minecraft servers faster and easier than ever before.
 
 ```bash
 cd your-server
@@ -29,10 +29,6 @@ lucy init                  # Set up Lucy in this workspace (server)
 lucy add fabric            # Install fabric
 lucy add lithium@latest    # Install mods
 ```
-
-- Declare packages in the manifest. Lucy resolves exact versions and checksums. `lucy install` fetches and places them.
-- `lucy init` discovers your runtime, platform, and installed packages, then asks what to manage. Everything else stays untouched.
-- Lucy builds a graph of your runtime — Fabric, Forge, MCDR, Paper, Velocity — mapping roles, capabilities, and risk levels. This graph powers `lucy status`, init discovery, and compatibility resolution.
 
 ## Getting Started
 
@@ -105,8 +101,8 @@ lucy search modrinth:carpet --index downloads --platform fabric
 | `-i`, `--index`  | Sort: `relevance`, `downloads`, `newest`        |
 | `-c`, `--client` | Include client-only mods                        |
 | `--platform`     | Filter: `fabric`, `forge`, `neoforge`, `bukkit` |
-| `-l`, `--long`   | Show full output                                            |
-| `--json`         | Print raw JSON                                              |
+| `-l`, `--long`   | Show full output                                |
+| `--json`         | Print raw JSON                                  |
 
 ### `lucy status`
 
