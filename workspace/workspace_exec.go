@@ -194,7 +194,7 @@ func executableLabel(executable *ServerInstance) string {
 }
 
 func executableAnnotation(executable *ServerInstance) string {
-	gameVersion := executable.GameVersion.String()
+	gameVersion := executable.GameVersion().String()
 	derivedPlatform := derivedModLoader(executable.topology)
 	if derivedPlatform == types.EcoMinecraft {
 		return fmt.Sprintf("(Minecraft %s, Vanilla)", gameVersion)

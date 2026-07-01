@@ -113,7 +113,7 @@ func generateStatusOutput(
 		output.Fields,
 		&tui.FieldAnnotatedShortText{
 			Title:      "Game",
-			Text:       data.Server.GameVersion.String(),
+			Text:       data.Server.GameVersion().String(),
 			Annotation: data.Server.PrimaryEntrance,
 		},
 	)

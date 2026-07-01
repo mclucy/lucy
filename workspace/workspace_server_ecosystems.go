@@ -25,7 +25,7 @@ func ecosystemsForCapability(c types.RuntimeCapability) []types.Ecosystem {
 	}
 }
 
-func ProjectEcosystemsFromTopology(
+func projectEcosystemsFromTopology(
 	topology *types.ServerTopology,
 ) (native, hosted []types.Ecosystem, identities []types.VersionedPackageRef) {
 	if topology == nil || !topology.Resolved() {
@@ -77,8 +77,49 @@ func SyncServerInstanceFromTopology(exec *ServerInstance) {
 	if exec == nil {
 		return
 	}
-	native, hosted, identities := ProjectEcosystemsFromTopology(exec.topology)
-	exec.PrimaryEcosystems = native
-	exec.SecondaryEcosystems = hosted
-	exec.Identities = identities
+	native, hosted, identities := projectEcosystemsFromTopology(exec.topology)
+	exec.primaryEcosystems = native
+	exec.secondaryEcosystems = hosted
+	exec.Cores = mergeCoreRefs(exec.Cores, identities)
+}
+
+func mergeCoreRefs(
+	existing, fromTopology []types.VersionedPackageRef,
+) []types.VersionedPackageRef {
+	seen := map[string]struct{}{}
+	var out []types.VersionedPackageRef
+	add := func(ref types.VersionedPackageRef) {
+		key := ref.StringFull()
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, ref)
+	}
+	for _, ref := range existing {
+		add(ref)
+	}
+	for _, ref := range fromTopology {
+		add(ref)
+	}
+	return out
+}
+
+func upsertMinecraftCore(
+	cores []types.VersionedPackageRef,
+	gameVersion types.BareVersion,
+) []types.VersionedPackageRef {
+	if gameVersion == types.VersionUnknown ||
+		gameVersion == types.VersionNone ||
+		gameVersion == "" {
+		return cores
+	}
+	mc := types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoMinecraft,
+			Name: "minecraft",
+		},
+		Version: gameVersion,
+	}
+	return mergeCoreRefs(cores, []types.VersionedPackageRef{mc})
 }

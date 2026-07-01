@@ -16,10 +16,10 @@ func materializeRuntimeInfo(evidence *detector.ExecutableEvidence) *ServerInstan
 
 	exec := &ServerInstance{
 		PrimaryEntrance: evidence.PrimaryEntrance,
-		GameVersion:     evidence.GameVersion,
 		topology:        materializeRuntimeTopology(evidence),
 	}
 	SyncServerInstanceFromTopology(exec)
+	exec.Cores = upsertMinecraftCore(exec.Cores, evidence.GameVersion)
 	return exec
 }
 

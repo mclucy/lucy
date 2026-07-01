@@ -93,7 +93,7 @@ func minecraftVersionForInstall() (types.BareVersion, error) {
 	ws := workspace.New()
 	switch ws.DerivedModLoader() {
 	case types.EcoVanilla:
-		return ws.Server.GameVersion, nil
+		return ws.Server.GameVersion(), nil
 	case types.EcoUnspecified:
 		selectedVersion := promptSelectMinecraftVersion()
 		if selectedVersion == "none" || selectedVersion == "error" {
@@ -101,7 +101,7 @@ func minecraftVersionForInstall() (types.BareVersion, error) {
 		}
 		return types.BareVersion(selectedVersion), nil
 	default:
-		return ws.Server.GameVersion, nil
+		return ws.Server.GameVersion(), nil
 	}
 }
 

@@ -146,3 +146,51 @@ var Cores = map[PackageRef]Core{
 	{Eco: EcoUnspecified, Name: "bungeecord"}: CoreVelocity,
 	{Eco: EcoUnspecified, Name: "waterfall"}:  CoreWaterfall,
 }
+
+func LookupCore(ref PackageRef) (Core, bool) {
+	if core, ok := Cores[ref]; ok {
+		return core, true
+	}
+	unspecified := PackageRef{Eco: EcoUnspecified, Name: ref.Name}
+	if core, ok := Cores[unspecified]; ok {
+		return core, true
+	}
+	return "", false
+}
+
+func (c Core) SupportedEcosystems() []Ecosystem {
+	switch c {
+	case CoreFabric:
+		return []Ecosystem{EcoFabric}
+	case CoreForge:
+		return []Ecosystem{EcoForge}
+	case CoreNeoforge:
+		return []Ecosystem{EcoNeoforge}
+	case CoreMcdr:
+		return []Ecosystem{EcoMcdr}
+	case CoreCraftBukkit, CoreSpigot:
+		return []Ecosystem{EcoBukkit}
+	case CorePaper, CoreFolia, CoreLeaves:
+		return []Ecosystem{EcoPaper, EcoBukkit}
+	case CoreCatserver, CoreArclightForge:
+		return []Ecosystem{EcoForge, EcoBukkit}
+	case CoreArclightNeoforge:
+		return []Ecosystem{EcoNeoforge, EcoBukkit}
+	case CoreArclightFabric:
+		return []Ecosystem{EcoFabric, EcoBukkit}
+	case CoreYouer:
+		return []Ecosystem{EcoNeoforge, EcoPaper, EcoBukkit}
+	case CoreSpongeVanilla:
+		return []Ecosystem{EcoSponge}
+	case CoreSpongeForge:
+		return []Ecosystem{EcoSponge, EcoForge}
+	case CoreSpongeNeo:
+		return []Ecosystem{EcoSponge, EcoNeoforge}
+	case CoreBungeecord, CoreWaterfall:
+		return []Ecosystem{EcoBungeecord}
+	case CoreVelocity:
+		return []Ecosystem{EcoVelocity}
+	default:
+		return nil
+	}
+}

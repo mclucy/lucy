@@ -97,7 +97,7 @@ func init() {
 
 func promptOverrideVanilla() (override bool, deleteVanilla bool) {
 	path := workspace.New().Server.PrimaryEntrance
-	version := workspace.New().Server.GameVersion
+	version := workspace.New().Server.GameVersion().String()
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().

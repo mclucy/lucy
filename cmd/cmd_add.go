@@ -302,7 +302,7 @@ func manifestGameVersion(
 		return manifest.Environment.GameVersion
 	}
 	if runtime != nil {
-		if version := runtime.GameVersion.String(); version != "" {
+		if version := runtime.GameVersion().String(); version != "" {
 			return version
 		}
 	}
