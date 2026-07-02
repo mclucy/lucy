@@ -164,6 +164,9 @@ type RuntimeEdge struct {
 	Verb RuntimeEdgeVerb `json:"verb"`
 }
 
+// ServerTopology
+//
+// deprecated: working on simplifying server model
 type ServerTopology struct {
 	PrimaryNode RuntimeNodeID `json:"primary_node"`
 	Nodes       []RuntimeNode `json:"nodes"`
