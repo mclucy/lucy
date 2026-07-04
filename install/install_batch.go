@@ -123,14 +123,14 @@ func Plan(
 		return nil, installError(CategoryResolution, err, nil)
 	}
 
-	if ws.Server == nil || ws.Topology == nil || !ws.Topology.Resolved() {
+	if ws.Server == nil || !ws.Server.Analyzable() {
 		return nil, installError(
 			CategoryResolution,
-			fmt.Errorf("runtime topology is unavailable"),
+			fmt.Errorf("server runtime is unavailable"),
 			nil,
 		)
 	}
-	providers := options.Providers(*ws.Topology)
+	providers := options.Providers(ws.Server)
 	if providers == nil {
 		providers = []upstream.PackageSource{}
 	}
@@ -150,7 +150,7 @@ func Plan(
 	roots := append([]types.VersionedPackageRef(nil), regularIds...)
 	serverLoader := ws.DerivedModLoader()
 	rootProviders, err := rootScopedProviders(
-		ws.Topology,
+		ws.Server,
 		requests,
 		roots,
 		serverLoader,
@@ -316,7 +316,7 @@ func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef 
 }
 
 func rootScopedProviders(
-	topology *types.ServerTopology,
+	server *workspace.ServerInstance,
 	requests []types.PackageRequest,
 	roots []types.VersionedPackageRef,
 	serverLoader types.Ecosystem,
@@ -350,8 +350,8 @@ func rootScopedProviders(
 				rootProviders[rootKey] = providers
 				break
 			}
-			scoped, err := routing.ResolveProvidersFromTopology(
-				topology,
+			scoped, err := routing.ResolveProvidersForRuntime(
+				server.RuntimeEcosystems(),
 				req.Scope,
 			)
 			if err != nil {

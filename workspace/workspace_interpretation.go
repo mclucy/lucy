@@ -12,6 +12,10 @@ func finalizeProbedRuntime(
 ) []types.DiscoveredPackage {
 	EnrichTopologyFromPackages(runtime, packages)
 	ensureRuntimeTopology(runtime)
+	if runtime != nil {
+		runtime.Cores = enrichCoresFromPackages(runtime.Cores, packages)
+		runtime.RefreshPrimaryCore()
+	}
 	out := packagesWithRuntimeIdentities(packages, runtime)
 	if runtime != nil {
 		runtime.Packages = out
@@ -25,7 +29,6 @@ func ensureRuntimeTopology(runtime *ServerInstance) {
 	}
 
 	runtime.topology = &types.ServerTopology{}
-	SyncServerInstanceFromTopology(runtime)
 }
 
 func packagesWithRuntimeIdentities(
@@ -38,7 +41,7 @@ func packagesWithRuntimeIdentities(
 
 	idx := NewPackageIndex()
 	idx.Merge(packages)
-	for _, rid := range runtime.topology.AllIdentities() {
+	for _, rid := range runtime.Cores {
 		if rid.Eco == types.EcoUnspecified {
 			continue
 		}
@@ -56,25 +59,24 @@ func packageSearchPaths(
 		return nil
 	}
 
-	return packageSearchPathsForTopology(runtime.topology, workingDirectory)
+	return packageSearchPathsForServer(runtime, workingDirectory)
 }
 
-func packageSearchPathsForTopology(
-	topology *types.ServerTopology,
+func packageSearchPathsForServer(
+	server *ServerInstance,
 	workingDirectory string,
 ) (paths []string) {
-	if topology == nil || !topology.Resolved() {
+	if server == nil || !server.Analyzable() {
 		return nil
 	}
 
-	if topology.HasCapability(types.CapabilityFabricLoader) ||
-		topology.HasCapability(types.CapabilityForge) ||
-		topology.HasCapability(types.CapabilityNeoforge) {
-		paths = append(paths, filepath.Join(workingDirectory, "mods"))
+	for _, eco := range server.PrimaryEcosystem() {
+		switch eco {
+		case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
+			paths = append(paths, filepath.Join(workingDirectory, "mods"))
+		case types.EcoBukkit, types.EcoPaper:
+			paths = append(paths, filepath.Join(workingDirectory, "plugins"))
+		}
 	}
-	if topology.HasCapability(types.CapabilityBukkitAPI) {
-		paths = append(paths, filepath.Join(workingDirectory, "plugins"))
-	}
-
 	return paths
 }

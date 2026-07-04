@@ -290,8 +290,8 @@ func resolveExplicitSearcher(src types.SourceId) (
 	return []upstream.SearchSource{provider}, nil
 }
 
-func ResolveProvidersFromTopology(
-	topology *types.ServerTopology,
+func ResolveProvidersForRuntime(
+	ecosystems []types.Ecosystem,
 	src types.SourceId,
 ) ([]upstream.PackageSource, error) {
 	if src == types.SourceUnknown {
@@ -302,11 +302,11 @@ func ResolveProvidersFromTopology(
 		return resolveExplicitSource(src)
 	}
 
-	if topology == nil || !topology.Resolved() {
-		return nil, fmt.Errorf("routing: topology unresolved, cannot resolve providers")
+	if len(ecosystems) == 0 {
+		return nil, fmt.Errorf("routing: runtime ecosystems unavailable, cannot resolve providers")
 	}
 
-	selection := providerSourcesFromTopology(topology)
+	selection := providerSourcesFromEcosystems(ecosystems)
 	if len(selection.sources) > 0 {
 		return providersFromSources(selection.sources)
 	}
@@ -314,6 +314,14 @@ func ResolveProvidersFromTopology(
 		return ListAutoProviders(), nil
 	}
 	return []upstream.PackageSource{}, nil
+}
+
+func ResolveProvidersFromTopology(
+	topology *types.ServerTopology,
+	src types.SourceId,
+) ([]upstream.PackageSource, error) {
+	_ = topology
+	return ResolveProvidersForRuntime(nil, src)
 }
 
 func resolveExplicitSource(src types.SourceId) (

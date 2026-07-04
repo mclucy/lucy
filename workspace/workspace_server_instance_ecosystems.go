@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
@@ -30,8 +31,9 @@ func appendUniqueEcosystems(
 func ecosystemsFromCoreRefs(refs []types.VersionedPackageRef) []types.Ecosystem {
 	var out []types.Ecosystem
 	for _, ref := range refs {
-		if core, ok := types.LookupCore(ref.PackageRef); ok {
-			out = appendUniqueEcosystems(out, core.SupportedEcosystems()...)
+		count := len(out)
+		out = appendCoreEcosystems(out, ref)
+		if len(out) > count {
 			continue
 		}
 		if ref.Eco != types.EcoUnspecified {
@@ -39,6 +41,30 @@ func ecosystemsFromCoreRefs(refs []types.VersionedPackageRef) []types.Ecosystem 
 		}
 	}
 	return out
+}
+
+func appendCoreEcosystems(
+	dst []types.Ecosystem,
+	ref types.VersionedPackageRef,
+) []types.Ecosystem {
+	core, ok := types.LookupCore(ref.PackageRef)
+	if !ok {
+		return dst
+	}
+	return appendUniqueEcosystems(dst, core.SupportedEcosystems()...)
+}
+
+func primaryCoreSupports(ref types.VersionedPackageRef, eco types.Ecosystem) bool {
+	return slices.Contains(appendCoreEcosystems(nil, ref), eco)
+}
+
+func modLoaderEcosystem(eco types.Ecosystem) bool {
+	switch eco {
+	case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
+		return true
+	default:
+		return false
+	}
 }
 
 func isConnectorBridgePackage(name string) bool {

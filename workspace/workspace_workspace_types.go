@@ -5,7 +5,7 @@ import (
 )
 
 type Workspace struct {
-	Root         string                    `json:"root"` // if found lucy on upperworkspace
+	Root         string                    `json:"root"` // if found lucy on upper workspace
 	SavePath     string                    `json:"save_path"`
 	ModPath      []string                  `json:"mod_path"`
 	Packages     []types.DiscoveredPackage `json:"packages"`
@@ -28,23 +28,29 @@ func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
 		return nil
 	}
 
-	return primaryRuntimeIdentity(w.Topology)
+	return w.Server.PrimaryCore
 }
 
 func (w Workspace) DerivedLoaderVersion() string {
 	if w.Server == nil {
-		return derivedLoaderVersion(nil)
+		return "unknown"
 	}
 
-	return derivedLoaderVersion(w.Topology)
+	return w.Server.DerivedLoaderVersion()
 }
 
 func (w Workspace) DerivedModLoader() types.Ecosystem {
-	return derivedModLoader(w.Topology)
+	if w.Server == nil {
+		return types.EcoUnspecified
+	}
+	return w.Server.DerivedModLoader()
 }
 
 func (w Workspace) DerivedServerCore() string {
-	return derivedServerCore(w.Topology)
+	if w.Server == nil {
+		return ""
+	}
+	return w.Server.DerivedServerCore()
 }
 
 func runtimeIdentityPackage(
@@ -64,57 +70,6 @@ func runtimeIdentityPackage(
 	}
 
 	return nil
-}
-
-func primaryRuntimeIdentity(topology *types.ServerTopology) *types.VersionedPackageRef {
-	if topology == nil {
-		return nil
-	}
-
-	identities := topology.NodeIdentities(topology.PrimaryNode)
-	for i := range identities {
-		pkg := &identities[i]
-		if string(pkg.Name) == string(topology.PrimaryNode) {
-			return pkg
-		}
-	}
-
-	return nil
-}
-
-func derivedLoaderVersion(topology *types.ServerTopology) string {
-	primaryIdentity := primaryRuntimeIdentity(topology)
-	if primaryIdentity == nil {
-		return "unknown"
-	}
-
-	return primaryIdentity.Version.String()
-}
-
-func derivedModLoader(topology *types.ServerTopology) types.Ecosystem {
-	if topology == nil {
-		return types.EcoUnspecified
-	}
-
-	primary, ok := topology.PrimaryNodeData()
-	if !ok {
-		return types.EcoUnspecified
-	}
-
-	return types.DeclaredModdingEcosystemForNode(primary.ID)
-}
-
-func derivedServerCore(topology *types.ServerTopology) string {
-	if topology == nil {
-		return ""
-	}
-
-	primary, ok := topology.PrimaryNodeData()
-	if !ok {
-		return ""
-	}
-
-	return string(primary.ID)
 }
 
 type ServerActivity struct {

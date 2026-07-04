@@ -7,8 +7,11 @@ import (
 )
 
 func serverFromTopology(topo *types.ServerTopology) *ServerInstance {
-	exec := &ServerInstance{topology: topo}
-	SyncServerInstanceFromTopology(exec)
+	exec := &ServerInstance{
+		topology: topo,
+		Cores:    coreRefsFromTopology(topo),
+	}
+	exec.RefreshPrimaryCore()
 	return exec
 }
 
@@ -20,10 +23,10 @@ func TestEvaluateCompatibility_NilServer(t *testing.T) {
 }
 
 func TestEvaluateCompatibility_UnresolvedServer(t *testing.T) {
-	exec := serverFromTopology(&types.ServerTopology{})
+	exec := &ServerInstance{}
 	result := EvaluateCompatibility(exec, types.EcoFabric)
 	if result.Verdict != types.CompatUnresolved {
-		t.Errorf("expected CompatUnresolved for empty topology, got %q", result.Verdict)
+		t.Errorf("expected CompatUnresolved for empty server, got %q", result.Verdict)
 	}
 }
 

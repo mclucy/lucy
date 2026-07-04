@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -65,7 +66,8 @@ func EnrichTopologyFromPackages(
 		// No topology yet — attempt to build one from package evidence.
 		if len(evidence) == 0 {
 			exec.topology = &types.ServerTopology{}
-			SyncServerInstanceFromTopology(exec)
+			exec.Cores = enrichCoresFromPackages(exec.Cores, packages)
+			exec.RefreshPrimaryCore()
 			return
 		}
 
@@ -105,7 +107,8 @@ func EnrichTopologyFromPackages(
 		addConnectorHostEdges(exec.topology)
 		NormalizeTopology(exec.topology)
 		attachRuntimePackageIdentities(exec.topology, packages)
-		SyncServerInstanceFromTopology(exec)
+		exec.Cores = enrichCoresFromPackages(exec.Cores, packages)
+		exec.RefreshPrimaryCore()
 		return
 	}
 
@@ -134,7 +137,8 @@ func EnrichTopologyFromPackages(
 	addConnectorHostEdges(exec.topology)
 	NormalizeTopology(exec.topology)
 	attachRuntimePackageIdentities(exec.topology, packages)
-	SyncServerInstanceFromTopology(exec)
+	exec.Cores = enrichCoresFromPackages(exec.Cores, packages)
+	exec.RefreshPrimaryCore()
 }
 
 func attachRuntimePackageIdentities(
@@ -202,12 +206,7 @@ func addConnectorHostEdges(t *types.ServerTopology) {
 }
 
 func topologyHasEdge(t *types.ServerTopology, edge types.RuntimeEdge) bool {
-	for _, existing := range t.Edges {
-		if existing == edge {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t.Edges, edge)
 }
 
 func applyDeclarativeConnections(

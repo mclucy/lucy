@@ -190,12 +190,12 @@ func generateNotes(notes ...string) string {
 }
 
 func executableLabel(executable *ServerInstance) string {
-	return style.Accent(executable.PrimaryEntrance) + " " + style.Muted(executableAnnotation(executable))
+	return style.Accent(executable.DerivedServerCore()) + " " + style.Muted(executableAnnotation(executable))
 }
 
 func executableAnnotation(executable *ServerInstance) string {
 	gameVersion := executable.GameVersion().String()
-	derivedPlatform := derivedModLoader(executable.topology)
+	derivedPlatform := executable.DerivedModLoader()
 	if derivedPlatform == types.EcoMinecraft {
 		return fmt.Sprintf("(Minecraft %s, Vanilla)", gameVersion)
 	}
@@ -203,7 +203,7 @@ func executableAnnotation(executable *ServerInstance) string {
 		"(Minecraft %s, %s %s)",
 		gameVersion,
 		derivedPlatform.Title(),
-		derivedLoaderVersion(executable.topology),
+		executable.DerivedLoaderVersion(),
 	)
 }
 
