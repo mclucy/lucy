@@ -64,22 +64,7 @@ type topologyResolution struct {
 	empty    bool
 }
 
-// isBukkitFamilyCapability reports whether capability is a Bukkit-family
-// plugin capability. Routing policy, not a type-system property.
-func isBukkitFamilyCapability(capability types.RuntimeCapability) bool {
-	switch capability {
-	case types.CapabilityBukkitAPI,
-		types.CapabilitySpigotAPI,
-		types.CapabilityPaperAPI,
-		types.CapabilityPurpurAPI,
-		types.CapabilityFoliaAPI:
-		return true
-	default:
-		return false
-	}
-}
-
-func providerSourcesFromTopology(topology *types.ServerTopology) topologyResolution {
+func providerSourcesFromEcosystems(ecosystems []types.Ecosystem) topologyResolution {
 	selection := topologyResolution{}
 	seen := map[types.SourceId]struct{}{}
 	sawKnownCapability := false
@@ -93,35 +78,29 @@ func providerSourcesFromTopology(topology *types.ServerTopology) topologyResolut
 		selection.sources = append(selection.sources, source)
 	}
 
-	for _, node := range topology.Nodes {
-		for _, capability := range node.Capabilities {
-			switch capability {
-			case types.CapabilityFabricLoader,
-				types.CapabilityForge,
-				types.CapabilityNeoforge:
-				sawKnownCapability = true
-				appendSource(types.SourceModrinth)
-				if curseforgeAvailable() {
-					appendSource(types.SourceCurseForge)
-				}
-			case types.CapabilityBukkitAPI,
-				types.CapabilitySpigotAPI,
-				types.CapabilityPaperAPI,
-				types.CapabilityPurpurAPI,
-				types.CapabilityFoliaAPI:
-				sawKnownCapability = true
-				appendSource(types.SourceModrinth)
-				if isBukkitFamilyCapability(capability) {
-					appendSource(types.SourceHangar)
-					appendSource(types.SourceSpiget)
-				}
-			case types.CapabilityMcdr:
-				sawKnownCapability = true
-				appendSource(types.SourceMCDR)
-			case types.CapabilityReversedProxy:
-				sawKnownCapability = true
-				sawProxyCapability = true
+	for _, ecosystem := range ecosystems {
+		switch ecosystem {
+		case types.EcoFabric,
+			types.EcoForge,
+			types.EcoNeoforge:
+			sawKnownCapability = true
+			appendSource(types.SourceModrinth)
+			if curseforgeAvailable() {
+				appendSource(types.SourceCurseForge)
 			}
+		case types.EcoBukkit,
+			types.EcoPaper:
+			sawKnownCapability = true
+			appendSource(types.SourceModrinth)
+			// Bukkit-family logic
+			appendSource(types.SourceHangar)
+			appendSource(types.SourceSpiget)
+		case types.EcoMcdr:
+			sawKnownCapability = true
+			appendSource(types.SourceMCDR)
+		case types.EcoBungeecord, types.EcoVelocity:
+			sawKnownCapability = true
+			sawProxyCapability = true
 		}
 	}
 

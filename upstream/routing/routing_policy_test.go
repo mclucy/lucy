@@ -33,44 +33,6 @@ func topologyWithCapabilities(capabilities ...types.RuntimeCapability) *types.Se
 	}
 }
 
-func TestIsBukkitFamilyCapability(t *testing.T) {
-	cases := []struct {
-		name       string
-		capability types.RuntimeCapability
-		want       bool
-	}{
-		{"bukkit", types.CapabilityBukkitAPI, true},
-		{"spigot", types.CapabilitySpigotAPI, true},
-		{"paper", types.CapabilityPaperAPI, true},
-		{"purpur", types.CapabilityPurpurAPI, true},
-		{"folia", types.CapabilityFoliaAPI, true},
-		{"fabric mods", types.CapabilityFabricLoader, false},
-		{"forge mods", types.CapabilityForge, false},
-		{"neoforge mods", types.CapabilityNeoforge, false},
-		{"mcdr", types.CapabilityMcdr, false},
-		{"velocity", types.CapabilityVelocity, false},
-		{"bungeecord", types.CapabilityBungeecord, false},
-		{"sponge", types.CapabilitySpongeAPI, false},
-		{"proxying", types.CapabilityReversedProxy, false},
-		{"protocol bridge", types.CapabilityBedrockBridge, false},
-	}
-	for _, tt := range cases {
-		t.Run(
-			tt.name, func(t *testing.T) {
-				got := isBukkitFamilyCapability(tt.capability)
-				if got != tt.want {
-					t.Fatalf(
-						"isBukkitFamilyCapability(%q) = %v, want %v",
-						tt.capability,
-						got,
-						tt.want,
-					)
-				}
-			},
-		)
-	}
-}
-
 func TestProviderSourcesFromTopology_BukkitFamily(t *testing.T) {
 	curseforgePresent := DefaultRegistry().has(types.SourceCurseForge)
 
@@ -88,7 +50,7 @@ func TestProviderSourcesFromTopology_BukkitFamily(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(
 			tt.name, func(t *testing.T) {
-				resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
+				resolution := providerSourcesFromEcosystems(ecosystemForCapability(tt.capability))
 
 				if resolution.fallback {
 					t.Fatalf(
@@ -172,7 +134,7 @@ func TestProviderSourcesFromTopology_ModLoaders(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(
 			tt.name, func(t *testing.T) {
-				resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
+				resolution := providerSourcesFromEcosystems(ecosystemForCapability(tt.capability))
 
 				if resolution.fallback {
 					t.Fatalf(
@@ -233,8 +195,8 @@ func TestProviderSourcesFromTopology_ModLoaders(t *testing.T) {
 }
 
 func TestProviderSourcesFromTopology_MCDR(t *testing.T) {
-	resolution := providerSourcesFromTopology(
-		topologyWithCapability(types.CapabilityMcdr),
+	resolution := providerSourcesFromEcosystems(
+		ecosystemForCapability(types.CapabilityMcdr),
 	)
 
 	if resolution.fallback {
@@ -251,8 +213,8 @@ func TestProviderSourcesFromTopology_MCDR(t *testing.T) {
 }
 
 func TestProviderSourcesFromTopology_ProxyOnly(t *testing.T) {
-	resolution := providerSourcesFromTopology(
-		topologyWithCapability(types.CapabilityReversedProxy),
+	resolution := providerSourcesFromEcosystems(
+		ecosystemForCapability(types.CapabilityVelocity),
 	)
 
 	if !resolution.empty {
@@ -262,7 +224,7 @@ func TestProviderSourcesFromTopology_ProxyOnly(t *testing.T) {
 		)
 	}
 	if resolution.fallback {
-		t.Error("proxy-only topology must not trigger fallback")
+		t.Error("reversed-proxy capability with no mapped ecosystems should not trigger fallback")
 	}
 }
 
@@ -283,7 +245,7 @@ func TestProviderSourcesFromTopology_NonBukkitPluginCapabilities(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(
 			tt.name, func(t *testing.T) {
-				resolution := providerSourcesFromTopology(topologyWithCapability(tt.capability))
+				resolution := providerSourcesFromEcosystems(ecosystemForCapability(tt.capability))
 
 				if len(resolution.sources) != 0 {
 					t.Errorf(
@@ -292,10 +254,14 @@ func TestProviderSourcesFromTopology_NonBukkitPluginCapabilities(t *testing.T) {
 						resolution.sources,
 					)
 				}
-				if !resolution.fallback {
+				wantFallback := tt.capability == types.CapabilitySpongeAPI ||
+					tt.capability == types.CapabilityBedrockBridge
+				if resolution.fallback != wantFallback {
 					t.Errorf(
-						"%s capability must trigger fallback (unknown capability)",
+						"%s capability fallback=%v, want %v",
 						tt.name,
+						resolution.fallback,
+						wantFallback,
 					)
 				}
 			},
@@ -326,7 +292,7 @@ func TestProviderSourcesFromTopology_MultipleBukkitFamilyNodes(t *testing.T) {
 		},
 	}
 
-	resolution := providerSourcesFromTopology(topology)
+	resolution := providerSourcesFromEcosystems(ecosystemsFromTopology(topology))
 
 	if resolution.fallback || resolution.empty {
 		t.Fatalf(
@@ -356,11 +322,8 @@ func TestProviderSourcesFromTopology_MixedBukkitAndModLoader(t *testing.T) {
 	// Modrinth (both), Hangar + Spiget (Paper), and CurseForge (Fabric) when
 	// available. CurseForge should never appear attached to the Bukkit-family
 	// portion.
-	resolution := providerSourcesFromTopology(
-		topologyWithCapabilities(
-			types.CapabilityFabricLoader,
-			types.CapabilityPaperAPI,
-		),
+	resolution := providerSourcesFromEcosystems(
+		ecosystemForCapability(types.CapabilityFabricLoader, types.CapabilityPaperAPI),
 	)
 
 	curseforgePresent := DefaultRegistry().has(types.SourceCurseForge)

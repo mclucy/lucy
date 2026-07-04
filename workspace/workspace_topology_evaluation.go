@@ -18,14 +18,6 @@ func EvaluateCompatibility(
 		}
 	}
 
-	if server.topology != nil && !server.topology.Resolved() {
-		return types.CompatResult{
-			Verdict: types.CompatUnresolved,
-			Reason:  "server_unresolved",
-			Detail:  "Server runtime has not been probed or could not be determined.",
-		}
-	}
-
 	if required == types.EcoUnspecified {
 		return types.CompatResult{
 			Verdict: types.CompatCompatible,

@@ -49,7 +49,7 @@ func buildAmbientDependencies(
 		)
 	}
 
-	if ws.Server == nil || ws.Topology == nil || !ws.Topology.HasCapability(types.CapabilityFabricLoader) {
+	if ws.Server == nil || !ws.Server.SupportsFabricLoader() {
 		return ambient, nil
 	}
 
