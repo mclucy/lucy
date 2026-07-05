@@ -9,6 +9,7 @@ import (
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/resolve"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
@@ -38,6 +39,13 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
 		return err
+	}
+	if target.Registered {
+		return cli.DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{Name: server.TaskInstall},
+		)
 	}
 	return cli.RunInTargetWorkDir(target, func() error {
 		return actionInstallAt(cmd, target)
@@ -221,4 +229,9 @@ func managedManifest(manifest *state.Manifest) *state.Manifest {
 		cloned.Packages = append(cloned.Packages, pkg)
 	}
 	return &cloned
+}
+
+// RunTask executes the install action for a daemon-dispatched package task.
+func RunTask(cmd *cobra.Command, target cli.CommandTarget) error {
+	return actionInstallAt(cmd, target)
 }

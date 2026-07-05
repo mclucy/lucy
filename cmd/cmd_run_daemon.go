@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os/signal"
 	"syscall"
 
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/add"
+	"github.com/mclucy/lucy/internal/cli/install"
 	"github.com/mclucy/lucy/server"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +45,69 @@ var runServerCmd = &cobra.Command{
 	}),
 }
 
+var runTaskCmd = &cobra.Command{
+	Use:    "run-task <server> <task> [args...]",
+	Short:  "Run a Lucy server package task",
+	Hidden: true,
+	Args:   cobra.MinimumNArgs(2),
+	RunE:   cli.WithErrorLogging(actionRunTask),
+}
+
+const (
+	flagForceName        = "force"
+	flagWithOptionalName = "with-optional"
+	flagNoOptionalName   = "no-optional"
+)
+
 func init() {
-	rootCmd.AddCommand(runDaemonCmd, runServerCmd)
+	runTaskCmd.Flags().BoolP(
+		flagForceName,
+		"f",
+		false,
+		"Ignore version, dependency, and platform warnings",
+	)
+	runTaskCmd.Flags().Bool(
+		flagWithOptionalName,
+		false,
+		"Also install optional upstream dependencies",
+	)
+	runTaskCmd.Flags().Bool(
+		flagNoOptionalName,
+		false,
+		"Skip optional upstream dependencies",
+	)
+	rootCmd.AddCommand(runDaemonCmd, runServerCmd, runTaskCmd)
+}
+
+func actionRunTask(cmd *cobra.Command, args []string) error {
+	inst, err := server.ReadInstance(args[0])
+	if err != nil {
+		return err
+	}
+	if inst == nil {
+		return fmt.Errorf("server %q is not registered", args[0])
+	}
+	target := cli.CommandTarget{
+		WorkDir:    inst.Root,
+		Instance:   inst,
+		Registered: true,
+	}
+	task := args[1]
+	taskArgs := args[2:]
+
+	return cli.RunInTargetWorkDirUnlocked(target, func() error {
+		switch task {
+		case server.TaskAdd:
+			return add.RunTask(cmd, taskArgs, target)
+		case server.TaskInstall:
+			if len(taskArgs) > 0 {
+				return fmt.Errorf("install task does not accept arguments")
+			}
+			return install.RunTask(cmd, target)
+		case server.TaskRemove:
+			return actionRemoveAt(cmd, taskArgs, target)
+		default:
+			return fmt.Errorf("unknown package task %q", task)
+		}
+	})
 }

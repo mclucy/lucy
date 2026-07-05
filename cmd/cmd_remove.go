@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -38,6 +39,16 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
 		return err
+	}
+	if target.Registered {
+		return cli.DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{
+				Name: server.TaskRemove,
+				Args: append([]string(nil), args...),
+			},
+		)
 	}
 	return cli.RunInTargetWorkDir(target, func() error {
 		return actionRemoveAt(cmd, args, target)

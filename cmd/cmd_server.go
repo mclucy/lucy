@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/internal/cli"
@@ -61,7 +60,7 @@ var serverStartCmd = &cobra.Command{
 	Short: "Start a registered server instance",
 	Args:  cobra.ExactArgs(1),
 	RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
-		return callDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStart, Instance: args[0]}, nil)
+		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStart, Instance: args[0]}, nil)
 	}),
 }
 
@@ -70,7 +69,7 @@ var serverStopCmd = &cobra.Command{
 	Short: "Gracefully stop a registered server instance",
 	Args:  cobra.ExactArgs(1),
 	RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
-		return callDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStop, Instance: args[0]}, nil)
+		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStop, Instance: args[0]}, nil)
 	}),
 }
 
@@ -79,7 +78,7 @@ var serverRestartCmd = &cobra.Command{
 	Short: "Restart a registered server instance",
 	Args:  cobra.ExactArgs(1),
 	RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
-		return callDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpRestart, Instance: args[0]}, nil)
+		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpRestart, Instance: args[0]}, nil)
 	}),
 }
 
@@ -88,7 +87,7 @@ var serverEnableCmd = &cobra.Command{
 	Short: "Enable a server instance at boot",
 	Args:  cobra.ExactArgs(1),
 	RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
-		return callDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpEnable, Instance: args[0]}, nil)
+		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpEnable, Instance: args[0]}, nil)
 	}),
 }
 
@@ -97,7 +96,7 @@ var serverDisableCmd = &cobra.Command{
 	Short: "Disable a server instance at boot",
 	Args:  cobra.ExactArgs(1),
 	RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
-		return callDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpDisable, Instance: args[0]}, nil)
+		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpDisable, Instance: args[0]}, nil)
 	}),
 }
 
@@ -236,7 +235,7 @@ func actionServerList(cmd *cobra.Command, _ []string) error {
 
 func actionServerStatus(cmd *cobra.Command, args []string) error {
 	var status server.InstanceStatus
-	if err := callDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStatus, Instance: args[0]}, &status); err != nil {
+	if err := cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStatus, Instance: args[0]}, &status); err != nil {
 		inst, readErr := server.ReadInstance(args[0])
 		if readErr != nil || inst == nil {
 			return err
@@ -273,7 +272,7 @@ func actionServerStatus(cmd *cobra.Command, args []string) error {
 
 func actionServerSend(cmd *cobra.Command, args []string) error {
 	line := strings.Join(args[1:], " ")
-	return callDaemonWithAutoStart(cmd.Context(), server.Request{
+	return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{
 		Op:       server.OpSend,
 		Instance: args[0],
 		Line:     line,
@@ -320,7 +319,7 @@ func actionServerAttach(cmd *cobra.Command, args []string) error {
 		if strings.TrimSpace(line) == "/detach" {
 			return nil
 		}
-		if err := callDaemonWithAutoStart(cmd.Context(), server.Request{
+		if err := cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{
 			Op:       server.OpSend,
 			Instance: args[0],
 			Line:     line,
@@ -387,19 +386,6 @@ func actionServerRemove(_ *cobra.Command, args []string) error {
 	}
 	log.ShowInfo(fmt.Sprintf("unregistered server %q", inst.Name))
 	return nil
-}
-
-func callDaemonWithAutoStart(ctx context.Context, req server.Request, out any) error {
-	err := server.CallDaemon(ctx, req, out)
-	if err == nil {
-		return nil
-	}
-	log.ShowInfo("Lucy daemon is not responding; attempting to start it")
-	if startErr := server.NewServiceManager().StartDaemon(); startErr != nil {
-		return fmt.Errorf("start Lucy daemon: %w (original request failed: %v)", startErr, err)
-	}
-	time.Sleep(500 * time.Millisecond)
-	return server.CallDaemon(ctx, req, out)
 }
 
 func openEditor(path string) error {

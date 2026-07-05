@@ -58,7 +58,7 @@ func ResolveCommandTarget(cmd *cobra.Command) (CommandTarget, error) {
 // instance lock when the target is a registered Lucy server instance.
 func RunInTargetWorkDir(target CommandTarget, fn func() error) error {
 	run := func() error {
-		return runInTargetWorkDirUnlocked(target, fn)
+		return RunInTargetWorkDirUnlocked(target, fn)
 	}
 	if target.Registered && target.Instance != nil {
 		return server.WithInstanceLock(target.Instance.Name, run)
@@ -66,7 +66,7 @@ func RunInTargetWorkDir(target CommandTarget, fn func() error) error {
 	return run()
 }
 
-func runInTargetWorkDirUnlocked(target CommandTarget, fn func() error) error {
+func RunInTargetWorkDirUnlocked(target CommandTarget, fn func() error) error {
 	current, err := os.Getwd()
 	if err != nil {
 		return err
@@ -104,4 +104,36 @@ func MarkPendingRestartIfRunning(target CommandTarget, reason string) {
 	if st.Running {
 		_ = server.MarkPendingRestart(target.Instance.Name, true, reason)
 	}
+}
+
+func DispatchPackageTask(
+	cmd *cobra.Command,
+	target CommandTarget,
+	task server.PackageTaskRequest,
+) error {
+	if target.Instance == nil {
+		return fmt.Errorf("registered server target is missing instance data")
+	}
+	var result server.PackageTaskResult
+	if err := CallDaemonWithAutoStart(
+		cmd.Context(),
+		server.Request{
+			Op:       server.OpPackageTask,
+			Instance: target.Instance.Name,
+			Task:     task,
+		},
+		&result,
+	); err != nil {
+		return err
+	}
+	if result.Output != "" {
+		fmt.Fprint(os.Stderr, result.Output)
+	}
+	return nil
+}
+
+// MustBoolFlag reads a boolean flag, defaulting to false when unset.
+func MustBoolFlag(cmd *cobra.Command, name string) bool {
+	value, _ := cmd.Flags().GetBool(name)
+	return value
 }

@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
 	"github.com/spf13/cobra"
 )

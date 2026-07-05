@@ -10,6 +10,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
@@ -74,6 +75,21 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
 		return err
+	}
+	if target.Registered {
+		return cli.DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{
+				Name: server.TaskAdd,
+				Args: append([]string(nil), args...),
+				AddOptions: server.PackageTaskAddOpts{
+					Force:        cli.MustBoolFlag(cmd, flagForceName),
+					WithOptional: cli.MustBoolFlag(cmd, flagWithOptionalName),
+					NoOptional:   cli.MustBoolFlag(cmd, flagNoOptionalName),
+				},
+			},
+		)
 	}
 	return cli.RunInTargetWorkDir(target, func() error {
 		return actionAddAt(cmd, args, target)
@@ -210,4 +226,9 @@ func buildUpdatedManifest(
 		)
 	}
 	return manifest
+}
+
+// RunTask executes the add action for a daemon-dispatched package task.
+func RunTask(cmd *cobra.Command, args []string, target cli.CommandTarget) error {
+	return actionAddAt(cmd, args, target)
 }

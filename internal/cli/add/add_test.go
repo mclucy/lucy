@@ -156,7 +156,7 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 		},
 	}
 
-	updated := cli.BuildUpdatedLock(workDir, &manifest, &existingLock, result)
+	updated := cli.BuildUpdatedLock(workDir, &manifest, &existingLock, result, workspace.NewAt(workDir))
 	if updated == nil {
 		t.Fatal("expected updated lock")
 	}
