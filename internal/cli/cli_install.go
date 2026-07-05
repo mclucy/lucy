@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -44,9 +43,9 @@ func NewInstallCommand() *cobra.Command {
 }
 
 func actionInstall(cmd *cobra.Command, _ []string) error {
-	workDir, err := os.Getwd()
+	target, err := ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
 
 	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
@@ -60,9 +59,15 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Sync(cmd.Context(), workDir, opts)
-	for _, diagnostic := range diagnostics {
-		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
-	}
-	return err
+	return RunInTargetWorkDir(target, func() error {
+		diagnostics, err := operation.Sync(cmd.Context(), target.WorkDir, opts)
+		for _, diagnostic := range diagnostics {
+			report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+		}
+		if err != nil {
+			return err
+		}
+		MarkPendingRestartIfRunning(target, "install changed runtime files")
+		return nil
+	})
 }
