@@ -6,6 +6,7 @@ import (
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -49,7 +50,23 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if target.Registered {
+		return DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{
+				Name: server.TaskRemove,
+				Args: append([]string(nil), args...),
+			},
+		)
+	}
+	return RunInTargetWorkDir(target, func() error {
+		return RunRemoveTask(cmd, args, target)
+	})
+}
 
+// RunRemoveTask executes the remove action for a daemon-dispatched package task.
+func RunRemoveTask(cmd *cobra.Command, args []string, target CommandTarget) error {
 	locked, _ := cmd.Flags().GetBool(flagRemoveLockedName)
 	offline, _ := cmd.Flags().GetBool(flagRemoveOfflineName)
 
@@ -63,11 +80,9 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	return RunInTargetWorkDir(target, func() error {
-		if err := operation.Remove(cmd.Context(), target.WorkDir, args, ecosystem, opts); err != nil {
-			return err
-		}
-		MarkPendingRestartIfRunning(target, "package intent changed")
-		return nil
-	})
+	if err := operation.Remove(cmd.Context(), target.WorkDir, args, ecosystem, opts); err != nil {
+		return err
+	}
+	MarkPendingRestartIfRunning(target, "package intent changed")
+	return nil
 }

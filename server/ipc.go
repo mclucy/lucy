@@ -23,6 +23,7 @@ const (
 	OpRunnerStatus   = "runner.status"
 	OpRunnerSend     = "runner.send"
 	OpRunnerStop     = "runner.stop"
+	OpPackageTask    = "package.task"
 )
 
 type Request struct {
@@ -30,6 +31,7 @@ type Request struct {
 	Instance string             `json:"instance,omitempty"`
 	Line     string             `json:"line,omitempty"`
 	Runner   RunnerRegistration `json:"runner,omitempty"`
+	Task     PackageTaskRequest `json:"task,omitempty"`
 }
 
 type Response struct {
@@ -37,6 +39,12 @@ type Response struct {
 	Error string          `json:"error,omitempty"`
 	Data  json.RawMessage `json:"data,omitempty"`
 }
+
+type ResponseError struct {
+	Message string
+}
+
+func (e ResponseError) Error() string { return e.Message }
 
 type RunnerRegistration struct {
 	Name       string `json:"name"`
@@ -60,6 +68,22 @@ type InstanceStatus struct {
 	Runner         RunnerStatus `json:"runner"`
 	PendingRestart bool         `json:"pending_restart"`
 	PendingReason  string       `json:"pending_reason,omitempty"`
+}
+
+type PackageTaskRequest struct {
+	Name       string             `json:"name"`
+	Args       []string           `json:"args,omitempty"`
+	AddOptions PackageTaskAddOpts `json:"add_options,omitempty"`
+}
+
+type PackageTaskAddOpts struct {
+	Force        bool `json:"force,omitempty"`
+	WithOptional bool `json:"with_optional,omitempty"`
+	NoOptional   bool `json:"no_optional,omitempty"`
+}
+
+type PackageTaskResult struct {
+	Output string `json:"output,omitempty"`
 }
 
 func CallDaemon(ctx context.Context, req Request, out any) error {
@@ -91,7 +115,7 @@ func callUnix(ctx context.Context, socketPath string, req Request, out any) erro
 		if resp.Error == "" {
 			resp.Error = "daemon request failed"
 		}
-		return fmt.Errorf("%s", resp.Error)
+		return ResponseError{Message: resp.Error}
 	}
 	if out != nil && len(resp.Data) > 0 {
 		if err := json.Unmarshal(resp.Data, out); err != nil {
