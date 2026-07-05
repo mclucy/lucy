@@ -11,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.T) {

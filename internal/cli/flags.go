@@ -14,6 +14,7 @@ const (
 	FlagPrintLogs   = "print-logs"
 	FlagDebug       = "debug"
 	FlagDumpLogs    = "dump-logs"
+	FlagServer      = "server"
 )
 
 // AddJSONFlag adds the --json flag to a command.

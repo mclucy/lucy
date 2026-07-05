@@ -83,6 +83,11 @@ func init() {
 		false,
 		"Print raw JSON response without indentation",
 	)
+	rootCmd.PersistentFlags().String(
+		cli.FlagServer,
+		"",
+		"Operate on a registered Lucy server instance",
+	)
 
 	rootCmd.AddCommand(
 		add.NewCommand(),

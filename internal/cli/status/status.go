@@ -47,7 +47,11 @@ func NewCommand() *cobra.Command {
 }
 
 func actionStatus(cmd *cobra.Command, args []string) error {
-	ws := workspace.New()
+	target, err := cli.ResolveCommandTarget(cmd)
+	if err != nil {
+		return err
+	}
+	ws := workspace.NewAt(target.WorkDir)
 	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
 	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)

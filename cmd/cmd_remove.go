@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/cli"
@@ -36,11 +35,17 @@ func init() {
 }
 
 func actionRemove(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
+	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
+	return cli.RunInTargetWorkDir(target, func() error {
+		return actionRemoveAt(cmd, args, target)
+	})
+}
 
+func actionRemoveAt(cmd *cobra.Command, args []string, target cli.CommandTarget) error {
+	workDir := target.WorkDir
 	hasLucyState, err := cli.LucyStateDirExists(workDir)
 	if err != nil {
 		return err
@@ -80,5 +85,6 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("update state: %w", err)
 	}
 
+	cli.MarkPendingRestartIfRunning(target, "package intent changed")
 	return nil
 }

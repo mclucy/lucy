@@ -3,7 +3,6 @@ package install
 import (
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 
 	"github.com/mclucy/lucy/input"
@@ -12,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -35,11 +35,17 @@ func NewCommand() *cobra.Command {
 }
 
 func actionInstall(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
+	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
+	return cli.RunInTargetWorkDir(target, func() error {
+		return actionInstallAt(cmd, target)
+	})
+}
 
+func actionInstallAt(cmd *cobra.Command, target cli.CommandTarget) error {
+	workDir := target.WorkDir
 	hasLucyState, err := cli.LucyStateDirExists(workDir)
 	if err != nil {
 		return err
@@ -65,6 +71,9 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	options := install.DefaultOptions()
+	options.Workspace = func() workspace.Workspace {
+		return workspace.NewAt(workDir)
+	}
 
 	result, err := install.InstallMany(cmd.Context(), plan.Requested, options)
 	if err != nil {
@@ -79,8 +88,13 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 		stateSvc.Manifest(),
 		stateSvc.Lock(),
 		result,
+		workspace.NewAt(workDir),
 	)
-	return stateSvc.Save(cmd.Context(), nil, lock)
+	if err := stateSvc.Save(cmd.Context(), nil, lock); err != nil {
+		return err
+	}
+	cli.MarkPendingRestartIfRunning(target, "install changed runtime files")
+	return nil
 }
 
 func buildInstallSyncPlan(
