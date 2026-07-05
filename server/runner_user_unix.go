@@ -27,11 +27,12 @@ func applyRunUser(cmd *exec.Cmd, runUser string) error {
 	if err != nil {
 		return fmt.Errorf("parse gid for %q: %w", runUser, err)
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{
-			Uid: uint32(uid),
-			Gid: uint32(gid),
-		},
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Credential = &syscall.Credential{
+		Uid: uint32(uid),
+		Gid: uint32(gid),
 	}
 	return nil
 }

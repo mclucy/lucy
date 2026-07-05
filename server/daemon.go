@@ -60,6 +60,10 @@ func (d *Daemon) handle(conn net.Conn) {
 		respond(conn, nil, fmt.Errorf("decode request: %w", err))
 		return
 	}
+	if err := authorizeDaemonRequest(conn, req); err != nil {
+		respond(conn, nil, err)
+		return
+	}
 	data, err := d.dispatch(req)
 	respond(conn, data, err)
 }
