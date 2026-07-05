@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -52,9 +51,9 @@ func NewAddCommand() *cobra.Command {
 }
 
 func actionAdd(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
+	target, err := ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
 
 	withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
@@ -70,5 +69,11 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	return operation.Add(cmd.Context(), workDir, args, types.Ecosystem(ecosystem), opts)
+	return RunInTargetWorkDir(target, func() error {
+		if err := operation.Add(cmd.Context(), target.WorkDir, args, types.Ecosystem(ecosystem), opts); err != nil {
+			return err
+		}
+		MarkPendingRestartIfRunning(target, "package intent changed")
+		return nil
+	})
 }

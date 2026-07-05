@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -46,9 +45,9 @@ func NewRemoveCommand() *cobra.Command {
 }
 
 func actionRemove(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
+	target, err := ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
 
 	locked, _ := cmd.Flags().GetBool(flagRemoveLockedName)
@@ -64,5 +63,11 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	return operation.Remove(cmd.Context(), workDir, args, ecosystem, opts)
+	return RunInTargetWorkDir(target, func() error {
+		if err := operation.Remove(cmd.Context(), target.WorkDir, args, ecosystem, opts); err != nil {
+			return err
+		}
+		MarkPendingRestartIfRunning(target, "package intent changed")
+		return nil
+	})
 }
