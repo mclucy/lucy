@@ -67,17 +67,17 @@ func (r *Runner) run(ctx context.Context) error {
 	r.logFile = logFile
 	defer logFile.Close()
 
-	listener, err := listenUnix(RunnerSocketPath(r.name), 0o660)
+	listener, err := listenUnix(RunnerSocketPath(r.name), 0o600)
 	if err != nil {
 		return fmt.Errorf("listen on runner socket: %w", err)
 	}
 	defer listener.Close()
 	defer os.Remove(RunnerSocketPath(r.name))
 
-	cmd := exec.CommandContext(ctx, r.cfg.Command, r.cfg.Args...)
+	cmd := exec.Command(r.cfg.Command, r.cfg.Args...)
 	cmd.Dir = r.cfg.WorkingDir
 	cmd.Env = mergeEnv(os.Environ(), r.cfg.Env)
-	if err := applyRunUser(cmd, r.inst.RunUser); err != nil {
+	if err := prepareManagedProcess(cmd, r.inst.RunUser); err != nil {
 		return err
 	}
 	stdin, err := cmd.StdinPipe()
@@ -103,8 +103,17 @@ func (r *Runner) run(ctx context.Context) error {
 	go r.serveControl(ctx, listener)
 	r.forwardSignals()
 
-	err = cmd.Wait()
-	if err != nil && !r.graceful {
+	waitErr := make(chan error, 1)
+	go func() {
+		waitErr <- cmd.Wait()
+	}()
+	select {
+	case err = <-waitErr:
+	case <-ctx.Done():
+		_ = r.stopGracefully()
+		err = <-waitErr
+	}
+	if err != nil && !r.isGraceful() {
 		return err
 	}
 	return nil
@@ -190,23 +199,44 @@ func (r *Runner) writeLine(line string) error {
 }
 
 func (r *Runner) stopGracefully() error {
-	r.graceful = true
-	if err := r.writeLine(r.cfg.Stop.Command); err != nil {
-		return err
-	}
 	timeout, err := time.ParseDuration(r.cfg.Stop.Timeout)
 	if err != nil || timeout <= 0 {
 		timeout = 60 * time.Second
 	}
+	if !r.markGraceful() {
+		return nil
+	}
+	if err := r.writeLine(r.cfg.Stop.Command); err != nil {
+		r.scheduleForcedStop(0)
+		return err
+	}
+	r.scheduleForcedStop(timeout)
+	return nil
+}
+
+func (r *Runner) markGraceful() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.graceful {
+		return false
+	}
+	r.graceful = true
+	return true
+}
+
+func (r *Runner) isGraceful() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.graceful
+}
+
+func (r *Runner) scheduleForcedStop(timeout time.Duration) {
 	go func() {
 		time.Sleep(timeout)
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		if r.cmd != nil && r.cmd.Process != nil {
-			_ = r.cmd.Process.Signal(syscall.SIGTERM)
-		}
+		_ = r.signalIfRunning(syscall.SIGTERM)
+		time.Sleep(10 * time.Second)
+		_ = r.signalIfRunning(syscall.SIGKILL)
 	}()
-	return nil
 }
 
 func (r *Runner) forwardSignals() {
@@ -216,6 +246,16 @@ func (r *Runner) forwardSignals() {
 		<-signals
 		_ = r.stopGracefully()
 	}()
+}
+
+func (r *Runner) signalIfRunning(signal os.Signal) error {
+	r.mu.Lock()
+	cmd := r.cmd
+	r.mu.Unlock()
+	if cmd == nil || cmd.Process == nil || cmd.ProcessState != nil {
+		return nil
+	}
+	return signalManagedProcess(cmd, signal)
 }
 
 func mergeEnv(base []string, extra map[string]string) []string {
