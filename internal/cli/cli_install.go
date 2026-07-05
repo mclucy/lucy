@@ -7,6 +7,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/server"
 	"github.com/spf13/cobra"
 )
 
@@ -47,7 +48,20 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	if target.Registered {
+		return DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{Name: server.TaskInstall},
+		)
+	}
+	return RunInTargetWorkDir(target, func() error {
+		return RunInstallTask(cmd, target)
+	})
+}
 
+// RunInstallTask executes the install action for a daemon-dispatched package task.
+func RunInstallTask(cmd *cobra.Command, target CommandTarget) error {
 	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
 	offline, _ := cmd.Flags().GetBool(flagInstallOfflineName)
 	withOptional, _ := cmd.Flags().GetBool(flagInstallWithOptionalName)
@@ -59,15 +73,13 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 		PublishManifest: false,
 	}
 
-	return RunInTargetWorkDir(target, func() error {
-		diagnostics, err := operation.Sync(cmd.Context(), target.WorkDir, opts)
-		for _, diagnostic := range diagnostics {
-			report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
-		}
-		if err != nil {
-			return err
-		}
-		MarkPendingRestartIfRunning(target, "install changed runtime files")
-		return nil
-	})
+	diagnostics, err := operation.Sync(cmd.Context(), target.WorkDir, opts)
+	for _, diagnostic := range diagnostics {
+		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	if err != nil {
+		return err
+	}
+	MarkPendingRestartIfRunning(target, "install changed runtime files")
+	return nil
 }

@@ -106,6 +106,8 @@ func (d *Daemon) dispatch(req Request) (any, error) {
 		d.runners[req.Runner.Name] = req.Runner
 		d.mu.Unlock()
 		return req.Runner, nil
+	case OpPackageTask:
+		return d.packageTask(req.Instance, req.Task)
 	default:
 		return nil, fmt.Errorf("unknown daemon operation %q", req.Op)
 	}
@@ -178,6 +180,44 @@ func (d *Daemon) runnerRegistration(name string) RunnerRegistration {
 		return reg
 	}
 	return RunnerRegistration{Name: name, SocketPath: RunnerSocketPath(name)}
+}
+
+func (d *Daemon) packageTask(
+	name string,
+	task PackageTaskRequest,
+) (PackageTaskResult, error) {
+	inst, err := requiredInstance(name)
+	if err != nil {
+		return PackageTaskResult{}, err
+	}
+
+	var result PackageTaskResult
+	err = WithInstanceLock(inst.Name, func() error {
+		var taskErr error
+		result, taskErr = RunPackageTask(context.Background(), *inst, task)
+		return taskErr
+	})
+	if err != nil {
+		return result, err
+	}
+
+	if d.service.StatusInstance(*inst).Running {
+		_ = MarkPendingRestart(inst.Name, true, pendingRestartReason(task.Name))
+	}
+	return result, nil
+}
+
+func pendingRestartReason(taskName string) string {
+	switch taskName {
+	case TaskAdd:
+		return "package files changed"
+	case TaskInstall:
+		return "install changed runtime files"
+	case TaskRemove:
+		return "package intent changed"
+	default:
+		return "server package state changed"
+	}
 }
 
 func requiredInstance(name string) (*Instance, error) {
