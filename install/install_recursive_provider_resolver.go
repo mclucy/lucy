@@ -46,8 +46,8 @@ func (resolver providerCandidateResolver) ResolvePackage(
 			attempts,
 			types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
-					Platform: id.Platform,
-					Name:     id.Name,
+					Eco:  id.Eco,
+					Name: id.Name,
 				},
 				Version: types.VersionAny,
 			},
