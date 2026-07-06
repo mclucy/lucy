@@ -183,7 +183,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	var file *fileResponse
 
 	switch id.Version {
-	case types.VersionCompatible:
+	case types.VersionStable:
 		mod, err := resolveSlug(id.Name)
 		if err != nil {
 			return id, err
@@ -192,7 +192,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 		if err != nil {
 			return id, err
 		}
-	case types.VersionAny, types.VersionNone, types.VersionLatest:
+	case types.VersionBeta, types.VersionAny, types.VersionNone:
 		mod, err := resolveSlug(id.Name)
 		if err != nil {
 			return id, err

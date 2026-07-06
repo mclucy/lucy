@@ -109,8 +109,8 @@ func forgeVersionFromPackageRef(
 	p types.VersionedPackageRef,
 	gameVersion types.BareVersion,
 ) (string, error) {
-	if p.Version != types.VersionLatest &&
-		p.Version != types.VersionCompatible &&
+	if p.Version != types.VersionBeta &&
+		p.Version != types.VersionStable &&
 		p.Version != types.VersionAny &&
 		p.Version != types.VersionUnknown {
 		return p.Version.String(), nil

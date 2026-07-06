@@ -145,13 +145,13 @@ func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 ) {
 	var rel *release
 	switch id.Version {
-	case types.VersionCompatible:
+	case types.VersionStable:
 		ws := workspace.New()
 		rel, err = getLatestCompatibleRelease(
 			id.Name.Pep8String(),
 			ws.Environments.Mcdr.Version,
 		)
-	case "", types.VersionLatest, types.VersionAny:
+	case types.VersionBeta, types.VersionAny:
 		rel, err = getLatestRelease(id.Name.Pep8String())
 		if err != nil {
 			return id, err

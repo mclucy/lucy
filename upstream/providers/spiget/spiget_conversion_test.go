@@ -215,15 +215,18 @@ func TestResolvedVersionIdentityPolicy(t *testing.T) {
 	if resolved.Matches(types.BareVersion("2.12.1")) {
 		t.Fatalf("did not expect mismatched version to match")
 	}
-	if resolved.Matches(types.VersionLatest) {
-		t.Fatalf("did not expect latest alias to count as an exact resolved version")
+	if resolved.Matches(types.VersionAny) {
+		t.Fatalf("did not expect any alias to count as an exact resolved version")
 	}
-	if resolved.Matches(types.VersionCompatible) {
-		t.Fatalf("did not expect compatible alias to count as an exact resolved version")
+	if resolved.Matches(types.VersionBeta) {
+		t.Fatalf("did not expect beta alias to count as an exact resolved version")
+	}
+	if resolved.Matches(types.VersionStable) {
+		t.Fatalf("did not expect stable alias to count as an exact resolved version")
 	}
 }
 
-func TestResolvedVersionLatestFallbackPolicy(t *testing.T) {
+func TestResolvedVersionIDFallbackPolicy(t *testing.T) {
 	resolved := NewResolvedVersion(
 		resourceResponse{
 			ID: 6245, Name: "PlaceholderAPI",
@@ -234,7 +237,7 @@ func TestResolvedVersionLatestFallbackPolicy(t *testing.T) {
 
 	if got := resolved.LucyVersion(); got != types.BareVersion("625258") {
 		t.Fatalf(
-			"expected numeric version id fallback for latest/exact resolution, got %q",
+			"expected numeric version id fallback for exact resolution, got %q",
 			got,
 		)
 	}
