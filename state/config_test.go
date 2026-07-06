@@ -62,16 +62,6 @@ func TestConfigValidation(t *testing.T) {
 			wantErr: true,
 			errMsg:  "invalid preferred source",
 		},
-		{
-			name: "invalid upgrade mode",
-			cfg: Config{
-				Upgrade: UpgradeConfig{
-					Mode: "invalid",
-				},
-			},
-			wantErr: true,
-			errMsg:  "invalid upgrade mode",
-		},
 	}
 
 	for _, tt := range tests {

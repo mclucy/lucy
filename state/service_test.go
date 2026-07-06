@@ -49,12 +49,8 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 		t.Fatalf("load B failed: %v", err)
 	}
 
-	serviceB.Manifest().Config.Upgrade.Mode = "latest"
-	if err := serviceB.Save(
-		ctx,
-		serviceB.Manifest(),
-		serviceB.Lock(),
-	); err != nil {
+	serviceB.Manifest().Config.Sources.Preferred = "mcdr"
+	if err := serviceB.Save(ctx, serviceB.Manifest(), serviceB.Lock()); err != nil {
 		t.Fatalf("second save B failed: %v", err)
 	}
 	if err := serviceB.Reload(ctx); err != nil {
@@ -64,16 +60,16 @@ func TestProjectStateServiceIsolatesProjects(t *testing.T) {
 	if serviceA.Config() == nil || serviceB.Config() == nil {
 		t.Fatal("expected both services to hold configs")
 	}
-	if serviceA.Config().Upgrade.Mode != "compatible" {
+	if serviceA.Config().Sources.Preferred != "github" {
 		t.Fatalf(
 			"expected A to remain unchanged, got %q",
-			serviceA.Config().Upgrade.Mode,
+			serviceA.Config().Sources.Preferred,
 		)
 	}
-	if serviceB.Config().Upgrade.Mode != "latest" {
+	if serviceB.Config().Sources.Preferred != "mcdr" {
 		t.Fatalf(
 			"expected B mutation to persist, got %q",
-			serviceB.Config().Upgrade.Mode,
+			serviceB.Config().Sources.Preferred,
 		)
 	}
 	if serviceA.Manifest().Environment.GameVersion != "1.21.1" {
@@ -138,7 +134,6 @@ func TestProjectStateServiceLoadMergesGlobalConfigUnderWorkspaceConfig(t *testin
 
 	globalCfg := ConfigDefaults()
 	globalCfg.Sources.Preferred = "curseforge"
-	globalCfg.Upgrade.Mode = "latest"
 	if err := WriteGlobalConfig(&globalCfg); err != nil {
 		t.Fatalf("write global config: %v", err)
 	}
@@ -168,9 +163,6 @@ func TestProjectStateServiceLoadMergesGlobalConfigUnderWorkspaceConfig(t *testin
 			got,
 		)
 	}
-	if got := service.Config().Upgrade.Mode; got != "latest" {
-		t.Fatalf("expected global upgrade mode to be preserved, got %q", got)
-	}
 	if got := service.Config().Sources.Priority; len(got) != len(globalCfg.Sources.Priority) {
 		t.Fatalf("expected global source priority to be preserved, got %v", got)
 	}
@@ -196,7 +188,7 @@ func TestProjectStateServiceLoadRejectsEmptyWorkDir(t *testing.T) {
 
 func TestProjectStateServiceLoadRejectsMalformedExistingFile(t *testing.T) {
 	workDir := t.TempDir()
-	malformedConfig := []byte("format_version: v1\nenvironment: {}\npackages: []\nbundles: []\nconfig:\n  sources:\n    priority:\n      - invalid\n    preferred: auto\n  upgrade:\n    mode: compatible\n")
+	malformedConfig := []byte("format_version: v1\nenvironment: {}\npackages: []\nbundles: []\nconfig:\n  sources:\n    priority:\n      - invalid\n    preferred: auto\n")
 	if err := os.WriteFile(
 		filepath.Join(workDir, string(ManifestFile)),
 		malformedConfig,

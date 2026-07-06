@@ -256,11 +256,11 @@ func runEcosystemVersion(s *InitFlowState) error {
 				Title("Platform loader version").
 				Description(
 					fmt.Sprintf(
-						"Enter the %s loader version, or leave blank to use the latest.",
+						"Enter the %s loader version, or leave blank to let Lucy choose.",
 						s.Ecosystem,
 					),
 				).
-				Placeholder("latest").
+				Placeholder("any").
 				Value(&s.EcosystemVersion),
 		),
 	)

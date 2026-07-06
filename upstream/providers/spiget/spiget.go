@@ -79,7 +79,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	parsed = id
 
 	switch id.Version {
-	case "", types.VersionAny, types.VersionBeta, types.VersionStable, types.VersionNone:
+	case "", types.VersionAny, types.VersionBeta, types.VersionStable:
 	default:
 		return id, nil
 	}

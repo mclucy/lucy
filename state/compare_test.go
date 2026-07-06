@@ -33,7 +33,7 @@ func TestDiffDesiredResolvedTreatsFuzzyIntentAndExactLockAsSameMembership(t *tes
 	manifest := &Manifest{
 		Packages: []ManifestPackage{{
 			ID:      "fabric/lithium",
-			Version: "compatible",
+			Version: "stable",
 			Source:  "modrinth",
 			Side:    SideBoth,
 		}},

@@ -13,14 +13,14 @@ environment:
   declared_capabilities: []
 packages:
   - id: neoforge/connector
-    version: compatible
+    version: stable
     source: modrinth
     role: required
     side: both
     optional: false
     pinned: false
   - id: neoforge/lithium
-    version: latest
+    version: beta
     source: github
     role: transitive
     side: server

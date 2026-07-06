@@ -20,7 +20,7 @@ func TestManifestRoundTrip(t *testing.T) {
 	  "packages": [
 	    {
 	      "id": "neoforge/connector",
-	      "version": "compatible",
+	      "version": "stable",
 	      "source": "modrinth",
 	      "role": "required",
 	      "side": "server",
@@ -79,11 +79,11 @@ func TestManifestPreservesPackageSides(t *testing.T) {
 	manifest.Environment.ModdingPlatformVersion = "0.16.10"
 	manifest.Packages = []ManifestPackage{
 		{
-			ID: "fabric/lithium", Version: "compatible", Source: "auto",
+			ID: "fabric/lithium", Version: "stable", Source: "auto",
 			Role: RoleRequired, Side: SideServer,
 		},
 		{
-			ID: "fabric/sodium", Version: "latest", Source: "modrinth",
+			ID: "fabric/sodium", Version: "beta", Source: "modrinth",
 			Role: RoleTransitive, Side: SideClient, Optional: true,
 		},
 		{
@@ -215,7 +215,7 @@ func TestManifestBundlesRemainSeparateFromPackages(t *testing.T) {
 	manifest.Packages = []ManifestPackage{
 		{
 			ID:      "forge/luckperms",
-			Version: "latest",
+			Version: "stable",
 			Source:  "curseforge",
 			Role:    RoleRequired,
 			Side:    SideServer,
@@ -308,7 +308,7 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 		},
 		Packages: []ManifestPackage{
 			{
-				ID: "fabric/kept-root", Version: "compatible", Source: "auto",
+				ID: "fabric/kept-root", Version: "stable", Source: "auto",
 				Role: RoleRequired, Side: SideBoth,
 			},
 			{
@@ -382,7 +382,7 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 		byID[pkg.ID] = pkg
 	}
 
-	if got := byID["fabric/kept-root"]; got.Role != RoleRequired || got.Version != "compatible" {
+	if got := byID["fabric/kept-root"]; got.Role != RoleRequired || got.Version != "stable" {
 		t.Fatalf(
 			"expected existing required root to remain required with manifest intent preserved, got %#v",
 			got,
@@ -416,11 +416,11 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 		},
 		Packages: []ManifestPackage{
 			{
-				ID: "fabric/root-a", Version: "compatible", Source: "auto",
+				ID: "fabric/root-a", Version: "stable", Source: "auto",
 				Role: RoleRequired, Side: SideBoth,
 			},
 			{
-				ID: "fabric/root-b", Version: "compatible", Source: "auto",
+				ID: "fabric/root-b", Version: "stable", Source: "auto",
 				Role: RoleRequired, Side: SideBoth,
 			},
 			{
@@ -544,7 +544,7 @@ func TestPruneLockForManifestKeepsOnlyManagedClosure(t *testing.T) {
 	manifest := &Manifest{
 		Packages: []ManifestPackage{
 			{
-				ID: "fabric/root-b", Version: "compatible", Source: "auto",
+				ID: "fabric/root-b", Version: "stable", Source: "auto",
 				Role: RoleRequired, Side: SideBoth,
 			},
 			{

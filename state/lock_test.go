@@ -230,8 +230,9 @@ func TestValidateLockIgnoresObservedOnlyFieldsAtStructBoundary(t *testing.T) {
 
 func TestValidateLockRejectsFuzzyVersions(t *testing.T) {
 	tests := []string{
-		"latest",
-		"compatible",
+		"any",
+		"stable",
+		"beta",
 		">=0.12.0 <0.13.0",
 		"^1.2.3",
 		"1.2.x",
