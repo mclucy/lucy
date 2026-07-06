@@ -57,7 +57,7 @@ Some packages represent the server runtime itself (Minecraft, Fabric loader, For
 
 Lucy supports multiple versioning schemes because the Minecraft ecosystem uses them all:
 
-- `BareVersion` — raw version string, may be a special constant (`any`, `latest`, `compatible`, `none`, `unknown`)
+- `BareVersion` — raw version string, may be a special constant (`any`, `stable`, `beta`, `none`, `unknown`)
 - `ResolvableVersion` — parsed, comparable version implementing `Compare(v2) (int, bool)` and `Scheme() VersionScheme`
 - Supported schemes: `Semver`, `Maven`, `MinecraftSnapshot`, `MinecraftRelease`
 - Cross-scheme comparison returns `(0, false)` — incomparable, not equal

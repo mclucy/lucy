@@ -6,7 +6,6 @@ import "fmt"
 // It is persisted in lucy.yaml as an optional config override section.
 type Config struct {
 	Sources SourcesConfig `yaml:"sources"`
-	Upgrade UpgradeConfig `yaml:"upgrade"`
 }
 
 // SourcesConfig defines source selection and priority rules.
@@ -15,20 +14,12 @@ type SourcesConfig struct {
 	Preferred string   `yaml:"preferred"`
 }
 
-// UpgradeConfig defines version resolution and upgrade policies.
-type UpgradeConfig struct {
-	Mode string `yaml:"mode"`
-}
-
 // ConfigDefaults returns a Config value with default settings.
 func ConfigDefaults() Config {
 	return Config{
 		Sources: SourcesConfig{
 			Priority:  []string{"modrinth", "curseforge", "github", "mcdr"},
 			Preferred: "auto",
-		},
-		Upgrade: UpgradeConfig{
-			Mode: "compatible",
 		},
 	}
 }
@@ -54,17 +45,6 @@ func ValidateConfig(c Config) error {
 			ErrMalformed,
 			"sources.preferred",
 			fmt.Sprintf("invalid preferred source %q", c.Sources.Preferred),
-		)
-	}
-	validModes := map[string]bool{
-		"compatible": true, "latest": true, "pinned": true,
-	}
-	if c.Upgrade.Mode != "" && !validModes[c.Upgrade.Mode] {
-		return NewStateError(
-			ManifestFile,
-			ErrMalformed,
-			"upgrade.mode",
-			fmt.Sprintf("invalid upgrade mode %q", c.Upgrade.Mode),
 		)
 	}
 	return nil

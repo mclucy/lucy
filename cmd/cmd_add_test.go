@@ -85,14 +85,14 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 	manifest.Packages = []state.ManifestPackage{
 		{
 			ID:      "fabric/lithium",
-			Version: "latest",
+			Version: "stable",
 			Source:  "auto",
 			Role:    state.RoleRequired,
 			Side:    state.SideServer,
 		},
 		{
 			ID:      "fabric/fabric-api",
-			Version: "latest",
+			Version: "stable",
 			Source:  "auto",
 			Role:    state.RoleTransitive,
 			Side:    state.SideServer,

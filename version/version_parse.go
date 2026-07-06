@@ -6,13 +6,12 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// ErrAmbiguousVersion is returned when attempting to parse an ambiguous version constant.
+// ErrAmbiguousVersion is returned when attempting to parse a non-exact version constant.
 var ErrAmbiguousVersion = fmt.Errorf("attempting to parse an ambiguous version")
 
 // Parse is the main function to parse a BareVersion into a ResolvableVersion.
 //
-// If the raw version is one of the special constants (which should be inferred
-// before passing to this function), it returns an error.
+// If the raw version is one of the special constants, it returns an error.
 //
 // It dispatches parsing by version scheme and returns nil when parsing fails.
 func Parse(

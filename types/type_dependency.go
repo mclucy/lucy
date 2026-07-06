@@ -16,9 +16,6 @@ import (
 // BareVersion is the version of a package. Here we expect mods and plugins
 // use semver (which they should). A known exception is Minecraft snapshots.
 //
-// There are several special constants for ambiguous(adaptive) versions.
-// You MUST call upstream.InferVersion() before parsing them to ResolvableVersion.
-//
 // Version selectors — all three are compatible with the detected server by
 // default. They differ only in stability preference:
 //

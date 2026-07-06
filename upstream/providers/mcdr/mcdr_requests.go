@@ -114,7 +114,7 @@ func getLatestRelease(id string) (*release, error) {
 	}
 	rel := selectLatestRelease(history)
 	if rel == nil {
-		return nil, ErrVersionNotFound(id, "latest")
+		return nil, ErrVersionNotFound(id, types.VersionAny.String())
 	}
 	return rel, nil
 }

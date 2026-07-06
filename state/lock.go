@@ -265,7 +265,7 @@ func isExactLockVersion(version string) bool {
 
 func isSpecialLockVersion(version string) bool {
 	switch version {
-	case "any", "none", "unknown", "latest", "compatible":
+	case "any", "stable", "beta", "none", "unknown":
 		return true
 	default:
 		return false

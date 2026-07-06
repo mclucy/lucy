@@ -165,8 +165,8 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 	return result
 }
 
-// ResolveVersionSelector resolves abstract version specifiers (latest,
-// compatible, any) to a concrete version by querying the CurseForge API.
+// ResolveVersionSelector resolves abstract version specifiers (any, stable,
+// beta) to a concrete version by querying the CurseForge API.
 func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	parsed types.VersionedPackageRef,
 	err error,
@@ -192,7 +192,7 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 		if err != nil {
 			return id, err
 		}
-	case types.VersionBeta, types.VersionAny, types.VersionNone:
+	case types.VersionBeta, types.VersionAny:
 		mod, err := resolveSlug(id.Name)
 		if err != nil {
 			return id, err

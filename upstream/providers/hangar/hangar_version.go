@@ -40,7 +40,7 @@ func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 	}
 
 	switch id.Version {
-	case types.VersionAny, types.VersionBeta, types.VersionNone:
+	case types.VersionAny, types.VersionBeta:
 		return selectLatestVersion(versions, id.Eco)
 	case types.VersionStable:
 		return selectLatestCompatibleVersion(versions, id.Eco)

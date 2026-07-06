@@ -44,7 +44,7 @@ func resolveVersion(
 	requested types.BareVersion,
 ) (resolvedVersion, error) {
 	switch requested {
-	case "", types.VersionAny, types.VersionBeta, types.VersionStable, types.VersionNone:
+	case "", types.VersionAny, types.VersionBeta, types.VersionStable:
 		latest, err := getLatestVersion(resource.ID)
 		if err != nil {
 			return resolvedVersion{}, err

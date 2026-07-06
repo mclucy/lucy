@@ -44,8 +44,8 @@ type ManifestPackage struct {
 	ID string `yaml:"id"`
 	// Version stores version intent exactly as written in the manifest.
 	//
-	// It may be an exact version or a fuzzy selector such as "latest",
-	// "compatible", or a future range/non-exact preference. The manifest is the
+	// It may be an exact version, a range, or one of the fuzzy selectors "any",
+	// "stable", and "beta". The manifest is the
 	// intent layer, so Lucy must preserve this string verbatim instead of
 	// rewriting it to the currently resolved exact version.
 	Version string `yaml:"version"`
