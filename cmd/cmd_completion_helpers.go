@@ -73,11 +73,9 @@ func StaticSearchEcosystemCandidates() []CompletionCandidate {
 // StaticVersionCandidates returns completion candidates for fuzzy version hints.
 func StaticVersionCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{
-			Value:       types.VersionCompatible.String(),
-			Description: "Newest version that appears to fit the environment",
-		},
-		{Value: "latest", Description: "Request the newest available version"},
+		{Value: "any", Description: "Latest version, any stability (default)"},
+		{Value: "stable", Description: "Latest stable release, no betas"},
+		{Value: "beta", Description: "Latest version, allow pre-releases"},
 	}
 }
 

@@ -59,9 +59,9 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 	}
 
 	fabricAPI := byID["fabric/fabric-api"]
-	if fabricAPI.Version != types.VersionCompatible.String() {
+	if fabricAPI.Version != types.VersionAny.String() {
 		t.Fatalf(
-			"expected omitted version to stay fuzzy-compatible, got %q",
+			"expected omitted version to default to any, got %q",
 			fabricAPI.Version,
 		)
 	}
