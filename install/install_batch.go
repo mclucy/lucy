@@ -330,8 +330,8 @@ func rootScopedProviders(
 			PackageRef: req.PackageRef,
 			Version:    req.Version,
 		}
-		if id.Platform == types.PlatformAny && serverLoader != types.PlatformAny {
-			id.Platform = serverLoader
+		if id.Eco == types.EcoUnspecified && serverLoader != types.EcoUnspecified {
+			id.Eco = serverLoader
 		}
 		for rootKey := range rootKeys {
 			if rootKey != id.StringBase() {
