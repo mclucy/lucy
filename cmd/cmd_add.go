@@ -111,9 +111,6 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		result, err = install.InstallMany(cmd.Context(), requests, options)
 	} else {
 		req := requests[0]
-		if req.Version == types.VersionAny {
-			req.Version = types.VersionCompatible
-		}
 		result, err = install.Install(cmd.Context(), req, options)
 	}
 	if err != nil {
