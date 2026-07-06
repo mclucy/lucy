@@ -10,6 +10,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -60,6 +61,9 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	*DownloadResult,
 	error,
 ) {
+	if err := validateDownloadURL(url); err != nil {
+		return nil, err
+	}
 	if opts.FileMode == 0 {
 		opts.FileMode = 0o640
 	}
@@ -120,6 +124,10 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (
 	*BytesResponse,
 	error,
 ) {
+	if err := validateDownloadURL(url); err != nil {
+		return nil, err
+	}
+
 	hit, data, err := Network().GetBytes(url)
 	if err != nil {
 		log.Warn(
@@ -231,6 +239,10 @@ func downloadAndCache(url, dir string, opts DownloadOptions) (
 	*DownloadResult,
 	error,
 ) {
+	if err := validateDownloadURL(url); err != nil {
+		return nil, err
+	}
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
@@ -375,6 +387,20 @@ func verifyIntegrity(
 	}
 
 	return integrity, verified, nil
+}
+
+func validateDownloadURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid download URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf(
+			"unsupported URL scheme %q (only http/https)",
+			u.Scheme,
+		)
+	}
+	return nil
 }
 
 func newHasher(algo HashAlgorithm) hash.Hash {
