@@ -16,7 +16,7 @@ func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 		},
 		Packages: []state.ManifestPackage{
 			{
-				ID: "fabric/root", Version: "compatible", Source: "auto",
+				ID: "fabric/root", Version: "any", Source: "auto",
 				Role: state.RoleRequired, Side: state.SideBoth,
 			},
 			{
@@ -70,7 +70,7 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 		},
 		Packages: []state.ManifestPackage{
 			{
-				ID: "fabric/root", Version: "compatible", Source: "auto",
+				ID: "fabric/root", Version: "any", Source: "auto",
 				Role: state.RoleRequired, Side: state.SideBoth,
 			},
 			{
@@ -104,7 +104,7 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 	}
 
 	got := packageIDsToStrings(plan.Requested)
-	want := []string{"fabric/root@compatible"}
+	want := []string{"fabric/root@any"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf(
 			"unexpected manifest fallback request set: got %#v want %#v",

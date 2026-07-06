@@ -36,9 +36,9 @@ advisory hint before you decide what Lucy should manage. Lucy absorbs the
 existing server into a managed boundary instead of claiming total ownership of
 the directory.
 
-Version hints are best-effort: omit a version to use "compatible" (newest
-version that appears to fit the current environment), use @latest to request
-the newest available, or keep the inferred runtime version when you want
+Version hints are best-effort: omit a version to use @any (latest compatible
+version regardless of release type), use @stable to require a release, use
+@beta to allow pre-releases, or keep the inferred runtime version when you want
 Lucy to match the current environment.`,
 	RunE: runWithErrorLogging(actionInit),
 }
