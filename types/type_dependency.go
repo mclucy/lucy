@@ -18,6 +18,13 @@ import (
 //
 // There are several special constants for ambiguous(adaptive) versions.
 // You MUST call upstream.InferVersion() before parsing them to ResolvableVersion.
+//
+// Version selectors — all three are compatible with the detected server by
+// default. They differ only in stability preference:
+//
+//   - VersionAny (default): latest version regardless of release type.
+//   - VersionStable: only stable/release versions, no beta fallback.
+//   - VersionBeta: include beta and pre-release versions.
 type BareVersion string
 
 func (v BareVersion) String() string {
@@ -28,17 +35,17 @@ func (v BareVersion) String() string {
 		return "none"
 	case VersionUnknown:
 		return "unknown"
-	case VersionLatest:
-		return "latest"
-	case VersionCompatible:
-		return "compatible"
+	case VersionBeta:
+		return "beta"
+	case VersionStable:
+		return "stable"
 	}
 	return string(v)
 }
 
 func (v BareVersion) CanInfer() bool {
 	switch v {
-	case VersionAny, VersionLatest, VersionCompatible:
+	case VersionAny, VersionBeta, VersionStable:
 		return true
 	}
 	return false
@@ -53,11 +60,11 @@ func (v BareVersion) IsInvalid() bool {
 }
 
 var (
-	VersionAny        BareVersion = "any"
-	VersionNone       BareVersion = "none"
-	VersionUnknown    BareVersion = "unknown"
-	VersionLatest     BareVersion = "latest"
-	VersionCompatible BareVersion = "compatible"
+	VersionAny     BareVersion = "any"
+	VersionBeta    BareVersion = "beta"
+	VersionStable  BareVersion = "stable"
+	VersionNone    BareVersion = "none"
+	VersionUnknown BareVersion = "unknown"
 )
 
 // ResolvableVersion is an interface for comparable parsed versions.
