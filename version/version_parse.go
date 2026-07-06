@@ -20,7 +20,7 @@ func Parse(
 	scheme types.VersionScheme,
 ) (types.ResolvableVersion, error) {
 	switch raw {
-	case types.VersionLatest, types.VersionCompatible, types.VersionNone, types.VersionAny, types.VersionUnknown:
+	case types.VersionBeta, types.VersionStable, types.VersionNone, types.VersionAny, types.VersionUnknown:
 		return nil, fmt.Errorf("%w: %s", ErrAmbiguousVersion, raw)
 	}
 
