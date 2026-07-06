@@ -363,7 +363,7 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 					PackageRef: types.PackageRef{
 						Eco: types.EcoFabric, Name: "new-root",
 					},
-					Version: types.VersionLatest,
+					Version: types.VersionAny,
 					Scope:   types.SourceModrinth,
 				},
 			},
@@ -388,7 +388,7 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 			got,
 		)
 	}
-	if got := byID["fabric/new-root"]; got.Role != RoleRequired || got.Version != types.VersionLatest.String() {
+	if got := byID["fabric/new-root"]; got.Role != RoleRequired || got.Version != types.VersionAny.String() {
 		t.Fatalf(
 			"expected added root to become required with requested intent preserved, got %#v",
 			got,
@@ -482,14 +482,14 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 					Eco:  types.EcoFabric,
 					Name: "root-a",
 				},
-				Version: types.VersionCompatible,
+				Version: types.VersionAny,
 				Scope:   types.SourceAuto,
 			}, {
 				PackageRef: types.PackageRef{
 					Eco:  types.EcoFabric,
 					Name: "manual-jar",
 				},
-				Version: types.VersionCompatible,
+				Version: types.VersionAny,
 				Scope:   types.SourceAuto,
 			},
 		},

@@ -350,7 +350,7 @@ func NormalizeManifestVersionIntent(version types.BareVersion) string {
 	trimmed := strings.TrimSpace(version.String())
 	switch trimmed {
 	case "", "any", "none", "unknown":
-		return types.VersionCompatible.String()
+		return types.VersionAny.String()
 	default:
 		return trimmed
 	}
@@ -449,7 +449,7 @@ func ManifestPackagesFromClassified(classified []ClassifiedPackage) []ManifestPa
 		}
 		version := strings.TrimSpace(pkg.Version)
 		if version == "" {
-			version = types.VersionCompatible.String()
+			version = types.VersionAny.String()
 		}
 		source := strings.TrimSpace(pkg.Source)
 		if types.ParseSource(source) == types.SourceUnknown {
@@ -701,7 +701,7 @@ func requestedManifestVersion(
 		if strings.TrimSpace(fallback) != "" {
 			return fallback
 		}
-		return types.VersionCompatible.String()
+		return types.VersionAny.String()
 	}
 	return version.String()
 }
@@ -728,7 +728,7 @@ func normalizedManifestSide(side ManifestSide) ManifestSide {
 func defaultManifestPackageForID(id string) ManifestPackage {
 	return ManifestPackage{
 		ID:      id,
-		Version: types.VersionCompatible.String(),
+		Version: types.VersionAny.String(),
 		Source:  "auto",
 		Role:    RoleRequired,
 		Side:    SideUnknown,
