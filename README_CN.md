@@ -25,9 +25,9 @@
 
 ```bash
 cd your-server
-lucy init                  # 在本目录启用 Lucy
-lucy add fabric            # 安装 Fabric
-lucy add lithium@latest    # 安装模组
+lucy init                         # 在本目录启用 Lucy
+lucy add fabric/lithium@stable    # 解析精确版本和依赖
+lucy install                      # 从 lock 文件同步受管范围
 ```
 
 ## 快速开始
@@ -38,6 +38,14 @@ lucy add lithium@latest    # 安装模组
 ```bash
 go install github.com/mclucy/lucy@latest   # 原生安装
 brew install --HEAD mclucy/tap/lucy        # Homebrew
+```
+
+```bash
+mkdir my-server && cd my-server
+lucy init                         # 接管这个目录
+lucy add fabric/fabric-api@stable # 添加模组，依赖自动解析
+lucy status                       # 查看检测结果
+lucy install                      # 从 lock 文件同步受管包
 ```
 
 ## 命令
@@ -61,8 +69,9 @@ lucy init
 
 ```bash
 lucy add fabric-api
-lucy add fabric/lithium@latest
+lucy add fabric/lithium@stable
 lucy add folia
+lucy add mcdr/example-plugin@beta
 ```
 
 | 参数              | 说明                         |
@@ -132,7 +141,7 @@ lucy topology --json
 查包的元数据、描述、作者和版本历史。
 
 ```bash
-lucy info fabric/fabric-api@latest --long
+lucy info fabric/fabric-api@stable --long
 ```
 
 | 参数           | 说明     |
@@ -210,3 +219,38 @@ lucy bisect reset          # 中止会话并重新启用模组
 | `--log-file`   | 打印日志文件路径 |
 | `--print-logs` | 日志打到控制台   |
 | `--no-style`   | 关闭彩色输出     |
+
+## 概念
+
+### 包标识符
+
+```text
+[平台/]名称[@版本]
+```
+
+只有名称是必需的。省略平台，Lucy 从环境推断。省略版本，默认使用 `@any`（任意稳定性的最新兼容版本）。
+
+```text
+fabric/fabric-api@1.2.3
+   ↑       ↑        ↑
+  平台     名称     版本
+```
+
+`@any` 是默认值，选择任意稳定性的最新兼容版本。`@stable` 只选择最新兼容正式版。`@beta` 允许兼容预发布版本。
+
+manifest 中接受的平台：`none`、`fabric`、`forge`、`neoforge`、`mcdr`
+
+类型系统也识别 `bukkit`、`sponge`、`velocity`、`bungeecord` 用于拓扑检测，但暂不支持设为主要平台。
+
+数据源：`modrinth`、`curseforge`、`github`、`mcdr`（`hangar` 和 `spiget` 已定义但尚未接入解析器）。
+
+### 状态文件
+
+意图和配置存放在 `lucy.yaml`。解析后的精确结果（版本、哈希、安装路径、来源）存放在 `lucy-lock.yaml`。
+
+### 运行时拓扑
+
+Lucy 为你的服务器构建一张运行时图。图中的每个节点（Fabric、Forge、Paper、MCDR、Geyser、Velocity）都有角色、能力（`fabric_mods`、`bukkit_plugins`、`mcdr_plugins`）和风险等级。边描述节点之间的关系：谁适配谁、谁桥接谁、谁代理谁。这张图是 `lucy status`、init 探测和兼容性解析的基础。
+
+> [!NOTE]
+> Logo 和美西螈像素艺术版权归 Mojang AB 所有，原创替代品正在制作中。

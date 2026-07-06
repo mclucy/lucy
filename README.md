@@ -25,9 +25,9 @@ Turn your server into stable, manageable, and reproducible workspaces. Manage mo
 
 ```bash
 cd your-server
-lucy init                  # Set up Lucy in this workspace (server)
-lucy add fabric            # Install fabric
-lucy add lithium@latest    # Install mods
+lucy init                         # Set up Lucy in this workspace (server)
+lucy add fabric/lithium@stable    # Resolve exact version + dependencies
+lucy install                      # Sync managed scope from the lock file
 ```
 
 ## Getting Started
@@ -38,6 +38,14 @@ lucy add lithium@latest    # Install mods
 ```bash
 go install github.com/mclucy/lucy@latest   # native
 brew install --HEAD mclucy/tap/lucy        # homebrew
+```
+
+```bash
+mkdir my-server && cd my-server
+lucy init                         # Take over this directory
+lucy add fabric/fabric-api@stable # Add a mod — dependencies resolve automatically
+lucy status                       # See what's detected
+lucy install                      # Sync managed packages from the lock file
 ```
 
 ## Commands
@@ -61,8 +69,9 @@ Add anything to your server.
 
 ```bash
 lucy add fabric-api
-lucy add fabric/lithium@latest
+lucy add fabric/lithium@stable
 lucy add folia
+lucy add mcdr/example-plugin@beta
 ```
 
 | Flag              | Description                                     |
@@ -132,7 +141,7 @@ lucy topology --json
 Get metadata, description, authors, and version history for a package.
 
 ```bash
-lucy info fabric/fabric-api@latest --long
+lucy info fabric/fabric-api@stable --long
 ```
 
 | Flag           | Description |
@@ -210,3 +219,38 @@ Registered but not yet implemented:
 | `--log-file`   | Print path to logfile  |
 | `--print-logs` | Print logs to console  |
 | `--no-style`   | Disable colored output |
+
+## Concepts
+
+### Package Identifiers
+
+```text
+[platform/]name[@version]
+```
+
+Only the name is required. Omit the platform and Lucy infers it from the environment. Omit the version to get `@any` (latest compatible version, any stability).
+
+```text
+fabric/fabric-api@1.2.3
+   ↑       ↑        ↑
+platform  name   version
+```
+
+`@any` is the default and selects the latest compatible version regardless of release type. `@stable` selects the latest compatible release only. `@beta` allows compatible pre-releases.
+
+Platforms accepted in the manifest: `none`, `fabric`, `forge`, `neoforge`, `mcdr`
+
+The type system also knows `bukkit`, `sponge`, `velocity`, and `bungeecord` for topology detection, but you can't set these as the primary platform yet.
+
+Data sources: `modrinth`, `curseforge`, `github`, `mcdr` (`hangar` and `spiget` are defined but not yet wired into the resolver).
+
+### State Files
+
+Intent and config live in `lucy.yaml`. Resolved facts (versions, hashes, install paths, provenance) live in `lucy-lock.yaml`.
+
+### Runtime Topology
+
+Lucy builds a graph of your server's runtime. Each node (Fabric, Forge, Paper, MCDR, Geyser, Velocity) carries a role, a set of capabilities (`fabric_mods`, `bukkit_plugins`, `mcdr_plugins`), and a risk level. Edges describe how nodes relate: one adapts another, one bridges to another. This graph powers `lucy status`, init discovery, and compatibility resolution.
+
+> [!NOTE]
+> Logo and axolotl pixel art are copyright Mojang AB. Original replacements in progress.
