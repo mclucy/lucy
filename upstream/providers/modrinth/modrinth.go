@@ -163,9 +163,9 @@ func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
 	var v *versionResponse
 
 	switch p.Version {
-	case types.VersionCompatible:
+	case types.VersionStable:
 		v, err = latestCompatibleVersion(p.Name, p.Eco)
-	case types.VersionAny, types.VersionNone, types.VersionLatest:
+	case types.VersionBeta, types.VersionAny, types.VersionNone:
 		v, err = latestVersion(p.Name)
 	default:
 		return p, nil

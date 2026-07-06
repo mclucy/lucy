@@ -40,9 +40,9 @@ func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 	}
 
 	switch id.Version {
-	case types.VersionAny, types.VersionNone, types.VersionLatest:
+	case types.VersionAny, types.VersionBeta, types.VersionNone:
 		return selectLatestVersion(versions, id.Eco)
-	case types.VersionCompatible:
+	case types.VersionStable:
 		return selectLatestCompatibleVersion(versions, id.Eco)
 	default:
 		for i := range versions {

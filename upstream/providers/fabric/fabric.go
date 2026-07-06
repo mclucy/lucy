@@ -111,7 +111,7 @@ func loaderVersion(loaderVersion types.BareVersion) (string, error) {
 		return "", err
 	}
 
-	if loaderVersion == types.VersionLatest || loaderVersion == types.VersionCompatible || loaderVersion == types.VersionAny {
+	if loaderVersion == types.VersionBeta || loaderVersion == types.VersionStable || loaderVersion == types.VersionAny {
 		if len(versions) == 0 {
 			return "", errors.New("no fabric loader versions available")
 		}
