@@ -21,7 +21,9 @@ func (resolver providerCandidateResolver) ResolvePackage(
 	id types.VersionedPackageRef,
 ) (types.ResolvedPackage, error) {
 	attempts := []types.VersionedPackageRef{id}
-	if id.Version == types.VersionCompatible {
+	// When a stability-preferring selector fails, fall back to VersionAny
+	// as a last resort (no stability filtering).
+	if id.Version == types.VersionStable {
 		attempts = append(
 			attempts,
 			types.VersionedPackageRef{
@@ -29,12 +31,23 @@ func (resolver providerCandidateResolver) ResolvePackage(
 					Eco:  id.Eco,
 					Name: id.Name,
 				},
-				Version: types.VersionLatest,
+				Version: types.VersionBeta,
 			},
 			types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
 					Eco:  id.Eco,
 					Name: id.Name,
+				},
+				Version: types.VersionAny,
+			},
+		)
+	} else if id.Version == types.VersionBeta {
+		attempts = append(
+			attempts,
+			types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Platform: id.Platform,
+					Name:     id.Name,
 				},
 				Version: types.VersionAny,
 			},

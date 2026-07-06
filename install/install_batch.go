@@ -330,8 +330,8 @@ func rootScopedProviders(
 			PackageRef: req.PackageRef,
 			Version:    req.Version,
 		}
-		if id.Version == types.VersionAny {
-			id.Version = types.VersionCompatible
+		if id.Platform == types.PlatformAny && serverLoader != types.PlatformAny {
+			id.Platform = serverLoader
 		}
 		for rootKey := range rootKeys {
 			if rootKey != id.StringBase() {
@@ -377,10 +377,6 @@ func prepareBatchIDs(ids []types.VersionedPackageRef) []types.VersionedPackageRe
 	prepared := make([]types.VersionedPackageRef, 0, len(ids))
 
 	for _, id := range ids {
-		if id.Version == types.VersionAny {
-			id.Version = types.VersionCompatible
-		}
-
 		key := id.StringBase()
 		if _, ok := seen[key]; ok {
 			continue

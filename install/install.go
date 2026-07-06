@@ -30,10 +30,6 @@ func Install(
 	}
 
 	// identity packages go through the established platform installer
-	if id.Version == types.VersionAny {
-		id.Version = types.VersionCompatible
-	}
-
 	if err := installEcosystem(ctx, id, options); err != nil {
 		return nil, err
 	}
