@@ -127,7 +127,7 @@ func DependencyToPackage(
 			return p, fmt.Errorf("resolve dependency latest version: %w", err)
 		}
 		p.Name = input.ToProjectName(project.Slug)
-		p.Version = types.VersionCompatible
+		p.Version = types.VersionAny
 		return p, nil
 	} else {
 		return p, ErrInvalidDependency
