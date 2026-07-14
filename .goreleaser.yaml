@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: lucy
+
+builds:
+  - id: lucy
+    main: .
+    binary: lucy
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    tags:
+      - release
+    ldflags:
+      - -s -w
+      - -X github.com/mclucy/lucy/cmd.version={{.Version}}
+      - -X github.com/mclucy/lucy/cmd.commit={{.Commit}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  prerelease: auto
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
