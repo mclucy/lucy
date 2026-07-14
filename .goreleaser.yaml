@@ -27,8 +27,16 @@ builds:
       - -s -w
       - -X github.com/mclucy/lucy/cmd.version={{.Version}}
       - -X github.com/mclucy/lucy/cmd.commit={{.Commit}}
-      - -X github.com/mclucy/lucy/internal/cipher.Key={{.Env.CIPHER_KEY}}
-      - -X github.com/mclucy/lucy/internal/cipher.Ciphertext={{.Env.CIPHER_CIPHERTEXT}}
+      - -X github.com/mclucy/lucy/internal/cipher.keyA={{.Env.CIPHER_KEY_A}}
+      - -X github.com/mclucy/lucy/internal/cipher.keyB={{.Env.CIPHER_KEY_B}}
+      - -X github.com/mclucy/lucy/internal/cipher.ciphertextA={{.Env.CIPHER_CIPHERTEXT_A}}
+      - -X github.com/mclucy/lucy/internal/cipher.ciphertextB={{.Env.CIPHER_CIPHERTEXT_B}}
+      # Tagged releases bind AD to version+commit. Snapshots leave identity empty
+      # so locally generated unbound material decrypts correctly.
+      - >-
+        -X github.com/mclucy/lucy/internal/cipher.releaseVersion={{ if .IsSnapshot }}{{ else }}{{ .Version }}{{ end }}
+      - >-
+        -X github.com/mclucy/lucy/internal/cipher.releaseCommit={{ if .IsSnapshot }}{{ else }}{{ .FullCommit }}{{ end }}
 
 archives:
   - id: default

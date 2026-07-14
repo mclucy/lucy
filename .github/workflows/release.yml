@@ -35,14 +35,34 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
         run: |
           set -euo pipefail
+          # Tag identity for AD binding: version without leading v and checked-out commit.
+          TAG_NAME="${GITHUB_REF_NAME}"
+          VERSION="${TAG_NAME#v}"
+          COMMIT="$(git rev-parse HEAD)"
+          export CIPHER_RELEASE_VERSION="${VERSION}"
+          export CIPHER_RELEASE_COMMIT="${COMMIT}"
           task cipher:generate
-          KEY=$(cut -d= -f2 .cipher_key)
-          TEXT=$(cut -d= -f2 .cipher_ciphertext)
-          echo "::add-mask::${KEY}"
-          echo "::add-mask::${TEXT}"
+          KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
+          KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
+          CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
+          CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
+          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
+            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
+            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
+          fi
+          if [ -z "$KEY_A" ] || [ -z "$KEY_B" ] || [ -z "$CT_A" ] || [ -z "$CT_B" ]; then
+            echo "cipher: incomplete fragments after generate" >&2
+            exit 1
+          fi
+          echo "::add-mask::${KEY_A}"
+          echo "::add-mask::${KEY_B}"
+          echo "::add-mask::${CT_A}"
+          echo "::add-mask::${CT_B}"
           {
-            printf 'CIPHER_KEY=%s\n' "${KEY}"
-            printf 'CIPHER_CIPHERTEXT=%s\n' "${TEXT}"
+            printf 'CIPHER_KEY_A=%s\n' "${KEY_A}"
+            printf 'CIPHER_KEY_B=%s\n' "${KEY_B}"
+            printf 'CIPHER_CIPHERTEXT_A=%s\n' "${CT_A}"
+            printf 'CIPHER_CIPHERTEXT_B=%s\n' "${CT_B}"
           } >> "${GITHUB_ENV}"
 
       - name: Run GoReleaser
