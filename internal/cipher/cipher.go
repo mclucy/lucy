@@ -1,50 +1,64 @@
 // Package cipher provides runtime decryption for embedded secrets.
 // Designed to deter casual extraction, not provide complete security.
 //
-// Usage:
-//   - Build time: go run ./internal/cipher -encrypt YOUR_API_KEY > .cipher_ciphertext
-//   - Runtime: key := cipher.Decode()
+// Build-time material is split into four linker fragments and optionally bound
+// to a release identity (version + commit) via AEAD associated data.
 package cipher
 
 import (
+	"crypto/rand"
 	"encoding/hex"
-	"flag"
+	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
+// Linker-injected material. Set only via -X at build time; never set in source.
+// Four encrypted-material fragments are concatenated inside Decode only.
 var (
-	// Key is the decryption key embedded in the binary.
-	// Generated at build time via go run ./cmd/cipher -keygen
-	Key      = ""
-	keyBytes []byte
+	keyA        string
+	keyB        string
+	ciphertextA string
+	ciphertextB string
+
+	// Public release identity used as AEAD associated data.
+	// Both empty = local unbound material; both set = tagged release.
+	releaseVersion string
+	releaseCommit  string
 )
 
-func init() {
-	if Key == "" {
-		return
-	}
-	var err error
-	keyBytes, err = hex.DecodeString(Key)
-	if err != nil {
-		panic(err)
-	}
-}
+// Fixed domain separator for associated data. Bump if the AD format changes.
+const adDomain = "lucy-cipher-v1"
 
-// Ciphertext is the encrypted API key embedded in the binary.
-// Generated at build time via go run ./internal/cipher -encrypt YOUR_KEY
-var Ciphertext = ""
-
-// Decode decrypts the embedded ciphertext and returns the plaintext.
+// Decode decrypts the embedded ciphertext and returns the plaintext API key.
+//
+// Empty embedding (all four fragments empty) returns ("", nil).
+// Partial material, bad hex, wrong key length, incomplete identity, or
+// ciphertext that is too short returns an error (never panics).
 func Decode() (string, error) {
-	if Ciphertext == "" {
+	if keyA == "" && keyB == "" && ciphertextA == "" && ciphertextB == "" {
 		return "", nil
 	}
+	if keyA == "" || keyB == "" || ciphertextA == "" || ciphertextB == "" {
+		return "", errors.New("cipher: partial embedded material")
+	}
 
-	data, err := hex.DecodeString(Ciphertext)
+	keyBytes, err := hex.DecodeString(keyA + keyB)
+	if err != nil {
+		return "", fmt.Errorf("cipher: malformed key hex: %w", err)
+	}
+	if len(keyBytes) != chacha20poly1305.KeySize {
+		return "", errors.New("cipher: incorrect key length")
+	}
+
+	data, err := hex.DecodeString(ciphertextA + ciphertextB)
+	if err != nil {
+		return "", fmt.Errorf("cipher: malformed ciphertext hex: %w", err)
+	}
+
+	ad, err := associatedData(releaseVersion, releaseCommit)
 	if err != nil {
 		return "", err
 	}
@@ -53,90 +67,72 @@ func Decode() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	if len(data) < aead.NonceSize() {
-		return "", err
+		return "", errors.New("cipher: ciphertext too short")
 	}
 
 	nonce := data[:aead.NonceSize()]
-	ciphertext := data[aead.NonceSize():]
-
-	plaintext, err := aead.Open(nil, nonce, ciphertext, nil)
+	ct := data[aead.NonceSize():]
+	plaintext, err := aead.Open(nil, nonce, ct, ad)
 	if err != nil {
 		return "", err
 	}
-
 	return string(plaintext), nil
 }
 
-// Encrypt encrypts plaintext using the embedded Key and returns hex ciphertext.
-func Encrypt(plaintext string) (string, error) {
-	aead, err := chacha20poly1305.NewX(keyBytes)
-	if err != nil {
-		return "", err
+// GenerateKey returns a fresh 32-byte key from crypto/rand.
+func GenerateKey() ([]byte, error) {
+	key := make([]byte, chacha20poly1305.KeySize)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		return nil, fmt.Errorf("cipher: generate key: %w", err)
 	}
-
-	var nonce [24]byte
-	f, err := os.Open("/dev/urandom")
-	if err != nil {
-		return "", err
-	}
-	io.ReadFull(f, nonce[:])
-	f.Close()
-
-	ciphertext := aead.Seal(nil, nonce[:], []byte(plaintext), nil)
-	result := make([]byte, 0, len(nonce)+len(ciphertext))
-	result = append(result, nonce[:]...)
-	result = append(result, ciphertext...)
-	return hex.EncodeToString(result), nil
+	return key, nil
 }
 
-func main() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\nOptions:\n")
-		fmt.Fprintf(os.Stderr, "  -keygen         Generate new random key\n")
-		fmt.Fprintf(os.Stderr, "  -encrypt KEY   Encrypt KEY with Key\n")
-		flag.PrintDefaults()
+// Encrypt encrypts plaintext with key, binding associated data for version and
+// commit. Both identity fields must be empty (local unbound) or both nonempty
+// (tagged release). Returns hex(nonce || ciphertext).
+func Encrypt(key []byte, plaintext, version, commit string) (string, error) {
+	if len(key) != chacha20poly1305.KeySize {
+		return "", errors.New("cipher: incorrect key length")
 	}
-
-	keygen := flag.Bool("keygen", false, "generate new key")
-	encrypt := flag.String("encrypt", "", "encrypt API key")
-	flag.Parse()
-
-	switch {
-	case *keygen:
-		var data [32]byte
-		f, err := os.Open("/dev/urandom")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
-		}
-		io.ReadFull(f, data[:])
-		f.Close()
-		fmt.Printf("cipher_key=%x\n", data)
-		os.Exit(0)
-	case *encrypt != "":
-		aead, err := chacha20poly1305.NewX(keyBytes)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
-		}
-
-		var nonce [24]byte
-		f, err := os.Open("/dev/urandom")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
-		}
-		io.ReadFull(f, nonce[:])
-		f.Close()
-
-		ciphertext := aead.Seal(nil, nonce[:], []byte(*encrypt), nil)
-		fmt.Printf("cipher_ciphertext=%x\n", nonce)
-		fmt.Printf("%x\n", ciphertext)
-
-	default:
-		flag.Usage()
+	ad, err := associatedData(version, commit)
+	if err != nil {
+		return "", err
 	}
+	aead, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("cipher: read nonce: %w", err)
+	}
+	ct := aead.Seal(nil, nonce, []byte(plaintext), ad)
+	out := make([]byte, 0, len(nonce)+len(ct))
+	out = append(out, nonce...)
+	out = append(out, ct...)
+	return hex.EncodeToString(out), nil
+}
+
+// associatedData builds the canonical AD sequence:
+//
+//	lucy-cipher-v1 \0 <version> \0 <commit>
+//
+// Identity must be both empty or both nonempty.
+func associatedData(version, commit string) ([]byte, error) {
+	vEmpty := version == ""
+	cEmpty := commit == ""
+	if vEmpty != cEmpty {
+		return nil, errors.New("cipher: incomplete release identity")
+	}
+	// domain + NUL + version + NUL + commit
+	n := len(adDomain) + 1 + len(version) + 1 + len(commit)
+	ad := make([]byte, 0, n)
+	ad = append(ad, adDomain...)
+	ad = append(ad, 0)
+	ad = append(ad, version...)
+	ad = append(ad, 0)
+	ad = append(ad, commit...)
+	return ad, nil
 }

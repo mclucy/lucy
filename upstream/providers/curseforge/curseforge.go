@@ -3,8 +3,8 @@
 // CurseForge identifies mods by numeric modId, not by slug. Slug resolution
 // is done via the search endpoint with the slug query parameter.
 //
-// All API requests require an x-api-key header. The key is injected at build
-// time via ldflags into the ApiKey variable.
+// All API requests require an x-api-key header. The key is decoded on first use
+// from linker-injected cipher fragments.
 package curseforge
 
 import (

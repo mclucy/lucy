@@ -30,6 +30,21 @@ jobs:
       - name: Run CI checks
         run: task ci:test
 
+      - name: Prepare cipher embedding
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+        run: |
+          set -euo pipefail
+          task cipher:generate
+          KEY=$(cut -d= -f2 .cipher_key)
+          TEXT=$(cut -d= -f2 .cipher_ciphertext)
+          echo "::add-mask::${KEY}"
+          echo "::add-mask::${TEXT}"
+          {
+            printf 'CIPHER_KEY=%s\n' "${KEY}"
+            printf 'CIPHER_CIPHERTEXT=%s\n' "${TEXT}"
+          } >> "${GITHUB_ENV}"
+
       - name: Run GoReleaser
         run: go tool goreleaser release --clean
         env:

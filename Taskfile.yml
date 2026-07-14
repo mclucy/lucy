@@ -208,4 +208,19 @@ tasks:
   release:snapshot:
     desc: Build a local GoReleaser snapshot without publishing
     cmds:
-      - go tool goreleaser release --snapshot --clean --skip=publish
+      - |
+        set -euo pipefail
+        # Prefer cipher files, then CIPHER_* env, then dotenv-loaded cipher_* vars.
+        # Never put these in Task vars — Task expands vars into command logs.
+        if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
+          export CIPHER_KEY
+          export CIPHER_CIPHERTEXT
+          CIPHER_KEY=$(cut -d= -f2 .cipher_key)
+          CIPHER_CIPHERTEXT=$(cut -d= -f2 .cipher_ciphertext)
+        elif [ -n "${CIPHER_KEY:-}" ] && [ -n "${CIPHER_CIPHERTEXT:-}" ]; then
+          :
+        elif [ -n "${cipher_key:-}" ] && [ -n "${cipher_ciphertext:-}" ]; then
+          export CIPHER_KEY="${cipher_key}"
+          export CIPHER_CIPHERTEXT="${cipher_ciphertext}"
+        fi
+        go tool goreleaser release --snapshot --clean --skip=publish

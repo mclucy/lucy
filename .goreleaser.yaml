@@ -27,6 +27,8 @@ builds:
       - -s -w
       - -X github.com/mclucy/lucy/cmd.version={{.Version}}
       - -X github.com/mclucy/lucy/cmd.commit={{.Commit}}
+      - -X github.com/mclucy/lucy/internal/cipher.Key={{.Env.CIPHER_KEY}}
+      - -X github.com/mclucy/lucy/internal/cipher.Ciphertext={{.Env.CIPHER_CIPHERTEXT}}
 
 archives:
   - id: default
