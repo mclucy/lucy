@@ -38,7 +38,7 @@ task ci:test            # CI checks (optional cipher:generate, then check)
 task ci:build           # CI release build + gzip artifacts
 ```
 
-Build uses ldflags to inject cipher key+ciphertext via `-X github.com/mclucy/lucy/internal/cipher.Key=$KEY`. Dotenv loads `.env`, `.cipher_key`, `.cipher_ciphertext`.
+Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/`ciphertextB`) plus optional release identity (`releaseVersion`/`releaseCommit`). Dotenv loads `.env`, `.cipher_key`, `.cipher_ciphertext`. See `docs/shared/cipher-key-operations.md`.
 
 To run the built binary against a test server directory:
 
@@ -127,7 +127,7 @@ You may find `test_*` directories under the project root. They are sandbox serve
 - **Don't use fmt.Println for user output.** The logger has three tiers for a reason. Use them.
 - **Minecraft knowledge is unreliable.** Don't assume you know how mod loaders, plugin systems, or server internals work. Research or ask.
 - **Upstream providers are routed by Source enum.** `hangar` and `spiget` are defined but not wired into the resolver. Don't assume they work.
-- **The cipher system embeds API keys at build time.** `task cipher:generate` requires `CF_API_KEY` in the environment. Without it, CurseForge integration won't work.
+- **The cipher system embeds API keys at build time.** `task cipher:generate` requires `CF_API_KEY` in the environment. Without it, CurseForge integration won't work. Material is split into four fragments and may be AEAD-bound to release version+commit; see `docs/shared/cipher-key-operations.md`.
 - **Package identifiers are `[source]:[platform/]name[@version]`.** Platform and version are optional. Lucy infers platform from the server environment.
 
 ## Other Rules
