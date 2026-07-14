@@ -14,13 +14,12 @@ vars:
   DEV_GOARCH:
     sh: go env GOARCH
   DEV_BINARY: dist/lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}}-dev
-  LUCY_LDFLAGS:
-    sh: |
-      if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
-        KEY=$(cut -d= -f2 .cipher_key)
-        TEXT=$(cut -d= -f2 .cipher_ciphertext)
-        printf '%s' "-X github.com/mclucy/lucy/internal/cipher.Key=$KEY -X github.com/mclucy/lucy/internal/cipher.Ciphertext=$TEXT"
-      fi
+  LUCY_VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  LUCY_COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+  # SECURITY: cipher Key/Ciphertext must NOT live in this var — Task expands vars into command logs.
+  LUCY_LDFLAGS: -X github.com/mclucy/lucy/cmd.version={{.LUCY_VERSION}} -X github.com/mclucy/lucy/cmd.commit={{.LUCY_COMMIT}}
 
 tasks:
   copyright:add:
@@ -61,17 +60,18 @@ tasks:
     cmds:
       - |
         set -e
-        CF_API_KEY="${CF_API_KEY}"  # Ensure variable is set
-        KEY=$(go run ./tools/cipher -keygen | cut -d= -f2)
-        CIPHERTEXT=$(go run -ldflags "-X github.com/mclucy/lucy/internal/cipher.Key=$KEY" ./tools/cipher -encrypt "$CF_API_KEY" | cut -d= -f2)
+        if [ -z "${CF_API_KEY:-}" ]; then
+          printf "[ERROR] CF_API_KEY is not set\n" >&2
+          exit 1
+        fi
+        KEY=$(go run ./cmd/cipher -keygen | cut -d= -f2)
+        CIPHERTEXT=$(go run -ldflags "-X github.com/mclucy/lucy/internal/cipher.Key=$KEY" ./cmd/cipher -encrypt "$CF_API_KEY" | cut -d= -f2)
         echo "cipher_key=$KEY" > .cipher_key
         echo "cipher_ciphertext=$CIPHERTEXT" > .cipher_ciphertext
-        cat .cipher_key
-        cat .cipher_ciphertext
+        printf "[OK] Wrote .cipher_key and .cipher_ciphertext\n"
     generates:
       - .cipher_key
       - .cipher_ciphertext
-
   check:cf-api-key:
     silent: true
     desc: Verify CF_API_KEY against the CurseForge API
@@ -98,12 +98,20 @@ tasks:
       - clean:release
       - check:cf-api-key
     cmds:
-      - mkdir -p release
-      - GOOS=linux GOARCH=amd64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-linux-amd64
-      - GOOS=linux GOARCH=arm64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-linux-arm64
-      - GOOS=windows GOARCH=amd64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-windows-amd64.exe
-      - GOOS=darwin GOARCH=amd64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-darwin-amd64
-      - GOOS=darwin GOARCH=arm64 go build -ldflags="-w -s {{.LUCY_LDFLAGS}}" -tags release -o release/lucy-darwin-arm64
+      - |
+        set -e
+        mkdir -p release
+        ldflags="-w -s {{.LUCY_LDFLAGS}}"
+        if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
+          KEY=$(cut -d= -f2 .cipher_key)
+          TEXT=$(cut -d= -f2 .cipher_ciphertext)
+          ldflags="$ldflags -X github.com/mclucy/lucy/internal/cipher.Key=$KEY -X github.com/mclucy/lucy/internal/cipher.Ciphertext=$TEXT"
+        fi
+        GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-arm64
     sources:
       - "./**/*.go"
       - "./go.mod"
@@ -114,8 +122,16 @@ tasks:
     deps:
       - check:cf-api-key
     cmds:
-      - mkdir -p dist
-      - GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="{{.LUCY_LDFLAGS}}" -tags debug -o {{.DEV_BINARY}}
+      - |
+        set -e
+        mkdir -p dist
+        ldflags="{{.LUCY_LDFLAGS}}"
+        if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
+          KEY=$(cut -d= -f2 .cipher_key)
+          TEXT=$(cut -d= -f2 .cipher_ciphertext)
+          ldflags="$ldflags -X github.com/mclucy/lucy/internal/cipher.Key=$KEY -X github.com/mclucy/lucy/internal/cipher.Ciphertext=$TEXT"
+        fi
+        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug -o {{.DEV_BINARY}}
     sources:
       - "./**/*.go"
       - "./go.mod"
@@ -183,3 +199,13 @@ tasks:
       - gzip -f release/lucy-windows-amd64.exe
       - gzip -f release/lucy-darwin-amd64
       - gzip -f release/lucy-darwin-arm64
+
+  release:check:
+    desc: Validate .goreleaser.yaml without building or publishing
+    cmds:
+      - go tool goreleaser check
+
+  release:snapshot:
+    desc: Build a local GoReleaser snapshot without publishing
+    cmds:
+      - go tool goreleaser release --snapshot --clean --skip=publish
