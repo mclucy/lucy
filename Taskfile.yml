@@ -18,7 +18,7 @@ vars:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
   LUCY_COMMIT:
     sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
-  # SECURITY: cipher Key/Ciphertext must NOT live in this var — Task expands vars into command logs.
+  # SECURITY: cipher fragments must NOT live in this var — Task expands vars into command logs.
   LUCY_LDFLAGS: -X github.com/mclucy/lucy/cmd.version={{.LUCY_VERSION}} -X github.com/mclucy/lucy/cmd.commit={{.LUCY_COMMIT}}
 
 tasks:
@@ -56,22 +56,59 @@ tasks:
       - go run {{.TASKFILE_DIR}} {{.CLI_ARGS}}
 
   cipher:generate:
-    desc: Generate new cipher key and ciphertext from CF_API_KEY
+    silent: true
+    desc: Generate unbound local cipher material from CF_API_KEY
     cmds:
       - |
-        set -e
+        set -euo pipefail
         if [ -z "${CF_API_KEY:-}" ]; then
           printf "[ERROR] CF_API_KEY is not set\n" >&2
           exit 1
         fi
-        KEY=$(go run ./cmd/cipher -keygen | cut -d= -f2)
-        CIPHERTEXT=$(go run -ldflags "-X github.com/mclucy/lucy/internal/cipher.Key=$KEY" ./cmd/cipher -encrypt "$CF_API_KEY" | cut -d= -f2)
-        echo "cipher_key=$KEY" > .cipher_key
-        echo "cipher_ciphertext=$CIPHERTEXT" > .cipher_ciphertext
-        printf "[OK] Wrote .cipher_key and .cipher_ciphertext\n"
+        # Optional identity for tagged releases (set by CI). Empty = unbound local.
+        if [ -n "${CIPHER_RELEASE_VERSION:-}" ] && [ -n "${CIPHER_RELEASE_COMMIT:-}" ]; then
+          :
+        elif [ -n "${CIPHER_RELEASE_VERSION:-}" ] || [ -n "${CIPHER_RELEASE_COMMIT:-}" ]; then
+          printf "[ERROR] both CIPHER_RELEASE_VERSION and CIPHER_RELEASE_COMMIT must be set together\n" >&2
+          exit 1
+        fi
+        BOUND=false
+        if [ -n "${CIPHER_RELEASE_VERSION:-}" ]; then
+          BOUND=true
+        fi
+        # Secret via stdin only — never on the process argv. Capture four
+        # fragment lines without logging fragment values or the secret.
+        GEN_ARGS=(-encrypt-stdin)
+        if [ -n "${CIPHER_RELEASE_VERSION:-}" ] && [ -n "${CIPHER_RELEASE_COMMIT:-}" ]; then
+          GEN_ARGS+=(-version "${CIPHER_RELEASE_VERSION}" -commit "${CIPHER_RELEASE_COMMIT}")
+        fi
+        # Pipe from env var into stdin; silent:true keeps this body out of Task logs.
+        OUT=$(printf '%s' "${CF_API_KEY}" | go run ./cmd/cipher "${GEN_ARGS[@]}")
+        KEY_A=$(printf '%s\n' "$OUT" | sed -n 's/^cipher_key_a=//p')
+        KEY_B=$(printf '%s\n' "$OUT" | sed -n 's/^cipher_key_b=//p')
+        CT_A=$(printf '%s\n' "$OUT" | sed -n 's/^cipher_ciphertext_a=//p')
+        CT_B=$(printf '%s\n' "$OUT" | sed -n 's/^cipher_ciphertext_b=//p')
+        if [ -z "$KEY_A" ] || [ -z "$KEY_B" ] || [ -z "$CT_A" ] || [ -z "$CT_B" ]; then
+          printf "[ERROR] cipher generator produced incomplete fragments\n" >&2
+          exit 1
+        fi
+        {
+          printf 'cipher_bound=%s\n' "$BOUND"
+          printf 'cipher_key_a=%s\n' "$KEY_A"
+          printf 'cipher_key_b=%s\n' "$KEY_B"
+          printf 'cipher_ciphertext_a=%s\n' "$CT_A"
+          printf 'cipher_ciphertext_b=%s\n' "$CT_B"
+        } > .cipher_key
+        # Keep companion file for dotenv compatibility; ciphertext halves live with key file.
+        {
+          printf 'cipher_ciphertext_a=%s\n' "$CT_A"
+          printf 'cipher_ciphertext_b=%s\n' "$CT_B"
+        } > .cipher_ciphertext
+        printf "[OK] Wrote .cipher_key and .cipher_ciphertext (four fragments)\n"
     generates:
       - .cipher_key
       - .cipher_ciphertext
+
   check:cf-api-key:
     silent: true
     desc: Verify CF_API_KEY against the CurseForge API
@@ -99,13 +136,34 @@ tasks:
       - check:cf-api-key
     cmds:
       - |
-        set -e
+        set -euo pipefail
         mkdir -p release
         ldflags="-w -s {{.LUCY_LDFLAGS}}"
-        if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
-          KEY=$(cut -d= -f2 .cipher_key)
-          TEXT=$(cut -d= -f2 .cipher_ciphertext)
-          ldflags="$ldflags -X github.com/mclucy/lucy/internal/cipher.Key=$KEY -X github.com/mclucy/lucy/internal/cipher.Ciphertext=$TEXT"
+        # Load four fragments from files or env without logging them.
+        if [ -f .cipher_key ]; then
+          KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
+          KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
+          CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
+          CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
+          # Fall back to companion file if halves only there.
+          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
+            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
+            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
+          fi
+          if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
+            ldflags="$ldflags \
+              -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
+              -X github.com/mclucy/lucy/internal/cipher.keyB=$KEY_B \
+              -X github.com/mclucy/lucy/internal/cipher.ciphertextA=$CT_A \
+              -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
+            # Manual Taskfile releases remain unbound (empty identity) unless
+            # CIPHER_RELEASE_* is provided explicitly for a tagged build.
+            if [ -n "${CIPHER_RELEASE_VERSION:-}" ] && [ -n "${CIPHER_RELEASE_COMMIT:-}" ]; then
+              ldflags="$ldflags \
+                -X github.com/mclucy/lucy/internal/cipher.releaseVersion=${CIPHER_RELEASE_VERSION} \
+                -X github.com/mclucy/lucy/internal/cipher.releaseCommit=${CIPHER_RELEASE_COMMIT}"
+            fi
+          fi
         fi
         GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-amd64
         GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-arm64
@@ -123,13 +181,25 @@ tasks:
       - check:cf-api-key
     cmds:
       - |
-        set -e
+        set -euo pipefail
         mkdir -p dist
         ldflags="{{.LUCY_LDFLAGS}}"
-        if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
-          KEY=$(cut -d= -f2 .cipher_key)
-          TEXT=$(cut -d= -f2 .cipher_ciphertext)
-          ldflags="$ldflags -X github.com/mclucy/lucy/internal/cipher.Key=$KEY -X github.com/mclucy/lucy/internal/cipher.Ciphertext=$TEXT"
+        if [ -f .cipher_key ]; then
+          KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
+          KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
+          CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
+          CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
+          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
+            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
+            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
+          fi
+          if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
+            ldflags="$ldflags \
+              -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
+              -X github.com/mclucy/lucy/internal/cipher.keyB=$KEY_B \
+              -X github.com/mclucy/lucy/internal/cipher.ciphertextA=$CT_A \
+              -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
+          fi
         fi
         GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug -o {{.DEV_BINARY}}
     sources:
@@ -206,21 +276,35 @@ tasks:
       - go tool goreleaser check
 
   release:snapshot:
-    desc: Build a local GoReleaser snapshot without publishing
+    desc: Build a local GoReleaser snapshot without publishing (unbound cipher identity)
     cmds:
       - |
         set -euo pipefail
-        # Prefer cipher files, then CIPHER_* env, then dotenv-loaded cipher_* vars.
+        # Prefer four-fragment cipher files, then CIPHER_* env, then dotenv-loaded vars.
         # Never put these in Task vars — Task expands vars into command logs.
-        if [ -f .cipher_key ] && [ -f .cipher_ciphertext ]; then
-          export CIPHER_KEY
-          export CIPHER_CIPHERTEXT
-          CIPHER_KEY=$(cut -d= -f2 .cipher_key)
-          CIPHER_CIPHERTEXT=$(cut -d= -f2 .cipher_ciphertext)
-        elif [ -n "${CIPHER_KEY:-}" ] && [ -n "${CIPHER_CIPHERTEXT:-}" ]; then
+        # Snapshot identity is empty in .goreleaser.yaml so material must be unbound.
+        if [ -f .cipher_key ]; then
+          if grep -qx 'cipher_bound=true' .cipher_key; then
+            printf "[ERROR] bound cipher material cannot be used for a snapshot; run task cipher:generate without CIPHER_RELEASE_*\n" >&2
+            exit 1
+          fi
+          export CIPHER_KEY_A CIPHER_KEY_B CIPHER_CIPHERTEXT_A CIPHER_CIPHERTEXT_B
+          CIPHER_KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
+          CIPHER_KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
+          CIPHER_CIPHERTEXT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
+          CIPHER_CIPHERTEXT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
+          if [ -z "$CIPHER_CIPHERTEXT_A" ] && [ -f .cipher_ciphertext ]; then
+            CIPHER_CIPHERTEXT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
+            CIPHER_CIPHERTEXT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
+          fi
+        elif [ -n "${CIPHER_KEY_A:-}" ] && [ -n "${CIPHER_KEY_B:-}" ] \
+          && [ -n "${CIPHER_CIPHERTEXT_A:-}" ] && [ -n "${CIPHER_CIPHERTEXT_B:-}" ]; then
           :
-        elif [ -n "${cipher_key:-}" ] && [ -n "${cipher_ciphertext:-}" ]; then
-          export CIPHER_KEY="${cipher_key}"
-          export CIPHER_CIPHERTEXT="${cipher_ciphertext}"
+        elif [ -n "${cipher_key_a:-}" ] && [ -n "${cipher_key_b:-}" ] \
+          && [ -n "${cipher_ciphertext_a:-}" ] && [ -n "${cipher_ciphertext_b:-}" ]; then
+          export CIPHER_KEY_A="${cipher_key_a}"
+          export CIPHER_KEY_B="${cipher_key_b}"
+          export CIPHER_CIPHERTEXT_A="${cipher_ciphertext_a}"
+          export CIPHER_CIPHERTEXT_B="${cipher_ciphertext_b}"
         fi
         go tool goreleaser release --snapshot --clean --skip=publish
