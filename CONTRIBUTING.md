@@ -23,15 +23,17 @@ CI includes testing and building. However, testing locally helps us merging your
 
 We do not reject AI-written code. However, you have the duty to:
 
-- Disclose the model and agent client used
-- Dislcose how did you use agents (generate code, understand, etc.)
-- If possible, share your prompts
-- Setup your agent according to the [following section](#agents-setup)
+- Disclose the model and agent client used.
+- Dislcose how did you use agents (generate code, understand the codebase, etc.).
+- If possible, share your prompts.
+- Setup your agent according to the [following section](#agents-setup).
 
 You must not:
 
-- Dispatch highly automated agents without clear human intent (e.g., "scan the codebase and fix all bugs you found")
-- Generate PR/Issue messages completely with AI. You must be able to elaborate your design/fix.
+- Dispatch highly automated agents without clear human intent (e.g., "scan the codebase and fix all bugs you found").
+- Generate PR/Issue messages completely with AI. You must be able to understand and elaborate your design/fix.
+- Generate long pieces of documetations with AI.
+- Use agents to communicate with others on behalf of you.
 
 ## Agents setup
 
