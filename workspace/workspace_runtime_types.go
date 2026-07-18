@@ -1,157 +1,90 @@
 package workspace
 
-import (
-	"slices"
+import "github.com/mclucy/lucy/types"
 
-	"github.com/mclucy/lucy/types"
-)
+type RuntimeArtifact struct {
+	Identity types.VersionedPackageRef `json:"identity"`
+	Path     string                    `json:"path"`
+}
+
+type EffectiveEcosystem struct {
+	Ecosystem types.Ecosystem     `json:"ecosystem"`
+	Verdict   types.CompatVerdict `json:"verdict"`
+}
 
 type ServerInstance struct {
-	PrimaryCore     *types.VersionedPackageRef  `json:"primary_core,omitempty"`
-	Cores           []types.VersionedPackageRef `json:"cores,omitempty"`
-	Packages        []types.DiscoveredPackage   `json:"packages,omitempty"`
-	PrimaryEntrance string                      `json:"primary_entrance,omitempty"`
-	topology        *types.ServerTopology       `json:"-"`
+	PrimaryRuntime    *RuntimeArtifact            `json:"primary_runtime,omitempty"`
+	RuntimeComponents []types.VersionedPackageRef `json:"runtime_components"`
+	Packages          []types.DiscoveredPackage   `json:"-"`
 }
 
-func (s *ServerInstance) PrimaryEcosystem() []types.Ecosystem {
-	if s == nil {
-		return nil
-	}
-	if s.PrimaryCore == nil {
-		return append([]types.Ecosystem(nil), ecosystemsFromCoreRefs(s.Cores)...)
-	}
-	return ecosystemsFromCoreRefs([]types.VersionedPackageRef{*s.PrimaryCore})
+var UnknownExecutable = &ServerInstance{}
+
+var NoExecutable = &ServerInstance{}
+
+func (s *ServerInstance) IsValid() bool {
+	return s != nil &&
+		s != NoExecutable &&
+		s != UnknownExecutable &&
+		s.PrimaryRuntime != nil &&
+		s.PrimaryRuntime.Identity.PackageRef != (types.PackageRef{}) &&
+		s.PrimaryRuntime.Path != ""
 }
 
-func (s *ServerInstance) RuntimeEcosystems() []types.Ecosystem {
-	if s == nil {
-		return nil
-	}
-	return appendUniqueEcosystems(
-		nil,
-		append(s.PrimaryEcosystem(), s.SecondaryEcosystem()...)...,
-	)
-}
-
-func (s *ServerInstance) SupportsFabricLoader() bool {
-	if s == nil {
-		return false
-	}
-	return slices.Contains(s.RuntimeEcosystems(), types.EcoFabric)
-}
-
-func (s *ServerInstance) SecondaryEcosystem() []types.Ecosystem {
-	if s == nil {
-		return nil
-	}
-	primary := s.PrimaryEcosystem()
-	return append(
-		[]types.Ecosystem(nil),
-		secondaryEcosystemsFromPackages(primary, s.Packages)...,
-	)
+func (s *ServerInstance) Analyzable() bool {
+	return s.IsValid()
 }
 
 func (s *ServerInstance) GameVersion() types.BareVersion {
 	if s == nil {
 		return types.VersionUnknown
 	}
-	for _, ref := range s.Cores {
-		if ref.Eco != types.EcoMinecraft &&
-			ref.Name != "minecraft" &&
-			ref.Name != "mc" {
+	for _, component := range s.RuntimeComponents {
+		if component.Eco != types.EcoMinecraft ||
+			component.Name != "minecraft" {
 			continue
 		}
-		if ref.Version != types.VersionUnknown &&
-			ref.Version != types.VersionNone &&
-			ref.Version != "" {
-			return ref.Version
+		if concreteRuntimeVersion(component.Version) {
+			return component.Version
 		}
 	}
 	return types.VersionUnknown
-}
-
-var UnknownExecutable = &ServerInstance{
-	topology: types.TopologyUnknown,
-}
-
-var NoExecutable = &ServerInstance{
-	topology: types.TopologyEmpty,
-}
-
-func (e *ServerInstance) IsValid() bool {
-	return e != nil && e != NoExecutable && e != UnknownExecutable && e.PrimaryCore != nil
-}
-
-func (e *ServerInstance) Analyzable() bool {
-	return e.IsValid()
 }
 
 func (s *ServerInstance) DerivedModLoader() types.Ecosystem {
 	if s == nil || !s.IsValid() {
 		return types.EcoUnspecified
 	}
-	if core, ok := types.LookupCore(s.PrimaryCore.PackageRef); ok {
-		for _, eco := range core.SupportedEcosystems() {
-			if modLoaderEcosystem(eco) {
-				return eco
-			}
+	for _, component := range s.RuntimeComponents {
+		if component.Eco == types.EcoFabric &&
+			(component.Name == "fabric-loader" ||
+				component.Name == "fabricloader") {
+			return types.EcoFabric
 		}
-	}
-	for _, eco := range s.PrimaryEcosystem() {
-		if modLoaderEcosystem(eco) {
-			return eco
+		if component.Eco == types.EcoForge && component.Name == "forge" {
+			return types.EcoForge
+		}
+		if component.Eco == types.EcoNeoforge &&
+			component.Name == "neoforge" {
+			return types.EcoNeoforge
 		}
 	}
 	return types.EcoMinecraft
 }
 
-func (s *ServerInstance) DerivedLoaderVersion() string {
-	if s == nil || s.PrimaryCore == nil {
-		return "unknown"
-	}
-	loader := s.DerivedModLoader()
-	if s.PrimaryCore.Eco == loader || s.PrimaryCore.PackageRef.Eco == loader || primaryCoreSupports(*s.PrimaryCore, loader) {
-		if s.PrimaryCore.Version != types.VersionUnknown && s.PrimaryCore.Version != "" {
-			return s.PrimaryCore.Version.String()
-		}
-	}
-	return "unknown"
-}
-
 func (s *ServerInstance) DerivedServerCore() string {
-	if s == nil || s.PrimaryCore == nil {
+	if s == nil || s.PrimaryRuntime == nil {
 		return ""
 	}
-	return s.PrimaryCore.Name.String()
+	return s.PrimaryRuntime.Identity.Name.String()
 }
 
-func (s *ServerInstance) RefreshPrimaryCore() {
-	if s == nil {
-		return
-	}
-	s.PrimaryCore = nil
-	for i := range s.Cores {
-		if runtimeRefMatchesPrimaryNode(s.Cores[i], s.topology) {
-			s.PrimaryCore = &s.Cores[i]
-			return
-		}
-	}
-	for i := range s.Cores {
-		if _, ok := types.LookupCore(s.Cores[i].PackageRef); ok {
-			s.PrimaryCore = &s.Cores[i]
-			return
-		}
-	}
-}
-
-func runtimeRefMatchesPrimaryNode(
-	ref types.VersionedPackageRef,
-	topology *types.ServerTopology,
-) bool {
-	if topology == nil || !topology.Resolved() {
+func concreteRuntimeVersion(version types.BareVersion) bool {
+	switch version {
+	case "", types.VersionNone, types.VersionUnknown, types.VersionAny,
+		types.VersionStable, types.VersionBeta:
 		return false
+	default:
+		return true
 	}
-	nodeID, ok := RuntimeIdentityNode(ref)
-	return ok && nodeID == topology.PrimaryNode
 }

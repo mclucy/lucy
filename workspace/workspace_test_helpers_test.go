@@ -23,35 +23,3 @@ func makeDiscoveredPackage(
 		Path: path,
 	}
 }
-
-// makeNode builds a RuntimeNode for topology construction in tests.
-func makeNode(
-	id types.RuntimeNodeID,
-	caps ...types.RuntimeCapability,
-) types.RuntimeNode {
-	return types.RuntimeNode{
-		ID:           id,
-		Capabilities: caps,
-	}
-}
-
-// makeEdge builds a RuntimeEdge.
-func makeEdge(
-	from, to types.RuntimeNodeID,
-	kind types.RuntimeEdgeVerb,
-) types.RuntimeEdge {
-	return types.RuntimeEdge{From: from, To: to, Verb: kind}
-}
-
-// makeTopology builds a RuntimeTopology with the given primary node, nodes, and edges.
-func makeTopology(
-	primary types.RuntimeNodeID,
-	nodes []types.RuntimeNode,
-	edges []types.RuntimeEdge,
-) *types.ServerTopology {
-	return &types.ServerTopology{
-		PrimaryNode: primary,
-		Nodes:       nodes,
-		Edges:       edges,
-	}
-}

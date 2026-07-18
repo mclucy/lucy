@@ -7,343 +7,117 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func topologyWithCapability(capability types.RuntimeCapability) *types.ServerTopology {
-	return &types.ServerTopology{
-		PrimaryNode: types.RuntimeNodeBukkit,
-		Nodes: []types.RuntimeNode{
-			{
-				ID:           types.RuntimeNodeBukkit,
-				Role:         types.RuntimeRolePluginCore,
-				Capabilities: []types.RuntimeCapability{capability},
-			},
-		},
-	}
-}
-
-func topologyWithCapabilities(capabilities ...types.RuntimeCapability) *types.ServerTopology {
-	return &types.ServerTopology{
-		PrimaryNode: types.RuntimeNodeBukkit,
-		Nodes: []types.RuntimeNode{
-			{
-				ID:           types.RuntimeNodeBukkit,
-				Role:         types.RuntimeRolePluginCore,
-				Capabilities: capabilities,
-			},
-		},
-	}
-}
-
-func TestProviderSourcesFromTopology_BukkitFamily(t *testing.T) {
-	curseforgePresent := DefaultRegistry().has(types.SourceCurseForge)
-
-	cases := []struct {
-		name       string
-		capability types.RuntimeCapability
-	}{
-		{"bukkit plugins", types.CapabilityBukkitAPI},
-		{"spigot plugins", types.CapabilitySpigotAPI},
-		{"paper plugins", types.CapabilityPaperAPI},
-		{"purpur plugins", types.CapabilityPurpurAPI},
-		{"folia plugins", types.CapabilityFoliaAPI},
-	}
-
-	for _, tt := range cases {
-		t.Run(
-			tt.name, func(t *testing.T) {
-				resolution := providerSourcesFromEcosystems(ecosystemForCapability(tt.capability))
-
-				if resolution.fallback {
-					t.Fatalf(
-						"unexpected fallback for Bukkit-family capability %q",
-						tt.capability,
-					)
-				}
-				if resolution.empty {
-					t.Fatalf(
-						"unexpected empty resolution for Bukkit-family capability %q",
-						tt.capability,
-					)
-				}
-
-				mustContain := []types.SourceId{
-					types.SourceModrinth,
-					types.SourceHangar,
-					types.SourceSpiget,
-				}
-				for _, source := range mustContain {
-					if !slices.Contains(resolution.sources, source) {
-						t.Errorf(
-							"expected source %s in result, got %v",
-							source,
-							resolution.sources,
-						)
-					}
-				}
-
-				if slices.Contains(resolution.sources, types.SourceCurseForge) {
-					t.Errorf(
-						"CurseForge must never appear for Bukkit-family routing, got %v",
-						resolution.sources,
-					)
-				}
-
-				if slices.Contains(resolution.sources, types.SourceMCDR) {
-					t.Errorf(
-						"MCDR must never appear for Bukkit-family routing, got %v",
-						resolution.sources,
-					)
-				}
-
-				if curseforgePresent {
-					t.Logf(
-						"curseforge available in this build; verified it stays excluded for %q",
-						tt.capability,
-					)
-				}
-
-				expectedOrder := []types.SourceId{
-					types.SourceModrinth,
-					types.SourceHangar,
-					types.SourceSpiget,
-				}
-				if !slices.Equal(resolution.sources, expectedOrder) {
-					t.Errorf(
-						"source order changed for %q: got %v, want %v",
-						tt.capability,
-						resolution.sources,
-						expectedOrder,
-					)
-				}
-			},
-		)
-	}
-}
-
-func TestProviderSourcesFromTopology_ModLoaders(t *testing.T) {
-	curseforgePresent := DefaultRegistry().has(types.SourceCurseForge)
-
-	cases := []struct {
-		name       string
-		capability types.RuntimeCapability
-	}{
-		{"fabric mods", types.CapabilityFabricLoader},
-		{"forge mods", types.CapabilityForge},
-		{"neoforge mods", types.CapabilityNeoforge},
-	}
-
-	for _, tt := range cases {
-		t.Run(
-			tt.name, func(t *testing.T) {
-				resolution := providerSourcesFromEcosystems(ecosystemForCapability(tt.capability))
-
-				if resolution.fallback {
-					t.Fatalf(
-						"unexpected fallback for mod-loader capability %q",
-						tt.capability,
-					)
-				}
-				if resolution.empty {
-					t.Fatalf(
-						"unexpected empty resolution for mod-loader capability %q",
-						tt.capability,
-					)
-				}
-				if !slices.Contains(resolution.sources, types.SourceModrinth) {
-					t.Errorf(
-						"expected Modrinth for mod-loader capability %q, got %v",
-						tt.capability,
-						resolution.sources,
-					)
-				}
-
-				hasCurse := slices.Contains(
-					resolution.sources,
-					types.SourceCurseForge,
+func TestProviderSourcesFromEcosystems_BukkitFamily(t *testing.T) {
+	for _, ecosystem := range []types.Ecosystem{
+		types.EcoBukkit,
+		types.EcoPaper,
+	} {
+		t.Run(ecosystem.String(), func(t *testing.T) {
+			resolution := providerSourcesFromEcosystems(
+				[]types.Ecosystem{ecosystem},
+			)
+			want := []types.SourceId{
+				types.SourceModrinth,
+				types.SourceHangar,
+				types.SourceSpiget,
+			}
+			if resolution.fallback || resolution.empty {
+				t.Fatalf(
+					"unexpected unresolved routing: fallback=%v empty=%v",
+					resolution.fallback,
+					resolution.empty,
 				)
-				if curseforgePresent && !hasCurse {
-					t.Errorf(
-						"expected CurseForge for mod-loader %q (available in build), got %v",
-						tt.capability,
-						resolution.sources,
-					)
-				}
-				if !curseforgePresent && hasCurse {
-					t.Errorf(
-						"unexpected CurseForge for mod-loader %q (not available in build), got %v",
-						tt.capability,
-						resolution.sources,
-					)
-				}
-
-				if slices.Contains(resolution.sources, types.SourceHangar) {
-					t.Errorf(
-						"Hangar must not appear for mod-loader capability %q, got %v",
-						tt.capability,
-						resolution.sources,
-					)
-				}
-				if slices.Contains(resolution.sources, types.SourceSpiget) {
-					t.Errorf(
-						"Spiget must not appear for mod-loader capability %q, got %v",
-						tt.capability,
-						resolution.sources,
-					)
-				}
-			},
-		)
+			}
+			if !slices.Equal(resolution.sources, want) {
+				t.Errorf("got %v, want %v", resolution.sources, want)
+			}
+		})
 	}
 }
 
-func TestProviderSourcesFromTopology_MCDR(t *testing.T) {
+func TestProviderSourcesFromEcosystems_ModLoaders(t *testing.T) {
+	for _, ecosystem := range []types.Ecosystem{
+		types.EcoFabric,
+		types.EcoForge,
+		types.EcoNeoforge,
+	} {
+		t.Run(ecosystem.String(), func(t *testing.T) {
+			resolution := providerSourcesFromEcosystems(
+				[]types.Ecosystem{ecosystem},
+			)
+			if resolution.fallback || resolution.empty {
+				t.Fatalf(
+					"unexpected unresolved routing: fallback=%v empty=%v",
+					resolution.fallback,
+					resolution.empty,
+				)
+			}
+			if !slices.Contains(resolution.sources, types.SourceModrinth) {
+				t.Errorf("expected Modrinth, got %v", resolution.sources)
+			}
+			hasCurseForge := slices.Contains(
+				resolution.sources,
+				types.SourceCurseForge,
+			)
+			if hasCurseForge != DefaultRegistry().has(types.SourceCurseForge) {
+				t.Errorf(
+					"CurseForge availability mismatch, got sources %v",
+					resolution.sources,
+				)
+			}
+			if slices.Contains(resolution.sources, types.SourceHangar) ||
+				slices.Contains(resolution.sources, types.SourceSpiget) {
+				t.Errorf(
+					"Bukkit sources must not route mod packages: %v",
+					resolution.sources,
+				)
+			}
+		})
+	}
+}
+
+func TestProviderSourcesFromEcosystems_MCDR(t *testing.T) {
 	resolution := providerSourcesFromEcosystems(
-		ecosystemForCapability(types.CapabilityMcdr),
+		[]types.Ecosystem{types.EcoMcdr},
 	)
-
-	if resolution.fallback {
-		t.Fatal("unexpected fallback for MCDR capability")
-	}
-	if resolution.empty {
-		t.Fatal("unexpected empty resolution for MCDR capability")
-	}
-
 	want := []types.SourceId{types.SourceMCDR}
-	if !slices.Equal(resolution.sources, want) {
-		t.Errorf("MCDR routing: got %v, want %v", resolution.sources, want)
+	if resolution.fallback || resolution.empty ||
+		!slices.Equal(resolution.sources, want) {
+		t.Fatalf("got %+v, want sources %v", resolution, want)
 	}
 }
 
-func TestProviderSourcesFromTopology_ProxyOnly(t *testing.T) {
-	resolution := providerSourcesFromEcosystems(
-		ecosystemForCapability(types.CapabilityVelocity),
+func TestProviderSourcesFromEcosystems_UnsupportedAndProxy(t *testing.T) {
+	unsupported := providerSourcesFromEcosystems(
+		[]types.Ecosystem{types.EcoSponge},
 	)
-
-	if !resolution.empty {
-		t.Errorf(
-			"proxy-only topology should produce empty sources, got %v",
-			resolution.sources,
-		)
-	}
-	if resolution.fallback {
-		t.Error("reversed-proxy capability with no mapped ecosystems should not trigger fallback")
-	}
-}
-
-func TestProviderSourcesFromTopology_NonBukkitPluginCapabilities(t *testing.T) {
-	// Velocity, Bungeecord, Sponge, ProtocolBridge are not part of the
-	// Bukkit-family routing bucket. A node with only one of these must
-	// produce no sources and must trigger fallback (no sawKnownCapability).
-	cases := []struct {
-		name       string
-		capability types.RuntimeCapability
-	}{
-		{"velocity", types.CapabilityVelocity},
-		{"bungeecord", types.CapabilityBungeecord},
-		{"sponge", types.CapabilitySpongeAPI},
-		{"protocol bridge", types.CapabilityBedrockBridge},
+	if !unsupported.fallback || !unsupported.empty {
+		t.Fatalf("unsupported ecosystem should fall back, got %+v", unsupported)
 	}
 
-	for _, tt := range cases {
-		t.Run(
-			tt.name, func(t *testing.T) {
-				resolution := providerSourcesFromEcosystems(ecosystemForCapability(tt.capability))
-
-				if len(resolution.sources) != 0 {
-					t.Errorf(
-						"%s capability must not produce sources, got %v",
-						tt.name,
-						resolution.sources,
-					)
-				}
-				wantFallback := tt.capability == types.CapabilitySpongeAPI ||
-					tt.capability == types.CapabilityBedrockBridge
-				if resolution.fallback != wantFallback {
-					t.Errorf(
-						"%s capability fallback=%v, want %v",
-						tt.name,
-						resolution.fallback,
-						wantFallback,
-					)
-				}
-			},
-		)
+	proxy := providerSourcesFromEcosystems(
+		[]types.Ecosystem{types.EcoVelocity},
+	)
+	if proxy.fallback || !proxy.empty {
+		t.Fatalf("known proxy ecosystem should resolve empty, got %+v", proxy)
 	}
 }
 
-func TestProviderSourcesFromTopology_MultipleBukkitFamilyNodes(t *testing.T) {
-	// Multiple Bukkit-family nodes (e.g. Paper primary + Folia bridge) must
-	// not produce duplicate sources and must keep the canonical order.
-	topology := &types.ServerTopology{
-		PrimaryNode: types.RuntimeNodePaper,
-		Nodes: []types.RuntimeNode{
-			{
-				ID:   types.RuntimeNodePaper,
-				Role: types.RuntimeRolePluginCore,
-				Capabilities: []types.RuntimeCapability{
-					types.CapabilityPaperAPI,
-				},
-			},
-			{
-				ID:   types.RuntimeNodeFolia,
-				Role: types.RuntimeRolePluginCore,
-				Capabilities: []types.RuntimeCapability{
-					types.CapabilityFoliaAPI,
-				},
-			},
-		},
-	}
-
-	resolution := providerSourcesFromEcosystems(ecosystemsFromTopology(topology))
-
-	if resolution.fallback || resolution.empty {
-		t.Fatalf(
-			"expected concrete sources for multi-node Bukkit-family topology, got fallback=%v empty=%v sources=%v",
-			resolution.fallback,
-			resolution.empty,
-			resolution.sources,
-		)
-	}
-
-	want := []types.SourceId{
+func TestProviderSourcesFromEcosystems_MixedRuntime(t *testing.T) {
+	resolution := providerSourcesFromEcosystems(
+		[]types.Ecosystem{types.EcoPaper, types.EcoFabric},
+	)
+	for _, source := range []types.SourceId{
 		types.SourceModrinth,
 		types.SourceHangar,
 		types.SourceSpiget,
-	}
-	if !slices.Equal(resolution.sources, want) {
-		t.Errorf(
-			"multi-node Bukkit-family: got %v, want %v",
-			resolution.sources,
-			want,
-		)
-	}
-}
-
-func TestProviderSourcesFromTopology_MixedBukkitAndModLoader(t *testing.T) {
-	// A single node with both FabricMods and PaperPlugins must include
-	// Modrinth (both), Hangar + Spiget (Paper), and CurseForge (Fabric) when
-	// available. CurseForge should never appear attached to the Bukkit-family
-	// portion.
-	resolution := providerSourcesFromEcosystems(
-		ecosystemForCapability(types.CapabilityFabricLoader, types.CapabilityPaperAPI),
-	)
-
-	curseforgePresent := DefaultRegistry().has(types.SourceCurseForge)
-
-	mustContain := []types.SourceId{
-		types.SourceModrinth,
-		types.SourceHangar,
-		types.SourceSpiget,
-	}
-	for _, source := range mustContain {
+	} {
 		if !slices.Contains(resolution.sources, source) {
 			t.Errorf("expected source %s, got %v", source, resolution.sources)
 		}
 	}
-
-	hasCurse := slices.Contains(resolution.sources, types.SourceCurseForge)
-	if curseforgePresent && !hasCurse {
-		t.Errorf(
-			"expected CurseForge for mixed topology (Fabric + Paper) when available, got %v",
-			resolution.sources,
-		)
+	if DefaultRegistry().has(types.SourceCurseForge) &&
+		!slices.Contains(resolution.sources, types.SourceCurseForge) {
+		t.Errorf("expected CurseForge when available, got %v", resolution.sources)
 	}
 }

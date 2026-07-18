@@ -201,14 +201,21 @@ func buildSpongeExecutableEvidence(
 	filePath string,
 	signals spongeManifestSignals,
 ) *ExecutableEvidence {
-	identities := []types.VersionedPackageRef{
-		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoSponge,
-				Name: input.ToProjectName("sponge"),
-			},
-			Version: signals.spongeVersion,
+	primaryName := "spongevanilla"
+	switch signals.flavor {
+	case spongeFlavorForge:
+		primaryName = "spongeforge"
+	case spongeFlavorNeo:
+		primaryName = "spongeneo"
+	}
+	primary := types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoSponge,
+			Name: input.ToProjectName(primaryName),
 		},
+		Version: signals.spongeVersion,
+	}
+	components := []types.VersionedPackageRef{
 		{
 			PackageRef: types.PackageRef{
 				Eco:  types.EcoMinecraft,
@@ -218,26 +225,10 @@ func buildSpongeExecutableEvidence(
 		},
 	}
 
-	spongeNode := types.RuntimeNode{
-		ID:   types.RuntimeNodeSponge,
-		Role: types.RuntimeRolePluginCore,
-		Capabilities: []types.RuntimeCapability{
-			types.CapabilitySpongeAPI,
-		},
-	}
-
-	nodes := []types.RuntimeNode{spongeNode}
-
 	switch signals.flavor {
 	case spongeFlavorForge:
-		spongeNode.Role = types.RuntimeRoleHybrid
-		spongeNode.Capabilities = append(
-			[]types.RuntimeCapability{types.CapabilitySpongeAPI},
-			types.CapabilityForge.Populate()...,
-		)
-		nodes[0] = spongeNode
-		identities = append(
-			identities, types.VersionedPackageRef{
+		components = append(
+			components, types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
 					Eco:  types.EcoForge,
 					Name: input.ToProjectName("forge"),
@@ -246,14 +237,8 @@ func buildSpongeExecutableEvidence(
 			},
 		)
 	case spongeFlavorNeo:
-		spongeNode.Role = types.RuntimeRoleHybrid
-		spongeNode.Capabilities = append(
-			[]types.RuntimeCapability{types.CapabilitySpongeAPI},
-			types.CapabilityNeoforge.Populate()...,
-		)
-		nodes[0] = spongeNode
-		identities = append(
-			identities, types.VersionedPackageRef{
+		components = append(
+			components, types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
 					Eco:  types.EcoNeoforge,
 					Name: input.ToProjectName("neoforge"),
@@ -264,13 +249,9 @@ func buildSpongeExecutableEvidence(
 	}
 
 	return &ExecutableEvidence{
-		PrimaryEntrance:   filePath,
-		GameVersion:       signals.gameVersion,
-		RuntimeIdentities: identities,
-		Topology: &types.ServerTopology{
-			PrimaryNode: types.RuntimeNodeSponge,
-			Nodes:       nodes,
-		},
+		PrimaryPath:       filePath,
+		PrimaryRuntime:    &primary,
+		RuntimeComponents: components,
 	}
 }
 

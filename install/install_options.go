@@ -40,7 +40,7 @@ func (o InstallOptions) withDefaults() InstallOptions {
 				return nil
 			}
 			providers, err := routing.ResolveProvidersForRuntime(
-				server.RuntimeEcosystems(),
+				effectiveRuntimeEcosystems(server),
 				types.SourceAuto,
 			)
 			if err != nil {
@@ -50,4 +50,36 @@ func (o InstallOptions) withDefaults() InstallOptions {
 		}
 	}
 	return o
+}
+
+func effectiveRuntimeEcosystems(
+	server *workspace.ServerInstance,
+) []types.Ecosystem {
+	if server == nil {
+		return nil
+	}
+	offers := server.EffectiveEcosystems()
+	ecosystems := make([]types.Ecosystem, 0, len(offers))
+	for _, offer := range offers {
+		ecosystems = append(ecosystems, offer.Ecosystem)
+	}
+	return ecosystems
+}
+
+func defaultRegularEcosystem(
+	server *workspace.ServerInstance,
+) types.Ecosystem {
+	if server == nil {
+		return types.EcoUnspecified
+	}
+	if loader := server.DerivedModLoader(); loader.IsModding() {
+		return loader
+	}
+	for _, offer := range server.EffectiveEcosystems() {
+		if offer.Verdict == types.CompatCompatible &&
+			offer.Ecosystem.IsSearchEcosystem() {
+			return offer.Ecosystem
+		}
+	}
+	return types.EcoUnspecified
 }

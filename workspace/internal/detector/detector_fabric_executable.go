@@ -237,36 +237,28 @@ func newFabricExecutableEvidence(
 	loaderVersion types.BareVersion,
 	gameVersion types.BareVersion,
 ) *ExecutableEvidence {
-	return &ExecutableEvidence{
-		PrimaryEntrance: filePath,
-		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.VersionedPackageRef{
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoFabric,
-					Name: "fabric",
-				},
-				Version: loaderVersion,
-			},
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMinecraft,
-					Name: "minecraft",
-				},
-				Version: gameVersion,
-			},
+	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoFabric,
+			Name: "fabric",
 		},
-		Topology: &types.ServerTopology{
-			PrimaryNode: "fabric",
-			Nodes: []types.RuntimeNode{
-				{
-					ID:           "fabric",
-					Role:         types.RuntimeRoleModLoader,
-					Capabilities: []types.RuntimeCapability{types.CapabilityFabricLoader},
-				},
+		Version: loaderVersion,
+	}, RuntimeComponents: []types.VersionedPackageRef{
+		{
+			PackageRef: types.PackageRef{
+				Eco:  types.EcoFabric,
+				Name: "fabric-loader",
 			},
+			Version: loaderVersion,
 		},
-	}
+		{
+			PackageRef: types.PackageRef{
+				Eco:  types.EcoMinecraft,
+				Name: "minecraft",
+			},
+			Version: gameVersion,
+		},
+	}}
 }
 
 func init() {

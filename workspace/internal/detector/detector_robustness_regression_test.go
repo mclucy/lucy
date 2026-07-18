@@ -27,11 +27,19 @@ func TestVanillaDetectorDetectsVanillaServerJson(t *testing.T) {
 	if evidence == nil {
 		t.Fatalf("expected vanilla evidence, got nil")
 	}
-	if evidence.GameVersion != "1.21.4" {
-		t.Fatalf("expected game version 1.21.4, got %q", evidence.GameVersion)
+	if got := runtimeIdentityVersion(
+		evidence,
+		types.EcoMinecraft,
+		"minecraft",
+	); got != "1.21.4" {
+		t.Fatalf("expected game version 1.21.4, got %q", got)
 	}
-	if evidence.Topology == nil || evidence.Topology.PrimaryNode != types.RuntimeNodeMinecraft {
-		t.Fatalf("expected primary node minecraft, got %+v", evidence.Topology)
+	if evidence.PrimaryRuntime == nil ||
+		evidence.PrimaryRuntime.Name != "minecraft" {
+		t.Fatalf(
+			"expected primary minecraft runtime, got %+v",
+			evidence.PrimaryRuntime,
+		)
 	}
 }
 
@@ -253,25 +261,28 @@ Implementation-Title: net.minecraftforge
 func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 	t.Parallel()
 
-	vanillaEvidence := &ExecutableEvidence{
-		PrimaryEntrance: "/fake/vanilla.jar",
-		GameVersion:     "1.21.4",
-		Topology: &types.ServerTopology{
-			PrimaryNode: types.RuntimeNodeMinecraft,
-			Nodes: []types.RuntimeNode{
-				{
-					ID:   types.RuntimeNodeMinecraft,
-					Role: types.RuntimeRoleVanilla,
-				},
-			},
+	vanillaCore := types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoMinecraft,
+			Name: "minecraft",
 		},
+		Version: "1.21.4",
+	}
+	paperCore := types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoPaper,
+			Name: "paper",
+		},
+		Version: "1.21.4",
+	}
+	vanillaEvidence := &ExecutableEvidence{
+		PrimaryPath:       "/fake/vanilla.jar",
+		PrimaryRuntime:    &vanillaCore,
+		RuntimeComponents: []types.VersionedPackageRef{vanillaCore},
 	}
 	paperEvidence := &ExecutableEvidence{
-		PrimaryEntrance: "/fake/paper.jar",
-		GameVersion:     "1.21.4",
-		Topology: &types.ServerTopology{
-			PrimaryNode: types.RuntimeNodePaper,
-		},
+		PrimaryPath:    "/fake/paper.jar",
+		PrimaryRuntime: &paperCore,
 	}
 
 	t.Run(
@@ -290,10 +301,11 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 			if single == nil {
 				t.Fatalf("expected single specific candidate, got nil")
 			}
-			if single.Topology.PrimaryNode != types.RuntimeNodePaper {
+			if single.PrimaryRuntime == nil ||
+				single.PrimaryRuntime.Name != "paper" {
 				t.Fatalf(
-					"expected paper to win, got %q",
-					single.Topology.PrimaryNode,
+					"expected paper to win, got %+v",
+					single.PrimaryRuntime,
 				)
 			}
 		},
@@ -317,12 +329,7 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 		"two_specific_still_ambiguous", func(t *testing.T) {
 			t.Parallel()
 
-			forgeEvidence := &ExecutableEvidence{
-				PrimaryEntrance: "/fake/forge.jar",
-				Topology: &types.ServerTopology{
-					PrimaryNode: types.RuntimeNodeID("forge"),
-				},
-			}
+			forgeEvidence := &ExecutableEvidence{PrimaryPath: "/fake/forge.jar"}
 			candidates := &ExecutableCandidates{
 				Candidates: []*ExecutableEvidence{paperEvidence, forgeEvidence},
 			}
