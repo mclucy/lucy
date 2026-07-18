@@ -72,6 +72,9 @@ func (r *bukkitReader) Read(
 			},
 			Version:  types.BareVersion(strings.TrimSpace(descriptor.Version)),
 			FilePath: filePath,
+			Compatibility: ArtifactCompatibility{
+				FoliaSupported: descriptor.FoliaSupported,
+			},
 			Metadata: types.Metadata{
 				Title:       strings.TrimSpace(descriptor.Name),
 				Description: strings.TrimSpace(descriptor.Description),
@@ -93,39 +96,34 @@ func (r *bukkitReader) Read(
 	return nil, nil
 }
 
-func detectBukkitPluginPlatform(descriptor *bukkitPluginDescriptor) types.Ecosystem {
-	signals := strings.ToLower(
-		strings.Join(
+func detectBukkitPluginPlatform(
+	descriptor *bukkitPluginDescriptor,
+) types.Ecosystem {
+	signals := strings.ToLower(strings.Join(
+		append(
 			append(
 				append(
-					append(
-						[]string{
-							descriptor.APIVersion,
-							descriptor.PaperPluginLoader,
-						}, descriptor.API...,
-					),
-					descriptor.Depend...,
+					[]string{
+						descriptor.APIVersion,
+						descriptor.PaperPluginLoader,
+					},
+					descriptor.API...,
 				),
-				append(descriptor.SoftDepend, descriptor.Libraries...)...,
-			), " ",
+				descriptor.Depend...,
+			),
+			append(descriptor.SoftDepend, descriptor.Libraries...)...,
 		),
-	)
+		" ",
+	))
 
-	switch {
-	case strings.Contains(signals, "leaves"):
-		return types.Ecosystem("leaves")
-	case descriptor.FoliaSupported || strings.Contains(signals, "folia"):
-		return types.Ecosystem("folia")
-	case strings.Contains(
-		signals,
-		"paper",
-	) || descriptor.PaperPluginLoader != "" || len(descriptor.Libraries) > 0:
-		return types.Ecosystem("paper")
-	case strings.Contains(signals, "spigot") || descriptor.APIVersion != "":
-		return types.Ecosystem("spigot")
-	default:
-		return types.EcoBukkit
+	if strings.Contains(signals, "paper") ||
+		strings.Contains(signals, "folia") ||
+		strings.Contains(signals, "leaves") ||
+		descriptor.PaperPluginLoader != "" ||
+		len(descriptor.Libraries) > 0 {
+		return types.EcoPaper
 	}
+	return types.EcoBukkit
 }
 
 func bukkitDescriptorDeps(
