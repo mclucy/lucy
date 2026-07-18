@@ -72,3 +72,7 @@ bisect.json
 
 # Secrets
 .env.local
+
+# Nix / direnv
+.direnv
+result

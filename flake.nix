@@ -1,5 +1,5 @@
 {
-  description = "Lucy — Minecraft server package manager";
+  description = "lucy — The Minecraft server package manager";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -13,7 +13,6 @@
       flake-utils,
     }:
     let
-      # ── NixOS module ────────────────────────────────────────
       nixosModule =
         {
           config,
@@ -27,7 +26,7 @@
         in
         {
           options.programs.lucy = {
-            enable = mkEnableOption "Lucy — Minecraft server package manager";
+            enable = mkEnableOption "lucy — The Minecraft server package manager";
             package = mkOption {
               type = types.package;
               default = self.packages.${pkgs.system}.default;
@@ -39,7 +38,6 @@
           };
         };
 
-      # ── Home Manager module ─────────────────────────────────
       homeManagerModule =
         {
           config,
@@ -53,7 +51,7 @@
         in
         {
           options.programs.lucy = {
-            enable = mkEnableOption "Lucy — Minecraft server package manager";
+            enable = mkEnableOption "lucy — The Minecraft server package manager";
             package = mkOption {
               type = types.package;
               default = self.packages.${pkgs.system}.default;
@@ -97,7 +95,7 @@
           '';
 
           meta = with pkgs.lib; {
-            description = "Minecraft server package manager";
+            description = "The Minecraft server package manager";
             homepage = "https://github.com/mclucy/lucy";
             license = licenses.asl20;
             mainProgram = "lucy";
