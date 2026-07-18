@@ -6,9 +6,6 @@
       "command": ["codegraph", "serve", "--mcp"],
       "enabled": true
     },
-    "gitnexus": {
-      "enabled": false
-    },
     "godoc": {
       "type": "local",
       "command": ["godoc-mcp"]

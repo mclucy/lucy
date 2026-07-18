@@ -63,9 +63,6 @@ docs/others
 docs/*
 !docs/shared
 
-# GitNexus
-.gitnexus
-
 # Logs
 *.log
 
