@@ -29,6 +29,7 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
       - name: Generate coverage badge
+        if: github.event_name != 'pull_request'
         uses: ncruces/go-coverage-report@v0
         with:
           badge-title: Coverage
