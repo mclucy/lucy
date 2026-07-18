@@ -316,14 +316,6 @@ func ResolveProvidersForRuntime(
 	return []upstream.PackageSource{}, nil
 }
 
-func ResolveProvidersFromTopology(
-	topology *types.ServerTopology,
-	src types.SourceId,
-) ([]upstream.PackageSource, error) {
-	_ = topology
-	return ResolveProvidersForRuntime(nil, src)
-}
-
 func resolveExplicitSource(src types.SourceId) (
 	[]upstream.PackageSource,
 	error,

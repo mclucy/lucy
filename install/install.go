@@ -7,75 +7,74 @@ import (
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func Install(
 	ctx context.Context,
-	req types.PackageRequest,
+	request types.PackageRequest,
 	options InstallOptions,
 ) (*Result, error) {
 	options = options.withDefaults()
-	id := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  req.Eco,
-			Name: req.Name,
-		},
-		Version: req.Version,
+	cores, regular, err := classifyInstallRequests(
+		[]types.PackageRequest{request},
+	)
+	if err != nil {
+		return nil, installError(CategoryResolution, err, nil)
 	}
-
-	// for regular (non-identity) packages, delegate to InstallMany to unify
-	// resolver behavior with batch adds
-	if !types.IsIdentityPackage(id.PackageRef) {
-		return InstallMany(ctx, []types.PackageRequest{req}, options)
+	if len(cores) == 0 {
+		return InstallMany(ctx, regular, options)
 	}
-
-	// identity packages go through the established platform installer
-	if err := installEcosystem(ctx, id, options); err != nil {
+	if err := prepareCoreRequests(cores); err != nil {
+		return nil, installError(CategoryResolution, err, nil)
+	}
+	if err := installCorePackage(ctx, cores[0], options); err != nil {
 		return nil, err
 	}
-
+	workspace.Invalidate()
 	return &Result{}, nil
 }
 
-func installEcosystem(
+func installCorePackage(
 	ctx context.Context,
-	id types.VersionedPackageRef,
+	request preparedCoreRequest,
 	options InstallOptions,
 ) error {
+	id := types.VersionedPackageRef{
+		PackageRef: request.Match.Ref.PackageRef,
+		Version:    request.Request.Version,
+	}
+	context := map[string]any{"package": id.StringFull()}
 	if err := ctx.Err(); err != nil {
-		return installError(
-			CategoryApply,
-			err,
-			map[string]any{"package": id.StringFull()},
-		)
+		return installError(CategoryApply, err, context)
 	}
 
 	ws := options.Workspace()
 	serverDir := ws.Root
-
-	bootstrapper, err := bootstrap.ForEcosystem(id.Eco)
+	bootstrapper, err := bootstrap.ForEcosystem(request.Binding.Ecosystem)
 	if err != nil {
-		return installError(
-			CategoryResolution,
-			err,
-			map[string]any{"platform": id.Eco},
-		)
+		return installError(CategoryResolution, err, context)
 	}
 
-	if id.Eco == types.EcoMcdr {
+	if request.Match.Core == types.CoreMCDReforged {
 		return installError(
 			CategoryApply,
 			bootstrapper.Bootstrap(ctx, types.ResolvedPackage{}, serverDir),
-			map[string]any{"package": id.StringFull()},
+			context,
 		)
 	}
 
-	installer, ok := routing.EcosystemInstallerFor(id.Eco)
+	installer, ok := routing.DefaultRegistry().EcosystemInstaller(
+		request.Binding.InstallerSource,
+	)
 	if !ok {
 		return installError(
 			CategoryResolution,
-			fmt.Errorf("cannot install platform: %s", id.Eco),
-			map[string]any{"platform": id.Eco},
+			fmt.Errorf(
+				"no installer is registered for core package %s",
+				request.Match.Core,
+			),
+			context,
 		)
 	}
 
@@ -83,8 +82,8 @@ func installEcosystem(
 	if err != nil {
 		return installError(
 			CategoryResolution,
-			fmt.Errorf("resolve version failed: %w", err),
-			map[string]any{"package": id.StringFull()},
+			fmt.Errorf("resolve core package version: %w", err),
+			context,
 		)
 	}
 
@@ -92,14 +91,14 @@ func installEcosystem(
 	if err != nil {
 		return installError(
 			CategoryDownload,
-			fmt.Errorf("fetch platform artifact failed: %w", err),
-			map[string]any{"package": id.StringFull()},
+			fmt.Errorf("fetch core package artifact: %w", err),
+			context,
 		)
 	}
 
 	return installError(
 		CategoryApply,
 		bootstrapper.Bootstrap(ctx, fetched, serverDir),
-		map[string]any{"package": id.StringFull()},
+		context,
 	)
 }

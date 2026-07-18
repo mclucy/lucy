@@ -2,32 +2,19 @@ package detector
 
 import "github.com/mclucy/lucy/types"
 
-// ExecutableDetectorProvenance records which detector produced an executable
-// evidence candidate. This remains internal to probe/detector flow even though
-// the type name is exported within the package surface for current refactor
-// compatibility.
+// ExecutableDetectorProvenance identifies the detector that produced an
+// executable candidate.
 type ExecutableDetectorProvenance struct {
 	DetectorName string
 }
 
-// ExecutableTopologySeed captures detector-produced topology facts before final
-// RuntimeInfo assembly and downstream topology enrichment choose the canonical
-// runtime topology.
-type ExecutableTopologySeed struct {
-	PrimaryNode types.RuntimeNodeID
-	Nodes       []types.RuntimeNode
-	Edges       []types.RuntimeEdge
-}
-
-// ExecutableEvidence is the internal detector output contract. It separates raw
-// detection evidence from final public RuntimeInfo assembly while still keeping
-// the current detector package compatible during the refactor.
+// ExecutableEvidence is the detector output consumed by workspace assembly.
+// PrimaryRuntime identifies the selected bootable artifact. A nil primary does
+// not establish an executable runtime.
 type ExecutableEvidence struct {
-	PrimaryEntrance   string
-	GameVersion       types.BareVersion
-	Topology          *types.ServerTopology
-	TopologySeed      *ExecutableTopologySeed
-	RuntimeIdentities []types.VersionedPackageRef
+	PrimaryRuntime    *types.VersionedPackageRef
+	PrimaryPath       string
+	RuntimeComponents []types.VersionedPackageRef
 	Provenance        ExecutableDetectorProvenance
 }
 
@@ -53,10 +40,8 @@ func (c *ExecutableCandidates) Single() *ExecutableEvidence {
 	return resolved[0]
 }
 
-// resolved returns candidates after dropping generic fallback evidence when
-// more specific detectors also fired on the same jar. This lets the vanilla
-// catch-all (RuntimeNodeMinecraft) yield to Paper, Forge, Fabric, etc. without
-// producing false ambiguity.
+// resolved drops generic vanilla fallback evidence when a more specific
+// executable detector also matched the same artifact.
 func (c *ExecutableCandidates) resolved() []*ExecutableEvidence {
 	if c == nil || len(c.Candidates) <= 1 {
 		if c == nil {
@@ -86,14 +71,8 @@ func (c *ExecutableCandidates) resolved() []*ExecutableEvidence {
 }
 
 func isVanillaEvidence(cand *ExecutableEvidence) bool {
-	if cand == nil {
-		return false
-	}
-	if cand.Topology != nil && cand.Topology.PrimaryNode == types.RuntimeNodeMinecraft {
-		return true
-	}
-	if cand.TopologySeed != nil && cand.TopologySeed.PrimaryNode == types.RuntimeNodeMinecraft {
-		return true
-	}
-	return false
+	return cand != nil &&
+		cand.PrimaryRuntime != nil &&
+		cand.PrimaryRuntime.Eco == types.EcoMinecraft &&
+		cand.PrimaryRuntime.Name == "minecraft"
 }

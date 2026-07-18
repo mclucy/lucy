@@ -56,32 +56,13 @@ func (d *geyserStandaloneDetector) Detect(
 		version = parseGeyserStandaloneVersionFromPath(filePath)
 	}
 
-	return &ExecutableEvidence{
-		PrimaryEntrance: filePath,
-		GameVersion:     types.VersionUnknown,
-		RuntimeIdentities: []types.VersionedPackageRef{
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoUnspecified,
-					Name: input.ToProjectName("geyser"),
-				},
-				Version: version,
-			},
+	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoUnspecified,
+			Name: input.ToProjectName("geyser"),
 		},
-		Topology: &types.ServerTopology{
-			PrimaryNode: "geyser_standalone",
-			Nodes: []types.RuntimeNode{
-				{
-					ID:   "geyser_standalone",
-					Role: types.RuntimeRoleProxy,
-					Capabilities: []types.RuntimeCapability{
-						types.CapabilityReversedProxy,
-						types.CapabilityBedrockBridge,
-					},
-				},
-			},
-		},
-	}, nil
+		Version: version,
+	}, RuntimeComponents: nil}, nil
 }
 
 type geyserStandaloneManifestSignals struct {

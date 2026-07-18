@@ -387,7 +387,7 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			continue
 		}
-		if types.IsIdentityPackage(ref.PackageRef) {
+		if types.IsCorePackage(ref.PackageRef) {
 			continue
 		}
 		mods = append(

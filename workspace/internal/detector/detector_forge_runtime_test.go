@@ -189,13 +189,6 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 	if runtime == nil {
 		t.Fatalf("expected legacy Forge detector to detect %s", jarPath)
 	}
-	if runtime.GameVersion.CanInfer() || runtime.GameVersion.IsInvalid() {
-		t.Fatalf(
-			"legacy detector returned unresolved game version: game=%q raw=%#v",
-			runtime.GameVersion,
-			runtime,
-		)
-	}
 
 	assertForgeRuntime(t, runtime, jarPath, "1.20.1", "47.3.22")
 }
@@ -383,34 +376,30 @@ func assertForgeRuntime(
 
 	wantGameVersion := types.BareVersion(gameVersion)
 
-	if runtime.PrimaryEntrance != primary {
+	if runtime.PrimaryPath != primary {
 		t.Fatalf(
-			"primary entrance mismatch: got %q want %q",
-			runtime.PrimaryEntrance,
+			"primary path mismatch: got %q want %q",
+			runtime.PrimaryPath,
 			primary,
 		)
 	}
-	if runtime.GameVersion != wantGameVersion {
+	if got := runtimeIdentityVersion(
+		runtime,
+		types.EcoMinecraft,
+		"minecraft",
+	); got != wantGameVersion.String() {
 		t.Fatalf(
-			"game version mismatch: got raw=%q string=%q want raw=%q string=%q",
-			runtime.GameVersion,
-			runtime.GameVersion.String(),
+			"game version mismatch: got %q want %q",
+			got,
 			wantGameVersion,
-			wantGameVersion.String(),
 		)
 	}
-	if runtime.Topology == nil {
-		t.Fatalf("expected topology on Forge runtime evidence")
-	}
-	primaryNode, ok := runtime.Topology.PrimaryNodeData()
-	if !ok {
-		t.Fatalf("expected primary topology node on Forge runtime evidence")
-	}
-	if got := types.DeclaredModdingEcosystemForNode(primaryNode.ID); got != types.EcoForge {
+	if runtime.PrimaryRuntime == nil ||
+		runtime.PrimaryRuntime.Eco != types.EcoForge ||
+		runtime.PrimaryRuntime.Name != "forge" {
 		t.Fatalf(
-			"derived mod loader mismatch: got %s want %s",
-			got,
-			types.EcoForge,
+			"expected primary forge runtime, got %+v",
+			runtime.PrimaryRuntime,
 		)
 	}
 	if got := runtimeIdentityVersion(
@@ -430,7 +419,7 @@ func runtimeIdentityVersion(
 	if runtime == nil {
 		return ""
 	}
-	for _, identity := range runtime.RuntimeIdentities {
+	for _, identity := range runtime.RuntimeComponents {
 		if identity.Eco == platform && identity.Name == name {
 			return identity.Version.String()
 		}

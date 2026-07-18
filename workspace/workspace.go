@@ -80,10 +80,8 @@ func Rebuild() {
 	ready = true
 }
 
-// Invalidate marks the cached Workspace as stale so the next call
-// to New() will re-probe the server state. This is useful after
-// installing packages (e.g., identity packages like Fabric) to refresh the
-// topology cache without forcing an immediate rebuild.
+// Invalidate marks the cached Workspace as stale so the next call to New
+// re-probes the server state.
 func Invalidate() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -273,9 +271,6 @@ func build() Workspace {
 		ws.Server,
 		ws.Packages,
 	)
-	if ws.Server != nil {
-		ws.Topology = ws.Server.topology
-	}
 
 	return ws
 }

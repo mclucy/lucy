@@ -148,34 +148,26 @@ func buildForgeRuntimeInfo(
 	gameVersion types.BareVersion,
 	forgeVersion types.BareVersion,
 ) *ExecutableEvidence {
-	return &ExecutableEvidence{
-		PrimaryEntrance: filePath,
-		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.VersionedPackageRef{
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoForge,
-					Name: "forge",
-				},
-				Version: forgeVersion,
-			},
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMinecraft,
-					Name: "minecraft",
-				},
-				Version: gameVersion,
-			},
+	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoForge,
+			Name: "forge",
 		},
-		Topology: &types.ServerTopology{
-			PrimaryNode: "forge",
-			Nodes: []types.RuntimeNode{
-				{
-					ID:           "forge",
-					Role:         types.RuntimeRoleModLoader,
-					Capabilities: []types.RuntimeCapability{types.CapabilityForge},
-				},
+		Version: forgeVersion,
+	}, RuntimeComponents: []types.VersionedPackageRef{
+		{
+			PackageRef: types.PackageRef{
+				Eco:  types.EcoForge,
+				Name: "forge",
 			},
+			Version: forgeVersion,
 		},
-	}
+		{
+			PackageRef: types.PackageRef{
+				Eco:  types.EcoMinecraft,
+				Name: "minecraft",
+			},
+			Version: gameVersion,
+		},
+	}}
 }

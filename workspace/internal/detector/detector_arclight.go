@@ -3,6 +3,7 @@ package detector
 import (
 	"archive/zip"
 	"bufio"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,10 +15,6 @@ import (
 
 var arclightJarNamePattern = regexp.MustCompile(
 	`^arclight-(?:forge|neoforge|fabric)-(\d+\.\d+(?:\.\d+)?)(?:[-.].*)?\.jar$`,
-)
-
-var arclightDistributionNamePattern = regexp.MustCompile(
-	`^arclight-(forge|neoforge|fabric)-`,
 )
 
 type arclightServerDetector struct{}
@@ -67,54 +64,49 @@ func (d *arclightServerDetector) Detect(
 		gameVersion = parseArclightGameVersionFromPath(filePath)
 	}
 
-	return &ExecutableEvidence{
-		PrimaryEntrance: filePath,
-		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.VersionedPackageRef{
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoUnspecified,
-					Name: input.ToProjectName("arclight"),
-				},
-				Version: manifestSignals.loaderVersion,
-			},
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMinecraft,
-					Name: input.ToProjectName("minecraft"),
-				},
-				Version: gameVersion,
-			},
+	primary := types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoUnspecified,
+			Name: input.ToProjectName("arclight"),
 		},
-		Topology: &types.ServerTopology{
-			PrimaryNode: types.RuntimeNodeArclight,
-			Nodes: []types.RuntimeNode{
-				{
-					ID:           types.RuntimeNodeArclight,
-					Role:         types.RuntimeRoleHybrid,
-					Capabilities: arclightCapabilities(filePath, launchProps),
-				},
-				{
-					ID:   types.RuntimeNodeMinecraft,
-					Role: types.RuntimeRoleVanilla,
-				},
+		Version: manifestSignals.implementationVersion,
+	}
+	components := []types.VersionedPackageRef{
+		primary,
+		{
+			PackageRef: types.PackageRef{
+				Eco:  types.EcoMinecraft,
+				Name: input.ToProjectName("minecraft"),
 			},
-			Edges: []types.RuntimeEdge{
-				{
-					From: types.RuntimeNodeArclight,
-					To:   types.RuntimeNodeMinecraft,
-					Verb: types.EdgeExtends,
-				},
-			},
+			Version: gameVersion,
 		},
-	}, nil
+	}
+	if loader, ok := arclightLoaderEcosystem(launchProps); ok {
+		installerJSON, found, err := readArchiveEntry(
+			zipReader,
+			"META-INF/installer.json",
+		)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			if component, ok := parseArclightLoaderComponent(
+				installerJSON,
+				loader,
+			); ok {
+				components = append(components, component)
+			}
+		}
+	}
+
+	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &primary, RuntimeComponents: components}, nil
 }
 
 type arclightManifestSignals struct {
-	mainClass      string
-	implementation string
-	loaderVersion  types.BareVersion
-	gameVersion    types.BareVersion
+	mainClass             string
+	implementation        string
+	implementationVersion types.BareVersion
+	gameVersion           types.BareVersion
 }
 
 func (s arclightManifestSignals) valid() bool {
@@ -149,7 +141,7 @@ func parseArclightManifest(data []byte) arclightManifestSignals {
 					"Implementation-Version: ",
 				),
 			)
-			signals.loaderVersion = types.BareVersion(version)
+			signals.implementationVersion = types.BareVersion(version)
 			if parsedGameVersion := parseArclightGameVersionFromImplementation(version); hasConcreteVersion(parsedGameVersion) {
 				signals.gameVersion = parsedGameVersion
 			}
@@ -178,56 +170,8 @@ func parseArclightGameVersionFromPath(filePath string) types.BareVersion {
 	return types.BareVersion(match[1])
 }
 
-func arclightCapabilities(
-	filePath string,
-	launchProps []byte,
-) []types.RuntimeCapability {
-	// Arclight implements the Bukkit/Spigot tier (not Paper) per its FAQ.
-	// Populate() expands the Spigot rung into its Bukkit ancestry so the
-	// detector-produced seed matches the registry-side ladder in
-	// probe_topology_data.go::RuntimeNodeArclight.
-	capabilities := types.CapabilitySpigotAPI.Populate()
-	if loaderCapability, ok := arclightLoaderCapabilityFromLaunchProps(launchProps); ok {
-		return append(
-			[]types.RuntimeCapability{loaderCapability},
-			capabilities...,
-		)
-	}
-
-	match := arclightDistributionNamePattern.FindStringSubmatch(
-		strings.ToLower(filepath.Base(filePath)),
-	)
-	if match == nil {
-		return append(
-			[]types.RuntimeCapability{types.CapabilityForge},
-			capabilities...,
-		)
-	}
-
-	switch match[1] {
-	case "fabric":
-		return append(
-			[]types.RuntimeCapability{types.CapabilityFabricLoader},
-			capabilities...,
-		)
-	case "neoforge":
-		return append(
-			[]types.RuntimeCapability{types.CapabilityNeoforge},
-			capabilities...,
-		)
-	default:
-		return append(
-			[]types.RuntimeCapability{types.CapabilityForge},
-			capabilities...,
-		)
-	}
-}
-
-func arclightLoaderCapabilityFromLaunchProps(data []byte) (
-	types.RuntimeCapability,
-	bool,
-) {
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+func arclightLoaderEcosystem(launchProps []byte) (types.Ecosystem, bool) {
+	scanner := bufio.NewScanner(strings.NewReader(string(launchProps)))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -238,18 +182,65 @@ func arclightLoaderCapabilityFromLaunchProps(data []byte) (
 		if !ok || strings.TrimSpace(key) != "launch.mainClass" {
 			continue
 		}
-
 		switch strings.TrimSpace(value) {
 		case "io.izzel.arclight.boot.fabric.application.Main_Fabric":
-			return types.CapabilityFabricLoader, true
+			return types.EcoFabric, true
 		case "io.izzel.arclight.boot.neoforge.application.Main_Neoforge":
-			return types.CapabilityNeoforge, true
+			return types.EcoNeoforge, true
 		case "io.izzel.arclight.boot.forge.application.Main_Forge":
-			return types.CapabilityForge, true
+			return types.EcoForge, true
+		default:
+			return types.EcoUnspecified, false
 		}
 	}
 
-	return "", false
+	return types.EcoUnspecified, false
+}
+
+type arclightInstallerMetadata struct {
+	Installer struct {
+		Forge        string `json:"forge"`
+		NeoForge     string `json:"neoforge"`
+		FabricLoader string `json:"fabricLoader"`
+	} `json:"installer"`
+}
+
+func parseArclightLoaderComponent(
+	data []byte,
+	loader types.Ecosystem,
+) (types.VersionedPackageRef, bool) {
+	var metadata arclightInstallerMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return types.VersionedPackageRef{}, false
+	}
+
+	var name types.BarePackageName
+	var version string
+	switch loader {
+	case types.EcoFabric:
+		name = "fabric-loader"
+		version = metadata.Installer.FabricLoader
+	case types.EcoNeoforge:
+		name = "neoforge"
+		version = metadata.Installer.NeoForge
+	case types.EcoForge:
+		name = "forge"
+		version = metadata.Installer.Forge
+	default:
+		return types.VersionedPackageRef{}, false
+	}
+
+	loaderVersion := types.BareVersion(strings.TrimSpace(version))
+	if !hasConcreteVersion(loaderVersion) {
+		return types.VersionedPackageRef{}, false
+	}
+	return types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  loader,
+			Name: name,
+		},
+		Version: loaderVersion,
+	}, true
 }
 
 func archiveContains(zipReader *zip.Reader, name string) (bool, error) {

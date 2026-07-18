@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/mclucy/lucy/types"
 )
 
 func TestCraftBukkitFamilyDetector_PaperFixtureClassifiesAsPaper(t *testing.T) {
@@ -22,17 +20,12 @@ func TestCraftBukkitFamilyDetector_PaperFixtureClassifiesAsPaper(t *testing.T) {
 	if evidence == nil {
 		t.Fatalf("expected paper fixture evidence")
 	}
-	if len(evidence.RuntimeIdentities) == 0 {
-		t.Fatalf("expected runtime identities for paper fixture")
-	}
-	if string(evidence.RuntimeIdentities[0].Name) != "paper" {
-		t.Fatalf("expected primary runtime identity paper, got %+v", evidence.RuntimeIdentities)
-	}
-	if evidence.TopologySeed == nil {
-		t.Fatalf("expected topology seed for paper fixture")
-	}
-	if evidence.TopologySeed.PrimaryNode != bukkitNodePaper {
-		t.Fatalf("expected primary topology node %q, got %+v", bukkitNodePaper, evidence.TopologySeed)
+	if evidence.PrimaryRuntime == nil ||
+		evidence.PrimaryRuntime.Name.String() != "paper" {
+		t.Fatalf(
+			"expected primary runtime paper, got %+v",
+			evidence.PrimaryRuntime,
+		)
 	}
 }
 
@@ -56,25 +49,25 @@ func TestCraftBukkitFamilyDetector_RuntimeProjection(t *testing.T) {
 		name         string
 		path         string
 		wantIdentity string
-		wantNode     types.RuntimeNodeID
+		wantCore     string
 	}{
 		{
 			name:         "paper fixture projects official paper runtime",
 			path:         filepath.Join(fixtureRoot, "test_paper", "paper"),
 			wantIdentity: "paper",
-			wantNode:     bukkitNodePaper,
+			wantCore:     "paper",
 		},
 		{
 			name:         "paper fork fixture projects paper fork runtime",
 			path:         filepath.Join(fixtureRoot, "test_folia", "folia"),
 			wantIdentity: "folia",
-			wantNode:     bukkitNodePaperFork,
+			wantCore:     "folia",
 		},
 		{
 			name:         "contradiction fails closed to bukkit runtime",
 			path:         contradictionDir,
 			wantIdentity: "bukkit",
-			wantNode:     bukkitNodeBukkit,
+			wantCore:     "bukkit",
 		},
 	}
 
@@ -89,17 +82,13 @@ func TestCraftBukkitFamilyDetector_RuntimeProjection(t *testing.T) {
 			if evidence == nil {
 				t.Fatalf("expected evidence for %s", tt.name)
 			}
-			if len(evidence.RuntimeIdentities) == 0 {
-				t.Fatalf("expected runtime identities for %s", tt.name)
-			}
-			if string(evidence.RuntimeIdentities[0].Name) != tt.wantIdentity {
-				t.Fatalf("expected primary runtime identity %q, got %+v", tt.wantIdentity, evidence.RuntimeIdentities)
-			}
-			if evidence.TopologySeed == nil {
-				t.Fatalf("expected topology seed for %s", tt.name)
-			}
-			if evidence.TopologySeed.PrimaryNode != tt.wantNode {
-				t.Fatalf("expected primary topology node %q, got %+v", tt.wantNode, evidence.TopologySeed)
+			if evidence.PrimaryRuntime == nil ||
+				evidence.PrimaryRuntime.Name.String() != tt.wantCore {
+				t.Fatalf(
+					"expected primary runtime %q, got %+v",
+					tt.wantCore,
+					evidence.PrimaryRuntime,
+				)
 			}
 		})
 	}
@@ -136,17 +125,13 @@ func TestCraftBukkitFamilyDetector_KnownPaperForkBrands(t *testing.T) {
 			if evidence == nil {
 				t.Fatalf("expected evidence for %s fixture", tt.brand)
 			}
-			if evidence.TopologySeed == nil {
-				t.Fatalf("expected topology seed for %s fixture", tt.brand)
-			}
-			if evidence.TopologySeed.PrimaryNode != bukkitNodePaperFork {
-				t.Fatalf("expected primary topology node %q for %s, got %+v", bukkitNodePaperFork, tt.brand, evidence.TopologySeed)
-			}
-			if len(evidence.RuntimeIdentities) == 0 {
-				t.Fatalf("expected runtime identities for %s fixture", tt.brand)
-			}
-			if string(evidence.RuntimeIdentities[0].Name) != tt.brand {
-				t.Fatalf("expected primary runtime identity %q, got %+v", tt.brand, evidence.RuntimeIdentities)
+			if evidence.PrimaryRuntime == nil ||
+				evidence.PrimaryRuntime.Name.String() != tt.brand {
+				t.Fatalf(
+					"expected primary runtime %q, got %+v",
+					tt.brand,
+					evidence.PrimaryRuntime,
+				)
 			}
 		})
 	}
@@ -252,17 +237,12 @@ func TestCraftBukkitFamilyDetector_Youer(t *testing.T) {
 	if evidence == nil {
 		t.Fatalf("expected evidence for youer fixture")
 	}
-	if evidence.TopologySeed == nil {
-		t.Fatalf("expected topology seed for youer fixture")
-	}
-	if evidence.TopologySeed.PrimaryNode != bukkitNodePaperFork {
-		t.Fatalf("expected primary topology node %q, got %+v", bukkitNodePaperFork, evidence.TopologySeed)
-	}
-	if len(evidence.RuntimeIdentities) == 0 {
-		t.Fatalf("expected runtime identities for youer fixture")
-	}
-	if string(evidence.RuntimeIdentities[0].Name) != "youer" {
-		t.Fatalf("expected primary runtime identity youer, got %+v", evidence.RuntimeIdentities)
+	if evidence.PrimaryRuntime == nil ||
+		evidence.PrimaryRuntime.Name.String() != "youer" {
+		t.Fatalf(
+			"expected primary runtime youer, got %+v",
+			evidence.PrimaryRuntime,
+		)
 	}
 }
 
@@ -290,17 +270,12 @@ func TestCraftBukkitFamilyDetector_Reaper(t *testing.T) {
 	if evidence == nil {
 		t.Fatalf("expected evidence for reaper fixture")
 	}
-	if evidence.TopologySeed == nil {
-		t.Fatalf("expected topology seed for reaper fixture")
-	}
-	if evidence.TopologySeed.PrimaryNode != bukkitNodePaperFork {
-		t.Fatalf("expected primary topology node %q, got %+v", bukkitNodePaperFork, evidence.TopologySeed)
-	}
-	if len(evidence.RuntimeIdentities) == 0 {
-		t.Fatalf("expected runtime identities for reaper fixture")
-	}
-	if string(evidence.RuntimeIdentities[0].Name) != "reaper" {
-		t.Fatalf("expected primary runtime identity reaper, got %+v", evidence.RuntimeIdentities)
+	if evidence.PrimaryRuntime == nil ||
+		evidence.PrimaryRuntime.Name.String() != "reaper" {
+		t.Fatalf(
+			"expected primary runtime reaper, got %+v",
+			evidence.PrimaryRuntime,
+		)
 	}
 }
 
@@ -336,11 +311,12 @@ func TestCraftBukkitFamilyDetector_FamilyMissStillRunsBrandRules(t *testing.T) {
 	if evidence == nil {
 		t.Fatalf("expected non-terminal family miss to continue to brand rules")
 	}
-	if len(evidence.RuntimeIdentities) == 0 || string(evidence.RuntimeIdentities[0].Name) != "purpur" {
-		t.Fatalf("expected brand recovery to project purpur identity, got %+v", evidence.RuntimeIdentities)
-	}
-	if evidence.TopologySeed == nil || len(evidence.TopologySeed.Nodes) == 0 || evidence.TopologySeed.Nodes[0].ID != bukkitNodePaperFork {
-		t.Fatalf("expected brand recovery to project paper-fork topology, got %+v", evidence.TopologySeed)
+	if evidence.PrimaryRuntime == nil ||
+		evidence.PrimaryRuntime.Name.String() != "purpur" {
+		t.Fatalf(
+			"expected brand recovery to select purpur, got %+v",
+			evidence.PrimaryRuntime,
+		)
 	}
 }
 
@@ -387,17 +363,13 @@ func TestCraftBukkitFamilyDetector_ContradictoryEvidenceFailsClosed(t *testing.T
 	if evidence == nil {
 		return
 	}
-	if len(evidence.RuntimeIdentities) == 0 {
-		t.Fatalf("expected at least one runtime identity when evidence is returned")
-	}
-	if evidence.RuntimeIdentities[0].Name == "paper" || evidence.RuntimeIdentities[0].Name == "purpur" {
-		t.Fatalf("expected contradictory evidence to fail closed, got %+v", evidence.RuntimeIdentities)
-	}
-	if evidence.TopologySeed != nil && len(evidence.TopologySeed.Nodes) > 0 {
-		primary := evidence.TopologySeed.Nodes[0].ID
-		if primary == bukkitNodePaper || primary == bukkitNodePaperFork {
-			t.Fatalf("expected contradictory evidence to avoid paper promotion, got %+v", evidence.TopologySeed.Nodes)
-		}
+	if evidence.PrimaryRuntime != nil &&
+		(evidence.PrimaryRuntime.Name == "paper" ||
+			evidence.PrimaryRuntime.Name == "purpur") {
+		t.Fatalf(
+			"expected contradictory evidence to avoid paper primary runtime, got %+v",
+			evidence.PrimaryRuntime,
+		)
 	}
 }
 

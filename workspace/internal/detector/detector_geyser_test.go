@@ -4,8 +4,6 @@ import (
 	"archive/zip"
 	"os"
 	"testing"
-
-	"github.com/mclucy/lucy/types"
 )
 
 func TestGeyserStandaloneDetectorDetectsStandaloneBootstrapJar(t *testing.T) {
@@ -24,17 +22,12 @@ func TestGeyserStandaloneDetectorDetectsStandaloneBootstrapJar(t *testing.T) {
 	if runtime == nil {
 		t.Fatal("expected standalone Geyser detector to detect runtime")
 	}
-	if runtime.Topology == nil {
-		t.Fatal("expected topology on detected runtime")
-	}
-	if runtime.Topology.PrimaryNode != types.RuntimeNodeID("geyser_standalone") {
-		t.Fatalf("expected standalone geyser primary node, got %q", runtime.Topology.PrimaryNode)
-	}
-	if got := runtime.Topology.Nodes[0].Role; got != types.RuntimeRoleProxy {
-		t.Fatalf("expected standalone geyser role %q, got %q", types.RuntimeRoleProxy, got)
-	}
-	if len(runtime.RuntimeIdentities) == 0 || runtime.RuntimeIdentities[0].Name.String() != "geyser" {
-		t.Fatalf("expected primary runtime identity for geyser, got %+v", runtime.RuntimeIdentities)
+	if runtime.PrimaryRuntime == nil ||
+		runtime.PrimaryRuntime.Name.String() != "geyser" {
+		t.Fatalf(
+			"expected primary geyser runtime, got %+v",
+			runtime.PrimaryRuntime,
+		)
 	}
 }
 

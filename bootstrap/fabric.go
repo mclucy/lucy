@@ -23,28 +23,30 @@ func (b fabricBootstrapper) Bootstrap(
 	serverDir string,
 ) error {
 	ws := workspace.New()
-	serverPlatform := ws.DerivedModLoader()
+	serverLoader := selectedLoader(ws.Server)
 
 	deleteVanilla := false
-	switch serverPlatform {
+	switch serverLoader {
 	case types.EcoFabric:
 		return errors.New("fabric server already detected, installation aborted")
 	case types.EcoForge:
-		return errors.New("forge server detected, cannot install Fabric bootstrap")
+		return errors.New("forge server detected, cannot install fabric bootstrap")
 	case types.EcoNeoforge:
-		return errors.New("NeoForge server detected, cannot install Fabric bootstrap")
-	case types.EcoVanilla:
-		override, shouldDeleteVanilla := promptOverrideVanilla()
+		return errors.New("neoforge server detected, cannot install fabric bootstrap")
+	case types.EcoUnspecified:
+	default:
+		return fmt.Errorf(
+			"unsupported selected loader %s for fabric installation",
+			serverLoader.Title(),
+		)
+	}
+	if isVanillaServer(ws.Server) {
+		override, shouldDeleteVanilla := promptOverrideVanilla(ws.Server)
 		if !override {
 			return errors.New("installation aborted by user")
 		}
 		deleteVanilla = shouldDeleteVanilla
-	case types.EcoUnspecified:
-	default:
-		return fmt.Errorf(
-			"unsupported server platform %s for fabric installation",
-			serverPlatform.Title(),
-		)
+
 	}
 
 	workPath := serverDir
@@ -82,7 +84,7 @@ func (b fabricBootstrapper) Bootstrap(
 	}
 
 	if deleteVanilla {
-		if err := os.Remove(ws.Server.PrimaryEntrance); err != nil {
+		if err := os.Remove(ws.Server.PrimaryRuntime.Path); err != nil {
 			return fmt.Errorf("delete vanilla server failed: %w", err)
 		}
 	}
@@ -95,9 +97,11 @@ func init() {
 	bootstrappers[types.EcoFabric] = fabricBootstrapper{}
 }
 
-func promptOverrideVanilla() (override bool, deleteVanilla bool) {
-	path := workspace.New().Server.PrimaryEntrance
-	version := workspace.New().Server.GameVersion().String()
+func promptOverrideVanilla(
+	server *workspace.ServerInstance,
+) (override bool, deleteVanilla bool) {
+	path := server.PrimaryRuntime.Path
+	version := server.GameVersion().String()
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().

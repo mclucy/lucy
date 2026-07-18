@@ -57,10 +57,6 @@ type EcosystemProvider interface {
 	Fetcher
 }
 
-type SupportedEcosystemsReporter interface {
-	SupportedEcosystems() []types.Ecosystem
-}
-
 type ArtifactMapper interface {
 	PackageByHash(artifact Hashable) (
 		ref types.FullPackageRef,

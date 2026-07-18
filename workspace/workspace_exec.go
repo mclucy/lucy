@@ -199,11 +199,19 @@ func executableAnnotation(executable *ServerInstance) string {
 	if derivedPlatform == types.EcoMinecraft {
 		return fmt.Sprintf("(Minecraft %s, Vanilla)", gameVersion)
 	}
+	loaderVersion := types.VersionUnknown.String()
+	for _, component := range executable.RuntimeComponents {
+		if component.Eco == derivedPlatform &&
+			concreteRuntimeVersion(component.Version) {
+			loaderVersion = component.Version.String()
+			break
+		}
+	}
 	return fmt.Sprintf(
 		"(Minecraft %s, %s %s)",
 		gameVersion,
 		derivedPlatform.Title(),
-		executable.DerivedLoaderVersion(),
+		loaderVersion,
 	)
 }
 

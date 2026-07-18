@@ -29,63 +29,73 @@ func InstallMany(
 	if err := ctx.Err(); err != nil {
 		return nil, installError(CategoryResolution, err, nil)
 	}
-
 	if len(requests) == 0 {
 		return &Result{}, nil
 	}
 
-	ids := requestsToIds(requests)
-	prepared := prepareBatchIDs(ids)
-	identityIds, regularIds := partitionBatchIDs(prepared)
-
-	if err := validateIdentityCompatibility(identityIds); err != nil {
+	cores, regular, err := classifyInstallRequests(requests)
+	if err != nil {
 		return nil, installError(CategoryResolution, err, nil)
 	}
-	identityIds = sortIdentityPackages(identityIds)
+	if err := prepareCoreRequests(cores); err != nil {
+		return nil, installError(CategoryResolution, err, nil)
+	}
 
-	if len(identityIds) > 0 {
+	currentEcosystem := types.EcoUnspecified
+	if len(regular) > 0 {
+		currentEcosystem = defaultRegularEcosystem(options.Workspace().Server)
+	}
+	if _, _, err := prepareRegularRoots(
+		regular,
+		batchDefaultEcosystem(cores, currentEcosystem),
+	); err != nil {
+		return nil, installError(CategoryResolution, err, nil)
+	}
+
+	coreIDs := coreRequestIDs(cores)
+	if len(cores) > 0 {
 		recordEvent(
 			journal,
 			Event{
-				Kind: EventBatchPhase, Header: "Installing platforms",
-				IDs: identityIds,
+				Kind:   EventBatchPhase,
+				Header: "Installing server components",
+				IDs:    coreIDs,
 			},
 		)
-		succeeded := make([]string, 0, len(identityIds))
-		for _, id := range identityIds {
-			if err := installEcosystem(ctx, id, options); err != nil {
+		succeeded := make([]string, 0, len(cores))
+		for i, request := range cores {
+			if err := installCorePackage(ctx, request, options); err != nil {
 				if len(succeeded) > 0 {
 					return nil, fmt.Errorf(
 						"%w: failed to install %s (already installed: %s)",
 						err,
-						id.StringFull(),
+						coreIDs[i].StringFull(),
 						strings.Join(succeeded, ", "),
 					)
 				}
 				return nil, fmt.Errorf(
 					"failed to install %s: %w",
-					id.StringFull(),
+					coreIDs[i].StringFull(),
 					err,
 				)
 			}
-			succeeded = append(succeeded, id.StringFull())
+			succeeded = append(succeeded, coreIDs[i].StringFull())
 		}
 		workspace.Invalidate()
 	}
 
-	if len(regularIds) == 0 {
+	if len(regular) == 0 {
 		recordEvent(
 			journal,
-			Event{Kind: EventBatchSummary, Count: len(identityIds)},
+			Event{Kind: EventBatchSummary, Count: len(cores)},
 		)
 		return &Result{}, nil
 	}
 
-	plan, err := Plan(ctx, requests, options)
+	plan, err := Plan(ctx, regular, options)
 	if err != nil {
 		return nil, err
 	}
-
 	return Apply(ctx, *plan, options)
 }
 
@@ -104,22 +114,41 @@ func Plan(
 		return &ApplyPlan{}, nil
 	}
 
-	ids := requestsToIds(requests)
-	prepared := prepareBatchIDs(ids)
-	_, regularIds := partitionBatchIDs(prepared)
-	if len(regularIds) == 0 {
+	cores, regular, err := classifyInstallRequests(requests)
+	if err != nil {
+		return nil, installError(CategoryResolution, err, nil)
+	}
+	if len(cores) > 0 {
+		return nil, installError(
+			CategoryResolution,
+			fmt.Errorf(
+				"core packages require Install or InstallMany: %s",
+				cores[0].Match.Core,
+			),
+			nil,
+		)
+	}
+	if len(regular) == 0 {
 		return &ApplyPlan{}, nil
 	}
 
 	ws := options.Workspace()
+	defaultEcosystem := defaultRegularEcosystem(ws.Server)
+	effectiveRequests, roots, err := prepareRegularRoots(
+		regular,
+		defaultEcosystem,
+	)
+	if err != nil {
+		return nil, installError(CategoryResolution, err, nil)
+	}
 	recordEvent(
 		journal,
 		Event{
 			Kind: EventBatchPhase, Header: "Fetching metadata for",
-			IDs: regularIds,
+			IDs: roots,
 		},
 	)
-	if err := validateRegularBatchIDs(regularIds, ws); err != nil {
+	if err := validateRegularBatchIDs(roots, ws); err != nil {
 		return nil, installError(CategoryResolution, err, nil)
 	}
 
@@ -147,13 +176,10 @@ func Plan(
 		}
 	}
 
-	roots := append([]types.VersionedPackageRef(nil), regularIds...)
-	serverLoader := ws.DerivedModLoader()
 	rootProviders, err := rootScopedProviders(
 		ws.Server,
-		requests,
+		effectiveRequests,
 		roots,
-		serverLoader,
 		providers,
 	)
 	if err != nil {
@@ -186,7 +212,7 @@ func Plan(
 				providers:        providers,
 				rootProviders:    rootProviders,
 				rootProviderSet:  keyedRoots(resolvePlan.Roots),
-				defaultEcosystem: serverLoader,
+				defaultEcosystem: defaultEcosystem,
 			},
 		)
 		if err != nil {
@@ -260,7 +286,12 @@ func Apply(
 				Count: len(downloaded.DownloadedArtifacts),
 			},
 		)
-		verified, err := verifyArtifacts(ctx, downloaded, options.Journal)
+		verified, err := verifyArtifacts(
+			ctx,
+			downloaded,
+			options.Journal,
+			ws.Server,
+		)
 		if err != nil {
 			return nil, installError(CategoryVerify, err, nil)
 		}
@@ -301,66 +332,34 @@ func resolutionError(err error) error {
 	return installError(CategoryResolution, err, nil)
 }
 
-func requestsToIds(requests []types.PackageRequest) []types.VersionedPackageRef {
-	ids := make([]types.VersionedPackageRef, len(requests))
-	for i, req := range requests {
-		ids[i] = types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Eco:  req.Eco,
-				Name: req.Name,
-			},
-			Version: req.Version,
-		}
-	}
-	return ids
-}
-
 func rootScopedProviders(
 	server *workspace.ServerInstance,
 	requests []types.PackageRequest,
 	roots []types.VersionedPackageRef,
-	serverLoader types.Ecosystem,
 	providers []upstream.PackageSource,
 ) (map[string][]upstream.PackageSource, error) {
 	rootKeys := keyedRoots(roots)
 	rootProviders := make(map[string][]upstream.PackageSource, len(rootKeys))
-	rootScopes := make(map[string]types.SourceId, len(rootKeys))
-	for _, req := range requests {
-		id := types.VersionedPackageRef{
-			PackageRef: req.PackageRef,
-			Version:    req.Version,
+
+	for _, request := range requests {
+		rootKey := request.PackageRef.StringBase()
+		if _, ok := rootKeys[rootKey]; !ok {
+			continue
 		}
-		if id.Eco == types.EcoUnspecified && serverLoader != types.EcoUnspecified {
-			id.Eco = serverLoader
+		if request.Scope == types.SourceAuto {
+			rootProviders[rootKey] = providers
+			continue
 		}
-		for rootKey := range rootKeys {
-			if rootKey != id.StringBase() {
-				continue
-			}
-			if existing, ok := rootScopes[rootKey]; ok && existing != req.Scope {
-				return nil, fmt.Errorf(
-					"install: conflicting sources for %s: %s and %s",
-					rootKey,
-					existing,
-					req.Scope,
-				)
-			}
-			rootScopes[rootKey] = req.Scope
-			if req.Scope == types.SourceAuto {
-				rootProviders[rootKey] = providers
-				break
-			}
-			scoped, err := routing.ResolveProvidersForRuntime(
-				server.RuntimeEcosystems(),
-				req.Scope,
-			)
-			if err != nil {
-				return nil, err
-			}
-			rootProviders[rootKey] = scoped
-			break
+		scoped, err := routing.ResolveProvidersForRuntime(
+			effectiveRuntimeEcosystems(server),
+			request.Scope,
+		)
+		if err != nil {
+			return nil, err
 		}
+		rootProviders[rootKey] = scoped
 	}
+
 	return rootProviders, nil
 }
 
@@ -370,41 +369,6 @@ func keyedRoots(roots []types.VersionedPackageRef) map[string]struct{} {
 		keys[root.StringBase()] = struct{}{}
 	}
 	return keys
-}
-
-func prepareBatchIDs(ids []types.VersionedPackageRef) []types.VersionedPackageRef {
-	seen := make(map[string]struct{}, len(ids))
-	prepared := make([]types.VersionedPackageRef, 0, len(ids))
-
-	for _, id := range ids {
-		key := id.StringBase()
-		if _, ok := seen[key]; ok {
-			continue
-		}
-
-		seen[key] = struct{}{}
-		prepared = append(prepared, id)
-	}
-
-	return prepared
-}
-
-func partitionBatchIDs(ids []types.VersionedPackageRef) (
-	[]types.VersionedPackageRef,
-	[]types.VersionedPackageRef,
-) {
-	identityIds := make([]types.VersionedPackageRef, 0, len(ids))
-	regularIds := make([]types.VersionedPackageRef, 0, len(ids))
-
-	for _, id := range ids {
-		if types.IsIdentityPackage(id.PackageRef) {
-			identityIds = append(identityIds, id)
-			continue
-		}
-		regularIds = append(regularIds, id)
-	}
-
-	return identityIds, regularIds
 }
 
 func validateRegularBatchIDs(

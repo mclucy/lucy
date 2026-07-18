@@ -38,13 +38,12 @@ import (
 var (
 	ESyntax    = errors.New("invalid syntax")
 	EEcosystem = errors.New("invalid ecosystem")
-	EIdentity  = errors.New("invalid identity package")
 )
 
 // Parse parses a scoped package specifier ("scope:platform/name@version") into a
 // ScopedPackageRef and a BareVersion. An omitted scope defaults to SourceAuto;
-// an omitted version defaults to VersionAny. Identity aliases are normalized
-// the same way as in ParsePackageRef.
+// an omitted version defaults to VersionAny. Core package aliases are normalized
+// before regular ecosystem validation.
 func Parse(s string) (
 	ref types.ScopedPackageRef,
 	version types.BareVersion,
@@ -68,8 +67,15 @@ func Parse(s string) (
 	ref.Scope = scope
 	version = v
 
-	if identity, ok := types.NormalizeIdentityPackage(ref.PackageRef); ok {
-		ref.PackageRef = identity
+	core, ok, err := types.NormalizeCorePackage(ref)
+	if err != nil {
+		return types.ScopedPackageRef{}, "", err
+	}
+	if ok {
+		return core.Ref, version, nil
+	}
+	if !pl.Valid() {
+		return types.ScopedPackageRef{}, "", EEcosystem
 	}
 	return ref, version, nil
 }
@@ -135,10 +141,7 @@ func parseOperatorAt(s string) (
 ) {
 	split := strings.Split(s, "@")
 
-	e, n, err = parseOperatorSlash(split[0])
-	if err != nil {
-		return "", "", "", ESyntax
-	}
+	e, n = parseOperatorSlash(split[0])
 
 	if len(split) == 1 {
 		v = types.VersionAny
@@ -157,7 +160,6 @@ func parseOperatorAt(s string) (
 func parseOperatorSlash(s string) (
 	e types.Ecosystem,
 	n types.BarePackageName,
-	err error,
 ) {
 	split := strings.SplitN(s, "/", 2)
 
@@ -170,9 +172,6 @@ func parseOperatorSlash(s string) (
 		}
 	} else {
 		e = types.Ecosystem(strings.ToLower(split[0]))
-		if !e.Valid() {
-			return "", "", EEcosystem
-		}
 		n = types.BarePackageName(split[1])
 	}
 

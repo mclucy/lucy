@@ -235,38 +235,26 @@ func buildModLoaderRuntimeInfo(
 	gameVersion types.BareVersion,
 	loaderVersion types.BareVersion,
 ) *ExecutableEvidence {
-	capability := types.CapabilityForge
-	if platform == types.EcoNeoforge {
-		capability = types.CapabilityNeoforge
-	}
-	return &ExecutableEvidence{
-		PrimaryEntrance: filePath,
-		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.VersionedPackageRef{
-			{
-				PackageRef: types.PackageRef{
-					Eco:  platform,
-					Name: types.BarePackageName(name),
-				},
-				Version: loaderVersion,
-			},
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMinecraft,
-					Name: "minecraft",
-				},
-				Version: gameVersion,
-			},
+	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  platform,
+			Name: types.BarePackageName(name),
 		},
-		Topology: &types.ServerTopology{
-			PrimaryNode: types.RuntimeNodeID(name),
-			Nodes: []types.RuntimeNode{
-				{
-					ID:           types.RuntimeNodeID(name),
-					Role:         types.RuntimeRoleModLoader,
-					Capabilities: []types.RuntimeCapability{capability},
-				},
+		Version: loaderVersion,
+	}, RuntimeComponents: []types.VersionedPackageRef{
+		{
+			PackageRef: types.PackageRef{
+				Eco:  platform,
+				Name: types.BarePackageName(name),
 			},
+			Version: loaderVersion,
 		},
-	}
+		{
+			PackageRef: types.PackageRef{
+				Eco:  types.EcoMinecraft,
+				Name: "minecraft",
+			},
+			Version: gameVersion,
+		},
+	}}
 }

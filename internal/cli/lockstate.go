@@ -161,9 +161,19 @@ func manifestEcosystemVersion(
 	if manifest != nil && manifest.Environment.ModdingPlatformVersion != "" {
 		return manifest.Environment.ModdingPlatformVersion
 	}
-	if ws.Server != nil {
-		if version := ws.DerivedLoaderVersion(); version != "" {
-			return version
+	if server := ws.Server; server != nil {
+		loader := server.DerivedModLoader()
+		for _, component := range server.RuntimeComponents {
+			if component.Eco != loader {
+				continue
+			}
+			switch component.Version {
+			case "", types.VersionNone, types.VersionUnknown, types.VersionAny,
+				types.VersionStable, types.VersionBeta:
+				continue
+			default:
+				return component.Version.String()
+			}
 		}
 	}
 	if fallback != "" {

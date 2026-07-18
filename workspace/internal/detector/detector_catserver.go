@@ -41,50 +41,21 @@ func (d *catServerDetector) Detect(
 		return nil, nil
 	}
 
-	return &ExecutableEvidence{
-		PrimaryEntrance: filePath,
-		GameVersion:     signals.gameVersion,
-		RuntimeIdentities: []types.VersionedPackageRef{
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoUnspecified,
-					Name: input.ToProjectName("catserver"),
-				},
-				Version: signals.version,
-			},
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMinecraft,
-					Name: input.ToProjectName("minecraft"),
-				},
-				Version: signals.gameVersion,
-			},
+	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoUnspecified,
+			Name: input.ToProjectName("catserver"),
 		},
-		Topology: &types.ServerTopology{
-			PrimaryNode: types.RuntimeNodeCatServer,
-			Nodes: []types.RuntimeNode{
-				{
-					ID:   types.RuntimeNodeCatServer,
-					Role: types.RuntimeRoleHybrid,
-					Capabilities: append(
-						[]types.RuntimeCapability{types.CapabilityForge},
-						types.CapabilitySpigotAPI.Populate()...,
-					),
-				},
-				{
-					ID:   types.RuntimeNodeMinecraft,
-					Role: types.RuntimeRoleVanilla,
-				},
+		Version: signals.version,
+	}, RuntimeComponents: []types.VersionedPackageRef{
+		{
+			PackageRef: types.PackageRef{
+				Eco:  types.EcoMinecraft,
+				Name: input.ToProjectName("minecraft"),
 			},
-			Edges: []types.RuntimeEdge{
-				{
-					From: types.RuntimeNodeCatServer,
-					To:   types.RuntimeNodeMinecraft,
-					Verb: types.EdgeExtends,
-				},
-			},
+			Version: signals.gameVersion,
 		},
-	}, nil
+	}}, nil
 }
 
 type catServerManifestSignals struct {

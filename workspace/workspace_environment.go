@@ -47,17 +47,27 @@ func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
 		return
 	}
 
-	bytes, err := exec.Command("mcdreforged", "--version").Output()
+	for i, pluginDir := range config.PluginDirectories {
+		if !filepath.IsAbs(pluginDir) {
+			config.PluginDirectories[i] = filepath.Join(dir, pluginDir)
+		}
+	}
+
+	version := types.VersionUnknown
+	output, err := exec.Command("mcdreforged", "--version").Output()
 	if err != nil {
 		log.ReportWarn(
 			fmt.Errorf(
-				"cannot execute mcdr, it is in your $PATH?: %w",
+				"cannot execute mcdr, is it in your $PATH?: %w",
 				err,
 			),
 		)
+	} else if fields := strings.Fields(string(output)); len(fields) > 1 {
+		version = types.BareVersion(fields[1])
+	} else {
+		log.ReportWarn(fmt.Errorf("cannot parse mcdr version output"))
 	}
 
-	version := types.BareVersion(strings.Split(string(bytes), " ")[1])
 	env.Mcdr = &types.McdrEnv{
 		Version: version,
 		Config:  config,
