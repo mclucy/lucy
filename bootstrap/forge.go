@@ -23,7 +23,7 @@ func (b forgeBootstrapper) Bootstrap(
 	fetched types.ResolvedPackage,
 	serverDir string,
 ) error {
-	if err := guardForgeServerTopology(); err != nil {
+	if err := guardForgeServerInstall(); err != nil {
 		return err
 	}
 
@@ -92,14 +92,14 @@ func init() {
 	bootstrappers[types.EcoForge] = forgeBootstrapper{}
 }
 
-func guardForgeServerTopology() error {
-	serverPlatform := workspace.New().DerivedModLoader()
+func guardForgeServerInstall() error {
+	loader := selectedLoader(workspace.New().Server)
 
-	switch serverPlatform {
+	switch loader {
 	case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
 		return fmt.Errorf(
-			"found an existing server platform %s, installation of forge aborted",
-			serverPlatform.Title(),
+			"found an existing server loader %s, installation of forge aborted",
+			loader.Title(),
 		)
 	}
 	return nil

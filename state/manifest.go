@@ -756,12 +756,16 @@ func resolveManifestPackageIDWithScope(
 	manifest *Manifest,
 	lock *Lock,
 ) string {
-	if types.IsIdentityPackage(id.PackageRef) {
-		var ok bool
-		id.PackageRef, ok = types.NormalizeIdentityPackage(id.PackageRef)
-		if !ok {
-			return ""
-		}
+	core, ok, err := types.NormalizeCorePackage(types.ScopedPackageRef{
+		PackageRef: id.PackageRef,
+		Scope:      id.Scope,
+	})
+	if err != nil {
+		return ""
+	}
+	if ok {
+		id.PackageRef = core.Ref.PackageRef
+		id.Scope = core.Ref.Scope
 	}
 	if id.Eco != types.EcoUnspecified {
 		if id.Scope != types.SourceAuto && id.Scope != types.SourceUnknown {

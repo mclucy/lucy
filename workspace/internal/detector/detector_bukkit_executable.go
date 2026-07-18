@@ -21,12 +21,6 @@ const (
 	bukkitPaperClassPrefix          = "io/papermc/paper/"
 	bukkitLegacyPaperClassPrefix    = "com/destroystokyo/paper/"
 	bukkitSpigotClassPrefix         = "org/spigotmc/"
-
-	bukkitNodePaperFork types.RuntimeNodeID = "paper-fork"
-	bukkitNodePaper     types.RuntimeNodeID = "paper"
-	bukkitNodeSpigot    types.RuntimeNodeID = "spigot"
-	bukkitNodeBukkit    types.RuntimeNodeID = "bukkit"
-	bukkitNodeMinecraft types.RuntimeNodeID = "minecraft"
 )
 
 var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
@@ -429,7 +423,6 @@ func projectPaperJudgment(
 		return nil
 	}
 
-	primaryNode := bukkitNodeBukkit
 	brand := "bukkit"
 
 	if judgment.contradictionState != "" {
@@ -437,21 +430,19 @@ func projectPaperJudgment(
 	} else {
 		switch judgment.brandResult {
 		case brandPaper:
-			primaryNode = bukkitNodePaper
-			brand = nonEmptyPaperBrandName(judgment.brandName, "paper")
+			brand = "paper"
 		case brandFork:
-			primaryNode = bukkitNodePaperFork
-			brand = nonEmptyPaperBrandName(judgment.brandName, "paper-fork")
+			if detectedBrand := normalizePaperBrandName(judgment.brandName); detectedBrand != "" {
+				brand = detectedBrand
+			} else {
+				judgment.addReason("paper-fork result without a concrete brand retains bukkit baseline")
+			}
 		case brandUnknown:
 			switch judgment.familyResult {
 			case familyStrong:
-				primaryNode = bukkitNodePaperFork
-				brand = "paper-fork"
-				judgment.addReason("strong paper-family evidence projected to generic paper-fork runtime")
+				judgment.addReason("strong paper-family evidence without a concrete brand retains bukkit baseline")
 			case familyWeak:
-				primaryNode = bukkitNodeSpigot
-				brand = "spigot"
-				judgment.addReason("weak paper-family evidence projected to spigot runtime")
+				judgment.addReason("weak paper-family evidence without a concrete brand retains bukkit baseline")
 			default:
 				judgment.addReason("family miss remains non-terminal but projects to baseline bukkit runtime")
 			}
@@ -464,29 +455,23 @@ func projectPaperJudgment(
 		}
 	}
 
-	return &ExecutableEvidence{
-		PrimaryEntrance: filePath,
-		GameVersion:     gameVersion,
-		RuntimeIdentities: []types.VersionedPackageRef{
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoUnspecified,
-					Name: input.ToProjectName(brand),
-				},
-			},
-			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMinecraft,
-					Name: input.ToProjectName("minecraft"),
-				},
-				Version: gameVersion,
-			},
+	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Eco:  types.EcoUnspecified,
+			Name: input.ToProjectName(brand),
 		},
-		TopologySeed: buildBukkitExecutableTopologySeed(primaryNode),
-		Provenance: ExecutableDetectorProvenance{
-			DetectorName: (&craftBukkitFamilyDetector{}).Name(),
+		Version: types.VersionUnknown,
+	}, RuntimeComponents: []types.VersionedPackageRef{
+		{
+			PackageRef: types.PackageRef{
+				Eco:  types.EcoMinecraft,
+				Name: input.ToProjectName("minecraft"),
+			},
+			Version: gameVersion,
 		},
-	}
+	}, Provenance: ExecutableDetectorProvenance{
+		DetectorName: (&craftBukkitFamilyDetector{}).Name(),
+	}}
 }
 
 func normalizePaperBrandName(name string) string {
@@ -569,113 +554,6 @@ func parseBukkitGameVersion(implementationVersion string) types.BareVersion {
 		return types.VersionUnknown
 	}
 	return types.BareVersion(match[1])
-}
-
-func buildBukkitExecutableTopologySeed(
-	primaryNode types.RuntimeNodeID,
-) *ExecutableTopologySeed {
-	var nodes []types.RuntimeNode
-	var edges []types.RuntimeEdge
-
-	addNode := func(id types.RuntimeNodeID) {
-		nodes = append(nodes, buildBukkitExecutableNode(id))
-	}
-
-	switch primaryNode {
-	case bukkitNodePaperFork:
-		addNode(bukkitNodePaperFork)
-		addNode(bukkitNodePaper)
-		addNode(bukkitNodeMinecraft)
-		edges = append(
-			edges,
-			buildBukkitImplementationEdge(
-				bukkitNodePaperFork,
-				bukkitNodePaper,
-				types.EdgeExtends,
-			),
-			buildBukkitImplementationEdge(
-				bukkitNodePaper,
-				bukkitNodeMinecraft,
-				types.EdgeExtends,
-			),
-		)
-	case bukkitNodePaper:
-		addNode(bukkitNodePaper)
-		addNode(bukkitNodeMinecraft)
-		edges = append(
-			edges,
-			buildBukkitImplementationEdge(
-				bukkitNodePaper,
-				bukkitNodeMinecraft,
-				types.EdgeExtends,
-			),
-		)
-	case bukkitNodeSpigot:
-		addNode(bukkitNodeSpigot)
-		addNode(bukkitNodeMinecraft)
-		edges = append(
-			edges,
-			buildBukkitImplementationEdge(
-				bukkitNodeSpigot,
-				bukkitNodeMinecraft,
-				types.EdgeExtends,
-			),
-		)
-	default:
-		addNode(bukkitNodeBukkit)
-	}
-
-	return &ExecutableTopologySeed{
-		PrimaryNode: primaryNode,
-		Nodes:       nodes,
-		Edges:       edges,
-	}
-}
-
-func buildBukkitExecutableNode(id types.RuntimeNodeID) types.RuntimeNode {
-	if id == bukkitNodeMinecraft {
-		return types.RuntimeNode{
-			ID:   id,
-			Role: types.RuntimeRoleVanilla,
-		}
-	}
-
-	// Anchor capabilities to the runtime's own declared rung and let Populate()
-	// expand the Bukkit-family ancestry. This mirrors the policy-side ladder in
-	// probe_topology_data.go so detector-produced seeds and registry-produced
-	// facts share the same tier model.
-	//
-	// bukkitNodePaperFork is intentionally conservative at the Paper tier rather
-	// than Purpur: detected Paper-fork servers may implement the Purpur API
-	// surface, but detection alone is not enough to claim the Purpur rung —
-	// Purpur-specific packages can be opted into separately by routing.
-	var capabilities []types.RuntimeCapability
-	switch id {
-	case bukkitNodeSpigot:
-		capabilities = types.CapabilitySpigotAPI.Populate()
-	case bukkitNodePaper, bukkitNodePaperFork:
-		capabilities = types.CapabilityPaperAPI.Populate()
-	case bukkitNodeBukkit:
-		capabilities = []types.RuntimeCapability{types.CapabilityBukkitAPI}
-	}
-
-	return types.RuntimeNode{
-		ID:           id,
-		Role:         types.RuntimeRolePluginCore,
-		Capabilities: capabilities,
-	}
-}
-
-func buildBukkitImplementationEdge(
-	from types.RuntimeNodeID,
-	to types.RuntimeNodeID,
-	verb types.RuntimeEdgeVerb,
-) types.RuntimeEdge {
-	return types.RuntimeEdge{
-		From: from,
-		To:   to,
-		Verb: verb,
-	}
 }
 
 func init() {

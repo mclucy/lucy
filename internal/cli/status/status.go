@@ -51,7 +51,9 @@ func generateStatusOutput(
 	longOutput bool,
 	noStyle bool,
 ) (output *tui.Data) {
-	if data.Server == nil {
+	hasServer := data != nil && data.Server != nil && data.Server.IsValid()
+	hasMcdr := data != nil && data.Environments.Mcdr != nil
+	if !hasServer && !hasMcdr {
 		return &tui.Data{
 			Fields: []tui.Field{
 				&tui.FieldAnnotation{
@@ -62,8 +64,13 @@ func generateStatusOutput(
 	}
 
 	output = &tui.Data{Fields: []tui.Field{}}
-	serverPlatform := data.DerivedModLoader()
-	modPlatforms := statusModEcosystems(data.Topology, serverPlatform)
+	var effectiveEcosystems []workspace.EffectiveEcosystem
+	var runtimeComponents []types.VersionedPackageRef
+	if hasServer {
+		effectiveEcosystems = data.Server.EffectiveEcosystems()
+		runtimeComponents = data.Server.RuntimeComponents
+	}
+	modPlatforms := statusModEcosystems(effectiveEcosystems)
 	showPlatformQualifiedMods := len(modPlatforms) > 1
 	packageNameOutput := func(pkg types.DiscoveredPackage) string {
 		if longOutput {
@@ -74,13 +81,14 @@ func generateStatusOutput(
 		}
 		return pkg.Id.Name.String()
 	}
-	hasMcdr := data.Environments.Mcdr != nil
-	hasLucy := data.Environments.Lucy != nil
-	primaryNode, hasPrimaryNode := topologyPrimaryNodeData(data.Topology)
 	showMods := len(modPlatforms) > 0
-	showPlugins := data.Topology != nil && data.Topology.Resolved() && data.Topology.HasCapability(types.CapabilityBukkitAPI)
+	showPlugins := statusHasDirectOffer(
+		effectiveEcosystems,
+		types.EcoBukkit,
+	)
 	modNames, modPaths, pluginNames, mcdrPlugins := statusPackageSections(
 		data.Packages,
+		runtimeComponents,
 		modPlatforms,
 		packageNameOutput,
 		showMods,
@@ -88,20 +96,23 @@ func generateStatusOutput(
 		hasMcdr,
 	)
 
-	// logo display strategy:
-	// custom client > mod loader > mcdr > lucy > vanilla
 	var logoEco types.Ecosystem
-	if serverPlatform == types.EcoVanilla {
-		if hasMcdr {
-			logoEco = types.EcoMcdr
-		} else if hasLucy {
-			// logoEco =
-			// lucy is not supposed to be a platform, needs refactor
-			// also need structural support for all other custom server clients
-		} else {
-			logoEco = types.EcoVanilla
+	for _, offer := range effectiveEcosystems {
+		if offer.Verdict == types.CompatCompatible &&
+			offer.Ecosystem.IsModding() {
+			logoEco = offer.Ecosystem
+			break
 		}
-	} else if serverPlatform.IsModding() {
+	}
+	if hasServer &&
+		logoEco == types.EcoUnspecified &&
+		data.Server.PrimaryRuntime.Identity.Eco == types.EcoMinecraft {
+		logoEco = types.EcoMinecraft
+	}
+	if logoEco == types.EcoUnspecified && hasMcdr {
+		logoEco = types.EcoMcdr
+	}
+	if logoEco != types.EcoUnspecified {
 		output.Fields = append(
 			output.Fields,
 			&tui.FieldLogo{
@@ -111,86 +122,106 @@ func generateStatusOutput(
 		)
 	}
 
-	output.Fields = append(
-		output.Fields,
-		&tui.FieldAnnotatedShortText{
-			Title:      "Game",
-			Text:       data.Server.GameVersion().String(),
-			Annotation: data.Server.PrimaryEntrance,
-		},
-	)
-
-	if data.Activity != nil {
+	if hasServer {
 		output.Fields = append(
-			output.Fields, &tui.FieldAnnotatedShortText{
-				Title: "Activity",
-				Text: fn.Ternary(
-					data.Activity.Active,
-					"Active",
-					"Inactive",
-				),
-				Annotation: fn.Ternary(
-					data.Activity.Active,
-					fmt.Sprintf("PID %d", data.Activity.Pid),
-					"",
-				),
+			output.Fields,
+			&tui.FieldAnnotatedShortText{
+				Title:      "Game",
+				Text:       data.Server.GameVersion().String(),
+				Annotation: data.Server.PrimaryRuntime.Path,
 			},
 		)
-	} else {
-		output.Fields = append(
-			output.Fields, &tui.FieldShortText{
-				Title: "Activity",
-				Text:  style.Muted("(Unknown)"),
-			},
-		)
-	}
 
-	if platformLabel := statusRuntimeEcosystemLabel(
-		data.Topology,
-		serverPlatform,
-		hasPrimaryNode,
-		primaryNode,
-	); platformLabel != "" {
-		children := make([]tui.TreeNode, 0, 2)
-		if showMods {
-			children = append(
-				children,
-				tui.TreeNode{
-					Title: "Mods",
-					Field: statusPackageListField(
-						modNames,
-						modPaths,
-						longOutput,
+		if data.Activity != nil {
+			output.Fields = append(
+				output.Fields, &tui.FieldAnnotatedShortText{
+					Title: "Activity",
+					Text: fn.Ternary(
+						data.Activity.Active,
+						"Active",
+						"Inactive",
+					),
+					Annotation: fn.Ternary(
+						data.Activity.Active,
+						fmt.Sprintf("PID %d", data.Activity.Pid),
+						"",
 					),
 				},
 			)
-		}
-		if showPlugins {
-			children = append(
-				children,
-				tui.TreeNode{
-					Title: "Plugins",
-					Field: statusPackageListField(pluginNames, nil, false),
+		} else {
+			output.Fields = append(
+				output.Fields, &tui.FieldShortText{
+					Title: "Activity",
+					Text:  style.Muted("(Unknown)"),
 				},
 			)
 		}
 
-		output.Fields = append(
-			output.Fields, &tui.FieldTree{
-				Title:      "Platform",
-				Text:       platformLabel,
-				Annotation: data.DerivedLoaderVersion(),
-				Children:   children,
-			},
-		)
-	}
-
-	if topologyField := statusTopologyField(
-		data.Topology,
-		hasPrimaryNode,
-		primaryNode,
-	); topologyField != nil {
-		output.Fields = append(output.Fields, topologyField)
+		primary := &data.Server.PrimaryRuntime.Identity
+		if platformLabel := statusRuntimeLabel(primary); platformLabel != "" {
+			children := make([]tui.TreeNode, 0, 4)
+			if len(data.Server.RuntimeComponents) > 0 {
+				components := make(
+					[]string,
+					0,
+					len(data.Server.RuntimeComponents),
+				)
+				for _, component := range data.Server.RuntimeComponents {
+					components = append(components, component.StringFull())
+				}
+				children = append(children, tui.TreeNode{
+					Title: "Components",
+					Field: statusPackageListField(components, nil, false),
+				})
+			}
+			if len(effectiveEcosystems) > 0 {
+				offers := make([]string, 0, len(effectiveEcosystems))
+				for _, offer := range effectiveEcosystems {
+					offers = append(
+						offers,
+						fmt.Sprintf(
+							"%s (%s)",
+							offer.Ecosystem.Title(),
+							offer.Verdict,
+						),
+					)
+				}
+				children = append(children, tui.TreeNode{
+					Title: "Offers",
+					Field: statusPackageListField(offers, nil, false),
+				})
+			}
+			if showMods {
+				children = append(
+					children,
+					tui.TreeNode{
+						Title: "Mods",
+						Field: statusPackageListField(
+							modNames,
+							modPaths,
+							longOutput,
+						),
+					},
+				)
+			}
+			if showPlugins {
+				children = append(
+					children,
+					tui.TreeNode{
+						Title: "Plugins",
+						Field: statusPackageListField(pluginNames, nil, false),
+					},
+				)
+			}
+			output.Fields = append(
+				output.Fields, &tui.FieldTree{
+					Title:      "Platform",
+					Text:       platformLabel,
+					Annotation: primary.Version.String(),
+					Children:   children,
+				},
+			)
+		}
 	}
 
 	if hasMcdr {
@@ -240,19 +271,27 @@ func statusPackageListField(
 
 func statusPackageSections(
 	packages []types.DiscoveredPackage,
+	runtimeComponents []types.VersionedPackageRef,
 	modPlatforms map[types.Ecosystem]bool,
 	packageNameOutput func(types.DiscoveredPackage) string,
 	showMods bool,
 	showPlugins bool,
 	hasMcdr bool,
 ) ([]string, []string, []string, []string) {
+	componentKeys := make(map[string]struct{}, len(runtimeComponents))
+	for _, component := range runtimeComponents {
+		componentKeys[component.StringBase()] = struct{}{}
+	}
+
 	modNames := make([]string, 0, len(packages))
 	modPaths := make([]string, 0, len(packages))
 	pluginNames := make([]string, 0, len(packages))
 	mcdrPlugins := make([]string, 0, len(packages))
-
 	for _, pkg := range packages {
-		if types.IsIdentityPackage(pkg.Id.PackageRef) {
+		if _, isComponent := componentKeys[pkg.Id.StringBase()]; isComponent {
+			continue
+		}
+		if types.IsCorePackage(pkg.Id.PackageRef) {
 			continue
 		}
 
@@ -263,7 +302,9 @@ func statusPackageSections(
 				modPaths = append(modPaths, pkg.Path)
 			}
 		}
-		if showPlugins && packagePlatform == types.EcoBukkit {
+		if showPlugins &&
+			(packagePlatform == types.EcoBukkit ||
+				packagePlatform == types.EcoPaper) {
 			pluginNames = append(pluginNames, packageNameOutput(pkg))
 		}
 		if hasMcdr && packagePlatform == types.EcoMcdr {
@@ -275,236 +316,58 @@ func statusPackageSections(
 }
 
 func statusModEcosystems(
-	topology *types.ServerTopology,
-	serverPlatform types.Ecosystem,
+	offers []workspace.EffectiveEcosystem,
 ) map[types.Ecosystem]bool {
 	platforms := make(map[types.Ecosystem]bool, 3)
-	if topology == nil || !topology.Resolved() {
-		return platforms
+	for _, offer := range offers {
+		if offer.Ecosystem.IsModding() {
+			platforms[offer.Ecosystem] = true
+		}
 	}
-
-	if serverPlatform.IsModding() {
-		platforms[serverPlatform] = true
-	}
-	if serverPlatform == types.EcoNeoforge {
-		platforms[types.EcoForge] = true
-	}
-	if topology.HasCapability(types.CapabilityFabricLoader) {
-		platforms[types.EcoFabric] = true
-	}
-	if topology.HasCapability(types.CapabilityForge) {
-		platforms[types.EcoForge] = true
-	}
-	if topology.HasCapability(types.CapabilityNeoforge) {
-		platforms[types.EcoNeoforge] = true
-	}
-
 	return platforms
 }
 
-func topologyPrimaryNodeData(topology *types.ServerTopology) (
-	types.RuntimeNode,
-	bool,
-) {
-	if topology == nil || !topology.Resolved() {
-		return types.RuntimeNode{}, false
+func statusHasDirectOffer(
+	offers []workspace.EffectiveEcosystem,
+	required types.Ecosystem,
+) bool {
+	for _, offer := range offers {
+		if offer.Verdict == types.CompatCompatible &&
+			offer.Ecosystem.Satisfy(required) {
+			return true
+		}
 	}
-
-	return topology.PrimaryNodeData()
+	return false
 }
 
-func statusRuntimeEcosystemLabel(
-	topology *types.ServerTopology,
-	fallback types.Ecosystem,
-	hasPrimaryNode bool,
-	primaryNode types.RuntimeNode,
-) string {
-	label := ""
-	if hasPrimaryNode {
-		if primaryNode.Role != types.RuntimeRoleHybrid {
-			if platform := types.DeclaredModdingEcosystemForNode(primaryNode.ID); platform != types.EcoUnspecified && platform != types.EcoMinecraft {
-				label = platform.Title()
-			}
-		}
-
-		if label == "" {
-			if nodeLabel := cli.RuntimeNodeLabel(primaryNode.ID); nodeLabel != "" && nodeLabel != "Minecraft" {
-				label = nodeLabel
-			}
-		}
-	}
-
-	if label == "" && topology != nil && topology.Resolved() && fallback != types.EcoMinecraft && fallback != types.EcoUnspecified {
-		label = fallback.Title()
-	}
-
-	if label == "" {
+func statusRuntimeLabel(primary *types.VersionedPackageRef) string {
+	if primary == nil {
 		return ""
 	}
-
-	if extras := runtimeTopologyAddonLabels(
-		topology,
-		primaryNode.ID,
-	); len(extras) > 0 {
-		label += " + " + strings.Join(extras, " + ")
-	}
-
-	return label
-}
-
-func statusTopologyField(
-	topology *types.ServerTopology,
-	hasPrimaryNode bool,
-	primaryNode types.RuntimeNode,
-) tui.Field {
-	if topology == nil {
-		return nil
-	}
-
-	if !topology.Resolved() {
-		return &tui.FieldShortText{
-			Title: "Topology",
-			Text:  style.Muted("(Unresolved)"),
-		}
-	}
-
-	if !hasPrimaryNode {
-		return &tui.FieldShortText{
-			Title: "Topology",
-			Text:  style.Muted("(Unknown)"),
-		}
-	}
-
-	roleLabel := cli.RuntimeRoleLabel(primaryNode.Role)
-	if roleLabel == "Mod loader" || roleLabel == "Plugin core" || roleLabel == "Vanilla" {
-		return nil
-	}
-	if roleLabel == "" {
-		return nil
-	}
-
-	annotation := runtimeTopologyRelationLabel(topology, primaryNode)
-	if annotation == "" {
-		return &tui.FieldShortText{
-			Title: "Topology",
-			Text:  roleLabel,
-		}
-	}
-
-	return &tui.FieldAnnotatedShortText{
-		Title:      "Topology",
-		Text:       roleLabel,
-		Annotation: annotation,
-	}
-}
-
-func runtimeTopologyRelationLabel(
-	topology *types.ServerTopology,
-	primaryNode types.RuntimeNode,
-) string {
-	switch primaryNode.Role {
-	case types.RuntimeRoleProxy:
-		if targets := runtimeTopologyTargets(
-			topology,
-			primaryNode.ID,
-		); len(targets) > 0 {
-			return "proxies to " + strings.Join(targets, ", ")
-		}
-		return "proxies to backends"
-	case types.RuntimeRoleHybrid:
-		if targets := runtimeTopologyTargets(
-			topology,
-			primaryNode.ID,
-		); len(targets) > 0 {
-			return "hosts " + strings.Join(targets, ", ")
-		}
-		return "hybrid runtime"
-	case types.RuntimeRoleBridge:
-		if targets := runtimeTopologyTargets(
-			topology,
-			primaryNode.ID,
-		); len(targets) > 0 {
-			return "hosts compatibility layer"
-		}
-		return "compatibility layer"
-	case types.RuntimeRoleProtocolBridge:
-		if targets := runtimeTopologyTargets(
-			topology,
-			primaryNode.ID,
-		); len(targets) > 0 {
-			return "provides protocol compatibility for " + strings.Join(
-				targets,
-				", ",
-			)
-		}
-		return "protocol bridge"
+	switch strings.ToLower(primary.Name.String()) {
+	case "minecraft":
+		return "Vanilla"
+	case "mcdreforged":
+		return "MCDReforged"
+	case "neoforge":
+		return "NeoForge"
+	case "craftbukkit":
+		return "CraftBukkit"
+	case "catserver":
+		return "CatServer"
+	case "bungeecord":
+		return "BungeeCord"
+	case "spongevanilla":
+		return "SpongeVanilla"
+	case "spongeforge":
+		return "SpongeForge"
+	case "spongeneo":
+		return "SpongeNeo"
 	default:
-		return ""
+		return style.Capitalize(strings.ReplaceAll(
+			strings.ReplaceAll(primary.Name.String(), "-", " "),
+			"_",
+			" ",
+		))
 	}
-}
-
-func runtimeTopologyTargets(
-	topology *types.ServerTopology,
-	nodeID types.RuntimeNodeID,
-) []string {
-	if topology == nil {
-		return nil
-	}
-
-	targets := make([]string, 0, 2)
-	seen := make(map[string]struct{}, 2)
-	for _, edge := range topology.EdgesFrom(nodeID) {
-		switch edge.Verb {
-		case types.EdgeHosts, types.EdgeProxies:
-			// keep - these point to meaningful targets
-		default:
-			continue
-		}
-		if target, ok := topology.FindNode(edge.To); ok {
-			label := cli.RuntimeNodeLabel(target.ID)
-			if label == "" {
-				continue
-			}
-			if _, exists := seen[label]; exists {
-				continue
-			}
-			seen[label] = struct{}{}
-			targets = append(targets, label)
-		}
-	}
-	return targets
-}
-
-func runtimeTopologyAddonLabels(
-	topology *types.ServerTopology,
-	primaryNodeID types.RuntimeNodeID,
-) []string {
-	if topology == nil {
-		return nil
-	}
-
-	labels := make([]string, 0, len(topology.Nodes))
-	seen := map[string]struct{}{}
-	for _, node := range topology.Nodes {
-		if node.ID == primaryNodeID {
-			continue
-		}
-
-		if node.Role == types.RuntimeRoleModLoader || node.Role == types.RuntimeRoleVanilla {
-			continue
-		}
-
-		label := cli.RuntimeNodeLabel(node.ID)
-		if label == "" || label == "Vanilla" {
-			continue
-		}
-		if _, exists := seen[label]; exists {
-			continue
-		}
-
-		seen[label] = struct{}{}
-		labels = append(labels, label)
-	}
-
-	return labels
 }

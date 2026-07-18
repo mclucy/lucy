@@ -163,32 +163,30 @@ func assertNeoForgeRuntime(
 
 	wantGameVersion := types.BareVersion(gameVersion)
 
-	if runtime.PrimaryEntrance != primary {
+	if runtime.PrimaryPath != primary {
 		t.Fatalf(
-			"primary entrance mismatch: got %q want %q",
-			runtime.PrimaryEntrance,
+			"primary path mismatch: got %q want %q",
+			runtime.PrimaryPath,
 			primary,
 		)
 	}
-	if runtime.GameVersion != wantGameVersion {
+	if got := runtimeIdentityVersion(
+		runtime,
+		types.EcoMinecraft,
+		"minecraft",
+	); got != wantGameVersion.String() {
 		t.Fatalf(
-			"game version mismatch: got raw=%q want raw=%q",
-			runtime.GameVersion,
+			"game version mismatch: got %q want %q",
+			got,
 			wantGameVersion,
 		)
 	}
-	if runtime.Topology == nil {
-		t.Fatalf("expected topology on NeoForge runtime evidence")
-	}
-	primaryNode, ok := runtime.Topology.PrimaryNodeData()
-	if !ok {
-		t.Fatalf("expected primary topology node on NeoForge runtime evidence")
-	}
-	if got := types.DeclaredModdingEcosystemForNode(primaryNode.ID); got != types.EcoNeoforge {
+	if runtime.PrimaryRuntime == nil ||
+		runtime.PrimaryRuntime.Eco != types.EcoNeoforge ||
+		runtime.PrimaryRuntime.Name != "neoforge" {
 		t.Fatalf(
-			"derived mod loader mismatch: got %s want %s",
-			got,
-			types.EcoNeoforge,
+			"expected primary neoforge runtime, got %+v",
+			runtime.PrimaryRuntime,
 		)
 	}
 	if got := runtimeIdentityVersion(

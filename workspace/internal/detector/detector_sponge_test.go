@@ -2,6 +2,8 @@ package detector
 
 import (
 	"testing"
+
+	"github.com/mclucy/lucy/types"
 )
 
 func TestSpongeServerDetector_UsesSpecificationTitleOverImplementationTitle(t *testing.T) {
@@ -24,8 +26,18 @@ func TestSpongeServerDetector_UsesSpecificationTitleOverImplementationTitle(t *t
 	if err != nil {
 		t.Fatalf("detect: %v", err)
 	}
-	if evidence == nil || evidence.GameVersion != "1.21.10" {
-		t.Fatalf("expected spongevanilla from Specification-Title, got %+v", evidence)
+	if evidence == nil ||
+		evidence.PrimaryRuntime == nil ||
+		evidence.PrimaryRuntime.Name != "spongevanilla" ||
+		runtimeIdentityVersion(
+			evidence,
+			types.EcoMinecraft,
+			"minecraft",
+		) != "1.21.10" {
+		t.Fatalf(
+			"expected spongevanilla from specification title, got %+v",
+			evidence,
+		)
 	}
 }
 

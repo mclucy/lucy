@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 )
 
 // Bootstrapper installs a server platform identity package (Minecraft,
@@ -30,4 +31,31 @@ func ForEcosystem(platform types.Ecosystem) (Bootstrapper, error) {
 		)
 	}
 	return b, nil
+}
+
+func selectedLoader(server *workspace.ServerInstance) types.Ecosystem {
+	if server == nil || !server.IsValid() {
+		return types.EcoUnspecified
+	}
+	for _, component := range server.RuntimeComponents {
+		switch {
+		case component.Eco == types.EcoFabric &&
+			(component.Name == "fabric-loader" ||
+				component.Name == "fabricloader"):
+			return types.EcoFabric
+		case component.Eco == types.EcoForge && component.Name == "forge":
+			return types.EcoForge
+		case component.Eco == types.EcoNeoforge &&
+			component.Name == "neoforge":
+			return types.EcoNeoforge
+		}
+	}
+	return types.EcoUnspecified
+}
+
+func isVanillaServer(server *workspace.ServerInstance) bool {
+	return server != nil &&
+		server.IsValid() &&
+		server.PrimaryRuntime.Identity.Eco == types.EcoMinecraft &&
+		server.PrimaryRuntime.Identity.Name == "minecraft"
 }

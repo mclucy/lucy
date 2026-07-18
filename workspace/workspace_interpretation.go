@@ -10,45 +10,10 @@ func finalizeProbedRuntime(
 	runtime *ServerInstance,
 	packages []types.DiscoveredPackage,
 ) []types.DiscoveredPackage {
-	EnrichTopologyFromPackages(runtime, packages)
-	ensureRuntimeTopology(runtime)
 	if runtime != nil {
-		runtime.Cores = enrichCoresFromPackages(runtime.Cores, packages)
-		runtime.RefreshPrimaryCore()
+		runtime.Packages = packages
 	}
-	out := packagesWithRuntimeIdentities(packages, runtime)
-	if runtime != nil {
-		runtime.Packages = out
-	}
-	return out
-}
-
-func ensureRuntimeTopology(runtime *ServerInstance) {
-	if runtime == nil || runtime.topology != nil {
-		return
-	}
-
-	runtime.topology = &types.ServerTopology{}
-}
-
-func packagesWithRuntimeIdentities(
-	packages []types.DiscoveredPackage,
-	runtime *ServerInstance,
-) []types.DiscoveredPackage {
-	if runtime == nil || !runtime.IsValid() {
-		return packages
-	}
-
-	idx := NewPackageIndex()
-	idx.Merge(packages)
-	for _, rid := range runtime.Cores {
-		if rid.Eco == types.EcoUnspecified {
-			continue
-		}
-		idx.Add(types.DiscoveredPackage{Id: rid})
-	}
-
-	return idx.Packages()
+	return packages
 }
 
 func packageSearchPaths(
@@ -70,12 +35,30 @@ func packageSearchPathsForServer(
 		return nil
 	}
 
-	for _, eco := range server.PrimaryEcosystem() {
-		switch eco {
+	for _, offer := range server.EffectiveEcosystems() {
+		if offer.Verdict != types.CompatCompatible {
+			continue
+		}
+
+		var path string
+		switch offer.Ecosystem {
 		case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
-			paths = append(paths, filepath.Join(workingDirectory, "mods"))
+			path = filepath.Join(workingDirectory, "mods")
 		case types.EcoBukkit, types.EcoPaper:
-			paths = append(paths, filepath.Join(workingDirectory, "plugins"))
+			path = filepath.Join(workingDirectory, "plugins")
+		default:
+			continue
+		}
+
+		duplicate := false
+		for _, existing := range paths {
+			if existing == path {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			paths = append(paths, path)
 		}
 	}
 	return paths

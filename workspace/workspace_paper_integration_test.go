@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-
-	"github.com/mclucy/lucy/types"
 )
 
 func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T) {
@@ -40,21 +38,11 @@ func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T
 	if primary == nil {
 		t.Fatalf("expected primary runtime identity, got %+v", observed.Server)
 	}
-	if got := string(primary.Name); got != "paper" {
+	if got := primary.Name.String(); got != "paper" {
 		t.Fatalf(
-			"expected paper runtime identity, got %q (%+v)",
+			"expected Paper primary core, got %q (%+v)",
 			got,
-			observed.Topology.AllIdentities(),
-		)
-	}
-	if observed.Topology == nil {
-		t.Fatalf("expected runtime topology for paper fixture")
-	}
-	if got := observed.Topology.PrimaryNode; got != types.RuntimeNodePaper {
-		t.Fatalf(
-			"expected primary runtime node %q, got %q",
-			types.RuntimeNodePaper,
-			got,
+			observed.Server.RuntimeComponents,
 		)
 	}
 }
@@ -94,16 +82,6 @@ func TestPaperDetectorIntegration_ContradictoryEvidenceDoesNotProducePaperRuntim
 	observed := NewAt(workDir)
 	if observed.Server == nil {
 		t.Fatal("expected runtime info for contradiction fixture")
-	}
-	if observed.Topology == nil {
-		t.Fatalf("expected runtime topology for contradiction fixture")
-	}
-
-	if got := observed.Topology.PrimaryNode; got == types.RuntimeNodePaper || got == types.RuntimeNodePaperFork {
-		t.Fatalf(
-			"expected contradiction to avoid paper lineage, got primary node %q",
-			got,
-		)
 	}
 
 	if primary := observed.PrimaryRuntimeIdentity(); primary != nil {

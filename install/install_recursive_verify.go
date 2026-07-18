@@ -9,18 +9,20 @@ import (
 	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func verifyArtifacts(
 	ctx context.Context,
 	downloaded DownloadedClosure,
 	journal Journal,
+	runtime *workspace.ServerInstance,
 ) (VerifiedClosure, error) {
 	if err := ctx.Err(); err != nil {
 		return VerifiedClosure{}, err
 	}
 
-	verifiedGraph, err := verifyDownloadedArtifacts(downloaded)
+	verifiedGraph, err := verifyDownloadedArtifacts(downloaded, runtime)
 	if err != nil {
 		return VerifiedClosure{}, err
 	}
@@ -44,6 +46,7 @@ func verifyArtifacts(
 
 func verifyDownloadedArtifacts(
 	downloaded DownloadedClosure,
+	runtime *workspace.ServerInstance,
 ) (map[string]CandidateNode, error) {
 	allPackages := make(
 		[]types.DiscoveredPackage,
@@ -64,6 +67,15 @@ func verifyDownloadedArtifacts(
 				"install: artifact verification failed for %s: unreadable or corrupt",
 				path,
 			)
+		}
+		if err := ensureFoliaArtifactCompatibility(
+			path,
+			infos,
+			expected,
+			hasExpected,
+			runtime,
+		); err != nil {
+			return nil, err
 		}
 		if len(infos) == 0 {
 			if !hasExpected || !hashMatchesResolvedPackage(path, expected) {
@@ -112,6 +124,49 @@ func verifyDownloadedArtifacts(
 	}
 
 	return verified, nil
+}
+
+func ensureFoliaArtifactCompatibility(
+	path string,
+	infos []artifact.Info,
+	expected types.ResolvedPackage,
+	hasExpected bool,
+	runtime *workspace.ServerInstance,
+) error {
+	if !isFoliaRuntime(runtime) ||
+		!hasExpected ||
+		!isBukkitFamilyCandidate(expected.Id.Eco) {
+		return nil
+	}
+
+	foundFamily := false
+	allFamilyInfosSupported := true
+	for _, info := range infos {
+		if !isBukkitFamilyCandidate(info.Ref.Eco) {
+			continue
+		}
+		foundFamily = true
+		if !info.Compatibility.FoliaSupported {
+			allFamilyInfosSupported = false
+		}
+	}
+	if foundFamily && allFamilyInfosSupported {
+		return nil
+	}
+	return fmt.Errorf(
+		"install: artifact verification failed for %s: bukkit plugin does not declare folia-supported: true",
+		path,
+	)
+}
+
+func isBukkitFamilyCandidate(ecosystem types.Ecosystem) bool {
+	return ecosystem == types.EcoBukkit || ecosystem == types.EcoPaper
+}
+
+func isFoliaRuntime(runtime *workspace.ServerInstance) bool {
+	return runtime != nil &&
+		runtime.PrimaryRuntime != nil &&
+		runtime.PrimaryRuntime.Identity.Name == "folia"
 }
 
 func downloadedArtifactPackages(

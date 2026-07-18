@@ -66,28 +66,21 @@ func (d *VanillaDetector) Detect(
 
 			gameVersion := types.BareVersion(obj.Id)
 
-			exec := &ExecutableEvidence{
-				PrimaryEntrance: filePath,
-				GameVersion:     gameVersion,
-				RuntimeIdentities: []types.VersionedPackageRef{
-					{
-						PackageRef: types.PackageRef{
-							Eco:  types.EcoMinecraft,
-							Name: "minecraft",
-						},
-						Version: gameVersion,
-					},
+			exec := &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Eco:  types.EcoMinecraft,
+					Name: "minecraft",
 				},
-				Topology: &types.ServerTopology{
-					PrimaryNode: "minecraft",
-					Nodes: []types.RuntimeNode{
-						{
-							ID:   "minecraft",
-							Role: types.RuntimeRoleVanilla,
-						},
+				Version: gameVersion,
+			}, RuntimeComponents: []types.VersionedPackageRef{
+				{
+					PackageRef: types.PackageRef{
+						Eco:  types.EcoMinecraft,
+						Name: "minecraft",
 					},
+					Version: gameVersion,
 				},
-			}
+			}}
 
 			return exec, nil
 		}

@@ -7,10 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/input"
@@ -25,12 +23,10 @@ type AmbientDependencies struct {
 	aliases map[string]string
 }
 
-// Ambient dependencies are dependency ids already contributed by the server
-// environment before Lucy resolves requested packages. They are separate from
-// topology identity packages: topology describes the server shape, while this
-// set describes what the mod loader can satisfy during dependency resolution.
+// Ambient dependencies are exact dependency identities already contributed by
+// observed runtime components or environments before Lucy resolves requests.
 func buildAmbientDependencies(
-	ctx context.Context,
+	_ context.Context,
 	ws workspace.Workspace,
 ) (AmbientDependencies, error) {
 	ambient := AmbientDependencies{
@@ -49,61 +45,19 @@ func buildAmbientDependencies(
 		)
 	}
 
-	if ws.Server == nil || !ws.Server.SupportsFabricLoader() {
+	if ws.Server == nil {
 		return ambient, nil
 	}
 
-	loaderVersion := ws.DerivedLoaderVersion()
-	if loaderVersion != "" && loaderVersion != types.VersionUnknown.String() {
-		ambient.Add(
-			types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco: types.EcoFabric, Name: "fabricloader",
-				},
-				Version: types.BareVersion(loaderVersion),
-			},
-		)
-	}
-	ambient.Add(
-		types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Eco: types.EcoFabric, Name: "minecraft",
-			},
-			Version: ws.Server.GameVersion(),
-		},
+	fabricLoaderVersion := addRuntimeComponentAmbientDependencies(
+		&ambient,
+		ws.Server.RuntimeComponents,
 	)
-	ambient.Add(
-		types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Eco: types.EcoFabric, Name: "fabric",
-			},
-			Version: types.VersionAny,
-		},
-	)
-	ambient.Add(
-		types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Eco: types.EcoFabric, Name: "fabric-api",
-			},
-			Version: types.VersionAny,
-		},
-	)
-
-	if javaVersion, ok := currentJavaSpecVersion(ctx); ok {
-		ambient.Add(
-			types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco: types.EcoFabric, Name: "java",
-				},
-				Version: javaVersion,
-			},
-		)
+	if fabricLoaderVersion == "" {
+		return ambient, nil
 	}
 
-	// Fabric Loader can also contribute real Fabric mods from its own artifact.
-	// Loader 0.15+ uses this path for MixinExtras, and future nested loader mods
-	// should be discovered from metadata rather than added as a name list.
-	loaderPath := fabricLoaderArtifactPath(ws.Root, loaderVersion)
+	loaderPath := fabricLoaderArtifactPath(ws.Root, fabricLoaderVersion)
 	if loaderPath == "" {
 		return ambient, nil
 	}
@@ -115,6 +69,88 @@ func buildAmbientDependencies(
 	}
 
 	return ambient, nil
+}
+
+func addRuntimeComponentAmbientDependencies(
+	ambient *AmbientDependencies,
+	components []types.VersionedPackageRef,
+) string {
+	var minecraft types.VersionedPackageRef
+	var fabricLoaderVersion string
+	var hasFabricLoader bool
+	var hasForge bool
+	var hasNeoForge bool
+
+	for _, component := range components {
+		if !concreteAmbientVersion(component.Version) {
+			continue
+		}
+
+		name := strings.ToLower(strings.TrimSpace(component.Name.String()))
+		switch {
+		case component.Eco == types.EcoMinecraft && name == "minecraft":
+			minecraft = component
+			ambient.Add(component)
+		case component.Eco == types.EcoFabric &&
+			(name == "fabric-loader" || name == "fabricloader"):
+			loader := component
+			loader.Name = "fabric-loader"
+			ambient.Add(loader)
+			ambient.AddAlias(
+				types.PackageRef{
+					Eco:  types.EcoFabric,
+					Name: "fabricloader",
+				},
+				loader,
+			)
+			fabricLoaderVersion = loader.Version.String()
+			hasFabricLoader = true
+		case component.Eco == types.EcoFabric && name == "fabric-api":
+			ambient.Add(component)
+		case component.Eco == types.EcoForge && name == "forge":
+			ambient.Add(component)
+			hasForge = true
+		case component.Eco == types.EcoNeoforge && name == "neoforge":
+			ambient.Add(component)
+			hasNeoForge = true
+		}
+	}
+
+	if minecraft.PackageRef != (types.PackageRef{}) {
+		if hasFabricLoader {
+			ambient.AddAlias(
+				types.PackageRef{
+					Eco:  types.EcoFabric,
+					Name: "minecraft",
+				},
+				minecraft,
+			)
+		}
+		if hasForge {
+			ambient.AddAlias(
+				types.PackageRef{
+					Eco:  types.EcoForge,
+					Name: "minecraft",
+				},
+				minecraft,
+			)
+		}
+		if hasNeoForge {
+			ambient.AddAlias(
+				types.PackageRef{
+					Eco:  types.EcoNeoforge,
+					Name: "minecraft",
+				},
+				minecraft,
+			)
+		}
+	}
+
+	return fabricLoaderVersion
+}
+
+func concreteAmbientVersion(version types.BareVersion) bool {
+	return version != "" && !version.IsInvalid() && !version.CanInfer()
 }
 
 func (a *AmbientDependencies) Add(id types.VersionedPackageRef) {
@@ -284,34 +320,4 @@ func readFabricModJSON(
 		return nil, err
 	}
 	return modInfo, nil
-}
-
-func currentJavaSpecVersion(ctx context.Context) (types.BareVersion, bool) {
-	javaCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-
-	output, err := exec.CommandContext(
-		javaCtx,
-		"java",
-		"-XshowSettings:properties",
-		"-version",
-	).CombinedOutput()
-	if err != nil && len(output) == 0 {
-		return "", false
-	}
-
-	for _, line := range strings.Split(string(output), "\n") {
-		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
-		if !ok || strings.TrimSpace(key) != "java.specification.version" {
-			continue
-		}
-		version := strings.TrimSpace(value)
-		version = strings.TrimPrefix(version, "1.")
-		if version == "" {
-			return "", false
-		}
-		return types.BareVersion(version), true
-	}
-
-	return "", false
 }

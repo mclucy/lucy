@@ -24,47 +24,37 @@ func ensureServerEcosystemMatch(
 		}
 		return nil
 	default:
-		if !ws.Server.IsValid() {
-			return errors.New("no valid executable found, `lucy add` requires a server in current directory")
+		if ws.Server == nil || !ws.Server.IsValid() {
+			return errors.New(
+				"no valid executable found, `lucy add` requires a server in current directory",
+			)
 		}
 
-		switch platform {
-		case types.EcoVelocity, types.EcoBungeecord, types.EcoSponge:
+		admission := workspace.EvaluateAdmission(ws.Server, platform)
+		switch admission.Verdict {
+		case workspace.AdmissionDirect:
 			return nil
-		}
-
-		result := workspace.EvaluateCompatibility(ws.Server, platform)
-		switch result.Verdict {
-		case types.CompatCompatible:
+		case workspace.AdmissionDegraded:
+			log.ShowWarn(fmt.Errorf(
+				"%s package admission is degraded through %s compatibility",
+				platform.Title(),
+				admission.Offered.Title(),
+			))
 			return nil
-		case types.CompatDegraded:
-			log.ShowWarn(
-				fmt.Errorf(
-					"compatibility degraded for %s: %s (reason: %s)",
-					platform,
-					result.Detail,
-					result.Reason,
-				),
-			)
-			return nil
-		case types.CompatUnresolved:
+		case workspace.AdmissionUnresolved:
 			return fmt.Errorf(
-				"topology unresolved for %s: cannot determine server compatibility",
+				"runtime unavailable: cannot determine %s package admission",
 				platform.Title(),
 			)
-		case types.CompatIncompatible:
+		case workspace.AdmissionRejected:
 			return fmt.Errorf(
-				"%s packages are incompatible with the current runtime (reason: %s, verdict: %s)",
+				"%s packages are incompatible with the current runtime",
 				platform.Title(),
-				result.Reason,
-				result.Verdict,
 			)
 		default:
 			return fmt.Errorf(
-				"%s runtime compatibility could not be confirmed (reason: %s, verdict: %s)",
+				"%s package admission could not be determined",
 				platform.Title(),
-				result.Reason,
-				result.Verdict,
 			)
 		}
 	}

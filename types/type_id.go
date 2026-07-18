@@ -110,23 +110,6 @@ func (e Ecosystem) IsModding() bool {
 	return e == EcoFabric || e == EcoForge || e == EcoNeoforge
 }
 
-func DeclaredModdingEcosystemForNode(id RuntimeNodeID) Ecosystem {
-	switch id {
-	case "fabric":
-		return EcoFabric
-	case "forge", "arclight", "catserver":
-		return EcoForge
-	case "neoforge", "youer":
-		return EcoNeoforge
-	case "mcdr":
-		return EcoMcdr
-	case "minecraft":
-		return EcoMinecraft
-	default:
-		return EcoUnspecified
-	}
-}
-
 // IsSelector returns true if the platform is ambiguous and can be resolved
 // from server context.
 func (e Ecosystem) IsSelector() bool {
