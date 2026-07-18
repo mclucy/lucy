@@ -1,3 +1,5 @@
+[中文](CONTRIBUTING.zh.md) | English
+
 # Contributing to lucy
 
 ## Development environment
