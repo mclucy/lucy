@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"github.com/mclucy/lucy/types"
 )
@@ -71,7 +70,6 @@ func Analyze(filePath string, opts ...Option) ([]Info, error) {
 		)
 	}
 
-	results = aggregateBukkitFamilyPackages(results)
 	return results, nil
 }
 
@@ -99,45 +97,19 @@ func applySlugResolver(results []Info, resolver SlugResolver) {
 // Ecosystem families:
 //
 //	proxyFamily  – velocity, bungeecord
-//	serverFamily – bukkit, paper, leaves, folia, spigot
+//	serverFamily – bukkit, paper
 //	modFamily    – fabric, forge, neoforge
 //
 // PlatformAny artifacts are excluded from the conflict check.
 func jarEcosystemsConflict(infos []Info) bool {
-	if len(infos) == 0 {
-		return false
-	}
-
-	proxyPlatforms := map[types.Ecosystem]struct{}{
-		types.Ecosystem("velocity"):   {},
-		types.Ecosystem("bungeecord"): {},
-	}
-	serverPlatforms := map[types.Ecosystem]struct{}{
-		types.Ecosystem("bukkit"): {},
-		types.Ecosystem("paper"):  {},
-		types.Ecosystem("leaves"): {},
-		types.Ecosystem("folia"):  {},
-		types.Ecosystem("spigot"): {},
-	}
-	modPlatforms := map[types.Ecosystem]struct{}{
-		types.EcoFabric:   {},
-		types.EcoForge:    {},
-		types.EcoNeoforge: {},
-	}
-
 	var hasProxy, hasServer, hasMod bool
 	for _, info := range infos {
-		p := info.Ref.Eco
-		if p == types.EcoUnspecified {
-			continue
-		}
-		if _, ok := proxyPlatforms[p]; ok {
+		switch info.Ref.Eco {
+		case types.EcoVelocity, types.EcoBungeecord:
 			hasProxy = true
-		}
-		if _, ok := serverPlatforms[p]; ok {
+		case types.EcoBukkit, types.EcoPaper:
 			hasServer = true
-		}
-		if _, ok := modPlatforms[p]; ok {
+		case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
 			hasMod = true
 		}
 	}
@@ -153,94 +125,4 @@ func jarEcosystemsConflict(infos []Info) bool {
 		families++
 	}
 	return families > 1
-}
-
-type bukkitFamilyRank struct {
-	priority int
-	fallback types.Ecosystem
-}
-
-func aggregateBukkitFamilyPackages(infos []Info) []Info {
-	if len(infos) < 2 {
-		return infos
-	}
-
-	bukkitIndexes := make([]int, 0, len(infos))
-	for i, info := range infos {
-		if isBukkitFamilyEcosystem(info.Ref.Eco) {
-			bukkitIndexes = append(bukkitIndexes, i)
-		}
-	}
-
-	if len(bukkitIndexes) < 2 {
-		return infos
-	}
-
-	bestIndex := bukkitIndexes[0]
-	bestRank := rankBukkitFamilyEcosystem(infos[bestIndex].Ref.Eco)
-	for _, idx := range bukkitIndexes[1:] {
-		rank := rankBukkitFamilyEcosystem(infos[idx].Ref.Eco)
-		if rank.priority > bestRank.priority {
-			bestIndex = idx
-			bestRank = rank
-		}
-	}
-
-	aggregated := infos[bestIndex]
-
-	resolved := make([]Info, 0, len(infos)-len(bukkitIndexes)+1)
-	inserted := false
-	for i, info := range infos {
-		if !isIndexSelected(bukkitIndexes, i) {
-			resolved = append(resolved, info)
-			continue
-		}
-		if inserted {
-			continue
-		}
-		resolved = append(resolved, aggregated)
-		inserted = true
-	}
-
-	return resolved
-}
-
-func rankBukkitFamilyEcosystem(platform types.Ecosystem) bukkitFamilyRank {
-	switch platform {
-	case types.Ecosystem("leaves"), types.Ecosystem("folia"):
-		return bukkitFamilyRank{
-			priority: 4, fallback: types.Ecosystem("paper"),
-		}
-	case types.Ecosystem("paper"):
-		return bukkitFamilyRank{
-			priority: 3, fallback: types.Ecosystem("paper"),
-		}
-	case types.Ecosystem("spigot"):
-		return bukkitFamilyRank{
-			priority: 2, fallback: types.Ecosystem("spigot"),
-		}
-	case types.Ecosystem("bukkit"):
-		return bukkitFamilyRank{
-			priority: 1, fallback: types.Ecosystem("bukkit"),
-		}
-	default:
-		return bukkitFamilyRank{}
-	}
-}
-
-func isBukkitFamilyEcosystem(platform types.Ecosystem) bool {
-	_, ok := bukkitFamilyEcosystems[platform]
-	return ok
-}
-
-func isIndexSelected(indexes []int, candidate int) bool {
-	return slices.Contains(indexes, candidate)
-}
-
-var bukkitFamilyEcosystems = map[types.Ecosystem]struct{}{
-	types.Ecosystem("bukkit"): {},
-	types.Ecosystem("spigot"): {},
-	types.Ecosystem("paper"):  {},
-	types.Ecosystem("folia"):  {},
-	types.Ecosystem("leaves"): {},
 }

@@ -28,14 +28,19 @@ type Dependency struct {
 	Type       types.DependencyType
 }
 
+type ArtifactCompatibility struct {
+	FoliaSupported bool
+}
+
 // Info represents metadata extracted from a single artifact file
 // (JAR/ZIP/PYZ/MCDR).
 type Info struct {
-	Ref          types.PackageRef
-	Version      types.BareVersion
-	FilePath     string
-	Dependencies []Dependency
-	Metadata     types.Metadata
+	Ref           types.PackageRef
+	Version       types.BareVersion
+	FilePath      string
+	Dependencies  []Dependency
+	Metadata      types.Metadata
+	Compatibility ArtifactCompatibility
 }
 
 func dependencyTypeForEmbedded(embedded bool) types.DependencyType {
