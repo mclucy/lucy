@@ -46,3 +46,11 @@ The config file sets up the following MCPs:
 - `goland`: If you have GoLand on and turned on its MCP server, the agent can access GoLand's powerful editing feautres through this MCP.
 - `godoc`: Allows agents to lookup documentations of go symbols.
 - `gopls`: Go language server.
+
+### Skills
+
+There is a [`skills-lock.json`](skills-lock.json) in the repo. It is recommended to install them for agentic development:
+
+```bash
+npx -y skills experimental_install
+```
