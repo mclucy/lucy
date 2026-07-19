@@ -69,6 +69,29 @@
         pkgs = import nixpkgs { inherit system; };
       in
       {
+        packages.godoc-mcp = pkgs.buildGoModule {
+          pname = "godoc-mcp";
+          version = "latest";
+
+          src = pkgs.fetchFromGitHub {
+            owner = "mrjoshuak";
+            repo = "godoc-mcp";
+            rev = "v1.1.0";
+            hash = "sha256-0cn0QLmVcjzA62oeKeHcEqeckk3CoxeM9UOuowPe17c=";
+          };
+
+          vendorHash = "sha256-N/ZV0FWKigMGUYyyOQHIrmvvcd83NQ0OAxiS1ExMoUw=";
+
+          doCheck = false;
+
+          meta = with pkgs.lib; {
+            description = "MCP server for efficient Go documentation access";
+            homepage = "https://github.com/mrjoshuak/godoc-mcp";
+            license = licenses.mit;
+            mainProgram = "godoc-mcp";
+          };
+        };
+
         packages.default = pkgs.buildGoModule {
           pname = "lucy";
           version =
@@ -110,6 +133,9 @@
             go-task
             watchexec
             nixfmt
+            codegraph
+            gopls
+            self.packages.${system}.godoc-mcp
           ];
 
           shellHook = ''
