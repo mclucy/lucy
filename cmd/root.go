@@ -19,6 +19,13 @@ var rootCmd = &cobra.Command{
 	Use:   "lucy",
 	Short: "The Minecraft server package manager",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
+			log.ReportWarn(
+				fmt.Errorf(
+					"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server.",
+				),
+			)
+		}
 		if noStyle, _ := cmd.Flags().GetBool(flagNoStyleName); noStyle {
 			style.TurnOffStyles()
 			log.TurnOffStyles()
