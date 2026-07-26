@@ -139,24 +139,18 @@ func ensureFoliaArtifactCompatibility(
 		return nil
 	}
 
-	foundFamily := false
-	allFamilyInfosSupported := true
 	for _, info := range infos {
 		if !isBukkitFamilyCandidate(info.Ref.Eco) {
 			continue
 		}
-		foundFamily = true
 		if !info.Compatibility.FoliaSupported {
-			allFamilyInfosSupported = false
+			return fmt.Errorf(
+				"install: artifact verification failed for %s: bukkit plugin does not declare folia-supported: true",
+				path,
+			)
 		}
 	}
-	if foundFamily && allFamilyInfosSupported {
-		return nil
-	}
-	return fmt.Errorf(
-		"install: artifact verification failed for %s: bukkit plugin does not declare folia-supported: true",
-		path,
-	)
+	return nil
 }
 
 func isBukkitFamilyCandidate(ecosystem types.Ecosystem) bool {
