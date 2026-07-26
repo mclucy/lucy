@@ -107,7 +107,7 @@ lucy install
 
 #### `lucy status`
 
-Shows what Lucy detects in the current directory: game version, server core, platform, runtime activity, risk signals, and installed packages.
+Shows what Lucy detects in the current directory: game version, server core, platform, runtime activity, and installed packages.
 
 ```bash
 lucy status
