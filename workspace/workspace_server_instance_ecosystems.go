@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
 func (s *ServerInstance) EffectiveEcosystems() []EffectiveEcosystem {
@@ -41,18 +42,6 @@ func (s *ServerInstance) EffectiveEcosystems() []EffectiveEcosystem {
 			)
 		}
 	case "craftbukkit", "bukkit", "spigot":
-		offers = appendEffectiveEcosystem(
-			offers,
-			types.EcoBukkit,
-			types.CompatCompatible,
-		)
-	case "paper", "purpur", "reaper", "divine", "leaf", "lophine",
-		"luminol", "folia", "leaves":
-		offers = appendEffectiveEcosystem(
-			offers,
-			types.EcoPaper,
-			types.CompatCompatible,
-		)
 		offers = appendEffectiveEcosystem(
 			offers,
 			types.EcoBukkit,
@@ -132,6 +121,19 @@ func (s *ServerInstance) EffectiveEcosystems() []EffectiveEcosystem {
 			types.EcoBungeecord,
 			types.CompatCompatible,
 		)
+	default:
+		if detector.IsPaperFamilyBrand(name) {
+			offers = appendEffectiveEcosystem(
+				offers,
+				types.EcoPaper,
+				types.CompatCompatible,
+			)
+			offers = appendEffectiveEcosystem(
+				offers,
+				types.EcoBukkit,
+				types.CompatCompatible,
+			)
+		}
 	}
 
 	if hasDirectOffer(offers, types.EcoForge) ||
