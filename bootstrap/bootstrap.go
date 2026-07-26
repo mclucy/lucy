@@ -33,21 +33,18 @@ func ForEcosystem(platform types.Ecosystem) (Bootstrapper, error) {
 	return b, nil
 }
 
+// selectedLoader reports the loader ecosystem the detected runtime already
+// serves, including hybrids (CatServer, Youer) whose loader shows up only as
+// an effective ecosystem offer rather than a runtime component. Degraded
+// offers (bridge mods) do not claim the loader slot.
 func selectedLoader(server *workspace.ServerInstance) types.Ecosystem {
 	if server == nil || !server.IsValid() {
 		return types.EcoUnspecified
 	}
-	for _, component := range server.RuntimeComponents {
-		switch {
-		case component.Eco == types.EcoFabric &&
-			(component.Name == "fabric-loader" ||
-				component.Name == "fabricloader"):
-			return types.EcoFabric
-		case component.Eco == types.EcoForge && component.Name == "forge":
-			return types.EcoForge
-		case component.Eco == types.EcoNeoforge &&
-			component.Name == "neoforge":
-			return types.EcoNeoforge
+	for _, offer := range server.EffectiveEcosystems() {
+		if offer.Verdict == types.CompatCompatible &&
+			offer.Ecosystem.IsModding() {
+			return offer.Ecosystem
 		}
 	}
 	return types.EcoUnspecified
