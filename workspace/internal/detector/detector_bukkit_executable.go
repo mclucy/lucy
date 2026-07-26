@@ -25,6 +25,28 @@ const (
 
 var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
 
+// paperFamilyBrands must cover every brand inferPaperObservationBrands can
+// attribute; the fork-brand fixture test iterates this map.
+var paperFamilyBrands = map[string]bool{
+	"paper":   true,
+	"folia":   true,
+	"divine":  true,
+	"purpur":  true,
+	"leaf":    true,
+	"leaves":  true,
+	"luminol": true,
+	"lophine": true,
+	"reaper":  true,
+	"youer":   true,
+}
+
+// IsPaperFamilyBrand reports whether name is a paper-lineage runtime brand
+// this package can emit as a primary runtime identity. Youer is included
+// even though it is a NeoForge hybrid; treat it separately before calling.
+func IsPaperFamilyBrand(name string) bool {
+	return paperFamilyBrands[name]
+}
+
 type craftBukkitFamilyDetector struct{}
 
 type bukkitManifestSignals struct {
