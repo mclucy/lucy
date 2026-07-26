@@ -403,7 +403,7 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 		return outputBisect(
 			cmd,
 			bisectOutput{
-				Message:  "no mods found after filtering identity packages",
+				Message:  "no mods found after filtering core packages",
 				Complete: true,
 			},
 		)
