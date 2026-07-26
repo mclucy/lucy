@@ -97,29 +97,20 @@ func (r *bukkitReader) Read(
 func detectBukkitPluginPlatform(
 	descriptor *bukkitPluginDescriptor,
 ) types.Ecosystem {
-	signals := strings.ToLower(strings.Join(
-		append(
-			append(
-				append(
-					[]string{
-						descriptor.APIVersion,
-						descriptor.PaperPluginLoader,
-					},
-					descriptor.API...,
-				),
-				descriptor.Depend...,
-			),
-			append(descriptor.SoftDepend, descriptor.Libraries...)...,
-		),
-		" ",
-	))
-
-	if strings.Contains(signals, "paper") ||
-		strings.Contains(signals, "folia") ||
-		strings.Contains(signals, "leaves") ||
-		descriptor.PaperPluginLoader != "" ||
-		len(descriptor.Libraries) > 0 {
+	if descriptor.PaperPluginLoader != "" || len(descriptor.Libraries) > 0 {
 		return types.EcoPaper
+	}
+	for _, list := range [][]string{
+		descriptor.API,
+		descriptor.Depend,
+		descriptor.SoftDepend,
+	} {
+		for _, entry := range list {
+			switch strings.ToLower(strings.TrimSpace(entry)) {
+			case "paper", "folia", "leaves":
+				return types.EcoPaper
+			}
+		}
 	}
 	return types.EcoBukkit
 }
