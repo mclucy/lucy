@@ -72,13 +72,10 @@ func classifyInstallRequests(
 	seen := make(map[types.FullPackageRef]struct{}, len(requests))
 
 	for _, request := range requests {
-		match, ok, err := types.NormalizeCorePackage(types.ScopedPackageRef{
+		match, ok := types.NormalizeCorePackage(types.ScopedPackageRef{
 			PackageRef: request.PackageRef,
 			Scope:      request.Scope,
 		})
-		if err != nil {
-			return nil, nil, err
-		}
 		if ok {
 			request.PackageRef = match.Ref.PackageRef
 			request.Scope = match.Ref.Scope

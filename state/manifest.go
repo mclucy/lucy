@@ -756,14 +756,10 @@ func resolveManifestPackageIDWithScope(
 	manifest *Manifest,
 	lock *Lock,
 ) string {
-	core, ok, err := types.NormalizeCorePackage(types.ScopedPackageRef{
+	if core, ok := types.NormalizeCorePackage(types.ScopedPackageRef{
 		PackageRef: id.PackageRef,
 		Scope:      id.Scope,
-	})
-	if err != nil {
-		return ""
-	}
-	if ok {
+	}); ok {
 		id.PackageRef = core.Ref.PackageRef
 		id.Scope = core.Ref.Scope
 	}

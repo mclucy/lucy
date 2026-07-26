@@ -1,5 +1,7 @@
 package types
 
+import "strings"
+
 // CorePackage identifies a special request for a bootable server product or
 // platform installer. It classifies package requests only; installation policy
 // belongs to install and bootstrap.
@@ -35,381 +37,256 @@ type CorePackageMatch struct {
 	Ref  ScopedPackageRef
 }
 
-type corePackageRoute struct {
-	Scope SourceId
-	Ref   PackageRef
-}
-
 type corePackageDefinition struct {
-	Core   CorePackage
-	Ref    PackageRef
-	Routes []corePackageRoute
+	Core    CorePackage
+	Ref     PackageRef
+	Aliases []PackageRef
 }
 
-type corePackageRouteKey struct {
-	Scope SourceId
-	Eco   Ecosystem
-	Name  BarePackageName
-}
-
-type corePackageCatalog struct {
-	byRoute       map[corePackageRouteKey]CorePackageMatch
-	canonical     map[PackageRef]CorePackage
-	inferredAuto  map[PackageRef]CorePackageMatch
-	ambiguousAuto map[PackageRef]bool
-}
-
-type corePackageCatalogError string
-
-func (e corePackageCatalogError) Error() string {
-	return string(e)
-}
-
+// corePackageDefinitions maps user-facing spellings to canonical core
+// identities. Ref is the canonical reference; Aliases are every accepted
+// request spelling, including the canonical one. Static invariants (valid
+// canonical eco, no duplicate aliases) are enforced by tests.
 var corePackageDefinitions = []corePackageDefinition{
 	{
 		Core: CoreMinecraft,
 		Ref:  PackageRef{Eco: EcoMinecraft, Name: "minecraft"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "minecraft"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "mc"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoMinecraft, Name: "minecraft"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoMinecraft, Name: "mc"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "minecraft"},
+			{Eco: EcoUnspecified, Name: "mc"},
+			{Eco: EcoMinecraft, Name: "minecraft"},
+			{Eco: EcoMinecraft, Name: "mc"},
 		},
 	},
 	{
 		Core: CoreFabric,
 		Ref:  PackageRef{Eco: EcoFabric, Name: "fabric"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "fabric"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "fabric-loader"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoFabric, Name: "fabric"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoFabric, Name: "fabric-loader"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "fabric"},
+			{Eco: EcoUnspecified, Name: "fabric-loader"},
+			{Eco: EcoFabric, Name: "fabric"},
+			{Eco: EcoFabric, Name: "fabric-loader"},
 		},
 	},
 	{
 		Core: CoreForge,
 		Ref:  PackageRef{Eco: EcoForge, Name: "forge"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "forge"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoForge, Name: "forge"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "forge"},
+			{Eco: EcoForge, Name: "forge"},
 		},
 	},
 	{
 		Core: CoreNeoForge,
 		Ref:  PackageRef{Eco: EcoNeoforge, Name: "neoforge"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "neoforge"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoNeoforge, Name: "neoforge"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "neoforge"},
+			{Eco: EcoNeoforge, Name: "neoforge"},
 		},
 	},
 	{
 		Core: CoreMCDReforged,
 		Ref:  PackageRef{Eco: EcoMcdr, Name: "mcdreforged"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "mcdreforged"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "mcdr"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoMcdr, Name: "mcdreforged"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoMcdr, Name: "mcdr"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "mcdreforged"},
+			{Eco: EcoUnspecified, Name: "mcdr"},
+			{Eco: EcoMcdr, Name: "mcdreforged"},
+			{Eco: EcoMcdr, Name: "mcdr"},
 		},
 	},
 	{
 		Core: CoreCraftBukkit,
 		Ref:  PackageRef{Eco: EcoBukkit, Name: "craftbukkit"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "bukkit"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "craftbukkit"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoBukkit, Name: "bukkit"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoBukkit, Name: "craftbukkit"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "bukkit"},
+			{Eco: EcoUnspecified, Name: "craftbukkit"},
+			{Eco: EcoBukkit, Name: "bukkit"},
+			{Eco: EcoBukkit, Name: "craftbukkit"},
 		},
 	},
 	{
 		Core: CoreSpigot,
 		Ref:  PackageRef{Eco: EcoBukkit, Name: "spigot"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "spigot"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoBukkit, Name: "spigot"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "spigot"},
+			{Eco: EcoBukkit, Name: "spigot"},
 		},
 	},
 	{
 		Core: CorePaper,
 		Ref:  PackageRef{Eco: EcoPaper, Name: "paper"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "paper"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoPaper, Name: "paper"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "paper"},
+			{Eco: EcoPaper, Name: "paper"},
 		},
 	},
 	{
 		Core: CoreFolia,
 		Ref:  PackageRef{Eco: EcoPaper, Name: "folia"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "folia"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoPaper, Name: "folia"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "folia"},
+			{Eco: EcoPaper, Name: "folia"},
 		},
 	},
 	{
 		Core: CoreLeaves,
 		Ref:  PackageRef{Eco: EcoPaper, Name: "leaves"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "leaves"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoPaper, Name: "leaves"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "leaves"},
+			{Eco: EcoPaper, Name: "leaves"},
 		},
 	},
 	{
 		Core: CoreArclight,
 		Ref:  PackageRef{Eco: EcoUnspecified, Name: "arclight"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "arclight"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "arclight"},
 		},
 	},
 	{
 		Core: CoreArclightForge,
 		Ref:  PackageRef{Eco: EcoUnspecified, Name: "arclight-forge"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "arclight-forge"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "arclight-forge"},
 		},
 	},
 	{
 		Core: CoreArclightNeoForge,
 		Ref:  PackageRef{Eco: EcoUnspecified, Name: "arclight-neoforge"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "arclight-neoforge"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "arclight-neoforge"},
 		},
 	},
 	{
 		Core: CoreArclightFabric,
 		Ref:  PackageRef{Eco: EcoUnspecified, Name: "arclight-fabric"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "arclight-fabric"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "arclight-fabric"},
 		},
 	},
 	{
 		Core: CoreCatServer,
 		Ref:  PackageRef{Eco: EcoUnspecified, Name: "catserver"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "catserver"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "catserver"},
 		},
 	},
 	{
 		Core: CoreYouer,
 		Ref:  PackageRef{Eco: EcoUnspecified, Name: "youer"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "youer"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "youer"},
 		},
 	},
 	{
 		Core: CoreSpongeVanilla,
 		Ref:  PackageRef{Eco: EcoSponge, Name: "spongevanilla"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "sponge"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "spongevanilla"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "sponge"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "spongevanilla"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "vanilla"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "minecraft"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "mc"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "sponge"},
+			{Eco: EcoUnspecified, Name: "spongevanilla"},
+			{Eco: EcoSponge, Name: "sponge"},
+			{Eco: EcoSponge, Name: "spongevanilla"},
+			{Eco: EcoSponge, Name: "vanilla"},
+			{Eco: EcoSponge, Name: "minecraft"},
+			{Eco: EcoSponge, Name: "mc"},
 		},
 	},
 	{
 		Core: CoreSpongeForge,
 		Ref:  PackageRef{Eco: EcoSponge, Name: "spongeforge"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "spongeforge"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "spongeforge"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "forge"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "spongeforge"},
+			{Eco: EcoSponge, Name: "spongeforge"},
+			{Eco: EcoSponge, Name: "forge"},
 		},
 	},
 	{
 		Core: CoreSpongeNeo,
 		Ref:  PackageRef{Eco: EcoSponge, Name: "spongeneo"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "spongeneo"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "spongeneo"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "neo"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoSponge, Name: "neoforge"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "spongeneo"},
+			{Eco: EcoSponge, Name: "spongeneo"},
+			{Eco: EcoSponge, Name: "neo"},
+			{Eco: EcoSponge, Name: "neoforge"},
 		},
 	},
 	{
 		Core: CoreBungeeCord,
 		Ref:  PackageRef{Eco: EcoBungeecord, Name: "bungeecord"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "bungeecord"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoBungeecord, Name: "bungeecord"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "bungeecord"},
+			{Eco: EcoBungeecord, Name: "bungeecord"},
 		},
 	},
 	{
 		Core: CoreVelocity,
 		Ref:  PackageRef{Eco: EcoVelocity, Name: "velocity"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "velocity"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoVelocity, Name: "velocity"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "velocity"},
+			{Eco: EcoVelocity, Name: "velocity"},
 		},
 	},
 	{
 		Core: CoreWaterfall,
 		Ref:  PackageRef{Eco: EcoBungeecord, Name: "waterfall"},
-		Routes: []corePackageRoute{
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoUnspecified, Name: "waterfall"}},
-			{Scope: SourceAuto, Ref: PackageRef{Eco: EcoBungeecord, Name: "waterfall"}},
+		Aliases: []PackageRef{
+			{Eco: EcoUnspecified, Name: "waterfall"},
+			{Eco: EcoBungeecord, Name: "waterfall"},
 		},
 	},
 }
 
-var loadedCorePackageCatalog, loadedCorePackageCatalogErr = newCorePackageCatalog()
+type corePackageEntry struct {
+	Core CorePackage
+	Ref  PackageRef
+}
 
-func NormalizeCorePackage(
-	request ScopedPackageRef,
-) (CorePackageMatch, bool, error) {
-	if loadedCorePackageCatalogErr != nil {
-		return CorePackageMatch{}, false, loadedCorePackageCatalogErr
-	}
+var corePackageByAlias, corePackageCanonical = buildCorePackageIndex()
 
-	request.Name = lowercasePackageName(request.Name)
-	key := corePackageRouteKey{
-		Scope: request.Scope,
-		Eco:   request.Eco,
-		Name:  request.Name,
-	}
-	if match, ok := loadedCorePackageCatalog.byRoute[key]; ok {
-		match.Ref.Scope = request.Scope
-		return match, true, nil
-	}
-
-	if request.Scope != SourceAuto {
-		key.Scope = SourceAuto
-		if match, ok := loadedCorePackageCatalog.byRoute[key]; ok {
-			match.Ref.Scope = request.Scope
-			return match, true, nil
+func buildCorePackageIndex() (
+	map[PackageRef]corePackageEntry,
+	map[PackageRef]CorePackage,
+) {
+	byAlias := make(map[PackageRef]corePackageEntry)
+	canonical := make(map[PackageRef]CorePackage)
+	for _, definition := range corePackageDefinitions {
+		canonical[definition.Ref] = definition.Core
+		for _, alias := range definition.Aliases {
+			alias.Name = lowercasePackageName(alias.Name)
+			byAlias[alias] = corePackageEntry{
+				Core: definition.Core,
+				Ref:  definition.Ref,
+			}
 		}
-		return CorePackageMatch{}, false, nil
 	}
+	return byAlias, canonical
+}
 
-	ref := PackageRef{Eco: request.Eco, Name: request.Name}
-	if loadedCorePackageCatalog.ambiguousAuto[ref] {
-		return CorePackageMatch{}, false, corePackageCatalogError(
-			"core package catalog: ambiguous automatic route " + ref.StringBase(),
-		)
-	}
-	match, ok := loadedCorePackageCatalog.inferredAuto[ref]
+// NormalizeCorePackage resolves a package request against the core catalog.
+// Aliases are matched case-insensitively on any source scope; the returned
+// match carries the canonical reference with the request's scope preserved.
+func NormalizeCorePackage(request ScopedPackageRef) (CorePackageMatch, bool) {
+	entry, ok := corePackageByAlias[PackageRef{
+		Eco:  request.Eco,
+		Name: lowercasePackageName(request.Name),
+	}]
 	if !ok {
-		return CorePackageMatch{}, false, nil
+		return CorePackageMatch{}, false
 	}
-	match.Ref.Scope = SourceAuto
-	return match, true, nil
+	return CorePackageMatch{
+		Core: entry.Core,
+		Ref: ScopedPackageRef{
+			PackageRef: entry.Ref,
+			Scope:      request.Scope,
+		},
+	}, true
 }
 
 func IsCorePackage(ref PackageRef) bool {
-	if loadedCorePackageCatalogErr != nil {
-		return false
-	}
-	_, ok := loadedCorePackageCatalog.canonical[ref]
+	_, ok := corePackageCanonical[ref]
 	return ok
 }
 
-func newCorePackageCatalog() (*corePackageCatalog, error) {
-	catalog := &corePackageCatalog{
-		byRoute:       make(map[corePackageRouteKey]CorePackageMatch),
-		canonical:     make(map[PackageRef]CorePackage),
-		inferredAuto:  make(map[PackageRef]CorePackageMatch),
-		ambiguousAuto: make(map[PackageRef]bool),
-	}
-
-	for _, definition := range corePackageDefinitions {
-		if !validCanonicalCorePackageRef(definition.Core, definition.Ref) {
-			return nil, corePackageCatalogError(
-				"core package catalog: invalid canonical reference " + definition.Ref.StringBase(),
-			)
-		}
-		if owner, ok := catalog.canonical[definition.Ref]; ok && owner != definition.Core {
-			return nil, corePackageCatalogError(
-				"core package catalog: canonical reference has multiple owners " + definition.Ref.StringBase(),
-			)
-		}
-		catalog.canonical[definition.Ref] = definition.Core
-
-		for _, route := range definition.Routes {
-			if route.Scope == SourceUnknown || route.Ref.Name == "" {
-				return nil, corePackageCatalogError("core package catalog: invalid request route")
-			}
-			route.Ref.Name = lowercasePackageName(route.Ref.Name)
-			key := corePackageRouteKey{
-				Scope: route.Scope,
-				Eco:   route.Ref.Eco,
-				Name:  route.Ref.Name,
-			}
-			if _, exists := catalog.byRoute[key]; exists {
-				return nil, corePackageCatalogError(
-					"core package catalog: duplicate request route " + route.Ref.StringBase(),
-				)
-			}
-
-			match := CorePackageMatch{
-				Core: definition.Core,
-				Ref: ScopedPackageRef{
-					PackageRef: definition.Ref,
-					Scope:      route.Scope,
-				},
-			}
-			catalog.byRoute[key] = match
-			if route.Scope == SourceAuto {
-				continue
-			}
-
-			inferred, exists := catalog.inferredAuto[route.Ref]
-			if !exists {
-				catalog.inferredAuto[route.Ref] = match
-				continue
-			}
-			if inferred.Core != match.Core {
-				catalog.ambiguousAuto[route.Ref] = true
-			}
-		}
-	}
-
-	return catalog, nil
-}
-
-func validCanonicalCorePackageRef(core CorePackage, ref PackageRef) bool {
-	if ref.Name != BarePackageName(core) {
-		return false
-	}
-
-	switch core {
-	case CoreMinecraft:
-		return ref.Eco == EcoMinecraft
-	case CoreFabric:
-		return ref.Eco == EcoFabric
-	case CoreForge:
-		return ref.Eco == EcoForge
-	case CoreNeoForge:
-		return ref.Eco == EcoNeoforge
-	case CoreMCDReforged:
-		return ref.Eco == EcoMcdr
-	case CoreCraftBukkit, CoreSpigot:
-		return ref.Eco == EcoBukkit
-	case CorePaper, CoreFolia, CoreLeaves:
-		return ref.Eco == EcoPaper
-	case CoreArclight, CoreArclightForge, CoreArclightNeoForge,
-		CoreArclightFabric, CoreCatServer, CoreYouer:
-		return ref.Eco == EcoUnspecified
-	case CoreSpongeVanilla, CoreSpongeForge, CoreSpongeNeo:
-		return ref.Eco == EcoSponge
-	case CoreBungeeCord, CoreWaterfall:
-		return ref.Eco == EcoBungeecord
-	case CoreVelocity:
-		return ref.Eco == EcoVelocity
-	default:
-		return false
-	}
-}
-
 func lowercasePackageName(name BarePackageName) BarePackageName {
-	lower := make([]byte, len(name))
-	for i := range name {
-		b := name[i]
-		if b >= 'A' && b <= 'Z' {
-			b += 'a' - 'A'
-		}
-		lower[i] = b
-	}
-	return BarePackageName(lower)
+	return BarePackageName(strings.ToLower(string(name)))
 }
