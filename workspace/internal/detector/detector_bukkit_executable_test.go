@@ -98,38 +98,23 @@ func TestCraftBukkitFamilyDetector_KnownPaperForkBrands(t *testing.T) {
 	t.Parallel()
 
 	fixtureRoot := paperFamilyFixtureRoot(t)
-	tests := []struct {
-		name  string
-		brand string
-	}{
-		{name: "folia", brand: "folia"},
-		{name: "divine", brand: "divine"},
-		{name: "purpur", brand: "purpur"},
-		{name: "leaf", brand: "leaf"},
-		{name: "leaves", brand: "leaves"},
-		{name: "reaper", brand: "reaper"},
-		{name: "youer", brand: "youer"},
-		{name: "luminol", brand: "luminol"},
-		{name: "lophine", brand: "lophine"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for brand := range paperFamilyBrands {
+		t.Run(brand, func(t *testing.T) {
 			t.Parallel()
 
-			brandDir := filepath.Join(fixtureRoot, "test_"+tt.brand, tt.brand)
+			brandDir := filepath.Join(fixtureRoot, "test_"+brand, brand)
 			evidence, err := (&craftBukkitFamilyDetector{}).Detect(brandDir, nil, nil)
 			if err != nil {
-				t.Fatalf("detect %s fixture: %v", tt.brand, err)
+				t.Fatalf("detect %s fixture: %v", brand, err)
 			}
 			if evidence == nil {
-				t.Fatalf("expected evidence for %s fixture", tt.brand)
+				t.Fatalf("expected evidence for %s fixture", brand)
 			}
 			if evidence.PrimaryRuntime == nil ||
-				evidence.PrimaryRuntime.Name.String() != tt.brand {
+				evidence.PrimaryRuntime.Name.String() != brand {
 				t.Fatalf(
 					"expected primary runtime %q, got %+v",
-					tt.brand,
+					brand,
 					evidence.PrimaryRuntime,
 				)
 			}
