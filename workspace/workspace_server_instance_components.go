@@ -24,7 +24,12 @@ func normalizeRuntimeComponents(
 			continue
 		}
 		if index, exists := indexes[key]; exists {
-			if out[index].Version == normalized.Version {
+			if out[index].Version == normalized.Version ||
+				normalized.Version == types.VersionUnknown {
+				continue
+			}
+			if out[index].Version == types.VersionUnknown {
+				out[index] = normalized
 				continue
 			}
 			log.Error(fmt.Errorf(
@@ -56,7 +61,8 @@ func normalizeRuntimeComponents(
 func normalizeRuntimeComponent(
 	ref types.VersionedPackageRef,
 ) (types.VersionedPackageRef, bool) {
-	if !concreteRuntimeVersion(ref.Version) {
+	if !concreteRuntimeVersion(ref.Version) &&
+		ref.Version != types.VersionUnknown {
 		return types.VersionedPackageRef{}, false
 	}
 
