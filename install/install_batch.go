@@ -33,10 +33,7 @@ func InstallMany(
 		return &Result{}, nil
 	}
 
-	cores, regular, err := classifyInstallRequests(requests)
-	if err != nil {
-		return nil, installError(CategoryResolution, err, nil)
-	}
+	cores, regular := classifyInstallRequests(requests)
 	if err := prepareCoreRequests(cores); err != nil {
 		return nil, installError(CategoryResolution, err, nil)
 	}
@@ -114,10 +111,7 @@ func Plan(
 		return &ApplyPlan{}, nil
 	}
 
-	cores, regular, err := classifyInstallRequests(requests)
-	if err != nil {
-		return nil, installError(CategoryResolution, err, nil)
-	}
+	cores, regular := classifyInstallRequests(requests)
 	if len(cores) > 0 {
 		return nil, installError(
 			CategoryResolution,
