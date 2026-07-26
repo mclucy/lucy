@@ -52,9 +52,16 @@ func TestSelectedLoader(t *testing.T) {
 			want: types.EcoUnspecified,
 		},
 		{
-			name: "fabric via component",
+			name: "fabric via primary runtime",
 			server: loaderTestServer(
 				loaderTestRef(types.EcoFabric, "fabric"),
+			),
+			want: types.EcoFabric,
+		},
+		{
+			name: "arclight claims loader via component",
+			server: loaderTestServer(
+				loaderTestRef(types.EcoUnspecified, "arclight"),
 				loaderTestRef(types.EcoFabric, "fabric-loader"),
 			),
 			want: types.EcoFabric,
