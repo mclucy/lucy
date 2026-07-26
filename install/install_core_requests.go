@@ -66,7 +66,7 @@ var coreBootstrapBindings = map[types.CorePackage]coreBootstrapBinding{
 
 func classifyInstallRequests(
 	requests []types.PackageRequest,
-) ([]preparedCoreRequest, []types.PackageRequest, error) {
+) ([]preparedCoreRequest, []types.PackageRequest) {
 	cores := make([]preparedCoreRequest, 0, len(requests))
 	regular := make([]types.PackageRequest, 0, len(requests))
 	seen := make(map[types.FullPackageRef]struct{}, len(requests))
@@ -96,7 +96,7 @@ func classifyInstallRequests(
 		})
 	}
 
-	return cores, regular, nil
+	return cores, regular
 }
 
 func prepareCoreRequests(requests []preparedCoreRequest) error {

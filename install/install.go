@@ -16,12 +16,9 @@ func Install(
 	options InstallOptions,
 ) (*Result, error) {
 	options = options.withDefaults()
-	cores, regular, err := classifyInstallRequests(
+	cores, regular := classifyInstallRequests(
 		[]types.PackageRequest{request},
 	)
-	if err != nil {
-		return nil, installError(CategoryResolution, err, nil)
-	}
 	if len(cores) == 0 {
 		return InstallMany(ctx, regular, options)
 	}
