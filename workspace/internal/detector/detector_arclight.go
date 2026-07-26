@@ -82,6 +82,7 @@ func (d *arclightServerDetector) Detect(
 		},
 	}
 	if loader, ok := arclightLoaderEcosystem(launchProps); ok {
+		component := arclightLoaderComponent(loader)
 		installerJSON, found, err := readArchiveEntry(
 			zipReader,
 			"META-INF/installer.json",
@@ -90,13 +91,14 @@ func (d *arclightServerDetector) Detect(
 			return nil, err
 		}
 		if found {
-			if component, ok := parseArclightLoaderComponent(
+			if version, ok := parseArclightLoaderVersion(
 				installerJSON,
 				loader,
 			); ok {
-				components = append(components, component)
+				component.Version = version
 			}
 		}
+		components = append(components, component)
 	}
 
 	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &primary, RuntimeComponents: components}, nil
@@ -205,42 +207,51 @@ type arclightInstallerMetadata struct {
 	} `json:"installer"`
 }
 
-func parseArclightLoaderComponent(
-	data []byte,
+func arclightLoaderComponent(
 	loader types.Ecosystem,
-) (types.VersionedPackageRef, bool) {
-	var metadata arclightInstallerMetadata
-	if err := json.Unmarshal(data, &metadata); err != nil {
-		return types.VersionedPackageRef{}, false
-	}
-
+) types.VersionedPackageRef {
 	var name types.BarePackageName
-	var version string
 	switch loader {
 	case types.EcoFabric:
 		name = "fabric-loader"
-		version = metadata.Installer.FabricLoader
 	case types.EcoNeoforge:
 		name = "neoforge"
-		version = metadata.Installer.NeoForge
 	case types.EcoForge:
 		name = "forge"
-		version = metadata.Installer.Forge
-	default:
-		return types.VersionedPackageRef{}, false
-	}
-
-	loaderVersion := types.BareVersion(strings.TrimSpace(version))
-	if !hasConcreteVersion(loaderVersion) {
-		return types.VersionedPackageRef{}, false
 	}
 	return types.VersionedPackageRef{
 		PackageRef: types.PackageRef{
 			Eco:  loader,
 			Name: name,
 		},
-		Version: loaderVersion,
-	}, true
+		Version: types.VersionUnknown,
+	}
+}
+
+func parseArclightLoaderVersion(
+	data []byte,
+	loader types.Ecosystem,
+) (types.BareVersion, bool) {
+	var metadata arclightInstallerMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return types.VersionUnknown, false
+	}
+
+	var version string
+	switch loader {
+	case types.EcoFabric:
+		version = metadata.Installer.FabricLoader
+	case types.EcoNeoforge:
+		version = metadata.Installer.NeoForge
+	case types.EcoForge:
+		version = metadata.Installer.Forge
+	}
+
+	loaderVersion := types.BareVersion(strings.TrimSpace(version))
+	if !hasConcreteVersion(loaderVersion) {
+		return types.VersionUnknown, false
+	}
+	return loaderVersion, true
 }
 
 func archiveContains(zipReader *zip.Reader, name string) (bool, error) {
