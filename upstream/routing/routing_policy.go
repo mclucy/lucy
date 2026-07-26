@@ -58,14 +58,14 @@ func providerSourcesForSearchEcosystem(ecosystem types.Ecosystem) []types.Source
 	return sources
 }
 
-type topologyResolution struct {
+type providerSelection struct {
 	sources  []types.SourceId
 	fallback bool
 	empty    bool
 }
 
-func providerSourcesFromEcosystems(ecosystems []types.Ecosystem) topologyResolution {
-	selection := topologyResolution{}
+func providerSourcesFromEcosystems(ecosystems []types.Ecosystem) providerSelection {
+	selection := providerSelection{}
 	seen := map[types.SourceId]struct{}{}
 	sawKnownCapability := false
 	sawProxyCapability := false
