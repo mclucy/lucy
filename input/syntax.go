@@ -67,11 +67,7 @@ func Parse(s string) (
 	ref.Scope = scope
 	version = v
 
-	core, ok, err := types.NormalizeCorePackage(ref)
-	if err != nil {
-		return types.ScopedPackageRef{}, "", err
-	}
-	if ok {
+	if core, ok := types.NormalizeCorePackage(ref); ok {
 		return core.Ref, version, nil
 	}
 	if !pl.Valid() {
