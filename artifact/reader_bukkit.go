@@ -13,8 +13,6 @@ const bukkitPluginDescriptorPath = "plugin.yml"
 
 type bukkitReader struct{}
 
-var _ = newBukkitReader
-
 type bukkitPluginDescriptor struct {
 	Name              string   `yaml:"name"`
 	Version           string   `yaml:"version"`
