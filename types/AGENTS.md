@@ -49,9 +49,9 @@ The reference types form a hierarchy of increasing specificity:
 
 `SourceId` identifies which upstream provider a package comes from (Modrinth, CurseForge, GitHub, MCDR, Hangar, Spiget, etc.). `SourceAuto` means "let Lucy choose."
 
-## Identity Packages
+## Core Packages
 
-Some packages represent the server runtime itself (Minecraft, Fabric loader, Forge, NeoForge, MCDReforged). These are "identity packages" — their installation means bootstrapping the server platform, not placing a jar in the mods directory. They are tracked via `type_identity.go`'s registry and follow a different install path than regular packages.
+Some packages represent a bootable server product (Minecraft, Fabric loader, Forge, Paper, hybrids, proxies). These are "core packages" — their installation means bootstrapping the server platform, not placing a jar in the mods directory. `type_core_package.go` defines the `CorePackage` enum and the alias catalog behind `NormalizeCorePackage`/`IsCorePackage`; install/bootstrap decides which cores are actually installable.
 
 ## Version System
 
