@@ -2,24 +2,18 @@
 
 This document is for coding agents working on the Lucy codebase.
 
-## What is Lucy?
+## Overview
 
-Lucy is a Minecraft server package manager, like apt or cargo but for server mods/plugins. Written in Go 1.26.4 (`github.com/mclucy/lucy`). Apache 2.0 licensed.
+Lucy is a Minecraft server package manager, like apt or cargo but for server mods/plugins. Written in Go (`github.com/mclucy/lucy`).
 
 Users declare desired packages in a manifest. Lucy resolves versions and dependencies, writes a lock file, and installs them into a Minecraft server directory.
 
-## Git Rules
-
-1. If not otherwise specified, you are allowed to make commits.
-2. You are always **NOT** allowed to perform `git push` or `git pull`.
-3. Do not create new branches or worktrees if not explicitly asked.
-
 ## Build and Development
 
-Uses **Taskfile** (`task`), not Make.
+Uses **Taskfile** (`task`).
 
 ```bash
-task build              # Build debug binary → dist/lucy-{os}-{arch}-dev
+task build              # Build debug binary → dist/lucy-{os}-{arch} + dist/lucy symlink
 task dev                # Same as build
 task run -- [args]      # go run from repo root with CLI args
 task build:dev          # Same as build (host dev binary, incremental)
@@ -43,8 +37,8 @@ Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/
 To run the built binary against a test server directory:
 
 ```bash
-./dist/lucy-darwin-arm64-dev status
-./dist/lucy-darwin-arm64-dev init --yes --game-version 1.21.4
+./dist/lucy status
+./dist/lucy init --yes --game-version 1.21.4
 ```
 
 ## Architecture
@@ -55,7 +49,7 @@ To run the built binary against a test server directory:
 
 ### Package Layout
 
-```
+```text
 .
 ├── cmd/                    Cobra CLI commands (14+ files)
 │   └── init/               Large init state machine sub-package
@@ -96,10 +90,6 @@ To run the built binary against a test server directory:
 - `lucy-lock.yaml` — resolved dependency graph (exact versions, checksums, install paths)
 - Global config: `os.UserConfigDir()/lucy/config.yaml` (user preferences, defaults)
 
-### Key Dependencies
-
-cobra v1.10.2, bubbletea v2, huh v2, lipgloss v2, semver v3, go-toml, glamour, fuzzy, ini.v1, yaml.v3
-
 ## Researching and Designing
 
 1. If your task is not general, i.e., the ones applicable and universal to almost any program, you should consider doing some research to know about the specific context.
@@ -110,24 +100,21 @@ cobra v1.10.2, bubbletea v2, huh v2, lipgloss v2, semver v3, go-toml, glamour, f
 6. I am open to adding new packages if you think they will greatly simplify the code. Ask me before doing that.
 7. You must always justify your design. Elaborate your architecture's shape and why is it.
 
-## Testing
+## Tests
 
-1. Do not add, propose, or even waste time on thinking about tests if not explicitly asked.
-2. Tests will always be prompted as isolated tasks.
-3. You are always allowed to use `go test` to audit.
+1. Do not add tests for new features/refactors/bug fixes unless explicitly asked.
+2. Testing would be isolated tasks.
+3. You are always allowed to use `go test`.
 
 ## Debugging
 
 You may find `test_*` directories under the project root. They are sandbox servers for smoke tests. They are .gitignored so you might not be able to find them with provided `grep` or `glob`, use `ls` to discover them instead.
 
-## Common Gotchas
+## Common Erros
 
 - **Don't import into types/.** It has zero dependencies by design. If you need a type that depends on something external, it belongs in the consuming package, not types.
-- **Don't bypass ProjectStateService.** All state file reads/writes go through it. Direct file manipulation breaks atomicity guarantees.
 - **Don't use fmt.Println for user output.** The logger has three tiers for a reason. Use them.
 - **Minecraft knowledge is unreliable.** Don't assume you know how mod loaders, plugin systems, or server internals work. Research or ask.
-- **Upstream providers are routed by Source enum.** `hangar` and `spiget` are defined but not wired into the resolver. Don't assume they work.
-- **The cipher system embeds API keys at build time.** `task cipher:generate` requires `CF_API_KEY` in the environment. Without it, CurseForge integration won't work. Material is split into four fragments and may be AEAD-bound to release version+commit; see `docs/shared/cipher-key-operations.md`.
 - **Package identifiers are `[source]:[platform/]name[@version]`.** Platform and version are optional. Lucy infers platform from the server environment.
 
 ## Other Rules
