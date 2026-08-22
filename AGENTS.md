@@ -21,13 +21,11 @@ task build:watch        # Rebuild on Go file changes (file watcher)
 task build:release      # Cross-compile all platforms (-tags release -w -s)
 task test               # go test ./...
 task test:race          # go test -race ./...
-task check              # build:dev + test + test:race
+task check              # build + test + test:race
 task clean              # Remove dist/ and release/ directories
 task clean:dist         # Remove dist/ only
 task clean:release      # Remove release/ only
 task cipher:generate    # Generate cipher files from CF_API_KEY env var
-task copyright:add      # Add Apache 2.0 license headers
-task copyright:rm       # Remove copyright headers
 task ci:test            # CI checks (optional cipher:generate, then check)
 task ci:build           # CI release build + gzip artifacts
 ```

@@ -13,7 +13,8 @@ vars:
     sh: go env GOOS
   DEV_GOARCH:
     sh: go env GOARCH
-  DEV_BINARY: dist/lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}}-dev
+  DEV_BINARY: dist/lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}}
+  DEV_SYMLINK: dist/lucy
   LUCY_VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
   LUCY_COMMIT:
@@ -22,15 +23,104 @@ vars:
   LUCY_LDFLAGS: -X github.com/mclucy/lucy/cmd.version={{.LUCY_VERSION}} -X github.com/mclucy/lucy/cmd.commit={{.LUCY_COMMIT}}
 
 tasks:
-  copyright:add:
-    desc: Add missing copyright headers to Go files
+  build:
+    desc: Build the local development binary for the host platform
+    deps:
+      - check:cf-api-key
     cmds:
-      - ./copyright.sh add
+      - |
+        set -euo pipefail
+        mkdir -p dist
+        ldflags="{{.LUCY_LDFLAGS}}"
+        if [ -f .cipher_key ]; then
+          KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
+          KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
+          CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
+          CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
+          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
+            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
+            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
+          fi
+          if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
+            ldflags="$ldflags \
+              -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
+              -X github.com/mclucy/lucy/internal/cipher.keyB=$KEY_B \
+              -X github.com/mclucy/lucy/internal/cipher.ciphertextA=$CT_A \
+              -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
+          fi
+        fi
+        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug -o {{.DEV_BINARY}}
+        ln -sf lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}} {{.DEV_SYMLINK}}
+    sources:
+      - "./**/*.go"
+      - "./go.mod"
+      - "./go.sum"
+    generates:
+      - "{{.DEV_BINARY}}"
+      - "{{.DEV_SYMLINK}}"
 
-  copyright:rm:
-    desc: Remove copyright headers from Go files
+  build:dev:
+    desc: Alias for build
+    deps:
+      - build
+
+  dev:
+    desc: Alias for build
+    deps:
+      - build
+
+  build:watch:
+    desc: Rebuild the local debug binary on Go file changes
     cmds:
-      - ./copyright.sh remove
+      - task build
+    watch: true
+    sources:
+      - "./**/*.go"
+      - "./go.mod"
+      - "./go.sum"
+    method: timestamp
+
+  build:release:
+    desc: Build release binaries for Windows, Linux, and macOS
+    deps:
+      - clean:release
+      - check:cf-api-key
+    cmds:
+      - |
+        set -euo pipefail
+        mkdir -p release
+        ldflags="-w -s {{.LUCY_LDFLAGS}}"
+        if [ -f .cipher_key ]; then
+          KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
+          KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
+          CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
+          CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
+          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
+            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
+            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
+          fi
+          if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
+            ldflags="$ldflags \
+              -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
+              -X github.com/mclucy/lucy/internal/cipher.keyB=$KEY_B \
+              -X github.com/mclucy/lucy/internal/cipher.ciphertextA=$CT_A \
+              -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
+            if [ -n "${CIPHER_RELEASE_VERSION:-}" ] && [ -n "${CIPHER_RELEASE_COMMIT:-}" ]; then
+              ldflags="$ldflags \
+                -X github.com/mclucy/lucy/internal/cipher.releaseVersion=${CIPHER_RELEASE_VERSION} \
+                -X github.com/mclucy/lucy/internal/cipher.releaseCommit=${CIPHER_RELEASE_COMMIT}"
+            fi
+          fi
+        fi
+        GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-arm64
+    sources:
+      - "./**/*.go"
+      - "./go.mod"
+      - "./go.sum"
 
   clean:
     desc: Remove all generated build artifacts
@@ -41,7 +131,7 @@ tasks:
   clean:dist:
     desc: Remove development build artifacts
     cmds:
-      - rm -rf dist
+      - rm -rf dist {{.DEV_SYMLINK}}
 
   clean:release:
     desc: Remove release build artifacts
@@ -129,107 +219,6 @@ tasks:
           *)   printf "[WARN] CurseForge API returned unexpected status %s\n" "$STATUS" ;;
         esac
 
-  build:release:
-    desc: Build release binaries for Windows, Linux, and macOS
-    deps:
-      - clean:release
-      - check:cf-api-key
-    cmds:
-      - |
-        set -euo pipefail
-        mkdir -p release
-        ldflags="-w -s {{.LUCY_LDFLAGS}}"
-        # Load four fragments from files or env without logging them.
-        if [ -f .cipher_key ]; then
-          KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
-          KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
-          CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
-          CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          # Fall back to companion file if halves only there.
-          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
-            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
-          if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
-            ldflags="$ldflags \
-              -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
-              -X github.com/mclucy/lucy/internal/cipher.keyB=$KEY_B \
-              -X github.com/mclucy/lucy/internal/cipher.ciphertextA=$CT_A \
-              -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
-            # Manual Taskfile releases remain unbound (empty identity) unless
-            # CIPHER_RELEASE_* is provided explicitly for a tagged build.
-            if [ -n "${CIPHER_RELEASE_VERSION:-}" ] && [ -n "${CIPHER_RELEASE_COMMIT:-}" ]; then
-              ldflags="$ldflags \
-                -X github.com/mclucy/lucy/internal/cipher.releaseVersion=${CIPHER_RELEASE_VERSION} \
-                -X github.com/mclucy/lucy/internal/cipher.releaseCommit=${CIPHER_RELEASE_COMMIT}"
-            fi
-          fi
-        fi
-        GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-arm64
-        GOOS=windows GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-arm64
-    sources:
-      - "./**/*.go"
-      - "./go.mod"
-      - "./go.sum"
-
-  build:dev:
-    desc: Build the local development binary for the host platform
-    deps:
-      - check:cf-api-key
-    cmds:
-      - |
-        set -euo pipefail
-        mkdir -p dist
-        ldflags="{{.LUCY_LDFLAGS}}"
-        if [ -f .cipher_key ]; then
-          KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
-          KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
-          CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
-          CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
-            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
-          if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
-            ldflags="$ldflags \
-              -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
-              -X github.com/mclucy/lucy/internal/cipher.keyB=$KEY_B \
-              -X github.com/mclucy/lucy/internal/cipher.ciphertextA=$CT_A \
-              -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
-          fi
-        fi
-        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug -o {{.DEV_BINARY}}
-    sources:
-      - "./**/*.go"
-      - "./go.mod"
-      - "./go.sum"
-    generates:
-      - "{{.DEV_BINARY}}"
-
-  build:watch:
-    desc: Rebuild the local debug binary on Go file changes
-    cmds:
-      - task build:dev
-    watch: true
-    sources:
-      - "./**/*.go"
-      - "./go.mod"
-      - "./go.sum"
-    method: timestamp
-
-  build:
-    desc: Build the local development binary
-    deps:
-      - build:dev
-
-  dev:
-    desc: Build the default local development binary
-    deps:
-      - build:dev
-
   test:
     desc: Run the Go test suite
     cmds:
@@ -243,7 +232,7 @@ tasks:
   check:
     desc: Run the default local verification tasks
     deps:
-      - build:dev
+      - build
       - test
       - test:race
 
