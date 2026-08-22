@@ -5,67 +5,74 @@
 
 ### Lucy
 
-<h3>
-  <sup>The Minecraft server package manager.</sup>
-</h3>
+Minecraft server package manager.
 
-[![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml) [![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html) [![Go Report Card](https://goreportcard.com/badge/github.com/mclucy/lucy)](https://goreportcard.com/report/github.com/mclucy/lucy) [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mclucy/lucy)
+[![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml) [![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html) [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mclucy/lucy)
 </div>
 
 > [!WARNING]
-> DeepWiki is currently stale
+> DeepWiki is currently stale.
 
 > [!IMPORTANT]
-> This project is under active development and incomplete. Everything may change. Contact <4rcadia.0@gmail.com> or join the [QQ group](https://qm.qq.com/q/Sf65NVYaAi) to contribute or stay updated. \
-> ⭐️ Star if you like this!
+> This project is under active development and is incomplete. APIs and behavior may change. Contact <4rcadiaaa@gmail.com> or join the [QQ group](https://qm.qq.com/q/Sf65NVYaAi) to contribute or follow updates.
 
 ## Overview
 
-Turn your server into stable, manageable, and reproducible workspaces. Manage mods and plugings with just one command. Make mass deployment of Minecraft servers faster and easier than ever before.
+Manage Minecraft server components from any ecosystem with `npm`-like experience.
 
-```bash
-cd your-server
-lucy init                         # Set up Lucy in this workspace (server)
-lucy add fabric/lithium@stable    # Resolve exact version + dependencies
-lucy install                      # Sync managed scope from the lock file
-```
+- Fabric
+- Forge
+- Neoforge
+- Spigot/Paper Plugins
+- MCDReforged
 
-## Getting Started
+## Installation
 
 > [!WARNING]
-> We do not recommand using pre-beta versions in production environments.
+> Pre-beta versions are not recommended for production environments.
+
+Install with Go:
 
 ```bash
-go install github.com/mclucy/lucy@latest   # native
-brew install --HEAD mclucy/tap/lucy        # homebrew
+go install github.com/mclucy/lucy@latest
 ```
+
+Install with Homebrew:
+
+```bash
+brew install --HEAD mclucy/tap/lucy
+```
+
+## Quick start
 
 ```bash
 mkdir my-server && cd my-server
-lucy init                         # Take over this directory
-lucy add fabric/fabric-api@stable # Add a mod — dependencies resolve automatically
-lucy status                       # See what's detected
-lucy install                      # Sync managed packages from the lock file
+lucy init                         # Initialize Lucy in this directory
+lucy add fabric/fabric-api@stable # Add a mod; dependencies resolve automatically
+lucy status                       # Show what Lucy detected
+lucy install                      # Install packages from the lock file
 ```
 
 ## Commands
 
-### `lucy init`
+### Managing packages
 
-Create manifest and lock file. Existing servers are respected.
+#### `lucy init`
+
+Creates the manifest and lock file in the current directory. Existing servers are preserved.
 
 ```bash
 lucy init
 ```
 
-| Flag             | Description                                             |
+| Flag | Description |
 | ---------------- | ------------------------------------------------------- |
-| `-y`, `--yes`    | Skip prompts, accept defaults                           |
+| `-y`, `--yes` | Skip prompts and accept defaults |
 | `--game-version` | Game version for non-interactive init (default: `1.21`) |
 
-### `lucy add`
+#### `lucy add`
 
-Add anything to your server.
+Adds a package to the manifest.
 
 ```bash
 lucy add fabric-api
@@ -74,108 +81,100 @@ lucy add folia
 lucy add mcdr/example-plugin@beta
 ```
 
-| Flag              | Description                                     |
+| Flag | Description |
 | ----------------- | ----------------------------------------------- |
-| `-f`, `--force`   | Skip version, dependency, and platform warnings |
-| `--with-optional` | Include optional upstream dependencies          |
-| `--no-optional`   | Skip optional dependencies (default)            |
+| `-f`, `--force` | Skip version, dependency, and platform warnings |
+| `--with-optional` | Include optional upstream dependencies |
+| `--no-optional` | Skip optional dependencies (default) |
 
-### `lucy remove`
+#### `lucy remove`
 
-Remove packages from the manifest. Prunes unused transitive dependencies from the lock.
+Removes a package from the manifest and prunes unused transitive dependencies from the lock file.
 
 ```bash
 lucy remove fabric/lithium
 ```
 
-### `lucy install`
+#### `lucy install`
 
-Apply the lock file to the managed runtime. Uses exact lock data when current, falls back to manifest intent when stale.
+Installs packages from the lock file. When the lock file is current, Lucy uses its exact data. When it is stale, Lucy falls back to the manifest.
 
 ```bash
 lucy install
 ```
 
-### `lucy search`
+### Inspecting the workspace
 
-Search across sources with filtering and sorting.
+#### `lucy status`
 
-```bash
-lucy search fabric/carpet
-lucy search modrinth:carpet --index downloads --platform fabric
-```
-
-| Flag             | Description                                     |
-| ---------------- | ----------------------------------------------- |
-| `-i`, `--index`  | Sort: `relevance`, `downloads`, `newest`        |
-| `-c`, `--client` | Include client-only mods                        |
-| `--platform`     | Filter: `fabric`, `forge`, `neoforge`, `bukkit` |
-| `-l`, `--long`   | Show full output                                |
-| `--json`         | Print raw JSON                                  |
-
-### `lucy status`
-
-Display what Lucy detects in the current directory: game version, server core, platform, topology, runtime activity, risk signals, and installed packages.
+Shows what Lucy detects in the current directory: game version, server core, platform, runtime activity, risk signals, and installed packages.
 
 ```bash
 lucy status
 lucy status --json --long
 ```
 
-### `lucy topology`
+#### `lucy search`
 
-Render the detected server runtime topology as an ASCII diagram.
+Searches across data sources.
 
 ```bash
-lucy topology
-lucy topology --long
-lucy topology --json
+lucy search fabric/carpet
+lucy search modrinth:carpet --index downloads --platform fabric
 ```
 
-| Flag           | Description                                              |
-| -------------- | -------------------------------------------------------- |
-| `-l`, `--long` | Show role, capabilities, and risk level inside each node |
+| Flag | Description |
+| ---------------- | ------------------------------------------------- |
+| `-i`, `--index` | Sort by `relevance`, `downloads`, or `newest` |
+| `-c`, `--client` | Include client-only mods |
+| `--platform` | Filter by `fabric`, `forge`, `neoforge`, `bukkit` |
+| `-l`, `--long` | Show full output |
+| `--json` | Print raw JSON |
 
-### `lucy info`
+#### `lucy info`
 
-Get metadata, description, authors, and version history for a package.
+Shows metadata, description, authors, and version history for a package.
 
 ```bash
 lucy info fabric/fabric-api@stable --long
 ```
 
-| Flag           | Description |
+| Flag | Description |
 | -------------- | ----------- |
 | `-l`, `--long` | Full output |
 
-### `lucy tree`
+#### `lucy tree`
 
-Display the dependency tree.
+Shows the dependency tree.
 
 ```bash
 lucy tree --live --depth 2
 ```
 
-| Flag      | Description                               |
-| --------- | ----------------------------------------- |
-| `--live`  | Probe running server instead of lock file |
-| `--depth` | Limit depth (0 = unlimited)               |
-| `--json`  | Raw JSON                                  |
+| Flag | Description |
+| --------- | ------------------------------------------------- |
+| `--live` | Probe the running server instead of the lock file |
+| `--depth` | Limit depth (0 = unlimited) |
+| `--json` | Print raw JSON |
 
-### `lucy leaves`
+#### `lucy leaves`
 
-List packages with no dependents. Use this to find what's safe to remove.
+Lists packages with no dependents. Use this command to find packages that are safe to remove.
 
 ```bash
 lucy leaves --live
 ```
 
-| Flag     | Description                               |
-| -------- | ----------------------------------------- |
-| `--live` | Probe running server instead of lock file |
-| `--json` | Raw JSON                                  |
+| Flag | Description |
+| -------- | ------------------------------------------------- |
+| `--live` | Probe the running server instead of the lock file |
+| `--json` | Print raw JSON |
 
-### `lucy cache`
+### Cache
+
+#### `lucy cache`
+
+Manages the local download cache.
 
 ```bash
 lucy cache ls              # List cached downloads
@@ -184,73 +183,46 @@ lucy cache slugs ls        # List slug-to-package-ID mappings
 lucy cache slugs clear     # Clear slug mappings
 ```
 
-| Subcommand    | Flags    |
+| Subcommand | Flags |
 | ------------- | -------- |
-| `ls`, `list`  | `--json` |
-| `clear`, `rm` |          |
-| `slugs ls`    | `--json` |
-| `slugs clear` |          |
+| `ls`, `list` | `--json` |
+| `clear`, `rm` | |
+| `slugs ls` | `--json` |
+| `slugs clear` | |
 
-### `lucy bisect`
+### Troubleshooting
+
+#### `lucy bisect`
+
+Runs a binary search over installed mods to find a faulty mod.
 
 ```bash
 lucy bisect start          # Start a binary-search session
-lucy bisect good           # Mark current midpoint as good (bad mod is in right half)
-lucy bisect bad            # Mark current midpoint as bad (bad mod is in left half)
+lucy bisect good           # Mark current midpoint as good (bad mod is in the right half)
+lucy bisect bad            # Mark current midpoint as bad (bad mod is in the left half)
 lucy bisect status         # Show the active bisect session
 lucy bisect reset          # Abort the session and re-enable mods
 ```
 
-### Stubs
+### Planned commands
 
-Registered but not yet implemented:
+The following commands are registered but not yet implemented.
 
-| Command   | Planned                           |
-| --------- | --------------------------------- |
-| `doctor`  | Diagnose server environment risks |
-| `export`  | Export config or generate client  |
-| `upgrade` | Upgrade installed packages        |
+| Command | Planned |
+| --------- | ---------------------------------- |
+| `doctor` | Diagnose server environment risks |
+| `export` | Export config or generate a client |
+| `upgrade` | Upgrade installed packages |
 
-### Global Flags
+### Global flags
 
-| Flag           | Description            |
-| -------------- | ---------------------- |
-| `--debug`      | Show debug logs        |
-| `--log-file`   | Print path to logfile  |
-| `--print-logs` | Print logs to console  |
-| `--no-style`   | Disable colored output |
-
-## Concepts
-
-### Package Identifiers
-
-```text
-[platform/]name[@version]
-```
-
-Only the name is required. Omit the platform and Lucy infers it from the environment. Omit the version to get `@any` (latest compatible version, any stability).
-
-```text
-fabric/fabric-api@1.2.3
-   ↑       ↑        ↑
-platform  name   version
-```
-
-`@any` is the default and selects the latest compatible version regardless of release type. `@stable` selects the latest compatible release only. `@beta` allows compatible pre-releases.
-
-Platforms accepted in the manifest: `none`, `fabric`, `forge`, `neoforge`, `mcdr`
-
-The type system also knows `bukkit`, `sponge`, `velocity`, and `bungeecord` for topology detection, but you can't set these as the primary platform yet.
-
-Data sources: `modrinth`, `curseforge`, `github`, `mcdr` (`hangar` and `spiget` are defined but not yet wired into the resolver).
-
-### State Files
-
-Intent and config live in `lucy.yaml`. Resolved facts (versions, hashes, install paths, provenance) live in `lucy-lock.yaml`.
-
-### Runtime Topology
-
-Lucy builds a graph of your server's runtime. Each node (Fabric, Forge, Paper, MCDR, Geyser, Velocity) carries a role, a set of capabilities (`fabric_mods`, `bukkit_plugins`, `mcdr_plugins`), and a risk level. Edges describe how nodes relate: one adapts another, one bridges to another. This graph powers `lucy status`, init discovery, and compatibility resolution.
+| Flag | Description |
+| --------------- | ---------------------------------------- |
+| `--debug` | Show debug logs |
+| `--log-file` | Print path to logfile |
+| `--print-logs` | Print logs to console |
+| `--no-style` | Disable colored output |
+| `--json-compact` | Print JSON output without indentation |
 
 > [!NOTE]
-> Logo and axolotl pixel art are copyright Mojang AB. Original replacements in progress.
+> The logo and axolotl pixel art are copyright Mojang AB. Original replacements are in progress.

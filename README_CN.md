@@ -5,67 +5,74 @@
 
 ### Lucy
 
-<h3>
-  <sup>Minecraft 服务器包管理器</sup>
-</h3>
+Minecraft 服务器包管理器。
 
-[![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml) [![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html) [![Go Report Card](https://goreportcard.com/badge/github.com/mclucy/lucy)](https://goreportcard.com/report/github.com/mclucy/lucy) [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mclucy/lucy)
+[![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml) [![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html) [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mclucy/lucy)
 </div>
 
 > [!WARNING]
-> DeepWiki 内容目前可能过时
+> DeepWiki 的内容可能过时。
 
 > [!IMPORTANT]
-> 项目仍在开发，功能未定型，随时可能改。想参与或跟进度：联系 <4rcadia.0@gmail.com>，或进 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)。 \
-> ⭐️ 觉得有用的话，给仓库点个 Star
+> 本项目正在开发中，功能尚不完整。API 和行为可能发生变化。如需参与贡献或关注进展，请联系 <4rcadiaaa@gmail.com> 或加入 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)。
 
-## 简介
+## 概述
 
-把服务器目录变成稳定、可复现的工作区。一条命令管模组和插件，批量部署会省事很多。
+以类似 `npm` 的体验管理任何生态的服务器组件。
+
+- Fabric
+- Forge
+- Neoforge
+- Spigot/Paper Plugins
+- MCDReforged
+
+## 安装
+
+> [!WARNING]
+> 不建议在生产环境中使用 beta 之前的版本。
+
+使用 Go 安装：
 
 ```bash
-cd your-server
-lucy init                         # 在本目录启用 Lucy
-lucy add fabric/lithium@stable    # 解析精确版本和依赖
-lucy install                      # 从 lock 文件同步受管范围
+go install github.com/mclucy/lucy@latest
+```
+
+使用 Homebrew 安装：
+
+```bash
+brew install --HEAD mclucy/tap/lucy
 ```
 
 ## 快速开始
 
-> [!WARNING]
-> 不建议在正式环境使用 beta 之前的版本。
-
-```bash
-go install github.com/mclucy/lucy@latest   # 原生安装
-brew install --HEAD mclucy/tap/lucy        # Homebrew
-```
-
 ```bash
 mkdir my-server && cd my-server
-lucy init                         # 接管这个目录
-lucy add fabric/fabric-api@stable # 添加模组，依赖自动解析
-lucy status                       # 查看检测结果
-lucy install                      # 从 lock 文件同步受管包
+lucy init                         # 在当前目录初始化 Lucy
+lucy add fabric/fabric-api@stable # 添加一个模组；依赖会自动解析
+lucy status                       # 显示 Lucy 检测到的信息
+lucy install                      # 从 lock 文件安装包
 ```
 
 ## 命令
 
-### `lucy init`
+### 管理包
 
-创建 manifest 和 lock 文件。已有服务器内容会保留。
+#### `lucy init`
+
+在当前目录创建清单文件和 lock 文件。已有的服务器会被保留。
 
 ```bash
 lucy init
 ```
 
-| 参数             | 说明                              |
-| ---------------- | --------------------------------- |
-| `-y`, `--yes`    | 跳过交互，用默认值                |
-| `--game-version` | 非交互时的游戏版本（默认 `1.21`） |
+| 标志 | 说明 |
+| ---------------- | -------------------------------------- |
+| `-y`, `--yes` | 跳过提示并接受默认值 |
+| `--game-version` | 非交互式初始化时使用的游戏版本（默认：`1.21`） |
 
-### `lucy add`
+#### `lucy add`
 
-往服务器里加任意包。
+向清单中添加一个包。
 
 ```bash
 lucy add fabric-api
@@ -74,81 +81,69 @@ lucy add folia
 lucy add mcdr/example-plugin@beta
 ```
 
-| 参数              | 说明                         |
-| ----------------- | ---------------------------- |
-| `-f`, `--force`   | 跳过版本、依赖、平台相关警告 |
-| `--with-optional` | 一并装上上游可选依赖         |
-| `--no-optional`   | 不装可选依赖（默认）         |
+| 标志 | 说明 |
+| ----------------- | -------------------------------- |
+| `-f`, `--force` | 跳过版本、依赖和平台警告 |
+| `--with-optional` | 包含上游的可选依赖 |
+| `--no-optional` | 跳过可选依赖（默认） |
 
-### `lucy remove`
+#### `lucy remove`
 
-从 manifest 删掉包，并在 lock 里剪掉不再需要的传递依赖。
+从清单中移除一个包，并从 lock 文件中清理不再使用的间接依赖。
 
 ```bash
 lucy remove fabric/lithium
 ```
 
-### `lucy install`
+#### `lucy install`
 
-把 lock 应用到受管运行时。lock 仍有效就用精确数据；过期则按 manifest 意图重新解析。
+从 lock 文件安装包。lock 文件是最新时，Lucy 使用其中的确切数据；lock 文件过期时，Lucy 回退到清单重新解析。
 
 ```bash
 lucy install
 ```
 
-### `lucy search`
+### 检查工作区
 
-跨数据源搜索，可过滤、排序。
+#### `lucy status`
 
-```bash
-lucy search fabric/carpet
-lucy search modrinth:carpet --index downloads --platform fabric
-```
-
-| 参数             | 说明                                              |
-| ---------------- | ------------------------------------------------- |
-| `-i`, `--index`  | 排序：`relevance`、`downloads`、`newest`          |
-| `-c`, `--client` | 包含仅客户端模组                                  |
-| `--platform`     | 平台过滤：`fabric`、`forge`、`neoforge`、`bukkit` |
-| `-l`, `--long`   | 完整输出          |
-| `--json`         | 原始 JSON         |
-
-### `lucy status`
-
-显示当前目录下 Lucy 探测到的内容：游戏版本、服务端核心、平台、拓扑、运行时活动、风险信号、已安装包。
+显示 Lucy 在当前目录检测到的信息：游戏版本、服务端核心、平台、运行时活动、风险信号和已安装的包。
 
 ```bash
 lucy status
 lucy status --json --long
 ```
 
-### `lucy topology`
+#### `lucy search`
 
-把探测到的服务端运行时拓扑画成 ASCII 图。
+在各个数据源中搜索。
 
 ```bash
-lucy topology
-lucy topology --long
-lucy topology --json
+lucy search fabric/carpet
+lucy search modrinth:carpet --index downloads --platform fabric
 ```
 
-| 参数           | 说明                           |
-| -------------- | ------------------------------ |
-| `-l`, `--long` | 节点内显示角色、能力、风险等级 |
+| 标志 | 说明 |
+| ---------------- | ----------------------------------------------- |
+| `-i`, `--index` | 按 `relevance`、`downloads` 或 `newest` 排序 |
+| `-c`, `--client` | 包含纯客户端模组 |
+| `--platform` | 按 `fabric`、`forge`、`neoforge`、`bukkit` 过滤 |
+| `-l`, `--long` | 显示完整输出 |
+| `--json` | 输出原始 JSON |
 
-### `lucy info`
+#### `lucy info`
 
-查包的元数据、描述、作者和版本历史。
+显示一个包的元数据、简介、作者和版本历史。
 
 ```bash
 lucy info fabric/fabric-api@stable --long
 ```
 
-| 参数           | 说明     |
+| 标志 | 说明 |
 | -------------- | -------- |
 | `-l`, `--long` | 完整输出 |
 
-### `lucy tree`
+#### `lucy tree`
 
 显示依赖树。
 
@@ -156,101 +151,78 @@ lucy info fabric/fabric-api@stable --long
 lucy tree --live --depth 2
 ```
 
-| 参数      | 说明                        |
-| --------- | --------------------------- |
-| `--live`  | 探测运行中服务器，不用 lock |
-| `--depth` | 限制深度（0 表示不限制）    |
-| `--json`  | 原始 JSON                   |
+| 标志 | 说明 |
+| --------- | -------------------------------- |
+| `--live` | 探测正在运行的服务器而非 lock 文件 |
+| `--depth` | 限制深度（0 = 不限制） |
+| `--json` | 输出原始 JSON |
 
-### `lucy leaves`
+#### `lucy leaves`
 
-列出没有依赖者的包，用来判断哪些能安全删。
+列出没有其他包依赖的包。可以用这个命令找出可以安全移除的包。
 
 ```bash
 lucy leaves --live
 ```
 
-| 参数     | 说明                        |
-| -------- | --------------------------- |
-| `--live` | 探测运行中服务器，不用 lock |
-| `--json` | 原始 JSON                   |
+| 标志 | 说明 |
+| -------- | ---------------------------------- |
+| `--live` | 探测正在运行的服务器而非 lock 文件 |
+| `--json` | 输出原始 JSON |
 
-### `lucy cache`
+### 缓存
+
+#### `lucy cache`
+
+管理本地下载缓存。
 
 ```bash
 lucy cache ls              # 列出缓存的下载
-lucy cache clear           # 清空下载缓存
-lucy cache slugs ls        # 列出 slug → 包 ID 映射
+lucy cache clear           # 清空所有缓存的下载
+lucy cache slugs ls        # 列出 slug 到包 ID 的映射
 lucy cache slugs clear     # 清空 slug 映射
 ```
 
-| 子命令        | 参数     |
+| 子命令 | 标志 |
 | ------------- | -------- |
-| `ls`、`list`  | `--json` |
-| `clear`、`rm` |          |
-| `slugs ls`    | `--json` |
-| `slugs clear` |          |
+| `ls`, `list` | `--json` |
+| `clear`, `rm` | |
+| `slugs ls` | `--json` |
+| `slugs clear` | |
 
-### `lucy bisect`
+### 故障排查
+
+#### `lucy bisect`
+
+对已安装的模组进行二分查找，定位导致故障的模组。
 
 ```bash
-lucy bisect start          # 开始二分排查会话
-lucy bisect good           # 当前中点正常（问题在右半段）
-lucy bisect bad            # 当前中点异常（问题在左半段）
-lucy bisect status         # 查看当前会话
+lucy bisect start          # 开始一次二分查找会话
+lucy bisect good           # 将当前中点标记为正常（故障模组在右半部分）
+lucy bisect bad            # 将当前中点标记为故障（故障模组在左半部分）
+lucy bisect status         # 显示当前的二分查找会话
 lucy bisect reset          # 中止会话并重新启用模组
 ```
 
-### 占位命令
+### 计划中的命令
 
-已注册，尚未实现：
+以下命令已注册但尚未实现。
 
-| 命令      | 计划用途           |
-| --------- | ------------------ |
-| `doctor`  | 诊断服务器环境风险 |
-| `export`  | 导出配置或生成客户端 |
-| `upgrade` | 升级已安装的包     |
+| 命令 | 计划功能 |
+| --------- | ---------------------- |
+| `doctor` | 诊断服务器环境风险 |
+| `export` | 导出配置或生成客户端 |
+| `upgrade` | 升级已安装的包 |
 
-### 全局参数
+### 全局标志
 
-| 参数           | 说明             |
-| -------------- | ---------------- |
-| `--debug`      | 输出调试日志     |
-| `--log-file`   | 打印日志文件路径 |
-| `--print-logs` | 日志打到控制台   |
-| `--no-style`   | 关闭彩色输出     |
-
-## 概念
-
-### 包标识符
-
-```text
-[平台/]名称[@版本]
-```
-
-只有名称是必需的。省略平台，Lucy 从环境推断。省略版本，默认使用 `@any`（任意稳定性的最新兼容版本）。
-
-```text
-fabric/fabric-api@1.2.3
-   ↑       ↑        ↑
-  平台     名称     版本
-```
-
-`@any` 是默认值，选择任意稳定性的最新兼容版本。`@stable` 只选择最新兼容正式版。`@beta` 允许兼容预发布版本。
-
-manifest 中接受的平台：`none`、`fabric`、`forge`、`neoforge`、`mcdr`
-
-类型系统也识别 `bukkit`、`sponge`、`velocity`、`bungeecord` 用于拓扑检测，但暂不支持设为主要平台。
-
-数据源：`modrinth`、`curseforge`、`github`、`mcdr`（`hangar` 和 `spiget` 已定义但尚未接入解析器）。
-
-### 状态文件
-
-意图和配置存放在 `lucy.yaml`。解析后的精确结果（版本、哈希、安装路径、来源）存放在 `lucy-lock.yaml`。
-
-### 运行时拓扑
-
-Lucy 为你的服务器构建一张运行时图。图中的每个节点（Fabric、Forge、Paper、MCDR、Geyser、Velocity）都有角色、能力（`fabric_mods`、`bukkit_plugins`、`mcdr_plugins`）和风险等级。边描述节点之间的关系：谁适配谁、谁桥接谁、谁代理谁。这张图是 `lucy status`、init 探测和兼容性解析的基础。
+| 标志 | 说明 |
+| --------------- | ----------------------- |
+| `--debug` | 显示调试日志 |
+| `--log-file` | 输出日志文件路径 |
+| `--print-logs` | 在控制台输出日志 |
+| `--no-style` | 禁用彩色输出 |
+| `--json-compact` | 输出不带缩进的 JSON |
 
 > [!NOTE]
-> Logo 和美西螈像素艺术版权归 Mojang AB 所有，原创替代品正在制作中。
+> 美西螈贴图的版权归 Mojang AB 所有。原创替代图正在制作中。
