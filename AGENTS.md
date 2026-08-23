@@ -106,7 +106,7 @@ To run the built binary against a test server directory:
 
 ## Debugging
 
-You may find `test_*` directories under the project root. They are sandbox servers for smoke tests. They are .gitignored so you might not be able to find them with provided `grep` or `glob`, use `ls` to discover them instead.
+Generated sandbox server environments live in `.sandboxes/` (gitignored). They are materialized from the declarative manifest in `testdata/environments/environments.yaml` — run `task envs:list` to see them and `task envs:gen` to generate. Ecosystem knowledge per core family (jar formats, detector markers, download APIs) is in `testdata/environments/families/*.md`. See `docs/shared/sandbox-environments.md` for the full guide. You are allowed to create temporary sandboxes prefixed with `test_` under the project root, they are already git ignored.
 
 ## Common Erros
 
