@@ -40,11 +40,10 @@ launch.json
 # Compiled files
 dist
 release
+.sandboxes
 
-# Testing environments
+# Local testing environments
 test_*
-!**/testdata
-!**/testdata/**
 
 # Installed skills
 .agents/skills
