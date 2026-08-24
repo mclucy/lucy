@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T) {
+func TestPaperDetectorIntegration_PaperFixtureDetectsRuntime(t *testing.T) {
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -34,7 +34,7 @@ func TestPaperDetectorIntegration_PaperFixtureProjectsToRuntimeInfo(t *testing.T
 		t.Fatal("expected runtime info for paper fixture")
 	}
 
-	primary := observed.PrimaryRuntimeIdentity()
+	primary := observed.Server.PrimaryRuntime
 	if primary == nil {
 		t.Fatalf("expected primary runtime identity, got %+v", observed.Server)
 	}
@@ -84,7 +84,7 @@ func TestPaperDetectorIntegration_ContradictoryEvidenceDoesNotProducePaperRuntim
 		t.Fatal("expected runtime info for contradiction fixture")
 	}
 
-	if primary := observed.PrimaryRuntimeIdentity(); primary != nil {
+	if primary := observed.Server.PrimaryRuntime; primary != nil {
 		if got := string(primary.Name); got == "paper" || got == "paper-fork" {
 			t.Fatalf(
 				"expected contradiction to avoid paper runtime identity, got %q",

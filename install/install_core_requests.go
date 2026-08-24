@@ -21,7 +21,7 @@ type preparedCoreRequest struct {
 	Binding coreBootstrapBinding
 }
 
-type regularRootPolicy struct {
+type requestPolicy struct {
 	Version types.BareVersion
 	Source  types.SourceId
 }
@@ -101,7 +101,7 @@ func classifyInstallRequests(
 
 func prepareCoreRequests(requests []preparedCoreRequest) error {
 	tierOne := make([]types.CorePackage, 0, len(requests))
-	policies := make(map[types.PackageRef]regularRootPolicy, len(requests))
+	policies := make(map[types.PackageRef]requestPolicy, len(requests))
 
 	for i := range requests {
 		binding, ok := coreBootstrapBindings[requests[i].Match.Core]
@@ -128,7 +128,7 @@ func prepareCoreRequests(requests []preparedCoreRequest) error {
 		}
 
 		ref := requests[i].Match.Ref.PackageRef
-		policy := regularRootPolicy{
+		policy := requestPolicy{
 			Version: requests[i].Request.Version,
 			Source:  requests[i].Request.Scope,
 		}
@@ -164,7 +164,7 @@ func prepareRegularRoots(
 ) ([]types.PackageRequest, []types.VersionedPackageRef, error) {
 	effective := make([]types.PackageRequest, 0, len(requests))
 	roots := make([]types.VersionedPackageRef, 0, len(requests))
-	policies := make(map[string]regularRootPolicy, len(requests))
+	policies := make(map[string]requestPolicy, len(requests))
 
 	for _, request := range requests {
 		if request.Eco == types.EcoUnspecified &&
@@ -177,7 +177,7 @@ func prepareRegularRoots(
 			Version:    request.Version,
 		}
 		key := root.StringBase()
-		policy := regularRootPolicy{
+		policy := requestPolicy{
 			Version: request.Version,
 			Source:  request.Scope,
 		}

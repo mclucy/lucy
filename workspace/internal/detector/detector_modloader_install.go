@@ -67,7 +67,7 @@ func detectModLoaderInstallFromVersionDir(
 			if candidate.kind == modLoaderArtifactShim {
 				continue
 			}
-			return buildModLoaderRuntimeInfo(
+			return newModLoaderExecutableEvidence(
 				spec.platform,
 				spec.name,
 				candidate.path,
@@ -85,7 +85,7 @@ func detectModLoaderInstallFromVersionDir(
 		if err != nil || !ok {
 			continue
 		}
-		return buildModLoaderRuntimeInfo(
+		return newModLoaderExecutableEvidence(
 			spec.platform,
 			spec.name,
 			candidate.path,
@@ -228,7 +228,7 @@ func hashArtifactFile(filePath string, algo cache.HashAlgorithm) (
 	}
 }
 
-func buildModLoaderRuntimeInfo(
+func newModLoaderExecutableEvidence(
 	platform types.Ecosystem,
 	name string,
 	filePath string,

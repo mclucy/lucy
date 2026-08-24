@@ -160,7 +160,7 @@ func isBukkitFamilyCandidate(ecosystem types.Ecosystem) bool {
 func isFoliaRuntime(runtime *workspace.ServerInstance) bool {
 	return runtime != nil &&
 		runtime.PrimaryRuntime != nil &&
-		runtime.PrimaryRuntime.Identity.Name == "folia"
+		runtime.PrimaryRuntime.Name == "folia"
 }
 
 func downloadedArtifactPackages(

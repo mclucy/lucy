@@ -13,7 +13,7 @@ func (s *ServerInstance) EffectiveEcosystems() []EffectiveEcosystem {
 	}
 
 	offers := make([]EffectiveEcosystem, 0, 3)
-	primary := s.PrimaryRuntime.Identity
+	primary := s.PrimaryRuntime
 	name := strings.ToLower(strings.TrimSpace(primary.Name.String()))
 
 	switch name {
