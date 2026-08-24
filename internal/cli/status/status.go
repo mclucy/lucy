@@ -1,9 +1,10 @@
-package cmd
+package status
 
 import (
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/tui"
 	"github.com/mclucy/lucy/tui/style"
@@ -17,21 +18,22 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Display basic information of the current server",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionStatus),
+	RunE:  cli.WithErrorLogging(actionStatus),
 }
 
-func init() {
-	addJsonFlag(statusCmd)
-	addLongFlag(statusCmd)
-	rootCmd.AddCommand(statusCmd)
+// NewCommand wires and returns the `lucy status` command.
+func NewCommand() *cobra.Command {
+	cli.AddJSONFlag(statusCmd)
+	cli.AddLongFlag(statusCmd)
+	return statusCmd
 }
 
 func actionStatus(cmd *cobra.Command, args []string) error {
 	ws := workspace.New()
-	json, _ := cmd.Flags().GetBool(flagJsonName)
-	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
-	long, _ := cmd.Flags().GetBool(flagLongName)
-	noStyle, _ := cmd.Flags().GetBool(flagNoStyleName)
+	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
+	long, _ := cmd.Flags().GetBool(cli.FlagLong)
+	noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle)
 	if json || jsonCompact {
 		if jsonCompact {
 			style.PrintAsJsonCompact(ws)
@@ -326,7 +328,7 @@ func statusRuntimeEcosystemLabel(
 		}
 
 		if label == "" {
-			if nodeLabel := runtimeNodeLabel(primaryNode.ID); nodeLabel != "" && nodeLabel != "Minecraft" {
+			if nodeLabel := cli.RuntimeNodeLabel(primaryNode.ID); nodeLabel != "" && nodeLabel != "Minecraft" {
 				label = nodeLabel
 			}
 		}
@@ -373,7 +375,7 @@ func statusTopologyField(
 		}
 	}
 
-	roleLabel := runtimeRoleLabel(primaryNode.Role)
+	roleLabel := cli.RuntimeRoleLabel(primaryNode.Role)
 	if roleLabel == "Mod loader" || roleLabel == "Plugin core" || roleLabel == "Vanilla" {
 		return nil
 	}
@@ -459,7 +461,7 @@ func runtimeTopologyTargets(
 			continue
 		}
 		if target, ok := topology.FindNode(edge.To); ok {
-			label := runtimeNodeLabel(target.ID)
+			label := cli.RuntimeNodeLabel(target.ID)
 			if label == "" {
 				continue
 			}
@@ -492,7 +494,7 @@ func runtimeTopologyAddonLabels(
 			continue
 		}
 
-		label := runtimeNodeLabel(node.ID)
+		label := cli.RuntimeNodeLabel(node.ID)
 		if label == "" || label == "Vanilla" {
 			continue
 		}
@@ -505,82 +507,4 @@ func runtimeTopologyAddonLabels(
 	}
 
 	return labels
-}
-
-func runtimeRoleLabel(role types.RuntimeRole) string {
-	switch role {
-	case types.RuntimeRoleModLoader:
-		return "Mod loader"
-	case types.RuntimeRolePluginCore:
-		return "Plugin core"
-	case types.RuntimeRoleHybrid:
-		return "Hybrid"
-	case types.RuntimeRoleProxy:
-		return "Proxy"
-	case types.RuntimeRoleBridge:
-		return "Bridge"
-	case types.RuntimeRoleProtocolBridge:
-		return "Protocol bridge"
-	case types.RuntimeRoleVanilla:
-		return "Vanilla"
-	default:
-		return ""
-	}
-}
-
-func runtimeNodeLabel(id types.RuntimeNodeID) string {
-	switch id {
-	case types.RuntimeNodeMinecraft:
-		return "Vanilla"
-	case types.RuntimeNodeFabric:
-		return "Fabric"
-	case types.RuntimeNodeForge:
-		return "Forge"
-	case types.RuntimeNodeNeoforge:
-		return "NeoForge"
-	case types.RuntimeNodeMCDR:
-		return "MCDR"
-	case types.RuntimeNodePaper:
-		return "Paper"
-	case types.RuntimeNodeSpigot:
-		return "Spigot"
-	case types.RuntimeNodeBukkit:
-		return "Bukkit"
-	case types.RuntimeNodeFolia:
-		return "Folia"
-	case types.RuntimeNodeLeaves:
-		return "Leaves"
-	case types.RuntimeNodeSponge:
-		return "Sponge"
-	case types.RuntimeNodeArclight:
-		return "Arclight"
-	case types.RuntimeNodeCatServer:
-		return "CatServer"
-	case types.RuntimeNodeYouer:
-		return "Youer"
-	case types.RuntimeNodeVelocity:
-		return "Velocity"
-	case types.RuntimeNodeBungeecord:
-		return "BungeeCord"
-	case types.RuntimeNodeWaterfall:
-		return "Waterfall"
-	case types.RuntimeNodeGeyserStandalone:
-		return "Geyser Standalone"
-	case types.RuntimeNodeGeyser:
-		return "Geyser"
-	case types.RuntimeNodeConnector:
-		return "Sinytra Connector"
-	case types.RuntimeNodeKilt:
-		return "Kilt"
-	default:
-		return style.Capitalize(
-			strings.ReplaceAll(
-				strings.ReplaceAll(
-					string(id),
-					"-",
-					" ",
-				), "_", " ",
-			),
-		)
-	}
 }

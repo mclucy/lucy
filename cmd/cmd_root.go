@@ -5,6 +5,14 @@ import (
 	"fmt"
 
 	"charm.land/fang/v2"
+	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/add"
+	"github.com/mclucy/lucy/internal/cli/bisect"
+	"github.com/mclucy/lucy/internal/cli/info"
+	lucyinit "github.com/mclucy/lucy/internal/cli/init"
+	"github.com/mclucy/lucy/internal/cli/install"
+	"github.com/mclucy/lucy/internal/cli/search"
+	"github.com/mclucy/lucy/internal/cli/status"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/spf13/cobra"
@@ -26,20 +34,20 @@ var rootCmd = &cobra.Command{
 				),
 			)
 		}
-		if noStyle, _ := cmd.Flags().GetBool(flagNoStyleName); noStyle {
+		if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 			style.TurnOffStyles()
 			log.TurnOffStyles()
 		}
-		if logFile, _ := cmd.Flags().GetBool(flagLogFileName); logFile {
+		if logFile, _ := cmd.Flags().GetBool(cli.FlagLogFile); logFile {
 			fmt.Println("Log file at", log.GetLogFile().Name())
 		}
-		if printLogs, _ := cmd.Flags().GetBool(flagPrintLogsName); printLogs {
+		if printLogs, _ := cmd.Flags().GetBool(cli.FlagPrintLogs); printLogs {
 			log.EnablePrintLogs()
 		}
-		if debug, _ := cmd.Flags().GetBool(flagDebugName); debug {
+		if debug, _ := cmd.Flags().GetBool(cli.FlagDebug); debug {
 			log.EnableDebug()
 		}
-		if dumpLogs, _ := cmd.Flags().GetBool(flagDumpLogsName); dumpLogs {
+		if dumpLogs, _ := cmd.Flags().GetBool(cli.FlagDumpLogs); dumpLogs {
 			log.EnableDumpHistory()
 		}
 		return nil
@@ -47,50 +55,43 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().Bool(flagDebugName, false, "Show debug logs")
+	rootCmd.PersistentFlags().Bool(cli.FlagDebug, false, "Show debug logs")
 	rootCmd.PersistentFlags().Bool(
-		flagLogFileName,
+		cli.FlagLogFile,
 		false,
 		"Output the path to logfile",
 	)
 	rootCmd.PersistentFlags().Bool(
-		flagPrintLogsName,
+		cli.FlagPrintLogs,
 		false,
 		"Print logs to console",
 	)
 	rootCmd.PersistentFlags().Bool(
-		flagDumpLogsName,
+		cli.FlagDumpLogs,
 		false,
 		"Dump the log history to console before exit",
 	)
-	_ = rootCmd.PersistentFlags().MarkHidden(flagDumpLogsName)
+	_ = rootCmd.PersistentFlags().MarkHidden(cli.FlagDumpLogs)
 	rootCmd.PersistentFlags().Bool(
-		flagNoStyleName,
+		cli.FlagNoStyle,
 		false,
 		"Disable colored and styled output",
 	)
 	rootCmd.PersistentFlags().Bool(
-		flagJsonCompactName,
+		cli.FlagJSONCompact,
 		false,
 		"Print raw JSON response without indentation",
 	)
-}
 
-// runWithErrorLogging records command failures in the log file only.
-// User-facing errors are returned to fang/cobra for a single stderr presentation.
-func runWithErrorLogging(
-	fn func(
-		cmd *cobra.Command,
-		args []string,
-	) error,
-) func(cmd *cobra.Command, args []string) error {
-	return func(cmd *cobra.Command, args []string) error {
-		err := fn(cmd, args)
-		if err != nil {
-			log.Error(err)
-		}
-		return err
-	}
+	rootCmd.AddCommand(
+		add.NewCommand(),
+		bisect.NewCommand(),
+		info.NewCommand(),
+		lucyinit.NewCommand(),
+		install.NewCommand(),
+		search.NewCommand(),
+		status.NewCommand(),
+	)
 }
 
 // Execute runs the root command.

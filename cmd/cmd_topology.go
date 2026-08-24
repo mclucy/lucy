@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
@@ -14,21 +15,21 @@ var topologyCmd = &cobra.Command{
 	Use:   "topology",
 	Short: "Visualize server runtime topology as an ASCII diagram",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionTopology),
+	RunE:  cli.WithErrorLogging(actionTopology),
 }
 
 func init() {
-	addJsonFlag(topologyCmd)
-	addLongFlag(topologyCmd)
-	addNoStyleFlag(topologyCmd)
+	cli.AddJSONFlag(topologyCmd)
+	cli.AddLongFlag(topologyCmd)
+	cli.AddNoStyleFlag(topologyCmd)
 	rootCmd.AddCommand(topologyCmd)
 }
 
 func actionTopology(cmd *cobra.Command, args []string) error {
-	jsonOut, _ := cmd.Flags().GetBool(flagJsonName)
-	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
-	longOut, _ := cmd.Flags().GetBool(flagLongName)
-	noStyle, _ := cmd.Flags().GetBool(flagNoStyleName)
+	jsonOut, _ := cmd.Flags().GetBool(cli.FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
+	longOut, _ := cmd.Flags().GetBool(cli.FlagLong)
+	noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle)
 
 	info := workspace.New()
 
@@ -108,7 +109,7 @@ func buildNodeLabel(
 	primary types.RuntimeNodeID,
 	longOut bool,
 ) string {
-	label := runtimeNodeLabel(node.ID)
+	label := cli.RuntimeNodeLabel(node.ID)
 	if node.ID == primary {
 		if longOut {
 			label += " (primary)"
@@ -122,7 +123,7 @@ func buildNodeLabel(
 	}
 
 	parts := []string{label}
-	if role := runtimeRoleLabel(node.Role); role != "" {
+	if role := cli.RuntimeRoleLabel(node.Role); role != "" {
 		parts = append(parts, role)
 	}
 	if len(node.Capabilities) > 0 {

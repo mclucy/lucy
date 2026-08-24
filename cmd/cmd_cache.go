@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui"
@@ -24,14 +25,14 @@ var cacheLsCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
 	Short:   "List cached entries",
-	RunE:    runWithErrorLogging(actionCacheLs),
+	RunE:    cli.WithErrorLogging(actionCacheLs),
 }
 
 var cacheClearCmd = &cobra.Command{
 	Use:     "clear",
 	Aliases: []string{"rm"},
 	Short:   "Clear all cached downloads",
-	RunE:    runWithErrorLogging(actionCacheClear),
+	RunE:    cli.WithErrorLogging(actionCacheClear),
 }
 
 var cacheSlugsCmd = &cobra.Command{
@@ -47,28 +48,28 @@ var cacheSlugsLsCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
 	Short:   "List slug mappings",
-	RunE:    runWithErrorLogging(actionCacheSlugsLs),
+	RunE:    cli.WithErrorLogging(actionCacheSlugsLs),
 }
 
 var cacheSlugsClearCmd = &cobra.Command{
 	Use:     "clear",
 	Aliases: []string{"rm"},
 	Short:   "Clear all slug mappings",
-	RunE:    runWithErrorLogging(actionCacheSlugsClear),
+	RunE:    cli.WithErrorLogging(actionCacheSlugsClear),
 }
 
 func init() {
-	addJsonFlag(cacheLsCmd)
-	addJsonCompactFlag(cacheLsCmd)
-	addNoStyleFlag(cacheLsCmd)
+	cli.AddJSONFlag(cacheLsCmd)
+	cli.AddJSONCompactFlag(cacheLsCmd)
+	cli.AddNoStyleFlag(cacheLsCmd)
 
-	addNoStyleFlag(cacheClearCmd)
+	cli.AddNoStyleFlag(cacheClearCmd)
 
-	addJsonFlag(cacheSlugsLsCmd)
-	addJsonCompactFlag(cacheSlugsLsCmd)
-	addNoStyleFlag(cacheSlugsLsCmd)
+	cli.AddJSONFlag(cacheSlugsLsCmd)
+	cli.AddJSONCompactFlag(cacheSlugsLsCmd)
+	cli.AddNoStyleFlag(cacheSlugsLsCmd)
 
-	addNoStyleFlag(cacheSlugsClearCmd)
+	cli.AddNoStyleFlag(cacheSlugsClearCmd)
 
 	cacheCmd.AddCommand(cacheLsCmd, cacheClearCmd, cacheSlugsCmd)
 	cacheSlugsCmd.AddCommand(cacheSlugsLsCmd, cacheSlugsClearCmd)
@@ -77,8 +78,8 @@ func init() {
 
 func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	entries := cache.Network().All()
-	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
-	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
+	jsonOutput, _ := cmd.Flags().GetBool(cli.FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
 
 	if jsonOutput || jsonCompact {
 		if jsonCompact {
@@ -145,8 +146,8 @@ func actionCacheClear(_ *cobra.Command, _ []string) error {
 
 func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 	entries := knownpkgs.Default().All()
-	jsonOutput, _ := cmd.Flags().GetBool(flagJsonName)
-	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
+	jsonOutput, _ := cmd.Flags().GetBool(cli.FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
 
 	if jsonOutput || jsonCompact {
 		if jsonCompact {

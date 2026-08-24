@@ -1,4 +1,4 @@
-package cmd
+package install
 
 import (
 	"errors"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
@@ -24,12 +25,13 @@ var installCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Converge Lucy-managed runtime state from the lockfile",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionInstall),
+	RunE:  cli.WithErrorLogging(actionInstall),
 }
 
-func init() {
-	addNoStyleFlag(installCmd)
-	rootCmd.AddCommand(installCmd)
+// NewCommand wires and returns the `lucy install` command.
+func NewCommand() *cobra.Command {
+	cli.AddNoStyleFlag(installCmd)
+	return installCmd
 }
 
 func actionInstall(cmd *cobra.Command, args []string) error {
@@ -38,7 +40,7 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
 
-	hasLucyState, err := lucyStateDirExists(workDir)
+	hasLucyState, err := cli.LucyStateDirExists(workDir)
 	if err != nil {
 		return err
 	}
@@ -67,12 +69,12 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 	result, err := install.InstallMany(cmd.Context(), plan.Requested, options)
 	if err != nil {
 		if conflictErr, ok := errors.AsType[*resolve.ConstraintConflictError](err); ok {
-			return formatConstraintConflict(conflictErr)
+			return cli.FormatConstraintConflict(conflictErr)
 		}
 		return err
 	}
 
-	lock := buildUpdatedLock(
+	lock := cli.BuildUpdatedLock(
 		workDir,
 		stateSvc.Manifest(),
 		stateSvc.Lock(),
@@ -115,7 +117,7 @@ func exactSyncPackageIDs(
 	if manifest == nil || lock == nil || len(lock.Packages) == 0 {
 		return nil, false, nil
 	}
-	if manifestFingerprint(manifest, "") != lock.ManifestFingerprint {
+	if cli.ManifestFingerprint(manifest, "") != lock.ManifestFingerprint {
 		return nil, false, nil
 	}
 

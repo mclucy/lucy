@@ -1,8 +1,9 @@
-package cmd
+package search
 
 import (
 	"sort"
 
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -48,5 +49,17 @@ func applySearchSort(results []upstream.SearchResponse, s SearchSort) {
 				return items[a].LastUpdated.After(items[b].LastUpdated)
 			})
 		}
+	}
+}
+
+// StaticSortCandidates returns completion candidates for search sort options.
+func StaticSortCandidates() []cli.CompletionCandidate {
+	return []cli.CompletionCandidate{
+		{Value: string(SearchSortRelevance), Description: "Sort by relevance"},
+		{
+			Value:       string(SearchSortDownloads),
+			Description: "Sort by download count",
+		},
+		{Value: string(SearchSortNewest), Description: "Sort by newest"},
 	}
 }
