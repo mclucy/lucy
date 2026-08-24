@@ -1,0 +1,186 @@
+# The configuration file for MCDReforged
+# See the document https://docs.mcdreforged.com/en/latest/configuration.html for more details
+
+
+# =========================================
+# |          Basic Configuration          |
+# =========================================
+
+
+# The language that MCDR will use to display information
+# Examples: "en_us", "zh_cn"
+language: en_us
+
+
+# =========================================
+# |          Server Configuration         |
+# =========================================
+
+
+# The working directory of the server process
+# For default value "server", It's suggested to put all the files related to the server into the server/ directory
+working_directory: server
+
+
+# The command to start the server, it can be a string or a list of string
+# (shell mode) If it's a string, the command will be executed as a shell command in a shell environment
+# (exec mode) If it's a list of strings, the command will be executed directly
+# Example command for starting a Minecraft server:
+#   'java -Xms1G -Xmx2G -jar minecraft_server.jar nogui'                        (shell mode)
+#   ['java', '-Xms1G', '-Xmx2G', '-jar', 'minecraft_server.jar', 'nogui']       (exec mode)
+start_command: echo Hello world from MCDReforged
+
+
+# The handler to the specific way to parse the standard output text of the server and the correct command for server control
+#   vanilla_handler    , for Vanilla / Carpet / Fabric server
+#   beta18_handler     , for Vanilla server in legacy versions, e.g. < 1.7, or even beta1.8
+#   bukkit_handler     , for Bukkit / Spigot server with Minecraft version below 1.14, and Paper / Mohist server in all version
+#   bukkit14_handler   , for Bukkit / Spigot server with Minecraft version 1.14 and above
+#   forge_handler      , for Forge server
+#   cat_server_handler , for CatServer server
+#   arclight_handler   , for Arclight server
+#   bungeecord_handler , for Bungeecord server
+#   waterfall_handler  , for Waterfall server
+#   velocity_handler   , for Velocity server
+handler: vanilla_handler
+
+
+# The codec format to encode messages to stdin / decode messages from stdout of the server
+# Leave it blank for MCDR to use the system encoding
+# For vanilla Minecraft servers, you need to set "encoding" to utf8, since they always read stdin with UTF-8
+# Examples: "utf8", "gbk"
+
+# MCDR -> Server
+encoding: utf8
+
+# Server -> MCDR
+decoding: utf8
+
+
+# Minecraft RCON setting
+# If enabled, plugins can use rcon to query commands from the server
+rcon:
+  enable: false
+  address: 127.0.0.1
+  port: 25575
+  password: password
+
+
+# =========================================
+# |          Plugin Configuration         |
+# =========================================
+
+
+# The list of directory path where MCDR will search for plugins to load
+# Example: "path/to/my/plugin/directory"
+plugin_directories:
+- plugins
+
+
+# The cache TTL of a fetched plugin catalogue meta
+# MCDR will keep using the cached meta within its TTL for the following catalogue plugin operations
+catalogue_meta_cache_ttl: 1200
+
+
+# The timeout in seconds for a plugin catalogue meta fetch
+catalogue_meta_fetch_timeout: 15
+
+
+# Override the URL pointing to the "everything.json" or "everything_slim.json" file, which is used to fetch the plugin catalogue meta
+# If it ends with ".gz" (gzip) or ".xz" (lzma), corresponding decompression operation will be applied
+# If not provided, the url will be "https://api.mcdreforged.com/catalogue/everything_slim.json.xz"
+catalogue_meta_url:
+
+
+# Plugin file download override. Should be a valid python str.format string
+# Available variables: {url}, {repos_owner}, {repos_name}, {tag}, {asset_name}, {asset_id}
+# As an example, to use ghproxy, you can set it to: "https://mirror.ghproxy.com/{url}"
+# If not provided, the origin GitHub asset download url will be directly used
+plugin_download_url:
+
+
+# The timeout in seconds for a plugin file download
+plugin_download_timeout: 15
+
+
+# Extra arguments passed to the pip subprocess for installing required python packages during plugin installation
+# Example: "-i https://pypi.tuna.tsinghua.edu.cn/simple"
+plugin_pip_install_extra_args:
+
+
+# =========================================
+# |           Misc Configuration          |
+# =========================================
+
+
+# If set to true, MCDR will detect if there's a new version every 24h
+check_update: true
+
+
+# Advance console switch powered by prompt-toolkit
+# Set it to false if you need to redirect the stdin/stdout of MCDR
+advanced_console: true
+
+
+# HTTP(s) proxy setting for all external HTTP requests in MCDR
+# It's suggested to set value for http_proxy and https_proxy at the same time
+# Example values:
+#   "http://127.0.0.1:1081"
+#   "http://user:pass@192.168.0.1:8888"
+http_proxy:
+https_proxy:
+
+
+# ==========================================
+# |         Advanced Configuration         |
+# ==========================================
+
+
+# When set to true, MCDR will not start the console thread for handling console command input
+# Don't change it to true unless you know what you are doing
+disable_console_thread: false
+
+
+# When set to true, MCDR will remove all console font formatter codes before any message gets printed onto the console
+disable_console_color: false
+
+
+# A list of customizing info reactor classes to handle the info instance. The classes need to be subclasses of AbstractServerHandler
+custom_handlers:
+
+
+# A list of customizing info reactor classes to handle the info instance. The classes need to be subclasses of AbstractInfoReactor
+custom_info_reactors:
+
+
+# The required time interval in second for watchdog to consider the task executor thread is not responding. Set it to 0 to disable watchdog
+watchdog_threshold: 10
+
+
+# When set to true, MCDR will start a handler detection on MCDR startup for a while,
+# to detect possible configuration mistake of the :ref:`configuration:handler` option
+handler_detection: true
+
+
+# =========================================
+# |          Debug Configuration          |
+# =========================================
+
+# Debug mode switches
+debug:
+  all: false
+  mcdr: false
+  handler: false
+  reactor: false
+  plugin: false
+  permission: false
+  command: false
+  task_executor: false
+
+
+# =========================================
+# |         Missing Configuration         |
+# =========================================
+
+# Options below were missing and set by MCDR with the default value
+# Remember to check and update them as soon as possible
