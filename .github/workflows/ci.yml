@@ -10,9 +10,13 @@ jobs:
   test:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
     runs-on: ubuntu-latest
-    permissions: write-all
+    permissions:
+      contents: read
+      code-quality: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -28,12 +32,13 @@ jobs:
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
-      - name: Generate coverage badge
-        if: github.event_name != 'pull_request'
-        uses: ncruces/go-coverage-report@v0
+      - name: Upload coverage report
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-code-coverage@v1
         with:
-          badge-title: Coverage
-          amend: true
+          file: coverage.xml
+          language: Go
+          label: code-coverage/go
 
   build:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"

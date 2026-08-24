@@ -229,6 +229,11 @@ tasks:
     cmds:
       - go test -race ./...
 
+  test:coverage:
+    desc: Run the Go test suite with a coverage profile
+    cmds:
+      - go test -coverprofile=cover.out ./...
+      - go tool gocover-cobertura < cover.out > coverage.xml
   check:
     desc: Run the default local verification tasks
     deps:
@@ -263,7 +268,9 @@ tasks:
         if [ -n "${CF_API_KEY:-}" ]; then
           task cipher:generate
         fi
-      - task: check
+      - task: build
+      - task: test:race
+      - task: test:coverage
 
   ci:build:
     desc: Build release artifacts for CI (for GitHub Actions); conditionally generates cipher files
