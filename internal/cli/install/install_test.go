@@ -1,9 +1,10 @@
-package cmd
+package install
 
 import (
 	"reflect"
 	"testing"
 
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 )
@@ -30,7 +31,7 @@ func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 		},
 	}
 	lock := &state.Lock{
-		ManifestFingerprint: manifestFingerprint(manifest, ""),
+		ManifestFingerprint: cli.ManifestFingerprint(manifest, ""),
 		Packages: []state.LockedPackage{
 			{ID: "fabric/root", Version: "1.2.3", InstallPath: "mods/root.jar"},
 			{

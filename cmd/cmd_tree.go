@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/tui/style"
 
 	"github.com/spf13/cobra"
@@ -13,7 +14,7 @@ var treeCmd = &cobra.Command{
 	Use:   "tree",
 	Short: "Display dependency tree structure",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionTree),
+	RunE:  cli.WithErrorLogging(actionTree),
 }
 
 func init() {
@@ -27,9 +28,9 @@ func init() {
 		0,
 		"Limit dependency tree depth (0 = unlimited)",
 	)
-	addJsonFlag(treeCmd)
-	addJsonCompactFlag(treeCmd)
-	addNoStyleFlag(treeCmd)
+	cli.AddJSONFlag(treeCmd)
+	cli.AddJSONCompactFlag(treeCmd)
+	cli.AddNoStyleFlag(treeCmd)
 	rootCmd.AddCommand(treeCmd)
 }
 
@@ -40,13 +41,13 @@ func actionTree(cmd *cobra.Command, args []string) error {
 	}
 
 	forceLive, _ := cmd.Flags().GetBool("live")
-	graph, source, err := LoadDependencyData(workDir, forceLive)
+	graph, source, err := cli.LoadDependencyData(workDir, forceLive)
 	if err != nil {
 		return err
 	}
 
-	jsonOut, _ := cmd.Flags().GetBool(flagJsonName)
-	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
+	jsonOut, _ := cmd.Flags().GetBool(cli.FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
 
 	if jsonOut || jsonCompact {
 		return outputTreeJSON(graph, source, jsonCompact)
@@ -67,7 +68,7 @@ func actionTree(cmd *cobra.Command, args []string) error {
 }
 
 func printTree(
-	node *GraphNode,
+	node *cli.GraphNode,
 	depth int,
 	isLast bool,
 	prefix string,
@@ -131,7 +132,7 @@ type treeNode struct {
 	Children []*treeNode `json:"children,omitempty"`
 }
 
-func outputTreeJSON(graph *DependencyGraph, source DataSource, compact bool) error {
+func outputTreeJSON(graph *cli.DependencyGraph, source cli.DataSource, compact bool) error {
 	visited := make(map[string]bool)
 	roots := graph.GetRoots()
 	jsonRoots := make([]*treeNode, 0, len(roots))
@@ -151,7 +152,7 @@ func outputTreeJSON(graph *DependencyGraph, source DataSource, compact bool) err
 	return nil
 }
 
-func buildJSONNode(node *GraphNode, visited map[string]bool) *treeNode {
+func buildJSONNode(node *cli.GraphNode, visited map[string]bool) *treeNode {
 	t := &treeNode{
 		ID:       node.ID,
 		Version:  node.Version,

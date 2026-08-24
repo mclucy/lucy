@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -20,17 +21,17 @@ var removeCmd = &cobra.Command{
 		args []string,
 		toComplete string,
 	) ([]string, cobra.ShellCompDirective) {
-		return CompletePackageIDSuggestions(
+		return cli.CompletePackageIDSuggestions(
 			context.Background(),
 			"remove",
 			toComplete,
 		)
 	},
-	RunE: runWithErrorLogging(actionRemove),
+	RunE: cli.WithErrorLogging(actionRemove),
 }
 
 func init() {
-	addNoStyleFlag(removeCmd)
+	cli.AddNoStyleFlag(removeCmd)
 	rootCmd.AddCommand(removeCmd)
 }
 
@@ -40,7 +41,7 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
 
-	hasLucyState, err := lucyStateDirExists(workDir)
+	hasLucyState, err := cli.LucyStateDirExists(workDir)
 	if err != nil {
 		return err
 	}

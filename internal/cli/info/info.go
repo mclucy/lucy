@@ -1,4 +1,4 @@
-package cmd
+package info
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui/style"
@@ -30,21 +31,22 @@ var infoCmd = &cobra.Command{
 		if len(args) >= 1 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return CompletePackageIDSuggestions(
+		return cli.CompletePackageIDSuggestions(
 			context.Background(),
 			"info",
 			toComplete,
 		)
 	},
 
-	RunE: runWithErrorLogging(actionInfo),
+	RunE: cli.WithErrorLogging(actionInfo),
 }
 
-func init() {
-	addJsonFlag(infoCmd)
-	addLongFlag(infoCmd)
-	addNoStyleFlag(infoCmd)
-	rootCmd.AddCommand(infoCmd)
+// NewCommand wires and returns the `lucy info` command.
+func NewCommand() *cobra.Command {
+	cli.AddJSONFlag(infoCmd)
+	cli.AddLongFlag(infoCmd)
+	cli.AddNoStyleFlag(infoCmd)
+	return infoCmd
 }
 
 func actionInfo(cmd *cobra.Command, args []string) error {
@@ -90,9 +92,9 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	json, _ := cmd.Flags().GetBool(flagJsonName)
-	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
-	long, _ := cmd.Flags().GetBool(flagLongName)
+	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
+	long, _ := cmd.Flags().GetBool(cli.FlagLong)
 
 	if json || jsonCompact {
 		if jsonCompact {

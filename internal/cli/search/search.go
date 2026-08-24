@@ -1,4 +1,4 @@
-package cmd
+package search
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
@@ -37,7 +38,7 @@ var searchCmd = &cobra.Command{
 		if len(args) >= 1 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return CompletePackageIDSuggestions(
+		return cli.CompletePackageIDSuggestions(
 			context.Background(),
 			"search",
 			toComplete,
@@ -54,10 +55,11 @@ var searchCmd = &cobra.Command{
 		}
 		return nil
 	},
-	RunE: runWithErrorLogging(actionSearch),
+	RunE: cli.WithErrorLogging(actionSearch),
 }
 
-func init() {
+// NewCommand wires and returns the `lucy search` command.
+func NewCommand() *cobra.Command {
 	searchCmd.Flags().StringP(
 		flagIndexName,
 		"i",
@@ -75,18 +77,18 @@ func init() {
 		"",
 		"Filter results by platform (fabric, forge, neoforge, bukkit)",
 	)
-	addJsonFlag(searchCmd)
-	addJsonCompactFlag(searchCmd)
-	addLongFlag(searchCmd)
-	addNoStyleFlag(searchCmd)
+	cli.AddJSONFlag(searchCmd)
+	cli.AddJSONCompactFlag(searchCmd)
+	cli.AddLongFlag(searchCmd)
+	cli.AddNoStyleFlag(searchCmd)
 	_ = searchCmd.RegisterFlagCompletionFunc(
 		flagIndexName,
 		func(cmd *cobra.Command, args []string, toComplete string) (
 			[]string,
 			cobra.ShellCompDirective,
 		) {
-			candidates := FilterByPrefix(StaticSortCandidates(), toComplete)
-			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+			candidates := cli.FilterByPrefix(StaticSortCandidates(), toComplete)
+			return cli.ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
 		},
 	)
 	_ = searchCmd.RegisterFlagCompletionFunc(
@@ -95,14 +97,14 @@ func init() {
 			[]string,
 			cobra.ShellCompDirective,
 		) {
-			candidates := FilterByPrefix(
-				StaticSearchEcosystemCandidates(),
+			candidates := cli.FilterByPrefix(
+				cli.StaticSearchEcosystemCandidates(),
 				toComplete,
 			)
-			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+			return cli.ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
 		},
 	)
-	rootCmd.AddCommand(searchCmd)
+	return searchCmd
 }
 
 func actionSearch(cmd *cobra.Command, args []string) error {
@@ -112,7 +114,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 	index, _ := cmd.Flags().GetString(flagIndexName)
 	client, _ := cmd.Flags().GetBool(flagClientName)
-	long, _ := cmd.Flags().GetBool(flagLongName)
+	long, _ := cmd.Flags().GetBool(cli.FlagLong)
 	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
 	specifiedSource := ref.Scope
 

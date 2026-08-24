@@ -1,4 +1,4 @@
-package cmd
+package add
 
 import (
 	"crypto/sha256"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
 )
@@ -154,7 +155,7 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 		},
 	}
 
-	updated := buildUpdatedLock(workDir, &manifest, &existingLock, result)
+	updated := cli.BuildUpdatedLock(workDir, &manifest, &existingLock, result)
 	if updated == nil {
 		t.Fatal("expected updated lock")
 	}

@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"strings"
@@ -76,18 +76,6 @@ func StaticVersionCandidates() []CompletionCandidate {
 		{Value: "any", Description: "Latest version, any stability (default)"},
 		{Value: "stable", Description: "Latest stable release, no betas"},
 		{Value: "beta", Description: "Latest version, allow pre-releases"},
-	}
-}
-
-// StaticSortCandidates returns completion candidates for search sort options.
-func StaticSortCandidates() []CompletionCandidate {
-	return []CompletionCandidate{
-		{Value: string(SearchSortRelevance), Description: "Sort by relevance"},
-		{
-			Value:       string(SearchSortDownloads),
-			Description: "Sort by download count",
-		},
-		{Value: string(SearchSortNewest), Description: "Sort by newest"},
 	}
 }
 

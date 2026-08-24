@@ -1,11 +1,11 @@
-package cmd
+package init
 
 import (
 	"context"
 	"fmt"
 	"os"
 
-	lucyinit "github.com/mclucy/lucy/cmd/init"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/state"
 	"github.com/spf13/cobra"
 )
@@ -40,10 +40,11 @@ Version hints are best-effort: omit a version to use @any (latest compatible
 version regardless of release type), use @stable to require a release, use
 @beta to allow pre-releases, or keep the inferred runtime version when you want
 Lucy to match the current environment.`,
-	RunE: runWithErrorLogging(actionInit),
+	RunE: cli.WithErrorLogging(actionInit),
 }
 
-func init() {
+// NewCommand wires and returns the `lucy init` command.
+func NewCommand() *cobra.Command {
 	initCmd.Flags().BoolP(
 		flagInitYesName,
 		"y",
@@ -67,7 +68,7 @@ func init() {
 		"Game version for non-interactive init (e.g., 1.21.4)",
 	)
 	_ = initCmd.Flags().MarkHidden(flagInitWorkDirName)
-	rootCmd.AddCommand(initCmd)
+	return initCmd
 }
 
 func actionInit(cmd *cobra.Command, _ []string) error {
@@ -85,7 +86,7 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 	yes, _ := cmd.Flags().GetBool(flagInitYesName)
 	gameVersion, _ := cmd.Flags().GetString(flagInitGameVersion)
 
-	flowState := lucyinit.NewInitFlowState(workDir)
+	flowState := NewInitFlowState(workDir)
 	flowState.ConflictResolution = conflictMode
 
 	if gameVersion != "" && gameVersion != "1.21" && flowState.GameVersion == "" {
@@ -110,14 +111,14 @@ func resolveWorkDir(cmd *cobra.Command) (string, error) {
 	return wd, nil
 }
 
-func parseConflictMode(s string) (lucyinit.ConflictMode, error) {
+func parseConflictMode(s string) (ConflictMode, error) {
 	switch s {
 	case "preserve", "":
-		return lucyinit.PreserveExisting, nil
+		return PreserveExisting, nil
 	case "abort":
-		return lucyinit.AbortOnConflict, nil
+		return AbortOnConflict, nil
 	case "overwrite":
-		return lucyinit.OverwriteAll, nil
+		return OverwriteAll, nil
 	default:
 		return "", fmt.Errorf(
 			"unknown conflict mode %q: must be preserve, abort, or overwrite",
@@ -126,7 +127,7 @@ func parseConflictMode(s string) (lucyinit.ConflictMode, error) {
 	}
 }
 
-func runNonInteractiveInit(workDir string, s *lucyinit.InitFlowState) error {
+func runNonInteractiveInit(workDir string, s *InitFlowState) error {
 	if s.GameVersion == "" {
 		s.GameVersion = "1.21"
 	}
@@ -137,15 +138,15 @@ func runNonInteractiveInit(workDir string, s *lucyinit.InitFlowState) error {
 		s.EcosystemVersion = "bare"
 	}
 
-	if !lucyinit.CanProceed(s) {
+	if !CanProceed(s) {
 		return fmt.Errorf("cannot proceed: managed roots are required for non-interactive init (run interactively or provide explicit roots)")
 	}
 	s.Confirmed = true
 	return writeInitResult(workDir, s)
 }
 
-func runInteractiveInit(workDir string, s *lucyinit.InitFlowState) error {
-	if err := lucyinit.RunInteractiveInit(s); err != nil {
+func runInteractiveInit(workDir string, s *InitFlowState) error {
+	if err := RunInteractiveInit(s); err != nil {
 		return fmt.Errorf("init flow: %w", err)
 	}
 	if s.Aborted {
@@ -159,8 +160,8 @@ func runInteractiveInit(workDir string, s *lucyinit.InitFlowState) error {
 	return writeInitResult(workDir, s)
 }
 
-func writeInitResult(workDir string, s *lucyinit.InitFlowState) error {
-	result, err := lucyinit.BuildResult(s)
+func writeInitResult(workDir string, s *InitFlowState) error {
+	result, err := BuildResult(s)
 	if err != nil {
 		return fmt.Errorf("build init plan: %w", err)
 	}
@@ -173,13 +174,13 @@ func writeInitResult(workDir string, s *lucyinit.InitFlowState) error {
 	); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
-	lucyinit.RefreshObservedStateAfterInitWrites(workDir)
+	RefreshObservedStateAfterInitWrites(workDir)
 
 	printInitSummary(result)
 	return nil
 }
 
-func printInitSummary(result lucyinit.InitFlowResult) {
+func printInitSummary(result InitFlowResult) {
 	fmt.Println("\nLucy initialized successfully.")
 	if len(result.WrittenFiles) > 0 {
 		fmt.Println("\nFiles written:")

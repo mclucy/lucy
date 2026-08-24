@@ -1,4 +1,4 @@
-package cmd
+package bisect
 
 import (
 	"encoding/json"
@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/tui/style"
@@ -30,48 +31,49 @@ var bisectStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start a binary-search session",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionBisectStart),
+	RunE:  cli.WithErrorLogging(actionBisectStart),
 }
 
 var bisectGoodCmd = &cobra.Command{
 	Use:   "good",
 	Short: "Mark current midpoint as good (bad mod is in right half)",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionBisectGood),
+	RunE:  cli.WithErrorLogging(actionBisectGood),
 }
 
 var bisectBadCmd = &cobra.Command{
 	Use:   "bad",
 	Short: "Mark current midpoint as bad (bad mod is in left half)",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionBisectBad),
+	RunE:  cli.WithErrorLogging(actionBisectBad),
 }
 
 var bisectStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show the active bisect session",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionBisectStatus),
+	RunE:  cli.WithErrorLogging(actionBisectStatus),
 }
 
 var bisectResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Abort the active bisect session and re-enable mods",
 	Args:  cobra.NoArgs,
-	RunE:  runWithErrorLogging(actionBisectReset),
+	RunE:  cli.WithErrorLogging(actionBisectReset),
 }
 
-func init() {
-	addJsonFlag(bisectStartCmd)
-	addJsonFlag(bisectGoodCmd)
-	addJsonFlag(bisectBadCmd)
-	addJsonFlag(bisectStatusCmd)
-	addJsonFlag(bisectResetCmd)
-	addNoStyleFlag(bisectStartCmd)
-	addNoStyleFlag(bisectGoodCmd)
-	addNoStyleFlag(bisectBadCmd)
-	addNoStyleFlag(bisectStatusCmd)
-	addNoStyleFlag(bisectResetCmd)
+// NewCommand wires and returns the `lucy bisect` command tree.
+func NewCommand() *cobra.Command {
+	for _, c := range []*cobra.Command{
+		bisectStartCmd,
+		bisectGoodCmd,
+		bisectBadCmd,
+		bisectStatusCmd,
+		bisectResetCmd,
+	} {
+		cli.AddJSONFlag(c)
+		cli.AddNoStyleFlag(c)
+	}
 	bisectCmd.AddCommand(
 		bisectStartCmd,
 		bisectGoodCmd,
@@ -79,7 +81,7 @@ func init() {
 		bisectStatusCmd,
 		bisectResetCmd,
 	)
-	rootCmd.AddCommand(bisectCmd)
+	return bisectCmd
 }
 
 type bisectMod struct {
@@ -261,8 +263,8 @@ func currentBisectView(state *bisectState) *bisectView {
 }
 
 func outputBisect(cmd *cobra.Command, output bisectOutput) error {
-	jsonOut, _ := cmd.Flags().GetBool(flagJsonName)
-	jsonCompact, _ := cmd.Flags().GetBool(flagJsonCompactName)
+	jsonOut, _ := cmd.Flags().GetBool(cli.FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
 	if jsonOut || jsonCompact {
 		if jsonCompact {
 			style.PrintAsJsonCompact(output)
@@ -352,7 +354,7 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	graph, _, err := LoadDependencyData(workDir, true)
+	graph, _, err := cli.LoadDependencyData(workDir, true)
 	if err != nil {
 		return err
 	}
@@ -361,7 +363,7 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 	message := "session started"
 	if sorted == nil {
 		message = "session started with dependency cycle; using alphabetical order"
-		sorted = make([]*GraphNode, 0, len(graph.Nodes))
+		sorted = make([]*cli.GraphNode, 0, len(graph.Nodes))
 		for _, node := range graph.Nodes {
 			sorted = append(sorted, node)
 		}

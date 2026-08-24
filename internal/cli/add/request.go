@@ -1,4 +1,4 @@
-package cmd
+package add
 
 import (
 	"github.com/mclucy/lucy/input"
