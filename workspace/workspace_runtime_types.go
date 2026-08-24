@@ -2,18 +2,14 @@ package workspace
 
 import "github.com/mclucy/lucy/types"
 
-type RuntimeArtifact struct {
-	Identity types.VersionedPackageRef `json:"identity"`
-	Path     string                    `json:"path"`
-}
-
 type EffectiveEcosystem struct {
 	Ecosystem     types.Ecosystem     `json:"ecosystem"`
 	Compatibility types.Compatibility `json:"compatibility"`
 }
 
 type ServerInstance struct {
-	PrimaryRuntime    *RuntimeArtifact            `json:"primary_runtime,omitempty"`
+	PrimaryRuntime    *types.VersionedPackageRef  `json:"primary_runtime,omitempty"`
+	PrimaryPath       string                      `json:"primary_path,omitempty"`
 	RuntimeComponents []types.VersionedPackageRef `json:"runtime_components"`
 	Packages          []types.DiscoveredPackage   `json:"-"`
 }
@@ -27,12 +23,8 @@ func (s *ServerInstance) IsValid() bool {
 		s != NoExecutable &&
 		s != UnknownExecutable &&
 		s.PrimaryRuntime != nil &&
-		s.PrimaryRuntime.Identity.PackageRef != (types.PackageRef{}) &&
-		s.PrimaryRuntime.Path != ""
-}
-
-func (s *ServerInstance) Analyzable() bool {
-	return s.IsValid()
+		s.PrimaryRuntime.PackageRef != (types.PackageRef{}) &&
+		s.PrimaryPath != ""
 }
 
 func (s *ServerInstance) GameVersion() types.BareVersion {
@@ -76,7 +68,7 @@ func (s *ServerInstance) DerivedServerCore() string {
 	if s == nil || s.PrimaryRuntime == nil {
 		return ""
 	}
-	return s.PrimaryRuntime.Identity.Name.String()
+	return s.PrimaryRuntime.Name.String()
 }
 
 func concreteRuntimeVersion(version types.BareVersion) bool {

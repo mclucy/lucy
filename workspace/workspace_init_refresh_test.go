@@ -37,10 +37,10 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	if baseline.Server == nil {
 		t.Fatal("expected baseline runtime info")
 	}
-	if baseline.DerivedModLoader() != types.EcoUnspecified {
+	if baseline.Server.DerivedModLoader() != types.EcoUnspecified {
 		t.Fatalf(
 			"expected empty dir baseline to look vanilla/none, got %s",
-			baseline.DerivedModLoader(),
+			baseline.Server.DerivedModLoader(),
 		)
 	}
 
@@ -55,10 +55,10 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	if observed.Server == nil {
 		t.Fatal("expected observed runtime info")
 	}
-	if observed.DerivedModLoader() != types.EcoFabric {
+	if observed.Server.DerivedModLoader() != types.EcoFabric {
 		t.Fatalf(
 			"expected fabric runtime from target dir, got %s",
-			observed.DerivedModLoader(),
+			observed.Server.DerivedModLoader(),
 		)
 	}
 	if len(observed.ModPath) == 0 || observed.ModPath[0] != filepath.Join(
@@ -75,10 +75,10 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	if cachedAgain.Server == nil {
 		t.Fatal("expected cached runtime info")
 	}
-	if cachedAgain.DerivedModLoader() != types.EcoUnspecified {
+	if cachedAgain.Server.DerivedModLoader() != types.EcoUnspecified {
 		t.Fatalf(
 			"expected global cache to remain on cache dir, got %s",
-			cachedAgain.DerivedModLoader(),
+			cachedAgain.Server.DerivedModLoader(),
 		)
 	}
 }
@@ -112,10 +112,10 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	if before.Server == nil {
 		t.Fatal("expected pre-refresh runtime info")
 	}
-	if before.DerivedModLoader() != types.EcoUnspecified {
+	if before.Server.DerivedModLoader() != types.EcoUnspecified {
 		t.Fatalf(
 			"expected empty dir baseline to look vanilla/none, got %s",
-			before.DerivedModLoader(),
+			before.Server.DerivedModLoader(),
 		)
 	}
 
@@ -129,10 +129,10 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	if refreshed.Server == nil {
 		t.Fatal("expected refreshed runtime info")
 	}
-	if refreshed.DerivedModLoader() != types.EcoFabric {
+	if refreshed.Server.DerivedModLoader() != types.EcoFabric {
 		t.Fatalf(
 			"expected refresh to rebuild fabric runtime, got %s",
-			refreshed.DerivedModLoader(),
+			refreshed.Server.DerivedModLoader(),
 		)
 	}
 
@@ -140,10 +140,10 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	if cached.Server == nil {
 		t.Fatal("expected cached runtime after refresh")
 	}
-	if cached.DerivedModLoader() != types.EcoFabric {
+	if cached.Server.DerivedModLoader() != types.EcoFabric {
 		t.Fatalf(
 			"expected current-dir cache to be refreshed to fabric, got %s",
-			cached.DerivedModLoader(),
+			cached.Server.DerivedModLoader(),
 		)
 	}
 }

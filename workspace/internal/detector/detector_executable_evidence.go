@@ -2,12 +2,6 @@ package detector
 
 import "github.com/mclucy/lucy/types"
 
-// ExecutableDetectorProvenance identifies the detector that produced an
-// executable candidate.
-type ExecutableDetectorProvenance struct {
-	DetectorName string
-}
-
 // ExecutableEvidence is the detector output consumed by workspace assembly.
 // PrimaryRuntime identifies the selected bootable artifact. A nil primary does
 // not establish an executable runtime.
@@ -15,7 +9,9 @@ type ExecutableEvidence struct {
 	PrimaryRuntime    *types.VersionedPackageRef
 	PrimaryPath       string
 	RuntimeComponents []types.VersionedPackageRef
-	Provenance        ExecutableDetectorProvenance
+
+	// DetectorName identifies the detector that produced this candidate.
+	DetectorName string
 }
 
 // ExecutableCandidates groups all detector candidates for one executable so the
@@ -29,20 +25,20 @@ func (c *ExecutableCandidates) IsEmpty() bool {
 }
 
 func (c *ExecutableCandidates) IsAmbiguous() bool {
-	return c != nil && len(c.resolved()) > 1
+	return c != nil && len(c.disambiguated()) > 1
 }
 
 func (c *ExecutableCandidates) Single() *ExecutableEvidence {
-	resolved := c.resolved()
-	if len(resolved) != 1 {
+	filtered := c.disambiguated()
+	if len(filtered) != 1 {
 		return nil
 	}
-	return resolved[0]
+	return filtered[0]
 }
 
-// resolved drops generic vanilla fallback evidence when a more specific
+// disambiguated drops generic vanilla fallback evidence when a more specific
 // executable detector also matched the same artifact.
-func (c *ExecutableCandidates) resolved() []*ExecutableEvidence {
+func (c *ExecutableCandidates) disambiguated() []*ExecutableEvidence {
 	if c == nil || len(c.Candidates) <= 1 {
 		if c == nil {
 			return nil
@@ -61,13 +57,13 @@ func (c *ExecutableCandidates) resolved() []*ExecutableEvidence {
 		return c.Candidates
 	}
 
-	resolved := make([]*ExecutableEvidence, 0, len(c.Candidates))
+	disambiguated := make([]*ExecutableEvidence, 0, len(c.Candidates))
 	for _, cand := range c.Candidates {
 		if !isVanillaEvidence(cand) {
-			resolved = append(resolved, cand)
+			disambiguated = append(disambiguated, cand)
 		}
 	}
-	return resolved
+	return disambiguated
 }
 
 func isVanillaEvidence(cand *ExecutableEvidence) bool {

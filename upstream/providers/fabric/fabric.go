@@ -54,7 +54,7 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 	error,
 ) {
 	ws := workspace.New()
-	serverPlatform := ws.DerivedModLoader()
+	serverPlatform := ws.Server.DerivedModLoader()
 
 	var gameVersionID string
 	switch serverPlatform {

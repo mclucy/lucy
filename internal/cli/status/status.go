@@ -106,7 +106,7 @@ func generateStatusOutput(
 	}
 	if hasServer &&
 		logoEco == types.EcoUnspecified &&
-		data.Server.PrimaryRuntime.Identity.Eco == types.EcoMinecraft {
+		data.Server.PrimaryRuntime.Eco == types.EcoMinecraft {
 		logoEco = types.EcoMinecraft
 	}
 	if logoEco == types.EcoUnspecified && hasMcdr {
@@ -128,7 +128,7 @@ func generateStatusOutput(
 			&tui.FieldAnnotatedShortText{
 				Title:      "Game",
 				Text:       data.Server.GameVersion().String(),
-				Annotation: data.Server.PrimaryRuntime.Path,
+				Annotation: data.Server.PrimaryPath,
 			},
 		)
 
@@ -157,7 +157,7 @@ func generateStatusOutput(
 			)
 		}
 
-		primary := &data.Server.PrimaryRuntime.Identity
+		primary := data.Server.PrimaryRuntime
 		if platformLabel := statusRuntimeLabel(primary); platformLabel != "" {
 			children := make([]tui.TreeNode, 0, 4)
 			if len(data.Server.RuntimeComponents) > 0 {

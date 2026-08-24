@@ -267,10 +267,9 @@ func build() Workspace {
 	}()
 
 	wg.Wait()
-	ws.Packages = finalizeProbedRuntime(
-		ws.Server,
-		ws.Packages,
-	)
+	if ws.Server != nil {
+		ws.Server.Packages = ws.Packages
+	}
 
 	return ws
 }

@@ -91,7 +91,7 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 
 func minecraftVersionForInstall() (types.BareVersion, error) {
 	ws := workspace.New()
-	switch ws.DerivedModLoader() {
+	switch ws.Server.DerivedModLoader() {
 	case types.EcoVanilla:
 		return ws.Server.GameVersion(), nil
 	case types.EcoUnspecified:

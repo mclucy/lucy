@@ -143,7 +143,7 @@ func manifestEcosystem(
 		return manifest.Environment.ModdingPlatform
 	}
 	if ws.Server != nil {
-		if platform := ws.DerivedModLoader().String(); platform != "" {
+		if platform := ws.Server.DerivedModLoader().String(); platform != "" {
 			return platform
 		}
 	}

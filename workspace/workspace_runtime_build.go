@@ -16,10 +16,8 @@ func buildServerInstance(
 	}
 
 	return &ServerInstance{
-		PrimaryRuntime: &RuntimeArtifact{
-			Identity: *evidence.PrimaryRuntime,
-			Path:     evidence.PrimaryPath,
-		},
+		PrimaryRuntime: evidence.PrimaryRuntime,
+		PrimaryPath:    evidence.PrimaryPath,
 		RuntimeComponents: normalizeRuntimeComponents(
 			evidence.RuntimeComponents,
 		),

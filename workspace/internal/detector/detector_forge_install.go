@@ -109,7 +109,7 @@ func detectForgeInstallFromVersionDir(versionDir string) (
 			if candidate.kind == forgeArtifactShim {
 				continue
 			}
-			return buildForgeRuntimeInfo(
+			return newForgeExecutableEvidence(
 				candidate.path,
 				gameVersion,
 				forgeVersion,
@@ -130,7 +130,7 @@ func detectForgeInstallFromVersionDir(versionDir string) (
 		if err != nil || !ok {
 			continue
 		}
-		return buildForgeRuntimeInfo(
+		return newForgeExecutableEvidence(
 			candidate.path,
 			gameVersion,
 			forgeVersion,
