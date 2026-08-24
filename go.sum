@@ -2,8 +2,8 @@ al.essio.dev/pkg/shellescape v1.6.0 h1:NxFcEqzFSEVCGN2yq7Huv/9hyCEGVa/TncnOOBBeX
 al.essio.dev/pkg/shellescape v1.6.0/go.mod h1:6sIqp7X2P6mThCQ7twERpZTuigpr6KbZWtls1U8I890=
 cel.dev/expr v0.25.1 h1:1KrZg61W6TWSxuNZ37Xy49ps13NUovb66QLprthtwi4=
 cel.dev/expr v0.25.1/go.mod h1:hrXvqGP6G6gyx8UAHSHJ5RGk//1Oj5nXQ2NI02Nrsg4=
-charm.land/bubbles/v2 v2.1.1 h1:7r55WzBxpo/R3z98hGmY7KKPd3ET6vsf0Fb9sDHOV60=
-charm.land/bubbles/v2 v2.1.1/go.mod h1:GE6M31gaWZVXzGw73OeuTTgy4lX+OtkH0E5ymnNsHxo=
+charm.land/bubbles/v2 v2.2.0 h1:9GEMewcejrNtVIxZ9Y2wSsWJamsWNsXa8MpMLnH4yI4=
+charm.land/bubbles/v2 v2.2.0/go.mod h1:wdMgn+sje1KNXdwFizIWjbf328fIUBxqEmJ/vYPo8yc=
 charm.land/bubbletea/v2 v2.0.9 h1:DpJCMWKgzQK8SJv4zbKKFHAI10ymWy/evClPFk0k0f8=
 charm.land/bubbletea/v2 v2.0.9/go.mod h1:2SkdgoTXluXJHOUwAoRlRXF/28vklb1rFl6GcgV1/ss=
 charm.land/fang/v2 v2.0.1 h1:zQCM8JQJ1JnQX/66B5jlCYBUxL2as5JXQZ2KJ6EL0mY=
@@ -680,8 +680,8 @@ github.com/mattn/go-isatty v0.0.22 h1:j8l17JJ9i6VGPUFUYoTUKPSgKe/83EYU2zBC7YNKMw
 github.com/mattn/go-isatty v0.0.22/go.mod h1:ZXfXG4SQHsB/w3ZeOYbR0PrPwLy+n6xiMrJlRFqopa4=
 github.com/mattn/go-mastodon v0.0.11 h1:Zcvc/8EHpf3os1mwAuUUB5es5VnfVdAeb4ed6ByJnCY=
 github.com/mattn/go-mastodon v0.0.11/go.mod h1:0DcwYEkqigrvknMvjmfKXLP0vYyeYm+vBdUOvoHcczg=
-github.com/mattn/go-runewidth v0.0.24 h1:cpokDiIn0MGnhdHwuWnJBITySJ20QyNGnY2kR/ay2DU=
-github.com/mattn/go-runewidth v0.0.24/go.mod h1:XBkDxAl56ILZc9knddidhrOlY5R/pDhgLpndooCuJAs=
+github.com/mattn/go-runewidth v0.0.27 h1:Feg/Oou5zI/wnpgDF6omIU0OokC9GxLC/WRknhVlIR0=
+github.com/mattn/go-runewidth v0.0.27/go.mod h1:3qAiGCV4Koz/yuveO58qUefmUTRm8r0IGEXZ9jeHp/8=
 github.com/microcosm-cc/bluemonday v1.0.27 h1:MpEUotklkwCSLeH+Qdx1VJgNqLlpY2KXwXFM08ygZfk=
 github.com/microcosm-cc/bluemonday v1.0.27/go.mod h1:jFi9vgW+H7c3V0lb6nR74Ib/DIB5OBs92Dimizgw2cA=
 github.com/minio/sha256-simd v1.0.1 h1:6kaan5IFmwTNynnKKpDHe6FWHohJOHhCPchzK49dzMM=
