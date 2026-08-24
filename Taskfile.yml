@@ -236,6 +236,21 @@ tasks:
       - test
       - test:race
 
+  envs:list:
+    desc: List sandbox environments defined in the manifest
+    cmds:
+      - go run ./tools/envgen --list
+
+  envs:gen:
+    desc: Materialize sandbox environments into .sandboxes (pass-through args, e.g. -- --only paper)
+    cmds:
+      - go run ./tools/envgen {{.CLI_ARGS}}
+
+  envs:clean:
+    desc: Remove generated sandbox environments (.sandboxes)
+    cmds:
+      - rm -rf .sandboxes
+
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks
     cmds:
