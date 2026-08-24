@@ -5,7 +5,7 @@ import (
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
-func materializeRuntimeInfo(
+func buildServerInstance(
 	evidence *detector.ExecutableEvidence,
 ) *ServerInstance {
 	if evidence == nil ||

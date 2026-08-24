@@ -8,8 +8,8 @@ type RuntimeArtifact struct {
 }
 
 type EffectiveEcosystem struct {
-	Ecosystem types.Ecosystem     `json:"ecosystem"`
-	Verdict   types.CompatVerdict `json:"verdict"`
+	Ecosystem     types.Ecosystem     `json:"ecosystem"`
+	Compatibility types.Compatibility `json:"compatibility"`
 }
 
 type ServerInstance struct {

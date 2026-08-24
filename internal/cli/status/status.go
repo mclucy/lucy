@@ -98,7 +98,7 @@ func generateStatusOutput(
 
 	var logoEco types.Ecosystem
 	for _, offer := range effectiveEcosystems {
-		if offer.Verdict == types.CompatCompatible &&
+		if offer.Compatibility == types.CompatCompatible &&
 			offer.Ecosystem.IsModding() {
 			logoEco = offer.Ecosystem
 			break
@@ -182,7 +182,7 @@ func generateStatusOutput(
 						fmt.Sprintf(
 							"%s (%s)",
 							offer.Ecosystem.Title(),
-							offer.Verdict,
+							offer.Compatibility,
 						),
 					)
 				}
@@ -332,7 +332,7 @@ func statusHasDirectOffer(
 	required types.Ecosystem,
 ) bool {
 	for _, offer := range offers {
-		if offer.Verdict == types.CompatCompatible &&
+		if offer.Compatibility == types.CompatCompatible &&
 			offer.Ecosystem.Satisfy(required) {
 			return true
 		}

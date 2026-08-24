@@ -19,7 +19,7 @@ type ExecutableEvidence struct {
 }
 
 // ExecutableCandidates groups all detector candidates for one executable so the
-// aggregator can resolve ambiguity before materializing RuntimeInfo.
+// aggregator can resolve ambiguity before building the ServerInstance.
 type ExecutableCandidates struct {
 	Candidates []*ExecutableEvidence
 }

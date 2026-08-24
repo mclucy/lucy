@@ -76,7 +76,7 @@ func defaultRegularEcosystem(
 		return loader
 	}
 	for _, offer := range server.EffectiveEcosystems() {
-		if offer.Verdict == types.CompatCompatible &&
+		if offer.Compatibility == types.CompatCompatible &&
 			offer.Ecosystem.IsSearchEcosystem() {
 			return offer.Ecosystem
 		}
