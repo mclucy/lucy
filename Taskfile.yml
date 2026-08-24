@@ -251,6 +251,11 @@ tasks:
     cmds:
       - rm -rf .sandboxes
 
+  envs:probe-e2e:
+    desc: "Run e2e for server probing over generated sandboxes (args: environment ids)"
+    cmds:
+      - ./scripts/server-probe-e2e.sh {{.CLI_ARGS}}
+
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks
     cmds:
