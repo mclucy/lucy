@@ -108,6 +108,22 @@ To run the built binary against a test server directory:
 
 Generated sandbox server environments live in `.sandboxes/` (gitignored). They are materialized from the declarative manifest in `testdata/environments/environments.yaml` — run `task envs:list` to see them and `task envs:gen` to generate. Ecosystem knowledge per core family (jar formats, detector markers, download APIs) is in `testdata/environments/families/*.md`. See `docs/shared/sandbox-environments.md` for the full guide. You are allowed to create temporary sandboxes prefixed with `test_` under the project root, they are already git ignored.
 
+### envgen CLI
+
+`go run ./tools/envgen` materializes environments; `task envs:*` wraps it for the common cases. Flags:
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--list` | off | Print all environments with family, game version, generated/missing state, then exit |
+| `--only a,b` | all | Restrict processing to the named environment ids |
+| `--force` | off | Regenerate even when `.sandboxes/<id>/` already exists |
+| `--out <dir>` | `.sandboxes` | Output root |
+| `--manifest <file>` | `testdata/environments/environments.yaml` | Manifest path |
+| `--cache <dir>` | `os.UserCacheDir()/lucy-envgen` | Content-addressed download cache (keyed by sha256) |
+| `--manual-dir <dir>` | `<cache>/manual` | Where `manual: true` artifacts are expected as `<id>/<basename>` |
+
+Behavior: idempotent — existing environment dirs are skipped without `--force`; every artifact digest is verified after fetch and generation aborts that environment on mismatch; missing manual artifacts fail with the exact drop-in path and expected sha256.
+
 ## Common Erros
 
 - **Don't import into types/.** It has zero dependencies by design. If you need a type that depends on something external, it belongs in the consuming package, not types.
