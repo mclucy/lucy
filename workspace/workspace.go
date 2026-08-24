@@ -310,7 +310,7 @@ func buildServerProperties() fileschema.FileMinecraftServerProperties {
 	propertiesPath := filepath.Join(workPath(), "server.properties")
 	file, err := ini.Load(propertiesPath)
 	if err != nil {
-		if exec != UnknownExecutable {
+		if exec != UnknownServer {
 			log.Info("this server is missing a server.properties")
 		}
 		return nil

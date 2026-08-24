@@ -123,7 +123,7 @@ func buildExecutableInfo() *ServerInstance {
 	switch len(valid) {
 	case 0:
 		log.Info("no server executable found")
-		return NoExecutable
+		return NoServer
 	case 1:
 		return buildServerInstance(valid[0])
 	default:
