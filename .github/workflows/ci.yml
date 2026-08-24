@@ -12,16 +12,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions: write-all
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
 
       - name: Set up Task
-        uses: go-task/setup-task@v1
+        uses: go-task/setup-task@v2
 
       - name: Run CI checks
         run: task ci:test
@@ -39,15 +39,15 @@ jobs:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: "1.27"
 
       - name: Set up Task
-        uses: go-task/setup-task@v1
+        uses: go-task/setup-task@v2
 
       - name: Build release artifacts
         run: task ci:build
@@ -55,25 +55,25 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
       - name: Upload linux-amd64
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lucy-linux-amd64
           path: release/lucy-linux-amd64.gz
 
       - name: Upload windows-amd64
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lucy-windows-amd64
           path: release/lucy-windows-amd64.exe.gz
 
       - name: Upload darwin-amd64
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lucy-darwin-amd64
           path: release/lucy-darwin-amd64.gz
 
       - name: Upload darwin-arm64
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lucy-darwin-arm64
           path: release/lucy-darwin-arm64.gz
