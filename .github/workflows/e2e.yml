@@ -1,0 +1,69 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/envgen/**
+      - testdata/environments/**
+      - workspace/**
+      - internal/cli/**
+      - scripts/server-probe-e2e.sh
+      - .github/workflows/e2e.yml
+  pull_request:
+    paths:
+      - tools/envgen/**
+      - testdata/environments/**
+      - workspace/**
+      - internal/cli/**
+      - scripts/server-probe-e2e.sh
+      - .github/workflows/e2e.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Environment probe: generate each fetchable sandbox from pinned artifacts
+  # and verify lucy.s probe against e2e jq programs under
+  # testdata/environments/server-probe-e2e/<id>.jq.
+  #
+  # Manual-artifact environments (fabric-installed-1214, fabric-installed-114)
+  # are excluded: their pinned jars cannot be fetched in CI.
+  probe:
+    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
+    runs-on: ubuntu-latest
+    env:
+      ENVS: fabric-executable-1214,fabric-executable-262,forge-1201,forge-12111,neoforge-211,neoforge-262,mcdr-fabric,mcdr-forge,mcdr-neoforge
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Set up Task
+        uses: go-task/setup-task@v1
+
+      - name: Cache envgen downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/lucy-envgen
+          key: envgen-${{ hashFiles('testdata/environments/environments.yaml') }}
+
+      - name: Generate environments
+        run: task envs:gen -- --only ${{ env.ENVS }}
+
+      - name: Build lucy
+        run: |
+          if [ -n "${CF_API_KEY:-}" ]; then
+            task cipher:generate
+          fi
+          task build:dev
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+
+      - name: Verify probe (e2e)
+        run: task envs:probe-e2e -- ${{ env.ENVS }}
