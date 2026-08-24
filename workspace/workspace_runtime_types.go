@@ -14,14 +14,14 @@ type ServerInstance struct {
 	Packages          []types.DiscoveredPackage   `json:"-"`
 }
 
-var UnknownExecutable = &ServerInstance{}
+var UnknownServer = &ServerInstance{}
 
-var NoExecutable = &ServerInstance{}
+var NoServer = &ServerInstance{}
 
 func (s *ServerInstance) IsValid() bool {
 	return s != nil &&
-		s != NoExecutable &&
-		s != UnknownExecutable &&
+		s != NoServer &&
+		s != UnknownServer &&
 		s.PrimaryRuntime != nil &&
 		s.PrimaryRuntime.PackageRef != (types.PackageRef{}) &&
 		s.PrimaryPath != ""

@@ -12,7 +12,7 @@ func buildServerInstance(
 		evidence.PrimaryRuntime == nil ||
 		evidence.PrimaryRuntime.PackageRef == (types.PackageRef{}) ||
 		evidence.PrimaryPath == "" {
-		return UnknownExecutable
+		return UnknownServer
 	}
 
 	return &ServerInstance{
