@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -23,11 +24,14 @@ func buildExecutableInfo() *ServerInstance {
 	scanned := 0
 	// contradicted is true when more than one specific detector matched one jar.
 	contradicted := false
+	// ambiguous holds the paths of the jars that caused a contradiction.
+	ambiguous := []string{}
 
 	// scanArtifact analyzes one candidate jar:
 	// - no match: scanned increases
 	// - one match: the match goes into valid
-	// - more than one specific match: contradicted becomes true
+	// - more than one specific match: contradicted becomes true and the jar
+	//   path goes into ambiguous
 	scanArtifact := func(jar string) {
 		scanned++
 		candidates := detector.Executable(jar)
@@ -36,6 +40,7 @@ func buildExecutableInfo() *ServerInstance {
 		}
 		if candidates.IsAmbiguous() {
 			contradicted = true
+			ambiguous = append(ambiguous, jar)
 			return
 		}
 		valid = append(valid, candidates.Single())
@@ -130,9 +135,17 @@ func buildExecutableInfo() *ServerInstance {
 		return UnknownServer
 	default:
 		if contradicted {
-			log.Info("contradictory server environments detected")
+			log.ReportError(fmt.Errorf(
+				"found conflicting server files in %s (%s); lucy cannot tell which server this directory runs",
+				workPath,
+				strings.Join(ambiguous, ", "),
+			))
 		} else {
-			log.Info("multiple parallel server environments detected")
+			log.ReportError(fmt.Errorf(
+				"found multiple servers side by side in %s: %s; lucy cannot tell which one to use",
+				workPath,
+				strings.Join(evidenceLabels(valid), "; "),
+			))
 		}
 		return UnknownServer
 	}
@@ -144,6 +157,25 @@ func init() {
 	resetProbeExecCache = func() {
 		getExecutableInfo = fn.Memoize(buildExecutableInfo)
 	}
+}
+
+// evidenceLabels renders one line of text for each detected server. The text
+// shows the package ref and the file name.
+func evidenceLabels(evidence []*detector.ExecutableEvidence) []string {
+	labels := make([]string, 0, len(evidence))
+	for _, e := range evidence {
+		if e == nil || e.PrimaryRuntime == nil {
+			continue
+		}
+		labels = append(labels, fmt.Sprintf(
+			"%s/%s@%s (%s)",
+			e.PrimaryRuntime.Eco,
+			e.PrimaryRuntime.Name,
+			e.PrimaryRuntime.Version,
+			filepath.Base(e.PrimaryPath),
+		))
+	}
+	return labels
 }
 
 func findJar(dir ...string) (jarFiles []string, err error) {
