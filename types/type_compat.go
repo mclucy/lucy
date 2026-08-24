@@ -1,8 +1,10 @@
 package types
 
-type CompatVerdict string
+type Compatibility string
 
 const (
-	CompatCompatible CompatVerdict = "compatible"
-	CompatDegraded   CompatVerdict = "degraded"
+	CompatUnknown      Compatibility = "unknown"
+	CompatCompatible   Compatibility = "compatible"
+	CompatDegraded     Compatibility = "degraded"
+	CompatIncompatible Compatibility = "incompatible"
 )

@@ -6,10 +6,10 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func offerSet(offers []EffectiveEcosystem) map[types.Ecosystem]types.CompatVerdict {
-	set := make(map[types.Ecosystem]types.CompatVerdict, len(offers))
+func offerSet(offers []EffectiveEcosystem) map[types.Ecosystem]types.Compatibility {
+	set := make(map[types.Ecosystem]types.Compatibility, len(offers))
 	for _, offer := range offers {
-		set[offer.Ecosystem] = offer.Verdict
+		set[offer.Ecosystem] = offer.Compatibility
 	}
 	return set
 }
@@ -19,25 +19,25 @@ func TestEffectiveEcosystems(t *testing.T) {
 		name       string
 		primary    types.VersionedPackageRef
 		components []types.VersionedPackageRef
-		want       map[types.Ecosystem]types.CompatVerdict
+		want       map[types.Ecosystem]types.Compatibility
 	}{
 		{
 			name:    "vanilla offers nothing",
-			primary: admissionTestCore(types.EcoMinecraft, "minecraft"),
-			want:    map[types.Ecosystem]types.CompatVerdict{},
+			primary: compatTestCore(types.EcoMinecraft, "minecraft"),
+			want:    map[types.Ecosystem]types.Compatibility{},
 		},
 		{
 			name:    "purpur is a paper fork",
-			primary: admissionTestCore(types.EcoUnspecified, "purpur"),
-			want: map[types.Ecosystem]types.CompatVerdict{
+			primary: compatTestCore(types.EcoUnspecified, "purpur"),
+			want: map[types.Ecosystem]types.Compatibility{
 				types.EcoPaper:  types.CompatCompatible,
 				types.EcoBukkit: types.CompatCompatible,
 			},
 		},
 		{
 			name:    "youer offers neoforge paper bukkit",
-			primary: admissionTestCore(types.EcoUnspecified, "youer"),
-			want: map[types.Ecosystem]types.CompatVerdict{
+			primary: compatTestCore(types.EcoUnspecified, "youer"),
+			want: map[types.Ecosystem]types.Compatibility{
 				types.EcoNeoforge: types.CompatCompatible,
 				types.EcoPaper:    types.CompatCompatible,
 				types.EcoBukkit:   types.CompatCompatible,
@@ -45,50 +45,50 @@ func TestEffectiveEcosystems(t *testing.T) {
 		},
 		{
 			name:    "catserver offers forge and bukkit",
-			primary: admissionTestCore(types.EcoUnspecified, "catserver"),
-			want: map[types.Ecosystem]types.CompatVerdict{
+			primary: compatTestCore(types.EcoUnspecified, "catserver"),
+			want: map[types.Ecosystem]types.Compatibility{
 				types.EcoForge:  types.CompatCompatible,
 				types.EcoBukkit: types.CompatCompatible,
 			},
 		},
 		{
 			name:    "arclight without loader component offers nothing",
-			primary: admissionTestCore(types.EcoUnspecified, "arclight"),
-			want:    map[types.Ecosystem]types.CompatVerdict{},
+			primary: compatTestCore(types.EcoUnspecified, "arclight"),
+			want:    map[types.Ecosystem]types.Compatibility{},
 		},
 		{
 			name:    "arclight with forge component",
-			primary: admissionTestCore(types.EcoUnspecified, "arclight"),
+			primary: compatTestCore(types.EcoUnspecified, "arclight"),
 			components: []types.VersionedPackageRef{
-				admissionTestCore(types.EcoForge, "forge"),
+				compatTestCore(types.EcoForge, "forge"),
 			},
-			want: map[types.Ecosystem]types.CompatVerdict{
+			want: map[types.Ecosystem]types.Compatibility{
 				types.EcoForge:  types.CompatCompatible,
 				types.EcoBukkit: types.CompatCompatible,
 			},
 		},
 		{
 			name:    "spongeforge offers sponge and forge",
-			primary: admissionTestCore(types.EcoSponge, "spongeforge"),
+			primary: compatTestCore(types.EcoSponge, "spongeforge"),
 			components: []types.VersionedPackageRef{
-				admissionTestCore(types.EcoForge, "forge"),
+				compatTestCore(types.EcoForge, "forge"),
 			},
-			want: map[types.Ecosystem]types.CompatVerdict{
+			want: map[types.Ecosystem]types.Compatibility{
 				types.EcoSponge: types.CompatCompatible,
 				types.EcoForge:  types.CompatCompatible,
 			},
 		},
 		{
 			name:    "velocity proxy",
-			primary: admissionTestCore(types.EcoVelocity, "velocity"),
-			want: map[types.Ecosystem]types.CompatVerdict{
+			primary: compatTestCore(types.EcoVelocity, "velocity"),
+			want: map[types.Ecosystem]types.Compatibility{
 				types.EcoVelocity: types.CompatCompatible,
 			},
 		},
 		{
 			name:    "waterfall proxy",
-			primary: admissionTestCore(types.EcoBungeecord, "waterfall"),
-			want: map[types.Ecosystem]types.CompatVerdict{
+			primary: compatTestCore(types.EcoBungeecord, "waterfall"),
+			want: map[types.Ecosystem]types.Compatibility{
 				types.EcoBungeecord: types.CompatCompatible,
 			},
 		},
@@ -96,16 +96,16 @@ func TestEffectiveEcosystems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := admissionTestServer(tt.primary, tt.components...)
+			server := compatTestServer(tt.primary, tt.components...)
 			got := offerSet(server.EffectiveEcosystems())
 			if len(got) != len(tt.want) {
 				t.Fatalf("offers = %v, want %v", got, tt.want)
 			}
-			for eco, verdict := range tt.want {
-				if got[eco] != verdict {
+			for eco, compatibility := range tt.want {
+				if got[eco] != compatibility {
 					t.Errorf(
 						"offer %s = %q, want %q",
-						eco, got[eco], verdict,
+						eco, got[eco], compatibility,
 					)
 				}
 			}
@@ -114,9 +114,9 @@ func TestEffectiveEcosystems(t *testing.T) {
 }
 
 func TestEffectiveEcosystemsConnectorBridge(t *testing.T) {
-	server := admissionTestServer(
-		admissionTestCore(types.EcoNeoforge, "neoforge"),
-		admissionTestCore(types.EcoNeoforge, "neoforge"),
+	server := compatTestServer(
+		compatTestCore(types.EcoNeoforge, "neoforge"),
+		compatTestCore(types.EcoNeoforge, "neoforge"),
 	)
 	server.Packages = []types.DiscoveredPackage{
 		{Id: types.VersionedPackageRef{

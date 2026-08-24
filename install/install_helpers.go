@@ -30,30 +30,33 @@ func ensureServerEcosystemMatch(
 			)
 		}
 
-		admission := workspace.EvaluateAdmission(ws.Server, platform)
-		switch admission.Verdict {
-		case workspace.AdmissionDirect:
+		level, offered := workspace.EvaluateRuntimeCompatibility(
+			ws.Server,
+			platform,
+		)
+		switch level {
+		case types.CompatCompatible:
 			return nil
-		case workspace.AdmissionDegraded:
+		case types.CompatDegraded:
 			log.ShowWarn(fmt.Errorf(
-				"%s package admission is degraded through %s compatibility",
+				"%s support is degraded through %s compatibility",
 				platform.Title(),
-				admission.Offered.Title(),
+				offered.Title(),
 			))
 			return nil
-		case workspace.AdmissionUnresolved:
+		case types.CompatUnknown:
 			return fmt.Errorf(
-				"runtime unavailable: cannot determine %s package admission",
+				"runtime unavailable: cannot determine %s package compatibility",
 				platform.Title(),
 			)
-		case workspace.AdmissionRejected:
+		case types.CompatIncompatible:
 			return fmt.Errorf(
 				"%s packages are incompatible with the current runtime",
 				platform.Title(),
 			)
 		default:
 			return fmt.Errorf(
-				"%s package admission could not be determined",
+				"%s package compatibility could not be determined",
 				platform.Title(),
 			)
 		}

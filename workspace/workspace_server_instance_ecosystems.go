@@ -157,7 +157,7 @@ func (s *ServerInstance) EffectiveEcosystems() []EffectiveEcosystem {
 func appendEffectiveEcosystem(
 	offers []EffectiveEcosystem,
 	ecosystem types.Ecosystem,
-	verdict types.CompatVerdict,
+	compatibility types.Compatibility,
 ) []EffectiveEcosystem {
 	if ecosystem == types.EcoUnspecified {
 		return offers
@@ -166,14 +166,14 @@ func appendEffectiveEcosystem(
 		if offers[i].Ecosystem != ecosystem {
 			continue
 		}
-		if verdict == types.CompatCompatible {
-			offers[i].Verdict = verdict
+		if compatibility == types.CompatCompatible {
+			offers[i].Compatibility = compatibility
 		}
 		return offers
 	}
 	return append(offers, EffectiveEcosystem{
-		Ecosystem: ecosystem,
-		Verdict:   verdict,
+		Compatibility: compatibility,
+		Ecosystem:     ecosystem,
 	})
 }
 
@@ -223,7 +223,7 @@ func hasDirectOffer(
 ) bool {
 	for _, offer := range offers {
 		if offer.Ecosystem == ecosystem &&
-			offer.Verdict == types.CompatCompatible {
+			offer.Compatibility == types.CompatCompatible {
 			return true
 		}
 	}

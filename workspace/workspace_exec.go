@@ -125,16 +125,16 @@ func buildExecutableInfo() *ServerInstance {
 		log.Info("no server executable found")
 		return NoExecutable
 	case 1:
-		return materializeRuntimeInfo(valid[0])
+		return buildServerInstance(valid[0])
 	default:
 		runtimes := make([]*ServerInstance, 0, len(valid))
 		for _, evidence := range valid {
-			runtimes = append(runtimes, materializeRuntimeInfo(evidence))
+			runtimes = append(runtimes, buildServerInstance(evidence))
 		}
 		choice := promptSelectExecutable(
 			runtimes, []string{noteIgnorePath},
 		)
-		return materializeRuntimeInfo(valid[choice])
+		return buildServerInstance(valid[choice])
 	}
 }
 
