@@ -49,8 +49,7 @@ To run the built binary against a test server directory:
 
 ```text
 .
-├── cmd/                    Cobra CLI commands (14+ files)
-│   └── init/               Large init state machine sub-package
+├── cmd/                    Root wiring (cmd_root.go) + thin Cobra subcommands
 ├── types/                  Pure domain types
 ├── state/                  Two-file state model: lucy.yaml + lucy-lock.yaml
 ├── upstream/               Atomic capability interfaces: Searcher, Informer, etc.
@@ -66,6 +65,11 @@ To run the built binary against a test server directory:
 ├── tui/                    Terminal UI via bubbletea v2, lipgloss v2, huh v2, glamour
 ├── github/                 Shared GitHub API infra
 └── internal/
+    ├── cli/                Shared CLI plumbing: flags, error-logging wrapper,
+    │   │                   dependency graph/data source, shell completion,
+    │   │                   lock-state builders
+    │   └── <command>/      Large subcommands (add, bisect, info, init, install,
+    │                       search, status), each exposing NewCommand()
     ├── cipher/             ChaCha20Poly1305 encryption for API key embedding
     ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
     ├── fn/                 Generic helpers: Ternary, Memoize, slice utilities
@@ -81,6 +85,7 @@ To run the built binary against a test server directory:
 - **Dependency inversion via atomic interfaces.** Upstream sources implement atomic capabilities (`Searcher`, `Informer`, `ArtifactMapper`, `VersionSelectorResolver`); composite interfaces (`PackageResolver`, `PackageSource`) emerge from consumers via type assertion. The install package consumes through interfaces, not concrete types.
 - **State ownership is strict.** Only `ProjectStateService` reads/writes state files. Don't bypass it.
 - **Three-tier logger, never `fmt.Println` for user output.** Use the logger package: file-only, user-display, or both tiers.
+- **CLI layout: thin commands in `cmd/`, large commands under `internal/cli/<name>`.** A command earning its own package exposes `NewCommand() *cobra.Command` and is wired in `cmd/cmd_root.go`; shared plumbing (flags, logging wrapper, graph loading, completion, lock-state builders) lives in the `internal/cli` root package so both sides import it without import cycles.
 
 ### State Files (in user's Minecraft server directory)
 
