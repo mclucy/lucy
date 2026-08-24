@@ -1,0 +1,333 @@
+# Lucy sandbox environments. Generate with `task envs:gen`; output lands in .sandboxes/.
+# Artifact source kinds and the manual flow are documented in docs/shared/sandbox-environments.md.
+# Family ecosystem notes: families/*.md.
+version: 1
+
+environments:
+
+  - id: mcdr-fabric
+    family: mcdr
+    game_version: "1.21.4"
+    description: MCDR-wrapped Fabric 1.21.4 executable launcher with PrimeBackup plugin
+    docs: families/mcdr.md
+    dirs: [logs]
+    artifacts:
+      - dest: server/fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar
+        fabric_meta: {game: "1.21.4", loader: "0.16.9", installer: "1.0.1"}
+        sha256: b1ec95e206380741b33993afc5ffbbf9abfb4c6cd1ce5a06dfca88952c8e6c84
+      - dest: plugins/PrimeBackup-v1.13.1.pyz
+        url: https://github.com/TISUnion/PrimeBackup/releases/download/v1.13.1/PrimeBackup-v1.13.1.pyz
+        sha256: 081c91872ff3f6ab438328b96237e5e8db87ebff28e46b909eca804b6320db2b
+
+  - id: mcdr-forge
+    family: mcdr
+    game_version: "1.20.1"
+    description: MCDR-wrapped Forge 1.20.1-47.4.10 with PrimeBackup plugin
+    docs: families/mcdr.md
+    dirs: [logs]
+    artifacts:
+      - dest: server/libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
+        sha256: bb2f67fc423f09c30ac3d83ab629fa5cc6743a0ce1c2febae46602530f17c8f1
+      - dest: server/forge-1.20.1-47.4.10-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar
+        sha256: 1912760b4cb6b803d8a826de603c9076b1da71ec2765e9a1f8c1ca78f65278e3
+      - dest: plugins/PrimeBackup-v1.13.1.pyz
+        url: https://github.com/TISUnion/PrimeBackup/releases/download/v1.13.1/PrimeBackup-v1.13.1.pyz
+        sha256: 081c91872ff3f6ab438328b96237e5e8db87ebff28e46b909eca804b6320db2b
+    installer_hint: cd server && java -jar forge-1.20.1-47.4.10-installer.jar --installServer
+
+  - id: mcdr-neoforge
+    family: mcdr
+    game_version: "1.20.2"
+    description: MCDR-wrapped NeoForge 20.2.93 with WhereIs plugin
+    docs: families/mcdr.md
+    dirs: [logs]
+    artifacts:
+      - dest: server/neoforge-20.2.93-installer.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-installer.jar
+        sha256: f2badd12f9e5d0cef4d2c9143d1ae2e008345fa7438e89cee629c13e33de00c7
+      - dest: server/libraries/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-universal.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-universal.jar
+        sha256: 14738ecbf2b5322536c78c0a1de678ba457b3244a891f31efb5bac89eadee172
+      - dest: plugins/WhereIs-v2.2.2.mcdr
+        url: https://github.com/Lazy-Bing-Server/WhereIs-MCDR/releases/download/2.2.2/WhereIs-v2.2.2.mcdr
+        sha256: 7bc25c11de0560581b27f7f075d096f4176b9eaa8595577ea27b8e6512652251
+    installer_hint: cd server && java -jar neoforge-20.2.93-installer.jar --installServer
+
+  - id: neoforge-211
+    family: neoforge
+    game_version: "1.21.1"
+    description: NeoForge 21.1.248 representative, mature classic line with dual-jar installer output
+    dirs: [logs, mods]
+    artifacts:
+      - dest: neoforge-21.1.248-installer.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar
+        sha256: 68eeab77059ba53df1812f1afa5bf530ab2566a3cdcd5f924aa6e71be42e410c
+      - dest: libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
+        sha256: 90a56f70425711b4e1a4b94ff0c2904ae9f6d74ca6478b3b2152ac794a07b8e5
+    installer_hint: java -jar neoforge-21.1.248-installer.jar --installServer
+
+  - id: neoforge-262
+    family: neoforge
+    game_version: "26.2"
+    description: NeoForge 26.2.0.67 representative, current year-scheme line with universal-only layout
+    docs: families/neoforge.md
+    dirs: [logs, mods]
+    artifacts:
+      - dest: neoforge-26.2.0.67-installer.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-installer.jar
+        sha256: 2f3c2a454d83983e4ddbcd831810d7e57299361dc1f03f66216071cc009ec340
+      - dest: libraries/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
+        sha256: 0f76a82128b9ab3f613ca7a8963abe9468292dead4df68dfb8a8dd0060c6877b
+    installer_hint: java -jar neoforge-26.2.0.67-installer.jar --installServer
+
+  - id: fabric-executable-1214
+    family: fabric
+    game_version: "1.21.4"
+    description: Executable Server launcher jar for MC 1.21.4 with Fabric API, Carpet, Sodium Extra
+    docs: families/fabric.md
+    dirs: [mods]
+    artifacts:
+      - dest: fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar
+        fabric_meta: {game: "1.21.4", loader: "0.16.9", installer: "1.0.1"}
+        sha256: b1ec95e206380741b33993afc5ffbbf9abfb4c6cd1ce5a06dfca88952c8e6c84
+      - dest: mods/fabric-api-0.154.0+26.2.jar
+        url: https://cdn.modrinth.com/data/P7dR8mSH/versions/Cpy2Px2f/fabric-api-0.154.0%2B26.2.jar
+        sha256: 84a5399dfd1096295450dfdbd535693453962f51fa20a8c15855dd1e69a73adc
+      - dest: mods/fabric-carpet-1.21.11-1.4.194+v251223.jar
+        url: https://cdn.modrinth.com/data/TQTTVgYE/versions/HzPcczDK/fabric-carpet-1.21.11-1.4.194%2Bv251223.jar
+        sha256: 1b4d66f0332bda5deee08755e493c2d6ac64d64d5285e1134aa03604975c2521
+      - dest: sodium-extra-fabric-0.8.3+mc1.21.11.jar
+        url: https://cdn.modrinth.com/data/PtjYWJkn/versions/yqY1efrC/sodium-extra-fabric-0.8.3%2Bmc1.21.11.jar
+        sha256: bd634e73fec7c84b47bf3d5701495c6b7d5d4104b81a75cb453346e9c2c92009
+
+  - id: fabric-executable-262
+    family: fabric
+    game_version: "26.2"
+    description: Current-era Executable Server launcher jar for MC 26.2 (loader 0.19.3)
+    docs: families/fabric.md
+    artifacts:
+      - dest: fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar
+        fabric_meta: {game: "26.2", loader: "0.19.3", installer: "1.1.2"}
+        sha256: 301f83aac36b23f2bc64cc58560edf98533cfaa30e53af002ba950c75f4100b4
+
+  - id: fabric-installed-1214
+    family: fabric
+    game_version: "1.21.4"
+    description: Installer-produced layout with stub launch jar, vanilla 1.21.4, installer jar
+    docs: families/fabric.md
+    dirs: [mods]
+    artifacts:
+      - dest: fabric-server-launch.jar
+        manual: true
+        sha256: b53c61eab415f6a715051ae2039514df1dd1a684a962f98e0dd50a623c869302
+      - dest: fabric-installer-1.0.1.jar
+        url: https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.0.1/fabric-installer-1.0.1.jar
+        sha256: 62edf170bdcc41edea85d33acf3eb85474258699b3d41f9418d286c836cb088d
+      - dest: server.jar
+        mojang_version: "1.21.4"
+        sha256: 1066970b09e9c671844572291c4a871cc1ac2b85838bf7004fa0e778e10f1358
+    installer_hint: java -jar fabric-installer-1.0.1.jar server -downloadMinecraft
+
+  - id: fabric-installed-114
+    family: fabric
+    game_version: "1.14"
+    description: Legacy-era installed layout with self-contained fat launcher jar
+    docs: families/fabric.md
+    artifacts:
+      - dest: fabric-server-launch.jar
+        manual: true
+        sha256: 1542bce01e6d9f44ac4d0b5ae41b2c9b0ee32dae02e2e3f777bcffdef10ded66
+      - dest: server.jar
+        mojang_version: "1.14"
+        sha256: 671e3d334dd601c520bf1aeb96e49038145172bef16bc6c418e969fd8bf8ff6c
+
+  # ---- Forge ----
+
+  - id: forge-1201
+    family: forge
+    game_version: "1.20.1"
+    description: Forge 1.20.1-47.4.10 recommended, pre-shim era representative
+    docs: families/forge.md
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
+        sha256: bb2f67fc423f09c30ac3d83ab629fa5cc6743a0ce1c2febae46602530f17c8f1
+      - dest: forge-1.20.1-47.4.10-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar
+        sha256: 1912760b4cb6b803d8a826de603c9076b1da71ec2765e9a1f8c1ca78f65278e3
+    installer_hint: java -jar forge-1.20.1-47.4.10-installer.jar --installServer
+
+  - id: forge-12111
+    family: forge
+    game_version: "1.21.11"
+    description: Forge 1.21.11-61.2.0 recommended, shim-era representative
+    docs: families/forge.md
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar
+        sha256: 9c35eb4f7af1455e31b20693c704194f73457bdbbbc080a13c3acf78c712e550
+      - dest: libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-shim.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-shim.jar
+        sha256: 4ecdfbdc40b8f5d63b6618fa32c3f19d8332e4a541f84e6f5e978fb97313b94c
+      - dest: forge-1.21.11-61.2.0-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-installer.jar
+        sha256: 5f993a6fb5ae96e1bafc4db43346b8411757254503674403eafead9af1f3f90f
+    installer_hint: java -jar forge-1.21.11-61.2.0-installer.jar --installServer
+
+  # ---- Vanilla ----
+
+  - id: vanilla-1201
+    family: vanilla
+    game_version: "1.20.1"
+    description: Vanilla 1.20.1, early bundler-era representative
+    docs: families/vanilla.md
+    artifacts:
+      - dest: server.jar
+        mojang_version: "1.20.1"
+        sha256: 3af73a9dc5a102e38147946360dd27d4d70bae7055bf91cf2151cd5d121b79e0
+
+  - id: vanilla-262
+    family: vanilla
+    game_version: "26.2"
+    description: Current stable vanilla, bundler era
+    docs: families/vanilla.md
+    artifacts:
+      - dest: server.jar
+        mojang_version: "26.2"
+        sha256: cdacdfb25898de5e4b4b0e5ddcc2722f77067e46605709c2d886c000ebb63ec5
+
+  - id: paper
+    family: paper
+    game_version: "1.21.11"
+    description: Paper build 130 paperclip jar
+    docs: families/paper-family.md
+    artifacts:
+      - dest: paper-1.21.11-130.jar
+        url: https://fill-data.papermc.io/v1/objects/25eb85bd8415195ce4bc188e1939e0c7cef77fb51d26d4e766407ee922561097/paper-1.21.11-130.jar
+        sha256: 25eb85bd8415195ce4bc188e1939e0c7cef77fb51d26d4e766407ee922561097
+
+  - id: folia
+    family: folia
+    game_version: "1.21.11"
+    description: Folia build 14 paperclip jar
+    docs: families/paper-family.md
+    artifacts:
+      - dest: folia-1.21.11-14.jar
+        url: https://fill-data.papermc.io/v1/objects/f52c408490a0225611e67907a3ca19f7e6da2c6bc899e715d5f46844e7103c39/folia-1.21.11-14.jar
+        sha256: f52c408490a0225611e67907a3ca19f7e6da2c6bc899e715d5f46844e7103c39
+
+  - id: purpur
+    family: purpur
+    game_version: "1.21.11"
+    description: Purpur build 2568 (renamed to server.jar, identity confirmed via md5)
+    docs: families/paper-family.md
+    artifacts:
+      - dest: server.jar
+        purpur: {version: "1.21.11", build: "2568"}
+        sha256: ee199511bf0a970ee8459fe3a351703fec37293f00bc2de1c5cb746c7e4acc34
+
+  - id: divinemc
+    family: divinemc
+    game_version: "1.21.11"
+    description: DivineMC build 24; release hosting unresolved, supply manually
+    docs: families/paper-family.md
+    artifacts:
+      - dest: divinemc-1.21.11-24.jar
+        manual: true
+        sha256: 1875de3558a731795d70a1717cf628f2aec6162b45c2ec5a23da98a73a9986ec
+
+  - id: leaf
+    family: leaf
+    game_version: "1.21.11"
+    description: Leaf build 115; release hosting unresolved, supply manually
+    docs: families/paper-family.md
+    artifacts:
+      - dest: leaf-1.21.11-115.jar
+        manual: true
+        sha256: 29468f84fe484412b117207c975c3fc520d0e9bd5fca96c57f63eaf707d25077
+
+  - id: leaves
+    family: leaves
+    game_version: "1.21.8"
+    description: Leaves build 138 with sidecar evidence markers
+    docs: families/paper-family.md
+    artifacts:
+      - dest: leaves-1.21.8.jar
+        url: https://github.com/LeavesMC/Leaves/releases/download/1.21.8-138-9331167/leaves-1.21.8.jar
+        sha256: 91c46d9b5ed09a9776a5d686eb71d9d50ab07e00ec1f5ace336e1354f7c7ffae
+
+  - id: reaper
+    family: reaper
+    game_version: "1.12.2"
+    description: Reaper paperclip for MC 1.12.2; hosting unresolved, supply manually
+    docs: families/paper-family.md
+    artifacts:
+      - dest: reaper-paperclip.jar
+        manual: true
+        sha256: 81e49088efc01c5a112278b8e4acba24ff71eac44644fdb4ecc94baaca7fbfc2
+
+  - id: youer
+    family: youer
+    game_version: "1.21.1"
+    description: Youer (MohistMC) hybrid jar; hosting unresolved, supply manually
+    docs: families/paper-family.md
+    artifacts:
+      - dest: youer.jar
+        manual: true
+        sha256: 93abe3aded4fcd866cefce9faea41cad1ae0a6c0424e64c7444ab56c966cae0a
+
+  - id: sponge-vanilla
+    family: sponge
+    game_version: "1.21.10"
+    description: SpongeVanilla universal jar, SpongeAPI 17.0.0
+    docs: families/sponge.md
+    artifacts:
+      - dest: spongevanilla-1.21.10-17.0.0-universal.jar
+        manual: true
+        sha256: 407f97fd0a07c93e7986f1bb5198e8e1d17f4849ac6e2306b640b2d5be429642
+
+  - id: sponge-forge
+    family: sponge
+    game_version: "1.21.10"
+    description: SpongeForge universal jar on Forge 60.0.1
+    docs: families/sponge.md
+    artifacts:
+      - dest: spongeforge-1.21.10-60.0.1-17.0.0-universal.jar
+        manual: true
+        sha256: 362c434c4b20ad4c2df6ad04c083ea1ac136c7769ce05425d52cb61280d0266f
+
+  - id: sponge-neo
+    family: sponge
+    game_version: "1.21.10"
+    description: SpongeNeo universal jar on NeoForge 21.10.64
+    docs: families/sponge.md
+    artifacts:
+      - dest: spongeneo-1.21.10-21.10.64-17.0.0-universal.jar
+        manual: true
+        sha256: 9f412f2c6224a167bc752627bd4754b3a424bb223cf22e982a8e27b592494e90
+
+  - id: arclight-fabric
+    family: arclight
+    game_version: "1.21.1"
+    description: Arclight hybrid on Fabric 1.21.1, release FeudalKings/1.0.1
+    docs: families/hybrids.md
+    artifacts:
+      - dest: arclight-fabric-1.21.1-1.0.1-8ec9529.jar
+        url: https://github.com/IzzelAliz/Arclight/releases/download/FeudalKings%2F1.0.1/arclight-fabric-1.21.1-1.0.1-8ec9529.jar
+        sha256: 98088835a2671d476895d8cb282f328fec9f0c96d0dffd82236a181348dd3f82
+
+  # luminol: discontinued upstream (2026-08); fixtures removed.
+
+  - id: mohist
+    family: mohist
+    game_version: unknown
+    description: Mohist hybrid jar; exact build unidentified, supply manually
+    docs: families/hybrids.md
+    artifacts:
+      - dest: mohist.jar
+        manual: true
+        sha256: cbefdc9230b714c784dafaf74c83f55d8c4ec049dc41561c4e9b2d5766d05941
