@@ -40,7 +40,7 @@ func (d *forgeLegacyDetector) Detect(
 		return nil, nil
 	}
 
-	return buildForgeRuntimeInfo(filePath, gameVersion, forgeVersion), nil
+	return newForgeExecutableEvidence(filePath, gameVersion, forgeVersion), nil
 }
 
 type forgeModernDetector struct{}
@@ -76,7 +76,7 @@ func (d *forgeModernDetector) Detect(
 		return nil, nil
 	}
 
-	return buildForgeRuntimeInfo(filePath, gameVersion, forgeVersion), nil
+	return newForgeExecutableEvidence(filePath, gameVersion, forgeVersion), nil
 }
 
 type forgeLatestDetector struct{}
@@ -115,7 +115,7 @@ func (d *forgeLatestDetector) Detect(
 		return nil, nil
 	}
 
-	return buildForgeRuntimeInfo(filePath, gameVersion, forgeVersion), nil
+	return newForgeExecutableEvidence(filePath, gameVersion, forgeVersion), nil
 }
 
 // forgeServerDetector detects Forge servers via manifest metadata fallback.
@@ -147,7 +147,7 @@ func (d *forgeServerDetector) Detect(
 		return nil, nil
 	}
 
-	return buildForgeRuntimeInfo(filePath, gameVersion, forgeVersion), nil
+	return newForgeExecutableEvidence(filePath, gameVersion, forgeVersion), nil
 }
 
 func init() {

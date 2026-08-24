@@ -146,7 +146,7 @@ func Plan(
 		return nil, installError(CategoryResolution, err, nil)
 	}
 
-	if ws.Server == nil || !ws.Server.Analyzable() {
+	if ws.Server == nil || !ws.Server.IsValid() {
 		return nil, installError(
 			CategoryResolution,
 			fmt.Errorf("server runtime is unavailable"),

@@ -12,10 +12,8 @@ func loaderTestServer(
 	components ...types.VersionedPackageRef,
 ) *workspace.ServerInstance {
 	return &workspace.ServerInstance{
-		PrimaryRuntime: &workspace.RuntimeArtifact{
-			Identity: primary,
-			Path:     "server.jar",
-		},
+		PrimaryRuntime:    &primary,
+		PrimaryPath:       "server.jar",
 		RuntimeComponents: components,
 	}
 }

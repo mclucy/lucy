@@ -477,23 +477,23 @@ func projectPaperJudgment(
 		}
 	}
 
-	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoUnspecified,
-			Name: input.ToProjectName(brand),
-		},
-		Version: types.VersionUnknown,
-	}, RuntimeComponents: []types.VersionedPackageRef{
-		{
+	return &ExecutableEvidence{
+		PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Eco:  types.EcoMinecraft,
-				Name: input.ToProjectName("minecraft"),
+				Eco:  types.EcoUnspecified,
+				Name: input.ToProjectName(brand),
 			},
-			Version: gameVersion,
-		},
-	}, Provenance: ExecutableDetectorProvenance{
-		DetectorName: (&craftBukkitFamilyDetector{}).Name(),
-	}}
+			Version: types.VersionUnknown,
+		}, RuntimeComponents: []types.VersionedPackageRef{
+			{
+				PackageRef: types.PackageRef{
+					Eco:  types.EcoMinecraft,
+					Name: input.ToProjectName("minecraft"),
+				},
+				Version: gameVersion,
+			},
+		}, DetectorName: (&craftBukkitFamilyDetector{}).Name(),
+	}
 }
 
 func normalizePaperBrandName(name string) string {

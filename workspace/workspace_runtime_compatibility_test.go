@@ -11,10 +11,8 @@ func compatTestServer(
 	components ...types.VersionedPackageRef,
 ) *ServerInstance {
 	return &ServerInstance{
-		PrimaryRuntime: &RuntimeArtifact{
-			Identity: primary,
-			Path:     "server.jar",
-		},
+		PrimaryRuntime: &primary,
+		PrimaryPath:    "server.jar",
 		RuntimeComponents: append(
 			[]types.VersionedPackageRef(nil),
 			components...,

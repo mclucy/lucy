@@ -6,16 +6,6 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func finalizeProbedRuntime(
-	runtime *ServerInstance,
-	packages []types.DiscoveredPackage,
-) []types.DiscoveredPackage {
-	if runtime != nil {
-		runtime.Packages = packages
-	}
-	return packages
-}
-
 func packageSearchPaths(
 	runtime *ServerInstance,
 	workingDirectory string,
@@ -31,7 +21,7 @@ func packageSearchPathsForServer(
 	server *ServerInstance,
 	workingDirectory string,
 ) (paths []string) {
-	if server == nil || !server.Analyzable() {
+	if server == nil || !server.IsValid() {
 		return nil
 	}
 

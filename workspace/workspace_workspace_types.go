@@ -12,27 +12,6 @@ type Workspace struct {
 	Environments types.EnvironmentInfo     `json:"environments"`
 }
 
-func (w Workspace) PrimaryRuntimeIdentity() *types.VersionedPackageRef {
-	if w.Server == nil || w.Server.PrimaryRuntime == nil {
-		return nil
-	}
-	return &w.Server.PrimaryRuntime.Identity
-}
-
-func (w Workspace) DerivedModLoader() types.Ecosystem {
-	if w.Server == nil {
-		return types.EcoUnspecified
-	}
-	return w.Server.DerivedModLoader()
-}
-
-func (w Workspace) DerivedServerCore() string {
-	if w.Server == nil {
-		return ""
-	}
-	return w.Server.DerivedServerCore()
-}
-
 type ServerActivity struct {
 	Active bool `json:"active"`
 	Pid    int  `json:"pid"`

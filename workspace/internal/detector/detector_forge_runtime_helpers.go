@@ -143,7 +143,7 @@ func forgeHasSibling(filePath string, siblings ...string) bool {
 	return false
 }
 
-func buildForgeRuntimeInfo(
+func newForgeExecutableEvidence(
 	filePath string,
 	gameVersion types.BareVersion,
 	forgeVersion types.BareVersion,
