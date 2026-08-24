@@ -5,21 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/tui/style"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace/internal/detector"
-
-	"charm.land/huh/v2"
 )
-
-const noteIgnorePath = "Some modding platforms are located from the libraries directory. " +
-	"You might want to look at the platform and version, rather than the path."
 
 const multiThreadThreshold = 10
 
@@ -27,6 +19,27 @@ const multiThreadThreshold = 10
 func buildExecutableInfo() *ServerInstance {
 	valid := make([]*detector.ExecutableEvidence, 0)
 	workPath := workPath()
+	// scanned counts the candidate executables that we analyzed.
+	scanned := 0
+	// contradicted is true when more than one specific detector matched one jar.
+	contradicted := false
+
+	// scanArtifact analyzes one candidate jar:
+	// - no match: scanned increases
+	// - one match: the match goes into valid
+	// - more than one specific match: contradicted becomes true
+	scanArtifact := func(jar string) {
+		scanned++
+		candidates := detector.Executable(jar)
+		if candidates == nil || candidates.IsEmpty() {
+			return
+		}
+		if candidates.IsAmbiguous() {
+			contradicted = true
+			return
+		}
+		valid = append(valid, candidates.Single())
+	}
 	for _, evidence := range detector.ForgeInstallationRuntimes(workPath) {
 		valid = append(valid, evidence)
 	}
@@ -42,11 +55,7 @@ func buildExecutableInfo() *ServerInstance {
 		log.Warn(fmt.Errorf("cannot read server directory: %w", err))
 	}
 	for _, jar := range jars {
-		candidates := detector.Executable(jar)
-		if candidates == nil || candidates.IsEmpty() || candidates.IsAmbiguous() {
-			continue
-		}
-		valid = append(valid, candidates.Single())
+		scanArtifact(jar)
 	}
 
 	// 2. Forge/Fabric installation paths
@@ -77,11 +86,7 @@ func buildExecutableInfo() *ServerInstance {
 	jars = slices.Concat(forgeJars, fabricJars)
 
 	for _, jar := range jars {
-		candidates := detector.Executable(jar)
-		if candidates == nil || candidates.IsEmpty() || candidates.IsAmbiguous() {
-			continue
-		}
-		valid = append(valid, candidates.Single())
+		scanArtifact(jar)
 	}
 
 	// 3. Everything under libraries
@@ -95,46 +100,41 @@ func buildExecutableInfo() *ServerInstance {
 				wg.Add(1)
 				go func(jarPath string) {
 					defer wg.Done()
-					candidates := detector.Executable(jarPath)
-					if candidates == nil || candidates.IsEmpty() || candidates.IsAmbiguous() {
-						return
-					}
 					mu.Lock()
-					valid = append(valid, candidates.Single())
+					scanArtifact(jarPath)
 					mu.Unlock()
 				}(jarPath)
 			}
 			wg.Wait()
 		} else {
 			for _, jarPath := range jarPaths {
-				candidates := detector.Executable(jarPath)
-				if candidates == nil || candidates.IsEmpty() || candidates.IsAmbiguous() {
-					continue
-				}
-				valid = append(valid, candidates.Single())
+				scanArtifact(jarPath)
 			}
 		}
 	}
 
 	// 4. pwd, recursively
-	// Prompt before do so due to the potential large number of files
 	// TODO: Implement
 
-	switch len(valid) {
-	case 0:
+	switch {
+	case len(valid) == 1 && !contradicted:
+		return buildServerInstance(valid[0])
+	case len(valid) == 0 && scanned == 0:
 		log.Info("no server executable found")
 		return NoServer
-	case 1:
-		return buildServerInstance(valid[0])
+	case len(valid) == 0:
+		log.Info(fmt.Sprintf(
+			"%d candidate executables examined, none identifiable as a server",
+			scanned,
+		))
+		return UnknownServer
 	default:
-		runtimes := make([]*ServerInstance, 0, len(valid))
-		for _, evidence := range valid {
-			runtimes = append(runtimes, buildServerInstance(evidence))
+		if contradicted {
+			log.Info("contradictory server environments detected")
+		} else {
+			log.Info("multiple parallel server environments detected")
 		}
-		choice := promptSelectExecutable(
-			runtimes, []string{noteIgnorePath},
-		)
-		return buildServerInstance(valid[choice])
+		return UnknownServer
 	}
 }
 
@@ -144,75 +144,6 @@ func init() {
 	resetProbeExecCache = func() {
 		getExecutableInfo = fn.Memoize(buildExecutableInfo)
 	}
-}
-
-func promptSelectExecutable(
-	executables []*ServerInstance,
-	notes []string,
-) int {
-	selection := 0
-	title := "Multiple possible executables detected, select one"
-	noteText := strings.TrimSpace(generateNotes(notes...))
-	if noteText != "" {
-		title = title + "\n" + noteText
-	}
-
-	options := make([]huh.Option[int], 0, len(executables))
-	for i, exec := range executables {
-		options = append(options, huh.NewOption(executableLabel(exec), i))
-	}
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[int]().
-				Title(title).
-				Options(options...).
-				Filtering(true).
-				Height(10).
-				Value(&selection),
-		),
-	)
-	if err := form.Run(); err != nil {
-		log.ShowWarn(err)
-	}
-	return selection
-}
-
-func generateNotes(notes ...string) string {
-	var note strings.Builder
-	for _, n := range notes {
-		note.WriteString(style.Note("*"))
-		note.WriteString(" ")
-		note.WriteString(n)
-		note.WriteString("\n")
-	}
-	return note.String()
-}
-
-func executableLabel(executable *ServerInstance) string {
-	return style.Accent(executable.DerivedServerCore()) + " " + style.Muted(executableAnnotation(executable))
-}
-
-func executableAnnotation(executable *ServerInstance) string {
-	gameVersion := executable.GameVersion().String()
-	derivedPlatform := executable.DerivedModLoader()
-	if derivedPlatform == types.EcoMinecraft {
-		return fmt.Sprintf("(Minecraft %s, Vanilla)", gameVersion)
-	}
-	loaderVersion := types.VersionUnknown.String()
-	for _, component := range executable.RuntimeComponents {
-		if component.Eco == derivedPlatform &&
-			concreteRuntimeVersion(component.Version) {
-			loaderVersion = component.Version.String()
-			break
-		}
-	}
-	return fmt.Sprintf(
-		"(Minecraft %s, %s %s)",
-		gameVersion,
-		derivedPlatform.Title(),
-		loaderVersion,
-	)
 }
 
 func findJar(dir ...string) (jarFiles []string, err error) {
