@@ -40,7 +40,7 @@ func InstallMany(
 
 	currentEcosystem := types.EcoUnspecified
 	if len(regular) > 0 {
-		currentEcosystem = defaultRegularEcosystem(options.Workspace().Server)
+		currentEcosystem = defaultRegularEcosystem(options.Workspace())
 	}
 	if _, _, err := prepareRegularRoots(
 		regular,
@@ -127,7 +127,7 @@ func Plan(
 	}
 
 	ws := options.Workspace()
-	defaultEcosystem := defaultRegularEcosystem(ws.Server)
+	defaultEcosystem := defaultRegularEcosystem(ws)
 	effectiveRequests, roots, err := prepareRegularRoots(
 		regular,
 		defaultEcosystem,
@@ -146,14 +146,14 @@ func Plan(
 		return nil, installError(CategoryResolution, err, nil)
 	}
 
-	if ws.Server == nil || !ws.Server.IsValid() {
+	if ws.Server() == nil {
 		return nil, installError(
 			CategoryResolution,
 			fmt.Errorf("server runtime is unavailable"),
 			nil,
 		)
 	}
-	providers := options.Providers(ws.Server)
+	providers := options.Providers(ws)
 	if providers == nil {
 		providers = []upstream.PackageSource{}
 	}
@@ -171,7 +171,7 @@ func Plan(
 	}
 
 	rootProviders, err := rootScopedProviders(
-		ws.Server,
+		ws,
 		effectiveRequests,
 		roots,
 		providers,
@@ -284,7 +284,7 @@ func Apply(
 			ctx,
 			downloaded,
 			options.Journal,
-			ws.Server,
+			ws.Server(),
 		)
 		if err != nil {
 			return nil, installError(CategoryVerify, err, nil)
@@ -327,7 +327,7 @@ func resolutionError(err error) error {
 }
 
 func rootScopedProviders(
-	server *workspace.ServerInstance,
+	ws workspace.Workspace,
 	requests []types.PackageRequest,
 	roots []types.VersionedPackageRef,
 	providers []upstream.PackageSource,
@@ -345,7 +345,7 @@ func rootScopedProviders(
 			continue
 		}
 		scoped, err := routing.ResolveProvidersForRuntime(
-			effectiveRuntimeEcosystems(server),
+			effectiveRuntimeEcosystems(ws),
 			request.Scope,
 		)
 		if err != nil {

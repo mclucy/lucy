@@ -51,7 +51,8 @@ func generateStatusOutput(
 	longOutput bool,
 	noStyle bool,
 ) (output *tui.Data) {
-	hasServer := data != nil && data.Server != nil && data.Server.IsValid()
+	server := data.Server()
+	hasServer := server != nil
 	hasMcdr := data != nil && data.Environments.Mcdr != nil
 	if !hasServer && !hasMcdr {
 		return &tui.Data{
@@ -67,8 +68,8 @@ func generateStatusOutput(
 	var effectiveEcosystems []workspace.EffectiveEcosystem
 	var runtimeComponents []types.VersionedPackageRef
 	if hasServer {
-		effectiveEcosystems = data.Server.EffectiveEcosystems()
-		runtimeComponents = data.Server.RuntimeComponents
+		effectiveEcosystems = data.EffectiveEcosystems()
+		runtimeComponents = server.RuntimeComponents
 	}
 	modPlatforms := statusModEcosystems(effectiveEcosystems)
 	showPlatformQualifiedMods := len(modPlatforms) > 1
@@ -98,7 +99,7 @@ func generateStatusOutput(
 
 	var logoEco types.Ecosystem
 	for _, offer := range effectiveEcosystems {
-		if offer.Compatibility == types.CompatCompatible &&
+		if offer.Compatibility == types.CompatFull &&
 			offer.Ecosystem.IsModding() {
 			logoEco = offer.Ecosystem
 			break
@@ -106,7 +107,7 @@ func generateStatusOutput(
 	}
 	if hasServer &&
 		logoEco == types.EcoUnspecified &&
-		data.Server.PrimaryRuntime.Eco == types.EcoMinecraft {
+		server.PrimaryRuntime.Eco == types.EcoMinecraft {
 		logoEco = types.EcoMinecraft
 	}
 	if logoEco == types.EcoUnspecified && hasMcdr {
@@ -127,46 +128,32 @@ func generateStatusOutput(
 			output.Fields,
 			&tui.FieldAnnotatedShortText{
 				Title:      "Game",
-				Text:       data.Server.GameVersion().String(),
-				Annotation: data.Server.PrimaryPath,
+				Text:       server.GameVersion().String(),
+				Annotation: server.PrimaryPath,
 			},
 		)
 
-		if data.Activity != nil {
-			output.Fields = append(
-				output.Fields, &tui.FieldAnnotatedShortText{
-					Title: "Activity",
-					Text: fn.Ternary(
-						data.Activity.Active,
-						"Active",
-						"Inactive",
-					),
-					Annotation: fn.Ternary(
-						data.Activity.Active,
-						fmt.Sprintf("PID %d", data.Activity.Pid),
-						"",
-					),
-				},
-			)
-		} else {
-			output.Fields = append(
-				output.Fields, &tui.FieldShortText{
-					Title: "Activity",
-					Text:  style.Muted("(Unknown)"),
-				},
-			)
-		}
+		output.Fields = append(
+			output.Fields, &tui.FieldShortText{
+				Title: "Activity",
+				Text: fn.Ternary(
+					data.Active(),
+					"Active",
+					"Inactive",
+				),
+			},
+		)
 
-		primary := data.Server.PrimaryRuntime
+		primary := server.PrimaryRuntime
 		if platformLabel := statusRuntimeLabel(primary); platformLabel != "" {
 			children := make([]tui.TreeNode, 0, 4)
-			if len(data.Server.RuntimeComponents) > 0 {
+			if len(server.RuntimeComponents) > 0 {
 				components := make(
 					[]string,
 					0,
-					len(data.Server.RuntimeComponents),
+					len(server.RuntimeComponents),
 				)
-				for _, component := range data.Server.RuntimeComponents {
+				for _, component := range server.RuntimeComponents {
 					components = append(components, component.StringFull())
 				}
 				children = append(children, tui.TreeNode{
@@ -332,7 +319,7 @@ func statusHasDirectOffer(
 	required types.Ecosystem,
 ) bool {
 	for _, offer := range offers {
-		if offer.Compatibility == types.CompatCompatible &&
+		if offer.Compatibility == types.CompatFull &&
 			offer.Ecosystem.Satisfy(required) {
 			return true
 		}

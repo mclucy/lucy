@@ -45,13 +45,14 @@ func buildAmbientDependencies(
 		)
 	}
 
-	if ws.Server == nil {
+	server := ws.Server()
+	if server == nil {
 		return ambient, nil
 	}
 
 	fabricLoaderVersion := addRuntimeComponentAmbientDependencies(
 		&ambient,
-		ws.Server.RuntimeComponents,
+		server.RuntimeComponents,
 	)
 	if fabricLoaderVersion == "" {
 		return ambient, nil

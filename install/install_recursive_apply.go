@@ -16,8 +16,8 @@ func recursiveInstallDestination(
 	ws workspace.Workspace,
 	pkg types.InstalledPackage,
 ) string {
-	if pkg.Id.Eco.IsModding() && len(ws.ModPath) > 0 {
-		return ws.ModPath[0]
+	if pkg.Id.Eco.IsModding() && len(ws.ModPath()) > 0 {
+		return ws.ModPath()[0]
 	}
 
 	if pkg.Id.Eco == types.EcoMcdr &&
@@ -26,8 +26,8 @@ func recursiveInstallDestination(
 		return ws.Environments.Mcdr.Config.PluginDirectories[0]
 	}
 
-	if len(ws.ModPath) == 1 {
-		return ws.ModPath[0]
+	if len(ws.ModPath()) == 1 {
+		return ws.ModPath()[0]
 	}
 
 	return ws.Root

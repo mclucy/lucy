@@ -30,19 +30,19 @@ func TestPaperDetectorIntegration_PaperFixtureDetectsRuntime(t *testing.T) {
 	copyProbeFixture(t, paperJar, filepath.Join(workDir, "paper.jar"))
 
 	observed := NewAt(workDir)
-	if observed.Server == nil {
+	if observed.Server() == nil {
 		t.Fatal("expected runtime info for paper fixture")
 	}
 
-	primary := observed.Server.PrimaryRuntime
+	primary := observed.Server().PrimaryRuntime
 	if primary == nil {
-		t.Fatalf("expected primary runtime identity, got %+v", observed.Server)
+		t.Fatalf("expected primary runtime identity, got %+v", observed.Server())
 	}
 	if got := primary.Name.String(); got != "paper" {
 		t.Fatalf(
 			"expected Paper primary core, got %q (%+v)",
 			got,
-			observed.Server.RuntimeComponents,
+			observed.Server().RuntimeComponents,
 		)
 	}
 }
@@ -80,11 +80,14 @@ func TestPaperDetectorIntegration_ContradictoryEvidenceDoesNotProducePaperRuntim
 	)
 
 	observed := NewAt(workDir)
-	if observed.Server == nil {
+	server := observed.Server()
+	if server == nil {
 		t.Fatal("expected runtime info for contradiction fixture")
 	}
 
-	if primary := observed.Server.PrimaryRuntime; primary != nil {
+	// The paper-family detector must decline the jar rather than guess a
+	// brand; whatever identity survives must not be a paper fork.
+	if primary := server.PrimaryRuntime; primary != nil {
 		if got := string(primary.Name); got == "paper" || got == "paper-fork" {
 			t.Fatalf(
 				"expected contradiction to avoid paper runtime identity, got %q",

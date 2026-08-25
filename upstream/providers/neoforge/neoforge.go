@@ -92,9 +92,10 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 
 func minecraftVersionForInstall() (types.BareVersion, error) {
 	ws := workspace.New()
-	switch ws.Server.DerivedModLoader() {
+	server := ws.Server()
+	switch server.ModLoader() {
 	case types.EcoVanilla:
-		return ws.Server.GameVersion(), nil
+		return server.GameVersion(), nil
 	case types.EcoUnspecified:
 		selectedVersion := promptSelectMinecraftVersion()
 		if selectedVersion == "none" || selectedVersion == "error" {
@@ -102,7 +103,7 @@ func minecraftVersionForInstall() (types.BareVersion, error) {
 		}
 		return types.BareVersion(selectedVersion), nil
 	default:
-		return ws.Server.GameVersion(), nil
+		return server.GameVersion(), nil
 	}
 }
 

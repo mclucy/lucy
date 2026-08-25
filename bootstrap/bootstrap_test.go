@@ -7,92 +7,78 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func loaderTestServer(
-	primary types.VersionedPackageRef,
-	components ...types.VersionedPackageRef,
-) *workspace.ServerInstance {
-	return &workspace.ServerInstance{
-		PrimaryRuntime:    &primary,
-		PrimaryPath:       "server.jar",
-		RuntimeComponents: components,
-	}
-}
-
-func loaderTestRef(
-	eco types.Ecosystem,
-	name string,
-) types.VersionedPackageRef {
-	return types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  eco,
-			Name: types.BarePackageName(name),
-		},
-		Version: "1.0.0",
-	}
-}
-
 func TestSelectedLoader(t *testing.T) {
 	tests := []struct {
 		name   string
-		server *workspace.ServerInstance
+		offers []workspace.EffectiveEcosystem
 		want   types.Ecosystem
 	}{
 		{
-			name:   "nil server",
-			server: nil,
+			name:   "no offers",
+			offers: nil,
 			want:   types.EcoUnspecified,
 		},
 		{
-			name: "vanilla",
-			server: loaderTestServer(
-				loaderTestRef(types.EcoMinecraft, "minecraft"),
-			),
+			name: "vanilla offers nothing loadable",
+			offers: []workspace.EffectiveEcosystem{
+				{Ecosystem: types.EcoMinecraft, Compatibility: types.CompatFull},
+			},
 			want: types.EcoUnspecified,
 		},
 		{
 			name: "fabric via primary runtime",
-			server: loaderTestServer(
-				loaderTestRef(types.EcoFabric, "fabric"),
-			),
+			offers: []workspace.EffectiveEcosystem{
+				{Ecosystem: types.EcoFabric, Compatibility: types.CompatFull},
+			},
 			want: types.EcoFabric,
 		},
 		{
-			name: "arclight claims loader via component",
-			server: loaderTestServer(
-				loaderTestRef(types.EcoUnspecified, "arclight"),
-				loaderTestRef(types.EcoFabric, "fabric-loader"),
-			),
+			name: "arclight claims loader via component offer",
+			offers: []workspace.EffectiveEcosystem{
+				{Ecosystem: types.EcoFabric, Compatibility: types.CompatFull},
+				{Ecosystem: types.EcoBukkit, Compatibility: types.CompatFull},
+			},
 			want: types.EcoFabric,
 		},
 		{
 			name: "catserver hybrid claims forge without loader component",
-			server: loaderTestServer(
-				loaderTestRef(types.EcoUnspecified, "catserver"),
-				loaderTestRef(types.EcoMinecraft, "minecraft"),
-			),
+			offers: []workspace.EffectiveEcosystem{
+				{Ecosystem: types.EcoForge, Compatibility: types.CompatFull},
+				{Ecosystem: types.EcoBukkit, Compatibility: types.CompatFull},
+			},
 			want: types.EcoForge,
 		},
 		{
 			name: "youer hybrid claims neoforge",
-			server: loaderTestServer(
-				loaderTestRef(types.EcoUnspecified, "youer"),
-				loaderTestRef(types.EcoMinecraft, "minecraft"),
-			),
+			offers: []workspace.EffectiveEcosystem{
+				{Ecosystem: types.EcoNeoforge, Compatibility: types.CompatFull},
+				{Ecosystem: types.EcoPaper, Compatibility: types.CompatFull},
+				{Ecosystem: types.EcoBukkit, Compatibility: types.CompatFull},
+			},
 			want: types.EcoNeoforge,
 		},
 		{
 			name: "paper server claims no loader",
-			server: loaderTestServer(
-				loaderTestRef(types.EcoUnspecified, "paper"),
-			),
+			offers: []workspace.EffectiveEcosystem{
+				{Ecosystem: types.EcoPaper, Compatibility: types.CompatFull},
+				{Ecosystem: types.EcoBukkit, Compatibility: types.CompatFull},
+			},
 			want: types.EcoUnspecified,
+		},
+		{
+			name: "degraded bridge offers do not claim the loader slot",
+			offers: []workspace.EffectiveEcosystem{
+				{Ecosystem: types.EcoForge, Compatibility: types.CompatFull},
+				{Ecosystem: types.EcoFabric, Compatibility: types.CompatDegraded},
+			},
+			want: types.EcoForge,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := selectedLoader(tt.server); got != tt.want {
-				t.Errorf("selectedLoader() = %v, want %v", got, tt.want)
+			if got := selectedLoader(tt.offers); got != tt.want {
+				t.Fatalf("selectedLoader() = %q, want %q", got, tt.want)
 			}
 		})
 	}

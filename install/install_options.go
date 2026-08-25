@@ -17,7 +17,7 @@ type InstallOptions struct {
 		url, destDir string,
 		opts cache.DownloadOptions,
 	) (*cache.DownloadResult, error)
-	Providers func(*workspace.ServerInstance) []upstream.PackageSource
+	Providers func(workspace.Workspace) []upstream.PackageSource
 }
 
 func DefaultOptions() InstallOptions {
@@ -35,12 +35,9 @@ func (o InstallOptions) withDefaults() InstallOptions {
 		o.Cache = cache.CachedDownload
 	}
 	if o.Providers == nil {
-		o.Providers = func(server *workspace.ServerInstance) []upstream.PackageSource {
-			if server == nil {
-				return nil
-			}
+		o.Providers = func(ws workspace.Workspace) []upstream.PackageSource {
 			providers, err := routing.ResolveProvidersForRuntime(
-				effectiveRuntimeEcosystems(server),
+				effectiveRuntimeEcosystems(ws),
 				types.SourceAuto,
 			)
 			if err != nil {
@@ -53,12 +50,9 @@ func (o InstallOptions) withDefaults() InstallOptions {
 }
 
 func effectiveRuntimeEcosystems(
-	server *workspace.ServerInstance,
+	ws workspace.Workspace,
 ) []types.Ecosystem {
-	if server == nil {
-		return nil
-	}
-	offers := server.EffectiveEcosystems()
+	offers := ws.EffectiveEcosystems()
 	ecosystems := make([]types.Ecosystem, 0, len(offers))
 	for _, offer := range offers {
 		ecosystems = append(ecosystems, offer.Ecosystem)
@@ -67,16 +61,17 @@ func effectiveRuntimeEcosystems(
 }
 
 func defaultRegularEcosystem(
-	server *workspace.ServerInstance,
+	ws workspace.Workspace,
 ) types.Ecosystem {
+	server := ws.Server()
 	if server == nil {
 		return types.EcoUnspecified
 	}
-	if loader := server.DerivedModLoader(); loader.IsModding() {
+	if loader := server.ModLoader(); loader.IsModding() {
 		return loader
 	}
-	for _, offer := range server.EffectiveEcosystems() {
-		if offer.Compatibility == types.CompatCompatible &&
+	for _, offer := range ws.EffectiveEcosystems() {
+		if offer.Compatibility == types.CompatFull &&
 			offer.Ecosystem.IsSearchEcosystem() {
 			return offer.Ecosystem
 		}

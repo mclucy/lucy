@@ -93,7 +93,7 @@ func init() {
 }
 
 func guardForgeServerInstall() error {
-	loader := selectedLoader(workspace.New().Server)
+	loader := selectedLoader(workspace.New().EffectiveEcosystems())
 
 	switch loader {
 	case types.EcoFabric, types.EcoForge, types.EcoNeoforge:

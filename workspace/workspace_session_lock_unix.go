@@ -21,10 +21,8 @@ package workspace
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -33,49 +31,30 @@ import (
 	"github.com/mclucy/lucy/log"
 )
 
-func buildServerFileLockStatus() *ServerActivity {
-	inactive := &ServerActivity{Active: false, Pid: 0}
-
-	if savePath() == "" {
-		return inactive
-	}
-
-	lockPath := filepath.Join(
-		savePath(),
-		"session.lock",
-	)
-	// Try lsof before using the file lock check. As the file lock check is
-	// tested to be unstable on linux (Ubuntu 20.04, Linux 5.15.0-48-generic).
-	pid, _ := lsof(lockPath)
-	if pid != 0 {
-		return &ServerActivity{Active: true, Pid: pid}
+// checkSessionLock reports whether another process holds session.lock. A
+// result of false covers every failure mode. An unreadable or unlocked file
+// says nothing about a running server.
+//
+// lsof runs first. Plain flock probes were unstable on some Linux kernels.
+// lsof gives a definite answer when a java process holds the file open.
+func checkSessionLock(lockPath string) bool {
+	if sessionLockHeldByLsof(lockPath) {
+		return true
 	}
 
 	file, err := os.OpenFile(lockPath, os.O_RDWR|os.O_APPEND, 0o666)
 	defer fn.CloseReader(file, log.Warn)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		return inactive
-	} else if err != nil {
-		return nil
+	if err != nil {
+		return false
 	}
 
 	log.Debug("checking lock on: " + file.Name())
 	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	if err != nil && errors.Is(err, syscall.EWOULDBLOCK) {
 		log.Debug("found a lock on the file: " + err.Error())
-		fl := syscall.Flock_t{
-			Type: syscall.F_WRLCK,
-		}
-		err = syscall.FcntlFlock(file.Fd(), syscall.F_GETLK, &fl)
-		log.Warn(
-			fmt.Errorf("activity detected but cannot get pid: %w", err),
-		)
-		if err != nil {
-			return &ServerActivity{Active: true, Pid: 0}
-		}
-		return &ServerActivity{Active: true, Pid: int(fl.Pid)}
+		return true
 	} else if err != nil {
-		return nil
+		return false
 	}
 
 	log.Debug("no lock found on the file: " + file.Name())
@@ -84,24 +63,17 @@ func buildServerFileLockStatus() *ServerActivity {
 		log.Warn(err)
 	}
 
-	return inactive
+	return false
 }
 
-var checkServerFileLock = fn.Memoize(buildServerFileLockStatus)
-
-func init() {
-	resetProbeFileLockCache = func() {
-		checkServerFileLock = fn.Memoize(buildServerFileLockStatus)
-	}
-}
-
-func lsof(filePath string) (pid int, err error) {
+// sessionLockHeldByLsof asks the lsof tool whether any process holds
+// filePath open.
+func sessionLockHeldByLsof(filePath string) bool {
 	cmd := exec.Command("lsof", filePath)
 	var out bytes.Buffer
 	cmd.Stdout = &out
-	err = cmd.Run()
-	if err != nil {
-		return 0, err
+	if err := cmd.Run(); err != nil {
+		return false
 	}
 	log.Debug("got output from lsof:\n" + out.String())
 
@@ -114,17 +86,20 @@ func lsof(filePath string) (pid int, err error) {
 		}
 	}
 	for _, line := range lines[outputBegin:] {
-		if line == "" {
-			continue
-		}
 		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		if fields[0] == "java" {
-			return strconv.Atoi(fields[1])
+		// Only the server JVM counts as server activity. Other holders, such
+		// as editors and shells, do not count.
+		if len(fields) >= 2 &&
+			fields[0] == "java" &&
+			pidLike(fields[1]) {
+			return true
 		}
 	}
 
-	return 0, nil
+	return false
+}
+
+func pidLike(field string) bool {
+	_, err := strconv.Atoi(field)
+	return err == nil
 }

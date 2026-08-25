@@ -33,16 +33,13 @@ func ForEcosystem(ecosystem types.Ecosystem) (Bootstrapper, error) {
 	return b, nil
 }
 
-// selectedLoader reports the loader ecosystem the detected runtime already
-// serves, including hybrids (CatServer, Youer) whose loader shows up only as
-// an effective ecosystem offer rather than a runtime component. Degraded
-// offers (bridge mods) do not claim the loader slot.
-func selectedLoader(server *workspace.ServerInstance) types.Ecosystem {
-	if server == nil || !server.IsValid() {
-		return types.EcoUnspecified
-	}
-	for _, offer := range server.EffectiveEcosystems() {
-		if offer.Compatibility == types.CompatCompatible &&
+// selectedLoader reports the loader ecosystem that a set of ecosystem
+// offers already serves. Hybrid servers, such as CatServer and Youer, show
+// their loader only as an effective ecosystem offer. Degraded offers, such
+// as bridge mods, do not claim the loader slot.
+func selectedLoader(offers []workspace.EffectiveEcosystem) types.Ecosystem {
+	for _, offer := range offers {
+		if offer.Compatibility == types.CompatFull &&
 			offer.Ecosystem.IsModding() {
 			return offer.Ecosystem
 		}
@@ -52,7 +49,6 @@ func selectedLoader(server *workspace.ServerInstance) types.Ecosystem {
 
 func isVanillaServer(server *workspace.ServerInstance) bool {
 	return server != nil &&
-		server.IsValid() &&
 		server.PrimaryRuntime.Eco == types.EcoMinecraft &&
 		server.PrimaryRuntime.Name == "minecraft"
 }
