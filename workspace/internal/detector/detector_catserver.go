@@ -42,17 +42,13 @@ func (d *catServerDetector) Detect(
 	}
 
 	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoUnspecified,
-			Name: input.ToProjectName("catserver"),
-		},
+		Eco:     types.EcoUnspecified,
+		Name:    input.ToProjectName("catserver"),
 		Version: signals.version,
 	}, RuntimeComponents: []types.VersionedPackageRef{
 		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoMinecraft,
-				Name: input.ToProjectName("minecraft"),
-			},
+			Eco:     types.EcoMinecraft,
+			Name:    input.ToProjectName("minecraft"),
 			Version: signals.gameVersion,
 		},
 	}}, nil

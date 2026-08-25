@@ -262,17 +262,13 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 	t.Parallel()
 
 	vanillaCore := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoMinecraft,
-			Name: "minecraft",
-		},
+		Eco:     types.EcoMinecraft,
+		Name:    "minecraft",
 		Version: "1.21.4",
 	}
 	paperCore := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoPaper,
-			Name: "paper",
-		},
+		Eco:     types.EcoPaper,
+		Name:    "paper",
 		Version: "1.21.4",
 	}
 	vanillaEvidence := &ExecutableEvidence{

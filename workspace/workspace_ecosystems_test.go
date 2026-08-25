@@ -32,10 +32,8 @@ func compatTestCore(
 	name string,
 ) types.VersionedPackageRef {
 	return types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  ecosystem,
-			Name: types.BarePackageName(name),
-		},
+		Eco:     ecosystem,
+		Name:    types.BarePackageName(name),
 		Version: "1.0.0",
 	}
 }

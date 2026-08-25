@@ -142,11 +142,9 @@ func exactSyncPackageIDs(
 		}
 		requested = append(
 			requested, types.PackageRequest{
-				FullPackageRef: types.FullPackageRef{
-					PackageRef: ref.PackageRef,
-					Version:    version,
-					Scope:      types.ParseSource(pkg.Source),
-				},
+				PackageRef: ref.PackageRef,
+				Version:    version,
+				Scope:      types.ParseSource(pkg.Source),
 			},
 		)
 	}
@@ -180,11 +178,9 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 		}
 		requested = append(
 			requested, types.PackageRequest{
-				FullPackageRef: types.FullPackageRef{
-					PackageRef: ref.PackageRef,
-					Version:    version,
-					Scope:      types.ParseSource(pkg.Source),
-				},
+				PackageRef: ref.PackageRef,
+				Version:    version,
+				Scope:      types.ParseSource(pkg.Source),
 			},
 		)
 	}

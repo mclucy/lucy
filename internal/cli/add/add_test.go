@@ -243,17 +243,15 @@ func lockedResultPackage(
 	t.Helper()
 	id := mustParsePackageID(t, rawID)
 	return types.InstalledPackage{
-		ResolvedPackage: types.ResolvedPackage{
-			Id: types.FullPackageRef{
-				PackageRef: id.PackageRef,
-				Version:    id.Version,
-				Scope:      types.SourceModrinth,
-			},
-			FileUrl:       "https://example.invalid/" + filename,
-			Filename:      filename,
-			Hash:          "deadbeef",
-			HashAlgorithm: "sha512",
+		Id: types.FullPackageRef{
+			PackageRef: id.PackageRef,
+			Version:    id.Version,
+			Scope:      types.SourceModrinth,
 		},
-		Path: filepath.Join(workDir, "mods", filename),
+		FileUrl:       "https://example.invalid/" + filename,
+		Filename:      filename,
+		Hash:          "deadbeef",
+		HashAlgorithm: "sha512",
+		Path:          filepath.Join(workDir, "mods", filename),
 	}
 }

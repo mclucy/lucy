@@ -359,13 +359,9 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 	updated := UpdateManifestRolesForAdd(
 		manifest, []types.PackageRequest{
 			{
-				FullPackageRef: types.FullPackageRef{
-					PackageRef: types.PackageRef{
-						Eco: types.EcoFabric, Name: "new-root",
-					},
-					Version: types.VersionAny,
-					Scope:   types.SourceModrinth,
-				},
+				Eco: types.EcoFabric, Name: "new-root",
+				Version: types.VersionAny,
+				Scope:   types.SourceModrinth,
 			},
 		}, lock,
 	)
@@ -478,17 +474,13 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 		manifest,
 		[]types.FullPackageRef{
 			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoFabric,
-					Name: "root-a",
-				},
+				Eco:     types.EcoFabric,
+				Name:    "root-a",
 				Version: types.VersionAny,
 				Scope:   types.SourceAuto,
 			}, {
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoFabric,
-					Name: "manual-jar",
-				},
+				Eco:     types.EcoFabric,
+				Name:    "manual-jar",
 				Version: types.VersionAny,
 				Scope:   types.SourceAuto,
 			},

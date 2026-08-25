@@ -65,19 +65,15 @@ func (d *arclightServerDetector) Detect(
 	}
 
 	primary := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoUnspecified,
-			Name: input.ToProjectName("arclight"),
-		},
+		Eco:     types.EcoUnspecified,
+		Name:    input.ToProjectName("arclight"),
 		Version: manifestSignals.implementationVersion,
 	}
 	components := []types.VersionedPackageRef{
 		primary,
 		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoMinecraft,
-				Name: input.ToProjectName("minecraft"),
-			},
+			Eco:     types.EcoMinecraft,
+			Name:    input.ToProjectName("minecraft"),
 			Version: gameVersion,
 		},
 	}
@@ -220,10 +216,8 @@ func arclightLoaderComponent(
 		name = "forge"
 	}
 	return types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  loader,
-			Name: name,
-		},
+		Eco:     loader,
+		Name:    name,
 		Version: types.VersionUnknown,
 	}
 }

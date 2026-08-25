@@ -48,10 +48,8 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}
 
 	return types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoForge,
-			Name: "forge",
-		},
+		Eco:     types.EcoForge,
+		Name:    "forge",
 		Version: types.BareVersion(forgeVersion),
 	}, nil
 }

@@ -209,18 +209,14 @@ func buildSpongeExecutableEvidence(
 		primaryName = "spongeneo"
 	}
 	primary := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoSponge,
-			Name: input.ToProjectName(primaryName),
-		},
+		Eco:     types.EcoSponge,
+		Name:    input.ToProjectName(primaryName),
 		Version: signals.spongeVersion,
 	}
 	components := []types.VersionedPackageRef{
 		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoMinecraft,
-				Name: input.ToProjectName("minecraft"),
-			},
+			Eco:     types.EcoMinecraft,
+			Name:    input.ToProjectName("minecraft"),
 			Version: signals.gameVersion,
 		},
 	}
@@ -229,20 +225,16 @@ func buildSpongeExecutableEvidence(
 	case spongeFlavorForge:
 		components = append(
 			components, types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoForge,
-					Name: input.ToProjectName("forge"),
-				},
+				Eco:     types.EcoForge,
+				Name:    input.ToProjectName("forge"),
 				Version: signals.loaderVersion,
 			},
 		)
 	case spongeFlavorNeo:
 		components = append(
 			components, types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoNeoforge,
-					Name: input.ToProjectName("neoforge"),
-				},
+				Eco:     types.EcoNeoforge,
+				Name:    input.ToProjectName("neoforge"),
 				Version: signals.loaderVersion,
 			},
 		)

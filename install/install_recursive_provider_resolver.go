@@ -27,17 +27,13 @@ func (resolver providerCandidateResolver) ResolvePackage(
 		attempts = append(
 			attempts,
 			types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  id.Eco,
-					Name: id.Name,
-				},
+				Eco:     id.Eco,
+				Name:    id.Name,
 				Version: types.VersionBeta,
 			},
 			types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  id.Eco,
-					Name: id.Name,
-				},
+				Eco:     id.Eco,
+				Name:    id.Name,
 				Version: types.VersionAny,
 			},
 		)
@@ -45,10 +41,8 @@ func (resolver providerCandidateResolver) ResolvePackage(
 		attempts = append(
 			attempts,
 			types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  id.Eco,
-					Name: id.Name,
-				},
+				Eco:     id.Eco,
+				Name:    id.Name,
 				Version: types.VersionAny,
 			},
 		)

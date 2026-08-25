@@ -26,10 +26,8 @@ func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies
 		}
 
 		parentId := types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Eco:  m.platform,
-				Name: input.ToProjectName(m.version.Id),
-			},
+			Eco:     m.platform,
+			Name:    input.ToProjectName(m.version.Id),
 			Version: types.BareVersion(m.version.VersionNumber),
 		}
 

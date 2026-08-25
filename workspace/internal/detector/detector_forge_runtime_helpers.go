@@ -149,24 +149,18 @@ func newForgeExecutableEvidence(
 	forgeVersion types.BareVersion,
 ) *ExecutableEvidence {
 	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoForge,
-			Name: "forge",
-		},
+		Eco:     types.EcoForge,
+		Name:    "forge",
 		Version: forgeVersion,
 	}, RuntimeComponents: []types.VersionedPackageRef{
 		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoForge,
-				Name: "forge",
-			},
+			Eco:     types.EcoForge,
+			Name:    "forge",
 			Version: forgeVersion,
 		},
 		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoMinecraft,
-				Name: "minecraft",
-			},
+			Eco:     types.EcoMinecraft,
+			Name:    "minecraft",
 			Version: gameVersion,
 		},
 	}}
