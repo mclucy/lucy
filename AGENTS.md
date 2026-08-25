@@ -1,14 +1,10 @@
 # Agents
 
-This document is for coding agents working on the Lucy codebase.
-
 ## Overview
 
-Lucy is a Minecraft server package manager, like apt or cargo but for server mods/plugins. Written in Go (`github.com/mclucy/lucy`).
+Lucy is a Minecraft server package manager. Its goal is to provide pm-like UX for server hosting and mod pack managing.
 
-Users declare desired packages in a manifest. Lucy resolves versions and dependencies, writes a lock file, and installs them into a Minecraft server directory.
-
-## Build and Development
+## Toolchain
 
 Uses **Taskfile** (`task`).
 
@@ -40,10 +36,6 @@ To run the built binary against a test server directory:
 ```
 
 ## Architecture
-
-### Entry Point
-
-`main.go` (17 lines): `defer logger.DumpHistory(); cmd.Execute()`
 
 ### Package Layout
 
@@ -79,20 +71,6 @@ To run the built binary against a test server directory:
     └── networkutil/        Network helpers wrapping cache downloads
 ```
 
-### Design Rules
-
-- **types/ has zero dependencies.** Never import anything into types. All other packages depend on types, not the reverse.
-- **Dependency inversion via atomic interfaces.** Upstream sources implement atomic capabilities (`Searcher`, `Informer`, `ArtifactMapper`, `VersionSelectorResolver`); composite interfaces (`PackageResolver`, `PackageSource`) emerge from consumers via type assertion. The install package consumes through interfaces, not concrete types.
-- **State ownership is strict.** Only `ProjectStateService` reads/writes state files. Don't bypass it.
-- **Three-tier logger, never `fmt.Println` for user output.** Use the logger package: file-only, user-display, or both tiers.
-- **CLI layout: thin commands in `cmd/`, large commands under `internal/cli/<name>`.** A command earning its own package exposes `NewCommand() *cobra.Command` and is wired in `cmd/cmd_root.go`; shared plumbing (flags, logging wrapper, graph loading, completion, lock-state builders) lives in the `internal/cli` root package so both sides import it without import cycles.
-
-### State Files (in user's Minecraft server directory)
-
-- `lucy.yaml` — declared package intent (what the user wants) + optional config overrides
-- `lucy-lock.yaml` — resolved dependency graph (exact versions, checksums, install paths)
-- Global config: `os.UserConfigDir()/lucy/config.yaml` (user preferences, defaults)
-
 ## Researching and Designing
 
 1. If your task is not general, i.e., the ones applicable and universal to almost any program, you should consider doing some research to know about the specific context.
@@ -103,22 +81,20 @@ To run the built binary against a test server directory:
 6. I am open to adding new packages if you think they will greatly simplify the code. Ask me before doing that.
 7. You must always justify your design. Elaborate your architecture's shape and why is it.
 
-## Tests
+## Testing and Debugging
 
-1. Do not add tests for new features/refactors/bug fixes unless explicitly asked.
-2. Testing would be isolated tasks.
-3. You are always allowed to use `go test`.
-
-## Debugging
-
-Generated sandbox server environments live in `.sandboxes/` (gitignored). They are materialized from the declarative manifest in `testdata/environments/environments.yaml` — run `task envs:list` to see them and `task envs:gen` to generate. Ecosystem knowledge per core family (jar formats, detector markers, download APIs) is in `testdata/environments/families/*.md`. See `docs/shared/sandbox-environments.md` for the full guide. You are allowed to create temporary sandboxes prefixed with `test_` under the project root, they are already git ignored.
+1. Always prefer the project's e2e testing suite (`envgen`). You should do regression tests after implementing a feature.
+2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `testdata/environments/environments.yaml`. There's brief explanation for each environment in `testdata/environments/families/*.md`.
+3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
+4. Upon refactors/bug fixes/feature additions, you may write temporary go test files for PoC but you must dispose them afterwards.
+5. Do not create persisted tests unless explicitly asked.
 
 ### envgen CLI
 
 `go run ./tools/envgen` materializes environments; `task envs:*` wraps it for the common cases. Flags:
 
 | Flag | Default | Effect |
-|---|---|---|
+| --- | --- | --- |
 | `--list` | off | Print all environments with family, game version, generated/missing state, then exit |
 | `--only a,b` | all | Restrict processing to the named environment ids |
 | `--force` | off | Regenerate even when `.sandboxes/<id>/` already exists |
@@ -127,16 +103,15 @@ Generated sandbox server environments live in `.sandboxes/` (gitignored). They a
 | `--cache <dir>` | `os.UserCacheDir()/lucy-envgen` | Content-addressed download cache (keyed by sha256) |
 | `--manual-dir <dir>` | `<cache>/manual` | Where `manual: true` artifacts are expected as `<id>/<basename>` |
 
-Behavior: idempotent — existing environment dirs are skipped without `--force`; every artifact digest is verified after fetch and generation aborts that environment on mismatch; missing manual artifacts fail with the exact drop-in path and expected sha256.
+The CLI is idempotent:
 
-## Common Erros
-
-- **Don't import into types/.** It has zero dependencies by design. If you need a type that depends on something external, it belongs in the consuming package, not types.
-- **Don't use fmt.Println for user output.** The logger has three tiers for a reason. Use them.
-- **Minecraft knowledge is unreliable.** Don't assume you know how mod loaders, plugin systems, or server internals work. Research or ask.
-- **Package identifiers are `[source]:[platform/]name[@version]`.** Platform and version are optional. Lucy infers platform from the server environment.
+- Existing environment dirs are skipped without `--force`
+- Every artifact digest is verified after fetch and generation aborts that environment on mismatch
+- Missing manual artifacts fail with the exact drop-in path and expected sha256.
 
 ## Other Rules
 
 1. If you suspect there might be helpful packages to add, you should search on the web, or look up on go.dev.
 2. If you believe the initial demand is fully satisfied and all current context will not be helpful for future tasks, you can remind me to open a new session.
+3. Upon refactors, always reconsider the file structure of touched packages. You should do a cleanup by moving/renaming/merging/splitting files for better maintainability.
+4. Prefix files with the package name for convinent searching.
