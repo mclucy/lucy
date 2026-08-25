@@ -19,7 +19,7 @@
 package workspace
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"os"
 	"path/filepath"
 	"sync"

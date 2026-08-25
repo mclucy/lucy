@@ -3,7 +3,7 @@ package modrinth
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/url"

@@ -1,7 +1,8 @@
 package bisect
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -138,7 +139,7 @@ func readBisectState(workDir string) (*bisectState, error) {
 }
 
 func writeBisectState(workDir string, session *bisectState) error {
-	data, err := json.MarshalIndent(session, "", "  ")
+	data, err := json.Marshal(session, jsontext.Multiline(true), jsontext.WithIndent("  "))
 	if err != nil {
 		return fmt.Errorf("failed to serialize bisect state: %w", err)
 	}

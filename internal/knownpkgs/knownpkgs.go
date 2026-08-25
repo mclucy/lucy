@@ -1,7 +1,8 @@
 package knownpkgs
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"os"
 	"path/filepath"
 	"sync"
@@ -133,7 +134,7 @@ func (s *store) flush() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(s.entries, "", "  ")
+	data, err := json.Marshal(s.entries, jsontext.Multiline(true), jsontext.WithIndent("  "))
 	if err != nil {
 		return err
 	}

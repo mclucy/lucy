@@ -5,7 +5,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -386,7 +386,7 @@ func getJSON(url string, target any) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("GET %s: HTTP %d", url, resp.StatusCode)
 	}
-	return json.NewDecoder(resp.Body).Decode(target)
+	return json.UnmarshalRead(resp.Body, target)
 }
 
 func downloadTo(url string, tmp *os.File) error {

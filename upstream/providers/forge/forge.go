@@ -2,7 +2,8 @@ package forge
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/url"
@@ -184,34 +185,34 @@ func fetchSupportedMinecraftVersions() ([]string, error) {
 
 func parseSupportedMinecraftVersions(data []byte) ([]string, error) {
 	var payload struct {
-		Promos json.RawMessage `json:"promos"`
+		Promos jsontext.Value `json:"promos"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return nil, fmt.Errorf("parse forge promotions failed: %w", err)
 	}
 
-	dec := json.NewDecoder(bytes.NewReader(payload.Promos))
-	tok, err := dec.Token()
+	dec := jsontext.NewDecoder(bytes.NewReader(payload.Promos))
+	tok, err := dec.ReadToken()
 	if err != nil {
 		return nil, fmt.Errorf("parse forge promotions failed: %w", err)
 	}
-	if delim, ok := tok.(json.Delim); !ok || delim != '{' {
+	if tok.Kind() != '{' {
 		return nil, fmt.Errorf("parse forge promotions failed: promos is not an object")
 	}
 
 	seen := map[string]struct{}{}
 	versions := make([]string, 0)
-	for dec.More() {
-		keyTok, err := dec.Token()
+	for dec.PeekKind() != '}' {
+		keyTok, err := dec.ReadToken()
 		if err != nil {
 			return nil, fmt.Errorf("parse forge promotions failed: %w", err)
 		}
-		key, ok := keyTok.(string)
-		if !ok {
+		if keyTok.Kind() != '"' {
 			return nil, fmt.Errorf("parse forge promotions failed: invalid promos key")
 		}
+		key := keyTok.String()
 
-		if _, err := dec.Token(); err != nil {
+		if err := dec.SkipValue(); err != nil {
 			return nil, fmt.Errorf("parse forge promotions failed: %w", err)
 		}
 

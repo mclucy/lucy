@@ -1,7 +1,7 @@
 package fileschema
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 
 	"github.com/mclucy/lucy/internal/fn"
 )

@@ -2,7 +2,7 @@ package artifact
 
 import (
 	"archive/zip"
-	"encoding/json"
+	"encoding/json/v2"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/types"
@@ -57,7 +57,7 @@ func (r *velocityReader) Read(
 		}
 
 		descriptor := &velocityPluginDescriptor{}
-		decodeErr := json.NewDecoder(rc).Decode(descriptor)
+		decodeErr := json.UnmarshalRead(rc, descriptor)
 		closeErr := rc.Close()
 		if decodeErr != nil {
 			return nil, decodeErr

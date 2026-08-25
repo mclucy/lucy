@@ -1,7 +1,7 @@
 package fileschema
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"time"
 )
 
@@ -13,18 +13,18 @@ import (
 //
 // TODO: This file does not exist before 18w47b (1.14), find alternative methods to detect versions
 type FileMinecraftVersionSpec struct {
-	Id              string          `json:"id"`
-	Name            string          `json:"name"`
-	WorldVersion    int             `json:"world_version"`
-	SeriesId        string          `json:"series_id"`
-	ReleaseTarget   string          `json:"release_target"` // removed in 22w42a
-	ProtocolVersion int             `json:"protocol_version"`
-	PackVersion     json.RawMessage `json:"pack_version"` // varies across versions
-	BuildTime       time.Time       `json:"build_time"`
-	JavaComponent   string          `json:"java_component"`
-	JavaVersion     int             `json:"java_version"`
-	Stable          bool            `json:"stable"`
-	UseEditor       bool            `json:"use_editor"`
+	Id              string         `json:"id"`
+	Name            string         `json:"name"`
+	WorldVersion    int            `json:"world_version"`
+	SeriesId        string         `json:"series_id"`
+	ReleaseTarget   string         `json:"release_target"` // removed in 22w42a
+	ProtocolVersion int            `json:"protocol_version"`
+	PackVersion     jsontext.Value `json:"pack_version"` // varies across versions
+	BuildTime       time.Time      `json:"build_time"`
+	JavaComponent   string         `json:"java_component"`
+	JavaVersion     int            `json:"java_version"`
+	Stable          bool           `json:"stable"`
+	UseEditor       bool           `json:"use_editor"`
 }
 
 // FileMinecraftServerProperties is the struct for server.properties
