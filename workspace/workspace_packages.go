@@ -15,23 +15,58 @@ import (
 	"github.com/mclucy/lucy/upstream/providers/modrinth"
 )
 
+// resolveUpstream resolves the following upstream of an artifact by hash,
+// Modrinth first. A hit records the local-to-remote mapping in the session
+// store, so later resolutions follow stable upstream identities across
+// provider name differences.
+func resolveUpstream(
+	sess *knownpkgs.Session,
+	path string,
+	local *types.PackageRef,
+) (types.FullPackageRef, bool) {
+	mappers := []upstream.ArtifactMapSource{modrinth.Provider}
+	if curseforge.Enabled() {
+		mappers = append(mappers, curseforge.Provider)
+	}
+
+	for _, mapper := range mappers {
+		ref, fileHash, ok, err := mapper.PackageByHash(
+			artifacthash.File{Path: path},
+		)
+		if err != nil || !ok || ref.Name == "" {
+			continue
+		}
+		if local != nil {
+			sess.Record(
+				mapper.Id(),
+				local.Name.String(),
+				fileHash,
+				string(ref.Name),
+				"hash",
+			)
+		}
+		return ref, true
+	}
+	return types.FullPackageRef{}, false
+}
+
 // discoverPackages fills in the package index of one workspace probe. It
 // analyzes every jar under searchPaths and every MCDR plugins under
 // mcdrPluginDirs, when the MCDR environment exists. Results are
 // deduplicated and sorted. Two discoveries of one package keep the entry
 // that has a local path.
 //
-// Expensive. It opens every candidate artifact. Jars without readable
-// metadata fall back to hash lookups at providers. These lookups can touch
-// the network.
+// Expensive. It opens every candidate artifact. Every artifact also goes
+// through a hash query. A hit anchors the jar to a stable upstream
+// identity and records the local-to-remote mapping.
 func discoverPackages(
+	sess *knownpkgs.Session,
 	searchPaths []string,
 	mcdrPluginDirs []string,
 ) []types.DiscoveredPackage {
 	idx := NewPackageIndex()
 	var mu sync.Mutex
 
-	sess := knownpkgs.Default().Session()
 	resolver := knownPackagesSlugResolver(sess)
 
 	for _, searchPath := range searchPaths {
@@ -52,13 +87,19 @@ func discoverPackages(
 					path,
 					artifact.WithSlugResolver(resolver),
 				)
+
+				var local *types.PackageRef
+				if err == nil && len(analyzed) == 1 {
+					local = &analyzed[0].Ref
+				}
+				upstreamRef, hit := resolveUpstream(sess, path, local)
+
 				if err != nil || len(analyzed) == 0 {
-					pkg, ok := packageByArtifactHash(path)
-					if !ok {
+					if !hit {
 						return
 					}
 					mu.Lock()
-					idx.Add(pkg)
+					idx.Add(discoveredFromUpstream(path, upstreamRef))
 					mu.Unlock()
 					return
 				}
@@ -84,6 +125,12 @@ func discoverPackages(
 				pluginFile,
 				artifact.WithSlugResolver(resolver),
 			)
+
+			var local *types.PackageRef
+			if err == nil && len(analyzed) == 1 {
+				local = &analyzed[0].Ref
+			}
+			resolveUpstream(sess, pluginFile, local)
 			if err == nil && len(analyzed) > 0 {
 				pkgs := artifactInfoToDiscoveredPackage(analyzed)
 				idx.Merge(pkgs)
@@ -134,49 +181,42 @@ func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPa
 	return pkgs
 }
 
-// packageByArtifactHash names a metadata-less artifact by asking hash-aware
-// upstream providers. It handles jars whose contents carry no readable
-// manifest.
-func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
-	providers := []upstream.ArtifactMapSource{modrinth.Provider}
-	if curseforge.Enabled() {
-		providers = append(providers, curseforge.Provider)
+// discoveredFromUpstream builds a discovered package from an injected
+// upstream identity alone. It covers artifacts whose contents carry no
+// readable manifest.
+func discoveredFromUpstream(
+	path string,
+	ref types.FullPackageRef,
+) types.DiscoveredPackage {
+	platform := ref.Eco
+	if platform == types.EcoUnspecified {
+		platform = types.EcoForge
 	}
-	for _, mapper := range providers {
-		ref, _, ok, err := mapper.PackageByHash(artifacthash.File{Path: filePath})
-		if err != nil || !ok || ref.Name == "" {
-			continue
-		}
-		platform := ref.Eco
-		if platform == types.EcoUnspecified {
-			platform = types.EcoForge
-		}
-		version := ref.Version
-		if version == "" {
-			version = types.VersionUnknown
-		}
-		pkgName := ref.Name
-		if ref.Scope == types.SourceMCDR {
-			pkgName = types.BarePackageName(
-				strings.ReplaceAll(string(ref.Name), "_", "-"),
-			)
-		}
-		return types.DiscoveredPackage{
-			Id: types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  platform,
-					Name: pkgName,
-				},
-				Version: version,
+	version := ref.Version
+	if version == "" {
+		version = types.VersionUnknown
+	}
+	pkgName := ref.Name
+	if ref.Scope == types.SourceMCDR {
+		pkgName = types.BarePackageName(
+			strings.ReplaceAll(string(ref.Name), "_", "-"),
+		)
+	}
+	return types.DiscoveredPackage{
+		Id: types.VersionedPackageRef{
+			PackageRef: types.PackageRef{
+				Eco:  platform,
+				Name: pkgName,
 			},
-			Path: filePath,
-		}, true
+			Version: version,
+		},
+		Path: path,
 	}
-	return types.DiscoveredPackage{}, false
 }
 
-// knownPackagesSlugResolver returns a slug resolver that consults the knownpkgs
-// session for a canonical name matching the detected platform/local name.
+// knownPackagesSlugResolver returns a slug resolver that consults the
+// knownpkgs session for a canonical name matching the detected
+// platform/local name.
 //
 // On hit, the mapping is promoted into the session cache via Record so that
 // subsequent resolutions in the same invocation see the freshly discovered
