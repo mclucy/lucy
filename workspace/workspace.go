@@ -15,8 +15,7 @@
 // current working directory. Only Rebuild, Invalidate, and Refresh change
 // it. No other function keeps state between calls.
 //
-// Package discovery may query hash-aware upstream providers as a fallback
-// for jars without readable metadata. These lookups can touch the network.
+// TODO: remove direct dependency to upstream used by artifact hash queries
 package workspace
 
 import (
@@ -25,6 +24,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -33,7 +33,7 @@ const sessionLockName = "session.lock"
 // Workspace is one consistent observation of a server directory.
 type Workspace struct {
 	// Root is the server directory that the observation describes.
-	// If MCDR manages the root, then Root is the MCDR working directory.
+	// If MCDR manages the anchor, then Root is the MCDR working directory.
 	Root         string                `json:"root"`
 	Environments types.EnvironmentInfo `json:"environments"`
 
@@ -173,7 +173,11 @@ func observe(dir string) Workspace {
 		Environments: env,
 	}
 	ws.Probe = probeDirectory(ws.Root)
-	ws.Packages = discoverPackages(ws.ModPath(), mcdrPluginDirs(env))
+	ws.Packages = discoverPackages(
+		knownpkgs.Default().Session(),
+		ws.ModPath(),
+		mcdrPluginDirs(env),
+	)
 	return ws
 }
 
