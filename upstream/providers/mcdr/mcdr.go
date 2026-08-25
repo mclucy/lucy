@@ -167,10 +167,8 @@ func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 		return id, err
 	}
 	parsed = types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoMcdr,
-			Name: id.Name,
-		},
+		Eco:     types.EcoMcdr,
+		Name:    id.Name,
 		Version: types.BareVersion(rel.Meta.Version),
 	}
 	log.Debug("parsed from" + id.StringFull() + " to " + parsed.StringFull())

@@ -238,24 +238,18 @@ func newFabricExecutableEvidence(
 	gameVersion types.BareVersion,
 ) *ExecutableEvidence {
 	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoFabric,
-			Name: "fabric",
-		},
+		Eco:     types.EcoFabric,
+		Name:    "fabric",
 		Version: loaderVersion,
 	}, RuntimeComponents: []types.VersionedPackageRef{
 		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoFabric,
-				Name: "fabric-loader",
-			},
+			Eco:     types.EcoFabric,
+			Name:    "fabric-loader",
 			Version: loaderVersion,
 		},
 		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoMinecraft,
-				Name: "minecraft",
-			},
+			Eco:     types.EcoMinecraft,
+			Name:    "minecraft",
 			Version: gameVersion,
 		},
 	}}

@@ -21,10 +21,8 @@ func selectLatestCompatibleRelease(
 	}
 
 	mcdrPackage := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoMcdr,
-			Name: "mcdreforged",
-		},
+		Eco:     types.EcoMcdr,
+		Name:    "mcdreforged",
 		Version: localMcdrVersion,
 	}
 	localVersion, err := version.Parse(localMcdrVersion, types.Semver)

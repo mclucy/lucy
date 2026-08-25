@@ -95,10 +95,8 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}
 
 	return types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoMinecraft,
-			Name: "minecraft",
-		},
+		Eco:     types.EcoMinecraft,
+		Name:    "minecraft",
 		Version: types.BareVersion(versionID),
 	}, nil
 }

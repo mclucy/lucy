@@ -166,10 +166,8 @@ func (s provider) PackageByHash(artifact upstream.Hashable) (
 	}
 
 	ref = types.FullPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  ecosystemFromModrinthLoaders(version.Loaders),
-			Name: types.BarePackageName(project.Slug),
-		},
+		Eco:     ecosystemFromModrinthLoaders(version.Loaders),
+		Name:    types.BarePackageName(project.Slug),
 		Version: types.BareVersion(version.VersionNumber),
 		Scope:   s.Id(),
 	}

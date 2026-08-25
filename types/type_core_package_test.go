@@ -168,8 +168,8 @@ func TestNormalizeCorePackage(t *testing.T) {
 
 func TestNormalizeCorePackagePreservesExplicitScope(t *testing.T) {
 	match, ok := NormalizeCorePackage(ScopedPackageRef{
-		PackageRef: PackageRef{Eco: EcoUnspecified, Name: "forge"},
-		Scope:      SourceForge,
+		Eco: EcoUnspecified, Name: "forge",
+		Scope: SourceForge,
 	})
 	if !ok {
 		t.Fatal("expected forge to normalize as a core package")

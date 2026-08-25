@@ -41,10 +41,8 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 		return id, err
 	}
 	return types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoFabric,
-			Name: "fabric",
-		},
+		Eco:     types.EcoFabric,
+		Name:    "fabric",
 		Version: types.BareVersion(loaderVersion),
 	}, nil
 }

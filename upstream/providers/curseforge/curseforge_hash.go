@@ -75,10 +75,8 @@ func (p provider) PackageByHash(artifact upstream.Hashable) (
 	}
 
 	ref = types.FullPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  platformFromCurseForgeFile(mod, file),
-			Name: types.BarePackageName(mod.Slug),
-		},
+		Eco:     platformFromCurseForgeFile(mod, file),
+		Name:    types.BarePackageName(mod.Slug),
 		Version: types.BareVersion(file.DisplayName),
 		Scope:   p.Id(),
 	}

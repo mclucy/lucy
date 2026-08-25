@@ -323,10 +323,8 @@ func assertConstraintSatisfy(
 ) {
 	t.Helper()
 	id := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  platform,
-			Name: types.BarePackageName(name),
-		},
+		Eco:  platform,
+		Name: types.BarePackageName(name),
 	}
 	depSpec := types.Dependency{Id: id, Constraint: expr, Mandatory: true}
 	got := depSpec.Satisfy(id, mustParseSemver(t, version))

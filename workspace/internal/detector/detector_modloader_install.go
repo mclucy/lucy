@@ -236,24 +236,18 @@ func newModLoaderExecutableEvidence(
 	loaderVersion types.BareVersion,
 ) *ExecutableEvidence {
 	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  platform,
-			Name: types.BarePackageName(name),
-		},
+		Eco:     platform,
+		Name:    types.BarePackageName(name),
 		Version: loaderVersion,
 	}, RuntimeComponents: []types.VersionedPackageRef{
 		{
-			PackageRef: types.PackageRef{
-				Eco:  platform,
-				Name: types.BarePackageName(name),
-			},
+			Eco:     platform,
+			Name:    types.BarePackageName(name),
 			Version: loaderVersion,
 		},
 		{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoMinecraft,
-				Name: "minecraft",
-			},
+			Eco:     types.EcoMinecraft,
+			Name:    "minecraft",
 			Version: gameVersion,
 		},
 	}}

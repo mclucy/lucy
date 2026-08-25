@@ -57,10 +57,8 @@ func (d *geyserStandaloneDetector) Detect(
 	}
 
 	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoUnspecified,
-			Name: input.ToProjectName("geyser"),
-		},
+		Eco:     types.EcoUnspecified,
+		Name:    input.ToProjectName("geyser"),
 		Version: version,
 	}, RuntimeComponents: nil}, nil
 }

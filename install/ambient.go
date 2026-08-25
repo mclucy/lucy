@@ -36,10 +36,8 @@ func buildAmbientDependencies(
 	if ws.Environments.Mcdr != nil {
 		ambient.Add(
 			types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMcdr,
-					Name: "mcdreforged",
-				},
+				Eco:     types.EcoMcdr,
+				Name:    "mcdreforged",
 				Version: types.BareVersion(strings.TrimSpace(ws.Environments.Mcdr.Version.String())),
 			},
 		)
@@ -263,10 +261,8 @@ func addFabricZipAmbientDependencies(
 	}
 
 	id := types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  types.EcoFabric,
-			Name: input.ToProjectName(modInfo.Id),
-		},
+		Eco:     types.EcoFabric,
+		Name:    input.ToProjectName(modInfo.Id),
 		Version: types.BareVersion(modInfo.Version),
 	}
 	ambient.Add(id)

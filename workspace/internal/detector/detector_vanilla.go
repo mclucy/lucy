@@ -67,17 +67,13 @@ func (d *VanillaDetector) Detect(
 			gameVersion := types.BareVersion(obj.Id)
 
 			exec := &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMinecraft,
-					Name: "minecraft",
-				},
+				Eco:     types.EcoMinecraft,
+				Name:    "minecraft",
 				Version: gameVersion,
 			}, RuntimeComponents: []types.VersionedPackageRef{
 				{
-					PackageRef: types.PackageRef{
-						Eco:  types.EcoMinecraft,
-						Name: "minecraft",
-					},
+					Eco:     types.EcoMinecraft,
+					Name:    "minecraft",
 					Version: gameVersion,
 				},
 			}}

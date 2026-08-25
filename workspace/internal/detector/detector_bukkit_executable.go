@@ -479,17 +479,13 @@ func projectPaperJudgment(
 
 	return &ExecutableEvidence{
 		PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Eco:  types.EcoUnspecified,
-				Name: input.ToProjectName(brand),
-			},
+			Eco:     types.EcoUnspecified,
+			Name:    input.ToProjectName(brand),
 			Version: types.VersionUnknown,
 		}, RuntimeComponents: []types.VersionedPackageRef{
 			{
-				PackageRef: types.PackageRef{
-					Eco:  types.EcoMinecraft,
-					Name: input.ToProjectName("minecraft"),
-				},
+				Eco:     types.EcoMinecraft,
+				Name:    input.ToProjectName("minecraft"),
 				Version: gameVersion,
 			},
 		}, DetectorName: (&craftBukkitFamilyDetector{}).Name(),

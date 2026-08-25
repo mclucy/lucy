@@ -12,10 +12,8 @@ func componentRef(
 	version types.BareVersion,
 ) types.VersionedPackageRef {
 	return types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Eco:  eco,
-			Name: types.BarePackageName(name),
-		},
+		Eco:     eco,
+		Name:    types.BarePackageName(name),
 		Version: version,
 	}
 }
