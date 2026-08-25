@@ -2,7 +2,7 @@ package artifact
 
 import (
 	"archive/zip"
-	"encoding/json"
+	"encoding/json/v2"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
@@ -29,7 +29,7 @@ func (r *forgeLegacyReader) Read(
 			return nil, err
 		}
 		var mods fileschema.FileForgeModIdentifierOld
-		decodeErr := json.NewDecoder(rc).Decode(&mods)
+		decodeErr := json.UnmarshalRead(rc, &mods)
 		closeErr := rc.Close()
 		if decodeErr != nil {
 			return nil, decodeErr

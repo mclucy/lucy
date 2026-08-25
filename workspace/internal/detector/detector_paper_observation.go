@@ -2,7 +2,7 @@ package detector
 
 import (
 	"archive/zip"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io/fs"
 	"os"

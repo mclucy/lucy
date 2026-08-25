@@ -1,7 +1,8 @@
 package style
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"strings"
 	"time"
@@ -57,7 +58,7 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 
 // PrintAsJson is usually used for debugging purposes
 func PrintAsJson(v interface{}) {
-	data, err := json.MarshalIndent(v, "", "  ")
+	data, err := json.Marshal(v, jsontext.Multiline(true), jsontext.WithIndent("  "))
 	if err != nil {
 		fmt.Println(err)
 		return

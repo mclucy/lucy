@@ -3,7 +3,7 @@ package artifact
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 
 	"github.com/mclucy/lucy/input"
@@ -37,7 +37,7 @@ func (r *fabricReader) Read(
 		}
 
 		modInfo := &fileschema.FileFabricModIdentifier{}
-		decodeErr := json.NewDecoder(reader).Decode(modInfo)
+		decodeErr := json.UnmarshalRead(reader, modInfo)
 		closeErr := reader.Close()
 		if decodeErr != nil {
 			return nil, decodeErr
@@ -233,7 +233,7 @@ func fabricNestedModInfo(
 			return nil, err
 		}
 		modInfo := &fileschema.FileFabricModIdentifier{}
-		decodeErr := json.NewDecoder(reader).Decode(modInfo)
+		decodeErr := json.UnmarshalRead(reader, modInfo)
 		closeErr := reader.Close()
 		if decodeErr != nil {
 			return nil, decodeErr

@@ -2,7 +2,7 @@ package detector
 
 import (
 	"archive/zip"
-	"encoding/json"
+	"encoding/json/v2"
 	"os"
 
 	"github.com/mclucy/lucy/internal/fileschema"

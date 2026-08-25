@@ -1,6 +1,6 @@
 package fn
 
-import "encoding/json"
+import "encoding/json/v2"
 
 // SingleOrSlice represents a value that can be encoded as either:
 //   - a single element: `T`

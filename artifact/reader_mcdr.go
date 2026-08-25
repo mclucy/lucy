@@ -2,7 +2,7 @@ package artifact
 
 import (
 	"archive/zip"
-	"encoding/json"
+	"encoding/json/v2"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
@@ -34,7 +34,7 @@ func (r *mcdrReader) Read(
 		}
 
 		pluginInfo := &fileschema.FileMcdrPluginIdentifier{}
-		decodeErr := json.NewDecoder(rc).Decode(pluginInfo)
+		decodeErr := json.UnmarshalRead(rc, pluginInfo)
 		closeErr := rc.Close()
 		if decodeErr != nil {
 			return nil, decodeErr

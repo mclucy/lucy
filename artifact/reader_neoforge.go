@@ -3,7 +3,7 @@ package artifact
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 
 	"github.com/mclucy/lucy/input"

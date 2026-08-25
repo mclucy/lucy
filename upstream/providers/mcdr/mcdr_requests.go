@@ -1,7 +1,7 @@
 package mcdr
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 
 	"github.com/mclucy/lucy/github"
