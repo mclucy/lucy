@@ -1,71 +1,56 @@
 package init
 
 import (
-	"context"
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/x/term"
+
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/create"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/state"
+	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"
 )
 
 const (
-	flagInitYesName      = "yes"
-	flagInitConflictName = "conflict"
-	flagInitWorkDirName  = "work-dir"
-	flagInitGameVersion  = "game-version"
+	flagInitAllowEmptyName = "allow-empty"
+	flagInitForceName      = "force"
+	flagInitWorkDirName    = "work-dir"
+	flagInitGameVersion    = "game-version"
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Take over the current server into Lucy state",
-	Long: `Initialize Lucy in the current
-directory. Creates lucy.yaml (manifest + optional config overrides) and lucy-lock.yaml (resolved graph) in the project root.
-
-Init is optimized for taking over an existing server before it behaves like a
-blank-slate scaffold. Lucy reconstructs the current reality first, then draws
-its managed boundary around the parts the operator wants it to own. It inspects
-the live server first, records a soft manifest intent from those facts, and
-writes an exact lockfile for the resolved managed state.
-
-No files are written until you confirm at the final review step. That confirmation
-is mandatory before Lucy persists intent. Existing Lucy state is preserved by
-default, and takeover-style init will show you what is already on disk as an
-advisory hint before you decide what Lucy should manage. Lucy absorbs the
-existing server into a managed boundary instead of claiming total ownership of
-the directory.
-
-Version hints are best-effort: omit a version to use @any (latest compatible
-version regardless of release type), use @stable to require a release, use
-@beta to allow pre-releases, or keep the inferred runtime version when you want
-Lucy to match the current environment.`,
-	RunE: cli.WithErrorLogging(actionInit),
+	Short: "Generate a Lucy manifest for an existing server",
+	Args:  cobra.NoArgs,
+	RunE:  cli.WithErrorLogging(actionInit),
 }
 
 // NewCommand wires and returns the `lucy init` command.
 func NewCommand() *cobra.Command {
 	initCmd.Flags().BoolP(
-		flagInitYesName,
+		flagInitForceName,
+		"f",
+		false,
+		"Overwrite an existing manifest without asking",
+	)
+	initCmd.Flags().BoolP(
+		flagInitAllowEmptyName,
 		"y",
 		false,
-		"Non-interactive mode: accept all defaults without prompting",
+		"Record an empty server when none is detected; skips the create prompt",
 	)
-	initCmd.Flags().StringP(
-		flagInitConflictName,
-		"c",
-		"preserve",
-		"Conflict mode for existing files: preserve, abort, overwrite",
+	initCmd.Flags().String(
+		flagInitGameVersion,
+		"",
+		"Game version recorded when no server is detected (e.g. 1.21.4)",
 	)
 	initCmd.Flags().String(
 		flagInitWorkDirName,
 		"",
 		"Override working directory (for testing)",
-	)
-	initCmd.Flags().String(
-		flagInitGameVersion,
-		"1.21",
-		"Game version for non-interactive init (e.g., 1.21.4)",
 	)
 	_ = initCmd.Flags().MarkHidden(flagInitWorkDirName)
 	return initCmd
@@ -77,26 +62,109 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	conflictStr, _ := cmd.Flags().GetString(flagInitConflictName)
-	conflictMode, err := parseConflictMode(conflictStr)
+	opts := Options{
+		GameVersion: flagString(cmd, flagInitGameVersion),
+		Force:       flagBool(cmd, flagInitForceName),
+		AllowEmpty:  flagBool(cmd, flagInitAllowEmptyName),
+	}
+
+	ws := workspace.NewAt(workDir)
+
+	// An unresolved server fails the init process
+	_, resolved := ws.Probe.Single()
+	switch {
+	case ws.Probe.HasAmbiguity():
+		return fmt.Errorf(
+			"cannot initialize %s: conflicting server files",
+			workDir,
+		)
+	case !resolved && len(ws.Probe.Unidentified) > 0:
+		return fmt.Errorf(
+			"cannot initialize %s: unrecognized server files",
+			workDir,
+		)
+	}
+
+	if ManifestExists(workDir) && !opts.Force {
+		rebuild, err := confirm(
+			"Existing Lucy manifest found",
+			fmt.Sprintf(
+				"Delete %s and rebuild it from the detected server?",
+				state.ManifestFile,
+			),
+		)
+		if err != nil {
+			return fmt.Errorf("rebuild prompt: %w", err)
+		}
+		if !rebuild {
+			log.ShowInfo("Init cancelled.")
+			return nil
+		}
+	}
+	manifest, err := createManifest(ws, workDir, opts)
 	if err != nil {
 		return err
 	}
-
-	yes, _ := cmd.Flags().GetBool(flagInitYesName)
-	gameVersion, _ := cmd.Flags().GetString(flagInitGameVersion)
-
-	flowState := NewInitFlowState(workDir)
-	flowState.ConflictResolution = conflictMode
-
-	if gameVersion != "" && gameVersion != "1.21" && flowState.GameVersion == "" {
-		flowState.GameVersion = gameVersion
+	if manifest == nil {
+		return nil
 	}
 
-	if yes {
-		return runNonInteractiveInit(workDir, flowState)
+	if !opts.AllowEmpty || resolved {
+		approved, err := confirmManifestWrite(manifest)
+		if err != nil {
+			return fmt.Errorf("review step: %w", err)
+		}
+		if !approved {
+			log.ShowInfo("Init cancelled.")
+			return nil
+		}
 	}
-	return runInteractiveInit(workDir, flowState)
+
+	if err := SaveManifest(workDir, manifest); err != nil {
+		return fmt.Errorf("write manifest: %w", err)
+	}
+	log.ReportInfo(fmt.Sprintf(
+		"Wrote %s in %s",
+		state.ManifestFile,
+		workDir,
+	))
+	return nil
+}
+
+// createManifest picks the manifest content for the probe result.
+// A nil manifest means the redirect ran. Init then stops.
+func createManifest(
+	ws workspace.Workspace,
+	workDir string,
+	opts Options,
+) (*state.Manifest, error) {
+	if _, ok := ws.Probe.Single(); ok {
+		return ManifestFromDetection(ws), nil
+	}
+
+	if !opts.AllowEmpty {
+		if !term.IsTerminal(os.Stdin.Fd()) {
+			return nil, fmt.Errorf(
+				"--allow-empty is required when stdin is not a terminal",
+			)
+		}
+		runCreate, err := confirm(
+			"No server detected in this directory",
+			"Run lucy create to record one instead?",
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create prompt: %w", err)
+		}
+		if runCreate {
+			// The redirect runs the real create flow.
+			if err := create.Execute(workDir, opts.Force, "", ""); err != nil {
+				return nil, fmt.Errorf("lucy create: %w", err)
+			}
+			return nil, nil
+		}
+	}
+
+	return EmptyServerManifest(opts.GameVersion), nil
 }
 
 func resolveWorkDir(cmd *cobra.Command) (string, error) {
@@ -111,87 +179,12 @@ func resolveWorkDir(cmd *cobra.Command) (string, error) {
 	return wd, nil
 }
 
-func parseConflictMode(s string) (ConflictMode, error) {
-	switch s {
-	case "preserve", "":
-		return PreserveExisting, nil
-	case "abort":
-		return AbortOnConflict, nil
-	case "overwrite":
-		return OverwriteAll, nil
-	default:
-		return "", fmt.Errorf(
-			"unknown conflict mode %q: must be preserve, abort, or overwrite",
-			s,
-		)
-	}
+func flagString(cmd *cobra.Command, name string) string {
+	value, _ := cmd.Flags().GetString(name)
+	return value
 }
 
-func runNonInteractiveInit(workDir string, s *InitFlowState) error {
-	if s.GameVersion == "" {
-		s.GameVersion = "1.21"
-	}
-	if s.Ecosystem == "" {
-		s.Ecosystem = "bare"
-	}
-	if (s.Ecosystem == "bare" || s.Ecosystem == "none") && s.EcosystemVersion == "" {
-		s.EcosystemVersion = "bare"
-	}
-
-	if !CanProceed(s) {
-		return fmt.Errorf("cannot proceed: managed roots are required for non-interactive init (run interactively or provide explicit roots)")
-	}
-	s.Confirmed = true
-	return writeInitResult(workDir, s)
-}
-
-func runInteractiveInit(workDir string, s *InitFlowState) error {
-	if err := RunInteractiveInit(s); err != nil {
-		return fmt.Errorf("init flow: %w", err)
-	}
-	if s.Aborted {
-		fmt.Fprintln(os.Stderr, "Init cancelled.")
-		return nil
-	}
-	if !s.Confirmed {
-		fmt.Fprintln(os.Stderr, "Init cancelled.")
-		return nil
-	}
-	return writeInitResult(workDir, s)
-}
-
-func writeInitResult(workDir string, s *InitFlowState) error {
-	result, err := BuildResult(s)
-	if err != nil {
-		return fmt.Errorf("build init plan: %w", err)
-	}
-
-	stateSvc := state.NewProjectStateService(workDir)
-	if err := stateSvc.Save(
-		context.Background(),
-		result.ManifestToWrite,
-		result.LockToWrite,
-	); err != nil {
-		return fmt.Errorf("write state: %w", err)
-	}
-	RefreshObservedStateAfterInitWrites(workDir)
-
-	printInitSummary(result)
-	return nil
-}
-
-func printInitSummary(result InitFlowResult) {
-	fmt.Println("\nLucy initialized successfully.")
-	if len(result.WrittenFiles) > 0 {
-		fmt.Println("\nFiles written:")
-		for _, f := range result.WrittenFiles {
-			fmt.Printf("  %s\n", f)
-		}
-	}
-	if len(result.SkippedFiles) > 0 {
-		fmt.Println("\nFiles preserved (already exist):")
-		for _, f := range result.SkippedFiles {
-			fmt.Printf("  %s\n", f)
-		}
-	}
+func flagBool(cmd *cobra.Command, name string) bool {
+	value, _ := cmd.Flags().GetBool(name)
+	return value
 }
