@@ -1,6 +1,8 @@
 package knownpkgs
 
 import (
+	"sync"
+
 	"github.com/mclucy/lucy/types"
 )
 
@@ -20,6 +22,7 @@ import (
 // persistent store, so the session is always a strict superset of the
 // persisted data.
 type Session struct {
+	mu     sync.Mutex
 	store  *store
 	memory map[sessionKey]string
 }
@@ -55,6 +58,8 @@ var sessions map[*store]*Session
 // Returns the canonical ID and true if found.
 func (sess *Session) Lookup(src types.SourceId, localId string) (string, bool) {
 	k := sessionKey{src: src, localId: localId}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
 	if canon, ok := sess.memory[k]; ok {
 		return canon, true
 	}
@@ -94,6 +99,8 @@ func (sess *Session) Record(
 	src types.SourceId,
 	localId, fileHash, canonicalId, resolvedBy string,
 ) {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
 	sess.memory[sessionKey{src: src, localId: localId}] = canonicalId
 	sess.store.Set(src, localId, fileHash, canonicalId, resolvedBy)
 }
