@@ -8,6 +8,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/add"
 	"github.com/mclucy/lucy/internal/cli/bisect"
+	"github.com/mclucy/lucy/internal/cli/create"
 	"github.com/mclucy/lucy/internal/cli/info"
 	lucyinit "github.com/mclucy/lucy/internal/cli/init"
 	"github.com/mclucy/lucy/internal/cli/install"
@@ -89,6 +90,7 @@ func init() {
 		info.NewCommand(),
 		lucyinit.NewCommand(),
 		install.NewCommand(),
+		create.NewCommand(),
 		search.NewCommand(),
 		status.NewCommand(),
 	)
