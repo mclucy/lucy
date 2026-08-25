@@ -16,12 +16,21 @@ import (
 
 const mcdrConfigFileName = "config.yml"
 
-func buildEnvironment() types.EnvironmentInfo {
+// detectEnvironment reads environments in the workspace root. These
+// environments do not come from jars. An MCDR installation manages a server
+// directory from outside the directory.
+func detectEnvironment(dir string) types.EnvironmentInfo {
 	var env types.EnvironmentInfo
-	detectMcdrEnvironment(".", &env)
+	detectMcdrEnvironment(dir, &env)
 	return env
 }
 
+// detectMcdrEnvironment detects an MCDR managed directory. The marker is
+// the config.yml file. It records the wrapper version. The version comes
+// from the mcdreforged command on PATH. Relative plugin directories resolve
+// against dir.
+//
+// MCDR changes the server root, so later consumers will not depend on pwd.
 func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
 	configPath := filepath.Join(dir, mcdrConfigFileName)
 

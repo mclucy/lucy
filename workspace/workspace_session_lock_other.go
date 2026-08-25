@@ -18,14 +18,6 @@ limitations under the License.
 
 package workspace
 
-var checkServerFileLock = func() *ServerActivity {
-	return nil
-}
-
-func init() {
-	resetProbeFileLockCache = func() {
-		checkServerFileLock = func() *ServerActivity {
-			return nil
-		}
-	}
-}
+// checkSessionLock has no implementation on platforms without a supported
+// locking primitive; activity is simply unobservable there.
+func checkSessionLock(string) bool { return false }

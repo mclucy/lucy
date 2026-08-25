@@ -47,10 +47,10 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 		appendConstraint(pkg, fmt.Sprintf("installed:%s", pkg.Id.StringFull()))
 	}
 
-	if si.Server != nil {
-		loader := si.Server.DerivedModLoader()
+	if server := si.Server(); server != nil {
+		loader := server.ModLoader()
 		if loader.Valid() && loader != types.EcoUnspecified {
-			gv := si.Server.GameVersion()
+			gv := server.GameVersion()
 			if !gv.IsInvalid() && gv != types.VersionAny {
 				appendConstraint(
 					types.DiscoveredPackage{
@@ -82,7 +82,7 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 				}, fmt.Sprintf("runtime:%s/java", loader),
 			)
 
-			if primary := si.Server.PrimaryRuntime; primary != nil {
+			if primary := server.PrimaryRuntime; primary != nil {
 				if alias := runtimeLoaderAliasName(primary.Eco); alias != "" {
 					appendConstraint(
 						types.DiscoveredPackage{

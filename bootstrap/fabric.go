@@ -23,7 +23,7 @@ func (b fabricBootstrapper) Bootstrap(
 	serverDir string,
 ) error {
 	ws := workspace.New()
-	serverLoader := selectedLoader(ws.Server)
+	serverLoader := selectedLoader(ws.EffectiveEcosystems())
 
 	deleteVanilla := false
 	switch serverLoader {
@@ -40,8 +40,8 @@ func (b fabricBootstrapper) Bootstrap(
 			serverLoader.Title(),
 		)
 	}
-	if isVanillaServer(ws.Server) {
-		override, shouldDeleteVanilla := promptOverrideVanilla(ws.Server)
+	if isVanillaServer(ws.Server()) {
+		override, shouldDeleteVanilla := promptOverrideVanilla(ws.Server())
 		if !override {
 			return errors.New("installation aborted by user")
 		}
@@ -84,7 +84,7 @@ func (b fabricBootstrapper) Bootstrap(
 	}
 
 	if deleteVanilla {
-		if err := os.Remove(ws.Server.PrimaryPath); err != nil {
+		if err := os.Remove(ws.Server().PrimaryPath); err != nil {
 			return fmt.Errorf("delete vanilla server failed: %w", err)
 		}
 	}

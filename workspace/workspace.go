@@ -1,51 +1,92 @@
-// Package workspace provides functionality to gather and manage server information
-// for a Minecraft server. It includes methods to retrieve server configuration,
-// mod list, executable information, and other relevant details. The package
-// utilizes memoization to avoid redundant calculations and resolve any data
-// dependencies issues. Therefore, all probe functions are 100% concurrent-safe.
+// Package workspace probes a Minecraft server directory (i.e., a workspace).
 //
-// The main exposed function is New, which returns a comprehensive
-// Workspace struct containing all the gathered information. To avoid side
-// effects, the Workspace struct is returned as a copy, rather than reference.
+// The package collects the following information:
+//
+//   - the server runtime that runs in the directory
+//   - the directories that hold content packages
+//   - the content packages that are installed
+//   - the running state of the server process
+//
+// New, NewAt, and Refresh return a Workspace value. A Workspace is an
+// immutable observation. Four members store facts: Root, Environments,
+// Probe, and Packages. Every other member is a method over these facts.
+//
+// The package has one cache. The cache stores the observation of the
+// current working directory. Only Rebuild, Invalidate, and Refresh change
+// it. No other function keeps state between calls.
+//
+// Package discovery may query hash-aware upstream providers as a fallback
+// for jars without readable metadata. These lookups can touch the network.
 package workspace
 
 import (
-	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
-	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/internal/artifacthash"
-	"github.com/mclucy/lucy/internal/fileschema"
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/internal/knownpkgs"
-	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/providers/curseforge"
-	"github.com/mclucy/lucy/upstream/providers/modrinth"
-	"gopkg.in/ini.v1"
-
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
+
+const sessionLockName = "session.lock"
+
+// Workspace is one consistent observation of a server directory.
+type Workspace struct {
+	// Root is the server directory that the observation describes.
+	// If MCDR manages the root, then Root is the MCDR working directory.
+	Root         string                `json:"root"`
+	Environments types.EnvironmentInfo `json:"environments"`
+
+	// Probe holds the scan results before interpretation. Each examined jar
+	// appears in exactly one bucket. Read Probe when you need more than the
+	// single interpreted server.
+	Probe Probe `json:"-"`
+
+	// Packages lists the discovered content packages. observe derives it
+	// once from Probe and Environments. Artifact analysis makes this step
+	// expensive.
+	Packages []types.DiscoveredPackage `json:"packages"`
+}
+
+// MarshalJSON writes the wire format of an observation. The wire format
+// contains the stored facts and the values of the derived methods.
+// Consumers of `lucy status --json` read this format. MarshalJSON does not
+// write Probe. The raw scan is for use inside this process only.
+func (ws Workspace) MarshalJSON() ([]byte, error) {
+	projection := struct {
+		Root         string                    `json:"root"`
+		SavePath     string                    `json:"save_path"`
+		ModPath      []string                  `json:"mod_path"`
+		Packages     []types.DiscoveredPackage `json:"packages"`
+		Server       *ServerInstance           `json:"server,omitempty"`
+		Activity     *wireActivity             `json:"activity,omitempty"`
+		Environments types.EnvironmentInfo     `json:"environments"`
+	}{
+		Root:         ws.Root,
+		SavePath:     ws.SaveDir(),
+		ModPath:      ws.ModPath(),
+		Packages:     ws.Packages,
+		Environments: ws.Environments,
+	}
+	if server := ws.Server(); server != nil {
+		projection.Server = server
+		projection.Activity = &wireActivity{Active: ws.Active()}
+	}
+	return json.Marshal(projection)
+}
+
+type wireActivity struct {
+	Active bool `json:"active"`
+}
 
 var (
 	mu    sync.RWMutex
 	cache Workspace
 	ready bool
-
-	resetProbeExecCache     = func() {}
-	resetProbeFileLockCache = func() {}
 )
 
-// probeAnchor is the absolute server directory that buildWorkPath returns as
-// the workspace root. Set under mu before build() runs.
-var probeAnchor string
-
-// New is the exposed function for external packages to get Workspace.
-// The value is cached after the first build, and read access is blocked while
-// Rebuild refreshes the cache.
+// New returns the observation of the process working directory. New builds
+// the observation on the first call. Later calls read the cache.
 func New() Workspace {
 	mu.RLock()
 	if ready {
@@ -55,122 +96,138 @@ func New() Workspace {
 	}
 	mu.RUnlock()
 
-	mu.Lock()
-	defer mu.Unlock()
-
-	if !ready {
-		resetProbeMemoizedStateLocked()
-		probeAnchor, _ = os.Getwd()
-		cache = build()
-		ready = true
+	root, err := os.Getwd()
+	if err != nil {
+		return Workspace{}
 	}
-
-	return cache
+	return rebuild(root)
 }
 
-// Rebuild forces Workspace to be regenerated and blocks all readers while
-// rebuilding.
+// Rebuild builds the observation of the process working directory again.
+// Readers wait until the build finishes.
 func Rebuild() {
-	mu.Lock()
-	defer mu.Unlock()
-
-	resetProbeMemoizedStateLocked()
-	probeAnchor, _ = os.Getwd()
-	cache = build()
-	ready = true
+	root, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	rebuild(root)
 }
 
-// Invalidate marks the cached Workspace as stale so the next call to New
-// re-probes the server state.
+func rebuild(root string) Workspace {
+	observed := observe(root)
+	mu.Lock()
+	cache = observed
+	ready = true
+	mu.Unlock()
+	return observed
+}
+
+// Invalidate marks the cached observation as stale. The next New call
+// probes the directory again.
 func Invalidate() {
 	mu.Lock()
-	defer mu.Unlock()
 	ready = false
+	mu.Unlock()
 }
 
-// NewAt probes an explicit working directory without replacing the
-// current process-global Workspace cache. This is intended for init-style
-// takeover discovery where the caller may need rich observed state for a target
-// directory that is not the current process working directory.
+// NewAt observes the directory workDir. NewAt does not read or write the
+// process-global cache. Concurrent calls are safe.
 func NewAt(workDir string) Workspace {
-	mu.Lock()
-	defer mu.Unlock()
-
-	return buildAtLocked(workDir, false)
-}
-
-// Refresh refreshes probed state for workDir. When workDir matches
-// the current process working directory, this rebuilds the shared cache so
-// future New() calls observe the new state. Otherwise it performs an ad
-// hoc reprobe and returns the refreshed observation without mutating the shared
-// cache.
-func Refresh(workDir string) Workspace {
-	mu.Lock()
-	defer mu.Unlock()
-
-	return buildAtLocked(workDir, true)
-}
-
-func resetProbeMemoizedStateLocked() {
-	modPaths = fn.Memoize(buildModPaths)
-	getEnvironment = fn.Memoize(buildEnvironment)
-	workPath = fn.Memoize(buildWorkPath)
-	serverProperties = fn.Memoize(buildServerProperties)
-	savePath = fn.Memoize(buildSavePath)
-	installedPackages = fn.Memoize(buildInstalledPackages)
-	resetProbeExecCache()
-	resetProbeFileLockCache()
-}
-
-func buildAtLocked(
-	workDir string,
-	persistWhenCurrent bool,
-) Workspace {
 	target, err := filepath.Abs(workDir)
 	if err != nil {
 		return Workspace{}
 	}
-
-	originalWD, err := os.Getwd()
-	if err != nil {
-		return Workspace{}
-	}
-	originalTarget, err := filepath.Abs(originalWD)
-	if err != nil {
-		return Workspace{}
-	}
-
-	savedCache := cache
-	savedReady := ready
-	shouldRestoreCache := true
-	defer func() {
-		resetProbeMemoizedStateLocked()
-		if shouldRestoreCache {
-			cache = savedCache
-			ready = savedReady
-		}
-	}()
-
-	probeAnchor = target
-	if err := os.Chdir(target); err != nil {
-		return Workspace{}
-	}
-	defer func() {
-		_ = os.Chdir(originalWD)
-	}()
-
-	resetProbeMemoizedStateLocked()
-	info := build()
-
-	if persistWhenCurrent && sameProbePath(target, originalTarget) {
-		cache = info
-		ready = true
-		shouldRestoreCache = false
-	}
-
-	return info
+	return observe(target)
 }
 
+// Refresh observes the directory workDir again. If workDir resolves to the
+// current working directory, Refresh replaces the cached observation.
+// Otherwise Refresh returns a new observation and does not change the
+// cache.
+func Refresh(workDir string) Workspace {
+	target, err := filepath.Abs(workDir)
+	if err != nil {
+		return Workspace{}
+	}
+	observed := observe(target)
+
+	if current, err := os.Getwd(); err == nil && sameProbePath(target, current) {
+		mu.Lock()
+		cache = observed
+		ready = true
+		mu.Unlock()
+	}
+	return observed
+}
+
+// observe collects one snapshot of the server directory at dir. The steps
+// follow their data dependencies. First, detectEnvironment reads the host
+// environments. MCDR can move the server root away from dir. Next,
+// probeDirectory scans that root. Last, discoverPackages inventories the
+// packages under the root.
+func observe(dir string) Workspace {
+	env := detectEnvironment(dir)
+
+	ws := Workspace{
+		Root:         resolveRoot(dir, env),
+		Environments: env,
+	}
+	ws.Probe = probeDirectory(ws.Root)
+	ws.Packages = discoverPackages(ws.ModPath(), mcdrPluginDirs(env))
+	return ws
+}
+
+// resolveRoot returns the directory that holds the server. Only MCDR moves
+// the server away from the anchor. MCDR uses its configured working
+// directory.
+func resolveRoot(anchor string, env types.EnvironmentInfo) string {
+	if env.Mcdr != nil {
+		wd := env.Mcdr.Config.WorkingDirectory
+		if filepath.IsAbs(wd) {
+			return wd
+		}
+		return filepath.Join(anchor, wd)
+	}
+	return anchor
+}
+
+func mcdrPluginDirs(env types.EnvironmentInfo) []string {
+	if env.Mcdr == nil {
+		return nil
+	}
+	return env.Mcdr.Config.PluginDirectories
+}
+
+// Server returns the single bootable runtime of the directory. Server
+// returns nil in these cases:
+//
+//   - the scan found no runtime
+//   - the scan found more than one runtime
+//   - two or more detectors claim one jar
+//
+// Every non-nil result satisfies IsValid.
+func (ws Workspace) Server() *ServerInstance {
+	server, _ := ws.Probe.Single()
+	return server
+}
+
+// Active reports whether the server runs at this moment. The check probes
+// an exclusive lock on the session file. Active performs I/O on every call,
+// because activity changes over time. Active returns false when no single
+// runtime exists, or when the save location is unknown.
+func (ws Workspace) Active() bool {
+	if ws.Server() == nil {
+		return false
+	}
+	saveDir := ws.SaveDir()
+	if saveDir == "" {
+		return false
+	}
+	return checkSessionLock(filepath.Join(saveDir, sessionLockName))
+}
+
+// sameProbePath compares two directories after symlink resolution. Refresh
+// uses it to detect alias paths of the current directory.
 func sameProbePath(left, right string) bool {
 	leftEval, leftErr := filepath.EvalSymlinks(left)
 	if leftErr != nil {
@@ -182,333 +239,3 @@ func sameProbePath(left, right string) bool {
 	}
 	return leftEval == rightEval
 }
-
-// build builds the server information by performing several checks
-// and gathering data from various sources. It uses goroutines to perform these
-// tasks concurrently and a sync.Mutex to ensure thread-safe updates to the
-// Workspace struct.
-func build() Workspace {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var ws Workspace
-
-	// Environment stage
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		env := getEnvironment()
-		mu.Lock()
-		ws.Environments = env
-		mu.Unlock()
-	}()
-
-	// Server Work Path
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		workPath := workPath()
-		mu.Lock()
-		ws.Root = workPath
-		mu.Unlock()
-	}()
-
-	// Executable Stage
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		executable := getExecutableInfo()
-		mu.Lock()
-		ws.Server = executable
-		mu.Unlock()
-	}()
-
-	// Mod Path
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		modPath := modPaths()
-		mu.Lock()
-		ws.ModPath = modPath
-		mu.Unlock()
-	}()
-
-	// Installed Packages
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		packages := installedPackages()
-		mu.Lock()
-		ws.Packages = packages
-		mu.Unlock()
-	}()
-
-	// Save Path
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		savePath := savePath()
-		mu.Lock()
-		ws.SavePath = savePath
-		mu.Unlock()
-	}()
-
-	// TODO: Check for state.LockFile path
-	// However, the local installation method is not determined yet, so this is
-	// just a placeholder for now.
-
-	// Check if the server is running
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		activity := checkServerFileLock()
-		mu.Lock()
-		ws.Activity = activity
-		mu.Unlock()
-	}()
-
-	wg.Wait()
-	if ws.Server != nil {
-		ws.Server.Packages = ws.Packages
-	}
-
-	return ws
-}
-
-// Some functions that gets a single piece of information. They are not exported,
-// as New() applies a memoization mechanism. Every time a workspace
-// is needed, just call Workspace() without the concern of redundant calculation.
-
-func buildModPaths() (paths []string) {
-	exec := getExecutableInfo()
-	if exec == nil {
-		return
-	}
-
-	return packageSearchPaths(exec, workPath())
-}
-
-var modPaths = fn.Memoize(buildModPaths)
-
-var getEnvironment = fn.Memoize(buildEnvironment)
-
-func buildWorkPath() string {
-	env := getEnvironment()
-	if env.Mcdr != nil {
-		wd := env.Mcdr.Config.WorkingDirectory
-		if filepath.IsAbs(wd) {
-			return wd
-		}
-		return filepath.Join(probeAnchor, wd)
-	}
-	return probeAnchor
-}
-
-var workPath = fn.Memoize(buildWorkPath)
-
-func buildServerProperties() fileschema.FileMinecraftServerProperties {
-	exec := getExecutableInfo()
-	propertiesPath := filepath.Join(workPath(), "server.properties")
-	file, err := ini.Load(propertiesPath)
-	if err != nil {
-		if exec != UnknownServer {
-			log.Info("this server is missing a server.properties")
-		}
-		return nil
-	}
-
-	properties := make(map[string]string)
-	for _, section := range file.Sections() {
-		for _, key := range section.Keys() {
-			properties[key.Name()] = key.String()
-		}
-	}
-
-	return properties
-}
-
-var serverProperties = fn.Memoize(buildServerProperties)
-
-func buildSavePath() string {
-	serverProperties := serverProperties()
-	if serverProperties == nil {
-		return ""
-	}
-	levelName := serverProperties["level-name"]
-	return filepath.Join(workPath(), levelName)
-}
-
-var savePath = fn.Memoize(buildSavePath)
-
-func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPackage {
-	if len(infos) == 0 {
-		return nil
-	}
-	pkgs := make([]types.DiscoveredPackage, 0, len(infos))
-	for _, info := range infos {
-		pkg := types.DiscoveredPackage{
-			Id: types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  info.Ref.Eco,
-					Name: info.Ref.Name,
-				},
-				Version: info.Version,
-			},
-			Path: info.FilePath,
-		}
-		if len(info.Dependencies) > 0 {
-			deps := make([]types.Dependency, 0, len(info.Dependencies))
-			for _, dep := range info.Dependencies {
-				deps = append(
-					deps, types.Dependency{
-						Id: types.VersionedPackageRef{
-							PackageRef: types.PackageRef{
-								Eco:  dep.Ref.Eco,
-								Name: dep.Ref.Name,
-							},
-						},
-						Constraint: dep.Constraint,
-						Mandatory:  dep.Mandatory,
-						Type:       types.NormalizeDependencyType(dep.Type),
-					},
-				)
-			}
-			pkg.Dependencies = types.PackageDependencies{Value: deps}
-		}
-		pkgs = append(pkgs, pkg)
-	}
-	return pkgs
-}
-
-func buildInstalledPackages() (mods []types.DiscoveredPackage) {
-	idx := NewPackageIndex()
-	var mu sync.Mutex
-
-	sess := knownpkgs.Default().Session()
-	resolver := knownPackagesSlugResolver(sess)
-
-	paths := modPaths()
-	for _, modPath := range paths {
-		jarFiles, err := findJar(modPath)
-		if err != nil {
-			log.Warn(err)
-			log.Info("cannot read the mod directory")
-			continue
-		}
-
-		var wg sync.WaitGroup
-		for _, jarPath := range jarFiles {
-			wg.Add(1)
-			go func(path string) {
-				defer wg.Done()
-
-				analyzed, err := artifact.Analyze(
-					path,
-					artifact.WithSlugResolver(resolver),
-				)
-				if err != nil || len(analyzed) == 0 {
-					pkg, ok := packageByArtifactHash(path)
-					if !ok {
-						return
-					}
-					mu.Lock()
-					idx.Add(pkg)
-					mu.Unlock()
-					return
-				}
-				pkgs := artifactInfoToDiscoveredPackage(analyzed)
-
-				mu.Lock()
-				idx.Merge(pkgs)
-				mu.Unlock()
-			}(jarPath)
-		}
-		wg.Wait()
-	}
-
-	env := getEnvironment()
-	if env.Mcdr != nil {
-		for _, dir := range env.Mcdr.Config.PluginDirectories {
-			pluginFiles, err := findFileWithExt(dir, ".pyz", ".mcdr")
-			if err != nil {
-				log.Warn(err)
-				log.Info("cannot read the MCDR plugin directory")
-				continue
-			}
-			for _, pluginFile := range pluginFiles {
-				analyzed, err := artifact.Analyze(
-					pluginFile,
-					artifact.WithSlugResolver(resolver),
-				)
-				if err == nil && len(analyzed) > 0 {
-					pkgs := artifactInfoToDiscoveredPackage(analyzed)
-					idx.Merge(pkgs)
-				}
-			}
-		}
-	}
-
-	return idx.Packages()
-}
-
-func packageByArtifactHash(filePath string) (types.DiscoveredPackage, bool) {
-	providers := []upstream.ArtifactMapSource{modrinth.Provider}
-	if curseforge.Enabled() {
-		providers = append(providers, curseforge.Provider)
-	}
-	for _, mapper := range providers {
-		ref, _, ok, err := mapper.PackageByHash(artifacthash.File{Path: filePath})
-		if err != nil || !ok || ref.Name == "" {
-			continue
-		}
-		platform := ref.Eco
-		if platform == types.EcoUnspecified {
-			platform = types.EcoForge
-		}
-		version := ref.Version
-		if version == "" {
-			version = types.VersionUnknown
-		}
-		pkgName := ref.Name
-		if ref.Scope == types.SourceMCDR {
-			pkgName = types.BarePackageName(
-				strings.ReplaceAll(string(ref.Name), "_", "-"),
-			)
-		}
-		return types.DiscoveredPackage{
-			Id: types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  platform,
-					Name: pkgName,
-				},
-				Version: version,
-			},
-			Path: filePath,
-		}, true
-	}
-	return types.DiscoveredPackage{}, false
-}
-
-// knownPackagesSlugResolver returns a slug resolver that consults the knownpkgs
-// session for a canonical name matching the detected platform/local name.
-//
-// On hit, the mapping is promoted into the session cache via Record so that
-// subsequent resolutions in the same invocation see the freshly discovered
-// mapping without re-querying.
-func knownPackagesSlugResolver(session *knownpkgs.Session) artifact.SlugResolver {
-	return func(
-		ctx context.Context,
-		platform types.Ecosystem,
-		name types.BarePackageName,
-	) (types.BarePackageName, error) {
-		canonical, src, ok := session.LookupAny(string(name))
-		if !ok || canonical == string(name) {
-			return name, nil
-		}
-		// Resolver runs on the local name only, not on file contents — the
-		// persisted store already holds this mapping (LookupAny hit it).
-		session.Record(src, string(name), "", canonical, "hash")
-		return types.BarePackageName(canonical), nil
-	}
-}
-
-var installedPackages = fn.Memoize(buildInstalledPackages)

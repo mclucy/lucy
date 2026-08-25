@@ -24,41 +24,26 @@ func ensureServerEcosystemMatch(
 		}
 		return nil
 	default:
-		if ws.Server == nil || !ws.Server.IsValid() {
+		if ws.Server() == nil {
 			return errors.New(
 				"no valid executable found, `lucy add` requires a server in current directory",
 			)
 		}
 
-		level, offered := workspace.EvaluateRuntimeCompatibility(
-			ws.Server,
-			platform,
-		)
-		switch level {
-		case types.CompatCompatible:
-			return nil
-		case types.CompatDegraded:
+		offered, level, ok := ws.Supports(id)
+		if !ok {
+			return fmt.Errorf(
+				"%s packages are incompatible with the current runtime",
+				platform.Title(),
+			)
+		}
+		if level == types.CompatDegraded {
 			log.ShowWarn(fmt.Errorf(
 				"%s support is degraded through %s compatibility",
 				platform.Title(),
 				offered.Title(),
 			))
-			return nil
-		case types.CompatUnknown:
-			return fmt.Errorf(
-				"runtime unavailable: cannot determine %s package compatibility",
-				platform.Title(),
-			)
-		case types.CompatIncompatible:
-			return fmt.Errorf(
-				"%s packages are incompatible with the current runtime",
-				platform.Title(),
-			)
-		default:
-			return fmt.Errorf(
-				"%s package compatibility could not be determined",
-				platform.Title(),
-			)
 		}
+		return nil
 	}
 }

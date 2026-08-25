@@ -23,14 +23,15 @@ func NewPackageIndex() *PackageIndex {
 	}
 }
 
-// Add inserts a package into the index with the following dedupe policy:
+// Add inserts a package into the index. Dedupe strategy:
 //
 //   - First-write wins: if a package with the same full ID already exists, the
 //     new entry is ignored.
 //   - EXCEPTION: if the existing entry has an empty Path (i.e., it was
 //     discovered without a local installation path) AND the new package has a
 //     non-empty Path, the new package replaces the existing one. This
-//     allows local-path enrichment to take precedence over pathless entries.
+//     allows adding local path info upon discovery of a package that was
+//     previously only known remotely.
 //
 // The dedupe key is pkg.Id.StringFull(), which encodes platform/name@version.
 func (idx *PackageIndex) Add(pkg types.DiscoveredPackage) {
@@ -56,11 +57,12 @@ func (idx *PackageIndex) Merge(pkgs []types.DiscoveredPackage) {
 
 // Packages returns a deterministic sorted projection of all indexed packages.
 // The sort order is ascending by:
+//
 //  1. Platform (string)
 //  2. Name (string)
 //  3. Version (string)
 //
-// This method never exposes map iteration order; results are always sorted.
+// Unrelated with the map iteration order; results are always sorted.
 func (idx *PackageIndex) Packages() []types.DiscoveredPackage {
 	result := make([]types.DiscoveredPackage, 0, len(idx.pkgs))
 	for _, pkg := range idx.pkgs {
@@ -99,7 +101,7 @@ func (idx *PackageIndex) LookupByID(id types.VersionedPackageRef) (
 // name, sorted by Version (string ascending). If no packages match, returns
 // nil.
 //
-// This method never exposes map iteration order; results are always sorted.
+// Unrelated with the map iteration order; results are always sorted.
 func (idx *PackageIndex) LookupByEcosystemName(
 	platform types.Ecosystem,
 	name string,

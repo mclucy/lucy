@@ -54,12 +54,12 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 	error,
 ) {
 	ws := workspace.New()
-	serverPlatform := ws.Server.DerivedModLoader()
+	serverPlatform := ws.Server().ModLoader()
 
 	var gameVersionID string
 	switch serverPlatform {
 	case types.EcoVanilla:
-		gameVersionID = string(ws.Server.GameVersion())
+		gameVersionID = string(ws.Server().GameVersion())
 	case types.EcoUnspecified:
 		gameVersionID = promptSelectMinecraftVersion()
 	default:

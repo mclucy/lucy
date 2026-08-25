@@ -20,7 +20,7 @@ func (b mojangBootstrapper) Bootstrap(
 	fetched types.ResolvedPackage,
 	serverDir string,
 ) error {
-	if server := workspace.New().Server; server != nil && server.IsValid() {
+	if server := workspace.New().Server(); server != nil {
 		return errors.New("a server is already installed")
 	}
 
