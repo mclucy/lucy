@@ -1,6 +1,7 @@
 package version
 
 import (
+	"encoding/json/jsontext"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
@@ -80,6 +81,12 @@ func (v *MavenVersion) String() string {
 		return ""
 	}
 	return v.original
+}
+
+// MarshalJSONTo renders the version in its original string form. All fields
+// are unexported, which encoding/json/v2 refuses to marshal.
+func (v *MavenVersion) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String(v.String()))
 }
 
 func tokenizeMavenVersion(raw string) []mavenToken {
