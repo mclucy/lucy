@@ -18,8 +18,8 @@ func TestValidateVersionRejectsUnsupportedVersion(t *testing.T) {
 		t.Fatal("expected unsupported version error")
 	}
 
-	var stateErr StateError
-	if !errors.As(err, &stateErr) {
+	stateErr, ok := errors.AsType[StateError](err)
+	if !ok {
 		t.Fatalf("expected StateError, got %T", err)
 	}
 	if stateErr.Kind != ErrVersionUnsupported {
@@ -39,8 +39,8 @@ func TestValidateVersionRejectsEmptyVersionAsMalformed(t *testing.T) {
 		t.Fatal("expected malformed version error")
 	}
 
-	var stateErr StateError
-	if !errors.As(err, &stateErr) {
+	stateErr, ok := errors.AsType[StateError](err)
+	if !ok {
 		t.Fatalf("expected StateError, got %T", err)
 	}
 	if stateErr.Kind != ErrMalformed {

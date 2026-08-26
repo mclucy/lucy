@@ -46,8 +46,8 @@ func (e StateError) Error() string {
 }
 
 func IsVersionError(err error) bool {
-	var stateErr StateError
-	return errors.As(err, &stateErr) && stateErr.Kind == ErrVersionUnsupported
+	stateErr, ok := errors.AsType[StateError](err)
+	return ok && stateErr.Kind == ErrVersionUnsupported
 }
 
 func malformedStateError(file StateFile, field string, err error) error {

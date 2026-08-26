@@ -174,8 +174,8 @@ func TestProjectStateServiceLoadRejectsEmptyWorkDir(t *testing.T) {
 		t.Fatal("expected empty workDir to fail")
 	}
 
-	var stateErr StateError
-	if !errors.As(err, &stateErr) {
+	stateErr, ok := errors.AsType[StateError](err)
+	if !ok {
 		t.Fatalf("expected StateError, got %T", err)
 	}
 	if stateErr.Kind != ErrIOFailure {
@@ -202,8 +202,8 @@ func TestProjectStateServiceLoadRejectsMalformedExistingFile(t *testing.T) {
 		t.Fatal("expected malformed config to fail load")
 	}
 
-	var stateErr StateError
-	if !errors.As(err, &stateErr) {
+	stateErr, ok := errors.AsType[StateError](err)
+	if !ok {
 		t.Fatalf("expected StateError, got %T", err)
 	}
 	if stateErr.File != ManifestFile {
