@@ -1,6 +1,7 @@
 package version
 
 import (
+	"encoding/json/jsontext"
 	"fmt"
 
 	semverlib "github.com/Masterminds/semver/v3"
@@ -85,4 +86,11 @@ func (s *SemverVersion) String() string {
 		return ""
 	}
 	return (*semverlib.Version)(s).Original()
+}
+
+// MarshalJSONTo renders the version in its original string form. The wrapped
+// Masterminds semver.Version exposes only unexported fields, which
+// encoding/json/v2 refuses to marshal.
+func (s *SemverVersion) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return enc.WriteToken(jsontext.String(s.String()))
 }
