@@ -196,8 +196,8 @@ func fabricArtifactEmbeddedModNames(
 		}
 
 		base := jar.File
-		if idx := strings.LastIndex(base, "/"); idx >= 0 {
-			base = base[idx+1:]
+		if _, tail, ok := strings.CutLast(base, "/"); ok {
+			base = tail
 		}
 		base = strings.TrimSuffix(base, ".jar")
 		for _, dep := range depNames {
