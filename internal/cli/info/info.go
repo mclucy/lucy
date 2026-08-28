@@ -20,9 +20,13 @@ import (
 )
 
 var infoCmd = &cobra.Command{
-	Use:   "info",
-	Short: "Display information of a mod or plugin",
-	Args:  cobra.ExactArgs(1),
+	Use:   "info <package-ref|artifact-path>",
+	Short: "Display information of a mod, plugin, or local artifact",
+	Long: `Display information of a mod or plugin from an upstream source.
+
+Pass a local .jar, .zip, .pyz, or .mcdr file to inspect its embedded metadata
+without making a network request.`,
+	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(
 		cmd *cobra.Command,
 		args []string,
@@ -31,11 +35,12 @@ var infoCmd = &cobra.Command{
 		if len(args) >= 1 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return cli.CompletePackageIDSuggestions(
+		candidates, _ := cli.CompletePackageIDSuggestions(
 			context.Background(),
 			"info",
 			toComplete,
 		)
+		return candidates, cobra.ShellCompDirectiveDefault
 	},
 
 	RunE: cli.WithErrorLogging(actionInfo),
@@ -50,6 +55,14 @@ func NewCommand() *cobra.Command {
 }
 
 func actionInfo(cmd *cobra.Command, args []string) error {
+	isArtifact, err := isArtifactPath(args[0])
+	if err != nil {
+		return err
+	}
+	if isArtifact {
+		return actionLocalInfo(cmd, args[0])
+	}
+
 	ref, err := input.ParseFullPackageRef(args[0])
 	if err != nil {
 		return err
