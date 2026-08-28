@@ -217,6 +217,29 @@ func GetInfoHedged(
 	return types.Metadata{}, providerErrors, joinProviderErrors(providerErrors)
 }
 
+// ResolveArtifactByHash resolves an artifact's canonical upstream reference.
+// Mappers run in policy order; a failed or missing match does not stop later
+// mappers. Provider failures are returned for callers that surface warnings.
+func ResolveArtifactByHash(
+	artifact upstream.Hashable,
+) (types.FullPackageRef, string, []ProviderError) {
+	providerErrors := make([]ProviderError, 0)
+	for _, mapper := range artifactMappers() {
+		ref, hash, ok, err := mapper.PackageByHash(artifact)
+		if err != nil {
+			providerErrors = append(providerErrors, ProviderError{
+				Source: mapper.Id(),
+				Err:    fmt.Errorf("hash lookup failed: %w", err),
+			})
+			continue
+		}
+		if ok && ref.Name != "" {
+			return ref, hash, providerErrors
+		}
+	}
+	return types.FullPackageRef{}, "", providerErrors
+}
+
 // DependenciesMany executes Dependencies on all providers in parallel and
 // returns all successful results. An error is returned only when every provider
 // fails; partial failures are collected in the returned []ProviderError slice.

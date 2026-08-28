@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/mclucy/lucy/types"
 )
@@ -19,7 +20,7 @@ func Analyze(filePath string, opts ...Option) ([]Info, error) {
 		opt(o)
 	}
 
-	ext := filepath.Ext(filePath)
+	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
 	case ".jar", ".zip", ".pyz", ".mcdr":
 	default:

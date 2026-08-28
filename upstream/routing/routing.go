@@ -166,6 +166,23 @@ func GetArtifactMapper(src types.SourceId) (
 	return mapper, ok, nil
 }
 
+func artifactMappers() []upstream.ArtifactMapSource {
+	sources := []types.SourceId{types.SourceModrinth}
+	if curseforge.Enabled() {
+		sources = append(sources, types.SourceCurseForge)
+	}
+
+	registry := DefaultRegistry()
+	mappers := make([]upstream.ArtifactMapSource, 0, len(sources))
+	for _, source := range sources {
+		mapper, ok := registry.ArtifactMapper(source)
+		if ok {
+			mappers = append(mappers, mapper)
+		}
+	}
+	return mappers
+}
+
 func EcosystemInstallerFor(
 	ecosystem types.Ecosystem,
 ) (upstream.EcosystemProvider, bool) {
