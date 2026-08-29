@@ -20,8 +20,8 @@ import (
 )
 
 var infoCmd = &cobra.Command{
-	Use:   "info <package-ref|artifact-path>",
-	Short: "Display information of a mod, plugin, or local artifact",
+	Use:   "info <package|file>",
+	Short: "Display information a package, as a remote reference or local file.",
 	Long: `Display information of a mod or plugin from an upstream source.
 
 Pass a local .jar, .zip, .pyz, or .mcdr file to inspect its embedded metadata

@@ -104,6 +104,7 @@ func probeDirectory(root string) Probe {
 		}
 	}
 
+	p.foldConsumedComponents()
 	reportScanDiagnostics(root, p, len(jars))
 	return p
 }
@@ -113,6 +114,31 @@ func (p *Probe) addCandidate(jarPath string, evidence *detector.ExecutableEviden
 		JarPath:  jarPath,
 		Evidence: evidence,
 	})
+}
+
+// foldConsumedComponents drops vanilla runtime candidates that another
+// candidate consumes as a component. A Fabric launch shim boots the jar named
+// by its serverJar setting; the shim and that jar are one runtime, not two
+// servers side by side.
+func (p *Probe) foldConsumedComponents() {
+	consumed := make(map[string]bool)
+	for _, candidate := range p.Candidates {
+		for _, path := range candidate.Evidence.ConsumedPaths {
+			consumed[path] = true
+		}
+	}
+	if len(consumed) == 0 {
+		return
+	}
+
+	kept := make([]RuntimeCandidate, 0, len(p.Candidates))
+	for _, candidate := range p.Candidates {
+		if candidate.Evidence.IsVanilla() && consumed[candidate.Evidence.PrimaryPath] {
+			continue
+		}
+		kept = append(kept, candidate)
+	}
+	p.Candidates = kept
 }
 
 // reportScanDiagnostics writes the messages that a person needs for an
