@@ -2,10 +2,8 @@ package detector
 
 import (
 	"archive/zip"
-	"encoding/json/v2"
 	"os"
 
-	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
@@ -33,7 +31,7 @@ func (d *VanillaDetector) Detect(
 	}
 
 	for _, f := range zipReader.File {
-		if f.Name == "version.json" {
+		if f.Name == mojangVersionJSONEntry {
 			r, err := f.Open()
 			if err != nil {
 				return nil, err
@@ -45,26 +43,13 @@ func (d *VanillaDetector) Detect(
 				return nil, err
 			}
 
-			// Guard against Forge installer jars, which also contain version.json
-			// but with _comment and/or mainClass. encoding/json ignores unknown
-			// fields, so we must check that the guard fields are populated.
-			forgeInstallerGuard := &struct {
-				Comment   []string `json:"_comment"`
-				MainClass string   `json:"mainClass"`
-			}{}
-			if err := json.Unmarshal(data, forgeInstallerGuard); err == nil &&
-				(len(forgeInstallerGuard.Comment) > 0 ||
-					forgeInstallerGuard.MainClass != "") {
-				return nil, nil
-			}
-
-			obj := fileschema.FileMinecraftVersionSpec{}
-			err = json.Unmarshal(data, &obj)
+			gameVersion, guarded, err := mojangVersionFromJSON(data)
 			if err != nil {
 				return nil, err
 			}
-
-			gameVersion := types.BareVersion(obj.Id)
+			if guarded {
+				return nil, nil
+			}
 
 			exec := &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
 				Eco:     types.EcoMinecraft,

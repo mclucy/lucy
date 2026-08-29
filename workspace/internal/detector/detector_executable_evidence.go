@@ -10,8 +10,20 @@ type ExecutableEvidence struct {
 	PrimaryPath       string
 	RuntimeComponents []types.VersionedPackageRef
 
+	// ConsumedPaths lists artifacts this evidence absorbs as runtime
+	// components, such as the vanilla jar a Fabric launch shim boots. The
+	// probe must not report them as standalone runtimes.
+	ConsumedPaths []string
+
 	// DetectorName identifies the detector that produced this candidate.
 	DetectorName string
+}
+
+// IsVanilla reports evidence claiming a plain Minecraft runtime.
+func (e *ExecutableEvidence) IsVanilla() bool {
+	return e != nil && e.PrimaryRuntime != nil &&
+		e.PrimaryRuntime.Eco == types.EcoMinecraft &&
+		e.PrimaryRuntime.Name == "minecraft"
 }
 
 // ExecutableCandidates groups all detector candidates for one executable so the
@@ -48,7 +60,7 @@ func (c *ExecutableCandidates) disambiguated() []*ExecutableEvidence {
 
 	hasSpecific := false
 	for _, cand := range c.Candidates {
-		if !isVanillaEvidence(cand) {
+		if !cand.IsVanilla() {
 			hasSpecific = true
 			break
 		}
@@ -59,16 +71,9 @@ func (c *ExecutableCandidates) disambiguated() []*ExecutableEvidence {
 
 	disambiguated := make([]*ExecutableEvidence, 0, len(c.Candidates))
 	for _, cand := range c.Candidates {
-		if !isVanillaEvidence(cand) {
+		if !cand.IsVanilla() {
 			disambiguated = append(disambiguated, cand)
 		}
 	}
 	return disambiguated
-}
-
-func isVanillaEvidence(cand *ExecutableEvidence) bool {
-	return cand != nil &&
-		cand.PrimaryRuntime != nil &&
-		cand.PrimaryRuntime.Eco == types.EcoMinecraft &&
-		cand.PrimaryRuntime.Name == "minecraft"
 }

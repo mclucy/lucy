@@ -2,9 +2,11 @@ package detector
 
 import (
 	"archive/zip"
+	"encoding/json/v2"
 	"os"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/types"
 )
@@ -38,6 +40,31 @@ func analyzeForgeArgFile(file *os.File) (
 	}
 
 	return forgeVersion, mcVersion
+}
+
+// mojangVersionJSONEntry is the version spec entry inside a Mojang server jar.
+const mojangVersionJSONEntry = "version.json"
+
+// mojangVersionFromJSON extracts the game version from a Mojang version.json
+// payload. guarded reports a Forge installer jar, which also carries a
+// version.json but with _comment and/or mainClass control fields a real spec
+// never has. encoding/json ignores unknown fields, so the guard fields must
+// be checked explicitly.
+func mojangVersionFromJSON(data []byte) (types.BareVersion, bool, error) {
+	guard := &struct {
+		Comment   []string `json:"_comment"`
+		MainClass string   `json:"mainClass"`
+	}{}
+	if err := json.Unmarshal(data, guard); err == nil &&
+		(len(guard.Comment) > 0 || guard.MainClass != "") {
+		return types.VersionUnknown, true, nil
+	}
+
+	var spec fileschema.FileMinecraftVersionSpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		return types.VersionUnknown, false, err
+	}
+	return types.BareVersion(spec.Id), false, nil
 }
 
 func readArchiveEntry(zipReader *zip.Reader, name string) ([]byte, bool, error) {
