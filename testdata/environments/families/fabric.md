@@ -1,24 +1,26 @@
 # Fabric
 
-Covers environments: `fabric-executable-1214`, `fabric-executable-262`, `fabric-installed-1214`, `fabric-installed-114`.
+Covers environments: `fabric-executable-1214`, `fabric-executable-262`, `fabric-installed-1214`, `fabric-installed-262`, `fabric-installed-114`.
 
 ## Layouts
 
-- A executable Server (.jar) is self-contained launcher (`fabric-server-mc.<mc>-loader.<l>-launcher.<i>.jar`); downloads loader libraries on first run.
+- An executable Server (.jar) is self-contained launcher (`fabric-server-mc.<mc>-loader.<l>-launcher.<i>.jar`); downloads loader libraries on first run.
 - A fabric installer (server mode) creates a shim `fabric-server-launch.jar` beside a separate vanilla `server.jar`.
-- The legacy approach is everything bundled into one fat launcher jar.
+- The legacy approach is everything bundled into one single launcher jar. There are no dependency libraries under `libraries/`
 
-## Layouts and what lucy keys on
+## Layouts
 
-| Layout                | Marker inside jar                                                                                                                                                                                                                                                                  |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Executable Server jar | `install.properties`                                                                                                                                                                                                                                                               |
-| Installer stub        | `fabric-server-launch.properties`: `launch.mainClass=net.fabricmc.loader.impl.launch.knot.KnotServer` (legacy spelling without `.impl.` also accepted) + MANIFEST `Class-Path:` into `libraries/net/fabricmc/{intermediary,fabric-loader}/<ver>/`; sidecar `version.json` fallback |
+| Layout                                                                  | Key files                                                              | Loader version source                                      | Game version source                                                                                                                                                                                                                                |
+|-------------------------------------------------------------------------|------------------------------------------------------------------------|------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Executable server jar (example: `fabric-executable-262`)                | `install.properties`                                                   | `install.properties` field `fabric-loader-version`         | `install.properties` field `game-version`                                                                                                                                                                                                          |
+| Installer shim, old (installer ≤ 1.0, example: `fabric-installed-1214`) | `fabric-server-launch.properties` with `launch.mainClass` = KnotServer | `MANIFEST.MF` `Class-Path` entry `fabric-loader/<version>` | `MANIFEST.MF` `Class-Path` entry `intermediary/<mc version>`. If that entry is not present, `version.json` next to the jar, then `version.json` inside the jar named by `serverJar`.                                                               |
+| Installer shim, new (installer ≥ 1.1, example: `fabric-installed-262`)  | `fabric-server-launch.properties` with `launch.mainClass` = KnotServer | `MANIFEST.MF` `Class-Path` entry `fabric-loader/<version>` | No clue from the artifact itself. Lucy reads `serverJar` from `fabric-server-launcher.properties` to locate the vanilla server. That entry names the vanilla jar. The default is `server.jar`. Lucy reads `version.json` field `id` from that jar. |
 
 Note:
 
 - loader ≥ 0.12 has a breaking change to us that renamed the Knot package (`impl.` inserted); both spellings are handled.
-- `.fabric/`, `libraries/`, `versions/` cannot be used for detection as they are artifacts of the first run.
+- `.fabric/`, `libraries/`, `versions/` cannot be used for detection as they are generated artifacts of the first run.
+- A shim boots the jar named by `serverJar`. Lucy treats that jar as a component of the shim. Lucy does not report it as a standalone server. Without this rule, a directory with a shim and its vanilla jar reads as two servers side by side.
 
 ## Endpoints
 

@@ -132,6 +132,23 @@ environments:
         sha256: 1066970b09e9c671844572291c4a871cc1ac2b85838bf7004fa0e778e10f1358
     installer_hint: java -jar fabric-installer-1.0.1.jar server -downloadMinecraft
 
+  - id: fabric-installed-262
+    family: fabric
+    game_version: "26.2"
+    description: Installer-produced layout with modern stub (loader 0.19.3, installer 1.1.2) — MANIFEST omits intermediary, no version.json sidecar; distinct from fabric-installed-1214 which pins MC via intermediary Class-Path entry
+    docs: families/fabric.md
+    dirs: [mods]
+    artifacts:
+      - dest: fabric-server-launch.jar
+        manual: true
+        sha256: 18573c6f8f98ef4633e46068ec66abf68e292a9a95a7caf1cf57a6ed7754a12a
+      - dest: fabric-installer-1.1.2.jar
+        url: https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.2/fabric-installer-1.1.2.jar
+        sha256: 61e035bf7bf70153e127440ce34de47c9036f0a2d0c65d1529454bd35ceefe4f
+      - dest: server.jar
+        mojang_version: "26.2"
+        sha256: cdacdfb25898de5e4b4b0e5ddcc2722f77067e46605709c2d886c000ebb63ec5
+
   - id: fabric-installed-114
     family: fabric
     game_version: "1.14"

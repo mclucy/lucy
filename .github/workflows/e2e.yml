@@ -28,8 +28,8 @@ jobs:
   # and verify lucy.s probe against e2e jq programs under
   # testdata/environments/server-probe-e2e/<id>.jq.
   #
-  # Manual-artifact environments (fabric-installed-1214, fabric-installed-114)
-  # are excluded: their pinned jars cannot be fetched in CI.
+  # Manual-artifact environments (fabric-installed-1214, fabric-installed-262,
+  # fabric-installed-114) are excluded: their pinned jars cannot be fetched in CI.
   probe:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
     runs-on: ubuntu-latest
