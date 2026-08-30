@@ -19,10 +19,9 @@ func TestSpongeServerDetector_UsesSpecificationTitleOverImplementationTitle(t *t
 			"Implementation-Version: 1.21.10-17.0.0\n",
 	}
 	jarPath := writeRootJar(t, "spongevanilla-spec-title.jar", files)
-	reader := openZipForTest(t, jarPath)
 	det := &spongeServerDetector{}
 
-	evidence, err := det.Detect(jarPath, reader, nil)
+	evidence, err := det.Detect(DetectionContext{}, NewDetectionFile(jarPath))
 	if err != nil {
 		t.Fatalf("detect: %v", err)
 	}
@@ -48,10 +47,9 @@ func TestSpongeServerDetector_RejectsNonSpongeJar(t *testing.T) {
 		"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nImplementation-Title: NotSponge\nImplementation-Vendor: SpongePowered\nImplementation-Version: 1.21.10-17.0.0\n",
 	}
 	jarPath := writeRootJar(t, "random-server.jar", files)
-	reader := openZipForTest(t, jarPath)
 	det := &spongeServerDetector{}
 
-	evidence, err := det.Detect(jarPath, reader, nil)
+	evidence, err := det.Detect(DetectionContext{}, NewDetectionFile(jarPath))
 	if err != nil {
 		t.Fatalf("detect: %v", err)
 	}

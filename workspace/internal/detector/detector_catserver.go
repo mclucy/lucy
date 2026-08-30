@@ -1,9 +1,7 @@
 package detector
 
 import (
-	"archive/zip"
 	"bufio"
-	"os"
 	"regexp"
 	"strings"
 
@@ -21,12 +19,13 @@ func (d *catServerDetector) Name() string {
 	return "catserver executable"
 }
 
-func (d *catServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
-	_ = fileHandle
+func (d *catServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
 
 	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
 	if err != nil {

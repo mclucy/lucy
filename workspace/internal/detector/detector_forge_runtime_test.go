@@ -309,7 +309,7 @@ func TestExecutableRejectsCreateModJar(t *testing.T) {
 		},
 	)
 
-	runtime := Executable(jarPath)
+	runtime := Executable(DetectionContext{}, NewDetectionFile(jarPath))
 	if runtime == nil || !runtime.IsEmpty() {
 		t.Fatalf(
 			"expected Create mod jar to be rejected as executable, got %+v",
@@ -331,7 +331,7 @@ func TestExecutableRejectsForgeShimJar(t *testing.T) {
 		},
 	)
 
-	runtime := Executable(jarPath)
+	runtime := Executable(DetectionContext{}, NewDetectionFile(jarPath))
 	if runtime == nil || !runtime.IsEmpty() {
 		t.Fatalf(
 			"expected Forge shim jar to be rejected as executable, got %+v",
@@ -347,23 +347,11 @@ func detectForgeRuntimeWith(
 ) *ExecutableEvidence {
 	t.Helper()
 
-	file, err := os.Open(jarPath)
+	context, err := NewDetectionContext(filepath.Dir(jarPath))
 	if err != nil {
-		t.Fatalf("open jar: %v", err)
+		t.Fatalf("create detection context: %v", err)
 	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		t.Fatalf("stat jar: %v", err)
-	}
-
-	reader, err := zip.NewReader(file, stat.Size())
-	if err != nil {
-		t.Fatalf("read zip: %v", err)
-	}
-
-	evidence, err := detector.Detect(jarPath, reader, file)
+	evidence, err := detector.Detect(context, NewDetectionFile(jarPath))
 	if err != nil {
 		t.Fatalf("detect runtime: %v", err)
 	}
@@ -575,5 +563,24 @@ func mkdirAll(t *testing.T, path string) {
 	}
 	if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
 		t.Fatalf("touch file: %v", err)
+	}
+}
+
+func TestPropertiesValueSupportsJavaSeparatorsAndLastAssignment(t *testing.T) {
+	t.Parallel()
+
+	data := []byte("serverJar: first.jar\nserverJar second.jar\nserverJar=custom.jar\n")
+	if got := propertiesValue(data, fabricServerJarProperty); got != "custom.jar" {
+		t.Fatalf("propertiesValue() = %q, want %q", got, "custom.jar")
+	}
+}
+
+func TestFabricLauncherServerJarPathPreservesAbsolutePath(t *testing.T) {
+	t.Parallel()
+
+	primary := NewDetectionFile(filepath.Join(string(filepath.Separator), "server", "fabric-server-launch.jar"))
+	want := filepath.Join(string(filepath.Separator), "other", "server.jar")
+	if got := fabricLauncherServerJarPath(primary, []byte("serverJar="+want)); got != want {
+		t.Fatalf("fabricLauncherServerJarPath() = %q, want %q", got, want)
 	}
 }

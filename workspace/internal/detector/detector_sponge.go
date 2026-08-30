@@ -1,9 +1,7 @@
 package detector
 
 import (
-	"archive/zip"
 	"bufio"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -39,12 +37,13 @@ func (d *spongeServerDetector) Name() string {
 	return "sponge server"
 }
 
-func (d *spongeServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
-	_ = fileHandle
+func (d *spongeServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
 
 	if !spongeUniversalJarPattern.MatchString(strings.ToLower(filepath.Base(filePath))) {
 		return nil, nil

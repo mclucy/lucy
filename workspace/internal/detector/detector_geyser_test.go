@@ -1,10 +1,6 @@
 package detector
 
-import (
-	"archive/zip"
-	"os"
-	"testing"
-)
+import "testing"
 
 func TestGeyserStandaloneDetectorDetectsStandaloneBootstrapJar(t *testing.T) {
 	t.Parallel()
@@ -34,23 +30,7 @@ func TestGeyserStandaloneDetectorDetectsStandaloneBootstrapJar(t *testing.T) {
 func detectGeyserStandaloneRuntimeWith(t *testing.T, jarPath string) *ExecutableEvidence {
 	t.Helper()
 
-	file, err := os.Open(jarPath)
-	if err != nil {
-		t.Fatalf("open jar: %v", err)
-	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		t.Fatalf("stat jar: %v", err)
-	}
-
-	reader, err := zip.NewReader(file, stat.Size())
-	if err != nil {
-		t.Fatalf("read zip: %v", err)
-	}
-
-	evidence, err := (&geyserStandaloneDetector{}).Detect(jarPath, reader, file)
+	evidence, err := (&geyserStandaloneDetector{}).Detect(DetectionContext{}, NewDetectionFile(jarPath))
 	if err != nil {
 		t.Fatalf("detect standalone geyser runtime: %v", err)
 	}

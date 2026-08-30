@@ -13,7 +13,7 @@ func TestCraftBukkitFamilyDetector_PaperFixtureClassifiesAsPaper(t *testing.T) {
 	fixtureRoot := paperFamilyFixtureRoot(t)
 	paperDir := filepath.Join(fixtureRoot, "test_paper", "paper")
 
-	evidence, err := (&craftBukkitFamilyDetector{}).Detect(paperDir, nil, nil)
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(paperDir))
 	if err != nil {
 		t.Fatalf("detect paper fixture: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestCraftBukkitFamilyDetector_RuntimeProjection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			evidence, err := (&craftBukkitFamilyDetector{}).Detect(tt.path, nil, nil)
+			evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(tt.path))
 			if err != nil {
 				t.Fatalf("detect %s: %v", tt.name, err)
 			}
@@ -103,7 +103,7 @@ func TestCraftBukkitFamilyDetector_KnownPaperForkBrands(t *testing.T) {
 			t.Parallel()
 
 			brandDir := filepath.Join(fixtureRoot, "test_"+brand, brand)
-			evidence, err := (&craftBukkitFamilyDetector{}).Detect(brandDir, nil, nil)
+			evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(brandDir))
 			if err != nil {
 				t.Fatalf("detect %s fixture: %v", brand, err)
 			}
@@ -132,7 +132,7 @@ func TestCraftBukkitFamilyDetector_RequiresBukkitConfirmation(t *testing.T) {
 		[]byte("Manifest-Version: 1.0\nMain-Class: com.example.SomeOtherServer\n\n"),
 	)
 
-	evidence, err := (&craftBukkitFamilyDetector{}).Detect(dir, nil, nil)
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(dir))
 	if err != nil {
 		t.Fatalf("detect craftbukkit family without bukkit confirmation: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestCraftBukkitFamilyDetector_SkipsFastPathBeforeBukkitConfirmation(t *test
 	// The detector intentionally has no hash fast-path hook before Stage 1.
 	// Without Bukkit confirmation, Detect must return nil before any Paper-family
 	// classification or future fast-path optimization could run.
-	evidence, err := (&craftBukkitFamilyDetector{}).Detect(dir, nil, nil)
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(dir))
 	if err != nil {
 		t.Fatalf("detect paper-like non-bukkit candidate: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestCraftBukkitFamilyDetector_LauncherOnlyEvidenceNotSufficient(t *testing.
 		[]byte("launcher-only-marker"),
 	)
 
-	evidence, err := (&craftBukkitFamilyDetector{}).Detect(dir, nil, nil)
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(dir))
 	if err != nil {
 		t.Fatalf("detect launcher-only paperclip candidate: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestCraftBukkitFamilyDetector_Youer(t *testing.T) {
 		t.Fatalf("expected youer manifest identity to satisfy strict bukkit confirmation: %+v", signals)
 	}
 
-	evidence, err := (&craftBukkitFamilyDetector{}).Detect(youerDir, nil, nil)
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(youerDir))
 	if err != nil {
 		t.Fatalf("detect youer fixture: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestCraftBukkitFamilyDetector_Reaper(t *testing.T) {
 		t.Fatalf("expected reaper patch marker %q in %#v", paperPatchReaperToken, patchProperties)
 	}
 
-	evidence, err := (&craftBukkitFamilyDetector{}).Detect(reaperDir, nil, nil)
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(reaperDir))
 	if err != nil {
 		t.Fatalf("detect reaper fixture: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestCraftBukkitFamilyDetector_FamilyMissStillRunsBrandRules(t *testing.T) {
 		t.Fatalf("expected family miss before brand rules, got %v", judgment.familyResult)
 	}
 
-	evidence, err := (&craftBukkitFamilyDetector{}).Detect(dir, nil, nil)
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(dir))
 	if err != nil {
 		t.Fatalf("detect bukkit candidate with family miss brand recovery: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestCraftBukkitFamilyDetector_ContradictoryEvidenceFailsClosed(t *testing.T
 		t.Fatalf("expected reasons to record contradiction state, got %#v", judgment.reasons)
 	}
 
-	evidence, err := (&craftBukkitFamilyDetector{}).Detect(dir, nil, nil)
+	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(dir))
 	if err != nil {
 		t.Fatalf("detect contradictory paper candidate: %v", err)
 	}
