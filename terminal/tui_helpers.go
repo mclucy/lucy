@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 )
 
 const keyColPadding = 2

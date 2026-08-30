@@ -10,7 +10,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 
