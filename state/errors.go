@@ -1,7 +1,6 @@
 package state
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -9,9 +8,8 @@ import (
 type ErrorKind string
 
 const (
-	ErrMalformed          ErrorKind = "malformed"
-	ErrVersionUnsupported ErrorKind = "version_unsupported"
-	ErrIOFailure          ErrorKind = "io_failure"
+	ErrMalformed ErrorKind = "malformed"
+	ErrIOFailure ErrorKind = "io_failure"
 )
 
 type StateError struct {
@@ -45,23 +43,11 @@ func (e StateError) Error() string {
 	return strings.Join(parts, ": ")
 }
 
-func IsVersionError(err error) bool {
-	stateErr, ok := errors.AsType[StateError](err)
-	return ok && stateErr.Kind == ErrVersionUnsupported
-}
-
 func malformedStateError(file StateFile, field string, err error) error {
 	if err == nil {
 		return nil
 	}
 	return NewStateError(file, ErrMalformed, field, err.Error())
-}
-
-func versionStateError(file StateFile, field string, version string, kind ErrorKind) error {
-	if kind == ErrMalformed {
-		return NewStateError(file, kind, field, "version is required")
-	}
-	return NewStateError(file, kind, field, fmt.Sprintf("unsupported version %q; supported version is %q", version, SupportedVersion))
 }
 
 func ioStateError(file StateFile, field, msg string, err error) error {

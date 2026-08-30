@@ -13,11 +13,10 @@ import (
 // Manifest stores the desired environment intent for a Lucy project.
 // It is persisted in lucy.yaml.
 type Manifest struct {
-	FormatVersion string              `yaml:"format_version"`
-	Environment   ManifestEnvironment `yaml:"environment"`
-	Packages      []ManifestPackage   `yaml:"packages"`
-	Bundles       []ManifestBundle    `yaml:"bundles"`
-	Config        *Config             `yaml:"config,omitempty"`
+	Environment ManifestEnvironment `yaml:"environment"`
+	Packages    []ManifestPackage   `yaml:"packages"`
+	Bundles     []ManifestBundle    `yaml:"bundles"`
+	Config      *Config             `yaml:"config,omitempty"`
 }
 
 type ManifestEnvironment struct {
@@ -102,7 +101,6 @@ type ManifestBundle struct {
 
 func ManifestDefaults() Manifest {
 	return Manifest{
-		FormatVersion: SupportedVersion,
 		Environment: ManifestEnvironment{
 			GameVersion:            "",
 			ServerCore:             "",
@@ -119,23 +117,6 @@ func ManifestDefaults() Manifest {
 }
 
 func ValidateManifest(m Manifest) error {
-	if err := ValidateVersion(m.FormatVersion); err != nil {
-		if IsVersionError(err) {
-			return versionStateError(
-				ManifestFile,
-				"format_version",
-				m.FormatVersion,
-				ErrVersionUnsupported,
-			)
-		}
-		return versionStateError(
-			ManifestFile,
-			"format_version",
-			m.FormatVersion,
-			ErrMalformed,
-		)
-	}
-
 	if err := ValidateManifestEnvironment(m.Environment); err != nil {
 		return err
 	}

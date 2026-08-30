@@ -10,7 +10,6 @@ import (
 
 func TestManifestRoundTrip(t *testing.T) {
 	manifestText := []byte(`{
-	  "format_version": "v1",
 	  "environment": {
 	    "game_version": "1.21.1",
 	    "modding_platform": "neoforge",
@@ -247,9 +246,6 @@ func TestManifestBundlesRemainSeparateFromPackages(t *testing.T) {
 func TestManifestDefaults(t *testing.T) {
 	manifest := ManifestDefaults()
 
-	if manifest.FormatVersion != "v1" {
-		t.Fatalf("expected format version v1, got %q", manifest.FormatVersion)
-	}
 	if manifest.Environment.ModdingPlatform != "" {
 		t.Fatalf(
 			"expected default modding platform empty, got %q",
@@ -279,8 +275,7 @@ func TestManifestDefaults(t *testing.T) {
 
 func TestManifestBlankPackageEntryMeansEmptyPackages(t *testing.T) {
 	manifest, err := ParseManifest(
-		[]byte(`format_version: v1
-environment:
+		[]byte(`environment:
   game_version: "1.21.4"
   compatible_platforms: []
   declared_capabilities: []
@@ -302,7 +297,6 @@ bundles: []
 
 func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t *testing.T) {
 	manifest := &Manifest{
-		FormatVersion: ManifestDefaults().FormatVersion,
 		Environment: ManifestEnvironment{
 			ModdingPlatform: string(types.EcoFabric),
 		},
@@ -406,7 +400,6 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 
 func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t *testing.T) {
 	manifest := &Manifest{
-		FormatVersion: ManifestDefaults().FormatVersion,
 		Environment: ManifestEnvironment{
 			ModdingPlatform: string(types.EcoFabric),
 		},
@@ -550,7 +543,6 @@ func TestPruneLockForManifestKeepsOnlyManagedClosure(t *testing.T) {
 		},
 	}
 	lock := &Lock{
-		Version:             SupportedVersion,
 		GeneratedAt:         NewLock().GeneratedAt,
 		ManifestFingerprint: "sha256:test",
 		GameVersion:         "1.21.5",

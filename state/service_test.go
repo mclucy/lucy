@@ -188,7 +188,7 @@ func TestProjectStateServiceLoadRejectsEmptyWorkDir(t *testing.T) {
 
 func TestProjectStateServiceLoadRejectsMalformedExistingFile(t *testing.T) {
 	workDir := t.TempDir()
-	malformedConfig := []byte("format_version: v1\nenvironment: {}\npackages: []\nbundles: []\nconfig:\n  sources:\n    priority:\n      - invalid\n    preferred: auto\n")
+	malformedConfig := []byte("environment: {}\npackages: []\nbundles: []\nconfig:\n  sources:\n    priority:\n      - invalid\n    preferred: auto\n")
 	if err := os.WriteFile(
 		filepath.Join(workDir, string(ManifestFile)),
 		malformedConfig,

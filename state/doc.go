@@ -7,7 +7,7 @@
 //   - resolved state: the exact dependency closure Lucy selected for that intent
 //   - observed state: what probe discovers from the working directory right now
 //
-// The persistent files for v1 are:
+// The persistent files are:
 //
 //   - lucy.yaml for manifest (desired environment intent) and optional config overrides
 //   - lucy-lock.yaml for exact resolved graph, artifact identity, and provenance
