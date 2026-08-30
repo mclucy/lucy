@@ -85,27 +85,32 @@ func probeDirectory(root string) Probe {
 		p.addCandidate(evidence.PrimaryPath, evidence)
 	}
 
-	jars, err := findJar(root)
+	context, err := detector.NewDetectionContext(root)
 	if err != nil {
 		log.Warn(fmt.Errorf("cannot read server directory: %w", err))
+		return p
 	}
-	for _, jar := range jars {
-		claims := detector.Executable(jar)
+	files := context.RootFiles()
+	for _, file := range files {
+		if file.IsDirectory() || !strings.HasSuffix(strings.ToLower(file.Path()), ".jar") {
+			continue
+		}
+		claims := detector.Executable(context, file)
 		switch {
 		case claims == nil || claims.IsEmpty():
-			p.Unidentified = append(p.Unidentified, jar)
+			p.Unidentified = append(p.Unidentified, file.Path())
 		case claims.IsAmbiguous():
 			p.AmbiguousCandidates = append(p.AmbiguousCandidates, AmbiguousRuntimeCandidate{
-				JarPath:  jar,
+				JarPath:  file.Path(),
 				Evidence: claims.Candidates,
 			})
 		default:
-			p.addCandidate(jar, claims.Single())
+			p.addCandidate(file.Path(), claims.Single())
 		}
 	}
 
 	p.foldConsumedComponents()
-	reportScanDiagnostics(root, p, len(jars))
+	reportScanDiagnostics(root, p, len(files))
 	return p
 }
 
@@ -123,8 +128,10 @@ func (p *Probe) addCandidate(jarPath string, evidence *detector.ExecutableEviden
 func (p *Probe) foldConsumedComponents() {
 	consumed := make(map[string]bool)
 	for _, candidate := range p.Candidates {
-		for _, path := range candidate.Evidence.ConsumedPaths {
-			consumed[path] = true
+		for _, file := range candidate.Evidence.ConsumedFiles {
+			if file != nil {
+				consumed[file.Path()] = true
+			}
 		}
 	}
 	if len(consumed) == 0 {

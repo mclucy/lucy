@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bufio"
 	"encoding/json/v2"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -33,11 +32,14 @@ func (d *fabricServerSingleFileDetector) Name() string {
 	return "fabric server"
 }
 
-func (d *fabricServerSingleFileDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (exec *ExecutableEvidence, err error) {
+func (d *fabricServerSingleFileDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (exec *ExecutableEvidence, err error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
+
 	loaderVersion := types.VersionUnknown
 	gameVersion := types.VersionUnknown
 	for _, f := range zipReader.File {
@@ -91,11 +93,14 @@ func (d *fabricServerLauncherDetector) Name() string {
 	return "fabric server"
 }
 
-func (d *fabricServerLauncherDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (exec *ExecutableEvidence, err error) {
+func (d *fabricServerLauncherDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (exec *ExecutableEvidence, err error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
+
 	data, ok, err := readArchiveEntry(zipReader, fabricLaunchPropertiesPath)
 	if err != nil || !ok {
 		return nil, err
@@ -109,14 +114,20 @@ func (d *fabricServerLauncherDetector) Detect(
 		loaderVersion = parseFabricLauncherBundledLoaderVersion(zipReader)
 	}
 	if gameVersion == types.VersionUnknown {
-		gameVersion = parseFabricLauncherSidecarGameVersion(filePath)
+		gameVersion = parseFabricLauncherSidecarGameVersion(context, primaryFile)
 	}
 	// Installer 1.1+ shims embed no version evidence, so the last resort is
 	// the vanilla jar the shim boots: FabricServerLauncher reads serverJar
 	// from fabric-server-launcher.properties and defaults to server.jar.
-	serverJarPath := fabricLauncherServerJarPath(filePath)
+	launcherProperties := []byte(nil)
+	if propertiesFile, ok := context.Sibling(primaryFile, "fabric-server-launcher.properties"); ok {
+		launcherProperties, _ = propertiesFile.Read()
+	}
+	serverJarPath := fabricLauncherServerJarPath(primaryFile, launcherProperties)
 	if gameVersion == types.VersionUnknown {
-		gameVersion = parseServerJarGameVersion(serverJarPath)
+		if serverJar, ok := context.RootFile(serverJarPath); ok {
+			gameVersion = parseServerJarGameVersion(serverJar)
+		}
 	}
 	if loaderVersion == types.VersionUnknown || gameVersion == types.VersionUnknown {
 		return nil, nil
@@ -125,7 +136,9 @@ func (d *fabricServerLauncherDetector) Detect(
 	exec = newFabricExecutableEvidence(filePath, loaderVersion, gameVersion)
 	// The shim boots this jar; the probe must not report it as a standalone
 	// runtime beside the shim.
-	exec.ConsumedPaths = []string{serverJarPath}
+	if serverJar, ok := context.RootFile(serverJarPath); ok {
+		exec.ConsumedFiles = []*DetectionFile{serverJar}
+	}
 	return exec, nil
 }
 
@@ -217,13 +230,12 @@ func parseFabricLauncherBundledLoaderVersion(zipReader *zip.Reader) types.BareVe
 	return types.BareVersion(metadata.Version)
 }
 
-func parseFabricLauncherSidecarGameVersion(filePath string) types.BareVersion {
-	data, err := os.ReadFile(
-		filepath.Join(
-			filepath.Dir(filePath),
-			"version.json",
-		),
-	)
+func parseFabricLauncherSidecarGameVersion(context DetectionContext, primaryFile *DetectionFile) types.BareVersion {
+	sidecar, ok := context.Sibling(primaryFile, "version.json")
+	if !ok {
+		return types.VersionUnknown
+	}
+	data, err := sidecar.Read()
 	if err != nil {
 		return types.VersionUnknown
 	}
@@ -248,22 +260,11 @@ func parseFabricLauncherSidecarGameVersion(filePath string) types.BareVersion {
 // parseServerJarGameVersion reads the game version from the version.json of a
 // server jar on disk. Any problem yields VersionUnknown: this source is the
 // last resort for launch shims with no embedded version evidence.
-func parseServerJarGameVersion(jarPath string) types.BareVersion {
-	file, err := os.Open(jarPath)
+func parseServerJarGameVersion(file *DetectionFile) types.BareVersion {
+	zipReader, err := file.Archive()
 	if err != nil {
 		return types.VersionUnknown
 	}
-	defer fn.CloseReader(file, log.Warn)
-
-	stat, err := file.Stat()
-	if err != nil {
-		return types.VersionUnknown
-	}
-	zipReader, err := zip.NewReader(file, stat.Size())
-	if err != nil {
-		return types.VersionUnknown
-	}
-
 	data, ok, err := readArchiveEntry(zipReader, mojangVersionJSONEntry)
 	if err != nil || !ok {
 		return types.VersionUnknown
@@ -279,34 +280,39 @@ func parseServerJarGameVersion(jarPath string) types.BareVersion {
 // shimPath boots. FabricServerLauncher reads serverJar from
 // fabric-server-launcher.properties beside the shim and falls back to
 // server.jar when the file or the entry is missing.
-func fabricLauncherServerJarPath(shimPath string) string {
+func fabricLauncherServerJarPath(primaryFile *DetectionFile, properties []byte) string {
 	name := fabricDefaultServerJar
-	if data, err := os.ReadFile(filepath.Join(
-		filepath.Dir(shimPath),
-		fabricLauncherPropertiesPath,
-	)); err == nil {
-		if value := propertiesValue(data, fabricServerJarProperty); value != "" {
-			name = value
-		}
+	if value := propertiesValue(properties, fabricServerJarProperty); value != "" {
+		name = value
 	}
-	return filepath.Join(filepath.Dir(shimPath), name)
+	if filepath.IsAbs(name) {
+		return filepath.Clean(name)
+	}
+	return filepath.Join(filepath.Dir(primaryFile.Path()), name)
 }
 
 // propertiesValue returns the value of key in a Java properties payload, or
 // "" when the key is absent.
 func propertiesValue(data []byte, key string) string {
-	prefix := key + "="
+	var value string
 	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
-		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
 			continue
 		}
-		if after, found := strings.CutPrefix(line, prefix); found {
-			return strings.TrimSpace(after)
-		}
-	}
 
-	return ""
+		separator := strings.IndexAny(line, "=:\t ")
+		if separator < 0 {
+			continue
+		}
+		propertyKey := strings.TrimSpace(line[:separator])
+		if propertyKey != key {
+			continue
+		}
+		propertyValue := strings.TrimLeft(line[separator:], "=:\t ")
+		value = strings.TrimSpace(propertyValue)
+	}
+	return value
 }
 
 func newFabricExecutableEvidence(

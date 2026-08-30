@@ -1,9 +1,7 @@
 package detector
 
 import (
-	"archive/zip"
 	"bufio"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -22,11 +20,14 @@ func (d *geyserStandaloneDetector) Name() string {
 // - https://geysermc.org/wiki/geyser/setup/self/standalone
 // - https://geysermc.org/wiki/geyser/setup/self/proxy-servers
 // - https://geysermc.org/wiki/geyser/faq/
-func (d *geyserStandaloneDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
+func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
+
 	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
 	if err != nil {
 		return nil, err

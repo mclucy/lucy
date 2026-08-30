@@ -1,9 +1,6 @@
 package detector
 
 import (
-	"archive/zip"
-	"os"
-
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
@@ -17,11 +14,14 @@ func (d *VanillaDetector) Name() string {
 	return "vanilla server"
 }
 
-func (d *VanillaDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
+func (d *VanillaDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
+
 	data, ok, err := readArchiveEntry(zipReader, fabricLaunchPropertiesPath)
 	if err != nil {
 		return nil, err

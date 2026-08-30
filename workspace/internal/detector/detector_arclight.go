@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bufio"
 	"encoding/json/v2"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -26,11 +25,14 @@ func (d *arclightServerDetector) Name() string {
 // Sources:
 // - https://arclight.izzel.io/
 // - https://deepwiki.com/IzzelAliz/Arclight/1-overview
-func (d *arclightServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
+func (d *arclightServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
+
 	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
 	if err != nil {
 		return nil, err

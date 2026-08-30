@@ -17,10 +17,9 @@ func TestVanillaDetectorDetectsVanillaServerJson(t *testing.T) {
 	}
 	jarPath := writeRootJar(t, "vanilla-server-1.21.4.jar", files)
 
-	reader := openZipForTest(t, jarPath)
 	detector := &VanillaDetector{}
 
-	evidence, err := detector.Detect(jarPath, reader, nil)
+	evidence, err := detector.Detect(DetectionContext{}, NewDetectionFile(jarPath))
 	if err != nil {
 		t.Fatalf("detect vanilla: %v", err)
 	}
@@ -51,10 +50,9 @@ func TestVanillaDetectorRejectsForgeInstallerJson(t *testing.T) {
 	}
 	jarPath := writeRootJar(t, "forge-installer.jar", files)
 
-	reader := openZipForTest(t, jarPath)
 	detector := &VanillaDetector{}
 
-	evidence, err := detector.Detect(jarPath, reader, nil)
+	evidence, err := detector.Detect(DetectionContext{}, NewDetectionFile(jarPath))
 	if err != nil {
 		t.Fatalf("detect forge installer: %v", err)
 	}
@@ -71,10 +69,9 @@ func TestVanillaDetectorRejectsForgeInstallerWithEmptyComment(t *testing.T) {
 	}
 	jarPath := writeRootJar(t, "forge-installer-empty-comment.jar", files)
 
-	reader := openZipForTest(t, jarPath)
 	detector := &VanillaDetector{}
 
-	evidence, err := detector.Detect(jarPath, reader, nil)
+	evidence, err := detector.Detect(DetectionContext{}, NewDetectionFile(jarPath))
 	if err != nil {
 		t.Fatalf("detect: %v", err)
 	}
@@ -223,7 +220,6 @@ Built-By: NeoForge
 		"META-INF/MANIFEST.MF": manifest,
 	}
 	jarPath := writeRootJar(t, "neoforge-universal.jar", files)
-
 	reader := openZipForTest(t, jarPath)
 	ok, err := verifyNeoForgeUniversalManifest(reader, "21.1.77")
 	if err != nil {
@@ -246,7 +242,6 @@ Implementation-Title: net.minecraftforge
 		"META-INF/MANIFEST.MF": versionFirstManifest,
 	}
 	jarPath := writeRootJar(t, "forge-universal.jar", files)
-
 	reader := openZipForTest(t, jarPath)
 	forgeVersion, gameVersion := parseForgeManifest(reader)
 

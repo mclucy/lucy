@@ -143,6 +143,15 @@ func forgeHasSibling(filePath string, siblings ...string) bool {
 	return false
 }
 
+func hasForgeSibling(context DetectionContext, primary *DetectionFile, siblings ...string) bool {
+	for _, sibling := range siblings {
+		if _, ok := context.Sibling(primary, sibling); ok {
+			return true
+		}
+	}
+	return false
+}
+
 func newForgeExecutableEvidence(
 	filePath string,
 	gameVersion types.BareVersion,

@@ -10,10 +10,9 @@ type ExecutableEvidence struct {
 	PrimaryPath       string
 	RuntimeComponents []types.VersionedPackageRef
 
-	// ConsumedPaths lists artifacts this evidence absorbs as runtime
-	// components, such as the vanilla jar a Fabric launch shim boots. The
-	// probe must not report them as standalone runtimes.
-	ConsumedPaths []string
+	// ConsumedFiles are artifacts absorbed by this runtime, such as the
+	// vanilla jar a Fabric launch shim boots.
+	ConsumedFiles []*DetectionFile
 
 	// DetectorName identifies the detector that produced this candidate.
 	DetectorName string

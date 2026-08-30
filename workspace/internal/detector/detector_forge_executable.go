@@ -1,8 +1,6 @@
 package detector
 
 import (
-	"archive/zip"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -16,11 +14,14 @@ func (d *forgeLegacyDetector) Name() string {
 // Sources:
 // - https://docs.minecraftforge.net/en/1.16.x/gettingstarted/
 // - https://forums.minecraftforge.net/topic/102544-forge-370-minecraft-1171/
-func (d *forgeLegacyDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
+func (d *forgeLegacyDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
+
 	base := filepath.Base(filePath)
 	if !strings.Contains(base, "forge-") || !strings.Contains(
 		base,
@@ -52,11 +53,9 @@ func (d *forgeModernDetector) Name() string {
 // Sources:
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://forums.minecraftforge.net/topic/102544-forge-370-minecraft-1171/
-func (d *forgeModernDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
+func (d *forgeModernDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(filePath)
 	if !ok || compareForgeMajor(forgeVersion, 61) >= 0 {
 		return nil, nil
@@ -72,7 +71,7 @@ func (d *forgeModernDetector) Detect(
 	) {
 		return nil, nil
 	}
-	if !forgeHasSibling(filePath, "unix_args.txt", "win_args.txt") {
+	if !hasForgeSibling(context, primaryFile, "unix_args.txt", "win_args.txt") {
 		return nil, nil
 	}
 
@@ -88,11 +87,9 @@ func (d *forgeLatestDetector) Name() string {
 // Sources:
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://forums.minecraftforge.net/topic/154652-how-to-install-forge-6110-for-1211-server/
-func (d *forgeLatestDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
+func (d *forgeLatestDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(filePath)
 	if !ok || compareForgeMajor(forgeVersion, 61) < 0 {
 		return nil, nil
@@ -105,8 +102,9 @@ func (d *forgeLatestDetector) Detect(
 	) {
 		return nil, nil
 	}
-	if !forgeHasSibling(
-		filePath,
+	if !hasForgeSibling(
+		context,
+		primaryFile,
 		"unix_args.txt",
 		"win_args.txt",
 		strings.Replace(base, "-server.jar", "-shim.jar", 1),
@@ -128,11 +126,14 @@ func (d *forgeServerDetector) Name() string {
 // Sources:
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://docs.minecraftforge.net/en/1.16.x/gettingstarted/
-func (d *forgeServerDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
+func (d *forgeServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
+
 	forgeVersion, gameVersion := parseForgeManifest(zipReader)
 	if !hasConcreteVersion(forgeVersion) {
 		return nil, nil

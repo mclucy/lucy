@@ -60,12 +60,13 @@ func (d *craftBukkitFamilyDetector) Name() string {
 	return "craftbukkit family executable"
 }
 
-func (d *craftBukkitFamilyDetector) Detect(
-	filePath string,
-	zipReader *zip.Reader,
-	fileHandle *os.File,
-) (*ExecutableEvidence, error) {
-	_ = fileHandle
+func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+	filePath := primaryFile.Path()
+	zipReader, err := primaryFile.Archive()
+	if err != nil {
+		return nil, err
+	}
+	_ = context
 
 	judgment := newPaperJudgment()
 
