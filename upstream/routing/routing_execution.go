@@ -32,7 +32,7 @@ func (e ProviderError) Unwrap() error {
 // upstream.SearchResponse item in the returned slice.
 func SearchMany(
 	providers []upstream.SearchSource,
-	query types.BarePackageName,
+	query string,
 	options upstream.SearchOptions,
 ) ([]upstream.SearchResponse, []ProviderError) {
 	if len(providers) == 0 {
@@ -50,18 +50,17 @@ func SearchMany(
 	var wg sync.WaitGroup
 
 	for i, provider := range providers {
-		wg.Add(1)
-		go func(index int, provider upstream.SearchSource) {
-			defer wg.Done()
+		wg.Go(func() {
 			res, err := upstream.Search(
-				provider, upstream.Query{
-					Keyword:         query.String(),
+				provider,
+				upstream.Query{
+					Keyword:         query,
 					ExcludeClient:   !options.IncludeClient,
 					FilterEcosystem: options.FilterEcosystem,
 				},
 			)
 			if err != nil {
-				slots[index] = slot{
+				slots[i] = slot{
 					failed: true,
 					err: ProviderError{
 						Source: provider.Id(),
@@ -73,8 +72,8 @@ func SearchMany(
 			if res.Source == types.SourceUnknown {
 				res.Source = provider.Id()
 			}
-			slots[index] = slot{ok: true, res: res}
-		}(i, provider)
+			slots[i] = slot{ok: true, res: res}
+		})
 	}
 
 	wg.Wait()

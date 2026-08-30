@@ -70,6 +70,17 @@ func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	}
 }
 
+// StaticSearchSourceCandidates returns candidates for search sources.
+func StaticSearchSourceCandidates() []CompletionCandidate {
+	return []CompletionCandidate{
+		{Value: types.SourceModrinth.String(), Description: "Modrinth"},
+		{Value: types.SourceCurseForge.String(), Description: "CurseForge"},
+		{Value: types.SourceHangar.String(), Description: "Hangar"},
+		{Value: types.SourceSpiget.String(), Description: "Spiget"},
+		{Value: types.SourceMCDR.String(), Description: "MCDR Plugin Catalogue"},
+	}
+}
+
 // StaticVersionCandidates returns completion candidates for fuzzy version hints.
 func StaticVersionCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
