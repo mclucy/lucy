@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cache"
-	tuiprogress "github.com/mclucy/lucy/tui/progress"
+	tuiprogress "github.com/mclucy/lucy/terminal/progress"
 	"github.com/mclucy/lucy/types"
 )
 

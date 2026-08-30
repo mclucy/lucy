@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
 )

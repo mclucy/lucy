@@ -6,8 +6,8 @@ import (
 
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/tui"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
 
@@ -20,7 +20,7 @@ var statusCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		logo, _ := cmd.Flags().GetString(cli.FlagLogo)
-		if _, ok := tui.ParseStatusLogoMode(logo); !ok {
+		if _, ok := terminal.ParseStatusLogoMode(logo); !ok {
 			return fmt.Errorf("--logo must be one of none, small, large")
 		}
 		return nil
@@ -60,8 +60,8 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		logo, _ := cmd.Flags().GetString(cli.FlagLogo)
-		logoMode, _ := tui.ParseStatusLogoMode(logo)
-		tui.Flush(generateStatusOutput(&ws, long, noStyle, logoMode))
+		logoMode, _ := terminal.ParseStatusLogoMode(logo)
+		terminal.Flush(generateStatusOutput(&ws, long, noStyle, logoMode))
 	}
 	return nil
 }
@@ -70,22 +70,22 @@ func generateStatusOutput(
 	data *workspace.Workspace,
 	longOutput bool,
 	noStyle bool,
-	logoMode tui.StatusLogoMode,
-) (output *tui.Data) {
+	logoMode terminal.StatusLogoMode,
+) (output *terminal.Data) {
 	server := data.Server()
 	hasServer := server != nil
 	hasMcdr := data != nil && data.Environments.Mcdr != nil
 	if !hasServer && !hasMcdr {
-		return &tui.Data{
-			Fields: []tui.Field{
-				&tui.FieldAnnotation{
+		return &terminal.Data{
+			Fields: []terminal.Field{
+				&terminal.FieldAnnotation{
 					Annotation: "(No server found)",
 				},
 			},
 		}
 	}
 
-	output = &tui.Data{Fields: []tui.Field{}, LogoMode: logoMode}
+	output = &terminal.Data{Fields: []terminal.Field{}, LogoMode: logoMode}
 	var effectiveEcosystems []workspace.EffectiveEcosystem
 	var runtimeComponents []types.VersionedPackageRef
 	if hasServer {
@@ -135,12 +135,12 @@ func generateStatusOutput(
 
 	logoCore := statusLogoCore(server, hasServer, hasMcdr)
 	logoVersion := statusLogoVersion(server, hasServer, hasMcdr)
-	if logoMode != tui.StatusLogoNone &&
+	if logoMode != terminal.StatusLogoNone &&
 		logoCore != "" &&
-		tui.GetLogo(logoCore, logoEco, logoVersion, tui.LogoSmallPlain) != "" {
+		terminal.GetLogo(logoCore, logoEco, logoVersion, terminal.LogoSmallPlain) != "" {
 		output.Fields = append(
 			output.Fields,
-			&tui.FieldLogo{
+			&terminal.FieldLogo{
 				Core:    logoCore,
 				Eco:     logoEco,
 				Version: logoVersion,
@@ -153,7 +153,7 @@ func generateStatusOutput(
 	if hasServer {
 		output.Fields = append(
 			output.Fields,
-			&tui.FieldAnnotatedShortText{
+			&terminal.FieldAnnotatedShortText{
 				Title:      "Game",
 				Text:       server.GameVersion().String(),
 				Annotation: server.PrimaryPath,
@@ -161,7 +161,7 @@ func generateStatusOutput(
 		)
 
 		output.Fields = append(
-			output.Fields, &tui.FieldShortText{
+			output.Fields, &terminal.FieldShortText{
 				Title: "Activity",
 				Text: fn.Ternary(
 					data.Active(),
@@ -173,7 +173,7 @@ func generateStatusOutput(
 
 		primary := server.PrimaryRuntime
 		if platformLabel := statusRuntimeLabel(primary); platformLabel != "" {
-			children := make([]tui.TreeNode, 0, 4)
+			children := make([]terminal.TreeNode, 0, 4)
 			if len(server.RuntimeComponents) > 0 {
 				components := make(
 					[]string,
@@ -183,7 +183,7 @@ func generateStatusOutput(
 				for _, component := range server.RuntimeComponents {
 					components = append(components, component.StringFull())
 				}
-				children = append(children, tui.TreeNode{
+				children = append(children, terminal.TreeNode{
 					Title: "Components",
 					Field: statusPackageListField(components, nil, false),
 				})
@@ -200,7 +200,7 @@ func generateStatusOutput(
 						),
 					)
 				}
-				children = append(children, tui.TreeNode{
+				children = append(children, terminal.TreeNode{
 					Title: "Offers",
 					Field: statusPackageListField(offers, nil, false),
 				})
@@ -208,7 +208,7 @@ func generateStatusOutput(
 			if showMods {
 				children = append(
 					children,
-					tui.TreeNode{
+					terminal.TreeNode{
 						Title: "Mods",
 						Field: statusPackageListField(
 							modNames,
@@ -221,14 +221,14 @@ func generateStatusOutput(
 			if showPlugins {
 				children = append(
 					children,
-					tui.TreeNode{
+					terminal.TreeNode{
 						Title: "Plugins",
 						Field: statusPackageListField(pluginNames, nil, false),
 					},
 				)
 			}
 			output.Fields = append(
-				output.Fields, &tui.FieldTree{
+				output.Fields, &terminal.FieldTree{
 					Title:      "Platform",
 					Text:       platformLabel,
 					Annotation: primary.Version.String(),
@@ -239,14 +239,14 @@ func generateStatusOutput(
 	}
 
 	if hasMcdr {
-		children := []tui.TreeNode{
+		children := []terminal.TreeNode{
 			{
 				Title: "Plugins",
 				Field: statusPackageListField(mcdrPlugins, nil, false),
 			},
 		}
 		output.Fields = append(
-			output.Fields, &tui.FieldTree{
+			output.Fields, &terminal.FieldTree{
 				Title: "MCDR",
 				Text: "Installed" + fn.Ternary(
 					noStyle,
@@ -293,18 +293,18 @@ func statusPackageListField(
 	names []string,
 	paths []string,
 	longOutput bool,
-) tui.Field {
+) terminal.Field {
 	if len(names) == 0 {
-		return &tui.FieldShortText{Text: style.Muted("(None)")}
+		return &terminal.FieldShortText{Text: style.Muted("(None)")}
 	}
 	if longOutput {
-		return &tui.FieldMultiAnnotatedShortText{
+		return &terminal.FieldMultiAnnotatedShortText{
 			Texts:       names,
 			Annotations: paths,
 			ShowTotal:   true,
 		}
 	}
-	return &tui.FieldDynamicColumnLabels{
+	return &terminal.FieldDynamicColumnLabels{
 		Labels:    names,
 		MaxLines:  0,
 		ShowTotal: true,

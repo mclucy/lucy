@@ -23,7 +23,7 @@ import (
 
 	"charm.land/log/v2"
 
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 )
 
 // ── File-only functions ─────────────────────────────────────────────────

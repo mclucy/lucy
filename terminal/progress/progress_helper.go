@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 )
 
 func clamp01(v float64) float64 {
