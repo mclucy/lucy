@@ -103,6 +103,24 @@ func statusLayoutLargeLogo(termWidth int, logoLargeWidth int) StatusLayoutParams
 	}
 }
 
+func statusLayoutAuto(
+	termWidth int,
+	logoLargeWidth int,
+	logoSmallWidth int,
+) StatusLayoutParams {
+	if termWidth >= logoLargeWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth {
+		return statusLayoutLargeLogo(termWidth, logoLargeWidth)
+	}
+	if termWidth >= logoSmallWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth {
+		return statusLayoutSmallLogo(termWidth, logoSmallWidth)
+	}
+	return statusLayoutLargeLogo(termWidth, logoLargeWidth)
+}
+
+// NegotiateStatusLayout decides which layout mode to use given the terminal
+// width, the widths of the two logo variants, TTY detection, and logo mode.
+// It returns the mode together with pixel-budget details so that the
+// compositor can render without further arithmetic.
 func NegotiateStatusLayout(
 	termWidth int,
 	logoLargeWidth int,
@@ -110,14 +128,16 @@ func NegotiateStatusLayout(
 	isTTY bool,
 	logoMode StatusLogoMode,
 ) StatusLayoutParams {
-	if logoMode == StatusLogoNone {
+	if logoMode == StatusLogoNone || !isTTY {
 		return statusLayoutInfoOnly(termWidth)
 	}
-	if !isTTY {
-		return statusLayoutInfoOnly(termWidth)
-	}
-	if logoMode == StatusLogoLarge {
+
+	switch logoMode {
+	case StatusLogoLarge:
 		return statusLayoutLargeLogo(termWidth, logoLargeWidth)
+	case StatusLogoSmall:
+		return statusLayoutSmallLogo(termWidth, logoSmallWidth)
+	default:
+		return statusLayoutAuto(termWidth, logoLargeWidth, logoSmallWidth)
 	}
-	return statusLayoutSmallLogo(termWidth, logoSmallWidth)
 }

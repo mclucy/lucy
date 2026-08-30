@@ -11,7 +11,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mclucy/lucy/internal/fn"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -49,10 +49,31 @@ func (f *FieldLogo) Render() string {
 }
 
 func (f *FieldLogo) renderVariant() LogoVariant {
-	if f.Mode == StatusLogoLarge {
-		return fn.Ternary(f.NoColor, LogoLargePlain, LogoLargeColored)
+	return f.renderVariantForWidth(style.TermWidth())
+}
+
+func (f *FieldLogo) renderVariantForWidth(termWidth int) LogoVariant {
+	switch f.Mode {
+	case StatusLogoLarge:
+		return f.variant(true)
+	case StatusLogoSmall:
+		return f.variant(false)
+	default:
+		return f.variant(termWidth >= logoLargeMaxWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth)
 	}
-	return fn.Ternary(f.NoColor, LogoSmallPlain, LogoSmallColored)
+}
+
+func (f *FieldLogo) variant(large bool) LogoVariant {
+	if large {
+		if f.NoColor {
+			return LogoLargePlain
+		}
+		return LogoLargeColored
+	}
+	if f.NoColor {
+		return LogoSmallPlain
+	}
+	return LogoSmallColored
 }
 
 // KeyLength returns 0 because the logo has no key.

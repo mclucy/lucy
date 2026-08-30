@@ -3,12 +3,13 @@ package terminal
 import "strings"
 
 // StatusLogoMode selects how the status command shows the ASCII platform logo.
-// Large is opt-in via --logo=large; default is small.
+// The zero value leaves the mode unset for direct FieldLogo callers.
 type StatusLogoMode int
 
 const (
-	// StatusLogoSmall is the default: compact logo when layout allows.
-	StatusLogoSmall StatusLogoMode = iota
+	statusLogoAuto StatusLogoMode = iota
+	// StatusLogoSmall selects the compact logo when layout allows.
+	StatusLogoSmall
 	// StatusLogoNone omits the logo.
 	StatusLogoNone
 	// StatusLogoLarge uses the full-size logo (side-by-side or stacked).
