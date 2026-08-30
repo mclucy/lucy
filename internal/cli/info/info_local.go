@@ -3,14 +3,13 @@ package info
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/tui/style"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 
 	"charm.land/lipgloss/v2"
@@ -19,9 +18,7 @@ import (
 )
 
 func isArtifactPath(path string) (bool, error) {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".jar", ".zip", ".pyz", ".mcdr":
-	default:
+	if !artifact.SupportsPath(path) {
 		return false, nil
 	}
 
@@ -35,7 +32,7 @@ func isArtifactPath(path string) (bool, error) {
 	return true, nil
 }
 
-func actionLocalInfo(cmd *cobra.Command, filePath string) error {
+func actionArtifactInfo(cmd *cobra.Command, filePath string) error {
 	infos, err := artifact.Analyze(filePath)
 	if err != nil {
 		return fmt.Errorf("analyze artifact %q: %w", filePath, err)
@@ -44,29 +41,25 @@ func actionLocalInfo(cmd *cobra.Command, filePath string) error {
 		return fmt.Errorf("no package metadata found in %q", filePath)
 	}
 
-	resolution := resolveLocalArtifactUpstream(filePath)
+	lookup := lookupArtifactUpstream(filePath)
 
 	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
 	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)
 
 	if json || jsonCompact {
-		views := make([]localArtifactView, len(infos))
+		views := make([]artifactInfoView, len(infos))
 		for i, info := range infos {
-			views[i] = localArtifactViewFromInfo(info, resolution)
+			views[i] = artifactInfoViewFromInfo(info, lookup)
 		}
+		payload := any(views)
 		if len(views) == 1 {
-			if jsonCompact {
-				style.PrintAsJsonCompact(views[0])
-			} else {
-				style.PrintAsJson(views[0])
-			}
-			return nil
+			payload = views[0]
 		}
 		if jsonCompact {
-			style.PrintAsJsonCompact(views)
+			style.PrintAsJsonCompact(payload)
 		} else {
-			style.PrintAsJson(views)
+			style.PrintAsJson(payload)
 		}
 		return nil
 	}
@@ -75,104 +68,170 @@ func actionLocalInfo(cmd *cobra.Command, filePath string) error {
 		if i > 0 {
 			fmt.Println()
 		}
-		fmt.Print(renderLocalArtifactInfo(info, resolution, long))
+		fmt.Print(renderArtifactInfo(info, lookup, long))
 	}
 	return nil
 }
 
-type localArtifactResolution struct {
-	Upstream *localArtifactUpstream
+// artifactLookup is the upstream result for one artifact file. Ref is the
+// project that matched the file hash, or nil. Info is the metadata of that
+// project. It is nil when the metadata lookup failed. Warnings holds the
+// problems found during the lookup.
+type artifactLookup struct {
+	Ref      *types.FullPackageRef
+	Info     *upstream.Info
 	Warnings []string
 }
 
-type localArtifactUpstream struct {
-	Ref      types.FullPackageRef
-	Metadata *types.Metadata
-}
+func lookupArtifactUpstream(filePath string) artifactLookup {
+	result := artifactLookup{}
+	lookup := routing.ResolveArtifactByHash(artifact.File{Path: filePath})
+	for _, providerErr := range lookup.Errors {
+		result.Warnings = append(result.Warnings,
+			fmt.Sprintf("could not look up this artifact on %s: %v",
+				providerErr.Source.Title(), providerErr.Err))
+	}
+	if !lookup.Matched() {
+		if lookup.Complete() {
+			result.Warnings = append(result.Warnings,
+				"no upstream project matched this artifact hash")
+		} else {
+			result.Warnings = append(result.Warnings,
+				"could not determine whether this artifact exists upstream")
+		}
+		return result
+	}
+	ref := lookup.Ref
+	result.Ref = &ref
 
-func resolveLocalArtifactUpstream(filePath string) localArtifactResolution {
-	ref, _, hashErrors := routing.ResolveArtifactByHash(
-		artifacthash.File{Path: filePath},
-	)
-	resolution := localArtifactResolution{
-		Warnings: make([]string, 0, len(hashErrors)+1),
-	}
-	for _, providerErr := range hashErrors {
-		resolution.Warnings = append(resolution.Warnings, providerErr.Error())
-	}
-	if ref.Name == "" {
-		resolution.Warnings = append(
-			resolution.Warnings,
-			"no upstream project matched this artifact hash",
-		)
-		return resolution
-	}
-
-	resolution.Upstream = &localArtifactUpstream{Ref: ref}
 	providers, err := routing.ResolveInfoProviders(ref.Eco, ref.Scope)
 	if err != nil {
-		resolution.Warnings = append(
-			resolution.Warnings,
-			fmt.Sprintf("cannot retrieve upstream metadata for %s: %v", ref.StringFull(), err),
-		)
-		return resolution
+		result.Warnings = append(result.Warnings,
+			fmt.Sprintf("cannot retrieve upstream metadata for %s: %v",
+				ref.StringFull(), err))
+		return result
 	}
 
-	metadata, infoErrors, err := routing.GetInfoHedged(
-		providers,
-		ref.PackageRef,
-	)
+	info, infoErrors, err := routing.GetInfoHedged(providers, ref.PackageRef)
 	for _, providerErr := range infoErrors {
-		resolution.Warnings = append(resolution.Warnings, providerErr.Error())
+		result.Warnings = append(result.Warnings,
+			fmt.Sprintf("could not retrieve metadata from %s: %v",
+				providerErr.Source.Title(), providerErr.Err))
 	}
 	if err != nil {
 		if len(infoErrors) == 0 {
-			resolution.Warnings = append(
-				resolution.Warnings,
-				fmt.Sprintf("cannot retrieve upstream metadata for %s: %v", ref.StringFull(), err),
-			)
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("cannot retrieve upstream metadata for %s: %v",
+					ref.StringFull(), err))
 		}
-		return resolution
+		return result
 	}
-	metadata.From = ref.Scope
-	resolution.Upstream.Metadata = &metadata
-	return resolution
+	result.Info = &info
+	return result
 }
 
-type localArtifactView struct {
-	File         string                     `json:"file"`
-	Package      string                     `json:"package"`
-	Platform     string                     `json:"platform"`
-	Version      string                     `json:"version,omitempty"`
-	Dependencies []localArtifactDependency  `json:"dependencies,omitempty"`
-	Metadata     types.Metadata             `json:"metadata"`
-	FileUpstream *localArtifactUpstreamView `json:"file_upstream,omitempty"`
-	Warnings     []string                   `json:"warnings,omitempty"`
+// matchedUpstream returns the upstream Info for info when the hash match
+// belongs to it. An archive with several descriptors matches only the
+// descriptor with the same ref.
+func matchedUpstream(info artifact.Info, lookup artifactLookup) *upstream.Info {
+	if lookup.Info == nil || lookup.Ref == nil {
+		return nil
+	}
+	if info.Ref != lookup.Ref.PackageRef {
+		return nil
+	}
+	return lookup.Info
 }
 
-type localArtifactUpstreamView struct {
+// displayMetadata merges the metadata of the archive and the upstream.
+// The upstream values win. The archive values fill the gaps.
+func displayMetadata(info artifact.Info, match *upstream.Info) types.Metadata {
+	local := info.Metadata
+	if local.Title == "" {
+		local.Title = info.Ref.Name.Title()
+	}
+	if match == nil {
+		return local
+	}
+
+	remote := match.Metadata
+	merged := types.Metadata{
+		Title:   firstNonEmpty(remote.Title, local.Title),
+		Brief:   firstNonEmpty(remote.Brief, local.Brief),
+		License: firstNonEmpty(remote.License, local.License),
+		Authors: firstNonEmptySlice(remote.Authors, local.Authors),
+		Urls:    firstNonEmptySlice(remote.Urls, local.Urls),
+	}
+	// The description fields are one unit. Do not mix upstream text with
+	// archive text or a URL of another document.
+	if remote.Description != "" || remote.DescriptionUrl != "" {
+		merged.Description = remote.Description
+		merged.DescriptionUrl = remote.DescriptionUrl
+		merged.DescriptionIsMarkdown = remote.DescriptionIsMarkdown
+	} else {
+		merged.Description = local.Description
+		merged.DescriptionUrl = local.DescriptionUrl
+		merged.DescriptionIsMarkdown = local.DescriptionIsMarkdown
+	}
+	return merged
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonEmptySlice[T comparable](slices ...[]T) []T {
+	for _, slice := range slices {
+		if len(slice) > 0 {
+			return slice
+		}
+	}
+	return nil
+}
+
+// artifactInfoView is the --json form of one descriptor in the archive.
+// Metadata is what the archive declares. Upstream holds the matched
+// upstream project.
+type artifactInfoView struct {
+	File         string                   `json:"file"`
+	Package      string                   `json:"package"`
+	Platform     string                   `json:"platform"`
+	Version      string                   `json:"version,omitempty"`
+	Dependencies []artifactDependencyView `json:"dependencies,omitempty"`
+	Metadata     types.Metadata           `json:"metadata"`
+	Upstream     *upstreamMatchView       `json:"upstream,omitempty"`
+	Warnings     []string                 `json:"warnings,omitempty"`
+}
+
+// upstreamMatchView describes the upstream project matched by file hash.
+type upstreamMatchView struct {
 	Ref      string          `json:"ref"`
 	Metadata *types.Metadata `json:"metadata,omitempty"`
 }
 
-type localArtifactDependency struct {
+type artifactDependencyView struct {
 	Package    string               `json:"package"`
 	Constraint string               `json:"constraint"`
 	Mandatory  bool                 `json:"mandatory"`
 	Type       types.DependencyType `json:"type"`
 }
 
-func localArtifactViewFromInfo(
+func artifactInfoViewFromInfo(
 	info artifact.Info,
-	resolution localArtifactResolution,
-) localArtifactView {
+	lookup artifactLookup,
+) artifactInfoView {
 	dependencies := make(
-		[]localArtifactDependency,
+		[]artifactDependencyView,
 		0,
 		len(info.Dependencies),
 	)
 	for _, dependency := range info.Dependencies {
-		dependencies = append(dependencies, localArtifactDependency{
+		dependencies = append(dependencies, artifactDependencyView{
 			Package:    formatArtifactRef(dependency.Ref),
 			Constraint: formatArtifactConstraint(dependency.Constraint),
 			Mandatory:  dependency.Mandatory,
@@ -180,71 +239,48 @@ func localArtifactViewFromInfo(
 		})
 	}
 
-	view := localArtifactView{
+	view := artifactInfoView{
 		File:         info.FilePath,
 		Package:      formatArtifactRef(info.Ref),
 		Platform:     info.Ref.Eco.String(),
 		Version:      info.Version.String(),
 		Dependencies: dependencies,
-		Metadata:     localArtifactMetadata(info),
-		Warnings:     resolution.Warnings,
+		Metadata:     info.Metadata,
+		Warnings:     lookup.Warnings,
 	}
-	if resolution.Upstream != nil {
-		upstream := &localArtifactUpstreamView{
-			Ref: resolution.Upstream.Ref.StringFull(),
+	if lookup.Ref != nil {
+		matchView := &upstreamMatchView{
+			Ref: lookup.Ref.StringFull(),
 		}
-		if artifactMatchesUpstream(info, resolution) {
-			upstream.Metadata = resolution.Upstream.Metadata
+		if match := matchedUpstream(info, lookup); match != nil {
+			matchView.Metadata = &match.Metadata
 		}
-		view.FileUpstream = upstream
+		view.Upstream = matchView
 	}
 	return view
 }
 
-func localArtifactMetadata(info artifact.Info) types.Metadata {
-	metadata := info.Metadata
-	metadata.From = types.SourceLocal
-	if metadata.Title == "" {
-		metadata.Title = info.Ref.Name.Title()
-	}
-	return metadata
-}
-
-func artifactMatchesUpstream(
+func renderArtifactInfo(
 	info artifact.Info,
-	resolution localArtifactResolution,
-) bool {
-	return resolution.Upstream != nil &&
-		info.Ref == resolution.Upstream.Ref.PackageRef
-}
-
-func renderLocalArtifactInfo(
-	info artifact.Info,
-	resolution localArtifactResolution,
+	lookup artifactLookup,
 	longOutput bool,
 ) string {
-	metadata := localArtifactMetadata(info)
-	remoteName := info.FilePath
-	if resolution.Upstream != nil &&
-		resolution.Upstream.Metadata != nil &&
-		artifactMatchesUpstream(info, resolution) {
-		metadata = *resolution.Upstream.Metadata
-		metadata.From = resolution.Upstream.Ref.Scope
-		if metadata.Title == "" {
-			metadata.Title = localArtifactMetadata(info).Title
-		}
-		remoteName = resolution.Upstream.Ref.Name.String()
+	match := matchedUpstream(info, lookup)
+	metadata := displayMetadata(info, match)
+	installID := "local:" + info.FilePath
+	if match != nil {
+		installID = match.Ref.Scope.String() + ":" + match.Ref.Name.String()
 	}
 
 	var out strings.Builder
-	out.WriteString(renderInfo(metadata, remoteName, longOutput))
+	out.WriteString(renderInfo(metadata, installID, longOutput))
 	out.WriteString("\n")
-	out.WriteString(renderLocalArtifactDetails(info, resolution))
-	if dependencies := renderLocalArtifactDependencies(info.Dependencies); dependencies != "" {
+	out.WriteString(renderArtifactDetails(info, lookup))
+	if dependencies := renderArtifactDependencies(info.Dependencies); dependencies != "" {
 		out.WriteString("\n\n")
 		out.WriteString(dependencies)
 	}
-	if warnings := renderLocalArtifactWarnings(resolution.Warnings); warnings != "" {
+	if warnings := renderArtifactWarnings(lookup.Warnings); warnings != "" {
 		out.WriteString("\n\n")
 		out.WriteString(warnings)
 	}
@@ -252,9 +288,9 @@ func renderLocalArtifactInfo(
 	return out.String()
 }
 
-func renderLocalArtifactDetails(
+func renderArtifactDetails(
 	info artifact.Info,
-	resolution localArtifactResolution,
+	lookup artifactLookup,
 ) string {
 	rows := [][]string{
 		{"File", info.FilePath},
@@ -262,19 +298,19 @@ func renderLocalArtifactDetails(
 		{"Platform", info.Ref.Eco.Title()},
 		{"Version", info.Version.String()},
 	}
-	if resolution.Upstream != nil {
+	if lookup.Ref != nil {
 		rows = append(
 			rows,
-			[]string{"File upstream", resolution.Upstream.Ref.StringFull()},
+			[]string{"File upstream", lookup.Ref.StringFull()},
 		)
 	}
 	if info.Compatibility.FoliaSupported {
 		rows = append(rows, []string{"Compatibility", "Folia supported"})
 	}
-	return renderLocalArtifactTable("ARTIFACT", rows)
+	return renderArtifactTable("ARTIFACT", rows)
 }
 
-func renderLocalArtifactWarnings(warnings []string) string {
+func renderArtifactWarnings(warnings []string) string {
 	if len(warnings) == 0 {
 		return ""
 	}
@@ -285,7 +321,7 @@ func renderLocalArtifactWarnings(warnings []string) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderLocalArtifactDependencies(dependencies []artifact.Dependency) string {
+func renderArtifactDependencies(dependencies []artifact.Dependency) string {
 	if len(dependencies) == 0 {
 		return ""
 	}
@@ -305,10 +341,10 @@ func renderLocalArtifactDependencies(dependencies []artifact.Dependency) string 
 			}, " · "),
 		})
 	}
-	return renderLocalArtifactTable("DEPENDENCIES", rows)
+	return renderArtifactTable("DEPENDENCIES", rows)
 }
 
-func renderLocalArtifactTable(title string, rows [][]string) string {
+func renderArtifactTable(title string, rows [][]string) string {
 	width := min(80, style.TermWidth())
 	return renderInfoSectionHeader(title, len(rows), len(rows), width, false) +
 		"\n\n" +

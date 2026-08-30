@@ -73,7 +73,6 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	info := rawProjectInformation{
 		mod: mod, description: description,
 	}.ToProjectInformation()
-	info.From = p.Id()
 	return info, nil
 }
 

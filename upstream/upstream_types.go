@@ -67,8 +67,8 @@ type ArtifactMapper interface {
 }
 
 type Hashable interface {
-	Sha1() [sha1.Size]byte
-	MurmurHash() uint32
+	Sha1() ([sha1.Size]byte, error)
+	MurmurHash() (uint32, error)
 }
 
 type VersionSelectorResolver interface {
@@ -100,6 +100,13 @@ type SearchResponse struct {
 
 type Informer interface {
 	Info(ref types.PackageRef) (info types.Metadata, err error)
+}
+
+// Info is a project description from one upstream. Ref identifies the
+// upstream project that answered. Metadata is the content it returned.
+type Info struct {
+	Ref      types.ScopedPackageRef
+	Metadata types.Metadata
 }
 
 type SearchOptions struct {

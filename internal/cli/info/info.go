@@ -60,7 +60,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if isArtifact {
-		return actionLocalInfo(cmd, args[0])
+		return actionArtifactInfo(cmd, args[0])
 	}
 
 	ref, err := input.ParseFullPackageRef(args[0])
@@ -111,12 +111,13 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 
 	if json || jsonCompact {
 		if jsonCompact {
-			style.PrintAsJsonCompact(meta)
+			style.PrintAsJsonCompact(meta.Metadata)
 		} else {
-			style.PrintAsJson(meta)
+			style.PrintAsJson(meta.Metadata)
 		}
 	} else {
-		output := renderInfo(meta, ref.PackageRef.Name.String(), long)
+		installID := meta.Ref.Scope.String() + ":" + meta.Ref.Name.String()
+		output := renderInfo(meta.Metadata, installID, long)
 		if len(noResultSources) > 0 {
 			output += style.Muted(
 				"  Not found on "+strings.Join(
@@ -132,11 +133,10 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 
 func renderInfo(
 	data types.Metadata,
-	remoteName string,
+	installID string,
 	longOutput bool,
 ) string {
 	var out strings.Builder
-	installID := data.From.String() + ":" + remoteName
 
 	out.WriteString(style.Accent(data.Title))
 	out.WriteString("\n")

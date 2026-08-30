@@ -22,16 +22,7 @@ package upstream
 
 import (
 	"fmt"
-
-	"github.com/mclucy/lucy/types"
 )
-
-func Info(
-	informer Informer,
-	ref types.PackageRef,
-) (info types.Metadata, err error) {
-	return informer.Info(ref)
-}
 
 func Search(
 	searcher Searcher,

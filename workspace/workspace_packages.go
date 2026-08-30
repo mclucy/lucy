@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
@@ -31,7 +30,7 @@ func resolveUpstream(
 
 	for _, mapper := range mappers {
 		ref, fileHash, ok, err := mapper.PackageByHash(
-			artifacthash.File{Path: path},
+			artifact.File{Path: path},
 		)
 		if err != nil || !ok || ref.Name == "" {
 			continue

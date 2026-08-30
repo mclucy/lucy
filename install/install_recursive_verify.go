@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/internal/artifacthash"
 	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -295,7 +294,7 @@ func hashMatchesResolvedPackage(
 	if err != nil || !ok {
 		return false
 	}
-	ref, _, ok, err := mapper.PackageByHash(artifacthash.File{Path: path})
+	ref, _, ok, err := mapper.PackageByHash(artifact.File{Path: path})
 	if err != nil || !ok {
 		return false
 	}

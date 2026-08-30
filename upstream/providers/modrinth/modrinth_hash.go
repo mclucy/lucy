@@ -127,13 +127,16 @@ func sha1File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func (s provider) PackageByHash(artifact upstream.Hashable) (
+func (s provider) PackageByHash(hashable upstream.Hashable) (
 	ref types.FullPackageRef,
 	hash string,
 	ok bool,
 	err error,
 ) {
-	hashBytes := artifact.Sha1()
+	hashBytes, err := hashable.Sha1()
+	if err != nil {
+		return ref, hash, false, err
+	}
 	hash = hex.EncodeToString(hashBytes[:])
 	u := versionFileUrlPrefix + hash + "?algorithm=sha1"
 
