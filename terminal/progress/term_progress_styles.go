@@ -15,8 +15,7 @@ func init() {
 	globalOptions = append(globalOptions, progress.WithFillCharacters('█', '░'))
 }
 
-// colorOptions returns color options lazily, ensuring OSC4 probing
-// has been completed first. This is called at first use, not at init time.
+// colorOptions loads terminal colors on first use.
 func colorOptions() []progress.Option {
 	style.EnsureTermColors()
 	if style.ValidUserColors {
@@ -30,8 +29,7 @@ func colorOptions() []progress.Option {
 	return []progress.Option{progress.WithColors(lipgloss.Magenta)}
 }
 
-// successColorOptions returns color options for success state,
-// lazily ensuring OSC4 probing has been completed first.
+// successColorOptions loads terminal colors for completed entries.
 func successColorOptions() []progress.Option {
 	style.EnsureTermColors()
 	if style.ValidUserColors {

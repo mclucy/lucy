@@ -1,4 +1,4 @@
-package tui
+package terminal
 
 import (
 	"embed"
@@ -9,8 +9,108 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/types"
 )
+
+// LogoVariant selects between the large and small logo variants.
+type LogoVariant int
+
+const (
+	// LogoLargePlain selects the full-size ASCII art logo.
+	LogoLargePlain LogoVariant = iota
+	// LogoSmallPlain selects the compact ASCII art logo.
+	LogoSmallPlain
+	LogoLargeColored
+	LogoSmallColored
+)
+
+const (
+	logoSmallMaxWidth = 30
+	logoLargeMaxWidth = 72
+)
+
+// FieldLogo is a Field that holds the ASCII logo for the status view.
+// It also provides the line and width data used by the layout compositor.
+type FieldLogo struct {
+	Core    types.BarePackageName
+	Eco     types.Ecosystem
+	Version types.BareVersion
+	NoColor bool
+	Mode    StatusLogoMode
+}
+
+// Render returns the selected logo as a string.
+func (f *FieldLogo) Render() string {
+	logo := GetLogo(f.Core, f.Eco, f.Version, f.renderVariant())
+	return strings.Join(normalizeLines(logo), "\n")
+}
+
+func (f *FieldLogo) renderVariant() LogoVariant {
+	if f.Mode == StatusLogoLarge {
+		return fn.Ternary(f.NoColor, LogoLargePlain, LogoLargeColored)
+	}
+	return fn.Ternary(f.NoColor, LogoSmallPlain, LogoSmallColored)
+}
+
+// KeyLength returns 0 because the logo has no key.
+func (f *FieldLogo) KeyLength() int {
+	return 0
+}
+
+// Lines returns normalized lines for the requested logo variant.
+func (f *FieldLogo) Lines(variant LogoVariant) []string {
+	return normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant))
+}
+
+// Width returns the visual width of the requested logo variant.
+func (f *FieldLogo) Width(variant LogoVariant) int {
+	lines := normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant))
+	if len(lines) == 0 {
+		return 0
+	}
+	return lipgloss.Width(lines[0])
+}
+
+// Height returns the number of lines in the requested logo variant.
+func (f *FieldLogo) Height(variant LogoVariant) int {
+	return len(normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant)))
+}
+
+// normalizeLines removes empty edges and pads lines to the same visual width.
+func normalizeLines(raw string) []string {
+	raw = strings.ReplaceAll(raw, "\r", "")
+	lines := strings.Split(raw, "\n")
+
+	for len(lines) > 0 && strings.TrimSpace(ansi.Strip(lines[0])) == "" {
+		lines = lines[1:]
+	}
+
+	for len(lines) > 0 && strings.TrimSpace(ansi.Strip(lines[len(lines)-1])) == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	if len(lines) == 0 {
+		return nil
+	}
+
+	maxWidth := 0
+	for _, line := range lines {
+		if width := lipgloss.Width(line); width > maxWidth {
+			maxWidth = width
+		}
+	}
+
+	for i, line := range lines {
+		if width := lipgloss.Width(line); width < maxWidth {
+			lines[i] = line + strings.Repeat(" ", maxWidth-width)
+		}
+	}
+
+	return lines
+}
 
 //go:embed assets/large_plain/*.txt assets/small_plain/*.txt assets/large_colored/*.txt assets/small_colored/*.txt
 var logoAssets embed.FS
@@ -43,6 +143,7 @@ func loadEmbeddedLogoAssets() map[string]string {
 	return assets
 }
 
+// GetLogo returns the logo for the package, platform, version, and variant.
 func GetLogo(
 	core types.BarePackageName,
 	platform types.Ecosystem,

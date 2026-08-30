@@ -1,22 +1,11 @@
-// Package progress runtime manages the bubbletea program lifecycle.
+// Package progress runtime manages the Bubble Tea program.
 //
-// # Lifecycle States
+// The runtime has three states: idle, running, and stopped. Ctrl+C and
+// completion of all entries set the stopped flag. A new tracker restarts the
+// runtime after all entries complete.
 //
-// The runtime transitions through states: idle -> running -> stopped.
-// The stopped flag is set on interrupt (Ctrl+C) or when all entries complete.
-// After all-complete shutdown, new tracker registration resets stopped and restarts.
-//
-// # Graceful Interrupt
-//
-// On Ctrl+C, the runtime sets the stopped atomic flag and returns control
-// to the caller. The runtime does not call os.Exit - the caller controls
-// process lifecycle.
-//
-// # Idempotent Shutdown
-//
-// The stopped atomic flag ensures shutdown operations are idempotent.
-// Multiple Close() calls or interrupts are safe. Defer-based cleanup in
-// the runtime goroutine ensures fields reset on all exit paths.
+// Shutdown is idempotent. Multiple Close calls and interrupts are safe.
+// The runtime goroutine resets its state on every exit path.
 package progress
 
 import (
@@ -119,7 +108,7 @@ func (m *runtime) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entry.percent = 1.0
 			entry.message = string(payload)
 			entry.completed = true
-			// order sensitive, set success colors last so they override global options
+			// Apply success colors after global options.
 			options := append(globalOptions, successColorOptions()...)
 			entry.bar = progress.New(options...)
 			entry.bar.SetWidth(m.barWidthLocked(0))

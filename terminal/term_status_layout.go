@@ -1,4 +1,4 @@
-package tui
+package terminal
 
 // StatusLayoutMode describes how the status view arranges the logo and info
 // blocks within the available terminal width.
