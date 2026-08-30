@@ -38,8 +38,6 @@ const (
 	paperLibraryPurpurToken    = "org.purpurmc.purpur:purpur-api:"
 	paperLibraryLeafToken      = "cn.dreeam.leaf:leaf-api:"
 	paperLibraryLeavesToken    = "org.leavesmc.leaves:leaves-api:"
-	paperLibraryLuminolToken   = "me.earthme.luminol:luminol-api:"
-	paperLibraryLophineToken   = "fun.bm.lophine:lophine-api:"
 )
 
 type paperObservationEntry struct {

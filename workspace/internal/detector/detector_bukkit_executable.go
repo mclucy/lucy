@@ -28,16 +28,14 @@ var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
 // paperFamilyBrands must cover every brand inferPaperObservationBrands can
 // attribute; the fork-brand fixture test iterates this map.
 var paperFamilyBrands = map[string]bool{
-	"paper":   true,
-	"folia":   true,
-	"divine":  true,
-	"purpur":  true,
-	"leaf":    true,
-	"leaves":  true,
-	"luminol": true,
-	"lophine": true,
-	"reaper":  true,
-	"youer":   true,
+	"paper":  true,
+	"folia":  true,
+	"divine": true,
+	"purpur": true,
+	"leaf":   true,
+	"leaves": true,
+	"reaper": true,
+	"youer":  true,
 }
 
 // IsPaperFamilyBrand reports whether name is a paper-lineage runtime brand
@@ -292,18 +290,6 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 		"Leaves\t",
 	) {
 		add("leaves")
-	}
-	if observationLinesContain(
-		obs.librariesListEntries,
-		paperLibraryLuminolToken,
-	) {
-		add("luminol")
-	}
-	if observationLinesContain(
-		obs.librariesListEntries,
-		paperLibraryLophineToken,
-	) {
-		add("lophine")
 	}
 	// Fixture citation: probe/internal/detector/testdata/paper_family/test_reaper/reaper/patch.properties
 	if hasStrictReaperObservationBrand(obs) {
