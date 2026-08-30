@@ -11,6 +11,21 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+// SupportsPath reports whether path has a supported artifact archive
+// extension.
+func SupportsPath(path string) bool {
+	return supportedExt(strings.ToLower(filepath.Ext(path)))
+}
+
+func supportedExt(ext string) bool {
+	switch ext {
+	case ".jar", ".zip", ".pyz", ".mcdr":
+		return true
+	default:
+		return false
+	}
+}
+
 // Analyze extracts package metadata from an artifact file.
 // It opens the file internally and routes to appropriate readers based on file extension.
 // For .jar/.zip files, all readers are tried. For .pyz/.mcdr, only the MCDR reader runs.
@@ -21,9 +36,7 @@ func Analyze(filePath string, opts ...Option) ([]Info, error) {
 	}
 
 	ext := strings.ToLower(filepath.Ext(filePath))
-	switch ext {
-	case ".jar", ".zip", ".pyz", ".mcdr":
-	default:
+	if !supportedExt(ext) {
 		return nil, fmt.Errorf("unsupported artifact format: %s", ext)
 	}
 

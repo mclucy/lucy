@@ -89,7 +89,6 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 		Meta:       meta,
 		Repository: repo,
 	}.ToProjectInformation()
-	info.From = s.Id()
 	return info, nil
 }
 

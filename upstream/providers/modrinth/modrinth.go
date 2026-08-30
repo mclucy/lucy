@@ -122,7 +122,6 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 		return types.Metadata{}, err
 	}
 	info := project.ToProjectInformation()
-	info.From = s.Id()
 	return info, nil
 }
 

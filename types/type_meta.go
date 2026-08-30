@@ -1,9 +1,9 @@
 package types
 
-// Metadata is a struct that contains informational data about the
-// package. It is typically used in `lucy info`.
+// Metadata contains informational data about a package. Archive readers and
+// upstream providers both produce it. It carries content only. The source of
+// the data is part of the result types, for example upstream.Info.
 type Metadata struct {
-	From                  SourceId
 	Title                 string
 	Brief                 string // short
 	Description           string // prose or Markdown

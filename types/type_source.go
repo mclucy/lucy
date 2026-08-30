@@ -29,7 +29,6 @@ const (
 	SourceNeoForge
 	SourceFabric
 	SourceUnknown // sentinel for parse/validation failure
-	SourceLocal
 )
 
 func (s SourceId) String() string {
@@ -56,8 +55,6 @@ func (s SourceId) String() string {
 		return "neoforge"
 	case SourceFabric:
 		return "fabric"
-	case SourceLocal:
-		return "local"
 	case SourceUnknown:
 		return "unknown"
 	default:
@@ -89,8 +86,6 @@ func (s SourceId) Title() string {
 		return "NeoForge"
 	case SourceFabric:
 		return "Fabric"
-	case SourceLocal:
-		return "Local"
 	case SourceUnknown:
 		return "Unknown"
 	default:

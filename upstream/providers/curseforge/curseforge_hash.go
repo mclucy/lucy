@@ -6,10 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 
-	"github.com/mclucy/lucy/internal/artifacthash"
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
@@ -41,21 +40,23 @@ func SlugFromFilePathWithHint(filePath, urlHint string) (
 	slug string,
 	err error,
 ) {
-	data, err := os.ReadFile(filePath)
+	fp, err := artifact.File{Path: filePath}.MurmurHash()
 	if err != nil {
 		return "", fmt.Errorf("curseforge hash: %w", err)
 	}
-	fp := artifacthash.Bytes(data).MurmurHash()
 	return slugFromFingerprint(fp)
 }
 
-func (p provider) PackageByHash(artifact upstream.Hashable) (
+func (p provider) PackageByHash(hashable upstream.Hashable) (
 	ref types.FullPackageRef,
 	hash string,
 	ok bool,
 	err error,
 ) {
-	fingerprint := artifact.MurmurHash()
+	fingerprint, err := hashable.MurmurHash()
+	if err != nil {
+		return ref, hash, false, err
+	}
 	hash = strconv.FormatUint(uint64(fingerprint), 10)
 	match, err := fingerprintMatch(fingerprint)
 	if err != nil {

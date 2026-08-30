@@ -26,11 +26,6 @@ func (e ProviderError) Unwrap() error {
 	return e.Err
 }
 
-type InfoResult struct {
-	Information types.Metadata
-	Fetch       types.ResolvedPackage
-}
-
 // SearchMany executes search on all providers in parallel.
 //
 // Default behavior is non-aggregated: each provider contributes one
@@ -175,21 +170,21 @@ func FetchMany(
 }
 
 // GetInfoHedged executes info on all providers in parallel and returns the
-// first successful result.
+// first successful result. Ref.Scope holds the provider that answered.
 func GetInfoHedged(
 	providers []upstream.InfoSource,
 	ref types.PackageRef,
-) (types.Metadata, []ProviderError, error) {
+) (upstream.Info, []ProviderError, error) {
 	if len(providers) == 0 {
-		return types.Metadata{}, nil, ErrNoProviderSucceeded
+		return upstream.Info{}, nil, ErrNoProviderSucceeded
 	}
 
-	resChan := make(chan types.Metadata, len(providers))
+	resChan := make(chan upstream.Info, len(providers))
 	errChan := make(chan ProviderError, len(providers))
 
 	for _, provider := range providers {
 		go func(provider upstream.InfoSource) {
-			res, err := upstream.Info(provider, ref)
+			metadata, err := provider.Info(ref)
 			if err != nil {
 				errChan <- ProviderError{
 					Source: provider.Id(),
@@ -197,7 +192,13 @@ func GetInfoHedged(
 				}
 				return
 			}
-			resChan <- res
+			resChan <- upstream.Info{
+				Ref: types.ScopedPackageRef{
+					PackageRef: ref,
+					Scope:      provider.Id(),
+				},
+				Metadata: metadata,
+			}
 		}(provider)
 	}
 
@@ -214,30 +215,43 @@ func GetInfoHedged(
 		}
 	}
 
-	return types.Metadata{}, providerErrors, joinProviderErrors(providerErrors)
+	return upstream.Info{}, providerErrors, joinProviderErrors(providerErrors)
 }
+
+// ArtifactLookup is the result of a hash lookup on the upstream mappers.
+// Ref is zero when no mapper matched the artifact. Errors holds the failure
+// of each mapper. A lookup with errors is incomplete, not a miss.
+type ArtifactLookup struct {
+	Ref    types.FullPackageRef
+	Errors []ProviderError
+}
+
+// Matched reports whether some mapper identified the artifact.
+func (l ArtifactLookup) Matched() bool { return l.Ref.Name != "" }
+
+// Complete reports whether every attempted mapper finished without failure.
+func (l ArtifactLookup) Complete() bool { return len(l.Errors) == 0 }
 
 // ResolveArtifactByHash resolves an artifact's canonical upstream reference.
 // Mappers run in policy order; a failed or missing match does not stop later
 // mappers. Provider failures are returned for callers that surface warnings.
-func ResolveArtifactByHash(
-	artifact upstream.Hashable,
-) (types.FullPackageRef, string, []ProviderError) {
-	providerErrors := make([]ProviderError, 0)
+func ResolveArtifactByHash(artifact upstream.Hashable) ArtifactLookup {
+	result := ArtifactLookup{}
 	for _, mapper := range artifactMappers() {
-		ref, hash, ok, err := mapper.PackageByHash(artifact)
+		ref, _, ok, err := mapper.PackageByHash(artifact)
 		if err != nil {
-			providerErrors = append(providerErrors, ProviderError{
+			result.Errors = append(result.Errors, ProviderError{
 				Source: mapper.Id(),
-				Err:    fmt.Errorf("hash lookup failed: %w", err),
+				Err:    err,
 			})
 			continue
 		}
 		if ok && ref.Name != "" {
-			return ref, hash, providerErrors
+			result.Ref = ref
+			return result
 		}
 	}
-	return types.FullPackageRef{}, "", providerErrors
+	return result
 }
 
 // DependenciesMany executes Dependencies on all providers in parallel and

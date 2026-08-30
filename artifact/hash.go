@@ -1,46 +1,49 @@
-package artifacthash
+package artifact
 
 import (
 	"crypto/sha1"
+	"fmt"
 	"io"
 	"os"
 )
 
+// File is an artifact file on disk. It implements upstream.Hashable.
 type File struct {
 	Path string
 }
 
-type Bytes []byte
-
-func (f File) Sha1() [sha1.Size]byte {
+// Sha1 returns the SHA-1 digest of the file's content.
+func (f File) Sha1() ([sha1.Size]byte, error) {
 	file, err := os.Open(f.Path)
 	if err != nil {
-		return [sha1.Size]byte{}
+		return [sha1.Size]byte{}, fmt.Errorf("open artifact: %w", err)
 	}
 	defer file.Close()
 
 	hasher := sha1.New()
 	if _, err := io.Copy(hasher, file); err != nil {
-		return [sha1.Size]byte{}
+		return [sha1.Size]byte{}, fmt.Errorf("hash artifact: %w", err)
 	}
-
-	return [sha1.Size]byte(hasher.Sum(nil))
+	return [sha1.Size]byte(hasher.Sum(nil)), nil
 }
 
-// MurmurHash computes CurseForge's custom MurmurHash2 fingerprint.
-// It strips whitespace bytes (0x09, 0x0A, 0x0D, 0x20) before mixing.
-func (f File) MurmurHash() uint32 {
+// MurmurHash computes CurseForge's custom MurmurHash2 fingerprint of the
+// file's content. It strips whitespace bytes (0x09, 0x0A, 0x0D, 0x20) before
+// mixing.
+func (f File) MurmurHash() (uint32, error) {
 	data, err := os.ReadFile(f.Path)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("read artifact: %w", err)
 	}
-	return Bytes(data).MurmurHash()
+	return MurmurHashBytes(data), nil
 }
 
-func (b Bytes) MurmurHash() uint32 {
+// MurmurHashBytes computes CurseForge's custom MurmurHash2 fingerprint.
+// It strips whitespace bytes (0x09, 0x0A, 0x0D, 0x20) before mixing.
+func MurmurHashBytes(data []byte) uint32 {
 	const multiplex uint32 = 1540483477
 	normalizedLen := uint32(0)
-	for _, value := range b {
+	for _, value := range data {
 		if !isCurseForgeWhitespace(value) {
 			normalizedLen++
 		}
@@ -49,7 +52,7 @@ func (b Bytes) MurmurHash() uint32 {
 	hash := uint32(1) ^ normalizedLen
 	var pending uint32
 	var pendingBits uint32
-	for _, value := range b {
+	for _, value := range data {
 		if isCurseForgeWhitespace(value) {
 			continue
 		}

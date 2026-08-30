@@ -167,11 +167,12 @@ func GetArtifactMapper(src types.SourceId) (
 }
 
 func artifactMappers() []upstream.ArtifactMapSource {
-	sources := []types.SourceId{types.SourceModrinth}
-	if curseforge.Enabled() {
-		sources = append(sources, types.SourceCurseForge)
-	}
+	return artifactMappersFromSources(modProviderSources())
+}
 
+// artifactMappersFromSources returns the mappers for the given sources, in
+// order. Sources without a mapper are skipped.
+func artifactMappersFromSources(sources []types.SourceId) []upstream.ArtifactMapSource {
 	registry := DefaultRegistry()
 	mappers := make([]upstream.ArtifactMapSource, 0, len(sources))
 	for _, source := range sources {
