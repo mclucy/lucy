@@ -158,9 +158,15 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 	t.Parallel()
 
 	jarPath := filepath.Join(
-		testDataRoot(t),
-		"forge",
+		t.TempDir(),
 		"forge-1.20.1-47.3.22-universal.jar",
+	)
+	writeZipFile(
+		t,
+		jarPath,
+		map[string]string{
+			"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nSpecification-Title: Forge\nImplementation-Title: net.minecraftforge\nImplementation-Version: 47.3.22\nSpecification-Version: 1.20.1\n",
+		},
 	)
 
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(jarPath)
