@@ -40,10 +40,6 @@ type StatusLayoutParams struct {
 	GapWidth  int
 }
 
-// NegotiateStatusLayout decides which layout mode to use given the terminal
-// width, the widths of the two logo variants, TTY detection, and logo mode.
-// It returns the mode together with pixel-budget details so that the
-// compositor can render without further arithmetic.
 func statusLayoutInfoOnly(termWidth int) StatusLayoutParams {
 	return StatusLayoutParams{
 		Mode:      LayoutInfoOnly,
