@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/tui/progress"
+	"github.com/mclucy/lucy/terminal/progress"
 )
 
 func checkJavaAvailability() error {

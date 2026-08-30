@@ -13,7 +13,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/state"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"

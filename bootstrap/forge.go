@@ -11,7 +11,7 @@ import (
 
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/tui/progress"
+	"github.com/mclucy/lucy/terminal/progress"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
 )

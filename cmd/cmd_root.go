@@ -15,7 +15,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli/search"
 	"github.com/mclucy/lucy/internal/cli/status"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 

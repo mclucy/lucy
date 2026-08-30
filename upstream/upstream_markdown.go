@@ -3,7 +3,7 @@ package upstream
 import (
 	"strings"
 
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 )
 
 // LooksLikeMarkdown returns true when rendering the text as markdown produces a

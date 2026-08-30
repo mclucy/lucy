@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 )
 
 // Ecosystem is an enum of several string constants.

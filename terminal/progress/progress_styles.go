@@ -3,7 +3,7 @@ package progress
 import (
 	"charm.land/bubbles/v2/progress"
 	"charm.land/lipgloss/v2"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal/style"
 )
 
 var globalOptions []progress.Option

@@ -8,8 +8,8 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/tui"
-	"github.com/mclucy/lucy/tui/style"
+	"github.com/mclucy/lucy/terminal"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -101,9 +101,9 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 		},
 	)
 
-	out := &tui.Data{
-		Fields: []tui.Field{
-			&tui.FieldAnnotation{
+	out := &terminal.Data{
+		Fields: []terminal.Field{
+			&terminal.FieldAnnotation{
 				Annotation: fmt.Sprintf("(%d entries)", len(entries)),
 			},
 		},
@@ -111,7 +111,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 
 	for _, entry := range entries {
 		out.Fields = append(
-			out.Fields, &tui.FieldAnnotatedShortText{
+			out.Fields, &terminal.FieldAnnotatedShortText{
 				Title: entry.Key,
 				Text: fmt.Sprintf(
 					"%s  %s",
@@ -123,7 +123,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 		)
 	}
 
-	tui.Flush(out)
+	terminal.Flush(out)
 	return nil
 }
 
@@ -163,9 +163,9 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	out := &tui.Data{
-		Fields: []tui.Field{
-			&tui.FieldAnnotation{
+	out := &terminal.Data{
+		Fields: []terminal.Field{
+			&terminal.FieldAnnotation{
 				Annotation: fmt.Sprintf("(%d entries)", len(entries)),
 			},
 		},
@@ -178,7 +178,7 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 		}
 
 		out.Fields = append(
-			out.Fields, &tui.FieldAnnotatedShortText{
+			out.Fields, &terminal.FieldAnnotatedShortText{
 				Title:      entry.Source.String() + "/" + entry.LocalId,
 				Text:       entry.CanonicalId,
 				Annotation: shortHash,
@@ -186,7 +186,7 @@ func actionCacheSlugsLs(cmd *cobra.Command, _ []string) error {
 		)
 	}
 
-	tui.Flush(out)
+	terminal.Flush(out)
 	return nil
 }
 
