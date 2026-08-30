@@ -1,9 +1,10 @@
 package tui
 
 import (
-	_ "embed"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/types"
 )
@@ -30,7 +31,9 @@ const (
 // but its primary API is the Lines / Width / Height helpers which the
 // layout compositor uses to build the neofetch-style side-by-side view.
 type FieldLogo struct {
+	Core    types.BarePackageName
 	Eco     types.Ecosystem
+	Version types.BareVersion
 	NoColor bool
 	Mode    StatusLogoMode
 }
@@ -38,7 +41,7 @@ type FieldLogo struct {
 // Render returns the large logo as a plain string. This is a fallback for
 // callers that are not layout-aware and simply iterate over Fields.
 func (f *FieldLogo) Render() string {
-	logo := GetLogo(f.Eco, f.renderVariant())
+	logo := GetLogo(f.Core, f.Eco, f.Version, f.renderVariant())
 	return strings.Join(normalizeLines(logo), "\n")
 }
 
@@ -58,22 +61,22 @@ func (f *FieldLogo) KeyLength() int {
 // Each line is padded with trailing spaces so that all lines share the
 // same width, making grid-based composition straightforward.
 func (f *FieldLogo) Lines(variant LogoVariant) []string {
-	return normalizeLines(GetLogo(f.Eco, variant))
+	return normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant))
 }
 
 // Width returns the uniform width (in runes) of every line for the given
 // logo variant.
 func (f *FieldLogo) Width(variant LogoVariant) int {
-	lines := normalizeLines(GetLogo(f.Eco, variant))
+	lines := normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant))
 	if len(lines) == 0 {
 		return 0
 	}
-	return len([]rune(lines[0]))
+	return lipgloss.Width(lines[0])
 }
 
 // Height returns the number of lines for the given logo variant.
 func (f *FieldLogo) Height(variant LogoVariant) int {
-	return len(normalizeLines(GetLogo(f.Eco, variant)))
+	return len(normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant)))
 }
 
 // normalizeLines splits the raw logo text into lines, strips \r characters,
@@ -83,12 +86,12 @@ func normalizeLines(raw string) []string {
 	raw = strings.ReplaceAll(raw, "\r", "")
 	lines := strings.Split(raw, "\n")
 
-	for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+	for len(lines) > 0 && strings.TrimSpace(ansi.Strip(lines[0])) == "" {
 		lines = lines[1:]
 	}
 
 	// Trim trailing empty lines.
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+	for len(lines) > 0 && strings.TrimSpace(ansi.Strip(lines[len(lines)-1])) == "" {
 		lines = lines[:len(lines)-1]
 	}
 
@@ -96,19 +99,18 @@ func normalizeLines(raw string) []string {
 		return nil
 	}
 
-	// Find maximum width (in runes).
+	// Find maximum visual width; ANSI escape sequences occupy no columns.
 	maxWidth := 0
 	for _, line := range lines {
-		if w := len([]rune(line)); w > maxWidth {
+		if w := lipgloss.Width(line); w > maxWidth {
 			maxWidth = w
 		}
 	}
 
-	// Pad each line to maxWidth.
+	// Pad each line to maxWidth using visual width.
 	for i, line := range lines {
-		runeLen := len([]rune(line))
-		if runeLen < maxWidth {
-			lines[i] = line + strings.Repeat(" ", maxWidth-runeLen)
+		if width := lipgloss.Width(line); width < maxWidth {
+			lines[i] = line + strings.Repeat(" ", maxWidth-width)
 		}
 	}
 

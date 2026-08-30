@@ -120,26 +120,30 @@ func generateStatusOutput(
 
 	var logoEco types.Ecosystem
 	for _, offer := range effectiveEcosystems {
-		if offer.Compatibility == types.CompatFull &&
-			offer.Ecosystem.IsModding() {
+		if offer.Compatibility == types.CompatFull && offer.Ecosystem.IsModding() {
 			logoEco = offer.Ecosystem
 			break
 		}
 	}
-	if hasServer &&
-		logoEco == types.EcoUnspecified &&
+	if hasServer && logoEco == types.EcoUnspecified &&
 		server.PrimaryRuntime.Eco == types.EcoMinecraft {
 		logoEco = types.EcoMinecraft
 	}
 	if logoEco == types.EcoUnspecified && hasMcdr {
 		logoEco = types.EcoMcdr
 	}
+
+	logoCore := statusLogoCore(server, hasServer, hasMcdr)
+	logoVersion := statusLogoVersion(server, hasServer, hasMcdr)
 	if logoMode != tui.StatusLogoNone &&
-		logoEco != types.EcoUnspecified {
+		logoCore != "" &&
+		tui.GetLogo(logoCore, logoEco, logoVersion, tui.LogoSmallPlain) != "" {
 		output.Fields = append(
 			output.Fields,
 			&tui.FieldLogo{
+				Core:    logoCore,
 				Eco:     logoEco,
+				Version: logoVersion,
 				NoColor: noStyle,
 				Mode:    logoMode,
 			},
@@ -255,6 +259,34 @@ func generateStatusOutput(
 	}
 
 	return output
+}
+
+func statusLogoCore(
+	server *workspace.ServerInstance,
+	hasServer bool,
+	hasMcdr bool,
+) types.BarePackageName {
+	if hasServer && server != nil {
+		return server.PrimaryRuntime.Name
+	}
+	if hasMcdr {
+		return "mcdr"
+	}
+	return ""
+}
+
+func statusLogoVersion(
+	server *workspace.ServerInstance,
+	hasServer bool,
+	hasMcdr bool,
+) types.BareVersion {
+	if hasServer && server != nil {
+		return server.GameVersion()
+	}
+	if hasMcdr {
+		return types.VersionUnknown
+	}
+	return ""
 }
 
 func statusPackageListField(
