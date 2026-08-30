@@ -1,7 +1,6 @@
 package search
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -10,7 +9,6 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
-	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/tui/style"
@@ -24,6 +22,7 @@ const (
 	flagIndexName    = "index"
 	flagClientName   = "client"
 	flagPlatformName = "platform"
+	flagSourceName   = "source"
 )
 
 var searchCmd = &cobra.Command{
@@ -35,14 +34,7 @@ var searchCmd = &cobra.Command{
 		args []string,
 		toComplete string,
 	) ([]string, cobra.ShellCompDirective) {
-		if len(args) >= 1 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		return cli.CompletePackageIDSuggestions(
-			context.Background(),
-			"search",
-			toComplete,
-		)
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		index, _ := cmd.Flags().GetString(flagIndexName)
@@ -50,10 +42,12 @@ var searchCmd = &cobra.Command{
 			return errors.New("--index must be one of \"relevance\", \"downloads\", \"newest\"")
 		}
 		platform, _ := cmd.Flags().GetString(flagPlatformName)
-		if platform != "" && !types.Ecosystem(platform).IsSearchEcosystem() {
-			return errors.New("--platform must be one of \"fabric\", \"forge\", \"neoforge\", \"bukkit\"")
+		if _, err := searchEcosystem(platform); err != nil {
+			return err
 		}
-		return nil
+		source, _ := cmd.Flags().GetString(flagSourceName)
+		_, err := searchSource(source)
+		return err
 	},
 	RunE: cli.WithErrorLogging(actionSearch),
 }
@@ -77,10 +71,29 @@ func NewCommand() *cobra.Command {
 		"",
 		"Filter results by platform (fabric, forge, neoforge, bukkit)",
 	)
+	searchCmd.Flags().StringP(
+		flagSourceName,
+		"s",
+		"",
+		"Restrict results to SOURCE",
+	)
 	cli.AddJSONFlag(searchCmd)
 	cli.AddJSONCompactFlag(searchCmd)
 	cli.AddLongFlag(searchCmd)
 	cli.AddNoStyleFlag(searchCmd)
+	_ = searchCmd.RegisterFlagCompletionFunc(
+		flagSourceName,
+		func(cmd *cobra.Command, args []string, toComplete string) (
+			[]string,
+			cobra.ShellCompDirective,
+		) {
+			candidates := cli.FilterByPrefix(
+				cli.StaticSearchSourceCandidates(),
+				toComplete,
+			)
+			return cli.ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+		},
+	)
 	_ = searchCmd.RegisterFlagCompletionFunc(
 		flagIndexName,
 		func(cmd *cobra.Command, args []string, toComplete string) (
@@ -108,20 +121,16 @@ func NewCommand() *cobra.Command {
 }
 
 func actionSearch(cmd *cobra.Command, args []string) error {
-	ref, err := input.ParseFullPackageRef(args[0])
-	if err != nil {
-		return err
-	}
 	index, _ := cmd.Flags().GetString(flagIndexName)
 	client, _ := cmd.Flags().GetBool(flagClientName)
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)
 	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
-	specifiedSource := ref.Scope
-
-	resolvedPlatform, err := ResolveEcosystem(
-		ref.PackageRef.Eco,
-		platformArg,
-	)
+	resolvedPlatform, err := searchEcosystem(platformArg)
+	if err != nil {
+		return err
+	}
+	sourceArg, _ := cmd.Flags().GetString(flagSourceName)
+	specifiedSource, err := searchSource(sourceArg)
 	if err != nil {
 		return err
 	}
@@ -143,7 +152,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%w: %s", err, errArg)
 	}
 
-	results, errs := routing.SearchMany(providers, ref.PackageRef.Name, options)
+	results, errs := routing.SearchMany(providers, args[0], options)
 	applySearchSort(results, SearchSort(index))
 
 	var noResultSources []string
@@ -184,6 +193,36 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Print(sb.String())
 	return nil
+}
+
+func searchEcosystem(value string) (types.Ecosystem, error) {
+	if value == "" {
+		return types.EcoUnspecified, nil
+	}
+
+	ecosystem := types.Ecosystem(strings.ToLower(strings.TrimSpace(value)))
+	if !ecosystem.IsSearchEcosystem() {
+		return types.EcoUnspecified, fmt.Errorf("invalid --platform %q", value)
+	}
+	return ecosystem, nil
+}
+
+func searchSource(value string) (types.SourceId, error) {
+	if value == "" {
+		return types.SourceAuto, nil
+	}
+
+	source := types.ParseSource(strings.TrimSpace(value))
+	switch source {
+	case types.SourceModrinth,
+		types.SourceCurseForge,
+		types.SourceHangar,
+		types.SourceSpiget,
+		types.SourceMCDR:
+		return source, nil
+	default:
+		return types.SourceUnknown, fmt.Errorf("invalid --source %q", value)
+	}
 }
 
 func searchResultError(
