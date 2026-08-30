@@ -119,14 +119,15 @@ lucy status --json --long
 Searches across data sources.
 
 ```bash
-lucy search fabric/carpet
-lucy search modrinth:carpet --index downloads --platform fabric
+lucy search carpet
+lucy search carpet --source modrinth --index downloads --platform fabric
 ```
 
 | Flag | Description |
 | ---------------- | ------------------------------------------------- |
 | `-i`, `--index` | Sort by `relevance`, `downloads`, or `newest` |
 | `-c`, `--client` | Include client-only mods |
+| `-s`, `--source` | Restrict results to `modrinth`, `curseforge`, `hangar`, `spiget`, or `mcdr` |
 | `--platform` | Filter by `fabric`, `forge`, `neoforge`, `bukkit` |
 | `-l`, `--long` | Show full output |
 | `--json` | Print raw JSON |

@@ -119,14 +119,15 @@ lucy status --json --long
 在各个数据源中搜索。
 
 ```bash
-lucy search fabric/carpet
-lucy search modrinth:carpet --index downloads --platform fabric
+lucy search carpet
+lucy search carpet --source modrinth --index downloads --platform fabric
 ```
 
 | 标志 | 说明 |
 | ---------------- | ----------------------------------------------- |
 | `-i`, `--index` | 按 `relevance`、`downloads` 或 `newest` 排序 |
 | `-c`, `--client` | 包含纯客户端模组 |
+| `-s`, `--source` | 限定为 `modrinth`、`curseforge`、`hangar`、`spiget` 或 `mcdr` |
 | `--platform` | 按 `fabric`、`forge`、`neoforge`、`bukkit` 过滤 |
 | `-l`, `--long` | 显示完整输出 |
 | `--json` | 输出原始 JSON |
