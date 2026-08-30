@@ -14,7 +14,6 @@ import (
 // Lock represents Lucy's exact resolved state snapshot.
 // It is persisted in lucy-lock.yaml.
 type Lock struct {
-	Version     string `yaml:"version"`
 	GeneratedAt string `yaml:"generated_at"`
 	// ManifestFingerprint binds the exact lock facts to one serialized manifest
 	// intent document. If the manifest bytes change, the lock is stale even when
@@ -58,29 +57,17 @@ type LockedBundle struct {
 	InstallPath string `yaml:"install_path"`
 }
 
-// NewLock returns a new v1 lock with the current timestamp in RFC3339 format.
+// NewLock returns a new lock with the current timestamp in RFC3339 format.
 func NewLock() Lock {
 	return Lock{
-		Version:     SupportedVersion,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Packages:    []LockedPackage{},
 		Bundles:     []LockedBundle{},
 	}
 }
 
-// ValidateLock validates required fields and v1 resolved-state invariants.
+// ValidateLock validates required fields and resolved-state invariants.
 func ValidateLock(l Lock) error {
-	if err := ValidateVersion(l.Version); err != nil {
-		if IsVersionError(err) {
-			return versionStateError(
-				LockFile,
-				"version",
-				l.Version,
-				ErrVersionUnsupported,
-			)
-		}
-		return versionStateError(LockFile, "version", l.Version, ErrMalformed)
-	}
 	if l.GeneratedAt == "" {
 		return NewStateError(
 			LockFile,

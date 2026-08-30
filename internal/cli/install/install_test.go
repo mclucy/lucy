@@ -11,7 +11,6 @@ import (
 
 func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 	manifest := &state.Manifest{
-		FormatVersion: state.ManifestDefaults().FormatVersion,
 		Environment: state.ManifestEnvironment{
 			ModdingPlatform: string(types.EcoFabric),
 		},
@@ -65,7 +64,6 @@ func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 
 func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing.T) {
 	manifest := &state.Manifest{
-		FormatVersion: state.ManifestDefaults().FormatVersion,
 		Environment: state.ManifestEnvironment{
 			ModdingPlatform: string(types.EcoFabric),
 		},

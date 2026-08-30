@@ -7,7 +7,6 @@ import (
 
 func TestLockRoundTrip(t *testing.T) {
 	original := Lock{
-		Version:             "v1",
 		GeneratedAt:         "2026-04-15T12:34:56Z",
 		ManifestFingerprint: "sha256:manifest",
 		GameVersion:         "1.21.1",
@@ -51,8 +50,7 @@ func TestLockRoundTrip(t *testing.T) {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	if decoded.Version != original.Version ||
-		decoded.GeneratedAt != original.GeneratedAt ||
+	if decoded.GeneratedAt != original.GeneratedAt ||
 		decoded.ManifestFingerprint != original.ManifestFingerprint ||
 		decoded.GameVersion != original.GameVersion ||
 		decoded.Platform != original.Platform ||
@@ -94,7 +92,6 @@ func TestLockRoundTrip(t *testing.T) {
 
 func TestLockEmbeddedDependency(t *testing.T) {
 	lock := Lock{
-		Version:             "v1",
 		GeneratedAt:         "2026-04-15T12:34:56Z",
 		ManifestFingerprint: "sha256:manifest",
 		GameVersion:         "1.21.1",
@@ -151,7 +148,6 @@ func TestLockEmbeddedDependency(t *testing.T) {
 
 func TestLockProvenanceRoundTrip(t *testing.T) {
 	original := Lock{
-		Version:             "v1",
 		GeneratedAt:         "2026-04-15T12:34:56Z",
 		ManifestFingerprint: "sha256:manifest",
 		GameVersion:         "1.21.1",
@@ -202,7 +198,6 @@ func TestLockProvenanceRoundTrip(t *testing.T) {
 
 func TestValidateLockIgnoresObservedOnlyFieldsAtStructBoundary(t *testing.T) {
 	lock := Lock{
-		Version:             "v1",
 		GeneratedAt:         "2026-04-15T12:34:56Z",
 		ManifestFingerprint: "sha256:manifest",
 		GameVersion:         "1.21.1",
@@ -214,7 +209,7 @@ func TestValidateLockIgnoresObservedOnlyFieldsAtStructBoundary(t *testing.T) {
 		t.Fatalf("expected schema-level validation only, got error: %v", err)
 	}
 
-	invalidFixture := []byte("version: v1\ngenerated_at: \"2026-04-15T12:34:56Z\"\nmanifest_fingerprint: sha256:manifest\ngame_version: \"1.21.1\"\nplatform: fabric\nplatform_version: \"0.16.10\"\nplayer_count: 12\n")
+	invalidFixture := []byte("generated_at: \"2026-04-15T12:34:56Z\"\nmanifest_fingerprint: sha256:manifest\ngame_version: \"1.21.1\"\nplatform: fabric\nplatform_version: \"0.16.10\"\nplayer_count: 12\n")
 	var decoded Lock
 	if err := decoded.Unmarshal(invalidFixture); err != nil {
 		t.Fatalf("unexpected unmarshal error: %v", err)
@@ -241,7 +236,6 @@ func TestValidateLockRejectsFuzzyVersions(t *testing.T) {
 	for _, version := range tests {
 		t.Run(version, func(t *testing.T) {
 			lock := Lock{
-				Version:             "v1",
 				GeneratedAt:         "2026-04-15T12:34:56Z",
 				ManifestFingerprint: "sha256:manifest",
 				GameVersion:         "1.21.1",
@@ -275,7 +269,6 @@ func TestValidateLockRejectsFuzzyVersions(t *testing.T) {
 
 func TestValidateLockRejectsNonExactPackageIdentityFacts(t *testing.T) {
 	lock := Lock{
-		Version:             "v1",
 		GeneratedAt:         "2026-04-15T12:34:56Z",
 		ManifestFingerprint: "sha256:manifest",
 		GameVersion:         "1.21.1",
