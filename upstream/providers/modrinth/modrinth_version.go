@@ -6,6 +6,7 @@ import (
 	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 // TODO: Refactor to separate all API functions to accept an url. While the urls
@@ -55,22 +56,22 @@ func listVersions(slug types.BarePackageName) (
 
 // getVersion is named as so because a Package in lucy is equivalent to a version
 // in SourceModrinth.
-func getVersion(id types.VersionedPackageRef) (
-	v *versionResponse,
-	err error,
-) {
+func getVersion(
+	local upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (v *versionResponse, err error) {
 	versions, err := listVersions(id.Name)
 	if err != nil {
 		return nil, err
 	}
 	if id.Version.CanInfer() {
-		v, err = latestVersion(id.Name)
+		v, err = latestVersion(id.Name, id.Eco, local.GameVersion)
 		if err != nil {
 			return nil, err
 		}
 		return v, nil
 	}
-	if selected := selectExactVersion(versions, id); selected != nil {
+	if selected := selectExactVersion(versions, id, local.GameVersion); selected != nil {
 		return selected, nil
 	}
 	return nil, ErrNoVersion
@@ -96,20 +97,26 @@ func versionSupportsLoader(
 	return false
 }
 
-func latestVersion(slug types.BarePackageName) (
-	v *versionResponse,
-	err error,
-) {
+func latestVersion(
+	slug types.BarePackageName,
+	platform types.Ecosystem,
+	gameVersion types.BareVersion,
+) (v *versionResponse, err error) {
 	versions, err := listVersions(slug)
 	if err != nil {
 		return nil, err
 	}
-	v, fellBack := selectLatestVersionCandidate(versions, types.EcoUnspecified)
+	filterByLoader := platform != types.EcoUnspecified
+	v, fellBack := selectLatestVersionByLoader(
+		versions,
+		platform,
+		gameVersion,
+		filterByLoader,
+	)
 	if v == nil {
 		return nil, ErrNoVersion
 	}
 	if fellBack {
-		// No release version found; fall back to the latest pre-release (beta/alpha).
 		log.Info("no release version found for " + slug.Title() + ", falling back to latest pre-release")
 	}
 	log.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
@@ -119,29 +126,36 @@ func latestVersion(slug types.BarePackageName) (
 func latestCompatibleVersion(
 	slug types.BarePackageName,
 	platform types.Ecosystem,
-) (
-	v *versionResponse,
-	err error,
-) {
+	gameVersion types.BareVersion,
+) (v *versionResponse, err error) {
 	versions, err := listVersions(slug)
 	if err != nil {
 		return nil, err
 	}
 	filterByLoader := platform != types.EcoUnspecified
 	if filterByLoader {
-		v, _ = selectLatestCompatibleVersionCandidate(versions, platform)
+		v, _ = selectLatestCompatibleVersionCandidate(
+			versions,
+			platform,
+			gameVersion,
+		)
 	} else {
-		v, _ = selectLatestVersionCandidate(versions, platform)
+		v, _ = selectLatestVersionCandidate(versions, platform, gameVersion)
 	}
 	if v == nil {
 		return nil, ErrNoVersion
 	}
-	if filterByLoader && latestReleaseVersion(versions, platform, true) == nil {
-		// No release version found; fall back to the latest pre-release (beta/alpha).
+	if filterByLoader && latestReleaseVersion(
+		versions,
+		platform,
+		gameVersion,
+		true,
+	) == nil {
 		log.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
 	} else if !filterByLoader && latestReleaseVersion(
 		versions,
 		platform,
+		gameVersion,
 		false,
 	) == nil {
 		log.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
