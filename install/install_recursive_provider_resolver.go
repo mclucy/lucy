@@ -26,25 +26,13 @@ func (resolver providerCandidateResolver) ResolvePackage(
 	if id.Version == types.VersionStable {
 		attempts = append(
 			attempts,
-			types.VersionedPackageRef{
-				Eco:     id.Eco,
-				Name:    id.Name,
-				Version: types.VersionBeta,
-			},
-			types.VersionedPackageRef{
-				Eco:     id.Eco,
-				Name:    id.Name,
-				Version: types.VersionAny,
-			},
+			types.VersionedPackageRef{PackageRef: id.PackageRef, Eco: id.Eco, Version: types.VersionBeta},
+			types.VersionedPackageRef{PackageRef: id.PackageRef, Eco: id.Eco, Version: types.VersionAny},
 		)
 	} else if id.Version == types.VersionBeta {
 		attempts = append(
 			attempts,
-			types.VersionedPackageRef{
-				Eco:     id.Eco,
-				Name:    id.Name,
-				Version: types.VersionAny,
-			},
+			types.VersionedPackageRef{PackageRef: id.PackageRef, Eco: id.Eco, Version: types.VersionAny},
 		)
 	}
 
@@ -173,7 +161,7 @@ func (resolver providerCandidateResolver) ResolveDependencies(
 		return nil, err
 	}
 
-	providers := providersForSource(resolver.providers, pkg.Id.Scope)
+	providers := providersForSource(resolver.providers, pkg.Id.Source)
 	dependencySets, providerErrors := routing.DependenciesMany(
 		providers,
 		versionedResolvedID(pkg),

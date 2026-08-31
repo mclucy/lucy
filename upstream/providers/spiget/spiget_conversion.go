@@ -133,7 +133,7 @@ func (r resolvedVersion) Matches(version types.BareVersion) bool {
 
 func (r resolvedVersion) ToPackageRemote() types.ResolvedPackage {
 	return types.ResolvedPackage{
-		Id:       types.FullPackageRef{Scope: types.SourceSpiget},
+		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceSpiget}},
 		FileUrl:  r.downloadURL(),
 		Filename: r.filename(),
 	}

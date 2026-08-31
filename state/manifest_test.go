@@ -18,7 +18,7 @@ func TestManifestRoundTrip(t *testing.T) {
 	  },
 	  "packages": [
 	    {
-	      "id": "neoforge/connector",
+      "id": "connector",
 	      "version": "stable",
 	      "source": "modrinth",
 	      "role": "required",
@@ -78,15 +78,15 @@ func TestManifestPreservesPackageSides(t *testing.T) {
 	manifest.Environment.ModdingPlatformVersion = "0.16.10"
 	manifest.Packages = []ManifestPackage{
 		{
-			ID: "fabric/lithium", Version: "stable", Source: "auto",
+			ID: "lithium", Version: "stable", Source: "auto",
 			Role: RoleRequired, Side: SideServer,
 		},
 		{
-			ID: "fabric/sodium", Version: "beta", Source: "modrinth",
+			ID: "sodium", Version: "beta", Source: "modrinth",
 			Role: RoleTransitive, Side: SideClient, Optional: true,
 		},
 		{
-			ID: "fabric/fabric-api", Version: "0.119.2+1.21.5",
+			ID: "fabric-api", Version: "0.119.2+1.21.5",
 			Source: "github", Role: RoleIgnored, Side: SideBoth, Pinned: true,
 		},
 	}
@@ -132,7 +132,7 @@ func TestManifestPreservesFuzzyVersionIntentVerbatim(t *testing.T) {
 	manifest.Environment.ModdingPlatformVersion = "0.16.10"
 	manifest.Packages = []ManifestPackage{
 		{
-			ID:      "fabric/lithium",
+			ID:      "lithium",
 			Version: ">=0.12.0 <0.13.0",
 			Source:  "auto",
 			Role:    RoleRequired,
@@ -213,11 +213,11 @@ func TestManifestBundlesRemainSeparateFromPackages(t *testing.T) {
 	manifest.Environment.ModdingPlatform = ""
 	manifest.Packages = []ManifestPackage{
 		{
-			ID:      "forge/luckperms",
+			ID:      "luckperms",
 			Version: "stable",
 			Source:  "curseforge",
 			Role:    RoleRequired,
-			Side:    SideServer,
+			Side:    SideBoth,
 		},
 	}
 	manifest.Bundles = []ManifestBundle{
@@ -301,61 +301,23 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 			ModdingPlatform: string(types.EcoFabric),
 		},
 		Packages: []ManifestPackage{
-			{
-				ID: "fabric/kept-root", Version: "stable", Source: "auto",
-				Role: RoleRequired, Side: SideBoth,
-			},
-			{
-				ID: "fabric/manual-jar", Version: "1.0.0", Source: "github",
-				Role: RoleIgnored, Side: SideBoth, Pinned: true,
-			},
+			{ID: "kept-root", Version: "stable", Source: "auto", Role: RoleRequired, Side: SideBoth},
+			{ID: "manual-jar", Version: "1.0.0", Source: "github", Role: RoleIgnored, Side: SideBoth, Pinned: true},
 		},
 	}
-	lock := &Lock{
-		Packages: []LockedPackage{
-			{
-				ID: "fabric/kept-root", Version: "1.0.0", Source: "modrinth",
-				URL:      "https://example.com/kept-root.jar",
-				Filename: "kept-root.jar", Hash: "abc", HashAlgorithm: "sha1",
-				InstallPath: "mods/kept-root.jar", Side: "both",
-				Provenance: []string{"root"}, Requester: "root",
-			},
-			{
-				ID: "fabric/kept-dependency", Version: "1.1.0",
-				Source:   "modrinth",
-				URL:      "https://example.com/kept-dependency.jar",
-				Filename: "kept-dependency.jar", Hash: "def",
-				HashAlgorithm: "sha1", InstallPath: "mods/kept-dependency.jar",
-				Side:       "both",
-				Provenance: []string{"root", "fabric/kept-root@1.0.0"},
-				Requester:  "fabric/kept-root",
-			},
-			{
-				ID: "fabric/new-root", Version: "2.0.0", Source: "modrinth",
-				URL:      "https://example.com/new-root.jar",
-				Filename: "new-root.jar", Hash: "ghi", HashAlgorithm: "sha1",
-				InstallPath: "mods/new-root.jar", Side: "both",
-				Provenance: []string{"root"}, Requester: "root",
-			},
-			{
-				ID: "fabric/new-dependency", Version: "2.1.0",
-				Source:   "modrinth",
-				URL:      "https://example.com/new-dependency.jar",
-				Filename: "new-dependency.jar", Hash: "jkl",
-				HashAlgorithm: "sha1", InstallPath: "mods/new-dependency.jar",
-				Side:       "both",
-				Provenance: []string{"root", "fabric/new-root@2.0.0"},
-				Requester:  "fabric/new-root",
-			},
-		},
-	}
+	lock := &Lock{Packages: []LockedPackage{
+		{ID: "kept-root", Version: "1.0.0", Source: "modrinth", Platform: "fabric", URL: "https://example.com/kept-root.jar", Filename: "kept-root.jar", Hash: "abc", HashAlgorithm: "sha1", InstallPath: "mods/kept-root.jar", Side: "both", Provenance: []string{"root"}, Requester: "root"},
+		{ID: "kept-dependency", Version: "1.1.0", Source: "modrinth", Platform: "fabric", URL: "https://example.com/kept-dependency.jar", Filename: "kept-dependency.jar", Hash: "def", HashAlgorithm: "sha1", InstallPath: "mods/kept-dependency.jar", Side: "both", Provenance: []string{"root", "kept-root@1.0.0"}, Requester: "kept-root"},
+		{ID: "new-root", Version: "2.0.0", Source: "modrinth", Platform: "fabric", URL: "https://example.com/new-root.jar", Filename: "new-root.jar", Hash: "ghi", HashAlgorithm: "sha1", InstallPath: "mods/new-root.jar", Side: "both", Provenance: []string{"root"}, Requester: "root"},
+		{ID: "new-dependency", Version: "2.1.0", Source: "modrinth", Platform: "fabric", URL: "https://example.com/new-dependency.jar", Filename: "new-dependency.jar", Hash: "jkl", HashAlgorithm: "sha1", InstallPath: "mods/new-dependency.jar", Side: "both", Provenance: []string{"root", "new-root@2.0.0"}, Requester: "new-root"},
+	}}
 
 	updated := UpdateManifestRolesForAdd(
 		manifest, []types.PackageRequest{
 			{
-				Eco: types.EcoFabric, Name: "new-root",
-				Version: types.VersionAny,
-				Scope:   types.SourceModrinth,
+				PackageRef: types.PackageRef{Name: "new-root", Source: types.SourceModrinth},
+				Eco:        types.EcoFabric,
+				Version:    types.VersionAny,
 			},
 		}, lock,
 	)
@@ -372,28 +334,28 @@ func TestUpdateManifestRolesForAddPromotesExplicitRequestsAndPreservesIgnored(t 
 		byID[pkg.ID] = pkg
 	}
 
-	if got := byID["fabric/kept-root"]; got.Role != RoleRequired || got.Version != "stable" {
+	if got := byID["kept-root"]; got.Role != RoleRequired || got.Version != "stable" {
 		t.Fatalf(
 			"expected existing required root to remain required with manifest intent preserved, got %#v",
 			got,
 		)
 	}
-	if got := byID["fabric/new-root"]; got.Role != RoleRequired || got.Version != types.VersionAny.String() {
+	if got := byID["new-root"]; got.Role != RoleRequired || got.Version != types.VersionAny.String() {
 		t.Fatalf(
 			"expected added root to become required with requested intent preserved, got %#v",
 			got,
 		)
 	}
-	if got := byID["fabric/kept-dependency"]; got.Role != RoleTransitive {
+	if got := byID["kept-dependency"]; got.Role != RoleTransitive {
 		t.Fatalf(
 			"expected existing dependency to remain transitive, got %#v",
 			got,
 		)
 	}
-	if got := byID["fabric/new-dependency"]; got.Role != RoleTransitive {
+	if got := byID["new-dependency"]; got.Role != RoleTransitive {
 		t.Fatalf("expected new dependency to be transitive, got %#v", got)
 	}
-	if got := byID["fabric/manual-jar"]; got.Role != RoleIgnored || !got.Pinned || got.Version != "1.0.0" {
+	if got := byID["manual-jar"]; got.Role != RoleIgnored || !got.Pinned || got.Version != "1.0.0" {
 		t.Fatalf("expected ignored package to remain untouched, got %#v", got)
 	}
 }
@@ -405,23 +367,23 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 		},
 		Packages: []ManifestPackage{
 			{
-				ID: "fabric/root-a", Version: "stable", Source: "auto",
+				ID: "root-a", Version: "stable", Source: "auto",
 				Role: RoleRequired, Side: SideBoth,
 			},
 			{
-				ID: "fabric/root-b", Version: "stable", Source: "auto",
+				ID: "root-b", Version: "stable", Source: "auto",
 				Role: RoleRequired, Side: SideBoth,
 			},
 			{
-				ID: "fabric/dependency-a", Version: "1.0.0", Source: "modrinth",
+				ID: "dependency-a", Version: "1.0.0", Source: "modrinth",
 				Role: RoleTransitive, Side: SideBoth,
 			},
 			{
-				ID: "fabric/dependency-b", Version: "1.0.0", Source: "modrinth",
+				ID: "dependency-b", Version: "1.0.0", Source: "modrinth",
 				Role: RoleTransitive, Side: SideBoth,
 			},
 			{
-				ID: "fabric/manual-jar", Version: "1.0.0", Source: "github",
+				ID: "manual-jar", Version: "1.0.0", Source: "github",
 				Role: RoleIgnored, Side: SideBoth,
 			},
 		},
@@ -429,53 +391,41 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 	lock := &Lock{
 		Packages: []LockedPackage{
 			{
-				ID: "fabric/root-a", Version: "1.0.0", Source: "modrinth",
+				ID: "root-a", Version: "1.0.0", Source: "modrinth",
 				URL: "https://example.com/root-a.jar", Filename: "root-a.jar",
 				Hash: "aaa", HashAlgorithm: "sha1",
 				InstallPath: "mods/root-a.jar", Side: "both",
 				Provenance: []string{"root"}, Requester: "root",
 			},
 			{
-				ID: "fabric/root-b", Version: "1.0.0", Source: "modrinth",
+				ID: "root-b", Version: "1.0.0", Source: "modrinth",
 				URL: "https://example.com/root-b.jar", Filename: "root-b.jar",
 				Hash: "bbb", HashAlgorithm: "sha1",
 				InstallPath: "mods/root-b.jar", Side: "both",
 				Provenance: []string{"root"}, Requester: "root",
 			},
 			{
-				ID: "fabric/dependency-a", Version: "1.0.0", Source: "modrinth",
-				URL:      "https://example.com/dependency-a.jar",
-				Filename: "dependency-a.jar", Hash: "ccc",
-				HashAlgorithm: "sha1", InstallPath: "mods/dependency-a.jar",
-				Side:       "both",
-				Provenance: []string{"root", "fabric/root-a@1.0.0"},
-				Requester:  "fabric/root-a",
+				ID: "dependency-a", Version: "1.0.0", Source: "modrinth",
+				URL: "https://example.com/dependency-a.jar", Filename: "dependency-a.jar", Hash: "ccc", HashAlgorithm: "sha1", InstallPath: "mods/dependency-a.jar", Side: "both", Provenance: []string{"root", "root-a@1.0.0"}, Requester: "root-a",
 			},
 			{
-				ID: "fabric/dependency-b", Version: "1.0.0", Source: "modrinth",
-				URL:      "https://example.com/dependency-b.jar",
-				Filename: "dependency-b.jar", Hash: "ddd",
-				HashAlgorithm: "sha1", InstallPath: "mods/dependency-b.jar",
-				Side:       "both",
-				Provenance: []string{"root", "fabric/root-b@1.0.0"},
-				Requester:  "fabric/root-b",
+				ID: "dependency-b", Version: "1.0.0", Source: "modrinth",
+				URL: "https://example.com/dependency-b.jar", Filename: "dependency-b.jar", Hash: "ddd", HashAlgorithm: "sha1", InstallPath: "mods/dependency-b.jar", Side: "both", Provenance: []string{"root", "root-b@1.0.0"}, Requester: "root-b",
 			},
 		},
 	}
 
 	updated := UpdateManifestRolesForRemove(
 		manifest,
-		[]types.FullPackageRef{
+		[]types.VersionedPackageRef{
 			{
-				Eco:     types.EcoFabric,
-				Name:    "root-a",
-				Version: types.VersionAny,
-				Scope:   types.SourceAuto,
+				PackageRef: types.PackageRef{Name: "root-a", Source: types.SourceAuto},
+				Eco:        types.EcoFabric,
+				Version:    types.VersionAny,
 			}, {
-				Eco:     types.EcoFabric,
-				Name:    "manual-jar",
-				Version: types.VersionAny,
-				Scope:   types.SourceAuto,
+				PackageRef: types.PackageRef{Name: "manual-jar", Source: types.SourceAuto},
+				Eco:        types.EcoFabric,
+				Version:    types.VersionAny,
 			},
 		},
 		lock,
@@ -493,31 +443,31 @@ func TestUpdateManifestRolesForRemovePrunesOrphanedTransitivesAndKeepsIgnored(t 
 		byID[pkg.ID] = pkg
 	}
 
-	if _, ok := byID["fabric/root-a"]; ok {
+	if _, ok := byID["root-a"]; ok {
 		t.Fatalf(
 			"expected removed required root to disappear from manifest, got %#v",
-			byID["fabric/root-a"],
+			byID["root-a"],
 		)
 	}
-	if _, ok := byID["fabric/dependency-a"]; ok {
+	if _, ok := byID["dependency-a"]; ok {
 		t.Fatalf(
 			"expected orphaned transitive dependency to be pruned, got %#v",
-			byID["fabric/dependency-a"],
+			byID["dependency-a"],
 		)
 	}
-	if got := byID["fabric/root-b"]; got.Role != RoleRequired {
+	if got := byID["root-b"]; got.Role != RoleRequired {
 		t.Fatalf(
 			"expected unrelated required root to remain required, got %#v",
 			got,
 		)
 	}
-	if got := byID["fabric/dependency-b"]; got.Role != RoleTransitive {
+	if got := byID["dependency-b"]; got.Role != RoleTransitive {
 		t.Fatalf(
 			"expected reachable transitive dependency to remain, got %#v",
 			got,
 		)
 	}
-	if got := byID["fabric/manual-jar"]; got.Role != RoleIgnored {
+	if got := byID["manual-jar"]; got.Role != RoleIgnored {
 		t.Fatalf(
 			"expected ignored package to remain untouched when remove addresses it, got %#v",
 			got,
@@ -529,15 +479,15 @@ func TestPruneLockForManifestKeepsOnlyManagedClosure(t *testing.T) {
 	manifest := &Manifest{
 		Packages: []ManifestPackage{
 			{
-				ID: "fabric/root-b", Version: "stable", Source: "auto",
+				ID: "root-b", Version: "stable", Source: "auto",
 				Role: RoleRequired, Side: SideBoth,
 			},
 			{
-				ID: "fabric/dependency-b", Version: "1.0.0", Source: "modrinth",
+				ID: "dependency-b", Version: "1.0.0", Source: "modrinth",
 				Role: RoleTransitive, Side: SideBoth,
 			},
 			{
-				ID: "fabric/manual-jar", Version: "1.0.0", Source: "github",
+				ID: "manual-jar", Version: "1.0.0", Source: "github",
 				Role: RoleIgnored, Side: SideBoth,
 			},
 		},
@@ -550,39 +500,29 @@ func TestPruneLockForManifestKeepsOnlyManagedClosure(t *testing.T) {
 		PlatformVersion:     "0.16.0",
 		Packages: []LockedPackage{
 			{
-				ID: "fabric/root-a", Version: "1.0.0", Source: "modrinth",
+				ID: "root-a", Version: "1.0.0", Source: "modrinth",
 				URL: "https://example.com/root-a.jar", Filename: "root-a.jar",
 				Hash: "aaa", HashAlgorithm: "sha1",
 				InstallPath: "mods/root-a.jar", Side: "both",
 				Provenance: []string{"root"}, Requester: "root",
 			},
 			{
-				ID: "fabric/root-b", Version: "1.0.0", Source: "modrinth",
+				ID: "root-b", Version: "1.0.0", Source: "modrinth",
 				URL: "https://example.com/root-b.jar", Filename: "root-b.jar",
 				Hash: "bbb", HashAlgorithm: "sha1",
 				InstallPath: "mods/root-b.jar", Side: "both",
 				Provenance: []string{"root"}, Requester: "root",
 			},
 			{
-				ID: "fabric/dependency-a", Version: "1.0.0", Source: "modrinth",
-				URL:      "https://example.com/dependency-a.jar",
-				Filename: "dependency-a.jar", Hash: "ccc",
-				HashAlgorithm: "sha1", InstallPath: "mods/dependency-a.jar",
-				Side:       "both",
-				Provenance: []string{"root", "fabric/root-a@1.0.0"},
-				Requester:  "fabric/root-a",
+				ID: "dependency-a", Version: "1.0.0", Source: "modrinth",
+				URL: "https://example.com/dependency-a.jar", Filename: "dependency-a.jar", Hash: "ccc", HashAlgorithm: "sha1", InstallPath: "mods/dependency-a.jar", Side: "both", Provenance: []string{"root", "root-a@1.0.0"}, Requester: "root-a",
 			},
 			{
-				ID: "fabric/dependency-b", Version: "1.0.0", Source: "modrinth",
-				URL:      "https://example.com/dependency-b.jar",
-				Filename: "dependency-b.jar", Hash: "ddd",
-				HashAlgorithm: "sha1", InstallPath: "mods/dependency-b.jar",
-				Side:       "both",
-				Provenance: []string{"root", "fabric/root-b@1.0.0"},
-				Requester:  "fabric/root-b",
+				ID: "dependency-b", Version: "1.0.0", Source: "modrinth",
+				URL: "https://example.com/dependency-b.jar", Filename: "dependency-b.jar", Hash: "ddd", HashAlgorithm: "sha1", InstallPath: "mods/dependency-b.jar", Side: "both", Provenance: []string{"root", "root-b@1.0.0"}, Requester: "root-b",
 			},
 			{
-				ID: "fabric/manual-jar", Version: "1.0.0", Source: "github",
+				ID: "manual-jar", Version: "1.0.0", Source: "github",
 				URL: "https://example.com/manual.jar", Filename: "manual.jar",
 				Hash: "eee", HashAlgorithm: "sha1",
 				InstallPath: "mods/manual.jar", Side: "both",
@@ -599,7 +539,7 @@ func TestPruneLockForManifestKeepsOnlyManagedClosure(t *testing.T) {
 			len(pruned.Packages),
 		)
 	}
-	if pruned.Packages[0].ID != "fabric/dependency-b" || pruned.Packages[1].ID != "fabric/root-b" {
+	if pruned.Packages[0].ID != "dependency-b" || pruned.Packages[1].ID != "root-b" {
 		t.Fatalf("unexpected pruned lock package set: %#v", pruned.Packages)
 	}
 }

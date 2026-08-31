@@ -60,10 +60,7 @@ func (r *mcdrReader) Read(
 		}
 
 		info := Info{
-			Ref: types.PackageRef{
-				Eco:  types.EcoMcdr,
-				Name: input.ToProjectName(pluginInfo.Id),
-			},
+			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(pluginInfo.Id), Source: types.SourceUnknown}, Eco: types.EcoMcdr},
 			Version:  types.BareVersion(pluginInfo.Version),
 			FilePath: filePath,
 			Metadata: types.Metadata{
@@ -79,10 +76,7 @@ func (r *mcdrReader) Read(
 			for key, value := range pluginInfo.Dependencies {
 				deps = append(
 					deps, Dependency{
-						Ref: types.PackageRef{
-							Eco:  types.EcoMcdr,
-							Name: input.ToProjectName(key),
-						},
+						Ref: types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(key), Source: types.SourceUnknown}, Eco: types.EcoMcdr},
 						Constraint: version.ParseRange(
 							value,
 							version.InferRangeDialect(types.EcoMcdr),

@@ -384,20 +384,18 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 
 	mods := make([]bisectMod, 0, len(sorted))
 	for _, node := range sorted {
-		ref, _, err := input.Parse(node.ID)
+		request, err := input.Parse(node.ID)
 		if err != nil {
 			continue
 		}
-		if types.IsCorePackage(ref.PackageRef) {
+		if types.IsCorePackage(request) {
 			continue
 		}
-		mods = append(
-			mods, bisectMod{
-				ID:      ref.PackageRef,
-				Version: types.BareVersion(node.Version),
-				Path:    pathByID[node.ID],
-			},
-		)
+		mods = append(mods, bisectMod{
+			ID:      request.PackageRef,
+			Version: types.BareVersion(node.Version),
+			Path:    pathByID[node.ID],
+		})
 	}
 
 	if len(mods) == 0 {

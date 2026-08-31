@@ -14,9 +14,10 @@ func TestLockRoundTrip(t *testing.T) {
 		PlatformVersion:     "0.16.10",
 		Packages: []LockedPackage{
 			{
-				ID:            "fabric/fabric-api",
+				ID:            "fabric-api",
 				Version:       "0.110.5+1.21.1",
 				Source:        "modrinth",
+				Platform:      "fabric",
 				URL:           "https://cdn.modrinth.com/data/P7dR8mSH/versions/abc/fabric-api.jar",
 				Filename:      "fabric-api-0.110.5+1.21.1.jar",
 				Hash:          "deadbeef",
@@ -99,32 +100,12 @@ func TestLockEmbeddedDependency(t *testing.T) {
 		PlatformVersion:     "21.1.0",
 		Packages: []LockedPackage{
 			{
-				ID:            "neoforge/parent-mod",
-				Version:       "1.0.0",
-				Source:        "modrinth",
-				URL:           "https://example.invalid/parent-mod.jar",
-				Filename:      "parent-mod.jar",
-				Hash:          "parenthash",
-				HashAlgorithm: "sha512",
-				InstallPath:   "mods/parent-mod.jar",
-				Side:          "server",
-				Provenance:    []string{"root"},
-				Requester:     "root",
+				ID: "parent-mod", Version: "1.0.0", Source: "modrinth", Platform: "neoforge",
+				URL: "https://example.invalid/parent-mod.jar", Filename: "parent-mod.jar", Hash: "parenthash", HashAlgorithm: "sha512", InstallPath: "mods/parent-mod.jar", Side: "server", Provenance: []string{"root"}, Requester: "root",
 			},
 			{
-				ID:            "neoforge/embedded-lib",
-				Version:       "2.0.0",
-				Source:        "direct",
-				URL:           "jar-in-jar://parent-mod.jar!/META-INF/jarjar/embedded-lib.jar",
-				Filename:      "embedded-lib.jar",
-				Hash:          "embeddedhash",
-				HashAlgorithm: "sha512",
-				InstallPath:   "mods/parent-mod.jar!/META-INF/jarjar/embedded-lib.jar",
-				Side:          "server",
-				Embedded:      true,
-				EmbeddedIn:    "neoforge/parent-mod",
-				Provenance:    []string{"root", "neoforge/parent-mod@1.0.0"},
-				Requester:     "neoforge/parent-mod",
+				ID: "embedded-lib", Version: "2.0.0", Source: "direct", Platform: "neoforge",
+				URL: "jar-in-jar://parent-mod.jar!/META-INF/jarjar/embedded-lib.jar", Filename: "embedded-lib.jar", Hash: "embeddedhash", HashAlgorithm: "sha512", InstallPath: "mods/parent-mod.jar!/META-INF/jarjar/embedded-lib.jar", Side: "server", Embedded: true, EmbeddedIn: "parent-mod", Provenance: []string{"root", "parent-mod@1.0.0"}, Requester: "parent-mod",
 			},
 		},
 	}
@@ -155,7 +136,7 @@ func TestLockProvenanceRoundTrip(t *testing.T) {
 		PlatformVersion:     "0.16.10",
 		Packages: []LockedPackage{
 			{
-				ID:            "fabric/sodium",
+				ID:            "sodium",
 				Version:       "0.6.0",
 				Source:        "modrinth",
 				URL:           "https://example.invalid/sodium.jar",
@@ -166,10 +147,10 @@ func TestLockProvenanceRoundTrip(t *testing.T) {
 				Side:          "both",
 				Provenance: []string{
 					"root",
-					"fabric/fabric-api@0.110.5+1.21.1",
-					"fabric/indium@1.0.35+mc1.21",
+					"fabric-api@0.110.5+1.21.1",
+					"indium@1.0.35+mc1.21",
 				},
-				Requester: "fabric/indium",
+				Requester: "indium",
 			},
 		},
 	}
@@ -242,9 +223,10 @@ func TestValidateLockRejectsFuzzyVersions(t *testing.T) {
 				Platform:            "fabric",
 				PlatformVersion:     "0.16.10",
 				Packages: []LockedPackage{{
-					ID:            "fabric/lithium",
+					ID:            "lithium",
 					Version:       version,
 					Source:        "modrinth",
+					Platform:      "fabric",
 					URL:           "https://example.invalid/lithium.jar",
 					Filename:      "lithium.jar",
 					Hash:          "hash",
@@ -267,33 +249,20 @@ func TestValidateLockRejectsFuzzyVersions(t *testing.T) {
 	}
 }
 
-func TestValidateLockRejectsNonExactPackageIdentityFacts(t *testing.T) {
+func TestValidateLockRejectsMissingArtifactPlatform(t *testing.T) {
 	lock := Lock{
-		GeneratedAt:         "2026-04-15T12:34:56Z",
-		ManifestFingerprint: "sha256:manifest",
-		GameVersion:         "1.21.1",
-		Platform:            "fabric",
-		PlatformVersion:     "0.16.10",
+		GeneratedAt: "2026-04-15T12:34:56Z", ManifestFingerprint: "sha256:manifest",
+		GameVersion: "1.21.1", Platform: "fabric", PlatformVersion: "0.16.10",
 		Packages: []LockedPackage{{
-			ID:            "lithium",
-			Version:       "0.12.7+mc1.21.1",
-			Source:        "modrinth",
-			URL:           "https://example.invalid/lithium.jar",
-			Filename:      "lithium.jar",
-			Hash:          "hash",
-			HashAlgorithm: "sha512",
-			InstallPath:   "mods/lithium.jar",
-			Side:          "server",
-			Provenance:    []string{"root"},
-			Requester:     "root",
+			ID: "lithium", Version: "0.12.7+mc1.21.1", Source: "modrinth",
+			URL: "https://example.invalid/lithium.jar", Filename: "lithium.jar", Hash: "hash", HashAlgorithm: "sha512", InstallPath: "mods/lithium.jar", Side: "server", Provenance: []string{"root"}, Requester: "root",
 		}},
 	}
-
 	err := ValidateLock(lock)
 	if err == nil {
-		t.Fatal("expected lock validation to reject package ids without exact platform facts")
+		t.Fatal("expected lock validation to reject a missing artifact platform")
 	}
-	if !strings.Contains(err.Error(), "platform/name format") {
-		t.Fatalf("expected exact package identity error, got %v", err)
+	if !strings.Contains(err.Error(), "invalid package platform") {
+		t.Fatalf("expected artifact-platform error, got %v", err)
 	}
 }

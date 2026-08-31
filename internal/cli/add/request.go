@@ -6,10 +6,5 @@ import (
 )
 
 func packageRequestFromInput(raw string) (types.PackageRequest, error) {
-	ref, err := input.ParseFullPackageRef(raw)
-	if err != nil {
-		return types.PackageRequest{}, err
-	}
-
-	return types.PackageRequest{FullPackageRef: ref}, nil
+	return input.Parse(raw)
 }

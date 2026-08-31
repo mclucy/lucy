@@ -115,7 +115,7 @@ func (v *hangarVersion) ToPackageRemote() types.ResolvedPackage {
 	if remote.FileUrl == "" {
 		platforms := sortedMapKeys(v.Downloads)
 		if len(platforms) == 0 {
-			return types.ResolvedPackage{Id: types.FullPackageRef{Scope: types.SourceHangar}}
+			return types.ResolvedPackage{Id: types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceHangar}}}
 		}
 
 		remote, _ = v.ToPackageRemoteForPlatform(types.Ecosystem(strings.ToLower(platforms[0])))
@@ -129,11 +129,11 @@ func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Ecosystem) (
 ) {
 	download, ok := v.downloadForPlatform(platform)
 	if !ok {
-		return types.ResolvedPackage{Id: types.FullPackageRef{Scope: types.SourceHangar}}, false
+		return types.ResolvedPackage{Id: types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceHangar}}}, false
 	}
 
 	remote := types.ResolvedPackage{
-		Id:       types.FullPackageRef{Scope: types.SourceHangar},
+		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceHangar}},
 		FileUrl:  download.URL(),
 		Filename: download.FileInfo.Name,
 	}

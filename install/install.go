@@ -38,7 +38,8 @@ func installCorePackage(
 	options InstallOptions,
 ) error {
 	id := types.VersionedPackageRef{
-		PackageRef: request.Match.Ref.PackageRef,
+		PackageRef: request.Request.PackageRef,
+		Eco:        request.Binding.Ecosystem,
 		Version:    request.Request.Version,
 	}
 	context := map[string]any{"package": id.StringFull()}

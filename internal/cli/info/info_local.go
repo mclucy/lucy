@@ -78,7 +78,7 @@ func actionArtifactInfo(cmd *cobra.Command, filePath string) error {
 // project. It is nil when the metadata lookup failed. Warnings holds the
 // problems found during the lookup.
 type artifactLookup struct {
-	Ref      *types.FullPackageRef
+	Ref      *types.VersionedPackageRef
 	Info     *upstream.Info
 	Warnings []string
 }
@@ -104,7 +104,7 @@ func lookupArtifactUpstream(filePath string) artifactLookup {
 	ref := lookup.Ref
 	result.Ref = &ref
 
-	providers, err := routing.ResolveInfoProviders(ref.Eco, ref.Scope)
+	providers, err := routing.ResolveInfoProviders(ref.Eco, ref.Source)
 	if err != nil {
 		result.Warnings = append(result.Warnings,
 			fmt.Sprintf("cannot retrieve upstream metadata for %s: %v",
@@ -132,12 +132,12 @@ func lookupArtifactUpstream(filePath string) artifactLookup {
 
 // matchedUpstream returns the upstream Info for info when the hash match
 // belongs to it. An archive with several descriptors matches only the
-// descriptor with the same ref.
+// descriptor with the same name and ecosystem.
 func matchedUpstream(info artifact.Info, lookup artifactLookup) *upstream.Info {
 	if lookup.Info == nil || lookup.Ref == nil {
 		return nil
 	}
-	if info.Ref != lookup.Ref.PackageRef {
+	if info.Ref.Name != lookup.Ref.Name || info.Ref.Eco != lookup.Ref.Eco {
 		return nil
 	}
 	return lookup.Info
@@ -269,7 +269,7 @@ func renderArtifactInfo(
 	metadata := displayMetadata(info, match)
 	installID := "local:" + info.FilePath
 	if match != nil {
-		installID = match.Ref.Scope.String() + ":" + match.Ref.Name.String()
+		installID = match.Ref.StringFull()
 	}
 
 	var out strings.Builder
@@ -360,7 +360,7 @@ func renderArtifactTable(title string, rows [][]string) string {
 			Render())
 }
 
-func formatArtifactRef(ref types.PackageRef) string {
+func formatArtifactRef(ref types.VersionedPackageRef) string {
 	if ref.Eco == types.EcoUnspecified {
 		return ref.Name.String()
 	}

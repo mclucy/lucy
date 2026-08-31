@@ -195,7 +195,7 @@ func lockedPackageFromInstalled(
 	source := "direct"
 	hash := "unknown"
 	hashAlgorithm := "sha1"
-	if src := pkg.Id.Scope.String(); src != "unknown" {
+	if src := pkg.Id.Source.String(); src != "unknown" {
 		source = src
 	}
 	filename := filepath.Base(pkg.Path)
@@ -210,9 +210,10 @@ func lockedPackageFromInstalled(
 	}
 
 	return state.LockedPackage{
-		ID:            pkg.Id.StringBase(),
+		ID:            pkg.Id.Name.String(),
 		Version:       pkg.Id.Version.String(),
 		Source:        source,
+		Platform:      pkg.Id.Eco.String(),
 		URL:           pkg.FileUrl,
 		Filename:      filename,
 		Hash:          hash,

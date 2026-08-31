@@ -53,15 +53,11 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 			gv := server.GameVersion()
 			if !gv.IsInvalid() && gv != types.VersionAny {
 				appendConstraint(
-					types.DiscoveredPackage{
-						Id: types.VersionedPackageRef{
-							PackageRef: types.PackageRef{
-								Eco:  loader,
-								Name: "minecraft",
-							},
-							Version: gv,
-						},
-					},
+					types.DiscoveredPackage{Id: types.VersionedPackageRef{
+						PackageRef: types.PackageRef{Name: "minecraft", Source: types.SourceUnknown},
+						Eco:        loader,
+						Version:    gv,
+					}},
 					fmt.Sprintf(
 						"runtime:%s/minecraft@%s",
 						loader,
@@ -71,35 +67,22 @@ func snapshotInstalledConstraints(si workspace.Workspace) []InstalledConstraint 
 			}
 
 			appendConstraint(
-				types.DiscoveredPackage{
-					Id: types.VersionedPackageRef{
-						PackageRef: types.PackageRef{
-							Eco:  loader,
-							Name: "java",
-						},
-						Version: types.VersionAny,
-					},
-				}, fmt.Sprintf("runtime:%s/java", loader),
+				types.DiscoveredPackage{Id: types.VersionedPackageRef{
+					PackageRef: types.PackageRef{Name: "java", Source: types.SourceUnknown},
+					Eco:        loader,
+					Version:    types.VersionAny,
+				}}, fmt.Sprintf("runtime:%s/java", loader),
 			)
 
 			if primary := server.PrimaryRuntime; primary != nil {
 				if alias := runtimeLoaderAliasName(primary.Eco); alias != "" {
 					appendConstraint(
-						types.DiscoveredPackage{
-							Id: types.VersionedPackageRef{
-								PackageRef: types.PackageRef{
-									Eco:  loader,
-									Name: alias,
-								},
-								Version: primary.Version,
-							},
-						},
-						fmt.Sprintf(
-							"runtime:%s/%s@%s",
-							loader,
-							alias,
-							primary.Version,
-						),
+						types.DiscoveredPackage{Id: types.VersionedPackageRef{
+							PackageRef: types.PackageRef{Name: alias, Source: types.SourceUnknown},
+							Eco:        loader,
+							Version:    primary.Version,
+						}},
+						fmt.Sprintf("runtime:%s/%s@%s", loader, alias, primary.Version),
 					)
 				}
 			}

@@ -128,7 +128,7 @@ func sha1File(path string) (string, error) {
 }
 
 func (s provider) PackageByHash(hashable upstream.Hashable) (
-	ref types.FullPackageRef,
+	ref types.VersionedPackageRef,
 	hash string,
 	ok bool,
 	err error,
@@ -168,11 +168,13 @@ func (s provider) PackageByHash(hashable upstream.Hashable) (
 		return ref, hash, false, err
 	}
 
-	ref = types.FullPackageRef{
+	ref = types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Name:   types.BarePackageName(project.Slug),
+			Source: s.Id(),
+		},
 		Eco:     ecosystemFromModrinthLoaders(version.Loaders),
-		Name:    types.BarePackageName(project.Slug),
 		Version: types.BareVersion(version.VersionNumber),
-		Scope:   s.Id(),
 	}
 	return ref, hash, true, nil
 }

@@ -32,6 +32,7 @@ var removeCmd = &cobra.Command{
 
 func init() {
 	cli.AddNoStyleFlag(removeCmd)
+	cli.AddPlatformFlag(removeCmd)
 	rootCmd.AddCommand(removeCmd)
 }
 
@@ -57,13 +58,21 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("manifest is required for remove")
 	}
 
-	ids := make([]types.FullPackageRef, 0, len(args))
+	platformArg, _ := cmd.Flags().GetString(cli.FlagPlatform)
+	platform := types.Ecosystem(platformArg)
+	if platform != types.EcoUnspecified && !platform.Valid() {
+		return fmt.Errorf("--platform must name a supported ecosystem")
+	}
+	ids := make([]types.VersionedPackageRef, 0, len(args))
 	for _, arg := range args {
-		ref, err := input.ParseFullPackageRef(arg)
+		request, err := input.Parse(arg)
 		if err != nil {
 			return err
 		}
-		ids = append(ids, ref)
+		if platform != types.EcoUnspecified {
+			request.Eco = platform
+		}
+		ids = append(ids, types.VersionedPackageRef{PackageRef: request.PackageRef, Eco: request.Eco, Version: request.Version})
 	}
 
 	manifest := state.UpdateManifestRolesForRemove(

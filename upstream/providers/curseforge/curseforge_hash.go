@@ -48,7 +48,7 @@ func SlugFromFilePathWithHint(filePath, urlHint string) (
 }
 
 func (p provider) PackageByHash(hashable upstream.Hashable) (
-	ref types.FullPackageRef,
+	ref types.VersionedPackageRef,
 	hash string,
 	ok bool,
 	err error,
@@ -75,11 +75,13 @@ func (p provider) PackageByHash(hashable upstream.Hashable) (
 		return ref, hash, false, err
 	}
 
-	ref = types.FullPackageRef{
+	ref = types.VersionedPackageRef{
+		PackageRef: types.PackageRef{
+			Name:   types.BarePackageName(mod.Slug),
+			Source: p.Id(),
+		},
 		Eco:     platformFromCurseForgeFile(mod, file),
-		Name:    types.BarePackageName(mod.Slug),
 		Version: types.BareVersion(file.DisplayName),
-		Scope:   p.Id(),
 	}
 	return ref, hash, true, nil
 }

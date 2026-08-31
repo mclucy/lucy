@@ -11,14 +11,14 @@ environment:
   mcdr: false
   declared_capabilities: []
 packages:
-  - id: neoforge/connector
+  - id: connector
     version: stable
     source: modrinth
     role: required
     side: both
     optional: false
     pinned: false
-  - id: neoforge/lithium
+  - id: lithium
     version: beta
     source: github
     role: transitive
