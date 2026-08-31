@@ -5,16 +5,17 @@ import "github.com/spf13/cobra"
 // Shared flag names. Root persistent flags and per-command local flags must
 // agree on these strings.
 const (
-	FlagJSON        = "json"
-	FlagJSONCompact = "json-compact"
-	FlagLong        = "long"
-	FlagNoStyle     = "no-style"
-	FlagLogo        = "logo"
-	FlagLogFile     = "log-file"
-	FlagPrintLogs   = "print-logs"
-	FlagDebug       = "debug"
-	FlagDumpLogs    = "dump-logs"
-	FlagPlatform    = "platform"
+	FlagJSON            = "json"
+	FlagJSONCompact     = "json-compact"
+	FlagLong            = "long"
+	FlagNoStyle         = "no-style"
+	FlagLogo            = "logo"
+	FlagLogFile         = "log-file"
+	FlagPrintLogs       = "print-logs"
+	FlagDebug           = "debug"
+	FlagDumpLogs        = "dump-logs"
+	FlagPlatform        = "platform"
+	FlagUseGitHubMirror = "use-github-mirror"
 )
 
 // AddJSONFlag adds the --json flag to a command.

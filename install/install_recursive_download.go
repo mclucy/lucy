@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/github"
 	tuiprogress "github.com/mclucy/lucy/terminal/progress"
 	"github.com/mclucy/lucy/types"
 )
@@ -173,12 +174,13 @@ func downloadBatchPackages(
 				slots[index] = slot{failed: true, err: downloadCtx.Err()}
 				return
 			}
-
+			requestURL := github.DownloadURL(pkg.FileUrl, options.UseGitHubMirror)
 			result, err := options.Cache(
 				pkg.FileUrl,
 				stagingDir,
 				cache.DownloadOptions{
 					Kind:          cache.KindArtifact,
+					RequestURL:    requestURL,
 					Filename:      pkg.Filename,
 					ExpectedHash:  pkg.Hash,
 					HashAlgorithm: cache.ParseHashAlgorithm(pkg.HashAlgorithm),

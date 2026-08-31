@@ -76,7 +76,7 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	options := install.DefaultOptions()
-
+	options.UseGitHubMirror, _ = cmd.Flags().GetBool(cli.FlagUseGitHubMirror)
 	result, err := install.InstallMany(cmd.Context(), plan.Requested, options)
 	if err != nil {
 		if conflictErr, ok := errors.AsType[*resolve.ConstraintConflictError](err); ok {

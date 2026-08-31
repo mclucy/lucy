@@ -9,11 +9,12 @@ import (
 )
 
 type InstallOptions struct {
-	WithOptional bool
-	Force        bool
-	Journal      Journal
-	Workspace    func() workspace.Workspace
-	Cache        func(
+	WithOptional    bool
+	Force           bool
+	UseGitHubMirror bool
+	Journal         Journal
+	Workspace       func() workspace.Workspace
+	Cache           func(
 		url, destDir string,
 		opts cache.DownloadOptions,
 	) (*cache.DownloadResult, error)

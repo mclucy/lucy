@@ -83,6 +83,11 @@ func init() {
 		false,
 		"Print raw JSON response without indentation",
 	)
+	rootCmd.PersistentFlags().Bool(
+		cli.FlagUseGitHubMirror,
+		false,
+		"Use the GitHub release mirror for eligible downloads",
+	)
 
 	rootCmd.AddCommand(
 		add.NewCommand(),
