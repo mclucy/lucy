@@ -340,13 +340,13 @@ func rootScopedProviders(
 		if _, ok := rootKeys[rootKey]; !ok {
 			continue
 		}
-		if request.Scope == types.SourceAuto {
+		if request.Source == types.SourceAuto {
 			rootProviders[rootKey] = providers
 			continue
 		}
 		scoped, err := routing.ResolveProvidersForRuntime(
 			effectiveRuntimeEcosystems(ws),
-			request.Scope,
+			request.Source,
 		)
 		if err != nil {
 			return nil, err

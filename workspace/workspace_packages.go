@@ -21,8 +21,8 @@ import (
 func resolveUpstream(
 	sess *knownpkgs.Session,
 	path string,
-	local *types.PackageRef,
-) (types.FullPackageRef, bool) {
+	local *types.VersionedPackageRef,
+) (types.VersionedPackageRef, bool) {
 	mappers := []upstream.ArtifactMapSource{modrinth.Provider}
 	if curseforge.Enabled() {
 		mappers = append(mappers, curseforge.Provider)
@@ -46,7 +46,7 @@ func resolveUpstream(
 		}
 		return ref, true
 	}
-	return types.FullPackageRef{}, false
+	return types.VersionedPackageRef{}, false
 }
 
 // discoverPackages fills in the package index of one workspace probe. It
@@ -87,7 +87,7 @@ func discoverPackages(
 					artifact.WithSlugResolver(resolver),
 				)
 
-				var local *types.PackageRef
+				var local *types.VersionedPackageRef
 				if err == nil && len(analyzed) == 1 {
 					local = &analyzed[0].Ref
 				}
@@ -125,7 +125,7 @@ func discoverPackages(
 				artifact.WithSlugResolver(resolver),
 			)
 
-			var local *types.PackageRef
+			var local *types.VersionedPackageRef
 			if err == nil && len(analyzed) == 1 {
 				local = &analyzed[0].Ref
 			}
@@ -148,30 +148,24 @@ func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPa
 	for _, info := range infos {
 		pkg := types.DiscoveredPackage{
 			Id: types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  info.Ref.Eco,
-					Name: info.Ref.Name,
-				},
-				Version: info.Version,
+				PackageRef: info.Ref.PackageRef,
+				Eco:        info.Ref.Eco,
+				Version:    info.Version,
 			},
 			Path: info.FilePath,
 		}
 		if len(info.Dependencies) > 0 {
 			deps := make([]types.Dependency, 0, len(info.Dependencies))
 			for _, dep := range info.Dependencies {
-				deps = append(
-					deps, types.Dependency{
-						Id: types.VersionedPackageRef{
-							PackageRef: types.PackageRef{
-								Eco:  dep.Ref.Eco,
-								Name: dep.Ref.Name,
-							},
-						},
-						Constraint: dep.Constraint,
-						Mandatory:  dep.Mandatory,
-						Type:       types.NormalizeDependencyType(dep.Type),
+				deps = append(deps, types.Dependency{
+					Id: types.VersionedPackageRef{
+						PackageRef: dep.Ref.PackageRef,
+						Eco:        dep.Ref.Eco,
 					},
-				)
+					Constraint: dep.Constraint,
+					Mandatory:  dep.Mandatory,
+					Type:       types.NormalizeDependencyType(dep.Type),
+				})
 			}
 			pkg.Dependencies = types.PackageDependencies{Value: deps}
 		}
@@ -185,7 +179,7 @@ func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPa
 // readable manifest.
 func discoveredFromUpstream(
 	path string,
-	ref types.FullPackageRef,
+	ref types.VersionedPackageRef,
 ) types.DiscoveredPackage {
 	platform := ref.Eco
 	if platform == types.EcoUnspecified {
@@ -196,7 +190,7 @@ func discoveredFromUpstream(
 		version = types.VersionUnknown
 	}
 	pkgName := ref.Name
-	if ref.Scope == types.SourceMCDR {
+	if ref.Source == types.SourceMCDR {
 		pkgName = types.BarePackageName(
 			strings.ReplaceAll(string(ref.Name), "_", "-"),
 		)
@@ -204,9 +198,10 @@ func discoveredFromUpstream(
 	return types.DiscoveredPackage{
 		Id: types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Eco:  platform,
-				Name: pkgName,
+				Name:   pkgName,
+				Source: ref.Source,
 			},
+			Eco:     platform,
 			Version: version,
 		},
 		Path: path,

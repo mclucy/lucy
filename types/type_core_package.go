@@ -3,8 +3,8 @@ package types
 import "strings"
 
 // CorePackage identifies a special request for a bootable server product or
-// platform installer. It classifies package requests only; installation policy
-// belongs to install and bootstrap.
+// platform installer. It classifies requests; installation policy belongs to
+// install and bootstrap.
 type CorePackage string
 
 const (
@@ -34,256 +34,63 @@ const (
 
 type CorePackageMatch struct {
 	Core CorePackage
-	Ref  ScopedPackageRef
+	Eco  Ecosystem
+}
+
+type corePackageAlias struct {
+	Name BarePackageName
+	Eco  Ecosystem
 }
 
 type corePackageDefinition struct {
 	Core    CorePackage
-	Ref     PackageRef
-	Aliases []PackageRef
+	Eco     Ecosystem
+	Aliases []corePackageAlias
 }
 
-// corePackageDefinitions maps user-facing spellings to canonical core
-// identities. Ref is the canonical reference; Aliases are every accepted
-// request spelling, including the canonical one. Static invariants (valid
-// canonical eco, no duplicate aliases) are enforced by tests.
+// corePackageDefinitions maps accepted core spellings to canonical core
+// products. Eco disambiguates aliases such as Sponge's Forge variant.
 var corePackageDefinitions = []corePackageDefinition{
-	{
-		Core: CoreMinecraft,
-		Ref:  PackageRef{Eco: EcoMinecraft, Name: "minecraft"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "minecraft"},
-			{Eco: EcoUnspecified, Name: "mc"},
-			{Eco: EcoMinecraft, Name: "minecraft"},
-			{Eco: EcoMinecraft, Name: "mc"},
-		},
-	},
-	{
-		Core: CoreFabric,
-		Ref:  PackageRef{Eco: EcoFabric, Name: "fabric"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "fabric"},
-			{Eco: EcoUnspecified, Name: "fabric-loader"},
-			{Eco: EcoFabric, Name: "fabric"},
-			{Eco: EcoFabric, Name: "fabric-loader"},
-		},
-	},
-	{
-		Core: CoreForge,
-		Ref:  PackageRef{Eco: EcoForge, Name: "forge"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "forge"},
-			{Eco: EcoForge, Name: "forge"},
-		},
-	},
-	{
-		Core: CoreNeoForge,
-		Ref:  PackageRef{Eco: EcoNeoforge, Name: "neoforge"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "neoforge"},
-			{Eco: EcoNeoforge, Name: "neoforge"},
-		},
-	},
-	{
-		Core: CoreMCDReforged,
-		Ref:  PackageRef{Eco: EcoMcdr, Name: "mcdreforged"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "mcdreforged"},
-			{Eco: EcoUnspecified, Name: "mcdr"},
-			{Eco: EcoMcdr, Name: "mcdreforged"},
-			{Eco: EcoMcdr, Name: "mcdr"},
-		},
-	},
-	{
-		Core: CoreCraftBukkit,
-		Ref:  PackageRef{Eco: EcoBukkit, Name: "craftbukkit"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "bukkit"},
-			{Eco: EcoUnspecified, Name: "craftbukkit"},
-			{Eco: EcoBukkit, Name: "bukkit"},
-			{Eco: EcoBukkit, Name: "craftbukkit"},
-		},
-	},
-	{
-		Core: CoreSpigot,
-		Ref:  PackageRef{Eco: EcoBukkit, Name: "spigot"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "spigot"},
-			{Eco: EcoBukkit, Name: "spigot"},
-		},
-	},
-	{
-		Core: CorePaper,
-		Ref:  PackageRef{Eco: EcoPaper, Name: "paper"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "paper"},
-			{Eco: EcoPaper, Name: "paper"},
-		},
-	},
-	{
-		Core: CoreFolia,
-		Ref:  PackageRef{Eco: EcoPaper, Name: "folia"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "folia"},
-			{Eco: EcoPaper, Name: "folia"},
-		},
-	},
-	{
-		Core: CoreLeaves,
-		Ref:  PackageRef{Eco: EcoPaper, Name: "leaves"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "leaves"},
-			{Eco: EcoPaper, Name: "leaves"},
-		},
-	},
-	{
-		Core: CoreArclight,
-		Ref:  PackageRef{Eco: EcoUnspecified, Name: "arclight"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "arclight"},
-		},
-	},
-	{
-		Core: CoreArclightForge,
-		Ref:  PackageRef{Eco: EcoUnspecified, Name: "arclight-forge"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "arclight-forge"},
-		},
-	},
-	{
-		Core: CoreArclightNeoForge,
-		Ref:  PackageRef{Eco: EcoUnspecified, Name: "arclight-neoforge"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "arclight-neoforge"},
-		},
-	},
-	{
-		Core: CoreArclightFabric,
-		Ref:  PackageRef{Eco: EcoUnspecified, Name: "arclight-fabric"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "arclight-fabric"},
-		},
-	},
-	{
-		Core: CoreCatServer,
-		Ref:  PackageRef{Eco: EcoUnspecified, Name: "catserver"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "catserver"},
-		},
-	},
-	{
-		Core: CoreYouer,
-		Ref:  PackageRef{Eco: EcoUnspecified, Name: "youer"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "youer"},
-		},
-	},
-	{
-		Core: CoreSpongeVanilla,
-		Ref:  PackageRef{Eco: EcoSponge, Name: "spongevanilla"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "sponge"},
-			{Eco: EcoUnspecified, Name: "spongevanilla"},
-			{Eco: EcoSponge, Name: "sponge"},
-			{Eco: EcoSponge, Name: "spongevanilla"},
-			{Eco: EcoSponge, Name: "vanilla"},
-			{Eco: EcoSponge, Name: "minecraft"},
-			{Eco: EcoSponge, Name: "mc"},
-		},
-	},
-	{
-		Core: CoreSpongeForge,
-		Ref:  PackageRef{Eco: EcoSponge, Name: "spongeforge"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "spongeforge"},
-			{Eco: EcoSponge, Name: "spongeforge"},
-			{Eco: EcoSponge, Name: "forge"},
-		},
-	},
-	{
-		Core: CoreSpongeNeo,
-		Ref:  PackageRef{Eco: EcoSponge, Name: "spongeneo"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "spongeneo"},
-			{Eco: EcoSponge, Name: "spongeneo"},
-			{Eco: EcoSponge, Name: "neo"},
-			{Eco: EcoSponge, Name: "neoforge"},
-		},
-	},
-	{
-		Core: CoreBungeeCord,
-		Ref:  PackageRef{Eco: EcoBungeecord, Name: "bungeecord"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "bungeecord"},
-			{Eco: EcoBungeecord, Name: "bungeecord"},
-		},
-	},
-	{
-		Core: CoreVelocity,
-		Ref:  PackageRef{Eco: EcoVelocity, Name: "velocity"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "velocity"},
-			{Eco: EcoVelocity, Name: "velocity"},
-		},
-	},
-	{
-		Core: CoreWaterfall,
-		Ref:  PackageRef{Eco: EcoBungeecord, Name: "waterfall"},
-		Aliases: []PackageRef{
-			{Eco: EcoUnspecified, Name: "waterfall"},
-			{Eco: EcoBungeecord, Name: "waterfall"},
-		},
-	},
+	{Core: CoreMinecraft, Eco: EcoMinecraft, Aliases: []corePackageAlias{{"minecraft", EcoUnspecified}, {"mc", EcoUnspecified}, {"minecraft", EcoMinecraft}, {"mc", EcoMinecraft}}},
+	{Core: CoreFabric, Eco: EcoFabric, Aliases: []corePackageAlias{{"fabric", EcoUnspecified}, {"fabric-loader", EcoUnspecified}, {"fabric", EcoFabric}, {"fabric-loader", EcoFabric}}},
+	{Core: CoreForge, Eco: EcoForge, Aliases: []corePackageAlias{{"forge", EcoUnspecified}, {"forge", EcoForge}}},
+	{Core: CoreNeoForge, Eco: EcoNeoforge, Aliases: []corePackageAlias{{"neoforge", EcoUnspecified}, {"neoforge", EcoNeoforge}}},
+	{Core: CoreMCDReforged, Eco: EcoMcdr, Aliases: []corePackageAlias{{"mcdreforged", EcoUnspecified}, {"mcdr", EcoUnspecified}, {"mcdreforged", EcoMcdr}, {"mcdr", EcoMcdr}}},
+	{Core: CoreCraftBukkit, Eco: EcoBukkit, Aliases: []corePackageAlias{{"bukkit", EcoUnspecified}, {"craftbukkit", EcoUnspecified}, {"bukkit", EcoBukkit}, {"craftbukkit", EcoBukkit}}},
+	{Core: CoreSpigot, Eco: EcoBukkit, Aliases: []corePackageAlias{{"spigot", EcoUnspecified}, {"spigot", EcoBukkit}}},
+	{Core: CorePaper, Eco: EcoPaper, Aliases: []corePackageAlias{{"paper", EcoUnspecified}, {"paper", EcoPaper}}},
+	{Core: CoreFolia, Eco: EcoPaper, Aliases: []corePackageAlias{{"folia", EcoUnspecified}, {"folia", EcoPaper}}},
+	{Core: CoreLeaves, Eco: EcoPaper, Aliases: []corePackageAlias{{"leaves", EcoUnspecified}, {"leaves", EcoPaper}}},
+	{Core: CoreArclight, Aliases: []corePackageAlias{{"arclight", EcoUnspecified}}},
+	{Core: CoreArclightForge, Aliases: []corePackageAlias{{"arclight-forge", EcoUnspecified}}},
+	{Core: CoreArclightNeoForge, Aliases: []corePackageAlias{{"arclight-neoforge", EcoUnspecified}}},
+	{Core: CoreArclightFabric, Aliases: []corePackageAlias{{"arclight-fabric", EcoUnspecified}}},
+	{Core: CoreCatServer, Aliases: []corePackageAlias{{"catserver", EcoUnspecified}}},
+	{Core: CoreYouer, Aliases: []corePackageAlias{{"youer", EcoUnspecified}}},
+	{Core: CoreSpongeVanilla, Eco: EcoSponge, Aliases: []corePackageAlias{{"sponge", EcoUnspecified}, {"spongevanilla", EcoUnspecified}, {"sponge", EcoSponge}, {"spongevanilla", EcoSponge}, {"vanilla", EcoSponge}, {"minecraft", EcoSponge}, {"mc", EcoSponge}}},
+	{Core: CoreSpongeForge, Eco: EcoSponge, Aliases: []corePackageAlias{{"spongeforge", EcoUnspecified}, {"spongeforge", EcoSponge}, {"forge", EcoSponge}}},
+	{Core: CoreSpongeNeo, Eco: EcoSponge, Aliases: []corePackageAlias{{"spongeneo", EcoUnspecified}, {"spongeneo", EcoSponge}, {"neo", EcoSponge}, {"neoforge", EcoSponge}}},
+	{Core: CoreBungeeCord, Eco: EcoBungeecord, Aliases: []corePackageAlias{{"bungeecord", EcoUnspecified}, {"bungeecord", EcoBungeecord}}},
+	{Core: CoreVelocity, Eco: EcoVelocity, Aliases: []corePackageAlias{{"velocity", EcoUnspecified}, {"velocity", EcoVelocity}}},
+	{Core: CoreWaterfall, Eco: EcoBungeecord, Aliases: []corePackageAlias{{"waterfall", EcoUnspecified}, {"waterfall", EcoBungeecord}}},
 }
 
-type corePackageEntry struct {
-	Core CorePackage
-	Ref  PackageRef
-}
-
-var corePackageByAlias, corePackageCanonical = buildCorePackageIndex()
-
-func buildCorePackageIndex() (
-	map[PackageRef]corePackageEntry,
-	map[PackageRef]CorePackage,
-) {
-	byAlias := make(map[PackageRef]corePackageEntry)
-	canonical := make(map[PackageRef]CorePackage)
+// NormalizeCorePackage resolves a request against the core catalog. Source is
+// intentionally not considered: it is a provider-routing decision.
+func NormalizeCorePackage(request PackageRequest) (CorePackageMatch, bool) {
+	name := lowercasePackageName(request.Name)
 	for _, definition := range corePackageDefinitions {
-		canonical[definition.Ref] = definition.Core
 		for _, alias := range definition.Aliases {
-			alias.Name = lowercasePackageName(alias.Name)
-			byAlias[alias] = corePackageEntry{
-				Core: definition.Core,
-				Ref:  definition.Ref,
+			if alias.Name == name && alias.Eco == request.Eco {
+				return CorePackageMatch{Core: definition.Core, Eco: definition.Eco}, true
 			}
 		}
 	}
-	return byAlias, canonical
+	return CorePackageMatch{}, false
 }
 
-// NormalizeCorePackage resolves a package request against the core catalog.
-// Aliases are matched case-insensitively on any source scope; the returned
-// match carries the canonical reference with the request's scope preserved.
-func NormalizeCorePackage(request ScopedPackageRef) (CorePackageMatch, bool) {
-	entry, ok := corePackageByAlias[PackageRef{
-		Eco:  request.Eco,
-		Name: lowercasePackageName(request.Name),
-	}]
-	if !ok {
-		return CorePackageMatch{}, false
-	}
-	return CorePackageMatch{
-		Core: entry.Core,
-		Ref: ScopedPackageRef{
-			PackageRef: entry.Ref,
-			Scope:      request.Scope,
-		},
-	}, true
-}
-
-func IsCorePackage(ref PackageRef) bool {
-	_, ok := corePackageCanonical[ref]
+func IsCorePackage(request PackageRequest) bool {
+	_, ok := NormalizeCorePackage(request)
 	return ok
 }
 

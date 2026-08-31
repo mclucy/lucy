@@ -118,10 +118,7 @@ func translateFabricArtifact(
 	)
 
 	return Info{
-		Ref: types.PackageRef{
-			Eco:  types.EcoFabric,
-			Name: input.ToProjectName(modInfo.Id),
-		},
+		Ref:          types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(modInfo.Id), Source: types.SourceUnknown}, Eco: types.EcoFabric},
 		Version:      types.BareVersion(modInfo.Version),
 		FilePath:     filePath,
 		Dependencies: dependencies,
@@ -146,10 +143,7 @@ func translateFabricArtifactDependencyMap(
 		name := input.ToProjectName(id)
 		_, embedded := embeddedNames[string(name)]
 		dep := Dependency{
-			Ref: types.PackageRef{
-				Eco:  types.EcoFabric,
-				Name: name,
-			},
+			Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: name, Source: types.SourceUnknown}, Eco: types.EcoFabric},
 			Constraint: parseFabricArtifactVersionRanges(ranges),
 			Mandatory:  mandatory,
 			Type:       dependencyTypeForEmbedded(embedded),

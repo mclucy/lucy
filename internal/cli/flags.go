@@ -14,6 +14,7 @@ const (
 	FlagPrintLogs   = "print-logs"
 	FlagDebug       = "debug"
 	FlagDumpLogs    = "dump-logs"
+	FlagPlatform    = "platform"
 )
 
 // AddJSONFlag adds the --json flag to a command.
@@ -42,4 +43,9 @@ func AddLogoFlag(cmd *cobra.Command) {
 		"small",
 		"Status ASCII logo: none, small, or large (large is opt-in)",
 	)
+}
+
+// AddPlatformFlag adds an optional target ecosystem selector to a command.
+func AddPlatformFlag(cmd *cobra.Command) {
+	cmd.Flags().String(FlagPlatform, "", "Resolve packages for PLATFORM")
 }

@@ -1,8 +1,9 @@
 package types
 
-// PackageRequest is the install package boundary object. Callers construct it
-// only after package input has been parsed into a concrete package ref and a
-// source scope has been chosen.
+// PackageRequest expresses one package selection for a target ecosystem.
+// EcoUnspecified is resolved from the workspace before provider routing.
 type PackageRequest struct {
-	FullPackageRef
+	PackageRef
+	Eco     Ecosystem
+	Version BareVersion
 }

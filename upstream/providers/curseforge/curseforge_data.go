@@ -208,7 +208,7 @@ type fileResponse struct {
 
 func (f *fileResponse) ToPackageRemote() types.ResolvedPackage {
 	remote := types.ResolvedPackage{
-		Id:       types.FullPackageRef{Scope: types.SourceCurseForge},
+		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceCurseForge}},
 		Filename: f.FileName,
 	}
 

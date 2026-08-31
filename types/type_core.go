@@ -4,9 +4,11 @@ package types
 // be invalid.
 type BarePackageName string
 
+// PackageRef identifies an upstream package. SourceAuto is valid while routing
+// an unresolved request; resolved upstream packages carry a concrete source.
 type PackageRef struct {
-	Eco  Ecosystem
-	Name BarePackageName
+	Name   BarePackageName
+	Source SourceId
 }
 
 func (p PackageRef) StringFull() string {
@@ -14,39 +16,15 @@ func (p PackageRef) StringFull() string {
 }
 
 func (p PackageRef) StringBase() string {
-	return p.Eco.String() + "/" + p.Name.String()
+	return p.Source.String() + ":" + p.Name.String()
 }
 
+// VersionedPackageRef identifies a package selection for one ecosystem.
+// Version may be a selector during resolution or an exact resolved version.
 type VersionedPackageRef struct {
 	PackageRef
+	Eco     Ecosystem
 	Version BareVersion
-}
-
-type ScopedPackageRef struct {
-	PackageRef
-	Scope SourceId
-}
-
-func (p ScopedPackageRef) StringBase() string {
-	return p.PackageRef.StringBase()
-}
-
-func (p ScopedPackageRef) StringFull() string {
-	return p.Scope.String() + ":" + p.PackageRef.StringFull()
-}
-
-type FullPackageRef struct {
-	PackageRef
-	Version BareVersion
-	Scope   SourceId
-}
-
-func (p FullPackageRef) StringBase() string {
-	return p.PackageRef.StringBase()
-}
-
-func (p FullPackageRef) StringFull() string {
-	return p.Scope.String() + ":" + p.PackageRef.StringFull()
 }
 
 type StringablePackageRef interface {

@@ -59,7 +59,7 @@ type EcosystemProvider interface {
 
 type ArtifactMapper interface {
 	PackageByHash(artifact Hashable) (
-		ref types.FullPackageRef,
+		ref types.VersionedPackageRef,
 		hash string,
 		ok bool,
 		err error,
@@ -105,7 +105,7 @@ type Informer interface {
 // Info is a project description from one upstream. Ref identifies the
 // upstream project that answered. Metadata is the content it returned.
 type Info struct {
-	Ref      types.ScopedPackageRef
+	Ref      types.PackageRef
 	Metadata types.Metadata
 }
 

@@ -20,6 +20,7 @@ const (
 	flagForceName        = "force"
 	flagWithOptionalName = "with-optional"
 	flagNoOptionalName   = "no-optional"
+	flagPlatformName     = cli.FlagPlatform
 )
 
 var addCmd = &cobra.Command{
@@ -42,6 +43,10 @@ var addCmd = &cobra.Command{
 		noOptional, _ := cmd.Flags().GetBool(flagNoOptionalName)
 		if withOptional && noOptional {
 			return fmt.Errorf("--with-optional and --no-optional cannot be used together")
+		}
+		platform, _ := cmd.Flags().GetString(flagPlatformName)
+		if platform != "" && !types.Ecosystem(platform).Valid() {
+			return fmt.Errorf("--platform must name a supported ecosystem")
 		}
 		return nil
 	},
@@ -66,6 +71,7 @@ func NewCommand() *cobra.Command {
 		false,
 		"Skip optional upstream dependencies (default)",
 	)
+	cli.AddPlatformFlag(addCmd)
 	cli.AddNoStyleFlag(addCmd)
 	return addCmd
 }
@@ -95,11 +101,16 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	options.WithOptional = withOptional
 	options.Force = force
 
+	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
+	platform := types.Ecosystem(platformArg)
 	requests := make([]types.PackageRequest, 0, len(args))
 	for _, arg := range args {
 		req, err := packageRequestFromInput(arg)
 		if err != nil {
 			return fmt.Errorf("stopping package addition: %w", err)
+		}
+		if platform != types.EcoUnspecified {
+			req.Eco = platform
 		}
 		requests = append(requests, req)
 	}
@@ -188,7 +199,7 @@ func buildUpdatedManifest(
 		manifest = state.UpsertManifestRequiredIntent(
 			manifest,
 			req,
-			req.Scope.String(),
+			req.Source.String(),
 		)
 	}
 	return manifest

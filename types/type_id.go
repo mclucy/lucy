@@ -11,7 +11,6 @@ package types
 import (
 	"strings"
 
-	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/terminal/style"
 )
 
@@ -131,22 +130,19 @@ func (n BarePackageName) Pep8String() string {
 }
 
 func (p VersionedPackageRef) String() string {
-	return fn.Ternary(
-		p.Eco == EcoUnspecified,
-		"", string(p.Eco)+"/",
-	) +
-		string(p.Name) +
-		fn.Ternary(
-			p.Version == VersionAny,
-			"",
-			"@"+string(p.Version),
-		)
+	version := ""
+	if p.Version != VersionAny {
+		version = "@" + p.Version.String()
+	}
+	return p.PackageRef.StringFull() + version
 }
 
+// StringFull is a human-facing selected-artifact label. StringBase is the
+// stable source-qualified package identity used by graph and provenance keys.
 func (p VersionedPackageRef) StringFull() string {
-	return p.Eco.String() + "/" + p.Name.String() + "@" + p.Version.String()
+	return p.Eco.String() + "/" + p.PackageRef.StringFull() + "@" + p.Version.String()
 }
 
 func (p VersionedPackageRef) StringBase() string {
-	return string(p.Eco) + "/" + string(p.Name)
+	return p.PackageRef.StringBase()
 }

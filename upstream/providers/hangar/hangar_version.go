@@ -22,9 +22,10 @@ func (h *hangarDependencies) ToPackageDependencies() types.PackageDependencies {
 			result.Value, types.Dependency{
 				Id: types.VersionedPackageRef{
 					PackageRef: types.PackageRef{
-						Eco:  types.EcoUnspecified,
-						Name: input.ToProjectName(dep.Name),
+						Name:   input.ToProjectName(dep.Name),
+						Source: types.SourceAuto,
 					},
+					Eco: types.EcoUnspecified,
 				},
 				Mandatory: dep.Required,
 			},

@@ -81,10 +81,10 @@ func planApply(
 		}
 
 		resolved := candidate.Package
-		resolved.Id = types.FullPackageRef{
+		resolved.Id = types.VersionedPackageRef{
 			PackageRef: verifiedPkg.Id.PackageRef,
+			Eco:        verifiedPkg.Id.Eco,
 			Version:    verifiedPkg.Id.Version,
-			Scope:      candidate.Package.Id.Scope,
 		}
 
 		pkg := types.InstalledPackage{

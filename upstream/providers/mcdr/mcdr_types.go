@@ -49,7 +49,7 @@ type release struct {
 
 func (r release) ToPackageRemote() types.ResolvedPackage {
 	remote := types.ResolvedPackage{
-		Id:       types.FullPackageRef{Scope: types.SourceMCDR},
+		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceMCDR}},
 		FileUrl:  r.Asset.BrowserDownloadUrl,
 		Filename: r.Asset.Name,
 	}

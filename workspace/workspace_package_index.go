@@ -33,7 +33,8 @@ func NewPackageIndex() *PackageIndex {
 //     allows adding local path info upon discovery of a package that was
 //     previously only known remotely.
 //
-// The dedupe key is pkg.Id.StringFull(), which encodes platform/name@version.
+// The dedupe key is pkg.Id.StringFull(), which includes the selected artifact
+// ecosystem and exact version.
 func (idx *PackageIndex) Add(pkg types.DiscoveredPackage) {
 	key := pkg.Id.StringFull()
 

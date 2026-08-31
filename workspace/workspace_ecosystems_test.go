@@ -274,9 +274,10 @@ func makeDiscoveredPackage(
 	return types.DiscoveredPackage{
 		Id: types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Eco:  platform,
-				Name: types.BarePackageName(name),
+				Name:   types.BarePackageName(name),
+				Source: types.SourceUnknown,
 			},
+			Eco:     platform,
 			Version: types.BareVersion(version),
 		},
 		Path: path,

@@ -301,10 +301,10 @@ func (planner *candidateGraphPlanner) admit(
 
 func resolvedPackageFromInstalled(pkg types.DiscoveredPackage) types.ResolvedPackage {
 	return types.ResolvedPackage{
-		Id: types.FullPackageRef{
+		Id: types.VersionedPackageRef{
 			PackageRef: pkg.Id.PackageRef,
+			Eco:        pkg.Id.Eco,
 			Version:    pkg.Id.Version,
-			Scope:      types.SourceUnknown,
 		},
 	}
 }

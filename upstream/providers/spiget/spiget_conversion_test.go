@@ -153,11 +153,11 @@ func TestResolvedVersionToPackageRemote(t *testing.T) {
 		versionResponse{ID: 625258, Name: "2.12.2"},
 	).ToPackageRemote()
 
-	if remote.Id.Scope != types.SourceSpiget {
+	if remote.Id.Source != types.SourceSpiget {
 		t.Fatalf(
 			"expected source %v, got %v",
 			types.SourceSpiget,
-			remote.Id.Scope,
+			remote.Id.Source,
 		)
 	}
 	if remote.FileUrl != "https://api.spiget.org/v2/resources/6245/versions/625258/download" {

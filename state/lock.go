@@ -28,13 +28,14 @@ type Lock struct {
 
 // LockedPackage records one exact resolved artifact and how it entered the
 // resolved graph.
+// LockedPackage records one exact resolved artifact and how it entered the
+// resolved graph. ID and Source form stable package identity; Platform records
+// the selected artifact variant.
 type LockedPackage struct {
-	ID string `yaml:"id"`
-	// Version is the final concrete version chosen for this resolved artifact.
-	// Lock entries are fact records, so fuzzy selectors and ranges are invalid
-	// here even when the manifest used them as intent.
+	ID            string   `yaml:"id"`
 	Version       string   `yaml:"version"`
 	Source        string   `yaml:"source"`
+	Platform      string   `yaml:"platform"`
 	URL           string   `yaml:"url"`
 	Filename      string   `yaml:"filename"`
 	Hash          string   `yaml:"hash"`
@@ -152,16 +153,15 @@ func (l *Lock) Unmarshal(data []byte) error {
 }
 
 func validateLockedPackage(pkg LockedPackage) error {
-	if pkg.ID == "" {
+	if strings.TrimSpace(pkg.ID) == "" {
 		return fmt.Errorf("id is required")
 	}
-	parts := strings.Split(pkg.ID, "/")
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return fmt.Errorf("id must use platform/name format")
+	if !isValidLockSource(pkg.Source) {
+		return fmt.Errorf("invalid source %q", pkg.Source)
 	}
-	platform := types.Ecosystem(parts[0])
-	if !platform.Valid() || platform == types.EcoUnspecified || platform == types.EcoMinecraft {
-		return fmt.Errorf("invalid package platform %q", parts[0])
+	platform := types.Ecosystem(pkg.Platform)
+	if !platform.Valid() || platform == types.EcoUnspecified {
+		return fmt.Errorf("invalid package platform %q", pkg.Platform)
 	}
 	if pkg.Version == "" {
 		return fmt.Errorf("version is required")

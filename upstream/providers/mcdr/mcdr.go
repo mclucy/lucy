@@ -122,9 +122,10 @@ func mcdrDependenciesFromMeta(meta pluginMeta) types.PackageDependencies {
 			deps.Value, types.Dependency{
 				Id: types.VersionedPackageRef{
 					PackageRef: types.PackageRef{
-						Eco:  types.EcoMcdr,
-						Name: input.ToProjectName(name),
+						Name:   input.ToProjectName(name),
+						Source: types.SourceMCDR,
 					},
+					Eco: types.EcoMcdr,
 				},
 				Constraint: version.ParseRange(
 					constraint,

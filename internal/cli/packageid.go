@@ -9,7 +9,7 @@ import (
 type PackageIDSuggestionContext struct {
 	Command string
 	Token   string
-	Eco     string
+	Source  string
 	Name    string
 	Version string
 	Segment string
@@ -31,12 +31,8 @@ func CompletePackageIDSuggestions(
 	commandName string,
 	token string,
 ) ([]string, cobra.ShellCompDirective) {
-	eco, name, version, segment := ParseCompletionToken(token)
+	source, name, version, segment := ParseCompletionToken(token)
 
-	if segment == "" || segment == "ecosystem" {
-		candidates := FilterByPrefix(StaticEcosystemCandidates(), token)
-		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
-	}
 	if segment == "version" {
 		candidates := FilterByPrefix(StaticVersionCandidates(), version)
 		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
@@ -45,7 +41,7 @@ func CompletePackageIDSuggestions(
 	request := PackageIDSuggestionContext{
 		Command: commandName,
 		Token:   token,
-		Eco:     eco,
+		Source:  source,
 		Name:    name,
 		Version: version,
 		Segment: segment,

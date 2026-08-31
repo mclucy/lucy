@@ -35,19 +35,22 @@ The correct model is a mapping problem, not a mode problem:
 
 Without a working local→remote bridge, scoped syntax only gives users a way to be explicit, not a way for Lucy to understand what is already installed.
 
-## Package Reference Hierarchy
+## Package Reference Model
 
-The reference types form a hierarchy of increasing specificity:
+The reference types keep stable upstream identity separate from target ecosystem:
 
 - `BarePackageName` — just a name string (`fabric-api`)
-- `PackageRef` — ecosystem + name (`fabric/fabric-api`); field `Eco`
-- `VersionedPackageRef` — ecosystem + name + version (`fabric/fabric-api@0.100.0`)
-- `ScopedPackageRef` — source + ecosystem + name (`modrinth:fabric/fabric-api`)
-- `FullPackageRef` — source + ecosystem + name + version (`modrinth:fabric/fabric-api@0.100.0`)
+- `PackageRef` — source + name (`modrinth:fabric-api`); `SourceAuto` is unresolved request intent
+- `PackageRequest` — package identity + target ecosystem + version selector
+- `VersionedPackageRef` — package identity + selected/observed ecosystem + version selector or fact
 
-`Ecosystem` (formerly **Platform** / `PlatformId`) is an enum: definite loaders (Fabric, Forge, NeoForge, MCDR, Bukkit, …), ambiguous (`EcoAny`), or structural (`EcoBare` — no mod loader; manifest may still use legacy `none`). Alias `EcoVanilla` = `EcoMinecraft`.
+`Ecosystem` (formerly **Platform** / `PlatformId`) is an enum of definite
+loaders (Fabric, Forge, NeoForge, MCDR, Bukkit, …) and `EcoUnspecified` for
+request selection that must be derived from workspace context. It is not part
+of `PackageRef` identity.
 
-`SourceId` identifies which upstream provider a package comes from (Modrinth, CurseForge, GitHub, MCDR, Hangar, Spiget, etc.). `SourceAuto` means "let Lucy choose."
+`SourceId` identifies the upstream provider. Resolved upstream package records
+carry a concrete source; locally observed artifacts may use `SourceUnknown`.
 
 ## Core Packages
 

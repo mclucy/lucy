@@ -8,23 +8,23 @@ import (
 func TestDiffDesiredResolved(t *testing.T) {
 	manifest := &Manifest{
 		Packages: []ManifestPackage{
-			{ID: "fabric/a", Version: "1.0.0", Source: "modrinth", Side: SideBoth},
-			{ID: "fabric/b", Version: "1.0.0", Source: "modrinth", Side: SideBoth},
+			{ID: "a", Version: "1.0.0", Source: "modrinth", Side: SideBoth},
+			{ID: "b", Version: "1.0.0", Source: "modrinth", Side: SideBoth},
 		},
 	}
 	lock := &Lock{
 		Packages: []LockedPackage{
-			{ID: "fabric/a", InstallPath: "mods/a.jar"},
-			{ID: "fabric/c", InstallPath: "mods/c.jar"},
+			{ID: "a", InstallPath: "mods/a.jar"},
+			{ID: "c", InstallPath: "mods/c.jar"},
 		},
 	}
 
 	diff := DiffDesiredResolved(manifest, lock)
 
-	if !reflect.DeepEqual(diff.InManifestNotLock, []string{"fabric/b"}) {
+	if !reflect.DeepEqual(diff.InManifestNotLock, []string{"b"}) {
 		t.Fatalf("expected manifest-only package, got %#v", diff.InManifestNotLock)
 	}
-	if !reflect.DeepEqual(diff.InLockNotManifest, []string{"fabric/c"}) {
+	if !reflect.DeepEqual(diff.InLockNotManifest, []string{"c"}) {
 		t.Fatalf("expected lock-only package, got %#v", diff.InLockNotManifest)
 	}
 }
@@ -32,7 +32,7 @@ func TestDiffDesiredResolved(t *testing.T) {
 func TestDiffDesiredResolvedTreatsFuzzyIntentAndExactLockAsSameMembership(t *testing.T) {
 	manifest := &Manifest{
 		Packages: []ManifestPackage{{
-			ID:      "fabric/lithium",
+			ID:      "lithium",
 			Version: "stable",
 			Source:  "modrinth",
 			Side:    SideBoth,
@@ -41,7 +41,7 @@ func TestDiffDesiredResolvedTreatsFuzzyIntentAndExactLockAsSameMembership(t *tes
 	lock := &Lock{
 		ManifestFingerprint: "sha256:stale-or-current",
 		Packages: []LockedPackage{{
-			ID:          "fabric/lithium",
+			ID:          "lithium",
 			Version:     "0.12.7+mc1.21.1",
 			InstallPath: "mods/lithium.jar",
 		}},
@@ -57,8 +57,8 @@ func TestDiffDesiredResolvedTreatsFuzzyIntentAndExactLockAsSameMembership(t *tes
 func TestDiffResolvedObserved(t *testing.T) {
 	lock := &Lock{
 		Packages: []LockedPackage{
-			{ID: "fabric/a", InstallPath: "mods/a.jar"},
-			{ID: "fabric/b", InstallPath: "mods/b.jar"},
+			{ID: "a", InstallPath: "mods/a.jar"},
+			{ID: "b", InstallPath: "mods/b.jar"},
 		},
 	}
 
@@ -78,7 +78,7 @@ func TestDiffResolvedObserved(t *testing.T) {
 func TestDiffResolvedObservedDistinguishesRuntimeDriftFromIgnoredContent(t *testing.T) {
 	lock := &Lock{
 		Packages: []LockedPackage{{
-			ID:          "fabric/a",
+			ID:          "a",
 			InstallPath: "mods/a.jar",
 		}},
 	}
@@ -104,15 +104,15 @@ func TestDiffResolvedObservedDistinguishesRuntimeDriftFromIgnoredContent(t *test
 func TestIgnoredInstallPaths(t *testing.T) {
 	manifest := &Manifest{
 		Packages: []ManifestPackage{
-			{ID: "fabric/a", Role: RoleRequired},
-			{ID: "fabric/manual", Role: RoleIgnored},
-			{ID: "fabric/missing", Role: RoleIgnored},
+			{ID: "a", Role: RoleRequired},
+			{ID: "manual", Role: RoleIgnored},
+			{ID: "missing", Role: RoleIgnored},
 		},
 	}
 	lock := &Lock{
 		Packages: []LockedPackage{
-			{ID: "fabric/a", InstallPath: "mods/a.jar"},
-			{ID: "fabric/manual", InstallPath: "mods/manual.jar"},
+			{ID: "a", InstallPath: "mods/a.jar"},
+			{ID: "manual", InstallPath: "mods/manual.jar"},
 		},
 	}
 
@@ -125,16 +125,16 @@ func TestIgnoredInstallPaths(t *testing.T) {
 func TestCompareManifestLockObservedSeparatesIntentFactAndObservedLayers(t *testing.T) {
 	manifest := &Manifest{
 		Packages: []ManifestPackage{
-			{ID: "fabric/a", Role: RoleRequired},
-			{ID: "fabric/b", Role: RoleRequired},
-			{ID: "fabric/manual", Role: RoleIgnored},
+			{ID: "a", Role: RoleRequired},
+			{ID: "b", Role: RoleRequired},
+			{ID: "manual", Role: RoleIgnored},
 		},
 	}
 	lock := &Lock{
 		Packages: []LockedPackage{
-			{ID: "fabric/a", InstallPath: "mods/a.jar"},
-			{ID: "fabric/transitive", InstallPath: "mods/transitive.jar"},
-			{ID: "fabric/manual", InstallPath: "mods/manual.jar"},
+			{ID: "a", InstallPath: "mods/a.jar"},
+			{ID: "transitive", InstallPath: "mods/transitive.jar"},
+			{ID: "manual", InstallPath: "mods/manual.jar"},
 		},
 	}
 
@@ -145,10 +145,10 @@ func TestCompareManifestLockObservedSeparatesIntentFactAndObservedLayers(t *test
 		"world/level.dat",
 	})
 
-	if !reflect.DeepEqual(diff.InManifestNotLock, []string{"fabric/b"}) {
+	if !reflect.DeepEqual(diff.InManifestNotLock, []string{"b"}) {
 		t.Fatalf("expected manifest intent drift, got %#v", diff.InManifestNotLock)
 	}
-	if !reflect.DeepEqual(diff.InLockNotManifest, []string{"fabric/transitive"}) {
+	if !reflect.DeepEqual(diff.InLockNotManifest, []string{"transitive"}) {
 		t.Fatalf("expected stale lock facts only for non-ignored entries, got %#v", diff.InLockNotManifest)
 	}
 	if !reflect.DeepEqual(diff.InLockNotObserved, []string{"mods/transitive.jar"}) {
@@ -177,12 +177,12 @@ func TestClassifyDrift(t *testing.T) {
 		},
 		{
 			name: "has unresolved intent",
-			diff: StateDiff{InManifestNotLock: []string{"fabric/a"}},
+			diff: StateDiff{InManifestNotLock: []string{"a"}},
 			want: "has unresolved intent",
 		},
 		{
 			name: "has stale lock facts",
-			diff: StateDiff{InLockNotManifest: []string{"fabric/transitive"}},
+			diff: StateDiff{InLockNotManifest: []string{"transitive"}},
 			want: "has stale lock facts",
 		},
 		{
@@ -203,8 +203,8 @@ func TestClassifyDrift(t *testing.T) {
 		{
 			name: "has intent drift stale lock facts runtime drift and ignored content",
 			diff: StateDiff{
-				InManifestNotLock: []string{"fabric/a"},
-				InLockNotManifest: []string{"fabric/transitive"},
+				InManifestNotLock: []string{"a"},
+				InLockNotManifest: []string{"transitive"},
 				InObservedNotLock: []string{"mods/extra.jar"},
 				IgnoredObserved:   []string{"mods/manual.jar"},
 			},

@@ -14,11 +14,9 @@ type PackageInstallation struct {
 	Path string
 }
 
-// ResolvedPackage — upstream identity + download info. No local state, no deps.
-// Produced by: upstream providers (FetchResult assembly)
-// Consumed by: install/ resolve/download stages
+// ResolvedPackage is an upstream package coordinate with download metadata.
 type ResolvedPackage struct {
-	Id            FullPackageRef
+	Id            VersionedPackageRef
 	FileUrl       string
 	Filename      string
 	Hash          string

@@ -139,14 +139,15 @@ func FetchMany(
 				}
 				return
 			}
-			// Providers receive a VersionedPackageRef (no scope) and thus
-			// cannot fill Id.Scope themselves. Routing supplies the scope
-			// from the provider identity, and the platform/name/version
-			// from the resolvedID returned by ResolveVersionSelector.
-			remoteData.Id = types.FullPackageRef{
-				PackageRef: resolvedID.PackageRef,
-				Version:    resolvedID.Version,
-				Scope:      provider.Id(),
+			// Routing binds the provider's concrete source to the selected
+			// ecosystem/name/version coordinate returned by resolution.
+			remoteData.Id = types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Name:   resolvedID.Name,
+					Source: provider.Id(),
+				},
+				Eco:     resolvedID.Eco,
+				Version: resolvedID.Version,
 			}
 			slots[index] = slot{ok: true, res: remoteData}
 		}(i, provider)
@@ -169,7 +170,7 @@ func FetchMany(
 }
 
 // GetInfoHedged executes info on all providers in parallel and returns the
-// first successful result. Ref.Scope holds the provider that answered.
+// first successful result. Ref.Source records the provider that answered.
 func GetInfoHedged(
 	providers []upstream.InfoSource,
 	ref types.PackageRef,
@@ -185,17 +186,11 @@ func GetInfoHedged(
 		go func(provider upstream.InfoSource) {
 			metadata, err := provider.Info(ref)
 			if err != nil {
-				errChan <- ProviderError{
-					Source: provider.Id(),
-					Err:    fmt.Errorf("information failed: %w", err),
-				}
+				errChan <- ProviderError{Source: provider.Id(), Err: fmt.Errorf("information failed: %w", err)}
 				return
 			}
 			resChan <- upstream.Info{
-				Ref: types.ScopedPackageRef{
-					PackageRef: ref,
-					Scope:      provider.Id(),
-				},
+				Ref:      types.PackageRef{Name: ref.Name, Source: provider.Id()},
 				Metadata: metadata,
 			}
 		}(provider)
@@ -221,7 +216,7 @@ func GetInfoHedged(
 // Ref is zero when no mapper matched the artifact. Errors holds the failure
 // of each mapper. A lookup with errors is incomplete, not a miss.
 type ArtifactLookup struct {
-	Ref    types.FullPackageRef
+	Ref    types.VersionedPackageRef
 	Errors []ProviderError
 }
 

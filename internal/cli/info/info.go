@@ -63,26 +63,21 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		return actionArtifactInfo(cmd, args[0])
 	}
 
-	ref, err := input.ParseFullPackageRef(args[0])
+	request, err := input.Parse(args[0])
 	if err != nil {
 		return err
 	}
 
-	source := ref.Scope
-
-	providers, err := routing.ResolveInfoProviders(ref.Eco, source)
+	providers, err := routing.ResolveInfoProviders(request.Eco, request.Source)
 	if err != nil {
-		errArg := ref.Eco.String()
-		if source != types.SourceAuto {
-			errArg = source.String()
+		errArg := request.Eco.String()
+		if request.Source != types.SourceAuto {
+			errArg = request.Source.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
 	}
 
-	meta, providerErrors, err := routing.GetInfoHedged(
-		providers,
-		ref.PackageRef,
-	)
+	meta, providerErrors, err := routing.GetInfoHedged(providers, request.PackageRef)
 	if err != nil {
 		return fmt.Errorf("failed to get information: %w", err)
 	}
@@ -116,7 +111,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 			style.PrintAsJson(meta.Metadata)
 		}
 	} else {
-		installID := meta.Ref.Scope.String() + ":" + meta.Ref.Name.String()
+		installID := meta.Ref.StringFull()
 		output := renderInfo(meta.Metadata, installID, long)
 		if len(noResultSources) > 0 {
 			output += style.Muted(

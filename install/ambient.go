@@ -96,9 +96,9 @@ func addRuntimeComponentAmbientDependencies(
 			loader.Name = "fabric-loader"
 			ambient.Add(loader)
 			ambient.AddAlias(
-				types.PackageRef{
-					Eco:  types.EcoFabric,
-					Name: "fabricloader",
+				types.VersionedPackageRef{
+					PackageRef: types.PackageRef{Name: "fabricloader", Source: types.SourceUnknown},
+					Eco:        types.EcoFabric,
 				},
 				loader,
 			)
@@ -117,31 +117,13 @@ func addRuntimeComponentAmbientDependencies(
 
 	if minecraft.PackageRef != (types.PackageRef{}) {
 		if hasFabricLoader {
-			ambient.AddAlias(
-				types.PackageRef{
-					Eco:  types.EcoFabric,
-					Name: "minecraft",
-				},
-				minecraft,
-			)
+			ambient.AddAlias(types.VersionedPackageRef{PackageRef: types.PackageRef{Name: "minecraft", Source: types.SourceUnknown}, Eco: types.EcoFabric}, minecraft)
 		}
 		if hasForge {
-			ambient.AddAlias(
-				types.PackageRef{
-					Eco:  types.EcoForge,
-					Name: "minecraft",
-				},
-				minecraft,
-			)
+			ambient.AddAlias(types.VersionedPackageRef{PackageRef: types.PackageRef{Name: "minecraft", Source: types.SourceUnknown}, Eco: types.EcoForge}, minecraft)
 		}
 		if hasNeoForge {
-			ambient.AddAlias(
-				types.PackageRef{
-					Eco:  types.EcoNeoforge,
-					Name: "minecraft",
-				},
-				minecraft,
-			)
+			ambient.AddAlias(types.VersionedPackageRef{PackageRef: types.PackageRef{Name: "minecraft", Source: types.SourceUnknown}, Eco: types.EcoNeoforge}, minecraft)
 		}
 	}
 
@@ -163,7 +145,7 @@ func (a *AmbientDependencies) Add(id types.VersionedPackageRef) {
 }
 
 func (a *AmbientDependencies) AddAlias(
-	alias types.PackageRef,
+	alias types.VersionedPackageRef,
 	target types.VersionedPackageRef,
 ) {
 	if alias.Eco == "" || alias.Name == "" || target.Eco == "" || target.Name == "" {
@@ -261,20 +243,15 @@ func addFabricZipAmbientDependencies(
 	}
 
 	id := types.VersionedPackageRef{
-		Eco:     types.EcoFabric,
-		Name:    input.ToProjectName(modInfo.Id),
-		Version: types.BareVersion(modInfo.Version),
+		PackageRef: types.PackageRef{Name: input.ToProjectName(modInfo.Id), Source: types.SourceUnknown},
+		Eco:        types.EcoFabric,
+		Version:    types.BareVersion(modInfo.Version),
 	}
 	ambient.Add(id)
 	for _, provided := range modInfo.Provides {
-		// Fabric provides[] entries are aliases in the loader resolver, similar to
-		// Debian/RPM virtual package provides. They satisfy dependency ids without
-		// requiring a separate downloaded package.
+		// Fabric provides[] entries are aliases in the loader resolver.
 		ambient.AddAlias(
-			types.PackageRef{
-				Eco:  types.EcoFabric,
-				Name: input.ToProjectName(provided),
-			},
+			types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(provided), Source: types.SourceUnknown}, Eco: types.EcoFabric},
 			id,
 		)
 	}
