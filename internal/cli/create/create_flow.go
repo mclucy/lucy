@@ -32,29 +32,21 @@ func parseCores(raw string) ([]parsedCore, error) {
 	cores := make([]parsedCore, 0, len(tokens))
 	seen := make(map[string]bool, len(tokens))
 	for _, token := range tokens {
-		ref, version, err := input.Parse(token)
+		request, err := input.Parse(token)
 		if err != nil {
 			return nil, fmt.Errorf("parse core %q: %w", token, err)
 		}
-		full := types.FullPackageRef{
-			PackageRef: ref.PackageRef,
-			Version:    version,
-			Scope:      ref.Scope,
-		}
-		key := full.StringBase()
+		key := request.PackageRef.StringBase()
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
 
-		core := types.CorePackage(full.Name.String())
-		if match, ok := types.NormalizeCorePackage(ref); ok {
+		core := types.CorePackage(request.Name.String())
+		if match, ok := types.NormalizeCorePackage(request); ok {
 			core = match.Core
 		}
-		cores = append(cores, parsedCore{
-			Request: types.PackageRequest{FullPackageRef: full},
-			Core:    core,
-		})
+		cores = append(cores, parsedCore{Request: request, Core: core})
 	}
 
 	if err := checkPlatformConflict(cores); err != nil {

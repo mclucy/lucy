@@ -99,11 +99,11 @@ func (s provider) Id() types.SourceId {
 
 var Provider provider
 
-func (s provider) Fetch(id types.VersionedPackageRef) (
-	types.ResolvedPackage,
-	error,
-) {
-	version, err := getVersion(id)
+func (s provider) Fetch(
+	local upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.ResolvedPackage, error) {
+	version, err := getVersion(local, id)
 	if err != nil {
 		return types.ResolvedPackage{}, err
 	}
@@ -132,9 +132,10 @@ var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api"
 var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported")
 
 func (s provider) Dependencies(
+	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (*types.PackageDependencies, error) {
-	version, err := getVersion(id)
+	version, err := getVersion(local, id)
 	if err != nil {
 		return nil, fmt.Errorf("modrinth: dependencies fetch failed: %w", err)
 	}
@@ -146,26 +147,22 @@ func (s provider) Dependencies(
 	), nil
 }
 
-func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
-	parsed types.VersionedPackageRef,
-	err error,
-) {
+func (s provider) ResolveVersionSelector(
+	local upstream.LocalContext,
+	p types.VersionedPackageRef,
+) (parsed types.VersionedPackageRef, err error) {
 	if p.Eco.IsSelector() {
-		// Platform inference removed to avoid circular imports.
-		// Caller should provide explicit platform.
 		p.Eco = types.EcoUnspecified
 	}
 	parsed.Eco = p.Eco
-
 	parsed.Name = p.Name
 
 	var v *versionResponse
-
 	switch p.Version {
 	case types.VersionStable:
-		v, err = latestCompatibleVersion(p.Name, p.Eco)
+		v, err = latestCompatibleVersion(p.Name, p.Eco, local.GameVersion)
 	case types.VersionBeta, types.VersionAny:
-		v, err = latestVersion(p.Name)
+		v, err = latestVersion(p.Name, p.Eco, local.GameVersion)
 	default:
 		return p, nil
 	}
@@ -173,6 +170,5 @@ func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
 		return p, err
 	}
 	parsed.Version = types.BareVersion(v.VersionNumber)
-
 	return parsed, nil
 }

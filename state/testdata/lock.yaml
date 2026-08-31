@@ -1,13 +1,13 @@
-version: v1
 generated_at: "2026-04-15T12:34:56Z"
 manifest_fingerprint: "sha256:manifest-fixture"
 game_version: "1.21.1"
 platform: fabric
 platform_version: "0.16.10"
 packages:
-  - id: fabric/fabric-api
+  - id: fabric-api
     version: 0.110.5+1.21.1
     source: modrinth
+    platform: fabric
     url: https://cdn.modrinth.com/data/P7dR8mSH/versions/abc/fabric-api.jar
     filename: fabric-api-0.110.5+1.21.1.jar
     hash: deadbeef
@@ -19,9 +19,10 @@ packages:
     provenance:
       - root
     requester: root
-  - id: fabric/embedded-lib
+  - id: embedded-lib
     version: "1.0.0"
     source: direct
+    platform: fabric
     url: jar-in-jar://mods/parent.jar!/META-INF/jars/embedded-lib.jar
     filename: embedded-lib.jar
     hash: cafebabe
@@ -30,11 +31,11 @@ packages:
     side: server
     optional: true
     embedded: true
-    embedded_in: fabric/fabric-api
+    embedded_in: fabric-api
     provenance:
       - root
-      - fabric/fabric-api@0.110.5+1.21.1
-    requester: fabric/fabric-api
+      - fabric-api@0.110.5+1.21.1
+    requester: fabric-api
 bundles:
   - name: default-config
     type: config

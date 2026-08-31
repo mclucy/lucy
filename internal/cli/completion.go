@@ -98,34 +98,28 @@ func StaticVersionCandidates() []CompletionCandidate {
 	}
 }
 
-// ParseCompletionToken parses a partial "platform/name@version" token for shell completion.
-// Returns parsed components and the active segment ("platform", "name", or "version").
-//
-// Uses manual string splitting instead of syntax.Parse which panics on partial input.
-func ParseCompletionToken(token string) (eco, name, version, segment string) {
+// ParseCompletionToken parses a partial "source:name@version" token for
+// shell completion. It returns source, name, version, and the active segment.
+// Target ecosystem is selected by --platform, not package syntax.
+func ParseCompletionToken(token string) (source, name, version, segment string) {
+	source = "auto"
+	beforeVersion := token
 	if before, after, ok := strings.Cut(token, "@"); ok {
+		beforeVersion = before
 		version = after
-		if beforeSlash, afterSlash, hasSlash := strings.Cut(
-			before,
-			"/",
-		); hasSlash {
-			eco = beforeSlash
-			name = afterSlash
-		} else {
-			name = before
-		}
 		segment = "version"
-		return
 	}
-
-	if before, after, ok := strings.Cut(token, "/"); ok {
-		eco = before
+	if before, after, ok := strings.Cut(beforeVersion, ":"); ok {
+		source = before
 		name = after
-		segment = "name"
+		if segment == "" {
+			segment = "name"
+		}
 		return
 	}
-
-	eco = token
-	segment = "ecosystem"
+	name = beforeVersion
+	if segment == "" {
+		segment = "name"
+	}
 	return
 }

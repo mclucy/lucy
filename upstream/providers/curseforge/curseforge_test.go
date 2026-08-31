@@ -167,8 +167,8 @@ func TestFileResponseToPackageRemote_PrefersSha1(t *testing.T) {
 
 	remote := f.ToPackageRemote()
 
-	if remote.Id.Scope != types.SourceCurseForge {
-		t.Errorf("expected source CurseForge, got %v", remote.Id.Scope)
+	if remote.Id.Source != types.SourceCurseForge {
+		t.Errorf("expected source CurseForge, got %v", remote.Id.Source)
 	}
 	if remote.FileUrl != downloadUrl {
 		t.Errorf("expected URL '%s', got '%s'", downloadUrl, remote.FileUrl)

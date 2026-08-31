@@ -13,11 +13,10 @@ import (
 // Manifest stores the desired environment intent for a Lucy project.
 // It is persisted in lucy.yaml.
 type Manifest struct {
-	FormatVersion string              `yaml:"format_version"`
-	Environment   ManifestEnvironment `yaml:"environment"`
-	Packages      []ManifestPackage   `yaml:"packages"`
-	Bundles       []ManifestBundle    `yaml:"bundles"`
-	Config        *Config             `yaml:"config,omitempty"`
+	Environment ManifestEnvironment `yaml:"environment"`
+	Packages    []ManifestPackage   `yaml:"packages"`
+	Bundles     []ManifestBundle    `yaml:"bundles"`
+	Config      *Config             `yaml:"config,omitempty"`
 }
 
 type ManifestEnvironment struct {
@@ -102,7 +101,6 @@ type ManifestBundle struct {
 
 func ManifestDefaults() Manifest {
 	return Manifest{
-		FormatVersion: SupportedVersion,
 		Environment: ManifestEnvironment{
 			GameVersion:            "",
 			ServerCore:             "",
@@ -119,23 +117,6 @@ func ManifestDefaults() Manifest {
 }
 
 func ValidateManifest(m Manifest) error {
-	if err := ValidateVersion(m.FormatVersion); err != nil {
-		if IsVersionError(err) {
-			return versionStateError(
-				ManifestFile,
-				"format_version",
-				m.FormatVersion,
-				ErrVersionUnsupported,
-			)
-		}
-		return versionStateError(
-			ManifestFile,
-			"format_version",
-			m.FormatVersion,
-			ErrMalformed,
-		)
-	}
-
 	if err := ValidateManifestEnvironment(m.Environment); err != nil {
 		return err
 	}
@@ -291,16 +272,8 @@ func validateManifestPackage(pkg ManifestPackage) error {
 	if strings.TrimSpace(pkg.ID) == "" {
 		return fmt.Errorf("id is required")
 	}
-	if strings.Contains(pkg.ID, "@") {
-		return fmt.Errorf("id must use platform/name format without version")
-	}
-	parts := strings.Split(pkg.ID, "/")
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return fmt.Errorf("id must use platform/name format")
-	}
-	platform := types.Ecosystem(parts[0])
-	if !platform.Valid() || platform == types.EcoUnspecified || platform == types.EcoMinecraft {
-		return fmt.Errorf("invalid package ecosystem %q", parts[0])
+	if strings.Contains(pkg.ID, "/") {
+		return fmt.Errorf("id must be a package name, not platform/name")
 	}
 
 	if strings.TrimSpace(pkg.Version) == "" {
@@ -383,7 +356,7 @@ func UpsertManifestRequiredIntent(
 		resolvedSource = "auto"
 	}
 	intentVersion := NormalizeManifestVersionIntent(req.Version)
-	refID := req.PackageRef.StringBase()
+	refID := req.Name.String()
 
 	for i := range manifest.Packages {
 		if manifest.Packages[i].ID != refID {
@@ -493,11 +466,7 @@ func UpdateManifestRolesForAdd(
 	ignored := manifestPackagesByRole(base.Packages, RoleIgnored)
 
 	for _, req := range requested {
-		// TODO: migrate resolveManifestPackageID to accept PackageRef directly
-		pid := types.VersionedPackageRef{
-			PackageRef: req.PackageRef,
-		}
-		resolvedID := resolveManifestPackageID(pid, &base, lock)
+		resolvedID := resolveManifestPackageID(req.PackageRef, &base, lock)
 		if resolvedID == "" {
 			continue
 		}
@@ -512,7 +481,7 @@ func UpdateManifestRolesForAdd(
 		pkg.ID = resolvedID
 		pkg.Role = RoleRequired
 		pkg.Version = requestedManifestVersion(req.Version, pkg.Version)
-		pkg.Source = normalizedManifestSource(req.Scope.String())
+		pkg.Source = normalizedManifestSource(req.Source.String())
 		if pkg.Side == "" {
 			pkg.Side = SideUnknown
 		}
@@ -526,7 +495,7 @@ func UpdateManifestRolesForAdd(
 
 func UpdateManifestRolesForRemove(
 	manifest *Manifest,
-	removed []types.FullPackageRef,
+	removed []types.VersionedPackageRef,
 	lock *Lock,
 ) *Manifest {
 	base := cloneManifestOrDefaults(manifest)
@@ -534,7 +503,7 @@ func UpdateManifestRolesForRemove(
 	ignored := manifestPackagesByRole(base.Packages, RoleIgnored)
 
 	for _, id := range removed {
-		resolvedID := resolveManifestPackageIDWithScope(id, &base, lock)
+		resolvedID := resolveManifestPackageID(id.PackageRef, &base, lock)
 		if resolvedID == "" {
 			continue
 		}
@@ -736,148 +705,46 @@ func defaultManifestPackageForID(id string) ManifestPackage {
 }
 
 func resolveManifestPackageID(
-	id types.VersionedPackageRef,
+	ref types.PackageRef,
 	manifest *Manifest,
 	lock *Lock,
 ) string {
-	return resolveManifestPackageIDWithScope(
-		types.FullPackageRef{
-			PackageRef: id.PackageRef,
-			Version:    id.Version,
-			Scope:      types.SourceAuto,
-		},
-		manifest,
-		lock,
-	)
-}
-
-func resolveManifestPackageIDWithScope(
-	id types.FullPackageRef,
-	manifest *Manifest,
-	lock *Lock,
-) string {
-	if core, ok := types.NormalizeCorePackage(types.ScopedPackageRef{
-		PackageRef: id.PackageRef,
-		Scope:      id.Scope,
-	}); ok {
-		id.PackageRef = core.Ref.PackageRef
-		id.Scope = core.Ref.Scope
+	if ref.Name == "" {
+		return ""
 	}
-	if id.Eco != types.EcoUnspecified {
-		if id.Scope != types.SourceAuto && id.Scope != types.SourceUnknown {
-			if pkg, ok := manifestPackageByID(
-				manifest.Packages,
-				id.StringBase(),
-			); ok && pkg.Source == id.Scope.String() {
-				return id.StringBase()
-			}
-			if lock != nil {
-				for _, pkg := range lock.Packages {
-					if pkg.ID == id.StringBase() && types.ParseSource(pkg.Source) == id.Scope {
-						return id.StringBase()
-					}
+	if ref.Source != types.SourceAuto && ref.Source != types.SourceUnknown {
+		if manifest != nil {
+			for _, pkg := range manifest.Packages {
+				if pkg.ID == ref.Name.String() && types.ParseSource(pkg.Source) == ref.Source {
+					return pkg.ID
 				}
 			}
-			return ""
 		}
-		return id.StringBase()
+		if lock != nil {
+			for _, pkg := range lock.Packages {
+				if pkg.ID == ref.Name.String() && types.ParseSource(pkg.Source) == ref.Source {
+					return pkg.ID
+				}
+			}
+		}
+		return ref.Name.String()
 	}
-
 	if manifest != nil {
-		candidate := resolveIDByNameAndSource(
-			id.Name,
-			id.Scope,
-			manifestPackageIDs(manifest.Packages),
-			manifest.Packages,
-		)
-		if candidate != "" {
-			return candidate
-		}
-	}
-	if lock != nil {
-		ids := make([]string, 0, len(lock.Packages))
-		for _, pkg := range lock.Packages {
-			ids = append(ids, pkg.ID)
-		}
-		candidate := resolveIDByNameAndSource(id.Name, id.Scope, ids, nil)
-		if candidate != "" {
-			return candidate
-		}
-	}
-
-	return id.StringBase()
-}
-
-func manifestPackageIDs(packages []ManifestPackage) []string {
-	ids := make([]string, 0, len(packages))
-	for _, pkg := range packages {
-		ids = append(ids, pkg.ID)
-	}
-	return ids
-}
-
-func resolveIDByName(name types.BarePackageName, ids []string) string {
-	var match string
-	for _, id := range ids {
-		parts := strings.Split(id, "/")
-		if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
-			continue
-		}
-		if parts[1] != name.String() {
-			continue
-		}
-		if match != "" && match != id {
-			return ""
-		}
-		match = id
-	}
-	return match
-}
-
-func resolveIDByNameAndSource(
-	name types.BarePackageName,
-	scope types.SourceId,
-	ids []string,
-	packages []ManifestPackage,
-) string {
-	if scope == types.SourceAuto || scope == types.SourceUnknown {
-		return resolveIDByName(name, ids)
-	}
-
-	var match string
-	for _, id := range ids {
-		parts := strings.Split(id, "/")
-		if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
-			continue
-		}
-		if parts[1] != name.String() {
-			continue
-		}
-		if scopeMatchesManifestPackage(id, scope, packages) {
-			if match != "" && match != id {
+		var match string
+		for _, pkg := range manifest.Packages {
+			if pkg.ID != ref.Name.String() {
+				continue
+			}
+			if match != "" && match != pkg.ID {
 				return ""
 			}
-			match = id
+			match = pkg.ID
+		}
+		if match != "" {
+			return match
 		}
 	}
-	return match
-}
-
-func scopeMatchesManifestPackage(
-	id string,
-	scope types.SourceId,
-	packages []ManifestPackage,
-) bool {
-	if packages == nil {
-		return true
-	}
-	for _, pkg := range packages {
-		if pkg.ID != id {
-			continue
-		}
-		return types.ParseSource(pkg.Source) == scope
-	}
-	return false
+	return ref.Name.String()
 }
 
 func (m Manifest) Marshal() ([]byte, error) {

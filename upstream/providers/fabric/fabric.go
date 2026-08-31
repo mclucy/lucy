@@ -9,7 +9,7 @@ import (
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/upstream"
 )
 
 const metaBaseURL = "https://meta.fabricmc.net"
@@ -32,10 +32,10 @@ type loaderVersionEntry struct {
 	Stable  bool   `json:"stable"`
 }
 
-func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
-	types.VersionedPackageRef,
-	error,
-) {
+func (p provider) ResolveVersionSelector(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.VersionedPackageRef, error) {
 	loaderVersion, err := loaderVersion(id.Version)
 	if err != nil {
 		return id, err
@@ -47,23 +47,20 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (
-	types.ResolvedPackage,
-	error,
-) {
-	ws := workspace.New()
-	serverPlatform := ws.Server().ModLoader()
-
+func (p provider) Fetch(
+	local upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.ResolvedPackage, error) {
 	var gameVersionID string
-	switch serverPlatform {
+	switch local.ModLoader {
 	case types.EcoVanilla:
-		gameVersionID = string(ws.Server().GameVersion())
+		gameVersionID = local.GameVersion.String()
 	case types.EcoUnspecified:
 		gameVersionID = promptSelectMinecraftVersion()
 	default:
 		return types.ResolvedPackage{}, fmt.Errorf(
 			"unsupported server platform %s for fabric bootstrap",
-			serverPlatform.Title(),
+			local.ModLoader.Title(),
 		)
 	}
 

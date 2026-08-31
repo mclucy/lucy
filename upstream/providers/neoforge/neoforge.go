@@ -9,8 +9,8 @@ import (
 	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
-	"github.com/mclucy/lucy/workspace"
 )
 
 var (
@@ -35,11 +35,11 @@ type mavenMetadata struct {
 	} `xml:"versioning"`
 }
 
-func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
-	types.VersionedPackageRef,
-	error,
-) {
-	gameVersion, err := minecraftVersionForInstall()
+func (p provider) ResolveVersionSelector(
+	local upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.VersionedPackageRef, error) {
+	gameVersion, err := minecraftVersionForInstall(local)
 	if err != nil {
 		return id, err
 	}
@@ -56,11 +56,11 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (
-	types.ResolvedPackage,
-	error,
-) {
-	gameVersion, err := minecraftVersionForInstall()
+func (p provider) Fetch(
+	local upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.ResolvedPackage, error) {
+	gameVersion, err := minecraftVersionForInstall(local)
 	if err != nil {
 		return types.ResolvedPackage{}, err
 	}
@@ -88,12 +88,10 @@ func (p provider) Fetch(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func minecraftVersionForInstall() (types.BareVersion, error) {
-	ws := workspace.New()
-	server := ws.Server()
-	switch server.ModLoader() {
+func minecraftVersionForInstall(local upstream.LocalContext) (types.BareVersion, error) {
+	switch local.ModLoader {
 	case types.EcoVanilla:
-		return server.GameVersion(), nil
+		return local.GameVersion, nil
 	case types.EcoUnspecified:
 		selectedVersion := promptSelectMinecraftVersion()
 		if selectedVersion == "none" || selectedVersion == "error" {
@@ -101,7 +99,7 @@ func minecraftVersionForInstall() (types.BareVersion, error) {
 		}
 		return types.BareVersion(selectedVersion), nil
 	default:
-		return server.GameVersion(), nil
+		return local.GameVersion, nil
 	}
 }
 

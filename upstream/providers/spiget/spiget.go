@@ -33,10 +33,10 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return resp.ToSearchResults(p.Id()), nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (
-	types.ResolvedPackage,
-	error,
-) {
+func (p provider) Fetch(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.ResolvedPackage, error) {
 	resource, err := resolveResourceByProjectName(id.Name)
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -66,17 +66,17 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 }
 
 func (p provider) Dependencies(
-	id types.VersionedPackageRef,
+	_ upstream.LocalContext,
+	_ types.VersionedPackageRef,
 ) (*types.PackageDependencies, error) {
 	return &types.PackageDependencies{Authentic: false}, nil
 }
 
-func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
-	parsed types.VersionedPackageRef,
-	err error,
-) {
+func (p provider) ResolveVersionSelector(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (parsed types.VersionedPackageRef, err error) {
 	parsed = id
-
 	switch id.Version {
 	case "", types.VersionAny, types.VersionBeta, types.VersionStable:
 	default:

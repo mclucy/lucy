@@ -5,16 +5,18 @@ import "github.com/spf13/cobra"
 // Shared flag names. Root persistent flags and per-command local flags must
 // agree on these strings.
 const (
-	FlagJSON        = "json"
-	FlagJSONCompact = "json-compact"
-	FlagLong        = "long"
-	FlagNoStyle     = "no-style"
-	FlagLogo        = "logo"
-	FlagLogFile     = "log-file"
-	FlagPrintLogs   = "print-logs"
-	FlagDebug       = "debug"
-	FlagDumpLogs    = "dump-logs"
-	FlagServer      = "server"
+	FlagJSON            = "json"
+	FlagJSONCompact     = "json-compact"
+	FlagLong            = "long"
+	FlagNoStyle         = "no-style"
+	FlagLogo            = "logo"
+	FlagLogFile         = "log-file"
+	FlagPrintLogs       = "print-logs"
+	FlagDebug           = "debug"
+	FlagDumpLogs        = "dump-logs"
+	FlagServer          = "server"
+	FlagPlatform        = "platform"
+	FlagUseGitHubMirror = "use-github-mirror"
 )
 
 // AddJSONFlag adds the --json flag to a command.
@@ -43,4 +45,9 @@ func AddLogoFlag(cmd *cobra.Command) {
 		"small",
 		"Status ASCII logo: none, small, or large (large is opt-in)",
 	)
+}
+
+// AddPlatformFlag adds an optional target ecosystem selector to a command.
+func AddPlatformFlag(cmd *cobra.Command) {
+	cmd.Flags().String(FlagPlatform, "", "Resolve packages for PLATFORM")
 }

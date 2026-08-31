@@ -10,6 +10,7 @@ import (
 )
 
 type providerCandidateResolver struct {
+	local            upstream.LocalContext
 	providers        []upstream.PackageSource
 	rootProviders    map[string][]upstream.PackageSource
 	rootProviderSet  map[string]struct{}
@@ -26,25 +27,13 @@ func (resolver providerCandidateResolver) ResolvePackage(
 	if id.Version == types.VersionStable {
 		attempts = append(
 			attempts,
-			types.VersionedPackageRef{
-				Eco:     id.Eco,
-				Name:    id.Name,
-				Version: types.VersionBeta,
-			},
-			types.VersionedPackageRef{
-				Eco:     id.Eco,
-				Name:    id.Name,
-				Version: types.VersionAny,
-			},
+			types.VersionedPackageRef{PackageRef: id.PackageRef, Eco: id.Eco, Version: types.VersionBeta},
+			types.VersionedPackageRef{PackageRef: id.PackageRef, Eco: id.Eco, Version: types.VersionAny},
 		)
 	} else if id.Version == types.VersionBeta {
 		attempts = append(
 			attempts,
-			types.VersionedPackageRef{
-				Eco:     id.Eco,
-				Name:    id.Name,
-				Version: types.VersionAny,
-			},
+			types.VersionedPackageRef{PackageRef: id.PackageRef, Eco: id.Eco, Version: types.VersionAny},
 		)
 	}
 
@@ -122,7 +111,7 @@ func (resolver providerCandidateResolver) fetchMany(
 				routing.ProviderError{Err: err},
 			)
 		}
-		fetches, errors := routing.FetchMany(group.providers, group.id)
+		fetches, errors := routing.FetchMany(resolver.local, group.providers, group.id)
 		results = append(results, fetches...)
 		providerErrors = append(providerErrors, errors...)
 	}
@@ -173,8 +162,9 @@ func (resolver providerCandidateResolver) ResolveDependencies(
 		return nil, err
 	}
 
-	providers := providersForSource(resolver.providers, pkg.Id.Scope)
+	providers := providersForSource(resolver.providers, pkg.Id.Source)
 	dependencySets, providerErrors := routing.DependenciesMany(
+		resolver.local,
 		providers,
 		versionedResolvedID(pkg),
 	)

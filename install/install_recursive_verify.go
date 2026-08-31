@@ -208,11 +208,9 @@ func artifactInfoToDiscoveredPackages(infos []artifact.Info) []types.DiscoveredP
 	for _, info := range infos {
 		pkg := types.DiscoveredPackage{
 			Id: types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Eco:  info.Ref.Eco,
-					Name: info.Ref.Name,
-				},
-				Version: info.Version,
+				PackageRef: info.Ref.PackageRef,
+				Eco:        info.Ref.Eco,
+				Version:    info.Version,
 			},
 			Path: info.FilePath,
 		}
@@ -224,17 +222,11 @@ func artifactInfoToDiscoveredPackages(infos []artifact.Info) []types.DiscoveredP
 	return pkgs
 }
 
-func artifactInfoToResolvedDiscoveredPackages(
-	infos []artifact.Info,
-	resolved types.ResolvedPackage,
-) []types.DiscoveredPackage {
+func artifactInfoToResolvedDiscoveredPackages(infos []artifact.Info, resolved types.ResolvedPackage) []types.DiscoveredPackage {
 	packages := artifactInfoToDiscoveredPackages(infos)
 	for i := range packages {
 		if shouldPreserveResolvedIdentity(packages[i].Id, resolved.Id) {
-			packages[i].Id = types.VersionedPackageRef{
-				PackageRef: resolved.Id.PackageRef,
-				Version:    resolved.Id.Version,
-			}
+			packages[i].Id = resolved.Id
 		}
 	}
 	return packages
@@ -243,26 +235,22 @@ func artifactInfoToResolvedDiscoveredPackages(
 func packageDependenciesFromArtifact(deps []artifact.Dependency) types.PackageDependencies {
 	out := make([]types.Dependency, 0, len(deps))
 	for _, dep := range deps {
-		out = append(
-			out, types.Dependency{
-				Id: types.VersionedPackageRef{
-					PackageRef: types.PackageRef{
-						Eco:  dep.Ref.Eco,
-						Name: dep.Ref.Name,
-					},
-				},
-				Constraint: dep.Constraint,
-				Mandatory:  dep.Mandatory,
-				Type:       types.NormalizeDependencyType(dep.Type),
+		out = append(out, types.Dependency{
+			Id: types.VersionedPackageRef{
+				PackageRef: dep.Ref.PackageRef,
+				Eco:        dep.Ref.Eco,
 			},
-		)
+			Constraint: dep.Constraint,
+			Mandatory:  dep.Mandatory,
+			Type:       types.NormalizeDependencyType(dep.Type),
+		})
 	}
 	return types.PackageDependencies{Value: out}
 }
 
 func shouldPreserveResolvedIdentity(
 	verified types.VersionedPackageRef,
-	resolved types.FullPackageRef,
+	resolved types.VersionedPackageRef,
 ) bool {
 	if resolved.Name == "" || resolved.Version == "" {
 		return false
@@ -290,7 +278,7 @@ func hashMatchesResolvedPackage(
 	path string,
 	resolved types.ResolvedPackage,
 ) bool {
-	mapper, ok, err := routing.GetArtifactMapper(resolved.Id.Scope)
+	mapper, ok, err := routing.GetArtifactMapper(resolved.Id.Source)
 	if err != nil || !ok {
 		return false
 	}
@@ -335,11 +323,9 @@ func sourceForEcosystem(p types.Ecosystem) types.SourceId {
 }
 
 func resolvedPackageFromVerifiedDiscovered(pkg types.DiscoveredPackage) types.ResolvedPackage {
-	return types.ResolvedPackage{
-		Id: types.FullPackageRef{
-			PackageRef: pkg.Id.PackageRef,
-			Version:    pkg.Id.Version,
-			Scope:      types.SourceUnknown,
-		},
-	}
+	return types.ResolvedPackage{Id: types.VersionedPackageRef{
+		PackageRef: pkg.Id.PackageRef,
+		Eco:        pkg.Id.Eco,
+		Version:    pkg.Id.Version,
+	}}
 }

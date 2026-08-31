@@ -9,7 +9,8 @@ import (
 
 // GraphNode represents a single package in the dependency graph.
 type GraphNode struct {
-	// ID is the package identifier in "platform/name" format (e.g. "fabric/fabric-api").
+	// ID is the source-qualified stable package key (for example,
+	// "modrinth:fabric-api").
 	ID string
 
 	// Version is the exact version string of this package.

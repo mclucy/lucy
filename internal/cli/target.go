@@ -114,6 +114,8 @@ func DispatchPackageTask(
 	if target.Instance == nil {
 		return fmt.Errorf("registered server target is missing instance data")
 	}
+	task.Platform, _ = cmd.Flags().GetString(FlagPlatform)
+	task.UseGitHubMirror, _ = cmd.Flags().GetBool(FlagUseGitHubMirror)
 	var result server.PackageTaskResult
 	if err := CallDaemonWithAutoStart(
 		cmd.Context(),

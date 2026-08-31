@@ -88,6 +88,11 @@ func init() {
 		"",
 		"Operate on a registered Lucy server instance",
 	)
+	rootCmd.PersistentFlags().Bool(
+		cli.FlagUseGitHubMirror,
+		false,
+		"Use the GitHub release mirror for eligible downloads",
+	)
 
 	rootCmd.AddCommand(
 		add.NewCommand(),

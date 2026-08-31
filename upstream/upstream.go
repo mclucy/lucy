@@ -8,9 +8,8 @@
 //
 // Dependency inversion:
 //   - This package defines interfaces and normalized conversion contracts.
-//   - Concrete providers (modrinth, mcdr, curseforge, githubsource) implement
-//     small capability interfaces and depend on these contracts, not the other
-//     way around.
+//   - Concrete providers implement small capability interfaces and depend on
+//     these contracts, not the other way around.
 //   - Callers pass capability interfaces into Search/Info. Core logic depends
 //     on abstractions rather than concrete upstream implementations.
 //

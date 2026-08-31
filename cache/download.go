@@ -19,11 +19,15 @@ import (
 	"github.com/mclucy/lucy/log"
 )
 
+// DownloadOptions controls artifact caching and downloading. The URL passed to
+// CachedDownload is the cache identity; RequestURL, when set, is used only for
+// the network request.
 type DownloadOptions struct {
 	Kind               EntryKind
 	ExpectedHash       string
 	HashAlgorithm      HashAlgorithm
 	Filename           string
+	RequestURL         string // actual request target; url remains cache identity
 	WrapReader         func(io.Reader, int64) io.Reader
 	OnCacheHit         func()
 	OnResolvedFilename func(string)
@@ -64,6 +68,13 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	if err := validateDownloadURL(url); err != nil {
 		return nil, err
 	}
+	requestURL := url
+	if opts.RequestURL != "" {
+		requestURL = opts.RequestURL
+	}
+	if err := validateDownloadURL(requestURL); err != nil {
+		return nil, err
+	}
 	if opts.FileMode == 0 {
 		opts.FileMode = 0o640
 	}
@@ -100,7 +111,7 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 		}, nil
 	}
 
-	return downloadAndCache(url, dir, opts)
+	return downloadAndCache(url, requestURL, dir, opts)
 }
 
 // CachedGetBytes fetches bytes from url, using the cache for deduplication.
@@ -235,15 +246,18 @@ func readLimitedBytes(reader io.Reader, maxBytes int64) ([]byte, error) {
 	return bytes, nil
 }
 
-func downloadAndCache(url, dir string, opts DownloadOptions) (
+func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 	*DownloadResult,
 	error,
 ) {
 	if err := validateDownloadURL(url); err != nil {
 		return nil, err
 	}
+	if err := validateDownloadURL(requestURL); err != nil {
+		return nil, err
+	}
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(requestURL)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}

@@ -14,12 +14,31 @@ type SourceIdentifier interface {
 	Id() types.SourceId
 }
 
+// LocalContext is an immutable snapshot of local runtime facts that can affect
+// upstream resolution. Its zero value describes an unknown local runtime.
+//
+// The application layer derives LocalContext from workspace discovery. Upstream
+// must not depend on that discovery mechanism or its filesystem representation.
+type LocalContext struct {
+	ModLoader   types.Ecosystem
+	GameVersion types.BareVersion
+	MCDRVersion types.BareVersion
+}
+
+// HasGameVersion reports whether the local runtime provides a concrete
+// Minecraft version suitable for upstream compatibility filtering.
+func (c LocalContext) HasGameVersion() bool {
+	return c.GameVersion != "" &&
+		!c.GameVersion.IsInvalid() &&
+		!c.GameVersion.CanInfer()
+}
+
 type Fetcher interface {
-	Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error)
+	Fetch(local LocalContext, id types.VersionedPackageRef) (types.ResolvedPackage, error)
 }
 
 type DependencyResolver interface {
-	Dependencies(id types.VersionedPackageRef) (
+	Dependencies(local LocalContext, id types.VersionedPackageRef) (
 		*types.PackageDependencies,
 		error,
 	)
@@ -59,7 +78,7 @@ type EcosystemProvider interface {
 
 type ArtifactMapper interface {
 	PackageByHash(artifact Hashable) (
-		ref types.FullPackageRef,
+		ref types.VersionedPackageRef,
 		hash string,
 		ok bool,
 		err error,
@@ -72,7 +91,7 @@ type Hashable interface {
 }
 
 type VersionSelectorResolver interface {
-	ResolveVersionSelector(ref types.VersionedPackageRef) (
+	ResolveVersionSelector(local LocalContext, ref types.VersionedPackageRef) (
 		resolved types.VersionedPackageRef,
 		err error,
 	)
@@ -105,7 +124,7 @@ type Informer interface {
 // Info is a project description from one upstream. Ref identifies the
 // upstream project that answered. Metadata is the content it returned.
 type Info struct {
-	Ref      types.ScopedPackageRef
+	Ref      types.PackageRef
 	Metadata types.Metadata
 }
 

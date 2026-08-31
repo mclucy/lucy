@@ -76,9 +76,11 @@ type InstanceStatus struct {
 }
 
 type PackageTaskRequest struct {
-	Name       string             `json:"name"`
-	Args       []string           `json:"args,omitempty"`
-	AddOptions PackageTaskAddOpts `json:"add_options,omitempty"`
+	Name            string             `json:"name"`
+	Args            []string           `json:"args,omitempty"`
+	Platform        string             `json:"platform,omitempty"`
+	UseGitHubMirror bool               `json:"use_github_mirror,omitempty"`
+	AddOptions      PackageTaskAddOpts `json:"add_options,omitempty"`
 }
 
 type PackageTaskAddOpts struct {

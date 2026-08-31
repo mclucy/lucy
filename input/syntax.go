@@ -1,30 +1,7 @@
-// Package input defines the syntax for specifying packages and platforms.
+// Package input parses package request syntax.
 //
-// A package can either be specified by a string in the format of
-// "scope:platform/name@version". Only the name is required; scope, platform,
-// and version can all be omitted.
-//
-// The operators, from lowest to highest priority:
-//
-//	:   scope delimiter     (outermost — split first)
-//	@   version delimiter
-//	/   platform delimiter  (innermost — split last)
-//
-// The ':' operator only acts on the leftmost colon that appears before any '/'
-// or '@'. Colons inside the version (e.g., Maven "group:artifact:version"
-// coordinates after '@') are preserved.
-//
-// Valid Examples:
-//   - carpet
-//   - mcdr/prime-backup
-//   - fabric/jade@1.0.0
-//   - fabric@12.0
-//   - minecraft@1.19 (recommended)
-//   - minecraft/minecraft@1.16.5 (= minecraft@1.16.5)
-//   - 1.8.9 (= minecraft@1.8.9)
-//   - modrinth:fabric/jade@1.0.0
-//   - modrinth:jade
-//   - auto:fabric-api
+// A request has the form "source:name@version". Source and version are
+// optional. Its target ecosystem is selected separately by the caller.
 package input
 
 import (
@@ -35,56 +12,22 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-var (
-	ESyntax    = errors.New("invalid syntax")
-	EEcosystem = errors.New("invalid ecosystem")
-)
+var ESyntax = errors.New("invalid syntax")
 
-// Parse parses a scoped package specifier ("scope:platform/name@version") into a
-// ScopedPackageRef and a BareVersion. An omitted scope defaults to SourceAuto;
-// an omitted version defaults to VersionAny. Core package aliases are normalized
-// before regular ecosystem validation.
-func Parse(s string) (
-	ref types.ScopedPackageRef,
-	version types.BareVersion,
-	err error,
-) {
-	text := strings.TrimSpace(s)
-	ref = types.ScopedPackageRef{}
-	version = types.VersionAny
-
-	scope, remainder, err := parseOperatorColon(text)
+// Parse parses source:name@version. Omitted source and version become
+// SourceAuto and VersionAny. Eco remains unspecified until install planning.
+func Parse(s string) (types.PackageRequest, error) {
+	source, remainder, err := parseSource(strings.TrimSpace(s))
 	if err != nil {
-		return types.ScopedPackageRef{}, "", err
+		return types.PackageRequest{}, err
 	}
-
-	pl, n, v, err := parseOperatorAt(remainder)
+	name, version, err := parseNameVersion(remainder)
 	if err != nil {
-		return types.ScopedPackageRef{}, "", err
+		return types.PackageRequest{}, err
 	}
-
-	ref.PackageRef = types.PackageRef{Eco: pl, Name: n}
-	ref.Scope = scope
-	version = v
-
-	if core, ok := types.NormalizeCorePackage(ref); ok {
-		return core.Ref, version, nil
-	}
-	if !pl.Valid() {
-		return types.ScopedPackageRef{}, "", EEcosystem
-	}
-	return ref, version, nil
-}
-
-func ParseFullPackageRef(s string) (types.FullPackageRef, error) {
-	ref, version, err := Parse(s)
-	if err != nil {
-		return types.FullPackageRef{}, err
-	}
-	return types.FullPackageRef{
-		PackageRef: ref.PackageRef,
+	return types.PackageRequest{
+		PackageRef: types.PackageRef{Name: name, Source: source},
 		Version:    version,
-		Scope:      ref.Scope,
 	}, nil
 }
 
@@ -95,81 +38,36 @@ func ToProjectName(s string) types.BarePackageName {
 	return types.BarePackageName(s)
 }
 
-// parseOperatorColon splits on the scope delimiter ':' — the outermost operator.
-// Only the leftmost ':' before the first '/' or '@' is the delimiter; colons
-// after '@' (Maven version coordinates) are preserved. No ':' defaults to
-// SourceAuto.
-func parseOperatorColon(s string) (
-	scope types.SourceId,
-	remainder string,
-	err error,
-) {
+func parseSource(s string) (types.SourceId, string, error) {
 	boundary := len(s)
-	if i := strings.IndexByte(s, '/'); i >= 0 && i < boundary {
-		boundary = i
+	if at := strings.IndexByte(s, '@'); at >= 0 {
+		boundary = at
 	}
-	if i := strings.IndexByte(s, '@'); i >= 0 && i < boundary {
-		boundary = i
-	}
-
-	colonIdx := strings.IndexByte(s[:boundary], ':')
-	if colonIdx < 0 {
+	colon := strings.IndexByte(s[:boundary], ':')
+	if colon < 0 {
 		return types.SourceAuto, s, nil
 	}
-
-	scope = types.ParseSource(strings.ToLower(s[:colonIdx]))
-	if scope == types.SourceUnknown {
-		return types.SourceUnknown, "", fmt.Errorf(
-			"%w: unknown source %q",
-			ESyntax, s[:colonIdx],
-		)
+	source := types.ParseSource(strings.ToLower(s[:colon]))
+	if source == types.SourceUnknown {
+		return types.SourceUnknown, "", fmt.Errorf("%w: unknown source %q", ESyntax, s[:colon])
 	}
-	return scope, s[colonIdx+1:], nil
+	return source, s[colon+1:], nil
 }
 
-// parseOperatorAt is called first since '@' operator always occur after '/' (equivalent
-// to a lower priority).
-func parseOperatorAt(s string) (
-	e types.Ecosystem,
-	n types.BarePackageName,
-	v types.BareVersion,
-	err error,
-) {
-	split := strings.Split(s, "@")
-
-	e, n = parseOperatorSlash(split[0])
-
-	if len(split) == 1 {
-		v = types.VersionAny
-	} else if len(split) == 2 {
-		v = types.BareVersion(split[1])
-		if v == types.VersionNone {
-			return "", "", "", ESyntax
+func parseNameVersion(s string) (types.BarePackageName, types.BareVersion, error) {
+	parts := strings.Split(s, "@")
+	switch len(parts) {
+	case 1:
+		if parts[0] == "" {
+			return "", "", ESyntax
 		}
-	} else {
-		return "", "", "", ESyntax
-	}
-
-	return
-}
-
-func parseOperatorSlash(s string) (
-	e types.Ecosystem,
-	n types.BarePackageName,
-) {
-	split := strings.SplitN(s, "/", 2)
-
-	if len(split) == 1 {
-		e = types.EcoUnspecified
-		n = types.BarePackageName(split[0])
-		if candidate := types.Ecosystem(strings.ToLower(split[0])); candidate.Valid() {
-			e = candidate
-			n = types.BarePackageName(e)
+		return types.BarePackageName(parts[0]), types.VersionAny, nil
+	case 2:
+		if parts[0] == "" || parts[1] == "" || types.BareVersion(parts[1]) == types.VersionNone {
+			return "", "", ESyntax
 		}
-	} else {
-		e = types.Ecosystem(strings.ToLower(split[0]))
-		n = types.BarePackageName(split[1])
+		return types.BarePackageName(parts[0]), types.BareVersion(parts[1]), nil
+	default:
+		return "", "", ESyntax
 	}
-
-	return
 }

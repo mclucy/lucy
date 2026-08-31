@@ -18,7 +18,7 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 	existing := state.ManifestDefaults()
 	existing.Packages = []state.ManifestPackage{
 		{
-			ID:       "fabric/lithium",
+			ID:       "lithium",
 			Version:  "0.12.7",
 			Source:   "modrinth",
 			Role:     state.RoleTransitive,
@@ -29,8 +29,8 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 	}
 
 	requested := []types.PackageRequest{
-		mustParsePackageRequest(t, "fabric/lithium@>=0.12.0 <0.13.0"),
-		mustParsePackageRequest(t, "fabric/fabric-api"),
+		mustParsePackageRequest(t, "modrinth:lithium@>=0.12.0 <0.13.0"),
+		mustParsePackageRequest(t, "fabric-api"),
 	}
 
 	updated := buildUpdatedManifest(&existing, requested)
@@ -43,7 +43,7 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 		byID[pkg.ID] = pkg
 	}
 
-	lithium := byID["fabric/lithium"]
+	lithium := byID["lithium"]
 	if lithium.Version != ">=0.12.0 <0.13.0" {
 		t.Fatalf(
 			"expected fuzzy version intent to be preserved, got %q",
@@ -60,7 +60,7 @@ func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.
 		)
 	}
 
-	fabricAPI := byID["fabric/fabric-api"]
+	fabricAPI := byID["fabric-api"]
 	if fabricAPI.Version != types.VersionAny.String() {
 		t.Fatalf(
 			"expected omitted version to default to any, got %q",
@@ -86,14 +86,14 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 	manifest.Environment.ModdingPlatformVersion = "0.16.10"
 	manifest.Packages = []state.ManifestPackage{
 		{
-			ID:      "fabric/lithium",
+			ID:      "lithium",
 			Version: "stable",
 			Source:  "auto",
 			Role:    state.RoleRequired,
 			Side:    state.SideServer,
 		},
 		{
-			ID:      "fabric/fabric-api",
+			ID:      "fabric-api",
 			Version: "stable",
 			Source:  "auto",
 			Role:    state.RoleTransitive,
@@ -108,29 +108,11 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 	existingLock.PlatformVersion = "0.16.9"
 	existingLock.Packages = []state.LockedPackage{
 		{
-			ID:            "fabric/fabric-api",
-			Version:       "1.0.0",
-			Source:        "modrinth",
-			URL:           "https://example.invalid/fabric-api-old.jar",
-			Filename:      "fabric-api-old.jar",
-			Hash:          "stalehash",
-			HashAlgorithm: "sha512",
-			InstallPath:   "mods/fabric-api-old.jar",
-			Side:          "server",
-			Provenance:    []string{"root"},
-			Requester:     "root",
+			ID: "fabric-api", Version: "1.0.0", Source: "modrinth", Platform: "fabric",
+			URL: "https://example.invalid/fabric-api-old.jar", Filename: "fabric-api-old.jar", Hash: "stalehash", HashAlgorithm: "sha512", InstallPath: "mods/fabric-api-old.jar", Side: "server", Provenance: []string{"root"}, Requester: "root",
 		}, {
-			ID:            "fabric/cloth-config",
-			Version:       "15.0.0",
-			Source:        "modrinth",
-			URL:           "https://example.invalid/cloth-config.jar",
-			Filename:      "cloth-config.jar",
-			Hash:          "clothhash",
-			HashAlgorithm: "sha512",
-			InstallPath:   "mods/cloth-config.jar",
-			Side:          "server",
-			Provenance:    []string{"root"},
-			Requester:     "root",
+			ID: "cloth-config", Version: "15.0.0", Source: "modrinth", Platform: "fabric",
+			URL: "https://example.invalid/cloth-config.jar", Filename: "cloth-config.jar", Hash: "clothhash", HashAlgorithm: "sha512", InstallPath: "mods/cloth-config.jar", Side: "server", Provenance: []string{"root"}, Requester: "root",
 		},
 	}
 	existingLock.Bundles = []state.LockedBundle{
@@ -144,16 +126,9 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 
 	result := &install.Result{
 		Installed: []types.InstalledPackage{
-			lockedResultPackage(
-				t,
-				workDir,
-				"fabric/lithium@0.12.9+mc1.21.1",
-				"lithium.jar",
-			),
+			lockedResultPackage(t, workDir, "lithium@0.12.9+mc1.21.1", "lithium.jar"),
 		},
-		Provenance: map[string][]string{
-			"fabric/lithium": {"root"},
-		},
+		Provenance: map[string][]string{"lithium": {"root"}},
 	}
 
 	updated := cli.BuildUpdatedLock(workDir, &manifest, &existingLock, result, workspace.NewAt(workDir))
@@ -167,7 +142,7 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 			len(updated.Packages),
 		)
 	}
-	if updated.Packages[0].ID != "fabric/cloth-config" || updated.Packages[1].ID != "fabric/fabric-api" || updated.Packages[2].ID != "fabric/lithium" {
+	if updated.Packages[0].ID != "cloth-config" || updated.Packages[1].ID != "fabric-api" || updated.Packages[2].ID != "lithium" {
 		t.Fatalf(
 			"expected lock packages to be canonically sorted, got %#v",
 			updated.Packages,
@@ -218,13 +193,14 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 
 func mustParsePackageID(t *testing.T, raw string) types.VersionedPackageRef {
 	t.Helper()
-	ref, version, err := input.Parse(raw)
+	request, err := input.Parse(raw)
 	if err != nil {
 		t.Fatalf("parse %q: %v", raw, err)
 	}
 	return types.VersionedPackageRef{
-		PackageRef: ref.PackageRef,
-		Version:    version,
+		PackageRef: request.PackageRef,
+		Eco:        request.Eco,
+		Version:    request.Version,
 	}
 }
 
@@ -243,16 +219,21 @@ func lockedResultPackage(
 ) types.InstalledPackage {
 	t.Helper()
 	id := mustParsePackageID(t, rawID)
+	if id.Eco == types.EcoUnspecified {
+		id.Eco = types.EcoFabric
+	}
 	return types.InstalledPackage{
-		Id: types.FullPackageRef{
-			PackageRef: id.PackageRef,
-			Version:    id.Version,
-			Scope:      types.SourceModrinth,
+		ResolvedPackage: types.ResolvedPackage{
+			Id: types.VersionedPackageRef{
+				PackageRef: types.PackageRef{Name: id.Name, Source: types.SourceModrinth},
+				Eco:        id.Eco,
+				Version:    id.Version,
+			},
+			FileUrl:       "https://example.invalid/" + filename,
+			Filename:      filename,
+			Hash:          "deadbeef",
+			HashAlgorithm: "sha512",
 		},
-		FileUrl:       "https://example.invalid/" + filename,
-		Filename:      filename,
-		Hash:          "deadbeef",
-		HashAlgorithm: "sha512",
-		Path:          filepath.Join(workDir, "mods", filename),
+		Path: filepath.Join(workDir, "mods", filename),
 	}
 }

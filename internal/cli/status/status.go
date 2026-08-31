@@ -337,7 +337,7 @@ func statusPackageSections(
 		if _, isComponent := componentKeys[pkg.Id.StringBase()]; isComponent {
 			continue
 		}
-		if types.IsCorePackage(pkg.Id.PackageRef) {
+		if types.IsCorePackage(types.PackageRequest{PackageRef: pkg.Id.PackageRef, Eco: pkg.Id.Eco, Version: pkg.Id.Version}) {
 			continue
 		}
 

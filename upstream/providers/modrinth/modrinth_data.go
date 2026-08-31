@@ -200,7 +200,7 @@ type versionResponse struct {
 
 func (v versionResponse) ToPackageRemote() types.ResolvedPackage {
 	remote := types.ResolvedPackage{
-		Id:       types.FullPackageRef{Scope: types.SourceModrinth},
+		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceModrinth}},
 		FileUrl:  v.Files[0].Url,
 		Filename: v.Files[0].Filename,
 	}

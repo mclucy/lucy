@@ -97,11 +97,11 @@ func TestReadWriteManifestPreservesCompatiblePlatforms(t *testing.T) {
 	manifest.Environment.ModdingPlatformVersion = "21.1.0"
 	manifest.Packages = []ManifestPackage{
 		{
-			ID:      "neoforge/connector",
+			ID:      "connector",
 			Version: "stable",
 			Source:  "modrinth",
 			Role:    RoleRequired,
-			Side:    SideServer,
+			Side:    SideBoth,
 		},
 	}
 

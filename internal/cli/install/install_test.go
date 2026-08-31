@@ -11,21 +11,20 @@ import (
 
 func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 	manifest := &state.Manifest{
-		FormatVersion: state.ManifestDefaults().FormatVersion,
 		Environment: state.ManifestEnvironment{
 			ModdingPlatform: string(types.EcoFabric),
 		},
 		Packages: []state.ManifestPackage{
 			{
-				ID: "fabric/root", Version: "any", Source: "auto",
+				ID: "root", Version: "any", Source: "auto",
 				Role: state.RoleRequired, Side: state.SideBoth,
 			},
 			{
-				ID: "fabric/dependency", Version: "1.0.0", Source: "modrinth",
+				ID: "dependency", Version: "1.0.0", Source: "modrinth",
 				Role: state.RoleTransitive, Side: state.SideBoth,
 			},
 			{
-				ID: "fabric/manual", Version: "1.0.0", Source: "github",
+				ID: "manual", Version: "1.0.0", Source: "github",
 				Role: state.RoleIgnored, Side: state.SideBoth,
 			},
 		},
@@ -33,9 +32,9 @@ func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 	lock := &state.Lock{
 		ManifestFingerprint: cli.ManifestFingerprint(manifest, ""),
 		Packages: []state.LockedPackage{
-			{ID: "fabric/root", Version: "1.2.3", InstallPath: "mods/root.jar"},
+			{ID: "root", Version: "1.2.3", InstallPath: "mods/root.jar"},
 			{
-				ID: "fabric/dependency", Version: "4.5.6",
+				ID: "dependency", Version: "4.5.6",
 				InstallPath: "mods/dependency.jar",
 			},
 		},
@@ -50,7 +49,7 @@ func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 	}
 
 	got := packageIDsToStrings(plan.Requested)
-	want := []string{"fabric/dependency@4.5.6", "fabric/root@1.2.3"}
+	want := []string{"auto:dependency@4.5.6", "auto:root@1.2.3"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf(
 			"unexpected exact sync request set: got %#v want %#v",
@@ -65,21 +64,20 @@ func TestBuildInstallSyncPlanUsesExactLockClosure(t *testing.T) {
 
 func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing.T) {
 	manifest := &state.Manifest{
-		FormatVersion: state.ManifestDefaults().FormatVersion,
 		Environment: state.ManifestEnvironment{
 			ModdingPlatform: string(types.EcoFabric),
 		},
 		Packages: []state.ManifestPackage{
 			{
-				ID: "fabric/root", Version: "any", Source: "auto",
+				ID: "root", Version: "any", Source: "auto",
 				Role: state.RoleRequired, Side: state.SideBoth,
 			},
 			{
-				ID: "fabric/dependency", Version: "1.0.0", Source: "modrinth",
+				ID: "dependency", Version: "1.0.0", Source: "modrinth",
 				Role: state.RoleTransitive, Side: state.SideBoth,
 			},
 			{
-				ID: "fabric/manual", Version: "1.0.0", Source: "github",
+				ID: "manual", Version: "1.0.0", Source: "github",
 				Role: state.RoleIgnored, Side: state.SideBoth,
 			},
 		},
@@ -87,9 +85,9 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 	lock := &state.Lock{
 		ManifestFingerprint: "sha256:stale",
 		Packages: []state.LockedPackage{
-			{ID: "fabric/root", Version: "9.9.9", InstallPath: "mods/root.jar"},
+			{ID: "root", Version: "9.9.9", InstallPath: "mods/root.jar"},
 			{
-				ID: "fabric/dependency", Version: "8.8.8",
+				ID: "dependency", Version: "8.8.8",
 				InstallPath: "mods/dependency.jar",
 			},
 		},
@@ -105,7 +103,7 @@ func TestBuildInstallSyncPlanFallsBackToRequiredIntentWhenLockIsStale(t *testing
 	}
 
 	got := packageIDsToStrings(plan.Requested)
-	want := []string{"fabric/root@any"}
+	want := []string{"auto:root@any"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf(
 			"unexpected manifest fallback request set: got %#v want %#v",

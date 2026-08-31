@@ -76,6 +76,7 @@ func init() {
 		false,
 		"Skip optional upstream dependencies",
 	)
+	cli.AddPlatformFlag(runTaskCmd)
 	rootCmd.AddCommand(runDaemonCmd, runServerCmd, runTaskCmd)
 }
 

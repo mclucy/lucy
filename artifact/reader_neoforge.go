@@ -62,10 +62,7 @@ func (r *neoforgeReader) Read(
 		}
 
 		info := Info{
-			Ref: types.PackageRef{
-				Eco:  types.EcoNeoforge,
-				Name: input.ToProjectName(mod.ModID),
-			},
+			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(mod.ModID), Source: types.SourceUnknown}, Eco: types.EcoNeoforge},
 			Version:  version,
 			FilePath: filePath,
 			Metadata: types.Metadata{
@@ -104,10 +101,7 @@ func (r *neoforgeReader) Read(
 
 			info.Dependencies = append(
 				info.Dependencies, Dependency{
-					Ref: types.PackageRef{
-						Eco:  types.EcoNeoforge,
-						Name: input.ToProjectName(dep.ModID),
-					},
+					Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(dep.ModID), Source: types.SourceUnknown}, Eco: types.EcoNeoforge},
 					Constraint: parseNeoforgeMavenVersionRange(dep.VersionRange),
 					Mandatory:  dep.Type == "required" || dep.Mandatory,
 					Type:       dependencyTypeForEmbedded(embeddedModIds[dep.ModID]),
@@ -265,10 +259,7 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependenc
 	for _, entry := range meta.Jars {
 		deps = append(
 			deps, Dependency{
-				Ref: types.PackageRef{
-					Eco:  types.EcoUnspecified,
-					Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact),
-				},
+				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact), Source: types.SourceUnknown}, Eco: types.EcoUnspecified},
 				Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),
 				Mandatory:  true,
 				Type:       types.Embedded,

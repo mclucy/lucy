@@ -32,6 +32,7 @@ var installCmd = &cobra.Command{
 // NewCommand wires and returns the `lucy install` command.
 func NewCommand() *cobra.Command {
 	cli.AddNoStyleFlag(installCmd)
+	cli.AddPlatformFlag(installCmd)
 	return installCmd
 }
 
@@ -74,6 +75,16 @@ func actionInstallAt(cmd *cobra.Command, target cli.CommandTarget) error {
 	if err != nil {
 		return err
 	}
+	platformArg, _ := cmd.Flags().GetString(cli.FlagPlatform)
+	if platformArg != "" {
+		platform := types.Ecosystem(platformArg)
+		if !platform.Valid() {
+			return fmt.Errorf("--platform must name a supported ecosystem")
+		}
+		for i := range plan.Requested {
+			plan.Requested[i].Eco = platform
+		}
+	}
 	if len(plan.Requested) == 0 {
 		return nil
 	}
@@ -82,6 +93,7 @@ func actionInstallAt(cmd *cobra.Command, target cli.CommandTarget) error {
 	options.Workspace = func() workspace.Workspace {
 		return workspace.NewAt(workDir)
 	}
+	options.UseGitHubMirror, _ = cmd.Flags().GetBool(cli.FlagUseGitHubMirror)
 
 	result, err := install.InstallMany(cmd.Context(), plan.Requested, options)
 	if err != nil {
@@ -154,21 +166,13 @@ func exactSyncPackageIDs(
 
 	requested := make([]types.PackageRequest, 0, len(lock.Packages))
 	for _, pkg := range lock.Packages {
-		ref, version, err := input.Parse(pkg.ID + "@" + pkg.Version)
+		request, err := input.Parse(pkg.ID + "@" + pkg.Version)
 		if err != nil {
-			return nil, false, fmt.Errorf(
-				"parse locked package %s: %w",
-				pkg.ID,
-				err,
-			)
+			return nil, false, fmt.Errorf("parse locked package %s: %w", pkg.ID, err)
 		}
-		requested = append(
-			requested, types.PackageRequest{
-				PackageRef: ref.PackageRef,
-				Version:    version,
-				Scope:      types.ParseSource(pkg.Source),
-			},
-		)
+		request.Source = types.ParseSource(pkg.Source)
+		request.Eco = types.Ecosystem(pkg.Platform)
+		requested = append(requested, request)
 	}
 
 	sort.Slice(
@@ -194,17 +198,12 @@ func manifestRequiredPackageIDs(manifest *state.Manifest) (
 		if pkg.Role != state.RoleRequired {
 			continue
 		}
-		ref, version, err := input.Parse(pkg.ID + "@" + pkg.Version)
+		request, err := input.Parse(pkg.ID + "@" + pkg.Version)
 		if err != nil {
 			return nil, fmt.Errorf("parse manifest package %s: %w", pkg.ID, err)
 		}
-		requested = append(
-			requested, types.PackageRequest{
-				PackageRef: ref.PackageRef,
-				Version:    version,
-				Scope:      types.ParseSource(pkg.Source),
-			},
-		)
+		request.Source = types.ParseSource(pkg.Source)
+		requested = append(requested, request)
 	}
 
 	sort.Slice(

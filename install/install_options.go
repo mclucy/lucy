@@ -9,11 +9,12 @@ import (
 )
 
 type InstallOptions struct {
-	WithOptional bool
-	Force        bool
-	Journal      Journal
-	Workspace    func() workspace.Workspace
-	Cache        func(
+	WithOptional    bool
+	Force           bool
+	UseGitHubMirror bool
+	Journal         Journal
+	Workspace       func() workspace.Workspace
+	Cache           func(
 		url, destDir string,
 		opts cache.DownloadOptions,
 	) (*cache.DownloadResult, error)
@@ -47,6 +48,18 @@ func (o InstallOptions) withDefaults() InstallOptions {
 		}
 	}
 	return o
+}
+
+func localContext(ws workspace.Workspace) upstream.LocalContext {
+	local := upstream.LocalContext{}
+	if server := ws.Server(); server != nil {
+		local.ModLoader = server.ModLoader()
+		local.GameVersion = server.GameVersion()
+	}
+	if mcdr := ws.Environments.Mcdr; mcdr != nil {
+		local.MCDRVersion = mcdr.Version
+	}
+	return local
 }
 
 func effectiveRuntimeEcosystems(

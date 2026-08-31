@@ -44,6 +44,12 @@ func RunPackageTask(
 
 func packageTaskArgs(instance string, task PackageTaskRequest) ([]string, error) {
 	args := []string{"run-task", instance, task.Name}
+	if task.Platform != "" {
+		args = append(args, "--platform", task.Platform)
+	}
+	if task.UseGitHubMirror {
+		args = append(args, "--use-github-mirror")
+	}
 	switch task.Name {
 	case TaskAdd:
 		if task.AddOptions.Force {
