@@ -14,12 +14,23 @@ type SourceIdentifier interface {
 	Id() types.SourceId
 }
 
+// LocalContext is an immutable snapshot of local runtime facts that can affect
+// upstream resolution. Its zero value describes an unknown local runtime.
+//
+// The application layer derives LocalContext from workspace discovery. Upstream
+// must not depend on that discovery mechanism or its filesystem representation.
+type LocalContext struct {
+	ModLoader   types.Ecosystem
+	GameVersion types.BareVersion
+	MCDRVersion types.BareVersion
+}
+
 type Fetcher interface {
-	Fetch(id types.VersionedPackageRef) (types.ResolvedPackage, error)
+	Fetch(local LocalContext, id types.VersionedPackageRef) (types.ResolvedPackage, error)
 }
 
 type DependencyResolver interface {
-	Dependencies(id types.VersionedPackageRef) (
+	Dependencies(local LocalContext, id types.VersionedPackageRef) (
 		*types.PackageDependencies,
 		error,
 	)
@@ -72,7 +83,7 @@ type Hashable interface {
 }
 
 type VersionSelectorResolver interface {
-	ResolveVersionSelector(ref types.VersionedPackageRef) (
+	ResolveVersionSelector(local LocalContext, ref types.VersionedPackageRef) (
 		resolved types.VersionedPackageRef,
 		err error,
 	)

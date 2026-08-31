@@ -49,6 +49,7 @@ func installCorePackage(
 
 	ws := options.Workspace()
 	serverDir := ws.Root
+	local := localContext(ws)
 	bootstrapper, err := bootstrap.ForEcosystem(request.Binding.Ecosystem)
 	if err != nil {
 		return installError(CategoryResolution, err, context)
@@ -76,7 +77,7 @@ func installCorePackage(
 		)
 	}
 
-	resolved, err := installer.ResolveVersionSelector(id)
+	resolved, err := installer.ResolveVersionSelector(local, id)
 	if err != nil {
 		return installError(
 			CategoryResolution,
@@ -85,7 +86,7 @@ func installCorePackage(
 		)
 	}
 
-	fetched, err := installer.Fetch(resolved)
+	fetched, err := installer.Fetch(local, resolved)
 	if err != nil {
 		return installError(
 			CategoryDownload,

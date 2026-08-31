@@ -10,6 +10,7 @@ import (
 )
 
 type providerCandidateResolver struct {
+	local            upstream.LocalContext
 	providers        []upstream.PackageSource
 	rootProviders    map[string][]upstream.PackageSource
 	rootProviderSet  map[string]struct{}
@@ -110,7 +111,7 @@ func (resolver providerCandidateResolver) fetchMany(
 				routing.ProviderError{Err: err},
 			)
 		}
-		fetches, errors := routing.FetchMany(group.providers, group.id)
+		fetches, errors := routing.FetchMany(resolver.local, group.providers, group.id)
 		results = append(results, fetches...)
 		providerErrors = append(providerErrors, errors...)
 	}
@@ -163,6 +164,7 @@ func (resolver providerCandidateResolver) ResolveDependencies(
 
 	providers := providersForSource(resolver.providers, pkg.Id.Source)
 	dependencySets, providerErrors := routing.DependenciesMany(
+		resolver.local,
 		providers,
 		versionedResolvedID(pkg),
 	)

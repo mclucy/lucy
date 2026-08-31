@@ -8,7 +8,6 @@ import (
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
-	"github.com/mclucy/lucy/workspace"
 )
 
 type provider struct{}
@@ -52,10 +51,10 @@ func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return res.ToSearchResults(s.Id()), nil
 }
 
-func (s provider) Fetch(id types.VersionedPackageRef) (
-	types.ResolvedPackage,
-	error,
-) {
+func (s provider) Fetch(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.ResolvedPackage, error) {
 	rel, err := getRelease(id.Name.Pep8String(), id.Version)
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -93,10 +92,11 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 }
 
 func (s provider) Dependencies(
+	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (*types.PackageDependencies, error) {
 	if id.Version == "" || id.Version.CanInfer() {
-		resolved, err := s.ResolveVersionSelector(id)
+		resolved, err := s.ResolveVersionSelector(local, id)
 		if err != nil {
 			return nil, err
 		}
@@ -139,17 +139,16 @@ func mcdrDependenciesFromMeta(meta pluginMeta) types.PackageDependencies {
 	return deps
 }
 
-func (s provider) ResolveVersionSelector(id types.VersionedPackageRef) (
-	parsed types.VersionedPackageRef,
-	err error,
-) {
+func (s provider) ResolveVersionSelector(
+	local upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (parsed types.VersionedPackageRef, err error) {
 	var rel *release
 	switch id.Version {
 	case types.VersionStable:
-		ws := workspace.New()
 		rel, err = getLatestCompatibleRelease(
 			id.Name.Pep8String(),
-			ws.Environments.Mcdr.Version,
+			local.MCDRVersion,
 		)
 	case types.VersionBeta, types.VersionAny:
 		rel, err = getLatestRelease(id.Name.Pep8String())
