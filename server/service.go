@@ -117,7 +117,12 @@ func (systemdManager) InstallInstance(inst Instance, binary string) error {
 }
 
 func (systemdManager) RemoveInstance(inst Instance) error {
-	_ = (systemdManager{}).DisableInstance(inst)
+	if err := (systemdManager{}).StopInstance(inst); err != nil {
+		return err
+	}
+	if err := (systemdManager{}).DisableInstance(inst); err != nil {
+		return err
+	}
 	return runCommand("systemctl", "daemon-reload")
 }
 
@@ -211,7 +216,6 @@ func (launchdManager) InstallInstance(inst Instance, binary string) error {
 	if err := writeFile(path, []byte(renderLaunchdInstance(inst, binary)), 0o644); err != nil {
 		return err
 	}
-	_ = runCommand("launchctl", "bootstrap", "system", path)
 	return nil
 }
 
@@ -241,6 +245,10 @@ func (launchdManager) DisableInstance(inst Instance) error {
 }
 
 func (launchdManager) StartInstance(inst Instance) error {
+	if !launchdStatus(inst.LaunchdLabel).Installed {
+		path := filepath.Join(launchdDir(), inst.LaunchdLabel+".plist")
+		return runCommand("launchctl", "bootstrap", "system", path)
+	}
 	return runCommand("launchctl", "kickstart", "-k", "system/"+inst.LaunchdLabel)
 }
 
