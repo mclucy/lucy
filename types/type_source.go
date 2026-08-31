@@ -28,6 +28,7 @@ const (
 	SourceForge
 	SourceNeoForge
 	SourceFabric
+	SourceBMCLAPI
 	SourceUnknown // sentinel for parse/validation failure
 )
 
@@ -55,6 +56,8 @@ func (s SourceId) String() string {
 		return "neoforge"
 	case SourceFabric:
 		return "fabric"
+	case SourceBMCLAPI:
+		return "bmclapi"
 	case SourceUnknown:
 		return "unknown"
 	default:
@@ -86,6 +89,8 @@ func (s SourceId) Title() string {
 		return "NeoForge"
 	case SourceFabric:
 		return "Fabric"
+	case SourceBMCLAPI:
+		return "BMCLAPI"
 	case SourceUnknown:
 		return "Unknown"
 	default:
@@ -106,6 +111,7 @@ var sourceByString = map[string]SourceId{
 	"forge":      SourceForge,
 	"neoforge":   SourceNeoForge,
 	"fabric":     SourceFabric,
+	"bmclapi":    SourceBMCLAPI,
 	"unknown":    SourceUnknown,
 }
 
