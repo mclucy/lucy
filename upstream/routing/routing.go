@@ -19,6 +19,7 @@ import (
 
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/providers/bmclapi"
 	"github.com/mclucy/lucy/upstream/providers/curseforge"
 	"github.com/mclucy/lucy/upstream/providers/fabric"
 	"github.com/mclucy/lucy/upstream/providers/forge"
@@ -62,6 +63,7 @@ func NewRegistry() *Registry {
 	r.register(types.SourceMojang, mojang.Provider)
 	r.register(types.SourceForge, forge.Provider)
 	r.register(types.SourceNeoForge, neoforge.Provider)
+	r.register(types.SourceBMCLAPI, bmclapi.Provider)
 	r.register(types.SourceFabric, fabric.Provider)
 	if curseforge.Enabled() {
 		r.register(types.SourceCurseForge, curseforge.Provider)

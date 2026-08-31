@@ -27,10 +27,10 @@ type requestPolicy struct {
 }
 
 var coreBootstrapBindings = map[types.CorePackage]coreBootstrapBinding{
-	types.CoreMinecraft:   {Core: types.CoreMinecraft, Ecosystem: types.EcoMinecraft, InstallerSource: types.SourceMojang, AcceptedSources: []types.SourceId{types.SourceAuto, types.SourceMojang}, Tier: 0},
+	types.CoreMinecraft:   {Core: types.CoreMinecraft, Ecosystem: types.EcoMinecraft, InstallerSource: types.SourceMojang, AcceptedSources: []types.SourceId{types.SourceAuto, types.SourceMojang, types.SourceBMCLAPI}, Tier: 0},
 	types.CoreFabric:      {Core: types.CoreFabric, Ecosystem: types.EcoFabric, InstallerSource: types.SourceFabric, AcceptedSources: []types.SourceId{types.SourceAuto, types.SourceFabric}, Tier: 1},
-	types.CoreForge:       {Core: types.CoreForge, Ecosystem: types.EcoForge, InstallerSource: types.SourceForge, AcceptedSources: []types.SourceId{types.SourceAuto, types.SourceForge}, Tier: 1},
-	types.CoreNeoForge:    {Core: types.CoreNeoForge, Ecosystem: types.EcoNeoforge, InstallerSource: types.SourceNeoForge, AcceptedSources: []types.SourceId{types.SourceAuto, types.SourceNeoForge}, Tier: 1},
+	types.CoreForge:       {Core: types.CoreForge, Ecosystem: types.EcoForge, InstallerSource: types.SourceForge, AcceptedSources: []types.SourceId{types.SourceAuto, types.SourceForge, types.SourceBMCLAPI}, Tier: 1},
+	types.CoreNeoForge:    {Core: types.CoreNeoForge, Ecosystem: types.EcoNeoforge, InstallerSource: types.SourceNeoForge, AcceptedSources: []types.SourceId{types.SourceAuto, types.SourceNeoForge, types.SourceBMCLAPI}, Tier: 1},
 	types.CoreMCDReforged: {Core: types.CoreMCDReforged, Ecosystem: types.EcoMcdr, InstallerSource: types.SourceMCDR, AcceptedSources: []types.SourceId{types.SourceAuto, types.SourceMCDR}, Tier: 2},
 }
 
@@ -63,6 +63,9 @@ func prepareCoreRequests(requests []preparedCoreRequest) error {
 		}
 		if !slices.Contains(binding.AcceptedSources, requests[i].Request.Source) {
 			return fmt.Errorf("core package %s does not accept source %s", requests[i].Match.Core, requests[i].Request.Source)
+		}
+		if requests[i].Request.Source == types.SourceBMCLAPI {
+			binding.InstallerSource = types.SourceBMCLAPI
 		}
 		requests[i].Binding = binding
 		if binding.Tier == 1 {
