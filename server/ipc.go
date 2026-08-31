@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -25,6 +26,10 @@ const (
 	OpRunnerStop     = "runner.stop"
 	OpPackageTask    = "package.task"
 )
+
+// ErrIPCUnavailable marks a request that failed before an IPC connection was
+// established. Callers may safely retry only this class of transport failure.
+var ErrIPCUnavailable = errors.New("IPC endpoint unavailable")
 
 type Request struct {
 	Op       string             `json:"op"`
@@ -94,21 +99,35 @@ func callUnix(ctx context.Context, socketPath string, req Request, out any) erro
 	dialer := net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "unix", socketPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrIPCUnavailable, err)
 	}
 	defer conn.Close()
 
-	deadline := time.Now().Add(30 * time.Second)
+	var deadline time.Time
 	if value, ok := ctx.Deadline(); ok {
 		deadline = value
+	} else if req.Op != OpPackageTask {
+		deadline = time.Now().Add(30 * time.Second)
 	}
-	_ = conn.SetDeadline(deadline)
+	if !deadline.IsZero() {
+		_ = conn.SetDeadline(deadline)
+	}
+	stopCancel := context.AfterFunc(ctx, func() {
+		_ = conn.SetDeadline(time.Now())
+	})
+	defer stopCancel()
 
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		return fmt.Errorf("send request: %w", err)
 	}
 	var resp Response
 	if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&resp); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		return fmt.Errorf("read response: %w", err)
 	}
 	if !resp.OK {

@@ -56,13 +56,10 @@ func (r *Runner) run(ctx context.Context) error {
 	if err := os.MkdirAll(RunnerSocketDir(), 0o755); err != nil {
 		return fmt.Errorf("create runner socket directory: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(r.cfg.Logs.ConsolePath), 0o755); err != nil {
-		return fmt.Errorf("create console log directory: %w", err)
-	}
 
-	logFile, err := os.OpenFile(r.cfg.Logs.ConsolePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	logFile, err := r.openConsoleLog()
 	if err != nil {
-		return fmt.Errorf("open console log: %w", err)
+		return err
 	}
 	r.logFile = logFile
 	defer logFile.Close()
@@ -117,6 +114,58 @@ func (r *Runner) run(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// openConsoleLog confines the privileged log open to the registered instance
+// root. os.Root keeps path resolution anchored to that directory even when its
+// writable contents contain symlinks or are changed concurrently.
+func (r *Runner) openConsoleLog() (*os.File, error) {
+	instanceRoot, err := filepath.Abs(r.inst.Root)
+	if err != nil {
+		return nil, fmt.Errorf("resolve server root: %w", err)
+	}
+	logPath := r.cfg.Logs.ConsolePath
+	if !filepath.IsAbs(logPath) {
+		return nil, fmt.Errorf("console log path must be absolute and inside server root %s", instanceRoot)
+	}
+	logPath, err = filepath.Abs(logPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve console log path: %w", err)
+	}
+	rel, err := filepath.Rel(instanceRoot, logPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve console log within server root: %w", err)
+	}
+	parentPrefix := ".." + string(os.PathSeparator)
+	if rel == "." || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, parentPrefix) {
+		return nil, fmt.Errorf("console log must be inside server root %s", instanceRoot)
+	}
+
+	root, err := os.OpenRoot(instanceRoot)
+	if err != nil {
+		return nil, fmt.Errorf("open server root: %w", err)
+	}
+	defer root.Close()
+	if parent := filepath.Dir(rel); parent != "." {
+		if err := root.MkdirAll(parent, 0o755); err != nil {
+			return nil, fmt.Errorf("create console log directory: %w", err)
+		}
+	}
+	logFile, err := root.OpenFile(rel, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open console log: %w", err)
+	}
+	info, err := logFile.Stat()
+	if err != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("stat console log: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("console log is not a regular file: %s", logPath)
+	}
+	r.cfg.Logs.ConsolePath = logPath
+	return logFile, nil
 }
 
 func (r *Runner) register() {
