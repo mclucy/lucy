@@ -95,6 +95,7 @@ func SearchMany(
 // FetchMany executes fetch on all providers in parallel and returns all
 // successful results.
 func FetchMany(
+	local upstream.LocalContext,
 	providers []upstream.PackageSource,
 	id types.VersionedPackageRef,
 ) ([]types.ResolvedPackage, []ProviderError) {
@@ -116,7 +117,7 @@ func FetchMany(
 		wg.Add(1)
 		go func(index int, provider upstream.PackageSource) {
 			defer wg.Done()
-			resolvedID, err := provider.ResolveVersionSelector(id)
+			resolvedID, err := provider.ResolveVersionSelector(local, id)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,
@@ -128,7 +129,7 @@ func FetchMany(
 				return
 			}
 
-			remoteData, err := provider.Fetch(resolvedID)
+			remoteData, err := provider.Fetch(local, resolvedID)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,
@@ -252,6 +253,7 @@ func ResolveArtifactByHash(artifact upstream.Hashable) ArtifactLookup {
 // returns all successful results. An error is returned only when every provider
 // fails; partial failures are collected in the returned []ProviderError slice.
 func DependenciesMany(
+	local upstream.LocalContext,
 	providers []upstream.PackageSource,
 	id types.VersionedPackageRef,
 ) ([]types.PackageDependencies, []ProviderError) {
@@ -273,7 +275,7 @@ func DependenciesMany(
 		wg.Add(1)
 		go func(index int, provider upstream.PackageSource) {
 			defer wg.Done()
-			deps, err := provider.Dependencies(id)
+			deps, err := provider.Dependencies(local, id)
 			if err != nil {
 				slots[index] = slot{
 					failed: true,

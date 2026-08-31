@@ -99,10 +99,10 @@ func (s provider) Id() types.SourceId {
 
 var Provider provider
 
-func (s provider) Fetch(id types.VersionedPackageRef) (
-	types.ResolvedPackage,
-	error,
-) {
+func (s provider) Fetch(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.ResolvedPackage, error) {
 	version, err := getVersion(id)
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -132,6 +132,7 @@ var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api"
 var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported")
 
 func (s provider) Dependencies(
+	_ upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (*types.PackageDependencies, error) {
 	version, err := getVersion(id)
@@ -146,21 +147,17 @@ func (s provider) Dependencies(
 	), nil
 }
 
-func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
-	parsed types.VersionedPackageRef,
-	err error,
-) {
+func (s provider) ResolveVersionSelector(
+	_ upstream.LocalContext,
+	p types.VersionedPackageRef,
+) (parsed types.VersionedPackageRef, err error) {
 	if p.Eco.IsSelector() {
-		// Platform inference removed to avoid circular imports.
-		// Caller should provide explicit platform.
 		p.Eco = types.EcoUnspecified
 	}
 	parsed.Eco = p.Eco
-
 	parsed.Name = p.Name
 
 	var v *versionResponse
-
 	switch p.Version {
 	case types.VersionStable:
 		v, err = latestCompatibleVersion(p.Name, p.Eco)
@@ -173,6 +170,5 @@ func (s provider) ResolveVersionSelector(p types.VersionedPackageRef) (
 		return p, err
 	}
 	parsed.Version = types.BareVersion(v.VersionNumber)
-
 	return parsed, nil
 }

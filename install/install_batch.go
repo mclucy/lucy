@@ -203,6 +203,7 @@ func Plan(
 			ambient,
 			options,
 			providerCandidateResolver{
+				local:            localContext(ws),
 				providers:        providers,
 				rootProviders:    rootProviders,
 				rootProviderSet:  keyedRoots(resolvePlan.Roots),

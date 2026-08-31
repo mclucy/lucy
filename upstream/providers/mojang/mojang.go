@@ -10,6 +10,7 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 const VersionManifestURL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
@@ -80,10 +81,10 @@ func ResolveVersionEntry(
 	)
 }
 
-func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
-	types.VersionedPackageRef,
-	error,
-) {
+func (p provider) ResolveVersionSelector(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.VersionedPackageRef, error) {
 	manifest, err := FetchVersionManifest()
 	if err != nil {
 		return id, err
@@ -101,10 +102,10 @@ func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
 	}, nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (
-	types.ResolvedPackage,
-	error,
-) {
+func (p provider) Fetch(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.ResolvedPackage, error) {
 	manifest, err := FetchVersionManifest()
 	if err != nil {
 		return types.ResolvedPackage{}, err

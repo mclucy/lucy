@@ -27,10 +27,10 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return res.ToSearchResults(p.Id()), nil
 }
 
-func (p provider) Fetch(id types.VersionedPackageRef) (
-	types.ResolvedPackage,
-	error,
-) {
+func (p provider) Fetch(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (types.ResolvedPackage, error) {
 	version, err := getVersion(id)
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -66,6 +66,7 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 }
 
 func (p provider) Dependencies(
+	_ upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (*types.PackageDependencies, error) {
 	version, err := getVersion(id)
@@ -80,10 +81,10 @@ func (p provider) Dependencies(
 	), nil
 }
 
-func (p provider) ResolveVersionSelector(id types.VersionedPackageRef) (
-	parsed types.VersionedPackageRef,
-	err error,
-) {
+func (p provider) ResolveVersionSelector(
+	_ upstream.LocalContext,
+	id types.VersionedPackageRef,
+) (parsed types.VersionedPackageRef, err error) {
 	if id.Eco.IsSelector() {
 		id.Eco = types.EcoUnspecified
 	}
