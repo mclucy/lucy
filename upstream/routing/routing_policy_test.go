@@ -59,7 +59,7 @@ func TestProviderSourcesFromEcosystems_ModLoaders(t *testing.T) {
 				resolution.sources,
 				types.SourceCurseForge,
 			)
-			if hasCurseForge != DefaultRegistry().has(types.SourceCurseForge) {
+			if hasCurseForge != curseforgeAvailable() {
 				t.Errorf(
 					"CurseForge availability mismatch, got sources %v",
 					resolution.sources,
@@ -116,7 +116,7 @@ func TestProviderSourcesFromEcosystems_MixedRuntime(t *testing.T) {
 			t.Errorf("expected source %s, got %v", source, resolution.sources)
 		}
 	}
-	if DefaultRegistry().has(types.SourceCurseForge) &&
+	if curseforgeAvailable() &&
 		!slices.Contains(resolution.sources, types.SourceCurseForge) {
 		t.Errorf("expected CurseForge when available, got %v", resolution.sources)
 	}
