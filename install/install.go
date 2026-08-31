@@ -63,7 +63,7 @@ func installCorePackage(
 		)
 	}
 
-	installer, ok := routing.DefaultRegistry().EcosystemInstaller(
+	installer, ok := routing.EcosystemInstallerForSource(
 		request.Binding.InstallerSource,
 	)
 	if !ok {

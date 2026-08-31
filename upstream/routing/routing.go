@@ -23,7 +23,6 @@ import (
 	"github.com/mclucy/lucy/upstream/providers/curseforge"
 	"github.com/mclucy/lucy/upstream/providers/fabric"
 	"github.com/mclucy/lucy/upstream/providers/forge"
-	"github.com/mclucy/lucy/upstream/providers/githubsource"
 	"github.com/mclucy/lucy/upstream/providers/hangar"
 	"github.com/mclucy/lucy/upstream/providers/mcdr"
 	"github.com/mclucy/lucy/upstream/providers/modrinth"
@@ -38,113 +37,60 @@ var (
 	ErrInvalidEcosystem  = errors.New("cannot find sources for ecosystem")
 )
 
-type Registry struct {
-	entries []entry
+type providerCatalog struct {
+	packageSources     map[types.SourceId]upstream.PackageSource
+	searchSources      map[types.SourceId]upstream.SearchSource
+	infoSources        map[types.SourceId]upstream.InfoSource
+	artifactMappers    map[types.SourceId]upstream.ArtifactMapSource
+	ecosystemProviders map[types.SourceId]upstream.EcosystemProvider
 }
 
-type entry struct {
-	source types.SourceId
-	impl   any
-}
+var providers = sync.OnceValue(newProviderCatalog)
 
-var defaultRegistry = sync.OnceValue(NewRegistry)
-
-func DefaultRegistry() *Registry {
-	return defaultRegistry()
-}
-
-func NewRegistry() *Registry {
-	r := &Registry{}
-	r.register(types.SourceModrinth, modrinth.Provider)
-	r.register(types.SourceGitHub, githubsource.Provider)
-	r.register(types.SourceMCDR, mcdr.Provider)
-	r.register(types.SourceHangar, hangar.Provider)
-	r.register(types.SourceSpiget, spiget.Provider)
-	r.register(types.SourceMojang, mojang.Provider)
-	r.register(types.SourceForge, forge.Provider)
-	r.register(types.SourceNeoForge, neoforge.Provider)
-	r.register(types.SourceBMCLAPI, bmclapi.Provider)
-	r.register(types.SourceFabric, fabric.Provider)
-	if curseforge.Enabled() {
-		r.register(types.SourceCurseForge, curseforge.Provider)
+func newProviderCatalog() providerCatalog {
+	catalog := providerCatalog{
+		packageSources: map[types.SourceId]upstream.PackageSource{
+			types.SourceModrinth: modrinth.Provider,
+			types.SourceMCDR:     mcdr.Provider,
+			types.SourceHangar:   hangar.Provider,
+			types.SourceSpiget:   spiget.Provider,
+		},
+		searchSources: map[types.SourceId]upstream.SearchSource{
+			types.SourceModrinth: modrinth.Provider,
+			types.SourceMCDR:     mcdr.Provider,
+			types.SourceHangar:   hangar.Provider,
+			types.SourceSpiget:   spiget.Provider,
+		},
+		infoSources: map[types.SourceId]upstream.InfoSource{
+			types.SourceModrinth: modrinth.Provider,
+			types.SourceMCDR:     mcdr.Provider,
+			types.SourceHangar:   hangar.Provider,
+			types.SourceSpiget:   spiget.Provider,
+		},
+		artifactMappers: map[types.SourceId]upstream.ArtifactMapSource{
+			types.SourceModrinth: modrinth.Provider,
+		},
+		ecosystemProviders: map[types.SourceId]upstream.EcosystemProvider{
+			types.SourceBMCLAPI:  bmclapi.Provider,
+			types.SourceFabric:   fabric.Provider,
+			types.SourceForge:    forge.Provider,
+			types.SourceMojang:   mojang.Provider,
+			types.SourceNeoForge: neoforge.Provider,
+		},
 	}
-	return r
-}
-
-func (r *Registry) register(source types.SourceId, impl any) {
-	if impl == nil {
-		return
+	if !curseforge.Enabled() {
+		return catalog
 	}
-	r.entries = append(r.entries, entry{source: source, impl: impl})
+
+	catalog.packageSources[types.SourceCurseForge] = curseforge.Provider
+	catalog.searchSources[types.SourceCurseForge] = curseforge.Provider
+	catalog.infoSources[types.SourceCurseForge] = curseforge.Provider
+	catalog.artifactMappers[types.SourceCurseForge] = curseforge.Provider
+	return catalog
 }
 
-func (r *Registry) has(source types.SourceId) bool {
-	_, ok := r.entry(source)
-	return ok
-}
-
-func (r *Registry) entry(source types.SourceId) (entry, bool) {
-	for _, e := range r.entries {
-		if e.source == source {
-			return e, true
-		}
-	}
-	return entry{}, false
-}
-
-func (r *Registry) PackageSource(
-	source types.SourceId,
-) (upstream.PackageSource, bool) {
-	e, ok := r.entry(source)
-	if !ok {
-		return nil, false
-	}
-	provider, ok := e.impl.(upstream.PackageSource)
-	return provider, ok
-}
-
-func (r *Registry) Searcher(
-	source types.SourceId,
-) (upstream.SearchSource, bool) {
-	e, ok := r.entry(source)
-	if !ok {
-		return nil, false
-	}
-	provider, ok := e.impl.(upstream.SearchSource)
-	return provider, ok
-}
-
-func (r *Registry) Informer(
-	source types.SourceId,
-) (upstream.InfoSource, bool) {
-	e, ok := r.entry(source)
-	if !ok {
-		return nil, false
-	}
-	provider, ok := e.impl.(upstream.InfoSource)
-	return provider, ok
-}
-
-func (r *Registry) ArtifactMapper(
-	source types.SourceId,
-) (upstream.ArtifactMapSource, bool) {
-	e, ok := r.entry(source)
-	if !ok {
-		return nil, false
-	}
-	provider, ok := e.impl.(upstream.ArtifactMapSource)
-	return provider, ok
-}
-
-func (r *Registry) EcosystemInstaller(
-	source types.SourceId,
-) (upstream.EcosystemProvider, bool) {
-	e, ok := r.entry(source)
-	if !ok {
-		return nil, false
-	}
-	installer, ok := e.impl.(upstream.EcosystemProvider)
-	return installer, ok
+func providerCatalogInstance() providerCatalog {
+	return providers()
 }
 
 func listModProviders() []upstream.PackageSource {
@@ -159,12 +105,10 @@ func ListAutoProviders() []upstream.PackageSource {
 	return providers
 }
 
-func GetArtifactMapper(src types.SourceId) (
-	upstream.ArtifactMapSource,
-	bool,
-	error,
-) {
-	mapper, ok := DefaultRegistry().ArtifactMapper(src)
+func GetArtifactMapper(
+	src types.SourceId,
+) (upstream.ArtifactMapSource, bool, error) {
+	mapper, ok := providerCatalogInstance().artifactMappers[src]
 	return mapper, ok, nil
 }
 
@@ -175,10 +119,10 @@ func artifactMappers() []upstream.ArtifactMapSource {
 // artifactMappersFromSources returns the mappers for the given sources, in
 // order. Sources without a mapper are skipped.
 func artifactMappersFromSources(sources []types.SourceId) []upstream.ArtifactMapSource {
-	registry := DefaultRegistry()
+	catalog := providerCatalogInstance()
 	mappers := make([]upstream.ArtifactMapSource, 0, len(sources))
 	for _, source := range sources {
-		mapper, ok := registry.ArtifactMapper(source)
+		mapper, ok := catalog.artifactMappers[source]
 		if ok {
 			mappers = append(mappers, mapper)
 		}
@@ -193,7 +137,14 @@ func EcosystemInstallerFor(
 	if !ok {
 		return nil, false
 	}
-	return DefaultRegistry().EcosystemInstaller(source)
+	return EcosystemInstallerForSource(source)
+}
+
+func EcosystemInstallerForSource(
+	source types.SourceId,
+) (upstream.EcosystemProvider, bool) {
+	provider, ok := providerCatalogInstance().ecosystemProviders[source]
+	return provider, ok
 }
 
 func ecosystemInstallerSource(ecosystem types.Ecosystem) (
@@ -292,7 +243,7 @@ func resolveExplicitInformer(src types.SourceId) (
 	[]upstream.InfoSource,
 	error,
 ) {
-	provider, ok := DefaultRegistry().Informer(src)
+	provider, ok := providerCatalogInstance().infoSources[src]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
@@ -303,7 +254,7 @@ func resolveExplicitSearcher(src types.SourceId) (
 	[]upstream.SearchSource,
 	error,
 ) {
-	provider, ok := DefaultRegistry().Searcher(src)
+	provider, ok := providerCatalogInstance().searchSources[src]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
@@ -340,7 +291,7 @@ func resolveExplicitSource(src types.SourceId) (
 	[]upstream.PackageSource,
 	error,
 ) {
-	provider, ok := DefaultRegistry().PackageSource(src)
+	provider, ok := providerCatalogInstance().packageSources[src]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
@@ -369,7 +320,7 @@ func providersFromSources(sources []types.SourceId) (
 ) {
 	providers := make([]upstream.PackageSource, 0, len(sources))
 	for _, source := range sources {
-		provider, ok := DefaultRegistry().PackageSource(source)
+		provider, ok := providerCatalogInstance().packageSources[source]
 		if !ok {
 			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
 		}
@@ -384,7 +335,7 @@ func searchersFromSources(sources []types.SourceId) (
 ) {
 	providers := make([]upstream.SearchSource, 0, len(sources))
 	for _, source := range sources {
-		provider, ok := DefaultRegistry().Searcher(source)
+		provider, ok := providerCatalogInstance().searchSources[source]
 		if !ok {
 			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
 		}
@@ -399,7 +350,7 @@ func informersFromSources(sources []types.SourceId) (
 ) {
 	providers := make([]upstream.InfoSource, 0, len(sources))
 	for _, source := range sources {
-		provider, ok := DefaultRegistry().Informer(source)
+		provider, ok := providerCatalogInstance().infoSources[source]
 		if !ok {
 			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
 		}
@@ -409,5 +360,6 @@ func informersFromSources(sources []types.SourceId) (
 }
 
 func curseforgeAvailable() bool {
-	return DefaultRegistry().has(types.SourceCurseForge)
+	_, ok := providerCatalogInstance().packageSources[types.SourceCurseForge]
+	return ok
 }
