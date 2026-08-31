@@ -100,6 +100,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	options := install.DefaultOptions()
 	options.WithOptional = withOptional
 	options.Force = force
+	options.UseGitHubMirror, _ = cmd.Flags().GetBool(cli.FlagUseGitHubMirror)
 
 	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
 	platform := types.Ecosystem(platformArg)
