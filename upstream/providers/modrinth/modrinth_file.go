@@ -2,6 +2,7 @@ package modrinth
 
 import (
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 func GetFile(id types.VersionedPackageRef) (
@@ -9,7 +10,7 @@ func GetFile(id types.VersionedPackageRef) (
 	filename string,
 	err error,
 ) {
-	version, err := getVersion(id)
+	version, err := getVersion(upstream.LocalContext{}, id)
 	if err != nil {
 		return "", "", err
 	}

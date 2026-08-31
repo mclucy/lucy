@@ -25,6 +25,14 @@ type LocalContext struct {
 	MCDRVersion types.BareVersion
 }
 
+// HasGameVersion reports whether the local runtime provides a concrete
+// Minecraft version suitable for upstream compatibility filtering.
+func (c LocalContext) HasGameVersion() bool {
+	return c.GameVersion != "" &&
+		!c.GameVersion.IsInvalid() &&
+		!c.GameVersion.CanInfer()
+}
+
 type Fetcher interface {
 	Fetch(local LocalContext, id types.VersionedPackageRef) (types.ResolvedPackage, error)
 }

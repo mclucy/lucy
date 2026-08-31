@@ -41,7 +41,7 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 
 // Fetch resolves the package version, then fetches the corresponding file.
 func (p provider) Fetch(
-	_ upstream.LocalContext,
+	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (types.ResolvedPackage, error) {
 	mod, err := resolveSlug(id.Name)
@@ -49,7 +49,7 @@ func (p provider) Fetch(
 		return types.ResolvedPackage{}, err
 	}
 
-	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Eco)
+	file, err := getFileByDisplayName(mod.Id, string(id.Version), local, id.Eco)
 	if err != nil {
 		return types.ResolvedPackage{}, err
 	}
@@ -77,7 +77,7 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 }
 
 func (p provider) Dependencies(
-	_ upstream.LocalContext,
+	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (*types.PackageDependencies, error) {
 	mod, err := resolveSlug(id.Name)
@@ -85,16 +85,9 @@ func (p provider) Dependencies(
 		return nil, err
 	}
 
-	file, err := getFileByDisplayName(mod.Id, string(id.Version), id.Eco)
+	file, err := getFileByDisplayName(mod.Id, string(id.Version), local, id.Eco)
 	if err != nil {
 		return nil, err
-	}
-
-	if file == nil {
-		file, err = latestCompatibleFile(mod.Id, id.Eco)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return new((&curseforgeDependencies{file: file}).ToPackageDependencies()), nil
@@ -165,7 +158,7 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 // ResolveVersionSelector resolves abstract version specifiers (any, stable,
 // beta) to a concrete version by querying the CurseForge API.
 func (p provider) ResolveVersionSelector(
-	_ upstream.LocalContext,
+	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (parsed types.VersionedPackageRef, err error) {
 	if id.Eco.IsSelector() {
@@ -174,28 +167,22 @@ func (p provider) ResolveVersionSelector(
 	parsed.Eco = id.Eco
 	parsed.Name = id.Name
 
+	mod, err := resolveSlug(id.Name)
+	if err != nil {
+		return id, err
+	}
+
 	var file *fileResponse
 	switch id.Version {
 	case types.VersionStable:
-		mod, err := resolveSlug(id.Name)
-		if err != nil {
-			return id, err
-		}
-		file, err = latestCompatibleFile(mod.Id, id.Eco)
-		if err != nil {
-			return id, err
-		}
+		file, err = latestCompatibleFile(mod.Id, local, id.Eco)
 	case types.VersionBeta, types.VersionAny:
-		mod, err := resolveSlug(id.Name)
-		if err != nil {
-			return id, err
-		}
-		file, err = latestFile(mod.Id)
-		if err != nil {
-			return id, err
-		}
+		file, err = latestFile(mod.Id, local, id.Eco)
 	default:
 		return id, nil
+	}
+	if err != nil {
+		return id, err
 	}
 
 	parsed.Version = types.BareVersion(file.FileName)

@@ -2,6 +2,7 @@ package curseforge
 
 import (
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 // listFiles fetches files for a mod with optional filtering by game version
@@ -18,15 +19,21 @@ func listFiles(modId int32, gameVersion string, loaderType int) (
 	return resp.Data, nil
 }
 
-// latestFile finds the latest release file for a mod (no version/platform
-// filtering).
-func latestFile(modId int32) (*fileResponse, error) {
-	files, err := listFiles(modId, "", 0)
+// latestFile finds the latest release file compatible with local runtime facts.
+func latestFile(
+	modId int32,
+	local upstream.LocalContext,
+	platform types.Ecosystem,
+) (*fileResponse, error) {
+	files, err := listFiles(
+		modId,
+		curseForgeGameVersion(local),
+		modLoaderType(platform),
+	)
 	if err != nil {
 		return nil, err
 	}
 	latest := selectLatestReleaseFile(files)
-
 	if latest == nil {
 		return nil, ErrNoCompatibleFile
 	}
@@ -36,38 +43,25 @@ func latestFile(modId int32) (*fileResponse, error) {
 	return latest, nil
 }
 
-// latestCompatibleFile finds the latest release file compatible with the
-// current server's game version and platform.
-func latestCompatibleFile(modId int32, platform types.Ecosystem) (
-	*fileResponse, error,
-) {
-	// Platform inference removed to avoid circular imports.
-	// Caller should provide explicit platform or this will use latest.
-	_ = platform
-	files, err := listFiles(modId, "", 0)
-	if err != nil {
-		return nil, err
-	}
-	latest := selectLatestReleaseFile(files)
-
-	if latest == nil {
-		return nil, ErrNoCompatibleFile
-	}
-	if latest.DownloadUrl == nil {
-		return nil, ErrDownloadNotAllowed
-	}
-	return latest, nil
+func latestCompatibleFile(
+	modId int32,
+	local upstream.LocalContext,
+	platform types.Ecosystem,
+) (*fileResponse, error) {
+	return latestFile(modId, local, platform)
 }
 
-// getFileByDisplayName finds a file matching a specific version string.
-// It checks DisplayName and FileName for a match.
 func getFileByDisplayName(
 	modId int32,
 	version string,
+	local upstream.LocalContext,
 	platform types.Ecosystem,
 ) (*fileResponse, error) {
-	loaderType := modLoaderType(platform)
-	files, err := listFiles(modId, "", loaderType)
+	files, err := listFiles(
+		modId,
+		curseForgeGameVersion(local),
+		modLoaderType(platform),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +73,13 @@ func getFileByDisplayName(
 		return nil, ErrDownloadNotAllowed
 	}
 	return selected, nil
+}
+
+func curseForgeGameVersion(local upstream.LocalContext) string {
+	if !local.HasGameVersion() {
+		return ""
+	}
+	return local.GameVersion.String()
 }
 
 type modFileDataResponse struct {

@@ -118,10 +118,10 @@ func DependencyToPackage(
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency project: %w", err)
 		}
-		// This is not safe, TODO: use better inference method
 		version, err = latestCompatibleVersion(
 			input.ToProjectName(project.Slug),
 			dependent.Eco,
+			types.VersionUnknown,
 		)
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency latest version: %w", err)
