@@ -31,9 +31,9 @@ Wants=network-online.target lucyd.service
 [Service]
 Type=simple
 ExecStart=` + binary + ` run-server %i
-ExecStop=` + binary + ` server stop %i
 Restart=on-failure
 RestartSec=10s
+KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=90s
 

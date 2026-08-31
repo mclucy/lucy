@@ -17,14 +17,19 @@ func CallDaemonWithAutoStart(ctx context.Context, req server.Request, out any) e
 	if err == nil {
 		return nil
 	}
-	var responseErr server.ResponseError
-	if errors.As(err, &responseErr) {
+	if ctx.Err() != nil || !errors.Is(err, server.ErrIPCUnavailable) {
 		return err
 	}
 	log.ShowInfo("Lucy daemon is not responding; attempting to start it")
 	if startErr := server.NewServiceManager().StartDaemon(); startErr != nil {
 		return fmt.Errorf("start Lucy daemon: %w (original request failed: %v)", startErr, err)
 	}
-	time.Sleep(500 * time.Millisecond)
+	timer := time.NewTimer(500 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+	}
 	return server.CallDaemon(ctx, req, out)
 }

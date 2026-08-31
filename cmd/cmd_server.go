@@ -377,7 +377,6 @@ func actionServerRemove(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("server %q is not registered", args[0])
 	}
 	manager := server.NewServiceManager()
-	_ = manager.DisableInstance(*inst)
 	if err := manager.RemoveInstance(*inst); err != nil {
 		return err
 	}
