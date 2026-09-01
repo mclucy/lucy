@@ -1,0 +1,60 @@
+---
+title: "lucy search"
+description: "Search for mods and plugins across upstream sources"
+---
+
+`lucy search` queries one or more upstream registries and prints matching packages. By default it searches all applicable sources simultaneously and merges the results.
+
+```bash
+lucy search <query>
+```
+
+```bash
+lucy search "litematica"
+lucy search "worldedit" --platform fabric --index downloads
+lucy search "luckperms" --source hangar --long
+```
+
+## Arguments
+
+<ParamField path="query" type="string" required>
+  The search term. Passed directly to each upstream source.
+</ParamField>
+
+## Flags
+
+<ParamField query="--index, -i" type="string" default="relevance">
+  Sort order for results. Applied client-side after each source returns its own results.
+
+  | Value | Description |
+  |---|---|
+  | `relevance` | Preserve the order returned by the source (default) |
+  | `downloads` | Sort by total download count, descending |
+  | `newest` | Sort by last-updated date, descending |
+</ParamField>
+
+<ParamField query="--platform" type="string">
+  Filter results to packages that target a specific mod or plugin platform. Restricts which sources are queried.
+
+  Accepted values: `fabric`, `forge`, `neoforge`, `bukkit`
+</ParamField>
+
+<ParamField query="--source, -s" type="string">
+  Restrict the search to a single upstream source instead of querying all applicable ones.
+
+  Accepted values: `modrinth`, `curseforge`, `hangar`, `spiget`, `mcdr`
+</ParamField>
+
+<ParamField query="--client, -c" type="boolean" default="false">
+  Include client-only mods in results. By default, packages marked as client-side only are filtered out.
+</ParamField>
+
+<ParamField query="--long, -l" type="boolean" default="false">
+  Use the expanded output format. Shows the description, download count, last-updated time, and install identifier for each result instead of the compact two-column table.
+</ParamField>
+
+<ParamField query="--json" type="boolean" default="false">
+  Print the raw JSON response, pretty-printed.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags).

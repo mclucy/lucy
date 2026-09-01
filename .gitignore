@@ -58,11 +58,6 @@ test_*
 # Generated autocomplete script
 completions
 
-# Documentations
-docs/others
-docs/*
-!docs/shared
-
 # Logs
 *.log
 

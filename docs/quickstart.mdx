@@ -1,0 +1,60 @@
+---
+title: "Quickstart"
+description: "Install and start using `lucy`"
+---
+
+Currently, we are in pre-beta stage, there will be more distribution methods in the future.
+
+## Prerequisites
+
+Before you begin, you must have:
+
+- A terminal and basic knowledge of command line usage
+
+## Get started
+
+<Warning>Pre-beta versions are not recommended for production use and may lead to permanent data loss.</Warning>
+
+<Steps>
+  <Step title="Install">
+    The current recommended way to install `lucy` is via Golang's toolchain natively.
+
+    ```bash
+    go install github.com/mclucy/lucy@latest
+    ```
+
+    For macOS users, you can also use `brew` to install `lucy`:
+
+    ```bash
+    brew install --HEAD mclucy/tap/lucy
+    ```
+
+    The following distribution methods are planned for the future:
+
+    - YOLO `curl` scirpt
+    - Nix flake
+    - AUR
+  </Step>
+  <Step title="Usage">
+    After installation, you can run `lucy --help` in your terminal to see the available commands.
+
+    ```bash
+    lucy --help
+    ```
+  </Step>
+  <Step title="Run it">
+    Get an comprehensive overview of your server with the `lucy status` command!
+
+    ```bash
+    cd path/to/your/server
+    lucy status
+    ```
+
+    Or, you can scaffold a new server with the `lucy create` command!
+
+    ```bash
+    lucy create
+    ```
+  </Step>
+</Steps>
+

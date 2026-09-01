@@ -1,0 +1,34 @@
+---
+title: "lucy status"
+description: "Display an overview of the current server"
+---
+
+`lucy status` inspects the current directory and prints a summary of the detected server. This is like the [`neofetch`](https://github.com/dylanaraps/neofetch)/[`fastfetch`](https://github.com/LinusDierheimer/fastfetch) for Minecraft servers. Run it and show-off your server to your friends!
+
+```bash
+lucy status
+```
+
+No arguments. Run it from the server directory or any directory that `lucy` manages.
+
+## Flags
+
+<ParamField query="--logo" type="string" default="small">
+  Controls the ASCII art logo shown alongside the status output.
+
+  | Value | Description |
+  |---|---|
+  | `small` | Compact logo (default) |
+  | `large` | Full-size logo |
+  | `none` | No logo |
+</ParamField>
+
+<ParamField query="--long, -l" type="boolean" default="false">
+  Show full package identifiers (source-qualified slugs) instead of bare package names, and expand collapsed lists.
+</ParamField>
+
+<ParamField query="--json" type="boolean" default="false">
+  Print the workspace state as pretty-printed JSON.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags).
