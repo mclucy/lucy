@@ -337,6 +337,26 @@ environments:
         url: https://github.com/IzzelAliz/Arclight/releases/download/FeudalKings%2F1.0.1/arclight-fabric-1.21.1-1.0.1-8ec9529.jar
         sha256: 98088835a2671d476895d8cb282f328fec9f0c96d0dffd82236a181348dd3f82
 
+  - id: arclight-forge
+    family: arclight
+    game_version: "1.21.1"
+    description: Arclight hybrid on Forge 1.21.1, release FeudalKings/1.0.1
+    docs: families/hybrids.md
+    artifacts:
+      - dest: arclight-forge-1.21.1-1.0.1-8ec9529.jar
+        url: https://github.com/IzzelAliz/Arclight/releases/download/FeudalKings%2F1.0.1/arclight-forge-1.21.1-1.0.1-8ec9529.jar
+        sha256: 9556a10ca71898e107bd3032616e2ad7ed26998016d080dd19cec5e84d7906eb
+
+  - id: arclight-neoforge
+    family: arclight
+    game_version: "1.21.1"
+    description: Arclight hybrid on NeoForge 1.21.1, release FeudalKings/1.0.1
+    docs: families/hybrids.md
+    artifacts:
+      - dest: arclight-neoforge-1.21.1-1.0.1-8ec9529.jar
+        url: https://github.com/IzzelAliz/Arclight/releases/download/FeudalKings%2F1.0.1/arclight-neoforge-1.21.1-1.0.1-8ec9529.jar
+        sha256: a7ac57eee67c288df3c344e4f35a66d8513d6d0e1300bb58c81667836c2aebe3
+
   # luminol: discontinued upstream (2026-08); fixtures removed.
 
   - id: mohist

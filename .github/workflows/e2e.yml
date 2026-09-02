@@ -34,7 +34,7 @@ jobs:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
     runs-on: ubuntu-latest
     env:
-      ENVS: fabric-executable-1214,fabric-executable-262,forge-1201,forge-12111,neoforge-211,neoforge-262,mcdr-fabric,mcdr-forge,mcdr-neoforge
+      ENVS: arclight-fabric,arclight-forge,arclight-neoforge,fabric-executable-1214,fabric-executable-262,forge-1201,forge-12111,neoforge-211,neoforge-262,mcdr-fabric,mcdr-forge,mcdr-neoforge
     steps:
       - uses: actions/checkout@v7
 
