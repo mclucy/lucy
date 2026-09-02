@@ -1,6 +1,6 @@
 # Hybrid servers (Arclight, Luminol, Mohist)
 
-Covers environments: `arclight-fabric`, `mohist`. (Youer is documented with the paper family.)
+Covers environments: `arclight-fabric`, `arclight-forge`, `arclight-neoforge`, `mohist`. (Youer is documented with the paper family.)
 
 Hybrids run Bukkit/Spigot plugins on top of a mod loader platform. Detection relied on per-project launcher manifests; treat unresolved output as expected for some fixtures.
 
