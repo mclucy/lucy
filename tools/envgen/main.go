@@ -46,14 +46,13 @@ func (d *docsRefs) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type environment struct {
-	ID            string     `yaml:"id"`
-	Family        string     `yaml:"family"`
-	GameVersion   string     `yaml:"game_version"`
-	Description   string     `yaml:"description"`
-	Docs          docsRefs   `yaml:"docs,omitempty"`
-	Dirs          []string   `yaml:"dirs"`
-	Artifacts     []artifact `yaml:"artifacts"`
-	InstallerHint string     `yaml:"installer_hint,omitempty"`
+	ID          string     `yaml:"id"`
+	Family      string     `yaml:"family"`
+	GameVersion string     `yaml:"game_version"`
+	Description string     `yaml:"description"`
+	Docs        docsRefs   `yaml:"docs,omitempty"`
+	Dirs        []string   `yaml:"dirs"`
+	Artifacts   []artifact `yaml:"artifacts"`
 }
 
 type artifact struct {
@@ -200,9 +199,6 @@ func run(man *manifest, opts options) error {
 			fmt.Fprintf(os.Stderr, "[FAIL] %s: %v\n", env.ID, err)
 			failed = append(failed, env.ID)
 			continue
-		}
-		if env.InstallerHint != "" {
-			fmt.Printf("[HINT] %s: %s\n", env.ID, env.InstallerHint)
 		}
 	}
 	if len(failed) > 0 {
