@@ -45,7 +45,7 @@ func RunDaemon(ctx context.Context) error {
 
 	d := &Daemon{
 		runners: make(map[string]RunnerRegistration),
-		service: NewServiceManager(),
+		service: NewServiceManager().(instanceController),
 	}
 
 	go func() {
@@ -53,6 +53,7 @@ func RunDaemon(ctx context.Context) error {
 		_ = listener.Close()
 	}()
 
+	handlers := make(chan struct{}, maxIPCHandlers)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -61,7 +62,7 @@ func RunDaemon(ctx context.Context) error {
 			}
 			return fmt.Errorf("accept daemon connection: %w", err)
 		}
-		go d.handle(conn)
+		startIPCHandler(conn, handlers, d.handle)
 	}
 }
 
@@ -138,7 +139,10 @@ func (d *Daemon) status(name string) (InstanceStatus, error) {
 	if err != nil {
 		return InstanceStatus{}, err
 	}
-	st, _ := NewRuntimeStateService().Read(inst.Name)
+	st, err := NewRuntimeStateService().Read(inst.Name)
+	if err != nil {
+		return InstanceStatus{}, err
+	}
 	return InstanceStatus{
 		Instance:       *inst,
 		Service:        d.service.StatusInstance(*inst),
