@@ -20,6 +20,9 @@ func StreamLog(ctx context.Context, path string, follow bool, out io.Writer) err
 
 	reader := bufio.NewReader(file)
 	for {
+		if follow && ctx.Err() != nil {
+			return nil
+		}
 		line, err := reader.ReadString('\n')
 		if line != "" {
 			if _, writeErr := io.WriteString(out, line); writeErr != nil {

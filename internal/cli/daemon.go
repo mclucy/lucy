@@ -21,7 +21,7 @@ func CallDaemonWithAutoStart(ctx context.Context, req server.Request, out any) e
 		return err
 	}
 	log.ShowInfo("Lucy daemon is not responding; attempting to start it")
-	if startErr := server.NewServiceManager().StartDaemon(); startErr != nil {
+	if startErr := server.NewServiceManager().(server.DaemonStarter).StartDaemon(); startErr != nil {
 		return fmt.Errorf("start Lucy daemon: %w (original request failed: %v)", startErr, err)
 	}
 	timer := time.NewTimer(500 * time.Millisecond)

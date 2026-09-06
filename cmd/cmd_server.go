@@ -25,6 +25,12 @@ const (
 	flagServerBinaryName  = "binary"
 )
 
+// instanceRegistrar is the pair of native capabilities needed by server add.
+type instanceRegistrar interface {
+	server.InstanceInstaller
+	server.InstanceEnabler
+}
+
 var serverCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Manage registered Minecraft server instances",
@@ -201,7 +207,7 @@ func actionServerAdd(cmd *cobra.Command, args []string) error {
 	if err := server.WriteInstance(&inst); err != nil {
 		return err
 	}
-	manager := server.NewServiceManager()
+	manager := server.NewServiceManager().(instanceRegistrar)
 	if err := manager.InstallInstance(inst, binary); err != nil {
 		return fmt.Errorf("install instance service: %w", err)
 	}
@@ -234,7 +240,7 @@ func actionServerList(cmd *cobra.Command, _ []string) error {
 		log.ShowInfo("no registered servers")
 		return nil
 	}
-	manager := server.NewServiceManager()
+	manager := server.NewServiceManager().(server.InstanceStatusReader)
 	for _, inst := range instances {
 		st := manager.StatusInstance(inst)
 		log.ShowInfo(fmt.Sprintf("%s  %s  enabled=%t running=%t", inst.Name, inst.Root, st.Enabled, st.Running))
@@ -247,14 +253,20 @@ func actionServerList(cmd *cobra.Command, _ []string) error {
 func actionServerStatus(cmd *cobra.Command, args []string) error {
 	var status server.InstanceStatus
 	if err := cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStatus, Instance: args[0]}, &status); err != nil {
+		if ctxErr := cmd.Context().Err(); ctxErr != nil {
+			return ctxErr
+		}
 		inst, readErr := server.ReadInstance(args[0])
 		if readErr != nil || inst == nil {
 			return err
 		}
-		rt, _ := server.NewRuntimeStateService().Read(inst.Name)
+		rt, readErr := server.NewRuntimeStateService().Read(inst.Name)
+		if readErr != nil {
+			return readErr
+		}
 		status = server.InstanceStatus{
 			Instance:       *inst,
-			Service:        server.NewServiceManager().StatusInstance(*inst),
+			Service:        server.NewServiceManager().(server.InstanceStatusReader).StatusInstance(*inst),
 			PendingRestart: rt.PendingRestart,
 			PendingReason:  rt.Reason,
 		}
@@ -397,7 +409,7 @@ func actionServerRemove(_ *cobra.Command, args []string) error {
 	if inst == nil {
 		return fmt.Errorf("server %q is not registered", args[0])
 	}
-	manager := server.NewServiceManager()
+	manager := server.NewServiceManager().(server.InstanceRemover)
 	if err := manager.RemoveInstance(*inst); err != nil {
 		return err
 	}

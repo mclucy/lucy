@@ -83,26 +83,10 @@ type InstanceStatusReader interface {
 	StatusInstance(inst Instance) ServiceState
 }
 
-// ServiceManager preserves the factory and CLI's complete lifecycle contract.
-// Both native supervisors must implement every capability; consumers may compose
-// narrower interfaces without treating required lifecycle operations as optional.
-type ServiceManager interface {
-	DaemonInstaller
-	DaemonEnabler
-	DaemonStarter
-	DaemonStatusReader
-	InstanceInstaller
-	InstanceRemover
-	InstanceEnabler
-	InstanceDisabler
-	InstanceStarter
-	InstanceStopper
-	InstanceRestarter
-	InstanceStatusReader
-}
-
-// NewServiceManager selects the native service manager for the current platform.
-func NewServiceManager() ServiceManager {
+// NewServiceManager selects the native backend. Consumers assert the atomic
+// capability or consumer-owned combination they need instead of a shared facade.
+// Both backends are checked against each capability below at compile time.
+func NewServiceManager() any {
 	switch runtime.GOOS {
 	case "darwin":
 		return launchdManager{}
@@ -110,6 +94,34 @@ func NewServiceManager() ServiceManager {
 		return systemdManager{}
 	}
 }
+
+// Native backends implement each capability independently; callers own combinations.
+var (
+	_ DaemonInstaller      = systemdManager{}
+	_ DaemonInstaller      = launchdManager{}
+	_ DaemonEnabler        = systemdManager{}
+	_ DaemonEnabler        = launchdManager{}
+	_ DaemonStarter        = systemdManager{}
+	_ DaemonStarter        = launchdManager{}
+	_ DaemonStatusReader   = systemdManager{}
+	_ DaemonStatusReader   = launchdManager{}
+	_ InstanceInstaller    = systemdManager{}
+	_ InstanceInstaller    = launchdManager{}
+	_ InstanceRemover      = systemdManager{}
+	_ InstanceRemover      = launchdManager{}
+	_ InstanceEnabler      = systemdManager{}
+	_ InstanceEnabler      = launchdManager{}
+	_ InstanceDisabler     = systemdManager{}
+	_ InstanceDisabler     = launchdManager{}
+	_ InstanceStarter      = systemdManager{}
+	_ InstanceStarter      = launchdManager{}
+	_ InstanceStopper      = systemdManager{}
+	_ InstanceStopper      = launchdManager{}
+	_ InstanceRestarter    = systemdManager{}
+	_ InstanceRestarter    = launchdManager{}
+	_ InstanceStatusReader = systemdManager{}
+	_ InstanceStatusReader = launchdManager{}
+)
 
 // CurrentBinary locates the running Lucy executable, resolving symlinks when possible.
 func CurrentBinary() string {
@@ -338,7 +350,11 @@ func (launchdManager) InstallInstance(inst Instance, binary string) error {
 
 // RemoveInstance unloads the launchd instance and removes its persisted definition.
 func (launchdManager) RemoveInstance(inst Instance) error {
-	_ = runCommand("launchctl", "bootout", "system/"+inst.LaunchdLabel)
+	if launchdLoaded(inst.LaunchdLabel) {
+		if err := runCommand("launchctl", "bootout", "system/"+inst.LaunchdLabel); err != nil {
+			return err
+		}
+	}
 	path := filepath.Join(launchdDir(), inst.LaunchdLabel+".plist")
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove launchd plist: %w", err)

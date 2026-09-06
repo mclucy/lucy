@@ -6,9 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"time"
+)
+
+// Control requests contain console lines or package names, not downloaded
+// artifacts. Bound both their encoded size and the number of active handlers.
+const (
+	maxIPCRequestBytes = 1 << 20
+	maxIPCHandlers     = 64
 )
 
 const (
@@ -189,13 +197,33 @@ func decodeRequest(conn net.Conn) (Request, error) {
 	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		return req, err
 	}
-	if err := json.NewDecoder(conn).Decode(&req); err != nil {
+	limited := &io.LimitedReader{R: conn, N: maxIPCRequestBytes + 1}
+	decoder := json.NewDecoder(limited)
+	err := decoder.Decode(&req)
+	if decoder.InputOffset() > maxIPCRequestBytes || (err != nil && limited.N == 0) {
+		return req, fmt.Errorf("IPC request exceeds %d bytes", maxIPCRequestBytes)
+	}
+	if err != nil {
 		return req, err
 	}
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
 		return req, err
 	}
 	return req, nil
+}
+
+// startIPCHandler admits a connection only while handler capacity is available.
+// Saturated listeners close excess connections without spawning more goroutines.
+func startIPCHandler(conn net.Conn, slots chan struct{}, handle func(net.Conn)) {
+	select {
+	case slots <- struct{}{}:
+		go func() {
+			defer func() { <-slots }()
+			handle(conn)
+		}()
+	default:
+		_ = conn.Close()
+	}
 }
 
 // listenUnix replaces a stale local endpoint and applies the requested socket access mode.

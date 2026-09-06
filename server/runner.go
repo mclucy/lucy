@@ -196,12 +196,13 @@ func (r *Runner) serveControl(ctx context.Context, listener net.Listener) {
 		<-ctx.Done()
 		_ = listener.Close()
 	}()
+	handlers := make(chan struct{}, maxIPCHandlers)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			return
 		}
-		go r.handleControl(conn)
+		startIPCHandler(conn, handlers, r.handleControl)
 	}
 }
 

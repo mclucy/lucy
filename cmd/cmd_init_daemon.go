@@ -62,7 +62,7 @@ func actionInitDaemon(cmd *cobra.Command, _ []string) error {
 	if err := server.EnsureAdminGroup(); err != nil {
 		return err
 	}
-	if err := server.NewServiceManager().InstallDaemon(binary); err != nil {
+	if err := server.NewServiceManager().(server.DaemonInstaller).InstallDaemon(binary); err != nil {
 		return fmt.Errorf("install Lucy daemon: %w", err)
 	}
 	log.ShowInfo("Lucy daemon service installed, enabled, and started")

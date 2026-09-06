@@ -137,7 +137,7 @@ func sameOrChild(path, root string) bool {
 		return true
 	}
 	rel, err := filepath.Rel(root, path)
-	return err == nil && rel != "." && !strings.HasPrefix(rel, "..")
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
 }
 
 // normalizeInstance fills omitted registry metadata and service names in place

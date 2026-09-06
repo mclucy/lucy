@@ -141,7 +141,7 @@ func GuessRuntimeConfig(root string) RuntimeConfig {
 		entrance = filepath.Join(absRoot, entrance)
 	}
 	relEntrance := entrance
-	if rel, err := filepath.Rel(absRoot, entrance); err == nil && !strings.HasPrefix(rel, "..") {
+	if rel, err := filepath.Rel(absRoot, entrance); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		relEntrance = rel
 	}
 

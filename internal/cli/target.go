@@ -103,7 +103,7 @@ func MarkPendingRestartIfRunning(target CommandTarget, reason string) {
 	if !target.Registered || target.Instance == nil {
 		return
 	}
-	st := server.NewServiceManager().StatusInstance(*target.Instance)
+	st := server.NewServiceManager().(server.InstanceStatusReader).StatusInstance(*target.Instance)
 	if st.Running {
 		if err := server.NewRuntimeStateService().MarkPendingRestart(target.Instance.Name, true, reason); err != nil {
 			log.ShowWarn(fmt.Errorf("package changes completed, but could not save restart status: %w; restart server %q manually", err, target.Instance.Name))
