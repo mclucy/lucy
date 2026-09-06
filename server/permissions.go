@@ -21,7 +21,7 @@ func ensureSharedDir(path string, mode os.FileMode) error {
 		return fmt.Errorf("runtime path must be a directory, not a symlink: %s", path)
 	}
 	if os.Geteuid() != 0 && !directoryOwnedBy(info, os.Geteuid()) {
-		if info.Mode()&(os.ModePerm|os.ModeSticky) != mode {
+		if info.Mode()&(os.ModePerm|os.ModeSticky|os.ModeSetgid) != mode {
 			return fmt.Errorf("unexpected permissions on shared directory %s", path)
 		}
 		return nil
