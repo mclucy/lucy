@@ -32,9 +32,13 @@ var fileLog *log.Logger
 // consoleLog writes styled output to stderr, no timestamps.
 var consoleLog *log.Logger
 
+// consoleOutput also receives preformatted output through ShowRaw.
+var consoleOutput io.Writer = os.Stderr
+
+// init prepares console logging without opening the lazily created diagnostic file.
 func init() {
 	consoleLog = log.NewWithOptions(
-		os.Stderr, log.Options{
+		consoleOutput, log.Options{
 			ReportTimestamp: false,
 			Level:           log.InfoLevel,
 		},
@@ -77,6 +81,7 @@ func EnableDumpHistory() { dumpHistory = true }
 // SetConsoleOutput changes the console log's output writer.
 // Useful for testing or redirecting user-facing output.
 func SetConsoleOutput(w io.Writer) {
+	consoleOutput = w
 	consoleLog.SetOutput(w)
 }
 

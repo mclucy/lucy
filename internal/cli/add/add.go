@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -76,11 +77,37 @@ func NewCommand() *cobra.Command {
 	return addCmd
 }
 
+// actionAdd preserves package options when dispatching a managed server task,
+// or runs the same action directly in an unmanaged workspace.
 func actionAdd(cmd *cobra.Command, args []string) error {
-	ws, err := os.Getwd()
+	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("unable to get current directory: %w", err)
+		return err
 	}
+	if target.Registered {
+		return cli.DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{
+				Name: server.TaskAdd,
+				Args: append([]string(nil), args...),
+				AddOptions: server.PackageTaskAddOpts{
+					Force:        cli.MustBoolFlag(cmd, flagForceName),
+					WithOptional: cli.MustBoolFlag(cmd, flagWithOptionalName),
+					NoOptional:   cli.MustBoolFlag(cmd, flagNoOptionalName),
+				},
+			},
+		)
+	}
+	return cli.RunInTargetWorkDir(target, func() error {
+		return actionAddAt(cmd, args, target)
+	})
+}
+
+// actionAddAt resolves packages against the selected runtime, installs them and
+// updates existing project state while preserving requested version intent.
+func actionAddAt(cmd *cobra.Command, args []string, target cli.CommandTarget) error {
+	ws := target.WorkDir
 
 	stateSvc := state.NewProjectStateService(ws)
 	hasLucyState, err := cli.LucyStateDirExists(ws)
@@ -100,6 +127,9 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	options := install.DefaultOptions()
 	options.WithOptional = withOptional
 	options.Force = force
+	options.Workspace = func() workspace.Workspace {
+		return workspace.NewAt(ws)
+	}
 	options.UseGitHubMirror, _ = cmd.Flags().GetBool(cli.FlagUseGitHubMirror)
 
 	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
@@ -131,6 +161,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	if !hasLucyState {
+		cli.MarkPendingRestartIfRunning(target, "package files changed")
 		return nil
 	}
 
@@ -144,6 +175,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("update state: %w", err)
 	}
 
+	cli.MarkPendingRestartIfRunning(target, "package files changed")
 	return nil
 }
 
@@ -166,6 +198,8 @@ func presenceLabel(name string, present bool) string {
 	return name + " absent"
 }
 
+// updateAddState merges requested intent and successful installations into the
+// project manifest and lock without dropping previously managed packages.
 func updateAddState(
 	ctx context.Context,
 	workDir string,
@@ -182,7 +216,13 @@ func updateAddState(
 		return stateSvc.Save(ctx, manifestIntent, nil)
 	}
 
-	lock := cli.BuildUpdatedLock(workDir, manifestIntent, stateSvc.Lock(), result)
+	lock := cli.BuildUpdatedLock(
+		workDir,
+		manifestIntent,
+		stateSvc.Lock(),
+		result,
+		workspace.NewAt(workDir),
+	)
 	manifest := state.UpdateManifestRolesForAdd(
 		stateSvc.Manifest(),
 		requests,
@@ -204,4 +244,9 @@ func buildUpdatedManifest(
 		)
 	}
 	return manifest
+}
+
+// RunTask executes the add action for a daemon-dispatched package task.
+func RunTask(cmd *cobra.Command, args []string, target cli.CommandTarget) error {
+	return actionAddAt(cmd, args, target)
 }

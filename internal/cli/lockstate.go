@@ -50,6 +50,7 @@ func BuildUpdatedLock(
 	manifest *state.Manifest,
 	existing *state.Lock,
 	result *install.Result,
+	ws workspace.Workspace,
 ) *state.Lock {
 	var lock state.Lock
 	if existing != nil {
@@ -60,7 +61,6 @@ func BuildUpdatedLock(
 		lock = state.NewLock()
 	}
 
-	ws := workspace.New()
 	runtime := ws.Server()
 	lock.GeneratedAt = state.NewLock().GeneratedAt
 	lock.ManifestFingerprint = ManifestFingerprint(
