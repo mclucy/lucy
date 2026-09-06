@@ -76,6 +76,7 @@ func configureLogging(cmd *cobra.Command) error {
 	return log.Configure(path, level, printLogs)
 }
 
+// init registers shared flags and public command groups on the root command.
 func init() {
 	rootCmd.PersistentFlags().String(
 		cli.FlagLogLevel,

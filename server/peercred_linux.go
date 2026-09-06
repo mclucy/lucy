@@ -9,6 +9,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// getPeerCredentials reads the connected peer's UID, GID and PID from Linux
+// SO_PEERCRED, rejecting non-Unix connections or unavailable credentials.
 func getPeerCredentials(conn net.Conn) (PeerCredentials, error) {
 	unixConn, ok := conn.(*net.UnixConn)
 	if !ok {

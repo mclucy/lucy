@@ -6,6 +6,8 @@ import (
 	"runtime"
 )
 
+// EnsureAdminGroup creates the Lucy administration group if it is absent on
+// Linux or macOS; debug dry-run skips all account changes.
 func EnsureAdminGroup() error {
 	if serviceDryRunEnabled() {
 		return nil

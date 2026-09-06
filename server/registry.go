@@ -10,6 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ReadInstance validates the name and loads a normalized registry entry.
+// A missing entry returns nil without an error.
 func ReadInstance(name string) (*Instance, error) {
 	if err := ValidateInstanceName(name); err != nil {
 		return nil, err
@@ -26,6 +28,8 @@ func ReadInstance(name string) (*Instance, error) {
 	return &inst, nil
 }
 
+// WriteInstance validates and normalizes inst in place, then atomically replaces
+// its registry entry, creating the registry directory if needed.
 func WriteInstance(inst *Instance) error {
 	if inst == nil {
 		return fmt.Errorf("server instance is nil")
@@ -44,6 +48,8 @@ func WriteInstance(inst *Instance) error {
 	return writeAtomic(InstanceRegistryPath(inst.Name), data, 0o644)
 }
 
+// RemoveInstance removes only the validated registry entry; missing entries are
+// accepted, and callers must separately stop and remove the native service.
 func RemoveInstance(name string) error {
 	if err := ValidateInstanceName(name); err != nil {
 		return err
@@ -54,6 +60,8 @@ func RemoveInstance(name string) error {
 	return nil
 }
 
+// ListInstances reads YAML registry entries in name order, returning an empty list
+// for a missing directory and an error if any entry cannot be read or parsed.
 func ListInstances() ([]Instance, error) {
 	entries, err := os.ReadDir(ServersDir())
 	if err != nil {
@@ -83,6 +91,8 @@ func ListInstances() ([]Instance, error) {
 	return instances, nil
 }
 
+// FindInstanceForPath selects the most specific registered root containing path,
+// or nil if none matches; registry read failures are returned to the caller.
 func FindInstanceForPath(path string) (*Instance, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
@@ -111,6 +121,8 @@ func FindInstanceForPath(path string) (*Instance, error) {
 	return best, nil
 }
 
+// sameOrChild checks containment after resolving symlinks where possible,
+// falling back to the supplied paths when resolution fails.
 func sameOrChild(path, root string) bool {
 	pathEval, err := filepath.EvalSymlinks(path)
 	if err == nil {
@@ -127,6 +139,8 @@ func sameOrChild(path, root string) bool {
 	return err == nil && rel != "." && !strings.HasPrefix(rel, "..")
 }
 
+// normalizeInstance fills omitted registry metadata and service names in place
+// without changing explicitly configured values.
 func normalizeInstance(inst *Instance) {
 	if inst.FormatVersion == "" {
 		inst.FormatVersion = FormatVersion
