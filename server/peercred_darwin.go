@@ -9,6 +9,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// getPeerCredentials reads the peer's UID and first group from macOS
+// LOCAL_PEERCRED; PID remains zero because this query does not provide it.
 func getPeerCredentials(conn net.Conn) (PeerCredentials, error) {
 	unixConn, ok := conn.(*net.UnixConn)
 	if !ok {

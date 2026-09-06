@@ -15,6 +15,34 @@ type PeerCredentials struct {
 	PID int
 }
 
+// authorizeIPCServer authenticates the endpoint before sending request data.
+// A stale or preclaimed socket must not impersonate lucyd or another run user.
+func authorizeIPCServer(conn net.Conn, socketPath string, req Request) error {
+	cred, err := getPeerCredentials(conn)
+	if err != nil {
+		return fmt.Errorf("authorize IPC server: %w", err)
+	}
+	if cred.UID == 0 || (serviceDryRunEnabled() && os.Geteuid() != 0 && cred.UID == uint32(os.Geteuid())) {
+		return nil
+	}
+	if socketPath != DaemonSocketPath() && socketPath == RunnerSocketPath(req.Instance) {
+		inst, err := requiredInstance(req.Instance)
+		if err != nil {
+			return err
+		}
+		uid, err := uidForUser(inst.RunUser)
+		if err != nil {
+			return err
+		}
+		if cred.UID == uid {
+			return nil
+		}
+	}
+	return fmt.Errorf("permission denied: unexpected IPC server uid %d", cred.UID)
+}
+
+// authorizeDaemonRequest checks kernel-reported peer credentials before dispatch;
+// runner registration additionally requires ownership of the registered instance.
 func authorizeDaemonRequest(conn net.Conn, req Request) error {
 	cred, err := getPeerCredentials(conn)
 	if err != nil {
@@ -35,6 +63,8 @@ func authorizeDaemonRequest(conn net.Conn, req Request) error {
 	)
 }
 
+// daemonPeerIsAllowed permits root and Lucy administrators, plus the current user
+// when a non-root debug daemon is running in service dry-run mode.
 func daemonPeerIsAllowed(cred PeerCredentials) bool {
 	if cred.UID == 0 {
 		return true
@@ -45,6 +75,8 @@ func daemonPeerIsAllowed(cred PeerCredentials) bool {
 	return uidInGroup(cred.UID, cred.GID, DefaultGroup)
 }
 
+// authorizeRunnerRegistration requires the canonical instance socket and root or
+// its configured run user; debug dry-run also permits the current user.
 func authorizeRunnerRegistration(cred PeerCredentials, reg RunnerRegistration) error {
 	if err := ValidateInstanceName(reg.Name); err != nil {
 		return err
@@ -74,6 +106,8 @@ func authorizeRunnerRegistration(cred PeerCredentials, reg RunnerRegistration) e
 	return fmt.Errorf("permission denied: runner registration for %q must come from root or run_user %q", reg.Name, inst.RunUser)
 }
 
+// uidInGroup checks primary and supplementary membership, denying access if the
+// system cannot resolve the requested group or the user's memberships.
 func uidInGroup(uid, gid uint32, groupName string) bool {
 	group, err := user.LookupGroup(groupName)
 	if err != nil {
@@ -98,6 +132,7 @@ func uidInGroup(uid, gid uint32, groupName string) bool {
 	return false
 }
 
+// uidForUser resolves a system account and rejects UIDs outside the credential range.
 func uidForUser(name string) (uint32, error) {
 	u, err := user.Lookup(name)
 	if err != nil {

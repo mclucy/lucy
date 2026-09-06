@@ -1,10 +1,12 @@
 package server
 
 import (
+	"fmt"
 	"html"
 	"strings"
 )
 
+// renderSystemdDaemon renders the shared daemon's systemd service definition.
 func renderSystemdDaemon(binary string) string {
 	return `[Unit]
 Description=Lucy daemon
@@ -13,7 +15,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=` + binary + ` run-daemon
+ExecStart=` + systemdExecutable(binary) + ` run-daemon
 Restart=on-failure
 RestartSec=3s
 
@@ -22,6 +24,7 @@ WantedBy=multi-user.target
 `
 }
 
+// renderSystemdInstanceTemplate renders a server template that lets the runner stop gracefully.
 func renderSystemdInstanceTemplate(binary string) string {
 	return `[Unit]
 Description=Lucy Minecraft server %i
@@ -30,7 +33,7 @@ Wants=network-online.target lucyd.service
 
 [Service]
 Type=simple
-ExecStart=` + binary + ` run-server %i
+ExecStart=` + systemdExecutable(binary) + ` run-server %i
 Restart=on-failure
 RestartSec=10s
 KillMode=mixed
@@ -42,6 +45,29 @@ WantedBy=multi-user.target
 `
 }
 
+// systemdExecutable encodes one executable token, escaping unit specifiers and C quoting.
+// The ':' executable prefix disables environment expansion in argv, including a '$' in the path.
+func systemdExecutable(binary string) string {
+	var b strings.Builder
+	b.WriteString(`":`)
+	for _, c := range []byte(binary) {
+		switch {
+		case c == '%':
+			b.WriteString("%%")
+		case c == '\\' || c == '"':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		case c < 0x20 || c == 0x7f:
+			fmt.Fprintf(&b, `\x%02x`, c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// renderLaunchdDaemon renders an always-running shared daemon with native log files.
 func renderLaunchdDaemon(binary string) string {
 	return plist(map[string]any{
 		"Label":             LaunchdDaemonLabel(),
@@ -53,6 +79,7 @@ func renderLaunchdDaemon(binary string) string {
 	})
 }
 
+// renderLaunchdInstance renders a server job that starts when explicitly loaded.
 func renderLaunchdInstance(inst Instance, binary string) string {
 	return plist(map[string]any{
 		"Label":             inst.LaunchdLabel,
@@ -66,6 +93,7 @@ func renderLaunchdInstance(inst Instance, binary string) string {
 	})
 }
 
+// plist renders the supported launchd keys in a stable top-level order.
 func plist(values map[string]any) string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
@@ -95,6 +123,7 @@ func plist(values map[string]any) string {
 	return b.String()
 }
 
+// writePlistKey appends an XML-escaped dictionary key and its value.
 func writePlistKey(b *strings.Builder, key string, value any) {
 	b.WriteString("\t<key>")
 	b.WriteString(html.EscapeString(key))
@@ -102,6 +131,7 @@ func writePlistKey(b *strings.Builder, key string, value any) {
 	writePlistValue(b, value, 1)
 }
 
+// writePlistValue appends a supported launchd scalar, string array or nested dictionary.
 func writePlistValue(b *strings.Builder, value any, indent int) {
 	prefix := strings.Repeat("\t", indent)
 	switch v := value.(type) {
