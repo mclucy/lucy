@@ -46,6 +46,8 @@ func NewCommand() *cobra.Command {
 	return statusCmd
 }
 
+// actionStatus probes the selected workspace and renders its local runtime and
+// package observations in the requested human-readable or JSON format.
 func actionStatus(cmd *cobra.Command, args []string) error {
 	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {

@@ -8,6 +8,8 @@ import (
 	"syscall"
 )
 
+// prepareManagedProcess gives the child its own process group for group-wide
+// shutdown and configures its run user before the command is started.
 func prepareManagedProcess(cmd *exec.Cmd, runUser string) error {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
@@ -16,6 +18,8 @@ func prepareManagedProcess(cmd *exec.Cmd, runUser string) error {
 	return applyRunUser(cmd, runUser)
 }
 
+// signalManagedProcess signals the child's process group when available,
+// otherwise its process; a command without a started process is a no-op.
 func signalManagedProcess(cmd *exec.Cmd, signal os.Signal) error {
 	if cmd == nil || cmd.Process == nil {
 		return nil

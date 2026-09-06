@@ -77,6 +77,8 @@ func NewCommand() *cobra.Command {
 	return addCmd
 }
 
+// actionAdd preserves package options when dispatching a managed server task,
+// or runs the same action directly in an unmanaged workspace.
 func actionAdd(cmd *cobra.Command, args []string) error {
 	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
@@ -102,6 +104,8 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	})
 }
 
+// actionAddAt resolves packages against the selected runtime, installs them and
+// updates existing project state while preserving requested version intent.
 func actionAddAt(cmd *cobra.Command, args []string, target cli.CommandTarget) error {
 	ws := target.WorkDir
 
@@ -194,6 +198,8 @@ func presenceLabel(name string, present bool) string {
 	return name + " absent"
 }
 
+// updateAddState merges requested intent and successful installations into the
+// project manifest and lock without dropping previously managed packages.
 func updateAddState(
 	ctx context.Context,
 	workDir string,

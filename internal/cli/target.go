@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"
@@ -66,6 +67,8 @@ func RunInTargetWorkDir(target CommandTarget, fn func() error) error {
 	return run()
 }
 
+// RunInTargetWorkDirUnlocked switches workspace context for a callback whose
+// caller already owns the instance lock, restoring the original directory after it.
 func RunInTargetWorkDirUnlocked(target CommandTarget, fn func() error) error {
 	current, err := os.Getwd()
 	if err != nil {
@@ -102,10 +105,14 @@ func MarkPendingRestartIfRunning(target CommandTarget, reason string) {
 	}
 	st := server.NewServiceManager().StatusInstance(*target.Instance)
 	if st.Running {
-		_ = server.MarkPendingRestart(target.Instance.Name, true, reason)
+		if err := server.NewRuntimeStateService().MarkPendingRestart(target.Instance.Name, true, reason); err != nil {
+			log.ShowWarn(fmt.Errorf("package changes completed, but could not save restart status: %w; restart server %q manually", err, target.Instance.Name))
+		}
 	}
 }
 
+// DispatchPackageTask forwards a registered instance operation and its options
+// to the daemon, then displays the child process's already formatted output.
 func DispatchPackageTask(
 	cmd *cobra.Command,
 	target CommandTarget,
@@ -129,7 +136,7 @@ func DispatchPackageTask(
 		return err
 	}
 	if result.Output != "" {
-		fmt.Fprint(os.Stderr, result.Output)
+		return log.ShowRaw(result.Output)
 	}
 	return nil
 }

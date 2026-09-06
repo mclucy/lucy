@@ -135,6 +135,8 @@ var serverRemoveCmd = &cobra.Command{
 	RunE:  cli.WithErrorLogging(actionServerRemove),
 }
 
+// init registers server lifecycle and console commands with their output,
+// runtime-user and configuration-editing flags.
 func init() {
 	serverAddCmd.Flags().String(
 		flagServerRunUserName,
@@ -172,6 +174,8 @@ func init() {
 	rootCmd.AddCommand(serverCmd)
 }
 
+// actionServerAdd writes the instance registry, creates launch settings if absent,
+// and installs and enables its native service without starting the server.
 func actionServerAdd(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	root := args[1]
@@ -186,7 +190,10 @@ func actionServerAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	cfg := server.GuessRuntimeConfig(inst.Root)
-	if _, err := os.Stat(inst.RuntimeConfig); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(inst.RuntimeConfig); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("stat runtime config: %w", err)
+		}
 		if err := server.WriteRuntimeConfig(inst.RuntimeConfig, &cfg); err != nil {
 			return err
 		}
@@ -206,6 +213,8 @@ func actionServerAdd(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// actionServerList prints registry entries as JSON or adds native service state
+// to the human-readable listing, without requiring a daemon connection.
 func actionServerList(cmd *cobra.Command, _ []string) error {
 	instances, err := server.ListInstances()
 	if err != nil {
@@ -233,6 +242,8 @@ func actionServerList(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// actionServerStatus queries the daemon and falls back to registry and native
+// service data if unavailable, then renders JSON or a human-readable status.
 func actionServerStatus(cmd *cobra.Command, args []string) error {
 	var status server.InstanceStatus
 	if err := cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStatus, Instance: args[0]}, &status); err != nil {
@@ -240,7 +251,7 @@ func actionServerStatus(cmd *cobra.Command, args []string) error {
 		if readErr != nil || inst == nil {
 			return err
 		}
-		rt, _ := server.ReadRuntimeState(inst.Name)
+		rt, _ := server.NewRuntimeStateService().Read(inst.Name)
 		status = server.InstanceStatus{
 			Instance:       *inst,
 			Service:        server.NewServiceManager().StatusInstance(*inst),
@@ -270,6 +281,8 @@ func actionServerStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// actionServerSend joins the command arguments into one console line and sends
+// it through the daemon, returning any connection or dispatch error.
 func actionServerSend(cmd *cobra.Command, args []string) error {
 	line := strings.Join(args[1:], " ")
 	return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{
@@ -279,6 +292,8 @@ func actionServerSend(cmd *cobra.Command, args []string) error {
 	}, nil)
 }
 
+// actionServerLogs streams the registered instance's configured console log to
+// stdout, optionally following new output until the command is cancelled.
 func actionServerLogs(cmd *cobra.Command, args []string) error {
 	inst, err := server.ReadInstance(args[0])
 	if err != nil {
@@ -295,6 +310,8 @@ func actionServerLogs(cmd *cobra.Command, args []string) error {
 	return server.StreamLog(cmd.Context(), cfg.Logs.ConsolePath, follow, os.Stdout)
 }
 
+// actionServerAttach follows console output while forwarding stdin through the
+// daemon; /detach and EOF end the attachment without stopping the server.
 func actionServerAttach(cmd *cobra.Command, args []string) error {
 	inst, err := server.ReadInstance(args[0])
 	if err != nil {
@@ -330,6 +347,8 @@ func actionServerAttach(cmd *cobra.Command, args []string) error {
 	return scanner.Err()
 }
 
+// actionServerEdit edits launch settings through a form or the configured text
+// editor; it saves configuration without restarting the running instance.
 func actionServerEdit(cmd *cobra.Command, args []string) error {
 	inst, err := server.ReadInstance(args[0])
 	if err != nil {
@@ -368,6 +387,8 @@ func actionServerEdit(cmd *cobra.Command, args []string) error {
 	return server.WriteRuntimeConfig(inst.RuntimeConfig, cfg)
 }
 
+// actionServerRemove removes the native service before deleting its registry
+// entry, leaving the Minecraft files and runtime configuration in place.
 func actionServerRemove(_ *cobra.Command, args []string) error {
 	inst, err := server.ReadInstance(args[0])
 	if err != nil {
@@ -387,6 +408,8 @@ func actionServerRemove(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// openEditor runs the executable named by EDITOR, falling back to vi, with the
+// current terminal streams and returns its exit error.
 func openEditor(path string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {

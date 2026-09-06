@@ -36,6 +36,7 @@ func init() {
 	rootCmd.AddCommand(removeCmd)
 }
 
+// actionRemove selects the workspace and routes managed instances through the daemon.
 func actionRemove(cmd *cobra.Command, args []string) error {
 	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
@@ -56,6 +57,8 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 	})
 }
 
+// actionRemoveAt updates package intent and prunes the lock in the selected
+// workspace; daemon callers hold the instance lock before entering this action.
 func actionRemoveAt(cmd *cobra.Command, args []string, target cli.CommandTarget) error {
 	workDir := target.WorkDir
 	hasLucyState, err := cli.LucyStateDirExists(workDir)

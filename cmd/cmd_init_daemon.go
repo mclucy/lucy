@@ -35,6 +35,8 @@ var daemonInitCmd = &cobra.Command{
 	RunE:   cli.WithErrorLogging(actionInitDaemon),
 }
 
+// init registers init-daemon and its hidden daemon init alias with an optional
+// binary path for native service installation.
 func init() {
 	initDaemonCmd.Flags().String(
 		flagInitDaemonBinaryName,
@@ -50,6 +52,8 @@ func init() {
 	rootCmd.AddCommand(initDaemonCmd, daemonCmd)
 }
 
+// actionInitDaemon ensures the administration group and installs, enables and
+// starts the daemon service, returning failures before reporting success.
 func actionInitDaemon(cmd *cobra.Command, _ []string) error {
 	binary, _ := cmd.Flags().GetString(flagInitDaemonBinaryName)
 	if binary == "" {

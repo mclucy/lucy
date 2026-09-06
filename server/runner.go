@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -15,8 +13,11 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/mclucy/lucy/log"
 )
 
+// Runner owns one Minecraft process, its console streams, and its control socket.
 type Runner struct {
 	name      string
 	inst      Instance
@@ -29,6 +30,8 @@ type Runner struct {
 	mu        sync.Mutex
 }
 
+// RunServer loads a registered instance and supervises it until exit or cancellation.
+// A missing runtime config is inferred from the instance directory.
 func RunServer(ctx context.Context, name string) error {
 	inst, err := requiredInstance(name)
 	if err != nil {
@@ -52,8 +55,10 @@ func RunServer(ctx context.Context, name string) error {
 	return r.run(ctx)
 }
 
-func (r *Runner) run(ctx context.Context) error {
-	if err := os.MkdirAll(RunnerSocketDir(), 0o755); err != nil {
+// run prepares IPC and logs, starts the child with its configured credentials,
+// and waits for exit even after requesting a graceful stop.
+func (r *Runner) run(ctx context.Context) (err error) {
+	if err := prepareRuntimeDirs(); err != nil {
 		return fmt.Errorf("create runner socket directory: %w", err)
 	}
 
@@ -62,7 +67,11 @@ func (r *Runner) run(ctx context.Context) error {
 		return err
 	}
 	r.logFile = logFile
-	defer logFile.Close()
+	defer func() {
+		if closeErr := logFile.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close console log: %w", closeErr)
+		}
+	}()
 
 	listener, err := listenUnix(RunnerSocketPath(r.name), 0o600)
 	if err != nil {
@@ -81,10 +90,8 @@ func (r *Runner) run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("open server stdin: %w", err)
 	}
-	out := io.MultiWriter(os.Stdout, logFile)
-	errOut := io.MultiWriter(os.Stderr, logFile)
-	cmd.Stdout = out
-	cmd.Stderr = errOut
+	cmd.Stdout = log.RawOutput(os.Stdout, logFile)
+	cmd.Stderr = log.RawOutput(os.Stderr, logFile)
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start minecraft server: %w", err)
@@ -94,7 +101,7 @@ func (r *Runner) run(ctx context.Context) error {
 	r.stdin = stdin
 	r.mu.Unlock()
 
-	_ = MarkPendingRestart(r.name, false, "")
+	_ = NewRuntimeStateService().MarkPendingRestart(r.name, false, "")
 	r.register()
 
 	go r.serveControl(ctx, listener)
@@ -168,6 +175,8 @@ func (r *Runner) openConsoleLog() (*os.File, error) {
 	return logFile, nil
 }
 
+// register announces the runner when the daemon is available; recovery can also
+// discover its derived socket path if this best-effort announcement fails.
 func (r *Runner) register() {
 	_ = CallDaemon(context.Background(), Request{
 		Op: OpRunnerRegister,
@@ -181,6 +190,7 @@ func (r *Runner) register() {
 	}, nil)
 }
 
+// serveControl accepts independent console requests until cancellation or closure.
 func (r *Runner) serveControl(ctx context.Context, listener net.Listener) {
 	go func() {
 		<-ctx.Done()
@@ -195,10 +205,11 @@ func (r *Runner) serveControl(ctx context.Context, listener net.Listener) {
 	}
 }
 
+// handleControl processes one bounded request on the owner-only runner socket.
 func (r *Runner) handleControl(conn net.Conn) {
 	defer conn.Close()
-	var req Request
-	if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&req); err != nil {
+	req, err := decodeRequest(conn)
+	if err != nil {
 		respond(conn, nil, fmt.Errorf("decode runner request: %w", err))
 		return
 	}
@@ -214,6 +225,7 @@ func (r *Runner) handleControl(conn net.Conn) {
 	}
 }
 
+// status reports the child PID and console metadata for this reachable runner.
 func (r *Runner) status() RunnerStatus {
 	return RunnerStatus{
 		Connected: true,
@@ -223,6 +235,7 @@ func (r *Runner) status() RunnerStatus {
 	}
 }
 
+// pid returns zero until the child has started, synchronizing access with startup.
 func (r *Runner) pid() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -232,6 +245,7 @@ func (r *Runner) pid() int {
 	return r.cmd.Process.Pid
 }
 
+// writeLine removes trailing newlines and writes one nonempty console command.
 func (r *Runner) writeLine(line string) error {
 	line = strings.TrimRight(line, "\r\n")
 	if line == "" {
@@ -247,6 +261,8 @@ func (r *Runner) writeLine(line string) error {
 	return err
 }
 
+// stopGracefully sends the configured stop command once and schedules escalation
+// if the child outlives its grace period; callers still wait for process exit.
 func (r *Runner) stopGracefully() error {
 	timeout, err := time.ParseDuration(r.cfg.Stop.Timeout)
 	if err != nil || timeout <= 0 {
@@ -263,6 +279,7 @@ func (r *Runner) stopGracefully() error {
 	return nil
 }
 
+// markGraceful claims the one-time stop transition across signals and IPC callers.
 func (r *Runner) markGraceful() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -273,12 +290,14 @@ func (r *Runner) markGraceful() bool {
 	return true
 }
 
+// isGraceful reports whether an operator stop should suppress child exit errors.
 func (r *Runner) isGraceful() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.graceful
 }
 
+// scheduleForcedStop escalates from TERM to KILL if the child ignores shutdown.
 func (r *Runner) scheduleForcedStop(timeout time.Duration) {
 	go func() {
 		time.Sleep(timeout)
@@ -288,6 +307,7 @@ func (r *Runner) scheduleForcedStop(timeout time.Duration) {
 	}()
 }
 
+// forwardSignals translates the first termination signal into a console stop.
 func (r *Runner) forwardSignals() {
 	signals := make(chan os.Signal, 2)
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
@@ -297,6 +317,7 @@ func (r *Runner) forwardSignals() {
 	}()
 }
 
+// signalIfRunning delivers a process-group signal only while the child is active.
 func (r *Runner) signalIfRunning(signal os.Signal) error {
 	r.mu.Lock()
 	cmd := r.cmd
@@ -307,6 +328,8 @@ func (r *Runner) signalIfRunning(signal os.Signal) error {
 	return signalManagedProcess(cmd, signal)
 }
 
+// mergeEnv appends configured overrides without mutating the inherited environment.
+// os/exec keeps the last value when duplicate environment keys are present.
 func mergeEnv(base []string, extra map[string]string) []string {
 	if len(extra) == 0 {
 		return base

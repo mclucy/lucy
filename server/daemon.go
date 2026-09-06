@@ -2,21 +2,34 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"sync"
 )
 
+// instanceController requires only the native server operations dispatched by Daemon.
+// Installation and management of the shared daemon belong to the CLI instead.
+type instanceController interface {
+	InstanceStarter
+	InstanceStopper
+	InstanceRestarter
+	InstanceEnabler
+	InstanceDisabler
+	InstanceStatusReader
+}
+
+// Daemon coordinates native services and forwards commands to instance runners.
 type Daemon struct {
 	mu      sync.RWMutex
 	runners map[string]RunnerRegistration
-	service ServiceManager
+	service instanceController
 }
 
+// RunDaemon accepts local IPC until ctx is canceled, keeping runners independent
+// of the daemon's lifetime so an API restart does not stop Minecraft processes.
 func RunDaemon(ctx context.Context) error {
-	if err := ensureSharedDir(RunDir(), 0o775); err != nil {
+	if err := prepareRuntimeDirs(); err != nil {
 		return fmt.Errorf("create daemon runtime directory: %w", err)
 	}
 	if err := os.MkdirAll(LogDir(), 0o755); err != nil {
@@ -52,11 +65,12 @@ func RunDaemon(ctx context.Context) error {
 	}
 }
 
+// handle receives and authorizes one bounded request before dispatching it.
 func (d *Daemon) handle(conn net.Conn) {
 	defer conn.Close()
 
-	var req Request
-	if err := json.NewDecoder(conn).Decode(&req); err != nil {
+	req, err := decodeRequest(conn)
+	if err != nil {
 		respond(conn, nil, fmt.Errorf("decode request: %w", err))
 		return
 	}
@@ -68,6 +82,7 @@ func (d *Daemon) handle(conn net.Conn) {
 	respond(conn, data, err)
 }
 
+// dispatch routes an authorized operation to the registry, runner, or native service.
 func (d *Daemon) dispatch(req Request) (any, error) {
 	switch req.Op {
 	case OpList:
@@ -117,12 +132,13 @@ func (d *Daemon) dispatch(req Request) (any, error) {
 	}
 }
 
+// status combines persisted restart intent with current service and runner status.
 func (d *Daemon) status(name string) (InstanceStatus, error) {
 	inst, err := requiredInstance(name)
 	if err != nil {
 		return InstanceStatus{}, err
 	}
-	st, _ := ReadRuntimeState(inst.Name)
+	st, _ := NewRuntimeStateService().Read(inst.Name)
 	return InstanceStatus{
 		Instance:       *inst,
 		Service:        d.service.StatusInstance(*inst),
@@ -132,6 +148,8 @@ func (d *Daemon) status(name string) (InstanceStatus, error) {
 	}, nil
 }
 
+// runnerStatus probes the registered socket, falling back to the derived path
+// after a daemon restart has discarded in-memory registrations.
 func (d *Daemon) runnerStatus(name string) RunnerStatus {
 	d.mu.RLock()
 	reg, ok := d.runners[name]
@@ -149,6 +167,7 @@ func (d *Daemon) runnerStatus(name string) RunnerStatus {
 	return st
 }
 
+// send forwards a nonempty console command to the instance's runner.
 func (d *Daemon) send(name, line string) error {
 	if line == "" {
 		return fmt.Errorf("console command is required")
@@ -161,6 +180,7 @@ func (d *Daemon) send(name, line string) error {
 	}, nil)
 }
 
+// stop requests a graceful runner stop, using native service control if IPC fails.
 func (d *Daemon) stop(name string) error {
 	reg := d.runnerRegistration(name)
 	if err := callUnix(context.Background(), reg.SocketPath, Request{
@@ -176,6 +196,7 @@ func (d *Daemon) stop(name string) error {
 	return d.service.StopInstance(*inst)
 }
 
+// runnerRegistration retrieves a live registration or derives the recovery endpoint.
 func (d *Daemon) runnerRegistration(name string) RunnerRegistration {
 	d.mu.RLock()
 	reg, ok := d.runners[name]
@@ -186,6 +207,8 @@ func (d *Daemon) runnerRegistration(name string) RunnerRegistration {
 	return RunnerRegistration{Name: name, SocketPath: RunnerSocketPath(name)}
 }
 
+// packageTask serializes package changes per instance and marks running servers
+// for restart, distinguishing persistence failures from failure of the task itself.
 func (d *Daemon) packageTask(
 	name string,
 	task PackageTaskRequest,
@@ -206,11 +229,14 @@ func (d *Daemon) packageTask(
 	}
 
 	if d.service.StatusInstance(*inst).Running {
-		_ = MarkPendingRestart(inst.Name, true, pendingRestartReason(task.Name))
+		if err := NewRuntimeStateService().MarkPendingRestart(inst.Name, true, pendingRestartReason(task.Name)); err != nil {
+			return result, fmt.Errorf("package task %s completed, but could not save restart status: %w; restart server %q manually (do not repeat the package task)", task.Name, err, inst.Name)
+		}
 	}
 	return result, nil
 }
 
+// pendingRestartReason explains which part of package state a completed task changed.
 func pendingRestartReason(taskName string) string {
 	switch taskName {
 	case TaskAdd:
@@ -224,6 +250,7 @@ func pendingRestartReason(taskName string) string {
 	}
 }
 
+// requiredInstance validates a name and rejects missing registry entries.
 func requiredInstance(name string) (*Instance, error) {
 	if name == "" {
 		return nil, fmt.Errorf("server name is required")

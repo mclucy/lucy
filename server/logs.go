@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// StreamLog copies a log from its beginning, optionally polling the open file for
+// appended data until cancellation. Read and write failures are returned.
 func StreamLog(ctx context.Context, path string, follow bool, out io.Writer) error {
 	file, err := os.Open(path)
 	if err != nil {

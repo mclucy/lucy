@@ -13,6 +13,8 @@ const (
 	TaskRemove  = "remove"
 )
 
+// RunPackageTask starts a Lucy subprocess in the instance root under its run
+// user, honoring context cancellation and returning combined output even on failure.
 func RunPackageTask(
 	ctx context.Context,
 	inst Instance,
@@ -42,6 +44,8 @@ func RunPackageTask(
 	return result, nil
 }
 
+// packageTaskArgs translates supported task options to the hidden run-task CLI,
+// separating package arguments from flags and rejecting unknown tasks.
 func packageTaskArgs(instance string, task PackageTaskRequest) ([]string, error) {
 	args := []string{"run-task", instance, task.Name}
 	if task.Platform != "" {

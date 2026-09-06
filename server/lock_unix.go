@@ -9,7 +9,9 @@ import (
 	"syscall"
 )
 
-func WithInstanceLock(name string, fn func() error) error {
+// WithInstanceLock validates name and holds a blocking, cross-process file lock
+// while fn runs. It returns the callback's error, or a later close error if any.
+func WithInstanceLock(name string, fn func() error) (err error) {
 	if err := ValidateInstanceName(name); err != nil {
 		return err
 	}
@@ -21,7 +23,11 @@ func WithInstanceLock(name string, fn func() error) error {
 	if err != nil {
 		return fmt.Errorf("open instance lock: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close instance lock: %w", closeErr)
+		}
+	}()
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX); err != nil {
 		return fmt.Errorf("lock server %q: %w", name, err)
 	}

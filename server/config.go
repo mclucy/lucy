@@ -70,6 +70,8 @@ type RestartConfig struct {
 	Policy string `yaml:"policy"`
 }
 
+// ValidateInstanceName rejects names that cannot safely identify registry files
+// and native services; the first character must be a lowercase letter or digit.
 func ValidateInstanceName(name string) error {
 	if !instanceNamePattern.MatchString(name) {
 		return fmt.Errorf("invalid server name %q: use lowercase letters, digits, '-' or '_'", name)
@@ -77,6 +79,8 @@ func ValidateInstanceName(name string) error {
 	return nil
 }
 
+// NewInstance builds registry metadata with an absolute root and default run user.
+// It validates the name but does not create files or install a service.
 func NewInstance(name, root, runUser string) (Instance, error) {
 	if err := ValidateInstanceName(name); err != nil {
 		return Instance{}, err
@@ -100,6 +104,8 @@ func NewInstance(name, root, runUser string) (Instance, error) {
 	}, nil
 }
 
+// GuessRuntimeConfig derives a launch command from the detected server artifact,
+// falling back to Java and server.jar when detection provides no entry point.
 func GuessRuntimeConfig(root string) RuntimeConfig {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
@@ -149,16 +155,18 @@ func GuessRuntimeConfig(root string) RuntimeConfig {
 			relEntrance,
 			"nogui",
 		}
-	case ".sh":
-		cfg.Command = "./" + relEntrance
-		cfg.Args = []string{"nogui"}
 	default:
 		cfg.Command = relEntrance
+		if !filepath.IsAbs(relEntrance) {
+			cfg.Command = "." + string(os.PathSeparator) + relEntrance
+		}
 		cfg.Args = []string{"nogui"}
 	}
 	return cfg
 }
 
+// ReadRuntimeConfig loads launch settings and fills omitted defaults relative to
+// the config directory; a missing file returns nil without an error.
 func ReadRuntimeConfig(path string) (*RuntimeConfig, error) {
 	data, ok, err := state.SafeRead(path)
 	if err != nil || !ok {
@@ -172,6 +180,8 @@ func ReadRuntimeConfig(path string) (*RuntimeConfig, error) {
 	return &cfg, nil
 }
 
+// WriteRuntimeConfig normalizes cfg in place and atomically replaces its YAML
+// file, creating parent directories and rejecting a nil configuration.
 func WriteRuntimeConfig(path string, cfg *RuntimeConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("runtime config is nil")
@@ -187,6 +197,8 @@ func WriteRuntimeConfig(path string, cfg *RuntimeConfig) error {
 	return state.AtomicWrite(path, data, 0o644)
 }
 
+// normalizeRuntimeConfig supplies omitted launch, logging and stop defaults in
+// place, using fallbackRoot only when no working directory is configured.
 func normalizeRuntimeConfig(cfg *RuntimeConfig, fallbackRoot string) {
 	if cfg.FormatVersion == "" {
 		cfg.FormatVersion = FormatVersion

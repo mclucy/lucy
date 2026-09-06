@@ -31,6 +31,7 @@ const (
 // established. Callers may safely retry only this class of transport failure.
 var ErrIPCUnavailable = errors.New("IPC endpoint unavailable")
 
+// Request carries exactly one daemon or runner operation over local IPC.
 type Request struct {
 	Op       string             `json:"op"`
 	Instance string             `json:"instance,omitempty"`
@@ -39,18 +40,22 @@ type Request struct {
 	Task     PackageTaskRequest `json:"task,omitempty"`
 }
 
+// Response separates transport success from an operation's error and result data.
 type Response struct {
 	OK    bool            `json:"ok"`
 	Error string          `json:"error,omitempty"`
 	Data  json.RawMessage `json:"data,omitempty"`
 }
 
+// ResponseError is an explicit server rejection, never an auto-start retry signal.
 type ResponseError struct {
 	Message string
 }
 
+// Error returns the server's operation error verbatim.
 func (e ResponseError) Error() string { return e.Message }
 
+// RunnerRegistration advertises the expected instance socket and process metadata.
 type RunnerRegistration struct {
 	Name       string `json:"name"`
 	SocketPath string `json:"socket_path"`
@@ -59,6 +64,7 @@ type RunnerRegistration struct {
 	StartedAt  string `json:"started_at"`
 }
 
+// RunnerStatus reports whether the child supervisor can answer console requests.
 type RunnerStatus struct {
 	Connected bool   `json:"connected"`
 	Pid       int    `json:"pid,omitempty"`
@@ -67,6 +73,7 @@ type RunnerStatus struct {
 	Detail    string `json:"detail,omitempty"`
 }
 
+// InstanceStatus combines native lifecycle state, runner reachability, and restart intent.
 type InstanceStatus struct {
 	Instance       Instance     `json:"instance"`
 	Service        ServiceState `json:"service"`
@@ -75,6 +82,7 @@ type InstanceStatus struct {
 	PendingReason  string       `json:"pending_reason,omitempty"`
 }
 
+// PackageTaskRequest preserves package-command options across the privilege boundary.
 type PackageTaskRequest struct {
 	Name            string             `json:"name"`
 	Args            []string           `json:"args,omitempty"`
@@ -83,20 +91,26 @@ type PackageTaskRequest struct {
 	AddOptions      PackageTaskAddOpts `json:"add_options,omitempty"`
 }
 
+// PackageTaskAddOpts preserves add-only conflict and dependency selection flags.
 type PackageTaskAddOpts struct {
 	Force        bool `json:"force,omitempty"`
 	WithOptional bool `json:"with_optional,omitempty"`
 	NoOptional   bool `json:"no_optional,omitempty"`
 }
 
+// PackageTaskResult carries the child command's already formatted console output.
 type PackageTaskResult struct {
 	Output string `json:"output,omitempty"`
 }
 
+// CallDaemon sends one operation to the daemon; callers must not retry failures
+// after a connection has been established because the operation may have run.
 func CallDaemon(ctx context.Context, req Request, out any) error {
 	return callUnix(ctx, DaemonSocketPath(), req, out)
 }
 
+// callUnix exchanges one JSON request and response, respecting context cancellation.
+// Package operations have no implicit deadline; short control requests use 30 seconds.
 func callUnix(ctx context.Context, socketPath string, req Request, out any) error {
 	dialer := net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "unix", socketPath)
@@ -104,6 +118,9 @@ func callUnix(ctx context.Context, socketPath string, req Request, out any) erro
 		return fmt.Errorf("%w: %w", ErrIPCUnavailable, err)
 	}
 	defer conn.Close()
+	if err := authorizeIPCServer(conn, socketPath, req); err != nil {
+		return err
+	}
 
 	var deadline time.Time
 	if value, ok := ctx.Deadline(); ok {
@@ -146,7 +163,10 @@ func callUnix(ctx context.Context, socketPath string, req Request, out any) erro
 	return nil
 }
 
+// respond encodes an operation result with a bounded write so unread responses
+// cannot indefinitely retain a connection after request decoding has finished.
 func respond(conn net.Conn, data any, err error) {
+	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	resp := Response{OK: err == nil}
 	if err != nil {
 		resp.Error = err.Error()
@@ -162,10 +182,24 @@ func respond(conn net.Conn, data any, err error) {
 	_ = json.NewEncoder(conn).Encode(resp)
 }
 
-func listenUnix(socketPath string, mode os.FileMode) (net.Listener, error) {
-	if err := ensureSharedDir(filepathDir(socketPath), 0o775); err != nil {
-		return nil, err
+// decodeRequest bounds the time spent receiving a complete request. The read
+// deadline is cleared before dispatch so long-running package tasks can finish.
+func decodeRequest(conn net.Conn) (Request, error) {
+	var req Request
+	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		return req, err
 	}
+	if err := json.NewDecoder(conn).Decode(&req); err != nil {
+		return req, err
+	}
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		return req, err
+	}
+	return req, nil
+}
+
+// listenUnix replaces a stale local endpoint and applies the requested socket access mode.
+func listenUnix(socketPath string, mode os.FileMode) (net.Listener, error) {
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -177,10 +211,14 @@ func listenUnix(socketPath string, mode os.FileMode) (net.Listener, error) {
 		_ = l.Close()
 		return nil, err
 	}
-	_ = chownGroup(socketPath, DefaultGroup)
+	if err := chownGroup(socketPath, DefaultGroup); err != nil {
+		_ = l.Close()
+		return nil, err
+	}
 	return l, nil
 }
 
+// filepathDir extracts the parent of a Unix socket path, retaining root and dot cases.
 func filepathDir(path string) string {
 	for i := len(path) - 1; i >= 0; i-- {
 		if path[i] == '/' {

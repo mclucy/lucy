@@ -59,6 +59,8 @@ const (
 	flagNoOptionalName   = "no-optional"
 )
 
+// init exposes hidden daemon, runner and package-task entry points used by native
+// services and subprocesses, including add-task and platform flags.
 func init() {
 	runTaskCmd.Flags().BoolP(
 		flagForceName,
@@ -80,6 +82,8 @@ func init() {
 	rootCmd.AddCommand(runDaemonCmd, runServerCmd, runTaskCmd)
 }
 
+// actionRunTask dispatches a supported package operation in the registered root
+// without acquiring another instance lock; the daemon holds the outer lock.
 func actionRunTask(cmd *cobra.Command, args []string) error {
 	inst, err := server.ReadInstance(args[0])
 	if err != nil {

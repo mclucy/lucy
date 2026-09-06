@@ -55,6 +55,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// init registers shared flags and public command groups on the root command.
 func init() {
 	rootCmd.PersistentFlags().Bool(cli.FlagDebug, false, "Show debug logs")
 	rootCmd.PersistentFlags().Bool(

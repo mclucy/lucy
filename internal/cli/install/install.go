@@ -36,6 +36,8 @@ func NewCommand() *cobra.Command {
 	return installCmd
 }
 
+// actionInstall selects a workspace and delegates registered-instance writes
+// to the daemon so installation runs as the configured server user.
 func actionInstall(cmd *cobra.Command, args []string) error {
 	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
@@ -53,6 +55,8 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 	})
 }
 
+// actionInstallAt converges the selected workspace from its lock or manifest,
+// preserving platform overrides and recording the resulting resolved state.
 func actionInstallAt(cmd *cobra.Command, target cli.CommandTarget) error {
 	workDir := target.WorkDir
 	hasLucyState, err := cli.LucyStateDirExists(workDir)
