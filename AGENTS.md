@@ -73,13 +73,10 @@ To run the built binary against a test server directory:
 
 ## Researching and Designing
 
-1. If your task is not general, i.e., the ones applicable and universal to almost any program, you should consider doing some research to know about the specific context.
-2. Always do research on complicated and large features or refactors.
-3. While researching, you should take reference to other package managers, such as Cargo, npm, pip, apt, brew, etc. This does not mean you should copy their design. Combine your research with our own design principles.
-4. If the task is highly Minecraft-related, it is very likely that you don't have the most-updated or correct knowledge about it. Either do some research or ask me if you are not sure about something.
-5. Whenever you are adding new types/enums/structs, you must elaborate and justify your design.
-6. I am open to adding new packages if you think they will greatly simplify the code. Ask me before doing that.
-7. You must always justify your design. Elaborate your architecture's shape and why is it.
+1. If your task is highly domain (Minecraft) related, always conduct research before action.
+2. Take reference from other package managers, such as Cargo, npm, pip, apt, brew, etc. This does not mean you should copy their design. Combine your research with our own design principles.
+3. Before implementing a new feature, or refactoring existing modules, first walk me through the core functions and types.
+4. You are encouraged to use existing go packages rather than reinventing the wheel. However, you must first ask for permission and justify your decision.
 
 ## Testing and Debugging
 
@@ -87,7 +84,7 @@ To run the built binary against a test server directory:
 2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `testdata/environments/environments.yaml`. There's brief explanation for each environment in `testdata/environments/families/*.md`.
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
 4. Upon refactors/bug fixes/feature additions, you may write temporary go test files for PoC but you must dispose them afterwards.
-5. Do not create persisted tests unless explicitly asked.
+5. Do not commit persisted tests unless explicitly asked.
 
 ### envgen CLI
 
@@ -111,7 +108,5 @@ The CLI is idempotent:
 
 ## Other Rules
 
-1. If you suspect there might be helpful packages to add, you should search on the web, or look up on go.dev.
-2. If you believe the initial demand is fully satisfied and all current context will not be helpful for future tasks, you can remind me to open a new session.
-3. Upon refactors, always reconsider the file structure of touched packages. You should do a cleanup by moving/renaming/merging/splitting files for better maintainability.
-4. Prefix files with the package name for convinent searching.
+1. Always tidy the files in packages touched after refactoring: relocate/rename/merge/split files for better maintainability.
+2. Prefix files with the package name for convinent searching.
