@@ -1,0 +1,45 @@
+---
+title: "lucy info"
+description: "Display information about a package or local artifact file"
+---
+
+`lucy info` fetches and displays metadata for a package from an upstream registry, or reads it directly from a local file without making a network request.
+
+```bash
+lucy info <package|file>
+```
+
+```bash
+lucy info modrinth:fabric-api
+lucy info worldedit
+lucy info ./mods/worldedit-7.3.0.jar
+lucy info ./plugins/luckperms.jar
+```
+
+## Arguments
+
+<ParamField path="package|file" type="string" required>
+  Either a package reference or a path to a local artifact file.
+
+  **Remote reference** — a slug, `source:slug`, or `ecosystem:source:slug` identifier. When only a slug is given, `lucy` queries all applicable sources and returns the first match.
+
+  **Local file** — a path to a `.jar`, `.zip`, `.pyz`, or `.mcdr` file. Reads embedded metadata directly from the archive without a network request. If the file hash matches a known upstream project, that project's metadata is merged in.
+</ParamField>
+
+## Flags
+
+<ParamField query="--long, -l" type="boolean" default="false">
+  Show the full README instead of a truncated preview, and expand any collapsed sections.
+</ParamField>
+
+<ParamField query="--json" type="boolean" default="false">
+  Print the raw metadata as pretty-printed JSON.
+</ParamField>
+
+## Local file inspection
+
+When given a file path, `lucy info` reads the embedded mod or plugin descriptor (`fabric.mod.json`, `mods.toml`, `plugin.yml`, etc.) and displays its declared metadata: name, version, description, authors, dependencies, and links.
+
+If the file's hash matches an upstream project, that project's remote metadata is merged with the local descriptor. Remote values take precedence over locally declared ones, and the install identifier you would use with `lucy add` is shown.
+
+See also [Global Flags](/commands/global-flags).

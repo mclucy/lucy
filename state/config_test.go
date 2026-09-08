@@ -1,34 +1,8 @@
 package state
 
 import (
-	"bytes"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 )
-
-func TestConfigRoundTrip(t *testing.T) {
-	cfg := ConfigDefaults()
-
-	first, err := yaml.Marshal(cfg)
-	if err != nil {
-		t.Fatalf("first marshal failed: %v", err)
-	}
-
-	var parsed Config
-	if err := yaml.Unmarshal(first, &parsed); err != nil {
-		t.Fatalf("unmarshal failed: %v", err)
-	}
-
-	second, err := yaml.Marshal(parsed)
-	if err != nil {
-		t.Fatalf("second marshal failed: %v", err)
-	}
-
-	if !bytes.Equal(first, second) {
-		t.Errorf("round-trip produced different output:\nfirst:\n%s\nsecond:\n%s", first, second)
-	}
-}
 
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {

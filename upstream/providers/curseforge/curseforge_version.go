@@ -5,8 +5,6 @@ import (
 	"github.com/mclucy/lucy/upstream"
 )
 
-// listFiles fetches files for a mod with optional filtering by game version
-// and mod loader type.
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-files
 func listFiles(modId int32, gameVersion string, loaderType int) (
 	[]fileResponse, error,

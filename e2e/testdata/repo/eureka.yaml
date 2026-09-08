@@ -1,0 +1,8 @@
+# Tag: release/1.6.3 (Minecraft 1.20.1).
+# Mixed Kotlin settings/Groovy builds and a local applied publishing script.
+# Both common and loader projects apply Loom; select the loader explicitly.
+# Distributed on Modrinth: https://modrinth.com/mod/eureka
+url: https://github.com/ValkyrienSkies/Eureka.git
+commit: 07cf4181d72590731d140d603bda5c9de23c5ae7
+platform: fabric
+project: ':fabric'

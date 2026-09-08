@@ -27,8 +27,6 @@ type Lock struct {
 }
 
 // LockedPackage records one exact resolved artifact and how it entered the
-// resolved graph.
-// LockedPackage records one exact resolved artifact and how it entered the
 // resolved graph. ID and Source form stable package identity; Platform records
 // the selected artifact variant.
 type LockedPackage struct {

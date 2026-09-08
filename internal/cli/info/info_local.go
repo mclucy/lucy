@@ -74,8 +74,8 @@ func actionArtifactInfo(cmd *cobra.Command, filePath string) error {
 }
 
 // artifactLookup is the upstream result for one artifact file. Ref is the
-// project that matched the file hash, or nil. Info is the metadata of that
-// project. It is nil when the metadata lookup failed. Warnings holds the
+// project that matched the file hash, nil when nothing matched. Info is that
+// project's metadata, nil when the metadata lookup failed. Warnings holds the
 // problems found during the lookup.
 type artifactLookup struct {
 	Ref      *types.VersionedPackageRef
@@ -143,8 +143,8 @@ func matchedUpstream(info artifact.Info, lookup artifactLookup) *upstream.Info {
 	return lookup.Info
 }
 
-// displayMetadata merges the metadata of the archive and the upstream.
-// The upstream values win. The archive values fill the gaps.
+// displayMetadata merges archive and upstream metadata; upstream values win,
+// archive values fill the gaps.
 func displayMetadata(info artifact.Info, match *upstream.Info) types.Metadata {
 	local := info.Metadata
 	if local.Title == "" {
@@ -194,9 +194,8 @@ func firstNonEmptySlice[T comparable](slices ...[]T) []T {
 	return nil
 }
 
-// artifactInfoView is the --json form of one descriptor in the archive.
-// Metadata is what the archive declares. Upstream holds the matched
-// upstream project.
+// artifactInfoView is the --json form of one archive descriptor. Metadata is
+// what the archive declares; Upstream holds the matched upstream project.
 type artifactInfoView struct {
 	File         string                   `json:"file"`
 	Package      string                   `json:"package"`
@@ -208,7 +207,6 @@ type artifactInfoView struct {
 	Warnings     []string                 `json:"warnings,omitempty"`
 }
 
-// upstreamMatchView describes the upstream project matched by file hash.
 type upstreamMatchView struct {
 	Ref      string          `json:"ref"`
 	Metadata *types.Metadata `json:"metadata,omitempty"`

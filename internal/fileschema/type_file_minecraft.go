@@ -5,13 +5,8 @@ import (
 	"time"
 )
 
-// FileMinecraftVersionSpec is the struct for version.json found in Minecraft
-// jar files.
-//
-// wiki:
-// https://zh.minecraft.wiki/w/%E7%89%88%E6%9C%AC%E4%BF%A1%E6%81%AF%E6%96%87%E4%BB%B6%E6%A0%BC%E5%BC%8F
-//
-// TODO: This file does not exist before 18w47b (1.14), find alternative methods to detect versions
+// FileMinecraftVersionSpec is version.json metadata found in Minecraft JARs
+// from 18w47b onward.
 type FileMinecraftVersionSpec struct {
 	Id              string         `json:"id"`
 	Name            string         `json:"name"`

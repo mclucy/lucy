@@ -67,7 +67,6 @@ func (f *FieldTree) RenderChildren() string {
 	return t.String()
 }
 
-// HasChildren reports whether this field has child nodes.
 func (f *FieldTree) HasChildren() bool {
 	return len(f.Children) > 0
 }

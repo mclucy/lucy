@@ -23,7 +23,6 @@ func (provider) Id() types.SourceId {
 	return types.SourceCurseForge
 }
 
-// Search queries the CurseForge /v1/mods/search endpoint.
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	options := upstream.SearchOptions{
 		IncludeClient:   !q.ExcludeClient,
@@ -39,7 +38,6 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	return resp.ToSearchResults(p.Id()), nil
 }
 
-// Fetch resolves the package version, then fetches the corresponding file.
 func (p provider) Fetch(
 	local upstream.LocalContext,
 	id types.VersionedPackageRef,
@@ -60,7 +58,6 @@ func (p provider) Fetch(
 	return resolved, nil
 }
 
-// Info resolves a project slug and returns project metadata.
 func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	mod, err := resolveSlug(ref.Name)
 	if err != nil {
@@ -114,7 +111,7 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 		// 6 = Include (skip - bundled with the mod)
 
 		switch dep.RelationType {
-		case 2: // OptionalDependency
+		case 2:
 			result.Value = append(
 				result.Value, types.Dependency{
 					Id: types.VersionedPackageRef{
@@ -130,7 +127,7 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 					Mandatory: false,
 				},
 			)
-		case 3: // RequiredDependency
+		case 3:
 			result.Value = append(
 				result.Value, types.Dependency{
 					Id: types.VersionedPackageRef{
@@ -147,7 +144,6 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 				},
 			)
 		default:
-			// Skip 1, 4, 5, 6 - not runtime dependencies
 			continue
 		}
 	}

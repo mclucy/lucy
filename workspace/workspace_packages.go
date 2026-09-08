@@ -49,15 +49,13 @@ func resolveUpstream(
 	return types.VersionedPackageRef{}, false
 }
 
-// discoverPackages fills in the package index of one workspace probe. It
-// analyzes every jar under searchPaths and every MCDR plugins under
-// mcdrPluginDirs, when the MCDR environment exists. Results are
-// deduplicated and sorted. Two discoveries of one package keep the entry
-// that has a local path.
+// discoverPackages inventories the packages under searchPaths and
+// mcdrPluginDirs, when the MCDR environment exists. Deduplication and
+// local-path enrichment follow the PackageIndex.Add policy.
 //
-// Expensive. It opens every candidate artifact. Every artifact also goes
-// through a hash query. A hit anchors the jar to a stable upstream
-// identity and records the local-to-remote mapping.
+// Expensive: every candidate artifact is opened and also queried by hash.
+// A hit anchors the jar to a stable upstream identity and records the
+// local-to-remote mapping.
 func discoverPackages(
 	sess *knownpkgs.Session,
 	searchPaths []string,
@@ -210,11 +208,9 @@ func discoveredFromUpstream(
 
 // knownPackagesSlugResolver returns a slug resolver that consults the
 // knownpkgs session for a canonical name matching the detected
-// platform/local name.
-//
-// On hit, the mapping is promoted into the session cache via Record so that
-// subsequent resolutions in the same invocation see the freshly discovered
-// mapping without re-querying.
+// platform/local name. On hit, the mapping is re-recorded via Record so
+// subsequent resolutions in the same invocation see it without re-querying
+// the persisted store.
 func knownPackagesSlugResolver(session *knownpkgs.Session) artifact.SlugResolver {
 	return func(
 		ctx context.Context,
@@ -225,8 +221,6 @@ func knownPackagesSlugResolver(session *knownpkgs.Session) artifact.SlugResolver
 		if !ok || canonical == string(name) {
 			return name, nil
 		}
-		// Resolver runs on the local name only, not on file contents — the
-		// persisted store already holds this mapping (LookupAny hit it).
 		session.Record(src, string(name), "", canonical, "hash")
 		return types.BarePackageName(canonical), nil
 	}

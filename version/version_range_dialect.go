@@ -58,9 +58,6 @@ func ParseRange(
 		if scheme != types.Semver {
 			return nil
 		}
-		// MCDR uses space-separated criteria (AND) with operators
-		// >=, >, <=, <, =, ==, ^, ~ and wildcard versions.
-		// Reference: https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
 		return parseMcdrSemverRange(raw)
 	case DialectFabricSemver:
 		if scheme != types.Semver {

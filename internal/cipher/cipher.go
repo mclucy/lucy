@@ -16,7 +16,6 @@ import (
 )
 
 // Linker-injected material. Set only via -X at build time; never set in source.
-// Four encrypted-material fragments are concatenated inside Decode only.
 var (
 	keyA        string
 	keyB        string
@@ -118,15 +117,12 @@ func Encrypt(key []byte, plaintext, version, commit string) (string, error) {
 // associatedData builds the canonical AD sequence:
 //
 //	lucy-cipher-v1 \0 <version> \0 <commit>
-//
-// Identity must be both empty or both nonempty.
 func associatedData(version, commit string) ([]byte, error) {
 	vEmpty := version == ""
 	cEmpty := commit == ""
 	if vEmpty != cEmpty {
 		return nil, errors.New("cipher: incomplete release identity")
 	}
-	// domain + NUL + version + NUL + commit
 	n := len(adDomain) + 1 + len(version) + 1 + len(commit)
 	ad := make([]byte, 0, n)
 	ad = append(ad, adDomain...)

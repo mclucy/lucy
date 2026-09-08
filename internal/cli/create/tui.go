@@ -21,7 +21,7 @@ func applyAccessible(f *huh.Form) *huh.Form {
 	return f
 }
 
-// confirmProceed asks the user to confirm a risky creation. --force skips this.
+// confirmProceed asks the user to confirm a risky creation. --force skips it.
 func confirmProceed(title, description string, force bool) (bool, error) {
 	if force {
 		return true, nil
@@ -86,7 +86,6 @@ func gatherInputs(
 	return rawCores, gameVersion, false, nil
 }
 
-// nonEmpty builds a validator that rejects blank answers with message.
 func nonEmpty(message string) func(string) error {
 	return func(s string) error {
 		if strings.TrimSpace(s) == "" {

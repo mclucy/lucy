@@ -5,14 +5,11 @@
 //   - index:  versioned manifest tracking cache entries with v1→v2 migration
 //   - policy: per-kind (artifact vs metadata) TTL and size-limit enforcement
 //
-// The primary consumer-facing API is [util.CachedDownload], which wraps HTTP
+// The primary consumer-facing API is [CachedDownload], which wraps HTTP
 // downloads with streaming hash verification, cache storage, and optional
-// progress bar injection via DownloadOptions.WrapReader.
-//
-// Cache entries are keyed by URL and classified as either KindArtifact (JARs,
-// binaries — long TTL) or KindMetadata (version manifests, API responses —
-// short TTL). Integrity verification is performed inline during download when
-// an expected hash is provided.
+// progress bar injection via DownloadOptions.WrapReader. Integrity
+// verification is performed inline during download when an expected hash
+// is provided.
 package cache
 
 import "sync"

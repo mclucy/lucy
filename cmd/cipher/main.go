@@ -79,8 +79,6 @@ func main() {
 	fmt.Printf("cipher_ciphertext_b=%s\n", ctB)
 }
 
-// readSecret reads all of r, trims a single trailing newline if present, and
-// rejects empty input after trimming surrounding whitespace.
 func readSecret(r io.Reader) (string, error) {
 	raw, err := io.ReadAll(r)
 	if err != nil {
@@ -97,7 +95,6 @@ func readSecret(r io.Reader) (string, error) {
 	return s, nil
 }
 
-// splitExactHalves splits s into two equal-length halves. s must have even length.
 func splitExactHalves(s string) (string, string, error) {
 	if len(s) == 0 {
 		return "", "", fmt.Errorf("empty string")

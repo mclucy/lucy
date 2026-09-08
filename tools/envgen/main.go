@@ -1,5 +1,4 @@
-// Command envgen generates sandbox server environments from the manifest in
-// testdata/environments into .sandboxes/. See docs/shared/sandbox-environments.md.
+// Command envgen materializes server sandboxes from e2e/testdata/environments.
 package main
 
 import (
@@ -46,14 +45,13 @@ func (d *docsRefs) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type environment struct {
-	ID            string     `yaml:"id"`
-	Family        string     `yaml:"family"`
-	GameVersion   string     `yaml:"game_version"`
-	Description   string     `yaml:"description"`
-	Docs          docsRefs   `yaml:"docs,omitempty"`
-	Dirs          []string   `yaml:"dirs"`
-	Artifacts     []artifact `yaml:"artifacts"`
-	InstallerHint string     `yaml:"installer_hint,omitempty"`
+	ID          string     `yaml:"id"`
+	Family      string     `yaml:"family"`
+	GameVersion string     `yaml:"game_version"`
+	Description string     `yaml:"description"`
+	Docs        docsRefs   `yaml:"docs,omitempty"`
+	Dirs        []string   `yaml:"dirs"`
+	Artifacts   []artifact `yaml:"artifacts"`
 }
 
 type artifact struct {
@@ -90,7 +88,12 @@ type options struct {
 
 func main() {
 	opts := options{}
-	flag.StringVar(&opts.manifestPath, "manifest", "testdata/environments/environments.yaml", "path to environments manifest")
+	flag.StringVar(
+		&opts.manifestPath,
+		"manifest",
+		"e2e/testdata/environments/environments.yaml",
+		"path to environments manifest",
+	)
 	flag.StringVar(&opts.outRoot, "out", ".sandboxes", "output root for generated environments")
 	defaultCache, _ := os.UserCacheDir()
 	flag.StringVar(&opts.cacheDir, "cache", filepath.Join(defaultCache, "lucy-envgen"), "download cache directory")
@@ -200,9 +203,6 @@ func run(man *manifest, opts options) error {
 			fmt.Fprintf(os.Stderr, "[FAIL] %s: %v\n", env.ID, err)
 			failed = append(failed, env.ID)
 			continue
-		}
-		if env.InstallerHint != "" {
-			fmt.Printf("[HINT] %s: %s\n", env.ID, env.InstallerHint)
 		}
 	}
 	if len(failed) > 0 {

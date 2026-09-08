@@ -36,18 +36,16 @@ func osc4Query(index uint8) color.Color {
 		return nil
 	}
 
-	// Raw mode
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
 		return nil
 	}
 	defer func() { _ = term.Restore(fd, oldState) }()
 
-	// OSC 4 query. Prefer ST terminator (ESC \).
-	// (Many terminals also accept BEL; ST is the official string terminator.)
+	// OSC 4 query. ST is the official string terminator; many terminals
+	// also accept BEL, but ST is used here.
 	query := fmt.Sprintf("\x1b]4;%d;?\x1b\\", index)
 
-	// Write query
 	if _, err := tty.Write([]byte(query)); err != nil {
 		return nil
 	}
@@ -113,8 +111,8 @@ func shouldQueryOSC4(profile termenv.Profile) bool {
 }
 
 func parseOSC4Response(index uint8, data []byte) color.Color {
-	// Example: ESC ] 4 ; 1 ; rgb:ffff/0000/0000 ESC \
-	// Some terminals may return "#" hex; handle only rgb:.... here for clarity.
+	// Response: ESC ] 4 ; <i> ; rgb:rrrr/gggg/bbbb ESC \. Some terminals
+	// return "#"-hex; only rgb:.... is handled here.
 	re := regexp.MustCompile(`\x1b\]4;` + strconv.Itoa(int(index)) + `;rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})`)
 	m := re.FindSubmatch(data)
 	if m == nil {

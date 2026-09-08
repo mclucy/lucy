@@ -28,7 +28,6 @@ var initCmd = &cobra.Command{
 	RunE:  cli.WithErrorLogging(actionInit),
 }
 
-// NewCommand wires and returns the `lucy init` command.
 func NewCommand() *cobra.Command {
 	initCmd.Flags().BoolP(
 		flagInitForceName,
@@ -70,7 +69,6 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 
 	ws := workspace.NewAt(workDir)
 
-	// An unresolved server fails the init process
 	_, resolved := ws.Probe.Single()
 	switch {
 	case ws.Probe.HasAmbiguity():
@@ -131,8 +129,8 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// createManifest picks the manifest content for the probe result.
-// A nil manifest means the redirect ran. Init then stops.
+// createManifest picks the manifest content for the probe result. A nil
+// manifest means the create redirect ran and init stops.
 func createManifest(
 	ws workspace.Workspace,
 	workDir string,
@@ -156,7 +154,6 @@ func createManifest(
 			return nil, fmt.Errorf("create prompt: %w", err)
 		}
 		if runCreate {
-			// The redirect runs the real create flow.
 			if err := create.Execute(workDir, opts.Force, "", ""); err != nil {
 				return nil, fmt.Errorf("lucy create: %w", err)
 			}

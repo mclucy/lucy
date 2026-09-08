@@ -39,8 +39,6 @@ func newBungeeCordReader() Reader {
 	return &bungeeCordReader{}
 }
 
-// Read extracts artifact metadata from velocity-plugin.json inside a Velocity
-// plugin JAR.
 func (r *velocityReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
@@ -100,8 +98,6 @@ func (r *velocityReader) Read(
 	return nil, nil
 }
 
-// Read extracts artifact metadata from bungee.yml inside a BungeeCord plugin
-// JAR.
 func (r *bungeeCordReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,

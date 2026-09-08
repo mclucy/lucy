@@ -1,0 +1,38 @@
+---
+title: "lucy init"
+description: "Generate manifest file for an existing server directory"
+---
+
+`lucy init` creates the manifest file `lucy.yaml` per the current server setup.
+
+Use `lucy init` to start managing an existing server instance with `lucy`. Or, use it to overwrite an existing manifest with the current server state. To create a new server from scratch, use [`lucy create`](/commands/create) instead.
+
+```bash
+lucy init
+```
+
+If no server is detected and `--allow-empty` is not set, `lucy init` offers to redirect you to `lucy create` to scaffold a new server instead.
+
+## Flags
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Overwrite an existing `lucy.yaml` without prompting for confirmation. Without this flag, `lucy init` asks before replacing an existing manifest.
+</ParamField>
+
+<ParamField query="--allow-empty, -y" type="boolean" default="false">
+  Generate a manifest even when no server runtime is detected in the directory. Skips the interactive prompt that would otherwise redirect you to `lucy create`. Combine with `--game-version` to record the target Minecraft version.
+</ParamField>
+
+<ParamField query="--game-version" type="string">
+  The Minecraft version to record in the manifest when no server binary is present (e.g. `1.21.4`). Has no effect when a server is detected — the version is read from the runtime directly.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags).
+
+## Behavior
+
+For deterministic resolution, `lucy init` fails if the directory contains ambiguous or unrecognized server files (for example, two conflicting server JARs under the server root). Resolve the conflict manually before running `init`.
+
+When a manifest already exists and `--force` is not set, `lucy init` shows a confirmation prompt before overwriting it.
+
+After detection, a review step shows the manifest that will be written and asks for confirmation before saving — unless `--allow-empty` is set and no server was found.

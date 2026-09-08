@@ -10,7 +10,6 @@ import (
 // fixed constraint during recursive solving. The package must not be replaced
 // automatically; it only contributes as a fixed version anchor.
 type InstalledConstraint struct {
-	// Package is the installed package with its local installation path.
 	Package types.DiscoveredPackage
 
 	// ConstraintInput is the fixed constraint edge derived from this installed
@@ -66,7 +65,6 @@ type ApplyPlan struct {
 	Resolved             ResolvedClosure
 	InstalledConstraints []InstalledConstraint
 
-	// Install is the ordered list of packages to install.
 	Install []types.InstalledPackage
 
 	// Remove is the list of locally-installed packages proven unreachable from

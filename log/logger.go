@@ -29,7 +29,6 @@ import (
 // ── File-only functions ─────────────────────────────────────────────────
 
 // Info logs an informational entry to the log file.
-// In verboseWrite mode the entry is also printed to the console.
 func Info(content any) {
 	e := &entry{Time: time.Now(), Level: log.InfoLevel, Content: content}
 	record(e)
@@ -40,7 +39,6 @@ func Info(content any) {
 }
 
 // Warn logs a warning to the log file.
-// In verboseWrite mode the entry is also printed to the console.
 func Warn(content error) {
 	if content == nil {
 		return
@@ -54,7 +52,6 @@ func Warn(content error) {
 }
 
 // Error logs an error to the log file.
-// In verboseWrite mode the entry is also printed to the console.
 func Error(content error) {
 	if content == nil {
 		return
@@ -68,7 +65,6 @@ func Error(content error) {
 }
 
 // Debug logs a debug entry to the log file. No-op unless debug mode is on.
-// In verboseWrite mode the entry is also printed to the console.
 func Debug(content any) {
 	if !debug {
 		return
@@ -84,19 +80,16 @@ func Debug(content any) {
 // ── User-display only functions ─────────────────────────────────────────
 
 // ShowInfo displays an informational message to the user on stderr.
-// The message is NOT written to the log file.
 func ShowInfo(content any) {
 	consoleLog.Info(fmt.Sprint(content))
 }
 
 // ShowWarn displays a warning to the user on stderr.
-// The message is NOT written to the log file.
 func ShowWarn(content error) {
 	consoleLog.Warn(content.Error())
 }
 
 // ShowError displays an error to the user on stderr.
-// The message is NOT written to the log file.
 func ShowError(content error) {
 	consoleLog.Error(content.Error())
 }
@@ -144,8 +137,8 @@ func ReportError(content error) {
 func Fatal(content error) {
 	e := &entry{Time: time.Now(), Level: log.FatalLevel, Content: content}
 	record(e)
-	getFileLog().Error(content.Error()) // write to file at error level (Fatal would exit)
-	consoleLog.Error(content.Error())   // show to user
+	getFileLog().Error(content.Error()) // Error, not Fatal: Fatal would exit
+	consoleLog.Error(content.Error())
 	DumpHistory()
 	os.Exit(1)
 }
@@ -169,7 +162,6 @@ func DumpHistory() {
 		style.Muted("── Log history ("+getLogFile().Name()+") ──"),
 	)
 
-	// Create a temporary log for replay with time-only timestamps.
 	replay := log.NewWithOptions(
 		os.Stderr, log.Options{
 			ReportTimestamp: true,

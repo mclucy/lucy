@@ -1,0 +1,43 @@
+---
+title: "Global Flags"
+description: "Flags available on every lucy command"
+---
+
+These flags are inherited by every `lucy` subcommand.
+
+## Meta
+
+<ParamField query="--version" type="boolean">
+  Print the current `lucy` version and exit.
+</ParamField>
+
+
+## Output
+
+<ParamField query="--no-style" type="boolean" default="false">
+  Disable colored and styled terminal output. Useful in environments that do not support ANSI escape codes, or when piping output to another program.
+</ParamField>
+
+<ParamField query="--json-compact" type="boolean" default="false">
+  Print raw JSON without indentation. Implies machine-readable output on any command that supports JSON. Use `--json` (per-command) for pretty-printed JSON.
+</ParamField>
+
+## Logging
+
+<ParamField query="--debug" type="boolean" default="false">
+  Show debug-level log entries in the console.
+</ParamField>
+
+<ParamField query="--log-file" type="boolean" default="false">
+  Print the path to the session log file before running the command.
+</ParamField>
+
+<ParamField query="--print-logs" type="boolean" default="false">
+  Stream log entries to the console as they are emitted.
+</ParamField>
+
+## Network
+
+<ParamField query="--use-github-mirror" type="boolean" default="false">
+  Route eligible downloads through the GitHub release mirror instead of the canonical upstream URL. This is useful for users in regions with limited access to GitHub. We use https://ghfast.top for this feature.
+</ParamField>

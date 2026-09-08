@@ -6,8 +6,7 @@ import (
 	"charm.land/log/v2"
 )
 
-// entry represents a single log item for the history buffer.
-// Uses charm/log's Level type directly.
+// entry is one history-buffer record.
 type entry struct {
 	Time    time.Time
 	Level   log.Level

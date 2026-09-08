@@ -79,12 +79,13 @@ func (f *facetItem) String() string {
 	return `"` + f.Type + f.Operation.String() + f.Value + `"`
 }
 
-// facetItems is an array of facetItem. It represents an expression joined by OR statements.
-// a complete facet is an array of facetItems, with each array joined by AND statements.
+// facetItems is an array of facetItem. It represents an expression joined by
+// OR statements. A complete facet is an array of facetItems, with each array
+// joined by AND statements.
 type facetItems []facetItem
 
-// There are no facet data structures, rather, a function is used to directly
-// create a facet string that can be used in the URL.
+// serializeFacet renders expressions as Modrinth's nested JSON arrays; see
+// facetItems for the OR/AND semantics.
 func serializeFacet(expressions ...facetItems) string {
 	var sb strings.Builder
 	sb.WriteRune('[')

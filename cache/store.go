@@ -32,7 +32,7 @@ func (s *store) Write(contentHash, filename string, data []byte) error {
 	return nil
 }
 
-// Read opens the blob and returns the file handle. Caller must close it.
+// Read returns an open handle to the blob; the caller must close it.
 func (s *store) Read(contentHash, filename string) (*os.File, error) {
 	p := filepath.Join(s.dir, contentHash, filename)
 	f, err := os.Open(p)
@@ -42,7 +42,6 @@ func (s *store) Read(contentHash, filename string) (*os.File, error) {
 	return f, nil
 }
 
-// ReadBytes reads the blob and returns its contents as bytes.
 func (s *store) ReadBytes(contentHash, filename string) ([]byte, error) {
 	p := filepath.Join(s.dir, contentHash, filename)
 	data, err := os.ReadFile(p)
@@ -60,8 +59,8 @@ func (s *store) Remove(contentHash string) error {
 	return nil
 }
 
-// Ingest moves a file from srcPath into the content-addressed store.
-// Tries os.Rename for atomic same-filesystem moves, falls back to copy+delete.
+// Ingest moves srcPath into the store, preferring an atomic same-filesystem
+// rename and falling back to copy+delete.
 func (s *store) Ingest(contentHash, filename, srcPath string) error {
 	filename = sanitizeFilename(filename, contentHash)
 	dir := filepath.Join(s.dir, contentHash)
@@ -105,13 +104,13 @@ func (s *store) Ingest(contentHash, filename, srcPath string) error {
 // sanitizeFilename prevents path traversal by stripping directory components.
 func sanitizeFilename(name, fallback string) string {
 	name = filepath.Base(name)
-	if name == "." || name == "/" || name == string(filepath.Separator) {
+	if !filepath.IsLocal(name) || name == "." || name == ".." || name == "/" || name == string(filepath.Separator) {
 		return fallback
 	}
 	return name
 }
 
-// containedUnder validates child is strictly inside parent (prevents path traversal).
+// containedUnder reports whether child is strictly inside parent.
 func containedUnder(parent, child string) bool {
 	absParent, err := filepath.Abs(parent)
 	if err != nil {
@@ -121,5 +120,9 @@ func containedUnder(parent, child string) bool {
 	if err != nil {
 		return false
 	}
-	return strings.HasPrefix(absChild, absParent+string(filepath.Separator))
+	prefix := absParent
+	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
+	}
+	return strings.HasPrefix(absChild, prefix)
 }

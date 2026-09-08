@@ -71,23 +71,16 @@ To run the built binary against a test server directory:
     └── networkutil/        Network helpers wrapping cache downloads
 ```
 
-## Researching and Designing
-
-1. If your task is not general, i.e., the ones applicable and universal to almost any program, you should consider doing some research to know about the specific context.
-2. Always do research on complicated and large features or refactors.
-3. While researching, you should take reference to other package managers, such as Cargo, npm, pip, apt, brew, etc. This does not mean you should copy their design. Combine your research with our own design principles.
-4. If the task is highly Minecraft-related, it is very likely that you don't have the most-updated or correct knowledge about it. Either do some research or ask me if you are not sure about something.
-5. Whenever you are adding new types/enums/structs, you must elaborate and justify your design.
-6. I am open to adding new packages if you think they will greatly simplify the code. Ask me before doing that.
-7. You must always justify your design. Elaborate your architecture's shape and why is it.
-
 ## Testing and Debugging
 
 1. Always prefer the project's e2e testing suite (`envgen`). You should do regression tests after implementing a feature.
-2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `testdata/environments/environments.yaml`. There's brief explanation for each environment in `testdata/environments/families/*.md`.
+2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `e2e/testdata/environments/environments.yaml`. There's brief explanation for each environment in `e2e/testdata/environments/families/*.md`.
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
-4. Upon refactors/bug fixes/feature additions, you may write temporary go test files for PoC but you must dispose them afterwards.
-5. Do not create persisted tests unless explicitly asked.
+4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
+
+The domain suites run with `task e2e:init -- <environment ids>` and
+`task e2e:compile -- [fixture ids]`. Shared selection and reporting lives in
+`e2e/internal/testkit`; the compile suite defaults to all repository fixtures.
 
 ### envgen CLI
 
@@ -99,7 +92,7 @@ To run the built binary against a test server directory:
 | `--only a,b` | all | Restrict processing to the named environment ids |
 | `--force` | off | Regenerate even when `.sandboxes/<id>/` already exists |
 | `--out <dir>` | `.sandboxes` | Output root |
-| `--manifest <file>` | `testdata/environments/environments.yaml` | Manifest path |
+| `--manifest <file>` | `e2e/testdata/environments/environments.yaml` | Manifest path |
 | `--cache <dir>` | `os.UserCacheDir()/lucy-envgen` | Content-addressed download cache (keyed by sha256) |
 | `--manual-dir <dir>` | `<cache>/manual` | Where `manual: true` artifacts are expected as `<id>/<basename>` |
 
@@ -109,9 +102,17 @@ The CLI is idempotent:
 - Every artifact digest is verified after fetch and generation aborts that environment on mismatch
 - Missing manual artifacts fail with the exact drop-in path and expected sha256.
 
+## Comments
+
+Write code that explains itself. Namings must not need documentations from call sites.
+
+- Do not restate the code. Refactor instead if you must do this.
+- No repeating comments inside or outside the package. Explain 1 fact only once across the codebase.
+- Preconditions, postconditions, edge cases, why the item exists are worth recording.
+- Docs must reflect only the live condition. Never record the history. That's what `git log` and `git blame` are for.
+- Follow the ASD-STE100 standard.
+
 ## Other Rules
 
-1. If you suspect there might be helpful packages to add, you should search on the web, or look up on go.dev.
-2. If you believe the initial demand is fully satisfied and all current context will not be helpful for future tasks, you can remind me to open a new session.
-3. Upon refactors, always reconsider the file structure of touched packages. You should do a cleanup by moving/renaming/merging/splitting files for better maintainability.
-4. Prefix files with the package name for convinent searching.
+1. Always tidy the files in packages touched after refactoring: relocate/rename/merge/split files for better maintainability.
+2. Prefix files with the package name for convinent searching.

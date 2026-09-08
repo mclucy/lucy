@@ -14,7 +14,6 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-// LucyStateDirExists reports whether a lucy.yaml manifest exists in workDir.
 func LucyStateDirExists(workDir string) (bool, error) {
 	info, err := os.Stat(filepath.Join(workDir, "lucy.yaml"))
 	if err != nil {
@@ -26,8 +25,6 @@ func LucyStateDirExists(workDir string) (bool, error) {
 	return !info.IsDir(), nil
 }
 
-// FormatConstraintConflict rewraps a resolver constraint conflict with the
-// package id and both sides of the conflict.
 func FormatConstraintConflict(err *resolve.ConstraintConflictError) error {
 	if err == nil {
 		return fmt.Errorf("dependency constraints conflict")
@@ -43,8 +40,6 @@ func FormatConstraintConflict(err *resolve.ConstraintConflictError) error {
 	)
 }
 
-// BuildUpdatedLock merges freshly installed packages into an existing lock,
-// or builds a new one when no lock exists yet.
 func BuildUpdatedLock(
 	workDir string,
 	manifest *state.Manifest,
@@ -99,8 +94,6 @@ func BuildUpdatedLock(
 	return &lock
 }
 
-// ManifestFingerprint fingerprints the canonical serialized manifest,
-// falling back to the provided fallback when serialization fails.
 func ManifestFingerprint(manifest *state.Manifest, fallback string) string {
 	if manifest != nil {
 		data, err := state.SerializeManifest(manifest)

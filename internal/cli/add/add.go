@@ -54,7 +54,6 @@ var addCmd = &cobra.Command{
 	RunE: cli.WithErrorLogging(actionAdd),
 }
 
-// NewCommand wires and returns the `lucy add` command.
 func NewCommand() *cobra.Command {
 	addCmd.Flags().BoolP(
 		flagForceName,

@@ -5,9 +5,9 @@ package types
 // the data is part of the result types, for example upstream.Info.
 type Metadata struct {
 	Title                 string
-	Brief                 string // short
-	Description           string // prose or Markdown
-	DescriptionUrl        string // when full description is not displayed
+	Brief                 string
+	Description           string
+	DescriptionUrl        string
 	DescriptionIsMarkdown bool
 	Authors               []Person
 	Urls                  []Url

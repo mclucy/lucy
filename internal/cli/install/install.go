@@ -29,7 +29,6 @@ var installCmd = &cobra.Command{
 	RunE:  cli.WithErrorLogging(actionInstall),
 }
 
-// NewCommand wires and returns the `lucy install` command.
 func NewCommand() *cobra.Command {
 	cli.AddNoStyleFlag(installCmd)
 	cli.AddPlatformFlag(installCmd)

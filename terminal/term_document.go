@@ -1,7 +1,7 @@
 // Package terminal provides key-value terminal output.
 //
-// Data contains the fields to render. Flush writes the composed output.
-// Fields use Lip Gloss styles and fixed-width key columns.
+// Flush writes the composed output. Fields use Lip Gloss styles and
+// fixed-width key columns.
 package terminal
 
 // Data is a collection of fields to render together.

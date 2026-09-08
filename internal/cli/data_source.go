@@ -9,18 +9,13 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-// DataSource indicates where dependency data was loaded from.
 type DataSource int
 
 const (
-	// SourceLock means data was read from lucy-lock.yaml.
 	SourceLock DataSource = iota
-
-	// SourceProbe means data was obtained by probing the live server directory.
 	SourceProbe
 )
 
-// String returns a human-readable label for the data source.
 func (ds DataSource) String() string {
 	switch ds {
 	case SourceLock:
@@ -32,10 +27,9 @@ func (ds DataSource) String() string {
 	}
 }
 
-// LoadDependencyData loads the dependency graph from the best available source.
-// When forceLive is true, the lock file is skipped and the server directory is
-// probed directly. Otherwise the lock file is tried first; if it is missing or
-// invalid the directory is probed as a fallback.
+// LoadDependencyData builds the dependency graph from the lock file, falling
+// back to a live probe when the lock is missing or invalid. forceLive skips
+// the lock file entirely.
 func LoadDependencyData(workDir string, forceLive bool) (
 	*DependencyGraph,
 	DataSource,

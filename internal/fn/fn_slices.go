@@ -5,8 +5,6 @@ import (
 	"slices"
 )
 
-// Exists checks if an element exists in a slice. It returns true if the element
-// is found, and false otherwise.
 func Exists[T comparable](arr []T, elem T) bool {
 	for _, v := range arr {
 		if v == elem {

@@ -1,0 +1,142 @@
+name: E2E Compile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - e2e/**
+      - '**/*.go'
+      - internal/cli/compile/**
+      - go.mod
+      - go.sum
+      - Taskfile.yml
+      - .github/workflows/e2e-compile.yml
+  pull_request:
+    paths:
+      - e2e/**
+      - '**/*.go'
+      - internal/cli/compile/**
+      - go.mod
+      - go.sum
+      - Taskfile.yml
+      - .github/workflows/e2e-compile.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manifests:
+    name: List compile fixtures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      fixtures: ${{ steps.list.outputs.fixtures }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27.1"
+
+      # The suite enumerates its own fixtures so this matrix and a local
+      # `go run ./e2e/compile` can never disagree about which manifests exist.
+      - name: Collect fixture ids
+        id: list
+        run: |
+          set -euo pipefail
+          ids="$(go run ./e2e/compile --list | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          if [ "$(jq 'length' <<<"$ids")" -eq 0 ]; then
+            echo "no compile manifests found" >&2
+            exit 1
+          fi
+          echo "fixtures=$ids" >> "$GITHUB_OUTPUT"
+
+  compile:
+    name: Compile ${{ matrix.fixture }}
+    needs: manifests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: ${{ fromJSON(needs.manifests.outputs.fixtures) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27.1"
+          cache: true
+
+      - name: Install Temurin 17
+        id: java17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          architecture: x64
+          set-default: false
+
+      - name: Install Temurin 21
+        id: java21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          architecture: x64
+          set-default: false
+
+      - name: Install Temurin 25
+        id: java25
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          architecture: x64
+
+      # Fixture builds are Gradle-heavy and share nothing between jobs, so a cold
+      # cache blows the job timeout on the multi-loader fixtures. The key tracks the
+      # fixture's pin, so moving a commit starts over from a clean cache.
+      - name: Restore Gradle cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/lucy-gradle
+          key: gradle-${{ matrix.fixture }}-${{ hashFiles(format('e2e/testdata/repo/{0}.yaml', matrix.fixture)) }}
+
+      # Pin majors, not exact patches: Lucy's toolchain selection matches on Java major
+      # version only, and Adoptium re-tags LTS releases (e.g. 21.0.8+9 became
+      # 21.0.8+9.0.LTS), so exact patch pins silently stop resolving.
+      # Restrict Gradle toolchain resolution to the three pinned JDKs. The runner image's
+      # own JDKs stay in place: setup-java exposes its toolcache entries as symlinks into
+      # /usr/lib/jvm, so hiding that directory from Lucy breaks JAVA_HOME resolution.
+      - name: Configure pinned JDK inventory
+        env:
+          JDK17: ${{ steps.java17.outputs.path }}
+          JDK21: ${{ steps.java21.outputs.path }}
+          JDK25: ${{ steps.java25.outputs.path }}
+        run: |
+          export GRADLE_USER_HOME="$RUNNER_TEMP/lucy-gradle"
+          mkdir -p "$GRADLE_USER_HOME"
+          printf '%s\n' \
+            'org.gradle.java.installations.auto-detect=false' \
+            'org.gradle.java.installations.auto-download=false' \
+            "org.gradle.java.installations.paths=$JDK17,$JDK21,$JDK25" \
+            > "$GRADLE_USER_HOME/gradle.properties"
+          echo "GRADLE_USER_HOME=$GRADLE_USER_HOME" >> "$GITHUB_ENV"
+
+      - name: Build Lucy
+        run: go build -o dist/lucy .
+
+      - name: Compile fixture (e2e)
+        env:
+          FIXTURE: ${{ matrix.fixture }}
+        run: go run ./e2e/compile --lucy dist/lucy "$FIXTURE"
