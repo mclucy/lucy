@@ -105,7 +105,7 @@ func (s *store) Ingest(contentHash, filename, srcPath string) error {
 // sanitizeFilename prevents path traversal by stripping directory components.
 func sanitizeFilename(name, fallback string) string {
 	name = filepath.Base(name)
-	if name == "." || name == "/" || name == string(filepath.Separator) {
+	if !filepath.IsLocal(name) || name == "." || name == ".." || name == "/" || name == string(filepath.Separator) {
 		return fallback
 	}
 	return name
@@ -121,5 +121,9 @@ func containedUnder(parent, child string) bool {
 	if err != nil {
 		return false
 	}
-	return strings.HasPrefix(absChild, absParent+string(filepath.Separator))
+	prefix := absParent
+	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
+	}
+	return strings.HasPrefix(absChild, prefix)
 }
