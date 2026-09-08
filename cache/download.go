@@ -89,7 +89,7 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	}
 	if hit && cachedFile != nil {
 		defer cachedFile.Close()
-		resolvedName := filepath.Base(cachedFile.Name())
+		resolvedName := sanitizeFilename(cachedFile.Name(), "artifact")
 		if opts.OnResolvedFilename != nil {
 			opts.OnResolvedFilename(resolvedName)
 		}
@@ -97,6 +97,12 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 			opts.OnCacheHit()
 		}
 		destPath := filepath.Join(dir, resolvedName)
+		if !containedUnder(dir, destPath) {
+			return nil, fmt.Errorf(
+				"cached filename %q escapes destination directory",
+				resolvedName,
+			)
+		}
 		destFile, err := fsutil.CopyFile(cachedFile, destPath, opts.FileMode)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -321,12 +327,15 @@ func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 		return nil, err
 	}
 
-	if filename == "" {
-		filename = contentHash
-	}
-	filename = filepath.Base(filename)
+	filename = sanitizeFilename(filename, contentHash)
 
 	destPath := filepath.Join(dir, filename)
+	if !containedUnder(dir, destPath) {
+		return nil, fmt.Errorf(
+			"downloaded filename %q escapes destination directory",
+			filename,
+		)
+	}
 	tmpFile.Close()
 
 	src, err := os.Open(tmpPath)
