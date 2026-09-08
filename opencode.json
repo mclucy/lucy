@@ -3,15 +3,8 @@
   "mcp": {
     "codegraph": {
       "type": "local",
-      "command": ["npx", "-y", "@colbymchenry/codegraph", "serve", "--mcp"],
+      "command": ["pnpx", "-y", "@colbymchenry/codegraph", "serve", "--mcp"],
       "enabled": true
-    },
-    "github-lucy": {
-      "type": "remote",
-      "url": "https://api.githubcopilot.com/mcp",
-      "headers": {
-        "Authorization": "Bearer {env:LUCY_GITHUB_TOKEN}"
-      }
     },
     "godoc": {
       "type": "local",
