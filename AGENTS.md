@@ -83,8 +83,7 @@ To run the built binary against a test server directory:
 1. Always prefer the project's e2e testing suite (`envgen`). You should do regression tests after implementing a feature.
 2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `testdata/environments/environments.yaml`. There's brief explanation for each environment in `testdata/environments/families/*.md`.
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
-4. Upon refactors/bug fixes/feature additions, you may write temporary go test files for PoC but you must dispose them afterwards.
-5. Do not commit persisted tests unless explicitly asked.
+4. The project is under an early development stage. Do not add tests unless explicitly requested. You may write temporary tests for your own debugging or verification purpose.
 
 ### envgen CLI
 
