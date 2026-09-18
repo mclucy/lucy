@@ -3,15 +3,16 @@ package install
 import (
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/resolve"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -35,12 +36,29 @@ func NewCommand() *cobra.Command {
 	return installCmd
 }
 
+// actionInstall selects a workspace and delegates registered-instance writes
+// to the daemon so installation runs as the configured server user.
 func actionInstall(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
+	target, err := cli.ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
+	if target.Registered {
+		return cli.DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{Name: server.TaskInstall},
+		)
+	}
+	return cli.RunInTargetWorkDir(target, func() error {
+		return actionInstallAt(cmd, target)
+	})
+}
 
+// actionInstallAt converges the selected workspace from its lock or manifest,
+// preserving platform overrides and recording the resulting resolved state.
+func actionInstallAt(cmd *cobra.Command, target cli.CommandTarget) error {
+	workDir := target.WorkDir
 	hasLucyState, err := cli.LucyStateDirExists(workDir)
 	if err != nil {
 		return err
@@ -76,7 +94,11 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	options := install.DefaultOptions()
+	options.Workspace = func() workspace.Workspace {
+		return workspace.NewAt(workDir)
+	}
 	options.UseGitHubMirror, _ = cmd.Flags().GetBool(cli.FlagUseGitHubMirror)
+
 	result, err := install.InstallMany(cmd.Context(), plan.Requested, options)
 	if err != nil {
 		if conflictErr, ok := errors.AsType[*resolve.ConstraintConflictError](err); ok {
@@ -90,8 +112,13 @@ func actionInstall(cmd *cobra.Command, args []string) error {
 		stateSvc.Manifest(),
 		stateSvc.Lock(),
 		result,
+		workspace.NewAt(workDir),
 	)
-	return stateSvc.Save(cmd.Context(), nil, lock)
+	if err := stateSvc.Save(cmd.Context(), nil, lock); err != nil {
+		return err
+	}
+	cli.MarkPendingRestartIfRunning(target, "install changed runtime files")
+	return nil
 }
 
 func buildInstallSyncPlan(
@@ -205,4 +232,9 @@ func managedManifest(manifest *state.Manifest) *state.Manifest {
 		cloned.Packages = append(cloned.Packages, pkg)
 	}
 	return &cloned
+}
+
+// RunTask executes the install action for a daemon-dispatched package task.
+func RunTask(cmd *cobra.Command, target cli.CommandTarget) error {
+	return actionInstallAt(cmd, target)
 }
