@@ -18,7 +18,6 @@ func (s provider) Id() types.SourceId {
 
 var Provider provider
 
-// Just a trivial type to implement the search response conversion.
 type mcdrSearchResult []string
 
 func (m mcdrSearchResult) ToSearchResults(source types.SourceId) upstream.SearchResponse {
@@ -34,7 +33,8 @@ func (m mcdrSearchResult) ToSearchResults(source types.SourceId) upstream.Search
 	return res
 }
 
-// TODO: handle search options
+// Search returns the provider's default result set; tags and limit are not
+// applied.
 
 func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	if q.FilterEcosystem != types.EcoMcdr && q.FilterEcosystem != types.EcoUnspecified {

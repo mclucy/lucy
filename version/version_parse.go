@@ -9,11 +9,9 @@ import (
 // ErrAmbiguousVersion is returned when attempting to parse a non-exact version constant.
 var ErrAmbiguousVersion = fmt.Errorf("attempting to parse an ambiguous version")
 
-// Parse is the main function to parse a BareVersion into a ResolvableVersion.
-//
-// If the raw version is one of the special constants, it returns an error.
-//
-// It dispatches parsing by version scheme and returns nil when parsing fails.
+// Parse parses raw into a ResolvableVersion under scheme. Special version
+// constants are rejected with ErrAmbiguousVersion; unknown schemes and
+// unparseable values return nil.
 func Parse(
 	raw types.BareVersion,
 	scheme types.VersionScheme,

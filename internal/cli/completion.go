@@ -6,13 +6,13 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// CompletionCandidate holds a value and optional description for shell completion.
 type CompletionCandidate struct {
 	Value       string
 	Description string
 }
 
-// FilterByPrefix returns candidates whose Value starts with prefix (case-insensitive).
+// FilterByPrefix keeps candidates whose Value starts with prefix,
+// matching case-insensitively.
 func FilterByPrefix(
 	candidates []CompletionCandidate,
 	prefix string,
@@ -30,7 +30,7 @@ func FilterByPrefix(
 	return out
 }
 
-// ToCobraCompletions converts CompletionCandidate slice to cobra's "value\tDescription" format.
+// ToCobraCompletions formats candidates as cobra's "value\tDescription" lines.
 func ToCobraCompletions(candidates []CompletionCandidate) []string {
 	out := make([]string, 0, len(candidates))
 	for _, c := range candidates {
@@ -43,7 +43,7 @@ func ToCobraCompletions(candidates []CompletionCandidate) []string {
 	return out
 }
 
-// StaticEcosystemCandidates returns completion candidates for all user-facing platforms.
+// StaticEcosystemCandidates covers all user-facing platforms.
 func StaticEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{
@@ -68,7 +68,8 @@ func StaticStatusLogoCandidates() []CompletionCandidate {
 	}
 }
 
-// StaticSearchEcosystemCandidates returns completion candidates for search-enabled platforms (rollout set).
+// StaticSearchEcosystemCandidates is the search rollout subset, not the full
+// platform set.
 func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{Value: types.EcoFabric.String(), Description: "Fabric mods"},
@@ -78,7 +79,6 @@ func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	}
 }
 
-// StaticSearchSourceCandidates returns candidates for search sources.
 func StaticSearchSourceCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{Value: types.SourceModrinth.String(), Description: "Modrinth"},
@@ -89,7 +89,6 @@ func StaticSearchSourceCandidates() []CompletionCandidate {
 	}
 }
 
-// StaticVersionCandidates returns completion candidates for fuzzy version hints.
 func StaticVersionCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{Value: "any", Description: "Latest version, any stability (default)"},
@@ -98,9 +97,8 @@ func StaticVersionCandidates() []CompletionCandidate {
 	}
 }
 
-// ParseCompletionToken parses a partial "source:name@version" token for
-// shell completion. It returns source, name, version, and the active segment.
-// Target ecosystem is selected by --platform, not package syntax.
+// ParseCompletionToken parses a partial "source:name@version" completion
+// token. Target ecosystem is selected by --platform, not package syntax.
 func ParseCompletionToken(token string) (source, name, version, segment string) {
 	source = "auto"
 	beforeVersion := token

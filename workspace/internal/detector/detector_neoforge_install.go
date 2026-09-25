@@ -11,8 +11,6 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// neoForgeMavenArtifactBaseURL is the Maven base URL for NeoForge artifacts.
-// Source: https://maven.neoforged.net/releases/net/neoforged/neoforge/
 const neoForgeMavenArtifactBaseURL = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
 
 var neoforgeArtifactHashLookup = func(
@@ -27,12 +25,9 @@ var neoforgeArtifactHashLookup = func(
 	)
 }
 
-// NeoForgeInstallationRuntimes scans libraries/net/neoforged/neoforge/ for installed
-// NeoForge server artifacts and returns detected runtime infos.
-//
-// Detection order:
-//  1. Maven .sha1 / .sha256 hash verification
-//  2. Unpack-based content verification
+// NeoForgeInstallationRuntimes scans libraries/net/neoforged/neoforge/ for
+// installed NeoForge server artifacts, verifying candidates by Maven
+// checksum first and falling back to unpack-based content verification.
 //
 // References:
 //   - https://maven.neoforged.net/releases/net/neoforged/neoforge/

@@ -54,8 +54,7 @@ type FileFabricModIdentifier struct {
 	//   - "sources"
 	Contact map[string]string `json:"contact"`
 
-	// This uses the SPDX format https://spdx.org/licenses/
-	// TODO: Should implement and check whether other platforms use this too.
+	// License uses the SPDX license expression format.
 	License string `json:"license"`
 
 	Icon        string            `json:"icon"`
@@ -81,9 +80,6 @@ type FileFabricModIdentifier struct {
 }
 
 type FileFabricModIdentifierOld struct {
-	// TODO: See https://wiki.fabricmc.net/documentation:fabric_mod_json_spec
-	// This is for very old fabric (< 0.4.0). It does not matter much right
-	// now. Besides, it is poorly documented.
-	//
-	// When SchemaVersion is 0 or missing, it is considered old.
+	// FileFabricModIdentifierOld represents pre-0.4.0 metadata, where the schema
+	// version is absent or zero.
 }

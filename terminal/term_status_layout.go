@@ -11,8 +11,7 @@ const (
 	// LayoutSmallLogoSideBySide places the small logo to the left of the
 	// info block with a gap between them.
 	LayoutSmallLogoSideBySide
-	// LayoutVertical stacks the logo above the info block (no
-	// side-by-side).
+	// LayoutVertical stacks the logo above the info block.
 	LayoutVertical
 	// LayoutClipped renders only the info block, clipped to the terminal
 	// width. Used when the terminal is narrower than minInfoWidth.
@@ -115,8 +114,8 @@ func statusLayoutAuto(
 
 // NegotiateStatusLayout decides which layout mode to use given the terminal
 // width, the widths of the two logo variants, TTY detection, and logo mode.
-// It returns the mode together with pixel-budget details so that the
-// compositor can render without further arithmetic.
+// It returns the mode together with column budgets so that the compositor
+// can render without further arithmetic.
 func NegotiateStatusLayout(
 	termWidth int,
 	logoLargeWidth int,

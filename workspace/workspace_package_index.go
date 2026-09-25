@@ -6,35 +6,22 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// PackageIndex is a map-backed package indexing utility that provides
-// deterministic, sorted access to a collection of packages. It deduplicates
-// packages by their full identifier (PackageId.StringFull()) and guarantees
-// that all exported methods return results in a stable, deterministic order.
-//
-// PackageIndex does NOT expose raw map iteration order to any caller.
+// PackageIndex is a map-backed index over discovered packages, keyed by the
+// full identifier PackageId.StringFull(). All exported methods return
+// results in a stable order; raw map iteration order never reaches callers.
 type PackageIndex struct {
 	pkgs map[string]types.DiscoveredPackage
 }
 
-// NewPackageIndex creates a new, empty PackageIndex ready for use.
 func NewPackageIndex() *PackageIndex {
 	return &PackageIndex{
 		pkgs: make(map[string]types.DiscoveredPackage),
 	}
 }
 
-// Add inserts a package into the index. Dedupe strategy:
-//
-//   - First-write wins: if a package with the same full ID already exists, the
-//     new entry is ignored.
-//   - EXCEPTION: if the existing entry has an empty Path (i.e., it was
-//     discovered without a local installation path) AND the new package has a
-//     non-empty Path, the new package replaces the existing one. This
-//     allows adding local path info upon discovery of a package that was
-//     previously only known remotely.
-//
-// The dedupe key is pkg.Id.StringFull(), which includes the selected artifact
-// ecosystem and exact version.
+// Add inserts a package into the index. First-write wins, except that a
+// non-empty Path replaces an existing entry whose Path is empty, so an
+// entry without a local path can gain one when discovered.
 func (idx *PackageIndex) Add(pkg types.DiscoveredPackage) {
 	key := pkg.Id.StringFull()
 
@@ -56,14 +43,8 @@ func (idx *PackageIndex) Merge(pkgs []types.DiscoveredPackage) {
 	}
 }
 
-// Packages returns a deterministic sorted projection of all indexed packages.
-// The sort order is ascending by:
-//
-//  1. Platform (string)
-//  2. Name (string)
-//  3. Version (string)
-//
-// Unrelated with the map iteration order; results are always sorted.
+// Packages returns all indexed packages sorted ascending by platform,
+// name, and version string.
 func (idx *PackageIndex) Packages() []types.DiscoveredPackage {
 	result := make([]types.DiscoveredPackage, 0, len(idx.pkgs))
 	for _, pkg := range idx.pkgs {
@@ -87,9 +68,8 @@ func (idx *PackageIndex) Packages() []types.DiscoveredPackage {
 	return result
 }
 
-// LookupByID performs an exact lookup by the full package identifier
-// (PackageId.StringFull()). Returns the package and true if found, or a zero
-// DiscoveredPackage and false otherwise.
+// LookupByID performs an exact lookup by the full identifier
+// (PackageId.StringFull()), returning a zero package and false when absent.
 func (idx *PackageIndex) LookupByID(id types.VersionedPackageRef) (
 	types.DiscoveredPackage,
 	bool,
@@ -98,11 +78,8 @@ func (idx *PackageIndex) LookupByID(id types.VersionedPackageRef) (
 	return pkg, ok
 }
 
-// LookupByEcosystemName returns all packages matching the given platform and
-// name, sorted by Version (string ascending). If no packages match, returns
-// nil.
-//
-// Unrelated with the map iteration order; results are always sorted.
+// LookupByEcosystemName returns all packages matching the given platform
+// and name, sorted by version string ascending, or nil when none match.
 func (idx *PackageIndex) LookupByEcosystemName(
 	platform types.Ecosystem,
 	name string,

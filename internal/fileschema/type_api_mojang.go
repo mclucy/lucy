@@ -2,7 +2,8 @@ package fileschema
 
 import "time"
 
-// ApiMojangMinecraftVersionManifest https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
+// ApiMojangMinecraftVersionManifest is Mojang's version_manifest_v2.json:
+// https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
 type ApiMojangMinecraftVersionManifest struct {
 	Latest struct {
 		Release  string `json:"release"`

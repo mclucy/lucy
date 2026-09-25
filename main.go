@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	defer log.DumpHistory() // Whether DumpHistory actually does anything depends on the flag.
+	defer log.DumpHistory()
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}

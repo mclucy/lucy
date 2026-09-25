@@ -1,14 +1,5 @@
 package types
 
-// Package types is a general package for all types used in Lucy.
-//
-// This package contains ONLY pure domain semantics. It must have no side effects:
-//   - NO logging (log.)
-//   - NO filesystem access (os.)
-//   - NO panics (panic())
-//
-// All functions should be deterministic and side-effect free.
-
 import (
 	"github.com/mclucy/lucy/internal/fn"
 )
@@ -100,12 +91,7 @@ const (
 	MinecraftRelease
 )
 
-// Dependency represents a dependency requirement for a package.
-//
-// DO NOT read the Id.Version field. It is supposed to be empty.
-//
-// Dependency.Constraint is a 2D array. The outer array is OR and the inner
-// array is AND. nil/empty means no constraint (all versions acceptable).
+// DependencyType identifies how a dependency is satisfied.
 type DependencyType string
 
 const (
@@ -114,7 +100,7 @@ const (
 	Embedded DependencyType = "embedded"
 )
 
-// DependencyType returns Regular for legacy zero-value dependency records.
+// DependencyType returns Regular for the zero value.
 func (d Dependency) DependencyType() DependencyType {
 	return NormalizeDependencyType(d.Type)
 }
@@ -134,6 +120,10 @@ func (d Dependency) IsEmbedded() bool {
 	return d.DependencyType() == Embedded
 }
 
+// Dependency is a package dependency request. Constraint is a 2D array whose
+// outer array is OR and inner array is AND; nil or empty means no constraint.
+// Id.Version is always empty because Constraint carries the version selector.
+//
 // Type records how the dependency is satisfied. Regular dependencies resolve
 // through upstream sources, ambient dependencies are supplied by the server
 // environment, and embedded dependencies are physically bundled inside the

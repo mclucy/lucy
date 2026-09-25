@@ -1,11 +1,3 @@
-// Package progress runtime manages the Bubble Tea program.
-//
-// The runtime has three states: idle, running, and stopped. Ctrl+C and
-// completion of all entries set the stopped flag. A new tracker restarts the
-// runtime after all entries complete.
-//
-// Shutdown is idempotent. Multiple Close calls and interrupts are safe.
-// The runtime goroutine resets its state on every exit path.
 package progress
 
 import (
@@ -43,6 +35,9 @@ type entryMsg struct {
 	payload tea.Msg
 }
 
+// runtime is the Bubble Tea model backing all progress entries. Shutdown is
+// idempotent and its state resets on every exit path so a tracker registered
+// after shutdown can restart the runtime.
 type runtime struct {
 	program      *tea.Program
 	entries      map[entryID]*entryState

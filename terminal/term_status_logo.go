@@ -165,6 +165,7 @@ func loadEmbeddedLogoAssets() map[string]string {
 }
 
 // GetLogo returns the logo for the package, platform, version, and variant.
+// Falls back to the plain variant when the colored variant has no asset.
 func GetLogo(
 	core types.BarePackageName,
 	platform types.Ecosystem,

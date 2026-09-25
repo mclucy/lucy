@@ -28,7 +28,6 @@ var statusCmd = &cobra.Command{
 	RunE: cli.WithErrorLogging(actionStatus),
 }
 
-// NewCommand wires and returns the `lucy status` command.
 func NewCommand() *cobra.Command {
 	cli.AddJSONFlag(statusCmd)
 	cli.AddLongFlag(statusCmd)

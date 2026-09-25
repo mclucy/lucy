@@ -30,10 +30,10 @@ func (k EntryKind) String() string {
 type HashAlgorithm uint8
 
 const (
-	HashNone   HashAlgorithm = iota
-	HashSHA1                 // Mojang-provided hashes
-	HashSHA256               // Internal content addressing
-	HashSHA512               // Modrinth-provided hashes
+	HashNone HashAlgorithm = iota
+	HashSHA1
+	HashSHA256
+	HashSHA512
 )
 
 func (h HashAlgorithm) String() string {
@@ -49,8 +49,8 @@ func (h HashAlgorithm) String() string {
 	}
 }
 
-// ParseHashAlgorithm converts a string representation to HashAlgorithm.
-// Returns HashNone for unrecognized inputs.
+// ParseHashAlgorithm maps s to a HashAlgorithm, returning HashNone for
+// unrecognized inputs.
 func ParseHashAlgorithm(s string) HashAlgorithm {
 	switch s {
 	case "sha1":
@@ -69,8 +69,8 @@ func ParseHashAlgorithm(s string) HashAlgorithm {
 type IntegrityState uint8
 
 const (
-	// IntegrityUnverified means the entry was cached without a known-good
-	// digest to compare against, or verification has not yet occurred.
+	// IntegrityUnverified means no expected digest was available or verification
+	// has not run.
 	IntegrityUnverified IntegrityState = iota
 
 	// IntegrityVerified means the entry's content matched the expected
@@ -99,10 +99,10 @@ type Integrity struct {
 	State     IntegrityState `json:"state"`
 }
 
-// CacheEntry is the enriched metadata record for a single cached blob.
-// ContentHash (always SHA-256) is used for content-addressed storage.
-// Integrity tracks the upstream-provided digest which may use a different
-// algorithm (SHA-1 for Mojang, SHA-512 for Modrinth).
+// CacheEntry is the metadata record for one cached blob. ContentHash
+// (always SHA-256) addresses the blob in the store; Integrity carries the
+// upstream-provided digest, which may use a different algorithm (see
+// HashAlgorithm).
 type CacheEntry struct {
 	Kind        EntryKind `json:"kind"`
 	Filename    string    `json:"filename"`

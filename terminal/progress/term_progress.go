@@ -1,6 +1,5 @@
 // Package progress displays terminal progress bars.
 //
-// It uses Bubble Tea, Bubbles progress, and Lip Gloss.
 // The runtime stops after all registered entries complete. Registering a
 // tracker after shutdown starts the runtime again.
 //
@@ -96,12 +95,10 @@ func (t *Tracker) LogWriter() io.Writer {
 	return &logWriter{tracker: t}
 }
 
-// setBytesProgress sends byte progress to the runtime.
 func (t *Tracker) setBytesProgress(read, total int64) {
 	globalRuntime.send(t.id, bytesProgressMsg{read: read, total: total})
 }
 
-// appendLog sends log data to the runtime.
 func (t *Tracker) appendLog(data string) {
 	globalRuntime.send(t.id, appendLogMsg(data))
 }

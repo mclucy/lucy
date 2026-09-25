@@ -11,8 +11,8 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// analyzeForgeArgFile parses Forge argument files to extract version information
-// This is a helper function used by ForgeDetector
+// analyzeForgeArgFile extracts the Forge and Minecraft versions from a
+// Forge argument file.
 func analyzeForgeArgFile(file *os.File) (
 	forgeVersion types.BareVersion,
 	mcVersion types.BareVersion,

@@ -7,7 +7,6 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// VanillaDetector detects vanilla Minecraft servers
 type VanillaDetector struct{}
 
 func (d *VanillaDetector) Name() string {

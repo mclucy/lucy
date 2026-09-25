@@ -64,8 +64,6 @@ func updateStyles() {
 	Note = Cyan
 }
 
-// lsStyle wraps a lipgloss.Style into a func(any) string, matching the
-// existing tools.Bold / tools.Dim / ... signature.
 func lsStyle(s lipgloss.Style) func(any) string {
 	return func(v any) string {
 		switch v := v.(type) {

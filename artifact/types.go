@@ -1,9 +1,5 @@
 // Package artifact provides types and interfaces for extracting metadata from
 // package artifact files (JAR, ZIP, PYZ, MCDR plugin archives).
-//
-// This package defines the data structures that artifact readers produce and the
-// option types that configure reader behavior. It has no runtime logic — readers
-// are implemented in separate files within this package.
 package artifact
 
 import (

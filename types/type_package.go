@@ -1,8 +1,7 @@
 package types
 
-// PackageDependencies is one of the optional attributions that can be added to
-// a Package struct. It is usually used in any command that requires operating
-// local packages, such as `lucy install` or `lucy remove`.
+// PackageDependencies carries dependency metadata and records whether it came
+// from the artifact itself.
 type PackageDependencies struct {
 	Value     []Dependency
 	Authentic bool
@@ -23,20 +22,17 @@ type ResolvedPackage struct {
 	HashAlgorithm string
 }
 
-// DiscoveredPackage — found on disk via jar scanning.
-// Produced by: workspace/probe
-// Consumed by: cmd/init/, cmd/cmd_status.go
+// DiscoveredPackage is a package observed in a server directory.
 type DiscoveredPackage struct {
 	Id           VersionedPackageRef
 	Path         string
-	Dependencies PackageDependencies // authentic, from jar analysis
+	Dependencies PackageDependencies
 }
 
-// InstalledPackage — resolved + placed + verified.
-// Produced by: install/ apply stage
-// Consumed by: cmd/cmd_add.go (lock file writer)
+// InstalledPackage is a resolved package present at Path after installation
+// and verification.
 type InstalledPackage struct {
 	ResolvedPackage
 	Path         string
-	Dependencies PackageDependencies // authentic, from jar analysis
+	Dependencies PackageDependencies
 }

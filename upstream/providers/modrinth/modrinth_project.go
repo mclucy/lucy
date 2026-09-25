@@ -90,9 +90,8 @@ func DependencyToPackage(
 	var version *versionResponse
 	var project *projectResponse
 
-	// I don't see a case where a package would depend on a project on another
-	// platform. So, we can safely assume that the platform of the dependent
-	// package is the same as the platform of the dependency.
+	// Modrinth dependencies do not cross platforms: a dependency's platform
+	// is taken from the dependent package, not from the dependency itself.
 	p.Eco = dependent.Eco
 
 	if dependency.VersionId != "" && dependency.ProjectId != "" {

@@ -32,7 +32,6 @@ usage. Leaving out the cores records a vanilla server.`,
 	RunE: cli.WithErrorLogging(actionCreate),
 }
 
-// NewCommand wires and returns the `lucy create` command.
 func NewCommand() *cobra.Command {
 	createCmd.Flags().BoolP(
 		flagCreateForceName,
@@ -74,7 +73,6 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 	)
 }
 
-// Execute is the main entrance
 func Execute(
 	workDir string,
 	force bool,
@@ -103,8 +101,6 @@ func Execute(
 		return err
 	}
 
-	// TODO: Download and bootstrap the recorded cores here once the
-	// creation pipeline exists. Until then create only records intent.
 	manifest := manifestForCores(gameVersion, cores)
 	service := state.NewProjectStateService(workDir)
 	if err := service.Save(context.Background(), manifest, nil); err != nil {
@@ -124,9 +120,9 @@ func Execute(
 
 // admitDirectory enforces creation rules:
 //
-//   - Cannot have an existing server, with manifest or not
-//   - Ask to proceed a server is suspected
-//   - Ask to overwrite when there's a manifest file but no server
+//   - Refuse when a server exists (use lucy init instead)
+//   - Ask for confirmation when server files are ambiguous
+//   - Ask to overwrite an existing manifest without a server
 func admitDirectory(
 	workDir string,
 	ws workspace.Workspace,

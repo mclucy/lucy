@@ -14,7 +14,6 @@ type ExecutableEvidence struct {
 	// vanilla jar a Fabric launch shim boots.
 	ConsumedFiles []*DetectionFile
 
-	// DetectorName identifies the detector that produced this candidate.
 	DetectorName string
 }
 

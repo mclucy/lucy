@@ -16,8 +16,6 @@ func newMcdrReader() Reader {
 	return &mcdrReader{}
 }
 
-// Read extracts artifact metadata from mcdreforged.plugin.json inside an MCDR
-// plugin archive (.pyz or .mcdr).
 func (r *mcdrReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,

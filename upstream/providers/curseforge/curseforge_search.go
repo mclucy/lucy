@@ -28,7 +28,6 @@ func modLoaderType(p types.Ecosystem) int {
 	}
 }
 
-// searchUrl builds the search URL for the CurseForge /v1/mods/search endpoint.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func searchUrl(
 	query types.BarePackageName,
@@ -51,7 +50,6 @@ func searchUrl(
 	return baseUrl + "/v1/mods/search?" + params.Encode()
 }
 
-// slugSearchUrl builds a URL to find a mod by its exact slug.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func slugSearchUrl(slug types.BarePackageName) string {
 	params := url.Values{}
@@ -62,13 +60,11 @@ func slugSearchUrl(slug types.BarePackageName) string {
 	return baseUrl + "/v1/mods/search?" + params.Encode()
 }
 
-// modUrl builds the URL for getting a mod by its numeric ID.
 // Docs: https://docs.curseforge.com/rest-api/#get-mod
 func modUrl(modId int32) string {
 	return fmt.Sprintf("%s/v1/mods/%d", baseUrl, modId)
 }
 
-// modDescriptionUrl builds the URL for getting a mod's long description.
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-description
 func modDescriptionUrl(modId int32, stripped bool) string {
 	params := url.Values{}
@@ -83,8 +79,6 @@ func modDescriptionUrl(modId int32, stripped bool) string {
 	return u + "?" + params.Encode()
 }
 
-// modFilesUrl builds the URL for listing files of a mod, with optional
-// filtering by game version and mod loader.
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-files
 func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 	params := url.Values{}
@@ -105,7 +99,6 @@ func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 	)
 }
 
-// modFileUrl builds the URL for a single mod file.
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-file
 func modFileUrl(modId, fileId int32) string {
 	return fmt.Sprintf("%s/v1/mods/%d/files/%d", baseUrl, modId, fileId)

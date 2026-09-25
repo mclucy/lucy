@@ -18,8 +18,8 @@ type parsedCore struct {
 	Core    types.CorePackage
 }
 
-// parseCores splits a comma- or space-separated core list and parses each
-// entry through the shared package syntax. Duplicate entries collapse.
+// parseCores parses a comma- or space-separated core list through the shared
+// package syntax; duplicate entries collapse.
 func parseCores(raw string) ([]parsedCore, error) {
 	tokens := strings.FieldsFunc(raw, func(r rune) bool {
 		return r == ',' || r == ' ' || r == '\t'
@@ -55,7 +55,6 @@ func parseCores(raw string) ([]parsedCore, error) {
 	return cores, nil
 }
 
-// moddingPlatforms maps manifest platform names to themselves for lookup.
 var moddingPlatforms = map[types.CorePackage]bool{
 	types.CoreFabric:   true,
 	types.CoreForge:    true,
@@ -84,7 +83,6 @@ func checkPlatformConflict(cores []parsedCore) error {
 	return nil
 }
 
-// manifestForCores builds the manifest file for a freshly created server.
 func manifestForCores(
 	gameVersion string,
 	cores []parsedCore,
@@ -118,7 +116,6 @@ func manifestForCores(
 	return &mf
 }
 
-// isExactVersion gates version selectors
 func isExactVersion(version types.BareVersion) bool {
 	switch version {
 	case "", types.VersionNone, types.VersionUnknown, types.VersionAny,

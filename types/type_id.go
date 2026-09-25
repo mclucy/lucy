@@ -14,37 +14,28 @@ import (
 	"github.com/mclucy/lucy/terminal/style"
 )
 
-// Ecosystem is an enum of several string constants.
-//
-// All platform is a package under itself, for example, "fabric/fabric" is a
-// valid package, and is equivalent to "fabric". This literal is typically used
-// when installing/upgrading a platform itself.
+// Ecosystem identifies a runtime ecosystem or the unresolved selector used
+// before workspace context is available.
 type Ecosystem string
 
 const (
-	// special selectors
-
-	// EcoUnspecified is ambiguous but has single-valueness. It does NOT refer
-	// to multiple platforms, but rather a single platform that is unknown.
-	// Understand this as EcoUnspecified reduces to a definite platform at
-	// evaluation. Again, keep in mind that you should not allow it to be
-	// explicitly evaluated as multiple platforms.
+	// EcoUnspecified is a single unknown ecosystem, resolved during planning.
 	EcoUnspecified Ecosystem = ""
 
 	EcoMinecraft Ecosystem = "minecraft"
-	EcoVanilla             = EcoMinecraft // alias
+	EcoVanilla             = EcoMinecraft
 
-	// modding platforms
+	// Modding ecosystems.
 
 	EcoFabric   Ecosystem = "fabric"
 	EcoForge    Ecosystem = "forge"
 	EcoNeoforge Ecosystem = "neoforge"
 
-	// others
+	// Other runtime ecosystems.
 
-	EcoBukkit     Ecosystem = "bukkit"     // Bukkit or spigot plugins
-	EcoPaper      Ecosystem = "paper"      // Paper and its forks' plugins
-	EcoBungeecord Ecosystem = "bungeecord" // Can be consumed by both waterfall and bungeecord itself
+	EcoBukkit     Ecosystem = "bukkit"
+	EcoPaper      Ecosystem = "paper"
+	EcoBungeecord Ecosystem = "bungeecord"
 	EcoVelocity   Ecosystem = "velocity"
 	EcoSponge     Ecosystem = "sponge"
 	EcoMcdr       Ecosystem = "mcdr"
@@ -67,9 +58,8 @@ func (e Ecosystem) String() string {
 	return string(e)
 }
 
-// Valid
-//
-// If a platform can be used in a package id, it is a valid platform.
+// Valid reports whether e is accepted in package identity. EcoUnspecified is
+// valid only while a request is awaiting workspace context.
 func (e Ecosystem) Valid() bool {
 	switch e {
 	case EcoMinecraft, EcoFabric, EcoForge, EcoNeoforge, EcoMcdr, EcoBukkit, EcoUnspecified:
@@ -87,13 +77,12 @@ func (e Ecosystem) IsSearchEcosystem() bool {
 	}
 }
 
-// Satisfy returns true if p satisfies the requirement of p2.
+// Satisfy reports whether e satisfies required. An unspecified requirement
+// accepts any ecosystem; an unspecified receiver matches only that selector.
 func (e Ecosystem) Satisfy(e2 Ecosystem) bool {
-	// When p2 is PlatformNone, it is satisfied by all platforms.
 	if e2 == EcoUnspecified {
 		return true
 	}
-	// When p is PlatformAny, it does not satisfy any platform except itself.
 	if e == EcoUnspecified {
 		return false
 	}
@@ -101,7 +90,6 @@ func (e Ecosystem) Satisfy(e2 Ecosystem) bool {
 		return true
 	}
 
-	// Trivial cases
 	return e == e2
 }
 
@@ -115,8 +103,7 @@ func (e Ecosystem) IsSelector() bool {
 	return e == EcoUnspecified
 }
 
-// Title Replaces underlines or hyphens with spaces, then capitalize the first
-// letter.
+// Title formats a package name for display.
 func (n BarePackageName) Title() string {
 	return style.Capitalize(strings.ReplaceAll(string(n), "-", " "))
 }

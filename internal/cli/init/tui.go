@@ -68,7 +68,6 @@ func confirmManifestWrite(mf *state.Manifest) (bool, error) {
 	return write, nil
 }
 
-// manifestSummary renders the manifest environment for review.
 func manifestSummary(mf *state.Manifest) string {
 	env := mf.Environment
 	var sb strings.Builder
@@ -102,7 +101,6 @@ func manifestSummary(mf *state.Manifest) string {
 	return sb.String()
 }
 
-// displayOrNone replaces an empty string with a visible marker.
 func displayOrNone(s string) string {
 	if s == "" {
 		return "(none)"

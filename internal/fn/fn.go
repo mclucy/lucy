@@ -48,8 +48,8 @@ func Memoize[T any](f func() T) func() T {
 	}
 }
 
-// Insert inserts a value into a slice at a slice[pos]. If the pos is out of
-// bounds, the slice remains unchanged.
+// Insert inserts values into a slice at pos. An out-of-bounds pos leaves the
+// slice unchanged.
 func Insert[T any](slice []T, pos int, value ...T) []T {
 	if pos < 0 || pos > len(slice) {
 		return slice

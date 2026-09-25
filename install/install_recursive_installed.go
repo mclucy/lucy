@@ -10,9 +10,7 @@ import (
 )
 
 // SnapshotInstalledConstraints reads installed packages from the probe snapshot
-// and converts them into fixed InstalledConstraint entries.
-// Each installed package is treated as an immutable anchor during recursive
-// solving; it will never be auto-replaced by the solver.
+// and converts them into fixed InstalledConstraint anchors.
 func SnapshotInstalledConstraints() []InstalledConstraint {
 	return snapshotInstalledConstraints(workspace.New())
 }
@@ -126,9 +124,8 @@ func FindCompatibleInstalled(
 	return matches
 }
 
-// ReportCompatibleInstalled logs any locally-installed versions that are
-// compatible with the given package ID. This is an informational-only report;
-// no automatic selection occurs.
+// ReportCompatibleInstalled logs locally-installed versions compatible with id;
+// informational only, the solver must not auto-select them.
 func ReportCompatibleInstalled(
 	installedConstraints []InstalledConstraint,
 	id types.VersionedPackageRef,

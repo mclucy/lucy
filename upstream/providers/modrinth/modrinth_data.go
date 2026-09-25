@@ -71,7 +71,6 @@ func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
 		Urls:                  make([]types.Url, 0),
 	}
 
-	// Urls
 	if p.DiscordUrl != "" {
 		info.Urls = append(
 			info.Urls, types.Url{

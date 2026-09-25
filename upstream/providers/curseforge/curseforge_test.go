@@ -117,7 +117,6 @@ func TestModResponseToProjectInformation_PartialLinks(t *testing.T) {
 		Summary: "Only some links",
 		Links: modLinks{
 			WebsiteUrl: "https://example.com",
-			// WikiUrl, IssuesUrl, SourceUrl are empty
 		},
 		Authors: []modAuthor{},
 	}
@@ -160,8 +159,8 @@ func TestFileResponseToPackageRemote_PrefersSha1(t *testing.T) {
 		FileName:    "modfile.jar",
 		DownloadUrl: &downloadUrl,
 		Hashes: []fileHash{
-			{Value: "abc123md5", Algo: 2},  // md5 listed first
-			{Value: "def456sha1", Algo: 1}, // sha1 listed second
+			{Value: "abc123md5", Algo: 2},
+			{Value: "def456sha1", Algo: 1},
 		},
 	}
 
@@ -275,7 +274,6 @@ func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
 
 	u := searchUrl("fabric-api", options)
 
-	// Should contain key parameters
 	mustContain := []string{
 		"gameId=432",
 		"classId=6",
@@ -364,7 +362,6 @@ func TestModFilesUrl_NoFilters(t *testing.T) {
 	}
 }
 
-// containsSubstring is a simple test helper.
 func containsSubstring(s, substr string) bool {
 	return len(s) >= len(substr) && searchSubstring(s, substr)
 }

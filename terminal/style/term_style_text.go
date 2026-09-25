@@ -56,7 +56,6 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 	return strings.Join(lines, "\n")
 }
 
-// PrintAsJson is usually used for debugging purposes
 func PrintAsJson(v interface{}) {
 	data, err := json.Marshal(v, jsontext.Multiline(true), jsontext.WithIndent("  "))
 	if err != nil {

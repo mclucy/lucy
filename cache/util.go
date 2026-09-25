@@ -1,4 +1,3 @@
-// Package util is a general package for network and file system operations.
 package cache
 
 import (

@@ -23,25 +23,23 @@ type Options struct {
 	// Force overwrites an existing manifest without asking.
 	Force bool
 
-	// AllowEmpty allows generating a manifest of an empty server
+	// AllowEmpty allows generating a manifest for an empty server.
 	AllowEmpty bool
 }
 
-// ManifestExists reports whether lucy.yaml is already present in dir.
 func ManifestExists(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, string(state.ManifestFile)))
 	return err == nil
 }
 
-// EmptyServerManifest builds a manifest for a directory with no server.
 func EmptyServerManifest(gameVersion string) *state.Manifest {
 	mf := state.ManifestDefaults()
 	mf.Environment.GameVersion = gameVersion
 	return &mf
 }
 
-// ManifestFromDetection builds a manifest from one resolved server
-// instance. Unknown versions stay empty. Nothing gets guessed.
+// ManifestFromDetection builds a manifest from one resolved server instance.
+// Unknown versions stay empty; nothing gets guessed.
 func ManifestFromDetection(ws workspace.Workspace) *state.Manifest {
 	mf := state.ManifestDefaults()
 	server := ws.Server()
@@ -74,7 +72,7 @@ func ManifestFromDetection(ws workspace.Workspace) *state.Manifest {
 	return &mf
 }
 
-// SaveManifest writes the manifest. Then it refreshes the state for dir.
+// SaveManifest writes the manifest and refreshes the workspace state for dir.
 func SaveManifest(dir string, mf *state.Manifest) error {
 	service := state.NewProjectStateService(dir)
 	if err := service.Save(context.Background(), mf, nil); err != nil {
@@ -84,8 +82,6 @@ func SaveManifest(dir string, mf *state.Manifest) error {
 	return nil
 }
 
-// componentVersion returns the version of the first component for eco.
-// It returns "" with no match.
 func componentVersion(
 	components []types.VersionedPackageRef,
 	eco types.Ecosystem,

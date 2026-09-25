@@ -52,7 +52,6 @@ var searchCmd = &cobra.Command{
 	RunE: cli.WithErrorLogging(actionSearch),
 }
 
-// NewCommand wires and returns the `lucy search` command.
 func NewCommand() *cobra.Command {
 	searchCmd.Flags().StringP(
 		flagIndexName,
@@ -249,8 +248,6 @@ func isNoResultsError(err error) bool {
 	return err != nil && strings.HasPrefix(err.Error(), "no projects found")
 }
 
-// renderSearchCompact renders a source's results as a two-column table:
-// slug in the left column, description in the right.
 func renderSearchCompact(res upstream.SearchResponse) string {
 	var sb strings.Builder
 	sb.WriteString(searchSectionHeader(res))
@@ -290,8 +287,6 @@ func renderSearchCompact(res upstream.SearchResponse) string {
 	return sb.String()
 }
 
-// renderSearchLong renders a source's results in npm-style multiline format:
-// name (bold), description, stats line, install identifier.
 func renderSearchLong(res upstream.SearchResponse) string {
 	var sb strings.Builder
 	sb.WriteString(searchSectionHeader(res))

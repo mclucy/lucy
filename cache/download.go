@@ -27,7 +27,7 @@ type DownloadOptions struct {
 	ExpectedHash       string
 	HashAlgorithm      HashAlgorithm
 	Filename           string
-	RequestURL         string // actual request target; url remains cache identity
+	RequestURL         string
 	WrapReader         func(io.Reader, int64) io.Reader
 	OnCacheHit         func()
 	OnResolvedFilename func(string)

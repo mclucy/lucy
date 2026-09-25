@@ -14,7 +14,7 @@ var IsTerminal = term.IsTerminal(int(os.Stdout.Fd()))
 var ensureTermColorsOnce sync.Once
 
 // EnsureTermColors lazily initializes UserColors and ValidUserColors
-// on first call, using sync.Once for thread safety.
+// exactly once.
 func EnsureTermColors() {
 	ensureTermColorsOnce.Do(getTermProfileColors)
 }

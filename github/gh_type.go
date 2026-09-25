@@ -1,8 +1,6 @@
 package github
 
-// Make this independent if some other package needs to access GitHub API
-
-// GhItem is the GitHub API representation of a file or directory item
+// GhItem is one file or directory entry returned by GitHub's API.
 type GhItem struct {
 	Name        string `json:"name"`
 	Path        string `json:"path"`
@@ -20,7 +18,7 @@ type GhItem struct {
 	} `json:"_links"`
 }
 
-// GhApiMessage is the message from GitHub API when something goes wrong
+// GhApiMessage is GitHub's API error envelope.
 type GhApiMessage struct {
 	Message          string `json:"message"`
 	DocumentationUrl string `json:"documentation_url"`

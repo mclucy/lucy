@@ -12,12 +12,10 @@ import (
 	"github.com/charmbracelet/colorprofile"
 )
 
-// This file contains initialization and global state for the log package.
-
 var (
-	debug        bool // when true, Debug() entries are recorded
-	verboseWrite bool // when true, file-only entries are also printed to console
-	dumpHistory  bool // when true, DumpHistory() will print the history to console
+	debug        bool
+	verboseWrite bool
+	dumpHistory  bool
 )
 
 var (
@@ -25,8 +23,7 @@ var (
 	history []*entry
 )
 
-// fileLog writes to the log file with timestamps, no color.
-// Initialized lazily on first use.
+// fileLog writes to the log file with timestamps and no color.
 var fileLog *log.Logger
 
 // consoleLog writes styled output to stderr, no timestamps.
@@ -81,13 +78,9 @@ func SetConsoleOutput(w io.Writer) {
 }
 
 // themedStyles returns charm/log Styles with level colors matching the
-// application theme (tui/style). The old hand-rolled log used:
-//
-//	Debug → Cyan, Info → Green, Warn → Yellow, Error → Red, Fatal → Red
-//
-// We reproduce these using basic ANSI colors so they stay consistent
-// with the semantic roles defined in tui/style (Note, Success, Warning,
-// Failure).
+// application theme (terminal/style). Basic ANSI colors keep the log
+// consistent with the semantic roles defined there (Note, Success,
+// Warning, Failure).
 func themedStyles() *log.Styles {
 	levelStyle := func(name string, fg color.Color) lipgloss.Style {
 		return lipgloss.NewStyle().

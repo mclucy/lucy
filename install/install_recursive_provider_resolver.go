@@ -22,8 +22,8 @@ func (resolver providerCandidateResolver) ResolvePackage(
 	id types.VersionedPackageRef,
 ) (types.ResolvedPackage, error) {
 	attempts := []types.VersionedPackageRef{id}
-	// When a stability-preferring selector fails, fall back to VersionAny
-	// as a last resort (no stability filtering).
+	// Stable and beta requests degrade to looser selectors so a package with
+	// no exact-stability release still resolves.
 	if id.Version == types.VersionStable {
 		attempts = append(
 			attempts,

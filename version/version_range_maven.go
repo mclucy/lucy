@@ -123,7 +123,6 @@ func parseMavenSingleRange(raw string) []types.VersionSubExpr {
 				return out
 			}
 
-			// Exact value form: [1.0]
 			if left == '[' && right == ']' && body != "" {
 				v := parseMavenVersion(types.BareVersion(body))
 				if v == nil {

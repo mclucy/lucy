@@ -101,7 +101,6 @@ func init() {
 	)
 }
 
-// Execute runs the root command.
 func Execute() error {
 	return fang.Execute(
 		context.Background(),
