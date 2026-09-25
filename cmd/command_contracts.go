@@ -1,8 +1,8 @@
 package cmd
 
-// CommandContract defines the durable semantic boundary for a user-facing
-// command. These contracts are intentionally stricter than the current
-// implementation so future work can converge on one meaning per command.
+// CommandContract defines the durable semantic boundary of a user-facing
+// command. Contracts are intentionally stricter than the current
+// implementation.
 type CommandContract struct {
 	Name            string
 	Summary         string

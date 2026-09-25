@@ -10,9 +10,8 @@ import (
 // when the full payload is required for parsing (metadata descriptors).
 const MaxZipEntryBytes = 32 * 1024 * 1024
 
-// CopyBytes reads from r into memory using io.Copy (streaming). When maxBytes > 0,
-// r is wrapped with io.LimitReader(max+1) so
-// reads fail if the stream exceeds the limit.
+// CopyBytes reads r into memory. When maxBytes > 0, r is wrapped in
+// io.LimitReader(max+1) so reads fail if the stream exceeds the limit.
 func CopyBytes(r io.Reader, maxBytes int64) ([]byte, error) {
 	var limited io.Reader = r
 	if maxBytes > 0 {

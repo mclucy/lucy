@@ -44,8 +44,8 @@ func (ws Workspace) EffectiveEcosystems() []EffectiveEcosystem {
 	return offers
 }
 
-// effectiveEcosystems is the purely derived from the runtime projection.
-// It is not effected by installed packages.
+// effectiveEcosystems derives offers from the runtime projection only;
+// installed packages never contribute.
 func (s *ServerInstance) effectiveEcosystems() []EffectiveEcosystem {
 	if s == nil || !s.IsValid() {
 		return nil

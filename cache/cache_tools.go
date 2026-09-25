@@ -39,7 +39,6 @@ func (handler *handler) clearExpiredCache() {
 	}
 }
 
-// expiredEntries returns keys of all expired entries.
 func expiredEntries(entries map[key]*CacheEntry, now time.Time) []key {
 	var expired []key
 	for k, entry := range entries {

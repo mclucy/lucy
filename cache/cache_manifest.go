@@ -70,7 +70,6 @@ func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
 	return report, nil
 }
 
-// calculateSize recursively calculates the total size of a file or directory
 func calculateSize(filePath string) (int64, error) {
 	var totalSize int64
 

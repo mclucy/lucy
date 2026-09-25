@@ -252,8 +252,7 @@ func ValidateManifestEnvironment(env ManifestEnvironment) error {
 	return nil
 }
 
-// validateManifestEcosystem remains as a legacy helper for the pre-Task-2 lock
-// schema, which still validates a single platform field.
+// validateManifestEcosystem validates the legacy environment.platform field.
 func validateManifestEcosystem(value string) error {
 	platform := types.Ecosystem(strings.TrimSpace(value))
 	if platform == "" {

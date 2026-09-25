@@ -34,7 +34,8 @@ type forgeModDependencies struct {
 	Side         string `toml:"side"`
 }
 
-// FileForgeModIdentifierOld is for 1.12 and older forge mods. This is a json file.
+// FileForgeModIdentifierOld is the JSON metadata shape used by Forge 1.12
+// and earlier.
 type FileForgeModIdentifierOld []struct {
 	ModId        string        `json:"modid"`
 	Name         string        `json:"name"`

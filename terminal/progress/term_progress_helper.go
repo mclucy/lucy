@@ -13,7 +13,6 @@ func clamp01(v float64) float64 {
 
 func getTrackerWidth(termWidth int) (w int) {
 	if termWidth <= 0 {
-		// unset or invalid width
 		termWidth = style.TermWidth()
 	}
 	w = fn.Ternary(termWidth >= 125, 100, termWidth-50)

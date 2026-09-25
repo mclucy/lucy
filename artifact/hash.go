@@ -12,7 +12,6 @@ type File struct {
 	Path string
 }
 
-// Sha1 returns the SHA-1 digest of the file's content.
 func (f File) Sha1() ([sha1.Size]byte, error) {
 	file, err := os.Open(f.Path)
 	if err != nil {
@@ -27,9 +26,8 @@ func (f File) Sha1() ([sha1.Size]byte, error) {
 	return [sha1.Size]byte(hasher.Sum(nil)), nil
 }
 
-// MurmurHash computes CurseForge's custom MurmurHash2 fingerprint of the
-// file's content. It strips whitespace bytes (0x09, 0x0A, 0x0D, 0x20) before
-// mixing.
+// MurmurHash computes the CurseForge MurmurHash2 fingerprint of the file
+// at Path; see MurmurHashBytes.
 func (f File) MurmurHash() (uint32, error) {
 	data, err := os.ReadFile(f.Path)
 	if err != nil {

@@ -46,7 +46,6 @@ without making a network request.`,
 	RunE: cli.WithErrorLogging(actionInfo),
 }
 
-// NewCommand wires and returns the `lucy info` command.
 func NewCommand() *cobra.Command {
 	cli.AddJSONFlag(infoCmd)
 	cli.AddLongFlag(infoCmd)

@@ -26,9 +26,9 @@ type versionFileResponse struct {
 	Loaders       []string `json:"loaders"`
 }
 
-// SlugFromFilePathWithHint is like SlugFromFilePath but accepts an optional
-// urlHint slug. The hint is verified against the project's version file hashes
-// before falling back to the authoritative hash lookup path.
+// SlugFromFilePathWithHint resolves the slug for a local artifact file by
+// SHA-1. The optional urlHint slug is verified against the project's version
+// file hashes before falling back to the authoritative hash lookup path.
 func SlugFromFilePathWithHint(filePath, urlHint string) (
 	slug string,
 	err error,

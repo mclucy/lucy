@@ -16,7 +16,7 @@ import (
 
 const mcdrConfigFileName = "config.yml"
 
-// detectEnvironment reads environments in the workspace root. These
+// detectEnvironment reads the environments of a server directory. These
 // environments do not come from jars. An MCDR installation manages a server
 // directory from outside the directory.
 func detectEnvironment(dir string) types.EnvironmentInfo {

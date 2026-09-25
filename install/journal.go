@@ -2,7 +2,6 @@ package install
 
 import "github.com/mclucy/lucy/types"
 
-// EventKind identifies a pipeline lifecycle event.
 type EventKind uint8
 
 const (
@@ -17,7 +16,6 @@ const (
 	EventConflict
 )
 
-// Event represents a pipeline lifecycle event.
 type Event struct {
 	Kind   EventKind
 	Header string
@@ -29,7 +27,6 @@ type Event struct {
 	Err    error
 }
 
-// Journal records pipeline lifecycle events.
 type Journal interface {
 	Record(event Event)
 }

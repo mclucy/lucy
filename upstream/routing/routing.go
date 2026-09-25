@@ -116,8 +116,6 @@ func artifactMappers() []upstream.ArtifactMapSource {
 	return artifactMappersFromSources(modProviderSources())
 }
 
-// artifactMappersFromSources returns the mappers for the given sources, in
-// order. Sources without a mapper are skipped.
 func artifactMappersFromSources(sources []types.SourceId) []upstream.ArtifactMapSource {
 	catalog := providerCatalogInstance()
 	mappers := make([]upstream.ArtifactMapSource, 0, len(sources))
@@ -165,8 +163,8 @@ func ecosystemInstallerSource(ecosystem types.Ecosystem) (
 	}
 }
 
-// ResolveProviders resolves ordered provider candidates for a given operation,
-// platform, and user-specified source.
+// ResolveProviders resolves ordered provider candidates for the platform and
+// user-specified source.
 func ResolveProviders(
 	platform types.Ecosystem,
 	src types.SourceId,
@@ -186,10 +184,9 @@ func ResolveProviders(
 	return providersFromSources(sources)
 }
 
-// ResolveSearchProviders resolves providers for search operations. When a
-// specific platform filter is active, routing validates explicit source
-// selection and uses source capability data as the authority for automatic
-// selection.
+// ResolveSearchProviders resolves search providers for the platform. With a
+// platform filter active, explicit source selection is validated against
+// source capability data.
 func ResolveSearchProviders(
 	platform types.Ecosystem,
 	src types.SourceId,

@@ -1,14 +1,9 @@
 // Package modrinth provides functions to interact with Modrinth API.
 //
-// We use Modrinth terms in private functions:
-//   - project: A project is a mod, plugin, or resource pack.
-//   - Version: A version is a release, beta, or alpha version of a project.
-//
-// Generally, a project in Modrinth is equivalent to a project in Lucy. And
-// a version in Modrinth is equivalent to a package in Lucy.
-//
-// Here, while referring to a project in lucy, we would try to the term "slug"
-// to refer to the project (or it's name).
+// Terminology: a Modrinth project maps to a Lucy project, and a Modrinth
+// version maps to a Lucy package version. Lucy-side names are Modrinth slugs;
+// private helpers say "slug" for the project and "version" for a release,
+// beta, or alpha.
 package modrinth
 
 import (
@@ -54,7 +49,6 @@ func (s provider) Search(q upstream.Query) (
 	}
 	searchUrl := searchUrl(q.Keyword, internalOptions)
 
-	// Make the call to Modrinth API
 	log.Debug("searching via modrinth api: " + searchUrl)
 	res, err := requestBytes(searchUrl)
 	if err != nil {
@@ -127,8 +121,7 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 
 var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api")
 
-// Temporary guard: Modrinth can ship non-JAR artifacts such as .mrpack,
-// but Lucy does not support installing them yet.
+// Modrinth may publish non-JAR files; Lucy accepts only JAR artifacts.
 var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported")
 
 func (s provider) Dependencies(

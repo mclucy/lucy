@@ -6,9 +6,8 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// resolveSlug resolves a project slug to its mod data by searching with the
-// slug parameter. CurseForge has no "get by slug" endpoint, so we search with
-// the slug query parameter and look for an exact match.
+// resolveSlug resolves a project slug to its mod data. CurseForge has no
+// get-by-slug endpoint, so it searches by slug and requires an exact match.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func resolveSlug(slug types.BarePackageName) (*modResponse, error) {
 	// Canonicalize slug-like name to provider canonical slug before search.
@@ -29,12 +28,10 @@ func resolveSlug(slug types.BarePackageName) (*modResponse, error) {
 		return nil, ErrProjectNotFound
 	}
 
-	// If exactly one result, use it.
 	if len(resp.Data) == 1 {
 		return &resp.Data[0], nil
 	}
 
-	// Multiple results — find exact slug match.
 	for i := range resp.Data {
 		if input.ToProjectName(resp.Data[i].Slug) == slug {
 			return &resp.Data[i], nil
@@ -44,7 +41,6 @@ func resolveSlug(slug types.BarePackageName) (*modResponse, error) {
 	return nil, ErrAmbiguousSlug
 }
 
-// getModById fetches a mod by its numeric ID.
 // Docs: https://docs.curseforge.com/rest-api/#get-mod
 func getModById(modId int32) (*modResponse, error) {
 	u := modUrl(modId)

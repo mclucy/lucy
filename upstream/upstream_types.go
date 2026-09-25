@@ -8,8 +8,8 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// SourceIdentifier returns the semantic source identity represented by a
-// provider capability.
+// SourceIdentifier exposes the semantic source identity of a provider
+// capability.
 type SourceIdentifier interface {
 	Id() types.SourceId
 }

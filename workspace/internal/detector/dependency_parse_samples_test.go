@@ -58,7 +58,8 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	)
 }
 
-// TODO: find a real-world example of Fabric mod with an array of version ranges to test the OR logic. For now we just test the parsing of this syntax with a synthetic example.
+// This fixture uses a synthetic dependency expression because it does not
+// contain a real array-of-ranges dependency.
 func TestFabricDependencyParsingFromSample(t *testing.T) {
 	root := testDataRoot(t)
 	fabricMetaFile := filepath.Join(

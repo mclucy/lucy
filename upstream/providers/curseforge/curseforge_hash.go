@@ -34,8 +34,9 @@ type fingerprintResponse struct {
 	} `json:"data"`
 }
 
-// SlugFromFilePathWithHint is like SlugFromFilePath but accepts an optional
-// urlHint slug. URL hint is never trusted on its own — fingerprint always wins.
+// SlugFromFilePathWithHint resolves the slug for a local artifact file,
+// optionally using a urlHint slug. URL hint is never trusted on its own —
+// fingerprint always wins.
 func SlugFromFilePathWithHint(filePath, urlHint string) (
 	slug string,
 	err error,

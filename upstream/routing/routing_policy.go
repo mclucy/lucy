@@ -92,7 +92,6 @@ func providerSourcesFromEcosystems(ecosystems []types.Ecosystem) providerSelecti
 			types.EcoPaper:
 			sawKnownCapability = true
 			appendSource(types.SourceModrinth)
-			// Bukkit-family logic
 			appendSource(types.SourceHangar)
 			appendSource(types.SourceSpiget)
 		case types.EcoMcdr:

@@ -8,8 +8,8 @@ import (
 	"github.com/mclucy/lucy/cache"
 )
 
-// checkGitHubMessage checks if the response data is a GitHub API error message
-// Returns the parsed message if it is an error message, nil otherwise
+// checkGitHubMessage returns the parsed error message when data is a GitHub
+// API error envelope, nil otherwise.
 func checkGitHubMessage(data []byte) *GhApiMessage {
 	var msg *GhApiMessage
 	err := json.Unmarshal(data, &msg)
@@ -33,7 +33,6 @@ func GetFileFromGitHub(apiEndpoint string) (
 	}
 	data = res.Data
 
-	// Check if the response is an error message from GitHub API
 	if msg := checkGitHubMessage(data); msg != nil {
 		return nil, msg, data
 	}
@@ -69,7 +68,6 @@ func GetDirectoryFromGitHub(apiEndpoint string) (
 	}
 	data := res.Data
 
-	// Check if the response is an error message from GitHub API
 	if msg := checkGitHubMessage(data); msg != nil {
 		return nil, msg, nil
 	}

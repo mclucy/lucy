@@ -63,7 +63,6 @@ var bisectResetCmd = &cobra.Command{
 	RunE:  cli.WithErrorLogging(actionBisectReset),
 }
 
-// NewCommand wires and returns the `lucy bisect` command tree.
 func NewCommand() *cobra.Command {
 	for _, c := range []*cobra.Command{
 		bisectStartCmd,

@@ -11,11 +11,9 @@
 // immutable observation. Four members store facts: Root, Environments,
 // Probe, and Packages. Every other member is a method over these facts.
 //
-// The package has one cache. The cache stores the observation of the
-// current working directory. Only Rebuild, Invalidate, and Refresh change
-// it. No other function keeps state between calls.
-//
-// TODO: remove direct dependency to upstream used by artifact hash queries
+// The package holds one cached observation of the current working
+// directory. Only Rebuild, Invalidate, and Refresh change it; no other
+// function keeps state between calls.
 package workspace
 
 import (
@@ -37,21 +35,19 @@ type Workspace struct {
 	Root         string                `json:"root"`
 	Environments types.EnvironmentInfo `json:"environments"`
 
-	// Probe holds the scan results before interpretation. Each examined jar
-	// appears in exactly one bucket. Read Probe when you need more than the
-	// single interpreted server.
+	// Probe holds the scan results before interpretation. The Probe type
+	// documents the bucket invariant; read Probe when the single
+	// interpreted server is not enough.
 	Probe Probe `json:"-"`
 
-	// Packages lists the discovered content packages. observe derives it
-	// once from Probe and Environments. Artifact analysis makes this step
-	// expensive.
+	// Packages lists the discovered content packages, derived once during
+	// observe.
 	Packages []types.DiscoveredPackage `json:"packages"`
 }
 
-// MarshalJSON writes the wire format of an observation. The wire format
-// contains the stored facts and the values of the derived methods.
-// Consumers of `lucy status --json` read this format. MarshalJSON does not
-// write Probe. The raw scan is for use inside this process only.
+// MarshalJSON writes the wire format of an observation: the stored facts
+// and the derived method values. Consumers of `lucy status --json` read
+// this format. Probe is omitted; the raw scan is internal to this process.
 func (ws Workspace) MarshalJSON() ([]byte, error) {
 	projection := struct {
 		Root         string                    `json:"root"`
@@ -160,11 +156,9 @@ func Refresh(workDir string) Workspace {
 	return observed
 }
 
-// observe collects one snapshot of the server directory at dir. The steps
-// follow their data dependencies. First, detectEnvironment reads the host
-// environments. MCDR can move the server root away from dir. Next,
-// probeDirectory scans that root. Last, discoverPackages inventories the
-// packages under the root.
+// observe collects one snapshot of the server directory at dir. MCDR can
+// move the server root away from dir; the probe and package scan then run
+// against that root.
 func observe(dir string) Workspace {
 	env := detectEnvironment(dir)
 
@@ -230,8 +224,8 @@ func (ws Workspace) Active() bool {
 	return checkSessionLock(filepath.Join(saveDir, sessionLockName))
 }
 
-// sameProbePath compares two directories after symlink resolution. Refresh
-// uses it to detect alias paths of the current directory.
+// sameProbePath compares two directories after symlink resolution,
+// treating unresolvable paths literally.
 func sameProbePath(left, right string) bool {
 	leftEval, leftErr := filepath.EvalSymlinks(left)
 	if leftErr != nil {

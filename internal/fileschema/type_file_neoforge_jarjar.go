@@ -13,18 +13,14 @@ type FileNeoforgeJarjar struct {
 // NeoforgeJarjarEntry describes a single embedded library inside a NeoForge
 // mod JAR's META-INF/jarjar/ directory.
 type NeoforgeJarjarEntry struct {
-	// Identifier holds the Maven group and artifact ID of the bundled library.
 	Identifier NeoforgeJarjarIdentifier `json:"identifier"`
 
-	// Version holds the version range the mod is compatible with and the
-	// exact version actually bundled.
+	// Version holds both the version range the mod is compatible with and
+	// the exact version actually bundled.
 	Version NeoforgeJarjarVersion `json:"version"`
 
-	// Path is the path inside the JAR to the embedded library JAR file,
-	// e.g. "META-INF/jarjar/flywheel-neoforge-1.21.1-1.0.6.jar".
 	Path string `json:"path"`
 
-	// IsObfuscated indicates whether the embedded JAR has been obfuscated.
 	IsObfuscated bool `json:"isObfuscated"`
 }
 

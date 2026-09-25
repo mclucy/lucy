@@ -26,9 +26,8 @@ func supportedExt(ext string) bool {
 	}
 }
 
-// Analyze extracts package metadata from an artifact file.
-// It opens the file internally and routes to appropriate readers based on file extension.
-// For .jar/.zip files, all readers are tried. For .pyz/.mcdr, only the MCDR reader runs.
+// Analyze extracts package metadata from an artifact file. For .jar/.zip
+// files all readers are tried; for .pyz/.mcdr only the MCDR reader runs.
 func Analyze(filePath string, opts ...Option) ([]Info, error) {
 	o := &options{}
 	for _, opt := range opts {

@@ -13,7 +13,7 @@ import (
 const (
 	pluginCatalogueRepoEndpoint = `https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/`
 	branchMaster                = "?ref=master"
-	branchCatalogue             = "?ref=catalogue" // I haven't figured out the difference yet
+	branchCatalogue             = "?ref=catalogue"
 	branchMeta                  = "?ref=meta"
 )
 

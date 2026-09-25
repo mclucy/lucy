@@ -3,7 +3,7 @@ package resolve
 import "github.com/mclucy/lucy/types"
 
 // ConstraintGraph is the merged requirement graph keyed by
-// PackageId.StringPlatformName().
+// VersionedPackageRef.StringBase() (stable source-qualified identity).
 type ConstraintGraph map[string]ConstraintRequirement
 
 // ConstraintRequirement is the merged requirement set for one package identity.

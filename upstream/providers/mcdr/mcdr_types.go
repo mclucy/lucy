@@ -8,8 +8,8 @@ import (
 )
 
 // SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/plugins/{plugin_name}/plugin_info.json
-// The purpose of this file is quite unclear to me.
-// For this project, meta.json under the meta branch is more handy.
+// Lucy uses this file only for authorship; metadata comes from meta.json on
+// the meta branch instead.
 type pluginInfo struct {
 	Id           string   `json:"id"`
 	Authors      []author `json:"authors"`
