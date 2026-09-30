@@ -8,6 +8,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/add"
 	"github.com/mclucy/lucy/internal/cli/bisect"
+	"github.com/mclucy/lucy/internal/cli/compile"
 	"github.com/mclucy/lucy/internal/cli/create"
 	"github.com/mclucy/lucy/internal/cli/info"
 	lucyinit "github.com/mclucy/lucy/internal/cli/init"
@@ -92,6 +93,7 @@ func init() {
 	rootCmd.AddCommand(
 		add.NewCommand(),
 		bisect.NewCommand(),
+		compile.NewCommand(),
 		info.NewCommand(),
 		lucyinit.NewCommand(),
 		install.NewCommand(),

@@ -1,0 +1,113 @@
+import groovy.json.JsonOutput
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+import org.gradle.util.GradleVersion
+
+gradle.projectsEvaluated {
+    def root = gradle.rootProject
+    if (root.tasks.findByName('lucyCompileModel') != null) {
+        throw new GradleException('The build already defines a lucyCompileModel task')
+    }
+    def configureInspection = {
+        def buildTaskPath = root.findProperty('lucy.compile.task')
+        if (buildTaskPath != null) {
+            mustRunAfter(root.tasks.getByPath(buildTaskPath.toString()))
+        }
+        doLast {
+            def compilers = []
+            def selected = root.findProperty('lucy.compile.project')
+            if (selected != null) {
+                def project = root.findProject(selected.toString())
+                if (project == null) {
+                    throw new GradleException('Selected project no longer exists: ' + selected)
+                }
+                def lifecycle = project.tasks.findByName('assemble') ?: project.tasks.findByName('build')
+                def pending = new ArrayDeque()
+                pending.add(lifecycle)
+                def visited = [] as Set
+                while (!pending.isEmpty()) {
+                    def candidate = pending.removeFirst()
+                    if (visited.add(candidate)) {
+                        pending.addAll(candidate.taskDependencies.getDependencies(candidate))
+                    }
+                }
+                compilers = visited.findAll { it instanceof JavaCompile && it.enabled }.sort { it.path }.collect { compiler ->
+                    def major = 0
+                    def executable = ''
+                    if (compiler.hasProperty('javaCompiler')) {
+                        def provider = compiler.javaCompiler.get()
+                        major = provider.metadata.languageVersion.asInt()
+                        executable = provider.executablePath.asFile.absolutePath
+                    }
+                    [task: compiler.path, major: major, executable: executable,
+                     release: compiler.options.hasProperty('release') ? compiler.options.release.orNull ?: 0 : 0,
+                     target: compiler.targetCompatibility ?: '']
+                }
+            }
+            def projects = root.allprojects.collect { project ->
+                def ecosystems = []
+                def has = { id -> project.plugins.hasPlugin(id) }
+                if (has('fabric-loom') || has('net.fabricmc.fabric-loom') || has('net.fabricmc.fabric-loom-remap')) {
+                    ecosystems.add('fabric')
+                }
+                if (has('net.minecraftforge.gradle') || has('net.neoforged.moddev.legacyforge')) {
+                    ecosystems.add('forge')
+                }
+                if (has('net.neoforged.moddev') || has('net.neoforged.gradle.userdev')) {
+                    ecosystems.add('neoforge')
+                }
+                if (has('dev.architectury.loom') || has('architectury.loom')) {
+                    def platform = project.extensions.findByName('loom').platform.orNull?.toString()?.toLowerCase(Locale.ROOT)
+                    if (['fabric', 'forge', 'neoforge'].contains(platform)) {
+                        ecosystems.add(platform)
+                    }
+                }
+                def hasModMetadata = false
+                def sourceSets = project.extensions.findByName('sourceSets')
+                def main = sourceSets?.findByName('main')
+                def resourceDirs = main?.resources?.srcDirs ?: [new File(project.projectDir, 'src/main/resources')]
+                resourceDirs.each { dir ->
+                    if (new File(dir, 'fabric.mod.json').isFile()) {
+                        ecosystems.add('fabric')
+                        hasModMetadata = true
+                    }
+                    if (new File(dir, 'META-INF/neoforge.mods.toml').isFile()) {
+                        ecosystems.add('neoforge')
+                        hasModMetadata = true
+                    }
+                    if (new File(dir, 'META-INF/mods.toml').isFile() && !ecosystems.contains('neoforge')) {
+                        ecosystems.add('forge')
+                        hasModMetadata = true
+                    }
+                }
+                def published = [] as Set
+
+                def publishing = project.extensions.findByName('publishing')
+                publishing?.publications?.each { publication ->
+                    if (publication.hasProperty('artifacts')) {
+                        publication.artifacts.each { artifact -> published.add(artifact.file.absolutePath) }
+                    }
+                }
+                def archives = project.tasks.withType(AbstractArchiveTask).collect { archive ->
+                    def file = archive.hasProperty('archiveFile') ? archive.archiveFile.orNull?.asFile : archive.archivePath
+                    def classifier = archive.hasProperty('archiveClassifier') ? archive.archiveClassifier.orNull : archive.classifier
+                    [file: file?.absolutePath ?: '', classifier: classifier ?: '', enabled: archive.enabled,
+                     published: file != null && published.contains(file.absolutePath)]
+                }
+                [path: project.path, ecosystems: ecosystems.unique().sort(), hasModMetadata: hasModMetadata,
+                 buildTask: project.tasks.findByName('assemble')?.path ?: project.tasks.findByName('build')?.path ?: '',
+                 compilers: project.path == selected ? compilers : [], archives: archives]
+            }
+            def output = System.getenv('LUCY_COMPILE_MODEL')
+            if (output == null || output.isEmpty()) {
+                throw new GradleException('LUCY_COMPILE_MODEL is not set')
+            }
+            new File(output).text = JsonOutput.toJson([projects: projects])
+        }
+    }
+    if (GradleVersion.current().baseVersion >= GradleVersion.version('4.9')) {
+        root.tasks.register('lucyCompileModel', configureInspection)
+    } else {
+        root.tasks.create('lucyCompileModel', configureInspection)
+    }
+}
