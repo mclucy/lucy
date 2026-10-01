@@ -24,7 +24,7 @@ The source can be a GitHub `owner/repo` reference or any Git repository URL. Luc
 ## Arguments
 
 <ParamField path="url|owner/repo" type="string" required>
-  GitHub shorthand (`owner/repo`) or a Git repository URL to clone. The repository's default branch is used.
+  GitHub shorthand (`owner/repo`) or a Git repository URL to clone. The repository's default branch with no `--branch` or `--tag` set.
 </ParamField>
 
 ## Flags
@@ -43,6 +43,14 @@ The source can be a GitHub `owner/repo` reference or any Git repository URL. Luc
 
 <ParamField query="--project" type="string">
   Select a Gradle project path, such as `:fabric`, when a build contains multiple mod projects.
+</ParamField>
+
+<ParamField query="--branch" type="string">
+  Checkout Git branch BRANCH after cloning, before compiling. Mutually exclusive with `--tag`.
+</ParamField>
+
+<ParamField query="--tag" type="string">
+  Checkout Git tag TAG after cloning, before compiling. Mutually exclusive with `--branch`.
 </ParamField>
 
 See also [Global Flags](/commands/global-flags).

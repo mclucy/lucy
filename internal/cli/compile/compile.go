@@ -23,6 +23,8 @@ type options struct {
 	platform string
 	project  string
 	buildDir string
+	branch   string
+	tag      string
 }
 
 func NewCommand() *cobra.Command {
@@ -43,6 +45,8 @@ func NewCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.platform, cli.FlagPlatform, "", "Select fabric, forge, or neoforge")
 	cmd.Flags().StringVar(&opts.project, "project", "", "Select a Gradle project path, such as :fabric")
 	cmd.Flags().StringVar(&opts.buildDir, "build-dir", "", "Select a Gradle build directory relative to the checkout")
+	cmd.Flags().StringVar(&opts.branch, "branch", "", "Checkout Git branch BRANCH before compiling")
+	cmd.Flags().StringVar(&opts.tag, "tag", "", "Checkout Git tag TAG before compiling")
 	if err := cmd.MarkFlagRequired("output"); err != nil {
 		panic(err)
 	}
@@ -62,6 +66,14 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 	}
 	if opts.platform != "" && !supportedPlatform(types.Ecosystem(opts.platform)) {
 		return errors.New("--platform must be fabric, forge, or neoforge")
+	}
+	branch := strings.TrimSpace(opts.branch)
+	tag := strings.TrimSpace(opts.tag)
+	if branch != "" && tag != "" {
+		return errors.New("--branch and --tag are mutually exclusive")
+	}
+	if strings.HasPrefix(branch, "-") || strings.HasPrefix(tag, "-") {
+		return errors.New("branch and tag names must not start with '-'")
 	}
 	output, err := filepath.Abs(opts.output)
 	if err != nil {
@@ -83,7 +95,7 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 		}
 	}()
 	checkout := filepath.Join(temporary, "repository")
-	if err := clone(ctx, remote, checkout, stderr); err != nil {
+	if err := clone(ctx, remote, checkout, branch, tag, stderr); err != nil {
 		return err
 	}
 	layout, err := buildrepo.Probe(ctx, checkout)

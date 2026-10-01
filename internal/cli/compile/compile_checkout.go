@@ -47,15 +47,20 @@ func parseRemote(source string) (string, error) {
 	return remote.String(), nil
 }
 
-func clone(ctx context.Context, remote, dir string, stderr io.Writer) error {
+func clone(ctx context.Context, remote, dir, branch, tag string, stderr io.Writer) error {
 	git, err := exec.LookPath("git")
 	if err != nil {
 		return fmt.Errorf("find git: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, git,
-		"-c", "protocol.ext.allow=never",
-		"clone", "--recurse-submodules", "--", remote, dir,
-	)
+	args := []string{"-c", "protocol.ext.allow=never", "clone", "--recurse-submodules"}
+	switch {
+	case branch != "":
+		args = append(args, "--branch", branch)
+	case tag != "":
+		args = append(args, "--branch", tag)
+	}
+	args = append(args, "--", remote, dir)
+	cmd := exec.CommandContext(ctx, git, args...)
 	cmd.Stdout = stderr
 	cmd.Stderr = stderr
 	cmd.WaitDelay = 5 * time.Second
