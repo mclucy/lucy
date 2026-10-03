@@ -14,6 +14,52 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+// outputDestination is where the compiled JAR is written: either an explicit
+// JAR file or a directory that receives the project's artifact name.
+type outputDestination struct {
+	directory string
+	file      string
+}
+
+// parseOutputDestination classifies the output flag. A path ending in `.jar`
+// names the JAR to write; every other value, including an unset flag, names the
+// directory that receives the project's artifact name.
+func parseOutputDestination(value string) outputDestination {
+	trimmed := strings.TrimSpace(value)
+	if strings.EqualFold(filepath.Ext(trimmed), ".jar") {
+		return outputDestination{file: trimmed}
+	}
+	if trimmed == "" {
+		return outputDestination{directory: "."}
+	}
+	return outputDestination{directory: filepath.Clean(trimmed)}
+}
+
+// resolve returns the absolute destination for the artifact Gradle built as
+// artifactName. A directory destination stores the JAR under that name, while
+// an explicit destination keeps the file name the user asked for.
+func (d outputDestination) resolve(artifactName string) (string, error) {
+	target := d.file
+	if d.directory != "" {
+		target = filepath.Join(d.directory, artifactName)
+	}
+	resolved, err := filepath.Abs(target)
+	if err != nil {
+		return "", fmt.Errorf("resolve output path: %w", err)
+	}
+	return resolved, nil
+}
+
+// ensureAbsent rejects an occupied destination; compile never overwrites files.
+func ensureAbsent(path string) error {
+	if _, err := os.Lstat(path); err == nil {
+		return fmt.Errorf("output already exists: %s", path)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect output: %w", err)
+	}
+	return nil
+}
+
 func selectArtifact(project gradleProject, platform types.Ecosystem) (string, error) {
 	candidates := make([]archive, 0, len(project.Archives))
 	seen := make(map[string]bool, len(project.Archives))

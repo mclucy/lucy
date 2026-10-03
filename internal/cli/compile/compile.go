@@ -30,7 +30,7 @@ type options struct {
 func NewCommand() *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
-		Use:   "compile <url|owner/repo> -o <artifact.jar>",
+		Use:   "compile <url|owner/repo> [-o <artifact.jar|directory>]",
 		Short: "Compile a Minecraft mod from a Git repository",
 		Long: "Clone a Git repository into a temporary directory and compile a Forge, NeoForge, or Fabric mod. " +
 			"Compilation executes repository build scripts and can download build dependencies.",
@@ -41,15 +41,12 @@ func NewCommand() *cobra.Command {
 			return run(ctx, args[0], opts, cmd.OutOrStdout(), cmd.ErrOrStderr())
 		}),
 	}
-	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Write the compiled mod JAR to PATH")
+	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Write the compiled mod JAR to PATH, or to a directory under the project's artifact name")
 	cmd.Flags().StringVar(&opts.platform, cli.FlagPlatform, "", "Select fabric, forge, or neoforge")
 	cmd.Flags().StringVar(&opts.project, "project", "", "Select a Gradle project path, such as :fabric")
 	cmd.Flags().StringVar(&opts.buildDir, "build-dir", "", "Select a Gradle build directory relative to the checkout")
 	cmd.Flags().StringVar(&opts.branch, "branch", "", "Checkout Git branch BRANCH before compiling")
 	cmd.Flags().StringVar(&opts.tag, "tag", "", "Checkout Git tag TAG before compiling")
-	if err := cmd.MarkFlagRequired("output"); err != nil {
-		panic(err)
-	}
 	return cmd
 }
 
@@ -58,12 +55,7 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(opts.output) == "" {
-		return errors.New("output path must not be empty")
-	}
-	if !strings.EqualFold(filepath.Ext(opts.output), ".jar") {
-		return errors.New("output path must have a .jar extension")
-	}
+	destination := parseOutputDestination(opts.output)
 	if opts.platform != "" && !supportedPlatform(types.Ecosystem(opts.platform)) {
 		return errors.New("--platform must be fabric, forge, or neoforge")
 	}
@@ -75,14 +67,14 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 	if strings.HasPrefix(branch, "-") || strings.HasPrefix(tag, "-") {
 		return errors.New("branch and tag names must not start with '-'")
 	}
-	output, err := filepath.Abs(opts.output)
-	if err != nil {
-		return fmt.Errorf("resolve output path: %w", err)
-	}
-	if _, err := os.Lstat(output); err == nil {
-		return fmt.Errorf("output already exists: %s", output)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("inspect output: %w", err)
+	output := ""
+	if destination.file != "" {
+		if output, err = destination.resolve(""); err != nil {
+			return err
+		}
+		if err := ensureAbsent(output); err != nil {
+			return err
+		}
 	}
 
 	temporary, err := os.MkdirTemp("", "lucy-compile-*")
@@ -153,6 +145,14 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 	artifactPath, err := selectArtifact(project, types.Ecosystem(opts.platform))
 	if err != nil {
 		return err
+	}
+	if output == "" {
+		if output, err = destination.resolve(filepath.Base(artifactPath)); err != nil {
+			return err
+		}
+		if err := ensureAbsent(output); err != nil {
+			return err
+		}
 	}
 	if err := publishArtifact(ctx, artifactPath, output); err != nil {
 		return err

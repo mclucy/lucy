@@ -10,14 +10,18 @@ description: "Compile a Fabric, Forge, or NeoForge mod from a Git repository"
 </Warning>
 
 ```bash
-lucy compile <url|owner/repo> --output <artifact.jar>
+lucy compile <url|owner/repo> [--output <artifact.jar|directory>]
 ```
 
 ```bash
+lucy compile owner/repo
+lucy compile owner/repo -o ./dist
 lucy compile owner/repo -o ./dist/mod.jar
-lucy compile https://codeberg.org/owner/repo.git -o ./dist/mod.jar --platform fabric
-lucy compile owner/multi-platform-mod -o ./dist/mod.jar --build-dir fabric --project :fabric
+lucy compile https://codeberg.org/owner/repo.git -o ./dist --platform fabric
+lucy compile owner/multi-platform-mod -o ./dist --build-dir fabric --project :fabric
 ```
+
+Without `--output`, the compiled JAR is written to the current directory. A `--output` path ending in `.jar` is used as the destination file; any other value is a directory that receives the artifact name the project produced. Directories are created when missing.
 
 The source can be a GitHub `owner/repo` reference or any Git repository URL. Lucy clones the repository into a temporary directory and removes that checkout when the command finishes.
 
@@ -29,8 +33,8 @@ The source can be a GitHub `owner/repo` reference or any Git repository URL. Luc
 
 ## Flags
 
-<ParamField query="--output, -o" type="string" required>
-  Destination path for the compiled `.jar`, resolved relative to the current directory. The path must have a `.jar` extension. The parent directory is created if needed. The destination must not already exist; `lucy compile` does not overwrite files.
+<ParamField query="--output, -o" type="string">
+  Destination for the compiled `.jar`, resolved relative to the current directory. A path ending in `.jar` names the destination file; any other value names a directory that receives the project's artifact name. Defaults to the current directory. Missing directories are created. The destination must not already exist; `lucy compile` does not overwrite files.
 </ParamField>
 
 <ParamField query="--platform" type="string">
