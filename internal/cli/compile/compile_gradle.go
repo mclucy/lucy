@@ -6,7 +6,6 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +17,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/toolchain"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -29,8 +29,8 @@ type gradleRunner struct {
 	executable string
 	arguments  []string
 	env        []string
+	version    string
 	modelPath  string
-	stderr     io.Writer
 	daemon     toolchain.JavaInstallation
 }
 
@@ -67,9 +67,8 @@ func newGradleRunner(
 	build buildrepo.GradleBuild,
 	inventory toolchain.Inventory,
 	temporary string,
-	stderr io.Writer,
 ) (gradleRunner, error) {
-	runner := gradleRunner{dir: build.Dir, stderr: stderr}
+	runner := gradleRunner{dir: build.Dir, version: "unknown"}
 	version := ""
 	if build.Wrapper != nil {
 		wrapper := build.Wrapper
@@ -111,6 +110,9 @@ func newGradleRunner(
 			errors.Join(inventory.Problems...),
 		)
 	}
+	if version != "" {
+		runner.version = version
+	}
 	launcher, daemon, err := selectJVMs(build, inventory, version)
 	if err != nil {
 		return runner, errors.Join(err, errors.Join(inventory.Problems...))
@@ -147,12 +149,22 @@ func newGradleRunner(
 	return runner, nil
 }
 
+// inspect evaluates the build model of every project so Lucy can choose one.
 func (r gradleRunner) inspect(ctx context.Context) (gradleModel, error) {
-	return r.execute(ctx, ":lucyCompileModel")
+	log.ShowInfo("Evaluating Gradle " + r.version + " build")
+	return r.execute(ctx, "Gradle build model", ":lucyCompileModel")
 }
 
+// inspectCompilers reports the compilers the selected project can use, which
+// decides whether the local JDK can build it.
 func (r gradleRunner) inspectCompilers(ctx context.Context, project string) (gradleProject, error) {
-	model, err := r.execute(ctx, ":lucyCompileModel", "-Plucy.compile.project="+project)
+	log.ShowInfo("Checking toolchain for " + nameProject(project))
+	model, err := r.execute(
+		ctx,
+		"Gradle compiler inspection",
+		":lucyCompileModel",
+		"-Plucy.compile.project="+project,
+	)
 	if err != nil {
 		return gradleProject{}, err
 	}
@@ -164,29 +176,46 @@ func (r gradleRunner) inspectCompilers(ctx context.Context, project string) (gra
 	return gradleProject{}, fmt.Errorf("selected project %s disappeared from the build", project)
 }
 
-func (r gradleRunner) build(ctx context.Context, task string) (gradleModel, error) {
-	return r.execute(ctx, task, ":lucyCompileModel", "-Plucy.compile.task="+task)
+// build runs task on the selected project and returns the archives it produced.
+func (r gradleRunner) build(ctx context.Context, project string, task string) (gradleModel, error) {
+	log.ShowInfo("Building " + task)
+	return r.execute(
+		ctx,
+		"Gradle "+task,
+		task,
+		":lucyCompileModel",
+		"-Plucy.compile.task="+task,
+	)
 }
 
-func (r gradleRunner) execute(ctx context.Context, tasks ...string) (gradleModel, error) {
+// execute runs label along with tasks. The label names only the work the user
+// asked for: tasks also carries Lucy's own inspection task and its -P
+// properties, which are implementation detail rather than something to report.
+func (r gradleRunner) execute(ctx context.Context, label string, tasks ...string) (gradleModel, error) {
 	if err := os.Remove(r.modelPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return gradleModel{}, fmt.Errorf("remove previous Gradle model: %w", err)
 	}
 	arguments := make([]string, 0, len(r.arguments)+len(tasks))
 	arguments = append(arguments, r.arguments...)
 	arguments = append(arguments, tasks...)
+	output := newProcessLog("gradle")
 	cmd := exec.CommandContext(ctx, r.executable, arguments...)
 	cmd.Dir = r.dir
 	cmd.Env = r.env
-	cmd.Stdout = r.stderr
-	cmd.Stderr = r.stderr
+	cmd.Stdout = output
+	cmd.Stderr = output
 	cmd.WaitDelay = 5 * time.Second
 	configureProcess(cmd)
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	output.flush()
+	if err != nil {
 		if ctx.Err() != nil {
 			return gradleModel{}, ctx.Err()
 		}
-		return gradleModel{}, fmt.Errorf("execute Gradle %s: %w", strings.Join(tasks, " "), err)
+		return gradleModel{}, reportFailure(
+			output,
+			fmt.Errorf("run %s: %w", label, err),
+		)
 	}
 	data, err := os.ReadFile(r.modelPath)
 	if err != nil {
@@ -197,6 +226,15 @@ func (r gradleRunner) execute(ctx context.Context, tasks ...string) (gradleModel
 		return model, fmt.Errorf("decode evaluated Gradle model: %w", err)
 	}
 	return model, nil
+}
+
+// nameProject names a Gradle project for a status line. The root project
+// carries the empty-looking path ":", which reads badly inside a sentence.
+func nameProject(path string) string {
+	if path == "" || path == ":" {
+		return "the root project"
+	}
+	return path
 }
 
 func selectProject(model gradleModel, opts options) (gradleProject, error) {

@@ -3,7 +3,6 @@ package compile
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/url"
 	"os/exec"
 	"path/filepath"
@@ -47,7 +46,10 @@ func parseRemote(source string) (string, error) {
 	return remote.String(), nil
 }
 
-func clone(ctx context.Context, remote, dir, branch, tag string, stderr io.Writer) error {
+// clone fetches remote into dir. Its raw output goes to output rather than
+// straight to the terminal, so a large checkout stays quiet and a rejected
+// remote is reported with git's own reason.
+func clone(ctx context.Context, remote, dir, branch, tag string, output *processLog) error {
 	git, err := exec.LookPath("git")
 	if err != nil {
 		return fmt.Errorf("find git: %w", err)
@@ -61,15 +63,17 @@ func clone(ctx context.Context, remote, dir, branch, tag string, stderr io.Write
 	}
 	args = append(args, "--", remote, dir)
 	cmd := exec.CommandContext(ctx, git, args...)
-	cmd.Stdout = stderr
-	cmd.Stderr = stderr
+	cmd.Stdout = output
+	cmd.Stderr = output
 	cmd.WaitDelay = 5 * time.Second
 	configureProcess(cmd)
-	if err := cmd.Run(); err != nil {
+	err = cmd.Run()
+	output.flush()
+	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return fmt.Errorf("clone repository: %w", err)
+		return reportFailure(output, fmt.Errorf("clone repository: %w", err))
 	}
 	return nil
 }

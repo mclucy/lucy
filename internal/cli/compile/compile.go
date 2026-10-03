@@ -8,12 +8,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/toolchain"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -38,7 +40,7 @@ func NewCommand() *cobra.Command {
 		RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return run(ctx, args[0], opts, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			return run(ctx, args[0], opts, cmd.OutOrStdout())
 		}),
 	}
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Write the compiled mod JAR to PATH, or to a directory under the project's artifact name")
@@ -50,7 +52,9 @@ func NewCommand() *cobra.Command {
 	return cmd
 }
 
-func run(ctx context.Context, source string, opts options, stdout, stderr io.Writer) (err error) {
+// run compiles source and writes the resulting JAR. Progress is narrated on
+// stderr; stdout carries only the artifact path so the command stays pipeable.
+func run(ctx context.Context, source string, opts options, stdout io.Writer) (err error) {
 	remote, err := parseRemote(source)
 	if err != nil {
 		return err
@@ -87,17 +91,23 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 		}
 	}()
 	checkout := filepath.Join(temporary, "repository")
-	if err := clone(ctx, remote, checkout, branch, tag, stderr); err != nil {
+	log.ShowInfo("Cloning " + source)
+	if err := clone(ctx, remote, checkout, branch, tag, newProcessLog("git")); err != nil {
 		return err
 	}
+	log.ShowInfo("Cloned " + source)
+
 	layout, err := buildrepo.Probe(ctx, checkout)
 	if err != nil {
 		return fmt.Errorf("probe repository: %w", err)
 	}
+	reportFindings(layout.Root, layout.Findings)
 	build, err := selectBuild(layout, opts.buildDir)
 	if err != nil {
 		return err
 	}
+
+	log.ShowInfo("Preparing the Gradle build")
 	gradleUserHome := os.Getenv("GRADLE_USER_HOME")
 	if gradleUserHome == "" {
 		home, homeErr := os.UserHomeDir()
@@ -115,7 +125,7 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 	if err != nil {
 		return fmt.Errorf("discover local toolchains: %w", err)
 	}
-	runner, err := newGradleRunner(build, inventory, temporary, stderr)
+	runner, err := newGradleRunner(build, inventory, temporary)
 	if err != nil {
 		return err
 	}
@@ -134,7 +144,7 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 	if err := checkCompiler(compilerProject, runner.daemon); err != nil {
 		return err
 	}
-	model, err = runner.build(ctx, project.BuildTask)
+	model, err = runner.build(ctx, project.Path, project.BuildTask)
 	if err != nil {
 		return err
 	}
@@ -157,10 +167,28 @@ func run(ctx context.Context, source string, opts options, stdout, stderr io.Wri
 	if err := publishArtifact(ctx, artifactPath, output); err != nil {
 		return err
 	}
+	log.ShowInfo("Compiled " + filepath.Base(output))
 	if _, err := fmt.Fprintln(stdout, output); err != nil {
 		return fmt.Errorf("report output: %w", err)
 	}
 	return nil
+}
+
+// reportFindings surfaces what the static probe could not settle on its own.
+// None of them stops a build, but each marks a decision left to Gradle, and
+// silently discarding one would leave the user with a wrong model of what Lucy
+// verified before running an untrusted build.
+func reportFindings(root string, findings []buildrepo.Finding) {
+	for _, finding := range findings {
+		location := finding.File
+		if relative, err := filepath.Rel(root, finding.File); err == nil {
+			location = filepath.ToSlash(relative)
+		}
+		if finding.Line > 0 {
+			location += ":" + strconv.Itoa(finding.Line)
+		}
+		log.ShowWarn(fmt.Errorf("%s: %s", location, finding.Message))
+	}
 }
 
 func supportedPlatform(platform types.Ecosystem) bool {
