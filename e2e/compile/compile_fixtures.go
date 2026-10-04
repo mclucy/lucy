@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/e2e/internal/testkit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,20 +38,9 @@ func runCompile(binary, repos string, ids []string) int {
 			return 1
 		}
 	}
-	failed := false
-	for _, id := range ids {
-		if err := executeCompile(binary, repos, id); err != nil {
-			fmt.Printf("FAIL %s: %v\n", id, err)
-			failed = true
-			continue
-		}
-		fmt.Printf("ok   %s\n", id)
-	}
-	if failed {
-		fmt.Println("verification failed")
-		return 1
-	}
-	return 0
+	return testkit.VerifyAll(ids, func(id string) error {
+		return executeCompile(binary, repos, id)
+	})
 }
 
 func executeCompile(binary, repos, id string) error {

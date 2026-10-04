@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - e2e/**
-      - testdata/repo/**
       - '**/*.go'
       - internal/cli/compile/**
       - go.mod
@@ -15,7 +14,6 @@ on:
   pull_request:
     paths:
       - e2e/**
-      - testdata/repo/**
       - '**/*.go'
       - internal/cli/compile/**
       - go.mod
@@ -46,12 +44,12 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           fixtures=()
-          for manifest in testdata/repo/*.yaml; do
+          for manifest in e2e/testdata/repo/*.yaml; do
             name="${manifest##*/}"
             fixtures+=("${name%.yaml}")
           done
           if [ ${#fixtures[@]} -eq 0 ]; then
-            echo "no compile manifests found in testdata/repo" >&2
+            echo "no compile manifests found in e2e/testdata/repo" >&2
             exit 1
           fi
           ids="$(printf '%s\n' "${fixtures[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
@@ -131,4 +129,4 @@ jobs:
       - name: Compile fixture (e2e)
         env:
           FIXTURE: ${{ matrix.fixture }}
-        run: go run ./e2e --suite compile --lucy dist/lucy "$FIXTURE"
+        run: go run ./e2e/compile --lucy dist/lucy "$FIXTURE"

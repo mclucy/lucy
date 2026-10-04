@@ -73,11 +73,11 @@ From the repository root, build Lucy and run the pinned repository fixtures:
 
 ```bash
 task build:dev
-go run ./e2e --suite compile                 # all fixtures
-go run ./e2e --suite compile eureka botania  # selected fixtures
+go run ./e2e/compile                 # all fixtures
+go run ./e2e/compile eureka botania  # selected fixtures
 ```
 
-Fixtures in `testdata/repo/` record full commit hashes and release tags where available.
+Fixtures in `e2e/testdata/repo/` record full commit hashes and release tags where available.
 The runner checks out each commit detached before invoking `lucy compile` on its local
 checkout; it does not pass `--branch` or `--tag`. Only the compile exit status is checked.
 

@@ -1,5 +1,4 @@
-// Command envgen generates sandbox server environments from the manifest in
-// testdata/environments into .sandboxes/. See docs/shared/sandbox-environments.md.
+// Command envgen materializes server sandboxes from e2e/testdata/environments.
 package main
 
 import (
@@ -89,7 +88,12 @@ type options struct {
 
 func main() {
 	opts := options{}
-	flag.StringVar(&opts.manifestPath, "manifest", "testdata/environments/environments.yaml", "path to environments manifest")
+	flag.StringVar(
+		&opts.manifestPath,
+		"manifest",
+		"e2e/testdata/environments/environments.yaml",
+		"path to environments manifest",
+	)
 	flag.StringVar(&opts.outRoot, "out", ".sandboxes", "output root for generated environments")
 	defaultCache, _ := os.UserCacheDir()
 	flag.StringVar(&opts.cacheDir, "cache", filepath.Join(defaultCache, "lucy-envgen"), "download cache directory")

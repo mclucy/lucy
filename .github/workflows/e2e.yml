@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - tools/envgen/**
-      - testdata/environments/**
+      - e2e/testdata/environments/**
       - workspace/**
       - internal/cli/**
       - e2e/**
@@ -13,7 +13,7 @@ on:
   pull_request:
     paths:
       - tools/envgen/**
-      - testdata/environments/**
+      - e2e/testdata/environments/**
       - workspace/**
       - internal/cli/**
       - e2e/**
@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/lucy-envgen
-          key: envgen-${{ hashFiles('testdata/environments/environments.yaml') }}
+          key: envgen-${{ hashFiles('e2e/testdata/environments/environments.yaml') }}
 
       - name: Generate environments
         run: task envs:gen -- --only ${{ env.ENVS }}
@@ -65,4 +65,4 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
       - name: Verify probe (e2e)
-        run: go run ./e2e ${{ env.ENVS }}
+        run: go run ./e2e/init ${{ env.ENVS }}
