@@ -188,3 +188,57 @@ func checkCompiler(project gradleProject, daemon toolchain.JavaInstallation) err
 	}
 	return nil
 }
+
+// toolchainWarnings reports projects that pin a Java toolchain no local JDK
+// satisfies. Gradle enforces such a pin exactly: a newer JDK never substitutes,
+// because its compiler emits newer bytecode than the project targets. Lucy turns
+// Gradle's auto-provisioning off, so an unsatisfied pin otherwise surfaces as a
+// "Cannot find a Java installation" error raised from inside a build script,
+// naming a JDK the reader was never told to install.
+//
+// These are warnings rather than errors because the pin is read statically from
+// a Groovy DSL that a convention plugin may also set, leaving Gradle the final
+// authority. The check only moves the diagnosis ahead of the failure.
+func toolchainWarnings(build buildrepo.GradleBuild, inventory toolchain.Inventory) []string {
+	var warnings []string
+	for _, project := range build.Projects {
+		required := project.Java.Toolchain
+		if required == nil || required.Major == 0 {
+			continue
+		}
+		var available []string
+		seen := map[int]bool{}
+		satisfied := false
+		for _, java := range inventory.Java {
+			if java.Javac == "" {
+				continue
+			}
+			if java.Major == required.Major && vendorMatches(required.Vendor, java.Vendor) {
+				satisfied = true
+			}
+			if seen[java.Major] {
+				continue
+			}
+			seen[java.Major] = true
+			available = append(available, strconv.Itoa(java.Major))
+		}
+		if satisfied {
+			continue
+		}
+		pin := fmt.Sprintf("%s pins a Java %d toolchain", project.Path, required.Major)
+		if required.Vendor != "" {
+			pin += " from " + required.Vendor
+		}
+		if len(available) == 0 {
+			pin += ", but no local JDK was found"
+		} else {
+			pin += ", but local installations are Java " + strings.Join(available, ", ")
+		}
+		location := project.BuildFile
+		if relative, err := filepath.Rel(build.Dir, project.BuildFile); err == nil {
+			location = filepath.ToSlash(relative)
+		}
+		warnings = append(warnings, location+": "+pin)
+	}
+	return warnings
+}

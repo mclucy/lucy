@@ -125,6 +125,9 @@ func run(ctx context.Context, source string, opts options, stdout io.Writer) (er
 	if err != nil {
 		return fmt.Errorf("discover local toolchains: %w", err)
 	}
+	for _, warning := range toolchainWarnings(build, inventory) {
+		log.ShowWarn(errors.New(warning))
+	}
 	runner, err := newGradleRunner(build, inventory, temporary)
 	if err != nil {
 		return err
