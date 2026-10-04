@@ -1,0 +1,7 @@
+# Tag: v21.0.66 (Minecraft 1.21.1).
+# Shared buildSrc conventions configure loader subprojects; select NeoForge explicitly.
+# Distributed on Modrinth: https://modrinth.com/mod/balm
+url: https://github.com/TwelveIterations/Balm.git
+commit: edc6dc6a4f69f859918012c0fc8c8206e37204ae
+platform: neoforge
+project: ':neoforge'

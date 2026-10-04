@@ -1,0 +1,6 @@
+# Tag: 10.2.0-183 (Minecraft 1.20.1).
+# ForgeGradle root build with manual/API source sets folded into the main shadow jar.
+# Distributed on CurseForge: https://www.curseforge.com/minecraft/mc-mods/immersive-engineering
+url: https://github.com/BluSunrize/ImmersiveEngineering.git
+commit: e63e4824800945eccf3684200a2c2270e2e1cdf2
+platform: forge

@@ -1,4 +1,4 @@
-// Command e2e verifies Lucy's CLI against generated sandbox environments.
+// Command e2e verifies Lucy's CLI against server environments and pinned repositories.
 package main
 
 import (
@@ -18,9 +18,12 @@ func run(args []string) int {
 	flags := flag.NewFlagSet("e2e", flag.ContinueOnError)
 	lucy := flags.String("lucy", "dist/lucy", "path to the Lucy binary")
 	sandboxes := flags.String("sandboxes", ".sandboxes", "directory containing generated environments")
+	suite := flags.String("suite", "probe", "e2e suite: probe or compile")
+	repos := flags.String("repos", "testdata/repo", "directory containing compile fixture manifests")
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: go run ./e2e [flags] <environment ids>")
-		fmt.Fprintln(flags.Output(), "Environment ids may be comma- or whitespace-separated. Run from the repository root.")
+		fmt.Fprintln(flags.Output(), "Usage: go run ./e2e [flags] [scenario ids]")
+		fmt.Fprintln(flags.Output(), "IDs may be comma- or whitespace-separated. The compile suite defaults to all fixtures.")
+		fmt.Fprintln(flags.Output(), "Run from the repository root.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -33,7 +36,11 @@ func run(args []string) int {
 	for _, arg := range flags.Args() {
 		ids = append(ids, strings.Fields(strings.ReplaceAll(arg, ",", " "))...)
 	}
-	if len(ids) == 0 {
+	if *suite != "probe" && *suite != "compile" {
+		fmt.Fprintf(os.Stderr, "unknown e2e suite %q\n", *suite)
+		return 2
+	}
+	if *suite == "probe" && len(ids) == 0 {
 		flags.Usage()
 		return 2
 	}
@@ -41,6 +48,9 @@ func run(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "resolve Lucy binary: %v\n", err)
 		return 1
+	}
+	if *suite == "compile" {
+		return runCompile(binary, *repos, ids)
 	}
 	failed := false
 	for _, id := range ids {
