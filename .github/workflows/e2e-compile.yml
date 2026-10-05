@@ -81,7 +81,7 @@ jobs:
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
-          java-version: "17.0.16+8"
+          java-version: "17"
           architecture: x64
           set-default: false
 
@@ -90,7 +90,7 @@ jobs:
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
-          java-version: "21.0.8+9"
+          java-version: "21"
           architecture: x64
           set-default: false
 
@@ -99,9 +99,12 @@ jobs:
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
-          java-version: "25.0.1+8"
+          java-version: "25"
           architecture: x64
 
+      # Pin majors, not exact patches: Lucy's toolchain selection matches on Java major
+      # version only, and Adoptium re-tags LTS releases (e.g. 21.0.8+9 became
+      # 21.0.8+9.0.LTS), so exact patch pins silently stop resolving.
       # Hide the image's moving JDK installations from Lucy and Gradle discovery.
       - name: Configure pinned JDK inventory
         env:
