@@ -105,18 +105,15 @@ jobs:
       # Pin majors, not exact patches: Lucy's toolchain selection matches on Java major
       # version only, and Adoptium re-tags LTS releases (e.g. 21.0.8+9 became
       # 21.0.8+9.0.LTS), so exact patch pins silently stop resolving.
-      # Hide the image's moving JDK installations from Lucy and Gradle discovery.
+      # Restrict Gradle toolchain resolution to the three pinned JDKs. The runner image's
+      # own JDKs stay in place: setup-java exposes its toolcache entries as symlinks into
+      # /usr/lib/jvm, so hiding that directory from Lucy breaks JAVA_HOME resolution.
       - name: Configure pinned JDK inventory
         env:
           JDK17: ${{ steps.java17.outputs.path }}
           JDK21: ${{ steps.java21.outputs.path }}
           JDK25: ${{ steps.java25.outputs.path }}
         run: |
-          sudo mv /usr/lib/jvm "$RUNNER_TEMP/runner-jvms"
-          sudo mkdir -p /usr/lib/jvm
-          sudo ln -s "$JDK17" /usr/lib/jvm/lucy-temurin-17
-          sudo ln -s "$JDK21" /usr/lib/jvm/lucy-temurin-21
-          sudo ln -s "$JDK25" /usr/lib/jvm/lucy-temurin-25
           export GRADLE_USER_HOME="$RUNNER_TEMP/lucy-gradle"
           mkdir -p "$GRADLE_USER_HOME"
           printf '%s\n' \
