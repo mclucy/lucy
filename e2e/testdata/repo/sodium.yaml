@@ -1,6 +1,6 @@
-# Tag: mc1.20.1-0.5.13 (Minecraft 1.20.1, JDK 17).
-# Extra source sets (api/desktop/workarounds) live in the root project, so no platform subproject exists.
+# Tag: mc26.3-0.9.2 (Minecraft 26.3, JDK 25).
+# Platform sources moved into subprojects, so the fabric mod lives in :fabric.
 # Distributed on Modrinth: https://modrinth.com/mod/sodium
 url: https://github.com/CaffeineMC/sodium.git
-commit: 1bcd392f241a44bc454582dad97e7f2a6c1ad01b
+commit: 03198cb36ab831c99694403d18e4cf4a1726df72
 platform: fabric
