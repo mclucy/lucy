@@ -72,6 +72,7 @@ func newGradleRunner(
 	version := ""
 	if build.Wrapper != nil {
 		wrapper := build.Wrapper
+		var scriptMode os.FileMode
 		for _, path := range []string{wrapper.Script, wrapper.Jar, wrapper.Properties} {
 			if path == "" {
 				return runner, errors.New("repository Gradle wrapper is incomplete")
@@ -83,17 +84,23 @@ func newGradleRunner(
 			if !info.Mode().IsRegular() {
 				return runner, fmt.Errorf("Gradle wrapper component is not a regular file: %s", path)
 			}
+			if path == wrapper.Script {
+				scriptMode = info.Mode()
+			}
 		}
 		if wrapper.DistributionURL == "" {
 			return runner, errors.New("Gradle wrapper has no distribution url")
 		}
 		version = wrapper.Version
 		runner.executable = wrapper.Script
-		if runtime.GOOS == "windows" {
+		switch {
+		case runtime.GOOS == "windows":
 			runner.executable = "cmd.exe"
 			runner.arguments = []string{"/d", "/c", wrapper.Script}
-		} else {
-			runner.executable = "/bin/sh"
+		case scriptMode.Perm()&0o111 == 0:
+			// Repositories sometimes commit the wrapper without the executable
+			// bit, so Lucy names the interpreter its shebang asks for.
+			runner.executable = wrapperInterpreter(wrapper.Script)
 			runner.arguments = []string{wrapper.Script}
 		}
 	} else if inventory.Gradle != nil {
