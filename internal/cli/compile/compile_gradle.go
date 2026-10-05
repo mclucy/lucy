@@ -163,36 +163,34 @@ func (r gradleRunner) inspect(ctx context.Context) (gradleModel, error) {
 }
 
 // inspectCompilers reports the compilers the selected project can use, which
-// decides whether the local JDK can build it.
-func (r gradleRunner) inspectCompilers(ctx context.Context, project string) (gradleProject, error) {
-	log.ShowInfo("Checking toolchain for " + nameProject(project))
+// decides whether the local JDK can build it. The project's own build task
+// joins the invocation as a dry run so the task graph names the compile tasks
+// without running any of them: the JDK check must happen before the build.
+func (r gradleRunner) inspectCompilers(ctx context.Context, project gradleProject) (gradleProject, error) {
+	log.ShowInfo("Checking toolchain for " + nameProject(project.Path))
 	model, err := r.execute(
 		ctx,
 		"Gradle compiler inspection",
+		project.BuildTask,
 		":lucyCompileModel",
-		"-Plucy.compile.project="+project,
+		"-Plucy.compile.project="+project.Path,
+		"--dry-run",
 	)
 	if err != nil {
 		return gradleProject{}, err
 	}
 	for _, candidate := range model.Projects {
-		if candidate.Path == project {
+		if candidate.Path == project.Path {
 			return candidate, nil
 		}
 	}
-	return gradleProject{}, fmt.Errorf("selected project %s disappeared from the build", project)
+	return gradleProject{}, fmt.Errorf("selected project %s disappeared from the build", project.Path)
 }
 
 // build runs task on the selected project and returns the archives it produced.
-func (r gradleRunner) build(ctx context.Context, project string, task string) (gradleModel, error) {
+func (r gradleRunner) build(ctx context.Context, task string) (gradleModel, error) {
 	log.ShowInfo("Building " + task)
-	return r.execute(
-		ctx,
-		"Gradle "+task,
-		task,
-		":lucyCompileModel",
-		"-Plucy.compile.task="+task,
-	)
+	return r.execute(ctx, "Gradle "+task, task, ":lucyCompileModel")
 }
 
 // execute runs label along with tasks. The label names only the work the user

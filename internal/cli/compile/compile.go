@@ -140,14 +140,14 @@ func run(ctx context.Context, source string, opts options, stdout io.Writer) (er
 	if err != nil {
 		return err
 	}
-	compilerProject, err := runner.inspectCompilers(ctx, project.Path)
+	compilerProject, err := runner.inspectCompilers(ctx, project)
 	if err != nil {
 		return err
 	}
 	if err := checkCompiler(compilerProject, runner.daemon); err != nil {
 		return err
 	}
-	model, err = runner.build(ctx, project.Path, project.BuildTask)
+	model, err = runner.build(ctx, project.BuildTask)
 	if err != nil {
 		return err
 	}
