@@ -1,0 +1,94 @@
+---
+title: "Recover and revert files"
+description: "Restore an accepted snapshot or return to a historical revision"
+---
+
+## Recover accepted contents
+
+`lucy file recover` restores the file to its current accepted digest recorded in `lucy.yaml` and `lucy-lock.yaml`. It does not accept a new revision.
+
+For example, if you edit `config/example.json` and the server encounters issues, restore the accepted snapshot:
+
+```bash
+lucy file recover config/example.json
+```
+
+Before overwriting the working file, `recover` preserves displaced working bytes in local backups without accepting them.
+
+To restore all tracked files that have an accepted hash:
+
+```bash
+lucy file recover --all
+```
+
+Presence-only files (tracked without a hash) have no recovery target and are reported as skipped during `recover --all`.
+
+### Verification order and failure safety
+
+When recovering a file:
+
+1. Lucy checks the local content-addressed store (`.lucy/objects/sha256/`) for the accepted blob.
+2. If no valid local blob is available and `recover_url` is configured, Lucy fetches the URL directly.
+3. Lucy verifies the downloaded bytes against the exact accepted SHA-256 digest (`sha256:<64 lowercase hex>`).
+
+If no valid local blob is available and the remote source is unavailable, invalid, or produces a mismatched digest, recovery fails with an error. The destination file on disk is not modified.
+
+## Revert an accepted update
+
+`recover` restores the current accepted digest without changing the accepted revision. `revert` restores an earlier accepted revision, makes it the active accepted revision, and records the transition in history.
+
+```bash
+lucy file revert config/example.json
+```
+
+### Navigating accepted history
+
+Without a target argument, `revert` follows the current accepted revision's parent. Repeated reverts step backward through historical revisions: C, then B, then A. They do not toggle between the last two states.
+
+During a revert, displaced working bytes are preserved in local backups, and existing history records remain intact.
+
+### Finding revisions and choosing a target
+
+Use `lucy file history` to inspect chronological revisions and event sequence numbers:
+
+```bash
+lucy file history config/example.json
+```
+
+To revert to a specific historical digest, pass its SHA-256 hash:
+
+```bash
+lucy file revert config/example.json sha256:2da9eeead0999df06fc9a986498c6ebebe6eb09ac2174b889d603223e47c6216
+```
+
+If the same digest appears across multiple historical points, you can disambiguate by passing the sequence ID using `--revision`:
+
+```bash
+lucy file revert config/example.json --revision 4
+```
+
+Note that `--revision` conflicts with passing a positional digest argument.
+
+## Fresh source update vs digest-pinned recovery
+
+It is important to understand the difference between `recover` and `update --from-source`:
+
+- **`recover`**: Pinned to the accepted digest. It restores the exact bytes matching the recorded SHA-256 hash. If the remote source serves different bytes, recovery fails and preserves the destination file unchanged.
+- **`update --from-source`**: Fetches fresh bytes from the source URL. It replaces working bytes (preserving displaced bytes in local backups), updates the accepted hash to the new digest, and logs a new accepted revision.
+
+```bash
+lucy file update --from-source config/example.json
+```
+
+## Recover on another machine
+
+Local backups stored under `.lucy/objects/` and history in `.lucy/history/files.jsonl` are private to the workspace. They are not off-machine backups, and the object store also holds snapshots of working bytes you never accepted, so it is not a distribution payload.
+
+Recording an accepted hash in `lucy.yaml` or `lucy-lock.yaml` does not distribute the file content. To make the accepted contents available on another machine:
+
+- Place the accepted bytes at the declared path before installing.
+- Host the accepted bytes at the declared `recover_url`, so installation and recovery can fetch them.
+
+<Note>
+  Distribution is not implemented yet: there is no `lucy export` and no archive import. Track the packaging work in [issue #129](https://github.com/mclucy/lucy/issues/129).
+</Note>
