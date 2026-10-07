@@ -71,19 +71,12 @@ To run the built binary against a test server directory:
     └── networkutil/        Network helpers wrapping cache downloads
 ```
 
-## Researching and Designing
-
-1. If your task is highly domain (Minecraft) related, always conduct research before action.
-2. Take reference from other package managers, such as Cargo, npm, pip, apt, brew, etc. This does not mean you should copy their design. Combine your research with our own design principles.
-3. Before implementing a new feature, or refactoring existing modules, first walk me through the core functions and types.
-4. You are encouraged to use existing go packages rather than reinventing the wheel. However, you must first ask for permission and justify your decision.
-
 ## Testing and Debugging
 
 1. Always prefer the project's e2e testing suite (`envgen`). You should do regression tests after implementing a feature.
 2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `testdata/environments/environments.yaml`. There's brief explanation for each environment in `testdata/environments/families/*.md`.
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
-4. The project is under an early development stage. Do not add tests unless explicitly requested. You may write temporary tests for your own debugging or verification purpose.
+4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 
 ### envgen CLI
 
@@ -104,6 +97,16 @@ The CLI is idempotent:
 - Existing environment dirs are skipped without `--force`
 - Every artifact digest is verified after fetch and generation aborts that environment on mismatch
 - Missing manual artifacts fail with the exact drop-in path and expected sha256.
+
+## Comments
+
+Write code that explains itself. Namings must not need documentations from call sites.
+
+- Do not restate the code. Refactor instead if you must do this.
+- No repeating comments inside or outside the package. Explain 1 fact only once across the codebase.
+- Preconditions, postconditions, edge cases, why the item exists are worth recording.
+- Docs must reflect only the live condition. Never record the history. That's what `git log` and `git blame` are for.
+- Follow the ASD-STE100 standard.
 
 ## Other Rules
 
