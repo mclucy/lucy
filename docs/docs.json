@@ -22,10 +22,19 @@
           "commands/install",
           "commands/add",
           "commands/remove",
+          "commands/file",
           "commands/search",
           "commands/compile",
           "commands/info",
           "commands/status"
+        ]
+      },
+      {
+        "group": "File tracking",
+        "pages": [
+          "file-tracking/overview",
+          "file-tracking/tracking",
+          "file-tracking/recovery"
         ]
       }
     ],
