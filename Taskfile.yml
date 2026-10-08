@@ -259,10 +259,15 @@ tasks:
     cmds:
       - rm -rf .sandboxes
 
-  envs:probe-e2e:
-    desc: "Run e2e for server probing over generated sandboxes (args: environment ids)"
+  e2e:init:
+    desc: "Run server probing e2e over generated sandboxes (args: environment ids)"
     cmds:
-      - go run ./e2e {{.CLI_ARGS}}
+      - go run ./e2e/init {{.CLI_ARGS}}
+
+  e2e:compile:
+    desc: "Compile pinned repository fixtures (args: optional fixture ids)"
+    cmds:
+      - go run ./e2e/compile {{.CLI_ARGS}}
 
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks

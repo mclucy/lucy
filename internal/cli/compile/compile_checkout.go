@@ -38,13 +38,28 @@ func parseRemote(source string) (string, error) {
 		if remote.Host != "" && remote.Host != "localhost" {
 			return "", fmt.Errorf("file repository url must refer to the local host")
 		}
-		if !filepath.IsAbs(remote.Path) {
+		if !isAbsoluteFilePath(remote.Path) {
 			return "", fmt.Errorf("file repository url must have an absolute path")
 		}
 	default:
 		return "", fmt.Errorf("source must be a Git repository url or GitHub owner/repo reference")
 	}
 	return remote.String(), nil
+}
+
+// isAbsoluteFilePath reports whether a file URL path is absolute. Windows paths
+// carry their drive letter after a leading slash inside the URL, and no native
+// absolute-path check accepts that spelling on Windows, so recognize it directly.
+// The URL is handed to git unchanged either way, only its validity is judged here.
+func isAbsoluteFilePath(path string) bool {
+	if len(path) >= 3 && path[0] == '/' && isDriveLetter(path[1]) && path[2] == ':' {
+		return true
+	}
+	return filepath.IsAbs(path)
+}
+
+func isDriveLetter(c byte) bool {
+	return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z')
 }
 
 // clone fetches remote into dir. Its raw output goes to output rather than

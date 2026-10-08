@@ -63,8 +63,6 @@ func (want probeExpectation) check(got statusOutput) []string {
 	return failures
 }
 
-// These pinned expectations mirror the artifacts in the envgen manifest.
-// Optional fields represent checks that a scenario intentionally does not make.
 var probeScenarios = map[string]probeExpectation{
 	"arclight-fabric": {
 		name: "arclight", version: "arclight-1.21.1-1.0.1-8ec9529",

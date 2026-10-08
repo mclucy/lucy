@@ -1,0 +1,6 @@
+# Tag: mc1.20.1-0.11.4 (Minecraft 1.20.1, JDK 17).
+# Settings pulls in an included build (components/mixin-config-plugin) for mixin config generation.
+# Distributed on Modrinth: https://modrinth.com/mod/lithium
+url: https://github.com/CaffeineMC/lithium.git
+commit: 1316ab1aafd888bf9881e924f29928f653ad2308
+platform: fabric

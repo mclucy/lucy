@@ -1,0 +1,7 @@
+# Tag: 1.7.3+1.21 (Minecraft 1.21).
+# Kotlin DSL with headers, desktop, vendored and sodiumCompatibility source sets.
+# The mod jar merges several source-set outputs and compiles against a committed DHApi.jar.
+# Distributed on Modrinth: https://modrinth.com/mod/iris
+url: https://github.com/IrisShaders/Iris.git
+commit: ee97d207bbbc2b0649f48cd0e61b57a8b56f48bd
+platform: fabric
