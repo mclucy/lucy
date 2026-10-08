@@ -131,7 +131,17 @@ func executeCompile(binary, repos, id string) error {
 		return err
 	}
 	// Lucy clones this detached HEAD, so revision selection belongs to the fixture runner.
-	remote := (&url.URL{Scheme: "file", Path: filepath.ToSlash(checkout)}).String()
+	//
+	// The checkout has to reach Lucy as a URL, and a URL path after the authority
+	// always begins with a slash, so no spelling keeps a Windows drive letter in the
+	// path. An empty host puts it in the host instead ("file://C:/...") and lucy
+	// rejects that; naming localhost keeps it in the path as "/C:/...", which lucy
+	// accepts and git resolves to the same directory.
+	remote := (&url.URL{
+		Scheme: "file",
+		Host:   "localhost",
+		Path:   filepath.ToSlash(checkout),
+	}).String()
 	args := []string{"compile", remote, "--output", filepath.Join(temporary, "artifact.jar"), "--no-style"}
 	if fixture.Platform != "" {
 		args = append(args, "--platform", fixture.Platform)
