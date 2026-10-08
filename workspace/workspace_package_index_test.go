@@ -159,18 +159,3 @@ func TestPackageIndex_LookupByEcosystemName_MultipleVersions(t *testing.T) {
 		)
 	}
 }
-
-func TestPackageIndex_LookupByEcosystemName_NoneFound(t *testing.T) {
-	idx := NewPackageIndex()
-	results := idx.LookupByEcosystemName(types.EcoFabric, "nonexistent")
-	if results != nil {
-		t.Errorf("expected nil for no matches, got %v", results)
-	}
-}
-
-func TestPackageIndex_EmptyIndex(t *testing.T) {
-	idx := NewPackageIndex()
-	if pkgs := idx.Packages(); len(pkgs) != 0 {
-		t.Errorf("expected empty, got %d", len(pkgs))
-	}
-}

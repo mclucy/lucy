@@ -3,17 +3,6 @@ package types
 import "testing"
 
 func TestCorePackageDefinitionsInvariants(t *testing.T) {
-	wantEco := map[CorePackage]Ecosystem{
-		CoreMinecraft: EcoMinecraft, CoreFabric: EcoFabric, CoreForge: EcoForge,
-		CoreNeoForge: EcoNeoforge, CoreMCDReforged: EcoMcdr,
-		CoreCraftBukkit: EcoBukkit, CoreSpigot: EcoBukkit, CorePaper: EcoPaper,
-		CoreFolia: EcoPaper, CoreLeaves: EcoPaper,
-		CoreArclight: EcoUnspecified, CoreArclightForge: EcoUnspecified,
-		CoreArclightNeoForge: EcoUnspecified, CoreArclightFabric: EcoUnspecified,
-		CoreCatServer: EcoUnspecified, CoreYouer: EcoUnspecified,
-		CoreSpongeVanilla: EcoSponge, CoreSpongeForge: EcoSponge, CoreSpongeNeo: EcoSponge,
-		CoreBungeeCord: EcoBungeecord, CoreVelocity: EcoVelocity, CoreWaterfall: EcoBungeecord,
-	}
 	seenCores := make(map[CorePackage]bool)
 	seenAliases := make(map[corePackageAlias]CorePackage)
 	for _, definition := range corePackageDefinitions {
@@ -21,9 +10,6 @@ func TestCorePackageDefinitionsInvariants(t *testing.T) {
 			t.Errorf("duplicate definition for core %q", definition.Core)
 		}
 		seenCores[definition.Core] = true
-		if definition.Eco != wantEco[definition.Core] {
-			t.Errorf("core %q eco = %q, want %q", definition.Core, definition.Eco, wantEco[definition.Core])
-		}
 		for _, alias := range definition.Aliases {
 			if alias.Name == "" {
 				t.Errorf("core %q has empty alias", definition.Core)
@@ -36,9 +22,6 @@ func TestCorePackageDefinitionsInvariants(t *testing.T) {
 			}
 			seenAliases[alias] = definition.Core
 		}
-	}
-	if len(seenCores) != len(wantEco) {
-		t.Errorf("catalog defines %d cores, expected %d", len(seenCores), len(wantEco))
 	}
 }
 

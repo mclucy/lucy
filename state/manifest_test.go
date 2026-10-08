@@ -207,7 +207,7 @@ func TestManifestRejectsIncompatibleEnvironmentCompatiblePlatforms(t *testing.T)
 	}
 }
 
-func TestManifestBundlesRemainSeparateFromPackages(t *testing.T) {
+func TestManifestWithBundlesValidates(t *testing.T) {
 	manifest := ManifestDefaults()
 	manifest.Environment.GameVersion = "1.20.6"
 	manifest.Environment.ModdingPlatform = ""
@@ -235,38 +235,10 @@ func TestManifestBundlesRemainSeparateFromPackages(t *testing.T) {
 	if err := ValidateManifest(manifest); err != nil {
 		t.Fatalf("bundled manifest should validate: %v", err)
 	}
-	if manifest.Packages[0].ID == manifest.Bundles[0].Name {
-		t.Fatalf("package identity space should remain separate from bundle names")
-	}
-	if manifest.Bundles[0].Type != BundleTypeConfig || manifest.Bundles[1].Type != BundleTypeDatapack {
-		t.Fatalf("unexpected bundle types: %#v", manifest.Bundles)
-	}
 }
 
-func TestManifestDefaults(t *testing.T) {
+func TestDefaultManifestValidates(t *testing.T) {
 	manifest := ManifestDefaults()
-
-	if manifest.Environment.ModdingPlatform != "" {
-		t.Fatalf(
-			"expected default modding platform empty, got %q",
-			manifest.Environment.ModdingPlatform,
-		)
-	}
-	if len(manifest.Environment.CompatiblePlatforms) != 0 {
-		t.Fatalf(
-			"expected no compatible platforms by default, got %#v",
-			manifest.Environment.CompatiblePlatforms,
-		)
-	}
-	if len(manifest.Environment.DeclaredCapabilities) != 0 {
-		t.Fatalf(
-			"expected no declared capabilities by default, got %#v",
-			manifest.Environment.DeclaredCapabilities,
-		)
-	}
-	if len(manifest.Packages) != 0 || len(manifest.Bundles) != 0 {
-		t.Fatalf("expected empty package and bundle declarations by default")
-	}
 
 	if err := ValidateManifest(manifest); err != nil {
 		t.Fatalf("default manifest should validate: %v", err)

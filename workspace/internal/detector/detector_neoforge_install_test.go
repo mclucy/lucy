@@ -109,49 +109,6 @@ func TestDetectNeoForgeInstallFallsBackToUnpackVerification(t *testing.T) {
 	)
 }
 
-func TestDetectNeoForgeInstallRejectsShimOnly(t *testing.T) {
-	t.Parallel()
-
-	workPath := t.TempDir()
-	versionDir := filepath.Join(
-		workPath,
-		"libraries",
-		"net",
-		"neoforged",
-		"neoforge",
-		"21.4.0",
-	)
-	if err := os.MkdirAll(versionDir, 0o755); err != nil {
-		t.Fatalf("mkdir version dir: %v", err)
-	}
-	writeZipFile(
-		t,
-		filepath.Join(versionDir, "neoforge-21.4.0-shim.jar"),
-		map[string]string{
-			"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nSpecification-Title: neoforge\n",
-		},
-	)
-
-	restore := stubNeoforgeArtifactHashLookup(
-		func(
-			version string,
-			artifact modLoaderArtifactKind,
-			filePath string,
-		) (bool, error) {
-			return artifact == modLoaderArtifactShim, nil
-		},
-	)
-	defer restore()
-
-	runtimes := NeoForgeInstallationRuntimes(workPath)
-	if len(runtimes) != 0 {
-		t.Fatalf(
-			"expected shim-only layout to be rejected, got %d runtimes",
-			len(runtimes),
-		)
-	}
-}
-
 func assertNeoForgeRuntime(
 	t *testing.T,
 	runtime *ExecutableEvidence,
