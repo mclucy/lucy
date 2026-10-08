@@ -73,13 +73,22 @@ From the repository root, build Lucy and run the pinned repository fixtures:
 
 ```bash
 task build:dev
-go run ./e2e/compile                 # all fixtures
-go run ./e2e/compile eureka botania  # selected fixtures
+task e2e:compile                    # all fixtures
+task e2e:compile -- eureka botania  # selected fixtures
+task e2e:compile -- -p 4            # four fixtures at a time
+task e2e:compile -- --list          # print fixture ids and exit
 ```
+
+Each fixture builds in its own temporary checkout, so `-p` is safe for any number up to
+the machine's memory budget; each one drives its own Gradle daemon. Results are always
+reported in the order the fixtures were listed, whatever order they finish in.
 
 Fixtures in `e2e/testdata/repo/` record full commit hashes and release tags where available.
 The runner checks out each commit detached before invoking `lucy compile` on its local
 checkout; it does not pass `--branch` or `--tag`. Only the compile exit status is checked.
+
+The suite enforces no per-fixture timeout, so a Gradle build that never returns will
+hold the run open until you interrupt it.
 
 Install Git and JDKs 17, 21 and 25 before running the suite. Balm's multi-loader
 configuration needs Java 25 even when its NeoForge sources target Java 21.
