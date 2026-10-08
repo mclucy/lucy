@@ -1,6 +1,9 @@
 # Lucy sandbox environments. Generate with `task envs:gen`; output lands in .sandboxes/.
-# Artifact source kinds and the manual flow are documented in docs/shared/sandbox-environments.md.
 # Family ecosystem notes: families/*.md.
+#
+# Forge and NeoForge maven hosts republish versioned coordinates in place and
+# rewrite their checksum sidecars when they do. No immutable endpoint exists for
+# these artifacts, so they carry no sha256 and envgen skips digest verification.
 version: 1
 
 environments:
@@ -28,10 +31,8 @@ environments:
     artifacts:
       - dest: server/libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
-        sha256: bb2f67fc423f09c30ac3d83ab629fa5cc6743a0ce1c2febae46602530f17c8f1
       - dest: server/forge-1.20.1-47.4.10-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar
-        sha256: 1912760b4cb6b803d8a826de603c9076b1da71ec2765e9a1f8c1ca78f65278e3
       - dest: plugins/PrimeBackup-v1.13.1.pyz
         url: https://github.com/TISUnion/PrimeBackup/releases/download/v1.13.1/PrimeBackup-v1.13.1.pyz
         sha256: 081c91872ff3f6ab438328b96237e5e8db87ebff28e46b909eca804b6320db2b
@@ -45,10 +46,8 @@ environments:
     artifacts:
       - dest: server/neoforge-20.2.93-installer.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-installer.jar
-        sha256: f2badd12f9e5d0cef4d2c9143d1ae2e008345fa7438e89cee629c13e33de00c7
       - dest: server/libraries/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-universal.jar
-        sha256: 14738ecbf2b5322536c78c0a1de678ba457b3244a891f31efb5bac89eadee172
       - dest: plugins/WhereIs-v2.2.2.mcdr
         url: https://github.com/Lazy-Bing-Server/WhereIs-MCDR/releases/download/2.2.2/WhereIs-v2.2.2.mcdr
         sha256: 7bc25c11de0560581b27f7f075d096f4176b9eaa8595577ea27b8e6512652251
@@ -61,10 +60,8 @@ environments:
     artifacts:
       - dest: neoforge-21.1.248-installer.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar
-        sha256: 68eeab77059ba53df1812f1afa5bf530ab2566a3cdcd5f924aa6e71be42e410c
       - dest: libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
-        sha256: 90a56f70425711b4e1a4b94ff0c2904ae9f6d74ca6478b3b2152ac794a07b8e5
 
   - id: neoforge-262
     family: neoforge
@@ -75,10 +72,8 @@ environments:
     artifacts:
       - dest: neoforge-26.2.0.67-installer.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-installer.jar
-        sha256: 2f3c2a454d83983e4ddbcd831810d7e57299361dc1f03f66216071cc009ec340
       - dest: libraries/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
-        sha256: 0f76a82128b9ab3f613ca7a8963abe9468292dead4df68dfb8a8dd0060c6877b
 
   - id: fabric-executable-1214
     family: fabric
@@ -167,10 +162,8 @@ environments:
     artifacts:
       - dest: libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
-        sha256: bb2f67fc423f09c30ac3d83ab629fa5cc6743a0ce1c2febae46602530f17c8f1
       - dest: forge-1.20.1-47.4.10-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar
-        sha256: 1912760b4cb6b803d8a826de603c9076b1da71ec2765e9a1f8c1ca78f65278e3
 
   - id: forge-12111
     family: forge
@@ -180,13 +173,10 @@ environments:
     artifacts:
       - dest: libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar
-        sha256: 9c35eb4f7af1455e31b20693c704194f73457bdbbbc080a13c3acf78c712e550
       - dest: libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-shim.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-shim.jar
-        sha256: 4ecdfbdc40b8f5d63b6618fa32c3f19d8332e4a541f84e6f5e978fb97313b94c
       - dest: forge-1.21.11-61.2.0-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-installer.jar
-        sha256: 5f993a6fb5ae96e1bafc4db43346b8411757254503674403eafead9af1f3f90f
 
   # ---- Vanilla ----
 
