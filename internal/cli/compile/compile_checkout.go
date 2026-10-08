@@ -55,37 +55,77 @@ func clone(ctx context.Context, remote, dir, branch, tag string, output *process
 	if err != nil {
 		return fmt.Errorf("find git: %w", err)
 	}
-	args := []string{"-c", "protocol.ext.allow=never", "clone", "--recurse-submodules"}
-	switch {
-	case branch != "":
-		args = append(args, "--branch", branch)
-	case tag != "":
-		args = append(args, "--branch", tag)
+	env := cloneEnvironment()
+	// run labels one git invocation; a failure quotes the label along with the
+	// tail of git's own output.
+	run := func(label string, args []string) error {
+		cmd := exec.CommandContext(ctx, git, args...)
+		cmd.Env = env
+		cmd.Stdout = output
+		cmd.Stderr = output
+		cmd.WaitDelay = 5 * time.Second
+		configureProcess(cmd)
+		err := cmd.Run()
+		output.flush()
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return reportFailure(output, fmt.Errorf("%s: %w", label, err))
+		}
+		return nil
+	}
+
+	// git resolves --branch under refs/heads before refs/tags, so a tag named
+	// like a branch would clone the branch. When a ref is requested, clone
+	// without a checkout, resolve the exact namespace, and only then check
+	// out that commit and initialize the submodules.
+	args := []string{"-c", "protocol.ext.allow=never", "clone"}
+	if branch == "" && tag == "" {
+		args = append(args, "--recurse-submodules")
+	} else {
+		args = append(args, "--no-checkout")
 	}
 	args = append(args, "--", remote, dir)
-	cmd := exec.CommandContext(ctx, git, args...)
-	cmd.Env = cloneEnvironment()
-	cmd.Stdout = output
-	cmd.Stderr = output
-	cmd.WaitDelay = 5 * time.Second
-	configureProcess(cmd)
-	err = cmd.Run()
-	output.flush()
-	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return reportFailure(output, fmt.Errorf("clone repository: %w", err))
+	if err := run("clone repository", args); err != nil {
+		return err
 	}
-	return nil
+	if branch == "" && tag == "" {
+		return nil
+	}
+	// A clone keeps the fetched branches under the origin remote and copies the
+	// tags verbatim, so branches resolve through refs/remotes/origin and tags
+	// through refs/tags.
+	kind, namespace := "branch", "refs/remotes/origin/"
+	if branch == "" {
+		kind, namespace = "tag", "refs/tags/"
+	}
+	name := branch
+	if name == "" {
+		name = tag
+	}
+	ref := namespace + name
+	if err := run(fmt.Sprintf("remote has no %s %q", kind, name),
+		[]string{"-c", "protocol.ext.allow=never", "-C", dir, "show-ref", "--verify", "--quiet", ref},
+	); err != nil {
+		return err
+	}
+	if err := run(fmt.Sprintf("checkout %s %s", kind, name),
+		[]string{"-c", "protocol.ext.allow=never", "-C", dir, "checkout", "--detach", ref},
+	); err != nil {
+		return err
+	}
+	return run("initialize submodules",
+		[]string{"-c", "protocol.ext.allow=never", "-C", dir, "submodule", "update", "--init", "--recursive"},
+	)
 }
 
-// cloneEnvironment makes the clone non-interactive. The command runs in its own
-// process group, so a prompt waiting on the terminal is stopped by the kernel
-// (SIGTTIN) with no way to answer it and the command hangs until Ctrl+C;
-// prompts instead fail fast. HTTPS credentials honor GIT_TERMINAL_PROMPT,
-// host-key and passphrase prompts honor batch-mode ssh, and a user who
-// configured their own GIT_SSH_COMMAND or GIT_SSH keeps it.
+// cloneEnvironment makes every git invocation of the clone non-interactive. The
+// commands run in their own process group, so a prompt waiting on the terminal
+// is stopped by the kernel (SIGTTIN) with no way to answer it and the command
+// hangs until Ctrl+C; prompts instead fail fast. HTTPS credentials honor
+// GIT_TERMINAL_PROMPT, host-key and passphrase prompts honor batch-mode ssh,
+// and a user who configured their own GIT_SSH_COMMAND or GIT_SSH keeps it.
 func cloneEnvironment() []string {
 	env := replaceEnvironment(os.Environ(), "GIT_TERMINAL_PROMPT", "0")
 	if _, configured := os.LookupEnv("GIT_SSH_COMMAND"); !configured {
