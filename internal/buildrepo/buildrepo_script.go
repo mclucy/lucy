@@ -180,21 +180,30 @@ type scriptSource struct {
 	content string
 }
 
-// appliedScriptSources returns the convention plugin scripts a build script
-// applies, so their configuration counts as part of the project.
+// appliedScriptSources returns the scripts contributing configuration to a
+// project: the script that applies each plugin, plus the convention script
+// that introduces the plugin. A convention script configures the project even
+// when it applies no plugins of its own, so it counts regardless of whether
+// any nested plugin records it as a source.
 func (p *prober) appliedScriptSources(file string, plugins []appliedPlugin) []scriptSource {
 	seen := map[string]bool{file: true}
 	var out []scriptSource
-	for _, plugin := range plugins {
-		if seen[plugin.source] {
-			continue
+	add := func(path string) {
+		if seen[path] {
+			return
 		}
-		seen[plugin.source] = true
-		convention, err := p.readFile(plugin.source)
+		seen[path] = true
+		script, err := p.readFile(path)
 		if err != nil {
-			continue
+			return
 		}
-		out = append(out, scriptSource{file: plugin.source, content: stripComments(convention)})
+		out = append(out, scriptSource{file: path, content: stripComments(script)})
+	}
+	for _, plugin := range plugins {
+		add(plugin.source)
+		if path, ok := p.conventionScript(plugin.id); ok {
+			add(path)
+		}
 	}
 	return out
 }
