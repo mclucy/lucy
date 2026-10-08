@@ -1,6 +1,6 @@
 # Fabric
 
-Covers environments: `fabric-executable-1214`, `fabric-executable-262`, `fabric-installed-1214`, `fabric-installed-262`, `fabric-installed-114`.
+Covers environments: `fabric-executable-1214`, `fabric-executable-262`, `fabric-installed-1214`, `fabric-installed-262`, `fabric-installed-114`, `lock-fabric-1214`.
 
 ## Layouts
 
@@ -28,3 +28,7 @@ Note:
 - Installer jars: `https://maven.fabricmc.net/net/fabricmc/fabric-installer/<v>/...`
 
 References: <https://fabricmc.net/use/server>, <https://meta.fabricmc.net>, <https://wiki.fabricmc.net/documentation:fabric_loader>
+
+## Lock fixtures
+
+`lock-fabric-1214` supplies reference artifacts for the [lock E2E suite](../../../../docs/commands/install.mdx#end-to-end-verification). It is not a runnable Fabric server. The suite resolves and installs the runtime in a separate temporary workspace.
