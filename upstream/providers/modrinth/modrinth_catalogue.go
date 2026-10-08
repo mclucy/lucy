@@ -32,7 +32,20 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 			if f.Hashes.Sha1 != "" {
 				hashes["sha1"] = f.Hashes.Sha1
 			}
-			c := types.CatalogueCandidate{Artifact: types.Artifact{Provider: "modrinth", ProjectID: v.ProjectId, ReleaseID: v.Id, FileID: f.Filename, Version: v.VersionNumber, Filename: f.Filename, URL: f.Url, Hashes: hashes}, ReleaseType: v.VersionType, Published: v.DatePublished.Format("2006-01-02T15:04:05Z07:00"), Primary: f.Primary, Dependencies: []types.ProjectDependency{}}
+			c := types.CatalogueCandidate{
+				Provider:     "modrinth",
+				ProjectID:    v.ProjectId,
+				ReleaseID:    v.Id,
+				FileID:       f.ID,
+				Version:      v.VersionNumber,
+				Filename:     f.Filename,
+				URL:          f.Url,
+				Hashes:       hashes,
+				ReleaseType:  v.VersionType,
+				Published:    v.DatePublished.Format("2006-01-02T15:04:05Z07:00"),
+				Primary:      f.Primary,
+				Dependencies: []types.ProjectDependency{},
+			}
 			for _, d := range v.Dependencies {
 				projectID := d.ProjectId
 				if projectID == "" && d.VersionId != "" {
