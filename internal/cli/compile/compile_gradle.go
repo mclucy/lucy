@@ -134,7 +134,11 @@ func newGradleRunner(
 		"--no-daemon", "--console=plain", "--no-configure-on-demand", "--init-script", initPath,
 		"-Dorg.gradle.java.installations.auto-download=false",
 	)
-	if parsed, err := semver.NewVersion(version); err != nil || parsed.GreaterThanEqual(semver.MustParse("6.6.0")) {
+	// --no-configuration-cache exists since Gradle 6.6. A wrapper distribution
+	// with a custom file name leaves the version unknown, and Gradle refuses
+	// an unsupported flag before running any task, so the flag is passed only
+	// when the version is known to accept it.
+	if parsed, err := semver.NewVersion(version); err == nil && parsed.GreaterThanEqual(semver.MustParse("6.6.0")) {
 		runner.arguments = append(runner.arguments, "--no-configuration-cache")
 	}
 	if build.Daemon == nil {
