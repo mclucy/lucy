@@ -36,7 +36,7 @@ func NewCommand() *cobra.Command {
 	installCmd.Flags().Bool(
 		flagWithOptionalName,
 		false,
-		"Also install optional requirements marked enabled: false",
+		"Re-resolve to install optional upstream dependencies and record them as explicit requirements",
 	)
 	cli.AddNoStyleFlag(installCmd)
 	return installCmd

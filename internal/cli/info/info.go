@@ -25,8 +25,9 @@ var infoCmd = &cobra.Command{
 	Short: "Display information a package, as a remote reference or local file.",
 	Long: `Display information of a mod or plugin from an upstream source.
 
-Pass a local .jar, .zip, .pyz, or .mcdr file to inspect its embedded metadata
-without making a network request.`,
+Pass a local .jar, .zip, .pyz, or .mcdr file to read its embedded metadata.
+Lucy then identifies the file by its SHA-256, which requires network access
+and works without a lucy-lock.yaml.`,
 	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(
 		cmd *cobra.Command,

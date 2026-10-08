@@ -32,7 +32,7 @@ To run the built binary against a test server directory:
 
 ```bash
 ./dist/lucy status
-./dist/lucy init --yes --game-version 1.21.4
+./dist/lucy init --allow-empty --minecraft 1.21.4 --core fabric@0.16.9
 ```
 
 ## Architecture
@@ -43,12 +43,15 @@ To run the built binary against a test server directory:
 .
 ├── cmd/                    Root wiring (cmd_root.go) + thin Cobra subcommands
 ├── types/                  Pure domain types
-├── state/                  Two-file state model: lucy.yaml + lucy-lock.yaml
+├── manifest/               Required server intent and optional MCDR wrapper
+├── lockfile/               Flattened exact runtime, artifacts, and native modules
 ├── upstream/               Atomic capability interfaces: Searcher, Informer, etc.
 │   └── providers/          Modrinth, CurseForge, GitHub, MCDR, Hangar, Spiget, Fabric, etc.
 ├── workspace/              Runtime detection — server platform, version, installed mods
 │   └── detector/           Declarative runtime node detection
-├── install/                RecursivePhase pipeline: Candidate→Downloaded→Verified→Committed
+├── install/                Lock replay, staged bootstrap, ownership receipt, rollback
+├── bootstrap/              Pinned native server installation profiles
+├── resolve/                Catalogue selection and native dependency validation
 ├── input/                  Trust boundary for external input, package ref parsing
 ├── cache/                  Three-layer network cache: store, index, policy
 ├── version/                Version parsing: semver, Minecraft release/snapshot, Maven ranges
@@ -59,7 +62,7 @@ To run the built binary against a test server directory:
 └── internal/
     ├── cli/                Shared CLI plumbing: flags, error-logging wrapper,
     │   │                   dependency graph/data source, shell completion,
-    │   │                   lock-state builders
+    │   │                   lock-context shorthand
     │   └── <command>/      Large subcommands (add, bisect, info, init, install,
     │                       search, status), each exposing NewCommand()
     ├── cipher/             ChaCha20Poly1305 encryption for API key embedding
@@ -67,7 +70,6 @@ To run the built binary against a test server directory:
     ├── fn/                 Generic helpers: Ternary, Memoize, slice utilities
     ├── fsutil/             Filesystem helpers: CloseReader, path utilities
     ├── algo/               Graph operations, data structure utilities
-    ├── slugmap/            Remote-to-local slug mapping
     └── networkutil/        Network helpers wrapping cache downloads
 ```
 

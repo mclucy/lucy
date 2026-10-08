@@ -46,32 +46,34 @@ Pre-built binaries are available on [Releases](https://github.com/mclucy/lucy/re
 ## Quickstart
 
 ```bash
-# Initialize in a server directory
+# Generate lucy.yaml for an existing server directory
 lucy init
 
 # Add packages with dependency resolution
-lucy add fabric/fabric-api lithium sodium
+lucy add modrinth:fabric-api modrinth:lithium
 
-# Inspect runtime platform and managed dependencies
+# Inspect the resolved core, files, and packages
 lucy status
 
-# Sync files deterministically from lockfile
+# Sync (install) files exactly as the lock file describes
 lucy install
 ```
 
+`lucy.yaml` records what you want. `lucy-lock.yaml` records the exact artifact that satisfies it, hash included. Commit both — `lucy install` reproduces the server from the lock alone, and `--locked` fails the build if the two have drifted apart.
+
 ## Commands
 
-| Command | Usage |
-| --- | --- |
-| `lucy init` | Scaffold `lucy.yaml` and `lucy-lock.yaml` |
-| `lucy add <pkg>` | Resolve dependencies, update lockfile, and install |
-| `lucy remove <pkg>` | Remove packages and prune unused transitive dependencies |
-| `lucy install` | Sync server runtime deterministically from `lucy-lock.yaml` |
-| `lucy status` | Show server core, loader, runtime status, and packages |
-| `lucy tree` | Inspect dependency graph (supports `--live` probe) |
-| `lucy leaves` | List unreferenced packages safe to remove |
-| `lucy bisect` | Binary search installed mods to isolate crash causes |
-| `lucy search <query>` | Query Modrinth, CurseForge, and GitHub |
+| Command               | Usage                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------ |
+| `lucy init`           | Generate `lucy.yaml` from an existing server directory                                     |
+| `lucy add <pkg>`      | Record a requirement, resolve it, update the lock, install                                 |
+| `lucy remove <pkg>`   | Drop a requirement and prune what nothing references                                       |
+| `lucy install`        | Sync files from `lucy-lock.yaml`; `--locked` fails on drift, `--offline` forbids downloads |
+| `lucy status`         | Show the resolved core, Minecraft version, and packages                                    |
+| `lucy tree`           | Inspect the dependency graph (supports `--live` probe)                                     |
+| `lucy leaves`         | List unreferenced packages safe to remove                                                  |
+| `lucy bisect`         | Binary search installed mods to isolate crash causes                                       |
+| `lucy search <query>` | Query Modrinth, CurseForge, and GitHub                                                     |
 
 Full guides, configuration, and flags: **[lucy.lc/docs](https://lucy.lc/docs)**
 

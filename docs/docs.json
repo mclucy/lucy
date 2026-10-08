@@ -19,6 +19,9 @@
         "pages": [
           "commands/global-flags",
           "commands/init",
+          "commands/install",
+          "commands/add",
+          "commands/remove",
           "commands/search",
           "commands/compile",
           "commands/info",
