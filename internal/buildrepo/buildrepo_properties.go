@@ -52,6 +52,11 @@ func ParseProperties(content string) (map[string]string, error) {
 		line := strings.TrimSuffix(raw, "\r")
 		if pending != "" {
 			line = pending + strings.TrimLeft(line, " \t\f")
+		} else if trimmed := strings.TrimLeft(line, " \t\f"); trimmed != "" && (trimmed[0] == '#' || trimmed[0] == '!') {
+			// A comment line never continues, even when it ends with a
+			// backslash: "# e.g. C:\Tools\" must not swallow the property
+			// that follows it.
+			continue
 		}
 		trailing := 0
 		for i := len(line) - 1; i >= 0 && line[i] == '\\'; i-- {
