@@ -103,6 +103,15 @@ jobs:
           java-version: "25"
           architecture: x64
 
+      # Fixture builds are Gradle-heavy and share nothing between jobs, so a cold
+      # cache blows the job timeout on the multi-loader fixtures. The key tracks the
+      # fixture's pin, so moving a commit starts over from a clean cache.
+      - name: Restore Gradle cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/lucy-gradle
+          key: gradle-${{ matrix.fixture }}-${{ hashFiles(format('e2e/testdata/repo/{0}.yaml', matrix.fixture)) }}
+
       # Pin majors, not exact patches: Lucy's toolchain selection matches on Java major
       # version only, and Adoptium re-tags LTS releases (e.g. 21.0.8+9 became
       # 21.0.8+9.0.LTS), so exact patch pins silently stop resolving.
