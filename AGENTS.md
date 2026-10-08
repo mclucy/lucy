@@ -74,9 +74,13 @@ To run the built binary against a test server directory:
 ## Testing and Debugging
 
 1. Always prefer the project's e2e testing suite (`envgen`). You should do regression tests after implementing a feature.
-2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `testdata/environments/environments.yaml`. There's brief explanation for each environment in `testdata/environments/families/*.md`.
+2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `e2e/testdata/environments/environments.yaml`. There's brief explanation for each environment in `e2e/testdata/environments/families/*.md`.
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
 4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
+
+The domain suites run with `task e2e:init -- <environment ids>` and
+`task e2e:compile -- [fixture ids]`. Shared selection and reporting lives in
+`e2e/internal/testkit`; the compile suite defaults to all repository fixtures.
 
 ### envgen CLI
 
@@ -88,7 +92,7 @@ To run the built binary against a test server directory:
 | `--only a,b` | all | Restrict processing to the named environment ids |
 | `--force` | off | Regenerate even when `.sandboxes/<id>/` already exists |
 | `--out <dir>` | `.sandboxes` | Output root |
-| `--manifest <file>` | `testdata/environments/environments.yaml` | Manifest path |
+| `--manifest <file>` | `e2e/testdata/environments/environments.yaml` | Manifest path |
 | `--cache <dir>` | `os.UserCacheDir()/lucy-envgen` | Content-addressed download cache (keyed by sha256) |
 | `--manual-dir <dir>` | `<cache>/manual` | Where `manual: true` artifacts are expected as `<id>/<basename>` |
 

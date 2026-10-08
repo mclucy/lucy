@@ -1,0 +1,8 @@
+# Source line: 1.20.x (Minecraft 1.20.1; no release tags for this line).
+# Xplat/Fabric/Forge projects mix Loom and ModDevGradle legacyForge.
+# The loader-free Xplat project also builds jars; select a loader explicitly.
+# Distributed on Modrinth: https://modrinth.com/mod/botania
+url: https://github.com/VazkiiMods/Botania.git
+commit: 31dd815741147f5cf2739e2d5afa951af3b77c07
+platform: forge
+project: ':Forge'

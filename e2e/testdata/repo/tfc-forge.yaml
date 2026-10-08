@@ -1,0 +1,6 @@
+# Tag: v3.2.26 (Minecraft 1.20.1).
+# Root ForgeGradle build with Kotlin applied-script configuration.
+# Distributed on Modrinth: https://modrinth.com/mod/terrafirmacraft
+url: https://github.com/TerraFirmaCraft/TerraFirmaCraft.git
+commit: 51388b52ecf1f876d74184d9e60e9ea03f7ba3a6
+platform: forge
