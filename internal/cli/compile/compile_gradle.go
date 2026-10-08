@@ -132,7 +132,7 @@ func newGradleRunner(
 	runner.modelPath = filepath.Join(temporary, "gradle-model.json")
 	runner.arguments = append(runner.arguments,
 		"--no-daemon", "--console=plain", "--no-configure-on-demand", "--init-script", initPath,
-		"-Porg.gradle.java.installations.auto-download=false",
+		"-Dorg.gradle.java.installations.auto-download=false",
 	)
 	if parsed, err := semver.NewVersion(version); err != nil || parsed.GreaterThanEqual(semver.MustParse("6.6.0")) {
 		runner.arguments = append(runner.arguments, "--no-configuration-cache")
