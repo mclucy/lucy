@@ -40,7 +40,7 @@ func NewCommand() *cobra.Command {
 		RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return run(ctx, args[0], opts, cmd.OutOrStdout())
+			return run(ctx, args[0], &opts, cmd.OutOrStdout())
 		}),
 	}
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Write the compiled mod JAR to PATH, or to a directory under the project's artifact name")
@@ -54,7 +54,7 @@ func NewCommand() *cobra.Command {
 
 // run compiles source and writes the resulting JAR. Progress is narrated on
 // stderr; stdout carries only the artifact path so the command stays pipeable.
-func run(ctx context.Context, source string, opts options, stdout io.Writer) (err error) {
+func run(ctx context.Context, source string, opts *options, stdout io.Writer) (err error) {
 	remote, err := parseRemote(source)
 	if err != nil {
 		return err
@@ -141,6 +141,9 @@ func run(ctx context.Context, source string, opts options, stdout io.Writer) (er
 	if err != nil {
 		return err
 	}
+	// selectProject runs again on the rebuilt model; pin the pick so the
+	// second pass keeps the same project instead of listing candidates anew.
+	opts.project = project.Path
 	compilerProject, err := runner.inspectCompilers(ctx, project)
 	if err != nil {
 		return err

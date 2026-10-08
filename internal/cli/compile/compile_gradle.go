@@ -237,7 +237,7 @@ func (r gradleRunner) execute(ctx context.Context, label string, tasks ...string
 	return model, nil
 }
 
-// nameProject names a Gradle project for a status line. The root project
+// nameProject names a Gradle project for user-facing text. The root project
 // carries the empty-looking path ":", which reads badly inside a sentence.
 func nameProject(path string) string {
 	if path == "" || path == ":" {
@@ -246,7 +246,7 @@ func nameProject(path string) string {
 	return path
 }
 
-func selectProject(model gradleModel, opts options) (gradleProject, error) {
+func selectProject(model gradleModel, opts *options) (gradleProject, error) {
 	candidates := make([]gradleProject, 0, len(model.Projects))
 	platform := types.Ecosystem(opts.platform)
 	for _, project := range model.Projects {
@@ -269,12 +269,23 @@ func selectProject(model gradleModel, opts options) (gradleProject, error) {
 	if len(candidates) == 0 {
 		return gradleProject{}, errors.New("no matching Forge, NeoForge, or Fabric mod project was found")
 	}
-	if len(candidates) != 1 {
-		paths := make([]string, 0, len(candidates))
-		for _, project := range candidates {
-			paths = append(paths, project.Path+" ["+joinEcosystems(project.Ecosystems)+"]")
+	if len(candidates) > 1 {
+		// An explicit --project never reaches this branch, so the prompt only
+		// ever replaces an absent flag.
+		if opts.project == "" && promptAvailable() {
+			picked, err := promptModProject(candidates)
+			if err != nil {
+				return gradleProject{}, err
+			}
+			opts.project = picked.Path
+			candidates = []gradleProject{picked}
+		} else {
+			paths := make([]string, 0, len(candidates))
+			for _, project := range candidates {
+				paths = append(paths, project.Path+" ["+joinEcosystems(project.Ecosystems)+"]")
+			}
+			return gradleProject{}, fmt.Errorf("multiple mod projects found; select --platform or --project: %s", strings.Join(paths, ", "))
 		}
-		return gradleProject{}, fmt.Errorf("multiple mod projects found; select --platform or --project: %s", strings.Join(paths, ", "))
 	}
 	project := candidates[0]
 	if project.BuildTask == "" {
