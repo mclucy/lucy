@@ -91,11 +91,12 @@ func run(ctx context.Context, source string, opts options, stdout io.Writer) (er
 		}
 	}()
 	checkout := filepath.Join(temporary, "repository")
-	log.ShowInfo("Cloning " + source)
+	ref := refSuffix(branch, tag)
+	log.ShowInfo("Cloning " + source + ref)
 	if err := clone(ctx, remote, checkout, branch, tag, newProcessLog("git")); err != nil {
 		return err
 	}
-	log.ShowInfo("Cloned " + source)
+	log.ShowInfo("Cloned " + source + ref)
 
 	layout, err := buildrepo.Probe(ctx, checkout)
 	if err != nil {

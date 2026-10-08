@@ -62,6 +62,19 @@ func isDriveLetter(c byte) bool {
 	return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z')
 }
 
+// refSuffix describes the requested ref for the clone narration lines, so the
+// user can see which branch or tag the checkout landed on.
+func refSuffix(branch, tag string) string {
+	switch {
+	case branch != "":
+		return " (branch " + branch + ")"
+	case tag != "":
+		return " (tag " + tag + ")"
+	default:
+		return ""
+	}
+}
+
 // clone fetches remote into dir. Its raw output goes to output rather than
 // straight to the terminal, so a large checkout stays quiet and a rejected
 // remote is reported with git's own reason.
