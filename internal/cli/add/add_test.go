@@ -11,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/state"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace"
 )
 
 func TestBuildUpdatedManifestPreservesFuzzyIntentAndPromotesRequired(t *testing.T) {
@@ -130,7 +131,7 @@ func TestBuildUpdatedLockMergesIncrementalResultsAndPreservesUnmentionedPackages
 		Provenance: map[string][]string{"lithium": {"root"}},
 	}
 
-	updated := cli.BuildUpdatedLock(workDir, &manifest, &existingLock, result)
+	updated := cli.BuildUpdatedLock(workDir, &manifest, &existingLock, result, workspace.NewAt(workDir))
 	if updated == nil {
 		t.Fatal("expected updated lock")
 	}
