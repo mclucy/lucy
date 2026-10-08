@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -63,6 +64,7 @@ func clone(ctx context.Context, remote, dir, branch, tag string, output *process
 	}
 	args = append(args, "--", remote, dir)
 	cmd := exec.CommandContext(ctx, git, args...)
+	cmd.Env = cloneEnvironment()
 	cmd.Stdout = output
 	cmd.Stderr = output
 	cmd.WaitDelay = 5 * time.Second
@@ -76,4 +78,20 @@ func clone(ctx context.Context, remote, dir, branch, tag string, output *process
 		return reportFailure(output, fmt.Errorf("clone repository: %w", err))
 	}
 	return nil
+}
+
+// cloneEnvironment makes the clone non-interactive. The command runs in its own
+// process group, so a prompt waiting on the terminal is stopped by the kernel
+// (SIGTTIN) with no way to answer it and the command hangs until Ctrl+C;
+// prompts instead fail fast. HTTPS credentials honor GIT_TERMINAL_PROMPT,
+// host-key and passphrase prompts honor batch-mode ssh, and a user who
+// configured their own GIT_SSH_COMMAND or GIT_SSH keeps it.
+func cloneEnvironment() []string {
+	env := replaceEnvironment(os.Environ(), "GIT_TERMINAL_PROMPT", "0")
+	if _, configured := os.LookupEnv("GIT_SSH_COMMAND"); !configured {
+		if _, configured := os.LookupEnv("GIT_SSH"); !configured {
+			env = append(env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
+		}
+	}
+	return env
 }
