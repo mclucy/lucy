@@ -3,6 +3,7 @@ package info
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -67,6 +68,11 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	request, err = resolveAgainstLock(request)
+	if err != nil {
+		return err
+	}
+
 	providers, err := routing.ResolveInfoProviders(request.Eco, request.Source)
 	if err != nil {
 		errArg := request.Eco.String()
@@ -123,6 +129,48 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		fmt.Print(output)
 	}
 	return nil
+}
+
+// resolveAgainstLock expands a bare package name into the explicit
+// "provider:project" reference the current lock binds it to. It only runs for
+// an auto-sourced request: an explicit source override is always honored, and
+// nothing is cached or remembered beyond this call.
+func resolveAgainstLock(request types.PackageRequest) (types.PackageRequest, error) {
+	if request.Source != types.SourceAuto {
+		return request, nil
+	}
+
+	root, err := os.Getwd()
+	if err != nil {
+		return request, nil
+	}
+
+	runtime := cli.RuntimeServer
+	if request.Eco == types.EcoMcdr {
+		runtime = cli.RuntimeMCDR
+	}
+
+	reference, err := cli.ResolveLockReference(
+		root,
+		runtime,
+		request.Eco,
+		string(request.Name),
+	)
+	if err != nil {
+		return request, err
+	}
+	if reference == "" {
+		return request, nil
+	}
+
+	resolved, err := input.Parse(reference)
+	if err != nil {
+		return request, nil
+	}
+
+	request.Source = resolved.Source
+	request.Name = resolved.Name
+	return request, nil
 }
 
 func renderInfo(
