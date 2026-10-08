@@ -223,37 +223,3 @@ func lockForComparison(manifest *Manifest, lock *Lock) *Lock {
 	filtered.Packages = CanonicalLockedPackages(filtered.Packages)
 	return &filtered
 }
-
-func ClassifyDrift(diff StateDiff) string {
-	parts := make([]string, 0, 4)
-	if len(diff.InManifestNotLock) > 0 {
-		parts = append(parts, "unresolved intent")
-	}
-	if len(diff.InLockNotManifest) > 0 {
-		parts = append(parts, "stale lock facts")
-	}
-	if len(diff.InLockNotObserved) > 0 || len(diff.InObservedNotLock) > 0 {
-		parts = append(parts, "runtime drift")
-	}
-	if len(diff.IgnoredObserved) > 0 || len(diff.UnmanagedObserved) > 0 {
-		parts = append(parts, "ignored/manual content")
-	}
-
-	if len(parts) == 0 {
-		return "in sync"
-	}
-	return "has " + joinDiagnosticParts(parts)
-}
-
-func joinDiagnosticParts(parts []string) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	if len(parts) == 1 {
-		return parts[0]
-	}
-	if len(parts) == 2 {
-		return parts[0] + " and " + parts[1]
-	}
-	return strings.Join(parts[:len(parts)-1], ", ") + ", and " + parts[len(parts)-1]
-}

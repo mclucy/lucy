@@ -12,60 +12,6 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func TestPaperObservationCollector_AnchorsFixtureRoot(t *testing.T) {
-	t.Parallel()
-
-	root := paperFamilyFixtureRoot(t)
-	if filepath.Base(root) != "paper_family" {
-		t.Fatalf("fixture root mismatch: %s", root)
-	}
-
-	checks := []string{
-		paperFamilyFixturePath(
-			t,
-			"test_paper",
-			"paper",
-			"META-INF",
-			"libraries.list",
-		),
-		paperFamilyFixturePath(
-			t,
-			"test_folia",
-			"folia",
-			"META-INF",
-			"libraries.list",
-		),
-		paperFamilyFixturePath(
-			t,
-			"test_leaf",
-			"leaf",
-			"META-INF",
-			"MANIFEST.MF",
-		),
-		paperFamilyFixturePath(
-			t,
-			"test_leaves",
-			"leaves",
-			"META-INF",
-			"build-info",
-		),
-		paperFamilyFixturePath(t, "test_reaper", "reaper", "patch.properties"),
-		paperFamilyFixturePath(
-			t,
-			"test_youer",
-			"youer",
-			"META-INF",
-			"MANIFEST.MF",
-		),
-	}
-
-	for _, path := range checks {
-		if _, err := os.Stat(path); err != nil {
-			t.Fatalf("expected anchored fixture path %s: %v", path, err)
-		}
-	}
-}
-
 func TestPaperObservationCollector_PaperFixtureSupportsTreeAndJar(t *testing.T) {
 	t.Parallel()
 

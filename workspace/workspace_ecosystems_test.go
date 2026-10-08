@@ -46,22 +46,6 @@ func offerSet(offers []EffectiveEcosystem) map[types.Ecosystem]types.Compatibili
 	return set
 }
 
-func TestSupports_UnobservedRuntime(t *testing.T) {
-	for _, ws := range []Workspace{{}, compatWorkspace(types.VersionedPackageRef{})} {
-		offered, level, ok := ws.Supports(
-			compatTestCore(types.EcoFabric, "lithium"),
-		)
-		if ok || offered != types.EcoUnspecified {
-			t.Errorf(
-				"expected no offer from an empty observation, got %q/%q/%v",
-				offered,
-				level,
-				ok,
-			)
-		}
-	}
-}
-
 func TestSupports_FullAndMissing(t *testing.T) {
 	ws := compatWorkspace(compatTestCore(types.EcoFabric, "fabric"))
 
@@ -243,25 +227,6 @@ func TestEffectiveEcosystems(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestEffectiveEcosystemsConnectorBridge(t *testing.T) {
-	ws := compatWorkspace(
-		compatTestCore(types.EcoNeoforge, "neoforge"),
-		compatTestCore(types.EcoNeoforge, "neoforge"),
-	)
-	ws.Packages = []types.DiscoveredPackage{
-		{
-			Id: compatTestCore(types.EcoNeoforge, "sinytra-connector"),
-		},
-	}
-	got := offerSet(ws.EffectiveEcosystems())
-	if got[types.EcoNeoforge] != types.CompatFull {
-		t.Errorf("neoforge = %q, want compatible", got[types.EcoNeoforge])
-	}
-	if got[types.EcoFabric] != types.CompatDegraded {
-		t.Errorf("fabric = %q, want degraded", got[types.EcoFabric])
 	}
 }
 

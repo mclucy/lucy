@@ -8,7 +8,7 @@ on:
       - testdata/environments/**
       - workspace/**
       - internal/cli/**
-      - scripts/server-probe-e2e.sh
+      - e2e/**
       - .github/workflows/e2e.yml
   pull_request:
     paths:
@@ -16,7 +16,7 @@ on:
       - testdata/environments/**
       - workspace/**
       - internal/cli/**
-      - scripts/server-probe-e2e.sh
+      - e2e/**
       - .github/workflows/e2e.yml
   workflow_dispatch:
 
@@ -25,8 +25,7 @@ permissions:
 
 jobs:
   # Environment probe: generate each fetchable sandbox from pinned artifacts
-  # and verify lucy.s probe against e2e jq programs under
-  # testdata/environments/server-probe-e2e/<id>.jq.
+  # and verify Lucy's CLI output against native assertions in e2e/.
   #
   # Manual-artifact environments (fabric-installed-1214, fabric-installed-262,
   # fabric-installed-114) are excluded: their pinned jars cannot be fetched in CI.
@@ -66,4 +65,4 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
       - name: Verify probe (e2e)
-        run: task envs:probe-e2e -- ${{ env.ENVS }}
+        run: go run ./e2e ${{ env.ENVS }}
