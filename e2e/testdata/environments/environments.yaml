@@ -7,7 +7,6 @@
 version: 1
 
 environments:
-
   - id: mcdr-fabric
     family: mcdr
     game_version: "1.21.4"
@@ -16,7 +15,7 @@ environments:
     dirs: [logs]
     artifacts:
       - dest: server/fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar
-        fabric_meta: {game: "1.21.4", loader: "0.16.9", installer: "1.0.1"}
+        fabric_meta: { game: "1.21.4", loader: "0.16.9", installer: "1.0.1" }
         sha256: b1ec95e206380741b33993afc5ffbbf9abfb4c6cd1ce5a06dfca88952c8e6c84
       - dest: plugins/PrimeBackup-v1.13.1.pyz
         url: https://github.com/TISUnion/PrimeBackup/releases/download/v1.13.1/PrimeBackup-v1.13.1.pyz
@@ -83,7 +82,7 @@ environments:
     dirs: [mods]
     artifacts:
       - dest: fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar
-        fabric_meta: {game: "1.21.4", loader: "0.16.9", installer: "1.0.1"}
+        fabric_meta: { game: "1.21.4", loader: "0.16.9", installer: "1.0.1" }
         sha256: b1ec95e206380741b33993afc5ffbbf9abfb4c6cd1ce5a06dfca88952c8e6c84
       - dest: mods/fabric-api-0.154.0+26.2.jar
         url: https://cdn.modrinth.com/data/P7dR8mSH/versions/Cpy2Px2f/fabric-api-0.154.0%2B26.2.jar
@@ -102,7 +101,7 @@ environments:
     docs: families/fabric.md
     artifacts:
       - dest: fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar
-        fabric_meta: {game: "26.2", loader: "0.19.3", installer: "1.1.2"}
+        fabric_meta: { game: "26.2", loader: "0.19.3", installer: "1.1.2" }
         sha256: 301f83aac36b23f2bc64cc58560edf98533cfaa30e53af002ba950c75f4100b4
 
   - id: fabric-installed-1214
@@ -152,7 +151,7 @@ environments:
         mojang_version: "1.14"
         sha256: 671e3d334dd601c520bf1aeb96e49038145172bef16bc6c418e969fd8bf8ff6c
 
-  # ---- Forge ----
+  # Forge
 
   - id: forge-1201
     family: forge
@@ -178,7 +177,7 @@ environments:
       - dest: forge-1.21.11-61.2.0-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-installer.jar
 
-  # ---- Vanilla ----
+  # Vanilla
 
   - id: vanilla-1201
     family: vanilla
@@ -227,7 +226,7 @@ environments:
     docs: families/paper-family.md
     artifacts:
       - dest: server.jar
-        purpur: {version: "1.21.11", build: "2568"}
+        purpur: { version: "1.21.11", build: "2568" }
         sha256: ee199511bf0a970ee8459fe3a351703fec37293f00bc2de1c5cb746c7e4acc34
 
   - id: divinemc
@@ -351,3 +350,21 @@ environments:
       - dest: mohist.jar
         manual: true
         sha256: cbefdc9230b714c784dafaf74c83f55d8c4ec049dc41561c4e9b2d5766d05941
+
+  # Lock generation
+
+  - id: lock-fabric-1214
+    family: fabric
+    game_version: "1.21.4"
+    description: Pinned compatible Flan and Fabric API artifacts for lock generation and replay
+    docs: families/fabric.md
+    artifacts:
+      - dest: server.jar
+        mojang_version: "1.21.4"
+        sha256: 1066970b09e9c671844572291c4a871cc1ac2b85838bf7004fa0e778e10f1358
+      - dest: mods/fabric-api-0.119.4+1.21.4.jar
+        url: https://cdn.modrinth.com/data/P7dR8mSH/versions/p96k10UR/fabric-api-0.119.4%2B1.21.4.jar
+        sha256: d183bacb845167f09264c2f90322b7ecffe8826debda6f60e597889264bef4af
+      - dest: mods/flan-1.21.4-1.11.7.b-fabric.jar
+        url: https://cdn.modrinth.com/data/Si383TIH/versions/9EC25rAV/flan-1.21.4-1.11.7.b-fabric.jar
+        sha256: 33c466b7c319f1597798f62d13b619317590bf069c4a2c11715fb19fdd98e7f8
