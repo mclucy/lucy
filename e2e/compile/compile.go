@@ -19,9 +19,11 @@ func run(args []string) int {
 	flags := flag.NewFlagSet("e2e/compile", flag.ContinueOnError)
 	lucy := flags.String("lucy", "dist/lucy", "path to the Lucy binary")
 	repos := flags.String("repos", "e2e/testdata/repo", "directory containing compile fixture manifests")
+	parallel := flags.Int("p", 1, "run up to N fixtures concurrently")
 	flags.Usage = func() {
 		fmt.Fprintln(flags.Output(), "Usage: go run ./e2e/compile [flags] [fixture ids]")
 		fmt.Fprintln(flags.Output(), "IDs may be comma- or whitespace-separated. Defaults to all fixtures.")
+		fmt.Fprintln(flags.Output(), "Without ids every fixture runs, one at a time unless -p allows more.")
 		fmt.Fprintln(flags.Output(), "Run from the repository root.")
 		flags.PrintDefaults()
 	}
@@ -36,5 +38,5 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "resolve Lucy binary: %v\n", err)
 		return 1
 	}
-	return runCompile(binary, *repos, testkit.ExpandIDs(flags.Args()))
+	return runCompile(binary, *repos, testkit.ExpandIDs(flags.Args()), *parallel)
 }

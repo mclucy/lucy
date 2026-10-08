@@ -42,7 +42,7 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "resolve Lucy binary: %v\n", err)
 		return 1
 	}
-	return testkit.VerifyAll(ids, func(id string) error {
+	return testkit.VerifyAll(ids, 1, func(id string) error {
 		expected, ok := probeScenarios[id]
 		if !ok {
 			return errors.New("no e2e scenario")

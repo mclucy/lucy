@@ -21,7 +21,7 @@ type repoFixture struct {
 	Project  string `yaml:"project"`
 }
 
-func runCompile(binary, repos string, ids []string) int {
+func runCompile(binary, repos string, ids []string, parallel int) int {
 	if len(ids) == 0 {
 		entries, err := os.ReadDir(repos)
 		if err != nil {
@@ -38,7 +38,7 @@ func runCompile(binary, repos string, ids []string) int {
 			return 1
 		}
 	}
-	return testkit.VerifyAll(ids, func(id string) error {
+	return testkit.VerifyAll(ids, parallel, func(id string) error {
 		return executeCompile(binary, repos, id)
 	})
 }
