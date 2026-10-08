@@ -55,7 +55,9 @@ type environment struct {
 }
 
 type artifact struct {
-	Dest          string      `yaml:"dest"`
+	Dest string `yaml:"dest"`
+	// SHA256 pins the expected content digest. Optional: without it, digest
+	// verification is skipped.
 	SHA256        string      `yaml:"sha256"`
 	URL           string      `yaml:"url,omitempty"`
 	MojangVersion string      `yaml:"mojang_version,omitempty"`
@@ -142,11 +144,13 @@ func validate(man *manifest) error {
 			if art.Dest == "" {
 				return fmt.Errorf("%s: artifact without dest", env.ID)
 			}
-			if len(art.SHA256) != 64 {
-				return fmt.Errorf("%s/%s: sha256 must be 64 hex chars", env.ID, art.Dest)
-			}
-			if _, err := hex.DecodeString(art.SHA256); err != nil {
-				return fmt.Errorf("%s/%s: bad sha256: %v", env.ID, art.Dest, err)
+			if art.SHA256 != "" {
+				if len(art.SHA256) != 64 {
+					return fmt.Errorf("%s/%s: sha256 must be 64 hex chars", env.ID, art.Dest)
+				}
+				if _, err := hex.DecodeString(art.SHA256); err != nil {
+					return fmt.Errorf("%s/%s: bad sha256: %v", env.ID, art.Dest, err)
+				}
 			}
 			kinds := 0
 			for _, set := range []bool{art.URL != "", art.MojangVersion != "", art.FabricMeta != nil, art.Purpur != nil, art.Manual} {
@@ -260,6 +264,10 @@ func generateEnvironment(env environment, opts options) error {
 
 func ensureCached(envID string, art artifact, opts options) (string, error) {
 	key := strings.ToLower(art.SHA256)
+	if key == "" {
+		sum := sha256.Sum256([]byte(sourceDescriptor(envID, art)))
+		key = "src-" + hex.EncodeToString(sum[:])
+	}
 	cached := filepath.Join(opts.cacheDir, key[:2], key)
 	if _, err := os.Stat(cached); err == nil {
 		return cached, nil
@@ -280,6 +288,9 @@ func ensureCached(envID string, art artifact, opts options) (string, error) {
 		_ = tmp.Close()
 		source := filepath.Join(opts.manualDir, envID, filepath.Base(art.Dest))
 		if _, err := os.Stat(source); err != nil {
+			if art.SHA256 == "" {
+				return "", fmt.Errorf("manual artifact missing: place the file at %s", source)
+			}
 			return "", fmt.Errorf(
 				"manual artifact missing: place the file at %s (expected sha256 %s)",
 				source, key,
@@ -327,17 +338,40 @@ func ensureCached(envID string, art artifact, opts options) (string, error) {
 		_ = tmp.Close()
 	}
 
-	digest, err := fileSHA256(tmpName)
-	if err != nil {
-		return "", err
-	}
-	if digest != key {
-		return "", fmt.Errorf("sha256 mismatch: got %s want %s", digest, key)
+	if art.SHA256 != "" {
+		digest, err := fileSHA256(tmpName)
+		if err != nil {
+			return "", err
+		}
+		if digest != key {
+			return "", fmt.Errorf("sha256 mismatch: got %s want %s", digest, key)
+		}
 	}
 	if err := os.Rename(tmpName, cached); err != nil {
 		return "", err
 	}
 	return cached, nil
+}
+
+// sourceDescriptor names where an artifact's bytes come from. Digest-less
+// artifacts key their cache entries by the hash of this descriptor, prefixed
+// src- to keep them disjoint from content digests.
+func sourceDescriptor(envID string, art artifact) string {
+	switch {
+	case art.URL != "":
+		return art.URL
+	case art.MojangVersion != "":
+		return "mojang:" + art.MojangVersion
+	case art.FabricMeta != nil:
+		return fmt.Sprintf(
+			"fabric:%s/%s/%s",
+			art.FabricMeta.Game, art.FabricMeta.Loader, art.FabricMeta.Installer,
+		)
+	case art.Purpur != nil:
+		return fmt.Sprintf("purpur:%s/%s", art.Purpur.Version, art.Purpur.Build)
+	default:
+		return "manual:" + envID + "/" + filepath.Base(art.Dest)
+	}
 }
 
 func resolveMojangServer(version string) (string, error) {
