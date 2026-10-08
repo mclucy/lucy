@@ -1,7 +1,0 @@
-sources:
-  priority:
-    - modrinth
-    - curseforge
-    - github
-    - mcdr
-  preferred: auto
