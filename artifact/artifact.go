@@ -2,7 +2,6 @@ package artifact
 
 import (
 	"archive/zip"
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,6 +32,7 @@ func Analyze(filePath string, opts ...Option) ([]Info, error) {
 	for _, opt := range opts {
 		opt(o)
 	}
+	_ = o
 
 	ext := strings.ToLower(filepath.Ext(filePath))
 	if !supportedExt(ext) {
@@ -59,23 +59,20 @@ func Analyze(filePath string, opts ...Option) ([]Info, error) {
 
 	if ext == ".pyz" || ext == ".mcdr" {
 		mcdrReader := newMcdrReader()
-		results, err := mcdrReader.Read(zipReader, filePath, o.slugResolver)
+		results, err := mcdrReader.Read(zipReader, filePath)
 		if err != nil {
 			return nil, err
 		}
-		applySlugResolver(results, o.slugResolver)
 		return results, nil
 	}
 
 	for _, r := range readers {
-		infos, err := r.Read(zipReader, filePath, o.slugResolver)
+		infos, err := r.Read(zipReader, filePath)
 		if err != nil {
 			continue
 		}
 		results = append(results, infos...)
 	}
-	applySlugResolver(results, o.slugResolver)
-
 	if jarEcosystemsConflict(results) {
 		return nil, fmt.Errorf(
 			"ambiguous artifact %q: packages span incompatible ecosystems",
@@ -84,24 +81,6 @@ func Analyze(filePath string, opts ...Option) ([]Info, error) {
 	}
 
 	return results, nil
-}
-
-func applySlugResolver(results []Info, resolver SlugResolver) {
-	if resolver == nil {
-		return
-	}
-
-	ctx := context.Background()
-	for i := range results {
-		normalized, err := resolver(
-			ctx,
-			results[i].Ref.Eco,
-			results[i].Ref.Name,
-		)
-		if err == nil && normalized != "" {
-			results[i].Ref.Name = types.BarePackageName(normalized)
-		}
-	}
 }
 
 // jarEcosystemsConflict returns true when the detected artifacts span two or more

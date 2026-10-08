@@ -42,7 +42,6 @@ func newBungeeCordReader() Reader {
 func (r *velocityReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-	resolver SlugResolver,
 ) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "velocity-plugin.json" {
@@ -101,7 +100,6 @@ func (r *velocityReader) Read(
 func (r *bungeeCordReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-	resolver SlugResolver,
 ) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "bungee.yml" {

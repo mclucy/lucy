@@ -31,7 +31,6 @@ func newNeoforgeReader() Reader {
 func (r *neoforgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-	resolver SlugResolver,
 ) ([]Info, error) {
 	raw, err := readNeoforgeModsToml(zipRdr)
 	if err != nil {

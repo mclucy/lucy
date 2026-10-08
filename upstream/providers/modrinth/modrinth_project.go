@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -34,34 +33,15 @@ func getProjectByName(slug types.BarePackageName) (
 	project *projectResponse,
 	err error,
 ) {
-	tryFetch := func(target types.BarePackageName) (
-		*projectResponse,
-		error,
-	) {
-		project := &projectResponse{}
-		if err := requestJSON(
-			projectUrl(string(target)),
-			project,
-			ErrNoProject,
-		); err != nil {
-			return nil, err
-		}
-		return project, nil
+	project = &projectResponse{}
+	if err := requestJSON(
+		projectUrl(string(slug)),
+		project,
+		ErrNoProject,
+	); err != nil {
+		return nil, err
 	}
-
-	project, err = tryFetch(slug)
-	if err == nil {
-		return project, nil
-	}
-
-	if canonical, ok := knownpkgs.Default().Session().Lookup(
-		types.SourceModrinth,
-		string(slug),
-	); ok && canonical != string(slug) {
-		return tryFetch(types.BarePackageName(canonical))
-	}
-
-	return nil, err
+	return project, nil
 }
 
 func getProjectMembers(id string) (
