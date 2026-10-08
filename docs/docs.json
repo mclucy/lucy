@@ -20,6 +20,7 @@
           "commands/global-flags",
           "commands/init",
           "commands/search",
+          "commands/compile",
           "commands/info",
           "commands/status"
         ]

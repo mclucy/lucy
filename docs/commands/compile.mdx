@@ -1,0 +1,68 @@
+---
+title: "lucy compile"
+description: "Compile a Fabric, Forge, or NeoForge mod from a Git repository"
+---
+
+`lucy compile` clones a Git repository and builds an executable. Currently supporting Fabric, Forge, and NeoForge projects.
+
+<Warning>
+  Compiling runs Gradle (and other scripts) from the repository and may download the Gradle distribution and build dependencies. Only compile repositories you trust.
+</Warning>
+
+```bash
+lucy compile <url|owner/repo> [--output <artifact.jar|directory>]
+```
+
+```bash
+lucy compile owner/repo
+lucy compile owner/repo -o ./dist
+lucy compile owner/repo -o ./dist/mod.jar
+lucy compile https://codeberg.org/owner/repo.git -o ./dist --platform fabric
+lucy compile owner/multi-platform-mod -o ./dist --build-dir fabric --project :fabric
+```
+
+Without `--output`, the compiled JAR is written to the current directory. A `--output` path ending in `.jar` is used as the destination file; any other value is a directory that receives the artifact name the project produced. Directories are created when missing.
+
+The source can be a GitHub `owner/repo` reference or any Git repository URL. Lucy clones the repository into a temporary directory and removes that checkout when the command finishes.
+
+## Arguments
+
+<ParamField path="url|owner/repo" type="string" required>
+  GitHub shorthand (`owner/repo`) or a Git repository URL to clone. The repository's default branch with no `--branch` or `--tag` set.
+</ParamField>
+
+## Flags
+
+<ParamField query="--output, -o" type="string">
+  Destination for the compiled `.jar`, resolved relative to the current directory. A path ending in `.jar` names the destination file; any other value names a directory that receives the project's artifact name. Defaults to the current directory. Missing directories are created. The destination must not already exist; `lucy compile` does not overwrite files.
+</ParamField>
+
+<ParamField query="--platform" type="string">
+  Restrict project selection to one mod platform. Accepted values: `fabric`, `forge`, `neoforge`.
+</ParamField>
+
+<ParamField query="--build-dir" type="string">
+  Select a Gradle build directory relative to the cloned repository. Use this when the repository has multiple independent Gradle builds. The path must stay inside the checkout.
+</ParamField>
+
+<ParamField query="--project" type="string">
+  Select a Gradle project path, such as `:fabric`, when a build contains multiple mod projects.
+</ParamField>
+
+<ParamField query="--branch" type="string">
+  Checkout Git branch BRANCH after cloning, before compiling. Mutually exclusive with `--tag`.
+</ParamField>
+
+<ParamField query="--tag" type="string">
+  Checkout Git tag TAG after cloning, before compiling. Mutually exclusive with `--branch`.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags).
+
+## Requirements
+
+Requires `git`, Java required by the project, and either a complete Gradle wrapper in the selected build or a local Gradle installation. The wrapper will be used when present, which may download its pinned Gradle distribution. Lucy then inspects Gradle's evaluated build model, runs the selected project's `build` or `assemble` task, and checks the produced JAR for matching mod metadata.
+
+By default, Lucy selects the repository-root Gradle build when present. If there is no root build and exactly one eligible build, it selects that build. If multiple builds are found, pass `--build-dir`. Lucy then selects a matching mod project automatically. If more than one project matches, pass `--platform`, `--project`, or both to make the selection unambiguous.
+
+If several eligible JARs are produced, Lucy prefers archives marked as published by Gradle. It still requires one unique JAR with metadata for a supported mod platform; otherwise, compilation fails rather than choosing an arbitrary archive.

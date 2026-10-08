@@ -53,6 +53,7 @@ tasks:
         ln -sf lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}} {{.DEV_SYMLINK}}
     sources:
       - "./**/*.go"
+      - "./internal/cli/compile/*.gradle"
       - "./go.mod"
       - "./go.sum"
     generates:
@@ -76,6 +77,7 @@ tasks:
     watch: true
     sources:
       - "./**/*.go"
+      - "./internal/cli/compile/*.gradle"
       - "./go.mod"
       - "./go.sum"
     method: timestamp
@@ -119,6 +121,7 @@ tasks:
         GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-arm64
     sources:
       - "./**/*.go"
+      - "./internal/cli/compile/*.gradle"
       - "./go.mod"
       - "./go.sum"
 
