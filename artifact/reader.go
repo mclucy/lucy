@@ -4,8 +4,7 @@ import "archive/zip"
 
 // Reader extracts metadata from supported artifact archives.
 type Reader interface {
-	// Read accepts a nil resolver to leave detected names unchanged.
-	Read(r *zip.Reader, filePath string, resolver SlugResolver) ([]Info, error)
+	Read(r *zip.Reader, filePath string) ([]Info, error)
 }
 
 // readers is the explicit ordered list of all platform readers.

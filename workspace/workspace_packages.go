@@ -1,12 +1,10 @@
 package workspace
 
 import (
-	"context"
 	"strings"
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -14,14 +12,10 @@ import (
 	"github.com/mclucy/lucy/upstream/providers/modrinth"
 )
 
-// resolveUpstream resolves the following upstream of an artifact by hash,
-// Modrinth first. A hit records the local-to-remote mapping in the session
-// store, so later resolutions follow stable upstream identities across
-// provider name differences.
+// resolveUpstream resolves the upstream of an artifact by hash,
+// Modrinth first.
 func resolveUpstream(
-	sess *knownpkgs.Session,
 	path string,
-	local *types.VersionedPackageRef,
 ) (types.VersionedPackageRef, bool) {
 	mappers := []upstream.ArtifactMapSource{modrinth.Provider}
 	if curseforge.Enabled() {
@@ -29,20 +23,11 @@ func resolveUpstream(
 	}
 
 	for _, mapper := range mappers {
-		ref, fileHash, ok, err := mapper.PackageByHash(
+		ref, _, ok, err := mapper.PackageByHash(
 			artifact.File{Path: path},
 		)
 		if err != nil || !ok || ref.Name == "" {
 			continue
-		}
-		if local != nil {
-			sess.Record(
-				mapper.Id(),
-				local.Name.String(),
-				fileHash,
-				string(ref.Name),
-				"hash",
-			)
 		}
 		return ref, true
 	}
@@ -52,19 +37,12 @@ func resolveUpstream(
 // discoverPackages inventories the packages under searchPaths and
 // mcdrPluginDirs, when the MCDR environment exists. Deduplication and
 // local-path enrichment follow the PackageIndex.Add policy.
-//
-// Expensive: every candidate artifact is opened and also queried by hash.
-// A hit anchors the jar to a stable upstream identity and records the
-// local-to-remote mapping.
 func discoverPackages(
-	sess *knownpkgs.Session,
 	searchPaths []string,
 	mcdrPluginDirs []string,
 ) []types.DiscoveredPackage {
 	idx := NewPackageIndex()
 	var mu sync.Mutex
-
-	resolver := knownPackagesSlugResolver(sess)
 
 	for _, searchPath := range searchPaths {
 		jarFiles, err := findJar(searchPath)
@@ -80,16 +58,8 @@ func discoverPackages(
 			go func(path string) {
 				defer wg.Done()
 
-				analyzed, err := artifact.Analyze(
-					path,
-					artifact.WithSlugResolver(resolver),
-				)
-
-				var local *types.VersionedPackageRef
-				if err == nil && len(analyzed) == 1 {
-					local = &analyzed[0].Ref
-				}
-				upstreamRef, hit := resolveUpstream(sess, path, local)
+				analyzed, err := artifact.Analyze(path)
+				upstreamRef, hit := resolveUpstream(path)
 
 				if err != nil || len(analyzed) == 0 {
 					if !hit {
@@ -118,16 +88,8 @@ func discoverPackages(
 			continue
 		}
 		for _, pluginFile := range pluginFiles {
-			analyzed, err := artifact.Analyze(
-				pluginFile,
-				artifact.WithSlugResolver(resolver),
-			)
-
-			var local *types.VersionedPackageRef
-			if err == nil && len(analyzed) == 1 {
-				local = &analyzed[0].Ref
-			}
-			resolveUpstream(sess, pluginFile, local)
+			analyzed, err := artifact.Analyze(pluginFile)
+			resolveUpstream(pluginFile)
 			if err == nil && len(analyzed) > 0 {
 				pkgs := artifactInfoToDiscoveredPackage(analyzed)
 				idx.Merge(pkgs)
@@ -203,25 +165,5 @@ func discoveredFromUpstream(
 			Version: version,
 		},
 		Path: path,
-	}
-}
-
-// knownPackagesSlugResolver returns a slug resolver that consults the
-// knownpkgs session for a canonical name matching the detected
-// platform/local name. On hit, the mapping is re-recorded via Record so
-// subsequent resolutions in the same invocation see it without re-querying
-// the persisted store.
-func knownPackagesSlugResolver(session *knownpkgs.Session) artifact.SlugResolver {
-	return func(
-		ctx context.Context,
-		platform types.Ecosystem,
-		name types.BarePackageName,
-	) (types.BarePackageName, error) {
-		canonical, src, ok := session.LookupAny(string(name))
-		if !ok || canonical == string(name) {
-			return name, nil
-		}
-		session.Record(src, string(name), "", canonical, "hash")
-		return types.BarePackageName(canonical), nil
 	}
 }
