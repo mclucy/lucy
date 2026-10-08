@@ -19,6 +19,7 @@ func run(args []string) int {
 	flags := flag.NewFlagSet("e2e/compile", flag.ContinueOnError)
 	lucy := flags.String("lucy", "dist/lucy", "path to the Lucy binary")
 	repos := flags.String("repos", "e2e/testdata/repo", "directory containing compile fixture manifests")
+	list := flags.Bool("list", false, "print every fixture id and exit")
 	parallel := flags.Int("p", 1, "run up to N fixtures concurrently")
 	flags.Usage = func() {
 		fmt.Fprintln(flags.Output(), "Usage: go run ./e2e/compile [flags] [fixture ids]")
@@ -32,6 +33,17 @@ func run(args []string) int {
 			return 0
 		}
 		return 2
+	}
+	if *list {
+		ids, err := fixtureIDs(*repos)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return 1
+		}
+		for _, id := range ids {
+			fmt.Println(id)
+		}
+		return 0
 	}
 	binary, err := filepath.Abs(*lucy)
 	if err != nil {

@@ -38,21 +38,22 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27.1"
+
+      # The suite enumerates its own fixtures so this matrix and a local
+      # `go run ./e2e/compile` can never disagree about which manifests exist.
       - name: Collect fixture ids
         id: list
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          fixtures=()
-          for manifest in e2e/testdata/repo/*.yaml; do
-            name="${manifest##*/}"
-            fixtures+=("${name%.yaml}")
-          done
-          if [ ${#fixtures[@]} -eq 0 ]; then
-            echo "no compile manifests found in e2e/testdata/repo" >&2
+          ids="$(go run ./e2e/compile --list | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          if [ "$(jq 'length' <<<"$ids")" -eq 0 ]; then
+            echo "no compile manifests found" >&2
             exit 1
           fi
-          ids="$(printf '%s\n' "${fixtures[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
           echo "fixtures=$ids" >> "$GITHUB_OUTPUT"
 
   compile:

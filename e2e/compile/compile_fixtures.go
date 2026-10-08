@@ -23,24 +23,33 @@ type repoFixture struct {
 
 func runCompile(binary, repos string, ids []string, parallel int) int {
 	if len(ids) == 0 {
-		entries, err := os.ReadDir(repos)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "list compile fixtures: %v\n", err)
-			return 1
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yaml") {
-				ids = append(ids, strings.TrimSuffix(entry.Name(), ".yaml"))
-			}
-		}
-		if len(ids) == 0 {
-			fmt.Fprintf(os.Stderr, "no compile fixtures in %s\n", repos)
+		var err error
+		if ids, err = fixtureIDs(repos); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
 			return 1
 		}
 	}
 	return testkit.VerifyAll(ids, parallel, func(id string) error {
 		return executeCompile(binary, repos, id)
 	})
+}
+
+// fixtureIDs lists every fixture manifest in repos, in directory order.
+func fixtureIDs(repos string) ([]string, error) {
+	entries, err := os.ReadDir(repos)
+	if err != nil {
+		return nil, fmt.Errorf("list compile fixtures: %w", err)
+	}
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yaml") {
+			ids = append(ids, strings.TrimSuffix(entry.Name(), ".yaml"))
+		}
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no compile fixtures in %s", repos)
+	}
+	return ids, nil
 }
 
 func executeCompile(binary, repos, id string) error {
