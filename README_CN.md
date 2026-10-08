@@ -46,32 +46,34 @@ go install github.com/mclucy/lucy@latest
 ## 快速上手
 
 ```bash
-# 在服务器目录中初始化
+# 在一个已有服务器中初始化 lucy.yaml
 lucy init
 
 # 添加包并自动解析依赖
-lucy add fabric/fabric-api lithium sodium
+lucy add modrinth:fabric-api modrinth:lithium
 
-# 查看检测到的运行时平台与已管理依赖
+# 查看解析后的核心、文件与包
 lucy status
 
-# 根据 lockfile 确定性同步文件
+# 按照 lock 描述安装文件
 lucy install
 ```
 
+`lucy.yaml` 记录你的意图，`lucy-lock.yaml` 记录满足该意图的确切构件（含哈希）。两者一并提交——仅凭 lock 即可重建服务器，`--locked` 会在两者不一致时直接失败。
+
 ## 命令
 
-| 命令 | 用途 |
-| --- | --- |
-| `lucy init` | 生成 `lucy.yaml` 和 `lucy-lock.yaml` |
-| `lucy add <pkg>` | 解析依赖，更新 lockfile 并安装 |
-| `lucy remove <pkg>` | 移除包并清理未使用的传递依赖 |
-| `lucy install` | 根据 `lucy-lock.yaml` 确定性同步服务器运行时 |
-| `lucy status` | 显示服务端核心、加载器、运行状态及已安装包 |
-| `lucy tree` | 检查依赖图谱（支持 `--live` 探测） |
-| `lucy leaves` | 列出无依赖引用的安全移除候选包 |
-| `lucy bisect` | 二分排查已安装模组以定位崩溃原因 |
-| `lucy search <query>` | 跨 Modrinth、CurseForge 和 GitHub 查询 |
+| 命令                  | 用途                                                                          |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `lucy init`           | 从已有服务器目录生成 `lucy.yaml`                                              |
+| `lucy add <pkg>`      | 记录需求、解析、更新 lock 并安装                                              |
+| `lucy remove <pkg>`   | 删除需求并清理无引用构件                                                      |
+| `lucy install`        | 依据 `lucy-lock.yaml` 同步文件；`--locked` 在漂移时报错，`--offline` 禁止下载 |
+| `lucy status`         | 显示解析后的核心、Minecraft 版本与包                                          |
+| `lucy tree`           | 检查依赖图谱（支持 `--live` 探测）                                            |
+| `lucy leaves`         | 列出无依赖引用的安全移除候选包                                                |
+| `lucy bisect`         | 二分排查已安装模组以定位崩溃原因                                              |
+| `lucy search <query>` | 跨 Modrinth、CurseForge 和 GitHub 查询                                        |
 
 完整指南、配置与参数说明：**[lucy.lc/docs](https://lucy.lc/docs)**
 

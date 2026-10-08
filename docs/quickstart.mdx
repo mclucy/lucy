@@ -43,17 +43,19 @@ Before you begin, you must have:
     ```
   </Step>
   <Step title="Run it">
-    Get an comprehensive overview of your server with the `lucy status` command!
+    Get a comprehensive overview of your resolved server with `lucy status`:
 
     ```bash
     cd path/to/your/server
     lucy status
     ```
 
-    Or, you can scaffold a new server with the `lucy create` command!
+    To manage an existing server directory, adopt it into a manifest first, then add packages and sync:
 
     ```bash
-    lucy create
+    lucy init
+    lucy add modrinth:lithium
+    lucy install
     ```
   </Step>
 </Steps>

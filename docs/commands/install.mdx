@@ -1,0 +1,115 @@
+---
+title: "lucy install"
+description: "Sync the server exactly as the lock file describes"
+---
+
+`lucy install` converges the directory with the resolved state recorded in `lucy-lock.yaml`. It never invents versions: every file it places comes from a lock entry, and every lock entry was produced by resolving [`lucy.yaml`](/commands/init) against an upstream catalogue.
+
+```bash
+lucy install
+```
+
+Running `lucy install` in a server directory is the normal way to reproduce a server elsewhere — a CI job, a fresh VPS, a teammate's machine.
+
+## Resolution modes
+
+`lucy install` compares the lock's `manifest_fingerprint` against the manifest it just read. That single comparison decides what happens.
+
+| Manifest | Lock | What happens |
+|---|---|---|
+| unchanged | present | Exact replay. Every file is verified against its recorded hash. No resolution, no catalogue lookup. |
+| unchanged, `--with-optional` | present | Re-resolves so optional dependencies can be selected, then records them as explicit requirements. |
+| changed or absent | present | The lock is stale for this manifest. `lucy` resolves again and rewrites the lock. |
+| unchanged | present, `--locked` | Works. This is what you want in CI. |
+| changed or absent | present, `--locked` | Fails: a locked installation requires a current lock. |
+| absent | absent | Fails: a manifest is required to resolve an installation. |
+| re-resolving | present, `--offline` | Fails: offline resolution needs a current lock, because selecting metadata is not something `lucy` can do without a network. |
+
+Two consequences worth internalizing.
+
+**Stale locks re-resolve, but pins win.** When the lock no longer matches the manifest, `lucy` resolves the manifest again — and any version you pinned is still pinned. If the Minecraft version and core distribution are unchanged and the core selector is floating (`stable`), the previously locked core artifact is reused rather than chased to a newer build. Adding a package does not float your other packages.
+
+**`--locked` is a promise, not a hint.** Under `--locked`, a missing or stale lock is an error, never a silent re-resolve. If your pipeline depends on failing when the lock drifts, that is the flag.
+
+### Lock-only replay
+
+If the manifest is gone but `lucy-lock.yaml` remains, `lucy install` replays the lock as-is. The lock is self-describing: it records the server's Minecraft version, core distribution, core version, and full artifact coordinates, so a lock alone is enough to reconstruct the server. This is what makes the lock the artifact worth publishing.
+
+## Offline
+
+`--offline` forbids network acquisition. Anything already present and hash-correct is left alone; anything that would need a download fails.
+
+The rule is byte-level, not name-level: a file that exists but whose hash differs from the lock is a mismatch, and `--offline` will not paper over it by keeping the old copy. In practice `--offline` works for replaying a current lock after a warm run; it does not work for first-time installs or for anything requiring re-resolution.
+
+## Lock file shape
+
+The lock has top-level `lock_version`, `manifest_fingerprint`, `server`, an optional `mcdr`, and a flat `packages` list.
+
+```yaml
+lock_version: 1
+manifest_fingerprint: "sha256:<digest of the manifest>"
+server:
+  minecraft: "1.21.4"
+  directory: "."
+  distribution: paper
+  core_version: "<resolved core version>"
+  provider: papermc
+  version: "<resolved core version>"
+  filename: "paper-1.21.4-<build>.jar"
+  url: "<upstream download URL>"
+  hashes:
+    sha256: "<64 hex characters>"
+  java: 21
+mcdr:
+  directory: "."
+  version: "<resolved MCDReforged version>"
+  python: "<resolved interpreter>"
+packages:
+  - runtime: server
+    loader: bukkit
+    provider: modrinth
+    project_id: "<project id>"
+    release_id: "<version id>"
+    file_id: "<file id>"
+    version: "<resolved version>"
+    filename: "<filename>"
+    url: "<upstream download URL>"
+    hashes:
+      sha256: "<64 hex characters>"
+    requirements:
+      - reference: modrinth:luckperms
+        selector: "<resolved selector>"
+        enabled: true
+```
+
+Artifact coordinates are flattened onto each entry. Provider, project, release, file, filename, URL, and hashes are explicit fields — there are no separate ID lookup tables to keep in sync, and a SHA-256 digest is mandatory on every artifact, server core included. A lock missing a digest, or carrying a filename with a path separator in it, is rejected on read.
+
+`runtime` is `server` or `mcdr`, which is how one flat list covers two independent environments without nesting. `requirements` records which manifest reference each locked file satisfies, with the selector that was applied; a package with no requirements is present because a dependency needed it.
+
+## Pruning is receipt-based
+
+`lucy install` converges the directory on the lock: files the lock no longer references are removed, but only when `lucy` can prove the file belongs to it. Every installed artifact leaves a receipt, and removal is limited to paths an active receipt covers. Untracked files in `mods/` or `plugins/` — your own jars, backups, anything you dropped in by hand — are left alone rather than deleted on a guess.
+
+See also [Global Flags](/commands/global-flags).
+
+## Flags
+
+<ParamField query="--locked" type="boolean" default="false">
+  Fail instead of re-resolving when the lock is missing or stale.
+</ParamField>
+
+<ParamField query="--offline" type="boolean" default="false">
+  Disallow network acquisition. Hash-correct files are kept; anything missing or mismatched fails.
+</ParamField>
+
+<ParamField query="--with-optional" type="boolean" default="false">
+  Also install optional upstream dependencies. It forces a re-resolution even when the lock already matches the manifest, and every optional package selected this way is written back into `lucy.yaml` as an explicit requirement — so it is part of the declared server from then on, not just of this run. Cannot be combined with `--locked`.
+</ParamField>
+
+<ParamField query="--no-style" type="boolean" default="false">
+  Disable colored and styled terminal output.
+</ParamField>
+
+## What install does not do
+
+`lucy install` does not migrate worlds, edit `server.properties` or any other configuration, accept the EULA, or start the server. It places and removes files. Everything else is yours to run.

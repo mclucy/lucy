@@ -1,0 +1,34 @@
+---
+title: "lucy remove"
+description: "Remove packages from the manifest and uninstall them"
+---
+
+`lucy remove` turns off a requirement in `lucy.yaml` and re-resolves, uninstalling whatever nothing else needs any more. The requirement is kept in the manifest marked `enabled: false` rather than deleted, so re-adding it later restores the same selector instead of floating back to `stable`. Manifest and lock move together — a failed removal leaves both files untouched.
+
+## Arguments
+
+<ParamField path="package" type="string" required>
+  One or more package references, in the same `provider:project` form accepted by [`lucy add`](/commands/add). Bare names resolve as the same shortcuts: a unique match in the current lock, otherwise Modrinth (or the MCDR catalogue in MCDR scope). Only direct requirements can be removed — naming something the manifest never declared is an error, and transitive dependencies follow whatever their dependents need.
+</ParamField>
+
+## Flags
+
+<ParamField query="--loader, -l" type="string">
+  Target loader scope for the request (`fabric`, `forge`, `neoforge`, `bukkit`). `--platform` is accepted as an alias.
+</ParamField>
+
+<ParamField query="--locked" type="boolean" default="false">
+  Re-resolve using only what the lock already pins.
+</ParamField>
+
+<ParamField query="--offline" type="boolean" default="false">
+  Disallow network acquisition for any re-resolution this triggers.
+</ParamField>
+
+## What actually gets deleted
+
+Removing a package does not necessarily remove a file. A locked package that some other requirement still needs stays installed — that is exactly what `lucy leaves` reports: locked packages nothing references.
+
+Files are removed only when `lucy` can prove it placed them and the lock no longer lists them; every managed artifact leaves a receipt, and removal is limited to paths an active receipt covers. Anything you put in `mods/` or `plugins/` yourself is never touched. No worlds, server configuration, or EULA file is read, rewritten, or removed by `lucy remove`.
+
+See also [Global Flags](/commands/global-flags), [`lucy add`](/commands/add).
