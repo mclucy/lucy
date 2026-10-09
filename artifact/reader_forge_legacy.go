@@ -18,7 +18,6 @@ func newForgeLegacyReader() Reader {
 func (r *forgeLegacyReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-	resolver SlugResolver,
 ) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "mcmod.info" {

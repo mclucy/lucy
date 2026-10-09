@@ -21,11 +21,8 @@ func newForgeReader() Reader { return &forgeReader{} }
 func (r *forgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-	resolver SlugResolver,
 ) ([]Info, error) {
 	_ = r
-	_ = resolver
-
 	for _, file := range zipRdr.File {
 		if file.Name != "META-INF/mods.toml" {
 			continue
