@@ -77,50 +77,77 @@ func (s *artifactStore) acquire(a *types.Artifact) (string, error) {
 		return "", err
 	}
 	destination := filepath.Join(dir, a.Filename)
-	if _, err := os.Stat(destination); os.IsNotExist(err) {
-		if s.offline {
-			hit, cached, err := cache.Network().Get(a.URL)
-			if err != nil {
-				return "", err
-			}
-			if !hit || cached == nil {
-				return "", fmt.Errorf("offline artifact unavailable: %s", a.URL)
-			}
-			defer cached.Close()
-			out, err := os.Create(destination)
-			if err != nil {
-				return "", err
-			}
-			_, copyErr := io.Copy(out, cached)
-			closeErr := out.Close()
-			if copyErr != nil {
-				return "", copyErr
-			}
-			if closeErr != nil {
-				return "", closeErr
-			}
-		} else {
-			result, err := cache.CachedDownload(a.URL, dir, cache.DownloadOptions{Kind: cache.KindArtifact, Filename: a.Filename})
-			if err != nil {
-				return "", err
-			}
-			actual := result.File.Name()
-			if err := result.File.Close(); err != nil {
-				return "", err
-			}
-			if actual != destination {
-				if err := os.Rename(actual, destination); err != nil {
-					return "", err
-				}
-			}
-		}
-	} else if err != nil {
-		return "", err
-	}
 	hashes, err := digestFile(destination, a.Hashes)
 	if err != nil {
-		return "", err
+		if !os.IsNotExist(err) {
+			// A destination that fails verification would be reused by every
+			// later attempt, so discard it instead of leaving bad bytes.
+			if err := os.Remove(destination); err != nil {
+				return "", err
+			}
+		}
+		if err := s.acquireFile(a, dir, destination); err != nil {
+			return "", err
+		}
+		if hashes, err = digestFile(destination, a.Hashes); err != nil {
+			os.Remove(destination)
+			return "", err
+		}
 	}
 	a.Hashes = hashes
 	return destination, nil
+}
+
+// acquireFile materializes the artifact at destination from the network or the
+// offline cache. Bytes are staged under a partial name and renamed into place
+// only after they verify, so an interrupted copy can never be mistaken for a
+// completed download and a failed verification can never poison the store.
+func (s *artifactStore) acquireFile(a *types.Artifact, dir, destination string) error {
+	staged := destination + ".partial"
+	defer os.Remove(staged)
+
+	if s.offline {
+		hit, cached, err := cache.Network().Get(a.URL)
+		if err != nil {
+			return err
+		}
+		if !hit || cached == nil {
+			return fmt.Errorf("offline artifact unavailable: %s", a.URL)
+		}
+		defer cached.Close()
+		out, err := os.Create(staged)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(out, cached)
+		closeErr := out.Close()
+		cachedErr := cached.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if cachedErr != nil {
+			return cachedErr
+		}
+	} else {
+		result, err := cache.CachedDownload(a.URL, dir, cache.DownloadOptions{Kind: cache.KindArtifact, Filename: a.Filename})
+		if err != nil {
+			return err
+		}
+		actual := result.File.Name()
+		if err := result.File.Close(); err != nil {
+			return err
+		}
+		if actual != staged {
+			if err := os.Rename(actual, staged); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := digestFile(staged, a.Hashes); err != nil {
+		return err
+	}
+	return os.Rename(staged, destination)
 }
