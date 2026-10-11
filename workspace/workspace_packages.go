@@ -59,15 +59,15 @@ func discoverPackages(
 				defer wg.Done()
 
 				analyzed, err := artifact.Analyze(path)
-				upstreamRef, hit := resolveUpstream(path)
 
 				if err != nil || len(analyzed) == 0 {
-					if !hit {
-						return
+					// Only a jar without a readable descriptor needs its upstream
+					// identity, since anything else describes itself.
+					if upstreamRef, hit := resolveUpstream(path); hit {
+						mu.Lock()
+						idx.Add(discoveredFromUpstream(path, upstreamRef))
+						mu.Unlock()
 					}
-					mu.Lock()
-					idx.Add(discoveredFromUpstream(path, upstreamRef))
-					mu.Unlock()
 					return
 				}
 				pkgs := artifactInfoToDiscoveredPackage(analyzed)
@@ -89,7 +89,6 @@ func discoverPackages(
 		}
 		for _, pluginFile := range pluginFiles {
 			analyzed, err := artifact.Analyze(pluginFile)
-			resolveUpstream(pluginFile)
 			if err == nil && len(analyzed) > 0 {
 				pkgs := artifactInfoToDiscoveredPackage(analyzed)
 				idx.Merge(pkgs)
