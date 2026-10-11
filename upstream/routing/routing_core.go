@@ -82,11 +82,11 @@ func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types
 				return out, err
 			}
 			for _, lib := range profile.Libraries {
-				input, e := libraryInput(lib, nil, out.Version)
+				input, downloadable, e := libraryInput(lib, nil, out.Version)
 				if e != nil {
 					return out, e
 				}
-				if input.Artifact.URL == out.Artifact.URL {
+				if !downloadable || input.Artifact.URL == out.Artifact.URL {
 					continue
 				}
 				out.Inputs = append(out.Inputs, input)

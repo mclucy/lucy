@@ -19,7 +19,7 @@ type mavenLibrary struct {
 	Name      string `json:"name"`
 	URL       string `json:"url"`
 	Downloads struct {
-		Artifact struct {
+		Artifact *struct {
 			Path string `json:"path"`
 			URL  string `json:"url"`
 			SHA1 string `json:"sha1"`
@@ -27,27 +27,40 @@ type mavenLibrary struct {
 	} `json:"downloads"`
 }
 
-func libraryInput(lib mavenLibrary, z *zip.Reader, version string) (types.BootstrapInput, error) {
-	p := lib.Downloads.Artifact.Path
+// libraryInput turns one profile library into a bootstrap input. The second
+// result is false when the profile explicitly names a library that cannot be
+// downloaded: Forge declares the client classifier with an empty artifact URL
+// because the jar exists nowhere in a public Maven repository.
+func libraryInput(lib mavenLibrary, z *zip.Reader, version string) (types.BootstrapInput, bool, error) {
+	download := lib.Downloads.Artifact
+	p := ""
+	if download != nil {
+		p = download.Path
+	}
 	if p == "" {
 		var err error
 		p, err = MavenPath(lib.Name)
 		if err != nil {
-			return types.BootstrapInput{}, err
+			return types.BootstrapInput{}, false, err
 		}
 	}
 	a := types.Artifact{Provider: "maven", ProjectID: lib.Name, Version: version, Filename: path.Base(p), Hashes: map[string]string{}}
 	if z != nil {
 		if raw, err := zipBytes(z, "maven/"+p); err != nil {
-			return types.BootstrapInput{}, err
+			return types.BootstrapInput{}, false, err
 		} else if raw != nil {
 			a.Embedded = "maven/" + p
 			sum := sha256.Sum256(raw)
 			a.Hashes["sha256"] = hex.EncodeToString(sum[:])
-			return types.BootstrapInput{Path: "libraries/" + p, Artifact: a}, nil
+			return types.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
 		}
 	}
-	a.URL = lib.Downloads.Artifact.URL
+	if download != nil && download.URL == "" {
+		return types.BootstrapInput{}, false, nil
+	}
+	if download != nil {
+		a.URL = download.URL
+	}
 	if a.URL == "" {
 		base := lib.URL
 		if base == "" {
@@ -55,10 +68,10 @@ func libraryInput(lib mavenLibrary, z *zip.Reader, version string) (types.Bootst
 		}
 		a.URL = strings.TrimRight(base, "/") + "/" + p
 	}
-	if lib.Downloads.Artifact.SHA1 != "" {
-		a.Hashes["sha1"] = lib.Downloads.Artifact.SHA1
+	if download != nil && download.SHA1 != "" {
+		a.Hashes["sha1"] = download.SHA1
 	}
-	return types.BootstrapInput{Path: "libraries/" + p, Artifact: a}, nil
+	return types.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
 }
 
 func MavenPath(coordinate string) (string, error) {
@@ -140,11 +153,11 @@ func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.Cor
 	}
 	seen := map[string]bool{}
 	for _, lib := range profile.Libraries {
-		input, e := libraryInput(lib, &z.Reader, out.Version)
+		input, downloadable, e := libraryInput(lib, &z.Reader, out.Version)
 		if e != nil {
 			return e
 		}
-		if !seen[input.Path] {
+		if downloadable && !seen[input.Path] {
 			seen[input.Path] = true
 			out.Inputs = append(out.Inputs, input)
 		}
