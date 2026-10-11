@@ -151,10 +151,17 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 	if err != nil {
 		return err
 	}
-	config := map[string]any{"working_directory": filepath.ToSlash(relative), "start_command": entry, "handler": "vanilla_handler"}
-	if d.Server.Distribution == "forge" || d.Server.Distribution == "neoforge" {
-		config["handler"] = "forge_handler"
+	// MCDReforged parses the server log stream through a handler that matches
+	// the launcher, so a Bukkit-family server needs its own parser to report
+	// start-up and player events at all.
+	handler := "vanilla_handler"
+	switch d.Server.Bootstrap {
+	case "forge-installer":
+		handler = "forge_handler"
+	case "paperclip":
+		handler = "bukkit_handler"
 	}
+	config := map[string]any{"working_directory": filepath.ToSlash(relative), "start_command": entry, "handler": handler}
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return err
