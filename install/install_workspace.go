@@ -117,6 +117,12 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 		coreReq := types.CoreRequest{Minecraft: d.Server.Minecraft, Distribution: d.Server.Core.Distribution, Version: d.Server.Core.Version, Repository: d.Server.Core.Repository, File: d.Server.Core.File}
 		var core types.CoreResolution
 		canReuse := old != nil && old.Server.Minecraft == coreReq.Minecraft && old.Server.Distribution == coreReq.Distribution && (isFloating(coreReq.Version) || old.Server.CoreVersion == coreReq.Version)
+		// Dropping the repository override retargets the server at its
+		// official distribution, so a locked GitHub artifact no longer
+		// satisfies the request even though every pinned field still matches.
+		if canReuse && coreReq.Repository == "" && old.Server.Provider == "github" {
+			canReuse = false
+		}
 		if canReuse && coreReq.Repository != "" {
 			var repository struct {
 				ID int64 `json:"id"`
