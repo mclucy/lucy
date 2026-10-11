@@ -270,7 +270,7 @@ tasks:
       - go run ./e2e/compile {{.CLI_ARGS}}
 
   e2e:lock:
-    desc: "Verify lock generation and replay (args: optional scenario ids)"
+    desc: "Run fresh install scenarios across server core families (args: optional scenario ids)"
     cmds:
       - go run ./e2e/lock {{.CLI_ARGS}}
 

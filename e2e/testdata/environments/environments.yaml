@@ -351,12 +351,12 @@ environments:
         manual: true
         sha256: cbefdc9230b714c784dafaf74c83f55d8c4ec049dc41561c4e9b2d5766d05941
 
-  # Lock generation
+  # Install scenario fixtures
 
   - id: lock-fabric-1214
     family: fabric
     game_version: "1.21.4"
-    description: Pinned compatible Flan and Fabric API artifacts for lock generation and replay
+    description: Pinned Fabric API and Flan artifacts for the Fabric 1.21.4 install scenario
     docs: families/fabric.md
     artifacts:
       - dest: server.jar

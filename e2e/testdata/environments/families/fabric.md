@@ -29,6 +29,6 @@ Note:
 
 References: <https://fabricmc.net/use/server>, <https://meta.fabricmc.net>, <https://wiki.fabricmc.net/documentation:fabric_loader>
 
-## Lock fixtures
+## Artifact fixture
 
-`lock-fabric-1214` supplies reference artifacts for the [lock E2E suite](../../../../docs/commands/install.mdx#end-to-end-verification). It is not a runnable Fabric server. The suite resolves and installs the runtime in a separate temporary workspace.
+`lock-fabric-1214` contains reference files for the Fabric 1.21.4 install scenario. It is not a runnable server.

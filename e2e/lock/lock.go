@@ -1,4 +1,4 @@
-// Command lock verifies generated locks and exact replay of pinned server fixtures.
+// Command lock verifies fresh installs against pinned server fixtures.
 package main
 
 import (

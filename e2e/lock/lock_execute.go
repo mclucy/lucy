@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 )
@@ -28,19 +27,10 @@ func (r commandRunner) execute(ctx context.Context, root string, args ...string)
 		"XDG_CACHE_HOME":  filepath.Join(r.home, "cache"),
 		"XDG_CONFIG_HOME": filepath.Join(r.home, "config"),
 	}
-	offline := slices.Contains(args, "--offline")
-	if offline {
-		overrides["HTTP_PROXY"] = "http://127.0.0.1:1"
-		overrides["HTTPS_PROXY"] = "http://127.0.0.1:1"
-		overrides["NO_PROXY"] = ""
-	}
 	environment := make([]string, 0, len(os.Environ())+len(overrides))
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
 		if _, overridden := overrides[strings.ToUpper(key)]; overridden {
-			continue
-		}
-		if offline && strings.HasSuffix(strings.ToLower(key), "_proxy") {
 			continue
 		}
 		environment = append(environment, entry)
