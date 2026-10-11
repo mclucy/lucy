@@ -10,7 +10,7 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      go-mods:
+      go:
         patterns:
           - "*"
   - package-ecosystem: "github-actions"
@@ -18,6 +18,6 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      github-actions:
+      actions:
         patterns:
           - "*"
