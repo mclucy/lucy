@@ -227,15 +227,18 @@ func stageInstall(
 	store *artifactStore,
 	opts Options,
 ) error {
-	if err := checkJava(ctx, resolved.Server.Java); err != nil {
-		return err
-	}
 	current, err := installationCurrent(root, resolved)
 	if err != nil {
 		return err
 	}
 	if current && !opts.PublishManifest {
 		return validateAmbient(ctx, root, resolved)
+	}
+	// Every path past here installs or replaces files, so the server the lock
+	// describes must be runnable. A no-op replay never runs the server, so
+	// demanding a local JVM earlier would fail installs that change nothing.
+	if err := checkJava(ctx, resolved.Server.Java); err != nil {
+		return err
 	}
 	stage, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "stage-*")
 	if err != nil {
