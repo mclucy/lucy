@@ -20,6 +20,6 @@ func Candidates(ctx context.Context, provider, project, minecraft string, loader
 	case "mcdr":
 		return mcdr.Provider.Candidates(ctx, project, minecraft, loader)
 	default:
-		return nil, fmt.Errorf("unsupported package catalogue %q", provider)
+		return nil, fmt.Errorf("%w: %q", ErrNoCatalogue, provider)
 	}
 }

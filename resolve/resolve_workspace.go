@@ -104,6 +104,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	}
 	candidates := map[projectKey][]types.CatalogueCandidate{}
 	chosen := map[projectKey]types.LockedPackage{}
+	discovery := newModuleDiscovery(server, acquire)
 	attempts := 0
 	var lastErr error
 	var search func([]projectRequest) bool
@@ -232,8 +233,10 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			a.Modules = modules
 			chosen[r.key] = types.LockedPackage{Runtime: r.key.runtime, Loader: r.key.loader, Artifact: a, Requirements: r.requirements}
 			next := append([]projectRequest{}, rest...)
+			declared := map[catalogueProject]bool{}
 			for _, dep := range candidate.Dependencies {
 				if dep.Kind == "required" || (withOptional && dep.Kind == "optional") {
+					declared[catalogueProject{dep.Provider, dep.ProjectID}] = true
 					ids := []string{}
 					if dep.ReleaseID != "" {
 						ids = append(ids, dep.ReleaseID)
@@ -243,6 +246,31 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 						dependency.requirements = []types.RequirementBinding{{Reference: dep.Provider + ":" + dep.ProjectID, Selector: "stable", Enabled: true}}
 					}
 					next = append(next, dependency)
+				}
+			}
+			// A required dependency the catalogue omitted still has to enter
+			// the graph, so resolution asks the registry which project ships
+			// the module identity the artifact itself declares.
+			for _, module := range a.Modules {
+				for _, dep := range module.Dependencies {
+					if dep.Kind != "required" || runtimeModule(dep.ID) {
+						continue
+					}
+					if providesSelected(chosen, r.key.loader, dep.ID) {
+						continue
+					}
+					request, found, err := discovery.project(ctx, r.key, dep.ID)
+					if err != nil {
+						lastErr = err
+						return false
+					}
+					if !found {
+						continue
+					}
+					if declared[catalogueProject{request.key.provider, request.key.project}] {
+						continue
+					}
+					next = append(next, request)
 				}
 			}
 			if search(next) {
