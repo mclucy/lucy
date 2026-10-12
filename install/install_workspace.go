@@ -24,6 +24,10 @@ type (
 		PublishManifest  bool
 		WithOptional     bool
 		expectedManifest string
+		// requirementChange records that the caller edited declared package
+		// requirements, so a lock whose fingerprint no longer matches is
+		// expected rather than stale.
+		requirementChange bool
 	}
 	InitOptions struct {
 		Minecraft, Distribution, CoreVersion, Repository, MCDRVersion, Directory string
@@ -106,7 +110,24 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 	}
 	if old == nil || opts.WithOptional || (d != nil && old.ManifestFingerprint != fingerprint) {
 		if opts.Locked {
-			return fmt.Errorf("locked installation requires a current lucy-lock.yaml")
+			if !opts.requirementChange || old == nil || d == nil {
+				return fmt.Errorf("locked installation requires a current lucy-lock.yaml")
+			}
+			reusable, err := coreReusable(ctx, d, old, opts.Offline)
+			if err != nil {
+				return err
+			}
+			if !reusable {
+				return fmt.Errorf("manifest core no longer matches lucy-lock.yaml; install without --locked")
+			}
+			resolved, err = mutateLock(d, old, fingerprint)
+			if err != nil {
+				return err
+			}
+			if err := lockfile.Validate(resolved); err != nil {
+				return err
+			}
+			return stageInstall(ctx, root, d, resolved, store, opts)
 		}
 		if d == nil {
 			return fmt.Errorf("manifest required to resolve installation")
@@ -116,28 +137,13 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 		}
 		coreReq := types.CoreRequest{Minecraft: d.Server.Minecraft, Distribution: d.Server.Core.Distribution, Version: d.Server.Core.Version, Repository: d.Server.Core.Repository, File: d.Server.Core.File}
 		var core types.CoreResolution
-		canReuse := old != nil && old.Server.Minecraft == coreReq.Minecraft && old.Server.Distribution == coreReq.Distribution && (isFloating(coreReq.Version) || old.Server.CoreVersion == coreReq.Version)
-		// Dropping the repository override retargets the server at its
-		// official distribution, so a locked GitHub artifact no longer
-		// satisfies the request even though every pinned field still matches.
-		if canReuse && coreReq.Repository == "" && old.Server.Provider == "github" {
-			canReuse = false
-		}
-		if canReuse && coreReq.Repository != "" {
-			var repository struct {
-				ID int64 `json:"id"`
-			}
-			if err := routing.Metadata(ctx, "https://api.github.com/repos/"+coreReq.Repository, &repository); err != nil {
-				return err
-			}
-			canReuse = old.Server.Provider == "github" && old.Server.ProjectID == strconv.FormatInt(repository.ID, 10)
-		}
-		if canReuse && coreReq.File != "" {
-			matched, err := filepath.Match(coreReq.File, old.Server.Filename)
+		canReuse := false
+		if old != nil {
+			reusable, err := coreReusable(ctx, d, old, opts.Offline)
 			if err != nil {
 				return err
 			}
-			canReuse = matched
+			canReuse = reusable
 		}
 		if canReuse {
 			core = types.CoreResolution{Minecraft: old.Server.Minecraft, Distribution: old.Server.Distribution, Version: old.Server.CoreVersion, Artifact: old.Server.Artifact, Bootstrap: old.Server.Bootstrap, Inputs: old.Server.Inputs, Java: old.Server.Java}
@@ -207,6 +213,20 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 	if err := lockfile.Validate(resolved); err != nil {
 		return err
 	}
+	return stageInstall(ctx, root, d, resolved, store, opts)
+}
+
+// stageInstall materializes a resolved lock in the server directory and commits
+// it with the manifest it was resolved from. Resolution paths differ in how they
+// build the lock; every one of them lands here.
+func stageInstall(
+	ctx context.Context,
+	root string,
+	d *manifest.Document,
+	resolved *lockfile.Document,
+	store *artifactStore,
+	opts Options,
+) error {
 	if err := checkJava(ctx, resolved.Server.Java); err != nil {
 		return err
 	}
@@ -283,4 +303,51 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 
 func isFloating(v string) bool {
 	return v == "" || v == "stable" || v == "beta" || v == "any" || v == "latest"
+}
+
+// coreReusable reports whether a lock's server record still answers the
+// manifest's core request. Resolution reuses the pin when it does; a locked
+// mutation treats a negative answer as a stale lock, because rebinding
+// requirements must never re-target the server.
+func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Document, offline bool) (bool, error) {
+	request := types.CoreRequest{Minecraft: d.Server.Minecraft, Distribution: d.Server.Core.Distribution, Version: d.Server.Core.Version, Repository: d.Server.Core.Repository, File: d.Server.Core.File}
+	if old.Server.Directory != d.Server.Directory {
+		return false, nil
+	}
+	if old.Server.Minecraft != request.Minecraft || old.Server.Distribution != request.Distribution {
+		return false, nil
+	}
+	if !isFloating(request.Version) && old.Server.CoreVersion != request.Version {
+		return false, nil
+	}
+	// Dropping the repository override retargets the server at its official
+	// distribution, so a locked GitHub artifact no longer satisfies the request
+	// even though every pinned field still matches.
+	if request.Repository == "" && old.Server.Provider == "github" {
+		return false, nil
+	}
+	if request.Repository != "" {
+		if offline {
+			return false, nil
+		}
+		var repository struct {
+			ID int64 `json:"id"`
+		}
+		if err := routing.Metadata(ctx, "https://api.github.com/repos/"+request.Repository, &repository); err != nil {
+			return false, err
+		}
+		if old.Server.Provider != "github" || old.Server.ProjectID != strconv.FormatInt(repository.ID, 10) {
+			return false, nil
+		}
+	}
+	if request.File != "" {
+		matched, err := filepath.Match(request.File, old.Server.Filename)
+		if err != nil {
+			return false, err
+		}
+		if !matched {
+			return false, nil
+		}
+	}
+	return true, nil
 }

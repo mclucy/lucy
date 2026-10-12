@@ -104,6 +104,7 @@ func Add(ctx context.Context, root string, args []string, loader types.Ecosystem
 	if err != nil {
 		return err
 	}
+	opts.requirementChange = true
 	loader = selectedLoader(d, loader)
 	if loader == types.EcoUnspecified {
 		return fmt.Errorf("specify a package loader supported by the declared server")
@@ -139,6 +140,7 @@ func Remove(ctx context.Context, root string, args []string, loader types.Ecosys
 	if err != nil {
 		return err
 	}
+	opts.requirementChange = true
 	loader = selectedLoader(d, loader)
 	for _, raw := range args {
 		ref, _, err := commandReference(d, old, raw, loader)
