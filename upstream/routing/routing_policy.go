@@ -1,6 +1,9 @@
 package routing
 
-import "github.com/mclucy/lucy/types"
+import (
+	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/types"
+)
 
 var searchProviderSourcesInPriorityOrder = []types.SourceId{
 	types.SourceModrinth,
@@ -45,11 +48,23 @@ func providerSourcesForSearchEcosystem(ecosystem types.Ecosystem) []types.Source
 	)
 	for _, source := range searchProviderSourcesInPriorityOrder {
 		if source == types.SourceCurseForge && !curseforgeAvailable() {
+			log.Debug(
+				"routing: ecosystem candidate skipped",
+				"source", source,
+				"platform", ecosystem,
+				"reason", "provider unavailable",
+			)
 			continue
 		}
 
 		support, ok := EcosystemSupportedBy(source, ecosystem)
 		if !ok || !support.Supported {
+			log.Debug(
+				"routing: ecosystem candidate skipped",
+				"source", source,
+				"platform", ecosystem,
+				"reason", "source does not support platform",
+			)
 			continue
 		}
 
@@ -72,6 +87,11 @@ func providerSourcesFromEcosystems(ecosystems []types.Ecosystem) providerSelecti
 
 	appendSource := func(source types.SourceId) {
 		if _, ok := seen[source]; ok {
+			log.Debug(
+				"routing: runtime candidate skipped",
+				"source", source,
+				"reason", "source already selected for runtime",
+			)
 			return
 		}
 		seen[source] = struct{}{}

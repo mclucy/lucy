@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/fabric"
@@ -21,6 +22,7 @@ func Metadata(ctx context.Context, endpoint string, target any) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	log.Debug("routing: metadata request", "endpoint", endpoint)
 	data, err := cache.CachedGetBytes(endpoint, cache.BytesRequestOptions{Kind: cache.KindMetadata})
 	if err != nil {
 		return err
@@ -52,6 +54,11 @@ func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types
 	}
 	minecraft := types.Artifact{Provider: "mojang", ProjectID: "minecraft", Version: req.Minecraft, Filename: "server.jar", URL: vanilla.FileUrl, Hashes: map[string]string{"sha1": vanilla.Hash}}
 	if req.Distribution == "vanilla" {
+		log.Debug(
+			"routing: core route selected",
+			"distribution", req.Distribution,
+			"provider", "mojang",
+		)
 		out.Artifact = minecraft
 		out.Version = req.Minecraft
 		_, err = acquire(&out.Artifact)
@@ -59,6 +66,12 @@ func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types
 	}
 	out.Inputs = []types.BootstrapInput{{Path: "server.jar", Artifact: minecraft}}
 	if req.Repository != "" {
+		log.Debug(
+			"routing: core route selected",
+			"distribution", req.Distribution,
+			"provider", "github",
+			"repository", req.Repository,
+		)
 		err = resolveGithubCore(ctx, req, &out, acquire)
 	} else {
 		switch req.Distribution {
@@ -69,6 +82,12 @@ func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types
 			}
 			out.Version = string(selected.Version)
 			out.Bootstrap = "fabric"
+			log.Debug(
+				"routing: core route selected",
+				"distribution", req.Distribution,
+				"provider", "fabric",
+				"version", out.Version,
+			)
 			var profile struct {
 				MainClass string         `json:"mainClass"`
 				Libraries []mavenLibrary `json:"libraries"`
@@ -107,6 +126,15 @@ func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types
 				return out, e
 			}
 			err = resolveInstaller(ctx, req, &out, installer)
+			if err != nil {
+				return out, err
+			}
+			log.Debug(
+				"routing: core route selected",
+				"distribution", req.Distribution,
+				"provider", req.Distribution,
+				"version", out.Version,
+			)
 		case "paper":
 			err = resolvePaper(ctx, req, &out)
 		case "purpur":
@@ -128,7 +156,18 @@ func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types
 			out.Version = info.Build
 			out.Artifact = types.Artifact{Provider: "purpur", ProjectID: "purpur", ReleaseID: info.Build, Version: info.Build, Filename: "purpur-" + req.Minecraft + "-" + info.Build + ".jar", URL: "https://api.purpurmc.org/v2/purpur/" + req.Minecraft + "/" + info.Build + "/download", Hashes: map[string]string{"md5": info.MD5}}
 			out.Bootstrap = "paperclip"
+			log.Debug(
+				"routing: core route selected",
+				"distribution", req.Distribution,
+				"provider", "purpur",
+				"build", info.Build,
+			)
 		default:
+			log.Debug(
+				"routing: core route rejected",
+				"distribution", req.Distribution,
+				"reason", "unsupported distribution",
+			)
 			return out, fmt.Errorf("unsupported distribution %q", req.Distribution)
 		}
 	}

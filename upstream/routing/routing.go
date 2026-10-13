@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/bmclapi"
@@ -110,6 +111,13 @@ func GetArtifactMapper(
 	src types.SourceId,
 ) (upstream.ArtifactMapSource, bool, error) {
 	mapper, ok := providerCatalogInstance().artifactMappers[src]
+	if !ok {
+		log.Debug(
+			"routing: no artifact mapper for source",
+			"source", src,
+			"reason", "source has no artifact mapper",
+		)
+	}
 	return mapper, ok, nil
 }
 
@@ -143,6 +151,13 @@ func EcosystemInstallerForSource(
 	source types.SourceId,
 ) (upstream.EcosystemProvider, bool) {
 	provider, ok := providerCatalogInstance().ecosystemProviders[source]
+	if !ok {
+		log.Debug(
+			"routing: no ecosystem installer",
+			"source", source,
+			"reason", "source has no ecosystem provider",
+		)
+	}
 	return provider, ok
 }
 
@@ -160,6 +175,11 @@ func ecosystemInstallerSource(ecosystem types.Ecosystem) (
 	case types.EcoFabric:
 		return types.SourceFabric, true
 	default:
+		log.Debug(
+			"routing: no ecosystem installer",
+			"ecosystem", ecosystem,
+			"reason", "unsupported ecosystem",
+		)
 		return types.SourceUnknown, false
 	}
 }
@@ -180,9 +200,23 @@ func ResolveProviders(
 
 	sources, err := providerSourcesForEcosystem(platform)
 	if err != nil {
+		log.Debug(
+			"routing: package providers unavailable for ecosystem",
+			"platform", platform,
+			"reason", "unsupported ecosystem",
+		)
 		return nil, fmt.Errorf("%w: %s", err, platform)
 	}
-	return providersFromSources(sources)
+	providers, err := providersFromSources(sources)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(
+		"routing: package providers selected from ecosystem candidates",
+		"platform", platform,
+		"sources", sources,
+	)
+	return providers, nil
 }
 
 // ResolveSearchProviders resolves search providers for the platform. With a
@@ -198,6 +232,12 @@ func ResolveSearchProviders(
 
 	if src != types.SourceAuto {
 		if err := validateSearchSourceEcosystem(src, platform); err != nil {
+			log.Debug(
+				"routing: search source rejected for platform",
+				"source", src,
+				"platform", platform,
+				"reason", "source does not support platform",
+			)
 			return nil, err
 		}
 		return resolveExplicitSearcher(src)
@@ -206,16 +246,44 @@ func ResolveSearchProviders(
 	if !platform.IsSearchEcosystem() {
 		sources, err := providerSourcesForEcosystem(platform)
 		if err != nil {
+			log.Debug(
+				"routing: search providers unavailable for ecosystem",
+				"platform", platform,
+				"reason", "unsupported ecosystem",
+			)
 			return nil, fmt.Errorf("%w: %s", err, platform)
 		}
-		return searchersFromSources(sources)
+		providers, err := searchersFromSources(sources)
+		if err != nil {
+			return nil, err
+		}
+		log.Debug(
+			"routing: search providers selected from ecosystem candidates",
+			"platform", platform,
+			"sources", sources,
+		)
+		return providers, nil
 	}
 
 	sources := providerSourcesForSearchEcosystem(platform)
 	if len(sources) == 0 {
+		log.Debug(
+			"routing: search providers unavailable for platform",
+			"platform", platform,
+			"reason", "no source supports platform search",
+		)
 		return nil, fmt.Errorf("%w: %s", ErrInvalidEcosystem, platform)
 	}
-	return searchersFromSources(sources)
+	providers, err := searchersFromSources(sources)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(
+		"routing: search providers selected for platform",
+		"platform", platform,
+		"sources", sources,
+	)
+	return providers, nil
 }
 
 func ResolveInfoProviders(
@@ -232,9 +300,23 @@ func ResolveInfoProviders(
 
 	sources, err := providerSourcesForEcosystem(platform)
 	if err != nil {
+		log.Debug(
+			"routing: info providers unavailable for ecosystem",
+			"platform", platform,
+			"reason", "unsupported ecosystem",
+		)
 		return nil, fmt.Errorf("%w: %s", err, platform)
 	}
-	return informersFromSources(sources)
+	providers, err := informersFromSources(sources)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(
+		"routing: info providers selected from ecosystem candidates",
+		"platform", platform,
+		"sources", sources,
+	)
+	return providers, nil
 }
 
 func resolveExplicitInformer(src types.SourceId) (
@@ -243,8 +325,18 @@ func resolveExplicitInformer(src types.SourceId) (
 ) {
 	provider, ok := providerCatalogInstance().infoSources[src]
 	if !ok {
+		log.Debug(
+			"routing: explicit info source rejected",
+			"source", src,
+			"reason", "source has no info provider",
+		)
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
+	log.Debug(
+		"routing: explicit info source selected",
+		"source", src,
+		"provider", provider.Id(),
+	)
 	return []upstream.InfoSource{provider}, nil
 }
 
@@ -254,8 +346,18 @@ func resolveExplicitSearcher(src types.SourceId) (
 ) {
 	provider, ok := providerCatalogInstance().searchSources[src]
 	if !ok {
+		log.Debug(
+			"routing: explicit search source rejected",
+			"source", src,
+			"reason", "source has no search provider",
+		)
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
+	log.Debug(
+		"routing: explicit search source selected",
+		"source", src,
+		"provider", provider.Id(),
+	)
 	return []upstream.SearchSource{provider}, nil
 }
 
@@ -272,17 +374,37 @@ func ResolveProvidersForRuntime(
 	}
 
 	if len(ecosystems) == 0 {
+		log.Debug(
+			"routing: package providers unavailable for runtime",
+			"reason", "no runtime ecosystems",
+		)
 		return nil, fmt.Errorf("routing: runtime ecosystems unavailable, cannot resolve providers")
 	}
 
 	selection := providerSourcesFromEcosystems(ecosystems)
-	if len(selection.sources) > 0 {
+	switch {
+	case len(selection.sources) > 0:
+		log.Debug(
+			"routing: package providers selected from runtime ecosystems",
+			"ecosystems", ecosystems,
+			"sources", selection.sources,
+		)
 		return providersFromSources(selection.sources)
-	}
-	if selection.fallback {
+	case selection.fallback:
+		log.Debug(
+			"routing: package providers fell back to auto list",
+			"ecosystems", ecosystems,
+			"reason", "no runtime ecosystem maps to package sources",
+		)
 		return ListAutoProviders(), nil
+	default:
+		log.Debug(
+			"routing: package provider selection is empty",
+			"ecosystems", ecosystems,
+			"reason", "runtime ecosystems carry no package sources",
+		)
+		return []upstream.PackageSource{}, nil
 	}
-	return []upstream.PackageSource{}, nil
 }
 
 func resolveExplicitSource(src types.SourceId) (
@@ -291,8 +413,18 @@ func resolveExplicitSource(src types.SourceId) (
 ) {
 	provider, ok := providerCatalogInstance().packageSources[src]
 	if !ok {
+		log.Debug(
+			"routing: explicit package source rejected",
+			"source", src,
+			"reason", "source has no package provider",
+		)
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
 	}
+	log.Debug(
+		"routing: explicit package source selected",
+		"source", src,
+		"provider", provider.Id(),
+	)
 	return []upstream.PackageSource{provider}, nil
 }
 
