@@ -31,35 +31,35 @@ var bisectStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: message.BisectStartShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionBisectStart),
+	RunE:  actionBisectStart,
 }
 
 var bisectGoodCmd = &cobra.Command{
 	Use:   "good",
 	Short: message.BisectGoodShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionBisectGood),
+	RunE:  actionBisectGood,
 }
 
 var bisectBadCmd = &cobra.Command{
 	Use:   "bad",
 	Short: message.BisectBadShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionBisectBad),
+	RunE:  actionBisectBad,
 }
 
 var bisectStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: message.BisectStatusShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionBisectStatus),
+	RunE:  actionBisectStatus,
 }
 
 var bisectResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: message.BisectResetShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionBisectReset),
+	RunE:  actionBisectReset,
 }
 
 func NewBisectCommand() *cobra.Command {

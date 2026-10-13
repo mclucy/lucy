@@ -43,7 +43,7 @@ var infoCmd = &cobra.Command{
 		return candidates, cobra.ShellCompDirectiveDefault
 	},
 
-	RunE: cli.WithErrorLogging(actionInfo),
+	RunE: actionInfo,
 }
 
 func NewCommand() *cobra.Command {

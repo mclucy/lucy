@@ -27,7 +27,7 @@ var removeCmd = &cobra.Command{
 		}
 		return nil
 	},
-	RunE: WithErrorLogging(actionRemove),
+	RunE: actionRemove,
 }
 
 func NewRemoveCommand() *cobra.Command {

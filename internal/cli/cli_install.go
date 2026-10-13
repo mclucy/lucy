@@ -19,7 +19,7 @@ var installCmd = &cobra.Command{
 	Use:   "install",
 	Short: message.InstallShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionInstall),
+	RunE:  actionInstall,
 }
 
 func NewInstallCommand() *cobra.Command {

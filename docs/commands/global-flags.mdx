@@ -37,6 +37,8 @@ These flags are inherited by every `lucy` subcommand.
 
 ## Logging
 
+Diagnostic logs record action boundaries and internal decisions. Command results and user reports remain independent of these settings.
+
 <ParamField query="--log-level" type="string" default="info">
   Set the minimum diagnostic severity: `debug`, `info`, `warn`, `error`, or `fatal`. This setting does not filter user reports.
 </ParamField>

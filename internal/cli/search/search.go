@@ -51,7 +51,7 @@ var searchCmd = &cobra.Command{
 		_, err := searchSource(source)
 		return err
 	},
-	RunE: cli.WithErrorLogging(actionSearch),
+	RunE: actionSearch,
 }
 
 func NewCommand() *cobra.Command {
@@ -164,7 +164,9 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			err.Source.Title(),
 			err.Err,
 		)
-		log.Warn(providerWarn)
+		if len(results) > 0 {
+			log.Warn(providerWarn)
+		}
 		report.Warn(providerWarn)
 	}
 

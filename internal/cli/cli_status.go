@@ -25,7 +25,7 @@ var statusCmd = &cobra.Command{
 		}
 		return nil
 	},
-	RunE: WithErrorLogging(actionStatus),
+	RunE: actionStatus,
 }
 
 func NewStatusCommand() *cobra.Command {

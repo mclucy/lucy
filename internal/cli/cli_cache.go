@@ -24,14 +24,14 @@ var cacheLsCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
 	Short:   message.CacheLsShort,
-	RunE:    WithErrorLogging(actionCacheLs),
+	RunE:    actionCacheLs,
 }
 
 var cacheClearCmd = &cobra.Command{
 	Use:     "clear",
 	Aliases: []string{"rm"},
 	Short:   message.CacheClearShort,
-	RunE:    WithErrorLogging(actionCacheClear),
+	RunE:    actionCacheClear,
 }
 
 func NewCacheCommand() *cobra.Command {

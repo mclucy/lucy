@@ -37,11 +37,11 @@ func NewCommand() *cobra.Command {
 		Short: message.CompileShort,
 		Long:  message.CompileLong,
 		Args:  cobra.ExactArgs(1),
-		RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			return run(ctx, args[0], &opts, cmd.OutOrStdout())
-		}),
+		},
 	}
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Write the compiled mod JAR to PATH, or to a directory under the project's artifact name")
 	cmd.Flags().StringVar(&opts.platform, cli.FlagPlatform, "", "Select fabric, forge, or neoforge")
