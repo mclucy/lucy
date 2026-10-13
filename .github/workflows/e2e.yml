@@ -7,14 +7,12 @@ on:
       - e2e/**
       - workspace/**
       - internal/cli/**
-      - e2e/**
       - .github/workflows/e2e.yml
   pull_request:
     paths:
       - e2e/**
       - workspace/**
       - internal/cli/**
-      - e2e/**
       - .github/workflows/e2e.yml
   workflow_dispatch:
 
