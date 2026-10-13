@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/internal/toolchain"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -92,12 +93,15 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 	}()
 	checkout := filepath.Join(temporary, "repository")
 	ref := refSuffix(branch, tag)
+	log.Info("compilation checkout started", "branch", branch, "tag", tag)
 	report.Info("Cloning " + source + ref)
 	if err := clone(ctx, remote, checkout, branch, tag, newProcessLog("git")); err != nil {
 		return err
 	}
+	log.Info("compilation checkout completed", "directory", checkout)
 	report.Info("Cloned " + source + ref)
 
+	log.Info("compilation repository inspection started", "directory", checkout)
 	layout, err := buildrepo.Probe(ctx, checkout)
 	if err != nil {
 		return fmt.Errorf("probe repository: %w", err)
@@ -107,6 +111,9 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 	if err != nil {
 		return err
 	}
+	log.Debug("Gradle build selected", "directory", build.Dir, "requested", opts.buildDir,
+		"reason", "requested directory or root/unique Gradle build")
+	log.Info("compilation toolchain preparation started", "directory", build.Dir)
 
 	report.Info("Preparing the Gradle build")
 	gradleUserHome := os.Getenv("GRADLE_USER_HOME")
@@ -127,7 +134,9 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 		return fmt.Errorf("discover local toolchains: %w", err)
 	}
 	for _, warning := range toolchainWarnings(build, inventory) {
-		report.Warn(errors.New(warning))
+		warnErr := errors.New(warning)
+		log.Warn(warnErr)
+		report.Warn(warnErr)
 	}
 	runner, err := newGradleRunner(build, inventory, temporary)
 	if err != nil {
@@ -141,6 +150,8 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 	if err != nil {
 		return err
 	}
+	log.Debug("compilation project selected", "project", project.Path, "task", project.BuildTask,
+		"reason", "project selection and supported mod artifact metadata")
 	// selectProject runs again on the rebuilt model; pin the pick so the
 	// second pass keeps the same project instead of listing candidates anew.
 	opts.project = project.Path
@@ -174,6 +185,7 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 	if err := publishArtifact(ctx, artifactPath, output); err != nil {
 		return err
 	}
+	log.Info("compiled artifact published", "path", output, "project", project.Path)
 	report.Info("Compiled " + filepath.Base(output))
 	if _, err := fmt.Fprintln(stdout, output); err != nil {
 		return fmt.Errorf("report output: %w", err)
@@ -194,7 +206,9 @@ func reportFindings(root string, findings []buildrepo.Finding) {
 		if finding.Line > 0 {
 			location += ":" + strconv.Itoa(finding.Line)
 		}
-		report.Warn(fmt.Errorf("%s: %s", location, finding.Message))
+		warning := fmt.Errorf("%s: %s", location, finding.Message)
+		log.Warn(warning)
+		report.Warn(warning)
 	}
 }
 

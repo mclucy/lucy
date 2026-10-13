@@ -17,6 +17,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/toolchain"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 )
@@ -125,6 +126,8 @@ func newGradleRunner(
 		return runner, errors.Join(err, errors.Join(inventory.Problems...))
 	}
 	runner.daemon = daemon
+	log.Debug("Gradle JVMs selected", "launcher", launcher.Java, "daemon", daemon.Java,
+		"reason", "Gradle compatibility and project toolchain requirements")
 	initPath := filepath.Join(temporary, "lucy-init.gradle")
 	if err := os.WriteFile(initPath, []byte(inspectionScript), 0o600); err != nil {
 		return runner, fmt.Errorf("write Gradle inspection script: %w", err)
@@ -215,6 +218,8 @@ func (r gradleRunner) execute(ctx context.Context, label string, tasks ...string
 	cmd.Stderr = output
 	cmd.WaitDelay = 5 * time.Second
 	configureProcess(cmd)
+	log.Info("Gradle stage started", "stage", label, "version", r.version)
+	log.Debug("Gradle invocation prepared", "executable", r.executable, "tasks", tasks, "directory", r.dir)
 	err := cmd.Run()
 	output.flush()
 	if err != nil {
@@ -234,6 +239,7 @@ func (r gradleRunner) execute(ctx context.Context, label string, tasks ...string
 	if err := json.Unmarshal(data, &model); err != nil {
 		return model, fmt.Errorf("decode evaluated Gradle model: %w", err)
 	}
+	log.Info("Gradle stage completed", "stage", label, "projects", len(model.Projects))
 	return model, nil
 }
 
