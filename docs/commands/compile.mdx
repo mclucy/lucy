@@ -25,6 +25,8 @@ Without `--output`, the compiled JAR is written to the current directory. A `--o
 
 The source can be a GitHub `owner/repo` reference or any Git repository URL. Lucy clones the repository into a temporary directory and removes that checkout when the command finishes.
 
+Progress and warnings go to stderr; stdout carries only the compiled artifact path. Diagnostic logs record compilation stages. Raw Git and Gradle output uses the `debug` level: add `--log-level=debug --print-logs` to see it live. A failed step reports its recent output even when diagnostic logging filters out `debug` records.
+
 ## Arguments
 
 <ParamField path="url|owner/repo" type="string" required>

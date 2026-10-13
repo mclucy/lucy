@@ -15,10 +15,8 @@ const excerptLines = 20
 
 // processLog captures the raw stdout and stderr of one external tool.
 //
-// Tool output is diagnostics, not console output: a Gradle build emits
-// thousands of lines that bury the steps a user asked for. Chunks go to the
-// log file, and a failing step quotes its own tail through excerpt so the
-// reason is visible without re-running with --print-logs.
+// Raw tool output is DEBUG diagnostics. A failed step reports its recent
+// output even when diagnostic logging filters out DEBUG records.
 //
 // os/exec copies a child's stdout and stderr on separate goroutines, so every
 // method is guarded.
@@ -59,7 +57,7 @@ func (l *processLog) consume(chunk []byte) {
 	l.mu.Unlock()
 
 	if len(complete) > 0 {
-		log.Info(l.tool + ": " + strings.Join(complete, "\n"))
+		log.Debug("external tool output", "tool", l.tool, "lines", complete)
 	}
 }
 
