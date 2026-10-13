@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/terminal/style"
@@ -16,7 +17,7 @@ import (
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Display basic information of the current server",
+	Short: message.StatusShort,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		logo, _ := cmd.Flags().GetString(cli.FlagLogo)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
@@ -33,10 +34,9 @@ func NewCommand() *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
 		Use:   "compile <url|owner/repo>",
-		Short: "Compile a Minecraft mod or plugin from a Git repository",
-		Long: "Clone a Git repository into a temporary directory and compile a Forge, NeoForge, or Fabric mod. Requires local Java toolchain." +
-			"Compilation executes repository build scripts and can download build dependencies. Run this command only on the repository you trust.",
-		Args: cobra.ExactArgs(1),
+		Short: message.CompileShort,
+		Long:  message.CompileLong,
+		Args:  cobra.ExactArgs(1),
 		RunE: cli.WithErrorLogging(func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()

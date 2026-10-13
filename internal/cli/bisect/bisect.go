@@ -11,6 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/terminal/style"
@@ -20,7 +21,7 @@ import (
 
 var bisectCmd = &cobra.Command{
 	Use:   "bisect",
-	Short: "Find a problematic package by binary search",
+	Short: message.BisectShort,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
@@ -29,35 +30,35 @@ var bisectCmd = &cobra.Command{
 
 var bisectStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start a binary-search session",
+	Short: message.BisectStartShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionBisectStart),
 }
 
 var bisectGoodCmd = &cobra.Command{
 	Use:   "good",
-	Short: "Mark current midpoint as good (bad package is in right half)",
+	Short: message.BisectGoodShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionBisectGood),
 }
 
 var bisectBadCmd = &cobra.Command{
 	Use:   "bad",
-	Short: "Mark current midpoint as bad (bad package is in the left half)",
+	Short: message.BisectBadShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionBisectBad),
 }
 
 var bisectStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show the active bisect session",
+	Short: message.BisectStatusShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionBisectStatus),
 }
 
 var bisectResetCmd = &cobra.Command{
 	Use:   "reset",
-	Short: "Abort the active bisect session and restore the manifest",
+	Short: message.BisectResetShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionBisectReset),
 }

@@ -2,13 +2,14 @@ package cmd
 
 import (
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 
 	"github.com/spf13/cobra"
 )
 
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
-	Short: "Upgrade installed packages",
+	Short: message.UpgradeShort,
 	RunE:  cli.NotImplementedRun,
 }
 

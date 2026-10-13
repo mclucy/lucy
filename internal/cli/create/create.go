@@ -7,6 +7,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,7 @@ const (
 
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a lucy.yaml",
+	Short: message.CreateShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionCreate),
 }

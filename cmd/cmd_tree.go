@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
@@ -12,7 +13,7 @@ import (
 
 var treeCmd = &cobra.Command{
 	Use:   "tree",
-	Short: "Show the resolved package dependency tree",
+	Short: message.TreeShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionTree),
 }

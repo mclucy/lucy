@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +23,7 @@ const (
 
 var addCmd = &cobra.Command{
 	Use:   "add",
-	Short: "Add packages under explicit operator control",
+	Short: message.AddShort,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)

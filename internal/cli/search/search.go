@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
@@ -27,7 +28,7 @@ const (
 
 var searchCmd = &cobra.Command{
 	Use:   "search",
-	Short: "Search for mods and plugins",
+	Short: message.SearchShort,
 	Args:  cobra.ExactArgs(1),
 	ValidArgsFunction: func(
 		cmd *cobra.Command,

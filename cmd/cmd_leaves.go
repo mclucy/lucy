@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
@@ -12,7 +13,7 @@ import (
 
 var leavesCmd = &cobra.Command{
 	Use:   "leaves",
-	Short: "List leaf packages (packages with no dependents)",
+	Short: message.LeavesShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionLeaves),
 }

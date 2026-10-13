@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +19,7 @@ const (
 
 var removeCmd = &cobra.Command{
 	Use:   "remove",
-	Short: "Remove packages under explicit operator control",
+	Short: message.RemoveShort,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		loaderArg := resolveRemoveLoaderFlag(cmd)
