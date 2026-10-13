@@ -105,9 +105,9 @@ func themedStyles() *log.Styles {
 	return s
 }
 
-// TurnOffStyles disables all coloring on the console log. Call this
-// alongside style.TurnOffStyles() to keep log output consistent with
-// the rest of the UI when --no-style is active.
-func TurnOffStyles() {
+// TurnOffColors disables all coloring on the console log. Call this
+// alongside style.TurnOffColors() to keep log output consistent with the
+// rest of the UI when --no-color is active.
+func TurnOffColors() {
 	consoleLog.SetColorProfile(colorprofile.NoTTY)
 }

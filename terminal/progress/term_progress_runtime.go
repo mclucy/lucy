@@ -195,7 +195,7 @@ var globalRuntime = &runtime{
 }
 
 func (r *runtime) registerEntry(title string, logCapacity int) entryID {
-	if !style.IsTerminal {
+	if !style.IsTerminal || !style.InteractiveEnabled() {
 		return 0
 	}
 
@@ -212,7 +212,7 @@ func (r *runtime) registerEntry(title string, logCapacity int) entryID {
 	}
 
 	id := entryID(r.nextID.Add(1))
-	options := append([]progress.Option(nil), globalOptions...)
+	options := append(globalOptions, colorOptions()...)
 	r.mu.Lock()
 	if len(r.entries) > 0 && r.allCompleted() {
 		r.entries = make(map[entryID]*entryState)
