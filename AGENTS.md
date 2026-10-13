@@ -77,9 +77,8 @@ To run the built binary against a test server directory:
 
 1. Always prefer the project's e2e testing suite. You should do regression tests after implementing a feature.
 2. `go run ./e2e/sandbox` materializes real server sandboxes into `.sandboxes/` from `e2e/testdata/environments/sandboxes.yaml`. There's brief explanation for each sandbox family in `e2e/testdata/environments/docs/*.md`.
-3. Install scenarios declare intent in `e2e/testdata/manifest/<id>.yaml` and pin expected bytes as digests in `e2e/lock`; they need no sandbox unless they compare against one.
-4. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
-5. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
+3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
+4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 
 The domain suites run with `task e2e:init -- <sandbox ids>` and
 `task e2e:compile -- [fixture ids]`. Shared selection and reporting lives in
