@@ -3,18 +3,8 @@
 package artifact
 
 import (
-	"context"
-
 	"github.com/mclucy/lucy/types"
 )
-
-// SlugResolver normalizes a package name for a given platform.
-// Injected via WithSlugResolver option. Nil means no resolution.
-type SlugResolver func(
-	ctx context.Context,
-	platform types.Ecosystem,
-	name types.BarePackageName,
-) (types.BarePackageName, error)
 
 // Dependency represents a platform-qualified dependency detected from an
 // artifact file. Artifact metadata does not establish upstream provenance.

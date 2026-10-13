@@ -2,7 +2,6 @@ package curseforge
 
 import (
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -10,14 +9,6 @@ import (
 // get-by-slug endpoint, so it searches by slug and requires an exact match.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func resolveSlug(slug types.BarePackageName) (*modResponse, error) {
-	// Canonicalize slug-like name to provider canonical slug before search.
-	if canonical, ok := knownpkgs.Default().Session().Lookup(
-		types.SourceCurseForge,
-		string(slug),
-	); ok {
-		slug = types.BarePackageName(canonical)
-	}
-
 	u := slugSearchUrl(slug)
 	var resp searchResponse
 	if err := get(u, &resp); err != nil {

@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -168,7 +167,6 @@ func observe(dir string) Workspace {
 	}
 	ws.Probe = probeDirectory(ws.Root)
 	ws.Packages = discoverPackages(
-		knownpkgs.Default().Session(),
 		ws.ModPath(),
 		mcdrPluginDirs(env),
 	)

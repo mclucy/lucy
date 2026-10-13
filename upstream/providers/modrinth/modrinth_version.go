@@ -3,7 +3,6 @@ package modrinth
 import (
 	"errors"
 
-	"github.com/mclucy/lucy/internal/knownpkgs"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -20,34 +19,15 @@ func listVersions(slug types.BarePackageName) (
 	versions []*versionResponse,
 	err error,
 ) {
-	tryFetch := func(target types.BarePackageName) (
-		[]*versionResponse,
-		error,
-	) {
-		var out []*versionResponse
-		if err := requestJSON(
-			versionsUrl(target),
-			&out,
-			ErrNoProject,
-		); err != nil {
-			return nil, err
-		}
-		return out, nil
+	var out []*versionResponse
+	if err := requestJSON(
+		versionsUrl(slug),
+		&out,
+		ErrNoProject,
+	); err != nil {
+		return nil, err
 	}
-
-	versions, err = tryFetch(slug)
-	if err == nil {
-		return versions, nil
-	}
-
-	if canonical, ok := knownpkgs.Default().Session().Lookup(
-		types.SourceModrinth,
-		string(slug),
-	); ok && canonical != string(slug) {
-		return tryFetch(types.BarePackageName(canonical))
-	}
-
-	return nil, err
+	return out, nil
 }
 
 // getVersion is named so because a Lucy package corresponds to a Modrinth
