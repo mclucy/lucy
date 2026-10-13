@@ -1,11 +1,10 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 	"os"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -28,10 +27,10 @@ var removeCmd = &cobra.Command{
 		}
 		return nil
 	},
-	RunE: cli.WithErrorLogging(actionRemove),
+	RunE: WithErrorLogging(actionRemove),
 }
 
-func init() {
+func NewRemoveCommand() *cobra.Command {
 	removeCmd.Flags().Bool(
 		flagRemoveLockedName,
 		false,
@@ -48,9 +47,9 @@ func init() {
 		"",
 		"Target loader scope for the request (fabric, forge, neoforge, bukkit)",
 	)
-	cli.AddNoStyleFlag(removeCmd)
-	cli.AddPlatformFlag(removeCmd)
-	rootCmd.AddCommand(removeCmd)
+	AddNoStyleFlag(removeCmd)
+	AddPlatformFlag(removeCmd)
+	return removeCmd
 }
 
 func resolveRemoveLoaderFlag(cmd *cobra.Command) string {
@@ -58,7 +57,7 @@ func resolveRemoveLoaderFlag(cmd *cobra.Command) string {
 	if loader != "" {
 		return loader
 	}
-	platform, _ := cmd.Flags().GetString(cli.FlagPlatform)
+	platform, _ := cmd.Flags().GetString(FlagPlatform)
 	return platform
 }
 

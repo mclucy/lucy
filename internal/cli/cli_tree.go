@@ -1,10 +1,9 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/terminal/style"
 
@@ -15,10 +14,10 @@ var treeCmd = &cobra.Command{
 	Use:   "tree",
 	Short: message.TreeShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionTree),
+	RunE:  WithErrorLogging(actionTree),
 }
 
-func init() {
+func NewTreeCommand() *cobra.Command {
 	treeCmd.Flags().Bool(
 		"live",
 		false,
@@ -29,10 +28,10 @@ func init() {
 		0,
 		"Limit dependency tree depth (0 = unlimited)",
 	)
-	cli.AddJSONFlag(treeCmd)
-	cli.AddJSONCompactFlag(treeCmd)
-	cli.AddNoStyleFlag(treeCmd)
-	rootCmd.AddCommand(treeCmd)
+	AddJSONFlag(treeCmd)
+	AddJSONCompactFlag(treeCmd)
+	AddNoStyleFlag(treeCmd)
+	return treeCmd
 }
 
 func actionTree(cmd *cobra.Command, args []string) error {
@@ -42,13 +41,13 @@ func actionTree(cmd *cobra.Command, args []string) error {
 	}
 
 	forceLive, _ := cmd.Flags().GetBool("live")
-	graph, source, _, err := cli.LoadDependencyData(workDir, forceLive)
+	graph, source, _, err := LoadDependencyData(workDir, forceLive)
 	if err != nil {
 		return err
 	}
 
-	jsonOut, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
+	jsonOut, _ := cmd.Flags().GetBool(FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
 
 	if jsonOut || jsonCompact {
 		return outputTreeJSON(graph, source, jsonCompact)
@@ -69,7 +68,7 @@ func actionTree(cmd *cobra.Command, args []string) error {
 // nodeLabel renders one graph node. Node identity is always an explicit
 // artifact coordinate or a native module ID; nothing is re-derived by
 // parsing the label.
-func nodeLabel(node *cli.GraphNode) string {
+func nodeLabel(node *GraphNode) string {
 	label := fmt.Sprintf("%s@%s", node.ID, node.Version)
 	if node.Provider != "" {
 		label += fmt.Sprintf(" (%s)", node.Provider)
@@ -80,14 +79,8 @@ func nodeLabel(node *cli.GraphNode) string {
 	return label
 }
 
-// nodeKey scopes a node so the same identity in two runtimes or loaders is
-// tracked separately while rendering.
-func nodeKey(node *cli.GraphNode) string {
-	return node.Runtime + "|" + string(node.Loader) + "|" + node.ID
-}
-
 func printTree(
-	node *cli.GraphNode,
+	node *GraphNode,
 	depth int,
 	isLast bool,
 	prefix string,
@@ -100,7 +93,7 @@ func printTree(
 	}
 
 	label := nodeLabel(node)
-	key := nodeKey(node)
+	key := node.key()
 
 	if visited[key] {
 		fmt.Printf("%s%s%s [shown above]\n", prefix, branch, label)
@@ -141,7 +134,7 @@ type treeNode struct {
 	Children []*treeNode `json:"children,omitempty"`
 }
 
-func outputTreeJSON(graph *cli.DependencyGraph, source cli.DataSource, compact bool) error {
+func outputTreeJSON(graph *DependencyGraph, source DataSource, compact bool) error {
 	visited := make(map[string]bool)
 	roots := graph.GetRoots()
 	jsonRoots := make([]*treeNode, 0, len(roots))
@@ -161,7 +154,7 @@ func outputTreeJSON(graph *cli.DependencyGraph, source cli.DataSource, compact b
 	return nil
 }
 
-func buildJSONNode(node *cli.GraphNode, visited map[string]bool) *treeNode {
+func buildJSONNode(node *GraphNode, visited map[string]bool) *treeNode {
 	t := &treeNode{
 		ID:       node.ID,
 		Version:  node.Version,
@@ -175,7 +168,7 @@ func buildJSONNode(node *cli.GraphNode, visited map[string]bool) *treeNode {
 		Root:     node.Root,
 	}
 
-	key := nodeKey(node)
+	key := node.key()
 	if visited[key] {
 		return t
 	}

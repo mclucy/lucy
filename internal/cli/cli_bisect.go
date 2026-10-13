@@ -1,4 +1,4 @@
-package bisect
+package cli
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -32,38 +31,38 @@ var bisectStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: message.BisectStartShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionBisectStart),
+	RunE:  WithErrorLogging(actionBisectStart),
 }
 
 var bisectGoodCmd = &cobra.Command{
 	Use:   "good",
 	Short: message.BisectGoodShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionBisectGood),
+	RunE:  WithErrorLogging(actionBisectGood),
 }
 
 var bisectBadCmd = &cobra.Command{
 	Use:   "bad",
 	Short: message.BisectBadShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionBisectBad),
+	RunE:  WithErrorLogging(actionBisectBad),
 }
 
 var bisectStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: message.BisectStatusShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionBisectStatus),
+	RunE:  WithErrorLogging(actionBisectStatus),
 }
 
 var bisectResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: message.BisectResetShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionBisectReset),
+	RunE:  WithErrorLogging(actionBisectReset),
 }
 
-func NewCommand() *cobra.Command {
+func NewBisectCommand() *cobra.Command {
 	for _, c := range []*cobra.Command{
 		bisectStartCmd,
 		bisectGoodCmd,
@@ -71,8 +70,8 @@ func NewCommand() *cobra.Command {
 		bisectStatusCmd,
 		bisectResetCmd,
 	} {
-		cli.AddJSONFlag(c)
-		cli.AddNoStyleFlag(c)
+		AddJSONFlag(c)
+		AddNoStyleFlag(c)
 	}
 	bisectCmd.AddCommand(
 		bisectStartCmd,
@@ -226,12 +225,12 @@ func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disab
 func setRequirementEnabled(doc *manifest.Document, mod bisectMod, enabled bool) bool {
 	var packages map[string]manifest.Requirement
 	switch mod.Runtime {
-	case cli.RuntimeServer:
+	case RuntimeServer:
 		if doc.Server.Packages == nil {
 			return false
 		}
 		packages = doc.Server.Packages[mod.Loader]
-	case cli.RuntimeMCDR:
+	case RuntimeMCDR:
 		if doc.MCDR == nil {
 			return false
 		}
@@ -294,8 +293,8 @@ func currentBisectView(session *bisectState) *bisectView {
 }
 
 func outputBisect(cmd *cobra.Command, output bisectOutput) error {
-	jsonOut, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
+	jsonOut, _ := cmd.Flags().GetBool(FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
 	if jsonOut || jsonCompact {
 		if jsonCompact {
 			style.PrintAsJsonCompact(output)
@@ -374,7 +373,7 @@ func bisectCandidates(workDir string) ([]bisectMod, error) {
 		return nil, fmt.Errorf("read manifest: %w", err)
 	}
 
-	graph, _, _, err := cli.LoadDependencyData(workDir, false)
+	graph, _, _, err := LoadDependencyData(workDir, false)
 	if err != nil {
 		return nil, err
 	}
@@ -416,12 +415,12 @@ func requirementEnabled(
 ) bool {
 	var packages map[string]manifest.Requirement
 	switch runtime {
-	case cli.RuntimeServer:
+	case RuntimeServer:
 		if doc.Server.Packages == nil {
 			return false
 		}
 		packages = doc.Server.Packages[loader]
-	case cli.RuntimeMCDR:
+	case RuntimeMCDR:
 		if doc.MCDR == nil {
 			return false
 		}

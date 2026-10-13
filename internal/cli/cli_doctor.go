@@ -1,7 +1,6 @@
-package cmd
+package cli
 
 import (
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 
 	"github.com/spf13/cobra"
@@ -11,9 +10,9 @@ var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: message.DoctorShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.NotImplementedRun,
+	RunE:  NotImplementedRun,
 }
 
-func init() {
-	rootCmd.AddCommand(doctorCmd)
+func NewDoctorCommand() *cobra.Command {
+	return doctorCmd
 }

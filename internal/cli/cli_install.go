@@ -1,45 +1,44 @@
-package install
+package cli
 
 import (
 	"fmt"
 	"os"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/spf13/cobra"
 )
 
 const (
-	flagLockedName       = "locked"
-	flagOfflineName      = "offline"
-	flagWithOptionalName = "with-optional"
+	flagInstallLockedName       = "locked"
+	flagInstallOfflineName      = "offline"
+	flagInstallWithOptionalName = "with-optional"
 )
 
 var installCmd = &cobra.Command{
 	Use:   "install",
 	Short: message.InstallShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionInstall),
+	RunE:  WithErrorLogging(actionInstall),
 }
 
-func NewCommand() *cobra.Command {
+func NewInstallCommand() *cobra.Command {
 	installCmd.Flags().Bool(
-		flagLockedName,
+		flagInstallLockedName,
 		false,
 		"Fail instead of re-resolving when the lock is missing or stale",
 	)
 	installCmd.Flags().Bool(
-		flagOfflineName,
+		flagInstallOfflineName,
 		false,
 		"Disallow network acquisition; fail if any file is missing or mismatched",
 	)
 	installCmd.Flags().Bool(
-		flagWithOptionalName,
+		flagInstallWithOptionalName,
 		false,
 		"Re-resolve to install optional upstream dependencies and record them as explicit requirements",
 	)
-	cli.AddNoStyleFlag(installCmd)
+	AddNoStyleFlag(installCmd)
 	return installCmd
 }
 
@@ -49,9 +48,9 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
 
-	locked, _ := cmd.Flags().GetBool(flagLockedName)
-	offline, _ := cmd.Flags().GetBool(flagOfflineName)
-	withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
+	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
+	offline, _ := cmd.Flags().GetBool(flagInstallOfflineName)
+	withOptional, _ := cmd.Flags().GetBool(flagInstallWithOptionalName)
 
 	opts := install.Options{
 		Locked:          locked,

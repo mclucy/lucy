@@ -63,8 +63,7 @@ To run the built binary against a test server directory:
     ├── cli/                Shared CLI plumbing: flags, error-logging wrapper,
     │   │                   dependency graph/data source, shell completion,
     │   │                   lock-context shorthand
-    │   └── <command>/      Large subcommands (add, bisect, info, init, install,
-    │                       search, status), each exposing NewCommand()
+    │   └── <command>/      Large subcommands (compile, info, search), each exposing NewCommand()
     ├── cipher/             ChaCha20Poly1305 encryption for API key embedding
     ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
     ├── fn/                 Generic helpers: Ternary, Memoize, slice utilities

@@ -1,11 +1,10 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 	"sort"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/terminal"
@@ -25,31 +24,31 @@ var cacheLsCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
 	Short:   message.CacheLsShort,
-	RunE:    cli.WithErrorLogging(actionCacheLs),
+	RunE:    WithErrorLogging(actionCacheLs),
 }
 
 var cacheClearCmd = &cobra.Command{
 	Use:     "clear",
 	Aliases: []string{"rm"},
 	Short:   message.CacheClearShort,
-	RunE:    cli.WithErrorLogging(actionCacheClear),
+	RunE:    WithErrorLogging(actionCacheClear),
 }
 
-func init() {
-	cli.AddJSONFlag(cacheLsCmd)
-	cli.AddJSONCompactFlag(cacheLsCmd)
-	cli.AddNoStyleFlag(cacheLsCmd)
+func NewCacheCommand() *cobra.Command {
+	AddJSONFlag(cacheLsCmd)
+	AddJSONCompactFlag(cacheLsCmd)
+	AddNoStyleFlag(cacheLsCmd)
 
-	cli.AddNoStyleFlag(cacheClearCmd)
+	AddNoStyleFlag(cacheClearCmd)
 
 	cacheCmd.AddCommand(cacheLsCmd, cacheClearCmd)
-	rootCmd.AddCommand(cacheCmd)
+	return cacheCmd
 }
 
 func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	entries := cache.Network().All()
-	jsonOutput, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
+	jsonOutput, _ := cmd.Flags().GetBool(FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
 
 	if jsonOutput || jsonCompact {
 		if jsonCompact {

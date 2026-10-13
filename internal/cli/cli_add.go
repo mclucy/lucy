@@ -1,11 +1,10 @@
-package add
+package cli
 
 import (
 	"fmt"
 	"os"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -18,7 +17,7 @@ const (
 	flagLockedName       = "locked"
 	flagOfflineName      = "offline"
 	flagLoaderName       = "loader"
-	flagPlatformName     = cli.FlagPlatform
+	flagPlatformName     = FlagPlatform
 )
 
 var addCmd = &cobra.Command{
@@ -37,10 +36,10 @@ var addCmd = &cobra.Command{
 		}
 		return nil
 	},
-	RunE: cli.WithErrorLogging(actionAdd),
+	RunE: WithErrorLogging(actionAdd),
 }
 
-func NewCommand() *cobra.Command {
+func NewAddCommand() *cobra.Command {
 	addCmd.Flags().BoolP(
 		flagForceName,
 		"f",
@@ -73,8 +72,8 @@ func NewCommand() *cobra.Command {
 		"",
 		"Target loader scope for the request (fabric, forge, neoforge, bukkit)",
 	)
-	cli.AddPlatformFlag(addCmd)
-	cli.AddNoStyleFlag(addCmd)
+	AddPlatformFlag(addCmd)
+	AddNoStyleFlag(addCmd)
 	return addCmd
 }
 
