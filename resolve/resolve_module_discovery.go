@@ -9,6 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -47,12 +48,29 @@ func newModuleDiscovery(server lockfile.Server, acquire func(*types.Artifact) (s
 // validation settles that case. Only a failed lookup errors.
 func (index *moduleDiscovery) project(ctx context.Context, from projectKey, id string) (projectRequest, bool, error) {
 	if request, ok := index.requests[id]; ok {
+		log.Debug(
+			"resolve: module discovery reused",
+			"module", id,
+			"provider", request.key.provider,
+			"project", request.key.project,
+			"reason", "module identity already mapped",
+		)
 		return request, true, nil
 	}
 	if index.absent[id] {
+		log.Debug(
+			"resolve: module discovery reused absence",
+			"module", id,
+			"reason", "no catalogue project ships module",
+		)
 		return projectRequest{}, false, nil
 	}
 	if err, ok := index.failures[id]; ok {
+		log.Debug(
+			"resolve: module discovery reused failure",
+			"module", id,
+			"reason", "lookup failed earlier in resolution",
+		)
 		return projectRequest{}, false, err
 	}
 	request, found, err := index.search(ctx, from, id)
@@ -73,6 +91,12 @@ func (index *moduleDiscovery) search(ctx context.Context, from projectKey, id st
 	if err != nil {
 		return projectRequest{}, false, err
 	}
+	log.Debug(
+		"resolve: module discovery searching",
+		"module", id,
+		"loader", from.loader,
+		"reason", "module identity missing from catalogue dependency",
+	)
 	responses, _ := routing.SearchMany(searchers, id, upstream.SearchOptions{FilterEcosystem: from.loader})
 	inspected := 0
 	for _, hit := range collectDiscoveryHits(responses) {
@@ -94,14 +118,34 @@ func (index *moduleDiscovery) search(ctx context.Context, from projectKey, id st
 // verify reports whether the newest release of one catalogue project carries
 // the module identity, so a search hit becomes a dependency only on proof.
 func (index *moduleDiscovery) verify(ctx context.Context, from projectKey, hit catalogueProject, id string) (projectRequest, bool, error) {
+	log.Debug(
+		"resolve: module discovery verifying candidate",
+		"module", id,
+		"provider", hit.provider,
+		"project", hit.project,
+	)
 	list, err := routing.Candidates(ctx, hit.provider, hit.project, index.server.Minecraft, from.loader)
 	if err != nil {
 		if errors.Is(err, routing.ErrNoCatalogue) {
+			log.Debug(
+				"resolve: module discovery candidate rejected",
+				"module", id,
+				"provider", hit.provider,
+				"project", hit.project,
+				"reason", "source has no package catalogue",
+			)
 			return projectRequest{}, false, nil
 		}
 		return projectRequest{}, false, fmt.Errorf("resolve module %s: %w", id, err)
 	}
 	if len(list) == 0 {
+		log.Debug(
+			"resolve: module discovery candidate rejected",
+			"module", id,
+			"provider", hit.provider,
+			"project", hit.project,
+			"reason", "project has no candidates",
+		)
 		return projectRequest{}, false, nil
 	}
 	slices.SortStableFunc(list, func(a, b types.CatalogueCandidate) int {
@@ -119,9 +163,23 @@ func (index *moduleDiscovery) verify(ctx context.Context, from projectKey, hit c
 	project := projectRequest{key: projectKey{from.runtime, from.loader, hit.provider, hit.project}}
 	for _, module := range modules {
 		if moduleAlias(module, id) {
+			log.Debug(
+				"resolve: module discovery verified",
+				"module", id,
+				"provider", hit.provider,
+				"project", hit.project,
+				"reason", "artifact declares module identity",
+			)
 			return project, true, nil
 		}
 	}
+	log.Debug(
+		"resolve: module discovery candidate rejected",
+		"module", id,
+		"provider", hit.provider,
+		"project", hit.project,
+		"reason", "artifact does not declare module identity",
+	)
 	return projectRequest{}, false, nil
 }
 

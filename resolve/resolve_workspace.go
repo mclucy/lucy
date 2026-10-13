@@ -9,6 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -107,6 +108,10 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	discovery := newModuleDiscovery(server, acquire)
 	attempts := 0
 	var lastErr error
+	log.Info(
+		"resolve: resolving package requirements",
+		"requests", len(requests),
+	)
 	var search func([]projectRequest) bool
 	search = func(pending []projectRequest) bool {
 		if err := ctx.Err(); err != nil {
@@ -160,6 +165,12 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			}
 			p.Requirements = before
 			chosen[r.key] = p
+			log.Debug(
+				"resolve: backtracking requirement merge",
+				"provider", r.key.provider,
+				"project", r.key.project,
+				"reason", "remaining requests failed after merge",
+			)
 			return false
 		}
 		list, ok := candidates[r.key]
@@ -187,8 +198,17 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		}
 		for _, candidate := range list {
 			eligible := true
+			reason := ""
+			reject := func(cause string) {
+				eligible = false
+				if reason == "" {
+					reason = cause
+				}
+			}
 			for _, release := range r.releaseIDs {
-				eligible = eligible && (release == "" || candidate.ReleaseID == release)
+				if release != "" && candidate.ReleaseID != release {
+					reject("release mismatch")
+				}
 			}
 			for _, req := range r.requirements {
 				if !req.Enabled {
@@ -196,10 +216,14 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				}
 				switch req.Selector {
 				case "stable":
-					eligible = eligible && candidate.ReleaseType == "release"
+					if candidate.ReleaseType != "release" {
+						reject("not a release build")
+					}
 				case "any", "beta":
 				default:
-					eligible = eligible && (candidate.Version == req.Selector || candidate.ReleaseID == req.Selector || candidate.FileID == req.Selector || candidate.Filename == req.Selector)
+					if candidate.Version != req.Selector && candidate.ReleaseID != req.Selector && candidate.FileID != req.Selector && candidate.Filename != req.Selector {
+						reject("selector mismatch")
+					}
 				}
 				if req.File != "" {
 					match, err := filepath.Match(req.File, candidate.Filename)
@@ -207,12 +231,22 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 						lastErr = err
 						return false
 					}
-					eligible = eligible && match
+					if !match {
+						reject("file pattern mismatch")
+					}
 				} else if !candidate.Primary {
-					eligible = false
+					reject("not the primary file")
 				}
 			}
 			if !eligible {
+				log.Debug(
+					"resolve: candidate rejected",
+					"provider", r.key.provider,
+					"project", r.key.project,
+					"candidate", candidate.Version,
+					"file", candidate.Filename,
+					"reason", reason,
+				)
 				continue
 			}
 			a := candidate.Artifact
@@ -232,6 +266,14 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			}
 			a.Modules = modules
 			chosen[r.key] = types.LockedPackage{Runtime: r.key.runtime, Loader: r.key.loader, Artifact: a, Requirements: r.requirements}
+			log.Debug(
+				"resolve: candidate selected",
+				"provider", r.key.provider,
+				"project", r.key.project,
+				"candidate", candidate.Version,
+				"file", candidate.Filename,
+				"modules", len(modules),
+			)
 			next := append([]projectRequest{}, rest...)
 			declared := map[catalogueProject]bool{}
 			for _, dep := range candidate.Dependencies {
@@ -253,10 +295,27 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			// the module identity the artifact itself declares.
 			for _, module := range a.Modules {
 				for _, dep := range module.Dependencies {
-					if dep.Kind != "required" || runtimeModule(dep.ID) {
+					if dep.Kind != "required" {
+						continue
+					}
+					if runtimeModule(dep.ID) {
+						log.Debug(
+							"resolve: module dependency skipped",
+							"provider", r.key.provider,
+							"project", r.key.project,
+							"module", dep.ID,
+							"reason", "provided by server runtime",
+						)
 						continue
 					}
 					if providesSelected(chosen, r.key.loader, dep.ID) {
+						log.Debug(
+							"resolve: module dependency skipped",
+							"provider", r.key.provider,
+							"project", r.key.project,
+							"module", dep.ID,
+							"reason", "provided by selected package",
+						)
 						continue
 					}
 					request, found, err := discovery.project(ctx, r.key, dep.ID)
@@ -265,18 +324,46 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 						return false
 					}
 					if !found {
+						log.Debug(
+							"resolve: module dependency unresolved",
+							"provider", r.key.provider,
+							"project", r.key.project,
+							"module", dep.ID,
+							"reason", "no catalogue project ships module",
+						)
 						continue
 					}
 					if declared[catalogueProject{request.key.provider, request.key.project}] {
+						log.Debug(
+							"resolve: module dependency skipped",
+							"provider", r.key.provider,
+							"project", r.key.project,
+							"module", dep.ID,
+							"reason", "declared in catalogue metadata",
+						)
 						continue
 					}
 					next = append(next, request)
+					log.Debug(
+						"resolve: native dependency discovered",
+						"module", dep.ID,
+						"provider", request.key.provider,
+						"project", request.key.project,
+						"reason", "artifact declares module identity",
+					)
 				}
 			}
 			if search(next) {
 				return true
 			}
 			delete(chosen, r.key)
+			log.Debug(
+				"resolve: backtracking candidate",
+				"provider", r.key.provider,
+				"project", r.key.project,
+				"candidate", candidate.Version,
+				"reason", "nested resolution failed",
+			)
 		}
 		if lastErr == nil {
 			lastErr = fmt.Errorf("no candidate satisfies %s:%s", r.key.provider, r.key.project)
@@ -306,6 +393,10 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	if err := ValidateModules(out, server, mcdrVersion); err != nil {
 		return nil, err
 	}
+	log.Info(
+		"resolve: selected packages",
+		"packages", len(out),
+	)
 	return out, nil
 }
 
