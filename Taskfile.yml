@@ -244,23 +244,23 @@ tasks:
       - test
       - test:race
 
-  envs:list:
-    desc: List sandbox environments defined in the manifest
+  sandboxes:list:
+    desc: List sandboxes defined in the manifest
     cmds:
-      - go run ./tools/envgen --list
+      - go run ./e2e/sandbox --list
 
-  envs:gen:
-    desc: Materialize sandbox environments into .sandboxes (pass-through args, e.g. -- --only paper)
+  sandboxes:gen:
+    desc: Materialize sandboxes into .sandboxes (pass-through args, e.g. -- --only paper)
     cmds:
-      - go run ./tools/envgen {{.CLI_ARGS}}
+      - go run ./e2e/sandbox {{.CLI_ARGS}}
 
-  envs:clean:
-    desc: Remove generated sandbox environments (.sandboxes)
+  sandboxes:clean:
+    desc: Remove generated sandboxes (.sandboxes)
     cmds:
       - rm -rf .sandboxes
 
   e2e:init:
-    desc: "Run server probing e2e over generated sandboxes (args: environment ids)"
+    desc: "Run server probing e2e over generated sandboxes (args: sandbox ids)"
     cmds:
       - go run ./e2e/init {{.CLI_ARGS}}
 

@@ -1,6 +1,6 @@
 # NeoForge
 
-Covers environments: `neoforge-211`, `neoforge-262`.
+Covers sandboxes: `neoforge-211`, `neoforge-262`.
 
 ## Versioning and endpoints
 
@@ -18,4 +18,4 @@ libraries/net/neoforged/neoforge/<v>/
 run.sh  run.bat  user_jvm_args.txt  eula.txt
 ```
 
-Verified by live installs: `21.1.248` ships both jars; later in the 21.x cycle the server jar was dropped in favor of `libraries/net/neoforged/minecraft-server-patched/<v>/` (`26.2.0.67` has none). Detection handles both — the universal jar alone is sufficient (manifest check offline, maven hash check online), so a pinned universal makes generated environments detection-complete without running the installer.
+Verified by live installs: `21.1.248` ships both jars; later in the 21.x cycle the server jar was dropped in favor of `libraries/net/neoforged/minecraft-server-patched/<v>/` (`26.2.0.67` has none). Detection handles both — the universal jar alone is sufficient (manifest check offline, maven hash check online), so a pinned universal makes a generated sandbox detection-complete without running the installer.

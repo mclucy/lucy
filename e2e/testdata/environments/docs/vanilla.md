@@ -1,6 +1,6 @@
 # Vanilla
 
-Covers environments: `vanilla-1201`, `vanilla-262`; inner cores of `fabric-installed-1214` (1.21.4), `fabric-installed-114` (1.14) see the [./fabric.md](fabric docs).
+Covers sandboxes: `vanilla-1201`, `vanilla-262`; inner cores of `fabric-installed-1214` (1.21.4), `fabric-installed-114` (1.14) see [fabric.md](./fabric.md).
 
 ## Resolving the server jar
 
@@ -10,7 +10,7 @@ Mojang has no stable per-version direct URLs; resolve at generation time:
 2. find version entry by id → its `url` (per-version JSON)
 3. `downloads.server.url` (+ `sha1`) → piston-data download
 
-envgen does this for `mojang_version:` artifacts and verifies the manifest sha256 afterwards.
+The sandbox tool does this for `mojang_version:` artifacts and verifies the manifest sha256 afterwards.
 
 ## Format eras
 
