@@ -24,9 +24,9 @@ permissions:
   contents: read
 
 jobs:
-  # Fresh-install lock scenarios: generate the pinned envgen fixtures, build
-  # Lucy, then install each scenario manifest in a disposable workspace and
-  # verify the generated lock and runtime files against the fixtures.
+  # Fresh-install lock scenarios: generate the pinned sandboxes, build Lucy,
+  # then install each scenario manifest in a disposable workspace and verify the
+  # generated lock and runtime files against the pinned bytes.
   #
   # Java 21 is the strictest minimum across the scenarios (1.20.1 cores need
   # 17, 1.21.x cores need 21) and also drives the Forge and NeoForge installer
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      ENVS: vanilla-1201,lock-fabric-1214,forge-1201,neoforge-211
+      SANDBOXES: vanilla-1201,forge-1201,neoforge-211
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -58,14 +58,14 @@ jobs:
       - name: Set up Task
         uses: go-task/setup-task@v2
 
-      - name: Cache envgen downloads
+      - name: Cache sandbox downloads
         uses: actions/cache@v6
         with:
-          path: ~/.cache/lucy-envgen
-          key: envgen-${{ hashFiles('tools/envgen/sandboxes/sandboxes.yaml') }}
+          path: ~/.cache/lucy-sandbox
+          key: sandbox-${{ hashFiles('e2e/testdata/sandboxes/sandboxes.yaml') }}
 
-      - name: Generate environments
-        run: task envs:gen -- --only ${{ env.ENVS }}
+      - name: Generate sandboxes
+        run: task sandboxes:gen -- --only ${{ env.SANDBOXES }}
 
       - name: Build lucy
         run: |

@@ -1,17 +1,19 @@
-# Lucy sandbox environments. Generate with `task envs:gen`; output lands in .sandboxes/.
-# Family ecosystem notes: families/*.md.
+# Lucy sandboxes: real server directories materialized from pinned artifacts.
+# Generate with `task sandboxes:gen`; output lands in .sandboxes/.
+# Ecosystem notes for each family: docs/*.md.
 #
 # Forge and NeoForge maven hosts republish versioned coordinates in place and
 # rewrite their checksum sidecars when they do. No immutable endpoint exists for
-# these artifacts, so they carry no sha256 and envgen skips digest verification.
+# these artifacts, so they carry no sha256 and the sandbox tool skips digest
+# verification.
 version: 1
 
-environments:
+sandboxes:
   - id: mcdr-fabric
     family: mcdr
     game_version: "1.21.4"
     description: MCDR-wrapped Fabric 1.21.4 executable launcher with PrimeBackup plugin
-    docs: families/mcdr.md
+    docs: docs/mcdr.md
     dirs: [logs]
     artifacts:
       - dest: server/fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar
@@ -25,7 +27,7 @@ environments:
     family: mcdr
     game_version: "1.20.1"
     description: MCDR-wrapped Forge 1.20.1-47.4.10 with PrimeBackup plugin
-    docs: families/mcdr.md
+    docs: docs/mcdr.md
     dirs: [logs]
     artifacts:
       - dest: server/libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
@@ -40,7 +42,7 @@ environments:
     family: mcdr
     game_version: "1.20.2"
     description: MCDR-wrapped NeoForge 20.2.93 with WhereIs plugin
-    docs: families/mcdr.md
+    docs: docs/mcdr.md
     dirs: [logs]
     artifacts:
       - dest: server/neoforge-20.2.93-installer.jar
@@ -66,7 +68,7 @@ environments:
     family: neoforge
     game_version: "26.2"
     description: NeoForge 26.2.0.67 representative, current year-scheme line with universal-only layout
-    docs: families/neoforge.md
+    docs: docs/neoforge.md
     dirs: [logs, mods]
     artifacts:
       - dest: neoforge-26.2.0.67-installer.jar
@@ -78,7 +80,7 @@ environments:
     family: fabric
     game_version: "1.21.4"
     description: Executable Server launcher jar for MC 1.21.4 with Fabric API, Carpet, Sodium Extra
-    docs: families/fabric.md
+    docs: docs/fabric.md
     dirs: [mods]
     artifacts:
       - dest: fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar
@@ -90,7 +92,7 @@ environments:
       - dest: mods/fabric-carpet-1.21.11-1.4.194+v251223.jar
         url: https://cdn.modrinth.com/data/TQTTVgYE/versions/HzPcczDK/fabric-carpet-1.21.11-1.4.194%2Bv251223.jar
         sha256: 1b4d66f0332bda5deee08755e493c2d6ac64d64d5285e1134aa03604975c2521
-      - dest: sodium-extra-fabric-0.8.3+mc1.21.11.jar
+      - dest: mods/sodium-extra-fabric-0.8.3+mc1.21.11.jar
         url: https://cdn.modrinth.com/data/PtjYWJkn/versions/yqY1efrC/sodium-extra-fabric-0.8.3%2Bmc1.21.11.jar
         sha256: bd634e73fec7c84b47bf3d5701495c6b7d5d4104b81a75cb453346e9c2c92009
 
@@ -98,7 +100,7 @@ environments:
     family: fabric
     game_version: "26.2"
     description: Current-era Executable Server launcher jar for MC 26.2 (loader 0.19.3)
-    docs: families/fabric.md
+    docs: docs/fabric.md
     artifacts:
       - dest: fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar
         fabric_meta: { game: "26.2", loader: "0.19.3", installer: "1.1.2" }
@@ -108,7 +110,7 @@ environments:
     family: fabric
     game_version: "1.21.4"
     description: Installer-produced layout with stub launch jar, vanilla 1.21.4, installer jar
-    docs: families/fabric.md
+    docs: docs/fabric.md
     dirs: [mods]
     artifacts:
       - dest: fabric-server-launch.jar
@@ -125,7 +127,7 @@ environments:
     family: fabric
     game_version: "26.2"
     description: Installer-produced layout with modern stub (loader 0.19.3, installer 1.1.2) — MANIFEST omits intermediary, no version.json sidecar; distinct from fabric-installed-1214 which pins MC via intermediary Class-Path entry
-    docs: families/fabric.md
+    docs: docs/fabric.md
     dirs: [mods]
     artifacts:
       - dest: fabric-server-launch.jar
@@ -142,7 +144,7 @@ environments:
     family: fabric
     game_version: "1.14"
     description: Legacy-era installed layout with self-contained fat launcher jar
-    docs: families/fabric.md
+    docs: docs/fabric.md
     artifacts:
       - dest: fabric-server-launch.jar
         manual: true
@@ -157,7 +159,7 @@ environments:
     family: forge
     game_version: "1.20.1"
     description: Forge 1.20.1-47.4.10 recommended, pre-shim era representative
-    docs: families/forge.md
+    docs: docs/forge.md
     artifacts:
       - dest: libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
@@ -168,7 +170,7 @@ environments:
     family: forge
     game_version: "1.21.11"
     description: Forge 1.21.11-61.2.0 recommended, shim-era representative
-    docs: families/forge.md
+    docs: docs/forge.md
     artifacts:
       - dest: libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar
@@ -183,7 +185,7 @@ environments:
     family: vanilla
     game_version: "1.20.1"
     description: Vanilla 1.20.1, early bundler-era representative
-    docs: families/vanilla.md
+    docs: docs/vanilla.md
     artifacts:
       - dest: server.jar
         mojang_version: "1.20.1"
@@ -193,7 +195,7 @@ environments:
     family: vanilla
     game_version: "26.2"
     description: Current stable vanilla, bundler era
-    docs: families/vanilla.md
+    docs: docs/vanilla.md
     artifacts:
       - dest: server.jar
         mojang_version: "26.2"
@@ -203,7 +205,7 @@ environments:
     family: paper
     game_version: "1.21.11"
     description: Paper build 130 paperclip jar
-    docs: families/paper-family.md
+    docs: docs/paper-family.md
     artifacts:
       - dest: paper-1.21.11-130.jar
         url: https://fill-data.papermc.io/v1/objects/25eb85bd8415195ce4bc188e1939e0c7cef77fb51d26d4e766407ee922561097/paper-1.21.11-130.jar
@@ -213,7 +215,7 @@ environments:
     family: folia
     game_version: "1.21.11"
     description: Folia build 14 paperclip jar
-    docs: families/paper-family.md
+    docs: docs/paper-family.md
     artifacts:
       - dest: folia-1.21.11-14.jar
         url: https://fill-data.papermc.io/v1/objects/f52c408490a0225611e67907a3ca19f7e6da2c6bc899e715d5f46844e7103c39/folia-1.21.11-14.jar
@@ -223,7 +225,7 @@ environments:
     family: purpur
     game_version: "1.21.11"
     description: Purpur build 2568 (renamed to server.jar, identity confirmed via md5)
-    docs: families/paper-family.md
+    docs: docs/paper-family.md
     artifacts:
       - dest: server.jar
         purpur: { version: "1.21.11", build: "2568" }
@@ -233,7 +235,7 @@ environments:
     family: divinemc
     game_version: "1.21.11"
     description: DivineMC build 24; release hosting unresolved, supply manually
-    docs: families/paper-family.md
+    docs: docs/paper-family.md
     artifacts:
       - dest: divinemc-1.21.11-24.jar
         manual: true
@@ -243,7 +245,7 @@ environments:
     family: leaf
     game_version: "1.21.11"
     description: Leaf build 115; release hosting unresolved, supply manually
-    docs: families/paper-family.md
+    docs: docs/paper-family.md
     artifacts:
       - dest: leaf-1.21.11-115.jar
         manual: true
@@ -253,7 +255,7 @@ environments:
     family: leaves
     game_version: "1.21.8"
     description: Leaves build 138 with sidecar evidence markers
-    docs: families/paper-family.md
+    docs: docs/paper-family.md
     artifacts:
       - dest: leaves-1.21.8.jar
         url: https://github.com/LeavesMC/Leaves/releases/download/1.21.8-138-9331167/leaves-1.21.8.jar
@@ -263,7 +265,7 @@ environments:
     family: reaper
     game_version: "1.12.2"
     description: Reaper paperclip for MC 1.12.2; hosting unresolved, supply manually
-    docs: families/paper-family.md
+    docs: docs/paper-family.md
     artifacts:
       - dest: reaper-paperclip.jar
         manual: true
@@ -273,7 +275,7 @@ environments:
     family: youer
     game_version: "1.21.1"
     description: Youer (MohistMC) hybrid jar; hosting unresolved, supply manually
-    docs: families/paper-family.md
+    docs: docs/paper-family.md
     artifacts:
       - dest: youer.jar
         manual: true
@@ -283,7 +285,7 @@ environments:
     family: sponge
     game_version: "1.21.10"
     description: SpongeVanilla universal jar, SpongeAPI 17.0.0
-    docs: families/sponge.md
+    docs: docs/sponge.md
     artifacts:
       - dest: spongevanilla-1.21.10-17.0.0-universal.jar
         manual: true
@@ -293,7 +295,7 @@ environments:
     family: sponge
     game_version: "1.21.10"
     description: SpongeForge universal jar on Forge 60.0.1
-    docs: families/sponge.md
+    docs: docs/sponge.md
     artifacts:
       - dest: spongeforge-1.21.10-60.0.1-17.0.0-universal.jar
         manual: true
@@ -303,7 +305,7 @@ environments:
     family: sponge
     game_version: "1.21.10"
     description: SpongeNeo universal jar on NeoForge 21.10.64
-    docs: families/sponge.md
+    docs: docs/sponge.md
     artifacts:
       - dest: spongeneo-1.21.10-21.10.64-17.0.0-universal.jar
         manual: true
@@ -313,7 +315,7 @@ environments:
     family: arclight
     game_version: "1.21.1"
     description: Arclight hybrid on Fabric 1.21.1, release FeudalKings/1.0.1
-    docs: families/hybrids.md
+    docs: docs/hybrids.md
     artifacts:
       - dest: arclight-fabric-1.21.1-1.0.1-8ec9529.jar
         url: https://github.com/IzzelAliz/Arclight/releases/download/FeudalKings%2F1.0.1/arclight-fabric-1.21.1-1.0.1-8ec9529.jar
@@ -323,7 +325,7 @@ environments:
     family: arclight
     game_version: "1.21.1"
     description: Arclight hybrid on Forge 1.21.1, release FeudalKings/1.0.1
-    docs: families/hybrids.md
+    docs: docs/hybrids.md
     artifacts:
       - dest: arclight-forge-1.21.1-1.0.1-8ec9529.jar
         url: https://github.com/IzzelAliz/Arclight/releases/download/FeudalKings%2F1.0.1/arclight-forge-1.21.1-1.0.1-8ec9529.jar
@@ -333,7 +335,7 @@ environments:
     family: arclight
     game_version: "1.21.1"
     description: Arclight hybrid on NeoForge 1.21.1, release FeudalKings/1.0.1
-    docs: families/hybrids.md
+    docs: docs/hybrids.md
     artifacts:
       - dest: arclight-neoforge-1.21.1-1.0.1-8ec9529.jar
         url: https://github.com/IzzelAliz/Arclight/releases/download/FeudalKings%2F1.0.1/arclight-neoforge-1.21.1-1.0.1-8ec9529.jar
@@ -345,26 +347,8 @@ environments:
     family: mohist
     game_version: unknown
     description: Mohist hybrid jar; exact build unidentified, supply manually
-    docs: families/hybrids.md
+    docs: docs/hybrids.md
     artifacts:
       - dest: mohist.jar
         manual: true
         sha256: cbefdc9230b714c784dafaf74c83f55d8c4ec049dc41561c4e9b2d5766d05941
-
-  # Install scenario fixtures
-
-  - id: lock-fabric-1214
-    family: fabric
-    game_version: "1.21.4"
-    description: Pinned Fabric API and Flan artifacts for the Fabric 1.21.4 install scenario
-    docs: families/fabric.md
-    artifacts:
-      - dest: server.jar
-        mojang_version: "1.21.4"
-        sha256: 1066970b09e9c671844572291c4a871cc1ac2b85838bf7004fa0e778e10f1358
-      - dest: mods/fabric-api-0.119.4+1.21.4.jar
-        url: https://cdn.modrinth.com/data/P7dR8mSH/versions/p96k10UR/fabric-api-0.119.4%2B1.21.4.jar
-        sha256: d183bacb845167f09264c2f90322b7ecffe8826debda6f60e597889264bef4af
-      - dest: mods/flan-1.21.4-1.11.7.b-fabric.jar
-        url: https://cdn.modrinth.com/data/Si383TIH/versions/9EC25rAV/flan-1.21.4-1.11.7.b-fabric.jar
-        sha256: 33c466b7c319f1597798f62d13b619317590bf069c4a2c11715fb19fdd98e7f8

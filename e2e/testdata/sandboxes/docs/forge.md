@@ -1,6 +1,6 @@
 # Forge
 
-Covers environments: `forge-1201`, `forge-12111`.
+Covers sandboxes: `forge-1201`, `forge-12111`.
 
 ## Versioning and endpoints
 

@@ -1,6 +1,6 @@
 # Paper family (paperclip-based servers)
 
-Covers environments: `paper`, `folia`, `purpur`, `divinemc`, `leaf`, `leaves`, `reaper`, `youer`.
+Covers sandboxes: `paper`, `folia`, `purpur`, `divinemc`, `leaf`, `leaves`, `reaper`, `youer`.
 
 ## What the jar is
 
