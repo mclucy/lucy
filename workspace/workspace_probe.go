@@ -8,6 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
@@ -163,18 +164,22 @@ func reportScanDiagnostics(root string, p Probe, examined int) {
 	}
 
 	if conflicted := conflictLabels(p.AmbiguousCandidates); len(conflicted) > 0 {
-		log.ReportError(fmt.Errorf(
+		conflictErr := fmt.Errorf(
 			"found conflicting server files in %s (%s); lucy cannot tell which server this directory runs",
 			root,
 			strings.Join(conflicted, ", "),
-		))
+		)
+		log.Error(conflictErr)
+		report.Error(conflictErr)
 	}
 	if len(p.Candidates) > 1 {
-		log.ReportError(fmt.Errorf(
+		multiErr := fmt.Errorf(
 			"found multiple servers side by side in %s: %s; lucy cannot tell which one to use",
 			root,
 			strings.Join(candidateLabels(p.Candidates), "; "),
-		))
+		)
+		log.Error(multiErr)
+		report.Error(multiErr)
 	}
 }
 

@@ -16,7 +16,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/internal/toolchain"
-	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -92,11 +92,11 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 	}()
 	checkout := filepath.Join(temporary, "repository")
 	ref := refSuffix(branch, tag)
-	log.ShowInfo("Cloning " + source + ref)
+	report.Info("Cloning " + source + ref)
 	if err := clone(ctx, remote, checkout, branch, tag, newProcessLog("git")); err != nil {
 		return err
 	}
-	log.ShowInfo("Cloned " + source + ref)
+	report.Info("Cloned " + source + ref)
 
 	layout, err := buildrepo.Probe(ctx, checkout)
 	if err != nil {
@@ -108,7 +108,7 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 		return err
 	}
 
-	log.ShowInfo("Preparing the Gradle build")
+	report.Info("Preparing the Gradle build")
 	gradleUserHome := os.Getenv("GRADLE_USER_HOME")
 	if gradleUserHome == "" {
 		home, homeErr := os.UserHomeDir()
@@ -127,7 +127,7 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 		return fmt.Errorf("discover local toolchains: %w", err)
 	}
 	for _, warning := range toolchainWarnings(build, inventory) {
-		log.ShowWarn(errors.New(warning))
+		report.Warn(errors.New(warning))
 	}
 	runner, err := newGradleRunner(build, inventory, temporary)
 	if err != nil {
@@ -174,7 +174,7 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 	if err := publishArtifact(ctx, artifactPath, output); err != nil {
 		return err
 	}
-	log.ShowInfo("Compiled " + filepath.Base(output))
+	report.Info("Compiled " + filepath.Base(output))
 	if _, err := fmt.Fprintln(stdout, output); err != nil {
 		return fmt.Errorf("report output: %w", err)
 	}
@@ -194,7 +194,7 @@ func reportFindings(root string, findings []buildrepo.Finding) {
 		if finding.Line > 0 {
 			location += ":" + strconv.Itoa(finding.Line)
 		}
-		log.ShowWarn(fmt.Errorf("%s: %s", location, finding.Message))
+		report.Warn(fmt.Errorf("%s: %s", location, finding.Message))
 	}
 }
 

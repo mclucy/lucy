@@ -10,6 +10,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli/info"
 	"github.com/mclucy/lucy/internal/cli/search"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
@@ -24,19 +25,21 @@ var rootCmd = &cobra.Command{
 	Short: "The Minecraft server package manager",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
-			log.ReportWarn(
-				fmt.Errorf(
-					"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
-				),
+			warning := fmt.Errorf(
+				"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
 			)
+			log.Warn(warning)
+			report.Warn(warning)
 		}
 		if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 			style.TurnOffStyles()
 			log.TurnOffColors()
+			report.TurnOffColors()
 		}
 		if noColor, _ := cmd.Flags().GetBool(cli.FlagNoColor); noColor {
 			style.TurnOffColors()
 			log.TurnOffColors()
+			report.TurnOffColors()
 		}
 		if noInteractive, _ := cmd.Flags().GetBool(cli.FlagNoInteractive); noInteractive {
 			style.TurnOffInteractivity()

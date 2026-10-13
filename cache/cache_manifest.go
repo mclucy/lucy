@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 )
 
 const (
@@ -32,7 +33,7 @@ func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
 		return ResetReport{}, err
 	}
 
-	var report ResetReport
+	var resetResult ResetReport
 	for _, entry := range entries {
 		if entry.Name() == manifestFilename {
 			continue
@@ -60,14 +61,14 @@ func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
 				),
 			)
 		} else if verbose {
-			log.ShowInfo(fmt.Sprintf("removed %s", entryPath))
+			report.Info(fmt.Sprintf("removed %s", entryPath))
 		}
 
-		report.TotalFreedSize += size
-		report.FileCount++
+		resetResult.TotalFreedSize += size
+		resetResult.FileCount++
 	}
 
-	return report, nil
+	return resetResult, nil
 }
 
 func calculateSize(filePath string) (int64, error) {

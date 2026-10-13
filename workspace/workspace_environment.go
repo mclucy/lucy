@@ -10,6 +10,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
@@ -65,16 +66,18 @@ func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
 	version := types.VersionUnknown
 	output, err := exec.Command("mcdreforged", "--version").Output()
 	if err != nil {
-		log.ReportWarn(
-			fmt.Errorf(
-				"cannot execute mcdr, is it in your $PATH?: %w",
-				err,
-			),
+		warnErr := fmt.Errorf(
+			"cannot execute mcdr, is it in your $PATH?: %w",
+			err,
 		)
+		log.Warn(warnErr)
+		report.Warn(warnErr)
 	} else if fields := strings.Fields(string(output)); len(fields) > 1 {
 		version = types.BareVersion(fields[1])
 	} else {
-		log.ReportWarn(fmt.Errorf("cannot parse mcdr version output"))
+		warnErr := fmt.Errorf("cannot parse mcdr version output")
+		log.Warn(warnErr)
+		report.Warn(warnErr)
 	}
 
 	env.Mcdr = &types.McdrEnv{

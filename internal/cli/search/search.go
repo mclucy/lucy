@@ -12,6 +12,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -158,12 +159,13 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			noResultSources = append(noResultSources, err.Source.Title())
 			continue
 		}
-		providerErr := fmt.Errorf(
+		providerWarn := fmt.Errorf(
 			"search on %s failed: %w",
 			err.Source.Title(),
 			err.Err,
 		)
-		log.ReportWarn(providerErr)
+		log.Warn(providerWarn)
+		report.Warn(providerWarn)
 	}
 
 	if err := searchResultError(results, errs); err != nil {
