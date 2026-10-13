@@ -264,32 +264,23 @@ func stageInstall(
 	if err := bootstrap.PrepareLocked(ctx, stage, resolved.Server, core, inputs); err != nil {
 		return err
 	}
+	if err := rejectSharedDestinations(resolved); err != nil {
+		return err
+	}
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
-		active := len(p.Requirements) == 0
-		for _, r := range p.Requirements {
-			active = active || r.Enabled
-		}
-		if !active {
+		if !packageActive(p) {
 			continue
+		}
+		destination, err := packageDestination(resolved, p)
+		if err != nil {
+			return err
 		}
 		source, err := store.acquire(&p.Artifact)
 		if err != nil {
 			return err
 		}
-		directory := resolved.Server.Directory
-		folder := "mods"
-		if p.Loader == types.EcoBukkit {
-			folder = "plugins"
-		}
-		if p.Runtime == "mcdr" {
-			if resolved.MCDR == nil {
-				return fmt.Errorf("MCDR package has no wrapper runtime")
-			}
-			directory = resolved.MCDR.Directory
-			folder = "plugins"
-		}
-		if err := bootstrap.CopyLockedFile(source, filepath.Join(stage, directory, folder, p.Filename), 0o644); err != nil {
+		if err := bootstrap.CopyLockedFile(source, filepath.Join(stage, destination), 0o644); err != nil {
 			return err
 		}
 	}
@@ -353,4 +344,58 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 		}
 	}
 	return true, nil
+}
+
+// rejectSharedDestinations enforces the lock's installability guarantee: a
+// destination two active packages both claim must fail before anything is
+// written. Left unguarded the later copy silently replaces the earlier one, so
+// the workspace diverges from a lock that still reports itself as current.
+func rejectSharedDestinations(resolved *lockfile.Document) error {
+	claimed := map[string]string{}
+	for i := range resolved.Packages {
+		p := &resolved.Packages[i]
+		if !packageActive(p) {
+			continue
+		}
+		destination, err := packageDestination(resolved, p)
+		if err != nil {
+			return err
+		}
+		identity := p.Artifact.Provider + ":" + p.Artifact.ProjectID
+		if claimedBy, taken := claimed[destination]; taken {
+			return fmt.Errorf("packages %s and %s both install to %s", claimedBy, identity, destination)
+		}
+		claimed[destination] = identity
+	}
+	return nil
+}
+
+// packageDestination reports where an active package lands inside the staged
+// server tree.
+func packageDestination(resolved *lockfile.Document, p *types.LockedPackage) (string, error) {
+	directory := resolved.Server.Directory
+	folder := "mods"
+	if p.Loader == types.EcoBukkit {
+		folder = "plugins"
+	}
+	if p.Runtime == "mcdr" {
+		if resolved.MCDR == nil {
+			return "", fmt.Errorf("MCDR package has no wrapper runtime")
+		}
+		directory = resolved.MCDR.Directory
+		folder = "plugins"
+	}
+	return filepath.Join(directory, folder, p.Filename), nil
+}
+
+func packageActive(p *types.LockedPackage) bool {
+	if len(p.Requirements) == 0 {
+		return true
+	}
+	for _, r := range p.Requirements {
+		if r.Enabled {
+			return true
+		}
+	}
+	return false
 }
