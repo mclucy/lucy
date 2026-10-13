@@ -26,9 +26,10 @@ func run(args []string) int {
 	list := flags.Bool("list", false, "print every scenario id and exit")
 	parallel := flags.Int("p", 1, "run up to N scenarios concurrently")
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: go run ./e2e/lock [flags] [scenario ids]")
-		fmt.Fprintln(flags.Output(), "IDs may be comma- or whitespace-separated. Defaults to all scenarios.")
-		fmt.Fprintln(flags.Output(), "Run from the repository root after building Lucy and generating the fixture environments.")
+		out := flags.Output()
+		_, _ = fmt.Fprintln(out, "Usage: go run ./e2e/lock [flags] [scenario ids]")
+		_, _ = fmt.Fprintln(out, "IDs may be comma- or whitespace-separated. Defaults to all scenarios.")
+		_, _ = fmt.Fprintln(out, "Run from the repository root after building Lucy and generating the fixture environments.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {

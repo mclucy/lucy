@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - e2e/**
-      - '**/*.go'
+      - "**/*.go"
       - go.mod
       - go.sum
       - Taskfile.yml
@@ -13,7 +13,7 @@ on:
   pull_request:
     paths:
       - e2e/**
-      - '**/*.go'
+      - "**/*.go"
       - go.mod
       - go.sum
       - Taskfile.yml
@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/lucy-envgen
-          key: envgen-${{ hashFiles('e2e/testdata/environments/environments.yaml') }}
+          key: envgen-${{ hashFiles('tools/envgen/sandboxes/sandboxes.yaml') }}
 
       - name: Generate environments
         run: task envs:gen -- --only ${{ env.ENVS }}
