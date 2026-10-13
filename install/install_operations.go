@@ -154,12 +154,10 @@ func Remove(ctx context.Context, root string, args []string, loader types.Ecosys
 			}
 			packages = d.MCDR.Packages
 		}
-		r, ok := packages[ref]
-		if !ok {
+		if _, ok := packages[ref]; !ok {
 			return fmt.Errorf("direct requirement %s not found in %s", ref, loader)
 		}
-		r.Enabled = new(false)
-		packages[ref] = r
+		delete(packages, ref)
 	}
 	opts.PublishManifest = true
 	return Sync(ctx, root, d, old, opts)

@@ -83,7 +83,9 @@ func bindRequirement(p *types.LockedPackage, ref string, requirement manifest.Re
 // rebindRequirements reapplies the manifest's requirements onto a lock that
 // already resolved them. A locked mutation never reaches upstream, so it can
 // only enable or disable what the lock already pins; a declared requirement the
-// lock does not satisfy is reported rather than resolved.
+// lock does not satisfy is reported rather than resolved. Packages left bound
+// only to requirements the manifest no longer declares are dropped, so a locked
+// removal uninstalls the package instead of leaving the lock pinning it.
 func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error {
 	declared := declaredRequirements(d)
 	for _, ref := range slices.Sorted(maps.Keys(declared)) {
@@ -104,7 +106,36 @@ func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error
 			)
 		}
 	}
+	resolved.Packages = retainDeclared(resolved.Packages, declared)
 	return nil
+}
+
+// retainDeclared keeps the packages a locked mutation still justifies. A
+// package bound only to requirements the manifest no longer declares is
+// dropped; packages with no bindings of their own are ambient and survive.
+func retainDeclared(
+	packages []types.LockedPackage,
+	declared map[string]manifest.Requirement,
+) []types.LockedPackage {
+	retained := make([]types.LockedPackage, 0, len(packages))
+	for _, p := range packages {
+		if len(p.Requirements) == 0 {
+			retained = append(retained, p)
+			continue
+		}
+		bindings := make([]types.RequirementBinding, 0, len(p.Requirements))
+		for _, binding := range p.Requirements {
+			if _, ok := declared[binding.Reference]; ok {
+				bindings = append(bindings, binding)
+			}
+		}
+		if len(bindings) == 0 {
+			continue
+		}
+		p.Requirements = bindings
+		retained = append(retained, p)
+	}
+	return retained
 }
 
 // mutateLock produces the lock a locked mutation commits. Only requirements and

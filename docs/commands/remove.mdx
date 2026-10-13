@@ -3,7 +3,7 @@ title: "lucy remove"
 description: "Remove packages from the manifest and uninstall them"
 ---
 
-`lucy remove` turns off a requirement in `lucy.yaml` and re-resolves, uninstalling whatever nothing else needs any more. The requirement is kept in the manifest marked `enabled: false` rather than deleted, so re-adding it later restores the same selector instead of floating back to `stable`. Manifest and lock move together — a failed removal leaves both files untouched.
+`lucy remove` deletes a requirement from `lucy.yaml` and re-resolves, uninstalling whatever nothing else needs any more. Re-adding the package later selects the default `stable` version unless `lucy add` names one. Manifest and lock move together — a failed removal leaves both files untouched.
 
 ## Arguments
 
