@@ -229,6 +229,7 @@ func Write(root string, d *Document) error {
 	if err != nil {
 		return err
 	}
+	data = append([]byte("# yaml-language-server: $schema="+SchemaURL+"\n"), data...)
 	return AtomicWrite(filepath.Join(root, Filename), data)
 }
 

@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/mclucy/lucy/main/manifest/manifest.schema.json",
+  "properties": {
+    "manifest_version": {
+      "type": "integer"
+    },
+    "server": {
+      "properties": {
+        "minecraft": {
+          "type": "string"
+        },
+        "directory": {
+          "type": "string"
+        },
+        "core": {
+          "properties": {
+            "distribution": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "repository": {
+              "type": "string"
+            },
+            "file": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "distribution",
+            "version"
+          ]
+        },
+        "packages": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "A version selector: stable, a tag, or an exact version."
+                },
+                {
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "description": "A version selector: stable, a tag, or an exact version."
+                    },
+                    "file": {
+                      "type": "string",
+                      "description": "Workspace-relative path to a local package artifact."
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Whether the requirement is active in the resolved environment.",
+                      "default": true
+                    }
+                  },
+                  "additionalProperties": false,
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "minecraft",
+        "directory",
+        "core",
+        "packages"
+      ]
+    },
+    "mcdr": {
+      "properties": {
+        "directory": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "packages": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "A version selector: stable, a tag, or an exact version."
+              },
+              {
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "description": "A version selector: stable, a tag, or an exact version."
+                  },
+                  "file": {
+                    "type": "string",
+                    "description": "Workspace-relative path to a local package artifact."
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Whether the requirement is active in the resolved environment.",
+                    "default": true
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object"
+              }
+            ]
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "directory",
+        "version",
+        "packages"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "manifest_version",
+    "server"
+  ],
+  "title": "Lucy manifest",
+  "description": "Desired-state manifest (lucy.yaml) for a Lucy-managed Minecraft server."
+}
