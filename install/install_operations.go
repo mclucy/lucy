@@ -10,6 +10,7 @@ import (
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -217,8 +218,20 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.D
 				}
 				d.Server.Directory = filepath.ToSlash(relative)
 			}
+			log.Debug(
+				"detected server runtime",
+				"minecraft", d.Server.Minecraft,
+				"distribution", d.Server.Core.Distribution,
+				"core-version", d.Server.Core.Version,
+				"directory", d.Server.Directory,
+			)
 		} else if !opts.AllowEmpty {
 			return nil, observed.Warnings, fmt.Errorf("no server detected; use create or --allow-empty with a complete server declaration")
+		} else {
+			log.Debug(
+				"no server detected; building a complete declaration",
+				"reason", "--allow-empty",
+			)
 		}
 	}
 	if d.Server.Minecraft == "" || types.BareVersion(d.Server.Minecraft).IsInvalid() {
@@ -230,9 +243,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.D
 			return nil, observed.Warnings, err
 		}
 		d.Server.Minecraft = text
+		log.Debug("minecraft version supplied interactively", "version", text)
 	}
 	if d.Server.Core.Distribution == "" {
 		d.Server.Core.Distribution = "vanilla"
+		log.Debug("core distribution defaulted", "distribution", "vanilla")
 	}
 	mcdrVersion := opts.MCDRVersion
 	if mcdrVersion == "" && observed.Environments.Mcdr != nil {
@@ -241,6 +256,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.D
 			return nil, observed.Warnings, fmt.Errorf("MCDR detected without an exact app version; specify --mcdr-version")
 		}
 		mcdrVersion = string(v)
+		log.Debug("MCDR version from workspace detection", "version", mcdrVersion)
 	}
 	if mcdrVersion != "" {
 		d.MCDR = &manifest.MCDR{Directory: ".", Version: mcdrVersion, Packages: map[string]manifest.Requirement{}}
@@ -252,6 +268,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.D
 	if err != nil {
 		return nil, observed.Warnings, err
 	}
+	recognized := 0
 	for _, p := range observed.Packages {
 		if !artifact.SupportsPath(p.Path) {
 			continue
@@ -275,6 +292,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.D
 				}
 				if _, err := digestFile(p.Path, candidate.Hashes); err == nil {
 					d.MCDR.Packages["mcdr:"+candidate.ProjectID] = manifest.Requirement{Version: candidate.Version}
+					recognized++
 					break
 				}
 			}
@@ -294,7 +312,13 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.D
 			d.Server.Packages[loader] = map[string]manifest.Requirement{}
 		}
 		d.Server.Packages[loader]["modrinth:"+ref.Name.String()] = manifest.Requirement{Version: ref.Version.String()}
+		recognized++
 	}
+	log.Debug(
+		"recognized existing packages",
+		"count", recognized,
+		"present", len(observed.Packages),
+	)
 	store := &artifactStore{ctx: ctx, dir: filepath.Join(root, ".lucy", "downloads")}
 	if _, err := routing.ResolveCore(ctx, types.CoreRequest{Minecraft: d.Server.Minecraft, Distribution: d.Server.Core.Distribution, Version: d.Server.Core.Version, Repository: d.Server.Core.Repository, File: d.Server.Core.File}, store.acquire); err != nil {
 		return nil, observed.Warnings, err

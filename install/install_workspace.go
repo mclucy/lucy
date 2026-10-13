@@ -10,6 +10,7 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
@@ -112,6 +113,27 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			return err
 		}
 	}
+	switch {
+	case old == nil:
+		log.Debug("installation decision", "mode", "resolve", "reason", "no lock file to replay")
+	case opts.WithOptional:
+		log.Debug("installation decision", "mode", "resolve", "reason", "optional packages requested")
+	case d != nil && old.ManifestFingerprint != fingerprint:
+		log.Debug(
+			"installation decision",
+			"mode", "resolve",
+			"reason", "manifest changed since lock",
+			"manifest", fingerprint,
+			"lock", old.ManifestFingerprint,
+		)
+	default:
+		log.Debug(
+			"installation decision",
+			"mode", "replay",
+			"reason", "manifest unchanged; lock replays exactly",
+			"manifest", fingerprint,
+		)
+	}
 	if old == nil || opts.WithOptional || (d != nil && old.ManifestFingerprint != fingerprint) {
 		if opts.Locked {
 			if !opts.requirementChange || old == nil || d == nil {
@@ -124,6 +146,10 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			if !reusable {
 				return fmt.Errorf("manifest core no longer matches lucy-lock.yaml; install without --locked")
 			}
+			log.Debug(
+				"locked installation reuses core",
+				"reason", "manifest core still matches lock; requirements rebind in place",
+			)
 			resolved, err = mutateLock(d, old, fingerprint)
 			if err != nil {
 				return err
@@ -139,6 +165,13 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 		if opts.Offline {
 			return fmt.Errorf("offline resolution requires a current lock; metadata selection is unavailable")
 		}
+		log.Info(
+			"resolving installation",
+			"minecraft", d.Server.Minecraft,
+			"distribution", d.Server.Core.Distribution,
+			"core", d.Server.Core.Version,
+			"mcdr", d.MCDR != nil,
+		)
 		coreReq := types.CoreRequest{Minecraft: d.Server.Minecraft, Distribution: d.Server.Core.Distribution, Version: d.Server.Core.Version, Repository: d.Server.Core.Repository, File: d.Server.Core.File}
 		var core types.CoreResolution
 		canReuse := false
@@ -150,6 +183,13 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			canReuse = reusable
 		}
 		if canReuse {
+			log.Debug(
+				"reusing locked core resolution",
+				"reason", "manifest core still matches lock",
+				"minecraft", old.Server.Minecraft,
+				"distribution", old.Server.Distribution,
+				"core-version", old.Server.CoreVersion,
+			)
 			core = types.CoreResolution{Minecraft: old.Server.Minecraft, Distribution: old.Server.Distribution, Version: old.Server.CoreVersion, Artifact: old.Server.Artifact, Bootstrap: old.Server.Bootstrap, Inputs: old.Server.Inputs, Java: old.Server.Java}
 		} else {
 			var err error
@@ -236,8 +276,18 @@ func stageInstall(
 		return err
 	}
 	if current && !opts.PublishManifest {
+		log.Info(
+			"installation already current",
+			"root", root,
+			"packages", len(resolved.Packages),
+		)
 		return validateAmbient(ctx, root, resolved)
 	}
+	reason := "installation missing or stale"
+	if current {
+		reason = "manifest publication forces re-staging"
+	}
+	log.Debug("staging installation", "root", root, "reason", reason)
 	// Every path past here installs or replaces files, so the server the lock
 	// describes must be runnable. A no-op replay never runs the server, so
 	// demanding a local JVM earlier would fail installs that change nothing.
@@ -268,9 +318,16 @@ func stageInstall(
 	if err := bootstrap.PrepareLocked(ctx, stage, resolved.Server, core, inputs); err != nil {
 		return err
 	}
+	log.Debug(
+		"server tree prepared",
+		"stage", stage,
+		"core", resolved.Server.Filename,
+		"inputs", len(inputs),
+	)
 	if err := rejectSharedDestinations(resolved); err != nil {
 		return err
 	}
+	staged := 0
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
 		if !packageActive(p) {
@@ -287,7 +344,9 @@ func stageInstall(
 		if err := bootstrap.CopyLockedFile(source, filepath.Join(stage, destination), 0o644); err != nil {
 			return err
 		}
+		staged++
 	}
+	log.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
 	if resolved.MCDR != nil {
 		if err := preparePython(ctx, root, stage, resolved, store); err != nil {
 			return err
@@ -310,22 +369,51 @@ func isFloating(v string) bool {
 func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Document, offline bool) (bool, error) {
 	request := types.CoreRequest{Minecraft: d.Server.Minecraft, Distribution: d.Server.Core.Distribution, Version: d.Server.Core.Version, Repository: d.Server.Core.Repository, File: d.Server.Core.File}
 	if old.Server.Directory != d.Server.Directory {
+		log.Debug(
+			"core pin not reusable",
+			"reason", "server directory changed",
+			"locked", old.Server.Directory,
+			"requested", d.Server.Directory,
+		)
 		return false, nil
 	}
 	if old.Server.Minecraft != request.Minecraft || old.Server.Distribution != request.Distribution {
+		log.Debug(
+			"core pin not reusable",
+			"reason", "pinned minecraft or distribution changed",
+			"minecraft", old.Server.Minecraft,
+			"requested-minecraft", request.Minecraft,
+			"distribution", old.Server.Distribution,
+			"requested-distribution", request.Distribution,
+		)
 		return false, nil
 	}
 	if !isFloating(request.Version) && old.Server.CoreVersion != request.Version {
+		log.Debug(
+			"core pin not reusable",
+			"reason", "core version changed",
+			"locked", old.Server.CoreVersion,
+			"requested", request.Version,
+		)
 		return false, nil
 	}
 	// Dropping the repository override retargets the server at its official
 	// distribution, so a locked GitHub artifact no longer satisfies the request
 	// even though every pinned field still matches.
 	if request.Repository == "" && old.Server.Provider == "github" {
+		log.Debug(
+			"core pin not reusable",
+			"reason", "repository override dropped while pin came from a GitHub fork",
+		)
 		return false, nil
 	}
 	if request.Repository != "" {
 		if offline {
+			log.Debug(
+				"core pin not reusable",
+				"reason", "repository override needs upstream confirmation while offline",
+				"repository", request.Repository,
+			)
 			return false, nil
 		}
 		var repository struct {
@@ -335,6 +423,13 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 			return false, err
 		}
 		if old.Server.Provider != "github" || old.Server.ProjectID != strconv.FormatInt(repository.ID, 10) {
+			log.Debug(
+				"core pin not reusable",
+				"reason", "repository identity changed",
+				"requested-repository", request.Repository,
+				"resolved-id", repository.ID,
+				"locked-project", old.Server.ProjectID,
+			)
 			return false, nil
 		}
 	}
@@ -344,6 +439,12 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 			return false, err
 		}
 		if !matched {
+			log.Debug(
+				"core pin not reusable",
+				"reason", "artifact filename no longer matches pattern",
+				"locked", old.Server.Filename,
+				"pattern", request.File,
+			)
 			return false, nil
 		}
 	}

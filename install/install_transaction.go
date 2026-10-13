@@ -12,6 +12,7 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"gopkg.in/yaml.v3"
 )
@@ -54,14 +55,26 @@ func recoverCommit(root string) error {
 	if err := safeOutputPath(root, filepath.Join(".lucy", relativeBackup)); err != nil {
 		return err
 	}
+	log.Warn(
+		fmt.Errorf(
+			"recovering interrupted installation transaction %s: %d created outputs to remove, %d changed outputs to restore",
+			p, len(journal.Created), len(journal.Changed),
+		),
+	)
+	removed := 0
 	for _, name := range journal.Created {
 		if err := safeOutputPath(root, name); err != nil {
 			return err
 		}
-		if err := os.Remove(filepath.Join(root, name)); err != nil && !os.IsNotExist(err) {
-			return err
+		if err := os.Remove(filepath.Join(root, name)); err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			continue
 		}
+		removed++
 	}
+	restored := 0
 	for _, name := range journal.Changed {
 		if err := safeOutputPath(root, name); err != nil {
 			return err
@@ -75,12 +88,23 @@ func recoverCommit(root string) error {
 			if err := bootstrap.CopyLockedFile(source, filepath.Join(root, name), info.Mode().Perm()); err != nil {
 				return err
 			}
+			restored++
 		}
 	}
 	if err := os.Remove(p); err != nil {
 		return err
 	}
-	return os.RemoveAll(journal.Backup)
+	if err := os.RemoveAll(journal.Backup); err != nil {
+		return err
+	}
+	log.Info(
+		"installation transaction recovered",
+		"root", root,
+		"journal", p,
+		"removed", removed,
+		"restored", restored,
+	)
+	return nil
 }
 
 func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool) (resultErr error) {
@@ -221,9 +245,17 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	if err != nil {
 		return err
 	}
-	if err := manifest.AtomicWrite(filepath.Join(root, ".lucy", "commit.yaml"), journalBytes); err != nil {
+	journalPath := filepath.Join(root, ".lucy", "commit.yaml")
+	if err := manifest.AtomicWrite(journalPath, journalBytes); err != nil {
 		return err
 	}
+	log.Debug(
+		"installation transaction journaled",
+		"journal", journalPath,
+		"backup", backup,
+		"created", len(journal.Created),
+		"changed", len(journal.Changed),
+	)
 	failed := true
 	defer func() {
 		if failed {
@@ -242,11 +274,16 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 			return err
 		}
 	}
+	pruned := 0
 	for _, entry := range previous.Entries {
 		if _, ok := sources[entry.Path]; !ok {
-			if err := os.Remove(filepath.Join(root, entry.Path)); err != nil && !os.IsNotExist(err) {
-				return err
+			if err := os.Remove(filepath.Join(root, entry.Path)); err != nil {
+				if !os.IsNotExist(err) {
+					return err
+				}
+				continue
 			}
+			pruned++
 		}
 	}
 	if publish {
@@ -268,7 +305,17 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		return err
 	}
 	failed = false
-	return os.RemoveAll(backup)
+	if err := os.RemoveAll(backup); err != nil {
+		return err
+	}
+	log.Info(
+		"installation committed",
+		"root", root,
+		"files", len(sources),
+		"pruned", pruned,
+		"manifest-published", publish,
+	)
+	return nil
 }
 
 func safeOutputPath(root, relative string) error {
@@ -302,8 +349,10 @@ func resolutionFingerprint(l *lockfile.Document) (string, error) {
 }
 
 func installationCurrent(root string, l *lockfile.Document) (bool, error) {
-	raw, err := os.ReadFile(filepath.Join(root, ".lucy", "install.yaml"))
+	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
+	raw, err := os.ReadFile(receiptPath)
 	if os.IsNotExist(err) {
+		log.Debug("installation not current", "reason", "no install receipt")
 		return false, nil
 	}
 	if err != nil {
@@ -318,6 +367,12 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 		return false, err
 	}
 	if receipt.LockFingerprint != expected {
+		log.Debug(
+			"installation not current",
+			"reason", "lock fingerprint changed",
+			"receipt", receipt.LockFingerprint,
+			"expected", expected,
+		)
 		return false, nil
 	}
 	for _, entry := range receipt.Entries {
@@ -326,14 +381,17 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 		}
 		actual, err := digestFile(filepath.Join(root, entry.Path), nil)
 		if os.IsNotExist(err) {
+			log.Debug("installation not current", "reason", "owned output missing", "path", entry.Path)
 			return false, nil
 		}
 		if err != nil {
 			return false, err
 		}
 		if actual["sha256"] != entry.SHA256 {
+			log.Debug("installation not current", "reason", "owned output modified", "path", entry.Path)
 			return false, nil
 		}
 	}
+	log.Debug("installation current", "reason", "receipt matches lock and every owned output", "receipt", receiptPath)
 	return true, nil
 }
