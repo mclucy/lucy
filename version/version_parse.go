@@ -9,9 +9,7 @@ import (
 // ErrAmbiguousVersion is returned when attempting to parse a non-exact version constant.
 var ErrAmbiguousVersion = fmt.Errorf("attempting to parse an ambiguous version")
 
-// Parse parses raw into a ResolvableVersion under scheme. Special version
-// constants are rejected with ErrAmbiguousVersion; unknown schemes and
-// unparseable values return nil.
+// Parse rejects selectors, unsupported schemes, and invalid concrete versions.
 func Parse(
 	raw types.BareVersion,
 	scheme types.VersionScheme,
@@ -21,16 +19,21 @@ func Parse(
 		return nil, fmt.Errorf("%w: %s", ErrAmbiguousVersion, raw)
 	}
 
+	var parsed types.ResolvableVersion
 	switch scheme {
 	case types.Semver:
-		return parseSemver(raw), nil
+		parsed = parseSemver(raw)
 	case types.Maven:
-		return parseMavenVersion(raw), nil
+		parsed = parseMavenVersion(raw)
 	case types.MinecraftRelease:
-		return parseMinecraftRelease(raw), nil
+		parsed = parseMinecraftRelease(raw)
 	case types.MinecraftSnapshot:
-		return parseMinecraftSnapshot(raw), nil
+		parsed = parseMinecraftSnapshot(raw)
 	default:
-		return nil, nil
+		return nil, fmt.Errorf("unsupported version scheme %v", scheme)
 	}
+	if parsed == nil {
+		return nil, fmt.Errorf("invalid concrete version %q for scheme %v", raw, scheme)
+	}
+	return parsed, nil
 }

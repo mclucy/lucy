@@ -19,7 +19,6 @@ func newMcdrReader() Reader {
 func (r *mcdrReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-	resolver SlugResolver,
 ) ([]Info, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "mcdreforged.plugin.json" {
