@@ -4,16 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - tools/envgen/**
-      - e2e/testdata/environments/**
+      - e2e/**
       - workspace/**
       - internal/cli/**
       - e2e/**
       - .github/workflows/e2e.yml
   pull_request:
     paths:
-      - tools/envgen/**
-      - e2e/testdata/environments/**
+      - e2e/**
       - workspace/**
       - internal/cli/**
       - e2e/**
@@ -33,7 +31,7 @@ jobs:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
     runs-on: ubuntu-latest
     env:
-      ENVS: arclight-fabric,arclight-forge,arclight-neoforge,fabric-executable-1214,fabric-executable-262,forge-1201,forge-12111,neoforge-211,neoforge-262,mcdr-fabric,mcdr-forge,mcdr-neoforge
+      SANDBOXES: arclight-fabric,arclight-forge,arclight-neoforge,fabric-executable-1214,fabric-executable-262,forge-1201,forge-12111,neoforge-211,neoforge-262,mcdr-fabric,mcdr-forge,mcdr-neoforge
     steps:
       - uses: actions/checkout@v7
 
@@ -46,14 +44,14 @@ jobs:
       - name: Set up Task
         uses: go-task/setup-task@v2
 
-      - name: Cache envgen downloads
+      - name: Cache sandbox downloads
         uses: actions/cache@v6
         with:
-          path: ~/.cache/lucy-envgen
-          key: envgen-${{ hashFiles('e2e/testdata/environments/environments.yaml') }}
+          path: ~/.cache/lucy-sandbox
+          key: sandbox-${{ hashFiles('e2e/testdata/environments/sandboxes.yaml') }}
 
-      - name: Generate environments
-        run: task envs:gen -- --only ${{ env.ENVS }}
+      - name: Generate sandboxes
+        run: task sandboxes:gen -- --only ${{ env.SANDBOXES }}
 
       - name: Build lucy
         run: |
@@ -65,4 +63,4 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
       - name: Verify probe (e2e)
-        run: go run ./e2e/init ${{ env.ENVS }}
+        run: go run ./e2e/init ${{ env.SANDBOXES }}

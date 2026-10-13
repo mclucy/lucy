@@ -75,34 +75,36 @@ To run the built binary against a test server directory:
 
 ## Testing and Debugging
 
-1. Always prefer the project's e2e testing suite (`envgen`). You should do regression tests after implementing a feature.
-2. `envgen` creates sandbox server environments in `.sandboxes/` with the manifest file `e2e/testdata/environments/environments.yaml`. There's brief explanation for each environment in `e2e/testdata/environments/families/*.md`.
-3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
-4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
+1. Always prefer the project's e2e testing suite. You should do regression tests after implementing a feature.
+2. `go run ./e2e/sandbox` materializes real server sandboxes into `.sandboxes/` from `e2e/testdata/environments/sandboxes.yaml`. There's brief explanation for each sandbox family in `e2e/testdata/environments/docs/*.md`.
+3. Install scenarios declare intent in `e2e/testdata/manifest/<id>.yaml` and pin expected bytes as digests in `e2e/lock`; they need no sandbox unless they compare against one.
+4. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
+5. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 
-The domain suites run with `task e2e:init -- <environment ids>` and
+The domain suites run with `task e2e:init -- <sandbox ids>` and
 `task e2e:compile -- [fixture ids]`. Shared selection and reporting lives in
 `e2e/internal/testkit`; the compile suite defaults to all repository fixtures.
 
-### envgen CLI
+### Sandbox CLI
 
-`go run ./tools/envgen` materializes environments; `task envs:*` wraps it for the common cases. Flags:
+`go run ./e2e/sandbox` materializes sandboxes; `task sandboxes:*` wraps it for the common cases. Flags:
 
 | Flag | Default | Effect |
 | --- | --- | --- |
-| `--list` | off | Print all environments with family, game version, generated/missing state, then exit |
-| `--only a,b` | all | Restrict processing to the named environment ids |
+| `--list` | off | Print all sandboxes with family, game version, generated/missing state, then exit |
+| `--only a,b` | all | Restrict processing to the named sandbox ids |
 | `--force` | off | Regenerate even when `.sandboxes/<id>/` already exists |
 | `--out <dir>` | `.sandboxes` | Output root |
-| `--manifest <file>` | `e2e/testdata/environments/environments.yaml` | Manifest path |
-| `--cache <dir>` | `os.UserCacheDir()/lucy-envgen` | Content-addressed download cache (keyed by sha256) |
+| `--manifest <file>` | `e2e/testdata/environments/sandboxes.yaml` | Manifest path |
+| `--cache <dir>` | `os.UserCacheDir()/lucy-sandbox` | Content-addressed download cache (keyed by sha256) |
 | `--manual-dir <dir>` | `<cache>/manual` | Where `manual: true` artifacts are expected as `<id>/<basename>` |
 
 The CLI is idempotent:
 
-- Existing environment dirs are skipped without `--force`
-- Every artifact digest is verified after fetch and generation aborts that environment on mismatch
+- Existing sandbox dirs are skipped without `--force`
+- Every artifact digest is verified after fetch and generation aborts that sandbox on mismatch
 - Missing manual artifacts fail with the exact drop-in path and expected sha256.
+- No binary is committed to the repository; fixtures that are not real servers pin their digests in `e2e/lock` instead.
 
 ## Comments
 

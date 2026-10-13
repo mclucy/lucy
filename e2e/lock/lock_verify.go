@@ -131,12 +131,12 @@ func (scenario lockScenario) verify(root, oracle string, declared manifestIntent
 			return fmt.Errorf("core fixture %s: %w", scenario.coreFixture, err)
 		}
 		if actual != server.Hashes["sha256"] {
-			return fmt.Errorf("selected %s core artifact differs from its envgen fixture", scenario.distribution)
+			return fmt.Errorf("selected %s core artifact differs from its pinned sandbox artifact", scenario.distribution)
 		}
 	}
 	for _, artifact := range scenario.runtimeArtifacts {
-		if err := verifyOracleFile(filepath.Join(oracle, artifact.fixture), filepath.Join(live, artifact.runtime)); err != nil {
-			return fmt.Errorf("runtime artifact %s: %w", artifact.runtime, err)
+		if err := verifyOracleFile(filepath.Join(oracle, artifact.sandboxFile), filepath.Join(live, artifact.runtimeFile)); err != nil {
+			return fmt.Errorf("runtime artifact %s: %w", artifact.runtimeFile, err)
 		}
 	}
 	switch {
@@ -320,10 +320,12 @@ func verifyLockedFile(path string, artifact lockedArtifact) error {
 	return nil
 }
 
-func verifyOracleFile(fixture, installed string) error {
-	want, err := fileSHA256(fixture)
+// verifyOracleFile compares an installed file against its counterpart in the
+// generated sandbox, which the sandbox manifest pins by digest.
+func verifyOracleFile(sandboxFile, installed string) error {
+	want, err := fileSHA256(sandboxFile)
 	if err != nil {
-		return fmt.Errorf("fixture unavailable (%s): %w", fixture, err)
+		return fmt.Errorf("fixture unavailable (%s): %w", sandboxFile, err)
 	}
 	return verifyPinnedDigest(installed, want)
 }

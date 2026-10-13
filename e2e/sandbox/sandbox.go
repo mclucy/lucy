@@ -1,4 +1,4 @@
-// Command envgen materializes server sandboxes from e2e/testdata/environments.
+// Command sandbox materializes server sandboxes from e2e/testdata/environments.
 package main
 
 import (
@@ -18,11 +18,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const userAgent = "lucy-envgen/1.0 (+https://github.com/mclucy/lucy)"
+const userAgent = "lucy-sandbox/1.0 (+https://github.com/mclucy/lucy)"
 
 type manifest struct {
-	Version      int           `yaml:"version"`
-	Environments []environment `yaml:"environments"`
+	Version   int       `yaml:"version"`
+	Sandboxes []sandbox `yaml:"sandboxes"`
 }
 
 // docsRefs accepts either a scalar string or a sequence of strings in YAML.
@@ -44,7 +44,7 @@ func (d *docsRefs) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-type environment struct {
+type sandbox struct {
 	ID          string     `yaml:"id"`
 	Family      string     `yaml:"family"`
 	GameVersion string     `yaml:"game_version"`
@@ -82,7 +82,7 @@ type options struct {
 	outRoot      string
 	cacheDir     string
 	manualDir    string
-	seedsRoot    string
+	fixturesRoot string
 	only         string
 	force        bool
 	list         bool
@@ -93,22 +93,22 @@ func main() {
 	flag.StringVar(
 		&opts.manifestPath,
 		"manifest",
-		"e2e/testdata/environments/environments.yaml",
-		"path to environments manifest",
+		"e2e/testdata/environments/sandboxes.yaml",
+		"path to the sandboxes manifest",
 	)
-	flag.StringVar(&opts.outRoot, "out", ".sandboxes", "output root for generated environments")
+	flag.StringVar(&opts.outRoot, "out", ".sandboxes", "output root for generated sandboxes")
 	defaultCache, _ := os.UserCacheDir()
-	flag.StringVar(&opts.cacheDir, "cache", filepath.Join(defaultCache, "lucy-envgen"), "download cache directory")
+	flag.StringVar(&opts.cacheDir, "cache", filepath.Join(defaultCache, "lucy-sandbox"), "download cache directory")
 	flag.StringVar(&opts.manualDir, "manual-dir", "", "directory holding manually supplied artifacts (default <cache>/manual)")
-	flag.StringVar(&opts.only, "only", "", "comma-separated environment ids to process")
+	flag.StringVar(&opts.only, "only", "", "comma-separated sandbox ids to process")
 	flag.BoolVar(&opts.force, "force", false, "regenerate even if the output directory already exists")
-	flag.BoolVar(&opts.list, "list", false, "list environments and exit")
+	flag.BoolVar(&opts.list, "list", false, "list sandboxes and exit")
 	flag.Parse()
 
 	if opts.manualDir == "" {
 		opts.manualDir = filepath.Join(opts.cacheDir, "manual")
 	}
-	opts.seedsRoot = filepath.Join(filepath.Dir(opts.manifestPath), "seeds")
+	opts.fixturesRoot = filepath.Join(filepath.Dir(opts.manifestPath), "fixtures")
 
 	data, err := os.ReadFile(opts.manifestPath)
 	if err != nil {
@@ -122,7 +122,7 @@ func main() {
 		fatal("invalid manifest: %v", err)
 	}
 	if opts.list {
-		listEnvironments(&man, opts.outRoot)
+		listSandboxes(&man, opts.outRoot)
 		return
 	}
 	if err := run(&man, opts); err != nil {
@@ -132,24 +132,24 @@ func main() {
 
 func validate(man *manifest) error {
 	seen := map[string]bool{}
-	for _, env := range man.Environments {
-		if env.ID == "" {
-			return errors.New("environment without id")
+	for _, sb := range man.Sandboxes {
+		if sb.ID == "" {
+			return errors.New("sandbox without id")
 		}
-		if seen[env.ID] {
-			return fmt.Errorf("duplicate environment id %q", env.ID)
+		if seen[sb.ID] {
+			return fmt.Errorf("duplicate sandbox id %q", sb.ID)
 		}
-		seen[env.ID] = true
-		for _, art := range env.Artifacts {
+		seen[sb.ID] = true
+		for _, art := range sb.Artifacts {
 			if art.Dest == "" {
-				return fmt.Errorf("%s: artifact without dest", env.ID)
+				return fmt.Errorf("%s: artifact without dest", sb.ID)
 			}
 			if art.SHA256 != "" {
 				if len(art.SHA256) != 64 {
-					return fmt.Errorf("%s/%s: sha256 must be 64 hex chars", env.ID, art.Dest)
+					return fmt.Errorf("%s/%s: sha256 must be 64 hex chars", sb.ID, art.Dest)
 				}
 				if _, err := hex.DecodeString(art.SHA256); err != nil {
-					return fmt.Errorf("%s/%s: bad sha256: %v", env.ID, art.Dest, err)
+					return fmt.Errorf("%s/%s: bad sha256: %v", sb.ID, art.Dest, err)
 				}
 			}
 			kinds := 0
@@ -161,7 +161,7 @@ func validate(man *manifest) error {
 			if kinds != 1 {
 				return fmt.Errorf(
 					"%s/%s: exactly one of url, mojang_version, fabric_meta, purpur, manual required",
-					env.ID, art.Dest,
+					sb.ID, art.Dest,
 				)
 			}
 		}
@@ -169,22 +169,22 @@ func validate(man *manifest) error {
 	return nil
 }
 
-func listEnvironments(man *manifest, outRoot string) {
+func listSandboxes(man *manifest, outRoot string) {
 	fmt.Printf("%-24s %-14s %-10s %-10s %s\n", "ID", "FAMILY", "GAME", "STATE", "DESCRIPTION")
-	for _, env := range man.Environments {
+	for _, sb := range man.Sandboxes {
 		state := "missing"
-		if _, err := os.Stat(filepath.Join(outRoot, env.ID)); err == nil {
+		if _, err := os.Stat(filepath.Join(outRoot, sb.ID)); err == nil {
 			state = "generated"
 		}
 		manual := ""
-		for _, art := range env.Artifacts {
+		for _, art := range sb.Artifacts {
 			if art.Manual {
 				manual = " (manual)"
 				break
 			}
 		}
 		fmt.Printf("%-24s %-14s %-10s %-10s %s%s\n",
-			env.ID, env.Family, env.GameVersion, state, env.Description, manual)
+			sb.ID, sb.Family, sb.GameVersion, state, sb.Description, manual)
 	}
 }
 
@@ -199,26 +199,26 @@ func run(man *manifest, opts options) error {
 		return err
 	}
 	var failed []string
-	for _, env := range man.Environments {
-		if len(selected) > 0 && !selected[env.ID] {
+	for _, sb := range man.Sandboxes {
+		if len(selected) > 0 && !selected[sb.ID] {
 			continue
 		}
-		if err := generateEnvironment(env, opts); err != nil {
-			fmt.Fprintf(os.Stderr, "[FAIL] %s: %v\n", env.ID, err)
-			failed = append(failed, env.ID)
+		if err := generateSandbox(sb, opts); err != nil {
+			fmt.Fprintf(os.Stderr, "[FAIL] %s: %v\n", sb.ID, err)
+			failed = append(failed, sb.ID)
 			continue
 		}
 	}
 	if len(failed) > 0 {
-		return fmt.Errorf("failed environments: %s", strings.Join(failed, ", "))
+		return fmt.Errorf("failed sandboxes: %s", strings.Join(failed, ", "))
 	}
 	return nil
 }
 
-func generateEnvironment(env environment, opts options) error {
-	outDir := filepath.Join(opts.outRoot, env.ID)
+func generateSandbox(sb sandbox, opts options) error {
+	outDir := filepath.Join(opts.outRoot, sb.ID)
 	if _, err := os.Stat(outDir); err == nil && !opts.force {
-		fmt.Printf("[SKIP] %s (exists; use --force)\n", env.ID)
+		fmt.Printf("[SKIP] %s (exists; use --force)\n", sb.ID)
 		return nil
 	}
 
@@ -226,17 +226,17 @@ func generateEnvironment(env environment, opts options) error {
 		artifact
 		cachedPath string
 	}
-	resolvedArtifacts := make([]resolved, 0, len(env.Artifacts))
-	for _, art := range env.Artifacts {
-		path, err := ensureCached(env.ID, art, opts)
+	resolvedArtifacts := make([]resolved, 0, len(sb.Artifacts))
+	for _, art := range sb.Artifacts {
+		path, err := ensureCached(sb.ID, art, opts)
 		if err != nil {
 			return fmt.Errorf("artifact %s: %w", art.Dest, err)
 		}
 		resolvedArtifacts = append(resolvedArtifacts, resolved{artifact: art, cachedPath: path})
-		fmt.Printf("[OK]   %s: %s\n", env.ID, art.Dest)
+		fmt.Printf("[OK]   %s: %s\n", sb.ID, art.Dest)
 	}
 
-	for _, dir := range env.Dirs {
+	for _, dir := range sb.Dirs {
 		if err := os.MkdirAll(filepath.Join(outDir, dir), 0o755); err != nil {
 			return err
 		}
@@ -250,22 +250,22 @@ func generateEnvironment(env environment, opts options) error {
 			return fmt.Errorf("install %s: %w", ra.Dest, err)
 		}
 	}
-	seedsDir := filepath.Join(opts.seedsRoot, env.ID)
-	if _, err := os.Stat(seedsDir); err == nil {
-		if err := copyTree(seedsDir, outDir); err != nil {
-			return fmt.Errorf("copy seeds: %w", err)
+	fixturesDir := filepath.Join(opts.fixturesRoot, sb.ID)
+	if _, err := os.Stat(fixturesDir); err == nil {
+		if err := copyTree(fixturesDir, outDir); err != nil {
+			return fmt.Errorf("copy fixtures: %w", err)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	fmt.Printf("[GEN]  %s -> %s\n", env.ID, outDir)
+	fmt.Printf("[GEN]  %s -> %s\n", sb.ID, outDir)
 	return nil
 }
 
-func ensureCached(envID string, art artifact, opts options) (string, error) {
+func ensureCached(sandboxID string, art artifact, opts options) (string, error) {
 	key := strings.ToLower(art.SHA256)
 	if key == "" {
-		sum := sha256.Sum256([]byte(sourceDescriptor(envID, art)))
+		sum := sha256.Sum256([]byte(sourceDescriptor(sandboxID, art)))
 		key = "src-" + hex.EncodeToString(sum[:])
 	}
 	cached := filepath.Join(opts.cacheDir, key[:2], key)
@@ -286,7 +286,7 @@ func ensureCached(envID string, art artifact, opts options) (string, error) {
 	switch {
 	case art.Manual:
 		_ = tmp.Close()
-		source := filepath.Join(opts.manualDir, envID, filepath.Base(art.Dest))
+		source := filepath.Join(opts.manualDir, sandboxID, filepath.Base(art.Dest))
 		if _, err := os.Stat(source); err != nil {
 			if art.SHA256 == "" {
 				return "", fmt.Errorf("manual artifact missing: place the file at %s", source)
@@ -356,7 +356,7 @@ func ensureCached(envID string, art artifact, opts options) (string, error) {
 // sourceDescriptor names where an artifact's bytes come from. Digest-less
 // artifacts key their cache entries by the hash of this descriptor, prefixed
 // src- to keep them disjoint from content digests.
-func sourceDescriptor(envID string, art artifact) string {
+func sourceDescriptor(sandboxID string, art artifact) string {
 	switch {
 	case art.URL != "":
 		return art.URL
@@ -370,7 +370,7 @@ func sourceDescriptor(envID string, art artifact) string {
 	case art.Purpur != nil:
 		return fmt.Sprintf("purpur:%s/%s", art.Purpur.Version, art.Purpur.Build)
 	default:
-		return "manual:" + envID + "/" + filepath.Base(art.Dest)
+		return "manual:" + sandboxID + "/" + filepath.Base(art.Dest)
 	}
 }
 
@@ -471,7 +471,7 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer func() { _ = in.Close() }()
-	tmpDst := dst + ".envgen-tmp"
+	tmpDst := dst + ".sandbox-tmp"
 	out, err := os.Create(tmpDst)
 	if err != nil {
 		return err
@@ -506,6 +506,6 @@ func copyTree(srcRoot, dstRoot string) error {
 }
 
 func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "envgen: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "sandbox: "+format+"\n", args...)
 	os.Exit(1)
 }

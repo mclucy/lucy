@@ -1,6 +1,6 @@
 # Sponge
 
-Covers environments: `sponge-vanilla`, `sponge-forge`, `sponge-neo`.
+Covers sandboxes: `sponge-vanilla`, `sponge-forge`, `sponge-neo`.
 
 ## Flavors
 
@@ -16,4 +16,4 @@ Filename grammar (<https://docs.spongepowered.org/stable/en/versions/filenames.h
 
 ## Provenance (2026-08)
 
-The distribution landscape shifted: `repo.spongepowered.org` maven-releases now serves a slim ~54 KB launcher-style artifact under the old version paths, while the live download endpoints are `https://dl.spongepowered.org/spongevanilla`, `https://dl.spongepowered.org/spongeforge`, and `https://dl.spongepowered.org/spongeneo` — each currently resolving to a ~50 KB slim launcher too, not the multi-MB `-universal.jar` builds. The sandbox copies predate this change and stay pinned `manual:`; flip to pinned URLs only after an upstream download matches the recorded sha256.
+The distribution landscape shifted: `repo.spongepowered.org` maven-releases now serves a slim ~54 KB launcher-style artifact under the old version paths, while the live download endpoints are `https://dl.spongepowered.org/spongevanilla`, `https://dl.spongepowered.org/spongeforge`, and `https://dl.spongepowered.org/spongeneo` — each currently resolving to a ~50 KB slim launcher too, not the multi-MB `-universal.jar` builds. The pinned fixtures predate this change and stay `manual:`; flip to pinned URLs only after an upstream download matches the recorded sha256.

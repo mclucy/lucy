@@ -11,7 +11,10 @@ import (
 )
 
 type lockScenario struct {
-	environment      string
+	// sandbox names the generated server that supplies pinned oracle bytes.
+	// Scenarios without one pin their own digests below, so fixtures that are
+	// not real servers never need a generated directory or a committed binary.
+	sandbox          string
 	distribution     string
 	minecraft        string
 	coreVersion      string
@@ -31,7 +34,7 @@ type lockScenario struct {
 }
 
 type runtimeArtifactExpectation struct {
-	fixture, runtime string
+	sandboxFile, runtimeFile string
 }
 
 type packageExpectation struct {
@@ -40,7 +43,7 @@ type packageExpectation struct {
 
 var lockScenarios = map[string]lockScenario{
 	"vanilla-1201": {
-		environment:      "vanilla-1201",
+		sandbox:          "vanilla-1201",
 		distribution:     "vanilla",
 		minecraft:        "1.20.1",
 		coreVersion:      "1.20.1",
@@ -80,7 +83,7 @@ var lockScenarios = map[string]lockScenario{
 		},
 	},
 	"forge-1201": {
-		environment:     "forge-1201",
+		sandbox:         "forge-1201",
 		distribution:    "forge",
 		minecraft:       "1.20.1",
 		coreVersion:     "47.4.10",
@@ -93,12 +96,12 @@ var lockScenarios = map[string]lockScenario{
 		requiredInputs:  []string{"libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar"},
 		launchArguments: "libraries/net/minecraftforge/forge/1.20.1-47.4.10/unix_args.txt",
 		runtimeArtifacts: []runtimeArtifactExpectation{{
-			fixture: "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar",
-			runtime: "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar",
+			sandboxFile: "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar",
+			runtimeFile: "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar",
 		}},
 	},
 	"neoforge-211": {
-		environment:     "neoforge-211",
+		sandbox:         "neoforge-211",
 		distribution:    "neoforge",
 		minecraft:       "1.21.1",
 		coreVersion:     "21.1.248",
@@ -111,8 +114,8 @@ var lockScenarios = map[string]lockScenario{
 		requiredInputs:  []string{"libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar"},
 		launchArguments: "libraries/net/neoforged/neoforge/21.1.248/unix_args.txt",
 		runtimeArtifacts: []runtimeArtifactExpectation{{
-			fixture: "libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar",
-			runtime: "libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar",
+			sandboxFile: "libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar",
+			runtimeFile: "libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar",
 		}},
 	},
 }
@@ -123,19 +126,19 @@ func executeScenario(ctx context.Context, binary, sandboxes, id string) (resultE
 		return fmt.Errorf("unknown install scenario %q", id)
 	}
 	oracle := ""
-	if scenario.environment != "" {
-		oracle = filepath.Join(sandboxes, scenario.environment)
+	if scenario.sandbox != "" {
+		oracle = filepath.Join(sandboxes, scenario.sandbox)
 		info, err := os.Stat(oracle)
 		if err != nil {
-			return fmt.Errorf("generate %s with task envs:gen first: %w", scenario.environment, err)
+			return fmt.Errorf("generate %s with task sandboxes:gen first: %w", scenario.sandbox, err)
 		}
 		if !info.IsDir() {
-			return fmt.Errorf("environment fixture is not a directory: %s", oracle)
+			return fmt.Errorf("sandbox is not a directory: %s", oracle)
 		}
 	}
 	intent, err := os.ReadFile(filepath.Join("e2e", "testdata", "manifest", id+".yaml"))
 	if err != nil {
-		return fmt.Errorf("read scenario intent: %w", err)
+		return fmt.Errorf("read scenario manifest: %w", err)
 	}
 	var declared manifestIntent
 	if err := yaml.Unmarshal(intent, &declared); err != nil {
