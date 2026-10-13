@@ -2,13 +2,11 @@
 package report
 
 import (
-	"fmt"
-
 	"charm.land/log/v2"
 )
 
 func Info(content any) {
-	console.Info(fmt.Sprint(content))
+	console.Info(content)
 }
 
 func Warn(err error) {
