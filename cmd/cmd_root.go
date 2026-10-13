@@ -32,7 +32,7 @@ var rootCmd = &cobra.Command{
 		}
 		if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 			style.TurnOffStyles()
-			log.TurnOffStyles()
+			log.TurnOffColors()
 		}
 		if logFile, _ := cmd.Flags().GetBool(cli.FlagLogFile); logFile {
 			fmt.Println("Log file at", log.GetLogFile().Name())

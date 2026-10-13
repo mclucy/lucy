@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/ansi"
 	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 	"github.com/mclucy/lucy/internal/fn"
@@ -27,14 +28,14 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 	options := []glamour.TermRendererOption{
 		glamour.WithWordWrap(maxWidth),
 	}
-	if StylesEnabled() {
+	if ColorsEnabled() {
 		if HasDarkBackground() {
 			options = append(options, glamour.WithStandardStyle(styles.DarkStyle))
 		} else {
 			options = append(options, glamour.WithStandardStyle(styles.LightStyle))
 		}
 	} else {
-		options = append(options, glamour.WithStandardStyle(styles.NoTTYStyle))
+		options = append(options, glamour.WithStyles(noColorMarkdownStyle()))
 	}
 
 	renderer, err := glamour.NewTermRenderer(options...)
@@ -56,7 +57,20 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 	return strings.Join(lines, "\n")
 }
 
-func PrintAsJson(v interface{}) {
+// noColorMarkdownStyle renders markdown without color while keeping emphasis
+// as terminal attributes. The stock NoTTY style falls back to literal
+// `**bold**` and `*italic*` markers, which contradicts --no-color keeping
+// text attributes.
+func noColorMarkdownStyle() ansi.StyleConfig {
+	bold, italic, crossedOut := true, true, true
+	cfg := styles.NoTTYStyleConfig
+	cfg.Strong = ansi.StylePrimitive{Bold: &bold}
+	cfg.Emph = ansi.StylePrimitive{Italic: &italic}
+	cfg.Strikethrough = ansi.StylePrimitive{CrossedOut: &crossedOut}
+	return cfg
+}
+
+func PrintAsJson(v any) {
 	data, err := json.Marshal(v, jsontext.Multiline(true), jsontext.WithIndent("  "))
 	if err != nil {
 		fmt.Println(err)
@@ -65,7 +79,7 @@ func PrintAsJson(v interface{}) {
 	fmt.Println(string(data))
 }
 
-func PrintAsJsonCompact(v interface{}) {
+func PrintAsJsonCompact(v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		fmt.Println(err)
