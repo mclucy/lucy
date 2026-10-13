@@ -24,60 +24,58 @@ var rootCmd = &cobra.Command{
 	Use:   "lucy",
 	Short: "The Minecraft server package manager",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
-			warning := fmt.Errorf(
-				"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
-			)
-			log.Warn(warning)
-			report.Warn(warning)
+		path, err := cmd.Flags().GetString(cli.FlagLogFile)
+		if err != nil {
+			return err
 		}
+		level, err := cmd.Flags().GetString(cli.FlagLogLevel)
+		if err != nil {
+			return err
+		}
+		printLogs, err := cmd.Flags().GetBool(cli.FlagPrintLogs)
+		if err != nil {
+			return err
+		}
+		if err := log.Configure(path, level, printLogs); err != nil {
+			return err
+		}
+		report.SetOutput(cmd.ErrOrStderr())
 		if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 			style.TurnOffStyles()
-			log.TurnOffColors()
 			report.TurnOffColors()
 		}
 		if noColor, _ := cmd.Flags().GetBool(cli.FlagNoColor); noColor {
 			style.TurnOffColors()
-			log.TurnOffColors()
 			report.TurnOffColors()
 		}
 		if noInteractive, _ := cmd.Flags().GetBool(cli.FlagNoInteractive); noInteractive {
 			style.TurnOffInteractivity()
 		}
-		if logFile, _ := cmd.Flags().GetBool(cli.FlagLogFile); logFile {
-			fmt.Println("Log file at", log.GetLogFile().Name())
-		}
-		if printLogs, _ := cmd.Flags().GetBool(cli.FlagPrintLogs); printLogs {
-			log.EnablePrintLogs()
-		}
-		if debug, _ := cmd.Flags().GetBool(cli.FlagDebug); debug {
-			log.EnableDebug()
-		}
-		if dumpLogs, _ := cmd.Flags().GetBool(cli.FlagDumpLogs); dumpLogs {
-			log.EnableDumpHistory()
+		if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
+			report.Warn(fmt.Errorf(
+				"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
+			))
 		}
 		return nil
 	},
 }
 
 func init() {
-	rootCmd.PersistentFlags().Bool(cli.FlagDebug, false, "Show debug logs")
-	rootCmd.PersistentFlags().Bool(
+	rootCmd.PersistentFlags().String(
+		cli.FlagLogLevel,
+		"info",
+		"Set diagnostic log level: debug, info, warn, error, fatal",
+	)
+	rootCmd.PersistentFlags().String(
 		cli.FlagLogFile,
-		false,
-		"Output the path to logfile",
+		log.DefaultFile(),
+		"Write diagnostic logs to this file",
 	)
 	rootCmd.PersistentFlags().Bool(
 		cli.FlagPrintLogs,
 		false,
-		"Print logs to console",
+		"Mirror diagnostic logs to stderr",
 	)
-	rootCmd.PersistentFlags().Bool(
-		cli.FlagDumpLogs,
-		false,
-		"Dump the log history to console before exit",
-	)
-	_ = rootCmd.PersistentFlags().MarkHidden(cli.FlagDumpLogs)
 	rootCmd.PersistentFlags().Bool(
 		cli.FlagJSON,
 		false,

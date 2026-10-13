@@ -1,106 +1,68 @@
 package log
 
 import (
-	"image/color"
+	"fmt"
+	"io"
 	"os"
-	"strings"
 	"sync"
 
-	"charm.land/lipgloss/v2"
 	"charm.land/log/v2"
 	"github.com/charmbracelet/colorprofile"
 )
 
 var (
-	debug        bool
-	verboseWrite bool
-	dumpHistory  bool
+	mu         sync.RWMutex
+	output     = &fileOutput{path: DefaultFile()}
+	diagnostic = log.NewWithOptions(output, log.Options{
+		ReportTimestamp: true,
+		TimeFormat:      "2006-01-02 15:04:05",
+		Level:           log.InfoLevel,
+		Formatter:       log.TextFormatter,
+	})
 )
-
-var (
-	mu      sync.Mutex // write lock for history
-	history []*entry
-)
-
-// fileLog writes to the log file with timestamps and no color.
-var fileLog *log.Logger
-
-// consoleLog writes styled output to stderr, no timestamps.
-var consoleLog *log.Logger
 
 func init() {
-	consoleLog = log.NewWithOptions(
-		os.Stderr, log.Options{
-			ReportTimestamp: false,
-			Level:           log.InfoLevel,
-		},
-	)
-	consoleLog.SetStyles(themedStyles())
-
-	// fileLog is initialized lazily via getFileLog() since the log file
-	// may not be available at init time.
+	diagnostic.SetColorProfile(colorprofile.NoTTY)
 }
 
-// getFileLog returns the file log, creating it lazily.
-func getFileLog() *log.Logger {
-	if fileLog == nil {
-		f := getLogFile()
-		fileLog = log.NewWithOptions(
-			f, log.Options{
-				ReportTimestamp: true,
-				TimeFormat:      "2006-01-02 15:04:05",
-				Level:           log.DebugLevel,
-				Formatter:       log.TextFormatter,
-			},
-		)
-		fileLog.SetColorProfile(colorprofile.NoTTY)
+// Configure opens the diagnostic destination before replacing the current stream.
+// Mirroring writes the same filtered, formatted records to stderr.
+func Configure(path, level string, printLogs bool) error {
+	threshold, err := log.ParseLevel(level)
+	if err != nil {
+		return fmt.Errorf("log level: %w", err)
 	}
-	return fileLog
-}
-
-// EnablePrintLogs enables echoing of file-only log entries to the console.
-func EnablePrintLogs() { verboseWrite = true }
-
-// EnableDebug enables Debug-level logging
-func EnableDebug() {
-	debug = true
-	consoleLog.SetLevel(log.DebugLevel)
-}
-
-// EnableDumpHistory enables history dump on exit.
-func EnableDumpHistory() { dumpHistory = true }
-
-// themedStyles returns charm/log Styles with level colors matching the
-// application theme (terminal/style). Basic ANSI colors keep the log
-// consistent with the semantic roles defined there (Note, Success,
-// Warning, Failure).
-func themedStyles() *log.Styles {
-	levelStyle := func(name string, fg color.Color) lipgloss.Style {
-		return lipgloss.NewStyle().
-			SetString(strings.ToUpper(name)).
-			Bold(true).
-			MaxWidth(4).
-			Foreground(fg)
+	if path == "" {
+		path = DefaultFile()
+	}
+	file, err := openLogFile(path)
+	if err != nil {
+		return err
 	}
 
-	s := log.DefaultStyles()
-	s.Levels[log.DebugLevel] = levelStyle(
-		log.DebugLevel.String(),
-		lipgloss.Cyan,
-	)
-	s.Levels[log.InfoLevel] = levelStyle(log.InfoLevel.String(), lipgloss.Green)
-	s.Levels[log.WarnLevel] = levelStyle(
-		log.WarnLevel.String(),
-		lipgloss.Yellow,
-	)
-	s.Levels[log.ErrorLevel] = levelStyle(log.ErrorLevel.String(), lipgloss.Red)
-	s.Levels[log.FatalLevel] = levelStyle(log.FatalLevel.String(), lipgloss.Red)
-	return s
+	mu.Lock()
+	defer mu.Unlock()
+	previous := output
+	output = &fileOutput{path: path, file: file}
+	var destination io.Writer = output
+	if printLogs {
+		destination = io.MultiWriter(output, os.Stderr)
+	}
+	diagnostic.SetOutput(destination)
+	diagnostic.SetLevel(threshold)
+	if err := previous.close(); err != nil {
+		return fmt.Errorf("close previous log file: %w", err)
+	}
+	return nil
 }
 
-// TurnOffColors disables all coloring on the console log. Call this
-// alongside style.TurnOffColors() to keep log output consistent with the
-// rest of the UI when --no-color is active.
-func TurnOffColors() {
-	consoleLog.SetColorProfile(colorprofile.NoTTY)
+// Close stops diagnostic writes and releases the log file.
+func Close() error {
+	mu.Lock()
+	defer mu.Unlock()
+	diagnostic.SetOutput(io.Discard)
+	if err := output.close(); err != nil {
+		return fmt.Errorf("close log file %q: %w", output.path, err)
+	}
+	return nil
 }

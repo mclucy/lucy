@@ -37,16 +37,18 @@ These flags are inherited by every `lucy` subcommand.
 
 ## Logging
 
-<ParamField query="--debug" type="boolean" default="false">
-  Show debug-level log entries in the console.
+<ParamField query="--log-level" type="string" default="info">
+  Set the minimum diagnostic severity: `debug`, `info`, `warn`, `error`, or `fatal`. This setting does not filter user reports.
 </ParamField>
 
-<ParamField query="--log-file" type="boolean" default="false">
-  Print the path to the session log file before running the command.
+<ParamField query="--log-file" type="string" default="platform-specific">
+  Append diagnostic logs to this file. Parent directories are created when needed. The command fails before its action if the destination cannot be opened.
+
+  The default is `lucy.log` under `~/Library/Logs/lucy` on macOS, `~/.local/share/lucy/logs` on Linux, or `%APPDATA%/lucy/logs` on Windows.
 </ParamField>
 
 <ParamField query="--print-logs" type="boolean" default="false">
-  Stream diagnostic log entries to stderr as they are emitted. User reports remain independent. When an event is both logged and reported, both representations appear.
+  Write the same filtered, timestamped diagnostic records to the log file and stderr. User reports remain independent. When an event is both logged and reported, both representations appear.
 </ParamField>
 
 ## Network

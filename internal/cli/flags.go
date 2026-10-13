@@ -14,8 +14,7 @@ const (
 	FlagLogo            = "logo"
 	FlagLogFile         = "log-file"
 	FlagPrintLogs       = "print-logs"
-	FlagDebug           = "debug"
-	FlagDumpLogs        = "dump-logs"
+	FlagLogLevel        = "log-level"
 	FlagPlatform        = "platform"
 	FlagUseGitHubMirror = "use-github-mirror"
 )
