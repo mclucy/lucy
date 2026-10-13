@@ -251,6 +251,10 @@ func Initialize(ctx context.Context, root string, opts InitOptions) error {
 	if err := manifest.Normalize(d); err != nil {
 		return err
 	}
+	modrinthMapper, hasModrinthMapper, err := routing.GetArtifactMapper(types.SourceModrinth)
+	if err != nil {
+		return err
+	}
 	for _, p := range observed.Packages {
 		if !artifact.SupportsPath(p.Path) {
 			continue
@@ -282,21 +286,17 @@ func Initialize(ctx context.Context, root string, opts InitOptions) error {
 		if loader != types.EcoFabric && loader != types.EcoForge && loader != types.EcoNeoforge && loader != types.EcoBukkit {
 			continue
 		}
-		hashes, err := digestFile(p.Path, map[string]string{"sha1": ""})
-		if err != nil {
-			return err
+		if !hasModrinthMapper {
+			continue
 		}
-		var remote struct {
-			ProjectID string `json:"project_id"`
-			Version   string `json:"version_number"`
-		}
-		if err := routing.Metadata(ctx, "https://api.modrinth.com/v2/version_file/"+hashes["sha1"]+"?algorithm=sha1", &remote); err != nil {
+		ref, _, matched, err := modrinthMapper.PackageByHash(artifact.File{Path: p.Path})
+		if err != nil || !matched || ref.Name == "" {
 			continue
 		}
 		if d.Server.Packages[loader] == nil {
 			d.Server.Packages[loader] = map[string]manifest.Requirement{}
 		}
-		d.Server.Packages[loader]["modrinth:"+remote.ProjectID] = manifest.Requirement{Version: remote.Version}
+		d.Server.Packages[loader]["modrinth:"+ref.Name.String()] = manifest.Requirement{Version: ref.Version.String()}
 	}
 	store := &artifactStore{ctx: ctx, dir: filepath.Join(root, ".lucy", "downloads")}
 	if _, err := routing.ResolveCore(ctx, types.CoreRequest{Minecraft: d.Server.Minecraft, Distribution: d.Server.Core.Distribution, Version: d.Server.Core.Version, Repository: d.Server.Core.Repository, File: d.Server.Core.File}, store.acquire); err != nil {
