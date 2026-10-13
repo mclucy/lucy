@@ -11,6 +11,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
 )
@@ -157,10 +158,25 @@ func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.Cor
 		if e != nil {
 			return e
 		}
-		if downloadable && !seen[input.Path] {
-			seen[input.Path] = true
-			out.Inputs = append(out.Inputs, input)
+		if !downloadable {
+			log.Debug(
+				"routing: installer library skipped",
+				"library", lib.Name,
+				"reason", "no downloadable artifact",
+			)
+			continue
 		}
+		if seen[input.Path] {
+			log.Debug(
+				"routing: installer library skipped",
+				"library", lib.Name,
+				"path", input.Path,
+				"reason", "duplicate library path",
+			)
+			continue
+		}
+		seen[input.Path] = true
+		out.Inputs = append(out.Inputs, input)
 	}
 	// Processors may need Mojang server mappings in addition to the server JAR.
 	var index struct {
@@ -189,5 +205,11 @@ func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.Cor
 			break
 		}
 	}
+	log.Debug(
+		"routing: installer inputs resolved",
+		"distribution", req.Distribution,
+		"version", out.Version,
+		"inputs", len(out.Inputs),
+	)
 	return nil
 }

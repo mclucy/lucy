@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -30,18 +31,35 @@ func resolvePaper(ctx context.Context, req types.CoreRequest, out *types.CoreRes
 	sort.Slice(builds, func(i, j int) bool { return builds[i].ID > builds[j].ID })
 	for _, build := range builds {
 		v := strconv.Itoa(build.ID)
-		if !floating(req.Version) && v != req.Version {
-			continue
-		}
-		if req.Version == "stable" && build.Channel != "STABLE" {
-			continue
+		reason := ""
+		switch {
+		case !floating(req.Version) && v != req.Version:
+			reason = "build version mismatch"
+		case req.Version == "stable" && build.Channel != "STABLE":
+			reason = "unstable build channel"
 		}
 		asset, ok := build.Downloads["server:default"]
-		if !ok {
+		if !ok && reason == "" {
+			reason = "no server download"
+		}
+		if reason != "" {
+			log.Debug(
+				"routing: paper build skipped",
+				"minecraft", req.Minecraft,
+				"build", v,
+				"reason", reason,
+			)
 			continue
 		}
 		out.Version, out.Bootstrap = v, "paperclip"
 		out.Artifact = types.Artifact{Provider: "papermc", ProjectID: "paper", ReleaseID: req.Minecraft + "/" + v, FileID: "server:default", Version: v, Filename: asset.Name, URL: asset.URL, Hashes: asset.Checksums}
+		log.Debug(
+			"routing: paper build selected",
+			"minecraft", req.Minecraft,
+			"build", v,
+			"channel", build.Channel,
+			"requested", req.Version,
+		)
 		return nil
 	}
 	return fmt.Errorf("no Paper build %s for Minecraft %s", req.Version, req.Minecraft)
@@ -70,21 +88,46 @@ func resolveGithubCore(ctx context.Context, req types.CoreRequest, out *types.Co
 		return err
 	}
 	for _, r := range releases {
-		if r.Draft || (!floating(req.Version) && r.Tag != req.Version) || (req.Version == "stable" && r.Prerelease) {
+		reason := ""
+		switch {
+		case r.Draft:
+			reason = "draft release"
+		case !floating(req.Version) && r.Tag != req.Version:
+			reason = "release tag mismatch"
+		case req.Version == "stable" && r.Prerelease:
+			reason = "prerelease excluded"
+		}
+		if reason != "" {
+			log.Debug(
+				"routing: github release skipped",
+				"repository", req.Repository,
+				"release", r.Tag,
+				"reason", reason,
+			)
 			continue
 		}
 		for _, a := range r.Assets {
+			reason := ""
 			if !strings.HasSuffix(a.Name, ".jar") {
-				continue
-			}
-			if req.File != "" {
+				reason = "not a jar asset"
+			} else if req.File != "" {
 				matched, e := filepath.Match(req.File, a.Name)
 				if e != nil {
 					return e
 				}
 				if !matched {
-					continue
+					reason = "file pattern mismatch"
 				}
+			}
+			if reason != "" {
+				log.Debug(
+					"routing: github release asset skipped",
+					"repository", req.Repository,
+					"release", r.Tag,
+					"asset", a.Name,
+					"reason", reason,
+				)
+				continue
 			}
 			hashes := map[string]string{}
 			if h, ok := strings.CutPrefix(a.Digest, "sha256:"); ok {
@@ -100,9 +143,22 @@ func resolveGithubCore(ctx context.Context, req types.CoreRequest, out *types.Co
 			trial.Version = r.Tag
 			trial.Bootstrap = "paperclip"
 			if e := paperclipInput(&trial, p); e != nil {
+				log.Debug(
+					"routing: github fork candidate rejected",
+					"repository", req.Repository,
+					"release", r.Tag,
+					"asset", a.Name,
+					"reason", "paperclip download context unusable",
+				)
 				continue
 			}
 			*out = trial
+			log.Debug(
+				"routing: github fork core selected",
+				"repository", req.Repository,
+				"release", r.Tag,
+				"asset", a.Name,
+			)
 			return nil
 		}
 	}
