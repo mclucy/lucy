@@ -11,6 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
@@ -85,6 +86,12 @@ func validateAmbient(ctx context.Context, root string, d *lockfile.Document) err
 			}
 		}
 	}
+	log.Debug(
+		"ambient workspace validated",
+		"root", root,
+		"directories", len(seenDirectories),
+		"packages", len(d.Packages),
+	)
 	return nil
 }
 

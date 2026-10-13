@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -77,6 +78,7 @@ func (s *artifactStore) acquire(a *types.Artifact) (string, error) {
 		return "", err
 	}
 	destination := filepath.Join(dir, a.Filename)
+	source := "cache"
 	hashes, err := digestFile(destination, a.Hashes)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -85,6 +87,11 @@ func (s *artifactStore) acquire(a *types.Artifact) (string, error) {
 			if err := os.Remove(destination); err != nil {
 				return "", err
 			}
+		}
+		if s.offline {
+			source = "offline cache"
+		} else {
+			source = "download"
 		}
 		if err := s.acquireFile(a, dir, destination); err != nil {
 			return "", err
@@ -95,6 +102,12 @@ func (s *artifactStore) acquire(a *types.Artifact) (string, error) {
 		}
 	}
 	a.Hashes = hashes
+	log.Debug(
+		"artifact verified",
+		"file", a.Filename,
+		"sha256", hashes["sha256"],
+		"source", source,
+	)
 	return destination, nil
 }
 

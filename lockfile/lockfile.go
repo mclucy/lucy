@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
@@ -142,7 +143,17 @@ func Write(root string, d *Document) error {
 	if err != nil {
 		return err
 	}
-	return manifest.AtomicWrite(filepath.Join(root, Filename), data)
+	path := filepath.Join(root, Filename)
+	if err := manifest.AtomicWrite(path, data); err != nil {
+		return err
+	}
+	log.Info(
+		"lock written",
+		"path", path,
+		"version", d.Version,
+		"packages", len(d.Packages),
+	)
+	return nil
 }
 
 // ContextReference resolves only unique native module names from this lock.

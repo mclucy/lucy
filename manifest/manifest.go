@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
@@ -230,7 +231,16 @@ func Write(root string, d *Document) error {
 		return err
 	}
 	data = append([]byte("# yaml-language-server: $schema="+SchemaURL+"\n"), data...)
-	return AtomicWrite(filepath.Join(root, Filename), data)
+	path := filepath.Join(root, Filename)
+	if err := AtomicWrite(path, data); err != nil {
+		return err
+	}
+	log.Info(
+		"manifest written",
+		"path", path,
+		"version", d.Version,
+	)
+	return nil
 }
 
 func AtomicWrite(path string, data []byte) error {
