@@ -1,68 +1,67 @@
 package log
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
-
-	"github.com/mclucy/lucy/internal/fn"
+	"sync"
 )
 
-func record(e *entry) {
-	mu.Lock()
-	history = append(history, e)
-	mu.Unlock()
-}
-
-var getLogFile = fn.Memoize(logFile)
-
-// GetLogFile returns the log file handle, creating it on first call.
-func GetLogFile() *os.File {
-	return getLogFile()
-}
-
-func logDir() string {
-	var logDir string
-
+func DefaultFile() string {
+	var directory string
 	switch runtime.GOOS {
 	case "windows":
-		logDir = filepath.Join(os.Getenv("APPDATA"), "lucy", "logs")
+		directory = filepath.Join(os.Getenv("APPDATA"), "lucy", "logs")
 	case "darwin":
-		logDir = filepath.Join(os.Getenv("HOME"), "Library", "Logs", "lucy")
+		directory = filepath.Join(os.Getenv("HOME"), "Library", "Logs", "lucy")
 	case "linux":
-		logDir = filepath.Join(
-			os.Getenv("HOME"),
-			".local",
-			"share",
-			"lucy",
-			"logs",
-		)
+		directory = filepath.Join(os.Getenv("HOME"), ".local", "share", "lucy", "logs")
 	default:
-		logDir = "./logs"
+		directory = "logs"
 	}
-
-	return logDir
+	return filepath.Join(directory, "lucy.log")
 }
 
-func logFile() *os.File {
-	logDir := logDir()
-	err := os.MkdirAll(logDir, 0o755)
-	if err != nil {
-		devNull, _ := os.Open(os.DevNull)
-		return devNull
-	}
+// fileOutput opens the default destination lazily for callers outside the CLI.
+// CLI configuration opens its destination before an action can run.
+type fileOutput struct {
+	mu   sync.Mutex
+	path string
+	file *os.File
+}
 
-	logFilePath := filepath.Join(logDir, "lucy.log")
-	logFile, err := os.OpenFile(
-		logFilePath,
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
-		0o755,
-	)
-	if err != nil {
-		println(err.Error())
-		devNull, _ := os.Open(os.DevNull)
-		return devNull
+func (output *fileOutput) Write(content []byte) (int, error) {
+	output.mu.Lock()
+	defer output.mu.Unlock()
+	if output.file == nil {
+		file, err := openLogFile(output.path)
+		if err != nil {
+			return 0, err
+		}
+		output.file = file
 	}
+	return output.file.Write(content)
+}
 
-	return logFile
+func (output *fileOutput) close() error {
+	output.mu.Lock()
+	defer output.mu.Unlock()
+	if output.file == nil {
+		return nil
+	}
+	file := output.file
+	output.file = nil
+	return file.Close()
+}
+
+func openLogFile(path string) (*os.File, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("create log directory: %w", err)
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open log file %q: %w", path, err)
+	}
+	return file, nil
 }
