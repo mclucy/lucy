@@ -56,11 +56,12 @@ To run the built binary against a test server directory:
 ├── cache/                  Three-layer network cache: store, index, policy
 ├── version/                Version parsing: semver, Minecraft release/snapshot, Maven ranges
 ├── artifact/               Jar metadata analysis: fabric.mod.json, mods.toml, plugin.yml
-├── logger/                 Three-tier logging + Fatal, history buffer for DumpHistory()
-├── tui/                    Terminal UI via bubbletea v2, lipgloss v2, huh v2, glamour
+├── log/                    Operational diagnostics
+├── report/                 User-facing messages
+├── terminal/               Terminal rendering via the Charm stack
 ├── github/                 Shared GitHub API infra
 └── internal/
-    ├── cli/                Shared CLI plumbing: flags, error-logging wrapper,
+    ├── cli/                Shared CLI plumbing: flags,
     │   │                   dependency graph/data source, shell completion,
     │   │                   lock-context shorthand
     │   └── <command>/      Large subcommands (compile, info, search), each exposing NewCommand()
@@ -82,7 +83,13 @@ The output style flags are persistent on the root command, and every subcommand 
 - `--no-style` is exactly `--no-color` combined with `--no-interactive`.
 - `--yes` is not a global flag and not part of this family. It only answers a y/n prompt and never substitutes for the flag that replaces a selection.
 
-A new interactive surface ships with its flag equivalent in the same change. Log coloring follows `--no-color` through `log.TurnOffColors`; markdown and progress rendering follow the same color state.
+A new interactive surface ships with its flag equivalent in the same change. User reports, markdown, and progress rendering follow the same color state.
+
+## Observability
+
+- Keep presentation decisions at command boundaries; backend modules return results and warnings. Do not add combined log/report helpers.
+- Log action boundaries, critical stages, decisions with reasons, state changes, recovery, and outcomes. Keep high-volume details at DEBUG.
+- Log unrecovered failures once at the CLI boundary. Record successful state changes and recovery only after the corresponding work succeeds.
 
 ## Testing and Debugging
 
