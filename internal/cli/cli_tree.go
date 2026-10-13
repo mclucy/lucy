@@ -14,7 +14,7 @@ var treeCmd = &cobra.Command{
 	Use:   "tree",
 	Short: message.TreeShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionTree),
+	RunE:  actionTree,
 }
 
 func NewTreeCommand() *cobra.Command {

@@ -35,7 +35,7 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: message.InitShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionInit),
+	RunE:  actionInit,
 }
 
 func NewInitCommand() *cobra.Command {

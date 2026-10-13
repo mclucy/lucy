@@ -26,7 +26,7 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: message.CreateShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionCreate),
+	RunE:  actionCreate,
 }
 
 func NewCreateCommand() *cobra.Command {

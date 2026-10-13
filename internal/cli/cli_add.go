@@ -36,7 +36,7 @@ var addCmd = &cobra.Command{
 		}
 		return nil
 	},
-	RunE: WithErrorLogging(actionAdd),
+	RunE: actionAdd,
 }
 
 func NewAddCommand() *cobra.Command {

@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 
 	"charm.land/fang/v2"
 	"github.com/mclucy/lucy/internal/cli"
@@ -16,29 +18,21 @@ import (
 )
 
 var (
-	version string
-	commit  string
+	version          string
+	commit           string
+	executingCommand *cobra.Command
+	loggingReady     bool
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "lucy",
 	Short: "The Minecraft server package manager",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		path, err := cmd.Flags().GetString(cli.FlagLogFile)
-		if err != nil {
+		executingCommand = cmd
+		if err := configureLogging(cmd); err != nil {
 			return err
 		}
-		level, err := cmd.Flags().GetString(cli.FlagLogLevel)
-		if err != nil {
-			return err
-		}
-		printLogs, err := cmd.Flags().GetBool(cli.FlagPrintLogs)
-		if err != nil {
-			return err
-		}
-		if err := log.Configure(path, level, printLogs); err != nil {
-			return err
-		}
+		loggingReady = true
 		report.SetOutput(cmd.ErrOrStderr())
 		if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 			style.TurnOffStyles()
@@ -52,12 +46,34 @@ var rootCmd = &cobra.Command{
 			style.TurnOffInteractivity()
 		}
 		if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
+			directory, err := os.Getwd()
+			if err != nil {
+				log.Debug("action working directory unavailable", "error", err)
+			}
+			log.Info("action invoked", "action", cmd.CommandPath(), "directory", directory)
 			report.Warn(fmt.Errorf(
 				"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
 			))
 		}
 		return nil
 	},
+}
+
+func configureLogging(cmd *cobra.Command) error {
+	flags := cmd.Root().PersistentFlags()
+	path, err := flags.GetString(cli.FlagLogFile)
+	if err != nil {
+		return err
+	}
+	level, err := flags.GetString(cli.FlagLogLevel)
+	if err != nil {
+		return err
+	}
+	printLogs, err := flags.GetBool(cli.FlagPrintLogs)
+	if err != nil {
+		return err
+	}
+	return log.Configure(path, level, printLogs)
 }
 
 func init() {
@@ -128,10 +144,42 @@ func init() {
 }
 
 func Execute() error {
-	return fang.Execute(
+	executingCommand = nil
+	loggingReady = false
+	err := fang.Execute(
 		context.Background(),
 		rootCmd,
 		fang.WithVersion(version),
 		fang.WithCommit(commit),
 	)
+	if err != nil {
+		command := executingCommand
+		if command == nil {
+			var findErr error
+			command, _, findErr = rootCmd.Find(os.Args[1:])
+			if findErr != nil {
+				command = rootCmd
+				// Unknown commands fail before Cobra parses the persistent flags.
+				if flagErr := rootCmd.ParseFlags(os.Args[1:]); flagErr != nil {
+					report.Error(flagErr)
+					err = errors.Join(err, flagErr)
+				}
+			}
+			if configureErr := configureLogging(command); configureErr != nil {
+				report.Error(configureErr)
+				return errors.Join(err, configureErr)
+			}
+			loggingReady = true
+		}
+		if loggingReady {
+			log.Error(fmt.Errorf("%s failed: %w", command.CommandPath(), err))
+		}
+		return err
+	}
+	if loggingReady && executingCommand != nil {
+		if n := executingCommand.Name(); n != "__complete" && n != "__completeNoDesc" {
+			log.Info("action completed", "action", executingCommand.CommandPath())
+		}
+	}
+	return nil
 }

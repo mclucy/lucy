@@ -14,7 +14,7 @@ var leavesCmd = &cobra.Command{
 	Use:   "leaves",
 	Short: message.LeavesShort,
 	Args:  cobra.NoArgs,
-	RunE:  WithErrorLogging(actionLeaves),
+	RunE:  actionLeaves,
 }
 
 func NewLeavesCommand() *cobra.Command {
