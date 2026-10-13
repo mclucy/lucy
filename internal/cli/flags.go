@@ -2,12 +2,14 @@ package cli
 
 import "github.com/spf13/cobra"
 
-// Shared flag names: root persistent flags and per-command local flags must
-// agree on these strings.
+// Output style flag names. The whole family is registered once as root
+// persistent flags and applies to every subcommand.
 const (
 	FlagJSON            = "json"
 	FlagJSONCompact     = "json-compact"
 	FlagLong            = "long"
+	FlagNoColor         = "no-color"
+	FlagNoInteractive   = "no-interactive"
 	FlagNoStyle         = "no-style"
 	FlagLogo            = "logo"
 	FlagLogFile         = "log-file"
@@ -18,21 +20,32 @@ const (
 	FlagUseGitHubMirror = "use-github-mirror"
 )
 
-func AddJSONFlag(cmd *cobra.Command) {
-	cmd.Flags().Bool(FlagJSON, false, "Print raw JSON response")
-}
+// JSONRendering names the machine-readable rendering of a command result.
+type JSONRendering int
 
-func AddJSONCompactFlag(cmd *cobra.Command) {
-	cmd.Flags().Bool(FlagJSONCompact, false, "Print raw JSON response without indentation")
+const (
+	// JSONNone renders the human-facing view.
+	JSONNone JSONRendering = iota
+	// JSONPretty prints JSON indented with two spaces.
+	JSONPretty
+	// JSONCompact prints JSON on a single line.
+	JSONCompact
+)
+
+// JSONMode reports the JSON rendering a command's flags select.
+// --json-compact wins over --json when both are set.
+func JSONMode(cmd *cobra.Command) JSONRendering {
+	if compact, _ := cmd.Flags().GetBool(FlagJSONCompact); compact {
+		return JSONCompact
+	}
+	if pretty, _ := cmd.Flags().GetBool(FlagJSON); pretty {
+		return JSONPretty
+	}
+	return JSONNone
 }
 
 func AddLongFlag(cmd *cobra.Command) {
 	cmd.Flags().BoolP(FlagLong, "l", false, "Show hidden or collapsed output")
-}
-
-// AddNoStyleFlag adds the flag as a local flag, not persistent.
-func AddNoStyleFlag(cmd *cobra.Command) {
-	cmd.Flags().Bool(FlagNoStyle, false, "Disable colored and styled output")
 }
 
 func AddLogoFlag(cmd *cobra.Command) {

@@ -34,6 +34,13 @@ var rootCmd = &cobra.Command{
 			style.TurnOffStyles()
 			log.TurnOffColors()
 		}
+		if noColor, _ := cmd.Flags().GetBool(cli.FlagNoColor); noColor {
+			style.TurnOffColors()
+			log.TurnOffColors()
+		}
+		if noInteractive, _ := cmd.Flags().GetBool(cli.FlagNoInteractive); noInteractive {
+			style.TurnOffInteractivity()
+		}
 		if logFile, _ := cmd.Flags().GetBool(cli.FlagLogFile); logFile {
 			fmt.Println("Log file at", log.GetLogFile().Name())
 		}
@@ -69,14 +76,29 @@ func init() {
 	)
 	_ = rootCmd.PersistentFlags().MarkHidden(cli.FlagDumpLogs)
 	rootCmd.PersistentFlags().Bool(
-		cli.FlagNoStyle,
+		cli.FlagJSON,
 		false,
-		"Disable colored and styled output",
+		"Print JSON indented with 2 spaces",
 	)
 	rootCmd.PersistentFlags().Bool(
 		cli.FlagJSONCompact,
 		false,
-		"Print raw JSON response without indentation",
+		"Print JSON without indentation; wins over --json",
+	)
+	rootCmd.PersistentFlags().Bool(
+		cli.FlagNoColor,
+		false,
+		"Disable colored output",
+	)
+	rootCmd.PersistentFlags().Bool(
+		cli.FlagNoInteractive,
+		false,
+		"Disable prompts and animated output; fail instead of asking",
+	)
+	rootCmd.PersistentFlags().Bool(
+		cli.FlagNoStyle,
+		false,
+		"Same as --no-color --no-interactive",
 	)
 	rootCmd.PersistentFlags().Bool(
 		cli.FlagUseGitHubMirror,

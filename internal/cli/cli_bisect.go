@@ -63,16 +63,6 @@ var bisectResetCmd = &cobra.Command{
 }
 
 func NewBisectCommand() *cobra.Command {
-	for _, c := range []*cobra.Command{
-		bisectStartCmd,
-		bisectGoodCmd,
-		bisectBadCmd,
-		bisectStatusCmd,
-		bisectResetCmd,
-	} {
-		AddJSONFlag(c)
-		AddNoStyleFlag(c)
-	}
 	bisectCmd.AddCommand(
 		bisectStartCmd,
 		bisectGoodCmd,
@@ -293,14 +283,12 @@ func currentBisectView(session *bisectState) *bisectView {
 }
 
 func outputBisect(cmd *cobra.Command, output bisectOutput) error {
-	jsonOut, _ := cmd.Flags().GetBool(FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
-	if jsonOut || jsonCompact {
-		if jsonCompact {
-			style.PrintAsJsonCompact(output)
-		} else {
-			style.PrintAsJson(output)
-		}
+	switch JSONMode(cmd) {
+	case JSONPretty:
+		style.PrintAsJson(output)
+		return nil
+	case JSONCompact:
+		style.PrintAsJsonCompact(output)
 		return nil
 	}
 	log.ShowInfo(formatBisectOutput(output))

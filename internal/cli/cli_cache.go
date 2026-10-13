@@ -35,27 +35,19 @@ var cacheClearCmd = &cobra.Command{
 }
 
 func NewCacheCommand() *cobra.Command {
-	AddJSONFlag(cacheLsCmd)
-	AddJSONCompactFlag(cacheLsCmd)
-	AddNoStyleFlag(cacheLsCmd)
-
-	AddNoStyleFlag(cacheClearCmd)
-
 	cacheCmd.AddCommand(cacheLsCmd, cacheClearCmd)
 	return cacheCmd
 }
 
 func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	entries := cache.Network().All()
-	jsonOutput, _ := cmd.Flags().GetBool(FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
 
-	if jsonOutput || jsonCompact {
-		if jsonCompact {
-			style.PrintAsJsonCompact(entries)
-		} else {
-			style.PrintAsJson(entries)
-		}
+	switch JSONMode(cmd) {
+	case JSONPretty:
+		style.PrintAsJson(entries)
+		return nil
+	case JSONCompact:
+		style.PrintAsJsonCompact(entries)
 		return nil
 	}
 

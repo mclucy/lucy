@@ -47,7 +47,6 @@ func NewRemoveCommand() *cobra.Command {
 		"",
 		"Target loader scope for the request (fabric, forge, neoforge, bukkit)",
 	)
-	AddNoStyleFlag(removeCmd)
 	AddPlatformFlag(removeCmd)
 	return removeCmd
 }

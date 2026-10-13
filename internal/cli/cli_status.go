@@ -29,7 +29,6 @@ var statusCmd = &cobra.Command{
 }
 
 func NewStatusCommand() *cobra.Command {
-	AddJSONFlag(statusCmd)
 	AddLongFlag(statusCmd)
 	AddLogoFlag(statusCmd)
 	_ = statusCmd.RegisterFlagCompletionFunc(
@@ -47,28 +46,27 @@ func NewStatusCommand() *cobra.Command {
 
 func actionStatus(cmd *cobra.Command, args []string) error {
 	ws := workspace.New()
-	json, _ := cmd.Flags().GetBool(FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
 	long, _ := cmd.Flags().GetBool(FlagLong)
-	noStyle, _ := cmd.Flags().GetBool(FlagNoStyle)
-	if json || jsonCompact {
-		if jsonCompact {
-			style.PrintAsJsonCompact(ws)
-		} else {
-			style.PrintAsJson(ws)
-		}
-	} else {
-		logo, _ := cmd.Flags().GetString(FlagLogo)
-		logoMode, _ := terminal.ParseStatusLogoMode(logo)
-		terminal.Flush(generateStatusOutput(&ws, long, noStyle, logoMode))
+	switch JSONMode(cmd) {
+	case JSONPretty:
+		style.PrintAsJson(ws)
+		return nil
+	case JSONCompact:
+		style.PrintAsJsonCompact(ws)
+		return nil
 	}
+	logo, _ := cmd.Flags().GetString(FlagLogo)
+	logoMode, _ := terminal.ParseStatusLogoMode(logo)
+	terminal.Flush(
+		generateStatusOutput(&ws, long, style.ColorsEnabled(), logoMode),
+	)
 	return nil
 }
 
 func generateStatusOutput(
 	data *workspace.Workspace,
 	longOutput bool,
-	noStyle bool,
+	colorsEnabled bool,
 	logoMode terminal.StatusLogoMode,
 ) (output *terminal.Data) {
 	server := data.Server()
@@ -143,7 +141,7 @@ func generateStatusOutput(
 				Core:    logoCore,
 				Eco:     logoEco,
 				Version: logoVersion,
-				NoColor: noStyle,
+				NoColor: !colorsEnabled,
 				Mode:    logoMode,
 			},
 		)
@@ -246,12 +244,8 @@ func generateStatusOutput(
 		}
 		output.Fields = append(
 			output.Fields, &terminal.FieldTree{
-				Title: "MCDR",
-				Text: "Installed" + fn.Ternary(
-					noStyle,
-					"",
-					style.Success(" ✓"),
-				),
+				Title:    "MCDR",
+				Text:     "Installed" + style.Success(" ✓"),
 				Children: children,
 			},
 		)

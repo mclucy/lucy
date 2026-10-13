@@ -3,11 +3,9 @@ package style
 import (
 	"fmt"
 	"image/color"
-	"os"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/term"
 )
 
 func init() {
@@ -52,19 +50,6 @@ func ColorsEnabled() bool {
 
 func InteractiveEnabled() bool {
 	return interactiveEnabled
-}
-
-// RequireInteractive fails an interactive action when stdin cannot carry a
-// prompt or --no-interactive blocked it. flag names the argument carrying the
-// same choice, so the error points at the way forward.
-func RequireInteractive(action, flag string) error {
-	if !interactiveEnabled {
-		return fmt.Errorf("%s is unavailable with --no-interactive; pass %s", action, flag)
-	}
-	if !term.IsTerminal(os.Stdin.Fd()) {
-		return fmt.Errorf("%s requires an interactive terminal; pass %s", action, flag)
-	}
-	return nil
 }
 
 func updateStyles() {

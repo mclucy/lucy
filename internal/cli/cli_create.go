@@ -80,7 +80,6 @@ func NewCreateCommand() *cobra.Command {
 		"Override working directory (for testing)",
 	)
 	_ = createCmd.Flags().MarkHidden(flagCreateWorkDirName)
-	AddNoStyleFlag(createCmd)
 	return createCmd
 }
 

@@ -28,9 +28,6 @@ func NewTreeCommand() *cobra.Command {
 		0,
 		"Limit dependency tree depth (0 = unlimited)",
 	)
-	AddJSONFlag(treeCmd)
-	AddJSONCompactFlag(treeCmd)
-	AddNoStyleFlag(treeCmd)
 	return treeCmd
 }
 
@@ -46,11 +43,9 @@ func actionTree(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	jsonOut, _ := cmd.Flags().GetBool(FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
-
-	if jsonOut || jsonCompact {
-		return outputTreeJSON(graph, source, jsonCompact)
+	mode := JSONMode(cmd)
+	if mode != JSONNone {
+		return outputTreeJSON(graph, source, mode)
 	}
 
 	maxDepth, _ := cmd.Flags().GetInt("depth")
@@ -134,7 +129,11 @@ type treeNode struct {
 	Children []*treeNode `json:"children,omitempty"`
 }
 
-func outputTreeJSON(graph *DependencyGraph, source DataSource, compact bool) error {
+func outputTreeJSON(
+	graph *DependencyGraph,
+	source DataSource,
+	mode JSONRendering,
+) error {
 	visited := make(map[string]bool)
 	roots := graph.GetRoots()
 	jsonRoots := make([]*treeNode, 0, len(roots))
@@ -142,13 +141,14 @@ func outputTreeJSON(graph *DependencyGraph, source DataSource, compact bool) err
 		jsonRoots = append(jsonRoots, buildJSONNode(root, visited))
 	}
 
-	output := map[string]interface{}{
+	output := map[string]any{
 		"source": source.String(),
 		"roots":  jsonRoots,
 	}
-	if compact {
+	switch mode {
+	case JSONCompact:
 		style.PrintAsJsonCompact(output)
-	} else {
+	default:
 		style.PrintAsJson(output)
 	}
 	return nil

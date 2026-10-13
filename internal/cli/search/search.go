@@ -77,10 +77,7 @@ func NewCommand() *cobra.Command {
 		"",
 		"Restrict results to SOURCE",
 	)
-	cli.AddJSONFlag(searchCmd)
-	cli.AddJSONCompactFlag(searchCmd)
 	cli.AddLongFlag(searchCmd)
-	cli.AddNoStyleFlag(searchCmd)
 	_ = searchCmd.RegisterFlagCompletionFunc(
 		flagSourceName,
 		func(cmd *cobra.Command, args []string, toComplete string) (
@@ -171,6 +168,15 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 
 	if err := searchResultError(results, errs); err != nil {
 		return err
+	}
+
+	switch cli.JSONMode(cmd) {
+	case cli.JSONPretty:
+		style.PrintAsJson(results)
+		return nil
+	case cli.JSONCompact:
+		style.PrintAsJsonCompact(results)
+		return nil
 	}
 
 	var sb strings.Builder

@@ -73,7 +73,6 @@ func NewAddCommand() *cobra.Command {
 		"Target loader scope for the request (fabric, forge, neoforge, bukkit)",
 	)
 	AddPlatformFlag(addCmd)
-	AddNoStyleFlag(addCmd)
 	return addCmd
 }
 
