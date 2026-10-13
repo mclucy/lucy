@@ -1,10 +1,9 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/terminal/style"
 
@@ -15,19 +14,19 @@ var leavesCmd = &cobra.Command{
 	Use:   "leaves",
 	Short: message.LeavesShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionLeaves),
+	RunE:  WithErrorLogging(actionLeaves),
 }
 
-func init() {
+func NewLeavesCommand() *cobra.Command {
 	leavesCmd.Flags().Bool(
 		"live",
 		false,
 		"Observe the live workspace instead of reading the lock",
 	)
-	cli.AddJSONFlag(leavesCmd)
-	cli.AddJSONCompactFlag(leavesCmd)
-	cli.AddNoStyleFlag(leavesCmd)
-	rootCmd.AddCommand(leavesCmd)
+	AddJSONFlag(leavesCmd)
+	AddJSONCompactFlag(leavesCmd)
+	AddNoStyleFlag(leavesCmd)
+	return leavesCmd
 }
 
 func actionLeaves(cmd *cobra.Command, args []string) error {
@@ -37,13 +36,13 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 	}
 
 	forceLive, _ := cmd.Flags().GetBool("live")
-	graph, source, _, err := cli.LoadDependencyData(workDir, forceLive)
+	graph, source, _, err := LoadDependencyData(workDir, forceLive)
 	if err != nil {
 		return err
 	}
 
-	jsonOut, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
+	jsonOut, _ := cmd.Flags().GetBool(FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
 
 	if jsonOut || jsonCompact {
 		return outputLeavesJSON(graph, source, jsonCompact)
@@ -74,7 +73,7 @@ type leafNode struct {
 	Loader   string `json:"loader"`
 }
 
-func outputLeavesJSON(graph *cli.DependencyGraph, source cli.DataSource, compact bool) error {
+func outputLeavesJSON(graph *DependencyGraph, source DataSource, compact bool) error {
 	leaves := graph.GetLeaves()
 	jsonLeaves := make([]leafNode, 0, len(leaves))
 	for _, leaf := range leaves {

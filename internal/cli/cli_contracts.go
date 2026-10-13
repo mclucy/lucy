@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 // CommandContract defines the durable semantic boundary of a user-facing
 // command. Contracts are intentionally stricter than the current

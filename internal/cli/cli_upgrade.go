@@ -1,7 +1,6 @@
-package cmd
+package cli
 
 import (
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 
 	"github.com/spf13/cobra"
@@ -10,9 +9,9 @@ import (
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: message.UpgradeShort,
-	RunE:  cli.NotImplementedRun,
+	RunE:  NotImplementedRun,
 }
 
-func init() {
-	rootCmd.AddCommand(upgradeCmd)
+func NewUpgradeCommand() *cobra.Command {
+	return upgradeCmd
 }

@@ -1,10 +1,9 @@
-package status
+package cli
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/terminal"
@@ -20,27 +19,27 @@ var statusCmd = &cobra.Command{
 	Short: message.StatusShort,
 	Args:  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		logo, _ := cmd.Flags().GetString(cli.FlagLogo)
+		logo, _ := cmd.Flags().GetString(FlagLogo)
 		if _, ok := terminal.ParseStatusLogoMode(logo); !ok {
 			return fmt.Errorf("--logo must be one of none, small, large")
 		}
 		return nil
 	},
-	RunE: cli.WithErrorLogging(actionStatus),
+	RunE: WithErrorLogging(actionStatus),
 }
 
-func NewCommand() *cobra.Command {
-	cli.AddJSONFlag(statusCmd)
-	cli.AddLongFlag(statusCmd)
-	cli.AddLogoFlag(statusCmd)
+func NewStatusCommand() *cobra.Command {
+	AddJSONFlag(statusCmd)
+	AddLongFlag(statusCmd)
+	AddLogoFlag(statusCmd)
 	_ = statusCmd.RegisterFlagCompletionFunc(
-		cli.FlagLogo,
+		FlagLogo,
 		func(cmd *cobra.Command, args []string, toComplete string) (
 			[]string,
 			cobra.ShellCompDirective,
 		) {
-			candidates := cli.FilterByPrefix(cli.StaticStatusLogoCandidates(), toComplete)
-			return cli.ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+			candidates := FilterByPrefix(StaticStatusLogoCandidates(), toComplete)
+			return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
 		},
 	)
 	return statusCmd
@@ -48,10 +47,10 @@ func NewCommand() *cobra.Command {
 
 func actionStatus(cmd *cobra.Command, args []string) error {
 	ws := workspace.New()
-	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
-	long, _ := cmd.Flags().GetBool(cli.FlagLong)
-	noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle)
+	json, _ := cmd.Flags().GetBool(FlagJSON)
+	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
+	long, _ := cmd.Flags().GetBool(FlagLong)
+	noStyle, _ := cmd.Flags().GetBool(FlagNoStyle)
 	if json || jsonCompact {
 		if jsonCompact {
 			style.PrintAsJsonCompact(ws)
@@ -59,7 +58,7 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 			style.PrintAsJson(ws)
 		}
 	} else {
-		logo, _ := cmd.Flags().GetString(cli.FlagLogo)
+		logo, _ := cmd.Flags().GetString(FlagLogo)
 		logoMode, _ := terminal.ParseStatusLogoMode(logo)
 		terminal.Flush(generateStatusOutput(&ws, long, noStyle, logoMode))
 	}

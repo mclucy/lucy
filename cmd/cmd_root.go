@@ -6,15 +6,9 @@ import (
 
 	"charm.land/fang/v2"
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/internal/cli/add"
-	"github.com/mclucy/lucy/internal/cli/bisect"
 	"github.com/mclucy/lucy/internal/cli/compile"
-	"github.com/mclucy/lucy/internal/cli/create"
 	"github.com/mclucy/lucy/internal/cli/info"
-	lucyinit "github.com/mclucy/lucy/internal/cli/init"
-	"github.com/mclucy/lucy/internal/cli/install"
 	"github.com/mclucy/lucy/internal/cli/search"
-	"github.com/mclucy/lucy/internal/cli/status"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
@@ -32,7 +26,7 @@ var rootCmd = &cobra.Command{
 		if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
 			log.ReportWarn(
 				fmt.Errorf(
-					"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server.",
+					"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
 				),
 			)
 		}
@@ -91,15 +85,22 @@ func init() {
 	)
 
 	rootCmd.AddCommand(
-		add.NewCommand(),
-		bisect.NewCommand(),
+		cli.NewAddCommand(),
+		cli.NewBisectCommand(),
+		cli.NewCacheCommand(),
+		cli.NewCreateCommand(),
+		cli.NewDoctorCommand(),
+		cli.NewExportCommand(),
+		cli.NewInitCommand(),
+		cli.NewInstallCommand(),
+		cli.NewLeavesCommand(),
+		cli.NewRemoveCommand(),
+		cli.NewTreeCommand(),
+		cli.NewUpgradeCommand(),
 		compile.NewCommand(),
 		info.NewCommand(),
-		lucyinit.NewCommand(),
-		install.NewCommand(),
-		create.NewCommand(),
+		cli.NewStatusCommand(),
 		search.NewCommand(),
-		status.NewCommand(),
 	)
 }
 

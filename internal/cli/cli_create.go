@@ -1,4 +1,4 @@
-package create
+package cli
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/spf13/cobra"
 )
@@ -27,10 +26,10 @@ var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: message.CreateShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionCreate),
+	RunE:  WithErrorLogging(actionCreate),
 }
 
-func NewCommand() *cobra.Command {
+func NewCreateCommand() *cobra.Command {
 	createCmd.Flags().BoolP(
 		flagCreateForceName,
 		"f",
@@ -81,11 +80,11 @@ func NewCommand() *cobra.Command {
 		"Override working directory (for testing)",
 	)
 	_ = createCmd.Flags().MarkHidden(flagCreateWorkDirName)
-	cli.AddNoStyleFlag(createCmd)
+	AddNoStyleFlag(createCmd)
 	return createCmd
 }
 
-func parseCoreDistribution(raw string) (distribution, version string) {
+func parseCoreDistributionCreate(raw string) (distribution, version string) {
 	if raw == "" {
 		return "", ""
 	}
@@ -96,19 +95,19 @@ func parseCoreDistribution(raw string) (distribution, version string) {
 }
 
 func actionCreate(cmd *cobra.Command, _ []string) error {
-	workDir, err := resolveWorkDir(cmd)
+	workDir, err := resolveWorkDirCreate(cmd)
 	if err != nil {
 		return err
 	}
 
-	mc := flagString(cmd, flagCreateMcName)
+	mc := flagStringCreate(cmd, flagCreateMcName)
 	if mc == "" {
-		mc = flagString(cmd, flagCreateGameVersionName)
+		mc = flagStringCreate(cmd, flagCreateGameVersionName)
 	}
 
-	coreRaw := flagString(cmd, flagCreateCoreName)
-	distribution, coreVer := parseCoreDistribution(coreRaw)
-	if explicitVer := flagString(cmd, flagCreateCoreVersionName); explicitVer != "" {
+	coreRaw := flagStringCreate(cmd, flagCreateCoreName)
+	distribution, coreVer := parseCoreDistributionCreate(coreRaw)
+	if explicitVer := flagStringCreate(cmd, flagCreateCoreVersionName); explicitVer != "" {
 		coreVer = explicitVer
 	}
 
@@ -116,10 +115,10 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 		Minecraft:    mc,
 		Distribution: distribution,
 		CoreVersion:  coreVer,
-		Repository:   flagString(cmd, flagCreateRepositoryName),
-		MCDRVersion:  flagString(cmd, flagCreateMCDRVersionName),
-		Directory:    flagString(cmd, flagCreateDirectoryName),
-		Force:        flagBool(cmd, flagCreateForceName),
+		Repository:   flagStringCreate(cmd, flagCreateRepositoryName),
+		MCDRVersion:  flagStringCreate(cmd, flagCreateMCDRVersionName),
+		Directory:    flagStringCreate(cmd, flagCreateDirectoryName),
+		Force:        flagBoolCreate(cmd, flagCreateForceName),
 		AllowEmpty:   true,
 		Detect:       false,
 	}
@@ -127,7 +126,7 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 	return install.Initialize(cmd.Context(), workDir, opts)
 }
 
-func resolveWorkDir(cmd *cobra.Command) (string, error) {
+func resolveWorkDirCreate(cmd *cobra.Command) (string, error) {
 	override, _ := cmd.Flags().GetString(flagCreateWorkDirName)
 	if override != "" {
 		return override, nil
@@ -139,12 +138,12 @@ func resolveWorkDir(cmd *cobra.Command) (string, error) {
 	return wd, nil
 }
 
-func flagString(cmd *cobra.Command, name string) string {
+func flagStringCreate(cmd *cobra.Command, name string) string {
 	value, _ := cmd.Flags().GetString(name)
 	return value
 }
 
-func flagBool(cmd *cobra.Command, name string) bool {
+func flagBoolCreate(cmd *cobra.Command, name string) bool {
 	value, _ := cmd.Flags().GetBool(name)
 	return value
 }

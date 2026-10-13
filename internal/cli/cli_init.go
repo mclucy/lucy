@@ -1,4 +1,4 @@
-package init
+package cli
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/spf13/cobra"
 )
@@ -29,10 +28,10 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: message.InitShort,
 	Args:  cobra.NoArgs,
-	RunE:  cli.WithErrorLogging(actionInit),
+	RunE:  WithErrorLogging(actionInit),
 }
 
-func NewCommand() *cobra.Command {
+func NewInitCommand() *cobra.Command {
 	initCmd.Flags().BoolP(
 		flagInitForceName,
 		"f",
@@ -92,11 +91,11 @@ func NewCommand() *cobra.Command {
 		"Override working directory (for testing)",
 	)
 	_ = initCmd.Flags().MarkHidden(flagInitWorkDirName)
-	cli.AddNoStyleFlag(initCmd)
+	AddNoStyleFlag(initCmd)
 	return initCmd
 }
 
-func parseCoreDistribution(raw string) (distribution, version string) {
+func parseCoreDistributionInit(raw string) (distribution, version string) {
 	if raw == "" {
 		return "", ""
 	}
@@ -107,43 +106,43 @@ func parseCoreDistribution(raw string) (distribution, version string) {
 }
 
 func actionInit(cmd *cobra.Command, _ []string) error {
-	workDir, err := resolveWorkDir(cmd)
+	workDir, err := resolveWorkDirInit(cmd)
 	if err != nil {
 		return err
 	}
 
-	mc := flagString(cmd, flagInitMinecraftName)
+	mc := flagStringInit(cmd, flagInitMinecraftName)
 	if mc == "" {
-		mc = flagString(cmd, flagInitGameVersionName)
+		mc = flagStringInit(cmd, flagInitGameVersionName)
 	}
 
-	coreRaw := flagString(cmd, flagInitCoreName)
-	distribution, coreVer := parseCoreDistribution(coreRaw)
-	if explicitVer := flagString(cmd, flagInitCoreVersionName); explicitVer != "" {
+	coreRaw := flagStringInit(cmd, flagInitCoreName)
+	distribution, coreVer := parseCoreDistributionInit(coreRaw)
+	if explicitVer := flagStringInit(cmd, flagInitCoreVersionName); explicitVer != "" {
 		coreVer = explicitVer
 	}
 
 	detect := true
 	if cmd.Flags().Changed(flagInitDetectName) {
-		detect = flagBool(cmd, flagInitDetectName)
+		detect = flagBoolInit(cmd, flagInitDetectName)
 	}
 
 	opts := install.InitOptions{
 		Minecraft:    mc,
 		Distribution: distribution,
 		CoreVersion:  coreVer,
-		Repository:   flagString(cmd, flagInitRepositoryName),
-		MCDRVersion:  flagString(cmd, flagInitMCDRVersionName),
-		Directory:    flagString(cmd, flagInitDirectoryName),
-		Force:        flagBool(cmd, flagInitForceName),
-		AllowEmpty:   flagBool(cmd, flagInitAllowEmptyName),
+		Repository:   flagStringInit(cmd, flagInitRepositoryName),
+		MCDRVersion:  flagStringInit(cmd, flagInitMCDRVersionName),
+		Directory:    flagStringInit(cmd, flagInitDirectoryName),
+		Force:        flagBoolInit(cmd, flagInitForceName),
+		AllowEmpty:   flagBoolInit(cmd, flagInitAllowEmptyName),
 		Detect:       detect,
 	}
 
 	return install.Initialize(cmd.Context(), workDir, opts)
 }
 
-func resolveWorkDir(cmd *cobra.Command) (string, error) {
+func resolveWorkDirInit(cmd *cobra.Command) (string, error) {
 	override, _ := cmd.Flags().GetString(flagInitWorkDirName)
 	if override != "" {
 		return override, nil
@@ -155,12 +154,12 @@ func resolveWorkDir(cmd *cobra.Command) (string, error) {
 	return wd, nil
 }
 
-func flagString(cmd *cobra.Command, name string) string {
+func flagStringInit(cmd *cobra.Command, name string) string {
 	value, _ := cmd.Flags().GetString(name)
 	return value
 }
 
-func flagBool(cmd *cobra.Command, name string) bool {
+func flagBoolInit(cmd *cobra.Command, name string) bool {
 	value, _ := cmd.Flags().GetBool(name)
 	return value
 }
