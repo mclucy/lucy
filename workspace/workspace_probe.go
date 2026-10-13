@@ -8,7 +8,6 @@ import (
 
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
@@ -63,6 +62,26 @@ func (p Probe) HasAmbiguity() bool {
 	return len(p.AmbiguousCandidates) > 0 || len(p.Candidates) > 1
 }
 
+// AmbiguityErrors preserves conflict-before-multiple-runtime finding order.
+func (p Probe) AmbiguityErrors(root string) []error {
+	var errs []error
+	if conflicted := conflictLabels(p.AmbiguousCandidates); len(conflicted) > 0 {
+		errs = append(errs, fmt.Errorf(
+			"found conflicting server files in %s (%s); lucy cannot tell which server this directory runs",
+			root,
+			strings.Join(conflicted, ", "),
+		))
+	}
+	if len(p.Candidates) > 1 {
+		errs = append(errs, fmt.Errorf(
+			"found multiple servers side by side in %s: %s; lucy cannot tell which one to use",
+			root,
+			strings.Join(candidateLabels(p.Candidates), "; "),
+		))
+	}
+	return errs
+}
+
 // IsEmpty reports whether the scan found no examinable artifact.
 func (p Probe) IsEmpty() bool {
 	return len(p.Candidates) == 0 &&
@@ -71,7 +90,7 @@ func (p Probe) IsEmpty() bool {
 }
 
 // probeDirectory scans root and sorts each piece of runtime evidence into
-// its bucket. It writes user-facing diagnostics once per observation. The
+// its bucket. It logs scan diagnostics once per observation. The
 // interpretation methods then stay quiet and repeatable.
 func probeDirectory(root string) Probe {
 	var p Probe
@@ -111,7 +130,7 @@ func probeDirectory(root string) Probe {
 	}
 
 	p.foldConsumedComponents()
-	reportScanDiagnostics(root, p, len(files))
+	logScanDiagnostics(root, p, len(files))
 	return p
 }
 
@@ -149,37 +168,21 @@ func (p *Probe) foldConsumedComponents() {
 	p.Candidates = kept
 }
 
-// reportScanDiagnostics writes the messages that a person needs for an
-// ambiguous or empty directory. It runs once per scan. Readers of Single
-// never repeat these messages.
-func reportScanDiagnostics(root string, p Probe, examined int) {
+func logScanDiagnostics(root string, p Probe, examined int) {
 	switch {
 	case p.IsEmpty():
 		log.Info("no server executable found")
 	case len(p.Candidates) == 0 && len(p.AmbiguousCandidates) == 0:
-		log.Info(fmt.Sprintf(
-			"%d candidate executables examined, none identifiable as a server",
-			examined,
-		))
+		log.Info("candidate executables could not be identified as a server", "root", root, "examined", examined)
 	}
 
-	if conflicted := conflictLabels(p.AmbiguousCandidates); len(conflicted) > 0 {
-		conflictErr := fmt.Errorf(
-			"found conflicting server files in %s (%s); lucy cannot tell which server this directory runs",
-			root,
-			strings.Join(conflicted, ", "),
-		)
-		log.Error(conflictErr)
-		report.Error(conflictErr)
+	if len(p.AmbiguousCandidates) > 0 {
+		log.Debug("runtime scan could not choose between conflicting detector claims",
+			"root", root, "artifacts", len(p.AmbiguousCandidates))
 	}
 	if len(p.Candidates) > 1 {
-		multiErr := fmt.Errorf(
-			"found multiple servers side by side in %s: %s; lucy cannot tell which one to use",
-			root,
-			strings.Join(candidateLabels(p.Candidates), "; "),
-		)
-		log.Error(multiErr)
-		report.Error(multiErr)
+		log.Debug("runtime scan found multiple independent servers",
+			"root", root, "runtimes", len(p.Candidates))
 	}
 }
 

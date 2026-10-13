@@ -94,6 +94,11 @@ func actionCacheClear(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
 
+	// The cache backend only collects the successful removals; the command
+	// presents them, in the order the reset walked the cache directory.
+	for _, removed := range cleared.Removed {
+		report.Info(fmt.Sprintf("removed %s", removed))
+	}
 	report.Info("all cache items cleared")
 	report.Info(
 		fmt.Sprintf(

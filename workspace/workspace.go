@@ -8,8 +8,9 @@
 //   - the running state of the server process
 //
 // New, NewAt, and Refresh return a Workspace value. A Workspace is an
-// immutable observation. Four members store facts: Root, Environments,
-// Probe, and Packages. Every other member is a method over these facts.
+// immutable observation. Five members store facts: Root, Environments,
+// Probe, Packages, and Warnings. Every other member is a method over these
+// facts.
 //
 // The package holds one cached observation of the current working
 // directory. Only Rebuild, Invalidate, and Refresh change it; no other
@@ -33,6 +34,12 @@ type Workspace struct {
 	// If MCDR manages the anchor, then Root is the MCDR working directory.
 	Root         string                `json:"root"`
 	Environments types.EnvironmentInfo `json:"environments"`
+
+	// Warnings records the recoverable problems seen while observing the
+	// directory, such as MCDR version-detection failures. It stays out of
+	// the JSON wire format; CLI presentation reports the entries once per
+	// consumed observation.
+	Warnings []error `json:"-"`
 
 	// Probe holds the scan results before interpretation. The Probe type
 	// documents the bucket invariant; read Probe when the single
@@ -159,11 +166,12 @@ func Refresh(workDir string) Workspace {
 // move the server root away from dir; the probe and package scan then run
 // against that root.
 func observe(dir string) Workspace {
-	env := detectEnvironment(dir)
+	env, warnings := detectEnvironment(dir)
 
 	ws := Workspace{
 		Root:         resolveRoot(dir, env),
 		Environments: env,
+		Warnings:     warnings,
 	}
 	ws.Probe = probeDirectory(ws.Root)
 	ws.Packages = discoverPackages(

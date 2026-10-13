@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/report"
 )
 
 const (
@@ -16,9 +15,13 @@ const (
 
 type key string
 
+// ResetReport summarizes a cache reset. Removed lists the paths of the
+// items the reset actually removed; a reset that does not request
+// collection leaves it nil.
 type ResetReport struct {
 	TotalFreedSize int64
 	FileCount      int
+	Removed        []string
 }
 
 func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
@@ -61,7 +64,7 @@ func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
 				),
 			)
 		} else if verbose {
-			report.Info(fmt.Sprintf("removed %s", entryPath))
+			resetResult.Removed = append(resetResult.Removed, entryPath)
 		}
 
 		resetResult.TotalFreedSize += size

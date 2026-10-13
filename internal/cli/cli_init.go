@@ -1,12 +1,19 @@
 package cli
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -127,18 +134,63 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 	}
 
 	opts := install.InitOptions{
-		Minecraft:    mc,
-		Distribution: distribution,
-		CoreVersion:  coreVer,
-		Repository:   flagStringInit(cmd, flagInitRepositoryName),
-		MCDRVersion:  flagStringInit(cmd, flagInitMCDRVersionName),
-		Directory:    flagStringInit(cmd, flagInitDirectoryName),
-		Force:        flagBoolInit(cmd, flagInitForceName),
-		AllowEmpty:   flagBoolInit(cmd, flagInitAllowEmptyName),
-		Detect:       detect,
+		Minecraft:       mc,
+		Distribution:    distribution,
+		CoreVersion:     coreVer,
+		Repository:      flagStringInit(cmd, flagInitRepositoryName),
+		MCDRVersion:     flagStringInit(cmd, flagInitMCDRVersionName),
+		Directory:       flagStringInit(cmd, flagInitDirectoryName),
+		Force:           flagBoolInit(cmd, flagInitForceName),
+		AllowEmpty:      flagBoolInit(cmd, flagInitAllowEmptyName),
+		Detect:          detect,
+		PromptMinecraft: promptMinecraft(cmd),
 	}
 
-	return install.Initialize(cmd.Context(), workDir, opts)
+	return initializeWorkspace(cmd, workDir, opts)
+}
+
+// initializeWorkspace initializes one workspace and owns its presentation.
+// Warnings observed during initialization surface on stderr once, failures
+// return to the command framework, and success reprints the stored manifest
+// from the returned document instead of rereading it.
+func initializeWorkspace(cmd *cobra.Command, workDir string, opts install.InitOptions) error {
+	d, warnings, err := install.Initialize(cmd.Context(), workDir, opts)
+	for _, warning := range warnings {
+		report.Warn(warning)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s for Minecraft %s (%s)\n", manifest.Filename, d.Server.Minecraft, d.Server.Core.Distribution)
+	return nil
+}
+
+// promptMinecraft returns the interactive Minecraft-version prompt for
+// Initialize. It requires a terminal stdin with interactive mode enabled,
+// echoes the question on stderr, and returns the trimmed answer.
+func promptMinecraft(cmd *cobra.Command) func() (string, error) {
+	return func() (string, error) {
+		stdin := cmd.InOrStdin()
+		file, isFile := stdin.(*os.File)
+		if !isFile || !term.IsTerminal(file.Fd()) || !style.InteractiveEnabled() {
+			return "", errors.New("a concrete --minecraft version is required")
+		}
+		fmt.Fprint(cmd.ErrOrStderr(), "Minecraft version: ")
+		// Piped answers may end without a newline, so a final line behind
+		// io.EOF is still a valid answer.
+		text, err := bufio.NewReader(stdin).ReadString('\n')
+		if err == io.EOF && strings.TrimSpace(text) != "" {
+			err = nil
+		}
+		if err != nil {
+			return "", err
+		}
+		answer := strings.TrimSpace(text)
+		if answer == "" {
+			return "", errors.New("a concrete --minecraft version is required")
+		}
+		return answer, nil
+	}
 }
 
 func resolveWorkDirInit(cmd *cobra.Command) (string, error) {
