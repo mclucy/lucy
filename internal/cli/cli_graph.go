@@ -181,7 +181,10 @@ func BuildGraphFromLock(lock *lockfile.Document) (*DependencyGraph, error) {
 	}
 
 	sort.Slice(graph.Roots, func(i, j int) bool {
-		return graph.Roots[i].ID < graph.Roots[j].ID
+		if graph.Roots[i].ID != graph.Roots[j].ID {
+			return graph.Roots[i].ID < graph.Roots[j].ID
+		}
+		return graph.Roots[i].key() < graph.Roots[j].key()
 	})
 	return graph, nil
 }
@@ -238,40 +241,57 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 		node := &GraphNode{
 			ID:      id,
 			Version: string(p.Id.Version),
+			Runtime: RuntimeServer,
 			Loader:  p.Id.Eco,
 		}
-		graph.Nodes[nodeKey(RuntimeServer, p.Id.Eco, id)] = node
+		graph.Nodes[node.key()] = node
 	}
 
+	// A probe observation has no runtime membership marker, so every node
+	// scopes to the server runtime and its scope matches the map key.
 	isDependency := make(map[string]bool)
 
 	for _, p := range info.Packages {
 		parentID := p.Id.StringBase()
-
-		if len(p.Dependencies.Value) == 0 {
+		parent, parentOK := graph.Nodes[nodeKey(RuntimeServer, p.Id.Eco, parentID)]
+		if !parentOK {
 			continue
 		}
 
 		for _, dep := range p.Dependencies.Value {
 			depID := dep.Id.StringBase()
-			isDependency[depID] = true
 
-			parent, parentOK := graph.Nodes[nodeKey(RuntimeServer, p.Id.Eco, parentID)]
-			child, childOK := graph.Nodes[nodeKey(RuntimeServer, p.Id.Eco, depID)]
-
-			if parentOK && childOK {
-				parent.Children = append(parent.Children, child)
-				child.Parents = append(child.Parents, parent)
+			depEco := dep.Id.Eco
+			if depEco == types.EcoUnspecified {
+				depEco = p.Id.Eco
 			}
+			child, childOK := graph.Nodes[nodeKey(RuntimeServer, depEco, depID)]
+			if !childOK || child == parent {
+				continue
+			}
+			isDependency[child.key()] = true
+
+			if slices.Contains(parent.Children, child) {
+				continue
+			}
+			parent.Children = append(parent.Children, child)
+			child.Parents = append(child.Parents, parent)
 		}
 	}
 
 	for _, node := range graph.Nodes {
-		if !isDependency[node.ID] {
+		if !isDependency[node.key()] {
 			node.Root = true
 			graph.Roots = append(graph.Roots, node)
 		}
 	}
+
+	sort.Slice(graph.Roots, func(i, j int) bool {
+		if graph.Roots[i].ID != graph.Roots[j].ID {
+			return graph.Roots[i].ID < graph.Roots[j].ID
+		}
+		return graph.Roots[i].key() < graph.Roots[j].key()
+	})
 
 	for _, node := range graph.Nodes {
 		node.InDegree = len(node.Parents)
@@ -348,7 +368,10 @@ func (g *DependencyGraph) OrderedRoots() []*GraphNode {
 		ordered := make([]*GraphNode, 0, len(g.Roots))
 		ordered = append(ordered, g.Roots...)
 		sort.Slice(ordered, func(i, j int) bool {
-			return ordered[i].ID < ordered[j].ID
+			if ordered[i].ID != ordered[j].ID {
+				return ordered[i].ID < ordered[j].ID
+			}
+			return ordered[i].key() < ordered[j].key()
 		})
 		return ordered
 	}
