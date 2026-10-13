@@ -21,7 +21,7 @@ func init() {
 	leavesCmd.Flags().Bool(
 		"live",
 		false,
-		"Probe live server instead of reading lock",
+		"Observe the live workspace instead of reading the lock",
 	)
 	cli.AddJSONFlag(leavesCmd)
 	cli.AddJSONCompactFlag(leavesCmd)
@@ -36,7 +36,7 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 	}
 
 	forceLive, _ := cmd.Flags().GetBool("live")
-	graph, source, err := cli.LoadDependencyData(workDir, forceLive)
+	graph, source, _, err := cli.LoadDependencyData(workDir, forceLive)
 	if err != nil {
 		return err
 	}
@@ -55,17 +55,7 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 		fmt.Println("No leaf packages found")
 	} else {
 		for _, leaf := range leaves {
-			label := fmt.Sprintf("%s@%s", leaf.ID, leaf.Version)
-			if leaf.Source != "" {
-				label += fmt.Sprintf(" (%s)", leaf.Source)
-			}
-			if leaf.Optional {
-				label += " [optional]"
-			}
-			if leaf.Embedded {
-				label += " [embedded]"
-			}
-			fmt.Println(label)
+			fmt.Println(nodeLabel(leaf))
 		}
 	}
 
@@ -76,9 +66,11 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 type leafNode struct {
 	ID       string `json:"id"`
 	Version  string `json:"version"`
-	Source   string `json:"source,omitempty"`
-	Optional bool   `json:"optional,omitempty"`
-	Embedded bool   `json:"embedded,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	Project  string `json:"project,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	Runtime  string `json:"runtime"`
+	Loader   string `json:"loader"`
 }
 
 func outputLeavesJSON(graph *cli.DependencyGraph, source cli.DataSource, compact bool) error {
@@ -89,9 +81,11 @@ func outputLeavesJSON(graph *cli.DependencyGraph, source cli.DataSource, compact
 			jsonLeaves, leafNode{
 				ID:       leaf.ID,
 				Version:  leaf.Version,
-				Source:   leaf.Source,
-				Optional: leaf.Optional,
-				Embedded: leaf.Embedded,
+				Provider: leaf.Provider,
+				Project:  leaf.ProjectID,
+				Filename: leaf.Filename,
+				Runtime:  leaf.Runtime,
+				Loader:   leaf.Loader.String(),
 			},
 		)
 	}

@@ -1,0 +1,56 @@
+---
+title: "lucy add"
+description: "Add packages to the manifest and install them"
+---
+
+`lucy add` records a new requirement in `lucy.yaml`, resolves it against the lock, and installs the result. The manifest change and the lock update are one transaction: if resolution fails, `lucy.yaml` is left exactly as it was.
+
+```bash
+lucy add modrinth:lithium
+lucy add curseforge:238222
+lucy add modrinth:fabric-api@0.100.8
+lucy add modrinth:fabric-api modrinth:lithium
+lucy add mcdr:synced --loader mcdr
+```
+
+## Arguments
+
+<ParamField path="package" type="string" required>
+  One or more package references.
+
+  References are provider-qualified: `modrinth:`, `curseforge:`, or `mcdr:` followed by the project slug or id. An `@` suffix pins a selector — `modrinth:fabric-api@0.100.8`. Without `@`, the recorded selector is `stable`.
+
+  A bare name such as `lithium` works as a shortcut. `lucy` first looks for a unique match among the native module names the current lock already records; if nothing matches, it falls back to Modrinth, or to the MCDR catalogue inside the MCDR scope. A name matching more than one locked package is an error asking for `provider:project` rather than a guess.
+
+  Native mod and plugin ids are not rewritten. The manifest stores the provider-qualified reference; the id stays whatever the runtime loads.
+</ParamField>
+
+Without a pin, the requirement floats on `stable`: the selector records intent, not a fixed version, and re-resolution may move it forward. To hold a version, add it with `@` or edit the requirement's `version` afterwards. Either way, adding a package never floats the rest — existing pins are pins, and the new requirement resolves against them.
+
+## Flags
+
+<ParamField query="--loader, -l" type="string">
+  Target loader scope for the request (`fabric`, `forge`, `neoforge`, `bukkit`). `--platform` is accepted as an alias for the same scope.
+</ParamField>
+
+<ParamField query="--with-optional" type="boolean" default="false">
+  Also pull in the optional upstream dependencies that would otherwise be skipped. Anything selected this way is written back into `lucy.yaml` as an explicit requirement, so it is included when the server is reconstructed later — not just for this run.
+</ParamField>
+
+<ParamField query="--no-optional" type="boolean" default="false">
+  Skip optional upstream dependencies. This is the default; the flag is here so you can be explicit. Using it together with `--with-optional` is an error.
+</ParamField>
+
+<ParamField query="--locked" type="boolean" default="false">
+  Resolve only within what the lock already pins.
+</ParamField>
+
+<ParamField query="--offline" type="boolean" default="false">
+  Disallow network acquisition for newly added files.
+</ParamField>
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Ignore version, dependency, and platform warnings.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags), [`lucy remove`](/commands/remove).

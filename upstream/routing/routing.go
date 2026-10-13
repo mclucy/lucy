@@ -35,6 +35,7 @@ var (
 	ErrUnknownSource     = errors.New("unknown source")
 	ErrUnsupportedSource = errors.New("unsupported source")
 	ErrInvalidEcosystem  = errors.New("cannot find sources for ecosystem")
+	ErrNoCatalogue       = errors.New("source has no package catalogue")
 )
 
 type providerCatalog struct {

@@ -186,7 +186,9 @@ func normalizeRequirement(ref string, r *Requirement) error {
 		return err
 	}
 	r.Version = r.Selector()
-	r.Enabled = new(r.IsEnabled())
+	if r.Enabled == nil {
+		r.Enabled = new(true)
+	}
 	return nil
 }
 

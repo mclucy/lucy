@@ -3,6 +3,7 @@ package info
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -24,8 +25,9 @@ var infoCmd = &cobra.Command{
 	Short: "Display information a package, as a remote reference or local file.",
 	Long: `Display information of a mod or plugin from an upstream source.
 
-Pass a local .jar, .zip, .pyz, or .mcdr file to inspect its embedded metadata
-without making a network request.`,
+Pass a local .jar, .zip, .pyz, or .mcdr file to read its embedded metadata.
+Lucy then identifies the file by its SHA-256, which requires network access
+and works without a lucy-lock.yaml.`,
 	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(
 		cmd *cobra.Command,
@@ -63,6 +65,11 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	request, err := input.Parse(args[0])
+	if err != nil {
+		return err
+	}
+
+	request, err = resolveAgainstLock(request)
 	if err != nil {
 		return err
 	}
@@ -123,6 +130,48 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		fmt.Print(output)
 	}
 	return nil
+}
+
+// resolveAgainstLock expands a bare package name into the explicit
+// "provider:project" reference the current lock binds it to. It only runs for
+// an auto-sourced request: an explicit source override is always honored, and
+// nothing is cached or remembered beyond this call.
+func resolveAgainstLock(request types.PackageRequest) (types.PackageRequest, error) {
+	if request.Source != types.SourceAuto {
+		return request, nil
+	}
+
+	root, err := os.Getwd()
+	if err != nil {
+		return request, nil
+	}
+
+	runtime := cli.RuntimeServer
+	if request.Eco == types.EcoMcdr {
+		runtime = cli.RuntimeMCDR
+	}
+
+	reference, err := cli.ResolveLockReference(
+		root,
+		runtime,
+		request.Eco,
+		string(request.Name),
+	)
+	if err != nil {
+		return request, err
+	}
+	if reference == "" {
+		return request, nil
+	}
+
+	resolved, err := input.Parse(reference)
+	if err != nil {
+		return request, nil
+	}
+
+	request.Source = resolved.Source
+	request.Name = resolved.Name
+	return request, nil
 }
 
 func renderInfo(
