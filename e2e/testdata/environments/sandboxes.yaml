@@ -92,7 +92,7 @@ sandboxes:
       - dest: mods/fabric-carpet-1.21.11-1.4.194+v251223.jar
         url: https://cdn.modrinth.com/data/TQTTVgYE/versions/HzPcczDK/fabric-carpet-1.21.11-1.4.194%2Bv251223.jar
         sha256: 1b4d66f0332bda5deee08755e493c2d6ac64d64d5285e1134aa03604975c2521
-      - dest: sodium-extra-fabric-0.8.3+mc1.21.11.jar
+      - dest: mods/sodium-extra-fabric-0.8.3+mc1.21.11.jar
         url: https://cdn.modrinth.com/data/PtjYWJkn/versions/yqY1efrC/sodium-extra-fabric-0.8.3%2Bmc1.21.11.jar
         sha256: bd634e73fec7c84b47bf3d5701495c6b7d5d4104b81a75cb453346e9c2c92009
 
