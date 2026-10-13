@@ -43,11 +43,10 @@ func actionArtifactInfo(cmd *cobra.Command, filePath string) error {
 
 	lookup := lookupArtifactUpstream(filePath)
 
-	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)
 
-	if json || jsonCompact {
+	mode := cli.JSONMode(cmd)
+	if mode != cli.JSONNone {
 		views := make([]artifactInfoView, len(infos))
 		for i, info := range infos {
 			views[i] = artifactInfoViewFromInfo(info, lookup)
@@ -56,7 +55,7 @@ func actionArtifactInfo(cmd *cobra.Command, filePath string) error {
 		if len(views) == 1 {
 			payload = views[0]
 		}
-		if jsonCompact {
+		if mode == cli.JSONCompact {
 			style.PrintAsJsonCompact(payload)
 		} else {
 			style.PrintAsJson(payload)

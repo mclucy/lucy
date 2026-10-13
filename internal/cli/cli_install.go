@@ -38,7 +38,6 @@ func NewInstallCommand() *cobra.Command {
 		false,
 		"Re-resolve to install optional upstream dependencies and record them as explicit requirements",
 	)
-	AddNoStyleFlag(installCmd)
 	return installCmd
 }
 

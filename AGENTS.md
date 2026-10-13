@@ -72,6 +72,18 @@ To run the built binary against a test server directory:
     └── networkutil/        Network helpers wrapping cache downloads
 ```
 
+## Output Style Flags
+
+The output style flags are persistent on the root command, and every subcommand inherits them. A command must never register a local copy that shadows the root flags.
+
+- `--json` prints JSON indented with two spaces, and `--json-compact` prints it on one line. `--json-compact` wins when both are set. Only commands that render machine-readable output read them, through `cli.JSONMode`.
+- `--no-color` strips ANSI foreground colors. Text attributes such as bold or faint survive; a color-off style keeps its bare attributes.
+- `--no-interactive` disables progress bars, spinners, and prompt forms. A command that would ask for input fails instead, and the error names the flag that carries the same choice.
+- `--no-style` is exactly `--no-color` combined with `--no-interactive`.
+- `--yes` is not a global flag and not part of this family. It only answers a y/n prompt and never substitutes for the flag that replaces a selection.
+
+A new interactive surface ships with its flag equivalent in the same change. Log coloring follows `--no-color` through `log.TurnOffColors`; markdown and progress rendering follow the same color state.
+
 ## Testing and Debugging
 
 1. Always prefer the project's e2e testing suite. You should do regression tests after implementing a feature.

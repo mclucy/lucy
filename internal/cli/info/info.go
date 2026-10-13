@@ -46,9 +46,7 @@ var infoCmd = &cobra.Command{
 }
 
 func NewCommand() *cobra.Command {
-	cli.AddJSONFlag(infoCmd)
 	cli.AddLongFlag(infoCmd)
-	cli.AddNoStyleFlag(infoCmd)
 	return infoCmd
 }
 
@@ -103,17 +101,14 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)
 
-	if json || jsonCompact {
-		if jsonCompact {
-			style.PrintAsJsonCompact(meta.Metadata)
-		} else {
-			style.PrintAsJson(meta.Metadata)
-		}
-	} else {
+	switch cli.JSONMode(cmd) {
+	case cli.JSONPretty:
+		style.PrintAsJson(meta.Metadata)
+	case cli.JSONCompact:
+		style.PrintAsJsonCompact(meta.Metadata)
+	default:
 		installID := meta.Ref.StringFull()
 		output := renderInfo(meta.Metadata, installID, long)
 		if len(noResultSources) > 0 {

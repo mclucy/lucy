@@ -23,9 +23,6 @@ func NewLeavesCommand() *cobra.Command {
 		false,
 		"Observe the live workspace instead of reading the lock",
 	)
-	AddJSONFlag(leavesCmd)
-	AddJSONCompactFlag(leavesCmd)
-	AddNoStyleFlag(leavesCmd)
 	return leavesCmd
 }
 
@@ -41,11 +38,9 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	jsonOut, _ := cmd.Flags().GetBool(FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(FlagJSONCompact)
-
-	if jsonOut || jsonCompact {
-		return outputLeavesJSON(graph, source, jsonCompact)
+	mode := JSONMode(cmd)
+	if mode != JSONNone {
+		return outputLeavesJSON(graph, source, mode)
 	}
 
 	fmt.Printf("Using data from: %s\n\n", source.String())
@@ -73,7 +68,11 @@ type leafNode struct {
 	Loader   string `json:"loader"`
 }
 
-func outputLeavesJSON(graph *DependencyGraph, source DataSource, compact bool) error {
+func outputLeavesJSON(
+	graph *DependencyGraph,
+	source DataSource,
+	mode JSONRendering,
+) error {
 	leaves := graph.GetLeaves()
 	jsonLeaves := make([]leafNode, 0, len(leaves))
 	for _, leaf := range leaves {
@@ -90,13 +89,14 @@ func outputLeavesJSON(graph *DependencyGraph, source DataSource, compact bool) e
 		)
 	}
 
-	output := map[string]interface{}{
+	output := map[string]any{
 		"source": source.String(),
 		"leaves": jsonLeaves,
 	}
-	if compact {
+	switch mode {
+	case JSONCompact:
 		style.PrintAsJsonCompact(output)
-	} else {
+	default:
 		style.PrintAsJson(output)
 	}
 	return nil

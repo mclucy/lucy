@@ -11,15 +11,28 @@ These flags are inherited by every `lucy` subcommand.
   Print the current `lucy` version and exit.
 </ParamField>
 
+## Output style
 
-## Output
+<ParamField query="--no-color" type="boolean" default="false">
+  Disable ANSI colors. Text attributes such as bold or underline survive, so output stays readable in environments that do not support color or when piping output to another program.
+</ParamField>
+
+<ParamField query="--no-interactive" type="boolean" default="false">
+  Disable interactive effects such as progress bars, spinners, and prompts. A command that would have to ask for input fails instead, naming the flag that carries the same choice — every interactive selection has one.
+</ParamField>
 
 <ParamField query="--no-style" type="boolean" default="false">
-  Disable colored and styled terminal output. Useful in environments that do not support ANSI escape codes, or when piping output to another program.
+  Same as `--no-color --no-interactive`.
+</ParamField>
+
+`--json` and `--json-compact` are inherited by every command and render on the ones that produce machine-readable output. `--json-compact` wins when both are set.
+
+<ParamField query="--json" type="boolean" default="false">
+  Print JSON indented with 2 spaces.
 </ParamField>
 
 <ParamField query="--json-compact" type="boolean" default="false">
-  Print raw JSON without indentation. Implies machine-readable output on any command that supports JSON. Use `--json` (per-command) for pretty-printed JSON.
+  Print JSON without indentation.
 </ParamField>
 
 ## Logging

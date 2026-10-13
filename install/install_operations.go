@@ -14,6 +14,7 @@ import (
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
@@ -222,7 +223,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) error {
 		}
 	}
 	if d.Server.Minecraft == "" || types.BareVersion(d.Server.Minecraft).IsInvalid() {
-		if !term.IsTerminal(os.Stdin.Fd()) {
+		if !term.IsTerminal(os.Stdin.Fd()) || !style.InteractiveEnabled() {
 			return fmt.Errorf("a concrete --minecraft version is required")
 		}
 		fmt.Print("Minecraft version: ")

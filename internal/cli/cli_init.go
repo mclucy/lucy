@@ -91,7 +91,6 @@ func NewInitCommand() *cobra.Command {
 		"Override working directory (for testing)",
 	)
 	_ = initCmd.Flags().MarkHidden(flagInitWorkDirName)
-	AddNoStyleFlag(initCmd)
 	return initCmd
 }
 
