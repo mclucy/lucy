@@ -229,6 +229,7 @@ const (
 )
 
 type fileResponse struct {
+	ID     string `json:"id"`
 	Hashes struct {
 		Sha1   string `json:"sha1"`
 		Sha512 string `json:"sha512"`

@@ -1,0 +1,357 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Wire types keep assertions independent of Lucy's codecs and fingerprint code.
+type manifestIntent struct {
+	Server struct {
+		Minecraft string `yaml:"minecraft"`
+		Directory string `yaml:"directory"`
+		Core      struct {
+			Distribution string `yaml:"distribution"`
+			Version      string `yaml:"version"`
+		} `yaml:"core"`
+		Packages map[string]map[string]string `yaml:"packages"`
+	} `yaml:"server"`
+}
+
+type lockedArtifact struct {
+	Provider  string            `yaml:"provider"`
+	ProjectID string            `yaml:"project_id"`
+	ReleaseID string            `yaml:"release_id"`
+	FileID    string            `yaml:"file_id"`
+	Version   string            `yaml:"version"`
+	Filename  string            `yaml:"filename"`
+	URL       string            `yaml:"url"`
+	Hashes    map[string]string `yaml:"hashes"`
+	Modules   []lockedModule    `yaml:"modules"`
+}
+
+type lockedModule struct {
+	ID           string   `yaml:"id"`
+	Version      string   `yaml:"version"`
+	Member       string   `yaml:"member"`
+	Provides     []string `yaml:"provides"`
+	Dependencies []struct {
+		ID         string `yaml:"id"`
+		Kind       string `yaml:"kind"`
+		Constraint string `yaml:"constraint"`
+	} `yaml:"dependencies"`
+}
+
+type lockedPackage struct {
+	Runtime        string `yaml:"runtime"`
+	Loader         string `yaml:"loader"`
+	lockedArtifact `yaml:",inline"`
+	Requirements   []struct {
+		Reference string `yaml:"reference"`
+		Selector  string `yaml:"selector"`
+		Enabled   bool   `yaml:"enabled"`
+	} `yaml:"requirements"`
+}
+
+type lockedInput struct {
+	Path           string `yaml:"path"`
+	lockedArtifact `yaml:",inline"`
+}
+
+type lockDocument struct {
+	Version             int    `yaml:"lock_version"`
+	ManifestFingerprint string `yaml:"manifest_fingerprint"`
+	Server              struct {
+		Minecraft      string `yaml:"minecraft"`
+		Directory      string `yaml:"directory"`
+		Distribution   string `yaml:"distribution"`
+		CoreVersion    string `yaml:"core_version"`
+		Bootstrap      string `yaml:"bootstrap"`
+		lockedArtifact `yaml:",inline"`
+		Inputs         []lockedInput `yaml:"inputs"`
+	} `yaml:"server"`
+	Packages []lockedPackage `yaml:"packages"`
+}
+
+func readLock(root string) (lockDocument, error) {
+	data, err := os.ReadFile(filepath.Join(root, "lucy-lock.yaml"))
+	if err != nil {
+		return lockDocument{}, fmt.Errorf("read generated lock: %w", err)
+	}
+	var document lockDocument
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return lockDocument{}, fmt.Errorf("decode generated lock: %w", err)
+	}
+	return document, nil
+}
+
+func (scenario lockScenario) verify(root, fixture string, declared manifestIntent, locked lockDocument) error {
+	server := locked.Server
+	if locked.Version != 1 {
+		return fmt.Errorf("install did not write lock version 1")
+	}
+	validFingerprint := strings.HasPrefix(locked.ManifestFingerprint, "sha256:") && len(locked.ManifestFingerprint) == 71
+	if !validFingerprint {
+		return fmt.Errorf("install did not write a valid manifest fingerprint")
+	}
+	if server.Minecraft != scenario.minecraft || server.Minecraft != declared.Server.Minecraft {
+		return fmt.Errorf("lock Minecraft version does not match the pinned manifest")
+	}
+	if server.Distribution != scenario.distribution || server.Distribution != declared.Server.Core.Distribution {
+		return fmt.Errorf("lock core distribution does not match the pinned manifest")
+	}
+	if server.CoreVersion != scenario.coreVersion || server.CoreVersion != declared.Server.Core.Version {
+		return fmt.Errorf("lock core version does not match the pinned manifest")
+	}
+	if server.Directory != declared.Server.Directory {
+		return fmt.Errorf("lock server directory does not match the pinned manifest")
+	}
+	if server.Provider != scenario.provider || server.ProjectID != scenario.projectID {
+		return fmt.Errorf("lock has incorrect %s provider or project identity", scenario.distribution)
+	}
+	if server.Version != scenario.coreVersion || server.Filename != scenario.filename {
+		return fmt.Errorf("lock has incorrect %s core version or filename", scenario.distribution)
+	}
+	if server.Bootstrap != scenario.bootstrap {
+		return fmt.Errorf("lock has incorrect %s bootstrap profile", scenario.distribution)
+	}
+	if server.URL == "" || !hasSHA256(server.Hashes["sha256"]) {
+		return fmt.Errorf("lock has incomplete %s core artifact coordinates", scenario.distribution)
+	}
+
+	live := filepath.Join(root, server.Directory)
+	if scenario.coreOutput != "" {
+		path := filepath.Join(live, filepath.FromSlash(scenario.coreOutput))
+		if err := verifyLockedFile(path, server.lockedArtifact); err != nil {
+			return err
+		}
+	}
+	if scenario.coreFixture != "" {
+		actual, err := fileSHA256(filepath.Join(fixture, scenario.coreFixture))
+		if err != nil {
+			return fmt.Errorf("core fixture %s: %w", scenario.coreFixture, err)
+		}
+		if actual != server.Hashes["sha256"] {
+			return fmt.Errorf("selected %s core artifact differs from its envgen fixture", scenario.distribution)
+		}
+	}
+	for _, artifact := range scenario.runtimeArtifacts {
+		if err := verifyOracleFile(filepath.Join(fixture, artifact.fixture), filepath.Join(live, artifact.runtime)); err != nil {
+			return fmt.Errorf("runtime artifact %s: %w", artifact.runtime, err)
+		}
+	}
+	if scenario.minecraftFixture != "" {
+		if err := verifyOracleFile(filepath.Join(fixture, scenario.minecraftFixture), filepath.Join(live, "server.jar")); err != nil {
+			return fmt.Errorf("Minecraft server input: %w", err)
+		}
+	}
+	if err := verifyBootstrapInputs(live, server.Inputs, scenario.requiredInputs); err != nil {
+		return err
+	}
+	if err := verifyRuntimeFiles(live, scenario); err != nil {
+		return err
+	}
+	if err := verifyPackages(live, fixture, declared, scenario.packages, locked.Packages); err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyBootstrapInputs(root string, inputs []lockedInput, required []string) error {
+	seen := make(map[string]bool, len(inputs))
+	for _, input := range inputs {
+		seen[input.Path] = true
+		path := filepath.Join(root, filepath.FromSlash(input.Path))
+		if err := verifyLockedFile(path, input.lockedArtifact); err != nil {
+			return fmt.Errorf("bootstrap input %s: %w", input.Path, err)
+		}
+	}
+	for _, path := range required {
+		if !seen[path] {
+			return fmt.Errorf("lock omitted required bootstrap input %s", path)
+		}
+	}
+	return nil
+}
+
+func verifyRuntimeFiles(root string, scenario lockScenario) error {
+	for _, relative := range scenario.requiredFiles {
+		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			return fmt.Errorf("required runtime file %s: %w", relative, err)
+		}
+		if relative == "run.sh" && info.Mode().Perm()&0o111 == 0 {
+			return fmt.Errorf("generated launcher %s is not executable", relative)
+		}
+	}
+	if scenario.launchArguments != "" {
+		path := filepath.Join(root, filepath.FromSlash(scenario.launchArguments))
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("generated launch arguments %s: %w", scenario.launchArguments, err)
+		}
+		script, err := os.ReadFile(filepath.Join(root, "run.sh"))
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(string(script), "@"+scenario.launchArguments) {
+			return fmt.Errorf("generated launcher does not reference %s", scenario.launchArguments)
+		}
+	}
+	if scenario.distribution == "fabric" {
+		script, err := os.ReadFile(filepath.Join(root, "run.sh"))
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(string(script), "net.fabricmc.loader.impl.launch.server.FabricServerLauncher") {
+			return fmt.Errorf("generated launcher does not start the Fabric server")
+		}
+	}
+	return nil
+}
+
+func verifyPackages(root, fixture string, declared manifestIntent, expected []packageExpectation, packages []lockedPackage) error {
+	seen := make(map[string]bool, len(packages))
+	for _, pkg := range packages {
+		index := slices.IndexFunc(expected, func(want packageExpectation) bool {
+			return pkg.ProjectID == want.projectID
+		})
+		if index < 0 || seen[pkg.ProjectID] {
+			return fmt.Errorf("unexpected or duplicated locked project %q", pkg.ProjectID)
+		}
+		seen[pkg.ProjectID] = true
+		want := expected[index]
+		if pkg.Provider != "modrinth" || pkg.Runtime != "server" {
+			return fmt.Errorf("project %s has incorrect provider or runtime", pkg.ProjectID)
+		}
+		if pkg.Loader != "fabric" {
+			return fmt.Errorf("project %s has incorrect loader", pkg.ProjectID)
+		}
+		if pkg.ReleaseID != want.releaseID || pkg.FileID != want.fileID {
+			return fmt.Errorf("project %s has incorrect release or file identity", pkg.ProjectID)
+		}
+		if pkg.Filename != want.filename {
+			return fmt.Errorf("project %s has incorrect filename", pkg.ProjectID)
+		}
+		selector := declared.Server.Packages["fabric"][want.reference]
+		if pkg.Version != selector || !slices.ContainsFunc(pkg.Requirements, func(req struct {
+			Reference string `yaml:"reference"`
+			Selector  string `yaml:"selector"`
+			Enabled   bool   `yaml:"enabled"`
+		},
+		) bool {
+			return req.Reference == want.reference && req.Selector == selector && req.Enabled
+		}) {
+			return fmt.Errorf("project %s lost its exact manifest selector %q", pkg.ProjectID, selector)
+		}
+		path := filepath.Join(root, "mods", pkg.Filename)
+		if err := verifyOracleFile(filepath.Join(fixture, "mods", pkg.Filename), path); err != nil {
+			return err
+		}
+		if err := verifyLockedFile(path, pkg.lockedArtifact); err != nil {
+			return err
+		}
+		if err := verifyNativeModules(pkg); err != nil {
+			return err
+		}
+	}
+	if len(seen) != len(expected) {
+		return fmt.Errorf("lock omitted a declared package: selected %v", seen)
+	}
+	return nil
+}
+
+func verifyNativeModules(pkg lockedPackage) error {
+	id, version, member := "fabric-api-base", "0.4.54+b47eab6b04", "META-INF/jars/fabric-api-base-0.4.54+b47eab6b04.jar"
+	if pkg.ProjectID == "Si383TIH" {
+		id, version, member = "lingua_bib", "1.21.4-1.0.3", "META-INF/jars/lingua_bib-1.21.4-1.0.3-fabric.jar"
+		flan := slices.IndexFunc(pkg.Modules, func(module lockedModule) bool { return module.ID == "flan" })
+		if flan < 0 || pkg.Modules[flan].Version != "1.21.4-1.11.7.b" {
+			return fmt.Errorf("Flan lock lost its native module version")
+		}
+		found := false
+		for _, dependency := range pkg.Modules[flan].Dependencies {
+			if dependency.ID != "fabric" || dependency.Kind != "required" {
+				continue
+			}
+			if dependency.Constraint == ">=0.119.2+1.21.4" {
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("Flan lock lost its required dependency on the Fabric API alias")
+		}
+	} else {
+		api := slices.IndexFunc(pkg.Modules, func(module lockedModule) bool { return module.ID == "fabric-api" })
+		if api < 0 {
+			return fmt.Errorf("Fabric API lock omitted its native module")
+		}
+		if pkg.Modules[api].Version != pkg.Version || !slices.Contains(pkg.Modules[api].Provides, "fabric") {
+			return fmt.Errorf("Fabric API lock lost its native identity or provided alias")
+		}
+	}
+	if !slices.ContainsFunc(pkg.Modules, func(module lockedModule) bool {
+		matchesIDAndVersion := module.ID == id && module.Version == version
+		return matchesIDAndVersion && module.Member == member
+	}) {
+		return fmt.Errorf("project %s lock lost embedded module %s", pkg.ProjectID, id)
+	}
+	return nil
+}
+
+func verifyLockedFile(path string, artifact lockedArtifact) error {
+	if !hasSHA256(artifact.Hashes["sha256"]) {
+		return fmt.Errorf("lock has no SHA-256 for %s", artifact.Filename)
+	}
+	hash, err := fileSHA256(path)
+	if err != nil {
+		return err
+	}
+	if artifact.Hashes["sha256"] != hash {
+		return fmt.Errorf("locked digest for %s does not match its installed bytes", path)
+	}
+	return nil
+}
+
+func verifyOracleFile(fixture, installed string) error {
+	want, err := fileSHA256(fixture)
+	if err != nil {
+		return fmt.Errorf("fixture unavailable (%s): %w", fixture, err)
+	}
+	got, err := fileSHA256(installed)
+	if err != nil {
+		return err
+	}
+	if want != got {
+		return fmt.Errorf("installed %s differs from the pinned envgen artifact", installed)
+	}
+	return nil
+}
+
+func hasSHA256(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func fileSHA256(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}

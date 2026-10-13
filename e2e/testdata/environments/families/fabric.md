@@ -1,6 +1,6 @@
 # Fabric
 
-Covers environments: `fabric-executable-1214`, `fabric-executable-262`, `fabric-installed-1214`, `fabric-installed-262`, `fabric-installed-114`.
+Covers environments: `fabric-executable-1214`, `fabric-executable-262`, `fabric-installed-1214`, `fabric-installed-262`, `fabric-installed-114`, `lock-fabric-1214`.
 
 ## Layouts
 
@@ -28,3 +28,7 @@ Note:
 - Installer jars: `https://maven.fabricmc.net/net/fabricmc/fabric-installer/<v>/...`
 
 References: <https://fabricmc.net/use/server>, <https://meta.fabricmc.net>, <https://wiki.fabricmc.net/documentation:fabric_loader>
+
+## Artifact fixture
+
+`lock-fabric-1214` contains reference files for the Fabric 1.21.4 install scenario. It is not a runnable server.

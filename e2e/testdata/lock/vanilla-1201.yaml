@@ -1,0 +1,7 @@
+manifest_version: 1
+server:
+  minecraft: "1.20.1"
+  directory: server
+  core:
+    distribution: vanilla
+    version: "1.20.1"

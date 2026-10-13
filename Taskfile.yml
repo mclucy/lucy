@@ -269,6 +269,11 @@ tasks:
     cmds:
       - go run ./e2e/compile {{.CLI_ARGS}}
 
+  e2e:lock:
+    desc: "Run fresh install scenarios across server core families (args: optional scenario ids)"
+    cmds:
+      - go run ./e2e/lock {{.CLI_ARGS}}
+
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks
     cmds:
