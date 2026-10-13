@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/terminal/style"
@@ -22,13 +23,9 @@ import (
 
 var infoCmd = &cobra.Command{
 	Use:   "info <package|file>",
-	Short: "Display information a package, as a remote reference or local file.",
-	Long: `Display information of a mod or plugin from an upstream source.
-
-Pass a local .jar, .zip, .pyz, or .mcdr file to read its embedded metadata.
-Lucy then identifies the file by its SHA-256, which requires network access
-and works without a lucy-lock.yaml.`,
-	Args: cobra.ExactArgs(1),
+	Short: message.InfoShort,
+	Long:  message.InfoLong,
+	Args:  cobra.ExactArgs(1),
 	ValidArgsFunction: func(
 		cmd *cobra.Command,
 		args []string,

@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +18,7 @@ const (
 
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Converge Lucy-managed runtime state from the lockfile",
+	Short: message.InstallShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionInstall),
 }

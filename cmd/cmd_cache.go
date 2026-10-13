@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/terminal/style"
@@ -14,7 +15,7 @@ import (
 
 var cacheCmd = &cobra.Command{
 	Use:   "cache",
-	Short: "Manage the download cache",
+	Short: message.CacheShort,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},
@@ -23,14 +24,14 @@ var cacheCmd = &cobra.Command{
 var cacheLsCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
-	Short:   "List cached entries",
+	Short:   message.CacheLsShort,
 	RunE:    cli.WithErrorLogging(actionCacheLs),
 }
 
 var cacheClearCmd = &cobra.Command{
 	Use:     "clear",
 	Aliases: []string{"rm"},
-	Short:   "Clear all cached downloads",
+	Short:   message.CacheClearShort,
 	RunE:    cli.WithErrorLogging(actionCacheClear),
 }
 

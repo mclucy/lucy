@@ -7,6 +7,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +27,7 @@ const (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Generate a manifest file for an existing server directory",
+	Short: message.InitShort,
 	Args:  cobra.NoArgs,
 	RunE:  cli.WithErrorLogging(actionInit),
 }
