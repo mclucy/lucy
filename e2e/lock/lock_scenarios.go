@@ -22,6 +22,7 @@ type lockScenario struct {
 	coreOutput       string
 	coreFixture      string
 	minecraftFixture string
+	minecraftDigest  string
 	requiredFiles    []string
 	requiredInputs   []string
 	launchArguments  string
@@ -34,7 +35,7 @@ type runtimeArtifactExpectation struct {
 }
 
 type packageExpectation struct {
-	reference, projectID, releaseID, fileID, filename string
+	reference, projectID, releaseID, fileID, filename, sha256 string
 }
 
 var lockScenarios = map[string]lockScenario{
@@ -51,16 +52,15 @@ var lockScenarios = map[string]lockScenario{
 		minecraftFixture: "server.jar",
 	},
 	"fabric-1214": {
-		environment:      "lock-fabric-1214",
-		distribution:     "fabric",
-		minecraft:        "1.21.4",
-		coreVersion:      "0.16.9",
-		provider:         "fabric",
-		projectID:        "fabric-loader",
-		filename:         "fabric-loader-0.16.9.jar",
-		bootstrap:        "fabric",
-		coreOutput:       "libraries/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar",
-		minecraftFixture: "server.jar",
+		distribution:    "fabric",
+		minecraft:       "1.21.4",
+		coreVersion:     "0.16.9",
+		provider:        "fabric",
+		projectID:       "fabric-loader",
+		filename:        "fabric-loader-0.16.9.jar",
+		bootstrap:       "fabric",
+		coreOutput:      "libraries/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar",
+		minecraftDigest: "1066970b09e9c671844572291c4a871cc1ac2b85838bf7004fa0e778e10f1358",
 		requiredFiles: []string{
 			"run.sh",
 			"run.bat",
@@ -70,10 +70,12 @@ var lockScenarios = map[string]lockScenario{
 			{
 				reference: "modrinth:fabric-api", projectID: "P7dR8mSH", releaseID: "p96k10UR",
 				fileID: "9aQezMA2", filename: "fabric-api-0.119.4+1.21.4.jar",
+				sha256: "d183bacb845167f09264c2f90322b7ecffe8826debda6f60e597889264bef4af",
 			},
 			{
 				reference: "modrinth:flan", projectID: "Si383TIH", releaseID: "9EC25rAV",
 				fileID: "HjsqW7BQ", filename: "flan-1.21.4-1.11.7.b-fabric.jar",
+				sha256: "33c466b7c319f1597798f62d13b619317590bf069c4a2c11715fb19fdd98e7f8",
 			},
 		},
 	},
@@ -120,13 +122,16 @@ func executeScenario(ctx context.Context, binary, sandboxes, id string) (resultE
 	if !ok {
 		return fmt.Errorf("unknown install scenario %q", id)
 	}
-	fixture := filepath.Join(sandboxes, scenario.environment)
-	info, err := os.Stat(fixture)
-	if err != nil {
-		return fmt.Errorf("generate %s with task envs:gen first: %w", scenario.environment, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("environment fixture is not a directory: %s", fixture)
+	oracle := ""
+	if scenario.environment != "" {
+		oracle = filepath.Join(sandboxes, scenario.environment)
+		info, err := os.Stat(oracle)
+		if err != nil {
+			return fmt.Errorf("generate %s with task envs:gen first: %w", scenario.environment, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("environment fixture is not a directory: %s", oracle)
+		}
 	}
 	intent, err := os.ReadFile(filepath.Join("e2e", "testdata", "manifest", id+".yaml"))
 	if err != nil {
@@ -158,7 +163,7 @@ func executeScenario(ctx context.Context, binary, sandboxes, id string) (resultE
 	if err != nil {
 		return err
 	}
-	if err := scenario.verify(root, fixture, declared, locked); err != nil {
+	if err := scenario.verify(root, oracle, declared, locked); err != nil {
 		return fmt.Errorf("installed runtime: %w", err)
 	}
 	fmt.Printf("install %s: generated lock and runtime outputs\n", id)

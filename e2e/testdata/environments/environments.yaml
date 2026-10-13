@@ -350,21 +350,3 @@ environments:
       - dest: mohist.jar
         manual: true
         sha256: cbefdc9230b714c784dafaf74c83f55d8c4ec049dc41561c4e9b2d5766d05941
-
-  # Install scenario fixtures
-
-  - id: lock-fabric-1214
-    family: fabric
-    game_version: "1.21.4"
-    description: Pinned Fabric API and Flan artifacts for the Fabric 1.21.4 install scenario
-    docs: families/fabric.md
-    artifacts:
-      - dest: server.jar
-        mojang_version: "1.21.4"
-        sha256: 1066970b09e9c671844572291c4a871cc1ac2b85838bf7004fa0e778e10f1358
-      - dest: mods/fabric-api-0.119.4+1.21.4.jar
-        url: https://cdn.modrinth.com/data/P7dR8mSH/versions/p96k10UR/fabric-api-0.119.4%2B1.21.4.jar
-        sha256: d183bacb845167f09264c2f90322b7ecffe8826debda6f60e597889264bef4af
-      - dest: mods/flan-1.21.4-1.11.7.b-fabric.jar
-        url: https://cdn.modrinth.com/data/Si383TIH/versions/9EC25rAV/flan-1.21.4-1.11.7.b-fabric.jar
-        sha256: 33c466b7c319f1597798f62d13b619317590bf069c4a2c11715fb19fdd98e7f8

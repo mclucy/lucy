@@ -94,7 +94,7 @@ func readLock(root string) (lockDocument, error) {
 	return document, nil
 }
 
-func (scenario lockScenario) verify(root, fixture string, declared manifestIntent, locked lockDocument) error {
+func (scenario lockScenario) verify(root, oracle string, declared manifestIntent, locked lockDocument) error {
 	server := locked.Server
 	if server.Minecraft != scenario.minecraft || server.Minecraft != declared.Server.Minecraft {
 		return fmt.Errorf("lock Minecraft version does not match the pinned manifest")
@@ -126,7 +126,7 @@ func (scenario lockScenario) verify(root, fixture string, declared manifestInten
 		}
 	}
 	if scenario.coreFixture != "" {
-		actual, err := fileSHA256(filepath.Join(fixture, scenario.coreFixture))
+		actual, err := fileSHA256(filepath.Join(oracle, scenario.coreFixture))
 		if err != nil {
 			return fmt.Errorf("core fixture %s: %w", scenario.coreFixture, err)
 		}
@@ -135,12 +135,17 @@ func (scenario lockScenario) verify(root, fixture string, declared manifestInten
 		}
 	}
 	for _, artifact := range scenario.runtimeArtifacts {
-		if err := verifyOracleFile(filepath.Join(fixture, artifact.fixture), filepath.Join(live, artifact.runtime)); err != nil {
+		if err := verifyOracleFile(filepath.Join(oracle, artifact.fixture), filepath.Join(live, artifact.runtime)); err != nil {
 			return fmt.Errorf("runtime artifact %s: %w", artifact.runtime, err)
 		}
 	}
-	if scenario.minecraftFixture != "" {
-		if err := verifyOracleFile(filepath.Join(fixture, scenario.minecraftFixture), filepath.Join(live, "server.jar")); err != nil {
+	switch {
+	case scenario.minecraftFixture != "":
+		if err := verifyOracleFile(filepath.Join(oracle, scenario.minecraftFixture), filepath.Join(live, "server.jar")); err != nil {
+			return fmt.Errorf("minecraft server input: %w", err)
+		}
+	case scenario.minecraftDigest != "":
+		if err := verifyPinnedDigest(filepath.Join(live, "server.jar"), scenario.minecraftDigest); err != nil {
 			return fmt.Errorf("minecraft server input: %w", err)
 		}
 	}
@@ -150,7 +155,7 @@ func (scenario lockScenario) verify(root, fixture string, declared manifestInten
 	if err := verifyRuntimeFiles(live, scenario); err != nil {
 		return err
 	}
-	if err := verifyPackages(live, fixture, declared, scenario.packages, locked.Packages); err != nil {
+	if err := verifyPackages(live, oracle, declared, scenario.packages, locked.Packages); err != nil {
 		return err
 	}
 	return nil
@@ -208,7 +213,7 @@ func verifyRuntimeFiles(root string, scenario lockScenario) error {
 	return nil
 }
 
-func verifyPackages(root, fixture string, declared manifestIntent, expected []packageExpectation, packages []lockedPackage) error {
+func verifyPackages(root, oracle string, declared manifestIntent, expected []packageExpectation, packages []lockedPackage) error {
 	seen := make(map[string]bool, len(packages))
 	for _, pkg := range packages {
 		index := slices.IndexFunc(expected, func(want packageExpectation) bool {
@@ -243,8 +248,15 @@ func verifyPackages(root, fixture string, declared manifestIntent, expected []pa
 			return fmt.Errorf("project %s lost its exact manifest selector %q", pkg.ProjectID, selector)
 		}
 		path := filepath.Join(root, "mods", pkg.Filename)
-		if err := verifyOracleFile(filepath.Join(fixture, "mods", pkg.Filename), path); err != nil {
-			return err
+		switch {
+		case want.sha256 != "":
+			if err := verifyPinnedDigest(path, want.sha256); err != nil {
+				return fmt.Errorf("project %s: %w", pkg.ProjectID, err)
+			}
+		case oracle != "":
+			if err := verifyOracleFile(filepath.Join(oracle, "mods", pkg.Filename), path); err != nil {
+				return err
+			}
 		}
 		if err := verifyLockedFile(path, pkg.lockedArtifact); err != nil {
 			return err
@@ -313,12 +325,19 @@ func verifyOracleFile(fixture, installed string) error {
 	if err != nil {
 		return fmt.Errorf("fixture unavailable (%s): %w", fixture, err)
 	}
-	got, err := fileSHA256(installed)
+	return verifyPinnedDigest(installed, want)
+}
+
+// verifyPinnedDigest checks an installed file against a digest pinned in the
+// scenario table, so fixtures that are not real servers need neither a
+// generated directory nor a binary committed to the repository.
+func verifyPinnedDigest(path, want string) error {
+	got, err := fileSHA256(path)
 	if err != nil {
 		return err
 	}
-	if want != got {
-		return fmt.Errorf("installed %s differs from the pinned envgen artifact", installed)
+	if got != want {
+		return fmt.Errorf("installed %s has digest %s, want pinned %s", path, got, want)
 	}
 	return nil
 }
