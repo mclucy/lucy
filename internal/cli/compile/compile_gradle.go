@@ -17,7 +17,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/toolchain"
-	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -162,7 +162,7 @@ func newGradleRunner(
 
 // inspect evaluates the build model of every project so Lucy can choose one.
 func (r gradleRunner) inspect(ctx context.Context) (gradleModel, error) {
-	log.ShowInfo("Evaluating Gradle " + r.version + " build")
+	report.Info("Evaluating Gradle " + r.version + " build")
 	return r.execute(ctx, "Gradle build model", ":lucyCompileModel")
 }
 
@@ -171,7 +171,7 @@ func (r gradleRunner) inspect(ctx context.Context) (gradleModel, error) {
 // joins the invocation as a dry run so the task graph names the compile tasks
 // without running any of them: the JDK check must happen before the build.
 func (r gradleRunner) inspectCompilers(ctx context.Context, project gradleProject) (gradleProject, error) {
-	log.ShowInfo("Checking toolchain for " + nameProject(project.Path))
+	report.Info("Checking toolchain for " + nameProject(project.Path))
 	model, err := r.execute(
 		ctx,
 		"Gradle compiler inspection",
@@ -193,7 +193,7 @@ func (r gradleRunner) inspectCompilers(ctx context.Context, project gradleProjec
 
 // build runs task on the selected project and returns the archives it produced.
 func (r gradleRunner) build(ctx context.Context, task string) (gradleModel, error) {
-	log.ShowInfo("Building " + task)
+	report.Info("Building " + task)
 	return r.execute(ctx, "Gradle "+task, task, ":lucyCompileModel")
 }
 

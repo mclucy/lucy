@@ -11,8 +11,8 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/message"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -291,7 +291,7 @@ func outputBisect(cmd *cobra.Command, output bisectOutput) error {
 		style.PrintAsJsonCompact(output)
 		return nil
 	}
-	log.ShowInfo(formatBisectOutput(output))
+	report.Info(formatBisectOutput(output))
 	return nil
 }
 

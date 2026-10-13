@@ -6,7 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/cli/message"
-	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
@@ -52,7 +52,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	}
 
 	if len(entries) == 0 {
-		log.ShowInfo("Cache is empty")
+		report.Info("Cache is empty")
 		return nil
 	}
 
@@ -89,17 +89,17 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 }
 
 func actionCacheClear(_ *cobra.Command, _ []string) error {
-	report, err := cache.Network().ClearAll()
+	cleared, err := cache.Network().ClearAll()
 	if err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
 
-	log.ShowInfo("all cache items cleared")
-	log.ShowInfo(
+	report.Info("all cache items cleared")
+	report.Info(
 		fmt.Sprintf(
 			"removed %d files, freed up %s of space",
-			report.FileCount,
-			style.FormatBytesBinary(report.TotalFreedSize),
+			cleared.FileCount,
+			style.FormatBytesBinary(cleared.TotalFreedSize),
 		),
 	)
 	return nil

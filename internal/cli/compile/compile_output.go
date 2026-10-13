@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 )
 
 // excerptLines bounds the tail of a failed tool quoted on the console. Git and
@@ -84,7 +85,7 @@ func (l *processLog) excerpt() string {
 // a run of raw lines would be reflowed into a single paragraph.
 func reportFailure(output *processLog, err error) error {
 	if excerpt := output.excerpt(); excerpt != "" {
-		log.ShowError(errors.New(output.tool + " reported:\n" + indent(excerpt)))
+		report.Error(errors.New(output.tool + " reported:\n" + indent(excerpt)))
 	}
 	return err
 }

@@ -2,7 +2,6 @@ package log
 
 import (
 	"image/color"
-	"io"
 	"os"
 	"strings"
 	"sync"
@@ -70,12 +69,6 @@ func EnableDebug() {
 
 // EnableDumpHistory enables history dump on exit.
 func EnableDumpHistory() { dumpHistory = true }
-
-// SetConsoleOutput changes the console log's output writer.
-// Useful for testing or redirecting user-facing output.
-func SetConsoleOutput(w io.Writer) {
-	consoleLog.SetOutput(w)
-}
 
 // themedStyles returns charm/log Styles with level colors matching the
 // application theme (terminal/style). Basic ANSI colors keep the log

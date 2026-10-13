@@ -12,6 +12,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli/message"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -92,13 +93,13 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 			)
 			continue
 		}
-		log.ReportWarn(
-			fmt.Errorf(
-				"info on %s failed: %w",
-				providerErr.Source.Title(),
-				providerErr.Err,
-			),
+		providerWarn := fmt.Errorf(
+			"info on %s failed: %w",
+			providerErr.Source.Title(),
+			providerErr.Err,
 		)
+		log.Warn(providerWarn)
+		report.Warn(providerWarn)
 	}
 
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)
