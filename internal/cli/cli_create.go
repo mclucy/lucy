@@ -111,18 +111,19 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 	}
 
 	opts := install.InitOptions{
-		Minecraft:    mc,
-		Distribution: distribution,
-		CoreVersion:  coreVer,
-		Repository:   flagStringCreate(cmd, flagCreateRepositoryName),
-		MCDRVersion:  flagStringCreate(cmd, flagCreateMCDRVersionName),
-		Directory:    flagStringCreate(cmd, flagCreateDirectoryName),
-		Force:        flagBoolCreate(cmd, flagCreateForceName),
-		AllowEmpty:   true,
-		Detect:       false,
+		Minecraft:       mc,
+		Distribution:    distribution,
+		CoreVersion:     coreVer,
+		Repository:      flagStringCreate(cmd, flagCreateRepositoryName),
+		MCDRVersion:     flagStringCreate(cmd, flagCreateMCDRVersionName),
+		Directory:       flagStringCreate(cmd, flagCreateDirectoryName),
+		Force:           flagBoolCreate(cmd, flagCreateForceName),
+		AllowEmpty:      true,
+		Detect:          false,
+		PromptMinecraft: promptMinecraft(cmd),
 	}
 
-	return install.Initialize(cmd.Context(), workDir, opts)
+	return initializeWorkspace(cmd, workDir, opts)
 }
 
 func resolveWorkDirCreate(cmd *cobra.Command) (string, error) {

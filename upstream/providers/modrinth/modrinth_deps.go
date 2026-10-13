@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -26,16 +26,16 @@ func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies
 		}
 
 		parentId := types.VersionedPackageRef{
-			Eco:     m.platform,
 			Name:    input.ToProjectName(m.version.Id),
+			Eco:     m.platform,
 			Version: types.BareVersion(m.version.VersionNumber),
 		}
 
 		depId, err := DependencyToPackage(parentId, &dep)
 		if err != nil {
-			report.Info(
-				fmt.Sprintf(
-					"[modrinth] skipping dependency with resolution error: %v",
+			log.Warn(
+				fmt.Errorf(
+					"modrinth: skipping dependency with resolution error: %w",
 					err,
 				),
 			)

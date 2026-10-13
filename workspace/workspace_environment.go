@@ -1,48 +1,55 @@
 package workspace
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
 
 const mcdrConfigFileName = "config.yml"
 
-// detectEnvironment reads the environments of a server directory. These
-// environments do not come from jars. An MCDR installation manages a server
-// directory from outside the directory.
-func detectEnvironment(dir string) types.EnvironmentInfo {
+// detectEnvironment reads the environments of a server directory and the
+// recoverable warnings seen while reading them. These environments do not
+// come from jars. An MCDR installation manages a server directory from
+// outside the directory.
+func detectEnvironment(dir string) (types.EnvironmentInfo, []error) {
 	var env types.EnvironmentInfo
-	detectMcdrEnvironment(dir, &env)
-	return env
+	warnings := detectMcdrEnvironment(dir, &env)
+	return env, warnings
 }
 
-// detectMcdrEnvironment detects an MCDR managed directory. The marker is
-// the config.yml file. It records the wrapper version. The version comes
-// from the mcdreforged command on PATH. Relative plugin directories resolve
-// against dir.
+// detectMcdrEnvironment detects an MCDR managed directory and returns the
+// MCDR version-detection warnings. The marker is the config.yml file. It
+// records the wrapper version. The version comes from the mcdreforged
+// command on PATH. Relative plugin directories resolve against dir.
 //
 // MCDR changes the server root, so later consumers will not depend on pwd.
-func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
+// Warnings are diagnostics for CLI presentation; the environment detection
+// itself only logs them.
+func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) []error {
+	var warnings []error
 	configPath := filepath.Join(dir, mcdrConfigFileName)
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return
+		return nil
 	}
 
 	configFile, err := os.Open(configPath)
 	if err != nil {
-		log.Warn(err)
-		return
+		warnErr := fmt.Errorf("cannot open %s: %w", configPath, err)
+		log.Warn(warnErr)
+		warnings = append(warnings, warnErr)
+		return warnings
 	}
 	defer func(configFile io.ReadCloser) {
 		err := configFile.Close()
@@ -53,8 +60,10 @@ func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
 
 	config := &fileschema.FileMcdrConfig{}
 	if err := yaml.NewDecoder(configFile).Decode(config); err != nil {
-		log.Warn(err)
-		return
+		warnErr := fmt.Errorf("cannot decode %s: %w", configPath, err)
+		log.Warn(warnErr)
+		warnings = append(warnings, warnErr)
+		return warnings
 	}
 
 	for i, pluginDir := range config.PluginDirectories {
@@ -63,25 +72,29 @@ func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) {
 		}
 	}
 
+	// A hung mcdreforged must not block workspace observation.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	version := types.VersionUnknown
-	output, err := exec.Command("mcdreforged", "--version").Output()
+	output, err := exec.CommandContext(ctx, "mcdreforged", "--version").Output()
 	if err != nil {
 		warnErr := fmt.Errorf(
 			"cannot execute mcdr, is it in your $PATH?: %w",
 			err,
 		)
 		log.Warn(warnErr)
-		report.Warn(warnErr)
+		warnings = append(warnings, warnErr)
 	} else if fields := strings.Fields(string(output)); len(fields) > 1 {
 		version = types.BareVersion(fields[1])
 	} else {
 		warnErr := fmt.Errorf("cannot parse mcdr version output")
 		log.Warn(warnErr)
-		report.Warn(warnErr)
+		warnings = append(warnings, warnErr)
 	}
 
 	env.Mcdr = &types.McdrEnv{
 		Version: version,
 		Config:  config,
 	}
+	return warnings
 }

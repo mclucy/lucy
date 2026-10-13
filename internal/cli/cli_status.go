@@ -46,6 +46,7 @@ func NewStatusCommand() *cobra.Command {
 
 func actionStatus(cmd *cobra.Command, args []string) error {
 	ws := workspace.New()
+	reportObservationFindings(ws)
 	long, _ := cmd.Flags().GetBool(FlagLong)
 	switch JSONMode(cmd) {
 	case JSONPretty:

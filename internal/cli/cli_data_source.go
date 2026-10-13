@@ -5,6 +5,7 @@ import (
 
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -77,11 +78,26 @@ func LoadDependencyData(workDir string, forceLive bool) (
 
 	source = SourceProbe
 	info := workspace.NewAt(workDir)
+	reportObservationFindings(info)
 	graph, err := BuildGraphFromProbe(info)
 	if err != nil {
 		return nil, 0, env, fmt.Errorf("failed to build graph from probe: %w", err)
 	}
 	return graph, source, environmentFromWorkspace(info, env), nil
+}
+
+// reportObservationFindings presents the recoverable findings of one
+// consumed workspace observation on the report surface: environment
+// warnings with report.Warn and probe ambiguity findings with report.Error.
+// The backend observation itself only writes these diagnostics to the log,
+// so a command runs this exactly once per observation it consumes.
+func reportObservationFindings(observed workspace.Workspace) {
+	for _, warning := range observed.Warnings {
+		report.Warn(warning)
+	}
+	for _, ambiguityErr := range observed.Probe.AmbiguityErrors(observed.Root) {
+		report.Error(ambiguityErr)
+	}
 }
 
 // environmentFromLock reads the server identity from the lock's explicit

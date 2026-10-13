@@ -1,20 +1,16 @@
 package install
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
@@ -164,26 +160,26 @@ func Remove(ctx context.Context, root string, args []string, loader types.Ecosys
 	return Sync(ctx, root, d, old, opts)
 }
 
-func Initialize(ctx context.Context, root string, opts InitOptions) error {
+func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.Document, []error, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
-		return err
+		return nil, nil, err
 	}
 	if _, err := os.Stat(filepath.Join(root, manifest.Filename)); err == nil && !opts.Force {
-		return fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
+		return nil, nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
 	}
 	if err := safeOutputPath(root, ".lucy"); err != nil {
-		return err
+		return nil, nil, err
 	}
 	if err := os.MkdirAll(filepath.Join(root, ".lucy"), 0o755); err != nil {
-		return err
+		return nil, nil, err
 	}
 	writer, err := lockWorkspace(root)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	defer writer.Close()
 	d := &manifest.Document{Version: manifest.FormatVersion, Server: manifest.Server{
@@ -195,11 +191,14 @@ func Initialize(ctx context.Context, root string, opts InitOptions) error {
 	if opts.Detect {
 		observed = workspace.NewAt(root)
 		if observed.Probe.HasAmbiguity() {
-			return fmt.Errorf("cannot initialize an ambiguous server runtime")
+			return nil, observed.Warnings, fmt.Errorf(
+				"cannot initialize an ambiguous server runtime: %w",
+				errors.Join(observed.Probe.AmbiguityErrors(observed.Root)...),
+			)
 		}
 		if server := observed.Server(); server != nil {
 			if d.Server.Minecraft != "" && d.Server.Minecraft != string(server.GameVersion()) {
-				return fmt.Errorf("detected Minecraft %s, requested %s", server.GameVersion(), d.Server.Minecraft)
+				return nil, observed.Warnings, fmt.Errorf("detected Minecraft %s, requested %s", server.GameVersion(), d.Server.Minecraft)
 			}
 			d.Server.Minecraft = string(server.GameVersion())
 			if d.Server.Core.Distribution == "" {
@@ -214,24 +213,23 @@ func Initialize(ctx context.Context, root string, opts InitOptions) error {
 			if d.Server.Directory == "" {
 				relative, err := filepath.Rel(root, observed.Root)
 				if err != nil {
-					return err
+					return nil, observed.Warnings, err
 				}
 				d.Server.Directory = filepath.ToSlash(relative)
 			}
 		} else if !opts.AllowEmpty {
-			return fmt.Errorf("no server detected; use create or --allow-empty with a complete server declaration")
+			return nil, observed.Warnings, fmt.Errorf("no server detected; use create or --allow-empty with a complete server declaration")
 		}
 	}
 	if d.Server.Minecraft == "" || types.BareVersion(d.Server.Minecraft).IsInvalid() {
-		if !term.IsTerminal(os.Stdin.Fd()) || !style.InteractiveEnabled() {
-			return fmt.Errorf("a concrete --minecraft version is required")
+		if opts.PromptMinecraft == nil {
+			return nil, observed.Warnings, fmt.Errorf("a concrete --minecraft version is required")
 		}
-		fmt.Print("Minecraft version: ")
-		text, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		text, err := opts.PromptMinecraft()
 		if err != nil {
-			return err
+			return nil, observed.Warnings, err
 		}
-		d.Server.Minecraft = strings.TrimSpace(text)
+		d.Server.Minecraft = text
 	}
 	if d.Server.Core.Distribution == "" {
 		d.Server.Core.Distribution = "vanilla"
@@ -240,7 +238,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) error {
 	if mcdrVersion == "" && observed.Environments.Mcdr != nil {
 		v := observed.Environments.Mcdr.Version
 		if v.IsInvalid() || v.CanInfer() {
-			return fmt.Errorf("MCDR detected without an exact app version; specify --mcdr-version")
+			return nil, observed.Warnings, fmt.Errorf("MCDR detected without an exact app version; specify --mcdr-version")
 		}
 		mcdrVersion = string(v)
 	}
@@ -248,11 +246,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) error {
 		d.MCDR = &manifest.MCDR{Directory: ".", Version: mcdrVersion, Packages: map[string]manifest.Requirement{}}
 	}
 	if err := manifest.Normalize(d); err != nil {
-		return err
+		return nil, observed.Warnings, err
 	}
 	modrinthMapper, hasModrinthMapper, err := routing.GetArtifactMapper(types.SourceModrinth)
 	if err != nil {
-		return err
+		return nil, observed.Warnings, err
 	}
 	for _, p := range observed.Packages {
 		if !artifact.SupportsPath(p.Path) {
@@ -299,11 +297,10 @@ func Initialize(ctx context.Context, root string, opts InitOptions) error {
 	}
 	store := &artifactStore{ctx: ctx, dir: filepath.Join(root, ".lucy", "downloads")}
 	if _, err := routing.ResolveCore(ctx, types.CoreRequest{Minecraft: d.Server.Minecraft, Distribution: d.Server.Core.Distribution, Version: d.Server.Core.Version, Repository: d.Server.Core.Repository, File: d.Server.Core.File}, store.acquire); err != nil {
-		return err
+		return nil, observed.Warnings, err
 	}
 	if err := manifest.Write(root, d); err != nil {
-		return err
+		return nil, observed.Warnings, err
 	}
-	fmt.Printf("Wrote %s for Minecraft %s (%s)\n", manifest.Filename, d.Server.Minecraft, d.Server.Core.Distribution)
-	return nil
+	return d, observed.Warnings, nil
 }
