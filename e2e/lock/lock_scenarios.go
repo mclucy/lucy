@@ -136,7 +136,7 @@ func executeScenario(ctx context.Context, binary, sandboxes, id string) (resultE
 			return fmt.Errorf("sandbox is not a directory: %s", oracle)
 		}
 	}
-	intent, err := os.ReadFile(filepath.Join("e2e", "testdata", "manifest", id+".yaml"))
+	intent, err := os.ReadFile(filepath.Join("e2e", "lock", "testdata", id+".yaml"))
 	if err != nil {
 		return fmt.Errorf("read scenario manifest: %w", err)
 	}
