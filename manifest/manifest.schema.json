@@ -124,6 +124,69 @@
         "version",
         "packages"
       ]
+    },
+    "files": {
+      "items": {
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "immutable": {
+                  "const": true
+                }
+              },
+              "required": [
+                "immutable"
+              ]
+            },
+            "then": {
+              "required": [
+                "hash"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "recover_url"
+              ]
+            },
+            "then": {
+              "required": [
+                "hash"
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Workspace-relative forward-slash path to the tracked file."
+          },
+          "immutable": {
+            "type": "boolean",
+            "description": "Whether deviation from the accepted digest produces an immutable-file warning.",
+            "default": false
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Accepted SHA-256 digest in canonical sha256:<hex> form."
+          },
+          "recover_url": {
+            "type": "string",
+            "pattern": "^https?://",
+            "format": "uri",
+            "description": "Remote HTTP(S) URL used to restore missing file contents."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path"
+        ]
+      },
+      "type": "array"
     }
   },
   "additionalProperties": false,
