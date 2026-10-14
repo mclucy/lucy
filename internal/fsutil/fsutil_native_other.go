@@ -16,7 +16,7 @@ func unlockFile(file *os.File) error {
 	return unsupportedNative("file unlocking")
 }
 
-func renameRoot(root *os.Root, from, to string) error {
+func renameRoot(root *os.Root, from, to string, replace bool) error {
 	return unsupportedNative("durable rename")
 }
 

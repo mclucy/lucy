@@ -2,12 +2,14 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -42,36 +44,37 @@ type (
 	}
 )
 
-func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) error {
+func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (resultErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return err
 	}
 	root = absolute
-	if err := SafeOutputPath(root, ".lucy"); err != nil {
+	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
 		return err
 	}
 	if d == nil && old == nil {
 		return fmt.Errorf("lucy.yaml or lucy-lock.yaml is required")
 	}
-	if err := os.MkdirAll(filepath.Join(root, ".lucy"), 0o755); err != nil {
-		return err
-	}
-	writer, err := LockWorkspace(root)
+	writer, err := workspacewrite.Lock(root)
 	if err != nil {
 		return err
 	}
-	defer writer.Close()
+	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
+	if err := workspacewrite.RecoverInstall(root); err != nil {
+		return err
+	}
 	serverDirectory := ""
 	if d != nil {
 		serverDirectory = d.Server.Directory
 	} else if old != nil {
 		serverDirectory = old.Server.Directory
 	}
-	if workspace.RunningAt(filepath.Join(root, serverDirectory)) {
+	if workspace.RunningAt(filepath.Join(root, serverDirectory)) ||
+		(serverDirectory != "." && workspace.RunningAt(root)) {
 		return fmt.Errorf("stop the running Minecraft server before installation")
 	}
-	if err := rollbackInterruptedCommit(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root); err != nil {
 		return err
 	}
 	if opts.ExpectedManifest != "" {
