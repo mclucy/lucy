@@ -12,6 +12,7 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -29,84 +30,7 @@ type (
 		LockFingerprint string         `yaml:"lock_fingerprint"`
 		Entries         []receiptEntry `yaml:"entries"`
 	}
-	transactionJournal struct {
-		Backup  string   `yaml:"backup"`
-		Changed []string `yaml:"changed"`
-		Created []string `yaml:"created"`
-	}
 )
-
-func rollbackInterruptedCommit(root string) error {
-	p := filepath.Join(root, ".lucy", "commit.yaml")
-	raw, err := os.ReadFile(p)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	var journal transactionJournal
-	if err := yaml.Unmarshal(raw, &journal); err != nil {
-		return err
-	}
-	relativeBackup, err := filepath.Rel(filepath.Join(root, ".lucy"), journal.Backup)
-	if err != nil || !strings.HasPrefix(relativeBackup, "rollback-") || strings.ContainsAny(relativeBackup, "/\\") {
-		return fmt.Errorf("invalid transaction backup directory")
-	}
-	if err := SafeOutputPath(root, filepath.Join(".lucy", relativeBackup)); err != nil {
-		return err
-	}
-	log.Warn(
-		fmt.Errorf(
-			"recovering interrupted installation transaction %s: %d created outputs to remove, %d changed outputs to restore",
-			p, len(journal.Created), len(journal.Changed),
-		),
-	)
-	removed := 0
-	for _, name := range journal.Created {
-		if err := SafeOutputPath(root, name); err != nil {
-			return err
-		}
-		if err := os.Remove(filepath.Join(root, name)); err != nil {
-			if !os.IsNotExist(err) {
-				return err
-			}
-			continue
-		}
-		removed++
-	}
-	restored := 0
-	for _, name := range journal.Changed {
-		if err := SafeOutputPath(root, name); err != nil {
-			return err
-		}
-		source := filepath.Join(journal.Backup, name)
-		if _, err := os.Stat(source); err == nil {
-			info, err := os.Stat(source)
-			if err != nil {
-				return err
-			}
-			if err := bootstrap.CopyLockedFile(source, filepath.Join(root, name), info.Mode().Perm()); err != nil {
-				return err
-			}
-			restored++
-		}
-	}
-	if err := os.Remove(p); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(journal.Backup); err != nil {
-		return err
-	}
-	log.Info(
-		"installation transaction recovered",
-		"root", root,
-		"journal", p,
-		"removed", removed,
-		"restored", restored,
-	)
-	return nil
-}
 
 func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool) (resultErr error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
@@ -210,12 +134,8 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	if err != nil {
 		return err
 	}
-	journal := transactionJournal{
-		Backup:  backup,
-		Changed: []string{},
-		Created: []string{},
-	}
-	var names []string
+	journal := workspacewrite.InstallJournal{Backup: backup, Changed: []string{}, Created: []string{}}
+	names := []string{}
 	for name := range sources {
 		names = append(names, name)
 	}
@@ -231,7 +151,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	slices.Sort(names)
 	names = slices.Compact(names)
 	for _, name := range names {
-		if err := SafeOutputPath(root, name); err != nil {
+		if err := workspacewrite.SafePath(root, name); err != nil {
 			return err
 		}
 		target := filepath.Join(root, name)
@@ -254,7 +174,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	if err != nil {
 		return err
 	}
-	journalPath := filepath.Join(root, ".lucy", "commit.yaml")
+	journalPath := filepath.Join(root, workspacewrite.InstallJournalName)
 	if err := fsutil.AtomicWrite(journalPath, journalBytes, 0o600); err != nil {
 		return err
 	}
@@ -268,7 +188,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	failed := true
 	defer func() {
 		if failed {
-			resultErr = errors.Join(resultErr, rollbackInterruptedCommit(root))
+			resultErr = errors.Join(resultErr, workspacewrite.RecoverInstall(root))
 		}
 	}()
 	for name, source := range sources {
@@ -310,7 +230,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	if err := fsutil.AtomicWrite(receiptPath, receiptBytes, 0o600); err != nil {
 		return err
 	}
-	if err := os.Remove(filepath.Join(root, ".lucy", "commit.yaml")); err != nil {
+	if err := os.Remove(filepath.Join(root, workspacewrite.InstallJournalName)); err != nil {
 		return err
 	}
 	failed = false
@@ -324,27 +244,6 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		"pruned", pruned,
 		"manifest-published", publish,
 	)
-	return nil
-}
-
-func SafeOutputPath(root, relative string) error {
-	if err := manifest.SafeRelativePath(relative); err != nil {
-		return err
-	}
-	current := root
-	for component := range strings.SplitSeq(filepath.Clean(relative), string(filepath.Separator)) {
-		current = filepath.Join(current, component)
-		info, err := os.Lstat(current)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("output path traverses symlink: %s", relative)
-		}
-	}
 	return nil
 }
 
@@ -385,7 +284,7 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 		return false, nil
 	}
 	for _, entry := range receipt.Entries {
-		if err := SafeOutputPath(root, entry.Path); err != nil {
+		if err := workspacewrite.SafePath(root, entry.Path); err != nil {
 			return false, err
 		}
 		actual, err := DigestFile(filepath.Join(root, entry.Path), nil)

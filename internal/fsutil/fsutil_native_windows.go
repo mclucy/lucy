@@ -45,7 +45,7 @@ func isLockContention(err error) bool {
 		errors.Is(err, windows.ERROR_SHARING_VIOLATION)
 }
 
-func renameRoot(root *os.Root, from, to string) (resultErr error) {
+func renameRoot(root *os.Root, from, to string, replace bool) (resultErr error) {
 	sourceRoot, err := root.OpenRoot(filepath.Dir(from))
 	if err != nil {
 		return fmt.Errorf("open staged directory: %w", err)
@@ -85,13 +85,17 @@ func renameRoot(root *os.Root, from, to string) (resultErr error) {
 	if attributeErr != nil && !errors.Is(attributeErr, windows.ERROR_FILE_NOT_FOUND) && !errors.Is(attributeErr, windows.ERROR_PATH_NOT_FOUND) {
 		return attributeErr
 	}
-	readOnly := attributeErr == nil && attributes&windows.FILE_ATTRIBUTE_READONLY != 0
+	readOnly := replace && attributeErr == nil && attributes&windows.FILE_ATTRIBUTE_READONLY != 0
 	if readOnly {
 		if err := windows.SetFileAttributes(destination, attributes&^windows.FILE_ATTRIBUTE_READONLY); err != nil {
 			return err
 		}
 	}
-	if err := windows.MoveFileEx(source, destination, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH); err != nil {
+	flags := uint32(windows.MOVEFILE_WRITE_THROUGH)
+	if replace {
+		flags |= windows.MOVEFILE_REPLACE_EXISTING
+	}
+	if err := windows.MoveFileEx(source, destination, flags); err != nil {
 		var restoreErr error
 		if readOnly {
 			restoreErr = windows.SetFileAttributes(destination, attributes)
