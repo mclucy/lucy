@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
@@ -30,6 +32,8 @@ type (
 		// requirements, so a lock whose fingerprint no longer matches is
 		// expected rather than stale.
 		requirementChange bool
+		readDocuments     bool
+		publishLock       bool
 	}
 	InitOptions struct {
 		Minecraft, Distribution, CoreVersion, Repository, MCDRVersion, Directory string
@@ -41,43 +45,43 @@ type (
 	}
 )
 
-func Run(ctx context.Context, root string, opts Options) error {
-	d, err := manifest.Read(root)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		d = nil
-	}
-	old, err := lockfile.Read(root)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		old = nil
-	}
-	return Sync(ctx, root, d, old, opts)
+func Run(ctx context.Context, root string, opts Options) ([]filetrack.Diagnostic, error) {
+	opts.readDocuments = true
+	return Sync(ctx, root, nil, nil, opts)
 }
 
-func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (resultErr error) {
+func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (diagnostics []filetrack.Diagnostic, resultErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	root = absolute
 	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
-		return err
-	}
-	if d == nil && old == nil {
-		return fmt.Errorf("lucy.yaml or lucy-lock.yaml is required")
+		return nil, err
 	}
 	writer, err := workspacewrite.Lock(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
 	if err := workspacewrite.RecoverInstall(root); err != nil {
-		return err
+		return nil, err
+	}
+	if err := filetrack.RecoverPending(root); err != nil {
+		return nil, err
+	}
+	if opts.readDocuments {
+		d, err = manifest.Read(root)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		old, err = lockfile.Read(root)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
+	if d == nil && old == nil {
+		return nil, fmt.Errorf("lucy.yaml or lucy-lock.yaml is required")
 	}
 	serverDirectory := ""
 	if d != nil {
@@ -86,19 +90,19 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 		serverDirectory = old.Server.Directory
 	}
 	if workspace.ActiveAt(filepath.Join(root, serverDirectory)) || (serverDirectory != "." && workspace.ActiveAt(root)) {
-		return fmt.Errorf("stop the running Minecraft server before installation")
+		return nil, fmt.Errorf("stop the running Minecraft server before installation")
 	}
 	if opts.expectedManifest != "" {
 		current, err := manifest.Read(root)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		fingerprint, err := manifest.Fingerprint(current)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if fingerprint != opts.expectedManifest {
-			return fmt.Errorf("manifest changed during package selection; retry from current intent")
+			return nil, fmt.Errorf("manifest changed during package selection; retry from current intent")
 		}
 	}
 	store := &artifactStore{ctx: ctx, dir: filepath.Join(root, ".lucy", "downloads"), offline: opts.Offline}
@@ -108,7 +112,7 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 		var err error
 		fingerprint, err = manifest.Fingerprint(d)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	switch {
@@ -135,14 +139,14 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 	if old == nil || opts.WithOptional || (d != nil && old.ManifestFingerprint != fingerprint) {
 		if opts.Locked {
 			if !opts.requirementChange || old == nil || d == nil {
-				return fmt.Errorf("locked installation requires a current lucy-lock.yaml")
+				return nil, fmt.Errorf("locked installation requires a current lucy-lock.yaml")
 			}
 			reusable, err := coreReusable(ctx, d, old, opts.Offline)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if !reusable {
-				return fmt.Errorf("manifest core no longer matches lucy-lock.yaml; install without --locked")
+				return nil, fmt.Errorf("manifest core no longer matches lucy-lock.yaml; install without --locked")
 			}
 			log.Debug(
 				"locked installation reuses core",
@@ -150,18 +154,19 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			)
 			resolved, err = mutateLock(d, old, fingerprint)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if err := lockfile.Validate(resolved); err != nil {
-				return err
+				return nil, err
 			}
+			opts.publishLock = true
 			return stageInstall(ctx, root, d, resolved, store, opts)
 		}
 		if d == nil {
-			return fmt.Errorf("manifest required to resolve installation")
+			return nil, fmt.Errorf("manifest required to resolve installation")
 		}
 		if opts.Offline {
-			return fmt.Errorf("offline resolution requires a current lock; metadata selection is unavailable")
+			return nil, fmt.Errorf("offline resolution requires a current lock; metadata selection is unavailable")
 		}
 		log.Info(
 			"resolving installation",
@@ -176,7 +181,7 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 		if old != nil {
 			reusable, err := coreReusable(ctx, d, old, opts.Offline)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			canReuse = reusable
 		}
@@ -193,10 +198,10 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			var err error
 			core, err = routing.ResolveCore(ctx, coreReq, store.acquire)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
-		resolved = &lockfile.Document{Version: lockfile.FormatVersion, ManifestFingerprint: fingerprint, Server: lockfile.Server{Minecraft: core.Minecraft, Directory: d.Server.Directory, Distribution: core.Distribution, CoreVersion: core.Version, Artifact: core.Artifact, Bootstrap: core.Bootstrap, Inputs: core.Inputs, Java: core.Java}, Packages: []types.LockedPackage{}}
+		resolved = &lockfile.Document{Version: lockfile.FormatVersion, ManifestFingerprint: fingerprint, Server: lockfile.Server{Minecraft: core.Minecraft, Directory: d.Server.Directory, Distribution: core.Distribution, CoreVersion: core.Version, Artifact: core.Artifact, Bootstrap: core.Bootstrap, Inputs: core.Inputs, Java: core.Java}, Packages: []types.LockedPackage{}, Files: slices.Clone(d.Files)}
 		mcdrVersion := ""
 		if d.MCDR != nil {
 			request := d.MCDR.Version
@@ -205,14 +210,14 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			}
 			environment, err := resolvePython(ctx, root, d.MCDR.Directory, request, nil, store)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			resolved.MCDR = environment
 			mcdrVersion = environment.Version
 		}
 		packages, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.acquire, opts.WithOptional)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		resolved.Packages = packages
 		if opts.WithOptional {
@@ -230,7 +235,7 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			}
 			resolved.ManifestFingerprint, err = manifest.Fingerprint(d)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			opts.PublishManifest = true
 		}
@@ -247,14 +252,15 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			}
 			environment, err := resolvePython(ctx, root, d.MCDR.Directory, resolved.MCDR.Version, requirements, store)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			resolved.MCDR = environment
 		}
 	}
 	if err := lockfile.Validate(resolved); err != nil {
-		return err
+		return nil, err
 	}
+	opts.publishLock = resolved != old
 	return stageInstall(ctx, root, d, resolved, store, opts)
 }
 
@@ -268,10 +274,13 @@ func stageInstall(
 	resolved *lockfile.Document,
 	store *artifactStore,
 	opts Options,
-) error {
+) ([]filetrack.Diagnostic, error) {
+	if err := filetrack.ValidateOwnership(root, resolved.Files, resolved); err != nil {
+		return nil, err
+	}
 	current, err := installationCurrent(root, resolved)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if current && !opts.PublishManifest {
 		log.Info(
@@ -279,7 +288,15 @@ func stageInstall(
 			"root", root,
 			"packages", len(resolved.Packages),
 		)
-		return validateAmbient(ctx, root, resolved)
+		if err := validateAmbient(ctx, root, resolved); err != nil {
+			return nil, err
+		}
+		if opts.publishLock {
+			if err := lockfile.Write(root, resolved); err != nil {
+				return nil, err
+			}
+		}
+		return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
 	}
 	reason := "installation missing or stale"
 	if current {
@@ -290,16 +307,16 @@ func stageInstall(
 	// describes must be runnable. A no-op replay never runs the server, so
 	// demanding a local JVM earlier would fail installs that change nothing.
 	if err := checkJava(ctx, resolved.Server.Java); err != nil {
-		return err
+		return nil, err
 	}
 	stage, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "stage-*")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer os.RemoveAll(stage)
 	core, err := store.acquire(&resolved.Server.Artifact)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	inputs := map[string]string{}
 	for i := range resolved.Server.Inputs {
@@ -309,12 +326,12 @@ func stageInstall(
 		}
 		p, err := store.acquire(&input.Artifact)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		inputs[input.Path] = p
 	}
 	if err := bootstrap.PrepareLocked(ctx, stage, resolved.Server, core, inputs); err != nil {
-		return err
+		return nil, err
 	}
 	log.Debug(
 		"server tree prepared",
@@ -323,7 +340,7 @@ func stageInstall(
 		"inputs", len(inputs),
 	)
 	if err := rejectSharedDestinations(resolved); err != nil {
-		return err
+		return nil, err
 	}
 	staged := 0
 	for i := range resolved.Packages {
@@ -333,27 +350,30 @@ func stageInstall(
 		}
 		destination, err := packageDestination(resolved, p)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		source, err := store.acquire(&p.Artifact)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := bootstrap.CopyLockedFile(source, filepath.Join(stage, destination), 0o644); err != nil {
-			return err
+			return nil, err
 		}
 		staged++
 	}
 	log.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
 	if resolved.MCDR != nil {
 		if err := preparePython(ctx, root, stage, resolved, store); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if err := validateAmbient(ctx, root, resolved); err != nil {
-		return err
+		return nil, err
 	}
-	return applyCommit(root, stage, d, resolved, opts.PublishManifest)
+	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest); err != nil {
+		return nil, err
+	}
+	return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
 }
 
 func isFloating(v string) bool {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
@@ -25,6 +26,9 @@ func commandDocuments(root string) (document *manifest.Document, locked *lockfil
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
 	if err := workspacewrite.RecoverInstall(root); err != nil {
+		return nil, nil, err
+	}
+	if err := filetrack.RecoverPending(root); err != nil {
 		return nil, nil, err
 	}
 	d, err := manifest.Read(root)
@@ -102,29 +106,29 @@ func commandReference(d *manifest.Document, old *lockfile.Document, raw string, 
 	return ref, selector, nil
 }
 
-func Add(ctx context.Context, root string, args []string, loader types.Ecosystem, opts Options) error {
+func Add(ctx context.Context, root string, args []string, loader types.Ecosystem, opts Options) ([]filetrack.Diagnostic, error) {
 	d, old, err := commandDocuments(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.expectedManifest, err = manifest.Fingerprint(d)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.requirementChange = true
 	loader = selectedLoader(d, loader)
 	if loader == types.EcoUnspecified {
-		return fmt.Errorf("specify a package loader supported by the declared server")
+		return nil, fmt.Errorf("specify a package loader supported by the declared server")
 	}
 	for _, raw := range args {
 		ref, selector, err := commandReference(d, old, raw, loader)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		r := manifest.Requirement{Version: selector, Enabled: new(true)}
 		if loader == types.EcoMcdr {
 			if d.MCDR == nil {
-				return fmt.Errorf("manifest has no MCDR runtime")
+				return nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
 			d.MCDR.Packages[ref] = r
 		} else {
@@ -138,31 +142,31 @@ func Add(ctx context.Context, root string, args []string, loader types.Ecosystem
 	return Sync(ctx, root, d, old, opts)
 }
 
-func Remove(ctx context.Context, root string, args []string, loader types.Ecosystem, opts Options) error {
+func Remove(ctx context.Context, root string, args []string, loader types.Ecosystem, opts Options) ([]filetrack.Diagnostic, error) {
 	d, old, err := commandDocuments(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.expectedManifest, err = manifest.Fingerprint(d)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.requirementChange = true
 	loader = selectedLoader(d, loader)
 	for _, raw := range args {
 		ref, _, err := commandReference(d, old, raw, loader)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		packages := d.Server.Packages[loader]
 		if loader == types.EcoMcdr {
 			if d.MCDR == nil {
-				return fmt.Errorf("manifest has no MCDR runtime")
+				return nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
 			packages = d.MCDR.Packages
 		}
 		if _, ok := packages[ref]; !ok {
-			return fmt.Errorf("direct requirement %s not found in %s", ref, loader)
+			return nil, fmt.Errorf("direct requirement %s not found in %s", ref, loader)
 		}
 		delete(packages, ref)
 	}
@@ -184,6 +188,9 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
 	if err := workspacewrite.RecoverInstall(root); err != nil {
+		return nil, nil, err
+	}
+	if err := filetrack.RecoverPending(root); err != nil {
 		return nil, nil, err
 	}
 	if _, err := os.Stat(filepath.Join(root, manifest.Filename)); err == nil && !opts.Force {
