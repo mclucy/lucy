@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
@@ -148,15 +149,28 @@ func validateLockedPackage(pkg *types.LockedPackage) error {
 }
 
 func Read(root string) (*Document, error) {
-	data, err := os.ReadFile(filepath.Join(root, Filename))
+	file, err := os.Open(filepath.Join(root, Filename))
 	if err != nil {
 		return nil, err
 	}
+	d, decodeErr := Decode(file)
+	return d, errors.Join(decodeErr, file.Close())
+}
+
+// Decode validates lock bytes from a reader.
+func Decode(reader io.Reader) (*Document, error) {
 	d := &Document{}
-	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	decoder := yaml.NewDecoder(reader)
 	decoder.KnownFields(true)
 	if err := decoder.Decode(d); err != nil {
 		return nil, fmt.Errorf("decode lock: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("lock must contain one YAML document")
+		}
+		return nil, fmt.Errorf("decode lock tail: %w", err)
 	}
 	if err := d.Validate(); err != nil {
 		return nil, err
