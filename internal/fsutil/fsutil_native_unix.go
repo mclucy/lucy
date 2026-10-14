@@ -27,7 +27,19 @@ func unlockFile(file *os.File) error {
 	return unix.Flock(int(file.Fd()), unix.LOCK_UN)
 }
 
-func renameRoot(root *os.Root, from, to string) error {
+func renameRoot(root *os.Root, from, to string, replace bool) error {
+	if !replace {
+		if err := root.Link(from, to); err != nil {
+			return fmt.Errorf("publish absent name in root: %w", err)
+		}
+		if err := syncRenameChain(root, to); err != nil {
+			return err
+		}
+		if err := root.Remove(from); err != nil {
+			return err
+		}
+		return syncRenameChain(root, from)
+	}
 	if err := root.Rename(from, to); err != nil {
 		return fmt.Errorf("rename in root: %w", err)
 	}
