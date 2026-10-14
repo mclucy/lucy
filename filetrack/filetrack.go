@@ -153,7 +153,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err := ValidateOwnership(root, document.Files, locked); err != nil {
 		return result, err
 	}
-	raw, err := manifest.Snapshot(document)
+	raw, err := manifest.CanonicalBytes(document)
 	if err != nil {
 		return result, err
 	}
@@ -170,7 +170,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 				return result, err
 			}
 		}
-		if err := lockfile.Validate(locked); err != nil {
+		if err := locked.Validate(); err != nil {
 			return result, err
 		}
 		raw, err := yaml.Marshal(locked)
@@ -453,11 +453,11 @@ func ValidateOwnership(root string, files []types.TrackedFile, locked *lockfile.
 	}
 	if locked != nil {
 		server := locked.Server
-		switch server.Bootstrap {
+		switch server.Bootstrapper {
 		case "", "paperclip":
 			add(server.Directory, "server.jar")
 		case "fabric":
-			for _, name := range []string{"run.sh", "run.bat", "fabric-server-launch.jar", "fabric-server-launcher.properties", "libraries/net/fabricmc/fabric-loader/" + server.CoreVersion + "/fabric-loader-" + server.CoreVersion + ".jar"} {
+			for _, name := range []string{"run.sh", "run.bat", "fabric-server-launch.jar", "fabric-server-launcher.properties", "libraries/net/fabricmc/fabric-loader/" + string(server.CoreVersion) + "/fabric-loader-" + string(server.CoreVersion) + ".jar"} {
 				add(server.Directory, name)
 			}
 		case "forge-installer":
@@ -479,10 +479,10 @@ func ValidateOwnership(root string, files []types.TrackedFile, locked *lockfile.
 				continue
 			}
 			directory, folder := server.Directory, "mods"
-			if pkg.Loader == types.EcoBukkit {
+			if pkg.Ecosystem == types.EcosystemBukkit || pkg.Ecosystem == types.EcosystemPaper {
 				folder = "plugins"
 			}
-			if pkg.Runtime == "mcdr" {
+			if pkg.Environment == types.EnvironmentMCDR {
 				if locked.MCDR == nil {
 					return fmt.Errorf("MCDR package has no wrapper runtime")
 				}

@@ -14,6 +14,7 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -205,7 +206,11 @@ func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disab
 	if err := manifest.Write(workDir, doc); err != nil {
 		return 0, 0, fmt.Errorf("write manifest: %w", err)
 	}
-	if err := operation.Sync(context.Background(), workDir, install.Options{}); err != nil {
+	diagnostics, err := operation.Sync(context.Background(), workDir, install.Options{})
+	for _, diagnostic := range diagnostics {
+		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	if err != nil {
 		return 0, 0, fmt.Errorf("sync installation: %w", err)
 	}
 	return enabled, disabled, nil
@@ -248,7 +253,11 @@ func restoreBisectManifest(workDir string, original *manifest.Document) (int, er
 	if err := manifest.Write(workDir, original); err != nil {
 		return 0, fmt.Errorf("restore manifest: %w", err)
 	}
-	if err := operation.Sync(context.Background(), workDir, install.Options{}); err != nil {
+	diagnostics, err := operation.Sync(context.Background(), workDir, install.Options{})
+	for _, diagnostic := range diagnostics {
+		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	if err != nil {
 		return 0, fmt.Errorf("sync installation: %w", err)
 	}
 	return countRequirements(original), nil

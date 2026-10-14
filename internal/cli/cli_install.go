@@ -7,6 +7,7 @@ import (
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
+	"github.com/mclucy/lucy/report"
 	"github.com/spf13/cobra"
 )
 
@@ -59,5 +60,9 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 		PublishManifest: false,
 	}
 
-	return operation.Sync(cmd.Context(), workDir, opts)
+	diagnostics, err := operation.Sync(cmd.Context(), workDir, opts)
+	for _, diagnostic := range diagnostics {
+		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	return err
 }

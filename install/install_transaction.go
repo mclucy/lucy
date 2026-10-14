@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,6 +54,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		return err
 	}
 	next.LockFingerprint = lockFingerprint
+	tracked := trackedPaths(l)
 	sources := map[string]string{}
 	err = filepath.WalkDir(stage, func(p string, e os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -74,6 +76,12 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		}
 		target := filepath.Join(root, relative)
 		mutableDefault := filepath.Base(relative) == "config.yml" || filepath.Base(relative) == "user_jvm_args.txt"
+		if tracked[strings.ToLower(relative)] {
+			if !mutableDefault {
+				return fmt.Errorf("tracked file %s collides with managed runtime output", relative)
+			}
+			return nil
+		}
 		if mutableDefault {
 			if _, err := os.Stat(target); err == nil {
 				return nil
@@ -115,6 +123,9 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		return err
 	}
 	for _, old := range previous.Entries {
+		if tracked[strings.ToLower(old.Path)] {
+			continue
+		}
 		if _, ok := sources[old.Path]; ok {
 			continue
 		}
@@ -140,6 +151,9 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		names = append(names, name)
 	}
 	for _, entry := range previous.Entries {
+		if tracked[strings.ToLower(entry.Path)] {
+			continue
+		}
 		if _, ok := sources[entry.Path]; !ok {
 			names = append(names, entry.Path)
 		}
@@ -205,6 +219,9 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	}
 	pruned := 0
 	for _, entry := range previous.Entries {
+		if tracked[strings.ToLower(entry.Path)] {
+			continue
+		}
 		if _, ok := sources[entry.Path]; !ok {
 			if err := os.Remove(filepath.Join(root, entry.Path)); err != nil {
 				if !os.IsNotExist(err) {
@@ -247,8 +264,32 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	return nil
 }
 
+// resolutionFingerprint covers the resolved runtime only, so accepting a
+// tracked file revision never re-stages an unchanged installation.
 func resolutionFingerprint(l *lockfile.Document) (string, error) {
-	data, err := yaml.Marshal(l)
+	data, err := yaml.Marshal(struct {
+		Server   lockfile.Server       `yaml:"server"`
+		MCDR     *lockfile.MCDR        `yaml:"mcdr,omitempty"`
+		Packages []types.LockedPackage `yaml:"packages"`
+	}{l.Server, l.MCDR, l.Packages})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// legacyResolutionFingerprint reproduces the whole-document fingerprint that
+// receipts recorded before the resolved runtime was separated from the lock
+// identity, so such a receipt stays current instead of re-staging once.
+func legacyResolutionFingerprint(l *lockfile.Document) (string, error) {
+	data, err := yaml.Marshal(struct {
+		Version             int                   `yaml:"lock_version"`
+		ManifestFingerprint string                `yaml:"manifest_fingerprint"`
+		Server              lockfile.Server       `yaml:"server"`
+		MCDR                *lockfile.MCDR        `yaml:"mcdr,omitempty"`
+		Packages            []types.LockedPackage `yaml:"packages"`
+	}{l.SchemaVersion, l.ManifestFingerprint, l.Server, l.MCDR, l.Packages})
 	if err != nil {
 		return "", err
 	}
@@ -275,15 +316,26 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 		return false, err
 	}
 	if receipt.LockFingerprint != expected {
-		log.Debug(
-			"installation not current",
-			"reason", "lock fingerprint changed",
-			"receipt", receipt.LockFingerprint,
-			"expected", expected,
-		)
-		return false, nil
+		legacy, err := legacyResolutionFingerprint(l)
+		if err != nil {
+			return false, err
+		}
+		if receipt.LockFingerprint != legacy {
+			log.Debug(
+				"installation not current",
+				"reason", "lock fingerprint changed",
+				"receipt", receipt.LockFingerprint,
+				"expected", expected,
+			)
+			return false, nil
+		}
+		log.Debug("accepting a pre-file-tracking installation receipt", "receipt", receiptPath)
 	}
+	tracked := trackedPaths(l)
 	for _, entry := range receipt.Entries {
+		if tracked[strings.ToLower(entry.Path)] {
+			continue
+		}
 		if err := workspacewrite.SafePath(root, entry.Path); err != nil {
 			return false, err
 		}
@@ -302,4 +354,12 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 	}
 	log.Debug("installation current", "reason", "receipt matches lock and every owned output", "receipt", receiptPath)
 	return true, nil
+}
+
+func trackedPaths(l *lockfile.Document) map[string]bool {
+	paths := make(map[string]bool, len(l.Files))
+	for _, file := range l.Files {
+		paths[strings.ToLower(file.Path)] = true
+	}
+	return paths
 }
