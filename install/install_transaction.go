@@ -49,7 +49,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		owned[entry.Path] = entry.SHA256
 	}
 	next := installReceipt{Version: 1, Entries: []receiptEntry{}}
-	lockFingerprint, err := resolutionFingerprint(l)
+	lockFingerprint, err := ResolutionFingerprint(l)
 	if err != nil {
 		return err
 	}
@@ -264,9 +264,10 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	return nil
 }
 
-// resolutionFingerprint covers the resolved runtime only, so accepting a
-// tracked file revision never re-stages an unchanged installation.
-func resolutionFingerprint(l *lockfile.Document) (string, error) {
+// ResolutionFingerprint digests the fields an installation receipt pins a lock
+// with: the server, MCDR and package fields only. Tracked files and the
+// manifest fingerprint stay out, so file-only changes keep a receipt current.
+func ResolutionFingerprint(l *lockfile.Document) (string, error) {
 	data, err := yaml.Marshal(struct {
 		Server   lockfile.Server       `yaml:"server"`
 		MCDR     *lockfile.MCDR        `yaml:"mcdr,omitempty"`
@@ -311,7 +312,7 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 	if err := yaml.Unmarshal(raw, &receipt); err != nil {
 		return false, err
 	}
-	expected, err := resolutionFingerprint(l)
+	expected, err := ResolutionFingerprint(l)
 	if err != nil {
 		return false, err
 	}
