@@ -143,6 +143,7 @@ func retainDeclared(
 func mutateLock(d *manifest.Document, old *lockfile.Document, fingerprint string) (*lockfile.Document, error) {
 	resolved := *old
 	resolved.ManifestFingerprint = fingerprint
+	resolved.Files = slices.Clone(d.Files)
 	resolved.Packages = make([]types.LockedPackage, len(old.Packages))
 	for i, p := range old.Packages {
 		resolved.Packages[i] = p
