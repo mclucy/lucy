@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -28,6 +29,7 @@ type Document struct {
 	Server              Server                `yaml:"server" json:"server"`
 	MCDR                *MCDR                 `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
 	Packages            []types.LockedPackage `yaml:"packages" json:"packages"`
+	Files               []types.TrackedFile   `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 type Server struct {
@@ -101,6 +103,9 @@ func (d *Document) Validate() error {
 		if err := validateLockedPackage(&d.Packages[i]); err != nil {
 			return err
 		}
+	}
+	if err := input.NormalizeTrackedFiles(d.Files); err != nil {
+		return err
 	}
 	return nil
 }
