@@ -9,6 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -17,7 +18,15 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-func commandDocuments(root string) (*manifest.Document, *lockfile.Document, error) {
+func commandDocuments(root string) (document *manifest.Document, locked *lockfile.Document, resultErr error) {
+	writer, err := workspacewrite.Lock(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
+	if err := workspacewrite.RecoverInstall(root); err != nil {
+		return nil, nil, err
+	}
 	d, err := manifest.Read(root)
 	if err != nil {
 		return nil, nil, err
@@ -161,7 +170,7 @@ func Remove(ctx context.Context, root string, args []string, loader types.Ecosys
 	return Sync(ctx, root, d, old, opts)
 }
 
-func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.Document, []error, error) {
+func Initialize(ctx context.Context, root string, opts InitOptions) (document *manifest.Document, warnings []error, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, nil, err
@@ -169,20 +178,17 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (*manifest.D
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, nil, err
 	}
-	if _, err := os.Stat(filepath.Join(root, manifest.Filename)); err == nil && !opts.Force {
-		return nil, nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
-	}
-	if err := safeOutputPath(root, ".lucy"); err != nil {
-		return nil, nil, err
-	}
-	if err := os.MkdirAll(filepath.Join(root, ".lucy"), 0o755); err != nil {
-		return nil, nil, err
-	}
-	writer, err := lockWorkspace(root)
+	writer, err := workspacewrite.Lock(root)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer writer.Close()
+	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
+	if err := workspacewrite.RecoverInstall(root); err != nil {
+		return nil, nil, err
+	}
+	if _, err := os.Stat(filepath.Join(root, manifest.Filename)); err == nil && !opts.Force {
+		return nil, nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
+	}
 	d := &manifest.Document{Version: manifest.FormatVersion, Server: manifest.Server{
 		Minecraft: opts.Minecraft, Directory: opts.Directory,
 		Core:     manifest.Core{Distribution: opts.Distribution, Version: opts.CoreVersion, Repository: opts.Repository},

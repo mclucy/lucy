@@ -13,6 +13,15 @@ import (
 // RenameRoot publishes a closed, synced file inside root and persists the rename.
 // Parent directories must exist. Platform implementations preserve root confinement.
 func RenameRoot(root *os.Root, from, to string) error {
+	return publishRoot(root, from, to, true)
+}
+
+// RenameRootNoReplace publishes only if the destination name is still absent.
+func RenameRootNoReplace(root *os.Root, from, to string) error {
+	return publishRoot(root, from, to, false)
+}
+
+func publishRoot(root *os.Root, from, to string, replace bool) error {
 	if !filepath.IsLocal(from) || !filepath.IsLocal(to) {
 		return fmt.Errorf("rename paths must stay inside their root")
 	}
@@ -36,7 +45,7 @@ func RenameRoot(root *os.Root, from, to string) error {
 			}
 		}
 	}
-	return renameRoot(root, from, to)
+	return renameRoot(root, from, to, replace)
 }
 
 // AtomicWrite replaces a file atomically and retains its permissions.
