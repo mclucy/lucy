@@ -3,50 +3,15 @@ package file
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
 
 	"github.com/spf13/cobra"
 )
-
-// errNoDeclarations reports a workspace where neither state file exists, so a
-// read-only command cannot silently report an empty tracking state.
-var errNoDeclarations = fmt.Errorf(
-	"no %s or %s in this workspace",
-	manifest.Filename,
-	lockfile.Filename,
-)
-
-// declaredFiles prefers the manifest declarations and falls back to the lock
-// only when no manifest exists, so inspection also works in an installed-only
-// workspace. A present but unreadable file is always an error.
-func declaredFiles(root string) ([]types.TrackedFile, error) {
-	doc, manifestErr := manifest.Read(root)
-	switch {
-	case manifestErr == nil:
-		return doc.Files, nil
-	case !errors.Is(manifestErr, os.ErrNotExist):
-		return nil, fmt.Errorf("read manifest: %w", manifestErr)
-	}
-
-	lock, lockErr := lockfile.Read(root)
-	switch {
-	case lockErr == nil:
-		return lock.Files, nil
-	case !errors.Is(lockErr, os.ErrNotExist):
-		return nil, fmt.Errorf("read lockfile: %w", lockErr)
-	}
-
-	return nil, errNoDeclarations
-}
 
 func workRoot() (string, error) {
 	root, err := os.Getwd()
