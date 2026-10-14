@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
-	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/cas"
+	"github.com/mclucy/lucy/internal/fsutil"
 )
 
-const indexVersion = 2
+const indexVersion = 3
 
 type indexManifest struct {
 	Version int                 `json:"version"`
@@ -20,91 +20,79 @@ type indexManifest struct {
 type index struct {
 	path    string
 	entries map[key]*CacheEntry
+	info    os.FileInfo
 }
 
-func newIndex(manifestPath string) *index {
-	idx := &index{
-		path:    manifestPath,
-		entries: make(map[key]*CacheEntry),
-	}
-	return idx
+func newIndex(path string) *index {
+	return &index{path: path, entries: make(map[key]*CacheEntry)}
 }
 
-func (idx *index) load() bool {
-	data, err := os.ReadFile(idx.path)
+// load runs under cache ownership. Atomic replacement makes inode identity a safe fast path.
+func (idx *index) load() (bool, error) {
+	info, err := os.Stat(idx.path)
 	if errors.Is(err, os.ErrNotExist) {
-		return idx.create()
+		idx.entries = make(map[key]*CacheEntry)
+		return true, idx.flush()
 	}
 	if err != nil {
-		return false
+		return false, err
 	}
-
-	if idx.tryLoadV2(data) {
-		return true
+	if idx.info != nil && os.SameFile(info, idx.info) && info.Size() == idx.info.Size() && info.ModTime().Equal(idx.info.ModTime()) {
+		return false, nil
 	}
-
-	_, _ = resetCache(idx.path, false)
-	return idx.create()
+	file, err := os.Open(idx.path)
+	if err != nil {
+		return false, err
+	}
+	var manifest indexManifest
+	decodeErr := json.UnmarshalRead(file, &manifest)
+	info, statErr := file.Stat()
+	closeErr := file.Close()
+	if statErr != nil || closeErr != nil {
+		return false, errors.Join(statErr, closeErr)
+	}
+	if decodeErr != nil || !validIndex(manifest) {
+		idx.entries = make(map[key]*CacheEntry)
+		return true, idx.flush()
+	}
+	idx.info = info
+	idx.entries = manifest.Entries
+	return false, nil
 }
 
-func (idx *index) tryLoadV2(data []byte) bool {
-	var m indexManifest
-	if err := json.Unmarshal(data, &m); err != nil {
+func validIndex(manifest indexManifest) bool {
+	if manifest.Version != indexVersion || manifest.Entries == nil {
 		return false
 	}
-	if m.Version != indexVersion || m.Entries == nil {
-		return false
-	}
-	idx.entries = m.Entries
-	return true
-}
-
-func (idx *index) create() bool {
-	dir := filepath.Dir(idx.path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		log.Warn(
-			fmt.Errorf(
-				"failed to create index directory %s: %w",
-				dir,
-				err,
-			),
-		)
-		return false
-	}
-	idx.entries = make(map[key]*CacheEntry)
-	if err := idx.flush(); err != nil {
-		log.Warn(fmt.Errorf("failed to write initial index: %w", err))
-		return false
+	for k, entry := range manifest.Entries {
+		if entry == nil || entry.Size < 0 || entry.Kind > KindArtifact || entry.Key != string(k) {
+			return false
+		}
+		digest, err := cas.ParseDigest(entry.ContentHash)
+		if err != nil || entry.Filename == "" || sanitizeFilename(entry.Filename, digest.Hex()) != entry.Filename {
+			return false
+		}
 	}
 	return true
 }
 
 func (idx *index) flush() error {
-	m := indexManifest{
-		Version: indexVersion,
-		Entries: idx.entries,
-	}
-	data, err := json.Marshal(m)
+	data, err := json.Marshal(indexManifest{Version: indexVersion, Entries: idx.entries})
 	if err != nil {
-		return fmt.Errorf("failed to marshal index: %w", err)
+		idx.info = nil
+		return fmt.Errorf("encode cache index: %w", err)
 	}
-
-	tempFile := idx.path + ".tmp"
-	if err := os.WriteFile(tempFile, data, 0o600); err != nil {
-		log.Warn(os.Remove(tempFile))
-		return fmt.Errorf("failed to write temporary index file: %w", err)
+	if err := fsutil.AtomicWrite(idx.path, data); err != nil {
+		idx.info = nil
+		return fmt.Errorf("publish cache index: %w", err)
 	}
-
-	if err := os.Rename(tempFile, idx.path); err != nil {
-		log.Warn(os.Remove(tempFile))
-		return fmt.Errorf("failed to replace index file: %w", err)
-	}
-	return nil
+	idx.info, err = os.Stat(idx.path)
+	return err
 }
 
 func (idx *index) get(k key) (*CacheEntry, bool) {
-	e, ok := idx.entries[k]
-	return e, ok
+	entry, ok := idx.entries[k]
+	return entry, ok
 }
 
 func (idx *index) put(k key, entry *CacheEntry) {

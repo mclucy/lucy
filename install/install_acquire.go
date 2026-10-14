@@ -120,7 +120,7 @@ func (s *artifactStore) acquireFile(a *types.Artifact, dir, destination string) 
 	defer os.Remove(staged)
 
 	if s.offline {
-		hit, cached, err := cache.Network().Get(a.URL)
+		hit, cached, _, err := cache.Network().Get(a.URL)
 		if err != nil {
 			return err
 		}

@@ -1,93 +1,89 @@
 package cache
 
 import (
-	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
+	"time"
 
-	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/cas"
 )
 
-const (
-	manifestFilename = "cache.json"
-)
+const manifestFilename = "cache.json"
 
 type key string
 
-// ResetReport summarizes a cache reset. Removed lists the paths of the
-// items the reset actually removed; a reset that does not request
-// collection leaves it nil.
+// ResetReport counts unique objects actually removed, not logical URL references.
+// Removed lists the paths of those objects.
 type ResetReport struct {
 	TotalFreedSize int64
 	FileCount      int
 	Removed        []string
 }
 
-func resetCache(manifestPath string, verbose bool) (ResetReport, error) {
-	err := os.Remove(manifestPath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return ResetReport{}, err
-	}
-
-	cacheDir := filepath.Dir(manifestPath)
-	entries, err := os.ReadDir(cacheDir)
-	if err != nil {
-		return ResetReport{}, err
-	}
-
-	var resetResult ResetReport
-	for _, entry := range entries {
-		if entry.Name() == manifestFilename {
-			continue
-		}
-		entryPath := filepath.Join(cacheDir, entry.Name())
-
-		var size int64
-		size, err = calculateSize(entryPath)
+func (h *handler) maintainLocked(removed []cas.Digest) ([]cas.Digest, error) {
+	for _, k := range expiredEntries(h.index.entries, time.Now()) {
+		digest, err := cas.ParseDigest(h.index.entries[k].ContentHash)
 		if err != nil {
-			log.Debug(
-				fmt.Sprintf(
-					"failed to calculate size for %s: %v",
-					entryPath,
-					err,
-				),
-			)
-			size = 0
+			return nil, err
 		}
-
-		if err := os.RemoveAll(entryPath); err != nil {
-			log.Warn(
-				fmt.Errorf(
-					"failed to remove cache item %s: %w",
-					entryPath, err,
-				),
-			)
-		} else if verbose {
-			resetResult.Removed = append(resetResult.Removed, entryPath)
-		}
-
-		resetResult.TotalFreedSize += size
-		resetResult.FileCount++
+		removed = append(removed, digest)
+		h.index.delete(k)
 	}
-
-	return resetResult, nil
+	for _, target := range evictionCandidates(h.index.entries, h.policy) {
+		digest, err := cas.ParseDigest(h.index.entries[target.key].ContentHash)
+		if err != nil {
+			return nil, err
+		}
+		removed = append(removed, digest)
+		h.index.delete(target.key)
+	}
+	return removed, nil
 }
 
-func calculateSize(filePath string) (int64, error) {
-	var totalSize int64
+func (h *handler) referencedLocked(digest cas.Digest) bool {
+	value := digest.String()
+	for _, entry := range h.index.entries {
+		if entry.ContentHash == value {
+			return true
+		}
+	}
+	return false
+}
 
-	err := filepath.Walk(
-		filePath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.IsDir() {
-				totalSize += info.Size()
-			}
+func (h *handler) collectCandidatesLocked(digests []cas.Digest) error {
+	for _, digest := range digests {
+		if h.referencedLocked(digest) {
+			continue
+		}
+		if _, err := h.store.Remove(digest); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *handler) collectAllLocked(report *ResetReport) error {
+	references := make(map[cas.Digest]struct{}, len(h.index.entries))
+	for _, entry := range h.index.entries {
+		digest, err := cas.ParseDigest(entry.ContentHash)
+		if err != nil {
+			return err
+		}
+		references[digest] = struct{}{}
+	}
+	return h.store.Walk(func(object cas.Object) error {
+		if _, ok := references[object.Digest]; ok {
 			return nil
-		},
-	)
-
-	return totalSize, err
+		}
+		freed, err := h.store.Remove(object.Digest)
+		if err != nil {
+			return err
+		}
+		if report != nil {
+			report.TotalFreedSize += freed
+			report.FileCount++
+			hex := object.Digest.Hex()
+			report.Removed = append(report.Removed, filepath.Join(h.dir, "cas", "objects", "sha256", hex[:2], hex))
+		}
+		return nil
+	})
 }

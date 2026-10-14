@@ -4,6 +4,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 )
 
@@ -36,12 +37,35 @@ func getFilenameFromURL(urlString string) string {
 		return ""
 	}
 
-	segments := strings.Split(u.Path, "/")
-	if len(segments) == 0 {
-		return ""
+	_, filename, found := strings.CutLast(u.Path, "/")
+	if !found {
+		return u.Path
 	}
-
-	filename := segments[len(segments)-1]
-
 	return filename
+}
+
+// sanitizeFilename prevents path traversal by stripping directory components.
+func sanitizeFilename(name, fallback string) string {
+	name = filepath.Base(name)
+	if !filepath.IsLocal(name) || name == "." || name == ".." || name == "/" || name == string(filepath.Separator) {
+		return fallback
+	}
+	return name
+}
+
+// containedUnder reports whether child is strictly inside parent.
+func containedUnder(parent, child string) bool {
+	absParent, err := filepath.Abs(parent)
+	if err != nil {
+		return false
+	}
+	absChild, err := filepath.Abs(child)
+	if err != nil {
+		return false
+	}
+	prefix := absParent
+	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
+	}
+	return strings.HasPrefix(absChild, prefix)
 }

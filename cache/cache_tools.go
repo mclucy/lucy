@@ -1,8 +1,7 @@
 package cache
 
 import (
-	"crypto/sha256"
-	"fmt"
+	"cmp"
 	"maps"
 	"net/url"
 	"os"
@@ -11,16 +10,7 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/mclucy/lucy/log"
 )
-
-var h = func(data []byte) string {
-	return fmt.Sprintf(
-		"%x",
-		sha256.Sum256(data),
-	)
-}
 
 func setDir(name string) string {
 	dir, err := os.UserCacheDir()
@@ -28,16 +18,6 @@ func setDir(name string) string {
 		dir = os.TempDir()
 	}
 	return filepath.Join(dir, "lucy", name)
-}
-
-func (handler *handler) clearExpiredCache() {
-	expired := expiredEntries(handler.index.all(), time.Now())
-	for _, k := range expired {
-		log.Info("removing expired cache item " + k)
-		if err := handler.removeEntryLocked(k); err != nil {
-			continue
-		}
-	}
 }
 
 func expiredEntries(entries map[key]*CacheEntry, now time.Time) []key {
@@ -50,59 +30,48 @@ func expiredEntries(entries map[key]*CacheEntry, now time.Time) []key {
 	return expired
 }
 
-func (handler *handler) maintainCacheLimit() {
-	evicted := evictionCandidates(handler.index.all(), handler.policy)
-	for _, e := range evicted {
-		log.Info("removing cache item " + e.key)
-		if err := handler.removeEntryLocked(e.key); err != nil {
-			continue
-		}
-	}
-}
-
 type evictionTarget struct {
-	key  key
-	kind EntryKind
-	size int64
-	exp  time.Time
-}
-
-func evictionTargets(entries map[key]*CacheEntry) (
-	map[EntryKind]int64,
-	[]evictionTarget,
-) {
-	totals := map[EntryKind]int64{}
-	var targets []evictionTarget
-	for k, entry := range entries {
-		totals[entry.Kind] += entry.Size
-		targets = append(
-			targets, evictionTarget{
-				key:  k,
-				kind: entry.Kind,
-				size: entry.Size,
-				exp:  entry.Expiration,
-			},
-		)
-	}
-	slices.SortFunc(targets, func(a, b evictionTarget) int {
-		return a.exp.Compare(b.exp)
-	})
-	return totals, targets
+	key key
+	exp time.Time
 }
 
 func evictionCandidates(
 	entries map[key]*CacheEntry,
 	policy Policy,
 ) []evictionTarget {
-	totals, targets := evictionTargets(entries)
+	type objectKey struct {
+		kind EntryKind
+		hash string
+	}
+	totals := map[EntryKind]int64{}
+	references := make(map[objectKey]int, len(entries))
+	targets := make([]evictionTarget, 0, len(entries))
+	for k, entry := range entries {
+		object := objectKey{kind: entry.Kind, hash: entry.ContentHash}
+		if references[object] == 0 {
+			totals[entry.Kind] += entry.Size
+		}
+		references[object]++
+		targets = append(targets, evictionTarget{key: k, exp: entry.Expiration})
+	}
+	slices.SortFunc(targets, func(a, b evictionTarget) int {
+		if c := a.exp.Compare(b.exp); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.key, b.key)
+	})
 	var result []evictionTarget
-	for _, e := range targets {
-		limit := policy.ConfigFor(e.kind).MaxSize
-		if totals[e.kind] <= limit {
+	for _, target := range targets {
+		entry := entries[target.key]
+		if totals[entry.Kind] <= policy.ConfigFor(entry.Kind).MaxSize {
 			continue
 		}
-		result = append(result, e)
-		totals[e.kind] -= e.size
+		result = append(result, target)
+		object := objectKey{kind: entry.Kind, hash: entry.ContentHash}
+		references[object]--
+		if references[object] == 0 {
+			totals[entry.Kind] -= entry.Size
+		}
 	}
 	return result
 }
@@ -131,7 +100,7 @@ func canonicalizeKey(k string) key {
 		keys := slices.Sorted(maps.Keys(params))
 		var parts []string
 		for _, k := range keys {
-			vals := params[k]
+			vals := slices.Clone(params[k])
 			slices.Sort(vals)
 			for _, v := range vals {
 				parts = append(parts, url.QueryEscape(k)+"="+url.QueryEscape(v))
