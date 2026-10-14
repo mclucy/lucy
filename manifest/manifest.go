@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
@@ -23,9 +24,10 @@ const (
 )
 
 type Document struct {
-	Version int    `yaml:"manifest_version" json:"manifest_version"`
-	Server  Server `yaml:"server" json:"server"`
-	MCDR    *MCDR  `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Version int                 `yaml:"manifest_version" json:"manifest_version"`
+	Server  Server              `yaml:"server" json:"server"`
+	MCDR    *MCDR               `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Files   []types.TrackedFile `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 type Core struct {
@@ -182,6 +184,9 @@ func Normalize(d *Document) error {
 			}
 			d.MCDR.Packages[ref] = r
 		}
+	}
+	if err := input.NormalizeTrackedFiles(d.Files); err != nil {
+		return err
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -21,11 +22,12 @@ const (
 )
 
 type Document struct {
-	Version             int                   `yaml:"lock_version"`
-	ManifestFingerprint string                `yaml:"manifest_fingerprint"`
-	Server              Server                `yaml:"server"`
-	MCDR                *MCDR                 `yaml:"mcdr,omitempty"`
-	Packages            []types.LockedPackage `yaml:"packages"`
+	Version             int                   `yaml:"lock_version" json:"lock_version"`
+	ManifestFingerprint string                `yaml:"manifest_fingerprint" json:"manifest_fingerprint"`
+	Server              Server                `yaml:"server" json:"server"`
+	MCDR                *MCDR                 `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Packages            []types.LockedPackage `yaml:"packages" json:"packages"`
+	Files               []types.TrackedFile   `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 type Server struct {
@@ -97,6 +99,9 @@ func Validate(d *Document) error {
 				return err
 			}
 		}
+	}
+	if err := input.NormalizeTrackedFiles(d.Files); err != nil {
+		return err
 	}
 	return nil
 }
