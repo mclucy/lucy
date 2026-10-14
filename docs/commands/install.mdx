@@ -57,7 +57,7 @@ The CAS cache uses a new disposable disk format. On the first run, Lucy discards
 
 ## Lock file shape
 
-The lock has top-level `lock_version`, `manifest_fingerprint`, `server`, an optional `mcdr`, and a flat `packages` list.
+The lock has top-level `lock_version`, `manifest_fingerprint`, `server`, an optional `mcdr`, a flat `packages` list, and optional `files` declarations.
 
 ```yaml
 lock_version: 1
@@ -103,6 +103,16 @@ Artifact coordinates are flattened onto each entry. Provider, project, release, 
 ## Pruning is receipt-based
 
 `lucy install` converges the directory on the lock: files the lock no longer references are removed, but only when `lucy` can prove the file belongs to it. Every installed artifact leaves a receipt, and removal is limited to paths an active receipt covers. Untracked files in `mods/` or `plugins/` — your own jars, backups, anything you dropped in by hand — are left alone rather than deleted on a guess.
+
+## Tracked working files
+
+Top-level `files` paths are relative to the directory containing `lucy.yaml`, not `server.directory`. Installation preserves existing working files. An immutable digest mismatch produces a warning; it does not overwrite the file or change its permissions.
+
+Missing hashed files are provisioned from verified project-local CAS objects, or from `recover_url` when online. Missing presence-only files and unavailable or mismatched recovery sources produce diagnostics. For offline replay, place the accepted contents in the workspace beforehand; packaged distribution is not implemented yet (see [issue #129](https://github.com/mclucy/lucy/issues/129)).
+
+These checks run even when the native runtime is already current. Tracked files are excluded from runtime ownership receipts and pruning. File commands preserve exact runtime pins; accepted file changes do not reinstall an unchanged native runtime.
+
+Use [`lucy file`](/commands/file) to accept, recover, or revert contents explicitly.
 
 See also [Global Flags](/commands/global-flags).
 
