@@ -9,6 +9,7 @@ import (
 	"charm.land/fang/v2"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/compile"
+	"github.com/mclucy/lucy/internal/cli/file"
 	"github.com/mclucy/lucy/internal/cli/info"
 	"github.com/mclucy/lucy/internal/cli/search"
 	"github.com/mclucy/lucy/log"
@@ -129,6 +130,7 @@ func init() {
 		cli.NewCacheCommand(),
 		cli.NewCreateCommand(),
 		cli.NewDoctorCommand(),
+		file.NewCommand(),
 		cli.NewExportCommand(),
 		cli.NewInitCommand(),
 		cli.NewInstallCommand(),
