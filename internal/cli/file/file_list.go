@@ -24,7 +24,7 @@ func actionFileList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	files, err := declaredFiles(root)
+	files, err := filetrack.DeclaredFiles(root)
 	if err != nil {
 		return err
 	}

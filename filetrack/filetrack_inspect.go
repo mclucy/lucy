@@ -11,8 +11,38 @@ import (
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/workspacewrite"
+	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/types"
 )
+
+// DeclaredFiles prefers the manifest declarations and falls back to the lock
+// when only an installed workspace remains, so read-only commands also work
+// without a manifest. A present but unreadable state file is an error, never an
+// empty result set.
+func DeclaredFiles(root string) ([]types.TrackedFile, error) {
+	document, manifestErr := manifest.Read(root)
+	switch {
+	case manifestErr == nil:
+		return document.Files, nil
+	case !errors.Is(manifestErr, os.ErrNotExist):
+		return nil, fmt.Errorf("read manifest: %w", manifestErr)
+	}
+
+	locked, lockErr := lockfile.Read(root)
+	switch {
+	case lockErr == nil:
+		return locked.Files, nil
+	case !errors.Is(lockErr, os.ErrNotExist):
+		return nil, fmt.Errorf("read lockfile: %w", lockErr)
+	}
+
+	return nil, fmt.Errorf(
+		"no %s or %s in this workspace; run lucy init to create a manifest",
+		manifest.Filename,
+		lockfile.Filename,
+	)
+}
 
 // Inspect makes no state directories and never contacts a recovery source.
 func Inspect(root string, declarations []types.TrackedFile) (statuses []Status, resultErr error) {
