@@ -232,6 +232,16 @@ tasks:
     cmds:
       - go test -race ./...
 
+  test:integration:
+    desc: Run hermetic CAS, cache, file transaction, and CLI integration scenarios
+    cmds:
+      - go test -tags integration ./...
+
+  test:integration:race:
+    desc: Run integration scenarios with the race detector
+    cmds:
+      - go test -race -tags integration ./...
+
   test:coverage:
     desc: Run the Go test suite with a coverage profile
     cmds:
