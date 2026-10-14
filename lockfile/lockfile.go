@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/types"
@@ -144,7 +145,7 @@ func Write(root string, d *Document) error {
 		return err
 	}
 	path := filepath.Join(root, Filename)
-	if err := manifest.AtomicWrite(path, data); err != nil {
+	if err := fsutil.AtomicWrite(path, data); err != nil {
 		return err
 	}
 	log.Info(

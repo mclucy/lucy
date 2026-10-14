@@ -11,6 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
@@ -139,7 +140,7 @@ func writeBisectState(workDir string, session *bisectState) error {
 	if err != nil {
 		return fmt.Errorf("failed to serialize bisect state: %w", err)
 	}
-	if err := manifest.AtomicWrite(bisectFilePath(workDir), data); err != nil {
+	if err := fsutil.AtomicWrite(bisectFilePath(workDir), data); err != nil {
 		return fmt.Errorf("failed to write bisect state: %w", err)
 	}
 	return nil
