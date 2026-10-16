@@ -121,6 +121,25 @@ func (w workspace) modTime(t *testing.T, relative string) time.Time {
 	return info.ModTime()
 }
 
+func (w workspace) chmod(t *testing.T, relative string, mode os.FileMode) {
+	t.Helper()
+	if err := os.Chmod(w.path(relative), mode); err != nil {
+		t.Fatalf("chmod %s: %v", relative, err)
+	}
+}
+
+// requireMode proves the command left the permissions a user chose alone.
+func (w workspace) requireMode(t *testing.T, relative string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Lstat(w.path(relative))
+	if err != nil {
+		t.Fatalf("stat %s: %v", relative, err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("%s holds mode %04o, want %04o", relative, got, want)
+	}
+}
+
 func (w workspace) symlink(t *testing.T, target, relative string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(w.path(relative)), 0o755); err != nil {
