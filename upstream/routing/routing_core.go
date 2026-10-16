@@ -30,6 +30,33 @@ func Metadata(ctx context.Context, endpoint string, target any) error {
 	return json.Unmarshal(data, target)
 }
 
+// trustMavenChecksum adopts the digest the artifact's Maven repository
+// publishes beside it. Acquisition records whatever digest it computes when
+// nothing is supplied to compare against, so a core artifact without a trusted
+// checksum would pin unverified bytes in the lock. The repository sidecar is
+// that source, and an unavailable one fails the resolution rather than
+// lowering the guarantee.
+func trustMavenChecksum(ctx context.Context, a *types.Artifact) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	data, err := cache.CachedGetBytes(a.URL+".sha256", cache.BytesRequestOptions{Kind: cache.KindMetadata})
+	if err != nil {
+		return fmt.Errorf("no trusted checksum for %s: %w", a.Filename, err)
+	}
+	sum := strings.TrimSpace(string(data))
+	if len(sum) != 64 {
+		return fmt.Errorf("malformed checksum for %s", a.Filename)
+	}
+	a.Hashes["sha256"] = sum
+	log.Debug(
+		"routing: trusted checksum adopted",
+		"artifact", a.Filename,
+		"sha256", sum,
+	)
+	return nil
+}
+
 func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types.Artifact) (string, error)) (types.CoreResolution, error) {
 	out := types.CoreResolution{Minecraft: req.Minecraft, Distribution: req.Distribution, Java: 21}
 	if strings.HasPrefix(req.Minecraft, "1.") {
@@ -96,6 +123,9 @@ func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types
 				return out, e
 			}
 			out.Artifact = types.Artifact{Provider: "fabric", ProjectID: "fabric-loader", Version: out.Version, Filename: "fabric-loader-" + out.Version + ".jar", URL: "https://maven.fabricmc.net/net/fabricmc/fabric-loader/" + out.Version + "/fabric-loader-" + out.Version + ".jar", Hashes: map[string]string{}}
+			if e := trustMavenChecksum(ctx, &out.Artifact); e != nil {
+				return out, e
+			}
 			_, err = acquire(&out.Artifact)
 			if err != nil {
 				return out, err
