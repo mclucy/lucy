@@ -118,7 +118,8 @@ func Normalize(d *Document) error {
 		return fmt.Errorf("unsupported manifest version %d", d.Version)
 	}
 	d.Server.Minecraft = strings.TrimSpace(d.Server.Minecraft)
-	if d.Server.Minecraft == "" || types.BareVersion(d.Server.Minecraft).CanInfer() {
+	declared := types.BareVersion(d.Server.Minecraft)
+	if declared == "" || declared.CanInfer() || declared.IsInvalid() {
 		return fmt.Errorf("server.minecraft must specify a concrete Minecraft version")
 	}
 	d.Server.Core.Distribution = strings.ToLower(strings.TrimSpace(d.Server.Core.Distribution))
