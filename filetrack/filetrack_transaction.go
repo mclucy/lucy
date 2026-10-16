@@ -124,7 +124,11 @@ func applyImage(files *os.Root, store *cas.Store, name string, desired, expected
 	if err != nil {
 		return err
 	}
-	copyErr := workspacewrite.CopyRootChecked(files, name, reader, os.FileMode(desired.Mode), check)
+	copyErr := fsutil.WriteRoot(files, name, reader, fsutil.WriteOptions{
+		Mode:    os.FileMode(desired.Mode),
+		Replace: true,
+		Check:   check,
+	})
 	return errors.Join(copyErr, reader.Close())
 }
 
@@ -187,7 +191,10 @@ func commit(root string, files *os.Root, store *cas.Store, txn transaction) (res
 	if err != nil {
 		return err
 	}
-	if err := workspacewrite.CopyRoot(files, transactionName, bytes.NewReader(data), 0o600); err != nil {
+	if err := fsutil.WriteRoot(files, transactionName, bytes.NewReader(data), fsutil.WriteOptions{
+		Mode:    0o600,
+		Replace: true,
+	}); err != nil {
 		return err
 	}
 	failed := true
