@@ -54,10 +54,17 @@ func TestFileCommandsAndInstallPreserveRuntimePinsAndCoreBytes(t *testing.T) {
 	w.requireBytes(t, manifest.Filename, manifestBytes)
 	w.requireReceiptEntries(t, receiptEntry{Path: "server/server.jar", SHA256: digestHex(core), Mode: 0o644})
 
+	// The file commands rewrite the manifest and the lock. The permissions a
+	// user chose for them must survive that rewrite.
+	w.chmod(t, manifest.Filename, 0o640)
+	w.chmod(t, lockfile.Filename, 0o640)
+
 	// A manifest-only files edit republishes the lock without reinstalling,
 	// because the receipt never measured the tracked files.
 	w.write(t, "config/extra.txt", []byte("extra note\n"), 0o644)
 	w.lucyOK(t, "file", "track", "config/extra.txt")
+	w.requireMode(t, manifest.Filename, 0o640)
+	w.requireMode(t, lockfile.Filename, 0o640)
 	fresh = w.readLock(t)
 	if len(fresh.Files) != 2 || fresh.ManifestFingerprint != w.manifestFingerprint(t) {
 		t.Errorf("the manifest-only edit did not publish a current lock: %+v", fresh.Files)
