@@ -20,6 +20,12 @@ func renameRoot(root *os.Root, from, to string, replace bool) error {
 	return unsupportedNative("durable rename")
 }
 
+// sameDevice has no portable implementation on this platform, so a publish
+// always stages beside its destination instead.
+func sameDevice(first, second string) bool {
+	return false
+}
+
 func unsupportedNative(operation string) error {
 	return fmt.Errorf("%s is not supported on %s", operation, runtime.GOOS)
 }

@@ -46,6 +46,21 @@ func renameRoot(root *os.Root, from, to string, replace bool) error {
 	return syncRenameChain(root, from, to)
 }
 
+// sameDevice reports whether both paths live on one filesystem, so that a
+// staged copy reaches its destination through a rename. When either path
+// cannot be stated, it reports false and the publish stages beside the
+// destination instead, which is always on the destination filesystem.
+func sameDevice(first, second string) bool {
+	var firstStat, secondStat unix.Stat_t
+	if err := unix.Stat(first, &firstStat); err != nil {
+		return false
+	}
+	if err := unix.Stat(second, &secondStat); err != nil {
+		return false
+	}
+	return firstStat.Dev == secondStat.Dev
+}
+
 // syncRenameChain flushes the directory entries that a rename changes: the
 // parent directories of both endpoints and every directory from those parents
 // up to root.

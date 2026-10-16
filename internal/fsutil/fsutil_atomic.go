@@ -10,13 +10,14 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // WorkspaceMarker names the directory that marks a lucy workspace root.
 const WorkspaceMarker = ".lucy"
 
-// StagingRelative is the directory inside a workspace that holds staged copies.
-// The install and cache stages share it, so staging names stay disjoint.
+// StagingRelative is the directory inside a workspace that holds staged copies
+// written through WriteRoot while the workspace writer lock is held.
 const StagingRelative = ".lucy/tmp"
 
 // StagingPrefix names the staged copy of a publish.
@@ -96,21 +97,13 @@ func atomicCopy(reader io.Reader, path string, mode os.FileMode) (resultErr erro
 	if err := MkdirAllPrivate(filepath.Dir(path)); err != nil {
 		return fmt.Errorf("create file parent: %w", err)
 	}
-	rootDir, stageRel, destRel, err := stagingPlan(path)
+	root, err := os.OpenRoot(filepath.Dir(path))
 	if err != nil {
-		return err
-	}
-	root, err := os.OpenRoot(rootDir)
-	if err != nil {
-		return fmt.Errorf("open staging root: %w", err)
+		return fmt.Errorf("open file parent: %w", err)
 	}
 	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
-	if stageRel != "." {
-		if err := root.MkdirAll(stageRel, 0o700); err != nil {
-			return fmt.Errorf("create staging directory: %w", err)
-		}
-	}
-	return publish(root, filepath.Join(stageRel, stagedName(filepath.Base(path))), destRel, reader, mode, true, nil)
+	base := filepath.Base(path)
+	return publish(root, stagedName(base), base, reader, mode, true, nil)
 }
 
 // WriteOptions controls one publish.
@@ -203,7 +196,8 @@ func publish(
 
 // stagingRelative prefers the workspace staging directory, which keeps a
 // staged payload out of the destination namespace, and falls back to the
-// destination's own directory for a root that is not a workspace.
+// destination's own directory for a root that is not a workspace, or when the
+// staging directory sits on another filesystem than the destination.
 func stagingRelative(root *os.Root, parent string) (string, error) {
 	info, err := root.Stat(WorkspaceMarker)
 	if err == nil {
@@ -213,7 +207,10 @@ func stagingRelative(root *os.Root, parent string) (string, error) {
 		if err := root.MkdirAll(StagingRelative, 0o700); err != nil {
 			return "", fmt.Errorf("create staging directory: %w", err)
 		}
-		return StagingRelative, nil
+		if sameDevice(filepath.Join(root.Name(), StagingRelative), filepath.Join(root.Name(), parent)) {
+			return StagingRelative, nil
+		}
+		return parent, nil
 	}
 	if !errors.Is(err, os.ErrNotExist) {
 		return "", err
@@ -221,39 +218,15 @@ func stagingRelative(root *os.Root, parent string) (string, error) {
 	return parent, nil
 }
 
-// stagingPlan locates the staging root for a destination path: the nearest
-// workspace containing it, so that the publish stays within one filesystem,
-// or the destination's own directory when no workspace contains it.
-func stagingPlan(path string) (rootDir, stageRel, destRel string, err error) {
-	dir := filepath.Dir(path)
-	for {
-		info, statErr := os.Stat(filepath.Join(dir, WorkspaceMarker))
-		if statErr == nil {
-			if !info.IsDir() {
-				return "", "", "", fmt.Errorf("%s is not a directory", filepath.Join(dir, WorkspaceMarker))
-			}
-			relative, relErr := filepath.Rel(dir, path)
-			if relErr != nil {
-				return "", "", "", relErr
-			}
-			return dir, StagingRelative, relative, nil
-		}
-		if !errors.Is(statErr, os.ErrNotExist) {
-			return "", "", "", statErr
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return filepath.Dir(path), ".", filepath.Base(path), nil
-		}
-		dir = parent
-	}
-}
-
 // stagedName carries the destination basename so that a stage abandoned by a
 // killed process names the file it belongs to.
 func stagedName(base string) string {
 	if len(base) > MaxStagedBase {
-		base = base[:MaxStagedBase]
+		cut := MaxStagedBase
+		for cut > 0 && !utf8.RuneStart(base[cut]) {
+			cut--
+		}
+		base = base[:cut]
 	}
 	return StagingPrefix + base + "-" + rand.Text()
 }
