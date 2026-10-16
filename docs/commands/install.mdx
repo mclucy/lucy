@@ -41,6 +41,20 @@ If the manifest is gone but `lucy-lock.yaml` remains, `lucy install` replays the
 
 The rule is byte-level, not name-level: a file that exists but whose hash differs from the lock is a mismatch, and `--offline` will not paper over it by keeping the old copy. In practice `--offline` works for replaying a current lock after a warm run; it does not work for first-time installs or for anything requiring re-resolution.
 
+### Download cache
+
+Lucy stores global cached contents as SHA-256 objects. Request URLs, output filenames, upstream checksum records, and expiration stay in the cache index. Multiple requests can share one object; evicting one request does not remove contents that another request still references.
+
+Each cache kind counts a shared object once toward its size limit, regardless of the number of request URLs that reference it. Eviction releases that object's quota only after its last reference in that kind is removed.
+
+Cache reads verify the object's digest. A normal download can replace a corrupt cache object. Cache failures do not prevent a download when an uncached staging path is available.
+
+Cache maintenance ignores unrelated object filenames and non-regular stage lease entries.
+
+The CAS cache uses a new disposable disk format. On the first run, Lucy discards the previous global cache. Run an online installation to refill cache-only artifacts before relying on `--offline`. Existing project downloads are not cleared.
+
+`lucy cache clear` removes global cached objects and their index references. It does not clear project-local storage.
+
 ## Lock file shape
 
 The lock has top-level `lock_version`, `manifest_fingerprint`, `server`, an optional `mcdr`, and a flat `packages` list.

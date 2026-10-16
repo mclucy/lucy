@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
@@ -244,7 +245,7 @@ func Write(root string, d *Document) error {
 		return err
 	}
 	path := filepath.Join(root, Filename)
-	if err := AtomicWrite(path, data); err != nil {
+	if err := fsutil.AtomicWrite(path, data, 0o644); err != nil {
 		return err
 	}
 	log.Info(
@@ -253,32 +254,4 @@ func Write(root string, d *Document) error {
 		"version", d.Version,
 	)
 	return nil
-}
-
-func AtomicWrite(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".lucy-write-*")
-	if err != nil {
-		return err
-	}
-	name := f.Name()
-	defer os.Remove(name)
-	if err := f.Chmod(0o644); err != nil {
-		f.Close()
-		return err
-	}
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
 }

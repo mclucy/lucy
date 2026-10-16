@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -246,7 +247,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		return err
 	}
 	journalPath := filepath.Join(root, ".lucy", "commit.yaml")
-	if err := manifest.AtomicWrite(journalPath, journalBytes); err != nil {
+	if err := fsutil.AtomicWrite(journalPath, journalBytes, 0o600); err != nil {
 		return err
 	}
 	log.Debug(
@@ -298,7 +299,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	if err != nil {
 		return err
 	}
-	if err := manifest.AtomicWrite(receiptPath, receiptBytes); err != nil {
+	if err := fsutil.AtomicWrite(receiptPath, receiptBytes, 0o600); err != nil {
 		return err
 	}
 	if err := os.Remove(filepath.Join(root, ".lucy", "commit.yaml")); err != nil {
