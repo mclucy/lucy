@@ -223,15 +223,26 @@ func Fingerprint(d *Document) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-func Write(root string, d *Document) error {
+// Snapshot returns the canonical bytes of the document, including the schema
+// modeline. It writes nothing. A publisher that decides when and where the
+// bytes land takes a snapshot first; Write takes one and publishes it.
+func Snapshot(d *Document) ([]byte, error) {
 	if err := Normalize(d); err != nil {
-		return err
+		return nil, err
 	}
 	data, err := yaml.Marshal(d)
 	if err != nil {
+		return nil, err
+	}
+	return append([]byte("# yaml-language-server: $schema="+SchemaURL+"\n"), data...), nil
+}
+
+// Write publishes the canonical bytes at the manifest location of root.
+func Write(root string, d *Document) error {
+	data, err := Snapshot(d)
+	if err != nil {
 		return err
 	}
-	data = append([]byte("# yaml-language-server: $schema="+SchemaURL+"\n"), data...)
 	path := filepath.Join(root, Filename)
 	if err := AtomicWrite(path, data); err != nil {
 		return err
