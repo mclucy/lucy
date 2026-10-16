@@ -10,6 +10,7 @@ import (
 
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
@@ -165,7 +166,9 @@ func Provision(ctx context.Context, root string, declarations []types.TrackedFil
 			diagnostics = append(diagnostics, Diagnostic{Path: file.Path, Message: "cannot open accepted contents: " + err.Error()})
 			continue
 		}
-		copyErr := workspacewrite.CopyMissingRoot(files, file.Path, reader, os.FileMode(accepted.Mode))
+		copyErr := fsutil.WriteRoot(files, file.Path, reader, fsutil.WriteOptions{
+			Mode: os.FileMode(accepted.Mode),
+		})
 		if err := errors.Join(copyErr, reader.Close()); err != nil {
 			diagnostics = append(diagnostics, Diagnostic{Path: file.Path, Message: "cannot provision accepted contents: " + err.Error()})
 		}
