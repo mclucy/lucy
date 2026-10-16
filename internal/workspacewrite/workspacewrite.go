@@ -23,7 +23,9 @@ type InstallJournal struct {
 	Created []string `yaml:"created"`
 }
 
-// Lock is shared by installation and explicit file operations.
+// Lock is shared by installation and explicit file operations. It reclaims
+// staging that a killed publisher abandoned, which is safe only under the
+// writer lock it takes, because that lock proves no publisher is live.
 func Lock(root string) (*fsutil.FileLock, error) {
 	if err := SafePath(root, ".lucy"); err != nil {
 		return nil, err
@@ -35,10 +37,28 @@ func Lock(root string) (*fsutil.FileLock, error) {
 		return nil, err
 	}
 	lock, err := fsutil.TryLockFile(filepath.Join(root, ".lucy", "writer.lock"))
-	if errors.Is(err, fsutil.ErrLocked) {
-		return nil, fmt.Errorf("another Lucy operation owns this workspace: %w", err)
+	if err != nil {
+		if errors.Is(err, fsutil.ErrLocked) {
+			return nil, fmt.Errorf("another Lucy operation owns this workspace: %w", err)
+		}
+		return nil, err
 	}
-	return lock, err
+	files, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, errors.Join(err, lock.Close())
+	}
+	removed, sweepErr := fsutil.SweepStaging(files)
+	closeErr := files.Close()
+	if sweepErr != nil {
+		log.Warn(fmt.Errorf("reclaim stale staging files: %w", sweepErr))
+	}
+	for _, name := range removed {
+		log.Debug("removed stale staging file", "path", name)
+	}
+	if closeErr != nil {
+		return nil, errors.Join(closeErr, lock.Close())
+	}
+	return lock, nil
 }
 
 // SafePath rejects existing symlink components before root-confined IO.
