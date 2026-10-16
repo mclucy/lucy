@@ -1,7 +1,8 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"reflect"
@@ -53,7 +54,7 @@ func main() {
 		DoNotReference: true,
 		BaseSchemaID:   jsonschema.ID(schemaURL),
 		Mapper: func(t reflect.Type) *jsonschema.Schema {
-			if t == reflect.TypeOf(manifest.Requirement{}) {
+			if t == reflect.TypeFor[manifest.Requirement]() {
 				return requirementSchema
 			}
 			return nil
@@ -65,7 +66,7 @@ func main() {
 	schema.Title = "Lucy manifest"
 	schema.Description = "Desired-state manifest (lucy.yaml) for a Lucy-managed Minecraft server."
 
-	raw, err := json.MarshalIndent(schema, "", "  ")
+	raw, err := json.Marshal(schema, jsontext.Multiline(true), jsontext.WithIndent("  "))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
