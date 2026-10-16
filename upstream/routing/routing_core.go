@@ -60,14 +60,24 @@ func trustMavenChecksum(ctx context.Context, a *types.Artifact) error {
 func ResolveCore(ctx context.Context, req types.CoreRequest, acquire func(*types.Artifact) (string, error)) (types.CoreResolution, error) {
 	out := types.CoreResolution{Minecraft: req.Minecraft, Distribution: req.Distribution, Java: 21}
 	if strings.HasPrefix(req.Minecraft, "1.") {
-		parts := strings.Split(req.Minecraft, ".")
+		// A prerelease or release-candidate suffix rides on the Minecraft id
+		// ("1.20-pre1", "1.20.5-pre1"). The numeric parts alone decide the Java
+		// requirement, and a suffix on any of them silently parses as zero,
+		// which would map the 1.20 prereleases to Java 8.
+		parts := strings.Split(strings.SplitN(req.Minecraft, "-", 2)[0], ".")
 		if len(parts) > 1 {
 			minor, _ := strconv.Atoi(parts[1])
+			// An absent patch is the unpatched release, and 1.20 predates the
+			// Java 21 requirement that 1.20.5 introduced.
+			patch := 0
+			if len(parts) > 2 {
+				patch, _ = strconv.Atoi(parts[2])
+			}
 			if minor < 17 {
 				out.Java = 8
 			} else if minor < 18 {
 				out.Java = 16
-			} else if minor < 20 || (minor == 20 && len(parts) > 2 && parts[2] < "5") {
+			} else if minor < 20 || (minor == 20 && patch < 5) {
 				out.Java = 17
 			}
 		}
