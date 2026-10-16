@@ -9,6 +9,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/types"
 	orderedmap "github.com/pb33f/ordered-map/v2"
 )
 
@@ -50,14 +51,75 @@ func main() {
 		},
 	}
 
+	trackedFileSchema := func() *jsonschema.Schema {
+		path := &jsonschema.Schema{
+			Type:        "string",
+			Description: "Workspace-relative forward-slash path to the tracked file.",
+		}
+		immutable := &jsonschema.Schema{
+			Type:        "boolean",
+			Default:     false,
+			Description: "Whether deviation from the accepted digest produces an immutable-file warning.",
+		}
+		hash := &jsonschema.Schema{
+			Type:        "string",
+			Pattern:     `^sha256:[0-9a-f]{64}$`,
+			Description: "Accepted SHA-256 digest in canonical sha256:<hex> form.",
+		}
+		recoverURL := &jsonschema.Schema{
+			Type:        "string",
+			Format:      "uri",
+			Pattern:     `^https?://`,
+			Description: "Remote HTTP(S) URL used to restore missing file contents.",
+		}
+		properties := orderedmap.New[string, *jsonschema.Schema]()
+		properties.Set("path", path)
+		properties.Set("immutable", immutable)
+		properties.Set("hash", hash)
+		properties.Set("recover_url", recoverURL)
+		return &jsonschema.Schema{
+			Type:                 "object",
+			Properties:           properties,
+			Required:             []string{"path"},
+			AdditionalProperties: jsonschema.FalseSchema,
+			AllOf: []*jsonschema.Schema{
+				{
+					If: &jsonschema.Schema{
+						Properties: func() *orderedmap.OrderedMap[string, *jsonschema.Schema] {
+							p := orderedmap.New[string, *jsonschema.Schema]()
+							p.Set("immutable", &jsonschema.Schema{Const: true})
+							return p
+						}(),
+						Required: []string{"immutable"},
+					},
+					Then: &jsonschema.Schema{
+						Required: []string{"hash"},
+					},
+				},
+				{
+					If: &jsonschema.Schema{
+						Required: []string{"recover_url"},
+					},
+					Then: &jsonschema.Schema{
+						Required: []string{"hash"},
+					},
+				},
+			},
+		}
+	}()
+
 	r := &jsonschema.Reflector{
 		DoNotReference: true,
 		BaseSchemaID:   jsonschema.ID(schemaURL),
 		Mapper: func(t reflect.Type) *jsonschema.Schema {
-			if t == reflect.TypeFor[manifest.Requirement]() {
+			switch t {
+			case reflect.TypeFor[manifest.Requirement]():
 				return requirementSchema
+			case reflect.TypeFor[types.TrackedFile]():
+				return trackedFileSchema
+			default:
+				return nil
 			}
-			return nil
 		},
 	}
 	schema := r.Reflect(&manifest.Document{})

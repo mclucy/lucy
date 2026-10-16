@@ -1,11 +1,14 @@
 package lockfile
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -19,11 +22,12 @@ const (
 )
 
 type Document struct {
-	Version             int                   `yaml:"lock_version"`
-	ManifestFingerprint string                `yaml:"manifest_fingerprint"`
-	Server              Server                `yaml:"server"`
-	MCDR                *MCDR                 `yaml:"mcdr,omitempty"`
-	Packages            []types.LockedPackage `yaml:"packages"`
+	Version             int                   `yaml:"lock_version" json:"lock_version"`
+	ManifestFingerprint string                `yaml:"manifest_fingerprint" json:"manifest_fingerprint"`
+	Server              Server                `yaml:"server" json:"server"`
+	MCDR                *MCDR                 `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Packages            []types.LockedPackage `yaml:"packages" json:"packages"`
+	Files               []types.TrackedFile   `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 type Server struct {
@@ -96,6 +100,9 @@ func Validate(d *Document) error {
 			}
 		}
 	}
+	if err := input.NormalizeTrackedFiles(d.Files); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -120,15 +127,28 @@ func validateArtifact(a types.Artifact) error {
 }
 
 func Read(root string) (*Document, error) {
-	data, err := os.ReadFile(filepath.Join(root, Filename))
+	file, err := os.Open(filepath.Join(root, Filename))
 	if err != nil {
 		return nil, err
 	}
+	d, decodeErr := Decode(file)
+	return d, errors.Join(decodeErr, file.Close())
+}
+
+// Decode validates lock bytes from a reader.
+func Decode(reader io.Reader) (*Document, error) {
 	d := &Document{}
-	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	decoder := yaml.NewDecoder(reader)
 	decoder.KnownFields(true)
 	if err := decoder.Decode(d); err != nil {
 		return nil, fmt.Errorf("decode lock: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("lock must contain one YAML document")
+		}
+		return nil, fmt.Errorf("decode lock tail: %w", err)
 	}
 	if err := Validate(d); err != nil {
 		return nil, err

@@ -4,11 +4,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
@@ -21,9 +24,10 @@ const (
 )
 
 type Document struct {
-	Version int    `yaml:"manifest_version" json:"manifest_version"`
-	Server  Server `yaml:"server" json:"server"`
-	MCDR    *MCDR  `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Version int                 `yaml:"manifest_version" json:"manifest_version"`
+	Server  Server              `yaml:"server" json:"server"`
+	MCDR    *MCDR               `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Files   []types.TrackedFile `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 type Core struct {
@@ -181,6 +185,9 @@ func Normalize(d *Document) error {
 			d.MCDR.Packages[ref] = r
 		}
 	}
+	if err := input.NormalizeTrackedFiles(d.Files); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -196,15 +203,28 @@ func normalizeRequirement(ref string, r *Requirement) error {
 }
 
 func Read(root string) (*Document, error) {
-	data, err := os.ReadFile(filepath.Join(root, Filename))
+	file, err := os.Open(filepath.Join(root, Filename))
 	if err != nil {
 		return nil, err
 	}
+	d, decodeErr := Decode(file)
+	return d, errors.Join(decodeErr, file.Close())
+}
+
+// Decode validates manifest bytes from a reader.
+func Decode(reader io.Reader) (*Document, error) {
 	d := &Document{}
-	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	decoder := yaml.NewDecoder(reader)
 	decoder.KnownFields(true)
 	if err := decoder.Decode(d); err != nil {
 		return nil, fmt.Errorf("decode manifest: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("manifest must contain one YAML document")
+		}
+		return nil, fmt.Errorf("decode manifest tail: %w", err)
 	}
 	if err := Normalize(d); err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -105,5 +106,9 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	return install.Add(cmd.Context(), workDir, args, loader, opts)
+	diagnostics, err := install.Add(cmd.Context(), workDir, args, loader, opts)
+	for _, diagnostic := range diagnostics {
+		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	return err
 }
