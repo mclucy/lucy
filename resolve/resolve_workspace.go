@@ -141,6 +141,33 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		for _, req := range r.requirements {
 			active = active || req.Enabled
 		}
+		// An artifact-less entry records only a disabled direct binding. When
+		// something else in the graph needs the package, that demand outranks
+		// the binding, so the artifact resolves instead of merging into a
+		// package that no file can satisfy.
+		if previous, ok := chosen[r.key]; ok && (!active || previous.Artifact.Filename != "") {
+			for _, release := range r.releaseIDs {
+				if release != "" && previous.ReleaseID != release {
+					lastErr = fmt.Errorf("conflicting exact releases for %s:%s", r.key.provider, r.key.project)
+					return false
+				}
+			}
+			before := previous.Requirements
+			previous.Requirements = append(previous.Requirements, r.requirements...)
+			chosen[r.key] = previous
+			if search(rest) {
+				return true
+			}
+			previous.Requirements = before
+			chosen[r.key] = previous
+			log.Debug(
+				"resolve: backtracking requirement merge",
+				"provider", r.key.provider,
+				"project", r.key.project,
+				"reason", "remaining requests failed after merge",
+			)
+			return false
+		}
 		if !active {
 			p := types.LockedPackage{Runtime: r.key.runtime, Loader: r.key.loader, Artifact: types.Artifact{Provider: r.key.provider, ProjectID: r.key.project}, Requirements: r.requirements}
 			chosen[r.key] = p
@@ -150,28 +177,14 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			delete(chosen, r.key)
 			return false
 		}
-		if p, ok := chosen[r.key]; ok {
-			for _, release := range r.releaseIDs {
-				if release != "" && p.ReleaseID != release {
-					lastErr = fmt.Errorf("conflicting exact releases for %s:%s", r.key.provider, r.key.project)
-					return false
-				}
-			}
-			before := p.Requirements
-			p.Requirements = append(p.Requirements, r.requirements...)
-			chosen[r.key] = p
-			if search(rest) {
-				return true
-			}
-			p.Requirements = before
-			chosen[r.key] = p
-			log.Debug(
-				"resolve: backtracking requirement merge",
-				"provider", r.key.provider,
-				"project", r.key.project,
-				"reason", "remaining requests failed after merge",
-			)
-			return false
+		// A disabled direct binding may already hold an artifact-less entry
+		// here, because a real demand outranks it. Selecting a file replaces
+		// the entry, so the binding's requirements have to travel into the
+		// selection and back out again when the selection does not resolve.
+		var artifactless types.LockedPackage
+		replacingArtifactless := false
+		if prior, ok := chosen[r.key]; ok && prior.Artifact.Filename == "" {
+			artifactless, replacingArtifactless = prior, true
 		}
 		list, ok := candidates[r.key]
 		if !ok {
@@ -265,7 +278,11 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				continue
 			}
 			a.Modules = modules
-			chosen[r.key] = types.LockedPackage{Runtime: r.key.runtime, Loader: r.key.loader, Artifact: a, Requirements: r.requirements}
+			requirements := r.requirements
+			if replacingArtifactless {
+				requirements = append(slices.Clone(artifactless.Requirements), r.requirements...)
+			}
+			chosen[r.key] = types.LockedPackage{Runtime: r.key.runtime, Loader: r.key.loader, Artifact: a, Requirements: requirements}
 			log.Debug(
 				"resolve: candidate selected",
 				"provider", r.key.provider,
@@ -356,7 +373,11 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			if search(next) {
 				return true
 			}
-			delete(chosen, r.key)
+			if replacingArtifactless {
+				chosen[r.key] = artifactless
+			} else {
+				delete(chosen, r.key)
+			}
 			log.Debug(
 				"resolve: backtracking candidate",
 				"provider", r.key.provider,
@@ -375,6 +396,12 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	}
 	out := []types.LockedPackage{}
 	for _, p := range chosen {
+		// A requirement the manifest disables and nothing demands pins no
+		// artifact, so recording it would leave the lock claiming a package
+		// that has no file to install.
+		if p.Artifact.Filename == "" {
+			continue
+		}
 		out = append(out, p)
 	}
 	out = mergeArtifactSelections(out)
