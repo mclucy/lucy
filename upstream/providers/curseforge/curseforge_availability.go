@@ -7,19 +7,10 @@ import (
 	"sync"
 )
 
-var (
-	availabilityOnce sync.Once
-	availabilityErr  error
-)
+var availabilityErr = sync.OnceValue(validateAvailability)
 
 func AvailabilityError() error {
-	availabilityOnce.Do(
-		func() {
-			availabilityErr = validateAvailability()
-		},
-	)
-
-	return availabilityErr
+	return availabilityErr()
 }
 
 func Enabled() bool {

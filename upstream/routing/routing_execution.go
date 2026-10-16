@@ -114,12 +114,10 @@ func FetchMany(
 	var wg sync.WaitGroup
 
 	for i, provider := range providers {
-		wg.Add(1)
-		go func(index int, provider upstream.PackageSource) {
-			defer wg.Done()
+		wg.Go(func() {
 			resolvedID, err := provider.ResolveVersionSelector(local, id)
 			if err != nil {
-				slots[index] = slot{
+				slots[i] = slot{
 					failed: true,
 					err: ProviderError{
 						Source: provider.Id(),
@@ -131,7 +129,7 @@ func FetchMany(
 
 			remoteData, err := provider.Fetch(local, resolvedID)
 			if err != nil {
-				slots[index] = slot{
+				slots[i] = slot{
 					failed: true,
 					err: ProviderError{
 						Source: provider.Id(),
@@ -143,15 +141,13 @@ func FetchMany(
 			// Routing binds the provider's concrete source to the selected
 			// ecosystem/name/version coordinate returned by resolution.
 			remoteData.Id = types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
-					Name:   resolvedID.Name,
-					Source: provider.Id(),
-				},
+				Name:    resolvedID.Name,
+				Source:  provider.Id(),
 				Eco:     resolvedID.Eco,
 				Version: resolvedID.Version,
 			}
-			slots[index] = slot{ok: true, res: remoteData}
-		}(i, provider)
+			slots[i] = slot{ok: true, res: remoteData}
+		})
 	}
 
 	wg.Wait()
@@ -272,12 +268,10 @@ func DependenciesMany(
 	var wg sync.WaitGroup
 
 	for i, provider := range providers {
-		wg.Add(1)
-		go func(index int, provider upstream.PackageSource) {
-			defer wg.Done()
+		wg.Go(func() {
 			deps, err := provider.Dependencies(local, id)
 			if err != nil {
-				slots[index] = slot{
+				slots[i] = slot{
 					failed: true,
 					err: ProviderError{
 						Source: provider.Id(),
@@ -290,8 +284,8 @@ func DependenciesMany(
 			if deps != nil {
 				result = *deps
 			}
-			slots[index] = slot{ok: true, res: result}
-		}(i, provider)
+			slots[i] = slot{ok: true, res: result}
+		})
 	}
 
 	wg.Wait()

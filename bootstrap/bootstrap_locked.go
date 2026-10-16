@@ -353,7 +353,7 @@ func jarMain(p string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, line := range strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
 		if v, ok := strings.CutPrefix(line, "Main-Class: "); ok {
 			return strings.TrimSpace(v), nil
 		}

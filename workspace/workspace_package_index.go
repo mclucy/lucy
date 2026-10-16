@@ -1,7 +1,8 @@
 package workspace
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 
 	"github.com/mclucy/lucy/types"
 )
@@ -51,19 +52,17 @@ func (idx *PackageIndex) Packages() []types.DiscoveredPackage {
 		result = append(result, pkg)
 	}
 
-	sort.Slice(
-		result, func(i, j int) bool {
-			pi, pj := result[i].Id, result[j].Id
+	slices.SortFunc(result, func(a, b types.DiscoveredPackage) int {
+		pi, pj := a.Id, b.Id
 
-			if pi.Eco != pj.Eco {
-				return pi.Eco.String() < pj.Eco.String()
-			}
-			if pi.Name != pj.Name {
-				return pi.Name.String() < pj.Name.String()
-			}
-			return pi.Version.String() < pj.Version.String()
-		},
-	)
+		if c := cmp.Compare(pi.Eco.String(), pj.Eco.String()); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(pi.Name.String(), pj.Name.String()); c != 0 {
+			return c
+		}
+		return cmp.Compare(pi.Version.String(), pj.Version.String())
+	})
 
 	return result
 }
@@ -95,11 +94,9 @@ func (idx *PackageIndex) LookupByEcosystemName(
 		return nil
 	}
 
-	sort.Slice(
-		matches, func(i, j int) bool {
-			return matches[i].Id.Version.String() < matches[j].Id.Version.String()
-		},
-	)
+	slices.SortFunc(matches, func(a, b types.DiscoveredPackage) int {
+		return cmp.Compare(a.Id.Version.String(), b.Id.Version.String())
+	})
 
 	return matches
 }

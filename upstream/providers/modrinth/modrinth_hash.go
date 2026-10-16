@@ -169,10 +169,8 @@ func (s provider) PackageByHash(hashable upstream.Hashable) (
 	}
 
 	ref = types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Name:   types.BarePackageName(project.Slug),
-			Source: s.Id(),
-		},
+		Name:    types.BarePackageName(project.Slug),
+		Source:  s.Id(),
 		Eco:     ecosystemFromModrinthLoaders(version.Loaders),
 		Version: types.BareVersion(version.VersionNumber),
 	}

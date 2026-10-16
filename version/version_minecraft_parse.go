@@ -188,9 +188,9 @@ func parsePre26MinecraftRelease(s types.BareVersion) types.ResolvableVersion {
 
 func splitCoreAndSuffix(raw string) (core string, suffix string) {
 	core = raw
-	if idx := strings.IndexByte(raw, '-'); idx >= 0 {
-		core = raw[:idx]
-		suffix = raw[idx+1:]
+	if before, after, ok := strings.Cut(raw, "-"); ok {
+		core = before
+		suffix = after
 	}
 	return core, suffix
 }
@@ -200,15 +200,15 @@ func parseMinecraftPrereleaseSuffix(suffix string) (
 	uint8,
 	bool,
 ) {
-	if strings.HasPrefix(suffix, "pre") {
-		number, ok := parsePrereleaseNumber(strings.TrimPrefix(suffix, "pre"))
+	if after, ok := strings.CutPrefix(suffix, "pre"); ok {
+		number, ok := parsePrereleaseNumber(after)
 		if !ok {
 			return "", 0, false
 		}
 		return Post26Prerelease, number, true
 	}
-	if strings.HasPrefix(suffix, "rc") {
-		number, ok := parsePrereleaseNumber(strings.TrimPrefix(suffix, "rc"))
+	if after, ok := strings.CutPrefix(suffix, "rc"); ok {
+		number, ok := parsePrereleaseNumber(after)
 		if !ok {
 			return "", 0, false
 		}

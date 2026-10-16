@@ -229,8 +229,8 @@ func parseSemverToken(
 	for _, op := range []string{
 		">=", "<=", "!=", "==", ">", "<", "=", "^", "~",
 	} {
-		if strings.HasPrefix(raw, op) {
-			versionToken := strings.TrimSpace(strings.TrimPrefix(raw, op))
+		if after, ok := strings.CutPrefix(raw, op); ok {
+			versionToken := strings.TrimSpace(after)
 			if versionToken == "" {
 				return nil, false
 			}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -136,8 +137,7 @@ func (m *runtime) View() tea.View {
 
 	var lines []string
 	titleWidth := m.maxTitleWidthLocked()
-	for i := len(m.entryOrder) - 1; i >= 0; i-- {
-		id := m.entryOrder[i]
+	for _, id := range slices.Backward(m.entryOrder) {
 		entry, ok := m.entries[id]
 		if !ok {
 			continue

@@ -37,16 +37,16 @@ type forgeModDependencies struct {
 // FileForgeModIdentifierOld is the JSON metadata shape used by Forge 1.12
 // and earlier.
 type FileForgeModIdentifierOld []struct {
-	ModId        string        `json:"modid"`
-	Name         string        `json:"name"`
-	Description  string        `json:"description"`
-	Version      string        `json:"version"`
-	McVersion    string        `json:"mcversion"`
-	URL          string        `json:"url"`
-	UpdateURL    string        `json:"updateUrl"`
-	AuthorList   []string      `json:"authorList"`
-	Credits      string        `json:"credits"`
-	LogoFile     string        `json:"logoFile"`
-	Screenshots  []interface{} `json:"screenshots"`
-	Dependencies []interface{} `json:"dependencies"`
+	ModId        string   `json:"modid"`
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	Version      string   `json:"version"`
+	McVersion    string   `json:"mcversion"`
+	URL          string   `json:"url"`
+	UpdateURL    string   `json:"updateUrl"`
+	AuthorList   []string `json:"authorList"`
+	Credits      string   `json:"credits"`
+	LogoFile     string   `json:"logoFile"`
+	Screenshots  []any    `json:"screenshots"`
+	Dependencies []any    `json:"dependencies"`
 }

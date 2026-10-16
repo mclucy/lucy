@@ -76,7 +76,7 @@ type FileFabricModIdentifier struct {
 	Breaks     map[string]fn.SingleOrSlice[string] `json:"breaks"`
 	Conflicts  map[string]fn.SingleOrSlice[string] `json:"conflicts"`
 
-	Custom interface{} `json:"-"`
+	Custom any `json:"-"`
 }
 
 type FileFabricModIdentifierOld struct {

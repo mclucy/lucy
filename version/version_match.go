@@ -81,8 +81,8 @@ func matchFabricMinimumPrerelease(raw, actual string) (bool, bool, error) {
 		}
 		operator, number := "=", strings.TrimSuffix(token, "-")
 		for _, op := range []string{">=", "<=", "==", "!=", ">", "<", "="} {
-			if strings.HasPrefix(number, op) {
-				operator, number = op, strings.TrimPrefix(number, op)
+			if after, ok := strings.CutPrefix(number, op); ok {
+				operator, number = op, after
 				break
 			}
 		}

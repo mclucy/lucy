@@ -12,10 +12,12 @@ const (
 	Sixel
 )
 
-var (
-	detectOnce     sync.Once
-	detectedResult Protocol
-)
+var detectedResult = sync.OnceValue(detect)
+
+// Detect determines the image protocol supported by the current terminal.
+func Detect() Protocol {
+	return detectedResult()
+}
 
 // String returns the protocol name.
 func (p Protocol) String() string {
@@ -29,16 +31,6 @@ func (p Protocol) String() string {
 	default:
 		return "none"
 	}
-}
-
-// Detect determines the image protocol supported by the current terminal.
-func Detect() Protocol {
-	detectOnce.Do(
-		func() {
-			detectedResult = detect()
-		},
-	)
-	return detectedResult
 }
 
 // Render renders image data using the detected protocol.

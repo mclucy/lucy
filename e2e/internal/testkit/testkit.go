@@ -30,13 +30,11 @@ func VerifyAll(ids []string, parallel int, verify func(string) error) int {
 	slots := make(chan struct{}, parallel)
 	var running sync.WaitGroup
 	for i, id := range ids {
-		running.Add(1)
-		go func() {
-			defer running.Done()
+		running.Go(func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
 			errs[i] = verify(id)
-		}()
+		})
 	}
 	running.Wait()
 	var failed bool

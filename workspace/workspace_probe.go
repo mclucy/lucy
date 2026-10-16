@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
@@ -233,7 +233,7 @@ func findFileWithExt(dirs []string, ext ...string) ([]string, error) {
 			if entry.IsDir() {
 				continue
 			}
-			if fn.Exists(ext, filepath.Ext(entry.Name())) {
+			if slices.Contains(ext, filepath.Ext(entry.Name())) {
 				files = append(files, filepath.Join(dir, entry.Name()))
 			}
 		}

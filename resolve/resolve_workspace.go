@@ -169,7 +169,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			return false
 		}
 		if !active {
-			p := types.LockedPackage{Runtime: r.key.runtime, Loader: r.key.loader, Artifact: types.Artifact{Provider: r.key.provider, ProjectID: r.key.project}, Requirements: r.requirements}
+			p := types.LockedPackage{Runtime: r.key.runtime, Loader: r.key.loader, Provider: r.key.provider, ProjectID: r.key.project, Requirements: r.requirements}
 			chosen[r.key] = p
 			if search(rest) {
 				return true

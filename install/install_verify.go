@@ -101,12 +101,12 @@ func checkJava(ctx context.Context, minimum int) error {
 		return fmt.Errorf("Java %d or later is required: %w", minimum, err)
 	}
 	text := string(raw)
-	start := strings.IndexByte(text, '"')
-	if start < 0 {
+	_, after, ok := strings.Cut(text, "\"")
+	if !ok {
 		return fmt.Errorf("cannot identify Java version: %s", text)
 	}
-	v := strings.Split(text[start+1:], "\"")[0]
-	majorText := strings.Split(v, ".")[0]
+	v, _, _ := strings.Cut(after, "\"")
+	majorText, _, _ := strings.Cut(v, ".")
 	if majorText == "1" && strings.Contains(v, ".") {
 		majorText = strings.Split(v, ".")[1]
 	}
