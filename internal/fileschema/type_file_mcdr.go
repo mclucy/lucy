@@ -31,24 +31,24 @@ type FileMcdrConfig struct {
 		Port     int    `yaml:"port"`
 		Password string `yaml:"password"`
 	} `yaml:"rcon"`
-	PluginDirectories         []string    `yaml:"plugin_directories"`
-	CatalogueMetaCacheTtl     int         `yaml:"catalogue_meta_cache_ttl"`
-	CatalogueMetaFetchTimeout int         `yaml:"catalogue_meta_fetch_timeout"`
-	CatalogueMetaUrl          interface{} `yaml:"catalogue_meta_url"`
-	PluginDownloadUrl         interface{} `yaml:"plugin_download_url"`
-	PluginDownloadTimeout     int         `yaml:"plugin_download_timeout"`
-	PluginPipInstallExtraArgs interface{} `yaml:"plugin_pip_install_extra_args"`
-	CheckUpdate               bool        `yaml:"check_update"`
-	AdvancedConsole           bool        `yaml:"advanced_console"`
-	HttpProxy                 interface{} `yaml:"http_proxy"`
-	HttpsProxy                interface{} `yaml:"https_proxy"`
-	Telemetry                 bool        `yaml:"telemetry"`
-	DisableConsoleThread      bool        `yaml:"disable_console_thread"`
-	DisableConsoleColor       bool        `yaml:"disable_console_color"`
-	CustomHandlers            interface{} `yaml:"custom_handlers"`
-	CustomInfoReactors        interface{} `yaml:"custom_info_reactors"`
-	WatchdogThreshold         int         `yaml:"watchdog_threshold"`
-	HandlerDetection          bool        `yaml:"handler_detection"`
+	PluginDirectories         []string `yaml:"plugin_directories"`
+	CatalogueMetaCacheTtl     int      `yaml:"catalogue_meta_cache_ttl"`
+	CatalogueMetaFetchTimeout int      `yaml:"catalogue_meta_fetch_timeout"`
+	CatalogueMetaUrl          any      `yaml:"catalogue_meta_url"`
+	PluginDownloadUrl         any      `yaml:"plugin_download_url"`
+	PluginDownloadTimeout     int      `yaml:"plugin_download_timeout"`
+	PluginPipInstallExtraArgs any      `yaml:"plugin_pip_install_extra_args"`
+	CheckUpdate               bool     `yaml:"check_update"`
+	AdvancedConsole           bool     `yaml:"advanced_console"`
+	HttpProxy                 any      `yaml:"http_proxy"`
+	HttpsProxy                any      `yaml:"https_proxy"`
+	Telemetry                 bool     `yaml:"telemetry"`
+	DisableConsoleThread      bool     `yaml:"disable_console_thread"`
+	DisableConsoleColor       bool     `yaml:"disable_console_color"`
+	CustomHandlers            any      `yaml:"custom_handlers"`
+	CustomInfoReactors        any      `yaml:"custom_info_reactors"`
+	WatchdogThreshold         int      `yaml:"watchdog_threshold"`
+	HandlerDetection          bool     `yaml:"handler_detection"`
 	Debug                     struct {
 		All          bool `yaml:"all"`
 		Mcdr         bool `yaml:"mcdr"`

@@ -77,10 +77,8 @@ func (p provider) PackageByHash(hashable upstream.Hashable) (
 	}
 
 	ref = types.VersionedPackageRef{
-		PackageRef: types.PackageRef{
-			Name:   types.BarePackageName(mod.Slug),
-			Source: p.Id(),
-		},
+		Name:    types.BarePackageName(mod.Slug),
+		Source:  p.Id(),
 		Eco:     platformFromCurseForgeFile(mod, file),
 		Version: types.BareVersion(file.DisplayName),
 	}

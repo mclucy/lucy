@@ -67,7 +67,7 @@ To run the built binary against a test server directory:
     │   └── <command>/      Large subcommands (compile, info, search), each exposing NewCommand()
     ├── cipher/             ChaCha20Poly1305 encryption for API key embedding
     ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
-    ├── fn/                 Generic helpers: Ternary, Memoize, slice utilities
+    ├── fn/                 Generic helpers: Ternary, slice utilities
     ├── fsutil/             Filesystem helpers: CloseReader, path utilities
     ├── algo/               Graph operations, data structure utilities
     └── networkutil/        Network helpers wrapping cache downloads

@@ -48,7 +48,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 		if f.ReleaseType != 1 {
 			releaseType = "beta"
 		}
-		c := types.CatalogueCandidate{Artifact: types.Artifact{Provider: "curseforge", ProjectID: strconv.FormatInt(id, 10), ReleaseID: strconv.Itoa(int(f.Id)), FileID: strconv.Itoa(int(f.Id)), Version: f.DisplayName, Filename: f.FileName, URL: *f.DownloadUrl, Hashes: hashes}, ReleaseType: releaseType, Published: f.FileDate, Primary: true, Dependencies: []types.ProjectDependency{}}
+		c := types.CatalogueCandidate{Provider: "curseforge", ProjectID: strconv.FormatInt(id, 10), ReleaseID: strconv.Itoa(int(f.Id)), FileID: strconv.Itoa(int(f.Id)), Version: f.DisplayName, Filename: f.FileName, URL: *f.DownloadUrl, Hashes: hashes, ReleaseType: releaseType, Published: f.FileDate, Primary: true, Dependencies: []types.ProjectDependency{}}
 		for _, d := range f.Dependencies {
 			kind := ""
 			switch d.RelationType {

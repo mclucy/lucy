@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -141,8 +142,7 @@ func fetchLatestVersion(gameVersion types.BareVersion) (string, error) {
 	neoPrefix := strings.Join(parts[1:], ".") + "."
 
 	versions := meta.Versioning.Versions
-	for i := len(versions) - 1; i >= 0; i-- {
-		v := versions[i]
+	for _, v := range slices.Backward(versions) {
 		if strings.HasPrefix(v, neoPrefix) {
 			return v, nil
 		}

@@ -19,8 +19,8 @@ func analyzeForgeArgFile(file *os.File) (
 ) {
 	data, _ := fsutil.CopyBytes(file, fsutil.MaxZipEntryBytes)
 	s := string(data)
-	lines := strings.Split(s, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(s, "\n")
+	for line := range lines {
 		if strings.HasPrefix(line, "--fml.forgeVersion") {
 			split := strings.Split(line, " ")
 			if len(split) == 2 {

@@ -54,18 +54,15 @@ func discoverPackages(
 
 		var wg sync.WaitGroup
 		for _, jarPath := range jarFiles {
-			wg.Add(1)
-			go func(path string) {
-				defer wg.Done()
-
-				analyzed, err := artifact.Analyze(path)
+			wg.Go(func() {
+				analyzed, err := artifact.Analyze(jarPath)
 
 				if err != nil || len(analyzed) == 0 {
 					// Only a jar without a readable descriptor needs its upstream
 					// identity, since anything else describes itself.
-					if upstreamRef, hit := resolveUpstream(path); hit {
+					if upstreamRef, hit := resolveUpstream(jarPath); hit {
 						mu.Lock()
-						idx.Add(discoveredFromUpstream(path, upstreamRef))
+						idx.Add(discoveredFromUpstream(jarPath, upstreamRef))
 						mu.Unlock()
 					}
 					return
@@ -75,7 +72,7 @@ func discoverPackages(
 				mu.Lock()
 				idx.Merge(pkgs)
 				mu.Unlock()
-			}(jarPath)
+			})
 		}
 		wg.Wait()
 	}

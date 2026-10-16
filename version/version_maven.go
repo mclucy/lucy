@@ -54,11 +54,8 @@ func (v *MavenVersion) Compare(other types.ResolvableVersion) (int, bool) {
 		return 0, false
 	}
 
-	maxLen := len(v.tokens)
-	if len(o.tokens) > maxLen {
-		maxLen = len(o.tokens)
-	}
-	for i := 0; i < maxLen; i++ {
+	maxLen := max(len(o.tokens), len(v.tokens))
+	for i := range maxLen {
 		left := mavenTokenAt(v.tokens, i, mavenTokenSeparatorAt(o.tokens, i))
 		right := mavenTokenAt(o.tokens, i, mavenTokenSeparatorAt(v.tokens, i))
 		if cmp := compareMavenToken(left, right); cmp != 0 {

@@ -139,12 +139,12 @@ func drainStdin(timeout time.Duration) {
 }
 
 func parseXTVERSIONResponse(data []byte) Protocol {
-	start := bytes.Index(data, []byte(xtversionPrefix))
-	if start < 0 {
+	_, after, ok := bytes.Cut(data, []byte(xtversionPrefix))
+	if !ok {
 		return None
 	}
 
-	payload := data[start+len(xtversionPrefix):]
+	payload := after
 	if end := bytes.Index(payload, []byte(stringTerminator)); end >= 0 {
 		payload = payload[:end]
 	}

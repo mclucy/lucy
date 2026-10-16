@@ -3,11 +3,12 @@ package cache
 import (
 	"crypto/sha256"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -83,11 +84,9 @@ func evictionTargets(entries map[key]*CacheEntry) (
 			},
 		)
 	}
-	sort.Slice(
-		targets, func(i, j int) bool {
-			return targets[i].exp.Before(targets[j].exp)
-		},
-	)
+	slices.SortFunc(targets, func(a, b evictionTarget) int {
+		return a.exp.Compare(b.exp)
+	})
 	return totals, targets
 }
 
@@ -129,15 +128,11 @@ func canonicalizeKey(k string) key {
 
 	if u.RawQuery != "" {
 		params := u.Query()
-		keys := make([]string, 0, len(params))
-		for k := range params {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
+		keys := slices.Sorted(maps.Keys(params))
 		var parts []string
 		for _, k := range keys {
 			vals := params[k]
-			sort.Strings(vals)
+			slices.Sort(vals)
 			for _, v := range vals {
 				parts = append(parts, url.QueryEscape(k)+"="+url.QueryEscape(v))
 			}

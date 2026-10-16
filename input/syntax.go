@@ -26,8 +26,9 @@ func Parse(s string) (types.PackageRequest, error) {
 		return types.PackageRequest{}, err
 	}
 	return types.PackageRequest{
-		PackageRef: types.PackageRef{Name: name, Source: source},
-		Version:    version,
+		Name:    name,
+		Source:  source,
+		Version: version,
 	}, nil
 }
 

@@ -32,11 +32,11 @@ func TestNormalizeCorePackage(t *testing.T) {
 		want    CorePackage
 		ok      bool
 	}{
-		{"bare minecraft alias", PackageRequest{PackageRef: PackageRef{Name: "mc", Source: SourceAuto}}, CoreMinecraft, true},
-		{"case insensitive", PackageRequest{PackageRef: PackageRef{Name: "Paper", Source: SourceAuto}}, CorePaper, true},
-		{"fabric loader alias", PackageRequest{PackageRef: PackageRef{Name: "fabric-loader", Source: SourceAuto}, Eco: EcoFabric}, CoreFabric, true},
-		{"sponge forge alias", PackageRequest{PackageRef: PackageRef{Name: "forge", Source: SourceAuto}, Eco: EcoSponge}, CoreSpongeForge, true},
-		{"regular package", PackageRequest{PackageRef: PackageRef{Name: "fabric-api", Source: SourceAuto}, Eco: EcoFabric}, "", false},
+		{"bare minecraft alias", PackageRequest{Name: "mc", Source: SourceAuto}, CoreMinecraft, true},
+		{"case insensitive", PackageRequest{Name: "Paper", Source: SourceAuto}, CorePaper, true},
+		{"fabric loader alias", PackageRequest{Name: "fabric-loader", Source: SourceAuto, Eco: EcoFabric}, CoreFabric, true},
+		{"sponge forge alias", PackageRequest{Name: "forge", Source: SourceAuto, Eco: EcoSponge}, CoreSpongeForge, true},
+		{"regular package", PackageRequest{Name: "fabric-api", Source: SourceAuto, Eco: EcoFabric}, "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

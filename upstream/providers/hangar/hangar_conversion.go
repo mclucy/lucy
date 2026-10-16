@@ -1,8 +1,8 @@
 package hangar
 
 import (
+	"maps"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/input"
@@ -255,10 +255,5 @@ func firstNonEmpty(values ...string) string {
 }
 
 func sortedMapKeys[T any](m map[string]T) []string {
-	keys := make([]string, 0, len(m))
-	for key := range m {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
+	return slices.Sorted(maps.Keys(m))
 }

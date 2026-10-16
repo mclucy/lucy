@@ -2,11 +2,12 @@ package routing
 
 import (
 	"archive/zip"
+	"cmp"
 	"context"
 	"fmt"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -14,21 +15,24 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+// paperBuild is one build entry from the PaperMC fill API.
+type paperBuild struct {
+	ID        int    `json:"id"`
+	Channel   string `json:"channel"`
+	Downloads map[string]struct {
+		Name      string            `json:"name"`
+		URL       string            `json:"url"`
+		Checksums map[string]string `json:"checksums"`
+	} `json:"downloads"`
+}
+
 func resolvePaper(ctx context.Context, req types.CoreRequest, out *types.CoreResolution) error {
-	var builds []struct {
-		ID        int    `json:"id"`
-		Channel   string `json:"channel"`
-		Downloads map[string]struct {
-			Name      string            `json:"name"`
-			URL       string            `json:"url"`
-			Checksums map[string]string `json:"checksums"`
-		} `json:"downloads"`
-	}
+	var builds []paperBuild
 	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" + req.Minecraft + "/builds"
 	if err := Metadata(ctx, endpoint, &builds); err != nil {
 		return err
 	}
-	sort.Slice(builds, func(i, j int) bool { return builds[i].ID > builds[j].ID })
+	slices.SortFunc(builds, func(a, b paperBuild) int { return cmp.Compare(b.ID, a.ID) })
 	for _, build := range builds {
 		v := strconv.Itoa(build.ID)
 		reason := ""
@@ -186,6 +190,6 @@ func paperclipInput(out *types.CoreResolution, corePath string) error {
 	if fields[2] != expected {
 		return fmt.Errorf("core targets %s, requested Minecraft %s", fields[2], out.Minecraft)
 	}
-	out.Inputs = []types.BootstrapInput{{Path: path.Join("cache", fields[2]), Artifact: types.Artifact{Provider: "mojang", ProjectID: "minecraft", Version: out.Minecraft, Filename: fields[2], URL: fields[1], Hashes: map[string]string{"sha256": fields[0]}}}}
+	out.Inputs = []types.BootstrapInput{{Path: path.Join("cache", fields[2]), Provider: "mojang", ProjectID: "minecraft", Version: out.Minecraft, Filename: fields[2], URL: fields[1], Hashes: map[string]string{"sha256": fields[0]}}}
 	return nil
 }

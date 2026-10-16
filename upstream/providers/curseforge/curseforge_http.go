@@ -16,26 +16,23 @@ import (
 const baseUrl = "https://api.curseforge.com"
 
 var (
-	ApiKey     string
-	apiKeyErr  error
-	apiKeyOnce sync.Once
+	ApiKey string
+
+	loadApiKey = sync.OnceValue(func() error {
+		key, err := cipher.Decode()
+		if err != nil {
+			return fmt.Errorf("curseforge: decode embedded api key: %w", err)
+		}
+		ApiKey = strings.TrimSpace(key)
+		return nil
+	})
 )
 
 // get performs an authenticated GET request to the CurseForge API and
 // unmarshals the JSON response into dest.
 func get(url string, dest any) error {
-	apiKeyOnce.Do(
-		func() {
-			key, err := cipher.Decode()
-			if err != nil {
-				apiKeyErr = fmt.Errorf("curseforge: decode embedded api key: %w", err)
-				return
-			}
-			ApiKey = strings.TrimSpace(key)
-		},
-	)
-	if apiKeyErr != nil {
-		return apiKeyErr
+	if err := loadApiKey(); err != nil {
+		return err
 	}
 
 	if ApiKey == "" {

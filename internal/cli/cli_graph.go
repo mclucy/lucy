@@ -1,8 +1,8 @@
 package cli
 
 import (
+	"cmp"
 	"slices"
-	"sort"
 
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/types"
@@ -180,11 +180,11 @@ func BuildGraphFromLock(lock *lockfile.Document) (*DependencyGraph, error) {
 		}
 	}
 
-	sort.Slice(graph.Roots, func(i, j int) bool {
-		if graph.Roots[i].ID != graph.Roots[j].ID {
-			return graph.Roots[i].ID < graph.Roots[j].ID
+	slices.SortFunc(graph.Roots, func(a, b *GraphNode) int {
+		if c := cmp.Compare(a.ID, b.ID); c != 0 {
+			return c
 		}
-		return graph.Roots[i].key() < graph.Roots[j].key()
+		return cmp.Compare(a.key(), b.key())
 	})
 	return graph, nil
 }
@@ -286,11 +286,11 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 		}
 	}
 
-	sort.Slice(graph.Roots, func(i, j int) bool {
-		if graph.Roots[i].ID != graph.Roots[j].ID {
-			return graph.Roots[i].ID < graph.Roots[j].ID
+	slices.SortFunc(graph.Roots, func(a, b *GraphNode) int {
+		if c := cmp.Compare(a.ID, b.ID); c != 0 {
+			return c
 		}
-		return graph.Roots[i].key() < graph.Roots[j].key()
+		return cmp.Compare(a.key(), b.key())
 	})
 
 	for _, node := range graph.Nodes {
@@ -313,11 +313,9 @@ func (g *DependencyGraph) GetLeaves() []*GraphNode {
 		}
 		leaves = append(leaves, node)
 	}
-	sort.Slice(
-		leaves, func(i, j int) bool {
-			return leaves[i].ID < leaves[j].ID
-		},
-	)
+	slices.SortFunc(leaves, func(a, b *GraphNode) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return leaves
 }
 
@@ -339,7 +337,7 @@ func (g *DependencyGraph) TopologicalSort() []*GraphNode {
 			queue = append(queue, id)
 		}
 	}
-	sort.Strings(queue)
+	slices.Sort(queue)
 
 	result := make([]*GraphNode, 0, len(g.Nodes))
 	for len(queue) > 0 {
@@ -367,11 +365,11 @@ func (g *DependencyGraph) OrderedRoots() []*GraphNode {
 	if sorted == nil {
 		ordered := make([]*GraphNode, 0, len(g.Roots))
 		ordered = append(ordered, g.Roots...)
-		sort.Slice(ordered, func(i, j int) bool {
-			if ordered[i].ID != ordered[j].ID {
-				return ordered[i].ID < ordered[j].ID
+		slices.SortFunc(ordered, func(a, b *GraphNode) int {
+			if c := cmp.Compare(a.ID, b.ID); c != 0 {
+				return c
 			}
-			return ordered[i].key() < ordered[j].key()
+			return cmp.Compare(a.key(), b.key())
 		})
 		return ordered
 	}
@@ -387,8 +385,8 @@ func (g *DependencyGraph) OrderedRoots() []*GraphNode {
 		}
 		ordered = append(ordered, root)
 	}
-	sort.SliceStable(ordered, func(i, j int) bool {
-		return position[ordered[i].key()] < position[ordered[j].key()]
+	slices.SortStableFunc(ordered, func(a, b *GraphNode) int {
+		return cmp.Compare(position[a.key()], position[b.key()])
 	})
 	return ordered
 }

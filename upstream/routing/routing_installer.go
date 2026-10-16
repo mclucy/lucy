@@ -200,7 +200,7 @@ func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.Cor
 				return err
 			}
 			if mapping, ok := detail.Downloads["server_mappings"]; ok {
-				out.Inputs = append(out.Inputs, types.BootstrapInput{Path: "server-mappings.txt", Artifact: types.Artifact{Provider: "mojang", ProjectID: "server-mappings", Version: req.Minecraft, Filename: "server-mappings.txt", URL: mapping.URL, Hashes: map[string]string{"sha1": mapping.SHA1}}})
+				out.Inputs = append(out.Inputs, types.BootstrapInput{Path: "server-mappings.txt", Provider: "mojang", ProjectID: "server-mappings", Version: req.Minecraft, Filename: "server-mappings.txt", URL: mapping.URL, Hashes: map[string]string{"sha1": mapping.SHA1}})
 			}
 			break
 		}

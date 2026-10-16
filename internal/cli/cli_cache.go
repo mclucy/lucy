@@ -2,7 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/cli/message"
@@ -56,11 +56,9 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	sort.Slice(
-		entries, func(i, j int) bool {
-			return entries[i].CreatedAt.After(entries[j].CreatedAt)
-		},
-	)
+	slices.SortFunc(entries, func(a, b *cache.CacheEntry) int {
+		return b.CreatedAt.Compare(a.CreatedAt)
+	})
 
 	out := &terminal.Data{
 		Fields: []terminal.Field{

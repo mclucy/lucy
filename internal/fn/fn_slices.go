@@ -5,15 +5,6 @@ import (
 	"slices"
 )
 
-func Exists[T comparable](arr []T, elem T) bool {
-	for _, v := range arr {
-		if v == elem {
-			return true
-		}
-	}
-	return false
-}
-
 func ForEach[T any](arr []T, fn func(T)) {
 	for _, v := range arr {
 		fn(v)

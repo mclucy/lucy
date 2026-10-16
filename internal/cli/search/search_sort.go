@@ -1,7 +1,8 @@
 package search
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/upstream"
@@ -36,15 +37,15 @@ func applySearchSort(results []upstream.SearchResponse, s SearchSort) {
 	case SearchSortDownloads:
 		for i := range results {
 			items := results[i].Items
-			sort.SliceStable(items, func(a, b int) bool {
-				return items[a].Downloads > items[b].Downloads
+			slices.SortStableFunc(items, func(a, b upstream.SearchResult) int {
+				return cmp.Compare(b.Downloads, a.Downloads)
 			})
 		}
 	case SearchSortNewest:
 		for i := range results {
 			items := results[i].Items
-			sort.SliceStable(items, func(a, b int) bool {
-				return items[a].LastUpdated.After(items[b].LastUpdated)
+			slices.SortStableFunc(items, func(a, b upstream.SearchResult) int {
+				return b.LastUpdated.Compare(a.LastUpdated)
 			})
 		}
 	}

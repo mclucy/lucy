@@ -15,29 +15,29 @@ import (
 //   - https://api.modrinth.com/v2/project/1IjD5062
 //     (Continuity)
 type projectResponse struct {
-	ClientSide       string      `json:"client_side"`
-	ServerSide       string      `json:"server_side"`
-	GameVersions     []string    `json:"game_versions"`
-	Id               string      `json:"id"`
-	Slug             string      `json:"slug"`
-	ProjectType      string      `json:"project_type"`
-	Team             string      `json:"team"`
-	Organization     string      `json:"organization"`
-	Title            string      `json:"title"`
-	Description      string      `json:"description"`
-	Body             string      `json:"body"`
-	BodyUrl          string      `json:"body_url"`
-	Published        time.Time   `json:"published"`
-	Updated          time.Time   `json:"updated"`
-	Approved         time.Time   `json:"approved"`
-	Queued           interface{} `json:"queued"`
-	Status           string      `json:"status"`
-	RequestedStatus  interface{} `json:"requested_status"`
-	ModeratorMessage interface{} `json:"moderator_message"`
+	ClientSide       string    `json:"client_side"`
+	ServerSide       string    `json:"server_side"`
+	GameVersions     []string  `json:"game_versions"`
+	Id               string    `json:"id"`
+	Slug             string    `json:"slug"`
+	ProjectType      string    `json:"project_type"`
+	Team             string    `json:"team"`
+	Organization     string    `json:"organization"`
+	Title            string    `json:"title"`
+	Description      string    `json:"description"`
+	Body             string    `json:"body"`
+	BodyUrl          string    `json:"body_url"`
+	Published        time.Time `json:"published"`
+	Updated          time.Time `json:"updated"`
+	Approved         time.Time `json:"approved"`
+	Queued           any       `json:"queued"`
+	Status           string    `json:"status"`
+	RequestedStatus  any       `json:"requested_status"`
+	ModeratorMessage any       `json:"moderator_message"`
 	License          struct {
-		Id   string      `json:"id"`
-		Name string      `json:"name"`
-		Url  interface{} `json:"url"`
+		Id   string `json:"id"`
+		Name string `json:"name"`
+		Url  any    `json:"url"`
 	} `json:"license"`
 	Downloads            int      `json:"downloads"`
 	Followers            int      `json:"followers"`
@@ -55,10 +55,10 @@ type projectResponse struct {
 		Platform string `json:"platform"`
 		Url      string `json:"url"`
 	} `json:"donation_urls"`
-	Gallery            []interface{} `json:"gallery"`
-	Color              int           `json:"color"`
-	ThreadId           string        `json:"thread_id"`
-	MonetizationStatus string        `json:"monetization_status"`
+	Gallery            []any  `json:"gallery"`
+	Color              int    `json:"color"`
+	ThreadId           string `json:"thread_id"`
+	MonetizationStatus string `json:"monetization_status"`
 }
 
 func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
@@ -192,7 +192,7 @@ type versionResponse struct {
 	Downloads       int                    `json:"downloads"`
 	VersionType     string                 `json:"version_type"`
 	Status          string                 `json:"status"`
-	RequestedStatus interface{}            `json:"requested_status"`
+	RequestedStatus any                    `json:"requested_status"`
 	Files           []fileResponse         `json:"files"`
 	Dependencies    []dependenciesResponse `json:"dependencies"`
 }
@@ -259,9 +259,9 @@ type memberResponse struct {
 	Role         string       `json:"role"`
 	TeamId       string       `json:"team_id"`
 	User         userResponse `json:"user"`
-	Permissions  interface{}  `json:"permissions"`
+	Permissions  any          `json:"permissions"`
 	Accepted     bool         `json:"accepted"`
-	PayoutsSplit interface{}  `json:"payouts_split"`
+	PayoutsSplit any          `json:"payouts_split"`
 	Ordering     int          `json:"ordering"`
 }
 

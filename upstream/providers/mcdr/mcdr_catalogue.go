@@ -29,7 +29,7 @@ func (provider) Candidates(ctx context.Context, project, _ string, loader types.
 		if rel.Prerelease {
 			kind = "beta"
 		}
-		c := types.CatalogueCandidate{Artifact: types.Artifact{Provider: "mcdr", ProjectID: history.Id, ReleaseID: rel.TagName, FileID: strconv.Itoa(rel.Asset.Id), Version: rel.Meta.Version, Filename: rel.Asset.Name, URL: rel.Asset.BrowserDownloadUrl, Hashes: hashes}, ReleaseType: kind, Published: rel.CreatedAt.Format("2006-01-02T15:04:05Z07:00"), Primary: true, Dependencies: []types.ProjectDependency{}}
+		c := types.CatalogueCandidate{Provider: "mcdr", ProjectID: history.Id, ReleaseID: rel.TagName, FileID: strconv.Itoa(rel.Asset.Id), Version: rel.Meta.Version, Filename: rel.Asset.Name, URL: rel.Asset.BrowserDownloadUrl, Hashes: hashes, ReleaseType: kind, Published: rel.CreatedAt.Format("2006-01-02T15:04:05Z07:00"), Primary: true, Dependencies: []types.ProjectDependency{}}
 		if c.ProjectID == "" {
 			c.ProjectID = project
 		}

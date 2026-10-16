@@ -322,7 +322,7 @@ func renderSearchLong(res upstream.SearchResponse) string {
 			desc = strings.ReplaceAll(desc, "\r", "")
 			wrapWidth := min(80, style.TermWidth()) - 2
 			wrapped := lipgloss.Wrap(desc, wrapWidth, "")
-			for _, line := range strings.Split(wrapped, "\n") {
+			for line := range strings.SplitSeq(wrapped, "\n") {
 				sb.WriteString("  " + line + "\n")
 			}
 		}

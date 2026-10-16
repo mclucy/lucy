@@ -115,7 +115,7 @@ func hasConcreteVersion(version types.BareVersion) bool {
 }
 
 func compareForgeMajor(version types.BareVersion, target int) int {
-	major := strings.Split(string(version), ".")[0]
+	major, _, _ := strings.Cut(string(version), ".")
 	if major == "" {
 		return -1
 	}

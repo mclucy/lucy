@@ -11,12 +11,12 @@ import (
 
 var IsTerminal = term.IsTerminal(int(os.Stdout.Fd()))
 
-var ensureTermColorsOnce sync.Once
+var ensureTermColorsOnce = sync.OnceFunc(getTermProfileColors)
 
 // EnsureTermColors lazily initializes UserColors and ValidUserColors
 // exactly once.
 func EnsureTermColors() {
-	ensureTermColorsOnce.Do(getTermProfileColors)
+	ensureTermColorsOnce()
 }
 
 func TermWidth() int {
@@ -37,7 +37,7 @@ func HasDarkBackground() bool {
 }
 
 func getTermProfileColors() {
-	for i := ansi.BasicColor(0); i < 16; i++ {
+	for i := range ansi.BasicColor(16) {
 		c := osc4Query(uint8(i))
 		if c == nil {
 			return

@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
@@ -275,10 +276,8 @@ func appendUniqueEcosystem(
 	ecosystems []types.Ecosystem,
 	ecosystem types.Ecosystem,
 ) []types.Ecosystem {
-	for _, existing := range ecosystems {
-		if existing == ecosystem {
-			return ecosystems
-		}
+	if slices.Contains(ecosystems, ecosystem) {
+		return ecosystems
 	}
 	return append(ecosystems, ecosystem)
 }

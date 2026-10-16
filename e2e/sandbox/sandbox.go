@@ -191,7 +191,7 @@ func listSandboxes(man *manifest, outRoot string) {
 func run(man *manifest, opts options) error {
 	selected := map[string]bool{}
 	if opts.only != "" {
-		for _, id := range strings.Split(opts.only, ",") {
+		for id := range strings.SplitSeq(opts.only, ",") {
 			selected[strings.TrimSpace(id)] = true
 		}
 	}
@@ -426,7 +426,7 @@ func getJSON(url string, target any) error {
 func downloadTo(url string, tmp *os.File) error {
 	client := &http.Client{Timeout: 30 * time.Second}
 	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
+	for range 3 {
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			return err
