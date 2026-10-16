@@ -203,7 +203,8 @@ func publish(
 
 // stagingRelative prefers the workspace staging directory, which keeps a
 // staged payload out of the destination namespace, and falls back to the
-// destination's own directory for a root that is not a workspace.
+// destination's own directory for a root that is not a workspace, or when the
+// staging directory sits on another filesystem than the destination.
 func stagingRelative(root *os.Root, parent string) (string, error) {
 	info, err := root.Stat(WorkspaceMarker)
 	if err == nil {
@@ -213,7 +214,10 @@ func stagingRelative(root *os.Root, parent string) (string, error) {
 		if err := root.MkdirAll(StagingRelative, 0o700); err != nil {
 			return "", fmt.Errorf("create staging directory: %w", err)
 		}
-		return StagingRelative, nil
+		if sameDevice(filepath.Join(root.Name(), StagingRelative), filepath.Join(root.Name(), parent)) {
+			return StagingRelative, nil
+		}
+		return parent, nil
 	}
 	if !errors.Is(err, os.ErrNotExist) {
 		return "", err
@@ -223,7 +227,9 @@ func stagingRelative(root *os.Root, parent string) (string, error) {
 
 // stagingPlan locates the staging root for a destination path: the nearest
 // workspace containing it, so that the publish stays within one filesystem,
-// or the destination's own directory when no workspace contains it.
+// or the destination's own directory when no workspace contains it. A
+// workspace on another filesystem than the destination, such as a nested
+// mount, stages beside the destination instead.
 func stagingPlan(path string) (rootDir, stageRel, destRel string, err error) {
 	dir := filepath.Dir(path)
 	for {
@@ -236,7 +242,10 @@ func stagingPlan(path string) (rootDir, stageRel, destRel string, err error) {
 			if relErr != nil {
 				return "", "", "", relErr
 			}
-			return dir, StagingRelative, relative, nil
+			if sameDevice(filepath.Join(dir, StagingRelative), filepath.Dir(path)) {
+				return dir, StagingRelative, relative, nil
+			}
+			return filepath.Dir(path), ".", filepath.Base(path), nil
 		}
 		if !errors.Is(statErr, os.ErrNotExist) {
 			return "", "", "", statErr
