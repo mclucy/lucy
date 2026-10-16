@@ -300,6 +300,52 @@ func TestCachedDownloadMissThenHitKeepsIndexedFilename(t *testing.T) {
 	}
 }
 
+// Every stored download rewrites the cache index. A mode an operator set on it
+// must survive the rewrite.
+func TestCacheIndexRetainsFileMode(t *testing.T) {
+	fixture := newCacheFixture(t)
+	h := installNetworkCache(t, DefaultCacheConfig())
+	indexPath := filepath.Join(h.dir, manifestFilename)
+
+	first, err := CachedDownload(
+		fixture.artifactURL("first.jar"),
+		t.TempDir(),
+		DownloadOptions{Kind: KindArtifact},
+	)
+	if err != nil {
+		t.Fatalf("first download: %v", err)
+	}
+	if err := first.File.Close(); err != nil {
+		t.Fatalf("close first download: %v", err)
+	}
+	if err := os.Chmod(indexPath, 0o640); err != nil {
+		t.Fatalf("chmod cache index: %v", err)
+	}
+
+	second, err := CachedDownload(
+		fixture.artifactURL("second.jar"),
+		t.TempDir(),
+		DownloadOptions{Kind: KindArtifact},
+	)
+	if err != nil {
+		t.Fatalf("second download: %v", err)
+	}
+	if err := second.File.Close(); err != nil {
+		t.Fatalf("close second download: %v", err)
+	}
+
+	info, err := os.Stat(indexPath)
+	if err != nil {
+		t.Fatalf("stat cache index: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o640 {
+		t.Fatalf("cache index holds mode %04o, want 0640", got)
+	}
+	if entries := h.All(); len(entries) != 2 {
+		t.Fatalf("index holds %d entries, want the two stored downloads", len(entries))
+	}
+}
+
 func TestCachedDownloadCorruptObjectIsRefetchedAndRepaired(t *testing.T) {
 	fixture := newCacheFixture(t)
 	h := installNetworkCache(t, DefaultCacheConfig())
