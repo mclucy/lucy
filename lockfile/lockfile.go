@@ -202,11 +202,18 @@ func cloneForFingerprint(d *Document) *Document {
 	return &clone
 }
 
-func Write(root string, d *Document) error {
+// Snapshot returns the canonical bytes of the document. It writes nothing. A
+// publisher that decides when and where the bytes land takes a snapshot first;
+// Write takes one and publishes it.
+func Snapshot(d *Document) ([]byte, error) {
 	if err := d.Validate(); err != nil {
-		return err
+		return nil, err
 	}
-	data, err := yaml.Marshal(d)
+	return yaml.Marshal(d)
+}
+
+func Write(root string, d *Document) error {
+	data, err := Snapshot(d)
 	if err != nil {
 		return err
 	}

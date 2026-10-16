@@ -197,7 +197,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err := locked.Validate(); err != nil {
 			return result, err
 		}
-		raw, err := yaml.Marshal(locked)
+		raw, err := lockfile.Snapshot(locked)
 		if err != nil {
 			return result, err
 		}
