@@ -26,6 +26,9 @@ func MkdirAllPrivate(path string) error {
 			return err
 		}
 		missing = append(missing, current)
+		if filepath.Dir(current) == current {
+			return fmt.Errorf("filesystem root does not exist: %s: %w", current, err)
+		}
 	}
 	if len(missing) == 0 {
 		return nil
