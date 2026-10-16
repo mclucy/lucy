@@ -247,7 +247,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		return err
 	}
 	journalPath := filepath.Join(root, ".lucy", "commit.yaml")
-	if err := fsutil.AtomicWrite(journalPath, journalBytes); err != nil {
+	if err := fsutil.AtomicWrite(journalPath, journalBytes, 0o600); err != nil {
 		return err
 	}
 	log.Debug(
@@ -299,7 +299,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	if err != nil {
 		return err
 	}
-	if err := fsutil.AtomicWrite(receiptPath, receiptBytes); err != nil {
+	if err := fsutil.AtomicWrite(receiptPath, receiptBytes, 0o600); err != nil {
 		return err
 	}
 	if err := os.Remove(filepath.Join(root, ".lucy", "commit.yaml")); err != nil {

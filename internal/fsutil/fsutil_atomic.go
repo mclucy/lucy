@@ -40,9 +40,9 @@ func RenameRoot(root *os.Root, from, to string) error {
 }
 
 // AtomicWrite replaces a file atomically and retains its permissions.
-// New files are private.
-func AtomicWrite(path string, data []byte) error {
-	mode := os.FileMode(0o600)
+// New files use defaultMode.
+func AtomicWrite(path string, data []byte, defaultMode os.FileMode) error {
+	mode := defaultMode
 	info, err := os.Lstat(path)
 	if err == nil {
 		if !info.Mode().IsRegular() {

@@ -82,7 +82,7 @@ func (idx *index) flush() error {
 		idx.info = nil
 		return fmt.Errorf("encode cache index: %w", err)
 	}
-	if err := fsutil.AtomicWrite(idx.path, data); err != nil {
+	if err := fsutil.AtomicWrite(idx.path, data, 0o600); err != nil {
 		idx.info = nil
 		return fmt.Errorf("publish cache index: %w", err)
 	}

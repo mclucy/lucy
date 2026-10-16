@@ -140,7 +140,7 @@ func writeBisectState(workDir string, session *bisectState) error {
 	if err != nil {
 		return fmt.Errorf("failed to serialize bisect state: %w", err)
 	}
-	if err := fsutil.AtomicWrite(bisectFilePath(workDir), data); err != nil {
+	if err := fsutil.AtomicWrite(bisectFilePath(workDir), data, 0o600); err != nil {
 		return fmt.Errorf("failed to write bisect state: %w", err)
 	}
 	return nil

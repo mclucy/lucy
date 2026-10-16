@@ -145,7 +145,7 @@ func Write(root string, d *Document) error {
 		return err
 	}
 	path := filepath.Join(root, Filename)
-	if err := fsutil.AtomicWrite(path, data); err != nil {
+	if err := fsutil.AtomicWrite(path, data, 0o644); err != nil {
 		return err
 	}
 	log.Info(
