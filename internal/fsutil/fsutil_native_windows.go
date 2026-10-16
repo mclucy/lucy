@@ -45,6 +45,13 @@ func isLockContention(err error) bool {
 		errors.Is(err, windows.ERROR_SHARING_VIOLATION)
 }
 
+// sameDevice reports whether both paths live on one filesystem. Windows
+// volumes make the check unreliable through reparse points, so a publish
+// always stages beside its destination instead.
+func sameDevice(first, second string) bool {
+	return false
+}
+
 func renameRoot(root *os.Root, from, to string, replace bool) (resultErr error) {
 	sourceRoot, err := root.OpenRoot(filepath.Dir(from))
 	if err != nil {
