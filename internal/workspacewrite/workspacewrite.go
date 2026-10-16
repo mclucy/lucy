@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,71 +61,6 @@ func SafePath(root, relative string) error {
 		}
 	}
 	return nil
-}
-
-// CopyRoot keeps incomplete contents out of the destination namespace.
-func CopyRoot(root *os.Root, relative string, reader io.Reader, mode os.FileMode) (resultErr error) {
-	return copyRoot(root, relative, reader, mode, true)
-}
-
-// CopyMissingRoot never replaces a file created during provisioning.
-func CopyMissingRoot(root *os.Root, relative string, reader io.Reader, mode os.FileMode) error {
-	return copyRoot(root, relative, reader, mode, false)
-}
-
-// CopyRootChecked rechecks the destination after staging, immediately before publication.
-func CopyRootChecked(root *os.Root, relative string, reader io.Reader, mode os.FileMode, check func() error) error {
-	return copyRootChecked(root, relative, reader, mode, true, check)
-}
-
-func copyRoot(root *os.Root, relative string, reader io.Reader, mode os.FileMode, replace bool) (resultErr error) {
-	return copyRootChecked(root, relative, reader, mode, replace, nil)
-}
-
-func copyRootChecked(root *os.Root, relative string, reader io.Reader, mode os.FileMode, replace bool, check func() error) (resultErr error) {
-	if !filepath.IsLocal(relative) {
-		return fmt.Errorf("output path must stay inside the workspace")
-	}
-	parent := filepath.Dir(relative)
-	if err := root.MkdirAll(parent, 0o700); err != nil {
-		return err
-	}
-	name := filepath.Join(parent, ".lucy-file-"+rand.Text())
-	file, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if file != nil {
-			resultErr = errors.Join(resultErr, file.Close())
-		}
-		if err := root.Remove(name); err != nil && !errors.Is(err, os.ErrNotExist) {
-			resultErr = errors.Join(resultErr, err)
-		}
-	}()
-	if _, err := io.Copy(file, reader); err != nil {
-		return err
-	}
-	if err := file.Chmod(mode.Perm()); err != nil {
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		return err
-	}
-	if err := file.Close(); err != nil {
-		file = nil
-		return err
-	}
-	file = nil
-	if check != nil {
-		if err := check(); err != nil {
-			return err
-		}
-	}
-	if !replace {
-		return fsutil.RenameRootNoReplace(root, name, relative)
-	}
-	return fsutil.RenameRoot(root, name, relative)
 }
 
 // RemoveRoot persists disappearance from its original name; leftovers are private cleanup data.
@@ -210,7 +144,10 @@ func RecoverInstall(root string) (resultErr error) {
 		if statErr != nil {
 			return errors.Join(statErr, source.Close())
 		}
-		copyErr := CopyRoot(files, name, source, info.Mode().Perm())
+		copyErr := fsutil.WriteRoot(files, name, source, fsutil.WriteOptions{
+			Mode:    info.Mode().Perm(),
+			Replace: true,
+		})
 		if closeErr := source.Close(); copyErr != nil || closeErr != nil {
 			return errors.Join(copyErr, closeErr)
 		}
