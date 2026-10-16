@@ -223,10 +223,12 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 					reject("release mismatch")
 				}
 			}
+			constrained := false
 			for _, req := range r.requirements {
 				if !req.Enabled {
 					continue
 				}
+				constrained = true
 				switch req.Selector {
 				case "stable":
 					if candidate.ReleaseType != "release" {
@@ -250,6 +252,13 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				} else if !candidate.Primary {
 					reject("not the primary file")
 				}
+			}
+			// A dependency request carries no requirement of its own, so no
+			// enabled binding rejects the extra files a release publishes: the
+			// sources and dev jars carry a readable descriptor and would
+			// otherwise win the version race on publication date alone.
+			if !constrained && !candidate.Primary {
+				reject("not the primary file")
 			}
 			if !eligible {
 				log.Debug(

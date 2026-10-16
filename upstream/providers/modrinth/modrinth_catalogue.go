@@ -21,7 +21,12 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 		if !slices.Contains(v.GameVersions, minecraft) || !versionSupportsLoader(v, loader) {
 			continue
 		}
-		for _, f := range v.Files {
+		// Modrinth infers the first file as primary when no file carries the
+		// flag, so a version without a marked primary still must produce a
+		// primary candidate instead of losing every candidate to the check
+		// in resolve.
+		unmarked := !slices.ContainsFunc(v.Files, func(f fileResponse) bool { return f.Primary })
+		for i, f := range v.Files {
 			if f.FileType != "" {
 				continue
 			}
@@ -43,7 +48,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 				Hashes:       hashes,
 				ReleaseType:  v.VersionType,
 				Published:    v.DatePublished.Format("2006-01-02T15:04:05Z07:00"),
-				Primary:      f.Primary,
+				Primary:      f.Primary || (unmarked && i == 0),
 				Dependencies: []types.ProjectDependency{},
 			}
 			for _, d := range v.Dependencies {
