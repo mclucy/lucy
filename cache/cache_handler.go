@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -343,7 +342,7 @@ func clearLegacyCache(dir string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if entry.Name() == manifestFilename || entry.Name() == "cas" || strings.HasPrefix(entry.Name(), ".lucy-write-") {
+		if entry.Name() == manifestFilename || entry.Name() == "cas" || fsutil.IsStagingName(entry.Name()) {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
