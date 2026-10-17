@@ -53,6 +53,18 @@ sandboxes:
         url: https://github.com/Lazy-Bing-Server/WhereIs-MCDR/releases/download/2.2.2/WhereIs-v2.2.2.mcdr
         sha256: 7bc25c11de0560581b27f7f075d096f4176b9eaa8595577ea27b8e6512652251
 
+  - id: neoforge-202
+    family: neoforge
+    game_version: "1.20.2"
+    description: NeoForge 20.2.93 (final build of the 20.2 line), classic layout
+    docs: docs/neoforge.md
+    dirs: [mods]
+    artifacts:
+      - dest: neoforge-20.2.93-installer.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-installer.jar
+      - dest: libraries/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-universal.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-universal.jar
+
   - id: neoforge-211
     family: neoforge
     game_version: "1.21.1"
@@ -63,6 +75,18 @@ sandboxes:
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar
       - dest: libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
+
+  - id: neoforge-2612
+    family: neoforge
+    game_version: "26.1.2"
+    description: NeoForge 26.1.2.122, year-scheme layout
+    docs: docs/neoforge.md
+    dirs: [mods]
+    artifacts:
+      - dest: neoforge-26.1.2.122-installer.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.1.2.122/neoforge-26.1.2.122-installer.jar
+      - dest: libraries/net/neoforged/neoforge/26.1.2.122/neoforge-26.1.2.122-universal.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.1.2.122/neoforge-26.1.2.122-universal.jar
 
   - id: neoforge-262
     family: neoforge
@@ -75,6 +99,48 @@ sandboxes:
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-installer.jar
       - dest: libraries/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
+
+  - id: fabric-executable-1165
+    family: fabric
+    game_version: "1.16.5"
+    description: Executable Server launcher jar for MC 1.16.5 (loader 0.19.5) with Architectury 1.32.68
+    docs: docs/fabric.md
+    dirs: [mods]
+    artifacts:
+      - dest: fabric-server-mc.1.16.5-loader.0.19.5-launcher.1.1.2.jar
+        fabric_meta: { game: "1.16.5", loader: "0.19.5", installer: "1.1.2" }
+        sha256: 74ae8610eb09ef06a375bf8e1b029663020900acf8c8058f840839bb7c8b4653
+      - dest: mods/architectury-1.32.68.jar
+        url: https://cdn.modrinth.com/data/lhGA9TYQ/versions/ScYnvqdx/architectury-1.32.68.jar
+        sha256: d328ee10bbd514c02dee703c523c00286c636a7e40fe67a6fde77e47332c5ea8
+
+  - id: fabric-executable-118
+    family: fabric
+    game_version: "1.18"
+    description: Executable Server launcher jar for MC 1.18 (loader 0.19.5) with Architectury 3.9.66
+    docs: docs/fabric.md
+    dirs: [mods]
+    artifacts:
+      - dest: fabric-server-mc.1.18-loader.0.19.5-launcher.1.1.2.jar
+        fabric_meta: { game: "1.18", loader: "0.19.5", installer: "1.1.2" }
+        sha256: 6449ee3927f50dc0a18c28c3639ccdc74d2ded2f6f91b69c8320b65f35153b7c
+      - dest: mods/architectury-3.9.66.jar
+        url: https://cdn.modrinth.com/data/lhGA9TYQ/versions/3.9.66%2Bfabric/architectury-3.9.66.jar
+        sha256: 22822032b182ca53e7a3448edbd854edeacdecc0cf10e804cb7a4f5dac674c11
+
+  - id: fabric-executable-1211
+    family: fabric
+    game_version: "1.21.1"
+    description: Executable Server launcher jar for MC 1.21.1 (loader 0.19.5) with Architectury 13.0.11
+    docs: docs/fabric.md
+    dirs: [mods]
+    artifacts:
+      - dest: fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar
+        fabric_meta: { game: "1.21.1", loader: "0.19.5", installer: "1.1.2" }
+        sha256: 809d99b16dd4d4b57384d128724ab0d6560f859aaba989dc6750d8437a447ed0
+      - dest: mods/architectury-13.0.11-fabric.jar
+        url: https://cdn.modrinth.com/data/lhGA9TYQ/versions/Pzc2FP5K/architectury-13.0.11-fabric.jar
+        sha256: ab17d5c7d8d8c93cc713437ed426f0ff0d6f802a48fff0c579a9bd3aaa833efd
 
   - id: fabric-executable-1214
     family: fabric
@@ -155,6 +221,81 @@ sandboxes:
 
   # Forge
 
+  - id: forge-1710
+    family: forge
+    game_version: "1.7.10"
+    description: Legacy Forge 1.7.10 installer layout; fixture only, excluded from the probe suite
+    docs: docs/forge.md
+    dirs: [mods]
+    artifacts:
+      - dest: forge-1.7.10-10.13.4.1614-1.7.10-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10-universal.jar
+      - dest: forge-1.7.10-10.13.4.1614-1.7.10-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10-installer.jar
+
+  - id: forge-1122
+    family: forge
+    game_version: "1.12.2"
+    description: Forge 1.12.2-14.23.5.2859 recommended, late legacy universal-only era
+    docs: docs/forge.md
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/1.12.2-14.23.5.2859/forge-1.12.2-14.23.5.2859-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.12.2-14.23.5.2859/forge-1.12.2-14.23.5.2859-universal.jar
+      - dest: forge-1.12.2-14.23.5.2859-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.12.2-14.23.5.2859/forge-1.12.2-14.23.5.2859-installer.jar
+
+  - id: forge-1144
+    family: forge
+    game_version: "1.14.4"
+    description: Forge 1.14.4-28.2.26 recommended, 1.14-series representative
+    docs: docs/forge.md
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/1.14.4-28.2.26/forge-1.14.4-28.2.26-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.14.4-28.2.26/forge-1.14.4-28.2.26-universal.jar
+      - dest: forge-1.14.4-28.2.26-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.14.4-28.2.26/forge-1.14.4-28.2.26-installer.jar
+
+  - id: forge-1165
+    family: forge
+    game_version: "1.16.5"
+    description: Forge 1.16.5-36.2.34 recommended with Architectury 1.32.68
+    docs: docs/forge.md
+    dirs: [mods]
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/1.16.5-36.2.34/forge-1.16.5-36.2.34-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.16.5-36.2.34/forge-1.16.5-36.2.34-universal.jar
+      - dest: forge-1.16.5-36.2.34-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.16.5-36.2.34/forge-1.16.5-36.2.34-installer.jar
+      - dest: mods/architectury-1.32.68.jar
+        url: https://cdn.modrinth.com/data/lhGA9TYQ/versions/Zw57dVyl/architectury-1.32.68.jar
+        sha256: e240c66919e3920d864de30138f0790072fdd72e3a27b69ba2865ab92153fba3
+
+  - id: forge-118
+    family: forge
+    game_version: "1.18"
+    description: Forge 1.18-38.0.17 recommended with Architectury 3.9.66
+    docs: docs/forge.md
+    dirs: [mods]
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/1.18-38.0.17/forge-1.18-38.0.17-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.18-38.0.17/forge-1.18-38.0.17-universal.jar
+      - dest: forge-1.18-38.0.17-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.18-38.0.17/forge-1.18-38.0.17-installer.jar
+      - dest: mods/architectury-3.9.66.jar
+        url: https://cdn.modrinth.com/data/lhGA9TYQ/versions/3.9.66%2Bforge/architectury-3.9.66.jar
+        sha256: 39b5cd11fa64977ee2ed0d0b990de6c36bc3c67e033197ffc66e40d7ea7b0bb4
+
+  - id: forge-1192
+    family: forge
+    game_version: "1.19.2"
+    description: Forge 1.19.2-43.5.0 recommended, pre-shim era representative
+    docs: docs/forge.md
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/1.19.2-43.5.0/forge-1.19.2-43.5.0-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.19.2-43.5.0/forge-1.19.2-43.5.0-universal.jar
+      - dest: forge-1.19.2-43.5.0-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.19.2-43.5.0/forge-1.19.2-43.5.0-installer.jar
+
   - id: forge-1201
     family: forge
     game_version: "1.20.1"
@@ -165,6 +306,19 @@ sandboxes:
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
       - dest: forge-1.20.1-47.4.10-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar
+
+  - id: forge-1211
+    family: forge
+    game_version: "1.21.1"
+    description: Forge 1.21.1-52.1.0 recommended, shim-era with universal fallback
+    docs: docs/forge.md
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/1.21.1-52.1.0/forge-1.21.1-52.1.0-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.1-52.1.0/forge-1.21.1-52.1.0-universal.jar
+      - dest: libraries/net/minecraftforge/forge/1.21.1-52.1.0/forge-1.21.1-52.1.0-shim.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.1-52.1.0/forge-1.21.1-52.1.0-shim.jar
+      - dest: forge-1.21.1-52.1.0-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.1-52.1.0/forge-1.21.1-52.1.0-installer.jar
 
   - id: forge-12111
     family: forge
@@ -178,6 +332,19 @@ sandboxes:
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-shim.jar
       - dest: forge-1.21.11-61.2.0-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-installer.jar
+
+  - id: forge-2612
+    family: forge
+    game_version: "26.1.2"
+    description: Forge 26.1.2-64.1.0 recommended, shim-era year-scheme line
+    docs: docs/forge.md
+    artifacts:
+      - dest: libraries/net/minecraftforge/forge/26.1.2-64.1.0/forge-26.1.2-64.1.0-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.1.0/forge-26.1.2-64.1.0-universal.jar
+      - dest: libraries/net/minecraftforge/forge/26.1.2-64.1.0/forge-26.1.2-64.1.0-shim.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.1.0/forge-26.1.2-64.1.0-shim.jar
+      - dest: forge-26.1.2-64.1.0-installer.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.1.0/forge-26.1.2-64.1.0-installer.jar
 
   # Vanilla
 
@@ -352,3 +519,46 @@ sandboxes:
       - dest: mohist.jar
         manual: true
         sha256: cbefdc9230b714c784dafaf74c83f55d8c4ec049dc41561c4e9b2d5766d05941
+
+  # Cross-loader bridges
+
+  - id: kilt-211
+    family: kilt
+    game_version: "1.21.1"
+    description: Fabric 1.21.1 server with Kilt 21.1.15, Fabric API 0.116.17, Architectury 13.0.11
+    docs: docs/bridges.md
+    dirs: [mods]
+    artifacts:
+      - dest: fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar
+        fabric_meta: { game: "1.21.1", loader: "0.19.5", installer: "1.1.2" }
+        sha256: 809d99b16dd4d4b57384d128724ab0d6560f859aaba989dc6750d8437a447ed0
+      - dest: mods/Kilt-21.1.15.jar
+        url: https://cdn.modrinth.com/data/t87XZEqv/versions/FVVpTWMd/Kilt-21.1.15.jar
+        sha256: 2fb34b2792b0c9aafea72df1289a5e6a829f18170a4c3dc402b28112eb64ca68
+      - dest: mods/fabric-api-0.116.17+1.21.1.jar
+        url: https://cdn.modrinth.com/data/P7dR8mSH/versions/Mys3P7lK/fabric-api-0.116.17%2B1.21.1.jar
+        sha256: 79ac44b40780acbd884b34c50be1e39af682847e5f5cb3b1fddeeaa768dce800
+      - dest: mods/architectury-13.0.11-fabric.jar
+        url: https://cdn.modrinth.com/data/lhGA9TYQ/versions/Pzc2FP5K/architectury-13.0.11-fabric.jar
+        sha256: ab17d5c7d8d8c93cc713437ed426f0ff0d6f802a48fff0c579a9bd3aaa833efd
+
+  - id: connector-211
+    family: connector
+    game_version: "1.21.1"
+    description: NeoForge 1.21.1 server with Sinytra Connector 2.0.0-beta.17, Forgified Fabric API, Architectury 13.0.11
+    docs: docs/bridges.md
+    dirs: [mods]
+    artifacts:
+      - dest: neoforge-21.1.248-installer.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar
+      - dest: libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
+      - dest: mods/connector-2.0.0-beta.17+1.21.1-full.jar
+        url: https://cdn.modrinth.com/data/u58R1TMW/versions/IITF0PRC/connector-2.0.0-beta.17%2B1.21.1-full.jar
+        sha256: ca70b57df3a7a4e8d211fea7ff3ae77e768482af374f26bf953ff5fd755564f0
+      - dest: mods/forgified-fabric-api-0.116.15+2.3.6+1.21.1.jar
+        url: https://cdn.modrinth.com/data/Aqlf1Shp/versions/C4eskNuR/forgified-fabric-api-0.116.15%2B2.3.6%2B1.21.1.jar
+        sha256: bcbb5d8479032690d53debfcf61c0477080ff6d1d4dae9a9a85122b47377646a
+      - dest: mods/architectury-13.0.11-neoforge.jar
+        url: https://cdn.modrinth.com/data/lhGA9TYQ/versions/1IiqEQGl/architectury-13.0.11-neoforge.jar
+        sha256: 9cc92f2c09533fc5482c60f993bd891c655a0e32b637037cdcb7c2b23adedeeb
