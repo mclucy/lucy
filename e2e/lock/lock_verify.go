@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -39,16 +40,18 @@ type lockedArtifact struct {
 	Modules   []lockedModule    `yaml:"modules"`
 }
 
+type lockedModuleDependency struct {
+	ID         string `yaml:"id"`
+	Kind       string `yaml:"kind"`
+	Constraint string `yaml:"constraint"`
+}
+
 type lockedModule struct {
-	ID           string   `yaml:"id"`
-	Version      string   `yaml:"version"`
-	Member       string   `yaml:"member"`
-	Provides     []string `yaml:"provides"`
-	Dependencies []struct {
-		ID         string `yaml:"id"`
-		Kind       string `yaml:"kind"`
-		Constraint string `yaml:"constraint"`
-	} `yaml:"dependencies"`
+	ID           string                   `yaml:"id"`
+	Version      string                   `yaml:"version"`
+	Member       string                   `yaml:"member"`
+	Provides     []string                 `yaml:"provides"`
+	Dependencies []lockedModuleDependency `yaml:"dependencies"`
 }
 
 type lockedPackage struct {
@@ -184,7 +187,8 @@ func verifyRuntimeFiles(root string, scenario lockScenario) error {
 		if err != nil {
 			return fmt.Errorf("required runtime file %s: %w", relative, err)
 		}
-		if relative == "run.sh" && info.Mode().Perm()&0o111 == 0 {
+		// Only platforms with Unix permission bits express launcher executability.
+		if runtime.GOOS != "windows" && relative == "run.sh" && info.Mode().Perm()&0o111 == 0 {
 			return fmt.Errorf("generated launcher %s is not executable", relative)
 		}
 	}
@@ -213,6 +217,17 @@ func verifyRuntimeFiles(root string, scenario lockScenario) error {
 	return nil
 }
 
+// declaredPackageLoader finds the manifest loader map that pins a package
+// reference. A reference belongs to exactly one loader in a manifest.
+func declaredPackageLoader(declared manifestIntent, reference string) (string, bool) {
+	for loader, packages := range declared.Server.Packages {
+		if _, ok := packages[reference]; ok {
+			return loader, true
+		}
+	}
+	return "", false
+}
+
 func verifyPackages(root, oracle string, declared manifestIntent, expected []packageExpectation, packages []lockedPackage) error {
 	seen := make(map[string]bool, len(packages))
 	for _, pkg := range packages {
@@ -227,25 +242,38 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 		if pkg.Provider != "modrinth" || pkg.Runtime != "server" {
 			return fmt.Errorf("project %s has incorrect provider or runtime", pkg.ProjectID)
 		}
-		if pkg.Loader != "fabric" {
-			return fmt.Errorf("project %s has incorrect loader", pkg.ProjectID)
+		if want.reference == "" {
+			if pkg.Loader != want.loader {
+				return fmt.Errorf("project %s has incorrect loader", pkg.ProjectID)
+			}
+			if len(pkg.Requirements) != 0 {
+				return fmt.Errorf("transitively pulled project %s carries manifest requirements", pkg.ProjectID)
+			}
+		} else {
+			loader, found := declaredPackageLoader(declared, want.reference)
+			if !found {
+				return fmt.Errorf("scenario declares no selector for project %s", pkg.ProjectID)
+			}
+			if pkg.Loader != loader {
+				return fmt.Errorf("project %s has incorrect loader", pkg.ProjectID)
+			}
+			selector := declared.Server.Packages[loader][want.reference]
+			if pkg.Version != selector || !slices.ContainsFunc(pkg.Requirements, func(req struct {
+				Reference string `yaml:"reference"`
+				Selector  string `yaml:"selector"`
+				Enabled   bool   `yaml:"enabled"`
+			},
+			) bool {
+				return req.Reference == want.reference && req.Selector == selector && req.Enabled
+			}) {
+				return fmt.Errorf("project %s lost its exact manifest selector %q", pkg.ProjectID, selector)
+			}
 		}
 		if pkg.ReleaseID != want.releaseID || pkg.FileID != want.fileID {
 			return fmt.Errorf("project %s has incorrect release or file identity", pkg.ProjectID)
 		}
 		if pkg.Filename != want.filename {
 			return fmt.Errorf("project %s has incorrect filename", pkg.ProjectID)
-		}
-		selector := declared.Server.Packages["fabric"][want.reference]
-		if pkg.Version != selector || !slices.ContainsFunc(pkg.Requirements, func(req struct {
-			Reference string `yaml:"reference"`
-			Selector  string `yaml:"selector"`
-			Enabled   bool   `yaml:"enabled"`
-		},
-		) bool {
-			return req.Reference == want.reference && req.Selector == selector && req.Enabled
-		}) {
-			return fmt.Errorf("project %s lost its exact manifest selector %q", pkg.ProjectID, selector)
 		}
 		path := filepath.Join(root, "mods", pkg.Filename)
 		switch {
@@ -261,7 +289,7 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 		if err := verifyLockedFile(path, pkg.lockedArtifact); err != nil {
 			return err
 		}
-		if err := verifyNativeModules(pkg); err != nil {
+		if err := verifyNativeModules(pkg, want.modules); err != nil {
 			return err
 		}
 	}
@@ -271,40 +299,41 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 	return nil
 }
 
-func verifyNativeModules(pkg lockedPackage) error {
-	id, version, member := "fabric-api-base", "0.4.54+b47eab6b04", "META-INF/jars/fabric-api-base-0.4.54+b47eab6b04.jar"
-	if pkg.ProjectID == "Si383TIH" {
-		id, version, member = "lingua_bib", "1.21.4-1.0.3", "META-INF/jars/lingua_bib-1.21.4-1.0.3-fabric.jar"
-		flan := slices.IndexFunc(pkg.Modules, func(module lockedModule) bool { return module.ID == "flan" })
-		if flan < 0 || pkg.Modules[flan].Version != "1.21.4-1.11.7.b" {
-			return fmt.Errorf("flan lock lost its native module version")
+// verifyNativeModules checks the embedded modules a scenario pins for a locked
+// package. Expectations live in the scenario table so each project carries its
+// own alias and jar-in-jar assertions instead of a hard-coded project id.
+func verifyNativeModules(pkg lockedPackage, expected []moduleExpectation) error {
+	for _, want := range expected {
+		index := slices.IndexFunc(pkg.Modules, func(module lockedModule) bool {
+			return module.ID == want.id
+		})
+		if index < 0 {
+			return fmt.Errorf("project %s lock lost native module %s", pkg.ProjectID, want.id)
 		}
-		found := false
-		for _, dependency := range pkg.Modules[flan].Dependencies {
-			if dependency.ID != "fabric" || dependency.Kind != "required" {
-				continue
-			}
-			if dependency.Constraint == ">=0.119.2+1.21.4" {
-				found = true
-			}
+		module := pkg.Modules[index]
+		version := want.version
+		if version == "" {
+			version = pkg.Version
 		}
-		if !found {
-			return fmt.Errorf("flan lock lost its required dependency on the Fabric API alias")
+		if module.Version != version {
+			return fmt.Errorf("project %s native module %s has version %q, want %q", pkg.ProjectID, want.id, module.Version, version)
 		}
-	} else {
-		api := slices.IndexFunc(pkg.Modules, func(module lockedModule) bool { return module.ID == "fabric-api" })
-		if api < 0 {
-			return fmt.Errorf("fabric api lock omitted its native module")
+		if want.member != "" && module.Member != want.member {
+			return fmt.Errorf("project %s native module %s has member %q, want %q", pkg.ProjectID, want.id, module.Member, want.member)
 		}
-		if pkg.Modules[api].Version != pkg.Version || !slices.Contains(pkg.Modules[api].Provides, "fabric") {
-			return fmt.Errorf("fabric api lock lost its native identity or provided alias")
+		if want.provides != "" && !slices.Contains(module.Provides, want.provides) {
+			return fmt.Errorf("project %s native module %s lost provided alias %s", pkg.ProjectID, want.id, want.provides)
 		}
-	}
-	if !slices.ContainsFunc(pkg.Modules, func(module lockedModule) bool {
-		matchesIDAndVersion := module.ID == id && module.Version == version
-		return matchesIDAndVersion && module.Member == member
-	}) {
-		return fmt.Errorf("project %s lock lost embedded module %s", pkg.ProjectID, id)
+		if want.dependency == nil {
+			continue
+		}
+		if !slices.ContainsFunc(module.Dependencies, func(dependency lockedModuleDependency) bool {
+			return dependency.ID == want.dependency.id &&
+				dependency.Kind == want.dependency.kind &&
+				dependency.Constraint == want.dependency.constraint
+		}) {
+			return fmt.Errorf("project %s native module %s lost its %s dependency", pkg.ProjectID, want.id, want.dependency.id)
+		}
 	}
 	return nil
 }
