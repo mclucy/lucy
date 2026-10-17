@@ -1,0 +1,7 @@
+manifest_version: 1
+server:
+  minecraft: "1.16.5"
+  directory: server
+  core:
+    distribution: fabric
+    version: "0.19.5"
