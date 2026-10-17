@@ -1,0 +1,7 @@
+manifest_version: 1
+server:
+  minecraft: "1.14.4"
+  directory: server
+  core:
+    distribution: forge
+    version: "28.2.26"

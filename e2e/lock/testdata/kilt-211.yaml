@@ -1,0 +1,12 @@
+manifest_version: 1
+server:
+  minecraft: "1.21.1"
+  directory: server
+  core:
+    distribution: fabric
+    version: "0.19.5"
+  packages:
+    fabric:
+      modrinth:kilt: "21.1.15"
+      modrinth:fabric-api: "0.116.17+1.21.1"
+      modrinth:architectury-api: "13.0.11+fabric"

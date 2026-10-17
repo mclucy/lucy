@@ -1,0 +1,7 @@
+manifest_version: 1
+server:
+  minecraft: "1.20.2"
+  directory: server
+  core:
+    distribution: neoforge
+    version: "20.2.93"
