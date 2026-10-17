@@ -1,0 +1,12 @@
+manifest_version: 1
+server:
+  minecraft: "1.21.1"
+  directory: server
+  core:
+    distribution: neoforge
+    version: "21.1.248"
+  packages:
+    neoforge:
+      modrinth:connector: "2.0.0-beta.17+1.21.1"
+      modrinth:forgified-fabric-api: "0.116.15+2.3.6+1.21.1"
+      modrinth:architectury-api: "13.0.11+neoforge"
