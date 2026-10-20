@@ -3,7 +3,7 @@ title: "lucy info"
 description: "Display information about a package or local artifact file"
 ---
 
-`lucy info` fetches and displays metadata for a package from an upstream registry, or reads a local file's embedded metadata and identifies it by hash.
+`lucy info` fetches and displays metadata for a mod or plugin from a package source, or reads a local file's embedded metadata.
 
 ```bash
 lucy info <package|file>
@@ -19,11 +19,11 @@ lucy info ./plugins/luckperms.jar
 ## Arguments
 
 <ParamField path="package|file" type="string" required>
-  Either a package reference or a path to a local artifact file.
+  Either a package reference or a path to a local file.
 
-  **Remote reference** — a `provider:project` identifier such as `modrinth:lithium` or `curseforge:238222`, optionally with an exact version: `modrinth:fabric-api@0.100.8`. Without a provider, `lucy` queries the applicable sources and returns the first match.
+  **Remote reference** — a `modrinth:project` or `curseforge:project` identifier such as `modrinth:lithium` or `curseforge:238222`, optionally with an exact version: `modrinth:fabric-api@0.100.8`. Without a prefix, `lucy` queries the applicable package sources and returns the first match. No `lucy-lock.yaml` is required.
 
-  **Local file** — a path to a `.jar`, `.zip`, `.pyz`, or `.mcdr` file. Reads embedded metadata directly from the archive, then asks the upstream sources whether any project matches the file's SHA-256. A match contributes that project's resolved metadata and its `provider:project` reference. No `lucy-lock.yaml` is required.
+  **Local file** — a path to a `.jar`, `.pyz`, or `.mcdr` file. Lucy reads the embedded mod or plugin descriptor (`fabric.mod.json`, `mods.toml`, `plugin.yml`, MCDR metadata, and so on) and displays the declared metadata: name, version, description, authors, dependencies, and links.
 </ParamField>
 
 ## Flags
@@ -34,8 +34,8 @@ lucy info ./plugins/luckperms.jar
 
 ## Local file inspection
 
-When given a file path, `lucy info` reads the embedded mod or plugin descriptor (`fabric.mod.json`, `mods.toml`, `plugin.yml`, etc.) and displays its declared metadata: name, version, description, authors, dependencies, and links.
+Local inspection works without a lock file or a running server. Lucy opens the archive, reads each recognized descriptor, and reports what the file declares.
 
-After reading the descriptor, `lucy` looks up the file's SHA-256 on the upstream sources. When a project matches, its metadata is merged over the local descriptor and shown with the `provider:project` reference you would use with `lucy add`. This step makes network requests. A file that matches nothing upstream — including one Lucy did not install — is reported from its own descriptor alone, with a warning.
+When the file matches a project in an upstream source, Lucy may merge that project's metadata over the local descriptor and show the `modrinth:project` reference you would use with [`lucy add`](/commands/add). That lookup is best-effort and makes network requests. A file that matches nothing upstream is reported from its own descriptor, with a warning.
 
-See also [Global Flags](/commands/global-flags).
+See also [Global Flags](/commands/global-flags) and [`lucy search`](/commands/search).

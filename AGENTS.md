@@ -24,6 +24,11 @@ task clean:release      # Remove release/ only
 task cipher:generate    # Generate cipher files from CF_API_KEY env var
 task ci:test            # CI checks (optional cipher:generate, then check)
 task ci:build           # CI release build + gzip artifacts
+task e2e:status         # Probe generated sandboxes with the built CLI
+task e2e:install        # Run fresh-install scenarios against pinned fixtures
+task e2e:compile        # Compile pinned repository fixtures
+task sandboxes:list     # List sandbox definitions
+task sandboxes:gen      # Materialize sandboxes into .sandboxes/
 ```
 
 Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/`ciphertextB`) plus optional release identity (`releaseVersion`/`releaseCommit`). Dotenv loads `.env`, `.cipher_key`, `.cipher_ciphertext`. See `docs/shared/cipher-key-operations.md`.
@@ -42,25 +47,28 @@ To run the built binary against a test server directory:
 ```text
 .
 ├── cmd/                    Root wiring (cmd_root.go) + thin Cobra subcommands
-├── types/                  Pure domain types
-├── manifest/               Required server intent and optional MCDR wrapper
-├── lockfile/               Flattened exact runtime, artifacts, and native modules
+├── types/                  Pure domain types: ecosystems, products, dependencies, artifacts
+├── manifest/               Declared server intent: Minecraft, server product, requirements
+├── lockfile/               Flattened resolved environment, artifacts, and descriptor modules
+├── operation/              Command orchestration: init, add, remove, sync
+├── install/                Convergence engine: lock replay, staged bootstrap, receipts, rollback
 ├── upstream/               Atomic capability interfaces: Searcher, Informer, etc.
-│   └── providers/          Modrinth, CurseForge, GitHub, MCDR, Hangar, Spiget, Fabric, etc.
-├── workspace/              Runtime detection — server platform, version, installed mods
+│   └── providers/          Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
+├── workspace/              Live runtime observation — server product, version, installed packages
 │   └── detector/           Declarative runtime node detection
-├── install/                Lock replay, staged bootstrap, ownership receipt, rollback
-├── bootstrap/              Pinned native server installation profiles
-├── resolve/                Catalogue selection and native dependency validation
+├── bootstrap/              Pinned server product bootstrap profiles
+├── resolve/                Catalogue selection and descriptor dependency validation
 ├── input/                  Trust boundary for external input, package ref parsing
-├── cache/                  Three-layer network cache: store, index, policy
+├── cache/                  Network cache request metadata and expiration policy
+├── cas/                    Content-addressed storage for cached bytes
 ├── version/                Version parsing: semver, Minecraft release/snapshot, Maven ranges
-├── artifact/               Jar metadata analysis: fabric.mod.json, mods.toml, plugin.yml
+├── artifact/               Archive metadata analysis: fabric.mod.json, mods.toml, plugin.yml
 ├── log/                    Operational diagnostics
 ├── report/                 User-facing messages
 ├── terminal/               Terminal rendering via the Charm stack
 ├── github/                 Shared GitHub API infra
 └── internal/
+    ├── buildrepo/           Gradle build and project discovery for compile
     ├── cli/                Shared CLI plumbing: flags,
     │   │                   dependency graph/data source, shell completion,
     │   │                   lock-context shorthand
@@ -69,7 +77,7 @@ To run the built binary against a test server directory:
     ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
     ├── fn/                 Generic helpers: Ternary, slice utilities
     ├── fsutil/             Filesystem helpers: CloseReader, path utilities
-    ├── algo/               Graph operations, data structure utilities
+    ├── toolchain/          Local Git, Java, and Gradle discovery
     └── networkutil/        Network helpers wrapping cache downloads
 ```
 
@@ -98,9 +106,12 @@ A new interactive surface ships with its flag equivalent in the same change. Use
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
 4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 
-The domain suites run with `task e2e:init -- <sandbox ids>` and
-`task e2e:compile -- [fixture ids]`. Shared selection and reporting lives in
-`e2e/internal/testkit`; the compile suite defaults to all repository fixtures.
+The domain suites run with `task e2e:status -- <sandbox ids>` and
+`task e2e:install -- [scenario ids]`, or directly with
+`go run ./e2e/status <sandbox ids>` and `go run ./e2e/install [scenario ids]`.
+`task e2e:compile -- [fixture ids]` runs the compile fixtures. Shared selection
+and reporting lives in `e2e/internal/testkit`; the install suite defaults to
+all scenarios, and the compile suite defaults to all repository fixtures.
 
 ### Sandbox CLI
 
@@ -121,7 +132,7 @@ The CLI is idempotent:
 - Existing sandbox dirs are skipped without `--force`
 - Every artifact digest is verified after fetch and generation aborts that sandbox on mismatch
 - Missing manual artifacts fail with the exact drop-in path and expected sha256.
-- No binary is committed to the repository; fixtures that are not real servers pin their digests in `e2e/lock` instead.
+- No binary is committed to the repository; fixtures that are not real servers pin their digests in `e2e/testdata/sandboxes/sandboxes.yaml` instead.
 
 ## Comments
 
