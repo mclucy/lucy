@@ -109,15 +109,18 @@ The domain suites are Go tests behind the `e2e` build tag, so `go test ./...`
 stays unit-only. Build Lucy and generate the sandboxes first, then:
 
 ```bash
-go test -tags e2e -count=1 ./e2e/status    # probe .sandboxes
+go test -tags e2e -count=1 ./e2e/status    # probe and initialize .sandboxes
 go test -tags e2e -count=1 ./e2e/compile   # compile e2e/testdata/repo fixtures
 go test -tags e2e -count=1 ./e2e/install   # fresh installs
 ```
 
 Select cases with `-run`: `-run 'TestProbe/<sandbox id>'`,
-`-run 'TestCompile/<fixture id>'`, `-run 'TestInstall/<scenario id>'`. A suite
+`-run 'TestInitialize/<modpack id>'`, `-run 'TestCompile/<fixture id>'`, and
+`-run 'TestInstall/<scenario id>'`. A suite
 covers every case in its table and fails when its binary or a sandbox is
-missing; probes that need manually supplied artifacts skip instead. `-count=1`
+missing; probes that need manually supplied artifacts skip instead.
+`TestInitialize` runs `lucy init` in a clone of each modpack sandbox and
+checks the manifest that the CLI writes. `-count=1`
 disables the test cache, `-parallel N` bounds concurrency, and `-lucy` and
 `-sandboxes` override the `dist/lucy` and `.sandboxes` defaults.
 `e2e/internal/testkit` resolves those paths; `task e2e:status|compile|install` wrap

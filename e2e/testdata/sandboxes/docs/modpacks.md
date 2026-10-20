@@ -18,12 +18,20 @@ files.
 Generation verifies each downloaded file against the sha512 in the pack
 index. The pack archive itself is pinned by sha256 in the manifest.
 
-## Lock fixture
+## Initialization
 
-`e2e/lock/testdata/cobblemon-1211.yaml` translates part of the Cobblemon pack
+`TestInitialize` clones each sandbox, runs `lucy init --no-interactive`, and
+checks the manifest. The initializer identifies the loader from its artifacts
+and resolves every mod jar by hash, so the generated package list is the
+translation of the pack. Client-only jars are left out.
+
+## Install fixture
+
+`e2e/install/testdata/cobblemon-1211.yaml` translates part of the Cobblemon pack
 into a Lucy manifest. Every entry names the Modrinth slug and the exact pack
-version. `cobblemon-1211.packages.yaml` pins the project, release, file, and
-digest that install must produce.
+version. The pinned versions match the `TestInitialize` output.
+`cobblemon-1211.packages.yaml` pins the project, release, file, and digest
+that install must produce.
 
 The lock subset leaves out two groups:
 
