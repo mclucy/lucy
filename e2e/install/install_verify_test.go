@@ -160,7 +160,7 @@ func (scenario installScenario) verify(root, oracle string, declared manifestInt
 	if err := verifyRuntimeFiles(live, scenario); err != nil {
 		return err
 	}
-	if err := verifyPackages(live, oracle, declared, scenario.packages, locked.Packages); err != nil {
+	if err := verifyPackages(live, oracle, declared, scenario.packages, locked.Packages, scenario.product); err != nil {
 		return err
 	}
 	return nil
@@ -218,11 +218,11 @@ func verifyRuntimeFiles(root string, scenario installScenario) error {
 	return nil
 }
 
-func verifyPackages(root, oracle string, declared manifestIntent, expected []packageExpectation, packages []lockedPackage) error {
+func verifyPackages(root, oracle string, declared manifestIntent, expected []packageExpectation, packages []lockedPackage, loader string) error {
 	seen := make(map[string]bool, len(packages))
 	for _, pkg := range packages {
 		index := slices.IndexFunc(expected, func(want packageExpectation) bool {
-			return pkg.ProjectID == want.projectID
+			return pkg.ProjectID == want.ProjectID
 		})
 		if index < 0 || seen[pkg.ProjectID] {
 			return fmt.Errorf("unexpected or duplicated locked project %q", pkg.ProjectID)
@@ -232,30 +232,33 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 		if pkg.Provider != "modrinth" || pkg.Environment != "server" {
 			return fmt.Errorf("project %s has incorrect provider or environment", pkg.ProjectID)
 		}
-		if pkg.Ecosystem != "fabric" {
+		if pkg.Ecosystem != loader {
 			return fmt.Errorf("project %s has incorrect ecosystem", pkg.ProjectID)
 		}
-		if pkg.ReleaseID != want.releaseID || pkg.FileID != want.fileID {
+		if pkg.ReleaseID != want.ReleaseID || pkg.FileID != want.FileID {
 			return fmt.Errorf("project %s has incorrect release or file identity", pkg.ProjectID)
 		}
-		if pkg.Filename != want.filename {
+		if pkg.Filename != want.Filename {
 			return fmt.Errorf("project %s has incorrect filename", pkg.ProjectID)
 		}
-		selector := declared.Server.Packages["fabric"][want.reference]
-		if pkg.Version != selector || !slices.ContainsFunc(pkg.Requirements, func(req struct {
-			Reference string `yaml:"reference"`
-			Selector  string `yaml:"selector"`
-			Enabled   bool   `yaml:"enabled"`
-		},
-		) bool {
-			return req.Reference == want.reference && req.Selector == selector && req.Enabled
-		}) {
-			return fmt.Errorf("project %s lost its exact manifest selector %q", pkg.ProjectID, selector)
+		if selector, ok := declared.Server.Packages[loader][want.Reference]; ok {
+			if pkg.Version != selector || !slices.ContainsFunc(pkg.Requirements, func(req struct {
+				Reference string `yaml:"reference"`
+				Selector  string `yaml:"selector"`
+				Enabled   bool   `yaml:"enabled"`
+			},
+			) bool {
+				return req.Reference == want.Reference && req.Selector == selector && req.Enabled
+			}) {
+				return fmt.Errorf("project %s lost its exact manifest selector %q", pkg.ProjectID, selector)
+			}
+		} else if len(pkg.Requirements) != 0 {
+			return fmt.Errorf("project %s appeared without a manifest requirement", pkg.ProjectID)
 		}
 		path := filepath.Join(root, "mods", pkg.Filename)
 		switch {
-		case want.sha256 != "":
-			if err := verifyPinnedDigest(path, want.sha256); err != nil {
+		case want.SHA256 != "":
+			if err := verifyPinnedDigest(path, want.SHA256); err != nil {
 				return fmt.Errorf("project %s: %w", pkg.ProjectID, err)
 			}
 		case oracle != "":
@@ -277,9 +280,22 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 }
 
 func verifyNativeModules(pkg lockedPackage) error {
-	id, version, member := "fabric-api-base", "0.4.54+b47eab6b04", "META-INF/jars/fabric-api-base-0.4.54+b47eab6b04.jar"
-	if pkg.ProjectID == "Si383TIH" {
-		id, version, member = "lingua_bib", "1.21.4-1.0.3", "META-INF/jars/lingua_bib-1.21.4-1.0.3-fabric.jar"
+	switch pkg.ProjectID {
+	case "P7dR8mSH":
+		api := slices.IndexFunc(pkg.Modules, func(module lockedModule) bool { return module.ID == "fabric-api" })
+		if api < 0 {
+			return fmt.Errorf("fabric api lock omitted its native module")
+		}
+		if pkg.Modules[api].Version != pkg.Version || !slices.Contains(pkg.Modules[api].Provides, "fabric") {
+			return fmt.Errorf("fabric api lock lost its native identity or provided alias")
+		}
+		if !slices.ContainsFunc(pkg.Modules, func(module lockedModule) bool {
+			return module.ID == "fabric-api-base" && strings.HasPrefix(module.NestedPath, "META-INF/jars/fabric-api-base-")
+		}) {
+			return fmt.Errorf("fabric api lock lost its embedded base module")
+		}
+		return nil
+	case "Si383TIH":
 		flan := slices.IndexFunc(pkg.Modules, func(module lockedModule) bool { return module.ID == "flan" })
 		if flan < 0 || pkg.Modules[flan].Version != "1.21.4-1.11.7.b" {
 			return fmt.Errorf("flan lock lost its native module version")
@@ -296,15 +312,13 @@ func verifyNativeModules(pkg lockedPackage) error {
 		if !found {
 			return fmt.Errorf("flan lock lost its required dependency on the Fabric API alias")
 		}
-	} else {
-		api := slices.IndexFunc(pkg.Modules, func(module lockedModule) bool { return module.ID == "fabric-api" })
-		if api < 0 {
-			return fmt.Errorf("fabric api lock omitted its native module")
-		}
-		if pkg.Modules[api].Version != pkg.Version || !slices.Contains(pkg.Modules[api].Provides, "fabric") {
-			return fmt.Errorf("fabric api lock lost its native identity or provided alias")
-		}
+		return verifyEmbeddedModule(pkg, "lingua_bib", "1.21.4-1.0.3", "META-INF/jars/lingua_bib-1.21.4-1.0.3-fabric.jar")
+	default:
+		return nil
 	}
+}
+
+func verifyEmbeddedModule(pkg lockedPackage, id, version, member string) error {
 	if !slices.ContainsFunc(pkg.Modules, func(module lockedModule) bool {
 		matchesIDAndVersion := module.ID == id && module.Version == version
 		return matchesIDAndVersion && module.NestedPath == member

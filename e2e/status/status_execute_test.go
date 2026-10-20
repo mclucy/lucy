@@ -17,7 +17,16 @@ type statusOutput struct {
 		Primary    runtimeRef   `json:"primary_runtime"`
 		Components []runtimeRef `json:"runtime_components"`
 	} `json:"server"`
-	PackageDirs []string `json:"package_dirs"`
+	PackageDirs []string            `json:"package_dirs"`
+	Packages    []discoveredPackage `json:"packages"`
+}
+
+type discoveredPackage struct {
+	ID runtimeRef `json:"ID"`
+}
+
+func (p discoveredPackage) identifier() string {
+	return p.ID.Ecosystem + ":" + p.ID.Name + "@" + p.ID.Version
 }
 
 type runtimeRef struct {
