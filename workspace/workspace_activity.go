@@ -7,8 +7,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ActiveAt checks the native world session lock without catalogue or app lookup.
-func ActiveAt(anchor string) bool {
+// RunningAt checks the native world session lock without catalogue or app lookup.
+func RunningAt(anchor string) bool {
 	root := anchor
 	if raw, err := os.ReadFile(filepath.Join(anchor, "config.yml")); err == nil {
 		var config struct {
@@ -21,6 +21,6 @@ func ActiveAt(anchor string) bool {
 			}
 		}
 	}
-	ws := Workspace{Root: root, Probe: probeDirectory(root)}
-	return ws.Active()
+	ws := Workspace{ServerDir: root, Probe: probeDirectory(root)}
+	return ws.Running()
 }

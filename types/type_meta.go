@@ -4,55 +4,61 @@ package types
 // upstream providers both produce it. It carries content only. The source of
 // the data is part of the result types, for example upstream.Info.
 type Metadata struct {
-	Title                 string
-	Brief                 string
-	Description           string
-	DescriptionUrl        string
-	DescriptionIsMarkdown bool
-	Authors               []Person
-	Urls                  []Url
-	License               string
+	Title                 string   `json:"title"`
+	Brief                 string   `json:"brief,omitempty"`
+	Description           string   `json:"description,omitempty"`
+	DescriptionURL        string   `json:"description_url,omitempty"`
+	DescriptionIsMarkdown bool     `json:"description_is_markdown,omitempty"`
+	Authors               []Person `json:"authors,omitempty"`
+	URLs                  []URL    `json:"urls,omitempty"`
+	License               string   `json:"license,omitempty"`
 }
 
 type Person struct {
-	Name  string
-	Role  string
-	Url   string
-	Email string
+	Name  string `json:"name"`
+	Role  string `json:"role,omitempty"`
+	URL   string `json:"url,omitempty"`
+	Email string `json:"email,omitempty"`
 }
 
-type Url struct {
-	Name string
-	Type UrlType
-	Url  string
+type URL struct {
+	Name string  `json:"name"`
+	Type URLType `json:"type"`
+	URL  string  `json:"url"`
 }
 
-func (p UrlType) String() string {
+func (p URLType) String() string {
 	switch p {
-	case UrlFile:
+	case URLFile:
 		return "File"
-	case UrlHome:
+	case URLHome:
 		return "Homepage"
-	case UrlSource:
+	case URLSource:
 		return "Source"
-	case UrlWiki:
+	case URLWiki:
 		return "Wiki"
-	case UrlMisc:
+	case URLForum:
+		return "Forum"
+	case URLIssues:
+		return "Issues"
+	case URLSponsor:
+		return "Sponsor"
+	case URLMisc:
 		return "URL"
 	default:
 		return "Unknown"
 	}
 }
 
-type UrlType uint8
+type URLType uint8
 
 const (
-	UrlFile UrlType = iota
-	UrlHome
-	UrlSource
-	UrlWiki
-	UrlForum
-	UrlIssues
-	UrlSponsor
-	UrlMisc
+	URLFile URLType = iota
+	URLHome
+	URLSource
+	URLWiki
+	URLForum
+	URLIssues
+	URLSponsor
+	URLMisc
 )

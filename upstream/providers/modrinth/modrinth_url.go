@@ -11,7 +11,7 @@ import (
 
 const projectUrlPrefix = "https://api.modrinth.com/v2/project/"
 
-func versionsUrl(slug types.BarePackageName) (urlString string) {
+func versionsUrl(slug types.PackageName) (urlString string) {
 	urlString, _ = url.JoinPath(
 		projectUrlPrefix,
 		string(slug),

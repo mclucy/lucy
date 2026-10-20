@@ -173,7 +173,7 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected to parse legacy jar path: %s", jarPath)
 	}
-	if gameVersion != types.BareVersion("1.20.1") || forgeVersion != types.BareVersion("47.3.22") {
+	if gameVersion != types.Version("1.20.1") || forgeVersion != types.Version("47.3.22") {
 		t.Fatalf(
 			"unexpected path parse: game=%q forge=%q",
 			gameVersion,
@@ -184,10 +184,10 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 		t,
 		jarPath,
 	)
-	if manifestForgeVersion != types.BareVersion("47.3.22") {
+	if manifestForgeVersion != types.Version("47.3.22") {
 		t.Fatalf("unexpected manifest forge version: %q", manifestForgeVersion)
 	}
-	if manifestGameVersion != types.BareVersion("1.20.1") {
+	if manifestGameVersion != types.Version("1.20.1") {
 		t.Fatalf("unexpected manifest game version: %q", manifestGameVersion)
 	}
 
@@ -202,7 +202,7 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 func parseForgeManifestFromFile(
 	t *testing.T,
 	jarPath string,
-) (types.BareVersion, types.BareVersion) {
+) (types.Version, types.Version) {
 	t.Helper()
 
 	file, err := os.Open(jarPath)
@@ -344,7 +344,7 @@ func detectForgeRuntimeWith(
 	t *testing.T,
 	detector ExecutableDetector,
 	jarPath string,
-) *ExecutableEvidence {
+) *RuntimeEvidence {
 	t.Helper()
 
 	context, err := NewDetectionContext(filepath.Dir(jarPath))
@@ -361,14 +361,14 @@ func detectForgeRuntimeWith(
 
 func assertForgeRuntime(
 	t *testing.T,
-	runtime *ExecutableEvidence,
+	runtime *RuntimeEvidence,
 	primary string,
 	gameVersion string,
 	forgeVersion string,
 ) {
 	t.Helper()
 
-	wantGameVersion := types.BareVersion(gameVersion)
+	wantGameVersion := types.Version(gameVersion)
 
 	if runtime.PrimaryPath != primary {
 		t.Fatalf(
@@ -379,7 +379,7 @@ func assertForgeRuntime(
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.EcoMinecraft,
+		types.EcosystemMinecraft,
 		"minecraft",
 	); got != wantGameVersion.String() {
 		t.Fatalf(
@@ -389,7 +389,7 @@ func assertForgeRuntime(
 		)
 	}
 	if runtime.PrimaryRuntime == nil ||
-		runtime.PrimaryRuntime.Eco != types.EcoForge ||
+		runtime.PrimaryRuntime.Ecosystem != types.EcosystemForge ||
 		runtime.PrimaryRuntime.Name != "forge" {
 		t.Fatalf(
 			"expected primary forge runtime, got %+v",
@@ -398,7 +398,7 @@ func assertForgeRuntime(
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.EcoForge,
+		types.EcosystemForge,
 		"forge",
 	); got != forgeVersion {
 		t.Fatalf("forge version mismatch: got %q want %q", got, forgeVersion)
@@ -406,15 +406,15 @@ func assertForgeRuntime(
 }
 
 func runtimeIdentityVersion(
-	runtime *ExecutableEvidence,
+	runtime *RuntimeEvidence,
 	platform types.Ecosystem,
-	name types.BarePackageName,
+	name types.PackageName,
 ) string {
 	if runtime == nil {
 		return ""
 	}
 	for _, identity := range runtime.RuntimeComponents {
-		if identity.Eco == platform && identity.Name == name {
+		if identity.Ecosystem == platform && identity.Name == name {
 			return identity.Version.String()
 		}
 	}

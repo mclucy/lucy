@@ -26,9 +26,9 @@ type paperBuild struct {
 	} `json:"downloads"`
 }
 
-func resolvePaper(ctx context.Context, req types.CoreRequest, out *types.CoreResolution) error {
+func resolvePaper(ctx context.Context, req types.ServerProductRequest, out *types.ServerProductResolution) error {
 	var builds []paperBuild
-	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" + req.Minecraft + "/builds"
+	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" + req.Minecraft.String() + "/builds"
 	if err := Metadata(ctx, endpoint, &builds); err != nil {
 		return err
 	}
@@ -37,9 +37,9 @@ func resolvePaper(ctx context.Context, req types.CoreRequest, out *types.CoreRes
 		v := strconv.Itoa(build.ID)
 		reason := ""
 		switch {
-		case !floating(req.Version) && v != req.Version:
+		case !floating(req.ProductVersion) && v != req.ProductVersion.String():
 			reason = "build version mismatch"
-		case req.Version == "stable" && build.Channel != "STABLE":
+		case req.ProductVersion == types.VersionStable && build.Channel != "STABLE":
 			reason = "unstable build channel"
 		}
 		asset, ok := build.Downloads["server:default"]
@@ -55,21 +55,21 @@ func resolvePaper(ctx context.Context, req types.CoreRequest, out *types.CoreRes
 			)
 			continue
 		}
-		out.Version, out.Bootstrap = v, "paperclip"
-		out.Artifact = types.Artifact{Provider: "papermc", ProjectID: "paper", ReleaseID: req.Minecraft + "/" + v, FileID: "server:default", Version: v, Filename: asset.Name, URL: asset.URL, Hashes: asset.Checksums}
+		out.ProductVersion, out.Bootstrapper = types.Version(v), "paperclip"
+		out.Artifact = types.Artifact{Provider: types.ProviderPaperMC, ProjectID: "paper", ReleaseID: req.Minecraft.String() + "/" + v, FileID: "server:default", Version: types.Version(v), Filename: asset.Name, URL: asset.URL, Hashes: asset.Checksums}
 		log.Debug(
 			"routing: paper build selected",
 			"minecraft", req.Minecraft,
 			"build", v,
 			"channel", build.Channel,
-			"requested", req.Version,
+			"requested", req.ProductVersion,
 		)
 		return nil
 	}
-	return fmt.Errorf("no Paper build %s for Minecraft %s", req.Version, req.Minecraft)
+	return fmt.Errorf("no Paper build %s for Minecraft %s", req.ProductVersion, req.Minecraft)
 }
 
-func resolveGithubCore(ctx context.Context, req types.CoreRequest, out *types.CoreResolution, acquire func(*types.Artifact) (string, error)) error {
+func resolveGithubProduct(ctx context.Context, req types.ServerProductRequest, out *types.ServerProductResolution, acquire func(*types.Artifact) (string, error)) error {
 	var repo struct {
 		ID int64 `json:"id"`
 	}
@@ -96,9 +96,9 @@ func resolveGithubCore(ctx context.Context, req types.CoreRequest, out *types.Co
 		switch {
 		case r.Draft:
 			reason = "draft release"
-		case !floating(req.Version) && r.Tag != req.Version:
+		case !floating(req.ProductVersion) && r.Tag != req.ProductVersion.String():
 			reason = "release tag mismatch"
-		case req.Version == "stable" && r.Prerelease:
+		case req.ProductVersion == types.VersionStable && r.Prerelease:
 			reason = "prerelease excluded"
 		}
 		if reason != "" {
@@ -114,8 +114,8 @@ func resolveGithubCore(ctx context.Context, req types.CoreRequest, out *types.Co
 			reason := ""
 			if !strings.HasSuffix(a.Name, ".jar") {
 				reason = "not a jar asset"
-			} else if req.File != "" {
-				matched, e := filepath.Match(req.File, a.Name)
+			} else if req.FilePattern != "" {
+				matched, e := filepath.Match(req.FilePattern, a.Name)
 				if e != nil {
 					return e
 				}
@@ -137,15 +137,15 @@ func resolveGithubCore(ctx context.Context, req types.CoreRequest, out *types.Co
 			if h, ok := strings.CutPrefix(a.Digest, "sha256:"); ok {
 				hashes["sha256"] = h
 			}
-			candidate := types.Artifact{Provider: "github", ProjectID: strconv.FormatInt(repo.ID, 10), ReleaseID: strconv.FormatInt(r.ID, 10), FileID: strconv.FormatInt(a.ID, 10), Version: r.Tag, Filename: a.Name, URL: a.URL, Hashes: hashes}
+			candidate := types.Artifact{Provider: types.ProviderGitHub, ProjectID: strconv.FormatInt(repo.ID, 10), ReleaseID: strconv.FormatInt(r.ID, 10), FileID: strconv.FormatInt(a.ID, 10), Version: types.Version(r.Tag), Filename: a.Name, URL: a.URL, Hashes: hashes}
 			p, e := acquire(&candidate)
 			if e != nil {
 				return e
 			}
 			trial := *out
 			trial.Artifact = candidate
-			trial.Version = r.Tag
-			trial.Bootstrap = "paperclip"
+			trial.ProductVersion = types.Version(r.Tag)
+			trial.Bootstrapper = "paperclip"
 			if e := paperclipInput(&trial, p); e != nil {
 				log.Debug(
 					"routing: github fork candidate rejected",
@@ -169,7 +169,7 @@ func resolveGithubCore(ctx context.Context, req types.CoreRequest, out *types.Co
 	return fmt.Errorf("no GitHub Paper fork artifact for Minecraft %s in %s", req.Minecraft, req.Repository)
 }
 
-func paperclipInput(out *types.CoreResolution, corePath string) error {
+func paperclipInput(out *types.ServerProductResolution, corePath string) error {
 	z, err := zip.OpenReader(corePath)
 	if err != nil {
 		return err
@@ -186,10 +186,10 @@ func paperclipInput(out *types.CoreResolution, corePath string) error {
 	if len(fields) != 3 {
 		return fmt.Errorf("invalid Paperclip download context")
 	}
-	expected := "mojang_" + out.Minecraft + ".jar"
+	expected := "mojang_" + out.Minecraft.String() + ".jar"
 	if fields[2] != expected {
 		return fmt.Errorf("core targets %s, requested Minecraft %s", fields[2], out.Minecraft)
 	}
-	out.Inputs = []types.BootstrapInput{{Path: path.Join("cache", fields[2]), Provider: "mojang", ProjectID: "minecraft", Version: out.Minecraft, Filename: fields[2], URL: fields[1], Hashes: map[string]string{"sha256": fields[0]}}}
+	out.Inputs = []types.BootstrapInput{{Path: path.Join("cache", fields[2]), Provider: types.ProviderMojang, ProjectID: "minecraft", Version: out.Minecraft, Filename: fields[2], URL: fields[1], Hashes: map[string]string{"sha256": fields[0]}}}
 	return nil
 }

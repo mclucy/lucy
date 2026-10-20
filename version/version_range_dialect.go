@@ -29,11 +29,11 @@ const (
 // InferRangeDialect infers the range dialect from package ecosystem.
 func InferRangeDialect(ecosystem types.Ecosystem) VersionRangeDialect {
 	switch ecosystem {
-	case types.EcoMcdr:
+	case types.EcosystemMCDR:
 		return DialectNpmSemver
-	case types.EcoFabric:
+	case types.EcosystemFabric:
 		return DialectFabricSemver
-	case types.EcoForge, types.EcoNeoforge:
+	case types.EcosystemForge, types.EcosystemNeoForge:
 		return DialectMavenRange
 	default:
 		return DialectUnknown
@@ -55,12 +55,12 @@ func ParseRange(
 	}
 	switch dialect {
 	case DialectNpmSemver:
-		if scheme != types.Semver {
+		if scheme != types.VersionSchemeSemver {
 			return nil
 		}
 		return parseMcdrSemverRange(raw)
 	case DialectFabricSemver:
-		if scheme != types.Semver {
+		if scheme != types.VersionSchemeSemver {
 			return nil
 		}
 		// Fabric semantics: '^' keeps same-major behavior without 0.x special-casing.
@@ -70,7 +70,7 @@ func ParseRange(
 			semverRangeOptions{caretMode: caretModeSameMajor},
 		)
 	case DialectMavenRange:
-		if scheme != types.Maven {
+		if scheme != types.VersionSchemeMaven {
 			return nil
 		}
 		return parseMavenRange(raw)

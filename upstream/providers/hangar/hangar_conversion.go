@@ -25,7 +25,7 @@ func (n hangarProjectNamespace) ProjectRef() hangarProjectRef {
 	return hangarProjectRef{Owner: n.Owner, Slug: n.Slug}
 }
 
-func (r hangarProjectRef) CanonicalName() types.BarePackageName {
+func (r hangarProjectRef) CanonicalName() types.PackageName {
 	return input.ToProjectName(r.Slug)
 }
 
@@ -43,17 +43,17 @@ func (r hangarProjectRef) ProjectURL() string {
 	return hangarSiteBaseURL + "/" + r.Owner + "/" + r.Slug
 }
 
-func (s *projectSearchResponse) ToSearchResults(source types.SourceId) upstream.SearchResponse {
+func (s *projectSearchResponse) ToSearchResults(source types.Provider) upstream.SearchResponse {
 	res := upstream.SearchResponse{
-		Source: source,
-		Items:  make([]upstream.SearchResult, 0, len(s.Result)),
+		Provider: source,
+		Items:    make([]upstream.SearchResult, 0, len(s.Result)),
 	}
 
 	for _, project := range s.Result {
 		res.Items = append(
 			res.Items, upstream.SearchResult{
-				RemoteName: project.ProjectRef().CanonicalName().String(),
-				Source:     source,
+				ProjectName: project.ProjectRef().CanonicalName().String(),
+				Provider:    source,
 			},
 		)
 	}
@@ -75,15 +75,15 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 			p.Settings.License.Type,
 		),
 		Authors: make([]types.Person, 0, len(p.MemberNames)),
-		Urls:    make([]types.Url, 0, len(p.Settings.Links)+1),
+		URLs:    make([]types.URL, 0, len(p.Settings.Links)+1),
 	}
 
 	if projectURL := p.ProjectRef().ProjectURL(); projectURL != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Hangar",
-				Type: types.UrlHome,
-				Url:  projectURL,
+				Type: types.URLHome,
+				URL:  projectURL,
 			},
 		)
 	}
@@ -97,11 +97,11 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 			if link.URL == "" {
 				continue
 			}
-			info.Urls = append(
-				info.Urls, types.Url{
+			info.URLs = append(
+				info.URLs, types.URL{
 					Name: link.Name,
 					Type: classifyHangarURL(link.Name),
-					Url:  link.URL,
+					URL:  link.URL,
 				},
 			)
 		}
@@ -111,11 +111,11 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 }
 
 func (v *hangarVersion) ToPackageRemote() types.ResolvedPackage {
-	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.EcoUnspecified))
-	if remote.FileUrl == "" {
+	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.EcosystemUnspecified))
+	if remote.FileURL == "" {
 		platforms := sortedMapKeys(v.Downloads)
 		if len(platforms) == 0 {
-			return types.ResolvedPackage{Id: types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceHangar}}}
+			return types.ResolvedPackage{ID: types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderHangar}}}
 		}
 
 		remote, _ = v.ToPackageRemoteForPlatform(types.Ecosystem(strings.ToLower(platforms[0])))
@@ -129,12 +129,12 @@ func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Ecosystem) (
 ) {
 	download, ok := v.downloadForPlatform(platform)
 	if !ok {
-		return types.ResolvedPackage{Id: types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceHangar}}}, false
+		return types.ResolvedPackage{ID: types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderHangar}}}, false
 	}
 
 	remote := types.ResolvedPackage{
-		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceHangar}},
-		FileUrl:  download.URL(),
+		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderHangar}},
+		FileURL:  download.URL(),
 		Filename: download.FileInfo.Name,
 	}
 
@@ -146,13 +146,20 @@ func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Ecosystem) (
 	return remote, true
 }
 
-func (v *hangarVersion) PluginDependencyNames() []types.BarePackageName {
-	depsForPlatform := v.DependenciesForPlatform(types.EcoUnspecified)
+// IsReleaseChannel reports whether the version was published on Hangar's
+// Release channel. A version without channel data is treated as a release so
+// older cached payloads keep resolving.
+func (v *hangarVersion) IsReleaseChannel() bool {
+	return v.Channel.Name == "" || strings.EqualFold(v.Channel.Name, "Release")
+}
+
+func (v *hangarVersion) PluginDependencyNames() []types.PackageName {
+	depsForPlatform := v.DependenciesForPlatform(types.EcosystemUnspecified)
 	if len(depsForPlatform) == 0 {
 		return nil
 	}
 
-	deps := make([]types.BarePackageName, 0, len(depsForPlatform))
+	deps := make([]types.PackageName, 0, len(depsForPlatform))
 	for _, dep := range depsForPlatform {
 		if dep.Name == "" || dep.ExternalURL != nil {
 			continue
@@ -187,7 +194,7 @@ func (v *hangarVersion) HasDownloadForPlatform(platform types.Ecosystem) bool {
 	if ok {
 		return true
 	}
-	return len(v.Downloads) > 0 && platform == types.EcoUnspecified
+	return len(v.Downloads) > 0 && platform == types.EcosystemUnspecified
 }
 
 func (v *hangarVersion) SupportsPlatform(platform types.Ecosystem) bool {
@@ -200,7 +207,7 @@ func (v *hangarVersion) SupportsPlatform(platform types.Ecosystem) bool {
 		return true
 	}
 
-	return platform == types.EcoUnspecified && len(v.PlatformDependencies) > 0
+	return platform == types.EcosystemUnspecified && len(v.PlatformDependencies) > 0
 }
 
 func (v *hangarVersion) downloadForPlatform(platform types.Ecosystem) (
@@ -228,20 +235,20 @@ func (d hangarDownload) URL() string {
 	return d.DownloadURL
 }
 
-func classifyHangarURL(name string) types.UrlType {
+func classifyHangarURL(name string) types.URLType {
 	switch strings.ToLower(name) {
 	case "issues":
-		return types.UrlIssues
+		return types.URLIssues
 	case "source":
-		return types.UrlSource
+		return types.URLSource
 	case "wiki":
-		return types.UrlWiki
+		return types.URLWiki
 	case "support", "discord":
-		return types.UrlForum
+		return types.URLForum
 	case "website", "homepage", "hangar":
-		return types.UrlHome
+		return types.URLHome
 	default:
-		return types.UrlMisc
+		return types.URLMisc
 	}
 }
 

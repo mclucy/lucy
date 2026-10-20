@@ -25,20 +25,20 @@ const discoveryHits = 10
 // translation between the two. Resolution needs it because a required
 // dependency the registry omitted reaches the graph only from the artifact.
 type moduleDiscovery struct {
-	server   lockfile.Server
-	acquire  func(*types.Artifact) (string, error)
-	requests map[string]projectRequest
-	absent   map[string]bool
-	failures map[string]error
+	server      lockfile.Server
+	materialize func(*types.Artifact) (string, error)
+	requests    map[string]projectRequest
+	absent      map[string]bool
+	failures    map[string]error
 }
 
-func newModuleDiscovery(server lockfile.Server, acquire func(*types.Artifact) (string, error)) *moduleDiscovery {
+func newModuleDiscovery(server lockfile.Server, materialize func(*types.Artifact) (string, error)) *moduleDiscovery {
 	return &moduleDiscovery{
-		server:   server,
-		acquire:  acquire,
-		requests: map[string]projectRequest{},
-		absent:   map[string]bool{},
-		failures: map[string]error{},
+		server:      server,
+		materialize: materialize,
+		requests:    map[string]projectRequest{},
+		absent:      map[string]bool{},
+		failures:    map[string]error{},
 	}
 }
 
@@ -73,7 +73,7 @@ func (index *moduleDiscovery) project(ctx context.Context, from projectKey, id s
 		)
 		return projectRequest{}, false, err
 	}
-	request, found, err := index.search(ctx, from, id)
+	request, found, err := index.backtrack(ctx, from, id)
 	if err != nil {
 		index.failures[id] = err
 		return projectRequest{}, false, err
@@ -86,18 +86,18 @@ func (index *moduleDiscovery) project(ctx context.Context, from projectKey, id s
 	return request, true, nil
 }
 
-func (index *moduleDiscovery) search(ctx context.Context, from projectKey, id string) (projectRequest, bool, error) {
-	searchers, err := routing.ResolveSearchProviders(from.loader, types.SourceAuto)
+func (index *moduleDiscovery) backtrack(ctx context.Context, from projectKey, id string) (projectRequest, bool, error) {
+	searchers, err := routing.ResolveSearchProviders(from.ecosystem, types.RegistryUnspecified)
 	if err != nil {
 		return projectRequest{}, false, err
 	}
 	log.Debug(
 		"resolve: module discovery searching",
 		"module", id,
-		"loader", from.loader,
+		"ecosystem", from.ecosystem,
 		"reason", "module identity missing from catalogue dependency",
 	)
-	responses, _ := routing.SearchMany(searchers, id, upstream.SearchOptions{FilterEcosystem: from.loader})
+	responses, _ := routing.SearchMany(searchers, upstream.Query{Keyword: id, FilterEcosystem: from.ecosystem})
 	inspected := 0
 	for _, hit := range collectDiscoveryHits(responses) {
 		if inspected == discoveryHits {
@@ -124,7 +124,7 @@ func (index *moduleDiscovery) verify(ctx context.Context, from projectKey, hit c
 		"provider", hit.provider,
 		"project", hit.project,
 	)
-	list, err := routing.Candidates(ctx, hit.provider, hit.project, index.server.Minecraft, from.loader)
+	list, err := routing.Candidates(ctx, catalogueRegistry(hit.provider), hit.project, string(index.server.Minecraft), from.ecosystem)
 	if err != nil {
 		if errors.Is(err, routing.ErrNoCatalogue) {
 			log.Debug(
@@ -149,18 +149,18 @@ func (index *moduleDiscovery) verify(ctx context.Context, from projectKey, hit c
 		return projectRequest{}, false, nil
 	}
 	slices.SortStableFunc(list, func(a, b types.CatalogueCandidate) int {
-		return strings.Compare(b.Published, a.Published)
+		return b.PublishedAt.Compare(a.PublishedAt)
 	})
 	candidate := list[0].Artifact
-	path, err := index.acquire(&candidate)
+	path, err := index.materialize(&candidate)
 	if err != nil {
 		return projectRequest{}, false, fmt.Errorf("resolve module %s: %w", id, err)
 	}
-	modules, err := artifact.Inspect(ctx, path, from.loader)
+	modules, err := artifact.ReadModules(ctx, path, from.ecosystem)
 	if err != nil {
 		return projectRequest{}, false, fmt.Errorf("resolve module %s: %w", id, err)
 	}
-	project := projectRequest{key: projectKey{from.runtime, from.loader, hit.provider, hit.project}}
+	project := projectRequest{key: projectKey{from.environment, from.ecosystem, hit.provider, hit.project}}
 	for _, module := range modules {
 		if moduleAlias(module, id) {
 			log.Debug(
@@ -184,7 +184,18 @@ func (index *moduleDiscovery) verify(ctx context.Context, from projectKey, hit c
 }
 
 type catalogueProject struct {
-	provider, project string
+	provider types.Provider
+	project  string
+}
+
+// catalogueRegistry names the registry that serves a package provider. Only a
+// provider backing a registry can answer catalogue queries.
+func catalogueRegistry(provider types.Provider) types.Registry {
+	registry, ok := provider.Registry()
+	if !ok {
+		return types.RegistryUnspecified
+	}
+	return registry
 }
 
 func collectDiscoveryHits(responses []upstream.SearchResponse) []catalogueProject {
@@ -192,7 +203,7 @@ func collectDiscoveryHits(responses []upstream.SearchResponse) []catalogueProjec
 	seen := map[catalogueProject]bool{}
 	for _, response := range responses {
 		for _, item := range response.Items {
-			hit := catalogueProject{response.Source.String(), item.RemoteName}
+			hit := catalogueProject{response.Provider, item.ProjectName}
 			if seen[hit] {
 				continue
 			}
@@ -205,8 +216,8 @@ func collectDiscoveryHits(responses []upstream.SearchResponse) []catalogueProjec
 
 // moduleAlias reports whether a native module publishes a loader module
 // identity as its own identifier or as an alias.
-func moduleAlias(module types.NativeModule, id string) bool {
-	if module.Loader == types.EcoBukkit {
+func moduleAlias(module types.DescriptorModule, id string) bool {
+	if module.Ecosystem == types.EcosystemBukkit || module.Ecosystem == types.EcosystemPaper {
 		return strings.EqualFold(module.ID, id) ||
 			slices.ContainsFunc(module.Provides, func(alias string) bool { return strings.EqualFold(alias, id) })
 	}
@@ -215,9 +226,9 @@ func moduleAlias(module types.NativeModule, id string) bool {
 
 // providesSelected reports whether a package already selected in the current
 // search state carries the module identity, which makes discovery unnecessary.
-func providesSelected(chosen map[projectKey]types.LockedPackage, loader types.Ecosystem, id string) bool {
+func providesSelected(chosen map[projectKey]types.LockedPackage, ecosystem types.Ecosystem, id string) bool {
 	for _, selected := range chosen {
-		if selected.Loader != loader {
+		if selected.Ecosystem != ecosystem {
 			continue
 		}
 		for _, module := range selected.Modules {

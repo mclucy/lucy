@@ -14,122 +14,126 @@ import (
 	"github.com/mclucy/lucy/terminal/style"
 )
 
-// Ecosystem identifies a runtime ecosystem or the unresolved selector used
-// before workspace context is available.
+// Ecosystem identifies the compatibility surface a server can serve. It is a
+// capability descriptor, not the server product itself.
 type Ecosystem string
 
 const (
-	// EcoUnspecified is a single unknown ecosystem, resolved during planning.
-	EcoUnspecified Ecosystem = ""
+	EcosystemUnspecified Ecosystem = ""
 
-	EcoMinecraft Ecosystem = "minecraft"
-	EcoVanilla             = EcoMinecraft
+	EcosystemMinecraft Ecosystem = "minecraft"
+	EcosystemVanilla             = EcosystemMinecraft
 
-	// Modding ecosystems.
+	EcosystemFabric   Ecosystem = "fabric"
+	EcosystemForge    Ecosystem = "forge"
+	EcosystemNeoForge Ecosystem = "neoforge"
 
-	EcoFabric   Ecosystem = "fabric"
-	EcoForge    Ecosystem = "forge"
-	EcoNeoforge Ecosystem = "neoforge"
-
-	// Other runtime ecosystems.
-
-	EcoBukkit     Ecosystem = "bukkit"
-	EcoPaper      Ecosystem = "paper"
-	EcoBungeecord Ecosystem = "bungeecord"
-	EcoVelocity   Ecosystem = "velocity"
-	EcoSponge     Ecosystem = "sponge"
-	EcoMcdr       Ecosystem = "mcdr"
+	EcosystemBukkit     Ecosystem = "bukkit"
+	EcosystemPaper      Ecosystem = "paper"
+	EcosystemBungeeCord Ecosystem = "bungeecord"
+	EcosystemVelocity   Ecosystem = "velocity"
+	EcosystemSponge     Ecosystem = "sponge"
+	EcosystemMCDR       Ecosystem = "mcdr"
 )
 
 func (e Ecosystem) Title() string {
-	if e == EcoUnspecified {
+	switch e {
+	case EcosystemUnspecified:
 		return "Any"
+	case EcosystemMinecraft:
+		return "Minecraft"
+	case EcosystemFabric:
+		return "Fabric"
+	case EcosystemForge:
+		return "Forge"
+	case EcosystemNeoForge:
+		return "NeoForge"
+	case EcosystemBukkit:
+		return "Bukkit"
+	case EcosystemPaper:
+		return "Paper"
+	case EcosystemBungeeCord:
+		return "BungeeCord"
+	case EcosystemVelocity:
+		return "Velocity"
+	case EcosystemSponge:
+		return "Sponge"
+	case EcosystemMCDR:
+		return "MCDR"
+	default:
+		return "Unknown"
 	}
-	if e.Valid() {
-		return strings.ToUpper(string(e)[0:1]) + string(e)[1:]
-	}
-	return "Unknown"
 }
 
 func (e Ecosystem) String() string {
-	if e == EcoUnspecified {
+	if e == EcosystemUnspecified {
 		return "any"
 	}
 	return string(e)
 }
 
-// Valid reports whether e is accepted in package identity. EcoUnspecified is
-// valid only while a request is awaiting workspace context.
+// Valid reports whether e is a defined ecosystem.
 func (e Ecosystem) Valid() bool {
 	switch e {
-	case EcoMinecraft, EcoFabric, EcoForge, EcoNeoforge, EcoMcdr, EcoBukkit, EcoUnspecified:
-		return true
-	}
-	return false
-}
-
-func (e Ecosystem) IsSearchEcosystem() bool {
-	switch e {
-	case EcoFabric, EcoForge, EcoNeoforge, EcoBukkit:
+	case EcosystemUnspecified,
+		EcosystemMinecraft,
+		EcosystemFabric,
+		EcosystemForge,
+		EcosystemNeoForge,
+		EcosystemBukkit,
+		EcosystemPaper,
+		EcosystemBungeeCord,
+		EcosystemVelocity,
+		EcosystemSponge,
+		EcosystemMCDR:
 		return true
 	default:
 		return false
 	}
 }
 
-// Satisfy reports whether e satisfies required. An unspecified requirement
-// accepts any ecosystem; an unspecified receiver matches only that selector.
-func (e Ecosystem) Satisfy(e2 Ecosystem) bool {
-	if e2 == EcoUnspecified {
+func (e Ecosystem) IsSearchable() bool {
+	switch e {
+	case EcosystemFabric, EcosystemForge, EcosystemNeoForge,
+		EcosystemBukkit, EcosystemPaper:
 		return true
-	}
-	if e == EcoUnspecified {
+	default:
 		return false
 	}
-	if e2 == EcoBukkit && e == EcoPaper {
+}
+
+// Satisfy reports whether e satisfies the required ecosystem. An unspecified
+// requirement accepts any ecosystem. Paper satisfies Bukkit because Paper is
+// a Bukkit superset; the reverse is not true.
+func (e Ecosystem) Satisfy(required Ecosystem) bool {
+	if required == EcosystemUnspecified {
 		return true
 	}
-
-	return e == e2
+	if e == EcosystemUnspecified {
+		return false
+	}
+	if required == EcosystemBukkit && e == EcosystemPaper {
+		return true
+	}
+	return e == required
 }
 
 func (e Ecosystem) IsModding() bool {
-	return e == EcoFabric || e == EcoForge || e == EcoNeoforge
+	return e == EcosystemFabric || e == EcosystemForge || e == EcosystemNeoForge
 }
 
-// IsSelector returns true if the platform is ambiguous and can be resolved
-// from server context.
-func (e Ecosystem) IsSelector() bool {
-	return e == EcoUnspecified
+// IsUnspecified reports whether the ecosystem is waiting for workspace
+// context.
+func (e Ecosystem) IsUnspecified() bool {
+	return e == EcosystemUnspecified
 }
 
 // Title formats a package name for display.
-func (n BarePackageName) Title() string {
+func (n PackageName) Title() string {
 	return style.Capitalize(strings.ReplaceAll(string(n), "-", " "))
 }
 
-func (n BarePackageName) String() string {
-	return string(n)
-}
-
-func (n BarePackageName) Pep8String() string {
+// PythonName formats the name as a Python distribution name.
+func (n PackageName) PythonName() string {
 	return strings.ReplaceAll(string(n), "-", "_")
-}
-
-func (p VersionedPackageRef) String() string {
-	version := ""
-	if p.Version != VersionAny {
-		version = "@" + p.Version.String()
-	}
-	return p.PackageRef.StringFull() + version
-}
-
-// StringFull is a human-facing selected-artifact label. StringBase is the
-// stable source-qualified package identity used by graph and provenance keys.
-func (p VersionedPackageRef) StringFull() string {
-	return p.Eco.String() + "/" + p.PackageRef.StringFull() + "@" + p.Version.String()
-}
-
-func (p VersionedPackageRef) StringBase() string {
-	return p.PackageRef.StringBase()
 }

@@ -12,28 +12,28 @@ const (
 	familyContradiction
 )
 
-type paperBrandResult uint8
+type paperLineageResult uint8
 
 const (
-	paperBrandUnknown paperBrandResult = iota
-	brandPaper
-	brandFork
-	brandUnknown
-	brandContradiction
+	paperLineageUnknown paperLineageResult = iota
+	lineagePaper
+	lineageFork
+	lineageUnknown
+	lineageContradiction
 )
 
 type paperObservations struct {
 	hasPaperClasses              bool
 	hasSpigotClasses             bool
 	officialDistribution         bool
-	detectedBrand                string
-	gameVersion                  types.BareVersion
+	detectedLineage              string
+	gameVersion                  types.Version
 	metaMainClass                string
 	librariesListEntries         []string
 	versionsListEntries          []string
 	patchesListEntries           []string
 	downloadContext              string
-	versionJSONID                types.BareVersion
+	versionJSONID                types.Version
 	patchProperties              map[string]string
 	hasPaperMCPatch              bool
 	buildInfo                    string
@@ -55,8 +55,8 @@ type paperJudgment struct {
 	bukkitConfirmed    bool
 	observations       paperObservations
 	familyResult       paperFamilyResult
-	brandResult        paperBrandResult
-	brandName          string
+	lineageResult      paperLineageResult
+	lineageName        string
 	contradictionState string
 	fastPathUsed       bool
 	reasons            []string
@@ -64,9 +64,9 @@ type paperJudgment struct {
 
 func newPaperJudgment() paperJudgment {
 	return paperJudgment{
-		familyResult: paperFamilyUnknown,
-		brandResult:  paperBrandUnknown,
-		reasons:      make([]string, 0, 8),
+		familyResult:  paperFamilyUnknown,
+		lineageResult: paperLineageUnknown,
+		reasons:       make([]string, 0, 8),
 	}
 }
 

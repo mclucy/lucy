@@ -24,7 +24,7 @@ func newSpongeReader() Reader {
 func (r *spongeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != spongePluginMetadataPath {
 			continue
@@ -43,10 +43,10 @@ func (r *spongeReader) Read(
 		}
 
 		if !validSpongeMetadata(&metadata) {
-			return []Info{}, nil
+			return []PackageInfo{}, nil
 		}
 
-		infos := make([]Info, 0, len(metadata.Plugins))
+		infos := make([]PackageInfo, 0, len(metadata.Plugins))
 		for _, plugin := range metadata.Plugins {
 			info, ok := translateSpongePlugin(&metadata, plugin, filePath)
 			if !ok {
@@ -56,7 +56,7 @@ func (r *spongeReader) Read(
 		}
 
 		if len(infos) == 0 {
-			return []Info{}, nil
+			return []PackageInfo{}, nil
 		}
 		return infos, nil
 	}
@@ -94,15 +94,14 @@ func translateSpongePlugin(
 	metadata *fileschema.FileSpongePluginsIdentifier,
 	plugin fileschema.FileSpongePluginMetadata,
 	localPath string,
-) (Info, bool) {
+) (PackageInfo, bool) {
 	if !hasConcreteSpongePluginIdentity(metadata, plugin) {
-		return Info{}, false
+		return PackageInfo{}, false
 	}
 
 	v := resolveSpongePluginVersion(metadata, plugin)
-	info := Info{
-		Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(plugin.ID), Source: types.SourceUnknown}, Eco: types.EcoSponge},
-		Version:  types.BareVersion(v),
+	info := PackageInfo{
+		Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(plugin.ID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemSponge, Version: types.Version(v)},
 		FilePath: localPath,
 		Metadata: types.Metadata{
 			Title:   fn.Ternary(plugin.Name != "", plugin.Name, plugin.ID),
@@ -111,7 +110,7 @@ func translateSpongePlugin(
 			Authors: translateSpongeContributors(
 				resolveSpongePluginContributors(metadata, plugin),
 			),
-			Urls: translateSpongeLinks(
+			URLs: translateSpongeLinks(
 				resolveSpongePluginLinks(metadata, plugin),
 			),
 		},
@@ -263,24 +262,24 @@ func translateSpongeLinks(
 		Source   string
 		Issues   string
 	},
-) []types.Url {
-	urls := make([]types.Url, 0, 3)
+) []types.URL {
+	urls := make([]types.URL, 0, 3)
 	if homepage := strings.TrimSpace(links.Homepage); homepage != "" {
 		urls = append(
 			urls,
-			types.Url{Name: "Homepage", Type: types.UrlHome, Url: homepage},
+			types.URL{Name: "Homepage", Type: types.URLHome, URL: homepage},
 		)
 	}
 	if source := strings.TrimSpace(links.Source); source != "" {
 		urls = append(
 			urls,
-			types.Url{Name: "Source", Type: types.UrlSource, Url: source},
+			types.URL{Name: "Source", Type: types.URLSource, URL: source},
 		)
 	}
 	if issues := strings.TrimSpace(links.Issues); issues != "" {
 		urls = append(
 			urls,
-			types.Url{Name: "Issues", Type: types.UrlIssues, Url: issues},
+			types.URL{Name: "Issues", Type: types.URLIssues, URL: issues},
 		)
 	}
 	return urls
@@ -303,11 +302,11 @@ func translateSpongeDependencies(
 		}
 		translated = append(
 			translated, Dependency{
-				Ref: types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(id), Source: types.SourceUnknown}, Eco: types.EcoSponge},
+				Ref: types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(id), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemSponge},
 				Constraint: version.ParseRange(
 					v,
 					version.DialectMavenRange,
-					types.Maven,
+					types.VersionSchemeMaven,
 				),
 				Mandatory: !dep.Optional,
 			},

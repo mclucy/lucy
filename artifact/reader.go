@@ -4,7 +4,7 @@ import "archive/zip"
 
 // Reader extracts metadata from supported artifact archives.
 type Reader interface {
-	Read(r *zip.Reader, filePath string) ([]Info, error)
+	Read(r *zip.Reader, filePath string) ([]PackageInfo, error)
 }
 
 // readers is the explicit ordered list of all platform readers.

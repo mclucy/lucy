@@ -11,7 +11,7 @@ import (
 // Lucy uses this file only for authorship; metadata comes from meta.json on
 // the meta branch instead.
 type pluginInfo struct {
-	Id           string   `json:"id"`
+	ID           string   `json:"id"`
 	Authors      []author `json:"authors"`
 	Repository   string   `json:"repository"`
 	Branch       string   `json:"branch"`
@@ -31,13 +31,13 @@ type author struct {
 // SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/{plugin_name}/release.json?ref=meta
 type pluginRelease struct {
 	SchemaVersion      int       `json:"schema_version"`
-	Id                 string    `json:"id"`
+	ID                 string    `json:"id"`
 	LatestVersion      string    `json:"latest_version"`
 	LatestVersionIndex int       `json:"latest_version_index"`
 	Releases           []release `json:"releases"`
 }
 type release struct {
-	Url         string     `json:"url"`
+	URL         string     `json:"url"`
 	Name        string     `json:"name"`
 	TagName     string     `json:"tag_name"`
 	CreatedAt   time.Time  `json:"created_at"`
@@ -49,15 +49,15 @@ type release struct {
 
 func (r release) ToPackageRemote() types.ResolvedPackage {
 	remote := types.ResolvedPackage{
-		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceMCDR}},
-		FileUrl:  r.Asset.BrowserDownloadUrl,
+		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderMCDR}},
+		FileURL:  r.Asset.BrowserDownloadUrl,
 		Filename: r.Asset.Name,
 	}
 	return remote
 }
 
 type asset struct {
-	Id                 int       `json:"id"`
+	ID                 int       `json:"id"`
 	Name               string    `json:"name"`
 	Size               int       `json:"size"`
 	DownloadCount      int       `json:"download_count"`
@@ -70,7 +70,7 @@ type asset struct {
 // SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/meta.json?ref=meta
 type pluginMeta struct {
 	SchemaVersion int               `json:"schema_version"`
-	Id            string            `json:"id"`
+	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	Version       string            `json:"version"`
 	Link          string            `json:"link"`
@@ -85,7 +85,7 @@ type pluginMeta struct {
 
 // SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/{plugin_name}/repository.json?ref=meta
 type pluginRepo struct {
-	Url             string `json:"url"`
+	URL             string `json:"url"`
 	Name            string `json:"name"`
 	FullName        string `json:"full_name"`
 	HtmlUrl         string `json:"html_url"`
@@ -100,7 +100,7 @@ type pluginRepo struct {
 		Key    string `json:"key"`
 		Name   string `json:"name"`
 		SpdxId string `json:"spdx_id"`
-		Url    string `json:"url"`
+		URL    string `json:"url"`
 	} `json:"license"`
 }
 
@@ -115,10 +115,10 @@ func (r rawProjectInformation) ToProjectInformation() types.Metadata {
 		Title:                 r.Meta.Name,
 		Brief:                 r.Meta.Description.EnUs,
 		Description:           r.Repository.Readme,
-		DescriptionUrl:        r.Repository.HtmlUrl,
+		DescriptionURL:        r.Repository.HtmlUrl,
 		DescriptionIsMarkdown: true,
 		Authors:               nil,
-		Urls:                  nil,
+		URLs:                  nil,
 		License: fn.Ternary(
 			r.Repository.License != nil,
 			r.Repository.License.Name,
@@ -131,22 +131,22 @@ func (r rawProjectInformation) ToProjectInformation() types.Metadata {
 		info.Authors = append(
 			info.Authors, types.Person{
 				Name: author.Name,
-				Url:  author.Link,
+				URL:  author.Link,
 			},
 		)
 	}
 
-	info.Urls = make([]types.Url, 0)
-	info.Urls = append(
-		info.Urls,
-		types.Url{
+	info.URLs = make([]types.URL, 0)
+	info.URLs = append(
+		info.URLs,
+		types.URL{
 			Name: "Plugin Page",
-			Type: types.UrlHome,
-			Url:  r.Meta.Link,
-		}, types.Url{
+			Type: types.URLHome,
+			URL:  r.Meta.Link,
+		}, types.URL{
 			Name: "SourceGitHub Repo",
-			Type: types.UrlSource,
-			Url:  r.Info.Repository,
+			Type: types.URLSource,
+			URL:  r.Info.Repository,
 		},
 	)
 

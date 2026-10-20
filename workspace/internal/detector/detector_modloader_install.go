@@ -30,7 +30,7 @@ type modLoaderInstallSpec struct {
 	candidateNames func(versionDir, version string) []modLoaderCandidate
 	unpackVerify   func(
 		candidate modLoaderCandidate,
-		gameVersion, loaderVersion types.BareVersion,
+		gameVersion, loaderVersion types.Version,
 	) (bool, error)
 }
 
@@ -47,7 +47,7 @@ func detectModLoaderInstallFromVersionDir(
 		artifact modLoaderArtifactKind,
 		filePath string,
 	) (bool, error),
-) (*ExecutableEvidence, error) {
+) (*RuntimeEvidence, error) {
 	version := filepath.Base(versionDir)
 	gameVersion, loaderVersion, ok := parseModLoaderVersionTuple(
 		versionDir,
@@ -67,7 +67,7 @@ func detectModLoaderInstallFromVersionDir(
 			if candidate.kind == modLoaderArtifactShim {
 				continue
 			}
-			return newModLoaderExecutableEvidence(
+			return newModLoaderRuntimeEvidence(
 				spec.platform,
 				spec.name,
 				candidate.path,
@@ -85,7 +85,7 @@ func detectModLoaderInstallFromVersionDir(
 		if err != nil || !ok {
 			continue
 		}
-		return newModLoaderExecutableEvidence(
+		return newModLoaderRuntimeEvidence(
 			spec.platform,
 			spec.name,
 			candidate.path,
@@ -102,23 +102,23 @@ var neoforgeVersionDirPattern = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.\d+)*(?:-[
 func parseModLoaderVersionTuple(
 	versionDir string,
 	platform types.Ecosystem,
-) (gameVersion, loaderVersion types.BareVersion, ok bool) {
+) (gameVersion, loaderVersion types.Version, ok bool) {
 	name := filepath.Base(versionDir)
 
 	switch platform {
-	case types.EcoForge:
+	case types.EcosystemForge:
 		match := forgeRuntimeVersionDirPattern.FindStringSubmatch(name)
 		if match == nil {
 			return types.VersionUnknown, types.VersionUnknown, false
 		}
-		return types.BareVersion(match[1]), types.BareVersion(match[2]), true
-	case types.EcoNeoforge:
+		return types.Version(match[1]), types.Version(match[2]), true
+	case types.EcosystemNeoForge:
 		match := neoforgeVersionDirPattern.FindStringSubmatch(name)
 		if match == nil {
 			return types.VersionUnknown, types.VersionUnknown, false
 		}
-		gameVersion := types.BareVersion("1." + match[1] + "." + match[2])
-		return gameVersion, types.BareVersion(name), true
+		gameVersion := types.Version("1." + match[1] + "." + match[2])
+		return gameVersion, types.Version(name), true
 	default:
 		return types.VersionUnknown, types.VersionUnknown, false
 	}
@@ -132,14 +132,14 @@ func modLoaderInstallationRuntimes(
 		artifact modLoaderArtifactKind,
 		filePath string,
 	) (bool, error),
-) []*ExecutableEvidence {
+) []*RuntimeEvidence {
 	libraryRoot := filepath.Join(workPath, spec.libraryRoot)
 	entries, err := os.ReadDir(libraryRoot)
 	if err != nil {
 		return nil
 	}
 
-	runtimes := make([]*ExecutableEvidence, 0, len(entries))
+	runtimes := make([]*RuntimeEvidence, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -228,27 +228,27 @@ func hashArtifactFile(filePath string, algo cache.HashAlgorithm) (
 	}
 }
 
-func newModLoaderExecutableEvidence(
+func newModLoaderRuntimeEvidence(
 	platform types.Ecosystem,
 	name string,
 	filePath string,
-	gameVersion types.BareVersion,
-	loaderVersion types.BareVersion,
-) *ExecutableEvidence {
-	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		Eco:     platform,
-		Name:    types.BarePackageName(name),
-		Version: loaderVersion,
+	gameVersion types.Version,
+	loaderVersion types.Version,
+) *RuntimeEvidence {
+	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		Ecosystem: platform,
+		Name:      types.PackageName(name),
+		Version:   loaderVersion,
 	}, RuntimeComponents: []types.VersionedPackageRef{
 		{
-			Eco:     platform,
-			Name:    types.BarePackageName(name),
-			Version: loaderVersion,
+			Ecosystem: platform,
+			Name:      types.PackageName(name),
+			Version:   loaderVersion,
 		},
 		{
-			Eco:     types.EcoMinecraft,
-			Name:    "minecraft",
-			Version: gameVersion,
+			Ecosystem: types.EcosystemMinecraft,
+			Name:      "minecraft",
+			Version:   gameVersion,
 		},
 	}}
 }

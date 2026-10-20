@@ -32,7 +32,7 @@ func (d *fabricServerSingleFileDetector) Name() string {
 	return "fabric server"
 }
 
-func (d *fabricServerSingleFileDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (exec *ExecutableEvidence, err error) {
+func (d *fabricServerSingleFileDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (exec *RuntimeEvidence, err error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -57,12 +57,12 @@ func (d *fabricServerSingleFileDetector) Detect(context DetectionContext, primar
 					line,
 					"fabric-loader-version=",
 				); found {
-					loaderVersion = types.BareVersion(after)
+					loaderVersion = types.Version(after)
 				} else if after, found := strings.CutPrefix(
 					line,
 					"game-version=",
 				); found {
-					gameVersion = types.BareVersion(after)
+					gameVersion = types.Version(after)
 				}
 			}
 			if scanner.Err() != nil {
@@ -79,7 +79,7 @@ func (d *fabricServerSingleFileDetector) Detect(context DetectionContext, primar
 		return nil, nil
 	}
 
-	return newFabricExecutableEvidence(
+	return newFabricRuntimeEvidence(
 		filePath,
 		loaderVersion,
 		gameVersion,
@@ -93,7 +93,7 @@ func (d *fabricServerLauncherDetector) Name() string {
 	return "fabric server"
 }
 
-func (d *fabricServerLauncherDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (exec *ExecutableEvidence, err error) {
+func (d *fabricServerLauncherDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (exec *RuntimeEvidence, err error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -133,7 +133,7 @@ func (d *fabricServerLauncherDetector) Detect(context DetectionContext, primaryF
 		return nil, nil
 	}
 
-	exec = newFabricExecutableEvidence(filePath, loaderVersion, gameVersion)
+	exec = newFabricRuntimeEvidence(filePath, loaderVersion, gameVersion)
 	// The shim boots this jar; the probe must not report it as a standalone
 	// runtime beside the shim.
 	if serverJar, ok := context.RootFile(serverJarPath); ok {
@@ -154,8 +154,8 @@ func fabricLauncherPropertiesAreServer(data []byte) bool {
 }
 
 func parseFabricLauncherManifestVersions(zipReader *zip.Reader) (
-	loaderVersion types.BareVersion,
-	gameVersion types.BareVersion,
+	loaderVersion types.Version,
+	gameVersion types.Version,
 ) {
 	loaderVersion = types.VersionUnknown
 	gameVersion = types.VersionUnknown
@@ -193,14 +193,14 @@ func parseFabricLauncherManifestVersions(zipReader *zip.Reader) (
 					path,
 					"libraries/net/fabricmc/fabric-loader/",
 				); found {
-					loaderVersion = types.BareVersion(
+					loaderVersion = types.Version(
 						strings.Split(after, "/")[0],
 					)
 				} else if after, found := strings.CutPrefix(
 					path,
 					"libraries/net/fabricmc/intermediary/",
 				); found {
-					gameVersion = types.BareVersion(
+					gameVersion = types.Version(
 						strings.Split(after, "/")[0],
 					)
 				}
@@ -213,7 +213,7 @@ func parseFabricLauncherManifestVersions(zipReader *zip.Reader) (
 	return loaderVersion, gameVersion
 }
 
-func parseFabricLauncherBundledLoaderVersion(zipReader *zip.Reader) types.BareVersion {
+func parseFabricLauncherBundledLoaderVersion(zipReader *zip.Reader) types.Version {
 	data, ok, err := readArchiveEntry(zipReader, "fabric.mod.json")
 	if err != nil || !ok {
 		return types.VersionUnknown
@@ -223,14 +223,14 @@ func parseFabricLauncherBundledLoaderVersion(zipReader *zip.Reader) types.BareVe
 	if err := json.Unmarshal(data, &metadata); err != nil {
 		return types.VersionUnknown
 	}
-	if metadata.Id != "fabricloader" || strings.TrimSpace(metadata.Version) == "" {
+	if metadata.ID != "fabricloader" || strings.TrimSpace(metadata.Version) == "" {
 		return types.VersionUnknown
 	}
 
-	return types.BareVersion(metadata.Version)
+	return types.Version(metadata.Version)
 }
 
-func parseFabricLauncherSidecarGameVersion(context DetectionContext, primaryFile *DetectionFile) types.BareVersion {
+func parseFabricLauncherSidecarGameVersion(context DetectionContext, primaryFile *DetectionFile) types.Version {
 	sidecar, ok := context.Sibling(primaryFile, "version.json")
 	if !ok {
 		return types.VersionUnknown
@@ -248,10 +248,10 @@ func parseFabricLauncherSidecarGameVersion(context DetectionContext, primaryFile
 		return types.VersionUnknown
 	}
 	if strings.TrimSpace(metadata.Name) != "" {
-		return types.BareVersion(metadata.Name)
+		return types.Version(metadata.Name)
 	}
 	if strings.TrimSpace(metadata.ReleaseTarget) != "" {
-		return types.BareVersion(metadata.ReleaseTarget)
+		return types.Version(metadata.ReleaseTarget)
 	}
 
 	return types.VersionUnknown
@@ -260,7 +260,7 @@ func parseFabricLauncherSidecarGameVersion(context DetectionContext, primaryFile
 // parseServerJarGameVersion reads the game version from the version.json of a
 // server jar on disk. Any problem yields VersionUnknown: this source is the
 // last resort for launch shims with no embedded version evidence.
-func parseServerJarGameVersion(file *DetectionFile) types.BareVersion {
+func parseServerJarGameVersion(file *DetectionFile) types.Version {
 	zipReader, err := file.Archive()
 	if err != nil {
 		return types.VersionUnknown
@@ -315,25 +315,25 @@ func propertiesValue(data []byte, key string) string {
 	return value
 }
 
-func newFabricExecutableEvidence(
+func newFabricRuntimeEvidence(
 	filePath string,
-	loaderVersion types.BareVersion,
-	gameVersion types.BareVersion,
-) *ExecutableEvidence {
-	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		Eco:     types.EcoFabric,
-		Name:    "fabric",
-		Version: loaderVersion,
+	loaderVersion types.Version,
+	gameVersion types.Version,
+) *RuntimeEvidence {
+	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		Ecosystem: types.EcosystemFabric,
+		Name:      "fabric",
+		Version:   loaderVersion,
 	}, RuntimeComponents: []types.VersionedPackageRef{
 		{
-			Eco:     types.EcoFabric,
-			Name:    "fabric-loader",
-			Version: loaderVersion,
+			Ecosystem: types.EcosystemFabric,
+			Name:      "fabric-loader",
+			Version:   loaderVersion,
 		},
 		{
-			Eco:     types.EcoMinecraft,
-			Name:    "minecraft",
-			Version: gameVersion,
+			Ecosystem: types.EcosystemMinecraft,
+			Name:      "minecraft",
+			Version:   gameVersion,
 		},
 	}}
 }

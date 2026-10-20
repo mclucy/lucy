@@ -12,27 +12,32 @@ import (
 )
 
 // Candidates routes explicit project identities, never context aliases.
-func Candidates(ctx context.Context, provider, project, minecraft string, loader types.Ecosystem) ([]types.CatalogueCandidate, error) {
+func Candidates(
+	ctx context.Context,
+	registry types.Registry,
+	project, minecraft string,
+	loader types.Ecosystem,
+) ([]types.CatalogueCandidate, error) {
 	log.Debug(
 		"routing: catalogue candidates requested",
-		"provider", provider,
+		"registry", registry,
 		"project", project,
 		"minecraft", minecraft,
 		"loader", loader,
 	)
-	switch provider {
-	case "modrinth":
+	switch registry {
+	case types.RegistryModrinth:
 		return modrinth.Provider.Candidates(ctx, project, minecraft, loader)
-	case "curseforge":
+	case types.RegistryCurseForge:
 		return curseforge.Provider.Candidates(ctx, project, minecraft, loader)
-	case "mcdr":
+	case types.RegistryMCDR:
 		return mcdr.Provider.Candidates(ctx, project, minecraft, loader)
 	default:
 		log.Debug(
-			"routing: catalogue provider rejected",
-			"provider", provider,
-			"reason", "source has no package catalogue",
+			"routing: catalogue registry rejected",
+			"registry", registry,
+			"reason", "registry has no package catalogue",
 		)
-		return nil, fmt.Errorf("%w: %q", ErrNoCatalogue, provider)
+		return nil, fmt.Errorf("%w: %q", ErrNoCatalogue, registry)
 	}
 }

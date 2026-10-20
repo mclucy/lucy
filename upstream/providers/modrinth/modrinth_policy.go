@@ -5,11 +5,11 @@ import "github.com/mclucy/lucy/types"
 func selectExactVersion(
 	versions []*versionResponse,
 	id types.VersionedPackageRef,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 ) *versionResponse {
 	for _, version := range versions {
-		if types.BareVersion(version.VersionNumber) == id.Version &&
-			versionSupportsLoader(version, id.Eco) &&
+		if types.Version(version.VersionNumber) == id.Version &&
+			versionSupportsLoader(version, id.Ecosystem) &&
 			versionSupportsGameVersion(version, gameVersion) {
 			return version
 		}
@@ -19,7 +19,7 @@ func selectExactVersion(
 
 func versionSupportsGameVersion(
 	version *versionResponse,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 ) bool {
 	if !localGameVersionKnown(gameVersion) {
 		return true
@@ -32,50 +32,49 @@ func versionSupportsGameVersion(
 	return false
 }
 
-func localGameVersionKnown(gameVersion types.BareVersion) bool {
+func localGameVersionKnown(gameVersion types.Version) bool {
 	return gameVersion != "" &&
 		!gameVersion.IsInvalid() &&
 		!gameVersion.CanInfer()
 }
 
-func selectLatestVersionCandidate(
+// selectLatestVersionForSelector applies issue 60 selector semantics. stable
+// accepts release versions only; beta accepts any channel; any prefers a
+// release but still falls back to a prerelease.
+func selectLatestVersionForSelector(
 	versions []*versionResponse,
 	platform types.Ecosystem,
-	gameVersion types.BareVersion,
-) (*versionResponse, bool) {
-	return selectLatestVersionByLoader(versions, platform, gameVersion, false)
-}
-
-func selectLatestCompatibleVersionCandidate(
-	versions []*versionResponse,
-	platform types.Ecosystem,
-	gameVersion types.BareVersion,
-) (*versionResponse, bool) {
-	return selectLatestVersionByLoader(versions, platform, gameVersion, true)
-}
-
-func selectLatestVersionByLoader(
-	versions []*versionResponse,
-	platform types.Ecosystem,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 	filterByLoader bool,
-) (*versionResponse, bool) {
-	selected := latestReleaseVersion(
-		versions,
-		platform,
-		gameVersion,
-		filterByLoader,
-	)
-	if selected != nil {
-		return selected, false
+	selector types.Version,
+) *versionResponse {
+	switch selector {
+	case types.VersionStable:
+		return latestReleaseVersion(
+			versions,
+			platform,
+			gameVersion,
+			filterByLoader,
+		)
+	case types.VersionBeta:
+		return latestAnyVersion(versions, platform, gameVersion, filterByLoader)
+	default:
+		if selected := latestReleaseVersion(
+			versions,
+			platform,
+			gameVersion,
+			filterByLoader,
+		); selected != nil {
+			return selected
+		}
+		return latestAnyVersion(versions, platform, gameVersion, filterByLoader)
 	}
-	return latestAnyVersion(versions, platform, gameVersion, filterByLoader), true
 }
 
 func latestReleaseVersion(
 	versions []*versionResponse,
 	platform types.Ecosystem,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 	filterByLoader bool,
 ) *versionResponse {
 	var selected *versionResponse
@@ -95,7 +94,7 @@ func latestReleaseVersion(
 func latestAnyVersion(
 	versions []*versionResponse,
 	platform types.Ecosystem,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 	filterByLoader bool,
 ) *versionResponse {
 	var selected *versionResponse

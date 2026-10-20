@@ -14,7 +14,7 @@ func (d *forgeLegacyDetector) Name() string {
 // Sources:
 // - https://docs.minecraftforge.net/en/1.16.x/gettingstarted/
 // - https://forums.minecraftforge.net/topic/102544-forge-370-minecraft-1171/
-func (d *forgeLegacyDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *forgeLegacyDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -41,7 +41,7 @@ func (d *forgeLegacyDetector) Detect(context DetectionContext, primaryFile *Dete
 		return nil, nil
 	}
 
-	return newForgeExecutableEvidence(filePath, gameVersion, forgeVersion), nil
+	return newForgeRuntimeEvidence(filePath, gameVersion, forgeVersion), nil
 }
 
 type forgeModernDetector struct{}
@@ -53,7 +53,7 @@ func (d *forgeModernDetector) Name() string {
 // Sources:
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://forums.minecraftforge.net/topic/102544-forge-370-minecraft-1171/
-func (d *forgeModernDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *forgeModernDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(filePath)
@@ -75,7 +75,7 @@ func (d *forgeModernDetector) Detect(context DetectionContext, primaryFile *Dete
 		return nil, nil
 	}
 
-	return newForgeExecutableEvidence(filePath, gameVersion, forgeVersion), nil
+	return newForgeRuntimeEvidence(filePath, gameVersion, forgeVersion), nil
 }
 
 type forgeLatestDetector struct{}
@@ -87,7 +87,7 @@ func (d *forgeLatestDetector) Name() string {
 // Sources:
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://forums.minecraftforge.net/topic/154652-how-to-install-forge-6110-for-1211-server/
-func (d *forgeLatestDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *forgeLatestDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 
 	gameVersion, forgeVersion, ok := parseForgeVersionTupleFromPath(filePath)
@@ -113,7 +113,7 @@ func (d *forgeLatestDetector) Detect(context DetectionContext, primaryFile *Dete
 		return nil, nil
 	}
 
-	return newForgeExecutableEvidence(filePath, gameVersion, forgeVersion), nil
+	return newForgeRuntimeEvidence(filePath, gameVersion, forgeVersion), nil
 }
 
 // forgeServerDetector detects Forge servers via manifest metadata fallback.
@@ -126,7 +126,7 @@ func (d *forgeServerDetector) Name() string {
 // Sources:
 // - https://docs.minecraftforge.net/en/latest/gettingstarted/server/
 // - https://docs.minecraftforge.net/en/1.16.x/gettingstarted/
-func (d *forgeServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *forgeServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -148,7 +148,7 @@ func (d *forgeServerDetector) Detect(context DetectionContext, primaryFile *Dete
 		return nil, nil
 	}
 
-	return newForgeExecutableEvidence(filePath, gameVersion, forgeVersion), nil
+	return newForgeRuntimeEvidence(filePath, gameVersion, forgeVersion), nil
 }
 
 func init() {

@@ -26,7 +26,7 @@ type fingerprintRequest struct {
 type fingerprintResponse struct {
 	Data struct {
 		ExactMatches []struct {
-			Id   uint32 `json:"id"`
+			ID   uint32 `json:"id"`
 			File struct {
 				ModId int32 `json:"modId"`
 			} `json:"file"`
@@ -48,7 +48,7 @@ func SlugFromFilePathWithHint(filePath, urlHint string) (
 	return slugFromFingerprint(fp)
 }
 
-func (p provider) PackageByHash(hashable upstream.Hashable) (
+func (p provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
 	ref types.VersionedPackageRef,
 	hash string,
 	ok bool,
@@ -77,10 +77,10 @@ func (p provider) PackageByHash(hashable upstream.Hashable) (
 	}
 
 	ref = types.VersionedPackageRef{
-		Name:    types.BarePackageName(mod.Slug),
-		Source:  p.Id(),
-		Eco:     platformFromCurseForgeFile(mod, file),
-		Version: types.BareVersion(file.DisplayName),
+		Name:      types.PackageName(mod.Slug),
+		Provider:  p.Provider(),
+		Ecosystem: platformFromCurseForgeFile(mod, file),
+		Version:   types.Version(file.DisplayName),
 	}
 	return ref, hash, true, nil
 }
@@ -136,7 +136,7 @@ func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
 	m := result.Data.ExactMatches[0]
 	return fingerprintMatchResult{
 		ModId:  m.File.ModId,
-		FileId: int32(m.Id),
+		FileId: int32(m.ID),
 	}, nil
 }
 
@@ -157,22 +157,22 @@ func platformFromCurseForgeFile(
 	file *fileResponse,
 ) types.Ecosystem {
 	for _, idx := range mod.LatestFilesIndexes {
-		if idx.FileId == file.Id && idx.ModLoader != nil {
+		if idx.FileId == file.ID && idx.ModLoader != nil {
 			return platformFromCurseForgeModLoader(*idx.ModLoader)
 		}
 	}
-	return types.EcoUnspecified
+	return types.EcosystemUnspecified
 }
 
 func platformFromCurseForgeModLoader(loader int32) types.Ecosystem {
 	switch loader {
 	case 1:
-		return types.EcoForge
+		return types.EcosystemForge
 	case 4:
-		return types.EcoFabric
+		return types.EcosystemFabric
 	case 6:
-		return types.EcoNeoforge
+		return types.EcosystemNeoForge
 	default:
-		return types.EcoUnspecified
+		return types.EcosystemUnspecified
 	}
 }

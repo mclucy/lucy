@@ -134,7 +134,7 @@ func TestPaperObservationCollector_ForkFixturesExposeRawEvidence(t *testing.T) {
 			if !obs.hasPaperclipNamespace {
 				t.Fatalf("expected paperclip namespace marker for reaper fixture")
 			}
-			if obs.gameVersion != types.BareVersion("1.12.2") {
+			if obs.gameVersion != types.Version("1.12.2") {
 				t.Fatalf("unexpected reaper game version: %q", obs.gameVersion)
 			}
 		},
@@ -178,7 +178,7 @@ func TestPaperObservationCollector_ForkFixturesExposeRawEvidence(t *testing.T) {
 			if !obs.hasYouerNamespace {
 				t.Fatalf("expected youer namespace marker")
 			}
-			if obs.gameVersion != types.BareVersion("1.21.1") {
+			if obs.gameVersion != types.Version("1.21.1") {
 				t.Fatalf("unexpected youer game version: %q", obs.gameVersion)
 			}
 		},
@@ -289,20 +289,20 @@ func assertPaperFixtureObservations(t *testing.T, obs paperObservations) {
 	if obs.downloadContext == "" {
 		t.Fatalf("expected download-context to be captured")
 	}
-	if obs.versionJSONID != types.BareVersion("1.21.11") {
+	if obs.versionJSONID != types.Version("1.21.11") {
 		t.Fatalf("unexpected version.json id: %q", obs.versionJSONID)
 	}
 	if !obs.hasPaperclipNamespace {
 		t.Fatalf("expected paperclip namespace marker")
 	}
-	if obs.gameVersion != types.BareVersion("1.21.11") {
+	if obs.gameVersion != types.Version("1.21.11") {
 		t.Fatalf("unexpected game version: %q", obs.gameVersion)
 	}
 }
 
 func extractFixtureObservations(
 	t *testing.T,
-	brand string,
+	lineage string,
 	parts ...string,
 ) paperObservations {
 	t.Helper()
@@ -310,12 +310,12 @@ func extractFixtureObservations(
 	obs, err := extractPaperObservations(
 		paperFamilyFixturePath(
 			t,
-			brand,
+			lineage,
 			parts...,
 		), nil,
 	)
 	if err != nil {
-		t.Fatalf("extract observations from %s: %v", brand, err)
+		t.Fatalf("extract observations from %s: %v", lineage, err)
 	}
 	return obs
 }
@@ -337,11 +337,11 @@ func paperFamilyFixtureRoot(t *testing.T) string {
 
 func paperFamilyFixturePath(
 	t *testing.T,
-	brand string,
+	lineage string,
 	parts ...string,
 ) string {
 	t.Helper()
-	segments := append([]string{paperFamilyFixtureRoot(t), brand}, parts...)
+	segments := append([]string{paperFamilyFixtureRoot(t), lineage}, parts...)
 	return filepath.Join(segments...)
 }
 

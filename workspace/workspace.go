@@ -8,7 +8,7 @@
 //   - the running state of the server process
 //
 // New, NewAt, and Refresh return a Workspace value. A Workspace is an
-// immutable observation. Five members store facts: Root, Environments,
+// immutable observation. Five members store facts: ServerDir, Wrappers,
 // Probe, Packages, and Warnings. Every other member is a method over these
 // facts.
 //
@@ -30,10 +30,11 @@ const sessionLockName = "session.lock"
 
 // Workspace is one consistent observation of a server directory.
 type Workspace struct {
-	// Root is the server directory that the observation describes.
-	// If MCDR manages the anchor, then Root is the MCDR working directory.
-	Root         string                `json:"root"`
-	Environments types.EnvironmentInfo `json:"environments"`
+	// ServerDir is the server directory that the observation describes.
+	// If MCDR manages the anchor, then ServerDir is the MCDR working
+	// directory.
+	ServerDir string            `json:"root"`
+	Wrappers  types.WrapperInfo `json:"wrappers"`
 
 	// Warnings records the recoverable problems seen while observing the
 	// directory, such as MCDR version-detection failures. It stays out of
@@ -56,29 +57,29 @@ type Workspace struct {
 // this format. Probe is omitted; the raw scan is internal to this process.
 func (ws Workspace) MarshalJSON() ([]byte, error) {
 	projection := struct {
-		Root         string                    `json:"root"`
-		SavePath     string                    `json:"save_path"`
-		ModPath      []string                  `json:"mod_path"`
-		Packages     []types.DiscoveredPackage `json:"packages"`
-		Server       *ServerInstance           `json:"server,omitempty"`
-		Activity     *wireActivity             `json:"activity,omitempty"`
-		Environments types.EnvironmentInfo     `json:"environments"`
+		ServerDir   string                    `json:"root"`
+		SavePath    string                    `json:"save_path"`
+		PackageDirs []string                  `json:"package_dirs"`
+		Packages    []types.DiscoveredPackage `json:"packages"`
+		Server      *ServerRuntime            `json:"server,omitempty"`
+		Activity    *wireActivity             `json:"activity,omitempty"`
+		Wrappers    types.WrapperInfo         `json:"wrappers"`
 	}{
-		Root:         ws.Root,
-		SavePath:     ws.SaveDir(),
-		ModPath:      ws.ModPath(),
-		Packages:     ws.Packages,
-		Environments: ws.Environments,
+		ServerDir:   ws.ServerDir,
+		SavePath:    ws.SaveDir(),
+		PackageDirs: ws.PackageDirs(),
+		Packages:    ws.Packages,
+		Wrappers:    ws.Wrappers,
 	}
-	if server := ws.Server(); server != nil {
+	if server := ws.Runtime(); server != nil {
 		projection.Server = server
-		projection.Activity = &wireActivity{Active: ws.Active()}
+		projection.Activity = &wireActivity{Running: ws.Running()}
 	}
 	return json.Marshal(projection)
 }
 
 type wireActivity struct {
-	Active bool `json:"active"`
+	Running bool `json:"active"`
 }
 
 var (
@@ -163,30 +164,30 @@ func Refresh(workDir string) Workspace {
 }
 
 // observe collects one snapshot of the server directory at dir. MCDR can
-// move the server root away from dir; the probe and package scan then run
-// against that root.
+// move the server directory away from dir; the probe and package scan then
+// run against that directory.
 func observe(dir string) Workspace {
-	env, warnings := detectEnvironment(dir)
+	wrappers, warnings := detectWrappers(dir)
 
 	ws := Workspace{
-		Root:         resolveRoot(dir, env),
-		Environments: env,
-		Warnings:     warnings,
+		ServerDir: resolveServerDir(dir, wrappers),
+		Wrappers:  wrappers,
+		Warnings:  warnings,
 	}
-	ws.Probe = probeDirectory(ws.Root)
+	ws.Probe = probeDirectory(ws.ServerDir)
 	ws.Packages = discoverPackages(
-		ws.ModPath(),
-		mcdrPluginDirs(env),
+		ws.PackageDirs(),
+		mcdrPluginDirs(wrappers),
 	)
 	return ws
 }
 
-// resolveRoot returns the directory that holds the server. Only MCDR moves
-// the server away from the anchor. MCDR uses its configured working
+// resolveServerDir returns the directory that holds the server. Only MCDR
+// moves the server away from the anchor. MCDR uses its configured working
 // directory.
-func resolveRoot(anchor string, env types.EnvironmentInfo) string {
-	if env.Mcdr != nil {
-		wd := env.Mcdr.Config.WorkingDirectory
+func resolveServerDir(anchor string, wrappers types.WrapperInfo) string {
+	if wrappers.MCDR != nil {
+		wd := wrappers.MCDR.Config.WorkingDirectory
 		if filepath.IsAbs(wd) {
 			return wd
 		}
@@ -195,14 +196,14 @@ func resolveRoot(anchor string, env types.EnvironmentInfo) string {
 	return anchor
 }
 
-func mcdrPluginDirs(env types.EnvironmentInfo) []string {
-	if env.Mcdr == nil {
+func mcdrPluginDirs(wrappers types.WrapperInfo) []string {
+	if wrappers.MCDR == nil {
 		return nil
 	}
-	return env.Mcdr.Config.PluginDirectories
+	return wrappers.MCDR.Config.PluginDirectories
 }
 
-// Server returns the single bootable runtime of the directory. Server
+// Runtime returns the single bootable runtime of the directory. Runtime
 // returns nil in these cases:
 //
 //   - the scan found no runtime
@@ -210,17 +211,17 @@ func mcdrPluginDirs(env types.EnvironmentInfo) []string {
 //   - two or more detectors claim one jar
 //
 // Every non-nil result satisfies IsValid.
-func (ws Workspace) Server() *ServerInstance {
+func (ws Workspace) Runtime() *ServerRuntime {
 	server, _ := ws.Probe.Single()
 	return server
 }
 
-// Active reports whether the server runs at this moment. The check probes
-// an exclusive lock on the session file. Active performs I/O on every call,
-// because activity changes over time. Active returns false when no single
+// Running reports whether the server runs at this moment. The check probes
+// an exclusive lock on the session file. Running performs I/O on every call,
+// because activity changes over time. Running returns false when no single
 // runtime exists, or when the save location is unknown.
-func (ws Workspace) Active() bool {
-	if ws.Server() == nil {
+func (ws Workspace) Running() bool {
+	if ws.Runtime() == nil {
 		return false
 	}
 	saveDir := ws.SaveDir()

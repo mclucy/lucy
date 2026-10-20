@@ -19,15 +19,15 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Id() types.SourceId {
-	return types.SourceMojang
+func (provider) Provider() types.Provider {
+	return types.ProviderMojang
 }
 
 type versionDetail struct {
 	Downloads struct {
 		Server *struct {
 			Sha1 string `json:"sha1"`
-			Url  string `json:"url"`
+			URL  string `json:"url"`
 		} `json:"server"`
 	} `json:"downloads"`
 }
@@ -58,7 +58,7 @@ func FetchVersionManifest() (
 
 func ResolveVersionEntry(
 	manifest *fileschema.ApiMojangMinecraftVersionManifest,
-	targetVersion types.BareVersion,
+	targetVersion types.Version,
 ) (string, string, error) {
 	selected := targetVersion.String()
 	if targetVersion == "" || targetVersion.CanInfer() || targetVersion == types.VersionUnknown {
@@ -70,8 +70,8 @@ func ResolveVersionEntry(
 	}
 
 	for i := range manifest.Versions {
-		if manifest.Versions[i].Id == selected {
-			return manifest.Versions[i].Id, manifest.Versions[i].Url, nil
+		if manifest.Versions[i].ID == selected {
+			return manifest.Versions[i].ID, manifest.Versions[i].URL, nil
 		}
 	}
 
@@ -96,9 +96,9 @@ func (p provider) ResolveVersionSelector(
 	}
 
 	return types.VersionedPackageRef{
-		Eco:     types.EcoMinecraft,
-		Name:    "minecraft",
-		Version: types.BareVersion(versionID),
+		Ecosystem: types.EcosystemMinecraft,
+		Name:      "minecraft",
+		Version:   types.Version(versionID),
 	}, nil
 }
 
@@ -129,7 +129,7 @@ func (p provider) Fetch(
 	}
 
 	return types.ResolvedPackage{
-		FileUrl:       detail.Downloads.Server.Url,
+		FileURL:       detail.Downloads.Server.URL,
 		Filename:      "server.jar",
 		Hash:          detail.Downloads.Server.Sha1,
 		HashAlgorithm: "sha1",

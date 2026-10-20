@@ -21,7 +21,7 @@ func newForgeReader() Reader { return &forgeReader{} }
 func (r *forgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	_ = r
 	for _, file := range zipRdr.File {
 		if file.Name != "META-INF/mods.toml" {
@@ -38,7 +38,7 @@ func readForgeModsToml(
 	zipRdr *zip.Reader,
 	file *zip.File,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	reader, err := file.Open()
 	if err != nil {
 		return nil, err
@@ -65,21 +65,20 @@ func readForgeModsToml(
 		return nil, nil
 	}
 
-	infos := make([]Info, 0, len(modIdentifier.Mods))
+	infos := make([]PackageInfo, 0, len(modIdentifier.Mods))
 	for _, mod := range modIdentifier.Mods {
 		if mod.ModID == "forge" {
 			continue
 		}
 
-		version := types.BareVersion(mod.Version)
+		version := types.Version(mod.Version)
 		if version == "${file.jarVersion}" {
 			version = forgeJarVersion(zipRdr)
 		}
 
 		infos = append(
-			infos, Info{
-				Ref:          types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.BarePackageName(mod.ModID), Source: types.SourceUnknown}, Eco: types.EcoForge},
-				Version:      version,
+			infos, PackageInfo{
+				Ref:          types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.PackageName(mod.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge, Version: version},
 				FilePath:     filePath,
 				Dependencies: forgeDependencies(modIdentifier, mod.ModID),
 				Metadata: types.Metadata{
@@ -88,16 +87,16 @@ func readForgeModsToml(
 					Description: mod.Description,
 					Authors:     []types.Person{{Name: mod.Authors}},
 					License:     modIdentifier.License,
-					Urls: []types.Url{
+					URLs: []types.URL{
 						{
 							Name: "URL",
-							Type: types.UrlHome,
-							Url:  mod.DisplayURL,
+							Type: types.URLHome,
+							URL:  mod.DisplayURL,
 						},
 						{
 							Name: "Issue Tracker",
-							Type: types.UrlIssues,
-							Url:  modIdentifier.IssueTrackerURL,
+							Type: types.URLIssues,
+							URL:  modIdentifier.IssueTrackerURL,
 						},
 					},
 				},
@@ -117,7 +116,7 @@ func forgeDependencies(
 	for _, dep := range deps {
 		translated = append(
 			translated, Dependency{
-				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.BarePackageName(dep.ModID), Source: types.SourceUnknown}, Eco: types.EcoForge},
+				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.PackageName(dep.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge},
 				Constraint: forgeVersionRange(dep.VersionRange),
 				Mandatory:  dep.Mandatory,
 			},
@@ -129,12 +128,12 @@ func forgeDependencies(
 func forgeVersionRange(versionRange string) types.VersionExpr {
 	return version.ParseRange(
 		versionRange,
-		version.InferRangeDialect(types.EcoForge),
-		types.Maven,
+		version.InferRangeDialect(types.EcosystemForge),
+		types.VersionSchemeMaven,
 	)
 }
 
-func forgeJarVersion(zipRdr *zip.Reader) types.BareVersion {
+func forgeJarVersion(zipRdr *zip.Reader) types.Version {
 	for _, file := range zipRdr.File {
 		if file.Name != "META-INF/MANIFEST.MF" {
 			continue
@@ -160,7 +159,7 @@ func forgeJarVersion(zipRdr *zip.Reader) types.BareVersion {
 	return types.VersionUnknown
 }
 
-func forgeManifestVersion(manifest string) types.BareVersion {
+func forgeManifestVersion(manifest string) types.Version {
 	const versionField = "Implementation-Version: "
 	version, found := strings.CutPrefix(manifest, versionField)
 	if !found {
@@ -172,5 +171,5 @@ func forgeManifestVersion(manifest string) types.BareVersion {
 
 	version = strings.Split(version, "\r")[0]
 	version = strings.Split(version, "\n")[0]
-	return types.BareVersion(version)
+	return types.Version(version)
 }

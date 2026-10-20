@@ -18,7 +18,7 @@ func newForgeLegacyReader() Reader {
 func (r *forgeLegacyReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "mcmod.info" {
 			continue
@@ -37,15 +37,14 @@ func (r *forgeLegacyReader) Read(
 			return nil, closeErr
 		}
 
-		infos := make([]Info, 0, len(mods))
+		infos := make([]PackageInfo, 0, len(mods))
 		for _, m := range mods {
 			if m.ModId == "forge" || m.ModId == "minecraft" || m.ModId == "mcp" {
 				continue
 			}
 
-			info := Info{
-				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(m.ModId), Source: types.SourceUnknown}, Eco: types.EcoForge},
-				Version:  types.BareVersion(m.Version),
+			info := PackageInfo{
+				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(m.ModId), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge, Version: types.Version(m.Version)},
 				FilePath: filePath,
 			}
 
@@ -58,7 +57,7 @@ func (r *forgeLegacyReader) Read(
 					}
 					deps = append(
 						deps, Dependency{
-							Ref:       types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(depStr), Source: types.SourceUnknown}, Eco: types.EcoForge},
+							Ref:       types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(depStr), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge},
 							Mandatory: true,
 						},
 					)

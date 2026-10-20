@@ -111,14 +111,14 @@ func TestDetectNeoForgeInstallFallsBackToUnpackVerification(t *testing.T) {
 
 func assertNeoForgeRuntime(
 	t *testing.T,
-	runtime *ExecutableEvidence,
+	runtime *RuntimeEvidence,
 	primary string,
 	gameVersion string,
 	loaderVersion string,
 ) {
 	t.Helper()
 
-	wantGameVersion := types.BareVersion(gameVersion)
+	wantGameVersion := types.Version(gameVersion)
 
 	if runtime.PrimaryPath != primary {
 		t.Fatalf(
@@ -129,7 +129,7 @@ func assertNeoForgeRuntime(
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.EcoMinecraft,
+		types.EcosystemMinecraft,
 		"minecraft",
 	); got != wantGameVersion.String() {
 		t.Fatalf(
@@ -139,7 +139,7 @@ func assertNeoForgeRuntime(
 		)
 	}
 	if runtime.PrimaryRuntime == nil ||
-		runtime.PrimaryRuntime.Eco != types.EcoNeoforge ||
+		runtime.PrimaryRuntime.Ecosystem != types.EcosystemNeoForge ||
 		runtime.PrimaryRuntime.Name != "neoforge" {
 		t.Fatalf(
 			"expected primary neoforge runtime, got %+v",
@@ -148,7 +148,7 @@ func assertNeoForgeRuntime(
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.EcoNeoforge,
+		types.EcosystemNeoForge,
 		"neoforge",
 	); got != loaderVersion {
 		t.Fatalf(

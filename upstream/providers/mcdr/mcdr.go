@@ -12,21 +12,21 @@ import (
 
 type provider struct{}
 
-func (s provider) Id() types.SourceId {
-	return types.SourceMCDR
+func (s provider) Provider() types.Provider {
+	return types.ProviderMCDR
 }
 
 var Provider provider
 
 type mcdrSearchResult []string
 
-func (m mcdrSearchResult) ToSearchResults(source types.SourceId) upstream.SearchResponse {
-	res := upstream.SearchResponse{Source: source}
+func (m mcdrSearchResult) ToSearchResults(source types.Provider) upstream.SearchResponse {
+	res := upstream.SearchResponse{Provider: source}
 	for _, id := range m {
 		res.Items = append(
 			res.Items, upstream.SearchResult{
-				RemoteName: input.ToProjectName(id).String(),
-				Source:     source,
+				ProjectName: input.ToProjectName(id).String(),
+				Provider:    source,
 			},
 		)
 	}
@@ -37,10 +37,11 @@ func (m mcdrSearchResult) ToSearchResults(source types.SourceId) upstream.Search
 // applied.
 
 func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
-	if q.FilterEcosystem != types.EcoMcdr && q.FilterEcosystem != types.EcoUnspecified {
+	// MCDR publishes server plugins only; IncludeClient needs no filter.
+	if q.FilterEcosystem != types.EcosystemMCDR && q.FilterEcosystem != types.EcosystemUnspecified {
 		return upstream.SearchResponse{}, fmt.Errorf(
 			"invalid search platform: expected %s, got %s",
-			types.EcoMcdr,
+			types.EcosystemMCDR,
 			q.FilterEcosystem,
 		)
 	}
@@ -48,20 +49,20 @@ func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	if err != nil {
 		return upstream.SearchResponse{}, err
 	}
-	return res.ToSearchResults(s.Id()), nil
+	return res.ToSearchResults(s.Provider()), nil
 }
 
 func (s provider) Fetch(
 	_ upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (types.ResolvedPackage, error) {
-	rel, err := getRelease(id.Name.Pep8String(), id.Version)
+	rel, err := getRelease(id.Name.PythonName(), id.Version)
 	if err != nil {
 		return types.ResolvedPackage{}, err
 	}
 	r := rel.ToPackageRemote()
 	return types.ResolvedPackage{
-		FileUrl:       r.FileUrl,
+		FileURL:       r.FileURL,
 		Filename:      r.Filename,
 		Hash:          r.Hash,
 		HashAlgorithm: r.HashAlgorithm,
@@ -69,7 +70,7 @@ func (s provider) Fetch(
 }
 
 func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
-	name := ref.Name.Pep8String()
+	name := ref.Name.PythonName()
 	plugin, err := getInfo(name)
 	if err != nil {
 		return types.Metadata{}, err
@@ -94,7 +95,7 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 func (s provider) Dependencies(
 	local upstream.LocalContext,
 	id types.VersionedPackageRef,
-) (*types.PackageDependencies, error) {
+) (*types.DependencySet, error) {
 	if id.Version == "" || id.Version.CanInfer() {
 		resolved, err := s.ResolveVersionSelector(local, id)
 		if err != nil {
@@ -103,34 +104,34 @@ func (s provider) Dependencies(
 		id = resolved
 	}
 
-	rel, err := getRelease(id.Name.Pep8String(), id.Version)
+	rel, err := getRelease(id.Name.PythonName(), id.Version)
 	if err != nil {
 		return nil, err
 	}
 	return new(mcdrDependenciesFromMeta(rel.Meta)), nil
 }
 
-func mcdrDependenciesFromMeta(meta pluginMeta) types.PackageDependencies {
-	deps := types.PackageDependencies{Authentic: true}
+func mcdrDependenciesFromMeta(meta pluginMeta) types.DependencySet {
+	deps := types.DependencySet{FromArtifact: true}
 	if len(meta.Dependencies) == 0 {
 		return deps
 	}
 
-	deps.Value = make([]types.Dependency, 0, len(meta.Dependencies))
+	deps.Dependencies = make([]types.Dependency, 0, len(meta.Dependencies))
 	for name, constraint := range meta.Dependencies {
-		deps.Value = append(
-			deps.Value, types.Dependency{
-				Id: types.VersionedPackageRef{
+		deps.Dependencies = append(
+			deps.Dependencies, types.Dependency{
+				ID: types.VersionedPackageRef{
 					PackageRef: types.PackageRef{
-						Name:   input.ToProjectName(name),
-						Source: types.SourceMCDR,
+						Name:     input.ToProjectName(name),
+						Provider: types.ProviderMCDR,
 					},
-					Eco: types.EcoMcdr,
+					Ecosystem: types.EcosystemMCDR,
 				},
 				Constraint: version.ParseRange(
 					constraint,
-					version.InferRangeDialect(types.EcoMcdr),
-					types.Semver,
+					version.InferRangeDialect(types.EcosystemMCDR),
+					types.VersionSchemeSemver,
 				),
 				Mandatory: true,
 			},
@@ -147,11 +148,11 @@ func (s provider) ResolveVersionSelector(
 	switch id.Version {
 	case types.VersionStable:
 		rel, err = getLatestCompatibleRelease(
-			id.Name.Pep8String(),
+			id.Name.PythonName(),
 			local.MCDRVersion,
 		)
 	case types.VersionBeta, types.VersionAny:
-		rel, err = getLatestRelease(id.Name.Pep8String())
+		rel, err = getLatestRelease(id.Name.PythonName())
 		if err != nil {
 			return id, err
 		}
@@ -166,10 +167,10 @@ func (s provider) ResolveVersionSelector(
 		return id, err
 	}
 	parsed = types.VersionedPackageRef{
-		Eco:     types.EcoMcdr,
-		Name:    id.Name,
-		Version: types.BareVersion(rel.Meta.Version),
+		Ecosystem: types.EcosystemMCDR,
+		Name:      id.Name,
+		Version:   types.Version(rel.Meta.Version),
 	}
-	log.Debug("parsed from" + id.StringFull() + " to " + parsed.StringFull())
+	log.Debug("parsed from" + id.StringQualified() + " to " + parsed.StringQualified())
 	return parsed, nil
 }

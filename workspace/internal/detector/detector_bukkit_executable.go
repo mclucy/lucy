@@ -25,9 +25,9 @@ const (
 
 var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
 
-// paperFamilyBrands must cover every brand inferPaperObservationBrands can
-// attribute; the fork-brand fixture test iterates this map.
-var paperFamilyBrands = map[string]bool{
+// paperLineages must cover every lineage inferPaperObservationLineages can
+// attribute; the fork-lineage fixture test iterates this map.
+var paperLineages = map[string]bool{
 	"paper":  true,
 	"folia":  true,
 	"divine": true,
@@ -38,11 +38,11 @@ var paperFamilyBrands = map[string]bool{
 	"youer":  true,
 }
 
-// IsPaperFamilyBrand reports whether name is a paper-lineage runtime brand
+// IsPaperLineage reports whether name is a paper-lineage runtime identity
 // this package can emit as a primary runtime identity. Youer is included
 // even though it is a NeoForge hybrid; treat it separately before calling.
-func IsPaperFamilyBrand(name string) bool {
-	return paperFamilyBrands[name]
+func IsPaperLineage(name string) bool {
+	return paperLineages[name]
 }
 
 type craftBukkitFamilyDetector struct{}
@@ -60,7 +60,7 @@ func (d *craftBukkitFamilyDetector) Name() string {
 	return "craftbukkit family executable"
 }
 
-func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -99,7 +99,7 @@ func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile
 	// CraftBukkit-derived servers consistently launch through
 	// org.bukkit.craftbukkit.Main, while Implementation-Title: CraftBukkit is the
 	// fallback family marker seen in repackaged jars that keep the canonical
-	// implementation branding. Extracted modern Paper fixtures keep the decisive
+	// implementation title. Extracted modern Paper fixtures keep the decisive
 	// Bukkit entrypoint in META-INF/main-class, while strict launcher-heavy Reaper
 	// and Youer fixtures only expose definitive Paper-fork proof via patch or
 	// manifest identity. Without one of these strict signals, we should not claim
@@ -126,8 +126,8 @@ func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile
 	// Stage 3: Family Reasoning
 	reasonPaperFamily(&judgment)
 
-	// Stage 4: Brand Attribution
-	attributePaperBrand(&judgment)
+	// Stage 4: Lineage Attribution
+	attributePaperLineage(&judgment)
 
 	// Stage 5: Contradiction Resolution
 	resolvePaperContradictions(&judgment)
@@ -191,7 +191,7 @@ func reasonPaperFamily(judgment *paperJudgment) {
 		judgment.addReason("paper-family remains likely from paperclip launcher namespaces")
 	default:
 		judgment.familyResult = familyMiss
-		judgment.addReason("paper-family evidence missing after bukkit confirmation; continuing to brand attribution")
+		judgment.addReason("paper-family evidence missing after bukkit confirmation; continuing to lineage attribution")
 	}
 }
 
@@ -201,42 +201,42 @@ func hasModernPaperclipMetadataCluster(obs paperObservations) bool {
 		strings.TrimSpace(obs.metaMainClass) != ""
 }
 
-func attributePaperBrand(judgment *paperJudgment) {
+func attributePaperLineage(judgment *paperJudgment) {
 	if judgment == nil {
 		return
 	}
 
-	brands := inferPaperObservationBrands(judgment.observations)
+	lineages := inferPaperObservationLineages(judgment.observations)
 
 	switch {
-	case len(brands) > 1:
-		judgment.brandResult = brandContradiction
-		judgment.brandName = strings.Join(brands, ",")
+	case len(lineages) > 1:
+		judgment.lineageResult = lineageContradiction
+		judgment.lineageName = strings.Join(lineages, ",")
 		judgment.addReason(
 			fmt.Sprintf(
-				"contradictory paper brands detected: %s",
-				strings.Join(brands, ", "),
+				"contradictory paper lineages detected: %s",
+				strings.Join(lineages, ", "),
 			),
 		)
-	case len(brands) == 1 && brands[0] == "paper":
-		judgment.brandResult = brandPaper
-		judgment.brandName = "paper"
-		judgment.addReason("brand attributed to official paper distribution")
-	case len(brands) == 1:
-		judgment.brandResult = brandFork
-		judgment.brandName = brands[0]
-		judgment.addReason("brand attributed to paper fork")
+	case len(lineages) == 1 && lineages[0] == "paper":
+		judgment.lineageResult = lineagePaper
+		judgment.lineageName = "paper"
+		judgment.addReason("lineage attributed to official paper distribution")
+	case len(lineages) == 1:
+		judgment.lineageResult = lineageFork
+		judgment.lineageName = lineages[0]
+		judgment.addReason("lineage attributed to paper fork")
 	default:
-		judgment.brandResult = brandUnknown
-		judgment.addReason("no specific paper-family brand attribution available")
+		judgment.lineageResult = lineageUnknown
+		judgment.addReason("no specific paper-family lineage attribution available")
 	}
 }
 
-func inferPaperObservationBrands(obs paperObservations) []string {
-	brands := make([]string, 0, 8)
+func inferPaperObservationLineages(obs paperObservations) []string {
+	lineages := make([]string, 0, 8)
 	seen := make(map[string]struct{}, 8)
 	add := func(name string) {
-		normalized := normalizePaperBrandName(name)
+		normalized := normalizePaperLineageName(name)
 		if normalized == "" {
 			return
 		}
@@ -244,7 +244,7 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 			return
 		}
 		seen[normalized] = struct{}{}
-		brands = append(brands, normalized)
+		lineages = append(lineages, normalized)
 	}
 
 	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_paper/paper/META-INF/libraries.list
@@ -293,7 +293,7 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 		add("leaves")
 	}
 	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_reaper/reaper/patch.properties
-	if hasStrictReaperObservationBrand(obs) {
+	if hasStrictReaperObservationLineage(obs) {
 		add("reaper")
 	}
 	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_youer/youer/META-INF/MANIFEST.MF
@@ -313,8 +313,8 @@ func inferPaperObservationBrands(obs paperObservations) []string {
 		add("youer")
 	}
 
-	slices.Sort(brands)
-	return brands
+	slices.Sort(lineages)
+	return lineages
 }
 
 func readBukkitExecutableSidecar(
@@ -389,7 +389,7 @@ func hasStrictYouerBukkitConfirmation(signals bukkitManifestSignals) bool {
 		)
 }
 
-func hasStrictReaperObservationBrand(obs paperObservations) bool {
+func hasStrictReaperObservationLineage(obs paperObservations) bool {
 	return strings.Contains(obs.patchProperties["patch"], paperPatchReaperToken)
 }
 
@@ -407,11 +407,11 @@ func resolvePaperContradictions(judgment *paperJudgment) {
 		return
 	}
 
-	if judgment.brandResult == brandContradiction {
+	if judgment.lineageResult == lineageContradiction {
 		judgment.familyResult = familyContradiction
 		judgment.contradictionState = fmt.Sprintf(
-			"brand contradiction after bukkit confirmation: %s",
-			nonEmptyPaperBrandName(judgment.brandName, "unknown"),
+			"lineage contradiction after bukkit confirmation: %s",
+			nonEmptyPaperLineageName(judgment.lineageName, "unknown"),
 		)
 	}
 	if judgment.familyResult == familyContradiction && judgment.contradictionState == "" {
@@ -425,61 +425,61 @@ func resolvePaperContradictions(judgment *paperJudgment) {
 
 func projectPaperJudgment(
 	filePath string,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 	judgment paperJudgment,
-) *ExecutableEvidence {
+) *RuntimeEvidence {
 	if !judgment.bukkitConfirmed {
 		return nil
 	}
 
-	brand := "bukkit"
+	lineage := "bukkit"
 
 	if judgment.contradictionState != "" {
 		judgment.addReason("runtime projection withheld paper promotion due to contradiction state")
 	} else {
-		switch judgment.brandResult {
-		case brandPaper:
-			brand = "paper"
-		case brandFork:
-			if detectedBrand := normalizePaperBrandName(judgment.brandName); detectedBrand != "" {
-				brand = detectedBrand
+		switch judgment.lineageResult {
+		case lineagePaper:
+			lineage = "paper"
+		case lineageFork:
+			if detectedLineage := normalizePaperLineageName(judgment.lineageName); detectedLineage != "" {
+				lineage = detectedLineage
 			} else {
-				judgment.addReason("paper-fork result without a concrete brand retains bukkit baseline")
+				judgment.addReason("paper-fork result without a concrete lineage retains bukkit baseline")
 			}
-		case brandUnknown:
+		case lineageUnknown:
 			switch judgment.familyResult {
 			case familyStrong:
-				judgment.addReason("strong paper-family evidence without a concrete brand retains bukkit baseline")
+				judgment.addReason("strong paper-family evidence without a concrete lineage retains bukkit baseline")
 			case familyWeak:
-				judgment.addReason("weak paper-family evidence without a concrete brand retains bukkit baseline")
+				judgment.addReason("weak paper-family evidence without a concrete lineage retains bukkit baseline")
 			default:
 				judgment.addReason("family miss remains non-terminal but projects to baseline bukkit runtime")
 			}
-		case brandContradiction:
+		case lineageContradiction:
 			// contradictionState is set by resolvePaperContradictions; projection
 			// already withheld above via the contradictionState guard. This arm
-			// makes the switch exhaustive over all paperBrandResult values.
-			judgment.addReason("brand contradiction: projection falls back to bukkit baseline")
+			// makes the switch exhaustive over all paperLineageResult values.
+			judgment.addReason("lineage contradiction: projection falls back to bukkit baseline")
 		default:
 		}
 	}
 
-	return &ExecutableEvidence{
+	return &RuntimeEvidence{
 		PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-			Eco:     types.EcoUnspecified,
-			Name:    input.ToProjectName(brand),
-			Version: types.VersionUnknown,
+			Ecosystem: types.EcosystemUnspecified,
+			Name:      input.ToProjectName(lineage),
+			Version:   types.VersionUnknown,
 		}, RuntimeComponents: []types.VersionedPackageRef{
 			{
-				Eco:     types.EcoMinecraft,
-				Name:    input.ToProjectName("minecraft"),
-				Version: gameVersion,
+				Ecosystem: types.EcosystemMinecraft,
+				Name:      input.ToProjectName("minecraft"),
+				Version:   gameVersion,
 			},
 		}, DetectorName: (&craftBukkitFamilyDetector{}).Name(),
 	}
 }
 
-func normalizePaperBrandName(name string) string {
+func normalizePaperLineageName(name string) string {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if normalized == "" {
 		return ""
@@ -493,8 +493,8 @@ func normalizePaperBrandName(name string) string {
 	}
 }
 
-func nonEmptyPaperBrandName(name string, fallback string) string {
-	if normalized := normalizePaperBrandName(name); normalized != "" {
+func nonEmptyPaperLineageName(name string, fallback string) string {
+	if normalized := normalizePaperLineageName(name); normalized != "" {
 		return normalized
 	}
 	return fallback
@@ -553,12 +553,12 @@ func parseBukkitManifest(data []byte) bukkitManifestSignals {
 	return signals
 }
 
-func parseBukkitGameVersion(implementationVersion string) types.BareVersion {
+func parseBukkitGameVersion(implementationVersion string) types.Version {
 	match := bukkitVersionPrefixPattern.FindStringSubmatch(strings.TrimSpace(implementationVersion))
 	if len(match) < 2 || !isMinecraftReleaseVersion(match[1]) {
 		return types.VersionUnknown
 	}
-	return types.BareVersion(match[1])
+	return types.Version(match[1])
 }
 
 func init() {

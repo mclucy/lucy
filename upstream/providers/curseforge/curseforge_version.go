@@ -17,11 +17,14 @@ func listFiles(modId int32, gameVersion string, loaderType int) (
 	return resp.Data, nil
 }
 
-// latestFile finds the latest release file compatible with local runtime facts.
+// latestFile finds the latest file compatible with local runtime facts and
+// the requested selector. stable accepts releases only; beta accepts any
+// channel; any prefers a release and falls back to a prerelease.
 func latestFile(
 	modId int32,
 	local upstream.LocalContext,
 	platform types.Ecosystem,
+	selector types.Version,
 ) (*fileResponse, error) {
 	files, err := listFiles(
 		modId,
@@ -31,7 +34,7 @@ func latestFile(
 	if err != nil {
 		return nil, err
 	}
-	latest := selectLatestReleaseFile(files)
+	latest := selectLatestFile(files, selector)
 	if latest == nil {
 		return nil, ErrNoCompatibleFile
 	}
@@ -39,14 +42,6 @@ func latestFile(
 		return nil, ErrDownloadNotAllowed
 	}
 	return latest, nil
-}
-
-func latestCompatibleFile(
-	modId int32,
-	local upstream.LocalContext,
-	platform types.Ecosystem,
-) (*fileResponse, error) {
-	return latestFile(modId, local, platform)
 }
 
 func getFileByDisplayName(
@@ -74,10 +69,10 @@ func getFileByDisplayName(
 }
 
 func curseForgeGameVersion(local upstream.LocalContext) string {
-	if !local.HasGameVersion() {
+	if !local.HasMinecraftVersion() {
 		return ""
 	}
-	return local.GameVersion.String()
+	return local.MinecraftVersion.String()
 }
 
 type modFileDataResponse struct {
@@ -85,7 +80,7 @@ type modFileDataResponse struct {
 }
 
 func getModFileById(modId, fileId int32) (*fileResponse, error) {
-	u := modFileUrl(modId, fileId)
+	u := modFileURL(modId, fileId)
 	var resp modFileDataResponse
 	if err := get(u, &resp); err != nil {
 		return nil, err

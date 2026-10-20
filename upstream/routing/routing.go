@@ -1,9 +1,11 @@
-// Package routing contains source-to-provider bindings and source resolution
-// policies.
+// Package routing contains provider-to-capability bindings and provider
+// resolution policies.
 //
 // Responsibilities:
-//   - Resolve SourceAuto against Platform into ordered provider candidates.
-//   - Map explicit Source to exactly one provider when supported.
+//   - Resolve ProviderUnspecified against an Ecosystem into ordered provider
+//     candidates.
+//   - Map an explicit Provider (or Registry for search) to exactly one
+//     capability when supported.
 //   - Apply operation-aware routing policy (search/info/fetch/dependencies).
 //   - Return typed selection errors for invalid/unsupported inputs.
 //
@@ -33,103 +35,100 @@ import (
 )
 
 var (
-	ErrUnknownSource     = errors.New("unknown source")
-	ErrUnsupportedSource = errors.New("unsupported source")
-	ErrInvalidEcosystem  = errors.New("cannot find sources for ecosystem")
-	ErrNoCatalogue       = errors.New("source has no package catalogue")
+	ErrUnknownProvider     = errors.New("unknown provider")
+	ErrUnsupportedProvider = errors.New("unsupported provider")
+	ErrInvalidEcosystem    = errors.New("cannot find providers for ecosystem")
+	ErrNoCatalogue         = errors.New("registry has no package catalogue")
 )
 
 type providerCatalog struct {
-	packageSources     map[types.SourceId]upstream.PackageSource
-	searchSources      map[types.SourceId]upstream.SearchSource
-	infoSources        map[types.SourceId]upstream.InfoSource
-	artifactMappers    map[types.SourceId]upstream.ArtifactMapSource
-	ecosystemProviders map[types.SourceId]upstream.EcosystemProvider
+	packageProviders   map[types.Provider]upstream.PackageProvider
+	searchProviders    map[types.Registry]upstream.SearchProvider
+	infoProviders      map[types.Provider]upstream.InfoProvider
+	artifactMappers    map[types.Provider]upstream.ArtifactMapProvider
+	installerProviders map[types.Provider]upstream.InstallerProvider
 }
 
-var providers = sync.OnceValue(newProviderCatalog)
+var providerCatalogOnce = sync.OnceValue(newProviderCatalog)
 
 func newProviderCatalog() providerCatalog {
 	catalog := providerCatalog{
-		packageSources: map[types.SourceId]upstream.PackageSource{
-			types.SourceModrinth: modrinth.Provider,
-			types.SourceMCDR:     mcdr.Provider,
-			types.SourceHangar:   hangar.Provider,
-			types.SourceSpiget:   spiget.Provider,
+		packageProviders: map[types.Provider]upstream.PackageProvider{
+			types.ProviderModrinth: modrinth.Provider,
+			types.ProviderMCDR:     mcdr.Provider,
+			types.ProviderHangar:   hangar.Provider,
+			types.ProviderSpiget:   spiget.Provider,
 		},
-		searchSources: map[types.SourceId]upstream.SearchSource{
-			types.SourceModrinth: modrinth.Provider,
-			types.SourceMCDR:     mcdr.Provider,
-			types.SourceHangar:   hangar.Provider,
-			types.SourceSpiget:   spiget.Provider,
+		searchProviders: map[types.Registry]upstream.SearchProvider{
+			types.RegistryModrinth: modrinth.Provider,
+			types.RegistryMCDR:     mcdr.Provider,
+			types.RegistryHangar:   hangar.Provider,
+			types.RegistrySpiget:   spiget.Provider,
 		},
-		infoSources: map[types.SourceId]upstream.InfoSource{
-			types.SourceModrinth: modrinth.Provider,
-			types.SourceMCDR:     mcdr.Provider,
-			types.SourceHangar:   hangar.Provider,
-			types.SourceSpiget:   spiget.Provider,
+		infoProviders: map[types.Provider]upstream.InfoProvider{
+			types.ProviderModrinth: modrinth.Provider,
+			types.ProviderMCDR:     mcdr.Provider,
+			types.ProviderHangar:   hangar.Provider,
+			types.ProviderSpiget:   spiget.Provider,
 		},
-		artifactMappers: map[types.SourceId]upstream.ArtifactMapSource{
-			types.SourceModrinth: modrinth.Provider,
+		artifactMappers: map[types.Provider]upstream.ArtifactMapProvider{
+			types.ProviderModrinth: modrinth.Provider,
 		},
-		ecosystemProviders: map[types.SourceId]upstream.EcosystemProvider{
-			types.SourceBMCLAPI:  bmclapi.Provider,
-			types.SourceFabric:   fabric.Provider,
-			types.SourceForge:    forge.Provider,
-			types.SourceMojang:   mojang.Provider,
-			types.SourceNeoForge: neoforge.Provider,
+		installerProviders: map[types.Provider]upstream.InstallerProvider{
+			types.ProviderBMCLAPI:  bmclapi.Provider,
+			types.ProviderFabric:   fabric.Provider,
+			types.ProviderForge:    forge.Provider,
+			types.ProviderMojang:   mojang.Provider,
+			types.ProviderNeoForge: neoforge.Provider,
 		},
 	}
 	if !curseforge.Enabled() {
 		return catalog
 	}
 
-	catalog.packageSources[types.SourceCurseForge] = curseforge.Provider
-	catalog.searchSources[types.SourceCurseForge] = curseforge.Provider
-	catalog.infoSources[types.SourceCurseForge] = curseforge.Provider
-	catalog.artifactMappers[types.SourceCurseForge] = curseforge.Provider
+	catalog.packageProviders[types.ProviderCurseForge] = curseforge.Provider
+	catalog.searchProviders[types.RegistryCurseForge] = curseforge.Provider
+	catalog.infoProviders[types.ProviderCurseForge] = curseforge.Provider
+	catalog.artifactMappers[types.ProviderCurseForge] = curseforge.Provider
 	return catalog
 }
 
 func providerCatalogInstance() providerCatalog {
-	return providers()
+	return providerCatalogOnce()
 }
 
-func listModProviders() []upstream.PackageSource {
-	providers, _ := providersFromSources(modProviderSources())
-	return providers
-}
-
-// ListAutoProviders returns the default ordered provider list used when
-// source=auto and platform=all.
-func ListAutoProviders() []upstream.PackageSource {
-	providers, _ := providersFromSources(autoProviderSources())
-	return providers
+// ListAutoProviders returns the default ordered provider list used when the
+// provider is unspecified and the platform is unspecified.
+func ListAutoProviders() []upstream.PackageProvider {
+	capabilities, _ := packageProvidersFromKeys(autoProviders())
+	return capabilities
 }
 
 func GetArtifactMapper(
-	src types.SourceId,
-) (upstream.ArtifactMapSource, bool, error) {
-	mapper, ok := providerCatalogInstance().artifactMappers[src]
+	provider types.Provider,
+) (upstream.ArtifactMapProvider, bool, error) {
+	mapper, ok := providerCatalogInstance().artifactMappers[provider]
 	if !ok {
 		log.Debug(
-			"routing: no artifact mapper for source",
-			"source", src,
-			"reason", "source has no artifact mapper",
+			"routing: no artifact mapper for provider",
+			"provider", provider,
+			"reason", "provider has no artifact mapper",
 		)
 	}
 	return mapper, ok, nil
 }
 
-func artifactMappers() []upstream.ArtifactMapSource {
-	return artifactMappersFromSources(modProviderSources())
+func artifactMappers() []upstream.ArtifactMapProvider {
+	return artifactMappersFromProviders(modProviders())
 }
 
-func artifactMappersFromSources(sources []types.SourceId) []upstream.ArtifactMapSource {
+func artifactMappersFromProviders(
+	providers []types.Provider,
+) []upstream.ArtifactMapProvider {
 	catalog := providerCatalogInstance()
-	mappers := make([]upstream.ArtifactMapSource, 0, len(sources))
-	for _, source := range sources {
-		mapper, ok := catalog.artifactMappers[source]
+	mappers := make([]upstream.ArtifactMapProvider, 0, len(providers))
+	for _, provider := range providers {
+		mapper, ok := catalog.artifactMappers[provider]
 		if ok {
 			mappers = append(mappers, mapper)
 		}
@@ -137,68 +136,74 @@ func artifactMappersFromSources(sources []types.SourceId) []upstream.ArtifactMap
 	return mappers
 }
 
-func EcosystemInstallerFor(
-	ecosystem types.Ecosystem,
-) (upstream.EcosystemProvider, bool) {
-	source, ok := ecosystemInstallerSource(ecosystem)
+// InstallerFor returns the installer provider that can bootstrap the
+// ecosystem.
+func InstallerFor(ecosystem types.Ecosystem) (
+	upstream.InstallerProvider,
+	bool,
+) {
+	provider, ok := installerProviderForEcosystem(ecosystem)
 	if !ok {
 		return nil, false
 	}
-	return EcosystemInstallerForSource(source)
+	return InstallerForProvider(provider)
 }
 
-func EcosystemInstallerForSource(
-	source types.SourceId,
-) (upstream.EcosystemProvider, bool) {
-	provider, ok := providerCatalogInstance().ecosystemProviders[source]
+// InstallerForProvider returns the installer provider registered for the
+// provider key.
+func InstallerForProvider(provider types.Provider) (
+	upstream.InstallerProvider,
+	bool,
+) {
+	installer, ok := providerCatalogInstance().installerProviders[provider]
 	if !ok {
 		log.Debug(
-			"routing: no ecosystem installer",
-			"source", source,
-			"reason", "source has no ecosystem provider",
+			"routing: no installer provider",
+			"provider", provider,
+			"reason", "provider has no installer capability",
 		)
 	}
-	return provider, ok
+	return installer, ok
 }
 
-func ecosystemInstallerSource(ecosystem types.Ecosystem) (
-	types.SourceId,
+func installerProviderForEcosystem(ecosystem types.Ecosystem) (
+	types.Provider,
 	bool,
 ) {
 	switch ecosystem {
-	case types.EcoMinecraft:
-		return types.SourceMojang, true
-	case types.EcoForge:
-		return types.SourceForge, true
-	case types.EcoNeoforge:
-		return types.SourceNeoForge, true
-	case types.EcoFabric:
-		return types.SourceFabric, true
+	case types.EcosystemMinecraft:
+		return types.ProviderMojang, true
+	case types.EcosystemForge:
+		return types.ProviderForge, true
+	case types.EcosystemNeoForge:
+		return types.ProviderNeoForge, true
+	case types.EcosystemFabric:
+		return types.ProviderFabric, true
 	default:
 		log.Debug(
-			"routing: no ecosystem installer",
+			"routing: no installer provider",
 			"ecosystem", ecosystem,
 			"reason", "unsupported ecosystem",
 		)
-		return types.SourceUnknown, false
+		return types.ProviderUnknown, false
 	}
 }
 
 // ResolveProviders resolves ordered provider candidates for the platform and
-// user-specified source.
+// user-specified provider.
 func ResolveProviders(
 	platform types.Ecosystem,
-	src types.SourceId,
-) ([]upstream.PackageSource, error) {
-	if src == types.SourceUnknown {
-		return nil, ErrUnknownSource
+	provider types.Provider,
+) ([]upstream.PackageProvider, error) {
+	if provider == types.ProviderUnknown {
+		return nil, ErrUnknownProvider
 	}
 
-	if src != types.SourceAuto {
-		return resolveExplicitSource(src)
+	if provider != types.ProviderUnspecified {
+		return resolveExplicitProvider(provider)
 	}
 
-	sources, err := providerSourcesForEcosystem(platform)
+	keys, err := providersForEcosystem(platform)
 	if err != nil {
 		log.Debug(
 			"routing: package providers unavailable for ecosystem",
@@ -207,44 +212,44 @@ func ResolveProviders(
 		)
 		return nil, fmt.Errorf("%w: %s", err, platform)
 	}
-	providers, err := providersFromSources(sources)
+	providers, err := packageProvidersFromKeys(keys)
 	if err != nil {
 		return nil, err
 	}
 	log.Debug(
 		"routing: package providers selected from ecosystem candidates",
 		"platform", platform,
-		"sources", sources,
+		"providers", keys,
 	)
 	return providers, nil
 }
 
 // ResolveSearchProviders resolves search providers for the platform. With a
-// platform filter active, explicit source selection is validated against
-// source capability data.
+// platform filter active, explicit registry selection is validated against
+// registry capability data.
 func ResolveSearchProviders(
 	platform types.Ecosystem,
-	src types.SourceId,
-) ([]upstream.SearchSource, error) {
-	if src == types.SourceUnknown {
-		return nil, ErrUnknownSource
+	registry types.Registry,
+) ([]upstream.SearchProvider, error) {
+	if registry == types.RegistryUnknown {
+		return nil, ErrUnknownProvider
 	}
 
-	if src != types.SourceAuto {
-		if err := validateSearchSourceEcosystem(src, platform); err != nil {
+	if registry != types.RegistryUnspecified {
+		if err := validateSearchRegistryEcosystem(registry, platform); err != nil {
 			log.Debug(
-				"routing: search source rejected for platform",
-				"source", src,
+				"routing: search registry rejected for platform",
+				"registry", registry,
 				"platform", platform,
-				"reason", "source does not support platform",
+				"reason", "registry does not support platform",
 			)
 			return nil, err
 		}
-		return resolveExplicitSearcher(src)
+		return resolveExplicitRegistry(registry)
 	}
 
-	if !platform.IsSearchEcosystem() {
-		sources, err := providerSourcesForEcosystem(platform)
+	if !platform.IsSearchable() {
+		keys, err := providersForEcosystem(platform)
 		if err != nil {
 			log.Debug(
 				"routing: search providers unavailable for ecosystem",
@@ -253,52 +258,52 @@ func ResolveSearchProviders(
 			)
 			return nil, fmt.Errorf("%w: %s", err, platform)
 		}
-		providers, err := searchersFromSources(sources)
+		providers, err := searchersFromKeys(keys)
 		if err != nil {
 			return nil, err
 		}
 		log.Debug(
 			"routing: search providers selected from ecosystem candidates",
 			"platform", platform,
-			"sources", sources,
+			"providers", keys,
 		)
 		return providers, nil
 	}
 
-	sources := providerSourcesForSearchEcosystem(platform)
-	if len(sources) == 0 {
+	keys := searchProvidersForEcosystem(platform)
+	if len(keys) == 0 {
 		log.Debug(
 			"routing: search providers unavailable for platform",
 			"platform", platform,
-			"reason", "no source supports platform search",
+			"reason", "no provider supports platform search",
 		)
 		return nil, fmt.Errorf("%w: %s", ErrInvalidEcosystem, platform)
 	}
-	providers, err := searchersFromSources(sources)
+	providers, err := searchersFromKeys(keys)
 	if err != nil {
 		return nil, err
 	}
 	log.Debug(
 		"routing: search providers selected for platform",
 		"platform", platform,
-		"sources", sources,
+		"providers", keys,
 	)
 	return providers, nil
 }
 
 func ResolveInfoProviders(
 	platform types.Ecosystem,
-	src types.SourceId,
-) ([]upstream.InfoSource, error) {
-	if src == types.SourceUnknown {
-		return nil, ErrUnknownSource
+	provider types.Provider,
+) ([]upstream.InfoProvider, error) {
+	if provider == types.ProviderUnknown {
+		return nil, ErrUnknownProvider
 	}
 
-	if src != types.SourceAuto {
-		return resolveExplicitInformer(src)
+	if provider != types.ProviderUnspecified {
+		return resolveExplicitInformer(provider)
 	}
 
-	sources, err := providerSourcesForEcosystem(platform)
+	keys, err := providersForEcosystem(platform)
 	if err != nil {
 		log.Debug(
 			"routing: info providers unavailable for ecosystem",
@@ -307,70 +312,70 @@ func ResolveInfoProviders(
 		)
 		return nil, fmt.Errorf("%w: %s", err, platform)
 	}
-	providers, err := informersFromSources(sources)
+	providers, err := informersFromKeys(keys)
 	if err != nil {
 		return nil, err
 	}
 	log.Debug(
 		"routing: info providers selected from ecosystem candidates",
 		"platform", platform,
-		"sources", sources,
+		"providers", keys,
 	)
 	return providers, nil
 }
 
-func resolveExplicitInformer(src types.SourceId) (
-	[]upstream.InfoSource,
+func resolveExplicitInformer(provider types.Provider) (
+	[]upstream.InfoProvider,
 	error,
 ) {
-	provider, ok := providerCatalogInstance().infoSources[src]
+	informer, ok := providerCatalogInstance().infoProviders[provider]
 	if !ok {
 		log.Debug(
-			"routing: explicit info source rejected",
-			"source", src,
-			"reason", "source has no info provider",
+			"routing: explicit info provider rejected",
+			"provider", provider,
+			"reason", "provider has no info capability",
 		)
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, provider)
 	}
 	log.Debug(
-		"routing: explicit info source selected",
-		"source", src,
-		"provider", provider.Id(),
+		"routing: explicit info provider selected",
+		"provider", provider,
+		"capability", informer.Provider(),
 	)
-	return []upstream.InfoSource{provider}, nil
+	return []upstream.InfoProvider{informer}, nil
 }
 
-func resolveExplicitSearcher(src types.SourceId) (
-	[]upstream.SearchSource,
+func resolveExplicitRegistry(registry types.Registry) (
+	[]upstream.SearchProvider,
 	error,
 ) {
-	provider, ok := providerCatalogInstance().searchSources[src]
+	searcher, ok := providerCatalogInstance().searchProviders[registry]
 	if !ok {
 		log.Debug(
-			"routing: explicit search source rejected",
-			"source", src,
-			"reason", "source has no search provider",
+			"routing: explicit search registry rejected",
+			"registry", registry,
+			"reason", "registry has no search capability",
 		)
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, registry)
 	}
 	log.Debug(
-		"routing: explicit search source selected",
-		"source", src,
-		"provider", provider.Id(),
+		"routing: explicit search registry selected",
+		"registry", registry,
+		"provider", searcher.Provider(),
 	)
-	return []upstream.SearchSource{provider}, nil
+	return []upstream.SearchProvider{searcher}, nil
 }
 
 func ResolveProvidersForRuntime(
 	ecosystems []types.Ecosystem,
-	src types.SourceId,
-) ([]upstream.PackageSource, error) {
-	if src == types.SourceUnknown {
-		return nil, ErrUnknownSource
+	provider types.Provider,
+) ([]upstream.PackageProvider, error) {
+	if provider == types.ProviderUnknown {
+		return nil, ErrUnknownProvider
 	}
 
-	if src != types.SourceAuto {
-		return resolveExplicitSource(src)
+	if provider != types.ProviderUnspecified {
+		return resolveExplicitProvider(provider)
 	}
 
 	if len(ecosystems) == 0 {
@@ -381,115 +386,124 @@ func ResolveProvidersForRuntime(
 		return nil, fmt.Errorf("routing: runtime ecosystems unavailable, cannot resolve providers")
 	}
 
-	selection := providerSourcesFromEcosystems(ecosystems)
+	selection := providersFromEcosystems(ecosystems)
 	switch {
-	case len(selection.sources) > 0:
+	case len(selection.providers) > 0:
 		log.Debug(
 			"routing: package providers selected from runtime ecosystems",
 			"ecosystems", ecosystems,
-			"sources", selection.sources,
+			"providers", selection.providers,
 		)
-		return providersFromSources(selection.sources)
+		return packageProvidersFromKeys(selection.providers)
 	case selection.fallback:
 		log.Debug(
 			"routing: package providers fell back to auto list",
 			"ecosystems", ecosystems,
-			"reason", "no runtime ecosystem maps to package sources",
+			"reason", "no runtime ecosystem maps to package providers",
 		)
 		return ListAutoProviders(), nil
 	default:
 		log.Debug(
 			"routing: package provider selection is empty",
 			"ecosystems", ecosystems,
-			"reason", "runtime ecosystems carry no package sources",
+			"reason", "runtime ecosystems carry no package providers",
 		)
-		return []upstream.PackageSource{}, nil
+		return []upstream.PackageProvider{}, nil
 	}
 }
 
-func resolveExplicitSource(src types.SourceId) (
-	[]upstream.PackageSource,
+func resolveExplicitProvider(provider types.Provider) (
+	[]upstream.PackageProvider,
 	error,
 ) {
-	provider, ok := providerCatalogInstance().packageSources[src]
+	capability, ok := providerCatalogInstance().packageProviders[provider]
 	if !ok {
 		log.Debug(
-			"routing: explicit package source rejected",
-			"source", src,
-			"reason", "source has no package provider",
+			"routing: explicit package provider rejected",
+			"provider", provider,
+			"reason", "provider has no package capability",
 		)
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, src)
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, provider)
 	}
 	log.Debug(
-		"routing: explicit package source selected",
-		"source", src,
-		"provider", provider.Id(),
+		"routing: explicit package provider selected",
+		"provider", provider,
+		"capability", capability.Provider(),
 	)
-	return []upstream.PackageSource{provider}, nil
+	return []upstream.PackageProvider{capability}, nil
 }
 
-func validateSearchSourceEcosystem(
-	src types.SourceId,
+func validateSearchRegistryEcosystem(
+	registry types.Registry,
 	platform types.Ecosystem,
 ) error {
-	if !platform.IsSearchEcosystem() {
+	if !platform.IsSearchable() {
 		return nil
 	}
 
-	support, ok := EcosystemSupportedBy(src, platform)
+	provider := registry.Provider()
+	support, ok := EcosystemSupportedBy(provider, platform)
 	if ok && support.Supported {
 		return nil
 	}
 
-	return fmt.Errorf("source %s does not support platform %s", src, platform)
+	return fmt.Errorf(
+		"registry %s does not support platform %s",
+		registry,
+		platform,
+	)
 }
 
-func providersFromSources(sources []types.SourceId) (
-	[]upstream.PackageSource,
+func packageProvidersFromKeys(providers []types.Provider) (
+	[]upstream.PackageProvider,
 	error,
 ) {
-	providers := make([]upstream.PackageSource, 0, len(sources))
-	for _, source := range sources {
-		provider, ok := providerCatalogInstance().packageSources[source]
+	capabilities := make([]upstream.PackageProvider, 0, len(providers))
+	for _, provider := range providers {
+		capability, ok := providerCatalogInstance().packageProviders[provider]
 		if !ok {
-			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, provider)
 		}
-		providers = append(providers, provider)
+		capabilities = append(capabilities, capability)
 	}
-	return providers, nil
+	return capabilities, nil
 }
 
-func searchersFromSources(sources []types.SourceId) (
-	[]upstream.SearchSource,
+func searchersFromKeys(keys []types.Provider) (
+	[]upstream.SearchProvider,
 	error,
 ) {
-	providers := make([]upstream.SearchSource, 0, len(sources))
-	for _, source := range sources {
-		provider, ok := providerCatalogInstance().searchSources[source]
+	capabilities := make([]upstream.SearchProvider, 0, len(keys))
+	for _, key := range keys {
+		registry, ok := key.Registry()
 		if !ok {
-			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, key)
 		}
-		providers = append(providers, provider)
+		capability, ok := providerCatalogInstance().searchProviders[registry]
+		if !ok {
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, key)
+		}
+		capabilities = append(capabilities, capability)
 	}
-	return providers, nil
+	return capabilities, nil
 }
 
-func informersFromSources(sources []types.SourceId) (
-	[]upstream.InfoSource,
+func informersFromKeys(keys []types.Provider) (
+	[]upstream.InfoProvider,
 	error,
 ) {
-	providers := make([]upstream.InfoSource, 0, len(sources))
-	for _, source := range sources {
-		provider, ok := providerCatalogInstance().infoSources[source]
+	capabilities := make([]upstream.InfoProvider, 0, len(keys))
+	for _, key := range keys {
+		capability, ok := providerCatalogInstance().infoProviders[key]
 		if !ok {
-			return nil, fmt.Errorf("%w: %s", ErrUnsupportedSource, source)
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, key)
 		}
-		providers = append(providers, provider)
+		capabilities = append(capabilities, capability)
 	}
-	return providers, nil
+	return capabilities, nil
 }
 
 func curseforgeAvailable() bool {
-	_, ok := providerCatalogInstance().packageSources[types.SourceCurseForge]
+	_, ok := providerCatalogInstance().packageProviders[types.ProviderCurseForge]
 	return ok
 }

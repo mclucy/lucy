@@ -19,23 +19,21 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Id() types.SourceId {
-	return types.SourceCurseForge
+func (provider) Provider() types.Provider {
+	return types.ProviderCurseForge
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
-	options := upstream.SearchOptions{
-		IncludeClient:   !q.ExcludeClient,
-		FilterEcosystem: q.FilterEcosystem,
-	}
-	u := searchUrl(types.BarePackageName(q.Keyword), options)
+	// CurseForge exposes no client/server search facet; IncludeClient cannot
+	// be applied upstream and is left to post-filtering.
+	u := searchUrl(types.PackageName(q.Keyword), q.FilterEcosystem)
 	log.Debug("searching via curseforge api: " + u)
 
 	resp := &searchResponse{}
 	if err := get(u, resp); err != nil {
 		return upstream.SearchResponse{}, err
 	}
-	return resp.ToSearchResults(p.Id()), nil
+	return resp.ToSearchResults(p.Provider()), nil
 }
 
 func (p provider) Fetch(
@@ -47,14 +45,14 @@ func (p provider) Fetch(
 		return types.ResolvedPackage{}, err
 	}
 
-	file, err := getFileByDisplayName(mod.Id, string(id.Version), local, id.Eco)
+	file, err := getFileByDisplayName(mod.ID, string(id.Version), local, id.Ecosystem)
 	if err != nil {
 		return types.ResolvedPackage{}, err
 	}
 
 	resolved := file.ToPackageRemote()
-	resolved.Id.PackageRef = id.PackageRef
-	resolved.Id.Version = id.Version
+	resolved.ID.PackageRef = id.PackageRef
+	resolved.ID.Version = id.Version
 	return resolved, nil
 }
 
@@ -63,7 +61,7 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 	if err != nil {
 		return types.Metadata{}, err
 	}
-	description, err := getModDescription(mod.Id)
+	description, err := getModDescription(mod.ID)
 	if err != nil {
 		return types.Metadata{}, err
 	}
@@ -76,18 +74,18 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 func (p provider) Dependencies(
 	local upstream.LocalContext,
 	id types.VersionedPackageRef,
-) (*types.PackageDependencies, error) {
+) (*types.DependencySet, error) {
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	file, err := getFileByDisplayName(mod.Id, string(id.Version), local, id.Eco)
+	file, err := getFileByDisplayName(mod.ID, string(id.Version), local, id.Ecosystem)
 	if err != nil {
 		return nil, err
 	}
 
-	return new((&curseforgeDependencies{file: file}).ToPackageDependencies()), nil
+	return new((&curseforgeDependencies{file: file}).ToDependencySet()), nil
 }
 
 // curseforgeDependencies wraps a fileResponse for dependency
@@ -96,9 +94,9 @@ type curseforgeDependencies struct {
 	file *fileResponse
 }
 
-func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependencies {
-	result := types.PackageDependencies{
-		Authentic: false,
+func (c *curseforgeDependencies) ToDependencySet() types.DependencySet {
+	result := types.DependencySet{
+		FromArtifact: false,
 	}
 
 	for _, dep := range c.file.Dependencies {
@@ -112,11 +110,11 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 
 		switch dep.RelationType {
 		case 2:
-			result.Value = append(
-				result.Value, types.Dependency{
-					Id: types.VersionedPackageRef{
+			result.Dependencies = append(
+				result.Dependencies, types.Dependency{
+					ID: types.VersionedPackageRef{
 						PackageRef: types.PackageRef{
-							Name: types.BarePackageName(
+							Name: types.PackageName(
 								fmt.Sprintf(
 									"%d",
 									dep.ModId,
@@ -128,11 +126,11 @@ func (c *curseforgeDependencies) ToPackageDependencies() types.PackageDependenci
 				},
 			)
 		case 3:
-			result.Value = append(
-				result.Value, types.Dependency{
-					Id: types.VersionedPackageRef{
+			result.Dependencies = append(
+				result.Dependencies, types.Dependency{
+					ID: types.VersionedPackageRef{
 						PackageRef: types.PackageRef{
-							Name: types.BarePackageName(
+							Name: types.PackageName(
 								fmt.Sprintf(
 									"%d",
 									dep.ModId,
@@ -157,10 +155,10 @@ func (p provider) ResolveVersionSelector(
 	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (parsed types.VersionedPackageRef, err error) {
-	if id.Eco.IsSelector() {
-		id.Eco = types.EcoUnspecified
+	if id.Ecosystem.IsUnspecified() {
+		id.Ecosystem = types.EcosystemUnspecified
 	}
-	parsed.Eco = id.Eco
+	parsed.Ecosystem = id.Ecosystem
 	parsed.Name = id.Name
 
 	mod, err := resolveSlug(id.Name)
@@ -170,10 +168,8 @@ func (p provider) ResolveVersionSelector(
 
 	var file *fileResponse
 	switch id.Version {
-	case types.VersionStable:
-		file, err = latestCompatibleFile(mod.Id, local, id.Eco)
-	case types.VersionBeta, types.VersionAny:
-		file, err = latestFile(mod.Id, local, id.Eco)
+	case types.VersionStable, types.VersionBeta, types.VersionAny:
+		file, err = latestFile(mod.ID, local, id.Ecosystem, id.Version)
 	default:
 		return id, nil
 	}
@@ -181,6 +177,6 @@ func (p provider) ResolveVersionSelector(
 		return id, err
 	}
 
-	parsed.Version = types.BareVersion(file.FileName)
+	parsed.Version = types.Version(file.FileName)
 	return parsed, nil
 }

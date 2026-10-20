@@ -17,7 +17,7 @@ import (
 func resolveUpstream(
 	path string,
 ) (types.VersionedPackageRef, bool) {
-	mappers := []upstream.ArtifactMapSource{modrinth.Provider}
+	mappers := []upstream.ArtifactMapProvider{modrinth.Provider}
 	if curseforge.Enabled() {
 		mappers = append(mappers, curseforge.Provider)
 	}
@@ -35,7 +35,7 @@ func resolveUpstream(
 }
 
 // discoverPackages inventories the packages under searchPaths and
-// mcdrPluginDirs, when the MCDR environment exists. Deduplication and
+// mcdrPluginDirs, when the MCDR wrapper exists. Deduplication and
 // local-path enrichment follow the PackageIndex.Add policy.
 func discoverPackages(
 	searchPaths []string,
@@ -55,7 +55,7 @@ func discoverPackages(
 		var wg sync.WaitGroup
 		for _, jarPath := range jarFiles {
 			wg.Go(func() {
-				analyzed, err := artifact.Analyze(jarPath)
+				analyzed, err := artifact.ReadInfo(jarPath)
 
 				if err != nil || len(analyzed) == 0 {
 					// Only a jar without a readable descriptor needs its upstream
@@ -85,7 +85,7 @@ func discoverPackages(
 			continue
 		}
 		for _, pluginFile := range pluginFiles {
-			analyzed, err := artifact.Analyze(pluginFile)
+			analyzed, err := artifact.ReadInfo(pluginFile)
 			if err == nil && len(analyzed) > 0 {
 				pkgs := artifactInfoToDiscoveredPackage(analyzed)
 				idx.Merge(pkgs)
@@ -96,17 +96,17 @@ func discoverPackages(
 	return idx.Packages()
 }
 
-func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPackage {
+func artifactInfoToDiscoveredPackage(infos []artifact.PackageInfo) []types.DiscoveredPackage {
 	if len(infos) == 0 {
 		return nil
 	}
 	pkgs := make([]types.DiscoveredPackage, 0, len(infos))
 	for _, info := range infos {
 		pkg := types.DiscoveredPackage{
-			Id: types.VersionedPackageRef{
+			ID: types.VersionedPackageRef{
 				PackageRef: info.Ref.PackageRef,
-				Eco:        info.Ref.Eco,
-				Version:    info.Version,
+				Ecosystem:  info.Ref.Ecosystem,
+				Version:    info.Ref.Version,
 			},
 			Path: info.FilePath,
 		}
@@ -114,16 +114,16 @@ func artifactInfoToDiscoveredPackage(infos []artifact.Info) []types.DiscoveredPa
 			deps := make([]types.Dependency, 0, len(info.Dependencies))
 			for _, dep := range info.Dependencies {
 				deps = append(deps, types.Dependency{
-					Id: types.VersionedPackageRef{
+					ID: types.VersionedPackageRef{
 						PackageRef: dep.Ref.PackageRef,
-						Eco:        dep.Ref.Eco,
+						Ecosystem:  dep.Ref.Ecosystem,
 					},
 					Constraint: dep.Constraint,
 					Mandatory:  dep.Mandatory,
-					Type:       types.NormalizeDependencyType(dep.Type),
+					Origin:     types.NormalizeDependencyOrigin(dep.Origin),
 				})
 			}
-			pkg.Dependencies = types.PackageDependencies{Value: deps}
+			pkg.Dependencies = types.DependencySet{Dependencies: deps}
 		}
 		pkgs = append(pkgs, pkg)
 	}
@@ -137,28 +137,28 @@ func discoveredFromUpstream(
 	path string,
 	ref types.VersionedPackageRef,
 ) types.DiscoveredPackage {
-	platform := ref.Eco
-	if platform == types.EcoUnspecified {
-		platform = types.EcoForge
+	ecosystem := ref.Ecosystem
+	if ecosystem == types.EcosystemUnspecified {
+		ecosystem = types.EcosystemForge
 	}
 	version := ref.Version
 	if version == "" {
 		version = types.VersionUnknown
 	}
 	pkgName := ref.Name
-	if ref.Source == types.SourceMCDR {
-		pkgName = types.BarePackageName(
+	if ref.Provider == types.ProviderMCDR {
+		pkgName = types.PackageName(
 			strings.ReplaceAll(string(ref.Name), "_", "-"),
 		)
 	}
 	return types.DiscoveredPackage{
-		Id: types.VersionedPackageRef{
+		ID: types.VersionedPackageRef{
 			PackageRef: types.PackageRef{
-				Name:   pkgName,
-				Source: ref.Source,
+				Name:     pkgName,
+				Provider: ref.Provider,
 			},
-			Eco:     platform,
-			Version: version,
+			Ecosystem: ecosystem,
+			Version:   version,
 		},
 		Path: path,
 	}

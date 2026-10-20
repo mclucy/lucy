@@ -8,7 +8,7 @@ import (
 // resolveSlug resolves a project slug to its mod data. CurseForge has no
 // get-by-slug endpoint, so it searches by slug and requires an exact match.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func resolveSlug(slug types.BarePackageName) (*modResponse, error) {
+func resolveSlug(slug types.PackageName) (*modResponse, error) {
 	u := slugSearchUrl(slug)
 	var resp searchResponse
 	if err := get(u, &resp); err != nil {

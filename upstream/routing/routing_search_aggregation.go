@@ -22,12 +22,12 @@ func MaybeAggregateSearchResults(
 }
 
 // AggregateSearchResults merges multi-provider search results into one result.
-// Source metadata remains in the original non-aggregated form and should be
+// Provider metadata remains in the original non-aggregated form and should be
 // preferred unless aggregation is explicitly required by callers.
 func AggregateSearchResults(results []upstream.SearchResponse) upstream.SearchResponse {
 	aggregated := upstream.SearchResponse{
-		Source: types.SourceAuto,
-		Items:  make([]upstream.SearchResult, 0),
+		Provider: types.ProviderUnspecified,
+		Items:    make([]upstream.SearchResult, 0),
 	}
 	for _, res := range results {
 		aggregated.Items = append(aggregated.Items, res.Items...)

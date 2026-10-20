@@ -18,7 +18,7 @@ type projectResponse struct {
 	ClientSide       string    `json:"client_side"`
 	ServerSide       string    `json:"server_side"`
 	GameVersions     []string  `json:"game_versions"`
-	Id               string    `json:"id"`
+	ID               string    `json:"id"`
 	Slug             string    `json:"slug"`
 	ProjectType      string    `json:"project_type"`
 	Team             string    `json:"team"`
@@ -27,7 +27,7 @@ type projectResponse struct {
 	Description      string    `json:"description"`
 	Body             string    `json:"body"`
 	BodyUrl          string    `json:"body_url"`
-	Published        time.Time `json:"published"`
+	PublishedAt      time.Time `json:"published"`
 	Updated          time.Time `json:"updated"`
 	Approved         time.Time `json:"approved"`
 	Queued           any       `json:"queued"`
@@ -35,9 +35,9 @@ type projectResponse struct {
 	RequestedStatus  any       `json:"requested_status"`
 	ModeratorMessage any       `json:"moderator_message"`
 	License          struct {
-		Id   string `json:"id"`
+		ID   string `json:"id"`
 		Name string `json:"name"`
-		Url  any    `json:"url"`
+		URL  any    `json:"url"`
 	} `json:"license"`
 	Downloads            int      `json:"downloads"`
 	Followers            int      `json:"followers"`
@@ -51,9 +51,9 @@ type projectResponse struct {
 	WikiUrl              string   `json:"wiki_url"`
 	DiscordUrl           string   `json:"discord_url"`
 	DonationUrls         []struct {
-		Id       string `json:"id"`
+		ID       string `json:"id"`
 		Platform string `json:"platform"`
-		Url      string `json:"url"`
+		URL      string `json:"url"`
 	} `json:"donation_urls"`
 	Gallery            []any  `json:"gallery"`
 	Color              int    `json:"color"`
@@ -68,55 +68,55 @@ func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
 		Description:           p.Body,
 		DescriptionIsMarkdown: upstream.LooksLikeMarkdown(p.Body),
 		License:               p.License.Name,
-		Urls:                  make([]types.Url, 0),
+		URLs:                  make([]types.URL, 0),
 	}
 
 	if p.DiscordUrl != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Discord",
-				Type: types.UrlForum,
-				Url:  p.DiscordUrl,
+				Type: types.URLForum,
+				URL:  p.DiscordUrl,
 			},
 		)
 	}
 
 	if p.IssuesUrl != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Issues",
-				Type: types.UrlSource,
-				Url:  "",
+				Type: types.URLSource,
+				URL:  "",
 			},
 		)
 	}
 
 	if p.SourceUrl != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Source",
-				Type: types.UrlSource,
-				Url:  p.SourceUrl,
+				Type: types.URLSource,
+				URL:  p.SourceUrl,
 			},
 		)
 	}
 
 	if p.WikiUrl != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Wiki",
-				Type: types.UrlWiki,
-				Url:  p.WikiUrl,
+				Type: types.URLWiki,
+				URL:  p.WikiUrl,
 			},
 		)
 	}
 
 	for _, donationUrl := range p.DonationUrls {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: donationUrl.Platform,
-				Type: types.UrlSponsor,
-				Url:  donationUrl.Url,
+				Type: types.URLSponsor,
+				URL:  donationUrl.URL,
 			},
 		)
 	}
@@ -162,14 +162,6 @@ type hit struct {
 	Color             *int      `json:"color"`
 }
 
-func (h hit) RemoteName() string {
-	return h.Slug
-}
-
-func (h hit) Source() types.SourceId {
-	return types.SourceModrinth
-}
-
 // versionResponse
 //
 // Docs
@@ -180,7 +172,7 @@ func (h hit) Source() types.SourceId {
 type versionResponse struct {
 	GameVersions    []string               `json:"game_versions"`
 	Loaders         []string               `json:"loaders"`
-	Id              string                 `json:"id"`
+	ID              string                 `json:"id"`
 	ProjectId       string                 `json:"project_id"`
 	AuthorId        string                 `json:"author_id"`
 	Featured        bool                   `json:"featured"`
@@ -199,8 +191,8 @@ type versionResponse struct {
 
 func (v versionResponse) ToPackageRemote() types.ResolvedPackage {
 	remote := types.ResolvedPackage{
-		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceModrinth}},
-		FileUrl:  v.Files[0].Url,
+		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderModrinth}},
+		FileURL:  v.Files[0].URL,
 		Filename: v.Files[0].Filename,
 	}
 
@@ -234,11 +226,11 @@ type fileResponse struct {
 		Sha1   string `json:"sha1"`
 		Sha512 string `json:"sha512"`
 	} `json:"hashes"`
-	Url      string `json:"url"`
-	Filename string `json:"filename"`
-	Primary  bool   `json:"primary"`
-	Size     int    `json:"size"`
-	FileType string `json:"file_type"`
+	URL       string `json:"url"`
+	Filename  string `json:"filename"`
+	IsPrimary bool   `json:"primary"`
+	Size      int    `json:"size"`
+	FileType  string `json:"file_type"`
 }
 
 type dependenciesResponse struct {
@@ -272,7 +264,7 @@ type memberResponse struct {
 // Example
 // https://modrinth.com/user/gnembon
 type userResponse struct {
-	Id                  string    `json:"id"`
+	ID                  string    `json:"id"`
 	Username            string    `json:"username"`
 	AvatarUrl           string    `json:"avatar_url"`
 	Bio                 string    `json:"bio"`

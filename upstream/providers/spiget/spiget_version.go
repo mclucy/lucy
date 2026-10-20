@@ -4,10 +4,9 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 )
 
-func resolveResourceByProjectName(name types.BarePackageName) (
+func resolveResourceByProjectName(name types.PackageName) (
 	*resourceResponse,
 	error,
 ) {
@@ -15,10 +14,7 @@ func resolveResourceByProjectName(name types.BarePackageName) (
 		return getResource(id)
 	}
 
-	results, err := searchResources(
-		name.String(),
-		upstream.SearchOptions{},
-	)
+	results, err := searchResources(name.String())
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +37,7 @@ func resolveResourceByProjectName(name types.BarePackageName) (
 
 func resolveVersion(
 	resource *resourceResponse,
-	requested types.BareVersion,
+	requested types.Version,
 ) (resolvedVersion, error) {
 	switch requested {
 	case "", types.VersionAny, types.VersionBeta, types.VersionStable:

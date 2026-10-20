@@ -50,7 +50,7 @@ func (v1 *Pre26MinecraftSnapshotVersion) Validate() bool {
 }
 
 func (v1 *Pre26MinecraftSnapshotVersion) Scheme() types.VersionScheme {
-	return types.MinecraftSnapshot
+	return types.VersionSchemeMinecraftSnapshot
 }
 
 // Post26MinecraftSnapshotVersion represents snapshots after the new numbering
@@ -88,7 +88,7 @@ func (v1 *Post26MinecraftSnapshotVersion) Validate() bool {
 }
 
 func (v1 *Post26MinecraftSnapshotVersion) Scheme() types.VersionScheme {
-	return types.MinecraftSnapshot
+	return types.VersionSchemeMinecraftSnapshot
 }
 
 type MinecraftVersion struct {
@@ -184,7 +184,7 @@ func (v1 *MinecraftVersion) Validate() bool {
 }
 
 func (v1 *MinecraftVersion) Scheme() types.VersionScheme {
-	return types.MinecraftRelease
+	return types.VersionSchemeMinecraftRelease
 }
 
 func prereleaseRank(pr PrereleaseType) uint8 {

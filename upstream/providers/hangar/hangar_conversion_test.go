@@ -24,24 +24,24 @@ func TestProjectSearchResponseToSearchResults(t *testing.T) {
 		},
 	}
 
-	results := resp.ToSearchResults(types.SourceHangar)
+	results := resp.ToSearchResults(types.ProviderHangar)
 
-	if results.Source != types.SourceHangar {
-		t.Fatalf("expected Hangar source, got %v", results.Source)
+	if results.Provider != types.ProviderHangar {
+		t.Fatalf("expected Hangar source, got %v", results.Provider)
 	}
 	if len(results.Items) != 2 {
 		t.Fatalf("expected 2 projects, got %d", len(results.Items))
 	}
-	if results.Items[0].RemoteName != "placeholderapi" {
+	if results.Items[0].ProjectName != "placeholderapi" {
 		t.Fatalf(
 			"expected first project placeholderapi, got %s",
-			results.Items[0].RemoteName,
+			results.Items[0].ProjectName,
 		)
 	}
-	if results.Items[1].RemoteName != "pronounsmc" {
+	if results.Items[1].ProjectName != "pronounsmc" {
 		t.Fatalf(
 			"expected second project pronounsmc, got %s",
-			results.Items[1].RemoteName,
+			results.Items[1].ProjectName,
 		)
 	}
 
@@ -49,7 +49,7 @@ func TestProjectSearchResponseToSearchResults(t *testing.T) {
 	if ref.LookupPath() != "HelpChat/PlaceholderAPI" {
 		t.Fatalf("expected owner-aware lookup path, got %s", ref.LookupPath())
 	}
-	if ref.CanonicalName() != types.BarePackageName("placeholderapi") {
+	if ref.CanonicalName() != types.PackageName("placeholderapi") {
 		t.Fatalf(
 			"expected canonical project name placeholderapi, got %s",
 			ref.CanonicalName(),
@@ -115,45 +115,45 @@ func TestHangarProjectToProjectInformation(t *testing.T) {
 			info.Authors,
 		)
 	}
-	if len(info.Urls) < 5 {
+	if len(info.URLs) < 5 {
 		t.Fatalf(
 			"expected project and settings links to map to info URLs, got %d",
-			len(info.Urls),
+			len(info.URLs),
 		)
 	}
 	assertHasHangarURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Hangar",
-		types.UrlHome,
+		types.URLHome,
 		"https://hangar.papermc.io/HelpChat/PlaceholderAPI",
 	)
 	assertHasHangarURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Issues",
-		types.UrlIssues,
+		types.URLIssues,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI/issues",
 	)
 	assertHasHangarURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Source",
-		types.UrlSource,
+		types.URLSource,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI",
 	)
 	assertHasHangarURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Support",
-		types.UrlForum,
+		types.URLForum,
 		"https://helpch.at/discord",
 	)
 	assertHasHangarURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Wiki",
-		types.UrlWiki,
+		types.URLWiki,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI/wiki",
 	)
 }
@@ -180,13 +180,13 @@ func TestHangarVersionToPackageRemote(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected PAPER download to resolve")
 	}
-	if remote.Id.Source != types.SourceHangar {
-		t.Fatalf("expected Hangar source, got %v", remote.Id.Source)
+	if remote.ID.Provider != types.ProviderHangar {
+		t.Fatalf("expected Hangar source, got %v", remote.ID.Provider)
 	}
-	if remote.FileUrl != version.Downloads["PAPER"].DownloadURL {
+	if remote.FileURL != version.Downloads["PAPER"].DownloadURL {
 		t.Fatalf(
 			"expected download URL to be preserved, got %s",
-			remote.FileUrl,
+			remote.FileURL,
 		)
 	}
 	if remote.Filename != "PlaceholderAPI-2.12.2.jar" {
@@ -240,7 +240,7 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 	}
 
 	defaultRemote := version.ToPackageRemote()
-	if defaultRemote.FileUrl == "" {
+	if defaultRemote.FileURL == "" {
 		t.Fatalf("expected ambiguous remote selection to still resolve a fetchable artifact")
 	}
 	if defaultRemote.Filename == "" {
@@ -258,8 +258,8 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected case-insensitive platform match for paper")
 	}
-	if paperRemote.FileUrl != version.Downloads["PAPER"].DownloadURL {
-		t.Fatalf("expected paper download url, got %q", paperRemote.FileUrl)
+	if paperRemote.FileURL != version.Downloads["PAPER"].DownloadURL {
+		t.Fatalf("expected paper download url, got %q", paperRemote.FileURL)
 	}
 
 	if _, ok := version.ToPackageRemoteForPlatform(types.Ecosystem("velocity")); ok {
@@ -275,23 +275,23 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 	}
 	if !slices.Contains(
 		deps,
-		types.BarePackageName("essentialsx"),
-	) || !slices.Contains(deps, types.BarePackageName("vault")) {
+		types.PackageName("essentialsx"),
+	) || !slices.Contains(deps, types.PackageName("vault")) {
 		t.Fatalf("expected normalized plugin dependency names, got %#v", deps)
 	}
 }
 
 func assertHasHangarURL(
 	t *testing.T,
-	urls []types.Url,
+	urls []types.URL,
 	name string,
-	kind types.UrlType,
+	kind types.URLType,
 	value string,
 ) {
 	t.Helper()
 	if slices.ContainsFunc(
-		urls, func(u types.Url) bool {
-			if u.Name == name && u.Type == kind && u.Url == value {
+		urls, func(u types.URL) bool {
+			if u.Name == name && u.Type == kind && u.URL == value {
 				return true
 			}
 			return false

@@ -8,7 +8,7 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-func getProjectId(slug types.BarePackageName) (id string, err error) {
+func getProjectId(slug types.PackageName) (id string, err error) {
 	modrinthProject := projectResponse{}
 	if err := requestJSON(
 		projectUrl(string(slug)),
@@ -17,7 +17,7 @@ func getProjectId(slug types.BarePackageName) (id string, err error) {
 	); err != nil {
 		return "", err
 	}
-	id = modrinthProject.Id
+	id = modrinthProject.ID
 	return
 }
 
@@ -29,7 +29,7 @@ func getProjectById(id string) (project *projectResponse, err error) {
 	return
 }
 
-func getProjectByName(slug types.BarePackageName) (
+func getProjectByName(slug types.PackageName) (
 	project *projectResponse,
 	err error,
 ) {
@@ -72,7 +72,7 @@ func DependencyToPackage(
 
 	// Modrinth dependencies do not cross platforms: a dependency's platform
 	// is taken from the dependent package, not from the dependency itself.
-	p.Eco = dependent.Eco
+	p.Ecosystem = dependent.Ecosystem
 
 	if dependency.VersionId != "" && dependency.ProjectId != "" {
 		version, err = getVersionById(dependency.VersionId)
@@ -97,10 +97,11 @@ func DependencyToPackage(
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency project: %w", err)
 		}
-		version, err = latestCompatibleVersion(
+		version, err = latestVersion(
 			input.ToProjectName(project.Slug),
-			dependent.Eco,
+			dependent.Ecosystem,
 			types.VersionUnknown,
+			types.VersionAny,
 		)
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency latest version: %w", err)
@@ -113,7 +114,7 @@ func DependencyToPackage(
 	}
 
 	p.Name = input.ToProjectName(project.Slug)
-	p.Version = types.BareVersion(version.VersionNumber)
+	p.Version = types.Version(version.VersionNumber)
 
 	return p, nil
 }

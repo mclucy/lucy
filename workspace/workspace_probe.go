@@ -11,21 +11,21 @@ import (
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
-// RuntimeCandidate is one examined artifact. Exactly one specific detector
+// IdentifiedRuntime is one examined artifact. Exactly one specific detector
 // claims it as a bootable server runtime. Evidence carries the complete
 // identity from that detector. The scan does not change the evidence after
 // it returns.
-type RuntimeCandidate struct {
+type IdentifiedRuntime struct {
 	JarPath  string
-	Evidence *detector.ExecutableEvidence
+	Evidence *detector.RuntimeEvidence
 }
 
-// AmbiguousRuntimeCandidate is one artifact that more than one specific detector
+// ConflictingRuntime is one artifact that more than one specific detector
 // claims. The scan cannot decide between the claims. The scan keeps all
 // claims and keeps the jar out of Single.
-type AmbiguousRuntimeCandidate struct {
+type ConflictingRuntime struct {
 	JarPath  string
-	Evidence []*detector.ExecutableEvidence
+	Evidence []*detector.RuntimeEvidence
 }
 
 // Probe holds the results of one directory scan. Each examined artifact
@@ -38,19 +38,19 @@ type AmbiguousRuntimeCandidate struct {
 //
 // Probe reports observations. The methods on Probe interpret them.
 type Probe struct {
-	Candidates          []RuntimeCandidate
-	AmbiguousCandidates []AmbiguousRuntimeCandidate
+	Candidates          []IdentifiedRuntime
+	AmbiguousCandidates []ConflictingRuntime
 	Unidentified        []string
 }
 
 // Single interprets the probe as exactly one trustworthy server runtime.
 // Single fails when the scan saw contradictory evidence, several runtimes,
 // or no usable runtime.
-func (p Probe) Single() (*ServerInstance, bool) {
+func (p Probe) Single() (*ServerRuntime, bool) {
 	if len(p.Candidates) != 1 || len(p.AmbiguousCandidates) > 0 {
 		return nil, false
 	}
-	server := buildServerInstance(p.Candidates[0].Evidence)
+	server := buildServerRuntime(p.Candidates[0].Evidence)
 	return server, server != nil
 }
 
@@ -120,7 +120,7 @@ func probeDirectory(root string) Probe {
 		case claims == nil || claims.IsEmpty():
 			p.Unidentified = append(p.Unidentified, file.Path())
 		case claims.IsAmbiguous():
-			p.AmbiguousCandidates = append(p.AmbiguousCandidates, AmbiguousRuntimeCandidate{
+			p.AmbiguousCandidates = append(p.AmbiguousCandidates, ConflictingRuntime{
 				JarPath:  file.Path(),
 				Evidence: claims.Candidates,
 			})
@@ -134,8 +134,8 @@ func probeDirectory(root string) Probe {
 	return p
 }
 
-func (p *Probe) addCandidate(jarPath string, evidence *detector.ExecutableEvidence) {
-	p.Candidates = append(p.Candidates, RuntimeCandidate{
+func (p *Probe) addCandidate(jarPath string, evidence *detector.RuntimeEvidence) {
+	p.Candidates = append(p.Candidates, IdentifiedRuntime{
 		JarPath:  jarPath,
 		Evidence: evidence,
 	})
@@ -158,7 +158,7 @@ func (p *Probe) foldConsumedComponents() {
 		return
 	}
 
-	kept := make([]RuntimeCandidate, 0, len(p.Candidates))
+	kept := make([]IdentifiedRuntime, 0, len(p.Candidates))
 	for _, candidate := range p.Candidates {
 		if candidate.Evidence.IsVanilla() && consumed[candidate.Evidence.PrimaryPath] {
 			continue
@@ -187,7 +187,7 @@ func logScanDiagnostics(root string, p Probe, examined int) {
 }
 
 // conflictLabels writes one entry for each jar whose detectors disagree.
-func conflictLabels(jars []AmbiguousRuntimeCandidate) []string {
+func conflictLabels(jars []ConflictingRuntime) []string {
 	labels := make([]string, 0, len(jars))
 	for _, jar := range jars {
 		labels = append(labels, jar.JarPath)
@@ -197,7 +197,7 @@ func conflictLabels(jars []AmbiguousRuntimeCandidate) []string {
 
 // candidateLabels writes one entry for each identified runtime. The entry
 // shows the claimed package ref and the file name.
-func candidateLabels(candidates []RuntimeCandidate) []string {
+func candidateLabels(candidates []IdentifiedRuntime) []string {
 	labels := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
 		evidence := candidate.Evidence
@@ -206,7 +206,7 @@ func candidateLabels(candidates []RuntimeCandidate) []string {
 		}
 		labels = append(labels, fmt.Sprintf(
 			"%s/%s@%s (%s)",
-			evidence.PrimaryRuntime.Eco,
+			evidence.PrimaryRuntime.Ecosystem,
 			evidence.PrimaryRuntime.Name,
 			evidence.PrimaryRuntime.Version,
 			filepath.Base(evidence.PrimaryPath),

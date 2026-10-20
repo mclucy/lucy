@@ -63,10 +63,10 @@ func lockPackageFor(ref string, p types.LockedPackage) bool {
 // added, so a package resolved only as a dependency becomes declared.
 func bindRequirement(p *types.LockedPackage, ref string, requirement manifest.Requirement) {
 	binding := types.RequirementBinding{
-		Reference: ref,
-		Selector:  requirement.Selector(),
-		File:      requirement.File,
-		Enabled:   requirement.IsEnabled(),
+		Reference:   ref,
+		Selector:    requirement.Selector,
+		FilePattern: requirement.FilePattern,
+		Enabled:     requirement.IsEnabled(),
 	}
 	for i := range p.Requirements {
 		if p.Requirements[i].Reference != ref {

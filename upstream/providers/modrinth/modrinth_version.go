@@ -15,7 +15,7 @@ var (
 )
 
 // Known crash risk: this path has caused segmentation faults.
-func listVersions(slug types.BarePackageName) (
+func listVersions(slug types.PackageName) (
 	versions []*versionResponse,
 	err error,
 ) {
@@ -41,13 +41,18 @@ func getVersion(
 		return nil, err
 	}
 	if id.Version.CanInfer() {
-		v, err = latestVersion(id.Name, id.Eco, local.GameVersion)
+		v, err = latestVersion(
+			id.Name,
+			id.Ecosystem,
+			local.MinecraftVersion,
+			id.Version,
+		)
 		if err != nil {
 			return nil, err
 		}
 		return v, nil
 	}
-	if selected := selectExactVersion(versions, id, local.GameVersion); selected != nil {
+	if selected := selectExactVersion(versions, id, local.MinecraftVersion); selected != nil {
 		return selected, nil
 	}
 	return nil, ErrNoVersion
@@ -73,68 +78,30 @@ func versionSupportsLoader(
 	return false
 }
 
+// latestVersion selects the newest version matching the selector. stable
+// accepts releases only; beta accepts any channel; any prefers a release and
+// falls back to a prerelease.
 func latestVersion(
-	slug types.BarePackageName,
+	slug types.PackageName,
 	platform types.Ecosystem,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
+	selector types.Version,
 ) (v *versionResponse, err error) {
 	versions, err := listVersions(slug)
 	if err != nil {
 		return nil, err
 	}
-	filterByLoader := platform != types.EcoUnspecified
-	v, fellBack := selectLatestVersionByLoader(
+	filterByLoader := platform != types.EcosystemUnspecified
+	v = selectLatestVersionForSelector(
 		versions,
 		platform,
 		gameVersion,
 		filterByLoader,
+		selector,
 	)
 	if v == nil {
 		return nil, ErrNoVersion
 	}
-	if fellBack {
-		log.Info("no release version found for " + slug.Title() + ", falling back to latest pre-release")
-	}
 	log.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
-	return v, nil
-}
-
-func latestCompatibleVersion(
-	slug types.BarePackageName,
-	platform types.Ecosystem,
-	gameVersion types.BareVersion,
-) (v *versionResponse, err error) {
-	versions, err := listVersions(slug)
-	if err != nil {
-		return nil, err
-	}
-	filterByLoader := platform != types.EcoUnspecified
-	if filterByLoader {
-		v, _ = selectLatestCompatibleVersionCandidate(
-			versions,
-			platform,
-			gameVersion,
-		)
-	} else {
-		v, _ = selectLatestVersionCandidate(versions, platform, gameVersion)
-	}
-	if v == nil {
-		return nil, ErrNoVersion
-	}
-	if filterByLoader && latestReleaseVersion(
-		versions,
-		platform,
-		gameVersion,
-		true,
-	) == nil {
-		log.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
-	} else if !filterByLoader && latestReleaseVersion(
-		versions,
-		platform,
-		gameVersion,
-		false,
-	) == nil {
-		log.Info("no compatible version found for " + slug.Title() + ", falling back to latest pre-release")
-	}
 	return v, nil
 }
