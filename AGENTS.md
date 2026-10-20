@@ -77,8 +77,7 @@ To run the built binary against a test server directory:
     ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
     ├── fn/                 Generic helpers: Ternary, slice utilities
     ├── fsutil/             Filesystem helpers: CloseReader, path utilities
-    ├── toolchain/          Local Git, Java, and Gradle discovery
-    └── networkutil/        Network helpers wrapping cache downloads
+    └── toolchain/          Local Git, Java, and Gradle discovery
 ```
 
 ## Output Style Flags
@@ -118,7 +117,7 @@ all scenarios, and the compile suite defaults to all repository fixtures.
 `go run ./e2e/sandbox` materializes sandboxes; `task sandboxes:*` wraps it for the common cases. Flags:
 
 | Flag                 | Default                                 | Effect                                                                            |
-|----------------------|-----------------------------------------|-----------------------------------------------------------------------------------|
+| -------------------- | --------------------------------------- | --------------------------------------------------------------------------------- |
 | `--list`             | off                                     | Print all sandboxes with family, game version, generated/missing state, then exit |
 | `--only a,b`         | all                                     | Restrict processing to the named sandbox ids                                      |
 | `--force`            | off                                     | Regenerate even when `.sandboxes/<id>/` already exists                            |
@@ -134,6 +133,29 @@ The CLI is idempotent:
 - Missing manual artifacts fail with the exact drop-in path and expected sha256.
 - No binary is committed to the repository; fixtures that are not real servers pin their digests in `e2e/testdata/sandboxes/sandboxes.yaml` instead.
 
+## Naming and Terminology
+
+Clarify before naming. A name is a contract, not a label.
+
+- Use one word for one concept. Do not overload a word across layers, lifecycles, or persistence boundaries.
+- Reuse roots. Do not introduce a synonym when a prefix or suffix makes the meaning unambiguous.
+- Name the specific layer or role. Leave the generic word unqualified only when the context makes it exact.
+- Prefer terms established in software engineering, computer science, package management, or Minecraft. Avoid invented or obscure words unless they are defined at the point of use.
+- Keep presentation names out of domain types and persisted schemas.
+
+## Code Styles
+
+- Do not write long composite literals in one line.
+- Use `gofumpt`.
+
+## Documentation
+
+The following rules applies to README and `docs/`:
+
+- They are user-oriented. Never edit them if your change is not worth notifying for the user.
+- Never name a go module, internal terminology, or code symbol.
+- The scope is strictly what the user sees. No mechanism behind it should be exposed.
+
 ## Comments
 
 Write code that explains itself. Namings must not need documentations from call sites.
@@ -147,4 +169,4 @@ Write code that explains itself. Namings must not need documentations from call 
 ## Other Rules
 
 1. Always tidy the files in packages touched after refactoring: relocate/rename/merge/split files for better maintainability.
-2. Prefix files with the package name for convinent searching.
+2. Prefix files with the package name for convenient searching.
