@@ -19,6 +19,11 @@ type probeExpectation struct {
 	packageDirs       bool
 	packageDirsSuffix string
 	packageDirsCheck  string
+	// packages lists eco:name@version identifiers that discovery must report.
+	packages []string
+	// minPackages requires at least that many discovered packages. Use it for
+	// packs whose complete package list is too large to pin.
+	minPackages int
 	// manualSandbox marks sandboxes whose artifacts cannot be fetched, so the
 	// suite skips them until the drop-in files exist.
 	manualSandbox bool
@@ -65,6 +70,23 @@ func (want probeExpectation) check(t *testing.T, got statusOutput) {
 			t.Errorf("%s: got %q, want suffix %q", want.packageDirsCheck, first, want.packageDirsSuffix)
 		}
 	}
+	if len(want.packages) > 0 {
+		found := map[string]struct{}{}
+		gotIDs := make([]string, 0, len(got.Packages))
+		for _, pkg := range got.Packages {
+			found[pkg.identifier()] = struct{}{}
+			gotIDs = append(gotIDs, pkg.identifier())
+		}
+		slices.Sort(gotIDs)
+		for _, id := range want.packages {
+			if _, ok := found[id]; !ok {
+				t.Errorf("packages: missing %q; got %v", id, gotIDs)
+			}
+		}
+	}
+	if len(got.Packages) < want.minPackages {
+		t.Errorf("packages: discovered %d, want at least %d", len(got.Packages), want.minPackages)
+	}
 }
 
 var probeScenarios = map[string]probeExpectation{
@@ -85,6 +107,24 @@ var probeScenarios = map[string]probeExpectation{
 	},
 	"fabric-executable-262": {
 		eco: "fabric", version: "0.19.3", minecraftVersion: "26.2", packageDirs: true,
+	},
+	"cobblemon-1211": {
+		eco: "fabric", version: "0.19.5", minecraftVersion: "1.21.1", packageDirs: true,
+		minPackages: 30,
+		packages:    []string{"fabric:cobblemon@1.8.2+1.21.1", "fabric:fabric-api@0.116.17+1.21.1"},
+	},
+	"create-plus-1211": {
+		eco: "neoforge", version: "21.1.233", minecraftVersion: "1.21.1", packageDirs: true,
+		minPackages: 100,
+		packages:    []string{"neoforge:alloyed@3.0.9+1.21.1"},
+	},
+	"fabric-kilt": {
+		eco: "fabric", version: "0.19.5", minecraftVersion: "1.21.1", packageDirs: true,
+		packages: []string{
+			"fabric:kilt@21.1.15",
+			"fabric:fabric-api@0.116.17+1.21.1",
+			"fabric:fabric-language-kotlin@1.14.2+kotlin.2.4.21",
+		},
 	},
 	"fabric-installed-1214": {
 		eco: "fabric", version: "0.16.9", minecraftVersion: "1.21.4", manualSandbox: true,
@@ -116,8 +156,27 @@ var probeScenarios = map[string]probeExpectation{
 	"neoforge-262": {
 		eco: "neoforge", version: "26.2.0.67", minecraftVersion: "1.26.2", packageDirs: true,
 	},
+	"neoforge-connector": {
+		eco: "neoforge", version: "21.1.248", minecraftVersion: "1.21.1", packageDirs: true,
+		packages: []string{
+			"neoforge:connector@2.0.0-beta.17+1.21.1",
+			"neoforge:forgified-fabric-api@0.116.15+2.3.6+1.21.1",
+		},
+	},
 	"paper": {
 		name: "paper", minecraftVersion: "1.21.11", packageDirs: true,
+		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
+	},
+	"folia": {
+		name: "folia", minecraftVersion: "1.21.11", packageDirs: true,
+		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
+	},
+	"purpur": {
+		name: "purpur", minecraftVersion: "1.21.11", packageDirs: true,
+		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
+	},
+	"leaves": {
+		name: "leaves", minecraftVersion: "1.21.8", packageDirs: true,
 		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
 	},
 	"vanilla-1201": {

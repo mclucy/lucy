@@ -24,12 +24,13 @@ jobs:
   # and verify Lucy's CLI output against native assertions in e2e/.
   #
   # Manual-artifact environments (fabric-installed-1214, fabric-installed-262,
-  # fabric-installed-114) are excluded: their pinned jars cannot be fetched in CI.
+  # fabric-installed-114, divinemc, leaf, reaper, youer, mohist) are excluded:
+  # their pinned jars cannot be fetched in CI.
   probe:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
     runs-on: ubuntu-latest
     env:
-      SANDBOXES: arclight-fabric,arclight-forge,arclight-neoforge,fabric-executable-1214,fabric-executable-262,forge-1201,forge-12111,neoforge-211,neoforge-262,mcdr-fabric,mcdr-forge,mcdr-neoforge
+      SANDBOXES: arclight-fabric,arclight-forge,arclight-neoforge,cobblemon-1211,create-plus-1211,fabric-executable-1214,fabric-executable-262,fabric-kilt,folia,forge-1201,forge-12111,leaves,mcdr-fabric,mcdr-forge,mcdr-neoforge,neoforge-211,neoforge-262,neoforge-connector,paper,purpur
     steps:
       - uses: actions/checkout@v7
 
