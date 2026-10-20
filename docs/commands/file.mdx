@@ -11,7 +11,7 @@ Run the command from your server workspace. Use a path relative to `lucy.yaml`.
 
 Stop running servers before changing tracked files. Lucy checks the workspace root and the server directories declared in both `lucy.yaml` and `lucy-lock.yaml`, including a stale lock's directory.
 
-Every subcommand supports the inherited machine-readable JSON output flags (`--json` and `--json-compact`). Mutating commands emit the event payload that `lucy file history` records.
+Every subcommand supports the inherited machine-readable JSON output flags (`--json` and `--json-compact`). Mutating commands emit the event payload that `lucy file history` records, and delete stored contents that no revision, manifest entry, lock entry, or pending transaction names. A run that reclaims anything reports how many objects and bytes it removed.
 
 ## Track
 

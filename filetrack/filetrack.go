@@ -17,6 +17,7 @@ import (
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
@@ -83,6 +84,28 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err := closeErr; err != nil {
 		return result, err
 	}
+	own := make(map[string]struct{})
+	record := func(state image) {
+		if state.Exists && state.Hash != "" {
+			own[state.Hash] = struct{}{}
+		}
+	}
+	record(beforeManifest)
+	record(beforeLock)
+	defer func() {
+		reclaimed, sweepErr := reclaimObjects(root, files, store, own)
+		if sweepErr != nil {
+			log.Warn(sweepErr)
+		}
+		result.Reclaimed = reclaimed
+		if reclaimed.Objects > 0 {
+			log.Info(
+				"reclaimed unreferenced objects",
+				"objects", reclaimed.Objects,
+				"bytes", reclaimed.Bytes,
+			)
+		}
+	}()
 	if err := workspacewrite.CheckInactive(root, "changing tracked files"); err != nil {
 		return result, err
 	}
@@ -161,6 +184,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err != nil {
 		return result, err
 	}
+	record(afterManifest)
 	txn.Mutations = append(txn.Mutations, mutation{Path: manifest.Filename, Before: beforeManifest, After: afterManifest})
 	if locked != nil {
 		locked.Files = slices.Clone(document.Files)
@@ -181,6 +205,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err != nil {
 			return result, err
 		}
+		record(afterLock)
 		txn.Mutations = append(txn.Mutations, mutation{Path: lockfile.Filename, Before: beforeLock, After: afterLock})
 	}
 	txn.Event = event
