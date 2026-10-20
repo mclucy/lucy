@@ -1,4 +1,6 @@
-package main
+//go:build e2e
+
+package install
 
 import (
 	"context"

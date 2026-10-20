@@ -43,13 +43,13 @@ jobs:
         with:
           go-version: "1.27.1"
 
-      # The suite enumerates its own fixtures so this matrix and a local
-      # `go run ./e2e/compile` can never disagree about which manifests exist.
+      # The suite derives its cases from the same manifests, so this matrix and a
+      # local `go test ./e2e/compile` can never disagree about which manifests exist.
       - name: Collect fixture ids
         id: list
         run: |
           set -euo pipefail
-          ids="$(go run ./e2e/compile --list | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          ids="$(find e2e/testdata/repo -maxdepth 1 -type f -name '*.yaml' -exec basename {} .yaml \; | sort | jq -Rsc 'split("\n") | map(select(length > 0))')"
           if [ "$(jq 'length' <<<"$ids")" -eq 0 ]; then
             echo "no compile manifests found" >&2
             exit 1
@@ -139,4 +139,4 @@ jobs:
       - name: Compile fixture (e2e)
         env:
           FIXTURE: ${{ matrix.fixture }}
-        run: go run ./e2e/compile --lucy dist/lucy "$FIXTURE"
+        run: go test -tags e2e -count=1 ./e2e/compile -run "^TestCompile/$FIXTURE$"

@@ -76,7 +76,8 @@ jobs:
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
-      # No scenario ids: the suite defaults to all scenarios. Scenarios that
-      # need a generated sandbox resolve it from the .sandboxes directory.
+      # No scenario ids: the suite defaults to all scenarios and fails loudly
+      # when a scenario lacks its generated environment, so this list and the
+      # suite cannot silently drift apart.
       - name: Install scenarios (e2e)
-        run: go run ./e2e/install --p 2
+        run: go test -tags e2e -count=1 -parallel 2 -v ./e2e/install
