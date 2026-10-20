@@ -9,6 +9,8 @@ package testkit
 import (
 	"flag"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -104,6 +106,52 @@ func Sandbox(t *testing.T, id string) string {
 		t.Fatalf("sandbox %s is not generated (%s): run `task sandboxes:gen -- --only %s`", id, dir, id)
 	}
 	return dir
+}
+
+// CloneSandbox copies a generated sandbox into a temporary directory. Files
+// hardlink when the filesystem allows it; a clone never modifies existing files.
+func CloneSandbox(t *testing.T, id string) string {
+	t.Helper()
+	source := Sandbox(t, id)
+	root := t.TempDir()
+	err := filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(root, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		if err := os.Link(path, target); err == nil {
+			return nil
+		}
+		return copyFile(path, target)
+	})
+	if err != nil {
+		t.Fatalf("clone sandbox %s: %v", id, err)
+	}
+	return root
+}
+
+func copyFile(source, target string) error {
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // HasSandbox reports whether the generated sandbox directory for id exists.
