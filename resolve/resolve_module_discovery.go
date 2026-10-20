@@ -97,7 +97,10 @@ func (index *moduleDiscovery) backtrack(ctx context.Context, from projectKey, id
 		"ecosystem", from.ecosystem,
 		"reason", "module identity missing from catalogue dependency",
 	)
-	responses, _ := routing.SearchMany(searchers, upstream.Query{Keyword: id, FilterEcosystem: from.ecosystem})
+	responses, _ := routing.SearchMany(searchers, upstream.Query{
+		Keyword:         id,
+		FilterEcosystem: from.ecosystem,
+	})
 	inspected := 0
 	for _, hit := range collectDiscoveryHits(responses) {
 		if inspected == discoveryHits {
@@ -160,7 +163,14 @@ func (index *moduleDiscovery) verify(ctx context.Context, from projectKey, hit c
 	if err != nil {
 		return projectRequest{}, false, fmt.Errorf("resolve module %s: %w", id, err)
 	}
-	project := projectRequest{key: projectKey{from.environment, from.ecosystem, hit.provider, hit.project}}
+	project := projectRequest{
+		key: projectKey{
+			from.environment,
+			from.ecosystem,
+			hit.provider,
+			hit.project,
+		},
+	}
 	for _, module := range modules {
 		if moduleAlias(module, id) {
 			log.Debug(
@@ -199,7 +209,7 @@ func catalogueRegistry(provider types.Provider) types.Registry {
 }
 
 func collectDiscoveryHits(responses []upstream.SearchResponse) []catalogueProject {
-	hits := []catalogueProject{}
+	var hits []catalogueProject
 	seen := map[catalogueProject]bool{}
 	for _, response := range responses {
 		for _, item := range response.Items {

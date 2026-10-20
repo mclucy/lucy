@@ -132,7 +132,12 @@ func ResolveServerProduct(
 		_, err = acquire(&out.Artifact)
 		return out, err
 	}
-	out.Inputs = []types.BootstrapInput{{Path: "server.jar", Artifact: minecraft}}
+	out.Inputs = []types.BootstrapInput{
+		{
+			Path:     "server.jar",
+			Artifact: minecraft,
+		},
+	}
 	if req.Repository != "" {
 		log.Debug(
 			"routing: server product route selected",
@@ -281,7 +286,7 @@ func ResolveServerProduct(
 			}
 			if info.Version != req.Minecraft.String() {
 				return out, fmt.Errorf(
-					"Purpur release targets Minecraft %s, requested %s",
+					"purpur release targets Minecraft %s, requested %s",
 					info.Version,
 					req.Minecraft,
 				)

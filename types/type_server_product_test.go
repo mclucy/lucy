@@ -32,11 +32,48 @@ func TestNormalizeServerProduct(t *testing.T) {
 		want    ServerProduct
 		ok      bool
 	}{
-		{"bare minecraft alias", VersionedPackageRef{PackageRef: PackageRef{Name: "mc", Provider: ProviderUnspecified}}, ServerProductMinecraft, true},
-		{"case insensitive", VersionedPackageRef{PackageRef: PackageRef{Name: "Paper", Provider: ProviderUnspecified}}, ServerProductPaper, true},
-		{"fabric loader alias", VersionedPackageRef{PackageRef: PackageRef{Name: "fabric-loader", Provider: ProviderUnspecified}, Ecosystem: EcosystemFabric}, ServerProductFabric, true},
-		{"sponge forge alias", VersionedPackageRef{PackageRef: PackageRef{Name: "forge", Provider: ProviderUnspecified}, Ecosystem: EcosystemSponge}, ServerProductSpongeForge, true},
-		{"regular package", VersionedPackageRef{PackageRef: PackageRef{Name: "fabric-api", Provider: ProviderUnspecified}, Ecosystem: EcosystemFabric}, "", false},
+		{
+			"bare minecraft alias",
+			VersionedPackageRef{Name: "mc", Provider: ProviderUnspecified},
+			ServerProductMinecraft,
+			true,
+		},
+		{
+			"case insensitive",
+			VersionedPackageRef{Name: "Paper", Provider: ProviderUnspecified},
+			ServerProductPaper,
+			true,
+		},
+		{
+			"fabric loader alias",
+			VersionedPackageRef{
+				Name:      "fabric-loader",
+				Provider:  ProviderUnspecified,
+				Ecosystem: EcosystemFabric,
+			},
+			ServerProductFabric,
+			true,
+		},
+		{
+			"sponge forge alias",
+			VersionedPackageRef{
+				Name:      "forge",
+				Provider:  ProviderUnspecified,
+				Ecosystem: EcosystemSponge,
+			},
+			ServerProductSpongeForge,
+			true,
+		},
+		{
+			"regular package",
+			VersionedPackageRef{
+				Name:      "fabric-api",
+				Provider:  ProviderUnspecified,
+				Ecosystem: EcosystemFabric,
+			},
+			"",
+			false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

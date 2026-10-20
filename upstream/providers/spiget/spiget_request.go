@@ -70,7 +70,7 @@ func getLatestVersion(resourceID int64) (*versionResponse, error) {
 }
 
 func listVersions(resourceID int64) ([]versionResponse, error) {
-	resp := []versionResponse{}
+	var resp []versionResponse
 	if err := requestJSON(
 		versionsURL(resourceID),
 		&resp,

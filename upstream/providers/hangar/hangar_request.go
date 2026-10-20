@@ -105,7 +105,7 @@ func listVersions(name types.PackageName) ([]hangarVersion, error) {
 	params := url.Values{}
 	params.Set("limit", "25")
 
-	res := &HangarVersionListResponse{}
+	res := &VersionListResponse{}
 	if err := getJSON(
 		hangarVersionsURL(project.ProjectRef(), params),
 		res,

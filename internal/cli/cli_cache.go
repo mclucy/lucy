@@ -55,7 +55,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	slices.SortFunc(entries, func(a, b *cache.CacheEntry) int {
+	slices.SortFunc(entries, func(a, b *cache.Entry) int {
 		return b.CreatedAt.Compare(a.CreatedAt)
 	})
 

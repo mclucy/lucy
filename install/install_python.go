@@ -49,7 +49,17 @@ func prepareMCDR(ctx context.Context, root, directory string, selector types.Ver
 	if !isFloating(selector) {
 		request += "==" + selector.String()
 	}
-	args := []string{"-m", "pip", "install", "--dry-run", "--ignore-installed", "--only-binary=:all:", "--report", reportPath, request}
+	args := []string{
+		"-m",
+		"pip",
+		"install",
+		"--dry-run",
+		"--ignore-installed",
+		"--only-binary=:all:",
+		"--report",
+		reportPath,
+		request,
+	}
 	for _, requirement := range requirements {
 		if strings.HasPrefix(requirement, "-") {
 			return nil, fmt.Errorf("invalid Python requirement %q", requirement)
@@ -80,20 +90,35 @@ func prepareMCDR(ctx context.Context, root, directory string, selector types.Ver
 	if err := json.Unmarshal(raw, &report); err != nil {
 		return nil, err
 	}
-	out := &lockfile.MCDR{Directory: directory, Python: strings.TrimSpace(string(versionBytes)), Target: pythonTarget(), Inputs: []types.BootstrapInput{}}
+	out := &lockfile.MCDR{
+		Directory: directory,
+		Python:    strings.TrimSpace(string(versionBytes)),
+		Target:    pythonTarget(),
+		Inputs:    []types.BootstrapInput{},
+	}
 	for _, pkg := range report.Install {
 		filename := filepath.Base(strings.Split(pkg.Download.URL, "?")[0])
-		a := types.Artifact{Provider: types.ProviderPyPI, ProjectID: pkg.Metadata.Name, Version: types.Version(pkg.Metadata.Version), Filename: filename, URL: pkg.Download.URL, Hashes: pkg.Download.Archive.Hashes}
+		a := types.Artifact{
+			Provider:  types.ProviderPyPI,
+			ProjectID: pkg.Metadata.Name,
+			Version:   types.Version(pkg.Metadata.Version),
+			Filename:  filename,
+			URL:       pkg.Download.URL,
+			Hashes:    pkg.Download.Archive.Hashes,
+		}
 		if _, err := store.materialize(&a); err != nil {
 			return nil, err
 		}
-		out.Inputs = append(out.Inputs, types.BootstrapInput{Path: "wheels/" + filename, Artifact: a})
+		out.Inputs = append(out.Inputs, types.BootstrapInput{
+			Path:     "wheels/" + filename,
+			Artifact: a,
+		})
 		if strings.EqualFold(pkg.Metadata.Name, "mcdreforged") {
 			out.Version = types.Version(pkg.Metadata.Version)
 		}
 	}
 	if out.Version == "" {
-		return nil, fmt.Errorf("Python resolution omitted mcdreforged")
+		return nil, fmt.Errorf("python resolution omitted mcdreforged")
 	}
 	return out, nil
 }
@@ -124,7 +149,7 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 		if output, err := exec.CommandContext(ctx, "python3", "-m", "venv", env).CombinedOutput(); err != nil {
 			return fmt.Errorf("create locked MCDR environment: %w\n%s", err, output)
 		}
-		requirements := []string{}
+		var requirements []string
 		for i := range m.Inputs {
 			input := &m.Inputs[i]
 			p, err := store.materialize(&input.Artifact)
@@ -168,7 +193,11 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 	case "paperclip":
 		launchHandler = "bukkit_handler"
 	}
-	config := map[string]any{"working_directory": filepath.ToSlash(relative), "start_command": entry, "handler": launchHandler}
+	config := map[string]any{
+		"working_directory": filepath.ToSlash(relative),
+		"start_command":     entry,
+		"handler":           launchHandler,
+	}
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return err

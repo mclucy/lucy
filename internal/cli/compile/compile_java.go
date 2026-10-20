@@ -70,7 +70,7 @@ func selectJVMs(
 		}
 	}
 	if !gradleSupportsJava(gradle, daemon.Major) {
-		return launcher, daemon, fmt.Errorf("Gradle %s cannot run its daemon on Java %d", gradleVersion, daemon.Major)
+		return launcher, daemon, fmt.Errorf("gradle %s cannot run its daemon on Java %d", gradleVersion, daemon.Major)
 	}
 	return launcher, daemon, nil
 }

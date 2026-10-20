@@ -21,7 +21,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 		id = int64(mod.ID)
 	}
 	// Pagination is required: exact older files are not necessarily on page one.
-	files := []fileResponse{}
+	var files []fileResponse
 	for offset := 0; ; offset += 50 {
 		endpoint := modFilesUrl(int32(id), minecraft, modLoaderType(loader)) + "&index=" + strconv.Itoa(offset)
 		var page filesResponse
@@ -33,7 +33,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 			break
 		}
 	}
-	out := []types.CatalogueCandidate{}
+	var out []types.CatalogueCandidate
 	for _, f := range files {
 		if f.DownloadUrl == nil {
 			continue
@@ -45,16 +45,14 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 			}
 		}
 		c := types.CatalogueCandidate{
-			Artifact: types.Artifact{
-				Provider:  types.ProviderCurseForge,
-				ProjectID: strconv.FormatInt(id, 10),
-				ReleaseID: strconv.Itoa(int(f.ID)),
-				FileID:    strconv.Itoa(int(f.ID)),
-				Version:   types.Version(f.DisplayName),
-				Filename:  f.FileName,
-				URL:       *f.DownloadUrl,
-				Hashes:    hashes,
-			},
+			Provider:     types.ProviderCurseForge,
+			ProjectID:    strconv.FormatInt(id, 10),
+			ReleaseID:    strconv.Itoa(int(f.ID)),
+			FileID:       strconv.Itoa(int(f.ID)),
+			Version:      types.Version(f.DisplayName),
+			Filename:     f.FileName,
+			URL:          *f.DownloadUrl,
+			Hashes:       hashes,
 			Channel:      curseForgeChannel(f.ChannelCode),
 			PublishedAt:  parseCurseforgeDate(f.FileDate),
 			PrimaryFile:  true,

@@ -171,8 +171,8 @@ func keyColumnWidth(fields []Field) int {
 }
 
 func buildSegments(fields []Field, totalWidth int, keyWidth int) []segment {
-	segments := []segment{}
-	rows := []tableRow{}
+	var segments []segment
+	var rows []tableRow
 	flushRows := func() {
 		if len(rows) == 0 {
 			return

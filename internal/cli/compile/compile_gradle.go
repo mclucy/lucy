@@ -71,12 +71,20 @@ func newGradleRunner(
 	temporary string,
 	progress io.Writer,
 ) (gradleRunner, error) {
-	runner := gradleRunner{dir: build.Dir, version: "unknown", progress: progress}
+	runner := gradleRunner{
+		dir:      build.Dir,
+		version:  "unknown",
+		progress: progress,
+	}
 	version := ""
 	if build.Wrapper != nil {
 		wrapper := build.Wrapper
 		var scriptMode os.FileMode
-		for _, path := range []string{wrapper.Script, wrapper.Jar, wrapper.Properties} {
+		for _, path := range []string{
+			wrapper.Script,
+			wrapper.Jar,
+			wrapper.Properties,
+		} {
 			if path == "" {
 				return runner, errors.New("repository Gradle wrapper is incomplete")
 			}
@@ -85,14 +93,14 @@ func newGradleRunner(
 				return runner, fmt.Errorf("inspect Gradle wrapper component %q: %w", path, err)
 			}
 			if !info.Mode().IsRegular() {
-				return runner, fmt.Errorf("Gradle wrapper component is not a regular file: %s", path)
+				return runner, fmt.Errorf("gradle wrapper component is not a regular file: %s", path)
 			}
 			if path == wrapper.Script {
 				scriptMode = info.Mode()
 			}
 		}
 		if wrapper.DistributionURL == "" {
-			return runner, errors.New("Gradle wrapper has no distribution url")
+			return runner, errors.New("gradle wrapper has no distribution url")
 		}
 		version = wrapper.Version
 		runner.executable = wrapper.Script

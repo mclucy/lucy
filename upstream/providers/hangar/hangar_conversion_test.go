@@ -49,7 +49,7 @@ func TestProjectSearchResponseToSearchResults(t *testing.T) {
 	if ref.LookupPath() != "HelpChat/PlaceholderAPI" {
 		t.Fatalf("expected owner-aware lookup path, got %s", ref.LookupPath())
 	}
-	if ref.CanonicalName() != types.PackageName("placeholderapi") {
+	if ref.CanonicalName() != "placeholderapi" {
 		t.Fatalf(
 			"expected canonical project name placeholderapi, got %s",
 			ref.CanonicalName(),
@@ -176,7 +176,7 @@ func TestHangarVersionToPackageRemote(t *testing.T) {
 		PluginDependencies: map[string][]hangarPluginDependency{},
 	}
 
-	remote, ok := version.ToPackageRemoteForPlatform(types.Ecosystem("paper"))
+	remote, ok := version.ToPackageRemoteForPlatform("paper")
 	if !ok {
 		t.Fatalf("expected PAPER download to resolve")
 	}
@@ -254,7 +254,7 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 		)
 	}
 
-	paperRemote, ok := version.ToPackageRemoteForPlatform(types.Ecosystem("PaPeR"))
+	paperRemote, ok := version.ToPackageRemoteForPlatform("PaPeR")
 	if !ok {
 		t.Fatalf("expected case-insensitive platform match for paper")
 	}
@@ -262,7 +262,7 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 		t.Fatalf("expected paper download url, got %q", paperRemote.FileURL)
 	}
 
-	if _, ok := version.ToPackageRemoteForPlatform(types.Ecosystem("velocity")); ok {
+	if _, ok := version.ToPackageRemoteForPlatform("velocity"); ok {
 		t.Fatalf("expected missing platform to remain unresolved")
 	}
 
@@ -275,8 +275,8 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 	}
 	if !slices.Contains(
 		deps,
-		types.PackageName("essentialsx"),
-	) || !slices.Contains(deps, types.PackageName("vault")) {
+		"essentialsx",
+	) || !slices.Contains(deps, "vault") {
 		t.Fatalf("expected normalized plugin dependency names, got %#v", deps)
 	}
 }

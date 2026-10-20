@@ -103,7 +103,7 @@ type Integrity struct {
 // (always SHA-256) addresses the blob in the store; Integrity carries the
 // upstream-provided digest, which may use a different algorithm (see
 // HashAlgorithm).
-type CacheEntry struct {
+type Entry struct {
 	Kind        EntryKind `json:"kind"`
 	Filename    string    `json:"filename"`
 	Size        int64     `json:"size"`

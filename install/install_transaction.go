@@ -178,7 +178,11 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 			return err
 		}
 		if !mutableDefault {
-			next.Entries = append(next.Entries, receiptEntry{Path: relative, SHA256: hashes["sha256"], Mode: uint32(info.Mode().Perm())})
+			next.Entries = append(next.Entries, receiptEntry{
+				Path:   relative,
+				SHA256: hashes["sha256"],
+				Mode:   uint32(info.Mode().Perm()),
+			})
 		}
 		sources[relative] = p
 		return nil
@@ -206,8 +210,12 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	if err != nil {
 		return err
 	}
-	journal := transactionJournal{Backup: backup, Changed: []string{}, Created: []string{}}
-	names := []string{}
+	journal := transactionJournal{
+		Backup:  backup,
+		Changed: []string{},
+		Created: []string{},
+	}
+	var names []string
 	for name := range sources {
 		names = append(names, name)
 	}

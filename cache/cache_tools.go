@@ -20,7 +20,7 @@ func setDir(name string) string {
 	return filepath.Join(dir, "lucy", name)
 }
 
-func expiredEntries(entries map[key]*CacheEntry, now time.Time) []key {
+func expiredEntries(entries map[key]*Entry, now time.Time) []key {
 	var expired []key
 	for k, entry := range entries {
 		if entry.Expiration.Before(now) {
@@ -36,7 +36,7 @@ type evictionTarget struct {
 }
 
 func evictionCandidates(
-	entries map[key]*CacheEntry,
+	entries map[key]*Entry,
 	policy Policy,
 ) []evictionTarget {
 	type objectKey struct {
