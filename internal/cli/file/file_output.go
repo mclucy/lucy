@@ -9,6 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
 )
@@ -58,6 +59,7 @@ type fileResultView struct {
 	Operation filetrack.Operation `json:"operation"`
 	Changes   []filetrack.Change  `json:"changes,omitempty"`
 	Skipped   []string            `json:"skipped,omitempty"`
+	Reclaimed filetrack.Reclaimed `json:"reclaimed,omitzero"`
 }
 
 func newFileResultView(result filetrack.Result) fileResultView {
@@ -65,6 +67,7 @@ func newFileResultView(result filetrack.Result) fileResultView {
 		Operation: result.Event.Operation,
 		Changes:   result.Event.Changes,
 		Skipped:   result.Skipped,
+		Reclaimed: result.Reclaimed,
 	}
 }
 
@@ -89,6 +92,19 @@ func reportFileResult(cmd *cobra.Command, result filetrack.Result) error {
 	}
 	for _, skipped := range result.Skipped {
 		fmt.Fprintf(out, "skipped %s\n", skipped)
+	}
+	if result.Reclaimed.Objects > 0 {
+		noun := "objects"
+		if result.Reclaimed.Objects == 1 {
+			noun = "object"
+		}
+		fmt.Fprintf(
+			out,
+			"reclaimed %d %s (%s)\n",
+			result.Reclaimed.Objects,
+			noun,
+			style.FormatBytesBinary(result.Reclaimed.Bytes),
+		)
 	}
 	return nil
 }
