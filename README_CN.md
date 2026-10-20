@@ -13,7 +13,8 @@
 </div>
 
 > [!IMPORTANT]
-> Lucy 处于 pre-beta 活跃开发阶段。1.0 之前，API 与模式可能发生变化。欢迎加入 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi) 或提交 [Issue](https://github.com/mclucy/lucy/issues) 参与贡献。
+> Lucy 处于 pre-beta 活跃开发阶段。1.0 之前，API 与模式可能发生变化。欢迎加入 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)
+或提交 [Issue](https://github.com/mclucy/lucy/issues) 参与贡献。
 
 Lucy 为 Minecraft 服务器带来现代化的包管理体验。通过简单直观的声明式工作流定义和管理你的服务器。
 
@@ -52,30 +53,28 @@ lucy init
 # 添加包并自动解析依赖
 lucy add modrinth:fabric-api modrinth:lithium
 
-# 查看解析后的核心、文件与包
+# 查看实时服务器状态
 lucy status
 
-# 按照 lock 描述安装文件
+# 将服务器同步到 lock 描述的状态
 lucy install
 ```
 
-`lucy.yaml` 记录你的意图，`lucy-lock.yaml` 记录满足该意图的确切构件（含哈希）。两者一并提交——仅凭 lock 即可重建服务器，`--locked` 会在两者不一致时直接失败。
+`lucy.yaml` 记录你的意图，`lucy-lock.yaml` 记录满足该意图的确切文件（含哈希）。两者一并提交——仅凭 lock 即可重建服务器，
+`--locked` 会在两者不一致时直接失败。
 
 ## 命令
 
-| 命令                  | 用途                                                                          |
-| --------------------- | ----------------------------------------------------------------------------- |
-| `lucy init`           | 从已有服务器目录生成 `lucy.yaml`                                              |
-| `lucy add <pkg>`      | 记录需求、解析、更新 lock 并安装                                              |
-| `lucy remove <pkg>`   | 删除需求并清理无引用构件                                                      |
-| `lucy install`        | 依据 `lucy-lock.yaml` 同步文件；`--locked` 在漂移时报错，`--offline` 禁止下载 |
-| `lucy status`         | 显示解析后的核心、Minecraft 版本与包                                          |
-| `lucy tree`           | 检查依赖图谱（支持 `--live` 探测）                                            |
-| `lucy leaves`         | 列出无依赖引用的安全移除候选包                                                |
-| `lucy bisect`         | 二分排查已安装模组以定位崩溃原因                                              |
-| `lucy search <query>` | 跨 Modrinth、CurseForge 和 GitHub 查询                                        |
+| 命令                   | 用途                                                          |
+|------------------------|---------------------------------------------------------------|
+| `lucy init`            | 从已有服务器目录生成 `lucy.yaml`                              |
+| `lucy add <pkg>...`    | 记录包、解析依赖、更新 lock 并同步                            |
+| `lucy remove <pkg>...` | 删除包、重新解析，并清理不再需要的文件                        |
+| `lucy install`         | 将服务器同步到 manifest 与 lock；lock 过期时重新解析          |
+| `lucy status`          | 显示实时服务器与包；`--from-lock` 渲染 lock                   |
+| `lucy search <query>`  | 搜索 Modrinth、CurseForge、Hangar、Spiget 和 MCDReforged 目录 |
 
-完整指南、配置与参数说明：**[lucy.lc/docs](https://lucy.lc/docs)**
+完整指南、配置与参数说明： **[lucy.lc/docs](https://lucy.lc/docs)**
 
 ---
 

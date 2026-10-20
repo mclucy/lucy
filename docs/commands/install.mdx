@@ -1,59 +1,53 @@
 ---
 title: "lucy install"
-description: "Sync the server exactly as the lock file describes"
+description: "Sync the server with the manifest and lock file"
 ---
 
-`lucy install` converges the directory with the resolved state recorded in `lucy-lock.yaml`. It never invents versions: every file it places comes from a lock entry, and every lock entry was produced by resolving [`lucy.yaml`](/commands/init) against an upstream catalogue.
+`lucy install` syncs the directory with the resolved state recorded in `lucy-lock.yaml`. It never invents versions: every file it places is pinned by the lock. Some launcher files are generated from the locked server JAR and its inputs. When the manifest has changed, `lucy` resolves a new lock from [`lucy.yaml`](/commands/init) first, then syncs the server.
 
 ```bash
 lucy install
 ```
 
-Running `lucy install` in a server directory is the normal way to reproduce a server elsewhere — a CI job, a fresh VPS, a teammate's machine.
+Running `lucy install` in a server directory is the normal way to reproduce a server elsewhere — a CI job, a fresh VPS, a teammate's machine. It is not append-only: files that the new lock no longer lists are removed, as long as `lucy` installed them.
 
-## Resolution modes
+## Replay or resolve
 
-`lucy install` compares the lock's `manifest_fingerprint` against the manifest it just read. That single comparison decides what happens.
+`lucy install` compares the lock's `manifest_fingerprint` with the manifest. That comparison, together with the flags, decides what happens.
 
-| Manifest | Lock | What happens |
-|---|---|---|
-| unchanged | present | Exact replay. Every file is verified against its recorded hash. No resolution, no catalogue lookup. |
-| unchanged, `--with-optional` | present | Re-resolves so optional dependencies can be selected, then records them as explicit requirements. |
-| changed or absent | present | The lock is stale for this manifest. `lucy` resolves again and rewrites the lock. |
-| unchanged | present, `--locked` | Works. This is what you want in CI. |
-| changed or absent | present, `--locked` | Fails: a locked installation requires a current lock. |
-| absent | absent | Fails: a manifest is required to resolve an installation. |
-| re-resolving | present, `--offline` | Fails: offline resolution needs a current lock, because selecting metadata is not something `lucy` can do without a network. |
+| Manifest | Lock | Flags | What happens |
+|---|---|---|---|
+| unchanged | present | none | Exact replay. Every locked file is checked against its recorded hash. No resolution, no catalogue lookup. |
+| unchanged | present | `--with-optional` | Re-resolves so optional dependencies can be selected, then records them as explicit packages. |
+| changed | present | none | The lock is stale for this manifest. `lucy` resolves again, rewrites the lock, and syncs. |
+| absent | present | none | Lock-only replay. The lock describes the complete server. |
+| present | absent | none | `lucy` resolves the manifest, writes the lock, and syncs. |
+| absent | absent | none | Fails: a manifest or a lock is required. |
+| any | any | `--locked` with a missing or stale lock | Fails: `--locked` requires a current lock. |
+| any | any | any re-resolution with `--offline` | Fails: selecting new metadata requires a network. |
+| any | any | `--with-optional --locked` | Fails: optional selection forces a re-resolution. |
 
-Two consequences worth internalizing.
+Two consequences are worth internalizing.
 
-**Stale locks re-resolve, but pins win.** When the lock no longer matches the manifest, `lucy` resolves the manifest again — and any version you pinned is still pinned. If the Minecraft version and core distribution are unchanged and the core selector is floating (`stable`), the previously locked core artifact is reused rather than chased to a newer build. Adding a package does not float your other packages.
+**Stale locks re-resolve, but pins win.** When the lock no longer matches the manifest, `lucy` resolves the manifest again — and any version you pinned is still pinned. If the Minecraft version and server software are unchanged and the server version selector is floating, the previously locked server JAR is reused rather than chased to a newer build. Adding a package does not float your other packages.
 
 **`--locked` is a promise, not a hint.** Under `--locked`, a missing or stale lock is an error, never a silent re-resolve. If your pipeline depends on failing when the lock drifts, that is the flag.
 
 ### Lock-only replay
 
-If the manifest is gone but `lucy-lock.yaml` remains, `lucy install` replays the lock as-is. The lock is self-describing: it records the server's Minecraft version, core distribution, core version, and full artifact coordinates, so a lock alone is enough to reconstruct the server. This is what makes the lock the artifact worth publishing.
+If the manifest is gone but `lucy-lock.yaml` remains, `lucy install` replays the lock as-is. The lock records the Minecraft version, server software, server version, launcher files, and full download details, so a lock alone is enough to reconstruct the server. This is what makes the lock the file worth publishing.
 
 ## Offline
 
 `--offline` forbids network acquisition. Anything already present and hash-correct is left alone; anything that would need a download fails.
 
-The rule is byte-level, not name-level: a file that exists but whose hash differs from the lock is a mismatch, and `--offline` will not paper over it by keeping the old copy. In practice `--offline` works for replaying a current lock after a warm run; it does not work for first-time installs or for anything requiring re-resolution.
+The rule is byte-level, not name-level: a file that exists but whose hash differs from the lock is a mismatch, and `--offline` will not paper over it by keeping the old copy. In practice `--offline` works for replaying a current lock after a warm run; it does not work for first-time installs or for anything requiring a new resolution.
 
 ### Download cache
 
-Lucy stores global cached contents as SHA-256 objects. Request URLs, output filenames, upstream checksum records, and expiration stay in the cache index. Multiple requests can share one object; evicting one request does not remove contents that another request still references.
+Lucy stores each downloaded file once, keyed by its SHA-256 hash. If several requests need the same file, they share one copy. Lucy checks the stored copy before use and replaces a damaged copy on the next normal download.
 
-Each cache kind counts a shared object once toward its size limit, regardless of the number of request URLs that reference it. Eviction releases that object's quota only after its last reference in that kind is removed.
-
-Cache reads verify the object's digest. A normal download can replace a corrupt cache object. Cache failures do not prevent a download when an uncached staging path is available.
-
-Cache maintenance ignores unrelated object filenames and non-regular stage lease entries.
-
-The CAS cache uses a new disposable disk format. On the first run, Lucy discards the previous global cache. Run an online installation to refill cache-only artifacts before relying on `--offline`. Existing project downloads are not cleared.
-
-`lucy cache clear` removes global cached objects and their index references. It does not clear project-local storage.
+`lucy cache clear` removes the global download cache but not files in the current project. Run an online installation to refill the cache before relying on `--offline`.
 
 ## Lock file shape
 
@@ -63,24 +57,25 @@ The lock has top-level `lock_version`, `manifest_fingerprint`, `server`, an opti
 lock_version: 1
 manifest_fingerprint: "sha256:<digest of the manifest>"
 server:
-  minecraft: "1.21.4"
   directory: "."
-  distribution: paper
-  core_version: "<resolved core version>"
+  minecraft: "1.21.4"
+  product: paper
+  core_version: "<build id>"
   provider: papermc
-  version: "<resolved core version>"
-  filename: "paper-1.21.4-<build>.jar"
+  project_id: paper
+  release_id: "1.21.4/<build id>"
+  file_id: "server:default"
+  version: "<build id>"
+  filename: "paper-1.21.4-<build id>.jar"
   url: "<upstream download URL>"
   hashes:
     sha256: "<64 hex characters>"
+  bootstrapper: paperclip
   java: 21
-mcdr:
-  directory: "."
-  version: "<resolved MCDReforged version>"
-  python: "<resolved interpreter>"
+
 packages:
-  - runtime: server
-    loader: bukkit
+  - environment: server
+    ecosystem: bukkit
     provider: modrinth
     project_id: "<project id>"
     release_id: "<version id>"
@@ -92,24 +87,24 @@ packages:
       sha256: "<64 hex characters>"
     requirements:
       - reference: modrinth:luckperms
-        selector: "<resolved selector>"
+        selector: stable
         enabled: true
 ```
 
-Artifact coordinates are flattened onto each entry. Provider, project, release, file, filename, URL, and hashes are explicit fields — there are no separate ID lookup tables to keep in sync, and a SHA-256 digest is mandatory on every artifact, server core included. A lock missing a digest, or carrying a filename with a path separator in it, is rejected on read.
+Each entry records where the file came from: provider, project, release, file, filename, URL, and hashes. A locked package needs a concrete version, a filename without path separators, and a SHA-256 hash. The `server` section uses `product` and `core_version`, and records how to launch the server (`bootstrapper`) plus any supporting files (`inputs`).
 
-`runtime` is `server` or `mcdr`, which is how one flat list covers two independent environments without nesting. `requirements` records which manifest reference each locked file satisfies, with the selector that was applied; a package with no requirements is present because a dependency needed it.
+`environment` is `server` or `mcdr`, which is how one flat list covers the server and MCDR without nesting. `ecosystem` is the mod or plugin type. The `requirements` list records which package in `lucy.yaml` a locked file satisfies, with the version rule and file pattern that were applied; a package with no requirements is present because a dependency needed it.
 
-## Pruning is receipt-based
+## Removing old files
 
-`lucy install` converges the directory on the lock: files the lock no longer references are removed, but only when `lucy` can prove the file belongs to it. Every installed artifact leaves a receipt, and removal is limited to paths an active receipt covers. Untracked files in `mods/` or `plugins/` — your own jars, backups, anything you dropped in by hand — are left alone rather than deleted on a guess.
+`lucy install` syncs the directory to the lock: files the lock no longer lists are removed, but only when `lucy` can prove it installed them. Lucy records the files it installs in `.lucy/install.yaml` and only removes paths in that record. Untracked files in `mods/` or `plugins/` — your own jars, backups, anything you dropped in by hand — are left alone rather than deleted on a guess.
 
-See also [Global Flags](/commands/global-flags).
+See also [Global Flags](/commands/global-flags), [`lucy add`](/commands/add), and [`lucy remove`](/commands/remove).
 
 ## Flags
 
 <ParamField query="--locked" type="boolean" default="false">
-  Fail instead of re-resolving when the lock is missing or stale.
+  Do not resolve new versions; fail when the lock cannot satisfy the manifest.
 </ParamField>
 
 <ParamField query="--offline" type="boolean" default="false">
@@ -117,5 +112,5 @@ See also [Global Flags](/commands/global-flags).
 </ParamField>
 
 <ParamField query="--with-optional" type="boolean" default="false">
-  Also install optional upstream dependencies. It forces a re-resolution even when the lock already matches the manifest, and every optional package selected this way is written back into `lucy.yaml` as an explicit requirement — so it is part of the declared server from then on, not just of this run. Cannot be combined with `--locked`.
+  Also install optional upstream dependencies. It forces a new resolution even when the lock already matches the manifest, and every optional package selected this way is written back into `lucy.yaml` as an explicit package — so it is part of the declared server from then on, not just of this run. Cannot be combined with `--locked`.
 </ParamField>

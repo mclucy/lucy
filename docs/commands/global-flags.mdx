@@ -1,14 +1,14 @@
 ---
 title: "Global Flags"
-description: "Flags available on every lucy command"
+description: "Flags shared by lucy commands"
 ---
 
-These flags are inherited by every `lucy` subcommand.
+These flags work with every `lucy` subcommand. The root command also exposes version information.
 
 ## Meta
 
-<ParamField query="--version" type="boolean">
-  Print the current `lucy` version and exit.
+<ParamField query="--version, -v" type="boolean">
+  Print the current `lucy` version and exit. This flag belongs to the root command; use `lucy --version`, not `lucy <command> --version`.
 </ParamField>
 
 ## Output style
@@ -32,7 +32,7 @@ These flags are inherited by every `lucy` subcommand.
 </ParamField>
 
 <ParamField query="--json-compact" type="boolean" default="false">
-  Print JSON without indentation.
+  Print JSON without indentation; wins over `--json`.
 </ParamField>
 
 ## Logging
@@ -56,5 +56,5 @@ Diagnostic logs record action boundaries and internal decisions. Command results
 ## Network
 
 <ParamField query="--use-github-mirror" type="boolean" default="false">
-  Route eligible downloads through the GitHub release mirror instead of the canonical upstream URL. This is useful for users in regions with limited access to GitHub. We use https://ghfast.top for this feature.
+  Route eligible downloads through the GitHub release mirror instead of the canonical upstream URL. This is useful for users in regions with limited access to GitHub. The mirror is `https://ghfast.top`.
 </ParamField>

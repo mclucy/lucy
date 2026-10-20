@@ -13,9 +13,12 @@
 </div>
 
 > [!IMPORTANT]
-> Lucy is in active pre-beta development. APIs and schemas may change before 1.0. Join the [QQ Group](https://qm.qq.com/q/Sf65NVYaAi) or open an [issue](https://github.com/mclucy/lucy/issues) to contribute.
+> Lucy is in active pre-beta development. APIs and schemas may change before `v0.1.0`. Join
+the [QQ Group](https://qm.qq.com/q/Sf65NVYaAi) or open an [issue](https://github.com/mclucy/lucy/issues/new) to
+contribute.
 
-Lucy brings modern package management experience to Minecraft servers. Define and manage your server with simple and declarative workflows.
+Lucy brings modern package management experience to Minecraft servers. Define and manage your server with simple and
+declarative workflows.
 
 We (are working to) support multiple ecosystems, and their combinations:
 
@@ -25,10 +28,10 @@ We (are working to) support multiple ecosystems, and their combinations:
 - MCDReforged
 - Bukkit/Spigot/Paper
 
-Lucy fetches metadata and artifacts from multiple soucres:
+Lucy fetches metadata and artifacts from multiple sources:
 
 - Modrinth
-- Curseforge
+- CurseForge
 - Host your own on GitHub!
 
 ## Installation
@@ -52,28 +55,27 @@ lucy init
 # Add packages with dependency resolution
 lucy add modrinth:fabric-api modrinth:lithium
 
-# Inspect the resolved core, files, and packages
+# Inspect the live server
 lucy status
 
-# Sync (install) files exactly as the lock file describes
+# Sync the server as defined by the manifest file
 lucy install
 ```
 
-`lucy.yaml` records what you want. `lucy-lock.yaml` records the exact artifact that satisfies it, hash included. Commit both — `lucy install` reproduces the server from the lock alone, and `--locked` fails the build if the two have drifted apart.
+`lucy.yaml` records what you want. `lucy-lock.yaml` records the exact artifact that satisfies it, hash included. Commit
+both: `lucy install` reproduces the server from the lock alone, and `--locked` fails the build if the two have drifted
+apart.
 
 ## Commands
 
-| Command               | Usage                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------ |
-| `lucy init`           | Generate `lucy.yaml` from an existing server directory                                     |
-| `lucy add <pkg>`      | Record a requirement, resolve it, update the lock, install                                 |
-| `lucy remove <pkg>`   | Drop a requirement and prune what nothing references                                       |
-| `lucy install`        | Sync files from `lucy-lock.yaml`; `--locked` fails on drift, `--offline` forbids downloads |
-| `lucy status`         | Show the resolved core, Minecraft version, and packages                                    |
-| `lucy tree`           | Inspect the dependency graph (supports `--live` probe)                                     |
-| `lucy leaves`         | List unreferenced packages safe to remove                                                  |
-| `lucy bisect`         | Binary search installed mods to isolate crash causes                                       |
-| `lucy search <query>` | Query Modrinth, CurseForge, and GitHub                                                     |
+| Command                | Usage                                                                                              |
+|------------------------|----------------------------------------------------------------------------------------------------|
+| `lucy init`            | Generate `lucy.yaml` from an existing server directory                                             |
+| `lucy add <pkg>...`    | Record requirements, resolve the closure, update the lock, and sync                                |
+| `lucy remove <pkg>...` | Drop requirements, re-resolve, and prune artifacts nothing needs                                   |
+| `lucy install`         | Converge the server with the lock; re-resolve when stale, with `--locked` and `--offline` controls |
+| `lucy status`          | Show the live server identity, files, and packages; `--from-lock` renders the lock                 |
+| `lucy search <query>`  | Search Modrinth, CurseForge, Hangar, Spiget, and the MCDReforged catalogue                         |
 
 Full guides, configuration, and flags: **[lucy.lc/docs](https://lucy.lc/docs)**
 

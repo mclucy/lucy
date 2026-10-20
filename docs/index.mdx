@@ -3,18 +3,18 @@ title: "Introduction"
 description: "`lucy` - the package manager for Minecraft servers"
 ---
 
-`lucy` is a powerful Minecraft server/modpack management tool that provides `npm`-like experience. Currtenly, `lucy` only provides CLI but a web UI is planned for the future.
+`lucy` is a package manager for Minecraft servers. It provides an `npm`-like experience for server hosting and modpack management. Currently, `lucy` only provides a CLI, but a web UI is planned for the future.
 
 With `lucy`, you can:
 
 - Set up a server from scratch in seconds
 - Adopt an existing server directory into a versioned manifest
 - Add and remove mods or plugins with dependency resolution
-- Pin versions exactly and replay them byte-for-byte from a lock file
+- Pin exact versions and replay them byte-for-byte from a lock file
 - Reproduce a server anywhere with one `lucy install`
-- Batch these operations across multiple instances on a machine
+- Batch these operations across multiple servers on a machine
 
-... all through an unified CLI experience.
+`lucy.yaml` records what you want, and `lucy-lock.yaml` records the exact files that satisfy it, hashes included. Commit both to reproduce the server later.
 
 Star ⭐️ us if you like it!
 
