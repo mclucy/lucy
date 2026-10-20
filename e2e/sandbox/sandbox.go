@@ -13,7 +13,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -319,54 +318,53 @@ func materializeModpack(packPath, outDir string, opts options) error {
 		if len(file.Downloads) == 0 {
 			return fmt.Errorf("pack file %s has no download", file.Path)
 		}
-		if err := safeRelativePath(file.Path); err != nil {
-			return err
-		}
 		cached, err := fetchDigest(file.Downloads[0], file.Hashes.SHA512, opts)
 		if err != nil {
 			return fmt.Errorf("pack file %s: %w", file.Path, err)
 		}
-		dest := filepath.Join(outDir, filepath.FromSlash(file.Path))
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return err
-		}
-		if err := copyFile(cached, dest); err != nil {
-			return err
+		if err := writePackFile(outDir, file.Path, func(dest string) error {
+			return copyFile(cached, dest)
+		}); err != nil {
+			return fmt.Errorf("pack file %s: %w", file.Path, err)
 		}
 	}
 
-	for _, entry := range archive.File {
-		var prefix string
-		switch {
-		case strings.HasPrefix(entry.Name, "overrides/"):
-			prefix = "overrides/"
-		case strings.HasPrefix(entry.Name, "server-overrides/"):
-			prefix = "server-overrides/"
-		default:
-			continue
-		}
-		relative := strings.TrimPrefix(entry.Name, prefix)
-		if relative == "" {
-			continue
-		}
-		if err := safeRelativePath(relative); err != nil {
-			return err
-		}
-		dest := filepath.Join(outDir, filepath.FromSlash(relative))
-		if entry.FileInfo().IsDir() {
-			if err := os.MkdirAll(dest, 0o755); err != nil {
+	// The pack format applies generic overrides first, then server overrides.
+	// Archive order carries no layer meaning, so the two prefixes get their own
+	// pass; a server file for a path always wins.
+	for _, prefix := range []string{"overrides/", "server-overrides/"} {
+		for _, entry := range archive.File {
+			name, ok := strings.CutPrefix(entry.Name, prefix)
+			if !ok || name == "" {
+				continue
+			}
+			if err := writePackFile(outDir, name, func(dest string) error {
+				if entry.FileInfo().IsDir() {
+					return os.MkdirAll(dest, 0o755)
+				}
+				return extractZipEntry(entry, dest)
+			}); err != nil {
 				return err
 			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return err
-		}
-		if err := extractZipEntry(entry, dest); err != nil {
-			return err
 		}
 	}
 	return nil
+}
+
+// writePackFile resolves a pack-relative path below outDir, creates its parent
+// directory, then hands the destination to write. Pack paths use forward
+// slashes and must stay inside the sandbox root, so this is the single guard
+// between archive content and the filesystem.
+func writePackFile(outDir, name string, write func(string) error) error {
+	relative := filepath.FromSlash(name)
+	if relative == "." || strings.Contains(name, `\`) || !filepath.IsLocal(relative) {
+		return fmt.Errorf("unsafe pack path %q", name)
+	}
+	dest := filepath.Join(outDir, relative)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	return write(dest)
 }
 
 func readZipEntry(reader *zip.Reader, name string) ([]byte, error) {
@@ -397,14 +395,6 @@ func extractZipEntry(entry *zip.File, dest string) error {
 		return err
 	}
 	return target.Close()
-}
-
-func safeRelativePath(name string) error {
-	clean := path.Clean(name)
-	if clean == "." || path.IsAbs(clean) || strings.HasPrefix(clean, "../") {
-		return fmt.Errorf("unsafe pack path %q", name)
-	}
-	return nil
 }
 
 // fetchDigest caches one pack file under its sha512 digest. The digest is
@@ -629,6 +619,12 @@ func downloadTo(url string, tmp *os.File) error {
 	client := &http.Client{Timeout: 5 * time.Minute}
 	var lastErr error
 	for range 3 {
+		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		if err := tmp.Truncate(0); err != nil {
+			return err
+		}
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			return err

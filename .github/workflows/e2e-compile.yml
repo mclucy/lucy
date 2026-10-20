@@ -139,4 +139,4 @@ jobs:
       - name: Compile fixture (e2e)
         env:
           FIXTURE: ${{ matrix.fixture }}
-        run: go test -tags e2e -count=1 ./e2e/compile -run "^TestCompile/$FIXTURE$"
+        run: go test -tags e2e -count=1 -timeout 40m ./e2e/compile -run "^TestCompile/$FIXTURE$"

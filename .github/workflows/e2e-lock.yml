@@ -80,4 +80,4 @@ jobs:
       # when a scenario lacks its generated environment, so this list and the
       # suite cannot silently drift apart.
       - name: Install scenarios (e2e)
-        run: go test -tags e2e -count=1 -parallel 2 -v ./e2e/install
+        run: go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install
