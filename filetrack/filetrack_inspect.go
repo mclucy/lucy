@@ -132,7 +132,7 @@ func Provision(ctx context.Context, root string, declarations []types.TrackedFil
 			if file.Hash == "" {
 				continue
 			}
-			actual, err := capture(root, files, store, file.Path)
+			actual, err := observe(files, file.Path)
 			if err != nil {
 				return diagnostics, err
 			}
