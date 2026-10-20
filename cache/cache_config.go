@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type CacheConfig struct {
+type Config struct {
 	Enabled           bool          `json:"enabled"`
 	DownloadMaxSize   int64         `json:"download_max_size"`
 	DownloadKeepFor   time.Duration `json:"download_keep_for"`
@@ -13,8 +13,8 @@ type CacheConfig struct {
 	IndexRefreshAfter time.Duration `json:"index_refresh_after"`
 }
 
-func DefaultCacheConfig() CacheConfig {
-	return CacheConfig{
+func DefaultCacheConfig() Config {
+	return Config{
 		Enabled:           true,
 		DownloadMaxSize:   2 * 1024 * 1024 * 1024, // 2 GB
 		DownloadKeepFor:   7 * 24 * time.Hour,     // 7 days
@@ -23,7 +23,7 @@ func DefaultCacheConfig() CacheConfig {
 	}
 }
 
-func (c *CacheConfig) Validate() error {
+func (c *Config) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
@@ -42,7 +42,7 @@ func (c *CacheConfig) Validate() error {
 	return nil
 }
 
-func (c *CacheConfig) toPolicy() Policy {
+func (c *Config) toPolicy() Policy {
 	return Policy{
 		Metadata: PolicyConfig{
 			MaxSize: c.IndexMaxSize,

@@ -15,7 +15,7 @@ type Dependency struct {
 	Origin     types.DependencyOrigin
 }
 
-type ArtifactCompatibility struct {
+type Compatibility struct {
 	FoliaSupported bool
 }
 
@@ -26,7 +26,7 @@ type PackageInfo struct {
 	FilePath      string
 	Dependencies  []Dependency
 	Metadata      types.Metadata
-	Compatibility ArtifactCompatibility
+	Compatibility Compatibility
 }
 
 func dependencyOriginForEmbedded(embedded bool) types.DependencyOrigin {

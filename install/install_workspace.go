@@ -87,7 +87,11 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			return fmt.Errorf("manifest changed during package selection; retry from current intent")
 		}
 	}
-	store := &downloadStore{ctx: ctx, dir: filepath.Join(root, ".lucy", "downloads"), offline: opts.Offline}
+	store := &downloadStore{
+		ctx:     ctx,
+		dir:     filepath.Join(root, ".lucy", "downloads"),
+		offline: opts.Offline,
+	}
 	resolved := old
 	fingerprint := ""
 	if d != nil {
@@ -156,7 +160,13 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			"core", d.Server.Core.ProductVersion,
 			"mcdr", d.MCDR != nil,
 		)
-		coreReq := types.ServerProductRequest{Minecraft: d.Server.Minecraft, Product: d.Server.Core.Product, ProductVersion: d.Server.Core.ProductVersion, Repository: d.Server.Core.Repository, FilePattern: d.Server.Core.FilePattern}
+		coreReq := types.ServerProductRequest{
+			Minecraft:      d.Server.Minecraft,
+			Product:        d.Server.Core.Product,
+			ProductVersion: d.Server.Core.ProductVersion,
+			Repository:     d.Server.Core.Repository,
+			FilePattern:    d.Server.Core.FilePattern,
+		}
 		var core types.ServerProductResolution
 		canReuse := false
 		if old != nil {
@@ -174,7 +184,15 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 				"product", old.Server.Product,
 				"core-version", old.Server.CoreVersion,
 			)
-			core = types.ServerProductResolution{Minecraft: old.Server.Minecraft, Product: old.Server.Product, ProductVersion: old.Server.CoreVersion, Artifact: old.Server.Artifact, Bootstrapper: old.Server.Bootstrapper, Inputs: old.Server.Inputs, Java: old.Server.Java}
+			core = types.ServerProductResolution{
+				Minecraft:      old.Server.Minecraft,
+				Product:        old.Server.Product,
+				ProductVersion: old.Server.CoreVersion,
+				Artifact:       old.Server.Artifact,
+				Bootstrapper:   old.Server.Bootstrapper,
+				Inputs:         old.Server.Inputs,
+				Java:           old.Server.Java,
+			}
 		} else {
 			var err error
 			core, err = routing.ResolveServerProduct(ctx, coreReq, store.materialize)
@@ -182,7 +200,21 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 				return err
 			}
 		}
-		resolved = &lockfile.Document{SchemaVersion: lockfile.SchemaVersion, ManifestFingerprint: fingerprint, Server: lockfile.Server{Minecraft: core.Minecraft, Directory: d.Server.Directory, Product: core.Product, CoreVersion: core.ProductVersion, Artifact: core.Artifact, Bootstrapper: core.Bootstrapper, Inputs: core.Inputs, Java: core.Java}, Packages: []types.LockedPackage{}}
+		resolved = &lockfile.Document{
+			SchemaVersion:       lockfile.SchemaVersion,
+			ManifestFingerprint: fingerprint,
+			Server: lockfile.Server{
+				Minecraft:    core.Minecraft,
+				Directory:    d.Server.Directory,
+				Product:      core.Product,
+				CoreVersion:  core.ProductVersion,
+				Artifact:     core.Artifact,
+				Bootstrapper: core.Bootstrapper,
+				Inputs:       core.Inputs,
+				Java:         core.Java,
+			},
+			Packages: []types.LockedPackage{},
+		}
 		mcdrVersion := ""
 		if d.MCDR != nil {
 			request := d.MCDR.Version
@@ -205,12 +237,20 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			for _, p := range packages {
 				for _, request := range p.Requirements {
 					if p.Environment == types.EnvironmentMCDR {
-						d.MCDR.Packages[request.Reference] = manifest.Requirement{Selector: request.Selector, FilePattern: request.FilePattern, Enabled: new(request.Enabled)}
+						d.MCDR.Packages[request.Reference] = manifest.Requirement{
+							Selector:    request.Selector,
+							FilePattern: request.FilePattern,
+							Enabled:     new(request.Enabled),
+						}
 					} else {
 						if d.Server.Packages[p.Ecosystem] == nil {
 							d.Server.Packages[p.Ecosystem] = map[string]manifest.Requirement{}
 						}
-						d.Server.Packages[p.Ecosystem][request.Reference] = manifest.Requirement{Selector: request.Selector, FilePattern: request.FilePattern, Enabled: new(request.Enabled)}
+						d.Server.Packages[p.Ecosystem][request.Reference] = manifest.Requirement{
+							Selector:    request.Selector,
+							FilePattern: request.FilePattern,
+							Enabled:     new(request.Enabled),
+						}
 					}
 				}
 			}
@@ -221,7 +261,7 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			opts.PublishManifest = true
 		}
 		if d.MCDR != nil {
-			requirements := []string{}
+			var requirements []string
 			for _, p := range packages {
 				for _, m := range p.Modules {
 					for _, dep := range m.Dependencies {
@@ -355,7 +395,13 @@ func isFloating(v types.Version) bool {
 // mutation treats a negative answer as a stale lock, because rebinding
 // requirements must never re-target the server.
 func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Document, offline bool) (bool, error) {
-	request := types.ServerProductRequest{Minecraft: d.Server.Minecraft, Product: d.Server.Core.Product, ProductVersion: d.Server.Core.ProductVersion, Repository: d.Server.Core.Repository, FilePattern: d.Server.Core.FilePattern}
+	request := types.ServerProductRequest{
+		Minecraft:      d.Server.Minecraft,
+		Product:        d.Server.Core.Product,
+		ProductVersion: d.Server.Core.ProductVersion,
+		Repository:     d.Server.Core.Repository,
+		FilePattern:    d.Server.Core.FilePattern,
+	}
 	if old.Server.Directory != d.Server.Directory {
 		log.Debug(
 			"core pin not reusable",

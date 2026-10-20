@@ -13,25 +13,25 @@ import (
 const indexVersion = 3
 
 type indexManifest struct {
-	Version int                 `json:"version"`
-	Entries map[key]*CacheEntry `json:"entries"`
+	Version int            `json:"version"`
+	Entries map[key]*Entry `json:"entries"`
 }
 
 type index struct {
 	path    string
-	entries map[key]*CacheEntry
+	entries map[key]*Entry
 	info    os.FileInfo
 }
 
 func newIndex(path string) *index {
-	return &index{path: path, entries: make(map[key]*CacheEntry)}
+	return &index{path: path, entries: make(map[key]*Entry)}
 }
 
 // load runs under cache ownership. Atomic replacement makes inode identity a safe fast path.
 func (idx *index) load() (bool, error) {
 	info, err := os.Stat(idx.path)
 	if errors.Is(err, os.ErrNotExist) {
-		idx.entries = make(map[key]*CacheEntry)
+		idx.entries = make(map[key]*Entry)
 		return true, idx.flush()
 	}
 	if err != nil {
@@ -52,7 +52,7 @@ func (idx *index) load() (bool, error) {
 		return false, errors.Join(statErr, closeErr)
 	}
 	if decodeErr != nil || !validIndex(manifest) {
-		idx.entries = make(map[key]*CacheEntry)
+		idx.entries = make(map[key]*Entry)
 		return true, idx.flush()
 	}
 	idx.info = info
@@ -77,7 +77,10 @@ func validIndex(manifest indexManifest) bool {
 }
 
 func (idx *index) flush() error {
-	data, err := json.Marshal(indexManifest{Version: indexVersion, Entries: idx.entries})
+	data, err := json.Marshal(indexManifest{
+		Version: indexVersion,
+		Entries: idx.entries,
+	})
 	if err != nil {
 		idx.info = nil
 		return fmt.Errorf("encode cache index: %w", err)
@@ -90,12 +93,12 @@ func (idx *index) flush() error {
 	return err
 }
 
-func (idx *index) get(k key) (*CacheEntry, bool) {
+func (idx *index) get(k key) (*Entry, bool) {
 	entry, ok := idx.entries[k]
 	return entry, ok
 }
 
-func (idx *index) put(k key, entry *CacheEntry) {
+func (idx *index) put(k key, entry *Entry) {
 	idx.entries[k] = entry
 }
 
@@ -108,6 +111,6 @@ func (idx *index) exists(k key) bool {
 	return ok
 }
 
-func (idx *index) all() map[key]*CacheEntry {
+func (idx *index) all() map[key]*Entry {
 	return idx.entries
 }

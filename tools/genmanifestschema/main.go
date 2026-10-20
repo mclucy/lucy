@@ -62,7 +62,7 @@ func main() {
 	}
 	schema := r.Reflect(&manifest.Document{})
 	schema.Version = jsonschema.Version
-	schema.ID = jsonschema.ID(schemaURL)
+	schema.ID = schemaURL
 	schema.Title = "Lucy manifest"
 	schema.Description = "Desired-state manifest (lucy.yaml) for a Lucy-managed Minecraft server."
 

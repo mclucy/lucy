@@ -51,7 +51,7 @@ func searchUrl(
 	err := urlTemplate.Execute(
 		&urlBuilder,
 		map[string]any{
-			"query":  url.QueryEscape(string(query)),
+			"query":  url.QueryEscape(query),
 			"index":  option.index,
 			"facets": url.QueryEscape(serializeFacet(option.facets...)),
 		},

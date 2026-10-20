@@ -7,10 +7,10 @@ import (
 )
 
 // VersionRangeDialect defines the grammar used when parsing a range string.
-type VersionRangeDialect uint8
+type RangeDialect uint8
 
 const (
-	DialectUnknown VersionRangeDialect = iota
+	DialectUnknown RangeDialect = iota
 	// DialectNpmSemver represents MCDR plugin metadata dependency ranges.
 	// References:
 	//   - https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
@@ -27,7 +27,7 @@ const (
 )
 
 // InferRangeDialect infers the range dialect from package ecosystem.
-func InferRangeDialect(ecosystem types.Ecosystem) VersionRangeDialect {
+func InferRangeDialect(ecosystem types.Ecosystem) RangeDialect {
 	switch ecosystem {
 	case types.EcosystemMCDR:
 		return DialectNpmSemver
@@ -47,7 +47,7 @@ func InferRangeDialect(ecosystem types.Ecosystem) VersionRangeDialect {
 // (>, >=, <, <=, =, !=) so that the evaluator layer stays dialect-agnostic.
 func ParseRange(
 	raw string,
-	dialect VersionRangeDialect,
+	dialect RangeDialect,
 	scheme types.VersionScheme,
 ) types.VersionExpr {
 	if strings.TrimSpace(raw) == "" {
@@ -88,7 +88,7 @@ func ParseRange(
 // is unconstrained (nil), because one OR branch already matches all versions.
 func ParseRanges(
 	raws []string,
-	dialect VersionRangeDialect,
+	dialect RangeDialect,
 	scheme types.VersionScheme,
 ) types.VersionExpr {
 	if len(raws) == 0 {

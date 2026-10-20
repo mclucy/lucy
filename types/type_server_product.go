@@ -111,29 +111,189 @@ type serverProductDefinition struct {
 // server products. Ecosystem disambiguates aliases such as Sponge's Forge
 // variant.
 var serverProductDefinitions = []serverProductDefinition{
-	{Product: ServerProductMinecraft, Ecosystem: EcosystemMinecraft, Aliases: []serverProductAlias{{"minecraft", EcosystemUnspecified}, {"mc", EcosystemUnspecified}, {"vanilla", EcosystemUnspecified}, {"minecraft", EcosystemMinecraft}, {"mc", EcosystemMinecraft}, {"vanilla", EcosystemMinecraft}}},
-	{Product: ServerProductFabric, Ecosystem: EcosystemFabric, Aliases: []serverProductAlias{{"fabric", EcosystemUnspecified}, {"fabric-loader", EcosystemUnspecified}, {"fabric", EcosystemFabric}, {"fabric-loader", EcosystemFabric}}},
-	{Product: ServerProductForge, Ecosystem: EcosystemForge, Aliases: []serverProductAlias{{"forge", EcosystemUnspecified}, {"forge", EcosystemForge}}},
-	{Product: ServerProductNeoForge, Ecosystem: EcosystemNeoForge, Aliases: []serverProductAlias{{"neoforge", EcosystemUnspecified}, {"neoforge", EcosystemNeoForge}}},
-	{Product: ServerProductMCDReforged, Ecosystem: EcosystemMCDR, Aliases: []serverProductAlias{{"mcdreforged", EcosystemUnspecified}, {"mcdr", EcosystemUnspecified}, {"mcdreforged", EcosystemMCDR}, {"mcdr", EcosystemMCDR}}},
-	{Product: ServerProductCraftBukkit, Ecosystem: EcosystemBukkit, Aliases: []serverProductAlias{{"bukkit", EcosystemUnspecified}, {"craftbukkit", EcosystemUnspecified}, {"bukkit", EcosystemBukkit}, {"craftbukkit", EcosystemBukkit}}},
-	{Product: ServerProductSpigot, Ecosystem: EcosystemBukkit, Aliases: []serverProductAlias{{"spigot", EcosystemUnspecified}, {"spigot", EcosystemBukkit}}},
-	{Product: ServerProductPaper, Ecosystem: EcosystemPaper, Aliases: []serverProductAlias{{"paper", EcosystemUnspecified}, {"paper", EcosystemPaper}}},
-	{Product: ServerProductPurpur, Ecosystem: EcosystemPaper, Aliases: []serverProductAlias{{"purpur", EcosystemUnspecified}, {"purpur", EcosystemPaper}}},
-	{Product: ServerProductFolia, Ecosystem: EcosystemPaper, Aliases: []serverProductAlias{{"folia", EcosystemUnspecified}, {"folia", EcosystemPaper}}},
-	{Product: ServerProductLeaves, Ecosystem: EcosystemPaper, Aliases: []serverProductAlias{{"leaves", EcosystemUnspecified}, {"leaves", EcosystemPaper}}},
-	{Product: ServerProductArclight, Aliases: []serverProductAlias{{"arclight", EcosystemUnspecified}}},
-	{Product: ServerProductArclightForge, Aliases: []serverProductAlias{{"arclight-forge", EcosystemUnspecified}}},
-	{Product: ServerProductArclightNeoForge, Aliases: []serverProductAlias{{"arclight-neoforge", EcosystemUnspecified}}},
-	{Product: ServerProductArclightFabric, Aliases: []serverProductAlias{{"arclight-fabric", EcosystemUnspecified}}},
-	{Product: ServerProductCatServer, Aliases: []serverProductAlias{{"catserver", EcosystemUnspecified}}},
-	{Product: ServerProductYouer, Aliases: []serverProductAlias{{"youer", EcosystemUnspecified}}},
-	{Product: ServerProductSpongeVanilla, Ecosystem: EcosystemSponge, Aliases: []serverProductAlias{{"sponge", EcosystemUnspecified}, {"spongevanilla", EcosystemUnspecified}, {"sponge", EcosystemSponge}, {"spongevanilla", EcosystemSponge}, {"vanilla", EcosystemSponge}, {"minecraft", EcosystemSponge}, {"mc", EcosystemSponge}}},
-	{Product: ServerProductSpongeForge, Ecosystem: EcosystemSponge, Aliases: []serverProductAlias{{"spongeforge", EcosystemUnspecified}, {"spongeforge", EcosystemSponge}, {"forge", EcosystemSponge}}},
-	{Product: ServerProductSpongeNeo, Ecosystem: EcosystemSponge, Aliases: []serverProductAlias{{"spongeneo", EcosystemUnspecified}, {"spongeneo", EcosystemSponge}, {"neo", EcosystemSponge}, {"neoforge", EcosystemSponge}}},
-	{Product: ServerProductBungeeCord, Ecosystem: EcosystemBungeeCord, Aliases: []serverProductAlias{{"bungeecord", EcosystemUnspecified}, {"bungeecord", EcosystemBungeeCord}}},
-	{Product: ServerProductVelocity, Ecosystem: EcosystemVelocity, Aliases: []serverProductAlias{{"velocity", EcosystemUnspecified}, {"velocity", EcosystemVelocity}}},
-	{Product: ServerProductWaterfall, Ecosystem: EcosystemBungeeCord, Aliases: []serverProductAlias{{"waterfall", EcosystemUnspecified}, {"waterfall", EcosystemBungeeCord}}},
+	{
+		Product:   ServerProductMinecraft,
+		Ecosystem: EcosystemMinecraft,
+		Aliases: []serverProductAlias{
+			{"minecraft", EcosystemUnspecified},
+			{"mc", EcosystemUnspecified},
+			{"vanilla", EcosystemUnspecified},
+			{"minecraft", EcosystemMinecraft},
+			{"mc", EcosystemMinecraft},
+			{"vanilla", EcosystemMinecraft},
+		},
+	},
+	{
+		Product:   ServerProductFabric,
+		Ecosystem: EcosystemFabric,
+		Aliases: []serverProductAlias{
+			{"fabric", EcosystemUnspecified},
+			{"fabric-loader", EcosystemUnspecified},
+			{"fabric", EcosystemFabric},
+			{"fabric-loader", EcosystemFabric},
+		},
+	},
+	{
+		Product:   ServerProductForge,
+		Ecosystem: EcosystemForge,
+		Aliases: []serverProductAlias{
+			{"forge", EcosystemUnspecified},
+			{"forge", EcosystemForge},
+		},
+	},
+	{
+		Product:   ServerProductNeoForge,
+		Ecosystem: EcosystemNeoForge,
+		Aliases: []serverProductAlias{
+			{"neoforge", EcosystemUnspecified},
+			{"neoforge", EcosystemNeoForge},
+		},
+	},
+	{
+		Product:   ServerProductMCDReforged,
+		Ecosystem: EcosystemMCDR,
+		Aliases: []serverProductAlias{
+			{"mcdreforged", EcosystemUnspecified},
+			{"mcdr", EcosystemUnspecified},
+			{"mcdreforged", EcosystemMCDR},
+			{"mcdr", EcosystemMCDR},
+		},
+	},
+	{
+		Product:   ServerProductCraftBukkit,
+		Ecosystem: EcosystemBukkit,
+		Aliases: []serverProductAlias{
+			{"bukkit", EcosystemUnspecified},
+			{"craftbukkit", EcosystemUnspecified},
+			{"bukkit", EcosystemBukkit},
+			{"craftbukkit", EcosystemBukkit},
+		},
+	},
+	{
+		Product:   ServerProductSpigot,
+		Ecosystem: EcosystemBukkit,
+		Aliases: []serverProductAlias{
+			{"spigot", EcosystemUnspecified},
+			{"spigot", EcosystemBukkit},
+		},
+	},
+	{
+		Product:   ServerProductPaper,
+		Ecosystem: EcosystemPaper,
+		Aliases: []serverProductAlias{
+			{"paper", EcosystemUnspecified},
+			{"paper", EcosystemPaper},
+		},
+	},
+	{
+		Product:   ServerProductPurpur,
+		Ecosystem: EcosystemPaper,
+		Aliases: []serverProductAlias{
+			{"purpur", EcosystemUnspecified},
+			{"purpur", EcosystemPaper},
+		},
+	},
+	{
+		Product:   ServerProductFolia,
+		Ecosystem: EcosystemPaper,
+		Aliases: []serverProductAlias{
+			{"folia", EcosystemUnspecified},
+			{"folia", EcosystemPaper},
+		},
+	},
+	{
+		Product:   ServerProductLeaves,
+		Ecosystem: EcosystemPaper,
+		Aliases: []serverProductAlias{
+			{"leaves", EcosystemUnspecified},
+			{"leaves", EcosystemPaper},
+		},
+	},
+	{
+		Product: ServerProductArclight,
+		Aliases: []serverProductAlias{{"arclight", EcosystemUnspecified}},
+	},
+	{
+		Product: ServerProductArclightForge,
+		Aliases: []serverProductAlias{{"arclight-forge", EcosystemUnspecified}},
+	},
+	{
+		Product: ServerProductArclightNeoForge,
+		Aliases: []serverProductAlias{
+			{
+				"arclight-neoforge",
+				EcosystemUnspecified,
+			},
+		},
+	},
+	{
+		Product: ServerProductArclightFabric,
+		Aliases: []serverProductAlias{{"arclight-fabric", EcosystemUnspecified}},
+	},
+	{
+		Product: ServerProductCatServer,
+		Aliases: []serverProductAlias{{"catserver", EcosystemUnspecified}},
+	},
+	{
+		Product: ServerProductYouer,
+		Aliases: []serverProductAlias{{"youer", EcosystemUnspecified}},
+	},
+	{
+		Product:   ServerProductSpongeVanilla,
+		Ecosystem: EcosystemSponge,
+		Aliases: []serverProductAlias{
+			{"sponge", EcosystemUnspecified},
+			{"spongevanilla", EcosystemUnspecified},
+			{"sponge", EcosystemSponge},
+			{"spongevanilla", EcosystemSponge},
+			{"vanilla", EcosystemSponge},
+			{"minecraft", EcosystemSponge},
+			{"mc", EcosystemSponge},
+		},
+	},
+	{
+		Product:   ServerProductSpongeForge,
+		Ecosystem: EcosystemSponge,
+		Aliases: []serverProductAlias{
+			{"spongeforge", EcosystemUnspecified},
+			{"spongeforge", EcosystemSponge},
+			{"forge", EcosystemSponge},
+		},
+	},
+	{
+		Product:   ServerProductSpongeNeo,
+		Ecosystem: EcosystemSponge,
+		Aliases: []serverProductAlias{
+			{"spongeneo", EcosystemUnspecified},
+			{"spongeneo", EcosystemSponge},
+			{"neo", EcosystemSponge},
+			{"neoforge", EcosystemSponge},
+		},
+	},
+	{
+		Product:   ServerProductBungeeCord,
+		Ecosystem: EcosystemBungeeCord,
+		Aliases: []serverProductAlias{
+			{"bungeecord", EcosystemUnspecified},
+			{"bungeecord", EcosystemBungeeCord},
+		},
+	},
+	{
+		Product:   ServerProductVelocity,
+		Ecosystem: EcosystemVelocity,
+		Aliases: []serverProductAlias{
+			{"velocity", EcosystemUnspecified},
+			{"velocity", EcosystemVelocity},
+		},
+	},
+	{
+		Product:   ServerProductWaterfall,
+		Ecosystem: EcosystemBungeeCord,
+		Aliases: []serverProductAlias{
+			{"waterfall", EcosystemUnspecified},
+			{"waterfall", EcosystemBungeeCord},
+		},
+	},
 }
 
 // NormalizeServerProduct resolves a request against the server product
@@ -143,7 +303,10 @@ func NormalizeServerProduct(request VersionedPackageRef) (ServerProductMatch, bo
 	for _, definition := range serverProductDefinitions {
 		for _, alias := range definition.Aliases {
 			if alias.Name == name && alias.Ecosystem == request.Ecosystem {
-				return ServerProductMatch{Product: definition.Product, Ecosystem: definition.Ecosystem}, true
+				return ServerProductMatch{
+					Product:   definition.Product,
+					Ecosystem: definition.Ecosystem,
+				}, true
 			}
 		}
 	}
@@ -154,7 +317,7 @@ func NormalizeServerProduct(request VersionedPackageRef) (ServerProductMatch, bo
 // qualifier. It is used for persisted server declarations.
 func ParseServerProduct(name string) (ServerProduct, bool) {
 	match, ok := NormalizeServerProduct(VersionedPackageRef{
-		PackageRef: PackageRef{Name: PackageName(strings.ToLower(strings.TrimSpace(name)))},
+		Name: PackageName(strings.ToLower(strings.TrimSpace(name))),
 	})
 	return match.Product, ok
 }

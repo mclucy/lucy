@@ -29,7 +29,7 @@ type handler struct {
 	policy Policy
 }
 
-func newHandler(name string, cfg CacheConfig) *handler {
+func newHandler(name string, cfg Config) *handler {
 	h := &handler{on: cfg.Enabled, dir: setDir(name), policy: cfg.toPolicy()}
 	if !h.on {
 		return h
@@ -46,7 +46,7 @@ func newHandler(name string, cfg CacheConfig) *handler {
 	return h
 }
 
-func (h *handler) initialize(cfg CacheConfig) (resultErr error) {
+func (h *handler) initialize(cfg Config) (resultErr error) {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
@@ -170,7 +170,16 @@ func (h *handler) CommitEntry(writer *cas.Writer, filename, k string, kind Entry
 			removed = append(removed, digest)
 		}
 	}
-	h.index.put(ckey, &CacheEntry{Kind: kind, Filename: sanitizeFilename(filename, object.Digest.Hex()), Size: object.Size, ContentHash: contentHash, Integrity: integrity, Expiration: now.Add(expiration), Key: string(ckey), CreatedAt: created})
+	h.index.put(ckey, &Entry{
+		Kind:        kind,
+		Filename:    sanitizeFilename(filename, object.Digest.Hex()),
+		Size:        object.Size,
+		ContentHash: contentHash,
+		Integrity:   integrity,
+		Expiration:  now.Add(expiration),
+		Key:         string(ckey),
+		CreatedAt:   created,
+	})
 	removed, err = h.maintainLocked(removed)
 	if err != nil {
 		return err
@@ -282,7 +291,7 @@ func (h *handler) Remove(k string) (resultErr error) {
 	return h.collectCandidatesLocked([]cas.Digest{digest})
 }
 
-func (h *handler) All() []*CacheEntry {
+func (h *handler) All() []*Entry {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.on {
@@ -299,7 +308,7 @@ func (h *handler) All() []*CacheEntry {
 		}
 	}()
 	keys := slices.Sorted(maps.Keys(h.index.entries))
-	entries := make([]*CacheEntry, 0, len(keys))
+	entries := make([]*Entry, 0, len(keys))
 	for _, k := range keys {
 		entry := *h.index.entries[k]
 		entries = append(entries, &entry)
@@ -318,7 +327,7 @@ func (h *handler) ClearAll() (report ResetReport, resultErr error) {
 		return report, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, lock.Close()) }()
-	h.index.entries = make(map[key]*CacheEntry)
+	h.index.entries = make(map[key]*Entry)
 	if err := h.index.flush(); err != nil {
 		return report, err
 	}

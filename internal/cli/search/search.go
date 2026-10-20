@@ -40,7 +40,7 @@ var searchCmd = &cobra.Command{
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		sort, _ := cmd.Flags().GetString(flagSortName)
-		if !SearchSort(sort).Valid() {
+		if !Sort(sort).Valid() {
 			return errors.New("--sort must be one of \"relevance\", \"downloads\", \"newest\"")
 		}
 		ecosystem, _ := cmd.Flags().GetString(flagEcosystemName)
@@ -151,7 +151,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	results, errs := routing.SearchMany(providers, query)
-	applySearchSort(results, SearchSort(sortOrder))
+	applySearchSort(results, Sort(sortOrder))
 
 	var noResultSources []string
 	for _, err := range errs {

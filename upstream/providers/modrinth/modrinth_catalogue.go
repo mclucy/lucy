@@ -16,7 +16,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 	if err != nil {
 		return nil, err
 	}
-	out := []types.CatalogueCandidate{}
+	var out []types.CatalogueCandidate
 	for _, v := range versions {
 		if !slices.Contains(v.GameVersions, minecraft) || !versionSupportsLoader(v, loader) {
 			continue
@@ -38,16 +38,14 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 				hashes["sha1"] = f.Hashes.Sha1
 			}
 			c := types.CatalogueCandidate{
-				Artifact: types.Artifact{
-					Provider:  types.ProviderModrinth,
-					ProjectID: v.ProjectId,
-					ReleaseID: v.ID,
-					FileID:    f.ID,
-					Version:   types.Version(v.VersionNumber),
-					Filename:  f.Filename,
-					URL:       f.URL,
-					Hashes:    hashes,
-				},
+				Provider:     types.ProviderModrinth,
+				ProjectID:    v.ProjectId,
+				ReleaseID:    v.ID,
+				FileID:       f.ID,
+				Version:      types.Version(v.VersionNumber),
+				Filename:     f.Filename,
+				URL:          f.URL,
+				Hashes:       hashes,
 				Channel:      types.ParseReleaseChannel(v.VersionType),
 				PublishedAt:  v.DatePublished,
 				PrimaryFile:  f.IsPrimary || (unmarked && i == 0),

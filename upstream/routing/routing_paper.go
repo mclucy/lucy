@@ -56,7 +56,16 @@ func resolvePaper(ctx context.Context, req types.ServerProductRequest, out *type
 			continue
 		}
 		out.ProductVersion, out.Bootstrapper = types.Version(v), "paperclip"
-		out.Artifact = types.Artifact{Provider: types.ProviderPaperMC, ProjectID: "paper", ReleaseID: req.Minecraft.String() + "/" + v, FileID: "server:default", Version: types.Version(v), Filename: asset.Name, URL: asset.URL, Hashes: asset.Checksums}
+		out.Artifact = types.Artifact{
+			Provider:  types.ProviderPaperMC,
+			ProjectID: "paper",
+			ReleaseID: req.Minecraft.String() + "/" + v,
+			FileID:    "server:default",
+			Version:   types.Version(v),
+			Filename:  asset.Name,
+			URL:       asset.URL,
+			Hashes:    asset.Checksums,
+		}
 		log.Debug(
 			"routing: paper build selected",
 			"minecraft", req.Minecraft,
@@ -137,7 +146,16 @@ func resolveGithubProduct(ctx context.Context, req types.ServerProductRequest, o
 			if h, ok := strings.CutPrefix(a.Digest, "sha256:"); ok {
 				hashes["sha256"] = h
 			}
-			candidate := types.Artifact{Provider: types.ProviderGitHub, ProjectID: strconv.FormatInt(repo.ID, 10), ReleaseID: strconv.FormatInt(r.ID, 10), FileID: strconv.FormatInt(a.ID, 10), Version: types.Version(r.Tag), Filename: a.Name, URL: a.URL, Hashes: hashes}
+			candidate := types.Artifact{
+				Provider:  types.ProviderGitHub,
+				ProjectID: strconv.FormatInt(repo.ID, 10),
+				ReleaseID: strconv.FormatInt(r.ID, 10),
+				FileID:    strconv.FormatInt(a.ID, 10),
+				Version:   types.Version(r.Tag),
+				Filename:  a.Name,
+				URL:       a.URL,
+				Hashes:    hashes,
+			}
 			p, e := acquire(&candidate)
 			if e != nil {
 				return e
@@ -180,7 +198,7 @@ func paperclipInput(out *types.ServerProductResolution, corePath string) error {
 		return err
 	}
 	if data == nil {
-		return fmt.Errorf("Paper fork has no supported Paperclip download context")
+		return fmt.Errorf("paper fork has no supported Paperclip download context")
 	}
 	fields := strings.Fields(string(data))
 	if len(fields) != 3 {
@@ -190,6 +208,16 @@ func paperclipInput(out *types.ServerProductResolution, corePath string) error {
 	if fields[2] != expected {
 		return fmt.Errorf("core targets %s, requested Minecraft %s", fields[2], out.Minecraft)
 	}
-	out.Inputs = []types.BootstrapInput{{Path: path.Join("cache", fields[2]), Provider: types.ProviderMojang, ProjectID: "minecraft", Version: out.Minecraft, Filename: fields[2], URL: fields[1], Hashes: map[string]string{"sha256": fields[0]}}}
+	out.Inputs = []types.BootstrapInput{
+		{
+			Path:      path.Join("cache", fields[2]),
+			Provider:  types.ProviderMojang,
+			ProjectID: "minecraft",
+			Version:   out.Minecraft,
+			Filename:  fields[2],
+			URL:       fields[1],
+			Hashes:    map[string]string{"sha256": fields[0]},
+		},
+	}
 	return nil
 }

@@ -4,7 +4,7 @@
 // Contract: filesystem paths are absolute, Gradle paths use the colon form
 // (":" for the root project), and nothing outside the probed root is read.
 // Whatever cannot be read from literals alone is reported as a Finding rather
-// than guessed; a cancelled context or an unreadable directory fails Probe
+// than guessed; a canceled context or an unreadable directory fails Probe
 // instead.
 package buildrepo
 
@@ -86,11 +86,11 @@ func Probe(ctx context.Context, root string) (layout Layout, err error) {
 	if !info.IsDir() {
 		return Layout{}, fmt.Errorf("buildrepo: %s is not a directory", abs)
 	}
-	real, err := filepath.EvalSymlinks(abs)
+	realpath, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return Layout{}, fmt.Errorf("buildrepo: resolve symlinks of %s: %w", abs, err)
 	}
-	scoped, err := os.OpenRoot(real)
+	scoped, err := os.OpenRoot(realpath)
 	if err != nil {
 		return Layout{}, fmt.Errorf("open repository root: %w", err)
 	}
@@ -102,7 +102,7 @@ func Probe(ctx context.Context, root string) (layout Layout, err error) {
 
 	p := &prober{
 		ctx:  ctx,
-		root: real, scoped: scoped,
+		root: realpath, scoped: scoped,
 		props:              map[string]map[string]string{},
 		catalog:            map[string]string{},
 		catalogs:           map[string]map[string]string{},
@@ -120,7 +120,11 @@ func Probe(ctx context.Context, root string) (layout Layout, err error) {
 	for i := range p.builds {
 		sortBuild(&p.builds[i])
 	}
-	return Layout{Root: real, Builds: p.builds, Findings: p.findings.sorted()}, nil
+	return Layout{
+		Root:     realpath,
+		Builds:   p.builds,
+		Findings: p.findings.sorted(),
+	}, nil
 }
 
 // skippedDirs never contain hand written Gradle configuration.
@@ -176,11 +180,11 @@ func (f findingList) sorted() []Finding {
 // contains reports whether target stays inside the root once symlinks are
 // resolved. Symlinked entries escaping the root are never followed.
 func (p *prober) contains(target string) bool {
-	real, err := filepath.EvalSymlinks(target)
+	realpath, err := filepath.EvalSymlinks(target)
 	if err != nil {
 		return false
 	}
-	rel, err := filepath.Rel(p.root, real)
+	rel, err := filepath.Rel(p.root, realpath)
 	if err != nil {
 		return false
 	}

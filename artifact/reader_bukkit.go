@@ -63,9 +63,16 @@ func (r *bukkitReader) Read(
 
 		platform := detectBukkitPluginPlatform(descriptor)
 		info := PackageInfo{
-			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.Name), Provider: types.ProviderUnknown}, Ecosystem: platform, Version: types.Version(strings.TrimSpace(descriptor.Version))},
+			Ref: types.VersionedPackageRef{
+				PackageRef: types.PackageRef{
+					Name:     input.ToProjectName(descriptor.Name),
+					Provider: types.ProviderUnknown,
+				},
+				Ecosystem: platform,
+				Version:   types.Version(strings.TrimSpace(descriptor.Version)),
+			},
 			FilePath: filePath,
-			Compatibility: ArtifactCompatibility{
+			Compatibility: Compatibility{
 				FoliaSupported: descriptor.FoliaSupported,
 			},
 			Metadata: types.Metadata{
@@ -142,7 +149,12 @@ func appendBukkitDescriptorDeps(
 		}
 		deps = append(
 			deps, Dependency{
-				Ref:       types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(name), Provider: types.ProviderUnknown}, Ecosystem: platform},
+				Ref: types.VersionedPackageRef{
+					PackageRef: types.PackageRef{
+						Name:     input.ToProjectName(name),
+						Provider: types.ProviderUnknown,
+					}, Ecosystem: platform,
+				},
 				Mandatory: mandatory,
 			},
 		)

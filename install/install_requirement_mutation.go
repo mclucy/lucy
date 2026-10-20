@@ -14,13 +14,13 @@ import (
 // package, keyed by the reference that names it.
 func declaredRequirements(d *manifest.Document) map[string]manifest.Requirement {
 	declared := map[string]manifest.Requirement{}
-	loaders := []types.Ecosystem{}
+	var loaders []types.Ecosystem
 	for loader := range d.Server.Packages {
 		loaders = append(loaders, loader)
 	}
 	slices.Sort(loaders)
 	for _, loader := range loaders {
-		refs := []string{}
+		var refs []string
 		for ref := range d.Server.Packages[loader] {
 			refs = append(refs, ref)
 		}
