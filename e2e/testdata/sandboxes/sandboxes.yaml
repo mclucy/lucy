@@ -6,6 +6,10 @@
 # rewrite their checksum sidecars when they do. No immutable endpoint exists for
 # these artifacts, so they carry no sha256 and the sandbox tool skips digest
 # verification.
+#
+# An artifact with modpack: true is a Modrinth pack archive. Generation writes
+# the indexed server files and the pack overrides into the sandbox root instead
+# of copying the archive.
 version: 1
 
 sandboxes:
@@ -76,6 +80,24 @@ sandboxes:
       - dest: libraries/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
 
+  - id: neoforge-connector
+    family: neoforge
+    game_version: "1.21.1"
+    description: Sinytra Connector on NeoForge 21.1.248 with Forgified Fabric API, the bridge that offers Fabric content to a NeoForge server
+    docs: docs/bridges.md
+    dirs: [mods]
+    artifacts:
+      - dest: neoforge-21.1.248-installer.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar
+      - dest: libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
+      - dest: mods/connector-2.0.0-beta.17+1.21.1-full.jar
+        url: https://cdn.modrinth.com/data/u58R1TMW/versions/IITF0PRC/connector-2.0.0-beta.17%2B1.21.1-full.jar
+        sha256: ca70b57df3a7a4e8d211fea7ff3ae77e768482af374f26bf953ff5fd755564f0
+      - dest: mods/forgified-fabric-api-0.116.15+2.3.6+1.21.1.jar
+        url: https://cdn.modrinth.com/data/Aqlf1Shp/versions/C4eskNuR/forgified-fabric-api-0.116.15%2B2.3.6%2B1.21.1.jar
+        sha256: bcbb5d8479032690d53debfcf61c0477080ff6d1d4dae9a9a85122b47377646a
+
   - id: fabric-executable-1214
     family: fabric
     game_version: "1.21.4"
@@ -105,6 +127,26 @@ sandboxes:
       - dest: fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar
         fabric_meta: { game: "26.2", loader: "0.19.3", installer: "1.1.2" }
         sha256: 301f83aac36b23f2bc64cc58560edf98533cfaa30e53af002ba950c75f4100b4
+
+  - id: fabric-kilt
+    family: fabric
+    game_version: "1.21.1"
+    description: Kilt compatibility layer on a Fabric 1.21.1 executable server with its required Fabric API and Kotlin runtime
+    docs: docs/bridges.md
+    dirs: [mods]
+    artifacts:
+      - dest: fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar
+        fabric_meta: { game: "1.21.1", loader: "0.19.5", installer: "1.1.2" }
+        sha256: 809d99b16dd4d4b57384d128724ab0d6560f859aaba989dc6750d8437a447ed0
+      - dest: mods/fabric-api-0.116.17+1.21.1.jar
+        url: https://cdn.modrinth.com/data/P7dR8mSH/versions/Mys3P7lK/fabric-api-0.116.17%2B1.21.1.jar
+        sha256: 79ac44b40780acbd884b34c50be1e39af682847e5f5cb3b1fddeeaa768dce800
+      - dest: mods/fabric-language-kotlin-1.14.2+kotlin.2.4.21.jar
+        url: https://cdn.modrinth.com/data/Ha28R6CL/versions/SKW1BTL3/fabric-language-kotlin-1.14.2%2Bkotlin.2.4.21.jar
+        sha256: fbdbf5286ab9d65fedb49e6e01c15e338ae303eb7b9d8c7423d0a9bcfe526ef9
+      - dest: mods/Kilt-21.1.15.jar
+        url: https://cdn.modrinth.com/data/t87XZEqv/versions/FVVpTWMd/Kilt-21.1.15.jar
+        sha256: 2fb34b2792b0c9aafea72df1289a5e6a829f18170a4c3dc402b28112eb64ca68
 
   - id: fabric-installed-1214
     family: fabric
@@ -352,3 +394,37 @@ sandboxes:
       - dest: mohist.jar
         manual: true
         sha256: cbefdc9230b714c784dafaf74c83f55d8c4ec049dc41561c4e9b2d5766d05941
+
+  # Modpacks. Generation writes the indexed server files and the pack
+  # overrides, then the loader artifacts land beside them.
+
+  - id: cobblemon-1211
+    family: modpack
+    game_version: "1.21.1"
+    description: Cobblemon Official Modpack [Fabric] 1.8.2 server files over Fabric 0.19.5
+    docs: docs/modpacks.md
+    dirs: [mods, config]
+    artifacts:
+      - dest: pack.mrpack
+        url: https://cdn.modrinth.com/data/5FFgwNNP/versions/BpTjgzL8/Cobblemon%20Official%20Modpack%20%5BFabric%5D%201.8.2.mrpack
+        sha256: 69f1398add0800ee1a96b872a60ad945a11e9e5b379a18e11df689b5994fdbd7
+        modpack: true
+      - dest: fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar
+        fabric_meta: { game: "1.21.1", loader: "0.19.5", installer: "1.1.2" }
+        sha256: 809d99b16dd4d4b57384d128724ab0d6560f859aaba989dc6750d8437a447ed0
+
+  - id: create-plus-1211
+    family: modpack
+    game_version: "1.21.1"
+    description: Create+ 6.0.0 Alpha f server files over NeoForge 21.1.233
+    docs: docs/modpacks.md
+    dirs: [mods, config]
+    artifacts:
+      - dest: pack.mrpack
+        url: https://cdn.modrinth.com/data/t1tOiUHZ/versions/BSg2ZS8u/Create%2B%206.0.0%20Alpha%20f.mrpack
+        sha256: 487cc77c5188bab7bebedad16410ce647f63a0a4e9c45cbcc22baa393e9ecb84
+        modpack: true
+      - dest: neoforge-21.1.233-installer.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.233/neoforge-21.1.233-installer.jar
+      - dest: libraries/net/neoforged/neoforge/21.1.233/neoforge-21.1.233-universal.jar
+        url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.233/neoforge-21.1.233-universal.jar

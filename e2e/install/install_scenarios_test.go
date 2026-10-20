@@ -34,6 +34,10 @@ type installScenario struct {
 	launchArguments  string
 	runtimeArtifacts []runtimeArtifactExpectation
 	packages         []packageExpectation
+	// packageList names a YAML file under testdata that supplies the expected
+	// packages. Use it for translated modpacks whose package set is too large
+	// to read in Go.
+	packageList string
 }
 
 type runtimeArtifactExpectation struct {
@@ -41,7 +45,12 @@ type runtimeArtifactExpectation struct {
 }
 
 type packageExpectation struct {
-	reference, projectID, releaseID, fileID, filename, sha256 string
+	Reference string `yaml:"reference"`
+	ProjectID string `yaml:"projectID"`
+	ReleaseID string `yaml:"releaseID"`
+	FileID    string `yaml:"fileID"`
+	Filename  string `yaml:"filename"`
+	SHA256    string `yaml:"sha256"`
 }
 
 var installScenarios = map[string]installScenario{
@@ -74,14 +83,14 @@ var installScenarios = map[string]installScenario{
 		},
 		packages: []packageExpectation{
 			{
-				reference: "modrinth:fabric-api", projectID: "P7dR8mSH", releaseID: "p96k10UR",
-				fileID: "9aQezMA2", filename: "fabric-api-0.119.4+1.21.4.jar",
-				sha256: "d183bacb845167f09264c2f90322b7ecffe8826debda6f60e597889264bef4af",
+				Reference: "modrinth:fabric-api", ProjectID: "P7dR8mSH", ReleaseID: "p96k10UR",
+				FileID: "9aQezMA2", Filename: "fabric-api-0.119.4+1.21.4.jar",
+				SHA256: "d183bacb845167f09264c2f90322b7ecffe8826debda6f60e597889264bef4af",
 			},
 			{
-				reference: "modrinth:flan", projectID: "Si383TIH", releaseID: "9EC25rAV",
-				fileID: "HjsqW7BQ", filename: "flan-1.21.4-1.11.7.b-fabric.jar",
-				sha256: "33c466b7c319f1597798f62d13b619317590bf069c4a2c11715fb19fdd98e7f8",
+				Reference: "modrinth:flan", ProjectID: "Si383TIH", ReleaseID: "9EC25rAV",
+				FileID: "HjsqW7BQ", Filename: "flan-1.21.4-1.11.7.b-fabric.jar",
+				SHA256: "33c466b7c319f1597798f62d13b619317590bf069c4a2c11715fb19fdd98e7f8",
 			},
 		},
 	},
@@ -121,11 +130,71 @@ var installScenarios = map[string]installScenario{
 			runtimeFile: "libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar",
 		}},
 	},
+	"cobblemon-1211": {
+		sandbox:         "cobblemon-1211",
+		product:         "fabric",
+		minecraft:       "1.21.1",
+		coreVersion:     "0.19.5",
+		provider:        "fabric",
+		projectID:       "fabric-loader",
+		filename:        "fabric-loader-0.19.5.jar",
+		bootstrap:       "fabric",
+		coreOutput:      "libraries/net/fabricmc/fabric-loader/0.19.5/fabric-loader-0.19.5.jar",
+		minecraftDigest: "e3bc55693e93cda0188f2e60aea28113fc647c5e85a15fa3d1b347349231b4bb",
+		requiredFiles: []string{
+			"run.sh",
+			"run.bat",
+			"fabric-server-launcher.properties",
+		},
+		packageList: "cobblemon-1211.packages.yaml",
+	},
+	"paper-12111": {
+		sandbox:       "paper",
+		product:       "paper",
+		minecraft:     "1.21.11",
+		coreVersion:   "130",
+		provider:      "papermc",
+		projectID:     "paper",
+		filename:      "paper-1.21.11-130.jar",
+		bootstrap:     "paperclip",
+		coreOutput:    "server.jar",
+		coreFixture:   "paper-1.21.11-130.jar",
+		requiredFiles: []string{"server.jar", "versions/1.21.11/paper-1.21.11.jar"},
+		requiredInputs: []string{
+			"cache/mojang_1.21.11.jar",
+		},
+	},
+	"purpur-12111": {
+		sandbox:       "purpur",
+		product:       "purpur",
+		minecraft:     "1.21.11",
+		coreVersion:   "2568",
+		provider:      "purpur",
+		projectID:     "purpur",
+		filename:      "purpur-1.21.11-2568.jar",
+		bootstrap:     "paperclip",
+		coreOutput:    "server.jar",
+		coreFixture:   "server.jar",
+		requiredFiles: []string{"server.jar", "versions/1.21.11/purpur-1.21.11.jar"},
+		requiredInputs: []string{
+			"cache/mojang_1.21.11.jar",
+		},
+	},
 }
 
 func executeScenario(t *testing.T, binary, id string) {
 	t.Helper()
 	scenario := installScenarios[id]
+	if scenario.packageList != "" {
+		path := filepath.Join(testkit.RepoRoot(t), "e2e", "install", "testdata", scenario.packageList)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read package list: %v", err)
+		}
+		if err := yaml.Unmarshal(data, &scenario.packages); err != nil {
+			t.Fatalf("decode package list: %v", err)
+		}
+	}
 	oracle := ""
 	if scenario.sandbox != "" {
 		oracle = testkit.Sandbox(t, scenario.sandbox)

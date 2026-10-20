@@ -1,0 +1,42 @@
+# Modpacks
+
+Covers sandboxes: `cobblemon-1211`, `create-plus-1211`.
+
+## What the sandbox contains
+
+Each sandbox pins one Modrinth pack archive with `modpack: true`. The sandbox
+tool reads `modrinth.index.json`, downloads every file whose `env.server` is
+not `unsupported` to its declared path, and unpacks `overrides/` and
+`server-overrides/` at the root. The loader artifact lands beside the pack
+files.
+
+| Sandbox          | Pack                                        | Loader           | Server files |
+| ---------------- | ------------------------------------------- | ---------------- | ------------ |
+| cobblemon-1211   | Cobblemon Official Modpack [Fabric] 1.8.2   | Fabric 0.19.5    | 34 mods      |
+| create-plus-1211 | Create+ 6.0.0 Alpha f                       | NeoForge 21.1.233 | 106 mods    |
+
+Generation verifies each downloaded file against the sha512 in the pack
+index. The pack archive itself is pinned by sha256 in the manifest.
+
+## Lock fixture
+
+`e2e/lock/testdata/cobblemon-1211.yaml` translates part of the Cobblemon pack
+into a Lucy manifest. Every entry names the Modrinth slug and the exact pack
+version. `cobblemon-1211.packages.yaml` pins the project, release, file, and
+digest that install must produce.
+
+The lock subset leaves out two groups:
+
+- jars that the pack marks as client-only, and jars whose `fabric.mod.json`
+  declares `environment: client`, because a server install rejects them;
+- jars whose dependency graph exceeds the resolver candidate budget. Module
+  names in this group collide with unrelated Modrinth projects, such as the
+  `melody` module of FancyMenu and the `melody` project slug.
+
+Add an excluded jar back when the resolver can place it. The probe case runs
+on the full pack and does not depend on the lock subset.
+
+## Endpoints
+
+- Modrinth: <https://modrinth.com/modpack/cobblemon-fabric>,
+  <https://modrinth.com/modpack/create_plus>

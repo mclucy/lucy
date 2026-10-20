@@ -1,0 +1,32 @@
+---
+manifest_version: 1
+server:
+  minecraft: 1.21.1
+  directory: server
+  core:
+    product: fabric
+    product_version: 0.19.5
+  packages:
+    fabric:
+      modrinth:almanac: 1.5.2
+      modrinth:appleskin: 3.0.6+mc1.21
+      modrinth:balm: 21.0.66+fabric-1.21.1
+      modrinth:bookshelf-lib: 21.1.81
+      modrinth:cloth-config: 15.0.140+fabric
+      modrinth:clumps: 19.0.0.1
+      modrinth:cobblemon: 1.8.2
+      modrinth:crafting-tweaks: 21.1.11+fabric-1.21.1
+      modrinth:emi: 1.1.24+1.21.1+fabric
+      modrinth:fabric-api: 0.116.17+1.21.1
+      modrinth:ferrite-core: 7.0.3-fabric
+      modrinth:jei: 19.57.0.451
+      modrinth:krypton: 0.2.8
+      modrinth:lithium: mc1.21.1-0.15.4-fabric
+      modrinth:monsters-in-the-closet: 1.0.3+1.21
+      modrinth:open-loader: 21.1.5
+      modrinth:owo-lib: 0.12.15.4+1.21
+      modrinth:placeholder-api: 2.4.2+1.21
+      modrinth:shulkerboxtooltip: 5.1.9+1.21.1-fabric
+      modrinth:xaeros-minimap: fabric-1.21.1-26.6.0
+      modrinth:xaeros-world-map: fabric-1.21.1-1.47.0
+      modrinth:yacl: 3.8.2+1.21.1-fabric

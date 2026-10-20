@@ -2,7 +2,9 @@
 package main
 
 import (
+	"archive/zip"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json/v2"
 	"errors"
@@ -11,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -64,6 +67,10 @@ type artifact struct {
 	FabricMeta    *fabricMeta `yaml:"fabric_meta,omitempty"`
 	Purpur        *purpurSpec `yaml:"purpur,omitempty"`
 	Manual        bool        `yaml:"manual,omitempty"`
+	// Modpack marks a Modrinth pack archive. Generation writes the indexed
+	// server files and the pack overrides into the sandbox root instead of
+	// copying the archive.
+	Modpack bool `yaml:"modpack,omitempty"`
 }
 
 type fabricMeta struct {
@@ -164,6 +171,9 @@ func validate(man *manifest) error {
 					sb.ID, art.Dest,
 				)
 			}
+			if art.Modpack && (art.URL == "" || art.SHA256 == "") {
+				return fmt.Errorf("%s/%s: modpack requires url and sha256", sb.ID, art.Dest)
+			}
 		}
 	}
 	return nil
@@ -242,6 +252,12 @@ func generateSandbox(sb sandbox, opts options) error {
 		}
 	}
 	for _, ra := range resolvedArtifacts {
+		if ra.Modpack {
+			if err := materializeModpack(ra.cachedPath, outDir, opts); err != nil {
+				return fmt.Errorf("materialize modpack %s: %w", ra.Dest, err)
+			}
+			continue
+		}
 		dest := filepath.Join(outDir, ra.Dest)
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
@@ -260,6 +276,192 @@ func generateSandbox(sb sandbox, opts options) error {
 	}
 	fmt.Printf("[GEN]  %s -> %s\n", sb.ID, outDir)
 	return nil
+}
+
+// modpackIndex is the subset of modrinth.index.json that server generation
+// needs. Client-only entries carry env.server "unsupported".
+type modpackIndex struct {
+	Files []struct {
+		Path   string `json:"path"`
+		Hashes struct {
+			SHA512 string `json:"sha512"`
+		} `json:"hashes"`
+		Env struct {
+			Server string `json:"server"`
+		} `json:"env"`
+		Downloads []string `json:"downloads"`
+	} `json:"files"`
+}
+
+// materializeModpack writes the server side of a Modrinth pack into outDir:
+// every indexed server file lands at its declared path, then overrides and
+// server-overrides unpack at the root.
+func materializeModpack(packPath, outDir string, opts options) error {
+	archive, err := zip.OpenReader(packPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = archive.Close() }()
+
+	data, err := readZipEntry(&archive.Reader, "modrinth.index.json")
+	if err != nil {
+		return fmt.Errorf("read pack index: %w", err)
+	}
+	var index modpackIndex
+	if err := json.Unmarshal(data, &index); err != nil {
+		return fmt.Errorf("decode pack index: %w", err)
+	}
+
+	for _, file := range index.Files {
+		if file.Env.Server == "unsupported" {
+			continue
+		}
+		if len(file.Downloads) == 0 {
+			return fmt.Errorf("pack file %s has no download", file.Path)
+		}
+		if err := safeRelativePath(file.Path); err != nil {
+			return err
+		}
+		cached, err := fetchDigest(file.Downloads[0], file.Hashes.SHA512, opts)
+		if err != nil {
+			return fmt.Errorf("pack file %s: %w", file.Path, err)
+		}
+		dest := filepath.Join(outDir, filepath.FromSlash(file.Path))
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return err
+		}
+		if err := copyFile(cached, dest); err != nil {
+			return err
+		}
+	}
+
+	for _, entry := range archive.File {
+		var prefix string
+		switch {
+		case strings.HasPrefix(entry.Name, "overrides/"):
+			prefix = "overrides/"
+		case strings.HasPrefix(entry.Name, "server-overrides/"):
+			prefix = "server-overrides/"
+		default:
+			continue
+		}
+		relative := strings.TrimPrefix(entry.Name, prefix)
+		if relative == "" {
+			continue
+		}
+		if err := safeRelativePath(relative); err != nil {
+			return err
+		}
+		dest := filepath.Join(outDir, filepath.FromSlash(relative))
+		if entry.FileInfo().IsDir() {
+			if err := os.MkdirAll(dest, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return err
+		}
+		if err := extractZipEntry(entry, dest); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func readZipEntry(reader *zip.Reader, name string) ([]byte, error) {
+	file, err := reader.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	return io.ReadAll(file)
+}
+
+func extractZipEntry(entry *zip.File, dest string) error {
+	source, err := entry.Open()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = source.Close() }()
+	mode := entry.Mode().Perm()
+	if mode == 0 {
+		mode = 0o644
+	}
+	target, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(target, source); err != nil {
+		_ = target.Close()
+		return err
+	}
+	return target.Close()
+}
+
+func safeRelativePath(name string) error {
+	clean := path.Clean(name)
+	if clean == "." || path.IsAbs(clean) || strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("unsafe pack path %q", name)
+	}
+	return nil
+}
+
+// fetchDigest caches one pack file under its sha512 digest. The digest is
+// mandatory: pack indexes always publish one, and it is the only integrity
+// check for downloads that do not share the sandbox manifest.
+func fetchDigest(url, sha512Hex string, opts options) (string, error) {
+	key := strings.ToLower(sha512Hex)
+	if len(key) != 128 {
+		return "", fmt.Errorf("pack file has no usable sha512")
+	}
+	if _, err := hex.DecodeString(key); err != nil {
+		return "", fmt.Errorf("bad sha512: %w", err)
+	}
+	cached := filepath.Join(opts.cacheDir, key[:2], key)
+	if _, err := os.Stat(cached); err == nil {
+		return cached, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {
+		return "", err
+	}
+	tmp, err := os.CreateTemp(opts.cacheDir, "modpack-*")
+	if err != nil {
+		return "", err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if err := downloadTo(url, tmp); err != nil {
+		_ = tmp.Close()
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", err
+	}
+	digest, err := fileSHA512(tmpName)
+	if err != nil {
+		return "", err
+	}
+	if digest != key {
+		return "", fmt.Errorf("sha512 mismatch: got %s want %s", digest, key)
+	}
+	if err := os.Rename(tmpName, cached); err != nil {
+		return "", err
+	}
+	return cached, nil
+}
+
+func fileSHA512(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = file.Close() }()
+	h := sha512.New()
+	if _, err := io.Copy(h, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func ensureCached(sandboxID string, art artifact, opts options) (string, error) {
@@ -424,7 +626,7 @@ func getJSON(url string, target any) error {
 }
 
 func downloadTo(url string, tmp *os.File) error {
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Minute}
 	var lastErr error
 	for range 3 {
 		req, err := http.NewRequest(http.MethodGet, url, nil)
