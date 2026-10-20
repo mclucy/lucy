@@ -200,19 +200,19 @@ func TestResolvedVersionIdentityPolicy(t *testing.T) {
 		versionResponse{ID: 625258, Name: "2.12.2"},
 	)
 
-	if got := resolved.LucyVersion(); got != types.Version("2.12.2") {
+	if got := resolved.LucyVersion(); got != "2.12.2" {
 		t.Fatalf(
 			"expected human version to drive lucy exact version, got %q",
 			got,
 		)
 	}
-	if !resolved.Matches(types.Version("2.12.2")) {
+	if !resolved.Matches("2.12.2") {
 		t.Fatalf("expected exact human version match")
 	}
-	if !resolved.Matches(types.Version("625258")) {
+	if !resolved.Matches("625258") {
 		t.Fatalf("expected numeric version-id fallback match")
 	}
-	if resolved.Matches(types.Version("2.12.1")) {
+	if resolved.Matches("2.12.1") {
 		t.Fatalf("did not expect mismatched version to match")
 	}
 	if resolved.Matches(types.VersionAny) {
@@ -235,13 +235,13 @@ func TestResolvedVersionIDFallbackPolicy(t *testing.T) {
 		versionResponse{ID: 625258},
 	)
 
-	if got := resolved.LucyVersion(); got != types.Version("625258") {
+	if got := resolved.LucyVersion(); got != "625258" {
 		t.Fatalf(
 			"expected numeric version id fallback for exact resolution, got %q",
 			got,
 		)
 	}
-	if !resolved.Matches(types.Version("625258")) {
+	if !resolved.Matches("625258") {
 		t.Fatalf("expected numeric version id to remain matchable")
 	}
 

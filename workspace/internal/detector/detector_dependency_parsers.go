@@ -12,7 +12,7 @@ func parseFabricVersionRanges(
 	ranges fn.SingleOrSlice[string],
 ) types.VersionExpr {
 	return version.ParseRanges(
-		[]string(ranges),
+		ranges,
 		version.InferRangeDialect(types.EcosystemFabric),
 		types.VersionSchemeSemver,
 	)

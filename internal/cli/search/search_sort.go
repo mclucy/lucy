@@ -11,17 +11,17 @@ import (
 // SearchSort is the user-facing sort order for `lucy search` results. It is
 // applied consumer-side to items already returned by providers, which always
 // return their own default (relevance) order.
-type SearchSort string
+type Sort string
 
 const (
-	SearchSortRelevance SearchSort = "relevance"
-	SearchSortDownloads SearchSort = "downloads"
-	SearchSortNewest    SearchSort = "newest"
+	SortRelevance Sort = "relevance"
+	SortDownloads Sort = "downloads"
+	SortNewest    Sort = "newest"
 )
 
-func (s SearchSort) Valid() bool {
+func (s Sort) Valid() bool {
 	switch s {
-	case SearchSortRelevance, SearchSortDownloads, SearchSortNewest:
+	case SortRelevance, SortDownloads, SortNewest:
 		return true
 	}
 	return false
@@ -30,18 +30,18 @@ func (s SearchSort) Valid() bool {
 // applySearchSort reorders items in each response according to s. Relevance
 // preserves the provider's order, and unrecognized sorts also fall through as
 // no-op rather than failing, so a bad sort never blocks the results.
-func applySearchSort(results []upstream.SearchResponse, s SearchSort) {
+func applySearchSort(results []upstream.SearchResponse, s Sort) {
 	switch s {
-	case "", SearchSortRelevance:
+	case "", SortRelevance:
 		return
-	case SearchSortDownloads:
+	case SortDownloads:
 		for i := range results {
 			items := results[i].Items
 			slices.SortStableFunc(items, func(a, b upstream.SearchResult) int {
 				return cmp.Compare(b.Downloads, a.Downloads)
 			})
 		}
-	case SearchSortNewest:
+	case SortNewest:
 		for i := range results {
 			items := results[i].Items
 			slices.SortStableFunc(items, func(a, b upstream.SearchResult) int {
@@ -53,11 +53,11 @@ func applySearchSort(results []upstream.SearchResponse, s SearchSort) {
 
 func StaticSortCandidates() []cli.CompletionCandidate {
 	return []cli.CompletionCandidate{
-		{Value: string(SearchSortRelevance), Description: "Sort by relevance"},
+		{Value: string(SortRelevance), Description: "Sort by relevance"},
 		{
-			Value:       string(SearchSortDownloads),
+			Value:       string(SortDownloads),
 			Description: "Sort by download count",
 		},
-		{Value: string(SearchSortNewest), Description: "Sort by newest"},
+		{Value: string(SortNewest), Description: "Sort by newest"},
 	}
 }

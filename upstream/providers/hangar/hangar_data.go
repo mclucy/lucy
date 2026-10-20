@@ -67,7 +67,7 @@ type hangarLink struct {
 
 type hangarPlatformVersionMap map[string][]string
 
-type HangarVersionListResponse struct {
+type VersionListResponse struct {
 	Pagination hangarPagination `json:"pagination"`
 	Result     []hangarVersion  `json:"result"`
 }
@@ -110,7 +110,7 @@ type hangarPluginDependency struct {
 	Platform    string  `json:"platform"`
 }
 
-type HangarPlatformVersion struct {
+type PlatformVersion struct {
 	Version     string   `json:"version"`
 	SubVersions []string `json:"subVersions"`
 }

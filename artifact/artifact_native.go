@@ -83,8 +83,23 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 		if side == types.SideClient {
 			return nil, nil
 		}
-		m := types.DescriptorModule{ID: d.ID, Version: types.Version(d.Version), Ecosystem: loader, NestedPath: member, DescriptorPath: "fabric.mod.json", Provides: d.Provides, Side: side, Dependencies: []types.DescriptorDependency{}}
-		for kind, deps := range map[types.DependencyKind]map[string]jsontext.Value{types.DependencyKindRequired: d.Depends, types.DependencyKindRecommended: d.Recommends, types.DependencyKindSuggested: d.Suggests, types.DependencyKindIncompatible: d.Breaks, types.DependencyKindConflict: d.Conflicts} {
+		m := types.DescriptorModule{
+			ID:             d.ID,
+			Version:        types.Version(d.Version),
+			Ecosystem:      loader,
+			NestedPath:     member,
+			DescriptorPath: "fabric.mod.json",
+			Provides:       d.Provides,
+			Side:           side,
+			Dependencies:   []types.DescriptorDependency{},
+		}
+		for kind, deps := range map[types.DependencyKind]map[string]jsontext.Value{
+			types.DependencyKindRequired:     d.Depends,
+			types.DependencyKindRecommended:  d.Recommends,
+			types.DependencyKindSuggested:    d.Suggests,
+			types.DependencyKindIncompatible: d.Breaks,
+			types.DependencyKindConflict:     d.Conflicts,
+		} {
 			for id, raw := range deps {
 				var one string
 				var many []string
@@ -93,7 +108,11 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 				} else if err := json.Unmarshal(raw, &many); err != nil {
 					return nil, err
 				}
-				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{ID: id, Kind: kind, Constraint: strings.Join(many, " || ")})
+				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+					ID:         id,
+					Kind:       kind,
+					Constraint: strings.Join(many, " || "),
+				})
 			}
 		}
 		out := []types.DescriptorModule{m}
@@ -153,7 +172,7 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 		if err := toml.Unmarshal(raw, &d); err != nil {
 			return nil, err
 		}
-		out := []types.DescriptorModule{}
+		var out []types.DescriptorModule
 		for _, mod := range d.Mods {
 			v := types.Version(mod.Version)
 			if v == "${file.jarVersion}" {
@@ -163,7 +182,14 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 				}
 				v = forgeManifestVersion(string(data))
 			}
-			m := types.DescriptorModule{ID: mod.ID, Version: v, Ecosystem: loader, NestedPath: member, DescriptorPath: name, Dependencies: []types.DescriptorDependency{}}
+			m := types.DescriptorModule{
+				ID:             mod.ID,
+				Version:        v,
+				Ecosystem:      loader,
+				NestedPath:     member,
+				DescriptorPath: name,
+				Dependencies:   []types.DescriptorDependency{},
+			}
 			for _, dep := range d.Dependencies[mod.ID] {
 				if types.ParseSide(dep.Side) == types.SideClient {
 					continue
@@ -175,7 +201,12 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 						kind = types.DependencyKindRequired
 					}
 				}
-				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{ID: dep.ID, Constraint: dep.Range, Kind: kind, Ordering: dep.Ordering})
+				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+					ID:         dep.ID,
+					Constraint: dep.Range,
+					Kind:       kind,
+					Ordering:   dep.Ordering,
+				})
 			}
 			out = append(out, m)
 		}
@@ -252,15 +283,37 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 		if err := yaml.Unmarshal(raw, &d); err != nil {
 			return nil, err
 		}
-		m := types.DescriptorModule{ID: d.Name, Version: types.Version(d.Version), Ecosystem: types.EcosystemBukkit, NestedPath: member, DescriptorPath: name, APIVersion: d.API, FoliaSupported: d.Folia, Provides: d.Provides, Dependencies: []types.DescriptorDependency{}}
+		m := types.DescriptorModule{
+			ID:             d.Name,
+			Version:        types.Version(d.Version),
+			Ecosystem:      types.EcosystemBukkit,
+			NestedPath:     member,
+			DescriptorPath: name,
+			APIVersion:     d.API,
+			FoliaSupported: d.Folia,
+			Provides:       d.Provides,
+			Dependencies:   []types.DescriptorDependency{},
+		}
 		for _, id := range d.Depend {
-			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{ID: id, Kind: types.DependencyKindRequired, Ordering: "AFTER"})
+			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+				ID:       id,
+				Kind:     types.DependencyKindRequired,
+				Ordering: "AFTER",
+			})
 		}
 		for _, id := range d.SoftDepend {
-			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{ID: id, Kind: types.DependencyKindOptional, Ordering: "AFTER"})
+			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+				ID:       id,
+				Kind:     types.DependencyKindOptional,
+				Ordering: "AFTER",
+			})
 		}
 		for _, id := range d.LoadBefore {
-			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{ID: id, Kind: types.DependencyKindOptional, Ordering: "BEFORE"})
+			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+				ID:       id,
+				Kind:     types.DependencyKindOptional,
+				Ordering: "BEFORE",
+			})
 		}
 		for phase, deps := range d.Dependencies {
 			for id, dep := range deps {
@@ -269,7 +322,13 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 					kind = types.DependencyKindOptional
 				}
 				join := dep.JoinClasspath == nil || *dep.JoinClasspath
-				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{ID: id, Kind: kind, Phase: phase, Load: dep.Load, JoinClasspath: join})
+				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+					ID:            id,
+					Kind:          kind,
+					Phase:         phase,
+					Load:          dep.Load,
+					JoinClasspath: join,
+				})
 			}
 		}
 		return []types.DescriptorModule{m}, nil
@@ -297,12 +356,26 @@ func nativeMCDR(raw []byte, member string) ([]types.DescriptorModule, error) {
 	if err := json.Unmarshal(raw, &d); err != nil {
 		return nil, err
 	}
-	m := types.DescriptorModule{ID: d.ID, Version: types.Version(d.Version), Ecosystem: types.EcosystemMCDR, NestedPath: member, DescriptorPath: "mcdreforged.plugin.json", Dependencies: []types.DescriptorDependency{}}
+	m := types.DescriptorModule{
+		ID:             d.ID,
+		Version:        types.Version(d.Version),
+		Ecosystem:      types.EcosystemMCDR,
+		NestedPath:     member,
+		DescriptorPath: "mcdreforged.plugin.json",
+		Dependencies:   []types.DescriptorDependency{},
+	}
 	for id, rangeText := range d.Dependencies {
-		m.Dependencies = append(m.Dependencies, types.DescriptorDependency{ID: id, Kind: types.DependencyKindRequired, Constraint: rangeText})
+		m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+			ID:         id,
+			Kind:       types.DependencyKindRequired,
+			Constraint: rangeText,
+		})
 	}
 	for _, r := range d.Requirements {
-		m.Dependencies = append(m.Dependencies, types.DescriptorDependency{ID: r, Kind: types.DependencyKindPython})
+		m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+			ID:   r,
+			Kind: types.DependencyKindPython,
+		})
 	}
 	return []types.DescriptorModule{m}, nil
 }

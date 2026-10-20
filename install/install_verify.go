@@ -94,7 +94,7 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 func checkJava(ctx context.Context, minimum int) error {
 	raw, err := exec.CommandContext(ctx, "java", "-version").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Java %d or later is required: %w", minimum, err)
+		return fmt.Errorf("java %d or later is required: %w", minimum, err)
 	}
 	text := string(raw)
 	_, after, ok := strings.Cut(text, "\"")
@@ -108,7 +108,7 @@ func checkJava(ctx context.Context, minimum int) error {
 	}
 	major, err := strconv.Atoi(majorText)
 	if err != nil || major < minimum {
-		return fmt.Errorf("Java %d or later required, found %s", minimum, v)
+		return fmt.Errorf("java %d or later required, found %s", minimum, v)
 	}
 	return nil
 }

@@ -73,8 +73,14 @@ func matchFabricMinimumPrerelease(raw, actual string) (bool, bool, error) {
 			if expr == nil {
 				return false, true, fmt.Errorf("invalid Fabric criterion %q", token)
 			}
-			id := types.VersionedPackageRef{Name: "native", Ecosystem: types.EcosystemFabric}
-			if !(types.Dependency{ID: id, Constraint: expr}).Satisfy(id, actualVersion) {
+			id := types.VersionedPackageRef{
+				Name:      "native",
+				Ecosystem: types.EcosystemFabric,
+			}
+			if !(types.Dependency{
+				ID:         id,
+				Constraint: expr,
+			}).Satisfy(id, actualVersion) {
 				return false, true, nil
 			}
 			continue
@@ -92,8 +98,8 @@ func matchFabricMinimumPrerelease(raw, actual string) (bool, bool, error) {
 		}
 		boundarySemver := boundary.(*SemverVersion)
 		boundaryBase := NewSemver(boundarySemver.Major(), boundarySemver.Minor(), boundarySemver.Patch())
-		comparison, comparable := actualBase.Compare(boundaryBase)
-		if !comparable {
+		comparison, isComparable := actualBase.Compare(boundaryBase)
+		if !isComparable {
 			return false, true, fmt.Errorf("incomparable Fabric boundary %q", token)
 		}
 		equal, less := comparison == 0, comparison < 0

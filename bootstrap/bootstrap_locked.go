@@ -192,7 +192,14 @@ func executeServerProfile(ctx context.Context, root string, server lockfile.Serv
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return err
 	}
-	vars := map[string]string{"SIDE": "server", "ROOT": root, "LIBRARY_DIR": filepath.Join(root, "libraries"), "INSTALLER": corePath, "MINECRAFT_VERSION": server.Minecraft.String(), "MINECRAFT_JAR": filepath.Join(root, "server.jar")}
+	vars := map[string]string{
+		"SIDE":              "server",
+		"ROOT":              root,
+		"LIBRARY_DIR":       filepath.Join(root, "libraries"),
+		"INSTALLER":         corePath,
+		"MINECRAFT_VERSION": server.Minecraft.String(),
+		"MINECRAFT_JAR":     filepath.Join(root, "server.jar"),
+	}
 	for key, value := range profile.Data {
 		v := value.Server
 		if strings.HasPrefix(v, "/") {
@@ -271,7 +278,7 @@ func executeServerProfile(ctx context.Context, root string, server lockfile.Serv
 		}
 		if mappingTask {
 			if mappingOutput == "" {
-				return fmt.Errorf("Mojang mappings processor has no output")
+				return fmt.Errorf("mojang mappings processor has no output")
 			}
 			if err := CopyLockedFile(filepath.Join(root, "server-mappings.txt"), mappingOutput, 0o644); err != nil {
 				return err
@@ -295,7 +302,11 @@ func executeServerProfile(ctx context.Context, root string, server lockfile.Serv
 			}
 			classpath = append(classpath, filepath.Join(root, "libraries", p))
 		}
-		commandArgs := []string{"-cp", strings.Join(classpath, string(os.PathListSeparator)), main}
+		commandArgs := []string{
+			"-cp",
+			strings.Join(classpath, string(os.PathListSeparator)),
+			main,
+		}
 		commandArgs = append(commandArgs, args...)
 		cmd := exec.CommandContext(ctx, "java", commandArgs...)
 		cmd.Dir = root

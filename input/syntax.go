@@ -27,8 +27,8 @@ func Parse(s string) (types.VersionedPackageRef, error) {
 		return types.VersionedPackageRef{}, err
 	}
 	return types.VersionedPackageRef{
-		PackageRef: types.PackageRef{Name: name, Provider: provider},
-		Version:    version,
+		Name: name, Provider: provider,
+		Version: version,
 	}, nil
 }
 

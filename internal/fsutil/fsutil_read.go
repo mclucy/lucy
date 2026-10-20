@@ -13,7 +13,7 @@ const MaxZipEntryBytes = 32 * 1024 * 1024
 // CopyBytes reads r into memory. When maxBytes > 0, r is wrapped in
 // io.LimitReader(max+1) so reads fail if the stream exceeds the limit.
 func CopyBytes(r io.Reader, maxBytes int64) ([]byte, error) {
-	var limited io.Reader = r
+	limited := r
 	if maxBytes > 0 {
 		limited = io.LimitReader(r, maxBytes+1)
 	}

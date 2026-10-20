@@ -137,7 +137,7 @@ func TestCompareForgeMajorNumeric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(
-			string(tt.version), func(t *testing.T) {
+			tt.version, func(t *testing.T) {
 				t.Parallel()
 
 				got := compareForgeMajor(

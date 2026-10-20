@@ -223,7 +223,7 @@ func findJar(dir ...string) ([]string, error) {
 }
 
 func findFileWithExt(dirs []string, ext ...string) ([]string, error) {
-	files := []string{}
+	var files []string
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {

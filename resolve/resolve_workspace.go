@@ -31,7 +31,7 @@ type (
 )
 
 func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool) ([]types.LockedPackage, error) {
-	requests := []projectRequest{}
+	var requests []projectRequest
 	appendRequest := func(environment types.Environment, ecosystem types.Ecosystem, ref string, r manifest.Requirement) error {
 		provider, project, err := manifest.ParseReference(ref)
 		if err != nil {
@@ -48,16 +48,31 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				}
 			}
 		}
-		requests = append(requests, projectRequest{key: projectKey{environment, ecosystem, provider, project}, requirements: []types.RequirementBinding{{Reference: ref, Selector: r.Selector, FilePattern: r.FilePattern, Enabled: r.IsEnabled()}}})
+		requests = append(requests, projectRequest{
+			key: projectKey{
+				environment,
+				ecosystem,
+				provider,
+				project,
+			},
+			requirements: []types.RequirementBinding{
+				{
+					Reference:   ref,
+					Selector:    r.Selector,
+					FilePattern: r.FilePattern,
+					Enabled:     r.IsEnabled(),
+				},
+			},
+		})
 		return nil
 	}
-	ecosystems := []types.Ecosystem{}
+	var ecosystems []types.Ecosystem
 	for ecosystem := range d.Server.Packages {
 		ecosystems = append(ecosystems, ecosystem)
 	}
 	slices.Sort(ecosystems)
 	for _, ecosystem := range ecosystems {
-		refs := []string{}
+		var refs []string
 		for ref := range d.Server.Packages[ecosystem] {
 			refs = append(refs, ref)
 		}
@@ -69,7 +84,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		}
 	}
 	if d.MCDR != nil {
-		refs := []string{}
+		var refs []string
 		for ref := range d.MCDR.Packages {
 			refs = append(refs, ref)
 		}
@@ -173,7 +188,13 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			return false
 		}
 		if !active {
-			p := types.LockedPackage{Environment: r.key.environment, Ecosystem: r.key.ecosystem, Artifact: types.Artifact{Provider: r.key.provider, ProjectID: r.key.project}, Requirements: r.requirements}
+			p := types.LockedPackage{
+				Environment:  r.key.environment,
+				Ecosystem:    r.key.ecosystem,
+				Provider:     r.key.provider,
+				ProjectID:    r.key.project,
+				Requirements: r.requirements,
+			}
 			chosen[r.key] = p
 			if backtrack(rest) {
 				return true
@@ -296,7 +317,12 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			if replacingArtifactless {
 				requirements = append(slices.Clone(artifactless.Requirements), r.requirements...)
 			}
-			chosen[r.key] = types.LockedPackage{Environment: r.key.environment, Ecosystem: r.key.ecosystem, Artifact: a, Requirements: requirements}
+			chosen[r.key] = types.LockedPackage{
+				Environment:  r.key.environment,
+				Ecosystem:    r.key.ecosystem,
+				Artifact:     a,
+				Requirements: requirements,
+			}
 			log.Debug(
 				"resolve: candidate selected",
 				"provider", r.key.provider,
@@ -309,14 +335,30 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			declared := map[catalogueProject]bool{}
 			for _, dep := range candidate.Dependencies {
 				if dep.Kind == types.DependencyKindRequired || (withOptional && dep.Kind == types.DependencyKindOptional) {
-					declared[catalogueProject{dep.Provider, dep.ProjectID}] = true
-					ids := []string{}
+					declared[catalogueProject{
+						dep.Provider,
+						dep.ProjectID,
+					}] = true
+					var ids []string
 					if dep.ReleaseID != "" {
 						ids = append(ids, dep.ReleaseID)
 					}
-					dependency := projectRequest{key: projectKey{r.key.environment, r.key.ecosystem, dep.Provider, dep.ProjectID}, releaseIDs: ids}
+					dependency := projectRequest{
+						key: projectKey{
+							r.key.environment,
+							r.key.ecosystem,
+							dep.Provider,
+							dep.ProjectID,
+						}, releaseIDs: ids,
+					}
 					if dep.Kind == types.DependencyKindOptional {
-						dependency.requirements = []types.RequirementBinding{{Reference: dep.Provider.String() + ":" + dep.ProjectID, Selector: types.VersionStable, Enabled: true}}
+						dependency.requirements = []types.RequirementBinding{
+							{
+								Reference: dep.Provider.String() + ":" + dep.ProjectID,
+								Selector:  types.VersionStable,
+								Enabled:   true,
+							},
+						}
 					}
 					next = append(next, dependency)
 				}
@@ -364,7 +406,10 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 						)
 						continue
 					}
-					if declared[catalogueProject{request.key.provider, request.key.project}] {
+					if declared[catalogueProject{
+						request.key.provider,
+						request.key.project,
+					}] {
 						log.Debug(
 							"resolve: module dependency skipped",
 							"provider", r.key.provider,
@@ -408,7 +453,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	if !backtrack(requests) {
 		return nil, lastErr
 	}
-	out := []types.LockedPackage{}
+	var out []types.LockedPackage
 	for _, p := range chosen {
 		// A requirement the manifest disables and nothing demands pins no
 		// artifact, so recording it would leave the lock claiming a package
@@ -528,8 +573,8 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 						if err != nil {
 							return err
 						}
-						comparison, comparable := a.Compare(b)
-						if !comparable {
+						comparison, isComparable := a.Compare(b)
+						if !isComparable {
 							return fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
 						}
 						if comparison >= 0 {
@@ -546,7 +591,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 		if !packageEnabled(*p) {
 			continue
 		}
-		selectedModules := []types.DescriptorModule{}
+		var selectedModules []types.DescriptorModule
 		for mi := range p.Modules {
 			m := p.Modules[mi]
 			id := m.ID
@@ -644,7 +689,14 @@ func mergeArtifactSelections(packages []types.LockedPackage) []types.LockedPacka
 	index := map[key]int{}
 	out := make([]types.LockedPackage, 0, len(packages))
 	for _, p := range packages {
-		k := key{p.Environment, p.Ecosystem, p.Provider, p.ProjectID, p.ReleaseID, p.FileID}
+		k := key{
+			p.Environment,
+			p.Ecosystem,
+			p.Provider,
+			p.ProjectID,
+			p.ReleaseID,
+			p.FileID,
+		}
 		if i, ok := index[k]; ok {
 			out[i].Requirements = append(out[i].Requirements, p.Requirements...)
 			continue

@@ -173,7 +173,7 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected to parse legacy jar path: %s", jarPath)
 	}
-	if gameVersion != types.Version("1.20.1") || forgeVersion != types.Version("47.3.22") {
+	if gameVersion != "1.20.1" || forgeVersion != "47.3.22" {
 		t.Fatalf(
 			"unexpected path parse: game=%q forge=%q",
 			gameVersion,
@@ -184,10 +184,10 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 		t,
 		jarPath,
 	)
-	if manifestForgeVersion != types.Version("47.3.22") {
+	if manifestForgeVersion != "47.3.22" {
 		t.Fatalf("unexpected manifest forge version: %q", manifestForgeVersion)
 	}
-	if manifestGameVersion != types.Version("1.20.1") {
+	if manifestGameVersion != "1.20.1" {
 		t.Fatalf("unexpected manifest game version: %q", manifestGameVersion)
 	}
 

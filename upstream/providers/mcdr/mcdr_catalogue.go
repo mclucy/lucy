@@ -34,16 +34,14 @@ func (provider) Candidates(ctx context.Context, project, _ string, loader types.
 			projectID = project
 		}
 		c := types.CatalogueCandidate{
-			Artifact: types.Artifact{
-				Provider:  types.ProviderMCDR,
-				ProjectID: projectID,
-				ReleaseID: rel.TagName,
-				FileID:    strconv.Itoa(rel.Asset.ID),
-				Version:   types.Version(rel.Meta.Version),
-				Filename:  rel.Asset.Name,
-				URL:       rel.Asset.BrowserDownloadUrl,
-				Hashes:    hashes,
-			},
+			Provider:     types.ProviderMCDR,
+			ProjectID:    projectID,
+			ReleaseID:    rel.TagName,
+			FileID:       strconv.Itoa(rel.Asset.ID),
+			Version:      types.Version(rel.Meta.Version),
+			Filename:     rel.Asset.Name,
+			URL:          rel.Asset.BrowserDownloadUrl,
+			Hashes:       hashes,
 			Channel:      channel,
 			PublishedAt:  rel.CreatedAt,
 			PrimaryFile:  true,

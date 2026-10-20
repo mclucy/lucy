@@ -13,7 +13,7 @@ func probeGradle(ctx context.Context) (*GradleInstallation, error) {
 		return nil, nil
 	}
 	if managerShim(path) {
-		return nil, fmt.Errorf("Gradle on PATH is a version-manager shim; select an installed distribution")
+		return nil, fmt.Errorf("gradle on PATH is a version-manager shim; select an installed distribution")
 	}
 	output, err := runProbe(ctx, path, "--version")
 	if err != nil {
@@ -24,9 +24,12 @@ func probeGradle(ctx context.Context) (*GradleInstallation, error) {
 		if ok {
 			version, _, _ = strings.Cut(version, " ")
 			if version != "" {
-				return &GradleInstallation{Path: canonical(path), Version: version}, nil
+				return &GradleInstallation{
+					Path:    canonical(path),
+					Version: version,
+				}, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Gradle %q reported no version", path)
+	return nil, fmt.Errorf("gradle %q reported no version", path)
 }
