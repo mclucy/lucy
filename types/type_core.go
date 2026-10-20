@@ -1,33 +1,54 @@
 package types
 
-// BarePackageName is an untrusted package name. Usually from user input. It might
-// be invalid.
-type BarePackageName string
+// PackageName is a package name. User input may be untrusted; normalize it
+// before using it as an identity.
+type PackageName string
 
-// PackageRef identifies an upstream package. SourceAuto is valid while routing
-// an unresolved request; resolved upstream packages carry a concrete source.
-type PackageRef struct {
-	Name   BarePackageName
-	Source SourceId
+func (n PackageName) String() string {
+	return string(n)
 }
 
-func (p PackageRef) StringFull() string {
+// PackageRef identifies one package supplied by a provider.
+type PackageRef struct {
+	Name     PackageName `json:"name" yaml:"name"`
+	Provider Provider    `json:"provider,omitempty" yaml:"provider,omitempty"`
+}
+
+func (p PackageRef) String() string {
 	return p.StringBase()
 }
 
 func (p PackageRef) StringBase() string {
-	return p.Source.String() + ":" + p.Name.String()
+	if p.Provider == ProviderUnspecified {
+		return p.Name.String()
+	}
+	return p.Provider.String() + ":" + p.Name.String()
 }
 
 // VersionedPackageRef identifies a package selection for one ecosystem.
-// Version may be a selector during resolution or an exact resolved version.
+// Version may be a selector during resolution or an exact version after
+// resolution.
 type VersionedPackageRef struct {
-	PackageRef
-	Eco     Ecosystem
-	Version BareVersion
+	PackageRef `yaml:",inline"`
+	Ecosystem  Ecosystem `json:"ecosystem" yaml:"ecosystem"`
+	Version    Version   `json:"version" yaml:"version"`
 }
 
-type StringablePackageRef interface {
-	StringFull() string
-	StringBase() string
+func (p VersionedPackageRef) String() string {
+	version := ""
+	if p.Version != VersionAny {
+		version = "@" + p.Version.String()
+	}
+	return p.PackageRef.String() + version
+}
+
+// StringBase is the stable provider-qualified package identity used by graph
+// and provenance keys.
+func (p VersionedPackageRef) StringBase() string {
+	return p.PackageRef.StringBase()
+}
+
+// StringQualified is the human-facing label that also carries the ecosystem.
+func (p VersionedPackageRef) StringQualified() string {
+	return p.Ecosystem.String() + "/" + p.StringBase() + "@" + p.Version.String()
 }

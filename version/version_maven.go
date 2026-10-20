@@ -20,7 +20,7 @@ type mavenToken struct {
 	numeric   bool
 }
 
-func parseMavenVersion(raw types.BareVersion) types.ResolvableVersion {
+func parseMavenVersion(raw types.Version) types.ResolvableVersion {
 	original := strings.TrimSpace(string(raw))
 	if original == "" {
 		return nil
@@ -41,7 +41,7 @@ func (v *MavenVersion) Compare(other types.ResolvableVersion) (int, bool) {
 	case *MavenVersion:
 		o = other
 	case *SemverVersion:
-		parsed := parseMavenVersion(types.BareVersion(other.String()))
+		parsed := parseMavenVersion(types.Version(other.String()))
 		var ok bool
 		o, ok = parsed.(*MavenVersion)
 		if !ok {
@@ -70,7 +70,7 @@ func (v *MavenVersion) Validate() bool {
 }
 
 func (v *MavenVersion) Scheme() types.VersionScheme {
-	return types.Maven
+	return types.VersionSchemeMaven
 }
 
 func (v *MavenVersion) String() string {

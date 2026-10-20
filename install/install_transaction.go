@@ -29,14 +29,14 @@ type (
 		LockFingerprint string         `yaml:"lock_fingerprint"`
 		Entries         []receiptEntry `yaml:"entries"`
 	}
-	commitJournal struct {
+	transactionJournal struct {
 		Backup  string   `yaml:"backup"`
 		Changed []string `yaml:"changed"`
 		Created []string `yaml:"created"`
 	}
 )
 
-func recoverCommit(root string) error {
+func rollbackInterruptedCommit(root string) error {
 	p := filepath.Join(root, ".lucy", "commit.yaml")
 	raw, err := os.ReadFile(p)
 	if os.IsNotExist(err) {
@@ -45,7 +45,7 @@ func recoverCommit(root string) error {
 	if err != nil {
 		return err
 	}
-	var journal commitJournal
+	var journal transactionJournal
 	if err := yaml.Unmarshal(raw, &journal); err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func recoverCommit(root string) error {
 	if err != nil || !strings.HasPrefix(relativeBackup, "rollback-") || strings.ContainsAny(relativeBackup, "/\\") {
 		return fmt.Errorf("invalid transaction backup directory")
 	}
-	if err := safeOutputPath(root, filepath.Join(".lucy", relativeBackup)); err != nil {
+	if err := SafeOutputPath(root, filepath.Join(".lucy", relativeBackup)); err != nil {
 		return err
 	}
 	log.Warn(
@@ -64,7 +64,7 @@ func recoverCommit(root string) error {
 	)
 	removed := 0
 	for _, name := range journal.Created {
-		if err := safeOutputPath(root, name); err != nil {
+		if err := SafeOutputPath(root, name); err != nil {
 			return err
 		}
 		if err := os.Remove(filepath.Join(root, name)); err != nil {
@@ -77,7 +77,7 @@ func recoverCommit(root string) error {
 	}
 	restored := 0
 	for _, name := range journal.Changed {
-		if err := safeOutputPath(root, name); err != nil {
+		if err := SafeOutputPath(root, name); err != nil {
 			return err
 		}
 		source := filepath.Join(journal.Backup, name)
@@ -145,7 +145,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		if strings.Contains(relative, "/.bootstrap-data/") || strings.HasPrefix(relative, ".bootstrap-data/") {
 			return nil
 		}
-		if err := manifest.SafePath(relative); err != nil {
+		if err := manifest.SafeRelativePath(relative); err != nil {
 			return err
 		}
 		target := filepath.Join(root, relative)
@@ -155,7 +155,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 				return nil
 			}
 		}
-		hashes, err := digestFile(p, nil)
+		hashes, err := DigestFile(p, nil)
 		if err != nil {
 			return err
 		}
@@ -167,7 +167,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 			if info, err := os.Lstat(target); err != nil || info.Mode()&os.ModeSymlink != 0 {
 				return fmt.Errorf("refuse symlink output %s", relative)
 			}
-			actual, err := digestFile(target, nil)
+			actual, err := DigestFile(target, nil)
 			if err != nil {
 				return err
 			}
@@ -194,7 +194,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		if _, err := os.Stat(p); os.IsNotExist(err) {
 			continue
 		}
-		actual, err := digestFile(p, nil)
+		actual, err := DigestFile(p, nil)
 		if err != nil {
 			return err
 		}
@@ -206,7 +206,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	if err != nil {
 		return err
 	}
-	journal := commitJournal{Backup: backup, Changed: []string{}, Created: []string{}}
+	journal := transactionJournal{Backup: backup, Changed: []string{}, Created: []string{}}
 	names := []string{}
 	for name := range sources {
 		names = append(names, name)
@@ -223,7 +223,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	slices.Sort(names)
 	names = slices.Compact(names)
 	for _, name := range names {
-		if err := safeOutputPath(root, name); err != nil {
+		if err := SafeOutputPath(root, name); err != nil {
 			return err
 		}
 		target := filepath.Join(root, name)
@@ -260,7 +260,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	failed := true
 	defer func() {
 		if failed {
-			resultErr = errors.Join(resultErr, recoverCommit(root))
+			resultErr = errors.Join(resultErr, rollbackInterruptedCommit(root))
 		}
 	}()
 	for name, source := range sources {
@@ -319,8 +319,8 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	return nil
 }
 
-func safeOutputPath(root, relative string) error {
-	if err := manifest.SafePath(relative); err != nil {
+func SafeOutputPath(root, relative string) error {
+	if err := manifest.SafeRelativePath(relative); err != nil {
 		return err
 	}
 	current := root
@@ -377,10 +377,10 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 		return false, nil
 	}
 	for _, entry := range receipt.Entries {
-		if err := safeOutputPath(root, entry.Path); err != nil {
+		if err := SafeOutputPath(root, entry.Path); err != nil {
 			return false, err
 		}
-		actual, err := digestFile(filepath.Join(root, entry.Path), nil)
+		actual, err := DigestFile(filepath.Join(root, entry.Path), nil)
 		if os.IsNotExist(err) {
 			log.Debug("installation not current", "reason", "owned output missing", "path", entry.Path)
 			return false, nil

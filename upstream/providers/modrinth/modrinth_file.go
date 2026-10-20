@@ -15,17 +15,17 @@ func GetFile(id types.VersionedPackageRef) (
 		return "", "", err
 	}
 	primary := primaryFile(version.Files)
-	return primary.Url, primary.Filename, nil
+	return primary.URL, primary.Filename, nil
 }
 
 func getFile(version *versionResponse) (url string, filename string) {
 	primary := primaryFile(version.Files)
-	return primary.Url, primary.Filename
+	return primary.URL, primary.Filename
 }
 
 func primaryFile(files []fileResponse) (primary fileResponse) {
 	for _, file := range files {
-		if file.Primary {
+		if file.IsPrimary {
 			return file
 		}
 	}

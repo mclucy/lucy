@@ -20,7 +20,7 @@ func (d *geyserStandaloneDetector) Name() string {
 // - https://geysermc.org/wiki/geyser/setup/self/standalone
 // - https://geysermc.org/wiki/geyser/setup/self/proxy-servers
 // - https://geysermc.org/wiki/geyser/faq/
-func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -57,16 +57,16 @@ func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile 
 		version = parseGeyserStandaloneVersionFromPath(filePath)
 	}
 
-	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		Eco:     types.EcoUnspecified,
-		Name:    input.ToProjectName("geyser"),
-		Version: version,
+	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		Ecosystem: types.EcosystemUnspecified,
+		Name:      input.ToProjectName("geyser"),
+		Version:   version,
 	}, RuntimeComponents: nil}, nil
 }
 
 type geyserStandaloneManifestSignals struct {
 	mainClass string
-	version   types.BareVersion
+	version   types.Version
 }
 
 func (s geyserStandaloneManifestSignals) valid() bool {
@@ -87,7 +87,7 @@ func parseGeyserStandaloneManifest(data []byte) geyserStandaloneManifestSignals 
 				),
 			)
 		case strings.HasPrefix(line, "Implementation-Version: "):
-			signals.version = types.BareVersion(
+			signals.version = types.Version(
 				strings.TrimSpace(
 					strings.TrimPrefix(
 						line,
@@ -104,14 +104,14 @@ var geyserStandaloneVersionPattern = regexp.MustCompile(
 	`geyser-standalone-(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)\.jar`,
 )
 
-func parseGeyserStandaloneVersionFromPath(filePath string) types.BareVersion {
+func parseGeyserStandaloneVersionFromPath(filePath string) types.Version {
 	match := geyserStandaloneVersionPattern.FindStringSubmatch(
 		strings.ToLower(filepath.Base(filePath)),
 	)
 	if match == nil {
 		return types.VersionUnknown
 	}
-	return types.BareVersion(match[1])
+	return types.Version(match[1])
 }
 
 func init() {

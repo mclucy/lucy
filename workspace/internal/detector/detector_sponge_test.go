@@ -30,7 +30,7 @@ func TestSpongeServerDetector_UsesSpecificationTitleOverImplementationTitle(t *t
 		evidence.PrimaryRuntime.Name != "spongevanilla" ||
 		runtimeIdentityVersion(
 			evidence,
-			types.EcoMinecraft,
+			types.EcosystemMinecraft,
 			"minecraft",
 		) != "1.21.10" {
 		t.Fatalf(

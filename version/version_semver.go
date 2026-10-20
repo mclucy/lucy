@@ -21,7 +21,7 @@ func NewSemver(major, minor, patch uint64) types.ResolvableVersion {
 	return (*SemverVersion)(v)
 }
 
-func parseSemver(s types.BareVersion) types.ResolvableVersion {
+func parseSemver(s types.Version) types.ResolvableVersion {
 	v, err := semverlib.NewVersion(string(s))
 	if err != nil {
 		return nil
@@ -58,7 +58,7 @@ func (s *SemverVersion) Prerelease() string {
 }
 
 func (s *SemverVersion) Scheme() types.VersionScheme {
-	return types.Semver
+	return types.VersionSchemeSemver
 }
 
 func (s *SemverVersion) Compare(other types.ResolvableVersion) (int, bool) {

@@ -35,7 +35,7 @@ func newBukkitReader() Reader { return &bukkitReader{} }
 func (r *bukkitReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != bukkitPluginDescriptorPath {
 			continue
@@ -62,9 +62,8 @@ func (r *bukkitReader) Read(
 		}
 
 		platform := detectBukkitPluginPlatform(descriptor)
-		info := Info{
-			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.Name), Source: types.SourceUnknown}, Eco: platform},
-			Version:  types.BareVersion(strings.TrimSpace(descriptor.Version)),
+		info := PackageInfo{
+			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.Name), Provider: types.ProviderUnknown}, Ecosystem: platform, Version: types.Version(strings.TrimSpace(descriptor.Version))},
 			FilePath: filePath,
 			Compatibility: ArtifactCompatibility{
 				FoliaSupported: descriptor.FoliaSupported,
@@ -76,7 +75,7 @@ func (r *bukkitReader) Read(
 					descriptor.Author,
 					descriptor.Authors,
 				),
-				Urls: bukkitDescriptorURLs(descriptor.Website),
+				URLs: bukkitDescriptorURLs(descriptor.Website),
 			},
 		}
 
@@ -84,7 +83,7 @@ func (r *bukkitReader) Read(
 			info.Dependencies = deps
 		}
 
-		return []Info{info}, nil
+		return []PackageInfo{info}, nil
 	}
 
 	return nil, nil
@@ -94,7 +93,7 @@ func detectBukkitPluginPlatform(
 	descriptor *bukkitPluginDescriptor,
 ) types.Ecosystem {
 	if descriptor.PaperPluginLoader != "" || len(descriptor.Libraries) > 0 {
-		return types.EcoPaper
+		return types.EcosystemPaper
 	}
 	for _, list := range [][]string{
 		descriptor.API,
@@ -104,11 +103,11 @@ func detectBukkitPluginPlatform(
 		for _, entry := range list {
 			switch strings.ToLower(strings.TrimSpace(entry)) {
 			case "paper", "folia", "leaves":
-				return types.EcoPaper
+				return types.EcosystemPaper
 			}
 		}
 	}
-	return types.EcoBukkit
+	return types.EcosystemBukkit
 }
 
 func bukkitDescriptorDeps(
@@ -143,7 +142,7 @@ func appendBukkitDescriptorDeps(
 		}
 		deps = append(
 			deps, Dependency{
-				Ref:       types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(name), Source: types.SourceUnknown}, Eco: platform},
+				Ref:       types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(name), Provider: types.ProviderUnknown}, Ecosystem: platform},
 				Mandatory: mandatory,
 			},
 		)
@@ -164,17 +163,17 @@ func bukkitDescriptorAuthors(author string, authors []string) []types.Person {
 	return people
 }
 
-func bukkitDescriptorURLs(website string) []types.Url {
+func bukkitDescriptorURLs(website string) []types.URL {
 	website = strings.TrimSpace(website)
 	if website == "" {
 		return nil
 	}
 
-	return []types.Url{
+	return []types.URL{
 		{
 			Name: "Website",
-			Type: types.UrlHome,
-			Url:  website,
+			Type: types.URLHome,
+			URL:  website,
 		},
 	}
 }

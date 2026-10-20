@@ -5,7 +5,6 @@ import (
 	"net/url"
 
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 )
 
 const (
@@ -17,11 +16,11 @@ const (
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func modLoaderType(p types.Ecosystem) int {
 	switch p {
-	case types.EcoForge:
+	case types.EcosystemForge:
 		return 1
-	case types.EcoFabric:
+	case types.EcosystemFabric:
 		return 4
-	case types.EcoNeoforge:
+	case types.EcosystemNeoForge:
 		return 6
 	default:
 		return 0 // Any
@@ -30,8 +29,8 @@ func modLoaderType(p types.Ecosystem) int {
 
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func searchUrl(
-	query types.BarePackageName,
-	options upstream.SearchOptions,
+	query types.PackageName,
+	ecosystem types.Ecosystem,
 ) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
@@ -43,7 +42,7 @@ func searchUrl(
 	params.Set("sortOrder", "desc")
 	params.Set("pageSize", "50")
 
-	if loader := modLoaderType(options.FilterEcosystem); loader != 0 {
+	if loader := modLoaderType(ecosystem); loader != 0 {
 		params.Set("modLoaderType", fmt.Sprintf("%d", loader))
 	}
 
@@ -51,7 +50,7 @@ func searchUrl(
 }
 
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func slugSearchUrl(slug types.BarePackageName) string {
+func slugSearchUrl(slug types.PackageName) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
 	params.Set("classId", fmt.Sprintf("%d", modsClassId))
@@ -100,6 +99,6 @@ func modFilesUrl(modId int32, gameVersion string, loaderType int) string {
 }
 
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-file
-func modFileUrl(modId, fileId int32) string {
+func modFileURL(modId, fileId int32) string {
 	return fmt.Sprintf("%s/v1/mods/%d/files/%d", baseUrl, modId, fileId)
 }

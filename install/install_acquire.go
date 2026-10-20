@@ -17,15 +17,24 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream/routing"
 )
 
-type artifactStore struct {
+type downloadStore struct {
 	ctx     context.Context
 	dir     string
 	offline bool
 }
 
-func digestFile(filename string, algorithms map[string]string) (map[string]string, error) {
+// MaterializeServerProduct resolves and downloads the declared server product
+// into the workspace download store.
+func MaterializeServerProduct(ctx context.Context, root string, request types.ServerProductRequest) error {
+	store := &downloadStore{ctx: ctx, dir: filepath.Join(root, ".lucy", "downloads")}
+	_, err := routing.ResolveServerProduct(ctx, request, store.materialize)
+	return err
+}
+
+func DigestFile(filename string, algorithms map[string]string) (map[string]string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -62,7 +71,7 @@ func digestFile(filename string, algorithms map[string]string) (map[string]strin
 	return out, nil
 }
 
-func (s *artifactStore) acquire(a *types.Artifact) (string, error) {
+func (s *downloadStore) materialize(a *types.Artifact) (string, error) {
 	if err := s.ctx.Err(); err != nil {
 		return "", err
 	}
@@ -79,7 +88,7 @@ func (s *artifactStore) acquire(a *types.Artifact) (string, error) {
 	}
 	destination := filepath.Join(dir, a.Filename)
 	source := "cache"
-	hashes, err := digestFile(destination, a.Hashes)
+	hashes, err := DigestFile(destination, a.Hashes)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			// A destination that fails verification would be reused by every
@@ -93,10 +102,10 @@ func (s *artifactStore) acquire(a *types.Artifact) (string, error) {
 		} else {
 			source = "download"
 		}
-		if err := s.acquireFile(a, dir, destination); err != nil {
+		if err := s.materializeFile(a, dir, destination); err != nil {
 			return "", err
 		}
-		if hashes, err = digestFile(destination, a.Hashes); err != nil {
+		if hashes, err = DigestFile(destination, a.Hashes); err != nil {
 			os.Remove(destination)
 			return "", err
 		}
@@ -111,11 +120,12 @@ func (s *artifactStore) acquire(a *types.Artifact) (string, error) {
 	return destination, nil
 }
 
-// acquireFile materializes the artifact at destination from the network or the
-// offline cache. Bytes are staged under a partial name and renamed into place
-// only after they verify, so an interrupted copy can never be mistaken for a
-// completed download and a failed verification can never poison the store.
-func (s *artifactStore) acquireFile(a *types.Artifact, dir, destination string) error {
+// materializeFile materializes the artifact at destination from the network or
+// the offline cache. Bytes are staged under a partial name and renamed into
+// place only after they verify, so an interrupted copy can never be mistaken
+// for a completed download and a failed verification can never poison the
+// store.
+func (s *downloadStore) materializeFile(a *types.Artifact, dir, destination string) error {
 	staged := destination + ".partial"
 	defer os.Remove(staged)
 
@@ -159,7 +169,7 @@ func (s *artifactStore) acquireFile(a *types.Artifact, dir, destination string) 
 			}
 		}
 	}
-	if _, err := digestFile(staged, a.Hashes); err != nil {
+	if _, err := DigestFile(staged, a.Hashes); err != nil {
 		return err
 	}
 	return os.Rename(staged, destination)

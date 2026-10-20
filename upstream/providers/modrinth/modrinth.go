@@ -25,21 +25,21 @@ func (s provider) Search(q upstream.Query) (
 ) {
 	var facets []facetItems
 	switch q.FilterEcosystem {
-	case types.EcoForge:
+	case types.EcosystemForge:
 		facets = append(facets, facetForgeOnly)
-	case types.EcoFabric:
+	case types.EcosystemFabric:
 		facets = append(facets, facetFabricOnly)
-	case types.EcoNeoforge:
+	case types.EcosystemNeoForge:
 		facets = append(facets, facetNeoforgeOnly)
-	case types.EcoBukkit:
+	case types.EcosystemBukkit:
 		facets = append(facets, facetBukkitOnly)
-	case types.EcoUnspecified:
+	case types.EcosystemUnspecified:
 		fallthrough
 	default:
 		facets = append(facets, facetAllLoaders)
 	}
 
-	if q.ExcludeClient {
+	if !q.IncludeClient {
 		facets = append(facets, facetServerSupported)
 	}
 
@@ -70,8 +70,8 @@ func (s provider) Search(q upstream.Query) (
 	items := make([]upstream.SearchResult, len(result.Hits))
 	for i, hit := range result.Hits {
 		items[i] = upstream.SearchResult{
-			RemoteName:  hit.Slug,
-			Source:      s.Id(),
+			ProjectName: hit.Slug,
+			Provider:    s.Provider(),
 			Title:       hit.Title,
 			Description: hit.Description,
 			Downloads:   int64(hit.Downloads),
@@ -79,7 +79,7 @@ func (s provider) Search(q upstream.Query) (
 		}
 	}
 	resp = upstream.SearchResponse{
-		Source:   s.Id(),
+		Provider: s.Provider(),
 		Items:    items,
 		Warnings: nil,
 	}
@@ -87,8 +87,8 @@ func (s provider) Search(q upstream.Query) (
 	return
 }
 
-func (s provider) Id() types.SourceId {
-	return types.SourceModrinth
+func (s provider) Provider() types.Provider {
+	return types.ProviderModrinth
 }
 
 var Provider provider
@@ -105,8 +105,8 @@ func (s provider) Fetch(
 		return types.ResolvedPackage{}, ErrUnsupportedFileType
 	}
 	resolved := resolvedPackageFromVersion(*version)
-	resolved.Id.PackageRef = id.PackageRef
-	resolved.Id.Version = id.Version
+	resolved.ID.PackageRef = id.PackageRef
+	resolved.ID.Version = id.Version
 	return resolved, nil
 }
 
@@ -127,7 +127,7 @@ var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported
 func (s provider) Dependencies(
 	local upstream.LocalContext,
 	id types.VersionedPackageRef,
-) (*types.PackageDependencies, error) {
+) (*types.DependencySet, error) {
 	version, err := getVersion(local, id)
 	if err != nil {
 		return nil, fmt.Errorf("modrinth: dependencies fetch failed: %w", err)
@@ -135,8 +135,8 @@ func (s provider) Dependencies(
 	return new(
 		(&modrinthDependencies{
 			version:  version,
-			platform: id.Eco,
-		}).ToPackageDependencies(),
+			platform: id.Ecosystem,
+		}).ToDependencySet(),
 	), nil
 }
 
@@ -144,24 +144,27 @@ func (s provider) ResolveVersionSelector(
 	local upstream.LocalContext,
 	p types.VersionedPackageRef,
 ) (parsed types.VersionedPackageRef, err error) {
-	if p.Eco.IsSelector() {
-		p.Eco = types.EcoUnspecified
+	if p.Ecosystem.IsUnspecified() {
+		p.Ecosystem = types.EcosystemUnspecified
 	}
-	parsed.Eco = p.Eco
+	parsed.Ecosystem = p.Ecosystem
 	parsed.Name = p.Name
 
 	var v *versionResponse
 	switch p.Version {
-	case types.VersionStable:
-		v, err = latestCompatibleVersion(p.Name, p.Eco, local.GameVersion)
-	case types.VersionBeta, types.VersionAny:
-		v, err = latestVersion(p.Name, p.Eco, local.GameVersion)
+	case types.VersionStable, types.VersionBeta, types.VersionAny:
+		v, err = latestVersion(
+			p.Name,
+			p.Ecosystem,
+			local.MinecraftVersion,
+			p.Version,
+		)
 	default:
 		return p, nil
 	}
 	if err != nil {
 		return p, err
 	}
-	parsed.Version = types.BareVersion(v.VersionNumber)
+	parsed.Version = types.Version(v.VersionNumber)
 	return parsed, nil
 }

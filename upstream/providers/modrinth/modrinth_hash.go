@@ -17,7 +17,7 @@ import (
 
 // https://docs.modrinth.com/api/operations/versionfromhash/
 
-const versionFileUrlPrefix = "https://api.modrinth.com/v2/version_file/"
+const versionFileURLPrefix = "https://api.modrinth.com/v2/version_file/"
 
 // versionFileResponse is the response from GET /v2/version_file/{hash}.
 type versionFileResponse struct {
@@ -81,7 +81,7 @@ func verifySlugBySha1(hintSlug, sha1hex string) bool {
 // SlugFromHash queries Modrinth for a project by SHA-1 hash using the
 // single-file endpoint GET /v2/version_file/{hash}?algorithm=sha1.
 func SlugFromHash(sha1hex string) (slug string, err error) {
-	u := versionFileUrlPrefix + sha1hex + "?algorithm=sha1"
+	u := versionFileURLPrefix + sha1hex + "?algorithm=sha1"
 
 	log.Debug("modrinth hash lookup: " + u)
 	res, err := requestBytes(u)
@@ -127,18 +127,18 @@ func sha1File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func (s provider) PackageByHash(hashable upstream.Hashable) (
+func (s provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
 	ref types.VersionedPackageRef,
 	hash string,
 	ok bool,
 	err error,
 ) {
-	hashBytes, err := hashable.Sha1()
+	hashBytes, err := hashable.SHA1()
 	if err != nil {
 		return ref, hash, false, err
 	}
 	hash = hex.EncodeToString(hashBytes[:])
-	u := versionFileUrlPrefix + hash + "?algorithm=sha1"
+	u := versionFileURLPrefix + hash + "?algorithm=sha1"
 
 	log.Debug("modrinth hash lookup: " + u)
 
@@ -169,10 +169,10 @@ func (s provider) PackageByHash(hashable upstream.Hashable) (
 	}
 
 	ref = types.VersionedPackageRef{
-		Name:    types.BarePackageName(project.Slug),
-		Source:  s.Id(),
-		Eco:     ecosystemFromModrinthLoaders(version.Loaders),
-		Version: types.BareVersion(version.VersionNumber),
+		Name:      types.PackageName(project.Slug),
+		Provider:  s.Provider(),
+		Ecosystem: ecosystemFromModrinthLoaders(version.Loaders),
+		Version:   types.Version(version.VersionNumber),
 	}
 	return ref, hash, true, nil
 }
@@ -180,12 +180,12 @@ func (s provider) PackageByHash(hashable upstream.Hashable) (
 func ecosystemFromModrinthLoaders(loaders []string) types.Ecosystem {
 	for _, loader := range loaders {
 		p := types.Ecosystem(loader)
-		if p.IsModding() || p == types.EcoBukkit {
+		if p.IsModding() || p == types.EcosystemBukkit || p == types.EcosystemPaper {
 			return p
 		}
 	}
 	if len(loaders) > 0 {
 		return types.Ecosystem(loaders[0])
 	}
-	return types.EcoUnspecified
+	return types.EcosystemUnspecified
 }

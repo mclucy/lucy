@@ -17,7 +17,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func resolvePython(ctx context.Context, root, directory, selector string, requirements []string, store *artifactStore) (*lockfile.MCDR, error) {
+// pythonTarget names the platform whose wheels a lock pins. Python wheels are
+// platform-specific, so a lock resolved on another operating system or
+// architecture cannot be materialized locally.
+func pythonTarget() string {
+	return runtime.GOOS + "/" + runtime.GOARCH
+}
+
+func prepareMCDR(ctx context.Context, root, directory string, selector types.Version, requirements []string, store *downloadStore) (*lockfile.MCDR, error) {
 	if store.offline {
 		return nil, fmt.Errorf("offline Python resolution needs a locked environment")
 	}
@@ -40,7 +47,7 @@ func resolvePython(ctx context.Context, root, directory, selector string, requir
 	reportPath := filepath.Join(temp, "report.json")
 	request := "mcdreforged"
 	if !isFloating(selector) {
-		request += "==" + selector
+		request += "==" + selector.String()
 	}
 	args := []string{"-m", "pip", "install", "--dry-run", "--ignore-installed", "--only-binary=:all:", "--report", reportPath, request}
 	for _, requirement := range requirements {
@@ -73,16 +80,16 @@ func resolvePython(ctx context.Context, root, directory, selector string, requir
 	if err := json.Unmarshal(raw, &report); err != nil {
 		return nil, err
 	}
-	out := &lockfile.MCDR{Directory: directory, Python: strings.TrimSpace(string(versionBytes)), Platform: runtime.GOOS + "/" + runtime.GOARCH, Inputs: []types.BootstrapInput{}}
+	out := &lockfile.MCDR{Directory: directory, Python: strings.TrimSpace(string(versionBytes)), Target: pythonTarget(), Inputs: []types.BootstrapInput{}}
 	for _, pkg := range report.Install {
 		filename := filepath.Base(strings.Split(pkg.Download.URL, "?")[0])
-		a := types.Artifact{Provider: "pypi", ProjectID: pkg.Metadata.Name, Version: pkg.Metadata.Version, Filename: filename, URL: pkg.Download.URL, Hashes: pkg.Download.Archive.Hashes}
-		if _, err := store.acquire(&a); err != nil {
+		a := types.Artifact{Provider: types.ProviderPyPI, ProjectID: pkg.Metadata.Name, Version: types.Version(pkg.Metadata.Version), Filename: filename, URL: pkg.Download.URL, Hashes: pkg.Download.Archive.Hashes}
+		if _, err := store.materialize(&a); err != nil {
 			return nil, err
 		}
 		out.Inputs = append(out.Inputs, types.BootstrapInput{Path: "wheels/" + filename, Artifact: a})
 		if strings.EqualFold(pkg.Metadata.Name, "mcdreforged") {
-			out.Version = pkg.Metadata.Version
+			out.Version = types.Version(pkg.Metadata.Version)
 		}
 	}
 	if out.Version == "" {
@@ -91,10 +98,10 @@ func resolvePython(ctx context.Context, root, directory, selector string, requir
 	return out, nil
 }
 
-func preparePython(ctx context.Context, root, stage string, d *lockfile.Document, store *artifactStore) error {
+func preparePython(ctx context.Context, root, stage string, d *lockfile.Document, store *downloadStore) error {
 	m := d.MCDR
-	if m.Platform != runtime.GOOS+"/"+runtime.GOARCH {
-		return fmt.Errorf("locked MCDR environment targets %s, current target is %s/%s", m.Platform, runtime.GOOS, runtime.GOARCH)
+	if m.Target != pythonTarget() {
+		return fmt.Errorf("locked %s environment targets %s, current target is %s", types.EnvironmentMCDR, m.Target, pythonTarget())
 	}
 	pyVersion, err := exec.CommandContext(ctx, "python3", "-c", "import sys;print(str(sys.version_info.major)+'.'+str(sys.version_info.minor))").Output()
 	if err != nil {
@@ -120,7 +127,7 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 		requirements := []string{}
 		for i := range m.Inputs {
 			input := &m.Inputs[i]
-			p, err := store.acquire(&input.Artifact)
+			p, err := store.materialize(&input.Artifact)
 			if err != nil {
 				return err
 			}
@@ -144,7 +151,7 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 		return err
 	}
 	entry := "java -jar server.jar nogui"
-	if d.Server.Bootstrap == "fabric" || d.Server.Bootstrap == "forge-installer" {
+	if d.Server.Bootstrapper == "fabric" || d.Server.Bootstrapper == "forge-installer" {
 		entry = "sh run.sh"
 	}
 	relative, err := filepath.Rel(m.Directory, d.Server.Directory)
@@ -154,14 +161,14 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 	// MCDReforged parses the server log stream through a handler that matches
 	// the launcher, so a Bukkit-family server needs its own parser to report
 	// start-up and player events at all.
-	handler := "vanilla_handler"
-	switch d.Server.Bootstrap {
+	launchHandler := "vanilla_handler"
+	switch d.Server.Bootstrapper {
 	case "forge-installer":
-		handler = "forge_handler"
+		launchHandler = "forge_handler"
 	case "paperclip":
-		handler = "bukkit_handler"
+		launchHandler = "bukkit_handler"
 	}
-	config := map[string]any{"working_directory": filepath.ToSlash(relative), "start_command": entry, "handler": handler}
+	config := map[string]any{"working_directory": filepath.ToSlash(relative), "start_command": entry, "handler": launchHandler}
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return err

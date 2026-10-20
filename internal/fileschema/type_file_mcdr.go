@@ -5,7 +5,7 @@ import (
 )
 
 type FileMcdrPluginIdentifier struct {
-	Id          string `json:"id"`
+	ID          string `json:"id"`
 	Version     string `json:"version"`
 	Name        string `json:"name"`
 	Description struct {

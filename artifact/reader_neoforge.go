@@ -31,7 +31,7 @@ func newNeoforgeReader() Reader {
 func (r *neoforgeReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	raw, err := readNeoforgeModsToml(zipRdr)
 	if err != nil {
 		return nil, err
@@ -49,36 +49,35 @@ func (r *neoforgeReader) Read(
 	embeddedModIds := neoforgeJarjarEmbeddedModIds(zipRdr, jarjarMeta)
 	embeddedDeps := neoforgeJarjarEmbeddedDeps(jarjarMeta)
 
-	infos := make([]Info, 0, len(modIdentifier.Mods))
+	infos := make([]PackageInfo, 0, len(modIdentifier.Mods))
 	for _, mod := range modIdentifier.Mods {
 		if mod.ModID == "neoforge" {
 			continue
 		}
 
-		version := types.BareVersion(mod.Version)
+		version := types.Version(mod.Version)
 		if version == "${file.jarVersion}" {
 			version = readNeoforgeManifestVersion(zipRdr)
 		}
 
-		info := Info{
-			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(mod.ModID), Source: types.SourceUnknown}, Eco: types.EcoNeoforge},
-			Version:  version,
+		info := PackageInfo{
+			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(mod.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemNeoForge, Version: version},
 			FilePath: filePath,
 			Metadata: types.Metadata{
 				Title:   mod.DisplayName,
 				Brief:   mod.Description,
 				Authors: []types.Person{{Name: mod.Authors}},
 				License: modIdentifier.License,
-				Urls: []types.Url{
+				URLs: []types.URL{
 					{
 						Name: "URL",
-						Type: types.UrlHome,
-						Url:  mod.DisplayURL,
+						Type: types.URLHome,
+						URL:  mod.DisplayURL,
 					},
 					{
 						Name: "Issue Tracker",
-						Type: types.UrlIssues,
-						Url:  modIdentifier.IssueTrackerURL,
+						Type: types.URLIssues,
+						URL:  modIdentifier.IssueTrackerURL,
 					},
 				},
 			},
@@ -100,10 +99,10 @@ func (r *neoforgeReader) Read(
 
 			info.Dependencies = append(
 				info.Dependencies, Dependency{
-					Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(dep.ModID), Source: types.SourceUnknown}, Eco: types.EcoNeoforge},
+					Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(dep.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemNeoForge},
 					Constraint: parseNeoforgeMavenVersionRange(dep.VersionRange),
 					Mandatory:  dep.Type == "required" || dep.Mandatory,
-					Type:       dependencyTypeForEmbedded(embeddedModIds[dep.ModID]),
+					Origin:     dependencyOriginForEmbedded(embeddedModIds[dep.ModID]),
 				},
 			)
 		}
@@ -162,7 +161,7 @@ func hasLoaderDependency(
 	return false
 }
 
-func readNeoforgeManifestVersion(zipRdr *zip.Reader) types.BareVersion {
+func readNeoforgeManifestVersion(zipRdr *zip.Reader) types.Version {
 	raw, err := readZipEntry(zipRdr, "META-INF/MANIFEST.MF")
 	if err != nil || raw == nil {
 		return types.VersionUnknown
@@ -176,7 +175,7 @@ func readNeoforgeManifestVersion(zipRdr *zip.Reader) types.BareVersion {
 	}
 	version = strings.Split(version, "\r")[0]
 	version = strings.Split(version, "\n")[0]
-	return types.BareVersion(version)
+	return types.Version(version)
 }
 
 func readNeoforgeJarjarMeta(zipRdr *zip.Reader) *fileschema.FileNeoforgeJarjar {
@@ -258,10 +257,10 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependenc
 	for _, entry := range meta.Jars {
 		deps = append(
 			deps, Dependency{
-				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact), Source: types.SourceUnknown}, Eco: types.EcoUnspecified},
+				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemUnspecified},
 				Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),
 				Mandatory:  true,
-				Type:       types.Embedded,
+				Origin:     types.DependencyEmbedded,
 			},
 		)
 	}
@@ -271,7 +270,7 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependenc
 func parseNeoforgeMavenVersionRange(interval string) types.VersionExpr {
 	return version.ParseRange(
 		interval,
-		version.InferRangeDialect(types.EcoForge),
-		types.Maven,
+		version.InferRangeDialect(types.EcosystemForge),
+		types.VersionSchemeMaven,
 	)
 }

@@ -37,7 +37,7 @@ func (d *spongeServerDetector) Name() string {
 	return "sponge server"
 }
 
-func (d *spongeServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *spongeServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -62,7 +62,7 @@ func (d *spongeServerDetector) Detect(context DetectionContext, primaryFile *Det
 		return nil, nil
 	}
 
-	return buildSpongeExecutableEvidence(filePath, signals), nil
+	return buildSpongeRuntimeEvidence(filePath, signals), nil
 }
 
 type spongeManifestSignals struct {
@@ -70,9 +70,9 @@ type spongeManifestSignals struct {
 	vendor        string
 	version       string
 	flavor        spongeFlavor
-	gameVersion   types.BareVersion
-	loaderVersion types.BareVersion
-	spongeVersion types.BareVersion
+	gameVersion   types.Version
+	loaderVersion types.Version
+	spongeVersion types.Version
 }
 
 func (s spongeManifestSignals) valid() bool {
@@ -158,9 +158,9 @@ func parseSpongeImplementationVersion(
 	version string,
 ) (
 	flavor spongeFlavor,
-	gameVersion types.BareVersion,
-	loaderVersion types.BareVersion,
-	spongeVersion types.BareVersion,
+	gameVersion types.Version,
+	loaderVersion types.Version,
+	spongeVersion types.Version,
 ) {
 	version = strings.TrimSpace(version)
 	switch strings.TrimSpace(title) {
@@ -170,36 +170,36 @@ func parseSpongeImplementationVersion(
 			return spongeFlavorUnknown, types.VersionUnknown, types.VersionUnknown, types.VersionUnknown
 		}
 		return spongeFlavorVanilla,
-			types.BareVersion(match[1]),
+			types.Version(match[1]),
 			types.VersionUnknown,
-			types.BareVersion(match[2])
+			types.Version(match[2])
 	case "SpongeForge":
 		match := spongeHybridVersionPattern.FindStringSubmatch(version)
 		if match == nil {
 			return spongeFlavorUnknown, types.VersionUnknown, types.VersionUnknown, types.VersionUnknown
 		}
 		return spongeFlavorForge,
-			types.BareVersion(match[1]),
-			types.BareVersion(match[2]),
-			types.BareVersion(match[3])
+			types.Version(match[1]),
+			types.Version(match[2]),
+			types.Version(match[3])
 	case "SpongeNeo":
 		match := spongeHybridVersionPattern.FindStringSubmatch(version)
 		if match == nil {
 			return spongeFlavorUnknown, types.VersionUnknown, types.VersionUnknown, types.VersionUnknown
 		}
 		return spongeFlavorNeo,
-			types.BareVersion(match[1]),
-			types.BareVersion(match[2]),
-			types.BareVersion(match[3])
+			types.Version(match[1]),
+			types.Version(match[2]),
+			types.Version(match[3])
 	default:
 		return spongeFlavorUnknown, types.VersionUnknown, types.VersionUnknown, types.VersionUnknown
 	}
 }
 
-func buildSpongeExecutableEvidence(
+func buildSpongeRuntimeEvidence(
 	filePath string,
 	signals spongeManifestSignals,
-) *ExecutableEvidence {
+) *RuntimeEvidence {
 	primaryName := "spongevanilla"
 	switch signals.flavor {
 	case spongeFlavorForge:
@@ -208,15 +208,15 @@ func buildSpongeExecutableEvidence(
 		primaryName = "spongeneo"
 	}
 	primary := types.VersionedPackageRef{
-		Eco:     types.EcoSponge,
-		Name:    input.ToProjectName(primaryName),
-		Version: signals.spongeVersion,
+		Ecosystem: types.EcosystemSponge,
+		Name:      input.ToProjectName(primaryName),
+		Version:   signals.spongeVersion,
 	}
 	components := []types.VersionedPackageRef{
 		{
-			Eco:     types.EcoMinecraft,
-			Name:    input.ToProjectName("minecraft"),
-			Version: signals.gameVersion,
+			Ecosystem: types.EcosystemMinecraft,
+			Name:      input.ToProjectName("minecraft"),
+			Version:   signals.gameVersion,
 		},
 	}
 
@@ -224,22 +224,22 @@ func buildSpongeExecutableEvidence(
 	case spongeFlavorForge:
 		components = append(
 			components, types.VersionedPackageRef{
-				Eco:     types.EcoForge,
-				Name:    input.ToProjectName("forge"),
-				Version: signals.loaderVersion,
+				Ecosystem: types.EcosystemForge,
+				Name:      input.ToProjectName("forge"),
+				Version:   signals.loaderVersion,
 			},
 		)
 	case spongeFlavorNeo:
 		components = append(
 			components, types.VersionedPackageRef{
-				Eco:     types.EcoNeoforge,
-				Name:    input.ToProjectName("neoforge"),
-				Version: signals.loaderVersion,
+				Ecosystem: types.EcosystemNeoForge,
+				Name:      input.ToProjectName("neoforge"),
+				Version:   signals.loaderVersion,
 			},
 		)
 	}
 
-	return &ExecutableEvidence{
+	return &RuntimeEvidence{
 		PrimaryPath:       filePath,
 		PrimaryRuntime:    &primary,
 		RuntimeComponents: components,

@@ -4,16 +4,12 @@ import (
 	"github.com/mclucy/lucy/internal/fileschema"
 )
 
-type EnvironmentInfo struct {
-	Lucy *LucyEnv `json:"lucy,omitempty"`
-	Mcdr *McdrEnv `json:"mcdr,omitempty"`
+// WrapperInfo describes non-jar wrappers around a server directory.
+type WrapperInfo struct {
+	MCDR *MCDREnv `json:"mcdr,omitempty"`
 }
 
-type McdrEnv struct {
-	Version BareVersion                `json:"version"`
+type MCDREnv struct {
+	Version Version                    `json:"version"`
 	Config  *fileschema.FileMcdrConfig `json:"config,omitempty"`
 }
-
-// LucyEnv is a placeholder for Lucy environment; currently just a boolean
-// indicating presence, but can be expanded with more details if needed
-type LucyEnv bool

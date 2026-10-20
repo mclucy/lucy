@@ -11,20 +11,17 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Id() types.SourceId {
-	return types.SourceHangar
+func (provider) Provider() types.Provider {
+	return types.ProviderHangar
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
-	options := upstream.SearchOptions{
-		IncludeClient:   !q.ExcludeClient,
-		FilterEcosystem: q.FilterEcosystem,
-	}
-	res, err := searchProjects(q.Keyword, options)
+	// Hangar publishes server plugins only; IncludeClient needs no filter.
+	res, err := searchProjects(q.Keyword, q.FilterEcosystem)
 	if err != nil {
 		return upstream.SearchResponse{}, err
 	}
-	return res.ToSearchResults(p.Id()), nil
+	return res.ToSearchResults(p.Provider()), nil
 }
 
 func (p provider) Fetch(
@@ -36,18 +33,18 @@ func (p provider) Fetch(
 		return types.ResolvedPackage{}, err
 	}
 
-	preferredPlatform := preferredDownloadPlatform(id.Eco)
+	preferredPlatform := preferredDownloadPlatform(id.Ecosystem)
 	if remote, ok := version.ToPackageRemoteForPlatform(preferredPlatform); ok {
 		return types.ResolvedPackage{
-			FileUrl:       remote.FileUrl,
+			FileURL:       remote.FileURL,
 			Filename:      remote.Filename,
 			Hash:          remote.Hash,
 			HashAlgorithm: remote.HashAlgorithm,
 		}, nil
 	}
-	if remote := version.ToPackageRemote(); remote.FileUrl != "" {
+	if remote := version.ToPackageRemote(); remote.FileURL != "" {
 		return types.ResolvedPackage{
-			FileUrl:       remote.FileUrl,
+			FileURL:       remote.FileURL,
 			Filename:      remote.Filename,
 			Hash:          remote.Hash,
 			HashAlgorithm: remote.HashAlgorithm,
@@ -68,7 +65,7 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 func (p provider) Dependencies(
 	_ upstream.LocalContext,
 	id types.VersionedPackageRef,
-) (*types.PackageDependencies, error) {
+) (*types.DependencySet, error) {
 	version, err := getVersion(id)
 	if err != nil {
 		return nil, fmt.Errorf("hangar: dependencies fetch failed: %w", err)
@@ -76,8 +73,8 @@ func (p provider) Dependencies(
 	return new(
 		(&hangarDependencies{
 			version:  version,
-			platform: id.Eco,
-		}).ToPackageDependencies(),
+			platform: id.Ecosystem,
+		}).ToDependencySet(),
 	), nil
 }
 
@@ -85,8 +82,8 @@ func (p provider) ResolveVersionSelector(
 	_ upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (parsed types.VersionedPackageRef, err error) {
-	if id.Eco.IsSelector() {
-		id.Eco = types.EcoUnspecified
+	if id.Ecosystem.IsUnspecified() {
+		id.Ecosystem = types.EcosystemUnspecified
 	}
 
 	if !id.Version.CanInfer() {
@@ -99,6 +96,6 @@ func (p provider) ResolveVersionSelector(
 	}
 
 	parsed = id
-	parsed.Version = types.BareVersion(version.Name)
+	parsed.Version = types.Version(version.Name)
 	return parsed, nil
 }

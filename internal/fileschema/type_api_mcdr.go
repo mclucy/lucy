@@ -1,7 +1,7 @@
 package fileschema
 
 type ApiMcdrPlugin struct {
-	Id      string `json:"id"`
+	ID      string `json:"id"`
 	Authors []struct {
 		Name string `json:"name"`
 		Link string `json:"link"`

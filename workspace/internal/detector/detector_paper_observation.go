@@ -263,7 +263,7 @@ func readObservationLines(data []byte) []string {
 	return strings.Split(trimmed, "\n")
 }
 
-func parsePaperVersionJSONID(data []byte) types.BareVersion {
+func parsePaperVersionJSONID(data []byte) types.Version {
 	var payload struct {
 		ID string `json:"id"`
 	}
@@ -273,7 +273,7 @@ func parsePaperVersionJSONID(data []byte) types.BareVersion {
 	if !isMinecraftReleaseVersion(payload.ID) {
 		return types.VersionUnknown
 	}
-	return types.BareVersion(payload.ID)
+	return types.Version(payload.ID)
 }
 
 func parsePaperPatchProperties(data []byte) map[string]string {
@@ -293,7 +293,7 @@ func parsePaperPatchProperties(data []byte) map[string]string {
 	return properties
 }
 
-func inferPaperObservationGameVersion(obs paperObservations) types.BareVersion {
+func inferPaperObservationGameVersion(obs paperObservations) types.Version {
 	if hasConcreteVersion(obs.versionJSONID) {
 		return obs.versionJSONID
 	}
@@ -309,7 +309,7 @@ func inferPaperObservationGameVersion(obs paperObservations) types.BareVersion {
 	return types.VersionUnknown
 }
 
-func parsePaperVersionList(entries []string) types.BareVersion {
+func parsePaperVersionList(entries []string) types.Version {
 	for _, entry := range entries {
 		fields := strings.Split(entry, "\t")
 		if len(fields) < 2 {
@@ -317,16 +317,16 @@ func parsePaperVersionList(entries []string) types.BareVersion {
 		}
 		candidate := strings.TrimSpace(fields[1])
 		if isMinecraftReleaseVersion(candidate) {
-			return types.BareVersion(candidate)
+			return types.Version(candidate)
 		}
 	}
 	return types.VersionUnknown
 }
 
-func parsePaperPatchPropertiesVersion(properties map[string]string) types.BareVersion {
+func parsePaperPatchPropertiesVersion(properties map[string]string) types.Version {
 	version := strings.TrimSpace(properties["version"])
 	if !isMinecraftReleaseVersion(version) {
 		return types.VersionUnknown
 	}
-	return types.BareVersion(version)
+	return types.Version(version)
 }

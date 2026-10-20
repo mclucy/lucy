@@ -24,7 +24,7 @@ var forgeJarNameVersionPattern = regexp.MustCompile(
 
 func parseForgeManifest(
 	zipReader *zip.Reader,
-) (forgeVersion types.BareVersion, gameVersion types.BareVersion) {
+) (forgeVersion types.Version, gameVersion types.Version) {
 	for _, f := range zipReader.File {
 		if f.Name != "META-INF/MANIFEST.MF" {
 			continue
@@ -47,7 +47,7 @@ func parseForgeManifest(
 			case line == "Implementation-Title: net.minecraftforge":
 				inForgeSection = true
 				if pendingImplVersion != "" {
-					forgeVersion = types.BareVersion(pendingImplVersion)
+					forgeVersion = types.Version(pendingImplVersion)
 					pendingImplVersion = ""
 				}
 			case strings.HasPrefix(line, "Implementation-Version: "):
@@ -57,7 +57,7 @@ func parseForgeManifest(
 				); found {
 					switch {
 					case inForgeSection:
-						forgeVersion = types.BareVersion(after)
+						forgeVersion = types.Version(after)
 					case !inForgeSection && forgeVersion == "" && pendingImplVersion == "":
 						pendingImplVersion = after
 					}
@@ -67,7 +67,7 @@ func parseForgeManifest(
 					line,
 					"Specification-Version: ",
 				); found && isMinecraftReleaseVersion(after) {
-					gameVersion = types.BareVersion(after)
+					gameVersion = types.Version(after)
 				}
 			}
 		}
@@ -92,7 +92,7 @@ func isMinecraftReleaseVersion(version string) bool {
 
 func parseForgeVersionTupleFromPath(
 	filePath string,
-) (gameVersion types.BareVersion, forgeVersion types.BareVersion, ok bool) {
+) (gameVersion types.Version, forgeVersion types.Version, ok bool) {
 	parts := strings.Split(filepath.ToSlash(filePath), "/")
 	for i := 0; i < len(parts)-1; i++ {
 		if parts[i] != "forge" {
@@ -102,19 +102,19 @@ func parseForgeVersionTupleFromPath(
 		if match == nil {
 			continue
 		}
-		return types.BareVersion(match[1]), types.BareVersion(match[2]), true
+		return types.Version(match[1]), types.Version(match[2]), true
 	}
 	if match := forgeJarNameVersionPattern.FindStringSubmatch(filepath.Base(filePath)); match != nil {
-		return types.BareVersion(match[1]), types.BareVersion(match[2]), true
+		return types.Version(match[1]), types.Version(match[2]), true
 	}
 	return types.VersionUnknown, types.VersionUnknown, false
 }
 
-func hasConcreteVersion(version types.BareVersion) bool {
+func hasConcreteVersion(version types.Version) bool {
 	return version != "" && !version.IsInvalid() && !version.CanInfer()
 }
 
-func compareForgeMajor(version types.BareVersion, target int) int {
+func compareForgeMajor(version types.Version, target int) int {
 	major, _, _ := strings.Cut(string(version), ".")
 	if major == "" {
 		return -1
@@ -152,25 +152,25 @@ func hasForgeSibling(context DetectionContext, primary *DetectionFile, siblings 
 	return false
 }
 
-func newForgeExecutableEvidence(
+func newForgeRuntimeEvidence(
 	filePath string,
-	gameVersion types.BareVersion,
-	forgeVersion types.BareVersion,
-) *ExecutableEvidence {
-	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		Eco:     types.EcoForge,
-		Name:    "forge",
-		Version: forgeVersion,
+	gameVersion types.Version,
+	forgeVersion types.Version,
+) *RuntimeEvidence {
+	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		Ecosystem: types.EcosystemForge,
+		Name:      "forge",
+		Version:   forgeVersion,
 	}, RuntimeComponents: []types.VersionedPackageRef{
 		{
-			Eco:     types.EcoForge,
-			Name:    "forge",
-			Version: forgeVersion,
+			Ecosystem: types.EcosystemForge,
+			Name:      "forge",
+			Version:   forgeVersion,
 		},
 		{
-			Eco:     types.EcoMinecraft,
-			Name:    "minecraft",
-			Version: gameVersion,
+			Ecosystem: types.EcosystemMinecraft,
+			Name:      "minecraft",
+			Version:   gameVersion,
 		},
 	}}
 }

@@ -12,7 +12,7 @@ func (provider) Candidates(ctx context.Context, project, _ string, loader types.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if loader != types.EcoMcdr {
+	if loader != types.EcosystemMCDR {
 		return nil, fmt.Errorf("MCDR catalogue requires the mcdr loader")
 	}
 	history, err := getReleaseHistory(project)
@@ -25,17 +25,37 @@ func (provider) Candidates(ctx context.Context, project, _ string, loader types.
 		if rel.Asset.HashSha256 != "" {
 			hashes["sha256"] = rel.Asset.HashSha256
 		}
-		kind := "release"
+		channel := types.ReleaseChannelRelease
 		if rel.Prerelease {
-			kind = "beta"
+			channel = types.ReleaseChannelBeta
 		}
-		c := types.CatalogueCandidate{Provider: "mcdr", ProjectID: history.Id, ReleaseID: rel.TagName, FileID: strconv.Itoa(rel.Asset.Id), Version: rel.Meta.Version, Filename: rel.Asset.Name, URL: rel.Asset.BrowserDownloadUrl, Hashes: hashes, ReleaseType: kind, Published: rel.CreatedAt.Format("2006-01-02T15:04:05Z07:00"), Primary: true, Dependencies: []types.ProjectDependency{}}
-		if c.ProjectID == "" {
-			c.ProjectID = project
+		projectID := history.ID
+		if projectID == "" {
+			projectID = project
+		}
+		c := types.CatalogueCandidate{
+			Artifact: types.Artifact{
+				Provider:  types.ProviderMCDR,
+				ProjectID: projectID,
+				ReleaseID: rel.TagName,
+				FileID:    strconv.Itoa(rel.Asset.ID),
+				Version:   types.Version(rel.Meta.Version),
+				Filename:  rel.Asset.Name,
+				URL:       rel.Asset.BrowserDownloadUrl,
+				Hashes:    hashes,
+			},
+			Channel:      channel,
+			PublishedAt:  rel.CreatedAt,
+			PrimaryFile:  true,
+			Dependencies: []types.ProjectDependency{},
 		}
 		for id := range rel.Meta.Dependencies {
 			if id != "mcdreforged" {
-				c.Dependencies = append(c.Dependencies, types.ProjectDependency{Provider: "mcdr", ProjectID: id, Kind: "required"})
+				c.Dependencies = append(c.Dependencies, types.ProjectDependency{
+					Provider:  types.ProviderMCDR,
+					ProjectID: id,
+					Kind:      types.DependencyKindRequired,
+				})
 			}
 		}
 		out = append(out, c)

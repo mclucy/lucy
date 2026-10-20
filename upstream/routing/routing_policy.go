@@ -5,125 +5,126 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-var searchProviderSourcesInPriorityOrder = []types.SourceId{
-	types.SourceModrinth,
-	types.SourceCurseForge,
-	types.SourceHangar,
-	types.SourceSpiget,
+var searchProvidersInPriorityOrder = []types.Provider{
+	types.ProviderModrinth,
+	types.ProviderCurseForge,
+	types.ProviderHangar,
+	types.ProviderSpiget,
 }
 
-func autoProviderSources() []types.SourceId {
-	return append(modProviderSources(), types.SourceMCDR)
+func autoProviders() []types.Provider {
+	return append(modProviders(), types.ProviderMCDR)
 }
 
-func modProviderSources() []types.SourceId {
-	sources := []types.SourceId{types.SourceModrinth}
+func modProviders() []types.Provider {
+	providers := []types.Provider{types.ProviderModrinth}
 	if curseforgeAvailable() {
-		sources = append(sources, types.SourceCurseForge)
+		providers = append(providers, types.ProviderCurseForge)
 	}
-	return sources
+	return providers
 }
 
-func providerSourcesForEcosystem(ecosystem types.Ecosystem) (
-	[]types.SourceId,
+func providersForEcosystem(ecosystem types.Ecosystem) (
+	[]types.Provider,
 	error,
 ) {
 	switch ecosystem {
-	case types.EcoUnspecified:
-		return autoProviderSources(), nil
-	case types.EcoMcdr:
-		return []types.SourceId{types.SourceMCDR}, nil
-	case types.EcoForge, types.EcoFabric, types.EcoNeoforge, types.EcoBukkit:
-		return providerSourcesForSearchEcosystem(ecosystem), nil
+	case types.EcosystemUnspecified:
+		return autoProviders(), nil
+	case types.EcosystemMCDR:
+		return []types.Provider{types.ProviderMCDR}, nil
+	case types.EcosystemForge, types.EcosystemFabric, types.EcosystemNeoForge,
+		types.EcosystemBukkit, types.EcosystemPaper:
+		return searchProvidersForEcosystem(ecosystem), nil
 	default:
 		return nil, ErrInvalidEcosystem
 	}
 }
 
-func providerSourcesForSearchEcosystem(ecosystem types.Ecosystem) []types.SourceId {
-	sources := make(
-		[]types.SourceId,
+func searchProvidersForEcosystem(ecosystem types.Ecosystem) []types.Provider {
+	providers := make(
+		[]types.Provider,
 		0,
-		len(searchProviderSourcesInPriorityOrder),
+		len(searchProvidersInPriorityOrder),
 	)
-	for _, source := range searchProviderSourcesInPriorityOrder {
-		if source == types.SourceCurseForge && !curseforgeAvailable() {
+	for _, provider := range searchProvidersInPriorityOrder {
+		if provider == types.ProviderCurseForge && !curseforgeAvailable() {
 			log.Debug(
 				"routing: ecosystem candidate skipped",
-				"source", source,
+				"provider", provider,
 				"platform", ecosystem,
 				"reason", "provider unavailable",
 			)
 			continue
 		}
 
-		support, ok := EcosystemSupportedBy(source, ecosystem)
+		support, ok := EcosystemSupportedBy(provider, ecosystem)
 		if !ok || !support.Supported {
 			log.Debug(
 				"routing: ecosystem candidate skipped",
-				"source", source,
+				"provider", provider,
 				"platform", ecosystem,
-				"reason", "source does not support platform",
+				"reason", "provider does not support platform",
 			)
 			continue
 		}
 
-		sources = append(sources, source)
+		providers = append(providers, provider)
 	}
-	return sources
+	return providers
 }
 
 type providerSelection struct {
-	sources  []types.SourceId
-	fallback bool
-	empty    bool
+	providers []types.Provider
+	fallback  bool
+	empty     bool
 }
 
-func providerSourcesFromEcosystems(ecosystems []types.Ecosystem) providerSelection {
+func providersFromEcosystems(ecosystems []types.Ecosystem) providerSelection {
 	selection := providerSelection{}
-	seen := map[types.SourceId]struct{}{}
+	seen := map[types.Provider]struct{}{}
 	sawKnownCapability := false
 	sawProxyCapability := false
 
-	appendSource := func(source types.SourceId) {
-		if _, ok := seen[source]; ok {
+	appendProvider := func(provider types.Provider) {
+		if _, ok := seen[provider]; ok {
 			log.Debug(
 				"routing: runtime candidate skipped",
-				"source", source,
-				"reason", "source already selected for runtime",
+				"provider", provider,
+				"reason", "provider already selected for runtime",
 			)
 			return
 		}
-		seen[source] = struct{}{}
-		selection.sources = append(selection.sources, source)
+		seen[provider] = struct{}{}
+		selection.providers = append(selection.providers, provider)
 	}
 
 	for _, ecosystem := range ecosystems {
 		switch ecosystem {
-		case types.EcoFabric,
-			types.EcoForge,
-			types.EcoNeoforge:
+		case types.EcosystemFabric,
+			types.EcosystemForge,
+			types.EcosystemNeoForge:
 			sawKnownCapability = true
-			appendSource(types.SourceModrinth)
+			appendProvider(types.ProviderModrinth)
 			if curseforgeAvailable() {
-				appendSource(types.SourceCurseForge)
+				appendProvider(types.ProviderCurseForge)
 			}
-		case types.EcoBukkit,
-			types.EcoPaper:
+		case types.EcosystemBukkit,
+			types.EcosystemPaper:
 			sawKnownCapability = true
-			appendSource(types.SourceModrinth)
-			appendSource(types.SourceHangar)
-			appendSource(types.SourceSpiget)
-		case types.EcoMcdr:
+			appendProvider(types.ProviderModrinth)
+			appendProvider(types.ProviderHangar)
+			appendProvider(types.ProviderSpiget)
+		case types.EcosystemMCDR:
 			sawKnownCapability = true
-			appendSource(types.SourceMCDR)
-		case types.EcoBungeecord, types.EcoVelocity:
+			appendProvider(types.ProviderMCDR)
+		case types.EcosystemBungeeCord, types.EcosystemVelocity:
 			sawKnownCapability = true
 			sawProxyCapability = true
 		}
 	}
 
-	if len(selection.sources) > 0 {
+	if len(selection.providers) > 0 {
 		return selection
 	}
 	if sawProxyCapability {

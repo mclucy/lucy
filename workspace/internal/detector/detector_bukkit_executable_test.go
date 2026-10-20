@@ -94,27 +94,27 @@ func TestCraftBukkitFamilyDetector_RuntimeProjection(t *testing.T) {
 	}
 }
 
-func TestCraftBukkitFamilyDetector_KnownPaperForkBrands(t *testing.T) {
+func TestCraftBukkitFamilyDetector_KnownPaperForkLineages(t *testing.T) {
 	t.Parallel()
 
 	fixtureRoot := paperFamilyFixtureRoot(t)
-	for brand := range paperFamilyBrands {
-		t.Run(brand, func(t *testing.T) {
+	for lineage := range paperLineages {
+		t.Run(lineage, func(t *testing.T) {
 			t.Parallel()
 
-			brandDir := filepath.Join(fixtureRoot, "test_"+brand, brand)
-			evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(brandDir))
+			lineageDir := filepath.Join(fixtureRoot, "test_"+lineage, lineage)
+			evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(lineageDir))
 			if err != nil {
-				t.Fatalf("detect %s fixture: %v", brand, err)
+				t.Fatalf("detect %s fixture: %v", lineage, err)
 			}
 			if evidence == nil {
-				t.Fatalf("expected evidence for %s fixture", brand)
+				t.Fatalf("expected evidence for %s fixture", lineage)
 			}
 			if evidence.PrimaryRuntime == nil ||
-				evidence.PrimaryRuntime.Name.String() != brand {
+				evidence.PrimaryRuntime.Name.String() != lineage {
 				t.Fatalf(
 					"expected primary runtime %q, got %+v",
-					brand,
+					lineage,
 					evidence.PrimaryRuntime,
 				)
 			}
@@ -264,7 +264,7 @@ func TestCraftBukkitFamilyDetector_Reaper(t *testing.T) {
 	}
 }
 
-func TestCraftBukkitFamilyDetector_FamilyMissStillRunsBrandRules(t *testing.T) {
+func TestCraftBukkitFamilyDetector_FamilyMissStillRunsLineageRules(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -286,20 +286,20 @@ func TestCraftBukkitFamilyDetector_FamilyMissStillRunsBrandRules(t *testing.T) {
 	}
 	reasonPaperFamily(&judgment)
 	if judgment.familyResult != familyMiss {
-		t.Fatalf("expected family miss before brand rules, got %v", judgment.familyResult)
+		t.Fatalf("expected family miss before lineage rules, got %v", judgment.familyResult)
 	}
 
 	evidence, err := (&craftBukkitFamilyDetector{}).Detect(DetectionContext{}, NewDetectionFile(dir))
 	if err != nil {
-		t.Fatalf("detect bukkit candidate with family miss brand recovery: %v", err)
+		t.Fatalf("detect bukkit candidate with family miss lineage recovery: %v", err)
 	}
 	if evidence == nil {
-		t.Fatalf("expected non-terminal family miss to continue to brand rules")
+		t.Fatalf("expected non-terminal family miss to continue to lineage rules")
 	}
 	if evidence.PrimaryRuntime == nil ||
 		evidence.PrimaryRuntime.Name.String() != "purpur" {
 		t.Fatalf(
-			"expected brand recovery to select purpur, got %+v",
+			"expected lineage recovery to select purpur, got %+v",
 			evidence.PrimaryRuntime,
 		)
 	}
@@ -329,10 +329,10 @@ func TestCraftBukkitFamilyDetector_ContradictoryEvidenceFailsClosed(t *testing.T
 		},
 	}
 	reasonPaperFamily(&judgment)
-	attributePaperBrand(&judgment)
+	attributePaperLineage(&judgment)
 	resolvePaperContradictions(&judgment)
 	if judgment.familyResult != familyContradiction {
-		t.Fatalf("expected contradictory brands to set family contradiction, got %v", judgment.familyResult)
+		t.Fatalf("expected contradictory lineages to set family contradiction, got %v", judgment.familyResult)
 	}
 	if judgment.contradictionState == "" {
 		t.Fatalf("expected descriptive contradiction state")

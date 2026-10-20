@@ -28,10 +28,10 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	Invalidate()
 	baseline := New()
 
-	if baseline.Server().ModLoader() != types.EcoUnspecified {
+	if baseline.Runtime().Ecosystem() != types.EcosystemUnspecified {
 		t.Fatalf(
 			"expected empty dir baseline to look vanilla/none, got %s",
-			baseline.Server().ModLoader(),
+			baseline.Runtime().Ecosystem(),
 		)
 	}
 
@@ -43,28 +43,28 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 
 	observed := NewAt(targetDir)
 
-	if observed.Server().ModLoader() != types.EcoFabric {
+	if observed.Runtime().Ecosystem() != types.EcosystemFabric {
 		t.Fatalf(
 			"expected fabric runtime from target dir, got %s",
-			observed.Server().ModLoader(),
+			observed.Runtime().Ecosystem(),
 		)
 	}
-	if len(observed.ModPath()) == 0 || observed.ModPath()[0] != filepath.Join(
+	if len(observed.PackageDirs()) == 0 || observed.PackageDirs()[0] != filepath.Join(
 		targetDir,
 		"mods",
 	) {
 		t.Fatalf(
-			"expected absolute fabric mod path from target dir topology, got %v",
-			observed.ModPath(),
+			"expected absolute fabric package dirs from target dir topology, got %v",
+			observed.PackageDirs(),
 		)
 	}
 
 	cachedAgain := New()
 
-	if cachedAgain.Server().ModLoader() != types.EcoUnspecified {
+	if cachedAgain.Runtime().Ecosystem() != types.EcosystemUnspecified {
 		t.Fatalf(
 			"expected global cache to remain on cache dir, got %s",
-			cachedAgain.Server().ModLoader(),
+			cachedAgain.Runtime().Ecosystem(),
 		)
 	}
 }
@@ -87,10 +87,10 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	}
 	Invalidate()
 	before := New()
-	if before.Server().ModLoader() != types.EcoUnspecified {
+	if before.Runtime().Ecosystem() != types.EcosystemUnspecified {
 		t.Fatalf(
 			"expected empty dir baseline to look vanilla/none, got %s",
-			before.Server().ModLoader(),
+			before.Runtime().Ecosystem(),
 		)
 	}
 
@@ -100,24 +100,24 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	)
 
 	refreshed := Refresh(workDir)
-	if refreshed.Server() == nil {
+	if refreshed.Runtime() == nil {
 		t.Fatal("expected refreshed runtime info")
 	}
-	if refreshed.Server().ModLoader() != types.EcoFabric {
+	if refreshed.Runtime().Ecosystem() != types.EcosystemFabric {
 		t.Fatalf(
 			"expected refresh to rebuild fabric runtime, got %s",
-			refreshed.Server().ModLoader(),
+			refreshed.Runtime().Ecosystem(),
 		)
 	}
 
 	cached := New()
-	if cached.Server() == nil {
+	if cached.Runtime() == nil {
 		t.Fatal("expected cached runtime after refresh")
 	}
-	if cached.Server().ModLoader() != types.EcoFabric {
+	if cached.Runtime().Ecosystem() != types.EcosystemFabric {
 		t.Fatalf(
 			"expected current-dir cache to be refreshed to fabric, got %s",
-			cached.Server().ModLoader(),
+			cached.Runtime().Ecosystem(),
 		)
 	}
 }

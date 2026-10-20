@@ -14,34 +14,37 @@ func selectLatestRelease(history *pluginRelease) *release {
 
 func selectLatestCompatibleRelease(
 	history *pluginRelease,
-	localMcdrVersion types.BareVersion,
+	localMcdrVersion types.Version,
 ) (*release, error) {
 	if history == nil {
 		return nil, nil
 	}
 
 	mcdrPackage := types.VersionedPackageRef{
-		Eco:     types.EcoMcdr,
-		Name:    "mcdreforged",
-		Version: localMcdrVersion,
+		Ecosystem: types.EcosystemMCDR,
+		Name:      "mcdreforged",
+		Version:   localMcdrVersion,
 	}
-	localVersion, err := version.Parse(localMcdrVersion, types.Semver)
+	localVersion, err := version.Parse(localMcdrVersion, types.VersionSchemeSemver)
 	if err != nil {
 		return nil, err
 	}
 
 	for i := range history.Releases {
 		rel := &history.Releases[i]
+		if rel.Prerelease {
+			continue
+		}
 		rangeExpr, ok := rel.Meta.Dependencies["mcdreforged"]
 		if !ok {
 			continue
 		}
 		dep := types.Dependency{
-			Id: mcdrPackage,
+			ID: mcdrPackage,
 			Constraint: version.ParseRange(
 				rangeExpr,
 				version.DialectNpmSemver,
-				types.Semver,
+				types.VersionSchemeSemver,
 			),
 			Mandatory: true,
 		}

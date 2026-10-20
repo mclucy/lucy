@@ -6,7 +6,7 @@ type GhItem struct {
 	Path        string `json:"path"`
 	Sha         string `json:"sha"`
 	Size        int    `json:"size"`
-	Url         string `json:"url"`
+	URL         string `json:"url"`
 	HtmlUrl     string `json:"html_url"`
 	GitUrl      string `json:"git_url"`
 	DownloadUrl string `json:"download_url"`

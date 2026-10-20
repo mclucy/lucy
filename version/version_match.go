@@ -13,11 +13,11 @@ func Match(raw, actual string, loader types.Ecosystem) (bool, error) {
 	if raw == "" || raw == "*" {
 		return true, nil
 	}
-	format := types.Semver
-	if loader == types.EcoForge || loader == types.EcoNeoforge {
-		format = types.Maven
+	format := types.VersionSchemeSemver
+	if loader == types.EcosystemForge || loader == types.EcosystemNeoForge {
+		format = types.VersionSchemeMaven
 	}
-	v, err := Parse(types.BareVersion(actual), format)
+	v, err := Parse(types.Version(actual), format)
 	if err != nil {
 		return false, err
 	}
@@ -26,7 +26,7 @@ func Match(raw, actual string, loader types.Ecosystem) (bool, error) {
 	}
 	for part := range strings.SplitSeq(raw, "||") {
 		part = strings.TrimSpace(part)
-		if loader == types.EcoFabric && strings.Contains(part, "-") {
+		if loader == types.EcosystemFabric && strings.Contains(part, "-") {
 			matched, handled, err := matchFabricMinimumPrerelease(part, actual)
 			if err != nil {
 				return false, err
@@ -42,8 +42,8 @@ func Match(raw, actual string, loader types.Ecosystem) (bool, error) {
 		if expr == nil {
 			return false, fmt.Errorf("invalid %s constraint %q", loader, part)
 		}
-		id := types.VersionedPackageRef{Name: "native", Eco: loader}
-		if (types.Dependency{Id: id, Constraint: expr}).Satisfy(id, v) {
+		id := types.VersionedPackageRef{Name: "native", Ecosystem: loader}
+		if (types.Dependency{ID: id, Constraint: expr}).Satisfy(id, v) {
 			return true, nil
 		}
 	}
@@ -61,7 +61,7 @@ func matchFabricMinimumPrerelease(raw, actual string) (bool, bool, error) {
 	if !handled {
 		return false, false, nil
 	}
-	actualVersion := parseSemver(types.BareVersion(strings.TrimSuffix(actual, "-")))
+	actualVersion := parseSemver(types.Version(strings.TrimSuffix(actual, "-")))
 	if actualVersion == nil {
 		return false, true, fmt.Errorf("invalid Fabric version %q", actual)
 	}
@@ -69,12 +69,12 @@ func matchFabricMinimumPrerelease(raw, actual string) (bool, bool, error) {
 	actualBase := NewSemver(actualSemver.Major(), actualSemver.Minor(), actualSemver.Patch())
 	for _, token := range tokens {
 		if !strings.HasSuffix(token, "-") {
-			expr := ParseRange(token, DialectFabricSemver, types.Semver)
+			expr := ParseRange(token, DialectFabricSemver, types.VersionSchemeSemver)
 			if expr == nil {
 				return false, true, fmt.Errorf("invalid Fabric criterion %q", token)
 			}
-			id := types.VersionedPackageRef{Name: "native", Eco: types.EcoFabric}
-			if !(types.Dependency{Id: id, Constraint: expr}).Satisfy(id, actualVersion) {
+			id := types.VersionedPackageRef{Name: "native", Ecosystem: types.EcosystemFabric}
+			if !(types.Dependency{ID: id, Constraint: expr}).Satisfy(id, actualVersion) {
 				return false, true, nil
 			}
 			continue
@@ -86,7 +86,7 @@ func matchFabricMinimumPrerelease(raw, actual string) (bool, bool, error) {
 				break
 			}
 		}
-		boundary := parseSemver(types.BareVersion(number))
+		boundary := parseSemver(types.Version(number))
 		if boundary == nil {
 			return false, true, fmt.Errorf("invalid Fabric boundary %q", token)
 		}

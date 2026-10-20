@@ -8,10 +8,10 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// SourceIdentifier exposes the semantic source identity of a provider
+// ProviderIdentifier exposes the execution-layer identity of a provider
 // capability.
-type SourceIdentifier interface {
-	Id() types.SourceId
+type ProviderIdentifier interface {
+	Provider() types.Provider
 }
 
 // LocalContext is an immutable snapshot of local runtime facts that can affect
@@ -20,17 +20,17 @@ type SourceIdentifier interface {
 // The application layer derives LocalContext from workspace discovery. Upstream
 // must not depend on that discovery mechanism or its filesystem representation.
 type LocalContext struct {
-	ModLoader   types.Ecosystem
-	GameVersion types.BareVersion
-	MCDRVersion types.BareVersion
+	Ecosystem        types.Ecosystem
+	MinecraftVersion types.Version
+	MCDRVersion      types.Version
 }
 
-// HasGameVersion reports whether the local runtime provides a concrete
+// HasMinecraftVersion reports whether the local runtime provides a concrete
 // Minecraft version suitable for upstream compatibility filtering.
-func (c LocalContext) HasGameVersion() bool {
-	return c.GameVersion != "" &&
-		!c.GameVersion.IsInvalid() &&
-		!c.GameVersion.CanInfer()
+func (c LocalContext) HasMinecraftVersion() bool {
+	return c.MinecraftVersion != "" &&
+		!c.MinecraftVersion.IsInvalid() &&
+		!c.MinecraftVersion.CanInfer()
 }
 
 type Fetcher interface {
@@ -39,45 +39,46 @@ type Fetcher interface {
 
 type DependencyResolver interface {
 	Dependencies(local LocalContext, id types.VersionedPackageRef) (
-		*types.PackageDependencies,
+		*types.DependencySet,
 		error,
 	)
 }
 
 type PackageResolver interface {
-	SourceIdentifier
+	ProviderIdentifier
 	VersionSelectorResolver
 	Fetcher
 }
 
-type PackageSource interface {
+type PackageProvider interface {
 	PackageResolver
 	DependencyResolver
 }
 
-type SearchSource interface {
-	SourceIdentifier
+type SearchProvider interface {
+	ProviderIdentifier
 	Searcher
 }
 
-type InfoSource interface {
-	SourceIdentifier
+type InfoProvider interface {
+	ProviderIdentifier
 	Informer
 }
 
-type ArtifactMapSource interface {
-	SourceIdentifier
+type ArtifactMapProvider interface {
+	ProviderIdentifier
 	ArtifactMapper
 }
 
-type EcosystemProvider interface {
-	SourceIdentifier
+// InstallerProvider installs a server product for one ecosystem.
+type InstallerProvider interface {
+	ProviderIdentifier
 	VersionSelectorResolver
 	Fetcher
 }
 
 type ArtifactMapper interface {
-	PackageByHash(artifact Hashable) (
+	PackageByHash(artifact ArtifactFingerprint) (
 		ref types.VersionedPackageRef,
 		hash string,
 		ok bool,
@@ -85,8 +86,8 @@ type ArtifactMapper interface {
 	)
 }
 
-type Hashable interface {
-	Sha1() ([sha1.Size]byte, error)
+type ArtifactFingerprint interface {
+	SHA1() ([sha1.Size]byte, error)
 	MurmurHash() (uint32, error)
 }
 
@@ -103,18 +104,17 @@ type Searcher interface {
 
 type Query struct {
 	Keyword         string
-	ExcludeClient   bool
+	IncludeClient   bool
 	FilterEcosystem types.Ecosystem
 	Tags            []string
 	Limit           int
 }
 
 type SearchResponse struct {
-	// Source labels which upstream catalog produced this result set.
-	// It is a semantic provenance marker, not a provider instance.
-	Source   types.SourceId
-	Items    []SearchResult
-	Warnings []error
+	// Provider labels which upstream provider produced this result set.
+	Provider types.Provider `json:"provider"`
+	Items    []SearchResult `json:"items"`
+	Warnings []error        `json:"warnings,omitempty"`
 }
 
 type Informer interface {
@@ -128,27 +128,22 @@ type Info struct {
 	Metadata types.Metadata
 }
 
-type SearchOptions struct {
-	IncludeClient   bool
-	FilterEcosystem types.Ecosystem
-}
-
 // SearchResult represents a single search result with optional metadata.
 // Providers populate what their API returns; display layer handles zero values.
 type SearchResult struct {
-	RemoteName string
-	Source     types.SourceId
+	ProjectName string         `json:"project"`
+	Provider    types.Provider `json:"provider"`
 
 	// Optional metadata — zero value means unavailable.
-	Title       string
-	Description string
-	Downloads   int64
-	LastUpdated time.Time
+	Title       string    `json:"title,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Downloads   int64     `json:"downloads,omitempty"`
+	LastUpdated time.Time `json:"last_updated,omitzero"`
 }
 
-func (r SearchResult) FormattedName() string {
-	if r.Source == types.SourceMCDR {
-		return strings.ReplaceAll(r.RemoteName, "_", "-")
+func (r SearchResult) DisplayName() string {
+	if r.Provider == types.ProviderMCDR {
+		return strings.ReplaceAll(r.ProjectName, "_", "-")
 	}
-	return r.RemoteName
+	return r.ProjectName
 }

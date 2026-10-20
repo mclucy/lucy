@@ -228,10 +228,10 @@ var modMetadata = []struct {
 	file string
 	eco  types.Ecosystem
 }{
-	{file: filepath.Join("src", "main", "resources", "fabric.mod.json"), eco: types.EcoFabric},
+	{file: filepath.Join("src", "main", "resources", "fabric.mod.json"), eco: types.EcosystemFabric},
 
-	{file: filepath.Join("src", "main", "resources", "META-INF", "mods.toml"), eco: types.EcoForge},
-	{file: filepath.Join("src", "main", "resources", "META-INF", "neoforge.mods.toml"), eco: types.EcoNeoforge},
+	{file: filepath.Join("src", "main", "resources", "META-INF", "mods.toml"), eco: types.EcosystemForge},
+	{file: filepath.Join("src", "main", "resources", "META-INF", "neoforge.mods.toml"), eco: types.EcosystemNeoForge},
 }
 
 // corroborate fills ecosystems from loader metadata when no modding plugin was

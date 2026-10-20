@@ -24,7 +24,7 @@ var _ = newFabricReader
 func (r *fabricReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "fabric.mod.json" {
 			continue
@@ -50,7 +50,7 @@ func (r *fabricReader) Read(
 			return nil, err
 		}
 
-		return []Info{info}, nil
+		return []PackageInfo{info}, nil
 	}
 
 	return nil, nil
@@ -60,10 +60,10 @@ func translateFabricArtifact(
 	zipRdr *zip.Reader,
 	modInfo *fileschema.FileFabricModIdentifier,
 	filePath string,
-) (Info, error) {
+) (PackageInfo, error) {
 	embeddedNames, err := fabricArtifactEmbeddedModNames(zipRdr, modInfo)
 	if err != nil {
-		return Info{}, err
+		return PackageInfo{}, err
 	}
 	dependencies := make(
 		[]Dependency, 0,
@@ -116,9 +116,8 @@ func translateFabricArtifact(
 		)...,
 	)
 
-	return Info{
-		Ref:          types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(modInfo.Id), Source: types.SourceUnknown}, Eco: types.EcoFabric},
-		Version:      types.BareVersion(modInfo.Version),
+	return PackageInfo{
+		Ref:          types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(modInfo.ID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemFabric, Version: types.Version(modInfo.Version)},
 		FilePath:     filePath,
 		Dependencies: dependencies,
 		Metadata: types.Metadata{
@@ -126,7 +125,7 @@ func translateFabricArtifact(
 			Description: modInfo.Description,
 			License:     modInfo.License,
 			Authors:     fabricArtifactAuthors(modInfo.Authors),
-			Urls:        fabricArtifactURLs(modInfo.Contact),
+			URLs:        fabricArtifactURLs(modInfo.Contact),
 		},
 	}, nil
 }
@@ -142,10 +141,10 @@ func translateFabricArtifactDependencyMap(
 		name := input.ToProjectName(id)
 		_, embedded := embeddedNames[string(name)]
 		dep := Dependency{
-			Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: name, Source: types.SourceUnknown}, Eco: types.EcoFabric},
+			Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: name, Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemFabric},
 			Constraint: parseFabricArtifactVersionRanges(ranges),
 			Mandatory:  mandatory,
-			Type:       dependencyTypeForEmbedded(embedded),
+			Origin:     dependencyOriginForEmbedded(embedded),
 		}
 		if inverse {
 			dep.Constraint.Inverse()
@@ -160,8 +159,8 @@ func parseFabricArtifactVersionRanges(
 ) types.VersionExpr {
 	return version.ParseRanges(
 		[]string(ranges),
-		version.InferRangeDialect(types.EcoFabric),
-		types.Semver,
+		version.InferRangeDialect(types.EcosystemFabric),
+		types.VersionSchemeSemver,
 	)
 }
 
@@ -181,7 +180,7 @@ func fabricArtifactEmbeddedModNames(
 			return nil, err
 		}
 		if nestedInfo != nil {
-			fabricRecordEmbeddedName(names, nestedInfo.Id)
+			fabricRecordEmbeddedName(names, nestedInfo.ID)
 			for _, provided := range nestedInfo.Provides {
 				fabricRecordEmbeddedName(names, provided)
 			}
@@ -255,28 +254,28 @@ func fabricArtifactAuthors(authors []fileschema.FabricAuthor) []types.Person {
 	return translated
 }
 
-func fabricArtifactURLs(contact map[string]string) []types.Url {
+func fabricArtifactURLs(contact map[string]string) []types.URL {
 	urlSpecs := []struct {
 		key     string
 		name    string
-		urlType types.UrlType
+		urlType types.URLType
 	}{
-		{key: "homepage", name: "Homepage", urlType: types.UrlHome},
-		{key: "sources", name: "Source", urlType: types.UrlSource},
-		{key: "issues", name: "Issues", urlType: types.UrlIssues},
+		{key: "homepage", name: "Homepage", urlType: types.URLHome},
+		{key: "sources", name: "Source", urlType: types.URLSource},
+		{key: "issues", name: "Issues", urlType: types.URLIssues},
 	}
 
-	urls := make([]types.Url, 0, len(urlSpecs))
+	urls := make([]types.URL, 0, len(urlSpecs))
 	for _, spec := range urlSpecs {
 		url := contact[spec.key]
 		if url == "" {
 			continue
 		}
 		urls = append(
-			urls, types.Url{
+			urls, types.URL{
 				Name: spec.name,
 				Type: spec.urlType,
-				Url:  url,
+				URL:  url,
 			},
 		)
 	}

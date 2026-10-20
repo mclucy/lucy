@@ -18,25 +18,25 @@ import (
 
 const mcdrConfigFileName = "config.yml"
 
-// detectEnvironment reads the environments of a server directory and the
-// recoverable warnings seen while reading them. These environments do not
-// come from jars. An MCDR installation manages a server directory from
-// outside the directory.
-func detectEnvironment(dir string) (types.EnvironmentInfo, []error) {
-	var env types.EnvironmentInfo
-	warnings := detectMcdrEnvironment(dir, &env)
-	return env, warnings
+// detectWrappers reads the wrappers of a server directory and the
+// recoverable warnings seen while reading them. These wrappers do not come
+// from jars. An MCDR installation manages a server directory from outside
+// the directory.
+func detectWrappers(dir string) (types.WrapperInfo, []error) {
+	var wrappers types.WrapperInfo
+	warnings := detectMCDRWrapper(dir, &wrappers)
+	return wrappers, warnings
 }
 
-// detectMcdrEnvironment detects an MCDR managed directory and returns the
-// MCDR version-detection warnings. The marker is the config.yml file. It
-// records the wrapper version. The version comes from the mcdreforged
-// command on PATH. Relative plugin directories resolve against dir.
+// detectMCDRWrapper detects an MCDR managed directory and returns the MCDR
+// version-detection warnings. The marker is the config.yml file. It records
+// the wrapper version. The version comes from the mcdreforged command on
+// PATH. Relative plugin directories resolve against dir.
 //
-// MCDR changes the server root, so later consumers will not depend on pwd.
-// Warnings are diagnostics for CLI presentation; the environment detection
+// MCDR changes the server directory, so later consumers will not depend on
+// pwd. Warnings are diagnostics for CLI presentation; the wrapper detection
 // itself only logs them.
-func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) []error {
+func detectMCDRWrapper(dir string, wrappers *types.WrapperInfo) []error {
 	var warnings []error
 	configPath := filepath.Join(dir, mcdrConfigFileName)
 
@@ -85,14 +85,14 @@ func detectMcdrEnvironment(dir string, env *types.EnvironmentInfo) []error {
 		log.Warn(warnErr)
 		warnings = append(warnings, warnErr)
 	} else if fields := strings.Fields(string(output)); len(fields) > 1 {
-		version = types.BareVersion(fields[1])
+		version = types.Version(fields[1])
 	} else {
 		warnErr := fmt.Errorf("cannot parse mcdr version output")
 		log.Warn(warnErr)
 		warnings = append(warnings, warnErr)
 	}
 
-	env.Mcdr = &types.McdrEnv{
+	wrappers.MCDR = &types.MCDREnv{
 		Version: version,
 		Config:  config,
 	}

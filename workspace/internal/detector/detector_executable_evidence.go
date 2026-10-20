@@ -2,10 +2,10 @@ package detector
 
 import "github.com/mclucy/lucy/types"
 
-// ExecutableEvidence is the detector output consumed by workspace assembly.
+// RuntimeEvidence is the detector output consumed by workspace assembly.
 // PrimaryRuntime identifies the selected bootable artifact. A nil primary does
 // not establish an executable runtime.
-type ExecutableEvidence struct {
+type RuntimeEvidence struct {
 	PrimaryRuntime    *types.VersionedPackageRef
 	PrimaryPath       string
 	RuntimeComponents []types.VersionedPackageRef
@@ -18,27 +18,27 @@ type ExecutableEvidence struct {
 }
 
 // IsVanilla reports evidence claiming a plain Minecraft runtime.
-func (e *ExecutableEvidence) IsVanilla() bool {
+func (e *RuntimeEvidence) IsVanilla() bool {
 	return e != nil && e.PrimaryRuntime != nil &&
-		e.PrimaryRuntime.Eco == types.EcoMinecraft &&
+		e.PrimaryRuntime.Ecosystem == types.EcosystemMinecraft &&
 		e.PrimaryRuntime.Name == "minecraft"
 }
 
-// ExecutableCandidates groups all detector candidates for one executable so the
-// aggregator can resolve ambiguity before building the ServerInstance.
-type ExecutableCandidates struct {
-	Candidates []*ExecutableEvidence
+// RuntimeClaims groups all detector candidates for one executable so the
+// aggregator can resolve ambiguity before building the ServerRuntime.
+type RuntimeClaims struct {
+	Candidates []*RuntimeEvidence
 }
 
-func (c *ExecutableCandidates) IsEmpty() bool {
+func (c *RuntimeClaims) IsEmpty() bool {
 	return c == nil || len(c.Candidates) == 0
 }
 
-func (c *ExecutableCandidates) IsAmbiguous() bool {
+func (c *RuntimeClaims) IsAmbiguous() bool {
 	return c != nil && len(c.disambiguated()) > 1
 }
 
-func (c *ExecutableCandidates) Single() *ExecutableEvidence {
+func (c *RuntimeClaims) Single() *RuntimeEvidence {
 	filtered := c.disambiguated()
 	if len(filtered) != 1 {
 		return nil
@@ -48,7 +48,7 @@ func (c *ExecutableCandidates) Single() *ExecutableEvidence {
 
 // disambiguated drops generic vanilla fallback evidence when a more specific
 // executable detector also matched the same artifact.
-func (c *ExecutableCandidates) disambiguated() []*ExecutableEvidence {
+func (c *RuntimeClaims) disambiguated() []*RuntimeEvidence {
 	if c == nil || len(c.Candidates) <= 1 {
 		if c == nil {
 			return nil
@@ -67,7 +67,7 @@ func (c *ExecutableCandidates) disambiguated() []*ExecutableEvidence {
 		return c.Candidates
 	}
 
-	disambiguated := make([]*ExecutableEvidence, 0, len(c.Candidates))
+	disambiguated := make([]*RuntimeEvidence, 0, len(c.Candidates))
 	for _, cand := range c.Candidates {
 		if !cand.IsVanilla() {
 			disambiguated = append(disambiguated, cand)

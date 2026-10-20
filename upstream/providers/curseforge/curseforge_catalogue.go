@@ -14,11 +14,11 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 	}
 	id, err := strconv.ParseInt(project, 10, 32)
 	if err != nil {
-		mod, e := resolveSlug(types.BarePackageName(project))
+		mod, e := resolveSlug(types.PackageName(project))
 		if e != nil {
 			return nil, e
 		}
-		id = int64(mod.Id)
+		id = int64(mod.ID)
 	}
 	// Pagination is required: exact older files are not necessarily on page one.
 	files := []fileResponse{}
@@ -41,26 +41,41 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 		hashes := map[string]string{}
 		for _, h := range f.Hashes {
 			if h.Algo == 1 {
-				hashes["sha1"] = h.Value
+				hashes["sha1"] = h.Digest
 			}
 		}
-		releaseType := "release"
-		if f.ReleaseType != 1 {
-			releaseType = "beta"
+		c := types.CatalogueCandidate{
+			Artifact: types.Artifact{
+				Provider:  types.ProviderCurseForge,
+				ProjectID: strconv.FormatInt(id, 10),
+				ReleaseID: strconv.Itoa(int(f.ID)),
+				FileID:    strconv.Itoa(int(f.ID)),
+				Version:   types.Version(f.DisplayName),
+				Filename:  f.FileName,
+				URL:       *f.DownloadUrl,
+				Hashes:    hashes,
+			},
+			Channel:      curseForgeChannel(f.ChannelCode),
+			PublishedAt:  parseCurseforgeDate(f.FileDate),
+			PrimaryFile:  true,
+			Dependencies: []types.ProjectDependency{},
 		}
-		c := types.CatalogueCandidate{Provider: "curseforge", ProjectID: strconv.FormatInt(id, 10), ReleaseID: strconv.Itoa(int(f.Id)), FileID: strconv.Itoa(int(f.Id)), Version: f.DisplayName, Filename: f.FileName, URL: *f.DownloadUrl, Hashes: hashes, ReleaseType: releaseType, Published: f.FileDate, Primary: true, Dependencies: []types.ProjectDependency{}}
 		for _, d := range f.Dependencies {
-			kind := ""
+			var kind types.DependencyKind
 			switch d.RelationType {
 			case 3:
-				kind = "required"
+				kind = types.DependencyKindRequired
 			case 2:
-				kind = "optional"
+				kind = types.DependencyKindOptional
 			case 5:
-				kind = "incompatible"
+				kind = types.DependencyKindIncompatible
 			}
-			if kind != "" {
-				c.Dependencies = append(c.Dependencies, types.ProjectDependency{Provider: "curseforge", ProjectID: strconv.Itoa(int(d.ModId)), Kind: kind})
+			if kind != types.DependencyKindUnknown {
+				c.Dependencies = append(c.Dependencies, types.ProjectDependency{
+					Provider:  types.ProviderCurseForge,
+					ProjectID: strconv.Itoa(int(d.ModId)),
+					Kind:      kind,
+				})
 			}
 		}
 		out = append(out, c)

@@ -11,7 +11,6 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 )
 
 const hangarAPIBaseURL = "https://hangar.papermc.io/api/v1"
@@ -23,14 +22,14 @@ var (
 	ErrNoDownload         = errors.New("hangar: download not found")
 )
 
-func getProject(name types.BarePackageName) (*hangarProject, error) {
+func getProject(name types.PackageName) (*hangarProject, error) {
 	if project, err := getProjectByPath(string(name)); err == nil {
 		if project.ProjectRef().CanonicalName() == name {
 			return project, nil
 		}
 	}
 
-	search, err := searchProjects(string(name), upstream.SearchOptions{})
+	search, err := searchProjects(string(name), types.EcosystemUnspecified)
 	if err != nil {
 		return nil, err
 	}
@@ -61,14 +60,14 @@ func getProjectByPath(path string) (*hangarProject, error) {
 
 func searchProjects(
 	query string,
-	options upstream.SearchOptions,
+	ecosystem types.Ecosystem,
 ) (*projectSearchResponse, error) {
 	params := url.Values{}
 	if query != "" {
 		params.Set("query", query)
 	}
 	params.Set("limit", "25")
-	if eco := searchEcosystem(options.FilterEcosystem); eco != "" {
+	if eco := searchEcosystem(ecosystem); eco != "" {
 		params.Set("platform", eco)
 	}
 
@@ -97,7 +96,7 @@ func getVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 	return version, nil
 }
 
-func listVersions(name types.BarePackageName) ([]hangarVersion, error) {
+func listVersions(name types.PackageName) ([]hangarVersion, error) {
 	project, err := getProject(name)
 	if err != nil {
 		return nil, err
@@ -167,9 +166,9 @@ func withQuery(base string, params url.Values) string {
 
 func searchEcosystem(ecosystem types.Ecosystem) string {
 	switch ecosystem {
-	case types.EcoBukkit:
+	case types.EcosystemBukkit, types.EcosystemPaper:
 		return hangarPreferredPlatform
-	case types.EcoUnspecified:
+	case types.EcosystemUnspecified:
 		return hangarPreferredPlatform
 	default:
 		return ""

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 )
 
 func TestSearchResponseToSearchResults(t *testing.T) {
@@ -16,25 +15,25 @@ func TestSearchResponseToSearchResults(t *testing.T) {
 		},
 	}
 
-	results := resp.ToSearchResults(types.SourceCurseForge)
+	results := resp.ToSearchResults(types.ProviderCurseForge)
 
-	if results.Source != types.SourceCurseForge {
-		t.Errorf("expected source CurseForge, got %v", results.Source)
+	if results.Provider != types.ProviderCurseForge {
+		t.Errorf("expected source CurseForge, got %v", results.Provider)
 	}
 	if len(results.Items) != 3 {
 		t.Fatalf("expected 3 projects, got %d", len(results.Items))
 	}
-	if results.Items[0].RemoteName != "jei" {
-		t.Errorf("expected 'jei', got '%s'", results.Items[0].RemoteName)
+	if results.Items[0].ProjectName != "jei" {
+		t.Errorf("expected 'jei', got '%s'", results.Items[0].ProjectName)
 	}
-	if results.Items[1].RemoteName != "just-enough-items" {
+	if results.Items[1].ProjectName != "just-enough-items" {
 		t.Errorf(
 			"expected 'just-enough-items', got '%s'",
-			results.Items[1].RemoteName,
+			results.Items[1].ProjectName,
 		)
 	}
-	if results.Items[2].RemoteName != "rei" {
-		t.Errorf("expected 'rei', got '%s'", results.Items[2].RemoteName)
+	if results.Items[2].ProjectName != "rei" {
+		t.Errorf("expected 'rei', got '%s'", results.Items[2].ProjectName)
 	}
 }
 
@@ -43,10 +42,10 @@ func TestSearchResponseToSearchResults_Empty(t *testing.T) {
 		Data: []modResponse{},
 	}
 
-	results := resp.ToSearchResults(types.SourceCurseForge)
+	results := resp.ToSearchResults(types.ProviderCurseForge)
 
-	if results.Source != types.SourceCurseForge {
-		t.Errorf("expected source CurseForge, got %v", results.Source)
+	if results.Provider != types.ProviderCurseForge {
+		t.Errorf("expected source CurseForge, got %v", results.Provider)
 	}
 	if len(results.Items) != 0 {
 		t.Errorf("expected 0 projects, got %d", len(results.Items))
@@ -64,7 +63,7 @@ func TestModResponseToProjectInformation(t *testing.T) {
 			SourceUrl:  "https://github.com/jei",
 		},
 		Authors: []modAuthor{
-			{Name: "mezz", Url: "https://curseforge.com/members/mezz"},
+			{Name: "mezz", URL: "https://curseforge.com/members/mezz"},
 		},
 	}
 
@@ -82,8 +81,8 @@ func TestModResponseToProjectInformation(t *testing.T) {
 	if info.DescriptionIsMarkdown {
 		t.Error("expected empty description not to be markdown")
 	}
-	if len(info.Urls) != 4 {
-		t.Errorf("expected 4 URLs, got %d", len(info.Urls))
+	if len(info.URLs) != 4 {
+		t.Errorf("expected 4 URLs, got %d", len(info.URLs))
 	}
 	if len(info.Authors) != 1 {
 		t.Errorf("expected 1 author, got %d", len(info.Authors))
@@ -103,8 +102,8 @@ func TestModResponseToProjectInformation_EmptyLinks(t *testing.T) {
 
 	info := mod.ToProjectInformation()
 
-	if len(info.Urls) != 0 {
-		t.Errorf("expected 0 URLs for empty links, got %d", len(info.Urls))
+	if len(info.URLs) != 0 {
+		t.Errorf("expected 0 URLs for empty links, got %d", len(info.URLs))
 	}
 	if len(info.Authors) != 0 {
 		t.Errorf("expected 0 authors, got %d", len(info.Authors))
@@ -123,11 +122,11 @@ func TestModResponseToProjectInformation_PartialLinks(t *testing.T) {
 
 	info := mod.ToProjectInformation()
 
-	if len(info.Urls) != 1 {
-		t.Errorf("expected 1 URL, got %d", len(info.Urls))
+	if len(info.URLs) != 1 {
+		t.Errorf("expected 1 URL, got %d", len(info.URLs))
 	}
-	if info.Urls[0].Type != types.UrlHome {
-		t.Errorf("expected UrlHome, got %v", info.Urls[0].Type)
+	if info.URLs[0].Type != types.URLHome {
+		t.Errorf("expected UrlHome, got %v", info.URLs[0].Type)
 	}
 }
 
@@ -159,18 +158,18 @@ func TestFileResponseToPackageRemote_PrefersSha1(t *testing.T) {
 		FileName:    "modfile.jar",
 		DownloadUrl: &downloadUrl,
 		Hashes: []fileHash{
-			{Value: "abc123md5", Algo: 2},
-			{Value: "def456sha1", Algo: 1},
+			{Digest: "abc123md5", Algo: 2},
+			{Digest: "def456sha1", Algo: 1},
 		},
 	}
 
 	remote := f.ToPackageRemote()
 
-	if remote.Id.Source != types.SourceCurseForge {
-		t.Errorf("expected source CurseForge, got %v", remote.Id.Source)
+	if remote.ID.Provider != types.ProviderCurseForge {
+		t.Errorf("expected source CurseForge, got %v", remote.ID.Provider)
 	}
-	if remote.FileUrl != downloadUrl {
-		t.Errorf("expected URL '%s', got '%s'", downloadUrl, remote.FileUrl)
+	if remote.FileURL != downloadUrl {
+		t.Errorf("expected URL '%s', got '%s'", downloadUrl, remote.FileURL)
 	}
 	if remote.Filename != "modfile.jar" {
 		t.Errorf("expected filename 'modfile.jar', got '%s'", remote.Filename)
@@ -188,16 +187,16 @@ func TestFileResponseToPackageRemote_NilDownloadUrl(t *testing.T) {
 		FileName:    "blocked-mod.jar",
 		DownloadUrl: nil,
 		Hashes: []fileHash{
-			{Value: "abc123sha1", Algo: 1},
+			{Digest: "abc123sha1", Algo: 1},
 		},
 	}
 
 	remote := f.ToPackageRemote()
 
-	if remote.FileUrl != "" {
+	if remote.FileURL != "" {
 		t.Errorf(
-			"expected empty FileUrl for nil downloadUrl, got '%s'",
-			remote.FileUrl,
+			"expected empty FileURL for nil downloadUrl, got '%s'",
+			remote.FileURL,
 		)
 	}
 	if remote.Hash != "abc123sha1" {
@@ -210,7 +209,7 @@ func TestFileResponseToPackageRemote_Md5Only(t *testing.T) {
 		FileName:    "mod.jar",
 		DownloadUrl: new("https://edge.forgecdn.net/files/12345/mod.jar"),
 		Hashes: []fileHash{
-			{Value: "md5hash", Algo: 2},
+			{Digest: "md5hash", Algo: 2},
 		},
 	}
 
@@ -249,11 +248,11 @@ func TestModLoaderType(t *testing.T) {
 		platform types.Ecosystem
 		expected int
 	}{
-		{types.EcoForge, 1},
-		{types.EcoFabric, 4},
-		{types.EcoNeoforge, 6},
-		{types.EcoUnspecified, 0},
-		{types.EcoMcdr, 0},
+		{types.EcosystemForge, 1},
+		{types.EcosystemFabric, 4},
+		{types.EcosystemNeoForge, 6},
+		{types.EcosystemUnspecified, 0},
+		{types.EcosystemMCDR, 0},
 	}
 
 	for _, tt := range tests {
@@ -268,11 +267,7 @@ func TestModLoaderType(t *testing.T) {
 }
 
 func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
-	options := upstream.SearchOptions{
-		FilterEcosystem: types.EcoFabric,
-	}
-
-	u := searchUrl("fabric-api", options)
+	u := searchUrl("fabric-api", types.EcosystemFabric)
 
 	mustContain := []string{
 		"gameId=432",
@@ -290,16 +285,12 @@ func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
 	}
 }
 
-func TestSearchUrl_NoLoaderForPlatformAny(t *testing.T) {
-	options := upstream.SearchOptions{
-		FilterEcosystem: types.EcoUnspecified,
-	}
-
-	u := searchUrl("test", options)
+func TestSearchURLNoLoaderForUnspecifiedEcosystem(t *testing.T) {
+	u := searchUrl("test", types.EcosystemUnspecified)
 
 	if containsSubstring(u, "modLoaderType") {
 		t.Errorf(
-			"searchUrl should not include modLoaderType for PlatformAny: %s",
+			"searchUrl should not include modLoaderType for unspecified ecosystem: %s",
 			u,
 		)
 	}

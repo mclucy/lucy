@@ -89,7 +89,7 @@ func getMeta(id string) (*pluginMeta, error) {
 	return &meta, nil
 }
 
-func getRelease(id string, version types.BareVersion) (*release, error) {
+func getRelease(id string, version types.Version) (*release, error) {
 	history, err := getReleaseHistory(id)
 	if err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func getLatestRelease(id string) (*release, error) {
 
 func getLatestCompatibleRelease(
 	id string,
-	localMcdrVersion types.BareVersion,
+	localMcdrVersion types.Version,
 ) (*release, error) {
 	history, err := getReleaseHistory(id)
 	if err != nil {

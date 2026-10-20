@@ -19,7 +19,7 @@ func newMcdrReader() Reader {
 func (r *mcdrReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "mcdreforged.plugin.json" {
 			continue
@@ -45,26 +45,25 @@ func (r *mcdrReader) Read(
 			authors[i] = types.Person{Name: author}
 		}
 
-		urls := make([]types.Url, 0, 1)
+		urls := make([]types.URL, 0, 1)
 		if pluginInfo.Link != "" {
 			urls = append(
-				urls, types.Url{
+				urls, types.URL{
 					Name: "Link",
-					Type: types.UrlSource,
-					Url:  pluginInfo.Link,
+					Type: types.URLSource,
+					URL:  pluginInfo.Link,
 				},
 			)
 		}
 
-		info := Info{
-			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(pluginInfo.Id), Source: types.SourceUnknown}, Eco: types.EcoMcdr},
-			Version:  types.BareVersion(pluginInfo.Version),
+		info := PackageInfo{
+			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(pluginInfo.ID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemMCDR, Version: types.Version(pluginInfo.Version)},
 			FilePath: filePath,
 			Metadata: types.Metadata{
 				Title:       pluginInfo.Name,
 				Description: pluginInfo.Description.EnUs,
 				Authors:     authors,
-				Urls:        urls,
+				URLs:        urls,
 			},
 		}
 
@@ -73,11 +72,11 @@ func (r *mcdrReader) Read(
 			for key, value := range pluginInfo.Dependencies {
 				deps = append(
 					deps, Dependency{
-						Ref: types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(key), Source: types.SourceUnknown}, Eco: types.EcoMcdr},
+						Ref: types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(key), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemMCDR},
 						Constraint: version.ParseRange(
 							value,
-							version.InferRangeDialect(types.EcoMcdr),
-							types.Semver,
+							version.InferRangeDialect(types.EcosystemMCDR),
+							types.VersionSchemeSemver,
 						),
 						Mandatory: true,
 					},
@@ -86,7 +85,7 @@ func (r *mcdrReader) Read(
 			info.Dependencies = deps
 		}
 
-		return []Info{info}, nil
+		return []PackageInfo{info}, nil
 	}
 
 	return nil, nil

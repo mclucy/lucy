@@ -12,7 +12,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	versions, err := listVersions(types.BarePackageName(project))
+	versions, err := listVersions(types.PackageName(project))
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 		// flag, so a version without a marked primary still must produce a
 		// primary candidate instead of losing every candidate to the check
 		// in resolve.
-		unmarked := !slices.ContainsFunc(v.Files, func(f fileResponse) bool { return f.Primary })
+		unmarked := !slices.ContainsFunc(v.Files, func(f fileResponse) bool { return f.IsPrimary })
 		for i, f := range v.Files {
 			if f.FileType != "" {
 				continue
@@ -38,17 +38,19 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 				hashes["sha1"] = f.Hashes.Sha1
 			}
 			c := types.CatalogueCandidate{
-				Provider:     "modrinth",
-				ProjectID:    v.ProjectId,
-				ReleaseID:    v.Id,
-				FileID:       f.ID,
-				Version:      v.VersionNumber,
-				Filename:     f.Filename,
-				URL:          f.Url,
-				Hashes:       hashes,
-				ReleaseType:  v.VersionType,
-				Published:    v.DatePublished.Format("2006-01-02T15:04:05Z07:00"),
-				Primary:      f.Primary || (unmarked && i == 0),
+				Artifact: types.Artifact{
+					Provider:  types.ProviderModrinth,
+					ProjectID: v.ProjectId,
+					ReleaseID: v.ID,
+					FileID:    f.ID,
+					Version:   types.Version(v.VersionNumber),
+					Filename:  f.Filename,
+					URL:       f.URL,
+					Hashes:    hashes,
+				},
+				Channel:      types.ParseReleaseChannel(v.VersionType),
+				PublishedAt:  v.DatePublished,
+				PrimaryFile:  f.IsPrimary || (unmarked && i == 0),
 				Dependencies: []types.ProjectDependency{},
 			}
 			for _, d := range v.Dependencies {
@@ -61,7 +63,12 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 					projectID = pinned.ProjectId
 				}
 				if projectID != "" {
-					c.Dependencies = append(c.Dependencies, types.ProjectDependency{Provider: "modrinth", ProjectID: projectID, ReleaseID: d.VersionId, Kind: string(d.DependencyType)})
+					c.Dependencies = append(c.Dependencies, types.ProjectDependency{
+						Provider:  types.ProviderModrinth,
+						ProjectID: projectID,
+						ReleaseID: d.VersionId,
+						Kind:      types.ParseDependencyKind(string(d.DependencyType)),
+					})
 				}
 			}
 			out = append(out, c)

@@ -9,12 +9,12 @@ import (
 func componentRef(
 	eco types.Ecosystem,
 	name string,
-	version types.BareVersion,
+	version types.Version,
 ) types.VersionedPackageRef {
 	return types.VersionedPackageRef{
-		Eco:     eco,
-		Name:    types.BarePackageName(name),
-		Version: version,
+		Ecosystem: eco,
+		Name:      types.PackageName(name),
+		Version:   version,
 	}
 }
 
@@ -27,45 +27,45 @@ func TestNormalizeRuntimeComponents(t *testing.T) {
 		{
 			name: "unknown version loader survives",
 			input: []types.VersionedPackageRef{
-				componentRef(types.EcoForge, "forge", types.VersionUnknown),
+				componentRef(types.EcosystemForge, "forge", types.VersionUnknown),
 			},
 			want: []types.VersionedPackageRef{
-				componentRef(types.EcoForge, "forge", types.VersionUnknown),
+				componentRef(types.EcosystemForge, "forge", types.VersionUnknown),
 			},
 		},
 		{
 			name: "concrete version wins over unknown duplicate",
 			input: []types.VersionedPackageRef{
-				componentRef(types.EcoForge, "forge", types.VersionUnknown),
-				componentRef(types.EcoForge, "forge", "47.2.0"),
+				componentRef(types.EcosystemForge, "forge", types.VersionUnknown),
+				componentRef(types.EcosystemForge, "forge", "47.2.0"),
 			},
 			want: []types.VersionedPackageRef{
-				componentRef(types.EcoForge, "forge", "47.2.0"),
+				componentRef(types.EcosystemForge, "forge", "47.2.0"),
 			},
 		},
 		{
 			name: "unknown duplicate does not disturb concrete",
 			input: []types.VersionedPackageRef{
-				componentRef(types.EcoForge, "forge", "47.2.0"),
-				componentRef(types.EcoForge, "forge", types.VersionUnknown),
+				componentRef(types.EcosystemForge, "forge", "47.2.0"),
+				componentRef(types.EcosystemForge, "forge", types.VersionUnknown),
 			},
 			want: []types.VersionedPackageRef{
-				componentRef(types.EcoForge, "forge", "47.2.0"),
+				componentRef(types.EcosystemForge, "forge", "47.2.0"),
 			},
 		},
 		{
 			name: "conflicting concrete versions are dropped",
 			input: []types.VersionedPackageRef{
-				componentRef(types.EcoForge, "forge", "47.2.0"),
-				componentRef(types.EcoForge, "forge", "48.0.1"),
+				componentRef(types.EcosystemForge, "forge", "47.2.0"),
+				componentRef(types.EcosystemForge, "forge", "48.0.1"),
 			},
 			want: []types.VersionedPackageRef{},
 		},
 		{
 			name: "inferable versions are rejected",
 			input: []types.VersionedPackageRef{
-				componentRef(types.EcoForge, "forge", types.VersionAny),
-				componentRef(types.EcoMinecraft, "minecraft", ""),
+				componentRef(types.EcosystemForge, "forge", types.VersionAny),
+				componentRef(types.EcosystemMinecraft, "minecraft", ""),
 			},
 			want: []types.VersionedPackageRef{},
 		},

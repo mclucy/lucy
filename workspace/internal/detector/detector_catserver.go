@@ -19,7 +19,7 @@ func (d *catServerDetector) Name() string {
 	return "catserver executable"
 }
 
-func (d *catServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *catServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -40,15 +40,15 @@ func (d *catServerDetector) Detect(context DetectionContext, primaryFile *Detect
 		return nil, nil
 	}
 
-	return &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		Eco:     types.EcoUnspecified,
-		Name:    input.ToProjectName("catserver"),
-		Version: signals.version,
+	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+		Ecosystem: types.EcosystemUnspecified,
+		Name:      input.ToProjectName("catserver"),
+		Version:   signals.version,
 	}, RuntimeComponents: []types.VersionedPackageRef{
 		{
-			Eco:     types.EcoMinecraft,
-			Name:    input.ToProjectName("minecraft"),
-			Version: signals.gameVersion,
+			Ecosystem: types.EcosystemMinecraft,
+			Name:      input.ToProjectName("minecraft"),
+			Version:   signals.gameVersion,
 		},
 	}}, nil
 }
@@ -56,8 +56,8 @@ func (d *catServerDetector) Detect(context DetectionContext, primaryFile *Detect
 type catServerManifestSignals struct {
 	mainClass   string
 	title       string
-	version     types.BareVersion
-	gameVersion types.BareVersion
+	version     types.Version
+	gameVersion types.Version
 }
 
 func (s catServerManifestSignals) valid() bool {
@@ -84,19 +84,19 @@ func parseCatServerManifest(data []byte) catServerManifestSignals {
 			version := strings.TrimSpace(
 				strings.TrimPrefix(line, "Implementation-Version: "),
 			)
-			signals.version = types.BareVersion(version)
+			signals.version = types.Version(version)
 			signals.gameVersion = parseCatServerGameVersion(version)
 		}
 	}
 	return signals
 }
 
-func parseCatServerGameVersion(version string) types.BareVersion {
+func parseCatServerGameVersion(version string) types.Version {
 	match := catServerVersionPattern.FindStringSubmatch(version)
 	if match == nil {
 		return types.VersionUnknown
 	}
-	return types.BareVersion(match[1])
+	return types.Version(match[1])
 }
 
 func init() {

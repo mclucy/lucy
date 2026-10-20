@@ -12,20 +12,20 @@ type hangarDependencies struct {
 	platform types.Ecosystem
 }
 
-func (h *hangarDependencies) ToPackageDependencies() types.PackageDependencies {
-	result := types.PackageDependencies{Authentic: true}
+func (h *hangarDependencies) ToDependencySet() types.DependencySet {
+	result := types.DependencySet{FromArtifact: true}
 	for _, dep := range h.version.DependenciesForPlatform(h.platform) {
 		if dep.Name == "" || dep.ExternalURL != nil {
 			continue
 		}
-		result.Value = append(
-			result.Value, types.Dependency{
-				Id: types.VersionedPackageRef{
+		result.Dependencies = append(
+			result.Dependencies, types.Dependency{
+				ID: types.VersionedPackageRef{
 					PackageRef: types.PackageRef{
-						Name:   input.ToProjectName(dep.Name),
-						Source: types.SourceAuto,
+						Name:     input.ToProjectName(dep.Name),
+						Provider: types.ProviderUnspecified,
 					},
-					Eco: types.EcoUnspecified,
+					Ecosystem: types.EcosystemUnspecified,
 				},
 				Mandatory: dep.Required,
 			},
@@ -42,9 +42,9 @@ func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 
 	switch id.Version {
 	case types.VersionAny, types.VersionBeta:
-		return selectLatestVersion(versions, id.Eco)
+		return selectLatestVersion(versions, id.Ecosystem, id.Version)
 	case types.VersionStable:
-		return selectLatestCompatibleVersion(versions, id.Eco)
+		return selectLatestCompatibleVersion(versions, id.Ecosystem)
 	default:
 		for i := range versions {
 			if versions[i].Name == id.Version.String() {
@@ -55,27 +55,45 @@ func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 	}
 }
 
+// selectLatestVersion selects the newest version for the any/beta selectors.
+// any prefers a release channel and falls back to any channel; beta accepts
+// any channel. Platform-specific candidates are preferred over versions that
+// declare no platform dependency.
 func selectLatestVersion(
 	versions []hangarVersion,
 	platform types.Ecosystem,
+	selector types.Version,
 ) (*hangarVersion, error) {
-	if version := firstVersionMatching(
-		versions,
-		platform,
-		false,
-	); version != nil {
-		return version, nil
+	platforms := []types.Ecosystem{platform}
+	if platform != types.EcosystemUnspecified {
+		platforms = append(platforms, types.EcosystemUnspecified)
 	}
-	if version := firstVersionMatching(
-		versions,
-		types.EcoUnspecified,
-		false,
-	); version != nil {
-		return version, nil
+	for _, candidatePlatform := range platforms {
+		if selector == types.VersionAny {
+			if version := firstVersionMatching(
+				versions,
+				candidatePlatform,
+				false,
+				true,
+			); version != nil {
+				return version, nil
+			}
+		}
+		if version := firstVersionMatching(
+			versions,
+			candidatePlatform,
+			false,
+			false,
+		); version != nil {
+			return version, nil
+		}
 	}
 	return nil, ErrNoVersion
 }
 
+// selectLatestCompatibleVersion selects the newest release-channel version
+// that declares compatibility with the platform. stable never falls back to
+// a prerelease channel.
 func selectLatestCompatibleVersion(
 	versions []hangarVersion,
 	platform types.Ecosystem,
@@ -83,6 +101,7 @@ func selectLatestCompatibleVersion(
 	if version := firstVersionMatching(
 		versions,
 		platform,
+		true,
 		true,
 	); version != nil {
 		return version, nil
@@ -94,6 +113,7 @@ func firstVersionMatching(
 	versions []hangarVersion,
 	platform types.Ecosystem,
 	requireCompatibility bool,
+	requireRelease bool,
 ) *hangarVersion {
 	for i := range versions {
 		version := &versions[i]
@@ -103,13 +123,16 @@ func firstVersionMatching(
 		if requireCompatibility && !version.SupportsPlatform(platform) {
 			continue
 		}
+		if requireRelease && !version.IsReleaseChannel() {
+			continue
+		}
 		return version
 	}
 	return nil
 }
 
 func preferredDownloadPlatform(platform types.Ecosystem) types.Ecosystem {
-	if platform == types.EcoUnspecified {
+	if platform == types.EcosystemUnspecified {
 		return "paper"
 	}
 	return "paper"

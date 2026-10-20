@@ -14,8 +14,8 @@ import (
 // analyzeForgeArgFile extracts the Forge and Minecraft versions from a
 // Forge argument file.
 func analyzeForgeArgFile(file *os.File) (
-	forgeVersion types.BareVersion,
-	mcVersion types.BareVersion,
+	forgeVersion types.Version,
+	mcVersion types.Version,
 ) {
 	data, _ := fsutil.CopyBytes(file, fsutil.MaxZipEntryBytes)
 	s := string(data)
@@ -24,7 +24,7 @@ func analyzeForgeArgFile(file *os.File) (
 		if strings.HasPrefix(line, "--fml.forgeVersion") {
 			split := strings.Split(line, " ")
 			if len(split) == 2 {
-				forgeVersion = types.BareVersion(split[1])
+				forgeVersion = types.Version(split[1])
 				continue
 			}
 			forgeVersion = types.VersionUnknown
@@ -32,7 +32,7 @@ func analyzeForgeArgFile(file *os.File) (
 		if strings.HasPrefix(line, "--fml.mcVersion") {
 			split := strings.Split(line, " ")
 			if len(split) == 2 {
-				mcVersion = types.BareVersion(split[1])
+				mcVersion = types.Version(split[1])
 				continue
 			}
 			mcVersion = types.VersionUnknown
@@ -50,7 +50,7 @@ const mojangVersionJSONEntry = "version.json"
 // version.json but with _comment and/or mainClass control fields a real spec
 // never has. encoding/json ignores unknown fields, so the guard fields must
 // be checked explicitly.
-func mojangVersionFromJSON(data []byte) (types.BareVersion, bool, error) {
+func mojangVersionFromJSON(data []byte) (types.Version, bool, error) {
 	guard := &struct {
 		Comment   []string `json:"_comment"`
 		MainClass string   `json:"mainClass"`
@@ -64,7 +64,7 @@ func mojangVersionFromJSON(data []byte) (types.BareVersion, bool, error) {
 	if err := json.Unmarshal(data, &spec); err != nil {
 		return types.VersionUnknown, false, err
 	}
-	return types.BareVersion(spec.Id), false, nil
+	return types.Version(spec.ID), false, nil
 }
 
 func readArchiveEntry(zipReader *zip.Reader, name string) ([]byte, bool, error) {

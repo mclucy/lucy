@@ -10,17 +10,17 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-// ModPath lists the directories that hold content packages for this
+// PackageDirs lists the directories that hold content packages for this
 // observation. Loader runtimes use mods/. Bukkit family servers use
 // plugins/. The list is empty when no runtime was identified.
-func (ws Workspace) ModPath() []string {
-	return packageSearchPaths(ws.Server(), ws.Root)
+func (ws Workspace) PackageDirs() []string {
+	return packageSearchPaths(ws.Runtime(), ws.ServerDir)
 }
 
 // packageSearchPaths maps full-support ecosystem offers onto conventional
 // directory names. Duplicate names appear once, in offer order.
 func packageSearchPaths(
-	server *ServerInstance,
+	server *ServerRuntime,
 	root string,
 ) []string {
 	if server == nil || !server.IsValid() {
@@ -28,16 +28,16 @@ func packageSearchPaths(
 	}
 
 	var paths []string
-	for _, offer := range server.effectiveEcosystems() {
+	for _, offer := range server.servedEcosystems() {
 		if offer.Compatibility != types.CompatFull {
 			continue
 		}
 
 		var path string
 		switch offer.Ecosystem {
-		case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
+		case types.EcosystemFabric, types.EcosystemForge, types.EcosystemNeoForge:
 			path = filepath.Join(root, "mods")
-		case types.EcoBukkit, types.EcoPaper:
+		case types.EcosystemBukkit, types.EcosystemPaper:
 			path = filepath.Join(root, "plugins")
 		default:
 			continue
@@ -52,21 +52,21 @@ func packageSearchPaths(
 }
 
 // SaveDir returns the world save directory from server.properties. The path
-// is Root joined with the level-name property. SaveDir returns an empty
+// is ServerDir joined with the level-name property. SaveDir returns an empty
 // string when no usable properties file exists. A missing level-name
-// degrades to Root. This matches the runtime default of storing the world
-// beside the server.
+// degrades to ServerDir. This matches the runtime default of storing the
+// world beside the server.
 func (ws Workspace) SaveDir() string {
-	properties := parseServerProperties(ws.Root)
+	properties := parseServerProperties(ws.ServerDir)
 	if properties == nil {
 		// Write one note when a known runtime has no properties file. Do not
 		// write notes for empty or ambiguous directories.
-		if ws.Server() != nil {
+		if ws.Runtime() != nil {
 			log.Info("this server is missing a server.properties")
 		}
 		return ""
 	}
-	return filepath.Join(ws.Root, properties["level-name"])
+	return filepath.Join(ws.ServerDir, properties["level-name"])
 }
 
 // parseServerProperties reads root/server.properties into a flat map of key
