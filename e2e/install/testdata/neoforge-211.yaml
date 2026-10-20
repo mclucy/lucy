@@ -3,5 +3,5 @@ server:
   minecraft: "1.21.1"
   directory: server
   core:
-    distribution: neoforge
-    version: "21.1.248"
+    product: neoforge
+    product_version: "21.1.248"

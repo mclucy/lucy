@@ -3,4 +3,4 @@
 # Distributed on Modrinth: https://modrinth.com/mod/sodium
 url: https://github.com/CaffeineMC/sodium.git
 commit: 03198cb36ab831c99694403d18e4cf4a1726df72
-platform: fabric
+ecosystem: fabric

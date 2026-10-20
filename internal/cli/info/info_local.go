@@ -33,7 +33,7 @@ func isArtifactPath(path string) (bool, error) {
 }
 
 func actionArtifactInfo(cmd *cobra.Command, filePath string) error {
-	infos, err := artifact.Analyze(filePath)
+	infos, err := artifact.ReadInfo(filePath)
 	if err != nil {
 		return fmt.Errorf("analyze artifact %q: %w", filePath, err)
 	}
@@ -88,7 +88,7 @@ func lookupArtifactUpstream(filePath string) artifactLookup {
 	for _, providerErr := range lookup.Errors {
 		result.Warnings = append(result.Warnings,
 			fmt.Sprintf("could not look up this artifact on %s: %v",
-				providerErr.Source.Title(), providerErr.Err))
+				providerErr.Provider.Title(), providerErr.Err))
 	}
 	if !lookup.Matched() {
 		if lookup.Complete() {
@@ -103,25 +103,25 @@ func lookupArtifactUpstream(filePath string) artifactLookup {
 	ref := lookup.Ref
 	result.Ref = &ref
 
-	providers, err := routing.ResolveInfoProviders(ref.Eco, ref.Source)
+	providers, err := routing.ResolveInfoProviders(ref.Ecosystem, ref.Provider)
 	if err != nil {
 		result.Warnings = append(result.Warnings,
 			fmt.Sprintf("cannot retrieve upstream metadata for %s: %v",
-				ref.StringFull(), err))
+				ref.StringBase(), err))
 		return result
 	}
 
-	info, infoErrors, err := routing.GetInfoHedged(providers, ref.PackageRef)
+	info, infoErrors, err := routing.GetInfoFirstSuccess(providers, ref.PackageRef)
 	for _, providerErr := range infoErrors {
 		result.Warnings = append(result.Warnings,
 			fmt.Sprintf("could not retrieve metadata from %s: %v",
-				providerErr.Source.Title(), providerErr.Err))
+				providerErr.Provider.Title(), providerErr.Err))
 	}
 	if err != nil {
 		if len(infoErrors) == 0 {
 			result.Warnings = append(result.Warnings,
 				fmt.Sprintf("cannot retrieve upstream metadata for %s: %v",
-					ref.StringFull(), err))
+					ref.StringBase(), err))
 		}
 		return result
 	}
@@ -132,11 +132,11 @@ func lookupArtifactUpstream(filePath string) artifactLookup {
 // matchedUpstream returns the upstream Info for info when the hash match
 // belongs to it. An archive with several descriptors matches only the
 // descriptor with the same name and ecosystem.
-func matchedUpstream(info artifact.Info, lookup artifactLookup) *upstream.Info {
+func matchedUpstream(info artifact.PackageInfo, lookup artifactLookup) *upstream.Info {
 	if lookup.Info == nil || lookup.Ref == nil {
 		return nil
 	}
-	if info.Ref.Name != lookup.Ref.Name || info.Ref.Eco != lookup.Ref.Eco {
+	if info.Ref.Name != lookup.Ref.Name || info.Ref.Provider != lookup.Ref.Provider {
 		return nil
 	}
 	return lookup.Info
@@ -144,7 +144,7 @@ func matchedUpstream(info artifact.Info, lookup artifactLookup) *upstream.Info {
 
 // displayMetadata merges archive and upstream metadata; upstream values win,
 // archive values fill the gaps.
-func displayMetadata(info artifact.Info, match *upstream.Info) types.Metadata {
+func displayMetadata(info artifact.PackageInfo, match *upstream.Info) types.Metadata {
 	local := info.Metadata
 	if local.Title == "" {
 		local.Title = info.Ref.Name.Title()
@@ -159,17 +159,17 @@ func displayMetadata(info artifact.Info, match *upstream.Info) types.Metadata {
 		Brief:   firstNonEmpty(remote.Brief, local.Brief),
 		License: firstNonEmpty(remote.License, local.License),
 		Authors: firstNonEmptySlice(remote.Authors, local.Authors),
-		Urls:    firstNonEmptySlice(remote.Urls, local.Urls),
+		URLs:    firstNonEmptySlice(remote.URLs, local.URLs),
 	}
 	// The description fields are one unit. Do not mix upstream text with
 	// archive text or a URL of another document.
-	if remote.Description != "" || remote.DescriptionUrl != "" {
+	if remote.Description != "" || remote.DescriptionURL != "" {
 		merged.Description = remote.Description
-		merged.DescriptionUrl = remote.DescriptionUrl
+		merged.DescriptionURL = remote.DescriptionURL
 		merged.DescriptionIsMarkdown = remote.DescriptionIsMarkdown
 	} else {
 		merged.Description = local.Description
-		merged.DescriptionUrl = local.DescriptionUrl
+		merged.DescriptionURL = local.DescriptionURL
 		merged.DescriptionIsMarkdown = local.DescriptionIsMarkdown
 	}
 	return merged
@@ -198,7 +198,7 @@ func firstNonEmptySlice[T comparable](slices ...[]T) []T {
 type artifactInfoView struct {
 	File         string                   `json:"file"`
 	Package      string                   `json:"package"`
-	Platform     string                   `json:"platform"`
+	Ecosystem    string                   `json:"ecosystem"`
 	Version      string                   `json:"version,omitempty"`
 	Dependencies []artifactDependencyView `json:"dependencies,omitempty"`
 	Metadata     types.Metadata           `json:"metadata"`
@@ -212,14 +212,14 @@ type upstreamMatchView struct {
 }
 
 type artifactDependencyView struct {
-	Package    string               `json:"package"`
-	Constraint string               `json:"constraint"`
-	Mandatory  bool                 `json:"mandatory"`
-	Type       types.DependencyType `json:"type"`
+	Package    string                 `json:"package"`
+	Constraint string                 `json:"constraint"`
+	Mandatory  bool                   `json:"mandatory"`
+	Origin     types.DependencyOrigin `json:"origin"`
 }
 
 func artifactInfoViewFromInfo(
-	info artifact.Info,
+	info artifact.PackageInfo,
 	lookup artifactLookup,
 ) artifactInfoView {
 	dependencies := make(
@@ -232,22 +232,22 @@ func artifactInfoViewFromInfo(
 			Package:    formatArtifactRef(dependency.Ref),
 			Constraint: formatArtifactConstraint(dependency.Constraint),
 			Mandatory:  dependency.Mandatory,
-			Type:       types.NormalizeDependencyType(dependency.Type),
+			Origin:     types.NormalizeDependencyOrigin(dependency.Origin),
 		})
 	}
 
 	view := artifactInfoView{
 		File:         info.FilePath,
 		Package:      formatArtifactRef(info.Ref),
-		Platform:     info.Ref.Eco.String(),
-		Version:      info.Version.String(),
+		Ecosystem:    info.Ref.Ecosystem.String(),
+		Version:      info.Ref.Version.String(),
 		Dependencies: dependencies,
 		Metadata:     info.Metadata,
 		Warnings:     lookup.Warnings,
 	}
 	if lookup.Ref != nil {
 		matchView := &upstreamMatchView{
-			Ref: lookup.Ref.StringFull(),
+			Ref: lookup.Ref.StringBase(),
 		}
 		if match := matchedUpstream(info, lookup); match != nil {
 			matchView.Metadata = &match.Metadata
@@ -258,7 +258,7 @@ func artifactInfoViewFromInfo(
 }
 
 func renderArtifactInfo(
-	info artifact.Info,
+	info artifact.PackageInfo,
 	lookup artifactLookup,
 	longOutput bool,
 ) string {
@@ -266,7 +266,7 @@ func renderArtifactInfo(
 	metadata := displayMetadata(info, match)
 	installID := "local:" + info.FilePath
 	if match != nil {
-		installID = match.Ref.StringFull()
+		installID = match.Ref.StringBase()
 	}
 
 	var out strings.Builder
@@ -286,19 +286,19 @@ func renderArtifactInfo(
 }
 
 func renderArtifactDetails(
-	info artifact.Info,
+	info artifact.PackageInfo,
 	lookup artifactLookup,
 ) string {
 	rows := [][]string{
 		{"File", info.FilePath},
 		{"Package", formatArtifactRef(info.Ref)},
-		{"Platform", info.Ref.Eco.Title()},
-		{"Version", info.Version.String()},
+		{"Ecosystem", info.Ref.Ecosystem.Title()},
+		{"Version", info.Ref.Version.String()},
 	}
 	if lookup.Ref != nil {
 		rows = append(
 			rows,
-			[]string{"File upstream", lookup.Ref.StringFull()},
+			[]string{"File upstream", lookup.Ref.StringBase()},
 		)
 	}
 	if info.Compatibility.FoliaSupported {
@@ -333,7 +333,7 @@ func renderArtifactDependencies(dependencies []artifact.Dependency) string {
 			formatArtifactRef(dependency.Ref),
 			strings.Join([]string{
 				role,
-				string(types.NormalizeDependencyType(dependency.Type)),
+				string(types.NormalizeDependencyOrigin(dependency.Origin)),
 				formatArtifactConstraint(dependency.Constraint),
 			}, " · "),
 		})
@@ -358,10 +358,10 @@ func renderArtifactTable(title string, rows [][]string) string {
 }
 
 func formatArtifactRef(ref types.VersionedPackageRef) string {
-	if ref.Eco == types.EcoUnspecified {
+	if ref.Ecosystem == types.EcosystemUnspecified {
 		return ref.Name.String()
 	}
-	return ref.Eco.String() + "/" + ref.Name.String()
+	return ref.Ecosystem.String() + "/" + ref.Name.String()
 }
 
 func formatArtifactConstraint(expr types.VersionExpr) string {

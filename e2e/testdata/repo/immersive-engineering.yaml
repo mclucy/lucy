@@ -3,4 +3,4 @@
 # Distributed on CurseForge: https://www.curseforge.com/minecraft/mc-mods/immersive-engineering
 url: https://github.com/BluSunrize/ImmersiveEngineering.git
 commit: e63e4824800945eccf3684200a2c2270e2e1cdf2
-platform: forge
+ecosystem: forge

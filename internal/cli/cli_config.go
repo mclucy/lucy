@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
 
 	"github.com/spf13/cobra"
 )
@@ -9,7 +9,7 @@ import (
 // configCmd is intentionally not registered with the root command.
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: message.ConfigShort,
+	Short: help.ConfigShort,
 }
 
 func NewConfigCommand() *cobra.Command {

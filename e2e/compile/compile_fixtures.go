@@ -15,10 +15,10 @@ import (
 )
 
 type repoFixture struct {
-	URL      string `yaml:"url"`
-	Commit   string `yaml:"commit"`
-	Platform string `yaml:"platform"`
-	Project  string `yaml:"project"`
+	URL       string `yaml:"url"`
+	Commit    string `yaml:"commit"`
+	Ecosystem string `yaml:"ecosystem"`
+	Project   string `yaml:"project"`
 }
 
 func runCompile(binary, repos string, ids []string, parallel int) int {
@@ -152,8 +152,8 @@ func executeCompile(binary, repos, id string) error {
 		Path:   filepath.ToSlash(checkout),
 	}).String()
 	args := []string{"compile", remote, "--output", filepath.Join(temporary, "artifact.jar"), "--no-style"}
-	if fixture.Platform != "" {
-		args = append(args, "--platform", fixture.Platform)
+	if fixture.Ecosystem != "" {
+		args = append(args, "--ecosystem", fixture.Ecosystem)
 	}
 	if fixture.Project != "" {
 		args = append(args, "--project", fixture.Project)

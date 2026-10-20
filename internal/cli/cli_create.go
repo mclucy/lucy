@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/operation"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ const (
 
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: message.CreateShort,
+	Short: help.CreateShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionCreate,
 }
@@ -40,12 +40,12 @@ func NewCreateCommand() *cobra.Command {
 		flagCreateCoreName,
 		"c",
 		"",
-		"Core distribution or core@version (e.g. fabric@0.16.9, paper)",
+		"Server software, optionally with a version (e.g. fabric@0.16.9, paper)",
 	)
 	createCmd.Flags().String(
 		flagCreateCoreVersionName,
 		"",
-		"Core distribution version or selector",
+		"Server software version or version rule",
 	)
 	createCmd.Flags().StringP(
 		flagCreateMcName,
@@ -61,7 +61,7 @@ func NewCreateCommand() *cobra.Command {
 	createCmd.Flags().String(
 		flagCreateRepositoryName,
 		"",
-		"GitHub repository serving the core jar (owner/repo)",
+		"GitHub repository serving the server JAR (owner/repo)",
 	)
 	createCmd.Flags().String(
 		flagCreateMCDRVersionName,
@@ -70,9 +70,9 @@ func NewCreateCommand() *cobra.Command {
 	)
 	createCmd.Flags().StringP(
 		flagCreateDirectoryName,
-		"C",
+		"d",
 		"",
-		"Workspace-relative directory that holds the server",
+		"Directory relative to the current directory that holds the server",
 	)
 	createCmd.Flags().String(
 		flagCreateWorkDirName,
@@ -110,10 +110,10 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 		coreVer = explicitVer
 	}
 
-	opts := install.InitOptions{
+	opts := operation.InitOptions{
 		Minecraft:       mc,
-		Distribution:    distribution,
-		CoreVersion:     coreVer,
+		Product:         distribution,
+		ProductVersion:  coreVer,
 		Repository:      flagStringCreate(cmd, flagCreateRepositoryName),
 		MCDRVersion:     flagStringCreate(cmd, flagCreateMCDRVersionName),
 		Directory:       flagStringCreate(cmd, flagCreateDirectoryName),

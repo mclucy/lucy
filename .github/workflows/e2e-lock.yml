@@ -1,4 +1,4 @@
-name: E2E Lock
+name: E2E Install
 
 on:
   push:
@@ -24,14 +24,14 @@ permissions:
   contents: read
 
 jobs:
-  # Fresh-install lock scenarios: generate the pinned sandboxes, build Lucy,
-  # then install each scenario manifest in a disposable workspace and verify the
+  # Fresh-install scenarios: generate the pinned sandboxes, build Lucy, then
+  # install each scenario manifest in a disposable workspace and verify the
   # generated lock and runtime files against the pinned bytes.
   #
   # Java 21 is the strictest minimum across the scenarios (1.20.1 cores need
   # 17, 1.21.x cores need 21) and also drives the Forge and NeoForge installer
   # processors during bootstrap.
-  lock:
+  install:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -76,8 +76,7 @@ jobs:
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
-      # No scenario ids: the suite defaults to all scenarios and fails loudly
-      # when a scenario lacks its generated environment, so this list and the
-      # suite cannot silently drift apart.
-      - name: Lock scenarios (e2e)
-        run: go run ./e2e/lock --p 2
+      # No scenario ids: the suite defaults to all scenarios. Scenarios that
+      # need a generated sandbox resolve it from the .sandboxes directory.
+      - name: Install scenarios (e2e)
+        run: go run ./e2e/install --p 2
