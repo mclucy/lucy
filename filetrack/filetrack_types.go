@@ -55,8 +55,9 @@ type Event struct {
 }
 
 type Result struct {
-	Event   Event    `json:"event"`
-	Skipped []string `json:"skipped,omitempty"`
+	Event     Event     `json:"event"`
+	Skipped   []string  `json:"skipped,omitempty"`
+	Reclaimed Reclaimed `json:"reclaimed,omitzero"`
 }
 
 // Status contains live observations. It is never persisted in a manifest or lockfile.
