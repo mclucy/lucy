@@ -39,13 +39,9 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 		if !enabled {
 			continue
 		}
-		directory, folder := d.Server.Directory, "mods"
-		if planned.Ecosystem == types.EcosystemBukkit {
-			folder = "plugins"
-		}
+		directory, folder := d.Server.Directory, packageFolder(planned.Environment, planned.Ecosystem)
 		if planned.Environment == types.EnvironmentMCDR {
 			directory = d.MCDR.Directory
-			folder = "plugins"
 		}
 		relative := filepath.Join(directory, folder)
 		key := string(planned.Environment) + "/" + string(planned.Ecosystem) + "/" + relative
