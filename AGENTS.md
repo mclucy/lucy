@@ -105,12 +105,23 @@ A new interactive surface ships with its flag equivalent in the same change. Use
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
 4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 
-The domain suites run with `task e2e:status -- <sandbox ids>` and
-`task e2e:install -- [scenario ids]`, or directly with
-`go run ./e2e/status <sandbox ids>` and `go run ./e2e/install [scenario ids]`.
-`task e2e:compile -- [fixture ids]` runs the compile fixtures. Shared selection
-and reporting lives in `e2e/internal/testkit`; the install suite defaults to
-all scenarios, and the compile suite defaults to all repository fixtures.
+The domain suites are Go tests behind the `e2e` build tag, so `go test ./...`
+stays unit-only. Build Lucy and generate the sandboxes first, then:
+
+```bash
+go test -tags e2e -count=1 ./e2e/status    # probe .sandboxes
+go test -tags e2e -count=1 ./e2e/compile   # compile e2e/testdata/repo fixtures
+go test -tags e2e -count=1 ./e2e/install   # fresh installs
+```
+
+Select cases with `-run`: `-run 'TestProbe/<sandbox id>'`,
+`-run 'TestCompile/<fixture id>'`, `-run 'TestInstall/<scenario id>'`. A suite
+covers every case in its table and fails when its binary or a sandbox is
+missing; probes that need manually supplied artifacts skip instead. `-count=1`
+disables the test cache, `-parallel N` bounds concurrency, and `-lucy` and
+`-sandboxes` override the `dist/lucy` and `.sandboxes` defaults.
+`e2e/internal/testkit` resolves those paths; `task e2e:status|compile|install` wrap
+the same commands.
 
 ### Sandbox CLI
 

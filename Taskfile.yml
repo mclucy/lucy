@@ -260,19 +260,19 @@ tasks:
       - rm -rf .sandboxes
 
   e2e:status:
-    desc: "Run server status e2e over generated sandboxes (args: sandbox ids)"
+    desc: "Probe generated sandboxes (args: -run 'TestProbe/<sandbox id>')"
     cmds:
-      - go run ./e2e/status {{.CLI_ARGS}}
+      - go test -tags e2e -count=1 ./e2e/status {{.CLI_ARGS}}
 
   e2e:compile:
-    desc: "Compile pinned repository fixtures (args: optional fixture ids)"
+    desc: "Compile pinned repository fixtures (args: -run 'TestCompile/<fixture id>')"
     cmds:
-      - go run ./e2e/compile {{.CLI_ARGS}}
+      - go test -tags e2e -count=1 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
   e2e:install:
-    desc: "Run fresh install scenarios across server core families (args: optional scenario ids)"
+    desc: "Run fresh install scenarios (args: -run 'TestInstall/<scenario id>')"
     cmds:
-      - go run ./e2e/install {{.CLI_ARGS}}
+      - go test -tags e2e -count=1 -parallel 2 ./e2e/install {{.CLI_ARGS}}
 
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks

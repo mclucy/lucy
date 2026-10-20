@@ -61,4 +61,4 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
       - name: Verify probe (e2e)
-        run: go run ./e2e/status ${{ env.SANDBOXES }}
+        run: go test -tags e2e -count=1 -v ./e2e/status -run "TestProbe/(${SANDBOXES//,/|})"
