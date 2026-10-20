@@ -4,4 +4,4 @@
 # Distributed on Modrinth: https://modrinth.com/mod/iris
 url: https://github.com/IrisShaders/Iris.git
 commit: ee97d207bbbc2b0649f48cd0e61b57a8b56f48bd
-platform: fabric
+ecosystem: fabric

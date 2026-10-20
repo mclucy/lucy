@@ -1,4 +1,4 @@
-// Command lock verifies fresh installs against pinned server fixtures.
+// Command install verifies fresh installs against pinned server fixtures.
 package main
 
 import (
@@ -20,14 +20,14 @@ func main() {
 }
 
 func run(args []string) int {
-	flags := flag.NewFlagSet("e2e/lock", flag.ContinueOnError)
+	flags := flag.NewFlagSet("e2e/install", flag.ContinueOnError)
 	lucy := flags.String("lucy", "dist/lucy", "path to the Lucy binary")
 	sandboxes := flags.String("sandboxes", ".sandboxes", "directory containing generated sandboxes")
 	list := flags.Bool("list", false, "print every scenario id and exit")
 	parallel := flags.Int("p", 1, "run up to N scenarios concurrently")
 	flags.Usage = func() {
 		out := flags.Output()
-		_, _ = fmt.Fprintln(out, "Usage: go run ./e2e/lock [flags] [scenario ids]")
+		_, _ = fmt.Fprintln(out, "Usage: go run ./e2e/install [flags] [scenario ids]")
 		_, _ = fmt.Fprintln(out, "IDs may be comma- or whitespace-separated. Defaults to all scenarios.")
 		_, _ = fmt.Fprintln(out, "Run from the repository root after building Lucy and generating the sandboxes.")
 		flags.PrintDefaults()
@@ -40,7 +40,7 @@ func run(args []string) int {
 	}
 	ids := testkit.ExpandIDs(flags.Args())
 	if *list || len(ids) == 0 {
-		ids = slices.Sorted(maps.Keys(lockScenarios))
+		ids = slices.Sorted(maps.Keys(installScenarios))
 	}
 	if *list {
 		for _, id := range ids {

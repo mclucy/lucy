@@ -10,12 +10,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type lockScenario struct {
+type installScenario struct {
 	// sandbox names the generated server that supplies pinned oracle bytes.
 	// Scenarios without one pin their own digests below, so fixtures that are
 	// not real servers never need a generated directory or a committed binary.
 	sandbox          string
-	distribution     string
+	product          string
 	minecraft        string
 	coreVersion      string
 	provider         string
@@ -41,10 +41,10 @@ type packageExpectation struct {
 	reference, projectID, releaseID, fileID, filename, sha256 string
 }
 
-var lockScenarios = map[string]lockScenario{
+var installScenarios = map[string]installScenario{
 	"vanilla-1201": {
 		sandbox:          "vanilla-1201",
-		distribution:     "vanilla",
+		product:          "minecraft",
 		minecraft:        "1.20.1",
 		coreVersion:      "1.20.1",
 		provider:         "mojang",
@@ -55,7 +55,7 @@ var lockScenarios = map[string]lockScenario{
 		minecraftFixture: "server.jar",
 	},
 	"fabric-1214": {
-		distribution:    "fabric",
+		product:         "fabric",
 		minecraft:       "1.21.4",
 		coreVersion:     "0.16.9",
 		provider:        "fabric",
@@ -84,7 +84,7 @@ var lockScenarios = map[string]lockScenario{
 	},
 	"forge-1201": {
 		sandbox:         "forge-1201",
-		distribution:    "forge",
+		product:         "forge",
 		minecraft:       "1.20.1",
 		coreVersion:     "47.4.10",
 		provider:        "forge",
@@ -102,7 +102,7 @@ var lockScenarios = map[string]lockScenario{
 	},
 	"neoforge-211": {
 		sandbox:         "neoforge-211",
-		distribution:    "neoforge",
+		product:         "neoforge",
 		minecraft:       "1.21.1",
 		coreVersion:     "21.1.248",
 		provider:        "neoforge",
@@ -121,7 +121,7 @@ var lockScenarios = map[string]lockScenario{
 }
 
 func executeScenario(ctx context.Context, binary, sandboxes, id string) (resultErr error) {
-	scenario, ok := lockScenarios[id]
+	scenario, ok := installScenarios[id]
 	if !ok {
 		return fmt.Errorf("unknown install scenario %q", id)
 	}
@@ -136,7 +136,7 @@ func executeScenario(ctx context.Context, binary, sandboxes, id string) (resultE
 			return fmt.Errorf("sandbox is not a directory: %s", oracle)
 		}
 	}
-	intent, err := os.ReadFile(filepath.Join("e2e", "lock", "testdata", id+".yaml"))
+	intent, err := os.ReadFile(filepath.Join("e2e", "install", "testdata", id+".yaml"))
 	if err != nil {
 		return fmt.Errorf("read scenario manifest: %w", err)
 	}

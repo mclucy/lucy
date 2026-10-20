@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,6 @@ import (
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 )
 
@@ -33,6 +33,7 @@ type gradleRunner struct {
 	version    string
 	modelPath  string
 	daemon     toolchain.JavaInstallation
+	progress   io.Writer
 }
 
 type gradleModel struct {
@@ -68,8 +69,9 @@ func newGradleRunner(
 	build buildrepo.GradleBuild,
 	inventory toolchain.Inventory,
 	temporary string,
+	progress io.Writer,
 ) (gradleRunner, error) {
-	runner := gradleRunner{dir: build.Dir, version: "unknown"}
+	runner := gradleRunner{dir: build.Dir, version: "unknown", progress: progress}
 	version := ""
 	if build.Wrapper != nil {
 		wrapper := build.Wrapper
@@ -165,7 +167,7 @@ func newGradleRunner(
 
 // inspect evaluates the build model of every project so Lucy can choose one.
 func (r gradleRunner) inspect(ctx context.Context) (gradleModel, error) {
-	report.Info("Evaluating Gradle " + r.version + " build")
+	writeProgress(r.progress, "Evaluating Gradle "+r.version+" build")
 	return r.execute(ctx, "Gradle build model", ":lucyCompileModel")
 }
 
@@ -174,7 +176,7 @@ func (r gradleRunner) inspect(ctx context.Context) (gradleModel, error) {
 // joins the invocation as a dry run so the task graph names the compile tasks
 // without running any of them: the JDK check must happen before the build.
 func (r gradleRunner) inspectCompilers(ctx context.Context, project gradleProject) (gradleProject, error) {
-	report.Info("Checking toolchain for " + nameProject(project.Path))
+	writeProgress(r.progress, "Checking toolchain for "+nameProject(project.Path))
 	model, err := r.execute(
 		ctx,
 		"Gradle compiler inspection",
@@ -196,7 +198,7 @@ func (r gradleRunner) inspectCompilers(ctx context.Context, project gradleProjec
 
 // build runs task on the selected project and returns the archives it produced.
 func (r gradleRunner) build(ctx context.Context, task string) (gradleModel, error) {
-	report.Info("Building " + task)
+	writeProgress(r.progress, "Building "+task)
 	return r.execute(ctx, "Gradle "+task, task, ":lucyCompileModel")
 }
 
@@ -254,18 +256,18 @@ func nameProject(path string) string {
 
 func selectProject(model gradleModel, opts *options) (gradleProject, error) {
 	candidates := make([]gradleProject, 0, len(model.Projects))
-	platform := types.Ecosystem(opts.platform)
+	ecosystem := types.Ecosystem(opts.ecosystem)
 	for _, project := range model.Projects {
 		if opts.project != "" && project.Path != opts.project {
 			continue
 		}
-		if platform != "" && !slices.Contains(project.Ecosystems, platform) {
+		if ecosystem != "" && !slices.Contains(project.Ecosystems, ecosystem) {
 			continue
 		}
 		hasModArchive := slices.ContainsFunc(project.Archives, func(output archive) bool {
 			return output.Enabled && filepath.Ext(output.File) == ".jar" && !developmentClassifier(output.Classifier)
 		})
-		if hasModArchive && slices.ContainsFunc(project.Ecosystems, supportedPlatform) {
+		if hasModArchive && slices.ContainsFunc(project.Ecosystems, supportedEcosystem) {
 			candidates = append(candidates, project)
 		}
 	}
@@ -290,7 +292,7 @@ func selectProject(model gradleModel, opts *options) (gradleProject, error) {
 			for _, project := range candidates {
 				paths = append(paths, project.Path+" ["+joinEcosystems(project.Ecosystems)+"]")
 			}
-			return gradleProject{}, fmt.Errorf("multiple mod projects found; select --platform or --project: %s", strings.Join(paths, ", "))
+			return gradleProject{}, fmt.Errorf("multiple mod projects found; select --ecosystem or --project: %s", strings.Join(paths, ", "))
 		}
 	}
 	project := candidates[0]

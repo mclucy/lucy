@@ -5,8 +5,7 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/internal/cli/message"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
@@ -14,7 +13,7 @@ import (
 
 var cacheCmd = &cobra.Command{
 	Use:   "cache",
-	Short: message.CacheShort,
+	Short: help.CacheShort,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},
@@ -23,14 +22,14 @@ var cacheCmd = &cobra.Command{
 var cacheLsCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
-	Short:   message.CacheLsShort,
+	Short:   help.CacheLsShort,
 	RunE:    actionCacheLs,
 }
 
 var cacheClearCmd = &cobra.Command{
 	Use:     "clear",
 	Aliases: []string{"rm"},
-	Short:   message.CacheClearShort,
+	Short:   help.CacheClearShort,
 	RunE:    actionCacheClear,
 }
 
@@ -52,8 +51,8 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	}
 
 	if len(entries) == 0 {
-		report.Info("Cache is empty")
-		return nil
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Cache is empty")
+		return err
 	}
 
 	slices.SortFunc(entries, func(a, b *cache.CacheEntry) int {
@@ -86,7 +85,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func actionCacheClear(_ *cobra.Command, _ []string) error {
+func actionCacheClear(cmd *cobra.Command, _ []string) error {
 	cleared, err := cache.Network().ClearAll()
 	if err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
@@ -94,16 +93,17 @@ func actionCacheClear(_ *cobra.Command, _ []string) error {
 
 	// The cache backend only collects the successful removals; the command
 	// presents them, in the order the reset walked the cache directory.
+	out := cmd.OutOrStdout()
 	for _, removed := range cleared.Removed {
-		report.Info(fmt.Sprintf("removed %s", removed))
+		if _, err := fmt.Fprintf(out, "removed %s\n", removed); err != nil {
+			return err
+		}
 	}
-	report.Info("all cache items cleared")
-	report.Info(
-		fmt.Sprintf(
-			"removed %d files, freed up %s of space",
-			cleared.FileCount,
-			style.FormatBytesBinary(cleared.TotalFreedSize),
-		),
+	_, err = fmt.Fprintf(
+		out,
+		"all cache items cleared\nremoved %d files, freed up %s of space\n",
+		cleared.FileCount,
+		style.FormatBytesBinary(cleared.TotalFreedSize),
 	)
-	return nil
+	return err
 }

@@ -3,8 +3,8 @@ server:
   minecraft: "1.21.4"
   directory: server
   core:
-    distribution: fabric
-    version: "0.16.9"
+    product: fabric
+    product_version: "0.16.9"
   packages:
     fabric:
       modrinth:fabric-api: "0.119.4+1.21.4"

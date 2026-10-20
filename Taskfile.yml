@@ -259,20 +259,20 @@ tasks:
     cmds:
       - rm -rf .sandboxes
 
-  e2e:init:
-    desc: "Run server probing e2e over generated sandboxes (args: sandbox ids)"
+  e2e:status:
+    desc: "Run server status e2e over generated sandboxes (args: sandbox ids)"
     cmds:
-      - go run ./e2e/init {{.CLI_ARGS}}
+      - go run ./e2e/status {{.CLI_ARGS}}
 
   e2e:compile:
     desc: "Compile pinned repository fixtures (args: optional fixture ids)"
     cmds:
       - go run ./e2e/compile {{.CLI_ARGS}}
 
-  e2e:lock:
+  e2e:install:
     desc: "Run fresh install scenarios across server core families (args: optional scenario ids)"
     cmds:
-      - go run ./e2e/lock {{.CLI_ARGS}}
+      - go run ./e2e/install {{.CLI_ARGS}}
 
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks

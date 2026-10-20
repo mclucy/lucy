@@ -10,18 +10,18 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-type DataSource int
+type GraphOrigin int
 
 const (
-	SourceLock DataSource = iota
-	SourceProbe
+	OriginLock GraphOrigin = iota
+	OriginLive
 )
 
-func (ds DataSource) String() string {
+func (ds GraphOrigin) String() string {
 	switch ds {
-	case SourceLock:
+	case OriginLock:
 		return "lock file"
-	case SourceProbe:
+	case OriginLive:
 		return "live probe"
 	default:
 		return "unknown"
@@ -32,10 +32,10 @@ func (ds DataSource) String() string {
 // Values come from the manifest or lock when either is readable; a live
 // probe fills the gaps when no lock exists.
 type ServerEnvironment struct {
-	Core        string
-	GameVersion string
-	Loader      types.Ecosystem
-	LoaderVer   string
+	Core             string
+	GameVersion      string
+	Ecosystem        types.Ecosystem
+	EcosystemVersion string
 }
 
 // LoadDependencyData builds the dependency graph from the lock file, falling
@@ -46,14 +46,14 @@ type ServerEnvironment struct {
 // when available and from the workspace probe otherwise.
 func LoadDependencyData(workDir string, forceLive bool) (
 	*DependencyGraph,
-	DataSource,
+	GraphOrigin,
 	ServerEnvironment,
 	error,
 ) {
 	var (
 		env    ServerEnvironment
 		lock   *lockfile.Document
-		source = SourceLock
+		origin = OriginLock
 	)
 
 	if !forceLive {
@@ -73,17 +73,17 @@ func LoadDependencyData(workDir string, forceLive bool) (
 				err,
 			)
 		}
-		return graph, source, env, nil
+		return graph, origin, env, nil
 	}
 
-	source = SourceProbe
+	origin = OriginLive
 	info := workspace.NewAt(workDir)
 	reportObservationFindings(info)
 	graph, err := BuildGraphFromProbe(info)
 	if err != nil {
 		return nil, 0, env, fmt.Errorf("failed to build graph from probe: %w", err)
 	}
-	return graph, source, environmentFromWorkspace(info, env), nil
+	return graph, origin, environmentFromWorkspace(info, env), nil
 }
 
 // reportObservationFindings presents the recoverable findings of one
@@ -95,7 +95,7 @@ func reportObservationFindings(observed workspace.Workspace) {
 	for _, warning := range observed.Warnings {
 		report.Warn(warning)
 	}
-	for _, ambiguityErr := range observed.Probe.AmbiguityErrors(observed.Root) {
+	for _, ambiguityErr := range observed.Probe.AmbiguityErrors(observed.ServerDir) {
 		report.Error(ambiguityErr)
 	}
 }
@@ -104,54 +104,55 @@ func reportObservationFindings(observed workspace.Workspace) {
 // fields. The lock always records exact versions, so nothing is inferred.
 func environmentFromLock(lock *lockfile.Document) ServerEnvironment {
 	return ServerEnvironment{
-		Core:        lock.Server.Distribution,
-		GameVersion: lock.Server.Minecraft,
-		Loader:      loaderFromLock(lock),
-		LoaderVer:   loaderVersionFromLock(lock),
+		Core:             lock.Server.Product.String(),
+		GameVersion:      lock.Server.Minecraft.String(),
+		Ecosystem:        ecosystemFromLock(lock),
+		EcosystemVersion: ecosystemVersionFromLock(lock),
 	}
 }
 
-// loaderFromLock reports the loader that scopes the server runtime. Server
-// packages come first; the bootstrap inputs name the loader when the runtime
-// has no packages of its own. It returns EcoUnspecified when the evidence
-// disagrees.
-func loaderFromLock(lock *lockfile.Document) types.Ecosystem {
+// ecosystemFromLock reports the ecosystem that scopes the server runtime.
+// Server packages come first; the bootstrap inputs name the loader when the
+// runtime has no packages of its own. It returns EcosystemUnspecified when
+// the evidence disagrees.
+func ecosystemFromLock(lock *lockfile.Document) types.Ecosystem {
 	var found types.Ecosystem
 	for _, pkg := range lock.Packages {
-		if pkg.Runtime != RuntimeServer || pkg.Loader == types.EcoUnspecified {
+		if pkg.Environment != types.EnvironmentServer ||
+			pkg.Ecosystem == types.EcosystemUnspecified {
 			continue
 		}
-		if found != types.EcoUnspecified && found != pkg.Loader {
-			return types.EcoUnspecified
+		if found != types.EcosystemUnspecified && found != pkg.Ecosystem {
+			return types.EcosystemUnspecified
 		}
-		found = pkg.Loader
+		found = pkg.Ecosystem
 	}
-	if found != types.EcoUnspecified {
+	if found != types.EcosystemUnspecified {
 		return found
 	}
 	for _, input := range lock.Server.Inputs {
 		for _, module := range input.Modules {
-			if module.Loader == types.EcoUnspecified {
+			if module.Ecosystem == types.EcosystemUnspecified {
 				continue
 			}
-			if found != types.EcoUnspecified && found != module.Loader {
-				return types.EcoUnspecified
+			if found != types.EcosystemUnspecified && found != module.Ecosystem {
+				return types.EcosystemUnspecified
 			}
-			found = module.Loader
+			found = module.Ecosystem
 		}
 	}
 	return found
 }
 
-func loaderVersionFromLock(lock *lockfile.Document) string {
-	loader := loaderFromLock(lock)
-	if loader == types.EcoUnspecified {
+func ecosystemVersionFromLock(lock *lockfile.Document) string {
+	ecosystem := ecosystemFromLock(lock)
+	if ecosystem == types.EcosystemUnspecified {
 		return ""
 	}
 	for _, input := range lock.Server.Inputs {
 		for _, module := range input.Modules {
-			if module.Loader == loader && module.Version != "" {
-				return module.Version
+			if module.Ecosystem == ecosystem && module.Version != "" {
+				return module.Version.String()
 			}
 		}
 	}
@@ -161,35 +162,36 @@ func loaderVersionFromLock(lock *lockfile.Document) string {
 // environmentFromWorkspace fills the environment gaps a lock could not
 // supply by observing the live workspace. Values already known win.
 func environmentFromWorkspace(ws workspace.Workspace, env ServerEnvironment) ServerEnvironment {
-	if env.Core == "" || env.GameVersion == "" || env.Loader == types.EcoUnspecified {
-		if doc, err := manifest.Read(ws.Root); err == nil {
+	if env.Core == "" || env.GameVersion == "" ||
+		env.Ecosystem == types.EcosystemUnspecified {
+		if doc, err := manifest.Read(ws.ServerDir); err == nil {
 			if env.Core == "" {
-				env.Core = doc.Server.Core.Distribution
+				env.Core = doc.Server.Core.Product.String()
 			}
 			if env.GameVersion == "" {
-				env.GameVersion = doc.Server.Minecraft
+				env.GameVersion = doc.Server.Minecraft.String()
 			}
 		}
 	}
-	server := ws.Server()
+	server := ws.Runtime()
 	if server == nil {
 		return env
 	}
 	if env.GameVersion == "" {
-		if version := server.GameVersion().String(); version != "" {
+		if version := server.MinecraftVersion().String(); version != "" {
 			env.GameVersion = version
 		}
 	}
 	if env.Core == "" {
-		env.Core = server.ServerCore()
+		env.Core = server.Product().String()
 	}
-	if env.Loader == types.EcoUnspecified {
-		env.Loader = server.ModLoader()
+	if env.Ecosystem == types.EcosystemUnspecified {
+		env.Ecosystem = server.Ecosystem()
 	}
-	if env.LoaderVer == "" {
-		loader := server.ModLoader()
-		for _, component := range server.RuntimeComponents {
-			if component.Eco != loader {
+	if env.EcosystemVersion == "" {
+		ecosystem := server.Ecosystem()
+		for _, component := range server.Components {
+			if component.Ecosystem != ecosystem {
 				continue
 			}
 			switch component.Version {
@@ -197,7 +199,7 @@ func environmentFromWorkspace(ws workspace.Workspace, env ServerEnvironment) Ser
 				types.VersionStable, types.VersionBeta:
 				continue
 			default:
-				env.LoaderVer = component.Version.String()
+				env.EcosystemVersion = component.Version.String()
 			}
 		}
 	}

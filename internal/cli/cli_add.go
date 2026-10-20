@@ -5,34 +5,26 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
 
 const (
-	flagForceName        = "force"
 	flagWithOptionalName = "with-optional"
-	flagNoOptionalName   = "no-optional"
 	flagLockedName       = "locked"
 	flagOfflineName      = "offline"
-	flagLoaderName       = "loader"
-	flagPlatformName     = FlagPlatform
 )
 
 var addCmd = &cobra.Command{
 	Use:   "add",
-	Short: message.AddShort,
+	Short: help.AddShort,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
-		noOptional, _ := cmd.Flags().GetBool(flagNoOptionalName)
-		if withOptional && noOptional {
-			return fmt.Errorf("--with-optional and --no-optional cannot be used together")
-		}
-		loaderArg := resolveLoaderFlag(cmd)
-		if loaderArg != "" && !types.Ecosystem(loaderArg).Valid() {
-			return fmt.Errorf("invalid loader or platform %q", loaderArg)
+		ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
+		if ecosystem != "" && !types.Ecosystem(ecosystem).Valid() {
+			return fmt.Errorf("invalid ecosystem %q", ecosystem)
 		}
 		return nil
 	},
@@ -40,49 +32,23 @@ var addCmd = &cobra.Command{
 }
 
 func NewAddCommand() *cobra.Command {
-	addCmd.Flags().BoolP(
-		flagForceName,
-		"f",
-		false,
-		"Ignore version, dependency, and platform warnings",
-	)
 	addCmd.Flags().Bool(
 		flagWithOptionalName,
 		false,
 		"Also install optional upstream dependencies",
 	)
 	addCmd.Flags().Bool(
-		flagNoOptionalName,
-		false,
-		"Skip optional upstream dependencies (default)",
-	)
-	addCmd.Flags().Bool(
 		flagLockedName,
 		false,
-		"Resolve only within what the lock already pins",
+		"Do not resolve new versions; fail when the lock cannot satisfy",
 	)
 	addCmd.Flags().Bool(
 		flagOfflineName,
 		false,
-		"Disallow network acquisition for newly added files",
+		"Disallow network access; fail if a needed file is not already available locally",
 	)
-	addCmd.Flags().StringP(
-		flagLoaderName,
-		"l",
-		"",
-		"Target loader scope for the request (fabric, forge, neoforge, bukkit)",
-	)
-	AddPlatformFlag(addCmd)
+	AddEcosystemFlag(addCmd)
 	return addCmd
-}
-
-func resolveLoaderFlag(cmd *cobra.Command) string {
-	loader, _ := cmd.Flags().GetString(flagLoaderName)
-	if loader != "" {
-		return loader
-	}
-	platform, _ := cmd.Flags().GetString(flagPlatformName)
-	return platform
 }
 
 func actionAdd(cmd *cobra.Command, args []string) error {
@@ -95,8 +61,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	locked, _ := cmd.Flags().GetBool(flagLockedName)
 	offline, _ := cmd.Flags().GetBool(flagOfflineName)
 
-	loaderArg := resolveLoaderFlag(cmd)
-	loader := types.Ecosystem(loaderArg)
+	ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
 
 	opts := install.Options{
 		Locked:          locked,
@@ -105,5 +70,5 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	return install.Add(cmd.Context(), workDir, args, loader, opts)
+	return operation.Add(cmd.Context(), workDir, args, types.Ecosystem(ecosystem), opts)
 }

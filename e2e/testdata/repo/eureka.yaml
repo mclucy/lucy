@@ -4,5 +4,5 @@
 # Distributed on Modrinth: https://modrinth.com/mod/eureka
 url: https://github.com/ValkyrienSkies/Eureka.git
 commit: 07cf4181d72590731d140d603bda5c9de23c5ae7
-platform: fabric
+ecosystem: fabric
 project: ':fabric'

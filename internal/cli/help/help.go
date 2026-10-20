@@ -1,9 +1,9 @@
-// Package message holds the user-facing description of every subcommand.
+// Package help holds the user-facing description of every subcommand.
 //
-// One package owns the words so help promises re reviewed and edited
+// One package owns the words so help promises are reviewed and edited
 // against the whole help surface, and a command cannot drift its own
 // description silently.
-package message
+package help
 
 const (
 	AddShort = "Add packages"
@@ -19,7 +19,7 @@ const (
 	CacheLsShort    = "List cache entries"
 	CacheClearShort = "Clear all cache"
 
-	CompileShort = "Compile a Minecraft mod or plugin from a Git repository"
+	CompileShort = "Compile a Fabric, Forge, or NeoForge mod from a Git repository"
 	CompileLong  = "Clone a Git repository into a temporary directory and compile a Forge, NeoForge, or Fabric mod. Requires local Java toolchain. " +
 		"Compilation executes repository build scripts and can download build " +
 		"dependencies. Run this command only on the repository you trust."
@@ -34,13 +34,13 @@ const (
 
 	InfoShort = "Display information of a package"
 	InfoLong  = "Pass a local .jar, .zip, .pyz, or .mcdr file or specify a " +
-		"package identifier. When no source is specified, all remotes will be queried"
+		"package identifier. When no registry is specified, all registries are queried"
 
 	InitShort = "Generate a manifest file for an existing server directory"
 
-	InstallShort = "Install packages"
+	InstallShort = "Sync the server with the manifest and lock"
 
-	LeavesShort = "List packages with no dependents"
+	LeavesShort = "List packages with no dependencies"
 
 	RemoveShort = "Remove packages"
 

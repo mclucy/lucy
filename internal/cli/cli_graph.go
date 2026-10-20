@@ -2,6 +2,7 @@ package cli
 
 import (
 	"cmp"
+	"path/filepath"
 	"slices"
 
 	"github.com/mclucy/lucy/lockfile"
@@ -11,7 +12,7 @@ import (
 
 // GraphNode is one node of a resolved package graph. A node is either an
 // artifact coordinate ("provider:project", taken from the lock's explicit
-// provider fields) or a native module (a module ID declared inside an
+// provider fields) or a descriptor module (a module ID declared inside an
 // artifact). Identity is always an explicit field; nothing is recovered by
 // parsing a display string.
 type GraphNode struct {
@@ -23,7 +24,7 @@ type GraphNode struct {
 	// Provider and ProjectID carry the upstream coordinates of an artifact
 	// node. They are empty for a native module node, which belongs to the
 	// artifact recorded in Artifact.
-	Provider  string
+	Provider  types.Provider
 	ProjectID string
 
 	// Artifact is the coordinate node that ships this module. It is empty
@@ -32,48 +33,46 @@ type GraphNode struct {
 
 	Filename string
 
-	// Runtime scopes the node ("server" or "mcdr") and Loader scopes it
-	// within that runtime. Dependency edges only resolve inside one scope.
-	Runtime string
-	Loader  types.Ecosystem
+	// Environment scopes the node ("server" or "mcdr") and Ecosystem scopes
+	// it within that environment. Dependency edges only resolve inside one
+	// scope.
+	Environment types.Environment
+	Ecosystem   types.Ecosystem
 
 	// Module reports whether the node is a native module rather than an
 	// artifact coordinate.
 	Module bool
 
-	// Core reports a node that is not a removable package. Server core and
-	// bootstrap inputs are never graph packages, so this marks nodes that
-	// requirement.
+	// Root reports a node that an enabled manifest requirement selects.
 	Root bool
 
 	Children []*GraphNode
 
 	Parents []*GraphNode
-
-	// InDegree is populated after graph build: the number of parents.
-	InDegree int
-
-	// dependedOn records that another package requires this artifact.
-	dependedOn bool
 }
 
 type DependencyGraph struct {
 	// Nodes is keyed by the scoped node key, so identically named modules
-	// in different runtimes or loaders stay distinct.
+	// in different environments or ecosystems stay distinct.
 	Nodes map[string]*GraphNode
 
 	// Roots are the artifacts an enabled manifest requirement selects.
 	Roots []*GraphNode
 }
 
-// nodeKey scopes an identity so edges never cross runtimes or loaders.
-func nodeKey(runtime string, loader types.Ecosystem, id string) string {
-	return runtime + "|" + string(loader) + "|" + id
+// nodeKey scopes an identity so edges never cross environments or
+// ecosystems.
+func nodeKey(
+	environment types.Environment,
+	ecosystem types.Ecosystem,
+	id string,
+) string {
+	return string(environment) + "|" + string(ecosystem) + "|" + id
 }
 
 // artifactCoordinate renders an artifact's explicit provider coordinates.
-func artifactCoordinate(provider, projectID string) string {
-	return provider + ":" + projectID
+func artifactCoordinate(provider types.Provider, projectID string) string {
+	return provider.String() + ":" + projectID
 }
 
 // BuildGraphFromLock builds the graph from a lock's resolved packages.
@@ -81,50 +80,45 @@ func artifactCoordinate(provider, projectID string) string {
 // Roots are the artifacts selected by an enabled manifest requirement.
 // Module dependency edges come from each artifact's native module
 // descriptors. The server core and bootstrap inputs are lock inputs, not
-// packages, so they never become graph nodes and therefore never appear as
-// removable leaves.
+// packages, so they never become graph nodes.
 func BuildGraphFromLock(lock *lockfile.Document) (*DependencyGraph, error) {
 	graph := &DependencyGraph{
 		Nodes: make(map[string]*GraphNode),
 	}
 
-	// owners maps a scoped module key to the artifact node shipping it, so a
-	// dependency on a module can also mark that artifact as depended upon.
-	owners := make(map[string]*GraphNode)
-	dependencies := make(map[string][]types.NativeDependency)
+	dependencies := make(map[string][]types.DescriptorDependency)
 
 	for _, pkg := range lock.Packages {
 		coordinate := artifactCoordinate(pkg.Provider, pkg.ProjectID)
-		key := nodeKey(pkg.Runtime, pkg.Loader, coordinate)
+		key := nodeKey(pkg.Environment, pkg.Ecosystem, coordinate)
 
 		node, ok := graph.Nodes[key]
 		if !ok {
 			node = &GraphNode{
-				ID:        coordinate,
-				Version:   pkg.Version,
-				Provider:  pkg.Provider,
-				ProjectID: pkg.ProjectID,
-				Filename:  pkg.Filename,
-				Runtime:   pkg.Runtime,
-				Loader:    pkg.Loader,
+				ID:          coordinate,
+				Version:     pkg.Version.String(),
+				Provider:    pkg.Provider,
+				ProjectID:   pkg.ProjectID,
+				Filename:    pkg.Filename,
+				Environment: pkg.Environment,
+				Ecosystem:   pkg.Ecosystem,
 			}
 			graph.Nodes[key] = node
 		}
 
 		for _, module := range pkg.Modules {
-			moduleKey := nodeKey(pkg.Runtime, pkg.Loader, module.ID)
+			moduleKey := nodeKey(pkg.Environment, pkg.Ecosystem, module.ID)
 			if _, exists := graph.Nodes[moduleKey]; !exists {
 				graph.Nodes[moduleKey] = &GraphNode{
-					ID:       module.ID,
-					Version:  module.Version,
-					Artifact: coordinate,
-					Runtime:  pkg.Runtime,
-					Loader:   pkg.Loader,
-					Module:   true,
-					Filename: pkg.Filename,
+					ID:          module.ID,
+					Version:     module.Version.String(),
+					Artifact:    coordinate,
+					Environment: pkg.Environment,
+					Ecosystem:   pkg.Ecosystem,
+					Module:      true,
+					Filename:    pkg.Filename,
 				}
 			}
-			owners[moduleKey] = node
 			dependencies[moduleKey] = module.Dependencies
 		}
 
@@ -143,20 +137,26 @@ func BuildGraphFromLock(lock *lockfile.Document) (*DependencyGraph, error) {
 	for _, root := range graph.Roots {
 		for _, node := range graph.Nodes {
 			if node.Module && node.Artifact == root.ID &&
-				node.Runtime == root.Runtime && node.Loader == root.Loader {
+				node.Environment == root.Environment &&
+				node.Ecosystem == root.Ecosystem {
 				root.Children = append(root.Children, node)
 				node.Parents = append(node.Parents, root)
 			}
 		}
 	}
 
-	// Dependency edges stay inside one runtime/loader scope.
+	// Dependency edges stay inside one environment/ecosystem scope.
 	for _, node := range graph.Nodes {
 		if !node.Module {
 			continue
 		}
 		for _, dep := range dependencies[node.key()] {
-			child := resolveDependencyNode(graph, node.Runtime, node.Loader, dep)
+			child := resolveDependencyNode(
+				graph,
+				node.Environment,
+				node.Ecosystem,
+				dep,
+			)
 			if child == nil || child == node {
 				continue
 			}
@@ -164,19 +164,6 @@ func BuildGraphFromLock(lock *lockfile.Document) (*DependencyGraph, error) {
 				node.Children = append(node.Children, child)
 				child.Parents = append(child.Parents, node)
 			}
-			if owner, ok := owners[child.key()]; ok {
-				owner.markDepended()
-			}
-		}
-	}
-
-	for _, node := range graph.Nodes {
-		if node.Module {
-			node.InDegree = len(node.Parents)
-			continue
-		}
-		if node.dependedOn {
-			node.InDegree = 1
 		}
 	}
 
@@ -190,14 +177,7 @@ func BuildGraphFromLock(lock *lockfile.Document) (*DependencyGraph, error) {
 }
 
 func (n *GraphNode) key() string {
-	return nodeKey(n.Runtime, n.Loader, n.ID)
-}
-
-// markDepended records that another package requires this artifact. Artifact
-// nodes carry no tree edges of their own, so dependency bookkeeping is
-// tracked separately from the rendered parent/child relationships.
-func (n *GraphNode) markDepended() {
-	n.dependedOn = true
+	return nodeKey(n.Environment, n.Ecosystem, n.ID)
 }
 
 // resolveDependencyNode maps a declared dependency onto a graph node. A
@@ -205,23 +185,23 @@ func (n *GraphNode) markDepended() {
 // project coordinates, it resolves to the artifact that ships them.
 func resolveDependencyNode(
 	graph *DependencyGraph,
-	runtime string,
-	loader types.Ecosystem,
-	dep types.NativeDependency,
+	environment types.Environment,
+	ecosystem types.Ecosystem,
+	dep types.DescriptorDependency,
 ) *GraphNode {
 	if dep.ModuleID != "" {
-		if node, ok := graph.Nodes[nodeKey(runtime, loader, dep.ModuleID)]; ok {
+		if node, ok := graph.Nodes[nodeKey(environment, ecosystem, dep.ModuleID)]; ok {
 			return node
 		}
 	}
-	if dep.Provider != "" && dep.ProjectID != "" {
+	if dep.Provider != types.ProviderUnspecified && dep.ProjectID != "" {
 		coordinate := artifactCoordinate(dep.Provider, dep.ProjectID)
-		if node, ok := graph.Nodes[nodeKey(runtime, loader, coordinate)]; ok {
+		if node, ok := graph.Nodes[nodeKey(environment, ecosystem, coordinate)]; ok {
 			return node
 		}
 	}
 	if dep.ModuleID == "" && dep.ID != "" {
-		if node, ok := graph.Nodes[nodeKey(runtime, loader, dep.ID)]; ok {
+		if node, ok := graph.Nodes[nodeKey(environment, ecosystem, dep.ID)]; ok {
 			return node
 		}
 	}
@@ -237,35 +217,46 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 	}
 
 	for _, p := range info.Packages {
-		id := p.Id.StringBase()
+		id := p.ID.StringBase()
 		node := &GraphNode{
-			ID:      id,
-			Version: string(p.Id.Version),
-			Runtime: RuntimeServer,
-			Loader:  p.Id.Eco,
+			ID:          id,
+			Version:     p.ID.Version.String(),
+			Provider:    p.ID.Provider,
+			ProjectID:   p.ID.Name.String(),
+			Filename:    filepath.Base(p.Path),
+			Environment: types.EnvironmentServer,
+			Ecosystem:   p.ID.Ecosystem,
 		}
 		graph.Nodes[node.key()] = node
 	}
 
 	// A probe observation has no runtime membership marker, so every node
-	// scopes to the server runtime and its scope matches the map key.
+	// scopes to the server environment.
 	isDependency := make(map[string]bool)
 
 	for _, p := range info.Packages {
-		parentID := p.Id.StringBase()
-		parent, parentOK := graph.Nodes[nodeKey(RuntimeServer, p.Id.Eco, parentID)]
+		parentID := p.ID.StringBase()
+		parent, parentOK := graph.Nodes[nodeKey(
+			types.EnvironmentServer,
+			p.ID.Ecosystem,
+			parentID,
+		)]
 		if !parentOK {
 			continue
 		}
 
-		for _, dep := range p.Dependencies.Value {
-			depID := dep.Id.StringBase()
+		for _, dep := range p.Dependencies.Dependencies {
+			depID := dep.ID.StringBase()
 
-			depEco := dep.Id.Eco
-			if depEco == types.EcoUnspecified {
-				depEco = p.Id.Eco
+			depEcosystem := dep.ID.Ecosystem
+			if depEcosystem == types.EcosystemUnspecified {
+				depEcosystem = p.ID.Ecosystem
 			}
-			child, childOK := graph.Nodes[nodeKey(RuntimeServer, depEco, depID)]
+			child, childOK := graph.Nodes[nodeKey(
+				types.EnvironmentServer,
+				depEcosystem,
+				depID,
+			)]
 			if !childOK || child == parent {
 				continue
 			}
@@ -293,30 +284,51 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 		return cmp.Compare(a.key(), b.key())
 	})
 
-	for _, node := range graph.Nodes {
-		node.InDegree = len(node.Parents)
-	}
-
 	return graph, nil
 }
 
-// GetLeaves returns removable packages: artifact nodes that no enabled
-// requirement selects and that nothing else depends upon, sorted by ID.
-// Module nodes are never leaves. The server core and bootstrap inputs are
-// lock inputs rather than packages, so they never become nodes and can
-// never be reported as removable.
+// GetLeaves returns artifact nodes that declare no dependencies. A lock
+// artifact is a leaf when none of the modules it ships has a dependency
+// child; a probe artifact is a leaf when it has no dependency children.
+// Being selected by a manifest requirement does not disqualify a package:
+// leaves describe the dependency graph, not removability.
 func (g *DependencyGraph) GetLeaves() []*GraphNode {
 	var leaves []*GraphNode
 	for _, node := range g.Nodes {
-		if node.Module || node.Root || node.InDegree != 0 {
+		if node.Module || g.artifactHasDependencies(node) {
 			continue
 		}
 		leaves = append(leaves, node)
 	}
 	slices.SortFunc(leaves, func(a, b *GraphNode) int {
-		return cmp.Compare(a.ID, b.ID)
+		if c := cmp.Compare(a.ID, b.ID); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.key(), b.key())
 	})
 	return leaves
+}
+
+// artifactHasDependencies reports whether an artifact node has dependency
+// children, either through the modules it ships or, for a probe graph,
+// directly through the artifact's own dependency edges.
+func (g *DependencyGraph) artifactHasDependencies(node *GraphNode) bool {
+	shipped := false
+	for _, candidate := range g.Nodes {
+		if !candidate.Module || candidate.Artifact != node.ID ||
+			candidate.Environment != node.Environment ||
+			candidate.Ecosystem != node.Ecosystem {
+			continue
+		}
+		shipped = true
+		if len(candidate.Children) > 0 {
+			return true
+		}
+	}
+	if shipped {
+		return false
+	}
+	return len(node.Children) > 0
 }
 
 func (g *DependencyGraph) GetRoots() []*GraphNode {
@@ -390,10 +402,3 @@ func (g *DependencyGraph) OrderedRoots() []*GraphNode {
 	})
 	return ordered
 }
-
-// RuntimeServer and RuntimeMCDR are the lock runtime names that scope graph
-// nodes and lock packages.
-const (
-	RuntimeServer = "server"
-	RuntimeMCDR   = "mcdr"
-)

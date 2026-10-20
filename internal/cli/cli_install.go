@@ -5,7 +5,8 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/operation"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +18,7 @@ const (
 
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: message.InstallShort,
+	Short: help.InstallShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionInstall,
 }
@@ -26,7 +27,7 @@ func NewInstallCommand() *cobra.Command {
 	installCmd.Flags().Bool(
 		flagInstallLockedName,
 		false,
-		"Fail instead of re-resolving when the lock is missing or stale",
+		"Do not resolve new versions; fail when the lock cannot satisfy",
 	)
 	installCmd.Flags().Bool(
 		flagInstallOfflineName,
@@ -36,7 +37,7 @@ func NewInstallCommand() *cobra.Command {
 	installCmd.Flags().Bool(
 		flagInstallWithOptionalName,
 		false,
-		"Re-resolve to install optional upstream dependencies and record them as explicit requirements",
+		"Also install optional dependencies and record them as explicit packages",
 	)
 	return installCmd
 }
@@ -58,5 +59,5 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 		PublishManifest: false,
 	}
 
-	return install.Run(cmd.Context(), workDir, opts)
+	return operation.Sync(cmd.Context(), workDir, opts)
 }

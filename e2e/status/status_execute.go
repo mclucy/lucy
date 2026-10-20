@@ -13,16 +13,17 @@ import (
 // Keeping the runner independent makes it verify the binary's public output.
 type statusOutput struct {
 	Server struct {
-		PrimaryRuntime    runtimeRef   `json:"primary_runtime"`
-		RuntimeComponents []runtimeRef `json:"runtime_components"`
+		Primary    runtimeRef   `json:"primary_runtime"`
+		Components []runtimeRef `json:"runtime_components"`
 	} `json:"server"`
-	ModPath []string `json:"mod_path"`
+	PackageDirs []string `json:"package_dirs"`
 }
 
 type runtimeRef struct {
-	Eco     string `json:"Eco"`
-	Name    string `json:"Name"`
-	Version string `json:"Version"`
+	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	Ecosystem string `json:"ecosystem"`
+	Version   string `json:"version"`
 }
 
 func executeStatus(binary, dir string) (statusOutput, error) {

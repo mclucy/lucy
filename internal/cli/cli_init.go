@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/term"
-	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
@@ -33,7 +33,7 @@ const (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: message.InitShort,
+	Short: help.InitShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionInit,
 }
@@ -45,9 +45,8 @@ func NewInitCommand() *cobra.Command {
 		false,
 		"Overwrite an existing manifest without asking",
 	)
-	initCmd.Flags().BoolP(
+	initCmd.Flags().Bool(
 		flagInitAllowEmptyName,
-		"y",
 		false,
 		"Record an empty server when none is detected",
 	)
@@ -64,17 +63,17 @@ func NewInitCommand() *cobra.Command {
 	initCmd.Flags().String(
 		flagInitCoreName,
 		"",
-		"Core distribution or core@version (e.g. fabric@0.16.9, paper)",
+		"Server software, optionally with a version (e.g. fabric@0.16.9, paper)",
 	)
 	initCmd.Flags().String(
 		flagInitCoreVersionName,
 		"",
-		"Core distribution version or selector",
+		"Server software version or version rule",
 	)
 	initCmd.Flags().String(
 		flagInitRepositoryName,
 		"",
-		"GitHub repository serving the core jar (owner/repo)",
+		"GitHub repository serving the server JAR (owner/repo)",
 	)
 	initCmd.Flags().String(
 		flagInitMCDRVersionName,
@@ -83,14 +82,14 @@ func NewInitCommand() *cobra.Command {
 	)
 	initCmd.Flags().StringP(
 		flagInitDirectoryName,
-		"C",
+		"d",
 		"",
-		"Workspace-relative directory that holds the server",
+		"Directory relative to the current directory that holds the server",
 	)
 	initCmd.Flags().Bool(
 		flagInitDetectName,
 		true,
-		"Detect runtime from server directory",
+		"Detect the server from this directory",
 	)
 	initCmd.Flags().String(
 		flagInitWorkDirName,
@@ -133,10 +132,10 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 		detect = flagBoolInit(cmd, flagInitDetectName)
 	}
 
-	opts := install.InitOptions{
+	opts := operation.InitOptions{
 		Minecraft:       mc,
-		Distribution:    distribution,
-		CoreVersion:     coreVer,
+		Product:         distribution,
+		ProductVersion:  coreVer,
 		Repository:      flagStringInit(cmd, flagInitRepositoryName),
 		MCDRVersion:     flagStringInit(cmd, flagInitMCDRVersionName),
 		Directory:       flagStringInit(cmd, flagInitDirectoryName),
@@ -153,15 +152,15 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 // Warnings observed during initialization surface on stderr once, failures
 // return to the command framework, and success reprints the stored manifest
 // from the returned document instead of rereading it.
-func initializeWorkspace(cmd *cobra.Command, workDir string, opts install.InitOptions) error {
-	d, warnings, err := install.Initialize(cmd.Context(), workDir, opts)
+func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.InitOptions) error {
+	d, warnings, err := operation.Initialize(cmd.Context(), workDir, opts)
 	for _, warning := range warnings {
 		report.Warn(warning)
 	}
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s for Minecraft %s (%s)\n", manifest.Filename, d.Server.Minecraft, d.Server.Core.Distribution)
+	fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s for Minecraft %s (%s)\n", manifest.Filename, d.Server.Minecraft, d.Server.Core.Product)
 	return nil
 }
 

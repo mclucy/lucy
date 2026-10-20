@@ -3,5 +3,5 @@
 # Distributed through FTB App and CurseForge projects 314906 (Forge) and 472657 (Fabric).
 url: https://github.com/FTBTeam/FTB-Chunks.git
 commit: 9103b7a5d4ee48d43d20fdac14109c7f982df25a
-platform: fabric
+ecosystem: fabric
 project: ':fabric'

@@ -15,7 +15,7 @@ const (
 	FlagLogFile         = "log-file"
 	FlagPrintLogs       = "print-logs"
 	FlagLogLevel        = "log-level"
-	FlagPlatform        = "platform"
+	FlagEcosystem       = "ecosystem"
 	FlagUseGitHubMirror = "use-github-mirror"
 )
 
@@ -55,7 +55,7 @@ func AddLogoFlag(cmd *cobra.Command) {
 	)
 }
 
-// AddPlatformFlag adds an optional target ecosystem selector to a command.
-func AddPlatformFlag(cmd *cobra.Command) {
-	cmd.Flags().String(FlagPlatform, "", "Resolve packages for PLATFORM")
+// AddEcosystemFlag adds an optional mod or plugin type to a command.
+func AddEcosystemFlag(cmd *cobra.Command) {
+	cmd.Flags().String(FlagEcosystem, "", "Mod or plugin type (fabric, forge, neoforge, bukkit, paper, mcdr)")
 }

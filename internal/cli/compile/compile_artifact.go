@@ -60,7 +60,7 @@ func ensureAbsent(path string) error {
 	return nil
 }
 
-func selectArtifact(project gradleProject, platform types.Ecosystem) (string, error) {
+func selectArtifact(project gradleProject, ecosystem types.Ecosystem) (string, error) {
 	candidates := make([]archive, 0, len(project.Archives))
 	seen := make(map[string]bool, len(project.Archives))
 	for _, output := range project.Archives {
@@ -80,12 +80,12 @@ func selectArtifact(project gradleProject, platform types.Ecosystem) (string, er
 		if !info.Mode().IsRegular() {
 			continue
 		}
-		packages, err := artifact.Analyze(output.File)
+		packages, err := artifact.ReadInfo(output.File)
 		if err != nil {
 			return "", fmt.Errorf("verify built archive %q: %w", output.File, err)
 		}
-		matches := slices.ContainsFunc(packages, func(info artifact.Info) bool {
-			return supportedPlatform(info.Ref.Eco) && (platform == "" || info.Ref.Eco == platform)
+		matches := slices.ContainsFunc(packages, func(info artifact.PackageInfo) bool {
+			return supportedEcosystem(info.Ref.Ecosystem) && (ecosystem == "" || info.Ref.Ecosystem == ecosystem)
 		})
 		if matches {
 			seen[output.File] = true
