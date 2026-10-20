@@ -23,13 +23,6 @@ func Debug(content any, fields ...any) {
 	write(log.DebugLevel, content, fields...)
 }
 
-// Fatal records a fatal error without terminating the process.
-func Fatal(err error) {
-	if err != nil {
-		write(log.FatalLevel, err)
-	}
-}
-
 func write(level log.Level, content any, fields ...any) {
 	mu.RLock()
 	defer mu.RUnlock()

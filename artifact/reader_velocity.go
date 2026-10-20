@@ -42,7 +42,7 @@ func newBungeeCordReader() Reader {
 func (r *velocityReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "velocity-plugin.json" {
 			continue
@@ -68,27 +68,26 @@ func (r *velocityReader) Read(
 			authors = append(authors, types.Person{Name: author})
 		}
 
-		urls := make([]types.Url, 0, 1)
+		urls := make([]types.URL, 0, 1)
 		if descriptor.URL != "" {
 			urls = append(
-				urls, types.Url{
+				urls, types.URL{
 					Name: "Homepage",
-					Type: types.UrlHome,
-					Url:  descriptor.URL,
+					Type: types.URLHome,
+					URL:  descriptor.URL,
 				},
 			)
 		}
 
-		return []Info{
+		return []PackageInfo{
 			{
-				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.ID), Source: types.SourceUnknown}, Eco: types.EcoVelocity},
-				Version:  types.BareVersion(descriptor.Version),
+				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.ID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemVelocity, Version: types.Version(descriptor.Version)},
 				FilePath: filePath,
 				Metadata: types.Metadata{
 					Title:       descriptor.Name,
 					Description: descriptor.Description,
 					Authors:     authors,
-					Urls:        urls,
+					URLs:        urls,
 				},
 			},
 		}, nil
@@ -100,7 +99,7 @@ func (r *velocityReader) Read(
 func (r *bungeeCordReader) Read(
 	zipRdr *zip.Reader,
 	filePath string,
-) ([]Info, error) {
+) ([]PackageInfo, error) {
 	for _, f := range zipRdr.File {
 		if f.Name != "bungee.yml" {
 			continue
@@ -128,27 +127,26 @@ func (r *bungeeCordReader) Read(
 			authors = append(authors, types.Person{Name: author})
 		}
 
-		urls := make([]types.Url, 0, 1)
+		urls := make([]types.URL, 0, 1)
 		if descriptor.Website != "" {
 			urls = append(
-				urls, types.Url{
+				urls, types.URL{
 					Name: "Website",
-					Type: types.UrlHome,
-					Url:  descriptor.Website,
+					Type: types.URLHome,
+					URL:  descriptor.Website,
 				},
 			)
 		}
 
-		return []Info{
+		return []PackageInfo{
 			{
-				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.Name), Source: types.SourceUnknown}, Eco: types.EcoBungeecord},
-				Version:  types.BareVersion(descriptor.Version),
+				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.Name), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemBungeeCord, Version: types.Version(descriptor.Version)},
 				FilePath: filePath,
 				Metadata: types.Metadata{
 					Title:       descriptor.Name,
 					Description: descriptor.Description,
 					Authors:     authors,
-					Urls:        urls,
+					URLs:        urls,
 				},
 			},
 		}, nil

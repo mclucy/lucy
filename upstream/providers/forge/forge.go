@@ -26,8 +26,8 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Id() types.SourceId {
-	return types.SourceForge
+func (provider) Provider() types.Provider {
+	return types.ProviderForge
 }
 
 type promotions struct {
@@ -49,9 +49,9 @@ func (p provider) ResolveVersionSelector(
 	}
 
 	return types.VersionedPackageRef{
-		Eco:     types.EcoForge,
-		Name:    "forge",
-		Version: types.BareVersion(forgeVersion),
+		Ecosystem: types.EcosystemForge,
+		Name:      "forge",
+		Version:   types.Version(forgeVersion),
 	}, nil
 }
 
@@ -79,7 +79,7 @@ func (p provider) Fetch(
 	fileURL := installerURL(gameVersion, forgeVersion)
 
 	return types.ResolvedPackage{
-		FileUrl: fileURL,
+		FileURL: fileURL,
 		Filename: fmt.Sprintf(
 			"forge-%s-%s-installer.jar",
 			gameVersion.String(),
@@ -88,24 +88,24 @@ func (p provider) Fetch(
 	}, nil
 }
 
-func minecraftVersionForInstall(local upstream.LocalContext) (types.BareVersion, error) {
-	switch local.ModLoader {
-	case types.EcoVanilla:
-		return local.GameVersion, nil
-	case types.EcoUnspecified:
+func minecraftVersionForInstall(local upstream.LocalContext) (types.Version, error) {
+	switch local.Ecosystem {
+	case types.EcosystemVanilla:
+		return local.MinecraftVersion, nil
+	case types.EcosystemUnspecified:
 		selectedVersion := promptSelectMinecraftVersion()
 		if selectedVersion == "none" || selectedVersion == "error" {
 			return "", errors.New("minecraft version selection cancelled or failed")
 		}
-		return types.BareVersion(selectedVersion), nil
+		return types.Version(selectedVersion), nil
 	default:
-		return local.GameVersion, nil
+		return local.MinecraftVersion, nil
 	}
 }
 
 func forgeVersionFromPackageRef(
 	p types.VersionedPackageRef,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 ) (string, error) {
 	if p.Version != types.VersionBeta &&
 		p.Version != types.VersionStable &&
@@ -113,7 +113,7 @@ func forgeVersionFromPackageRef(
 		p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
 	}
-	return fetchVersion(gameVersion)
+	return fetchVersion(gameVersion, p.Version)
 }
 
 func promptSelectMinecraftVersion() (version string) {
@@ -234,7 +234,13 @@ func parseSupportedMinecraftVersions(data []byte) ([]string, error) {
 	return versions, nil
 }
 
-func fetchVersion(gameVersion types.BareVersion) (string, error) {
+// fetchVersion selects a Forge version from the promotions data. stable
+// accepts the recommended promotion only; beta accepts the latest promotion;
+// any prefers the recommended release and falls back to the latest.
+func fetchVersion(
+	gameVersion types.Version,
+	selector types.Version,
+) (string, error) {
 	body, err := cache.CachedGetBytes(
 		promotionsURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
@@ -252,11 +258,27 @@ func fetchVersion(gameVersion types.BareVersion) (string, error) {
 	}
 
 	keyBase := gameVersion.String()
-	if v := data.Promos[keyBase+"-recommended"]; v != "" {
-		return v, nil
-	}
-	if v := data.Promos[keyBase+"-latest"]; v != "" {
-		return v, nil
+	recommended := data.Promos[keyBase+"-recommended"]
+	latest := data.Promos[keyBase+"-latest"]
+	switch selector {
+	case types.VersionStable:
+		if recommended != "" {
+			return recommended, nil
+		}
+	case types.VersionBeta:
+		if latest != "" {
+			return latest, nil
+		}
+		if recommended != "" {
+			return recommended, nil
+		}
+	default:
+		if recommended != "" {
+			return recommended, nil
+		}
+		if latest != "" {
+			return latest, nil
+		}
 	}
 
 	return "", fmt.Errorf(
@@ -268,7 +290,7 @@ func fetchVersion(gameVersion types.BareVersion) (string, error) {
 }
 
 func installerURL(
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 	forgeVersion string,
 ) string {
 	combinedVersion := fmt.Sprintf("%s-%s", gameVersion.String(), forgeVersion)

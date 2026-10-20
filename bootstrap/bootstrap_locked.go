@@ -44,7 +44,7 @@ func CopyLockedFile(src, dst string, mode os.FileMode) error {
 }
 
 func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, corePath string, inputs map[string]string) error {
-	if err := manifest.SafePath(server.Directory); err != nil {
+	if err := manifest.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
 	root := filepath.Join(stage, server.Directory)
@@ -52,7 +52,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		return err
 	}
 	var installer *zip.ReadCloser
-	if server.Bootstrap == "forge-installer" {
+	if server.Bootstrapper == "forge-installer" {
 		var err error
 		installer, err = zip.OpenReader(corePath)
 		if err != nil {
@@ -61,7 +61,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		defer installer.Close()
 	}
 	for _, input := range server.Inputs {
-		if err := manifest.SafePath(input.Path); err != nil {
+		if err := manifest.SafeRelativePath(input.Path); err != nil {
 			return err
 		}
 		dst := filepath.Join(root, filepath.FromSlash(input.Path))
@@ -82,7 +82,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 			return err
 		}
 	}
-	switch server.Bootstrap {
+	switch server.Bootstrapper {
 	case "":
 		return CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644)
 	case "paperclip":
@@ -97,7 +97,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		}
 		return nil
 	case "fabric":
-		p, err := routing.MavenPath("net.fabricmc:fabric-loader:" + server.CoreVersion)
+		p, err := routing.MavenPath("net.fabricmc:fabric-loader:" + server.CoreVersion.String())
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 	case "forge-installer":
 		return executeServerProfile(ctx, root, server, corePath, &installer.Reader)
 	default:
-		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrap)
+		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrapper)
 	}
 }
 
@@ -192,7 +192,7 @@ func executeServerProfile(ctx context.Context, root string, server lockfile.Serv
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return err
 	}
-	vars := map[string]string{"SIDE": "server", "ROOT": root, "LIBRARY_DIR": filepath.Join(root, "libraries"), "INSTALLER": corePath, "MINECRAFT_VERSION": server.Minecraft, "MINECRAFT_JAR": filepath.Join(root, "server.jar")}
+	vars := map[string]string{"SIDE": "server", "ROOT": root, "LIBRARY_DIR": filepath.Join(root, "libraries"), "INSTALLER": corePath, "MINECRAFT_VERSION": server.Minecraft.String(), "MINECRAFT_JAR": filepath.Join(root, "server.jar")}
 	for key, value := range profile.Data {
 		v := value.Server
 		if strings.HasPrefix(v, "/") {
@@ -320,12 +320,12 @@ func executeServerProfile(ctx context.Context, root string, server lockfile.Serv
 	// Profile extraction processors generate the native server launch scripts.
 	if _, err := os.Stat(filepath.Join(root, "run.sh")); err != nil {
 		prefix := "net/neoforged/neoforge/"
-		if server.Distribution == "forge" {
+		if server.Product == "forge" {
 			prefix = "net/minecraftforge/forge/"
 		}
-		version := server.CoreVersion
-		if server.Distribution == "forge" {
-			version = server.Minecraft + "-" + version
+		version := server.CoreVersion.String()
+		if server.Product == "forge" {
+			version = server.Minecraft.String() + "-" + version
 		}
 		argsPath := "libraries/" + prefix + version + "/unix_args.txt"
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(argsPath))); err != nil {

@@ -15,9 +15,9 @@ type modrinthDependencies struct {
 	platform types.Ecosystem
 }
 
-func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies {
-	result := types.PackageDependencies{
-		Authentic: false,
+func (m *modrinthDependencies) ToDependencySet() types.DependencySet {
+	result := types.DependencySet{
+		FromArtifact: false,
 	}
 
 	for _, dep := range m.version.Dependencies {
@@ -26,9 +26,9 @@ func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies
 		}
 
 		parentId := types.VersionedPackageRef{
-			Name:    input.ToProjectName(m.version.Id),
-			Eco:     m.platform,
-			Version: types.BareVersion(m.version.VersionNumber),
+			Name:      input.ToProjectName(m.version.ID),
+			Ecosystem: m.platform,
+			Version:   types.Version(m.version.VersionNumber),
 		}
 
 		depId, err := DependencyToPackage(parentId, &dep)
@@ -43,9 +43,9 @@ func (m *modrinthDependencies) ToPackageDependencies() types.PackageDependencies
 		}
 
 		mandatory := dep.DependencyType == required
-		result.Value = append(
-			result.Value, types.Dependency{
-				Id:        depId,
+		result.Dependencies = append(
+			result.Dependencies, types.Dependency{
+				ID:        depId,
 				Mandatory: mandatory,
 			},
 		)

@@ -1,6 +1,6 @@
 package detector
 
 type ExecutableDetector interface {
-	Detect(DetectionContext, *DetectionFile) (*ExecutableEvidence, error)
+	Detect(DetectionContext, *DetectionFile) (*RuntimeEvidence, error)
 	Name() string
 }

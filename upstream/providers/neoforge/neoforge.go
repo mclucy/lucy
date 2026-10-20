@@ -24,8 +24,8 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Id() types.SourceId {
-	return types.SourceNeoForge
+func (provider) Provider() types.Provider {
+	return types.ProviderNeoForge
 }
 
 type mavenMetadata struct {
@@ -51,9 +51,9 @@ func (p provider) ResolveVersionSelector(
 	}
 
 	return types.VersionedPackageRef{
-		Eco:     types.EcoNeoforge,
-		Name:    "neoforge",
-		Version: types.BareVersion(neoForgeVersion),
+		Ecosystem: types.EcosystemNeoForge,
+		Name:      "neoforge",
+		Version:   types.Version(neoForgeVersion),
 	}, nil
 }
 
@@ -81,7 +81,7 @@ func (p provider) Fetch(
 	fileURL := installerURL(neoForgeVersion)
 
 	return types.ResolvedPackage{
-		FileUrl: fileURL,
+		FileURL: fileURL,
 		Filename: fmt.Sprintf(
 			"neoforge-%s-installer.jar",
 			neoForgeVersion,
@@ -89,24 +89,24 @@ func (p provider) Fetch(
 	}, nil
 }
 
-func minecraftVersionForInstall(local upstream.LocalContext) (types.BareVersion, error) {
-	switch local.ModLoader {
-	case types.EcoVanilla:
-		return local.GameVersion, nil
-	case types.EcoUnspecified:
+func minecraftVersionForInstall(local upstream.LocalContext) (types.Version, error) {
+	switch local.Ecosystem {
+	case types.EcosystemVanilla:
+		return local.MinecraftVersion, nil
+	case types.EcosystemUnspecified:
 		selectedVersion := promptSelectMinecraftVersion()
 		if selectedVersion == "none" || selectedVersion == "error" {
 			return "", errors.New("minecraft version selection cancelled or failed")
 		}
-		return types.BareVersion(selectedVersion), nil
+		return types.Version(selectedVersion), nil
 	default:
-		return local.GameVersion, nil
+		return local.MinecraftVersion, nil
 	}
 }
 
 func neoForgeVersionFromPackageRef(
 	p types.VersionedPackageRef,
-	gameVersion types.BareVersion,
+	gameVersion types.Version,
 ) (string, error) {
 	if p.Version != types.VersionBeta &&
 		p.Version != types.VersionStable &&
@@ -114,10 +114,16 @@ func neoForgeVersionFromPackageRef(
 		p.Version != types.VersionUnknown {
 		return p.Version.String(), nil
 	}
-	return fetchLatestVersion(gameVersion)
+	return fetchVersion(gameVersion, p.Version)
 }
 
-func fetchLatestVersion(gameVersion types.BareVersion) (string, error) {
+// fetchVersion selects the newest NeoForge version for the Minecraft
+// version. stable excludes prerelease builds; beta accepts any build; any
+// prefers a release and falls back to a prerelease.
+func fetchVersion(
+	gameVersion types.Version,
+	selector types.Version,
+) (string, error) {
 	body, err := cache.CachedGetBytes(
 		metadataURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
@@ -141,19 +147,55 @@ func fetchLatestVersion(gameVersion types.BareVersion) (string, error) {
 	}
 	neoPrefix := strings.Join(parts[1:], ".") + "."
 
-	versions := meta.Versioning.Versions
-	for _, v := range slices.Backward(versions) {
+	matching := make([]string, 0, len(meta.Versioning.Versions))
+	for _, v := range meta.Versioning.Versions {
 		if strings.HasPrefix(v, neoPrefix) {
-			return v, nil
+			matching = append(matching, v)
 		}
 	}
+	if len(matching) == 0 {
+		return "", fmt.Errorf(
+			"no NeoForge version found for Minecraft %s (looked for prefix %s); see %s",
+			gameVersion,
+			neoPrefix,
+			docsURL,
+		)
+	}
 
-	return "", fmt.Errorf(
-		"no NeoForge version found for Minecraft %s (looked for prefix %s); see %s",
-		gameVersion,
-		neoPrefix,
-		docsURL,
-	)
+	switch selector {
+	case types.VersionStable:
+		for _, v := range slices.Backward(matching) {
+			if !isPrereleaseVersion(v) {
+				return v, nil
+			}
+		}
+		return "", fmt.Errorf(
+			"no stable NeoForge release found for Minecraft %s; see %s",
+			gameVersion,
+			docsURL,
+		)
+	case types.VersionBeta:
+		return matching[len(matching)-1], nil
+	default:
+		for _, v := range slices.Backward(matching) {
+			if !isPrereleaseVersion(v) {
+				return v, nil
+			}
+		}
+		return matching[len(matching)-1], nil
+	}
+}
+
+func isPrereleaseVersion(version string) bool {
+	lower := strings.ToLower(version)
+	for _, marker := range []string{
+		"-beta", "-alpha", "-pre", "-rc", "-snapshot",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func installerURL(neoForgeVersion string) string {
@@ -174,7 +216,7 @@ func promptSelectMinecraftVersion() (version string) {
 	gameVersions := make([]string, 0, 20)
 	for i := 0; i < len(manifest.Versions) && len(gameVersions) < 20; i++ {
 		if manifest.Versions[i].Type == "release" {
-			gameVersions = append(gameVersions, manifest.Versions[i].Id)
+			gameVersions = append(gameVersions, manifest.Versions[i].ID)
 		}
 	}
 

@@ -13,7 +13,7 @@ func (d *VanillaDetector) Name() string {
 	return "vanilla server"
 }
 
-func (d *VanillaDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*ExecutableEvidence, error) {
+func (d *VanillaDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
 	filePath := primaryFile.Path()
 	zipReader, err := primaryFile.Archive()
 	if err != nil {
@@ -50,15 +50,15 @@ func (d *VanillaDetector) Detect(context DetectionContext, primaryFile *Detectio
 				return nil, nil
 			}
 
-			exec := &ExecutableEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-				Eco:     types.EcoMinecraft,
-				Name:    "minecraft",
-				Version: gameVersion,
+			exec := &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+				Ecosystem: types.EcosystemMinecraft,
+				Name:      "minecraft",
+				Version:   gameVersion,
 			}, RuntimeComponents: []types.VersionedPackageRef{
 				{
-					Eco:     types.EcoMinecraft,
-					Name:    "minecraft",
-					Version: gameVersion,
+					Ecosystem: types.EcosystemMinecraft,
+					Name:      "minecraft",
+					Version:   gameVersion,
 				},
 			}}
 

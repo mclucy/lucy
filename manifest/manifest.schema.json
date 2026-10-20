@@ -15,24 +15,24 @@
         },
         "core": {
           "properties": {
-            "distribution": {
+            "product": {
               "type": "string"
             },
-            "version": {
+            "product_version": {
               "type": "string"
             },
             "repository": {
               "type": "string"
             },
-            "file": {
+            "file_pattern": {
               "type": "string"
             }
           },
           "additionalProperties": false,
           "type": "object",
           "required": [
-            "distribution",
-            "version"
+            "product",
+            "product_version"
           ]
         },
         "packages": {
@@ -41,17 +41,17 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "description": "A version selector: stable, a tag, or an exact version."
+                  "description": "A version selector: any, stable, beta, a tag, or an exact version."
                 },
                 {
                   "properties": {
-                    "version": {
+                    "selector": {
                       "type": "string",
-                      "description": "A version selector: stable, a tag, or an exact version."
+                      "description": "A version selector: any, stable, beta, a tag, or an exact version."
                     },
-                    "file": {
+                    "file_pattern": {
                       "type": "string",
-                      "description": "Workspace-relative path to a local package artifact."
+                      "description": "Glob pattern matching the upstream artifact filename."
                     },
                     "enabled": {
                       "type": "boolean",
@@ -91,17 +91,17 @@
             "oneOf": [
               {
                 "type": "string",
-                "description": "A version selector: stable, a tag, or an exact version."
+                "description": "A version selector: any, stable, beta, a tag, or an exact version."
               },
               {
                 "properties": {
-                  "version": {
+                  "selector": {
                     "type": "string",
-                    "description": "A version selector: stable, a tag, or an exact version."
+                    "description": "A version selector: any, stable, beta, a tag, or an exact version."
                   },
-                  "file": {
+                  "file_pattern": {
                     "type": "string",
-                    "description": "Workspace-relative path to a local package artifact."
+                    "description": "Glob pattern matching the upstream artifact filename."
                   },
                   "enabled": {
                     "type": "boolean",

@@ -16,7 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func validateAmbient(ctx context.Context, root string, d *lockfile.Document) error {
+func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Document) error {
 	raw, err := os.ReadFile(filepath.Join(root, ".lucy", "install.yaml"))
 	owned := map[string]bool{}
 	if err == nil {
@@ -32,23 +32,23 @@ func validateAmbient(ctx context.Context, root string, d *lockfile.Document) err
 	}
 	seenDirectories := map[string]bool{}
 	for _, planned := range d.Packages {
-		active := len(planned.Requirements) == 0
+		enabled := len(planned.Requirements) == 0
 		for _, r := range planned.Requirements {
-			active = active || r.Enabled
+			enabled = enabled || r.Enabled
 		}
-		if !active {
+		if !enabled {
 			continue
 		}
 		directory, folder := d.Server.Directory, "mods"
-		if planned.Loader == types.EcoBukkit {
+		if planned.Ecosystem == types.EcosystemBukkit {
 			folder = "plugins"
 		}
-		if planned.Runtime == "mcdr" {
+		if planned.Environment == types.EnvironmentMCDR {
 			directory = d.MCDR.Directory
 			folder = "plugins"
 		}
 		relative := filepath.Join(directory, folder)
-		key := planned.Runtime + "/" + string(planned.Loader) + "/" + relative
+		key := string(planned.Environment) + "/" + string(planned.Ecosystem) + "/" + relative
 		if seenDirectories[key] {
 			continue
 		}
@@ -68,12 +68,12 @@ func validateAmbient(ctx context.Context, root string, d *lockfile.Document) err
 			if owned[filepath.ToSlash(filename)] {
 				continue
 			}
-			mods, err := artifact.Inspect(ctx, filepath.Join(root, filename), planned.Loader)
+			mods, err := artifact.ReadModules(ctx, filepath.Join(root, filename), planned.Ecosystem)
 			if err != nil {
 				continue
 			}
 			for _, other := range d.Packages {
-				if other.Runtime != planned.Runtime || other.Loader != planned.Loader {
+				if other.Environment != planned.Environment || other.Ecosystem != planned.Ecosystem {
 					continue
 				}
 				for _, discovered := range mods {

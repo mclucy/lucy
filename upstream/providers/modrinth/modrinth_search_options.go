@@ -72,11 +72,11 @@ func (op facetItemOperation) String() string {
 type facetItem struct {
 	Type      string
 	Operation facetItemOperation
-	Value     string
+	Match     string
 }
 
 func (f *facetItem) String() string {
-	return `"` + f.Type + f.Operation.String() + f.Value + `"`
+	return `"` + f.Type + f.Operation.String() + f.Match + `"`
 }
 
 // facetItems is an array of facetItem. It represents an expression joined by
@@ -110,42 +110,42 @@ var facetAllLoaders = facetItems{
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "forge",
+		Match:     "forge",
 	},
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "fabric",
+		Match:     "fabric",
 	},
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "quilt",
+		Match:     "quilt",
 	},
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "liteloader",
+		Match:     "liteloader",
 	},
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "modloader",
+		Match:     "modloader",
 	},
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "rift",
+		Match:     "rift",
 	},
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "neoforge",
+		Match:     "neoforge",
 	},
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "bukkit",
+		Match:     "bukkit",
 	},
 }
 
@@ -153,7 +153,7 @@ var facetForgeOnly = facetItems{
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "forge",
+		Match:     "forge",
 	},
 }
 
@@ -161,7 +161,7 @@ var facetFabricOnly = facetItems{
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "fabric",
+		Match:     "fabric",
 	},
 }
 
@@ -169,7 +169,7 @@ var facetNeoforgeOnly = facetItems{
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "neoforge",
+		Match:     "neoforge",
 	},
 }
 
@@ -177,7 +177,7 @@ var facetBukkitOnly = facetItems{
 	{
 		Type:      "categories",
 		Operation: operationEq,
-		Value:     "bukkit",
+		Match:     "bukkit",
 	},
 }
 
@@ -185,12 +185,12 @@ var facetServerSupported = facetItems{
 	{
 		Type:      "server_side",
 		Operation: operationEq,
-		Value:     "required",
+		Match:     "required",
 	},
 	{
 		Type:      "server_side",
 		Operation: operationEq,
-		Value:     "optional",
+		Match:     "optional",
 	},
 }
 
@@ -198,12 +198,12 @@ var facetClientSupported = facetItems{
 	{
 		Type:      "client_side",
 		Operation: operationEq,
-		Value:     "required",
+		Match:     "required",
 	},
 	{
 		Type:      "client_side",
 		Operation: operationEq,
-		Value:     "optional",
+		Match:     "optional",
 	},
 }
 
@@ -212,14 +212,14 @@ var facetBothRequired = []facetItems{
 		{
 			Type:      "server_side",
 			Operation: operationEq,
-			Value:     "required",
+			Match:     "required",
 		},
 	},
 	{
 		{
 			Type:      "client_side",
 			Operation: operationEq,
-			Value:     "required",
+			Match:     "required",
 		},
 	},
 }
@@ -229,24 +229,24 @@ var facetBothSupported = []facetItems{
 		{
 			Type:      "server_side",
 			Operation: operationEq,
-			Value:     "required",
+			Match:     "required",
 		},
 		{
 			Type:      "server_side",
 			Operation: operationEq,
-			Value:     "optional",
+			Match:     "optional",
 		},
 	},
 	{
 		{
 			Type:      "client_side",
 			Operation: operationEq,
-			Value:     "required",
+			Match:     "required",
 		},
 		{
 			Type:      "client_side",
 			Operation: operationEq,
-			Value:     "optional",
+			Match:     "optional",
 		},
 	},
 }

@@ -23,23 +23,23 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Id() types.SourceId {
-	return types.SourceBMCLAPI
+func (provider) Provider() types.Provider {
+	return types.ProviderBMCLAPI
 }
 
 func (p provider) ResolveVersionSelector(
 	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (types.VersionedPackageRef, error) {
-	switch id.Eco {
-	case types.EcoMinecraft:
+	switch id.Ecosystem {
+	case types.EcosystemMinecraft:
 		return mojang.Provider.ResolveVersionSelector(local, id)
-	case types.EcoForge:
+	case types.EcosystemForge:
 		return forge.Provider.ResolveVersionSelector(local, id)
-	case types.EcoNeoforge:
+	case types.EcosystemNeoForge:
 		return neoforge.Provider.ResolveVersionSelector(local, id)
 	default:
-		return id, unsupportedEcosystem(id.Eco)
+		return id, unsupportedEcosystem(id.Ecosystem)
 	}
 }
 
@@ -47,36 +47,36 @@ func (p provider) Fetch(
 	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (types.ResolvedPackage, error) {
-	switch id.Eco {
-	case types.EcoMinecraft:
+	switch id.Ecosystem {
+	case types.EcosystemMinecraft:
 		resolved, err := mojang.Provider.Fetch(local, id)
 		if err != nil {
 			return types.ResolvedPackage{}, fmt.Errorf("bmclapi: fetch minecraft metadata: %w", err)
 		}
-		resolved.FileUrl = minecraftBaseURL + id.Version.String() + "/server"
+		resolved.FileURL = minecraftBaseURL + id.Version.String() + "/server"
 		return resolved, nil
-	case types.EcoForge:
+	case types.EcosystemForge:
 		resolved, err := forge.Provider.Fetch(local, id)
 		if err != nil {
 			return types.ResolvedPackage{}, fmt.Errorf("bmclapi: fetch forge artifact: %w", err)
 		}
-		resolved.FileUrl, err = mirrorMavenURL(resolved.FileUrl, forgeMavenBaseURL)
+		resolved.FileURL, err = mirrorMavenURL(resolved.FileURL, forgeMavenBaseURL)
 		if err != nil {
 			return types.ResolvedPackage{}, fmt.Errorf("bmclapi: map forge artifact URL: %w", err)
 		}
 		return resolved, nil
-	case types.EcoNeoforge:
+	case types.EcosystemNeoForge:
 		resolved, err := neoforge.Provider.Fetch(local, id)
 		if err != nil {
 			return types.ResolvedPackage{}, fmt.Errorf("bmclapi: fetch neoforge artifact: %w", err)
 		}
-		resolved.FileUrl, err = mirrorMavenURL(resolved.FileUrl, neoForgeMavenBaseURL)
+		resolved.FileURL, err = mirrorMavenURL(resolved.FileURL, neoForgeMavenBaseURL)
 		if err != nil {
 			return types.ResolvedPackage{}, fmt.Errorf("bmclapi: map neoforge artifact URL: %w", err)
 		}
 		return resolved, nil
 	default:
-		return types.ResolvedPackage{}, unsupportedEcosystem(id.Eco)
+		return types.ResolvedPackage{}, unsupportedEcosystem(id.Ecosystem)
 	}
 }
 

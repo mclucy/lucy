@@ -19,13 +19,13 @@ var pluginEcosystems = []struct {
 	{id: "dev.architectury.loom", multi: true},
 	{id: "architectury.loom", multi: true},
 	{id: "architectury-plugin", multi: true},
-	{id: "net.fabricmc.fabric-loom", ecos: []types.Ecosystem{types.EcoFabric}},
-	{id: "net.fabricmc.fabric-loom-remap", ecos: []types.Ecosystem{types.EcoFabric}},
-	{id: "fabric-loom", ecos: []types.Ecosystem{types.EcoFabric}},
-	{id: "net.minecraftforge.gradle", ecos: []types.Ecosystem{types.EcoForge}},
-	{id: "net.neoforged.moddev.legacyforge", ecos: []types.Ecosystem{types.EcoForge}},
-	{id: "net.neoforged.moddev", ecos: []types.Ecosystem{types.EcoNeoforge}},
-	{id: "net.neoforged.gradle.userdev", ecos: []types.Ecosystem{types.EcoNeoforge}},
+	{id: "net.fabricmc.fabric-loom", ecos: []types.Ecosystem{types.EcosystemFabric}},
+	{id: "net.fabricmc.fabric-loom-remap", ecos: []types.Ecosystem{types.EcosystemFabric}},
+	{id: "fabric-loom", ecos: []types.Ecosystem{types.EcosystemFabric}},
+	{id: "net.minecraftforge.gradle", ecos: []types.Ecosystem{types.EcosystemForge}},
+	{id: "net.neoforged.moddev.legacyforge", ecos: []types.Ecosystem{types.EcosystemForge}},
+	{id: "net.neoforged.moddev", ecos: []types.Ecosystem{types.EcosystemNeoForge}},
+	{id: "net.neoforged.gradle.userdev", ecos: []types.Ecosystem{types.EcosystemNeoForge}},
 }
 
 var (
@@ -83,7 +83,7 @@ func (p *prober) scriptEcosystems(file string, plugins []appliedPlugin) []types.
 			value, _ := p.propertyValue(filepath.Dir(file), "loom.platform")
 			platform := types.Ecosystem(value)
 			switch platform {
-			case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
+			case types.EcosystemFabric, types.EcosystemForge, types.EcosystemNeoForge:
 				if !slices.Contains(out, platform) {
 					out = append(out, platform)
 				}

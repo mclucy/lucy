@@ -11,7 +11,7 @@ var ErrAmbiguousVersion = fmt.Errorf("attempting to parse an ambiguous version")
 
 // Parse rejects selectors, unsupported schemes, and invalid concrete versions.
 func Parse(
-	raw types.BareVersion,
+	raw types.Version,
 	scheme types.VersionScheme,
 ) (types.ResolvableVersion, error) {
 	switch raw {
@@ -21,13 +21,13 @@ func Parse(
 
 	var parsed types.ResolvableVersion
 	switch scheme {
-	case types.Semver:
+	case types.VersionSchemeSemver:
 		parsed = parseSemver(raw)
-	case types.Maven:
+	case types.VersionSchemeMaven:
 		parsed = parseMavenVersion(raw)
-	case types.MinecraftRelease:
+	case types.VersionSchemeMinecraftRelease:
 		parsed = parseMinecraftRelease(raw)
-	case types.MinecraftSnapshot:
+	case types.VersionSchemeMinecraftSnapshot:
 		parsed = parseMinecraftSnapshot(raw)
 	default:
 		return nil, fmt.Errorf("unsupported version scheme %v", scheme)

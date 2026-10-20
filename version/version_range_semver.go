@@ -81,7 +81,7 @@ func parseMcdrSemverCriterion(raw string) ([]types.VersionSubExpr, bool) {
 		}
 	}
 
-	lower := parseSemver(types.BareVersion(versionToken))
+	lower := parseSemver(types.Version(versionToken))
 	if lower == nil {
 		return nil, false
 	}
@@ -192,8 +192,8 @@ func parseSemverHyphenRange(raw string) []types.VersionSubExpr {
 	if len(tokens) != 2 {
 		return nil
 	}
-	left := parseSemver(types.BareVersion(strings.TrimSpace(tokens[0])))
-	right := parseSemver(types.BareVersion(strings.TrimSpace(tokens[1])))
+	left := parseSemver(types.Version(strings.TrimSpace(tokens[0])))
+	right := parseSemver(types.Version(strings.TrimSpace(tokens[1])))
 	if left == nil || right == nil {
 		return nil
 	}
@@ -246,7 +246,7 @@ func parseSemverToken(
 		return constraints, true
 	}
 
-	v := parseSemver(types.BareVersion(raw))
+	v := parseSemver(types.Version(raw))
 	if v == nil {
 		return nil, false
 	}
@@ -273,7 +273,7 @@ func parseSemverOperator(
 		}
 	}
 
-	lower := parseSemver(types.BareVersion(versionToken))
+	lower := parseSemver(types.Version(versionToken))
 	if lower == nil && strings.ContainsAny(versionToken, "xX*") {
 		lower = parseSemverLowerBoundFromWildcard(versionToken)
 	}
@@ -468,7 +468,7 @@ func parseSemverLowerBoundFromWildcard(raw string) types.ResolvableVersion {
 	if len(parts) > 3 {
 		parts = parts[:3]
 	}
-	return parseSemver(types.BareVersion(strings.Join(parts, ".")))
+	return parseSemver(types.Version(strings.Join(parts, ".")))
 }
 
 func isWildcardToken(token string) bool {

@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func lockWorkspace(root string) (*os.File, error) {
+func LockWorkspace(root string) (*os.File, error) {
 	f, err := os.OpenFile(filepath.Join(root, ".lucy", "writer.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err

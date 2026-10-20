@@ -4,18 +4,11 @@ import (
 	"github.com/mclucy/lucy/internal/fn"
 )
 
-// BareVersion is the version of a package. Here we expect mods and plugins
-// use semver (which they should). A known exception is Minecraft snapshots.
-//
-// Version selectors — all three are compatible with the detected server by
-// default. They differ only in stability preference:
-//
-//   - VersionAny (default): latest version regardless of release type.
-//   - VersionStable: only stable/release versions, no beta fallback.
-//   - VersionBeta: include beta and pre-release versions.
-type BareVersion string
+// Version is a package version. It may hold a selector during resolution or
+// an exact version after resolution.
+type Version string
 
-func (v BareVersion) String() string {
+func (v Version) String() string {
 	switch v {
 	case VersionAny, "":
 		return "any"
@@ -31,7 +24,7 @@ func (v BareVersion) String() string {
 	return string(v)
 }
 
-func (v BareVersion) CanInfer() bool {
+func (v Version) CanInfer() bool {
 	switch v {
 	case VersionAny, VersionBeta, VersionStable:
 		return true
@@ -39,7 +32,7 @@ func (v BareVersion) CanInfer() bool {
 	return false
 }
 
-func (v BareVersion) IsInvalid() bool {
+func (v Version) IsInvalid() bool {
 	switch v {
 	case VersionNone, VersionUnknown:
 		return true
@@ -48,11 +41,11 @@ func (v BareVersion) IsInvalid() bool {
 }
 
 var (
-	VersionAny     BareVersion = "any"
-	VersionBeta    BareVersion = "beta"
-	VersionStable  BareVersion = "stable"
-	VersionNone    BareVersion = "none"
-	VersionUnknown BareVersion = "unknown"
+	VersionAny     Version = "any"
+	VersionBeta    Version = "beta"
+	VersionStable  Version = "stable"
+	VersionNone    Version = "none"
+	VersionUnknown Version = "unknown"
 )
 
 // ResolvableVersion is an interface for comparable parsed versions.
@@ -62,77 +55,62 @@ var (
 // In principle, you cannot compare two versions with different schemes.
 // Implementations should return false for cross-scheme comparisons.
 type ResolvableVersion interface {
-	// Compare compares this version with v2.
-	// It returns:
-	//   - -1 if this version < v2
-	//   -  0 if this version == v2
-	//   -  1 if this version > v2
-	// The second return value is false when the two versions are not comparable
-	// (for example, cross-scheme comparisons).
 	Compare(v2 ResolvableVersion) (int, bool)
-
-	// Validate returns whether this version has valid, non-zero components.
 	Validate() bool
-
-	// Scheme returns the versioning scheme of this version.
 	Scheme() VersionScheme
 }
 
 type VersionScheme uint8
 
 const (
-	Semver VersionScheme = iota
-	Maven
+	VersionSchemeUnknown VersionScheme = iota
+	VersionSchemeSemver
+	VersionSchemeMaven
 
 	// MinecraftSnapshot docs:
 	// https://zh.minecraft.wiki/w/%E7%89%88%E6%9C%AC%E6%A0%BC%E5%BC%8F#%E5%BF%AB%E7%85%A7%EF%BC%88Snapshot%EF%BC%89
 	// https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system
-	MinecraftSnapshot
-	MinecraftRelease
+	VersionSchemeMinecraftSnapshot
+	VersionSchemeMinecraftRelease
 )
 
-// DependencyType identifies how a dependency is satisfied.
-type DependencyType string
+// DependencyOrigin identifies how a dependency is satisfied.
+type DependencyOrigin string
 
 const (
-	Regular  DependencyType = "regular"
-	Ambient  DependencyType = "ambient"
-	Embedded DependencyType = "embedded"
+	DependencyRegular        DependencyOrigin = "regular"
+	DependencyServerProvided DependencyOrigin = "server-provided"
+	DependencyEmbedded       DependencyOrigin = "embedded"
 )
 
-// DependencyType returns Regular for the zero value.
-func (d Dependency) DependencyType() DependencyType {
-	return NormalizeDependencyType(d.Type)
-}
-
-func NormalizeDependencyType(t DependencyType) DependencyType {
-	if t == "" {
-		return Regular
+func NormalizeDependencyOrigin(origin DependencyOrigin) DependencyOrigin {
+	if origin == "" {
+		return DependencyRegular
 	}
-	return t
+	return origin
 }
 
-func (d Dependency) IsAmbient() bool {
-	return d.DependencyType() == Ambient
+func (d Dependency) IsServerProvided() bool {
+	return NormalizeDependencyOrigin(d.Origin) == DependencyServerProvided
 }
 
 func (d Dependency) IsEmbedded() bool {
-	return d.DependencyType() == Embedded
+	return NormalizeDependencyOrigin(d.Origin) == DependencyEmbedded
 }
 
 // Dependency is a package dependency request. Constraint is a 2D array whose
 // outer array is OR and inner array is AND; nil or empty means no constraint.
-// Id.Version is always empty because Constraint carries the version selector.
+// ID.Version is always empty because Constraint carries the version selector.
 //
-// Type records how the dependency is satisfied. Regular dependencies resolve
-// through upstream sources, ambient dependencies are supplied by the server
-// environment, and embedded dependencies are physically bundled inside the
-// parent artifact (e.g. Fabric jars[] or NeoForge JarInJar).
+// DependencyOrigin records how the dependency is satisfied. Regular
+// dependencies resolve through upstream providers, server-provided
+// dependencies come from the server environment, and embedded dependencies
+// are physically bundled inside the parent artifact.
 type Dependency struct {
-	Id         VersionedPackageRef
+	ID         VersionedPackageRef
 	Constraint VersionExpr
 	Mandatory  bool
-	Type       DependencyType
+	Origin     DependencyOrigin
 }
 
 type VersionExpr [][]VersionSubExpr
@@ -171,7 +149,7 @@ func (exp *VersionSubExpr) Inverse() {
 }
 
 func (d Dependency) Satisfy(id VersionedPackageRef, v ResolvableVersion) bool {
-	if id.Eco != d.Id.Eco || id.Name != d.Id.Name {
+	if id.Ecosystem != d.ID.Ecosystem || id.Name != d.ID.Name {
 		return false
 	}
 
@@ -242,7 +220,7 @@ func compareSemverWeakEq(p1, p2 ResolvableVersion) bool {
 	if p1 == nil || p2 == nil {
 		return false
 	}
-	if p1.Scheme() != Semver || p2.Scheme() != Semver {
+	if p1.Scheme() != VersionSchemeSemver || p2.Scheme() != VersionSchemeSemver {
 		return false
 	}
 	candidate, ok1 := p1.(semverTuple)
@@ -260,7 +238,7 @@ func compareSemverWeakGt(p1, p2 ResolvableVersion) bool {
 	if p1 == nil || p2 == nil {
 		return false
 	}
-	if p1.Scheme() != Semver || p2.Scheme() != Semver {
+	if p1.Scheme() != VersionSchemeSemver || p2.Scheme() != VersionSchemeSemver {
 		return false
 	}
 	candidate, ok1 := p1.(semverTuple)
@@ -275,50 +253,14 @@ func compareSemverWeakGt(p1, p2 ResolvableVersion) bool {
 }
 
 var operatorFunctions = map[VersionOperator]VersionComparator{
-	OpEq: func(p1, p2 ResolvableVersion) bool {
-		return compareByOperator(
-			OpEq,
-			p1,
-			p2,
-		)
-	},
+	OpEq:     func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpEq, p1, p2) },
 	OpWeakEq: compareSemverWeakEq,
-	OpNeq: func(p1, p2 ResolvableVersion) bool {
-		return compareByOperator(
-			OpNeq,
-			p1,
-			p2,
-		)
-	},
-	OpGt: func(p1, p2 ResolvableVersion) bool {
-		return compareByOperator(
-			OpGt,
-			p1,
-			p2,
-		)
-	},
+	OpNeq:    func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpNeq, p1, p2) },
+	OpGt:     func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpGt, p1, p2) },
 	OpWeakGt: compareSemverWeakGt,
-	OpGte: func(p1, p2 ResolvableVersion) bool {
-		return compareByOperator(
-			OpGte,
-			p1,
-			p2,
-		)
-	},
-	OpLt: func(p1, p2 ResolvableVersion) bool {
-		return compareByOperator(
-			OpLt,
-			p1,
-			p2,
-		)
-	},
-	OpLte: func(p1, p2 ResolvableVersion) bool {
-		return compareByOperator(
-			OpLte,
-			p1,
-			p2,
-		)
-	},
+	OpGte:    func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpGte, p1, p2) },
+	OpLt:     func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpLt, p1, p2) },
+	OpLte:    func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpLte, p1, p2) },
 }
 
 const (

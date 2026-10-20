@@ -26,7 +26,7 @@ const (
 
 var forgeArtifactHashLookup = lookupForgeArtifactHash
 
-func ForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
+func ForgeInstallationRuntimes(workPath string) []*RuntimeEvidence {
 	forgeLib := filepath.Join(
 		workPath,
 		"libraries",
@@ -39,7 +39,7 @@ func ForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 		return nil
 	}
 
-	runtimes := make([]*ExecutableEvidence, 0, len(entries))
+	runtimes := make([]*RuntimeEvidence, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -60,7 +60,7 @@ func ForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
 }
 
 func detectForgeInstallFromVersionDir(versionDir string) (
-	*ExecutableEvidence,
+	*RuntimeEvidence,
 	error,
 ) {
 	version := filepath.Base(versionDir)
@@ -69,8 +69,8 @@ func detectForgeInstallFromVersionDir(versionDir string) (
 		return nil, nil
 	}
 
-	gameVersion := types.BareVersion(match[1])
-	forgeVersion := types.BareVersion(match[2])
+	gameVersion := types.Version(match[1])
+	forgeVersion := types.Version(match[2])
 	candidates := []struct {
 		kind forgeArtifactKind
 		path string
@@ -109,7 +109,7 @@ func detectForgeInstallFromVersionDir(versionDir string) (
 			if candidate.kind == forgeArtifactShim {
 				continue
 			}
-			return newForgeExecutableEvidence(
+			return newForgeRuntimeEvidence(
 				candidate.path,
 				gameVersion,
 				forgeVersion,
@@ -130,7 +130,7 @@ func detectForgeInstallFromVersionDir(versionDir string) (
 		if err != nil || !ok {
 			continue
 		}
-		return newForgeExecutableEvidence(
+		return newForgeRuntimeEvidence(
 			candidate.path,
 			gameVersion,
 			forgeVersion,
@@ -143,8 +143,8 @@ func detectForgeInstallFromVersionDir(versionDir string) (
 func verifyForgeArtifactByUnpack(
 	jarPath string,
 	kind forgeArtifactKind,
-	gameVersion types.BareVersion,
-	forgeVersion types.BareVersion,
+	gameVersion types.Version,
+	forgeVersion types.Version,
 ) (bool, error) {
 	file, err := os.Open(jarPath)
 	if err != nil {

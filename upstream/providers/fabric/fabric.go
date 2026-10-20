@@ -18,8 +18,8 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Id() types.SourceId {
-	return types.SourceFabric
+func (provider) Provider() types.Provider {
+	return types.ProviderFabric
 }
 
 type installerVersion struct {
@@ -41,9 +41,9 @@ func (p provider) ResolveVersionSelector(
 		return id, err
 	}
 	return types.VersionedPackageRef{
-		Eco:     types.EcoFabric,
-		Name:    "fabric",
-		Version: types.BareVersion(loaderVersion),
+		Ecosystem: types.EcosystemFabric,
+		Name:      "fabric",
+		Version:   types.Version(loaderVersion),
 	}, nil
 }
 
@@ -52,15 +52,15 @@ func (p provider) Fetch(
 	id types.VersionedPackageRef,
 ) (types.ResolvedPackage, error) {
 	var gameVersionID string
-	switch local.ModLoader {
-	case types.EcoVanilla:
-		gameVersionID = local.GameVersion.String()
-	case types.EcoUnspecified:
+	switch local.Ecosystem {
+	case types.EcosystemVanilla:
+		gameVersionID = local.MinecraftVersion.String()
+	case types.EcosystemUnspecified:
 		gameVersionID = promptSelectMinecraftVersion()
 	default:
 		return types.ResolvedPackage{}, fmt.Errorf(
 			"unsupported server platform %s for fabric bootstrap",
-			local.ModLoader.Title(),
+			local.Ecosystem.Title(),
 		)
 	}
 
@@ -86,7 +86,7 @@ func (p provider) Fetch(
 	)
 
 	return types.ResolvedPackage{
-		FileUrl: url,
+		FileURL: url,
 		Filename: fmt.Sprintf(
 			"fabric-server-mc%s-loader%s-launcher%s.jar",
 			gameVersionID,
@@ -96,8 +96,8 @@ func (p provider) Fetch(
 	}, nil
 }
 
-func loaderVersion(loaderVersion types.BareVersion) (string, error) {
-	if loaderVersion == types.VersionUnknown {
+func loaderVersion(selector types.Version) (string, error) {
+	if selector == types.VersionUnknown {
 		return "", errors.New("unknown game version, cannot resolve fabric loader version")
 	}
 
@@ -105,23 +105,31 @@ func loaderVersion(loaderVersion types.BareVersion) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if len(versions) == 0 {
+		return "", errors.New("no fabric loader versions available")
+	}
 
-	if loaderVersion == types.VersionBeta || loaderVersion == types.VersionStable || loaderVersion == types.VersionAny {
-		if len(versions) == 0 {
-			return "", errors.New("no fabric loader versions available")
+	switch selector {
+	case types.VersionStable:
+		for _, v := range versions {
+			if v.Stable {
+				return v.Version, nil
+			}
 		}
+		return "", errors.New("no stable fabric loader version available")
+	case types.VersionBeta, types.VersionAny:
 		return versions[0].Version, nil
 	}
 
 	for _, v := range versions {
-		if v.Version == loaderVersion.String() {
+		if v.Version == selector.String() {
 			return v.Version, nil
 		}
 	}
 
 	return "", fmt.Errorf(
 		"fabric loader version %s not found",
-		loaderVersion.String(),
+		selector.String(),
 	)
 }
 

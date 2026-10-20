@@ -41,7 +41,7 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcoMcdr,
+		types.EcosystemMCDR,
 		"mcdreforged",
 		"2.12.0",
 		true,
@@ -50,7 +50,7 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcoMcdr,
+		types.EcosystemMCDR,
 		"mcdreforged",
 		"2.11.9",
 		false,
@@ -82,7 +82,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		minecraftExpr,
-		types.EcoFabric,
+		types.EcosystemFabric,
 		"minecraft",
 		"1.20.2",
 		true,
@@ -91,7 +91,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		minecraftExpr,
-		types.EcoFabric,
+		types.EcosystemFabric,
 		"minecraft",
 		"1.20.1",
 		false,
@@ -102,7 +102,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		loaderExpr,
-		types.EcoFabric,
+		types.EcosystemFabric,
 		"fabricloader",
 		"0.16.9",
 		true,
@@ -111,7 +111,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		loaderExpr,
-		types.EcoFabric,
+		types.EcosystemFabric,
 		"fabricloader",
 		"0.14.17",
 		false,
@@ -142,7 +142,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcoFabric,
+		types.EcosystemFabric,
 		"fabricloader",
 		"0.14.19",
 		true,
@@ -151,7 +151,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcoFabric,
+		types.EcosystemFabric,
 		"fabricloader",
 		"0.15.2",
 		false,
@@ -160,7 +160,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcoFabric,
+		types.EcosystemFabric,
 		"fabricloader",
 		"0.16.9",
 		true,
@@ -207,7 +207,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcoForge,
+		types.EcosystemForge,
 		"minecraft",
 		"1.20.1",
 		true,
@@ -216,7 +216,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcoForge,
+		types.EcosystemForge,
 		"minecraft",
 		"1.20.2",
 		false,
@@ -225,7 +225,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcoForge,
+		types.EcosystemForge,
 		"minecraft",
 		"1.20.0",
 		false,
@@ -266,7 +266,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		yungsExpr,
-		types.EcoForge,
+		types.EcosystemForge,
 		"yungsapi",
 		"1.20.0-Forge-4.0.0",
 		false,
@@ -275,7 +275,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		yungsExpr,
-		types.EcoForge,
+		types.EcosystemForge,
 		"yungsapi",
 		"1.20.0-Forge-4.0.1",
 		true,
@@ -303,7 +303,7 @@ func mustReadFile(t *testing.T, path string) []byte {
 
 func mustParseSemver(t *testing.T, raw string) types.ResolvableVersion {
 	t.Helper()
-	v, err := version.Parse(types.BareVersion(raw), types.Semver)
+	v, err := version.Parse(types.Version(raw), types.VersionSchemeSemver)
 	if err != nil {
 		t.Fatalf("parse semver %q failed: %v", raw, err)
 	}
@@ -324,10 +324,10 @@ func assertConstraintSatisfy(
 ) {
 	t.Helper()
 	id := types.VersionedPackageRef{
-		Eco:  platform,
-		Name: types.BarePackageName(name),
+		Ecosystem: platform,
+		Name:      types.PackageName(name),
 	}
-	depSpec := types.Dependency{Id: id, Constraint: expr, Mandatory: true}
+	depSpec := types.Dependency{ID: id, Constraint: expr, Mandatory: true}
 	got := depSpec.Satisfy(id, mustParseSemver(t, version))
 	t.Logf(
 		"%s: %s %s@%s => got=%v want=%v",

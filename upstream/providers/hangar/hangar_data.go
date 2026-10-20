@@ -77,12 +77,17 @@ type hangarVersion struct {
 	ID                            int64                               `json:"id"`
 	ProjectID                     int64                               `json:"projectId"`
 	Name                          string                              `json:"name"`
+	Channel                       hangarVersionChannel                `json:"channel"`
 	Description                   string                              `json:"description"`
 	Author                        string                              `json:"author"`
 	Downloads                     map[string]hangarDownload           `json:"downloads"`
 	PluginDependencies            map[string][]hangarPluginDependency `json:"pluginDependencies"`
 	PlatformDependencies          hangarPlatformVersionMap            `json:"platformDependencies"`
 	PlatformDependenciesFormatted hangarPlatformVersionMap            `json:"platformDependenciesFormatted"`
+}
+
+type hangarVersionChannel struct {
+	Name string `json:"name"`
 }
 
 type hangarDownload struct {

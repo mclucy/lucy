@@ -28,7 +28,7 @@ func TestVanillaDetectorDetectsVanillaServerJson(t *testing.T) {
 	}
 	if got := runtimeIdentityVersion(
 		evidence,
-		types.EcoMinecraft,
+		types.EcosystemMinecraft,
 		"minecraft",
 	); got != "1.21.4" {
 		t.Fatalf("expected game version 1.21.4, got %q", got)
@@ -88,7 +88,7 @@ func TestGeyserVersionExtractionFromFilename(t *testing.T) {
 
 	tests := []struct {
 		filename string
-		want     types.BareVersion
+		want     types.Version
 	}{
 		{"Geyser-Standalone-2.10.1-SNAPSHOT.jar", "2.10.1-snapshot"},
 		{"geyser-standalone-2.4.2-b123.jar", "2.4.2-b123"},
@@ -141,7 +141,7 @@ func TestCompareForgeMajorNumeric(t *testing.T) {
 				t.Parallel()
 
 				got := compareForgeMajor(
-					types.BareVersion(tt.version),
+					types.Version(tt.version),
 					tt.target,
 				)
 				sign := func(n int) int {
@@ -193,7 +193,7 @@ func TestNeoForgeVersionRegexAllowsBetaSuffix(t *testing.T) {
 
 				gameVersion, _, ok := parseModLoaderVersionTuple(
 					filepath.Join("fake", "neoforge", tt.input),
-					types.EcoNeoforge,
+					types.EcosystemNeoForge,
 				)
 				if ok != tt.want {
 					t.Fatalf(
@@ -253,25 +253,25 @@ Implementation-Title: net.minecraftforge
 	}
 }
 
-func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
+func TestRuntimeClaimsResolvesVanillaVsSpecific(t *testing.T) {
 	t.Parallel()
 
 	vanillaCore := types.VersionedPackageRef{
-		Eco:     types.EcoMinecraft,
-		Name:    "minecraft",
-		Version: "1.21.4",
+		Ecosystem: types.EcosystemMinecraft,
+		Name:      "minecraft",
+		Version:   "1.21.4",
 	}
 	paperCore := types.VersionedPackageRef{
-		Eco:     types.EcoPaper,
-		Name:    "paper",
-		Version: "1.21.4",
+		Ecosystem: types.EcosystemPaper,
+		Name:      "paper",
+		Version:   "1.21.4",
 	}
-	vanillaEvidence := &ExecutableEvidence{
+	vanillaEvidence := &RuntimeEvidence{
 		PrimaryPath:       "/fake/vanilla.jar",
 		PrimaryRuntime:    &vanillaCore,
 		RuntimeComponents: []types.VersionedPackageRef{vanillaCore},
 	}
-	paperEvidence := &ExecutableEvidence{
+	paperEvidence := &RuntimeEvidence{
 		PrimaryPath:    "/fake/paper.jar",
 		PrimaryRuntime: &paperCore,
 	}
@@ -280,8 +280,8 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 		"ambiguous_without_resolution", func(t *testing.T) {
 			t.Parallel()
 
-			candidates := &ExecutableCandidates{
-				Candidates: []*ExecutableEvidence{
+			candidates := &RuntimeClaims{
+				Candidates: []*RuntimeEvidence{
 					vanillaEvidence, paperEvidence,
 				},
 			}
@@ -306,8 +306,8 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 		"all_vanilla_still_single", func(t *testing.T) {
 			t.Parallel()
 
-			candidates := &ExecutableCandidates{
-				Candidates: []*ExecutableEvidence{vanillaEvidence},
+			candidates := &RuntimeClaims{
+				Candidates: []*RuntimeEvidence{vanillaEvidence},
 			}
 			single := candidates.Single()
 			if single == nil {
@@ -320,9 +320,9 @@ func TestExecutableCandidatesResolvesVanillaVsSpecific(t *testing.T) {
 		"two_specific_still_ambiguous", func(t *testing.T) {
 			t.Parallel()
 
-			forgeEvidence := &ExecutableEvidence{PrimaryPath: "/fake/forge.jar"}
-			candidates := &ExecutableCandidates{
-				Candidates: []*ExecutableEvidence{paperEvidence, forgeEvidence},
+			forgeEvidence := &RuntimeEvidence{PrimaryPath: "/fake/forge.jar"}
+			candidates := &RuntimeClaims{
+				Candidates: []*RuntimeEvidence{paperEvidence, forgeEvidence},
 			}
 			if !candidates.IsAmbiguous() {
 				t.Fatalf("expected ambiguous when two specific candidates exist")

@@ -13,23 +13,23 @@ func TestSearchResponseToSearchResults(t *testing.T) {
 		{ID: 3031, Name: "ClearChat 3.2"},
 	}
 
-	results := resp.ToSearchResults(types.SourceSpiget)
+	results := resp.ToSearchResults(types.ProviderSpiget)
 
-	if results.Source != types.SourceSpiget {
+	if results.Provider != types.ProviderSpiget {
 		t.Fatalf(
 			"expected source %v, got %v",
-			types.SourceSpiget,
-			results.Source,
+			types.ProviderSpiget,
+			results.Provider,
 		)
 	}
 	if len(results.Items) != 2 {
 		t.Fatalf("expected 2 projects, got %d", len(results.Items))
 	}
-	if results.Items[0].RemoteName != "placeholderapi" {
-		t.Fatalf("expected placeholderapi, got %q", results.Items[0].RemoteName)
+	if results.Items[0].ProjectName != "placeholderapi" {
+		t.Fatalf("expected placeholderapi, got %q", results.Items[0].ProjectName)
 	}
-	if results.Items[1].RemoteName != "clearchat-3-2" {
-		t.Fatalf("expected clearchat-3-2, got %q", results.Items[1].RemoteName)
+	if results.Items[1].ProjectName != "clearchat-3-2" {
+		t.Fatalf("expected clearchat-3-2, got %q", results.Items[1].ProjectName)
 	}
 }
 
@@ -65,30 +65,30 @@ func TestResourceResponseToProjectInformation(t *testing.T) {
 
 	assertHasURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Additional information",
-		types.UrlHome,
+		types.URLHome,
 		"https://wiki.placeholderapi.com/",
 	)
 	assertHasURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Discussion",
-		types.UrlForum,
+		types.URLForum,
 		"https://www.spigotmc.org/threads/placeholderapi.61918/",
 	)
 	assertHasURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Source",
-		types.UrlSource,
+		types.URLSource,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI",
 	)
 	assertHasURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Donate",
-		types.UrlSponsor,
+		types.URLSponsor,
 		"https://github.com/sponsors/PlaceholderAPI",
 	)
 }
@@ -107,16 +107,16 @@ func TestResourceResponseToProjectInformation_NormalizesRelativeAndMiscLinks(t *
 
 	assertHasURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Support",
-		types.UrlForum,
+		types.URLForum,
 		"https://www.spigotmc.org/threads/placeholderapi.61918/",
 	)
 	assertHasURL(
 		t,
-		info.Urls,
+		info.URLs,
 		"Custom docs",
-		types.UrlMisc,
+		types.URLMisc,
 		"https://www.spigotmc.org/resources/placeholderapi.6245/",
 	)
 }
@@ -153,15 +153,15 @@ func TestResolvedVersionToPackageRemote(t *testing.T) {
 		versionResponse{ID: 625258, Name: "2.12.2"},
 	).ToPackageRemote()
 
-	if remote.Id.Source != types.SourceSpiget {
+	if remote.ID.Provider != types.ProviderSpiget {
 		t.Fatalf(
 			"expected source %v, got %v",
-			types.SourceSpiget,
-			remote.Id.Source,
+			types.ProviderSpiget,
+			remote.ID.Provider,
 		)
 	}
-	if remote.FileUrl != "https://api.spiget.org/v2/resources/6245/versions/625258/download" {
-		t.Fatalf("unexpected file url %q", remote.FileUrl)
+	if remote.FileURL != "https://api.spiget.org/v2/resources/6245/versions/625258/download" {
+		t.Fatalf("unexpected file url %q", remote.FileURL)
 	}
 	if remote.Filename != "placeholderapi-2.12.2.jar" {
 		t.Fatalf("unexpected filename %q", remote.Filename)
@@ -186,8 +186,8 @@ func TestResolvedVersion_ToPackageRemote_UsesExternalDownload(t *testing.T) {
 		ExternalURL: "https://downloads.example.com/plugin.jar",
 	}.ToPackageRemote()
 
-	if remote.FileUrl != "https://downloads.example.com/plugin.jar" {
-		t.Fatalf("expected external url, got %q", remote.FileUrl)
+	if remote.FileURL != "https://downloads.example.com/plugin.jar" {
+		t.Fatalf("expected external url, got %q", remote.FileURL)
 	}
 	if remote.Filename != "external-plugin-1.0.0" {
 		t.Fatalf("unexpected filename %q", remote.Filename)
@@ -200,19 +200,19 @@ func TestResolvedVersionIdentityPolicy(t *testing.T) {
 		versionResponse{ID: 625258, Name: "2.12.2"},
 	)
 
-	if got := resolved.LucyVersion(); got != types.BareVersion("2.12.2") {
+	if got := resolved.LucyVersion(); got != types.Version("2.12.2") {
 		t.Fatalf(
 			"expected human version to drive lucy exact version, got %q",
 			got,
 		)
 	}
-	if !resolved.Matches(types.BareVersion("2.12.2")) {
+	if !resolved.Matches(types.Version("2.12.2")) {
 		t.Fatalf("expected exact human version match")
 	}
-	if !resolved.Matches(types.BareVersion("625258")) {
+	if !resolved.Matches(types.Version("625258")) {
 		t.Fatalf("expected numeric version-id fallback match")
 	}
-	if resolved.Matches(types.BareVersion("2.12.1")) {
+	if resolved.Matches(types.Version("2.12.1")) {
 		t.Fatalf("did not expect mismatched version to match")
 	}
 	if resolved.Matches(types.VersionAny) {
@@ -235,19 +235,19 @@ func TestResolvedVersionIDFallbackPolicy(t *testing.T) {
 		versionResponse{ID: 625258},
 	)
 
-	if got := resolved.LucyVersion(); got != types.BareVersion("625258") {
+	if got := resolved.LucyVersion(); got != types.Version("625258") {
 		t.Fatalf(
 			"expected numeric version id fallback for exact resolution, got %q",
 			got,
 		)
 	}
-	if !resolved.Matches(types.BareVersion("625258")) {
+	if !resolved.Matches(types.Version("625258")) {
 		t.Fatalf("expected numeric version id to remain matchable")
 	}
 
 	remote := resolved.ToPackageRemote()
-	if remote.FileUrl != "https://api.spiget.org/v2/resources/6245/versions/625258/download" {
-		t.Fatalf("unexpected fallback file url %q", remote.FileUrl)
+	if remote.FileURL != "https://api.spiget.org/v2/resources/6245/versions/625258/download" {
+		t.Fatalf("unexpected fallback file url %q", remote.FileURL)
 	}
 	if remote.Filename != "placeholderapi-625258.jar" {
 		t.Fatalf("unexpected numeric fallback filename %q", remote.Filename)
@@ -256,14 +256,14 @@ func TestResolvedVersionIDFallbackPolicy(t *testing.T) {
 
 func assertHasURL(
 	t *testing.T,
-	urls []types.Url,
+	urls []types.URL,
 	name string,
-	kind types.UrlType,
+	kind types.URLType,
 	value string,
 ) {
 	t.Helper()
 	for _, url := range urls {
-		if url.Name == name && url.Type == kind && url.Url == value {
+		if url.Name == name && url.Type == kind && url.URL == value {
 			return
 		}
 	}

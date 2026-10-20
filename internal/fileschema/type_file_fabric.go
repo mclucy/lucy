@@ -40,7 +40,7 @@ func (a *FabricAuthor) UnmarshalJSON(data []byte) error {
 // Docs: https://fabricmc.net/wiki/documentation:fabric_mod_json_spec
 type FileFabricModIdentifier struct {
 	SchemaVersion int            `json:"schemaVersion"`
-	Id            string         `json:"id"`
+	ID            string         `json:"id"`
 	Version       string         `json:"version"`
 	Name          string         `json:"name"`
 	Description   string         `json:"description"`

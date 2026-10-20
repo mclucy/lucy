@@ -90,7 +90,7 @@ func parseMavenSingleRange(raw string) []types.VersionSubExpr {
 				upperToken := strings.TrimSpace(bounds[1])
 				out := make([]types.VersionSubExpr, 0, 2)
 				if lowerToken != "" {
-					lower := parseMavenVersion(types.BareVersion(lowerToken))
+					lower := parseMavenVersion(types.Version(lowerToken))
 					if lower == nil {
 						return nil
 					}
@@ -104,7 +104,7 @@ func parseMavenSingleRange(raw string) []types.VersionSubExpr {
 					)
 				}
 				if upperToken != "" {
-					upper := parseMavenVersion(types.BareVersion(upperToken))
+					upper := parseMavenVersion(types.Version(upperToken))
 					if upper == nil {
 						return nil
 					}
@@ -124,7 +124,7 @@ func parseMavenSingleRange(raw string) []types.VersionSubExpr {
 			}
 
 			if left == '[' && right == ']' && body != "" {
-				v := parseMavenVersion(types.BareVersion(body))
+				v := parseMavenVersion(types.Version(body))
 				if v == nil {
 					return nil
 				}
@@ -157,7 +157,7 @@ func parseMavenSingleRange(raw string) []types.VersionSubExpr {
 			break
 		}
 	}
-	v := parseMavenVersion(types.BareVersion(versionToken))
+	v := parseMavenVersion(types.Version(versionToken))
 	if v == nil {
 		return nil
 	}

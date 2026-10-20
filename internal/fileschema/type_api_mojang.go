@@ -10,9 +10,9 @@ type ApiMojangMinecraftVersionManifest struct {
 		Snapshot string `json:"snapshot"`
 	} `json:"latest"`
 	Versions []struct {
-		Id              string    `json:"id"`
+		ID              string    `json:"id"`
 		Type            string    `json:"type"`
-		Url             string    `json:"url"`
+		URL             string    `json:"url"`
 		Time            time.Time `json:"time"`
 		ReleaseTime     time.Time `json:"releaseTime"`
 		Sha1            string    `json:"sha1"`

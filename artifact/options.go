@@ -1,6 +1,6 @@
 package artifact
 
-// Option configures Analyze behavior.
+// Option configures ReadInfo behavior.
 type Option func(*options)
 
 type options struct{}

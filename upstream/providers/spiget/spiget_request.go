@@ -11,7 +11,6 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
 )
 
 func requestJSON(requestURL string, out any, notFound error) error {
@@ -38,11 +37,11 @@ func requestJSON(requestURL string, out any, notFound error) error {
 	return nil
 }
 
-func searchResources(query string, options upstream.SearchOptions) (
+func searchResources(query string) (
 	searchResponse,
 	error,
 ) {
-	u := searchResourcesURL(query, options)
+	u := searchResourcesURL(query)
 	resp := searchResponse{}
 	if err := requestJSON(u, &resp, nil); err != nil {
 		return nil, err
@@ -82,7 +81,7 @@ func listVersions(resourceID int64) ([]versionResponse, error) {
 	return resp, nil
 }
 
-func searchResourcesURL(query string, options upstream.SearchOptions) string {
+func searchResourcesURL(query string) string {
 	values := url.Values{}
 	values.Set("size", "20")
 	return spigetAPIBaseURL + "/search/resources/" + url.PathEscape(query) + "?" + values.Encode()
@@ -103,7 +102,7 @@ func versionsURL(resourceID int64) string {
 	return resourceURL(resourceID) + "/versions?" + values.Encode()
 }
 
-func parseNumericResourceID(name types.BarePackageName) (int64, bool) {
+func parseNumericResourceID(name types.PackageName) (int64, bool) {
 	trimmed := strings.TrimSpace(name.String())
 	if trimmed == "" {
 		return 0, false

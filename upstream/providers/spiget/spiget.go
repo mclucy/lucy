@@ -13,24 +13,21 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Id() types.SourceId {
-	return types.SourceSpiget
+func (provider) Provider() types.Provider {
+	return types.ProviderSpiget
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
-	options := upstream.SearchOptions{
-		IncludeClient:   !q.ExcludeClient,
-		FilterEcosystem: q.FilterEcosystem,
-	}
-	if options.FilterEcosystem == types.EcoBukkit {
+	// Spiget publishes server resources only; IncludeClient needs no filter.
+	if q.FilterEcosystem == types.EcosystemBukkit || q.FilterEcosystem == types.EcosystemPaper {
 		log.Debug("spiget: platform filter is not supported upstream; search will run without a platform query parameter")
 	}
 
-	resp, err := searchResources(q.Keyword, options)
+	resp, err := searchResources(q.Keyword)
 	if err != nil {
 		return upstream.SearchResponse{}, err
 	}
-	return resp.ToSearchResults(p.Id()), nil
+	return resp.ToSearchResults(p.Provider()), nil
 }
 
 func (p provider) Fetch(
@@ -49,7 +46,7 @@ func (p provider) Fetch(
 
 	r := resolved.ToPackageRemote()
 	return types.ResolvedPackage{
-		FileUrl:       r.FileUrl,
+		FileURL:       r.FileURL,
 		Filename:      r.Filename,
 		Hash:          r.Hash,
 		HashAlgorithm: r.HashAlgorithm,
@@ -68,8 +65,8 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 func (p provider) Dependencies(
 	_ upstream.LocalContext,
 	_ types.VersionedPackageRef,
-) (*types.PackageDependencies, error) {
-	return &types.PackageDependencies{Authentic: false}, nil
+) (*types.DependencySet, error) {
+	return &types.DependencySet{FromArtifact: false}, nil
 }
 
 func (p provider) ResolveVersionSelector(
@@ -94,7 +91,7 @@ func (p provider) ResolveVersionSelector(
 	}
 
 	parsed.Version = resolved.LucyVersion()
-	log.Debug("parsed from " + id.StringFull() + " to " + parsed.StringFull())
+	log.Debug("parsed from " + id.StringQualified() + " to " + parsed.StringQualified())
 	return parsed, nil
 }
 

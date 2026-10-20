@@ -7,8 +7,8 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
-// PackageIndex is a map-backed index over discovered packages, keyed by the
-// full identifier PackageId.StringFull(). All exported methods return
+// PackageIndex is a map-backed index over discovered packages, keyed by
+// the qualified identity StringQualified(). All exported methods return
 // results in a stable order; raw map iteration order never reaches callers.
 type PackageIndex struct {
 	pkgs map[string]types.DiscoveredPackage
@@ -24,7 +24,7 @@ func NewPackageIndex() *PackageIndex {
 // non-empty Path replaces an existing entry whose Path is empty, so an
 // entry without a local path can gain one when discovered.
 func (idx *PackageIndex) Add(pkg types.DiscoveredPackage) {
-	key := pkg.Id.StringFull()
+	key := pkg.ID.StringQualified()
 
 	existing, exists := idx.pkgs[key]
 	if exists {
@@ -53,9 +53,9 @@ func (idx *PackageIndex) Packages() []types.DiscoveredPackage {
 	}
 
 	slices.SortFunc(result, func(a, b types.DiscoveredPackage) int {
-		pi, pj := a.Id, b.Id
+		pi, pj := a.ID, b.ID
 
-		if c := cmp.Compare(pi.Eco.String(), pj.Eco.String()); c != 0 {
+		if c := cmp.Compare(pi.Ecosystem.String(), pj.Ecosystem.String()); c != 0 {
 			return c
 		}
 		if c := cmp.Compare(pi.Name.String(), pj.Name.String()); c != 0 {
@@ -67,13 +67,13 @@ func (idx *PackageIndex) Packages() []types.DiscoveredPackage {
 	return result
 }
 
-// LookupByID performs an exact lookup by the full identifier
-// (PackageId.StringFull()), returning a zero package and false when absent.
+// LookupByID performs an exact lookup by the qualified identity
+// (StringQualified()), returning a zero package and false when absent.
 func (idx *PackageIndex) LookupByID(id types.VersionedPackageRef) (
 	types.DiscoveredPackage,
 	bool,
 ) {
-	pkg, ok := idx.pkgs[id.StringFull()]
+	pkg, ok := idx.pkgs[id.StringQualified()]
 	return pkg, ok
 }
 
@@ -85,7 +85,7 @@ func (idx *PackageIndex) LookupByEcosystemName(
 ) []types.DiscoveredPackage {
 	var matches []types.DiscoveredPackage
 	for _, pkg := range idx.pkgs {
-		if pkg.Id.Eco == platform && pkg.Id.Name.String() == name {
+		if pkg.ID.Ecosystem == platform && pkg.ID.Name.String() == name {
 			matches = append(matches, pkg)
 		}
 	}
@@ -95,7 +95,7 @@ func (idx *PackageIndex) LookupByEcosystemName(
 	}
 
 	slices.SortFunc(matches, func(a, b types.DiscoveredPackage) int {
-		return cmp.Compare(a.Id.Version.String(), b.Id.Version.String())
+		return cmp.Compare(a.ID.Version.String(), b.ID.Version.String())
 	})
 
 	return matches

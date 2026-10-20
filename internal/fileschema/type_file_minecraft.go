@@ -8,7 +8,7 @@ import (
 // FileMinecraftVersionSpec is version.json metadata found in Minecraft JARs
 // from 18w47b onward.
 type FileMinecraftVersionSpec struct {
-	Id              string         `json:"id"`
+	ID              string         `json:"id"`
 	Name            string         `json:"name"`
 	WorldVersion    int            `json:"world_version"`
 	SeriesId        string         `json:"series_id"`

@@ -33,9 +33,9 @@ var neoforgeArtifactHashLookup = func(
 //   - https://maven.neoforged.net/releases/net/neoforged/neoforge/
 //   - https://docs.neoforged.net/user/docs/server/
 //   - https://github.com/neoforged/NeoForge/blob/main/CHANGELOG.md
-func NeoForgeInstallationRuntimes(workPath string) []*ExecutableEvidence {
+func NeoForgeInstallationRuntimes(workPath string) []*RuntimeEvidence {
 	spec := modLoaderInstallSpec{
-		platform: types.EcoNeoforge,
+		platform: types.EcosystemNeoForge,
 		name:     "neoforge",
 		libraryRoot: filepath.Join(
 			"libraries",
@@ -73,8 +73,8 @@ func neoForgeCandidateNames(versionDir, version string) []modLoaderCandidate {
 
 func verifyNeoForgeArtifactByUnpack(
 	candidate modLoaderCandidate,
-	gameVersion types.BareVersion,
-	loaderVersion types.BareVersion,
+	gameVersion types.Version,
+	loaderVersion types.Version,
 ) (bool, error) {
 	file, err := os.Open(candidate.path)
 	if err != nil {
@@ -108,7 +108,7 @@ func verifyNeoForgeArtifactByUnpack(
 
 func verifyNeoForgeUniversalManifest(
 	reader *zip.Reader,
-	loaderVersion types.BareVersion,
+	loaderVersion types.Version,
 ) (bool, error) {
 	manifest, ok, err := readZipFile(reader, "META-INF/MANIFEST.MF")
 	if err != nil || !ok {

@@ -25,9 +25,9 @@ func supportedExt(ext string) bool {
 	}
 }
 
-// Analyze extracts package metadata from an artifact file. For .jar/.zip
+// ReadInfo extracts package metadata from an artifact file. For .jar/.zip
 // files all readers are tried; for .pyz/.mcdr only the MCDR reader runs.
-func Analyze(filePath string, opts ...Option) ([]Info, error) {
+func ReadInfo(filePath string, opts ...Option) ([]PackageInfo, error) {
 	o := &options{}
 	for _, opt := range opts {
 		opt(o)
@@ -55,7 +55,7 @@ func Analyze(filePath string, opts ...Option) ([]Info, error) {
 		return nil, fmt.Errorf("read zip: %w", err)
 	}
 
-	var results []Info
+	var results []PackageInfo
 
 	if ext == ".pyz" || ext == ".mcdr" {
 		mcdrReader := newMcdrReader()
@@ -92,16 +92,17 @@ func Analyze(filePath string, opts ...Option) ([]Info, error) {
 //	serverFamily – bukkit, paper
 //	modFamily    – fabric, forge, neoforge
 //
-// PlatformAny artifacts are excluded from the conflict check.
-func jarEcosystemsConflict(infos []Info) bool {
+// Artifacts whose ecosystem is types.EcosystemUnspecified are excluded from
+// the conflict check.
+func jarEcosystemsConflict(infos []PackageInfo) bool {
 	var hasProxy, hasServer, hasMod bool
 	for _, info := range infos {
-		switch info.Ref.Eco {
-		case types.EcoVelocity, types.EcoBungeecord:
+		switch info.Ref.Ecosystem {
+		case types.EcosystemVelocity, types.EcosystemBungeeCord:
 			hasProxy = true
-		case types.EcoBukkit, types.EcoPaper:
+		case types.EcosystemBukkit, types.EcosystemPaper:
 			hasServer = true
-		case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
+		case types.EcosystemFabric, types.EcosystemForge, types.EcosystemNeoForge:
 			hasMod = true
 		}
 	}

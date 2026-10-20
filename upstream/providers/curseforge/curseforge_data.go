@@ -16,16 +16,16 @@ type searchResponse struct {
 	Pagination pagination    `json:"pagination"`
 }
 
-func (s *searchResponse) ToSearchResults(source types.SourceId) upstream.SearchResponse {
+func (s *searchResponse) ToSearchResults(source types.Provider) upstream.SearchResponse {
 	res := upstream.SearchResponse{
-		Source: source,
-		Items:  make([]upstream.SearchResult, 0, len(s.Data)),
+		Provider: source,
+		Items:    make([]upstream.SearchResult, 0, len(s.Data)),
 	}
 	for _, mod := range s.Data {
 		res.Items = append(
 			res.Items, upstream.SearchResult{
-				RemoteName:  input.ToProjectName(mod.Slug).String(),
-				Source:      source,
+				ProjectName: input.ToProjectName(mod.Slug).String(),
+				Provider:    source,
 				Title:       mod.Name,
 				Description: mod.Summary,
 				Downloads:   mod.DownloadCount,
@@ -60,7 +60,7 @@ type stringDataResponse struct {
 
 // modResponse is the CurseForge Mod schema.
 type modResponse struct {
-	Id                   int32          `json:"id"`
+	ID                   int32          `json:"id"`
 	GameId               int32          `json:"gameId"`
 	Name                 string         `json:"name"`
 	Slug                 string         `json:"slug"`
@@ -69,7 +69,7 @@ type modResponse struct {
 	Status               int32          `json:"status"`
 	DownloadCount        int64          `json:"downloadCount"`
 	IsFeatured           bool           `json:"isFeatured"`
-	PrimaryCategoryId    int32          `json:"primaryCategoryId"`
+	CategoryID           int32          `json:"primaryCategoryId"`
 	ClassId              *int32         `json:"classId"`
 	Authors              []modAuthor    `json:"authors"`
 	Logo                 *modAsset      `json:"logo"`
@@ -101,43 +101,43 @@ func (r rawProjectInformation) ToProjectInformation() types.Metadata {
 		Brief:                 m.Summary,
 		Description:           r.description,
 		DescriptionIsMarkdown: upstream.LooksLikeMarkdown(r.description),
-		Urls:                  make([]types.Url, 0),
+		URLs:                  make([]types.URL, 0),
 		Authors:               make([]types.Person, 0, len(m.Authors)),
 	}
 
 	if m.Links.WebsiteUrl != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Website",
-				Type: types.UrlHome,
-				Url:  m.Links.WebsiteUrl,
+				Type: types.URLHome,
+				URL:  m.Links.WebsiteUrl,
 			},
 		)
 	}
 	if m.Links.WikiUrl != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Wiki",
-				Type: types.UrlWiki,
-				Url:  m.Links.WikiUrl,
+				Type: types.URLWiki,
+				URL:  m.Links.WikiUrl,
 			},
 		)
 	}
 	if m.Links.IssuesUrl != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Issues",
-				Type: types.UrlIssues,
-				Url:  m.Links.IssuesUrl,
+				Type: types.URLIssues,
+				URL:  m.Links.IssuesUrl,
 			},
 		)
 	}
 	if m.Links.SourceUrl != "" {
-		info.Urls = append(
-			info.Urls, types.Url{
+		info.URLs = append(
+			info.URLs, types.URL{
 				Name: "Source",
-				Type: types.UrlSource,
-				Url:  m.Links.SourceUrl,
+				Type: types.URLSource,
+				URL:  m.Links.SourceUrl,
 			},
 		)
 	}
@@ -146,7 +146,7 @@ func (r rawProjectInformation) ToProjectInformation() types.Metadata {
 		info.Authors = append(
 			info.Authors, types.Person{
 				Name: author.Name,
-				Url:  author.Url,
+				URL:  author.URL,
 			},
 		)
 	}
@@ -162,18 +162,18 @@ type modLinks struct {
 }
 
 type modAuthor struct {
-	Id   int32  `json:"id"`
+	ID   int32  `json:"id"`
 	Name string `json:"name"`
-	Url  string `json:"url"`
+	URL  string `json:"url"`
 }
 
 type modAsset struct {
-	Id           int32  `json:"id"`
+	ID           int32  `json:"id"`
 	ModId        int32  `json:"modId"`
 	Title        string `json:"title"`
 	Description  string `json:"description"`
 	ThumbnailUrl string `json:"thumbnailUrl"`
-	Url          string `json:"url"`
+	URL          string `json:"url"`
 }
 
 // --- File-level structs ---
@@ -186,13 +186,13 @@ type filesResponse struct {
 
 // fileResponse is the CurseForge File schema.
 type fileResponse struct {
-	Id            int32      `json:"id"`
+	ID            int32      `json:"id"`
 	GameId        int32      `json:"gameId"`
 	ModId         int32      `json:"modId"`
 	IsAvailable   bool       `json:"isAvailable"`
 	DisplayName   string     `json:"displayName"`
 	FileName      string     `json:"fileName"`
-	ReleaseType   int32      `json:"releaseType"` // 1=Release, 2=Beta, 3=Alpha
+	ChannelCode   int32      `json:"releaseType"` // 1=Release, 2=Beta, 3=Alpha
 	FileStatus    int32      `json:"fileStatus"`
 	Hashes        []fileHash `json:"hashes"`
 	FileDate      string     `json:"fileDate"`
@@ -208,18 +208,18 @@ type fileResponse struct {
 
 func (f *fileResponse) ToPackageRemote() types.ResolvedPackage {
 	remote := types.ResolvedPackage{
-		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceCurseForge}},
+		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderCurseForge}},
 		Filename: f.FileName,
 	}
 
 	if f.DownloadUrl != nil {
-		remote.FileUrl = *f.DownloadUrl
+		remote.FileURL = *f.DownloadUrl
 	}
 
 	// Prefer SHA1 over MD5 (algo 1=sha1, 2=md5)
 	for _, h := range f.Hashes {
 		if h.Algo == 1 {
-			remote.Hash = h.Value
+			remote.Hash = h.Digest
 			remote.HashAlgorithm = "sha1"
 			break
 		}
@@ -227,7 +227,7 @@ func (f *fileResponse) ToPackageRemote() types.ResolvedPackage {
 	if remote.Hash == "" {
 		for _, h := range f.Hashes {
 			if h.Algo == 2 {
-				remote.Hash = h.Value
+				remote.Hash = h.Digest
 				remote.HashAlgorithm = "md5"
 				break
 			}
@@ -238,8 +238,8 @@ func (f *fileResponse) ToPackageRemote() types.ResolvedPackage {
 }
 
 type fileHash struct {
-	Value string `json:"value"`
-	Algo  int32  `json:"algo"` // 1=Sha1, 2=Md5
+	Digest string `json:"value"`
+	Algo   int32  `json:"algo"` // 1=Sha1, 2=Md5
 }
 
 type fileDependency struct {
@@ -251,7 +251,7 @@ type fileIndex struct {
 	GameVersion       string `json:"gameVersion"`
 	FileId            int32  `json:"fileId"`
 	Filename          string `json:"filename"`
-	ReleaseType       int32  `json:"releaseType"`
+	ChannelCode       int32  `json:"releaseType"`
 	GameVersionTypeId *int32 `json:"gameVersionTypeId"`
 	ModLoader         *int32 `json:"modLoader"` // 0=Any, 1=Forge, 4=Fabric, 6=NeoForge
 }

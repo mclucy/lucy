@@ -27,7 +27,7 @@ func TestGeyserStandaloneDetectorDetectsStandaloneBootstrapJar(t *testing.T) {
 	}
 }
 
-func detectGeyserStandaloneRuntimeWith(t *testing.T, jarPath string) *ExecutableEvidence {
+func detectGeyserStandaloneRuntimeWith(t *testing.T, jarPath string) *RuntimeEvidence {
 	t.Helper()
 
 	evidence, err := (&geyserStandaloneDetector{}).Detect(DetectionContext{}, NewDetectionFile(jarPath))

@@ -19,7 +19,7 @@ const (
 )
 
 type decodedHTML struct {
-	Value string
+	Text  string
 	Valid bool
 }
 
@@ -36,10 +36,10 @@ type resolvedVersion struct {
 	UUID        string
 }
 
-func (s searchResponse) ToSearchResults(source types.SourceId) upstream.SearchResponse {
+func (s searchResponse) ToSearchResults(source types.Provider) upstream.SearchResponse {
 	results := upstream.SearchResponse{
-		Source: source,
-		Items:  make([]upstream.SearchResult, 0, len(s)),
+		Provider: source,
+		Items:    make([]upstream.SearchResult, 0, len(s)),
 	}
 
 	for _, resource := range s {
@@ -48,8 +48,8 @@ func (s searchResponse) ToSearchResults(source types.SourceId) upstream.SearchRe
 		}
 		results.Items = append(
 			results.Items, upstream.SearchResult{
-				RemoteName: normalizedProjectName(resource.Name).String(),
-				Source:     source,
+				ProjectName: normalizedProjectName(resource.Name).String(),
+				Provider:    source,
 			},
 		)
 	}
@@ -68,23 +68,23 @@ func (r resourceResponse) ToProjectInformation() types.Metadata {
 		Brief:                 r.Tag,
 		Description:           description,
 		DescriptionIsMarkdown: false,
-		Urls:                  make([]types.Url, 0, len(r.Links)+2),
+		URLs:                  make([]types.URL, 0, len(r.Links)+2),
 	}
 
 	appendLinkURLs(&info, r.Links)
 	if r.SourceCodeLink != "" {
-		info.Urls = append(
-			info.Urls,
-			types.Url{
-				Name: "Source", Type: types.UrlSource, Url: r.SourceCodeLink,
+		info.URLs = append(
+			info.URLs,
+			types.URL{
+				Name: "Source", Type: types.URLSource, URL: r.SourceCodeLink,
 			},
 		)
 	}
 	if r.DonationLink != "" {
-		info.Urls = append(
-			info.Urls,
-			types.Url{
-				Name: "Donate", Type: types.UrlSponsor, Url: r.DonationLink,
+		info.URLs = append(
+			info.URLs,
+			types.URL{
+				Name: "Donate", Type: types.URLSponsor, URL: r.DonationLink,
 			},
 		)
 	}
@@ -110,17 +110,17 @@ func NewResolvedVersion(
 	}
 }
 
-func (r resolvedVersion) LucyVersion() types.BareVersion {
+func (r resolvedVersion) LucyVersion() types.Version {
 	if r.VersionName != "" {
-		return types.BareVersion(r.VersionName)
+		return types.Version(r.VersionName)
 	}
 	if r.VersionID != 0 {
-		return types.BareVersion(strconv.FormatInt(r.VersionID, 10))
+		return types.Version(strconv.FormatInt(r.VersionID, 10))
 	}
 	return types.VersionUnknown
 }
 
-func (r resolvedVersion) Matches(version types.BareVersion) bool {
+func (r resolvedVersion) Matches(version types.Version) bool {
 	requested := strings.TrimSpace(version.String())
 	if requested == "" || requested == types.VersionAny.String() {
 		return false
@@ -133,8 +133,8 @@ func (r resolvedVersion) Matches(version types.BareVersion) bool {
 
 func (r resolvedVersion) ToPackageRemote() types.ResolvedPackage {
 	return types.ResolvedPackage{
-		Id:       types.VersionedPackageRef{PackageRef: types.PackageRef{Source: types.SourceSpiget}},
-		FileUrl:  r.downloadURL(),
+		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderSpiget}},
+		FileURL:  r.downloadURL(),
 		Filename: r.filename(),
 	}
 }
@@ -192,17 +192,17 @@ func decodeBase64HTML(encoded string) decodedHTML {
 	if err != nil {
 		return decodedHTML{}
 	}
-	return decodedHTML{Value: string(decoded), Valid: true}
+	return decodedHTML{Text: string(decoded), Valid: true}
 }
 
 func combineHTMLSections(description, documentation decodedHTML) string {
 	switch {
 	case description.Valid && documentation.Valid:
-		return description.Value + "\n\n<hr />\n\n<h2>Documentation</h2>\n" + documentation.Value
+		return description.Text + "\n\n<hr />\n\n<h2>Documentation</h2>\n" + documentation.Text
 	case description.Valid:
-		return description.Value
+		return description.Text
 	case documentation.Valid:
-		return documentation.Value
+		return documentation.Text
 	default:
 		return ""
 	}
@@ -215,9 +215,9 @@ func appendLinkURLs(info *types.Metadata, links map[string]string) {
 			continue
 		}
 		name, kind := classifySpigetLink(key)
-		info.Urls = append(
-			info.Urls,
-			types.Url{Name: name, Type: kind, Url: value},
+		info.URLs = append(
+			info.URLs,
+			types.URL{Name: name, Type: kind, URL: value},
 		)
 	}
 }
@@ -242,25 +242,25 @@ func normalizeSpigetURL(raw string) string {
 	return raw
 }
 
-func classifySpigetLink(key string) (string, types.UrlType) {
+func classifySpigetLink(key string) (string, types.URLType) {
 	switch key {
 	case "additionalInformation":
-		return "Additional information", types.UrlHome
+		return "Additional information", types.URLHome
 	case "alternativeSupport":
-		return "Support", types.UrlForum
+		return "Support", types.URLForum
 	case "discussion":
-		return "Discussion", types.UrlForum
+		return "Discussion", types.URLForum
 	}
 
 	decoded := decodeBase64HTML(key)
 	if decoded.Valid {
-		if _, err := url.ParseRequestURI(decoded.Value); err == nil {
-			return "Link", types.UrlMisc
+		if _, err := url.ParseRequestURI(decoded.Text); err == nil {
+			return "Link", types.URLMisc
 		}
-		return prettifyLinkName(decoded.Value), types.UrlMisc
+		return prettifyLinkName(decoded.Text), types.URLMisc
 	}
 
-	return prettifyLinkName(key), types.UrlMisc
+	return prettifyLinkName(key), types.URLMisc
 }
 
 func prettifyLinkName(name string) string {
@@ -273,7 +273,7 @@ func prettifyLinkName(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
 
-func normalizedProjectName(name string) types.BarePackageName {
+func normalizedProjectName(name string) types.PackageName {
 	name = input.ToProjectName(name).String()
 	var b strings.Builder
 	b.Grow(len(name))
@@ -290,5 +290,5 @@ func normalizedProjectName(name string) types.BarePackageName {
 		}
 	}
 
-	return types.BarePackageName(strings.Trim(b.String(), "-"))
+	return types.PackageName(strings.Trim(b.String(), "-"))
 }

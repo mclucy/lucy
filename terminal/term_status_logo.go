@@ -35,16 +35,16 @@ const (
 // FieldLogo is a Field that holds the ASCII logo for the status view.
 // It also provides the line and width data used by the layout compositor.
 type FieldLogo struct {
-	Core    types.BarePackageName
-	Eco     types.Ecosystem
-	Version types.BareVersion
-	NoColor bool
-	Mode    StatusLogoMode
+	Product   types.ServerProduct
+	Ecosystem types.Ecosystem
+	Version   types.Version
+	NoColor   bool
+	Mode      StatusLogoMode
 }
 
 // Render returns the selected logo as a string.
 func (f *FieldLogo) Render() string {
-	logo := GetLogo(f.Core, f.Eco, f.Version, f.renderVariant())
+	logo := GetLogo(f.Product, f.Ecosystem, f.Version, f.renderVariant())
 	return strings.Join(normalizeLines(logo), "\n")
 }
 
@@ -83,12 +83,12 @@ func (f *FieldLogo) KeyLength() int {
 
 // Lines returns normalized lines for the requested logo variant.
 func (f *FieldLogo) Lines(variant LogoVariant) []string {
-	return normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant))
+	return normalizeLines(GetLogo(f.Product, f.Ecosystem, f.Version, variant))
 }
 
 // Width returns the visual width of the requested logo variant.
 func (f *FieldLogo) Width(variant LogoVariant) int {
-	lines := normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant))
+	lines := normalizeLines(GetLogo(f.Product, f.Ecosystem, f.Version, variant))
 	if len(lines) == 0 {
 		return 0
 	}
@@ -97,7 +97,7 @@ func (f *FieldLogo) Width(variant LogoVariant) int {
 
 // Height returns the number of lines in the requested logo variant.
 func (f *FieldLogo) Height(variant LogoVariant) int {
-	return len(normalizeLines(GetLogo(f.Core, f.Eco, f.Version, variant)))
+	return len(normalizeLines(GetLogo(f.Product, f.Ecosystem, f.Version, variant)))
 }
 
 // normalizeLines removes empty edges and pads lines to the same visual width.
@@ -164,15 +164,16 @@ func loadEmbeddedLogoAssets() map[string]string {
 	return assets
 }
 
-// GetLogo returns the logo for the package, platform, version, and variant.
-// Falls back to the plain variant when the colored variant has no asset.
+// GetLogo returns the logo for the server product, ecosystem, Minecraft
+// version, and variant. Falls back to the plain variant when the colored
+// variant has no asset.
 func GetLogo(
-	core types.BarePackageName,
-	platform types.Ecosystem,
-	gameVersion types.BareVersion,
+	product types.ServerProduct,
+	ecosystem types.Ecosystem,
+	minecraftVersion types.Version,
 	variant LogoVariant,
 ) string {
-	name := logoAssetName(core, platform, gameVersion)
+	name := logoAssetName(product, ecosystem, minecraftVersion)
 	if name == "" {
 		return ""
 	}
@@ -209,20 +210,22 @@ func logoVariantDirectory(variant LogoVariant) (string, bool) {
 }
 
 func logoAssetName(
-	core types.BarePackageName,
-	platform types.Ecosystem,
-	gameVersion types.BareVersion,
+	product types.ServerProduct,
+	ecosystem types.Ecosystem,
+	minecraftVersion types.Version,
 ) string {
-	name := strings.ToLower(strings.TrimSpace(core.String()))
+	name := strings.ToLower(strings.TrimSpace(product.String()))
 	switch name {
 	case "minecraft", "vanilla":
-		if strings.Contains(strings.ToLower(gameVersion.String()), "snapshot") ||
-			snapshotVersionPattern.MatchString(gameVersion.String()) {
+		if strings.Contains(strings.ToLower(minecraftVersion.String()), "snapshot") ||
+			snapshotVersionPattern.MatchString(minecraftVersion.String()) {
 			return "vanilla-snapshot"
 		}
 		return "vanilla"
 	case "paper":
 		return "papermc"
+	case "mcdreforged":
+		return "mcdr"
 	case "bukkit", "craftbukkit":
 		return "spigot"
 	case "spongevanilla", "spongeforge", "spongeneo":
@@ -233,20 +236,20 @@ func logoAssetName(
 		return name
 	}
 
-	switch platform {
-	case types.EcoFabric:
+	switch ecosystem {
+	case types.EcosystemFabric:
 		return "fabric"
-	case types.EcoForge:
+	case types.EcosystemForge:
 		return "forge"
-	case types.EcoNeoforge:
+	case types.EcosystemNeoForge:
 		return "neoforge"
-	case types.EcoBukkit, types.EcoPaper:
+	case types.EcosystemBukkit, types.EcosystemPaper:
 		return "spigot"
-	case types.EcoSponge:
+	case types.EcosystemSponge:
 		return "sponge"
-	case types.EcoVelocity:
+	case types.EcosystemVelocity:
 		return "velocity"
-	case types.EcoMcdr:
+	case types.EcosystemMCDR:
 		return "mcdr"
 	default:
 		return ""

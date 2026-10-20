@@ -12,14 +12,14 @@ import (
 var ErrNoProviderSucceeded = errors.New("no provider succeeded")
 
 type ProviderError struct {
-	// Source identifies the semantic upstream label for user-facing diagnostics.
+	// Provider identifies the semantic upstream label for user-facing diagnostics.
 	// The failed runtime executor is a Provider implementation.
-	Source types.SourceId
-	Err    error
+	Provider types.Provider
+	Err      error
 }
 
 func (e ProviderError) Error() string {
-	return fmt.Sprintf("%s: %v", e.Source.String(), e.Err)
+	return fmt.Sprintf("%s: %v", e.Provider.String(), e.Err)
 }
 
 func (e ProviderError) Unwrap() error {
@@ -31,9 +31,8 @@ func (e ProviderError) Unwrap() error {
 // Default behavior is non-aggregated: each provider contributes one
 // upstream.SearchResponse item in the returned slice.
 func SearchMany(
-	providers []upstream.SearchSource,
-	query string,
-	options upstream.SearchOptions,
+	providers []upstream.SearchProvider,
+	query upstream.Query,
 ) ([]upstream.SearchResponse, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
@@ -51,26 +50,19 @@ func SearchMany(
 
 	for i, provider := range providers {
 		wg.Go(func() {
-			res, err := upstream.Search(
-				provider,
-				upstream.Query{
-					Keyword:         query,
-					ExcludeClient:   !options.IncludeClient,
-					FilterEcosystem: options.FilterEcosystem,
-				},
-			)
+			res, err := upstream.Search(provider, query)
 			if err != nil {
 				slots[i] = slot{
 					failed: true,
 					err: ProviderError{
-						Source: provider.Id(),
-						Err:    err,
+						Provider: provider.Provider(),
+						Err:      err,
 					},
 				}
 				return
 			}
-			if res.Source == types.SourceUnknown {
-				res.Source = provider.Id()
+			if res.Provider == types.ProviderUnknown {
+				res.Provider = provider.Provider()
 			}
 			slots[i] = slot{ok: true, res: res}
 		})
@@ -96,7 +88,7 @@ func SearchMany(
 // successful results.
 func FetchMany(
 	local upstream.LocalContext,
-	providers []upstream.PackageSource,
+	providers []upstream.PackageProvider,
 	id types.VersionedPackageRef,
 ) ([]types.ResolvedPackage, []ProviderError) {
 	if len(providers) == 0 {
@@ -120,8 +112,8 @@ func FetchMany(
 				slots[i] = slot{
 					failed: true,
 					err: ProviderError{
-						Source: provider.Id(),
-						Err:    err,
+						Provider: provider.Provider(),
+						Err:      err,
 					},
 				}
 				return
@@ -132,19 +124,19 @@ func FetchMany(
 				slots[i] = slot{
 					failed: true,
 					err: ProviderError{
-						Source: provider.Id(),
-						Err:    err,
+						Provider: provider.Provider(),
+						Err:      err,
 					},
 				}
 				return
 			}
-			// Routing binds the provider's concrete source to the selected
+			// Routing binds the provider's concrete identity to the selected
 			// ecosystem/name/version coordinate returned by resolution.
-			remoteData.Id = types.VersionedPackageRef{
-				Name:    resolvedID.Name,
-				Source:  provider.Id(),
-				Eco:     resolvedID.Eco,
-				Version: resolvedID.Version,
+			remoteData.ID = types.VersionedPackageRef{
+				Name:      resolvedID.Name,
+				Provider:  provider.Provider(),
+				Ecosystem: resolvedID.Ecosystem,
+				Version:   resolvedID.Version,
 			}
 			slots[i] = slot{ok: true, res: remoteData}
 		})
@@ -166,10 +158,10 @@ func FetchMany(
 	return results, providerErrors
 }
 
-// GetInfoHedged executes info on all providers in parallel and returns the
-// first successful result. Ref.Source records the provider that answered.
-func GetInfoHedged(
-	providers []upstream.InfoSource,
+// GetInfoFirstSuccess executes info on all providers in parallel and returns the
+// first successful result. Ref.Provider records the provider that answered.
+func GetInfoFirstSuccess(
+	providers []upstream.InfoProvider,
 	ref types.PackageRef,
 ) (upstream.Info, []ProviderError, error) {
 	if len(providers) == 0 {
@@ -180,14 +172,14 @@ func GetInfoHedged(
 	errChan := make(chan ProviderError, len(providers))
 
 	for _, provider := range providers {
-		go func(provider upstream.InfoSource) {
+		go func(provider upstream.InfoProvider) {
 			metadata, err := provider.Info(ref)
 			if err != nil {
-				errChan <- ProviderError{Source: provider.Id(), Err: fmt.Errorf("information failed: %w", err)}
+				errChan <- ProviderError{Provider: provider.Provider(), Err: fmt.Errorf("information failed: %w", err)}
 				return
 			}
 			resChan <- upstream.Info{
-				Ref:      types.PackageRef{Name: ref.Name, Source: provider.Id()},
+				Ref:      types.PackageRef{Name: ref.Name, Provider: provider.Provider()},
 				Metadata: metadata,
 			}
 		}(provider)
@@ -226,14 +218,14 @@ func (l ArtifactLookup) Complete() bool { return len(l.Errors) == 0 }
 // ResolveArtifactByHash resolves an artifact's canonical upstream reference.
 // Mappers run in policy order; a failed or missing match does not stop later
 // mappers. Provider failures are returned for callers that surface warnings.
-func ResolveArtifactByHash(artifact upstream.Hashable) ArtifactLookup {
+func ResolveArtifactByHash(artifact upstream.ArtifactFingerprint) ArtifactLookup {
 	result := ArtifactLookup{}
 	for _, mapper := range artifactMappers() {
 		ref, _, ok, err := mapper.PackageByHash(artifact)
 		if err != nil {
 			result.Errors = append(result.Errors, ProviderError{
-				Source: mapper.Id(),
-				Err:    err,
+				Provider: mapper.Provider(),
+				Err:      err,
 			})
 			continue
 		}
@@ -250,15 +242,15 @@ func ResolveArtifactByHash(artifact upstream.Hashable) ArtifactLookup {
 // fails; partial failures are collected in the returned []ProviderError slice.
 func DependenciesMany(
 	local upstream.LocalContext,
-	providers []upstream.PackageSource,
+	providers []upstream.PackageProvider,
 	id types.VersionedPackageRef,
-) ([]types.PackageDependencies, []ProviderError) {
+) ([]types.DependencySet, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
 	}
 
 	type slot struct {
-		res    types.PackageDependencies
+		res    types.DependencySet
 		err    ProviderError
 		ok     bool
 		failed bool
@@ -274,13 +266,13 @@ func DependenciesMany(
 				slots[i] = slot{
 					failed: true,
 					err: ProviderError{
-						Source: provider.Id(),
-						Err:    err,
+						Provider: provider.Provider(),
+						Err:      err,
 					},
 				}
 				return
 			}
-			result := types.PackageDependencies{}
+			result := types.DependencySet{}
 			if deps != nil {
 				result = *deps
 			}
@@ -290,7 +282,7 @@ func DependenciesMany(
 
 	wg.Wait()
 
-	results := make([]types.PackageDependencies, 0, len(providers))
+	results := make([]types.DependencySet, 0, len(providers))
 	providerErrors := make([]ProviderError, 0)
 	for _, item := range slots {
 		if item.ok {

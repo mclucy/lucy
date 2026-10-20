@@ -9,20 +9,20 @@ import (
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
-// ServerInstance is the identity of one bootable server runtime. Probe.Single
-// produces every instance.
+// ServerRuntime is the identity of one bootable server runtime. Probe.Single
+// produces every runtime.
 //
-// A nil *ServerInstance means that no trustworthy single runtime exists. Every
-// non-nil instance satisfies IsValid.
-type ServerInstance struct {
-	PrimaryRuntime    *types.VersionedPackageRef  `json:"primary_runtime,omitempty"`
-	PrimaryPath       string                      `json:"primary_path,omitempty"`
-	RuntimeComponents []types.VersionedPackageRef `json:"runtime_components"`
+// A nil *ServerRuntime means that no trustworthy single runtime exists. Every
+// non-nil runtime satisfies IsValid.
+type ServerRuntime struct {
+	Primary     *types.VersionedPackageRef  `json:"primary_runtime,omitempty"`
+	PrimaryPath string                      `json:"primary_path,omitempty"`
+	Components  []types.VersionedPackageRef `json:"runtime_components"`
 }
 
-// buildServerInstance creates server from detector evidence. It returns nil when
-// the evidence cannot name a concrete runtime.
-func buildServerInstance(evidence *detector.ExecutableEvidence) *ServerInstance {
+// buildServerRuntime creates runtime from detector evidence. It returns nil
+// when the evidence cannot name a concrete runtime.
+func buildServerRuntime(evidence *detector.RuntimeEvidence) *ServerRuntime {
 	if evidence == nil ||
 		evidence.PrimaryRuntime == nil ||
 		evidence.PrimaryRuntime.PackageRef == (types.PackageRef{}) ||
@@ -30,28 +30,28 @@ func buildServerInstance(evidence *detector.ExecutableEvidence) *ServerInstance 
 		return nil
 	}
 
-	return &ServerInstance{
-		PrimaryRuntime:    evidence.PrimaryRuntime,
-		PrimaryPath:       evidence.PrimaryPath,
-		RuntimeComponents: normalizeRuntimeComponents(evidence.RuntimeComponents),
+	return &ServerRuntime{
+		Primary:     evidence.PrimaryRuntime,
+		PrimaryPath: evidence.PrimaryPath,
+		Components:  normalizeRuntimeComponents(evidence.RuntimeComponents),
 	}
 }
 
-func (s *ServerInstance) IsValid() bool {
+func (s *ServerRuntime) IsValid() bool {
 	return s != nil &&
-		s.PrimaryRuntime != nil &&
-		s.PrimaryRuntime.PackageRef != (types.PackageRef{}) &&
+		s.Primary != nil &&
+		s.Primary.PackageRef != (types.PackageRef{}) &&
 		s.PrimaryPath != ""
 }
 
-// GameVersion returns the Minecraft version of the runtime. It returns
+// MinecraftVersion returns the Minecraft version of the runtime. It returns
 // types.VersionUnknown when no component names a concrete version.
-func (s *ServerInstance) GameVersion() types.BareVersion {
+func (s *ServerRuntime) MinecraftVersion() types.Version {
 	if s == nil {
 		return types.VersionUnknown
 	}
-	for _, component := range s.RuntimeComponents {
-		if component.Eco != types.EcoMinecraft ||
+	for _, component := range s.Components {
+		if component.Ecosystem != types.EcosystemMinecraft ||
 			component.Name != "minecraft" {
 			continue
 		}
@@ -62,39 +62,44 @@ func (s *ServerInstance) GameVersion() types.BareVersion {
 	return types.VersionUnknown
 }
 
-// ModLoader reports the mod loader ecosystem of the runtime. It
-// returns types.EcoMinecraft (vanilla) when no loader applies.
-func (s *ServerInstance) ModLoader() types.Ecosystem {
+// Ecosystem reports the mod loader ecosystem of the runtime. It
+// returns types.EcosystemMinecraft when no loader applies.
+func (s *ServerRuntime) Ecosystem() types.Ecosystem {
 	if s == nil || !s.IsValid() {
-		return types.EcoUnspecified
+		return types.EcosystemUnspecified
 	}
-	for _, component := range s.RuntimeComponents {
-		if component.Eco == types.EcoFabric &&
+	for _, component := range s.Components {
+		if component.Ecosystem == types.EcosystemFabric &&
 			(component.Name == "fabric-loader" ||
 				component.Name == "fabricloader") {
-			return types.EcoFabric
+			return types.EcosystemFabric
 		}
-		if component.Eco == types.EcoForge && component.Name == "forge" {
-			return types.EcoForge
+		if component.Ecosystem == types.EcosystemForge && component.Name == "forge" {
+			return types.EcosystemForge
 		}
-		if component.Eco == types.EcoNeoforge &&
+		if component.Ecosystem == types.EcosystemNeoForge &&
 			component.Name == "neoforge" {
-			return types.EcoNeoforge
+			return types.EcosystemNeoForge
 		}
 	}
-	return types.EcoMinecraft
+	return types.EcosystemMinecraft
 }
 
-// ServerCore returns the name of the primary runtime artifact. An
-// example value is "paper".
-func (s *ServerInstance) ServerCore() string {
-	if s == nil || s.PrimaryRuntime == nil {
-		return ""
+// Product returns the executable server product of the primary runtime. It
+// returns types.ServerProductUnknown when the primary runtime name is not a
+// known server product.
+func (s *ServerRuntime) Product() types.ServerProduct {
+	if s == nil || s.Primary == nil {
+		return types.ServerProductUnknown
 	}
-	return s.PrimaryRuntime.Name.String()
+	product, ok := types.ParseServerProduct(s.Primary.Name.String())
+	if !ok {
+		return types.ServerProductUnknown
+	}
+	return product
 }
 
-func concreteRuntimeVersion(version types.BareVersion) bool {
+func concreteRuntimeVersion(version types.Version) bool {
 	switch version {
 	case "", types.VersionNone, types.VersionUnknown, types.VersionAny,
 		types.VersionStable, types.VersionBeta:
@@ -169,13 +174,13 @@ func normalizeRuntimeComponent(
 	}
 
 	name := strings.ToLower(ref.Name.String())
-	switch ref.Eco {
-	case types.EcoMinecraft:
+	switch ref.Ecosystem {
+	case types.EcosystemMinecraft:
 		if name != "minecraft" {
 			return types.VersionedPackageRef{}, false
 		}
 		ref.Name = "minecraft"
-	case types.EcoFabric:
+	case types.EcosystemFabric:
 		switch name {
 		case "fabric", "fabric-loader", "fabricloader":
 			ref.Name = "fabric-loader"
@@ -184,12 +189,12 @@ func normalizeRuntimeComponent(
 		default:
 			return types.VersionedPackageRef{}, false
 		}
-	case types.EcoForge:
+	case types.EcosystemForge:
 		if name != "forge" {
 			return types.VersionedPackageRef{}, false
 		}
 		ref.Name = "forge"
-	case types.EcoNeoforge:
+	case types.EcosystemNeoForge:
 		if name != "neoforge" {
 			return types.VersionedPackageRef{}, false
 		}

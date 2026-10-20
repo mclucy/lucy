@@ -32,7 +32,7 @@ type mavenLibrary struct {
 // result is false when the profile explicitly names a library that cannot be
 // downloaded: Forge declares the client classifier with an empty artifact URL
 // because the jar exists nowhere in a public Maven repository.
-func libraryInput(lib mavenLibrary, z *zip.Reader, version string) (types.BootstrapInput, bool, error) {
+func libraryInput(lib mavenLibrary, z *zip.Reader, version types.Version) (types.BootstrapInput, bool, error) {
 	download := lib.Downloads.Artifact
 	p := ""
 	if download != nil {
@@ -45,7 +45,7 @@ func libraryInput(lib mavenLibrary, z *zip.Reader, version string) (types.Bootst
 			return types.BootstrapInput{}, false, err
 		}
 	}
-	a := types.Artifact{Provider: "maven", ProjectID: lib.Name, Version: version, Filename: path.Base(p), Hashes: map[string]string{}}
+	a := types.Artifact{Provider: types.ProviderMaven, ProjectID: lib.Name, Version: version, Filename: path.Base(p), Hashes: map[string]string{}}
 	if z != nil {
 		if raw, err := zipBytes(z, "maven/"+p); err != nil {
 			return types.BootstrapInput{}, false, err
@@ -105,7 +105,7 @@ func zipBytes(z *zip.Reader, name string) ([]byte, error) {
 	return nil, nil
 }
 
-func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.CoreResolution, installer string) error {
+func resolveInstaller(ctx context.Context, req types.ServerProductRequest, out *types.ServerProductResolution, installer string) error {
 	z, err := zip.OpenReader(installer)
 	if err != nil {
 		return err
@@ -127,18 +127,18 @@ func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.Cor
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return err
 	}
-	if profile.Minecraft != req.Minecraft {
-		return fmt.Errorf("%s installer targets Minecraft %s, requested %s", req.Distribution, profile.Minecraft, req.Minecraft)
+	if profile.Minecraft != req.Minecraft.String() {
+		return fmt.Errorf("%s installer targets Minecraft %s, requested %s", req.Product, profile.Minecraft, req.Minecraft)
 	}
-	out.Version = req.Version
-	if floating(out.Version) {
-		out.Version = strings.TrimSuffix(strings.TrimPrefix(out.Artifact.Filename, req.Distribution+"-"), "-installer.jar")
-		if req.Distribution == "forge" {
-			out.Version = strings.TrimPrefix(out.Version, req.Minecraft+"-")
+	out.ProductVersion = req.ProductVersion
+	if floating(out.ProductVersion) {
+		out.ProductVersion = types.Version(strings.TrimSuffix(strings.TrimPrefix(out.Artifact.Filename, req.Product.String()+"-"), "-installer.jar"))
+		if req.Product == types.ServerProductForge {
+			out.ProductVersion = types.Version(strings.TrimPrefix(out.ProductVersion.String(), req.Minecraft.String()+"-"))
 		}
 	}
-	out.Artifact.Version = out.Version
-	out.Bootstrap = "forge-installer"
+	out.Artifact.Version = out.ProductVersion
+	out.Bootstrapper = "forge-installer"
 	if profile.JSON != "" {
 		raw, e := zipBytes(&z.Reader, strings.TrimPrefix(profile.JSON, "/"))
 		if e != nil {
@@ -154,7 +154,7 @@ func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.Cor
 	}
 	seen := map[string]bool{}
 	for _, lib := range profile.Libraries {
-		input, downloadable, e := libraryInput(lib, &z.Reader, out.Version)
+		input, downloadable, e := libraryInput(lib, &z.Reader, out.ProductVersion)
 		if e != nil {
 			return e
 		}
@@ -189,7 +189,7 @@ func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.Cor
 		return err
 	}
 	for _, v := range index.Versions {
-		if v.ID == req.Minecraft {
+		if v.ID == req.Minecraft.String() {
 			var detail struct {
 				Downloads map[string]struct {
 					URL  string `json:"url"`
@@ -200,15 +200,15 @@ func resolveInstaller(ctx context.Context, req types.CoreRequest, out *types.Cor
 				return err
 			}
 			if mapping, ok := detail.Downloads["server_mappings"]; ok {
-				out.Inputs = append(out.Inputs, types.BootstrapInput{Path: "server-mappings.txt", Provider: "mojang", ProjectID: "server-mappings", Version: req.Minecraft, Filename: "server-mappings.txt", URL: mapping.URL, Hashes: map[string]string{"sha1": mapping.SHA1}})
+				out.Inputs = append(out.Inputs, types.BootstrapInput{Path: "server-mappings.txt", Provider: types.ProviderMojang, ProjectID: "server-mappings", Version: req.Minecraft, Filename: "server-mappings.txt", URL: mapping.URL, Hashes: map[string]string{"sha1": mapping.SHA1}})
 			}
 			break
 		}
 	}
 	log.Debug(
 		"routing: installer inputs resolved",
-		"distribution", req.Distribution,
-		"version", out.Version,
+		"product", req.Product,
+		"version", out.ProductVersion,
 		"inputs", len(out.Inputs),
 	)
 	return nil

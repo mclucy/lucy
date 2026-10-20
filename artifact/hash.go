@@ -7,12 +7,12 @@ import (
 	"os"
 )
 
-// File is an artifact file on disk. It implements upstream.Hashable.
+// File is an artifact file on disk. It implements upstream.ArtifactFingerprint.
 type File struct {
 	Path string
 }
 
-func (f File) Sha1() ([sha1.Size]byte, error) {
+func (f File) SHA1() ([sha1.Size]byte, error) {
 	file, err := os.Open(f.Path)
 	if err != nil {
 		return [sha1.Size]byte{}, fmt.Errorf("open artifact: %w", err)
