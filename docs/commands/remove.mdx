@@ -3,32 +3,32 @@ title: "lucy remove"
 description: "Remove packages from the manifest and uninstall them"
 ---
 
-`lucy remove` deletes a requirement from `lucy.yaml` and re-resolves, uninstalling whatever nothing else needs any more. Re-adding the package later selects the default `stable` version unless `lucy add` names one. Manifest and lock move together — a failed removal leaves both files untouched.
+`lucy remove` deletes a package from `lucy.yaml`, re-resolves the remaining dependencies, and uninstalls whatever is no longer needed. Re-adding the package later selects the default `any` version unless `lucy add` names one. Manifest and lock move together — a failed removal leaves both files untouched.
 
 ## Arguments
 
 <ParamField path="package" type="string" required>
-  One or more package references, in the same `provider:project` form accepted by [`lucy add`](/commands/add). Bare names resolve as the same shortcuts: a unique match in the current lock, otherwise Modrinth (or the MCDR catalogue in MCDR scope). Only direct requirements can be removed — naming something the manifest never declared is an error, and transitive dependencies follow whatever their dependents need.
+  One or more package references, in the same `modrinth:project`, `curseforge:project`, or `mcdr:project` form accepted by [`lucy add`](/commands/add). Bare names resolve as the same shortcuts: a unique match in the current lock, otherwise Modrinth (or the MCDR catalogue for MCDR plugins). Only packages declared directly in the manifest can be removed — naming something the manifest never declared is an error, and dependencies remain installed while another package still needs them.
 </ParamField>
 
 ## Flags
 
-<ParamField query="--loader, -l" type="string">
-  Target loader scope for the request (`fabric`, `forge`, `neoforge`, `bukkit`). `--platform` is accepted as an alias.
+<ParamField query="--ecosystem" type="string">
+  Remove the package from this mod or plugin type: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`. When omitted, it is inferred from the declared server.
 </ParamField>
 
 <ParamField query="--locked" type="boolean" default="false">
-  Re-resolve using only what the lock already pins.
+  Do not resolve new versions; fail when the lock cannot satisfy the remaining packages.
 </ParamField>
 
 <ParamField query="--offline" type="boolean" default="false">
-  Disallow network acquisition for any re-resolution this triggers.
+  Disallow network acquisition for any re-resolution this triggers. Removal changes the manifest, so a removal that requires re-resolution fails under `--offline`; combine it with `--locked` to reuse the existing lock without going upstream.
 </ParamField>
 
 ## What actually gets deleted
 
-Removing a package does not necessarily remove a file. A locked package that some other requirement still needs stays installed — that is exactly what `lucy leaves` reports: locked packages nothing references.
+Removing a package does not necessarily remove a file. A locked package that some other package still needs stays installed. `lucy leaves` is a different view: it lists packages with no dependencies, which describes the dependency tree rather than what is safe to uninstall.
 
-Files are removed only when `lucy` can prove it placed them and the lock no longer lists them; every managed artifact leaves a receipt, and removal is limited to paths an active receipt covers. Anything you put in `mods/` or `plugins/` yourself is never touched. No worlds, server configuration, or EULA file is read, rewritten, or removed by `lucy remove`.
+Files are removed only when `lucy` can prove it placed them and the lock no longer lists them. Lucy records the files it installs and only removes paths in that record. Anything you put in `mods/` or `plugins/` yourself is never touched. No worlds, server configuration, or EULA file is read, rewritten, or removed by `lucy remove`.
 
-See also [Global Flags](/commands/global-flags), [`lucy add`](/commands/add).
+See also [Global Flags](/commands/global-flags) and [`lucy add`](/commands/add).

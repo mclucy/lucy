@@ -3,14 +3,14 @@ title: "lucy add"
 description: "Add packages to the manifest and install them"
 ---
 
-`lucy add` records a new requirement in `lucy.yaml`, resolves it against the lock, and installs the result. The manifest change and the lock update are one transaction: if resolution fails, `lucy.yaml` is left exactly as it was.
+`lucy add` records a new package in `lucy.yaml`, resolves it against the lock, and installs the result. The manifest change and the lock update are one transaction: if resolution fails, `lucy.yaml` is left exactly as it was.
 
 ```bash
 lucy add modrinth:lithium
 lucy add curseforge:238222
 lucy add modrinth:fabric-api@0.100.8
 lucy add modrinth:fabric-api modrinth:lithium
-lucy add mcdr:synced --loader mcdr
+lucy add mcdr:synced --ecosystem mcdr
 ```
 
 ## Arguments
@@ -18,39 +18,33 @@ lucy add mcdr:synced --loader mcdr
 <ParamField path="package" type="string" required>
   One or more package references.
 
-  References are provider-qualified: `modrinth:`, `curseforge:`, or `mcdr:` followed by the project slug or id. An `@` suffix pins a selector — `modrinth:fabric-api@0.100.8`. Without `@`, the recorded selector is `stable`.
+  References include the package source, such as `modrinth:lithium`, `curseforge:238222`, or `mcdr:synced`. An `@` suffix pins a version — `modrinth:fabric-api@0.100.8`. Without `@`, the recorded version rule is `any`.
 
-  A bare name such as `lithium` works as a shortcut. `lucy` first looks for a unique match among the native module names the current lock already records; if nothing matches, it falls back to Modrinth, or to the MCDR catalogue inside the MCDR scope. A name matching more than one locked package is an error asking for `provider:project` rather than a guess.
+  A bare name such as `lithium` works as a shortcut. `lucy` first looks for a unique match among the package names the current lock already records; if nothing matches, it falls back to Modrinth, or to the MCDR catalogue when adding an MCDR plugin. A name matching more than one locked package is an error asking for a `modrinth:project`-style reference rather than a guess.
 
-  Native mod and plugin ids are not rewritten. The manifest stores the provider-qualified reference; the id stays whatever the runtime loads.
+  Lucy does not rename the IDs inside a mod or plugin. The manifest stores the `modrinth:`, `curseforge:`, or `mcdr:` reference; the ID stays whatever the server loads.
 </ParamField>
 
-Without a pin, the requirement floats on `stable`: the selector records intent, not a fixed version, and re-resolution may move it forward. To hold a version, add it with `@` or edit the requirement's `version` afterwards. Either way, adding a package never floats the rest — existing pins are pins, and the new requirement resolves against them.
+Without a pin, the recorded version rule is `any`: Lucy prefers release builds and may fall back to a prerelease when no release satisfies. `stable` requires a release build with no prerelease fallback, and `beta` also accepts prereleases. To hold a version, add it with `@` or edit the package's `selector` afterwards. Adding a package does not float the rest — existing pins are pins, and the new package resolves against them.
+
+The mod or plugin type is inferred from the declared server when `--ecosystem` is omitted: Fabric, Forge, and NeoForge servers select their matching type, Paper and Purpur select `paper`, and MCDR selects `mcdr`. Pass `--ecosystem` when the manifest does not make the target clear.
 
 ## Flags
 
-<ParamField query="--loader, -l" type="string">
-  Target loader scope for the request (`fabric`, `forge`, `neoforge`, `bukkit`). `--platform` is accepted as an alias for the same scope.
+<ParamField query="--ecosystem" type="string">
+  Target mod or plugin type for the request: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`.
 </ParamField>
 
 <ParamField query="--with-optional" type="boolean" default="false">
-  Also pull in the optional upstream dependencies that would otherwise be skipped. Anything selected this way is written back into `lucy.yaml` as an explicit requirement, so it is included when the server is reconstructed later — not just for this run.
-</ParamField>
-
-<ParamField query="--no-optional" type="boolean" default="false">
-  Skip optional upstream dependencies. This is the default; the flag is here so you can be explicit. Using it together with `--with-optional` is an error.
+  Also pull in optional dependencies that would otherwise be skipped. Anything selected this way is written back into `lucy.yaml` as an explicit package, so it is included when the server is reconstructed later — not just for this run.
 </ParamField>
 
 <ParamField query="--locked" type="boolean" default="false">
-  Resolve only within what the lock already pins.
+  Do not resolve new versions; fail when the lock cannot satisfy the request.
 </ParamField>
 
 <ParamField query="--offline" type="boolean" default="false">
-  Disallow network acquisition for newly added files.
+  Disallow network access. Adding a package changes the manifest, so a package that needs re-resolution fails under `--offline`; the flag is useful only when the lock already pins the result.
 </ParamField>
 
-<ParamField query="--force, -f" type="boolean" default="false">
-  Ignore version, dependency, and platform warnings.
-</ParamField>
-
-See also [Global Flags](/commands/global-flags), [`lucy remove`](/commands/remove).
+See also [Global Flags](/commands/global-flags) and [`lucy remove`](/commands/remove).
