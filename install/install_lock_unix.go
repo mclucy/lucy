@@ -11,7 +11,8 @@ import (
 )
 
 func LockWorkspace(root string) (*os.File, error) {
-	f, err := os.OpenFile(filepath.Join(root, ".lucy", "writer.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	// The lock file carries no data; a read-only handle is enough to flock it.
+	f, err := os.OpenFile(filepath.Join(root, ".lucy", "writer.lock"), os.O_CREATE|os.O_RDONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}

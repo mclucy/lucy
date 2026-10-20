@@ -463,20 +463,30 @@ func rejectSharedDestinations(resolved *lockfile.Document) error {
 	return nil
 }
 
+// packageFolder returns the directory that serves a package's environment and
+// ecosystem.
+func packageFolder(environment types.Environment, ecosystem types.Ecosystem) string {
+	if environment == types.EnvironmentMCDR {
+		return "plugins"
+	}
+	switch ecosystem {
+	case types.EcosystemBukkit, types.EcosystemPaper:
+		return "plugins"
+	default:
+		return "mods"
+	}
+}
+
 // packageDestination reports where an enabled package lands inside the staged
 // server tree.
 func packageDestination(resolved *lockfile.Document, p *types.LockedPackage) (string, error) {
 	directory := resolved.Server.Directory
-	folder := "mods"
-	if p.Ecosystem == types.EcosystemBukkit {
-		folder = "plugins"
-	}
+	folder := packageFolder(p.Environment, p.Ecosystem)
 	if p.Environment == types.EnvironmentMCDR {
 		if resolved.MCDR == nil {
 			return "", fmt.Errorf("MCDR package has no wrapper runtime")
 		}
 		directory = resolved.MCDR.Directory
-		folder = "plugins"
 	}
 	return filepath.Join(directory, folder, p.Filename), nil
 }
