@@ -14,7 +14,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
@@ -23,29 +23,29 @@ import (
 )
 
 type options struct {
-	output   string
-	platform string
-	project  string
-	buildDir string
-	branch   string
-	tag      string
+	output    string
+	ecosystem string
+	project   string
+	buildDir  string
+	branch    string
+	tag       string
 }
 
 func NewCommand() *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
 		Use:   "compile <url|owner/repo>",
-		Short: message.CompileShort,
-		Long:  message.CompileLong,
+		Short: help.CompileShort,
+		Long:  help.CompileLong,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return run(ctx, args[0], &opts, cmd.OutOrStdout())
+			return run(ctx, args[0], &opts, cmd.OutOrStdout(), cmd.ErrOrStderr())
 		},
 	}
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Write the compiled mod JAR to PATH, or to a directory under the project's artifact name")
-	cmd.Flags().StringVar(&opts.platform, cli.FlagPlatform, "", "Select fabric, forge, or neoforge")
+	cmd.Flags().StringVar(&opts.ecosystem, cli.FlagEcosystem, "", "Select fabric, forge, or neoforge")
 	cmd.Flags().StringVar(&opts.project, "project", "", "Select a Gradle project path, such as :fabric")
 	cmd.Flags().StringVar(&opts.buildDir, "build-dir", "", "Select a Gradle build directory relative to the checkout")
 	cmd.Flags().StringVar(&opts.branch, "branch", "", "Checkout Git branch BRANCH before compiling")
@@ -55,14 +55,14 @@ func NewCommand() *cobra.Command {
 
 // run compiles source and writes the resulting JAR. Progress is narrated on
 // stderr; stdout carries only the artifact path so the command stays pipeable.
-func run(ctx context.Context, source string, opts *options, stdout io.Writer) (err error) {
+func run(ctx context.Context, source string, opts *options, stdout, stderr io.Writer) (err error) {
 	remote, err := parseRemote(source)
 	if err != nil {
 		return err
 	}
 	destination := parseOutputDestination(opts.output)
-	if opts.platform != "" && !supportedPlatform(types.Ecosystem(opts.platform)) {
-		return errors.New("--platform must be fabric, forge, or neoforge")
+	if opts.ecosystem != "" && !supportedEcosystem(types.Ecosystem(opts.ecosystem)) {
+		return errors.New("--ecosystem must be fabric, forge, or neoforge")
 	}
 	branch := strings.TrimSpace(opts.branch)
 	tag := strings.TrimSpace(opts.tag)
@@ -94,12 +94,12 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 	checkout := filepath.Join(temporary, "repository")
 	ref := refSuffix(branch, tag)
 	log.Info("compilation checkout started", "branch", branch, "tag", tag)
-	report.Info("Cloning " + source + ref)
+	writeProgress(stderr, "Cloning "+source+ref)
 	if err := clone(ctx, remote, checkout, branch, tag, newProcessLog("git")); err != nil {
 		return err
 	}
 	log.Info("compilation checkout completed", "directory", checkout)
-	report.Info("Cloned " + source + ref)
+	writeProgress(stderr, "Cloned "+source+ref)
 
 	log.Info("compilation repository inspection started", "directory", checkout)
 	layout, err := buildrepo.Probe(ctx, checkout)
@@ -115,7 +115,7 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 		"reason", "requested directory or root/unique Gradle build")
 	log.Info("compilation toolchain preparation started", "directory", build.Dir)
 
-	report.Info("Preparing the Gradle build")
+	writeProgress(stderr, "Preparing the Gradle build")
 	gradleUserHome := os.Getenv("GRADLE_USER_HOME")
 	if gradleUserHome == "" {
 		home, homeErr := os.UserHomeDir()
@@ -138,7 +138,7 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 		log.Warn(warnErr)
 		report.Warn(warnErr)
 	}
-	runner, err := newGradleRunner(build, inventory, temporary)
+	runner, err := newGradleRunner(build, inventory, temporary, stderr)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 	if err != nil {
 		return err
 	}
-	artifactPath, err := selectArtifact(project, types.Ecosystem(opts.platform))
+	artifactPath, err := selectArtifact(project, types.Ecosystem(opts.ecosystem))
 	if err != nil {
 		return err
 	}
@@ -186,11 +186,17 @@ func run(ctx context.Context, source string, opts *options, stdout io.Writer) (e
 		return err
 	}
 	log.Info("compiled artifact published", "path", output, "project", project.Path)
-	report.Info("Compiled " + filepath.Base(output))
+	writeProgress(stderr, "Compiled "+filepath.Base(output))
 	if _, err := fmt.Fprintln(stdout, output); err != nil {
 		return fmt.Errorf("report output: %w", err)
 	}
 	return nil
+}
+
+// writeProgress narrates compilation progress on stderr. Progress text is
+// advisory, so a write failure does not stop the build.
+func writeProgress(writer io.Writer, line string) {
+	_, _ = fmt.Fprintln(writer, line)
 }
 
 // reportFindings surfaces what the static probe could not settle on its own.
@@ -212,9 +218,9 @@ func reportFindings(root string, findings []buildrepo.Finding) {
 	}
 }
 
-func supportedPlatform(platform types.Ecosystem) bool {
-	switch platform {
-	case types.EcoFabric, types.EcoForge, types.EcoNeoforge:
+func supportedEcosystem(ecosystem types.Ecosystem) bool {
+	switch ecosystem {
+	case types.EcosystemFabric, types.EcosystemForge, types.EcosystemNeoForge:
 		return true
 	default:
 		return false

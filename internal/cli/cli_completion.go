@@ -48,18 +48,18 @@ func ToCobraCompletions(candidates []CompletionCandidate) []string {
 	return out
 }
 
-// StaticEcosystemCandidates covers all user-facing platforms.
+// StaticEcosystemCandidates covers all user-facing ecosystems.
 func StaticEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{
-			Value:       types.EcoMinecraft.String(),
+			Value:       types.EcosystemMinecraft.String(),
 			Description: "Vanilla / Bukkit / Paper plugins",
 		},
-		{Value: types.EcoFabric.String(), Description: "Fabric mods"},
-		{Value: types.EcoForge.String(), Description: "Forge mods"},
-		{Value: types.EcoNeoforge.String(), Description: "NeoForge mods"},
+		{Value: types.EcosystemFabric.String(), Description: "Fabric mods"},
+		{Value: types.EcosystemForge.String(), Description: "Forge mods"},
+		{Value: types.EcosystemNeoForge.String(), Description: "NeoForge mods"},
 		{
-			Value:       types.EcoMcdr.String(),
+			Value:       types.EcosystemMCDR.String(),
 			Description: "MCDR controller / plugin framework",
 		},
 	}
@@ -74,23 +74,24 @@ func StaticStatusLogoCandidates() []CompletionCandidate {
 }
 
 // StaticSearchEcosystemCandidates is the search rollout subset, not the full
-// platform set.
+// ecosystem set.
 func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.EcoFabric.String(), Description: "Fabric mods"},
-		{Value: types.EcoForge.String(), Description: "Forge mods"},
-		{Value: types.EcoNeoforge.String(), Description: "NeoForge mods"},
-		{Value: "bukkit", Description: "Bukkit/Paper/Spigot plugins"},
+		{Value: types.EcosystemFabric.String(), Description: "Fabric mods"},
+		{Value: types.EcosystemForge.String(), Description: "Forge mods"},
+		{Value: types.EcosystemNeoForge.String(), Description: "NeoForge mods"},
+		{Value: types.EcosystemBukkit.String(), Description: "Bukkit/Spigot plugins"},
+		{Value: types.EcosystemPaper.String(), Description: "Paper plugins"},
 	}
 }
 
-func StaticSearchSourceCandidates() []CompletionCandidate {
+func StaticSearchRegistryCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.SourceModrinth.String(), Description: "Modrinth"},
-		{Value: types.SourceCurseForge.String(), Description: "CurseForge"},
-		{Value: types.SourceHangar.String(), Description: "Hangar"},
-		{Value: types.SourceSpiget.String(), Description: "Spiget"},
-		{Value: types.SourceMCDR.String(), Description: "MCDR Plugin Catalogue"},
+		{Value: types.RegistryModrinth.String(), Description: "Modrinth"},
+		{Value: types.RegistryCurseForge.String(), Description: "CurseForge"},
+		{Value: types.RegistryHangar.String(), Description: "Hangar"},
+		{Value: types.RegistrySpiget.String(), Description: "Spiget"},
+		{Value: types.RegistryMCDR.String(), Description: "MCDR Plugin Catalogue"},
 	}
 }
 
@@ -112,8 +113,8 @@ func LockCandidates(root string) []CompletionCandidate {
 	}
 	out := make([]CompletionCandidate, 0, len(lock.Packages))
 	for _, pkg := range lock.Packages {
-		reference := pkg.Provider + ":" + pkg.ProjectID
-		description := pkg.Runtime + "/" + pkg.Loader.String() + " " + pkg.Version
+		reference := pkg.Provider.String() + ":" + pkg.ProjectID
+		description := string(pkg.Environment) + "/" + pkg.Ecosystem.String() + " " + pkg.Version.String()
 		out = append(out, CompletionCandidate{
 			Value:       reference,
 			Description: description,
@@ -126,21 +127,21 @@ func LockCandidates(root string) []CompletionCandidate {
 // reference the current lock binds it to. An empty result means the lock
 // resolves no such package; an error means the name is ambiguous and the
 // caller must supply an explicit "provider:project".
-func ResolveLockReference(root, runtime string, loader types.Ecosystem, name string) (string, error) {
+func ResolveLockReference(root, name string) (string, error) {
 	lock, err := lockfile.Read(root)
 	if err != nil {
 		return "", nil
 	}
-	return lock.ContextReference(runtime, loader, name)
+	return lock.LookupReference(name)
 }
 
 type PackageIDSuggestionContext struct {
-	Command string
-	Token   string
-	Source  string
-	Name    string
-	Version string
-	Segment string
+	Command  string
+	Token    string
+	Provider string
+	Name     string
+	Version  string
+	Segment  string
 }
 
 type PackageIDSuggestionProvider interface {
@@ -177,7 +178,7 @@ func CompletePackageIDSuggestionsIn(
 	commandName string,
 	token string,
 ) ([]string, cobra.ShellCompDirective) {
-	source, name, version, segment := ParseCompletionToken(token)
+	provider, name, version, segment := ParseCompletionToken(token)
 
 	if segment == "version" {
 		candidates := FilterByPrefix(StaticVersionCandidates(), version)
@@ -185,12 +186,12 @@ func CompletePackageIDSuggestionsIn(
 	}
 
 	request := PackageIDSuggestionContext{
-		Command: commandName,
-		Token:   token,
-		Source:  source,
-		Name:    name,
-		Version: version,
-		Segment: segment,
+		Command:  commandName,
+		Token:    token,
+		Provider: provider,
+		Name:     name,
+		Version:  version,
+		Segment:  segment,
 	}
 
 	candidates := collectPackageIDSuggestionCandidates(ctx, root, request)
@@ -217,9 +218,9 @@ func collectPackageIDSuggestionCandidates(
 }
 
 // ParseCompletionToken parses a partial "provider:project@version" completion
-// token. Target ecosystem is selected by --platform, not package syntax.
-func ParseCompletionToken(token string) (source, name, version, segment string) {
-	source = "auto"
+// token. Target ecosystem is selected by --ecosystem, not package syntax.
+func ParseCompletionToken(token string) (provider, name, version, segment string) {
+	provider = "auto"
 	beforeVersion := token
 	if before, after, ok := strings.Cut(token, "@"); ok {
 		beforeVersion = before
@@ -227,7 +228,7 @@ func ParseCompletionToken(token string) (source, name, version, segment string) 
 		segment = "version"
 	}
 	if before, after, ok := strings.Cut(beforeVersion, ":"); ok {
-		source = before
+		provider = before
 		name = after
 		if segment == "" {
 			segment = "name"

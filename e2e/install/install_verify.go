@@ -20,8 +20,8 @@ type manifestIntent struct {
 		Minecraft string `yaml:"minecraft"`
 		Directory string `yaml:"directory"`
 		Core      struct {
-			Distribution string `yaml:"distribution"`
-			Version      string `yaml:"version"`
+			Product        string `yaml:"product"`
+			ProductVersion string `yaml:"product_version"`
 		} `yaml:"core"`
 		Packages map[string]map[string]string `yaml:"packages"`
 	} `yaml:"server"`
@@ -40,11 +40,13 @@ type lockedArtifact struct {
 }
 
 type lockedModule struct {
-	ID           string   `yaml:"id"`
-	Version      string   `yaml:"version"`
-	Member       string   `yaml:"member"`
-	Provides     []string `yaml:"provides"`
-	Dependencies []struct {
+	ID             string   `yaml:"id"`
+	Version        string   `yaml:"version"`
+	Ecosystem      string   `yaml:"ecosystem"`
+	NestedPath     string   `yaml:"nested_path"`
+	DescriptorPath string   `yaml:"descriptor_path"`
+	Provides       []string `yaml:"provides"`
+	Dependencies   []struct {
 		ID         string `yaml:"id"`
 		Kind       string `yaml:"kind"`
 		Constraint string `yaml:"constraint"`
@@ -52,8 +54,8 @@ type lockedModule struct {
 }
 
 type lockedPackage struct {
-	Runtime        string `yaml:"runtime"`
-	Loader         string `yaml:"loader"`
+	Environment    string `yaml:"environment"`
+	Ecosystem      string `yaml:"ecosystem"`
 	lockedArtifact `yaml:",inline"`
 	Requirements   []struct {
 		Reference string `yaml:"reference"`
@@ -73,11 +75,12 @@ type lockDocument struct {
 	Server              struct {
 		Minecraft      string `yaml:"minecraft"`
 		Directory      string `yaml:"directory"`
-		Distribution   string `yaml:"distribution"`
+		Product        string `yaml:"product"`
 		CoreVersion    string `yaml:"core_version"`
-		Bootstrap      string `yaml:"bootstrap"`
+		Bootstrapper   string `yaml:"bootstrapper"`
 		lockedArtifact `yaml:",inline"`
 		Inputs         []lockedInput `yaml:"inputs"`
+		Java           int           `yaml:"java"`
 	} `yaml:"server"`
 	Packages []lockedPackage `yaml:"packages"`
 }
@@ -94,28 +97,28 @@ func readLock(root string) (lockDocument, error) {
 	return document, nil
 }
 
-func (scenario lockScenario) verify(root, oracle string, declared manifestIntent, locked lockDocument) error {
+func (scenario installScenario) verify(root, oracle string, declared manifestIntent, locked lockDocument) error {
 	server := locked.Server
 	if server.Minecraft != scenario.minecraft || server.Minecraft != declared.Server.Minecraft {
 		return fmt.Errorf("lock Minecraft version does not match the pinned manifest")
 	}
-	if server.Distribution != scenario.distribution || server.Distribution != declared.Server.Core.Distribution {
-		return fmt.Errorf("lock core distribution does not match the pinned manifest")
+	if server.Product != scenario.product || server.Product != declared.Server.Core.Product {
+		return fmt.Errorf("lock core product does not match the pinned manifest")
 	}
-	if server.CoreVersion != scenario.coreVersion || server.CoreVersion != declared.Server.Core.Version {
+	if server.CoreVersion != scenario.coreVersion || server.CoreVersion != declared.Server.Core.ProductVersion {
 		return fmt.Errorf("lock core version does not match the pinned manifest")
 	}
 	if server.Directory != declared.Server.Directory {
 		return fmt.Errorf("lock server directory does not match the pinned manifest")
 	}
 	if server.Provider != scenario.provider || server.ProjectID != scenario.projectID {
-		return fmt.Errorf("lock has incorrect %s provider or project identity", scenario.distribution)
+		return fmt.Errorf("lock has incorrect %s provider or project identity", scenario.product)
 	}
 	if server.Version != scenario.coreVersion || server.Filename != scenario.filename {
-		return fmt.Errorf("lock has incorrect %s core version or filename", scenario.distribution)
+		return fmt.Errorf("lock has incorrect %s core version or filename", scenario.product)
 	}
-	if server.Bootstrap != scenario.bootstrap {
-		return fmt.Errorf("lock has incorrect %s bootstrap profile", scenario.distribution)
+	if server.Bootstrapper != scenario.bootstrap {
+		return fmt.Errorf("lock has incorrect %s bootstrap profile", scenario.product)
 	}
 
 	live := filepath.Join(root, server.Directory)
@@ -131,7 +134,7 @@ func (scenario lockScenario) verify(root, oracle string, declared manifestIntent
 			return fmt.Errorf("core fixture %s: %w", scenario.coreFixture, err)
 		}
 		if actual != server.Hashes["sha256"] {
-			return fmt.Errorf("selected %s core artifact differs from its pinned sandbox artifact", scenario.distribution)
+			return fmt.Errorf("selected %s core artifact differs from its pinned sandbox artifact", scenario.product)
 		}
 	}
 	for _, artifact := range scenario.runtimeArtifacts {
@@ -178,7 +181,7 @@ func verifyBootstrapInputs(root string, inputs []lockedInput, required []string)
 	return nil
 }
 
-func verifyRuntimeFiles(root string, scenario lockScenario) error {
+func verifyRuntimeFiles(root string, scenario installScenario) error {
 	for _, relative := range scenario.requiredFiles {
 		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative)))
 		if err != nil {
@@ -201,7 +204,7 @@ func verifyRuntimeFiles(root string, scenario lockScenario) error {
 			return fmt.Errorf("generated launcher does not reference %s", scenario.launchArguments)
 		}
 	}
-	if scenario.distribution == "fabric" {
+	if scenario.product == "fabric" {
 		script, err := os.ReadFile(filepath.Join(root, "run.sh"))
 		if err != nil {
 			return err
@@ -224,11 +227,11 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 		}
 		seen[pkg.ProjectID] = true
 		want := expected[index]
-		if pkg.Provider != "modrinth" || pkg.Runtime != "server" {
-			return fmt.Errorf("project %s has incorrect provider or runtime", pkg.ProjectID)
+		if pkg.Provider != "modrinth" || pkg.Environment != "server" {
+			return fmt.Errorf("project %s has incorrect provider or environment", pkg.ProjectID)
 		}
-		if pkg.Loader != "fabric" {
-			return fmt.Errorf("project %s has incorrect loader", pkg.ProjectID)
+		if pkg.Ecosystem != "fabric" {
+			return fmt.Errorf("project %s has incorrect ecosystem", pkg.ProjectID)
 		}
 		if pkg.ReleaseID != want.releaseID || pkg.FileID != want.fileID {
 			return fmt.Errorf("project %s has incorrect release or file identity", pkg.ProjectID)
@@ -302,7 +305,7 @@ func verifyNativeModules(pkg lockedPackage) error {
 	}
 	if !slices.ContainsFunc(pkg.Modules, func(module lockedModule) bool {
 		matchesIDAndVersion := module.ID == id && module.Version == version
-		return matchesIDAndVersion && module.Member == member
+		return matchesIDAndVersion && module.NestedPath == member
 	}) {
 		return fmt.Errorf("project %s lock lost embedded module %s", pkg.ProjectID, id)
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
@@ -24,8 +24,8 @@ import (
 
 var infoCmd = &cobra.Command{
 	Use:   "info <package|file>",
-	Short: message.InfoShort,
-	Long:  message.InfoLong,
+	Short: help.InfoShort,
+	Long:  help.InfoLong,
 	Args:  cobra.ExactArgs(1),
 	ValidArgsFunction: func(
 		cmd *cobra.Command,
@@ -70,16 +70,16 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	providers, err := routing.ResolveInfoProviders(request.Eco, request.Source)
+	providers, err := routing.ResolveInfoProviders(request.Ecosystem, request.Provider)
 	if err != nil {
-		errArg := request.Eco.String()
-		if request.Source != types.SourceAuto {
-			errArg = request.Source.String()
+		errArg := request.Ecosystem.String()
+		if request.Provider != types.ProviderUnspecified {
+			errArg = request.Provider.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
 	}
 
-	meta, providerErrors, err := routing.GetInfoHedged(providers, request.PackageRef)
+	meta, providerErrors, err := routing.GetInfoFirstSuccess(providers, request.PackageRef)
 	if err != nil {
 		return fmt.Errorf("failed to get information: %w", err)
 	}
@@ -89,13 +89,13 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		if strings.Contains(providerErr.Err.Error(), "not found") {
 			noResultSources = append(
 				noResultSources,
-				providerErr.Source.Title(),
+				providerErr.Provider.Title(),
 			)
 			continue
 		}
 		providerWarn := fmt.Errorf(
 			"info on %s failed: %w",
-			providerErr.Source.Title(),
+			providerErr.Provider.Title(),
 			providerErr.Err,
 		)
 		log.Warn(providerWarn)
@@ -110,7 +110,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	case cli.JSONCompact:
 		style.PrintAsJsonCompact(meta.Metadata)
 	default:
-		installID := meta.Ref.StringFull()
+		installID := meta.Ref.StringBase()
 		output := renderInfo(meta.Metadata, installID, long)
 		if len(noResultSources) > 0 {
 			output += style.Muted(
@@ -127,10 +127,10 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 
 // resolveAgainstLock expands a bare package name into the explicit
 // "provider:project" reference the current lock binds it to. It only runs for
-// an auto-sourced request: an explicit source override is always honored, and
+// a provider-unspecified request: an explicit provider is always honored, and
 // nothing is cached or remembered beyond this call.
-func resolveAgainstLock(request types.PackageRequest) (types.PackageRequest, error) {
-	if request.Source != types.SourceAuto {
+func resolveAgainstLock(request types.VersionedPackageRef) (types.VersionedPackageRef, error) {
+	if request.Provider != types.ProviderUnspecified {
 		return request, nil
 	}
 
@@ -139,17 +139,7 @@ func resolveAgainstLock(request types.PackageRequest) (types.PackageRequest, err
 		return request, nil
 	}
 
-	runtime := cli.RuntimeServer
-	if request.Eco == types.EcoMcdr {
-		runtime = cli.RuntimeMCDR
-	}
-
-	reference, err := cli.ResolveLockReference(
-		root,
-		runtime,
-		request.Eco,
-		string(request.Name),
-	)
+	reference, err := cli.ResolveLockReference(root, string(request.Name))
 	if err != nil {
 		return request, err
 	}
@@ -162,7 +152,7 @@ func resolveAgainstLock(request types.PackageRequest) (types.PackageRequest, err
 		return request, nil
 	}
 
-	request.Source = resolved.Source
+	request.Provider = resolved.Provider
 	request.Name = resolved.Name
 	return request, nil
 }
@@ -280,9 +270,9 @@ func renderInfoReadme(data types.Metadata, longOutput bool) string {
 		)
 		out.WriteString("\n")
 		out.WriteString("  ")
-		if data.DescriptionUrl != "" {
+		if data.DescriptionURL != "" {
 			out.WriteString(style.Muted("Full README -> "))
-			out.WriteString(style.Link(data.DescriptionUrl))
+			out.WriteString(style.Link(data.DescriptionURL))
 		} else {
 			out.WriteString(
 				style.Muted(
@@ -348,12 +338,12 @@ func indentInfoBlock(text string) string {
 }
 
 func renderInfoLinks(data types.Metadata) string {
-	rows := make([][]string, 0, len(data.Urls))
-	for _, url := range data.Urls {
-		if url.Url == "" {
+	rows := make([][]string, 0, len(data.URLs))
+	for _, url := range data.URLs {
+		if url.URL == "" {
 			continue
 		}
-		linked := ansi.SetHyperlink(url.Url) + url.Url + ansi.ResetHyperlink()
+		linked := ansi.SetHyperlink(url.URL) + url.URL + ansi.ResetHyperlink()
 		rows = append(rows, []string{url.Name, linked})
 	}
 	if len(rows) == 0 {

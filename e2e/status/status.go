@@ -1,4 +1,4 @@
-// Command init verifies Lucy's server probing against generated sandboxes.
+// Command status verifies Lucy's server probing against generated sandboxes.
 package main
 
 import (
@@ -17,11 +17,11 @@ func main() {
 }
 
 func run(args []string) int {
-	flags := flag.NewFlagSet("e2e/init", flag.ContinueOnError)
+	flags := flag.NewFlagSet("e2e/status", flag.ContinueOnError)
 	lucy := flags.String("lucy", "dist/lucy", "path to the Lucy binary")
 	sandboxes := flags.String("sandboxes", ".sandboxes", "directory containing generated sandboxes")
 	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), "Usage: go run ./e2e/init [flags] scenario ids")
+		fmt.Fprintln(flags.Output(), "Usage: go run ./e2e/status [flags] scenario ids")
 		fmt.Fprintln(flags.Output(), "IDs may be comma- or whitespace-separated.")
 		fmt.Fprintln(flags.Output(), "Run from the repository root.")
 		flags.PrintDefaults()

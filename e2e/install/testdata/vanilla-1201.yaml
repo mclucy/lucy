@@ -3,5 +3,5 @@ server:
   minecraft: "1.20.1"
   directory: server
   core:
-    distribution: forge
-    version: "47.4.10"
+    product: minecraft
+    product_version: "1.20.1"

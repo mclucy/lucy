@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
@@ -21,7 +21,7 @@ import (
 
 var bisectCmd = &cobra.Command{
 	Use:   "bisect",
-	Short: message.BisectShort,
+	Short: help.BisectShort,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
@@ -30,35 +30,35 @@ var bisectCmd = &cobra.Command{
 
 var bisectStartCmd = &cobra.Command{
 	Use:   "start",
-	Short: message.BisectStartShort,
+	Short: help.BisectStartShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionBisectStart,
 }
 
 var bisectGoodCmd = &cobra.Command{
 	Use:   "good",
-	Short: message.BisectGoodShort,
+	Short: help.BisectGoodShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionBisectGood,
 }
 
 var bisectBadCmd = &cobra.Command{
 	Use:   "bad",
-	Short: message.BisectBadShort,
+	Short: help.BisectBadShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionBisectBad,
 }
 
 var bisectStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: message.BisectStatusShort,
+	Short: help.BisectStatusShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionBisectStatus,
 }
 
 var bisectResetCmd = &cobra.Command{
 	Use:   "reset",
-	Short: message.BisectResetShort,
+	Short: help.BisectResetShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionBisectReset,
 }
@@ -75,13 +75,13 @@ func NewBisectCommand() *cobra.Command {
 }
 
 // bisectMod is one manifest requirement the session toggles. Reference is the
-// manifest's own "provider:project" key and Loader is the ecosystem it is
+// manifest's own "provider:project" key and Ecosystem is the ecosystem it is
 // declared under; together they identify the entry unambiguously.
 type bisectMod struct {
-	Runtime   string          `json:"runtime"`
-	Loader    types.Ecosystem `json:"loader"`
-	Reference string          `json:"reference"`
-	Version   string          `json:"version,omitempty"`
+	Environment types.Environment `json:"environment"`
+	Ecosystem   types.Ecosystem   `json:"ecosystem"`
+	Reference   string            `json:"reference"`
+	Version     string            `json:"version,omitempty"`
 }
 
 // bisectState is the persisted session. Original is the manifest as it stood
@@ -205,7 +205,7 @@ func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disab
 	if err := manifest.Write(workDir, doc); err != nil {
 		return 0, 0, fmt.Errorf("write manifest: %w", err)
 	}
-	if err := install.Run(context.Background(), workDir, install.Options{}); err != nil {
+	if err := operation.Sync(context.Background(), workDir, install.Options{}); err != nil {
 		return 0, 0, fmt.Errorf("sync installation: %w", err)
 	}
 	return enabled, disabled, nil
@@ -215,13 +215,13 @@ func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disab
 // the entry was present.
 func setRequirementEnabled(doc *manifest.Document, mod bisectMod, enabled bool) bool {
 	var packages map[string]manifest.Requirement
-	switch mod.Runtime {
-	case RuntimeServer:
+	switch mod.Environment {
+	case types.EnvironmentServer:
 		if doc.Server.Packages == nil {
 			return false
 		}
-		packages = doc.Server.Packages[mod.Loader]
-	case RuntimeMCDR:
+		packages = doc.Server.Packages[mod.Ecosystem]
+	case types.EnvironmentMCDR:
 		if doc.MCDR == nil {
 			return false
 		}
@@ -248,7 +248,7 @@ func restoreBisectManifest(workDir string, original *manifest.Document) (int, er
 	if err := manifest.Write(workDir, original); err != nil {
 		return 0, fmt.Errorf("restore manifest: %w", err)
 	}
-	if err := install.Run(context.Background(), workDir, install.Options{}); err != nil {
+	if err := operation.Sync(context.Background(), workDir, install.Options{}); err != nil {
 		return 0, fmt.Errorf("sync installation: %w", err)
 	}
 	return countRequirements(original), nil
@@ -292,8 +292,8 @@ func outputBisect(cmd *cobra.Command, output bisectOutput) error {
 		style.PrintAsJsonCompact(output)
 		return nil
 	}
-	report.Info(formatBisectOutput(output))
-	return nil
+	_, err := fmt.Fprintln(cmd.OutOrStdout(), formatBisectOutput(output))
+	return err
 }
 
 func formatBisectOutput(output bisectOutput) string {
@@ -375,16 +375,22 @@ func bisectCandidates(workDir string) ([]bisectMod, error) {
 	var mods []bisectMod
 	seen := make(map[string]bool)
 	for _, root := range ordered {
-		if !requirementEnabled(doc, root.Runtime, root.Loader, root.ID) {
+		if !requirementEnabled(
+			doc,
+			root.Environment,
+			root.Ecosystem,
+			root.ID,
+		) {
 			continue
 		}
 		mod := bisectMod{
-			Runtime:   root.Runtime,
-			Loader:    root.Loader,
-			Reference: root.ID,
-			Version:   root.Version,
+			Environment: root.Environment,
+			Ecosystem:   root.Ecosystem,
+			Reference:   root.ID,
+			Version:     root.Version,
 		}
-		key := mod.Runtime + "|" + string(mod.Loader) + "|" + mod.Reference
+		key := string(mod.Environment) + "|" +
+			string(mod.Ecosystem) + "|" + mod.Reference
 		if seen[key] {
 			continue
 		}
@@ -398,18 +404,18 @@ func bisectCandidates(workDir string) ([]bisectMod, error) {
 // requirement entry.
 func requirementEnabled(
 	doc *manifest.Document,
-	runtime string,
-	loader types.Ecosystem,
+	environment types.Environment,
+	ecosystem types.Ecosystem,
 	reference string,
 ) bool {
 	var packages map[string]manifest.Requirement
-	switch runtime {
-	case RuntimeServer:
+	switch environment {
+	case types.EnvironmentServer:
 		if doc.Server.Packages == nil {
 			return false
 		}
-		packages = doc.Server.Packages[loader]
-	case RuntimeMCDR:
+		packages = doc.Server.Packages[ecosystem]
+	case types.EnvironmentMCDR:
 		if doc.MCDR == nil {
 			return false
 		}
@@ -613,20 +619,20 @@ func actionBisectStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	message := "session active"
+	summary := "session active"
 	complete := false
 	if session.L > session.R {
-		message = "session complete: no bad package found"
+		summary = "session complete: no bad package found"
 		complete = true
 	} else if session.L == session.R {
-		message = "session complete: bad package identified"
+		summary = "session complete: bad package identified"
 		complete = true
 	}
 
 	return outputBisect(
 		cmd,
 		bisectOutput{
-			Message:  message,
+			Message:  summary,
 			Complete: complete,
 			State:    currentBisectView(session),
 		},

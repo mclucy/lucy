@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/terminal/style"
+	"github.com/mclucy/lucy/types"
 
 	"github.com/spf13/cobra"
 )
 
 var treeCmd = &cobra.Command{
 	Use:   "tree",
-	Short: message.TreeShort,
+	Short: help.TreeShort,
 	Args:  cobra.NoArgs,
 	RunE:  actionTree,
 }
@@ -38,25 +39,25 @@ func actionTree(cmd *cobra.Command, args []string) error {
 	}
 
 	forceLive, _ := cmd.Flags().GetBool("live")
-	graph, source, _, err := LoadDependencyData(workDir, forceLive)
+	graph, origin, _, err := LoadDependencyData(workDir, forceLive)
 	if err != nil {
 		return err
 	}
 
 	mode := JSONMode(cmd)
 	if mode != JSONNone {
-		return outputTreeJSON(graph, source, mode)
+		return outputTreeJSON(graph, origin, mode)
 	}
 
 	maxDepth, _ := cmd.Flags().GetInt("depth")
-	fmt.Printf("Using data from: %s\n\n", source.String())
+	fmt.Fprintf(cmd.OutOrStdout(), "Using data from: %s\n\n", origin.String())
 
 	roots := graph.GetRoots()
 	for i, root := range roots {
 		printTree(root, 0, i == len(roots)-1, "", make(map[string]bool), maxDepth)
 	}
 
-	fmt.Printf("\n(from %s)\n", source.String())
+	fmt.Fprintf(cmd.OutOrStdout(), "\n(from %s)\n", origin.String())
 	return nil
 }
 
@@ -65,7 +66,7 @@ func actionTree(cmd *cobra.Command, args []string) error {
 // parsing the label.
 func nodeLabel(node *GraphNode) string {
 	label := fmt.Sprintf("%s@%s", node.ID, node.Version)
-	if node.Provider != "" {
+	if node.Provider != types.ProviderUnspecified {
 		label += fmt.Sprintf(" (%s)", node.Provider)
 	}
 	if node.Module {
@@ -116,22 +117,22 @@ func printTree(
 }
 
 type treeNode struct {
-	ID       string      `json:"id"`
-	Version  string      `json:"version"`
-	Provider string      `json:"provider,omitempty"`
-	Project  string      `json:"project,omitempty"`
-	Artifact string      `json:"artifact,omitempty"`
-	Filename string      `json:"filename,omitempty"`
-	Runtime  string      `json:"runtime"`
-	Loader   string      `json:"loader"`
-	Module   bool        `json:"module,omitempty"`
-	Root     bool        `json:"root,omitempty"`
-	Children []*treeNode `json:"children,omitempty"`
+	ID          string      `json:"id"`
+	Version     string      `json:"version"`
+	Provider    string      `json:"provider,omitempty"`
+	Project     string      `json:"project,omitempty"`
+	Artifact    string      `json:"artifact,omitempty"`
+	Filename    string      `json:"filename,omitempty"`
+	Environment string      `json:"environment"`
+	Ecosystem   string      `json:"ecosystem"`
+	Module      bool        `json:"module,omitzero"`
+	Root        bool        `json:"root,omitzero"`
+	Children    []*treeNode `json:"children,omitempty"`
 }
 
 func outputTreeJSON(
 	graph *DependencyGraph,
-	source DataSource,
+	origin GraphOrigin,
 	mode JSONRendering,
 ) error {
 	visited := make(map[string]bool)
@@ -142,7 +143,7 @@ func outputTreeJSON(
 	}
 
 	output := map[string]any{
-		"source": source.String(),
+		"origin": origin.String(),
 		"roots":  jsonRoots,
 	}
 	switch mode {
@@ -155,17 +156,21 @@ func outputTreeJSON(
 }
 
 func buildJSONNode(node *GraphNode, visited map[string]bool) *treeNode {
+	provider := ""
+	if node.Provider != types.ProviderUnspecified {
+		provider = node.Provider.String()
+	}
 	t := &treeNode{
-		ID:       node.ID,
-		Version:  node.Version,
-		Provider: node.Provider,
-		Project:  node.ProjectID,
-		Artifact: node.Artifact,
-		Filename: node.Filename,
-		Runtime:  node.Runtime,
-		Loader:   node.Loader.String(),
-		Module:   node.Module,
-		Root:     node.Root,
+		ID:          node.ID,
+		Version:     node.Version,
+		Provider:    provider,
+		Project:     node.ProjectID,
+		Artifact:    node.Artifact,
+		Filename:    node.Filename,
+		Environment: string(node.Environment),
+		Ecosystem:   node.Ecosystem.String(),
+		Module:      node.Module,
+		Root:        node.Root,
 	}
 
 	key := node.key()

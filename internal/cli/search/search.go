@@ -10,7 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
@@ -21,15 +21,15 @@ import (
 )
 
 const (
-	flagIndexName    = "index"
-	flagClientName   = "client"
-	flagPlatformName = "platform"
-	flagSourceName   = "source"
+	flagSortName          = "sort"
+	flagIncludeClientName = "include-client"
+	flagEcosystemName     = cli.FlagEcosystem
+	flagRegistryName      = "registry"
 )
 
 var searchCmd = &cobra.Command{
 	Use:   "search",
-	Short: message.SearchShort,
+	Short: help.SearchShort,
 	Args:  cobra.ExactArgs(1),
 	ValidArgsFunction: func(
 		cmd *cobra.Command,
@@ -39,61 +39,60 @@ var searchCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		index, _ := cmd.Flags().GetString(flagIndexName)
-		if !SearchSort(index).Valid() {
-			return errors.New("--index must be one of \"relevance\", \"downloads\", \"newest\"")
+		sort, _ := cmd.Flags().GetString(flagSortName)
+		if !SearchSort(sort).Valid() {
+			return errors.New("--sort must be one of \"relevance\", \"downloads\", \"newest\"")
 		}
-		platform, _ := cmd.Flags().GetString(flagPlatformName)
-		if _, err := searchEcosystem(platform); err != nil {
+		ecosystem, _ := cmd.Flags().GetString(flagEcosystemName)
+		if _, err := searchEcosystem(ecosystem); err != nil {
 			return err
 		}
-		source, _ := cmd.Flags().GetString(flagSourceName)
-		_, err := searchSource(source)
+		registry, _ := cmd.Flags().GetString(flagRegistryName)
+		_, err := searchRegistry(registry)
 		return err
 	},
 	RunE: actionSearch,
 }
 
 func NewCommand() *cobra.Command {
-	searchCmd.Flags().StringP(
-		flagIndexName,
-		"i",
+	searchCmd.Flags().String(
+		flagSortName,
 		"relevance",
-		"Index search results by INDEX",
+		"Sort results by SORT (relevance, downloads, newest)",
 	)
 	searchCmd.Flags().BoolP(
-		flagClientName,
+		flagIncludeClientName,
 		"c",
 		false,
 		"Also show client-only mods in results",
 	)
 	searchCmd.Flags().String(
-		flagPlatformName,
+		flagEcosystemName,
 		"",
-		"Filter results by platform (fabric, forge, neoforge, bukkit)",
+		"Filter results by ecosystem (fabric, forge, neoforge, bukkit, paper)",
 	)
 	searchCmd.Flags().StringP(
-		flagSourceName,
+		flagRegistryName,
 		"s",
 		"",
-		"Restrict results to SOURCE",
+		"Restrict results to REGISTRY",
 	)
 	cli.AddLongFlag(searchCmd)
 	_ = searchCmd.RegisterFlagCompletionFunc(
-		flagSourceName,
+		flagRegistryName,
 		func(cmd *cobra.Command, args []string, toComplete string) (
 			[]string,
 			cobra.ShellCompDirective,
 		) {
 			candidates := cli.FilterByPrefix(
-				cli.StaticSearchSourceCandidates(),
+				cli.StaticSearchRegistryCandidates(),
 				toComplete,
 			)
 			return cli.ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
 		},
 	)
 	_ = searchCmd.RegisterFlagCompletionFunc(
-		flagIndexName,
+		flagSortName,
 		func(cmd *cobra.Command, args []string, toComplete string) (
 			[]string,
 			cobra.ShellCompDirective,
@@ -103,7 +102,7 @@ func NewCommand() *cobra.Command {
 		},
 	)
 	_ = searchCmd.RegisterFlagCompletionFunc(
-		flagPlatformName,
+		flagEcosystemName,
 		func(cmd *cobra.Command, args []string, toComplete string) (
 			[]string,
 			cobra.ShellCompDirective,
@@ -119,49 +118,50 @@ func NewCommand() *cobra.Command {
 }
 
 func actionSearch(cmd *cobra.Command, args []string) error {
-	index, _ := cmd.Flags().GetString(flagIndexName)
-	client, _ := cmd.Flags().GetBool(flagClientName)
+	sortOrder, _ := cmd.Flags().GetString(flagSortName)
+	client, _ := cmd.Flags().GetBool(flagIncludeClientName)
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)
-	platformArg, _ := cmd.Flags().GetString(flagPlatformName)
-	resolvedPlatform, err := searchEcosystem(platformArg)
+	ecosystemArg, _ := cmd.Flags().GetString(flagEcosystemName)
+	resolvedEcosystem, err := searchEcosystem(ecosystemArg)
 	if err != nil {
 		return err
 	}
-	sourceArg, _ := cmd.Flags().GetString(flagSourceName)
-	specifiedSource, err := searchSource(sourceArg)
+	registryArg, _ := cmd.Flags().GetString(flagRegistryName)
+	specifiedRegistry, err := searchRegistry(registryArg)
 	if err != nil {
 		return err
 	}
 
-	options := upstream.SearchOptions{
+	query := upstream.Query{
+		Keyword:         args[0],
 		IncludeClient:   client,
-		FilterEcosystem: resolvedPlatform,
+		FilterEcosystem: resolvedEcosystem,
 	}
 
 	providers, err := routing.ResolveSearchProviders(
-		options.FilterEcosystem,
-		specifiedSource,
+		query.FilterEcosystem,
+		specifiedRegistry,
 	)
 	if err != nil {
-		errArg := options.FilterEcosystem.String()
-		if specifiedSource != types.SourceAuto {
-			errArg = specifiedSource.String()
+		errArg := query.FilterEcosystem.String()
+		if specifiedRegistry != types.RegistryUnspecified {
+			errArg = specifiedRegistry.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
 	}
 
-	results, errs := routing.SearchMany(providers, args[0], options)
-	applySearchSort(results, SearchSort(index))
+	results, errs := routing.SearchMany(providers, query)
+	applySearchSort(results, SearchSort(sortOrder))
 
 	var noResultSources []string
 	for _, err := range errs {
 		if isNoResultsError(err.Err) {
-			noResultSources = append(noResultSources, err.Source.Title())
+			noResultSources = append(noResultSources, err.Provider.Title())
 			continue
 		}
 		providerWarn := fmt.Errorf(
 			"search on %s failed: %w",
-			err.Source.Title(),
+			err.Provider.Title(),
 			err.Err,
 		)
 		if len(results) > 0 {
@@ -207,32 +207,26 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 
 func searchEcosystem(value string) (types.Ecosystem, error) {
 	if value == "" {
-		return types.EcoUnspecified, nil
+		return types.EcosystemUnspecified, nil
 	}
 
 	ecosystem := types.Ecosystem(strings.ToLower(strings.TrimSpace(value)))
-	if !ecosystem.IsSearchEcosystem() {
-		return types.EcoUnspecified, fmt.Errorf("invalid --platform %q", value)
+	if !ecosystem.IsSearchable() {
+		return types.EcosystemUnspecified, fmt.Errorf("invalid --ecosystem %q", value)
 	}
 	return ecosystem, nil
 }
 
-func searchSource(value string) (types.SourceId, error) {
+func searchRegistry(value string) (types.Registry, error) {
 	if value == "" {
-		return types.SourceAuto, nil
+		return types.RegistryUnspecified, nil
 	}
 
-	source := types.ParseSource(strings.TrimSpace(value))
-	switch source {
-	case types.SourceModrinth,
-		types.SourceCurseForge,
-		types.SourceHangar,
-		types.SourceSpiget,
-		types.SourceMCDR:
-		return source, nil
-	default:
-		return types.SourceUnknown, fmt.Errorf("invalid --source %q", value)
+	registry, ok := types.ParseRegistry(value)
+	if !ok {
+		return types.RegistryUnknown, fmt.Errorf("invalid --registry %q", value)
 	}
+	return registry, nil
 }
 
 func searchResultError(
@@ -288,10 +282,10 @@ func renderSearchCompact(res upstream.SearchResponse) string {
 
 	for _, item := range res.Items {
 		desc := item.Description
-		if desc == "" && item.Title != "" && item.Title != item.RemoteName {
+		if desc == "" && item.Title != "" && item.Title != item.ProjectName {
 			desc = item.Title
 		}
-		t.Row("  "+item.FormattedName(), truncateText(desc, 60))
+		t.Row("  "+item.DisplayName(), truncateText(desc, 60))
 	}
 	sb.WriteString(t.String())
 	sb.WriteString("\n")
@@ -311,8 +305,8 @@ func renderSearchLong(res upstream.SearchResponse) string {
 		if i > 0 {
 			sb.WriteString("\n")
 		}
-		displayName := item.FormattedName()
-		if item.Title != "" && item.Title != item.RemoteName {
+		displayName := item.DisplayName()
+		if item.Title != "" && item.Title != item.ProjectName {
 			displayName = item.Title
 		}
 		sb.WriteString("  " + style.Accent(displayName) + "\n")
@@ -332,7 +326,7 @@ func renderSearchLong(res upstream.SearchResponse) string {
 			sb.WriteString("  " + style.Muted(stats) + "\n")
 		}
 
-		installID := item.Source.String() + ":" + item.FormattedName()
+		installID := item.Provider.String() + ":" + item.ProjectName
 		sb.WriteString("  " + style.Muted(installID) + "\n")
 	}
 	return sb.String()
@@ -340,12 +334,12 @@ func renderSearchLong(res upstream.SearchResponse) string {
 
 func searchSectionHeader(res upstream.SearchResponse) string {
 	header := style.Muted(
-		"Results from " + res.Source.Title() +
+		"Results from " + res.Provider.Title() +
 			" (" + strconv.Itoa(len(res.Items)) + ")",
 	)
 	var sb strings.Builder
 	sb.WriteString(header + "\n")
-	if res.Source == types.SourceModrinth && len(res.Items) == 100 {
+	if res.Provider == types.ProviderModrinth && len(res.Items) == 100 {
 		sb.WriteString(style.Muted("* only showing the top 100") + "\n")
 	}
 	return sb.String()

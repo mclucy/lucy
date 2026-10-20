@@ -3,4 +3,4 @@
 # Distributed on Modrinth: https://modrinth.com/mod/lithium
 url: https://github.com/CaffeineMC/lithium.git
 commit: 1316ab1aafd888bf9881e924f29928f653ad2308
-platform: fabric
+ecosystem: fabric

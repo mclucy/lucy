@@ -5,7 +5,8 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/internal/cli/message"
+	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -13,17 +14,16 @@ import (
 const (
 	flagRemoveLockedName  = "locked"
 	flagRemoveOfflineName = "offline"
-	flagRemoveLoaderName  = "loader"
 )
 
 var removeCmd = &cobra.Command{
 	Use:   "remove",
-	Short: message.RemoveShort,
+	Short: help.RemoveShort,
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		loaderArg := resolveRemoveLoaderFlag(cmd)
-		if loaderArg != "" && !types.Ecosystem(loaderArg).Valid() {
-			return fmt.Errorf("invalid loader or platform %q", loaderArg)
+		ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
+		if ecosystem != "" && !types.Ecosystem(ecosystem).Valid() {
+			return fmt.Errorf("invalid ecosystem %q", ecosystem)
 		}
 		return nil
 	},
@@ -34,30 +34,15 @@ func NewRemoveCommand() *cobra.Command {
 	removeCmd.Flags().Bool(
 		flagRemoveLockedName,
 		false,
-		"Re-resolve using only what the lock already pins",
+		"Do not resolve new versions; fail when the lock cannot satisfy",
 	)
 	removeCmd.Flags().Bool(
 		flagRemoveOfflineName,
 		false,
 		"Disallow network acquisition for any re-resolution this triggers",
 	)
-	removeCmd.Flags().StringP(
-		flagRemoveLoaderName,
-		"l",
-		"",
-		"Target loader scope for the request (fabric, forge, neoforge, bukkit)",
-	)
-	AddPlatformFlag(removeCmd)
+	AddEcosystemFlag(removeCmd)
 	return removeCmd
-}
-
-func resolveRemoveLoaderFlag(cmd *cobra.Command) string {
-	loader, _ := cmd.Flags().GetString(flagRemoveLoaderName)
-	if loader != "" {
-		return loader
-	}
-	platform, _ := cmd.Flags().GetString(FlagPlatform)
-	return platform
 }
 
 func actionRemove(cmd *cobra.Command, args []string) error {
@@ -69,8 +54,8 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 	locked, _ := cmd.Flags().GetBool(flagRemoveLockedName)
 	offline, _ := cmd.Flags().GetBool(flagRemoveOfflineName)
 
-	loaderArg := resolveRemoveLoaderFlag(cmd)
-	loader := types.Ecosystem(loaderArg)
+	ecosystemArg, _ := cmd.Flags().GetString(FlagEcosystem)
+	ecosystem := types.Ecosystem(ecosystemArg)
 
 	opts := install.Options{
 		Locked:          locked,
@@ -79,5 +64,5 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	return install.Remove(cmd.Context(), workDir, args, loader, opts)
+	return operation.Remove(cmd.Context(), workDir, args, ecosystem, opts)
 }
