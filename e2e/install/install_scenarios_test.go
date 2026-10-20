@@ -1,12 +1,15 @@
-package main
+//go:build e2e
+
+package install
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
+	"testing"
+	"time"
 
+	"github.com/mclucy/lucy/e2e/internal/testkit"
 	"gopkg.in/yaml.v3"
 )
 
@@ -120,55 +123,42 @@ var installScenarios = map[string]installScenario{
 	},
 }
 
-func executeScenario(ctx context.Context, binary, sandboxes, id string) (resultErr error) {
-	scenario, ok := installScenarios[id]
-	if !ok {
-		return fmt.Errorf("unknown install scenario %q", id)
-	}
+func executeScenario(t *testing.T, binary, id string) {
+	t.Helper()
+	scenario := installScenarios[id]
 	oracle := ""
 	if scenario.sandbox != "" {
-		oracle = filepath.Join(sandboxes, scenario.sandbox)
-		info, err := os.Stat(oracle)
-		if err != nil {
-			return fmt.Errorf("generate %s with task sandboxes:gen first: %w", scenario.sandbox, err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("sandbox is not a directory: %s", oracle)
-		}
+		oracle = testkit.Sandbox(t, scenario.sandbox)
 	}
-	intent, err := os.ReadFile(filepath.Join("e2e", "install", "testdata", id+".yaml"))
+	intentPath := filepath.Join(testkit.RepoRoot(t), "e2e", "install", "testdata", id+".yaml")
+	intent, err := os.ReadFile(intentPath)
 	if err != nil {
-		return fmt.Errorf("read scenario manifest: %w", err)
+		t.Fatalf("read scenario manifest: %v", err)
 	}
 	var declared manifestIntent
 	if err := yaml.Unmarshal(intent, &declared); err != nil {
-		return fmt.Errorf("decode scenario intent: %w", err)
+		t.Fatalf("decode scenario intent: %v", err)
 	}
-	temporary, err := os.MkdirTemp("", "lucy-e2e-install-"+id+"-*")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		resultErr = errors.Join(resultErr, os.RemoveAll(temporary))
-	}()
+	temporary := t.TempDir()
 	root := filepath.Join(temporary, "workspace")
 	if err := os.Mkdir(root, 0o755); err != nil {
-		return err
+		t.Fatal(err)
 	}
 	runner := commandRunner{binary: binary, home: filepath.Join(temporary, "home")}
 	if err := os.WriteFile(filepath.Join(root, "lucy.yaml"), intent, 0o644); err != nil {
-		return err
+		t.Fatal(err)
 	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
 	if _, err := runner.execute(ctx, root, "install"); err != nil {
-		return fmt.Errorf("fresh install: %w", err)
+		t.Fatalf("fresh install: %v", err)
 	}
 	locked, err := readLock(root)
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 	if err := scenario.verify(root, oracle, declared, locked); err != nil {
-		return fmt.Errorf("installed runtime: %w", err)
+		t.Fatalf("installed runtime: %v", err)
 	}
-	fmt.Printf("install %s: generated lock and runtime outputs\n", id)
-	return nil
+	t.Logf("install %s: generated lock and runtime outputs", id)
 }

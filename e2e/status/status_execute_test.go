@@ -1,10 +1,11 @@
-package main
+//go:build e2e
+
+package status
 
 import (
 	"bytes"
 	"encoding/json/v2"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -27,13 +28,6 @@ type runtimeRef struct {
 }
 
 func executeStatus(binary, dir string) (statusOutput, error) {
-	info, err := os.Stat(dir)
-	if err != nil {
-		return statusOutput{}, fmt.Errorf("sandbox unavailable (%s): %w", dir, err)
-	}
-	if !info.IsDir() {
-		return statusOutput{}, fmt.Errorf("sandbox is not a directory: %s", dir)
-	}
 	cmd := exec.Command(binary, "status", "--json", "--no-style")
 	cmd.Dir = dir
 	var stderr bytes.Buffer
