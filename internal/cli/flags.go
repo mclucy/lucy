@@ -17,6 +17,7 @@ const (
 	FlagLogLevel        = "log-level"
 	FlagEcosystem       = "ecosystem"
 	FlagUseGitHubMirror = "use-github-mirror"
+	FlagServer          = "server"
 )
 
 // JSONRendering names the machine-readable rendering of a command result.

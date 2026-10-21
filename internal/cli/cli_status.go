@@ -56,16 +56,21 @@ func NewStatusCommand() *cobra.Command {
 }
 
 func actionStatus(cmd *cobra.Command, args []string) error {
+	target, err := ResolveCommandTarget(cmd)
+	if err != nil {
+		return err
+	}
+
 	long, _ := cmd.Flags().GetBool(FlagLong)
 	logo, _ := cmd.Flags().GetString(FlagLogo)
 	logoMode, _ := terminal.ParseStatusLogoMode(logo)
 
 	fromLock, _ := cmd.Flags().GetBool(flagStatusFromLockName)
 	if fromLock {
-		return actionStatusFromLock(cmd, long, logoMode)
+		return actionStatusFromLock(cmd, target.WorkDir, long, logoMode)
 	}
 
-	ws := workspace.New()
+	ws := workspace.NewAt(target.WorkDir)
 	reportObservationFindings(ws)
 	switch JSONMode(cmd) {
 	case JSONPretty:
@@ -468,14 +473,10 @@ type lockStatusPackageView struct {
 
 func actionStatusFromLock(
 	cmd *cobra.Command,
+	workDir string,
 	longOutput bool,
 	logoMode terminal.StatusLogoMode,
 ) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
-	}
-
 	lock, err := lockfile.Read(workDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

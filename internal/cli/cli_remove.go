@@ -2,12 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -47,11 +47,27 @@ func NewRemoveCommand() *cobra.Command {
 }
 
 func actionRemove(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
+	target, err := ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
+	if target.Registered {
+		return DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{
+				Name: server.TaskRemove,
+				Args: append([]string(nil), args...),
+			},
+		)
+	}
+	return RunInTargetWorkDir(target, func() error {
+		return RunRemoveTask(cmd, args, target)
+	})
+}
 
+// RunRemoveTask executes the remove action for a daemon-dispatched package task.
+func RunRemoveTask(cmd *cobra.Command, args []string, target CommandTarget) error {
 	locked, _ := cmd.Flags().GetBool(flagRemoveLockedName)
 	offline, _ := cmd.Flags().GetBool(flagRemoveOfflineName)
 
@@ -65,9 +81,13 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Remove(cmd.Context(), workDir, args, ecosystem, opts)
+	diagnostics, err := operation.Remove(cmd.Context(), target.WorkDir, args, ecosystem, opts)
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	MarkPendingRestartIfRunning(target, "package intent changed")
+	return nil
 }

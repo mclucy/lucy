@@ -2,12 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/server"
 	"github.com/spf13/cobra"
 )
 
@@ -44,11 +44,24 @@ func NewInstallCommand() *cobra.Command {
 }
 
 func actionInstall(cmd *cobra.Command, _ []string) error {
-	workDir, err := os.Getwd()
+	target, err := ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
+	if target.Registered {
+		return DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{Name: server.TaskInstall},
+		)
+	}
+	return RunInTargetWorkDir(target, func() error {
+		return RunInstallTask(cmd, target)
+	})
+}
 
+// RunInstallTask executes the install action for a daemon-dispatched package task.
+func RunInstallTask(cmd *cobra.Command, target CommandTarget) error {
 	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
 	offline, _ := cmd.Flags().GetBool(flagInstallOfflineName)
 	withOptional, _ := cmd.Flags().GetBool(flagInstallWithOptionalName)
@@ -60,9 +73,13 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Sync(cmd.Context(), workDir, opts)
+	diagnostics, err := operation.Sync(cmd.Context(), target.WorkDir, opts)
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	MarkPendingRestartIfRunning(target, "install changed runtime files")
+	return nil
 }

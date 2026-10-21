@@ -2,12 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -53,11 +53,31 @@ func NewAddCommand() *cobra.Command {
 }
 
 func actionAdd(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
+	target, err := ResolveCommandTarget(cmd)
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
+	withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
+	if target.Registered {
+		return DispatchPackageTask(
+			cmd,
+			target,
+			server.PackageTaskRequest{
+				Name: server.TaskAdd,
+				Args: append([]string(nil), args...),
+				AddOptions: server.PackageTaskAddOpts{
+					WithOptional: withOptional,
+				},
+			},
+		)
+	}
+	return RunInTargetWorkDir(target, func() error {
+		return RunAddTask(cmd, args, target)
+	})
+}
 
+// RunAddTask executes the add action for a daemon-dispatched package task.
+func RunAddTask(cmd *cobra.Command, args []string, target CommandTarget) error {
 	withOptional, _ := cmd.Flags().GetBool(flagWithOptionalName)
 	locked, _ := cmd.Flags().GetBool(flagLockedName)
 	offline, _ := cmd.Flags().GetBool(flagOfflineName)
@@ -71,9 +91,13 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Add(cmd.Context(), workDir, args, types.Ecosystem(ecosystem), opts)
+	diagnostics, err := operation.Add(cmd.Context(), target.WorkDir, args, types.Ecosystem(ecosystem), opts)
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	MarkPendingRestartIfRunning(target, "package intent changed")
+	return nil
 }
