@@ -269,6 +269,16 @@ tasks:
     cmds:
       - rm -rf .sandboxes
 
+  logos:gen:
+    desc: "Generate the status logos from terminal/assets/logos.yaml (args: -- -only papermc -preview test_logos)"
+    cmds:
+      - go run ./tools/genlogo {{.CLI_ARGS}}
+
+  logos:check:
+    desc: Fail when the committed status logos differ from what terminal/assets/logos.yaml generates
+    cmds:
+      - go run ./tools/genlogo -check
+
   e2e:status:
     desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
     cmds:
