@@ -32,7 +32,22 @@ func NewSemver(major, minor, patch uint64) types.ResolvableVersion {
 	}
 }
 
+// parseSemver parses a version under the semantic grammar without a plain-string
+// fallback. Schemes shared by several ecosystems, such as MCDR, require it.
 func parseSemver(s types.Version) types.ResolvableVersion {
+	raw := string(s)
+	if raw == "" {
+		return nil
+	}
+	if parsed := parseFabricSemver(raw); parsed != nil {
+		return parsed
+	}
+	return nil
+}
+
+// parseFabricVersion parses a Fabric Loader version. Text outside the semantic
+// grammar stays a valid version that compares as a plain string.
+func parseFabricVersion(s types.Version) types.ResolvableVersion {
 	raw := string(s)
 	if raw == "" {
 		return nil

@@ -246,7 +246,7 @@ func parseSemverToken(
 		return constraints, true
 	}
 
-	v := parseSemver(types.Version(raw))
+	v := parseFabricVersion(types.Version(raw))
 	if v == nil {
 		return nil, false
 	}
@@ -273,9 +273,11 @@ func parseSemverOperator(
 		}
 	}
 
-	lower := parseSemver(types.Version(versionToken))
-	if lower == nil && strings.ContainsAny(versionToken, "xX*") {
+	var lower types.ResolvableVersion
+	if strings.ContainsAny(versionToken, "xX*") {
 		lower = parseSemverLowerBoundFromWildcard(versionToken)
+	} else {
+		lower = parseFabricVersion(types.Version(versionToken))
 	}
 	if lower == nil {
 		return nil, false
@@ -324,9 +326,18 @@ func parseSemverOperator(
 				Value: lower, Operator: types.OpLte,
 			},
 		}, true
-	case "^":
-		return parseCaretRangeFromSemver(lower, options.caretMode), true
-	case "~":
+	// Fabric reduces compatible-range operators to equality for a plain string.
+	case "^", "~":
+		if _, semantic := lower.(*SemverVersion); !semantic {
+			return []types.VersionSubExpr{
+				{
+					Value: lower, Operator: types.OpEq,
+				},
+			}, true
+		}
+		if op == "^" {
+			return parseCaretRangeFromSemver(lower, options.caretMode), true
+		}
 		return parseTildeRangeFromSemver(lower, versionToken), true
 	default:
 		return nil, false
