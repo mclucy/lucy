@@ -23,6 +23,22 @@ type downloadStore struct {
 	ctx     context.Context
 	dir     string
 	offline bool
+	trace   *Trace
+	fetch   *FetchSummary
+}
+
+func (s *downloadStore) cacheHit() {
+	if s.fetch != nil {
+		s.fetch.Cached++
+	}
+}
+
+func (s *downloadStore) downloaded(bytes int64) {
+	if s.fetch == nil {
+		return
+	}
+	s.fetch.Downloaded++
+	s.fetch.Bytes += bytes
 }
 
 func DigestFile(filename string, algorithms map[string]string) (map[string]string, error) {
@@ -100,6 +116,8 @@ func (s *downloadStore) materialize(a *types.Artifact) (string, error) {
 			os.Remove(destination)
 			return "", err
 		}
+	} else {
+		s.cacheHit()
 	}
 	a.Hashes = hashes
 	log.Debug(
@@ -145,8 +163,27 @@ func (s *downloadStore) materializeFile(a *types.Artifact, dir, destination stri
 		if cachedErr != nil {
 			return cachedErr
 		}
+		s.cacheHit()
 	} else {
-		result, err := cache.CachedDownload(a.URL, dir, cache.DownloadOptions{Kind: cache.KindArtifact, Filename: a.Filename})
+		var read int64
+		var total int64
+		options := cache.DownloadOptions{
+			Context:  s.ctx,
+			Kind:     cache.KindArtifact,
+			Filename: a.Filename,
+		}
+		options.WrapReader = func(reader io.Reader, size int64) io.Reader {
+			total = size
+			s.trace.fetchStarted(a.Filename, size)
+			return &fetchReader{
+				reader: reader,
+				name:   a.Filename,
+				total:  size,
+				read:   &read,
+				store:  s,
+			}
+		}
+		result, err := cache.CachedDownload(a.URL, dir, options)
 		if err != nil {
 			return err
 		}
@@ -159,9 +196,32 @@ func (s *downloadStore) materializeFile(a *types.Artifact, dir, destination stri
 				return err
 			}
 		}
+		if result.CacheHit {
+			s.cacheHit()
+		} else {
+			s.downloaded(read)
+			s.trace.fetchProgress(a.Filename, read, total)
+			s.trace.fetchDone(a.Filename, false)
+		}
 	}
 	if _, err := DigestFile(staged, a.Hashes); err != nil {
 		return err
 	}
 	return os.Rename(staged, destination)
+}
+
+// fetchReader reports download byte progress through the operation trace.
+type fetchReader struct {
+	reader io.Reader
+	name   string
+	total  int64
+	read   *int64
+	store  *downloadStore
+}
+
+func (r *fetchReader) Read(buffer []byte) (int, error) {
+	count, err := r.reader.Read(buffer)
+	*r.read += int64(count)
+	r.store.trace.fetchProgress(r.name, *r.read, r.total)
+	return count, err
 }

@@ -37,10 +37,10 @@ These flags work with every `lucy` subcommand. The root command also exposes ver
 
 ## Logging
 
-Diagnostic logs record action boundaries and internal decisions. Command results and user reports remain independent of these settings.
+Diagnostic logs record action boundaries and internal decisions. Command results and user reports remain independent of these settings. The log file always records everything, including debug detail, so a failed run can be inspected afterwards; the level below only affects what is mirrored.
 
 <ParamField query="--log-level" type="string" default="info">
-  Set the minimum diagnostic severity: `debug`, `info`, `warn`, `error`, or `fatal`. This setting does not filter user reports.
+  Set the minimum severity that `--print-logs` mirrors to the terminal: `debug`, `info`, `warn`, `error`, or `fatal`. The log file always receives debug records regardless of this setting.
 </ParamField>
 
 <ParamField query="--log-file" type="string" default="platform-specific">
@@ -50,7 +50,7 @@ Diagnostic logs record action boundaries and internal decisions. Command results
 </ParamField>
 
 <ParamField query="--print-logs" type="boolean" default="false">
-  Write the same filtered, timestamped diagnostic records to the log file and stderr. User reports remain independent. When an event is both logged and reported, both representations appear.
+  Mirror diagnostic records to stderr at the level set by `--log-level`. The log file keeps receiving the same records, plus debug detail. User reports remain independent. When an event is both logged and reported, both representations appear.
 </ParamField>
 
 ## Network

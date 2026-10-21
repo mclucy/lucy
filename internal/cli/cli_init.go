@@ -63,12 +63,18 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 // return to the command framework, and success reports the files written from
 // the returned document instead of rereading them.
 func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.InitOptions) error {
-	d, warnings, err := operation.Initialize(cmd.Context(), workDir, opts)
+	output := newInstallOutput(cmd)
+	defer output.Close()
+	opts.Trace = output.Trace()
+	ctx, stop := commandContext(cmd)
+	defer stop()
+	d, warnings, err := operation.Initialize(ctx, workDir, opts)
+	if err != nil {
+		return output.Failure(err)
+	}
+	output.Close()
 	for _, warning := range warnings {
 		report.Warn(warning)
-	}
-	if err != nil {
-		return err
 	}
 	fmt.Fprintf(
 		cmd.OutOrStdout(),

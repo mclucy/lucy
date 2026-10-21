@@ -7,7 +7,6 @@ import (
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
@@ -65,12 +64,14 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	diagnostics, warnings, err := operation.Remove(cmd.Context(), workDir, args, ecosystem, opts)
-	for _, diagnostic := range diagnostics {
-		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	output := newInstallOutput(cmd)
+	defer output.Close()
+	opts.Trace = output.Trace()
+	ctx, stop := commandContext(cmd)
+	defer stop()
+	result, err := operation.Remove(ctx, workDir, args, ecosystem, opts)
+	if err != nil {
+		return output.Failure(err)
 	}
-	for _, warning := range warnings {
-		report.Warn(warning)
-	}
-	return err
+	return output.Render(result)
 }

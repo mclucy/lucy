@@ -106,9 +106,13 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 
 	switch cli.JSONMode(cmd) {
 	case cli.JSONPretty:
-		style.PrintAsJson(meta.Metadata)
+		if err := style.WriteJSON(cmd.OutOrStdout(), meta.Metadata, false); err != nil {
+			return err
+		}
 	case cli.JSONCompact:
-		style.PrintAsJsonCompact(meta.Metadata)
+		if err := style.WriteJSON(cmd.OutOrStdout(), meta.Metadata, true); err != nil {
+			return err
+		}
 	default:
 		installID := meta.Ref.StringBase()
 		output := renderInfo(meta.Metadata, installID, long)

@@ -4,6 +4,7 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -70,22 +71,20 @@ func noColorMarkdownStyle() ansi.StyleConfig {
 	return cfg
 }
 
-func PrintAsJson(v any) {
-	data, err := json.Marshal(v, jsontext.Multiline(true), jsontext.WithIndent("  "))
-	if err != nil {
-		fmt.Println(err)
-		return
+// WriteJSON encodes v as the command's machine-readable output.
+func WriteJSON(w io.Writer, v any, compact bool) error {
+	var data []byte
+	var err error
+	if compact {
+		data, err = json.Marshal(v)
+	} else {
+		data, err = json.Marshal(v, jsontext.Multiline(true), jsontext.WithIndent("  "))
 	}
-	fmt.Println(string(data))
-}
-
-func PrintAsJsonCompact(v any) {
-	data, err := json.Marshal(v)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
-	fmt.Println(string(data))
+	_, err = fmt.Fprintln(w, string(data))
+	return err
 }
 
 func Capitalize(v any) string {
@@ -135,7 +134,7 @@ func FormatBytesDecimal(bytes int64) string {
 	}
 }
 
-func FormatDuration(t time.Time) string {
+func FormatTTL(t time.Time) string {
 	remaining := time.Until(t)
 	if remaining <= 0 {
 		return "expired"

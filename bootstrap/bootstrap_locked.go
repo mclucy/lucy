@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
@@ -43,7 +44,7 @@ func CopyLockedFile(src, dst string, mode os.FileMode) error {
 	return closeErr
 }
 
-func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, corePath string, inputs map[string]string) error {
+func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, corePath string, inputs map[string]string, output io.Writer) error {
 	if err := manifest.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
@@ -91,9 +92,9 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		}
 		cmd := exec.CommandContext(ctx, "java", "-Dpaperclip.patchonly=true", "-jar", "server.jar")
 		cmd.Dir = root
-		output, err := cmd.CombinedOutput()
+		captured, err := runLockedProcess(cmd, output)
 		if err != nil {
-			return fmt.Errorf("Paperclip patching: %w\n%s", err, output)
+			return fmt.Errorf("Paperclip patching: %w\n%s", err, captured)
 		}
 		return nil
 	case "fabric":
@@ -126,7 +127,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		}
 		return nil
 	case "forge-installer":
-		return executeServerProfile(ctx, root, server, corePath, &installer.Reader)
+		return executeServerProfile(ctx, root, server, corePath, &installer.Reader, output)
 	default:
 		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrapper)
 	}
@@ -158,6 +159,20 @@ func extractLockedEntry(z *zip.Reader, name, dst string) error {
 	return fmt.Errorf("missing pinned installer entry %s", name)
 }
 
+// runLockedProcess streams a subprocess's combined output to output while
+// retaining it for the error message. It returns the captured output.
+func runLockedProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
+	if output == nil {
+		output = io.Discard
+	}
+	var captured bytes.Buffer
+	writer := io.MultiWriter(output, &captured)
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+	err := cmd.Run()
+	return captured.Bytes(), err
+}
+
 func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
 	for _, f := range z.File {
 		if f.Name == name {
@@ -172,7 +187,7 @@ func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
 	return nil, fmt.Errorf("missing installer metadata %s", name)
 }
 
-func executeServerProfile(ctx context.Context, root string, server lockfile.Server, corePath string, z *zip.Reader) error {
+func executeServerProfile(ctx context.Context, root string, server lockfile.Server, corePath string, z *zip.Reader, output io.Writer) error {
 	raw, err := readLockedEntry(z, "install_profile.json")
 	if err != nil {
 		return err
@@ -310,9 +325,9 @@ func executeServerProfile(ctx context.Context, root string, server lockfile.Serv
 		commandArgs = append(commandArgs, args...)
 		cmd := exec.CommandContext(ctx, "java", commandArgs...)
 		cmd.Dir = root
-		output, err := cmd.CombinedOutput()
+		captured, err := runLockedProcess(cmd, output)
 		if err != nil {
-			return fmt.Errorf("installer processor %s: %w\n%s", proc.Jar, err, output)
+			return fmt.Errorf("installer processor %s: %w\n%s", proc.Jar, err, captured)
 		}
 		for name, expected := range proc.Outputs {
 			destination, err := expand(name)

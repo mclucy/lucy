@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -40,7 +41,7 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 
 	mode := JSONMode(cmd)
 	if mode != JSONNone {
-		return outputLeavesJSON(graph, origin, mode)
+		return outputLeavesJSON(cmd.OutOrStdout(), graph, origin, mode)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Using data from: %s\n\n", origin.String())
@@ -69,6 +70,7 @@ type leafNode struct {
 }
 
 func outputLeavesJSON(
+	w io.Writer,
 	graph *DependencyGraph,
 	origin GraphOrigin,
 	mode JSONRendering,
@@ -93,11 +95,9 @@ func outputLeavesJSON(
 		"origin": origin.String(),
 		"leaves": jsonLeaves,
 	}
-	switch mode {
-	case JSONCompact:
-		style.PrintAsJsonCompact(output)
-	default:
-		style.PrintAsJson(output)
+	compact := mode == JSONCompact
+	if err := style.WriteJSON(w, output, compact); err != nil {
+		return err
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -46,7 +47,7 @@ func actionTree(cmd *cobra.Command, args []string) error {
 
 	mode := JSONMode(cmd)
 	if mode != JSONNone {
-		return outputTreeJSON(graph, origin, mode)
+		return outputTreeJSON(cmd.OutOrStdout(), graph, origin, mode)
 	}
 
 	maxDepth, _ := cmd.Flags().GetInt("depth")
@@ -131,6 +132,7 @@ type treeNode struct {
 }
 
 func outputTreeJSON(
+	w io.Writer,
 	graph *DependencyGraph,
 	origin GraphOrigin,
 	mode JSONRendering,
@@ -146,11 +148,9 @@ func outputTreeJSON(
 		"origin": origin.String(),
 		"roots":  jsonRoots,
 	}
-	switch mode {
-	case JSONCompact:
-		style.PrintAsJsonCompact(output)
-	default:
-		style.PrintAsJson(output)
+	compact := mode == JSONCompact
+	if err := style.WriteJSON(w, output, compact); err != nil {
+		return err
 	}
 	return nil
 }
