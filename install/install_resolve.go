@@ -70,6 +70,9 @@ func resolveInstall(
 	store *downloadStore,
 	warnings *[]error,
 ) (*lockfile.Document, error) {
+	if d == nil {
+		return nil, fmt.Errorf("manifest required to resolve a lock")
+	}
 	if opts.Offline {
 		return nil, fmt.Errorf("offline resolution requires a current lock; metadata selection is unavailable")
 	}
