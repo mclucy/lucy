@@ -3,9 +3,9 @@ title: "lucy init"
 description: "Generate a manifest file for an existing server directory"
 ---
 
-`lucy init` inspects a server directory and writes the manifest `lucy.yaml`. Every later command — [`lucy add`](/commands/add), [`lucy remove`](/commands/remove), and [`lucy install`](/commands/install) — reads that manifest as the source of truth for what you want. `add`, `remove`, and `install` write the lock file `lucy-lock.yaml` next to it; read-only commands such as `lucy status` do not.
+`lucy init` inspects a server directory and writes the manifest `lucy.yaml` and the lock file `lucy-lock.yaml`. Every later command — [`lucy add`](/commands/add), [`lucy remove`](/commands/remove), and [`lucy install`](/commands/install) — reads that manifest as the source of truth for what you want. `add`, `remove`, and `install` keep the lock file in step with it; read-only commands such as `lucy status` do not.
 
-Use `lucy init` to adopt an existing server. It detects what is installed, recognizes supported installed mods and plugins by their file contents, and checks the requested Minecraft and server versions against the official version lists before writing the manifest. It may download server files into `.lucy`, but does not install them into the live server.
+Use `lucy init` to adopt an existing server. It detects what is installed, recognizes supported installed mods and plugins by their file contents, and checks the requested Minecraft and server versions against the official version lists before writing the manifest and lock. It may download server files into `.lucy`, but does not install them into the live server.
 
 ```bash
 lucy init
@@ -109,6 +109,6 @@ With `--detect=false`, no probing happens and nothing is inferred: what you decl
 
 An existing `lucy.yaml` is never overwritten silently — `lucy init` stops and tells you to pass `--force`.
 
-`lucy init` writes `lucy.yaml` only. The lock file is produced by the first `lucy install` or `lucy add`.
+`lucy init` writes `lucy.yaml` and resolves `lucy-lock.yaml` from it. Resolution downloads the artifacts whose hashes it records into `.lucy`; it does not stage or install them.
 
 `lucy init` does not migrate worlds, rewrite server configuration, accept the Minecraft EULA, or start the server.

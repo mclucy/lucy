@@ -70,7 +70,7 @@ apart.
 
 | Command                | Usage                                                                                              |
 |------------------------|----------------------------------------------------------------------------------------------------|
-| `lucy init`            | Generate `lucy.yaml` from an existing server directory                                             |
+| `lucy init`            | Generate `lucy.yaml` and `lucy-lock.yaml` from an existing server directory                       |
 | `lucy add <pkg>...`    | Record requirements, resolve the closure, update the lock, and sync                                |
 | `lucy remove <pkg>...` | Drop requirements, re-resolve, and prune artifacts nothing needs                                   |
 | `lucy install`         | Converge the server with the lock; re-resolve when stale, with `--locked` and `--offline` controls |
