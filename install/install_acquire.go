@@ -17,21 +17,12 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream/routing"
 )
 
 type downloadStore struct {
 	ctx     context.Context
 	dir     string
 	offline bool
-}
-
-// MaterializeServerProduct resolves and downloads the declared server product
-// into the workspace download store.
-func MaterializeServerProduct(ctx context.Context, root string, request types.ServerProductRequest) error {
-	store := &downloadStore{ctx: ctx, dir: filepath.Join(root, ".lucy", "downloads")}
-	_, err := routing.ResolveServerProduct(ctx, request, store.materialize)
-	return err
 }
 
 func DigestFile(filename string, algorithms map[string]string) (map[string]string, error) {

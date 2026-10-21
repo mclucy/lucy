@@ -156,23 +156,25 @@ func resolveGithubProduct(ctx context.Context, req types.ServerProductRequest, o
 				URL:       a.URL,
 				Hashes:    hashes,
 			}
-			p, e := acquire(&candidate)
-			if e != nil {
-				return e
-			}
 			trial := *out
 			trial.Artifact = candidate
 			trial.ProductVersion = types.Version(r.Tag)
 			trial.Bootstrapper = "paperclip"
-			if e := paperclipInput(&trial, p); e != nil {
-				log.Debug(
-					"routing: github fork candidate rejected",
-					"repository", req.Repository,
-					"release", r.Tag,
-					"asset", a.Name,
-					"reason", "paperclip download context unusable",
-				)
-				continue
+			if acquire != nil {
+				p, e := acquire(&candidate)
+				if e != nil {
+					return e
+				}
+				if e := paperclipInput(&trial, p); e != nil {
+					log.Debug(
+						"routing: github fork candidate rejected",
+						"repository", req.Repository,
+						"release", r.Tag,
+						"asset", a.Name,
+						"reason", "paperclip download context unusable",
+					)
+					continue
+				}
 			}
 			*out = trial
 			log.Debug(
