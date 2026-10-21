@@ -559,19 +559,21 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 						continue
 					}
 					if m.NestedPath != "" {
-						scheme := types.VersionSchemeSemver
-						if p.Ecosystem == types.EcosystemForge || p.Ecosystem == types.EcosystemNeoForge {
-							scheme = types.VersionSchemeMaven
-						}
-						a, err := version.Parse(previous.Version, scheme)
+						a, err := version.ParseVersion(
+							previous.Version,
+							previous.EffectiveVersionDialect(),
+						)
 						if err != nil {
 							return nil, err
 						}
-						b, err := version.Parse(m.Version, scheme)
+						b, err := version.ParseVersion(
+							m.Version,
+							m.EffectiveVersionDialect(),
+						)
 						if err != nil {
 							return nil, err
 						}
-						comparison, isComparable := a.Compare(b)
+						comparison, isComparable := version.Compare(a, b)
 						if !isComparable {
 							return nil, fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
 						}
@@ -650,7 +652,11 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 				invalid := false
 				if matched && dep.Constraint != "" {
 					var err error
-					matched, err = version.Match(dep.Constraint, value, p.Ecosystem)
+					matched, err = version.Match(
+						dep.Constraint,
+						types.Version(value),
+						m.EffectiveVersionDialect(),
+					)
 					if err != nil {
 						problems = append(problems, fmt.Errorf("module %s requires %s %s: %w", m.ID, dep.ID, dep.Constraint, err))
 						invalid = true

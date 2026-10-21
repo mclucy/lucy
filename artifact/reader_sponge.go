@@ -48,7 +48,10 @@ func (r *spongeReader) Read(
 
 		infos := make([]PackageInfo, 0, len(metadata.Plugins))
 		for _, plugin := range metadata.Plugins {
-			info, ok := translateSpongePlugin(&metadata, plugin, filePath)
+			info, ok, err := translateSpongePlugin(&metadata, plugin, filePath)
+			if err != nil {
+				return nil, err
+			}
 			if !ok {
 				continue
 			}
@@ -94,9 +97,9 @@ func translateSpongePlugin(
 	metadata *fileschema.FileSpongePluginsIdentifier,
 	plugin fileschema.FileSpongePluginMetadata,
 	localPath string,
-) (PackageInfo, bool) {
+) (PackageInfo, bool, error) {
 	if !hasConcreteSpongePluginIdentity(metadata, plugin) {
-		return PackageInfo{}, false
+		return PackageInfo{}, false, nil
 	}
 
 	v := resolveSpongePluginVersion(metadata, plugin)
@@ -116,14 +119,17 @@ func translateSpongePlugin(
 		},
 	}
 
-	deps := translateSpongeDependencies(
+	deps, err := translateSpongeDependencies(
 		resolveSpongePluginDependencies(metadata, plugin),
 	)
+	if err != nil {
+		return PackageInfo{}, false, err
+	}
 	if len(deps) > 0 {
 		info.Dependencies = deps
 	}
 
-	return info, true
+	return info, true, nil
 }
 
 func resolveSpongePluginVersion(
@@ -292,7 +298,7 @@ func translateSpongeDependencies(
 		LoadOrder string
 		Optional  bool
 	},
-) []Dependency {
+) ([]Dependency, error) {
 	translated := make([]Dependency, 0, len(deps))
 	for _, dep := range deps {
 		id := strings.TrimSpace(dep.ID)
@@ -300,17 +306,17 @@ func translateSpongeDependencies(
 		if id == "" || v == "" || strings.EqualFold(id, "spongeapi") {
 			continue
 		}
+		constraint, err := version.ParseConstraint(v, types.VersionDialectMaven)
+		if err != nil {
+			return nil, err
+		}
 		translated = append(
 			translated, Dependency{
-				Ref: types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(id), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemSponge},
-				Constraint: version.ParseRange(
-					v,
-					version.DialectMavenRange,
-					types.VersionSchemeMaven,
-				),
-				Mandatory: !dep.Optional,
+				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(id), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemSponge},
+				Constraint: constraint,
+				Mandatory:  !dep.Optional,
 			},
 		)
 	}
-	return translated
+	return translated, nil
 }

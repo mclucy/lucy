@@ -7,6 +7,13 @@ import (
 	"github.com/mclucy/lucy/types"
 )
 
+func parseMinecraftVersion(s types.Version) types.ResolvableVersion {
+	if v := parseMinecraftRelease(s); v != nil {
+		return v
+	}
+	return parseMinecraftSnapshot(s)
+}
+
 func parseMinecraftSnapshot(s types.Version) types.ResolvableVersion {
 	if v := parsePre26WeekSnapshot(s); v != nil {
 		return v

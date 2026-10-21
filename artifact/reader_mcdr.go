@@ -70,15 +70,18 @@ func (r *mcdrReader) Read(
 		if len(pluginInfo.Dependencies) > 0 {
 			deps := make([]Dependency, 0, len(pluginInfo.Dependencies))
 			for key, value := range pluginInfo.Dependencies {
+				constraint, err := version.ParseConstraint(
+					value,
+					types.VersionDialectMCDR,
+				)
+				if err != nil {
+					return nil, err
+				}
 				deps = append(
 					deps, Dependency{
-						Ref: types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(key), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemMCDR},
-						Constraint: version.ParseRange(
-							value,
-							version.InferRangeDialect(types.EcosystemMCDR),
-							types.VersionSchemeSemver,
-						),
-						Mandatory: true,
+						Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(key), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemMCDR},
+						Constraint: constraint,
+						Mandatory:  true,
 					},
 				)
 			}

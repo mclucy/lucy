@@ -33,7 +33,7 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 		t.Fatalf("missing mcdreforged dependency in sample plugin metadata")
 	}
 
-	expr := parseNpmVersionRange(rawRange)
+	expr := mustParseMCDRRange(t, rawRange)
 	if len(expr) != 1 || len(expr[0]) != 1 || expr[0][0].Operator != types.OpGte {
 		t.Fatalf("unexpected parsed expression for %q: %+v", rawRange, expr)
 	}
@@ -78,7 +78,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 		t.Fatalf("unmarshal fabric mod metadata: %v", err)
 	}
 
-	minecraftExpr := parseFabricVersionRanges(mod.Depends["minecraft"])
+	minecraftExpr := mustParseFabricRanges(t, mod.Depends["minecraft"])
 	assertConstraintSatisfy(
 		t,
 		minecraftExpr,
@@ -98,7 +98,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 		"fabric >1.20.1 reject",
 	)
 
-	loaderExpr := parseFabricVersionRanges(mod.Depends["fabricloader"])
+	loaderExpr := mustParseFabricRanges(t, mod.Depends["fabricloader"])
 	assertConstraintSatisfy(
 		t,
 		loaderExpr,
@@ -134,7 +134,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 		t.Fatalf("unmarshal fabric range-array sample: %v", err)
 	}
 
-	expr := parseFabricVersionRanges(mod.Depends["fabricloader"])
+	expr := mustParseFabricRanges(t, mod.Depends["fabricloader"])
 	if len(expr) != 2 {
 		t.Fatalf("array OR should produce two OR clauses, got %d", len(expr))
 	}
@@ -195,7 +195,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 		t.Fatalf("missing minecraft dependency range in ae2 sample")
 	}
 
-	expr := parseModLoaderMavenVersionRange(minecraftRange)
+	expr := mustParseMavenRange(t, minecraftRange)
 	if len(expr) != 1 || len(expr[0]) != 2 {
 		t.Fatalf(
 			"expected one AND clause with two bounds for %q, got %+v",
@@ -259,7 +259,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 		t.Fatalf("missing yungsapi dependency range in YUNG's Extras sample")
 	}
 
-	yungsExpr := parseModLoaderMavenVersionRange(yungsApiRange)
+	yungsExpr := mustParseMavenRange(t, yungsApiRange)
 	if len(yungsExpr) == 0 {
 		t.Fatalf("expected parsed expression for %q", yungsApiRange)
 	}
@@ -301,16 +301,51 @@ func mustReadFile(t *testing.T, path string) []byte {
 	return b
 }
 
-func mustParseSemver(t *testing.T, raw string) types.ResolvableVersion {
+func mustParseMCDRRange(t *testing.T, raw string) types.VersionExpr {
 	t.Helper()
-	v, err := version.Parse(types.Version(raw), types.VersionSchemeSemver)
+	expr, err := parseNpmVersionRange(raw)
 	if err != nil {
-		t.Fatalf("parse semver %q failed: %v", raw, err)
+		t.Fatalf("parse MCDR range %q: %v", raw, err)
 	}
-	if v == nil {
-		t.Fatalf("parse semver %q failed", raw)
+	return expr
+}
+
+func mustParseMavenRange(t *testing.T, raw string) types.VersionExpr {
+	t.Helper()
+	expr, err := parseModLoaderMavenVersionRange(raw)
+	if err != nil {
+		t.Fatalf("parse Maven range %q: %v", raw, err)
 	}
-	return v
+	return expr
+}
+
+func mustParseFabricRanges(
+	t *testing.T,
+	raw []string,
+) types.VersionExpr {
+	t.Helper()
+	expr, err := parseFabricVersionRanges(raw)
+	if err != nil {
+		t.Fatalf("parse Fabric ranges %v: %v", raw, err)
+	}
+	return expr
+}
+
+func dialectFor(platform types.Ecosystem) types.VersionDialect {
+	switch platform {
+	case types.EcosystemFabric:
+		return types.VersionDialectFabric
+	case types.EcosystemMCDR:
+		return types.VersionDialectMCDR
+	case types.EcosystemForge,
+		types.EcosystemNeoForge,
+		types.EcosystemSponge:
+		return types.VersionDialectMaven
+	case types.EcosystemMinecraft:
+		return types.VersionDialectMinecraft
+	default:
+		return types.VersionDialectOpaque
+	}
 }
 
 func assertConstraintSatisfy(
@@ -318,23 +353,26 @@ func assertConstraintSatisfy(
 	expr types.VersionExpr,
 	platform types.Ecosystem,
 	name string,
-	version string,
+	rawVersion string,
 	want bool,
 	label string,
 ) {
 	t.Helper()
-	id := types.VersionedPackageRef{
-		Ecosystem: platform,
-		Name:      types.PackageName(name),
+	dialect, err := version.NewVersionDialect(dialectFor(platform))
+	if err != nil {
+		t.Fatalf("dialect for %s: %v", platform, err)
 	}
-	depSpec := types.Dependency{ID: id, Constraint: expr, Mandatory: true}
-	got := depSpec.Satisfy(id, mustParseSemver(t, version))
+	actual, err := dialect.ParseVersion(types.Version(rawVersion))
+	if err != nil {
+		t.Fatalf("parse %s version %q: %v", platform, rawVersion, err)
+	}
+	got := dialect.Match(expr, actual)
 	t.Logf(
 		"%s: %s %s@%s => got=%v want=%v",
 		label,
 		platform,
 		name,
-		version,
+		rawVersion,
 		got,
 		want,
 	)
@@ -342,7 +380,7 @@ func assertConstraintSatisfy(
 		t.Fatalf(
 			"constraint %+v satisfy(%s) = %v, want %v",
 			expr,
-			version,
+			rawVersion,
 			got,
 			want,
 		)

@@ -70,51 +70,28 @@ func translateFabricArtifact(
 		len(modInfo.Depends)+len(modInfo.Recommends)+len(modInfo.Suggests)+
 			len(modInfo.Breaks)+len(modInfo.Conflicts),
 	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Depends,
-			true,
-			false,
+	for _, group := range []struct {
+		dependencies map[string]fn.SingleOrSlice[string]
+		mandatory    bool
+		inverse      bool
+	}{
+		{modInfo.Depends, true, false},
+		{modInfo.Recommends, false, false},
+		{modInfo.Suggests, false, false},
+		{modInfo.Breaks, false, true},
+		{modInfo.Conflicts, false, true},
+	} {
+		translated, err := translateFabricArtifactDependencyMap(
+			group.dependencies,
+			group.mandatory,
+			group.inverse,
 			embeddedNames,
-		)...,
-	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Recommends,
-			false,
-			false,
-			embeddedNames,
-		)...,
-	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Suggests,
-			false,
-			false,
-			embeddedNames,
-		)...,
-	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Breaks,
-			false,
-			true,
-			embeddedNames,
-		)...,
-	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Conflicts,
-			false,
-			true,
-			embeddedNames,
-		)...,
-	)
+		)
+		if err != nil {
+			return PackageInfo{}, err
+		}
+		dependencies = append(dependencies, translated...)
+	}
 
 	return PackageInfo{
 		Ref: types.VersionedPackageRef{
@@ -142,11 +119,15 @@ func translateFabricArtifactDependencyMap(
 	mandatory bool,
 	inverse bool,
 	embeddedNames map[string]struct{},
-) []Dependency {
+) ([]Dependency, error) {
 	translated := make([]Dependency, 0, len(deps))
 	for id, ranges := range deps {
 		name := input.ToProjectName(id)
 		_, embedded := embeddedNames[string(name)]
+		constraint, err := parseFabricArtifactVersionRanges(ranges)
+		if err != nil {
+			return nil, err
+		}
 		dep := Dependency{
 			Ref: types.VersionedPackageRef{
 				PackageRef: types.PackageRef{
@@ -154,26 +135,22 @@ func translateFabricArtifactDependencyMap(
 					Provider: types.ProviderUnknown,
 				}, Ecosystem: types.EcosystemFabric,
 			},
-			Constraint: parseFabricArtifactVersionRanges(ranges),
+			Constraint: constraint,
 			Mandatory:  mandatory,
 			Origin:     dependencyOriginForEmbedded(embedded),
 		}
 		if inverse {
-			dep.Constraint.Inverse()
+			dep.Constraint = dep.Constraint.Negate()
 		}
 		translated = append(translated, dep)
 	}
-	return translated
+	return translated, nil
 }
 
 func parseFabricArtifactVersionRanges(
 	ranges fn.SingleOrSlice[string],
-) types.VersionExpr {
-	return version.ParseRanges(
-		ranges,
-		version.InferRangeDialect(types.EcosystemFabric),
-		types.VersionSchemeSemver,
-	)
+) (types.VersionExpr, error) {
+	return version.ParseConstraints(ranges, types.VersionDialectFabric)
 }
 
 func fabricArtifactEmbeddedModNames(

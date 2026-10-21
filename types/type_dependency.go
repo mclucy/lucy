@@ -1,79 +1,5 @@
 package types
 
-import (
-	"github.com/mclucy/lucy/internal/fn"
-)
-
-// Version is a package version. It may hold a selector during resolution or
-// an exact version after resolution.
-type Version string
-
-func (v Version) String() string {
-	switch v {
-	case VersionAny, "":
-		return "any"
-	case VersionNone:
-		return "none"
-	case VersionUnknown:
-		return "unknown"
-	case VersionBeta:
-		return "beta"
-	case VersionStable:
-		return "stable"
-	}
-	return string(v)
-}
-
-func (v Version) CanInfer() bool {
-	switch v {
-	case VersionAny, VersionBeta, VersionStable:
-		return true
-	}
-	return false
-}
-
-func (v Version) IsInvalid() bool {
-	switch v {
-	case VersionNone, VersionUnknown:
-		return true
-	}
-	return false
-}
-
-var (
-	VersionAny     Version = "any"
-	VersionBeta    Version = "beta"
-	VersionStable  Version = "stable"
-	VersionNone    Version = "none"
-	VersionUnknown Version = "unknown"
-)
-
-// ResolvableVersion is an interface for comparable parsed versions.
-//
-// A nil ResolvableVersion represents an invalid or unparseable version.
-//
-// In principle, you cannot compare two versions with different schemes.
-// Implementations should return false for cross-scheme comparisons.
-type ResolvableVersion interface {
-	Compare(v2 ResolvableVersion) (int, bool)
-	Validate() bool
-	Scheme() VersionScheme
-}
-
-type VersionScheme uint8
-
-const (
-	VersionSchemeUnknown VersionScheme = iota
-	VersionSchemeSemver
-	VersionSchemeMaven
-
-	// MinecraftSnapshot docs:
-	// https://zh.minecraft.wiki/w/%E7%89%88%E6%9C%AC%E6%A0%BC%E5%BC%8F#%E5%BF%AB%E7%85%A7%EF%BC%88Snapshot%EF%BC%89
-	// https://www.minecraft.net/en-us/article/minecraft-new-version-numbering-system
-	VersionSchemeMinecraftSnapshot
-	VersionSchemeMinecraftRelease
-)
-
 // DependencyOrigin identifies how a dependency is satisfied.
 type DependencyOrigin string
 
@@ -113,204 +39,112 @@ type Dependency struct {
 	Origin     DependencyOrigin
 }
 
+// VersionExpr is a boolean expression in disjunctive normal form: the outer
+// slice is OR, the inner slice is AND. A nil or empty outer slice means the
+// expression imposes no constraint.
 type VersionExpr [][]VersionSubExpr
 
 type VersionSubExpr struct {
 	Value    ResolvableVersion
 	Operator VersionOperator
+	// Inverted records that Operator is the logical complement of a parsed
+	// predicate. Dialects with partial ordering use it to keep the complement
+	// consistent with their own predicate rules.
+	Inverted bool
 }
 
-// Inverse inverts the version constraint expression in-place.
-func (exps VersionExpr) Inverse() VersionExpr {
-	for i := range exps {
-		for j := range exps[i] {
-			exps[i][j].Inverse()
+// Negate returns the logical negation of the expression in disjunctive normal
+// form. Negating a disjunction produces a conjunction of negated clauses, so
+// the result is distributed back into OR-of-AND form.
+func (exps VersionExpr) Negate() VersionExpr {
+	if len(exps) == 0 {
+		return VersionExpr{{VersionSubExpr{Operator: OpNever}}}
+	}
+
+	result := VersionExpr{{}}
+	for _, conjunction := range exps {
+		if len(conjunction) == 0 {
+			return VersionExpr{{VersionSubExpr{Operator: OpNever}}}
 		}
-	}
-	return exps
-}
 
-// Inverse inverts the version constraint in-place.
-func (exp *VersionSubExpr) Inverse() {
-	switch exp.Operator {
-	case OpEq:
-		exp.Operator = OpNeq
-	case OpNeq:
-		exp.Operator = OpEq
-	case OpGt, OpWeakGt:
-		exp.Operator = OpLte
-	case OpGte:
-		exp.Operator = OpLt
-	case OpLt:
-		exp.Operator = OpGte
-	case OpLte:
-		exp.Operator = OpGt
-	}
-}
-
-func (d Dependency) Satisfy(id VersionedPackageRef, v ResolvableVersion) bool {
-	if id.Ecosystem != d.ID.Ecosystem || id.Name != d.ID.Name {
-		return false
-	}
-
-	if d.Constraint == nil || fn.IsEmptyVector(d.Constraint) {
-		return true
-	}
-
-	for _, orStatements := range d.Constraint {
-		satisfied := true
-		for _, andStatements := range orStatements {
-			cmp := andStatements.Operator.Comparator()
-			if v == nil || andStatements.Value == nil || !cmp(
-				v,
-				andStatements.Value,
-			) {
-				satisfied = false
+		clause := make([]VersionSubExpr, 0, len(conjunction))
+		trueClause := false
+		for _, term := range conjunction {
+			inverted, always := term.negated()
+			if always {
+				trueClause = true
 				break
 			}
+			clause = append(clause, inverted)
 		}
-		if satisfied {
-			return true
+		if trueClause {
+			continue
 		}
+
+		next := make(VersionExpr, 0, len(result)*len(clause))
+		for _, product := range result {
+			for _, term := range clause {
+				distributed := make([]VersionSubExpr, 0, len(product)+1)
+				distributed = append(distributed, product...)
+				distributed = append(distributed, term)
+				next = append(next, distributed)
+			}
+		}
+		result = next
 	}
-	return false
+
+	if len(result) == 1 && len(result[0]) == 0 {
+		return nil
+	}
+	if len(result) == 0 {
+		return VersionExpr{{VersionSubExpr{Operator: OpNever}}}
+	}
+	return result
+}
+
+// negated returns the logical complement of one term. always reports a term
+// that is already true, whose negation contributes nothing to a conjunction.
+func (term VersionSubExpr) negated() (inverted VersionSubExpr, always bool) {
+	if term.Operator == OpNever || term.Value == nil {
+		return VersionSubExpr{}, true
+	}
+	return VersionSubExpr{
+		Value:    term.Value,
+		Operator: term.Operator.Inverse(),
+		Inverted: !term.Inverted,
+	}, false
 }
 
 type VersionOperator uint8
 
-type VersionComparator func(p1, p2 ResolvableVersion) bool
-
-type semverTuple interface {
-	Major() uint64
-	Minor() uint64
-	Patch() uint64
-}
-
-func compareByOperator(op VersionOperator, p1, p2 ResolvableVersion) bool {
-	if p1 == nil || p2 == nil {
-		return false
-	}
-	if p1.Scheme() == VersionSchemeSemver && p2.Scheme() == VersionSchemeSemver {
-		_, leftSemantic := p1.(semverTuple)
-		_, rightSemantic := p2.(semverTuple)
-		if !leftSemantic || !rightSemantic {
-			return comparePlainStringOperand(op, p1, p2)
-		}
-	}
-	cmp, ok := p1.Compare(p2)
-	if !ok {
-		reverseCmp, reverseOK := p2.Compare(p1)
-		if !reverseOK {
-			return false
-		}
-		cmp = -reverseCmp
-	}
-	switch op {
-	case OpEq:
-		return cmp == 0
-	case OpNeq:
-		return cmp != 0
-	case OpGt:
-		return cmp > 0
-	case OpGte:
-		return cmp >= 0
-	case OpLt:
-		return cmp < 0
-	case OpLte:
-		return cmp <= 0
-	default:
-		return false
-	}
-}
-
-// comparePlainStringOperand applies Fabric Loader's rule for versions outside
-// its semantic grammar: inclusive operators require exact string equality and
-// exclusive operators never match.
-func comparePlainStringOperand(op VersionOperator, p1, p2 ResolvableVersion) bool {
-	if op != OpEq && op != OpGte && op != OpLte {
-		return false
-	}
-	left, leftOK := p1.(interface{ String() string })
-	right, rightOK := p2.(interface{ String() string })
-	return leftOK && rightOK && left.String() == right.String()
-}
-
-func compareSemverWeakEq(p1, p2 ResolvableVersion) bool {
-	if p1 == nil || p2 == nil {
-		return false
-	}
-	if p1.Scheme() != VersionSchemeSemver || p2.Scheme() != VersionSchemeSemver {
-		return false
-	}
-	candidate, ok1 := p1.(semverTuple)
-	base, ok2 := p2.(semverTuple)
-	if !ok1 || !ok2 {
-		return false
-	}
-	if base.Minor() == 0 && base.Patch() == 0 {
-		return candidate.Major() == base.Major()
-	}
-	return candidate.Major() == base.Major() && candidate.Minor() == base.Minor()
-}
-
-func compareSemverWeakGt(p1, p2 ResolvableVersion) bool {
-	if p1 == nil || p2 == nil {
-		return false
-	}
-	if p1.Scheme() != VersionSchemeSemver || p2.Scheme() != VersionSchemeSemver {
-		return false
-	}
-	candidate, ok1 := p1.(semverTuple)
-	base, ok2 := p2.(semverTuple)
-	if !ok1 || !ok2 {
-		return false
-	}
-	if candidate.Major() != base.Major() {
-		return false
-	}
-	return compareByOperator(OpGt, p1, p2)
-}
-
-var operatorFunctions = map[VersionOperator]VersionComparator{
-	OpEq:     func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpEq, p1, p2) },
-	OpWeakEq: compareSemverWeakEq,
-	OpNeq:    func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpNeq, p1, p2) },
-	OpGt:     func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpGt, p1, p2) },
-	OpWeakGt: compareSemverWeakGt,
-	OpGte:    func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpGte, p1, p2) },
-	OpLt:     func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpLt, p1, p2) },
-	OpLte:    func(p1, p2 ResolvableVersion) bool { return compareByOperator(OpLte, p1, p2) },
-}
-
 const (
-	OpEq     VersionOperator = iota
-	OpWeakEq                 // for ~ operator in semver
+	OpEq VersionOperator = iota
 	OpNeq
 	OpGt
-	OpWeakGt // for ^ operator in semver
 	OpGte
 	OpLt
 	OpLte
+	// OpNever is the canonical unsatisfiable term produced by negating an
+	// unconstrained expression.
+	OpNever
 )
 
 func (op VersionOperator) String() string {
 	switch op {
 	case OpEq:
 		return "equal"
-	case OpWeakEq:
-		return "weak equal"
 	case OpNeq:
 		return "not equal"
 	case OpGt:
 		return "greater than"
-	case OpWeakGt:
-		return "weak greater than"
 	case OpGte:
 		return "greater than or equal"
 	case OpLt:
 		return "less than"
 	case OpLte:
 		return "less than or equal"
+	case OpNever:
+		return "never"
 	default:
 		return "unknown"
 	}
@@ -320,20 +154,18 @@ func (op VersionOperator) ToSign() string {
 	switch op {
 	case OpEq:
 		return "="
-	case OpWeakEq:
-		return "~"
 	case OpNeq:
 		return "!="
 	case OpGt:
 		return ">"
-	case OpWeakGt:
-		return "^"
 	case OpGte:
 		return ">="
 	case OpLt:
 		return "<"
 	case OpLte:
 		return "<="
+	case OpNever:
+		return "!"
 	default:
 		return "unknown"
 	}
@@ -345,7 +177,7 @@ func (op VersionOperator) Inverse() VersionOperator {
 		return OpNeq
 	case OpNeq:
 		return OpEq
-	case OpGt, OpWeakGt:
+	case OpGt:
 		return OpLte
 	case OpGte:
 		return OpLt
@@ -356,8 +188,4 @@ func (op VersionOperator) Inverse() VersionOperator {
 	default:
 		return op
 	}
-}
-
-func (op VersionOperator) Comparator() VersionComparator {
-	return operatorFunctions[op]
 }

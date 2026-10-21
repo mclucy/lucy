@@ -141,6 +141,18 @@ func validateLockedPackage(pkg *types.LockedPackage) error {
 	if pkg.Artifact.Hashes["sha256"] == "" {
 		return fmt.Errorf("package %s has no sha256 hash", pkg.Artifact.ProjectID)
 	}
+	for j := range pkg.Modules {
+		module := &pkg.Modules[j]
+		if module.VersionDialect != types.VersionDialectUnknown &&
+			!module.VersionDialect.Valid() {
+			return fmt.Errorf(
+				"package %s module %s has unknown version dialect %q",
+				pkg.Artifact.ProjectID,
+				module.ID,
+				module.VersionDialect,
+			)
+		}
+	}
 	for j := range pkg.Requirements {
 		requirement := &pkg.Requirements[j]
 		if requirement.Reference == "" {
