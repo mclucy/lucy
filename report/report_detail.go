@@ -1,5 +1,3 @@
-// Package report presents warnings, errors, and multi-line failures on
-// stderr independently of diagnostic logging.
 package report
 
 import (
