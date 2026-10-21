@@ -289,6 +289,11 @@ tasks:
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
 
+  e2e:filetrack:
+    desc: "Run the hermetic file tracking and CLI transaction scenarios"
+    cmds:
+      - go test -tags integration -count=1 -timeout 0 ./e2e/filetrack {{.CLI_ARGS}}
+
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks
     cmds:

@@ -1,6 +1,6 @@
 //go:build integration
 
-package file_test
+package filetrack_test
 
 import (
 	"path/filepath"
@@ -89,11 +89,11 @@ func TestFileListReportsSymlinkedDeclarationAsError(t *testing.T) {
 	}
 	w.symlink(t, outsideDirectory, "outside")
 	w.writeManifest(t, &manifest.Document{
-		Version: manifest.FormatVersion,
+		SchemaVersion: manifest.SchemaVersion,
 		Server: manifest.Server{
 			Minecraft: "1.21.4",
 			Directory: "server",
-			Core:      manifest.Core{Distribution: "vanilla"},
+			Core:      manifest.Core{Product: types.ServerProductMinecraft},
 		},
 		Files: []types.TrackedFile{manifestTrackedFile("outside/inside.txt", acceptedHash(inside))},
 	})

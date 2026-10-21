@@ -1,6 +1,6 @@
 //go:build integration
 
-package file_test
+package filetrack_test
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 	code := func() int {
-		directory, err := os.MkdirTemp("", "lucy-file-integration-")
+		directory, err := os.MkdirTemp("", "lucy-filetrack-integration-")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
