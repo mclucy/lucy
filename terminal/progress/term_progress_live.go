@@ -34,6 +34,13 @@ type liveSnapshot struct {
 	frame int
 }
 
+// livePrint asks the model to emit a permanent line above the live area. The
+// model closes done once the line is queued for rendering.
+type livePrint struct {
+	text string
+	done chan struct{}
+}
+
 // live renders one animated area on stderr. Updates are coalesced by a ticker
 // so byte-level progress never floods the renderer.
 type live struct {
@@ -148,14 +155,23 @@ func (l *live) Println(lines ...string) {
 	if len(lines) == 0 {
 		return
 	}
+	text := strings.Join(lines, "\n")
+	// The lock stays held until the model acknowledges the line, so Close
+	// cannot quit the program while a permanent line is still in flight.
 	l.mu.Lock()
-	closed := l.closed
-	l.mu.Unlock()
-	if closed {
-		_, _ = io.WriteString(l.out, strings.Join(lines, "\n")+"\n")
+	defer l.mu.Unlock()
+	if l.closed {
+		_, _ = io.WriteString(l.out, text+"\n")
 		return
 	}
-	l.program.Println(strings.Join(lines, "\n"))
+	done := make(chan struct{})
+	// Send, unlike Program.Println, returns when the program has stopped, so a
+	// late line cannot block shutdown.
+	l.program.Send(livePrint{text: text, done: done})
+	select {
+	case <-done:
+	case <-l.done:
+	}
 }
 
 func (l *live) LogWriter() io.Writer { return logTail{l} }
@@ -200,6 +216,11 @@ func (m *liveModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case liveSnapshot:
 		m.state = msg.state
 		m.frame = msg.frame
+	case livePrint:
+		return m, tea.Sequence(tea.Println(msg.text), func() tea.Msg {
+			close(msg.done)
+			return nil
+		})
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 	}
