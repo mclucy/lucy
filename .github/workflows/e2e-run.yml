@@ -1,0 +1,181 @@
+# Reusable runner for one e2e matrix entry. The caller owns the matrix, the
+# sandbox set, and the suite command.
+name: E2E Run
+
+on:
+  workflow_call:
+    inputs:
+      suite:
+        description: Suite label shown in the job name.
+        required: true
+        type: string
+      command:
+        description: Shell command that runs the suite.
+        required: true
+        type: string
+      timeout-minutes:
+        description: Job timeout.
+        required: false
+        type: number
+        default: 30
+      sandboxes:
+        description: Comma-separated sandbox ids to generate. Empty skips the fixtures.
+        required: false
+        type: string
+        default: ""
+      java-version:
+        description: Single Temurin version to install. Empty skips Java.
+        required: false
+        type: string
+        default: ""
+      gradle:
+        description: Install the pinned Gradle JDK inventory.
+        required: false
+        type: boolean
+        default: false
+      cache-key:
+        description: Fixture id that keys the Gradle cache. Empty skips the cache.
+        required: false
+        type: string
+        default: ""
+      build:
+        description: Build the Lucy binary before running the suite.
+        required: false
+        type: boolean
+        default: true
+      task:
+        description: Set up Task and build through the Taskfile.
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      CF_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: ${{ inputs.suite }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Set up Task
+        if: ${{ inputs.task }}
+        uses: go-task/setup-task@v2
+
+      - name: Install Temurin
+        if: ${{ inputs.java-version != '' }}
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - name: Install Temurin 17
+        id: java17
+        if: ${{ inputs.gradle }}
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          architecture: x64
+          set-default: false
+
+      - name: Install Temurin 21
+        id: java21
+        if: ${{ inputs.gradle }}
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          architecture: x64
+          set-default: false
+
+      - name: Install Temurin 25
+        id: java25
+        if: ${{ inputs.gradle }}
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          architecture: x64
+
+      # Fixture builds are Gradle-heavy and share nothing between jobs, so a cold
+      # cache blows the job timeout on the multi-loader fixtures. The key tracks the
+      # fixture's pin, so moving a commit starts over from a clean cache.
+      - name: Restore Gradle cache
+        if: ${{ inputs.gradle && inputs.cache-key != '' }}
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/lucy-gradle
+          key: gradle-${{ inputs.cache-key }}-${{ hashFiles(format('e2e/testdata/repo/{0}.yaml', inputs.cache-key)) }}
+
+      # Pin majors, not exact patches: Lucy's toolchain selection matches on Java major
+      # version only, and Adoptium re-tags LTS releases (e.g. 21.0.8+9 became
+      # 21.0.8+9.0.LTS), so exact patch pins silently stop resolving.
+      # Restrict Gradle toolchain resolution to the three pinned JDKs. The runner image's
+      # own JDKs stay in place: setup-java exposes its toolcache entries as symlinks into
+      # /usr/lib/jvm, so hiding that directory from Lucy breaks JAVA_HOME resolution.
+      - name: Configure pinned JDK inventory
+        if: ${{ inputs.gradle }}
+        env:
+          JDK17: ${{ steps.java17.outputs.path }}
+          JDK21: ${{ steps.java21.outputs.path }}
+          JDK25: ${{ steps.java25.outputs.path }}
+        run: |
+          set -euo pipefail
+          export GRADLE_USER_HOME="$RUNNER_TEMP/lucy-gradle"
+          mkdir -p "$GRADLE_USER_HOME"
+          printf '%s\n' \
+            'org.gradle.java.installations.auto-detect=false' \
+            'org.gradle.java.installations.auto-download=false' \
+            "org.gradle.java.installations.paths=$JDK17,$JDK21,$JDK25" \
+            > "$GRADLE_USER_HOME/gradle.properties"
+          echo "GRADLE_USER_HOME=$GRADLE_USER_HOME" >> "$GITHUB_ENV"
+
+      - name: Cache sandbox downloads
+        if: ${{ inputs.sandboxes != '' }}
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/lucy-sandbox
+          key: sandbox-${{ hashFiles('e2e/testdata/sandboxes/sandboxes.yaml') }}
+
+      - name: Generate sandboxes
+        if: ${{ inputs.sandboxes != '' }}
+        env:
+          SANDBOXES: ${{ inputs.sandboxes }}
+        run: task sandboxes:gen -- --only "$SANDBOXES"
+
+      - name: Build Lucy
+        if: ${{ inputs.build }}
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          USE_TASK: ${{ inputs.task }}
+        run: |
+          set -euo pipefail
+          if [ "$USE_TASK" = "true" ]; then
+            if [ -n "${CF_API_KEY:-}" ]; then
+              task cipher:generate
+            fi
+            task build:dev
+          else
+            go build -o dist/lucy .
+          fi
+
+      - name: Run suite
+        shell: bash
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+        run: ${{ inputs.command }}

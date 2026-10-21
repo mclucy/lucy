@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   test:
@@ -87,3 +88,12 @@ jobs:
         with:
           name: lucy-darwin-arm64
           path: release/lucy-darwin-arm64.gz
+
+  e2e:
+    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/e2e.yml
+    secrets:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
