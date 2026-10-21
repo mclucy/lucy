@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/filetrack"
@@ -71,6 +72,22 @@ func selectedEcosystem(d *manifest.Document, requested types.Ecosystem) types.Ec
 		return types.EcosystemMCDR
 	}
 	return types.EcosystemUnspecified
+}
+
+// servedEcosystemSet returns the package ecosystems that the declared server
+// can load. A probed runtime also reports bridged ecosystems, such as Fabric
+// through Sinytra Connector. Without a probe, the declared product decides.
+func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[types.Ecosystem]struct{} {
+	served := map[types.Ecosystem]struct{}{}
+	for _, offer := range observed.ServedEcosystems() {
+		served[offer.Ecosystem] = struct{}{}
+	}
+	if len(served) == 0 {
+		if ecosystem := selectedEcosystem(d, types.EcosystemUnspecified); ecosystem != types.EcosystemUnspecified {
+			served[ecosystem] = struct{}{}
+		}
+	}
+	return served
 }
 
 func commandReference(d *manifest.Document, old *lockfile.Document, raw string, ecosystem types.Ecosystem) (string, types.Version, error) {
@@ -294,12 +311,18 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	if err != nil {
 		return nil, observed.Warnings, err
 	}
+	served := servedEcosystemSet(d, observed)
 	recognized := 0
 	for _, p := range observed.Packages {
 		if !artifact.SupportsPath(p.Path) {
 			continue
 		}
 		ecosystem := p.ID.Ecosystem
+		if ecosystem != types.EcosystemMCDR {
+			if _, ok := served[ecosystem]; !ok {
+				continue
+			}
+		}
 		modules, err := artifact.ReadModules(ctx, p.Path, ecosystem)
 		if err != nil || len(modules) == 0 {
 			continue
@@ -331,6 +354,26 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		if err != nil || !matched || ref.Name == "" {
 			continue
 		}
+		// A manifest entry that resolution cannot select blocks every later
+		// command, so an installed package whose catalogue metadata offers no
+		// matching release for this server stays unmanaged.
+		candidates, candidateErr := routing.Candidates(
+			ctx, types.RegistryModrinth, ref.Name.String(),
+			string(d.Server.Minecraft), ecosystem,
+		)
+		usable := candidateErr == nil && slices.ContainsFunc(
+			candidates,
+			func(candidate types.CatalogueCandidate) bool {
+				return candidate.Version == ref.Version && candidate.PrimaryFile
+			},
+		)
+		if !usable {
+			if candidateErr == nil {
+				candidateErr = fmt.Errorf("no release provides version %s", ref.Version)
+			}
+			observed.Warnings = append(observed.Warnings, fmt.Errorf("package %s left unmanaged: %w", ref.Name, candidateErr))
+			continue
+		}
 		if d.Server.Packages[ecosystem] == nil {
 			d.Server.Packages[ecosystem] = map[string]manifest.Requirement{}
 		}
@@ -349,7 +392,10 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	if errors.Is(err, os.ErrNotExist) {
 		old = nil
 	}
-	resolved, resolveWarnings, err := install.Resolve(ctx, root, d, old, install.Options{})
+	// Adoption records the set the server already runs, so module
+	// requirements that the installed jars report but the catalogue metadata
+	// cannot satisfy become warnings instead of a refusal.
+	resolved, resolveWarnings, err := install.Resolve(ctx, root, d, old, install.Options{AcceptBroken: true})
 	observed.Warnings = append(observed.Warnings, resolveWarnings...)
 	if err != nil {
 		return nil, observed.Warnings, err

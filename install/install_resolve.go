@@ -16,9 +16,11 @@ import (
 )
 
 // Resolve builds the lock document that answers d without staging or
-// committing the server tree. Artifact bytes still enter the workspace
-// download store because the lock pins their hashes. The caller must hold the
-// workspace writer lock.
+// committing the server tree. It records the declared packages alone, because
+// the workspace the manifest describes already holds a working set that
+// catalogue dependencies must not extend. Artifact bytes still enter the
+// workspace download store because the lock pins their hashes. The caller must
+// hold the workspace writer lock.
 func Resolve(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (*lockfile.Document, []error, error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
@@ -27,6 +29,7 @@ func Resolve(ctx context.Context, root string, d *manifest.Document, old *lockfi
 	if d == nil {
 		return nil, nil, fmt.Errorf("manifest required to resolve a lock")
 	}
+	opts.declaredOnly = true
 	if err := workspacewrite.SafePath(absolute, ".lucy"); err != nil {
 		return nil, nil, err
 	}
@@ -146,7 +149,7 @@ func resolveInstall(
 		resolved.MCDR = environment
 		mcdrVersion = string(environment.Version)
 	}
-	packages, moduleWarnings, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.materialize, opts.WithOptional, opts.AcceptBroken)
+	packages, moduleWarnings, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.materialize, opts.WithOptional, opts.AcceptBroken, !opts.declaredOnly)
 	if err != nil {
 		return nil, err
 	}

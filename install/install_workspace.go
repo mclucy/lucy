@@ -35,7 +35,11 @@ type (
 		// requirements, so a lock whose fingerprint no longer matches is
 		// expected rather than stale.
 		RequirementChange bool
-		publishLock       bool
+		// declaredOnly records the manifest's packages without adding their
+		// catalogue dependencies. Adoption sets it because the workspace
+		// already holds a working set that resolution must not extend.
+		declaredOnly bool
+		publishLock  bool
 	}
 	InitOptions struct {
 		Minecraft, Distribution, CoreVersion, Repository, MCDRVersion, Directory string

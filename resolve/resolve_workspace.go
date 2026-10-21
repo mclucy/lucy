@@ -41,7 +41,7 @@ func catalogueRegistry(provider types.Provider) types.Registry {
 	return registry
 }
 
-func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool, acceptBroken bool) ([]types.LockedPackage, []error, error) {
+func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool, acceptBroken bool, expandDependencies bool) ([]types.LockedPackage, []error, error) {
 	var requests []projectRequest
 	appendRequest := func(environment types.Environment, ecosystem types.Ecosystem, ref string, r manifest.Requirement) error {
 		provider, project, err := manifest.ParseReference(ref)
@@ -387,30 +387,32 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				"modules", len(modules),
 			)
 			next := append([]projectRequest{}, rest...)
-			for _, dep := range candidate.Dependencies {
-				if dep.Kind == types.DependencyKindRequired || (withOptional && dep.Kind == types.DependencyKindOptional) {
-					var ids []string
-					if dep.ReleaseID != "" {
-						ids = append(ids, dep.ReleaseID)
-					}
-					dependency := projectRequest{
-						key: projectKey{
-							r.key.environment,
-							r.key.ecosystem,
-							dep.Provider,
-							dep.ProjectID,
-						}, releaseIDs: ids,
-					}
-					if dep.Kind == types.DependencyKindOptional {
-						dependency.requirements = []types.RequirementBinding{
-							{
-								Reference: dep.Provider.String() + ":" + dep.ProjectID,
-								Selector:  types.VersionStable,
-								Enabled:   true,
-							},
+			if expandDependencies {
+				for _, dep := range candidate.Dependencies {
+					if dep.Kind == types.DependencyKindRequired || (withOptional && dep.Kind == types.DependencyKindOptional) {
+						var ids []string
+						if dep.ReleaseID != "" {
+							ids = append(ids, dep.ReleaseID)
 						}
+						dependency := projectRequest{
+							key: projectKey{
+								r.key.environment,
+								r.key.ecosystem,
+								dep.Provider,
+								dep.ProjectID,
+							}, releaseIDs: ids,
+						}
+						if dep.Kind == types.DependencyKindOptional {
+							dependency.requirements = []types.RequirementBinding{
+								{
+									Reference: dep.Provider.String() + ":" + dep.ProjectID,
+									Selector:  types.VersionStable,
+									Enabled:   true,
+								},
+							}
+						}
+						next = append(next, dependency)
 					}
-					next = append(next, dependency)
 				}
 			}
 			if backtrack(next) {
