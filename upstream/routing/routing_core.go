@@ -59,17 +59,9 @@ func trustMavenChecksum(ctx context.Context, a *types.Artifact) error {
 
 // ResolveServerProduct resolves the server product artifact, its download
 // inputs, and the Java requirement for the requested Minecraft version.
+// It always acquires the selected core because the lock records the bytes it
+// pins.
 func ResolveServerProduct(
-	ctx context.Context,
-	req types.ServerProductRequest,
-	acquire func(*types.Artifact) (string, error),
-) (types.ServerProductResolution, error) {
-	return resolveServerProduct(ctx, req, acquire)
-}
-
-// resolveServerProduct shares one route table between products. It always
-// acquires the selected core because the lock records the bytes it pins.
-func resolveServerProduct(
 	ctx context.Context,
 	req types.ServerProductRequest,
 	acquire func(*types.Artifact) (string, error),

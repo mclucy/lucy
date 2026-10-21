@@ -41,14 +41,6 @@ type (
 		declaredOnly bool
 		publishLock  bool
 	}
-	InitOptions struct {
-		Minecraft, Distribution, CoreVersion, Repository, MCDRVersion, Directory string
-		Force, AllowEmpty, Detect                                                bool
-		// PromptMinecraft asks for a concrete Minecraft version when
-		// initialization lacks one and returns the trimmed response. Nil keeps
-		// the concrete-version-required error and never prompts.
-		PromptMinecraft func() (string, error)
-	}
 )
 
 func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (diagnostics []filetrack.Diagnostic, warnings []error, resultErr error) {

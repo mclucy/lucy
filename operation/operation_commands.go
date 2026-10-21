@@ -314,7 +314,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 				"directory", d.Server.Directory,
 			)
 		} else if !opts.AllowEmpty {
-			return nil, observed.Warnings, fmt.Errorf("no server detected; use create or --allow-empty with a complete server declaration")
+			return nil, observed.Warnings, fmt.Errorf("no server detected; use `lucy create` to generate a new server")
 		} else {
 			log.Debug(
 				"no server detected; building a complete declaration",
