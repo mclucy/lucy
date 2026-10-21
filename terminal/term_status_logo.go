@@ -27,11 +27,6 @@ const (
 	LogoSmallColored
 )
 
-const (
-	logoSmallMaxWidth = 30
-	logoLargeMaxWidth = 72
-)
-
 // FieldLogo is a Field that holds the ASCII logo for the status view.
 // It also provides the line and width data used by the layout compositor.
 type FieldLogo struct {
@@ -59,7 +54,8 @@ func (f *FieldLogo) renderVariantForWidth(termWidth int) LogoVariant {
 	case StatusLogoSmall:
 		return f.variant(false)
 	default:
-		return f.variant(termWidth >= logoLargeMaxWidth+statusLayoutGapWidth+statusLayoutMinInfoWidth)
+		large := f.variant(true)
+		return f.variant(termWidth >= f.Width(large)+statusLayoutGapWidth+statusLayoutMinInfoWidth)
 	}
 }
 
