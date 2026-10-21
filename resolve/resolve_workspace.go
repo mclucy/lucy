@@ -41,7 +41,7 @@ func catalogueRegistry(provider types.Provider) types.Registry {
 	return registry
 }
 
-func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool, force bool) ([]types.LockedPackage, []error, error) {
+func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool, acceptBroken bool) ([]types.LockedPackage, []error, error) {
 	var requests []projectRequest
 	appendRequest := func(environment types.Environment, ecosystem types.Ecosystem, ref string, r manifest.Requirement) error {
 		provider, project, err := manifest.ParseReference(ref)
@@ -170,7 +170,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				lastErr = err
 				return false
 			}
-			if len(problems) > 0 && !force {
+			if len(problems) > 0 && !acceptBroken {
 				log.Debug(
 					"resolve: settled graph rejected",
 					"attempt", attempts,
@@ -454,7 +454,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	}
 	var warnings []error
 	if len(problems) > 0 {
-		if !force {
+		if !acceptBroken {
 			return nil, nil, errors.Join(problems...)
 		}
 		warnings = problems

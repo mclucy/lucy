@@ -125,6 +125,14 @@ See also [Global Flags](/commands/global-flags), [`lucy add`](/commands/add), an
   Also install optional upstream dependencies. It forces a new resolution even when the lock already matches the manifest, and every optional package selected this way is written back into `lucy.yaml` as an explicit package — so it is part of the declared server from then on, not just of this run. Cannot be combined with `--locked`.
 </ParamField>
 
-<ParamField query="--force, -f" type="boolean" default="false">
+<ParamField query="--accept-broken" type="boolean" default="false">
   Install the packages the manifest declares even when a module requirement cannot be satisfied: a required module is missing, a selected version falls outside its declared range, or a version string cannot be parsed. Each unresolved requirement is reported as a warning. Without this flag, such a server is refused because it would not start.
+</ParamField>
+
+<ParamField query="--overwrite" type="boolean" default="false">
+  Replace files already present at the destinations the lock selects, including unowned jars from an earlier manual setup and files whose contents were modified. Only the selected destination paths are replaced; unrelated files are left alone. Without this flag, an occupied destination stops the installation.
+</ParamField>
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Combine `--accept-broken` and `--overwrite` in one flag.
 </ParamField>

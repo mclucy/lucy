@@ -25,7 +25,8 @@ type (
 	Options struct {
 		Locked          bool
 		Offline         bool
-		Force           bool
+		AcceptBroken    bool
+		Overwrite       bool
 		PublishManifest bool
 		WithOptional    bool
 		// ExpectedManifest pins the manifest fingerprint the caller selected
@@ -242,7 +243,7 @@ func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lo
 			resolved.MCDR = environment
 			mcdrVersion = string(environment.Version)
 		}
-		packages, moduleWarnings, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.materialize, opts.WithOptional, opts.Force)
+		packages, moduleWarnings, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.materialize, opts.WithOptional, opts.AcceptBroken)
 		if err != nil {
 			return nil, err
 		}
@@ -324,7 +325,7 @@ func stageInstall(
 			"root", root,
 			"packages", len(resolved.Packages),
 		)
-		if err := validateUnmanagedArtifacts(ctx, root, resolved); err != nil {
+		if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 			return nil, err
 		}
 		if opts.publishLock {
@@ -403,10 +404,10 @@ func stageInstall(
 			return nil, err
 		}
 	}
-	if err := validateUnmanagedArtifacts(ctx, root, resolved); err != nil {
+	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 		return nil, err
 	}
-	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest); err != nil {
+	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest, opts.Overwrite); err != nil {
 		return nil, err
 	}
 	return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)

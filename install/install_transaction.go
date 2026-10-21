@@ -33,7 +33,7 @@ type (
 	}
 )
 
-func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool) (resultErr error) {
+func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwrite bool) (resultErr error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	previous := installReceipt{}
 	raw, err := os.ReadFile(receiptPath)
@@ -104,7 +104,14 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 				return err
 			}
 			if actual["sha256"] != hashes["sha256"] && actual["sha256"] != owned[relative] {
-				return fmt.Errorf("unowned or modified output conflict: %s", relative)
+				if !overwrite {
+					return fmt.Errorf("unowned or modified output conflict: %s", relative)
+				}
+				log.Debug(
+					"overwriting occupied output",
+					"path", relative,
+					"reason", "overwrite requested",
+				)
 			}
 		} else if !os.IsNotExist(err) {
 			return err
