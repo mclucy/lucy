@@ -34,7 +34,12 @@ on:
         type: boolean
         default: false
       cache-key:
-        description: Fixture id that keys the Gradle cache. Empty skips the cache.
+        description: Prefix for the Gradle cache key.
+        required: false
+        type: string
+        default: ""
+      cache-pattern:
+        description: Path pattern whose contents key the Gradle cache. Empty skips the cache.
         required: false
         type: string
         default: ""
@@ -114,13 +119,13 @@ jobs:
 
       # Fixture builds are Gradle-heavy and share nothing between jobs, so a cold
       # cache blows the job timeout on the multi-loader fixtures. The key tracks the
-      # fixture's pin, so moving a commit starts over from a clean cache.
+      # fixture pins, so moving a commit starts over from a clean cache.
       - name: Restore Gradle cache
-        if: ${{ inputs.gradle && inputs.cache-key != '' }}
+        if: ${{ inputs.gradle && inputs.cache-pattern != '' }}
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/lucy-gradle
-          key: gradle-${{ inputs.cache-key }}-${{ hashFiles(format('e2e/testdata/repo/{0}.yaml', inputs.cache-key)) }}
+          key: gradle-${{ inputs.cache-key }}-${{ hashFiles(inputs.cache-pattern) }}
 
       # Pin majors, not exact patches: Lucy's toolchain selection matches on Java major
       # version only, and Adoptium re-tags LTS releases (e.g. 21.0.8+9 became
