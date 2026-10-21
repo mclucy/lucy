@@ -1,21 +1,33 @@
+# Trigger scope: this suite's fixtures plus the packages the compile path is
+# built from. Other changes run the unit workflow.
 name: E2E Compile
 
 on:
   push:
     branches: [main]
     paths:
-      - e2e/**
-      - '**/*.go'
+      - e2e/compile/**
+      - e2e/internal/**
+      - e2e/testdata/repo/**
       - internal/cli/compile/**
+      - internal/buildrepo/**
+      - internal/toolchain/**
+      - cmd/*.go
+      - internal/cli/*.go
       - go.mod
       - go.sum
       - Taskfile.yml
       - .github/workflows/e2e-compile.yml
   pull_request:
     paths:
-      - e2e/**
-      - '**/*.go'
+      - e2e/compile/**
+      - e2e/internal/**
+      - e2e/testdata/repo/**
       - internal/cli/compile/**
+      - internal/buildrepo/**
+      - internal/toolchain/**
+      - cmd/*.go
+      - internal/cli/*.go
       - go.mod
       - go.sum
       - Taskfile.yml

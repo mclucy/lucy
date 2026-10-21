@@ -1,19 +1,39 @@
-name: E2E
+# Trigger scope: this suite's fixtures plus the packages the status and
+# initialization paths are built from. Other changes run the unit workflow.
+name: E2E Status
 
 on:
   push:
     branches: [main]
     paths:
-      - e2e/**
+      - e2e/status/**
+      - e2e/sandbox/**
+      - e2e/internal/**
+      - e2e/testdata/sandboxes/**
       - workspace/**
-      - internal/cli/**
-      - .github/workflows/e2e.yml
+      - manifest/**
+      - operation/**
+      - cmd/*.go
+      - internal/cli/*.go
+      - go.mod
+      - go.sum
+      - Taskfile.yml
+      - .github/workflows/e2e-status.yml
   pull_request:
     paths:
-      - e2e/**
+      - e2e/status/**
+      - e2e/sandbox/**
+      - e2e/internal/**
+      - e2e/testdata/sandboxes/**
       - workspace/**
-      - internal/cli/**
-      - .github/workflows/e2e.yml
+      - manifest/**
+      - operation/**
+      - cmd/*.go
+      - internal/cli/*.go
+      - go.mod
+      - go.sum
+      - Taskfile.yml
+      - .github/workflows/e2e-status.yml
   workflow_dispatch:
 
 permissions:

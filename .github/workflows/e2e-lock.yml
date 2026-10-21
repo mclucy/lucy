@@ -1,19 +1,45 @@
+# Trigger scope: this suite's fixtures plus the packages the install path is
+# built from. Other changes run the unit workflow.
 name: E2E Install
 
 on:
   push:
     branches: [main]
     paths:
-      - e2e/**
-      - "**/*.go"
+      - e2e/install/**
+      - e2e/sandbox/**
+      - e2e/internal/**
+      - e2e/testdata/sandboxes/**
+      - install/**
+      - bootstrap/**
+      - lockfile/**
+      - resolve/**
+      - upstream/**
+      - manifest/**
+      - operation/**
+      - workspace/**
+      - cmd/*.go
+      - internal/cli/*.go
       - go.mod
       - go.sum
       - Taskfile.yml
       - .github/workflows/e2e-lock.yml
   pull_request:
     paths:
-      - e2e/**
-      - "**/*.go"
+      - e2e/install/**
+      - e2e/sandbox/**
+      - e2e/internal/**
+      - e2e/testdata/sandboxes/**
+      - install/**
+      - bootstrap/**
+      - lockfile/**
+      - resolve/**
+      - upstream/**
+      - manifest/**
+      - operation/**
+      - workspace/**
+      - cmd/*.go
+      - internal/cli/*.go
       - go.mod
       - go.sum
       - Taskfile.yml
