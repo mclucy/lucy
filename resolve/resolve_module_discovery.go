@@ -118,6 +118,87 @@ func (index *moduleDiscovery) backtrack(ctx context.Context, from projectKey, id
 	return projectRequest{}, false, nil
 }
 
+// missing returns one request per required module identity that the settled
+// graph does not provide. Discovery runs only here, so a module another
+// package already carries never triggers a catalogue search, and a search hit
+// that cannot answer it cannot fail resolution.
+func (index *moduleDiscovery) missing(ctx context.Context, chosen map[projectKey]types.LockedPackage) ([]projectRequest, error) {
+	keys := make([]projectKey, 0, len(chosen))
+	for key := range chosen {
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, func(a, b projectKey) int {
+		if n := strings.Compare(string(a.environment), string(b.environment)); n != 0 {
+			return n
+		}
+		if n := strings.Compare(string(a.ecosystem), string(b.ecosystem)); n != 0 {
+			return n
+		}
+		if n := strings.Compare(string(a.provider), string(b.provider)); n != 0 {
+			return n
+		}
+		return strings.Compare(a.project, b.project)
+	})
+	var requests []projectRequest
+	seen := map[projectKey]bool{}
+	for _, key := range keys {
+		p := chosen[key]
+		if !packageEnabled(p) {
+			continue
+		}
+		for _, module := range p.Modules {
+			for _, dep := range module.Dependencies {
+				if dep.Kind != types.DependencyKindRequired {
+					continue
+				}
+				if runtimeModule(dep.ID) {
+					continue
+				}
+				if providesSelected(chosen, p.Ecosystem, dep.ID) {
+					continue
+				}
+				request, found, err := index.project(ctx, key, dep.ID)
+				if err != nil {
+					return nil, err
+				}
+				if !found {
+					log.Debug(
+						"resolve: module dependency unresolved",
+						"provider", key.provider,
+						"project", key.project,
+						"module", dep.ID,
+						"reason", "no catalogue project ships module",
+					)
+					continue
+				}
+				if _, selected := chosen[request.key]; selected {
+					log.Debug(
+						"resolve: module dependency unresolved",
+						"provider", key.provider,
+						"project", key.project,
+						"module", dep.ID,
+						"reason", "discovered project does not carry module",
+					)
+					continue
+				}
+				if seen[request.key] {
+					continue
+				}
+				seen[request.key] = true
+				requests = append(requests, request)
+				log.Debug(
+					"resolve: native dependency discovered",
+					"module", dep.ID,
+					"provider", request.key.provider,
+					"project", request.key.project,
+					"reason", "artifact declares module identity",
+				)
+			}
+		}
+	}
+	return requests, nil
+}
+
 // verify reports whether the newest release of one catalogue project carries
 // the module identity, so a search hit becomes a dependency only on proof.
 func (index *moduleDiscovery) verify(ctx context.Context, from projectKey, hit catalogueProject, id string) (projectRequest, bool, error) {

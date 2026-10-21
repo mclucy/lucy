@@ -143,6 +143,14 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			return false
 		}
 		if len(pending) == 0 {
+			missing, err := discovery.missing(ctx, chosen)
+			if err != nil {
+				lastErr = err
+				return false
+			}
+			if len(missing) > 0 {
+				return backtrack(missing)
+			}
 			all := make([]types.LockedPackage, 0, len(chosen))
 			for _, p := range chosen {
 				all = append(all, p)
@@ -332,13 +340,8 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				"modules", len(modules),
 			)
 			next := append([]projectRequest{}, rest...)
-			declared := map[catalogueProject]bool{}
 			for _, dep := range candidate.Dependencies {
 				if dep.Kind == types.DependencyKindRequired || (withOptional && dep.Kind == types.DependencyKindOptional) {
-					declared[catalogueProject{
-						dep.Provider,
-						dep.ProjectID,
-					}] = true
 					var ids []string
 					if dep.ReleaseID != "" {
 						ids = append(ids, dep.ReleaseID)
@@ -361,72 +364,6 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 						}
 					}
 					next = append(next, dependency)
-				}
-			}
-			// A required dependency the catalogue omitted still has to enter
-			// the graph, so resolution asks the registry which project ships
-			// the module identity the artifact itself declares.
-			for _, module := range a.Modules {
-				for _, dep := range module.Dependencies {
-					if dep.Kind != types.DependencyKindRequired {
-						continue
-					}
-					if runtimeModule(dep.ID) {
-						log.Debug(
-							"resolve: module dependency skipped",
-							"provider", r.key.provider,
-							"project", r.key.project,
-							"module", dep.ID,
-							"reason", "provided by server runtime",
-						)
-						continue
-					}
-					if providesSelected(chosen, r.key.ecosystem, dep.ID) {
-						log.Debug(
-							"resolve: module dependency skipped",
-							"provider", r.key.provider,
-							"project", r.key.project,
-							"module", dep.ID,
-							"reason", "provided by selected package",
-						)
-						continue
-					}
-					request, found, err := discovery.project(ctx, r.key, dep.ID)
-					if err != nil {
-						lastErr = err
-						return false
-					}
-					if !found {
-						log.Debug(
-							"resolve: module dependency unresolved",
-							"provider", r.key.provider,
-							"project", r.key.project,
-							"module", dep.ID,
-							"reason", "no catalogue project ships module",
-						)
-						continue
-					}
-					if declared[catalogueProject{
-						request.key.provider,
-						request.key.project,
-					}] {
-						log.Debug(
-							"resolve: module dependency skipped",
-							"provider", r.key.provider,
-							"project", r.key.project,
-							"module", dep.ID,
-							"reason", "declared in catalogue metadata",
-						)
-						continue
-					}
-					next = append(next, request)
-					log.Debug(
-						"resolve: native dependency discovered",
-						"module", dep.ID,
-						"provider", request.key.provider,
-						"project", request.key.project,
-						"reason", "artifact declares module identity",
-					)
 				}
 			}
 			if backtrack(next) {
