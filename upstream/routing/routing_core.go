@@ -64,6 +64,25 @@ func ResolveServerProduct(
 	req types.ServerProductRequest,
 	acquire func(*types.Artifact) (string, error),
 ) (types.ServerProductResolution, error) {
+	return resolveServerProduct(ctx, req, acquire)
+}
+
+// ValidateServerProduct resolves the declared server product from metadata
+// alone. It reports whether upstream serves the declaration; checks that need
+// artifact bytes stay with installation.
+func ValidateServerProduct(ctx context.Context, req types.ServerProductRequest) error {
+	_, err := resolveServerProduct(ctx, req, nil)
+	return err
+}
+
+// resolveServerProduct shares one route table between resolution that
+// materializes artifacts and validation that must not download anything. A nil
+// acquire skips every acquisition and the byte-level checks that depend on it.
+func resolveServerProduct(
+	ctx context.Context,
+	req types.ServerProductRequest,
+	acquire func(*types.Artifact) (string, error),
+) (types.ServerProductResolution, error) {
 	out := types.ServerProductResolution{
 		Minecraft:      req.Minecraft,
 		Product:        req.Product,
@@ -129,8 +148,12 @@ func ResolveServerProduct(
 		)
 		out.Artifact = minecraft
 		out.ProductVersion = req.Minecraft
-		_, err = acquire(&out.Artifact)
-		return out, err
+		if acquire != nil {
+			if _, err := acquire(&out.Artifact); err != nil {
+				return out, err
+			}
+		}
+		return out, nil
 	}
 	out.Inputs = []types.BootstrapInput{
 		{
@@ -195,9 +218,10 @@ func ResolveServerProduct(
 			if e := trustMavenChecksum(ctx, &out.Artifact); e != nil {
 				return out, e
 			}
-			_, err = acquire(&out.Artifact)
-			if err != nil {
-				return out, err
+			if acquire != nil {
+				if _, e := acquire(&out.Artifact); e != nil {
+					return out, e
+				}
 			}
 			for _, lib := range profile.Libraries {
 				input, downloadable, e := libraryInput(
@@ -250,13 +274,14 @@ func ResolveServerProduct(
 				URL:       remote.FileURL,
 				Hashes:    map[string]string{},
 			}
-			installer, e := acquire(&out.Artifact)
-			if e != nil {
-				return out, e
-			}
-			err = resolveInstaller(ctx, req, &out, installer)
-			if err != nil {
-				return out, err
+			if acquire != nil {
+				installer, e := acquire(&out.Artifact)
+				if e != nil {
+					return out, e
+				}
+				if err := resolveInstaller(ctx, req, &out, installer); err != nil {
+					return out, err
+				}
 			}
 			log.Debug(
 				"routing: server product route selected",
@@ -321,6 +346,9 @@ func ResolveServerProduct(
 	}
 	if err != nil {
 		return out, err
+	}
+	if acquire == nil {
+		return out, nil
 	}
 	corePath, err := acquire(&out.Artifact)
 	if err != nil {
