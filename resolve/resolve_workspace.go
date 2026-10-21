@@ -41,7 +41,26 @@ func catalogueRegistry(provider types.Provider) types.Registry {
 	return registry
 }
 
-func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool, acceptBroken bool) ([]types.LockedPackage, []error, error) {
+// SupportsPackages reports whether the server product loads packages from
+// ecosystem. A paperclip server loads Paper and Bukkit packages regardless of
+// how the manifest names its product.
+func SupportsPackages(server lockfile.Server, ecosystem types.Ecosystem) bool {
+	switch server.Product {
+	case types.ServerProductFabric:
+		return ecosystem == types.EcosystemFabric
+	case types.ServerProductForge:
+		return ecosystem == types.EcosystemForge
+	case types.ServerProductNeoForge:
+		return ecosystem == types.EcosystemNeoForge
+	case types.ServerProductPaper, types.ServerProductPurpur:
+		return ecosystem == types.EcosystemPaper || ecosystem == types.EcosystemBukkit
+	default:
+		return server.Bootstrapper == "paperclip" &&
+			(ecosystem == types.EcosystemPaper || ecosystem == types.EcosystemBukkit)
+	}
+}
+
+func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool, acceptBroken bool, expandDependencies bool) ([]types.LockedPackage, []error, error) {
 	var requests []projectRequest
 	appendRequest := func(environment types.Environment, ecosystem types.Ecosystem, ref string, r manifest.Requirement) error {
 		provider, project, err := manifest.ParseReference(ref)
@@ -108,23 +127,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	}
 	for _, r := range requests {
 		if r.key.environment == types.EnvironmentServer {
-			supported := false
-			switch server.Product {
-			case types.ServerProductFabric:
-				supported = r.key.ecosystem == types.EcosystemFabric
-			case types.ServerProductForge:
-				supported = r.key.ecosystem == types.EcosystemForge
-			case types.ServerProductNeoForge:
-				supported = r.key.ecosystem == types.EcosystemNeoForge
-			case types.ServerProductPaper, types.ServerProductPurpur:
-				supported = r.key.ecosystem == types.EcosystemPaper ||
-					r.key.ecosystem == types.EcosystemBukkit
-			default:
-				supported = server.Bootstrapper == "paperclip" &&
-					(r.key.ecosystem == types.EcosystemPaper ||
-						r.key.ecosystem == types.EcosystemBukkit)
-			}
-			if !supported {
+			if !SupportsPackages(server, r.key.ecosystem) {
 				for _, req := range r.requirements {
 					if req.Enabled {
 						return nil, nil, fmt.Errorf("product %s cannot load %s packages", server.Product, r.key.ecosystem)
@@ -387,30 +390,32 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				"modules", len(modules),
 			)
 			next := append([]projectRequest{}, rest...)
-			for _, dep := range candidate.Dependencies {
-				if dep.Kind == types.DependencyKindRequired || (withOptional && dep.Kind == types.DependencyKindOptional) {
-					var ids []string
-					if dep.ReleaseID != "" {
-						ids = append(ids, dep.ReleaseID)
-					}
-					dependency := projectRequest{
-						key: projectKey{
-							r.key.environment,
-							r.key.ecosystem,
-							dep.Provider,
-							dep.ProjectID,
-						}, releaseIDs: ids,
-					}
-					if dep.Kind == types.DependencyKindOptional {
-						dependency.requirements = []types.RequirementBinding{
-							{
-								Reference: dep.Provider.String() + ":" + dep.ProjectID,
-								Selector:  types.VersionStable,
-								Enabled:   true,
-							},
+			if expandDependencies {
+				for _, dep := range candidate.Dependencies {
+					if dep.Kind == types.DependencyKindRequired || (withOptional && dep.Kind == types.DependencyKindOptional) {
+						var ids []string
+						if dep.ReleaseID != "" {
+							ids = append(ids, dep.ReleaseID)
 						}
+						dependency := projectRequest{
+							key: projectKey{
+								r.key.environment,
+								r.key.ecosystem,
+								dep.Provider,
+								dep.ProjectID,
+							}, releaseIDs: ids,
+						}
+						if dep.Kind == types.DependencyKindOptional {
+							dependency.requirements = []types.RequirementBinding{
+								{
+									Reference: dep.Provider.String() + ":" + dep.ProjectID,
+									Selector:  types.VersionStable,
+									Enabled:   true,
+								},
+							}
+						}
+						next = append(next, dependency)
 					}
-					next = append(next, dependency)
 				}
 			}
 			if backtrack(next) {
