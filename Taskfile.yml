@@ -284,6 +284,11 @@ tasks:
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
+  e2e:compile:smoke:
+    desc: "Compile the fixtures marked smoke (args: -run 'TestCompile/<fixture id>')"
+    cmds:
+      - LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 0 ./e2e/compile {{.CLI_ARGS}}
+
   e2e:install:
     desc: "Run fresh and init-then-install scenarios (args: -run 'Test(Init)?Install/<scenario id>')"
     cmds:

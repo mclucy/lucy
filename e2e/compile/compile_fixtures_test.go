@@ -20,6 +20,13 @@ type repoFixture struct {
 	Commit    string `yaml:"commit"`
 	Ecosystem string `yaml:"ecosystem"`
 	Project   string `yaml:"project"`
+	// Smoke selects the fixture for CI's default compile layer.
+	Smoke bool `yaml:"smoke"`
+}
+
+type compileFixture struct {
+	ID string
+	repoFixture
 }
 
 // fixtureIDs lists every fixture manifest in repos, in directory order.
@@ -41,24 +48,43 @@ func fixtureIDs(t *testing.T, repos string) []string {
 	return ids
 }
 
-func executeCompile(t *testing.T, binary, repos, id string) {
+func selectFixtures(t *testing.T, repos string, smokeOnly bool) []compileFixture {
+	t.Helper()
+	ids := fixtureIDs(t, repos)
+	selected := make([]compileFixture, 0, len(ids))
+	for _, id := range ids {
+		fixture := readFixture(t, repos, id)
+		if smokeOnly && !fixture.Smoke {
+			continue
+		}
+		selected = append(selected, compileFixture{ID: id, repoFixture: fixture})
+	}
+	return selected
+}
+
+func readFixture(t *testing.T, repos, id string) repoFixture {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(repos, id+".yaml"))
 	if err != nil {
-		t.Fatalf("read compile fixture: %v", err)
+		t.Fatalf("read compile fixture %s: %v", id, err)
 	}
 	var fixture repoFixture
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&fixture); err != nil {
-		t.Fatalf("decode compile fixture: %v", err)
+		t.Fatalf("decode compile fixture %s: %v", id, err)
 	}
 	if fixture.URL == "" {
-		t.Fatal("fixture requires a repository URL")
+		t.Fatalf("fixture %s requires a repository URL", id)
 	}
 	if len(fixture.Commit) != 40 || strings.Trim(fixture.Commit, "0123456789abcdef") != "" {
-		t.Fatalf("fixture requires a full commit hash, got %q", fixture.Commit)
+		t.Fatalf("fixture %s requires a full commit hash, got %q", id, fixture.Commit)
 	}
+	return fixture
+}
+
+func executeCompile(t *testing.T, binary string, fixture compileFixture) {
+	t.Helper()
 	temporary := t.TempDir()
 	checkout := filepath.Join(temporary, "repository")
 	if err := os.Mkdir(checkout, 0o755); err != nil {
@@ -99,7 +125,7 @@ func executeCompile(t *testing.T, binary, repos, id string) {
 	if err != nil {
 		t.Fatalf("lucy compile: %v\n%s", err, output)
 	}
-	t.Logf("compiled %s (%s @ %s)", id, fixture.URL, fixture.Commit)
+	t.Logf("compiled %s (%s @ %s)", fixture.ID, fixture.URL, fixture.Commit)
 }
 
 func fixtureGit(t *testing.T, dir string, environment []string, args ...string) {
