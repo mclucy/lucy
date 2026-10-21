@@ -1,22 +1,23 @@
 //go:build integration
 
-package file_test
+package filetrack_test
 
 import (
 	"os"
 	"testing"
 
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/types"
 )
 
 func baseManifest(t *testing.T) *manifest.Document {
 	t.Helper()
 	return &manifest.Document{
-		Version: manifest.FormatVersion,
+		SchemaVersion: manifest.SchemaVersion,
 		Server: manifest.Server{
 			Minecraft: "1.21.4",
 			Directory: "server",
-			Core:      manifest.Core{Distribution: "vanilla"},
+			Core:      manifest.Core{Product: types.ServerProductMinecraft},
 		},
 	}
 }

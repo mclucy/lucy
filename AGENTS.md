@@ -25,8 +25,11 @@ task cipher:generate    # Generate cipher files from CF_API_KEY env var
 task ci:test            # CI checks (optional cipher:generate, then check)
 task ci:build           # CI release build + gzip artifacts
 task e2e:status         # Probe generated sandboxes with the built CLI
+task e2e:init           # Initialize modpack manifests from sandboxes
 task e2e:install        # Run fresh-install scenarios against pinned fixtures
 task e2e:compile        # Compile pinned repository fixtures
+task e2e:compile:smoke  # Compile only the fixtures marked smoke
+task e2e:filetrack      # Run hermetic file tracking scenarios
 task sandboxes:list     # List sandbox definitions
 task sandboxes:gen      # Materialize sandboxes into .sandboxes/
 ```
@@ -105,13 +108,16 @@ A new interactive surface ships with its flag equivalent in the same change. Use
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
 4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 
-The domain suites are Go tests behind the `e2e` build tag, so `go test ./...`
-stays unit-only. Build Lucy and generate the sandboxes first, then:
+The e2e domain suites are Go tests behind the `e2e` build tag, and the
+filetrack suite is behind `integration`, so `go test ./...` stays unit-only.
+Build Lucy and generate the sandboxes first, then:
 
 ```bash
-go test -tags e2e -count=1 ./e2e/status    # probe and initialize .sandboxes
+go test -tags e2e -count=1 ./e2e/status    # probe .sandboxes
+go test -tags e2e -count=1 ./e2e/init      # initialize modpack manifests
 go test -tags e2e -count=1 ./e2e/compile   # compile e2e/testdata/repo fixtures
 go test -tags e2e -count=1 ./e2e/install   # fresh and init-then-install scenarios
+go test -tags integration -count=1 ./e2e/filetrack  # hermetic file tracking scenarios
 ```
 
 Select cases with `-run`: `-run 'TestProbe/<sandbox id>'`,
@@ -121,13 +127,23 @@ A suite
 covers every case in its table and fails when its binary or a sandbox is
 missing; probes that need manually supplied artifacts skip instead.
 `TestInitialize` runs `lucy init` in a clone of each modpack sandbox and
-checks the manifest that the CLI writes. `TestInitInstall` initializes each
-sandbox in the install suite's table, then installs the generated manifest and
-lock in an empty workspace and verifies the runtime against them. `-count=1`
+checks the manifest and lock that the CLI writes. `TestInitInstall` initializes
+each sandbox in the install suite's table, then installs the generated manifest
+and lock in an empty workspace and verifies the runtime against them. CI runs
+the fresh install and the init-then-install chain as separate jobs so one
+cannot mask the other. `-count=1`
 disables the test cache, `-parallel N` bounds concurrency, and `-lucy` and
 `-sandboxes` override the `dist/lucy` and `.sandboxes` defaults.
-`e2e/internal/testkit` resolves those paths; `task e2e:status|compile|install` wrap
-the same commands.
+`e2e/internal/testkit` resolves those paths; `task e2e:status|init|compile|install` wrap
+the same commands. The filetrack suite builds its own debug binary and needs neither
+sandboxes nor a prebuilt CLI. CI selects the domains whose inputs changed from
+the path filters in `.github/workflows/e2e.yml` and runs each selected domain
+through the reusable runner.
+`TestCompile` runs every fixture by default. Fixtures marked `smoke: true`
+form the default CI layer; set `LUCY_COMPILE_LAYER=smoke` or run
+`task e2e:compile:smoke` to select only those. CI runs the smoke layer as one
+job and switches to the per-fixture full table when the pull request carries
+the `ci:compile-full` label.
 
 ### Sandbox CLI
 

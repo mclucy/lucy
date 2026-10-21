@@ -139,8 +139,8 @@ func main() {
 func validate(man *manifest) error {
 	seen := map[string]bool{}
 	for _, sb := range man.Sandboxes {
-		if sb.ID == "" {
-			return errors.New("sandbox without id")
+		if !filepath.IsLocal(sb.ID) || sb.ID == "." {
+			return fmt.Errorf("invalid sandbox id %q: must be a local path below the output root", sb.ID)
 		}
 		if seen[sb.ID] {
 			return fmt.Errorf("duplicate sandbox id %q", sb.ID)
@@ -245,6 +245,10 @@ func generateSandbox(sb sandbox, opts options) error {
 		fmt.Printf("[OK]   %s: %s\n", sb.ID, art.Dest)
 	}
 
+	if err := os.RemoveAll(outDir); err != nil {
+		return fmt.Errorf("clear %s: %w", outDir, err)
+	}
+
 	for _, dir := range sb.Dirs {
 		if err := os.MkdirAll(filepath.Join(outDir, dir), 0o755); err != nil {
 			return err
@@ -312,7 +316,11 @@ func materializeModpack(packPath, outDir string, opts options) error {
 	}
 
 	for _, file := range index.Files {
-		if file.Env.Server == "unsupported" {
+		// Create+ 6.0.0 Alpha f marks one client-only jar as "unknown" for both
+		// sides, which the pack format does not define. Skip it until the
+		// upstream metadata is corrected: the jar crashes a dedicated server.
+		// https://github.com/Sshmoob/Create-Plus/issues/80
+		if file.Env.Server == "unsupported" || file.Env.Server == "unknown" {
 			continue
 		}
 		if len(file.Downloads) == 0 {

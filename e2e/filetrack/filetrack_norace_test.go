@@ -1,5 +1,5 @@
 //go:build integration && !race
 
-package file_test
+package filetrack_test
 
 const lucyRaceInstrumented = false

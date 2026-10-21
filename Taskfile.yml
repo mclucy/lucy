@@ -270,19 +270,34 @@ tasks:
       - rm -rf .sandboxes
 
   e2e:status:
-    desc: "Probe sandboxes and initialize modpack manifests (args: -run 'TestProbe/<sandbox id>')"
+    desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/status {{.CLI_ARGS}}
+
+  e2e:init:
+    desc: "Initialize modpack manifests from sandboxes (args: -run 'TestInitialize/<modpack id>')"
+    cmds:
+      - go test -tags e2e -count=1 -timeout 0 ./e2e/init {{.CLI_ARGS}}
 
   e2e:compile:
     desc: "Compile pinned repository fixtures (args: -run 'TestCompile/<fixture id>')"
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
+  e2e:compile:smoke:
+    desc: "Compile the fixtures marked smoke (args: -run 'TestCompile/<fixture id>')"
+    cmds:
+      - LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 0 ./e2e/compile {{.CLI_ARGS}}
+
   e2e:install:
     desc: "Run fresh and init-then-install scenarios (args: -run 'Test(Init)?Install/<scenario id>')"
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
+
+  e2e:filetrack:
+    desc: "Run the hermetic file tracking and CLI transaction scenarios"
+    cmds:
+      - go test -tags integration -count=1 -timeout 0 ./e2e/filetrack ./filetrack {{.CLI_ARGS}}
 
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks

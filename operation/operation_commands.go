@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -93,6 +94,45 @@ func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[
 		}
 	}
 	return served
+}
+
+// servedEcosystemForFile reports the served loader whose descriptor the file
+// carries. A jar without a top-level descriptor can declare its loader inside
+// a JarJar container, while the upstream project label may name a loader the
+// server does not offer.
+func servedEcosystemForFile(
+	ctx context.Context,
+	path string,
+	served map[types.Ecosystem]struct{},
+) (types.Ecosystem, bool) {
+	for _, ecosystem := range slices.Sorted(maps.Keys(served)) {
+		if ecosystem == types.EcosystemMCDR {
+			continue
+		}
+		modules, err := artifact.ReadModules(ctx, path, ecosystem)
+		if err != nil {
+			continue
+		}
+		for _, module := range modules {
+			if loaderSpecificDescriptor(module) {
+				return ecosystem, true
+			}
+		}
+	}
+	return types.EcosystemUnspecified, false
+}
+
+// loaderSpecificDescriptor reports whether a module's descriptor names the
+// loader that read it. Forge and NeoForge share META-INF/mods.toml, so only a
+// loader dependency declared inside it identifies the loader.
+func loaderSpecificDescriptor(module types.DescriptorModule) bool {
+	if module.DescriptorPath != "META-INF/mods.toml" {
+		return true
+	}
+	loader := module.Ecosystem.String()
+	return slices.ContainsFunc(module.Dependencies, func(dep types.DescriptorDependency) bool {
+		return dep.ID == loader
+	})
 }
 
 func commandReference(d *manifest.Document, old *lockfile.Document, raw string, ecosystem types.Ecosystem) (string, types.Version, error) {
@@ -325,7 +365,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		ecosystem := p.ID.Ecosystem
 		if ecosystem != types.EcosystemMCDR {
 			if _, ok := served[ecosystem]; !ok {
-				continue
+				var adopted bool
+				ecosystem, adopted = servedEcosystemForFile(ctx, p.Path, served)
+				if !adopted {
+					continue
+				}
 			}
 		}
 		modules, err := artifact.ReadModules(ctx, p.Path, ecosystem)

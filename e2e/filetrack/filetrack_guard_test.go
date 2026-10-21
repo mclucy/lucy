@@ -1,6 +1,6 @@
 //go:build integration
 
-package file_test
+package filetrack_test
 
 import (
 	"testing"
@@ -23,15 +23,15 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 	w.write(t, "server/server.jar", core, 0o644)
 	w.write(t, "server/server.properties", []byte("level-name=world\n"), 0o644)
 	lock := &lockfile.Document{
-		Version:             lockfile.FormatVersion,
+		SchemaVersion:       lockfile.SchemaVersion,
 		ManifestFingerprint: "sha256:" + digestHex([]byte("a manifest fingerprint")),
 		Server: lockfile.Server{
-			Minecraft:    "1.21.4",
-			Directory:    "server",
-			Distribution: "vanilla",
-			CoreVersion:  "1.21.4",
+			Minecraft:   "1.21.4",
+			Directory:   "server",
+			Product:     types.ServerProductMinecraft,
+			CoreVersion: "1.21.4",
 			Artifact: types.Artifact{
-				Provider: "vanilla",
+				Provider: types.ProviderMojang,
 				Version:  "1.21.4",
 				Filename: "server.jar",
 				URL:      "https://example.invalid/server.jar",
@@ -144,15 +144,15 @@ func TestStaleLockRuntimeBlocksFileWritesWhileActive(t *testing.T) {
 	source := newSourceServer(t, replacement)
 	w.write(t, "config/rules.txt", accepted, 0o644)
 	lock := &lockfile.Document{
-		Version:             lockfile.FormatVersion,
+		SchemaVersion:       lockfile.SchemaVersion,
 		ManifestFingerprint: fingerprint,
 		Server: lockfile.Server{
-			Minecraft:    "1.21.4",
-			Directory:    "server-lock",
-			Distribution: "vanilla",
-			CoreVersion:  "1.21.4",
+			Minecraft:   "1.21.4",
+			Directory:   "server-lock",
+			Product:     types.ServerProductMinecraft,
+			CoreVersion: "1.21.4",
 			Artifact: types.Artifact{
-				Provider: "vanilla",
+				Provider: types.ProviderMojang,
 				Version:  "1.21.4",
 				Filename: "server.jar",
 				URL:      "https://example.invalid/server.jar",

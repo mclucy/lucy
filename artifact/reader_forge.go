@@ -23,12 +23,19 @@ func (r *forgeReader) Read(
 	filePath string,
 ) ([]PackageInfo, error) {
 	_ = r
+	neoforgeLayout := false
+	for _, file := range zipRdr.File {
+		if file.Name == neoforgeModsTomlPath {
+			neoforgeLayout = true
+			break
+		}
+	}
 	for _, file := range zipRdr.File {
 		if file.Name != "META-INF/mods.toml" {
 			continue
 		}
 
-		return readForgeModsToml(zipRdr, file, filePath)
+		return readForgeModsToml(zipRdr, file, filePath, neoforgeLayout)
 	}
 
 	return nil, nil
@@ -38,6 +45,7 @@ func readForgeModsToml(
 	zipRdr *zip.Reader,
 	file *zip.File,
 	filePath string,
+	neoforgeLayout bool,
 ) ([]PackageInfo, error) {
 	reader, err := file.Open()
 	if err != nil {
@@ -56,12 +64,12 @@ func readForgeModsToml(
 	}
 	// Forge and legacy NeoForge share META-INF/mods.toml. Forge docs identify the
 	// loader with modId="forge"; legacy NeoForge uses modId="neoforge" instead.
+	// Modern NeoForge ships META-INF/neoforge.mods.toml beside the shared file,
+	// so that file alone decides the loader unless the shared file names Forge.
 	// Docs: https://docs.minecraftforge.net/en/1.21.x/gettingstarted/modfiles/
 	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
-	if isNeoforgeModIdentifier(modIdentifier) && !hasLoaderDependency(
-		modIdentifier,
-		"forge",
-	) {
+	if !hasLoaderDependency(modIdentifier, "forge") &&
+		(neoforgeLayout || isNeoforgeModIdentifier(modIdentifier)) {
 		return nil, nil
 	}
 

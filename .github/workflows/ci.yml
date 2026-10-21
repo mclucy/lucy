@@ -5,13 +5,15 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   test:
-    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
+    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:')) && !(github.event_name == 'pull_request' && github.event.action == 'labeled')"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -44,7 +46,7 @@ jobs:
           label: code-coverage/go
 
   build:
-    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
+    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:')) && !(github.event_name == 'pull_request' && github.event.action == 'labeled')"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -87,3 +89,18 @@ jobs:
         with:
           name: lucy-darwin-arm64
           path: release/lucy-darwin-arm64.gz
+
+  e2e:
+    if: >-
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full'))
+      || (
+        !startsWith(github.event.head_commit.message, 'docs:')
+        && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))
+        && !(github.event_name == 'pull_request' && github.event.action == 'labeled')
+      )
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/e2e.yml
+    secrets:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}

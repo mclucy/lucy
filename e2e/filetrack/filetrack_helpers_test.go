@@ -1,6 +1,6 @@
 //go:build integration
 
-package file_test
+package filetrack_test
 
 import (
 	"archive/zip"
@@ -188,7 +188,7 @@ func (w workspace) manifestFingerprint(t *testing.T) string {
 
 func (w workspace) writeLock(t *testing.T, doc *lockfile.Document) {
 	t.Helper()
-	if err := lockfile.Validate(doc); err != nil {
+	if err := doc.Validate(); err != nil {
 		t.Fatalf("fixture lock is invalid: %v", err)
 	}
 	data, err := yaml.Marshal(doc)
@@ -284,11 +284,11 @@ func (w workspace) requireReceiptEntries(t *testing.T, want ...receiptEntry) {
 func (w workspace) seedNativeRuntime(t *testing.T, files ...types.TrackedFile) (*manifest.Document, *lockfile.Document, []byte) {
 	t.Helper()
 	doc := &manifest.Document{
-		Version: manifest.FormatVersion,
+		SchemaVersion: manifest.SchemaVersion,
 		Server: manifest.Server{
 			Minecraft: "1.21.4",
 			Directory: "server",
-			Core:      manifest.Core{Distribution: "vanilla"},
+			Core:      manifest.Core{Product: types.ServerProductMinecraft},
 		},
 		Files: files,
 	}
@@ -296,15 +296,15 @@ func (w workspace) seedNativeRuntime(t *testing.T, files ...types.TrackedFile) (
 	core := []byte("miniature server core bytes\n")
 	w.write(t, "server/server.jar", core, 0o644)
 	lock := &lockfile.Document{
-		Version:             lockfile.FormatVersion,
+		SchemaVersion:       lockfile.SchemaVersion,
 		ManifestFingerprint: fingerprint,
 		Server: lockfile.Server{
-			Minecraft:    "1.21.4",
-			Directory:    "server",
-			Distribution: "vanilla",
-			CoreVersion:  "1.21.4",
+			Minecraft:   "1.21.4",
+			Directory:   "server",
+			Product:     types.ServerProductMinecraft,
+			CoreVersion: "1.21.4",
 			Artifact: types.Artifact{
-				Provider: "vanilla",
+				Provider: types.ProviderMojang,
 				Version:  "1.21.4",
 				Filename: "server.jar",
 				URL:      "https://example.invalid/server.jar",
@@ -653,8 +653,8 @@ func miniVanillaJar(t *testing.T, id string) []byte {
 }
 
 const (
-	helperModeEnv = "LUCY_FILE_TEST_HELPER"
-	helperLockEnv = "LUCY_FILE_TEST_LOCK"
+	helperModeEnv = "LUCY_FILETRACK_TEST_HELPER"
+	helperLockEnv = "LUCY_FILETRACK_TEST_LOCK"
 )
 
 // TestFileHelperProcess is the child mode of the helper process. A normal run
