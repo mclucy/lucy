@@ -28,6 +28,7 @@ task e2e:status         # Probe generated sandboxes with the built CLI
 task e2e:init           # Initialize modpack manifests from sandboxes
 task e2e:install        # Run fresh-install scenarios against pinned fixtures
 task e2e:compile        # Compile pinned repository fixtures
+task e2e:compile:smoke  # Compile only the fixtures marked smoke
 task e2e:filetrack      # Run hermetic file tracking scenarios
 task sandboxes:list     # List sandbox definitions
 task sandboxes:gen      # Materialize sandboxes into .sandboxes/
@@ -138,6 +139,11 @@ the same commands. The filetrack suite builds its own debug binary and needs nei
 sandboxes nor a prebuilt CLI. CI selects the domains whose inputs changed from
 the path filters in `.github/workflows/e2e.yml` and runs each selected domain
 through the reusable runner.
+`TestCompile` runs every fixture by default. Fixtures marked `smoke: true`
+form the default CI layer; set `LUCY_COMPILE_LAYER=smoke` or run
+`task e2e:compile:smoke` to select only those. CI runs the smoke layer as one
+job and switches to the per-fixture full table when the pull request carries
+the `ci:compile-full` label.
 
 ### Sandbox CLI
 
