@@ -1,30 +1,24 @@
-
-                              .!!;
-                           ;^ ^~_^  ;
-                       ;|__|^"|__|--|__|!
-                    ^^ __||_    -   ^^^^^ ^^
-               .!^   -|_|||~~          -||-.   |.
-            !|_|__   ^~^^   ^-|__|-^    ^_^   ^--||!.
-        ;,   ^~|||||-_  ^  ^   ^^     -|__|-^    ^^   _y.
-        |_|y__--____|^^    .-_-___||__ ^  ^^ _||-___qRQQ,
-        T1_}AA1v_~~      ^ ~||~--~||~~       ~~jq#QQQgQQ,
-        g*#NMM|||||-_    ^^    __    ^^    _q#QQQQgMMMQQ,
-        ENME@NAATy_|||1y_^ _-||||||-_ ^_y###QQQQQQ@MMMQQ,
-        EN@MMMMgg###I1|AA#1|_|^^^^|_j#RQQQQQQQQgg@MMMMgML
-        EEENMM@NNMMgAAA||T_||#1__q#QQg9QQQQQQQQ@MMMMMMMML
-        EENEEEEEENMN|||g_|EMMTAA9#QMMMMQgMMMMQg@MMMMMMMML
-        ENENNNMMEEMMMg|ENMENN|||QQQ@MMMMMMMMMMMMMMMMMMMML
-        EEMEE@NNNEEMNNNEENNEET1|ggMMMMMMMMMMMMMMMMMMMMMML
-        EMMNEENNNMEEEEE@EEEEEgAAMMMMMMMMMMMMMMMMMMMMMMMML
-        MEEEEENNNNNMENEEMEMMEEMMMMMMMMMMMMMMMMMMMMMMMMMML
-        ENNEEENNNENMMMMMMMENNNNNMMMMMMMMMMMMMMMMMMMMMMMML
-        ~?@NEEQE@MEMEMQEEEEENNNNMMMMMMMMMMMMMMMMMMMMMMF]
-            ~F@MMENMEEEMMEEEEEEEMMMMMMMMMMMMMMMMMMF]
-                ~E@EEEMMMEEEEEEEMMMMMMMMMMMMMM@~`
-                    ?@@EEEMEEEEEMMMMMMMMMM@K~
-                       `?@@NNENEMMMMMMMF~
-                           ~~@EEMMMF]
-                               ~]
-     
-     
-     
+                 ..|j@@@i|;.
+              .;|jg@@@@@@@gy|;.
+          ..;|g@@@@@@@@@@@@@@@g|;..
+       .;|jg@@@@@@@@@@@@@@@@@@@@@gy|;.
+    .;|gg@@@@@@@@@@@@@@@@@@@@@@@@@@@@g|;..
+ .;jg@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@gi;.
+.|@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@b[:.
+.*%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#TT%==:.
+.!]T[%T@@@@@@@@@@@@@@@@@@@@@@@@@@@#T%%%====:.
+.:=%%%%{@@@@@@@@@@@@@@@@@@@@@@@#T%%%%%+*+==:.
+.:=%%%%%%]TT@@@@@@@@@@@@@@@#T[%%%%%%=[***]|:.
+.:=%%%%%%%%%%@@@@@@@@@@@T[%%%%%%%%%=*******:
+.:=%%%%%%%%%%@@@#}%TT@T%%=[]=i[+]==|*******:
+.:=%%%%%%%%%%T}%%%%%@@%%%******************:
+.:=%%%%%%%%%%%%%%%%%{T%=|******************:
+.:=%%%%%%%%%%%%%%%%%%%%+*******************:
+.:=%%%%%%%%%%%%%%%%%%%[********************:
+.:+%%%%%%%%%%%%%%%%%%%********************:-
+ .'!]]%%%%%%%%%%%%%%%%******************::-
+    .'!!]]%%%%%%%%%%%%[*************:::.
+       .''!]]%%%%%%%%%%**********::-.
+           .'!!]=%%%%%%*******::..
+              .'!!]]%%%***::-.
+                  .'!]=::-.

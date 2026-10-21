@@ -2,11 +2,8 @@ package terminal
 
 import (
 	"embed"
-	"encoding/hex"
-	"html"
 	"io/fs"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -129,6 +126,9 @@ func normalizeLines(raw string) []string {
 	return lines
 }
 
+// The logo assets are generated from assets/logos.yaml by tools/genlogo.
+// Colored assets carry their own SGR escapes.
+//
 //go:embed assets/large_plain/*.txt assets/small_plain/*.txt assets/large_colored/*.txt assets/small_colored/*.txt
 var logoAssets embed.FS
 
@@ -147,11 +147,7 @@ func loadEmbeddedLogoAssets() map[string]string {
 		if err != nil {
 			return err
 		}
-		text := string(data)
-		if strings.Contains(path, "_colored/") {
-			text = convertColoredLogo(text)
-		}
-		assets[strings.TrimPrefix(path, "assets/")] = text
+		assets[strings.TrimPrefix(path, "assets/")] = string(data)
 		return nil
 	})
 	if err != nil {
@@ -161,8 +157,7 @@ func loadEmbeddedLogoAssets() map[string]string {
 }
 
 // GetLogo returns the logo for the server product, ecosystem, Minecraft
-// version, and variant. Falls back to the plain variant when the colored
-// variant has no asset.
+// version, and variant.
 func GetLogo(
 	product types.ServerProduct,
 	ecosystem types.Ecosystem,
@@ -173,21 +168,11 @@ func GetLogo(
 	if name == "" {
 		return ""
 	}
-
 	directory, ok := logoVariantDirectory(variant)
 	if !ok {
 		return ""
 	}
-	if logo, ok := embeddedLogoAssets[directory+"/"+name+".txt"]; ok {
-		return logo
-	}
-	if variant == LogoLargeColored {
-		return embeddedLogoAssets["large_plain/"+name+".txt"]
-	}
-	if variant == LogoSmallColored {
-		return embeddedLogoAssets["small_plain/"+name+".txt"]
-	}
-	return ""
+	return embeddedLogoAssets[directory+"/"+name+".txt"]
 }
 
 func logoVariantDirectory(variant LogoVariant) (string, bool) {
@@ -250,26 +235,6 @@ func logoAssetName(
 	default:
 		return ""
 	}
-}
-
-var (
-	coloredLogoTagPattern   = regexp.MustCompile(`\[/?(?:size|font)[^\]]*\]|<[^>]*>`)
-	coloredLogoColorPattern = regexp.MustCompile(`(?s)\[color=#([0-9a-fA-F]{6})\](.*?)\[/color\]`)
-)
-
-func convertColoredLogo(raw string) string {
-	raw = html.UnescapeString(raw)
-	raw = coloredLogoColorPattern.ReplaceAllStringFunc(raw, func(match string) string {
-		parts := coloredLogoColorPattern.FindStringSubmatch(match)
-		color, err := hex.DecodeString(parts[1])
-		if err != nil {
-			return parts[2]
-		}
-		return "\x1b[38;2;" + strconv.Itoa(int(color[0])) + ";" +
-			strconv.Itoa(int(color[1])) + ";" + strconv.Itoa(int(color[2])) +
-			"m" + parts[2] + "\x1b[0m"
-	})
-	return coloredLogoTagPattern.ReplaceAllString(raw, "")
 }
 
 var snapshotVersionPattern = regexp.MustCompile(`^\d\dw\d+[a-z]$`)

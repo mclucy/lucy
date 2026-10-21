@@ -1,30 +1,24 @@
-
-                                M%_
-                                $MMMMp_
-                                $MMMMMMMMm,
-                                ^WMMMMMMMMMMMx.
-                                    ^NMMMMMMMMMMMc
-                                        ?MMMMMMMMMMMM_
-        ,                      ,;          `?MMMMMMMMMMM,
-        WWNu,              ,/W####W{,          ~YMMMMMMM'
-        WWWWWW         ,/A############W>,         $MMMMM'
-        WWWWWW       "W##################W)       $MMMMM'
-        WWWWWW      [!,.^{W###########V"`,/W      $MMMMM'
-        WWWWWW      ||||[!.."V####V"`,/WWWWW      $MMMMM'
-        WWWWWW      ||||||||[;.``,\VWWWWWWWW      $MMMMM'
-        WWWWWW      |||||||||||, WWWWWWWWWWW      $MMMMM'
-        WWWWWW      |||||||||||, WWWWWWWWWWW      $MMMMM'
-        WWWWWW      |||||||||||, WWWWWWWWWWW      $MMMMM'
-        WWWWWW        "[|||||||, WWWWWWWW?^       $MMMMM'
-        WWWWWW,          `![|||, WWWWV"           *MMMMM'
-        WWWWWWWWWv.          `\' V"                  "NM'
-        `?%WWWWWWWWNXv
-            ^V%WWWWWWWWNk,
-                ^*NWWWWWWWWNu,
-                    "WNWWWWWWWW%
-                        "WWWWWWW
-                           `?%WW
-                               ^
-     
-     
-     
+                     @g,
+                     @@@@gy,
+                     @@@@@@@@g,
+                     'TT@@@@@@@@gy_
+                         ?T#@@@@@@@gg,
+                            'T#@@@@@@@@g,_
+|;,               ,;ii;,        ?T#@@@@@@b
+*+++|.        _,y========i,_       `T@@@@b
+*++++:     .;i==============i;,     ]@@@@b
+*++++:    .,'"Y============Y"`,.    ]@@@@b
+*++++:    :**|;,"Yi====iY".;|**:    ]@@@@b
+*++++:    :******;,'""`,;******:    ]@@@@b
+*++++:    :*********::*********:    ]@@@@b
+*++++:    :*********::*********:    ]@@@@b
+*++++:    :*********::*********:    ]@@@@b
+*++++:     ''!******::******!'`     ]@@@@b
+*++++;_        '!***::***!'         ?#@@@b
+*++++++|;,        '!::!`               7Tb
+ '!i+++++++|,_
+    '!!+++++++|;,
+        '!++++++++|,_
+           '!!+++++++
+               '!++++
+                  '!i

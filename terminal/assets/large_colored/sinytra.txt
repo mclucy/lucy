@@ -1,29 +1,24 @@
-[size=9px][font=monospace][color=#808080]<span style="color:#808080">                  [/color][color=#979797]_[/color][color=#adadad]a[/color][color=#b8b8b8]a[/color][color=#b8b8b8]#[/color][color=#b6b6b6]F[/color][color=#b4b4b4]F[/color][color=#b7b7b7]F[/color][color=#b4b4b4]T[/color][color=#b4b4b4]T[/color][color=#b3b3b3]T[/color][color=#b3b3b3]T[/color][color=#b5b5b5]T[/color][color=#b4b4b4]T[/color][color=#b6b6b6]T[/color][color=#b5b5b5]F[/color][color=#b6b6b6]F[/color][color=#b7b7b7]%[/color][color=#b8b8b8]a[/color][color=#b2b2b2]g[/color][color=#9d9d9d]_[/color]</span>
-[color=#808080][/color][color=#808080]              [/color][color=#b0b0b0]g[/color][color=#bcbcbc]@[/color][color=#bcbcbc]F[/color][color=#adadad][[/color][color=#949494]`                   [/color][color=#aaaaaa]][/color][color=#bdbdbd]F[/color][color=#bebebe]M[/color][color=#b6b6b6]g[/color][color=#939393]_[/color]
-[color=#808080][/color][color=#808080]          [/color][color=#919191]_[/color][color=#bebebe]g[/color][color=#c1c1c1]F[/color][color=#a6a6a6]]                            [/color][color=#a1a1a1]~[/color][color=#c1c1c1]F[/color][color=#c2c2c2]M[/color][color=#9a9a9a]_[/color]
-[color=#808080][/color][color=#808080]        [/color][color=#aeaeae]g[/color][color=#cccccc]M[/color][color=#a8a8a8]]                                  [/color][color=#9f9f9f]~[/color][color=#c7c7c7]N[/color][color=#b6b6b6]g[/color]
-[color=#808080][/color][color=#808080]      [/color][color=#aeaeae]g[/color][color=#cccccc]B[/color][color=#969696]`                                       [/color][color=#cacaca]N[/color][color=#bbbbbb]g[/color]
-[color=#808080][/color][color=#808080]    [/color][color=#919191]_[/color][color=#d6d6d6]@[/color][color=#9a9a9a]~                                           [/color][color=#d7d7d7]M[/color][color=#9f9f9f]_[/color]
-[color=#808080][/color][color=#808080]   [/color][color=#adadad]g[/color][color=#cfcfcf]K                                              [/color][color=#bbbbbb]$[/color][color=#c3c3c3]g[/color]
-[color=#808080][/color][color=#808080]  [/color][color=#bcbcbc]g[/color][color=#bcbcbc]C                         [/color][color=#c5ab3e]4                      [/color][color=#a5a5a5]~[/color][color=#d3d3d3]g[/color]
-[color=#808080][/color][color=#808080] [/color][color=#a8a8a8]j[/color][color=#c7c7c7]K                        [/color][color=#bba547]x[/color][color=#f0c614]M                        [/color][color=#ababab]J[/color][color=#c1c1c1]K[/color]
-[color=#858585][/color][color=#858585] [/color][color=#f0f0f0]M                       [/color][color=#a8995b]_[/color][color=#f2c712]M[/color][color=#f1c613]M       [/color][color=#9a9068],[/color][color=#af9e55]i                 [/color][color=#dadada]$[/color][color=#939393],[/color]
-[color=#c1c1c1][/color][color=#c1c1c1]@[/color][color=#a8a8a8]L                      [/color][color=#e3bd21]M[/color][color=#ffcf06]M[/color][color=#efc515]M [/color][color=#948d6f]_[/color][color=#a8995b]_[/color][color=#bda748]m[/color][color=#d2b332]M[/color][color=#e6c01e]M[/color][color=#facc0a]M[/color][color=#ffcf06]M[/color][color=#e8c11c]M                   [/color][color=#dddddd]K[/color]
-[color=#f1f1f1][/color][color=#f1f1f1]@                     [/color][color=#d0b234]4[/color][color=#ffcf06]M[/color][color=#ffcf06]M[/color][color=#ffcf06]M[/color][color=#ffcf06]MM[/color][color=#f6c90e]M[/color][color=#dfbb25]M[/color][color=#e3bd21]N[/color][color=#ffcf06]M[/color][color=#ffcf06]M[/color][color=#fdce08]M[/color][color=#b7a24b]}                    [/color][color=#f7f7f7]@[/color]
-[color=#ffffff][/color][color=#ffffff]@                   [/color][color=#bca546]a[/color][color=#fccd09]M[/color][color=#f8ca0d]M[/color][color=#e0bc24]M[/color][color=#c9ad3b]F[/color][color=#b19e51]"[/color][color=#9a9068]`  [/color][color=#98906c];[/color][color=#facc0b]M[/color][color=#ffcf06]M[/color][color=#deba25]M                      [/color][color=#e6e6e6]@[/color]
-[color=#fefefe][/color][color=#fefefe]@                  [/color][color=#a6985b]"[/color][color=#9b9166]`       [/color][color=#9d9264]_[/color][color=#fccd09]M[/color][color=#f9cb0c]M[/color][color=#ac9b56]^                       [/color][color=#e9e9e9]@[/color]
-[color=#dfdfdf][/color][color=#dfdfdf]@                          [/color][color=#a5975d]_[/color][color=#fece07]M[/color][color=#d3b330]K                         [/color][color=#f8f8f8]B[/color]
-[color=#a2a2a2][/color][color=#a2a2a2]~[/color][color=#c5c5c5]K                        [/color][color=#ad9c55]j[/color][color=#f3c811]M[/color][color=#a19562]~                         [/color][color=#a9a9a9]{[/color][color=#bcbcbc]B[/color]
-[color=#808080][/color][color=#808080] [/color][color=#e3e3e3]@[/color][color=#929292],                      [/color][color=#b7a24c]j[/color][color=#c7ac3b]F                           [/color][color=#ededed]@[/color]
-[color=#808080][/color][color=#808080]  [/color][color=#e7e7e7]@                     [/color][color=#ad9c56]/[/color][color=#978f6b]'                           [/color][color=#dfdfdf]@[/color][color=#939393]`[/color]
-[color=#808080][/color][color=#808080]   [/color][color=#e3e3e3]@                                                [/color][color=#dcdcdc]@[/color][color=#959595]`[/color]
-[color=#808080][/color][color=#808080]    [/color][color=#d5d5d5]N[/color][color=#aaaaaa]L                                            [/color][color=#999999]_[/color][color=#dbdbdb]M[/color]
-[color=#808080][/color][color=#808080]     [/color][color=#a8a8a8][[/color][color=#d1d1d1]@[/color][color=#919191],                                         [/color][color=#c9c9c9]@[/color][color=#b8b8b8]D[/color]
-[color=#808080][/color][color=#808080]       [/color][color=#b7b7b7]J[/color][color=#c9c9c9]M[/color][color=#969696]_                                     [/color][color=#c3c3c3]@[/color][color=#c1c1c1]F[/color]
-[color=#808080][/color][color=#808080]         [/color][color=#a6a6a6][[/color][color=#c7c7c7]M[/color][color=#b3b3b3]g                                [/color][color=#adadad]a[/color][color=#c5c5c5]M[/color][color=#afafaf]][/color]
-[color=#808080][/color][color=#808080]            [/color][color=#adadad][[/color][color=#bfbfbf]N[/color][color=#bdbdbd]g[/color][color=#9e9e9e]_                        [/color][color=#989898]_[/color][color=#bababa]g[/color][color=#c0c0c0]F[/color][color=#b4b4b4]T[/color]
-[color=#808080][/color][color=#808080]                [/color][color=#afafaf]][/color][color=#b8b8b8]F[/color][color=#b8b8b8]%[/color][color=#b7b7b7]a[/color][color=#acacac]q[/color][color=#979797]_            [/color][color=#979797]_[/color][color=#a8a8a8]a[/color][color=#b7b7b7]g[/color][color=#bbbbbb]@[/color][color=#b9b9b9]F[/color][color=#b4b4b4]P[/color][color=#949494]`[/color]
-[color=#808080][/color][color=#808080]                      [/color][color=#9e9e9e]~[/color][color=#a8a8a8]][/color][color=#b3b3b3]T[/color][color=#b5b5b5]T[/color][color=#b6b6b6]T[/color][color=#b5b5b5]T[/color][color=#b5b5b5]T[/color][color=#b6b6b6]T[/color][color=#b3b3b3]T[/color][color=#b4b4b4]T[/color][color=#ababab]][/color][color=#a0a0a0]~[/color][color=#939393]`[/color]
-[color=#808080][/color][color=#808080] [/color]
-
-[/font][/size]
+               ,y=+**"TTTT"**+=y,
+           ,yYT`                `?Yx,
+        _yY`                        '?q,
+      ,d"                              ?o,
+    _y"                                  ?q,
+   jY                     j#               Y,
+  jT                    _@T                 ?;
+ jl                    y[38;2;231;184;0m{[39md`                  ?;[0m
+ [                   ,d[38;2;231;184;0m}[39md`    _,y             b[0m
+j`                 _y[38;2;231;184;0m[%[39m@_,y[38;2;231;184;0mad[39mT[38;2;231;184;0m][39md`             !L[0m
+d                 j[38;2;231;184;0md%%{[39mT[38;2;231;184;0m[%%%%g[39mT                b[0m
+b               _@[38;2;231;184;0m}%{gdY[39mT@[38;2;231;184;0m%%[39m@`                 d[0m
+b              g@[38;2;231;184;0m#[39mYT`  .d[38;2;231;184;0m%{[39mT`                  d[0m
+b              `       d[38;2;231;184;0m%@[39m"                    b[0m
+];                    d[38;2;231;184;0m{[39m#`                    :l[0m
+ b                   d[38;2;231;184;0m@[39mT                      d[0m
+ ?L                 @d`                      jl
+  ?y               gT                       jl
+   ?q             d"                       y`
+    'Y,                                  jY`
+      "b,                              jd`
+        'Yq,                        _yY`
+           "Yx,,                _jxY`
+               `?*+=yy,,,,yy=+*T`
