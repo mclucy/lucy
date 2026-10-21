@@ -312,7 +312,11 @@ func materializeModpack(packPath, outDir string, opts options) error {
 	}
 
 	for _, file := range index.Files {
-		if file.Env.Server == "unsupported" {
+		// Create+ 6.0.0 Alpha f marks one client-only jar as "unknown" for both
+		// sides, which the pack format does not define. Skip it until the
+		// upstream metadata is corrected: the jar crashes a dedicated server.
+		// https://github.com/Sshmoob/Create-Plus/issues/80
+		if file.Env.Server == "unsupported" || file.Env.Server == "unknown" {
 			continue
 		}
 		if len(file.Downloads) == 0 {

@@ -6,14 +6,16 @@ Covers sandboxes: `cobblemon-1211`, `create-plus-1211`.
 
 Each sandbox pins one Modrinth pack archive with `modpack: true`. The sandbox
 tool reads `modrinth.index.json`, downloads every file whose `env.server` is
-not `unsupported` to its declared path, and unpacks `overrides/` and
-`server-overrides/` at the root. The loader artifact lands beside the pack
-files.
+`required` or `optional` to its declared path, and unpacks `overrides/` and
+`server-overrides/` at the root. Create+ 6.0.0 Alpha f has one entry with
+`unknown` side metadata, which the pack format does not define; the tool skips
+it until the upstream pack is corrected. The loader artifact lands beside the
+pack files.
 
 | Sandbox          | Pack                                        | Loader           | Server files |
 | ---------------- | ------------------------------------------- | ---------------- | ------------ |
 | cobblemon-1211   | Cobblemon Official Modpack [Fabric] 1.8.2   | Fabric 0.19.5    | 34 mods      |
-| create-plus-1211 | Create+ 6.0.0 Alpha f                       | NeoForge 21.1.233 | 106 mods    |
+| create-plus-1211 | Create+ 6.0.0 Alpha f                       | NeoForge 21.1.233 | 105 mods    |
 
 Generation verifies each downloaded file against the sha512 in the pack
 index. The pack archive itself is pinned by sha256 in the manifest.
