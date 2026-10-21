@@ -153,66 +153,67 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 		if err != nil {
 			return nil, err
 		}
-		if raw == nil {
-			return nil, nil
-		}
-		var d struct {
-			Mods []struct {
-				ID      string `toml:"modId"`
-				Version string `toml:"version"`
-			} `toml:"mods"`
-			Dependencies map[string][]struct {
-				ID        string `toml:"modId"`
-				Mandatory bool   `toml:"mandatory"`
-				Type      string `toml:"type"`
-				Range     string `toml:"versionRange"`
-				Ordering  string `toml:"ordering"`
-				Side      string `toml:"side"`
-			} `toml:"dependencies"`
-		}
-		if err := toml.Unmarshal(raw, &d); err != nil {
-			return nil, err
-		}
 		var out []types.DescriptorModule
-		for _, mod := range d.Mods {
-			v := types.Version(mod.Version)
-			if v == "${file.jarVersion}" {
-				data, err := nativeEntry(z, "META-INF/MANIFEST.MF")
-				if err != nil {
-					return nil, err
-				}
-				v = forgeManifestVersion(string(data))
+		if raw != nil {
+			var d struct {
+				Mods []struct {
+					ID      string `toml:"modId"`
+					Version string `toml:"version"`
+				} `toml:"mods"`
+				Dependencies map[string][]struct {
+					ID        string `toml:"modId"`
+					Mandatory bool   `toml:"mandatory"`
+					Type      string `toml:"type"`
+					Range     string `toml:"versionRange"`
+					Ordering  string `toml:"ordering"`
+					Side      string `toml:"side"`
+				} `toml:"dependencies"`
 			}
-			m := types.DescriptorModule{
-				ID:             mod.ID,
-				Version:        v,
-				Ecosystem:      loader,
-				VersionDialect: types.VersionDialectMaven,
-				NestedPath:     member,
-				DescriptorPath: name,
-				Dependencies:   []types.DescriptorDependency{},
+			if err := toml.Unmarshal(raw, &d); err != nil {
+				return nil, err
 			}
-			for _, dep := range d.Dependencies[mod.ID] {
-				if types.ParseSide(dep.Side) == types.SideClient {
-					continue
-				}
-				kind := types.ParseDependencyKind(dep.Type)
-				if kind == types.DependencyKindUnknown {
-					kind = types.DependencyKindOptional
-					if dep.Mandatory {
-						kind = types.DependencyKindRequired
+			for _, mod := range d.Mods {
+				v := types.Version(mod.Version)
+				if v == "${file.jarVersion}" {
+					data, err := nativeEntry(z, "META-INF/MANIFEST.MF")
+					if err != nil {
+						return nil, err
 					}
+					v = forgeManifestVersion(string(data))
 				}
-				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
-					ID:         dep.ID,
-					Constraint: dep.Range,
-					Kind:       kind,
-					Ordering:   dep.Ordering,
-				})
+				m := types.DescriptorModule{
+					ID:             mod.ID,
+					Version:        v,
+					Ecosystem:      loader,
+					VersionDialect: types.VersionDialectMaven,
+					NestedPath:     member,
+					DescriptorPath: name,
+					Dependencies:   []types.DescriptorDependency{},
+				}
+				for _, dep := range d.Dependencies[mod.ID] {
+					if types.ParseSide(dep.Side) == types.SideClient {
+						continue
+					}
+					kind := types.ParseDependencyKind(dep.Type)
+					if kind == types.DependencyKindUnknown {
+						kind = types.DependencyKindOptional
+						if dep.Mandatory {
+							kind = types.DependencyKindRequired
+						}
+					}
+					m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+						ID:         dep.ID,
+						Constraint: dep.Range,
+						Kind:       kind,
+						Ordering:   dep.Ordering,
+					})
+				}
+				out = append(out, m)
 			}
-			out = append(out, m)
 		}
 		if loader == types.EcosystemNeoForge {
+			// A jar without its own descriptor may still ship mods in JarJar
+			// containers; FML loads those modules from the outer jar.
 			data, err := nativeEntry(z, "META-INF/jarjar/metadata.json")
 			if err != nil {
 				return nil, err
