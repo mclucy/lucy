@@ -323,7 +323,7 @@ func TestRecoveryWaitsForDeclaredRunningServer(t *testing.T) {
 	requireTransaction(t, file.Close())
 	requireTransaction(t, os.WriteFile(filepath.Join(native, "server.properties"), []byte("level-name=world\n"), 0o600))
 	stopWorld := startTransactionProcess(t, root, "hold-world")
-	if !workspace.ActiveAt(native) {
+	if !workspace.RunningAt(native) {
 		t.Fatal("fixture did not expose a live native session lock")
 	}
 	before := snapshotTransactionFiles(t, root)
@@ -539,12 +539,40 @@ func startTransactionProcess(t *testing.T, root, mode string) func() {
 func transactionWorkspace(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	document := &manifest.Document{Version: manifest.FormatVersion, Server: manifest.Server{Minecraft: "1.21.4", Directory: "native", Core: manifest.Core{Distribution: "vanilla", Version: "1.21.4"}}}
+	document := &manifest.Document{
+		SchemaVersion: manifest.SchemaVersion,
+		Server: manifest.Server{
+			Minecraft: "1.21.4",
+			Directory: "native",
+			Core: manifest.Core{
+				Product:        types.ServerProductMinecraft,
+				ProductVersion: "1.21.4",
+			},
+		},
+	}
 	requireTransaction(t, manifest.Write(root, document))
 	fingerprint, err := manifest.Fingerprint(document)
 	requireTransaction(t, err)
 	coreHash := sha256.Sum256([]byte("native core"))
-	locked := &lockfile.Document{Version: lockfile.FormatVersion, ManifestFingerprint: fingerprint, Server: lockfile.Server{Minecraft: "1.21.4", Directory: "native", Distribution: "vanilla", CoreVersion: "1.21.4", Java: 21, Artifact: types.Artifact{Provider: "mojang", Version: "1.21.4", Filename: "server.jar", URL: "https://example.invalid/native", Hashes: map[string]string{"sha256": fmt.Sprintf("%x", coreHash)}}}, Packages: []types.LockedPackage{}}
+	locked := &lockfile.Document{
+		SchemaVersion:       lockfile.SchemaVersion,
+		ManifestFingerprint: fingerprint,
+		Server: lockfile.Server{
+			Minecraft:   "1.21.4",
+			Directory:   "native",
+			Product:     types.ServerProductMinecraft,
+			CoreVersion: "1.21.4",
+			Java:        21,
+			Artifact: types.Artifact{
+				Provider: "mojang",
+				Version:  "1.21.4",
+				Filename: "server.jar",
+				URL:      "https://example.invalid/native",
+				Hashes:   map[string]string{"sha256": fmt.Sprintf("%x", coreHash)},
+			},
+		},
+		Packages: []types.LockedPackage{},
+	}
 	requireTransaction(t, lockfile.Write(root, locked))
 	for _, name := range []string{"a.cfg", "b.cfg"} {
 		requireTransaction(t, os.WriteFile(filepath.Join(root, name), []byte("initial-"+name), 0o640))
