@@ -65,7 +65,10 @@ func matchFabricMinimumPrerelease(raw, actual string) (bool, bool, error) {
 	if actualVersion == nil {
 		return false, true, fmt.Errorf("invalid Fabric version %q", actual)
 	}
-	actualSemver := actualVersion.(*SemverVersion)
+	actualSemver, ok := actualVersion.(*SemverVersion)
+	if !ok {
+		return false, false, nil
+	}
 	actualBase := NewSemver(actualSemver.Major(), actualSemver.Minor(), actualSemver.Patch())
 	for _, token := range tokens {
 		if !strings.HasSuffix(token, "-") {
@@ -96,7 +99,10 @@ func matchFabricMinimumPrerelease(raw, actual string) (bool, bool, error) {
 		if boundary == nil {
 			return false, true, fmt.Errorf("invalid Fabric boundary %q", token)
 		}
-		boundarySemver := boundary.(*SemverVersion)
+		boundarySemver, semantic := boundary.(*SemverVersion)
+		if !semantic {
+			return false, false, nil
+		}
 		boundaryBase := NewSemver(boundarySemver.Major(), boundarySemver.Minor(), boundarySemver.Patch())
 		comparison, isComparable := actualBase.Compare(boundaryBase)
 		if !isComparable {
