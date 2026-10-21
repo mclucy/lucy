@@ -60,6 +60,7 @@ jobs:
           filters: |
             status:
               - 'e2e/status/**'
+              - 'artifact/**'
               - 'e2e/sandbox/**'
               - 'e2e/internal/**'
               - 'e2e/testdata/sandboxes/**'
@@ -76,6 +77,7 @@ jobs:
               - '.github/workflows/e2e-run.yml'
             init:
               - 'e2e/init/**'
+              - 'artifact/**'
               - 'e2e/sandbox/**'
               - 'e2e/internal/**'
               - 'e2e/testdata/sandboxes/**'
@@ -95,6 +97,7 @@ jobs:
               - '.github/workflows/e2e-run.yml'
             install:
               - 'e2e/install/**'
+              - 'artifact/**'
               - 'e2e/sandbox/**'
               - 'e2e/internal/**'
               - 'e2e/testdata/sandboxes/**'
@@ -131,6 +134,7 @@ jobs:
               - '.github/workflows/e2e-run.yml'
             filetrack:
               - 'e2e/filetrack/**'
+              - 'artifact/**'
               - 'filetrack/**'
               - 'install/**'
               - 'manifest/**'
