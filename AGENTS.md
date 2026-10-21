@@ -111,16 +111,19 @@ stays unit-only. Build Lucy and generate the sandboxes first, then:
 ```bash
 go test -tags e2e -count=1 ./e2e/status    # probe and initialize .sandboxes
 go test -tags e2e -count=1 ./e2e/compile   # compile e2e/testdata/repo fixtures
-go test -tags e2e -count=1 ./e2e/install   # fresh installs
+go test -tags e2e -count=1 ./e2e/install   # fresh and init-then-install scenarios
 ```
 
 Select cases with `-run`: `-run 'TestProbe/<sandbox id>'`,
-`-run 'TestInitialize/<modpack id>'`, `-run 'TestCompile/<fixture id>'`, and
-`-run 'TestInstall/<scenario id>'`. A suite
+`-run 'TestInitialize/<modpack id>'`, `-run 'TestCompile/<fixture id>'`,
+`-run 'TestInstall/<scenario id>'`, and `-run 'TestInitInstall/<sandbox id>'`.
+A suite
 covers every case in its table and fails when its binary or a sandbox is
 missing; probes that need manually supplied artifacts skip instead.
 `TestInitialize` runs `lucy init` in a clone of each modpack sandbox and
-checks the manifest that the CLI writes. `-count=1`
+checks the manifest that the CLI writes. `TestInitInstall` initializes each
+sandbox in the install suite's table, then installs the generated manifest and
+lock in an empty workspace and verifies the runtime against them. `-count=1`
 disables the test cache, `-parallel N` bounds concurrency, and `-lucy` and
 `-sandboxes` override the `dist/lucy` and `.sandboxes` defaults.
 `e2e/internal/testkit` resolves those paths; `task e2e:status|compile|install` wrap
