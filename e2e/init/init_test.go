@@ -1,6 +1,8 @@
 //go:build e2e
 
-package status
+// Package init verifies that Lucy initializes manifests from real modpack
+// workspaces.
+package init
 
 import (
 	"bytes"
@@ -13,58 +15,10 @@ import (
 
 	"github.com/mclucy/lucy/e2e/internal/testkit"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/manifest"
 	"gopkg.in/yaml.v3"
 )
 
-type manifestDocument struct {
-	Server struct {
-		Minecraft string `yaml:"minecraft"`
-		Core      struct {
-			Product        string `yaml:"product"`
-			ProductVersion string `yaml:"product_version"`
-		} `yaml:"core"`
-		Packages map[string]map[string]string `yaml:"packages"`
-	} `yaml:"server"`
-}
-
-type initializeExpectation struct {
-	minecraft   string
-	product     string
-	coreVersion string
-	minPackages int
-	// packages maps a loader to the references that the initializer must write.
-	packages map[string]map[string]string
-	// absent lists references that the initializer must omit because their jars
-	// are client-only.
-	absent map[string][]string
-}
-
-var initializeScenarios = map[string]initializeExpectation{
-	"cobblemon-1211": {
-		minecraft: "1.21.1", product: "fabric", coreVersion: "0.19.5",
-		minPackages: 30,
-		packages: map[string]map[string]string{
-			"fabric": {
-				"modrinth:advanced-loot-info": "1.21.1-2.4.0",
-				"modrinth:cobblemon":          "1.8.2",
-				"modrinth:fabric-api":         "0.116.17+1.21.1",
-			},
-		},
-		absent: map[string][]string{
-			"fabric": {"modrinth:enchdesc", "modrinth:tipsmod"},
-		},
-	},
-	"create-plus-1211": {
-		minecraft: "1.21.1", product: "neoforge", coreVersion: "21.1.233",
-		minPackages: 100,
-		packages: map[string]map[string]string{
-			"neoforge": {
-				"modrinth:aileron": "1.21.1-neoforge-1.1.4",
-				"modrinth:txnilib": "neoforge-1.21.1-1.0.24",
-			},
-		},
-	},
-}
 
 // TestInitialize runs lucy init against each modpack sandbox and checks the
 // manifest and lock that the CLI writes for a real, decompressed server.
@@ -74,7 +28,17 @@ func TestInitialize(t *testing.T) {
 		t.Run(id, func(t *testing.T) {
 			t.Parallel()
 			want := initializeScenarios[id]
+			if want.blocked != "" {
+				t.Skipf("sandbox %s cannot initialize yet: %s", id, want.blocked)
+			}
 			root := testkit.CloneSandbox(t, id)
+			// A local sandbox may carry intent from an earlier run; init must
+			// start from the server workspace alone.
+			for _, name := range []string{manifest.Filename, lockfile.Filename, ".lucy"} {
+				if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
+					t.Fatalf("clear generated %s from sandbox: %v", name, err)
+				}
+			}
 			cmd := exec.Command(binary, "init", "--no-interactive", "--no-style")
 			cmd.Dir = root
 			var stderr bytes.Buffer

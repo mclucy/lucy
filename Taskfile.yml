@@ -270,9 +270,14 @@ tasks:
       - rm -rf .sandboxes
 
   e2e:status:
-    desc: "Probe sandboxes and initialize modpack manifests (args: -run 'TestProbe/<sandbox id>')"
+    desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/status {{.CLI_ARGS}}
+
+  e2e:init:
+    desc: "Initialize modpack manifests from sandboxes (args: -run 'TestInitialize/<modpack id>')"
+    cmds:
+      - go test -tags e2e -count=1 -timeout 0 ./e2e/init {{.CLI_ARGS}}
 
   e2e:compile:
     desc: "Compile pinned repository fixtures (args: -run 'TestCompile/<fixture id>')"
