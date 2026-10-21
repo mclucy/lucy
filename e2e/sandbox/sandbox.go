@@ -139,8 +139,8 @@ func main() {
 func validate(man *manifest) error {
 	seen := map[string]bool{}
 	for _, sb := range man.Sandboxes {
-		if sb.ID == "" {
-			return errors.New("sandbox without id")
+		if !filepath.IsLocal(sb.ID) || sb.ID == "." {
+			return fmt.Errorf("invalid sandbox id %q: must be a local path below the output root", sb.ID)
 		}
 		if seen[sb.ID] {
 			return fmt.Errorf("duplicate sandbox id %q", sb.ID)
