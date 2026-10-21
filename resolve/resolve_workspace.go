@@ -137,6 +137,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	canonical := map[projectKey]projectKey{}
 	chosen := map[projectKey]types.LockedPackage{}
 	attempts := 0
+	strict := true
 	var lastErr error
 	log.Info(
 		"resolve: resolving package requirements",
@@ -170,7 +171,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				lastErr = err
 				return false
 			}
-			if len(problems) > 0 && !acceptBroken {
+			if len(problems) > 0 && strict {
 				log.Debug(
 					"resolve: settled graph rejected",
 					"attempt", attempts,
@@ -433,8 +434,24 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		}
 		return false
 	}
-	if !backtrack(requests) {
-		return nil, nil, lastErr
+	search := func(allowBroken bool) bool {
+		chosen = map[projectKey]types.LockedPackage{}
+		attempts = 0
+		strict = !allowBroken
+		lastErr = nil
+		return backtrack(requests)
+	}
+	if !search(false) {
+		if !acceptBroken {
+			return nil, nil, lastErr
+		}
+		log.Debug(
+			"resolve: retrying with broken graphs",
+			"reason", lastErr,
+		)
+		if !search(true) {
+			return nil, nil, lastErr
+		}
 	}
 	var out []types.LockedPackage
 	for _, p := range chosen {
