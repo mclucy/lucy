@@ -58,8 +58,10 @@ var initializeScenarios = map[string]initializeExpectation{
 		minecraft: "1.21.1", product: "neoforge", coreVersion: "21.1.233",
 		minPackages: 100,
 		packages: map[string]map[string]string{
-			"forge":    {"modrinth:txnilib": "neoforge-1.21.1-1.0.24"},
-			"neoforge": {"modrinth:aileron": "1.21.1-neoforge-1.1.4"},
+			"neoforge": {
+				"modrinth:aileron": "1.21.1-neoforge-1.1.4",
+				"modrinth:txnilib": "neoforge-1.21.1-1.0.24",
+			},
 		},
 	},
 }
