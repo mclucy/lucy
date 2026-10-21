@@ -280,7 +280,7 @@ tasks:
       - go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
   e2e:install:
-    desc: "Run fresh install scenarios (args: -run 'TestInstall/<scenario id>')"
+    desc: "Run fresh and init-then-install scenarios (args: -run 'Test(Init)?Install/<scenario id>')"
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
 
