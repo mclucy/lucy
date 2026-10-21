@@ -159,7 +159,8 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				all = append(all, p)
 			}
 			all = mergeArtifactSelections(all)
-			problems, _, err := ValidateModules(all, server, mcdrVersion)
+			sortPackages(all)
+			problems, err := ValidateModules(all, server, mcdrVersion)
 			if err != nil {
 				log.Debug(
 					"resolve: settled graph invalid",
@@ -446,27 +447,17 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		out = append(out, p)
 	}
 	out = mergeArtifactSelections(out)
-	slices.SortFunc(out, func(a, b types.LockedPackage) int {
-		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {
-			return n
-		}
-		if n := strings.Compare(string(a.Ecosystem), string(b.Ecosystem)); n != 0 {
-			return n
-		}
-		if n := strings.Compare(string(a.Provider), string(b.Provider)); n != 0 {
-			return n
-		}
-		return strings.Compare(a.ProjectID, b.ProjectID)
-	})
-	problems, warnings, err := ValidateModules(out, server, mcdrVersion)
+	sortPackages(out)
+	problems, err := ValidateModules(out, server, mcdrVersion)
 	if err != nil {
 		return nil, nil, err
 	}
+	var warnings []error
 	if len(problems) > 0 {
 		if !force {
 			return nil, nil, errors.Join(problems...)
 		}
-		warnings = append(warnings, problems...)
+		warnings = problems
 	}
 	log.Info(
 		"resolve: selected packages",
@@ -518,7 +509,7 @@ func packageEnabled(p types.LockedPackage) bool {
 	return false
 }
 
-func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcdrVersion string) ([]error, []error, error) {
+func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcdrVersion string) ([]error, error) {
 	type selected struct{ packageIndex, moduleIndex int }
 	index := map[struct {
 		environment types.Environment
@@ -526,7 +517,6 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 		id          string
 	}]selected{}
 	var problems []error
-	var warnings []error
 	for pi := range packages {
 		p := &packages[pi]
 		if !packageEnabled(*p) {
@@ -546,7 +536,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 				if old, ok := index[key]; ok {
 					previous := packages[old.packageIndex].Modules[old.moduleIndex]
 					if m.NestedPath == "" && previous.NestedPath == "" && pi != old.packageIndex {
-						return nil, nil, fmt.Errorf("duplicate native module %s in %s and %s", name, p.Filename, packages[old.packageIndex].Filename)
+						return nil, fmt.Errorf("duplicate native module %s in %s and %s", name, p.Filename, packages[old.packageIndex].Filename)
 					}
 					if previous.NestedPath == "" {
 						continue
@@ -558,15 +548,15 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 						}
 						a, err := version.Parse(previous.Version, scheme)
 						if err != nil {
-							return nil, nil, err
+							return nil, err
 						}
 						b, err := version.Parse(m.Version, scheme)
 						if err != nil {
-							return nil, nil, err
+							return nil, err
 						}
 						comparison, isComparable := a.Compare(b)
 						if !isComparable {
-							return nil, nil, fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
+							return nil, fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
 						}
 						if comparison >= 0 {
 							continue
@@ -640,25 +630,24 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 					}
 				}
 				matched := value != ""
-				unverifiable := false
+				invalid := false
 				if matched && dep.Constraint != "" {
 					var err error
 					matched, err = version.Match(dep.Constraint, value, p.Ecosystem)
 					if err != nil {
-						warnings = append(warnings, fmt.Errorf("module %s cannot verify %s %s: %w", m.ID, dep.ID, dep.Constraint, err))
-						matched = true
-						unverifiable = true
+						problems = append(problems, fmt.Errorf("module %s requires %s %s: %w", m.ID, dep.ID, dep.Constraint, err))
+						invalid = true
 					}
 				}
 				requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
-				if !unverifiable && dep.Kind == types.DependencyKindRequired && !matched {
+				if !invalid && dep.Kind == types.DependencyKindRequired && !matched {
 					if value == "" {
 						problems = append(problems, fmt.Errorf("module %s requires %s, which no selected package provides", m.ID, requirement))
 					} else {
 						problems = append(problems, fmt.Errorf("module %s requires %s (selected %s)", m.ID, requirement, value))
 					}
 				}
-				if !unverifiable && dep.Kind == types.DependencyKindIncompatible && matched {
+				if !invalid && dep.Kind == types.DependencyKindIncompatible && matched {
 					problems = append(problems, fmt.Errorf("module %s breaks %s %s", m.ID, dep.ID, value))
 				}
 				if matched {
@@ -675,7 +664,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 		}
 		p.Modules = selectedModules
 	}
-	return problems, warnings, nil
+	return problems, nil
 }
 
 func mergeArtifactSelections(packages []types.LockedPackage) []types.LockedPackage {
@@ -704,4 +693,21 @@ func mergeArtifactSelections(packages []types.LockedPackage) []types.LockedPacka
 		out = append(out, p)
 	}
 	return out
+}
+
+// sortPackages orders packages by their persisted identity so validation
+// reports findings in a stable order.
+func sortPackages(packages []types.LockedPackage) {
+	slices.SortFunc(packages, func(a, b types.LockedPackage) int {
+		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {
+			return n
+		}
+		if n := strings.Compare(string(a.Ecosystem), string(b.Ecosystem)); n != 0 {
+			return n
+		}
+		if n := strings.Compare(string(a.Provider), string(b.Provider)); n != 0 {
+			return n
+		}
+		return strings.Compare(a.ProjectID, b.ProjectID)
+	})
 }
