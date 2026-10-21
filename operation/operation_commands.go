@@ -114,7 +114,7 @@ func servedEcosystemForFile(
 			continue
 		}
 		for _, module := range modules {
-			if loaderSpecificDescriptor(ecosystem, module.DescriptorPath) {
+			if loaderSpecificDescriptor(module) {
 				return ecosystem, true
 			}
 		}
@@ -122,15 +122,17 @@ func servedEcosystemForFile(
 	return types.EcosystemUnspecified, false
 }
 
-// loaderSpecificDescriptor reports whether a descriptor names its loader.
-// Shared metadata such as META-INF/mods.toml is ambiguous between Forge and
-// NeoForge, so it cannot justify adopting a package for a loader that the
-// server merely tolerates.
-func loaderSpecificDescriptor(ecosystem types.Ecosystem, path string) bool {
-	if ecosystem == types.EcosystemNeoForge {
-		return path == "META-INF/neoforge.mods.toml"
+// loaderSpecificDescriptor reports whether a module's descriptor names the
+// loader that read it. Forge and NeoForge share META-INF/mods.toml, so only a
+// loader dependency declared inside it identifies the loader.
+func loaderSpecificDescriptor(module types.DescriptorModule) bool {
+	if module.DescriptorPath != "META-INF/mods.toml" {
+		return true
 	}
-	return true
+	loader := module.Ecosystem.String()
+	return slices.ContainsFunc(module.Dependencies, func(dep types.DescriptorDependency) bool {
+		return dep.ID == loader
+	})
 }
 
 func commandReference(d *manifest.Document, old *lockfile.Document, raw string, ecosystem types.Ecosystem) (string, types.Version, error) {
