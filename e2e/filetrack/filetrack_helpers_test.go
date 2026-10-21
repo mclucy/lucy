@@ -278,7 +278,7 @@ func (w workspace) requireReceiptEntries(t *testing.T, want ...receiptEntry) {
 }
 
 // seedNativeRuntime writes a manifest, a current lock and an installation
-// receipt over real core bytes, so a following install is a no-op instead of
+// receipt over real core bytes, so a following installation is a no-op instead of
 // a fresh resolve. The declared tracked files take part in the lock and the
 // receipt stays pinned to the runtime only.
 func (w workspace) seedNativeRuntime(t *testing.T, files ...types.TrackedFile) (*manifest.Document, *lockfile.Document, []byte) {
@@ -316,7 +316,11 @@ func (w workspace) seedNativeRuntime(t *testing.T, files ...types.TrackedFile) (
 		Files:    files,
 	}
 	w.writeLock(t, lock)
-	w.writeReceipt(t, lock, receiptEntry{Path: "server/server.jar", SHA256: digestHex(core), Mode: 0o644})
+	w.writeReceipt(t, lock, receiptEntry{
+		Path:   "server/server.jar",
+		SHA256: digestHex(core),
+		Mode:   0o644,
+	})
 	return doc, lock, core
 }
 

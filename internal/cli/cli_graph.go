@@ -52,7 +52,7 @@ type GraphNode struct {
 }
 
 type DependencyGraph struct {
-	// Nodes is keyed by the scoped node key, so identically named modules
+	// Nodes are keyed by the scoped node key, so identically named modules
 	// in different environments or ecosystems stay distinct.
 	Nodes map[string]*GraphNode
 

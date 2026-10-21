@@ -55,7 +55,7 @@ func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 	}
 }
 
-// selectLatestVersion selects the newest version for the any/beta selectors.
+// selectLatestVersion selects the newest version for any/beta selectors.
 // any prefers a release channel and falls back to any channel; beta accepts
 // any channel. Platform-specific candidates are preferred over versions that
 // declare no platform dependency.

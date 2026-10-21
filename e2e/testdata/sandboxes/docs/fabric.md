@@ -27,5 +27,9 @@ Note:
 - Meta: `https://meta.fabricmc.net/v2/versions/{game,loader,installer}`, launcher jar at `/v2/versions/loader/{game}/{loader}/{installer}/server/jar`
 - Installer jars: `https://maven.fabricmc.net/net/fabricmc/fabric-installer/<v>/...`
 
-References: <https://fabricmc.net/use/server>, <https://meta.fabricmc.net>, <https://wiki.fabricmc.net/documentation:fabric_loader>
+References:
+
+- <https://fabricmc.net/use/server>
+- <https://meta.fabricmc.net>
+- <https://wiki.fabricmc.net/documentation:fabric_loader>
 

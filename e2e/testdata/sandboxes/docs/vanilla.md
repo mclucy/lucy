@@ -10,7 +10,7 @@ Mojang has no stable per-version direct URLs; resolve at generation time:
 2. find version entry by id → its `url` (per-version JSON)
 3. `downloads.server.url` (+ `sha1`) → piston-data download
 
-The sandbox tool does this for `mojang_version:` artifacts and verifies the manifest sha256 afterwards.
+The sandbox tool does this for `mojang_version:` artifacts and verifies the manifest sha256 afterward.
 
 ## Format eras
 

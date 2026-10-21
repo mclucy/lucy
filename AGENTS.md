@@ -93,7 +93,7 @@ The output style flags are persistent on the root command, and every subcommand 
 - `--no-style` is exactly `--no-color` combined with `--no-interactive`.
 - `--yes` is not a global flag and not part of this family. It only answers a y/n prompt and never substitutes for the flag that replaces a selection.
 
-A new interactive surface ships with its flag equivalent in the same change. User reports, markdown, and progress rendering follow the same color state.
+A new interactive surface ships with its flag equivalent in the same change. User reports, Markdown, and progress rendering follow the same color state.
 
 ## Observability
 
@@ -128,7 +128,7 @@ covers every case in its table and fails when its binary or a sandbox is
 missing; probes that need manually supplied artifacts skip instead.
 `TestInitialize` runs `lucy init` in a clone of each modpack sandbox and
 checks the manifest and lock that the CLI writes. `TestInitInstall` initializes
-each sandbox in the install suite's table, then installs the generated manifest
+each sandbox in the installation suite's table, then installs the generated manifest
 and lock in an empty workspace and verifies the runtime against them. CI runs
 the fresh install and the init-then-install chain as separate jobs so one
 cannot mask the other. `-count=1`

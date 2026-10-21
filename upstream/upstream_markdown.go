@@ -6,7 +6,7 @@ import (
 	"github.com/mclucy/lucy/terminal/style"
 )
 
-// LooksLikeMarkdown returns true when rendering the text as markdown produces a
+// LooksLikeMarkdown returns true when rendering the text as Markdown produces a
 // meaningfully different result than showing the original plain text.
 func LooksLikeMarkdown(text string) bool {
 	trimmed := strings.TrimSpace(text)

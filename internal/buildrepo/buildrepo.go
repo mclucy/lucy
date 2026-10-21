@@ -127,7 +127,7 @@ func Probe(ctx context.Context, root string) (layout Layout, err error) {
 	}, nil
 }
 
-// skippedDirs never contain hand written Gradle configuration.
+// skippedDirs never contain handwritten Gradle configuration.
 var skippedDirs = map[string]bool{
 	".git": true, ".gradle": true, ".idea": true, ".kotlin": true,
 	"build": true, "out": true, "target": true, "node_modules": true,

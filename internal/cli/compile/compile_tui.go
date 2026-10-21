@@ -17,9 +17,9 @@ func promptAvailable() bool {
 	return term.IsTerminal(os.Stdin.Fd()) && style.InteractiveEnabled()
 }
 
-// promptModProject asks which of several mod projects to compile. huh renders
+// promptModProject asks which of several mod projects to compile. `huh` renders
 // on stderr, so stdout keeps carrying only the artifact path. Aborting the
-// selection cancels the compile; there is no default to fall back to.
+// selection cancels the compilation; there is no default to fall back to.
 func promptModProject(candidates []gradleProject) (gradleProject, error) {
 	// gradleProject is not comparable (it holds slices), so the select carries
 	// the candidate index instead of the struct.

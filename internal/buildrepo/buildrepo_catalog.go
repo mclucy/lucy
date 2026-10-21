@@ -36,7 +36,7 @@ func (p *prober) indexCatalogs() {
 	}
 }
 
-// readCatalog parses one libs.versions.toml into the alias to plugin id map.
+// readCatalog parses libs.versions.toml into the alias to plugin id map.
 func (p *prober) readCatalog(path string) {
 	if _, seen := p.catalogs[path]; seen {
 		return

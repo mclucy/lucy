@@ -2,7 +2,7 @@ package fn
 
 import "io"
 
-// TernaryFunc gives a if expr == true, b if expr == false. For a simple
+// TernaryFunc gives `a` if `expr == true`, `b` if `expr == false`. For a simple
 // bool expression, use Ternary instead.
 func TernaryFunc[T any](expr func() bool, a T, b T) T {
 	if expr() {
@@ -11,7 +11,7 @@ func TernaryFunc[T any](expr func() bool, a T, b T) T {
 	return b
 }
 
-// Ternary returns a if v == true, b if v == false. For a function parameter, use
+// Ternary returns `a` if `v == true`, `b` if `v == false`. For a function parameter, use
 // TernaryFunc instead.
 //
 // Do not use this in a loop or a performance-critical code path, as it may cause

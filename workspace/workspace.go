@@ -145,7 +145,7 @@ func NewAt(workDir string) Workspace {
 
 // Refresh observes the directory workDir again. If workDir resolves to the
 // current working directory, Refresh replaces the cached observation.
-// Otherwise Refresh returns a new observation and does not change the
+// Otherwise, Refresh returns a new observation and does not change the
 // cache.
 func Refresh(workDir string) Workspace {
 	target, err := filepath.Abs(workDir)

@@ -38,7 +38,7 @@ func groovyCalls(content, name string) []int {
 	return out
 }
 
-// callArgs returns the comma separated arguments of a call starting at at,
+// callArgs returns the comma separated arguments of a call starting at `at`,
 // which is either an opening paren or the first argument of a Groovy style
 // call, together with the line of the call.
 func callArgs(content string, at int) ([]string, int) {
@@ -239,7 +239,7 @@ func closingParen(content string, start int) int {
 	return start
 }
 
-// literalString unwraps a literal that spans all of text.
+// literalString unwraps a literal that spans all text.
 func literalString(text string) (string, bool) {
 	text = strings.TrimSpace(text)
 	value, width, ok := readStringLiteral(text)
@@ -298,7 +298,7 @@ func block(content string, offset int) (string, int, bool) {
 	return "", offset, false
 }
 
-// blockNamed returns the body of the first "name {" block found in content
+// blockNamed returns the body of the first `name {` block found in content
 // together with the offset of the body's first byte.
 func blockNamed(content, name string) (string, int, bool) {
 	from := 0

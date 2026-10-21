@@ -99,7 +99,7 @@ func forgeVersionFromPackageRef(
 	return fetchVersion(gameVersion, p.Version)
 }
 
-// fetchVersion selects a Forge version from the promotions data. stable
+// fetchVersion selects a Forge version from the `promotions` data. stable
 // accepts the recommended promotion only; beta accepts the latest promotion;
 // any prefers the recommended release and falls back to the latest.
 func fetchVersion(

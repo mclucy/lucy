@@ -86,7 +86,11 @@ func (s *Store) Open(digest Digest) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Join(ErrRead, err)
 	}
-	return &verifiedReader{file: file, expected: digest, hash: sha256.New()}, nil
+	return &verifiedReader{
+		file:     file,
+		expected: digest,
+		hash:     sha256.New(),
+	}, nil
 }
 
 // Put computes the address while writing and never publishes a failed stream.
@@ -124,7 +128,7 @@ func (s *Store) Walk(visit func(Object) error) error {
 }
 
 // Remove is for consumer-approved reclamation, not automatic retention.
-// Readers already opened on systems that allow unlink can finish reading their handles.
+// Readers already opened on systems that allow to unlink can finish reading their handles.
 func (s *Store) Remove(digest Digest) (size int64, resultErr error) {
 	lock, err := s.lock()
 	if err != nil {

@@ -57,8 +57,8 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 	return strings.Join(lines, "\n")
 }
 
-// noColorMarkdownStyle renders markdown without color while keeping emphasis
-// as terminal attributes. The stock NoTTY style falls back to literal
+// noColorMarkdownStyle renders Markdown without color while keeping emphasis
+// as terminal attributes. The stock notty style falls back to literal
 // `**bold**` and `*italic*` markers, which contradicts --no-color keeping
 // text attributes.
 func noColorMarkdownStyle() ansi.StyleConfig {
