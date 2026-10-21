@@ -380,6 +380,7 @@ func stageInstall(
 		return nil, err
 	}
 	staged := 0
+	overwritePaths := map[string]bool{}
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
 		if !packageEnabled(p) {
@@ -388,6 +389,9 @@ func stageInstall(
 		destination, err := packageDestination(resolved, p)
 		if err != nil {
 			return nil, err
+		}
+		if opts.Overwrite {
+			overwritePaths[filepath.ToSlash(destination)] = true
 		}
 		source, err := store.materialize(&p.Artifact)
 		if err != nil {
@@ -407,7 +411,7 @@ func stageInstall(
 	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 		return nil, err
 	}
-	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest, opts.Overwrite); err != nil {
+	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths); err != nil {
 		return nil, err
 	}
 	return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
