@@ -161,7 +161,7 @@ jobs:
         if: ${{ inputs.sandboxes != '' }}
         env:
           SANDBOXES: ${{ inputs.sandboxes }}
-        run: task sandboxes:gen -- --only "$SANDBOXES"
+        run: go run ./e2e/sandbox --only "$SANDBOXES"
 
       - name: Build Lucy
         if: ${{ inputs.build }}
