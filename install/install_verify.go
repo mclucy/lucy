@@ -16,7 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Document) error {
+func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Document, overwrite bool) error {
 	raw, err := os.ReadFile(filepath.Join(root, ".lucy", "install.yaml"))
 	owned := map[string]bool{}
 	if err == nil {
@@ -68,18 +68,22 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 			if err != nil {
 				continue
 			}
-			for _, other := range d.Packages {
-				if other.Environment != planned.Environment || other.Ecosystem != planned.Ecosystem {
+			conflict, moduleID := unmanagedConflict(d, &planned, mods)
+			if conflict == nil {
+				continue
+			}
+			if overwrite {
+				destination, err := packageDestination(d, conflict)
+				if err == nil && filepath.Clean(filename) == filepath.Clean(destination) {
+					log.Debug(
+						"overwriting unmanaged artifact",
+						"path", filename,
+						"module", moduleID,
+					)
 					continue
 				}
-				for _, discovered := range mods {
-					for _, selected := range other.Modules {
-						if artifact.ModuleProvides(discovered, selected.ID) || artifact.ModuleProvides(selected, discovered.ID) {
-							return fmt.Errorf("unmanaged artifact %s conflicts with selected module %s; adopt or move it explicitly", filename, selected.ID)
-						}
-					}
-				}
 			}
+			return fmt.Errorf("unmanaged artifact %s conflicts with selected module %s; adopt or move it explicitly", filename, moduleID)
 		}
 	}
 	log.Debug(
@@ -89,6 +93,30 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 		"packages", len(d.Packages),
 	)
 	return nil
+}
+
+// unmanagedConflict reports the selected package whose module an unmanaged
+// artifact duplicates. Environment and ecosystem must match, because one
+// module identity may exist independently on the server and in MCDR.
+func unmanagedConflict(
+	d *lockfile.Document,
+	planned *types.LockedPackage,
+	discovered []types.DescriptorModule,
+) (*types.LockedPackage, string) {
+	for i := range d.Packages {
+		other := &d.Packages[i]
+		if other.Environment != planned.Environment || other.Ecosystem != planned.Ecosystem {
+			continue
+		}
+		for _, found := range discovered {
+			for _, selected := range other.Modules {
+				if artifact.ModuleProvides(found, selected.ID) || artifact.ModuleProvides(selected, found.ID) {
+					return other, selected.ID
+				}
+			}
+		}
+	}
+	return nil, ""
 }
 
 func checkJava(ctx context.Context, minimum int) error {

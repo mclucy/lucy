@@ -110,29 +110,29 @@ func commandReference(d *manifest.Document, old *lockfile.Document, raw string, 
 	return ref, selector, nil
 }
 
-func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) ([]filetrack.Diagnostic, error) {
+func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) ([]filetrack.Diagnostic, []error, error) {
 	d, old, err := commandDocuments(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.ExpectedManifest, err = manifest.Fingerprint(d)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.RequirementChange = true
 	ecosystem = selectedEcosystem(d, ecosystem)
 	if ecosystem == types.EcosystemUnspecified {
-		return nil, fmt.Errorf("specify a package ecosystem supported by the declared server")
+		return nil, nil, fmt.Errorf("specify a package ecosystem supported by the declared server")
 	}
 	for _, raw := range args {
 		ref, selector, err := commandReference(d, old, raw, ecosystem)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		r := manifest.Requirement{Selector: selector, Enabled: new(true)}
 		if ecosystem == types.EcosystemMCDR {
 			if d.MCDR == nil {
-				return nil, fmt.Errorf("manifest has no MCDR runtime")
+				return nil, nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
 			d.MCDR.Packages[ref] = r
 		} else {
@@ -146,31 +146,31 @@ func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosys
 	return install.Sync(ctx, root, d, old, opts)
 }
 
-func Remove(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) ([]filetrack.Diagnostic, error) {
+func Remove(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) ([]filetrack.Diagnostic, []error, error) {
 	d, old, err := commandDocuments(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.ExpectedManifest, err = manifest.Fingerprint(d)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.RequirementChange = true
 	ecosystem = selectedEcosystem(d, ecosystem)
 	for _, raw := range args {
 		ref, _, err := commandReference(d, old, raw, ecosystem)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		packages := d.Server.Packages[ecosystem]
 		if ecosystem == types.EcosystemMCDR {
 			if d.MCDR == nil {
-				return nil, fmt.Errorf("manifest has no MCDR runtime")
+				return nil, nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
 			packages = d.MCDR.Packages
 		}
 		if _, ok := packages[ref]; !ok {
-			return nil, fmt.Errorf("direct requirement %s not found in %s", ref, ecosystem)
+			return nil, nil, fmt.Errorf("direct requirement %s not found in %s", ref, ecosystem)
 		}
 		delete(packages, ref)
 	}

@@ -65,9 +65,12 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Remove(cmd.Context(), workDir, args, ecosystem, opts)
+	diagnostics, warnings, err := operation.Remove(cmd.Context(), workDir, args, ecosystem, opts)
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	for _, warning := range warnings {
+		report.Warn(warning)
 	}
 	return err
 }

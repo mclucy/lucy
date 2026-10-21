@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -30,7 +31,17 @@ type (
 	}
 )
 
-func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool) ([]types.LockedPackage, error) {
+// catalogueRegistry names the registry that serves a package provider. Only a
+// provider backing a registry can answer catalogue queries.
+func catalogueRegistry(provider types.Provider) types.Registry {
+	registry, ok := provider.Registry()
+	if !ok {
+		return types.RegistryUnspecified
+	}
+	return registry
+}
+
+func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool, acceptBroken bool) ([]types.LockedPackage, []error, error) {
 	var requests []projectRequest
 	appendRequest := func(environment types.Environment, ecosystem types.Ecosystem, ref string, r manifest.Requirement) error {
 		provider, project, err := manifest.ParseReference(ref)
@@ -79,7 +90,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		slices.Sort(refs)
 		for _, ref := range refs {
 			if err := appendRequest(types.EnvironmentServer, ecosystem, ref, d.Server.Packages[ecosystem][ref]); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
@@ -91,7 +102,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		slices.Sort(refs)
 		for _, ref := range refs {
 			if err := appendRequest(types.EnvironmentMCDR, types.EcosystemMCDR, ref, d.MCDR.Packages[ref]); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
@@ -116,16 +127,17 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			if !supported {
 				for _, req := range r.requirements {
 					if req.Enabled {
-						return nil, fmt.Errorf("product %s cannot load %s packages", server.Product, r.key.ecosystem)
+						return nil, nil, fmt.Errorf("product %s cannot load %s packages", server.Product, r.key.ecosystem)
 					}
 				}
 			}
 		}
 	}
 	candidates := map[projectKey][]types.CatalogueCandidate{}
+	canonical := map[projectKey]projectKey{}
 	chosen := map[projectKey]types.LockedPackage{}
-	discovery := newModuleDiscovery(server, materialize)
 	attempts := 0
+	strict := true
 	var lastErr error
 	log.Info(
 		"resolve: resolving package requirements",
@@ -148,14 +160,33 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				all = append(all, p)
 			}
 			all = mergeArtifactSelections(all)
-			if err := ValidateModules(all, server, mcdrVersion); err != nil {
+			sortPackages(all)
+			problems, err := ValidateModules(all, server, mcdrVersion)
+			if err != nil {
+				log.Debug(
+					"resolve: settled graph invalid",
+					"attempt", attempts,
+					"reason", err,
+				)
 				lastErr = err
+				return false
+			}
+			if len(problems) > 0 && strict {
+				log.Debug(
+					"resolve: settled graph rejected",
+					"attempt", attempts,
+					"reason", problems[0],
+				)
+				lastErr = errors.Join(problems...)
 				return false
 			}
 			return true
 		}
 		r := pending[0]
 		rest := pending[1:]
+		if canonicalKey, ok := canonical[r.key]; ok {
+			r.key = canonicalKey
+		}
 		active := len(r.requirements) == 0
 		for _, req := range r.requirements {
 			active = active || req.Enabled
@@ -233,6 +264,30 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				}
 			}
 			candidates[r.key] = list
+		}
+		if len(list) > 0 {
+			// Direct requirements name a project by its catalogue slug, while
+			// catalogue metadata names the same project by identity. Resolve
+			// under the identity so the project enters the graph only once.
+			if project := list[0].ProjectID; project != "" && project != r.key.project {
+				canonicalKey := r.key
+				canonicalKey.project = project
+				canonical[r.key] = canonicalKey
+				if _, cached := candidates[canonicalKey]; !cached {
+					candidates[canonicalKey] = list
+				}
+				log.Debug(
+					"resolve: project identity canonicalized",
+					"provider", r.key.provider,
+					"reference", r.key.project,
+					"project", project,
+				)
+				return backtrack(append([]projectRequest{{
+					key:          canonicalKey,
+					requirements: r.requirements,
+					releaseIDs:   r.releaseIDs,
+				}}, rest...))
+			}
 		}
 		list = preferReleaseBuilds(list, r.requirements)
 		for _, candidate := range list {
@@ -332,13 +387,8 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				"modules", len(modules),
 			)
 			next := append([]projectRequest{}, rest...)
-			declared := map[catalogueProject]bool{}
 			for _, dep := range candidate.Dependencies {
 				if dep.Kind == types.DependencyKindRequired || (withOptional && dep.Kind == types.DependencyKindOptional) {
-					declared[catalogueProject{
-						dep.Provider,
-						dep.ProjectID,
-					}] = true
 					var ids []string
 					if dep.ReleaseID != "" {
 						ids = append(ids, dep.ReleaseID)
@@ -363,72 +413,6 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 					next = append(next, dependency)
 				}
 			}
-			// A required dependency the catalogue omitted still has to enter
-			// the graph, so resolution asks the registry which project ships
-			// the module identity the artifact itself declares.
-			for _, module := range a.Modules {
-				for _, dep := range module.Dependencies {
-					if dep.Kind != types.DependencyKindRequired {
-						continue
-					}
-					if runtimeModule(dep.ID) {
-						log.Debug(
-							"resolve: module dependency skipped",
-							"provider", r.key.provider,
-							"project", r.key.project,
-							"module", dep.ID,
-							"reason", "provided by server runtime",
-						)
-						continue
-					}
-					if providesSelected(chosen, r.key.ecosystem, dep.ID) {
-						log.Debug(
-							"resolve: module dependency skipped",
-							"provider", r.key.provider,
-							"project", r.key.project,
-							"module", dep.ID,
-							"reason", "provided by selected package",
-						)
-						continue
-					}
-					request, found, err := discovery.project(ctx, r.key, dep.ID)
-					if err != nil {
-						lastErr = err
-						return false
-					}
-					if !found {
-						log.Debug(
-							"resolve: module dependency unresolved",
-							"provider", r.key.provider,
-							"project", r.key.project,
-							"module", dep.ID,
-							"reason", "no catalogue project ships module",
-						)
-						continue
-					}
-					if declared[catalogueProject{
-						request.key.provider,
-						request.key.project,
-					}] {
-						log.Debug(
-							"resolve: module dependency skipped",
-							"provider", r.key.provider,
-							"project", r.key.project,
-							"module", dep.ID,
-							"reason", "declared in catalogue metadata",
-						)
-						continue
-					}
-					next = append(next, request)
-					log.Debug(
-						"resolve: native dependency discovered",
-						"module", dep.ID,
-						"provider", request.key.provider,
-						"project", request.key.project,
-						"reason", "artifact declares module identity",
-					)
-				}
-			}
 			if backtrack(next) {
 				return true
 			}
@@ -450,8 +434,24 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		}
 		return false
 	}
-	if !backtrack(requests) {
-		return nil, lastErr
+	search := func(allowBroken bool) bool {
+		chosen = map[projectKey]types.LockedPackage{}
+		attempts = 0
+		strict = !allowBroken
+		lastErr = nil
+		return backtrack(requests)
+	}
+	if !search(false) {
+		if !acceptBroken {
+			return nil, nil, lastErr
+		}
+		log.Debug(
+			"resolve: retrying with broken graphs",
+			"reason", lastErr,
+		)
+		if !search(true) {
+			return nil, nil, lastErr
+		}
 	}
 	var out []types.LockedPackage
 	for _, p := range chosen {
@@ -464,26 +464,23 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		out = append(out, p)
 	}
 	out = mergeArtifactSelections(out)
-	slices.SortFunc(out, func(a, b types.LockedPackage) int {
-		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {
-			return n
+	sortPackages(out)
+	problems, err := ValidateModules(out, server, mcdrVersion)
+	if err != nil {
+		return nil, nil, err
+	}
+	var warnings []error
+	if len(problems) > 0 {
+		if !acceptBroken {
+			return nil, nil, errors.Join(problems...)
 		}
-		if n := strings.Compare(string(a.Ecosystem), string(b.Ecosystem)); n != 0 {
-			return n
-		}
-		if n := strings.Compare(string(a.Provider), string(b.Provider)); n != 0 {
-			return n
-		}
-		return strings.Compare(a.ProjectID, b.ProjectID)
-	})
-	if err := ValidateModules(out, server, mcdrVersion); err != nil {
-		return nil, err
+		warnings = problems
 	}
 	log.Info(
 		"resolve: selected packages",
 		"packages", len(out),
 	)
-	return out, nil
+	return out, warnings, nil
 }
 
 // preferReleaseBuilds applies the default selector's preference: `any` takes
@@ -529,13 +526,14 @@ func packageEnabled(p types.LockedPackage) bool {
 	return false
 }
 
-func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcdrVersion string) error {
+func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcdrVersion string) ([]error, error) {
 	type selected struct{ packageIndex, moduleIndex int }
 	index := map[struct {
 		environment types.Environment
 		ecosystem   types.Ecosystem
 		id          string
 	}]selected{}
+	var problems []error
 	for pi := range packages {
 		p := &packages[pi]
 		if !packageEnabled(*p) {
@@ -555,7 +553,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 				if old, ok := index[key]; ok {
 					previous := packages[old.packageIndex].Modules[old.moduleIndex]
 					if m.NestedPath == "" && previous.NestedPath == "" && pi != old.packageIndex {
-						return fmt.Errorf("duplicate native module %s in %s and %s", name, p.Filename, packages[old.packageIndex].Filename)
+						return nil, fmt.Errorf("duplicate native module %s in %s and %s", name, p.Filename, packages[old.packageIndex].Filename)
 					}
 					if previous.NestedPath == "" {
 						continue
@@ -567,15 +565,15 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 						}
 						a, err := version.Parse(previous.Version, scheme)
 						if err != nil {
-							return err
+							return nil, err
 						}
 						b, err := version.Parse(m.Version, scheme)
 						if err != nil {
-							return err
+							return nil, err
 						}
 						comparison, isComparable := a.Compare(b)
 						if !isComparable {
-							return fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
+							return nil, fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
 						}
 						if comparison >= 0 {
 							continue
@@ -649,18 +647,25 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 					}
 				}
 				matched := value != ""
+				invalid := false
 				if matched && dep.Constraint != "" {
 					var err error
 					matched, err = version.Match(dep.Constraint, value, p.Ecosystem)
 					if err != nil {
-						return fmt.Errorf("%s dependency %s: %w", m.ID, dep.ID, err)
+						problems = append(problems, fmt.Errorf("module %s requires %s %s: %w", m.ID, dep.ID, dep.Constraint, err))
+						invalid = true
 					}
 				}
-				if dep.Kind == types.DependencyKindRequired && !matched {
-					return fmt.Errorf("module %s requires %s %s (selected %s)", m.ID, dep.ID, dep.Constraint, value)
+				requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
+				if !invalid && dep.Kind == types.DependencyKindRequired && !matched {
+					if value == "" {
+						problems = append(problems, fmt.Errorf("module %s requires %s, which no selected package provides", m.ID, requirement))
+					} else {
+						problems = append(problems, fmt.Errorf("module %s requires %s (selected %s)", m.ID, requirement, value))
+					}
 				}
-				if dep.Kind == types.DependencyKindIncompatible && matched {
-					return fmt.Errorf("module %s breaks %s %s", m.ID, dep.ID, value)
+				if !invalid && dep.Kind == types.DependencyKindIncompatible && matched {
+					problems = append(problems, fmt.Errorf("module %s breaks %s %s", m.ID, dep.ID, value))
 				}
 				if matched {
 					if target != nil {
@@ -676,7 +681,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 		}
 		p.Modules = selectedModules
 	}
-	return nil
+	return problems, nil
 }
 
 func mergeArtifactSelections(packages []types.LockedPackage) []types.LockedPackage {
@@ -705,4 +710,21 @@ func mergeArtifactSelections(packages []types.LockedPackage) []types.LockedPacka
 		out = append(out, p)
 	}
 	return out
+}
+
+// sortPackages orders packages by their persisted identity so validation
+// reports findings in a stable order.
+func sortPackages(packages []types.LockedPackage) {
+	slices.SortFunc(packages, func(a, b types.LockedPackage) int {
+		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {
+			return n
+		}
+		if n := strings.Compare(string(a.Ecosystem), string(b.Ecosystem)); n != 0 {
+			return n
+		}
+		if n := strings.Compare(string(a.Provider), string(b.Provider)); n != 0 {
+			return n
+		}
+		return strings.Compare(a.ProjectID, b.ProjectID)
+	})
 }

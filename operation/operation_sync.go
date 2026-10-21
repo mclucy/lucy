@@ -13,17 +13,17 @@ import (
 
 // Sync converges the workspace to its manifest and lock. A missing manifest or
 // lock is allowed only when the other document can drive the operation.
-func Sync(ctx context.Context, root string, opts install.Options) ([]filetrack.Diagnostic, error) {
+func Sync(ctx context.Context, root string, opts install.Options) ([]filetrack.Diagnostic, []error, error) {
 	d, err := manifest.Read(root)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
+		return nil, nil, err
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		d = nil
 	}
 	old, err := lockfile.Read(root)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
+		return nil, nil, err
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		old = nil

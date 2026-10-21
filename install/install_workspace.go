@@ -25,6 +25,8 @@ type (
 	Options struct {
 		Locked          bool
 		Offline         bool
+		AcceptBroken    bool
+		Overwrite       bool
 		PublishManifest bool
 		WithOptional    bool
 		// ExpectedManifest pins the manifest fingerprint the caller selected
@@ -47,7 +49,12 @@ type (
 	}
 )
 
-func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (diagnostics []filetrack.Diagnostic, resultErr error) {
+func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (diagnostics []filetrack.Diagnostic, warnings []error, resultErr error) {
+	diagnostics, resultErr = syncInstall(ctx, root, d, old, opts, &warnings)
+	return diagnostics, warnings, resultErr
+}
+
+func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options, warnings *[]error) (diagnostics []filetrack.Diagnostic, resultErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -236,10 +243,11 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 			resolved.MCDR = environment
 			mcdrVersion = string(environment.Version)
 		}
-		packages, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.materialize, opts.WithOptional)
+		packages, moduleWarnings, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.materialize, opts.WithOptional, opts.AcceptBroken)
 		if err != nil {
 			return nil, err
 		}
+		*warnings = append(*warnings, moduleWarnings...)
 		resolved.Packages = packages
 		if opts.WithOptional {
 			for _, p := range packages {
@@ -317,7 +325,7 @@ func stageInstall(
 			"root", root,
 			"packages", len(resolved.Packages),
 		)
-		if err := validateUnmanagedArtifacts(ctx, root, resolved); err != nil {
+		if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 			return nil, err
 		}
 		if opts.publishLock {
@@ -372,6 +380,7 @@ func stageInstall(
 		return nil, err
 	}
 	staged := 0
+	overwritePaths := map[string]bool{}
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
 		if !packageEnabled(p) {
@@ -380,6 +389,9 @@ func stageInstall(
 		destination, err := packageDestination(resolved, p)
 		if err != nil {
 			return nil, err
+		}
+		if opts.Overwrite {
+			overwritePaths[filepath.ToSlash(destination)] = true
 		}
 		source, err := store.materialize(&p.Artifact)
 		if err != nil {
@@ -396,10 +408,10 @@ func stageInstall(
 			return nil, err
 		}
 	}
-	if err := validateUnmanagedArtifacts(ctx, root, resolved); err != nil {
+	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 		return nil, err
 	}
-	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest); err != nil {
+	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths); err != nil {
 		return nil, err
 	}
 	return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)

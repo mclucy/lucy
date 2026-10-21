@@ -190,6 +190,13 @@ func compareByOperator(op VersionOperator, p1, p2 ResolvableVersion) bool {
 	if p1 == nil || p2 == nil {
 		return false
 	}
+	if p1.Scheme() == VersionSchemeSemver && p2.Scheme() == VersionSchemeSemver {
+		_, leftSemantic := p1.(semverTuple)
+		_, rightSemantic := p2.(semverTuple)
+		if !leftSemantic || !rightSemantic {
+			return comparePlainStringOperand(op, p1, p2)
+		}
+	}
 	cmp, ok := p1.Compare(p2)
 	if !ok {
 		reverseCmp, reverseOK := p2.Compare(p1)
@@ -214,6 +221,18 @@ func compareByOperator(op VersionOperator, p1, p2 ResolvableVersion) bool {
 	default:
 		return false
 	}
+}
+
+// comparePlainStringOperand applies Fabric Loader's rule for versions outside
+// its semantic grammar: inclusive operators require exact string equality and
+// exclusive operators never match.
+func comparePlainStringOperand(op VersionOperator, p1, p2 ResolvableVersion) bool {
+	if op != OpEq && op != OpGte && op != OpLte {
+		return false
+	}
+	left, leftOK := p1.(interface{ String() string })
+	right, rightOK := p2.(interface{ String() string })
+	return leftOK && rightOK && left.String() == right.String()
 }
 
 func compareSemverWeakEq(p1, p2 ResolvableVersion) bool {

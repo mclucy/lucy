@@ -15,6 +15,9 @@ const (
 	flagInstallLockedName       = "locked"
 	flagInstallOfflineName      = "offline"
 	flagInstallWithOptionalName = "with-optional"
+	flagInstallAcceptBrokenName = "accept-broken"
+	flagInstallOverwriteName    = "overwrite"
+	flagInstallForceName        = "force"
 )
 
 var installCmd = &cobra.Command{
@@ -40,6 +43,22 @@ func NewInstallCommand() *cobra.Command {
 		false,
 		"Also install optional dependencies and record them as explicit packages",
 	)
+	installCmd.Flags().Bool(
+		flagInstallAcceptBrokenName,
+		false,
+		"Complete the installation even when required modules are missing or versions do not satisfy their constraints",
+	)
+	installCmd.Flags().Bool(
+		flagInstallOverwriteName,
+		false,
+		"Replace files already present at package destinations",
+	)
+	installCmd.Flags().BoolP(
+		flagInstallForceName,
+		"f",
+		false,
+		"Combine --accept-broken and --overwrite",
+	)
 	return installCmd
 }
 
@@ -52,17 +71,25 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
 	offline, _ := cmd.Flags().GetBool(flagInstallOfflineName)
 	withOptional, _ := cmd.Flags().GetBool(flagInstallWithOptionalName)
+	acceptBroken, _ := cmd.Flags().GetBool(flagInstallAcceptBrokenName)
+	overwrite, _ := cmd.Flags().GetBool(flagInstallOverwriteName)
+	force, _ := cmd.Flags().GetBool(flagInstallForceName)
 
 	opts := install.Options{
 		Locked:          locked,
 		Offline:         offline,
+		AcceptBroken:    acceptBroken || force,
+		Overwrite:       overwrite || force,
 		WithOptional:    withOptional,
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Sync(cmd.Context(), workDir, opts)
+	diagnostics, warnings, err := operation.Sync(cmd.Context(), workDir, opts)
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	for _, warning := range warnings {
+		report.Warn(warning)
 	}
 	return err
 }

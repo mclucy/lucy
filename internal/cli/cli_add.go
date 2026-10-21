@@ -71,9 +71,12 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Add(cmd.Context(), workDir, args, types.Ecosystem(ecosystem), opts)
+	diagnostics, warnings, err := operation.Add(cmd.Context(), workDir, args, types.Ecosystem(ecosystem), opts)
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	for _, warning := range warnings {
+		report.Warn(warning)
 	}
 	return err
 }

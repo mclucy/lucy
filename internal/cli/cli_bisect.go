@@ -206,7 +206,7 @@ func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disab
 	if err := manifest.Write(workDir, doc); err != nil {
 		return 0, 0, fmt.Errorf("write manifest: %w", err)
 	}
-	diagnostics, err := operation.Sync(context.Background(), workDir, install.Options{})
+	diagnostics, _, err := operation.Sync(context.Background(), workDir, install.Options{})
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
 	}
@@ -253,7 +253,7 @@ func restoreBisectManifest(workDir string, original *manifest.Document) (int, er
 	if err := manifest.Write(workDir, original); err != nil {
 		return 0, fmt.Errorf("restore manifest: %w", err)
 	}
-	diagnostics, err := operation.Sync(context.Background(), workDir, install.Options{})
+	diagnostics, _, err := operation.Sync(context.Background(), workDir, install.Options{})
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
 	}
