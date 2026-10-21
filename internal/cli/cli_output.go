@@ -1,0 +1,409 @@
+package cli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+
+	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/resolve"
+	"github.com/mclucy/lucy/terminal/progress"
+	"github.com/mclucy/lucy/terminal/style"
+	"github.com/spf13/cobra"
+)
+
+// installOutput presents one add, remove, install, or init operation: live
+// progress on stderr while it runs, then its summary or machine-readable
+// result. It owns every decision about how the facts look.
+type installOutput struct {
+	cmd      *cobra.Command
+	renderer progress.Renderer
+	json     JSONRendering
+
+	phase           string
+	resolved        int
+	pending         int
+	rejected        int
+	rejectedProject string
+	fetchedBase     int64
+	fetchedCurrent  int64
+}
+
+func newInstallOutput(cmd *cobra.Command) *installOutput {
+	mode := JSONMode(cmd)
+	renderer := progress.Discard()
+	if mode == JSONNone {
+		renderer = progress.New(cmd.ErrOrStderr())
+	}
+	return &installOutput{cmd: cmd, renderer: renderer, json: mode}
+}
+
+// Close stops the renderer after the command's work is done.
+func (o *installOutput) Close() { o.renderer.Close() }
+
+// Trace returns the hooks the operation reports through.
+func (o *installOutput) Trace() *install.Trace {
+	return &install.Trace{
+		PhaseStarted:  o.phaseStarted,
+		PhaseDone:     o.phaseDone,
+		FetchStarted:  o.fetchStarted,
+		FetchProgress: o.fetchProgress,
+		FetchDone:     o.fetchDone,
+		ProcessOutput: o.renderer.LogWriter(),
+		Resolve: resolve.Trace{
+			State:    o.resolveState,
+			Rejected: o.resolveRejected,
+		},
+	}
+}
+
+func (o *installOutput) phaseStarted(name string) {
+	o.phase = name
+	o.resolved = 0
+	o.pending = 0
+	o.rejected = 0
+	o.rejectedProject = ""
+	o.renderer.PhaseStarted(phaseLabel(name))
+}
+
+func (o *installOutput) phaseDone(phase install.PhaseInfo) {
+	o.phase = ""
+	text := phaseText(phase)
+	if text == "" {
+		return
+	}
+	o.renderer.PhaseDone(text, phase.Elapsed)
+}
+
+func (o *installOutput) fetchStarted(name string, size int64) {
+	o.fetchedCurrent = 0
+	o.renderer.Download(name, 0, size)
+	o.updateStatus()
+}
+
+func (o *installOutput) fetchProgress(name string, read, total int64) {
+	o.fetchedCurrent = read
+	o.renderer.Download(name, read, total)
+	o.updateStatus()
+}
+
+func (o *installOutput) fetchDone(string, bool) {
+	o.fetchedBase += o.fetchedCurrent
+	o.fetchedCurrent = 0
+	o.renderer.DownloadDone()
+	o.updateStatus()
+}
+
+func (o *installOutput) resolveState(resolved, pending int) {
+	o.resolved = resolved
+	o.pending = pending
+	o.updateStatus()
+}
+
+func (o *installOutput) resolveRejected(project, _, _ string) {
+	o.rejected++
+	o.rejectedProject = project
+	o.updateStatus()
+}
+
+func (o *installOutput) updateStatus() {
+	if o.phase == "" {
+		return
+	}
+	o.renderer.Status(o.statusText())
+}
+
+func (o *installOutput) statusText() string {
+	var parts []string
+	if o.phase == "packages" {
+		parts = append(
+			parts,
+			fmt.Sprintf("%d resolved", o.resolved),
+			fmt.Sprintf("%d pending", o.pending),
+		)
+	}
+	if fetched := o.fetchedBase + o.fetchedCurrent; fetched > 0 {
+		parts = append(parts, style.FormatBytesDecimal(fetched)+" fetched")
+	}
+	if o.rejectedProject != "" {
+		parts = append(parts, fmt.Sprintf("%s: %d builds rejected", o.rejectedProject, o.rejected))
+	}
+	return strings.Join(parts, " · ")
+}
+
+// Render prints the result. Human output goes to stderr; JSON goes to stdout.
+func (o *installOutput) Render(result *install.Result) error {
+	if result == nil {
+		return nil
+	}
+	result.WarningMessages = warningMessages(result.Warnings)
+	if o.json != JSONNone {
+		return style.WriteJSON(o.cmd.OutOrStdout(), result, o.json == JSONCompact)
+	}
+	if !result.Changed() {
+		if !result.PublishedManifest && !result.PublishedLock {
+			line := style.Success("✓") + " Already up to date"
+			if result.TotalPackages > 0 {
+				line += style.Muted(fmt.Sprintf(" · %d packages", result.TotalPackages))
+			}
+			o.renderer.Println(line)
+		}
+	} else {
+		var changes []string
+		if result.Server.Change == install.ChangeUpgraded {
+			changes = append(changes, serverChangeLine(result.Server))
+		}
+		changes = append(changes, packageChangeLines(result.Packages)...)
+		if len(changes) > 0 {
+			o.renderer.Println(append([]string{""}, changes...)...)
+		}
+	}
+	if trailer := publicationLine(result); trailer != "" {
+		o.renderer.Println("", trailer)
+	}
+	// Flush the summary before warnings so the two surfaces cannot interleave.
+	o.renderer.Close()
+	for _, warning := range result.Warnings {
+		report.Warn(warning)
+	}
+	for _, diagnostic := range result.Diagnostics {
+		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	return nil
+}
+
+// Failure converts an operation error into the detail the command framework
+// renders. Unknown errors pass through unchanged.
+func (o *installOutput) Failure(err error) error {
+	if err == nil {
+		return nil
+	}
+	var failure *resolve.Failure
+	if errors.As(err, &failure) {
+		return resolutionDetail(failure)
+	}
+	var committed *install.CommittedError
+	if errors.As(err, &committed) &&
+		(errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+		return &report.Detail{
+			Title: "interrupted",
+			Lines: []string{
+				"The installation was committed, but file provisioning was interrupted.",
+				"Run lucy install again to finish.",
+			},
+			Cause: err,
+		}
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return &report.Detail{
+			Title: "interrupted",
+			Lines: []string{"The installation stopped before it committed; staged files were rolled back."},
+			Cause: err,
+		}
+	}
+	return err
+}
+
+// commandContext cancels the operation on the first interrupt, so deferred
+// cleanup and the install journal rollback run instead of a hard exit.
+func commandContext(cmd *cobra.Command) (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+}
+
+func warningMessages(warnings []error) []string {
+	messages := make([]string, 0, len(warnings))
+	for _, warning := range warnings {
+		if warning != nil {
+			messages = append(messages, warning.Error())
+		}
+	}
+	return messages
+}
+
+func phaseLabel(name string) string {
+	switch name {
+	case "server":
+		return "Resolving server"
+	case "packages":
+		return "Resolving packages"
+	case "python environment":
+		return "Preparing Python environment"
+	case "install":
+		return "Installing"
+	default:
+		return style.Capitalize(name)
+	}
+}
+
+func phaseText(phase install.PhaseInfo) string {
+	switch phase.Name {
+	case "server":
+		if phase.Version == "" {
+			return fmt.Sprintf("Resolved %s", phase.Product)
+		}
+		return fmt.Sprintf(
+			"Resolved %s %s for Minecraft %s",
+			phase.Product,
+			phase.Version,
+			phase.Minecraft,
+		)
+	case "packages":
+		if phase.Count == 0 && phase.Total == 0 {
+			return ""
+		}
+		if phase.Total > 0 && phase.Count > phase.Total {
+			return fmt.Sprintf(
+				"Resolved %d packages (%d requested, %d dependencies)",
+				phase.Count,
+				phase.Total,
+				phase.Count-phase.Total,
+			)
+		}
+		return fmt.Sprintf("Resolved %d packages", phase.Count)
+	case "python environment":
+		return "Prepared Python environment"
+	case "install":
+		if phase.Count == 0 {
+			return ""
+		}
+		if phase.Count == 1 {
+			return "Installed 1 file"
+		}
+		return fmt.Sprintf("Installed %d files", phase.Count)
+	default:
+		return style.Capitalize(phase.Name)
+	}
+}
+
+func serverChangeLine(change install.ServerChange) string {
+	version := string(change.Version)
+	if change.Change == install.ChangeUpgraded {
+		version = fmt.Sprintf("%s → %s", change.Previous, change.Version)
+	}
+	return fmt.Sprintf(
+		"  %s %s %s",
+		changeGlyph(change.Change),
+		change.Product,
+		version,
+	)
+}
+
+func packageChangeLines(changes []install.PackageChange) []string {
+	width := 0
+	for _, change := range changes {
+		width = max(width, len(change.Name))
+	}
+	lines := make([]string, 0, len(changes))
+	for _, change := range changes {
+		version := string(change.Version)
+		if change.Change == install.ChangeUpgraded {
+			version = fmt.Sprintf("%s → %s", change.Previous, change.Version)
+		}
+		line := fmt.Sprintf(
+			"  %s %-*s  %s",
+			changeGlyph(change.Change),
+			width,
+			change.Name,
+			version,
+		)
+		if change.Change == install.ChangeAdded && !change.Direct && len(change.RequiredBy) > 0 {
+			line += "   " + style.Muted("dependency of "+joinLimited(change.RequiredBy, 2))
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func changeGlyph(change install.Change) string {
+	switch change {
+	case install.ChangeAdded:
+		return style.Success("+")
+	case install.ChangeRemoved:
+		return style.Failure("-")
+	case install.ChangeUpgraded:
+		return style.Warning("~")
+	default:
+		return " "
+	}
+}
+
+func joinLimited(values []string, limit int) string {
+	if len(values) <= limit {
+		return strings.Join(values, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(values[:limit], ", "), len(values)-limit)
+}
+
+func pluralBuilds(count int) string {
+	if count == 1 {
+		return "1 build"
+	}
+	return fmt.Sprintf("%d builds", count)
+}
+
+func publicationLine(result *install.Result) string {
+	switch {
+	case result.PublishedManifest && result.PublishedLock:
+		return style.Muted("Updated lucy.yaml and lucy-lock.yaml")
+	case result.PublishedManifest:
+		return style.Muted("Updated lucy.yaml")
+	case result.PublishedLock:
+		return style.Muted("Updated lucy-lock.yaml")
+	default:
+		return ""
+	}
+}
+
+func resolutionDetail(failure *resolve.Failure) *report.Detail {
+	detail := &report.Detail{Cause: failure}
+	versionOnly := len(failure.Groups) == 1 &&
+		failure.Groups[0].Kind == resolve.RejectionVersionMismatch
+	if versionOnly {
+		group := failure.Groups[0]
+		detail.Title = fmt.Sprintf("%s has no build matching %q", failure.Project, group.Detail)
+		if failure.Candidates > 0 {
+			detail.Lines = append(detail.Lines, fmt.Sprintf(
+				"%d builds exist for Minecraft %s on %s",
+				failure.Candidates,
+				failure.Minecraft,
+				failure.Ecosystem,
+			))
+		}
+		if group.FirstVersion != "" && group.LastVersion != "" && group.FirstVersion != group.LastVersion {
+			detail.Lines = append(detail.Lines, group.FirstVersion+" … "+group.LastVersion)
+		}
+		if group.FirstVersion != "" {
+			detail.Hint = fmt.Sprintf("lucy add %s@%s", failure.Project, group.FirstVersion)
+		}
+		return detail
+	}
+	detail.Title = fmt.Sprintf("no build of %s works on this server", failure.Project)
+	if failure.Candidates > 0 {
+		detail.Lines = append(detail.Lines, fmt.Sprintf(
+			"checked %d builds for Minecraft %s on %s",
+			failure.Candidates,
+			failure.Minecraft,
+			failure.Ecosystem,
+		))
+	}
+	for _, group := range failure.Groups {
+		switch group.Kind {
+		case resolve.RejectionEmpty:
+			detail.Lines = append(detail.Lines, group.Detail)
+		case resolve.RejectionModules:
+			prefix := pluralBuilds(group.Count)
+			if group.Count == failure.Candidates {
+				prefix = fmt.Sprintf("all %d", group.Count)
+			}
+			detail.Lines = append(detail.Lines, prefix+": "+group.Detail)
+		default:
+			detail.Lines = append(detail.Lines, pluralBuilds(group.Count)+": "+group.Detail)
+		}
+	}
+	return detail
+}

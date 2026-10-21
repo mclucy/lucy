@@ -31,6 +31,8 @@ type InitOptions struct {
 	// initialization lacks one and returns the trimmed response. Nil keeps
 	// the concrete-version-required error and never prompts.
 	PromptMinecraft func() (string, error)
+	// Trace receives progress for the lock resolution initialization runs.
+	Trace *install.Trace
 }
 
 func commandDocuments(root string) (document *manifest.Document, locked *lockfile.Document, resultErr error) {
@@ -172,29 +174,29 @@ func commandReference(d *manifest.Document, old *lockfile.Document, raw string, 
 	return ref, selector, nil
 }
 
-func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) ([]filetrack.Diagnostic, []error, error) {
+func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) (*install.Result, error) {
 	d, old, err := commandDocuments(root)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	opts.ExpectedManifest, err = manifest.Fingerprint(d)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	opts.RequirementChange = true
 	ecosystem = selectedEcosystem(d, ecosystem)
 	if ecosystem == types.EcosystemUnspecified {
-		return nil, nil, fmt.Errorf("specify a package ecosystem supported by the declared server")
+		return nil, fmt.Errorf("specify a package ecosystem supported by the declared server")
 	}
 	for _, raw := range args {
 		ref, selector, err := commandReference(d, old, raw, ecosystem)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		r := manifest.Requirement{Selector: selector, Enabled: new(true)}
 		if ecosystem == types.EcosystemMCDR {
 			if d.MCDR == nil {
-				return nil, nil, fmt.Errorf("manifest has no MCDR runtime")
+				return nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
 			d.MCDR.Packages[ref] = r
 		} else {
@@ -208,31 +210,31 @@ func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosys
 	return install.Sync(ctx, root, d, old, opts)
 }
 
-func Remove(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) ([]filetrack.Diagnostic, []error, error) {
+func Remove(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) (*install.Result, error) {
 	d, old, err := commandDocuments(root)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	opts.ExpectedManifest, err = manifest.Fingerprint(d)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	opts.RequirementChange = true
 	ecosystem = selectedEcosystem(d, ecosystem)
 	for _, raw := range args {
 		ref, _, err := commandReference(d, old, raw, ecosystem)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		packages := d.Server.Packages[ecosystem]
 		if ecosystem == types.EcosystemMCDR {
 			if d.MCDR == nil {
-				return nil, nil, fmt.Errorf("manifest has no MCDR runtime")
+				return nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
 			packages = d.MCDR.Packages
 		}
 		if _, ok := packages[ref]; !ok {
-			return nil, nil, fmt.Errorf("direct requirement %s not found in %s", ref, ecosystem)
+			return nil, fmt.Errorf("direct requirement %s not found in %s", ref, ecosystem)
 		}
 		delete(packages, ref)
 	}
@@ -444,7 +446,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	// Adoption records the set the server already runs, so module
 	// requirements that the installed jars report but the catalogue metadata
 	// cannot satisfy become warnings instead of a refusal.
-	resolved, resolveWarnings, err := install.Resolve(ctx, root, d, old, install.Options{AcceptBroken: true})
+	resolved, resolveWarnings, err := install.Resolve(ctx, root, d, old, install.Options{AcceptBroken: true, Trace: opts.Trace})
 	observed.Warnings = append(observed.Warnings, resolveWarnings...)
 	if err != nil {
 		return nil, observed.Warnings, err

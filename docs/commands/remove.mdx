@@ -11,6 +11,12 @@ description: "Remove packages from the manifest and uninstall them"
   One or more package references, in the same `modrinth:project`, `curseforge:project`, or `mcdr:project` form accepted by [`lucy add`](/commands/add). Bare names resolve as the same shortcuts: a unique match in the current lock, otherwise Modrinth (or the MCDR catalogue for MCDR plugins). Only packages declared directly in the manifest can be removed — naming something the manifest never declared is an error, and dependencies remain installed while another package still needs them.
 </ParamField>
 
+## Output
+
+Removal reports progress on stderr while it re-resolves, then lists what changed. Removed packages are marked `-`, including dependencies that nothing else needed any more; versions that moved are marked `~`. When nothing changes, the command says the workspace is already up to date.
+
+`--json` prints the same result as a machine-readable object on stdout. `--no-interactive` (and `--no-style`) replace the animated display with append-only lines for CI logs.
+
 ## Flags
 
 <ParamField query="--ecosystem" type="string">

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
@@ -45,16 +46,18 @@ func Resolve(ctx context.Context, root string, d *manifest.Document, old *lockfi
 		ctx:     ctx,
 		dir:     filepath.Join(absolute, ".lucy", "downloads"),
 		offline: opts.Offline,
+		trace:   opts.Trace,
+		fetch:   &FetchSummary{},
 	}
-	var warnings []error
-	resolved, err := resolveInstall(ctx, absolute, d, old, fingerprint, &opts, store, &warnings)
+	result := newResult()
+	resolved, err := resolveInstall(ctx, absolute, d, old, fingerprint, &opts, store, result)
 	if err != nil {
-		return nil, warnings, err
+		return nil, result.Warnings, err
 	}
 	if err := resolved.Validate(); err != nil {
-		return nil, warnings, err
+		return nil, result.Warnings, err
 	}
-	return resolved, warnings, nil
+	return resolved, result.Warnings, nil
 }
 
 // resolveInstall resolves d into a new lock document. The caller decides when
@@ -68,7 +71,7 @@ func resolveInstall(
 	fingerprint string,
 	opts *Options,
 	store *downloadStore,
-	warnings *[]error,
+	result *Result,
 ) (*lockfile.Document, error) {
 	if d == nil {
 		return nil, fmt.Errorf("manifest required to resolve a lock")
@@ -117,11 +120,22 @@ func resolveInstall(
 			Java:           old.Server.Java,
 		}
 	} else {
+		opts.Trace.phaseStarted("server")
+		start := time.Now()
 		var err error
 		core, err = routing.ResolveServerProduct(ctx, coreReq, store.materialize)
 		if err != nil {
 			return nil, err
 		}
+		elapsed := time.Since(start)
+		result.addPhase("server", elapsed)
+		opts.Trace.phaseDone(PhaseInfo{
+			Name:      "server",
+			Elapsed:   elapsed,
+			Product:   core.Product,
+			Version:   core.ProductVersion,
+			Minecraft: core.Minecraft,
+		})
 	}
 	resolved := &lockfile.Document{
 		SchemaVersion:       lockfile.SchemaVersion,
@@ -145,18 +159,44 @@ func resolveInstall(
 		if old != nil && old.MCDR != nil && isFloating(request) {
 			request = old.MCDR.Version
 		}
+		opts.Trace.phaseStarted("python environment")
+		start := time.Now()
 		environment, err := prepareMCDR(ctx, root, d.MCDR.Directory, request, nil, store)
 		if err != nil {
 			return nil, err
 		}
+		elapsed := time.Since(start)
+		result.addPhase("python environment", elapsed)
+		opts.Trace.phaseDone(PhaseInfo{Name: "python environment", Elapsed: elapsed})
 		resolved.MCDR = environment
 		mcdrVersion = string(environment.Version)
 	}
-	packages, moduleWarnings, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.materialize, opts.WithOptional, opts.AcceptBroken, !opts.declaredOnly)
+	opts.Trace.phaseStarted("packages")
+	start := time.Now()
+	packages, moduleWarnings, err := resolve.Packages(resolve.PackagesRequest{
+		Context:            ctx,
+		Manifest:           d,
+		Previous:           old,
+		Server:             resolved.Server,
+		MCDRVersion:        mcdrVersion,
+		Materialize:        store.materialize,
+		WithOptional:       opts.WithOptional,
+		AcceptBroken:       opts.AcceptBroken,
+		ExpandDependencies: !opts.declaredOnly,
+		Trace:              opts.Trace.resolveTrace(),
+	})
 	if err != nil {
 		return nil, err
 	}
-	*warnings = append(*warnings, moduleWarnings...)
+	elapsed := time.Since(start)
+	result.addPhase("packages", elapsed)
+	opts.Trace.phaseDone(PhaseInfo{
+		Name:    "packages",
+		Elapsed: elapsed,
+		Count:   len(packages),
+		Total:   countDeclared(d),
+	})
+	result.Warnings = append(result.Warnings, moduleWarnings...)
 	resolved.Packages = packages
 	if opts.WithOptional {
 		for _, p := range packages {

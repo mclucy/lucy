@@ -69,10 +69,14 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 	reportObservationFindings(ws)
 	switch JSONMode(cmd) {
 	case JSONPretty:
-		style.PrintAsJson(ws)
+		if err := style.WriteJSON(cmd.OutOrStdout(), ws, false); err != nil {
+			return err
+		}
 		return nil
 	case JSONCompact:
-		style.PrintAsJsonCompact(ws)
+		if err := style.WriteJSON(cmd.OutOrStdout(), ws, true); err != nil {
+			return err
+		}
 		return nil
 	}
 	terminal.Flush(
@@ -495,10 +499,14 @@ func actionStatusFromLock(
 	document := newLockStatusDocument(workDir, lock, declared)
 	switch JSONMode(cmd) {
 	case JSONPretty:
-		style.PrintAsJson(document)
+		if err := style.WriteJSON(cmd.OutOrStdout(), document, false); err != nil {
+			return err
+		}
 		return nil
 	case JSONCompact:
-		style.PrintAsJsonCompact(document)
+		if err := style.WriteJSON(cmd.OutOrStdout(), document, true); err != nil {
+			return err
+		}
 		return nil
 	}
 	terminal.Flush(

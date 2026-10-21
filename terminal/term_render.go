@@ -7,7 +7,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/mclucy/lucy/terminal/style"
-	"golang.org/x/term"
 )
 
 const keyColPadding = 2
@@ -87,7 +86,7 @@ func Flush(data *Data) {
 	logoMode := data.LogoMode
 	largeVariant := logoField.variant(true)
 	smallVariant := logoField.variant(false)
-	isTTY := term.IsTerminal(1)
+	isTTY := style.StdoutIsTerminal
 	params := NegotiateStatusLayout(
 		style.TermWidth(),
 		logoField.Width(largeVariant),

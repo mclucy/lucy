@@ -33,7 +33,13 @@ type (
 	}
 )
 
-func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths map[string]bool) (resultErr error) {
+func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths map[string]bool) (FileChanges, error) {
+	var counts FileChanges
+	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, &counts)
+	return counts, resultErr
+}
+
+func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths map[string]bool, counts *FileChanges) (resultErr error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	previous := installReceipt{}
 	raw, err := os.ReadFile(receiptPath)
@@ -45,6 +51,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		return err
 	}
 	owned := map[string]string{}
+	occupantHashes := map[string]string{}
 	for _, entry := range previous.Entries {
 		owned[entry.Path] = entry.SHA256
 	}
@@ -103,6 +110,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 			if err != nil {
 				return err
 			}
+			occupantHashes[relative] = actual["sha256"]
 			if actual["sha256"] != hashes["sha256"] && actual["sha256"] != owned[relative] {
 				if !overwritePaths[relative] {
 					return fmt.Errorf("unowned or modified output conflict: %s", relative)
@@ -214,13 +222,23 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	}()
 	for name, source := range sources {
 		mode := os.FileMode(0o644)
+		hash := ""
 		for _, entry := range next.Entries {
 			if entry.Path == name {
 				mode = os.FileMode(entry.Mode)
+				hash = entry.SHA256
 				break
 			}
 		}
-		if err := bootstrap.CopyLockedFile(source, filepath.Join(root, name), mode); err != nil {
+		target := filepath.Join(root, name)
+		_, statErr := os.Lstat(target)
+		exists := statErr == nil
+		if !exists {
+			counts.Created++
+		} else if occupantHashes[name] != hash {
+			counts.Replaced++
+		}
+		if err := bootstrap.CopyLockedFile(source, target, mode); err != nil {
 			return err
 		}
 	}
@@ -238,6 +256,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 			}
 			pruned++
 		}
+		counts.Removed = pruned
 	}
 	if publish {
 		if err := manifest.Write(root, d); err != nil {

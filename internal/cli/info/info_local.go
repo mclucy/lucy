@@ -55,10 +55,9 @@ func actionArtifactInfo(cmd *cobra.Command, filePath string) error {
 		if len(views) == 1 {
 			payload = views[0]
 		}
-		if mode == cli.JSONCompact {
-			style.PrintAsJsonCompact(payload)
-		} else {
-			style.PrintAsJson(payload)
+		compact := mode == cli.JSONCompact
+		if err := style.WriteJSON(cmd.OutOrStdout(), payload, compact); err != nil {
+			return err
 		}
 		return nil
 	}

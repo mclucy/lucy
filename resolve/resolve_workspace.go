@@ -26,6 +26,7 @@ type (
 	}
 	projectRequest struct {
 		key          projectKey
+		display      string
 		requirements []types.RequirementBinding
 		releaseIDs   []string
 	}
@@ -60,13 +61,44 @@ func SupportsPackages(server lockfile.Server, ecosystem types.Ecosystem) bool {
 	}
 }
 
-func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Document, server lockfile.Server, mcdrVersion string, materialize func(*types.Artifact) (string, error), withOptional bool, acceptBroken bool, expandDependencies bool) ([]types.LockedPackage, []error, error) {
+// PackagesRequest describes one package resolution. Trace and Context
+// default to their zero values, which report nothing and never cancel.
+type PackagesRequest struct {
+	Context            context.Context
+	Manifest           *manifest.Document
+	Previous           *lockfile.Document
+	Server             lockfile.Server
+	MCDRVersion        string
+	Materialize        func(*types.Artifact) (string, error)
+	WithOptional       bool
+	AcceptBroken       bool
+	ExpandDependencies bool
+	Trace              Trace
+}
+
+func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
+	ctx := request.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	d := request.Manifest
+	previous := request.Previous
+	server := request.Server
+	mcdrVersion := request.MCDRVersion
+	materialize := request.Materialize
+	withOptional := request.WithOptional
+	acceptBroken := request.AcceptBroken
+	expandDependencies := request.ExpandDependencies
+	trace := request.Trace
 	var requests []projectRequest
 	appendRequest := func(environment types.Environment, ecosystem types.Ecosystem, ref string, r manifest.Requirement) error {
 		provider, project, err := manifest.ParseReference(ref)
 		if err != nil {
 			return err
 		}
+		// The slug the user wrote is the display name even when the lock lets
+		// resolution start from the project identity.
+		display := project
 		if previous != nil {
 			for _, p := range previous.Packages {
 				if p.Environment == environment && p.Ecosystem == ecosystem && p.Provider == provider {
@@ -85,6 +117,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				provider,
 				project,
 			},
+			display: display,
 			requirements: []types.RequirementBinding{
 				{
 					Reference:   ref,
@@ -142,21 +175,29 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	attempts := 0
 	strict := true
 	var lastErr error
+	ledger := newRejectionLedger()
 	log.Info(
 		"resolve: resolving package requirements",
 		"requests", len(requests),
 	)
+	// A hard failure is an error that no candidate rejection explains, such as
+	// a network, checksum, or archive error. It outranks the rejection summary.
+	operational := false
+	hardFail := func(err error) bool {
+		lastErr = err
+		operational = true
+		return false
+	}
 	var backtrack func([]projectRequest) bool
 	backtrack = func(pending []projectRequest) bool {
 		if err := ctx.Err(); err != nil {
-			lastErr = err
-			return false
+			return hardFail(err)
 		}
 		attempts++
 		if attempts > 10000 {
-			lastErr = fmt.Errorf("package resolution exceeded 10000 candidate combinations")
-			return false
+			return hardFail(fmt.Errorf("package resolution exceeded 10000 candidate combinations"))
 		}
+		trace.state(len(chosen), len(pending))
 		if len(pending) == 0 {
 			all := make([]types.LockedPackage, 0, len(chosen))
 			for _, p := range chosen {
@@ -171,8 +212,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 					"attempt", attempts,
 					"reason", err,
 				)
-				lastErr = err
-				return false
+				return hardFail(err)
 			}
 			if len(problems) > 0 && strict {
 				log.Debug(
@@ -180,7 +220,31 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 					"attempt", attempts,
 					"reason", problems[0],
 				)
-				lastErr = errors.Join(problems...)
+				lastErr = errors.Join(problemErrors(problems)...)
+				for _, problem := range problems {
+					key := projectKey{
+						problem.Environment,
+						problem.Ecosystem,
+						problem.Provider,
+						problem.ProjectID,
+					}
+					display := ledger.displayFor(key)
+					if display == "" {
+						display = problem.ProjectID
+					}
+					version := ""
+					if owner, ok := chosen[key]; ok {
+						version = string(owner.Version)
+					}
+					ledger.record(
+						key,
+						display,
+						version,
+						problem.Message,
+						RejectionModules,
+					)
+					ledger.markFailed(key)
+				}
 				return false
 			}
 			return true
@@ -190,6 +254,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		if canonicalKey, ok := canonical[r.key]; ok {
 			r.key = canonicalKey
 		}
+		ledger.noteDisplay(r.key, r.display)
 		active := len(r.requirements) == 0
 		for _, req := range r.requirements {
 			active = active || req.Enabled
@@ -201,8 +266,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		if previous, ok := chosen[r.key]; ok && (!active || previous.Artifact.Filename != "") {
 			for _, release := range r.releaseIDs {
 				if release != "" && previous.ReleaseID != release {
-					lastErr = fmt.Errorf("conflicting exact releases for %s:%s", r.key.provider, r.key.project)
-					return false
+					return hardFail(fmt.Errorf("conflicting exact releases for %s:%s", r.key.provider, r.key.project))
 				}
 			}
 			before := previous.Requirements
@@ -250,8 +314,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			var err error
 			list, err = routing.Candidates(ctx, catalogueRegistry(r.key.provider), r.key.project, string(server.Minecraft), r.key.ecosystem)
 			if err != nil {
-				lastErr = err
-				return false
+				return hardFail(err)
 			}
 			slices.SortStableFunc(list, func(a, b types.CatalogueCandidate) int { return b.PublishedAt.Compare(a.PublishedAt) })
 			if previous != nil {
@@ -267,6 +330,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				}
 			}
 			candidates[r.key] = list
+			ledger.setCandidates(r.key, r.display, len(list))
 		}
 		if len(list) > 0 {
 			// Direct requirements name a project by its catalogue slug, while
@@ -279,6 +343,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				if _, cached := candidates[canonicalKey]; !cached {
 					candidates[canonicalKey] = list
 				}
+				ledger.setCandidates(canonicalKey, r.display, len(list))
 				log.Debug(
 					"resolve: project identity canonicalized",
 					"provider", r.key.provider,
@@ -287,24 +352,32 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				)
 				return backtrack(append([]projectRequest{{
 					key:          canonicalKey,
+					display:      r.display,
 					requirements: r.requirements,
 					releaseIDs:   r.releaseIDs,
 				}}, rest...))
 			}
 		}
+		if len(list) == 0 {
+			ledger.record(r.key, r.display, "", "no published builds match this server", RejectionEmpty)
+		}
 		list = preferReleaseBuilds(list, r.requirements)
 		for _, candidate := range list {
 			eligible := true
 			reason := ""
-			reject := func(cause string) {
+			var rejectKind RejectionKind
+			var rejectDetail string
+			reject := func(kind RejectionKind, detail string) {
 				eligible = false
 				if reason == "" {
-					reason = cause
+					reason = describeRejection(kind, detail)
+					rejectKind = kind
+					rejectDetail = detail
 				}
 			}
 			for _, release := range r.releaseIDs {
 				if release != "" && candidate.ReleaseID != release {
-					reject("release mismatch")
+					reject(RejectionReleaseMismatch, release)
 				}
 			}
 			constrained := false
@@ -316,25 +389,24 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				switch req.Selector {
 				case types.VersionStable:
 					if candidate.Channel != types.ReleaseChannelRelease {
-						reject("not a release build")
+						reject(RejectionChannel, "requested a release build")
 					}
 				case types.VersionAny, types.VersionBeta, "":
 				default:
 					if candidate.Version != req.Selector && candidate.ReleaseID != string(req.Selector) && candidate.FileID != string(req.Selector) && candidate.Filename != string(req.Selector) {
-						reject("selector mismatch")
+						reject(RejectionVersionMismatch, string(req.Selector))
 					}
 				}
 				if req.FilePattern != "" {
 					match, err := filepath.Match(req.FilePattern, candidate.Filename)
 					if err != nil {
-						lastErr = err
-						return false
+						return hardFail(err)
 					}
 					if !match {
-						reject("file pattern mismatch")
+						reject(RejectionFilePattern, req.FilePattern)
 					}
 				} else if !candidate.PrimaryFile {
-					reject("not the primary file")
+					reject(RejectionPrimaryFile, "")
 				}
 			}
 			// A dependency request carries no requirement of its own, so no
@@ -342,9 +414,11 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			// sources and dev jars carry a readable descriptor and would
 			// otherwise win the version race on publication date alone.
 			if !constrained && !candidate.PrimaryFile {
-				reject("not the primary file")
+				reject(RejectionPrimaryFile, "")
 			}
 			if !eligible {
+				ledger.record(r.key, r.display, string(candidate.Version), rejectDetail, rejectKind)
+				trace.rejected(r.display, string(candidate.Version), reason)
 				log.Debug(
 					"resolve: candidate rejected",
 					"provider", r.key.provider,
@@ -358,16 +432,17 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 			a := candidate.Artifact
 			p, err := materialize(&a)
 			if err != nil {
-				lastErr = err
-				return false
+				return hardFail(err)
 			}
 			modules, err := artifact.ReadModules(ctx, p, r.key.ecosystem)
 			if err != nil {
-				lastErr = err
-				return false
+				return hardFail(err)
 			}
 			if len(modules) == 0 {
-				lastErr = fmt.Errorf("artifact %s has no server-visible %s modules", a.Filename, r.key.ecosystem)
+				message := fmt.Sprintf("artifact %s has no server-visible %s modules", a.Filename, r.key.ecosystem)
+				lastErr = errors.New(message)
+				ledger.record(r.key, r.display, string(candidate.Version), message, RejectionModules)
+				trace.rejected(r.display, string(candidate.Version), message)
 				continue
 			}
 			a.Modules = modules
@@ -389,6 +464,7 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				"file", candidate.Filename,
 				"modules", len(modules),
 			)
+			trace.selected(r.display, string(candidate.Version))
 			next := append([]projectRequest{}, rest...)
 			if expandDependencies {
 				for _, dep := range candidate.Dependencies {
@@ -433,10 +509,18 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 				"candidate", candidate.Version,
 				"reason", "nested resolution failed",
 			)
+			ledger.record(
+				r.key,
+				r.display,
+				string(candidate.Version),
+				"a required dependency could not be resolved",
+				RejectionNested,
+			)
 		}
 		if lastErr == nil {
 			lastErr = fmt.Errorf("no candidate satisfies %s:%s", r.key.provider, r.key.project)
 		}
+		ledger.markFailed(r.key)
 		return false
 	}
 	search := func(allowBroken bool) bool {
@@ -444,18 +528,29 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 		attempts = 0
 		strict = !allowBroken
 		lastErr = nil
+		operational = false
+		ledger.reset()
 		return backtrack(requests)
+	}
+	finalFailure := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if operational {
+			return lastErr
+		}
+		return resolutionFailure(ledger.summary(server.Minecraft, lastErr), lastErr)
 	}
 	if !search(false) {
 		if !acceptBroken {
-			return nil, nil, lastErr
+			return nil, nil, finalFailure()
 		}
 		log.Debug(
 			"resolve: retrying with broken graphs",
 			"reason", lastErr,
 		)
 		if !search(true) {
-			return nil, nil, lastErr
+			return nil, nil, finalFailure()
 		}
 	}
 	var out []types.LockedPackage
@@ -477,9 +572,9 @@ func Packages(ctx context.Context, d *manifest.Document, previous *lockfile.Docu
 	var warnings []error
 	if len(problems) > 0 {
 		if !acceptBroken {
-			return nil, nil, errors.Join(problems...)
+			return nil, nil, errors.Join(problemErrors(problems)...)
 		}
-		warnings = problems
+		warnings = problemErrors(problems)
 	}
 	log.Info(
 		"resolve: selected packages",
@@ -531,14 +626,14 @@ func packageEnabled(p types.LockedPackage) bool {
 	return false
 }
 
-func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcdrVersion string) ([]error, error) {
+func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcdrVersion string) ([]ModuleProblem, error) {
 	type selected struct{ packageIndex, moduleIndex int }
 	index := map[struct {
 		environment types.Environment
 		ecosystem   types.Ecosystem
 		id          string
 	}]selected{}
-	var problems []error
+	var problems []ModuleProblem
 	for pi := range packages {
 		p := &packages[pi]
 		if !packageEnabled(*p) {
@@ -663,20 +758,20 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 						m.EffectiveVersionDialect(),
 					)
 					if err != nil {
-						problems = append(problems, fmt.Errorf("module %s requires %s %s: %w", m.ID, dep.ID, dep.Constraint, err))
+						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
 						invalid = true
 					}
 				}
 				requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
 				if !invalid && dep.Kind == types.DependencyKindRequired && !matched {
 					if value == "" {
-						problems = append(problems, fmt.Errorf("module %s requires %s, which no selected package provides", m.ID, requirement))
+						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s, which no selected package provides", m.ID, requirement)))
 					} else {
-						problems = append(problems, fmt.Errorf("module %s requires %s (selected %s)", m.ID, requirement, value))
+						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s (selected %s)", m.ID, requirement, value)))
 					}
 				}
 				if !invalid && dep.Kind == types.DependencyKindIncompatible && matched {
-					problems = append(problems, fmt.Errorf("module %s breaks %s %s", m.ID, dep.ID, value))
+					problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s breaks %s %s", m.ID, dep.ID, value)))
 				}
 				if matched {
 					if target != nil {

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"charm.land/fang/v2"
 	"github.com/mclucy/lucy/internal/cli"
@@ -81,7 +83,7 @@ func init() {
 	rootCmd.PersistentFlags().String(
 		cli.FlagLogLevel,
 		"info",
-		"Set diagnostic log level: debug, info, warn, error, fatal",
+		"Level mirrored by --print-logs; the log file always records debug",
 	)
 	rootCmd.PersistentFlags().String(
 		cli.FlagLogFile,
@@ -145,6 +147,42 @@ func init() {
 	)
 }
 
+// renderError keeps failures readable: structured details render their own
+// multi-line explanation, ordinary errors render on one line, and usage
+// mistakes keep the framework's format with its --help hint.
+func renderError(w io.Writer, styles fang.Styles, err error) {
+	var detail *report.Detail
+	if errors.As(err, &detail) {
+		report.RenderDetail(w, detail)
+		fmt.Fprintf(w, "  %s %s\n", style.Muted("log:"), log.FilePath())
+		return
+	}
+	if isUsageError(err) {
+		fang.DefaultErrorHandler(w, styles, err)
+		return
+	}
+	report.Error(err)
+	fmt.Fprintf(w, "  %s %s\n", style.Muted("log:"), log.FilePath())
+}
+
+// isUsageError keeps flag-parsing mistakes on the framework's surface, where
+// they come with the --help hint.
+func isUsageError(err error) bool {
+	message := err.Error()
+	for _, prefix := range []string{
+		"flag needs an argument:",
+		"unknown flag:",
+		"unknown shorthand flag:",
+		"unknown command",
+		"invalid argument",
+	} {
+		if strings.HasPrefix(message, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func Execute() error {
 	executingCommand = nil
 	loggingReady = false
@@ -153,6 +191,7 @@ func Execute() error {
 		rootCmd,
 		fang.WithVersion(version),
 		fang.WithCommit(commit),
+		fang.WithErrorHandler(renderError),
 	)
 	if err != nil {
 		command := executingCommand

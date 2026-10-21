@@ -1,11 +1,13 @@
 package install
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,8 +35,8 @@ func prepareMCDR(ctx context.Context, root, directory string, selector types.Ver
 		return nil, err
 	}
 	defer os.RemoveAll(temp)
-	if output, err := exec.CommandContext(ctx, "python3", "-m", "venv", temp).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("create Python environment: %w\n%s", err, output)
+	if captured, err := runProcess(exec.CommandContext(ctx, "python3", "-m", "venv", temp), store.trace.processOutput()); err != nil {
+		return nil, fmt.Errorf("create Python environment: %w\n%s", err, captured)
 	}
 	python := filepath.Join(temp, "bin", "python")
 	if runtime.GOOS == "windows" {
@@ -66,8 +68,8 @@ func prepareMCDR(ctx context.Context, root, directory string, selector types.Ver
 		}
 		args = append(args, requirement)
 	}
-	if output, err := exec.CommandContext(ctx, python, args...).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("resolve MCDR Python inputs: %w\n%s", err, output)
+	if captured, err := runProcess(exec.CommandContext(ctx, python, args...), store.trace.processOutput()); err != nil {
+		return nil, fmt.Errorf("resolve MCDR Python inputs: %w\n%s", err, captured)
 	}
 	raw, err := os.ReadFile(reportPath)
 	if err != nil {
@@ -123,6 +125,20 @@ func prepareMCDR(ctx context.Context, root, directory string, selector types.Ver
 	return out, nil
 }
 
+// runProcess streams a subprocess's combined output to output while retaining
+// it for the error message.
+func runProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
+	if output == nil {
+		output = io.Discard
+	}
+	var captured bytes.Buffer
+	writer := io.MultiWriter(output, &captured)
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+	err := cmd.Run()
+	return captured.Bytes(), err
+}
+
 func preparePython(ctx context.Context, root, stage string, d *lockfile.Document, store *downloadStore) error {
 	m := d.MCDR
 	if m.Target != pythonTarget() {
@@ -146,8 +162,8 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 		python = filepath.Join(env, "Scripts", "python.exe")
 	}
 	if _, err := os.Stat(filepath.Join(env, ".complete")); os.IsNotExist(err) {
-		if output, err := exec.CommandContext(ctx, "python3", "-m", "venv", env).CombinedOutput(); err != nil {
-			return fmt.Errorf("create locked MCDR environment: %w\n%s", err, output)
+		if captured, err := runProcess(exec.CommandContext(ctx, "python3", "-m", "venv", env), store.trace.processOutput()); err != nil {
+			return fmt.Errorf("create locked MCDR environment: %w\n%s", err, captured)
 		}
 		var requirements []string
 		for i := range m.Inputs {
@@ -163,9 +179,9 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 			return err
 		}
 		cmd := exec.CommandContext(ctx, python, "-m", "pip", "install", "--no-index", "--no-deps", "--require-hashes", "-r", requirementsPath)
-		if output, err := cmd.CombinedOutput(); err != nil {
+		if captured, err := runProcess(cmd, store.trace.processOutput()); err != nil {
 			os.RemoveAll(env)
-			return fmt.Errorf("materialize locked MCDR environment: %w\n%s", err, output)
+			return fmt.Errorf("materialize locked MCDR environment: %w\n%s", err, captured)
 		}
 		if err := os.WriteFile(filepath.Join(env, ".complete"), nil, 0o600); err != nil {
 			return err

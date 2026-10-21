@@ -111,6 +111,24 @@ Use [`lucy file`](/commands/file) to accept, recover, or revert contents explici
 
 See also [Global Flags](/commands/global-flags), [`lucy add`](/commands/add), and [`lucy remove`](/commands/remove).
 
+## Output
+
+Resolution and installation report progress on stderr while they run, then a summary of what changed. Packages are marked `+` (added), `-` (removed), or `~` (version changed), and a dependency is attributed to the package that needs it. When the lock already matches and nothing is published, the command says so and does nothing.
+
+```text
+✓ Resolved 24 packages (22 requested, 2 dependencies) in 1.6s
+✓ Installed 37 files in 0.8s
+
+  + cobblemon   1.8.2
+  + mezzconfig  0.6.8   dependency of jei
+```
+
+When resolution cannot satisfy a package, the error names the package, how many builds were checked, and why they were rejected. Nothing is written in that case: the manifest and the lock stay as they were.
+
+`--json` prints the same result as a machine-readable object on stdout: the resolution mode, server identity, package changes, file counts, fetch counts, and phase timings. Progress stays off stderr in that mode.
+
+`--no-interactive` (and `--no-style`) replace the animated display with append-only lines suitable for CI logs.
+
 ## Flags
 
 <ParamField query="--locked" type="boolean" default="false">

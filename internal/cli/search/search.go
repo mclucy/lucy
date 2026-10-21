@@ -176,10 +176,14 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 
 	switch cli.JSONMode(cmd) {
 	case cli.JSONPretty:
-		style.PrintAsJson(results)
+		if err := style.WriteJSON(cmd.OutOrStdout(), results, false); err != nil {
+			return err
+		}
 		return nil
 	case cli.JSONCompact:
-		style.PrintAsJsonCompact(results)
+		if err := style.WriteJSON(cmd.OutOrStdout(), results, true); err != nil {
+			return err
+		}
 		return nil
 	}
 

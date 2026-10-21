@@ -206,9 +206,14 @@ func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disab
 	if err := manifest.Write(workDir, doc); err != nil {
 		return 0, 0, fmt.Errorf("write manifest: %w", err)
 	}
-	diagnostics, _, err := operation.Sync(context.Background(), workDir, install.Options{})
-	for _, diagnostic := range diagnostics {
-		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	result, err := operation.Sync(context.Background(), workDir, install.Options{})
+	if result != nil {
+		for _, diagnostic := range result.Diagnostics {
+			report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+		}
+		for _, warning := range result.Warnings {
+			report.Warn(warning)
+		}
 	}
 	if err != nil {
 		return 0, 0, fmt.Errorf("sync installation: %w", err)
@@ -253,9 +258,14 @@ func restoreBisectManifest(workDir string, original *manifest.Document) (int, er
 	if err := manifest.Write(workDir, original); err != nil {
 		return 0, fmt.Errorf("restore manifest: %w", err)
 	}
-	diagnostics, _, err := operation.Sync(context.Background(), workDir, install.Options{})
-	for _, diagnostic := range diagnostics {
-		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	result, err := operation.Sync(context.Background(), workDir, install.Options{})
+	if result != nil {
+		for _, diagnostic := range result.Diagnostics {
+			report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+		}
+		for _, warning := range result.Warnings {
+			report.Warn(warning)
+		}
 	}
 	if err != nil {
 		return 0, fmt.Errorf("sync installation: %w", err)
@@ -295,10 +305,14 @@ func currentBisectView(session *bisectState) *bisectView {
 func outputBisect(cmd *cobra.Command, output bisectOutput) error {
 	switch JSONMode(cmd) {
 	case JSONPretty:
-		style.PrintAsJson(output)
+		if err := style.WriteJSON(cmd.OutOrStdout(), output, false); err != nil {
+			return err
+		}
 		return nil
 	case JSONCompact:
-		style.PrintAsJsonCompact(output)
+		if err := style.WriteJSON(cmd.OutOrStdout(), output, true); err != nil {
+			return err
+		}
 		return nil
 	}
 	_, err := fmt.Fprintln(cmd.OutOrStdout(), formatBisectOutput(output))

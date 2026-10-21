@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/filetrack"
@@ -40,15 +41,19 @@ type (
 		// already holds a working set that resolution must not extend.
 		declaredOnly bool
 		publishLock  bool
+		// Trace receives operation facts for the command layer to present.
+		Trace *Trace
 	}
 )
 
-func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (diagnostics []filetrack.Diagnostic, warnings []error, resultErr error) {
-	diagnostics, resultErr = syncInstall(ctx, root, d, old, opts, &warnings)
-	return diagnostics, warnings, resultErr
+func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (*Result, error) {
+	result := newResult()
+	diagnostics, resultErr := syncInstall(ctx, root, d, old, opts, result)
+	result.Diagnostics = diagnostics
+	return result, resultErr
 }
 
-func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options, warnings *[]error) (diagnostics []filetrack.Diagnostic, resultErr error) {
+func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options, result *Result) (diagnostics []filetrack.Diagnostic, resultErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -98,6 +103,8 @@ func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lo
 		ctx:     ctx,
 		dir:     filepath.Join(root, ".lucy", "downloads"),
 		offline: opts.Offline,
+		trace:   opts.Trace,
+		fetch:   &result.Fetch,
 	}
 	resolved := old
 	fingerprint := ""
@@ -110,25 +117,23 @@ func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lo
 	}
 	switch {
 	case old == nil:
-		log.Debug("installation decision", "mode", "resolve", "reason", "no lock file to replay")
+		result.Mode = ModeResolve
+		result.Reason = "no lock file to replay"
 	case opts.WithOptional:
-		log.Debug("installation decision", "mode", "resolve", "reason", "optional packages requested")
+		result.Mode = ModeResolve
+		result.Reason = "optional packages requested"
 	case d != nil && old.ManifestFingerprint != fingerprint:
-		log.Debug(
-			"installation decision",
-			"mode", "resolve",
-			"reason", "manifest changed since lock",
-			"manifest", fingerprint,
-			"lock", old.ManifestFingerprint,
-		)
+		result.Mode = ModeResolve
+		result.Reason = "manifest changed since lock"
 	default:
-		log.Debug(
-			"installation decision",
-			"mode", "replay",
-			"reason", "manifest unchanged; lock replays exactly",
-			"manifest", fingerprint,
-		)
+		result.Mode = ModeReplay
+		result.Reason = "manifest unchanged; lock replays exactly"
 	}
+	log.Debug(
+		"installation decision",
+		"mode", string(result.Mode),
+		"reason", result.Reason,
+	)
 	if old == nil || opts.WithOptional || (d != nil && old.ManifestFingerprint != fingerprint) {
 		if opts.Locked {
 			if !opts.RequirementChange || old == nil || d == nil {
@@ -152,10 +157,13 @@ func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lo
 			if err := resolved.Validate(); err != nil {
 				return nil, err
 			}
+			result.Mode = ModeLocked
+			result.Reason = "manifest core matches; requirements rebind in place"
 			opts.publishLock = true
-			return stageInstall(ctx, root, d, resolved, store, opts)
+			result.applyChanges(old, resolved, d)
+			return stageInstall(ctx, root, d, resolved, store, opts, result)
 		}
-		resolved, err = resolveInstall(ctx, root, d, old, fingerprint, &opts, store, warnings)
+		resolved, err = resolveInstall(ctx, root, d, old, fingerprint, &opts, store, result)
 		if err != nil {
 			return nil, err
 		}
@@ -164,7 +172,8 @@ func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lo
 		return nil, err
 	}
 	opts.publishLock = resolved != old
-	return stageInstall(ctx, root, d, resolved, store, opts)
+	result.applyChanges(old, resolved, d)
+	return stageInstall(ctx, root, d, resolved, store, opts, result)
 }
 
 // stageInstall materializes a resolved lock in the server directory and commits
@@ -177,6 +186,7 @@ func stageInstall(
 	resolved *lockfile.Document,
 	store *downloadStore,
 	opts Options,
+	result *Result,
 ) ([]filetrack.Diagnostic, error) {
 	if err := filetrack.ValidateOwnership(root, resolved.Files, resolved); err != nil {
 		return nil, err
@@ -198,6 +208,8 @@ func stageInstall(
 			if err := lockfile.Write(root, resolved); err != nil {
 				return nil, err
 			}
+			result.PublishedLock = true
+			return provisionCommitted(ctx, root, resolved, opts)
 		}
 		return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
 	}
@@ -212,6 +224,21 @@ func stageInstall(
 	if err := checkJava(ctx, resolved.Server.Java); err != nil {
 		return nil, err
 	}
+	opts.Trace.phaseStarted("install")
+	start := time.Now()
+	installed := false
+	defer func() {
+		if !installed {
+			return
+		}
+		elapsed := time.Since(start)
+		result.addPhase("install", elapsed)
+		opts.Trace.phaseDone(PhaseInfo{
+			Name:    "install",
+			Elapsed: elapsed,
+			Count:   result.Files.Created + result.Files.Replaced,
+		})
+	}()
 	stage, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "stage-*")
 	if err != nil {
 		return nil, err
@@ -233,7 +260,7 @@ func stageInstall(
 		}
 		inputs[input.Path] = p
 	}
-	if err := bootstrap.PrepareLocked(ctx, stage, resolved.Server, core, inputs); err != nil {
+	if err := bootstrap.PrepareLocked(ctx, stage, resolved.Server, core, inputs, opts.Trace.processOutput()); err != nil {
 		return nil, err
 	}
 	log.Debug(
@@ -277,10 +304,15 @@ func stageInstall(
 	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 		return nil, err
 	}
-	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths); err != nil {
+	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths)
+	if err != nil {
 		return nil, err
 	}
-	return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
+	result.Files = counts
+	result.PublishedManifest = opts.PublishManifest
+	result.PublishedLock = opts.publishLock || opts.PublishManifest
+	installed = true
+	return provisionCommitted(ctx, root, resolved, opts)
 }
 
 func isFloating(v types.Version) bool {
@@ -448,4 +480,14 @@ func packageEnabled(p *types.LockedPackage) bool {
 		}
 	}
 	return false
+}
+
+// provisionCommitted provisions tracked files after the lock is published. A
+// failure here leaves the committed installation in place, so it is marked.
+func provisionCommitted(ctx context.Context, root string, resolved *lockfile.Document, opts Options) ([]filetrack.Diagnostic, error) {
+	diagnostics, err := filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
+	if err != nil {
+		err = &CommittedError{Err: err}
+	}
+	return diagnostics, err
 }

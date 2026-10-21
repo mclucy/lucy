@@ -43,10 +43,14 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 
 	switch JSONMode(cmd) {
 	case JSONPretty:
-		style.PrintAsJson(entries)
+		if err := style.WriteJSON(cmd.OutOrStdout(), entries, false); err != nil {
+			return err
+		}
 		return nil
 	case JSONCompact:
-		style.PrintAsJsonCompact(entries)
+		if err := style.WriteJSON(cmd.OutOrStdout(), entries, true); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -76,7 +80,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 					entry.Kind,
 					style.FormatBytesBinary(entry.Size),
 				),
-				Annotation: style.FormatDuration(entry.Expiration),
+				Annotation: style.FormatTTL(entry.Expiration),
 			},
 		)
 	}
