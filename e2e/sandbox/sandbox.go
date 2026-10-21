@@ -226,9 +226,14 @@ func run(man *manifest, opts options) error {
 
 func generateSandbox(sb sandbox, opts options) error {
 	outDir := filepath.Join(opts.outRoot, sb.ID)
-	if _, err := os.Stat(outDir); err == nil && !opts.force {
-		fmt.Printf("[SKIP] %s (exists; use --force)\n", sb.ID)
-		return nil
+	if _, err := os.Stat(outDir); err == nil {
+		if !opts.force {
+			fmt.Printf("[SKIP] %s (exists; use --force)\n", sb.ID)
+			return nil
+		}
+		if err := os.RemoveAll(outDir); err != nil {
+			return fmt.Errorf("clear %s: %w", outDir, err)
+		}
 	}
 
 	type resolved struct {
