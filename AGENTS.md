@@ -40,7 +40,7 @@ To run the built binary against a test server directory:
 
 ```bash
 ./dist/lucy status
-./dist/lucy init --allow-empty --minecraft 1.21.4 --core fabric@0.16.9
+./dist/lucy create --minecraft 1.21.4 --core fabric@0.16.9
 ```
 
 ## Architecture
