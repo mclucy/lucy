@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/e2e/internal/testkit"
+	"github.com/mclucy/lucy/lockfile"
 	"gopkg.in/yaml.v3"
 )
 
@@ -64,7 +65,7 @@ var initializeScenarios = map[string]initializeExpectation{
 }
 
 // TestInitialize runs lucy init against each modpack sandbox and checks the
-// manifest that the CLI writes for a real, decompressed server.
+// manifest and lock that the CLI writes for a real, decompressed server.
 func TestInitialize(t *testing.T) {
 	binary := testkit.Lucy(t)
 	for _, id := range slices.Sorted(maps.Keys(initializeScenarios)) {
@@ -124,6 +125,31 @@ func TestInitialize(t *testing.T) {
 						t.Errorf("manifest lists client-only package %s [%s]", reference, loader)
 					}
 				}
+			}
+			lockData, err := os.ReadFile(filepath.Join(root, "lucy-lock.yaml"))
+			if err != nil {
+				t.Fatalf("read generated lock: %v", err)
+			}
+			locked, err := lockfile.Decode(bytes.NewReader(lockData))
+			if err != nil {
+				t.Fatalf("decode generated lock: %v", err)
+			}
+			if locked.Server.Minecraft.String() != want.minecraft ||
+				locked.Server.Product.String() != want.product {
+				t.Errorf(
+					"lock identity: got %s/%s, want %s/%s",
+					locked.Server.Minecraft, locked.Server.Product,
+					want.minecraft, want.product,
+				)
+			}
+			if len(locked.Packages) < want.minPackages {
+				t.Errorf(
+					"lock packages: got %d, want at least %d",
+					len(locked.Packages), want.minPackages,
+				)
+			}
+			if _, err := os.Stat(filepath.Join(root, ".lucy", "install.yaml")); !os.IsNotExist(err) {
+				t.Errorf("init staged an installation receipt: %v", err)
 			}
 		})
 	}
