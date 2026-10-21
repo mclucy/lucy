@@ -174,9 +174,9 @@ func (s *SemverVersion) Compare(other types.ResolvableVersion) (int, bool) {
 }
 
 // compareFabricPrerelease follows Fabric Loader: a release outranks its
-// prereleases, numeric identifiers outrank alphanumeric ones, numeric
-// identifiers compare by length, and a shorter identifier list outranks a
-// longer list sharing its prefix.
+// prereleases, numeric identifiers rank below alphanumeric ones, numeric
+// identifiers compare by length, and a longer identifier list outranks a
+// shorter list sharing its prefix.
 func compareFabricPrerelease(left, right *SemverVersion) int {
 	if !left.hasPrerelease && !right.hasPrerelease {
 		return 0
