@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
@@ -76,11 +77,15 @@ func selectedEcosystem(d *manifest.Document, requested types.Ecosystem) types.Ec
 
 // servedEcosystemSet returns the package ecosystems that the declared server
 // can load. A probed runtime also reports bridged ecosystems, such as Fabric
-// through Sinytra Connector. Without a probe, the declared product decides.
+// through Sinytra Connector. Only ecosystems the declared product loads enter
+// the set. Without a probe, the declared product decides.
 func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[types.Ecosystem]struct{} {
+	server := lockfile.Server{Product: d.Server.Core.Product}
 	served := map[types.Ecosystem]struct{}{}
 	for _, offer := range observed.ServedEcosystems() {
-		served[offer.Ecosystem] = struct{}{}
+		if resolve.SupportsPackages(server, offer.Ecosystem) {
+			served[offer.Ecosystem] = struct{}{}
+		}
 	}
 	if len(served) == 0 {
 		if ecosystem := selectedEcosystem(d, types.EcosystemUnspecified); ecosystem != types.EcosystemUnspecified {
