@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -93,6 +94,43 @@ func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[
 		}
 	}
 	return served
+}
+
+// servedEcosystemForFile reports the served loader whose descriptor the file
+// carries. A jar without a top-level descriptor can declare its loader inside
+// a JarJar container, while the upstream project label may name a loader the
+// server does not offer.
+func servedEcosystemForFile(
+	ctx context.Context,
+	path string,
+	served map[types.Ecosystem]struct{},
+) (types.Ecosystem, bool) {
+	for _, ecosystem := range slices.Sorted(maps.Keys(served)) {
+		if ecosystem == types.EcosystemMCDR {
+			continue
+		}
+		modules, err := artifact.ReadModules(ctx, path, ecosystem)
+		if err != nil {
+			continue
+		}
+		for _, module := range modules {
+			if loaderSpecificDescriptor(ecosystem, module.DescriptorPath) {
+				return ecosystem, true
+			}
+		}
+	}
+	return types.EcosystemUnspecified, false
+}
+
+// loaderSpecificDescriptor reports whether a descriptor names its loader.
+// Shared metadata such as META-INF/mods.toml is ambiguous between Forge and
+// NeoForge, so it cannot justify adopting a package for a loader that the
+// server merely tolerates.
+func loaderSpecificDescriptor(ecosystem types.Ecosystem, path string) bool {
+	if ecosystem == types.EcosystemNeoForge {
+		return path == "META-INF/neoforge.mods.toml"
+	}
+	return true
 }
 
 func commandReference(d *manifest.Document, old *lockfile.Document, raw string, ecosystem types.Ecosystem) (string, types.Version, error) {
@@ -325,7 +363,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		ecosystem := p.ID.Ecosystem
 		if ecosystem != types.EcosystemMCDR {
 			if _, ok := served[ecosystem]; !ok {
-				continue
+				var adopted bool
+				ecosystem, adopted = servedEcosystemForFile(ctx, p.Path, served)
+				if !adopted {
+					continue
+				}
 			}
 		}
 		modules, err := artifact.ReadModules(ctx, p.Path, ecosystem)
