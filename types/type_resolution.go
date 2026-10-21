@@ -1,6 +1,9 @@
 package types
 
-import "time"
+import (
+	"path"
+	"time"
+)
 
 // Artifact records one upstream file. Descriptor module identities do not
 // replace its provider coordinates.
@@ -21,6 +24,7 @@ type DescriptorModule struct {
 	ID             string                 `yaml:"id" json:"id"`
 	Version        Version                `yaml:"version" json:"version"`
 	Ecosystem      Ecosystem              `yaml:"ecosystem" json:"ecosystem"`
+	VersionDialect VersionDialect         `yaml:"version_dialect,omitempty" json:"version_dialect,omitempty"`
 	NestedPath     string                 `yaml:"nested_path,omitempty" json:"nested_path,omitempty"`
 	DescriptorPath string                 `yaml:"descriptor_path,omitempty" json:"descriptor_path,omitempty"`
 	Provides       []string               `yaml:"provides,omitempty" json:"provides,omitempty"`
@@ -28,6 +32,39 @@ type DescriptorModule struct {
 	FoliaSupported bool                   `yaml:"folia_supported,omitempty" json:"folia_supported,omitzero"`
 	APIVersion     string                 `yaml:"api_version,omitempty" json:"api_version,omitempty"`
 	Dependencies   []DescriptorDependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+}
+
+// EffectiveVersionDialect returns the recorded dialect. Documents written
+// before the field existed infer it from the descriptor format, then from the
+// module ecosystem.
+func (m DescriptorModule) EffectiveVersionDialect() VersionDialect {
+	if m.VersionDialect != VersionDialectUnknown {
+		return m.VersionDialect
+	}
+	switch path.Base(m.DescriptorPath) {
+	case "fabric.mod.json":
+		return VersionDialectFabric
+	case "mods.toml", "neoforge.mods.toml", "sponge_plugins.json":
+		return VersionDialectMaven
+	case "mcdreforged.plugin.json":
+		return VersionDialectMCDR
+	case "plugin.yml", "paper-plugin.yml":
+		return VersionDialectOpaque
+	}
+	switch m.Ecosystem {
+	case EcosystemFabric:
+		return VersionDialectFabric
+	case EcosystemForge, EcosystemNeoForge, EcosystemSponge:
+		return VersionDialectMaven
+	case EcosystemMCDR:
+		return VersionDialectMCDR
+	case EcosystemMinecraft:
+		return VersionDialectMinecraft
+	case EcosystemBukkit, EcosystemPaper:
+		return VersionDialectOpaque
+	default:
+		return VersionDialectUnknown
+	}
 }
 
 type DescriptorDependency struct {

@@ -47,7 +47,10 @@ func (r *neoforgeReader) Read(
 
 	jarjarMeta := readNeoforgeJarjarMeta(zipRdr)
 	embeddedModIds := neoforgeJarjarEmbeddedModIds(zipRdr, jarjarMeta)
-	embeddedDeps := neoforgeJarjarEmbeddedDeps(jarjarMeta)
+	embeddedDeps, err := neoforgeJarjarEmbeddedDeps(jarjarMeta)
+	if err != nil {
+		return nil, err
+	}
 
 	infos := make([]PackageInfo, 0, len(modIdentifier.Mods))
 	for _, mod := range modIdentifier.Mods {
@@ -97,10 +100,14 @@ func (r *neoforgeReader) Read(
 				continue
 			}
 
+			constraint, err := parseNeoforgeMavenVersionRange(dep.VersionRange)
+			if err != nil {
+				return nil, err
+			}
 			info.Dependencies = append(
 				info.Dependencies, Dependency{
 					Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(dep.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemNeoForge},
-					Constraint: parseNeoforgeMavenVersionRange(dep.VersionRange),
+					Constraint: constraint,
 					Mandatory:  dep.Type == "required" || dep.Mandatory,
 					Origin:     dependencyOriginForEmbedded(embeddedModIds[dep.ModID]),
 				},
@@ -248,29 +255,29 @@ func neoforgeJarjarEmbeddedModIds(
 	return modIds
 }
 
-func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependency {
+func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) ([]Dependency, error) {
 	if meta == nil {
-		return nil
+		return nil, nil
 	}
 
 	deps := make([]Dependency, 0, len(meta.Jars))
 	for _, entry := range meta.Jars {
+		constraint, err := parseNeoforgeMavenVersionRange(entry.Version.Range)
+		if err != nil {
+			return nil, err
+		}
 		deps = append(
 			deps, Dependency{
 				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemUnspecified},
-				Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),
+				Constraint: constraint,
 				Mandatory:  true,
 				Origin:     types.DependencyEmbedded,
 			},
 		)
 	}
-	return deps
+	return deps, nil
 }
 
-func parseNeoforgeMavenVersionRange(interval string) types.VersionExpr {
-	return version.ParseRange(
-		interval,
-		version.InferRangeDialect(types.EcosystemForge),
-		types.VersionSchemeMaven,
-	)
+func parseNeoforgeMavenVersionRange(interval string) (types.VersionExpr, error) {
+	return version.ParseConstraint(interval, types.VersionDialectMaven)
 }

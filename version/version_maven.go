@@ -15,14 +15,15 @@ type MavenVersion struct {
 }
 
 type mavenToken struct {
-	separator byte
-	value     string
-	numeric   bool
+	separator       byte
+	value           string
+	numeric         bool
+	followedByDigit bool
 }
 
 func parseMavenVersion(raw types.Version) types.ResolvableVersion {
-	original := strings.TrimSpace(string(raw))
-	if original == "" {
+	original := string(raw)
+	if original == "" || len(original) > 256 {
 		return nil
 	}
 	return &MavenVersion{
@@ -40,13 +41,6 @@ func (v *MavenVersion) Compare(other types.ResolvableVersion) (int, bool) {
 	switch other := other.(type) {
 	case *MavenVersion:
 		o = other
-	case *SemverVersion:
-		parsed := parseMavenVersion(types.Version(other.String()))
-		var ok bool
-		o, ok = parsed.(*MavenVersion)
-		if !ok {
-			return 0, false
-		}
 	default:
 		return 0, false
 	}
@@ -69,8 +63,8 @@ func (v *MavenVersion) Validate() bool {
 	return v != nil && v.original != ""
 }
 
-func (v *MavenVersion) Scheme() types.VersionScheme {
-	return types.VersionSchemeMaven
+func (v *MavenVersion) Dialect() types.VersionDialect {
+	return types.VersionDialectMaven
 }
 
 func (v *MavenVersion) String() string {
@@ -92,16 +86,17 @@ func tokenizeMavenVersion(raw string) []mavenToken {
 	var buf strings.Builder
 	previousClass := byte(0)
 
-	flush := func() {
+	flush := func(followedByDigit bool) {
 		if buf.Len() == 0 {
 			return
 		}
 		value := buf.String()
 		tokens = append(
 			tokens, mavenToken{
-				separator: separator,
-				value:     value,
-				numeric:   isMavenNumeric(value),
+				separator:       separator,
+				value:           value,
+				numeric:         isMavenNumeric(value),
+				followedByDigit: followedByDigit,
 			},
 		)
 		buf.Reset()
@@ -110,7 +105,7 @@ func tokenizeMavenVersion(raw string) []mavenToken {
 	for i := 0; i < len(raw); i++ {
 		ch := raw[i]
 		if isMavenSeparator(ch) {
-			flush()
+			flush(false)
 			separator = ch
 			previousClass = 0
 			continue
@@ -118,19 +113,19 @@ func tokenizeMavenVersion(raw string) []mavenToken {
 
 		class := mavenCharClass(ch)
 		if buf.Len() > 0 && previousClass != 0 && class != previousClass {
-			flush()
+			flush(class == '0')
 			separator = '-'
 		}
 		buf.WriteByte(ch)
 		previousClass = class
 	}
-	flush()
+	flush(false)
 
 	return trimMavenNullTokens(tokens)
 }
 
 func isMavenSeparator(ch byte) bool {
-	return ch == '.' || ch == '-' || ch == '_'
+	return ch == '.' || ch == '-'
 }
 
 func mavenCharClass(ch byte) byte {
@@ -228,7 +223,7 @@ func compareMavenToken(left, right mavenToken) int {
 		return compareMavenInteger(left.value, right.value)
 	}
 	if !left.numeric && !right.numeric {
-		return compareMavenQualifier(left.value, right.value)
+		return compareMavenQualifier(left, right)
 	}
 	if left.numeric {
 		return 1
@@ -261,11 +256,11 @@ func compareMavenInteger(left, right string) int {
 	return strings.Compare(left, right)
 }
 
-func compareMavenQualifier(left, right string) int {
-	left = normalizeMavenQualifier(left)
-	right = normalizeMavenQualifier(right)
-	leftRank, leftKnown := mavenQualifierRank(left)
-	rightRank, rightKnown := mavenQualifierRank(right)
+func compareMavenQualifier(left, right mavenToken) int {
+	leftValue := mavenQualifierValue(left)
+	rightValue := mavenQualifierValue(right)
+	leftRank, leftKnown := mavenQualifierRank(leftValue)
+	rightRank, rightKnown := mavenQualifierRank(rightValue)
 	if leftKnown || rightKnown {
 		if cmp := compareInt(leftRank, rightRank); cmp != 0 {
 			return cmp
@@ -274,7 +269,22 @@ func compareMavenQualifier(left, right string) int {
 			return 0
 		}
 	}
-	return strings.Compare(left, right)
+	return strings.Compare(leftValue, rightValue)
+}
+
+func mavenQualifierValue(token mavenToken) string {
+	value := normalizeMavenQualifier(token.value)
+	if token.followedByDigit && len(value) == 1 {
+		switch value {
+		case "a":
+			return "alpha"
+		case "b":
+			return "beta"
+		case "m":
+			return "milestone"
+		}
+	}
+	return value
 }
 
 func normalizeMavenQualifier(value string) string {
@@ -283,11 +293,11 @@ func normalizeMavenQualifier(value string) string {
 
 func mavenQualifierRank(value string) (int, bool) {
 	switch value {
-	case "alpha", "a":
+	case "alpha":
 		return 0, true
-	case "beta", "b":
+	case "beta":
 		return 1, true
-	case "milestone", "m":
+	case "milestone":
 		return 2, true
 	case "rc", "cr":
 		return 3, true
@@ -300,14 +310,4 @@ func mavenQualifierRank(value string) (int, bool) {
 	default:
 		return 7, false
 	}
-}
-
-func compareInt(left, right int) int {
-	if left < right {
-		return -1
-	}
-	if left > right {
-		return 1
-	}
-	return 0
 }

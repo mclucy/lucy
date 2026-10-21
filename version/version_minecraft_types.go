@@ -49,8 +49,8 @@ func (v1 *Pre26MinecraftSnapshotVersion) Validate() bool {
 		v1.Index >= minSnapshotIndex && v1.Index <= maxSnapshotIndex
 }
 
-func (v1 *Pre26MinecraftSnapshotVersion) Scheme() types.VersionScheme {
-	return types.VersionSchemeMinecraftSnapshot
+func (v1 *Pre26MinecraftSnapshotVersion) Dialect() types.VersionDialect {
+	return types.VersionDialectMinecraft
 }
 
 // Post26MinecraftSnapshotVersion represents snapshots after the new numbering
@@ -87,8 +87,8 @@ func (v1 *Post26MinecraftSnapshotVersion) Validate() bool {
 		v1.SnapshotN > 0
 }
 
-func (v1 *Post26MinecraftSnapshotVersion) Scheme() types.VersionScheme {
-	return types.VersionSchemeMinecraftSnapshot
+func (v1 *Post26MinecraftSnapshotVersion) Dialect() types.VersionDialect {
+	return types.VersionDialectMinecraft
 }
 
 type MinecraftVersion struct {
@@ -183,8 +183,8 @@ func (v1 *MinecraftVersion) Validate() bool {
 	}
 }
 
-func (v1 *MinecraftVersion) Scheme() types.VersionScheme {
-	return types.VersionSchemeMinecraftRelease
+func (v1 *MinecraftVersion) Dialect() types.VersionDialect {
+	return types.VersionDialectMinecraft
 }
 
 func prereleaseRank(pr PrereleaseType) uint8 {

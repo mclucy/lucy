@@ -2,139 +2,218 @@ package version
 
 import (
 	"encoding/json/jsontext"
-	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/mclucy/lucy/types"
 )
 
-// SemverVersion implements the superset of SemVer that Fabric Loader parses:
-// one or more numeric components, an optional prerelease, and arbitrary build
+// SemverVersion implements the semantic grammar shared by Fabric Loader and
+// MCDR: one or more numeric components, an optional prerelease, and build
 // metadata. Build metadata never participates in comparison.
 type SemverVersion struct {
+	dialect       types.VersionDialect
 	numbers       []uint64
+	wildcards     []bool
 	prerelease    string
 	hasPrerelease bool
 	original      string
 }
 
-// StringVersion is the fallback Fabric Loader uses for versions outside its
-// semantic grammar. Such versions compare by their full string.
+// StringVersion is a version outside the semantic grammar. Fabric Loader
+// compares it as a plain string; the opaque dialect uses it for identifiers.
 type StringVersion struct {
+	dialect  types.VersionDialect
 	original string
 }
 
-func NewSemver(major, minor, patch uint64) types.ResolvableVersion {
-	return &SemverVersion{
-		numbers:  []uint64{major, minor, patch},
-		original: fmt.Sprintf("%d.%d.%d", major, minor, patch),
-	}
+type semverParseOptions struct {
+	dialect       types.VersionDialect
+	allowWildcard bool
+	validateBuild bool
 }
 
-// parseSemver parses a version under the semantic grammar without a plain-string
-// fallback. Schemes shared by several ecosystems, such as MCDR, require it.
-func parseSemver(s types.Version) types.ResolvableVersion {
-	raw := string(s)
-	if raw == "" {
-		return nil
-	}
-	if parsed := parseFabricSemver(raw); parsed != nil {
-		return parsed
-	}
-	return nil
-}
-
-// parseFabricVersion parses a Fabric Loader version. Text outside the semantic
-// grammar stays a valid version that compares as a plain string.
-func parseFabricVersion(s types.Version) types.ResolvableVersion {
-	raw := string(s)
-	if raw == "" {
-		return nil
-	}
-	if parsed := parseFabricSemver(raw); parsed != nil {
-		return parsed
-	}
-	return &StringVersion{original: raw}
-}
-
-// parseFabricSemver mirrors Fabric Loader's semantic parser. It splits build
-// metadata at the first '+', splits the prerelease at the first '-', and then
-// requires every remaining dot-separated component to be an integer.
-func parseFabricSemver(raw string) *SemverVersion {
+func parseSemverVersion(
+	raw string,
+	options semverParseOptions,
+) *SemverVersion {
 	core := raw
 	if index := strings.IndexByte(core, '+'); index >= 0 {
+		build := core[index+1:]
+		if options.validateBuild && !validExtraIdentifiers(build, true) {
+			return nil
+		}
 		core = core[:index]
 	}
+
 	prerelease := ""
 	hasPrerelease := false
 	if index := strings.IndexByte(core, '-'); index >= 0 {
 		prerelease = core[index+1:]
 		hasPrerelease = true
 		core = core[:index]
-		if !validPrerelease(prerelease) {
+		if !validExtraIdentifiers(prerelease, false) {
 			return nil
 		}
 	}
+
 	if core == "" || strings.HasPrefix(core, ".") || strings.HasSuffix(core, ".") {
 		return nil
 	}
+
 	parts := strings.Split(core, ".")
 	numbers := make([]uint64, 0, len(parts))
+	var wildcards []bool
 	for _, part := range parts {
+		if isWildcardComponent(part) {
+			if !options.allowWildcard {
+				return nil
+			}
+			if wildcards == nil {
+				wildcards = make([]bool, len(parts))
+			}
+			wildcards[len(numbers)] = true
+			numbers = append(numbers, 0)
+			continue
+		}
 		number, err := strconv.ParseUint(part, 10, 64)
 		if err != nil {
 			return nil
 		}
 		numbers = append(numbers, number)
 	}
+
 	return &SemverVersion{
+		dialect:       options.dialect,
 		numbers:       numbers,
+		wildcards:     wildcards,
 		prerelease:    prerelease,
 		hasPrerelease: hasPrerelease,
 		original:      raw,
 	}
 }
 
-// validPrerelease accepts the identifiers Fabric permits. An empty prerelease
-// is valid and orders below every non-empty prerelease of the same core.
-func validPrerelease(prerelease string) bool {
-	if prerelease == "" {
+func parseFabricVersion(raw types.Version) types.ResolvableVersion {
+	text := string(raw)
+	if text == "" {
+		return nil
+	}
+	if parsed := parseSemverVersion(
+		text,
+		semverParseOptions{dialect: types.VersionDialectFabric},
+	); parsed != nil {
+		return parsed
+	}
+	return &StringVersion{
+		dialect:  types.VersionDialectFabric,
+		original: text,
+	}
+}
+
+func parseMCDRVersion(raw string, allowWildcard bool) types.ResolvableVersion {
+	parsed := parseSemverVersion(
+		raw,
+		semverParseOptions{
+			dialect:       types.VersionDialectMCDR,
+			allowWildcard: allowWildcard,
+			validateBuild: true,
+		},
+	)
+	if parsed == nil {
+		return nil
+	}
+	return parsed
+}
+
+// validExtraIdentifiers accepts prerelease or build identifiers allowed by the
+// semantic grammars. An empty value is valid and denotes an empty prerelease.
+func validExtraIdentifiers(value string, allowPlus bool) bool {
+	if value == "" {
 		return true
 	}
-	for identifier := range strings.SplitSeq(prerelease, ".") {
+	for identifier := range strings.SplitSeq(value, ".") {
 		if identifier == "" {
 			return false
 		}
 		for _, ch := range identifier {
-			if ch != '-' &&
-				(ch < '0' || ch > '9') &&
-				(ch < 'A' || ch > 'Z') &&
-				(ch < 'a' || ch > 'z') {
-				return false
+			if ch == '-' || (allowPlus && ch == '+') ||
+				(ch >= '0' && ch <= '9') ||
+				(ch >= 'A' && ch <= 'Z') ||
+				(ch >= 'a' && ch <= 'z') {
+				continue
 			}
+			return false
 		}
 	}
 	return true
 }
 
-func (s *SemverVersion) component(index int) uint64 {
-	if s == nil || index >= len(s.numbers) {
-		return 0
+// newSemverBoundary creates a version directly below every prerelease and
+// above every lower core version, matching Fabric's trailing '-' predicate
+// boundary.
+func newSemverBoundary(
+	dialect types.VersionDialect,
+	numbers ...uint64,
+) *SemverVersion {
+	return &SemverVersion{
+		dialect:       dialect,
+		numbers:       numbers,
+		hasPrerelease: true,
+		original:      joinSemverNumbers(numbers) + "-",
 	}
-	return s.numbers[index]
+}
+
+func joinSemverNumbers(numbers []uint64) string {
+	parts := make([]string, len(numbers))
+	for index, number := range numbers {
+		parts[index] = strconv.FormatUint(number, 10)
+	}
+	return strings.Join(parts, ".")
+}
+
+func (s *SemverVersion) component(index int) (uint64, bool) {
+	if s == nil || index < 0 {
+		return 0, false
+	}
+	if index < len(s.numbers) {
+		return s.numbers[index], s.wildcards != nil && s.wildcards[index]
+	}
+	if len(s.numbers) > 0 && s.wildcards != nil && s.wildcards[len(s.numbers)-1] {
+		return 0, true
+	}
+	return 0, false
 }
 
 func (s *SemverVersion) Major() uint64 {
-	return s.component(0)
+	value, _ := s.component(0)
+	return value
 }
 
 func (s *SemverVersion) Minor() uint64 {
-	return s.component(1)
+	value, _ := s.component(1)
+	return value
 }
 
 func (s *SemverVersion) Patch() uint64 {
-	return s.component(2)
+	value, _ := s.component(2)
+	return value
+}
+
+func (s *SemverVersion) wildcardAt(index int) bool {
+	_, wildcard := s.component(index)
+	return wildcard
+}
+
+func (s *SemverVersion) hasWildcard() bool {
+	if s == nil {
+		return false
+	}
+	for _, wildcard := range s.wildcards {
+		if wildcard {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *SemverVersion) Prerelease() string {
@@ -144,33 +223,49 @@ func (s *SemverVersion) Prerelease() string {
 	return s.prerelease
 }
 
-func (s *SemverVersion) Scheme() types.VersionScheme {
-	return types.VersionSchemeSemver
+func (s *SemverVersion) Dialect() types.VersionDialect {
+	if s == nil {
+		return types.VersionDialectUnknown
+	}
+	return s.dialect
 }
 
 func (s *SemverVersion) Compare(other types.ResolvableVersion) (int, bool) {
 	if s == nil || other == nil {
 		return 0, false
 	}
-	var o *SemverVersion
 	switch other := other.(type) {
 	case *SemverVersion:
-		o = other
+		if other.dialect != s.dialect {
+			return 0, false
+		}
+		count := max(len(s.numbers), len(other.numbers))
+		for index := range count {
+			left, leftWildcard := s.component(index)
+			right, rightWildcard := other.component(index)
+			if leftWildcard || rightWildcard {
+				continue
+			}
+			if comparison := compareUint(left, right); comparison != 0 {
+				return comparison, true
+			}
+		}
+		switch s.dialect {
+		case types.VersionDialectFabric:
+			return compareFabricPrerelease(s, other), true
+		case types.VersionDialectMCDR:
+			return compareMCDRPrerelease(s, other), true
+		default:
+			return 0, false
+		}
 	case *StringVersion:
+		if other.dialect != s.dialect {
+			return 0, false
+		}
 		return strings.Compare(s.String(), other.String()), true
 	default:
 		return 0, false
 	}
-	if o == nil {
-		return 0, false
-	}
-	count := max(len(s.numbers), len(o.numbers))
-	for index := range count {
-		if comparison := compareUint(s.component(index), o.component(index)); comparison != 0 {
-			return comparison, true
-		}
-	}
-	return compareFabricPrerelease(s, o), true
 }
 
 // compareFabricPrerelease follows Fabric Loader: a release outranks its
@@ -190,11 +285,84 @@ func compareFabricPrerelease(left, right *SemverVersion) int {
 	leftParts := prereleaseIdentifiers(left.prerelease)
 	rightParts := prereleaseIdentifiers(right.prerelease)
 	for index := range min(len(leftParts), len(rightParts)) {
-		if comparison := comparePrereleaseIdentifier(leftParts[index], rightParts[index]); comparison != 0 {
+		if comparison := comparePrereleaseIdentifier(
+			leftParts[index],
+			rightParts[index],
+		); comparison != 0 {
 			return comparison
 		}
 	}
 	return compareInt(len(leftParts), len(rightParts))
+}
+
+// compareMCDRPrerelease follows MCDReforged's _ExtraElement ordering. The whole
+// prerelease is one element split at its final dot into a body and an optional
+// numeric suffix.
+func compareMCDRPrerelease(left, right *SemverVersion) int {
+	switch {
+	case left.hasPrerelease && right.hasPrerelease:
+		return compareMCDRExtra(left.prerelease, right.prerelease)
+	case left.hasPrerelease:
+		if right.hasWildcard() {
+			return 0
+		}
+		return -1
+	case right.hasPrerelease:
+		if left.hasWildcard() {
+			return 0
+		}
+		return 1
+	default:
+		return 0
+	}
+}
+
+type mcdrExtra struct {
+	text   string
+	body   string
+	number int64
+	hasNum bool
+}
+
+func parseMCDRExtra(value string) mcdrExtra {
+	extra := mcdrExtra{text: value, body: value}
+	if index := strings.LastIndexByte(value, '.'); index >= 0 {
+		if number, err := strconv.ParseInt(value[index+1:], 10, 64); err == nil {
+			extra.body = value[:index]
+			extra.number = number
+			extra.hasNum = true
+		}
+	}
+	return extra
+}
+
+func (e mcdrExtra) String() string {
+	if e.hasNum {
+		return e.body + "." + strconv.FormatInt(e.number, 10)
+	}
+	return e.text
+}
+
+func (e mcdrExtra) less(other mcdrExtra) bool {
+	if !e.hasNum || !other.hasNum {
+		return e.String() < other.String()
+	}
+	if e.body != other.body {
+		return e.body < other.body
+	}
+	return e.number < other.number
+}
+
+func compareMCDRExtra(left, right string) int {
+	leftExtra := parseMCDRExtra(left)
+	rightExtra := parseMCDRExtra(right)
+	if leftExtra.less(rightExtra) {
+		return -1
+	}
+	if rightExtra.less(leftExtra) {
+		return 1
+	}
+	return 0
 }
 
 func prereleaseIdentifiers(prerelease string) []string {
@@ -248,16 +416,18 @@ func compareUint(left, right uint64) int {
 	}
 }
 
+func compareInt(left, right int) int {
+	if left < right {
+		return -1
+	}
+	if left > right {
+		return 1
+	}
+	return 0
+}
+
 func (s *SemverVersion) Validate() bool {
-	if s == nil {
-		return false
-	}
-	for _, number := range s.numbers {
-		if number != 0 {
-			return true
-		}
-	}
-	return false
+	return s != nil && len(s.numbers) > 0
 }
 
 func (s *SemverVersion) String() string {
@@ -273,19 +443,28 @@ func (s *SemverVersion) MarshalJSONTo(enc *jsontext.Encoder) error {
 	return enc.WriteToken(jsontext.String(s.String()))
 }
 
-func (v *StringVersion) Scheme() types.VersionScheme {
-	return types.VersionSchemeSemver
+func (v *StringVersion) Dialect() types.VersionDialect {
+	if v == nil {
+		return types.VersionDialectUnknown
+	}
+	return v.dialect
 }
 
 func (v *StringVersion) Compare(other types.ResolvableVersion) (int, bool) {
-	if v == nil || other == nil {
+	if v == nil || other == nil || other.Dialect() != v.dialect {
 		return 0, false
 	}
 	switch other := other.(type) {
 	case *StringVersion:
+		if v.dialect == types.VersionDialectOpaque {
+			if v.original != other.original {
+				return 0, false
+			}
+			return 0, true
+		}
 		return strings.Compare(v.original, other.original), true
 	case *SemverVersion:
-		return strings.Compare(v.original, other.original), true
+		return strings.Compare(v.original, other.String()), true
 	default:
 		return 0, false
 	}

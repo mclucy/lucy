@@ -10,12 +10,8 @@ import (
 // in the outer slice is an OR alternative.
 func parseFabricVersionRanges(
 	ranges fn.SingleOrSlice[string],
-) types.VersionExpr {
-	return version.ParseRanges(
-		ranges,
-		version.InferRangeDialect(types.EcosystemFabric),
-		types.VersionSchemeSemver,
-	)
+) (types.VersionExpr, error) {
+	return version.ParseConstraints(ranges, types.VersionDialectFabric)
 }
 
 // parseModLoaderMavenVersionRange parses Forge dependency version ranges.
@@ -23,12 +19,10 @@ func parseFabricVersionRanges(
 // References:
 //   - https://docs.minecraftforge.net/en/latest/gettingstarted/modfiles/
 //   - https://maven.apache.org/enforcer/enforcer-rules/versionRanges.html
-func parseModLoaderMavenVersionRange(interval string) [][]types.VersionSubExpr {
-	return version.ParseRange(
-		interval,
-		version.InferRangeDialect(types.EcosystemForge),
-		types.VersionSchemeMaven,
-	)
+func parseModLoaderMavenVersionRange(
+	interval string,
+) (types.VersionExpr, error) {
+	return version.ParseConstraint(interval, types.VersionDialectMaven)
 }
 
 // parseNpmVersionRange parses MCDR plugin dependency requirements.
@@ -36,10 +30,6 @@ func parseModLoaderMavenVersionRange(interval string) [][]types.VersionSubExpr {
 // References:
 //   - https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
 //   - https://docs.npmjs.com/about-semantic-versioning
-func parseNpmVersionRange(s string) types.VersionExpr {
-	return version.ParseRange(
-		s,
-		version.InferRangeDialect(types.EcosystemMCDR),
-		types.VersionSchemeSemver,
-	)
+func parseNpmVersionRange(s string) (types.VersionExpr, error) {
+	return version.ParseConstraint(s, types.VersionDialectMCDR)
 }

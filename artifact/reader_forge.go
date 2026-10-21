@@ -76,11 +76,15 @@ func readForgeModsToml(
 			version = forgeJarVersion(zipRdr)
 		}
 
+		dependencies, err := forgeDependencies(modIdentifier, mod.ModID)
+		if err != nil {
+			return nil, err
+		}
 		infos = append(
 			infos, PackageInfo{
 				Ref:          types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.PackageName(mod.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge, Version: version},
 				FilePath:     filePath,
-				Dependencies: forgeDependencies(modIdentifier, mod.ModID),
+				Dependencies: dependencies,
 				Metadata: types.Metadata{
 					Title:       mod.DisplayName,
 					Brief:       mod.Description,
@@ -110,27 +114,27 @@ func readForgeModsToml(
 func forgeDependencies(
 	modIdentifier fileschema.FileModLoaderIdentifier,
 	modID string,
-) []Dependency {
+) ([]Dependency, error) {
 	deps := modIdentifier.Dependencies[modID]
 	translated := make([]Dependency, 0, len(deps))
 	for _, dep := range deps {
+		constraint, err := forgeVersionRange(dep.VersionRange)
+		if err != nil {
+			return nil, err
+		}
 		translated = append(
 			translated, Dependency{
 				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.PackageName(dep.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge},
-				Constraint: forgeVersionRange(dep.VersionRange),
+				Constraint: constraint,
 				Mandatory:  dep.Mandatory,
 			},
 		)
 	}
-	return translated
+	return translated, nil
 }
 
-func forgeVersionRange(versionRange string) types.VersionExpr {
-	return version.ParseRange(
-		versionRange,
-		version.InferRangeDialect(types.EcosystemForge),
-		types.VersionSchemeMaven,
-	)
+func forgeVersionRange(versionRange string) (types.VersionExpr, error) {
+	return version.ParseConstraint(versionRange, types.VersionDialectMaven)
 }
 
 func forgeJarVersion(zipRdr *zip.Reader) types.Version {

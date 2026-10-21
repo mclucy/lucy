@@ -108,17 +108,28 @@ func (s provider) Dependencies(
 	if err != nil {
 		return nil, err
 	}
-	return new(mcdrDependenciesFromMeta(rel.Meta)), nil
+	dependencies, err := mcdrDependenciesFromMeta(rel.Meta)
+	if err != nil {
+		return nil, err
+	}
+	return new(dependencies), nil
 }
 
-func mcdrDependenciesFromMeta(meta pluginMeta) types.DependencySet {
+func mcdrDependenciesFromMeta(meta pluginMeta) (types.DependencySet, error) {
 	deps := types.DependencySet{FromArtifact: true}
 	if len(meta.Dependencies) == 0 {
-		return deps
+		return deps, nil
 	}
 
 	deps.Dependencies = make([]types.Dependency, 0, len(meta.Dependencies))
 	for name, constraint := range meta.Dependencies {
+		parsed, err := version.ParseConstraint(
+			constraint,
+			types.VersionDialectMCDR,
+		)
+		if err != nil {
+			return types.DependencySet{}, err
+		}
 		deps.Dependencies = append(
 			deps.Dependencies, types.Dependency{
 				ID: types.VersionedPackageRef{
@@ -128,16 +139,12 @@ func mcdrDependenciesFromMeta(meta pluginMeta) types.DependencySet {
 					},
 					Ecosystem: types.EcosystemMCDR,
 				},
-				Constraint: version.ParseRange(
-					constraint,
-					version.InferRangeDialect(types.EcosystemMCDR),
-					types.VersionSchemeSemver,
-				),
-				Mandatory: true,
+				Constraint: parsed,
+				Mandatory:  true,
 			},
 		)
 	}
-	return deps
+	return deps, nil
 }
 
 func (s provider) ResolveVersionSelector(

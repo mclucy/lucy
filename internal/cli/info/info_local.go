@@ -373,6 +373,10 @@ func formatArtifactConstraint(expr types.VersionExpr) string {
 	for _, conjunction := range expr {
 		terms := make([]string, 0, len(conjunction))
 		for _, term := range conjunction {
+			if term.Operator == types.OpNever {
+				terms = append(terms, "never")
+				continue
+			}
 			value, ok := term.Value.(fmt.Stringer)
 			if !ok || value.String() == "" {
 				continue
