@@ -23,9 +23,6 @@ type initializeExpectation struct {
 	// absent lists references that the initializer must omit because their jars
 	// are client-only.
 	absent map[string][]string
-	// blocked records why the current resolver cannot initialize the pack. The
-	// scenario keeps its expectations so removing the block revalidates them.
-	blocked string
 }
 
 var initializeScenarios = map[string]initializeExpectation{
@@ -47,8 +44,11 @@ var initializeScenarios = map[string]initializeExpectation{
 		minecraft: "1.21.1", product: "neoforge", coreVersion: "21.1.233",
 		minPackages: 100,
 		packages: map[string]map[string]string{
-			"neoforge": {"modrinth:aileron": "1.21.1-neoforge-1.1.4"},
+			"neoforge": {
+				"modrinth:aileron":          "1.21.1-neoforge-1.1.4",
+				"modrinth:kotlin-for-forge": "5.11.0",
+				"modrinth:txnilib":          "neoforge-1.21.1-1.0.24",
+			},
 		},
-		blocked: "the gml jar is published for 1.21, not 1.21.1, so resolution rejects the hash-matched requirement",
 	},
 }

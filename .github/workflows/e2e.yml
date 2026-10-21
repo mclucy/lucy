@@ -206,7 +206,7 @@ jobs:
               "suite": "init",
               "command": "go test -tags e2e -count=1 -v ./e2e/init -run 'TestInitialize/(cobblemon-1211|create-plus-1211)'",
               "timeout": 30,
-              "sandboxes": "cobblemon-1211",
+              "sandboxes": "cobblemon-1211,create-plus-1211",
               "java": "",
               "gradle": false,
               "cache-key": "",

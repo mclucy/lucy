@@ -19,7 +19,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-
 // TestInitialize runs lucy init against each modpack sandbox and checks the
 // manifest and lock that the CLI writes for a real, decompressed server.
 func TestInitialize(t *testing.T) {
@@ -28,9 +27,6 @@ func TestInitialize(t *testing.T) {
 		t.Run(id, func(t *testing.T) {
 			t.Parallel()
 			want := initializeScenarios[id]
-			if want.blocked != "" {
-				t.Skipf("sandbox %s cannot initialize yet: %s", id, want.blocked)
-			}
 			root := testkit.CloneSandbox(t, id)
 			// A local sandbox may carry intent from an earlier run; init must
 			// start from the server workspace alone.
@@ -50,7 +46,7 @@ func TestInitialize(t *testing.T) {
 					err, stdout, stderr.String(),
 				)
 			}
-			data, err := os.ReadFile(filepath.Join(root, "lucy.yaml"))
+			data, err := os.ReadFile(filepath.Join(root, manifest.Filename))
 			if err != nil {
 				t.Fatalf("read generated manifest: %v", err)
 			}
@@ -92,7 +88,7 @@ func TestInitialize(t *testing.T) {
 					}
 				}
 			}
-			lockData, err := os.ReadFile(filepath.Join(root, "lucy-lock.yaml"))
+			lockData, err := os.ReadFile(filepath.Join(root, lockfile.Filename))
 			if err != nil {
 				t.Fatalf("read generated lock: %v", err)
 			}
