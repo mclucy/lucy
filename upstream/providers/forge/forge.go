@@ -1,15 +1,11 @@
 package forge
 
 import (
-	"bytes"
-	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/url"
-	"strings"
 
-	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -64,13 +60,6 @@ func (p provider) Fetch(
 		return types.ResolvedPackage{}, err
 	}
 
-	if gameVersion == types.VersionUnknown {
-		return types.ResolvedPackage{}, fmt.Errorf(
-			"unknown minecraft version, cannot infer forge bootstrap artifact; see %s",
-			docsURL,
-		)
-	}
-
 	forgeVersion, err := forgeVersionFromPackageRef(id, gameVersion)
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -89,18 +78,12 @@ func (p provider) Fetch(
 }
 
 func minecraftVersionForInstall(local upstream.LocalContext) (types.Version, error) {
-	switch local.Ecosystem {
-	case types.EcosystemVanilla:
-		return local.MinecraftVersion, nil
-	case types.EcosystemUnspecified:
-		selectedVersion := promptSelectMinecraftVersion()
-		if selectedVersion == "none" || selectedVersion == "error" {
-			return "", errors.New("minecraft version selection cancelled or failed")
-		}
-		return types.Version(selectedVersion), nil
-	default:
-		return local.MinecraftVersion, nil
+	if !local.HasMinecraftVersion() {
+		return "", errors.New(
+			"forge bootstrap requires a concrete Minecraft version",
+		)
 	}
+	return local.MinecraftVersion, nil
 }
 
 func forgeVersionFromPackageRef(
@@ -114,124 +97,6 @@ func forgeVersionFromPackageRef(
 		return p.Version.String(), nil
 	}
 	return fetchVersion(gameVersion, p.Version)
-}
-
-func promptSelectMinecraftVersion() (version string) {
-	versions, err := fetchSupportedMinecraftVersions()
-	if err != nil || len(versions) == 0 {
-		return "error"
-	}
-
-	gameVersions := versions
-
-	var installLatest bool
-	options := huh.NewOptions(gameVersions...)
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("No current Minecraft installation found.").
-				Description("Do you want to install forge with its latest supported Minecraft version?").
-				Affirmative("Yes, proceed").
-				Negative("No, select a game version").
-				Value(&installLatest),
-		),
-	).Run()
-	if err != nil {
-		return "none"
-	}
-	if installLatest {
-		return gameVersions[len(gameVersions)-1]
-	}
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a Minecraft installation").
-				Options(options...).
-				Filtering(true).
-				Height(10).
-				Value(&version),
-		).WithHide(installLatest),
-	).Run()
-	if err != nil {
-		return "none"
-	}
-	return
-}
-
-func fetchSupportedMinecraftVersions() ([]string, error) {
-	data, err := cache.CachedGetBytes(
-		promotionsURL,
-		cache.BytesRequestOptions{Kind: cache.KindMetadata},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("fetch forge promotions failed: %w", err)
-	}
-
-	versions, err := parseSupportedMinecraftVersions(data)
-	if err != nil {
-		return nil, err
-	}
-	if len(versions) == 0 {
-		return nil, fmt.Errorf(
-			"forge promotions is empty; see %s",
-			docsURL,
-		)
-	}
-
-	return versions, nil
-}
-
-func parseSupportedMinecraftVersions(data []byte) ([]string, error) {
-	var payload struct {
-		Promos jsontext.Value `json:"promos"`
-	}
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, fmt.Errorf("parse forge promotions failed: %w", err)
-	}
-
-	dec := jsontext.NewDecoder(bytes.NewReader(payload.Promos))
-	tok, err := dec.ReadToken()
-	if err != nil {
-		return nil, fmt.Errorf("parse forge promotions failed: %w", err)
-	}
-	if tok.Kind() != '{' {
-		return nil, fmt.Errorf("parse forge promotions failed: promos is not an object")
-	}
-
-	seen := map[string]struct{}{}
-	versions := make([]string, 0)
-	for dec.PeekKind() != '}' {
-		keyTok, err := dec.ReadToken()
-		if err != nil {
-			return nil, fmt.Errorf("parse forge promotions failed: %w", err)
-		}
-		if keyTok.Kind() != '"' {
-			return nil, fmt.Errorf("parse forge promotions failed: invalid promos key")
-		}
-		key := keyTok.String()
-
-		if err := dec.SkipValue(); err != nil {
-			return nil, fmt.Errorf("parse forge promotions failed: %w", err)
-		}
-
-		base, ok := strings.CutSuffix(key, "-recommended")
-		if !ok {
-			base, ok = strings.CutSuffix(key, "-latest")
-		}
-		if !ok {
-			continue
-		}
-		if _, exists := seen[base]; exists {
-			continue
-		}
-		if !strings.HasPrefix(base, "1.") {
-			continue
-		}
-		seen[base] = struct{}{}
-		versions = append(versions, base)
-	}
-
-	return versions, nil
 }
 
 // fetchVersion selects a Forge version from the promotions data. stable

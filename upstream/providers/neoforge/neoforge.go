@@ -7,11 +7,9 @@ import (
 	"slices"
 	"strings"
 
-	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/providers/mojang"
 )
 
 var (
@@ -66,13 +64,6 @@ func (p provider) Fetch(
 		return types.ResolvedPackage{}, err
 	}
 
-	if gameVersion == types.VersionUnknown {
-		return types.ResolvedPackage{}, fmt.Errorf(
-			"unknown minecraft version, cannot infer NeoForge bootstrap artifact; see %s",
-			docsURL,
-		)
-	}
-
 	neoForgeVersion, err := neoForgeVersionFromPackageRef(id, gameVersion)
 	if err != nil {
 		return types.ResolvedPackage{}, err
@@ -90,18 +81,12 @@ func (p provider) Fetch(
 }
 
 func minecraftVersionForInstall(local upstream.LocalContext) (types.Version, error) {
-	switch local.Ecosystem {
-	case types.EcosystemVanilla:
-		return local.MinecraftVersion, nil
-	case types.EcosystemUnspecified:
-		selectedVersion := promptSelectMinecraftVersion()
-		if selectedVersion == "none" || selectedVersion == "error" {
-			return "", errors.New("minecraft version selection cancelled or failed")
-		}
-		return types.Version(selectedVersion), nil
-	default:
-		return local.MinecraftVersion, nil
+	if !local.HasMinecraftVersion() {
+		return "", errors.New(
+			"neoforge bootstrap requires a concrete Minecraft version",
+		)
 	}
+	return local.MinecraftVersion, nil
 }
 
 func neoForgeVersionFromPackageRef(
@@ -205,51 +190,4 @@ func installerURL(neoForgeVersion string) string {
 		neoForgeVersion,
 		neoForgeVersion,
 	)
-}
-
-func promptSelectMinecraftVersion() (version string) {
-	manifest, err := mojang.FetchVersionManifest()
-	if err != nil || len(manifest.Versions) == 0 {
-		return "error"
-	}
-
-	gameVersions := make([]string, 0, 20)
-	for i := 0; i < len(manifest.Versions) && len(gameVersions) < 20; i++ {
-		if manifest.Versions[i].Type == "release" {
-			gameVersions = append(gameVersions, manifest.Versions[i].ID)
-		}
-	}
-
-	var installLatest bool
-	options := huh.NewOptions(gameVersions...)
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("No current Minecraft installation found.").
-				Description("Do you want to install NeoForge with its latest supported Minecraft version?").
-				Affirmative("Yes, proceed").
-				Negative("No, select a game version").
-				Value(&installLatest),
-		),
-	).Run()
-	if err != nil {
-		return "none"
-	}
-	if installLatest {
-		return gameVersions[0]
-	}
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a Minecraft version for NeoForge").
-				Options(options...).
-				Filtering(true).
-				Height(10).
-				Value(&version),
-		).WithHide(installLatest),
-	).Run()
-	if err != nil {
-		return "none"
-	}
-	return
 }

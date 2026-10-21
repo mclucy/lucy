@@ -18,7 +18,9 @@ type ProviderIdentifier interface {
 // upstream resolution. Its zero value describes an unknown local runtime.
 //
 // The application layer derives LocalContext from workspace discovery. Upstream
-// must not depend on that discovery mechanism or its filesystem representation.
+// must not depend on that discovery mechanism or its filesystem representation,
+// and providers must not prompt for missing facts: interactive input belongs to
+// the command boundary.
 type LocalContext struct {
 	Ecosystem        types.Ecosystem
 	MinecraftVersion types.Version

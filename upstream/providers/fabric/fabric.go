@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
@@ -51,18 +50,12 @@ func (p provider) Fetch(
 	local upstream.LocalContext,
 	id types.VersionedPackageRef,
 ) (types.ResolvedPackage, error) {
-	var gameVersionID string
-	switch local.Ecosystem {
-	case types.EcosystemVanilla:
-		gameVersionID = local.MinecraftVersion.String()
-	case types.EcosystemUnspecified:
-		gameVersionID = promptSelectMinecraftVersion()
-	default:
-		return types.ResolvedPackage{}, fmt.Errorf(
-			"unsupported server platform %s for fabric bootstrap",
-			local.Ecosystem.Title(),
+	if !local.HasMinecraftVersion() {
+		return types.ResolvedPackage{}, errors.New(
+			"fabric bootstrap requires a concrete Minecraft version",
 		)
 	}
+	gameVersionID := local.MinecraftVersion.String()
 
 	loaderVer, err := loaderVersion(id.Version)
 	if err != nil {
@@ -152,14 +145,6 @@ func fetchLoaderVersions() (
 	return
 }
 
-func fetchGameVersions() (
-	gameVersions []installerVersion,
-	err error,
-) {
-	err = fetchVersionsMeta("game", &gameVersions)
-	return
-}
-
 func fetchInstallerVersions() (
 	installerVersions []installerVersion,
 	err error,
@@ -192,50 +177,5 @@ func fetchVersionsMeta(endpoint string, target any) (err error) {
 		)
 	}
 
-	return
-}
-
-func promptSelectMinecraftVersion() (version string) {
-	versions, err := fetchGameVersions()
-	if err != nil || len(versions) == 0 {
-		return "error"
-	}
-
-	gameVersions := make([]string, len(versions))
-	for i, v := range versions {
-		gameVersions[i] = v.Version
-	}
-
-	var installLatest bool
-	options := huh.NewOptions[string](gameVersions...)
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("No current Minecraft installation found.").
-				Description("Do you want to install fabric with its latest supported Minecraft version?").
-				Affirmative("Yes, proceed").
-				Negative("No, select a game version").
-				Value(&installLatest),
-		),
-	).Run()
-	if err != nil {
-		return "none"
-	}
-	if installLatest {
-		return gameVersions[0]
-	}
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a Minecraft installation").
-				Options(options...).
-				Filtering(true).
-				Height(10).
-				Value(&version),
-		).WithHide(installLatest),
-	).Run()
-	if err != nil {
-		return "none"
-	}
 	return
 }
