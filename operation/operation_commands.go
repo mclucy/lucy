@@ -342,15 +342,25 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		"count", recognized,
 		"present", len(observed.Packages),
 	)
-	request := types.ServerProductRequest{Minecraft: d.Server.Minecraft, Product: d.Server.Core.Product, ProductVersion: d.Server.Core.ProductVersion, Repository: d.Server.Core.Repository, FilePattern: d.Server.Core.FilePattern}
-	// Initialization records intent; it must not download the server it
-	// describes. Metadata resolution still rejects a declaration upstream
-	// cannot serve.
-	if err := routing.ValidateServerProduct(ctx, request); err != nil {
+	old, err := lockfile.Read(root)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, observed.Warnings, err
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		old = nil
+	}
+	resolved, resolveWarnings, err := install.Resolve(ctx, root, d, old, install.Options{})
+	observed.Warnings = append(observed.Warnings, resolveWarnings...)
+	if err != nil {
 		return nil, observed.Warnings, err
 	}
 	if err := manifest.Write(root, d); err != nil {
 		return nil, observed.Warnings, err
+	}
+	if resolved != old {
+		if err := lockfile.Write(root, resolved); err != nil {
+			return nil, observed.Warnings, err
+		}
 	}
 	return d, observed.Warnings, nil
 }

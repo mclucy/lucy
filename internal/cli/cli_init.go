@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
@@ -160,7 +161,14 @@ func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.Init
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s for Minecraft %s (%s)\n", manifest.Filename, d.Server.Minecraft, d.Server.Core.Product)
+	fmt.Fprintf(
+		cmd.OutOrStdout(),
+		"Wrote %s and %s for Minecraft %s (%s)\n",
+		manifest.Filename,
+		lockfile.Filename,
+		d.Server.Minecraft,
+		d.Server.Core.Product,
+	)
 	return nil
 }
 
