@@ -50,9 +50,9 @@ permissions:
   contents: read
 
 jobs:
-  # Fresh-install scenarios: generate the pinned sandboxes, build Lucy, then
-  # install each scenario manifest in a disposable workspace and verify the
-  # generated lock and runtime files against the pinned bytes.
+  # Install scenarios: generate the pinned sandboxes, build Lucy, then verify
+  # the fresh-install fixtures and the init-then-install chain in disposable
+  # workspaces against the pinned bytes and the generated locks.
   #
   # Java 21 is the strictest minimum across the scenarios (1.20.1 cores need
   # 17, 1.21.x cores need 21) and also drives the Forge and NeoForge installer
@@ -105,5 +105,5 @@ jobs:
       # No scenario ids: the suite defaults to all scenarios and fails loudly
       # when a scenario lacks its generated environment, so this list and the
       # suite cannot silently drift apart.
-      - name: Install scenarios (e2e)
+      - name: Install and init-then-install scenarios (e2e)
         run: go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install
