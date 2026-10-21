@@ -124,3 +124,7 @@ See also [Global Flags](/commands/global-flags), [`lucy add`](/commands/add), an
 <ParamField query="--with-optional" type="boolean" default="false">
   Also install optional upstream dependencies. It forces a new resolution even when the lock already matches the manifest, and every optional package selected this way is written back into `lucy.yaml` as an explicit package — so it is part of the declared server from then on, not just of this run. Cannot be combined with `--locked`.
 </ParamField>
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Install the packages the manifest declares even when a module requirement cannot be satisfied: a required module is missing, a selected version falls outside its declared range, or a version string cannot be parsed. Each unresolved requirement is reported as a warning. Without this flag, such a server is refused because it would not start.
+</ParamField>
