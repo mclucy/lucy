@@ -15,6 +15,7 @@ const (
 	flagInstallLockedName       = "locked"
 	flagInstallOfflineName      = "offline"
 	flagInstallWithOptionalName = "with-optional"
+	flagInstallForceName        = "force"
 )
 
 var installCmd = &cobra.Command{
@@ -40,6 +41,12 @@ func NewInstallCommand() *cobra.Command {
 		false,
 		"Also install optional dependencies and record them as explicit packages",
 	)
+	installCmd.Flags().BoolP(
+		flagInstallForceName,
+		"f",
+		false,
+		"Complete the installation even when packages cannot satisfy their declared modules",
+	)
 	return installCmd
 }
 
@@ -52,17 +59,22 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
 	offline, _ := cmd.Flags().GetBool(flagInstallOfflineName)
 	withOptional, _ := cmd.Flags().GetBool(flagInstallWithOptionalName)
+	force, _ := cmd.Flags().GetBool(flagInstallForceName)
 
 	opts := install.Options{
 		Locked:          locked,
 		Offline:         offline,
+		Force:           force,
 		WithOptional:    withOptional,
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Sync(cmd.Context(), workDir, opts)
+	diagnostics, warnings, err := operation.Sync(cmd.Context(), workDir, opts)
 	for _, diagnostic := range diagnostics {
 		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	}
+	for _, warning := range warnings {
+		report.Warn(warning)
 	}
 	return err
 }
