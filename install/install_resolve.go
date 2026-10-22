@@ -117,7 +117,7 @@ func resolveInstall(
 			Artifact:       old.Server.Artifact,
 			Bootstrapper:   old.Server.Bootstrapper,
 			Inputs:         old.Server.Inputs,
-			Java:           old.Server.Java,
+			JavaAdvisory:   old.Server.Java.Advisory,
 		}
 	} else {
 		opts.Trace.phaseStarted("server")
@@ -148,7 +148,7 @@ func resolveInstall(
 			Artifact:     core.Artifact,
 			Bootstrapper: core.Bootstrapper,
 			Inputs:       core.Inputs,
-			Java:         core.Java,
+			Java:         lockfile.NewJava(core.JavaAdvisory, d.Server.Java),
 		},
 		Packages: []types.LockedPackage{},
 		Files:    slices.Clone(d.Files),

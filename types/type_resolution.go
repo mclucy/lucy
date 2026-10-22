@@ -96,6 +96,20 @@ type LockedPackage struct {
 	Requirements []RequirementBinding `yaml:"requirements,omitempty" json:"requirements,omitempty"`
 }
 
+// Enabled reports whether p belongs to the installed set: a package bound to no
+// requirement is ambient, and a bound package needs one enabled requirement.
+func (p *LockedPackage) Enabled() bool {
+	if len(p.Requirements) == 0 {
+		return true
+	}
+	for _, r := range p.Requirements {
+		if r.Enabled {
+			return true
+		}
+	}
+	return false
+}
+
 type BootstrapInput struct {
 	Path     string `yaml:"path" json:"path"`
 	Artifact `yaml:",inline"`
@@ -131,5 +145,7 @@ type ServerProductResolution struct {
 	Artifact       Artifact
 	Bootstrapper   string
 	Inputs         []BootstrapInput
-	Java           int
+	// JavaAdvisory is the Java major version Mojang's launcher ships for the
+	// Minecraft version. Lucy treats it as an advisory minimum.
+	JavaAdvisory int
 }

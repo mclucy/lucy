@@ -4,10 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/lockfile"
@@ -117,26 +114,4 @@ func unmanagedConflict(
 		}
 	}
 	return nil, ""
-}
-
-func checkJava(ctx context.Context, minimum int) error {
-	raw, err := exec.CommandContext(ctx, "java", "-version").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("java %d or later is required: %w", minimum, err)
-	}
-	text := string(raw)
-	_, after, ok := strings.Cut(text, "\"")
-	if !ok {
-		return fmt.Errorf("cannot identify Java version: %s", text)
-	}
-	v, _, _ := strings.Cut(after, "\"")
-	majorText, _, _ := strings.Cut(v, ".")
-	if majorText == "1" && strings.Contains(v, ".") {
-		majorText = strings.Split(v, ".")[1]
-	}
-	major, err := strconv.Atoi(majorText)
-	if err != nil || major < minimum {
-		return fmt.Errorf("java %d or later required, found %s", minimum, v)
-	}
-	return nil
 }

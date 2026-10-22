@@ -37,7 +37,7 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 				URL:      "https://example.invalid/server.jar",
 				Hashes:   map[string]string{"sha256": digestHex(core)},
 			},
-			Java: 21,
+			Java: lockfile.Java{Advisory: 21},
 		},
 		Packages: []types.LockedPackage{},
 	}
@@ -158,7 +158,7 @@ func TestStaleLockRuntimeBlocksFileWritesWhileActive(t *testing.T) {
 				URL:      "https://example.invalid/server.jar",
 				Hashes:   map[string]string{"sha256": digestHex(core)},
 			},
-			Java: 21,
+			Java: lockfile.Java{Advisory: 21},
 		},
 		Packages: []types.LockedPackage{},
 	}

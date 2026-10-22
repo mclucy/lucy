@@ -84,7 +84,6 @@ type lockDocument struct {
 		Bootstrapper   string `yaml:"bootstrapper"`
 		lockedArtifact `yaml:",inline"`
 		Inputs         []lockedInput `yaml:"inputs"`
-		Java           int           `yaml:"java"`
 	} `yaml:"server"`
 	Packages []lockedPackage `yaml:"packages"`
 }

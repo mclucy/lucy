@@ -40,7 +40,33 @@ type Server struct {
 	types.Artifact `yaml:",inline" json:",inline"`
 	Bootstrapper   string                 `yaml:"bootstrapper" json:"bootstrapper"`
 	Inputs         []types.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
-	Java           int                    `yaml:"java" json:"java"`
+	Java           Java                   `yaml:"java" json:"java"`
+}
+
+// Java records the inputs of the Java requirement. Package requirements on
+// Java stay in the package modules, so commands combine the inputs when they
+// check a Java runtime.
+type Java struct {
+	// Advisory is the Java major version that Mojang recommends for the
+	// Minecraft version. Lucy treats it as a minimum.
+	Advisory int `yaml:"advisory" json:"advisory"`
+	// Version is the major version that the manifest pins; zero follows the
+	// advisory.
+	Version int `yaml:"version,omitempty" json:"version,omitempty"`
+	// Distribution is the distribution that the manifest pins; empty accepts
+	// any build.
+	Distribution types.JavaDistribution `yaml:"distribution,omitempty" json:"distribution,omitempty"`
+}
+
+// NewJava records the Mojang advisory with the override that the manifest
+// declares.
+func NewJava(advisory int, override *manifest.Java) Java {
+	java := Java{Advisory: advisory}
+	if override != nil {
+		java.Version = override.Version
+		java.Distribution = override.Distribution
+	}
+	return java
 }
 
 type MCDR struct {
@@ -79,8 +105,11 @@ func (d *Document) Validate() error {
 	if d.Server.Artifact.Filename == "" {
 		return fmt.Errorf("server.artifact.filename is required")
 	}
-	if d.Server.Java <= 0 {
-		return fmt.Errorf("server.java must be positive")
+	if d.Server.Java.Advisory <= 0 {
+		return fmt.Errorf("server.java.advisory must be positive")
+	}
+	if _, ok := types.ParseJavaDistribution(string(d.Server.Java.Distribution)); !ok {
+		return fmt.Errorf("unknown server.java.distribution %q", d.Server.Java.Distribution)
 	}
 	if d.MCDR != nil {
 		if d.MCDR.Directory == "" {

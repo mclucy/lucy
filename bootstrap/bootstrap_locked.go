@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -44,7 +45,10 @@ func CopyLockedFile(src, dst string, mode os.FileMode) error {
 	return closeErr
 }
 
-func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, corePath string, inputs map[string]string, output io.Writer) error {
+// PrepareLocked builds the server tree of a locked server in stage. java is the
+// Java executable for the bootstrap steps that run Java; it may be empty when
+// no runtime is installed, and only those steps fail then.
+func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, corePath string, inputs map[string]string, java string, output io.Writer) error {
 	if err := manifest.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
@@ -90,7 +94,10 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		if err := CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644); err != nil {
 			return err
 		}
-		cmd := exec.CommandContext(ctx, "java", "-Dpaperclip.patchonly=true", "-jar", "server.jar")
+		if err := requireJava(java, "Paperclip patching"); err != nil {
+			return err
+		}
+		cmd := exec.CommandContext(ctx, java, "-Dpaperclip.patchonly=true", "-jar", "server.jar")
 		cmd.Dir = root
 		captured, err := runLockedProcess(cmd, output)
 		if err != nil {
@@ -127,7 +134,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		}
 		return nil
 	case "forge-installer":
-		return executeServerProfile(ctx, root, server, corePath, &installer.Reader, output)
+		return executeServerProfile(ctx, root, server, corePath, &installer.Reader, java, output)
 	default:
 		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrapper)
 	}
@@ -173,6 +180,17 @@ func runLockedProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
 	return captured.Bytes(), err
 }
 
+// ErrNoJava reports a bootstrap step that runs Java when no Java runtime is
+// installed.
+var ErrNoJava = errors.New("no Java runtime is installed")
+
+func requireJava(java, step string) error {
+	if java == "" {
+		return fmt.Errorf("%s needs a Java runtime: %w", step, ErrNoJava)
+	}
+	return nil
+}
+
 func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
 	for _, f := range z.File {
 		if f.Name == name {
@@ -187,7 +205,7 @@ func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
 	return nil, fmt.Errorf("missing installer metadata %s", name)
 }
 
-func executeServerProfile(ctx context.Context, root string, server lockfile.Server, corePath string, z *zip.Reader, output io.Writer) error {
+func executeServerProfile(ctx context.Context, root string, server lockfile.Server, corePath string, z *zip.Reader, java string, output io.Writer) error {
 	raw, err := readLockedEntry(z, "install_profile.json")
 	if err != nil {
 		return err
@@ -323,7 +341,10 @@ func executeServerProfile(ctx context.Context, root string, server lockfile.Serv
 			main,
 		}
 		commandArgs = append(commandArgs, args...)
-		cmd := exec.CommandContext(ctx, "java", commandArgs...)
+		if err := requireJava(java, "installer processor "+proc.Jar); err != nil {
+			return err
+		}
+		cmd := exec.CommandContext(ctx, java, commandArgs...)
 		cmd.Dir = root
 		captured, err := runLockedProcess(cmd, output)
 		if err != nil {

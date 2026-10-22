@@ -5,7 +5,6 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
@@ -58,9 +57,9 @@ func trustMavenChecksum(ctx context.Context, a *types.Artifact) error {
 }
 
 // ResolveServerProduct resolves the server product artifact, its download
-// inputs, and the Java requirement for the requested Minecraft version.
-// It always acquires the selected core because the lock records the bytes it
-// pins.
+// inputs, and the Java advisory for the requested Minecraft version. The
+// advisory comes from Mojang's per-version metadata. It always acquires the
+// selected core because the lock records the bytes it pins.
 func ResolveServerProduct(
 	ctx context.Context,
 	req types.ServerProductRequest,
@@ -70,36 +69,12 @@ func ResolveServerProduct(
 		Minecraft:      req.Minecraft,
 		Product:        req.Product,
 		ProductVersion: req.ProductVersion,
-		Java:           21,
 	}
-	if strings.HasPrefix(req.Minecraft.String(), "1.") {
-		// A prerelease or release-candidate suffix rides on the Minecraft id
-		// ("1.20-pre1", "1.20.5-pre1"). The numeric parts alone decide the Java
-		// requirement, and a suffix on any of them silently parses as zero,
-		// which would map the 1.20 prereleases to Java 8.
-		parts := strings.Split(
-			strings.SplitN(req.Minecraft.String(), "-", 2)[0],
-			".",
-		)
-		if len(parts) > 1 {
-			minor, _ := strconv.Atoi(parts[1])
-			// An absent patch is the unpatched release, and 1.20 predates the
-			// Java 21 requirement that 1.20.5 introduced.
-			patch := 0
-			if len(parts) > 2 {
-				patch, _ = strconv.Atoi(parts[2])
-			}
-			if minor < 17 {
-				out.Java = 8
-			} else if minor < 18 {
-				out.Java = 16
-			} else if minor < 20 || (minor == 20 && patch < 5) {
-				out.Java = 17
-			}
-		}
-	} else {
-		out.Java = 25
+	advisory, err := mojang.JavaAdvisory(req.Minecraft)
+	if err != nil {
+		return out, err
 	}
+	out.JavaAdvisory = advisory
 	local := upstream.LocalContext{
 		Ecosystem:        types.EcosystemMinecraft,
 		MinecraftVersion: req.Minecraft,
