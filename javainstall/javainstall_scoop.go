@@ -172,6 +172,12 @@ func scoopPlans(req Request, hasManifest func(string) bool) []Plan {
 	if !found {
 		return nil
 	}
+	// Steps run "scoop" directly. Go's LookPath on Windows resolves "scoop" to
+	// scoop.cmd via PATHEXT (.com;.exe;.bat;.cmd), and CreateProcess runs a
+	// .cmd file through cmd.exe. Arguments without cmd.exe metacharacters
+	// (such as "install" and "java/<name>") need no shell quoting. Other Go
+	// tools calling Scoop on GitHub (matcha, basecamp-cli, hey-cli, teamcity-cli,
+	// glazepkg) launch "scoop" the same way.
 	plan := Plan{
 		Method:       MethodScoop,
 		Package:      "java/" + chosen.manifest,
