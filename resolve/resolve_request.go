@@ -3,6 +3,7 @@ package resolve
 import (
 	"context"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
@@ -58,11 +59,12 @@ func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
 // PackagesRequest describes one package resolution. Trace and Context
 // default to their zero values, which report nothing and never cancel.
 type PackagesRequest struct {
-	Context            context.Context
-	Manifest           *manifest.Document
-	Previous           []lockfile.Package
-	Target             Target
-	Materialize        func(*catalog.Artifact) (string, error)
+	Context  context.Context
+	Manifest *manifest.Document
+	Previous []lockfile.Package
+	Target   Target
+	// Materialize must leave its input unchanged and return verified local bytes.
+	Materialize        func(*catalog.Artifact) (artifact.MaterializedFile, error)
 	WithOptional       bool
 	AcceptBroken       bool
 	ExpandDependencies bool

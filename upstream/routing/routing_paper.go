@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
@@ -80,7 +81,7 @@ func resolvePaper(ctx context.Context, req ServerProductRequest, out *ServerProd
 	return fmt.Errorf("no Paper build %s for Minecraft %s", req.ProductVersion, req.Minecraft)
 }
 
-func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, acquire func(*catalog.Artifact) (string, error)) error {
+func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, acquire func(*catalog.Artifact) (artifact.MaterializedFile, error)) error {
 	var repo struct {
 		ID int64 `json:"id"`
 	}
@@ -159,14 +160,15 @@ func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *Se
 				Hashes:    hashes,
 			}
 			trial := *out
-			trial.Artifact = candidate
 			trial.ProductVersion = version.Version(r.Tag)
 			trial.Bootstrapper = "paperclip"
-			p, e := acquire(&candidate)
+			materialized, e := acquire(&candidate)
 			if e != nil {
 				return e
 			}
-			if e := paperclipInput(&trial, p); e != nil {
+			candidate.Hashes = materialized.Hashes
+			trial.Artifact = candidate
+			if e := paperclipInput(&trial, materialized.Path); e != nil {
 				log.Debug(
 					"routing: github fork candidate rejected",
 					"repository", req.Repository,

@@ -110,9 +110,11 @@ func prepareMCDR(ctx context.Context, root, directory string, selector version.V
 			URL:       pkg.Download.URL,
 			Hashes:    pkg.Download.Archive.Hashes,
 		}
-		if _, err := store.materialize(&a); err != nil {
+		materialized, err := store.materialize(&a)
+		if err != nil {
 			return nil, err
 		}
+		a.Hashes = materialized.Hashes
 		out.Inputs = append(out.Inputs, server.BootstrapInput{
 			Path:     "wheels/" + filename,
 			Artifact: a,
@@ -170,11 +172,12 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 		var requirements []string
 		for i := range m.Inputs {
 			input := &m.Inputs[i]
-			p, err := store.materialize(&input.Artifact)
+			materialized, err := store.materialize(&input.Artifact)
 			if err != nil {
 				return err
 			}
-			requirements = append(requirements, p+" --hash=sha256:"+input.Hashes["sha256"])
+			input.Artifact.Hashes = materialized.Hashes
+			requirements = append(requirements, materialized.Path+" --hash=sha256:"+materialized.Hashes["sha256"])
 		}
 		requirementsPath := filepath.Join(env, "locked.txt")
 		if err := os.WriteFile(requirementsPath, []byte(strings.Join(requirements, "\n")+"\n"), 0o600); err != nil {

@@ -380,11 +380,12 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 				continue
 			}
 			a := candidate.Artifact
-			p, err := materialize(&a)
+			materialized, err := materialize(&a)
 			if err != nil {
 				return hardFail(err)
 			}
-			modules, err := artifact.ReadModules(ctx, p, r.key.ecosystem)
+			a.Hashes = materialized.Hashes
+			modules, err := artifact.ReadModules(ctx, materialized.Path, r.key.ecosystem)
 			if err != nil {
 				return hardFail(err)
 			}

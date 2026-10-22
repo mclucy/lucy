@@ -254,23 +254,25 @@ func stageInstall(
 	if err != nil {
 		return nil, err
 	}
+	resolved.Server.Artifact.Hashes = core.Hashes
 	inputs := map[string]string{}
 	for i := range resolved.Server.Inputs {
 		input := &resolved.Server.Inputs[i]
 		if input.Embedded != "" {
 			continue
 		}
-		p, err := store.materialize(&input.Artifact)
+		materialized, err := store.materialize(&input.Artifact)
 		if err != nil {
 			return nil, err
 		}
-		inputs[input.Path] = p
+		input.Artifact.Hashes = materialized.Hashes
+		inputs[input.Path] = materialized.Path
 	}
 	if err := bootstrap.PrepareLocked(
 		ctx,
 		stage,
 		resolved.Server,
-		core,
+		core.Path,
 		inputs,
 		check.Executable(),
 		opts.Trace.processOutput(),
@@ -304,7 +306,8 @@ func stageInstall(
 		if err != nil {
 			return nil, err
 		}
-		if err := bootstrap.CopyLockedFile(source, filepath.Join(stage, destination), 0o644); err != nil {
+		p.Artifact.Hashes = source.Hashes
+		if err := bootstrap.CopyLockedFile(source.Path, filepath.Join(stage, destination), 0o644); err != nil {
 			return nil, err
 		}
 		staged++
