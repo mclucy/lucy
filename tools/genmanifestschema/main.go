@@ -1,6 +1,7 @@
 package main
 
 import (
+	stdjson "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
@@ -108,6 +109,51 @@ func main() {
 		}
 	}()
 
+	javaSchema := func() *jsonschema.Schema {
+		major := func() *jsonschema.Schema {
+			return &jsonschema.Schema{
+				Type:    "integer",
+				Minimum: stdjson.Number(fmt.Sprint(manifest.MinimumJava)),
+			}
+		}
+		version := &jsonschema.Schema{
+			OneOf: []*jsonschema.Schema{
+				major(),
+				{Const: manifest.JavaAuto},
+			},
+			Description: "The Java major version, or auto.",
+		}
+		distributions := []any{manifest.JavaAuto, "any"}
+		for _, distribution := range types.JavaDistributions {
+			distributions = append(distributions, string(distribution))
+		}
+		distribution := &jsonschema.Schema{
+			Enum:        distributions,
+			Description: "The Java distribution. Omit it to accept any distribution.",
+		}
+		properties := orderedmap.New[string, *jsonschema.Schema]()
+		properties.Set("version", version)
+		properties.Set("distribution", distribution)
+		short := major()
+		short.Description = "The Java major version."
+		return &jsonschema.Schema{
+			Description: "Overrides the Java runtime the server runs on. " +
+				"Omit it to follow the Java version Mojang recommends for the Minecraft version.",
+			OneOf: []*jsonschema.Schema{
+				short,
+				{
+					Const:       manifest.JavaAuto,
+					Description: "Follow the Java version Mojang recommends.",
+				},
+				{
+					Type:                 "object",
+					Properties:           properties,
+					AdditionalProperties: jsonschema.FalseSchema,
+				},
+			},
+		}
+	}()
+
 	r := &jsonschema.Reflector{
 		DoNotReference: true,
 		BaseSchemaID:   jsonschema.ID(schemaURL),
@@ -115,6 +161,8 @@ func main() {
 			switch t {
 			case reflect.TypeFor[manifest.Requirement]():
 				return requirementSchema
+			case reflect.TypeFor[manifest.Java]():
+				return javaSchema
 			case reflect.TypeFor[types.TrackedFile]():
 				return trackedFileSchema
 			default:
