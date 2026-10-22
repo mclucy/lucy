@@ -21,21 +21,6 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-type (
-	projectKey struct {
-		environment serverpkg.Environment
-		ecosystem   catalog.Ecosystem
-		provider    catalog.Provider
-		project     string
-	}
-	projectRequest struct {
-		key          projectKey
-		display      string
-		requirements []lockfile.RequirementBinding
-		releaseIDs   []string
-	}
-)
-
 // catalogueRegistry names the registry that serves a package provider. Only a
 // provider backing a registry can answer catalogue queries.
 func catalogueRegistry(provider catalog.Provider) catalog.Registry {
@@ -44,40 +29,6 @@ func catalogueRegistry(provider catalog.Provider) catalog.Registry {
 		return catalog.RegistryUnspecified
 	}
 	return registry
-}
-
-// SupportsPackages reports whether the server product loads packages from
-// ecosystem. A paperclip server loads Paper and Bukkit packages regardless of
-// how the manifest names its product.
-func SupportsPackages(server lockfile.Server, ecosystem catalog.Ecosystem) bool {
-	switch server.Product {
-	case serverpkg.ProductFabric:
-		return ecosystem == catalog.EcosystemFabric
-	case serverpkg.ProductForge:
-		return ecosystem == catalog.EcosystemForge
-	case serverpkg.ProductNeoForge:
-		return ecosystem == catalog.EcosystemNeoForge
-	case serverpkg.ProductPaper, serverpkg.ProductPurpur:
-		return ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit
-	default:
-		return server.Bootstrapper == "paperclip" &&
-			(ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit)
-	}
-}
-
-// PackagesRequest describes one package resolution. Trace and Context
-// default to their zero values, which report nothing and never cancel.
-type PackagesRequest struct {
-	Context            context.Context
-	Manifest           *manifest.Document
-	Previous           *lockfile.Document
-	Server             lockfile.Server
-	MCDRVersion        string
-	Materialize        func(*catalog.Artifact) (string, error)
-	WithOptional       bool
-	AcceptBroken       bool
-	ExpandDependencies bool
-	Trace              Trace
 }
 
 func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
@@ -209,7 +160,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			}
 			all = mergeArtifactSelections(all)
 			sortPackages(all)
-			problems, err := ValidateModules(all, server, mcdrVersion)
+			problems, err := finalizeModules(all, server, mcdrVersion)
 			if err != nil {
 				log.Debug(
 					"resolve: settled graph invalid",
@@ -569,7 +520,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	}
 	out = mergeArtifactSelections(out)
 	sortPackages(out)
-	problems, err := ValidateModules(out, server, mcdrVersion)
+	problems, err := finalizeModules(out, server, mcdrVersion)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -616,170 +567,6 @@ func preferReleaseBuilds(list []upstream.Candidate, requirements []lockfile.Requ
 		}
 	}
 	return ordered
-}
-
-func ValidateModules(packages []lockfile.Package, server lockfile.Server, mcdrVersion string) ([]ModuleProblem, error) {
-	type selected struct{ packageIndex, moduleIndex int }
-	index := map[struct {
-		environment serverpkg.Environment
-		ecosystem   catalog.Ecosystem
-		id          string
-	}]selected{}
-	var problems []ModuleProblem
-	for pi := range packages {
-		p := &packages[pi]
-		if !p.Enabled() {
-			continue
-		}
-		for mi, m := range p.Modules {
-			names := append([]string{m.ID}, m.Provides...)
-			for _, name := range names {
-				if m.Ecosystem == catalog.EcosystemBukkit || m.Ecosystem == catalog.EcosystemPaper {
-					name = strings.ToLower(name)
-				}
-				key := struct {
-					environment serverpkg.Environment
-					ecosystem   catalog.Ecosystem
-					id          string
-				}{p.Environment, p.Ecosystem, name}
-				if old, ok := index[key]; ok {
-					previous := packages[old.packageIndex].Modules[old.moduleIndex]
-					if m.NestedPath == "" && previous.NestedPath == "" && pi != old.packageIndex {
-						return nil, fmt.Errorf("duplicate native module %s in %s and %s", name, p.Filename, packages[old.packageIndex].Filename)
-					}
-					if previous.NestedPath == "" {
-						continue
-					}
-					if m.NestedPath != "" {
-						a, err := versionpkg.ParseVersion(
-							previous.Version,
-							previous.EffectiveVersionDialect(),
-						)
-						if err != nil {
-							return nil, err
-						}
-						b, err := versionpkg.ParseVersion(
-							m.Version,
-							m.EffectiveVersionDialect(),
-						)
-						if err != nil {
-							return nil, err
-						}
-						comparison, isComparable := versionpkg.Compare(a, b)
-						if !isComparable {
-							return nil, fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
-						}
-						if comparison >= 0 {
-							continue
-						}
-					}
-				}
-				index[key] = selected{pi, mi}
-			}
-		}
-	}
-	for pi := range packages {
-		p := &packages[pi]
-		if !p.Enabled() {
-			continue
-		}
-		var selectedModules []catalog.DescriptorModule
-		for mi := range p.Modules {
-			m := p.Modules[mi]
-			id := m.ID
-			if m.Ecosystem == catalog.EcosystemBukkit || m.Ecosystem == catalog.EcosystemPaper {
-				id = strings.ToLower(id)
-			}
-			key := struct {
-				environment serverpkg.Environment
-				ecosystem   catalog.Ecosystem
-				id          string
-			}{p.Environment, p.Ecosystem, id}
-			if target := index[key]; target.packageIndex != pi || target.moduleIndex != mi {
-				continue
-			}
-			for di := range m.Dependencies {
-				dep := &m.Dependencies[di]
-				// A Java requirement is checked against the Java runtime that
-				// runs the server, and only warns.
-				if dep.Kind == catalog.DependencyKindPython || dep.ID == "java" {
-					continue
-				}
-				value := ""
-				builtin := true
-				switch dep.ID {
-				case "minecraft":
-					value = string(server.Minecraft)
-				case "fabricloader":
-					if server.Product == serverpkg.ProductFabric {
-						value = string(server.CoreVersion)
-					}
-				case "forge", "neoforge":
-					if dep.ID == server.Product.String() {
-						value = string(server.CoreVersion)
-					}
-				case "mcdreforged":
-					value = mcdrVersion
-				default:
-					builtin = false
-				}
-				var target *lockfile.Package
-				var targetModule *catalog.DescriptorModule
-				if !builtin {
-					name := dep.ID
-					if p.Ecosystem == catalog.EcosystemBukkit || p.Ecosystem == catalog.EcosystemPaper {
-						name = strings.ToLower(name)
-					}
-					if match, ok := index[struct {
-						environment serverpkg.Environment
-						ecosystem   catalog.Ecosystem
-						id          string
-					}{p.Environment, p.Ecosystem, name}]; ok {
-						target = &packages[match.packageIndex]
-						targetModule = &target.Modules[match.moduleIndex]
-						value = string(targetModule.Version)
-					}
-				}
-				matched := value != ""
-				invalid := false
-				if matched && dep.Constraint != "" {
-					var err error
-					matched, err = versionpkg.Match(
-						dep.Constraint,
-						versionpkg.Version(value),
-						m.EffectiveVersionDialect(),
-					)
-					if err != nil {
-						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
-						invalid = true
-					}
-				}
-				requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
-				if !invalid && dep.Kind == catalog.DependencyKindRequired && !matched {
-					if value == "" {
-						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s, which no selected package provides", m.ID, requirement)))
-					} else {
-						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s (selected %s)", m.ID, requirement, value)))
-					}
-				}
-				if !invalid && dep.Kind == catalog.DependencyKindIncompatible && matched {
-					problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s breaks %s %s", m.ID, dep.ID, value)))
-				}
-				if matched {
-					if target != nil {
-						dep.Provider = target.Provider
-						dep.ProjectID = target.ProjectID
-						dep.ModuleID = targetModule.ID
-					} else {
-						dep.ModuleID = dep.ID
-					}
-				}
-			}
-			selectedModules = append(selectedModules, m)
-		}
-		p.Modules = selectedModules
-	}
-	return problems, nil
 }
 
 func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
