@@ -38,8 +38,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	}
 	d := request.Manifest
 	previous := request.Previous
-	server := request.Server
-	mcdrVersion := request.MCDRVersion
+	target := request.Target
 	materialize := request.Materialize
 	withOptional := request.WithOptional
 	acceptBroken := request.AcceptBroken
@@ -54,13 +53,11 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		// The slug the user wrote is the display name even when the lock lets
 		// resolution start from the project identity.
 		display := project
-		if previous != nil {
-			for _, p := range previous.Packages {
-				if p.Environment == environment && p.Ecosystem == ecosystem && p.Provider == provider {
-					for _, old := range p.Requirements {
-						if old.Reference == ref {
-							project = p.ProjectID
-						}
+		for _, p := range previous {
+			if p.Environment == environment && p.Ecosystem == ecosystem && p.Provider == provider {
+				for _, old := range p.Requirements {
+					if old.Reference == ref {
+						project = p.ProjectID
 					}
 				}
 			}
@@ -115,10 +112,10 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	}
 	for _, r := range requests {
 		if r.key.environment == serverpkg.EnvironmentServer {
-			if !SupportsPackages(server, r.key.ecosystem) {
+			if !SupportsPackages(target, r.key.ecosystem) {
 				for _, req := range r.requirements {
 					if req.Enabled {
-						return nil, nil, fmt.Errorf("product %s cannot load %s packages", server.Product, r.key.ecosystem)
+						return nil, nil, fmt.Errorf("product %s cannot load %s packages", target.Product, r.key.ecosystem)
 					}
 				}
 			}
@@ -160,7 +157,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			}
 			all = mergeArtifactSelections(all)
 			sortPackages(all)
-			problems, err := finalizeModules(all, server, mcdrVersion)
+			problems, err := finalizeModules(all, target)
 			if err != nil {
 				log.Debug(
 					"resolve: settled graph invalid",
@@ -267,19 +264,17 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		list, ok := candidates[r.key]
 		if !ok {
 			var err error
-			list, err = routing.Candidates(ctx, catalogueRegistry(r.key.provider), r.key.project, string(server.Minecraft), r.key.ecosystem)
+			list, err = routing.Candidates(ctx, catalogueRegistry(r.key.provider), r.key.project, string(target.Minecraft), r.key.ecosystem)
 			if err != nil {
 				return hardFail(err)
 			}
 			slices.SortStableFunc(list, func(a, b upstream.Candidate) int { return b.PublishedAt.Compare(a.PublishedAt) })
-			if previous != nil {
-				for _, p := range previous.Packages {
-					if p.Environment == r.key.environment && p.Ecosystem == r.key.ecosystem && p.Provider == r.key.provider && p.ProjectID == r.key.project {
-						for i, c := range list {
-							if c.ReleaseID == p.ReleaseID && c.FileID == p.FileID {
-								list = append([]upstream.Candidate{c}, append(list[:i], list[i+1:]...)...)
-								break
-							}
+			for _, p := range previous {
+				if p.Environment == r.key.environment && p.Ecosystem == r.key.ecosystem && p.Provider == r.key.provider && p.ProjectID == r.key.project {
+					for i, c := range list {
+						if c.ReleaseID == p.ReleaseID && c.FileID == p.FileID {
+							list = append([]upstream.Candidate{c}, append(list[:i], list[i+1:]...)...)
+							break
 						}
 					}
 				}
@@ -494,7 +489,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		if operational {
 			return lastErr
 		}
-		return resolutionFailure(ledger.summary(server.Minecraft, lastErr), lastErr)
+		return resolutionFailure(ledger.summary(target.Minecraft, lastErr), lastErr)
 	}
 	if !search(false) {
 		if !acceptBroken {
@@ -520,7 +515,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	}
 	out = mergeArtifactSelections(out)
 	sortPackages(out)
-	problems, err := finalizeModules(out, server, mcdrVersion)
+	problems, err := finalizeModules(out, target)
 	if err != nil {
 		return nil, nil, err
 	}

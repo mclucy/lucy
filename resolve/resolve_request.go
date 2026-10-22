@@ -7,6 +7,8 @@ import (
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
+
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 type (
@@ -24,11 +26,21 @@ type (
 	}
 )
 
-// SupportsPackages reports whether the server product loads packages from
+// Target identifies the server runtime whose compatibility rules package
+// resolution enforces.
+type Target struct {
+	Product      serverpkg.Product
+	Bootstrapper string
+	Minecraft    versionpkg.Version
+	CoreVersion  versionpkg.Version
+	MCDRVersion  string
+}
+
+// SupportsPackages reports whether the target product loads packages from
 // ecosystem. A paperclip server loads Paper and Bukkit packages regardless of
 // how the manifest names its product.
-func SupportsPackages(server lockfile.Server, ecosystem catalog.Ecosystem) bool {
-	switch server.Product {
+func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
+	switch target.Product {
 	case serverpkg.ProductFabric:
 		return ecosystem == catalog.EcosystemFabric
 	case serverpkg.ProductForge:
@@ -38,7 +50,7 @@ func SupportsPackages(server lockfile.Server, ecosystem catalog.Ecosystem) bool 
 	case serverpkg.ProductPaper, serverpkg.ProductPurpur:
 		return ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit
 	default:
-		return server.Bootstrapper == "paperclip" &&
+		return target.Bootstrapper == "paperclip" &&
 			(ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit)
 	}
 }
@@ -48,9 +60,8 @@ func SupportsPackages(server lockfile.Server, ecosystem catalog.Ecosystem) bool 
 type PackagesRequest struct {
 	Context            context.Context
 	Manifest           *manifest.Document
-	Previous           *lockfile.Document
-	Server             lockfile.Server
-	MCDRVersion        string
+	Previous           []lockfile.Package
+	Target             Target
 	Materialize        func(*catalog.Artifact) (string, error)
 	WithOptional       bool
 	AcceptBroken       bool

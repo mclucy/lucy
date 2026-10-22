@@ -88,10 +88,10 @@ func selectedEcosystem(d *manifest.Document, requested catalog.Ecosystem) catalo
 // through Sinytra Connector. Only ecosystems the declared product loads enter
 // the set. Without a probe, the declared product decides.
 func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[catalog.Ecosystem]struct{} {
-	server := lockfile.Server{Product: d.Server.Core.Product}
+	target := resolve.Target{Product: d.Server.Core.Product}
 	served := map[catalog.Ecosystem]struct{}{}
 	for _, offer := range observed.ServedEcosystems() {
-		if resolve.SupportsPackages(server, offer.Ecosystem) {
+		if resolve.SupportsPackages(target, offer.Ecosystem) {
 			served[offer.Ecosystem] = struct{}{}
 		}
 	}

@@ -15,7 +15,7 @@ import (
 // modules that lose to another selected module with the same identity. It
 // returns the problems it found; only an unparsable or ambiguous module
 // identity is an error.
-func finalizeModules(packages []lockfile.Package, target lockfile.Server, mcdrVersion string) ([]ModuleProblem, error) {
+func finalizeModules(packages []lockfile.Package, target Target) ([]ModuleProblem, error) {
 	type selected struct{ packageIndex, moduleIndex int }
 	index := map[struct {
 		environment serverpkg.Environment
@@ -116,7 +116,7 @@ func finalizeModules(packages []lockfile.Package, target lockfile.Server, mcdrVe
 						value = string(target.CoreVersion)
 					}
 				case "mcdreforged":
-					value = mcdrVersion
+					value = target.MCDRVersion
 				default:
 					builtin = false
 				}
