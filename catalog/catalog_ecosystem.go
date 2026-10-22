@@ -1,18 +1,11 @@
-// Package types is a general package for all types used in Lucy.
+// Package catalog describes package identities, artifacts, compatibility,
+// metadata, and dependencies independently of their source.
 //
-// This package contains ONLY pure domain semantics. It must have no side effects:
-//   - NO logging (log.)
-//   - NO filesystem access (os.)
-//   - NO panics (panic())
-//
-// All functions should be deterministic and side effect free.
-package types
+// Runtime observations, persisted workspace state, provider clients, and
+// presentation belong to their owning packages, not catalog.
+package catalog
 
-import (
-	"strings"
-
-	"github.com/mclucy/lucy/terminal/style"
-)
+import "strings"
 
 // Ecosystem identifies the compatibility surface a server can serve. It is a
 // capability descriptor, not the server product itself.
@@ -128,12 +121,7 @@ func (e Ecosystem) IsUnspecified() bool {
 	return e == EcosystemUnspecified
 }
 
-// Title formats a package name for display.
-func (n PackageName) Title() string {
-	return style.Capitalize(strings.ReplaceAll(string(n), "-", " "))
-}
-
 // PythonName formats the name as a Python distribution name.
-func (n PackageName) PythonName() string {
+func (n Name) PythonName() string {
 	return strings.ReplaceAll(string(n), "-", "_")
 }

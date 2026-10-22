@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 const neoForgeMavenArtifactBaseURL = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
@@ -35,7 +36,7 @@ var neoforgeArtifactHashLookup = func(
 //   - https://github.com/neoforged/NeoForge/blob/main/CHANGELOG.md
 func NeoForgeInstallationRuntimes(workPath string) []*RuntimeEvidence {
 	spec := modLoaderInstallSpec{
-		platform: types.EcosystemNeoForge,
+		platform: catalog.EcosystemNeoForge,
 		name:     "neoforge",
 		libraryRoot: filepath.Join(
 			"libraries",
@@ -73,8 +74,8 @@ func neoForgeCandidateNames(versionDir, version string) []modLoaderCandidate {
 
 func verifyNeoForgeArtifactByUnpack(
 	candidate modLoaderCandidate,
-	gameVersion types.Version,
-	loaderVersion types.Version,
+	gameVersion versionpkg.Version,
+	loaderVersion versionpkg.Version,
 ) (bool, error) {
 	file, err := os.Open(candidate.path)
 	if err != nil {
@@ -108,7 +109,7 @@ func verifyNeoForgeArtifactByUnpack(
 
 func verifyNeoForgeUniversalManifest(
 	reader *zip.Reader,
-	loaderVersion types.Version,
+	loaderVersion versionpkg.Version,
 ) (bool, error) {
 	manifest, ok, err := readZipFile(reader, "META-INF/MANIFEST.MF")
 	if err != nil || !ok {

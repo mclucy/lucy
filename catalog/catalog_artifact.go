@@ -1,8 +1,9 @@
-package types
+package catalog
 
 import (
 	"path"
-	"time"
+
+	"github.com/mclucy/lucy/version"
 )
 
 // Artifact records one upstream file. Descriptor module identities do not
@@ -12,7 +13,7 @@ type Artifact struct {
 	ProjectID string             `yaml:"project_id,omitempty" json:"project_id,omitempty"`
 	ReleaseID string             `yaml:"release_id,omitempty" json:"release_id,omitempty"`
 	FileID    string             `yaml:"file_id,omitempty" json:"file_id,omitempty"`
-	Version   Version            `yaml:"version" json:"version"`
+	Version   version.Version    `yaml:"version" json:"version"`
 	Embedded  string             `yaml:"embedded,omitempty" json:"embedded,omitempty"`
 	Filename  string             `yaml:"filename" json:"filename"`
 	URL       string             `yaml:"url,omitempty" json:"url,omitempty"`
@@ -22,9 +23,9 @@ type Artifact struct {
 
 type DescriptorModule struct {
 	ID             string                 `yaml:"id" json:"id"`
-	Version        Version                `yaml:"version" json:"version"`
+	Version        version.Version        `yaml:"version" json:"version"`
 	Ecosystem      Ecosystem              `yaml:"ecosystem" json:"ecosystem"`
-	VersionDialect VersionDialect         `yaml:"version_dialect,omitempty" json:"version_dialect,omitempty"`
+	VersionDialect version.Dialect        `yaml:"version_dialect,omitempty" json:"version_dialect,omitempty"`
 	NestedPath     string                 `yaml:"nested_path,omitempty" json:"nested_path,omitempty"`
 	DescriptorPath string                 `yaml:"descriptor_path,omitempty" json:"descriptor_path,omitempty"`
 	Provides       []string               `yaml:"provides,omitempty" json:"provides,omitempty"`
@@ -37,33 +38,33 @@ type DescriptorModule struct {
 // EffectiveVersionDialect returns the recorded dialect. Documents written
 // before the field existed infer it from the descriptor format, then from the
 // module ecosystem.
-func (m DescriptorModule) EffectiveVersionDialect() VersionDialect {
-	if m.VersionDialect != VersionDialectUnknown {
+func (m DescriptorModule) EffectiveVersionDialect() version.Dialect {
+	if m.VersionDialect != version.DialectUnknown {
 		return m.VersionDialect
 	}
 	switch path.Base(m.DescriptorPath) {
 	case "fabric.mod.json":
-		return VersionDialectFabric
+		return version.DialectFabric
 	case "mods.toml", "neoforge.mods.toml", "sponge_plugins.json":
-		return VersionDialectMaven
+		return version.DialectMaven
 	case "mcdreforged.plugin.json":
-		return VersionDialectMCDR
+		return version.DialectMCDR
 	case "plugin.yml", "paper-plugin.yml":
-		return VersionDialectOpaque
+		return version.DialectOpaque
 	}
 	switch m.Ecosystem {
 	case EcosystemFabric:
-		return VersionDialectFabric
+		return version.DialectFabric
 	case EcosystemForge, EcosystemNeoForge, EcosystemSponge:
-		return VersionDialectMaven
+		return version.DialectMaven
 	case EcosystemMCDR:
-		return VersionDialectMCDR
+		return version.DialectMCDR
 	case EcosystemMinecraft:
-		return VersionDialectMinecraft
+		return version.DialectMinecraft
 	case EcosystemBukkit, EcosystemPaper:
-		return VersionDialectOpaque
+		return version.DialectOpaque
 	default:
-		return VersionDialectUnknown
+		return version.DialectUnknown
 	}
 }
 
@@ -78,74 +79,4 @@ type DescriptorDependency struct {
 	Provider      Provider       `yaml:"provider,omitempty" json:"provider,omitempty"`
 	ProjectID     string         `yaml:"project_id,omitempty" json:"project_id,omitempty"`
 	ModuleID      string         `yaml:"module_id,omitempty" json:"module_id,omitempty"`
-}
-
-// RequirementBinding retains a declared reference's immutable project identity,
-// including when the requirement is disabled.
-type RequirementBinding struct {
-	Reference   string  `yaml:"reference" json:"reference"`
-	Selector    Version `yaml:"selector" json:"selector"`
-	FilePattern string  `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty"`
-	Enabled     bool    `yaml:"enabled" json:"enabled"`
-}
-
-type LockedPackage struct {
-	Environment  Environment `yaml:"environment" json:"environment"`
-	Ecosystem    Ecosystem   `yaml:"ecosystem" json:"ecosystem"`
-	Artifact     `yaml:",inline"`
-	Requirements []RequirementBinding `yaml:"requirements,omitempty" json:"requirements,omitempty"`
-}
-
-// Enabled reports whether p belongs to the installed set: a package bound to no
-// requirement is ambient, and a bound package needs one enabled requirement.
-func (p *LockedPackage) Enabled() bool {
-	if len(p.Requirements) == 0 {
-		return true
-	}
-	for _, r := range p.Requirements {
-		if r.Enabled {
-			return true
-		}
-	}
-	return false
-}
-
-type BootstrapInput struct {
-	Path     string `yaml:"path" json:"path"`
-	Artifact `yaml:",inline"`
-}
-
-type ProjectDependency struct {
-	Provider  Provider       `json:"provider"`
-	ProjectID string         `json:"project_id"`
-	ReleaseID string         `json:"release_id,omitempty"`
-	Kind      DependencyKind `json:"kind"`
-}
-
-type CatalogueCandidate struct {
-	Artifact
-	Channel      ReleaseChannel
-	PublishedAt  time.Time
-	PrimaryFile  bool
-	Dependencies []ProjectDependency
-}
-
-type ServerProductRequest struct {
-	Minecraft      Version
-	Product        ServerProduct
-	ProductVersion Version
-	Repository     string
-	FilePattern    string
-}
-
-type ServerProductResolution struct {
-	Minecraft      Version
-	Product        ServerProduct
-	ProductVersion Version
-	Artifact       Artifact
-	Bootstrapper   string
-	Inputs         []BootstrapInput
-	// JavaAdvisory is the Java major version Mojang's launcher ships for the
-	// Minecraft version. Lucy treats it as an advisory minimum.
-	JavaAdvisory int
 }

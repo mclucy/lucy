@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -25,7 +25,7 @@ func (n hangarProjectNamespace) ProjectRef() hangarProjectRef {
 	return hangarProjectRef{Owner: n.Owner, Slug: n.Slug}
 }
 
-func (r hangarProjectRef) CanonicalName() types.PackageName {
+func (r hangarProjectRef) CanonicalName() catalog.Name {
 	return input.ToProjectName(r.Slug)
 }
 
@@ -43,7 +43,7 @@ func (r hangarProjectRef) ProjectURL() string {
 	return hangarSiteBaseURL + "/" + r.Owner + "/" + r.Slug
 }
 
-func (s *projectSearchResponse) ToSearchResults(source types.Provider) upstream.SearchResponse {
+func (s *projectSearchResponse) ToSearchResults(source catalog.Provider) upstream.SearchResponse {
 	res := upstream.SearchResponse{
 		Provider: source,
 		Items:    make([]upstream.SearchResult, 0, len(s.Result)),
@@ -61,8 +61,8 @@ func (s *projectSearchResponse) ToSearchResults(source types.Provider) upstream.
 	return res
 }
 
-func (p *hangarProject) ToProjectInformation() types.Metadata {
-	info := types.Metadata{
+func (p *hangarProject) ToProjectInformation() catalog.Metadata {
+	info := catalog.Metadata{
 		Title:       p.Name,
 		Brief:       p.Description,
 		Description: p.MainPageContent,
@@ -74,22 +74,22 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 			p.Settings.License.Name,
 			p.Settings.License.Type,
 		),
-		Authors: make([]types.Person, 0, len(p.MemberNames)),
-		URLs:    make([]types.URL, 0, len(p.Settings.Links)+1),
+		Authors: make([]catalog.Person, 0, len(p.MemberNames)),
+		URLs:    make([]catalog.URL, 0, len(p.Settings.Links)+1),
 	}
 
 	if projectURL := p.ProjectRef().ProjectURL(); projectURL != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Hangar",
-				Type: types.URLHome,
+				Type: catalog.URLHome,
 				URL:  projectURL,
 			},
 		)
 	}
 
 	for _, memberName := range p.MemberNames {
-		info.Authors = append(info.Authors, types.Person{Name: memberName})
+		info.Authors = append(info.Authors, catalog.Person{Name: memberName})
 	}
 
 	for _, section := range p.Settings.Links {
@@ -98,7 +98,7 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 				continue
 			}
 			info.URLs = append(
-				info.URLs, types.URL{
+				info.URLs, catalog.URL{
 					Name: link.Name,
 					Type: classifyHangarURL(link.Name),
 					URL:  link.URL,
@@ -110,30 +110,30 @@ func (p *hangarProject) ToProjectInformation() types.Metadata {
 	return info
 }
 
-func (v *hangarVersion) ToPackageRemote() types.ResolvedPackage {
-	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(types.EcosystemUnspecified))
+func (v *hangarVersion) ToPackageRemote() upstream.ResolvedPackage {
+	remote, _ := v.ToPackageRemoteForPlatform(preferredDownloadPlatform(catalog.EcosystemUnspecified))
 	if remote.FileURL == "" {
 		platforms := sortedMapKeys(v.Downloads)
 		if len(platforms) == 0 {
-			return types.ResolvedPackage{ID: types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderHangar}}}
+			return upstream.ResolvedPackage{ID: catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderHangar}}}
 		}
 
-		remote, _ = v.ToPackageRemoteForPlatform(types.Ecosystem(strings.ToLower(platforms[0])))
+		remote, _ = v.ToPackageRemoteForPlatform(catalog.Ecosystem(strings.ToLower(platforms[0])))
 	}
 	return remote
 }
 
-func (v *hangarVersion) ToPackageRemoteForPlatform(platform types.Ecosystem) (
-	types.ResolvedPackage,
+func (v *hangarVersion) ToPackageRemoteForPlatform(platform catalog.Ecosystem) (
+	upstream.ResolvedPackage,
 	bool,
 ) {
 	download, ok := v.downloadForPlatform(platform)
 	if !ok {
-		return types.ResolvedPackage{ID: types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderHangar}}}, false
+		return upstream.ResolvedPackage{ID: catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderHangar}}}, false
 	}
 
-	remote := types.ResolvedPackage{
-		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderHangar}},
+	remote := upstream.ResolvedPackage{
+		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderHangar}},
 		FileURL:  download.URL(),
 		Filename: download.FileInfo.Name,
 	}
@@ -153,13 +153,13 @@ func (v *hangarVersion) IsReleaseChannel() bool {
 	return v.Channel.Name == "" || strings.EqualFold(v.Channel.Name, "Release")
 }
 
-func (v *hangarVersion) PluginDependencyNames() []types.PackageName {
-	depsForPlatform := v.DependenciesForPlatform(types.EcosystemUnspecified)
+func (v *hangarVersion) PluginDependencyNames() []catalog.Name {
+	depsForPlatform := v.DependenciesForPlatform(catalog.EcosystemUnspecified)
 	if len(depsForPlatform) == 0 {
 		return nil
 	}
 
-	deps := make([]types.PackageName, 0, len(depsForPlatform))
+	deps := make([]catalog.Name, 0, len(depsForPlatform))
 	for _, dep := range depsForPlatform {
 		if dep.Name == "" || dep.ExternalURL != nil {
 			continue
@@ -170,7 +170,7 @@ func (v *hangarVersion) PluginDependencyNames() []types.PackageName {
 	return deps
 }
 
-func (v *hangarVersion) DependenciesForPlatform(platform types.Ecosystem) []hangarPluginDependency {
+func (v *hangarVersion) DependenciesForPlatform(platform catalog.Ecosystem) []hangarPluginDependency {
 	if len(v.PluginDependencies) == 0 {
 		return nil
 	}
@@ -189,15 +189,15 @@ func (v *hangarVersion) DependenciesForPlatform(platform types.Ecosystem) []hang
 	return nil
 }
 
-func (v *hangarVersion) HasDownloadForPlatform(platform types.Ecosystem) bool {
+func (v *hangarVersion) HasDownloadForPlatform(platform catalog.Ecosystem) bool {
 	_, ok := v.downloadForPlatform(preferredDownloadPlatform(platform))
 	if ok {
 		return true
 	}
-	return len(v.Downloads) > 0 && platform == types.EcosystemUnspecified
+	return len(v.Downloads) > 0 && platform == catalog.EcosystemUnspecified
 }
 
-func (v *hangarVersion) SupportsPlatform(platform types.Ecosystem) bool {
+func (v *hangarVersion) SupportsPlatform(platform catalog.Ecosystem) bool {
 	if len(v.PlatformDependencies) == 0 {
 		return false
 	}
@@ -207,10 +207,10 @@ func (v *hangarVersion) SupportsPlatform(platform types.Ecosystem) bool {
 		return true
 	}
 
-	return platform == types.EcosystemUnspecified && len(v.PlatformDependencies) > 0
+	return platform == catalog.EcosystemUnspecified && len(v.PlatformDependencies) > 0
 }
 
-func (v *hangarVersion) downloadForPlatform(platform types.Ecosystem) (
+func (v *hangarVersion) downloadForPlatform(platform catalog.Ecosystem) (
 	hangarDownload,
 	bool,
 ) {
@@ -235,20 +235,20 @@ func (d hangarDownload) URL() string {
 	return d.DownloadURL
 }
 
-func classifyHangarURL(name string) types.URLType {
+func classifyHangarURL(name string) catalog.URLType {
 	switch strings.ToLower(name) {
 	case "issues":
-		return types.URLIssues
+		return catalog.URLIssues
 	case "source":
-		return types.URLSource
+		return catalog.URLSource
 	case "wiki":
-		return types.URLWiki
+		return catalog.URLWiki
 	case "support", "discord":
-		return types.URLForum
+		return catalog.URLForum
 	case "website", "homepage", "hangar":
-		return types.URLHome
+		return catalog.URLHome
 	default:
-		return types.URLMisc
+		return catalog.URLMisc
 	}
 }
 

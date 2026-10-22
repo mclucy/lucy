@@ -25,11 +25,12 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cas"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -545,7 +546,7 @@ func transactionWorkspace(t *testing.T) string {
 			Minecraft: "1.21.4",
 			Directory: "native",
 			Core: manifest.Core{
-				Product:        types.ServerProductMinecraft,
+				Product:        serverpkg.ProductMinecraft,
 				ProductVersion: "1.21.4",
 			},
 		},
@@ -560,10 +561,10 @@ func transactionWorkspace(t *testing.T) string {
 		Server: lockfile.Server{
 			Minecraft:   "1.21.4",
 			Directory:   "native",
-			Product:     types.ServerProductMinecraft,
+			Product:     serverpkg.ProductMinecraft,
 			CoreVersion: "1.21.4",
 			Java:        lockfile.Java{Advisory: 21},
-			Artifact: types.Artifact{
+			Artifact: catalog.Artifact{
 				Provider: "mojang",
 				Version:  "1.21.4",
 				Filename: "server.jar",
@@ -571,7 +572,7 @@ func transactionWorkspace(t *testing.T) string {
 				Hashes:   map[string]string{"sha256": fmt.Sprintf("%x", coreHash)},
 			},
 		},
-		Packages: []types.LockedPackage{},
+		Packages: []lockfile.Package{},
 	}
 	requireTransaction(t, lockfile.Write(root, locked))
 	for _, name := range []string{"a.cfg", "b.cfg"} {

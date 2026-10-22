@@ -14,12 +14,12 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/java"
+	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
 
@@ -75,13 +75,13 @@ func NewJavaCommand() *cobra.Command {
 
 // javaListView is the machine-readable `java list` result.
 type javaListView struct {
-	Requirement *java.Requirement `json:"requirement,omitempty"`
-	Selection   *java.Check       `json:"selection,omitempty"`
-	Runtimes    []javaRuntimeView `json:"runtimes"`
+	Requirement *javaruntime.Requirement `json:"requirement,omitempty"`
+	Selection   *javaruntime.Check       `json:"selection,omitempty"`
+	Runtimes    []javaRuntimeView        `json:"runtimes"`
 }
 
 type javaRuntimeView struct {
-	java.Runtime
+	javaruntime.Runtime
 	Selected bool     `json:"selected"`
 	Problems []string `json:"problems,omitempty"`
 }
@@ -97,13 +97,13 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	runtimes, err := java.Installed(ctx)
+	runtimes, err := javaruntime.Installed(ctx)
 	if err != nil {
 		return err
 	}
 	view := javaListView{Requirement: requirement, Runtimes: []javaRuntimeView{}}
 	if requirement != nil {
-		if view.Selection, err = java.Select(ctx, root, *requirement); err != nil {
+		if view.Selection, err = javaruntime.Select(ctx, root, *requirement); err != nil {
 			return err
 		}
 	}
@@ -129,7 +129,7 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 	} else {
 		writeJavaRequirement(out, requirement)
 	}
-	if view.Selection != nil && view.Selection.Source == java.SourceLocal {
+	if view.Selection != nil && view.Selection.Source == javaruntime.SourceLocal {
 		fmt.Fprintf(out, "%s selects %s\n", manifest.LocalFilename, view.Selection.LocalHome)
 	}
 	fmt.Fprintln(out)
@@ -147,7 +147,7 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func writeJavaRequirement(out io.Writer, requirement *java.Requirement) {
+func writeJavaRequirement(out io.Writer, requirement *javaruntime.Requirement) {
 	target := strconv.Itoa(requirement.Target())
 	fmt.Fprintf(
 		out,
@@ -233,7 +233,7 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(out, "Run lucy install to update %s.\n", lockfile.Filename)
 		return nil
 	}
-	check, err := java.Select(ctx, root, *requirement)
+	check, err := javaruntime.Select(ctx, root, *requirement)
 	if err != nil {
 		return err
 	}
@@ -305,7 +305,7 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 	if err != nil {
 		return operation.JavaChange{}, err
 	}
-	runtimes, err := java.Installed(ctx)
+	runtimes, err := javaruntime.Installed(ctx)
 	if err != nil {
 		return operation.JavaChange{}, err
 	}
@@ -331,10 +331,10 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 	for _, major := range majors {
 		versionOptions = append(versionOptions, huh.NewOption("Java "+strconv.Itoa(major), major))
 	}
-	distributionOptions := []huh.Option[types.JavaDistribution]{
-		huh.NewOption("auto (any distribution)", types.JavaDistributionAny),
+	distributionOptions := []huh.Option[java.Distribution]{
+		huh.NewOption("auto (any distribution)", java.DistributionAny),
 	}
-	for _, known := range types.JavaDistributions {
+	for _, known := range java.Distributions {
 		distributionOptions = append(
 			distributionOptions,
 			huh.NewOption(known.Title()+" ("+string(known)+")", known),
@@ -346,7 +346,7 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 				Title("Java version in "+manifest.Filename).
 				Options(versionOptions...).
 				Value(&version),
-			huh.NewSelect[types.JavaDistribution]().
+			huh.NewSelect[java.Distribution]().
 				Title("Java distribution in "+manifest.Filename).
 				Options(distributionOptions...).
 				Value(&distribution),
@@ -366,7 +366,7 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 
 // lockedJavaRequirement returns the Java requirement of the lock in root, or
 // nil when the workspace has no lock.
-func lockedJavaRequirement(root string) (*java.Requirement, error) {
+func lockedJavaRequirement(root string) (*javaruntime.Requirement, error) {
 	lock, err := lockfile.Read(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -374,13 +374,13 @@ func lockedJavaRequirement(root string) (*java.Requirement, error) {
 	if err != nil {
 		return nil, err
 	}
-	requirement := java.RequirementOf(lock)
+	requirement := javaruntime.RequirementOf(lock)
 	return &requirement, nil
 }
 
 // javaWarnings turns the problems of a Java check into warnings, with a hint
 // that names the command that fixes them.
-func javaWarnings(check *java.Check) []error {
+func javaWarnings(check *javaruntime.Check) []error {
 	if check == nil || check.Satisfied() {
 		return nil
 	}
@@ -388,7 +388,7 @@ func javaWarnings(check *java.Check) []error {
 	for _, problem := range check.Problems {
 		warnings = append(warnings, errors.New(problem))
 	}
-	if check.Source == java.SourceLocal {
+	if check.Source == javaruntime.SourceLocal {
 		warnings = append(warnings, fmt.Errorf(
 			"run lucy java use --%s <home> to select another Java runtime, or --%s auto to let Lucy choose",
 			flagJavaPathName,
@@ -404,8 +404,8 @@ func javaWarnings(check *java.Check) []error {
 	return warnings
 }
 
-func javaDistributionLabel(distribution types.JavaDistribution) string {
-	if distribution == types.JavaDistributionAny {
+func javaDistributionLabel(distribution java.Distribution) string {
+	if distribution == java.DistributionAny {
 		return "any distribution"
 	}
 	return distribution.Title()

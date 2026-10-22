@@ -5,9 +5,10 @@ package filetrack_test
 import (
 	"testing"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,10 +29,10 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 		Server: lockfile.Server{
 			Minecraft:   "1.21.4",
 			Directory:   "server",
-			Product:     types.ServerProductMinecraft,
+			Product:     server.ProductMinecraft,
 			CoreVersion: "1.21.4",
-			Artifact: types.Artifact{
-				Provider: types.ProviderMojang,
+			Artifact: catalog.Artifact{
+				Provider: catalog.ProviderMojang,
 				Version:  "1.21.4",
 				Filename: "server.jar",
 				URL:      "https://example.invalid/server.jar",
@@ -39,7 +40,7 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 			},
 			Java: lockfile.Java{Advisory: 21},
 		},
-		Packages: []types.LockedPackage{},
+		Packages: []lockfile.Package{},
 	}
 	w.writeLock(t, lock)
 
@@ -149,10 +150,10 @@ func TestStaleLockRuntimeBlocksFileWritesWhileActive(t *testing.T) {
 		Server: lockfile.Server{
 			Minecraft:   "1.21.4",
 			Directory:   "server-lock",
-			Product:     types.ServerProductMinecraft,
+			Product:     server.ProductMinecraft,
 			CoreVersion: "1.21.4",
-			Artifact: types.Artifact{
-				Provider: types.ProviderMojang,
+			Artifact: catalog.Artifact{
+				Provider: catalog.ProviderMojang,
 				Version:  "1.21.4",
 				Filename: "server.jar",
 				URL:      "https://example.invalid/server.jar",
@@ -160,7 +161,7 @@ func TestStaleLockRuntimeBlocksFileWritesWhileActive(t *testing.T) {
 			},
 			Java: lockfile.Java{Advisory: 21},
 		},
-		Packages: []types.LockedPackage{},
+		Packages: []lockfile.Package{},
 	}
 	w.writeLock(t, lock)
 	w.fileResult(t, "track", "config/rules.txt", "--recover-url", source.url("rules.txt"))

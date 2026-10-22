@@ -10,21 +10,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // homebrewCasks maps a branded distribution to the base token of its macOS
 // cask. Homebrew publishes no cask for the remaining distributions.
-var homebrewCasks = map[types.JavaDistribution]string{
-	types.JavaDistributionTemurin:    "temurin",
-	types.JavaDistributionZulu:       "zulu",
-	types.JavaDistributionCorretto:   "corretto",
-	types.JavaDistributionMicrosoft:  "microsoft-openjdk",
-	types.JavaDistributionOracle:     "oracle-jdk",
-	types.JavaDistributionGraalVM:    "graalvm-jdk",
-	types.JavaDistributionSapMachine: "sapmachine-jdk",
-	types.JavaDistributionSemeru:     "semeru-jdk-open",
+var homebrewCasks = map[java.Distribution]string{
+	java.DistributionTemurin:    "temurin",
+	java.DistributionZulu:       "zulu",
+	java.DistributionCorretto:   "corretto",
+	java.DistributionMicrosoft:  "microsoft-openjdk",
+	java.DistributionOracle:     "oracle-jdk",
+	java.DistributionGraalVM:    "graalvm-jdk",
+	java.DistributionSapMachine: "sapmachine-jdk",
+	java.DistributionSemeru:     "semeru-jdk-open",
 }
 
 type homebrew struct{}
@@ -69,12 +69,12 @@ func (homebrew) plans(ctx context.Context, req Request) ([]Plan, error) {
 	if _, err := exec.LookPath("brew"); err != nil {
 		return nil, nil
 	}
-	if req.Distribution == types.JavaDistributionAny {
+	if req.Distribution == java.DistributionAny {
 		token, ok := homebrewFormula(ctx, req.Major)
 		if !ok {
 			return nil, nil
 		}
-		return []Plan{homebrewPlan(token, req.Major, types.JavaDistributionAny, false)}, nil
+		return []Plan{homebrewPlan(token, req.Major, java.DistributionAny, false)}, nil
 	}
 	if runtime.GOOS != "darwin" {
 		return nil, nil
@@ -227,7 +227,7 @@ func homebrewJavaCask(token string) bool {
 	return false
 }
 
-func homebrewPlan(token string, major int, distribution types.JavaDistribution, cask bool) Plan {
+func homebrewPlan(token string, major int, distribution java.Distribution, cask bool) Plan {
 	args := []string{"brew", "install"}
 	elevation := ElevationNone
 	if cask {

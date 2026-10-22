@@ -1,10 +1,6 @@
 package version
 
-import (
-	"strconv"
-
-	"github.com/mclucy/lucy/types"
-)
+import "strconv"
 
 const (
 	maxSnapshotWeek      = 54
@@ -23,7 +19,7 @@ type Pre26MinecraftSnapshotVersion struct {
 	Index     uint8 // the letter, stored as ASCII values directly
 }
 
-func (v1 *Pre26MinecraftSnapshotVersion) Compare(v2 types.ResolvableVersion) (
+func (v1 *Pre26MinecraftSnapshotVersion) Compare(v2 ResolvableVersion) (
 	int,
 	bool,
 ) {
@@ -49,8 +45,8 @@ func (v1 *Pre26MinecraftSnapshotVersion) Validate() bool {
 		v1.Index >= minSnapshotIndex && v1.Index <= maxSnapshotIndex
 }
 
-func (v1 *Pre26MinecraftSnapshotVersion) Dialect() types.VersionDialect {
-	return types.VersionDialectMinecraft
+func (v1 *Pre26MinecraftSnapshotVersion) Dialect() Dialect {
+	return DialectMinecraft
 }
 
 // Post26MinecraftSnapshotVersion represents snapshots after the new numbering
@@ -61,7 +57,7 @@ type Post26MinecraftSnapshotVersion struct {
 	SnapshotN uint8
 }
 
-func (v1 *Post26MinecraftSnapshotVersion) Compare(v2 types.ResolvableVersion) (
+func (v1 *Post26MinecraftSnapshotVersion) Compare(v2 ResolvableVersion) (
 	int,
 	bool,
 ) {
@@ -87,8 +83,8 @@ func (v1 *Post26MinecraftSnapshotVersion) Validate() bool {
 		v1.SnapshotN > 0
 }
 
-func (v1 *Post26MinecraftSnapshotVersion) Dialect() types.VersionDialect {
-	return types.VersionDialectMinecraft
+func (v1 *Post26MinecraftSnapshotVersion) Dialect() Dialect {
+	return DialectMinecraft
 }
 
 type MinecraftVersion struct {
@@ -131,7 +127,7 @@ func (v *MinecraftVersion) Title() string {
 	return base
 }
 
-func (v1 *MinecraftVersion) Compare(v2 types.ResolvableVersion) (int, bool) {
+func (v1 *MinecraftVersion) Compare(v2 ResolvableVersion) (int, bool) {
 	o, ok := v2.(*MinecraftVersion)
 	if !ok || v1 == nil || o == nil {
 		return 0, false
@@ -183,8 +179,8 @@ func (v1 *MinecraftVersion) Validate() bool {
 	}
 }
 
-func (v1 *MinecraftVersion) Dialect() types.VersionDialect {
-	return types.VersionDialectMinecraft
+func (v1 *MinecraftVersion) Dialect() Dialect {
+	return DialectMinecraft
 }
 
 func prereleaseRank(pr PrereleaseType) uint8 {

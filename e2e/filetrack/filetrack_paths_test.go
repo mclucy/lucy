@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 )
 
 func TestFileTrackRejectsForbiddenAndNonRegularPaths(t *testing.T) {
@@ -93,9 +93,9 @@ func TestFileListReportsSymlinkedDeclarationAsError(t *testing.T) {
 		Server: manifest.Server{
 			Minecraft: "1.21.4",
 			Directory: "server",
-			Core:      manifest.Core{Product: types.ServerProductMinecraft},
+			Core:      manifest.Core{Product: server.ProductMinecraft},
 		},
-		Files: []types.TrackedFile{manifestTrackedFile("outside/inside.txt", acceptedHash(inside))},
+		Files: []manifest.TrackedFile{manifestTrackedFile("outside/inside.txt", acceptedHash(inside))},
 	})
 
 	status := w.statusOf(t, "outside/inside.txt")

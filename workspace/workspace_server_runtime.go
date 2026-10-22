@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
@@ -15,9 +17,9 @@ import (
 // A nil *ServerRuntime means that no trustworthy single runtime exists. Every
 // non-nil runtime satisfies IsValid.
 type ServerRuntime struct {
-	Primary     *types.VersionedPackageRef  `json:"primary_runtime,omitempty"`
-	PrimaryPath string                      `json:"primary_path,omitempty"`
-	Components  []types.VersionedPackageRef `json:"runtime_components"`
+	Primary     *catalog.VersionedRef  `json:"primary_runtime,omitempty"`
+	PrimaryPath string                 `json:"primary_path,omitempty"`
+	Components  []catalog.VersionedRef `json:"runtime_components"`
 }
 
 // buildServerRuntime creates runtime from detector evidence. It returns nil
@@ -25,7 +27,7 @@ type ServerRuntime struct {
 func buildServerRuntime(evidence *detector.RuntimeEvidence) *ServerRuntime {
 	if evidence == nil ||
 		evidence.PrimaryRuntime == nil ||
-		evidence.PrimaryRuntime.PackageRef == (types.PackageRef{}) ||
+		evidence.PrimaryRuntime.Ref == (catalog.Ref{}) ||
 		evidence.PrimaryPath == "" {
 		return nil
 	}
@@ -40,18 +42,18 @@ func buildServerRuntime(evidence *detector.RuntimeEvidence) *ServerRuntime {
 func (s *ServerRuntime) IsValid() bool {
 	return s != nil &&
 		s.Primary != nil &&
-		s.Primary.PackageRef != (types.PackageRef{}) &&
+		s.Primary.Ref != (catalog.Ref{}) &&
 		s.PrimaryPath != ""
 }
 
 // MinecraftVersion returns the Minecraft version of the runtime. It returns
-// types.VersionUnknown when no component names a concrete version.
-func (s *ServerRuntime) MinecraftVersion() types.Version {
+// version.Unknown when no component names a concrete version.
+func (s *ServerRuntime) MinecraftVersion() versionpkg.Version {
 	if s == nil {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 	for _, component := range s.Components {
-		if component.Ecosystem != types.EcosystemMinecraft ||
+		if component.Ecosystem != catalog.EcosystemMinecraft ||
 			component.Name != "minecraft" {
 			continue
 		}
@@ -59,50 +61,50 @@ func (s *ServerRuntime) MinecraftVersion() types.Version {
 			return component.Version
 		}
 	}
-	return types.VersionUnknown
+	return versionpkg.Unknown
 }
 
 // Ecosystem reports the mod loader ecosystem of the runtime. It
-// returns types.EcosystemMinecraft when no loader applies.
-func (s *ServerRuntime) Ecosystem() types.Ecosystem {
+// returns catalog.EcosystemMinecraft when no loader applies.
+func (s *ServerRuntime) Ecosystem() catalog.Ecosystem {
 	if s == nil || !s.IsValid() {
-		return types.EcosystemUnspecified
+		return catalog.EcosystemUnspecified
 	}
 	for _, component := range s.Components {
-		if component.Ecosystem == types.EcosystemFabric &&
+		if component.Ecosystem == catalog.EcosystemFabric &&
 			(component.Name == "fabric-loader" ||
 				component.Name == "fabricloader") {
-			return types.EcosystemFabric
+			return catalog.EcosystemFabric
 		}
-		if component.Ecosystem == types.EcosystemForge && component.Name == "forge" {
-			return types.EcosystemForge
+		if component.Ecosystem == catalog.EcosystemForge && component.Name == "forge" {
+			return catalog.EcosystemForge
 		}
-		if component.Ecosystem == types.EcosystemNeoForge &&
+		if component.Ecosystem == catalog.EcosystemNeoForge &&
 			component.Name == "neoforge" {
-			return types.EcosystemNeoForge
+			return catalog.EcosystemNeoForge
 		}
 	}
-	return types.EcosystemMinecraft
+	return catalog.EcosystemMinecraft
 }
 
 // Product returns the executable server product of the primary runtime. It
-// returns types.ServerProductUnknown when the primary runtime name is not a
+// returns server.ProductUnknown when the primary runtime name is not a
 // known server product.
-func (s *ServerRuntime) Product() types.ServerProduct {
+func (s *ServerRuntime) Product() server.Product {
 	if s == nil || s.Primary == nil {
-		return types.ServerProductUnknown
+		return server.ProductUnknown
 	}
-	product, ok := types.ParseServerProduct(s.Primary.Name.String())
+	product, ok := server.ParseProduct(s.Primary.Name.String())
 	if !ok {
-		return types.ServerProductUnknown
+		return server.ProductUnknown
 	}
 	return product
 }
 
-func concreteRuntimeVersion(version types.Version) bool {
+func concreteRuntimeVersion(version versionpkg.Version) bool {
 	switch version {
-	case "", types.VersionNone, types.VersionUnknown, types.VersionAny,
-		types.VersionStable, types.VersionBeta:
+	case "", versionpkg.None, versionpkg.Unknown, versionpkg.Any,
+		versionpkg.Stable, versionpkg.Beta:
 		return false
 	default:
 		return true
@@ -113,14 +115,14 @@ func concreteRuntimeVersion(version types.Version) bool {
 // list. The rules are:
 //   - names are canonical
 //   - duplicate base identities merge; a concrete version replaces
-//     types.VersionUnknown
+//     version.Unknown
 //   - conflicting concrete versions are both dropped, with an error report
 func normalizeRuntimeComponents(
-	components []types.VersionedPackageRef,
-) []types.VersionedPackageRef {
+	components []catalog.VersionedRef,
+) []catalog.VersionedRef {
 	indexes := make(map[string]int, len(components))
 	conflicts := make(map[string]struct{})
-	out := make([]types.VersionedPackageRef, 0, len(components))
+	out := make([]catalog.VersionedRef, 0, len(components))
 	for _, component := range components {
 		normalized, ok := normalizeRuntimeComponent(component)
 		if !ok {
@@ -132,10 +134,10 @@ func normalizeRuntimeComponents(
 		}
 		if index, exists := indexes[key]; exists {
 			if out[index].Version == normalized.Version ||
-				normalized.Version == types.VersionUnknown {
+				normalized.Version == versionpkg.Unknown {
 				continue
 			}
-			if out[index].Version == types.VersionUnknown {
+			if out[index].Version == versionpkg.Unknown {
 				out[index] = normalized
 				continue
 			}
@@ -145,7 +147,7 @@ func normalizeRuntimeComponents(
 				out[index].Version,
 				normalized.Version,
 			))
-			out[index] = types.VersionedPackageRef{}
+			out[index] = catalog.VersionedRef{}
 			delete(indexes, key)
 			conflicts[key] = struct{}{}
 			continue
@@ -156,7 +158,7 @@ func normalizeRuntimeComponents(
 
 	write := 0
 	for _, component := range out {
-		if component.PackageRef == (types.PackageRef{}) {
+		if component.Ref == (catalog.Ref{}) {
 			continue
 		}
 		out[write] = component
@@ -166,41 +168,41 @@ func normalizeRuntimeComponents(
 }
 
 func normalizeRuntimeComponent(
-	ref types.VersionedPackageRef,
-) (types.VersionedPackageRef, bool) {
+	ref catalog.VersionedRef,
+) (catalog.VersionedRef, bool) {
 	if !concreteRuntimeVersion(ref.Version) &&
-		ref.Version != types.VersionUnknown {
-		return types.VersionedPackageRef{}, false
+		ref.Version != versionpkg.Unknown {
+		return catalog.VersionedRef{}, false
 	}
 
 	name := strings.ToLower(ref.Name.String())
 	switch ref.Ecosystem {
-	case types.EcosystemMinecraft:
+	case catalog.EcosystemMinecraft:
 		if name != "minecraft" {
-			return types.VersionedPackageRef{}, false
+			return catalog.VersionedRef{}, false
 		}
 		ref.Name = "minecraft"
-	case types.EcosystemFabric:
+	case catalog.EcosystemFabric:
 		switch name {
 		case "fabric", "fabric-loader", "fabricloader":
 			ref.Name = "fabric-loader"
 		case "fabric-api":
 			ref.Name = "fabric-api"
 		default:
-			return types.VersionedPackageRef{}, false
+			return catalog.VersionedRef{}, false
 		}
-	case types.EcosystemForge:
+	case catalog.EcosystemForge:
 		if name != "forge" {
-			return types.VersionedPackageRef{}, false
+			return catalog.VersionedRef{}, false
 		}
 		ref.Name = "forge"
-	case types.EcosystemNeoForge:
+	case catalog.EcosystemNeoForge:
 		if name != "neoforge" {
-			return types.VersionedPackageRef{}, false
+			return catalog.VersionedRef{}, false
 		}
 		ref.Name = "neoforge"
 	default:
-		return types.VersionedPackageRef{}, false
+		return catalog.VersionedRef{}, false
 	}
 	return ref, true
 }

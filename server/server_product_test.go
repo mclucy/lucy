@@ -1,11 +1,15 @@
-package types
+package server
 
-import "testing"
+import (
+	"testing"
 
-func TestServerProductDefinitionsInvariants(t *testing.T) {
-	seenProducts := make(map[ServerProduct]bool)
-	seenAliases := make(map[serverProductAlias]ServerProduct)
-	for _, definition := range serverProductDefinitions {
+	"github.com/mclucy/lucy/catalog"
+)
+
+func TestProductDefinitionsInvariants(t *testing.T) {
+	seenProducts := make(map[Product]bool)
+	seenAliases := make(map[productAlias]Product)
+	for _, definition := range productDefinitions {
 		if seenProducts[definition.Product] {
 			t.Errorf("duplicate definition for product %q", definition.Product)
 		}
@@ -14,7 +18,7 @@ func TestServerProductDefinitionsInvariants(t *testing.T) {
 			if alias.Name == "" {
 				t.Errorf("product %q has empty alias", definition.Product)
 			}
-			if alias.Name != PackageName(lowercasePackageName(alias.Name)) {
+			if alias.Name != catalog.Name(lowercaseName(alias.Name)) {
 				t.Errorf("product %q alias %q is not lowercase", definition.Product, alias.Name)
 			}
 			if owner, exists := seenAliases[alias]; exists {
@@ -25,51 +29,48 @@ func TestServerProductDefinitionsInvariants(t *testing.T) {
 	}
 }
 
-func TestNormalizeServerProduct(t *testing.T) {
+func TestNormalizeProduct(t *testing.T) {
 	tests := []struct {
 		name    string
-		request VersionedPackageRef
-		want    ServerProduct
+		request catalog.VersionedRef
+		want    Product
 		ok      bool
 	}{
 		{
 			"bare minecraft alias",
-			VersionedPackageRef{Name: "mc", Provider: ProviderUnspecified},
-			ServerProductMinecraft,
+			catalog.VersionedRef{Ref: catalog.Ref{Name: "mc", Provider: catalog.ProviderUnspecified}},
+			ProductMinecraft,
 			true,
 		},
 		{
 			"case insensitive",
-			VersionedPackageRef{Name: "Paper", Provider: ProviderUnspecified},
-			ServerProductPaper,
+			catalog.VersionedRef{Ref: catalog.Ref{Name: "Paper", Provider: catalog.ProviderUnspecified}},
+			ProductPaper,
 			true,
 		},
 		{
 			"fabric loader alias",
-			VersionedPackageRef{
-				Name:      "fabric-loader",
-				Provider:  ProviderUnspecified,
-				Ecosystem: EcosystemFabric,
+			catalog.VersionedRef{
+				Ref:       catalog.Ref{Name: "fabric-loader", Provider: catalog.ProviderUnspecified},
+				Ecosystem: catalog.EcosystemFabric,
 			},
-			ServerProductFabric,
+			ProductFabric,
 			true,
 		},
 		{
 			"sponge forge alias",
-			VersionedPackageRef{
-				Name:      "forge",
-				Provider:  ProviderUnspecified,
-				Ecosystem: EcosystemSponge,
+			catalog.VersionedRef{
+				Ref:       catalog.Ref{Name: "forge", Provider: catalog.ProviderUnspecified},
+				Ecosystem: catalog.EcosystemSponge,
 			},
-			ServerProductSpongeForge,
+			ProductSpongeForge,
 			true,
 		},
 		{
 			"regular package",
-			VersionedPackageRef{
-				Name:      "fabric-api",
-				Provider:  ProviderUnspecified,
-				Ecosystem: EcosystemFabric,
+			catalog.VersionedRef{
+				Ref:       catalog.Ref{Name: "fabric-api", Provider: catalog.ProviderUnspecified},
+				Ecosystem: catalog.EcosystemFabric,
 			},
 			"",
 			false,
@@ -77,7 +78,7 @@ func TestNormalizeServerProduct(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := NormalizeServerProduct(tt.request)
+			got, ok := NormalizeProduct(tt.request)
 			if ok != tt.ok {
 				t.Fatalf("ok = %v, want %v", ok, tt.ok)
 			}
@@ -88,7 +89,7 @@ func TestNormalizeServerProduct(t *testing.T) {
 	}
 }
 
-func lowercasePackageName(name PackageName) string {
+func lowercaseName(name catalog.Name) string {
 	lowered := ""
 	for _, r := range string(name) {
 		if r >= 'A' && r <= 'Z' {

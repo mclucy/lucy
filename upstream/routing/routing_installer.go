@@ -11,9 +11,12 @@ import (
 	"path"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/server"
+
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 type mavenLibrary struct {
@@ -32,7 +35,7 @@ type mavenLibrary struct {
 // result is false when the profile explicitly names a library that cannot be
 // downloaded: Forge declares the client classifier with an empty artifact URL
 // because the jar exists nowhere in a public Maven repository.
-func libraryInput(lib mavenLibrary, z *zip.Reader, version types.Version) (types.BootstrapInput, bool, error) {
+func libraryInput(lib mavenLibrary, z *zip.Reader, version versionpkg.Version) (server.BootstrapInput, bool, error) {
 	download := lib.Downloads.Artifact
 	p := ""
 	if download != nil {
@@ -42,22 +45,22 @@ func libraryInput(lib mavenLibrary, z *zip.Reader, version types.Version) (types
 		var err error
 		p, err = MavenPath(lib.Name)
 		if err != nil {
-			return types.BootstrapInput{}, false, err
+			return server.BootstrapInput{}, false, err
 		}
 	}
-	a := types.Artifact{Provider: types.ProviderMaven, ProjectID: lib.Name, Version: version, Filename: path.Base(p), Hashes: map[string]string{}}
+	a := catalog.Artifact{Provider: catalog.ProviderMaven, ProjectID: lib.Name, Version: version, Filename: path.Base(p), Hashes: map[string]string{}}
 	if z != nil {
 		if raw, err := zipBytes(z, "maven/"+p); err != nil {
-			return types.BootstrapInput{}, false, err
+			return server.BootstrapInput{}, false, err
 		} else if raw != nil {
 			a.Embedded = "maven/" + p
 			sum := sha256.Sum256(raw)
 			a.Hashes["sha256"] = hex.EncodeToString(sum[:])
-			return types.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
+			return server.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
 		}
 	}
 	if download != nil && download.URL == "" {
-		return types.BootstrapInput{}, false, nil
+		return server.BootstrapInput{}, false, nil
 	}
 	if download != nil {
 		a.URL = download.URL
@@ -72,7 +75,7 @@ func libraryInput(lib mavenLibrary, z *zip.Reader, version types.Version) (types
 	if download != nil && download.SHA1 != "" {
 		a.Hashes["sha1"] = download.SHA1
 	}
-	return types.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
+	return server.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
 }
 
 func MavenPath(coordinate string) (string, error) {
@@ -105,7 +108,7 @@ func zipBytes(z *zip.Reader, name string) ([]byte, error) {
 	return nil, nil
 }
 
-func resolveInstaller(ctx context.Context, req types.ServerProductRequest, out *types.ServerProductResolution, installer string) error {
+func resolveInstaller(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, installer string) error {
 	z, err := zip.OpenReader(installer)
 	if err != nil {
 		return err
@@ -132,9 +135,9 @@ func resolveInstaller(ctx context.Context, req types.ServerProductRequest, out *
 	}
 	out.ProductVersion = req.ProductVersion
 	if floating(out.ProductVersion) {
-		out.ProductVersion = types.Version(strings.TrimSuffix(strings.TrimPrefix(out.Artifact.Filename, req.Product.String()+"-"), "-installer.jar"))
-		if req.Product == types.ServerProductForge {
-			out.ProductVersion = types.Version(strings.TrimPrefix(out.ProductVersion.String(), req.Minecraft.String()+"-"))
+		out.ProductVersion = versionpkg.Version(strings.TrimSuffix(strings.TrimPrefix(out.Artifact.Filename, req.Product.String()+"-"), "-installer.jar"))
+		if req.Product == server.ProductForge {
+			out.ProductVersion = versionpkg.Version(strings.TrimPrefix(out.ProductVersion.String(), req.Minecraft.String()+"-"))
 		}
 	}
 	out.Artifact.Version = out.ProductVersion
@@ -200,7 +203,7 @@ func resolveInstaller(ctx context.Context, req types.ServerProductRequest, out *
 				return err
 			}
 			if mapping, ok := detail.Downloads["server_mappings"]; ok {
-				out.Inputs = append(out.Inputs, types.BootstrapInput{Path: "server-mappings.txt", Provider: types.ProviderMojang, ProjectID: "server-mappings", Version: req.Minecraft, Filename: "server-mappings.txt", URL: mapping.URL, Hashes: map[string]string{"sha1": mapping.SHA1}})
+				out.Inputs = append(out.Inputs, server.BootstrapInput{Path: "server-mappings.txt", Provider: catalog.ProviderMojang, ProjectID: "server-mappings", Version: req.Minecraft, Filename: "server-mappings.txt", URL: mapping.URL, Hashes: map[string]string{"sha1": mapping.SHA1}})
 			}
 			break
 		}

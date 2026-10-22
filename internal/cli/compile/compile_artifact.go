@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 // outputDestination is where the compiled JAR is written: either an explicit
@@ -60,7 +60,7 @@ func ensureAbsent(path string) error {
 	return nil
 }
 
-func selectArtifact(project gradleProject, ecosystem types.Ecosystem) (string, error) {
+func selectArtifact(project gradleProject, ecosystem catalog.Ecosystem) (string, error) {
 	candidates := make([]archive, 0, len(project.Archives))
 	seen := make(map[string]bool, len(project.Archives))
 	for _, output := range project.Archives {

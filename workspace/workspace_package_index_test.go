@@ -3,21 +3,21 @@ package workspace
 import (
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 	idx := NewPackageIndex()
 	first := makeDiscoveredPackage(
 		t,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-0.5.0.jar",
 	)
 	second := makeDiscoveredPackage(
 		t,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-other.jar",
@@ -35,10 +35,10 @@ func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
 
 func TestPackageIndex_AddLocalPathEnrichment(t *testing.T) {
 	idx := NewPackageIndex()
-	remote := makeDiscoveredPackage(t, types.EcosystemFabric, "sodium", "0.5.0", "")
+	remote := makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", "")
 	local := makeDiscoveredPackage(
 		t,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-0.5.0.jar",
@@ -58,12 +58,12 @@ func TestPackageIndex_AddLocalPathNotOverwrittenByRemote(t *testing.T) {
 	idx := NewPackageIndex()
 	local := makeDiscoveredPackage(
 		t,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"sodium",
 		"0.5.0",
 		"/mods/sodium-0.5.0.jar",
 	)
-	remote := makeDiscoveredPackage(t, types.EcosystemFabric, "sodium", "0.5.0", "")
+	remote := makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", "")
 	idx.Add(local)
 	idx.Add(remote)
 	pkgs := idx.Packages()
@@ -77,9 +77,9 @@ func TestPackageIndex_AddLocalPathNotOverwrittenByRemote(t *testing.T) {
 
 func TestPackageIndex_PackagesSortOrder(t *testing.T) {
 	idx := NewPackageIndex()
-	idx.Add(makeDiscoveredPackage(t, types.EcosystemForge, "jei", "1.0.0", ""))
-	idx.Add(makeDiscoveredPackage(t, types.EcosystemFabric, "sodium", "0.5.0", ""))
-	idx.Add(makeDiscoveredPackage(t, types.EcosystemFabric, "lithium", "0.11.0", ""))
+	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemForge, "jei", "1.0.0", ""))
+	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", ""))
+	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "lithium", "0.11.0", ""))
 	pkgs := idx.Packages()
 	if len(pkgs) != 3 {
 		t.Fatalf("expected 3 packages, got %d", len(pkgs))
@@ -98,12 +98,12 @@ func TestPackageIndex_PackagesSortOrder(t *testing.T) {
 
 func TestPackageIndex_MergeBulk(t *testing.T) {
 	idx := NewPackageIndex()
-	pkgs := []types.DiscoveredPackage{
-		makeDiscoveredPackage(t, types.EcosystemFabric, "sodium", "0.5.0", ""),
-		makeDiscoveredPackage(t, types.EcosystemFabric, "lithium", "0.11.0", ""),
+	pkgs := []DiscoveredPackage{
+		makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", ""),
+		makeDiscoveredPackage(t, catalog.EcosystemFabric, "lithium", "0.11.0", ""),
 		makeDiscoveredPackage(
 			t,
-			types.EcosystemFabric,
+			catalog.EcosystemFabric,
 			"sodium",
 			"0.5.0",
 			"/mods/sodium.jar",
@@ -118,7 +118,7 @@ func TestPackageIndex_MergeBulk(t *testing.T) {
 
 func TestPackageIndex_LookupByID_Found(t *testing.T) {
 	idx := NewPackageIndex()
-	pkg := makeDiscoveredPackage(t, types.EcosystemFabric, "sodium", "0.5.0", "")
+	pkg := makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", "")
 	idx.Add(pkg)
 	found, ok := idx.LookupByID(pkg.ID)
 	if !ok {
@@ -131,8 +131,8 @@ func TestPackageIndex_LookupByID_Found(t *testing.T) {
 
 func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
 	idx := NewPackageIndex()
-	id := types.VersionedPackageRef{
-		Ecosystem: types.EcosystemFabric,
+	id := catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemFabric,
 		Name:      "missing",
 		Version:   "1.0.0",
 	}
@@ -144,10 +144,10 @@ func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
 
 func TestPackageIndex_LookupByEcosystemName_MultipleVersions(t *testing.T) {
 	idx := NewPackageIndex()
-	idx.Add(makeDiscoveredPackage(t, types.EcosystemFabric, "sodium", "0.6.0", ""))
-	idx.Add(makeDiscoveredPackage(t, types.EcosystemFabric, "sodium", "0.5.0", ""))
-	idx.Add(makeDiscoveredPackage(t, types.EcosystemFabric, "lithium", "0.11.0", ""))
-	results := idx.LookupByEcosystemName(types.EcosystemFabric, "sodium")
+	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.6.0", ""))
+	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", ""))
+	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "lithium", "0.11.0", ""))
+	results := idx.LookupByEcosystemName(catalog.EcosystemFabric, "sodium")
 	if len(results) != 2 {
 		t.Fatalf("expected 2 sodium versions, got %d", len(results))
 	}

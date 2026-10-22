@@ -11,26 +11,26 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // sdkmanVendors maps the vendor suffix of an SDKMAN candidate identifier to the
 // build it names. SDKMAN has no vendor suffix for the remaining distributions.
-var sdkmanVendors = map[string]types.JavaDistribution{
-	"tem":     types.JavaDistributionTemurin,
-	"zulu":    types.JavaDistributionZulu,
-	"amzn":    types.JavaDistributionCorretto,
-	"librca":  types.JavaDistributionLiberica,
-	"ms":      types.JavaDistributionMicrosoft,
-	"oracle":  types.JavaDistributionOracle,
-	"open":    types.JavaDistributionOracleOpenJDK,
-	"graalce": types.JavaDistributionGraalVMCommunity,
-	"graal":   types.JavaDistributionGraalVM,
-	"sem":     types.JavaDistributionSemeru,
-	"sapmchn": types.JavaDistributionSapMachine,
-	"kona":    types.JavaDistributionKona,
-	"jbr":     types.JavaDistributionJetBrains,
+var sdkmanVendors = map[string]java.Distribution{
+	"tem":     java.DistributionTemurin,
+	"zulu":    java.DistributionZulu,
+	"amzn":    java.DistributionCorretto,
+	"librca":  java.DistributionLiberica,
+	"ms":      java.DistributionMicrosoft,
+	"oracle":  java.DistributionOracle,
+	"open":    java.DistributionOracleOpenJDK,
+	"graalce": java.DistributionGraalVMCommunity,
+	"graal":   java.DistributionGraalVM,
+	"sem":     java.DistributionSemeru,
+	"sapmchn": java.DistributionSapMachine,
+	"kona":    java.DistributionKona,
+	"jbr":     java.DistributionJetBrains,
 }
 
 type sdkman struct{}
@@ -151,10 +151,10 @@ func sdkmanVersions(platform string) ([]string, error) {
 
 // sdkmanPick returns the newest plain candidate for the request. A candidate
 // is plain when it is exactly a version and one vendor suffix.
-func sdkmanPick(versions []string, req Request) (string, types.JavaDistribution, bool) {
+func sdkmanPick(versions []string, req Request) (string, java.Distribution, bool) {
 	wanted := req.Distribution
-	if wanted == types.JavaDistributionAny {
-		wanted = types.JavaDistributionTemurin
+	if wanted == java.DistributionAny {
+		wanted = java.DistributionTemurin
 	}
 	best := ""
 	bestVersion := []int(nil)

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,7 @@ var addCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
-		if ecosystem != "" && !types.Ecosystem(ecosystem).Valid() {
+		if ecosystem != "" && !catalog.Ecosystem(ecosystem).Valid() {
 			return fmt.Errorf("invalid ecosystem %q", ecosystem)
 		}
 		return nil
@@ -75,7 +75,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	opts.Trace = output.Trace()
 	ctx, stop := commandContext(cmd)
 	defer stop()
-	result, err := operation.Add(ctx, workDir, args, types.Ecosystem(ecosystem), opts)
+	result, err := operation.Add(ctx, workDir, args, catalog.Ecosystem(ecosystem), opts)
 	if err != nil {
 		return output.Failure(err)
 	}

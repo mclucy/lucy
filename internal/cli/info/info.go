@@ -6,7 +6,10 @@ import (
 	"os"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -14,11 +17,7 @@ import (
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream/routing"
-
-	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/table"
 	"github.com/spf13/cobra"
 )
 
@@ -73,13 +72,13 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	providers, err := routing.ResolveInfoProviders(request.Ecosystem, request.Provider)
 	if err != nil {
 		errArg := request.Ecosystem.String()
-		if request.Provider != types.ProviderUnspecified {
+		if request.Provider != catalog.ProviderUnspecified {
 			errArg = request.Provider.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
 	}
 
-	meta, providerErrors, err := routing.GetInfoFirstSuccess(providers, request.PackageRef)
+	meta, providerErrors, err := routing.GetInfoFirstSuccess(providers, request.Ref)
 	if err != nil {
 		return fmt.Errorf("failed to get information: %w", err)
 	}
@@ -133,8 +132,8 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 // "provider:project" reference the current lock binds it to. It only runs for
 // a provider-unspecified request: an explicit provider is always honored, and
 // nothing is cached or remembered beyond this call.
-func resolveAgainstLock(request types.VersionedPackageRef) (types.VersionedPackageRef, error) {
-	if request.Provider != types.ProviderUnspecified {
+func resolveAgainstLock(request catalog.VersionedRef) (catalog.VersionedRef, error) {
+	if request.Provider != catalog.ProviderUnspecified {
 		return request, nil
 	}
 
@@ -162,7 +161,7 @@ func resolveAgainstLock(request types.VersionedPackageRef) (types.VersionedPacka
 }
 
 func renderInfo(
-	data types.Metadata,
+	data catalog.Metadata,
 	installID string,
 	longOutput bool,
 ) string {
@@ -198,7 +197,7 @@ func renderInfo(
 	return out.String()
 }
 
-func renderInfoMetadataLine(data types.Metadata) string {
+func renderInfoMetadataLine(data catalog.Metadata) string {
 	parts := make([]string, 0, 2)
 	if data.License != "" {
 		parts = append(parts, data.License)
@@ -212,7 +211,7 @@ func renderInfoMetadataLine(data types.Metadata) string {
 	return style.Muted(strings.Join(parts, " | "))
 }
 
-func renderInfoAuthors(authors []types.Person) string {
+func renderInfoAuthors(authors []catalog.Person) string {
 	names := make([]string, 0, len(authors))
 	for _, author := range authors {
 		if author.Name == "" {
@@ -229,7 +228,7 @@ func renderInfoAuthors(authors []types.Person) string {
 	return fmt.Sprintf("%s, %s, +%d more", names[0], names[1], len(names)-2)
 }
 
-func renderInfoReadme(data types.Metadata, longOutput bool) string {
+func renderInfoReadme(data catalog.Metadata, longOutput bool) string {
 	description := strings.TrimSpace(data.Description)
 	if description == "" {
 		return ""
@@ -341,7 +340,7 @@ func indentInfoBlock(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderInfoLinks(data types.Metadata) string {
+func renderInfoLinks(data catalog.Metadata) string {
 	rows := make([][]string, 0, len(data.URLs))
 	for _, url := range data.URLs {
 		if url.URL == "" {

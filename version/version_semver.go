@@ -4,15 +4,13 @@ import (
 	"encoding/json/jsontext"
 	"strconv"
 	"strings"
-
-	"github.com/mclucy/lucy/types"
 )
 
 // SemverVersion implements the semantic grammar shared by Fabric Loader and
 // MCDR: one or more numeric components, an optional prerelease, and build
 // metadata. Build metadata never participates in comparison.
 type SemverVersion struct {
-	dialect       types.VersionDialect
+	dialect       Dialect
 	numbers       []uint64
 	wildcards     []bool
 	prerelease    string
@@ -23,12 +21,12 @@ type SemverVersion struct {
 // StringVersion is a version outside the semantic grammar. Fabric Loader
 // compares it as a plain string; the opaque dialect uses it for identifiers.
 type StringVersion struct {
-	dialect  types.VersionDialect
+	dialect  Dialect
 	original string
 }
 
 type semverParseOptions struct {
-	dialect       types.VersionDialect
+	dialect       Dialect
 	allowWildcard bool
 	validateBuild bool
 }
@@ -93,28 +91,28 @@ func parseSemverVersion(
 	}
 }
 
-func parseFabricVersion(raw types.Version) types.ResolvableVersion {
+func parseFabricVersion(raw Version) ResolvableVersion {
 	text := string(raw)
 	if text == "" {
 		return nil
 	}
 	if parsed := parseSemverVersion(
 		text,
-		semverParseOptions{dialect: types.VersionDialectFabric},
+		semverParseOptions{dialect: DialectFabric},
 	); parsed != nil {
 		return parsed
 	}
 	return &StringVersion{
-		dialect:  types.VersionDialectFabric,
+		dialect:  DialectFabric,
 		original: text,
 	}
 }
 
-func parseMCDRVersion(raw string, allowWildcard bool) types.ResolvableVersion {
+func parseMCDRVersion(raw string, allowWildcard bool) ResolvableVersion {
 	parsed := parseSemverVersion(
 		raw,
 		semverParseOptions{
-			dialect:       types.VersionDialectMCDR,
+			dialect:       DialectMCDR,
 			allowWildcard: allowWildcard,
 			validateBuild: true,
 		},
@@ -152,7 +150,7 @@ func validExtraIdentifiers(value string, allowPlus bool) bool {
 // above every lower core version, matching Fabric's trailing '-' predicate
 // boundary.
 func newSemverBoundary(
-	dialect types.VersionDialect,
+	dialect Dialect,
 	numbers ...uint64,
 ) *SemverVersion {
 	return &SemverVersion{
@@ -223,14 +221,14 @@ func (s *SemverVersion) Prerelease() string {
 	return s.prerelease
 }
 
-func (s *SemverVersion) Dialect() types.VersionDialect {
+func (s *SemverVersion) Dialect() Dialect {
 	if s == nil {
-		return types.VersionDialectUnknown
+		return DialectUnknown
 	}
 	return s.dialect
 }
 
-func (s *SemverVersion) Compare(other types.ResolvableVersion) (int, bool) {
+func (s *SemverVersion) Compare(other ResolvableVersion) (int, bool) {
 	if s == nil || other == nil {
 		return 0, false
 	}
@@ -251,9 +249,9 @@ func (s *SemverVersion) Compare(other types.ResolvableVersion) (int, bool) {
 			}
 		}
 		switch s.dialect {
-		case types.VersionDialectFabric:
+		case DialectFabric:
 			return compareFabricPrerelease(s, other), true
-		case types.VersionDialectMCDR:
+		case DialectMCDR:
 			return compareMCDRPrerelease(s, other), true
 		default:
 			return 0, false
@@ -443,20 +441,20 @@ func (s *SemverVersion) MarshalJSONTo(enc *jsontext.Encoder) error {
 	return enc.WriteToken(jsontext.String(s.String()))
 }
 
-func (v *StringVersion) Dialect() types.VersionDialect {
+func (v *StringVersion) Dialect() Dialect {
 	if v == nil {
-		return types.VersionDialectUnknown
+		return DialectUnknown
 	}
 	return v.dialect
 }
 
-func (v *StringVersion) Compare(other types.ResolvableVersion) (int, bool) {
+func (v *StringVersion) Compare(other ResolvableVersion) (int, bool) {
 	if v == nil || other == nil || other.Dialect() != v.dialect {
 		return 0, false
 	}
 	switch other := other.(type) {
 	case *StringVersion:
-		if v.dialect == types.VersionDialectOpaque {
+		if v.dialect == DialectOpaque {
 			if v.original != other.original {
 				return 0, false
 			}

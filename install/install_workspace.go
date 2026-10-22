@@ -10,14 +10,16 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/java"
+	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -47,7 +49,7 @@ type (
 		// ProvisionJava runs before staging when the selected Java runtime
 		// misses the requirement of the lock. It must leave a runtime installed
 		// or fail; the runtime is selected again afterwards.
-		ProvisionJava func(ctx context.Context, requirement java.Requirement, check *java.Check) error
+		ProvisionJava func(ctx context.Context, requirement javaruntime.Requirement, check *javaruntime.Check) error
 	}
 )
 
@@ -327,9 +329,9 @@ func stageInstall(
 	return provisionCommitted(ctx, root, resolved, opts)
 }
 
-func isFloating(v types.Version) bool {
+func isFloating(v version.Version) bool {
 	switch v {
-	case "", types.VersionStable, types.VersionBeta, types.VersionAny:
+	case "", version.Stable, version.Beta, version.Any:
 		return true
 	}
 	return v == "latest"
@@ -340,7 +342,7 @@ func isFloating(v types.Version) bool {
 // mutation treats a negative answer as a stale lock, because rebinding
 // requirements must never re-target the server.
 func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Document, offline bool) (bool, error) {
-	request := types.ServerProductRequest{
+	request := routing.ServerProductRequest{
 		Minecraft:      d.Server.Minecraft,
 		Product:        d.Server.Core.Product,
 		ProductVersion: d.Server.Core.ProductVersion,
@@ -379,7 +381,7 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 	// Dropping the repository override retargets the server at its official
 	// distribution, so a locked GitHub artifact no longer satisfies the request
 	// even though every pinned field still matches.
-	if request.Repository == "" && old.Server.Provider == types.ProviderGitHub {
+	if request.Repository == "" && old.Server.Provider == catalog.ProviderGitHub {
 		log.Debug(
 			"core pin not reusable",
 			"reason", "repository override dropped while pin came from a GitHub fork",
@@ -401,7 +403,7 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 		if err := routing.Metadata(ctx, "https://api.github.com/repos/"+request.Repository, &repository); err != nil {
 			return false, err
 		}
-		if old.Server.Provider != types.ProviderGitHub || old.Server.ProjectID != strconv.FormatInt(repository.ID, 10) {
+		if old.Server.Provider != catalog.ProviderGitHub || old.Server.ProjectID != strconv.FormatInt(repository.ID, 10) {
 			log.Debug(
 				"core pin not reusable",
 				"reason", "repository identity changed",
@@ -456,12 +458,12 @@ func rejectSharedDestinations(resolved *lockfile.Document) error {
 
 // packageFolder returns the directory that serves a package's environment and
 // ecosystem.
-func packageFolder(environment types.Environment, ecosystem types.Ecosystem) string {
-	if environment == types.EnvironmentMCDR {
+func packageFolder(environment server.Environment, ecosystem catalog.Ecosystem) string {
+	if environment == server.EnvironmentMCDR {
 		return "plugins"
 	}
 	switch ecosystem {
-	case types.EcosystemBukkit, types.EcosystemPaper:
+	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 		return "plugins"
 	default:
 		return "mods"
@@ -470,10 +472,10 @@ func packageFolder(environment types.Environment, ecosystem types.Ecosystem) str
 
 // packageDestination reports where an enabled package lands inside the staged
 // server tree.
-func packageDestination(resolved *lockfile.Document, p *types.LockedPackage) (string, error) {
+func packageDestination(resolved *lockfile.Document, p *lockfile.Package) (string, error) {
 	directory := resolved.Server.Directory
 	folder := packageFolder(p.Environment, p.Ecosystem)
-	if p.Environment == types.EnvironmentMCDR {
+	if p.Environment == server.EnvironmentMCDR {
 		if resolved.MCDR == nil {
 			return "", fmt.Errorf("MCDR package has no wrapper runtime")
 		}

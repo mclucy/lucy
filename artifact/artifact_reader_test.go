@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 const forgeModsToml = `modLoader = "javafml"
@@ -52,21 +52,21 @@ func TestReadInfoClassifiesForgeFamilyByLayout(t *testing.T) {
 	tests := []struct {
 		name      string
 		entries   map[string]string
-		ecosystem types.Ecosystem
+		ecosystem catalog.Ecosystem
 	}{
 		{
 			name: "forge layout",
 			entries: map[string]string{
 				"META-INF/mods.toml": forgeModsToml,
 			},
-			ecosystem: types.EcosystemForge,
+			ecosystem: catalog.EcosystemForge,
 		},
 		{
 			name: "legacy neoforge layout",
 			entries: map[string]string{
 				"META-INF/mods.toml": neoforgeModsToml,
 			},
-			ecosystem: types.EcosystemNeoForge,
+			ecosystem: catalog.EcosystemNeoForge,
 		},
 		{
 			name: "modern neoforge layout",
@@ -74,7 +74,7 @@ func TestReadInfoClassifiesForgeFamilyByLayout(t *testing.T) {
 				"META-INF/mods.toml":          forgeModsToml,
 				"META-INF/neoforge.mods.toml": neoforgeModsToml,
 			},
-			ecosystem: types.EcosystemNeoForge,
+			ecosystem: catalog.EcosystemNeoForge,
 		},
 	}
 	for _, test := range tests {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/java"
 )
 
 // releaseProperties reads the release file of a Java home. A missing or
@@ -41,38 +41,38 @@ func releaseProperties(home string) map[string]string {
 // vendor Lucy does not know is an unbranded build for the purpose of matching
 // a requirement. Oracle builds need extra keys to tell their three products
 // apart.
-func distributionFromRelease(properties map[string]string) types.JavaDistribution {
+func distributionFromRelease(properties map[string]string) java.Distribution {
 	implementor := properties["IMPLEMENTOR"]
 	if distribution, ok := implementorDistributions[implementor]; ok {
 		return distribution
 	}
 	if implementor != "Oracle Corporation" {
-		return types.JavaDistributionAny
+		return java.DistributionAny
 	}
 	switch {
 	case properties["GRAALVM_VERSION"] != "":
-		return types.JavaDistributionGraalVM
+		return java.DistributionGraalVM
 	case properties["BUILD_TYPE"] == "commercial":
-		return types.JavaDistributionOracle
+		return java.DistributionOracle
 	default:
-		return types.JavaDistributionOracleOpenJDK
+		return java.DistributionOracleOpenJDK
 	}
 }
 
 // implementorDistributions lists the IMPLEMENTOR values of the vendors Lucy
 // installs. Downloadable Oracle GraalVM reports Oracle Corporation and needs
 // the GRAALVM_VERSION key, so it is not listed here.
-var implementorDistributions = map[string]types.JavaDistribution{
-	"Eclipse Adoptium":   types.JavaDistributionTemurin,
-	"Azul Systems, Inc.": types.JavaDistributionZulu,
-	"Amazon.com Inc.":    types.JavaDistributionCorretto,
-	"BellSoft":           types.JavaDistributionLiberica,
-	"Microsoft":          types.JavaDistributionMicrosoft,
-	"GraalVM Community":  types.JavaDistributionGraalVMCommunity,
-	"IBM Corporation":    types.JavaDistributionSemeru,
-	"SAP SE":             types.JavaDistributionSapMachine,
-	"Alibaba":            types.JavaDistributionDragonwell,
-	"Tencent":            types.JavaDistributionKona,
-	"Red Hat, Inc.":      types.JavaDistributionRedHat,
-	"JetBrains s.r.o.":   types.JavaDistributionJetBrains,
+var implementorDistributions = map[string]java.Distribution{
+	"Eclipse Adoptium":   java.DistributionTemurin,
+	"Azul Systems, Inc.": java.DistributionZulu,
+	"Amazon.com Inc.":    java.DistributionCorretto,
+	"BellSoft":           java.DistributionLiberica,
+	"Microsoft":          java.DistributionMicrosoft,
+	"GraalVM Community":  java.DistributionGraalVMCommunity,
+	"IBM Corporation":    java.DistributionSemeru,
+	"SAP SE":             java.DistributionSapMachine,
+	"Alibaba":            java.DistributionDragonwell,
+	"Tencent":            java.DistributionKona,
+	"Red Hat, Inc.":      java.DistributionRedHat,
+	"JetBrains s.r.o.":   java.DistributionJetBrains,
 }

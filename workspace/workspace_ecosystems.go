@@ -4,15 +4,15 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
 // ServedEcosystem is one ecosystem that a runtime can serve with a
 // compatibility note.
 type ServedEcosystem struct {
-	Ecosystem     types.Ecosystem     `json:"ecosystem"`
-	Compatibility types.Compatibility `json:"compatibility"`
+	Ecosystem     catalog.Ecosystem `json:"ecosystem"`
+	Compatibility Compatibility     `json:"compatibility"`
 }
 
 // ServedEcosystems lists the package ecosystems a probed workspace
@@ -27,16 +27,16 @@ type ServedEcosystem struct {
 func (ws Workspace) ServedEcosystems() []ServedEcosystem {
 	offers := ws.Runtime().servedEcosystems()
 
-	if hasDirectOffer(offers, types.EcosystemForge) ||
-		hasDirectOffer(offers, types.EcosystemNeoForge) {
+	if hasDirectOffer(offers, catalog.EcosystemForge) ||
+		hasDirectOffer(offers, catalog.EcosystemNeoForge) {
 		for _, pkg := range ws.Packages {
 			if !isConnectorBridgePackage(pkg) {
 				continue
 			}
 			offers = appendServedEcosystem(
 				offers,
-				types.EcosystemFabric,
-				types.CompatDegraded,
+				catalog.EcosystemFabric,
+				CompatDegraded,
 			)
 			break
 		}
@@ -58,34 +58,34 @@ func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
 
 	switch name {
 	case "fabric":
-		if primary.Ecosystem == types.EcosystemFabric {
+		if primary.Ecosystem == catalog.EcosystemFabric {
 			offers = appendServedEcosystem(
 				offers,
-				types.EcosystemFabric,
-				types.CompatFull,
+				catalog.EcosystemFabric,
+				CompatFull,
 			)
 		}
 	case "forge":
-		if primary.Ecosystem == types.EcosystemForge {
+		if primary.Ecosystem == catalog.EcosystemForge {
 			offers = appendServedEcosystem(
 				offers,
-				types.EcosystemForge,
-				types.CompatFull,
+				catalog.EcosystemForge,
+				CompatFull,
 			)
 		}
 	case "neoforge":
-		if primary.Ecosystem == types.EcosystemNeoForge {
+		if primary.Ecosystem == catalog.EcosystemNeoForge {
 			offers = appendServedEcosystem(
 				offers,
-				types.EcosystemNeoForge,
-				types.CompatFull,
+				catalog.EcosystemNeoForge,
+				CompatFull,
 			)
 		}
 	case "craftbukkit", "bukkit", "spigot":
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemBukkit,
-			types.CompatFull,
+			catalog.EcosystemBukkit,
+			CompatFull,
 		)
 	case "arclight":
 		for _, ecosystem := range selectedLoaderEcosystems(
@@ -94,84 +94,84 @@ func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
 			offers = appendServedEcosystem(
 				offers,
 				ecosystem,
-				types.CompatFull,
+				CompatFull,
 			)
 		}
 		if len(offers) > 0 {
 			offers = appendServedEcosystem(
 				offers,
-				types.EcosystemBukkit,
-				types.CompatFull,
+				catalog.EcosystemBukkit,
+				CompatFull,
 			)
 		}
 	case "catserver":
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemForge,
-			types.CompatFull,
+			catalog.EcosystemForge,
+			CompatFull,
 		)
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemBukkit,
-			types.CompatFull,
+			catalog.EcosystemBukkit,
+			CompatFull,
 		)
 	case "youer":
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemNeoForge,
-			types.CompatFull,
+			catalog.EcosystemNeoForge,
+			CompatFull,
 		)
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemPaper,
-			types.CompatFull,
+			catalog.EcosystemPaper,
+			CompatFull,
 		)
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemBukkit,
-			types.CompatFull,
+			catalog.EcosystemBukkit,
+			CompatFull,
 		)
 	case "spongevanilla", "spongeforge", "spongeneo":
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemSponge,
-			types.CompatFull,
+			catalog.EcosystemSponge,
+			CompatFull,
 		)
 		for _, ecosystem := range selectedLoaderEcosystems(
 			s.Components,
 		) {
-			if ecosystem == types.EcosystemFabric {
+			if ecosystem == catalog.EcosystemFabric {
 				continue
 			}
 			offers = appendServedEcosystem(
 				offers,
 				ecosystem,
-				types.CompatFull,
+				CompatFull,
 			)
 		}
 	case "velocity":
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemVelocity,
-			types.CompatFull,
+			catalog.EcosystemVelocity,
+			CompatFull,
 		)
 	case "bungeecord", "waterfall":
 		offers = appendServedEcosystem(
 			offers,
-			types.EcosystemBungeeCord,
-			types.CompatFull,
+			catalog.EcosystemBungeeCord,
+			CompatFull,
 		)
 	default:
 		if detector.IsPaperLineage(name) {
 			offers = appendServedEcosystem(
 				offers,
-				types.EcosystemPaper,
-				types.CompatFull,
+				catalog.EcosystemPaper,
+				CompatFull,
 			)
 			offers = appendServedEcosystem(
 				offers,
-				types.EcosystemBukkit,
-				types.CompatFull,
+				catalog.EcosystemBukkit,
+				CompatFull,
 			)
 		}
 	}
@@ -183,8 +183,8 @@ func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
 // ecosystem that serves pkg and the support level. ok is false when no
 // ecosystem serves pkg. A full offer wins over a degraded offer.
 func (ws Workspace) Supports(
-	pkg types.VersionedPackageRef,
-) (offered types.Ecosystem, level types.Compatibility, ok bool) {
+	pkg catalog.VersionedRef,
+) (offered catalog.Ecosystem, level Compatibility, ok bool) {
 	offers := ws.ServedEcosystems()
 
 	serving := -1
@@ -193,20 +193,20 @@ func (ws Workspace) Supports(
 			continue
 		}
 		if serving < 0 ||
-			offers[serving].Compatibility == types.CompatDegraded &&
-				offer.Compatibility == types.CompatFull {
+			offers[serving].Compatibility == CompatDegraded &&
+				offer.Compatibility == CompatFull {
 			serving = i
 		}
 	}
 	if serving < 0 {
-		return types.EcosystemUnspecified, "", false
+		return catalog.EcosystemUnspecified, "", false
 	}
 
 	best := offers[serving]
-	if best.Compatibility == types.CompatFull {
-		return best.Ecosystem, types.CompatFull, true
+	if best.Compatibility == CompatFull {
+		return best.Ecosystem, CompatFull, true
 	}
-	return best.Ecosystem, types.CompatDegraded,
+	return best.Ecosystem, CompatDegraded,
 		supportsDegraded(best.Ecosystem, pkg)
 }
 
@@ -214,7 +214,7 @@ func (ws Workspace) Supports(
 // default rule accepts every package. Ecosystem-specific checks replace it
 // over time. Example: Fabric content over the Sinytra bridge needs a lookup
 // in the Probe compatibility report.
-func supportsDegraded(eco types.Ecosystem, pkg types.VersionedPackageRef) bool {
+func supportsDegraded(eco catalog.Ecosystem, pkg catalog.VersionedRef) bool {
 	switch eco {
 	default:
 		return true
@@ -223,17 +223,17 @@ func supportsDegraded(eco types.Ecosystem, pkg types.VersionedPackageRef) bool {
 
 func appendServedEcosystem(
 	offers []ServedEcosystem,
-	ecosystem types.Ecosystem,
-	compatibility types.Compatibility,
+	ecosystem catalog.Ecosystem,
+	compatibility Compatibility,
 ) []ServedEcosystem {
-	if ecosystem == types.EcosystemUnspecified {
+	if ecosystem == catalog.EcosystemUnspecified {
 		return offers
 	}
 	for i := range offers {
 		if offers[i].Ecosystem != ecosystem {
 			continue
 		}
-		if compatibility == types.CompatFull {
+		if compatibility == CompatFull {
 			offers[i].Compatibility = compatibility
 		}
 		return offers
@@ -245,27 +245,27 @@ func appendServedEcosystem(
 }
 
 func selectedLoaderEcosystems(
-	components []types.VersionedPackageRef,
-) []types.Ecosystem {
-	var ecosystems []types.Ecosystem
+	components []catalog.VersionedRef,
+) []catalog.Ecosystem {
+	var ecosystems []catalog.Ecosystem
 	for _, component := range components {
 		name := strings.ToLower(strings.TrimSpace(component.Name.String()))
 		switch {
-		case component.Ecosystem == types.EcosystemFabric &&
+		case component.Ecosystem == catalog.EcosystemFabric &&
 			(name == "fabric-loader" || name == "fabricloader"):
 			ecosystems = appendUniqueEcosystem(
 				ecosystems,
-				types.EcosystemFabric,
+				catalog.EcosystemFabric,
 			)
-		case component.Ecosystem == types.EcosystemForge && name == "forge":
+		case component.Ecosystem == catalog.EcosystemForge && name == "forge":
 			ecosystems = appendUniqueEcosystem(
 				ecosystems,
-				types.EcosystemForge,
+				catalog.EcosystemForge,
 			)
-		case component.Ecosystem == types.EcosystemNeoForge && name == "neoforge":
+		case component.Ecosystem == catalog.EcosystemNeoForge && name == "neoforge":
 			ecosystems = appendUniqueEcosystem(
 				ecosystems,
-				types.EcosystemNeoForge,
+				catalog.EcosystemNeoForge,
 			)
 		}
 	}
@@ -273,9 +273,9 @@ func selectedLoaderEcosystems(
 }
 
 func appendUniqueEcosystem(
-	ecosystems []types.Ecosystem,
-	ecosystem types.Ecosystem,
-) []types.Ecosystem {
+	ecosystems []catalog.Ecosystem,
+	ecosystem catalog.Ecosystem,
+) []catalog.Ecosystem {
 	if slices.Contains(ecosystems, ecosystem) {
 		return ecosystems
 	}
@@ -284,11 +284,11 @@ func appendUniqueEcosystem(
 
 func hasDirectOffer(
 	offers []ServedEcosystem,
-	ecosystem types.Ecosystem,
+	ecosystem catalog.Ecosystem,
 ) bool {
 	for _, offer := range offers {
 		if offer.Ecosystem == ecosystem &&
-			offer.Compatibility == types.CompatFull {
+			offer.Compatibility == CompatFull {
 			return true
 		}
 	}
@@ -303,9 +303,9 @@ func hasDirectOffer(
 //     https://github.com/Sinytra/Connector/discussions/1293) and the
 //     Modrinth project slug
 //   - "sinytra-connector": the CurseForge project slug
-func isConnectorBridgePackage(pkg types.DiscoveredPackage) bool {
-	if pkg.ID.Ecosystem != types.EcosystemForge &&
-		pkg.ID.Ecosystem != types.EcosystemNeoForge {
+func isConnectorBridgePackage(pkg DiscoveredPackage) bool {
+	if pkg.ID.Ecosystem != catalog.EcosystemForge &&
+		pkg.ID.Ecosystem != catalog.EcosystemNeoForge {
 		return false
 	}
 	switch strings.ToLower(strings.TrimSpace(pkg.ID.Name.String())) {

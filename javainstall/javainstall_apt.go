@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // apt installs Java from the configured APT sources.
@@ -22,13 +22,13 @@ func (apt) plans(ctx context.Context, req Request) ([]Plan, error) {
 	if req.Major <= 0 || !systemToolAvailable("apt-get", "apt-cache") {
 		return nil, nil
 	}
-	if req.Distribution == types.JavaDistributionAny {
+	if req.Distribution == java.DistributionAny {
 		pkg := fmt.Sprintf("openjdk-%d-jre-headless", req.Major)
 		if !aptPackageAvailable(ctx, pkg) {
 			return nil, nil
 		}
 		return []Plan{
-			aptPlan(pkg, types.JavaDistributionAny, req.Major, nil),
+			aptPlan(pkg, java.DistributionAny, req.Major, nil),
 		}, nil
 	}
 	packages, ok := aptBrandedPackages(req.Distribution, req.Major)
@@ -53,7 +53,7 @@ func (apt) plans(ctx context.Context, req Request) ([]Plan, error) {
 
 func aptPlan(
 	pkg string,
-	distribution types.JavaDistribution,
+	distribution java.Distribution,
 	major int,
 	repository *Repository,
 ) Plan {
@@ -106,21 +106,21 @@ func aptPackageAvailable(ctx context.Context, pkg string) bool {
 // aptBrandedPackages returns the package names of a vendor build, most
 // preferred first, and whether APT can provide that build.
 func aptBrandedPackages(
-	distribution types.JavaDistribution,
+	distribution java.Distribution,
 	major int,
 ) ([]string, bool) {
 	switch distribution {
-	case types.JavaDistributionTemurin:
+	case java.DistributionTemurin:
 		return []string{
 			fmt.Sprintf("temurin-%d-jre", major),
 			fmt.Sprintf("temurin-%d-jdk", major),
 		}, true
-	case types.JavaDistributionZulu:
+	case java.DistributionZulu:
 		return []string{
 			fmt.Sprintf("zulu%d-jre-headless", major),
 			fmt.Sprintf("zulu%d-jdk-headless", major),
 		}, true
-	case types.JavaDistributionCorretto:
+	case java.DistributionCorretto:
 		return []string{
 			fmt.Sprintf("java-%d-amazon-corretto-jdk", major),
 		}, true
@@ -131,9 +131,9 @@ func aptBrandedPackages(
 
 // aptRepository returns the vendor APT source for a build. It returns nil
 // when the vendor documents no source for this host.
-func aptRepository(distribution types.JavaDistribution) *Repository {
+func aptRepository(distribution java.Distribution) *Repository {
 	switch distribution {
-	case types.JavaDistributionTemurin:
+	case java.DistributionTemurin:
 		release := systemRelease()
 		suite := release["VERSION_CODENAME"]
 		if suite == "" {
@@ -150,7 +150,7 @@ func aptRepository(distribution types.JavaDistribution) *Repository {
 			"https://packages.adoptium.net/artifactory/api/gpg/key/public",
 			suite,
 		)
-	case types.JavaDistributionZulu:
+	case java.DistributionZulu:
 		return aptVendorRepository(
 			"Azul Zulu apt repository",
 			"https://repos.azul.com/zulu/deb",
@@ -159,7 +159,7 @@ func aptRepository(distribution types.JavaDistribution) *Repository {
 			"https://repos.azul.com/azul-repo.key",
 			"stable",
 		)
-	case types.JavaDistributionCorretto:
+	case java.DistributionCorretto:
 		return aptVendorRepository(
 			"Amazon Corretto apt repository",
 			"https://apt.corretto.aws",

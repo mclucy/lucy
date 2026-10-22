@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 func TestPaperObservationCollector_PaperFixtureSupportsTreeAndJar(t *testing.T) {
@@ -254,7 +254,7 @@ func TestPaperObservationCollector_MissingOptionalFilesGracefullyDegrades(t *tes
 	if obs.manifestMainClass != "io.papermc.paperclip.Main" {
 		t.Fatalf("unexpected manifest main class: %q", obs.manifestMainClass)
 	}
-	if obs.gameVersion != types.VersionUnknown {
+	if obs.gameVersion != version.Unknown {
 		t.Fatalf("expected unknown game version, got %q", obs.gameVersion)
 	}
 }

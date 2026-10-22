@@ -1,4 +1,4 @@
-package types
+package server
 
 // Environment identifies the managed server environment.
 type Environment string

@@ -7,7 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 func TestDetectForgeInstallFromVersionDirPrefersHashVerifiedServerJar(t *testing.T) {
@@ -202,7 +203,7 @@ func TestForgeLegacyDetectorDetectsUniversalJar(t *testing.T) {
 func parseForgeManifestFromFile(
 	t *testing.T,
 	jarPath string,
-) (types.Version, types.Version) {
+) (versionpkg.Version, versionpkg.Version) {
 	t.Helper()
 
 	file, err := os.Open(jarPath)
@@ -368,7 +369,7 @@ func assertForgeRuntime(
 ) {
 	t.Helper()
 
-	wantGameVersion := types.Version(gameVersion)
+	wantGameVersion := versionpkg.Version(gameVersion)
 
 	if runtime.PrimaryPath != primary {
 		t.Fatalf(
@@ -379,7 +380,7 @@ func assertForgeRuntime(
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.EcosystemMinecraft,
+		catalog.EcosystemMinecraft,
 		"minecraft",
 	); got != wantGameVersion.String() {
 		t.Fatalf(
@@ -389,7 +390,7 @@ func assertForgeRuntime(
 		)
 	}
 	if runtime.PrimaryRuntime == nil ||
-		runtime.PrimaryRuntime.Ecosystem != types.EcosystemForge ||
+		runtime.PrimaryRuntime.Ecosystem != catalog.EcosystemForge ||
 		runtime.PrimaryRuntime.Name != "forge" {
 		t.Fatalf(
 			"expected primary forge runtime, got %+v",
@@ -398,7 +399,7 @@ func assertForgeRuntime(
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.EcosystemForge,
+		catalog.EcosystemForge,
 		"forge",
 	); got != forgeVersion {
 		t.Fatalf("forge version mismatch: got %q want %q", got, forgeVersion)
@@ -407,8 +408,8 @@ func assertForgeRuntime(
 
 func runtimeIdentityVersion(
 	runtime *RuntimeEvidence,
-	platform types.Ecosystem,
-	name types.PackageName,
+	platform catalog.Ecosystem,
+	name catalog.Name,
 ) string {
 	if runtime == nil {
 		return ""

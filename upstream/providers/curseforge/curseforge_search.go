@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 const (
@@ -14,13 +14,13 @@ const (
 
 // modLoaderType maps lucy Platform to CurseForge ModLoaderType enum.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func modLoaderType(p types.Ecosystem) int {
+func modLoaderType(p catalog.Ecosystem) int {
 	switch p {
-	case types.EcosystemForge:
+	case catalog.EcosystemForge:
 		return 1
-	case types.EcosystemFabric:
+	case catalog.EcosystemFabric:
 		return 4
-	case types.EcosystemNeoForge:
+	case catalog.EcosystemNeoForge:
 		return 6
 	default:
 		return 0 // Any
@@ -29,8 +29,8 @@ func modLoaderType(p types.Ecosystem) int {
 
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
 func searchUrl(
-	query types.PackageName,
-	ecosystem types.Ecosystem,
+	query catalog.Name,
+	ecosystem catalog.Ecosystem,
 ) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
@@ -50,7 +50,7 @@ func searchUrl(
 }
 
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func slugSearchUrl(slug types.PackageName) string {
+func slugSearchUrl(slug catalog.Name) string {
 	params := url.Values{}
 	params.Set("gameId", fmt.Sprintf("%d", minecraftGameId))
 	params.Set("classId", fmt.Sprintf("%d", modsClassId))

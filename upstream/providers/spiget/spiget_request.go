@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 func requestJSON(requestURL string, out any, notFound error) error {
@@ -102,7 +102,7 @@ func versionsURL(resourceID int64) string {
 	return resourceURL(resourceID) + "/versions?" + values.Encode()
 }
 
-func parseNumericResourceID(name types.PackageName) (int64, bool) {
+func parseNumericResourceID(name catalog.Name) (int64, bool) {
 	trimmed := strings.TrimSpace(name.String())
 	if trimmed == "" {
 		return 0, false

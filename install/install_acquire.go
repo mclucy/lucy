@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 type downloadStore struct {
@@ -78,7 +78,7 @@ func DigestFile(filename string, algorithms map[string]string) (map[string]strin
 	return out, nil
 }
 
-func (s *downloadStore) materialize(a *types.Artifact) (string, error) {
+func (s *downloadStore) materialize(a *catalog.Artifact) (string, error) {
 	if err := s.ctx.Err(); err != nil {
 		return "", err
 	}
@@ -134,7 +134,7 @@ func (s *downloadStore) materialize(a *types.Artifact) (string, error) {
 // place only after they verify, so an interrupted copy can never be mistaken
 // for a completed download and a failed verification can never poison the
 // store.
-func (s *downloadStore) materializeFile(a *types.Artifact, dir, destination string) error {
+func (s *downloadStore) materializeFile(a *catalog.Artifact, dir, destination string) error {
 	staged := destination + ".partial"
 	defer os.Remove(staged)
 

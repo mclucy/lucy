@@ -9,12 +9,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
@@ -144,7 +144,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	)
 	if err != nil {
 		errArg := query.FilterEcosystem.String()
-		if specifiedRegistry != types.RegistryUnspecified {
+		if specifiedRegistry != catalog.RegistryUnspecified {
 			errArg = specifiedRegistry.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
@@ -209,26 +209,26 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func searchEcosystem(value string) (types.Ecosystem, error) {
+func searchEcosystem(value string) (catalog.Ecosystem, error) {
 	if value == "" {
-		return types.EcosystemUnspecified, nil
+		return catalog.EcosystemUnspecified, nil
 	}
 
-	ecosystem := types.Ecosystem(strings.ToLower(strings.TrimSpace(value)))
+	ecosystem := catalog.Ecosystem(strings.ToLower(strings.TrimSpace(value)))
 	if !ecosystem.IsSearchable() {
-		return types.EcosystemUnspecified, fmt.Errorf("invalid --ecosystem %q", value)
+		return catalog.EcosystemUnspecified, fmt.Errorf("invalid --ecosystem %q", value)
 	}
 	return ecosystem, nil
 }
 
-func searchRegistry(value string) (types.Registry, error) {
+func searchRegistry(value string) (catalog.Registry, error) {
 	if value == "" {
-		return types.RegistryUnspecified, nil
+		return catalog.RegistryUnspecified, nil
 	}
 
-	registry, ok := types.ParseRegistry(value)
+	registry, ok := catalog.ParseRegistry(value)
 	if !ok {
-		return types.RegistryUnknown, fmt.Errorf("invalid --registry %q", value)
+		return catalog.RegistryUnknown, fmt.Errorf("invalid --registry %q", value)
 	}
 	return registry, nil
 }
@@ -343,7 +343,7 @@ func searchSectionHeader(res upstream.SearchResponse) string {
 	)
 	var sb strings.Builder
 	sb.WriteString(header + "\n")
-	if res.Provider == types.ProviderModrinth && len(res.Items) == 100 {
+	if res.Provider == catalog.ProviderModrinth && len(res.Items) == 100 {
 		sb.WriteString(style.Muted("* only showing the top 100") + "\n")
 	}
 	return sb.String()

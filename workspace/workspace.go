@@ -22,8 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-
-	"github.com/mclucy/lucy/types"
 )
 
 const sessionLockName = "session.lock"
@@ -33,8 +31,8 @@ type Workspace struct {
 	// ServerDir is the server directory that the observation describes.
 	// If MCDR manages the anchor, then ServerDir is the MCDR working
 	// directory.
-	ServerDir string            `json:"root"`
-	Wrappers  types.WrapperInfo `json:"wrappers"`
+	ServerDir string      `json:"root"`
+	Wrappers  WrapperInfo `json:"wrappers"`
 
 	// Warnings records the recoverable problems seen while observing the
 	// directory, such as MCDR version-detection failures. It stays out of
@@ -49,7 +47,7 @@ type Workspace struct {
 
 	// Packages lists the discovered content packages, derived once during
 	// observe.
-	Packages []types.DiscoveredPackage `json:"packages"`
+	Packages []DiscoveredPackage `json:"packages"`
 }
 
 // MarshalJSON writes the wire format of an observation: the stored facts
@@ -57,13 +55,13 @@ type Workspace struct {
 // this format. Probe is omitted; the raw scan is internal to this process.
 func (ws Workspace) MarshalJSON() ([]byte, error) {
 	projection := struct {
-		ServerDir   string                    `json:"root"`
-		SavePath    string                    `json:"save_path"`
-		PackageDirs []string                  `json:"package_dirs"`
-		Packages    []types.DiscoveredPackage `json:"packages"`
-		Server      *ServerRuntime            `json:"server,omitempty"`
-		Activity    *wireActivity             `json:"activity,omitempty"`
-		Wrappers    types.WrapperInfo         `json:"wrappers"`
+		ServerDir   string              `json:"root"`
+		SavePath    string              `json:"save_path"`
+		PackageDirs []string            `json:"package_dirs"`
+		Packages    []DiscoveredPackage `json:"packages"`
+		Server      *ServerRuntime      `json:"server,omitempty"`
+		Activity    *wireActivity       `json:"activity,omitempty"`
+		Wrappers    WrapperInfo         `json:"wrappers"`
 	}{
 		ServerDir:   ws.ServerDir,
 		SavePath:    ws.SaveDir(),
@@ -185,7 +183,7 @@ func observe(dir string) Workspace {
 // resolveServerDir returns the directory that holds the server. Only MCDR
 // moves the server away from the anchor. MCDR uses its configured working
 // directory.
-func resolveServerDir(anchor string, wrappers types.WrapperInfo) string {
+func resolveServerDir(anchor string, wrappers WrapperInfo) string {
 	if wrappers.MCDR != nil {
 		wd := wrappers.MCDR.Config.WorkingDirectory
 		if filepath.IsAbs(wd) {
@@ -196,7 +194,7 @@ func resolveServerDir(anchor string, wrappers types.WrapperInfo) string {
 	return anchor
 }
 
-func mcdrPluginDirs(wrappers types.WrapperInfo) []string {
+func mcdrPluginDirs(wrappers WrapperInfo) []string {
 	if wrappers.MCDR == nil {
 		return nil
 	}

@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 const forgeMavenArtifactBaseURL = "https://maven.minecraftforge.net/net/minecraftforge/forge"
@@ -69,8 +69,8 @@ func detectForgeInstallFromVersionDir(versionDir string) (
 		return nil, nil
 	}
 
-	gameVersion := types.Version(match[1])
-	forgeVersion := types.Version(match[2])
+	gameVersion := versionpkg.Version(match[1])
+	forgeVersion := versionpkg.Version(match[2])
 	candidates := []struct {
 		kind forgeArtifactKind
 		path string
@@ -143,8 +143,8 @@ func detectForgeInstallFromVersionDir(versionDir string) (
 func verifyForgeArtifactByUnpack(
 	jarPath string,
 	kind forgeArtifactKind,
-	gameVersion types.Version,
-	forgeVersion types.Version,
+	gameVersion versionpkg.Version,
+	forgeVersion versionpkg.Version,
 ) (bool, error) {
 	file, err := os.Open(jarPath)
 	if err != nil {

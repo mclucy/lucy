@@ -5,10 +5,9 @@ import (
 	"io"
 	"os"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
-
 	"github.com/spf13/cobra"
 )
 
@@ -67,7 +66,7 @@ func actionTree(cmd *cobra.Command, args []string) error {
 // parsing the label.
 func nodeLabel(node *GraphNode) string {
 	label := fmt.Sprintf("%s@%s", node.ID, node.Version)
-	if node.Provider != types.ProviderUnspecified {
+	if node.Provider != catalog.ProviderUnspecified {
 		label += fmt.Sprintf(" (%s)", node.Provider)
 	}
 	if node.Module {
@@ -157,7 +156,7 @@ func outputTreeJSON(
 
 func buildJSONNode(node *GraphNode, visited map[string]bool) *treeNode {
 	provider := ""
-	if node.Provider != types.ProviderUnspecified {
+	if node.Provider != catalog.ProviderUnspecified {
 		provider = node.Provider.String()
 	}
 	t := &treeNode{

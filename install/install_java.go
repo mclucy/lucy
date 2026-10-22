@@ -3,16 +3,16 @@ package install
 import (
 	"context"
 
-	"github.com/mclucy/lucy/java"
+	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/lockfile"
 )
 
 // selectJava selects the Java runtime of the locked server. When the
 // selection misses the requirement and the caller can provision a runtime,
 // the caller runs first and the runtime is selected again.
-func selectJava(ctx context.Context, root string, resolved *lockfile.Document, opts Options) (*java.Check, error) {
-	requirement := java.RequirementOf(resolved)
-	check, err := java.Select(ctx, root, requirement)
+func selectJava(ctx context.Context, root string, resolved *lockfile.Document, opts Options) (*javaruntime.Check, error) {
+	requirement := javaruntime.RequirementOf(resolved)
+	check, err := javaruntime.Select(ctx, root, requirement)
 	if err != nil {
 		return nil, err
 	}
@@ -22,5 +22,5 @@ func selectJava(ctx context.Context, root string, resolved *lockfile.Document, o
 	if err := opts.ProvisionJava(ctx, requirement, check); err != nil {
 		return nil, err
 	}
-	return java.Select(ctx, root, requirement)
+	return javaruntime.Select(ctx, root, requirement)
 }

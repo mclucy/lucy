@@ -3,19 +3,17 @@ package version
 import (
 	"fmt"
 	"strings"
-
-	"github.com/mclucy/lucy/types"
 )
 
 // parseOpaqueVersion accepts any non-empty identifier. Opaque versions have no
 // ordering; they compare by exact string.
-func parseOpaqueVersion(raw types.Version) types.ResolvableVersion {
+func parseOpaqueVersion(raw Version) ResolvableVersion {
 	text := string(raw)
 	if strings.TrimSpace(text) == "" {
 		return nil
 	}
 	return &StringVersion{
-		dialect:  types.VersionDialectOpaque,
+		dialect:  DialectOpaque,
 		original: text,
 	}
 }
@@ -23,7 +21,7 @@ func parseOpaqueVersion(raw types.Version) types.ResolvableVersion {
 // parseOpaqueConstraint accepts an unconstrained expression or an exact
 // identifier. Descriptors with an opaque version grammar define no range
 // operators.
-func parseOpaqueConstraint(raw string) (types.VersionExpr, error) {
+func parseOpaqueConstraint(raw string) (Expr, error) {
 	text := strings.TrimSpace(raw)
 	if text == "" || text == "*" {
 		return nil, nil
@@ -35,11 +33,11 @@ func parseOpaqueConstraint(raw string) (types.VersionExpr, error) {
 	case '<', '>', '=', '!', '^', '~':
 		return nil, fmt.Errorf("opaque constraint %q must be an exact version", raw)
 	}
-	version := parseOpaqueVersion(types.Version(text))
+	version := parseOpaqueVersion(Version(text))
 	if version == nil {
 		return nil, fmt.Errorf("invalid opaque version %q", raw)
 	}
-	return types.VersionExpr{
-		{{Value: version, Operator: types.OpEq}},
+	return Expr{
+		{{Value: version, Operator: OpEq}},
 	}, nil
 }

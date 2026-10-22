@@ -1,14 +1,15 @@
 package detector
 
-import "github.com/mclucy/lucy/types"
+import "github.com/mclucy/lucy/catalog"
 
 // RuntimeEvidence is the detector output consumed by workspace assembly.
 // PrimaryRuntime identifies the selected bootable artifact. A nil primary does
 // not establish an executable runtime.
+
 type RuntimeEvidence struct {
-	PrimaryRuntime    *types.VersionedPackageRef
+	PrimaryRuntime    *catalog.VersionedRef
 	PrimaryPath       string
-	RuntimeComponents []types.VersionedPackageRef
+	RuntimeComponents []catalog.VersionedRef
 
 	// ConsumedFiles are artifacts absorbed by this runtime, such as the
 	// vanilla jar a Fabric launch shim boots.
@@ -20,7 +21,7 @@ type RuntimeEvidence struct {
 // IsVanilla reports evidence claiming a plain Minecraft runtime.
 func (e *RuntimeEvidence) IsVanilla() bool {
 	return e != nil && e.PrimaryRuntime != nil &&
-		e.PrimaryRuntime.Ecosystem == types.EcosystemMinecraft &&
+		e.PrimaryRuntime.Ecosystem == catalog.EcosystemMinecraft &&
 		e.PrimaryRuntime.Name == "minecraft"
 }
 

@@ -3,8 +3,6 @@ package version
 import (
 	"encoding/json/jsontext"
 	"strings"
-
-	"github.com/mclucy/lucy/types"
 )
 
 // MavenVersion implements Maven-style version ordering for Forge/NeoForge
@@ -21,7 +19,7 @@ type mavenToken struct {
 	followedByDigit bool
 }
 
-func parseMavenVersion(raw types.Version) types.ResolvableVersion {
+func parseMavenVersion(raw Version) ResolvableVersion {
 	original := string(raw)
 	if original == "" || len(original) > 256 {
 		return nil
@@ -32,7 +30,7 @@ func parseMavenVersion(raw types.Version) types.ResolvableVersion {
 	}
 }
 
-func (v *MavenVersion) Compare(other types.ResolvableVersion) (int, bool) {
+func (v *MavenVersion) Compare(other ResolvableVersion) (int, bool) {
 	if v == nil || other == nil {
 		return 0, false
 	}
@@ -63,8 +61,8 @@ func (v *MavenVersion) Validate() bool {
 	return v != nil && v.original != ""
 }
 
-func (v *MavenVersion) Dialect() types.VersionDialect {
-	return types.VersionDialectMaven
+func (v *MavenVersion) Dialect() Dialect {
+	return DialectMaven
 }
 
 func (v *MavenVersion) String() string {

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +22,7 @@ var removeCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
-		if ecosystem != "" && !types.Ecosystem(ecosystem).Valid() {
+		if ecosystem != "" && !catalog.Ecosystem(ecosystem).Valid() {
 			return fmt.Errorf("invalid ecosystem %q", ecosystem)
 		}
 		return nil
@@ -55,7 +55,7 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 	offline, _ := cmd.Flags().GetBool(flagRemoveOfflineName)
 
 	ecosystemArg, _ := cmd.Flags().GetString(FlagEcosystem)
-	ecosystem := types.Ecosystem(ecosystemArg)
+	ecosystem := catalog.Ecosystem(ecosystemArg)
 
 	opts := install.Options{
 		Locked:          locked,

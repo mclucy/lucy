@@ -11,7 +11,8 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 type modLoaderArtifactKind string
@@ -23,14 +24,14 @@ const (
 )
 
 type modLoaderInstallSpec struct {
-	platform       types.Ecosystem
+	platform       catalog.Ecosystem
 	name           string
 	libraryRoot    string
 	mavenBaseURL   string
 	candidateNames func(versionDir, version string) []modLoaderCandidate
 	unpackVerify   func(
 		candidate modLoaderCandidate,
-		gameVersion, loaderVersion types.Version,
+		gameVersion, loaderVersion versionpkg.Version,
 	) (bool, error)
 }
 
@@ -101,26 +102,26 @@ var neoforgeVersionDirPattern = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.\d+)*(?:-[
 
 func parseModLoaderVersionTuple(
 	versionDir string,
-	platform types.Ecosystem,
-) (gameVersion, loaderVersion types.Version, ok bool) {
+	platform catalog.Ecosystem,
+) (gameVersion, loaderVersion versionpkg.Version, ok bool) {
 	name := filepath.Base(versionDir)
 
 	switch platform {
-	case types.EcosystemForge:
+	case catalog.EcosystemForge:
 		match := forgeRuntimeVersionDirPattern.FindStringSubmatch(name)
 		if match == nil {
-			return types.VersionUnknown, types.VersionUnknown, false
+			return versionpkg.Unknown, versionpkg.Unknown, false
 		}
-		return types.Version(match[1]), types.Version(match[2]), true
-	case types.EcosystemNeoForge:
+		return versionpkg.Version(match[1]), versionpkg.Version(match[2]), true
+	case catalog.EcosystemNeoForge:
 		match := neoforgeVersionDirPattern.FindStringSubmatch(name)
 		if match == nil {
-			return types.VersionUnknown, types.VersionUnknown, false
+			return versionpkg.Unknown, versionpkg.Unknown, false
 		}
-		gameVersion := types.Version("1." + match[1] + "." + match[2])
-		return gameVersion, types.Version(name), true
+		gameVersion := versionpkg.Version("1." + match[1] + "." + match[2])
+		return gameVersion, versionpkg.Version(name), true
 	default:
-		return types.VersionUnknown, types.VersionUnknown, false
+		return versionpkg.Unknown, versionpkg.Unknown, false
 	}
 }
 
@@ -229,24 +230,24 @@ func hashArtifactFile(filePath string, algo cache.HashAlgorithm) (
 }
 
 func newModLoaderRuntimeEvidence(
-	platform types.Ecosystem,
+	platform catalog.Ecosystem,
 	name string,
 	filePath string,
-	gameVersion types.Version,
-	loaderVersion types.Version,
+	gameVersion versionpkg.Version,
+	loaderVersion versionpkg.Version,
 ) *RuntimeEvidence {
-	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
+	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &catalog.VersionedRef{
 		Ecosystem: platform,
-		Name:      types.PackageName(name),
+		Name:      catalog.Name(name),
 		Version:   loaderVersion,
-	}, RuntimeComponents: []types.VersionedPackageRef{
+	}, RuntimeComponents: []catalog.VersionedRef{
 		{
 			Ecosystem: platform,
-			Name:      types.PackageName(name),
+			Name:      catalog.Name(name),
 			Version:   loaderVersion,
 		},
 		{
-			Ecosystem: types.EcosystemMinecraft,
+			Ecosystem: catalog.EcosystemMinecraft,
 			Name:      "minecraft",
 			Version:   gameVersion,
 		},

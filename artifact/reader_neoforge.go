@@ -6,12 +6,12 @@ import (
 	"encoding/json/v2"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/version"
 
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml"
 )
 
@@ -58,28 +58,28 @@ func (r *neoforgeReader) Read(
 			continue
 		}
 
-		version := types.Version(mod.Version)
+		version := versionpkg.Version(mod.Version)
 		if version == "${file.jarVersion}" {
 			version = readNeoforgeManifestVersion(zipRdr)
 		}
 
 		info := PackageInfo{
-			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(mod.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemNeoForge, Version: version},
+			Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(mod.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemNeoForge, Version: version},
 			FilePath: filePath,
-			Metadata: types.Metadata{
+			Metadata: catalog.Metadata{
 				Title:   mod.DisplayName,
 				Brief:   mod.Description,
-				Authors: []types.Person{{Name: mod.Authors}},
+				Authors: []catalog.Person{{Name: mod.Authors}},
 				License: modIdentifier.License,
-				URLs: []types.URL{
+				URLs: []catalog.URL{
 					{
 						Name: "URL",
-						Type: types.URLHome,
+						Type: catalog.URLHome,
 						URL:  mod.DisplayURL,
 					},
 					{
 						Name: "Issue Tracker",
-						Type: types.URLIssues,
+						Type: catalog.URLIssues,
 						URL:  modIdentifier.IssueTrackerURL,
 					},
 				},
@@ -106,7 +106,7 @@ func (r *neoforgeReader) Read(
 			}
 			info.Dependencies = append(
 				info.Dependencies, Dependency{
-					Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(dep.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemNeoForge},
+					Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(dep.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemNeoForge},
 					Constraint: constraint,
 					Mandatory:  dep.Type == "required" || dep.Mandatory,
 					Origin:     dependencyOriginForEmbedded(embeddedModIds[dep.ModID]),
@@ -168,21 +168,21 @@ func hasLoaderDependency(
 	return false
 }
 
-func readNeoforgeManifestVersion(zipRdr *zip.Reader) types.Version {
+func readNeoforgeManifestVersion(zipRdr *zip.Reader) versionpkg.Version {
 	raw, err := readZipEntry(zipRdr, "META-INF/MANIFEST.MF")
 	if err != nil || raw == nil {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 
 	manifest := string(raw)
 	const versionField = "Implementation-Version: "
 	_, version, ok := strings.Cut(manifest, versionField)
 	if !ok {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 	version = strings.Split(version, "\r")[0]
 	version = strings.Split(version, "\n")[0]
-	return types.Version(version)
+	return versionpkg.Version(version)
 }
 
 func readNeoforgeJarjarMeta(zipRdr *zip.Reader) *fileschema.FileNeoforgeJarjar {
@@ -268,16 +268,16 @@ func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) ([]Dependen
 		}
 		deps = append(
 			deps, Dependency{
-				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemUnspecified},
+				Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemUnspecified},
 				Constraint: constraint,
 				Mandatory:  true,
-				Origin:     types.DependencyEmbedded,
+				Origin:     catalog.DependencyEmbedded,
 			},
 		)
 	}
 	return deps, nil
 }
 
-func parseNeoforgeMavenVersionRange(interval string) (types.VersionExpr, error) {
-	return version.ParseConstraint(interval, types.VersionDialectMaven)
+func parseNeoforgeMavenVersionRange(interval string) (versionpkg.Expr, error) {
+	return versionpkg.ParseConstraint(interval, versionpkg.DialectMaven)
 }

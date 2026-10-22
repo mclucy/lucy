@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"gopkg.in/ini.v1"
 )
 
@@ -29,15 +29,15 @@ func packageSearchPaths(
 
 	var paths []string
 	for _, offer := range server.servedEcosystems() {
-		if offer.Compatibility != types.CompatFull {
+		if offer.Compatibility != CompatFull {
 			continue
 		}
 
 		var path string
 		switch offer.Ecosystem {
-		case types.EcosystemFabric, types.EcosystemForge, types.EcosystemNeoForge:
+		case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge:
 			path = filepath.Join(root, "mods")
-		case types.EcosystemBukkit, types.EcosystemPaper:
+		case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 			path = filepath.Join(root, "plugins")
 		default:
 			continue

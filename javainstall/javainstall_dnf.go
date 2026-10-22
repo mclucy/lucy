@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // dnf installs Java from the configured DNF sources.
@@ -22,13 +22,13 @@ func (dnf) plans(ctx context.Context, req Request) ([]Plan, error) {
 	if req.Major <= 0 || !systemToolAvailable("dnf") {
 		return nil, nil
 	}
-	if req.Distribution == types.JavaDistributionAny {
+	if req.Distribution == java.DistributionAny {
 		pkg := fmt.Sprintf("java-%d-openjdk-headless", req.Major)
 		if !dnfPackageAvailable(ctx, pkg) {
 			return nil, nil
 		}
 		return []Plan{
-			dnfPlan(pkg, types.JavaDistributionAny, req.Major, nil),
+			dnfPlan(pkg, java.DistributionAny, req.Major, nil),
 		}, nil
 	}
 	packages, ok := dnfBrandedPackages(req.Distribution, req.Major)
@@ -53,7 +53,7 @@ func (dnf) plans(ctx context.Context, req Request) ([]Plan, error) {
 
 func dnfPlan(
 	pkg string,
-	distribution types.JavaDistribution,
+	distribution java.Distribution,
 	major int,
 	repository *Repository,
 ) Plan {
@@ -93,21 +93,21 @@ func dnfPackageAvailable(ctx context.Context, pkg string) bool {
 // dnfBrandedPackages returns the package names of a vendor build, most
 // preferred first, and whether DNF can provide that build.
 func dnfBrandedPackages(
-	distribution types.JavaDistribution,
+	distribution java.Distribution,
 	major int,
 ) ([]string, bool) {
 	switch distribution {
-	case types.JavaDistributionTemurin:
+	case java.DistributionTemurin:
 		return []string{
 			fmt.Sprintf("temurin-%d-jre", major),
 			fmt.Sprintf("temurin-%d-jdk", major),
 		}, true
-	case types.JavaDistributionZulu:
+	case java.DistributionZulu:
 		return []string{
 			fmt.Sprintf("zulu%d-jre-headless", major),
 			fmt.Sprintf("zulu%d-jdk-headless", major),
 		}, true
-	case types.JavaDistributionCorretto:
+	case java.DistributionCorretto:
 		return []string{
 			fmt.Sprintf("java-%d-amazon-corretto-devel", major),
 		}, true
@@ -118,9 +118,9 @@ func dnfBrandedPackages(
 
 // dnfRepository returns the vendor DNF source for a build. It returns nil when
 // the vendor documents no source for this host.
-func dnfRepository(distribution types.JavaDistribution) *Repository {
+func dnfRepository(distribution java.Distribution) *Repository {
 	switch distribution {
-	case types.JavaDistributionTemurin:
+	case java.DistributionTemurin:
 		repositoryURL := adoptiumRPMRepository()
 		if repositoryURL == "" {
 			return nil
@@ -133,7 +133,7 @@ func dnfRepository(distribution types.JavaDistribution) *Repository {
 			"https://packages.adoptium.net/artifactory/api/gpg/key/public",
 			"Eclipse Adoptium",
 		)
-	case types.JavaDistributionCorretto:
+	case java.DistributionCorretto:
 		return dnfVendorRepository(
 			"Amazon Corretto RPM repository",
 			"https://yum.corretto.aws/$basearch",

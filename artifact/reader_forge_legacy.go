@@ -4,9 +4,10 @@ import (
 	"archive/zip"
 	"encoding/json/v2"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 type forgeLegacyReader struct{}
@@ -44,7 +45,7 @@ func (r *forgeLegacyReader) Read(
 			}
 
 			info := PackageInfo{
-				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(m.ModId), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge, Version: types.Version(m.Version)},
+				Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(m.ModId), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemForge, Version: version.Version(m.Version)},
 				FilePath: filePath,
 			}
 
@@ -57,7 +58,7 @@ func (r *forgeLegacyReader) Read(
 					}
 					deps = append(
 						deps, Dependency{
-							Ref:       types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(depStr), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge},
+							Ref:       catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(depStr), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemForge},
 							Mandatory: true,
 						},
 					)

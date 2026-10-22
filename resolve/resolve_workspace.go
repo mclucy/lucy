@@ -8,36 +8,40 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/upstream"
+
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
-	"github.com/mclucy/lucy/version"
+
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 type (
 	projectKey struct {
-		environment types.Environment
-		ecosystem   types.Ecosystem
-		provider    types.Provider
+		environment serverpkg.Environment
+		ecosystem   catalog.Ecosystem
+		provider    catalog.Provider
 		project     string
 	}
 	projectRequest struct {
 		key          projectKey
 		display      string
-		requirements []types.RequirementBinding
+		requirements []lockfile.RequirementBinding
 		releaseIDs   []string
 	}
 )
 
 // catalogueRegistry names the registry that serves a package provider. Only a
 // provider backing a registry can answer catalogue queries.
-func catalogueRegistry(provider types.Provider) types.Registry {
+func catalogueRegistry(provider catalog.Provider) catalog.Registry {
 	registry, ok := provider.Registry()
 	if !ok {
-		return types.RegistryUnspecified
+		return catalog.RegistryUnspecified
 	}
 	return registry
 }
@@ -45,19 +49,19 @@ func catalogueRegistry(provider types.Provider) types.Registry {
 // SupportsPackages reports whether the server product loads packages from
 // ecosystem. A paperclip server loads Paper and Bukkit packages regardless of
 // how the manifest names its product.
-func SupportsPackages(server lockfile.Server, ecosystem types.Ecosystem) bool {
+func SupportsPackages(server lockfile.Server, ecosystem catalog.Ecosystem) bool {
 	switch server.Product {
-	case types.ServerProductFabric:
-		return ecosystem == types.EcosystemFabric
-	case types.ServerProductForge:
-		return ecosystem == types.EcosystemForge
-	case types.ServerProductNeoForge:
-		return ecosystem == types.EcosystemNeoForge
-	case types.ServerProductPaper, types.ServerProductPurpur:
-		return ecosystem == types.EcosystemPaper || ecosystem == types.EcosystemBukkit
+	case serverpkg.ProductFabric:
+		return ecosystem == catalog.EcosystemFabric
+	case serverpkg.ProductForge:
+		return ecosystem == catalog.EcosystemForge
+	case serverpkg.ProductNeoForge:
+		return ecosystem == catalog.EcosystemNeoForge
+	case serverpkg.ProductPaper, serverpkg.ProductPurpur:
+		return ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit
 	default:
 		return server.Bootstrapper == "paperclip" &&
-			(ecosystem == types.EcosystemPaper || ecosystem == types.EcosystemBukkit)
+			(ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit)
 	}
 }
 
@@ -69,14 +73,14 @@ type PackagesRequest struct {
 	Previous           *lockfile.Document
 	Server             lockfile.Server
 	MCDRVersion        string
-	Materialize        func(*types.Artifact) (string, error)
+	Materialize        func(*catalog.Artifact) (string, error)
 	WithOptional       bool
 	AcceptBroken       bool
 	ExpandDependencies bool
 	Trace              Trace
 }
 
-func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
+func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	ctx := request.Context
 	if ctx == nil {
 		ctx = context.Background()
@@ -91,7 +95,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 	expandDependencies := request.ExpandDependencies
 	trace := request.Trace
 	var requests []projectRequest
-	appendRequest := func(environment types.Environment, ecosystem types.Ecosystem, ref string, r manifest.Requirement) error {
+	appendRequest := func(environment serverpkg.Environment, ecosystem catalog.Ecosystem, ref string, r manifest.Requirement) error {
 		provider, project, err := manifest.ParseReference(ref)
 		if err != nil {
 			return err
@@ -118,7 +122,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 				project,
 			},
 			display: display,
-			requirements: []types.RequirementBinding{
+			requirements: []lockfile.RequirementBinding{
 				{
 					Reference:   ref,
 					Selector:    r.Selector,
@@ -129,7 +133,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 		})
 		return nil
 	}
-	var ecosystems []types.Ecosystem
+	var ecosystems []catalog.Ecosystem
 	for ecosystem := range d.Server.Packages {
 		ecosystems = append(ecosystems, ecosystem)
 	}
@@ -141,7 +145,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 		}
 		slices.Sort(refs)
 		for _, ref := range refs {
-			if err := appendRequest(types.EnvironmentServer, ecosystem, ref, d.Server.Packages[ecosystem][ref]); err != nil {
+			if err := appendRequest(serverpkg.EnvironmentServer, ecosystem, ref, d.Server.Packages[ecosystem][ref]); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -153,13 +157,13 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 		}
 		slices.Sort(refs)
 		for _, ref := range refs {
-			if err := appendRequest(types.EnvironmentMCDR, types.EcosystemMCDR, ref, d.MCDR.Packages[ref]); err != nil {
+			if err := appendRequest(serverpkg.EnvironmentMCDR, catalog.EcosystemMCDR, ref, d.MCDR.Packages[ref]); err != nil {
 				return nil, nil, err
 			}
 		}
 	}
 	for _, r := range requests {
-		if r.key.environment == types.EnvironmentServer {
+		if r.key.environment == serverpkg.EnvironmentServer {
 			if !SupportsPackages(server, r.key.ecosystem) {
 				for _, req := range r.requirements {
 					if req.Enabled {
@@ -169,9 +173,9 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 			}
 		}
 	}
-	candidates := map[projectKey][]types.CatalogueCandidate{}
+	candidates := map[projectKey][]upstream.Candidate{}
 	canonical := map[projectKey]projectKey{}
-	chosen := map[projectKey]types.LockedPackage{}
+	chosen := map[projectKey]lockfile.Package{}
 	attempts := 0
 	strict := true
 	var lastErr error
@@ -199,7 +203,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 		}
 		trace.state(len(chosen), len(pending))
 		if len(pending) == 0 {
-			all := make([]types.LockedPackage, 0, len(chosen))
+			all := make([]lockfile.Package, 0, len(chosen))
 			for _, p := range chosen {
 				all = append(all, p)
 			}
@@ -286,7 +290,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 			return false
 		}
 		if !active {
-			p := types.LockedPackage{
+			p := lockfile.Package{
 				Environment:  r.key.environment,
 				Ecosystem:    r.key.ecosystem,
 				Provider:     r.key.provider,
@@ -304,7 +308,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 		// here, because a real demand outranks it. Selecting a file replaces
 		// the entry, so the binding's requirements have to travel into the
 		// selection and back out again when the selection does not resolve.
-		var artifactless types.LockedPackage
+		var artifactless lockfile.Package
 		replacingArtifactless := false
 		if prior, ok := chosen[r.key]; ok && prior.Artifact.Filename == "" {
 			artifactless, replacingArtifactless = prior, true
@@ -316,13 +320,13 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 			if err != nil {
 				return hardFail(err)
 			}
-			slices.SortStableFunc(list, func(a, b types.CatalogueCandidate) int { return b.PublishedAt.Compare(a.PublishedAt) })
+			slices.SortStableFunc(list, func(a, b upstream.Candidate) int { return b.PublishedAt.Compare(a.PublishedAt) })
 			if previous != nil {
 				for _, p := range previous.Packages {
 					if p.Environment == r.key.environment && p.Ecosystem == r.key.ecosystem && p.Provider == r.key.provider && p.ProjectID == r.key.project {
 						for i, c := range list {
 							if c.ReleaseID == p.ReleaseID && c.FileID == p.FileID {
-								list = append([]types.CatalogueCandidate{c}, append(list[:i], list[i+1:]...)...)
+								list = append([]upstream.Candidate{c}, append(list[:i], list[i+1:]...)...)
 								break
 							}
 						}
@@ -387,11 +391,11 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 				}
 				constrained = true
 				switch req.Selector {
-				case types.VersionStable:
-					if candidate.Channel != types.ReleaseChannelRelease {
+				case versionpkg.Stable:
+					if candidate.Channel != upstream.ReleaseChannelRelease {
 						reject(RejectionChannel, "requested a release build")
 					}
-				case types.VersionAny, types.VersionBeta, "":
+				case versionpkg.Any, versionpkg.Beta, "":
 				default:
 					if candidate.Version != req.Selector && candidate.ReleaseID != string(req.Selector) && candidate.FileID != string(req.Selector) && candidate.Filename != string(req.Selector) {
 						reject(RejectionVersionMismatch, string(req.Selector))
@@ -450,7 +454,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 			if replacingArtifactless {
 				requirements = append(slices.Clone(artifactless.Requirements), r.requirements...)
 			}
-			chosen[r.key] = types.LockedPackage{
+			chosen[r.key] = lockfile.Package{
 				Environment:  r.key.environment,
 				Ecosystem:    r.key.ecosystem,
 				Artifact:     a,
@@ -468,7 +472,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 			next := append([]projectRequest{}, rest...)
 			if expandDependencies {
 				for _, dep := range candidate.Dependencies {
-					if dep.Kind == types.DependencyKindRequired || (withOptional && dep.Kind == types.DependencyKindOptional) {
+					if dep.Kind == catalog.DependencyKindRequired || (withOptional && dep.Kind == catalog.DependencyKindOptional) {
 						var ids []string
 						if dep.ReleaseID != "" {
 							ids = append(ids, dep.ReleaseID)
@@ -481,11 +485,11 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 								dep.ProjectID,
 							}, releaseIDs: ids,
 						}
-						if dep.Kind == types.DependencyKindOptional {
-							dependency.requirements = []types.RequirementBinding{
+						if dep.Kind == catalog.DependencyKindOptional {
+							dependency.requirements = []lockfile.RequirementBinding{
 								{
 									Reference: dep.Provider.String() + ":" + dep.ProjectID,
-									Selector:  types.VersionStable,
+									Selector:  versionpkg.Stable,
 									Enabled:   true,
 								},
 							}
@@ -524,7 +528,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 		return false
 	}
 	search := func(allowBroken bool) bool {
-		chosen = map[projectKey]types.LockedPackage{}
+		chosen = map[projectKey]lockfile.Package{}
 		attempts = 0
 		strict = !allowBroken
 		lastErr = nil
@@ -553,7 +557,7 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 			return nil, nil, finalFailure()
 		}
 	}
-	var out []types.LockedPackage
+	var out []lockfile.Package
 	for _, p := range chosen {
 		// A requirement the manifest disables and nothing demands pins no
 		// artifact, so recording it would leave the lock claiming a package
@@ -587,38 +591,38 @@ func Packages(request PackagesRequest) ([]types.LockedPackage, []error, error) {
 // the newest build but prefers a release over a prerelease when both exist.
 // `beta` keeps publication order because it accepts prereleases outright, and
 // `stable` rejects prereleases in the candidate loop.
-func preferReleaseBuilds(list []types.CatalogueCandidate, requirements []types.RequirementBinding) []types.CatalogueCandidate {
+func preferReleaseBuilds(list []upstream.Candidate, requirements []lockfile.RequirementBinding) []upstream.Candidate {
 	prefer := false
 	for _, req := range requirements {
 		if !req.Enabled {
 			continue
 		}
-		if req.Selector == types.VersionAny || req.Selector == "" {
+		if req.Selector == versionpkg.Any || req.Selector == "" {
 			prefer = true
 		}
 	}
 	if !prefer {
 		return list
 	}
-	ordered := make([]types.CatalogueCandidate, 0, len(list))
+	ordered := make([]upstream.Candidate, 0, len(list))
 	for _, candidate := range list {
-		if candidate.Channel == types.ReleaseChannelRelease {
+		if candidate.Channel == upstream.ReleaseChannelRelease {
 			ordered = append(ordered, candidate)
 		}
 	}
 	for _, candidate := range list {
-		if candidate.Channel != types.ReleaseChannelRelease {
+		if candidate.Channel != upstream.ReleaseChannelRelease {
 			ordered = append(ordered, candidate)
 		}
 	}
 	return ordered
 }
 
-func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcdrVersion string) ([]ModuleProblem, error) {
+func ValidateModules(packages []lockfile.Package, server lockfile.Server, mcdrVersion string) ([]ModuleProblem, error) {
 	type selected struct{ packageIndex, moduleIndex int }
 	index := map[struct {
-		environment types.Environment
-		ecosystem   types.Ecosystem
+		environment serverpkg.Environment
+		ecosystem   catalog.Ecosystem
 		id          string
 	}]selected{}
 	var problems []ModuleProblem
@@ -630,12 +634,12 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 		for mi, m := range p.Modules {
 			names := append([]string{m.ID}, m.Provides...)
 			for _, name := range names {
-				if m.Ecosystem == types.EcosystemBukkit || m.Ecosystem == types.EcosystemPaper {
+				if m.Ecosystem == catalog.EcosystemBukkit || m.Ecosystem == catalog.EcosystemPaper {
 					name = strings.ToLower(name)
 				}
 				key := struct {
-					environment types.Environment
-					ecosystem   types.Ecosystem
+					environment serverpkg.Environment
+					ecosystem   catalog.Ecosystem
 					id          string
 				}{p.Environment, p.Ecosystem, name}
 				if old, ok := index[key]; ok {
@@ -647,21 +651,21 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 						continue
 					}
 					if m.NestedPath != "" {
-						a, err := version.ParseVersion(
+						a, err := versionpkg.ParseVersion(
 							previous.Version,
 							previous.EffectiveVersionDialect(),
 						)
 						if err != nil {
 							return nil, err
 						}
-						b, err := version.ParseVersion(
+						b, err := versionpkg.ParseVersion(
 							m.Version,
 							m.EffectiveVersionDialect(),
 						)
 						if err != nil {
 							return nil, err
 						}
-						comparison, isComparable := version.Compare(a, b)
+						comparison, isComparable := versionpkg.Compare(a, b)
 						if !isComparable {
 							return nil, fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
 						}
@@ -679,16 +683,16 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 		if !p.Enabled() {
 			continue
 		}
-		var selectedModules []types.DescriptorModule
+		var selectedModules []catalog.DescriptorModule
 		for mi := range p.Modules {
 			m := p.Modules[mi]
 			id := m.ID
-			if m.Ecosystem == types.EcosystemBukkit || m.Ecosystem == types.EcosystemPaper {
+			if m.Ecosystem == catalog.EcosystemBukkit || m.Ecosystem == catalog.EcosystemPaper {
 				id = strings.ToLower(id)
 			}
 			key := struct {
-				environment types.Environment
-				ecosystem   types.Ecosystem
+				environment serverpkg.Environment
+				ecosystem   catalog.Ecosystem
 				id          string
 			}{p.Environment, p.Ecosystem, id}
 			if target := index[key]; target.packageIndex != pi || target.moduleIndex != mi {
@@ -698,7 +702,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 				dep := &m.Dependencies[di]
 				// A Java requirement is checked against the Java runtime that
 				// runs the server, and only warns.
-				if dep.Kind == types.DependencyKindPython || dep.ID == "java" {
+				if dep.Kind == catalog.DependencyKindPython || dep.ID == "java" {
 					continue
 				}
 				value := ""
@@ -707,7 +711,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 				case "minecraft":
 					value = string(server.Minecraft)
 				case "fabricloader":
-					if server.Product == types.ServerProductFabric {
+					if server.Product == serverpkg.ProductFabric {
 						value = string(server.CoreVersion)
 					}
 				case "forge", "neoforge":
@@ -719,16 +723,16 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 				default:
 					builtin = false
 				}
-				var target *types.LockedPackage
-				var targetModule *types.DescriptorModule
+				var target *lockfile.Package
+				var targetModule *catalog.DescriptorModule
 				if !builtin {
 					name := dep.ID
-					if p.Ecosystem == types.EcosystemBukkit || p.Ecosystem == types.EcosystemPaper {
+					if p.Ecosystem == catalog.EcosystemBukkit || p.Ecosystem == catalog.EcosystemPaper {
 						name = strings.ToLower(name)
 					}
 					if match, ok := index[struct {
-						environment types.Environment
-						ecosystem   types.Ecosystem
+						environment serverpkg.Environment
+						ecosystem   catalog.Ecosystem
 						id          string
 					}{p.Environment, p.Ecosystem, name}]; ok {
 						target = &packages[match.packageIndex]
@@ -740,9 +744,9 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 				invalid := false
 				if matched && dep.Constraint != "" {
 					var err error
-					matched, err = version.Match(
+					matched, err = versionpkg.Match(
 						dep.Constraint,
-						types.Version(value),
+						versionpkg.Version(value),
 						m.EffectiveVersionDialect(),
 					)
 					if err != nil {
@@ -751,14 +755,14 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 					}
 				}
 				requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
-				if !invalid && dep.Kind == types.DependencyKindRequired && !matched {
+				if !invalid && dep.Kind == catalog.DependencyKindRequired && !matched {
 					if value == "" {
 						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s, which no selected package provides", m.ID, requirement)))
 					} else {
 						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s (selected %s)", m.ID, requirement, value)))
 					}
 				}
-				if !invalid && dep.Kind == types.DependencyKindIncompatible && matched {
+				if !invalid && dep.Kind == catalog.DependencyKindIncompatible && matched {
 					problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s breaks %s %s", m.ID, dep.ID, value)))
 				}
 				if matched {
@@ -778,15 +782,15 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 	return problems, nil
 }
 
-func mergeArtifactSelections(packages []types.LockedPackage) []types.LockedPackage {
+func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
 	type key struct {
-		environment            types.Environment
-		ecosystem              types.Ecosystem
-		provider               types.Provider
+		environment            serverpkg.Environment
+		ecosystem              catalog.Ecosystem
+		provider               catalog.Provider
 		project, release, file string
 	}
 	index := map[key]int{}
-	out := make([]types.LockedPackage, 0, len(packages))
+	out := make([]lockfile.Package, 0, len(packages))
 	for _, p := range packages {
 		k := key{
 			p.Environment,
@@ -808,8 +812,8 @@ func mergeArtifactSelections(packages []types.LockedPackage) []types.LockedPacka
 
 // sortPackages orders packages by their persisted identity so validation
 // reports findings in a stable order.
-func sortPackages(packages []types.LockedPackage) {
-	slices.SortFunc(packages, func(a, b types.LockedPackage) int {
+func sortPackages(packages []lockfile.Package) {
+	slices.SortFunc(packages, func(a, b lockfile.Package) int {
 		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {
 			return n
 		}

@@ -5,18 +5,19 @@ import (
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/curseforge"
 	"github.com/mclucy/lucy/upstream/providers/modrinth"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // resolveUpstream resolves the upstream of an artifact by hash,
 // Modrinth first.
 func resolveUpstream(
 	path string,
-) (types.VersionedPackageRef, bool) {
+) (catalog.VersionedRef, bool) {
 	mappers := []upstream.ArtifactMapProvider{modrinth.Provider}
 	if curseforge.Enabled() {
 		mappers = append(mappers, curseforge.Provider)
@@ -31,7 +32,7 @@ func resolveUpstream(
 		}
 		return ref, true
 	}
-	return types.VersionedPackageRef{}, false
+	return catalog.VersionedRef{}, false
 }
 
 // discoverPackages inventories the packages under searchPaths and
@@ -40,7 +41,7 @@ func resolveUpstream(
 func discoverPackages(
 	searchPaths []string,
 	mcdrPluginDirs []string,
-) []types.DiscoveredPackage {
+) []DiscoveredPackage {
 	idx := NewPackageIndex()
 	var mu sync.Mutex
 
@@ -96,34 +97,34 @@ func discoverPackages(
 	return idx.Packages()
 }
 
-func artifactInfoToDiscoveredPackage(infos []artifact.PackageInfo) []types.DiscoveredPackage {
+func artifactInfoToDiscoveredPackage(infos []artifact.PackageInfo) []DiscoveredPackage {
 	if len(infos) == 0 {
 		return nil
 	}
-	pkgs := make([]types.DiscoveredPackage, 0, len(infos))
+	pkgs := make([]DiscoveredPackage, 0, len(infos))
 	for _, info := range infos {
-		pkg := types.DiscoveredPackage{
-			ID: types.VersionedPackageRef{
-				PackageRef: info.Ref.PackageRef,
-				Ecosystem:  info.Ref.Ecosystem,
-				Version:    info.Ref.Version,
+		pkg := DiscoveredPackage{
+			ID: catalog.VersionedRef{
+				Ref:       info.Ref.Ref,
+				Ecosystem: info.Ref.Ecosystem,
+				Version:   info.Ref.Version,
 			},
 			Path: info.FilePath,
 		}
 		if len(info.Dependencies) > 0 {
-			deps := make([]types.Dependency, 0, len(info.Dependencies))
+			deps := make([]catalog.Dependency, 0, len(info.Dependencies))
 			for _, dep := range info.Dependencies {
-				deps = append(deps, types.Dependency{
-					ID: types.VersionedPackageRef{
-						PackageRef: dep.Ref.PackageRef,
-						Ecosystem:  dep.Ref.Ecosystem,
+				deps = append(deps, catalog.Dependency{
+					ID: catalog.VersionedRef{
+						Ref:       dep.Ref.Ref,
+						Ecosystem: dep.Ref.Ecosystem,
 					},
 					Constraint: dep.Constraint,
 					Mandatory:  dep.Mandatory,
-					Origin:     types.NormalizeDependencyOrigin(dep.Origin),
+					Origin:     catalog.NormalizeDependencyOrigin(dep.Origin),
 				})
 			}
-			pkg.Dependencies = types.DependencySet{Dependencies: deps}
+			pkg.Dependencies = upstream.DependencySet{Dependencies: deps}
 		}
 		pkgs = append(pkgs, pkg)
 	}
@@ -135,25 +136,25 @@ func artifactInfoToDiscoveredPackage(infos []artifact.PackageInfo) []types.Disco
 // readable manifest.
 func discoveredFromUpstream(
 	path string,
-	ref types.VersionedPackageRef,
-) types.DiscoveredPackage {
+	ref catalog.VersionedRef,
+) DiscoveredPackage {
 	ecosystem := ref.Ecosystem
-	if ecosystem == types.EcosystemUnspecified {
-		ecosystem = types.EcosystemForge
+	if ecosystem == catalog.EcosystemUnspecified {
+		ecosystem = catalog.EcosystemForge
 	}
 	version := ref.Version
 	if version == "" {
-		version = types.VersionUnknown
+		version = versionpkg.Unknown
 	}
 	pkgName := ref.Name
-	if ref.Provider == types.ProviderMCDR {
-		pkgName = types.PackageName(
+	if ref.Provider == catalog.ProviderMCDR {
+		pkgName = catalog.Name(
 			strings.ReplaceAll(string(ref.Name), "_", "-"),
 		)
 	}
-	return types.DiscoveredPackage{
-		ID: types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
+	return DiscoveredPackage{
+		ID: catalog.VersionedRef{
+			Ref: catalog.Ref{
 				Name:     pkgName,
 				Provider: ref.Provider,
 			},

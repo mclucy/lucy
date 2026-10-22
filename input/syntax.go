@@ -9,7 +9,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 var ESyntax = errors.New("invalid syntax")
@@ -17,57 +18,57 @@ var ESyntax = errors.New("invalid syntax")
 // Parse parses provider:name@version. An omitted provider lets routing choose;
 // an omitted version becomes VersionAny. The ecosystem remains unspecified
 // until install planning.
-func Parse(s string) (types.VersionedPackageRef, error) {
+func Parse(s string) (catalog.VersionedRef, error) {
 	provider, remainder, err := parseProvider(strings.TrimSpace(s))
 	if err != nil {
-		return types.VersionedPackageRef{}, err
+		return catalog.VersionedRef{}, err
 	}
 	name, version, err := parseNameVersion(remainder)
 	if err != nil {
-		return types.VersionedPackageRef{}, err
+		return catalog.VersionedRef{}, err
 	}
-	return types.VersionedPackageRef{
+	return catalog.VersionedRef{
 		Name: name, Provider: provider,
 		Version: version,
 	}, nil
 }
 
-func ToProjectName(s string) types.PackageName {
+func ToProjectName(s string) catalog.Name {
 	s = strings.TrimSpace(strings.ToLower(s))
 	s = strings.ReplaceAll(s, "_", "-")
 	s = strings.ReplaceAll(s, " ", "-")
-	return types.PackageName(s)
+	return catalog.Name(s)
 }
 
-func parseProvider(s string) (types.Provider, string, error) {
+func parseProvider(s string) (catalog.Provider, string, error) {
 	boundary := len(s)
 	if at := strings.IndexByte(s, '@'); at >= 0 {
 		boundary = at
 	}
 	colon := strings.IndexByte(s[:boundary], ':')
 	if colon < 0 {
-		return types.ProviderUnspecified, s, nil
+		return catalog.ProviderUnspecified, s, nil
 	}
-	provider, ok := types.ParseProvider(strings.ToLower(s[:colon]))
-	if !ok || provider == types.ProviderUnspecified {
-		return types.ProviderUnknown, "", fmt.Errorf("%w: unknown provider %q", ESyntax, s[:colon])
+	provider, ok := catalog.ParseProvider(strings.ToLower(s[:colon]))
+	if !ok || provider == catalog.ProviderUnspecified {
+		return catalog.ProviderUnknown, "", fmt.Errorf("%w: unknown provider %q", ESyntax, s[:colon])
 	}
 	return provider, s[colon+1:], nil
 }
 
-func parseNameVersion(s string) (types.PackageName, types.Version, error) {
+func parseNameVersion(s string) (catalog.Name, versionpkg.Version, error) {
 	parts := strings.Split(s, "@")
 	switch len(parts) {
 	case 1:
 		if parts[0] == "" {
 			return "", "", ESyntax
 		}
-		return types.PackageName(parts[0]), types.VersionAny, nil
+		return catalog.Name(parts[0]), versionpkg.Any, nil
 	case 2:
-		if parts[0] == "" || parts[1] == "" || types.Version(parts[1]) == types.VersionNone {
+		if parts[0] == "" || parts[1] == "" || versionpkg.Version(parts[1]) == versionpkg.None {
 			return "", "", ESyntax
 		}
-		return types.PackageName(parts[0]), types.Version(parts[1]), nil
+		return catalog.Name(parts[0]), versionpkg.Version(parts[1]), nil
 	default:
 		return "", "", ESyntax
 	}

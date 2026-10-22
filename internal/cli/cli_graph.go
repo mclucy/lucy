@@ -5,8 +5,9 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -24,7 +25,7 @@ type GraphNode struct {
 	// Provider and ProjectID carry the upstream coordinates of an artifact
 	// node. They are empty for a native module node, which belongs to the
 	// artifact recorded in Artifact.
-	Provider  types.Provider
+	Provider  catalog.Provider
 	ProjectID string
 
 	// Artifact is the coordinate node that ships this module. It is empty
@@ -36,8 +37,8 @@ type GraphNode struct {
 	// Environment scopes the node ("server" or "mcdr") and Ecosystem scopes
 	// it within that environment. Dependency edges only resolve inside one
 	// scope.
-	Environment types.Environment
-	Ecosystem   types.Ecosystem
+	Environment server.Environment
+	Ecosystem   catalog.Ecosystem
 
 	// Module reports whether the node is a native module rather than an
 	// artifact coordinate.
@@ -63,15 +64,15 @@ type DependencyGraph struct {
 // nodeKey scopes an identity so edges never cross environments or
 // ecosystems.
 func nodeKey(
-	environment types.Environment,
-	ecosystem types.Ecosystem,
+	environment server.Environment,
+	ecosystem catalog.Ecosystem,
 	id string,
 ) string {
 	return string(environment) + "|" + string(ecosystem) + "|" + id
 }
 
 // artifactCoordinate renders an artifact's explicit provider coordinates.
-func artifactCoordinate(provider types.Provider, projectID string) string {
+func artifactCoordinate(provider catalog.Provider, projectID string) string {
 	return provider.String() + ":" + projectID
 }
 
@@ -86,7 +87,7 @@ func BuildGraphFromLock(lock *lockfile.Document) (*DependencyGraph, error) {
 		Nodes: make(map[string]*GraphNode),
 	}
 
-	dependencies := make(map[string][]types.DescriptorDependency)
+	dependencies := make(map[string][]catalog.DescriptorDependency)
 
 	for _, pkg := range lock.Packages {
 		coordinate := artifactCoordinate(pkg.Provider, pkg.ProjectID)
@@ -185,16 +186,16 @@ func (n *GraphNode) key() string {
 // project coordinates, it resolves to the artifact that ships them.
 func resolveDependencyNode(
 	graph *DependencyGraph,
-	environment types.Environment,
-	ecosystem types.Ecosystem,
-	dep types.DescriptorDependency,
+	environment server.Environment,
+	ecosystem catalog.Ecosystem,
+	dep catalog.DescriptorDependency,
 ) *GraphNode {
 	if dep.ModuleID != "" {
 		if node, ok := graph.Nodes[nodeKey(environment, ecosystem, dep.ModuleID)]; ok {
 			return node
 		}
 	}
-	if dep.Provider != types.ProviderUnspecified && dep.ProjectID != "" {
+	if dep.Provider != catalog.ProviderUnspecified && dep.ProjectID != "" {
 		coordinate := artifactCoordinate(dep.Provider, dep.ProjectID)
 		if node, ok := graph.Nodes[nodeKey(environment, ecosystem, coordinate)]; ok {
 			return node
@@ -224,7 +225,7 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 			Provider:    p.ID.Provider,
 			ProjectID:   p.ID.Name.String(),
 			Filename:    filepath.Base(p.Path),
-			Environment: types.EnvironmentServer,
+			Environment: server.EnvironmentServer,
 			Ecosystem:   p.ID.Ecosystem,
 		}
 		graph.Nodes[node.key()] = node
@@ -237,7 +238,7 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 	for _, p := range info.Packages {
 		parentID := p.ID.StringBase()
 		parent, parentOK := graph.Nodes[nodeKey(
-			types.EnvironmentServer,
+			server.EnvironmentServer,
 			p.ID.Ecosystem,
 			parentID,
 		)]
@@ -249,11 +250,11 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 			depID := dep.ID.StringBase()
 
 			depEcosystem := dep.ID.Ecosystem
-			if depEcosystem == types.EcosystemUnspecified {
+			if depEcosystem == catalog.EcosystemUnspecified {
 				depEcosystem = p.ID.Ecosystem
 			}
 			child, childOK := graph.Nodes[nodeKey(
-				types.EnvironmentServer,
+				server.EnvironmentServer,
 				depEcosystem,
 				depID,
 			)]

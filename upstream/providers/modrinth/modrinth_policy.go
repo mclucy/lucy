@@ -1,14 +1,17 @@
 package modrinth
 
-import "github.com/mclucy/lucy/types"
+import (
+	"github.com/mclucy/lucy/catalog"
+	versionpkg "github.com/mclucy/lucy/version"
+)
 
 func selectExactVersion(
 	versions []*versionResponse,
-	id types.VersionedPackageRef,
-	gameVersion types.Version,
+	id catalog.VersionedRef,
+	gameVersion versionpkg.Version,
 ) *versionResponse {
 	for _, version := range versions {
-		if types.Version(version.VersionNumber) == id.Version &&
+		if versionpkg.Version(version.VersionNumber) == id.Version &&
 			versionSupportsLoader(version, id.Ecosystem) &&
 			versionSupportsGameVersion(version, gameVersion) {
 			return version
@@ -19,7 +22,7 @@ func selectExactVersion(
 
 func versionSupportsGameVersion(
 	version *versionResponse,
-	gameVersion types.Version,
+	gameVersion versionpkg.Version,
 ) bool {
 	if !localGameVersionKnown(gameVersion) {
 		return true
@@ -32,7 +35,7 @@ func versionSupportsGameVersion(
 	return false
 }
 
-func localGameVersionKnown(gameVersion types.Version) bool {
+func localGameVersionKnown(gameVersion versionpkg.Version) bool {
 	return gameVersion != "" &&
 		!gameVersion.IsInvalid() &&
 		!gameVersion.CanInfer()
@@ -43,20 +46,20 @@ func localGameVersionKnown(gameVersion types.Version) bool {
 // release but still falls back to a prerelease.
 func selectLatestVersionForSelector(
 	versions []*versionResponse,
-	platform types.Ecosystem,
-	gameVersion types.Version,
+	platform catalog.Ecosystem,
+	gameVersion versionpkg.Version,
 	filterByLoader bool,
-	selector types.Version,
+	selector versionpkg.Version,
 ) *versionResponse {
 	switch selector {
-	case types.VersionStable:
+	case versionpkg.Stable:
 		return latestReleaseVersion(
 			versions,
 			platform,
 			gameVersion,
 			filterByLoader,
 		)
-	case types.VersionBeta:
+	case versionpkg.Beta:
 		return latestAnyVersion(versions, platform, gameVersion, filterByLoader)
 	default:
 		if selected := latestReleaseVersion(
@@ -73,8 +76,8 @@ func selectLatestVersionForSelector(
 
 func latestReleaseVersion(
 	versions []*versionResponse,
-	platform types.Ecosystem,
-	gameVersion types.Version,
+	platform catalog.Ecosystem,
+	gameVersion versionpkg.Version,
 	filterByLoader bool,
 ) *versionResponse {
 	var selected *versionResponse
@@ -93,8 +96,8 @@ func latestReleaseVersion(
 
 func latestAnyVersion(
 	versions []*versionResponse,
-	platform types.Ecosystem,
-	gameVersion types.Version,
+	platform catalog.Ecosystem,
+	gameVersion versionpkg.Version,
 	filterByLoader bool,
 ) *versionResponse {
 	var selected *versionResponse

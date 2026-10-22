@@ -13,14 +13,15 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml"
 	"gopkg.in/yaml.v3"
 )
 
 // ReadModules keeps each descriptor identity and nested container location
 // intact.
-func ReadModules(ctx context.Context, filename string, loader types.Ecosystem) ([]types.DescriptorModule, error) {
+func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem) ([]catalog.DescriptorModule, error) {
 	if strings.EqualFold(filepath.Ext(filename), ".py") {
 		return inspectPython(ctx, filename)
 	}
@@ -49,12 +50,12 @@ func nativeEntry(z *zip.Reader, name string) ([]byte, error) {
 	return nil, nil
 }
 
-func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth int) ([]types.DescriptorModule, error) {
+func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, depth int) ([]catalog.DescriptorModule, error) {
 	if depth > 16 {
 		return nil, fmt.Errorf("nested archive depth exceeds 16")
 	}
 	switch loader {
-	case types.EcosystemFabric:
+	case catalog.EcosystemFabric:
 		raw, err := nativeEntry(z, "fabric.mod.json")
 		if err != nil {
 			return nil, err
@@ -79,27 +80,27 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return nil, err
 		}
-		side := types.ParseSide(d.Environment)
-		if side == types.SideClient {
+		side := catalog.ParseSide(d.Environment)
+		if side == catalog.SideClient {
 			return nil, nil
 		}
-		m := types.DescriptorModule{
+		m := catalog.DescriptorModule{
 			ID:             d.ID,
-			Version:        types.Version(d.Version),
+			Version:        version.Version(d.Version),
 			Ecosystem:      loader,
-			VersionDialect: types.VersionDialectFabric,
+			VersionDialect: version.DialectFabric,
 			NestedPath:     member,
 			DescriptorPath: "fabric.mod.json",
 			Provides:       d.Provides,
 			Side:           side,
-			Dependencies:   []types.DescriptorDependency{},
+			Dependencies:   []catalog.DescriptorDependency{},
 		}
-		for kind, deps := range map[types.DependencyKind]map[string]jsontext.Value{
-			types.DependencyKindRequired:     d.Depends,
-			types.DependencyKindRecommended:  d.Recommends,
-			types.DependencyKindSuggested:    d.Suggests,
-			types.DependencyKindIncompatible: d.Breaks,
-			types.DependencyKindConflict:     d.Conflicts,
+		for kind, deps := range map[catalog.DependencyKind]map[string]jsontext.Value{
+			catalog.DependencyKindRequired:     d.Depends,
+			catalog.DependencyKindRecommended:  d.Recommends,
+			catalog.DependencyKindSuggested:    d.Suggests,
+			catalog.DependencyKindIncompatible: d.Breaks,
+			catalog.DependencyKindConflict:     d.Conflicts,
 		} {
 			for id, raw := range deps {
 				var one string
@@ -109,14 +110,14 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 				} else if err := json.Unmarshal(raw, &many); err != nil {
 					return nil, err
 				}
-				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+				m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
 					ID:         id,
 					Kind:       kind,
 					Constraint: strings.Join(many, " || "),
 				})
 			}
 		}
-		out := []types.DescriptorModule{m}
+		out := []catalog.DescriptorModule{m}
 		for _, jar := range d.Jars {
 			raw, err := nativeEntry(z, jar.File)
 			if err != nil {
@@ -140,9 +141,9 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 			out = append(out, mods...)
 		}
 		return out, nil
-	case types.EcosystemForge, types.EcosystemNeoForge:
+	case catalog.EcosystemForge, catalog.EcosystemNeoForge:
 		name := "META-INF/mods.toml"
-		if loader == types.EcosystemNeoForge {
+		if loader == catalog.EcosystemNeoForge {
 			if raw, err := nativeEntry(z, "META-INF/neoforge.mods.toml"); err != nil {
 				return nil, err
 			} else if raw != nil {
@@ -153,7 +154,7 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 		if err != nil {
 			return nil, err
 		}
-		var out []types.DescriptorModule
+		var out []catalog.DescriptorModule
 		if raw != nil {
 			var d struct {
 				Mods []struct {
@@ -173,7 +174,7 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 				return nil, err
 			}
 			for _, mod := range d.Mods {
-				v := types.Version(mod.Version)
+				v := version.Version(mod.Version)
 				if v == "${file.jarVersion}" {
 					data, err := nativeEntry(z, "META-INF/MANIFEST.MF")
 					if err != nil {
@@ -181,27 +182,27 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 					}
 					v = forgeManifestVersion(string(data))
 				}
-				m := types.DescriptorModule{
+				m := catalog.DescriptorModule{
 					ID:             mod.ID,
 					Version:        v,
 					Ecosystem:      loader,
-					VersionDialect: types.VersionDialectMaven,
+					VersionDialect: version.DialectMaven,
 					NestedPath:     member,
 					DescriptorPath: name,
-					Dependencies:   []types.DescriptorDependency{},
+					Dependencies:   []catalog.DescriptorDependency{},
 				}
 				for _, dep := range d.Dependencies[mod.ID] {
-					if types.ParseSide(dep.Side) == types.SideClient {
+					if catalog.ParseSide(dep.Side) == catalog.SideClient {
 						continue
 					}
-					kind := types.ParseDependencyKind(dep.Type)
-					if kind == types.DependencyKindUnknown {
-						kind = types.DependencyKindOptional
+					kind := catalog.ParseDependencyKind(dep.Type)
+					if kind == catalog.DependencyKindUnknown {
+						kind = catalog.DependencyKindOptional
 						if dep.Mandatory {
-							kind = types.DependencyKindRequired
+							kind = catalog.DependencyKindRequired
 						}
 					}
-					m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+					m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
 						ID:         dep.ID,
 						Constraint: dep.Range,
 						Kind:       kind,
@@ -211,7 +212,7 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 				out = append(out, m)
 			}
 		}
-		if loader == types.EcosystemNeoForge {
+		if loader == catalog.EcosystemNeoForge {
 			// A jar without its own descriptor may still ship mods in JarJar
 			// containers; FML loads those modules from the outer jar.
 			data, err := nativeEntry(z, "META-INF/jarjar/metadata.json")
@@ -252,7 +253,7 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 			}
 		}
 		return out, nil
-	case types.EcosystemBukkit, types.EcosystemPaper:
+	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 		name := "paper-plugin.yml"
 		raw, err := nativeEntry(z, name)
 		if err != nil {
@@ -286,47 +287,47 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 		if err := yaml.Unmarshal(raw, &d); err != nil {
 			return nil, err
 		}
-		m := types.DescriptorModule{
+		m := catalog.DescriptorModule{
 			ID:             d.Name,
-			Version:        types.Version(d.Version),
-			Ecosystem:      types.EcosystemBukkit,
-			VersionDialect: types.VersionDialectOpaque,
+			Version:        version.Version(d.Version),
+			Ecosystem:      catalog.EcosystemBukkit,
+			VersionDialect: version.DialectOpaque,
 			NestedPath:     member,
 			DescriptorPath: name,
 			APIVersion:     d.API,
 			FoliaSupported: d.Folia,
 			Provides:       d.Provides,
-			Dependencies:   []types.DescriptorDependency{},
+			Dependencies:   []catalog.DescriptorDependency{},
 		}
 		for _, id := range d.Depend {
-			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+			m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
 				ID:       id,
-				Kind:     types.DependencyKindRequired,
+				Kind:     catalog.DependencyKindRequired,
 				Ordering: "AFTER",
 			})
 		}
 		for _, id := range d.SoftDepend {
-			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+			m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
 				ID:       id,
-				Kind:     types.DependencyKindOptional,
+				Kind:     catalog.DependencyKindOptional,
 				Ordering: "AFTER",
 			})
 		}
 		for _, id := range d.LoadBefore {
-			m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+			m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
 				ID:       id,
-				Kind:     types.DependencyKindOptional,
+				Kind:     catalog.DependencyKindOptional,
 				Ordering: "BEFORE",
 			})
 		}
 		for phase, deps := range d.Dependencies {
 			for id, dep := range deps {
-				kind := types.DependencyKindRequired
+				kind := catalog.DependencyKindRequired
 				if dep.Required != nil && !*dep.Required {
-					kind = types.DependencyKindOptional
+					kind = catalog.DependencyKindOptional
 				}
 				join := dep.JoinClasspath == nil || *dep.JoinClasspath
-				m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+				m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
 					ID:            id,
 					Kind:          kind,
 					Phase:         phase,
@@ -335,8 +336,8 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 				})
 			}
 		}
-		return []types.DescriptorModule{m}, nil
-	case types.EcosystemMCDR:
+		return []catalog.DescriptorModule{m}, nil
+	case catalog.EcosystemMCDR:
 		raw, err := nativeEntry(z, "mcdreforged.plugin.json")
 		if err != nil {
 			return nil, err
@@ -350,7 +351,7 @@ func inspectArchive(z *zip.Reader, loader types.Ecosystem, member string, depth 
 	}
 }
 
-func nativeMCDR(raw []byte, member string) ([]types.DescriptorModule, error) {
+func nativeMCDR(raw []byte, member string) ([]catalog.DescriptorModule, error) {
 	var d struct {
 		ID           string            `json:"id"`
 		Version      string            `json:"version"`
@@ -360,32 +361,32 @@ func nativeMCDR(raw []byte, member string) ([]types.DescriptorModule, error) {
 	if err := json.Unmarshal(raw, &d); err != nil {
 		return nil, err
 	}
-	m := types.DescriptorModule{
+	m := catalog.DescriptorModule{
 		ID:             d.ID,
-		Version:        types.Version(d.Version),
-		Ecosystem:      types.EcosystemMCDR,
-		VersionDialect: types.VersionDialectMCDR,
+		Version:        version.Version(d.Version),
+		Ecosystem:      catalog.EcosystemMCDR,
+		VersionDialect: version.DialectMCDR,
 		NestedPath:     member,
 		DescriptorPath: "mcdreforged.plugin.json",
-		Dependencies:   []types.DescriptorDependency{},
+		Dependencies:   []catalog.DescriptorDependency{},
 	}
 	for id, rangeText := range d.Dependencies {
-		m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+		m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
 			ID:         id,
-			Kind:       types.DependencyKindRequired,
+			Kind:       catalog.DependencyKindRequired,
 			Constraint: rangeText,
 		})
 	}
 	for _, r := range d.Requirements {
-		m.Dependencies = append(m.Dependencies, types.DescriptorDependency{
+		m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
 			ID:   r,
-			Kind: types.DependencyKindPython,
+			Kind: catalog.DependencyKindPython,
 		})
 	}
-	return []types.DescriptorModule{m}, nil
+	return []catalog.DescriptorModule{m}, nil
 }
 
-func inspectPython(ctx context.Context, p string) ([]types.DescriptorModule, error) {
+func inspectPython(ctx context.Context, p string) ([]catalog.DescriptorModule, error) {
 	code := `import ast,json,sys
 m=ast.parse(open(sys.argv[1],encoding="utf-8").read())
 for n in m.body:
@@ -399,8 +400,8 @@ else: raise ValueError("missing static PLUGIN_METADATA")`
 	return nativeMCDR(data, "")
 }
 
-func ModuleProvides(m types.DescriptorModule, id string) bool {
-	if m.Ecosystem == types.EcosystemBukkit {
+func ModuleProvides(m catalog.DescriptorModule, id string) bool {
+	if m.Ecosystem == catalog.EcosystemBukkit {
 		return strings.EqualFold(m.ID, id) || slices.ContainsFunc(m.Provides, func(p string) bool { return strings.EqualFold(p, id) })
 	}
 	return m.ID == id || slices.Contains(m.Provides, id)

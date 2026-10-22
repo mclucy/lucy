@@ -9,14 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
 
@@ -79,10 +80,10 @@ func NewBisectCommand() *cobra.Command {
 // manifest's own "provider:project" key and Ecosystem is the ecosystem it is
 // declared under; together they identify the entry unambiguously.
 type bisectMod struct {
-	Environment types.Environment `json:"environment"`
-	Ecosystem   types.Ecosystem   `json:"ecosystem"`
-	Reference   string            `json:"reference"`
-	Version     string            `json:"version,omitempty"`
+	Environment server.Environment `json:"environment"`
+	Ecosystem   catalog.Ecosystem  `json:"ecosystem"`
+	Reference   string             `json:"reference"`
+	Version     string             `json:"version,omitempty"`
 }
 
 // bisectState is the persisted session. Original is the manifest as it stood
@@ -226,12 +227,12 @@ func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disab
 func setRequirementEnabled(doc *manifest.Document, mod bisectMod, enabled bool) bool {
 	var packages map[string]manifest.Requirement
 	switch mod.Environment {
-	case types.EnvironmentServer:
+	case server.EnvironmentServer:
 		if doc.Server.Packages == nil {
 			return false
 		}
 		packages = doc.Server.Packages[mod.Ecosystem]
-	case types.EnvironmentMCDR:
+	case server.EnvironmentMCDR:
 		if doc.MCDR == nil {
 			return false
 		}
@@ -427,18 +428,18 @@ func bisectCandidates(workDir string) ([]bisectMod, error) {
 // requirement entry.
 func requirementEnabled(
 	doc *manifest.Document,
-	environment types.Environment,
-	ecosystem types.Ecosystem,
+	environment server.Environment,
+	ecosystem catalog.Ecosystem,
 	reference string,
 ) bool {
 	var packages map[string]manifest.Requirement
 	switch environment {
-	case types.EnvironmentServer:
+	case server.EnvironmentServer:
 		if doc.Server.Packages == nil {
 			return false
 		}
 		packages = doc.Server.Packages[ecosystem]
-	case types.EnvironmentMCDR:
+	case server.EnvironmentMCDR:
 		if doc.MCDR == nil {
 			return false
 		}

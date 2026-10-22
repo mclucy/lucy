@@ -5,13 +5,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/version"
 )
 
 // ProviderIdentifier exposes the execution-layer identity of a provider
 // capability.
 type ProviderIdentifier interface {
-	Provider() types.Provider
+	Provider() catalog.Provider
 }
 
 // LocalContext is an immutable snapshot of local runtime facts that can affect
@@ -22,9 +23,9 @@ type ProviderIdentifier interface {
 // and providers must not prompt for missing facts: interactive input belongs to
 // the command boundary.
 type LocalContext struct {
-	Ecosystem        types.Ecosystem
-	MinecraftVersion types.Version
-	MCDRVersion      types.Version
+	Ecosystem        catalog.Ecosystem
+	MinecraftVersion version.Version
+	MCDRVersion      version.Version
 }
 
 // HasMinecraftVersion reports whether the local runtime provides a concrete
@@ -36,12 +37,12 @@ func (c LocalContext) HasMinecraftVersion() bool {
 }
 
 type Fetcher interface {
-	Fetch(local LocalContext, id types.VersionedPackageRef) (types.ResolvedPackage, error)
+	Fetch(local LocalContext, id catalog.VersionedRef) (ResolvedPackage, error)
 }
 
 type DependencyResolver interface {
-	Dependencies(local LocalContext, id types.VersionedPackageRef) (
-		*types.DependencySet,
+	Dependencies(local LocalContext, id catalog.VersionedRef) (
+		*DependencySet,
 		error,
 	)
 }
@@ -81,7 +82,7 @@ type InstallerProvider interface {
 
 type ArtifactMapper interface {
 	PackageByHash(artifact ArtifactFingerprint) (
-		ref types.VersionedPackageRef,
+		ref catalog.VersionedRef,
 		hash string,
 		ok bool,
 		err error,
@@ -94,8 +95,8 @@ type ArtifactFingerprint interface {
 }
 
 type VersionSelectorResolver interface {
-	ResolveVersionSelector(local LocalContext, ref types.VersionedPackageRef) (
-		resolved types.VersionedPackageRef,
+	ResolveVersionSelector(local LocalContext, ref catalog.VersionedRef) (
+		resolved catalog.VersionedRef,
 		err error,
 	)
 }
@@ -107,34 +108,34 @@ type Searcher interface {
 type Query struct {
 	Keyword         string
 	IncludeClient   bool
-	FilterEcosystem types.Ecosystem
+	FilterEcosystem catalog.Ecosystem
 	Tags            []string
 	Limit           int
 }
 
 type SearchResponse struct {
 	// Provider labels which upstream provider produced this result set.
-	Provider types.Provider `json:"provider"`
-	Items    []SearchResult `json:"items"`
-	Warnings []error        `json:"warnings,omitempty"`
+	Provider catalog.Provider `json:"provider"`
+	Items    []SearchResult   `json:"items"`
+	Warnings []error          `json:"warnings,omitempty"`
 }
 
 type Informer interface {
-	Info(ref types.PackageRef) (info types.Metadata, err error)
+	Info(ref catalog.Ref) (info catalog.Metadata, err error)
 }
 
 // Info is a project description from one upstream. Ref identifies the
 // upstream project that answered. Metadata is the content it returned.
 type Info struct {
-	Ref      types.PackageRef
-	Metadata types.Metadata
+	Ref      catalog.Ref
+	Metadata catalog.Metadata
 }
 
 // SearchResult represents a single search result with optional metadata.
 // Providers populate what their API returns; display layer handles zero values.
 type SearchResult struct {
-	ProjectName string         `json:"project"`
-	Provider    types.Provider `json:"provider"`
+	ProjectName string           `json:"project"`
+	Provider    catalog.Provider `json:"provider"`
 
 	// Optional metadata — zero value means unavailable.
 	Title       string    `json:"title,omitempty"`
@@ -144,7 +145,7 @@ type SearchResult struct {
 }
 
 func (r SearchResult) DisplayName() string {
-	if r.Provider == types.ProviderMCDR {
+	if r.Provider == catalog.ProviderMCDR {
 		return strings.ReplaceAll(r.ProjectName, "_", "-")
 	}
 	return r.ProjectName

@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/java"
 )
 
 // scoop is the Scoop package manager.
@@ -23,7 +23,7 @@ const scoopJavaBucketURL = "https://github.com/ScoopInstaller/Java"
 // bucket. The formats carry one %d directive for the major. An empty format
 // marks a build the bucket does not package.
 type scoopJavaPackage struct {
-	distribution types.JavaDistribution
+	distribution java.Distribution
 	jreFormat    string
 	jdkFormat    string
 	jreMajors    []int
@@ -34,76 +34,76 @@ type scoopJavaPackage struct {
 // distribution.
 var scoopJavaPackages = []scoopJavaPackage{
 	{
-		distribution: types.JavaDistributionTemurin,
+		distribution: java.DistributionTemurin,
 		jreFormat:    "temurin%d-jre",
 		jdkFormat:    "temurin%d-jdk",
 		jreMajors:    []int{8, 11, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26},
 		jdkMajors:    []int{8, 11, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26},
 	},
 	{
-		distribution: types.JavaDistributionZulu,
+		distribution: java.DistributionZulu,
 		jreFormat:    "zulu%d-jre",
 		jdkFormat:    "zulu%d-jdk",
 		jreMajors:    []int{8, 11, 12, 13, 14, 15, 16, 17, 21, 22},
 		jdkMajors:    []int{7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 21, 22, 25},
 	},
 	{
-		distribution: types.JavaDistributionCorretto,
+		distribution: java.DistributionCorretto,
 		jreFormat:    "corretto%d-jre",
 		jdkFormat:    "corretto%d-jdk",
 		jreMajors:    []int{8},
 		jdkMajors:    []int{8, 11, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25},
 	},
 	{
-		distribution: types.JavaDistributionLiberica,
+		distribution: java.DistributionLiberica,
 		jreFormat:    "liberica%d-jre",
 		jdkFormat:    "liberica%d-jdk",
 		jreMajors:    []int{8, 11, 13, 14, 15, 16, 17, 21, 25},
 		jdkMajors:    []int{8, 11, 12, 13, 14, 15, 16, 17, 21, 25},
 	},
 	{
-		distribution: types.JavaDistributionMicrosoft,
+		distribution: java.DistributionMicrosoft,
 		jdkFormat:    "microsoft%d-jdk",
 		jdkMajors:    []int{11, 16, 17, 21},
 	},
 	{
-		distribution: types.JavaDistributionSapMachine,
+		distribution: java.DistributionSapMachine,
 		jreFormat:    "sapmachine%d-jre",
 		jdkFormat:    "sapmachine%d-jdk",
 		jreMajors:    []int{11, 12, 13, 14, 15, 16, 17, 18},
 		jdkMajors:    []int{11, 12, 13, 14, 15, 16, 17, 18},
 	},
 	{
-		distribution: types.JavaDistributionSemeru,
+		distribution: java.DistributionSemeru,
 		jreFormat:    "semeru%d-jre",
 		jdkFormat:    "semeru%d-jdk",
 		jreMajors:    []int{8, 11, 16, 17, 18, 19, 20, 21, 22, 23},
 		jdkMajors:    []int{8, 11, 16, 17, 18, 19, 20, 21, 22, 23},
 	},
 	{
-		distribution: types.JavaDistributionGraalVM,
+		distribution: java.DistributionGraalVM,
 		jdkFormat:    "graalvm-oracle-%djdk",
 		jdkMajors:    []int{17, 20, 21, 22, 23, 24, 25},
 	},
 	{
-		distribution: types.JavaDistributionGraalVMCommunity,
+		distribution: java.DistributionGraalVMCommunity,
 		jdkFormat:    "graalvm%d-jdk",
 		jdkMajors:    []int{17, 20, 21, 22, 23, 24, 25},
 	},
 	{
-		distribution: types.JavaDistributionDragonwell,
+		distribution: java.DistributionDragonwell,
 		jdkFormat:    "dragonwell%d-jdk",
 		jdkMajors:    []int{8, 11, 17, 21},
 	},
 	{
-		distribution: types.JavaDistributionRedHat,
+		distribution: java.DistributionRedHat,
 		jreFormat:    "openjdk%d-redhat-jre",
 		jdkFormat:    "openjdk%d-redhat",
 		jreMajors:    []int{8},
 		jdkMajors:    []int{8},
 	},
 	{
-		distribution: types.JavaDistributionJetBrains,
+		distribution: java.DistributionJetBrains,
 		jdkFormat:    "intellij-jbr%d",
 		jdkMajors:    []int{11, 17, 21, 25},
 	},
@@ -118,7 +118,7 @@ var scoopOpenJDKManifestMajors = []int{
 // scoopCandidate is one manifest that can satisfy a request.
 type scoopCandidate struct {
 	manifest     string
-	distribution types.JavaDistribution
+	distribution java.Distribution
 }
 
 func (scoop) method() Method { return MethodScoop }
@@ -206,8 +206,8 @@ func scoopPlans(req Request, hasManifest func(string) bool) []Plan {
 // openjdk manifest.
 func scoopCandidates(req Request) []scoopCandidate {
 	distribution := req.Distribution
-	if distribution == types.JavaDistributionAny {
-		distribution = types.JavaDistributionTemurin
+	if distribution == java.DistributionAny {
+		distribution = java.DistributionTemurin
 	}
 	var candidates []scoopCandidate
 	for _, pkg := range scoopJavaPackages {
@@ -219,11 +219,11 @@ func scoopCandidates(req Request) []scoopCandidate {
 			break
 		}
 	}
-	if req.Distribution == types.JavaDistributionAny &&
+	if req.Distribution == java.DistributionAny &&
 		slices.Contains(scoopOpenJDKManifestMajors, req.Major) {
 		candidates = append(candidates, scoopCandidate{
 			manifest:     fmt.Sprintf("openjdk%d", req.Major),
-			distribution: types.JavaDistributionAny,
+			distribution: java.DistributionAny,
 		})
 	}
 	return candidates

@@ -12,13 +12,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
-	"github.com/mclucy/lucy/types"
 	"github.com/spf13/cobra"
 )
 
@@ -61,7 +61,7 @@ func run(ctx context.Context, source string, opts *options, stdout, stderr io.Wr
 		return err
 	}
 	destination := parseOutputDestination(opts.output)
-	if opts.ecosystem != "" && !supportedEcosystem(types.Ecosystem(opts.ecosystem)) {
+	if opts.ecosystem != "" && !supportedEcosystem(catalog.Ecosystem(opts.ecosystem)) {
 		return errors.New("--ecosystem must be fabric, forge, or neoforge")
 	}
 	branch := strings.TrimSpace(opts.branch)
@@ -170,7 +170,7 @@ func run(ctx context.Context, source string, opts *options, stdout, stderr io.Wr
 	if err != nil {
 		return err
 	}
-	artifactPath, err := selectArtifact(project, types.Ecosystem(opts.ecosystem))
+	artifactPath, err := selectArtifact(project, catalog.Ecosystem(opts.ecosystem))
 	if err != nil {
 		return err
 	}
@@ -218,9 +218,9 @@ func reportFindings(root string, findings []buildrepo.Finding) {
 	}
 }
 
-func supportedEcosystem(ecosystem types.Ecosystem) bool {
+func supportedEcosystem(ecosystem catalog.Ecosystem) bool {
 	switch ecosystem {
-	case types.EcosystemFabric, types.EcosystemForge, types.EcosystemNeoForge:
+	case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge:
 		return true
 	default:
 		return false

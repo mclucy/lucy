@@ -54,7 +54,10 @@ To run the built binary against a test server directory:
 ```text
 .
 ├── cmd/                    Root wiring (cmd_root.go) + thin Cobra subcommands
-├── types/                  Pure domain types: ecosystems, products, dependencies, artifacts
+├── catalog/                Source-independent package identities, metadata, artifacts, and dependencies
+├── server/                 Server product identities, environments, and bootstrap inputs
+├── java/                   Java distribution vocabulary
+├── javaruntime/            Java requirements, installed runtime observation, and selection
 ├── manifest/               Declared server intent: Minecraft, server product, requirements
 ├── lockfile/               Flattened resolved environment, artifacts, and descriptor modules
 ├── operation/              Command orchestration: init, add, remove, sync
@@ -68,7 +71,7 @@ To run the built binary against a test server directory:
 ├── input/                  Trust boundary for external input, package ref parsing
 ├── cache/                  Network cache request metadata and expiration policy
 ├── cas/                    Content-addressed storage for cached bytes
-├── version/                Version parsing: semver, Minecraft release/snapshot, Maven ranges
+├── version/                Version values, dialects, constraint expressions, and parsing
 ├── artifact/               Archive metadata analysis: fabric.mod.json, mods.toml, plugin.yml
 ├── log/                    Operational diagnostics
 ├── report/                 User-facing messages
@@ -86,6 +89,11 @@ To run the built binary against a test server directory:
     ├── fsutil/             Filesystem helpers: CloseReader, path utilities
     └── toolchain/          Local Git, Java, and Gradle discovery
 ```
+
+`catalog` describes packages; `upstream` obtains package metadata and artifacts.
+Keep `catalog` limited to the standard library and `version`. Shared usage alone
+does not justify placing a type there. Manifest declarations, lock records,
+workspace observations, runtime selection, and presentation stay with their owners.
 
 ## Output Style Flags
 

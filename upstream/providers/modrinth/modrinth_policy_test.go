@@ -4,7 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/version"
 )
 
 func TestSelectLatestVersionForSelector(t *testing.T) {
@@ -21,19 +22,19 @@ func TestSelectLatestVersionForSelector(t *testing.T) {
 	versions := []*versionResponse{release, beta}
 
 	tests := []struct {
-		selector types.Version
+		selector version.Version
 		want     *versionResponse
 	}{
-		{types.VersionStable, release},
-		{types.VersionAny, release},
-		{types.VersionBeta, beta},
+		{version.Stable, release},
+		{version.Any, release},
+		{version.Beta, beta},
 	}
 	for _, tt := range tests {
 		t.Run(tt.selector.String(), func(t *testing.T) {
 			got := selectLatestVersionForSelector(
 				versions,
-				types.EcosystemUnspecified,
-				types.VersionUnknown,
+				catalog.EcosystemUnspecified,
+				version.Unknown,
 				false,
 				tt.selector,
 			)
@@ -57,10 +58,10 @@ func TestSelectLatestVersionForSelector_StableRejectsPrereleaseOnly(t *testing.T
 	}
 	got := selectLatestVersionForSelector(
 		[]*versionResponse{beta},
-		types.EcosystemUnspecified,
-		types.VersionUnknown,
+		catalog.EcosystemUnspecified,
+		version.Unknown,
 		false,
-		types.VersionStable,
+		version.Stable,
 	)
 	if got != nil {
 		t.Fatalf("stable selector selected a prerelease: %v", got)

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/curseforge"
 	"github.com/mclucy/lucy/upstream/providers/mcdr"
 	"github.com/mclucy/lucy/upstream/providers/modrinth"
@@ -14,10 +15,10 @@ import (
 // Candidates routes explicit project identities, never context aliases.
 func Candidates(
 	ctx context.Context,
-	registry types.Registry,
+	registry catalog.Registry,
 	project, minecraft string,
-	loader types.Ecosystem,
-) ([]types.CatalogueCandidate, error) {
+	loader catalog.Ecosystem,
+) ([]upstream.Candidate, error) {
 	log.Debug(
 		"routing: catalogue candidates requested",
 		"registry", registry,
@@ -26,11 +27,11 @@ func Candidates(
 		"loader", loader,
 	)
 	switch registry {
-	case types.RegistryModrinth:
+	case catalog.RegistryModrinth:
 		return modrinth.Provider.Candidates(ctx, project, minecraft, loader)
-	case types.RegistryCurseForge:
+	case catalog.RegistryCurseForge:
 		return curseforge.Provider.Candidates(ctx, project, minecraft, loader)
-	case types.RegistryMCDR:
+	case catalog.RegistryMCDR:
 		return mcdr.Provider.Candidates(ctx, project, minecraft, loader)
 	default:
 		log.Debug(

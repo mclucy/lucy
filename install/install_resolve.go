@@ -7,12 +7,13 @@ import (
 	"slices"
 	"time"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
@@ -86,14 +87,14 @@ func resolveInstall(
 		"core", d.Server.Core.ProductVersion,
 		"mcdr", d.MCDR != nil,
 	)
-	coreReq := types.ServerProductRequest{
+	coreReq := routing.ServerProductRequest{
 		Minecraft:      d.Server.Minecraft,
 		Product:        d.Server.Core.Product,
 		ProductVersion: d.Server.Core.ProductVersion,
 		Repository:     d.Server.Core.Repository,
 		FilePattern:    d.Server.Core.FilePattern,
 	}
-	var core types.ServerProductResolution
+	var core routing.ServerProductResolution
 	canReuse := false
 	if old != nil {
 		reusable, err := coreReusable(ctx, d, old, opts.Offline)
@@ -110,7 +111,7 @@ func resolveInstall(
 			"product", old.Server.Product,
 			"core-version", old.Server.CoreVersion,
 		)
-		core = types.ServerProductResolution{
+		core = routing.ServerProductResolution{
 			Minecraft:      old.Server.Minecraft,
 			Product:        old.Server.Product,
 			ProductVersion: old.Server.CoreVersion,
@@ -150,7 +151,7 @@ func resolveInstall(
 			Inputs:       core.Inputs,
 			Java:         lockfile.NewJava(core.JavaAdvisory, d.Server.Java),
 		},
-		Packages: []types.LockedPackage{},
+		Packages: []lockfile.Package{},
 		Files:    slices.Clone(d.Files),
 	}
 	mcdrVersion := ""
@@ -201,7 +202,7 @@ func resolveInstall(
 	if opts.WithOptional {
 		for _, p := range packages {
 			for _, request := range p.Requirements {
-				if p.Environment == types.EnvironmentMCDR {
+				if p.Environment == server.EnvironmentMCDR {
 					d.MCDR.Packages[request.Reference] = manifest.Requirement{
 						Selector:    request.Selector,
 						FilePattern: request.FilePattern,
@@ -230,7 +231,7 @@ func resolveInstall(
 		for _, p := range packages {
 			for _, m := range p.Modules {
 				for _, dep := range m.Dependencies {
-					if dep.Kind == types.DependencyKindPython {
+					if dep.Kind == catalog.DependencyKindPython {
 						requirements = append(requirements, dep.ID)
 					}
 				}

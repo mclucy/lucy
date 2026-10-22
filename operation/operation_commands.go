@@ -9,7 +9,11 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
+
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
@@ -18,7 +22,7 @@ import (
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
-	"github.com/mclucy/lucy/types"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -55,43 +59,43 @@ func commandDocuments(root string) (document *manifest.Document, locked *lockfil
 	return d, old, nil
 }
 
-func selectedEcosystem(d *manifest.Document, requested types.Ecosystem) types.Ecosystem {
-	if requested != types.EcosystemUnspecified {
+func selectedEcosystem(d *manifest.Document, requested catalog.Ecosystem) catalog.Ecosystem {
+	if requested != catalog.EcosystemUnspecified {
 		return requested
 	}
 	switch d.Server.Core.Product {
-	case types.ServerProductFabric:
-		return types.EcosystemFabric
-	case types.ServerProductForge:
-		return types.EcosystemForge
-	case types.ServerProductNeoForge:
-		return types.EcosystemNeoForge
-	case types.ServerProductPaper, types.ServerProductPurpur:
-		return types.EcosystemPaper
+	case serverpkg.ProductFabric:
+		return catalog.EcosystemFabric
+	case serverpkg.ProductForge:
+		return catalog.EcosystemForge
+	case serverpkg.ProductNeoForge:
+		return catalog.EcosystemNeoForge
+	case serverpkg.ProductPaper, serverpkg.ProductPurpur:
+		return catalog.EcosystemPaper
 	}
 	if d.Server.Core.Repository != "" {
-		return types.EcosystemPaper
+		return catalog.EcosystemPaper
 	}
 	if d.MCDR != nil {
-		return types.EcosystemMCDR
+		return catalog.EcosystemMCDR
 	}
-	return types.EcosystemUnspecified
+	return catalog.EcosystemUnspecified
 }
 
 // servedEcosystemSet returns the package ecosystems that the declared server
 // can load. A probed runtime also reports bridged ecosystems, such as Fabric
 // through Sinytra Connector. Only ecosystems the declared product loads enter
 // the set. Without a probe, the declared product decides.
-func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[types.Ecosystem]struct{} {
+func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[catalog.Ecosystem]struct{} {
 	server := lockfile.Server{Product: d.Server.Core.Product}
-	served := map[types.Ecosystem]struct{}{}
+	served := map[catalog.Ecosystem]struct{}{}
 	for _, offer := range observed.ServedEcosystems() {
 		if resolve.SupportsPackages(server, offer.Ecosystem) {
 			served[offer.Ecosystem] = struct{}{}
 		}
 	}
 	if len(served) == 0 {
-		if ecosystem := selectedEcosystem(d, types.EcosystemUnspecified); ecosystem != types.EcosystemUnspecified {
+		if ecosystem := selectedEcosystem(d, catalog.EcosystemUnspecified); ecosystem != catalog.EcosystemUnspecified {
 			served[ecosystem] = struct{}{}
 		}
 	}
@@ -105,10 +109,10 @@ func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[
 func servedEcosystemForFile(
 	ctx context.Context,
 	path string,
-	served map[types.Ecosystem]struct{},
-) (types.Ecosystem, bool) {
+	served map[catalog.Ecosystem]struct{},
+) (catalog.Ecosystem, bool) {
 	for _, ecosystem := range slices.Sorted(maps.Keys(served)) {
-		if ecosystem == types.EcosystemMCDR {
+		if ecosystem == catalog.EcosystemMCDR {
 			continue
 		}
 		modules, err := artifact.ReadModules(ctx, path, ecosystem)
@@ -121,29 +125,29 @@ func servedEcosystemForFile(
 			}
 		}
 	}
-	return types.EcosystemUnspecified, false
+	return catalog.EcosystemUnspecified, false
 }
 
 // loaderSpecificDescriptor reports whether a module's descriptor names the
 // loader that read it. Forge and NeoForge share META-INF/mods.toml, so only a
 // loader dependency declared inside it identifies the loader.
-func loaderSpecificDescriptor(module types.DescriptorModule) bool {
+func loaderSpecificDescriptor(module catalog.DescriptorModule) bool {
 	if module.DescriptorPath != "META-INF/mods.toml" {
 		return true
 	}
 	loader := module.Ecosystem.String()
-	return slices.ContainsFunc(module.Dependencies, func(dep types.DescriptorDependency) bool {
+	return slices.ContainsFunc(module.Dependencies, func(dep catalog.DescriptorDependency) bool {
 		return dep.ID == loader
 	})
 }
 
-func commandReference(d *manifest.Document, old *lockfile.Document, raw string, ecosystem types.Ecosystem) (string, types.Version, error) {
+func commandReference(d *manifest.Document, old *lockfile.Document, raw string, ecosystem catalog.Ecosystem) (string, version.Version, error) {
 	request, err := input.Parse(raw)
 	if err != nil {
 		return "", "", err
 	}
 	provider, name := request.Provider, string(request.Name)
-	if provider == types.ProviderUnspecified {
+	if provider == catalog.ProviderUnspecified {
 		if old != nil {
 			ref, err := old.LookupReference(name)
 			if err != nil {
@@ -156,10 +160,10 @@ func commandReference(d *manifest.Document, old *lockfile.Document, raw string, 
 				}
 			}
 		}
-		if provider == types.ProviderUnspecified {
-			provider = types.ProviderModrinth
-			if ecosystem == types.EcosystemMCDR {
-				provider = types.ProviderMCDR
+		if provider == catalog.ProviderUnspecified {
+			provider = catalog.ProviderModrinth
+			if ecosystem == catalog.EcosystemMCDR {
+				provider = catalog.ProviderMCDR
 			}
 		}
 	}
@@ -169,12 +173,12 @@ func commandReference(d *manifest.Document, old *lockfile.Document, raw string, 
 	}
 	selector := request.Version
 	if selector == "" {
-		selector = types.VersionAny
+		selector = version.Any
 	}
 	return ref, selector, nil
 }
 
-func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) (*install.Result, error) {
+func Add(ctx context.Context, root string, args []string, ecosystem catalog.Ecosystem, opts install.Options) (*install.Result, error) {
 	d, old, err := commandDocuments(root)
 	if err != nil {
 		return nil, err
@@ -185,7 +189,7 @@ func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosys
 	}
 	opts.RequirementChange = true
 	ecosystem = selectedEcosystem(d, ecosystem)
-	if ecosystem == types.EcosystemUnspecified {
+	if ecosystem == catalog.EcosystemUnspecified {
 		return nil, fmt.Errorf("specify a package ecosystem supported by the declared server")
 	}
 	for _, raw := range args {
@@ -194,7 +198,7 @@ func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosys
 			return nil, err
 		}
 		r := manifest.Requirement{Selector: selector, Enabled: new(true)}
-		if ecosystem == types.EcosystemMCDR {
+		if ecosystem == catalog.EcosystemMCDR {
 			if d.MCDR == nil {
 				return nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
@@ -210,7 +214,7 @@ func Add(ctx context.Context, root string, args []string, ecosystem types.Ecosys
 	return install.Sync(ctx, root, d, old, opts)
 }
 
-func Remove(ctx context.Context, root string, args []string, ecosystem types.Ecosystem, opts install.Options) (*install.Result, error) {
+func Remove(ctx context.Context, root string, args []string, ecosystem catalog.Ecosystem, opts install.Options) (*install.Result, error) {
 	d, old, err := commandDocuments(root)
 	if err != nil {
 		return nil, err
@@ -227,7 +231,7 @@ func Remove(ctx context.Context, root string, args []string, ecosystem types.Eco
 			return nil, err
 		}
 		packages := d.Server.Packages[ecosystem]
-		if ecosystem == types.EcosystemMCDR {
+		if ecosystem == catalog.EcosystemMCDR {
 			if d.MCDR == nil {
 				return nil, fmt.Errorf("manifest has no MCDR runtime")
 			}
@@ -264,18 +268,18 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	if _, err := os.Stat(filepath.Join(root, manifest.Filename)); err == nil && !opts.Force {
 		return nil, nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
 	}
-	product := types.ServerProductUnknown
+	product := serverpkg.ProductUnknown
 	if opts.Product != "" {
-		if parsed, known := types.ParseServerProduct(opts.Product); known {
+		if parsed, known := serverpkg.ParseProduct(opts.Product); known {
 			product = parsed
 		} else {
-			product = types.ServerProduct(opts.Product)
+			product = serverpkg.Product(opts.Product)
 		}
 	}
 	d := &manifest.Document{SchemaVersion: manifest.SchemaVersion, Server: manifest.Server{
-		Minecraft: types.Version(opts.Minecraft), Directory: opts.Directory,
-		Core:     manifest.Core{Product: product, ProductVersion: types.Version(opts.ProductVersion), Repository: opts.Repository},
-		Packages: map[types.Ecosystem]map[string]manifest.Requirement{},
+		Minecraft: version.Version(opts.Minecraft), Directory: opts.Directory,
+		Core:     manifest.Core{Product: product, ProductVersion: version.Version(opts.ProductVersion), Repository: opts.Repository},
+		Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{},
 	}}
 	var observed workspace.Workspace
 	if opts.Detect {
@@ -291,11 +295,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 				return nil, observed.Warnings, fmt.Errorf("detected Minecraft %s, requested %s", server.MinecraftVersion(), d.Server.Minecraft)
 			}
 			d.Server.Minecraft = server.MinecraftVersion()
-			if d.Server.Core.Product == types.ServerProductUnknown {
-				if product := server.Product(); product != types.ServerProductUnknown {
+			if d.Server.Core.Product == serverpkg.ProductUnknown {
+				if product := server.Product(); product != serverpkg.ProductUnknown {
 					d.Server.Core.Product = product
 				} else if server.Primary != nil {
-					d.Server.Core.Product = types.ServerProduct(server.Primary.Name.String())
+					d.Server.Core.Product = serverpkg.Product(server.Primary.Name.String())
 				}
 			}
 			if d.Server.Core.ProductVersion == "" && server.Primary.Version != "" && !server.Primary.Version.IsInvalid() && !server.Primary.Version.CanInfer() {
@@ -332,11 +336,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		if err != nil {
 			return nil, observed.Warnings, err
 		}
-		d.Server.Minecraft = types.Version(text)
+		d.Server.Minecraft = version.Version(text)
 		log.Debug("minecraft version supplied interactively", "version", text)
 	}
-	if d.Server.Core.Product == types.ServerProductUnknown {
-		d.Server.Core.Product = types.ServerProductMinecraft
+	if d.Server.Core.Product == serverpkg.ProductUnknown {
+		d.Server.Core.Product = serverpkg.ProductMinecraft
 		log.Debug("core product defaulted", "product", d.Server.Core.Product)
 	}
 	mcdrVersion := opts.MCDRVersion
@@ -349,12 +353,12 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		log.Debug("MCDR version from workspace detection", "version", mcdrVersion)
 	}
 	if mcdrVersion != "" {
-		d.MCDR = &manifest.MCDR{Directory: ".", Version: types.Version(mcdrVersion), Packages: map[string]manifest.Requirement{}}
+		d.MCDR = &manifest.MCDR{Directory: ".", Version: version.Version(mcdrVersion), Packages: map[string]manifest.Requirement{}}
 	}
 	if err := manifest.Normalize(d); err != nil {
 		return nil, observed.Warnings, err
 	}
-	modrinthMapper, hasModrinthMapper, err := routing.GetArtifactMapper(types.ProviderModrinth)
+	modrinthMapper, hasModrinthMapper, err := routing.GetArtifactMapper(catalog.ProviderModrinth)
 	if err != nil {
 		return nil, observed.Warnings, err
 	}
@@ -365,7 +369,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 			continue
 		}
 		ecosystem := p.ID.Ecosystem
-		if ecosystem != types.EcosystemMCDR {
+		if ecosystem != catalog.EcosystemMCDR {
 			if _, ok := served[ecosystem]; !ok {
 				var adopted bool
 				ecosystem, adopted = servedEcosystemForFile(ctx, p.Path, served)
@@ -378,8 +382,8 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		if err != nil || len(modules) == 0 {
 			continue
 		}
-		if ecosystem == types.EcosystemMCDR && d.MCDR != nil {
-			candidates, err := routing.Candidates(ctx, types.RegistryMCDR, modules[0].ID, string(d.Server.Minecraft), ecosystem)
+		if ecosystem == catalog.EcosystemMCDR && d.MCDR != nil {
+			candidates, err := routing.Candidates(ctx, catalog.RegistryMCDR, modules[0].ID, string(d.Server.Minecraft), ecosystem)
 			if err != nil {
 				continue
 			}
@@ -395,7 +399,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 			}
 			continue
 		}
-		if ecosystem != types.EcosystemFabric && ecosystem != types.EcosystemForge && ecosystem != types.EcosystemNeoForge && ecosystem != types.EcosystemBukkit && ecosystem != types.EcosystemPaper {
+		if ecosystem != catalog.EcosystemFabric && ecosystem != catalog.EcosystemForge && ecosystem != catalog.EcosystemNeoForge && ecosystem != catalog.EcosystemBukkit && ecosystem != catalog.EcosystemPaper {
 			continue
 		}
 		if !hasModrinthMapper {
@@ -409,12 +413,12 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		// command, so an installed package whose catalogue metadata offers no
 		// matching release for this server stays unmanaged.
 		candidates, candidateErr := routing.Candidates(
-			ctx, types.RegistryModrinth, ref.Name.String(),
+			ctx, catalog.RegistryModrinth, ref.Name.String(),
 			string(d.Server.Minecraft), ecosystem,
 		)
 		usable := candidateErr == nil && slices.ContainsFunc(
 			candidates,
-			func(candidate types.CatalogueCandidate) bool {
+			func(candidate upstream.Candidate) bool {
 				return candidate.Version == ref.Version && candidate.PrimaryFile
 			},
 		)

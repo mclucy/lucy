@@ -3,20 +3,22 @@ package modrinth
 import (
 	"fmt"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // modrinthDependencies wraps a Modrinth versionResponse for dependency
 // normalization.
 type modrinthDependencies struct {
 	version  *versionResponse
-	platform types.Ecosystem
+	platform catalog.Ecosystem
 }
 
-func (m *modrinthDependencies) ToDependencySet() types.DependencySet {
-	result := types.DependencySet{
+func (m *modrinthDependencies) ToDependencySet() upstream.DependencySet {
+	result := upstream.DependencySet{
 		FromArtifact: false,
 	}
 
@@ -25,10 +27,10 @@ func (m *modrinthDependencies) ToDependencySet() types.DependencySet {
 			continue
 		}
 
-		parentId := types.VersionedPackageRef{
+		parentId := catalog.VersionedRef{
 			Name:      input.ToProjectName(m.version.ID),
 			Ecosystem: m.platform,
-			Version:   types.Version(m.version.VersionNumber),
+			Version:   versionpkg.Version(m.version.VersionNumber),
 		}
 
 		depId, err := DependencyToPackage(parentId, &dep)
@@ -44,7 +46,7 @@ func (m *modrinthDependencies) ToDependencySet() types.DependencySet {
 
 		mandatory := dep.DependencyType == required
 		result.Dependencies = append(
-			result.Dependencies, types.Dependency{
+			result.Dependencies, catalog.Dependency{
 				ID:        depId,
 				Mandatory: mandatory,
 			},

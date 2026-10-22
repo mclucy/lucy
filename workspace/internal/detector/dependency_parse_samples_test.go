@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml"
 )
@@ -34,14 +34,14 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	}
 
 	expr := mustParseMCDRRange(t, rawRange)
-	if len(expr) != 1 || len(expr[0]) != 1 || expr[0][0].Operator != types.OpGte {
+	if len(expr) != 1 || len(expr[0]) != 1 || expr[0][0].Operator != version.OpGte {
 		t.Fatalf("unexpected parsed expression for %q: %+v", rawRange, expr)
 	}
 
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcosystemMCDR,
+		catalog.EcosystemMCDR,
 		"mcdreforged",
 		"2.12.0",
 		true,
@@ -50,7 +50,7 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcosystemMCDR,
+		catalog.EcosystemMCDR,
 		"mcdreforged",
 		"2.11.9",
 		false,
@@ -82,7 +82,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		minecraftExpr,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"minecraft",
 		"1.20.2",
 		true,
@@ -91,7 +91,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		minecraftExpr,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"minecraft",
 		"1.20.1",
 		false,
@@ -102,7 +102,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		loaderExpr,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"fabricloader",
 		"0.16.9",
 		true,
@@ -111,7 +111,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		loaderExpr,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"fabricloader",
 		"0.14.17",
 		false,
@@ -142,7 +142,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"fabricloader",
 		"0.14.19",
 		true,
@@ -151,7 +151,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"fabricloader",
 		"0.15.2",
 		false,
@@ -160,7 +160,7 @@ func TestFabricVersionRangeArrayOR(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcosystemFabric,
+		catalog.EcosystemFabric,
 		"fabricloader",
 		"0.16.9",
 		true,
@@ -207,7 +207,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcosystemForge,
+		catalog.EcosystemForge,
 		"minecraft",
 		"1.20.1",
 		true,
@@ -216,7 +216,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcosystemForge,
+		catalog.EcosystemForge,
 		"minecraft",
 		"1.20.2",
 		false,
@@ -225,7 +225,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		expr,
-		types.EcosystemForge,
+		catalog.EcosystemForge,
 		"minecraft",
 		"1.20.0",
 		false,
@@ -266,7 +266,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		yungsExpr,
-		types.EcosystemForge,
+		catalog.EcosystemForge,
 		"yungsapi",
 		"1.20.0-Forge-4.0.0",
 		false,
@@ -275,7 +275,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	assertConstraintSatisfy(
 		t,
 		yungsExpr,
-		types.EcosystemForge,
+		catalog.EcosystemForge,
 		"yungsapi",
 		"1.20.0-Forge-4.0.1",
 		true,
@@ -301,7 +301,7 @@ func mustReadFile(t *testing.T, path string) []byte {
 	return b
 }
 
-func mustParseMCDRRange(t *testing.T, raw string) types.VersionExpr {
+func mustParseMCDRRange(t *testing.T, raw string) version.Expr {
 	t.Helper()
 	expr, err := parseNpmVersionRange(raw)
 	if err != nil {
@@ -310,7 +310,7 @@ func mustParseMCDRRange(t *testing.T, raw string) types.VersionExpr {
 	return expr
 }
 
-func mustParseMavenRange(t *testing.T, raw string) types.VersionExpr {
+func mustParseMavenRange(t *testing.T, raw string) version.Expr {
 	t.Helper()
 	expr, err := parseModLoaderMavenVersionRange(raw)
 	if err != nil {
@@ -322,7 +322,7 @@ func mustParseMavenRange(t *testing.T, raw string) types.VersionExpr {
 func mustParseFabricRanges(
 	t *testing.T,
 	raw []string,
-) types.VersionExpr {
+) version.Expr {
 	t.Helper()
 	expr, err := parseFabricVersionRanges(raw)
 	if err != nil {
@@ -331,38 +331,38 @@ func mustParseFabricRanges(
 	return expr
 }
 
-func dialectFor(platform types.Ecosystem) types.VersionDialect {
+func dialectFor(platform catalog.Ecosystem) version.Dialect {
 	switch platform {
-	case types.EcosystemFabric:
-		return types.VersionDialectFabric
-	case types.EcosystemMCDR:
-		return types.VersionDialectMCDR
-	case types.EcosystemForge,
-		types.EcosystemNeoForge,
-		types.EcosystemSponge:
-		return types.VersionDialectMaven
-	case types.EcosystemMinecraft:
-		return types.VersionDialectMinecraft
+	case catalog.EcosystemFabric:
+		return version.DialectFabric
+	case catalog.EcosystemMCDR:
+		return version.DialectMCDR
+	case catalog.EcosystemForge,
+		catalog.EcosystemNeoForge,
+		catalog.EcosystemSponge:
+		return version.DialectMaven
+	case catalog.EcosystemMinecraft:
+		return version.DialectMinecraft
 	default:
-		return types.VersionDialectOpaque
+		return version.DialectOpaque
 	}
 }
 
 func assertConstraintSatisfy(
 	t *testing.T,
-	expr types.VersionExpr,
-	platform types.Ecosystem,
+	expr version.Expr,
+	platform catalog.Ecosystem,
 	name string,
 	rawVersion string,
 	want bool,
 	label string,
 ) {
 	t.Helper()
-	dialect, err := version.NewVersionDialect(dialectFor(platform))
+	dialect, err := version.NewEngine(dialectFor(platform))
 	if err != nil {
 		t.Fatalf("dialect for %s: %v", platform, err)
 	}
-	actual, err := dialect.ParseVersion(types.Version(rawVersion))
+	actual, err := dialect.ParseVersion(version.Version(rawVersion))
 	if err != nil {
 		t.Fatalf("parse %s version %q: %v", platform, rawVersion, err)
 	}

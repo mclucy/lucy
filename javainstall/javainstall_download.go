@@ -23,8 +23,8 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/toolchain"
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 const (
@@ -47,7 +47,7 @@ type download struct {
 	archive      string
 	size         int64
 	javaVersion  string
-	distribution types.JavaDistribution
+	distribution java.Distribution
 	destination  string
 }
 
@@ -73,11 +73,11 @@ type foojayPackage struct {
 // anyDistributionOrder lists the distributions that a request for any
 // distribution tries in turn. foojay has no Temurin build for some old majors
 // and platforms, such as Java 8 on Apple silicon.
-var anyDistributionOrder = []types.JavaDistribution{
-	types.JavaDistributionTemurin,
-	types.JavaDistributionZulu,
-	types.JavaDistributionCorretto,
-	types.JavaDistributionLiberica,
+var anyDistributionOrder = []java.Distribution{
+	java.DistributionTemurin,
+	java.DistributionZulu,
+	java.DistributionCorretto,
+	java.DistributionLiberica,
 }
 
 func downloadPlan(ctx context.Context, req Request) (*Plan, error) {
@@ -89,8 +89,8 @@ func downloadPlan(ctx context.Context, req Request) (*Plan, error) {
 	if !ok {
 		return nil, nil
 	}
-	distributions := []types.JavaDistribution{req.Distribution}
-	if req.Distribution == types.JavaDistributionAny {
+	distributions := []java.Distribution{req.Distribution}
+	if req.Distribution == java.DistributionAny {
 		distributions = anyDistributionOrder
 	}
 	for _, distribution := range distributions {
@@ -110,7 +110,7 @@ func downloadPlan(ctx context.Context, req Request) (*Plan, error) {
 func downloadPlanFor(
 	ctx context.Context,
 	major int,
-	distribution types.JavaDistribution,
+	distribution java.Distribution,
 	architecture string,
 	operatingSystem string,
 ) (*Plan, error) {
@@ -171,7 +171,7 @@ func downloadPlanFor(
 func newDownload(
 	pkg foojayPackage,
 	build foojayPackage,
-	distribution types.JavaDistribution,
+	distribution java.Distribution,
 	major int,
 ) (*download, bool) {
 	checksumType := strings.ToLower(strings.TrimSpace(build.ChecksumType))
@@ -231,7 +231,7 @@ func newDownload(
 func fetchDownloadPackages(
 	ctx context.Context,
 	major int,
-	distribution types.JavaDistribution,
+	distribution java.Distribution,
 	architecture string,
 	operatingSystem string,
 	packageType string,
@@ -387,7 +387,7 @@ func downloadArchiveType(filename string) string {
 }
 
 func downloadDirectoryName(
-	distribution types.JavaDistribution,
+	distribution java.Distribution,
 	version string,
 ) string {
 	name := string(distribution) + "-" + version

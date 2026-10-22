@@ -8,8 +8,9 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 var (
@@ -22,8 +23,8 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Provider() types.Provider {
-	return types.ProviderNeoForge
+func (provider) Provider() catalog.Provider {
+	return catalog.ProviderNeoForge
 }
 
 type mavenMetadata struct {
@@ -36,8 +37,8 @@ type mavenMetadata struct {
 
 func (p provider) ResolveVersionSelector(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.VersionedPackageRef, error) {
+	id catalog.VersionedRef,
+) (catalog.VersionedRef, error) {
 	gameVersion, err := minecraftVersionForInstall(local)
 	if err != nil {
 		return id, err
@@ -48,30 +49,30 @@ func (p provider) ResolveVersionSelector(
 		return id, err
 	}
 
-	return types.VersionedPackageRef{
-		Ecosystem: types.EcosystemNeoForge,
+	return catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemNeoForge,
 		Name:      "neoforge",
-		Version:   types.Version(neoForgeVersion),
+		Version:   versionpkg.Version(neoForgeVersion),
 	}, nil
 }
 
 func (p provider) Fetch(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
 	gameVersion, err := minecraftVersionForInstall(local)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	neoForgeVersion, err := neoForgeVersionFromPackageRef(id, gameVersion)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	fileURL := installerURL(neoForgeVersion)
 
-	return types.ResolvedPackage{
+	return upstream.ResolvedPackage{
 		FileURL: fileURL,
 		Filename: fmt.Sprintf(
 			"neoforge-%s-installer.jar",
@@ -80,7 +81,7 @@ func (p provider) Fetch(
 	}, nil
 }
 
-func minecraftVersionForInstall(local upstream.LocalContext) (types.Version, error) {
+func minecraftVersionForInstall(local upstream.LocalContext) (versionpkg.Version, error) {
 	if !local.HasMinecraftVersion() {
 		return "", errors.New(
 			"neoforge bootstrap requires a concrete Minecraft version",
@@ -90,13 +91,13 @@ func minecraftVersionForInstall(local upstream.LocalContext) (types.Version, err
 }
 
 func neoForgeVersionFromPackageRef(
-	p types.VersionedPackageRef,
-	gameVersion types.Version,
+	p catalog.VersionedRef,
+	gameVersion versionpkg.Version,
 ) (string, error) {
-	if p.Version != types.VersionBeta &&
-		p.Version != types.VersionStable &&
-		p.Version != types.VersionAny &&
-		p.Version != types.VersionUnknown {
+	if p.Version != versionpkg.Beta &&
+		p.Version != versionpkg.Stable &&
+		p.Version != versionpkg.Any &&
+		p.Version != versionpkg.Unknown {
 		return p.Version.String(), nil
 	}
 	return fetchVersion(gameVersion, p.Version)
@@ -106,8 +107,8 @@ func neoForgeVersionFromPackageRef(
 // version. stable excludes prerelease builds; beta accepts any build; any
 // prefers a release and falls back to a prerelease.
 func fetchVersion(
-	gameVersion types.Version,
-	selector types.Version,
+	gameVersion versionpkg.Version,
+	selector versionpkg.Version,
 ) (string, error) {
 	body, err := cache.CachedGetBytes(
 		metadataURL,
@@ -148,7 +149,7 @@ func fetchVersion(
 	}
 
 	switch selector {
-	case types.VersionStable:
+	case versionpkg.Stable:
 		for _, v := range slices.Backward(matching) {
 			if !isPrereleaseVersion(v) {
 				return v, nil
@@ -159,7 +160,7 @@ func fetchVersion(
 			gameVersion,
 			docsURL,
 		)
-	case types.VersionBeta:
+	case versionpkg.Beta:
 		return matching[len(matching)-1], nil
 	default:
 		for _, v := range slices.Backward(matching) {

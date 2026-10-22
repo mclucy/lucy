@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 )
 
 const VersionManifestURL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
@@ -19,8 +20,8 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Provider() types.Provider {
-	return types.ProviderMojang
+func (provider) Provider() catalog.Provider {
+	return catalog.ProviderMojang
 }
 
 type versionDetail struct {
@@ -61,10 +62,10 @@ func FetchVersionManifest() (
 
 func ResolveVersionEntry(
 	manifest *fileschema.ApiMojangMinecraftVersionManifest,
-	targetVersion types.Version,
+	targetVersion version.Version,
 ) (string, string, error) {
 	selected := targetVersion.String()
-	if targetVersion == "" || targetVersion.CanInfer() || targetVersion == types.VersionUnknown {
+	if targetVersion == "" || targetVersion.CanInfer() || targetVersion == version.Unknown {
 		selected = manifest.Latest.Release
 	}
 
@@ -86,8 +87,8 @@ func ResolveVersionEntry(
 
 func (p provider) ResolveVersionSelector(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.VersionedPackageRef, error) {
+	id catalog.VersionedRef,
+) (catalog.VersionedRef, error) {
 	manifest, err := FetchVersionManifest()
 	if err != nil {
 		return id, err
@@ -98,40 +99,40 @@ func (p provider) ResolveVersionSelector(
 		return id, err
 	}
 
-	return types.VersionedPackageRef{
-		Ecosystem: types.EcosystemMinecraft,
+	return catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemMinecraft,
 		Name:      "minecraft",
-		Version:   types.Version(versionID),
+		Version:   version.Version(versionID),
 	}, nil
 }
 
 func (p provider) Fetch(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
 	manifest, err := FetchVersionManifest()
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	versionID, versionURL, err := ResolveVersionEntry(manifest, id.Version)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	detail, err := fetchVersionDetail(versionURL)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	if detail.Downloads.Server == nil {
-		return types.ResolvedPackage{}, fmt.Errorf(
+		return upstream.ResolvedPackage{}, fmt.Errorf(
 			"minecraft version %s does not provide a dedicated server jar",
 			versionID,
 		)
 	}
 
-	return types.ResolvedPackage{
+	return upstream.ResolvedPackage{
 		FileURL:       detail.Downloads.Server.URL,
 		Filename:      "server.jar",
 		Hash:          detail.Downloads.Server.Sha1,
@@ -149,7 +150,7 @@ const legacyJavaAdvisory = 8
 // Versions from 13w24a through 1.6.4 carry no javaVersion block. That metadata
 // field arrived later, and Mojang pairs the versions on both sides of the gap
 // with JRE 8, so those versions fall back to 8.
-func JavaAdvisory(minecraft types.Version) (int, error) {
+func JavaAdvisory(minecraft version.Version) (int, error) {
 	manifest, err := FetchVersionManifest()
 	if err != nil {
 		return 0, err

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/javainstall"
+	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/report"
@@ -18,9 +18,9 @@ import (
 // usable plan, most native first. A Java runtime that the local settings
 // select is the user's choice, so the hook installs nothing then. Every
 // installation method needs the network, so the hook fails when offline.
-func (o *installOutput) provisionJava(host javainstall.Host, offline bool) func(context.Context, java.Requirement, *java.Check) error {
-	return func(ctx context.Context, _ java.Requirement, check *java.Check) error {
-		if check.Source == java.SourceLocal {
+func (o *installOutput) provisionJava(host javainstall.Host, offline bool) func(context.Context, javaruntime.Requirement, *javaruntime.Check) error {
+	return func(ctx context.Context, _ javaruntime.Requirement, check *javaruntime.Check) error {
+		if check.Source == javaruntime.SourceLocal {
 			log.Info(
 				"java installation skipped",
 				"reason", manifest.LocalFilename+" selects the Java runtime",

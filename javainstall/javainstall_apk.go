@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // apk installs Java from the configured APK sources.
@@ -20,7 +20,7 @@ func (apk) ownsJava() bool { return false }
 
 func (apk) plans(ctx context.Context, req Request) ([]Plan, error) {
 	if req.Major <= 0 ||
-		req.Distribution != types.JavaDistributionAny ||
+		req.Distribution != java.DistributionAny ||
 		!systemToolAvailable("apk") {
 		return nil, nil
 	}
@@ -32,7 +32,7 @@ func (apk) plans(ctx context.Context, req Request) ([]Plan, error) {
 		{
 			Method:       MethodApk,
 			Package:      pkg,
-			Distribution: types.JavaDistributionAny,
+			Distribution: java.DistributionAny,
 			Major:        req.Major,
 			Steps: []Step{
 				{

@@ -4,9 +4,9 @@ import (
 	"archive/zip"
 	"encoding/json/v2"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -40,26 +40,26 @@ func (r *mcdrReader) Read(
 			return nil, closeErr
 		}
 
-		authors := make([]types.Person, len(pluginInfo.Author))
+		authors := make([]catalog.Person, len(pluginInfo.Author))
 		for i, author := range pluginInfo.Author {
-			authors[i] = types.Person{Name: author}
+			authors[i] = catalog.Person{Name: author}
 		}
 
-		urls := make([]types.URL, 0, 1)
+		urls := make([]catalog.URL, 0, 1)
 		if pluginInfo.Link != "" {
 			urls = append(
-				urls, types.URL{
+				urls, catalog.URL{
 					Name: "Link",
-					Type: types.URLSource,
+					Type: catalog.URLSource,
 					URL:  pluginInfo.Link,
 				},
 			)
 		}
 
 		info := PackageInfo{
-			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(pluginInfo.ID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemMCDR, Version: types.Version(pluginInfo.Version)},
+			Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(pluginInfo.ID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemMCDR, Version: version.Version(pluginInfo.Version)},
 			FilePath: filePath,
-			Metadata: types.Metadata{
+			Metadata: catalog.Metadata{
 				Title:       pluginInfo.Name,
 				Description: pluginInfo.Description.EnUs,
 				Authors:     authors,
@@ -72,14 +72,14 @@ func (r *mcdrReader) Read(
 			for key, value := range pluginInfo.Dependencies {
 				constraint, err := version.ParseConstraint(
 					value,
-					types.VersionDialectMCDR,
+					version.DialectMCDR,
 				)
 				if err != nil {
 					return nil, err
 				}
 				deps = append(
 					deps, Dependency{
-						Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(key), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemMCDR},
+						Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(key), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemMCDR},
 						Constraint: constraint,
 						Mandatory:  true,
 					},

@@ -3,9 +3,10 @@ package modrinth
 import (
 	"errors"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 var (
@@ -15,7 +16,7 @@ var (
 )
 
 // Known crash risk: this path has caused segmentation faults.
-func listVersions(slug types.PackageName) (
+func listVersions(slug catalog.Name) (
 	versions []*versionResponse,
 	err error,
 ) {
@@ -34,7 +35,7 @@ func listVersions(slug types.PackageName) (
 // version; see the package terminology note.
 func getVersion(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
+	id catalog.VersionedRef,
 ) (v *versionResponse, err error) {
 	versions, err := listVersions(id.Name)
 	if err != nil {
@@ -68,10 +69,10 @@ func getVersionById(id string) (v *versionResponse, err error) {
 
 func versionSupportsLoader(
 	version *versionResponse,
-	loader types.Ecosystem,
+	loader catalog.Ecosystem,
 ) bool {
 	for _, l := range version.Loaders {
-		if types.Ecosystem(l).Satisfy(loader) {
+		if catalog.Ecosystem(l).Satisfy(loader) {
 			return true
 		}
 	}
@@ -82,16 +83,16 @@ func versionSupportsLoader(
 // accepts releases only; beta accepts any channel; any prefers a release and
 // falls back to a prerelease.
 func latestVersion(
-	slug types.PackageName,
-	platform types.Ecosystem,
-	gameVersion types.Version,
-	selector types.Version,
+	slug catalog.Name,
+	platform catalog.Ecosystem,
+	gameVersion versionpkg.Version,
+	selector versionpkg.Version,
 ) (v *versionResponse, err error) {
 	versions, err := listVersions(slug)
 	if err != nil {
 		return nil, err
 	}
-	filterByLoader := platform != types.EcosystemUnspecified
+	filterByLoader := platform != catalog.EcosystemUnspecified
 	v = selectLatestVersionForSelector(
 		versions,
 		platform,

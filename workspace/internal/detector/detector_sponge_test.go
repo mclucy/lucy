@@ -3,7 +3,7 @@ package detector
 import (
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 func TestSpongeServerDetector_UsesSpecificationTitleOverImplementationTitle(t *testing.T) {
@@ -30,7 +30,7 @@ func TestSpongeServerDetector_UsesSpecificationTitleOverImplementationTitle(t *t
 		evidence.PrimaryRuntime.Name != "spongevanilla" ||
 		runtimeIdentityVersion(
 			evidence,
-			types.EcosystemMinecraft,
+			catalog.EcosystemMinecraft,
 			"minecraft",
 		) != "1.21.10" {
 		t.Fatalf(

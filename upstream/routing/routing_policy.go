@@ -1,54 +1,54 @@
 package routing
 
 import (
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
-var searchProvidersInPriorityOrder = []types.Provider{
-	types.ProviderModrinth,
-	types.ProviderCurseForge,
-	types.ProviderHangar,
-	types.ProviderSpiget,
+var searchProvidersInPriorityOrder = []catalog.Provider{
+	catalog.ProviderModrinth,
+	catalog.ProviderCurseForge,
+	catalog.ProviderHangar,
+	catalog.ProviderSpiget,
 }
 
-func autoProviders() []types.Provider {
-	return append(modProviders(), types.ProviderMCDR)
+func autoProviders() []catalog.Provider {
+	return append(modProviders(), catalog.ProviderMCDR)
 }
 
-func modProviders() []types.Provider {
-	providers := []types.Provider{types.ProviderModrinth}
+func modProviders() []catalog.Provider {
+	providers := []catalog.Provider{catalog.ProviderModrinth}
 	if curseforgeAvailable() {
-		providers = append(providers, types.ProviderCurseForge)
+		providers = append(providers, catalog.ProviderCurseForge)
 	}
 	return providers
 }
 
-func providersForEcosystem(ecosystem types.Ecosystem) (
-	[]types.Provider,
+func providersForEcosystem(ecosystem catalog.Ecosystem) (
+	[]catalog.Provider,
 	error,
 ) {
 	switch ecosystem {
-	case types.EcosystemUnspecified:
+	case catalog.EcosystemUnspecified:
 		return autoProviders(), nil
-	case types.EcosystemMCDR:
-		return []types.Provider{types.ProviderMCDR}, nil
-	case types.EcosystemForge, types.EcosystemFabric, types.EcosystemNeoForge,
-		types.EcosystemBukkit, types.EcosystemPaper:
+	case catalog.EcosystemMCDR:
+		return []catalog.Provider{catalog.ProviderMCDR}, nil
+	case catalog.EcosystemForge, catalog.EcosystemFabric, catalog.EcosystemNeoForge,
+		catalog.EcosystemBukkit, catalog.EcosystemPaper:
 		return searchProvidersForEcosystem(ecosystem), nil
 	default:
 		return nil, ErrInvalidEcosystem
 	}
 }
 
-func searchProvidersForEcosystem(ecosystem types.Ecosystem) []types.Provider {
+func searchProvidersForEcosystem(ecosystem catalog.Ecosystem) []catalog.Provider {
 	providers := make(
-		[]types.Provider,
+		[]catalog.Provider,
 		0,
 		len(searchProvidersInPriorityOrder),
 	)
 	for _, provider := range searchProvidersInPriorityOrder {
-		if provider == types.ProviderCurseForge && !curseforgeAvailable() {
+		if provider == catalog.ProviderCurseForge && !curseforgeAvailable() {
 			log.Debug(
 				"routing: ecosystem candidate skipped",
 				"provider", provider,
@@ -75,18 +75,18 @@ func searchProvidersForEcosystem(ecosystem types.Ecosystem) []types.Provider {
 }
 
 type providerSelection struct {
-	providers []types.Provider
+	providers []catalog.Provider
 	fallback  bool
 	empty     bool
 }
 
-func providersFromEcosystems(ecosystems []types.Ecosystem) providerSelection {
+func providersFromEcosystems(ecosystems []catalog.Ecosystem) providerSelection {
 	selection := providerSelection{}
-	seen := map[types.Provider]struct{}{}
+	seen := map[catalog.Provider]struct{}{}
 	sawKnownCapability := false
 	sawProxyCapability := false
 
-	appendProvider := func(provider types.Provider) {
+	appendProvider := func(provider catalog.Provider) {
 		if _, ok := seen[provider]; ok {
 			log.Debug(
 				"routing: runtime candidate skipped",
@@ -101,24 +101,24 @@ func providersFromEcosystems(ecosystems []types.Ecosystem) providerSelection {
 
 	for _, ecosystem := range ecosystems {
 		switch ecosystem {
-		case types.EcosystemFabric,
-			types.EcosystemForge,
-			types.EcosystemNeoForge:
+		case catalog.EcosystemFabric,
+			catalog.EcosystemForge,
+			catalog.EcosystemNeoForge:
 			sawKnownCapability = true
-			appendProvider(types.ProviderModrinth)
+			appendProvider(catalog.ProviderModrinth)
 			if curseforgeAvailable() {
-				appendProvider(types.ProviderCurseForge)
+				appendProvider(catalog.ProviderCurseForge)
 			}
-		case types.EcosystemBukkit,
-			types.EcosystemPaper:
+		case catalog.EcosystemBukkit,
+			catalog.EcosystemPaper:
 			sawKnownCapability = true
-			appendProvider(types.ProviderModrinth)
-			appendProvider(types.ProviderHangar)
-			appendProvider(types.ProviderSpiget)
-		case types.EcosystemMCDR:
+			appendProvider(catalog.ProviderModrinth)
+			appendProvider(catalog.ProviderHangar)
+			appendProvider(catalog.ProviderSpiget)
+		case catalog.EcosystemMCDR:
 			sawKnownCapability = true
-			appendProvider(types.ProviderMCDR)
-		case types.EcosystemBungeeCord, types.EcosystemVelocity:
+			appendProvider(catalog.ProviderMCDR)
+		case catalog.EcosystemBungeeCord, catalog.EcosystemVelocity:
 			sawKnownCapability = true
 			sawProxyCapability = true
 		}

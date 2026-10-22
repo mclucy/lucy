@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 )
 
 func baseManifest(t *testing.T) *manifest.Document {
@@ -17,7 +17,7 @@ func baseManifest(t *testing.T) *manifest.Document {
 		Server: manifest.Server{
 			Minecraft: "1.21.4",
 			Directory: "server",
-			Core:      manifest.Core{Product: types.ServerProductMinecraft},
+			Core:      manifest.Core{Product: server.ProductMinecraft},
 		},
 	}
 }

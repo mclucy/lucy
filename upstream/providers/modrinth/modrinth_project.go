@@ -4,11 +4,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
-func getProjectId(slug types.PackageName) (id string, err error) {
+func getProjectId(slug catalog.Name) (id string, err error) {
 	modrinthProject := projectResponse{}
 	if err := requestJSON(
 		projectUrl(string(slug)),
@@ -29,7 +30,7 @@ func getProjectById(id string) (project *projectResponse, err error) {
 	return
 }
 
-func getProjectByName(slug types.PackageName) (
+func getProjectByName(slug catalog.Name) (
 	project *projectResponse,
 	err error,
 ) {
@@ -61,10 +62,10 @@ func getProjectMembers(id string) (
 var ErrInvalidDependency = errors.New("modrinth: invalid dependency")
 
 func DependencyToPackage(
-	dependent types.VersionedPackageRef,
+	dependent catalog.VersionedRef,
 	dependency *dependenciesResponse,
 ) (
-	p types.VersionedPackageRef,
+	p catalog.VersionedRef,
 	err error,
 ) {
 	var version *versionResponse
@@ -100,21 +101,21 @@ func DependencyToPackage(
 		version, err = latestVersion(
 			input.ToProjectName(project.Slug),
 			dependent.Ecosystem,
-			types.VersionUnknown,
-			types.VersionAny,
+			versionpkg.Unknown,
+			versionpkg.Any,
 		)
 		if err != nil {
 			return p, fmt.Errorf("resolve dependency latest version: %w", err)
 		}
 		p.Name = input.ToProjectName(project.Slug)
-		p.Version = types.VersionAny
+		p.Version = versionpkg.Any
 		return p, nil
 	} else {
 		return p, ErrInvalidDependency
 	}
 
 	p.Name = input.ToProjectName(project.Slug)
-	p.Version = types.Version(version.VersionNumber)
+	p.Version = versionpkg.Version(version.VersionNumber)
 
 	return p, nil
 }

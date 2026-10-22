@@ -3,7 +3,7 @@ package curseforge
 import (
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 func TestSelectLatestFile(t *testing.T) {
@@ -23,12 +23,12 @@ func TestSelectLatestFile(t *testing.T) {
 	}
 
 	tests := []struct {
-		selector types.Version
+		selector version.Version
 		want     int32
 	}{
-		{types.VersionStable, 1},
-		{types.VersionAny, 1},
-		{types.VersionBeta, 2},
+		{version.Stable, 1},
+		{version.Any, 1},
+		{version.Beta, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.selector.String(), func(t *testing.T) {
@@ -55,7 +55,7 @@ func TestSelectLatestFile_StableRejectsPrereleaseOnly(t *testing.T) {
 		ChannelCode: 2,
 		FileDate:    "2024-02-01T00:00:00Z",
 	}}
-	if got := selectLatestFile(files, types.VersionStable); got != nil {
+	if got := selectLatestFile(files, version.Stable); got != nil {
 		t.Fatalf("stable selector selected a prerelease: %v", got)
 	}
 }

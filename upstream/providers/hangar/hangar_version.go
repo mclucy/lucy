@@ -1,31 +1,33 @@
 package hangar
 
 import (
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 const hangarPreferredPlatform = "PAPER"
 
 type hangarDependencies struct {
 	version  *hangarVersion
-	platform types.Ecosystem
+	platform catalog.Ecosystem
 }
 
-func (h *hangarDependencies) ToDependencySet() types.DependencySet {
-	result := types.DependencySet{FromArtifact: true}
+func (h *hangarDependencies) ToDependencySet() upstream.DependencySet {
+	result := upstream.DependencySet{FromArtifact: true}
 	for _, dep := range h.version.DependenciesForPlatform(h.platform) {
 		if dep.Name == "" || dep.ExternalURL != nil {
 			continue
 		}
 		result.Dependencies = append(
-			result.Dependencies, types.Dependency{
-				ID: types.VersionedPackageRef{
-					PackageRef: types.PackageRef{
+			result.Dependencies, catalog.Dependency{
+				ID: catalog.VersionedRef{
+					Ref: catalog.Ref{
 						Name:     input.ToProjectName(dep.Name),
-						Provider: types.ProviderUnspecified,
+						Provider: catalog.ProviderUnspecified,
 					},
-					Ecosystem: types.EcosystemUnspecified,
+					Ecosystem: catalog.EcosystemUnspecified,
 				},
 				Mandatory: dep.Required,
 			},
@@ -34,16 +36,16 @@ func (h *hangarDependencies) ToDependencySet() types.DependencySet {
 	return result
 }
 
-func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
+func resolveVersion(id catalog.VersionedRef) (*hangarVersion, error) {
 	versions, err := listVersions(id.Name)
 	if err != nil {
 		return nil, err
 	}
 
 	switch id.Version {
-	case types.VersionAny, types.VersionBeta:
+	case versionpkg.Any, versionpkg.Beta:
 		return selectLatestVersion(versions, id.Ecosystem, id.Version)
-	case types.VersionStable:
+	case versionpkg.Stable:
 		return selectLatestCompatibleVersion(versions, id.Ecosystem)
 	default:
 		for i := range versions {
@@ -61,15 +63,15 @@ func resolveVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 // declare no platform dependency.
 func selectLatestVersion(
 	versions []hangarVersion,
-	platform types.Ecosystem,
-	selector types.Version,
+	platform catalog.Ecosystem,
+	selector versionpkg.Version,
 ) (*hangarVersion, error) {
-	platforms := []types.Ecosystem{platform}
-	if platform != types.EcosystemUnspecified {
-		platforms = append(platforms, types.EcosystemUnspecified)
+	platforms := []catalog.Ecosystem{platform}
+	if platform != catalog.EcosystemUnspecified {
+		platforms = append(platforms, catalog.EcosystemUnspecified)
 	}
 	for _, candidatePlatform := range platforms {
-		if selector == types.VersionAny {
+		if selector == versionpkg.Any {
 			if version := firstVersionMatching(
 				versions,
 				candidatePlatform,
@@ -96,7 +98,7 @@ func selectLatestVersion(
 // a prerelease channel.
 func selectLatestCompatibleVersion(
 	versions []hangarVersion,
-	platform types.Ecosystem,
+	platform catalog.Ecosystem,
 ) (*hangarVersion, error) {
 	if version := firstVersionMatching(
 		versions,
@@ -111,7 +113,7 @@ func selectLatestCompatibleVersion(
 
 func firstVersionMatching(
 	versions []hangarVersion,
-	platform types.Ecosystem,
+	platform catalog.Ecosystem,
 	requireCompatibility bool,
 	requireRelease bool,
 ) *hangarVersion {
@@ -131,8 +133,8 @@ func firstVersionMatching(
 	return nil
 }
 
-func preferredDownloadPlatform(platform types.Ecosystem) types.Ecosystem {
-	if platform == types.EcosystemUnspecified {
+func preferredDownloadPlatform(platform catalog.Ecosystem) catalog.Ecosystem {
+	if platform == catalog.EcosystemUnspecified {
 		return "paper"
 	}
 	return "paper"

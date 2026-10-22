@@ -10,23 +10,24 @@ package curseforge
 import (
 	"fmt"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 )
 
 type provider struct{}
 
 var Provider provider
 
-func (provider) Provider() types.Provider {
-	return types.ProviderCurseForge
+func (provider) Provider() catalog.Provider {
+	return catalog.ProviderCurseForge
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	// CurseForge exposes no client/server search facet; IncludeClient cannot
 	// be applied upstream and is left to post-filtering.
-	u := searchUrl(types.PackageName(q.Keyword), q.FilterEcosystem)
+	u := searchUrl(catalog.Name(q.Keyword), q.FilterEcosystem)
 	log.Debug("searching via curseforge api: " + u)
 
 	resp := &searchResponse{}
@@ -38,32 +39,32 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 
 func (p provider) Fetch(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	file, err := getFileByDisplayName(mod.ID, string(id.Version), local, id.Ecosystem)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	resolved := file.ToPackageRemote()
-	resolved.ID.PackageRef = id.PackageRef
+	resolved.ID.Ref = id.Ref
 	resolved.ID.Version = id.Version
 	return resolved, nil
 }
 
-func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
+func (p provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
 	mod, err := resolveSlug(ref.Name)
 	if err != nil {
-		return types.Metadata{}, err
+		return catalog.Metadata{}, err
 	}
 	description, err := getModDescription(mod.ID)
 	if err != nil {
-		return types.Metadata{}, err
+		return catalog.Metadata{}, err
 	}
 	info := rawProjectInformation{
 		mod: mod, description: description,
@@ -73,8 +74,8 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 
 func (p provider) Dependencies(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (*types.DependencySet, error) {
+	id catalog.VersionedRef,
+) (*upstream.DependencySet, error) {
 	mod, err := resolveSlug(id.Name)
 	if err != nil {
 		return nil, err
@@ -94,8 +95,8 @@ type curseforgeDependencies struct {
 	file *fileResponse
 }
 
-func (c *curseforgeDependencies) ToDependencySet() types.DependencySet {
-	result := types.DependencySet{
+func (c *curseforgeDependencies) ToDependencySet() upstream.DependencySet {
+	result := upstream.DependencySet{
 		FromArtifact: false,
 	}
 
@@ -111,10 +112,10 @@ func (c *curseforgeDependencies) ToDependencySet() types.DependencySet {
 		switch dep.RelationType {
 		case 2:
 			result.Dependencies = append(
-				result.Dependencies, types.Dependency{
-					ID: types.VersionedPackageRef{
-						PackageRef: types.PackageRef{
-							Name: types.PackageName(
+				result.Dependencies, catalog.Dependency{
+					ID: catalog.VersionedRef{
+						Ref: catalog.Ref{
+							Name: catalog.Name(
 								fmt.Sprintf(
 									"%d",
 									dep.ModId,
@@ -127,10 +128,10 @@ func (c *curseforgeDependencies) ToDependencySet() types.DependencySet {
 			)
 		case 3:
 			result.Dependencies = append(
-				result.Dependencies, types.Dependency{
-					ID: types.VersionedPackageRef{
-						PackageRef: types.PackageRef{
-							Name: types.PackageName(
+				result.Dependencies, catalog.Dependency{
+					ID: catalog.VersionedRef{
+						Ref: catalog.Ref{
+							Name: catalog.Name(
 								fmt.Sprintf(
 									"%d",
 									dep.ModId,
@@ -153,10 +154,10 @@ func (c *curseforgeDependencies) ToDependencySet() types.DependencySet {
 // beta) to a concrete version by querying the CurseForge API.
 func (p provider) ResolveVersionSelector(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (parsed types.VersionedPackageRef, err error) {
+	id catalog.VersionedRef,
+) (parsed catalog.VersionedRef, err error) {
 	if id.Ecosystem.IsUnspecified() {
-		id.Ecosystem = types.EcosystemUnspecified
+		id.Ecosystem = catalog.EcosystemUnspecified
 	}
 	parsed.Ecosystem = id.Ecosystem
 	parsed.Name = id.Name
@@ -168,7 +169,7 @@ func (p provider) ResolveVersionSelector(
 
 	var file *fileResponse
 	switch id.Version {
-	case types.VersionStable, types.VersionBeta, types.VersionAny:
+	case version.Stable, version.Beta, version.Any:
 		file, err = latestFile(mod.ID, local, id.Ecosystem, id.Version)
 	default:
 		return id, nil
@@ -177,6 +178,6 @@ func (p provider) ResolveVersionSelector(
 		return id, err
 	}
 
-	parsed.Version = types.Version(file.FileName)
+	parsed.Version = version.Version(file.FileName)
 	return parsed, nil
 }
