@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/terminal/style"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/workspace/identify"
 	"github.com/spf13/cobra"
 )
 
@@ -66,7 +67,7 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 		return actionStatusFromLock(cmd, long, logoMode)
 	}
 
-	ws := workspace.New()
+	ws, _ := identify.Packages(workspace.New())
 	reportObservationFindings(ws)
 	switch JSONMode(cmd) {
 	case JSONPretty:

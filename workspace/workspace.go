@@ -8,9 +8,13 @@
 //   - the running state of the server process
 //
 // New, NewAt, and Refresh return a Workspace value. A Workspace is an
-// immutable observation. Five members store facts: ServerDir, Wrappers,
-// Probe, Packages, and Warnings. Every other member is a method over these
-// facts.
+// immutable observation. Six members store facts: ServerDir, Wrappers,
+// Probe, Packages, UnidentifiedPackageFiles, and Warnings. Every other
+// member is a method over these facts.
+//
+// Observation is local-only: the package reads the server directory and the
+// installed artifacts, and never contacts upstream services. Resolving the
+// upstream identity of a package is a separate step.
 //
 // The package holds one cached observation of the current working
 // directory. Only Rebuild, Invalidate, and Refresh change it; no other
@@ -44,9 +48,14 @@ type Workspace struct {
 	// interpreted server is not enough.
 	Probe Probe `json:"-"`
 
-	// Packages lists the discovered content packages, derived once during
-	// observe.
+	// Packages contains identities associated with installed package files.
+	// Observation fills it from descriptors; identification can add hash matches.
 	Packages []DiscoveredPackage `json:"packages"`
+
+	// UnidentifiedPackageFiles lists JAR paths without a known package identity.
+	// A missing or unreadable descriptor does not establish that a file is a
+	// valid package.
+	UnidentifiedPackageFiles []string `json:"-"`
 }
 
 var (
@@ -133,6 +142,9 @@ func Refresh(workDir string) Workspace {
 // observe collects one snapshot of the server directory at dir. MCDR can
 // move the server directory away from dir; the probe and package scan then
 // run against that directory.
+//
+// observe reads local files only. It never contacts upstream services, and
+// a readable artifact descriptor is the sole source of a package identity.
 func observe(dir string) Workspace {
 	wrappers, warnings := detectWrappers(dir)
 
@@ -142,7 +154,7 @@ func observe(dir string) Workspace {
 		Warnings:  warnings,
 	}
 	ws.Probe = probeDirectory(ws.ServerDir)
-	ws.Packages = discoverPackages(
+	ws.Packages, ws.UnidentifiedPackageFiles = discoverPackages(
 		ws.PackageDirs(),
 		mcdrPluginDirs(wrappers),
 	)

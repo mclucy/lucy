@@ -11,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/report"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/workspace/identify"
 )
 
 type GraphOrigin int
@@ -80,7 +81,7 @@ func LoadDependencyData(workDir string, forceLive bool) (
 	}
 
 	origin = OriginLive
-	info := workspace.NewAt(workDir)
+	info, _ := identify.Packages(workspace.NewAt(workDir))
 	reportObservationFindings(info)
 	graph, err := BuildGraphFromProbe(info)
 	if err != nil {
