@@ -37,9 +37,11 @@ func newLiveStatusDocument(observed workspace.Workspace) liveStatusDocument {
 	}
 	for i, pkg := range observed.Packages {
 		document.Packages[i] = liveStatusPackageView{
-			ID:           pkg.ID,
-			Path:         pkg.Path,
-			Dependencies: pkg.Dependencies,
+			ID:   pkg.ID,
+			Path: pkg.Path,
+			Dependencies: upstream.DependencySet{
+				Dependencies: pkg.Dependencies,
+			},
 		}
 	}
 	if server := observed.Runtime(); server != nil {

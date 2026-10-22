@@ -64,8 +64,9 @@ To run the built binary against a test server directory:
 ├── install/                Convergence engine: lock replay, staged bootstrap, receipts, rollback
 ├── upstream/               Atomic capability interfaces: Searcher, Informer, etc.
 │   └── providers/          Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
-├── workspace/              Live runtime observation — server product, version, installed packages
-│   └── detector/           Declarative runtime node detection
+├── workspace/              Local runtime, wrapper, and package-file observation
+│   ├── identify/           Associate local package files with upstream identities
+│   └── internal/detector/  Declarative runtime node detection
 ├── bootstrap/              Pinned server product bootstrap profiles
 ├── resolve/                Catalogue selection and descriptor dependency validation
 ├── input/                  Trust boundary for external input, package ref parsing
@@ -94,6 +95,11 @@ To run the built binary against a test server directory:
 Keep `catalog` limited to the standard library and `version`. Shared usage alone
 does not justify placing a type there. Manifest declarations, lock records,
 workspace observations, runtime selection, and presentation stay with their owners.
+
+`workspace` reads local files without upstream access. `workspace/identify`
+connects unidentified package files to upstream identities through hash lookup.
+Commands and operations invoke identification explicitly; CLI output projections
+stay outside workspace observation.
 
 ## Output Style Flags
 

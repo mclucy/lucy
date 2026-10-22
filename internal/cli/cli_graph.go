@@ -246,7 +246,7 @@ func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
 			continue
 		}
 
-		for _, dep := range p.Dependencies.Dependencies {
+		for _, dep := range p.Dependencies {
 			depID := dep.ID.StringBase()
 
 			depEcosystem := dep.ID.Ecosystem

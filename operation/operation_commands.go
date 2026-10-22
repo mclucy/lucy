@@ -25,6 +25,7 @@ import (
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/workspace/identify"
 )
 
 // InitOptions describes a new manifest declaration.
@@ -283,7 +284,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	}}
 	var observed workspace.Workspace
 	if opts.Detect {
-		observed = workspace.NewAt(root)
+		observed, _ = identify.Packages(workspace.NewAt(root))
 		if observed.Probe.HasAmbiguity() {
 			return nil, observed.Warnings, fmt.Errorf(
 				"cannot initialize an ambiguous server runtime: %w",
