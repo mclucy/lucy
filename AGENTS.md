@@ -32,9 +32,13 @@ task e2e:compile:smoke  # Compile only the fixtures marked smoke
 task e2e:filetrack      # Run hermetic file tracking scenarios
 task sandboxes:list     # List sandbox definitions
 task sandboxes:gen      # Materialize sandboxes into .sandboxes/
+task logos:gen          # Regenerate status logos from terminal/assets/logos.yaml
+task logos:check        # Fail when committed status logos differ from the manifest
 ```
 
 Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/`ciphertextB`) plus optional release identity (`releaseVersion`/`releaseCommit`). Dotenv loads `.env`, `.cipher_key`, `.cipher_ciphertext`. See `docs/shared/cipher-key-operations.md`.
+
+Status logos under `terminal/assets/{small,large}_{plain,colored}/` are generated; never edit them by hand. Change `terminal/assets/logos.yaml` (pinned source URL + sha256 and per-logo preprocessing), then run `task logos:gen -- -preview test_logos` and review the PNG previews.
 
 To run the built binary against a test server directory:
 

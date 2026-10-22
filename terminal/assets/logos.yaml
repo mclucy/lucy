@@ -1,0 +1,208 @@
+# Inputs of the status logos. Run `task logos:gen` after changing this file.
+#
+# Every source is pinned by URL and sha256. Prefer a raw GitHub URL at a
+# commit, then a content-addressed CDN URL, then a Wayback `id_` snapshot.
+# The generator prints the palette of each logo; copy colors from there into
+# a fixed palette to set tones by hand. Tone 0 makes a color background.
+
+# Glyph shapes are measured with this font. DejaVu Sans Mono is the base of
+# Menlo and a common Linux default, so it is close to what most terminals draw.
+font:
+  url: https://raw.githubusercontent.com/matplotlib/matplotlib/8d64f03a1f501ba0019279bf2f8db3930d1fe33f/lib/matplotlib/mpl-data/fonts/ttf/DejaVuSansMono.ttf
+  sha256: 602ec86b8948cfcd956482fe64f94c36c867770149ef2f791d4613f443bcecb3
+
+variants:
+  - name: small
+    cols: 32
+    rows: 16
+  - name: large
+    cols: 48
+    rows: 24
+
+logos:
+  # The "ARC" plate and the plug are text and detail that do not survive at
+  # terminal size, so only the crescent and its flowers stay.
+  - id: arclight
+    source:
+      url: https://raw.githubusercontent.com/IzzelAliz/Arclight/67f4212dff5821e2a533be4a29f3803dfcfd05c1/.github/arclightlogo.jpg
+      sha256: 1a2d8daacb07511f33b95b7c312460fc7dafde1c201367c1a72ca387b6c1d971
+    knockout: 0.04
+    despeckle: 0.02
+    palette:
+      - color: "#1b4784"
+        tone: 0
+      - color: "#237894"
+        tone: 0
+      - color: "#a4a2d3"
+        tone: 0
+      - color: "#a5732a"
+      - color: "#fff571"
+
+  # The icon draws the monogram on a stone tile; the tile is background.
+  - id: carpet
+    source:
+      url: https://raw.githubusercontent.com/gnembon/fabric-carpet/79dc14f8820b375fa258d43df5bbecd7082e32ec/src/main/resources/assets/carpet/icon.png
+      sha256: 75e558e25d97dda5b3f6970fb7bde2aae692f4e7afb6a584dc091a2c76c2ec43
+    palette:
+      - color: "#434a4d"
+        tone: 1
+      - color: "#85857c"
+        tone: 0
+      - color: "#9b9b94"
+        tone: 0
+
+  - id: fabric
+    source:
+      url: https://raw.githubusercontent.com/FabricMC/fabricmc.net/b64554c92e290f0a4273ac66a8459aa4981df452/assets/logo.png
+      sha256: a41878c3c4c5790cfc920eabf98d3404103a74a6f3df69d632ceb220c9ec9dc7
+    pixel: true
+    colors: 4
+
+  - id: folia
+    source:
+      url: https://raw.githubusercontent.com/PaperMC/Folia/8cffa9059ad6bbc2b28510c38ed61a51098d4971/folia-server/src/main/resources/folia-logo.png
+      sha256: 9f35c59d7aa2905a3c176a187973f5291b61ca8ccb157990ccea226997f22c59
+    colors: 6
+    flat: true
+
+  # The crop keeps the anvil and drops the wordmark.
+  - id: forge
+    source:
+      url: https://raw.githubusercontent.com/MinecraftForge/Web/368a9e664805def20502925d2821a7a79437ef74/images/logo.svg
+      sha256: 5101739f9d86ed95c4776fd6dc2014bdfc20525a8c77ce3f50d9167b1e94856b
+    crop: [36, 30, 326, 186]
+    colors: 1
+
+  - id: lophine
+    source:
+      url: https://raw.githubusercontent.com/LophineLabs/Lophine/42d5694c1a0b8806adf28e5a16ddc8eb208b2a30/public/image/lophine/lophine1.png
+      sha256: f1f7db1e354bbaee503b72e13cceb79f995439b2c2cb35c56fa3b53cb1084fab
+    colors: 4
+    flat: true
+
+  # The official LuminolMC repository is gone; this is its archive.
+  - id: luminol
+    source:
+      url: https://raw.githubusercontent.com/LuminolCustomArchive/Luminol/38a6a1af58b478f7507d8c5b8a2884eee9859fcb/public/image/SVG/Luminol_6.svg
+      sha256: 6e3ada774842f4d2e71aad2da6c127e41d95dd80cca29b4374aa1ca22221511b
+    colors: 1
+
+  - id: mcdr
+    source:
+      url: https://raw.githubusercontent.com/MCDReforged/MCDReforged/ecd8b27ee2bccb847dc08ceea3796eaa7f55e7c1/logo/images/logo_compact.svg
+      sha256: ce22d25b9f79c1ea11273ead84782254383905b9ad36ac404fef999db65a4279
+    colors: 5
+
+  # The fur shades share one tone, so they differ only by color and the
+  # plain art keeps one clean fill.
+  - id: neoforge
+    source:
+      url: https://raw.githubusercontent.com/neoforged/NeoForge/090aba227fefe4bf0f5eaf5834c68851498c1040/.idea/icon.svg
+      sha256: 8408bfd60a620fa4b13fe8a56ec8f27af95b6c7b11212f782168ea9df2b7fadc
+    palette:
+      - color: "#13151a"
+        tone: 0.35
+      - color: "#66534d"
+        tone: 0.5
+      - color: "#a44e37"
+        tone: 0.7
+      - color: "#bf6134"
+        tone: 0.7
+      - color: "#d7742f"
+        tone: 0.7
+      - color: "#f9f4f4"
+        tone: 1
+
+  # The sheets of the paper stack share one tone.
+  - id: papermc
+    source:
+      url: https://raw.githubusercontent.com/PaperMC/papermc.io/423b977cfb15629a093bea128abbd5dba522f358/src/images/logo.svg
+      sha256: 883e88253b174a19f2df3c9099b832c9e2bee0f35f89ac84f4c5b5125fdc534c
+    palette:
+      - color: "#434343"
+        tone: 0.35
+      - color: "#418dda"
+        tone: 0.7
+      - color: "#fd4e56"
+        tone: 0.7
+      - color: "#94d404"
+        tone: 0.7
+      - color: "#f8e446"
+        tone: 0.7
+      - color: "#fdfdfd"
+        tone: 1
+
+  # SVG gradient strokes do not rasterize, so this is the raster export.
+  - id: purpur
+    source:
+      url: https://raw.githubusercontent.com/PurpurMC/PurpurDocs/2a3a2fae3ae4a5540df9ec5141b0ac149c7621e7/mkdocs/images/purpur-small.png
+      sha256: bf3ae5f982dbf7be161a0bf548445d8dbc2043befed08534492feae993b89b90
+    colors: 4
+    flat: true
+    glyphs: line
+
+  # The badge lettering falls away as small islands; the ring and the bolt
+  # stay.
+  - id: sinytra
+    source:
+      url: https://raw.githubusercontent.com/Sinytra/website/ca24999c07a7efdd63094c86239c8c6c47328a28/public/logo.png
+      sha256: e174c950dfef7d7985eec360336accfc366efd07696c67ceaf6b0be6f935b619
+    despeckle: 0.05
+    palette:
+      - color: "#000000"
+        tone: 1
+      - color: "#ffcf06"
+        tone: 0.6
+      - color: "#ffffff"
+        tone: 0
+
+  - id: sinytra-connector
+    source:
+      url: https://raw.githubusercontent.com/Sinytra/Connector/42f60428da3efd7eaaf098d2fadc531512a14eea/src/mod/resources/logo.png
+      sha256: 2e69ea6364794d77fa08bd21ef2b4e7e20875b24361f5a6412ed8d28b664fc53
+    despeckle: 0.05
+    palette:
+      - color: "#231f20"
+        tone: 1
+      - color: "#23344a"
+      - color: "#ffcf06"
+      - color: "#c7b48b"
+      - color: "#ffffff"
+        tone: 0
+
+  # SpigotMC has no repository, and its static host rejects scripted
+  # downloads, so this is a Wayback snapshot of the site logo.
+  - id: spigot
+    source:
+      url: https://web.archive.org/web/20260925180524id_/https://static.spigotmc.org/img/spigot.png
+      sha256: f5119cd6eb131daf92be7ece485e0c43075f922e3bd597dc77cac07d7ba56fd2
+    colors: 4
+
+  - id: sponge
+    source:
+      url: https://raw.githubusercontent.com/SpongePowered/SpongeHome/afc7adbe8ac8ed591de65fee348914f52201ce6c/public/assets/img/icons/spongie-mark-reverse-dark.svg
+      sha256: ccbaa0c79f4dfc2312a2de0cfb1ba58b39c2bacfbcff519c1aba5ce59238a6f7
+    colors: 1
+
+  # Mojang publishes the game icon only inside composite images; the
+  # Minecraft Wiki copy is the official artwork on its own. Blur turns the
+  # block texture into face shading.
+  - id: vanilla
+    source:
+      url: https://minecraft.wiki/images/Java_Edition_icon_3.png
+      sha256: 6e8f3498a7f871d6bd1c1b57a991a8d3766545ccf8397ab4768a6320ed6608f6
+    blur: 24
+    colors: 4
+
+  - id: vanilla-snapshot
+    source:
+      url: https://minecraft.wiki/images/Coarse_Dirt_JE1_BE1.png
+      sha256: e029e805584034e553009879ea54dbd39266402ce89f4e77fed7420e00e68679
+    blur: 8
+    colors: 3
+
+  - id: velocity
+    source:
+      url: https://raw.githubusercontent.com/PaperMC/velocitypowered.com/267684d24eadb18712e783de1a0ae6c6280920bf/src/assets/img/velocity-blue.png
+      sha256: 8fcfba5c97342dd90239d629b7a4dd569871304e6093ccb39a3e2dc102bdb1c4
+    colors: 2
