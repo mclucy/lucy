@@ -30,11 +30,7 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 	}
 	seenDirectories := map[string]bool{}
 	for _, planned := range d.Packages {
-		enabled := len(planned.Requirements) == 0
-		for _, r := range planned.Requirements {
-			enabled = enabled || r.Enabled
-		}
-		if !enabled {
+		if !planned.Enabled() {
 			continue
 		}
 		directory, folder := d.Server.Directory, packageFolder(planned.Environment, planned.Ecosystem)

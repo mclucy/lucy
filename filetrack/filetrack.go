@@ -497,11 +497,7 @@ func ValidateOwnership(root string, files []manifest.TrackedFile, locked *lockfi
 			add(locked.MCDR.Directory, "run-mcdr.sh")
 		}
 		for _, pkg := range locked.Packages {
-			active := len(pkg.Requirements) == 0
-			for _, requirement := range pkg.Requirements {
-				active = active || requirement.Enabled
-			}
-			if !active {
+			if !pkg.Enabled() {
 				continue
 			}
 			directory, folder := server.Directory, "mods"

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
@@ -78,20 +79,23 @@ func DigestFile(filename string, algorithms map[string]string) (map[string]strin
 	return out, nil
 }
 
-func (s *downloadStore) materialize(a *catalog.Artifact) (string, error) {
+// materialize returns the verified local file and the digests computed while
+// verifying it. The artifact is an input only; callers attach the returned
+// hashes when the artifact becomes part of a lock.
+func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedFile, error) {
 	if err := s.ctx.Err(); err != nil {
-		return "", err
+		return artifact.MaterializedFile{}, err
 	}
 	if a.Embedded != "" {
-		return "", fmt.Errorf("embedded artifacts are extracted from their pinned parent")
+		return artifact.MaterializedFile{}, fmt.Errorf("embedded artifacts are extracted from their pinned parent")
 	}
 	if a.Filename == "" || filepath.Base(a.Filename) != a.Filename || strings.ContainsAny(a.Filename, "/\\") {
-		return "", fmt.Errorf("invalid artifact filename %q", a.Filename)
+		return artifact.MaterializedFile{}, fmt.Errorf("invalid artifact filename %q", a.Filename)
 	}
 	key := sha256.Sum256([]byte(a.URL))
 	dir := filepath.Join(s.dir, hex.EncodeToString(key[:]))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return artifact.MaterializedFile{}, err
 	}
 	destination := filepath.Join(dir, a.Filename)
 	source := "cache"
@@ -101,7 +105,7 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (string, error) {
 			// A destination that fails verification would be reused by every
 			// later attempt, so discard it instead of leaving bad bytes.
 			if err := os.Remove(destination); err != nil {
-				return "", err
+				return artifact.MaterializedFile{}, err
 			}
 		}
 		if s.offline {
@@ -110,23 +114,22 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (string, error) {
 			source = "download"
 		}
 		if err := s.materializeFile(a, dir, destination); err != nil {
-			return "", err
+			return artifact.MaterializedFile{}, err
 		}
 		if hashes, err = DigestFile(destination, a.Hashes); err != nil {
 			os.Remove(destination)
-			return "", err
+			return artifact.MaterializedFile{}, err
 		}
 	} else {
 		s.cacheHit()
 	}
-	a.Hashes = hashes
 	log.Debug(
 		"artifact verified",
 		"file", a.Filename,
 		"sha256", hashes["sha256"],
 		"source", source,
 	)
-	return destination, nil
+	return artifact.MaterializedFile{Path: destination, Hashes: hashes}, nil
 }
 
 // materializeFile materializes the artifact at destination from the network or

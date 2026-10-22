@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
@@ -65,7 +66,7 @@ func trustMavenChecksum(ctx context.Context, a *catalog.Artifact) error {
 func ResolveServerProduct(
 	ctx context.Context,
 	req ServerProductRequest,
-	acquire func(*catalog.Artifact) (string, error),
+	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
 ) (ServerProductResolution, error) {
 	out := ServerProductResolution{
 		Minecraft:      req.Minecraft,
@@ -108,9 +109,11 @@ func ResolveServerProduct(
 		)
 		out.Artifact = minecraft
 		out.ProductVersion = req.Minecraft
-		if _, err := acquire(&out.Artifact); err != nil {
+		materialized, err := acquire(&out.Artifact)
+		if err != nil {
 			return out, err
 		}
+		out.Artifact.Hashes = materialized.Hashes
 		return out, nil
 	}
 	out.Inputs = []server.BootstrapInput{
@@ -176,9 +179,11 @@ func ResolveServerProduct(
 			if e := trustMavenChecksum(ctx, &out.Artifact); e != nil {
 				return out, e
 			}
-			if _, e := acquire(&out.Artifact); e != nil {
+			materialized, e := acquire(&out.Artifact)
+			if e != nil {
 				return out, e
 			}
+			out.Artifact.Hashes = materialized.Hashes
 			for _, lib := range profile.Libraries {
 				input, downloadable, e := libraryInput(
 					lib,
@@ -230,11 +235,12 @@ func ResolveServerProduct(
 				URL:       remote.FileURL,
 				Hashes:    map[string]string{},
 			}
-			installer, e := acquire(&out.Artifact)
+			materialized, e := acquire(&out.Artifact)
 			if e != nil {
 				return out, e
 			}
-			if err := resolveInstaller(ctx, req, &out, installer); err != nil {
+			out.Artifact.Hashes = materialized.Hashes
+			if err := resolveInstaller(ctx, req, &out, materialized.Path); err != nil {
 				return out, err
 			}
 			log.Debug(
@@ -301,20 +307,23 @@ func ResolveServerProduct(
 	if err != nil {
 		return out, err
 	}
-	corePath, err := acquire(&out.Artifact)
+	materialized, err := acquire(&out.Artifact)
 	if err != nil {
 		return out, err
 	}
+	out.Artifact.Hashes = materialized.Hashes
 	if out.Bootstrapper == "paperclip" {
-		if err := paperclipInput(&out, corePath); err != nil {
+		if err := paperclipInput(&out, materialized.Path); err != nil {
 			return out, err
 		}
 	}
 	for i := range out.Inputs {
 		if out.Inputs[i].Embedded == "" {
-			if _, e := acquire(&out.Inputs[i].Artifact); e != nil {
+			input, e := acquire(&out.Inputs[i].Artifact)
+			if e != nil {
 				return out, e
 			}
+			out.Inputs[i].Artifact.Hashes = input.Hashes
 		}
 	}
 	return out, nil

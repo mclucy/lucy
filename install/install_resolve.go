@@ -174,12 +174,21 @@ func resolveInstall(
 	}
 	opts.Trace.phaseStarted("packages")
 	start := time.Now()
+	var previousPackages []lockfile.Package
+	if old != nil {
+		previousPackages = old.Packages
+	}
 	packages, moduleWarnings, err := resolve.Packages(resolve.PackagesRequest{
-		Context:            ctx,
-		Manifest:           d,
-		Previous:           old,
-		Server:             resolved.Server,
-		MCDRVersion:        mcdrVersion,
+		Context:  ctx,
+		Manifest: d,
+		Previous: previousPackages,
+		Target: resolve.Target{
+			Product:      resolved.Server.Product,
+			Bootstrapper: resolved.Server.Bootstrapper,
+			Minecraft:    resolved.Server.Minecraft,
+			CoreVersion:  resolved.Server.CoreVersion,
+			MCDRVersion:  mcdrVersion,
+		},
 		Materialize:        store.materialize,
 		WithOptional:       opts.WithOptional,
 		AcceptBroken:       opts.AcceptBroken,
