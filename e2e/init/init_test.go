@@ -1,17 +1,26 @@
 //go:build e2e
 
-// Package init verifies that Lucy initializes manifests from real modpack
-// workspaces.
+// Package init verifies that Lucy initializes manifests from real server
+// workspaces, including modpack fixtures and composed launcher layouts.
 package init
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json/v2"
+	"fmt"
+	"io"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/mclucy/lucy/e2e/internal/testkit"
 	"github.com/mclucy/lucy/lockfile"
@@ -19,100 +28,495 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestInitialize runs lucy init against each modpack sandbox and checks the
-// manifest and lock that the CLI writes for a real, decompressed server.
+// TestInitialize runs lucy init against each real sandbox composition and
+// checks the manifest and lock that the CLI writes for it.
 func TestInitialize(t *testing.T) {
 	binary := testkit.Lucy(t)
 	for _, id := range slices.Sorted(maps.Keys(initializeScenarios)) {
 		t.Run(id, func(t *testing.T) {
 			t.Parallel()
-			want := initializeScenarios[id]
-			root := testkit.CloneSandbox(t, id)
+			scenario := initializeScenarios[id]
+			sandbox := scenario.sandbox
+			if sandbox == "" {
+				sandbox = id
+			}
+			root, err := filepath.EvalSymlinks(testkit.CloneSandbox(t, sandbox))
+			if err != nil {
+				t.Fatalf("resolve clone root for %q: %v", sandbox, err)
+			}
 			// A local sandbox may carry intent from an earlier run; init must
 			// start from the server workspace alone.
-			for _, name := range []string{manifest.Filename, lockfile.Filename, ".lucy"} {
-				if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
-					t.Fatalf("clear generated %s from sandbox: %v", name, err)
+			removePaths(t, root, []string{manifest.Filename, lockfile.Filename, ".lucy"})
+			// Composition cases start from the files the modpack itself ships,
+			// not from a previous installation left in the generated sandbox.
+			removePaths(t, root, scenario.prune)
+			unchanged := digests(t, root, scenario.unchanged)
+
+			runner := commandRunner{
+				binary: binary,
+				home:   filepath.Join(t.TempDir(), "home"),
+			}
+			for _, command := range scenario.prepare {
+				args := withEntryPoint(command.args, root, command.selectEntryPoint)
+				stdout, stderr, err := runner.execute(t, root, args...)
+				if err != nil {
+					t.Fatalf(
+						"prepare %s: %v\nstdout: %s\nstderr: %s",
+						strings.Join(args, " "), err, stdout, stderr,
+					)
 				}
-			}
-			cmd := exec.Command(binary, "init", "--no-interactive", "--no-style")
-			cmd.Dir = root
-			var stderr bytes.Buffer
-			cmd.Stderr = &stderr
-			stdout, err := cmd.Output()
-			if err != nil {
-				t.Fatalf(
-					"lucy init: %v; stdout: %s; stderr: %s",
-					err, stdout, stderr.String(),
-				)
-			}
-			data, err := os.ReadFile(filepath.Join(root, manifest.Filename))
-			if err != nil {
-				t.Fatalf("read generated manifest: %v", err)
-			}
-			var document manifestDocument
-			if err := yaml.Unmarshal(data, &document); err != nil {
-				t.Fatalf("decode generated manifest: %v", err)
-			}
-			server := document.Server
-			if server.Minecraft != want.minecraft ||
-				server.Core.Product != want.product ||
-				server.Core.ProductVersion != want.coreVersion {
-				t.Errorf(
-					"manifest identity: got %s/%s@%s, want %s/%s@%s",
-					server.Minecraft, server.Core.Product, server.Core.ProductVersion,
-					want.minecraft, want.product, want.coreVersion,
-				)
-			}
-			total := 0
-			for _, packages := range server.Packages {
-				total += len(packages)
-			}
-			if total < want.minPackages {
-				t.Errorf("manifest packages: got %d, want at least %d", total, want.minPackages)
-			}
-			for loader, entries := range want.packages {
-				for reference, version := range entries {
-					if got := server.Packages[loader][reference]; got != version {
-						t.Errorf(
-							"manifest package %s [%s]: got %q, want %q",
-							reference, loader, got, version,
+				if command.wantEntryPoint != "" {
+					locked := readLock(t, root)
+					if locked.Server.EntryPoint != command.wantEntryPoint {
+						t.Fatalf(
+							"preparation selected entry point %q, want %q",
+							locked.Server.EntryPoint, command.wantEntryPoint,
 						)
 					}
 				}
 			}
-			for loader, references := range want.absent {
-				for _, reference := range references {
-					if _, ok := server.Packages[loader][reference]; ok {
-						t.Errorf("manifest lists client-only package %s [%s]", reference, loader)
-					}
-				}
+			for _, artifact := range scenario.artifacts {
+				copyArtifact(t, root, sandbox, artifact)
 			}
-			lockData, err := os.ReadFile(filepath.Join(root, lockfile.Filename))
+			removePaths(t, root, scenario.removeBefore)
+			modifyInstalledFiles(t, root, scenario.modifyFiles)
+
+			args := []string{"init", "--no-interactive"}
+			if scenario.force {
+				args = append(args, "--force")
+			}
+			args = withEntryPoint(args, root, scenario.selectEntryPoint)
+			stdout, stderr, err := runner.execute(t, root, args...)
+			output := stdout + stderr
+			if scenario.expectFailure {
+				requireFailure(t, root, scenario, output, err)
+				verifyUnchanged(t, root, scenario.unchanged, unchanged)
+				return
+			}
 			if err != nil {
-				t.Fatalf("read generated lock: %v", err)
-			}
-			locked, err := lockfile.Decode(bytes.NewReader(lockData))
-			if err != nil {
-				t.Fatalf("decode generated lock: %v", err)
-			}
-			if locked.Server.Minecraft.String() != want.minecraft ||
-				locked.Server.Product.String() != want.product {
-				t.Errorf(
-					"lock identity: got %s/%s, want %s/%s",
-					locked.Server.Minecraft, locked.Server.Product,
-					want.minecraft, want.product,
+				t.Fatalf(
+					"lucy init: %v\nstdout: %s\nstderr: %s",
+					err, stdout, stderr,
 				)
 			}
-			if len(locked.Packages) < want.minPackages {
-				t.Errorf(
-					"lock packages: got %d, want at least %d",
-					len(locked.Packages), want.minPackages,
-				)
+			if strings.Contains(output, "ERROR ") {
+				t.Fatalf("init reported an error finding:\n%s", output)
 			}
-			if _, err := os.Stat(filepath.Join(root, ".lucy", "install.yaml")); !os.IsNotExist(err) {
-				t.Errorf("init staged an installation receipt: %v", err)
+			requireInformational(t, stderr, root, scenario.informational)
+			locked := verifyInitialized(t, root, scenario)
+			verifyEntryPoint(t, root, locked, scenario.wantEntryPoint)
+			verifyReceipt(t, root, scenario.wantReceipt)
+			if scenario.status != nil {
+				verifyStatus(t, runner, root, *scenario.status, scenario.informational)
 			}
+			verifyUnchanged(t, root, scenario.unchanged, unchanged)
 		})
 	}
+}
+
+// requireFailure asserts that init refused the directory, that an unresolved
+// conflict names the exact selection command, and that the prior declaration
+// and receipt stayed intact.
+func requireFailure(
+	t *testing.T,
+	root string,
+	scenario initializeScenario,
+	output string,
+	err error,
+) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("init succeeded where it must refuse:\n%s", output)
+	}
+	for _, candidate := range scenario.guidance {
+		path := filepath.Join(root, filepath.FromSlash(candidate))
+		command := "lucy init --entry-point '" + path + "'"
+		if !strings.Contains(output, command) {
+			t.Errorf("init failure does not name the selection command %q:\n%s", command, output)
+		}
+	}
+	if len(scenario.guidance) > 0 && strings.Contains(output, "--from") {
+		t.Errorf("init failure still advertises the removed --from spelling:\n%s", output)
+	}
+	if scenario.minecraft != "" {
+		verifyInitialized(t, root, scenario)
+	}
+	if scenario.wantEntryPoint != "" {
+		locked := readLock(t, root)
+		if locked.Server.EntryPoint != scenario.wantEntryPoint {
+			t.Errorf(
+				"refused init changed the declared entry point to %q, want %q",
+				locked.Server.EntryPoint, scenario.wantEntryPoint,
+			)
+		}
+	}
+	verifyReceipt(t, root, scenario.wantReceipt)
+}
+
+// requireInformational requires an INFO-level report line naming each path.
+// The message text stays free to change; the severity and path are the
+// consumer-visible contract.
+func requireInformational(t *testing.T, output, root string, paths []string) {
+	t.Helper()
+	for _, candidate := range paths {
+		path := filepath.Join(root, filepath.FromSlash(candidate))
+		found := false
+		for line := range strings.SplitSeq(output, "\n") {
+			if strings.Contains(line, "INFO") && strings.Contains(line, path) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("no INFO finding names %s:\n%s", path, output)
+		}
+	}
+}
+
+func verifyInitialized(
+	t *testing.T,
+	root string,
+	scenario initializeScenario,
+) lockfile.Document {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, manifest.Filename))
+	if err != nil {
+		t.Fatalf("read generated manifest: %v", err)
+	}
+	var document manifestDocument
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		t.Fatalf("decode generated manifest: %v", err)
+	}
+	server := document.Server
+	if server.Minecraft != scenario.minecraft ||
+		server.Core.Product != scenario.product ||
+		server.Core.ProductVersion != scenario.coreVersion {
+		t.Errorf(
+			"manifest identity: got %s/%s@%s, want %s/%s@%s",
+			server.Minecraft, server.Core.Product, server.Core.ProductVersion,
+			scenario.minecraft, scenario.product, scenario.coreVersion,
+		)
+	}
+	total := 0
+	for _, packages := range server.Packages {
+		total += len(packages)
+	}
+	if total < scenario.minPackages {
+		t.Errorf("manifest packages: got %d, want at least %d", total, scenario.minPackages)
+	}
+	for loader, entries := range scenario.packages {
+		for reference, version := range entries {
+			if got := server.Packages[loader][reference]; got != version {
+				t.Errorf(
+					"manifest package %s [%s]: got %q, want %q",
+					reference, loader, got, version,
+				)
+			}
+		}
+	}
+	for loader, references := range scenario.absent {
+		for _, reference := range references {
+			if _, ok := server.Packages[loader][reference]; ok {
+				t.Errorf("manifest lists client-only package %s [%s]", reference, loader)
+			}
+		}
+	}
+	locked := readLock(t, root)
+	if locked.Server.Minecraft.String() != scenario.minecraft ||
+		locked.Server.Product.String() != scenario.product {
+		t.Errorf(
+			"lock identity: got %s/%s, want %s/%s",
+			locked.Server.Minecraft, locked.Server.Product,
+			scenario.minecraft, scenario.product,
+		)
+	}
+	if locked.Server.CoreVersion.String() != scenario.coreVersion {
+		t.Errorf(
+			"lock core version: got %s, want %s",
+			locked.Server.CoreVersion, scenario.coreVersion,
+		)
+	}
+	if len(locked.Packages) < scenario.minPackages {
+		t.Errorf(
+			"lock packages: got %d, want at least %d",
+			len(locked.Packages), scenario.minPackages,
+		)
+	}
+	return locked
+}
+
+func verifyEntryPoint(t *testing.T, root string, locked lockfile.Document, want string) {
+	t.Helper()
+	if want == "" {
+		return
+	}
+	if got := locked.Server.EntryPoint; got != want {
+		t.Fatalf("selected entry point = %q, want %q", got, want)
+	}
+	path := filepath.Join(root, filepath.FromSlash(want))
+	if info, err := os.Stat(path); err != nil || info.IsDir() {
+		t.Fatalf("selected entry point %s is not an installed file: %v", want, err)
+	}
+}
+
+func verifyReceipt(t *testing.T, root string, want bool) {
+	t.Helper()
+	path := filepath.Join(root, ".lucy", "install.yaml")
+	_, err := os.Stat(path)
+	switch {
+	case want && err != nil:
+		t.Errorf("expected the installation receipt to survive init: %v", err)
+	case !want && !os.IsNotExist(err):
+		t.Errorf("init staged an installation receipt: %v", err)
+	}
+}
+
+func verifyStatus(
+	t *testing.T,
+	runner commandRunner,
+	root string,
+	want statusExpectation,
+	informational []string,
+) {
+	t.Helper()
+	stdout, stderr, err := runner.execute(t, root, "status", "--json-compact")
+	if err != nil {
+		t.Fatalf("lucy status: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if strings.Contains(stderr, "ERROR ") {
+		t.Fatalf("live status reported a runtime conflict:\n%s", stderr)
+	}
+	requireInformational(t, stderr, root, informational)
+	var document statusDocument
+	if err := json.Unmarshal([]byte(stdout), &document); err != nil {
+		t.Fatalf("decode live status JSON: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if document.Server == nil {
+		t.Fatal("live status reported no server")
+	}
+	primary := document.Server.Primary
+	if primary.Ecosystem != want.ecosystem || primary.Name != want.name ||
+		primary.Version != want.version {
+		t.Errorf(
+			"live status primary runtime = %s:%s@%s, want %s:%s@%s",
+			primary.Ecosystem, primary.Name, primary.Version,
+			want.ecosystem, want.name, want.version,
+		)
+	}
+	for reference, version := range want.components {
+		ecosystem, name, found := strings.Cut(reference, ":")
+		if !found {
+			continue
+		}
+		if got := componentVersion(document.Server.Components, ecosystem, name); got != version {
+			t.Errorf(
+				"live status component %s = %q, want %q",
+				reference, got, version,
+			)
+		}
+	}
+}
+
+func componentVersion(components []statusRef, ecosystem, name string) string {
+	for _, component := range components {
+		if component.Ecosystem == ecosystem && component.Name == name {
+			return component.Version
+		}
+	}
+	return ""
+}
+
+func readLock(t *testing.T, root string) lockfile.Document {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, lockfile.Filename))
+	if err != nil {
+		t.Fatalf("read generated lock: %v", err)
+	}
+	locked, err := lockfile.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decode generated lock: %v", err)
+	}
+	return *locked
+}
+
+func withEntryPoint(args []string, root, entryPoint string) []string {
+	args = slices.Clone(args)
+	if entryPoint != "" {
+		args = append(
+			args,
+			"--entry-point",
+			filepath.Join(root, filepath.FromSlash(entryPoint)),
+		)
+	}
+	return args
+}
+
+func removePaths(t *testing.T, root string, paths []string) {
+	t.Helper()
+	for _, path := range paths {
+		if err := os.RemoveAll(filepath.Join(root, filepath.FromSlash(path))); err != nil {
+			t.Fatalf("remove %s: %v", path, err)
+		}
+	}
+}
+
+func copyArtifact(t *testing.T, root, sandbox string, artifact initializeArtifact) {
+	t.Helper()
+	sourceSandbox := artifact.sandbox
+	if sourceSandbox == "" {
+		sourceSandbox = sandbox
+	}
+	source := filepath.Join(
+		testkit.Sandbox(t, sourceSandbox),
+		filepath.FromSlash(artifact.source),
+	)
+	target := filepath.Join(root, filepath.FromSlash(artifact.dest))
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatalf("create directory for %s: %v", artifact.dest, err)
+	}
+	in, err := os.Open(source)
+	if err != nil {
+		t.Fatalf("open fixture %s: %v", source, err)
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.Create(target)
+	if err != nil {
+		t.Fatalf("create %s: %v", artifact.dest, err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		t.Fatalf("copy fixture to %s: %v", artifact.dest, err)
+	}
+	if err := out.Close(); err != nil {
+		t.Fatalf("close %s: %v", artifact.dest, err)
+	}
+}
+
+func digests(t *testing.T, root string, paths []string) map[string]string {
+	t.Helper()
+	sums := make(map[string]string, len(paths))
+	for _, path := range paths {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		sum := sha256.Sum256(data)
+		sums[path] = hex.EncodeToString(sum[:])
+	}
+	return sums
+}
+
+// verifyUnchanged proves the named fixture files survived preparation and
+// initialization byte-for-byte.
+func verifyUnchanged(t *testing.T, root string, paths []string, before map[string]string) {
+	t.Helper()
+	for _, path := range paths {
+		if got := digests(t, root, []string{path})[path]; got != before[path] {
+			t.Errorf("%s changed during initialization", path)
+		}
+	}
+}
+
+// modifyInstalledFiles appends a ZIP archive comment to each installed file.
+// Entries and manifests stay readable, but the bytes no longer match the
+// digest the installation receipt recorded.
+func modifyInstalledFiles(t *testing.T, root string, paths []string) {
+	t.Helper()
+	comment := []byte("\nmodified after the ownership receipt was written\n")
+	for _, path := range paths {
+		absolute := filepath.Join(root, filepath.FromSlash(path))
+		data, err := os.ReadFile(absolute)
+		if err != nil {
+			t.Fatalf("read installed file %s: %v", path, err)
+		}
+		info, err := os.Stat(absolute)
+		if err != nil {
+			t.Fatalf("stat installed file %s: %v", path, err)
+		}
+		end := bytes.LastIndex(data, []byte("PK\x05\x06"))
+		if end < 0 || end+22 > len(data) {
+			t.Fatalf("installed file %s has no ZIP end record", path)
+		}
+		commentLength := int(binary.LittleEndian.Uint16(data[end+20 : end+22]))
+		if end+22+commentLength != len(data) {
+			t.Fatalf("installed file %s has an unexpected ZIP layout", path)
+		}
+		if commentLength+len(comment) > 0xffff {
+			t.Fatalf("installed file %s ZIP comment is too long", path)
+		}
+		binary.LittleEndian.PutUint16(
+			data[end+20:end+22],
+			uint16(commentLength+len(comment)),
+		)
+		data = append(data, comment...)
+		if err := os.WriteFile(absolute, data, info.Mode().Perm()); err != nil {
+			t.Fatalf("modify installed file %s: %v", path, err)
+		}
+	}
+}
+
+type statusDocument struct {
+	Server *struct {
+		Primary    statusRef   `json:"primary_runtime"`
+		Components []statusRef `json:"runtime_components"`
+	} `json:"server"`
+}
+
+type statusRef struct {
+	Ecosystem string `json:"ecosystem"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+}
+
+type commandRunner struct {
+	binary string
+	home   string
+}
+
+// execute runs one Lucy command in root with an isolated home and captures
+// stdout and stderr separately so status can be decoded without log noise.
+func (r commandRunner) execute(t *testing.T, root string, args ...string) (string, string, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Minute)
+	defer cancel()
+	if err := os.MkdirAll(r.home, 0o755); err != nil {
+		return "", "", fmt.Errorf("create command home: %w", err)
+	}
+	overrides := map[string]string{
+		"HOME":            r.home,
+		"USERPROFILE":     r.home,
+		"XDG_CACHE_HOME":  filepath.Join(r.home, "cache"),
+		"XDG_CONFIG_HOME": filepath.Join(r.home, "config"),
+	}
+	environment := make([]string, 0, len(os.Environ())+len(overrides))
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if _, overridden := overrides[strings.ToUpper(key)]; overridden {
+			continue
+		}
+		environment = append(environment, entry)
+	}
+	for key, value := range overrides {
+		environment = append(environment, key+"="+value)
+	}
+	args = append(args, "--no-style")
+	cmd := exec.CommandContext(ctx, r.binary, args...)
+	cmd.Dir = root
+	cmd.Env = environment
+	cmd.WaitDelay = 5 * time.Second
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if ctx.Err() != nil {
+		return stdout.String(), stderr.String(), fmt.Errorf(
+			"lucy %s: %w", strings.Join(args, " "), ctx.Err(),
+		)
+	}
+	if err != nil {
+		return stdout.String(), stderr.String(), fmt.Errorf(
+			"lucy %s: %w", strings.Join(args, " "), err,
+		)
+	}
+	return stdout.String(), stderr.String(), nil
 }
