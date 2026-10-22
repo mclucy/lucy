@@ -136,6 +136,7 @@ func init() {
 		cli.NewExportCommand(),
 		cli.NewInitCommand(),
 		cli.NewInstallCommand(),
+		cli.NewJavaCommand(),
 		cli.NewLeavesCommand(),
 		cli.NewRemoveCommand(),
 		cli.NewTreeCommand(),

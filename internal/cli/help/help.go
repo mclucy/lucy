@@ -40,6 +40,17 @@ const (
 
 	InstallShort = "Sync the server with the manifest and lock"
 
+	JavaShort     = "Show and choose the Java runtime of the server"
+	JavaListShort = "List installed Java runtimes and the Java the server asks for"
+	JavaUseShort  = "Pin a Java version or distribution, or use a Java runtime on this machine"
+	JavaUseLong   = "A version or --distribution pins the Java of the server in lucy.yaml. " +
+		"auto returns that part to the default: the Java version that Mojang " +
+		"recommends for the Minecraft version, from any distribution. --path " +
+		"uses one Java home or java executable on this machine only and records " +
+		"it in lucy.local.yaml, which takes precedence over lucy.yaml; " +
+		"--path auto lets Lucy choose again. Without arguments, an " +
+		"interactive form asks for the version and the distribution."
+
 	LeavesShort = "List packages with no dependencies"
 
 	RemoveShort = "Remove packages"

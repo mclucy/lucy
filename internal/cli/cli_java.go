@@ -1,0 +1,423 @@
+package cli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"slices"
+	"strconv"
+	"strings"
+
+	"charm.land/huh/v2"
+	"github.com/charmbracelet/x/term"
+	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/java"
+	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/operation"
+	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/style"
+	"github.com/mclucy/lucy/types"
+	"github.com/spf13/cobra"
+)
+
+const (
+	flagJavaDistributionName = "distribution"
+	flagJavaPathName         = "path"
+)
+
+// javaChoices lists the long-term support releases that the interactive form
+// offers next to the installed major versions.
+var javaChoices = []int{8, 11, 17, 21, 25}
+
+var javaCmd = &cobra.Command{
+	Use:   "java <subcommand>",
+	Short: help.JavaShort,
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return cmd.Help()
+	},
+}
+
+var javaListCmd = &cobra.Command{
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   help.JavaListShort,
+	Args:    cobra.NoArgs,
+	RunE:    actionJavaList,
+}
+
+var javaUseCmd = &cobra.Command{
+	Use:   "use [version|auto]",
+	Short: help.JavaUseShort,
+	Long:  help.JavaUseLong,
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  actionJavaUse,
+}
+
+func NewJavaCommand() *cobra.Command {
+	javaUseCmd.Flags().String(
+		flagJavaDistributionName,
+		"",
+		"Pin a Java distribution in lucy.yaml, or auto to accept any",
+	)
+	javaUseCmd.Flags().String(
+		flagJavaPathName,
+		"",
+		"Use this Java home or java executable on this machine, or auto to let Lucy choose",
+	)
+	javaUseCmd.MarkFlagsMutuallyExclusive(flagJavaPathName, flagJavaDistributionName)
+	javaCmd.AddCommand(javaListCmd, javaUseCmd)
+	return javaCmd
+}
+
+// javaListView is the machine-readable `java list` result.
+type javaListView struct {
+	Requirement *java.Requirement `json:"requirement,omitempty"`
+	Selection   *java.Check       `json:"selection,omitempty"`
+	Runtimes    []javaRuntimeView `json:"runtimes"`
+}
+
+type javaRuntimeView struct {
+	java.Runtime
+	Selected bool     `json:"selected"`
+	Problems []string `json:"problems,omitempty"`
+}
+
+func actionJavaList(cmd *cobra.Command, _ []string) error {
+	root, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("could not determine working directory: %w", err)
+	}
+	ctx, stop := commandContext(cmd)
+	defer stop()
+	requirement, err := lockedJavaRequirement(root)
+	if err != nil {
+		return err
+	}
+	runtimes, err := java.Installed(ctx)
+	if err != nil {
+		return err
+	}
+	view := javaListView{Requirement: requirement, Runtimes: []javaRuntimeView{}}
+	if requirement != nil {
+		if view.Selection, err = java.Select(ctx, root, *requirement); err != nil {
+			return err
+		}
+	}
+	for _, runtime := range runtimes {
+		entry := javaRuntimeView{Runtime: runtime}
+		if requirement != nil {
+			entry.Problems = requirement.Misses(&runtime)
+		}
+		entry.Selected = view.Selection != nil && view.Selection.Runtime != nil &&
+			view.Selection.Runtime.Home == runtime.Home
+		view.Runtimes = append(view.Runtimes, entry)
+	}
+	if mode := JSONMode(cmd); mode != JSONNone {
+		return style.WriteJSON(cmd.OutOrStdout(), view, mode == JSONCompact)
+	}
+	out := cmd.OutOrStdout()
+	if requirement == nil {
+		fmt.Fprintf(
+			out,
+			"No %s; run lucy install to resolve the Java the server asks for.\n",
+			lockfile.Filename,
+		)
+	} else {
+		writeJavaRequirement(out, requirement)
+	}
+	if view.Selection != nil && view.Selection.Source == java.SourceLocal {
+		fmt.Fprintf(out, "%s selects %s\n", manifest.LocalFilename, view.Selection.LocalHome)
+	}
+	fmt.Fprintln(out)
+	if len(view.Runtimes) == 0 {
+		fmt.Fprintln(out, "No Java runtime found.")
+	}
+	for _, entry := range view.Runtimes {
+		writeJavaRuntime(out, entry, requirement != nil)
+	}
+	if view.Selection != nil {
+		for _, warning := range javaWarnings(view.Selection) {
+			report.Warn(warning)
+		}
+	}
+	return nil
+}
+
+func writeJavaRequirement(out io.Writer, requirement *java.Requirement) {
+	target := strconv.Itoa(requirement.Target())
+	fmt.Fprintf(
+		out,
+		"%s Java %s · %s\n",
+		style.Accent("Requires"),
+		target,
+		javaDistributionLabel(requirement.Distribution),
+	)
+	width := 0
+	for _, c := range requirement.Constraints {
+		width = max(width, len(c.Source))
+	}
+	for _, c := range requirement.Constraints {
+		fmt.Fprintf(out, "  %-*s  %s\n", width, c.Source, style.Muted(c.Expression))
+	}
+}
+
+func writeJavaRuntime(out io.Writer, entry javaRuntimeView, checked bool) {
+	marker := " "
+	switch {
+	case !checked:
+	case len(entry.Problems) == 0:
+		marker = style.Success("✓")
+	default:
+		marker = style.Failure("✗")
+	}
+	line := fmt.Sprintf(
+		"%s %-3d %-12s %-22s %s",
+		marker,
+		entry.Major,
+		entry.Version,
+		entry.Build(),
+		style.Muted(entry.Home),
+	)
+	if entry.Selected {
+		line += " " + style.Accent("(selected)")
+	}
+	fmt.Fprintln(out, line)
+}
+
+func actionJavaUse(cmd *cobra.Command, args []string) error {
+	root, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("could not determine working directory: %w", err)
+	}
+	ctx, stop := commandContext(cmd)
+	defer stop()
+	change, err := javaChangeFromFlags(cmd, args)
+	if err != nil {
+		return err
+	}
+	if change == (operation.JavaChange{}) {
+		if !javaPromptAvailable(cmd) {
+			return fmt.Errorf(
+				"specify a Java version or auto, --%s, or --%s; choosing interactively needs a terminal",
+				flagJavaDistributionName,
+				flagJavaPathName,
+			)
+		}
+		if change, err = promptJavaChange(ctx, root); err != nil {
+			return err
+		}
+	}
+	result, err := operation.SetJava(ctx, root, change)
+	if err != nil {
+		return err
+	}
+	if mode := JSONMode(cmd); mode != JSONNone {
+		return style.WriteJSON(cmd.OutOrStdout(), result, mode == JSONCompact)
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "%s: %s\n", manifest.Filename, javaOverrideLabel(result.Java))
+	if result.Home != "" {
+		fmt.Fprintf(out, "%s: %s\n", manifest.LocalFilename, result.Home)
+	} else if result.PublishedLocal {
+		fmt.Fprintf(out, "%s: Lucy chooses the Java runtime\n", manifest.LocalFilename)
+	}
+	requirement, err := lockedJavaRequirement(root)
+	if err != nil || requirement == nil {
+		return err
+	}
+	if !result.PublishedLock && result.PublishedManifest {
+		fmt.Fprintf(out, "Run lucy install to update %s.\n", lockfile.Filename)
+		return nil
+	}
+	check, err := java.Select(ctx, root, *requirement)
+	if err != nil {
+		return err
+	}
+	for _, warning := range javaWarnings(check) {
+		report.Warn(warning)
+	}
+	return nil
+}
+
+func javaChangeFromFlags(cmd *cobra.Command, args []string) (operation.JavaChange, error) {
+	var change operation.JavaChange
+	if len(args) == 1 {
+		if cmd.Flags().Changed(flagJavaPathName) {
+			return change, fmt.Errorf("a Java version and --%s cannot be used together", flagJavaPathName)
+		}
+		version, err := parseJavaMajor(args[0])
+		if err != nil {
+			return change, err
+		}
+		change.Version = &version
+	}
+	if cmd.Flags().Changed(flagJavaDistributionName) {
+		raw, _ := cmd.Flags().GetString(flagJavaDistributionName)
+		distribution, err := manifest.ParseJavaDistribution(raw)
+		if err != nil {
+			return change, err
+		}
+		change.Distribution = &distribution
+	}
+	if cmd.Flags().Changed(flagJavaPathName) {
+		path, _ := cmd.Flags().GetString(flagJavaPathName)
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return change, fmt.Errorf("--%s needs a Java home, a java executable, or auto", flagJavaPathName)
+		}
+		if path == manifest.JavaAuto {
+			path = ""
+		}
+		change.Path = &path
+	}
+	return change, nil
+}
+
+func parseJavaMajor(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if strings.EqualFold(raw, manifest.JavaAuto) {
+		return 0, nil
+	}
+	version, err := strconv.Atoi(raw)
+	if err != nil || version < manifest.MinimumJava {
+		return 0, fmt.Errorf(
+			"%q is not a Java major version of %d or later, or auto",
+			raw,
+			manifest.MinimumJava,
+		)
+	}
+	return version, nil
+}
+
+func javaPromptAvailable(cmd *cobra.Command) bool {
+	file, ok := cmd.InOrStdin().(*os.File)
+	return ok && term.IsTerminal(file.Fd()) && style.InteractiveEnabled()
+}
+
+// promptJavaChange asks for the Java version and distribution that lucy.yaml
+// pins. Each answer starts at the current value.
+func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, error) {
+	d, err := manifest.Read(root)
+	if err != nil {
+		return operation.JavaChange{}, err
+	}
+	runtimes, err := java.Installed(ctx)
+	if err != nil {
+		return operation.JavaChange{}, err
+	}
+	current := manifest.Java{}
+	if d.Server.Java != nil {
+		current = *d.Server.Java
+	}
+	version, distribution := current.Version, current.Distribution
+
+	majors := slices.Clone(javaChoices)
+	for _, runtime := range runtimes {
+		majors = append(majors, runtime.Major)
+	}
+	if version != 0 {
+		majors = append(majors, version)
+	}
+	slices.Sort(majors)
+	majors = slices.Compact(majors)
+	slices.Reverse(majors)
+	versionOptions := []huh.Option[int]{
+		huh.NewOption("auto (the version Mojang recommends)", 0),
+	}
+	for _, major := range majors {
+		versionOptions = append(versionOptions, huh.NewOption("Java "+strconv.Itoa(major), major))
+	}
+	distributionOptions := []huh.Option[types.JavaDistribution]{
+		huh.NewOption("auto (any distribution)", types.JavaDistributionAny),
+	}
+	for _, known := range types.JavaDistributions {
+		distributionOptions = append(
+			distributionOptions,
+			huh.NewOption(known.Title()+" ("+string(known)+")", known),
+		)
+	}
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[int]().
+				Title("Java version in "+manifest.Filename).
+				Options(versionOptions...).
+				Value(&version),
+			huh.NewSelect[types.JavaDistribution]().
+				Title("Java distribution in "+manifest.Filename).
+				Options(distributionOptions...).
+				Value(&distribution),
+		),
+	)
+	if err := form.Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return operation.JavaChange{}, errors.New("java selection cancelled")
+		}
+		return operation.JavaChange{}, err
+	}
+	return operation.JavaChange{
+		Version:      &version,
+		Distribution: &distribution,
+	}, nil
+}
+
+// lockedJavaRequirement returns the Java requirement of the lock in root, or
+// nil when the workspace has no lock.
+func lockedJavaRequirement(root string) (*java.Requirement, error) {
+	lock, err := lockfile.Read(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	requirement := java.RequirementOf(lock)
+	return &requirement, nil
+}
+
+// javaWarnings turns the problems of a Java check into warnings, with a hint
+// that names the command that fixes them.
+func javaWarnings(check *java.Check) []error {
+	if check == nil || check.Satisfied() {
+		return nil
+	}
+	warnings := make([]error, 0, len(check.Problems)+1)
+	for _, problem := range check.Problems {
+		warnings = append(warnings, errors.New(problem))
+	}
+	if check.Source == java.SourceLocal {
+		warnings = append(warnings, fmt.Errorf(
+			"run lucy java use --%s <home> to select another Java runtime, or --%s auto to let Lucy choose",
+			flagJavaPathName,
+			flagJavaPathName,
+		))
+		return warnings
+	}
+	warnings = append(warnings, fmt.Errorf(
+		"run lucy install --java to install Java %d (%s)",
+		check.Target,
+		javaDistributionLabel(check.Distribution),
+	))
+	return warnings
+}
+
+func javaDistributionLabel(distribution types.JavaDistribution) string {
+	if distribution == types.JavaDistributionAny {
+		return "any distribution"
+	}
+	return distribution.Title()
+}
+
+func javaOverrideLabel(override *manifest.Java) string {
+	if override.IsAuto() {
+		return "Java auto · any distribution"
+	}
+	version := manifest.JavaAuto
+	if override.Version != 0 {
+		version = strconv.Itoa(override.Version)
+	}
+	return "Java " + version + " · " + javaDistributionLabel(override.Distribution)
+}
