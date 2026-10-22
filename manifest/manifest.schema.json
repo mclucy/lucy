@@ -36,7 +36,6 @@
           ]
         },
         "java": {
-          "description": "Overrides the Java runtime the server runs on. Omit it to follow the Java version Mojang recommends for the Minecraft version.",
           "oneOf": [
             {
               "type": "integer",
