@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"sync"
 
+	catalogpkg "github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/bmclapi"
 	"github.com/mclucy/lucy/upstream/providers/curseforge"
@@ -42,54 +42,54 @@ var (
 )
 
 type providerCatalog struct {
-	packageProviders   map[types.Provider]upstream.PackageProvider
-	searchProviders    map[types.Registry]upstream.SearchProvider
-	infoProviders      map[types.Provider]upstream.InfoProvider
-	artifactMappers    map[types.Provider]upstream.ArtifactMapProvider
-	installerProviders map[types.Provider]upstream.InstallerProvider
+	packageProviders   map[catalogpkg.Provider]upstream.PackageProvider
+	searchProviders    map[catalogpkg.Registry]upstream.SearchProvider
+	infoProviders      map[catalogpkg.Provider]upstream.InfoProvider
+	artifactMappers    map[catalogpkg.Provider]upstream.ArtifactMapProvider
+	installerProviders map[catalogpkg.Provider]upstream.InstallerProvider
 }
 
 var providerCatalogOnce = sync.OnceValue(newProviderCatalog)
 
 func newProviderCatalog() providerCatalog {
 	catalog := providerCatalog{
-		packageProviders: map[types.Provider]upstream.PackageProvider{
-			types.ProviderModrinth: modrinth.Provider,
-			types.ProviderMCDR:     mcdr.Provider,
-			types.ProviderHangar:   hangar.Provider,
-			types.ProviderSpiget:   spiget.Provider,
+		packageProviders: map[catalogpkg.Provider]upstream.PackageProvider{
+			catalogpkg.ProviderModrinth: modrinth.Provider,
+			catalogpkg.ProviderMCDR:     mcdr.Provider,
+			catalogpkg.ProviderHangar:   hangar.Provider,
+			catalogpkg.ProviderSpiget:   spiget.Provider,
 		},
-		searchProviders: map[types.Registry]upstream.SearchProvider{
-			types.RegistryModrinth: modrinth.Provider,
-			types.RegistryMCDR:     mcdr.Provider,
-			types.RegistryHangar:   hangar.Provider,
-			types.RegistrySpiget:   spiget.Provider,
+		searchProviders: map[catalogpkg.Registry]upstream.SearchProvider{
+			catalogpkg.RegistryModrinth: modrinth.Provider,
+			catalogpkg.RegistryMCDR:     mcdr.Provider,
+			catalogpkg.RegistryHangar:   hangar.Provider,
+			catalogpkg.RegistrySpiget:   spiget.Provider,
 		},
-		infoProviders: map[types.Provider]upstream.InfoProvider{
-			types.ProviderModrinth: modrinth.Provider,
-			types.ProviderMCDR:     mcdr.Provider,
-			types.ProviderHangar:   hangar.Provider,
-			types.ProviderSpiget:   spiget.Provider,
+		infoProviders: map[catalogpkg.Provider]upstream.InfoProvider{
+			catalogpkg.ProviderModrinth: modrinth.Provider,
+			catalogpkg.ProviderMCDR:     mcdr.Provider,
+			catalogpkg.ProviderHangar:   hangar.Provider,
+			catalogpkg.ProviderSpiget:   spiget.Provider,
 		},
-		artifactMappers: map[types.Provider]upstream.ArtifactMapProvider{
-			types.ProviderModrinth: modrinth.Provider,
+		artifactMappers: map[catalogpkg.Provider]upstream.ArtifactMapProvider{
+			catalogpkg.ProviderModrinth: modrinth.Provider,
 		},
-		installerProviders: map[types.Provider]upstream.InstallerProvider{
-			types.ProviderBMCLAPI:  bmclapi.Provider,
-			types.ProviderFabric:   fabric.Provider,
-			types.ProviderForge:    forge.Provider,
-			types.ProviderMojang:   mojang.Provider,
-			types.ProviderNeoForge: neoforge.Provider,
+		installerProviders: map[catalogpkg.Provider]upstream.InstallerProvider{
+			catalogpkg.ProviderBMCLAPI:  bmclapi.Provider,
+			catalogpkg.ProviderFabric:   fabric.Provider,
+			catalogpkg.ProviderForge:    forge.Provider,
+			catalogpkg.ProviderMojang:   mojang.Provider,
+			catalogpkg.ProviderNeoForge: neoforge.Provider,
 		},
 	}
 	if !curseforge.Enabled() {
 		return catalog
 	}
 
-	catalog.packageProviders[types.ProviderCurseForge] = curseforge.Provider
-	catalog.searchProviders[types.RegistryCurseForge] = curseforge.Provider
-	catalog.infoProviders[types.ProviderCurseForge] = curseforge.Provider
-	catalog.artifactMappers[types.ProviderCurseForge] = curseforge.Provider
+	catalog.packageProviders[catalogpkg.ProviderCurseForge] = curseforge.Provider
+	catalog.searchProviders[catalogpkg.RegistryCurseForge] = curseforge.Provider
+	catalog.infoProviders[catalogpkg.ProviderCurseForge] = curseforge.Provider
+	catalog.artifactMappers[catalogpkg.ProviderCurseForge] = curseforge.Provider
 	return catalog
 }
 
@@ -105,7 +105,7 @@ func ListAutoProviders() []upstream.PackageProvider {
 }
 
 func GetArtifactMapper(
-	provider types.Provider,
+	provider catalogpkg.Provider,
 ) (upstream.ArtifactMapProvider, bool, error) {
 	mapper, ok := providerCatalogInstance().artifactMappers[provider]
 	if !ok {
@@ -123,7 +123,7 @@ func artifactMappers() []upstream.ArtifactMapProvider {
 }
 
 func artifactMappersFromProviders(
-	providers []types.Provider,
+	providers []catalogpkg.Provider,
 ) []upstream.ArtifactMapProvider {
 	catalog := providerCatalogInstance()
 	mappers := make([]upstream.ArtifactMapProvider, 0, len(providers))
@@ -138,7 +138,7 @@ func artifactMappersFromProviders(
 
 // InstallerFor returns the installer provider that can bootstrap the
 // ecosystem.
-func InstallerFor(ecosystem types.Ecosystem) (
+func InstallerFor(ecosystem catalogpkg.Ecosystem) (
 	upstream.InstallerProvider,
 	bool,
 ) {
@@ -151,7 +151,7 @@ func InstallerFor(ecosystem types.Ecosystem) (
 
 // InstallerForProvider returns the installer provider registered for the
 // provider key.
-func InstallerForProvider(provider types.Provider) (
+func InstallerForProvider(provider catalogpkg.Provider) (
 	upstream.InstallerProvider,
 	bool,
 ) {
@@ -166,40 +166,40 @@ func InstallerForProvider(provider types.Provider) (
 	return installer, ok
 }
 
-func installerProviderForEcosystem(ecosystem types.Ecosystem) (
-	types.Provider,
+func installerProviderForEcosystem(ecosystem catalogpkg.Ecosystem) (
+	catalogpkg.Provider,
 	bool,
 ) {
 	switch ecosystem {
-	case types.EcosystemMinecraft:
-		return types.ProviderMojang, true
-	case types.EcosystemForge:
-		return types.ProviderForge, true
-	case types.EcosystemNeoForge:
-		return types.ProviderNeoForge, true
-	case types.EcosystemFabric:
-		return types.ProviderFabric, true
+	case catalogpkg.EcosystemMinecraft:
+		return catalogpkg.ProviderMojang, true
+	case catalogpkg.EcosystemForge:
+		return catalogpkg.ProviderForge, true
+	case catalogpkg.EcosystemNeoForge:
+		return catalogpkg.ProviderNeoForge, true
+	case catalogpkg.EcosystemFabric:
+		return catalogpkg.ProviderFabric, true
 	default:
 		log.Debug(
 			"routing: no installer provider",
 			"ecosystem", ecosystem,
 			"reason", "unsupported ecosystem",
 		)
-		return types.ProviderUnknown, false
+		return catalogpkg.ProviderUnknown, false
 	}
 }
 
 // ResolveProviders resolves ordered provider candidates for the platform and
 // user-specified provider.
 func ResolveProviders(
-	platform types.Ecosystem,
-	provider types.Provider,
+	platform catalogpkg.Ecosystem,
+	provider catalogpkg.Provider,
 ) ([]upstream.PackageProvider, error) {
-	if provider == types.ProviderUnknown {
+	if provider == catalogpkg.ProviderUnknown {
 		return nil, ErrUnknownProvider
 	}
 
-	if provider != types.ProviderUnspecified {
+	if provider != catalogpkg.ProviderUnspecified {
 		return resolveExplicitProvider(provider)
 	}
 
@@ -228,14 +228,14 @@ func ResolveProviders(
 // platform filter active, explicit registry selection is validated against
 // registry capability data.
 func ResolveSearchProviders(
-	platform types.Ecosystem,
-	registry types.Registry,
+	platform catalogpkg.Ecosystem,
+	registry catalogpkg.Registry,
 ) ([]upstream.SearchProvider, error) {
-	if registry == types.RegistryUnknown {
+	if registry == catalogpkg.RegistryUnknown {
 		return nil, ErrUnknownProvider
 	}
 
-	if registry != types.RegistryUnspecified {
+	if registry != catalogpkg.RegistryUnspecified {
 		if err := validateSearchRegistryEcosystem(registry, platform); err != nil {
 			log.Debug(
 				"routing: search registry rejected for platform",
@@ -292,14 +292,14 @@ func ResolveSearchProviders(
 }
 
 func ResolveInfoProviders(
-	platform types.Ecosystem,
-	provider types.Provider,
+	platform catalogpkg.Ecosystem,
+	provider catalogpkg.Provider,
 ) ([]upstream.InfoProvider, error) {
-	if provider == types.ProviderUnknown {
+	if provider == catalogpkg.ProviderUnknown {
 		return nil, ErrUnknownProvider
 	}
 
-	if provider != types.ProviderUnspecified {
+	if provider != catalogpkg.ProviderUnspecified {
 		return resolveExplicitInformer(provider)
 	}
 
@@ -324,7 +324,7 @@ func ResolveInfoProviders(
 	return providers, nil
 }
 
-func resolveExplicitInformer(provider types.Provider) (
+func resolveExplicitInformer(provider catalogpkg.Provider) (
 	[]upstream.InfoProvider,
 	error,
 ) {
@@ -345,7 +345,7 @@ func resolveExplicitInformer(provider types.Provider) (
 	return []upstream.InfoProvider{informer}, nil
 }
 
-func resolveExplicitRegistry(registry types.Registry) (
+func resolveExplicitRegistry(registry catalogpkg.Registry) (
 	[]upstream.SearchProvider,
 	error,
 ) {
@@ -367,14 +367,14 @@ func resolveExplicitRegistry(registry types.Registry) (
 }
 
 func ResolveProvidersForRuntime(
-	ecosystems []types.Ecosystem,
-	provider types.Provider,
+	ecosystems []catalogpkg.Ecosystem,
+	provider catalogpkg.Provider,
 ) ([]upstream.PackageProvider, error) {
-	if provider == types.ProviderUnknown {
+	if provider == catalogpkg.ProviderUnknown {
 		return nil, ErrUnknownProvider
 	}
 
-	if provider != types.ProviderUnspecified {
+	if provider != catalogpkg.ProviderUnspecified {
 		return resolveExplicitProvider(provider)
 	}
 
@@ -412,7 +412,7 @@ func ResolveProvidersForRuntime(
 	}
 }
 
-func resolveExplicitProvider(provider types.Provider) (
+func resolveExplicitProvider(provider catalogpkg.Provider) (
 	[]upstream.PackageProvider,
 	error,
 ) {
@@ -434,8 +434,8 @@ func resolveExplicitProvider(provider types.Provider) (
 }
 
 func validateSearchRegistryEcosystem(
-	registry types.Registry,
-	platform types.Ecosystem,
+	registry catalogpkg.Registry,
+	platform catalogpkg.Ecosystem,
 ) error {
 	if !platform.IsSearchable() {
 		return nil
@@ -454,7 +454,7 @@ func validateSearchRegistryEcosystem(
 	)
 }
 
-func packageProvidersFromKeys(providers []types.Provider) (
+func packageProvidersFromKeys(providers []catalogpkg.Provider) (
 	[]upstream.PackageProvider,
 	error,
 ) {
@@ -469,7 +469,7 @@ func packageProvidersFromKeys(providers []types.Provider) (
 	return capabilities, nil
 }
 
-func searchersFromKeys(keys []types.Provider) (
+func searchersFromKeys(keys []catalogpkg.Provider) (
 	[]upstream.SearchProvider,
 	error,
 ) {
@@ -488,7 +488,7 @@ func searchersFromKeys(keys []types.Provider) (
 	return capabilities, nil
 }
 
-func informersFromKeys(keys []types.Provider) (
+func informersFromKeys(keys []catalogpkg.Provider) (
 	[]upstream.InfoProvider,
 	error,
 ) {
@@ -504,6 +504,6 @@ func informersFromKeys(keys []types.Provider) (
 }
 
 func curseforgeAvailable() bool {
-	_, ok := providerCatalogInstance().packageProviders[types.ProviderCurseForge]
+	_, ok := providerCatalogInstance().packageProviders[catalogpkg.ProviderCurseForge]
 	return ok
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -14,7 +14,7 @@ var ErrNoProviderSucceeded = errors.New("no provider succeeded")
 type ProviderError struct {
 	// Provider identifies the semantic upstream label for user-facing diagnostics.
 	// The failed runtime executor is a Provider implementation.
-	Provider types.Provider
+	Provider catalog.Provider
 	Err      error
 }
 
@@ -61,7 +61,7 @@ func SearchMany(
 				}
 				return
 			}
-			if res.Provider == types.ProviderUnknown {
+			if res.Provider == catalog.ProviderUnknown {
 				res.Provider = provider.Provider()
 			}
 			slots[i] = slot{ok: true, res: res}
@@ -89,14 +89,14 @@ func SearchMany(
 func FetchMany(
 	local upstream.LocalContext,
 	providers []upstream.PackageProvider,
-	id types.VersionedPackageRef,
-) ([]types.ResolvedPackage, []ProviderError) {
+	id catalog.VersionedRef,
+) ([]upstream.ResolvedPackage, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
 	}
 
 	type slot struct {
-		res    types.ResolvedPackage
+		res    upstream.ResolvedPackage
 		err    ProviderError
 		ok     bool
 		failed bool
@@ -132,7 +132,7 @@ func FetchMany(
 			}
 			// Routing binds the provider's concrete identity to the selected
 			// ecosystem/name/version coordinate returned by resolution.
-			remoteData.ID = types.VersionedPackageRef{
+			remoteData.ID = catalog.VersionedRef{
 				Name:      resolvedID.Name,
 				Provider:  provider.Provider(),
 				Ecosystem: resolvedID.Ecosystem,
@@ -144,7 +144,7 @@ func FetchMany(
 
 	wg.Wait()
 
-	results := make([]types.ResolvedPackage, 0, len(providers))
+	results := make([]upstream.ResolvedPackage, 0, len(providers))
 	providerErrors := make([]ProviderError, 0)
 	for _, item := range slots {
 		if item.ok {
@@ -162,7 +162,7 @@ func FetchMany(
 // first successful result. Ref.Provider records the provider that answered.
 func GetInfoFirstSuccess(
 	providers []upstream.InfoProvider,
-	ref types.PackageRef,
+	ref catalog.Ref,
 ) (upstream.Info, []ProviderError, error) {
 	if len(providers) == 0 {
 		return upstream.Info{}, nil, ErrNoProviderSucceeded
@@ -179,7 +179,7 @@ func GetInfoFirstSuccess(
 				return
 			}
 			resChan <- upstream.Info{
-				Ref:      types.PackageRef{Name: ref.Name, Provider: provider.Provider()},
+				Ref:      catalog.Ref{Name: ref.Name, Provider: provider.Provider()},
 				Metadata: metadata,
 			}
 		}(provider)
@@ -205,7 +205,7 @@ func GetInfoFirstSuccess(
 // Ref is zero when no mapper matched the artifact. Errors holds the failure
 // of each mapper. A lookup with errors is incomplete, not a miss.
 type ArtifactLookup struct {
-	Ref    types.VersionedPackageRef
+	Ref    catalog.VersionedRef
 	Errors []ProviderError
 }
 
@@ -243,14 +243,14 @@ func ResolveArtifactByHash(artifact upstream.ArtifactFingerprint) ArtifactLookup
 func DependenciesMany(
 	local upstream.LocalContext,
 	providers []upstream.PackageProvider,
-	id types.VersionedPackageRef,
-) ([]types.DependencySet, []ProviderError) {
+	id catalog.VersionedRef,
+) ([]upstream.DependencySet, []ProviderError) {
 	if len(providers) == 0 {
 		return nil, nil
 	}
 
 	type slot struct {
-		res    types.DependencySet
+		res    upstream.DependencySet
 		err    ProviderError
 		ok     bool
 		failed bool
@@ -272,7 +272,7 @@ func DependenciesMany(
 				}
 				return
 			}
-			result := types.DependencySet{}
+			result := upstream.DependencySet{}
 			if deps != nil {
 				result = *deps
 			}
@@ -282,7 +282,7 @@ func DependenciesMany(
 
 	wg.Wait()
 
-	results := make([]types.DependencySet, 0, len(providers))
+	results := make([]upstream.DependencySet, 0, len(providers))
 	providerErrors := make([]ProviderError, 0)
 	for _, item := range slots {
 		if item.ok {

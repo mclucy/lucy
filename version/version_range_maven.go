@@ -3,8 +3,6 @@ package version
 import (
 	"fmt"
 	"strings"
-
-	"github.com/mclucy/lucy/types"
 )
 
 // parseMavenRange parses Maven version ranges used by Forge and NeoForge.
@@ -13,7 +11,7 @@ import (
 // References:
 //   - https://docs.minecraftforge.net/en/latest/gettingstarted/modfiles/
 //   - https://maven.apache.org/enforcer/enforcer-rules/versionRanges.html
-func parseMavenRange(raw string) (types.VersionExpr, error) {
+func parseMavenRange(raw string) (Expr, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "*" || strings.EqualFold(raw, "none") {
 		return nil, nil
@@ -24,7 +22,7 @@ func parseMavenRange(raw string) (types.VersionExpr, error) {
 		return nil, err
 	}
 
-	result := make(types.VersionExpr, 0, len(parts))
+	result := make(Expr, 0, len(parts))
 	for _, part := range parts {
 		constraints, err := parseMavenSingleRange(strings.TrimSpace(part))
 		if err != nil {
@@ -80,14 +78,14 @@ func splitMavenUnions(raw string) ([]string, error) {
 	return out, nil
 }
 
-func parseMavenSingleRange(raw string) ([]types.VersionSubExpr, error) {
+func parseMavenSingleRange(raw string) ([]SubExpr, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, fmt.Errorf("empty Maven range")
 	}
 
 	if !startsRange(raw) {
-		if parseMavenVersion(types.Version(raw)) == nil {
+		if parseMavenVersion(Version(raw)) == nil {
 			return nil, fmt.Errorf("invalid Maven version %q", raw)
 		}
 		return nil, nil
@@ -105,12 +103,12 @@ func parseMavenSingleRange(raw string) ([]types.VersionSubExpr, error) {
 	body := strings.TrimSpace(raw[1 : len(raw)-1])
 	if !strings.Contains(body, ",") {
 		if left == '[' && right == ']' && body != "" {
-			version := parseMavenVersion(types.Version(body))
+			version := parseMavenVersion(Version(body))
 			if version == nil {
 				return nil, fmt.Errorf("invalid Maven version %q", body)
 			}
-			return []types.VersionSubExpr{
-				{Value: version, Operator: types.OpEq},
+			return []SubExpr{
+				{Value: version, Operator: OpEq},
 			}, nil
 		}
 		return nil, fmt.Errorf("invalid Maven range %q", raw)
@@ -120,30 +118,30 @@ func parseMavenSingleRange(raw string) ([]types.VersionSubExpr, error) {
 	lowerToken := strings.TrimSpace(bounds[0])
 	upperToken := strings.TrimSpace(bounds[1])
 	var lower, upper *MavenVersion
-	out := make([]types.VersionSubExpr, 0, 2)
+	out := make([]SubExpr, 0, 2)
 	if lowerToken != "" {
-		parsed := parseMavenVersion(types.Version(lowerToken))
+		parsed := parseMavenVersion(Version(lowerToken))
 		if parsed == nil {
 			return nil, fmt.Errorf("invalid Maven version %q", lowerToken)
 		}
 		lower = parsed.(*MavenVersion)
-		operator := types.OpGt
+		operator := OpGt
 		if left == '[' {
-			operator = types.OpGte
+			operator = OpGte
 		}
-		out = append(out, types.VersionSubExpr{Value: lower, Operator: operator})
+		out = append(out, SubExpr{Value: lower, Operator: operator})
 	}
 	if upperToken != "" {
-		parsed := parseMavenVersion(types.Version(upperToken))
+		parsed := parseMavenVersion(Version(upperToken))
 		if parsed == nil {
 			return nil, fmt.Errorf("invalid Maven version %q", upperToken)
 		}
 		upper = parsed.(*MavenVersion)
-		operator := types.OpLt
+		operator := OpLt
 		if right == ']' {
-			operator = types.OpLte
+			operator = OpLte
 		}
-		out = append(out, types.VersionSubExpr{Value: upper, Operator: operator})
+		out = append(out, SubExpr{Value: upper, Operator: operator})
 	}
 	if lower != nil && upper != nil {
 		comparison, comparable := lower.Compare(upper)

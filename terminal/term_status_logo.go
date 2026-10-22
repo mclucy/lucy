@@ -8,8 +8,10 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 // LogoVariant selects between the large and small logo variants.
@@ -27,9 +29,9 @@ const (
 // FieldLogo is a Field that holds the ASCII logo for the status view.
 // It also provides the line and width data used by the layout compositor.
 type FieldLogo struct {
-	Product   types.ServerProduct
-	Ecosystem types.Ecosystem
-	Version   types.Version
+	Product   server.Product
+	Ecosystem catalog.Ecosystem
+	Version   version.Version
 	NoColor   bool
 	Mode      StatusLogoMode
 }
@@ -159,9 +161,9 @@ func loadEmbeddedLogoAssets() map[string]string {
 // GetLogo returns the logo for the server product, ecosystem, Minecraft
 // version, and variant.
 func GetLogo(
-	product types.ServerProduct,
-	ecosystem types.Ecosystem,
-	minecraftVersion types.Version,
+	product server.Product,
+	ecosystem catalog.Ecosystem,
+	minecraftVersion version.Version,
 	variant LogoVariant,
 ) string {
 	name := logoAssetName(product, ecosystem, minecraftVersion)
@@ -191,9 +193,9 @@ func logoVariantDirectory(variant LogoVariant) (string, bool) {
 }
 
 func logoAssetName(
-	product types.ServerProduct,
-	ecosystem types.Ecosystem,
-	minecraftVersion types.Version,
+	product server.Product,
+	ecosystem catalog.Ecosystem,
+	minecraftVersion version.Version,
 ) string {
 	name := strings.ToLower(strings.TrimSpace(product.String()))
 	switch name {
@@ -218,19 +220,19 @@ func logoAssetName(
 	}
 
 	switch ecosystem {
-	case types.EcosystemFabric:
+	case catalog.EcosystemFabric:
 		return "fabric"
-	case types.EcosystemForge:
+	case catalog.EcosystemForge:
 		return "forge"
-	case types.EcosystemNeoForge:
+	case catalog.EcosystemNeoForge:
 		return "neoforge"
-	case types.EcosystemBukkit, types.EcosystemPaper:
+	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 		return "spigot"
-	case types.EcosystemSponge:
+	case catalog.EcosystemSponge:
 		return "sponge"
-	case types.EcosystemVelocity:
+	case catalog.EcosystemVelocity:
 		return "velocity"
-	case types.EcosystemMCDR:
+	case catalog.EcosystemMCDR:
 		return "mcdr"
 	default:
 		return ""

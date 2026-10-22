@@ -1,4 +1,4 @@
-package java
+package javaruntime
 
 import (
 	"cmp"
@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/internal/toolchain"
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
 )
 
 // Source names how a Java runtime was selected.
@@ -26,18 +26,18 @@ const (
 
 // Runtime is one installed Java runtime.
 type Runtime struct {
-	Home         string                 `json:"home"`
-	Executable   string                 `json:"executable"`
-	Version      string                 `json:"version"`
-	Major        int                    `json:"major"`
-	Distribution types.JavaDistribution `json:"distribution,omitempty"`
-	Implementor  string                 `json:"implementor,omitempty"`
+	Home         string            `json:"home"`
+	Executable   string            `json:"executable"`
+	Version      string            `json:"version"`
+	Major        int               `json:"major"`
+	Distribution java.Distribution `json:"distribution,omitempty"`
+	Implementor  string            `json:"implementor,omitempty"`
 }
 
 // Build names the build of r for people, for example "Eclipse Temurin" or
 // "Homebrew".
 func (r *Runtime) Build() string {
-	if r.Distribution != types.JavaDistributionAny {
+	if r.Distribution != java.DistributionAny {
 		return r.Distribution.Title()
 	}
 	if r.Implementor != "" {
@@ -56,8 +56,8 @@ type Check struct {
 	// not usable.
 	LocalHome string `json:"local_home,omitempty"`
 	// Target is the major version that meets the requirement.
-	Target       int                    `json:"target"`
-	Distribution types.JavaDistribution `json:"distribution,omitempty"`
+	Target       int               `json:"target"`
+	Distribution java.Distribution `json:"distribution,omitempty"`
 	// Problems describe each way the selection misses the requirement.
 	Problems []string `json:"problems,omitempty"`
 }

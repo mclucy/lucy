@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	manifestpkg "github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
@@ -49,7 +49,7 @@ func CopyLockedFile(src, dst string, mode os.FileMode) error {
 // Java executable for the bootstrap steps that run Java; it may be empty when
 // no runtime is installed, and only those steps fail then.
 func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, corePath string, inputs map[string]string, java string, output io.Writer) error {
-	if err := manifest.SafeRelativePath(server.Directory); err != nil {
+	if err := manifestpkg.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
 	root := filepath.Join(stage, server.Directory)
@@ -66,7 +66,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		defer installer.Close()
 	}
 	for _, input := range server.Inputs {
-		if err := manifest.SafeRelativePath(input.Path); err != nil {
+		if err := manifestpkg.SafeRelativePath(input.Path); err != nil {
 			return err
 		}
 		dst := filepath.Join(root, filepath.FromSlash(input.Path))

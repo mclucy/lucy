@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // zypper installs Java from the configured Zypper sources.
@@ -19,7 +19,7 @@ func (zypper) ownsJava() bool { return false }
 
 func (zypper) plans(ctx context.Context, req Request) ([]Plan, error) {
 	if req.Major <= 0 ||
-		req.Distribution != types.JavaDistributionAny ||
+		req.Distribution != java.DistributionAny ||
 		!systemToolAvailable("zypper") {
 		return nil, nil
 	}
@@ -31,7 +31,7 @@ func (zypper) plans(ctx context.Context, req Request) ([]Plan, error) {
 		{
 			Method:       MethodZypper,
 			Package:      pkg,
-			Distribution: types.JavaDistributionAny,
+			Distribution: java.DistributionAny,
 			Major:        req.Major,
 			Steps: []Step{
 				{

@@ -1,4 +1,4 @@
-package types
+package catalog
 
 // Metadata contains informational data about a package. Archive readers and
 // upstream providers both produce it. It carries content only. The source of

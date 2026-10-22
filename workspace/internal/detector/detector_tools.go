@@ -8,14 +8,14 @@ import (
 
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 // analyzeForgeArgFile extracts the Forge and Minecraft versions from a
 // Forge argument file.
 func analyzeForgeArgFile(file *os.File) (
-	forgeVersion types.Version,
-	mcVersion types.Version,
+	forgeVersion version.Version,
+	mcVersion version.Version,
 ) {
 	data, _ := fsutil.CopyBytes(file, fsutil.MaxZipEntryBytes)
 	s := string(data)
@@ -24,18 +24,18 @@ func analyzeForgeArgFile(file *os.File) (
 		if strings.HasPrefix(line, "--fml.forgeVersion") {
 			split := strings.Split(line, " ")
 			if len(split) == 2 {
-				forgeVersion = types.Version(split[1])
+				forgeVersion = version.Version(split[1])
 				continue
 			}
-			forgeVersion = types.VersionUnknown
+			forgeVersion = version.Unknown
 		}
 		if strings.HasPrefix(line, "--fml.mcVersion") {
 			split := strings.Split(line, " ")
 			if len(split) == 2 {
-				mcVersion = types.Version(split[1])
+				mcVersion = version.Version(split[1])
 				continue
 			}
-			mcVersion = types.VersionUnknown
+			mcVersion = version.Unknown
 		}
 	}
 
@@ -50,21 +50,21 @@ const mojangVersionJSONEntry = "version.json"
 // version.json but with _comment and/or mainClass control fields a real spec
 // never has. encoding/json ignores unknown fields, so the guard fields must
 // be checked explicitly.
-func mojangVersionFromJSON(data []byte) (types.Version, bool, error) {
+func mojangVersionFromJSON(data []byte) (version.Version, bool, error) {
 	guard := &struct {
 		Comment   []string `json:"_comment"`
 		MainClass string   `json:"mainClass"`
 	}{}
 	if err := json.Unmarshal(data, guard); err == nil &&
 		(len(guard.Comment) > 0 || guard.MainClass != "") {
-		return types.VersionUnknown, true, nil
+		return version.Unknown, true, nil
 	}
 
 	var spec fileschema.FileMinecraftVersionSpec
 	if err := json.Unmarshal(data, &spec); err != nil {
-		return types.VersionUnknown, false, err
+		return version.Unknown, false, err
 	}
-	return types.Version(spec.ID), false, nil
+	return version.Version(spec.ID), false, nil
 }
 
 func readArchiveEntry(zipReader *zip.Reader, name string) ([]byte, bool, error) {

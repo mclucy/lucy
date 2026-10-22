@@ -1,6 +1,6 @@
 package detector
 
-import "github.com/mclucy/lucy/types"
+import "github.com/mclucy/lucy/version"
 
 type paperFamilyResult uint8
 
@@ -27,13 +27,13 @@ type paperObservations struct {
 	hasSpigotClasses             bool
 	officialDistribution         bool
 	detectedLineage              string
-	gameVersion                  types.Version
+	gameVersion                  version.Version
 	metaMainClass                string
 	librariesListEntries         []string
 	versionsListEntries          []string
 	patchesListEntries           []string
 	downloadContext              string
-	versionJSONID                types.Version
+	versionJSONID                version.Version
 	patchProperties              map[string]string
 	hasPaperMCPatch              bool
 	buildInfo                    string

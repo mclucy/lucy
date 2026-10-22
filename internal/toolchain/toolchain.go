@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mclucy/lucy/types"
+	javapkg "github.com/mclucy/lucy/java"
 )
 
 const probeTimeout = 20 * time.Second
@@ -25,7 +25,7 @@ type JavaInstallation struct {
 	Major        int
 	Vendor       string
 	Arch         string
-	Distribution types.JavaDistribution
+	Distribution javapkg.Distribution
 	Implementor  string
 }
 

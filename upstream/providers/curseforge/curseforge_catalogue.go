@@ -5,16 +5,18 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 )
 
-func (provider) Candidates(ctx context.Context, project, minecraft string, loader types.Ecosystem) ([]types.CatalogueCandidate, error) {
+func (provider) Candidates(ctx context.Context, project, minecraft string, loader catalog.Ecosystem) ([]upstream.Candidate, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	id, err := strconv.ParseInt(project, 10, 32)
 	if err != nil {
-		mod, e := resolveSlug(types.PackageName(project))
+		mod, e := resolveSlug(catalog.Name(project))
 		if e != nil {
 			return nil, e
 		}
@@ -33,7 +35,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 			break
 		}
 	}
-	var out []types.CatalogueCandidate
+	var out []upstream.Candidate
 	for _, f := range files {
 		if f.DownloadUrl == nil {
 			continue
@@ -44,33 +46,33 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 				hashes["sha1"] = h.Digest
 			}
 		}
-		c := types.CatalogueCandidate{
-			Provider:     types.ProviderCurseForge,
+		c := upstream.Candidate{
+			Provider:     catalog.ProviderCurseForge,
 			ProjectID:    strconv.FormatInt(id, 10),
 			ReleaseID:    strconv.Itoa(int(f.ID)),
 			FileID:       strconv.Itoa(int(f.ID)),
-			Version:      types.Version(f.DisplayName),
+			Version:      version.Version(f.DisplayName),
 			Filename:     f.FileName,
 			URL:          *f.DownloadUrl,
 			Hashes:       hashes,
 			Channel:      curseForgeChannel(f.ChannelCode),
 			PublishedAt:  parseCurseforgeDate(f.FileDate),
 			PrimaryFile:  true,
-			Dependencies: []types.ProjectDependency{},
+			Dependencies: []upstream.ProjectDependency{},
 		}
 		for _, d := range f.Dependencies {
-			var kind types.DependencyKind
+			var kind catalog.DependencyKind
 			switch d.RelationType {
 			case 3:
-				kind = types.DependencyKindRequired
+				kind = catalog.DependencyKindRequired
 			case 2:
-				kind = types.DependencyKindOptional
+				kind = catalog.DependencyKindOptional
 			case 5:
-				kind = types.DependencyKindIncompatible
+				kind = catalog.DependencyKindIncompatible
 			}
-			if kind != types.DependencyKindUnknown {
-				c.Dependencies = append(c.Dependencies, types.ProjectDependency{
-					Provider:  types.ProviderCurseForge,
+			if kind != catalog.DependencyKindUnknown {
+				c.Dependencies = append(c.Dependencies, upstream.ProjectDependency{
+					Provider:  catalog.ProviderCurseForge,
 					ProjectID: strconv.Itoa(int(d.ModId)),
 					Kind:      kind,
 				})

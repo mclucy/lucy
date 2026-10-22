@@ -5,13 +5,13 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 const projectUrlPrefix = "https://api.modrinth.com/v2/project/"
 
-func versionsUrl(slug types.PackageName) (urlString string) {
+func versionsUrl(slug catalog.Name) (urlString string) {
 	urlString, _ = url.JoinPath(
 		projectUrlPrefix,
 		string(slug),

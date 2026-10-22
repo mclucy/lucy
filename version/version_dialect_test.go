@@ -1,120 +1,116 @@
 package version
 
-import (
-	"testing"
-
-	"github.com/mclucy/lucy/types"
-)
+import "testing"
 
 func TestDialectMatching(t *testing.T) {
 	cases := []struct {
 		name       string
-		dialect    types.VersionDialect
+		dialect    Dialect
 		constraint string
 		actual     string
 		want       bool
 	}{
 		{
 			name:       "fabric range includes prerelease",
-			dialect:    types.VersionDialectFabric,
+			dialect:    DialectFabric,
 			constraint: ">=1.2.3- <1.2.4",
 			actual:     "1.2.3-alpha",
 			want:       true,
 		},
 		{
 			name:       "fabric caret excludes next major prerelease",
-			dialect:    types.VersionDialectFabric,
+			dialect:    DialectFabric,
 			constraint: "^1.2.3",
 			actual:     "2.0.0-alpha",
 			want:       false,
 		},
 		{
 			name:       "fabric wildcard includes lower prerelease",
-			dialect:    types.VersionDialectFabric,
+			dialect:    DialectFabric,
 			constraint: "1.2.x",
 			actual:     "1.2.0-alpha",
 			want:       true,
 		},
 		{
 			name:       "fabric tilde one component",
-			dialect:    types.VersionDialectFabric,
+			dialect:    DialectFabric,
 			constraint: "~1",
 			actual:     "1.1.0",
 			want:       false,
 		},
 		{
 			name:       "fabric repeated trailing wildcard",
-			dialect:    types.VersionDialectFabric,
+			dialect:    DialectFabric,
 			constraint: "1.x.x",
 			actual:     "1.5.0",
 			want:       true,
 		},
 		{
 			name:       "fabric deep wildcard excludes next component prerelease",
-			dialect:    types.VersionDialectFabric,
+			dialect:    DialectFabric,
 			constraint: "1.2.3.x",
 			actual:     "1.2.4-alpha",
 			want:       false,
 		},
 		{
 			name:       "mcdr range",
-			dialect:    types.VersionDialectMCDR,
+			dialect:    DialectMCDR,
 			constraint: ">=2.0.0 <3.0.0",
 			actual:     "2.12.0",
 			want:       true,
 		},
 		{
 			name:       "mcdr tilde keeps minor",
-			dialect:    types.VersionDialectMCDR,
+			dialect:    DialectMCDR,
 			constraint: "~1",
 			actual:     "1.1.0",
 			want:       false,
 		},
 		{
 			name:       "mcdr wildcard bound",
-			dialect:    types.VersionDialectMCDR,
+			dialect:    DialectMCDR,
 			constraint: ">=1.0.x",
 			actual:     "1.0.5",
 			want:       true,
 		},
 		{
 			name:       "maven range",
-			dialect:    types.VersionDialectMaven,
+			dialect:    DialectMaven,
 			constraint: "[1.0,2.0)",
 			actual:     "1.9.0",
 			want:       true,
 		},
 		{
 			name:       "maven bare version is recommended",
-			dialect:    types.VersionDialectMaven,
+			dialect:    DialectMaven,
 			constraint: "1.0",
 			actual:     "1.0.1",
 			want:       true,
 		},
 		{
 			name:       "maven qualifier order",
-			dialect:    types.VersionDialectMaven,
+			dialect:    DialectMaven,
 			constraint: "[1.0-alpha,1.0)",
 			actual:     "1.0-beta",
 			want:       true,
 		},
 		{
 			name:       "minecraft snapshot",
-			dialect:    types.VersionDialectMinecraft,
+			dialect:    DialectMinecraft,
 			constraint: "24w14a",
 			actual:     "24w14a",
 			want:       true,
 		},
 		{
 			name:       "opaque exact",
-			dialect:    types.VersionDialectOpaque,
+			dialect:    DialectOpaque,
 			constraint: "1.2.3",
 			actual:     "1.2.3",
 			want:       true,
 		},
 		{
 			name:       "opaque mismatch",
-			dialect:    types.VersionDialectOpaque,
+			dialect:    DialectOpaque,
 			constraint: "1.2.3",
 			actual:     "1.2.4",
 			want:       false,
@@ -123,11 +119,11 @@ func TestDialectMatching(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			dialect, err := NewVersionDialect(testCase.dialect)
+			dialect, err := NewEngine(testCase.dialect)
 			if err != nil {
 				t.Fatalf("dialect: %v", err)
 			}
-			got, err := dialect.MatchText(testCase.constraint, types.Version(testCase.actual))
+			got, err := dialect.MatchText(testCase.constraint, Version(testCase.actual))
 			if err != nil {
 				t.Fatalf("match %q: %v", testCase.constraint, err)
 			}
@@ -141,15 +137,15 @@ func TestDialectMatching(t *testing.T) {
 
 func TestConstraintErrorsAndNegation(t *testing.T) {
 	unconstrained := []struct {
-		dialect types.VersionDialect
+		dialect Dialect
 		raw     string
 	}{
-		{types.VersionDialectFabric, "*"},
-		{types.VersionDialectMCDR, ""},
-		{types.VersionDialectMaven, "none"},
-		{types.VersionDialectMaven, "1.0"},
-		{types.VersionDialectMinecraft, "*"},
-		{types.VersionDialectOpaque, "*"},
+		{DialectFabric, "*"},
+		{DialectMCDR, ""},
+		{DialectMaven, "none"},
+		{DialectMaven, "1.0"},
+		{DialectMinecraft, "*"},
+		{DialectOpaque, "*"},
 	}
 	for _, item := range unconstrained {
 		expr, err := ParseConstraint(item.raw, item.dialect)
@@ -160,15 +156,15 @@ func TestConstraintErrorsAndNegation(t *testing.T) {
 	}
 
 	invalid := []struct {
-		dialect types.VersionDialect
+		dialect Dialect
 		raw     string
 	}{
-		{types.VersionDialectFabric, ">=1.0.0 <"},
-		{types.VersionDialectMCDR, ">=1.0.0 <"},
-		{types.VersionDialectMaven, "[1.0"},
-		{types.VersionDialectMaven, "[2.0,1.0]"},
-		{types.VersionDialectMinecraft, "not-a-version"},
-		{types.VersionDialectOpaque, ">=1.0"},
+		{DialectFabric, ">=1.0.0 <"},
+		{DialectMCDR, ">=1.0.0 <"},
+		{DialectMaven, "[1.0"},
+		{DialectMaven, "[2.0,1.0]"},
+		{DialectMinecraft, "not-a-version"},
+		{DialectOpaque, ">=1.0"},
 	}
 	for _, item := range invalid {
 		if _, err := ParseConstraint(item.raw, item.dialect); err == nil {
@@ -176,7 +172,7 @@ func TestConstraintErrorsAndNegation(t *testing.T) {
 		}
 	}
 
-	dialect, err := NewVersionDialect(types.VersionDialectFabric)
+	dialect, err := NewEngine(DialectFabric)
 	if err != nil {
 		t.Fatalf("dialect: %v", err)
 	}
@@ -190,7 +186,7 @@ func TestConstraintErrorsAndNegation(t *testing.T) {
 		"1.0.0": false,
 		"2.0.0": false,
 	} {
-		actual, err := dialect.ParseVersion(types.Version(raw))
+		actual, err := dialect.ParseVersion(Version(raw))
 		if err != nil {
 			t.Fatalf("parse %q: %v", raw, err)
 		}
@@ -199,11 +195,11 @@ func TestConstraintErrorsAndNegation(t *testing.T) {
 		}
 	}
 
-	fabricVersion, err := ParseVersion("1.0.0", types.VersionDialectFabric)
+	fabricVersion, err := ParseVersion("1.0.0", DialectFabric)
 	if err != nil {
 		t.Fatalf("parse fabric: %v", err)
 	}
-	mcdrVersion, err := ParseVersion("1.0.0", types.VersionDialectMCDR)
+	mcdrVersion, err := ParseVersion("1.0.0", DialectMCDR)
 	if err != nil {
 		t.Fatalf("parse mcdr: %v", err)
 	}
@@ -211,7 +207,7 @@ func TestConstraintErrorsAndNegation(t *testing.T) {
 		t.Fatal("cross-dialect versions must be incomparable")
 	}
 
-	plainVersion, err := ParseVersion("v1", types.VersionDialectFabric)
+	plainVersion, err := ParseVersion("v1", DialectFabric)
 	if err != nil {
 		t.Fatalf("parse plain fabric: %v", err)
 	}
@@ -232,11 +228,11 @@ func TestConstraintErrorsAndNegation(t *testing.T) {
 }
 
 func TestOpaqueVersionsAreEqualityOnly(t *testing.T) {
-	first, err := ParseVersion("1.0", types.VersionDialectOpaque)
+	first, err := ParseVersion("1.0", DialectOpaque)
 	if err != nil {
 		t.Fatalf("parse first: %v", err)
 	}
-	second, err := ParseVersion("2.0", types.VersionDialectOpaque)
+	second, err := ParseVersion("2.0", DialectOpaque)
 	if err != nil {
 		t.Fatalf("parse second: %v", err)
 	}
@@ -244,7 +240,7 @@ func TestOpaqueVersionsAreEqualityOnly(t *testing.T) {
 		t.Fatal("opaque versions must not be ordered")
 	}
 
-	dialect, err := NewVersionDialect(types.VersionDialectOpaque)
+	dialect, err := NewEngine(DialectOpaque)
 	if err != nil {
 		t.Fatalf("dialect: %v", err)
 	}
@@ -263,30 +259,30 @@ func TestOpaqueVersionsAreEqualityOnly(t *testing.T) {
 func TestNegatedIncomparablePredicates(t *testing.T) {
 	cases := []struct {
 		name       string
-		dialect    types.VersionDialect
+		dialect    Dialect
 		constraint string
 		actual     string
 	}{
 		{
 			name:       "opaque different identifier",
-			dialect:    types.VersionDialectOpaque,
+			dialect:    DialectOpaque,
 			constraint: "2.0",
 			actual:     "1.0",
 		},
 		{
 			name:       "minecraft across release lines",
-			dialect:    types.VersionDialectMinecraft,
+			dialect:    DialectMinecraft,
 			constraint: "1.21.4",
 			actual:     "26.1",
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			dialect, err := NewVersionDialect(testCase.dialect)
+			dialect, err := NewEngine(testCase.dialect)
 			if err != nil {
 				t.Fatalf("dialect: %v", err)
 			}
-			actual, err := dialect.ParseVersion(types.Version(testCase.actual))
+			actual, err := dialect.ParseVersion(Version(testCase.actual))
 			if err != nil {
 				t.Fatalf("parse actual %q: %v", testCase.actual, err)
 			}
@@ -312,7 +308,7 @@ func TestNegatedIncomparablePredicates(t *testing.T) {
 }
 
 func TestZeroVersionIsValid(t *testing.T) {
-	version, err := ParseVersion("0.0.0", types.VersionDialectFabric)
+	version, err := ParseVersion("0.0.0", DialectFabric)
 	if err != nil {
 		t.Fatalf("0.0.0 must be a valid semantic version: %v", err)
 	}

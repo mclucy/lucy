@@ -6,10 +6,10 @@ import (
 	"encoding/json/v2"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -94,17 +94,17 @@ func translateFabricArtifact(
 	}
 
 	return PackageInfo{
-		Ref: types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
+		Ref: catalog.VersionedRef{
+			Ref: catalog.Ref{
 				Name:     input.ToProjectName(modInfo.ID),
-				Provider: types.ProviderUnknown,
+				Provider: catalog.ProviderUnknown,
 			},
-			Ecosystem: types.EcosystemFabric,
-			Version:   types.Version(modInfo.Version),
+			Ecosystem: catalog.EcosystemFabric,
+			Version:   version.Version(modInfo.Version),
 		},
 		FilePath:     filePath,
 		Dependencies: dependencies,
-		Metadata: types.Metadata{
+		Metadata: catalog.Metadata{
 			Title:       modInfo.Name,
 			Description: modInfo.Description,
 			License:     modInfo.License,
@@ -129,11 +129,11 @@ func translateFabricArtifactDependencyMap(
 			return nil, err
 		}
 		dep := Dependency{
-			Ref: types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
+			Ref: catalog.VersionedRef{
+				Ref: catalog.Ref{
 					Name:     name,
-					Provider: types.ProviderUnknown,
-				}, Ecosystem: types.EcosystemFabric,
+					Provider: catalog.ProviderUnknown,
+				}, Ecosystem: catalog.EcosystemFabric,
 			},
 			Constraint: constraint,
 			Mandatory:  mandatory,
@@ -149,8 +149,8 @@ func translateFabricArtifactDependencyMap(
 
 func parseFabricArtifactVersionRanges(
 	ranges fn.SingleOrSlice[string],
-) (types.VersionExpr, error) {
-	return version.ParseConstraints(ranges, types.VersionDialectFabric)
+) (version.Expr, error) {
+	return version.ParseConstraints(ranges, version.DialectFabric)
 }
 
 func fabricArtifactEmbeddedModNames(
@@ -235,33 +235,33 @@ func fabricRecordEmbeddedName(names map[string]struct{}, id string) {
 	names[string(input.ToProjectName(id))] = struct{}{}
 }
 
-func fabricArtifactAuthors(authors []fileschema.FabricAuthor) []types.Person {
-	translated := make([]types.Person, len(authors))
+func fabricArtifactAuthors(authors []fileschema.FabricAuthor) []catalog.Person {
+	translated := make([]catalog.Person, len(authors))
 	for i, author := range authors {
-		translated[i] = types.Person{Name: string(author)}
+		translated[i] = catalog.Person{Name: string(author)}
 	}
 	return translated
 }
 
-func fabricArtifactURLs(contact map[string]string) []types.URL {
+func fabricArtifactURLs(contact map[string]string) []catalog.URL {
 	urlSpecs := []struct {
 		key     string
 		name    string
-		urlType types.URLType
+		urlType catalog.URLType
 	}{
-		{key: "homepage", name: "Homepage", urlType: types.URLHome},
-		{key: "sources", name: "Source", urlType: types.URLSource},
-		{key: "issues", name: "Issues", urlType: types.URLIssues},
+		{key: "homepage", name: "Homepage", urlType: catalog.URLHome},
+		{key: "sources", name: "Source", urlType: catalog.URLSource},
+		{key: "issues", name: "Issues", urlType: catalog.URLIssues},
 	}
 
-	urls := make([]types.URL, 0, len(urlSpecs))
+	urls := make([]catalog.URL, 0, len(urlSpecs))
 	for _, spec := range urlSpecs {
 		url := contact[spec.key]
 		if url == "" {
 			continue
 		}
 		urls = append(
-			urls, types.URL{
+			urls, catalog.URL{
 				Name: spec.name,
 				Type: spec.urlType,
 				URL:  url,

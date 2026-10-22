@@ -11,8 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/version"
 )
 
 // paperBuild is one build entry from the PaperMC fill API.
@@ -26,7 +28,7 @@ type paperBuild struct {
 	} `json:"downloads"`
 }
 
-func resolvePaper(ctx context.Context, req types.ServerProductRequest, out *types.ServerProductResolution) error {
+func resolvePaper(ctx context.Context, req ServerProductRequest, out *ServerProductResolution) error {
 	var builds []paperBuild
 	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" + req.Minecraft.String() + "/builds"
 	if err := Metadata(ctx, endpoint, &builds); err != nil {
@@ -39,7 +41,7 @@ func resolvePaper(ctx context.Context, req types.ServerProductRequest, out *type
 		switch {
 		case !floating(req.ProductVersion) && v != req.ProductVersion.String():
 			reason = "build version mismatch"
-		case req.ProductVersion == types.VersionStable && build.Channel != "STABLE":
+		case req.ProductVersion == version.Stable && build.Channel != "STABLE":
 			reason = "unstable build channel"
 		}
 		asset, ok := build.Downloads["server:default"]
@@ -55,13 +57,13 @@ func resolvePaper(ctx context.Context, req types.ServerProductRequest, out *type
 			)
 			continue
 		}
-		out.ProductVersion, out.Bootstrapper = types.Version(v), "paperclip"
-		out.Artifact = types.Artifact{
-			Provider:  types.ProviderPaperMC,
+		out.ProductVersion, out.Bootstrapper = version.Version(v), "paperclip"
+		out.Artifact = catalog.Artifact{
+			Provider:  catalog.ProviderPaperMC,
 			ProjectID: "paper",
 			ReleaseID: req.Minecraft.String() + "/" + v,
 			FileID:    "server:default",
-			Version:   types.Version(v),
+			Version:   version.Version(v),
 			Filename:  asset.Name,
 			URL:       asset.URL,
 			Hashes:    asset.Checksums,
@@ -78,7 +80,7 @@ func resolvePaper(ctx context.Context, req types.ServerProductRequest, out *type
 	return fmt.Errorf("no Paper build %s for Minecraft %s", req.ProductVersion, req.Minecraft)
 }
 
-func resolveGithubProduct(ctx context.Context, req types.ServerProductRequest, out *types.ServerProductResolution, acquire func(*types.Artifact) (string, error)) error {
+func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, acquire func(*catalog.Artifact) (string, error)) error {
 	var repo struct {
 		ID int64 `json:"id"`
 	}
@@ -107,7 +109,7 @@ func resolveGithubProduct(ctx context.Context, req types.ServerProductRequest, o
 			reason = "draft release"
 		case !floating(req.ProductVersion) && r.Tag != req.ProductVersion.String():
 			reason = "release tag mismatch"
-		case req.ProductVersion == types.VersionStable && r.Prerelease:
+		case req.ProductVersion == version.Stable && r.Prerelease:
 			reason = "prerelease excluded"
 		}
 		if reason != "" {
@@ -146,19 +148,19 @@ func resolveGithubProduct(ctx context.Context, req types.ServerProductRequest, o
 			if h, ok := strings.CutPrefix(a.Digest, "sha256:"); ok {
 				hashes["sha256"] = h
 			}
-			candidate := types.Artifact{
-				Provider:  types.ProviderGitHub,
+			candidate := catalog.Artifact{
+				Provider:  catalog.ProviderGitHub,
 				ProjectID: strconv.FormatInt(repo.ID, 10),
 				ReleaseID: strconv.FormatInt(r.ID, 10),
 				FileID:    strconv.FormatInt(a.ID, 10),
-				Version:   types.Version(r.Tag),
+				Version:   version.Version(r.Tag),
 				Filename:  a.Name,
 				URL:       a.URL,
 				Hashes:    hashes,
 			}
 			trial := *out
 			trial.Artifact = candidate
-			trial.ProductVersion = types.Version(r.Tag)
+			trial.ProductVersion = version.Version(r.Tag)
 			trial.Bootstrapper = "paperclip"
 			p, e := acquire(&candidate)
 			if e != nil {
@@ -187,7 +189,7 @@ func resolveGithubProduct(ctx context.Context, req types.ServerProductRequest, o
 	return fmt.Errorf("no GitHub Paper fork artifact for Minecraft %s in %s", req.Minecraft, req.Repository)
 }
 
-func paperclipInput(out *types.ServerProductResolution, corePath string) error {
+func paperclipInput(out *ServerProductResolution, corePath string) error {
 	z, err := zip.OpenReader(corePath)
 	if err != nil {
 		return err
@@ -208,10 +210,10 @@ func paperclipInput(out *types.ServerProductResolution, corePath string) error {
 	if fields[2] != expected {
 		return fmt.Errorf("core targets %s, requested Minecraft %s", fields[2], out.Minecraft)
 	}
-	out.Inputs = []types.BootstrapInput{
+	out.Inputs = []server.BootstrapInput{
 		{
 			Path:      path.Join("cache", fields[2]),
-			Provider:  types.ProviderMojang,
+			Provider:  catalog.ProviderMojang,
 			ProjectID: "minecraft",
 			Version:   out.Minecraft,
 			Filename:  fields[2],

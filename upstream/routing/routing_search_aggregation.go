@@ -1,7 +1,7 @@
 package routing
 
 import (
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -26,7 +26,7 @@ func MaybeAggregateSearchResults(
 // preferred unless aggregation is explicitly required by callers.
 func AggregateSearchResults(results []upstream.SearchResponse) upstream.SearchResponse {
 	aggregated := upstream.SearchResponse{
-		Provider: types.ProviderUnspecified,
+		Provider: catalog.ProviderUnspecified,
 		Items:    make([]upstream.SearchResult, 0),
 	}
 	for _, res := range results {

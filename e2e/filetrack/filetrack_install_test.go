@@ -8,9 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 )
 
 func TestFileCommandsAndInstallPreserveRuntimePinsAndCoreBytes(t *testing.T) {
@@ -182,10 +183,10 @@ func TestFileLockOnlyWorkspaceServesReadOnlyCommands(t *testing.T) {
 		Server: lockfile.Server{
 			Minecraft:   "1.21.4",
 			Directory:   "server",
-			Product:     types.ServerProductMinecraft,
+			Product:     server.ProductMinecraft,
 			CoreVersion: "1.21.4",
-			Artifact: types.Artifact{
-				Provider: types.ProviderMojang,
+			Artifact: catalog.Artifact{
+				Provider: catalog.ProviderMojang,
 				Version:  "1.21.4",
 				Filename: "server.jar",
 				URL:      "https://example.invalid/server.jar",
@@ -193,8 +194,8 @@ func TestFileLockOnlyWorkspaceServesReadOnlyCommands(t *testing.T) {
 			},
 			Java: lockfile.Java{Advisory: 21},
 		},
-		Packages: []types.LockedPackage{},
-		Files:    []types.TrackedFile{manifestTrackedFile("config/rules.txt", acceptedHash(rules))},
+		Packages: []lockfile.Package{},
+		Files:    []manifest.TrackedFile{manifestTrackedFile("config/rules.txt", acceptedHash(rules))},
 	}
 	w.writeLock(t, lock)
 	w.requireAbsent(t, manifest.Filename)
@@ -252,11 +253,11 @@ func TestFileTrackRejectsManagedCorePackageAndReceiptCollisions(t *testing.T) {
 			SchemaVersion:       lockfile.SchemaVersion,
 			ManifestFingerprint: "sha256:" + digestHex([]byte("stale")),
 			Server:              nativeLock.Server,
-			Packages: []types.LockedPackage{{
-				Environment: types.EnvironmentServer,
-				Ecosystem:   types.EcosystemFabric,
-				Artifact: types.Artifact{
-					Provider: types.ProviderModrinth,
+			Packages: []lockfile.Package{{
+				Environment: server.EnvironmentServer,
+				Ecosystem:   catalog.EcosystemFabric,
+				Artifact: catalog.Artifact{
+					Provider: catalog.ProviderModrinth,
 					Version:  "0.6.0",
 					Filename: "sodium.jar",
 					URL:      "https://example.invalid/sodium.jar",
@@ -281,18 +282,18 @@ func TestFileDisabledPackagePlaceholderDoesNotClaimModsFolder(t *testing.T) {
 		SchemaVersion:       lockfile.SchemaVersion,
 		ManifestFingerprint: "sha256:" + digestHex([]byte("stale")),
 		Server:              nativeLock.Server,
-		Packages: []types.LockedPackage{{
-			Environment: types.EnvironmentServer,
-			Ecosystem:   types.EcosystemFabric,
-			Artifact: types.Artifact{
-				Provider:  types.ProviderModrinth,
+		Packages: []lockfile.Package{{
+			Environment: server.EnvironmentServer,
+			Ecosystem:   catalog.EcosystemFabric,
+			Artifact: catalog.Artifact{
+				Provider:  catalog.ProviderModrinth,
 				ProjectID: "sodium",
 				Version:   "0.6.0",
 				Filename:  "sodium.jar",
 				URL:       "https://example.invalid/sodium.jar",
 				Hashes:    map[string]string{"sha256": digestHex([]byte("disabled sodium"))},
 			},
-			Requirements: []types.RequirementBinding{{
+			Requirements: []lockfile.RequirementBinding{{
 				Reference: "modrinth:sodium",
 				Selector:  "stable",
 				Enabled:   false,
@@ -319,15 +320,15 @@ func TestFileRootRelativeMCDRWrapperLayout(t *testing.T) {
 		SchemaVersion:       lockfile.SchemaVersion,
 		ManifestFingerprint: "sha256:" + digestHex([]byte("stale")),
 		Server:              nativeLock.Server,
-		Packages:            []types.LockedPackage{},
+		Packages:            []lockfile.Package{},
 		MCDR: &lockfile.MCDR{
 			Directory: ".",
 			Version:   "2.14.0",
 			Python:    "3.12.4",
 			Target:    "linux-x86_64",
-			Inputs: []types.BootstrapInput{{
+			Inputs: []server.BootstrapInput{{
 				Path: "mcdreforged.pyz",
-				Artifact: types.Artifact{
+				Artifact: catalog.Artifact{
 					Provider: "mcdr",
 					Version:  "2.14.0",
 					Filename: "mcdreforged.pyz",

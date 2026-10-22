@@ -9,27 +9,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // asdfVendors maps each distribution to the vendor prefix of its asdf-java
 // version. asdf-java has no Red Hat build.
-var asdfVendors = map[types.JavaDistribution]string{
-	types.JavaDistributionTemurin:          "temurin",
-	types.JavaDistributionZulu:             "zulu",
-	types.JavaDistributionCorretto:         "corretto",
-	types.JavaDistributionLiberica:         "liberica",
-	types.JavaDistributionMicrosoft:        "microsoft",
-	types.JavaDistributionOracle:           "oracle",
-	types.JavaDistributionOracleOpenJDK:    "openjdk",
-	types.JavaDistributionGraalVM:          "oracle-graalvm",
-	types.JavaDistributionGraalVMCommunity: "graalvm-community",
-	types.JavaDistributionSemeru:           "semeru-openj9",
-	types.JavaDistributionSapMachine:       "sapmachine",
-	types.JavaDistributionDragonwell:       "dragonwell",
-	types.JavaDistributionKona:             "kona",
-	types.JavaDistributionJetBrains:        "jetbrains",
+var asdfVendors = map[java.Distribution]string{
+	java.DistributionTemurin:          "temurin",
+	java.DistributionZulu:             "zulu",
+	java.DistributionCorretto:         "corretto",
+	java.DistributionLiberica:         "liberica",
+	java.DistributionMicrosoft:        "microsoft",
+	java.DistributionOracle:           "oracle",
+	java.DistributionOracleOpenJDK:    "openjdk",
+	java.DistributionGraalVM:          "oracle-graalvm",
+	java.DistributionGraalVMCommunity: "graalvm-community",
+	java.DistributionSemeru:           "semeru-openj9",
+	java.DistributionSapMachine:       "sapmachine",
+	java.DistributionDragonwell:       "dragonwell",
+	java.DistributionKona:             "kona",
+	java.DistributionJetBrains:        "jetbrains",
 }
 
 type asdf struct{}
@@ -91,9 +91,9 @@ func (asdf) plans(ctx context.Context, req Request) ([]Plan, error) {
 
 // asdfVendor returns the vendor prefix for dist. The unspecified distribution
 // installs Temurin, the plugin's default build.
-func asdfVendor(dist types.JavaDistribution) (string, types.JavaDistribution, bool) {
-	if dist == types.JavaDistributionAny {
-		return "temurin", types.JavaDistributionTemurin, true
+func asdfVendor(dist java.Distribution) (string, java.Distribution, bool) {
+	if dist == java.DistributionAny {
+		return "temurin", java.DistributionTemurin, true
 	}
 	prefix, ok := asdfVendors[dist]
 	return prefix, dist, ok

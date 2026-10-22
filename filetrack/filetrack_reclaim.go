@@ -9,7 +9,6 @@ import (
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
 )
 
 // Reclaimed counts content store objects that a sweep removed because no
@@ -72,7 +71,7 @@ func references(root string, files *os.Root) (map[cas.Digest]struct{}, error) {
 	if err := addDocumentReferences(
 		files,
 		manifest.Filename,
-		func(reader io.Reader) ([]types.TrackedFile, error) {
+		func(reader io.Reader) ([]manifest.TrackedFile, error) {
 			document, err := manifest.Decode(reader)
 			if err != nil {
 				return nil, err
@@ -86,7 +85,7 @@ func references(root string, files *os.Root) (map[cas.Digest]struct{}, error) {
 	if err := addDocumentReferences(
 		files,
 		lockfile.Filename,
-		func(reader io.Reader) ([]types.TrackedFile, error) {
+		func(reader io.Reader) ([]manifest.TrackedFile, error) {
 			document, err := lockfile.Decode(reader)
 			if err != nil {
 				return nil, err
@@ -130,7 +129,7 @@ func addPendingReferences(files *os.Root, referenced map[cas.Digest]struct{}) er
 func addDocumentReferences(
 	files *os.Root,
 	name string,
-	decode func(io.Reader) ([]types.TrackedFile, error),
+	decode func(io.Reader) ([]manifest.TrackedFile, error),
 	referenced map[cas.Digest]struct{},
 ) error {
 	reader, err := files.Open(name)
@@ -155,7 +154,7 @@ func addDocumentReferences(
 
 func addChangeReferences(referenced map[cas.Digest]struct{}, changes []Change) error {
 	for _, change := range changes {
-		for _, state := range []*types.TrackedFile{change.Before, change.After} {
+		for _, state := range []*manifest.TrackedFile{change.Before, change.After} {
 			if state == nil {
 				continue
 			}

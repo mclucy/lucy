@@ -10,10 +10,9 @@ import (
 
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/java"
+	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
-
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +29,7 @@ type doctorReport struct {
 	Warnings []filetrack.Diagnostic `json:"warnings,omitempty"`
 	Failures []filetrack.Diagnostic `json:"failures,omitempty"`
 	// Java is the Java runtime check; nil when the workspace has no lock.
-	Java *java.Check `json:"java,omitempty"`
+	Java *javaruntime.Check `json:"java,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -154,7 +153,7 @@ func writeDoctorReport(
 	compact bool,
 	warnings []filetrack.Diagnostic,
 	failures []filetrack.Diagnostic,
-	javaCheck *java.Check,
+	javaCheck *javaruntime.Check,
 ) error {
 	report := doctorReport{Warnings: warnings, Failures: failures, Java: javaCheck}
 
@@ -183,17 +182,17 @@ func writeDoctorReport(
 
 // doctorJava selects the Java runtime of the locked server. A workspace
 // without a lock has no Java requirement to check.
-func doctorJava(cmd *cobra.Command, root string) (*java.Check, error) {
+func doctorJava(cmd *cobra.Command, root string) (*javaruntime.Check, error) {
 	requirement, err := lockedJavaRequirement(root)
 	if err != nil || requirement == nil {
 		return nil, err
 	}
 	ctx, stop := commandContext(cmd)
 	defer stop()
-	return java.Select(ctx, root, *requirement)
+	return javaruntime.Select(ctx, root, *requirement)
 }
 
-func writeDoctorJava(out io.Writer, check *java.Check) {
+func writeDoctorJava(out io.Writer, check *javaruntime.Check) {
 	if check == nil {
 		return
 	}

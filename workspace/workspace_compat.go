@@ -1,4 +1,4 @@
-package types
+package workspace
 
 // Compatibility describes how directly a runtime serves an ecosystem.
 // CompatFull serves it directly. CompatDegraded serves it through an indirect

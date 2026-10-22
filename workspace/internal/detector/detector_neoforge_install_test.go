@@ -6,7 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 func TestDetectNeoForgeInstallPrefersHashVerifiedUniversalJar(t *testing.T) {
@@ -118,7 +119,7 @@ func assertNeoForgeRuntime(
 ) {
 	t.Helper()
 
-	wantGameVersion := types.Version(gameVersion)
+	wantGameVersion := versionpkg.Version(gameVersion)
 
 	if runtime.PrimaryPath != primary {
 		t.Fatalf(
@@ -129,7 +130,7 @@ func assertNeoForgeRuntime(
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.EcosystemMinecraft,
+		catalog.EcosystemMinecraft,
 		"minecraft",
 	); got != wantGameVersion.String() {
 		t.Fatalf(
@@ -139,7 +140,7 @@ func assertNeoForgeRuntime(
 		)
 	}
 	if runtime.PrimaryRuntime == nil ||
-		runtime.PrimaryRuntime.Ecosystem != types.EcosystemNeoForge ||
+		runtime.PrimaryRuntime.Ecosystem != catalog.EcosystemNeoForge ||
 		runtime.PrimaryRuntime.Name != "neoforge" {
 		t.Fatalf(
 			"expected primary neoforge runtime, got %+v",
@@ -148,7 +149,7 @@ func assertNeoForgeRuntime(
 	}
 	if got := runtimeIdentityVersion(
 		runtime,
-		types.EcosystemNeoForge,
+		catalog.EcosystemNeoForge,
 		"neoforge",
 	); got != loaderVersion {
 		t.Fatalf(

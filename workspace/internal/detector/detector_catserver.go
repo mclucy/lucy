@@ -5,8 +5,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 var catServerVersionPattern = regexp.MustCompile(
@@ -40,13 +41,13 @@ func (d *catServerDetector) Detect(context DetectionContext, primaryFile *Detect
 		return nil, nil
 	}
 
-	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		Ecosystem: types.EcosystemUnspecified,
+	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemUnspecified,
 		Name:      input.ToProjectName("catserver"),
 		Version:   signals.version,
-	}, RuntimeComponents: []types.VersionedPackageRef{
+	}, RuntimeComponents: []catalog.VersionedRef{
 		{
-			Ecosystem: types.EcosystemMinecraft,
+			Ecosystem: catalog.EcosystemMinecraft,
 			Name:      input.ToProjectName("minecraft"),
 			Version:   signals.gameVersion,
 		},
@@ -56,8 +57,8 @@ func (d *catServerDetector) Detect(context DetectionContext, primaryFile *Detect
 type catServerManifestSignals struct {
 	mainClass   string
 	title       string
-	version     types.Version
-	gameVersion types.Version
+	version     versionpkg.Version
+	gameVersion versionpkg.Version
 }
 
 func (s catServerManifestSignals) valid() bool {
@@ -84,19 +85,19 @@ func parseCatServerManifest(data []byte) catServerManifestSignals {
 			version := strings.TrimSpace(
 				strings.TrimPrefix(line, "Implementation-Version: "),
 			)
-			signals.version = types.Version(version)
+			signals.version = versionpkg.Version(version)
 			signals.gameVersion = parseCatServerGameVersion(version)
 		}
 	}
 	return signals
 }
 
-func parseCatServerGameVersion(version string) types.Version {
+func parseCatServerGameVersion(version string) versionpkg.Version {
 	match := catServerVersionPattern.FindStringSubmatch(version)
 	if match == nil {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
-	return types.Version(match[1])
+	return versionpkg.Version(match[1])
 }
 
 func init() {

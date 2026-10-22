@@ -5,11 +5,11 @@ import (
 	"encoding/json/v2"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -104,9 +104,9 @@ func translateSpongePlugin(
 
 	v := resolveSpongePluginVersion(metadata, plugin)
 	info := PackageInfo{
-		Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(plugin.ID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemSponge, Version: types.Version(v)},
+		Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(plugin.ID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemSponge, Version: version.Version(v)},
 		FilePath: localPath,
-		Metadata: types.Metadata{
+		Metadata: catalog.Metadata{
 			Title:   fn.Ternary(plugin.Name != "", plugin.Name, plugin.ID),
 			Brief:   plugin.Description,
 			License: metadata.License,
@@ -246,14 +246,14 @@ func translateSpongeContributors(
 		Name        string
 		Description string
 	},
-) []types.Person {
-	people := make([]types.Person, 0, len(contributors))
+) []catalog.Person {
+	people := make([]catalog.Person, 0, len(contributors))
 	for _, contributor := range contributors {
 		if strings.TrimSpace(contributor.Name) == "" {
 			continue
 		}
 		people = append(
-			people, types.Person{
+			people, catalog.Person{
 				Name: contributor.Name,
 				Role: contributor.Description,
 			},
@@ -268,24 +268,24 @@ func translateSpongeLinks(
 		Source   string
 		Issues   string
 	},
-) []types.URL {
-	urls := make([]types.URL, 0, 3)
+) []catalog.URL {
+	urls := make([]catalog.URL, 0, 3)
 	if homepage := strings.TrimSpace(links.Homepage); homepage != "" {
 		urls = append(
 			urls,
-			types.URL{Name: "Homepage", Type: types.URLHome, URL: homepage},
+			catalog.URL{Name: "Homepage", Type: catalog.URLHome, URL: homepage},
 		)
 	}
 	if source := strings.TrimSpace(links.Source); source != "" {
 		urls = append(
 			urls,
-			types.URL{Name: "Source", Type: types.URLSource, URL: source},
+			catalog.URL{Name: "Source", Type: catalog.URLSource, URL: source},
 		)
 	}
 	if issues := strings.TrimSpace(links.Issues); issues != "" {
 		urls = append(
 			urls,
-			types.URL{Name: "Issues", Type: types.URLIssues, URL: issues},
+			catalog.URL{Name: "Issues", Type: catalog.URLIssues, URL: issues},
 		)
 	}
 	return urls
@@ -306,13 +306,13 @@ func translateSpongeDependencies(
 		if id == "" || v == "" || strings.EqualFold(id, "spongeapi") {
 			continue
 		}
-		constraint, err := version.ParseConstraint(v, types.VersionDialectMaven)
+		constraint, err := version.ParseConstraint(v, version.DialectMaven)
 		if err != nil {
 			return nil, err
 		}
 		translated = append(
 			translated, Dependency{
-				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(id), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemSponge},
+				Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(id), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemSponge},
 				Constraint: constraint,
 				Mandatory:  !dep.Optional,
 			},

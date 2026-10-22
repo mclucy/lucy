@@ -11,10 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,37 +25,37 @@ const (
 )
 
 type Document struct {
-	SchemaVersion int                 `yaml:"manifest_version" json:"manifest_version"`
-	Server        Server              `yaml:"server" json:"server"`
-	MCDR          *MCDR               `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
-	Files         []types.TrackedFile `yaml:"files,omitempty" json:"files,omitempty"`
+	SchemaVersion int           `yaml:"manifest_version" json:"manifest_version"`
+	Server        Server        `yaml:"server" json:"server"`
+	MCDR          *MCDR         `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Files         []TrackedFile `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 type Core struct {
-	Product        types.ServerProduct `yaml:"product" json:"product"`
-	ProductVersion types.Version       `yaml:"product_version,omitempty" json:"product_version"`
-	Repository     string              `yaml:"repository,omitempty" json:"repository,omitempty"`
-	FilePattern    string              `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty"`
+	Product        server.Product  `yaml:"product" json:"product"`
+	ProductVersion version.Version `yaml:"product_version,omitempty" json:"product_version"`
+	Repository     string          `yaml:"repository,omitempty" json:"repository,omitempty"`
+	FilePattern    string          `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty"`
 }
 
 type Server struct {
-	Minecraft types.Version                              `yaml:"minecraft" json:"minecraft"`
-	Directory string                                     `yaml:"directory,omitempty" json:"directory"`
-	Core      Core                                       `yaml:"core" json:"core"`
-	Java      *Java                                      `yaml:"java,omitempty" json:"java,omitempty"`
-	Packages  map[types.Ecosystem]map[string]Requirement `yaml:"packages" json:"packages"`
+	Minecraft version.Version                              `yaml:"minecraft" json:"minecraft"`
+	Directory string                                       `yaml:"directory,omitempty" json:"directory"`
+	Core      Core                                         `yaml:"core" json:"core"`
+	Java      *Java                                        `yaml:"java,omitempty" json:"java,omitempty"`
+	Packages  map[catalog.Ecosystem]map[string]Requirement `yaml:"packages" json:"packages"`
 }
 
 type MCDR struct {
 	Directory string                 `yaml:"directory,omitempty" json:"directory"`
-	Version   types.Version          `yaml:"version,omitempty" json:"version"`
+	Version   version.Version        `yaml:"version,omitempty" json:"version"`
 	Packages  map[string]Requirement `yaml:"packages" json:"packages"`
 }
 
 type Requirement struct {
-	Selector    types.Version `yaml:"selector,omitempty" json:"selector"`
-	FilePattern string        `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty"`
-	Enabled     *bool         `yaml:"enabled,omitempty" json:"enabled"`
+	Selector    version.Version `yaml:"selector,omitempty" json:"selector"`
+	FilePattern string          `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty"`
+	Enabled     *bool           `yaml:"enabled,omitempty" json:"enabled"`
 }
 
 func (r Requirement) IsEnabled() bool { return r.Enabled == nil || *r.Enabled }
@@ -64,7 +65,7 @@ func (r *Requirement) UnmarshalYAML(n *yaml.Node) error {
 		if n.Tag != "!!str" {
 			return fmt.Errorf("package selector must be a quoted string")
 		}
-		r.Selector = types.Version(n.Value)
+		r.Selector = version.Version(n.Value)
 		return nil
 	}
 	if n.Kind != yaml.MappingNode {
@@ -90,21 +91,21 @@ func (r Requirement) MarshalYAML() (any, error) {
 }
 
 // ParseReference splits a versionless provider:project reference.
-func ParseReference(ref string) (provider types.Provider, project string, err error) {
+func ParseReference(ref string) (provider catalog.Provider, project string, err error) {
 	providerKey, project, ok := strings.Cut(ref, ":")
 	if !ok || project == "" || strings.Contains(ref, "@") {
-		return types.ProviderUnknown, "", fmt.Errorf("require provider:project reference, got %q", ref)
+		return catalog.ProviderUnknown, "", fmt.Errorf("require provider:project reference, got %q", ref)
 	}
-	provider, ok = types.ParseProvider(providerKey)
+	provider, ok = catalog.ParseProvider(providerKey)
 	if !ok || !isPackageProvider(provider) {
-		return types.ProviderUnknown, "", fmt.Errorf("unsupported package provider %q", providerKey)
+		return catalog.ProviderUnknown, "", fmt.Errorf("unsupported package provider %q", providerKey)
 	}
 	return provider, project, nil
 }
 
-func isPackageProvider(provider types.Provider) bool {
+func isPackageProvider(provider catalog.Provider) bool {
 	switch provider {
-	case types.ProviderModrinth, types.ProviderCurseForge, types.ProviderMCDR:
+	case catalog.ProviderModrinth, catalog.ProviderCurseForge, catalog.ProviderMCDR:
 		return true
 	default:
 		return false
@@ -128,21 +129,21 @@ func Normalize(d *Document) error {
 	if d.SchemaVersion != SchemaVersion {
 		return fmt.Errorf("unsupported manifest version %d", d.SchemaVersion)
 	}
-	d.Server.Minecraft = types.Version(strings.TrimSpace(d.Server.Minecraft.String()))
+	d.Server.Minecraft = version.Version(strings.TrimSpace(d.Server.Minecraft.String()))
 	if declared := d.Server.Minecraft; declared == "" || declared.CanInfer() || declared.IsInvalid() {
 		return fmt.Errorf("server.minecraft must specify a concrete Minecraft version")
 	}
-	d.Server.Core.Product = types.ServerProduct(strings.ToLower(strings.TrimSpace(d.Server.Core.Product.String())))
-	if d.Server.Core.Product == types.ServerProductUnknown {
+	d.Server.Core.Product = server.Product(strings.ToLower(strings.TrimSpace(d.Server.Core.Product.String())))
+	if d.Server.Core.Product == server.ProductUnknown {
 		return fmt.Errorf("server core product is required")
 	}
-	if product, known := types.ParseServerProduct(d.Server.Core.Product.String()); known {
+	if product, known := server.ParseProduct(d.Server.Core.Product.String()); known {
 		d.Server.Core.Product = product
 	} else if d.Server.Core.Repository == "" {
 		return fmt.Errorf("unsupported server product %q; GitHub forks require core.repository", d.Server.Core.Product)
 	}
 	if d.Server.Core.ProductVersion == "" {
-		d.Server.Core.ProductVersion = types.VersionAny
+		d.Server.Core.ProductVersion = version.Any
 	}
 	if d.Server.Directory == "" {
 		d.Server.Directory = "."
@@ -155,15 +156,15 @@ func Normalize(d *Document) error {
 		return err
 	}
 	if d.Server.Packages == nil {
-		d.Server.Packages = map[types.Ecosystem]map[string]Requirement{}
+		d.Server.Packages = map[catalog.Ecosystem]map[string]Requirement{}
 	}
 	for ecosystem, packages := range d.Server.Packages {
 		switch ecosystem {
-		case types.EcosystemFabric,
-			types.EcosystemForge,
-			types.EcosystemNeoForge,
-			types.EcosystemBukkit,
-			types.EcosystemPaper:
+		case catalog.EcosystemFabric,
+			catalog.EcosystemForge,
+			catalog.EcosystemNeoForge,
+			catalog.EcosystemBukkit,
+			catalog.EcosystemPaper:
 		default:
 			return fmt.Errorf("unsupported package ecosystem %q", ecosystem)
 		}
@@ -186,7 +187,7 @@ func Normalize(d *Document) error {
 		}
 		d.MCDR.Directory = filepath.ToSlash(filepath.Clean(d.MCDR.Directory))
 		if d.MCDR.Version == "" {
-			d.MCDR.Version = types.VersionAny
+			d.MCDR.Version = version.Any
 		}
 		if d.MCDR.Packages == nil {
 			d.MCDR.Packages = map[string]Requirement{}
@@ -198,7 +199,7 @@ func Normalize(d *Document) error {
 			d.MCDR.Packages[ref] = requirement
 		}
 	}
-	if err := input.NormalizeTrackedFiles(d.Files); err != nil {
+	if err := NormalizeTrackedFiles(d.Files); err != nil {
 		return err
 	}
 	return nil
@@ -209,7 +210,7 @@ func normalizeRequirement(ref string, requirement *Requirement) error {
 		return err
 	}
 	if requirement.Selector == "" {
-		requirement.Selector = types.VersionAny
+		requirement.Selector = version.Any
 	}
 	if requirement.Enabled == nil {
 		enabled := true

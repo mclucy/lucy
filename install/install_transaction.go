@@ -16,7 +16,6 @@ import (
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -298,9 +297,9 @@ func ResolutionFingerprint(l *lockfile.Document) (string, error) {
 	server := l.Server
 	server.Java = lockfile.Java{}
 	data, err := yaml.Marshal(struct {
-		Server   lockfile.Server       `yaml:"server"`
-		MCDR     *lockfile.MCDR        `yaml:"mcdr,omitempty"`
-		Packages []types.LockedPackage `yaml:"packages"`
+		Server   lockfile.Server    `yaml:"server"`
+		MCDR     *lockfile.MCDR     `yaml:"mcdr,omitempty"`
+		Packages []lockfile.Package `yaml:"packages"`
 	}{server, l.MCDR, l.Packages})
 	if err != nil {
 		return "", err
@@ -314,11 +313,11 @@ func ResolutionFingerprint(l *lockfile.Document) (string, error) {
 // identity, so such a receipt stays current instead of re-staging once.
 func legacyResolutionFingerprint(l *lockfile.Document) (string, error) {
 	data, err := yaml.Marshal(struct {
-		Version             int                   `yaml:"lock_version"`
-		ManifestFingerprint string                `yaml:"manifest_fingerprint"`
-		Server              lockfile.Server       `yaml:"server"`
-		MCDR                *lockfile.MCDR        `yaml:"mcdr,omitempty"`
-		Packages            []types.LockedPackage `yaml:"packages"`
+		Version             int                `yaml:"lock_version"`
+		ManifestFingerprint string             `yaml:"manifest_fingerprint"`
+		Server              lockfile.Server    `yaml:"server"`
+		MCDR                *lockfile.MCDR     `yaml:"mcdr,omitempty"`
+		Packages            []lockfile.Package `yaml:"packages"`
 	}{l.SchemaVersion, l.ManifestFingerprint, l.Server, l.MCDR, l.Packages})
 	if err != nil {
 		return "", err

@@ -9,19 +9,17 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/cas"
-	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
 )
 
 // DeclaredFiles prefers the manifest declarations and falls back to the lock
 // when only an installed workspace remains, so read-only commands also work
 // without a manifest. A present but unreadable state file is an error, never an
 // empty result set.
-func DeclaredFiles(root string) ([]types.TrackedFile, error) {
+func DeclaredFiles(root string) ([]manifest.TrackedFile, error) {
 	document, manifestErr := manifest.Read(root)
 	switch {
 	case manifestErr == nil:
@@ -46,12 +44,12 @@ func DeclaredFiles(root string) ([]types.TrackedFile, error) {
 }
 
 // Inspect makes no state directories and never contacts a recovery source.
-func Inspect(root string, declarations []types.TrackedFile) (statuses []Status, resultErr error) {
+func Inspect(root string, declarations []manifest.TrackedFile) (statuses []Status, resultErr error) {
 	if err := noPending(root); err != nil {
 		return nil, err
 	}
 	declarations = slices.Clone(declarations)
-	if err := input.NormalizeTrackedFiles(declarations); err != nil {
+	if err := manifest.NormalizeTrackedFiles(declarations); err != nil {
 		return nil, err
 	}
 	files, err := os.OpenRoot(root)
@@ -96,12 +94,12 @@ func Inspect(root string, declarations []types.TrackedFile) (statuses []Status, 
 
 // Provision requires shared workspace ownership and preserves every existing working file.
 // Availability failures are diagnostics; unsafe state and incomplete transactions are errors.
-func Provision(ctx context.Context, root string, declarations []types.TrackedFile, offline bool) (diagnostics []Diagnostic, resultErr error) {
+func Provision(ctx context.Context, root string, declarations []manifest.TrackedFile, offline bool) (diagnostics []Diagnostic, resultErr error) {
 	if err := noPending(root); err != nil {
 		return nil, err
 	}
 	declarations = slices.Clone(declarations)
-	if err := input.NormalizeTrackedFiles(declarations); err != nil {
+	if err := manifest.NormalizeTrackedFiles(declarations); err != nil {
 		return nil, err
 	}
 	if len(declarations) == 0 {

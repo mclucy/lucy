@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/mclucy/lucy/types"
 )
 
 // parseFabricConstraint parses fabric.mod.json dependency predicates. Each
@@ -13,14 +11,14 @@ import (
 // merges into OR clauses.
 //
 // Reference: https://wiki.fabricmc.net/documentation:fabric_mod_json_spec
-func parseFabricConstraint(raw string) (types.VersionExpr, error) {
+func parseFabricConstraint(raw string) (Expr, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardExpression(raw) {
 		return nil, nil
 	}
 
 	parts := strings.Split(raw, "||")
-	result := make(types.VersionExpr, 0, len(parts))
+	result := make(Expr, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
@@ -41,13 +39,13 @@ func parseFabricConstraint(raw string) (types.VersionExpr, error) {
 	return result, nil
 }
 
-func parseFabricClause(raw string) ([]types.VersionSubExpr, error) {
+func parseFabricClause(raw string) ([]SubExpr, error) {
 	if strings.Contains(raw, " - ") {
 		return parseFabricHyphenRange(raw)
 	}
 
 	tokens := strings.Fields(raw)
-	terms := make([]types.VersionSubExpr, 0, len(tokens))
+	terms := make([]SubExpr, 0, len(tokens))
 	for _, token := range tokens {
 		parsed, err := parseFabricToken(token)
 		if err != nil {
@@ -58,23 +56,23 @@ func parseFabricClause(raw string) ([]types.VersionSubExpr, error) {
 	return terms, nil
 }
 
-func parseFabricHyphenRange(raw string) ([]types.VersionSubExpr, error) {
+func parseFabricHyphenRange(raw string) ([]SubExpr, error) {
 	tokens := strings.SplitN(raw, " - ", 2)
 	if len(tokens) != 2 {
 		return nil, fmt.Errorf("invalid Fabric range %q", raw)
 	}
-	lower := parseFabricVersion(types.Version(strings.TrimSpace(tokens[0])))
-	upper := parseFabricVersion(types.Version(strings.TrimSpace(tokens[1])))
+	lower := parseFabricVersion(Version(strings.TrimSpace(tokens[0])))
+	upper := parseFabricVersion(Version(strings.TrimSpace(tokens[1])))
 	if lower == nil || upper == nil {
 		return nil, fmt.Errorf("invalid Fabric range %q", raw)
 	}
-	return []types.VersionSubExpr{
-		{Value: lower, Operator: types.OpGte},
-		{Value: upper, Operator: types.OpLte},
+	return []SubExpr{
+		{Value: lower, Operator: OpGte},
+		{Value: upper, Operator: OpLte},
 	}, nil
 }
 
-func parseFabricToken(raw string) ([]types.VersionSubExpr, error) {
+func parseFabricToken(raw string) ([]SubExpr, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardExpression(raw) {
 		return nil, nil
@@ -83,7 +81,7 @@ func parseFabricToken(raw string) ([]types.VersionSubExpr, error) {
 	// Comma-separated comparators are an AND group.
 	if strings.Contains(raw, ",") {
 		parts := strings.Split(raw, ",")
-		terms := make([]types.VersionSubExpr, 0, len(parts))
+		terms := make([]SubExpr, 0, len(parts))
 		for _, part := range parts {
 			parsed, err := parseFabricToken(part)
 			if err != nil {
@@ -121,7 +119,7 @@ func parseFabricToken(raw string) ([]types.VersionSubExpr, error) {
 		}
 	}
 
-	lower := parseFabricVersion(types.Version(versionToken))
+	lower := parseFabricVersion(Version(versionToken))
 	if lower == nil {
 		return nil, fmt.Errorf("invalid Fabric version %q", versionToken)
 	}
@@ -135,33 +133,33 @@ func parseFabricToken(raw string) ([]types.VersionSubExpr, error) {
 			)
 		default:
 			// Fabric reduces inclusive predicates on plain strings to equality.
-			return []types.VersionSubExpr{
-				{Value: lower, Operator: types.OpEq},
+			return []SubExpr{
+				{Value: lower, Operator: OpEq},
 			}, nil
 		}
 	}
 
 	switch operator {
 	case "", "=", "==":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpEq}}, nil
+		return []SubExpr{{Value: lower, Operator: OpEq}}, nil
 	case "!=":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpNeq}}, nil
+		return []SubExpr{{Value: lower, Operator: OpNeq}}, nil
 	case ">":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpGt}}, nil
+		return []SubExpr{{Value: lower, Operator: OpGt}}, nil
 	case ">=":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpGte}}, nil
+		return []SubExpr{{Value: lower, Operator: OpGte}}, nil
 	case "<":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpLt}}, nil
+		return []SubExpr{{Value: lower, Operator: OpLt}}, nil
 	case "<=":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpLte}}, nil
+		return []SubExpr{{Value: lower, Operator: OpLte}}, nil
 	case "^", "~":
 		upper := semverUpperBound(lower.(*SemverVersion), operator)
 		if upper == nil {
 			return nil, fmt.Errorf("invalid Fabric predicate %q", raw)
 		}
-		return []types.VersionSubExpr{
-			{Value: lower, Operator: types.OpGte},
-			{Value: upper, Operator: types.OpLt},
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
 		}, nil
 	default:
 		return nil, fmt.Errorf("invalid Fabric predicate %q", raw)
@@ -170,7 +168,7 @@ func parseFabricToken(raw string) ([]types.VersionSubExpr, error) {
 
 // parseFabricWildcardRange expands a Fabric X-range. Fabric includes
 // prereleases at the lower boundary and excludes them at the next component.
-func parseFabricWildcardRange(raw string) ([]types.VersionSubExpr, error) {
+func parseFabricWildcardRange(raw string) ([]SubExpr, error) {
 	core := raw
 	if index := strings.IndexByte(core, '+'); index >= 0 {
 		core = core[:index]
@@ -214,35 +212,35 @@ func parseFabricWildcardRange(raw string) ([]types.VersionSubExpr, error) {
 
 	switch wildcardIndex {
 	case 1: // a.x behaves as ^a-
-		lower := newSemverBoundary(types.VersionDialectFabric, numbers[0])
-		upper := newSemverBoundary(types.VersionDialectFabric, numbers[0]+1)
-		return []types.VersionSubExpr{
-			{Value: lower, Operator: types.OpGte},
-			{Value: upper, Operator: types.OpLt},
+		lower := newSemverBoundary(DialectFabric, numbers[0])
+		upper := newSemverBoundary(DialectFabric, numbers[0]+1)
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
 		}, nil
 	case 2: // a.b.x behaves as ~a.b-
 		lower := newSemverBoundary(
-			types.VersionDialectFabric,
+			DialectFabric,
 			numbers[0],
 			numbers[1],
 		)
 		upper := newSemverBoundary(
-			types.VersionDialectFabric,
+			DialectFabric,
 			numbers[0],
 			numbers[1]+1,
 		)
-		return []types.VersionSubExpr{
-			{Value: lower, Operator: types.OpGte},
-			{Value: upper, Operator: types.OpLt},
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
 		}, nil
 	default: // a.b.c.x increments the last numeric component.
-		lower := newSemverBoundary(types.VersionDialectFabric, numbers...)
+		lower := newSemverBoundary(DialectFabric, numbers...)
 		incremented := append([]uint64(nil), numbers...)
 		incremented[len(incremented)-1]++
-		upper := newSemverBoundary(types.VersionDialectFabric, incremented...)
-		return []types.VersionSubExpr{
-			{Value: lower, Operator: types.OpGte},
-			{Value: upper, Operator: types.OpLt},
+		upper := newSemverBoundary(DialectFabric, incremented...)
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
 		}, nil
 	}
 }
@@ -250,7 +248,7 @@ func parseFabricWildcardRange(raw string) ([]types.VersionSubExpr, error) {
 func semverUpperBound(
 	lower *SemverVersion,
 	operator string,
-) types.ResolvableVersion {
+) ResolvableVersion {
 	switch operator {
 	case "^":
 		return newSemverBoundary(
@@ -274,14 +272,14 @@ func semverUpperBound(
 // References:
 //   - https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
 //   - https://github.com/MCDReforged/MCDReforged/blob/master/mcdreforged/plugin/meta/version.py
-func parseMCDRConstraint(raw string) (types.VersionExpr, error) {
+func parseMCDRConstraint(raw string) (Expr, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardExpression(raw) {
 		return nil, nil
 	}
 
 	tokens := strings.Fields(raw)
-	terms := make([]types.VersionSubExpr, 0, len(tokens))
+	terms := make([]SubExpr, 0, len(tokens))
 	for _, token := range tokens {
 		parsed, err := parseMCDRCriterion(token)
 		if err != nil {
@@ -292,10 +290,10 @@ func parseMCDRConstraint(raw string) (types.VersionExpr, error) {
 	if len(terms) == 0 {
 		return nil, nil
 	}
-	return types.VersionExpr{terms}, nil
+	return Expr{terms}, nil
 }
 
-func parseMCDRCriterion(raw string) ([]types.VersionSubExpr, error) {
+func parseMCDRCriterion(raw string) ([]SubExpr, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || isWildcardExpression(raw) {
 		return nil, nil
@@ -327,39 +325,39 @@ func parseMCDRCriterion(raw string) ([]types.VersionSubExpr, error) {
 
 	switch operator {
 	case "", "=", "==":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpEq}}, nil
+		return []SubExpr{{Value: lower, Operator: OpEq}}, nil
 	case ">":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpGt}}, nil
+		return []SubExpr{{Value: lower, Operator: OpGt}}, nil
 	case ">=":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpGte}}, nil
+		return []SubExpr{{Value: lower, Operator: OpGte}}, nil
 	case "<":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpLt}}, nil
+		return []SubExpr{{Value: lower, Operator: OpLt}}, nil
 	case "<=":
-		return []types.VersionSubExpr{{Value: lower, Operator: types.OpLte}}, nil
+		return []SubExpr{{Value: lower, Operator: OpLte}}, nil
 	case "^":
 		if semantic.wildcardAt(0) {
-			return []types.VersionSubExpr{{Operator: types.OpNever}}, nil
+			return []SubExpr{{Operator: OpNever}}, nil
 		}
 		upper := newSemverBoundary(
-			types.VersionDialectMCDR,
+			DialectMCDR,
 			semantic.Major()+1,
 		)
-		return []types.VersionSubExpr{
-			{Value: lower, Operator: types.OpGte},
-			{Value: upper, Operator: types.OpLt},
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
 		}, nil
 	case "~":
 		if semantic.wildcardAt(0) || semantic.wildcardAt(1) {
-			return []types.VersionSubExpr{{Operator: types.OpNever}}, nil
+			return []SubExpr{{Operator: OpNever}}, nil
 		}
 		upper := newSemverBoundary(
-			types.VersionDialectMCDR,
+			DialectMCDR,
 			semantic.Major(),
 			semantic.Minor()+1,
 		)
-		return []types.VersionSubExpr{
-			{Value: lower, Operator: types.OpGte},
-			{Value: upper, Operator: types.OpLt},
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
 		}, nil
 	default:
 		return nil, fmt.Errorf("invalid MCDR criterion %q", raw)

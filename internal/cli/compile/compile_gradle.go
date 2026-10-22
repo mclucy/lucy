@@ -2,7 +2,6 @@ package compile
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -15,11 +14,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/catalog"
+
+	_ "embed"
+
 	"github.com/Masterminds/semver/v3"
 	"github.com/mclucy/lucy/internal/buildrepo"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 //go:embed compile_model.gradle
@@ -43,11 +45,11 @@ type gradleModel struct {
 type gradleProject struct {
 	Path string `json:"path"`
 
-	Ecosystems     []types.Ecosystem `json:"ecosystems"`
-	HasModMetadata bool              `json:"hasModMetadata"`
-	BuildTask      string            `json:"buildTask"`
-	Compilers      []compiler        `json:"compilers"`
-	Archives       []archive         `json:"archives"`
+	Ecosystems     []catalog.Ecosystem `json:"ecosystems"`
+	HasModMetadata bool                `json:"hasModMetadata"`
+	BuildTask      string              `json:"buildTask"`
+	Compilers      []compiler          `json:"compilers"`
+	Archives       []archive           `json:"archives"`
 }
 
 type compiler struct {
@@ -264,7 +266,7 @@ func nameProject(path string) string {
 
 func selectProject(model gradleModel, opts *options) (gradleProject, error) {
 	candidates := make([]gradleProject, 0, len(model.Projects))
-	ecosystem := types.Ecosystem(opts.ecosystem)
+	ecosystem := catalog.Ecosystem(opts.ecosystem)
 	for _, project := range model.Projects {
 		if opts.project != "" && project.Path != opts.project {
 			continue
@@ -310,7 +312,7 @@ func selectProject(model gradleModel, opts *options) (gradleProject, error) {
 	return project, nil
 }
 
-func joinEcosystems(ecosystems []types.Ecosystem) string {
+func joinEcosystems(ecosystems []catalog.Ecosystem) string {
 	values := make([]string, 0, len(ecosystems))
 	for _, ecosystem := range ecosystems {
 		values = append(values, string(ecosystem))

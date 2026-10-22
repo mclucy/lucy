@@ -1,7 +1,6 @@
 package mcdr
 
 import (
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -14,13 +13,13 @@ func selectLatestRelease(history *pluginRelease) *release {
 
 func selectLatestCompatibleRelease(
 	history *pluginRelease,
-	localMcdrVersion types.Version,
+	localMcdrVersion version.Version,
 ) (*release, error) {
 	if history == nil {
 		return nil, nil
 	}
 
-	dialect, err := version.NewVersionDialect(types.VersionDialectMCDR)
+	dialect, err := version.NewEngine(version.DialectMCDR)
 	if err != nil {
 		return nil, err
 	}

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 func TestDecodeInfersMissingModuleDialect(t *testing.T) {
@@ -45,14 +45,14 @@ packages:
 		t.Fatalf("decode old lock: %v", err)
 	}
 	module := document.Packages[0].Modules[0]
-	if got := module.EffectiveVersionDialect(); got != types.VersionDialectFabric {
-		t.Fatalf("inferred dialect = %q, want %q", got, types.VersionDialectFabric)
+	if got := module.EffectiveVersionDialect(); got != version.DialectFabric {
+		t.Fatalf("inferred dialect = %q, want %q", got, version.DialectFabric)
 	}
-	if module.VersionDialect != types.VersionDialectUnknown {
+	if module.VersionDialect != version.DialectUnknown {
 		t.Fatal("decode must not rewrite the optional field")
 	}
 
-	document.Packages[0].Modules[0].VersionDialect = types.VersionDialectFabric
+	document.Packages[0].Modules[0].VersionDialect = version.DialectFabric
 	data, err := Snapshot(document)
 	if err != nil {
 		t.Fatalf("snapshot: %v", err)

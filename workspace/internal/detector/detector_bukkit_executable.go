@@ -10,8 +10,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 )
 
 const (
@@ -135,7 +136,7 @@ func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile
 	// Stage 6: Runtime Projection
 	gameVersion := judgment.observations.gameVersion
 	if !hasConcreteVersion(gameVersion) {
-		gameVersion = types.VersionUnknown
+		gameVersion = version.Unknown
 	}
 	evidence := projectPaperJudgment(filePath, gameVersion, judgment)
 	if evidence == nil {
@@ -425,7 +426,7 @@ func resolvePaperContradictions(judgment *paperJudgment) {
 
 func projectPaperJudgment(
 	filePath string,
-	gameVersion types.Version,
+	gameVersion version.Version,
 	judgment paperJudgment,
 ) *RuntimeEvidence {
 	if !judgment.bukkitConfirmed {
@@ -465,13 +466,13 @@ func projectPaperJudgment(
 	}
 
 	return &RuntimeEvidence{
-		PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-			Ecosystem: types.EcosystemUnspecified,
+		PrimaryPath: filePath, PrimaryRuntime: &catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemUnspecified,
 			Name:      input.ToProjectName(lineage),
-			Version:   types.VersionUnknown,
-		}, RuntimeComponents: []types.VersionedPackageRef{
+			Version:   version.Unknown,
+		}, RuntimeComponents: []catalog.VersionedRef{
 			{
-				Ecosystem: types.EcosystemMinecraft,
+				Ecosystem: catalog.EcosystemMinecraft,
 				Name:      input.ToProjectName("minecraft"),
 				Version:   gameVersion,
 			},
@@ -553,12 +554,12 @@ func parseBukkitManifest(data []byte) bukkitManifestSignals {
 	return signals
 }
 
-func parseBukkitGameVersion(implementationVersion string) types.Version {
+func parseBukkitGameVersion(implementationVersion string) version.Version {
 	match := bukkitVersionPrefixPattern.FindStringSubmatch(strings.TrimSpace(implementationVersion))
 	if len(match) < 2 || !isMinecraftReleaseVersion(match[1]) {
-		return types.VersionUnknown
+		return version.Unknown
 	}
-	return types.Version(match[1])
+	return version.Version(match[1])
 }
 
 func init() {

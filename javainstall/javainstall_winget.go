@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"slices"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/java"
 )
 
 // winget is the Windows Package Manager.
@@ -17,7 +17,7 @@ type winget struct{}
 // The formats carry one %d directive for the major. An empty format marks a
 // build that winget does not package.
 type wingetJavaPackage struct {
-	distribution types.JavaDistribution
+	distribution java.Distribution
 	jreFormat    string
 	jdkFormat    string
 	jreMajors    []int
@@ -28,14 +28,14 @@ type wingetJavaPackage struct {
 // distribution.
 var wingetJavaPackages = []wingetJavaPackage{
 	{
-		distribution: types.JavaDistributionTemurin,
+		distribution: java.DistributionTemurin,
 		jreFormat:    "EclipseAdoptium.Temurin.%d.JRE",
 		jdkFormat:    "EclipseAdoptium.Temurin.%d.JDK",
 		jreMajors:    []int{8, 11, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26},
 		jdkMajors:    []int{8, 11, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26},
 	},
 	{
-		distribution: types.JavaDistributionZulu,
+		distribution: java.DistributionZulu,
 		jreFormat:    "Azul.Zulu.%d.JRE",
 		jdkFormat:    "Azul.Zulu.%d.JDK",
 		jreMajors:    []int{7, 8, 9, 11, 12, 13, 15, 16, 17, 18, 21, 25},
@@ -45,7 +45,7 @@ var wingetJavaPackages = []wingetJavaPackage{
 		},
 	},
 	{
-		distribution: types.JavaDistributionCorretto,
+		distribution: java.DistributionCorretto,
 		jreFormat:    "Amazon.Corretto.%d.JRE",
 		jdkFormat:    "Amazon.Corretto.%d.JDK",
 		jreMajors:    []int{8},
@@ -54,7 +54,7 @@ var wingetJavaPackages = []wingetJavaPackage{
 		},
 	},
 	{
-		distribution: types.JavaDistributionLiberica,
+		distribution: java.DistributionLiberica,
 		jreFormat:    "BellSoft.LibericaJRE.%d",
 		jdkFormat:    "BellSoft.LibericaJDK.%d",
 		jreMajors: []int{
@@ -66,26 +66,26 @@ var wingetJavaPackages = []wingetJavaPackage{
 		},
 	},
 	{
-		distribution: types.JavaDistributionMicrosoft,
+		distribution: java.DistributionMicrosoft,
 		jdkFormat:    "Microsoft.OpenJDK.%d",
 		jdkMajors:    []int{11, 16, 17, 21, 25},
 	},
 	{
-		distribution: types.JavaDistributionOracle,
+		distribution: java.DistributionOracle,
 		jdkFormat:    "Oracle.JDK.%d",
 		jdkMajors: []int{
 			17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
 		},
 	},
 	{
-		distribution: types.JavaDistributionSapMachine,
+		distribution: java.DistributionSapMachine,
 		jreFormat:    "SAP.SapMachine.%d.JRE",
 		jdkFormat:    "SAP.SapMachine.%d.JDK",
 		jreMajors:    []int{11, 17, 21, 22, 23, 24, 25, 26, 27},
 		jdkMajors:    []int{11, 17, 21, 22, 23, 24, 25, 26, 27},
 	},
 	{
-		distribution: types.JavaDistributionSemeru,
+		distribution: java.DistributionSemeru,
 		jreFormat:    "IBM.Semeru.%d.JRE",
 		jdkFormat:    "IBM.Semeru.%d.JDK",
 		jreMajors: []int{
@@ -142,10 +142,10 @@ func wingetPlans(req Request) []Plan {
 // wingetJavaIdentifier returns the package identifier for req, the build it
 // installs, and whether winget packages req. The JRE package is preferred to
 // the JDK package.
-func wingetJavaIdentifier(req Request) (string, types.JavaDistribution, bool) {
+func wingetJavaIdentifier(req Request) (string, java.Distribution, bool) {
 	distribution := req.Distribution
-	if distribution == types.JavaDistributionAny {
-		distribution = types.JavaDistributionTemurin
+	if distribution == java.DistributionAny {
+		distribution = java.DistributionTemurin
 	}
 	for _, pkg := range wingetJavaPackages {
 		if pkg.distribution != distribution {
@@ -158,5 +158,5 @@ func wingetJavaIdentifier(req Request) (string, types.JavaDistribution, bool) {
 			return fmt.Sprintf(pkg.jdkFormat, req.Major), pkg.distribution, true
 		}
 	}
-	return "", types.JavaDistributionAny, false
+	return "", java.DistributionAny, false
 }

@@ -3,8 +3,9 @@ package mcdr
 import (
 	"time"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/upstream"
 )
 
 // SourceGitHub API file ref: https://api.github.com/repos/MCDReforged/PluginCatalogue/contents/plugins/{plugin_name}/plugin_info.json
@@ -47,9 +48,9 @@ type release struct {
 	Meta        pluginMeta `json:"meta"`
 }
 
-func (r release) ToPackageRemote() types.ResolvedPackage {
-	remote := types.ResolvedPackage{
-		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderMCDR}},
+func (r release) ToPackageRemote() upstream.ResolvedPackage {
+	remote := upstream.ResolvedPackage{
+		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderMCDR}},
 		FileURL:  r.Asset.BrowserDownloadUrl,
 		Filename: r.Asset.Name,
 	}
@@ -110,8 +111,8 @@ type rawProjectInformation struct {
 	Repository *pluginRepo
 }
 
-func (r rawProjectInformation) ToProjectInformation() types.Metadata {
-	info := types.Metadata{
+func (r rawProjectInformation) ToProjectInformation() catalog.Metadata {
+	info := catalog.Metadata{
 		Title:                 r.Meta.Name,
 		Brief:                 r.Meta.Description.EnUs,
 		Description:           r.Repository.Readme,
@@ -126,26 +127,26 @@ func (r rawProjectInformation) ToProjectInformation() types.Metadata {
 		),
 	}
 
-	info.Authors = make([]types.Person, 0)
+	info.Authors = make([]catalog.Person, 0)
 	for _, author := range r.Info.Authors {
 		info.Authors = append(
-			info.Authors, types.Person{
+			info.Authors, catalog.Person{
 				Name: author.Name,
 				URL:  author.Link,
 			},
 		)
 	}
 
-	info.URLs = make([]types.URL, 0)
+	info.URLs = make([]catalog.URL, 0)
 	info.URLs = append(
 		info.URLs,
-		types.URL{
+		catalog.URL{
 			Name: "Plugin Page",
-			Type: types.URLHome,
+			Type: catalog.URLHome,
 			URL:  r.Meta.Link,
-		}, types.URL{
+		}, catalog.URL{
 			Name: "SourceGitHub Repo",
-			Type: types.URLSource,
+			Type: catalog.URLSource,
 			URL:  r.Info.Repository,
 		},
 	)

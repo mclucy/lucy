@@ -12,9 +12,10 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 type provider struct{}
@@ -25,15 +26,15 @@ func (s provider) Search(q upstream.Query) (
 ) {
 	var facets []facetItems
 	switch q.FilterEcosystem {
-	case types.EcosystemForge:
+	case catalog.EcosystemForge:
 		facets = append(facets, facetForgeOnly)
-	case types.EcosystemFabric:
+	case catalog.EcosystemFabric:
 		facets = append(facets, facetFabricOnly)
-	case types.EcosystemNeoForge:
+	case catalog.EcosystemNeoForge:
 		facets = append(facets, facetNeoforgeOnly)
-	case types.EcosystemBukkit:
+	case catalog.EcosystemBukkit:
 		facets = append(facets, facetBukkitOnly)
-	case types.EcosystemUnspecified:
+	case catalog.EcosystemUnspecified:
 		fallthrough
 	default:
 		facets = append(facets, facetAllLoaders)
@@ -87,33 +88,33 @@ func (s provider) Search(q upstream.Query) (
 	return
 }
 
-func (s provider) Provider() types.Provider {
-	return types.ProviderModrinth
+func (s provider) Provider() catalog.Provider {
+	return catalog.ProviderModrinth
 }
 
 var Provider provider
 
 func (s provider) Fetch(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
 	version, err := getVersion(local, id)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 	if len(version.Files) == 0 || path.Ext(version.Files[0].Filename) != ".jar" {
-		return types.ResolvedPackage{}, ErrUnsupportedFileType
+		return upstream.ResolvedPackage{}, ErrUnsupportedFileType
 	}
 	resolved := resolvedPackageFromVersion(*version)
-	resolved.ID.PackageRef = id.PackageRef
+	resolved.ID.Ref = id.Ref
 	resolved.ID.Version = id.Version
 	return resolved, nil
 }
 
-func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
+func (s provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
 	project, err := getProjectByName(ref.Name)
 	if err != nil {
-		return types.Metadata{}, err
+		return catalog.Metadata{}, err
 	}
 	info := project.ToProjectInformation()
 	return info, nil
@@ -126,8 +127,8 @@ var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported
 
 func (s provider) Dependencies(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (*types.DependencySet, error) {
+	id catalog.VersionedRef,
+) (*upstream.DependencySet, error) {
 	version, err := getVersion(local, id)
 	if err != nil {
 		return nil, fmt.Errorf("modrinth: dependencies fetch failed: %w", err)
@@ -142,17 +143,17 @@ func (s provider) Dependencies(
 
 func (s provider) ResolveVersionSelector(
 	local upstream.LocalContext,
-	p types.VersionedPackageRef,
-) (parsed types.VersionedPackageRef, err error) {
+	p catalog.VersionedRef,
+) (parsed catalog.VersionedRef, err error) {
 	if p.Ecosystem.IsUnspecified() {
-		p.Ecosystem = types.EcosystemUnspecified
+		p.Ecosystem = catalog.EcosystemUnspecified
 	}
 	parsed.Ecosystem = p.Ecosystem
 	parsed.Name = p.Name
 
 	var v *versionResponse
 	switch p.Version {
-	case types.VersionStable, types.VersionBeta, types.VersionAny:
+	case versionpkg.Stable, versionpkg.Beta, versionpkg.Any:
 		v, err = latestVersion(
 			p.Name,
 			p.Ecosystem,
@@ -165,6 +166,6 @@ func (s provider) ResolveVersionSelector(
 	if err != nil {
 		return p, err
 	}
-	parsed.Version = types.Version(v.VersionNumber)
+	parsed.Version = versionpkg.Version(v.VersionNumber)
 	return parsed, nil
 }

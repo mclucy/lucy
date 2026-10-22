@@ -9,28 +9,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // miseVendors maps each distribution to the vendor prefix of its mise java
 // version.
-var miseVendors = map[types.JavaDistribution]string{
-	types.JavaDistributionTemurin:          "temurin",
-	types.JavaDistributionZulu:             "zulu",
-	types.JavaDistributionCorretto:         "corretto",
-	types.JavaDistributionLiberica:         "liberica",
-	types.JavaDistributionMicrosoft:        "microsoft",
-	types.JavaDistributionOracle:           "oracle",
-	types.JavaDistributionOracleOpenJDK:    "openjdk",
-	types.JavaDistributionGraalVM:          "oracle-graalvm",
-	types.JavaDistributionGraalVMCommunity: "graalvm-community",
-	types.JavaDistributionSemeru:           "semeru",
-	types.JavaDistributionSapMachine:       "sapmachine",
-	types.JavaDistributionDragonwell:       "dragonwell",
-	types.JavaDistributionKona:             "kona",
-	types.JavaDistributionRedHat:           "redhat",
-	types.JavaDistributionJetBrains:        "jetbrains",
+var miseVendors = map[java.Distribution]string{
+	java.DistributionTemurin:          "temurin",
+	java.DistributionZulu:             "zulu",
+	java.DistributionCorretto:         "corretto",
+	java.DistributionLiberica:         "liberica",
+	java.DistributionMicrosoft:        "microsoft",
+	java.DistributionOracle:           "oracle",
+	java.DistributionOracleOpenJDK:    "openjdk",
+	java.DistributionGraalVM:          "oracle-graalvm",
+	java.DistributionGraalVMCommunity: "graalvm-community",
+	java.DistributionSemeru:           "semeru",
+	java.DistributionSapMachine:       "sapmachine",
+	java.DistributionDragonwell:       "dragonwell",
+	java.DistributionKona:             "kona",
+	java.DistributionRedHat:           "redhat",
+	java.DistributionJetBrains:        "jetbrains",
 }
 
 type mise struct{}
@@ -81,9 +81,9 @@ func (mise) plans(ctx context.Context, req Request) ([]Plan, error) {
 
 // miseVendor returns the vendor prefix for dist. The unspecified distribution
 // installs Temurin, the mise java default.
-func miseVendor(dist types.JavaDistribution) (string, types.JavaDistribution, bool) {
-	if dist == types.JavaDistributionAny {
-		return "temurin", types.JavaDistributionTemurin, true
+func miseVendor(dist java.Distribution) (string, java.Distribution, bool) {
+	if dist == java.DistributionAny {
+		return "temurin", java.DistributionTemurin, true
 	}
 	prefix, ok := miseVendors[dist]
 	return prefix, dist, ok

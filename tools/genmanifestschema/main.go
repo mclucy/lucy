@@ -1,16 +1,19 @@
 package main
 
 import (
-	stdjson "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
 	"os"
 	"reflect"
 
+	"github.com/mclucy/lucy/java"
+
+	stdjson "encoding/json"
+
 	"github.com/invopop/jsonschema"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+
 	orderedmap "github.com/pb33f/ordered-map/v2"
 )
 
@@ -124,7 +127,7 @@ func main() {
 			Description: "The Java major version, or auto.",
 		}
 		distributions := []any{manifest.JavaAuto, "any"}
-		for _, distribution := range types.JavaDistributions {
+		for _, distribution := range java.Distributions {
 			distributions = append(distributions, string(distribution))
 		}
 		distribution := &jsonschema.Schema{
@@ -161,7 +164,7 @@ func main() {
 				return requirementSchema
 			case reflect.TypeFor[manifest.Java]():
 				return javaSchema
-			case reflect.TypeFor[types.TrackedFile]():
+			case reflect.TypeFor[manifest.TrackedFile]():
 				return trackedFileSchema
 			default:
 				return nil

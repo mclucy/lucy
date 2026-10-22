@@ -10,14 +10,14 @@ import (
 	"context"
 	"slices"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // Request names the Java runtime to install.
 type Request struct {
 	Major        int
-	Distribution types.JavaDistribution
+	Distribution java.Distribution
 }
 
 // Host carries the choices the command boundary makes for the planner.
@@ -114,7 +114,7 @@ type Plan struct {
 	Package string
 	// Distribution is the build the plan installs. It is the unspecified
 	// distribution for unbranded builds.
-	Distribution types.JavaDistribution
+	Distribution java.Distribution
 	Major        int
 	// Repository is added before the steps. A plan with a repository needs
 	// Host.AllowRepository.

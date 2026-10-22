@@ -3,10 +3,13 @@ package cli
 import (
 	"fmt"
 
+	"github.com/mclucy/lucy/catalog"
+	serverpkg "github.com/mclucy/lucy/server"
+
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/report"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -34,7 +37,7 @@ func (ds GraphOrigin) String() string {
 type ServerEnvironment struct {
 	Core             string
 	GameVersion      string
-	Ecosystem        types.Ecosystem
+	Ecosystem        catalog.Ecosystem
 	EcosystemVersion string
 }
 
@@ -115,28 +118,28 @@ func environmentFromLock(lock *lockfile.Document) ServerEnvironment {
 // Server packages come first; the bootstrap inputs name the loader when the
 // runtime has no packages of its own. It returns EcosystemUnspecified when
 // the evidence disagrees.
-func ecosystemFromLock(lock *lockfile.Document) types.Ecosystem {
-	var found types.Ecosystem
+func ecosystemFromLock(lock *lockfile.Document) catalog.Ecosystem {
+	var found catalog.Ecosystem
 	for _, pkg := range lock.Packages {
-		if pkg.Environment != types.EnvironmentServer ||
-			pkg.Ecosystem == types.EcosystemUnspecified {
+		if pkg.Environment != serverpkg.EnvironmentServer ||
+			pkg.Ecosystem == catalog.EcosystemUnspecified {
 			continue
 		}
-		if found != types.EcosystemUnspecified && found != pkg.Ecosystem {
-			return types.EcosystemUnspecified
+		if found != catalog.EcosystemUnspecified && found != pkg.Ecosystem {
+			return catalog.EcosystemUnspecified
 		}
 		found = pkg.Ecosystem
 	}
-	if found != types.EcosystemUnspecified {
+	if found != catalog.EcosystemUnspecified {
 		return found
 	}
 	for _, input := range lock.Server.Inputs {
 		for _, module := range input.Modules {
-			if module.Ecosystem == types.EcosystemUnspecified {
+			if module.Ecosystem == catalog.EcosystemUnspecified {
 				continue
 			}
-			if found != types.EcosystemUnspecified && found != module.Ecosystem {
-				return types.EcosystemUnspecified
+			if found != catalog.EcosystemUnspecified && found != module.Ecosystem {
+				return catalog.EcosystemUnspecified
 			}
 			found = module.Ecosystem
 		}
@@ -146,7 +149,7 @@ func ecosystemFromLock(lock *lockfile.Document) types.Ecosystem {
 
 func ecosystemVersionFromLock(lock *lockfile.Document) string {
 	ecosystem := ecosystemFromLock(lock)
-	if ecosystem == types.EcosystemUnspecified {
+	if ecosystem == catalog.EcosystemUnspecified {
 		return ""
 	}
 	for _, input := range lock.Server.Inputs {
@@ -163,7 +166,7 @@ func ecosystemVersionFromLock(lock *lockfile.Document) string {
 // supply by observing the live workspace. Values already known win.
 func environmentFromWorkspace(ws workspace.Workspace, env ServerEnvironment) ServerEnvironment {
 	if env.Core == "" || env.GameVersion == "" ||
-		env.Ecosystem == types.EcosystemUnspecified {
+		env.Ecosystem == catalog.EcosystemUnspecified {
 		if doc, err := manifest.Read(ws.ServerDir); err == nil {
 			if env.Core == "" {
 				env.Core = doc.Server.Core.Product.String()
@@ -185,7 +188,7 @@ func environmentFromWorkspace(ws workspace.Workspace, env ServerEnvironment) Ser
 	if env.Core == "" {
 		env.Core = server.Product().String()
 	}
-	if env.Ecosystem == types.EcosystemUnspecified {
+	if env.Ecosystem == catalog.EcosystemUnspecified {
 		env.Ecosystem = server.Ecosystem()
 	}
 	if env.EcosystemVersion == "" {
@@ -195,8 +198,8 @@ func environmentFromWorkspace(ws workspace.Workspace, env ServerEnvironment) Ser
 				continue
 			}
 			switch component.Version {
-			case "", types.VersionNone, types.VersionUnknown, types.VersionAny,
-				types.VersionStable, types.VersionBeta:
+			case "", versionpkg.None, versionpkg.Unknown, versionpkg.Any,
+				versionpkg.Stable, versionpkg.Beta:
 				continue
 			default:
 				env.EcosystemVersion = component.Version.String()

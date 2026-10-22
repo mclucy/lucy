@@ -6,8 +6,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 type geyserStandaloneDetector struct{}
@@ -57,8 +58,8 @@ func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile 
 		version = parseGeyserStandaloneVersionFromPath(filePath)
 	}
 
-	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &types.VersionedPackageRef{
-		Ecosystem: types.EcosystemUnspecified,
+	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemUnspecified,
 		Name:      input.ToProjectName("geyser"),
 		Version:   version,
 	}, RuntimeComponents: nil}, nil
@@ -66,7 +67,7 @@ func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile 
 
 type geyserStandaloneManifestSignals struct {
 	mainClass string
-	version   types.Version
+	version   versionpkg.Version
 }
 
 func (s geyserStandaloneManifestSignals) valid() bool {
@@ -87,7 +88,7 @@ func parseGeyserStandaloneManifest(data []byte) geyserStandaloneManifestSignals 
 				),
 			)
 		case strings.HasPrefix(line, "Implementation-Version: "):
-			signals.version = types.Version(
+			signals.version = versionpkg.Version(
 				strings.TrimSpace(
 					strings.TrimPrefix(
 						line,
@@ -104,14 +105,14 @@ var geyserStandaloneVersionPattern = regexp.MustCompile(
 	`geyser-standalone-(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)\.jar`,
 )
 
-func parseGeyserStandaloneVersionFromPath(filePath string) types.Version {
+func parseGeyserStandaloneVersionFromPath(filePath string) versionpkg.Version {
 	match := geyserStandaloneVersionPattern.FindStringSubmatch(
 		strings.ToLower(filepath.Base(filePath)),
 	)
 	if match == nil {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
-	return types.Version(match[1])
+	return versionpkg.Version(match[1])
 }
 
 func init() {

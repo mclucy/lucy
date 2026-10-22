@@ -1,8 +1,9 @@
 package curseforge
 
 import (
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-files
@@ -23,8 +24,8 @@ func listFiles(modId int32, gameVersion string, loaderType int) (
 func latestFile(
 	modId int32,
 	local upstream.LocalContext,
-	platform types.Ecosystem,
-	selector types.Version,
+	platform catalog.Ecosystem,
+	selector versionpkg.Version,
 ) (*fileResponse, error) {
 	files, err := listFiles(
 		modId,
@@ -48,7 +49,7 @@ func getFileByDisplayName(
 	modId int32,
 	version string,
 	local upstream.LocalContext,
-	platform types.Ecosystem,
+	platform catalog.Ecosystem,
 ) (*fileResponse, error) {
 	files, err := listFiles(
 		modId,

@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,7 +38,7 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 			continue
 		}
 		directory, folder := d.Server.Directory, packageFolder(planned.Environment, planned.Ecosystem)
-		if planned.Environment == types.EnvironmentMCDR {
+		if planned.Environment == server.EnvironmentMCDR {
 			directory = d.MCDR.Directory
 		}
 		relative := filepath.Join(directory, folder)
@@ -97,9 +98,9 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 // module identity may exist independently on the server and in MCDR.
 func unmanagedConflict(
 	d *lockfile.Document,
-	planned *types.LockedPackage,
-	discovered []types.DescriptorModule,
-) (*types.LockedPackage, string) {
+	planned *lockfile.Package,
+	discovered []catalog.DescriptorModule,
+) (*lockfile.Package, string) {
 	for i := range d.Packages {
 		other := &d.Packages[i]
 		if other.Environment != planned.Environment || other.Ecosystem != planned.Ecosystem {

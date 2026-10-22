@@ -18,7 +18,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	catalogpkg "github.com/mclucy/lucy/catalog"
 )
 
 type Layout struct {
@@ -42,7 +42,7 @@ type Project struct {
 	Path       string
 	Dir        string
 	BuildFile  string
-	Ecosystems []types.Ecosystem
+	Ecosystems []catalogpkg.Ecosystem
 	Java       JavaRequirements
 }
 

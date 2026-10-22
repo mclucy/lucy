@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/java"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,8 +21,8 @@ const MinimumJava = 8
 // field keeps that part on auto: the version follows the Mojang advisory for
 // the Minecraft version, and every distribution is accepted.
 type Java struct {
-	Version      int                    `yaml:"version,omitempty" json:"version,omitempty"`
-	Distribution types.JavaDistribution `yaml:"distribution,omitempty" json:"distribution,omitempty"`
+	Version      int               `yaml:"version,omitempty" json:"version,omitempty"`
+	Distribution java.Distribution `yaml:"distribution,omitempty" json:"distribution,omitempty"`
 }
 
 // IsAuto reports whether j leaves both the version and the distribution on
@@ -74,7 +74,7 @@ func (j *Java) UnmarshalYAML(n *yaml.Node) error {
 
 // MarshalYAML writes the short form when only the version is set.
 func (j Java) MarshalYAML() (any, error) {
-	if j.Distribution == types.JavaDistributionAny {
+	if j.Distribution == java.DistributionAny {
 		return j.Version, nil
 	}
 	type plain Java
@@ -83,17 +83,17 @@ func (j Java) MarshalYAML() (any, error) {
 
 // ParseJavaDistribution reads a distribution key, where "auto" and "any" mean
 // every distribution.
-func ParseJavaDistribution(s string) (types.JavaDistribution, error) {
+func ParseJavaDistribution(s string) (java.Distribution, error) {
 	if strings.EqualFold(strings.TrimSpace(s), JavaAuto) {
-		return types.JavaDistributionAny, nil
+		return java.DistributionAny, nil
 	}
-	distribution, ok := types.ParseJavaDistribution(s)
+	distribution, ok := java.ParseDistribution(s)
 	if !ok {
-		names := make([]string, len(types.JavaDistributions))
-		for i, known := range types.JavaDistributions {
+		names := make([]string, len(java.Distributions))
+		for i, known := range java.Distributions {
 			names[i] = string(known)
 		}
-		return types.JavaDistributionAny, fmt.Errorf(
+		return java.DistributionAny, fmt.Errorf(
 			"unknown Java distribution %q; use one of %s",
 			s,
 			strings.Join(names, ", "),
@@ -127,7 +127,7 @@ func normalizeJava(s *Server) error {
 	if s.Java.Version != 0 && s.Java.Version < MinimumJava {
 		return fmt.Errorf("server.java.version must be %d or later", MinimumJava)
 	}
-	if _, ok := types.ParseJavaDistribution(string(s.Java.Distribution)); !ok {
+	if _, ok := java.ParseDistribution(string(s.Java.Distribution)); !ok {
 		return fmt.Errorf("unknown Java distribution %q", s.Java.Distribution)
 	}
 	return nil

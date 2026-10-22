@@ -1,29 +1,34 @@
 package resolve
 
 import (
-	"fmt"
 	"slices"
 	"sort"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/server"
+
+	// ModuleProblem names the module requirement that a candidate cannot satisfy,
+	// together with the package that ships the module. The owner lets the failure
+	// ledger attribute the problem to the package that caused it instead of the
+	// last package that happened to be selected.
+	"fmt"
+
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
-// ModuleProblem names the module requirement that a candidate cannot satisfy,
-// together with the package that ships the module. The owner lets the failure
-// ledger attribute the problem to the package that caused it instead of the
-// last package that happened to be selected.
 type ModuleProblem struct {
-	Environment types.Environment
-	Ecosystem   types.Ecosystem
-	Provider    types.Provider
+	Environment server.Environment
+	Ecosystem   catalog.Ecosystem
+	Provider    catalog.Provider
 	ProjectID   string
 	Message     string
 }
 
 func (p ModuleProblem) Error() string { return p.Message }
 
-func moduleProblem(owner *types.LockedPackage, message string) ModuleProblem {
+func moduleProblem(owner *lockfile.Package, message string) ModuleProblem {
 	return ModuleProblem{
 		Environment: owner.Environment,
 		Ecosystem:   owner.Ecosystem,
@@ -61,10 +66,10 @@ type RejectionGroup struct {
 // layer renders it; this type only carries facts.
 type Failure struct {
 	Project    string
-	Provider   types.Provider
+	Provider   catalog.Provider
 	ProjectID  string
-	Minecraft  types.Version
-	Ecosystem  types.Ecosystem
+	Minecraft  versionpkg.Version
+	Ecosystem  catalog.Ecosystem
 	Candidates int
 	Groups     []RejectionGroup
 	Cause      error
@@ -109,7 +114,7 @@ type rejectionGroup struct {
 
 type projectLedger struct {
 	display    string
-	provider   types.Provider
+	provider   catalog.Provider
 	projectID  string
 	candidates int
 	groups     map[rejectionKey]*rejectionGroup
@@ -210,7 +215,7 @@ func (l *rejectionLedger) record(
 // summary picks the project whose rejection explains the failure best: the
 // one with the most specific reasons, not the request that happened to be
 // processed first. Nested failures only back up a deeper cause.
-func (l *rejectionLedger) summary(minecraft types.Version, cause error) *Failure {
+func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Failure {
 	var bestKey projectKey
 	var bestEntry *projectLedger
 	bestScore := -1
@@ -244,7 +249,7 @@ func (l *rejectionLedger) summary(minecraft types.Version, cause error) *Failure
 func (l *rejectionLedger) build(
 	key projectKey,
 	entry *projectLedger,
-	minecraft types.Version,
+	minecraft versionpkg.Version,
 	cause error,
 ) *Failure {
 	groups := make([]RejectionGroup, 0, len(entry.order))

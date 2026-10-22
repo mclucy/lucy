@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 func TestVanillaDetectorDetectsVanillaServerJson(t *testing.T) {
@@ -28,7 +29,7 @@ func TestVanillaDetectorDetectsVanillaServerJson(t *testing.T) {
 	}
 	if got := runtimeIdentityVersion(
 		evidence,
-		types.EcosystemMinecraft,
+		catalog.EcosystemMinecraft,
 		"minecraft",
 	); got != "1.21.4" {
 		t.Fatalf("expected game version 1.21.4, got %q", got)
@@ -88,14 +89,14 @@ func TestGeyserVersionExtractionFromFilename(t *testing.T) {
 
 	tests := []struct {
 		filename string
-		want     types.Version
+		want     versionpkg.Version
 	}{
 		{"Geyser-Standalone-2.10.1-SNAPSHOT.jar", "2.10.1-snapshot"},
 		{"geyser-standalone-2.4.2-b123.jar", "2.4.2-b123"},
 		{"Geyser-Standalone-1.0.0.jar", "1.0.0"},
 		{"geyser-standalone-2.10.1-beta.jar", "2.10.1-beta"},
-		{"random.jar", types.VersionUnknown},
-		{"geyser-standalone.jar", types.VersionUnknown},
+		{"random.jar", versionpkg.Unknown},
+		{"geyser-standalone.jar", versionpkg.Unknown},
 	}
 
 	for _, tt := range tests {
@@ -141,7 +142,7 @@ func TestCompareForgeMajorNumeric(t *testing.T) {
 				t.Parallel()
 
 				got := compareForgeMajor(
-					types.Version(tt.version),
+					versionpkg.Version(tt.version),
 					tt.target,
 				)
 				sign := func(n int) int {
@@ -193,7 +194,7 @@ func TestNeoForgeVersionRegexAllowsBetaSuffix(t *testing.T) {
 
 				gameVersion, _, ok := parseModLoaderVersionTuple(
 					filepath.Join("fake", "neoforge", tt.input),
-					types.EcosystemNeoForge,
+					catalog.EcosystemNeoForge,
 				)
 				if ok != tt.want {
 					t.Fatalf(
@@ -256,20 +257,20 @@ Implementation-Title: net.minecraftforge
 func TestRuntimeClaimsResolvesVanillaVsSpecific(t *testing.T) {
 	t.Parallel()
 
-	vanillaCore := types.VersionedPackageRef{
-		Ecosystem: types.EcosystemMinecraft,
+	vanillaCore := catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemMinecraft,
 		Name:      "minecraft",
 		Version:   "1.21.4",
 	}
-	paperCore := types.VersionedPackageRef{
-		Ecosystem: types.EcosystemPaper,
+	paperCore := catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemPaper,
 		Name:      "paper",
 		Version:   "1.21.4",
 	}
 	vanillaEvidence := &RuntimeEvidence{
 		PrimaryPath:       "/fake/vanilla.jar",
 		PrimaryRuntime:    &vanillaCore,
-		RuntimeComponents: []types.VersionedPackageRef{vanillaCore},
+		RuntimeComponents: []catalog.VersionedRef{vanillaCore},
 	}
 	paperEvidence := &RuntimeEvidence{
 		PrimaryPath:    "/fake/paper.jar",

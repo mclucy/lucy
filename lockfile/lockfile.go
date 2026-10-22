@@ -10,11 +10,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fsutil"
+	javapkg "github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,23 +26,23 @@ const (
 )
 
 type Document struct {
-	SchemaVersion       int                   `yaml:"lock_version" json:"lock_version"`
-	ManifestFingerprint string                `yaml:"manifest_fingerprint" json:"manifest_fingerprint"`
-	Server              Server                `yaml:"server" json:"server"`
-	MCDR                *MCDR                 `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
-	Packages            []types.LockedPackage `yaml:"packages" json:"packages"`
-	Files               []types.TrackedFile   `yaml:"files,omitempty" json:"files,omitempty"`
+	SchemaVersion       int                    `yaml:"lock_version" json:"lock_version"`
+	ManifestFingerprint string                 `yaml:"manifest_fingerprint" json:"manifest_fingerprint"`
+	Server              Server                 `yaml:"server" json:"server"`
+	MCDR                *MCDR                  `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Packages            []Package              `yaml:"packages" json:"packages"`
+	Files               []manifest.TrackedFile `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 type Server struct {
-	Directory      string              `yaml:"directory,omitempty" json:"directory"`
-	Minecraft      types.Version       `yaml:"minecraft" json:"minecraft"`
-	Product        types.ServerProduct `yaml:"product" json:"product"`
-	CoreVersion    types.Version       `yaml:"core_version" json:"core_version"`
-	types.Artifact `yaml:",inline" json:",inline"`
-	Bootstrapper   string                 `yaml:"bootstrapper" json:"bootstrapper"`
-	Inputs         []types.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
-	Java           Java                   `yaml:"java" json:"java"`
+	Directory        string          `yaml:"directory,omitempty" json:"directory"`
+	Minecraft        version.Version `yaml:"minecraft" json:"minecraft"`
+	Product          server.Product  `yaml:"product" json:"product"`
+	CoreVersion      version.Version `yaml:"core_version" json:"core_version"`
+	catalog.Artifact `yaml:",inline" json:",inline"`
+	Bootstrapper     string                  `yaml:"bootstrapper" json:"bootstrapper"`
+	Inputs           []server.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
+	Java             Java                    `yaml:"java" json:"java"`
 }
 
 // Java records the inputs of the Java requirement. Package requirements on
@@ -55,7 +57,7 @@ type Java struct {
 	Version int `yaml:"version,omitempty" json:"version,omitempty"`
 	// Distribution is the distribution that the manifest pins; empty accepts
 	// any build.
-	Distribution types.JavaDistribution `yaml:"distribution,omitempty" json:"distribution,omitempty"`
+	Distribution javapkg.Distribution `yaml:"distribution,omitempty" json:"distribution,omitempty"`
 }
 
 // NewJava records the Mojang advisory with the override that the manifest
@@ -70,11 +72,11 @@ func NewJava(advisory int, override *manifest.Java) Java {
 }
 
 type MCDR struct {
-	Directory string                 `yaml:"directory" json:"directory"`
-	Version   types.Version          `yaml:"version" json:"version"`
-	Python    string                 `yaml:"python" json:"python"`
-	Target    string                 `yaml:"target" json:"target"`
-	Inputs    []types.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
+	Directory string                  `yaml:"directory" json:"directory"`
+	Version   version.Version         `yaml:"version" json:"version"`
+	Python    string                  `yaml:"python" json:"python"`
+	Target    string                  `yaml:"target" json:"target"`
+	Inputs    []server.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
 }
 
 func (d *Document) Validate() error {
@@ -93,7 +95,7 @@ func (d *Document) Validate() error {
 	if err := validateVersion("server.minecraft", d.Server.Minecraft, false); err != nil {
 		return err
 	}
-	if d.Server.Product == types.ServerProductUnknown {
+	if d.Server.Product == server.ProductUnknown {
 		return fmt.Errorf("server.product is required")
 	}
 	if err := validateVersion("server.core_version", d.Server.CoreVersion, true); err != nil {
@@ -108,7 +110,7 @@ func (d *Document) Validate() error {
 	if d.Server.Java.Advisory <= 0 {
 		return fmt.Errorf("server.java.advisory must be positive")
 	}
-	if _, ok := types.ParseJavaDistribution(string(d.Server.Java.Distribution)); !ok {
+	if _, ok := javapkg.ParseDistribution(string(d.Server.Java.Distribution)); !ok {
 		return fmt.Errorf("unknown server.java.distribution %q", d.Server.Java.Distribution)
 	}
 	if d.MCDR != nil {
@@ -133,13 +135,13 @@ func (d *Document) Validate() error {
 			return err
 		}
 	}
-	if err := input.NormalizeTrackedFiles(d.Files); err != nil {
+	if err := manifest.NormalizeTrackedFiles(d.Files); err != nil {
 		return err
 	}
 	return nil
 }
 
-func validateVersion(field string, v types.Version, allowSelector bool) error {
+func validateVersion(field string, v version.Version, allowSelector bool) error {
 	if v == "" {
 		return fmt.Errorf("%s is required", field)
 	}
@@ -149,16 +151,16 @@ func validateVersion(field string, v types.Version, allowSelector bool) error {
 	return nil
 }
 
-func validateLockedPackage(pkg *types.LockedPackage) error {
+func validateLockedPackage(pkg *Package) error {
 	switch pkg.Environment {
-	case types.EnvironmentServer, types.EnvironmentMCDR:
+	case server.EnvironmentServer, server.EnvironmentMCDR:
 	default:
 		return fmt.Errorf("package %s has unknown environment %q", pkg.Artifact.ProjectID, pkg.Environment)
 	}
-	if !pkg.Ecosystem.Valid() || pkg.Ecosystem == types.EcosystemUnspecified {
+	if !pkg.Ecosystem.Valid() || pkg.Ecosystem == catalog.EcosystemUnspecified {
 		return fmt.Errorf("package %s has unknown ecosystem %q", pkg.Artifact.ProjectID, pkg.Ecosystem)
 	}
-	if pkg.Artifact.Provider == types.ProviderUnspecified || pkg.Artifact.Provider == types.ProviderUnknown {
+	if pkg.Artifact.Provider == catalog.ProviderUnspecified || pkg.Artifact.Provider == catalog.ProviderUnknown {
 		return fmt.Errorf("package %s has no provider", pkg.Artifact.ProjectID)
 	}
 	if pkg.Artifact.Version == "" || pkg.Artifact.Version.CanInfer() || pkg.Artifact.Version.IsInvalid() {
@@ -172,7 +174,7 @@ func validateLockedPackage(pkg *types.LockedPackage) error {
 	}
 	for j := range pkg.Modules {
 		module := &pkg.Modules[j]
-		if module.VersionDialect != types.VersionDialectUnknown &&
+		if module.VersionDialect != version.DialectUnknown &&
 			!module.VersionDialect.Valid() {
 			return fmt.Errorf(
 				"package %s module %s has unknown version dialect %q",

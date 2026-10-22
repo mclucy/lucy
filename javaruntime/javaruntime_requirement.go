@@ -1,17 +1,18 @@
-// Package java decides which Java runtime a server runs on and how that
-// runtime misses the requirement of the locked server. Every miss is a
+// Package javaruntime decides which Java runtime a server runs on and how
+// that runtime misses the requirement of the locked server. Every miss is a
 // warning: Lucy never refuses to run a server because of its Java runtime.
-package java
+package javaruntime
 
 import (
 	"fmt"
 	"slices"
 	"strconv"
 
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -77,28 +78,28 @@ type Requirement struct {
 	Version int `json:"version,omitempty"`
 	// Distribution is the distribution that the manifest pins; empty accepts
 	// every build.
-	Distribution types.JavaDistribution `json:"distribution,omitempty"`
-	Constraints  []Constraint           `json:"constraints"`
+	Distribution java.Distribution `json:"distribution,omitempty"`
+	Constraints  []Constraint      `json:"constraints"`
 }
 
 // RequirementOf combines the Java inputs that lock records: the Mojang
 // advisory, the manifest pin, and the Java requirements of the enabled
 // packages.
 func RequirementOf(lock *lockfile.Document) Requirement {
-	java := lock.Server.Java
+	settings := lock.Server.Java
 	r := Requirement{
-		Advisory:     java.Advisory,
-		Version:      java.Version,
-		Distribution: java.Distribution,
+		Advisory:     settings.Advisory,
+		Version:      settings.Version,
+		Distribution: settings.Distribution,
 	}
-	advisory := java.Advisory
+	advisory := settings.Advisory
 	r.Constraints = append(r.Constraints, Constraint{
 		Source:     "Minecraft " + lock.Server.Minecraft.String(),
 		Expression: fmt.Sprintf(">=%d", advisory),
 		kind:       constraintAdvisory,
 		accepts:    func(major int) bool { return major >= advisory },
 	})
-	if pinned := java.Version; pinned != 0 {
+	if pinned := settings.Version; pinned != 0 {
 		r.Constraints = append(r.Constraints, Constraint{
 			Source:     manifest.Filename,
 			Expression: strconv.Itoa(pinned),
@@ -126,8 +127,8 @@ func RequirementOf(lock *lockfile.Document) Requirement {
 }
 
 func packageConstraint(
-	m types.DescriptorModule,
-	dep types.DescriptorDependency,
+	m catalog.DescriptorModule,
+	dep catalog.DescriptorDependency,
 	advisory int,
 ) (Constraint, bool) {
 	if dep.ID != dependencyID || dep.Constraint == "" {
@@ -135,15 +136,15 @@ func packageConstraint(
 	}
 	kind := constraintPackage
 	switch dep.Kind {
-	case types.DependencyKindRequired:
-	case types.DependencyKindIncompatible:
+	case catalog.DependencyKindRequired:
+	case catalog.DependencyKindIncompatible:
 		kind = constraintIncompatible
 	default:
 		return Constraint{}, false
 	}
 	expression, dialect := dep.Constraint, m.EffectiveVersionDialect()
 	match := func(major int) (bool, error) {
-		return version.Match(expression, types.Version(strconv.Itoa(major)), dialect)
+		return version.Match(expression, version.Version(strconv.Itoa(major)), dialect)
 	}
 	if _, err := match(advisory); err != nil {
 		log.Debug(

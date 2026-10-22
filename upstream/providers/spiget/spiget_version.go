@@ -3,10 +3,11 @@ package spiget
 import (
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
-func resolveResourceByProjectName(name types.PackageName) (
+func resolveResourceByProjectName(name catalog.Name) (
 	*resourceResponse,
 	error,
 ) {
@@ -37,10 +38,10 @@ func resolveResourceByProjectName(name types.PackageName) (
 
 func resolveVersion(
 	resource *resourceResponse,
-	requested types.Version,
+	requested versionpkg.Version,
 ) (resolvedVersion, error) {
 	switch requested {
-	case "", types.VersionAny, types.VersionBeta, types.VersionStable:
+	case "", versionpkg.Any, versionpkg.Beta, versionpkg.Stable:
 		latest, err := getLatestVersion(resource.ID)
 		if err != nil {
 			return resolvedVersion{}, err

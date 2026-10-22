@@ -7,8 +7,9 @@ import (
 	"net/url"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 )
 
 const (
@@ -22,8 +23,8 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Provider() types.Provider {
-	return types.ProviderForge
+func (provider) Provider() catalog.Provider {
+	return catalog.ProviderForge
 }
 
 type promotions struct {
@@ -32,8 +33,8 @@ type promotions struct {
 
 func (p provider) ResolveVersionSelector(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.VersionedPackageRef, error) {
+	id catalog.VersionedRef,
+) (catalog.VersionedRef, error) {
 	gameVersion, err := minecraftVersionForInstall(local)
 	if err != nil {
 		return id, err
@@ -44,30 +45,30 @@ func (p provider) ResolveVersionSelector(
 		return id, err
 	}
 
-	return types.VersionedPackageRef{
-		Ecosystem: types.EcosystemForge,
+	return catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemForge,
 		Name:      "forge",
-		Version:   types.Version(forgeVersion),
+		Version:   version.Version(forgeVersion),
 	}, nil
 }
 
 func (p provider) Fetch(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
 	gameVersion, err := minecraftVersionForInstall(local)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	forgeVersion, err := forgeVersionFromPackageRef(id, gameVersion)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	fileURL := installerURL(gameVersion, forgeVersion)
 
-	return types.ResolvedPackage{
+	return upstream.ResolvedPackage{
 		FileURL: fileURL,
 		Filename: fmt.Sprintf(
 			"forge-%s-%s-installer.jar",
@@ -77,7 +78,7 @@ func (p provider) Fetch(
 	}, nil
 }
 
-func minecraftVersionForInstall(local upstream.LocalContext) (types.Version, error) {
+func minecraftVersionForInstall(local upstream.LocalContext) (version.Version, error) {
 	if !local.HasMinecraftVersion() {
 		return "", errors.New(
 			"forge bootstrap requires a concrete Minecraft version",
@@ -87,13 +88,13 @@ func minecraftVersionForInstall(local upstream.LocalContext) (types.Version, err
 }
 
 func forgeVersionFromPackageRef(
-	p types.VersionedPackageRef,
-	gameVersion types.Version,
+	p catalog.VersionedRef,
+	gameVersion version.Version,
 ) (string, error) {
-	if p.Version != types.VersionBeta &&
-		p.Version != types.VersionStable &&
-		p.Version != types.VersionAny &&
-		p.Version != types.VersionUnknown {
+	if p.Version != version.Beta &&
+		p.Version != version.Stable &&
+		p.Version != version.Any &&
+		p.Version != version.Unknown {
 		return p.Version.String(), nil
 	}
 	return fetchVersion(gameVersion, p.Version)
@@ -103,8 +104,8 @@ func forgeVersionFromPackageRef(
 // accepts the recommended promotion only; beta accepts the latest promotion;
 // any prefers the recommended release and falls back to the latest.
 func fetchVersion(
-	gameVersion types.Version,
-	selector types.Version,
+	gameVersion version.Version,
+	selector version.Version,
 ) (string, error) {
 	body, err := cache.CachedGetBytes(
 		promotionsURL,
@@ -126,11 +127,11 @@ func fetchVersion(
 	recommended := data.Promos[keyBase+"-recommended"]
 	latest := data.Promos[keyBase+"-latest"]
 	switch selector {
-	case types.VersionStable:
+	case version.Stable:
 		if recommended != "" {
 			return recommended, nil
 		}
-	case types.VersionBeta:
+	case version.Beta:
 		if latest != "" {
 			return latest, nil
 		}
@@ -155,7 +156,7 @@ func fetchVersion(
 }
 
 func installerURL(
-	gameVersion types.Version,
+	gameVersion version.Version,
 	forgeVersion string,
 ) string {
 	combinedVersion := fmt.Sprintf("%s-%s", gameVersion.String(), forgeVersion)

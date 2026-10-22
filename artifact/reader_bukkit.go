@@ -4,8 +4,9 @@ import (
 	"archive/zip"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -63,19 +64,19 @@ func (r *bukkitReader) Read(
 
 		platform := detectBukkitPluginPlatform(descriptor)
 		info := PackageInfo{
-			Ref: types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
+			Ref: catalog.VersionedRef{
+				Ref: catalog.Ref{
 					Name:     input.ToProjectName(descriptor.Name),
-					Provider: types.ProviderUnknown,
+					Provider: catalog.ProviderUnknown,
 				},
 				Ecosystem: platform,
-				Version:   types.Version(strings.TrimSpace(descriptor.Version)),
+				Version:   version.Version(strings.TrimSpace(descriptor.Version)),
 			},
 			FilePath: filePath,
 			Compatibility: Compatibility{
 				FoliaSupported: descriptor.FoliaSupported,
 			},
-			Metadata: types.Metadata{
+			Metadata: catalog.Metadata{
 				Title:       strings.TrimSpace(descriptor.Name),
 				Description: strings.TrimSpace(descriptor.Description),
 				Authors: bukkitDescriptorAuthors(
@@ -98,9 +99,9 @@ func (r *bukkitReader) Read(
 
 func detectBukkitPluginPlatform(
 	descriptor *bukkitPluginDescriptor,
-) types.Ecosystem {
+) catalog.Ecosystem {
 	if descriptor.PaperPluginLoader != "" || len(descriptor.Libraries) > 0 {
-		return types.EcosystemPaper
+		return catalog.EcosystemPaper
 	}
 	for _, list := range [][]string{
 		descriptor.API,
@@ -110,15 +111,15 @@ func detectBukkitPluginPlatform(
 		for _, entry := range list {
 			switch strings.ToLower(strings.TrimSpace(entry)) {
 			case "paper", "folia", "leaves":
-				return types.EcosystemPaper
+				return catalog.EcosystemPaper
 			}
 		}
 	}
-	return types.EcosystemBukkit
+	return catalog.EcosystemBukkit
 }
 
 func bukkitDescriptorDeps(
-	platform types.Ecosystem,
+	platform catalog.Ecosystem,
 	descriptor *bukkitPluginDescriptor,
 ) []Dependency {
 	deps := make(
@@ -138,7 +139,7 @@ func bukkitDescriptorDeps(
 
 func appendBukkitDescriptorDeps(
 	deps []Dependency,
-	platform types.Ecosystem,
+	platform catalog.Ecosystem,
 	names []string,
 	mandatory bool,
 ) []Dependency {
@@ -149,10 +150,10 @@ func appendBukkitDescriptorDeps(
 		}
 		deps = append(
 			deps, Dependency{
-				Ref: types.VersionedPackageRef{
-					PackageRef: types.PackageRef{
+				Ref: catalog.VersionedRef{
+					Ref: catalog.Ref{
 						Name:     input.ToProjectName(name),
-						Provider: types.ProviderUnknown,
+						Provider: catalog.ProviderUnknown,
 					}, Ecosystem: platform,
 				},
 				Mandatory: mandatory,
@@ -162,29 +163,29 @@ func appendBukkitDescriptorDeps(
 	return deps
 }
 
-func bukkitDescriptorAuthors(author string, authors []string) []types.Person {
-	people := make([]types.Person, 0, len(authors)+1)
+func bukkitDescriptorAuthors(author string, authors []string) []catalog.Person {
+	people := make([]catalog.Person, 0, len(authors)+1)
 	if trimmed := strings.TrimSpace(author); trimmed != "" {
-		people = append(people, types.Person{Name: trimmed})
+		people = append(people, catalog.Person{Name: trimmed})
 	}
 	for _, item := range authors {
 		if trimmed := strings.TrimSpace(item); trimmed != "" {
-			people = append(people, types.Person{Name: trimmed})
+			people = append(people, catalog.Person{Name: trimmed})
 		}
 	}
 	return people
 }
 
-func bukkitDescriptorURLs(website string) []types.URL {
+func bukkitDescriptorURLs(website string) []catalog.URL {
 	website = strings.TrimSpace(website)
 	if website == "" {
 		return nil
 	}
 
-	return []types.URL{
+	return []catalog.URL{
 		{
 			Name: "Website",
-			Type: types.URLHome,
+			Type: catalog.URLHome,
 			URL:  website,
 		},
 	}

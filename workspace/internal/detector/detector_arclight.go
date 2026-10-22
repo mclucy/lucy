@@ -8,8 +8,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 var arclightJarNamePattern = regexp.MustCompile(
@@ -66,15 +67,15 @@ func (d *arclightServerDetector) Detect(context DetectionContext, primaryFile *D
 		gameVersion = parseArclightGameVersionFromPath(filePath)
 	}
 
-	primary := types.VersionedPackageRef{
-		Ecosystem: types.EcosystemUnspecified,
+	primary := catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemUnspecified,
 		Name:      input.ToProjectName("arclight"),
 		Version:   manifestSignals.implementationVersion,
 	}
-	components := []types.VersionedPackageRef{
+	components := []catalog.VersionedRef{
 		primary,
 		{
-			Ecosystem: types.EcosystemMinecraft,
+			Ecosystem: catalog.EcosystemMinecraft,
 			Name:      input.ToProjectName("minecraft"),
 			Version:   gameVersion,
 		},
@@ -105,8 +106,8 @@ func (d *arclightServerDetector) Detect(context DetectionContext, primaryFile *D
 type arclightManifestSignals struct {
 	mainClass             string
 	implementation        string
-	implementationVersion types.Version
-	gameVersion           types.Version
+	implementationVersion versionpkg.Version
+	gameVersion           versionpkg.Version
 }
 
 func (s arclightManifestSignals) valid() bool {
@@ -141,7 +142,7 @@ func parseArclightManifest(data []byte) arclightManifestSignals {
 					"Implementation-Version: ",
 				),
 			)
-			signals.implementationVersion = types.Version(version)
+			signals.implementationVersion = versionpkg.Version(version)
 			if parsedGameVersion := parseArclightGameVersionFromImplementation(version); hasConcreteVersion(parsedGameVersion) {
 				signals.gameVersion = parsedGameVersion
 			}
@@ -150,27 +151,27 @@ func parseArclightManifest(data []byte) arclightManifestSignals {
 	return signals
 }
 
-func parseArclightGameVersionFromImplementation(version string) types.Version {
+func parseArclightGameVersionFromImplementation(version string) versionpkg.Version {
 	if !strings.HasPrefix(version, "arclight-") {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 	trimmed := strings.TrimPrefix(version, "arclight-")
 	parts := strings.Split(trimmed, "-")
 	if len(parts) == 0 || !isMinecraftReleaseVersion(parts[0]) {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
-	return types.Version(parts[0])
+	return versionpkg.Version(parts[0])
 }
 
-func parseArclightGameVersionFromPath(filePath string) types.Version {
+func parseArclightGameVersionFromPath(filePath string) versionpkg.Version {
 	match := arclightJarNamePattern.FindStringSubmatch(filepath.Base(filePath))
 	if match == nil {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
-	return types.Version(match[1])
+	return versionpkg.Version(match[1])
 }
 
-func arclightLoaderEcosystem(launchProps []byte) (types.Ecosystem, bool) {
+func arclightLoaderEcosystem(launchProps []byte) (catalog.Ecosystem, bool) {
 	scanner := bufio.NewScanner(strings.NewReader(string(launchProps)))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -184,17 +185,17 @@ func arclightLoaderEcosystem(launchProps []byte) (types.Ecosystem, bool) {
 		}
 		switch strings.TrimSpace(value) {
 		case "io.izzel.arclight.boot.fabric.application.Main_Fabric":
-			return types.EcosystemFabric, true
+			return catalog.EcosystemFabric, true
 		case "io.izzel.arclight.boot.neoforge.application.Main_Neoforge":
-			return types.EcosystemNeoForge, true
+			return catalog.EcosystemNeoForge, true
 		case "io.izzel.arclight.boot.forge.application.Main_Forge":
-			return types.EcosystemForge, true
+			return catalog.EcosystemForge, true
 		default:
-			return types.EcosystemUnspecified, false
+			return catalog.EcosystemUnspecified, false
 		}
 	}
 
-	return types.EcosystemUnspecified, false
+	return catalog.EcosystemUnspecified, false
 }
 
 type arclightInstallerMetadata struct {
@@ -206,46 +207,46 @@ type arclightInstallerMetadata struct {
 }
 
 func arclightLoaderComponent(
-	loader types.Ecosystem,
-) types.VersionedPackageRef {
-	var name types.PackageName
+	loader catalog.Ecosystem,
+) catalog.VersionedRef {
+	var name catalog.Name
 	switch loader {
-	case types.EcosystemFabric:
+	case catalog.EcosystemFabric:
 		name = "fabric-loader"
-	case types.EcosystemNeoForge:
+	case catalog.EcosystemNeoForge:
 		name = "neoforge"
-	case types.EcosystemForge:
+	case catalog.EcosystemForge:
 		name = "forge"
 	}
-	return types.VersionedPackageRef{
+	return catalog.VersionedRef{
 		Ecosystem: loader,
 		Name:      name,
-		Version:   types.VersionUnknown,
+		Version:   versionpkg.Unknown,
 	}
 }
 
 func parseArclightLoaderVersion(
 	data []byte,
-	loader types.Ecosystem,
-) (types.Version, bool) {
+	loader catalog.Ecosystem,
+) (versionpkg.Version, bool) {
 	var metadata arclightInstallerMetadata
 	if err := json.Unmarshal(data, &metadata); err != nil {
-		return types.VersionUnknown, false
+		return versionpkg.Unknown, false
 	}
 
 	var version string
 	switch loader {
-	case types.EcosystemFabric:
+	case catalog.EcosystemFabric:
 		version = metadata.Installer.FabricLoader
-	case types.EcosystemNeoForge:
+	case catalog.EcosystemNeoForge:
 		version = metadata.Installer.NeoForge
-	case types.EcosystemForge:
+	case catalog.EcosystemForge:
 		version = metadata.Installer.Forge
 	}
 
-	loaderVersion := types.Version(strings.TrimSpace(version))
+	loaderVersion := versionpkg.Version(strings.TrimSpace(version))
 	if !hasConcreteVersion(loaderVersion) {
-		return types.VersionUnknown, false
+		return versionpkg.Unknown, false
 	}
 	return loaderVersion, true
 }

@@ -14,8 +14,10 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,7 +28,7 @@ func pythonTarget() string {
 	return runtime.GOOS + "/" + runtime.GOARCH
 }
 
-func prepareMCDR(ctx context.Context, root, directory string, selector types.Version, requirements []string, store *downloadStore) (*lockfile.MCDR, error) {
+func prepareMCDR(ctx context.Context, root, directory string, selector version.Version, requirements []string, store *downloadStore) (*lockfile.MCDR, error) {
 	if store.offline {
 		return nil, fmt.Errorf("offline Python resolution needs a locked environment")
 	}
@@ -96,14 +98,14 @@ func prepareMCDR(ctx context.Context, root, directory string, selector types.Ver
 		Directory: directory,
 		Python:    strings.TrimSpace(string(versionBytes)),
 		Target:    pythonTarget(),
-		Inputs:    []types.BootstrapInput{},
+		Inputs:    []server.BootstrapInput{},
 	}
 	for _, pkg := range report.Install {
 		filename := filepath.Base(strings.Split(pkg.Download.URL, "?")[0])
-		a := types.Artifact{
-			Provider:  types.ProviderPyPI,
+		a := catalog.Artifact{
+			Provider:  catalog.ProviderPyPI,
 			ProjectID: pkg.Metadata.Name,
-			Version:   types.Version(pkg.Metadata.Version),
+			Version:   version.Version(pkg.Metadata.Version),
 			Filename:  filename,
 			URL:       pkg.Download.URL,
 			Hashes:    pkg.Download.Archive.Hashes,
@@ -111,12 +113,12 @@ func prepareMCDR(ctx context.Context, root, directory string, selector types.Ver
 		if _, err := store.materialize(&a); err != nil {
 			return nil, err
 		}
-		out.Inputs = append(out.Inputs, types.BootstrapInput{
+		out.Inputs = append(out.Inputs, server.BootstrapInput{
 			Path:     "wheels/" + filename,
 			Artifact: a,
 		})
 		if strings.EqualFold(pkg.Metadata.Name, "mcdreforged") {
-			out.Version = types.Version(pkg.Metadata.Version)
+			out.Version = version.Version(pkg.Metadata.Version)
 		}
 	}
 	if out.Version == "" {
@@ -142,7 +144,7 @@ func runProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
 func preparePython(ctx context.Context, root, stage string, d *lockfile.Document, store *downloadStore) error {
 	m := d.MCDR
 	if m.Target != pythonTarget() {
-		return fmt.Errorf("locked %s environment targets %s, current target is %s", types.EnvironmentMCDR, m.Target, pythonTarget())
+		return fmt.Errorf("locked %s environment targets %s, current target is %s", server.EnvironmentMCDR, m.Target, pythonTarget())
 	}
 	pyVersion, err := exec.CommandContext(ctx, "python3", "-c", "import sys;print(str(sys.version_info.major)+'.'+str(sys.version_info.minor))").Output()
 	if err != nil {

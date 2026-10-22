@@ -9,10 +9,10 @@ import (
 
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/internal/workspacewrite"
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
 )
 
 // JavaChange edits the Java selection of a workspace. A nil field leaves that
@@ -23,7 +23,7 @@ type JavaChange struct {
 	Version *int
 	// Distribution is the distribution that lucy.yaml pins; the unspecified
 	// distribution returns it to auto.
-	Distribution *types.JavaDistribution
+	Distribution *java.Distribution
 	// Path is a Java home or java executable to use on this machine; empty
 	// lets Lucy choose again.
 	Path *string

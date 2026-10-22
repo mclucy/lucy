@@ -4,11 +4,11 @@ import (
 	"archive/zip"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/version"
 
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml"
 )
 
@@ -79,7 +79,7 @@ func readForgeModsToml(
 			continue
 		}
 
-		version := types.Version(mod.Version)
+		version := versionpkg.Version(mod.Version)
 		if version == "${file.jarVersion}" {
 			version = forgeJarVersion(zipRdr)
 		}
@@ -90,24 +90,24 @@ func readForgeModsToml(
 		}
 		infos = append(
 			infos, PackageInfo{
-				Ref:          types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.PackageName(mod.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge, Version: version},
+				Ref:          catalog.VersionedRef{Ref: catalog.Ref{Name: catalog.Name(mod.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemForge, Version: version},
 				FilePath:     filePath,
 				Dependencies: dependencies,
-				Metadata: types.Metadata{
+				Metadata: catalog.Metadata{
 					Title:       mod.DisplayName,
 					Brief:       mod.Description,
 					Description: mod.Description,
-					Authors:     []types.Person{{Name: mod.Authors}},
+					Authors:     []catalog.Person{{Name: mod.Authors}},
 					License:     modIdentifier.License,
-					URLs: []types.URL{
+					URLs: []catalog.URL{
 						{
 							Name: "URL",
-							Type: types.URLHome,
+							Type: catalog.URLHome,
 							URL:  mod.DisplayURL,
 						},
 						{
 							Name: "Issue Tracker",
-							Type: types.URLIssues,
+							Type: catalog.URLIssues,
 							URL:  modIdentifier.IssueTrackerURL,
 						},
 					},
@@ -132,7 +132,7 @@ func forgeDependencies(
 		}
 		translated = append(
 			translated, Dependency{
-				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.PackageName(dep.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge},
+				Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: catalog.Name(dep.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemForge},
 				Constraint: constraint,
 				Mandatory:  dep.Mandatory,
 			},
@@ -141,11 +141,11 @@ func forgeDependencies(
 	return translated, nil
 }
 
-func forgeVersionRange(versionRange string) (types.VersionExpr, error) {
-	return version.ParseConstraint(versionRange, types.VersionDialectMaven)
+func forgeVersionRange(versionRange string) (versionpkg.Expr, error) {
+	return versionpkg.ParseConstraint(versionRange, versionpkg.DialectMaven)
 }
 
-func forgeJarVersion(zipRdr *zip.Reader) types.Version {
+func forgeJarVersion(zipRdr *zip.Reader) versionpkg.Version {
 	for _, file := range zipRdr.File {
 		if file.Name != "META-INF/MANIFEST.MF" {
 			continue
@@ -153,35 +153,35 @@ func forgeJarVersion(zipRdr *zip.Reader) types.Version {
 
 		reader, err := file.Open()
 		if err != nil {
-			return types.VersionUnknown
+			return versionpkg.Unknown
 		}
 
 		data, err := fsutil.CopyBytes(reader, fsutil.MaxZipEntryBytes)
 		closeErr := reader.Close()
 		if err != nil {
-			return types.VersionUnknown
+			return versionpkg.Unknown
 		}
 		if closeErr != nil {
-			return types.VersionUnknown
+			return versionpkg.Unknown
 		}
 
 		return forgeManifestVersion(string(data))
 	}
 
-	return types.VersionUnknown
+	return versionpkg.Unknown
 }
 
-func forgeManifestVersion(manifest string) types.Version {
+func forgeManifestVersion(manifest string) versionpkg.Version {
 	const versionField = "Implementation-Version: "
 	version, found := strings.CutPrefix(manifest, versionField)
 	if !found {
 		_, version, found = strings.Cut(manifest, "\n"+versionField)
 	}
 	if !found {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 
 	version = strings.Split(version, "\r")[0]
 	version = strings.Split(version, "\n")[0]
-	return types.Version(version)
+	return versionpkg.Version(version)
 }

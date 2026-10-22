@@ -8,13 +8,15 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/fabric"
 	"github.com/mclucy/lucy/upstream/providers/forge"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
 	"github.com/mclucy/lucy/upstream/providers/neoforge"
+	"github.com/mclucy/lucy/version"
 )
 
 func Metadata(ctx context.Context, endpoint string, target any) error {
@@ -35,7 +37,7 @@ func Metadata(ctx context.Context, endpoint string, target any) error {
 // checksum would pin unverified bytes in the lock. The repository sidecar is
 // that source, and an unavailable one fails the resolution rather than
 // lowering the guarantee.
-func trustMavenChecksum(ctx context.Context, a *types.Artifact) error {
+func trustMavenChecksum(ctx context.Context, a *catalog.Artifact) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -62,10 +64,10 @@ func trustMavenChecksum(ctx context.Context, a *types.Artifact) error {
 // selected core because the lock records the bytes it pins.
 func ResolveServerProduct(
 	ctx context.Context,
-	req types.ServerProductRequest,
-	acquire func(*types.Artifact) (string, error),
-) (types.ServerProductResolution, error) {
-	out := types.ServerProductResolution{
+	req ServerProductRequest,
+	acquire func(*catalog.Artifact) (string, error),
+) (ServerProductResolution, error) {
+	out := ServerProductResolution{
 		Minecraft:      req.Minecraft,
 		Product:        req.Product,
 		ProductVersion: req.ProductVersion,
@@ -76,33 +78,33 @@ func ResolveServerProduct(
 	}
 	out.JavaAdvisory = advisory
 	local := upstream.LocalContext{
-		Ecosystem:        types.EcosystemMinecraft,
+		Ecosystem:        catalog.EcosystemMinecraft,
 		MinecraftVersion: req.Minecraft,
 	}
 	vanilla, err := mojang.Provider.Fetch(
 		local,
-		types.VersionedPackageRef{
+		catalog.VersionedRef{
 			Name:      "minecraft",
-			Ecosystem: types.EcosystemMinecraft,
+			Ecosystem: catalog.EcosystemMinecraft,
 			Version:   req.Minecraft,
 		},
 	)
 	if err != nil {
 		return out, err
 	}
-	minecraft := types.Artifact{
-		Provider:  types.ProviderMojang,
+	minecraft := catalog.Artifact{
+		Provider:  catalog.ProviderMojang,
 		ProjectID: "minecraft",
 		Version:   req.Minecraft,
 		Filename:  "server.jar",
 		URL:       vanilla.FileURL,
 		Hashes:    map[string]string{"sha1": vanilla.Hash},
 	}
-	if req.Product == types.ServerProductMinecraft {
+	if req.Product == server.ProductMinecraft {
 		log.Debug(
 			"routing: server product route selected",
 			"product", req.Product,
-			"provider", types.ProviderMojang,
+			"provider", catalog.ProviderMojang,
 		)
 		out.Artifact = minecraft
 		out.ProductVersion = req.Minecraft
@@ -111,7 +113,7 @@ func ResolveServerProduct(
 		}
 		return out, nil
 	}
-	out.Inputs = []types.BootstrapInput{
+	out.Inputs = []server.BootstrapInput{
 		{
 			Path:     "server.jar",
 			Artifact: minecraft,
@@ -121,18 +123,18 @@ func ResolveServerProduct(
 		log.Debug(
 			"routing: server product route selected",
 			"product", req.Product,
-			"provider", types.ProviderGitHub,
+			"provider", catalog.ProviderGitHub,
 			"repository", req.Repository,
 		)
 		err = resolveGithubProduct(ctx, req, &out, acquire)
 	} else {
 		switch req.Product {
-		case types.ServerProductFabric:
+		case server.ProductFabric:
 			selected, e := fabric.Provider.ResolveVersionSelector(
 				local,
-				types.VersionedPackageRef{
+				catalog.VersionedRef{
 					Name:      "fabric",
-					Ecosystem: types.EcosystemFabric,
+					Ecosystem: catalog.EcosystemFabric,
 					Version:   req.ProductVersion,
 				},
 			)
@@ -144,7 +146,7 @@ func ResolveServerProduct(
 			log.Debug(
 				"routing: server product route selected",
 				"product", req.Product,
-				"provider", types.ProviderFabric,
+				"provider", catalog.ProviderFabric,
 				"version", out.ProductVersion,
 			)
 			var profile struct {
@@ -161,8 +163,8 @@ func ResolveServerProduct(
 			); e != nil {
 				return out, e
 			}
-			out.Artifact = types.Artifact{
-				Provider:  types.ProviderFabric,
+			out.Artifact = catalog.Artifact{
+				Provider:  catalog.ProviderFabric,
 				ProjectID: "fabric-loader",
 				Version:   out.ProductVersion,
 				Filename:  "fabric-loader-" + out.ProductVersion.String() + ".jar",
@@ -191,28 +193,28 @@ func ResolveServerProduct(
 				}
 				out.Inputs = append(out.Inputs, input)
 			}
-		case types.ServerProductForge, types.ServerProductNeoForge:
+		case server.ProductForge, server.ProductNeoForge:
 			var (
-				remote   types.ResolvedPackage
-				provider types.Provider
+				remote   upstream.ResolvedPackage
+				provider catalog.Provider
 			)
-			if req.Product == types.ServerProductForge {
-				provider = types.ProviderForge
+			if req.Product == server.ProductForge {
+				provider = catalog.ProviderForge
 				remote, err = forge.Provider.Fetch(
 					local,
-					types.VersionedPackageRef{
+					catalog.VersionedRef{
 						Name:      "forge",
-						Ecosystem: types.EcosystemForge,
+						Ecosystem: catalog.EcosystemForge,
 						Version:   req.ProductVersion,
 					},
 				)
 			} else {
-				provider = types.ProviderNeoForge
+				provider = catalog.ProviderNeoForge
 				remote, err = neoforge.Provider.Fetch(
 					local,
-					types.VersionedPackageRef{
+					catalog.VersionedRef{
 						Name:      "neoforge",
-						Ecosystem: types.EcosystemNeoForge,
+						Ecosystem: catalog.EcosystemNeoForge,
 						Version:   req.ProductVersion,
 					},
 				)
@@ -220,7 +222,7 @@ func ResolveServerProduct(
 			if err != nil {
 				return out, err
 			}
-			out.Artifact = types.Artifact{
+			out.Artifact = catalog.Artifact{
 				Provider:  provider,
 				ProjectID: req.Product.String(),
 				Version:   req.ProductVersion,
@@ -241,9 +243,9 @@ func ResolveServerProduct(
 				"provider", provider,
 				"version", out.ProductVersion,
 			)
-		case types.ServerProductPaper:
+		case server.ProductPaper:
 			err = resolvePaper(ctx, req, &out)
-		case types.ServerProductPurpur:
+		case server.ProductPurpur:
 			build := req.ProductVersion
 			if floating(build) {
 				build = "latest"
@@ -268,12 +270,12 @@ func ResolveServerProduct(
 					req.Minecraft,
 				)
 			}
-			out.ProductVersion = types.Version(info.Build)
-			out.Artifact = types.Artifact{
-				Provider:  types.ProviderPurpur,
+			out.ProductVersion = version.Version(info.Build)
+			out.Artifact = catalog.Artifact{
+				Provider:  catalog.ProviderPurpur,
 				ProjectID: "purpur",
 				ReleaseID: info.Build,
-				Version:   types.Version(info.Build),
+				Version:   version.Version(info.Build),
 				Filename: "purpur-" + req.Minecraft.String() + "-" +
 					info.Build + ".jar",
 				URL: "https://api.purpurmc.org/v2/purpur/" +
@@ -284,7 +286,7 @@ func ResolveServerProduct(
 			log.Debug(
 				"routing: server product route selected",
 				"product", req.Product,
-				"provider", types.ProviderPurpur,
+				"provider", catalog.ProviderPurpur,
 				"build", info.Build,
 			)
 		default:
@@ -318,9 +320,9 @@ func ResolveServerProduct(
 	return out, nil
 }
 
-func floating(v types.Version) bool {
+func floating(v version.Version) bool {
 	switch v {
-	case "", types.VersionAny, types.VersionBeta, types.VersionStable, "latest":
+	case "", version.Any, version.Beta, version.Stable, "latest":
 		return true
 	default:
 		return false

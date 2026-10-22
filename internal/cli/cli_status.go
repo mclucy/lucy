@@ -6,15 +6,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
-
 	"github.com/spf13/cobra"
 )
 
@@ -106,14 +107,14 @@ func generateStatusOutput(
 
 	output = &terminal.Data{Fields: []terminal.Field{}, LogoMode: logoMode}
 	var servedEcosystems []workspace.ServedEcosystem
-	var runtimeComponents []types.VersionedPackageRef
+	var runtimeComponents []catalog.VersionedRef
 	if hasServer {
 		servedEcosystems = data.ServedEcosystems()
 		runtimeComponents = server.Components
 	}
 	modEcosystems := statusModEcosystems(servedEcosystems)
 	showEcosystemQualifiedMods := len(modEcosystems) > 1
-	packageNameOutput := func(pkg types.DiscoveredPackage) string {
+	packageNameOutput := func(pkg workspace.DiscoveredPackage) string {
 		if longOutput {
 			return pkg.ID.StringBase()
 		}
@@ -125,7 +126,7 @@ func generateStatusOutput(
 	showMods := len(modEcosystems) > 0
 	showPlugins := statusHasDirectOffer(
 		servedEcosystems,
-		types.EcosystemBukkit,
+		catalog.EcosystemBukkit,
 	)
 	modNames, modPaths, pluginNames, mcdrPlugins := statusPackageSections(
 		data.Packages,
@@ -137,26 +138,26 @@ func generateStatusOutput(
 		hasMcdr,
 	)
 
-	var logoEcosystem types.Ecosystem
+	var logoEcosystem catalog.Ecosystem
 	for _, offer := range servedEcosystems {
-		if offer.Compatibility == types.CompatFull && offer.Ecosystem.IsModding() {
+		if offer.Compatibility == workspace.CompatFull && offer.Ecosystem.IsModding() {
 			logoEcosystem = offer.Ecosystem
 			break
 		}
 	}
-	if hasServer && logoEcosystem == types.EcosystemUnspecified &&
+	if hasServer && logoEcosystem == catalog.EcosystemUnspecified &&
 		server.Primary != nil &&
-		server.Primary.Ecosystem == types.EcosystemMinecraft {
-		logoEcosystem = types.EcosystemMinecraft
+		server.Primary.Ecosystem == catalog.EcosystemMinecraft {
+		logoEcosystem = catalog.EcosystemMinecraft
 	}
-	if logoEcosystem == types.EcosystemUnspecified && hasMcdr {
-		logoEcosystem = types.EcosystemMCDR
+	if logoEcosystem == catalog.EcosystemUnspecified && hasMcdr {
+		logoEcosystem = catalog.EcosystemMCDR
 	}
 
 	logoProduct := statusLogoProduct(server, hasServer, hasMcdr)
 	logoVersion := statusLogoVersion(server, hasServer, hasMcdr)
 	if logoMode != terminal.StatusLogoNone &&
-		logoProduct != types.ServerProductUnknown &&
+		logoProduct != serverpkg.ProductUnknown &&
 		terminal.GetLogo(logoProduct, logoEcosystem, logoVersion, terminal.LogoSmallPlain) != "" {
 		output.Fields = append(
 			output.Fields,
@@ -281,26 +282,26 @@ func statusLogoProduct(
 	server *workspace.ServerRuntime,
 	hasServer bool,
 	hasMcdr bool,
-) types.ServerProduct {
+) serverpkg.Product {
 	if hasServer && server != nil {
 		return server.Product()
 	}
 	if hasMcdr {
-		return types.ServerProductMCDReforged
+		return serverpkg.ProductMCDReforged
 	}
-	return types.ServerProductUnknown
+	return serverpkg.ProductUnknown
 }
 
 func statusLogoVersion(
 	server *workspace.ServerRuntime,
 	hasServer bool,
 	hasMcdr bool,
-) types.Version {
+) versionpkg.Version {
 	if hasServer && server != nil {
 		return server.MinecraftVersion()
 	}
 	if hasMcdr {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 	return ""
 }
@@ -328,10 +329,10 @@ func statusPackageListField(
 }
 
 func statusPackageSections(
-	packages []types.DiscoveredPackage,
-	runtimeComponents []types.VersionedPackageRef,
-	modEcosystems map[types.Ecosystem]bool,
-	packageNameOutput func(types.DiscoveredPackage) string,
+	packages []workspace.DiscoveredPackage,
+	runtimeComponents []catalog.VersionedRef,
+	modEcosystems map[catalog.Ecosystem]bool,
+	packageNameOutput func(workspace.DiscoveredPackage) string,
 	showMods bool,
 	showPlugins bool,
 	hasMcdr bool,
@@ -349,10 +350,10 @@ func statusPackageSections(
 		if _, isComponent := componentKeys[pkg.ID.StringBase()]; isComponent {
 			continue
 		}
-		if types.IsServerProduct(types.VersionedPackageRef{
-			PackageRef: pkg.ID.PackageRef,
-			Ecosystem:  pkg.ID.Ecosystem,
-			Version:    pkg.ID.Version,
+		if serverpkg.IsProduct(catalog.VersionedRef{
+			Ref:       pkg.ID.Ref,
+			Ecosystem: pkg.ID.Ecosystem,
+			Version:   pkg.ID.Version,
 		}) {
 			continue
 		}
@@ -365,11 +366,11 @@ func statusPackageSections(
 			}
 		}
 		if showPlugins &&
-			(packageEcosystem == types.EcosystemBukkit ||
-				packageEcosystem == types.EcosystemPaper) {
+			(packageEcosystem == catalog.EcosystemBukkit ||
+				packageEcosystem == catalog.EcosystemPaper) {
 			pluginNames = append(pluginNames, packageNameOutput(pkg))
 		}
-		if hasMcdr && packageEcosystem == types.EcosystemMCDR {
+		if hasMcdr && packageEcosystem == catalog.EcosystemMCDR {
 			mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
 		}
 	}
@@ -379,8 +380,8 @@ func statusPackageSections(
 
 func statusModEcosystems(
 	offers []workspace.ServedEcosystem,
-) map[types.Ecosystem]bool {
-	ecosystems := make(map[types.Ecosystem]bool, 3)
+) map[catalog.Ecosystem]bool {
+	ecosystems := make(map[catalog.Ecosystem]bool, 3)
 	for _, offer := range offers {
 		if offer.Ecosystem.IsModding() {
 			ecosystems[offer.Ecosystem] = true
@@ -391,10 +392,10 @@ func statusModEcosystems(
 
 func statusHasDirectOffer(
 	offers []workspace.ServedEcosystem,
-	required types.Ecosystem,
+	required catalog.Ecosystem,
 ) bool {
 	for _, offer := range offers {
-		if offer.Compatibility == types.CompatFull &&
+		if offer.Compatibility == workspace.CompatFull &&
 			offer.Ecosystem.Satisfy(required) {
 			return true
 		}
@@ -402,7 +403,7 @@ func statusHasDirectOffer(
 	return false
 }
 
-func statusRuntimeLabel(primary *types.VersionedPackageRef) string {
+func statusRuntimeLabel(primary *catalog.VersionedRef) string {
 	if primary == nil {
 		return ""
 	}
@@ -444,30 +445,30 @@ type lockStatusDocument struct {
 }
 
 type lockStatusServer struct {
-	Product      types.ServerProduct `json:"product"`
-	Minecraft    types.Version       `json:"minecraft"`
-	CoreVersion  types.Version       `json:"core_version"`
-	Ecosystem    types.Ecosystem     `json:"ecosystem"`
-	Directory    string              `json:"directory"`
-	Bootstrapper string              `json:"bootstrapper,omitempty"`
+	Product      serverpkg.Product  `json:"product"`
+	Minecraft    versionpkg.Version `json:"minecraft"`
+	CoreVersion  versionpkg.Version `json:"core_version"`
+	Ecosystem    catalog.Ecosystem  `json:"ecosystem"`
+	Directory    string             `json:"directory"`
+	Bootstrapper string             `json:"bootstrapper,omitempty"`
 }
 
 type lockStatusMCDR struct {
-	Directory string        `json:"directory"`
-	Version   types.Version `json:"version"`
-	Python    string        `json:"python"`
-	Target    string        `json:"target"`
+	Directory string             `json:"directory"`
+	Version   versionpkg.Version `json:"version"`
+	Python    string             `json:"python"`
+	Target    string             `json:"target"`
 }
 
 type lockStatusPackageView struct {
-	ID          string            `json:"id"`
-	Name        types.PackageName `json:"name"`
-	Provider    types.Provider    `json:"provider"`
-	ProjectID   string            `json:"project_id"`
-	Ecosystem   types.Ecosystem   `json:"ecosystem"`
-	Environment types.Environment `json:"environment"`
-	Version     types.Version     `json:"version"`
-	Filename    string            `json:"filename"`
+	ID          string                `json:"id"`
+	Name        catalog.Name          `json:"name"`
+	Provider    catalog.Provider      `json:"provider"`
+	ProjectID   string                `json:"project_id"`
+	Ecosystem   catalog.Ecosystem     `json:"ecosystem"`
+	Environment serverpkg.Environment `json:"environment"`
+	Version     versionpkg.Version    `json:"version"`
+	Filename    string                `json:"filename"`
 }
 
 func actionStatusFromLock(
@@ -540,7 +541,7 @@ func newLockStatusDocument(
 	if declared != nil {
 		// The resolved lock wins on exact values; the manifest identifies
 		// the server that the lock was generated for.
-		if product, ok := types.ParseServerProduct(
+		if product, ok := serverpkg.ParseProduct(
 			declared.Server.Core.Product.String(),
 		); ok {
 			document.Server.Product = product
@@ -565,7 +566,7 @@ func newLockStatusDocument(
 			document.Packages,
 			lockStatusPackageView{
 				ID:          pkg.Provider.String() + ":" + pkg.ProjectID,
-				Name:        types.PackageName(pkg.ProjectID),
+				Name:        catalog.Name(pkg.ProjectID),
 				Provider:    pkg.Provider,
 				ProjectID:   pkg.ProjectID,
 				Ecosystem:   pkg.Ecosystem,
@@ -587,7 +588,7 @@ func generateLockStatusOutput(
 	output := &terminal.Data{Fields: []terminal.Field{}, LogoMode: logoMode}
 
 	if logoMode != terminal.StatusLogoNone &&
-		document.Server.Product != types.ServerProductUnknown &&
+		document.Server.Product != serverpkg.ProductUnknown &&
 		terminal.GetLogo(
 			document.Server.Product,
 			document.Server.Ecosystem,
@@ -626,7 +627,7 @@ func generateLockStatusOutput(
 		if longOutput {
 			label += " (" + pkg.Filename + ")"
 		}
-		if pkg.Environment == types.EnvironmentMCDR {
+		if pkg.Environment == serverpkg.EnvironmentMCDR {
 			mcdrNames = append(mcdrNames, label)
 			continue
 		}

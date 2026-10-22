@@ -6,8 +6,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 var (
@@ -70,9 +71,9 @@ type spongeManifestSignals struct {
 	vendor        string
 	version       string
 	flavor        spongeFlavor
-	gameVersion   types.Version
-	loaderVersion types.Version
-	spongeVersion types.Version
+	gameVersion   versionpkg.Version
+	loaderVersion versionpkg.Version
+	spongeVersion versionpkg.Version
 }
 
 func (s spongeManifestSignals) valid() bool {
@@ -158,41 +159,41 @@ func parseSpongeImplementationVersion(
 	version string,
 ) (
 	flavor spongeFlavor,
-	gameVersion types.Version,
-	loaderVersion types.Version,
-	spongeVersion types.Version,
+	gameVersion versionpkg.Version,
+	loaderVersion versionpkg.Version,
+	spongeVersion versionpkg.Version,
 ) {
 	version = strings.TrimSpace(version)
 	switch strings.TrimSpace(title) {
 	case "SpongeVanilla":
 		match := spongeVanillaVersionPattern.FindStringSubmatch(version)
 		if match == nil {
-			return spongeFlavorUnknown, types.VersionUnknown, types.VersionUnknown, types.VersionUnknown
+			return spongeFlavorUnknown, versionpkg.Unknown, versionpkg.Unknown, versionpkg.Unknown
 		}
 		return spongeFlavorVanilla,
-			types.Version(match[1]),
-			types.VersionUnknown,
-			types.Version(match[2])
+			versionpkg.Version(match[1]),
+			versionpkg.Unknown,
+			versionpkg.Version(match[2])
 	case "SpongeForge":
 		match := spongeHybridVersionPattern.FindStringSubmatch(version)
 		if match == nil {
-			return spongeFlavorUnknown, types.VersionUnknown, types.VersionUnknown, types.VersionUnknown
+			return spongeFlavorUnknown, versionpkg.Unknown, versionpkg.Unknown, versionpkg.Unknown
 		}
 		return spongeFlavorForge,
-			types.Version(match[1]),
-			types.Version(match[2]),
-			types.Version(match[3])
+			versionpkg.Version(match[1]),
+			versionpkg.Version(match[2]),
+			versionpkg.Version(match[3])
 	case "SpongeNeo":
 		match := spongeHybridVersionPattern.FindStringSubmatch(version)
 		if match == nil {
-			return spongeFlavorUnknown, types.VersionUnknown, types.VersionUnknown, types.VersionUnknown
+			return spongeFlavorUnknown, versionpkg.Unknown, versionpkg.Unknown, versionpkg.Unknown
 		}
 		return spongeFlavorNeo,
-			types.Version(match[1]),
-			types.Version(match[2]),
-			types.Version(match[3])
+			versionpkg.Version(match[1]),
+			versionpkg.Version(match[2]),
+			versionpkg.Version(match[3])
 	default:
-		return spongeFlavorUnknown, types.VersionUnknown, types.VersionUnknown, types.VersionUnknown
+		return spongeFlavorUnknown, versionpkg.Unknown, versionpkg.Unknown, versionpkg.Unknown
 	}
 }
 
@@ -207,14 +208,14 @@ func buildSpongeRuntimeEvidence(
 	case spongeFlavorNeo:
 		primaryName = "spongeneo"
 	}
-	primary := types.VersionedPackageRef{
-		Ecosystem: types.EcosystemSponge,
+	primary := catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemSponge,
 		Name:      input.ToProjectName(primaryName),
 		Version:   signals.spongeVersion,
 	}
-	components := []types.VersionedPackageRef{
+	components := []catalog.VersionedRef{
 		{
-			Ecosystem: types.EcosystemMinecraft,
+			Ecosystem: catalog.EcosystemMinecraft,
 			Name:      input.ToProjectName("minecraft"),
 			Version:   signals.gameVersion,
 		},
@@ -223,16 +224,16 @@ func buildSpongeRuntimeEvidence(
 	switch signals.flavor {
 	case spongeFlavorForge:
 		components = append(
-			components, types.VersionedPackageRef{
-				Ecosystem: types.EcosystemForge,
+			components, catalog.VersionedRef{
+				Ecosystem: catalog.EcosystemForge,
 				Name:      input.ToProjectName("forge"),
 				Version:   signals.loaderVersion,
 			},
 		)
 	case spongeFlavorNeo:
 		components = append(
-			components, types.VersionedPackageRef{
-				Ecosystem: types.EcosystemNeoForge,
+			components, catalog.VersionedRef{
+				Ecosystem: catalog.EcosystemNeoForge,
 				Name:      input.ToProjectName("neoforge"),
 				Version:   signals.loaderVersion,
 			},

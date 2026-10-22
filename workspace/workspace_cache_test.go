@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
@@ -28,7 +28,7 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 	Invalidate()
 	baseline := New()
 
-	if baseline.Runtime().Ecosystem() != types.EcosystemUnspecified {
+	if baseline.Runtime().Ecosystem() != catalog.EcosystemUnspecified {
 		t.Fatalf(
 			"expected empty dir baseline to look vanilla/none, got %s",
 			baseline.Runtime().Ecosystem(),
@@ -43,7 +43,7 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 
 	observed := NewAt(targetDir)
 
-	if observed.Runtime().Ecosystem() != types.EcosystemFabric {
+	if observed.Runtime().Ecosystem() != catalog.EcosystemFabric {
 		t.Fatalf(
 			"expected fabric runtime from target dir, got %s",
 			observed.Runtime().Ecosystem(),
@@ -61,7 +61,7 @@ func TestWorkspaceAtTargetsWorkDirWithoutPoisoningGlobalCache(t *testing.T) {
 
 	cachedAgain := New()
 
-	if cachedAgain.Runtime().Ecosystem() != types.EcosystemUnspecified {
+	if cachedAgain.Runtime().Ecosystem() != catalog.EcosystemUnspecified {
 		t.Fatalf(
 			"expected global cache to remain on cache dir, got %s",
 			cachedAgain.Runtime().Ecosystem(),
@@ -87,7 +87,7 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	}
 	Invalidate()
 	before := New()
-	if before.Runtime().Ecosystem() != types.EcosystemUnspecified {
+	if before.Runtime().Ecosystem() != catalog.EcosystemUnspecified {
 		t.Fatalf(
 			"expected empty dir baseline to look vanilla/none, got %s",
 			before.Runtime().Ecosystem(),
@@ -103,7 +103,7 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	if refreshed.Runtime() == nil {
 		t.Fatal("expected refreshed runtime info")
 	}
-	if refreshed.Runtime().Ecosystem() != types.EcosystemFabric {
+	if refreshed.Runtime().Ecosystem() != catalog.EcosystemFabric {
 		t.Fatalf(
 			"expected refresh to rebuild fabric runtime, got %s",
 			refreshed.Runtime().Ecosystem(),
@@ -114,7 +114,7 @@ func TestRefreshRebuildsCurrentDirCache(t *testing.T) {
 	if cached.Runtime() == nil {
 		t.Fatal("expected cached runtime after refresh")
 	}
-	if cached.Runtime().Ecosystem() != types.EcosystemFabric {
+	if cached.Runtime().Ecosystem() != catalog.EcosystemFabric {
 		t.Fatalf(
 			"expected current-dir cache to be refreshed to fabric, got %s",
 			cached.Runtime().Ecosystem(),

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 // pacman installs Java from the configured Pacman sources.
@@ -21,7 +21,7 @@ func (pacman) ownsJava() bool { return false }
 
 func (pacman) plans(ctx context.Context, req Request) ([]Plan, error) {
 	if req.Major <= 0 ||
-		req.Distribution != types.JavaDistributionAny ||
+		req.Distribution != java.DistributionAny ||
 		!systemToolAvailable("pacman") {
 		return nil, nil
 	}
@@ -37,7 +37,7 @@ func (pacman) plans(ctx context.Context, req Request) ([]Plan, error) {
 		{
 			Method:       MethodPacman,
 			Package:      pkg,
-			Distribution: types.JavaDistributionAny,
+			Distribution: java.DistributionAny,
 			Major:        req.Major,
 			Steps: []Step{
 				{

@@ -5,7 +5,8 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/resolve"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/version"
 )
 
 // PhaseInfo describes a finished stage. Counts are facts the renderer turns
@@ -15,9 +16,9 @@ type PhaseInfo struct {
 	Elapsed   time.Duration
 	Count     int
 	Total     int
-	Product   types.ServerProduct
-	Version   types.Version
-	Minecraft types.Version
+	Product   server.Product
+	Version   version.Version
+	Minecraft version.Version
 }
 
 // Trace receives facts about an operation while it runs. Every field is

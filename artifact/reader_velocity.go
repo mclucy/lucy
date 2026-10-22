@@ -4,8 +4,9 @@ import (
 	"archive/zip"
 	"encoding/json/v2"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -63,17 +64,17 @@ func (r *velocityReader) Read(
 			return nil, closeErr
 		}
 
-		authors := make([]types.Person, 0, len(descriptor.Authors))
+		authors := make([]catalog.Person, 0, len(descriptor.Authors))
 		for _, author := range descriptor.Authors {
-			authors = append(authors, types.Person{Name: author})
+			authors = append(authors, catalog.Person{Name: author})
 		}
 
-		urls := make([]types.URL, 0, 1)
+		urls := make([]catalog.URL, 0, 1)
 		if descriptor.URL != "" {
 			urls = append(
-				urls, types.URL{
+				urls, catalog.URL{
 					Name: "Homepage",
-					Type: types.URLHome,
+					Type: catalog.URLHome,
 					URL:  descriptor.URL,
 				},
 			)
@@ -81,9 +82,9 @@ func (r *velocityReader) Read(
 
 		return []PackageInfo{
 			{
-				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.ID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemVelocity, Version: types.Version(descriptor.Version)},
+				Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(descriptor.ID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemVelocity, Version: version.Version(descriptor.Version)},
 				FilePath: filePath,
-				Metadata: types.Metadata{
+				Metadata: catalog.Metadata{
 					Title:       descriptor.Name,
 					Description: descriptor.Description,
 					Authors:     authors,
@@ -119,20 +120,20 @@ func (r *bungeeCordReader) Read(
 			return nil, err
 		}
 
-		authors := make([]types.Person, 0, len(descriptor.Authors)+1)
+		authors := make([]catalog.Person, 0, len(descriptor.Authors)+1)
 		if descriptor.Author != "" {
-			authors = append(authors, types.Person{Name: descriptor.Author})
+			authors = append(authors, catalog.Person{Name: descriptor.Author})
 		}
 		for _, author := range descriptor.Authors {
-			authors = append(authors, types.Person{Name: author})
+			authors = append(authors, catalog.Person{Name: author})
 		}
 
-		urls := make([]types.URL, 0, 1)
+		urls := make([]catalog.URL, 0, 1)
 		if descriptor.Website != "" {
 			urls = append(
-				urls, types.URL{
+				urls, catalog.URL{
 					Name: "Website",
-					Type: types.URLHome,
+					Type: catalog.URLHome,
 					URL:  descriptor.Website,
 				},
 			)
@@ -140,9 +141,9 @@ func (r *bungeeCordReader) Read(
 
 		return []PackageInfo{
 			{
-				Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(descriptor.Name), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemBungeeCord, Version: types.Version(descriptor.Version)},
+				Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(descriptor.Name), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemBungeeCord, Version: version.Version(descriptor.Version)},
 				FilePath: filePath,
-				Metadata: types.Metadata{
+				Metadata: catalog.Metadata{
 					Title:       descriptor.Name,
 					Description: descriptor.Description,
 					Authors:     authors,

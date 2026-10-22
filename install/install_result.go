@@ -6,11 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/javaruntime"
+	"github.com/mclucy/lucy/server"
+
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/filetrack"
-	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // ResultSchema versions the machine-readable result.
@@ -37,24 +40,24 @@ const (
 // PackageChange is one difference between the previous lock and the committed
 // one, or between no lock and the first one.
 type PackageChange struct {
-	Reference  string         `json:"reference,omitempty"`
-	Name       string         `json:"name"`
-	Provider   types.Provider `json:"provider"`
-	ProjectID  string         `json:"project_id,omitempty"`
-	Version    types.Version  `json:"version,omitempty"`
-	Previous   types.Version  `json:"previous,omitempty"`
-	Change     Change         `json:"change"`
-	Direct     bool           `json:"direct"`
-	RequiredBy []string       `json:"required_by,omitempty"`
+	Reference  string             `json:"reference,omitempty"`
+	Name       string             `json:"name"`
+	Provider   catalog.Provider   `json:"provider"`
+	ProjectID  string             `json:"project_id,omitempty"`
+	Version    versionpkg.Version `json:"version,omitempty"`
+	Previous   versionpkg.Version `json:"previous,omitempty"`
+	Change     Change             `json:"change"`
+	Direct     bool               `json:"direct"`
+	RequiredBy []string           `json:"required_by,omitempty"`
 }
 
 // ServerChange reports a new or changed server core.
 type ServerChange struct {
-	Change    Change              `json:"change,omitempty"`
-	Product   types.ServerProduct `json:"product,omitempty"`
-	Minecraft types.Version       `json:"minecraft,omitempty"`
-	Version   types.Version       `json:"version,omitempty"`
-	Previous  types.Version       `json:"previous,omitempty"`
+	Change    Change             `json:"change,omitempty"`
+	Product   server.Product     `json:"product,omitempty"`
+	Minecraft versionpkg.Version `json:"minecraft,omitempty"`
+	Version   versionpkg.Version `json:"version,omitempty"`
+	Previous  versionpkg.Version `json:"previous,omitempty"`
 }
 
 // FileChanges counts the managed runtime outputs the commit touched.
@@ -92,8 +95,8 @@ type Result struct {
 	Diagnostics []filetrack.Diagnostic `json:"diagnostics,omitempty"`
 	// Java reports the Java runtime that the server runs on. It is nil when
 	// the operation stopped before it selected one.
-	Java     *java.Check `json:"java,omitempty"`
-	Warnings []error     `json:"-"`
+	Java     *javaruntime.Check `json:"java,omitempty"`
+	Warnings []error            `json:"-"`
 	// WarningMessages carries Warnings into machine-readable output.
 	WarningMessages []string `json:"warnings,omitempty"`
 	// TotalPackages counts every package the committed lock records.
@@ -170,7 +173,7 @@ func serverChange(before, after *lockfile.Document) ServerChange {
 type packageView struct {
 	name    string
 	direct  bool
-	version types.Version
+	version versionpkg.Version
 }
 
 func packageChanges(
@@ -277,7 +280,7 @@ func packageViews(
 // enabledReference returns the reference a package records for itself. A
 // package the current manifest no longer names, such as one being removed,
 // still carries the requirement that declared it.
-func enabledReference(p *types.LockedPackage) string {
+func enabledReference(p *lockfile.Package) string {
 	for _, binding := range p.Requirements {
 		if binding.Enabled {
 			return binding.Reference
@@ -376,13 +379,13 @@ func moduleOwners(doc *lockfile.Document) map[string]string {
 	return owners
 }
 
-func moduleLookupKey(p *types.LockedPackage, moduleID string) string {
+func moduleLookupKey(p *lockfile.Package, moduleID string) string {
 	return string(p.Environment) + "|" + string(p.Ecosystem) + "|" + strings.ToLower(moduleID)
 }
 
 func dependencyTarget(
-	source *types.LockedPackage,
-	dependency types.DescriptorDependency,
+	source *lockfile.Package,
+	dependency catalog.DescriptorDependency,
 	moduleOwner map[string]string,
 	doc *lockfile.Document,
 ) string {
@@ -407,7 +410,7 @@ func dependencyTarget(
 	return moduleOwner[moduleLookupKey(source, moduleID)]
 }
 
-func lockedPackageKey(p *types.LockedPackage) string {
+func lockedPackageKey(p *lockfile.Package) string {
 	identity := p.ProjectID
 	if identity == "" {
 		identity = p.Filename
@@ -423,7 +426,7 @@ func lockedPackageKey(p *types.LockedPackage) string {
 	)
 }
 
-func findPackage(doc *lockfile.Document, id string) *types.LockedPackage {
+func findPackage(doc *lockfile.Document, id string) *lockfile.Package {
 	if doc == nil {
 		return nil
 	}
@@ -436,7 +439,7 @@ func findPackage(doc *lockfile.Document, id string) *types.LockedPackage {
 }
 
 func declaredReference(
-	p *types.LockedPackage,
+	p *lockfile.Package,
 	declared map[string]manifest.Requirement,
 ) string {
 	for _, binding := range p.Requirements {

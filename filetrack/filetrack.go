@@ -14,12 +14,13 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cas"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	serverpkg "github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
 
@@ -149,8 +150,8 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err != nil {
 			return result, err
 		}
-		index := slices.IndexFunc(nextFiles, func(file types.TrackedFile) bool { return file.Path == path })
-		var previous *types.TrackedFile
+		index := slices.IndexFunc(nextFiles, func(file manifest.TrackedFile) bool { return file.Path == path })
+		var previous *manifest.TrackedFile
 		if index >= 0 {
 			copy := nextFiles[index]
 			previous = &copy
@@ -247,13 +248,13 @@ func validateRequest(request Request) error {
 	return nil
 }
 
-func selectFiles(files []types.TrackedFile, request Request) ([]string, []string, error) {
+func selectFiles(files []manifest.TrackedFile, request Request) ([]string, []string, error) {
 	if !request.All {
 		path, err := input.TrackedPath(request.Path)
 		if err != nil {
 			return nil, nil, err
 		}
-		index := slices.IndexFunc(files, func(file types.TrackedFile) bool { return file.Path == path })
+		index := slices.IndexFunc(files, func(file manifest.TrackedFile) bool { return file.Path == path })
 		if request.Operation == Track && index >= 0 {
 			return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
 		}
@@ -273,10 +274,10 @@ func selectFiles(files []types.TrackedFile, request Request) ([]string, []string
 	return selected, skipped, nil
 }
 
-func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uint64, request Request, path string, previous *types.TrackedFile, before image) (Change, image, error) {
+func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uint64, request Request, path string, previous *manifest.TrackedFile, before image) (Change, image, error) {
 	change := Change{Path: path, Before: previous}
 	after := before
-	file := types.TrackedFile{Path: path}
+	file := manifest.TrackedFile{Path: path}
 	if previous != nil {
 		file = *previous
 		change.Revision = currentRevision(events, path, file.Hash).sequence
@@ -400,7 +401,7 @@ func (c *cappedReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func sourceImage(ctx context.Context, store *cas.Store, file types.TrackedFile, update, offline bool) (result image, resultErr error) {
+func sourceImage(ctx context.Context, store *cas.Store, file manifest.TrackedFile, update, offline bool) (result image, resultErr error) {
 	if !update {
 		if err := verifyObject(store, file.Hash); err == nil {
 			return image{Exists: true, Hash: file.Hash, Mode: 0o600}, nil
@@ -448,7 +449,7 @@ func sourceImage(ctx context.Context, store *cas.Store, file types.TrackedFile, 
 }
 
 // ValidateOwnership includes generated outputs retained by the runtime receipt.
-func ValidateOwnership(root string, files []types.TrackedFile, locked *lockfile.Document) error {
+func ValidateOwnership(root string, files []manifest.TrackedFile, locked *lockfile.Document) error {
 	if len(files) == 0 {
 		return nil
 	}
@@ -504,10 +505,10 @@ func ValidateOwnership(root string, files []types.TrackedFile, locked *lockfile.
 				continue
 			}
 			directory, folder := server.Directory, "mods"
-			if pkg.Ecosystem == types.EcosystemBukkit || pkg.Ecosystem == types.EcosystemPaper {
+			if pkg.Ecosystem == catalog.EcosystemBukkit || pkg.Ecosystem == catalog.EcosystemPaper {
 				folder = "plugins"
 			}
-			if pkg.Environment == types.EnvironmentMCDR {
+			if pkg.Environment == serverpkg.EnvironmentMCDR {
 				if locked.MCDR == nil {
 					return fmt.Errorf("MCDR package has no wrapper runtime")
 				}

@@ -5,16 +5,16 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
 )
 
 // declaredRequirements collects every requirement the manifest declares for a
 // package, keyed by the reference that names it.
 func declaredRequirements(d *manifest.Document) map[string]manifest.Requirement {
 	declared := map[string]manifest.Requirement{}
-	var loaders []types.Ecosystem
+	var loaders []catalog.Ecosystem
 	for loader := range d.Server.Packages {
 		loaders = append(loaders, loader)
 	}
@@ -39,7 +39,7 @@ func declaredRequirements(d *manifest.Document) map[string]manifest.Requirement 
 }
 
 // lockPackageFor reports whether a reference names one locked package.
-func lockPackageFor(ref string, p types.LockedPackage) bool {
+func lockPackageFor(ref string, p lockfile.Package) bool {
 	provider, name, err := manifest.ParseReference(ref)
 	if err != nil {
 		return false
@@ -61,8 +61,8 @@ func lockPackageFor(ref string, p types.LockedPackage) bool {
 // bindRequirement records the manifest's current state of one requirement on
 // the package that satisfies it. A requirement the lock has never seen is
 // added, so a package resolved only as a dependency becomes declared.
-func bindRequirement(p *types.LockedPackage, ref string, requirement manifest.Requirement) {
-	binding := types.RequirementBinding{
+func bindRequirement(p *lockfile.Package, ref string, requirement manifest.Requirement) {
+	binding := lockfile.RequirementBinding{
 		Reference:   ref,
 		Selector:    requirement.Selector,
 		FilePattern: requirement.FilePattern,
@@ -114,16 +114,16 @@ func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error
 // package bound only to requirements the manifest no longer declares is
 // dropped; packages with no bindings of their own are ambient and survive.
 func retainDeclared(
-	packages []types.LockedPackage,
+	packages []lockfile.Package,
 	declared map[string]manifest.Requirement,
-) []types.LockedPackage {
-	retained := make([]types.LockedPackage, 0, len(packages))
+) []lockfile.Package {
+	retained := make([]lockfile.Package, 0, len(packages))
 	for _, p := range packages {
 		if len(p.Requirements) == 0 {
 			retained = append(retained, p)
 			continue
 		}
-		bindings := make([]types.RequirementBinding, 0, len(p.Requirements))
+		bindings := make([]lockfile.RequirementBinding, 0, len(p.Requirements))
 		for _, binding := range p.Requirements {
 			if _, ok := declared[binding.Reference]; ok {
 				bindings = append(bindings, binding)
@@ -146,7 +146,7 @@ func mutateLock(d *manifest.Document, old *lockfile.Document, fingerprint string
 	resolved.ManifestFingerprint = fingerprint
 	resolved.Files = slices.Clone(d.Files)
 	resolved.Server.Java = lockfile.NewJava(old.Server.Java.Advisory, d.Server.Java)
-	resolved.Packages = make([]types.LockedPackage, len(old.Packages))
+	resolved.Packages = make([]lockfile.Package, len(old.Packages))
 	for i, p := range old.Packages {
 		resolved.Packages[i] = p
 		resolved.Packages[i].Requirements = slices.Clone(p.Requirements)

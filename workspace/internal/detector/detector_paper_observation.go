@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 const (
@@ -263,17 +263,17 @@ func readObservationLines(data []byte) []string {
 	return strings.Split(trimmed, "\n")
 }
 
-func parsePaperVersionJSONID(data []byte) types.Version {
+func parsePaperVersionJSONID(data []byte) versionpkg.Version {
 	var payload struct {
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 	if !isMinecraftReleaseVersion(payload.ID) {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
-	return types.Version(payload.ID)
+	return versionpkg.Version(payload.ID)
 }
 
 func parsePaperPatchProperties(data []byte) map[string]string {
@@ -293,7 +293,7 @@ func parsePaperPatchProperties(data []byte) map[string]string {
 	return properties
 }
 
-func inferPaperObservationGameVersion(obs paperObservations) types.Version {
+func inferPaperObservationGameVersion(obs paperObservations) versionpkg.Version {
 	if hasConcreteVersion(obs.versionJSONID) {
 		return obs.versionJSONID
 	}
@@ -306,10 +306,10 @@ func inferPaperObservationGameVersion(obs paperObservations) types.Version {
 	if version := parsePaperPatchPropertiesVersion(obs.patchProperties); hasConcreteVersion(version) {
 		return version
 	}
-	return types.VersionUnknown
+	return versionpkg.Unknown
 }
 
-func parsePaperVersionList(entries []string) types.Version {
+func parsePaperVersionList(entries []string) versionpkg.Version {
 	for _, entry := range entries {
 		fields := strings.Split(entry, "\t")
 		if len(fields) < 2 {
@@ -317,16 +317,16 @@ func parsePaperVersionList(entries []string) types.Version {
 		}
 		candidate := strings.TrimSpace(fields[1])
 		if isMinecraftReleaseVersion(candidate) {
-			return types.Version(candidate)
+			return versionpkg.Version(candidate)
 		}
 	}
-	return types.VersionUnknown
+	return versionpkg.Unknown
 }
 
-func parsePaperPatchPropertiesVersion(properties map[string]string) types.Version {
+func parsePaperPatchPropertiesVersion(properties map[string]string) versionpkg.Version {
 	version := strings.TrimSpace(properties["version"])
 	if !isMinecraftReleaseVersion(version) {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
-	return types.Version(version)
+	return versionpkg.Version(version)
 }

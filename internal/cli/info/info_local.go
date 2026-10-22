@@ -5,15 +5,15 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
-
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/internal/cli"
+	"github.com/mclucy/lucy/terminal/style"
+	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/version"
 	"github.com/spf13/cobra"
 )
 
@@ -76,7 +76,7 @@ func actionArtifactInfo(cmd *cobra.Command, filePath string) error {
 // project's metadata, nil when the metadata lookup failed. Warnings holds the
 // problems found during the lookup.
 type artifactLookup struct {
-	Ref      *types.VersionedPackageRef
+	Ref      *catalog.VersionedRef
 	Info     *upstream.Info
 	Warnings []string
 }
@@ -110,7 +110,7 @@ func lookupArtifactUpstream(filePath string) artifactLookup {
 		return result
 	}
 
-	info, infoErrors, err := routing.GetInfoFirstSuccess(providers, ref.PackageRef)
+	info, infoErrors, err := routing.GetInfoFirstSuccess(providers, ref.Ref)
 	for _, providerErr := range infoErrors {
 		result.Warnings = append(result.Warnings,
 			fmt.Sprintf("could not retrieve metadata from %s: %v",
@@ -143,17 +143,17 @@ func matchedUpstream(info artifact.PackageInfo, lookup artifactLookup) *upstream
 
 // displayMetadata merges archive and upstream metadata; upstream values win,
 // archive values fill the gaps.
-func displayMetadata(info artifact.PackageInfo, match *upstream.Info) types.Metadata {
+func displayMetadata(info artifact.PackageInfo, match *upstream.Info) catalog.Metadata {
 	local := info.Metadata
 	if local.Title == "" {
-		local.Title = info.Ref.Name.Title()
+		local.Title = style.Capitalize(strings.ReplaceAll(info.Ref.Name.String(), "-", " "))
 	}
 	if match == nil {
 		return local
 	}
 
 	remote := match.Metadata
-	merged := types.Metadata{
+	merged := catalog.Metadata{
 		Title:   firstNonEmpty(remote.Title, local.Title),
 		Brief:   firstNonEmpty(remote.Brief, local.Brief),
 		License: firstNonEmpty(remote.License, local.License),
@@ -200,21 +200,21 @@ type artifactInfoView struct {
 	Ecosystem    string                   `json:"ecosystem"`
 	Version      string                   `json:"version,omitempty"`
 	Dependencies []artifactDependencyView `json:"dependencies,omitempty"`
-	Metadata     types.Metadata           `json:"metadata"`
+	Metadata     catalog.Metadata         `json:"metadata"`
 	Upstream     *upstreamMatchView       `json:"upstream,omitempty"`
 	Warnings     []string                 `json:"warnings,omitempty"`
 }
 
 type upstreamMatchView struct {
-	Ref      string          `json:"ref"`
-	Metadata *types.Metadata `json:"metadata,omitempty"`
+	Ref      string            `json:"ref"`
+	Metadata *catalog.Metadata `json:"metadata,omitempty"`
 }
 
 type artifactDependencyView struct {
-	Package    string                 `json:"package"`
-	Constraint string                 `json:"constraint"`
-	Mandatory  bool                   `json:"mandatory"`
-	Origin     types.DependencyOrigin `json:"origin"`
+	Package    string                   `json:"package"`
+	Constraint string                   `json:"constraint"`
+	Mandatory  bool                     `json:"mandatory"`
+	Origin     catalog.DependencyOrigin `json:"origin"`
 }
 
 func artifactInfoViewFromInfo(
@@ -231,7 +231,7 @@ func artifactInfoViewFromInfo(
 			Package:    formatArtifactRef(dependency.Ref),
 			Constraint: formatArtifactConstraint(dependency.Constraint),
 			Mandatory:  dependency.Mandatory,
-			Origin:     types.NormalizeDependencyOrigin(dependency.Origin),
+			Origin:     catalog.NormalizeDependencyOrigin(dependency.Origin),
 		})
 	}
 
@@ -332,7 +332,7 @@ func renderArtifactDependencies(dependencies []artifact.Dependency) string {
 			formatArtifactRef(dependency.Ref),
 			strings.Join([]string{
 				role,
-				string(types.NormalizeDependencyOrigin(dependency.Origin)),
+				string(catalog.NormalizeDependencyOrigin(dependency.Origin)),
 				formatArtifactConstraint(dependency.Constraint),
 			}, " · "),
 		})
@@ -356,14 +356,14 @@ func renderArtifactTable(title string, rows [][]string) string {
 			Render())
 }
 
-func formatArtifactRef(ref types.VersionedPackageRef) string {
-	if ref.Ecosystem == types.EcosystemUnspecified {
+func formatArtifactRef(ref catalog.VersionedRef) string {
+	if ref.Ecosystem == catalog.EcosystemUnspecified {
 		return ref.Name.String()
 	}
 	return ref.Ecosystem.String() + "/" + ref.Name.String()
 }
 
-func formatArtifactConstraint(expr types.VersionExpr) string {
+func formatArtifactConstraint(expr version.Expr) string {
 	if len(expr) == 0 {
 		return "any"
 	}
@@ -372,7 +372,7 @@ func formatArtifactConstraint(expr types.VersionExpr) string {
 	for _, conjunction := range expr {
 		terms := make([]string, 0, len(conjunction))
 		for _, term := range conjunction {
-			if term.Operator == types.OpNever {
+			if term.Operator == version.OpNever {
 				terms = append(terms, "never")
 				continue
 			}
