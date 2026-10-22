@@ -20,6 +20,7 @@
           "commands/global-flags",
           "commands/init",
           "commands/install",
+          "commands/java",
           "commands/add",
           "commands/remove",
           "commands/file",

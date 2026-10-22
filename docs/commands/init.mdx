@@ -20,6 +20,9 @@ manifest_version: 1
 server:
   minecraft: "1.21.4"
   directory: "."
+  java:
+    version: 21
+    distribution: temurin
   core:
     product: paper
     product_version: stable
@@ -42,6 +45,7 @@ mcdr:
 - `server.core.product` names the server software. Lucy can download `minecraft` (vanilla), `fabric`, `forge`, `neoforge`, `paper`, and `purpur` directly. For any other server software, set `core.repository` to a GitHub `owner/repo`.
 - `server.core.product_version` is the server version or version rule. It defaults to `any`. Use `stable` for release builds only, or `beta` to allow prereleases. `core.file_pattern` optionally narrows release assets for a GitHub-hosted server.
 - `server.directory` and `mcdr.directory` are relative to the directory containing `lucy.yaml`. Absolute paths and `..` escapes are rejected.
+- `server.java` is optional. Leave it out and `lucy` follows the Java version that Mojang recommends for the Minecraft version, from any distribution. Set it to pin a version (`java: 21`), a distribution, or both. `version` is a major version of 8 or later, or `auto`. `distribution` is one of `temurin`, `zulu`, `corretto`, `liberica`, `microsoft`, `oracle`, `oracle_open_jdk`, `graalvm`, `graalvm_community`, `semeru`, `sap_machine`, `dragonwell`, `kona`, `redhat`, `jetbrains`, or `auto`. A key you leave out stays on `auto`. Java settings never block an installation; a mismatch is a warning. See [`lucy java`](/commands/java).
 - Package keys use the form `modrinth:project`, `curseforge:project`, or `mcdr:project`, grouped by mod or plugin type. The groups in `server.packages` are `fabric`, `forge`, `neoforge`, `bukkit`, and `paper`; MCDR plugins live under `mcdr.packages`. Put Bukkit-only plugins under `bukkit` and Paper-specific plugins under `paper`.
 - A package value is either a version rule (`any`, `stable`, `beta`, a tag, or an exact version) or an object with `selector`, `file_pattern`, and `enabled`. The default version rule is `any`.
 

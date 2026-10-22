@@ -71,7 +71,8 @@ server:
   hashes:
     sha256: "<64 hex characters>"
   bootstrapper: paperclip
-  java: 21
+  java:
+    advisory: 21
 
 packages:
   - environment: server
@@ -91,13 +92,34 @@ packages:
         enabled: true
 ```
 
-Each entry records where the file came from: provider, project, release, file, filename, URL, and hashes. A locked package needs a concrete version, a filename without path separators, and a SHA-256 hash. The `server` section uses `product` and `core_version`, and records how to launch the server (`bootstrapper`) plus any supporting files (`inputs`).
+Each entry records where the file came from: provider, project, release, file, filename, URL, and hashes. A locked package needs a concrete version, a filename without path separators, and a SHA-256 hash. The `server` section uses `product` and `core_version`, and records how to launch the server (`bootstrapper`) plus any supporting files (`inputs`). Its `java` entry records the Java version that Mojang recommends (`advisory`) and, when `lucy.yaml` pins them, the `version` and `distribution`.
 
 `environment` is `server` or `mcdr`, which is how one flat list covers the server and MCDR without nesting. `ecosystem` is the mod or plugin type. The `requirements` list records which package in `lucy.yaml` a locked file satisfies, with the version rule and file pattern that were applied; a package with no requirements is present because a dependency needed it.
 
 ## Removing old files
 
 `lucy install` syncs the directory to the lock: files the lock no longer lists are removed, but only when `lucy` can prove it installed them. Lucy records the files it installs in `.lucy/install.yaml` and only removes paths in that record. Untracked files in `mods/` or `plugins/` — your own jars, backups, anything you dropped in by hand — are left alone rather than deleted on a guess.
+
+## Java
+
+Java is never a gate for an installation. `lucy install` picks the Java runtime that runs the server and warns when it misses a requirement. Three things set the requirement: the Java version that Mojang recommends for your Minecraft version, the `server.java` pin in `lucy.yaml`, and the Java version that your packages declare.
+
+`lucy` picks the runtime in this order:
+
+1. The runtime that `lucy.local.yaml` selects. It applies to this machine only and takes precedence over `lucy.yaml`. If it is not a working Java runtime, `lucy` warns and does not fall back to another one.
+2. The installed runtime that misses the fewest requirements. Among equal runtimes, `lucy` prefers the oldest major version that meets Mojang's recommendation, then the newest update. `JAVA_HOME` is only one of the places `lucy` looks.
+
+Steps that run Java, such as Paper patching and the Forge and NeoForge installers, use the selected runtime. They fail when no Java runtime is installed, and the error suggests `--java`.
+
+Add `--java` to install the runtime the server asks for when no installed runtime meets it. A runtime that already fits is reused, and nothing is installed when `lucy.local.yaml` selects one. `lucy` tries these methods in order and uses the first one that works:
+
+1. A Java version manager that already installed a Java runtime on this machine: SDKMAN, mise, asdf, Homebrew, or Scoop.
+2. Any other of those managers that is installed.
+3. Your system package manager: `apt`, `dnf`, `zypper`, `pacman`, `apk`, or `winget`. `lucy` installs a headless runtime where one exists.
+4. A vendor package repository, only when you also pass `--add-java-repository`. This includes the Scoop `java` bucket. `lucy` shows the vendor and URL, and checks a signing key against a fingerprint it already knows before it trusts the key. `lucy` never removes a repository it added.
+5. A download into your user data directory. `lucy` verifies the SHA-256 digest before it unpacks the archive.
+
+`lucy` runs Homebrew as you, never with `sudo`. A Homebrew cask or `winget` package that needs your password asks for it itself, so those methods need an interactive terminal and `--no-interactive` skips them. Package managers that need root run directly when you are root, and through `sudo` otherwise. With `--no-interactive`, `sudo` must work without a password, or `lucy` skips the method. When `lucy` skips a method, it says why. `lucy` never changes your default Java.
 
 ## Tracked working files
 
@@ -153,4 +175,12 @@ When resolution cannot satisfy a package, the error names the package, how many 
 
 <ParamField query="--force, -f" type="boolean" default="false">
   Combine `--accept-broken` and `--overwrite` in one flag.
+</ParamField>
+
+<ParamField query="--java" type="boolean" default="false">
+  Also install the Java runtime the server asks for when no installed runtime meets it. With `--offline`, the command fails instead of installing. See [Java](#java).
+</ParamField>
+
+<ParamField query="--add-java-repository" type="boolean" default="false">
+  Let `--java` add the Java vendor's package repository to the system package manager. Requires `--java`.
 </ParamField>

@@ -1,0 +1,54 @@
+---
+title: "lucy java"
+description: "Show and choose the Java runtime of the server"
+---
+
+`lucy java` shows the Java runtimes on your machine, checks them against what the server asks for, and records your choice. Java is never a gate: every mismatch is a warning, and you can always start the server with your own `java` command or start script.
+
+```bash
+lucy java list
+lucy java use 21 --distribution temurin
+lucy java use --path /opt/homebrew/opt/openjdk@21
+```
+
+## What the server asks for
+
+Three sources combine into the requirement:
+
+- The Java version that Mojang recommends for your Minecraft version. Lucy treats it as a minimum.
+- The `server.java` pin in `lucy.yaml`, if you set one.
+- The Java version that each installed package declares.
+
+Without a pin, the version is `auto` and the distribution is any. `lucy java list` names the source of each requirement, so a warning always tells you who asked.
+
+## lucy java list
+
+`lucy java list` prints the requirement and every Java runtime that `lucy` finds. A check mark means the runtime meets every requirement, and `(selected)` marks the runtime that `lucy` uses. `lucy` looks in `JAVA_HOME`, your `PATH`, SDKMAN, mise, asdf, Jabba, Homebrew, Scoop, Gradle's JDK folder, the system JVM folders, and the folder where `lucy install --java` downloads runtimes.
+
+The command needs `lucy-lock.yaml` to show a requirement. Without one it lists the runtimes only. `--json` prints the requirement, the selection, and each runtime with its problems.
+
+A runtime without a vendor name in its `release` file, such as a Homebrew or Debian build, counts as unbranded. It satisfies a pin of `auto` but never a named distribution.
+
+## lucy java use
+
+`lucy java use` changes what `lucy` uses.
+
+<ParamField query="version" type="string">
+  A Java major version of 8 or later, or `auto`. Writes `server.java` in `lucy.yaml`. `auto` returns the version to the Mojang recommendation.
+</ParamField>
+
+<ParamField query="--distribution" type="string">
+  A distribution name, or `auto` to accept any. Writes `server.java` in `lucy.yaml`. Valid names are `temurin`, `zulu`, `corretto`, `liberica`, `microsoft`, `oracle`, `oracle_open_jdk`, `graalvm`, `graalvm_community`, `semeru`, `sap_machine`, `dragonwell`, `kona`, `redhat`, and `jetbrains`.
+</ParamField>
+
+<ParamField query="--path" type="string">
+  A Java home directory or a `java` executable. Writes `lucy.local.yaml`, which applies to this machine only. `auto` removes the setting so that `lucy` chooses again. You cannot combine it with a version or `--distribution`.
+</ParamField>
+
+Without arguments, `lucy java use` opens a form that asks for the version and the distribution. Each question starts at the value in `lucy.yaml`, and the version list includes the major versions of the runtimes that `lucy` found. To choose a runtime on this machine, pass `--path`. With `--no-interactive` and no arguments, `lucy java use` fails and names the flags.
+
+`lucy.local.yaml` takes precedence over `lucy.yaml`. If the runtime it selects misses a requirement, `lucy` warns and still uses it. `lucy` stores a path inside the workspace relative to it, so a bundled runtime survives a move. Do not commit `lucy.local.yaml`: its path is true only on your machine.
+
+When `lucy-lock.yaml` matched `lucy.yaml` before the change, the lock records the new pin too and stays current. Otherwise run [`lucy install`](/commands/install) to update the lock.
+
+See also [`lucy install`](/commands/install#java) and [Global Flags](/commands/global-flags).
