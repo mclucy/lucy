@@ -154,6 +154,9 @@ func resolveInstall(
 		Packages: []lockfile.Package{},
 		Files:    slices.Clone(d.Files),
 	}
+	if canReuse {
+		resolved.Server.EntryPoint = old.Server.EntryPoint
+	}
 	mcdrVersion := ""
 	if d.MCDR != nil {
 		request := d.MCDR.Version

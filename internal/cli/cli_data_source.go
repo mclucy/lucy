@@ -90,17 +90,28 @@ func LoadDependencyData(workDir string, forceLive bool) (
 	return graph, origin, environmentFromWorkspace(info, env), nil
 }
 
-// reportObservationFindings presents the recoverable findings of one
-// consumed workspace observation on the report surface: environment
-// warnings with report.Warn and probe ambiguity findings with report.Error.
-// The backend observation itself only writes these diagnostics to the log,
-// so a command runs this exactly once per observation it consumes.
+// reportObservationFindings renders each consumed observation once.
 func reportObservationFindings(observed workspace.Workspace) {
 	for _, warning := range observed.Warnings {
 		report.Warn(warning)
 	}
 	for _, ambiguityErr := range observed.Probe.AmbiguityErrors(observed.ServerDir) {
 		report.Error(ambiguityErr)
+	}
+	reportRuntimeFindings(observed.Probe.Findings)
+}
+
+func reportRuntimeFindings(findings []workspace.RuntimeFinding) {
+	for _, finding := range findings {
+		label := "unmanaged entry point"
+		if finding.Kind == workspace.RuntimeUnmanaged {
+			label = "unmanaged server entry point"
+		}
+		report.Info(fmt.Sprintf(
+			"%s %s (%s %s / Minecraft %s); left unchanged",
+			label, finding.Path, finding.Runtime.Product(), finding.Runtime.Primary.Version,
+			finding.Runtime.MinecraftVersion(),
+		))
 	}
 }
 

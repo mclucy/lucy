@@ -36,6 +36,7 @@ type Document struct {
 
 type Server struct {
 	Directory        string          `yaml:"directory,omitempty" json:"directory"`
+	EntryPoint       string          `yaml:"entry_point,omitempty" json:"entry_point,omitempty"`
 	Minecraft        version.Version `yaml:"minecraft" json:"minecraft"`
 	Product          server.Product  `yaml:"product" json:"product"`
 	CoreVersion      version.Version `yaml:"core_version" json:"core_version"`
@@ -91,6 +92,11 @@ func (d *Document) Validate() error {
 	}
 	if err := manifest.SafeRelativePath(d.Server.Directory); err != nil {
 		return err
+	}
+	if d.Server.EntryPoint != "" {
+		if err := manifest.SafeRelativePath(d.Server.EntryPoint); err != nil {
+			return fmt.Errorf("server.entry_point: %w", err)
+		}
 	}
 	if err := validateVersion("server.minecraft", d.Server.Minecraft, false); err != nil {
 		return err

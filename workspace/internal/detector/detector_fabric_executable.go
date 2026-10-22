@@ -15,7 +15,12 @@ import (
 )
 
 const (
-	fabricLaunchPropertiesPath = "fabric-server-launch.properties"
+	fabricInstallPropertiesPath   = "install.properties"
+	fabricLaunchPropertiesPath    = "fabric-server-launch.properties"
+	fabricMetaLauncherMainClass   = "net.fabricmc.installer.ServerLauncher"
+	fabricServerDataDir           = ".fabric/server"
+	fabricGeneratedLauncherPrefix = "fabric-loader-server-"
+	fabricVersionSidecarPath      = "version.json"
 	// fabricLauncherPropertiesPath is the sidecar file FabricServerLauncher
 	// keeps beside the shim; note the extra "r" versus
 	// fabricLaunchPropertiesPath, which sits inside the jar.
@@ -41,42 +46,8 @@ func (d *fabricServerSingleFileDetector) Detect(context DetectionContext, primar
 	}
 	_ = context
 
-	loaderVersion := versionpkg.Unknown
-	gameVersion := versionpkg.Unknown
-	for _, f := range zipReader.File {
-		if f.Name == "install.properties" {
-			r, err := f.Open()
-			if err != nil {
-				continue
-			}
-			defer fn.CloseReader(r, log.Warn)
-
-			scanner := bufio.NewScanner(r)
-			for scanner.Scan() {
-				line := scanner.Text()
-				if after, found := strings.CutPrefix(
-					line,
-					"fabric-loader-version=",
-				); found {
-					loaderVersion = versionpkg.Version(after)
-				} else if after, found := strings.CutPrefix(
-					line,
-					"game-version=",
-				); found {
-					gameVersion = versionpkg.Version(after)
-				}
-			}
-			if scanner.Err() != nil {
-				continue
-			}
-			if loaderVersion == versionpkg.Unknown || gameVersion == versionpkg.Unknown {
-				continue
-			}
-			break
-		}
-	}
-
-	if loaderVersion == versionpkg.Unknown || gameVersion == versionpkg.Unknown {
+	loaderVersion, gameVersion, ok := parseFabricInstallProperties(zipReader)
+	if !ok {
 		return nil, nil
 	}
 
@@ -85,6 +56,51 @@ func (d *fabricServerSingleFileDetector) Detect(context DetectionContext, primar
 		loaderVersion,
 		gameVersion,
 	), nil
+}
+
+// parseFabricInstallProperties reads the unattended install.properties entry
+// that a Fabric meta launcher embeds. Only a complete loader and game version
+// pair counts as a runtime identity.
+func parseFabricInstallProperties(zipReader *zip.Reader) (
+	loaderVersion versionpkg.Version,
+	gameVersion versionpkg.Version,
+	ok bool,
+) {
+	loaderVersion = versionpkg.Unknown
+	gameVersion = versionpkg.Unknown
+	for _, f := range zipReader.File {
+		if f.Name != fabricInstallPropertiesPath {
+			continue
+		}
+		r, err := f.Open()
+		if err != nil {
+			continue
+		}
+
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if after, found := strings.CutPrefix(
+				line,
+				"fabric-loader-version=",
+			); found {
+				loaderVersion = versionpkg.Version(strings.TrimSpace(after))
+			} else if after, found := strings.CutPrefix(
+				line,
+				"game-version=",
+			); found {
+				gameVersion = versionpkg.Version(strings.TrimSpace(after))
+			}
+		}
+		scanErr := scanner.Err()
+		fn.CloseReader(r, log.Warn)
+		if scanErr == nil && loaderVersion != versionpkg.Unknown &&
+			gameVersion != versionpkg.Unknown {
+			return loaderVersion, gameVersion, true
+		}
+	}
+
+	return loaderVersion, gameVersion, false
 }
 
 // fabricServerLauncherDetector detects Fabric server launchers.
@@ -154,64 +170,96 @@ func fabricLauncherPropertiesAreServer(data []byte) bool {
 	return false
 }
 
+// parseFabricLauncherManifest returns the loader and game versions named by
+// the Class-Path entries of a Fabric launch jar manifest, together with the
+// raw classpath. Installer shims keep library paths relative to the root;
+// generated .fabric/server launchers walk back with "./../..".
+func parseFabricLauncherManifest(zipReader *zip.Reader) (
+	loaderVersion versionpkg.Version,
+	gameVersion versionpkg.Version,
+	classPath []string,
+) {
+	loaderVersion = versionpkg.Unknown
+	gameVersion = versionpkg.Unknown
+	data, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
+	if err != nil || !ok {
+		return loaderVersion, gameVersion, nil
+	}
+
+	for _, line := range unfoldManifestLines(data) {
+		value, found := strings.CutPrefix(line, "Class-Path: ")
+		if !found {
+			continue
+		}
+		for _, entry := range strings.Fields(value) {
+			classPath = append(classPath, entry)
+			if parsed, found := fabricClassPathVersion(entry, "fabric-loader"); found {
+				loaderVersion = parsed
+			} else if parsed, found := fabricClassPathVersion(entry, "intermediary"); found {
+				gameVersion = parsed
+			}
+		}
+		return loaderVersion, gameVersion, classPath
+	}
+
+	return loaderVersion, gameVersion, nil
+}
+
 func parseFabricLauncherManifestVersions(zipReader *zip.Reader) (
 	loaderVersion versionpkg.Version,
 	gameVersion versionpkg.Version,
 ) {
-	loaderVersion = versionpkg.Unknown
-	gameVersion = versionpkg.Unknown
-	for _, f := range zipReader.File {
-		if f.Name == "META-INF/MANIFEST.MF" {
-			r, err := f.Open()
-			if err != nil {
-				continue
-			}
-			defer fn.CloseReader(r, log.Warn)
+	loaderVersion, gameVersion, _ = parseFabricLauncherManifest(zipReader)
+	return loaderVersion, gameVersion
+}
 
-			var classPaths []string
-			s := bufio.NewScanner(r)
-			for s.Scan() {
-				line := s.Text()
-				if after, found := strings.CutPrefix(
-					line,
-					"Class-Path: ",
-				); found {
-					var classPathsBuilder strings.Builder
-					classPathsBuilder.WriteString(after)
-					for s.Scan() && strings.HasPrefix(s.Text(), " ") {
-						line := strings.TrimSpace(s.Text())
-						classPathsBuilder.WriteString(line)
-					}
-					classPaths = strings.Split(classPathsBuilder.String(), " ")
-				}
-			}
-			if s.Err() != nil {
-				return versionpkg.Unknown, versionpkg.Unknown
-			}
+// fabricClassPathVersion extracts the version segment after
+// libraries/net/fabricmc/<artifact>/ in a manifest Class-Path entry.
+func fabricClassPathVersion(classPath, artifact string) (versionpkg.Version, bool) {
+	segments := strings.Split(filepath.ToSlash(classPath), "/")
+	for i := 0; i+4 < len(segments); i++ {
+		if segments[i] != "libraries" || segments[i+1] != "net" ||
+			segments[i+2] != "fabricmc" || segments[i+3] != artifact {
+			continue
+		}
+		candidate := segments[i+4]
+		if candidate == "" || candidate == "." || candidate == ".." {
+			return versionpkg.Unknown, false
+		}
+		return versionpkg.Version(candidate), true
+	}
+	return versionpkg.Unknown, false
+}
 
-			for _, path := range classPaths {
-				if after, found := strings.CutPrefix(
-					path,
-					"libraries/net/fabricmc/fabric-loader/",
-				); found {
-					loaderVersion = versionpkg.Version(
-						strings.Split(after, "/")[0],
-					)
-				} else if after, found := strings.CutPrefix(
-					path,
-					"libraries/net/fabricmc/intermediary/",
-				); found {
-					gameVersion = versionpkg.Version(
-						strings.Split(after, "/")[0],
-					)
-				}
-			}
-
-			return loaderVersion, gameVersion
+// readArchiveManifestMainClass returns the Main-Class attribute of a jar
+// manifest, unfolding its continuation lines first.
+func readArchiveManifestMainClass(zipReader *zip.Reader) (string, bool) {
+	data, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
+	if err != nil || !ok {
+		return "", false
+	}
+	for _, line := range unfoldManifestLines(data) {
+		if value, found := strings.CutPrefix(line, "Main-Class: "); found {
+			return strings.TrimSpace(value), true
 		}
 	}
+	return "", false
+}
 
-	return loaderVersion, gameVersion
+// unfoldManifestLines joins the continuation lines of a JAR manifest. A
+// continuation line starts with a single space that is not part of the value.
+func unfoldManifestLines(data []byte) []string {
+	raw := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	lines := make([]string, 0, len(raw))
+	for _, line := range raw {
+		line = strings.TrimSuffix(line, "\r")
+		if strings.HasPrefix(line, " ") && len(lines) > 0 {
+			lines[len(lines)-1] += line[1:]
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 func parseFabricLauncherBundledLoaderVersion(zipReader *zip.Reader) versionpkg.Version {
@@ -232,7 +280,7 @@ func parseFabricLauncherBundledLoaderVersion(zipReader *zip.Reader) versionpkg.V
 }
 
 func parseFabricLauncherSidecarGameVersion(context DetectionContext, primaryFile *DetectionFile) versionpkg.Version {
-	sidecar, ok := context.Sibling(primaryFile, "version.json")
+	sidecar, ok := context.Sibling(primaryFile, fabricVersionSidecarPath)
 	if !ok {
 		return versionpkg.Unknown
 	}

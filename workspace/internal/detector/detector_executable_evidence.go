@@ -15,6 +15,17 @@ type RuntimeEvidence struct {
 	// vanilla jar a Fabric launch shim boots.
 	ConsumedFiles []*DetectionFile
 
+	// EntryPoints are absolute paths to every launchable artifact of an
+	// installation layout. Per-file detectors leave this nil; the directory
+	// scan falls back to PrimaryPath.
+	EntryPoints []string
+
+	// InstallationFiles are absolute paths to every file an installation
+	// detector positively proved belongs to the layout: entry points,
+	// sidecars, payload jars and referenced classpath libraries. A directory
+	// scan claims these files and does not run per-file detection on them.
+	InstallationFiles []string
+
 	DetectorName string
 }
 

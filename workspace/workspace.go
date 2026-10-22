@@ -147,13 +147,18 @@ func Refresh(workDir string) Workspace {
 // a readable artifact descriptor is the sole source of a package identity.
 func observe(dir string) Workspace {
 	wrappers, warnings := detectWrappers(dir)
+	locked := declaredRuntimeLock(dir)
 
 	ws := Workspace{
 		ServerDir: resolveServerDir(dir, wrappers),
 		Wrappers:  wrappers,
 		Warnings:  warnings,
 	}
+	if locked != nil {
+		ws.ServerDir = filepath.Join(dir, filepath.FromSlash(locked.Server.Directory))
+	}
 	ws.Probe = probeDirectory(ws.ServerDir)
+	ws.selectObservedRuntime(dir, locked)
 	ws.Packages, ws.UnidentifiedPackageFiles = discoverPackages(
 		ws.PackageDirs(),
 		mcdrPluginDirs(wrappers),
@@ -182,14 +187,9 @@ func mcdrPluginDirs(wrappers WrapperInfo) []string {
 	return wrappers.MCDR.Config.PluginDirectories
 }
 
-// Runtime returns the single bootable runtime of the directory. Runtime
-// returns nil in these cases:
-//
-//   - the scan found no runtime
-//   - the scan found more than one runtime
-//   - two or more detectors claim one jar
-//
-// Every non-nil result satisfies IsValid.
+// Runtime returns the observed runtime selected by the declaration, or the
+// sole identified runtime when no declaration applies. Missing selected files
+// and unresolved identities return nil. Every non-nil result satisfies IsValid.
 func (ws Workspace) Runtime() *ServerRuntime {
 	server, _ := ws.Probe.Single()
 	return server
@@ -210,7 +210,7 @@ func (ws Workspace) Running() bool {
 	return checkSessionLock(filepath.Join(saveDir, sessionLockName))
 }
 
-// sameProbePath compares two directories after symlink resolution,
+// sameProbePath compares two paths after symlink resolution,
 // treating unresolvable paths literally.
 func sameProbePath(left, right string) bool {
 	leftEval, leftErr := filepath.EvalSymlinks(left)

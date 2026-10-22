@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/lockfile"
@@ -15,12 +16,14 @@ import (
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
+	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"
 )
 
 const (
 	flagInitForceName       = "force"
 	flagInitMCDRVersionName = "mcdr-version"
+	flagInitEntryPointName  = "entry-point"
 )
 
 var initCmd = &cobra.Command{
@@ -42,6 +45,8 @@ func NewInitCommand() *cobra.Command {
 		"",
 		"MCDReforged version to record",
 	)
+	initCmd.Flags().String(flagInitEntryPointName, "", "Server entry point to adopt when several runtimes are present")
+	_ = initCmd.MarkFlagFilename(flagInitEntryPointName, "jar")
 	return initCmd
 }
 
@@ -52,6 +57,7 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 	}
 	opts := operation.InitOptions{
 		MCDRVersion: flagStringInit(cmd, flagInitMCDRVersionName),
+		EntryPoint:  flagStringInit(cmd, flagInitEntryPointName),
 		Force:       flagBoolInit(cmd, flagInitForceName),
 		Detect:      true,
 	}
@@ -66,6 +72,12 @@ func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.Init
 	output := newInstallOutput(cmd)
 	defer output.Close()
 	opts.Trace = output.Trace()
+	var findings []workspace.RuntimeFinding
+	opts.OnRuntimeFindings = func(observed []workspace.RuntimeFinding) { findings = observed }
+	opts.PromptRuntime = func(probe workspace.Probe) (string, error) {
+		output.Close()
+		return promptRuntime(cmd, probe)
+	}
 	ctx, stop := commandContext(cmd)
 	defer stop()
 	d, warnings, err := operation.Initialize(ctx, workDir, opts)
@@ -76,6 +88,7 @@ func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.Init
 	for _, warning := range warnings {
 		report.Warn(warning)
 	}
+	reportRuntimeFindings(findings)
 	fmt.Fprintf(
 		cmd.OutOrStdout(),
 		"Wrote %s and %s for Minecraft %s (%s)\n",
@@ -85,6 +98,38 @@ func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.Init
 		d.Server.Core.Product,
 	)
 	return nil
+}
+
+func promptRuntime(cmd *cobra.Command, probe workspace.Probe) (string, error) {
+	stdin, ok := cmd.InOrStdin().(*os.File)
+	if !ok || !term.IsTerminal(stdin.Fd()) || !style.InteractiveEnabled() {
+		return "", nil
+	}
+	options := make([]huh.Option[string], 0, len(probe.Candidates))
+	for _, candidate := range probe.Candidates {
+		runtime, err := probe.Select(candidate.JarPath)
+		if err != nil {
+			continue
+		}
+		server, _ := runtime.Single()
+		options = append(options, huh.NewOption(
+			fmt.Sprintf("%s %s / Minecraft %s (%s)", server.Product(), server.Primary.Version, server.MinecraftVersion(), candidate.JarPath),
+			candidate.JarPath,
+		))
+	}
+	if len(options) == 0 {
+		return "", nil
+	}
+	var selected string
+	form := huh.NewForm(huh.NewGroup(huh.NewSelect[string]().
+		Title("Select the server to initialize").
+		Description("Use --entry-point <entry-point> to make this selection without a prompt.").
+		Options(options...).Value(&selected))).
+		WithInput(cmd.InOrStdin()).WithOutput(cmd.ErrOrStderr())
+	if err := form.Run(); err != nil {
+		return "", fmt.Errorf("server selection cancelled: %w", err)
+	}
+	return selected, nil
 }
 
 // promptMinecraft returns the interactive Minecraft-version prompt for

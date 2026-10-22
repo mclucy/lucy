@@ -11,13 +11,11 @@ import (
 	"github.com/mclucy/lucy/workspace/internal/detector"
 )
 
-// IdentifiedRuntime is one examined artifact. Exactly one specific detector
-// claims it as a bootable server runtime. Evidence carries the complete
-// identity from that detector. The scan does not change the evidence after
-// it returns.
+// IdentifiedRuntime groups entry points with the same complete runtime identity.
 type IdentifiedRuntime struct {
-	JarPath  string
-	Evidence *detector.RuntimeEvidence
+	JarPath     string
+	Evidence    *detector.RuntimeEvidence
+	EntryPoints []RuntimeEntryPoint
 }
 
 // ConflictingRuntime is one artifact that more than one specific detector
@@ -28,25 +26,23 @@ type ConflictingRuntime struct {
 	Evidence []*detector.RuntimeEvidence
 }
 
-// Probe holds the results of one directory scan. Each examined artifact
-// appears in exactly one bucket:
-//
-//   - Candidates: artifacts that exactly one detector identifies as a
-//     bootable runtime
-//   - AmbiguousCandidates: artifacts with contradictory identity claims
-//   - Unidentified: artifacts that no detector identifies
-//
-// Probe reports observations. The methods on Probe interpret them.
+// Probe retains identified installations, contradictory claims, and unknown files.
 type Probe struct {
 	Candidates          []IdentifiedRuntime
 	AmbiguousCandidates []ConflictingRuntime
 	Unidentified        []string
+	Findings            []RuntimeFinding
+	selected            bool
+	selection           *ServerRuntime
 }
 
 // Single interprets the probe as exactly one trustworthy server runtime.
 // Single fails when the scan saw contradictory evidence, several runtimes,
 // or no usable runtime.
 func (p Probe) Single() (*ServerRuntime, bool) {
+	if p.selected {
+		return p.selection, p.selection != nil
+	}
 	if len(p.Candidates) != 1 || len(p.AmbiguousCandidates) > 0 {
 		return nil, false
 	}
@@ -59,24 +55,31 @@ func (p Probe) Single() (*ServerRuntime, bool) {
 //   - two or more detectors claim one jar
 //   - two or more distinct runtimes share one directory
 func (p Probe) HasAmbiguity() bool {
+	if p.selected {
+		return false
+	}
 	return len(p.AmbiguousCandidates) > 0 || len(p.Candidates) > 1
 }
 
 // AmbiguityErrors preserves conflict-before-multiple-runtime finding order.
 func (p Probe) AmbiguityErrors(root string) []error {
+	if p.selected {
+		return nil
+	}
 	var errs []error
 	if conflicted := conflictLabels(p.AmbiguousCandidates); len(conflicted) > 0 {
 		errs = append(errs, fmt.Errorf(
-			"found conflicting server files in %s (%s); lucy cannot tell which server this directory runs",
+			"found conflicting server files in %s (%s); select an unambiguous entry point with lucy init --entry-point <path>",
 			root,
 			strings.Join(conflicted, ", "),
 		))
 	}
 	if len(p.Candidates) > 1 {
 		errs = append(errs, fmt.Errorf(
-			"found multiple servers side by side in %s: %s; lucy cannot tell which one to use",
+			"found multiple servers side by side in %s: %s; select one with %s",
 			root,
 			strings.Join(candidateLabels(p.Candidates), "; "),
+			strings.Join(p.selectionCommands(), " or "),
 		))
 	}
 	return errs
@@ -95,9 +98,7 @@ func (p Probe) IsEmpty() bool {
 func probeDirectory(root string) Probe {
 	var p Probe
 
-	// Installer layouts (Forge, NeoForge) produce runtime evidence from the
-	// libraries tree. They do not need a scannable root jar. They take part
-	// in ambiguity detection like every other candidate.
+	// Installer layouts can identify a server without a root executable.
 	for _, evidence := range detector.ForgeInstallationRuntimes(root) {
 		p.addCandidate(evidence.PrimaryPath, evidence)
 	}
@@ -111,8 +112,22 @@ func probeDirectory(root string) Probe {
 		return p
 	}
 	files := context.RootFiles()
+	claimed := make(map[string]bool)
+	for _, evidence := range detector.FabricInstallationRuntimes(context) {
+		p.addCandidate(evidence.PrimaryPath, evidence)
+		claimed[evidence.PrimaryPath] = true
+		for _, path := range evidence.EntryPoints {
+			claimed[path] = true
+		}
+		for _, path := range evidence.InstallationFiles {
+			claimed[path] = true
+		}
+	}
 	for _, file := range files {
 		if file.IsDirectory() || !strings.HasSuffix(strings.ToLower(file.Path()), ".jar") {
+			continue
+		}
+		if claimed[file.Path()] {
 			continue
 		}
 		claims := detector.Executable(context, file)
@@ -130,14 +145,24 @@ func probeDirectory(root string) Probe {
 	}
 
 	p.foldConsumedComponents()
+	p.groupIdentities()
 	logScanDiagnostics(root, p, len(files))
 	return p
 }
 
 func (p *Probe) addCandidate(jarPath string, evidence *detector.RuntimeEvidence) {
+	paths := evidence.EntryPoints
+	if len(paths) == 0 {
+		paths = []string{jarPath}
+	}
+	points := make([]RuntimeEntryPoint, 0, len(paths))
+	for _, path := range paths {
+		points = append(points, RuntimeEntryPoint{Path: path})
+	}
 	p.Candidates = append(p.Candidates, IdentifiedRuntime{
-		JarPath:  jarPath,
-		Evidence: evidence,
+		JarPath:     jarPath,
+		Evidence:    evidence,
+		EntryPoints: points,
 	})
 }
 

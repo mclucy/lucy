@@ -32,6 +32,9 @@ import (
 type InitOptions struct {
 	Minecraft, Product, ProductVersion, Repository, MCDRVersion, Directory string
 	Force, AllowEmpty, Detect                                              bool
+	EntryPoint                                                             string
+	PromptRuntime                                                          func(workspace.Probe) (string, error)
+	OnRuntimeFindings                                                      func([]workspace.RuntimeFinding)
 	// PromptMinecraft asks for a concrete Minecraft version when
 	// initialization lacks one and returns the trimmed response. Nil keeps
 	// the concrete-version-required error and never prompts.
@@ -285,6 +288,22 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	var observed workspace.Workspace
 	if opts.Detect {
 		observed, _ = identify.Packages(workspace.NewAt(root))
+		entryPoint := opts.EntryPoint
+		if entryPoint == "" && observed.Probe.HasAmbiguity() && opts.PromptRuntime != nil {
+			entryPoint, err = opts.PromptRuntime(observed.Probe)
+			if err != nil {
+				return nil, observed.Warnings, err
+			}
+		}
+		if entryPoint != "" {
+			if !filepath.IsAbs(entryPoint) {
+				entryPoint = filepath.Join(root, entryPoint)
+			}
+			observed.Probe, err = observed.Probe.Select(entryPoint)
+			if err != nil {
+				return nil, observed.Warnings, err
+			}
+		}
 		if observed.Probe.HasAmbiguity() {
 			return nil, observed.Warnings, fmt.Errorf(
 				"cannot initialize an ambiguous server runtime: %w",
@@ -456,13 +475,26 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	if err != nil {
 		return nil, observed.Warnings, err
 	}
+	selectionChanged := false
+	if runtime := observed.Runtime(); runtime != nil {
+		path, err := filepath.Rel(observed.ServerDir, runtime.PrimaryPath)
+		if err != nil {
+			return nil, observed.Warnings, err
+		}
+		path = filepath.ToSlash(path)
+		selectionChanged = resolved.Server.EntryPoint != path
+		resolved.Server.EntryPoint = path
+	}
 	if err := manifest.Write(root, d); err != nil {
 		return nil, observed.Warnings, err
 	}
-	if resolved != old {
+	if resolved != old || selectionChanged {
 		if err := lockfile.Write(root, resolved); err != nil {
 			return nil, observed.Warnings, err
 		}
+	}
+	if opts.OnRuntimeFindings != nil {
+		opts.OnRuntimeFindings(observed.Probe.Findings)
 	}
 	return d, observed.Warnings, nil
 }
