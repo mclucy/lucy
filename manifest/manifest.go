@@ -41,6 +41,7 @@ type Server struct {
 	Minecraft types.Version                              `yaml:"minecraft" json:"minecraft"`
 	Directory string                                     `yaml:"directory,omitempty" json:"directory"`
 	Core      Core                                       `yaml:"core" json:"core"`
+	Java      *Java                                      `yaml:"java,omitempty" json:"java,omitempty"`
 	Packages  map[types.Ecosystem]map[string]Requirement `yaml:"packages" json:"packages"`
 }
 
@@ -150,6 +151,9 @@ func Normalize(d *Document) error {
 		return err
 	}
 	d.Server.Directory = filepath.ToSlash(filepath.Clean(d.Server.Directory))
+	if err := normalizeJava(&d.Server); err != nil {
+		return err
+	}
 	if d.Server.Packages == nil {
 		d.Server.Packages = map[types.Ecosystem]map[string]Requirement{}
 	}

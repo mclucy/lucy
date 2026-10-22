@@ -24,7 +24,10 @@ func TrackedPath(value string) (string, error) {
 	}
 	value = path.Clean(value)
 	first, _, _ := strings.Cut(value, "/")
-	if value == "." || strings.EqualFold(first, "lucy.yaml") || strings.EqualFold(first, "lucy-lock.yaml") {
+	if value == "." ||
+		strings.EqualFold(first, "lucy.yaml") ||
+		strings.EqualFold(first, "lucy-lock.yaml") ||
+		strings.EqualFold(first, "lucy.local.yaml") {
 		return "", fmt.Errorf("tracked path names Lucy state or a directory: %q", value)
 	}
 	return value, nil
