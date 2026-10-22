@@ -70,12 +70,12 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 	reportObservationFindings(ws)
 	switch JSONMode(cmd) {
 	case JSONPretty:
-		if err := style.WriteJSON(cmd.OutOrStdout(), ws, false); err != nil {
+		if err := style.WriteJSON(cmd.OutOrStdout(), newLiveStatusDocument(ws), false); err != nil {
 			return err
 		}
 		return nil
 	case JSONCompact:
-		if err := style.WriteJSON(cmd.OutOrStdout(), ws, true); err != nil {
+		if err := style.WriteJSON(cmd.OutOrStdout(), newLiveStatusDocument(ws), true); err != nil {
 			return err
 		}
 		return nil
