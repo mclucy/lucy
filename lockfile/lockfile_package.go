@@ -15,7 +15,7 @@ type RequirementBinding struct {
 	Enabled     bool            `yaml:"enabled" json:"enabled"`
 }
 
-// Package is one installed package recorded in the lockfile.
+// Package records an artifact pin and its requirement bindings, not installed state.
 type Package struct {
 	Environment      server.Environment `yaml:"environment" json:"environment"`
 	Ecosystem        catalog.Ecosystem  `yaml:"ecosystem" json:"ecosystem"`
@@ -23,8 +23,8 @@ type Package struct {
 	Requirements     []RequirementBinding `yaml:"requirements,omitempty" json:"requirements,omitempty"`
 }
 
-// Enabled reports whether p belongs to the installed set: a package bound to no
-// requirement is ambient, and a bound package needs one enabled requirement.
+// Enabled reports whether p is selected for installation. A package with no
+// requirement bindings is ambient; otherwise, one binding must be enabled.
 func (p *Package) Enabled() bool {
 	if len(p.Requirements) == 0 {
 		return true
