@@ -18,7 +18,6 @@
 package workspace
 
 import (
-	"encoding/json/v2"
 	"os"
 	"path/filepath"
 	"sync"
@@ -48,36 +47,6 @@ type Workspace struct {
 	// Packages lists the discovered content packages, derived once during
 	// observe.
 	Packages []DiscoveredPackage `json:"packages"`
-}
-
-// MarshalJSON writes the wire format of an observation: the stored facts
-// and the derived method values. Consumers of `lucy status --json` read
-// this format. Probe is omitted; the raw scan is internal to this process.
-func (ws Workspace) MarshalJSON() ([]byte, error) {
-	projection := struct {
-		ServerDir   string              `json:"root"`
-		SavePath    string              `json:"save_path"`
-		PackageDirs []string            `json:"package_dirs"`
-		Packages    []DiscoveredPackage `json:"packages"`
-		Server      *ServerRuntime      `json:"server,omitempty"`
-		Activity    *wireActivity       `json:"activity,omitempty"`
-		Wrappers    WrapperInfo         `json:"wrappers"`
-	}{
-		ServerDir:   ws.ServerDir,
-		SavePath:    ws.SaveDir(),
-		PackageDirs: ws.PackageDirs(),
-		Packages:    ws.Packages,
-		Wrappers:    ws.Wrappers,
-	}
-	if server := ws.Runtime(); server != nil {
-		projection.Server = server
-		projection.Activity = &wireActivity{Running: ws.Running()}
-	}
-	return json.Marshal(projection)
-}
-
-type wireActivity struct {
-	Running bool `json:"active"`
 }
 
 var (
