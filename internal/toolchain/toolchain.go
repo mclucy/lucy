@@ -11,18 +11,22 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mclucy/lucy/types"
 )
 
 const probeTimeout = 20 * time.Second
 
 type JavaInstallation struct {
-	Home    string
-	Java    string
-	Javac   string
-	Version string
-	Major   int
-	Vendor  string
-	Arch    string
+	Home         string
+	Java         string
+	Javac        string
+	Version      string
+	Major        int
+	Vendor       string
+	Arch         string
+	Distribution types.JavaDistribution
+	Implementor  string
 }
 
 type GradleInstallation struct {

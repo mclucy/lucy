@@ -562,7 +562,7 @@ func transactionWorkspace(t *testing.T) string {
 			Directory:   "native",
 			Product:     types.ServerProductMinecraft,
 			CoreVersion: "1.21.4",
-			Java:        21,
+			Java:        lockfile.Java{Advisory: 21},
 			Artifact: types.Artifact{
 				Provider: "mojang",
 				Version:  "1.21.4",

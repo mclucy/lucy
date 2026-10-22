@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/types"
@@ -89,7 +90,10 @@ type Result struct {
 	Fetch       FetchSummary           `json:"fetch"`
 	Phases      []Phase                `json:"phases"`
 	Diagnostics []filetrack.Diagnostic `json:"diagnostics,omitempty"`
-	Warnings    []error                `json:"-"`
+	// Java reports the Java runtime that the server runs on. It is nil when
+	// the operation stopped before it selected one.
+	Java     *java.Check `json:"java,omitempty"`
+	Warnings []error     `json:"-"`
 	// WarningMessages carries Warnings into machine-readable output.
 	WarningMessages []string `json:"warnings,omitempty"`
 	// TotalPackages counts every package the committed lock records.

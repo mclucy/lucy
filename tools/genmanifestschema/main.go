@@ -1,6 +1,7 @@
 package main
 
 import (
+	stdjson "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
@@ -22,16 +23,16 @@ func main() {
 		OneOf: []*jsonschema.Schema{
 			{
 				Type:        "string",
-				Description: "A version selector: stable, a tag, or an exact version.",
+				Description: "A version selector: any, stable, beta, a tag, or an exact version.",
 			},
 			func() *jsonschema.Schema {
-				version := &jsonschema.Schema{
+				selector := &jsonschema.Schema{
 					Type:        "string",
-					Description: "A version selector: stable, a tag, or an exact version.",
+					Description: "A version selector: any, stable, beta, a tag, or an exact version.",
 				}
-				file := &jsonschema.Schema{
+				filePattern := &jsonschema.Schema{
 					Type:        "string",
-					Description: "Workspace-relative path to a local package artifact.",
+					Description: "Glob pattern matching the upstream artifact filename.",
 				}
 				enabled := &jsonschema.Schema{
 					Type:        "boolean",
@@ -39,8 +40,8 @@ func main() {
 					Description: "Whether the requirement is active in the resolved environment.",
 				}
 				properties := orderedmap.New[string, *jsonschema.Schema]()
-				properties.Set("version", version)
-				properties.Set("file", file)
+				properties.Set("selector", selector)
+				properties.Set("file_pattern", filePattern)
 				properties.Set("enabled", enabled)
 				return &jsonschema.Schema{
 					Type:                 "object",
@@ -108,6 +109,49 @@ func main() {
 		}
 	}()
 
+	javaSchema := func() *jsonschema.Schema {
+		major := func() *jsonschema.Schema {
+			return &jsonschema.Schema{
+				Type:    "integer",
+				Minimum: stdjson.Number(fmt.Sprint(manifest.MinimumJava)),
+			}
+		}
+		version := &jsonschema.Schema{
+			OneOf: []*jsonschema.Schema{
+				major(),
+				{Const: manifest.JavaAuto},
+			},
+			Description: "The Java major version, or auto.",
+		}
+		distributions := []any{manifest.JavaAuto, "any"}
+		for _, distribution := range types.JavaDistributions {
+			distributions = append(distributions, string(distribution))
+		}
+		distribution := &jsonschema.Schema{
+			Enum:        distributions,
+			Description: "The Java distribution. Omit it to accept any distribution.",
+		}
+		properties := orderedmap.New[string, *jsonschema.Schema]()
+		properties.Set("version", version)
+		properties.Set("distribution", distribution)
+		short := major()
+		short.Description = "The Java major version."
+		return &jsonschema.Schema{
+			OneOf: []*jsonschema.Schema{
+				short,
+				{
+					Const:       manifest.JavaAuto,
+					Description: "Follow the Java version Mojang recommends.",
+				},
+				{
+					Type:                 "object",
+					Properties:           properties,
+					AdditionalProperties: jsonschema.FalseSchema,
+				},
+			},
+		}
+	}()
+
 	r := &jsonschema.Reflector{
 		DoNotReference: true,
 		BaseSchemaID:   jsonschema.ID(schemaURL),
@@ -115,6 +159,8 @@ func main() {
 			switch t {
 			case reflect.TypeFor[manifest.Requirement]():
 				return requirementSchema
+			case reflect.TypeFor[manifest.Java]():
+				return javaSchema
 			case reflect.TypeFor[types.TrackedFile]():
 				return trackedFileSchema
 			default:

@@ -12,6 +12,7 @@ import (
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/workspacewrite"
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -43,6 +44,10 @@ type (
 		publishLock  bool
 		// Trace receives operation facts for the command layer to present.
 		Trace *Trace
+		// ProvisionJava runs before staging when the selected Java runtime
+		// misses the requirement of the lock. It must leave a runtime installed
+		// or fail; the runtime is selected again afterwards.
+		ProvisionJava func(ctx context.Context, requirement java.Requirement, check *java.Check) error
 	}
 )
 
@@ -191,6 +196,11 @@ func stageInstall(
 	if err := filetrack.ValidateOwnership(root, resolved.Files, resolved); err != nil {
 		return nil, err
 	}
+	check, err := selectJava(ctx, root, resolved, opts)
+	if err != nil {
+		return nil, err
+	}
+	result.Java = check
 	current, err := installationCurrent(root, resolved)
 	if err != nil {
 		return nil, err
@@ -218,12 +228,6 @@ func stageInstall(
 		reason = "manifest publication forces re-staging"
 	}
 	log.Debug("staging installation", "root", root, "reason", reason)
-	// Every path past here installs or replaces files, so the server the lock
-	// describes must be runnable. A no-op replay never runs the server, so
-	// demanding a local JVM earlier would fail installs that change nothing.
-	if err := checkJava(ctx, resolved.Server.Java); err != nil {
-		return nil, err
-	}
 	opts.Trace.phaseStarted("install")
 	start := time.Now()
 	installed := false
@@ -260,7 +264,15 @@ func stageInstall(
 		}
 		inputs[input.Path] = p
 	}
-	if err := bootstrap.PrepareLocked(ctx, stage, resolved.Server, core, inputs, opts.Trace.processOutput()); err != nil {
+	if err := bootstrap.PrepareLocked(
+		ctx,
+		stage,
+		resolved.Server,
+		core,
+		inputs,
+		check.Executable(),
+		opts.Trace.processOutput(),
+	); err != nil {
 		return nil, err
 	}
 	log.Debug(
@@ -276,7 +288,7 @@ func stageInstall(
 	overwritePaths := map[string]bool{}
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
-		if !packageEnabled(p) {
+		if !p.Enabled() {
 			continue
 		}
 		destination, err := packageDestination(resolved, p)
@@ -426,7 +438,7 @@ func rejectSharedDestinations(resolved *lockfile.Document) error {
 	claimed := map[string]string{}
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
-		if !packageEnabled(p) {
+		if !p.Enabled() {
 			continue
 		}
 		destination, err := packageDestination(resolved, p)
@@ -468,18 +480,6 @@ func packageDestination(resolved *lockfile.Document, p *types.LockedPackage) (st
 		directory = resolved.MCDR.Directory
 	}
 	return filepath.Join(directory, folder, p.Filename), nil
-}
-
-func packageEnabled(p *types.LockedPackage) bool {
-	if len(p.Requirements) == 0 {
-		return true
-	}
-	for _, r := range p.Requirements {
-		if r.Enabled {
-			return true
-		}
-	}
-	return false
 }
 
 // provisionCommitted provisions tracked files after the lock is published. A

@@ -4,12 +4,15 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
 )
@@ -26,6 +29,8 @@ const (
 type doctorReport struct {
 	Warnings []filetrack.Diagnostic `json:"warnings,omitempty"`
 	Failures []filetrack.Diagnostic `json:"failures,omitempty"`
+	// Java is the Java runtime check; nil when the workspace has no lock.
+	Java *java.Check `json:"java,omitempty"`
 }
 
 var doctorCmd = &cobra.Command{
@@ -39,8 +44,9 @@ func NewDoctorCommand() *cobra.Command {
 	return doctorCmd
 }
 
-// actionDoctor reports tracked file diagnostics without any network access:
-// live observations come from the manifest or lock declarations only.
+// actionDoctor reports tracked file and Java runtime diagnostics without any
+// network access: live observations come from the manifest or lock
+// declarations only.
 func actionDoctor(cmd *cobra.Command, _ []string) error {
 	root, err := os.Getwd()
 	if err != nil {
@@ -59,13 +65,18 @@ func actionDoctor(cmd *cobra.Command, _ []string) error {
 
 	warnings, failures := classifyFileStatuses(statuses)
 
+	javaCheck, err := doctorJava(cmd, root)
+	if err != nil {
+		return err
+	}
+
 	switch JSONMode(cmd) {
 	case JSONCompact:
-		if err := writeDoctorReport(cmd, true, warnings, failures); err != nil {
+		if err := writeDoctorReport(cmd, true, warnings, failures, javaCheck); err != nil {
 			return err
 		}
 	case JSONPretty:
-		if err := writeDoctorReport(cmd, false, warnings, failures); err != nil {
+		if err := writeDoctorReport(cmd, false, warnings, failures, javaCheck); err != nil {
 			return err
 		}
 	default:
@@ -74,6 +85,10 @@ func actionDoctor(cmd *cobra.Command, _ []string) error {
 		}
 		if len(statuses) == 0 {
 			fmt.Fprintln(cmd.OutOrStdout(), "No tracked files declared.")
+		}
+		writeDoctorJava(cmd.OutOrStdout(), javaCheck)
+		for _, warning := range javaWarnings(javaCheck) {
+			report.Warn(warning)
 		}
 	}
 
@@ -139,8 +154,9 @@ func writeDoctorReport(
 	compact bool,
 	warnings []filetrack.Diagnostic,
 	failures []filetrack.Diagnostic,
+	javaCheck *java.Check,
 ) error {
-	report := doctorReport{Warnings: warnings, Failures: failures}
+	report := doctorReport{Warnings: warnings, Failures: failures, Java: javaCheck}
 
 	var (
 		data []byte
@@ -163,4 +179,38 @@ func writeDoctorReport(
 		return fmt.Errorf("write output: %w", err)
 	}
 	return nil
+}
+
+// doctorJava selects the Java runtime of the locked server. A workspace
+// without a lock has no Java requirement to check.
+func doctorJava(cmd *cobra.Command, root string) (*java.Check, error) {
+	requirement, err := lockedJavaRequirement(root)
+	if err != nil || requirement == nil {
+		return nil, err
+	}
+	ctx, stop := commandContext(cmd)
+	defer stop()
+	return java.Select(ctx, root, *requirement)
+}
+
+func writeDoctorJava(out io.Writer, check *java.Check) {
+	if check == nil {
+		return
+	}
+	if check.Runtime == nil {
+		fmt.Fprintf(out, "Java: none (the server asks for Java %d)\n", check.Target)
+		return
+	}
+	status := style.Success("✓")
+	if !check.Satisfied() {
+		status = style.Failure("✗")
+	}
+	fmt.Fprintf(
+		out,
+		"%s Java %s · %s · %s\n",
+		status,
+		check.Runtime.Version,
+		check.Runtime.Build(),
+		style.Muted(check.Runtime.Home),
+	)
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/javainstall"
 	"github.com/mclucy/lucy/operation"
 	"github.com/spf13/cobra"
 )
@@ -17,6 +18,8 @@ const (
 	flagInstallAcceptBrokenName = "accept-broken"
 	flagInstallOverwriteName    = "overwrite"
 	flagInstallForceName        = "force"
+	flagInstallJavaName         = "java"
+	flagInstallJavaRepoName     = "add-java-repository"
 )
 
 var installCmd = &cobra.Command{
@@ -58,6 +61,16 @@ func NewInstallCommand() *cobra.Command {
 		false,
 		"Combine --accept-broken and --overwrite",
 	)
+	installCmd.Flags().Bool(
+		flagInstallJavaName,
+		false,
+		"Also install the Java runtime the server asks for when no installed runtime meets it",
+	)
+	installCmd.Flags().Bool(
+		flagInstallJavaRepoName,
+		false,
+		"Let --java add the Java vendor's package repository to the system package manager",
+	)
 	return installCmd
 }
 
@@ -73,6 +86,11 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 	acceptBroken, _ := cmd.Flags().GetBool(flagInstallAcceptBrokenName)
 	overwrite, _ := cmd.Flags().GetBool(flagInstallOverwriteName)
 	force, _ := cmd.Flags().GetBool(flagInstallForceName)
+	installJava, _ := cmd.Flags().GetBool(flagInstallJavaName)
+	addJavaRepository, _ := cmd.Flags().GetBool(flagInstallJavaRepoName)
+	if addJavaRepository && !installJava {
+		return fmt.Errorf("--%s needs --%s", flagInstallJavaRepoName, flagInstallJavaName)
+	}
 
 	opts := install.Options{
 		Locked:          locked,
@@ -86,6 +104,12 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 	output := newInstallOutput(cmd)
 	defer output.Close()
 	opts.Trace = output.Trace()
+	if installJava {
+		opts.ProvisionJava = output.provisionJava(javainstall.Host{
+			Interactive:     javaPromptAvailable(cmd),
+			AllowRepository: addJavaRepository,
+		}, offline)
+	}
 	ctx, stop := commandContext(cmd)
 	defer stop()
 	result, err := operation.Sync(ctx, workDir, opts)

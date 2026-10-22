@@ -291,14 +291,17 @@ func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Docu
 }
 
 // ResolutionFingerprint digests the fields an installation receipt pins a lock
-// with: the server, MCDR and package fields only. Tracked files and the
-// manifest fingerprint stay out, so file-only changes keep a receipt current.
+// with: the server, MCDR and package fields only. Tracked files, the manifest
+// fingerprint, and the Java requirement stay out, so changes to them keep a
+// receipt current: they change no installed file.
 func ResolutionFingerprint(l *lockfile.Document) (string, error) {
+	server := l.Server
+	server.Java = lockfile.Java{}
 	data, err := yaml.Marshal(struct {
 		Server   lockfile.Server       `yaml:"server"`
 		MCDR     *lockfile.MCDR        `yaml:"mcdr,omitempty"`
 		Packages []types.LockedPackage `yaml:"packages"`
-	}{l.Server, l.MCDR, l.Packages})
+	}{server, l.MCDR, l.Packages})
 	if err != nil {
 		return "", err
 	}

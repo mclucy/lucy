@@ -2,7 +2,9 @@ package toolchain
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 const (
@@ -11,7 +13,11 @@ const (
 )
 
 func systemJavaRoots() []string {
-	return []string{"/usr/lib/jvm", "/usr/java", "/opt/java"}
+	roots := []string{"/usr/lib/jvm", "/usr/java", "/opt/java", "/home/linuxbrew/.linuxbrew/opt"}
+	if home, err := os.UserHomeDir(); err == nil {
+		roots = append(roots, filepath.Join(home, ".linuxbrew", "opt"))
+	}
+	return roots
 }
 
 func probeCommand(ctx context.Context, executable string, arguments ...string) *exec.Cmd {

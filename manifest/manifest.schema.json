@@ -35,6 +35,59 @@
             "product_version"
           ]
         },
+        "java": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 8,
+              "description": "The Java major version."
+            },
+            {
+              "const": "auto",
+              "description": "Follow the Java version Mojang recommends."
+            },
+            {
+              "properties": {
+                "version": {
+                  "oneOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 8
+                    },
+                    {
+                      "const": "auto"
+                    }
+                  ],
+                  "description": "The Java major version, or auto."
+                },
+                "distribution": {
+                  "enum": [
+                    "auto",
+                    "any",
+                    "temurin",
+                    "zulu",
+                    "corretto",
+                    "liberica",
+                    "microsoft",
+                    "oracle",
+                    "oracle_open_jdk",
+                    "graalvm",
+                    "graalvm_community",
+                    "semeru",
+                    "sap_machine",
+                    "dragonwell",
+                    "kona",
+                    "redhat",
+                    "jetbrains"
+                  ],
+                  "description": "The Java distribution. Omit it to accept any distribution."
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          ]
+        },
         "packages": {
           "additionalProperties": {
             "additionalProperties": {

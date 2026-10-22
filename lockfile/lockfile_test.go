@@ -22,7 +22,8 @@ server:
   hashes:
     sha256: abc
   bootstrapper: ""
-  java: 21
+  java:
+    advisory: 21
 packages:
   - environment: server
     ecosystem: fabric

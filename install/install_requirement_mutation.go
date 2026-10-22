@@ -138,12 +138,14 @@ func retainDeclared(
 	return retained
 }
 
-// mutateLock produces the lock a locked mutation commits. Only requirements and
-// the manifest fingerprint move; every artifact pin is copied as recorded.
+// mutateLock produces the lock a locked mutation commits. Only requirements,
+// the Java override, and the manifest fingerprint move; every artifact pin is
+// copied as recorded.
 func mutateLock(d *manifest.Document, old *lockfile.Document, fingerprint string) (*lockfile.Document, error) {
 	resolved := *old
 	resolved.ManifestFingerprint = fingerprint
 	resolved.Files = slices.Clone(d.Files)
+	resolved.Server.Java = lockfile.NewJava(old.Server.Java.Advisory, d.Server.Java)
 	resolved.Packages = make([]types.LockedPackage, len(old.Packages))
 	for i, p := range old.Packages {
 		resolved.Packages[i] = p

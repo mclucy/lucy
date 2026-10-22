@@ -614,18 +614,6 @@ func preferReleaseBuilds(list []types.CatalogueCandidate, requirements []types.R
 	return ordered
 }
 
-func packageEnabled(p types.LockedPackage) bool {
-	if len(p.Requirements) == 0 {
-		return true
-	}
-	for _, r := range p.Requirements {
-		if r.Enabled {
-			return true
-		}
-	}
-	return false
-}
-
 func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcdrVersion string) ([]ModuleProblem, error) {
 	type selected struct{ packageIndex, moduleIndex int }
 	index := map[struct {
@@ -636,7 +624,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 	var problems []ModuleProblem
 	for pi := range packages {
 		p := &packages[pi]
-		if !packageEnabled(*p) {
+		if !p.Enabled() {
 			continue
 		}
 		for mi, m := range p.Modules {
@@ -688,7 +676,7 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 	}
 	for pi := range packages {
 		p := &packages[pi]
-		if !packageEnabled(*p) {
+		if !p.Enabled() {
 			continue
 		}
 		var selectedModules []types.DescriptorModule
@@ -708,7 +696,9 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 			}
 			for di := range m.Dependencies {
 				dep := &m.Dependencies[di]
-				if dep.Kind == types.DependencyKindPython {
+				// A Java requirement is checked against the Java runtime that
+				// runs the server, and only warns.
+				if dep.Kind == types.DependencyKindPython || dep.ID == "java" {
 					continue
 				}
 				value := ""
@@ -724,8 +714,6 @@ func ValidateModules(packages []types.LockedPackage, server lockfile.Server, mcd
 					if dep.ID == server.Product.String() {
 						value = string(server.CoreVersion)
 					}
-				case "java":
-					value = fmt.Sprintf("%d", server.Java)
 				case "mcdreforged":
 					value = mcdrVersion
 				default:

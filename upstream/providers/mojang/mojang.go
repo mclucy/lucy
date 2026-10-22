@@ -24,6 +24,9 @@ func (provider) Provider() types.Provider {
 }
 
 type versionDetail struct {
+	JavaVersion *struct {
+		MajorVersion int `json:"majorVersion"`
+	} `json:"javaVersion"`
 	Downloads struct {
 		Server *struct {
 			Sha1 string `json:"sha1"`
@@ -134,6 +137,46 @@ func (p provider) Fetch(
 		Hash:          detail.Downloads.Server.Sha1,
 		HashAlgorithm: "sha1",
 	}, nil
+}
+
+// legacyJavaAdvisory is the Java major version for versions whose metadata
+// predates the javaVersion block.
+const legacyJavaAdvisory = 8
+
+// JavaAdvisory returns the Java major version Mojang's launcher ships for the
+// Minecraft version. Lucy treats it as an advisory minimum.
+//
+// Versions from 13w24a through 1.6.4 carry no javaVersion block. That metadata
+// field arrived later, and Mojang pairs the versions on both sides of the gap
+// with JRE 8, so those versions fall back to 8.
+func JavaAdvisory(minecraft types.Version) (int, error) {
+	manifest, err := FetchVersionManifest()
+	if err != nil {
+		return 0, err
+	}
+
+	versionID, versionURL, err := ResolveVersionEntry(manifest, minecraft)
+	if err != nil {
+		return 0, err
+	}
+
+	detail, err := fetchVersionDetail(versionURL)
+	if err != nil {
+		return 0, err
+	}
+
+	if detail.JavaVersion == nil {
+		return legacyJavaAdvisory, nil
+	}
+
+	if detail.JavaVersion.MajorVersion <= 0 {
+		return 0, fmt.Errorf(
+			"minecraft version %s declares no java major version",
+			versionID,
+		)
+	}
+
+	return detail.JavaVersion.MajorVersion, nil
 }
 
 func fetchVersionDetail(versionURL string) (*versionDetail, error) {

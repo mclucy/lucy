@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/resolve"
@@ -54,7 +55,7 @@ func (o *installOutput) Trace() *install.Trace {
 		FetchStarted:  o.fetchStarted,
 		FetchProgress: o.fetchProgress,
 		FetchDone:     o.fetchDone,
-		ProcessOutput: o.renderer.LogWriter(),
+		ProcessOutput: processLog{o},
 		Resolve: resolve.Trace{
 			State:    o.resolveState,
 			Rejected: o.resolveRejected,
@@ -141,6 +142,7 @@ func (o *installOutput) Render(result *install.Result) error {
 	if result == nil {
 		return nil
 	}
+	result.Warnings = append(result.Warnings, javaWarnings(result.Java)...)
 	result.WarningMessages = warningMessages(result.Warnings)
 	if o.json != JSONNone {
 		return style.WriteJSON(o.cmd.OutOrStdout(), result, o.json == JSONCompact)
@@ -206,7 +208,23 @@ func (o *installOutput) Failure(err error) error {
 			Cause: err,
 		}
 	}
+	if errors.Is(err, bootstrap.ErrNoJava) {
+		return &report.Detail{
+			Title: "no Java runtime",
+			Lines: []string{err.Error()},
+			Hint:  "Run lucy install --java to install the Java runtime the server asks for.",
+			Cause: err,
+		}
+	}
 	return err
+}
+
+// processLog forwards subprocess output to the current progress area, which
+// changes when a Java installation suspends it.
+type processLog struct{ o *installOutput }
+
+func (l processLog) Write(data []byte) (int, error) {
+	return l.o.renderer.LogWriter().Write(data)
 }
 
 // commandContext cancels the operation on the first interrupt, so deferred
