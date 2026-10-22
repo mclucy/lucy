@@ -9,7 +9,7 @@ description: "Display an overview of the current server"
 lucy status
 ```
 
-No arguments. Run it from the server directory or any directory that `lucy` manages. By default, server and package names come from a live inspection of the installed files. Pass `--from-lock` to render the server and packages from `lucy-lock.yaml` instead.
+No arguments. Run it from the server directory or any directory that `lucy` manages. By default, Lucy inspects the installed files. When the manifest and lock agree on the server, that selection stays authoritative: unrelated jars are reported as unmanaged, not as conflicting servers. Equivalent launchers of the same server also remain non-fatal. If the selected server is missing, Lucy reports it rather than switching to an unrelated jar. Pass `--from-lock` to render the server and packages from `lucy-lock.yaml` without inspecting the installed files.
 
 ```bash
 lucy status --from-lock
