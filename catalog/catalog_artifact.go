@@ -1,10 +1,6 @@
 package catalog
 
-import (
-	"path"
-
-	"github.com/mclucy/lucy/version"
-)
+import "github.com/mclucy/lucy/version"
 
 // Artifact records one upstream file. Descriptor module identities do not
 // replace its provider coordinates.
@@ -33,39 +29,6 @@ type DescriptorModule struct {
 	FoliaSupported bool                   `yaml:"folia_supported,omitempty" json:"folia_supported,omitzero"`
 	APIVersion     string                 `yaml:"api_version,omitempty" json:"api_version,omitempty"`
 	Dependencies   []DescriptorDependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
-}
-
-// EffectiveVersionDialect returns the recorded dialect. Documents written
-// before the field existed infer it from the descriptor format, then from the
-// module ecosystem.
-func (m DescriptorModule) EffectiveVersionDialect() version.Dialect {
-	if m.VersionDialect != version.DialectUnknown {
-		return m.VersionDialect
-	}
-	switch path.Base(m.DescriptorPath) {
-	case "fabric.mod.json":
-		return version.DialectFabric
-	case "mods.toml", "neoforge.mods.toml", "sponge_plugins.json":
-		return version.DialectMaven
-	case "mcdreforged.plugin.json":
-		return version.DialectMCDR
-	case "plugin.yml", "paper-plugin.yml":
-		return version.DialectOpaque
-	}
-	switch m.Ecosystem {
-	case EcosystemFabric:
-		return version.DialectFabric
-	case EcosystemForge, EcosystemNeoForge, EcosystemSponge:
-		return version.DialectMaven
-	case EcosystemMCDR:
-		return version.DialectMCDR
-	case EcosystemMinecraft:
-		return version.DialectMinecraft
-	case EcosystemBukkit, EcosystemPaper:
-		return version.DialectOpaque
-	default:
-		return version.DialectUnknown
-	}
 }
 
 type DescriptorDependency struct {

@@ -142,7 +142,7 @@ func packageConstraint(
 	default:
 		return Constraint{}, false
 	}
-	expression, dialect := dep.Constraint, m.EffectiveVersionDialect()
+	expression, dialect := dep.Constraint, m.VersionDialect
 	match := func(major int) (bool, error) {
 		return version.Match(expression, version.Version(strconv.Itoa(major)), dialect)
 	}

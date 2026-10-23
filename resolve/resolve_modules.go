@@ -50,14 +50,14 @@ func finalizeModules(packages []lockfile.Package, target Target) ([]ModuleProble
 					if m.NestedPath != "" {
 						a, err := versionpkg.ParseVersion(
 							previous.Version,
-							previous.EffectiveVersionDialect(),
+							previous.VersionDialect,
 						)
 						if err != nil {
 							return nil, err
 						}
 						b, err := versionpkg.ParseVersion(
 							m.Version,
-							m.EffectiveVersionDialect(),
+							m.VersionDialect,
 						)
 						if err != nil {
 							return nil, err
@@ -144,7 +144,7 @@ func finalizeModules(packages []lockfile.Package, target Target) ([]ModuleProble
 					matched, err = versionpkg.Match(
 						dep.Constraint,
 						versionpkg.Version(value),
-						m.EffectiveVersionDialect(),
+						m.VersionDialect,
 					)
 					if err != nil {
 						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
