@@ -9,13 +9,12 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/x/term"
+	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
-	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/spf13/cobra"
 )
@@ -76,7 +75,7 @@ func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.Init
 		output.Close()
 		return promptRuntime(cmd, observed)
 	}
-	ctx, stop := commandContext(cmd)
+	ctx, stop := CommandContext(cmd)
 	defer stop()
 	result, err := operation.Initialize(ctx, workDir, opts)
 	if err != nil {
@@ -84,16 +83,38 @@ func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.Init
 	}
 	output.Close()
 	for _, warning := range result.Warnings {
-		report.Warn(warning)
+		output.Warn(warning)
 	}
-	reportDiscoveryFindings(&result.Discovery)
+	reportDiscoveryFindings(&result.Discovery, output.Output)
+	if output.JSON() {
+		return output.WriteJSON(&install.Result{
+			Schema: install.ResultSchema,
+			Kind:   "install",
+			Mode:   install.ModeResolve,
+			Server: install.ServerChange{
+				Product:   result.Document.Server.Core.Product,
+				Minecraft: result.Document.Server.Minecraft,
+				Version:   result.Document.Server.Core.ProductVersion,
+			},
+			Packages:          []install.PackageChange{},
+			Phases:            []install.Phase{},
+			TotalPackages:     len(result.Lock.Packages),
+			PublishedManifest: true,
+			PublishedLock:     result.PublishedLock,
+			WarningMessages:   output.Warnings(),
+		})
+	}
+	written := manifest.Filename
+	if result.PublishedLock {
+		written += " and " + lockfile.Filename
+	}
 	fmt.Fprintf(
-		cmd.OutOrStdout(),
-		"Wrote %s and %s for Minecraft %s (%s)\n",
-		manifest.Filename,
-		lockfile.Filename,
+		output.Human(),
+		"Wrote %s for Minecraft %s (%s) · %d packages\n",
+		written,
 		result.Document.Server.Minecraft,
 		result.Document.Server.Core.Product,
+		len(result.Lock.Packages),
 	)
 	return nil
 }
@@ -152,8 +173,9 @@ func entryPointCommands(installations []discovery.Installation) []string {
 }
 
 func promptRuntime(cmd *cobra.Command, observed discovery.Result) (string, error) {
-	stdin, ok := cmd.InOrStdin().(*os.File)
-	if !ok || !term.IsTerminal(stdin.Fd()) || !style.InteractiveEnabled() {
+	// A closed gate returns no selection, so Initialize reports the typed
+	// ambiguous-selection error whose commands name --entry-point exactly.
+	if !NewPromptGate(cmd).Available() {
 		return "", nil
 	}
 	options := make([]huh.Option[string], 0, len(observed.Installations))
@@ -188,15 +210,17 @@ func promptRuntime(cmd *cobra.Command, observed discovery.Result) (string, error
 }
 
 // promptMinecraft returns the interactive Minecraft-version prompt for
-// Initialize. It requires a terminal stdin with interactive mode enabled,
-// echoes the question on stderr, and returns the trimmed answer.
+// Initialize. It asks only while the command's prompt gate is open and
+// otherwise fails with the flag that carries the same answer, so a JSON or
+// non-interactive run never waits on stdin.
 func promptMinecraft(cmd *cobra.Command) func() (string, error) {
 	return func() (string, error) {
-		stdin := cmd.InOrStdin()
-		file, isFile := stdin.(*os.File)
-		if !isFile || !term.IsTerminal(file.Fd()) || !style.InteractiveEnabled() {
-			return "", errors.New("a concrete --minecraft version is required")
+		if !NewPromptGate(cmd).Available() {
+			return "", errors.New(
+				"specify --minecraft <version>; choosing interactively needs a terminal",
+			)
 		}
+		stdin := cmd.InOrStdin()
 		fmt.Fprint(cmd.ErrOrStderr(), "Minecraft version: ")
 		// Piped answers may end without a newline, so a final line behind
 		// io.EOF is still a valid answer.

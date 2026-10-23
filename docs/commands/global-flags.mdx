@@ -25,15 +25,72 @@ These flags work with every `lucy` subcommand. The root command also exposes ver
   Same as `--no-color --no-interactive`.
 </ParamField>
 
-`--json` and `--json-compact` are inherited by every command and render on the ones that produce machine-readable output. `--json-compact` wins when both are set.
+`--json` and `--json-compact` are inherited by every command. Commands that produce machine-readable output render it; every command uses the same failure document. `--json-compact` wins when both are set.
 
 <ParamField query="--json" type="boolean" default="false">
-  Print JSON indented with 2 spaces.
+  Print JSON indented with 2 spaces. Success documents go to stdout; failure documents go to stderr.
 </ParamField>
 
 <ParamField query="--json-compact" type="boolean" default="false">
   Print JSON without indentation; wins over `--json`.
 </ParamField>
+
+## Streams
+
+Human output follows the kind of command:
+
+- Query results stay on stdout so they can be piped.
+- Operation summaries, progress, prompts, warnings, and errors go to stderr.
+- The pre-alpha notice goes to stderr.
+
+Machine output owns the streams instead:
+
+- On success, stdout carries exactly one JSON document and stderr stays empty. Progress, warnings, prompts, and the pre-alpha notice are suppressed. Warnings that belong to a result travel inside its document when the command supports them.
+- On failure, stdout stays empty and stderr carries exactly one JSON failure document. The human error is not repeated.
+- Invalid invocations — an unknown command, an unknown flag, a flag without its value, or a rejected argument count — follow the same rules. The output mode is read from the original command line, so `--json` and `--json-compact` work even when the command never starts.
+
+`--print-logs` is the exception to the empty-stderr rule. In machine mode lucy suppresses the terminal log mirror so the stream stays parseable; the log file still records diagnostics. Leave `--print-logs` off when a program parses stderr.
+
+## Failure documents
+
+Every machine-mode failure writes one document with this shape:
+
+```json
+{
+  "schema": 1,
+  "kind": "error",
+  "code": "usage.invalid_invocation",
+  "title": "unknown command \"instal\" for \"lucy\"",
+  "details": [],
+  "hint": "Run --help for usage.",
+  "log": "/path/to/lucy.log"
+}
+```
+
+- `schema` is `1` and identifies the document version.
+- `kind` is `error`. Successful operation documents name their own kind, such as `install` for add, install, remove, and init.
+- `code` is a stable machine-readable reason:
+  - `command.failed` — the action failed; read `title` and `details`.
+  - `usage.invalid_invocation` — the command line could not be parsed or validated.
+  - `operation.cancelled` — the action was interrupted before it completed.
+  - `resolve.no_matching_build` — no build matches the requested version.
+  - `resolve.no_compatible_build` — builds exist, but none fit this server.
+- `title` is a one-line summary without ANSI escapes.
+- `details` is an array of explanation lines, empty when the title says enough.
+- `hint` is optional and names a next step when one exists.
+- `log` names the diagnostic log file for the run.
+
+The document never contains colors, progress output, or a second human rendering. The result is published only after cleanup succeeds, so a failed command does not leave a success document on stdout.
+
+## Exit status
+
+| Code | Meaning |
+| --- | --- |
+| 0 | The command completed successfully. |
+| 1 | The command failed, including invalid invocations and a diagnostic log that could not be written or closed. |
+| 130 | The command was interrupted (Ctrl-C or termination request) after cleanup. |
+
+Check the exit status before consuming the result. On failure, read the error document from stderr.
 
 ## Logging
 
@@ -50,7 +107,7 @@ Diagnostic logs record action boundaries and internal decisions. Command results
 </ParamField>
 
 <ParamField query="--print-logs" type="boolean" default="false">
-  Mirror diagnostic records to stderr at the level set by `--log-level`. The log file keeps receiving the same records, plus debug detail. User reports remain independent. When an event is both logged and reported, both representations appear.
+  Mirror diagnostic records to stderr at the level set by `--log-level`. The log file keeps receiving the same records, plus debug detail. User reports remain independent. In machine mode the terminal mirror is suppressed so stdout and stderr keep their single-document contract; read the log file instead.
 </ParamField>
 
 ## Network

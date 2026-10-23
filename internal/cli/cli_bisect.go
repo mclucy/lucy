@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,9 +16,7 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/server"
-	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -104,6 +103,7 @@ type bisectOutput struct {
 	Enabled  int         `json:"enabled"`
 	Disabled int         `json:"disabled"`
 	Restored int         `json:"restored"`
+	Warnings []string    `json:"warnings,omitempty"`
 }
 
 type bisectView struct {
@@ -184,11 +184,13 @@ func validateBisectState(session *bisectState) error {
 }
 
 // applyBisectRange writes the manifest with entries up to mid enabled and
-// the rest disabled. Every other manifest field is preserved.
-func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disabled int, err error) {
+// the rest disabled. Every other manifest field is preserved. Sync facts come
+// back as warnings so the command can fold them into its result instead of
+// writing them past a JSON document.
+func applyBisectRange(ctx context.Context, workDir string, mods []bisectMod, mid int) (enabled, disabled int, warnings []string, err error) {
 	doc, err := manifest.Read(workDir)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 	changed := 0
 	for i, mod := range mods {
@@ -202,24 +204,16 @@ func applyBisectRange(workDir string, mods []bisectMod, mid int) (enabled, disab
 		}
 	}
 	if changed == 0 {
-		return 0, 0, nil
+		return 0, 0, nil, nil
 	}
 	if err := manifest.Write(workDir, doc); err != nil {
-		return 0, 0, fmt.Errorf("write manifest: %w", err)
+		return 0, 0, nil, fmt.Errorf("write manifest: %w", err)
 	}
-	result, err := operation.Sync(context.Background(), workDir, install.Options{})
-	if result != nil {
-		for _, diagnostic := range result.Diagnostics {
-			report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
-		}
-		for _, warning := range result.Warnings {
-			report.Warn(warning)
-		}
-	}
+	result, err := operation.Sync(ctx, workDir, install.Options{})
 	if err != nil {
-		return 0, 0, fmt.Errorf("sync installation: %w", err)
+		return 0, 0, nil, fmt.Errorf("sync installation: %w", err)
 	}
-	return enabled, disabled, nil
+	return enabled, disabled, syncWarnings(result), nil
 }
 
 // setRequirementEnabled flips one manifest requirement and reports whether
@@ -251,27 +245,42 @@ func setRequirementEnabled(doc *manifest.Document, mod bisectMod, enabled bool) 
 }
 
 // restoreBisectManifest writes back the manifest captured at session start
-// and reports how many requirement entries that restored.
-func restoreBisectManifest(workDir string, original *manifest.Document) (int, error) {
+// and reports how many requirement entries that restored. As with applying a
+// range, sync facts travel with the result.
+func restoreBisectManifest(ctx context.Context, workDir string, original *manifest.Document) (restored int, warnings []string, err error) {
 	if original == nil {
-		return 0, nil
+		return 0, nil, nil
 	}
 	if err := manifest.Write(workDir, original); err != nil {
-		return 0, fmt.Errorf("restore manifest: %w", err)
+		return 0, nil, fmt.Errorf("restore manifest: %w", err)
 	}
-	result, err := operation.Sync(context.Background(), workDir, install.Options{})
-	if result != nil {
-		for _, diagnostic := range result.Diagnostics {
-			report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
-		}
-		for _, warning := range result.Warnings {
-			report.Warn(warning)
-		}
-	}
+	result, err := operation.Sync(ctx, workDir, install.Options{})
 	if err != nil {
-		return 0, fmt.Errorf("sync installation: %w", err)
+		return 0, nil, fmt.Errorf("sync installation: %w", err)
 	}
-	return countRequirements(original), nil
+	return countRequirements(original), syncWarnings(result), nil
+}
+
+// syncWarnings collects the facts one sync produced so a bisect result can
+// carry them. Diagnostics and warnings stay separate from stderr output, so a
+// JSON run never emits a second document beside the result.
+func syncWarnings(result *install.Result) []string {
+	if result == nil {
+		return nil
+	}
+	warnings := make([]string, 0, len(result.Diagnostics)+len(result.Warnings))
+	for _, diagnostic := range result.Diagnostics {
+		warnings = append(
+			warnings,
+			fmt.Sprintf("%s: %s", diagnostic.Path, diagnostic.Message),
+		)
+	}
+	for _, warning := range result.Warnings {
+		if warning != nil {
+			warnings = append(warnings, warning.Error())
+		}
+	}
+	return warnings
 }
 
 // countRequirements counts every declared requirement entry across the
@@ -303,21 +312,21 @@ func currentBisectView(session *bisectState) *bisectView {
 	return view
 }
 
-func outputBisect(cmd *cobra.Command, output bisectOutput) error {
-	switch JSONMode(cmd) {
-	case JSONPretty:
-		if err := style.WriteJSON(cmd.OutOrStdout(), output, false); err != nil {
-			return err
-		}
-		return nil
-	case JSONCompact:
-		if err := style.WriteJSON(cmd.OutOrStdout(), output, true); err != nil {
-			return err
-		}
-		return nil
+func outputBisect(cmd *cobra.Command, view bisectOutput) error {
+	output := NewOperationOutput(cmd)
+	if cmd.Name() == "status" && cmd.Parent() != nil && cmd.Parent().Name() == "bisect" {
+		output = NewQueryOutput(cmd)
 	}
-	_, err := fmt.Fprintln(cmd.OutOrStdout(), formatBisectOutput(output))
-	return err
+	if output.JSON() {
+		return output.WriteJSON(view)
+	}
+	if _, err := fmt.Fprintln(output.Human(), formatBisectOutput(view)); err != nil {
+		return err
+	}
+	for _, warning := range view.Warnings {
+		output.Warn(errors.New(warning))
+	}
+	return nil
 }
 
 func formatBisectOutput(output bisectOutput) string {
@@ -380,15 +389,15 @@ func bisectModLabel(mod bisectMod) string {
 
 // bisectCandidates returns the manifest requirements a session may toggle,
 // ordered so a package always follows the packages it depends on.
-func bisectCandidates(workDir string) ([]bisectMod, error) {
+func bisectCandidates(workDir string, output *Output) ([]bisectMod, []string, error) {
 	doc, err := manifest.Read(workDir)
 	if err != nil {
-		return nil, fmt.Errorf("read manifest: %w", err)
+		return nil, nil, fmt.Errorf("read manifest: %w", err)
 	}
 
-	graph, _, _, err := LoadDependencyData(workDir, false)
+	graph, _, _, err := LoadDependencyData(workDir, false, output)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ordered := graph.OrderedRoots()
@@ -421,7 +430,7 @@ func bisectCandidates(workDir string) ([]bisectMod, error) {
 		seen[key] = true
 		mods = append(mods, mod)
 	}
-	return mods, nil
+	return mods, output.Warnings(), nil
 }
 
 // requirementEnabled reports whether the manifest still enables the given
@@ -452,12 +461,15 @@ func requirementEnabled(
 }
 
 func actionBisectStart(cmd *cobra.Command, args []string) error {
+	ctx, stop := CommandContext(cmd)
+	defer stop()
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	mods, err := bisectCandidates(workDir)
+	candidateOutput := NewOperationOutput(cmd)
+	mods, candidateWarnings, err := bisectCandidates(workDir, candidateOutput)
 	if err != nil {
 		return err
 	}
@@ -467,6 +479,7 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 			bisectOutput{
 				Message:  "no enabled package requirements found in this manifest",
 				Complete: true,
+				Warnings: candidateWarnings,
 			},
 		)
 	}
@@ -487,7 +500,7 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 	}
 
 	mid := (session.L + session.R) / 2
-	enabled, disabled, err := applyBisectRange(workDir, mods, mid)
+	enabled, disabled, warnings, err := applyBisectRange(ctx, workDir, mods, mid)
 	if err != nil {
 		return err
 	}
@@ -498,11 +511,14 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 			State:    currentBisectView(session),
 			Enabled:  enabled,
 			Disabled: disabled,
+			Warnings: append(candidateWarnings, warnings...),
 		},
 	)
 }
 
 func actionBisectGood(cmd *cobra.Command, args []string) error {
+	ctx, stop := CommandContext(cmd)
+	defer stop()
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
@@ -527,7 +543,7 @@ func actionBisectGood(cmd *cobra.Command, args []string) error {
 	mid := (session.L + session.R) / 2
 	session.L = mid + 1
 	if session.L > session.R {
-		restored, err := restoreBisectManifest(workDir, session.Original)
+		restored, warnings, err := restoreBisectManifest(ctx, workDir, session.Original)
 		if err != nil {
 			return err
 		}
@@ -541,12 +557,13 @@ func actionBisectGood(cmd *cobra.Command, args []string) error {
 				Complete: true,
 				State:    currentBisectView(session),
 				Restored: restored,
+				Warnings: warnings,
 			},
 		)
 	}
 
 	newMid := (session.L + session.R) / 2
-	enabled, disabled, err := applyBisectRange(workDir, session.Mods, newMid)
+	enabled, disabled, warnings, err := applyBisectRange(ctx, workDir, session.Mods, newMid)
 	if err != nil {
 		return err
 	}
@@ -563,11 +580,14 @@ func actionBisectGood(cmd *cobra.Command, args []string) error {
 			State:    currentBisectView(session),
 			Enabled:  enabled,
 			Disabled: disabled,
+			Warnings: warnings,
 		},
 	)
 }
 
 func actionBisectBad(cmd *cobra.Command, args []string) error {
+	ctx, stop := CommandContext(cmd)
+	defer stop()
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
@@ -591,7 +611,7 @@ func actionBisectBad(cmd *cobra.Command, args []string) error {
 	mid := (session.L + session.R) / 2
 	session.R = mid
 	if session.L == session.R {
-		restored, err := restoreBisectManifest(workDir, session.Original)
+		restored, warnings, err := restoreBisectManifest(ctx, workDir, session.Original)
 		if err != nil {
 			return err
 		}
@@ -606,12 +626,13 @@ func actionBisectBad(cmd *cobra.Command, args []string) error {
 				Found:    new(session.Mods[session.L]),
 				State:    currentBisectView(session),
 				Restored: restored,
+				Warnings: warnings,
 			},
 		)
 	}
 
 	newMid := (session.L + session.R) / 2
-	enabled, disabled, err := applyBisectRange(workDir, session.Mods, newMid)
+	enabled, disabled, warnings, err := applyBisectRange(ctx, workDir, session.Mods, newMid)
 	if err != nil {
 		return err
 	}
@@ -628,6 +649,7 @@ func actionBisectBad(cmd *cobra.Command, args []string) error {
 			State:    currentBisectView(session),
 			Enabled:  enabled,
 			Disabled: disabled,
+			Warnings: warnings,
 		},
 	)
 }
@@ -664,6 +686,8 @@ func actionBisectStatus(cmd *cobra.Command, args []string) error {
 }
 
 func actionBisectReset(cmd *cobra.Command, args []string) error {
+	ctx, stop := CommandContext(cmd)
+	defer stop()
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
@@ -673,7 +697,7 @@ func actionBisectReset(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	restored, err := restoreBisectManifest(workDir, session.Original)
+	restored, warnings, err := restoreBisectManifest(ctx, workDir, session.Original)
 	if err != nil {
 		return err
 	}
@@ -687,6 +711,7 @@ func actionBisectReset(cmd *cobra.Command, args []string) error {
 			Message:  "session reset",
 			Complete: true,
 			Restored: restored,
+			Warnings: warnings,
 		},
 	)
 }

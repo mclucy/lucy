@@ -19,6 +19,9 @@ import (
 // ResultSchema versions the machine-readable result.
 const ResultSchema = 1
 
+// ResultKind identifies the machine-readable install result document.
+const ResultKind = "install"
+
 // Mode records how the operation produced its lock.
 type Mode string
 
@@ -84,7 +87,11 @@ type Phase struct {
 // Result reports what one operation decided and changed. It carries facts
 // only; the command layer renders them.
 type Result struct {
-	Schema      int                    `json:"schema"`
+	Schema int `json:"schema"`
+	// Kind names the machine-readable document. Results created by this
+	// package default it to ResultKind; projections from other operations
+	// set it explicitly.
+	Kind        string                 `json:"kind"`
 	Mode        Mode                   `json:"mode"`
 	Reason      string                 `json:"reason,omitempty"`
 	Server      ServerChange           `json:"server"`
@@ -107,7 +114,7 @@ type Result struct {
 }
 
 func newResult() *Result {
-	return &Result{Schema: ResultSchema}
+	return &Result{Schema: ResultSchema, Kind: ResultKind}
 }
 
 // CommittedError marks a failure after the installation was committed. The

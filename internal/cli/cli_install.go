@@ -106,11 +106,11 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 	opts.Trace = output.Trace()
 	if installJava {
 		opts.ProvisionJava = output.provisionJava(javainstall.Host{
-			Interactive:     javaPromptAvailable(cmd),
+			Interactive:     NewPromptGate(cmd).Available(),
 			AllowRepository: addJavaRepository,
 		}, offline)
 	}
-	ctx, stop := commandContext(cmd)
+	ctx, stop := CommandContext(cmd)
 	defer stop()
 	result, err := operation.Sync(ctx, workDir, opts)
 	if err != nil {

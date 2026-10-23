@@ -1,8 +1,6 @@
 package file
 
 import (
-	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"fmt"
 	"io"
 	"os"
@@ -20,39 +18,6 @@ func workRoot() (string, error) {
 		return "", fmt.Errorf("failed to get working directory: %w", err)
 	}
 	return root, nil
-}
-
-func machineOutputRequested(cmd *cobra.Command) bool {
-	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
-	return json || jsonCompact
-}
-
-func writeJSON(cmd *cobra.Command, value any) error {
-	compact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
-
-	var (
-		data []byte
-		err  error
-	)
-	if compact {
-		data, err = json.Marshal(value)
-	} else {
-		data, err = json.Marshal(
-			value,
-			jsontext.Multiline(true),
-			jsontext.WithIndent("  "),
-		)
-	}
-	if err != nil {
-		return err
-	}
-
-	out := cmd.OutOrStdout()
-	if _, err := out.Write(append(data, '\n')); err != nil {
-		return fmt.Errorf("write output: %w", err)
-	}
-	return nil
 }
 
 type fileResultView struct {
@@ -82,11 +47,12 @@ var resultVerbs = map[filetrack.Operation]string{
 }
 
 func reportFileResult(cmd *cobra.Command, result filetrack.Result) error {
-	if machineOutputRequested(cmd) {
-		return writeJSON(cmd, newFileResultView(result))
+	output := cli.NewOperationOutput(cmd)
+	if output.JSON() {
+		return output.WriteJSON(newFileResultView(result))
 	}
 
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	for _, change := range result.Event.Changes {
 		writeChangeLine(out, result.Event.Operation, change)
 	}

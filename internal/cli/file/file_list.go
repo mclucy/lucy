@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/report"
 
 	"github.com/spf13/cobra"
@@ -36,17 +37,19 @@ func actionFileList(cmd *cobra.Command, _ []string) error {
 	if statuses == nil {
 		statuses = []filetrack.Status{}
 	}
+
+	output := cli.NewQueryOutput(cmd)
+	if output.JSON() {
+		return output.WriteJSON(statuses)
+	}
+
 	for _, status := range statuses {
 		if status.Immutable && status.State == "modified" {
 			report.Warn(fmt.Errorf("%s: immutable contents differ; use lucy file update to accept them or lucy file recover to restore the accepted revision", status.Path))
 		}
 	}
 
-	if machineOutputRequested(cmd) {
-		return writeJSON(cmd, statuses)
-	}
-
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	if len(statuses) == 0 {
 		fmt.Fprintln(out, "No tracked files.")
 		return nil

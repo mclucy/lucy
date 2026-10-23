@@ -51,9 +51,11 @@ type InitOptions struct {
 // is the written manifest; warnings and discovery carry the observations
 // that the command boundary presents.
 type InitResult struct {
-	Document  *manifest.Document
-	Warnings  []error
-	Discovery discovery.Result
+	Document      *manifest.Document
+	Lock          *lockfile.Document
+	PublishedLock bool
+	Warnings      []error
+	Discovery     discovery.Result
 }
 
 func commandDocuments(root string) (document *manifest.Document, locked *lockfile.Document, resultErr error) {
@@ -514,7 +516,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			return initResult(observed), err
 		}
 	}
-	result = &InitResult{Document: d}
+	result = &InitResult{
+		Document:      d,
+		Lock:          resolved,
+		PublishedLock: resolved != old,
+	}
 	if observed != nil {
 		result.Warnings = observed.Warnings
 		result.Discovery = observed.Discovery

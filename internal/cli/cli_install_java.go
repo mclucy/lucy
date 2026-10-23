@@ -85,7 +85,7 @@ func (o *installOutput) suspend(run func(io.Writer) error) error {
 			o.renderer = progress.New(o.cmd.ErrOrStderr())
 		}
 	}()
-	return run(o.cmd.ErrOrStderr())
+	return run(o.Human())
 }
 
 func noJavaPlanDetail(request javainstall.Request, skipped []javainstall.Skipped) error {

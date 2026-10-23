@@ -76,7 +76,7 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 		workDir,
 		discovery.Request{Policy: discovery.PolicyPreferModified},
 	))
-	reportObservationFindings(ws)
+	reportObservationFindings(ws, NewQueryOutput(cmd))
 	switch JSONMode(cmd) {
 	case JSONPretty:
 		if err := style.WriteJSON(cmd.OutOrStdout(), newLiveStatusDocument(ws), false); err != nil {
@@ -90,6 +90,7 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	terminal.Flush(
+		cmd.OutOrStdout(),
 		generateStatusOutput(ws, long, style.ColorsEnabled(), logoMode),
 	)
 	return nil
@@ -600,6 +601,7 @@ func actionStatusFromLock(
 		return nil
 	}
 	terminal.Flush(
+		cmd.OutOrStdout(),
 		generateLockStatusOutput(
 			document,
 			longOutput,

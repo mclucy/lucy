@@ -13,6 +13,9 @@ type Detail struct {
 	Title string
 	Lines []string
 	Hint  string
+	// Code is a stable machine-readable failure code. Human rendering ignores
+	// it; commands that emit JSON carry it into the error document.
+	Code  string
 	Cause error
 }
 

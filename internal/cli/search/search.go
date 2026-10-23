@@ -153,6 +153,12 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	results, errs := routing.SearchMany(providers, query)
 	applySearchSort(results, Sort(sortOrder))
 
+	if err := searchResultError(results, errs); err != nil {
+		return err
+	}
+
+	output := cli.NewQueryOutput(cmd)
+
 	var noResultSources []string
 	for _, err := range errs {
 		if isNoResultsError(err.Err) {
@@ -164,27 +170,18 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			err.Provider.Title(),
 			err.Err,
 		)
+		if output.JSON() {
+			log.Warn(providerWarn)
+			continue
+		}
 		if len(results) > 0 {
 			log.Warn(providerWarn)
 		}
 		report.Warn(providerWarn)
 	}
 
-	if err := searchResultError(results, errs); err != nil {
-		return err
-	}
-
-	switch cli.JSONMode(cmd) {
-	case cli.JSONPretty:
-		if err := style.WriteJSON(cmd.OutOrStdout(), results, false); err != nil {
-			return err
-		}
-		return nil
-	case cli.JSONCompact:
-		if err := style.WriteJSON(cmd.OutOrStdout(), results, true); err != nil {
-			return err
-		}
-		return nil
+	if output.JSON() {
+		return output.WriteJSON(results)
 	}
 
 	var sb strings.Builder
@@ -205,7 +202,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			) + "\n",
 		)
 	}
-	fmt.Print(sb.String())
+	fmt.Fprint(output.Human(), sb.String())
 	return nil
 }
 
