@@ -18,7 +18,7 @@ description: "Stop managing a server and remove lucy's files from its directory"
 lucy deinit
 ```
 
-It does not delete the server. The server software, mods, plugins, worlds, and configuration stay where they are, so the server keeps running without lucy. Files that lucy installed become unmanaged: later lucy commands no longer know about them, and nothing removes them automatically.
+It does not delete the server. The server software, mods, plugins, worlds, and configuration stay where they are, so the server keeps running without lucy. On a server that runs MCDReforged, the isolated Python environment that `run-mcdr.sh` starts also stays in the server directory, so the launcher keeps working. Files that lucy installed become unmanaged: later lucy commands no longer know about them, and nothing removes them automatically.
 
 Run it from the server directory. If the directory has no lucy files, `lucy deinit` fails instead of reporting success, so a wrong working directory cannot silently delete nothing.
 
