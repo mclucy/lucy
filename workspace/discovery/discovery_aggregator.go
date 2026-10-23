@@ -1,4 +1,4 @@
-package detector
+package discovery
 
 // Executable analyzes a file using all registered detectors and collects
 // all executable evidence candidates in registration order.

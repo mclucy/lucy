@@ -1,4 +1,4 @@
-package detector
+package discovery
 
 import "github.com/mclucy/lucy/version"
 

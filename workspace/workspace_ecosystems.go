@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/workspace/internal/detector"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
 // ServedEcosystem is one ecosystem that a runtime can serve with a
@@ -162,7 +162,7 @@ func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
 			CompatFull,
 		)
 	default:
-		if detector.IsPaperLineage(name) {
+		if discovery.IsPaperLineage(name) {
 			offers = appendServedEcosystem(
 				offers,
 				catalog.EcosystemPaper,

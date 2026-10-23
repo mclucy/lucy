@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/workspace/internal/detector"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
 // RuntimeEntryPoint is a launchable path. Managed requires a matching receipt hash.
@@ -29,7 +29,7 @@ type RuntimeFinding struct {
 	Runtime *ServerRuntime
 }
 
-func sameRuntimeIdentity(a, b *detector.RuntimeEvidence) bool {
+func sameRuntimeIdentity(a, b *discovery.RuntimeEvidence) bool {
 	if a == nil || b == nil || a.PrimaryRuntime == nil || b.PrimaryRuntime == nil ||
 		*a.PrimaryRuntime != *b.PrimaryRuntime || !concreteRuntimeVersion(a.PrimaryRuntime.Version) ||
 		len(a.RuntimeComponents) != len(b.RuntimeComponents) {

@@ -106,8 +106,7 @@ func probePaperFixtureRoot(t *testing.T) string {
 	return filepath.Clean(
 		filepath.Join(
 			filepath.Dir(file),
-			"internal",
-			"detector",
+			"discovery",
 			"testdata",
 			"paper_family",
 		),

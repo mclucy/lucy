@@ -1,4 +1,4 @@
-package detector
+package discovery
 
 type detectorRegistry struct {
 	executableDetectors []ExecutableDetector

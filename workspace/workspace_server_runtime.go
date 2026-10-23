@@ -8,7 +8,7 @@ import (
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
-	"github.com/mclucy/lucy/workspace/internal/detector"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
 // ServerRuntime is the identity of one bootable server runtime. Probe.Single
@@ -24,7 +24,7 @@ type ServerRuntime struct {
 
 // buildServerRuntime creates runtime from detector evidence. It returns nil
 // when the evidence cannot name a concrete runtime.
-func buildServerRuntime(evidence *detector.RuntimeEvidence) *ServerRuntime {
+func buildServerRuntime(evidence *discovery.RuntimeEvidence) *ServerRuntime {
 	if evidence == nil ||
 		evidence.PrimaryRuntime == nil ||
 		evidence.PrimaryRuntime.Ref == (catalog.Ref{}) ||

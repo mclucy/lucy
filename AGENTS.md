@@ -66,7 +66,7 @@ To run the built binary against a test server directory:
 │   └── providers/          Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
 ├── workspace/              Local runtime, wrapper, and package-file observation
 │   ├── identify/           Associate local package files with upstream identities
-│   └── internal/detector/  Declarative runtime node detection
+│   └── discovery/          Declarative runtime node detection
 ├── bootstrap/              Pinned server product bootstrap profiles
 ├── resolve/                Catalogue selection and descriptor dependency validation
 ├── input/                  Trust boundary for external input, package ref parsing

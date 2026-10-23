@@ -5,7 +5,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	versionpkg "github.com/mclucy/lucy/version"
-	"github.com/mclucy/lucy/workspace/internal/detector"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
 // compatWorkspace builds an observation whose probe names exactly one
@@ -18,7 +18,7 @@ func compatWorkspace(
 		Probe: Probe{
 			Candidates: []IdentifiedRuntime{{
 				JarPath: "server.jar",
-				Evidence: &detector.RuntimeEvidence{
+				Evidence: &discovery.RuntimeEvidence{
 					PrimaryRuntime:    &primary,
 					PrimaryPath:       "server.jar",
 					RuntimeComponents: components,
@@ -204,7 +204,7 @@ func TestServedEcosystems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := buildServerRuntime(&detector.RuntimeEvidence{
+			server := buildServerRuntime(&discovery.RuntimeEvidence{
 				PrimaryRuntime:    &tt.primary,
 				PrimaryPath:       "server.jar",
 				RuntimeComponents: tt.components,

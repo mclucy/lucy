@@ -1,4 +1,4 @@
-package detector
+package discovery
 
 import (
 	"archive/zip"
@@ -248,42 +248,42 @@ func inferPaperObservationLineages(obs paperObservations) []string {
 		lineages = append(lineages, normalized)
 	}
 
-	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_paper/paper/META-INF/libraries.list
+	// Fixture citation: workspace/discovery/testdata/paper_family/test_paper/paper/META-INF/libraries.list
 	if observationLinesContain(
 		obs.librariesListEntries,
 		paperLibraryPaperToken,
 	) {
 		add("paper")
 	}
-	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_folia/folia/META-INF/libraries.list
+	// Fixture citation: workspace/discovery/testdata/paper_family/test_folia/folia/META-INF/libraries.list
 	if observationLinesContain(
 		obs.librariesListEntries,
 		paperLibraryFoliaToken,
 	) {
 		add("folia")
 	}
-	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_divine/divine/META-INF/libraries.list
+	// Fixture citation: workspace/discovery/testdata/paper_family/test_divine/divine/META-INF/libraries.list
 	if observationLinesContain(
 		obs.librariesListEntries,
 		paperLibraryDivineToken,
 	) {
 		add("divine")
 	}
-	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_purpur/purpur/META-INF/libraries.list
+	// Fixture citation: workspace/discovery/testdata/paper_family/test_purpur/purpur/META-INF/libraries.list
 	if observationLinesContain(
 		obs.librariesListEntries,
 		paperLibraryPurpurToken,
 	) {
 		add("purpur")
 	}
-	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_leaf/leaf/META-INF/libraries.list and cn/dreeam/leaper/*
+	// Fixture citation: workspace/discovery/testdata/paper_family/test_leaf/leaf/META-INF/libraries.list and cn/dreeam/leaper/*
 	if observationLinesContain(
 		obs.librariesListEntries,
 		paperLibraryLeafToken,
 	) || obs.hasLeaperNamespace {
 		add("leaf")
 	}
-	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_leaves/leaves/META-INF/libraries.list, META-INF/build-info, META-INF/leavesclip-version
+	// Fixture citation: workspace/discovery/testdata/paper_family/test_leaves/leaves/META-INF/libraries.list, META-INF/build-info, META-INF/leavesclip-version
 	if observationLinesContain(
 		obs.librariesListEntries,
 		paperLibraryLeavesToken,
@@ -293,11 +293,11 @@ func inferPaperObservationLineages(obs paperObservations) []string {
 	) {
 		add("leaves")
 	}
-	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_reaper/reaper/patch.properties
+	// Fixture citation: workspace/discovery/testdata/paper_family/test_reaper/reaper/patch.properties
 	if hasStrictReaperObservationLineage(obs) {
 		add("reaper")
 	}
-	// Fixture citation: workspace/internal/detector/testdata/paper_family/test_youer/youer/META-INF/MANIFEST.MF
+	// Fixture citation: workspace/discovery/testdata/paper_family/test_youer/youer/META-INF/MANIFEST.MF
 	if obs.hasYouerNamespace ||
 		strings.EqualFold(
 			obs.manifestSpecificationTitle,

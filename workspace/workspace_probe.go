@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/workspace/internal/detector"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
 // IdentifiedRuntime groups entry points with the same complete runtime identity.
 type IdentifiedRuntime struct {
 	JarPath     string
-	Evidence    *detector.RuntimeEvidence
+	Evidence    *discovery.RuntimeEvidence
 	EntryPoints []RuntimeEntryPoint
 }
 
@@ -23,7 +23,7 @@ type IdentifiedRuntime struct {
 // claims and keeps the jar out of Single.
 type ConflictingRuntime struct {
 	JarPath  string
-	Evidence []*detector.RuntimeEvidence
+	Evidence []*discovery.RuntimeEvidence
 }
 
 // Probe retains identified installations, contradictory claims, and unknown files.
@@ -99,21 +99,21 @@ func probeDirectory(root string) Probe {
 	var p Probe
 
 	// Installer layouts can identify a server without a root executable.
-	for _, evidence := range detector.ForgeInstallationRuntimes(root) {
+	for _, evidence := range discovery.ForgeInstallationRuntimes(root) {
 		p.addCandidate(evidence.PrimaryPath, evidence)
 	}
-	for _, evidence := range detector.NeoForgeInstallationRuntimes(root) {
+	for _, evidence := range discovery.NeoForgeInstallationRuntimes(root) {
 		p.addCandidate(evidence.PrimaryPath, evidence)
 	}
 
-	context, err := detector.NewDetectionContext(root)
+	context, err := discovery.NewDetectionContext(root)
 	if err != nil {
 		log.Warn(fmt.Errorf("cannot read server directory: %w", err))
 		return p
 	}
 	files := context.RootFiles()
 	claimed := make(map[string]bool)
-	for _, evidence := range detector.FabricInstallationRuntimes(context) {
+	for _, evidence := range discovery.FabricInstallationRuntimes(context) {
 		p.addCandidate(evidence.PrimaryPath, evidence)
 		claimed[evidence.PrimaryPath] = true
 		for _, path := range evidence.EntryPoints {
@@ -130,7 +130,7 @@ func probeDirectory(root string) Probe {
 		if claimed[file.Path()] {
 			continue
 		}
-		claims := detector.Executable(context, file)
+		claims := discovery.Executable(context, file)
 		switch {
 		case claims == nil || claims.IsEmpty():
 			p.Unidentified = append(p.Unidentified, file.Path())
@@ -150,7 +150,7 @@ func probeDirectory(root string) Probe {
 	return p
 }
 
-func (p *Probe) addCandidate(jarPath string, evidence *detector.RuntimeEvidence) {
+func (p *Probe) addCandidate(jarPath string, evidence *discovery.RuntimeEvidence) {
 	paths := evidence.EntryPoints
 	if len(paths) == 0 {
 		paths = []string{jarPath}
