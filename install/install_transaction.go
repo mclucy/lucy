@@ -309,26 +309,6 @@ func ResolutionFingerprint(l *lockfile.Document) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// legacyResolutionFingerprint reproduces the whole-document fingerprint that
-// receipts recorded before the resolved runtime was separated from the lock
-// identity, so such a receipt stays current instead of re-staging once.
-func legacyResolutionFingerprint(l *lockfile.Document) (string, error) {
-	server := l.Server
-	server.EntryPoint = ""
-	data, err := yaml.Marshal(struct {
-		Version             int                `yaml:"lock_version"`
-		ManifestFingerprint string             `yaml:"manifest_fingerprint"`
-		Server              lockfile.Server    `yaml:"server"`
-		MCDR                *lockfile.MCDR     `yaml:"mcdr,omitempty"`
-		Packages            []lockfile.Package `yaml:"packages"`
-	}{l.SchemaVersion, l.ManifestFingerprint, server, l.MCDR, l.Packages})
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
-}
-
 func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	raw, err := os.ReadFile(receiptPath)
@@ -348,20 +328,13 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 		return false, err
 	}
 	if receipt.LockFingerprint != expected {
-		legacy, err := legacyResolutionFingerprint(l)
-		if err != nil {
-			return false, err
-		}
-		if receipt.LockFingerprint != legacy {
-			log.Debug(
-				"installation not current",
-				"reason", "lock fingerprint changed",
-				"receipt", receipt.LockFingerprint,
-				"expected", expected,
-			)
-			return false, nil
-		}
-		log.Debug("accepting a pre-file-tracking installation receipt", "receipt", receiptPath)
+		log.Debug(
+			"installation not current",
+			"reason", "lock fingerprint changed",
+			"receipt", receipt.LockFingerprint,
+			"expected", expected,
+		)
+		return false, nil
 	}
 	tracked := trackedPaths(l)
 	for _, entry := range receipt.Entries {
