@@ -153,8 +153,10 @@ var probeScenarios = map[string]probeExpectation{
 	"neoforge-211": {
 		eco: "neoforge", version: "21.1.248", minecraftVersion: "1.21.1", packageDirs: true,
 	},
+	// NeoForge 26.2.0.67 installs declare Minecraft 26.2 in install_profile.json
+	// and version.json; the loader tuple does not imply a 1.26.2 game version.
 	"neoforge-262": {
-		eco: "neoforge", version: "26.2.0.67", minecraftVersion: "1.26.2", packageDirs: true,
+		eco: "neoforge", version: "26.2.0.67", minecraftVersion: "26.2", packageDirs: true,
 	},
 	"neoforge-connector": {
 		eco: "neoforge", version: "21.1.248", minecraftVersion: "1.21.1", packageDirs: true,

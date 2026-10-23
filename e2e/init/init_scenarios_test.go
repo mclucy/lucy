@@ -7,11 +7,20 @@ const (
 	fabricExecutable262  = "fabric-executable-262"
 	fabricExecutable1214 = "fabric-executable-1214"
 	vanilla262           = "vanilla-262"
+	arclightFabric       = "arclight-fabric"
 
-	cobblemon1211Launcher = "fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar"
-	fabric262Launcher     = "fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar"
-	fabric1214Launcher    = "fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar"
-	fabricShim            = "fabric-server-launch.jar"
+	cobblemon1211Launcher  = "fabric-server-mc.1.21.1-loader.0.19.5-launcher.1.1.2.jar"
+	fabric262Launcher      = "fabric-server-mc.26.2-loader.0.19.3-launcher.1.1.2.jar"
+	fabric1214Launcher     = "fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar"
+	fabricShim             = "fabric-server-launch.jar"
+	arclightFabricLauncher = "arclight-fabric-1.21.1-1.0.1-8ec9529.jar"
+	paperJar               = "paper-1.21.11-130.jar"
+	forge1122Jar           = "forge-1.12.2-14.23.5.2860-universal.jar"
+
+	forge1201EntryPoint   = "libraries/net/minecraftforge/forge/1.20.1-47.4.10/unix_args.txt"
+	forge12111EntryPoint  = "libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-shim.jar"
+	neoforge211EntryPoint = "libraries/net/neoforged/neoforge/21.1.248/unix_args.txt"
+	neoforge262EntryPoint = "libraries/net/neoforged/neoforge/26.2.0.67/unix_args.txt"
 )
 
 type manifestDocument struct {
@@ -39,6 +48,8 @@ type initializeScenario struct {
 	prepare []initializeCommand
 	// artifacts copy pinned files from generated sandboxes into the case.
 	artifacts []initializeArtifact
+	// symlinks create real filesystem aliases inside the case.
+	symlinks []initializeSymlink
 	// removeBefore removes generated state after preparation and before init.
 	removeBefore []string
 	// modifyFiles appends a ZIP comment to these installed artifacts after the
@@ -62,7 +73,8 @@ type initializeScenario struct {
 	// wantReceipt keeps the installation receipt assertion; init itself never
 	// stages one.
 	wantReceipt bool
-	// status asserts the live server identity after a successful init.
+	// status asserts the live server identity after init, including after a
+	// refusal that leaves an ambiguous layout for observation.
 	status *statusExpectation
 	// unchanged lists files whose bytes must survive preparation and init.
 	unchanged []string
@@ -70,7 +82,10 @@ type initializeScenario struct {
 	minecraft   string
 	product     string
 	coreVersion string
-	minPackages int
+	// requireConcreteCore requires a concrete lock core version when
+	// coreVersion does not pin the exact value.
+	requireConcreteCore bool
+	minPackages         int
 	// packages maps a loader to the references that the initializer must write.
 	packages map[string]map[string]string
 	// absent lists references that the initializer must omit because their jars
@@ -93,6 +108,12 @@ type initializeArtifact struct {
 	dest    string
 }
 
+// initializeSymlink creates a real filesystem alias inside the case.
+type initializeSymlink struct {
+	target string
+	link   string
+}
+
 // statusExpectation describes the server identity `status --json-compact`
 // reports. components maps "ecosystem:name" to the expected version.
 type statusExpectation struct {
@@ -100,6 +121,14 @@ type statusExpectation struct {
 	name       string
 	version    string
 	components map[string]string
+	// path is the workspace-relative entry point live status must select.
+	path string
+	// pathMatchesLock requires live status to select the persisted lock entry
+	// point, which covers launch representations that are still undecided.
+	pathMatchesLock bool
+	// warning lists the automatically selected entry point followed by the
+	// competing entry points that a WARN-level finding must name.
+	warning []string
 }
 
 // installationOutputPaths are the files the installer owns for a Fabric
@@ -281,6 +310,7 @@ var initializeScenarios = map[string]initializeScenario{
 
 	// Two real launchers with different loader and Minecraft identities stay a
 	// conflict, and the refusal names the exact non-interactive selection.
+	// Live status resolves the same tie deterministically for observation.
 	"fabric-conflicting-identities": {
 		sandbox: fabricExecutable262,
 		artifacts: []initializeArtifact{{
@@ -290,6 +320,15 @@ var initializeScenarios = map[string]initializeScenario{
 		}},
 		expectFailure: true,
 		guidance:      []string{fabric262Launcher, fabric1214Launcher},
+		status: &statusExpectation{
+			ecosystem: "fabric", name: "fabric", version: "0.16.9",
+			path: fabric1214Launcher,
+			components: map[string]string{
+				"minecraft:minecraft":  "1.21.4",
+				"fabric:fabric-loader": "0.16.9",
+			},
+			warning: []string{fabric1214Launcher, fabric262Launcher},
+		},
 	},
 
 	// --entry-point resolves that conflict without discarding the other jar.
@@ -303,6 +342,190 @@ var initializeScenarios = map[string]initializeScenario{
 		selectEntryPoint: fabric262Launcher,
 		minecraft:        "26.2", product: "fabric", coreVersion: "0.19.3",
 		wantEntryPoint: fabric262Launcher,
+	},
+
+	// A real Fabric launcher and a real vanilla server jar are two
+	// installations. Init must still refuse, while live status prefers the mod
+	// loader over plain Minecraft and reports the automatic choice.
+	"fabric-vanilla-conflicting-identities": {
+		sandbox: fabricExecutable262,
+		artifacts: []initializeArtifact{{
+			sandbox: vanilla262,
+			source:  "server.jar",
+			dest:    "server.jar",
+		}},
+		expectFailure: true,
+		guidance:      []string{fabric262Launcher, "server.jar"},
+		status: &statusExpectation{
+			ecosystem: "fabric", name: "fabric", version: "0.19.3",
+			path: fabric262Launcher,
+			components: map[string]string{
+				"minecraft:minecraft":  "26.2",
+				"fabric:fabric-loader": "0.19.3",
+			},
+			warning: []string{fabric262Launcher, "server.jar"},
+		},
+	},
+
+	// Explicit selection outranks the live-status preference: vanilla is
+	// adopted even though observation would prefer the Fabric runtime.
+	"fabric-vanilla-conflicting-identities-selected": {
+		sandbox: fabricExecutable262,
+		artifacts: []initializeArtifact{{
+			sandbox: vanilla262,
+			source:  "server.jar",
+			dest:    "server.jar",
+		}},
+		selectEntryPoint: "server.jar",
+		minecraft:        "26.2", product: "minecraft", coreVersion: "26.2",
+		wantEntryPoint: "server.jar",
+		status: &statusExpectation{
+			ecosystem: "minecraft", name: "minecraft", version: "26.2",
+			path: "server.jar",
+			components: map[string]string{
+				"minecraft:minecraft": "26.2",
+			},
+		},
+	},
+
+	// A hybrid runtime outranks a plain mod loader during live observation.
+	// Init still refuses the bootstrap ambiguity; Arclight's bundled Fabric
+	// loader remains the reported component, not the copied meta launcher.
+	"arclight-fabric-conflicting-identities": {
+		sandbox: arclightFabric,
+		artifacts: []initializeArtifact{{
+			sandbox: cobblemon1211,
+			source:  cobblemon1211Launcher,
+			dest:    cobblemon1211Launcher,
+		}},
+		expectFailure: true,
+		guidance:      []string{arclightFabricLauncher, cobblemon1211Launcher},
+		status: &statusExpectation{
+			name: "arclight", version: "arclight-1.21.1-1.0.1-8ec9529",
+			path: arclightFabricLauncher,
+			components: map[string]string{
+				"minecraft:minecraft":  "1.21.1",
+				"fabric:fabric-loader": "0.16.14",
+			},
+			warning: []string{arclightFabricLauncher, cobblemon1211Launcher},
+		},
+	},
+
+	// A real legacy Forge universal jar at the server root is a standalone
+	// runtime: its manifest carries the launch main class and no installer,
+	// args, shim, or library layout is present.
+	"forge-1122": {
+		minecraft: "1.12.2", product: "forge", coreVersion: "14.23.5.2860",
+		wantEntryPoint: forge1122Jar,
+		status: &statusExpectation{
+			ecosystem: "forge", name: "forge", version: "14.23.5.2860",
+			path: forge1122Jar,
+			components: map[string]string{
+				"minecraft:minecraft": "1.12.2",
+				"forge:forge":         "14.23.5.2860",
+			},
+		},
+	},
+
+	// Real Forge and NeoForge installation layouts. Strict entry-point
+	// semantics select validated launch args, except that a valid shim wins;
+	// the fixture generator materializes the real installer output for these
+	// rows, so the expected paths are the installed launch targets.
+	"forge-1201": {
+		minecraft: "1.20.1", product: "forge", coreVersion: "47.4.10",
+		wantEntryPoint: forge1201EntryPoint,
+		status: &statusExpectation{
+			ecosystem: "forge", name: "forge", version: "47.4.10",
+			pathMatchesLock: true,
+			components: map[string]string{
+				"minecraft:minecraft": "1.20.1",
+				"forge:forge":         "47.4.10",
+			},
+		},
+	},
+	"forge-12111": {
+		minecraft: "1.21.11", product: "forge", coreVersion: "61.2.0",
+		wantEntryPoint: forge12111EntryPoint,
+		status: &statusExpectation{
+			ecosystem: "forge", name: "forge", version: "61.2.0",
+			pathMatchesLock: true,
+			components: map[string]string{
+				"minecraft:minecraft": "1.21.11",
+				"forge:forge":         "61.2.0",
+			},
+		},
+	},
+	"neoforge-211": {
+		minecraft: "1.21.1", product: "neoforge", coreVersion: "21.1.248",
+		wantEntryPoint: neoforge211EntryPoint,
+		status: &statusExpectation{
+			ecosystem: "neoforge", name: "neoforge", version: "21.1.248",
+			pathMatchesLock: true,
+			components: map[string]string{
+				"minecraft:minecraft": "1.21.1",
+				"neoforge:neoforge":   "21.1.248",
+			},
+		},
+	},
+	"neoforge-262": {
+		minecraft: "26.2", product: "neoforge", coreVersion: "26.2.0.67",
+		wantEntryPoint: neoforge262EntryPoint,
+		status: &statusExpectation{
+			ecosystem: "neoforge", name: "neoforge", version: "26.2.0.67",
+			pathMatchesLock: true,
+			components: map[string]string{
+				"minecraft:minecraft": "26.2",
+				"neoforge:neoforge":   "26.2.0.67",
+			},
+		},
+	},
+
+	// A real Paper jar and a server.jar symlink alias are one physical
+	// installation. Explicit selection through the alias persists the canonical
+	// target, which is also the path live status reports; the build version
+	// remains unobserved.
+	"paper-symlink-alias": {
+		sandbox: "paper",
+		symlinks: []initializeSymlink{{
+			target: paperJar,
+			link:   "server.jar",
+		}},
+		selectEntryPoint: "server.jar",
+		minecraft:        "1.21.11", product: "paper",
+		requireConcreteCore: true,
+		wantEntryPoint:      paperJar,
+		status: &statusExpectation{
+			name: "paper",
+			path: paperJar,
+			components: map[string]string{
+				"minecraft:minecraft": "1.21.11",
+			},
+		},
+	},
+
+	// A real vanilla jar copied under Maven-shaped loader server paths must not
+	// acquire Forge or NeoForge identity. The ordinary root jar stays selected.
+	"vanilla-under-loader-server-jars": {
+		sandbox: "vanilla-1201",
+		artifacts: []initializeArtifact{
+			{
+				source: "server.jar",
+				dest:   "libraries/net/minecraftforge/forge/1.21.1-52.0.28/forge-1.21.1-52.0.28-server.jar",
+			},
+			{
+				source: "server.jar",
+				dest:   "libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-server.jar",
+			},
+		},
+		minecraft: "1.20.1", product: "minecraft", coreVersion: "1.20.1",
+		wantEntryPoint: "server.jar",
+		status: &statusExpectation{
+			ecosystem: "minecraft", name: "minecraft", version: "1.20.1",
+			path: "server.jar",
+			components: map[string]string{
+				"minecraft:minecraft": "1.20.1",
+			},
+		},
 	},
 
 	// Two copies of the same real vanilla jar are one installation.

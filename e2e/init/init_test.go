@@ -78,6 +78,9 @@ func TestInitialize(t *testing.T) {
 			for _, artifact := range scenario.artifacts {
 				copyArtifact(t, root, sandbox, artifact)
 			}
+			for _, link := range scenario.symlinks {
+				createSymlink(t, root, link)
+			}
 			removePaths(t, root, scenario.removeBefore)
 			modifyInstalledFiles(t, root, scenario.modifyFiles)
 
@@ -90,6 +93,11 @@ func TestInitialize(t *testing.T) {
 			output := stdout + stderr
 			if scenario.expectFailure {
 				requireFailure(t, root, scenario, output, err)
+				// Status still observes an ambiguous layout; init's refusal
+				// must not deny live-status postconditions.
+				if scenario.status != nil {
+					verifyStatus(t, runner, root, *scenario.status, scenario.informational, "")
+				}
 				verifyUnchanged(t, root, scenario.unchanged, unchanged)
 				return
 			}
@@ -107,7 +115,14 @@ func TestInitialize(t *testing.T) {
 			verifyEntryPoint(t, root, locked, scenario.wantEntryPoint)
 			verifyReceipt(t, root, scenario.wantReceipt)
 			if scenario.status != nil {
-				verifyStatus(t, runner, root, *scenario.status, scenario.informational)
+				verifyStatus(
+					t,
+					runner,
+					root,
+					*scenario.status,
+					scenario.informational,
+					locked.Server.EntryPoint,
+				)
 			}
 			verifyUnchanged(t, root, scenario.unchanged, unchanged)
 		})
@@ -189,12 +204,17 @@ func verifyInitialized(
 	}
 	server := document.Server
 	if server.Minecraft != scenario.minecraft ||
-		server.Core.Product != scenario.product ||
-		server.Core.ProductVersion != scenario.coreVersion {
+		server.Core.Product != scenario.product {
 		t.Errorf(
-			"manifest identity: got %s/%s@%s, want %s/%s@%s",
+			"manifest identity: got %s/%s@%s, want %s/%s",
 			server.Minecraft, server.Core.Product, server.Core.ProductVersion,
-			scenario.minecraft, scenario.product, scenario.coreVersion,
+			scenario.minecraft, scenario.product,
+		)
+	}
+	if scenario.coreVersion != "" && server.Core.ProductVersion != scenario.coreVersion {
+		t.Errorf(
+			"manifest core version: got %s, want %s",
+			server.Core.ProductVersion, scenario.coreVersion,
 		)
 	}
 	total := 0
@@ -230,11 +250,18 @@ func verifyInitialized(
 			scenario.minecraft, scenario.product,
 		)
 	}
-	if locked.Server.CoreVersion.String() != scenario.coreVersion {
-		t.Errorf(
-			"lock core version: got %s, want %s",
-			locked.Server.CoreVersion, scenario.coreVersion,
-		)
+	if scenario.coreVersion != "" {
+		if locked.Server.CoreVersion.String() != scenario.coreVersion {
+			t.Errorf(
+				"lock core version: got %s, want %s",
+				locked.Server.CoreVersion, scenario.coreVersion,
+			)
+		}
+	} else if scenario.requireConcreteCore {
+		core := locked.Server.CoreVersion
+		if core.String() == "" || core.CanInfer() || core.IsInvalid() {
+			t.Errorf("lock core version = %q, want a concrete version", core)
+		}
 	}
 	if len(locked.Packages) < scenario.minPackages {
 		t.Errorf(
@@ -277,8 +304,12 @@ func verifyStatus(
 	root string,
 	want statusExpectation,
 	informational []string,
+	lockEntryPoint string,
 ) {
 	t.Helper()
+	guarded := []string{manifest.Filename, lockfile.Filename, ".lucy/install.yaml"}
+	before := fileFingerprints(t, root, guarded)
+	defer verifyFileFingerprints(t, root, guarded, before)
 	stdout, stderr, err := runner.execute(t, root, "status", "--json-compact")
 	if err != nil {
 		t.Fatalf("lucy status: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
@@ -295,13 +326,36 @@ func verifyStatus(
 		t.Fatal("live status reported no server")
 	}
 	primary := document.Server.Primary
-	if primary.Ecosystem != want.ecosystem || primary.Name != want.name ||
-		primary.Version != want.version {
+	if (want.ecosystem != "" && primary.Ecosystem != want.ecosystem) ||
+		(want.name != "" && primary.Name != want.name) ||
+		(want.version != "" && primary.Version != want.version) {
 		t.Errorf(
 			"live status primary runtime = %s:%s@%s, want %s:%s@%s",
 			primary.Ecosystem, primary.Name, primary.Version,
 			want.ecosystem, want.name, want.version,
 		)
+	}
+	if want.path != "" {
+		requireStatusPath(t, root, "primary_path", document.Server.PrimaryPath, want.path)
+	}
+	if want.pathMatchesLock {
+		if lockEntryPoint == "" {
+			t.Fatal("status case requires a persisted lock entry point")
+		}
+		requireStatusPath(
+			t,
+			root,
+			"primary_path (lock entry point)",
+			document.Server.PrimaryPath,
+			lockEntryPoint,
+		)
+	}
+	if len(want.warning) > 0 {
+		warning := make([]string, len(want.warning))
+		for i, path := range want.warning {
+			warning[i] = filepath.Join(root, filepath.FromSlash(path))
+		}
+		requireWarning(t, stderr, warning[0], warning[1:])
 	}
 	for reference, version := range want.components {
 		ecosystem, name, found := strings.Cut(reference, ":")
@@ -313,6 +367,45 @@ func verifyStatus(
 				"live status component %s = %q, want %q",
 				reference, got, version,
 			)
+		}
+	}
+}
+
+// requireStatusPath compares the reported entry point with a workspace-relative
+// fixture path.
+func requireStatusPath(t *testing.T, root, label, got, want string) {
+	t.Helper()
+	expected := filepath.Join(root, filepath.FromSlash(want))
+	if filepath.Clean(got) != filepath.Clean(expected) {
+		t.Errorf("live status %s = %q, want %q", label, got, expected)
+	}
+}
+
+// requireWarning requires a WARN-level automatic-selection finding that names
+// the selected entry point, and WARN coverage for each competing candidate.
+func requireWarning(t *testing.T, output, selected string, competitors []string) {
+	t.Helper()
+	selectedFound := false
+	found := make([]bool, len(competitors))
+	for line := range strings.SplitSeq(output, "\n") {
+		if !strings.Contains(line, "WARN") {
+			continue
+		}
+		if strings.Contains(line, selected) {
+			selectedFound = true
+		}
+		for i, competitor := range competitors {
+			if strings.Contains(line, competitor) {
+				found[i] = true
+			}
+		}
+	}
+	if !selectedFound {
+		t.Errorf("no WARN finding names the automatic selection %s:\n%s", selected, output)
+	}
+	for i, competitor := range competitors {
+		if !found[i] {
+			t.Errorf("no WARN finding names competing candidate %s:\n%s", competitor, output)
 		}
 	}
 }
@@ -360,6 +453,20 @@ func removePaths(t *testing.T, root string, paths []string) {
 	}
 }
 
+// createSymlink creates a real filesystem alias. Platform support is required;
+// the test fails closed rather than copying the target.
+func createSymlink(t *testing.T, root string, link initializeSymlink) {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(link.link))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create directory for %s: %v", link.link, err)
+	}
+	target := filepath.Join(root, filepath.FromSlash(link.target))
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatalf("create symlink %s -> %s: %v", link.link, link.target, err)
+	}
+}
+
 func copyArtifact(t *testing.T, root, sandbox string, artifact initializeArtifact) {
 	t.Helper()
 	sourceSandbox := artifact.sandbox
@@ -404,6 +511,50 @@ func digests(t *testing.T, root string, paths []string) map[string]string {
 		sums[path] = hex.EncodeToString(sum[:])
 	}
 	return sums
+}
+
+// fileFingerprint records whether a workspace file exists and its digest.
+type fileFingerprint struct {
+	present bool
+	digest  string
+}
+
+// fileFingerprints snapshots declaration files so a read-only observation can
+// prove it created or changed none of them.
+func fileFingerprints(t *testing.T, root string, paths []string) map[string]fileFingerprint {
+	t.Helper()
+	fingerprints := make(map[string]fileFingerprint, len(paths))
+	for _, path := range paths {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		switch {
+		case os.IsNotExist(err):
+			fingerprints[path] = fileFingerprint{}
+		case err != nil:
+			t.Fatalf("read %s: %v", path, err)
+		default:
+			sum := sha256.Sum256(data)
+			fingerprints[path] = fileFingerprint{
+				present: true,
+				digest:  hex.EncodeToString(sum[:]),
+			}
+		}
+	}
+	return fingerprints
+}
+
+func verifyFileFingerprints(
+	t *testing.T,
+	root string,
+	paths []string,
+	before map[string]fileFingerprint,
+) {
+	t.Helper()
+	after := fileFingerprints(t, root, paths)
+	for _, path := range paths {
+		if after[path] != before[path] {
+			t.Errorf("%s changed during live status", path)
+		}
+	}
 }
 
 // verifyUnchanged proves the named fixture files survived preparation and
@@ -457,8 +608,9 @@ func modifyInstalledFiles(t *testing.T, root string, paths []string) {
 
 type statusDocument struct {
 	Server *struct {
-		Primary    statusRef   `json:"primary_runtime"`
-		Components []statusRef `json:"runtime_components"`
+		Primary     statusRef   `json:"primary_runtime"`
+		PrimaryPath string      `json:"primary_path"`
+		Components  []statusRef `json:"runtime_components"`
 	} `json:"server"`
 }
 
