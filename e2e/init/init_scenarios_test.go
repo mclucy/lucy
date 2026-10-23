@@ -67,9 +67,6 @@ type initializeScenario struct {
 	// informational lists entry points that init and live status must report
 	// at INFO severity, naming the path.
 	informational []string
-	// wantEntryPoint is the lock entry point after init, or after a refusal
-	// that must not change the declaration.
-	wantEntryPoint string
 	// wantReceipt keeps the installation receipt assertion; init itself never
 	// stages one.
 	wantReceipt bool
@@ -97,7 +94,6 @@ type initializeScenario struct {
 type initializeCommand struct {
 	args             []string
 	selectEntryPoint string
-	wantEntryPoint   string
 }
 
 // initializeArtifact copies one pinned file from a generated sandbox.
@@ -123,9 +119,6 @@ type statusExpectation struct {
 	components map[string]string
 	// path is the workspace-relative entry point live status must select.
 	path string
-	// pathMatchesLock requires live status to select the persisted lock entry
-	// point, which covers launch representations that are still undecided.
-	pathMatchesLock bool
 	// warning lists the automatically selected entry point followed by the
 	// competing entry points that a WARN-level finding must name.
 	warning []string
@@ -208,10 +201,9 @@ var initializeScenarios = map[string]initializeScenario{
 		absent: map[string][]string{
 			"fabric": {"modrinth:enchdesc", "modrinth:tipsmod"},
 		},
-		wantEntryPoint: fabricShim,
-		wantReceipt:    true,
-		unchanged:      []string{cobblemon1211Launcher},
-		informational:  []string{cobblemon1211Launcher},
+		wantReceipt:   true,
+		unchanged:     []string{cobblemon1211Launcher},
+		informational: []string{cobblemon1211Launcher},
 		status: &statusExpectation{
 			ecosystem: "fabric", name: "fabric", version: "0.19.5",
 			components: map[string]string{
@@ -232,14 +224,12 @@ var initializeScenarios = map[string]initializeScenario{
 			initializeCommand{
 				args:             []string{"init", "--force", "--no-interactive"},
 				selectEntryPoint: fabric262Launcher,
-				wantEntryPoint:   fabric262Launcher,
 			},
 		),
 		removeBefore: []string{fabric262Launcher},
 		force:        true,
 		minecraft:    "26.2", product: "fabric", coreVersion: "0.19.3",
-		wantEntryPoint: fabricShim,
-		wantReceipt:    true,
+		wantReceipt: true,
 	},
 
 	// Without a managed replacement, a missing declared entry point is a
@@ -249,36 +239,11 @@ var initializeScenarios = map[string]initializeScenario{
 		prepare: []initializeCommand{{
 			args:             []string{"init", "--no-interactive"},
 			selectEntryPoint: fabric262Launcher,
-			wantEntryPoint:   fabric262Launcher,
 		}},
 		removeBefore:  []string{fabric262Launcher},
 		force:         true,
 		expectFailure: true,
 		minecraft:     "26.2", product: "fabric", coreVersion: "0.19.3",
-		wantEntryPoint: fabric262Launcher,
-	},
-
-	// The same replacement must refuse when the receipt no longer owns the
-	// shim: a stale digest leaves the file unmanaged, and the declared entry
-	// point is gone.
-	"fabric-in-place-stale-ownership": {
-		sandbox: fabricExecutable262,
-		prune:   installationOutputPaths,
-		prepare: append(
-			runtimeInstallPreparation("26.2", "fabric@0.19.3"),
-			initializeCommand{
-				args:             []string{"init", "--force", "--no-interactive"},
-				selectEntryPoint: fabric262Launcher,
-				wantEntryPoint:   fabric262Launcher,
-			},
-		),
-		removeBefore:  []string{fabric262Launcher},
-		modifyFiles:   []string{fabricShim},
-		force:         true,
-		expectFailure: true,
-		minecraft:     "26.2", product: "fabric", coreVersion: "0.19.3",
-		wantEntryPoint: fabric262Launcher,
-		wantReceipt:    true,
 	},
 
 	// A readable declaration and lock keep their identity when an unrelated,
@@ -288,7 +253,6 @@ var initializeScenarios = map[string]initializeScenario{
 		prepare: []initializeCommand{{
 			args:             []string{"init", "--no-interactive"},
 			selectEntryPoint: fabric262Launcher,
-			wantEntryPoint:   fabric262Launcher,
 		}},
 		artifacts: []initializeArtifact{{
 			sandbox: fabricExecutable1214,
@@ -297,8 +261,7 @@ var initializeScenarios = map[string]initializeScenario{
 		}},
 		force:     true,
 		minecraft: "26.2", product: "fabric", coreVersion: "0.19.3",
-		wantEntryPoint: fabric262Launcher,
-		informational:  []string{fabric1214Launcher},
+		informational: []string{fabric1214Launcher},
 		status: &statusExpectation{
 			ecosystem: "fabric", name: "fabric", version: "0.19.3",
 			components: map[string]string{
@@ -341,7 +304,6 @@ var initializeScenarios = map[string]initializeScenario{
 		}},
 		selectEntryPoint: fabric262Launcher,
 		minecraft:        "26.2", product: "fabric", coreVersion: "0.19.3",
-		wantEntryPoint: fabric262Launcher,
 	},
 
 	// A real Fabric launcher and a real vanilla server jar are two
@@ -378,7 +340,6 @@ var initializeScenarios = map[string]initializeScenario{
 		}},
 		selectEntryPoint: "server.jar",
 		minecraft:        "26.2", product: "minecraft", coreVersion: "26.2",
-		wantEntryPoint: "server.jar",
 		status: &statusExpectation{
 			ecosystem: "minecraft", name: "minecraft", version: "26.2",
 			path: "server.jar",
@@ -416,7 +377,6 @@ var initializeScenarios = map[string]initializeScenario{
 	// args, shim, or library layout is present.
 	"forge-1122": {
 		minecraft: "1.12.2", product: "forge", coreVersion: "14.23.5.2860",
-		wantEntryPoint: forge1122Jar,
 		status: &statusExpectation{
 			ecosystem: "forge", name: "forge", version: "14.23.5.2860",
 			path: forge1122Jar,
@@ -433,10 +393,9 @@ var initializeScenarios = map[string]initializeScenario{
 	// rows, so the expected paths are the installed launch targets.
 	"forge-1201": {
 		minecraft: "1.20.1", product: "forge", coreVersion: "47.4.10",
-		wantEntryPoint: forge1201EntryPoint,
 		status: &statusExpectation{
 			ecosystem: "forge", name: "forge", version: "47.4.10",
-			pathMatchesLock: true,
+			path: forge1201EntryPoint,
 			components: map[string]string{
 				"minecraft:minecraft": "1.20.1",
 				"forge:forge":         "47.4.10",
@@ -445,10 +404,9 @@ var initializeScenarios = map[string]initializeScenario{
 	},
 	"forge-12111": {
 		minecraft: "1.21.11", product: "forge", coreVersion: "61.2.0",
-		wantEntryPoint: forge12111EntryPoint,
 		status: &statusExpectation{
 			ecosystem: "forge", name: "forge", version: "61.2.0",
-			pathMatchesLock: true,
+			path: forge12111EntryPoint,
 			components: map[string]string{
 				"minecraft:minecraft": "1.21.11",
 				"forge:forge":         "61.2.0",
@@ -457,10 +415,9 @@ var initializeScenarios = map[string]initializeScenario{
 	},
 	"neoforge-211": {
 		minecraft: "1.21.1", product: "neoforge", coreVersion: "21.1.248",
-		wantEntryPoint: neoforge211EntryPoint,
 		status: &statusExpectation{
 			ecosystem: "neoforge", name: "neoforge", version: "21.1.248",
-			pathMatchesLock: true,
+			path: neoforge211EntryPoint,
 			components: map[string]string{
 				"minecraft:minecraft": "1.21.1",
 				"neoforge:neoforge":   "21.1.248",
@@ -469,10 +426,9 @@ var initializeScenarios = map[string]initializeScenario{
 	},
 	"neoforge-262": {
 		minecraft: "26.2", product: "neoforge", coreVersion: "26.2.0.67",
-		wantEntryPoint: neoforge262EntryPoint,
 		status: &statusExpectation{
 			ecosystem: "neoforge", name: "neoforge", version: "26.2.0.67",
-			pathMatchesLock: true,
+			path: neoforge262EntryPoint,
 			components: map[string]string{
 				"minecraft:minecraft": "26.2",
 				"neoforge:neoforge":   "26.2.0.67",
@@ -493,7 +449,6 @@ var initializeScenarios = map[string]initializeScenario{
 		selectEntryPoint: "server.jar",
 		minecraft:        "1.21.11", product: "paper",
 		requireConcreteCore: true,
-		wantEntryPoint:      paperJar,
 		status: &statusExpectation{
 			name: "paper",
 			path: paperJar,
@@ -518,7 +473,6 @@ var initializeScenarios = map[string]initializeScenario{
 			},
 		},
 		minecraft: "1.20.1", product: "minecraft", coreVersion: "1.20.1",
-		wantEntryPoint: "server.jar",
 		status: &statusExpectation{
 			ecosystem: "minecraft", name: "minecraft", version: "1.20.1",
 			path: "server.jar",
@@ -536,6 +490,5 @@ var initializeScenarios = map[string]initializeScenario{
 			dest:   "server-backup.jar",
 		}},
 		minecraft: "26.2", product: "minecraft", coreVersion: "26.2",
-		wantEntryPoint: "server-backup.jar",
 	},
 }

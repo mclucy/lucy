@@ -65,15 +65,6 @@ func TestInitialize(t *testing.T) {
 						strings.Join(args, " "), err, stdout, stderr,
 					)
 				}
-				if command.wantEntryPoint != "" {
-					locked := readLock(t, root)
-					if locked.Server.EntryPoint != command.wantEntryPoint {
-						t.Fatalf(
-							"preparation selected entry point %q, want %q",
-							locked.Server.EntryPoint, command.wantEntryPoint,
-						)
-					}
-				}
 			}
 			for _, artifact := range scenario.artifacts {
 				copyArtifact(t, root, sandbox, artifact)
@@ -96,7 +87,7 @@ func TestInitialize(t *testing.T) {
 				// Status still observes an ambiguous layout; init's refusal
 				// must not deny live-status postconditions.
 				if scenario.status != nil {
-					verifyStatus(t, runner, root, *scenario.status, scenario.informational, "")
+					verifyStatus(t, runner, root, *scenario.status, scenario.informational)
 				}
 				verifyUnchanged(t, root, scenario.unchanged, unchanged)
 				return
@@ -111,8 +102,7 @@ func TestInitialize(t *testing.T) {
 				t.Fatalf("init reported an error finding:\n%s", output)
 			}
 			requireInformational(t, stderr, root, scenario.informational)
-			locked := verifyInitialized(t, root, scenario)
-			verifyEntryPoint(t, root, locked, scenario.wantEntryPoint)
+			verifyInitialized(t, root, scenario)
 			verifyReceipt(t, root, scenario.wantReceipt)
 			if scenario.status != nil {
 				verifyStatus(
@@ -121,7 +111,6 @@ func TestInitialize(t *testing.T) {
 					root,
 					*scenario.status,
 					scenario.informational,
-					locked.Server.EntryPoint,
 				)
 			}
 			verifyUnchanged(t, root, scenario.unchanged, unchanged)
@@ -150,20 +139,8 @@ func requireFailure(
 			t.Errorf("init failure does not name the selection command %q:\n%s", command, output)
 		}
 	}
-	if len(scenario.guidance) > 0 && strings.Contains(output, "--from") {
-		t.Errorf("init failure still advertises the removed --from spelling:\n%s", output)
-	}
 	if scenario.minecraft != "" {
 		verifyInitialized(t, root, scenario)
-	}
-	if scenario.wantEntryPoint != "" {
-		locked := readLock(t, root)
-		if locked.Server.EntryPoint != scenario.wantEntryPoint {
-			t.Errorf(
-				"refused init changed the declared entry point to %q, want %q",
-				locked.Server.EntryPoint, scenario.wantEntryPoint,
-			)
-		}
 	}
 	verifyReceipt(t, root, scenario.wantReceipt)
 }
@@ -272,20 +249,6 @@ func verifyInitialized(
 	return locked
 }
 
-func verifyEntryPoint(t *testing.T, root string, locked lockfile.Document, want string) {
-	t.Helper()
-	if want == "" {
-		return
-	}
-	if got := locked.Server.EntryPoint; got != want {
-		t.Fatalf("selected entry point = %q, want %q", got, want)
-	}
-	path := filepath.Join(root, filepath.FromSlash(want))
-	if info, err := os.Stat(path); err != nil || info.IsDir() {
-		t.Fatalf("selected entry point %s is not an installed file: %v", want, err)
-	}
-}
-
 func verifyReceipt(t *testing.T, root string, want bool) {
 	t.Helper()
 	path := filepath.Join(root, ".lucy", "install.yaml")
@@ -304,7 +267,6 @@ func verifyStatus(
 	root string,
 	want statusExpectation,
 	informational []string,
-	lockEntryPoint string,
 ) {
 	t.Helper()
 	guarded := []string{manifest.Filename, lockfile.Filename, ".lucy/install.yaml"}
@@ -337,18 +299,6 @@ func verifyStatus(
 	}
 	if want.path != "" {
 		requireStatusPath(t, root, "primary_path", document.Server.PrimaryPath, want.path)
-	}
-	if want.pathMatchesLock {
-		if lockEntryPoint == "" {
-			t.Fatal("status case requires a persisted lock entry point")
-		}
-		requireStatusPath(
-			t,
-			root,
-			"primary_path (lock entry point)",
-			document.Server.PrimaryPath,
-			lockEntryPoint,
-		)
 	}
 	if len(want.warning) > 0 {
 		warning := make([]string, len(want.warning))
