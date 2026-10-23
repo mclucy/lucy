@@ -224,3 +224,4 @@ Write code that explains itself. Namings must not need documentations from call 
 
 1. Always tidy the files in packages touched after refactoring: relocate/rename/merge/split files for better maintainability.
 2. Prefix files with the package name for convenient searching.
+3. We are at pre-beta stage. Do not add any backward-compatibility measures nor bump document format versions upon change.
