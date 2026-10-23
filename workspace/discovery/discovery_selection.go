@@ -27,10 +27,21 @@ const (
 type SelectionSource string
 
 const (
-	SourceUnknown  SelectionSource = ""
-	SourceInferred SelectionSource = "inferred"
-	SourceDeclared SelectionSource = "declared"
-	SourceExplicit SelectionSource = "explicit"
+	SourceUnknown   SelectionSource = ""
+	SourceInferred  SelectionSource = "inferred"
+	SourceDeclared  SelectionSource = "declared"
+	SourceExplicit  SelectionSource = "explicit"
+	SourcePreferred SelectionSource = "preferred"
+)
+
+// SelectionPolicy controls whether an ambiguous observation may be resolved
+// by the read-only preference order.
+type SelectionPolicy string
+
+const (
+	PolicyUnknown        SelectionPolicy = ""
+	PolicyStrict         SelectionPolicy = "strict"
+	PolicyPreferModified SelectionPolicy = "prefer_modified"
 )
 
 // Declaration is the applicable persisted server intent. EntryPoint is an
@@ -43,10 +54,11 @@ type Declaration struct {
 }
 
 // Request is one selection attempt. A nonempty explicit EntryPoint overrides
-// the declaration.
+// the declaration. PolicyPreferModified is opted into only by live status.
 type Request struct {
 	EntryPoint string
 	Declared   *Declaration
+	Policy     SelectionPolicy
 }
 
 // Selection is the read-only result of a selection attempt. It references the
@@ -112,9 +124,9 @@ func (r *Result) Select(request Request) error {
 		return r.selectExplicit(request.EntryPoint, selectable)
 	}
 	if request.Declared != nil {
-		return r.selectDeclared(request.Declared, selectable)
+		return r.selectDeclared(request.Declared, request.Policy, selectable)
 	}
-	return r.selectInferred(selectable)
+	return r.selectInferred(request.Policy, selectable)
 }
 
 func (r *Result) selectExplicit(path string, selectable []*Installation) error {
@@ -146,6 +158,7 @@ func (r *Result) selectExplicit(path string, selectable []*Installation) error {
 
 func (r *Result) selectDeclared(
 	declaration *Declaration,
+	policy SelectionPolicy,
 	selectable []*Installation,
 ) error {
 	matches := installationsMatchingDeclaration(selectable, declaration)
@@ -189,6 +202,14 @@ func (r *Result) selectDeclared(
 		}
 	case 0:
 	default:
+		if policy == PolicyPreferModified {
+			if preferred := preferredInstallation(matches); preferred != nil {
+				if file := chooseEntryPoint(preferred); file != nil {
+					r.selectInstallation(preferred, file, SourcePreferred)
+					return nil
+				}
+			}
+		}
 		r.Selection.State = SelectionAmbiguous
 		return &SelectionError{
 			State:         SelectionAmbiguous,
@@ -203,6 +224,7 @@ func (r *Result) selectDeclared(
 }
 
 func (r *Result) selectInferred(
+	policy SelectionPolicy,
 	selectable []*Installation,
 ) error {
 	switch len(selectable) {
@@ -220,6 +242,15 @@ func (r *Result) selectInferred(
 		if file := chooseEntryPoint(selectable[0]); file != nil {
 			r.selectInstallation(selectable[0], file, SourceInferred)
 			return nil
+		}
+	default:
+		if policy == PolicyPreferModified {
+			if preferred := preferredInstallation(selectable); preferred != nil {
+				if file := chooseEntryPoint(preferred); file != nil {
+					r.selectInstallation(preferred, file, SourcePreferred)
+					return nil
+				}
+			}
 		}
 	}
 	r.Selection.State = SelectionAmbiguous
@@ -412,6 +443,136 @@ func chooseEntryPoint(installation *Installation) *File {
 		return managed
 	}
 	return first
+}
+
+func hasManagedEntryPoint(installation *Installation) bool {
+	return managedEntryPoint(installation) != nil
+}
+
+func preferredInstallation(candidates []*Installation) *Installation {
+	if len(candidates) == 0 {
+		return nil
+	}
+	best := candidates[0]
+	for _, candidate := range candidates[1:] {
+		if preferInstallation(candidate, best) < 0 {
+			best = candidate
+		}
+	}
+	return best
+}
+
+func preferInstallation(left, right *Installation) int {
+	leftTier, leftOrder := productRank(left.Identity)
+	rightTier, rightOrder := productRank(right.Identity)
+	if leftTier != rightTier {
+		return leftTier - rightTier
+	}
+	if leftOrder != rightOrder {
+		return leftOrder - rightOrder
+	}
+	leftManaged := hasManagedEntryPoint(left)
+	rightManaged := hasManagedEntryPoint(right)
+	if leftManaged != rightManaged {
+		if leftManaged {
+			return -1
+		}
+		return 1
+	}
+	if result := strings.Compare(identityKey(left.Identity), identityKey(right.Identity)); result != 0 {
+		return result
+	}
+	return strings.Compare(firstEntryPointPath(left), firstEntryPointPath(right))
+}
+
+// productRank implements the fixed live-status preference order. Lower tiers
+// are preferred. Unrecognized products and proxies rank below every recognized
+// Minecraft server.
+func productRank(identity Identity) (int, int) {
+	name := strings.ToLower(strings.TrimSpace(identity.Primary.Name.String()))
+	switch name {
+	case "youer":
+		return 0, 0
+	case "arclight", "arclight-forge", "arclight-neoforge", "arclight-fabric":
+		return 0, 1
+	case "catserver":
+		return 0, 2
+	case "spongeneo":
+		return 0, 3
+	case "spongeforge":
+		return 0, 4
+	case "neoforge":
+		return 1, 0
+	case "forge":
+		return 1, 1
+	case "fabric":
+		return 1, 2
+	case "reaper":
+		return 2, 0
+	case "leaf":
+		return 2, 1
+	case "divine":
+		return 2, 2
+	case "pufferfish":
+		return 2, 3
+	case "purpur":
+		return 2, 4
+	case "folia":
+		return 2, 5
+	case "leaves":
+		return 2, 6
+	case "paper":
+		return 3, 0
+	case "spigot":
+		return 3, 1
+	case "craftbukkit", "bukkit":
+		return 3, 2
+	case "spongevanilla":
+		return 3, 3
+	case "minecraft", "vanilla", "mc":
+		return 4, 0
+	case "bungeecord", "velocity", "waterfall":
+		return 5, 0
+	}
+	switch identity.Product() {
+	case server.ProductYouer:
+		return 0, 0
+	case server.ProductArclight, server.ProductArclightForge,
+		server.ProductArclightNeoForge, server.ProductArclightFabric:
+		return 0, 1
+	case server.ProductCatServer:
+		return 0, 2
+	case server.ProductSpongeNeo:
+		return 0, 3
+	case server.ProductSpongeForge:
+		return 0, 4
+	case server.ProductNeoForge:
+		return 1, 0
+	case server.ProductForge:
+		return 1, 1
+	case server.ProductFabric:
+		return 1, 2
+	case server.ProductPurpur:
+		return 2, 4
+	case server.ProductFolia:
+		return 2, 5
+	case server.ProductLeaves:
+		return 2, 6
+	case server.ProductPaper:
+		return 3, 0
+	case server.ProductSpigot:
+		return 3, 1
+	case server.ProductCraftBukkit:
+		return 3, 2
+	case server.ProductSpongeVanilla:
+		return 3, 3
+	case server.ProductMinecraft:
+		return 4, 0
+	case server.ProductBungeeCord, server.ProductVelocity, server.ProductWaterfall:
+		return 5, 0
+	default:
+		return 5, 1
+	}
 }
 
 func firstEntryPointPath(installation *Installation) string {

@@ -106,18 +106,21 @@ func reportObservationFindings(observed *workspace.Workspace) {
 }
 
 // reportDiscoveryFindings presents one discovery result. A resolved layout
-// never reports a failure: unmanaged or alternative entry points stay
-// informational.
+// never reports a failure: automatic choices are warnings, and unmanaged or
+// alternative entry points stay informational.
 func reportDiscoveryFindings(observed *discovery.Result) {
 	if observed == nil {
 		return
 	}
 	selection := observed.Selection
 	resolved := selection.IsValid()
+	automatic := selection.Source == discovery.SourcePreferred
 	unresolvedReported := false
 	unreadableReported := map[string]bool{}
 	for finding := range observed.Findings() {
 		switch finding.Kind {
+		case discovery.FindingAutomaticSelection:
+			report.Warn(automaticSelectionMessage(observed, finding))
 		case discovery.FindingUnreadableFile:
 			key := unreadableFindingKey(finding)
 			if unreadableReported[key] {
@@ -155,7 +158,7 @@ func reportDiscoveryFindings(observed *discovery.Result) {
 			))
 		case discovery.FindingConflictingIdentities,
 			discovery.FindingAmbiguousInstallations:
-			if resolved || unresolvedReported {
+			if resolved || automatic || unresolvedReported {
 				continue
 			}
 			report.Error(unresolvedRuntimeMessage(observed, finding))
@@ -216,6 +219,31 @@ func entryPointFindingMessage(finding discovery.Finding) string {
 		label = "unmanaged server entry point"
 	}
 	return fmt.Sprintf("%s %s; left unchanged", label, finding.Path)
+}
+
+// automaticSelectionMessage names the chosen entry point and every competing
+// entry point. The choice is read-only; the message suggests recording it.
+func automaticSelectionMessage(
+	observed *discovery.Result,
+	finding discovery.Finding,
+) error {
+	selected := finding.Path
+	if selected == "" && observed.Selection.EntryPoint != nil {
+		selected = observed.Selection.EntryPoint.Path
+	}
+	competitors := finding.Paths
+	if len(competitors) == 0 {
+		competitors = competingEntryPoints(observed, selected)
+	}
+	message := fmt.Sprintf(
+		"multiple server runtimes found; using %s automatically",
+		selected,
+	)
+	if len(competitors) > 0 {
+		message += "; competing entry points: " + strings.Join(competitors, ", ")
+	}
+	message += "; run lucy init --entry-point '<path>' to record a choice"
+	return errors.New(message)
 }
 
 func unresolvedRuntimeMessage(

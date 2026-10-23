@@ -22,6 +22,7 @@ const (
 	FindingUnmanagedInstallation     FindingKind = "unmanaged_installation"
 	FindingMissingDeclaredEntryPoint FindingKind = "missing_declared_entry_point"
 	FindingAmbiguousInstallations    FindingKind = "ambiguous_installations"
+	FindingAutomaticSelection        FindingKind = "automatic_selection"
 )
 
 // Finding is one typed observation condition. Path is the primary affected
@@ -99,6 +100,17 @@ func (r *Result) yieldSelectedFindings(yield func(Finding) bool) bool {
 	if !selected.IsValid() {
 		return true
 	}
+	if selected.Source == SourcePreferred {
+		if !yield(Finding{
+			Kind:       FindingAutomaticSelection,
+			Path:       selected.EntryPoint.Path,
+			Paths:      r.competingEntryPoints(),
+			Identity:   selected.Installation.Identity,
+			Identities: r.competingIdentities(),
+		}) {
+			return false
+		}
+	}
 	for file := range selected.Installation.EntryPoints() {
 		if file.Path == selected.EntryPoint.Path ||
 			file.Ownership == OwnershipManaged {
@@ -166,6 +178,47 @@ func (r *Result) candidateIdentities() []Identity {
 	for index := range r.Installations {
 		installation := &r.Installations[index]
 		if !selectableInstallation(installation) {
+			continue
+		}
+		identities = append(identities, installation.Identity)
+	}
+	return uniqueIdentities(identities)
+}
+
+func (r *Result) competingEntryPoints() []string {
+	if r == nil || r.Selection.Installation == nil {
+		return nil
+	}
+	selectedPath := ""
+	if r.Selection.EntryPoint != nil {
+		selectedPath = r.Selection.EntryPoint.Path
+	}
+	paths := make([]string, 0, len(r.Installations))
+	for index := range r.Installations {
+		installation := &r.Installations[index]
+		if installation == r.Selection.Installation ||
+			!selectableInstallation(installation) {
+			continue
+		}
+		for file := range installation.EntryPoints() {
+			if file.Path == selectedPath {
+				continue
+			}
+			paths = append(paths, file.Path)
+		}
+	}
+	return sortedUnique(paths)
+}
+
+func (r *Result) competingIdentities() []Identity {
+	if r == nil || r.Selection.Installation == nil {
+		return nil
+	}
+	identities := make([]Identity, 0, len(r.Installations))
+	for index := range r.Installations {
+		installation := &r.Installations[index]
+		if installation == r.Selection.Installation ||
+			!selectableInstallation(installation) {
 			continue
 		}
 		identities = append(identities, installation.Identity)

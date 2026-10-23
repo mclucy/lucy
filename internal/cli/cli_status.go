@@ -74,7 +74,7 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 	}
 	ws, _ := identify.Packages(workspace.Observe(
 		workDir,
-		discovery.Request{},
+		discovery.Request{Policy: discovery.PolicyPreferModified},
 	))
 	reportObservationFindings(ws)
 	switch JSONMode(cmd) {
