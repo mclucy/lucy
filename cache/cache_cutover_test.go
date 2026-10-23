@@ -39,7 +39,7 @@ func seedLegacyCache(
 	}
 	manifest := indexManifest{
 		Version: 2,
-		Entries: map[key]*CacheEntry{
+		Entries: map[key]*Entry{
 			key(cacheKey): {
 				Kind:        KindArtifact,
 				Filename:    "legacy.jar",
