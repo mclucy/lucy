@@ -121,7 +121,7 @@ func initializationFailure(err error, result *operation.InitResult) error {
 	case discovery.SelectionAmbiguous:
 		detail.Title = "several server runtimes share this directory"
 	case discovery.SelectionMissingDeclared:
-		detail.Title = "the declared server entry point is missing"
+		detail.Title = "the declared server installation is missing"
 	case discovery.SelectionInvalid:
 		detail.Title = "the requested entry point is not a recognized server"
 	default:

@@ -12,17 +12,17 @@ type FindingKind string
 const (
 	FindingUnknown FindingKind = ""
 
-	FindingUnknownArtifact           FindingKind = "unknown_artifact"
-	FindingConflictingIdentities     FindingKind = "conflicting_identities"
-	FindingInvalidIdentity           FindingKind = "invalid_identity"
-	FindingUnreadableFile            FindingKind = "unreadable_file"
-	FindingReceiptError              FindingKind = "receipt_error"
-	FindingModifiedFile              FindingKind = "modified_file"
-	FindingAlternativeEntryPoint     FindingKind = "alternative_entry_point"
-	FindingUnmanagedInstallation     FindingKind = "unmanaged_installation"
-	FindingMissingDeclaredEntryPoint FindingKind = "missing_declared_entry_point"
-	FindingAmbiguousInstallations    FindingKind = "ambiguous_installations"
-	FindingAutomaticSelection        FindingKind = "automatic_selection"
+	FindingUnknownArtifact             FindingKind = "unknown_artifact"
+	FindingConflictingIdentities       FindingKind = "conflicting_identities"
+	FindingInvalidIdentity             FindingKind = "invalid_identity"
+	FindingUnreadableFile              FindingKind = "unreadable_file"
+	FindingReceiptError                FindingKind = "receipt_error"
+	FindingModifiedFile                FindingKind = "modified_file"
+	FindingAlternativeEntryPoint       FindingKind = "alternative_entry_point"
+	FindingUnmanagedInstallation       FindingKind = "unmanaged_installation"
+	FindingMissingDeclaredInstallation FindingKind = "missing_declared_installation"
+	FindingAmbiguousInstallations      FindingKind = "ambiguous_installations"
+	FindingAutomaticSelection          FindingKind = "automatic_selection"
 )
 
 // Finding is one typed observation condition. Path is the primary affected
@@ -79,16 +79,13 @@ func (r *Result) yieldSelectionFindings(yield func(Finding) bool) bool {
 	case SelectionAmbiguous:
 		return yield(Finding{
 			Kind:       FindingAmbiguousInstallations,
-			Path:       r.selectionPath(),
+			Path:       r.Selection.RequestedPath,
 			Paths:      r.candidateEntryPoints(),
 			Identities: r.candidateIdentities(),
 		})
 	case SelectionMissingDeclared:
-		path := r.selectionPath()
 		return yield(Finding{
-			Kind:  FindingMissingDeclaredEntryPoint,
-			Path:  path,
-			Paths: nonEmptyPaths(path),
+			Kind: FindingMissingDeclaredInstallation,
 		})
 	default:
 		return true
@@ -144,19 +141,6 @@ func (r *Result) yieldSelectedFindings(yield func(Finding) bool) bool {
 		}
 	}
 	return true
-}
-
-func (r *Result) selectionPath() string {
-	if r == nil {
-		return ""
-	}
-	if r.Selection.RequestedPath != "" {
-		return r.Selection.RequestedPath
-	}
-	if r.Selection.Declared != nil {
-		return r.Selection.Declared.EntryPoint
-	}
-	return ""
 }
 
 func (r *Result) candidateEntryPoints() []string {

@@ -33,8 +33,10 @@ import (
 type InitOptions struct {
 	Minecraft, Product, ProductVersion, Repository, MCDRVersion, Directory string
 	Force, AllowEmpty, Detect                                              bool
-	EntryPoint                                                             string
-	// PromptRuntime asks which entry point to adopt when observation finds
+	// EntryPoint selects the runtime observation uses for this
+	// initialization only; it is never persisted.
+	EntryPoint string
+	// PromptRuntime asks which entry point to use when observation finds
 	// several equally valid runtimes. Nil keeps the strict failure.
 	PromptRuntime func(discovery.Result) (string, error)
 	// PromptMinecraft asks for a concrete Minecraft version when
@@ -504,21 +506,10 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if err != nil {
 		return initResult(observed), err
 	}
-	selectionChanged := false
-	if observed != nil {
-		if selection := observed.Runtime(); selection != nil && selection.EntryPoint != nil {
-			path, err := entryPointRelativeTo(observed.ServerDir, selection.EntryPoint.Path)
-			if err != nil {
-				return initResult(observed), err
-			}
-			selectionChanged = resolved.Server.EntryPoint != path
-			resolved.Server.EntryPoint = path
-		}
-	}
 	if err := manifest.Write(root, d); err != nil {
 		return initResult(observed), err
 	}
-	if resolved != old || selectionChanged {
+	if resolved != old {
 		if err := lockfile.Write(root, resolved); err != nil {
 			return initResult(observed), err
 		}
@@ -529,29 +520,6 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 		result.Discovery = observed.Discovery
 	}
 	return result, nil
-}
-
-// entryPointRelativeTo records a selected entry point relative to the server
-// directory. Both sides resolve symlinks first so a canonical scan path and a
-// caller-spelled server directory still produce a local lock path.
-func entryPointRelativeTo(serverDir, entryPoint string) (string, error) {
-	if resolved, err := filepath.EvalSymlinks(serverDir); err == nil {
-		serverDir = resolved
-	}
-	if resolved, err := filepath.EvalSymlinks(entryPoint); err == nil {
-		entryPoint = resolved
-	}
-	relative, err := filepath.Rel(serverDir, entryPoint)
-	if err != nil {
-		return "", err
-	}
-	if !filepath.IsLocal(relative) {
-		return "", fmt.Errorf(
-			"selected entry point %s is outside the server directory",
-			entryPoint,
-		)
-	}
-	return filepath.ToSlash(relative), nil
 }
 
 // initResult carries the observations of a failed initialization so the

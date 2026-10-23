@@ -44,13 +44,11 @@ const (
 	PolicyPreferModified SelectionPolicy = "prefer_modified"
 )
 
-// Declaration is the applicable persisted server intent. EntryPoint is an
-// absolute path built by the workspace from the locked relative entry point.
+// Declaration is the applicable persisted installation identity.
 type Declaration struct {
 	Product     server.Product
 	Minecraft   versionpkg.Version
 	CoreVersion versionpkg.Version
-	EntryPoint  string
 }
 
 // Request is one selection attempt. A nonempty explicit EntryPoint overrides
@@ -69,7 +67,6 @@ type Selection struct {
 	Installation  *Installation
 	EntryPoint    *File
 	RequestedPath string
-	Declared      *Declaration
 }
 
 // IsValid reports whether the selection names a chosen installation and a
@@ -116,7 +113,6 @@ func (r *Result) Select(request Request) error {
 	r.Selection = Selection{
 		State:         SelectionNone,
 		RequestedPath: request.EntryPoint,
-		Declared:      request.Declared,
 	}
 	selectable := r.selectableInstallations()
 
@@ -124,7 +120,7 @@ func (r *Result) Select(request Request) error {
 		return r.selectExplicit(request.EntryPoint, selectable)
 	}
 	if request.Declared != nil {
-		return r.selectDeclared(request.Declared, request.Policy, selectable)
+		return r.selectDeclared(request.Declared, selectable)
 	}
 	return r.selectInferred(request.Policy, selectable)
 }
@@ -158,42 +154,9 @@ func (r *Result) selectExplicit(path string, selectable []*Installation) error {
 
 func (r *Result) selectDeclared(
 	declaration *Declaration,
-	policy SelectionPolicy,
 	selectable []*Installation,
 ) error {
 	matches := installationsMatchingDeclaration(selectable, declaration)
-	if declaration.EntryPoint != "" {
-		withPath := installationsMatchingDeclaredPath(selectable, declaration)
-		switch len(withPath) {
-		case 1:
-			file := entryPointAt(withPath[0], declaration.EntryPoint)
-			if file != nil {
-				r.selectInstallation(withPath[0], file, SourceDeclared)
-				return nil
-			}
-		case 0:
-			if len(matches) == 1 {
-				if managed := managedEntryPoint(matches[0]); managed != nil {
-					r.selectInstallation(matches[0], managed, SourceDeclared)
-					return nil
-				}
-			}
-		default:
-			r.Selection.State = SelectionAmbiguous
-			return &SelectionError{
-				State:         SelectionAmbiguous,
-				Path:          declaration.EntryPoint,
-				Installations: cloneInstallations(withPath),
-			}
-		}
-		r.Selection.State = SelectionMissingDeclared
-		return &SelectionError{
-			State:         SelectionMissingDeclared,
-			Path:          declaration.EntryPoint,
-			Installations: cloneInstallations(selectable),
-		}
-	}
-
 	switch len(matches) {
 	case 1:
 		if file := chooseEntryPoint(matches[0]); file != nil {
@@ -202,14 +165,6 @@ func (r *Result) selectDeclared(
 		}
 	case 0:
 	default:
-		if policy == PolicyPreferModified {
-			if preferred := preferredInstallation(matches); preferred != nil {
-				if file := chooseEntryPoint(preferred); file != nil {
-					r.selectInstallation(preferred, file, SourcePreferred)
-					return nil
-				}
-			}
-		}
 		r.Selection.State = SelectionAmbiguous
 		return &SelectionError{
 			State:         SelectionAmbiguous,
@@ -283,6 +238,9 @@ func (r *Result) selectableInstallations() []*Installation {
 	return selectable
 }
 
+// A known version conflict excludes an installation. Missing metadata does not
+// establish a conflict or prove equality between candidates; selection still
+// requires one matching installation.
 func installationsMatchingDeclaration(
 	installations []*Installation,
 	declaration *Declaration,
@@ -300,52 +258,15 @@ func installationsMatchingDeclaration(
 		}
 		if concreteVersion(declaration.Minecraft) {
 			observed := installation.Identity.MinecraftVersion()
-			if !concreteVersion(observed) || observed != declaration.Minecraft {
+			if concreteVersion(observed) && observed != declaration.Minecraft {
 				continue
 			}
 		}
 		if concreteVersion(declaration.CoreVersion) {
 			observed := installation.Identity.Primary.Version
-			if !concreteVersion(observed) || observed != declaration.CoreVersion {
+			if concreteVersion(observed) && observed != declaration.CoreVersion {
 				continue
 			}
-		}
-		matches = append(matches, installation)
-	}
-	return matches
-}
-
-// installationsMatchingDeclaredPath finds the installation that owns the
-// declared entry point. The path itself is authoritative; observed concrete
-// versions must not contradict the declaration, while unknown observed
-// versions cannot disprove it.
-func installationsMatchingDeclaredPath(
-	installations []*Installation,
-	declaration *Declaration,
-) []*Installation {
-	if declaration == nil || declaration.EntryPoint == "" {
-		return nil
-	}
-	matches := make([]*Installation, 0, 1)
-	for _, installation := range installations {
-		if !installation.Identity.IsValid() ||
-			entryPointAt(installation, declaration.EntryPoint) == nil {
-			continue
-		}
-		if !installationMatchesProduct(installation, declaration.Product) {
-			continue
-		}
-		observedMinecraft := installation.Identity.MinecraftVersion()
-		if concreteVersion(declaration.Minecraft) &&
-			concreteVersion(observedMinecraft) &&
-			observedMinecraft != declaration.Minecraft {
-			continue
-		}
-		observedCore := installation.Identity.Primary.Version
-		if concreteVersion(declaration.CoreVersion) &&
-			concreteVersion(observedCore) &&
-			observedCore != declaration.CoreVersion {
-			continue
 		}
 		matches = append(matches, installation)
 	}
@@ -407,22 +328,6 @@ func firstEntryPoint(installation *Installation) *File {
 	return nil
 }
 
-func managedEntryPoint(installation *Installation) *File {
-	if installation == nil {
-		return nil
-	}
-	var chosen *File
-	for file := range installation.EntryPoints() {
-		if file.Ownership != OwnershipManaged {
-			continue
-		}
-		if chosen == nil || file.Path < chosen.Path {
-			chosen = file
-		}
-	}
-	return chosen
-}
-
 // chooseEntryPoint prefers a receipt-managed entry point, then the lexical
 // first entry point. Filesystem timestamps never participate.
 func chooseEntryPoint(installation *Installation) *File {
@@ -446,7 +351,12 @@ func chooseEntryPoint(installation *Installation) *File {
 }
 
 func hasManagedEntryPoint(installation *Installation) bool {
-	return managedEntryPoint(installation) != nil
+	for file := range installation.EntryPoints() {
+		if file.Ownership == OwnershipManaged {
+			return true
+		}
+	}
+	return false
 }
 
 func preferredInstallation(candidates []*Installation) *Installation {

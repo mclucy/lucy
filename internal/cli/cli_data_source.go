@@ -131,10 +131,9 @@ func reportDiscoveryFindings(observed *discovery.Result) {
 		case discovery.FindingAlternativeEntryPoint,
 			discovery.FindingUnmanagedInstallation:
 			report.Info(entryPointFindingMessage(finding))
-		case discovery.FindingMissingDeclaredEntryPoint:
-			report.Warn(fmt.Errorf(
-				"declared server entry point %s is missing; run lucy install --locked",
-				finding.Path,
+		case discovery.FindingMissingDeclaredInstallation:
+			report.Warn(errors.New(
+				"declared server installation is missing; run lucy install --locked",
 			))
 		case discovery.FindingModifiedFile:
 			report.Warn(fmt.Errorf(

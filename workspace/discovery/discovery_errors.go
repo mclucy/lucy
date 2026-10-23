@@ -26,13 +26,7 @@ func (e *SelectionError) Error() string {
 	case SelectionAmbiguous:
 		return "multiple server installations satisfy the selection"
 	case SelectionMissingDeclared:
-		if e.Path != "" {
-			return fmt.Sprintf(
-				"declared server entry point %q is not installed",
-				e.Path,
-			)
-		}
-		return "the declared server runtime is not installed"
+		return "the declared server installation is not installed"
 	case SelectionInvalid:
 		if e.Path != "" {
 			return fmt.Sprintf(

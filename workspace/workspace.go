@@ -168,19 +168,10 @@ func applicableDeclaration(
 			declared.Server.Core.ProductVersion != locked.Server.CoreVersion) {
 		return nil, nil
 	}
-	serverDir := filepath.Join(root, filepath.FromSlash(locked.Server.Directory))
-	entryPoint := ""
-	if locked.Server.EntryPoint != "" {
-		entryPoint = filepath.Join(
-			serverDir,
-			filepath.FromSlash(locked.Server.EntryPoint),
-		)
-	}
 	return &discovery.Declaration{
 		Product:     locked.Server.Product,
 		Minecraft:   locked.Server.Minecraft,
 		CoreVersion: locked.Server.CoreVersion,
-		EntryPoint:  entryPoint,
 	}, locked
 }
 
