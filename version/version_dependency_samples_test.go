@@ -1,4 +1,4 @@
-package detector
+package version_test
 
 import (
 	"encoding/json/v2"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
+	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml"
 )
@@ -17,6 +18,7 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	root := testDataRoot(t)
 	pluginFile := filepath.Join(
 		root,
+		"dependency",
 		"mcdr",
 		"plugins",
 		"PrimeBackup-v1.12.0",
@@ -64,6 +66,7 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	root := testDataRoot(t)
 	fabricMetaFile := filepath.Join(
 		root,
+		"dependency",
 		"fabric",
 		"mods",
 		"fabric-carpet-1.21-1.4.147+v240613",
@@ -172,6 +175,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	root := testDataRoot(t)
 	ae2MetaFile := filepath.Join(
 		root,
+		"dependency",
 		"forge",
 		"mods",
 		"appliedenergistics2-forge-15.2.13",
@@ -234,6 +238,7 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 
 	yungsMetaFile := filepath.Join(
 		root,
+		"dependency",
 		"forge",
 		"mods",
 		"YungsExtras-1.20-Forge-4.0.3",
@@ -303,7 +308,7 @@ func mustReadFile(t *testing.T, path string) []byte {
 
 func mustParseMCDRRange(t *testing.T, raw string) version.Expr {
 	t.Helper()
-	expr, err := parseNpmVersionRange(raw)
+	expr, err := version.ParseConstraint(raw, version.DialectMCDR)
 	if err != nil {
 		t.Fatalf("parse MCDR range %q: %v", raw, err)
 	}
@@ -312,7 +317,7 @@ func mustParseMCDRRange(t *testing.T, raw string) version.Expr {
 
 func mustParseMavenRange(t *testing.T, raw string) version.Expr {
 	t.Helper()
-	expr, err := parseModLoaderMavenVersionRange(raw)
+	expr, err := version.ParseConstraint(raw, version.DialectMaven)
 	if err != nil {
 		t.Fatalf("parse Maven range %q: %v", raw, err)
 	}
@@ -321,10 +326,10 @@ func mustParseMavenRange(t *testing.T, raw string) version.Expr {
 
 func mustParseFabricRanges(
 	t *testing.T,
-	raw []string,
+	raw fn.SingleOrSlice[string],
 ) version.Expr {
 	t.Helper()
-	expr, err := parseFabricVersionRanges(raw)
+	expr, err := version.ParseConstraints(raw, version.DialectFabric)
 	if err != nil {
 		t.Fatalf("parse Fabric ranges %v: %v", raw, err)
 	}
