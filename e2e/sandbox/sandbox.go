@@ -245,23 +245,36 @@ func generateSandbox(sb sandbox, opts options) error {
 		fmt.Printf("[OK]   %s: %s\n", sb.ID, art.Dest)
 	}
 
-	if err := os.RemoveAll(outDir); err != nil {
-		return fmt.Errorf("clear %s: %w", outDir, err)
+	if err := os.MkdirAll(opts.outRoot, 0o755); err != nil {
+		return fmt.Errorf("create output root: %w", err)
 	}
+	stage, err := os.MkdirTemp(opts.outRoot, ".sandbox-*")
+	if err != nil {
+		return fmt.Errorf("create staging directory: %w", err)
+	}
+	if err := os.Chmod(stage, 0o755); err != nil {
+		return err
+	}
+	published := false
+	defer func() {
+		if !published {
+			_ = os.RemoveAll(stage)
+		}
+	}()
 
 	for _, dir := range sb.Dirs {
-		if err := os.MkdirAll(filepath.Join(outDir, dir), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(stage, dir), 0o755); err != nil {
 			return err
 		}
 	}
 	for _, ra := range resolvedArtifacts {
 		if ra.Modpack {
-			if err := materializeModpack(ra.cachedPath, outDir, opts); err != nil {
+			if err := materializeModpack(ra.cachedPath, stage, opts); err != nil {
 				return fmt.Errorf("materialize modpack %s: %w", ra.Dest, err)
 			}
 			continue
 		}
-		dest := filepath.Join(outDir, ra.Dest)
+		dest := filepath.Join(stage, ra.Dest)
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return err
 		}
@@ -271,12 +284,25 @@ func generateSandbox(sb sandbox, opts options) error {
 	}
 	fixturesDir := filepath.Join(opts.fixturesRoot, sb.ID)
 	if _, err := os.Stat(fixturesDir); err == nil {
-		if err := copyTree(fixturesDir, outDir); err != nil {
+		if err := copyTree(fixturesDir, stage); err != nil {
 			return fmt.Errorf("copy fixtures: %w", err)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+
+	// Publish only a complete fixture. A failed download or materialization
+	// leaves no directory that a later run would skip.
+	if err := os.RemoveAll(outDir); err != nil {
+		return fmt.Errorf("replace %s: %w", outDir, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(outDir), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(stage, outDir); err != nil {
+		return fmt.Errorf("publish %s: %w", outDir, err)
+	}
+	published = true
 	fmt.Printf("[GEN]  %s -> %s\n", sb.ID, outDir)
 	return nil
 }
