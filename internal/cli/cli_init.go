@@ -92,9 +92,9 @@ func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.Init
 			Kind:   "install",
 			Mode:   install.ModeResolve,
 			Server: install.ServerChange{
-				Product:   result.Document.Server.Core.Product,
-				Minecraft: result.Document.Server.Minecraft,
-				Version:   result.Document.Server.Core.ProductVersion,
+				Product:   result.Lock.Server.Product,
+				Minecraft: result.Lock.Server.Minecraft,
+				Version:   result.Lock.Server.CoreVersion,
 			},
 			Packages:          []install.PackageChange{},
 			Phases:            []install.Phase{},
