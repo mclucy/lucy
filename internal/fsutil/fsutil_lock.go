@@ -24,7 +24,7 @@ func TryLockFile(path string) (*FileLock, error) {
 }
 
 func openLock(path string, wait bool) (*FileLock, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	file, err := openLockFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("open lock: %w", err)
 	}

@@ -28,6 +28,12 @@ const (
 
 	CreateShort = "Create a new server"
 
+	DeinitShort = "Remove lucy from the current server directory"
+	DeinitLong  = "Delete lucy.yaml, lucy-lock.yaml, lucy.local.yaml, and the " +
+		".lucy directory from the current directory. The server, its packages, " +
+		"worlds, and configuration stay in place, so it keeps running without " +
+		"lucy. Files that lucy installed become unmanaged."
+
 	DoctorShort = "Diagnose the server environment"
 
 	ExportShort = "Export server configuration, or generate client"

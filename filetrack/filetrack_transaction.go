@@ -226,6 +226,22 @@ func commit(root string, files *os.Root, store *cas.Store, txn transaction) (res
 	return workspacewrite.RemoveRoot(files, transactionName)
 }
 
+// HasPendingTransaction reports whether a file transaction has not committed.
+// It must run under the shared workspace writer lock.
+func HasPendingTransaction(root string) (bool, error) {
+	if err := workspacewrite.SafePath(root, transactionName); err != nil {
+		return false, err
+	}
+	_, err := os.Stat(filepath.Join(root, transactionName))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // RecoverPending must run under the shared workspace writer lock.
 func RecoverPending(root string) (resultErr error) {
 	if err := workspacewrite.SafePath(root, transactionName); err != nil {

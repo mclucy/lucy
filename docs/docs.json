@@ -23,6 +23,7 @@
           "commands/java",
           "commands/add",
           "commands/remove",
+          "commands/deinit",
           "commands/file",
           "commands/search",
           "commands/compile",
