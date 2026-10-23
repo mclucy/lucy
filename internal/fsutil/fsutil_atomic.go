@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -25,11 +24,6 @@ const StagingPrefix = ".lucy-stage-"
 
 // MaxStagedBase caps the destination basename embedded in a staging name.
 const MaxStagedBase = 64
-
-// staleStagingPrefixes name the staging copies written before this policy.
-// They are inert; a sweep removes them so crash debris does not outlive the
-// code that created it.
-var staleStagingPrefixes = []string{".lucy-write-", ".lucy-file-"}
 
 // RenameRoot publishes a closed, synced file inside root and persists the rename.
 // Parent directories must exist. Platform implementations preserve root confinement.
@@ -261,13 +255,8 @@ func SweepStaging(root *os.Root) (removed []string, resultErr error) {
 	return removed, resultErr
 }
 
-// IsStagingName reports whether name is a staged copy from the current policy
-// or an earlier one. Crash debris carries either name, and both are inert.
+// IsStagingName reports whether name is a staged copy from the current policy.
+// Crash debris carries such a name and is inert.
 func IsStagingName(name string) bool {
-	if strings.HasPrefix(name, StagingPrefix) {
-		return true
-	}
-	return slices.ContainsFunc(staleStagingPrefixes, func(prefix string) bool {
-		return strings.HasPrefix(name, prefix)
-	})
+	return strings.HasPrefix(name, StagingPrefix)
 }

@@ -1,6 +1,8 @@
 package workspace
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 
@@ -85,6 +87,32 @@ func sortUniquePaths(paths []string) []string {
 	}
 	slices.Sort(paths)
 	return slices.Compact(paths)
+}
+
+// findJar lists regular files with a .jar extension directly inside each
+// given directory. It does not walk subdirectories. Servers keep their
+// runtime jars at shallow locations with known names.
+func findJar(dir ...string) ([]string, error) {
+	return findFileWithExt(dir, ".jar")
+}
+
+func findFileWithExt(dirs []string, ext ...string) ([]string, error) {
+	var files []string
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			if slices.Contains(ext, filepath.Ext(entry.Name())) {
+				files = append(files, filepath.Join(dir, entry.Name()))
+			}
+		}
+	}
+	return files, nil
 }
 
 func artifactInfoToDiscoveredPackage(infos []artifact.PackageInfo) []DiscoveredPackage {

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/workspace/internal/detector"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
 // ServedEcosystem is one ecosystem that a runtime can serve with a
@@ -15,17 +15,20 @@ type ServedEcosystem struct {
 	Compatibility Compatibility     `json:"compatibility"`
 }
 
-// ServedEcosystems lists the package ecosystems a probed workspace
+// ServedEcosystems lists the package ecosystems an observed workspace
 // can serve. The list contains:
 //
 //   - direct ecosystems from the detected runtime
 //   - bridged ecosystems through installed packages. Example: Sinytra
 //     Connector
 //
-// Consumers should call this method. ServerRuntime.servedEcosystems gives
-// only the direct ecosystems.
-func (ws Workspace) ServedEcosystems() []ServedEcosystem {
-	offers := ws.Runtime().servedEcosystems()
+// Consumers should call this method. selectionServedEcosystems gives only the
+// direct ecosystems.
+func (ws *Workspace) ServedEcosystems() []ServedEcosystem {
+	if ws == nil {
+		return nil
+	}
+	offers := selectionServedEcosystems(ws.Runtime())
 
 	if hasDirectOffer(offers, catalog.EcosystemForge) ||
 		hasDirectOffer(offers, catalog.EcosystemNeoForge) {
@@ -45,15 +48,19 @@ func (ws Workspace) ServedEcosystems() []ServedEcosystem {
 	return offers
 }
 
-// servedEcosystems derives offers from the runtime projection only;
-// installed packages never contribute.
-func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
-	if s == nil || !s.IsValid() {
+// selectionServedEcosystems derives offers from the selected installation
+// identity only; installed packages never contribute.
+func selectionServedEcosystems(
+	selection *discovery.Selection,
+) []ServedEcosystem {
+	if selection == nil || !selection.IsValid() || selection.Installation == nil {
 		return nil
 	}
 
 	offers := make([]ServedEcosystem, 0, 3)
-	primary := s.Primary
+	identity := selection.Installation.Identity
+	primary := identity.Primary
+	components := identity.Components
 	name := strings.ToLower(strings.TrimSpace(primary.Name.String()))
 
 	switch name {
@@ -89,7 +96,7 @@ func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
 		)
 	case "arclight":
 		for _, ecosystem := range selectedLoaderEcosystems(
-			s.Components,
+			components,
 		) {
 			offers = appendServedEcosystem(
 				offers,
@@ -138,7 +145,7 @@ func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
 			CompatFull,
 		)
 		for _, ecosystem := range selectedLoaderEcosystems(
-			s.Components,
+			components,
 		) {
 			if ecosystem == catalog.EcosystemFabric {
 				continue
@@ -162,7 +169,7 @@ func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
 			CompatFull,
 		)
 	default:
-		if detector.IsPaperLineage(name) {
+		if discovery.IsPaperLineage(name) {
 			offers = appendServedEcosystem(
 				offers,
 				catalog.EcosystemPaper,
@@ -182,7 +189,7 @@ func (s *ServerRuntime) servedEcosystems() []ServedEcosystem {
 // Supports reports whether pkg runs on the observed runtime. It returns the
 // ecosystem that serves pkg and the support level. ok is false when no
 // ecosystem serves pkg. A full offer wins over a degraded offer.
-func (ws Workspace) Supports(
+func (ws *Workspace) Supports(
 	pkg catalog.VersionedRef,
 ) (offered catalog.Ecosystem, level Compatibility, ok bool) {
 	offers := ws.ServedEcosystems()
@@ -213,7 +220,7 @@ func (ws Workspace) Supports(
 // supportsDegraded validates one package against a degraded offer. The
 // default rule accepts every package. Ecosystem-specific checks replace it
 // over time. Example: Fabric content over the Sinytra bridge needs a lookup
-// in the Probe compatibility report.
+// in the discovery compatibility report.
 func supportsDegraded(eco catalog.Ecosystem, pkg catalog.VersionedRef) bool {
 	switch eco {
 	default:

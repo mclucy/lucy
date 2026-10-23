@@ -63,6 +63,10 @@ The Minecraft version and the server version are not independent knobs. `lucy` r
   MCDReforged version to record when detection cannot pin the exact version. Presence adds the `mcdr` section and an isolated Python environment for it.
 </ParamField>
 
+<ParamField query="--entry-point" type="path">
+  Select an installed server launcher or jar when different servers share the directory. The path is relative to the current directory, or absolute. Lucy records the selected server's identity and directory, not the launcher path.
+</ParamField>
+
 <ParamField query="--force, -f" type="boolean" default="false">
   Replace an existing `lucy.yaml`. Without it, `lucy init` refuses to touch a manifest that already exists.
 </ParamField>
@@ -71,7 +75,15 @@ See also [Global Flags](/commands/global-flags).
 
 ## Behavior
 
-`lucy init` always inspects the directory. It refuses to guess when the evidence is ambiguous — an ambiguous server is an error, not a coin flip. The Minecraft version, server software and version, and server directory are all recorded from what it detects. There is no way to declare a value that contradicts the installed server.
+`lucy init` inspects installed files and records the Minecraft version, server software and version, and server directory. One directory scan finds the server and everything it launches: a jar that another server uses as a payload is part of that server, not a second installation. Equivalent launchers count as one server. A pack-provided Fabric launcher can coexist with Lucy's installed launcher, and duplicate vanilla jars do not cause a conflict. Extra unmanaged launchers are reported as information and left unchanged.
+
+If different server identities are present without a declaration, Lucy asks which one to adopt. Init stays strict: it never picks one of several servers on its own. With `--no-interactive`, it fails and prints exact selection commands. Use `--entry-point` to select without a prompt:
+
+```bash
+lucy init --entry-point fabric-server-launch.jar
+```
+
+In a declared workspace, Lucy keeps the server selected by the matching manifest and lock. If one launcher disappears, another recognized launcher for the same server can take its place, whether or not Lucy installed that file. Conflicting server software or known versions do not satisfy the saved choice. If the selected installation is missing or several installations still match, init refuses to choose. Use `--force --entry-point <path>` to adopt a different installed server.
 
 If no server is detected, `lucy init` errors. To write a manifest for a server that does not exist yet, use `lucy create` instead.
 

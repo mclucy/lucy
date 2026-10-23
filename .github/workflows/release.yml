@@ -46,10 +46,6 @@ jobs:
           KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
           CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
           CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
-            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
           if [ -z "$KEY_A" ] || [ -z "$KEY_B" ] || [ -z "$CT_A" ] || [ -z "$CT_B" ]; then
             echo "cipher: incomplete fragments after generate" >&2
             exit 1

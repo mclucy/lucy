@@ -14,10 +14,14 @@ import (
 )
 
 // Packages adds upstream identities for observed.UnidentifiedPackageFiles.
-// It preserves descriptor-derived packages and dependencies without modifying
-// observed. Unmatched paths remain in the result. Provider failures include file
-// context and are returned even when a later provider identifies the file.
-func Packages(observed workspace.Workspace) (workspace.Workspace, []error) {
+// It preserves descriptor-derived packages and dependencies, updates the same
+// observation, and returns it. Unmatched paths remain. Provider failures
+// include file context and are returned even when a later provider identifies
+// the file.
+func Packages(observed *workspace.Workspace) (*workspace.Workspace, []error) {
+	if observed == nil {
+		return nil, nil
+	}
 	candidates := observed.UnidentifiedPackageFiles
 	if len(candidates) == 0 {
 		return observed, nil
@@ -54,12 +58,11 @@ func Packages(observed workspace.Workspace) (workspace.Workspace, []error) {
 		}
 	}
 
-	result := observed
 	if idx != nil {
-		result.Packages = idx.Packages()
+		observed.Packages = idx.Packages()
 	}
-	result.UnidentifiedPackageFiles = unidentified
-	return result, errs
+	observed.UnidentifiedPackageFiles = unidentified
+	return observed, errs
 }
 
 func identifiedPackage(

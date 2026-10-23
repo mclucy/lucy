@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -62,14 +61,8 @@ func (h *handler) initialize(cfg Config) (resultErr error) {
 		return err
 	}
 	h.index = newIndex(filepath.Join(h.dir, manifestFilename))
-	reset, err := h.index.load()
-	if err != nil {
+	if _, err = h.index.load(); err != nil {
 		return err
-	}
-	if reset {
-		if err := clearLegacyCache(h.dir); err != nil {
-			return err
-		}
 	}
 	removed, err := h.maintainLocked(nil)
 	if err != nil {
@@ -96,10 +89,7 @@ func (h *handler) lockIndex() (*fsutil.FileLock, error) {
 	}
 	reset, err := h.index.load()
 	if err == nil && reset {
-		err = clearLegacyCache(h.dir)
-		if err == nil {
-			err = h.collectAllLocked(nil)
-		}
+		err = h.collectAllLocked(nil)
 	}
 	if err != nil {
 		return nil, errors.Join(err, lock.Close())
@@ -334,20 +324,4 @@ func (h *handler) ClearAll() (report ResetReport, resultErr error) {
 		return report, err
 	}
 	return report, h.store.Cleanup()
-}
-
-func clearLegacyCache(dir string) error {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.Name() == manifestFilename || entry.Name() == "cas" || fsutil.IsStagingName(entry.Name()) {
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
-			return fmt.Errorf("remove obsolete cache data: %w", err)
-		}
-	}
-	return nil
 }

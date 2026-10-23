@@ -209,10 +209,10 @@ func resolveDependencyNode(
 	return nil
 }
 
-// BuildGraphFromProbe builds the graph from a probed server's packages.
-// A package that no other package lists as a dependency is a root;
+// BuildGraphFromObservation builds the graph from an observed server's
+// packages. A package that no other package lists as a dependency is a root;
 // parent-child relationships come from each package's Dependencies field.
-func BuildGraphFromProbe(info workspace.Workspace) (*DependencyGraph, error) {
+func BuildGraphFromObservation(info *workspace.Workspace) (*DependencyGraph, error) {
 	graph := &DependencyGraph{
 		Nodes: make(map[string]*GraphNode),
 	}

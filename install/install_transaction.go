@@ -291,8 +291,8 @@ func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Docu
 
 // ResolutionFingerprint digests the fields an installation receipt pins a lock
 // with: the server, MCDR and package fields only. Tracked files, the manifest
-// fingerprint, and the Java requirement stay out, so changes to them keep a
-// receipt current: they change no installed file.
+// fingerprint, and Java requirement stay out. Changing these fields does not
+// change installed files or invalidate the receipt.
 func ResolutionFingerprint(l *lockfile.Document) (string, error) {
 	server := l.Server
 	server.Java = lockfile.Java{}
@@ -301,24 +301,6 @@ func ResolutionFingerprint(l *lockfile.Document) (string, error) {
 		MCDR     *lockfile.MCDR     `yaml:"mcdr,omitempty"`
 		Packages []lockfile.Package `yaml:"packages"`
 	}{server, l.MCDR, l.Packages})
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
-}
-
-// legacyResolutionFingerprint reproduces the whole-document fingerprint that
-// receipts recorded before the resolved runtime was separated from the lock
-// identity, so such a receipt stays current instead of re-staging once.
-func legacyResolutionFingerprint(l *lockfile.Document) (string, error) {
-	data, err := yaml.Marshal(struct {
-		Version             int                `yaml:"lock_version"`
-		ManifestFingerprint string             `yaml:"manifest_fingerprint"`
-		Server              lockfile.Server    `yaml:"server"`
-		MCDR                *lockfile.MCDR     `yaml:"mcdr,omitempty"`
-		Packages            []lockfile.Package `yaml:"packages"`
-	}{l.SchemaVersion, l.ManifestFingerprint, l.Server, l.MCDR, l.Packages})
 	if err != nil {
 		return "", err
 	}
@@ -345,20 +327,13 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 		return false, err
 	}
 	if receipt.LockFingerprint != expected {
-		legacy, err := legacyResolutionFingerprint(l)
-		if err != nil {
-			return false, err
-		}
-		if receipt.LockFingerprint != legacy {
-			log.Debug(
-				"installation not current",
-				"reason", "lock fingerprint changed",
-				"receipt", receipt.LockFingerprint,
-				"expected", expected,
-			)
-			return false, nil
-		}
-		log.Debug("accepting a pre-file-tracking installation receipt", "receipt", receiptPath)
+		log.Debug(
+			"installation not current",
+			"reason", "lock fingerprint changed",
+			"receipt", receipt.LockFingerprint,
+			"expected", expected,
+		)
+		return false, nil
 	}
 	tracked := trackedPaths(l)
 	for _, entry := range receipt.Entries {

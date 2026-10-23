@@ -21,7 +21,7 @@ task check              # build + test + test:race
 task clean              # Remove dist/ and release/ directories
 task clean:dist         # Remove dist/ only
 task clean:release      # Remove release/ only
-task cipher:generate    # Generate cipher files from CF_API_KEY env var
+task cipher:generate    # Generate cipher material (.cipher_key) from CF_API_KEY env var
 task ci:test            # CI checks (optional cipher:generate, then check)
 task ci:build           # CI release build + gzip artifacts
 task e2e:status         # Probe generated sandboxes with the built CLI
@@ -36,7 +36,7 @@ task logos:gen          # Regenerate status logos from terminal/assets/logos.yam
 task logos:check        # Fail when committed status logos differ from the manifest
 ```
 
-Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/`ciphertextB`) plus optional release identity (`releaseVersion`/`releaseCommit`). Dotenv loads `.env`, `.cipher_key`, `.cipher_ciphertext`. See `docs/shared/cipher-key-operations.md`.
+Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/`ciphertextB`) plus optional release identity (`releaseVersion`/`releaseCommit`). Dotenv loads `.env` and the single canonical cipher file `.cipher_key`, which holds all four fragments. See `docs/shared/cipher-key-operations.md`.
 
 Status logos under `terminal/assets/{small,large}_{plain,colored}/` are generated; never edit them by hand. Change `terminal/assets/logos.yaml` (pinned source URL + sha256 and per-logo preprocessing), then run `task logos:gen -- -preview test_logos` and review the PNG previews.
 
@@ -66,7 +66,7 @@ To run the built binary against a test server directory:
 │   └── providers/          Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
 ├── workspace/              Local runtime, wrapper, and package-file observation
 │   ├── identify/           Associate local package files with upstream identities
-│   └── internal/detector/  Declarative runtime node detection
+│   └── discovery/          Unified installation discovery, ownership, and runtime selection
 ├── bootstrap/              Pinned server product bootstrap profiles
 ├── resolve/                Catalogue selection and descriptor dependency validation
 ├── input/                  Trust boundary for external input, package ref parsing
@@ -96,10 +96,13 @@ Keep `catalog` limited to the standard library and `version`. Shared usage alone
 does not justify placing a type there. Manifest declarations, lock records,
 workspace observations, runtime selection, and presentation stay with their owners.
 
-`workspace` reads local files without upstream access. `workspace/identify`
-connects unidentified package files to upstream identities through hash lookup.
-Commands and operations invoke identification explicitly; CLI output projections
-stay outside workspace observation.
+`workspace` reads local files without upstream access. `workspace/discovery`
+owns installation identity, member ownership, and runtime selection through one
+directory scan; `workspace` assembles that result with wrappers, declarations,
+and package files. `workspace/identify` connects unidentified package files to
+upstream identities through hash lookup. Commands and operations invoke
+identification explicitly; CLI output projections stay outside workspace
+observation.
 
 ## Output Style Flags
 
@@ -221,3 +224,4 @@ Write code that explains itself. Namings must not need documentations from call 
 
 1. Always tidy the files in packages touched after refactoring: relocate/rename/merge/split files for better maintainability.
 2. Prefix files with the package name for convenient searching.
+3. We are at pre-beta stage. Do not add any backward-compatibility measures nor bump document format versions upon change.

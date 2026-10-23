@@ -5,25 +5,34 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	versionpkg "github.com/mclucy/lucy/version"
-	"github.com/mclucy/lucy/workspace/internal/detector"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
-// compatWorkspace builds an observation whose probe names exactly one
-// runtime, as a scanner would have produced it.
+// compatWorkspace builds an observation whose discovery selected exactly one
+// runtime, as the scanner would have produced it.
 func compatWorkspace(
 	primary catalog.VersionedRef,
 	components ...catalog.VersionedRef,
-) Workspace {
-	return Workspace{
-		Probe: Probe{
-			Candidates: []IdentifiedRuntime{{
-				JarPath: "server.jar",
-				Evidence: &detector.RuntimeEvidence{
-					PrimaryRuntime:    &primary,
-					PrimaryPath:       "server.jar",
-					RuntimeComponents: components,
-				},
-			}},
+) *Workspace {
+	installations := []discovery.Installation{
+		discovery.NewInstallation(
+			discovery.Identity{Primary: primary, Components: components},
+			"/server.jar",
+		),
+	}
+	selection := discovery.Selection{
+		State:        discovery.SelectionSelected,
+		Source:       discovery.SourceInferred,
+		Installation: &installations[0],
+	}
+	for file := range installations[0].EntryPoints() {
+		selection.EntryPoint = file
+		break
+	}
+	return &Workspace{
+		Discovery: discovery.Result{
+			Installations: installations,
+			Selection:     selection,
 		},
 	}
 }
@@ -204,12 +213,8 @@ func TestServedEcosystems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := buildServerRuntime(&detector.RuntimeEvidence{
-				PrimaryRuntime:    &tt.primary,
-				PrimaryPath:       "server.jar",
-				RuntimeComponents: tt.components,
-			})
-			got := offerSet(server.servedEcosystems())
+			ws := compatWorkspace(tt.primary, tt.components...)
+			got := offerSet(selectionServedEcosystems(ws.Runtime()))
 			if len(got) != len(tt.want) {
 				t.Fatalf(
 					"offers = %v, want %v",

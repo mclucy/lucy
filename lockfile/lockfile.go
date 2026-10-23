@@ -174,10 +174,9 @@ func validateLockedPackage(pkg *Package) error {
 	}
 	for j := range pkg.Modules {
 		module := &pkg.Modules[j]
-		if module.VersionDialect != version.DialectUnknown &&
-			!module.VersionDialect.Valid() {
+		if !module.VersionDialect.Valid() {
 			return fmt.Errorf(
-				"package %s module %s has unknown version dialect %q",
+				"package %s module %s requires a known version dialect, got %q",
 				pkg.Artifact.ProjectID,
 				module.ID,
 				module.VersionDialect,
