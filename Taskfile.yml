@@ -6,7 +6,6 @@ interval: 700ms
 dotenv:
   - ".env"
   - ".cipher_key"
-  - ".cipher_ciphertext"
 
 vars:
   DEV_GOOS:
@@ -37,10 +36,6 @@ tasks:
           KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
           CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
           CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
-            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
           if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
             ldflags="$ldflags \
               -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
@@ -97,10 +92,6 @@ tasks:
           KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
           CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
           CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
-            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
           if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
             ldflags="$ldflags \
               -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
@@ -192,15 +183,9 @@ tasks:
           printf 'cipher_ciphertext_a=%s\n' "$CT_A"
           printf 'cipher_ciphertext_b=%s\n' "$CT_B"
         } > .cipher_key
-        # Keep companion file for dotenv compatibility; ciphertext halves live with key file.
-        {
-          printf 'cipher_ciphertext_a=%s\n' "$CT_A"
-          printf 'cipher_ciphertext_b=%s\n' "$CT_B"
-        } > .cipher_ciphertext
-        printf "[OK] Wrote .cipher_key and .cipher_ciphertext (four fragments)\n"
+        printf "[OK] Wrote .cipher_key (four fragments)\n"
     generates:
       - .cipher_key
-      - .cipher_ciphertext
 
   check:cf-api-key:
     silent: true
@@ -310,7 +295,7 @@ tasks:
       - go test -tags integration -count=1 -timeout 0 ./e2e/filetrack ./filetrack {{.CLI_ARGS}}
 
   ci:test:
-    desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks
+    desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher material then runs checks
     cmds:
       - |
         if [ -n "${CF_API_KEY:-}" ]; then
@@ -321,7 +306,7 @@ tasks:
       - task: test:coverage
 
   ci:build:
-    desc: Build release artifacts for CI (for GitHub Actions); conditionally generates cipher files
+    desc: Build release artifacts for CI (for GitHub Actions); conditionally generates cipher material
     cmds:
       - |
         if [ -n "${CF_API_KEY:-}" ]; then
@@ -344,7 +329,7 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        # Prefer four-fragment cipher files, then CIPHER_* env, then dotenv-loaded vars.
+        # Prefer the four-fragment .cipher_key file, then CIPHER_* env, then dotenv-loaded vars.
         # Never put these in Task vars — Task expands vars into command logs.
         # Snapshot identity is empty in .goreleaser.yaml so material must be unbound.
         if [ -f .cipher_key ]; then
@@ -357,10 +342,6 @@ tasks:
           CIPHER_KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
           CIPHER_CIPHERTEXT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
           CIPHER_CIPHERTEXT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$CIPHER_CIPHERTEXT_A" ] && [ -f .cipher_ciphertext ]; then
-            CIPHER_CIPHERTEXT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CIPHER_CIPHERTEXT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
         elif [ -n "${CIPHER_KEY_A:-}" ] && [ -n "${CIPHER_KEY_B:-}" ] \
           && [ -n "${CIPHER_CIPHERTEXT_A:-}" ] && [ -n "${CIPHER_CIPHERTEXT_B:-}" ]; then
           :
