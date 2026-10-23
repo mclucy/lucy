@@ -291,19 +291,19 @@ func verifyStatus(
 	if err != nil {
 		t.Fatalf("lucy status: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
-	if len(want.ambiguous) == 0 && strings.Contains(stderr, "ERROR ") {
-		t.Fatalf("live status reported a runtime conflict:\n%s", stderr)
+	if stderr != "" {
+		t.Fatalf("successful status JSON wrote stderr:\n%s", stderr)
 	}
-	requireInformational(t, stderr, root, informational)
 	var document statusDocument
 	if err := json.Unmarshal([]byte(stdout), &document); err != nil {
 		t.Fatalf("decode live status JSON: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
+	requireStatusFindings(t, document.Warnings, root, informational)
 	if len(want.ambiguous) > 0 {
 		if document.Server != nil {
 			t.Errorf("live status selected a runtime for a declared ambiguity")
 		}
-		requireErrorFinding(t, stderr, root, want.ambiguous)
+		requireStatusFindings(t, document.Warnings, root, want.ambiguous)
 		return
 	}
 	if want.missing {
@@ -315,7 +315,7 @@ func verifyStatus(
 	if document.Server == nil {
 		t.Fatal("live status reported no server")
 	}
-	primary := document.Server.Primary
+	primary := document.Server.Product
 	if (want.ecosystem != "" && primary.Ecosystem != want.ecosystem) ||
 		(want.name != "" && primary.Name != want.name) ||
 		(want.version != "" && primary.Version != want.version) {
@@ -326,15 +326,9 @@ func verifyStatus(
 		)
 	}
 	if want.path != "" {
-		requireStatusPath(t, root, "primary_path", document.Server.PrimaryPath, want.path)
+		requireStatusPath(t, "entry_point", document.Server.EntryPoint, want.path)
 	}
-	if len(want.warning) > 0 {
-		warning := make([]string, len(want.warning))
-		for i, path := range want.warning {
-			warning[i] = filepath.Join(root, filepath.FromSlash(path))
-		}
-		requireWarning(t, stderr, warning[0], warning[1:])
-	}
+	requireStatusFindings(t, document.Warnings, root, want.warning)
 	for reference, version := range want.components {
 		ecosystem, name, found := strings.Cut(reference, ":")
 		if !found {
@@ -351,59 +345,23 @@ func verifyStatus(
 
 // requireStatusPath compares the reported entry point with a workspace-relative
 // fixture path.
-func requireStatusPath(t *testing.T, root, label, got, want string) {
+func requireStatusPath(t *testing.T, label, got, want string) {
 	t.Helper()
-	expected := filepath.Join(root, filepath.FromSlash(want))
+	expected := filepath.FromSlash(want)
 	if filepath.Clean(got) != filepath.Clean(expected) {
 		t.Errorf("live status %s = %q, want %q", label, got, expected)
 	}
 }
 
-// requireWarning requires a WARN-level automatic-selection finding that names
-// the selected entry point, and WARN coverage for each competing candidate.
-func requireWarning(t *testing.T, output, selected string, competitors []string) {
-	t.Helper()
-	selectedFound := false
-	found := make([]bool, len(competitors))
-	for line := range strings.SplitSeq(output, "\n") {
-		if !strings.Contains(line, "WARN") {
-			continue
-		}
-		if strings.Contains(line, selected) {
-			selectedFound = true
-		}
-		for i, competitor := range competitors {
-			if strings.Contains(line, competitor) {
-				found[i] = true
-			}
-		}
-	}
-	if !selectedFound {
-		t.Errorf("no WARN finding names the automatic selection %s:\n%s", selected, output)
-	}
-	for i, competitor := range competitors {
-		if !found[i] {
-			t.Errorf("no WARN finding names competing candidate %s:\n%s", competitor, output)
-		}
-	}
-}
-
-// requireErrorFinding requires an ERROR-level finding naming each competing
-// entry point. An unresolved declared ambiguity is an error, not a warning or
-// an automatic choice.
-func requireErrorFinding(t *testing.T, output, root string, paths []string) {
+func requireStatusFindings(t *testing.T, warnings []string, root string, paths []string) {
 	t.Helper()
 	for _, candidate := range paths {
-		path := filepath.Join(root, filepath.FromSlash(candidate))
-		found := false
-		for line := range strings.SplitSeq(output, "\n") {
-			if strings.Contains(line, "ERROR") && strings.Contains(line, path) {
-				found = true
-				break
-			}
-		}
+		absolute := filepath.Join(root, filepath.FromSlash(candidate))
+		found := slices.ContainsFunc(warnings, func(message string) bool {
+			return strings.Contains(message, absolute) || strings.Contains(message, filepath.ToSlash(candidate))
+		})
 		if !found {
-			t.Errorf("no ERROR finding names competing entry point %s:\n%s", path, output)
+			t.Errorf("no status finding names %s:\n%v", candidate, warnings)
 		}
 	}
 }
@@ -606,10 +564,11 @@ func modifyInstalledFiles(t *testing.T, root string, paths []string) {
 
 type statusDocument struct {
 	Server *struct {
-		Primary     statusRef   `json:"primary_runtime"`
-		PrimaryPath string      `json:"primary_path"`
-		Components  []statusRef `json:"runtime_components"`
+		Product    statusRef   `json:"product"`
+		EntryPoint string      `json:"entry_point"`
+		Components []statusRef `json:"components"`
 	} `json:"server"`
+	Warnings []string `json:"warnings"`
 }
 
 type statusRef struct {
