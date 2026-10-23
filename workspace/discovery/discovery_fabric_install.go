@@ -2,15 +2,15 @@ package discovery
 
 import (
 	"encoding/json/v2"
-	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-// FabricInstallationRuntimes detects Fabric server distributions that span
-// more than one file. Two layouts are legitimate:
+// discoverFabric recognizes Fabric server distributions. Two layouts are
+// legitimate:
 //
 //   - an installer shim (fabric-server-launch.jar) beside the vanilla jar
 //     its fabric-server-launcher.properties names, with libraries referenced
@@ -22,152 +22,207 @@ import (
 // The meta launcher is recognized before .fabric/server is materialized.
 // Hidden files are claimed only when their content matches the identity the
 // meta launcher embedded; stale files from another version stay unclaimed.
-// Each legitimate layout yields one evidence. Identity grouping belongs to
-// the workspace scan.
-func FabricInstallationRuntimes(context DetectionContext) []*RuntimeEvidence {
-	if context.root == "" {
-		return nil
+// A generated launcher without its meta launcher is still a real installed
+// layout and is recognized from its own content.
+func discoverFabric(s *scan) ([]Installation, []Finding) {
+	if s == nil {
+		return nil, nil
 	}
 
-	runtimes := make([]*RuntimeEvidence, 0)
-	for _, file := range context.RootFiles() {
-		if file.IsDirectory() || !strings.HasSuffix(strings.ToLower(file.Path()), ".jar") {
+	installations := make([]Installation, 0)
+	metaLauncherSeen := false
+	for _, file := range s.RootFiles() {
+		if file.IsDirectory() || !isJarArtifact(file) {
 			continue
 		}
-		if runtime := detectFabricMetaLauncherInstallation(context, file); runtime != nil {
-			runtimes = append(runtimes, runtime)
+		if installation, ok := fabricMetaLauncherInstallation(s, file); ok {
+			installations = append(installations, installation)
+			metaLauncherSeen = true
 			continue
 		}
-		if runtime := detectFabricShimInstallation(context, file); runtime != nil {
-			runtimes = append(runtimes, runtime)
+		if installation, ok := fabricShimInstallation(s, file); ok {
+			installations = append(installations, installation)
 		}
 	}
-	return runtimes
+	if !metaLauncherSeen {
+		installations = append(
+			installations,
+			fabricGeneratedLauncherInstallations(s)...,
+		)
+	}
+	return installations, nil
 }
 
-// detectFabricMetaLauncherInstallation recognizes the unattended launcher by
-// its embedded install.properties. The installer jar users download carries a
-// different Main-Class and no install.properties, so it never becomes a
-// runnable server here.
-func detectFabricMetaLauncherInstallation(
-	context DetectionContext,
-	file *DetectionFile,
-) *RuntimeEvidence {
+// fabricMetaLauncherInstallation recognizes the unattended launcher by its
+// embedded install.properties and claims the hidden files the launcher
+// generates on first run when their content agrees with that identity.
+func fabricMetaLauncherInstallation(
+	s *scan,
+	file *artifact,
+) (Installation, bool) {
 	archive, err := file.Archive()
-	if err != nil || archive == nil {
-		return nil
+	if err != nil {
+		return Installation{}, false
 	}
 	mainClass, ok := readArchiveManifestMainClass(archive)
 	if !ok || mainClass != fabricMetaLauncherMainClass {
-		return nil
+		return Installation{}, false
 	}
-
 	loaderVersion, gameVersion, ok := parseFabricInstallProperties(archive)
 	if !ok {
-		return nil
+		return Installation{}, false
 	}
 
-	evidence := newFabricRuntimeEvidence(file.Path(), loaderVersion, gameVersion)
-	evidence.DetectorName = "fabric installation"
-	evidence.EntryPoints = []string{file.Path()}
-	installationFiles := []string{file.Path()}
+	installation := NewInstallation(
+		fabricIdentity(loaderVersion, gameVersion),
+		file.Path(),
+	)
 
-	dataDir := filepath.Join(context.root, filepath.FromSlash(fabricServerDataDir))
-
-	// ServerLauncher names the generated fabric-loader-server-<loader>-
-	// minecraft-<game>.jar after both versions. Only a jar whose manifest
-	// agrees with the embedded identity belongs to this installation.
+	dataDir := filepath.Join(s.root, filepath.FromSlash(fabricServerDataDir))
 	generatedPath := filepath.Join(
 		dataDir,
 		fabricGeneratedLauncherPrefix+string(loaderVersion)+
 			"-minecraft-"+string(gameVersion)+".jar",
 	)
-	if generated, ok := detectionFileInRoot(context.root, generatedPath); ok {
+	if generated, ok := s.File(generatedPath); ok && !generated.IsDirectory() {
 		generatedLoader, generatedGame, classPath, ok := fabricLaunchJarIdentity(generated)
 		if ok && generatedLoader == loaderVersion && generatedGame == gameVersion {
-			evidence.EntryPoints = append(evidence.EntryPoints, generated.Path())
-			installationFiles = append(installationFiles, generated.Path())
-			installationFiles = append(
-				installationFiles,
-				fabricClassPathFiles(context.root, generated, classPath)...,
-			)
+			installation.AddFile(generated.Path(), RoleEntryPoint)
+			addLocalClassPathFiles(s, &installation, generated, classPath)
+			addFabricSidecars(s, &installation, generated)
 		}
 	}
 
-	// ServerLauncher downloads <game>-server.jar beside the generated launch
-	// jar. The payload version.json decides whether the file belongs to this
-	// identity; a different game version is a stale leftover, not payload.
 	payloadPath := filepath.Join(dataDir, string(gameVersion)+"-server.jar")
-	if payload, ok := detectionFileInRoot(context.root, payloadPath); ok &&
+	if payload, ok := s.File(payloadPath); ok && !payload.IsDirectory() &&
 		fabricServerPayloadMatches(payload, gameVersion) {
-		evidence.ConsumedFiles = []*DetectionFile{payload}
-		installationFiles = append(installationFiles, payload.Path())
+		installation.AddFile(payload.Path(), RolePayload)
 	}
 
-	evidence.InstallationFiles = uniquePaths(installationFiles)
-	return evidence
+	return installation, true
 }
 
-// detectFabricShimInstallation enriches the per-file shim evidence with the
-// sidecars, payload and classpath files the shim needs at run time.
-func detectFabricShimInstallation(
-	context DetectionContext,
-	file *DetectionFile,
-) *RuntimeEvidence {
-	evidence, err := (&fabricServerLauncherDetector{}).Detect(context, file)
-	if err != nil || evidence == nil || evidence.PrimaryRuntime == nil {
+// fabricShimInstallation enriches a launch shim with the sidecars, payload
+// and classpath files the shim needs at run time.
+func fabricShimInstallation(s *scan, file *artifact) (Installation, bool) {
+	archive, err := file.Archive()
+	if err != nil {
+		return Installation{}, false
+	}
+	properties, ok, err := readArchiveEntry(archive, fabricLaunchPropertiesPath)
+	if err != nil || !ok || !fabricLauncherPropertiesAreServer(properties) {
+		return Installation{}, false
+	}
+
+	loaderVersion, gameVersion, classPath := parseFabricLauncherManifest(archive)
+	if loaderVersion == versionpkg.Unknown {
+		loaderVersion = parseFabricLauncherBundledLoaderVersion(archive)
+	}
+	launcherProperties := []byte(nil)
+	propertiesFile, hasProperties := s.Sibling(file, fabricLauncherPropertiesPath)
+	if hasProperties && !propertiesFile.IsDirectory() {
+		launcherProperties, _ = propertiesFile.Read()
+	}
+	if gameVersion == versionpkg.Unknown {
+		gameVersion = parseFabricLauncherSidecarGameVersion(s, file)
+	}
+	// Installer 1.1+ shims embed no version evidence, so the last resort is
+	// the vanilla jar the shim boots: FabricServerLauncher reads serverJar
+	// from fabric-server-launcher.properties and defaults to server.jar.
+	serverJarPath := fabricLauncherServerJarPath(file.Path(), launcherProperties)
+	serverJar, hasServerJar := s.File(serverJarPath)
+	if hasServerJar && serverJar.IsDirectory() {
+		hasServerJar = false
+	}
+	if gameVersion == versionpkg.Unknown && hasServerJar {
+		gameVersion = parseServerJarGameVersion(serverJar)
+	}
+	if loaderVersion == versionpkg.Unknown || gameVersion == versionpkg.Unknown {
+		return Installation{}, false
+	}
+
+	installation := NewInstallation(
+		fabricIdentity(loaderVersion, gameVersion),
+		file.Path(),
+	)
+	if hasServerJar {
+		installation.AddFile(serverJar.Path(), RolePayload)
+	}
+	if hasProperties {
+		installation.AddFile(propertiesFile.Path(), RoleConfiguration)
+	}
+	if sidecar, ok := s.Sibling(file, fabricVersionSidecarPath); ok &&
+		!sidecar.IsDirectory() {
+		installation.AddFile(sidecar.Path(), RoleConfiguration)
+	}
+	addLocalClassPathFiles(s, &installation, file, classPath)
+	return installation, true
+}
+
+// fabricGeneratedLauncherInstallations recognizes a generated launch jar in
+// the hidden server data directory when no meta launcher remains.
+func fabricGeneratedLauncherInstallations(s *scan) []Installation {
+	dataDir := filepath.Join(s.root, filepath.FromSlash(fabricServerDataDir))
+	entries, err := s.ReadDir(dataDir)
+	if err != nil {
 		return nil
 	}
 
-	evidence.DetectorName = "fabric installation"
-	evidence.EntryPoints = []string{file.Path()}
-	installationFiles := []string{file.Path()}
-	consumedPayloads := make(map[string]bool, len(evidence.ConsumedFiles))
-	for _, consumed := range evidence.ConsumedFiles {
-		if consumed != nil && !consumed.IsDirectory() {
-			consumedPayloads[consumed.Path()] = true
-			installationFiles = append(installationFiles, consumed.Path())
+	installations := make([]Installation, 0)
+	for _, entry := range entries {
+		if entry.IsDir() ||
+			!strings.HasPrefix(entry.Name(), fabricGeneratedLauncherPrefix) ||
+			!strings.HasSuffix(strings.ToLower(entry.Name()), ".jar") {
+			continue
 		}
-	}
-	launcherProperties := []byte(nil)
-	if properties, ok := context.Sibling(file, fabricLauncherPropertiesPath); ok &&
-		!properties.IsDirectory() {
-		installationFiles = append(installationFiles, properties.Path())
-		launcherProperties, _ = properties.Read()
-	}
-	// FabricServerLauncher resolves serverJar relative to the shim. The
-	// per-file detector only sees root files, so resolve nested payloads here.
-	serverJarPath := fabricLauncherServerJarPath(file, launcherProperties)
-	if payload, ok := detectionFileInRoot(context.root, serverJarPath); ok &&
-		!consumedPayloads[payload.Path()] {
-		evidence.ConsumedFiles = append(evidence.ConsumedFiles, payload)
-		installationFiles = append(installationFiles, payload.Path())
-	}
-	if sidecar, ok := context.Sibling(file, fabricVersionSidecarPath); ok &&
-		!sidecar.IsDirectory() {
-		installationFiles = append(installationFiles, sidecar.Path())
-	}
-
-	archive, err := file.Archive()
-	if err == nil && archive != nil {
-		_, _, classPath := parseFabricLauncherManifest(archive)
-		installationFiles = append(
-			installationFiles,
-			fabricClassPathFiles(context.root, file, classPath)...,
+		file, ok := s.File(filepath.Join(dataDir, entry.Name()))
+		if !ok || file.IsDirectory() {
+			continue
+		}
+		loaderVersion, gameVersion, classPath, ok := fabricLaunchJarIdentity(file)
+		if !ok {
+			continue
+		}
+		installation := NewInstallation(
+			fabricIdentity(loaderVersion, gameVersion),
+			file.Path(),
 		)
-	}
+		addLocalClassPathFiles(s, &installation, file, classPath)
+		addFabricSidecars(s, &installation, file)
 
-	evidence.InstallationFiles = uniquePaths(installationFiles)
-	return evidence
+		payloadPath := filepath.Join(dataDir, string(gameVersion)+"-server.jar")
+		if payload, ok := s.File(payloadPath); ok && !payload.IsDirectory() &&
+			fabricServerPayloadMatches(payload, gameVersion) {
+			installation.AddFile(payload.Path(), RolePayload)
+		}
+		installations = append(installations, installation)
+	}
+	return installations
+}
+
+// addFabricSidecars claims the launcher properties and version metadata that
+// sit beside a generated launch jar.
+func addFabricSidecars(s *scan, installation *Installation, launcher *artifact) {
+	if properties, ok := s.Sibling(launcher, fabricLauncherPropertiesPath); ok &&
+		!properties.IsDirectory() {
+		installation.AddFile(properties.Path(), RoleConfiguration)
+	}
+	if sidecar, ok := s.Sibling(launcher, fabricVersionSidecarPath); ok &&
+		!sidecar.IsDirectory() {
+		installation.AddFile(sidecar.Path(), RoleConfiguration)
+	}
 }
 
 // fabricServerPayloadMatches verifies that a downloaded server jar carries
 // the game version the meta launcher embedded. The id field is authoritative
 // for modern servers; name and release_target cover older ids that append a
 // build hash.
-func fabricServerPayloadMatches(file *DetectionFile, gameVersion versionpkg.Version) bool {
+func fabricServerPayloadMatches(
+	file *artifact,
+	gameVersion versionpkg.Version,
+) bool {
 	archive, err := file.Archive()
-	if err != nil || archive == nil {
+	if err != nil {
 		return false
 	}
 	data, ok, err := readArchiveEntry(archive, mojangVersionJSONEntry)
@@ -195,14 +250,14 @@ func fabricServerPayloadMatches(file *DetectionFile, gameVersion versionpkg.Vers
 
 // fabricLaunchJarIdentity validates a generated Fabric launch jar from its
 // content. The filename alone is never sufficient.
-func fabricLaunchJarIdentity(file *DetectionFile) (
+func fabricLaunchJarIdentity(file *artifact) (
 	loaderVersion versionpkg.Version,
 	gameVersion versionpkg.Version,
 	classPath []string,
 	ok bool,
 ) {
 	archive, err := file.Archive()
-	if err != nil || archive == nil {
+	if err != nil {
 		return versionpkg.Unknown, versionpkg.Unknown, nil, false
 	}
 	loaderVersion, gameVersion, classPath = parseFabricLauncherManifest(archive)
@@ -216,36 +271,74 @@ func fabricLaunchJarIdentity(file *DetectionFile) (
 	return loaderVersion, gameVersion, classPath, true
 }
 
-// detectionFileInRoot returns a regular file only when path stays inside the
-// scanned directory. Class-Path entries and hidden layout files must not
-// escape the workspace.
-func detectionFileInRoot(root, path string) (*DetectionFile, bool) {
-	if root == "" {
-		return nil, false
+// addMatchingMinecraftPayload claims the root Minecraft server jar as the
+// installation payload when its content names the same game version. The
+// engine then treats the matching vanilla installation as payload rather
+// than a second server.
+func addMatchingMinecraftPayload(
+	s *scan,
+	installation *Installation,
+	gameVersion versionpkg.Version,
+) {
+	if s == nil || installation == nil || !hasConcreteVersion(gameVersion) {
+		return
 	}
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return nil, false
+	serverJar, ok := s.File(filepath.Join(s.root, minecraftServerJarName))
+	if !ok || serverJar.IsDirectory() {
+		return
 	}
-	relative, err := filepath.Rel(root, absolute)
-	if err != nil || !filepath.IsLocal(relative) {
-		return nil, false
+	if parseServerJarGameVersion(serverJar) != gameVersion {
+		return
 	}
-	info, err := os.Stat(absolute)
-	if err != nil || !info.Mode().IsRegular() {
-		return nil, false
-	}
-	return NewDetectionFile(absolute), true
+	installation.AddFile(serverJar.Path(), RolePayload)
 }
 
-// fabricClassPathFiles resolves manifest Class-Path entries against the jar
-// that declares them and keeps the local files that exist.
-func fabricClassPathFiles(
-	root string,
-	jar *DetectionFile,
+// addMinecraftServerLibraryPayload claims the Minecraft server jar that
+// installers keep under libraries/net/minecraft/server/<mc>/. The path names
+// the game version; a version.json inside the jar must agree when present.
+func addMinecraftServerLibraryPayload(
+	s *scan,
+	installation *Installation,
+	gameVersion versionpkg.Version,
+) {
+	if s == nil || installation == nil || !hasConcreteVersion(gameVersion) {
+		return
+	}
+	version := string(gameVersion)
+	for _, name := range []string{
+		"server-" + version + ".jar",
+		"server-" + version + "-bundled.jar",
+	} {
+		path := filepath.Join(
+			s.root,
+			"libraries",
+			"net",
+			"minecraft",
+			"server",
+			version,
+			name,
+		)
+		file, ok := s.File(path)
+		if !ok || file.IsDirectory() {
+			continue
+		}
+		if recorded := parseServerJarGameVersion(file); recorded != versionpkg.Unknown &&
+			recorded != gameVersion {
+			continue
+		}
+		installation.AddFile(file.Path(), RolePayload)
+	}
+}
+
+// addLocalClassPathFiles resolves manifest Class-Path entries against the jar
+// that declares them and claims the local files that exist. Class-Path
+// entries must stay inside the scanned directory.
+func addLocalClassPathFiles(
+	s *scan,
+	installation *Installation,
+	jar *artifact,
 	classPath []string,
-) []string {
-	files := make([]string, 0, len(classPath))
+) {
 	for _, entry := range classPath {
 		entry = strings.Trim(strings.TrimSpace(entry), `"`)
 		if entry == "" || strings.Contains(entry, "://") ||
@@ -256,25 +349,40 @@ func fabricClassPathFiles(
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(filepath.Dir(jar.Path()), path)
 		}
-		if file, ok := detectionFileInRoot(root, path); ok {
-			files = append(files, file.Path())
+		if file, ok := s.File(path); ok && !file.IsDirectory() {
+			installation.AddFile(file.Path(), RoleLibrary)
 		}
 	}
-	return files
 }
 
-func uniquePaths(paths []string) []string {
-	unique := make([]string, 0, len(paths))
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		if path == "" {
-			continue
-		}
-		if _, ok := seen[path]; ok {
-			continue
-		}
-		seen[path] = struct{}{}
-		unique = append(unique, path)
+func fabricIdentity(
+	loaderVersion versionpkg.Version,
+	gameVersion versionpkg.Version,
+) Identity {
+	return Identity{
+		Primary: catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemFabric,
+			Name:      "fabric",
+			Version:   loaderVersion,
+		},
+		Components: []catalog.VersionedRef{
+			{
+				Ecosystem: catalog.EcosystemFabric,
+				Name:      "fabric-loader",
+				Version:   loaderVersion,
+			},
+			{
+				Ecosystem: catalog.EcosystemMinecraft,
+				Name:      "minecraft",
+				Version:   gameVersion,
+			},
+		},
 	}
-	return unique
+}
+
+// isJarArtifact reports whether a scanned file is a jar by name. Content
+// inspection decides whether it is a real installation; the name only avoids
+// opening unrelated files.
+func isJarArtifact(file *artifact) bool {
+	return strings.HasSuffix(strings.ToLower(file.Path()), ".jar")
 }

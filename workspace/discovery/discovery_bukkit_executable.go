@@ -1,10 +1,7 @@
 package discovery
 
 import (
-	"archive/zip"
 	"bufio"
-	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -21,7 +18,6 @@ const (
 	bukkitImplementationCraftBukkit = "CraftBukkit"
 	bukkitPaperClassPrefix          = "io/papermc/paper/"
 	bukkitLegacyPaperClassPrefix    = "com/destroystokyo/paper/"
-	bukkitSpigotClassPrefix         = "org/spigotmc/"
 )
 
 var bukkitVersionPrefixPattern = regexp.MustCompile(`^(\d+\.\d+(?:\.\d+)?)`)
@@ -40,13 +36,11 @@ var paperLineages = map[string]bool{
 }
 
 // IsPaperLineage reports whether name is a paper-lineage runtime identity
-// this package can emit as a primary runtime identity. Youer is included
-// even though it is a NeoForge hybrid; treat it separately before calling.
+// this package can emit. Youer is included even though it is a NeoForge
+// hybrid; treat it separately before calling.
 func IsPaperLineage(name string) bool {
 	return paperLineages[name]
 }
-
-type craftBukkitFamilyDetector struct{}
 
 type bukkitManifestSignals struct {
 	mainClass            string
@@ -57,21 +51,38 @@ type bukkitManifestSignals struct {
 	implementationVer    string
 }
 
-func (d *craftBukkitFamilyDetector) Name() string {
-	return "craftbukkit family executable"
+// discoverBukkit recognizes CraftBukkit-derived server layouts. A single
+// confirmed artifact is one installation; contradictory paper-lineage claims
+// are returned as separate installations so the engine can report typed
+// ambiguity instead of inventing a runtime.
+func discoverBukkit(s *scan) ([]Installation, []Finding) {
+	var installations []Installation
+	var findings []Finding
+	for _, primary := range s.RootFiles() {
+		if !productCandidate(s, primary) {
+			continue
+		}
+		detected, err := inspectBukkitInstallation(s, primary)
+		if err != nil {
+			findings = append(findings, Finding{
+				Kind:  FindingUnreadableFile,
+				Path:  primary.Path(),
+				Cause: err,
+			})
+			continue
+		}
+		installations = append(installations, detected...)
+	}
+	return installations, findings
 }
 
-func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
-	filePath := primaryFile.Path()
-	zipReader, err := primaryFile.Archive()
-	if err != nil {
-		return nil, err
-	}
-	_ = context
+func inspectBukkitInstallation(
+	s *scan,
+	primary *artifact,
+) ([]Installation, error) {
+	var judgment paperJudgment
 
-	judgment := newPaperJudgment()
-
-	manifest, ok, err := readBukkitExecutableManifest(filePath, zipReader)
+	manifest, ok, err := readBukkitManifest(s, primary)
 	if err != nil {
 		return nil, err
 	}
@@ -80,18 +91,15 @@ func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile
 	}
 
 	signals := parseBukkitManifest(manifest)
-	metaMainClass, err := readBukkitExecutableSidecar(
-		filePath,
-		zipReader,
+	metaMainClass, err := readBukkitSidecarString(
+		s,
+		primary,
 		paperMetaMainClassPath,
 	)
 	if err != nil {
 		return nil, err
 	}
-	reaperPatchProperties, err := readBukkitExecutablePatchProperties(
-		filePath,
-		zipReader,
-	)
+	reaperPatchProperties, err := readBukkitPatchProperties(s, primary)
 	if err != nil {
 		return nil, err
 	}
@@ -116,10 +124,9 @@ func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile
 	if !judgment.bukkitConfirmed {
 		return nil, nil
 	}
-	judgment.addReason("bukkit confirmation satisfied")
 
 	// Stage 2: Observation Extraction
-	judgment.observations, err = extractPaperObservations(filePath, zipReader)
+	judgment.observations, err = extractPaperObservations(s, primary)
 	if err != nil {
 		return nil, err
 	}
@@ -138,35 +145,7 @@ func (d *craftBukkitFamilyDetector) Detect(context DetectionContext, primaryFile
 	if !hasConcreteVersion(gameVersion) {
 		gameVersion = version.Unknown
 	}
-	evidence := projectPaperJudgment(filePath, gameVersion, judgment)
-	if evidence == nil {
-		return nil, nil
-	}
-
-	return evidence, nil
-}
-
-func readBukkitExecutableManifest(
-	filePath string,
-	zipReader *zip.Reader,
-) ([]byte, bool, error) {
-	if zipReader != nil {
-		return readArchiveEntry(zipReader, bukkitManifestPath)
-	}
-
-	manifestPath := filepath.Join(
-		filePath,
-		filepath.FromSlash(bukkitManifestPath),
-	)
-	data, err := os.ReadFile(manifestPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-
-	return data, true, nil
+	return projectPaperInstallations(primary.Path(), gameVersion, judgment), nil
 }
 
 func reasonPaperFamily(judgment *paperJudgment) {
@@ -177,22 +156,16 @@ func reasonPaperFamily(judgment *paperJudgment) {
 	switch {
 	case judgment.observations.hasPaperClasses:
 		judgment.familyResult = familyStrong
-		judgment.addReason("paper-family confirmed by bundled paper classes")
 	case hasModernPaperclipMetadataCluster(judgment.observations):
 		judgment.familyResult = familyStrong
-		judgment.addReason("paper-family confirmed by modern paperclip metadata cluster")
 	case hasConcreteVersion(judgment.observations.versionJSONID):
 		judgment.familyResult = familyWeak
-		judgment.addReason("paper-family remains likely from root version.json metadata")
 	case len(judgment.observations.patchProperties) > 0 || judgment.observations.hasPaperMCPatch:
 		judgment.familyResult = familyWeak
-		judgment.addReason("paper-family remains likely from legacy paper patch traces")
 	case judgment.observations.hasPaperclipNamespace || judgment.observations.hasLegacyPaperclipNamespace:
 		judgment.familyResult = familyWeak
-		judgment.addReason("paper-family remains likely from paperclip launcher namespaces")
 	default:
 		judgment.familyResult = familyMiss
-		judgment.addReason("paper-family evidence missing after bukkit confirmation; continuing to lineage attribution")
 	}
 }
 
@@ -208,28 +181,20 @@ func attributePaperLineage(judgment *paperJudgment) {
 	}
 
 	lineages := inferPaperObservationLineages(judgment.observations)
+	judgment.lineages = lineages
 
 	switch {
 	case len(lineages) > 1:
 		judgment.lineageResult = lineageContradiction
 		judgment.lineageName = strings.Join(lineages, ",")
-		judgment.addReason(
-			fmt.Sprintf(
-				"contradictory paper lineages detected: %s",
-				strings.Join(lineages, ", "),
-			),
-		)
 	case len(lineages) == 1 && lineages[0] == "paper":
 		judgment.lineageResult = lineagePaper
 		judgment.lineageName = "paper"
-		judgment.addReason("lineage attributed to official paper distribution")
 	case len(lineages) == 1:
 		judgment.lineageResult = lineageFork
 		judgment.lineageName = lineages[0]
-		judgment.addReason("lineage attributed to paper fork")
 	default:
 		judgment.lineageResult = lineageUnknown
-		judgment.addReason("no specific paper-family lineage attribution available")
 	}
 }
 
@@ -318,60 +283,31 @@ func inferPaperObservationLineages(obs paperObservations) []string {
 	return lineages
 }
 
-func readBukkitExecutableSidecar(
-	filePath string,
-	zipReader *zip.Reader,
+func readBukkitManifest(s *scan, primary *artifact) ([]byte, bool, error) {
+	return readProductEntry(s, primary, bukkitManifestPath)
+}
+
+func readBukkitSidecarString(
+	s *scan,
+	primary *artifact,
 	entryPath string,
 ) (string, error) {
-	var (
-		data []byte
-		ok   bool
-		err  error
-	)
-
-	if zipReader != nil {
-		data, ok, err = readArchiveEntry(zipReader, entryPath)
-	} else {
-		data, ok, err = readDirectoryEntry(filePath, entryPath)
-	}
+	data, ok, err := readProductEntry(s, primary, entryPath)
 	if err != nil || !ok {
 		return "", err
 	}
-
 	return strings.TrimSpace(string(data)), nil
 }
 
-func readBukkitExecutablePatchProperties(
-	filePath string,
-	zipReader *zip.Reader,
+func readBukkitPatchProperties(
+	s *scan,
+	primary *artifact,
 ) (map[string]string, error) {
-	var (
-		data []byte
-		ok   bool
-		err  error
-	)
-
-	if zipReader != nil {
-		data, ok, err = readArchiveEntry(zipReader, paperPatchPropertiesPath)
-	} else {
-		data, ok, err = readDirectoryEntry(filePath, paperPatchPropertiesPath)
-	}
+	data, ok, err := readProductEntry(s, primary, paperPatchPropertiesPath)
 	if err != nil || !ok {
 		return nil, err
 	}
-
 	return parsePaperPatchProperties(data), nil
-}
-
-func readDirectoryEntry(root string, entryPath string) ([]byte, bool, error) {
-	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(entryPath)))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-	return data, true, nil
 }
 
 func hasStrictReaperBukkitConfirmation(properties map[string]string) bool {
@@ -410,74 +346,109 @@ func resolvePaperContradictions(judgment *paperJudgment) {
 
 	if judgment.lineageResult == lineageContradiction {
 		judgment.familyResult = familyContradiction
-		judgment.contradictionState = fmt.Sprintf(
-			"lineage contradiction after bukkit confirmation: %s",
-			nonEmptyPaperLineageName(judgment.lineageName, "unknown"),
-		)
 	}
-	if judgment.familyResult == familyContradiction && judgment.contradictionState == "" {
-		judgment.contradictionState = "paper family contradiction after bukkit confirmation"
-	}
-	if judgment.contradictionState != "" {
-		judgment.addReason(judgment.contradictionState)
-		judgment.addReason("contradictory paper evidence resolved fail-closed to bukkit lineage")
-	}
+	judgment.contradicted = judgment.familyResult == familyContradiction
 }
 
-func projectPaperJudgment(
+// projectPaperInstallations emits one installation per attributable lineage.
+// Contradictory claims are never merged into one fabricated identity; the
+// engine reports the ambiguity and strict selection refuses it.
+func projectPaperInstallations(
 	filePath string,
 	gameVersion version.Version,
 	judgment paperJudgment,
-) *RuntimeEvidence {
+) []Installation {
 	if !judgment.bukkitConfirmed {
 		return nil
 	}
 
-	lineage := "bukkit"
+	components := []catalog.VersionedRef{
+		{
+			Ecosystem: catalog.EcosystemMinecraft,
+			Name:      input.ToProjectName("minecraft"),
+			Version:   gameVersion,
+		},
+	}
 
-	if judgment.contradictionState != "" {
-		judgment.addReason("runtime projection withheld paper promotion due to contradiction state")
-	} else {
-		switch judgment.lineageResult {
-		case lineagePaper:
-			lineage = "paper"
-		case lineageFork:
-			if detectedLineage := normalizePaperLineageName(judgment.lineageName); detectedLineage != "" {
-				lineage = detectedLineage
-			} else {
-				judgment.addReason("paper-fork result without a concrete lineage retains bukkit baseline")
+	if judgment.contradicted {
+		installations := make([]Installation, 0, len(judgment.lineages))
+		for _, lineage := range judgment.lineages {
+			name := normalizePaperLineageName(lineage)
+			if name == "" {
+				continue
 			}
-		case lineageUnknown:
-			switch judgment.familyResult {
-			case familyStrong:
-				judgment.addReason("strong paper-family evidence without a concrete lineage retains bukkit baseline")
-			case familyWeak:
-				judgment.addReason("weak paper-family evidence without a concrete lineage retains bukkit baseline")
-			default:
-				judgment.addReason("family miss remains non-terminal but projects to baseline bukkit runtime")
-			}
-		case lineageContradiction:
-			// contradictionState is set by resolvePaperContradictions; projection
-			// already withheld above via the contradictionState guard. This arm
-			// makes the switch exhaustive over all paperLineageResult values.
-			judgment.addReason("lineage contradiction: projection falls back to bukkit baseline")
-		default:
+			installations = append(
+				installations,
+				newPaperInstallation(name, components, filePath),
+			)
+		}
+		if len(installations) > 0 {
+			return installations
 		}
 	}
 
-	return &RuntimeEvidence{
-		PrimaryPath: filePath, PrimaryRuntime: &catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemUnspecified,
-			Name:      input.ToProjectName(lineage),
-			Version:   version.Unknown,
-		}, RuntimeComponents: []catalog.VersionedRef{
-			{
-				Ecosystem: catalog.EcosystemMinecraft,
-				Name:      input.ToProjectName("minecraft"),
-				Version:   gameVersion,
-			},
-		}, DetectorName: (&craftBukkitFamilyDetector{}).Name(),
+	lineage := "bukkit"
+	switch judgment.lineageResult {
+	case lineagePaper:
+		lineage = "paper"
+	case lineageFork:
+		if detected := normalizePaperLineageName(judgment.lineageName); detected != "" {
+			lineage = detected
+		}
+	case lineageUnknown, lineageContradiction:
+		// No attributable lineage retains the confirmed bukkit baseline.
 	}
+
+	return []Installation{newPaperInstallation(lineage, components, filePath)}
+}
+
+func newPaperInstallation(
+	lineage string,
+	components []catalog.VersionedRef,
+	filePath string,
+) Installation {
+	return NewInstallation(
+		Identity{
+			Primary: catalog.VersionedRef{
+				Ecosystem: paperLineageEcosystem(lineage),
+				Name:      input.ToProjectName(lineage),
+				Version:   version.Unknown,
+			},
+			Components: cloneComponents(components),
+		},
+		filePath,
+	)
+}
+
+func paperLineageEcosystem(lineage string) catalog.Ecosystem {
+	switch lineage {
+	case "bukkit":
+		return catalog.EcosystemBukkit
+	case "youer":
+		// Youer is a NeoForge hybrid; its primary product is not a Paper
+		// ecosystem, and served-package policy handles it by name.
+		return catalog.EcosystemUnspecified
+	default:
+		return catalog.EcosystemPaper
+	}
+}
+
+func cloneComponents(
+	components []catalog.VersionedRef,
+) []catalog.VersionedRef {
+	if len(components) == 0 {
+		return nil
+	}
+	return append([]catalog.VersionedRef(nil), components...)
+}
+
+// observedVersion keeps an unparseable or absent artifact version observable
+// as version.Unknown instead of producing an invalid identity.
+func observedVersion(value version.Version) version.Version {
+	if !hasConcreteVersion(value) {
+		return version.Unknown
+	}
+	return value
 }
 
 func normalizePaperLineageName(name string) string {
@@ -492,13 +463,6 @@ func normalizePaperLineageName(name string) string {
 	default:
 		return normalized
 	}
-}
-
-func nonEmptyPaperLineageName(name string, fallback string) string {
-	if normalized := normalizePaperLineageName(name); normalized != "" {
-		return normalized
-	}
-	return fallback
 }
 
 func parseBukkitManifest(data []byte) bukkitManifestSignals {
@@ -562,6 +526,97 @@ func parseBukkitGameVersion(implementationVersion string) version.Version {
 	return version.Version(match[1])
 }
 
-func init() {
-	registerExecutableDetector(&craftBukkitFamilyDetector{})
+// productCandidate reports whether a root artifact can carry an executable
+// server layout. Directory layouts are only considered when they expose the
+// manifest every recognized server product ships.
+func productCandidate(s *scan, primary *artifact) bool {
+	if primary == nil {
+		return false
+	}
+	if !primary.IsDirectory() {
+		return strings.HasSuffix(
+			strings.ToLower(primary.Path()),
+			".jar",
+		)
+	}
+	manifest, ok := s.File(
+		filepath.Join(
+			primary.Path(),
+			filepath.FromSlash(bukkitManifestPath),
+		),
+	)
+	return ok && !manifest.IsDirectory()
+}
+
+// readProductEntry reads one entry from a jar artifact or from an unpacked
+// directory layout artifact. Directory reads stay root-confined through the
+// scan; archives use the scan-owned ReaderAt handle.
+func readProductEntry(
+	s *scan,
+	primary *artifact,
+	entryPath string,
+) ([]byte, bool, error) {
+	if primary == nil {
+		return nil, false, nil
+	}
+	if primary.IsDirectory() {
+		nested, ok := s.File(
+			filepath.Join(
+				primary.Path(),
+				filepath.FromSlash(entryPath),
+			),
+		)
+		if !ok || nested.IsDirectory() {
+			return nil, false, nil
+		}
+		data, err := nested.Read()
+		if err != nil {
+			return nil, false, err
+		}
+		return data, true, nil
+	}
+
+	archive, err := primary.Archive()
+	if err != nil {
+		return nil, false, err
+	}
+	if archive == nil {
+		return nil, false, nil
+	}
+	return readArchiveEntry(archive, entryPath)
+}
+
+// productEntryExists reports whether one entry is present without loading its
+// bytes. Large payload jars are never read just to test for a marker.
+func productEntryExists(
+	s *scan,
+	primary *artifact,
+	entryPath string,
+) (bool, error) {
+	if primary == nil {
+		return false, nil
+	}
+	if primary.IsDirectory() {
+		nested, ok := s.File(
+			filepath.Join(
+				primary.Path(),
+				filepath.FromSlash(entryPath),
+			),
+		)
+		return ok && !nested.IsDirectory(), nil
+	}
+
+	archive, err := primary.Archive()
+	if err != nil {
+		return false, err
+	}
+	if archive == nil {
+		return false, nil
+	}
+	for _, file := range archive.File {
+		if file.Name == entryPath {
+			return true, nil
+		}
+	}
+	return false, nil
 }

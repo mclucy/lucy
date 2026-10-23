@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/mclucy/lucy/catalog"
 	serverpkg "github.com/mclucy/lucy/server"
@@ -11,6 +14,7 @@ import (
 	"github.com/mclucy/lucy/report"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/mclucy/lucy/workspace/identify"
 )
 
@@ -81,38 +85,182 @@ func LoadDependencyData(workDir string, forceLive bool) (
 	}
 
 	origin = OriginLive
-	info, _ := identify.Packages(workspace.NewAt(workDir))
+	info, _ := identify.Packages(workspace.Observe(workDir, discovery.Request{}))
 	reportObservationFindings(info)
-	graph, err := BuildGraphFromProbe(info)
+	graph, err := BuildGraphFromObservation(info)
 	if err != nil {
-		return nil, 0, env, fmt.Errorf("failed to build graph from probe: %w", err)
+		return nil, 0, env, fmt.Errorf("failed to build graph from observation: %w", err)
 	}
 	return graph, origin, environmentFromWorkspace(info, env), nil
 }
 
 // reportObservationFindings renders each consumed observation once.
-func reportObservationFindings(observed workspace.Workspace) {
+func reportObservationFindings(observed *workspace.Workspace) {
+	if observed == nil {
+		return
+	}
 	for _, warning := range observed.Warnings {
 		report.Warn(warning)
 	}
-	for _, ambiguityErr := range observed.Probe.AmbiguityErrors(observed.ServerDir) {
-		report.Error(ambiguityErr)
-	}
-	reportRuntimeFindings(observed.Probe.Findings)
+	reportDiscoveryFindings(&observed.Discovery)
 }
 
-func reportRuntimeFindings(findings []workspace.RuntimeFinding) {
-	for _, finding := range findings {
-		label := "unmanaged entry point"
-		if finding.Kind == workspace.RuntimeUnmanaged {
-			label = "unmanaged server entry point"
-		}
-		report.Info(fmt.Sprintf(
-			"%s %s (%s %s / Minecraft %s); left unchanged",
-			label, finding.Path, finding.Runtime.Product(), finding.Runtime.Primary.Version,
-			finding.Runtime.MinecraftVersion(),
-		))
+// reportDiscoveryFindings presents one discovery result. A resolved layout
+// never reports a failure: unmanaged or alternative entry points stay
+// informational.
+func reportDiscoveryFindings(observed *discovery.Result) {
+	if observed == nil {
+		return
 	}
+	selection := observed.Selection
+	resolved := selection.IsValid()
+	unresolvedReported := false
+	unreadableReported := map[string]bool{}
+	for finding := range observed.Findings() {
+		switch finding.Kind {
+		case discovery.FindingUnreadableFile:
+			key := unreadableFindingKey(finding)
+			if unreadableReported[key] {
+				continue
+			}
+			unreadableReported[key] = true
+			report.Warn(unreadableFindingError(finding))
+		case discovery.FindingAlternativeEntryPoint,
+			discovery.FindingUnmanagedInstallation:
+			report.Info(entryPointFindingMessage(finding))
+		case discovery.FindingMissingDeclaredEntryPoint:
+			report.Warn(fmt.Errorf(
+				"declared server entry point %s is missing; run lucy install --locked",
+				finding.Path,
+			))
+		case discovery.FindingModifiedFile:
+			report.Warn(fmt.Errorf(
+				"managed file %s was modified; it stays unmanaged",
+				finding.Path,
+			))
+		case discovery.FindingReceiptError:
+			if finding.Cause != nil {
+				report.Warn(fmt.Errorf(
+					"cannot verify installation ownership: %w",
+					finding.Cause,
+				))
+			} else {
+				report.Warn(errors.New("cannot verify installation ownership"))
+			}
+		case discovery.FindingInvalidIdentity:
+			report.Warn(fmt.Errorf(
+				"cannot identify the server in %s: %v",
+				finding.Path,
+				finding.Cause,
+			))
+		case discovery.FindingConflictingIdentities,
+			discovery.FindingAmbiguousInstallations:
+			if resolved || unresolvedReported {
+				continue
+			}
+			report.Error(unresolvedRuntimeMessage(observed, finding))
+			unresolvedReported = true
+		}
+	}
+}
+
+// unreadableFindingKey identifies one underlying read failure. Recognizers
+// can inspect the same artifact, so identical path and cause pairs collapse.
+func unreadableFindingKey(finding discovery.Finding) string {
+	cause := ""
+	if finding.Cause != nil {
+		cause = finding.Cause.Error()
+	}
+	return finding.Path + "\x00" + cause
+}
+
+func unreadableFindingError(finding discovery.Finding) error {
+	if finding.Cause != nil {
+		return fmt.Errorf("cannot read %s: %w", finding.Path, finding.Cause)
+	}
+	return fmt.Errorf("cannot read %s", finding.Path)
+}
+
+// unreadableFindingLines presents each underlying read failure once for a
+// command failure detail.
+func unreadableFindingLines(result *discovery.Result) []string {
+	if result == nil {
+		return nil
+	}
+	var lines []string
+	seen := map[string]bool{}
+	for _, finding := range result.Diagnostics {
+		if finding.Kind != discovery.FindingUnreadableFile {
+			continue
+		}
+		key := unreadableFindingKey(finding)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if finding.Cause != nil {
+			lines = append(
+				lines,
+				fmt.Sprintf("%s: %v", finding.Path, finding.Cause),
+			)
+		} else {
+			lines = append(lines, finding.Path)
+		}
+	}
+	return lines
+}
+
+func entryPointFindingMessage(finding discovery.Finding) string {
+	label := "unmanaged entry point"
+	if finding.Kind == discovery.FindingUnmanagedInstallation {
+		label = "unmanaged server entry point"
+	}
+	return fmt.Sprintf("%s %s; left unchanged", label, finding.Path)
+}
+
+func unresolvedRuntimeMessage(
+	observed *discovery.Result,
+	finding discovery.Finding,
+) error {
+	paths := finding.Paths
+	if len(paths) == 0 {
+		paths = competingEntryPoints(observed, "")
+	}
+	if len(paths) == 0 {
+		return errors.New("no unambiguous server runtime was found")
+	}
+	commands := make([]string, 0, len(paths))
+	for _, path := range paths {
+		commands = append(
+			commands,
+			"lucy init --entry-point '"+strings.ReplaceAll(path, "'", "'\\''")+"'",
+		)
+	}
+	return fmt.Errorf(
+		"cannot choose between server runtimes; select one with %s",
+		strings.Join(commands, " or "),
+	)
+}
+
+// competingEntryPoints is a fallback for findings that carry no paths. It
+// lists every entry point except the selected one in a stable order.
+func competingEntryPoints(
+	result *discovery.Result,
+	selected string,
+) []string {
+	var paths []string
+	seen := map[string]bool{}
+	for i := range result.Installations {
+		for file := range result.Installations[i].EntryPoints() {
+			if file.Path == "" || file.Path == selected || seen[file.Path] {
+				continue
+			}
+			seen[file.Path] = true
+			paths = append(paths, file.Path)
+		}
+	}
+	slices.Sort(paths)
+	return paths
 }
 
 // environmentFromLock reads the server identity from the lock's explicit
@@ -176,7 +324,10 @@ func ecosystemVersionFromLock(lock *lockfile.Document) string {
 
 // environmentFromWorkspace fills the environment gaps a lock could not
 // supply by observing the live workspace. Values already known win.
-func environmentFromWorkspace(ws workspace.Workspace, env ServerEnvironment) ServerEnvironment {
+func environmentFromWorkspace(ws *workspace.Workspace, env ServerEnvironment) ServerEnvironment {
+	if ws == nil {
+		return env
+	}
 	if env.Core == "" || env.GameVersion == "" ||
 		env.Ecosystem == catalog.EcosystemUnspecified {
 		if doc, err := manifest.Read(ws.ServerDir); err == nil {
@@ -205,7 +356,7 @@ func environmentFromWorkspace(ws workspace.Workspace, env ServerEnvironment) Ser
 	}
 	if env.EcosystemVersion == "" {
 		ecosystem := server.Ecosystem()
-		for _, component := range server.Components {
+		for _, component := range selectedRuntimeComponents(server) {
 			if component.Ecosystem != ecosystem {
 				continue
 			}

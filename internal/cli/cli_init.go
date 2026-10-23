@@ -16,7 +16,7 @@ import (
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/spf13/cobra"
 )
 
@@ -72,50 +72,105 @@ func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.Init
 	output := newInstallOutput(cmd)
 	defer output.Close()
 	opts.Trace = output.Trace()
-	var findings []workspace.RuntimeFinding
-	opts.OnRuntimeFindings = func(observed []workspace.RuntimeFinding) { findings = observed }
-	opts.PromptRuntime = func(probe workspace.Probe) (string, error) {
+	opts.PromptRuntime = func(observed discovery.Result) (string, error) {
 		output.Close()
-		return promptRuntime(cmd, probe)
+		return promptRuntime(cmd, observed)
 	}
 	ctx, stop := commandContext(cmd)
 	defer stop()
-	d, warnings, err := operation.Initialize(ctx, workDir, opts)
+	result, err := operation.Initialize(ctx, workDir, opts)
 	if err != nil {
-		return output.Failure(err)
+		return output.Failure(initializationFailure(err, result))
 	}
 	output.Close()
-	for _, warning := range warnings {
+	for _, warning := range result.Warnings {
 		report.Warn(warning)
 	}
-	reportRuntimeFindings(findings)
+	reportDiscoveryFindings(&result.Discovery)
 	fmt.Fprintf(
 		cmd.OutOrStdout(),
 		"Wrote %s and %s for Minecraft %s (%s)\n",
 		manifest.Filename,
 		lockfile.Filename,
-		d.Server.Minecraft,
-		d.Server.Core.Product,
+		result.Document.Server.Minecraft,
+		result.Document.Server.Core.Product,
 	)
 	return nil
 }
 
-func promptRuntime(cmd *cobra.Command, probe workspace.Probe) (string, error) {
+// initializationFailure turns a typed selection failure into an actionable
+// report. The commands name installed entry points exactly.
+func initializationFailure(err error, result *operation.InitResult) error {
+	var unreadable []string
+	if result != nil {
+		unreadable = unreadableFindingLines(&result.Discovery)
+	}
+	var selectionErr *discovery.SelectionError
+	if !errors.As(err, &selectionErr) {
+		if len(unreadable) == 0 {
+			return err
+		}
+		return &report.Detail{
+			Title: err.Error(),
+			Lines: unreadable,
+			Cause: err,
+		}
+	}
+	detail := &report.Detail{Cause: err}
+	switch selectionErr.State {
+	case discovery.SelectionAmbiguous:
+		detail.Title = "several server runtimes share this directory"
+	case discovery.SelectionMissingDeclared:
+		detail.Title = "the declared server entry point is missing"
+	case discovery.SelectionInvalid:
+		detail.Title = "the requested entry point is not a recognized server"
+	default:
+		return err
+	}
+	commands := entryPointCommands(selectionErr.Installations)
+	detail.Lines = append(detail.Lines, commands...)
+	detail.Lines = append(detail.Lines, unreadable...)
+	if len(commands) > 0 {
+		detail.Hint = "Run one of these commands to select the server to initialize."
+	}
+	return detail
+}
+
+func entryPointCommands(installations []discovery.Installation) []string {
+	var commands []string
+	seen := map[string]bool{}
+	for i := range installations {
+		for file := range installations[i].EntryPoints() {
+			if file.Path == "" || seen[file.Path] {
+				continue
+			}
+			seen[file.Path] = true
+			commands = append(commands, "lucy init --entry-point '"+strings.ReplaceAll(file.Path, "'", "'\\''")+"'")
+		}
+	}
+	return commands
+}
+
+func promptRuntime(cmd *cobra.Command, observed discovery.Result) (string, error) {
 	stdin, ok := cmd.InOrStdin().(*os.File)
 	if !ok || !term.IsTerminal(stdin.Fd()) || !style.InteractiveEnabled() {
 		return "", nil
 	}
-	options := make([]huh.Option[string], 0, len(probe.Candidates))
-	for _, candidate := range probe.Candidates {
-		runtime, err := probe.Select(candidate.JarPath)
-		if err != nil {
-			continue
+	options := make([]huh.Option[string], 0, len(observed.Installations))
+	for i := range observed.Installations {
+		installation := &observed.Installations[i]
+		for file := range installation.EntryPoints() {
+			options = append(options, huh.NewOption(
+				fmt.Sprintf(
+					"%s %s / Minecraft %s (%s)",
+					installation.Identity.Product().Title(),
+					installation.Identity.Primary.Version,
+					installation.Identity.MinecraftVersion(),
+					file.Path,
+				),
+				file.Path,
+			))
 		}
-		server, _ := runtime.Single()
-		options = append(options, huh.NewOption(
-			fmt.Sprintf("%s %s / Minecraft %s (%s)", server.Product(), server.Primary.Version, server.MinecraftVersion(), candidate.JarPath),
-			candidate.JarPath,
-		))
 	}
 	if len(options) == 0 {
 		return "", nil

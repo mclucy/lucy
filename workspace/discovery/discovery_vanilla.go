@@ -2,73 +2,73 @@ package discovery
 
 import (
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/log"
 )
 
-type VanillaDetector struct{}
-
-func (d *VanillaDetector) Name() string {
-	return "vanilla server"
+// discoverVanilla recognizes Mojang server jars. A Fabric meta launcher also
+// embeds version.json; it is rejected here because the loader installation
+// owns that artifact, not plain Minecraft.
+func discoverVanilla(s *scan) ([]Installation, []Finding) {
+	var installations []Installation
+	var findings []Finding
+	for _, primary := range s.RootFiles() {
+		if !productCandidate(s, primary) {
+			continue
+		}
+		installation, err := inspectVanillaInstallation(s, primary)
+		if err != nil {
+			findings = append(findings, Finding{
+				Kind:  FindingUnreadableFile,
+				Path:  primary.Path(),
+				Cause: err,
+			})
+			continue
+		}
+		if installation != nil {
+			installations = append(installations, *installation)
+		}
+	}
+	return installations, findings
 }
 
-func (d *VanillaDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
-	filePath := primaryFile.Path()
-	zipReader, err := primaryFile.Archive()
+func inspectVanillaInstallation(
+	s *scan,
+	primary *artifact,
+) (*Installation, error) {
+	launchProperties, hasLaunchProperties, err := readProductEntry(
+		s,
+		primary,
+		fabricLaunchPropertiesPath,
+	)
 	if err != nil {
 		return nil, err
 	}
-	_ = context
-
-	data, ok, err := readArchiveEntry(zipReader, fabricLaunchPropertiesPath)
-	if err != nil {
-		return nil, err
-	}
-	if ok && fabricLauncherPropertiesAreServer(data) {
+	if hasLaunchProperties && fabricLauncherPropertiesAreServer(launchProperties) {
 		return nil, nil
 	}
 
-	for _, f := range zipReader.File {
-		if f.Name == mojangVersionJSONEntry {
-			r, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer fn.CloseReader(r, log.Warn)
-
-			data, err := fsutil.CopyBytes(r, fsutil.MaxZipEntryBytes)
-			if err != nil {
-				return nil, err
-			}
-
-			gameVersion, guarded, err := mojangVersionFromJSON(data)
-			if err != nil {
-				return nil, err
-			}
-			if guarded {
-				return nil, nil
-			}
-
-			exec := &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &catalog.VersionedRef{
-				Ecosystem: catalog.EcosystemMinecraft,
-				Name:      "minecraft",
-				Version:   gameVersion,
-			}, RuntimeComponents: []catalog.VersionedRef{
-				{
-					Ecosystem: catalog.EcosystemMinecraft,
-					Name:      "minecraft",
-					Version:   gameVersion,
-				},
-			}}
-
-			return exec, nil
-		}
+	versionJSON, ok, err := readProductEntry(s, primary, mojangVersionJSONEntry)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
 	}
 
-	return nil, nil
-}
+	gameVersion, guarded, err := mojangVersionFromJSON(versionJSON)
+	if err != nil {
+		return nil, err
+	}
+	if guarded {
+		return nil, nil
+	}
 
-func init() {
-	registerExecutableDetector(&VanillaDetector{})
+	identity := Identity{
+		Primary: catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemMinecraft,
+			Name:      catalog.Name("minecraft"),
+			Version:   observedVersion(gameVersion),
+		},
+	}
+	installation := NewInstallation(identity, primary.Path())
+	return &installation, nil
 }

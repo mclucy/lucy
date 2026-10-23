@@ -32,25 +32,43 @@ const (
 	spongeFlavorNeo
 )
 
-type spongeServerDetector struct{}
-
-func (d *spongeServerDetector) Name() string {
-	return "sponge server"
+// discoverSponge recognizes SpongeVanilla/SpongeForge/SpongeNeo universal
+// jars. The specification title decides the flavor; the implementation title
+// only fills in when no specification title is present.
+func discoverSponge(s *scan) ([]Installation, []Finding) {
+	var installations []Installation
+	var findings []Finding
+	for _, primary := range s.RootFiles() {
+		if !productCandidate(s, primary) {
+			continue
+		}
+		installation, err := inspectSpongeInstallation(s, primary)
+		if err != nil {
+			findings = append(findings, Finding{
+				Kind:  FindingUnreadableFile,
+				Path:  primary.Path(),
+				Cause: err,
+			})
+			continue
+		}
+		if installation != nil {
+			installations = append(installations, *installation)
+		}
+	}
+	return installations, findings
 }
 
-func (d *spongeServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
-	filePath := primaryFile.Path()
-	zipReader, err := primaryFile.Archive()
-	if err != nil {
-		return nil, err
-	}
-	_ = context
-
-	if !spongeUniversalJarPattern.MatchString(strings.ToLower(filepath.Base(filePath))) {
+func inspectSpongeInstallation(
+	s *scan,
+	primary *artifact,
+) (*Installation, error) {
+	if !spongeUniversalJarPattern.MatchString(
+		strings.ToLower(filepath.Base(primary.Path())),
+	) {
 		return nil, nil
 	}
 
-	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
+	manifest, ok, err := readProductEntry(s, primary, bukkitManifestPath)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +81,9 @@ func (d *spongeServerDetector) Detect(context DetectionContext, primaryFile *Det
 		return nil, nil
 	}
 
-	return buildSpongeRuntimeEvidence(filePath, signals), nil
+	identity := buildSpongeIdentity(signals)
+	installation := NewInstallation(identity, primary.Path())
+	return &installation, nil
 }
 
 type spongeManifestSignals struct {
@@ -197,10 +217,7 @@ func parseSpongeImplementationVersion(
 	}
 }
 
-func buildSpongeRuntimeEvidence(
-	filePath string,
-	signals spongeManifestSignals,
-) *RuntimeEvidence {
+func buildSpongeIdentity(signals spongeManifestSignals) Identity {
 	primaryName := "spongevanilla"
 	switch signals.flavor {
 	case spongeFlavorForge:
@@ -208,11 +225,7 @@ func buildSpongeRuntimeEvidence(
 	case spongeFlavorNeo:
 		primaryName = "spongeneo"
 	}
-	primary := catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemSponge,
-		Name:      input.ToProjectName(primaryName),
-		Version:   signals.spongeVersion,
-	}
+
 	components := []catalog.VersionedRef{
 		{
 			Ecosystem: catalog.EcosystemMinecraft,
@@ -240,13 +253,12 @@ func buildSpongeRuntimeEvidence(
 		)
 	}
 
-	return &RuntimeEvidence{
-		PrimaryPath:       filePath,
-		PrimaryRuntime:    &primary,
-		RuntimeComponents: components,
+	return Identity{
+		Primary: catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemSponge,
+			Name:      input.ToProjectName(primaryName),
+			Version:   signals.spongeVersion,
+		},
+		Components: components,
 	}
-}
-
-func init() {
-	registerExecutableDetector(&spongeServerDetector{})
 }

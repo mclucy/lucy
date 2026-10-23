@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"archive/zip"
 	"bufio"
 	"encoding/json/v2"
 	"path/filepath"
@@ -17,24 +16,40 @@ var arclightJarNamePattern = regexp.MustCompile(
 	`^arclight-(?:forge|neoforge|fabric)-(\d+\.\d+(?:\.\d+)?)(?:[-.].*)?\.jar$`,
 )
 
-type arclightServerDetector struct{}
-
-func (d *arclightServerDetector) Name() string {
-	return "arclight server"
+// discoverArclight recognizes Arclight hybrid server jars. Loader evidence is
+// kept as a concrete runtime component; the jar itself is the sole entry
+// point of the installation.
+func discoverArclight(s *scan) ([]Installation, []Finding) {
+	var installations []Installation
+	var findings []Finding
+	for _, primary := range s.RootFiles() {
+		if !productCandidate(s, primary) {
+			continue
+		}
+		installation, err := inspectArclightInstallation(s, primary)
+		if err != nil {
+			findings = append(findings, Finding{
+				Kind:  FindingUnreadableFile,
+				Path:  primary.Path(),
+				Cause: err,
+			})
+			continue
+		}
+		if installation != nil {
+			installations = append(installations, *installation)
+		}
+	}
+	return installations, findings
 }
 
 // Sources:
 // - https://arclight.izzel.io/
 // - https://deepwiki.com/IzzelAliz/Arclight/1-overview
-func (d *arclightServerDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
-	filePath := primaryFile.Path()
-	zipReader, err := primaryFile.Archive()
-	if err != nil {
-		return nil, err
-	}
-	_ = context
-
-	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
+func inspectArclightInstallation(
+	s *scan,
+	primary *artifact,
+) (*Installation, error) {
+	manifest, ok, err := readProductEntry(s, primary, bukkitManifestPath)
 	if err != nil {
 		return nil, err
 	}
@@ -47,14 +62,15 @@ func (d *arclightServerDetector) Detect(context DetectionContext, primaryFile *D
 		return nil, nil
 	}
 
-	launchProps, hasLaunchProps, err := readArchiveEntry(
-		zipReader,
+	launchProps, hasLaunchProps, err := readProductEntry(
+		s,
+		primary,
 		"arclight-server-launch.properties",
 	)
 	if err != nil {
 		return nil, err
 	}
-	hasCommonJar, err := archiveContains(zipReader, "common.jar")
+	hasCommonJar, err := productEntryExists(s, primary, "common.jar")
 	if err != nil {
 		return nil, err
 	}
@@ -64,16 +80,10 @@ func (d *arclightServerDetector) Detect(context DetectionContext, primaryFile *D
 
 	gameVersion := manifestSignals.gameVersion
 	if !hasConcreteVersion(gameVersion) {
-		gameVersion = parseArclightGameVersionFromPath(filePath)
+		gameVersion = parseArclightGameVersionFromPath(primary.Path())
 	}
 
-	primary := catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemUnspecified,
-		Name:      input.ToProjectName("arclight"),
-		Version:   manifestSignals.implementationVersion,
-	}
 	components := []catalog.VersionedRef{
-		primary,
 		{
 			Ecosystem: catalog.EcosystemMinecraft,
 			Name:      input.ToProjectName("minecraft"),
@@ -82,25 +92,35 @@ func (d *arclightServerDetector) Detect(context DetectionContext, primaryFile *D
 	}
 	if loader, ok := arclightLoaderEcosystem(launchProps); ok {
 		component := arclightLoaderComponent(loader)
-		installerJSON, found, err := readArchiveEntry(
-			zipReader,
+		installerJSON, found, err := readProductEntry(
+			s,
+			primary,
 			"META-INF/installer.json",
 		)
 		if err != nil {
 			return nil, err
 		}
 		if found {
-			if version, ok := parseArclightLoaderVersion(
+			if loaderVersion, ok := parseArclightLoaderVersion(
 				installerJSON,
 				loader,
 			); ok {
-				component.Version = version
+				component.Version = loaderVersion
 			}
 		}
 		components = append(components, component)
 	}
 
-	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &primary, RuntimeComponents: components}, nil
+	identity := Identity{
+		Primary: catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemUnspecified,
+			Name:      input.ToProjectName("arclight"),
+			Version:   observedVersion(manifestSignals.implementationVersion),
+		},
+		Components: components,
+	}
+	installation := NewInstallation(identity, primary.Path())
+	return &installation, nil
 }
 
 type arclightManifestSignals struct {
@@ -249,16 +269,4 @@ func parseArclightLoaderVersion(
 		return versionpkg.Unknown, false
 	}
 	return loaderVersion, true
-}
-
-func archiveContains(zipReader *zip.Reader, name string) (bool, error) {
-	_, ok, err := readArchiveEntry(zipReader, name)
-	if err != nil {
-		return false, err
-	}
-	return ok, nil
-}
-
-func init() {
-	registerExecutableDetector(&arclightServerDetector{})
 }

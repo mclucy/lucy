@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/mclucy/lucy/workspace/discovery"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,6 +22,8 @@ func RunningAt(anchor string) bool {
 			}
 		}
 	}
-	ws := Workspace{ServerDir: root, Probe: probeDirectory(root)}
+	ws := &Workspace{ServerDir: root}
+	ws.Discovery = discovery.Discover(root)
+	ws.selectionErr = ws.Discovery.Select(discovery.Request{})
 	return ws.Running()
 }

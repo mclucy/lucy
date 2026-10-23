@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/log"
@@ -26,37 +25,10 @@ const (
 	// fabricLaunchPropertiesPath, which sits inside the jar.
 	fabricLauncherPropertiesPath = "fabric-server-launcher.properties"
 	fabricServerJarProperty      = "serverJar"
-	fabricDefaultServerJar       = "server.jar"
+	minecraftServerJarName       = "server.jar"
 	fabricModernKnotServer       = "net.fabricmc.loader.impl.launch.knot.KnotServer"
 	fabricLegacyKnotServer       = "net.fabricmc.loader.launch.knot.KnotServer"
 )
-
-// fabricServerSingleFileDetector detects Fabric single-file servers.
-type fabricServerSingleFileDetector struct{}
-
-func (d *fabricServerSingleFileDetector) Name() string {
-	return "fabric server"
-}
-
-func (d *fabricServerSingleFileDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (exec *RuntimeEvidence, err error) {
-	filePath := primaryFile.Path()
-	zipReader, err := primaryFile.Archive()
-	if err != nil {
-		return nil, err
-	}
-	_ = context
-
-	loaderVersion, gameVersion, ok := parseFabricInstallProperties(zipReader)
-	if !ok {
-		return nil, nil
-	}
-
-	return newFabricRuntimeEvidence(
-		filePath,
-		loaderVersion,
-		gameVersion,
-	), nil
-}
 
 // parseFabricInstallProperties reads the unattended install.properties entry
 // that a Fabric meta launcher embeds. Only a complete loader and game version
@@ -103,62 +75,6 @@ func parseFabricInstallProperties(zipReader *zip.Reader) (
 	return loaderVersion, gameVersion, false
 }
 
-// fabricServerLauncherDetector detects Fabric server launchers.
-type fabricServerLauncherDetector struct{}
-
-func (d *fabricServerLauncherDetector) Name() string {
-	return "fabric server"
-}
-
-func (d *fabricServerLauncherDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (exec *RuntimeEvidence, err error) {
-	filePath := primaryFile.Path()
-	zipReader, err := primaryFile.Archive()
-	if err != nil {
-		return nil, err
-	}
-	_ = context
-
-	data, ok, err := readArchiveEntry(zipReader, fabricLaunchPropertiesPath)
-	if err != nil || !ok {
-		return nil, err
-	}
-	if !fabricLauncherPropertiesAreServer(data) {
-		return nil, nil
-	}
-
-	loaderVersion, gameVersion := parseFabricLauncherManifestVersions(zipReader)
-	if loaderVersion == versionpkg.Unknown {
-		loaderVersion = parseFabricLauncherBundledLoaderVersion(zipReader)
-	}
-	if gameVersion == versionpkg.Unknown {
-		gameVersion = parseFabricLauncherSidecarGameVersion(context, primaryFile)
-	}
-	// Installer 1.1+ shims embed no version evidence, so the last resort is
-	// the vanilla jar the shim boots: FabricServerLauncher reads serverJar
-	// from fabric-server-launcher.properties and defaults to server.jar.
-	launcherProperties := []byte(nil)
-	if propertiesFile, ok := context.Sibling(primaryFile, "fabric-server-launcher.properties"); ok {
-		launcherProperties, _ = propertiesFile.Read()
-	}
-	serverJarPath := fabricLauncherServerJarPath(primaryFile, launcherProperties)
-	if gameVersion == versionpkg.Unknown {
-		if serverJar, ok := context.RootFile(serverJarPath); ok {
-			gameVersion = parseServerJarGameVersion(serverJar)
-		}
-	}
-	if loaderVersion == versionpkg.Unknown || gameVersion == versionpkg.Unknown {
-		return nil, nil
-	}
-
-	exec = newFabricRuntimeEvidence(filePath, loaderVersion, gameVersion)
-	// The shim boots this jar; the probe must not report it as a standalone
-	// runtime beside the shim.
-	if serverJar, ok := context.RootFile(serverJarPath); ok {
-		exec.ConsumedFiles = []*DetectionFile{serverJar}
-	}
-	return exec, nil
-}
-
 func fabricLauncherPropertiesAreServer(data []byte) bool {
 	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimRight(line, "\r")
@@ -181,36 +97,15 @@ func parseFabricLauncherManifest(zipReader *zip.Reader) (
 ) {
 	loaderVersion = versionpkg.Unknown
 	gameVersion = versionpkg.Unknown
-	data, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
-	if err != nil || !ok {
-		return loaderVersion, gameVersion, nil
-	}
-
-	for _, line := range unfoldManifestLines(data) {
-		value, found := strings.CutPrefix(line, "Class-Path: ")
-		if !found {
-			continue
+	classPath = parseArchiveClassPath(zipReader)
+	for _, entry := range classPath {
+		if parsed, found := fabricClassPathVersion(entry, "fabric-loader"); found {
+			loaderVersion = parsed
+		} else if parsed, found := fabricClassPathVersion(entry, "intermediary"); found {
+			gameVersion = parsed
 		}
-		for _, entry := range strings.Fields(value) {
-			classPath = append(classPath, entry)
-			if parsed, found := fabricClassPathVersion(entry, "fabric-loader"); found {
-				loaderVersion = parsed
-			} else if parsed, found := fabricClassPathVersion(entry, "intermediary"); found {
-				gameVersion = parsed
-			}
-		}
-		return loaderVersion, gameVersion, classPath
 	}
-
-	return loaderVersion, gameVersion, nil
-}
-
-func parseFabricLauncherManifestVersions(zipReader *zip.Reader) (
-	loaderVersion versionpkg.Version,
-	gameVersion versionpkg.Version,
-) {
-	loaderVersion, gameVersion, _ = parseFabricLauncherManifest(zipReader)
-	return loaderVersion, gameVersion
+	return loaderVersion, gameVersion, classPath
 }
 
 // fabricClassPathVersion extracts the version segment after
@@ -246,6 +141,23 @@ func readArchiveManifestMainClass(zipReader *zip.Reader) (string, bool) {
 	return "", false
 }
 
+// parseArchiveClassPath returns the entries of the first Class-Path
+// attribute in a jar manifest.
+func parseArchiveClassPath(zipReader *zip.Reader) []string {
+	data, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
+	if err != nil || !ok {
+		return nil
+	}
+	for _, line := range unfoldManifestLines(data) {
+		value, found := strings.CutPrefix(line, "Class-Path: ")
+		if !found {
+			continue
+		}
+		return strings.Fields(value)
+	}
+	return nil
+}
+
 // unfoldManifestLines joins the continuation lines of a JAR manifest. A
 // continuation line starts with a single space that is not part of the value.
 func unfoldManifestLines(data []byte) []string {
@@ -279,9 +191,12 @@ func parseFabricLauncherBundledLoaderVersion(zipReader *zip.Reader) versionpkg.V
 	return versionpkg.Version(metadata.Version)
 }
 
-func parseFabricLauncherSidecarGameVersion(context DetectionContext, primaryFile *DetectionFile) versionpkg.Version {
-	sidecar, ok := context.Sibling(primaryFile, fabricVersionSidecarPath)
-	if !ok {
+func parseFabricLauncherSidecarGameVersion(
+	s *scan,
+	primaryFile *artifact,
+) versionpkg.Version {
+	sidecar, ok := s.Sibling(primaryFile, fabricVersionSidecarPath)
+	if !ok || sidecar.IsDirectory() {
 		return versionpkg.Unknown
 	}
 	data, err := sidecar.Read()
@@ -307,9 +222,11 @@ func parseFabricLauncherSidecarGameVersion(context DetectionContext, primaryFile
 }
 
 // parseServerJarGameVersion reads the game version from the version.json of a
-// server jar on disk. Any problem yields VersionUnknown: this source is the
-// last resort for launch shims with no embedded version evidence.
-func parseServerJarGameVersion(file *DetectionFile) versionpkg.Version {
+// server jar on disk. Legacy ids embed a build hash after " / "; the name and
+// release_target fields carry the clean release id. Any problem yields
+// VersionUnknown: this source is the last resort for launch shims with no
+// embedded version evidence.
+func parseServerJarGameVersion(file *artifact) versionpkg.Version {
 	zipReader, err := file.Archive()
 	if err != nil {
 		return versionpkg.Unknown
@@ -319,25 +236,47 @@ func parseServerJarGameVersion(file *DetectionFile) versionpkg.Version {
 		return versionpkg.Unknown
 	}
 	version, guarded, err := mojangVersionFromJSON(data)
-	if err != nil || guarded || version == "" || version == versionpkg.Unknown {
+	if err != nil || guarded {
 		return versionpkg.Unknown
 	}
-	return version
+	if isMinecraftReleaseVersion(string(version)) {
+		return version
+	}
+
+	var metadata struct {
+		Name          string `json:"name"`
+		ReleaseTarget string `json:"release_target"`
+	}
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return versionpkg.Unknown
+	}
+	for _, candidate := range []string{
+		strings.TrimSpace(metadata.Name),
+		strings.TrimSpace(metadata.ReleaseTarget),
+	} {
+		if isMinecraftReleaseVersion(candidate) {
+			return versionpkg.Version(candidate)
+		}
+	}
+	return versionpkg.Unknown
 }
 
 // fabricLauncherServerJarPath returns the server jar that the launch shim at
-// shimPath boots. FabricServerLauncher reads serverJar from
+// primaryPath boots. FabricServerLauncher reads serverJar from
 // fabric-server-launcher.properties beside the shim and falls back to
 // server.jar when the file or the entry is missing.
-func fabricLauncherServerJarPath(primaryFile *DetectionFile, properties []byte) string {
-	name := fabricDefaultServerJar
+func fabricLauncherServerJarPath(
+	primaryPath string,
+	properties []byte,
+) string {
+	name := minecraftServerJarName
 	if value := propertiesValue(properties, fabricServerJarProperty); value != "" {
 		name = value
 	}
 	if filepath.IsAbs(name) {
 		return filepath.Clean(name)
 	}
-	return filepath.Join(filepath.Dir(primaryFile.Path()), name)
+	return filepath.Join(filepath.Dir(primaryPath), name)
 }
 
 // propertiesValue returns the value of key in a Java properties payload, or
@@ -362,32 +301,4 @@ func propertiesValue(data []byte, key string) string {
 		value = strings.TrimSpace(propertyValue)
 	}
 	return value
-}
-
-func newFabricRuntimeEvidence(
-	filePath string,
-	loaderVersion versionpkg.Version,
-	gameVersion versionpkg.Version,
-) *RuntimeEvidence {
-	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemFabric,
-		Name:      "fabric",
-		Version:   loaderVersion,
-	}, RuntimeComponents: []catalog.VersionedRef{
-		{
-			Ecosystem: catalog.EcosystemFabric,
-			Name:      "fabric-loader",
-			Version:   loaderVersion,
-		},
-		{
-			Ecosystem: catalog.EcosystemMinecraft,
-			Name:      "minecraft",
-			Version:   gameVersion,
-		},
-	}}
-}
-
-func init() {
-	registerExecutableDetector(&fabricServerSingleFileDetector{})
-	registerExecutableDetector(&fabricServerLauncherDetector{})
 }

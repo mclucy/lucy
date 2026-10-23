@@ -11,25 +11,42 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-type geyserStandaloneDetector struct{}
+const geyserStandaloneBootstrapClass = "org/geysermc/geyser/platform/standalone/GeyserStandaloneBootstrap.class"
 
-func (d *geyserStandaloneDetector) Name() string {
-	return "geyser standalone"
+// discoverGeyser recognizes the standalone Geyser proxy jar. The embedded
+// bootstrap class is a hard gate: a manifest alone is not enough.
+func discoverGeyser(s *scan) ([]Installation, []Finding) {
+	var installations []Installation
+	var findings []Finding
+	for _, primary := range s.RootFiles() {
+		if !productCandidate(s, primary) {
+			continue
+		}
+		installation, err := inspectGeyserInstallation(s, primary)
+		if err != nil {
+			findings = append(findings, Finding{
+				Kind:  FindingUnreadableFile,
+				Path:  primary.Path(),
+				Cause: err,
+			})
+			continue
+		}
+		if installation != nil {
+			installations = append(installations, *installation)
+		}
+	}
+	return installations, findings
 }
 
 // Sources:
 // - https://geysermc.org/wiki/geyser/setup/self/standalone
 // - https://geysermc.org/wiki/geyser/setup/self/proxy-servers
 // - https://geysermc.org/wiki/geyser/faq/
-func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile *DetectionFile) (*RuntimeEvidence, error) {
-	filePath := primaryFile.Path()
-	zipReader, err := primaryFile.Archive()
-	if err != nil {
-		return nil, err
-	}
-	_ = context
-
-	manifest, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
+func inspectGeyserInstallation(
+	s *scan,
+	primary *artifact,
+) (*Installation, error) {
+	manifest, ok, err := readProductEntry(s, primary, bukkitManifestPath)
 	if err != nil {
 		return nil, err
 	}
@@ -42,9 +59,10 @@ func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile 
 		return nil, nil
 	}
 
-	hasStandaloneBootstrap, err := archiveContains(
-		zipReader,
-		"org/geysermc/geyser/platform/standalone/GeyserStandaloneBootstrap.class",
+	hasStandaloneBootstrap, err := productEntryExists(
+		s,
+		primary,
+		geyserStandaloneBootstrapClass,
 	)
 	if err != nil {
 		return nil, err
@@ -55,14 +73,18 @@ func (d *geyserStandaloneDetector) Detect(context DetectionContext, primaryFile 
 
 	version := signals.version
 	if !hasConcreteVersion(version) {
-		version = parseGeyserStandaloneVersionFromPath(filePath)
+		version = parseGeyserStandaloneVersionFromPath(primary.Path())
 	}
 
-	return &RuntimeEvidence{PrimaryPath: filePath, PrimaryRuntime: &catalog.VersionedRef{
-		Ecosystem: catalog.EcosystemUnspecified,
-		Name:      input.ToProjectName("geyser"),
-		Version:   version,
-	}, RuntimeComponents: nil}, nil
+	identity := Identity{
+		Primary: catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemUnspecified,
+			Name:      input.ToProjectName("geyser"),
+			Version:   version,
+		},
+	}
+	installation := NewInstallation(identity, primary.Path())
+	return &installation, nil
 }
 
 type geyserStandaloneManifestSignals struct {
@@ -113,8 +135,4 @@ func parseGeyserStandaloneVersionFromPath(filePath string) versionpkg.Version {
 		return versionpkg.Unknown
 	}
 	return versionpkg.Version(match[1])
-}
-
-func init() {
-	registerExecutableDetector(&geyserStandaloneDetector{})
 }

@@ -24,9 +24,6 @@ const (
 
 type paperObservations struct {
 	hasPaperClasses              bool
-	hasSpigotClasses             bool
-	officialDistribution         bool
-	detectedLineage              string
 	gameVersion                  version.Version
 	metaMainClass                string
 	librariesListEntries         []string
@@ -52,27 +49,11 @@ type paperObservations struct {
 }
 
 type paperJudgment struct {
-	bukkitConfirmed    bool
-	observations       paperObservations
-	familyResult       paperFamilyResult
-	lineageResult      paperLineageResult
-	lineageName        string
-	contradictionState string
-	fastPathUsed       bool
-	reasons            []string
-}
-
-func newPaperJudgment() paperJudgment {
-	return paperJudgment{
-		familyResult:  paperFamilyUnknown,
-		lineageResult: paperLineageUnknown,
-		reasons:       make([]string, 0, 8),
-	}
-}
-
-func (j *paperJudgment) addReason(reason string) {
-	if reason == "" {
-		return
-	}
-	j.reasons = append(j.reasons, reason)
+	bukkitConfirmed bool
+	observations    paperObservations
+	familyResult    paperFamilyResult
+	lineageResult   paperLineageResult
+	lineageName     string
+	lineages        []string
+	contradicted    bool
 }

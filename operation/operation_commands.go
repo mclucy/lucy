@@ -25,6 +25,7 @@ import (
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/mclucy/lucy/workspace/identify"
 )
 
@@ -33,14 +34,24 @@ type InitOptions struct {
 	Minecraft, Product, ProductVersion, Repository, MCDRVersion, Directory string
 	Force, AllowEmpty, Detect                                              bool
 	EntryPoint                                                             string
-	PromptRuntime                                                          func(workspace.Probe) (string, error)
-	OnRuntimeFindings                                                      func([]workspace.RuntimeFinding)
+	// PromptRuntime asks which entry point to adopt when observation finds
+	// several equally valid runtimes. Nil keeps the strict failure.
+	PromptRuntime func(discovery.Result) (string, error)
 	// PromptMinecraft asks for a concrete Minecraft version when
 	// initialization lacks one and returns the trimmed response. Nil keeps
 	// the concrete-version-required error and never prompts.
 	PromptMinecraft func() (string, error)
 	// Trace receives progress for the lock resolution initialization runs.
 	Trace *install.Trace
+}
+
+// InitResult is the structured outcome of one initialization. The document
+// is the written manifest; warnings and discovery carry the observations
+// that the command boundary presents.
+type InitResult struct {
+	Document  *manifest.Document
+	Warnings  []error
+	Discovery discovery.Result
 }
 
 func commandDocuments(root string) (document *manifest.Document, locked *lockfile.Document, resultErr error) {
@@ -90,12 +101,14 @@ func selectedEcosystem(d *manifest.Document, requested catalog.Ecosystem) catalo
 // can load. A probed runtime also reports bridged ecosystems, such as Fabric
 // through Sinytra Connector. Only ecosystems the declared product loads enter
 // the set. Without a probe, the declared product decides.
-func servedEcosystemSet(d *manifest.Document, observed workspace.Workspace) map[catalog.Ecosystem]struct{} {
+func servedEcosystemSet(d *manifest.Document, observed *workspace.Workspace) map[catalog.Ecosystem]struct{} {
 	target := resolve.Target{Product: d.Server.Core.Product}
 	served := map[catalog.Ecosystem]struct{}{}
-	for _, offer := range observed.ServedEcosystems() {
-		if resolve.SupportsPackages(target, offer.Ecosystem) {
-			served[offer.Ecosystem] = struct{}{}
+	if observed != nil {
+		for _, offer := range observed.ServedEcosystems() {
+			if resolve.SupportsPackages(target, offer.Ecosystem) {
+				served[offer.Ecosystem] = struct{}{}
+			}
 		}
 	}
 	if len(served) == 0 {
@@ -250,27 +263,27 @@ func Remove(ctx context.Context, root string, args []string, ecosystem catalog.E
 	return install.Sync(ctx, root, d, old, opts)
 }
 
-func Initialize(ctx context.Context, root string, opts InitOptions) (document *manifest.Document, warnings []error, resultErr error) {
+func Initialize(ctx context.Context, root string, opts InitOptions) (result *InitResult, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	writer, err := workspacewrite.Lock(root)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
 	if err := workspacewrite.RecoverInstall(root); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if err := filetrack.RecoverPending(root); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if _, err := os.Stat(filepath.Join(root, manifest.Filename)); err == nil && !opts.Force {
-		return nil, nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
+		return nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
 	}
 	product := serverpkg.ProductUnknown
 	if opts.Product != "" {
@@ -285,50 +298,48 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		Core:     manifest.Core{Product: product, ProductVersion: version.Version(opts.ProductVersion), Repository: opts.Repository},
 		Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{},
 	}}
-	var observed workspace.Workspace
+	var observed *workspace.Workspace
 	if opts.Detect {
-		observed, _ = identify.Packages(workspace.NewAt(root))
-		entryPoint := opts.EntryPoint
-		if entryPoint == "" && observed.Probe.HasAmbiguity() && opts.PromptRuntime != nil {
-			entryPoint, err = opts.PromptRuntime(observed.Probe)
-			if err != nil {
-				return nil, observed.Warnings, err
-			}
-		}
-		if entryPoint != "" {
-			if !filepath.IsAbs(entryPoint) {
-				entryPoint = filepath.Join(root, entryPoint)
-			}
-			observed.Probe, err = observed.Probe.Select(entryPoint)
-			if err != nil {
-				return nil, observed.Warnings, err
-			}
-		}
-		if observed.Probe.HasAmbiguity() {
-			return nil, observed.Warnings, fmt.Errorf(
-				"cannot initialize an ambiguous server runtime: %w",
-				errors.Join(observed.Probe.AmbiguityErrors(observed.ServerDir)...),
-			)
-		}
-		if server := observed.Runtime(); server != nil {
-			if d.Server.Minecraft != "" && d.Server.Minecraft != server.MinecraftVersion() {
-				return nil, observed.Warnings, fmt.Errorf("detected Minecraft %s, requested %s", server.MinecraftVersion(), d.Server.Minecraft)
-			}
-			d.Server.Minecraft = server.MinecraftVersion()
-			if d.Server.Core.Product == serverpkg.ProductUnknown {
-				if product := server.Product(); product != serverpkg.ProductUnknown {
-					d.Server.Core.Product = product
-				} else if server.Primary != nil {
-					d.Server.Core.Product = serverpkg.Product(server.Primary.Name.String())
+		observed = workspace.Observe(root, discovery.Request{EntryPoint: opts.EntryPoint})
+		if opts.EntryPoint == "" && observed.Runtime() == nil && opts.PromptRuntime != nil {
+			var selectionErr *discovery.SelectionError
+			if errors.As(observed.SelectionError(), &selectionErr) &&
+				selectionErr.State == discovery.SelectionAmbiguous {
+				entryPoint, promptErr := opts.PromptRuntime(observed.Discovery)
+				if promptErr != nil {
+					return initResult(observed), promptErr
+				}
+				if entryPoint != "" {
+					if !filepath.IsAbs(entryPoint) {
+						entryPoint = filepath.Join(root, entryPoint)
+					}
+					if err := observed.Select(discovery.Request{EntryPoint: entryPoint}); err != nil {
+						return initResult(observed), err
+					}
+					observed.ObservePackages()
 				}
 			}
-			if d.Server.Core.ProductVersion == "" && server.Primary.Version != "" && !server.Primary.Version.IsInvalid() && !server.Primary.Version.CanInfer() {
-				d.Server.Core.ProductVersion = server.Primary.Version
+		}
+		if selection := observed.Runtime(); selection != nil {
+			identity := selection.Installation.Identity
+			if d.Server.Minecraft != "" && d.Server.Minecraft != selection.MinecraftVersion() {
+				return initResult(observed), fmt.Errorf("detected Minecraft %s, requested %s", selection.MinecraftVersion(), d.Server.Minecraft)
+			}
+			d.Server.Minecraft = selection.MinecraftVersion()
+			if d.Server.Core.Product == serverpkg.ProductUnknown {
+				if detected := selection.Product(); detected != serverpkg.ProductUnknown {
+					d.Server.Core.Product = detected
+				} else {
+					d.Server.Core.Product = serverpkg.Product(identity.Primary.Name.String())
+				}
+			}
+			if d.Server.Core.ProductVersion == "" && identity.Primary.Version != "" && !identity.Primary.Version.IsInvalid() && !identity.Primary.Version.CanInfer() {
+				d.Server.Core.ProductVersion = identity.Primary.Version
 			}
 			if d.Server.Directory == "" {
 				relative, err := filepath.Rel(root, observed.ServerDir)
 				if err != nil {
-					return nil, observed.Warnings, err
+					return initResult(observed), err
 				}
 				d.Server.Directory = filepath.ToSlash(relative)
 			}
@@ -340,21 +351,31 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 				"directory", d.Server.Directory,
 			)
 		} else if !opts.AllowEmpty {
-			return nil, observed.Warnings, fmt.Errorf("no server detected; use `lucy create` to generate a new server")
+			if selectionErr := observed.SelectionError(); selectionErr != nil {
+				var typed *discovery.SelectionError
+				noServer := errors.As(selectionErr, &typed) &&
+					(typed.State == discovery.SelectionNone ||
+						(typed.State == discovery.SelectionInvalid && typed.Path == ""))
+				if !noServer {
+					return initResult(observed), selectionErr
+				}
+			}
+			return initResult(observed), fmt.Errorf("no server detected; use `lucy create` to generate a new server")
 		} else {
 			log.Debug(
 				"no server detected; building a complete declaration",
 				"reason", "--allow-empty",
 			)
 		}
+		observed, _ = identify.Packages(observed)
 	}
 	if d.Server.Minecraft == "" || d.Server.Minecraft.IsInvalid() {
 		if opts.PromptMinecraft == nil {
-			return nil, observed.Warnings, fmt.Errorf("a concrete --minecraft version is required")
+			return initResult(observed), fmt.Errorf("a concrete --minecraft version is required")
 		}
 		text, err := opts.PromptMinecraft()
 		if err != nil {
-			return nil, observed.Warnings, err
+			return initResult(observed), err
 		}
 		d.Server.Minecraft = version.Version(text)
 		log.Debug("minecraft version supplied interactively", "version", text)
@@ -364,10 +385,10 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		log.Debug("core product defaulted", "product", d.Server.Core.Product)
 	}
 	mcdrVersion := opts.MCDRVersion
-	if mcdrVersion == "" && observed.Wrappers.MCDR != nil {
+	if mcdrVersion == "" && observed != nil && observed.Wrappers.MCDR != nil {
 		v := observed.Wrappers.MCDR.Version
 		if v.IsInvalid() || v.CanInfer() {
-			return nil, observed.Warnings, fmt.Errorf("MCDR detected without an exact app version; specify --mcdr-version")
+			return initResult(observed), fmt.Errorf("MCDR detected without an exact app version; specify --mcdr-version")
 		}
 		mcdrVersion = string(v)
 		log.Debug("MCDR version from workspace detection", "version", mcdrVersion)
@@ -376,15 +397,19 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 		d.MCDR = &manifest.MCDR{Directory: ".", Version: version.Version(mcdrVersion), Packages: map[string]manifest.Requirement{}}
 	}
 	if err := manifest.Normalize(d); err != nil {
-		return nil, observed.Warnings, err
+		return initResult(observed), err
 	}
 	modrinthMapper, hasModrinthMapper, err := routing.GetArtifactMapper(catalog.ProviderModrinth)
 	if err != nil {
-		return nil, observed.Warnings, err
+		return initResult(observed), err
 	}
 	served := servedEcosystemSet(d, observed)
+	var packages []workspace.DiscoveredPackage
+	if observed != nil {
+		packages = observed.Packages
+	}
 	recognized := 0
-	for _, p := range observed.Packages {
+	for _, p := range packages {
 		if !artifact.SupportsPath(p.Path) {
 			continue
 		}
@@ -446,7 +471,9 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 			if candidateErr == nil {
 				candidateErr = fmt.Errorf("no release provides version %s", ref.Version)
 			}
-			observed.Warnings = append(observed.Warnings, fmt.Errorf("package %s left unmanaged: %w", ref.Name, candidateErr))
+			if observed != nil {
+				observed.Warnings = append(observed.Warnings, fmt.Errorf("package %s left unmanaged: %w", ref.Name, candidateErr))
+			}
 			continue
 		}
 		if d.Server.Packages[ecosystem] == nil {
@@ -458,11 +485,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	log.Debug(
 		"recognized existing packages",
 		"count", recognized,
-		"present", len(observed.Packages),
+		"present", len(packages),
 	)
 	old, err := lockfile.Read(root)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, observed.Warnings, err
+		return initResult(observed), err
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		old = nil
@@ -471,30 +498,70 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (document *m
 	// requirements that the installed jars report but the catalogue metadata
 	// cannot satisfy become warnings instead of a refusal.
 	resolved, resolveWarnings, err := install.Resolve(ctx, root, d, old, install.Options{AcceptBroken: true, Trace: opts.Trace})
-	observed.Warnings = append(observed.Warnings, resolveWarnings...)
+	if observed != nil {
+		observed.Warnings = append(observed.Warnings, resolveWarnings...)
+	}
 	if err != nil {
-		return nil, observed.Warnings, err
+		return initResult(observed), err
 	}
 	selectionChanged := false
-	if runtime := observed.Runtime(); runtime != nil {
-		path, err := filepath.Rel(observed.ServerDir, runtime.PrimaryPath)
-		if err != nil {
-			return nil, observed.Warnings, err
+	if observed != nil {
+		if selection := observed.Runtime(); selection != nil && selection.EntryPoint != nil {
+			path, err := entryPointRelativeTo(observed.ServerDir, selection.EntryPoint.Path)
+			if err != nil {
+				return initResult(observed), err
+			}
+			selectionChanged = resolved.Server.EntryPoint != path
+			resolved.Server.EntryPoint = path
 		}
-		path = filepath.ToSlash(path)
-		selectionChanged = resolved.Server.EntryPoint != path
-		resolved.Server.EntryPoint = path
 	}
 	if err := manifest.Write(root, d); err != nil {
-		return nil, observed.Warnings, err
+		return initResult(observed), err
 	}
 	if resolved != old || selectionChanged {
 		if err := lockfile.Write(root, resolved); err != nil {
-			return nil, observed.Warnings, err
+			return initResult(observed), err
 		}
 	}
-	if opts.OnRuntimeFindings != nil {
-		opts.OnRuntimeFindings(observed.Probe.Findings)
+	result = &InitResult{Document: d}
+	if observed != nil {
+		result.Warnings = observed.Warnings
+		result.Discovery = observed.Discovery
 	}
-	return d, observed.Warnings, nil
+	return result, nil
+}
+
+// entryPointRelativeTo records a selected entry point relative to the server
+// directory. Both sides resolve symlinks first so a canonical scan path and a
+// caller-spelled server directory still produce a local lock path.
+func entryPointRelativeTo(serverDir, entryPoint string) (string, error) {
+	if resolved, err := filepath.EvalSymlinks(serverDir); err == nil {
+		serverDir = resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(entryPoint); err == nil {
+		entryPoint = resolved
+	}
+	relative, err := filepath.Rel(serverDir, entryPoint)
+	if err != nil {
+		return "", err
+	}
+	if !filepath.IsLocal(relative) {
+		return "", fmt.Errorf(
+			"selected entry point %s is outside the server directory",
+			entryPoint,
+		)
+	}
+	return filepath.ToSlash(relative), nil
+}
+
+// initResult carries the observations of a failed initialization so the
+// command boundary can present them alongside the failure.
+func initResult(observed *workspace.Workspace) *InitResult {
+	if observed == nil {
+		return nil
+	}
+	return &InitResult{
+		Warnings:  observed.Warnings,
+		Discovery: observed.Discovery,
+	}
 }

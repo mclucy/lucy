@@ -7,28 +7,32 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/workspace/discovery"
 	"gopkg.in/ini.v1"
 )
 
 // PackageDirs lists the directories that hold content packages for this
 // observation. Loader runtimes use mods/. Bukkit family servers use
 // plugins/. The list is empty when no runtime was identified.
-func (ws Workspace) PackageDirs() []string {
+func (ws *Workspace) PackageDirs() []string {
+	if ws == nil {
+		return nil
+	}
 	return packageSearchPaths(ws.Runtime(), ws.ServerDir)
 }
 
 // packageSearchPaths maps full-support ecosystem offers onto conventional
 // directory names. Duplicate names appear once, in offer order.
 func packageSearchPaths(
-	server *ServerRuntime,
+	selection *discovery.Selection,
 	root string,
 ) []string {
-	if server == nil || !server.IsValid() {
+	if selection == nil || !selection.IsValid() {
 		return nil
 	}
 
 	var paths []string
-	for _, offer := range server.servedEcosystems() {
+	for _, offer := range selectionServedEcosystems(selection) {
 		if offer.Compatibility != CompatFull {
 			continue
 		}
@@ -56,7 +60,10 @@ func packageSearchPaths(
 // string when no usable properties file exists. A missing level-name
 // degrades to ServerDir. This matches the runtime default of storing the
 // world beside the server.
-func (ws Workspace) SaveDir() string {
+func (ws *Workspace) SaveDir() string {
+	if ws == nil {
+		return ""
+	}
 	properties := parseServerProperties(ws.ServerDir)
 	if properties == nil {
 		// Write one note when a known runtime has no properties file. Do not

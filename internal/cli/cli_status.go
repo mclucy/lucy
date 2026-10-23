@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/terminal/style"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/mclucy/lucy/workspace/identify"
 	"github.com/spf13/cobra"
 )
@@ -67,7 +68,14 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 		return actionStatusFromLock(cmd, long, logoMode)
 	}
 
-	ws, _ := identify.Packages(workspace.New())
+	workDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("could not determine working directory: %w", err)
+	}
+	ws, _ := identify.Packages(workspace.Observe(
+		workDir,
+		discovery.Request{},
+	))
 	reportObservationFindings(ws)
 	switch JSONMode(cmd) {
 	case JSONPretty:
@@ -82,7 +90,7 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	terminal.Flush(
-		generateStatusOutput(&ws, long, style.ColorsEnabled(), logoMode),
+		generateStatusOutput(ws, long, style.ColorsEnabled(), logoMode),
 	)
 	return nil
 }
@@ -111,7 +119,7 @@ func generateStatusOutput(
 	var runtimeComponents []catalog.VersionedRef
 	if hasServer {
 		servedEcosystems = data.ServedEcosystems()
-		runtimeComponents = server.Components
+		runtimeComponents = selectedRuntimeComponents(server)
 	}
 	modEcosystems := statusModEcosystems(servedEcosystems)
 	showEcosystemQualifiedMods := len(modEcosystems) > 1
@@ -147,8 +155,7 @@ func generateStatusOutput(
 		}
 	}
 	if hasServer && logoEcosystem == catalog.EcosystemUnspecified &&
-		server.Primary != nil &&
-		server.Primary.Ecosystem == catalog.EcosystemMinecraft {
+		server.Installation.Identity.Primary.Ecosystem == catalog.EcosystemMinecraft {
 		logoEcosystem = catalog.EcosystemMinecraft
 	}
 	if logoEcosystem == catalog.EcosystemUnspecified && hasMcdr {
@@ -178,7 +185,7 @@ func generateStatusOutput(
 			&terminal.FieldAnnotatedShortText{
 				Title:      "Minecraft",
 				Text:       server.MinecraftVersion().String(),
-				Annotation: server.PrimaryPath,
+				Annotation: selectedEntryPointPath(server),
 			},
 		)
 
@@ -193,16 +200,16 @@ func generateStatusOutput(
 			},
 		)
 
-		primary := server.Primary
+		primary := server.Installation.Identity.Primary
 		if productLabel := statusRuntimeLabel(primary); productLabel != "" {
 			children := make([]terminal.TreeNode, 0, 4)
-			if len(server.Components) > 0 {
+			if len(runtimeComponents) > 0 {
 				components := make(
 					[]string,
 					0,
-					len(server.Components),
+					len(runtimeComponents),
 				)
-				for _, component := range server.Components {
+				for _, component := range runtimeComponents {
 					components = append(components, component.StringQualified())
 				}
 				children = append(children, terminal.TreeNode{
@@ -280,7 +287,7 @@ func generateStatusOutput(
 }
 
 func statusLogoProduct(
-	server *workspace.ServerRuntime,
+	server *discovery.Selection,
 	hasServer bool,
 	hasMcdr bool,
 ) serverpkg.Product {
@@ -294,7 +301,7 @@ func statusLogoProduct(
 }
 
 func statusLogoVersion(
-	server *workspace.ServerRuntime,
+	server *discovery.Selection,
 	hasServer bool,
 	hasMcdr bool,
 ) versionpkg.Version {
@@ -379,6 +386,90 @@ func statusPackageSections(
 	return modNames, modPaths, pluginNames, mcdrPlugins
 }
 
+// selectedRuntimeComponents presents the runtime components the status wire
+// format reports. Discovery keeps the primary identity separate and stores
+// only additional evidence, so a vanilla primary contributes its Minecraft
+// component here, and a loader primary contributes its loader component.
+func selectedRuntimeComponents(
+	selection *discovery.Selection,
+) []catalog.VersionedRef {
+	if selection == nil || !selection.IsValid() {
+		return []catalog.VersionedRef{}
+	}
+	identity := selection.Installation.Identity
+	components := make([]catalog.VersionedRef, 0, len(identity.Components)+2)
+	components = append(components, identity.Components...)
+
+	primary := identity.Primary
+	switch strings.ToLower(primary.Name.String()) {
+	case "minecraft":
+		components = ensureRuntimeComponent(components, catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemMinecraft,
+			Name:      "minecraft",
+			Version:   primary.Version,
+		})
+	case "fabric", "fabric-loader":
+		components = ensureRuntimeComponent(components, catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemFabric,
+			Name:      "fabric-loader",
+			Version:   primary.Version,
+		})
+	case "forge":
+		components = ensureRuntimeComponent(components, catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemForge,
+			Name:      "forge",
+			Version:   primary.Version,
+		})
+	case "neoforge":
+		components = ensureRuntimeComponent(components, catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemNeoForge,
+			Name:      "neoforge",
+			Version:   primary.Version,
+		})
+	}
+	if !hasRuntimeComponent(components, catalog.EcosystemMinecraft, "minecraft") {
+		components = ensureRuntimeComponent(components, catalog.VersionedRef{
+			Ecosystem: catalog.EcosystemMinecraft,
+			Name:      "minecraft",
+			Version:   identity.MinecraftVersion(),
+		})
+	}
+	return components
+}
+
+func ensureRuntimeComponent(
+	components []catalog.VersionedRef,
+	component catalog.VersionedRef,
+) []catalog.VersionedRef {
+	if component.Version == "" || component.Version == versionpkg.Unknown {
+		return components
+	}
+	if hasRuntimeComponent(components, component.Ecosystem, component.Name.String()) {
+		return components
+	}
+	return append(components, component)
+}
+
+func hasRuntimeComponent(
+	components []catalog.VersionedRef,
+	ecosystem catalog.Ecosystem,
+	name string,
+) bool {
+	for _, component := range components {
+		if component.Ecosystem == ecosystem && component.Name == catalog.Name(name) {
+			return true
+		}
+	}
+	return false
+}
+
+func selectedEntryPointPath(server *discovery.Selection) string {
+	if server == nil || server.EntryPoint == nil {
+		return ""
+	}
+	return server.EntryPoint.Path
+}
+
 func statusModEcosystems(
 	offers []workspace.ServedEcosystem,
 ) map[catalog.Ecosystem]bool {
@@ -404,10 +495,7 @@ func statusHasDirectOffer(
 	return false
 }
 
-func statusRuntimeLabel(primary *catalog.VersionedRef) string {
-	if primary == nil {
-		return ""
-	}
+func statusRuntimeLabel(primary catalog.VersionedRef) string {
 	switch strings.ToLower(primary.Name.String()) {
 	case "minecraft":
 		return "Vanilla"

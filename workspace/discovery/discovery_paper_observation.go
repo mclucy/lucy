@@ -5,7 +5,6 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -50,14 +49,14 @@ type paperObservationSource interface {
 }
 
 func extractPaperObservations(
-	filePath string,
-	zipReader *zip.Reader,
+	s *scan,
+	primary *artifact,
 ) (paperObservations, error) {
 	obs := paperObservations{
 		patchProperties: make(map[string]string),
 	}
 
-	source, err := newPaperObservationSource(filePath, zipReader)
+	source, err := newPaperObservationSource(s, primary)
 	if err != nil {
 		return paperObservations{}, err
 	}
@@ -72,8 +71,6 @@ func extractPaperObservations(
 				bukkitPaperClassPrefix,
 			), strings.HasPrefix(name, bukkitLegacyPaperClassPrefix):
 				obs.hasPaperClasses = true
-			case strings.HasPrefix(name, bukkitSpigotClassPrefix):
-				obs.hasSpigotClasses = true
 			case strings.HasPrefix(name, paperLeaperNamespacePrefix):
 				obs.hasLeaperNamespace = true
 			case strings.HasPrefix(name, paperLeavesclipNamespace):
@@ -173,25 +170,31 @@ func extractPaperObservations(
 }
 
 func newPaperObservationSource(
-	filePath string,
-	zipReader *zip.Reader,
+	s *scan,
+	primary *artifact,
 ) (paperObservationSource, error) {
-	if zipReader != nil {
-		return paperObservationZipSource{reader: zipReader}, nil
+	if primary == nil {
+		return nil, fmt.Errorf("paper observation artifact is missing")
+	}
+	if primary.IsDirectory() {
+		return paperObservationDirSource{
+			scan: s,
+			root: primary.Path(),
+		}, nil
 	}
 
-	info, err := os.Stat(filePath)
+	archive, err := primary.Archive()
 	if err != nil {
 		return nil, err
 	}
-	if !info.IsDir() {
+	if archive == nil {
 		return nil, fmt.Errorf(
-			"paper observation path is not a directory: %s",
-			filePath,
+			"paper observation path is not an archive: %s",
+			primary.Path(),
 		)
 	}
 
-	return paperObservationDirSource{root: filePath}, nil
+	return paperObservationZipSource{reader: archive}, nil
 }
 
 type paperObservationZipSource struct {
@@ -225,6 +228,7 @@ func (s paperObservationZipSource) Walk(fn func(paperObservationEntry) error) er
 }
 
 type paperObservationDirSource struct {
+	scan *scan
 	root string
 }
 
@@ -242,13 +246,14 @@ func (s paperObservationDirSource) Walk(fn func(paperObservationEntry) error) er
 			if err != nil {
 				return err
 			}
-			absolutePath := path
+			file, ok := s.scan.File(path)
+			if !ok || file.IsDirectory() {
+				return nil
+			}
 			return fn(
 				paperObservationEntry{
 					name: filepath.ToSlash(rel),
-					read: func() ([]byte, error) {
-						return os.ReadFile(absolutePath)
-					},
+					read: file.Read,
 				},
 			)
 		},

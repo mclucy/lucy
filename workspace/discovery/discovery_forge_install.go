@@ -2,296 +2,231 @@ package discovery
 
 import (
 	"archive/zip"
-	"crypto/sha1"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/cache"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-const forgeMavenArtifactBaseURL = "https://maven.minecraftforge.net/net/minecraftforge/forge"
-
-type forgeArtifactKind string
-
-const (
-	forgeArtifactServer    forgeArtifactKind = "server"
-	forgeArtifactUniversal forgeArtifactKind = "universal"
-	forgeArtifactShim      forgeArtifactKind = "shim"
-)
-
-var forgeArtifactHashLookup = lookupForgeArtifactHash
-
-func ForgeInstallationRuntimes(workPath string) []*RuntimeEvidence {
-	forgeLib := filepath.Join(
-		workPath,
-		"libraries",
-		"net",
-		"minecraftforge",
-		"forge",
-	)
-	entries, err := os.ReadDir(forgeLib)
-	if err != nil {
-		return nil
-	}
-
-	runtimes := make([]*RuntimeEvidence, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		runtime, err := detectForgeInstallFromVersionDir(
-			filepath.Join(
-				forgeLib,
-				entry.Name(),
-			),
-		)
-		if err != nil || runtime == nil {
-			continue
-		}
-		runtimes = append(runtimes, runtime)
-	}
-
-	return runtimes
-}
-
-func detectForgeInstallFromVersionDir(versionDir string) (
-	*RuntimeEvidence,
-	error,
-) {
-	version := filepath.Base(versionDir)
-	match := forgeRuntimeVersionDirPattern.FindStringSubmatch(version)
-	if match == nil {
-		return nil, nil
-	}
-
-	gameVersion := versionpkg.Version(match[1])
-	forgeVersion := versionpkg.Version(match[2])
-	candidates := []struct {
-		kind forgeArtifactKind
-		path string
-	}{
-		{
-			forgeArtifactServer, filepath.Join(
-				versionDir,
-				fmt.Sprintf("forge-%s-server.jar", version),
-			),
-		},
-		{
-			forgeArtifactUniversal, filepath.Join(
-				versionDir,
-				fmt.Sprintf("forge-%s-universal.jar", version),
-			),
-		},
-		{
-			forgeArtifactShim,
-			filepath.Join(
-				versionDir,
-				fmt.Sprintf("forge-%s-shim.jar", version),
-			),
-		},
-	}
-
-	for _, candidate := range candidates {
-		if !fileExists(candidate.path) {
-			continue
-		}
-		verified, err := forgeArtifactHashLookup(
-			version,
-			candidate.kind,
-			candidate.path,
-		)
-		if err == nil && verified {
-			if candidate.kind == forgeArtifactShim {
-				continue
-			}
-			return newForgeRuntimeEvidence(
-				candidate.path,
-				gameVersion,
-				forgeVersion,
-			), nil
-		}
-	}
-
-	for _, candidate := range candidates[:2] {
-		if !fileExists(candidate.path) {
-			continue
-		}
-		ok, err := verifyForgeArtifactByUnpack(
-			candidate.path,
-			candidate.kind,
-			gameVersion,
-			forgeVersion,
-		)
-		if err != nil || !ok {
-			continue
-		}
-		return newForgeRuntimeEvidence(
-			candidate.path,
-			gameVersion,
-			forgeVersion,
-		), nil
-	}
-
-	return nil, nil
-}
-
-func verifyForgeArtifactByUnpack(
-	jarPath string,
-	kind forgeArtifactKind,
+// loaderArgsLaunchValid reports whether a generated argument sidecar is a
+// positively identified launch target for this loader layout: it names the
+// same loader and Minecraft versions and either a server launch target or a
+// server main class. NeoForge 26.2 dropped --launchTarget in favor of
+// net.neoforged.fml.startup.Server.
+func loaderArgsLaunchValid(
+	file *artifact,
+	loaderVersion versionpkg.Version,
 	gameVersion versionpkg.Version,
-	forgeVersion versionpkg.Version,
-) (bool, error) {
-	file, err := os.Open(jarPath)
+) bool {
+	if file == nil || !hasConcreteVersion(gameVersion) {
+		return false
+	}
+	data, err := file.Read()
 	if err != nil {
-		return false, err
+		return false
 	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		return false, err
+	argsLoader, argsGame := parseLoaderArgs(data)
+	if hasConcreteVersion(argsLoader) && argsLoader != loaderVersion {
+		return false
 	}
-
-	reader, err := zip.NewReader(file, stat.Size())
-	if err != nil {
-		return false, err
+	if !hasConcreteVersion(argsGame) || argsGame != gameVersion {
+		return false
 	}
-
-	if kind == forgeArtifactUniversal {
-		manifestForge, manifestGame := parseForgeManifest(reader)
-		return manifestForge == forgeVersion && manifestGame == gameVersion, nil
+	target := strings.ToLower(parseLaunchTarget(data))
+	if target != "" && strings.Contains(target, "server") {
+		return true
 	}
-
-	if kind == forgeArtifactServer {
-		if compareForgeMajor(forgeVersion, 61) >= 0 {
-			shimPath := filepath.Join(
-				filepath.Dir(jarPath),
-				fmt.Sprintf("forge-%s-%s-shim.jar", gameVersion, forgeVersion),
-			)
-			if !fileExists(shimPath) {
-				return false, nil
-			}
-			ok, err := verifyForgeShimJar(shimPath)
-			if err != nil || !ok {
-				return false, err
-			}
-		}
-		return forgeHasSibling(jarPath, "unix_args.txt", "win_args.txt"), nil
-	}
-
-	return false, nil
+	mainClass := strings.ToLower(parseLaunchMainClass(data))
+	return mainClass != "" && strings.Contains(mainClass, "server")
 }
 
-func verifyForgeShimJar(jarPath string) (bool, error) {
-	file, err := os.Open(jarPath)
-	if err != nil {
-		return false, err
+// parseLaunchMainClass returns the first fully qualified Java class token in a
+// generated argument sidecar. Flags, JVM properties, and classpath entries are
+// not class tokens.
+func parseLaunchMainClass(data []byte) string {
+	for line := range strings.SplitSeq(string(data), "\n") {
+		candidate := strings.TrimSpace(line)
+		if candidate == "" || strings.HasPrefix(candidate, "-") ||
+			strings.ContainsAny(candidate, " \t=/:") {
+			continue
+		}
+		if isJavaClassName(candidate) {
+			return candidate
+		}
 	}
-	defer file.Close()
+	return ""
+}
 
-	stat, err := file.Stat()
-	if err != nil {
-		return false, err
+func isJavaClassName(value string) bool {
+	parts := strings.Split(value, ".")
+	if len(parts) < 2 {
+		return false
 	}
-
-	reader, err := zip.NewReader(file, stat.Size())
-	if err != nil {
-		return false, err
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		for index, r := range part {
+			switch {
+			case r == '_' || r == '$':
+			case r >= 'a' && r <= 'z':
+			case r >= 'A' && r <= 'Z':
+			case index > 0 && r >= '0' && r <= '9':
+			default:
+				return false
+			}
+		}
 	}
+	last := parts[len(parts)-1]
+	return last[0] >= 'A' && last[0] <= 'Z'
+}
 
+// artifactHasLaunchMainClass reports whether a jar declares a Main-Class and
+// is therefore independently java -jar runnable.
+func artifactHasLaunchMainClass(file *artifact) bool {
+	if file == nil {
+		return false
+	}
+	archive, err := file.Archive()
+	if err != nil {
+		return false
+	}
+	mainClass, ok := readArchiveManifestMainClass(archive)
+	return ok && strings.TrimSpace(mainClass) != ""
+}
+
+// forgeProductContent reports whether a jar carries positive Forge content.
+// Legacy universal jars have no implementation versions in their manifest;
+// they identify themselves through Tweak-Class, a Forge main class, or FML
+// classes.
+func forgeProductContent(zipReader *zip.Reader) bool {
+	switch {
+	case archiveManifestContains(zipReader, "FML-System-Mods: forge"):
+		return true
+	case archiveManifestContains(zipReader, "Tweak-Class: net.minecraftforge."):
+		return true
+	case archiveManifestContains(zipReader, "Main-Class: net.minecraftforge."):
+		return true
+	case archiveContains(
+		zipReader,
+		"net/minecraftforge/fml/relauncher/ServerLaunchWrapper.class",
+	):
+		return true
+	case archiveContains(
+		zipReader,
+		"net/minecraftforge/fml/common/launcher/FMLTweaker.class",
+	):
+		return true
+	default:
+		return false
+	}
+}
+
+// verifyForgeUniversalArtifact validates a universal jar by the Forge and
+// Minecraft versions recorded in its manifest. The directory name supplies
+// the Minecraft version when the manifest does not repeat it. Legacy
+// universals without implementation versions are accepted only with positive
+// Forge content in the archive.
+func verifyForgeUniversalArtifact(
+	file *artifact,
+	forgeVersion versionpkg.Version,
+	gameVersion versionpkg.Version,
+) bool {
+	archive, err := file.Archive()
+	if err != nil {
+		return false
+	}
+	if installerArtifact(archive) {
+		return false
+	}
+	manifestForge, manifestGame := parseForgeManifest(archive)
+	if hasConcreteVersion(manifestForge) {
+		if manifestForge != forgeVersion {
+			return false
+		}
+		if !hasConcreteVersion(manifestGame) {
+			manifestGame = gameVersion
+		}
+		return manifestGame == gameVersion
+	}
+	return forgeProductContent(archive)
+}
+
+// verifyForgeServerArtifact reports whether a server jar is positively a
+// Forge artifact for this layout. A vanilla server jar placed in a
+// Maven-shaped Forge directory must not become a Forge runtime merely because
+// its name and Main-Class are present.
+func verifyForgeServerArtifact(
+	file *artifact,
+	forgeVersion versionpkg.Version,
+	gameVersion versionpkg.Version,
+) bool {
+	archive, err := file.Archive()
+	if err != nil {
+		return false
+	}
+	if installerArtifact(archive) {
+		return false
+	}
+	manifestForge, manifestGame := parseForgeManifest(archive)
+	if hasConcreteVersion(manifestForge) {
+		if manifestForge != forgeVersion {
+			return false
+		}
+		if hasConcreteVersion(manifestGame) && manifestGame != gameVersion {
+			return false
+		}
+		return true
+	}
+	return forgeProductContent(archive)
+}
+
+// installerArtifact reports whether a jar is a loader installer rather than
+// a runtime artifact.
+func installerArtifact(zipReader *zip.Reader) bool {
+	if archiveContains(zipReader, "install_profile.json") {
+		return true
+	}
+	data, ok, err := readArchiveEntry(zipReader, "version.json")
+	if err != nil || !ok {
+		return false
+	}
+	_, guarded, err := mojangVersionFromJSON(data)
+	return err == nil && guarded
+}
+
+// archiveContains reports whether a ZIP archive has an entry with this exact
+// name.
+func archiveContains(zipReader *zip.Reader, name string) bool {
+	for _, entry := range zipReader.File {
+		if entry.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// archiveManifestContains reports whether the jar manifest contains needle.
+func archiveManifestContains(zipReader *zip.Reader, needle string) bool {
+	data, ok, err := readArchiveEntry(zipReader, "META-INF/MANIFEST.MF")
+	return err == nil && ok && strings.Contains(string(data), needle)
+}
+
+// verifyForgeShimArtifact requires the two bootstrap descriptors that make a
+// Forge shim a launch target rather than an arbitrary jar named *-shim.jar.
+func verifyForgeShimArtifact(file *artifact) bool {
+	archive, err := file.Archive()
+	if err != nil {
+		return false
+	}
 	hasProperties := false
 	hasList := false
-	for _, f := range reader.File {
-		switch f.Name {
+	for _, entry := range archive.File {
+		switch entry.Name {
 		case "bootstrap-shim.properties":
 			hasProperties = true
 		case "bootstrap-shim.list":
 			hasList = true
 		}
 	}
-	return hasProperties && hasList, nil
-}
-
-func lookupForgeArtifactHash(
-	version string,
-	artifact forgeArtifactKind,
-	filePath string,
-) (bool, error) {
-	sha1URL := fmt.Sprintf(
-		"%s/%s/%s.sha1",
-		forgeMavenArtifactBaseURL,
-		version,
-		filepath.Base(filePath),
-	)
-	if ok, err := verifyForgeArtifactHash(
-		filePath,
-		sha1URL,
-		cache.HashSHA1,
-	); ok || err != nil {
-		return ok, err
-	}
-
-	sha256URL := fmt.Sprintf(
-		"%s/%s/%s.sha256",
-		forgeMavenArtifactBaseURL,
-		version,
-		filepath.Base(filePath),
-	)
-	return verifyForgeArtifactHash(filePath, sha256URL, cache.HashSHA256)
-}
-
-func verifyForgeArtifactHash(
-	filePath string,
-	checksumURL string,
-	algo cache.HashAlgorithm,
-) (bool, error) {
-	data, err := cache.CachedGetBytes(
-		checksumURL,
-		cache.BytesRequestOptions{Kind: cache.KindMetadata, MaxBytes: 256},
-	)
-	if err != nil {
-		return false, nil
-	}
-	expected := strings.TrimSpace(string(data))
-	if expected == "" {
-		return false, nil
-	}
-	actual, err := hashForgeArtifact(filePath, algo)
-	if err != nil {
-		return false, err
-	}
-	return strings.EqualFold(actual, expected), nil
-}
-
-func hashForgeArtifact(filePath string, algo cache.HashAlgorithm) (
-	string,
-	error,
-) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	switch algo {
-	case cache.HashSHA1:
-		sum := sha1.Sum(data)
-		return hex.EncodeToString(sum[:]), nil
-	case cache.HashSHA256:
-		sum := sha256.Sum256(data)
-		return hex.EncodeToString(sum[:]), nil
-	default:
-		return "", fmt.Errorf(
-			"unsupported forge artifact hash algorithm: %s",
-			algo,
-		)
-	}
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	return hasProperties && hasList
 }
