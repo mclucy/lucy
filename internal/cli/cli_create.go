@@ -98,6 +98,8 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	ctx, stop := CommandContext(cmd)
+	defer stop()
 
 	mc := flagStringCreate(cmd, flagCreateMcName)
 	if mc == "" {
@@ -120,10 +122,10 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 		Force:           flagBoolCreate(cmd, flagCreateForceName),
 		AllowEmpty:      true,
 		Detect:          false,
-		PromptMinecraft: promptMinecraft(cmd),
+		PromptMinecraft: promptMinecraft(ctx, cmd),
 	}
 
-	return initializeWorkspace(cmd, workDir, opts)
+	return initializeWorkspace(ctx, cmd, workDir, opts)
 }
 
 func resolveWorkDirCreate(cmd *cobra.Command) (string, error) {

@@ -348,10 +348,7 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 				Value(&distribution),
 		),
 	)
-	if err := form.Run(); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return operation.JavaChange{}, errors.New("java selection cancelled")
-		}
+	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
 		return operation.JavaChange{}, err
 	}
 	return operation.JavaChange{

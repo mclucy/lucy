@@ -1,15 +1,16 @@
 package compile
 
 import (
-	"errors"
+	"context"
 
 	"charm.land/huh/v2"
+	"github.com/mclucy/lucy/internal/cli"
 )
 
 // promptModProject asks which of several mod projects to compile. `huh` renders
 // on stderr, so stdout keeps carrying only the artifact path. Aborting the
 // selection cancels the compilation; there is no default to fall back to.
-func promptModProject(candidates []gradleProject) (gradleProject, error) {
+func promptModProject(ctx context.Context, candidates []gradleProject) (gradleProject, error) {
 	// gradleProject is not comparable (it holds slices), so the select carries
 	// the candidate index instead of the struct.
 	options := make([]huh.Option[int], 0, len(candidates))
@@ -25,10 +26,7 @@ func promptModProject(candidates []gradleProject) (gradleProject, error) {
 			Filtering(true).
 			Value(&picked),
 	))
-	if err := form.Run(); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return gradleProject{}, errors.New("compile cancelled")
-		}
+	if err := cli.NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
 		return gradleProject{}, err
 	}
 	return candidates[picked], nil

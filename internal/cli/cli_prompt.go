@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"os"
 
+	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
@@ -33,4 +36,18 @@ func (g PromptGate) Available() bool {
 	}
 	stdin, ok := g.cmd.InOrStdin().(*os.File)
 	return ok && term.IsTerminal(stdin.Fd()) && style.InteractiveEnabled()
+}
+
+// Huh can report a cancelled context as a timeout instead of its cause.
+func NormalizePromptError(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	if cause := ctx.Err(); cause != nil {
+		return cause
+	}
+	if errors.Is(err, huh.ErrUserAborted) {
+		return context.Canceled
+	}
+	return err
 }

@@ -158,7 +158,7 @@ func run(ctx context.Context, source string, opts *options, gate cli.PromptGate,
 	if err != nil {
 		return err
 	}
-	project, err := selectProject(model, opts, gate)
+	project, err := selectProject(ctx, model, opts, gate)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func run(ctx context.Context, source string, opts *options, gate cli.PromptGate,
 	if err != nil {
 		return err
 	}
-	project, err = selectProject(model, opts, gate)
+	project, err = selectProject(ctx, model, opts, gate)
 	if err != nil {
 		return err
 	}
