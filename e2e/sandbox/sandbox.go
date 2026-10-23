@@ -3,6 +3,8 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
@@ -13,10 +15,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/internal/toolchain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,13 +51,17 @@ func (d *docsRefs) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type sandbox struct {
-	ID          string     `yaml:"id"`
-	Family      string     `yaml:"family"`
-	GameVersion string     `yaml:"game_version"`
-	Description string     `yaml:"description"`
-	Docs        docsRefs   `yaml:"docs,omitempty"`
-	Dirs        []string   `yaml:"dirs"`
-	Artifacts   []artifact `yaml:"artifacts"`
+	ID          string   `yaml:"id"`
+	Family      string   `yaml:"family"`
+	GameVersion string   `yaml:"game_version"`
+	Description string   `yaml:"description"`
+	Docs        docsRefs `yaml:"docs,omitempty"`
+	// EntryPoint is the launch target a sandbox must contain. An
+	// installer-backed sandbox must produce it; a standalone sandbox pins it
+	// directly. It is relative to the sandbox root.
+	EntryPoint string     `yaml:"entry_point,omitempty"`
+	Dirs       []string   `yaml:"dirs"`
+	Artifacts  []artifact `yaml:"artifacts"`
 }
 
 type artifact struct {
@@ -70,6 +78,11 @@ type artifact struct {
 	// server files and the pack overrides into the sandbox root instead of
 	// copying the archive.
 	Modpack bool `yaml:"modpack,omitempty"`
+	// InstallServer marks an official Forge/NeoForge installer. Generation
+	// runs it with --installServer in the directory that holds dest, after
+	// every artifact and fixture file has landed, so the sandbox carries the
+	// generated launch target rather than only copied libraries.
+	InstallServer bool `yaml:"install_server,omitempty"`
 }
 
 type fabricMeta struct {
@@ -146,6 +159,7 @@ func validate(man *manifest) error {
 			return fmt.Errorf("duplicate sandbox id %q", sb.ID)
 		}
 		seen[sb.ID] = true
+		installers := 0
 		for _, art := range sb.Artifacts {
 			if art.Dest == "" {
 				return fmt.Errorf("%s: artifact without dest", sb.ID)
@@ -172,6 +186,28 @@ func validate(man *manifest) error {
 			}
 			if art.Modpack && (art.URL == "" || art.SHA256 == "") {
 				return fmt.Errorf("%s/%s: modpack requires url and sha256", sb.ID, art.Dest)
+			}
+			if art.InstallServer {
+				installers++
+				if art.Modpack {
+					return fmt.Errorf("%s/%s: an installer cannot be a modpack", sb.ID, art.Dest)
+				}
+				if !strings.HasSuffix(strings.ToLower(art.Dest), ".jar") {
+					return fmt.Errorf("%s/%s: installer dest must be a jar", sb.ID, art.Dest)
+				}
+			}
+		}
+		if installers > 1 {
+			return fmt.Errorf("%s: at most one install_server artifact is supported", sb.ID)
+		}
+		hasEntryPoint := sb.EntryPoint != ""
+		if installers == 1 && !hasEntryPoint {
+			return fmt.Errorf("%s: install_server requires entry_point", sb.ID)
+		}
+		if hasEntryPoint {
+			entryPoint := filepath.FromSlash(sb.EntryPoint)
+			if !filepath.IsLocal(entryPoint) || entryPoint == "." {
+				return fmt.Errorf("%s: entry_point must be a local path below the sandbox root", sb.ID)
 			}
 		}
 	}
@@ -224,6 +260,11 @@ func run(man *manifest, opts options) error {
 	return nil
 }
 
+type resolvedArtifact struct {
+	artifact
+	cachedPath string
+}
+
 func generateSandbox(sb sandbox, opts options) error {
 	outDir := filepath.Join(opts.outRoot, sb.ID)
 	if _, err := os.Stat(outDir); err == nil && !opts.force {
@@ -231,17 +272,13 @@ func generateSandbox(sb sandbox, opts options) error {
 		return nil
 	}
 
-	type resolved struct {
-		artifact
-		cachedPath string
-	}
-	resolvedArtifacts := make([]resolved, 0, len(sb.Artifacts))
+	resolvedArtifacts := make([]resolvedArtifact, 0, len(sb.Artifacts))
 	for _, art := range sb.Artifacts {
 		path, err := ensureCached(sb.ID, art, opts)
 		if err != nil {
 			return fmt.Errorf("artifact %s: %w", art.Dest, err)
 		}
-		resolvedArtifacts = append(resolvedArtifacts, resolved{artifact: art, cachedPath: path})
+		resolvedArtifacts = append(resolvedArtifacts, resolvedArtifact{artifact: art, cachedPath: path})
 		fmt.Printf("[OK]   %s: %s\n", sb.ID, art.Dest)
 	}
 
@@ -290,9 +327,23 @@ func generateSandbox(sb sandbox, opts options) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	for _, ra := range resolvedArtifacts {
+		if !ra.InstallServer {
+			continue
+		}
+		if err := installServer(stage, ra); err != nil {
+			return fmt.Errorf("%s: %w", sb.ID, err)
+		}
+		fmt.Printf("[INST] %s: %s\n", sb.ID, ra.Dest)
+	}
+	if sb.EntryPoint != "" {
+		if err := verifyEntryPoint(stage, sb.EntryPoint); err != nil {
+			return fmt.Errorf("%s: %w", sb.ID, err)
+		}
+	}
 
-	// Publish only a complete fixture. A failed download or materialization
-	// leaves no directory that a later run would skip.
+	// Publish only a complete, validated fixture. A failed download or
+	// installer run leaves no directory that a later run would skip.
 	if err := os.RemoveAll(outDir); err != nil {
 		return fmt.Errorf("replace %s: %w", outDir, err)
 	}
@@ -305,6 +356,119 @@ func generateSandbox(sb sandbox, opts options) error {
 	published = true
 	fmt.Printf("[GEN]  %s -> %s\n", sb.ID, outDir)
 	return nil
+}
+
+// installerJavaMinimum is the oldest runtime that the pinned Forge and
+// NeoForge installers support. The generator only runs the installer; it never
+// launches the server, so the game version's own Java advisory does not apply.
+const installerJavaMinimum = 17
+
+// installServer runs one pinned loader installer in the directory that holds
+// it. The installer is the only source of the generated argument sidecars,
+// shim, and patched server jar; a copied universal jar is a runtime library,
+// not a launch target.
+func installServer(outDir string, ra resolvedArtifact) error {
+	java, err := installerJava()
+	if err != nil {
+		return fmt.Errorf("installer %s: %w", ra.Dest, err)
+	}
+	target := filepath.Dir(filepath.Join(outDir, ra.Dest))
+	// Run the copied installer under its fixture name so its own log and any
+	// path it derives match a real `java -jar <installer> --installServer .`.
+	cmd := exec.Command(java, "-jar", filepath.Base(ra.Dest), "--installServer", ".")
+	cmd.Dir = target
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("installer %s failed: %w\n%s", ra.Dest, err, outputTail(output.String()))
+	}
+	return nil
+}
+
+// installerJava picks the oldest installed runtime that the installers
+// support. Preferring the oldest qualifying major keeps legacy installers off
+// newer class-file versions while still accepting the current JDK.
+func installerJava() (string, error) {
+	inventory, err := toolchain.Discover(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("discover Java runtimes: %w", err)
+	}
+	var chosen *toolchain.JavaInstallation
+	for index := range inventory.Java {
+		runtime := &inventory.Java[index]
+		if runtime.Major < installerJavaMinimum {
+			continue
+		}
+		if chosen == nil || runtime.Major < chosen.Major {
+			chosen = runtime
+		}
+	}
+	if chosen == nil {
+		return "", fmt.Errorf(
+			"no Java %d+ runtime found: install a JDK %d or newer and put java on PATH or set JAVA_HOME",
+			installerJavaMinimum, installerJavaMinimum,
+		)
+	}
+	return chosen.Java, nil
+}
+
+func outputTail(output string) string {
+	const limit = 8 << 10
+	output = strings.TrimSpace(output)
+	if len(output) <= limit {
+		return output
+	}
+	return "..." + output[len(output)-limit:]
+}
+
+// verifyEntryPoint proves that an installer produced its declared launch
+// target, or that a pinned standalone launch jar is present and bootable.
+func verifyEntryPoint(outDir, entryPoint string) error {
+	path := filepath.Join(outDir, filepath.FromSlash(entryPoint))
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("launch target %s is missing: %w", entryPoint, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("launch target %s is not a regular file", entryPoint)
+	}
+	if info.Size() == 0 {
+		return fmt.Errorf("launch target %s is empty", entryPoint)
+	}
+	if !strings.HasSuffix(strings.ToLower(entryPoint), ".jar") {
+		return nil
+	}
+	archive, err := zip.OpenReader(path)
+	if err != nil {
+		return fmt.Errorf("launch target %s is not a readable jar: %w", entryPoint, err)
+	}
+	defer func() { _ = archive.Close() }()
+	if len(archive.File) == 0 {
+		return fmt.Errorf("launch target %s is an empty jar", entryPoint)
+	}
+	manifest, err := readZipEntry(&archive.Reader, "META-INF/MANIFEST.MF")
+	if err != nil {
+		return fmt.Errorf("launch target %s has no manifest: %w", entryPoint, err)
+	}
+	if manifestMainClass(manifest) == "" {
+		return fmt.Errorf("launch target %s declares no Main-Class", entryPoint)
+	}
+	return nil
+}
+
+// manifestMainClass returns the declared Main-Class of a jar manifest, or ""
+// when the attribute is absent. The manifest format is line oriented; a
+// Main-Class value is short enough that Forge and NeoForge never fold it.
+func manifestMainClass(manifest []byte) string {
+	for line := range strings.SplitSeq(string(manifest), "\n") {
+		key, value, ok := strings.Cut(strings.TrimSuffix(line, "\r"), ":")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "Main-Class") {
+			continue
+		}
+		return strings.TrimSpace(value)
+	}
+	return ""
 }
 
 // modpackIndex is the subset of modrinth.index.json that server generation

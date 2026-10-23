@@ -10,6 +10,20 @@
 # An artifact with modpack: true is a Modrinth pack archive. Generation writes
 # the indexed server files and the pack overrides into the sandbox root instead
 # of copying the archive.
+#
+# An artifact with install_server: true is an official Forge/NeoForge
+# installer. After every artifact and fixture file lands, generation runs
+# `java -jar <installer> --installServer .` in the directory that holds it and
+# then requires entry_point, a root-relative launch target, to exist. The
+# installer produces the argument sidecars, patched server jar, libraries, and
+# (where the branch publishes one) a shim; a copied universal jar is a runtime
+# library, not an entry point.
+# Generation picks the oldest installed Java 17+ runtime and fails with an
+# actionable message when no JDK is available; it never launches the server.
+#
+# entry_point may also name a pinned standalone launch jar without an
+# installer. A JAR entry point must declare Main-Class; the generator verifies
+# the manifest and never synthesizes arguments.
 version: 1
 
 sandboxes:
@@ -32,12 +46,14 @@ sandboxes:
     game_version: "1.20.1"
     description: MCDR-wrapped Forge 1.20.1-47.4.10 with PrimeBackup plugin
     docs: docs/mcdr.md
+    entry_point: server/libraries/net/minecraftforge/forge/1.20.1-47.4.10/unix_args.txt
     dirs: [logs]
     artifacts:
       - dest: server/libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
       - dest: server/forge-1.20.1-47.4.10-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar
+        install_server: true
       - dest: plugins/PrimeBackup-v1.13.1.pyz
         url: https://github.com/TISUnion/PrimeBackup/releases/download/v1.13.1/PrimeBackup-v1.13.1.pyz
         sha256: 081c91872ff3f6ab438328b96237e5e8db87ebff28e46b909eca804b6320db2b
@@ -47,10 +63,12 @@ sandboxes:
     game_version: "1.20.2"
     description: MCDR-wrapped NeoForge 20.2.93 with WhereIs plugin
     docs: docs/mcdr.md
+    entry_point: server/libraries/net/neoforged/neoforge/20.2.93/unix_args.txt
     dirs: [logs]
     artifacts:
       - dest: server/neoforge-20.2.93-installer.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-installer.jar
+        install_server: true
       - dest: server/libraries/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/20.2.93/neoforge-20.2.93-universal.jar
       - dest: plugins/WhereIs-v2.2.2.mcdr
@@ -61,10 +79,12 @@ sandboxes:
     family: neoforge
     game_version: "1.21.1"
     description: NeoForge 21.1.248 representative, mature classic line with dual-jar installer output
+    entry_point: libraries/net/neoforged/neoforge/21.1.248/unix_args.txt
     dirs: [logs, mods]
     artifacts:
       - dest: neoforge-21.1.248-installer.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar
+        install_server: true
       - dest: libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
 
@@ -73,10 +93,12 @@ sandboxes:
     game_version: "26.2"
     description: NeoForge 26.2.0.67 representative, current year-scheme line with universal-only layout
     docs: docs/neoforge.md
+    entry_point: libraries/net/neoforged/neoforge/26.2.0.67/unix_args.txt
     dirs: [logs, mods]
     artifacts:
       - dest: neoforge-26.2.0.67-installer.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-installer.jar
+        install_server: true
       - dest: libraries/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/26.2.0.67/neoforge-26.2.0.67-universal.jar
 
@@ -85,10 +107,12 @@ sandboxes:
     game_version: "1.21.1"
     description: Sinytra Connector on NeoForge 21.1.248 with Forgified Fabric API, the bridge that offers Fabric content to a NeoForge server
     docs: docs/bridges.md
+    entry_point: libraries/net/neoforged/neoforge/21.1.248/unix_args.txt
     dirs: [mods]
     artifacts:
       - dest: neoforge-21.1.248-installer.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-installer.jar
+        install_server: true
       - dest: libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar
       - dest: mods/connector-2.0.0-beta.17+1.21.1-full.jar
@@ -202,17 +226,20 @@ sandboxes:
     game_version: "1.20.1"
     description: Forge 1.20.1-47.4.10 recommended, pre-shim era representative
     docs: docs/forge.md
+    entry_point: libraries/net/minecraftforge/forge/1.20.1-47.4.10/unix_args.txt
     artifacts:
       - dest: libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar
       - dest: forge-1.20.1-47.4.10-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-installer.jar
+        install_server: true
 
   - id: forge-12111
     family: forge
     game_version: "1.21.11"
     description: Forge 1.21.11-61.2.0 recommended, shim-era representative
     docs: docs/forge.md
+    entry_point: libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-shim.jar
     artifacts:
       - dest: libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar
@@ -220,6 +247,18 @@ sandboxes:
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-shim.jar
       - dest: forge-1.21.11-61.2.0-installer.jar
         url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-installer.jar
+        install_server: true
+
+  - id: forge-1122
+    family: forge
+    game_version: "1.12.2"
+    description: Forge 1.12.2-14.23.5.2860 legacy standalone universal server jar
+    docs: docs/forge.md
+    entry_point: forge-1.12.2-14.23.5.2860-universal.jar
+    artifacts:
+      - dest: forge-1.12.2-14.23.5.2860-universal.jar
+        url: https://maven.minecraftforge.net/net/minecraftforge/forge/1.12.2-14.23.5.2860/forge-1.12.2-14.23.5.2860-universal.jar
+        sha256: cd3fbf85d7ca744507fd6a37a41b90122d43e616a4f8962332b1b658655e8a64
 
   # Vanilla
 
@@ -418,6 +457,7 @@ sandboxes:
     game_version: "1.21.1"
     description: Create+ 6.0.0 Alpha f server files over NeoForge 21.1.233
     docs: docs/modpacks.md
+    entry_point: libraries/net/neoforged/neoforge/21.1.233/unix_args.txt
     dirs: [mods, config]
     artifacts:
       - dest: pack.mrpack
@@ -426,5 +466,6 @@ sandboxes:
         modpack: true
       - dest: neoforge-21.1.233-installer.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.233/neoforge-21.1.233-installer.jar
+        install_server: true
       - dest: libraries/net/neoforged/neoforge/21.1.233/neoforge-21.1.233-universal.jar
         url: https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.233/neoforge-21.1.233-universal.jar
