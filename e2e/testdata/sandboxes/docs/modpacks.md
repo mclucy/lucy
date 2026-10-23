@@ -9,8 +9,11 @@ tool reads `modrinth.index.json`, downloads every file whose `env.server` is
 `required` or `optional` to its declared path, and unpacks `overrides/` and
 `server-overrides/` at the root. Create+ 6.0.0 Alpha f has one entry with
 `unknown` side metadata, which the pack format does not define; the tool skips
-it until the upstream pack is corrected. The loader artifact lands beside the
-pack files.
+it until the upstream pack is corrected. The pinned loader installer then runs
+with `--installServer`, so the generated argument sidecars, patched server jar,
+and libraries land beside the pack files. `create-plus-1211` launches through
+`libraries/net/neoforged/neoforge/21.1.233/unix_args.txt`; its universal jar is
+a runtime library, not an entry point.
 
 | Sandbox          | Pack                                        | Loader           | Server files |
 | ---------------- | ------------------------------------------- | ---------------- | ------------ |
