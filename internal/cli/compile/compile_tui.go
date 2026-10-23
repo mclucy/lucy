@@ -2,20 +2,9 @@ package compile
 
 import (
 	"errors"
-	"os"
 
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/x/term"
-	"github.com/mclucy/lucy/terminal/style"
 )
-
-// promptAvailable reports whether a select prompt can talk to the user. The
-// form needs a terminal on stdin; piped or closed stdin, or a run under
-// --no-interactive, must fail with the flag guidance instead of waiting on
-// input that never comes.
-func promptAvailable() bool {
-	return term.IsTerminal(os.Stdin.Fd()) && style.InteractiveEnabled()
-}
 
 // promptModProject asks which of several mod projects to compile. `huh` renders
 // on stderr, so stdout keeps carrying only the artifact path. Aborting the

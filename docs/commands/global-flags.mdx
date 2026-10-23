@@ -27,6 +27,8 @@ These flags work with every `lucy` subcommand. The root command also exposes ver
 
 `--json` and `--json-compact` are inherited by every command. Commands that produce machine-readable output render it; every command uses the same failure document. `--json-compact` wins when both are set.
 
+`compile` does not provide a JSON result. It rejects these flags before starting a build.
+
 <ParamField query="--json" type="boolean" default="false">
   Print JSON indented with 2 spaces. Success documents go to stdout; failure documents go to stderr.
 </ParamField>
