@@ -29,7 +29,9 @@ import (
 )
 
 // TestInitialize runs lucy init against each real sandbox composition and
-// checks the manifest and lock that the CLI writes for it.
+// checks the installation identity that the CLI writes for it. The launcher
+// path an operator selects is ephemeral; later observation must derive the
+// entry point from the declared identity and the files on disk.
 func TestInitialize(t *testing.T) {
 	binary := testkit.Lucy(t)
 	for _, id := range slices.Sorted(maps.Keys(initializeScenarios)) {
@@ -84,7 +86,7 @@ func TestInitialize(t *testing.T) {
 			output := stdout + stderr
 			if scenario.expectFailure {
 				requireFailure(t, root, scenario, output, err)
-				// Status still observes an ambiguous layout; init's refusal
+				// Status still observes the unresolved layout; init's refusal
 				// must not deny live-status postconditions.
 				if scenario.status != nil {
 					verifyStatus(t, runner, root, *scenario.status, scenario.informational)
@@ -103,15 +105,10 @@ func TestInitialize(t *testing.T) {
 			}
 			requireInformational(t, stderr, root, scenario.informational)
 			verifyInitialized(t, root, scenario)
+			requireLockOmitsEntryPoint(t, root)
 			verifyReceipt(t, root, scenario.wantReceipt)
 			if scenario.status != nil {
-				verifyStatus(
-					t,
-					runner,
-					root,
-					*scenario.status,
-					scenario.informational,
-				)
+				verifyStatus(t, runner, root, *scenario.status, scenario.informational)
 			}
 			verifyUnchanged(t, root, scenario.unchanged, unchanged)
 		})
@@ -169,7 +166,7 @@ func verifyInitialized(
 	t *testing.T,
 	root string,
 	scenario initializeScenario,
-) lockfile.Document {
+) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(root, manifest.Filename))
 	if err != nil {
@@ -246,7 +243,25 @@ func verifyInitialized(
 			len(locked.Packages), scenario.minPackages,
 		)
 	}
-	return locked
+}
+
+// requireLockOmitsEntryPoint inspects the written YAML rather than the decoder:
+// the obsolete launcher path must not survive in the lock under any schema
+// alias, and the assertion must not depend on the Go struct that decodes it.
+func requireLockOmitsEntryPoint(t *testing.T, root string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, lockfile.Filename))
+	if err != nil {
+		t.Fatalf("read generated lock: %v", err)
+	}
+	var document map[string]any
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		t.Fatalf("decode generated lock YAML: %v", err)
+	}
+	server, _ := document["server"].(map[string]any)
+	if _, ok := server["entry_point"]; ok {
+		t.Errorf("generated lock still records server.entry_point:\n%s", data)
+	}
 }
 
 func verifyReceipt(t *testing.T, root string, want bool) {
@@ -276,13 +291,26 @@ func verifyStatus(
 	if err != nil {
 		t.Fatalf("lucy status: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
-	if strings.Contains(stderr, "ERROR ") {
+	if len(want.ambiguous) == 0 && strings.Contains(stderr, "ERROR ") {
 		t.Fatalf("live status reported a runtime conflict:\n%s", stderr)
 	}
 	requireInformational(t, stderr, root, informational)
 	var document statusDocument
 	if err := json.Unmarshal([]byte(stdout), &document); err != nil {
 		t.Fatalf("decode live status JSON: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if len(want.ambiguous) > 0 {
+		if document.Server != nil {
+			t.Errorf("live status selected a runtime for a declared ambiguity")
+		}
+		requireErrorFinding(t, stderr, root, want.ambiguous)
+		return
+	}
+	if want.missing {
+		if document.Server != nil {
+			t.Errorf("live status adopted a runtime for a missing declared installation")
+		}
+		return
 	}
 	if document.Server == nil {
 		t.Fatal("live status reported no server")
@@ -356,6 +384,26 @@ func requireWarning(t *testing.T, output, selected string, competitors []string)
 	for i, competitor := range competitors {
 		if !found[i] {
 			t.Errorf("no WARN finding names competing candidate %s:\n%s", competitor, output)
+		}
+	}
+}
+
+// requireErrorFinding requires an ERROR-level finding naming each competing
+// entry point. An unresolved declared ambiguity is an error, not a warning or
+// an automatic choice.
+func requireErrorFinding(t *testing.T, output, root string, paths []string) {
+	t.Helper()
+	for _, candidate := range paths {
+		path := filepath.Join(root, filepath.FromSlash(candidate))
+		found := false
+		for line := range strings.SplitSeq(output, "\n") {
+			if strings.Contains(line, "ERROR") && strings.Contains(line, path) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("no ERROR finding names competing entry point %s:\n%s", path, output)
 		}
 	}
 }

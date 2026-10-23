@@ -71,7 +71,7 @@ type initializeScenario struct {
 	// stages one.
 	wantReceipt bool
 	// status asserts the live server identity after init, including after a
-	// refusal that leaves an ambiguous layout for observation.
+	// refusal that leaves the declared layout unresolved for observation.
 	status *statusExpectation
 	// unchanged lists files whose bytes must survive preparation and init.
 	unchanged []string
@@ -91,6 +91,8 @@ type initializeScenario struct {
 }
 
 // initializeCommand is one Lucy invocation that builds the pre-init directory.
+// selectEntryPoint is an ephemeral choice for this invocation only; it is
+// never persisted.
 type initializeCommand struct {
 	args             []string
 	selectEntryPoint string
@@ -117,8 +119,16 @@ type statusExpectation struct {
 	name       string
 	version    string
 	components map[string]string
-	// path is the workspace-relative entry point live status must select.
+	// path is the workspace-relative entry point live status must report. It
+	// names the file status observes now, not a path persisted by init.
 	path string
+	// missing requires live status to report no server and warn instead of
+	// adopting a runtime that does not match the declaration.
+	missing bool
+	// ambiguous lists competing workspace-relative entry points. It requires
+	// live status to report no server and an ERROR finding naming each one; a
+	// declaration with several compatible installations never auto-selects.
+	ambiguous []string
 	// warning lists the automatically selected entry point followed by the
 	// competing entry points that a WARN-level finding must name.
 	warning []string
@@ -206,6 +216,7 @@ var initializeScenarios = map[string]initializeScenario{
 		informational: []string{cobblemon1211Launcher},
 		status: &statusExpectation{
 			ecosystem: "fabric", name: "fabric", version: "0.19.5",
+			path: fabricShim,
 			components: map[string]string{
 				"minecraft:minecraft":  "1.21.1",
 				"fabric:fabric-loader": "0.19.5",
@@ -214,8 +225,8 @@ var initializeScenarios = map[string]initializeScenario{
 	},
 
 	// Installation replaces the declared meta launcher with its managed shim.
-	// Removing the declared entry point may only fall back to a receipt-owned
-	// entry point of the same identity.
+	// The selected path is ephemeral: when the pack launcher disappears, the
+	// declared installation identity still matches the shim.
 	"fabric-in-place-managed-replacement": {
 		sandbox: fabricExecutable262,
 		prune:   installationOutputPaths,
@@ -230,11 +241,20 @@ var initializeScenarios = map[string]initializeScenario{
 		force:        true,
 		minecraft:    "26.2", product: "fabric", coreVersion: "0.19.3",
 		wantReceipt: true,
+		status: &statusExpectation{
+			ecosystem: "fabric", name: "fabric", version: "0.19.3",
+			path: fabricShim,
+			components: map[string]string{
+				"minecraft:minecraft":  "26.2",
+				"fabric:fabric-loader": "0.19.3",
+			},
+		},
 	},
 
-	// Without a managed replacement, a missing declared entry point is a
-	// refusal, not an invitation to identify whatever remains.
-	"fabric-declared-entry-point-missing": {
+	// Without any remaining launcher for the declared identity, a missing
+	// installation is a refusal, not an invitation to identify whatever
+	// remains.
+	"fabric-declared-installation-missing": {
 		sandbox: fabricExecutable262,
 		prepare: []initializeCommand{{
 			args:             []string{"init", "--no-interactive"},
@@ -244,6 +264,36 @@ var initializeScenarios = map[string]initializeScenario{
 		force:         true,
 		expectFailure: true,
 		minecraft:     "26.2", product: "fabric", coreVersion: "0.19.3",
+		status: &statusExpectation{missing: true},
+	},
+
+	// The same replacement must still recognize the shim when the receipt no
+	// longer owns it: a stale digest leaves the file unmanaged, but its
+	// observed identity still matches the declaration. Ownership does not
+	// decide which installation the declaration selects.
+	"fabric-in-place-stale-ownership": {
+		sandbox: fabricExecutable262,
+		prune:   installationOutputPaths,
+		prepare: append(
+			runtimeInstallPreparation("26.2", "fabric@0.19.3"),
+			initializeCommand{
+				args:             []string{"init", "--force", "--no-interactive"},
+				selectEntryPoint: fabric262Launcher,
+			},
+		),
+		removeBefore: []string{fabric262Launcher},
+		modifyFiles:  []string{fabricShim},
+		force:        true,
+		minecraft:    "26.2", product: "fabric", coreVersion: "0.19.3",
+		wantReceipt: true,
+		status: &statusExpectation{
+			ecosystem: "fabric", name: "fabric", version: "0.19.3",
+			path: fabricShim,
+			components: map[string]string{
+				"minecraft:minecraft":  "26.2",
+				"fabric:fabric-loader": "0.19.3",
+			},
+		},
 	},
 
 	// A readable declaration and lock keep their identity when an unrelated,
@@ -264,6 +314,7 @@ var initializeScenarios = map[string]initializeScenario{
 		informational: []string{fabric1214Launcher},
 		status: &statusExpectation{
 			ecosystem: "fabric", name: "fabric", version: "0.19.3",
+			path: fabric262Launcher,
 			components: map[string]string{
 				"minecraft:minecraft":  "26.2",
 				"fabric:fabric-loader": "0.19.3",
@@ -295,6 +346,8 @@ var initializeScenarios = map[string]initializeScenario{
 	},
 
 	// --entry-point resolves that conflict without discarding the other jar.
+	// The declaration keeps the chosen identity, so live status must keep
+	// reporting the selected Fabric runtime rather than the preferred one.
 	"fabric-conflicting-identities-selected": {
 		sandbox: fabricExecutable262,
 		artifacts: []initializeArtifact{{
@@ -304,6 +357,15 @@ var initializeScenarios = map[string]initializeScenario{
 		}},
 		selectEntryPoint: fabric262Launcher,
 		minecraft:        "26.2", product: "fabric", coreVersion: "0.19.3",
+		informational: []string{fabric1214Launcher},
+		status: &statusExpectation{
+			ecosystem: "fabric", name: "fabric", version: "0.19.3",
+			path: fabric262Launcher,
+			components: map[string]string{
+				"minecraft:minecraft":  "26.2",
+				"fabric:fabric-loader": "0.19.3",
+			},
+		},
 	},
 
 	// A real Fabric launcher and a real vanilla server jar are two
@@ -330,7 +392,8 @@ var initializeScenarios = map[string]initializeScenario{
 	},
 
 	// Explicit selection outranks the live-status preference: vanilla is
-	// adopted even though observation would prefer the Fabric runtime.
+	// adopted even though observation would prefer the Fabric runtime, and
+	// the declaration keeps that identity on later observation.
 	"fabric-vanilla-conflicting-identities-selected": {
 		sandbox: fabricExecutable262,
 		artifacts: []initializeArtifact{{
@@ -340,6 +403,7 @@ var initializeScenarios = map[string]initializeScenario{
 		}},
 		selectEntryPoint: "server.jar",
 		minecraft:        "26.2", product: "minecraft", coreVersion: "26.2",
+		informational: []string{fabric262Launcher},
 		status: &statusExpectation{
 			ecosystem: "minecraft", name: "minecraft", version: "26.2",
 			path: "server.jar",
@@ -437,9 +501,10 @@ var initializeScenarios = map[string]initializeScenario{
 	},
 
 	// A real Paper jar and a server.jar symlink alias are one physical
-	// installation. Explicit selection through the alias persists the canonical
-	// target, which is also the path live status reports; the build version
-	// remains unobserved.
+	// installation. Explicit selection through the alias records the Paper
+	// identity; live status reports the canonical file for that identity. The
+	// observed build is unknown, which is noncontradictory with the resolved
+	// lock core rather than proof of a mismatch.
 	"paper-symlink-alias": {
 		sandbox: "paper",
 		symlinks: []initializeSymlink{{
@@ -450,11 +515,36 @@ var initializeScenarios = map[string]initializeScenario{
 		minecraft:        "1.21.11", product: "paper",
 		requireConcreteCore: true,
 		status: &statusExpectation{
-			name: "paper",
+			name: "paper", version: "unknown",
 			path: paperJar,
 			components: map[string]string{
 				"minecraft:minecraft": "1.21.11",
 			},
+		},
+	},
+
+	// Two physically distinct copies of the same real Paper jar are two
+	// installations: an unknown primary version was never proven concrete, so
+	// they cannot merge. After init recorded the Paper identity, both remain
+	// compatible with the declaration. Status and init must stay unresolved
+	// instead of picking one lexically; an explicitly selected path is not
+	// persisted, so the twin cannot be resolved permanently.
+	"paper-declared-ambiguous-twins": {
+		sandbox: "paper",
+		prepare: []initializeCommand{{
+			args: []string{"init", "--no-interactive"},
+		}},
+		artifacts: []initializeArtifact{{
+			source: paperJar,
+			dest:   "paper-1.21.11-130-copy.jar",
+		}},
+		force:         true,
+		expectFailure: true,
+		guidance:      []string{paperJar, "paper-1.21.11-130-copy.jar"},
+		minecraft:     "1.21.11", product: "paper",
+		requireConcreteCore: true,
+		status: &statusExpectation{
+			ambiguous: []string{paperJar, "paper-1.21.11-130-copy.jar"},
 		},
 	},
 
@@ -482,13 +572,88 @@ var initializeScenarios = map[string]initializeScenario{
 		},
 	},
 
-	// Two copies of the same real vanilla jar are one installation.
+	// Two copies of the same real vanilla jar are one installation. The
+	// ephemeral --entry-point choice names one copy, but the written lock
+	// records only the runtime identity; later observation reports the
+	// installation's lexical entry point, not the selected path.
 	"vanilla-duplicate-jars": {
 		sandbox: vanilla262,
 		artifacts: []initializeArtifact{{
 			source: "server.jar",
 			dest:   "server-backup.jar",
 		}},
-		minecraft: "26.2", product: "minecraft", coreVersion: "26.2",
+		selectEntryPoint: "server.jar",
+		minecraft:        "26.2", product: "minecraft", coreVersion: "26.2",
+		status: &statusExpectation{
+			ecosystem: "minecraft", name: "minecraft", version: "26.2",
+			path: "server-backup.jar",
+			components: map[string]string{
+				"minecraft:minecraft": "26.2",
+			},
+		},
+	},
+
+	// The selected launcher disappears, but an unmanaged copy of the same
+	// real runtime remains. The declared identity still matches it, so status
+	// and init keep the server instead of reporting a missing installation.
+	"vanilla-declared-unmanaged-survivor": {
+		sandbox: vanilla262,
+		prepare: []initializeCommand{{
+			args: []string{"init", "--no-interactive"},
+		}},
+		artifacts: []initializeArtifact{{
+			source: "server.jar",
+			dest:   "server-backup.jar",
+		}},
+		removeBefore: []string{"server.jar"},
+		force:        true,
+		minecraft:    "26.2", product: "minecraft", coreVersion: "26.2",
+		status: &statusExpectation{
+			ecosystem: "minecraft", name: "minecraft", version: "26.2",
+			path: "server-backup.jar",
+			components: map[string]string{
+				"minecraft:minecraft": "26.2",
+			},
+		},
+	},
+
+	// The declared Fabric runtime is gone and a different product remains.
+	// Init and status must not adopt the vanilla jar as a substitute.
+	"fabric-declared-missing-different-product": {
+		sandbox: fabricExecutable262,
+		prepare: []initializeCommand{{
+			args: []string{"init", "--no-interactive"},
+		}},
+		artifacts: []initializeArtifact{{
+			sandbox: vanilla262,
+			source:  "server.jar",
+			dest:    "server.jar",
+		}},
+		removeBefore:  []string{fabric262Launcher},
+		force:         true,
+		expectFailure: true,
+		guidance:      []string{"server.jar"},
+		minecraft:     "26.2", product: "fabric", coreVersion: "0.19.3",
+		status: &statusExpectation{missing: true},
+	},
+
+	// The declared Fabric runtime is gone and a different loader/Minecraft
+	// version remains. Version mismatch alone is enough to refuse adoption.
+	"fabric-declared-missing-different-version": {
+		sandbox: fabricExecutable262,
+		prepare: []initializeCommand{{
+			args: []string{"init", "--no-interactive"},
+		}},
+		artifacts: []initializeArtifact{{
+			sandbox: fabricExecutable1214,
+			source:  fabric1214Launcher,
+			dest:    fabric1214Launcher,
+		}},
+		removeBefore:  []string{fabric262Launcher},
+		force:         true,
+		expectFailure: true,
+		guidance:      []string{fabric1214Launcher},
+		minecraft:     "26.2", product: "fabric", coreVersion: "0.19.3",
+		status: &statusExpectation{missing: true},
 	},
 }
