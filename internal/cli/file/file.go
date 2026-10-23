@@ -74,8 +74,8 @@ const (
 		"about deviation."
 
 	ListLong = "Read-only inspection of every tracked file. Mutable files " +
-		"may deviate without warning; immutable files warn through lucy " +
-		"doctor and installation."
+		"may deviate without warning; immutable files warn during " +
+		"installation."
 
 	HistoryLong = "List file tracking events in chronological order with " +
 		"their sequence number, timestamp, digest, and operation. An " +

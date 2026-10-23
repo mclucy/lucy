@@ -124,7 +124,10 @@ func TestFileInstallWarnsImmutableDeviationWithoutRestoring(t *testing.T) {
 	drifted := []byte("drifted rules v3\n")
 	w.write(t, "config/rules.txt", drifted, 0o644)
 
-	w.lucyOK(t, "install")
+	run := w.lucyOK(t, "install")
+	if !strings.Contains(run.stderr, "config/rules.txt") {
+		t.Errorf("install did not warn about the immutable deviation:\n%s", run.stderr)
+	}
 	w.requireBytes(t, "config/rules.txt", drifted)
 	if !w.modTime(t, "server/server.jar").Equal(coreMtime) {
 		t.Error("the warned install touched the installed core")
@@ -133,10 +136,6 @@ func TestFileInstallWarnsImmutableDeviationWithoutRestoring(t *testing.T) {
 	status := w.statusOf(t, "config/rules.txt")
 	if status.State != "modified" || !status.Immutable {
 		t.Errorf("install changed the reported drift state: %+v", status)
-	}
-	report := decodeJSON[doctorReportView](t, w.lucyOK(t, "doctor", "--json").stdout)
-	if len(report.Warnings) != 1 || report.Warnings[0].Path != "config/rules.txt" {
-		t.Errorf("doctor lost the immutable deviation warning: %+v", report.Warnings)
 	}
 }
 
@@ -206,10 +205,6 @@ func TestFileLockOnlyWorkspaceServesReadOnlyCommands(t *testing.T) {
 	w.requireAbsent(t, ".lucy")
 	if events := w.lucyHistory(t, ""); len(events) != 0 {
 		t.Errorf("lock-only history invented events: %+v", events)
-	}
-	report := decodeJSON[doctorReportView](t, w.lucyOK(t, "doctor", "--json").stdout)
-	if len(report.Warnings) != 0 || len(report.Failures) != 0 {
-		t.Errorf("lock-only doctor reports state: %+v", report)
 	}
 
 	drifted := []byte("drifted rules\n")

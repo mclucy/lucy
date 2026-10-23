@@ -244,13 +244,6 @@ func TestFileLockAndUnlockControlDriftWarnings(t *testing.T) {
 		t.Errorf("drift hides one of the two digests: %+v", status)
 	}
 	w.lucyOK(t, "file", "list")
-	report := decodeJSON[doctorReportView](t, w.lucyOK(t, "doctor", "--json").stdout)
-	if len(report.Warnings) != 1 || report.Warnings[0].Path != "config/rules.txt" {
-		t.Errorf("doctor does not warn about the immutable drift: %+v", report.Warnings)
-	}
-	if len(report.Failures) != 0 {
-		t.Errorf("doctor reports failures for a mere drift: %+v", report.Failures)
-	}
 
 	unlocked := w.fileResult(t, "unlock", "config/rules.txt")
 	if len(unlocked.Changes) != 1 {
@@ -266,10 +259,6 @@ func TestFileLockAndUnlockControlDriftWarnings(t *testing.T) {
 
 	w.write(t, "config/rules.txt", []byte("mutable drift\n"), 0o644)
 	w.lucyOK(t, "file", "list")
-	report = decodeJSON[doctorReportView](t, w.lucyOK(t, "doctor", "--json").stdout)
-	if len(report.Warnings) != 0 || len(report.Failures) != 0 {
-		t.Errorf("a mutable drift produces diagnostics: %+v", report)
-	}
 	if status := w.statusOf(t, "config/rules.txt"); status.State != "modified" || status.Immutable {
 		t.Errorf("mutable drift is not reported plainly: %+v", status)
 	}

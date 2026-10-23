@@ -506,17 +506,6 @@ type historyEventView struct {
 	Changes   []historyChangeView `json:"changes"`
 }
 
-type doctorReportView struct {
-	Warnings []struct {
-		Path    string `json:"path"`
-		Message string `json:"message"`
-	} `json:"warnings"`
-	Failures []struct {
-		Path    string `json:"path"`
-		Message string `json:"message"`
-	} `json:"failures"`
-}
-
 func (w workspace) fileResult(t *testing.T, args ...string) fileResultView {
 	t.Helper()
 	argv := make([]string, len(args)+2)

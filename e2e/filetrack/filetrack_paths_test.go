@@ -102,14 +102,6 @@ func TestFileListReportsSymlinkedDeclarationAsError(t *testing.T) {
 	if status.State != "error" {
 		t.Errorf("symlinked declaration is not an error state: %+v", status)
 	}
-	run := w.lucy(t, "doctor", "--json")
-	if run.exitCode != 1 {
-		t.Errorf("doctor exited %d, want a failure on the symlinked declaration:\n%s", run.exitCode, run.stdout)
-	}
-	report := decodeJSON[doctorReportView](t, run.stdout)
-	if len(report.Failures) != 1 || report.Failures[0].Path != "outside/inside.txt" {
-		t.Errorf("doctor does not fail on the symlinked declaration: %+v", report)
-	}
 }
 
 func TestFileManifestRejectsDuplicateNormalizedPaths(t *testing.T) {
