@@ -329,11 +329,7 @@ func statusLockComponents(lock *lockfile.Document) []statusComponent {
 	})
 }
 
-// statusLockCompatibleEcosystems reports the package surfaces the lock proves.
-// The product contributes its own ecosystem, and installed server packages
-// prove the ecosystems they were resolved for. Fabric content under a
-// Forge/NeoForge server is degraded only when the lock also records a
-// connector bridge; the lock does not record any other support level.
+// Only enabled packages can contribute compatibility evidence.
 func statusLockCompatibleEcosystems(
 	lock *lockfile.Document,
 ) []statusEcosystem {
@@ -357,7 +353,7 @@ func statusLockCompatibleEcosystems(
 	add(productEcosystem, workspace.CompatFull)
 	for i := range lock.Packages {
 		pkg := &lock.Packages[i]
-		if pkg.Environment != serverpkg.EnvironmentServer {
+		if !pkg.Enabled() || pkg.Environment != serverpkg.EnvironmentServer {
 			continue
 		}
 		compatibility := workspace.CompatFull
@@ -386,6 +382,9 @@ func statusLockCompatibleEcosystems(
 func statusLockHasConnectorBridge(lock *lockfile.Document) bool {
 	for i := range lock.Packages {
 		pkg := &lock.Packages[i]
+		if !pkg.Enabled() || pkg.Environment != serverpkg.EnvironmentServer {
+			continue
+		}
 		if pkg.Ecosystem != catalog.EcosystemForge &&
 			pkg.Ecosystem != catalog.EcosystemNeoForge {
 			continue
@@ -519,21 +518,15 @@ func statusConcreteVersion(version versionpkg.Version) bool {
 	return version != "" && !version.CanInfer() && !version.IsInvalid()
 }
 
-// statusLockProductEcosystem prefers loaders or runtime packages recorded in
-// the lock. When the lock has no such evidence, the product catalog still
-// names the ecosystem the executable belongs to.
+// Native product support must not narrow to the packages currently declared.
 func statusLockProductEcosystem(lock *lockfile.Document) catalog.Ecosystem {
-	ecosystem := ecosystemFromLock(lock)
-	if ecosystem != catalog.EcosystemUnspecified {
-		return ecosystem
-	}
 	match, ok := serverpkg.NormalizeProduct(catalog.VersionedRef{
 		Name: catalog.Name(lock.Server.Product.String()),
 	})
-	if ok {
+	if ok && match.Ecosystem != catalog.EcosystemUnspecified {
 		return match.Ecosystem
 	}
-	return ecosystem
+	return ecosystemFromLock(lock)
 }
 
 // statusRelativePath reports a path relative to the document root. Absolute
