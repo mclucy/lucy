@@ -135,6 +135,12 @@ func reportDiscoveryFindings(observed *discovery.Result) {
 			report.Warn(errors.New(
 				"declared server installation is missing; run lucy install --locked",
 			))
+		case discovery.FindingOwnershipError:
+			report.Warn(fmt.Errorf(
+				"cannot verify ownership of %s: %w",
+				finding.Path,
+				finding.Cause,
+			))
 		case discovery.FindingModifiedFile:
 			report.Warn(fmt.Errorf(
 				"managed file %s was modified; it stays unmanaged",

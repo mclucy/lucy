@@ -17,6 +17,7 @@ const (
 	FindingInvalidIdentity             FindingKind = "invalid_identity"
 	FindingUnreadableFile              FindingKind = "unreadable_file"
 	FindingReceiptError                FindingKind = "receipt_error"
+	FindingOwnershipError              FindingKind = "ownership_error"
 	FindingModifiedFile                FindingKind = "modified_file"
 	FindingAlternativeEntryPoint       FindingKind = "alternative_entry_point"
 	FindingUnmanagedInstallation       FindingKind = "unmanaged_installation"

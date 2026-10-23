@@ -28,7 +28,9 @@ type ownershipReceiptEntry struct {
 // ObserveOwnership verifies the local installation receipt against every
 // observed member. Receipt paths are workspace-anchor-relative even when the
 // server directory is nested. A recorded path alone never proves management:
-// the content hash must match. The method never writes files.
+// the content hash must match. A member whose recorded content cannot be read
+// keeps OwnershipUnknown and never counts as modified. The method never writes
+// files.
 func (r *Result) ObserveOwnership(workspaceRoot string) {
 	if r == nil {
 		return
@@ -115,7 +117,17 @@ func (r *Result) ObserveOwnership(workspaceRoot string) {
 				observed = verifiedHash{hash: hash, err: hashErr}
 				verified[relative] = observed
 			}
-			if observed.err == nil && matchesRecordedHash(observed.hash, hashes) {
+			if observed.err != nil {
+				file.Ownership = OwnershipUnknown
+				r.Diagnostics = append(r.Diagnostics, Finding{
+					Kind:     FindingOwnershipError,
+					Path:     file.Path,
+					Identity: installation.Identity,
+					Cause:    observed.err,
+				})
+				continue
+			}
+			if matchesRecordedHash(observed.hash, hashes) {
 				file.Ownership = OwnershipManaged
 				continue
 			}
@@ -124,7 +136,6 @@ func (r *Result) ObserveOwnership(workspaceRoot string) {
 				Kind:     FindingModifiedFile,
 				Path:     file.Path,
 				Identity: installation.Identity,
-				Cause:    observed.err,
 			})
 		}
 	}
@@ -213,7 +224,7 @@ func (r *Result) clearOwnershipDiagnostics() {
 	kept := r.Diagnostics[:0]
 	for _, finding := range r.Diagnostics {
 		switch finding.Kind {
-		case FindingReceiptError, FindingModifiedFile:
+		case FindingReceiptError, FindingOwnershipError, FindingModifiedFile:
 			continue
 		}
 		kept = append(kept, finding)
