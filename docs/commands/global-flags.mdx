@@ -49,9 +49,9 @@ Machine output owns the streams instead:
 
 - On success, stdout carries exactly one JSON document and stderr stays empty. Progress, warnings, prompts, and the pre-alpha notice are suppressed. Warnings that belong to a result travel inside its document when the command supports them.
 - On failure, stdout stays empty and stderr carries exactly one JSON failure document. The human error is not repeated.
-- Invalid invocations — an unknown command, an unknown flag, a flag without its value, or a rejected argument count — follow the same rules. The output mode is read from the original command line, so `--json` and `--json-compact` work even when the command never starts.
+- Invalid commands, flags, and arguments follow the same failure contract.
 
-`--print-logs` is the exception to the empty-stderr rule. In machine mode lucy suppresses the terminal log mirror so the stream stays parseable; the log file still records diagnostics. Leave `--print-logs` off when a program parses stderr.
+Terminal log mirroring is disabled in JSON mode, even with `--print-logs`. Diagnostics still go to the log file.
 
 ## Failure documents
 
@@ -69,20 +69,9 @@ Every machine-mode failure writes one document with this shape:
 }
 ```
 
-- `schema` is `1` and identifies the document version.
-- `kind` is `error`. Successful operation documents name their own kind, such as `install` for add, install, remove, and init.
-- `code` is a stable machine-readable reason:
-  - `command.failed` — the action failed; read `title` and `details`.
-  - `usage.invalid_invocation` — the command line could not be parsed or validated.
-  - `operation.cancelled` — the action was interrupted before it completed.
-  - `resolve.no_matching_build` — no build matches the requested version.
-  - `resolve.no_compatible_build` — builds exist, but none fit this server.
-- `title` is a one-line summary without ANSI escapes.
-- `details` is an array of explanation lines, empty when the title says enough.
-- `hint` is optional and names a next step when one exists.
-- `log` names the diagnostic log file for the run.
+Use `code` for automation; `title` and `details` are human-readable explanations. `hint` is optional, and `log` points to diagnostic details.
 
-The document never contains colors, progress output, or a second human rendering. The result is published only after cleanup succeeds, so a failed command does not leave a success document on stdout.
+Results are published only after cleanup succeeds.
 
 ## Exit status
 
