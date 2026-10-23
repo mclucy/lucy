@@ -66,7 +66,7 @@ To run the built binary against a test server directory:
 │   └── providers/          Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
 ├── workspace/              Local runtime, wrapper, and package-file observation
 │   ├── identify/           Associate local package files with upstream identities
-│   └── discovery/          Declarative runtime node detection
+│   └── discovery/          Unified installation discovery, ownership, and runtime selection
 ├── bootstrap/              Pinned server product bootstrap profiles
 ├── resolve/                Catalogue selection and descriptor dependency validation
 ├── input/                  Trust boundary for external input, package ref parsing
@@ -96,10 +96,13 @@ Keep `catalog` limited to the standard library and `version`. Shared usage alone
 does not justify placing a type there. Manifest declarations, lock records,
 workspace observations, runtime selection, and presentation stay with their owners.
 
-`workspace` reads local files without upstream access. `workspace/identify`
-connects unidentified package files to upstream identities through hash lookup.
-Commands and operations invoke identification explicitly; CLI output projections
-stay outside workspace observation.
+`workspace` reads local files without upstream access. `workspace/discovery`
+owns installation identity, member ownership, and runtime selection through one
+directory scan; `workspace` assembles that result with wrappers, declarations,
+and package files. `workspace/identify` connects unidentified package files to
+upstream identities through hash lookup. Commands and operations invoke
+identification explicitly; CLI output projections stay outside workspace
+observation.
 
 ## Output Style Flags
 
