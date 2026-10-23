@@ -63,6 +63,9 @@ with CurseForge support before treating them as part of the security posture.
 
 ## Local generation
 
+`task cipher:generate` writes one canonical file, `.cipher_key`, holding
+`cipher_bound` plus all four fragments. Build tasks and CI read only that file.
+
 ```bash
 export CF_API_KEY=...   # never commit; process env only (never argv)
 task cipher:generate    # feeds key on stdin to cmd/cipher -encrypt-stdin
