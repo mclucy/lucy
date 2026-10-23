@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	versionpkg "github.com/mclucy/lucy/version"
 )
 
 func TestPackageIndex_AddFirstWriteWins(t *testing.T) {
@@ -158,24 +157,5 @@ func TestPackageIndex_LookupByEcosystemName_MultipleVersions(t *testing.T) {
 			"wrong version sort: got %q first",
 			results[0].ID.Version.String(),
 		)
-	}
-}
-
-func makeDiscoveredPackage(
-	t *testing.T,
-	platform catalog.Ecosystem,
-	name, version, path string,
-) DiscoveredPackage {
-	t.Helper()
-	return DiscoveredPackage{
-		ID: catalog.VersionedRef{
-			Ref: catalog.Ref{
-				Name:     catalog.Name(name),
-				Provider: catalog.ProviderUnknown,
-			},
-			Ecosystem: platform,
-			Version:   versionpkg.Version(version),
-		},
-		Path: path,
 	}
 }
