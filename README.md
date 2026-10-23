@@ -73,6 +73,7 @@ apart.
 | `lucy init`            | Generate `lucy.yaml` and `lucy-lock.yaml` from an existing server directory                       |
 | `lucy add <pkg>...`    | Record requirements, resolve the closure, update the lock, and sync                                |
 | `lucy remove <pkg>...` | Drop requirements, re-resolve, and prune artifacts nothing needs                                   |
+| `lucy deinit`          | Remove lucy's manifest, lock, and local state from a server directory                              |
 | `lucy install`         | Converge the server with the lock; re-resolve when stale, with `--locked` and `--offline` controls |
 | `lucy status`          | Show the live server identity, files, and packages; `--from-lock` renders the lock                 |
 | `lucy search <query>`  | Search Modrinth, CurseForge, Hangar, Spiget, and the MCDReforged catalogue                         |

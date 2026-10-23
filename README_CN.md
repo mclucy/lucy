@@ -70,6 +70,7 @@ lucy install
 | `lucy init`            | 从已有服务器目录生成 `lucy.yaml`                              |
 | `lucy add <pkg>...`    | 记录包、解析依赖、更新 lock 并同步                            |
 | `lucy remove <pkg>...` | 删除包、重新解析，并清理不再需要的文件                        |
+| `lucy deinit`          | 从服务器目录移除 lucy 的 manifest、lock 与本地状态            |
 | `lucy install`         | 将服务器同步到 manifest 与 lock；lock 过期时重新解析          |
 | `lucy status`          | 显示实时服务器与包；`--from-lock` 渲染 lock                   |
 | `lucy search <query>`  | 搜索 Modrinth、CurseForge、Hangar、Spiget 和 MCDReforged 目录 |
