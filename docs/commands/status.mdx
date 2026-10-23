@@ -3,40 +3,26 @@ title: "lucy status"
 description: "Display an overview of the current server"
 ---
 
-`lucy status` inspects the current directory and prints a summary of the server — server software and version, Minecraft version, runtime files, and installed packages. This is the [`neofetch`](https://github.com/dylanaraps/neofetch)/[`fastfetch`](https://github.com/LinusDierheimer/fastfetch) for Minecraft servers.
+Show the server and installed packages in the current workspace. This command does not change files.
 
 ```bash
 lucy status
-```
-
-No arguments. Run it from the server directory or any directory that `lucy` manages. By default, Lucy inspects the installed files. When the manifest and lock agree on the server, that selection stays authoritative: unrelated jars are reported as unmanaged, not as conflicting servers. The selected server is not tied to a particular launcher path; another recognized launcher for the same server can replace a missing one, regardless of who installed it. If the selected installation is missing, Lucy reports it rather than switching to a different server.
-
-Some launchers do not expose an exact server version. Lucy leaves that version unknown rather than guessing it from the filename. Known version conflicts exclude a candidate; several installations compatible with a saved choice remain ambiguous, even in status.
-
-When no declaration selects a server and the directory holds several, `lucy status` chooses one for display and prints a warning on stderr, including in JSON mode. The preference favors a server that loads more kinds of content: hybrid Forge/Fabric plus Bukkit runtimes first, then mod loaders, then specialized server forks, then Bukkit/Paper-family implementations, and finally plain Minecraft. A managed entry point and then a stable identity/path order break ties. The choice is read-only: status never writes it to `lucy.yaml` or `lucy-lock.yaml`. Run [`lucy init --entry-point`](/commands/init) to record a different server. Pass `--from-lock` to render the server and packages from `lucy-lock.yaml` without inspecting the installed files.
-
-```bash
+lucy status --long
 lucy status --from-lock
 ```
 
 ## Flags
 
 <ParamField query="--from-lock" type="boolean" default="false">
-  Render the server and packages from `lucy-lock.yaml` instead of inspecting the live directory. This describes the lock file, not what is currently installed on disk.
+  Read `lucy-lock.yaml` instead of inspecting installed files. Running activity is not observed.
 </ParamField>
 
 <ParamField query="--logo" type="string" default="small">
-  Controls the ASCII art logo shown alongside the status output.
-
-  | Value | Description |
-  |---|---|
-  | `small` | Compact logo (default) |
-  | `large` | Full-size logo (opt-in) |
-  | `none` | No logo |
+  Choose `small`, `large`, or `none`.
 </ParamField>
 
 <ParamField query="--long, -l" type="boolean" default="false">
-  Show full `modrinth:project`-style references instead of bare names, and expand collapsed lists.
+  Show every package with its full reference and relative path.
 </ParamField>
 
-See also [Global Flags](/commands/global-flags) and [`lucy install`](/commands/install).
+See [Global Flags](/commands/global-flags) for JSON and output options.

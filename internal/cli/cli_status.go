@@ -4,14 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
-	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/terminal/style"
 	versionpkg "github.com/mclucy/lucy/version"
@@ -62,335 +61,159 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 	long, _ := cmd.Flags().GetBool(FlagLong)
 	logo, _ := cmd.Flags().GetString(FlagLogo)
 	logoMode, _ := terminal.ParseStatusLogoMode(logo)
+	output := NewQueryOutput(cmd)
 
 	fromLock, _ := cmd.Flags().GetBool(flagStatusFromLockName)
 	if fromLock {
-		return actionStatusFromLock(cmd, long, logoMode)
+		return actionStatusFromLock(output, long, logoMode)
 	}
+	return actionStatusLive(output, long, logoMode)
+}
 
-	workDir, err := os.Getwd()
+// actionStatusLive observes the working directory and reports the runtime and
+// packages found there. Selection uncertainty is part of the document, not a
+// command failure: an empty, ambiguous, or declared-missing workspace still
+// prints a useful status.
+func actionStatusLive(
+	output *Output,
+	long bool,
+	logoMode terminal.StatusLogoMode,
+) error {
+	root, err := statusWorkingDirectory()
 	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
+		return err
 	}
-	ws, _ := identify.Packages(workspace.Observe(
-		workDir,
+	observed, identifyWarnings := identify.Packages(workspace.Observe(
+		root,
 		discovery.Request{Policy: discovery.PolicyPreferModified},
 	))
-	output := NewQueryOutput(cmd)
-	reportObservationFindings(ws, output)
-	document := newLiveStatusDocument(ws, output.Warnings())
-	switch JSONMode(cmd) {
-	case JSONPretty:
-		if err := style.WriteJSON(cmd.OutOrStdout(), document, false); err != nil {
-			return err
+	reportObservationFindings(observed, output)
+	for _, warning := range identifyWarnings {
+		output.Warn(warning)
+	}
+	if failure := statusSelectionFailure(observed); failure != nil {
+		return failure
+	}
+
+	document := newLiveStatusDocument(observed, root)
+	document.Warnings = append(document.Warnings, output.Warnings()...)
+	return writeStatusDocument(output, document, long, logoMode)
+}
+
+// actionStatusFromLock reports only the facts persisted in lucy-lock.yaml.
+// The lock cannot prove whether the server is running or which entry point an
+// installation would use, so the document leaves both unobserved.
+func actionStatusFromLock(
+	output *Output,
+	long bool,
+	logoMode terminal.StatusLogoMode,
+) error {
+	root, err := statusWorkingDirectory()
+	if err != nil {
+		return err
+	}
+	lock, err := lockfile.Read(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &report.Detail{
+				Title: fmt.Sprintf("no %s to render", lockfile.Filename),
+				Lines: []string{
+					"The workspace has no lock file yet.",
+				},
+				Hint:  "Run lucy install first.",
+				Code:  statusErrorLockMissing,
+				Cause: err,
+			}
 		}
-		return nil
-	case JSONCompact:
-		if err := style.WriteJSON(cmd.OutOrStdout(), document, true); err != nil {
-			return err
+		return &report.Detail{
+			Title: "cannot read " + lockfile.Filename,
+			Lines: []string{err.Error()},
+			Code:  statusErrorReadFailed,
+			Cause: err,
 		}
+	}
+	return writeStatusDocument(
+		output,
+		newLockStatusDocument(root, lock),
+		long,
+		logoMode,
+	)
+}
+
+// statusWorkingDirectory is the document root. Every reported path is
+// relative to it, whether the command observed the directory or read a lock.
+func statusWorkingDirectory() (string, error) {
+	root, err := os.Getwd()
+	if err != nil {
+		return "", &report.Detail{
+			Title: "cannot determine the working directory",
+			Lines: []string{err.Error()},
+			Code:  statusErrorReadFailed,
+			Cause: err,
+		}
+	}
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return "", &report.Detail{
+			Title: "cannot resolve the working directory",
+			Lines: []string{err.Error()},
+			Code:  statusErrorReadFailed,
+			Cause: err,
+		}
+	}
+	return filepath.Clean(absolute), nil
+}
+
+// statusSelectionFailure reports only selection outcomes that make the
+// observation unusable. An empty workspace, an unresolved declaration, and
+// competing candidates remain successful reports; discovery already turns
+// them into document warnings.
+func statusSelectionFailure(observed *workspace.Workspace) error {
+	if observed == nil {
 		return nil
 	}
-	terminal.Flush(
-		cmd.OutOrStdout(),
-		generateStatusOutput(ws, long, style.ColorsEnabled(), logoMode),
+	failure := observed.SelectionError()
+	if failure == nil {
+		return nil
+	}
+	var typed *discovery.SelectionError
+	if errors.As(failure, &typed) {
+		switch typed.State {
+		case discovery.SelectionNone,
+			discovery.SelectionAmbiguous,
+			discovery.SelectionMissingDeclared:
+			return nil
+		}
+	}
+	return &report.Detail{
+		Title: "cannot select a server runtime",
+		Lines: []string{failure.Error()},
+		Code:  statusErrorSelectionFailed,
+		Cause: failure,
+	}
+}
+
+func writeStatusDocument(
+	output *Output,
+	document statusDocument,
+	long bool,
+	logoMode terminal.StatusLogoMode,
+) error {
+	if output.JSON() {
+		return output.WriteJSON(document)
+	}
+	_, err := fmt.Fprintln(
+		output.Human(),
+		renderStatus(document, long, logoMode, style.TermWidth()),
 	)
+	if err != nil {
+		return fmt.Errorf("write status: %w", err)
+	}
 	return nil
 }
 
-func generateStatusOutput(
-	data *workspace.Workspace,
-	longOutput bool,
-	colorsEnabled bool,
-	logoMode terminal.StatusLogoMode,
-) (output *terminal.Data) {
-	server := data.Runtime()
-	hasServer := server != nil
-	hasMcdr := data != nil && data.Wrappers.MCDR != nil
-	if !hasServer && !hasMcdr {
-		return &terminal.Data{
-			Fields: []terminal.Field{
-				&terminal.FieldAnnotation{
-					Annotation: "(No server found)",
-				},
-			},
-		}
-	}
-
-	output = &terminal.Data{Fields: []terminal.Field{}, LogoMode: logoMode}
-	var servedEcosystems []workspace.ServedEcosystem
-	var runtimeComponents []catalog.VersionedRef
-	if hasServer {
-		servedEcosystems = data.ServedEcosystems()
-		runtimeComponents = selectedRuntimeComponents(server)
-	}
-	modEcosystems := statusModEcosystems(servedEcosystems)
-	showEcosystemQualifiedMods := len(modEcosystems) > 1
-	packageNameOutput := func(pkg workspace.DiscoveredPackage) string {
-		if longOutput {
-			return pkg.ID.StringBase()
-		}
-		if showEcosystemQualifiedMods {
-			return pkg.ID.StringBase()
-		}
-		return pkg.ID.Name.String()
-	}
-	showMods := len(modEcosystems) > 0
-	showPlugins := statusHasDirectOffer(
-		servedEcosystems,
-		catalog.EcosystemBukkit,
-	)
-	modNames, modPaths, pluginNames, mcdrPlugins := statusPackageSections(
-		data.Packages,
-		runtimeComponents,
-		modEcosystems,
-		packageNameOutput,
-		showMods,
-		showPlugins,
-		hasMcdr,
-	)
-
-	var logoEcosystem catalog.Ecosystem
-	for _, offer := range servedEcosystems {
-		if offer.Compatibility == workspace.CompatFull && offer.Ecosystem.IsModding() {
-			logoEcosystem = offer.Ecosystem
-			break
-		}
-	}
-	if hasServer && logoEcosystem == catalog.EcosystemUnspecified &&
-		server.Installation.Identity.Primary.Ecosystem == catalog.EcosystemMinecraft {
-		logoEcosystem = catalog.EcosystemMinecraft
-	}
-	if logoEcosystem == catalog.EcosystemUnspecified && hasMcdr {
-		logoEcosystem = catalog.EcosystemMCDR
-	}
-
-	logoProduct := statusLogoProduct(server, hasServer, hasMcdr)
-	logoVersion := statusLogoVersion(server, hasServer, hasMcdr)
-	if logoMode != terminal.StatusLogoNone &&
-		logoProduct != serverpkg.ProductUnknown &&
-		terminal.GetLogo(logoProduct, logoEcosystem, logoVersion, terminal.LogoSmallPlain) != "" {
-		output.Fields = append(
-			output.Fields,
-			&terminal.FieldLogo{
-				Product:   logoProduct,
-				Ecosystem: logoEcosystem,
-				Version:   logoVersion,
-				NoColor:   !colorsEnabled,
-				Mode:      logoMode,
-			},
-		)
-	}
-
-	if hasServer {
-		output.Fields = append(
-			output.Fields,
-			&terminal.FieldAnnotatedShortText{
-				Title:      "Minecraft",
-				Text:       server.MinecraftVersion().String(),
-				Annotation: selectedEntryPointPath(server),
-			},
-		)
-
-		output.Fields = append(
-			output.Fields, &terminal.FieldShortText{
-				Title: "Activity",
-				Text: fn.Ternary(
-					data.Running(),
-					"Active",
-					"Inactive",
-				),
-			},
-		)
-
-		primary := server.Installation.Identity.Primary
-		if productLabel := statusRuntimeLabel(primary); productLabel != "" {
-			children := make([]terminal.TreeNode, 0, 4)
-			if len(runtimeComponents) > 0 {
-				components := make(
-					[]string,
-					0,
-					len(runtimeComponents),
-				)
-				for _, component := range runtimeComponents {
-					components = append(components, component.StringQualified())
-				}
-				children = append(children, terminal.TreeNode{
-					Title: "Runtime components",
-					Field: statusPackageListField(components, nil, false),
-				})
-			}
-			if len(servedEcosystems) > 0 {
-				offers := make([]string, 0, len(servedEcosystems))
-				for _, offer := range servedEcosystems {
-					offers = append(
-						offers,
-						fmt.Sprintf(
-							"%s (%s)",
-							offer.Ecosystem.Title(),
-							offer.Compatibility,
-						),
-					)
-				}
-				children = append(children, terminal.TreeNode{
-					Title: "Compatible ecosystems",
-					Field: statusPackageListField(offers, nil, false),
-				})
-			}
-			if showMods {
-				children = append(
-					children,
-					terminal.TreeNode{
-						Title: "Mods",
-						Field: statusPackageListField(
-							modNames,
-							modPaths,
-							longOutput,
-						),
-					},
-				)
-			}
-			if showPlugins {
-				children = append(
-					children,
-					terminal.TreeNode{
-						Title: "Plugins",
-						Field: statusPackageListField(pluginNames, nil, false),
-					},
-				)
-			}
-			output.Fields = append(
-				output.Fields, &terminal.FieldTree{
-					Title:      "Server product",
-					Text:       productLabel,
-					Annotation: primary.Version.String(),
-					Children:   children,
-				},
-			)
-		}
-	}
-
-	if hasMcdr {
-		children := []terminal.TreeNode{
-			{
-				Title: "Plugins",
-				Field: statusPackageListField(mcdrPlugins, nil, false),
-			},
-		}
-		output.Fields = append(
-			output.Fields, &terminal.FieldTree{
-				Title:    "MCDR",
-				Text:     "Installed" + style.Success(" ✓"),
-				Children: children,
-			},
-		)
-	}
-
-	return output
-}
-
-func statusLogoProduct(
-	server *discovery.Selection,
-	hasServer bool,
-	hasMcdr bool,
-) serverpkg.Product {
-	if hasServer && server != nil {
-		return server.Product()
-	}
-	if hasMcdr {
-		return serverpkg.ProductMCDReforged
-	}
-	return serverpkg.ProductUnknown
-}
-
-func statusLogoVersion(
-	server *discovery.Selection,
-	hasServer bool,
-	hasMcdr bool,
-) versionpkg.Version {
-	if hasServer && server != nil {
-		return server.MinecraftVersion()
-	}
-	if hasMcdr {
-		return versionpkg.Unknown
-	}
-	return ""
-}
-
-func statusPackageListField(
-	names []string,
-	paths []string,
-	longOutput bool,
-) terminal.Field {
-	if len(names) == 0 {
-		return &terminal.FieldShortText{Text: style.Muted("(None)")}
-	}
-	if longOutput {
-		return &terminal.FieldMultiAnnotatedShortText{
-			Texts:       names,
-			Annotations: paths,
-			ShowTotal:   true,
-		}
-	}
-	return &terminal.FieldDynamicColumnLabels{
-		Labels:    names,
-		MaxLines:  0,
-		ShowTotal: true,
-	}
-}
-
-func statusPackageSections(
-	packages []workspace.DiscoveredPackage,
-	runtimeComponents []catalog.VersionedRef,
-	modEcosystems map[catalog.Ecosystem]bool,
-	packageNameOutput func(workspace.DiscoveredPackage) string,
-	showMods bool,
-	showPlugins bool,
-	hasMcdr bool,
-) ([]string, []string, []string, []string) {
-	componentKeys := make(map[string]struct{}, len(runtimeComponents))
-	for _, component := range runtimeComponents {
-		componentKeys[component.StringBase()] = struct{}{}
-	}
-
-	modNames := make([]string, 0, len(packages))
-	modPaths := make([]string, 0, len(packages))
-	pluginNames := make([]string, 0, len(packages))
-	mcdrPlugins := make([]string, 0, len(packages))
-	for _, pkg := range packages {
-		if _, isComponent := componentKeys[pkg.ID.StringBase()]; isComponent {
-			continue
-		}
-		if serverpkg.IsProduct(catalog.VersionedRef{
-			Ref:       pkg.ID.Ref,
-			Ecosystem: pkg.ID.Ecosystem,
-			Version:   pkg.ID.Version,
-		}) {
-			continue
-		}
-
-		packageEcosystem := pkg.ID.Ecosystem
-		if showMods && modEcosystems[packageEcosystem] {
-			modNames = append(modNames, packageNameOutput(pkg))
-			if pkg.Path != "" {
-				modPaths = append(modPaths, pkg.Path)
-			}
-		}
-		if showPlugins &&
-			(packageEcosystem == catalog.EcosystemBukkit ||
-				packageEcosystem == catalog.EcosystemPaper) {
-			pluginNames = append(pluginNames, packageNameOutput(pkg))
-		}
-		if hasMcdr && packageEcosystem == catalog.EcosystemMCDR {
-			mcdrPlugins = append(mcdrPlugins, packageNameOutput(pkg))
-		}
-	}
-
-	return modNames, modPaths, pluginNames, mcdrPlugins
-}
-
-// selectedRuntimeComponents presents the runtime components the status wire
-// format reports. Discovery keeps the primary identity separate and stores
+// selectedRuntimeComponents presents the runtime components the status
+// document reports. Discovery keeps the primary identity separate and stores
 // only additional evidence, so a vanilla primary contributes its Minecraft
 // component here, and a loader primary contributes its loader component.
 func selectedRuntimeComponents(
@@ -464,304 +287,4 @@ func hasRuntimeComponent(
 		}
 	}
 	return false
-}
-
-func selectedEntryPointPath(server *discovery.Selection) string {
-	if server == nil || server.EntryPoint == nil {
-		return ""
-	}
-	return server.EntryPoint.Path
-}
-
-func statusModEcosystems(
-	offers []workspace.ServedEcosystem,
-) map[catalog.Ecosystem]bool {
-	ecosystems := make(map[catalog.Ecosystem]bool, 3)
-	for _, offer := range offers {
-		if offer.Ecosystem.IsModding() {
-			ecosystems[offer.Ecosystem] = true
-		}
-	}
-	return ecosystems
-}
-
-func statusHasDirectOffer(
-	offers []workspace.ServedEcosystem,
-	required catalog.Ecosystem,
-) bool {
-	for _, offer := range offers {
-		if offer.Compatibility == workspace.CompatFull &&
-			offer.Ecosystem.Satisfy(required) {
-			return true
-		}
-	}
-	return false
-}
-
-func statusRuntimeLabel(primary catalog.VersionedRef) string {
-	switch strings.ToLower(primary.Name.String()) {
-	case "minecraft":
-		return "Vanilla"
-	case "mcdreforged":
-		return "MCDReforged"
-	case "neoforge":
-		return "NeoForge"
-	case "craftbukkit":
-		return "CraftBukkit"
-	case "catserver":
-		return "CatServer"
-	case "bungeecord":
-		return "BungeeCord"
-	case "spongevanilla":
-		return "SpongeVanilla"
-	case "spongeforge":
-		return "SpongeForge"
-	case "spongeneo":
-		return "SpongeNeo"
-	default:
-		return style.Capitalize(strings.ReplaceAll(
-			strings.ReplaceAll(primary.Name.String(), "-", " "),
-			"_",
-			" ",
-		))
-	}
-}
-
-// lockStatusDocument is the `status --from-lock` wire format. It reports the
-// exact facts recorded in lucy-lock.yaml instead of observing the directory.
-type lockStatusDocument struct {
-	Root     string                  `json:"root"`
-	Server   lockStatusServer        `json:"server"`
-	MCDR     *lockStatusMCDR         `json:"mcdr,omitempty"`
-	Packages []lockStatusPackageView `json:"packages"`
-}
-
-type lockStatusServer struct {
-	Product      serverpkg.Product  `json:"product"`
-	Minecraft    versionpkg.Version `json:"minecraft"`
-	CoreVersion  versionpkg.Version `json:"core_version"`
-	Ecosystem    catalog.Ecosystem  `json:"ecosystem"`
-	Directory    string             `json:"directory"`
-	Bootstrapper string             `json:"bootstrapper,omitempty"`
-}
-
-type lockStatusMCDR struct {
-	Directory string             `json:"directory"`
-	Version   versionpkg.Version `json:"version"`
-	Python    string             `json:"python"`
-	Target    string             `json:"target"`
-}
-
-type lockStatusPackageView struct {
-	ID          string                `json:"id"`
-	Name        catalog.Name          `json:"name"`
-	Provider    catalog.Provider      `json:"provider"`
-	ProjectID   string                `json:"project_id"`
-	Ecosystem   catalog.Ecosystem     `json:"ecosystem"`
-	Environment serverpkg.Environment `json:"environment"`
-	Version     versionpkg.Version    `json:"version"`
-	Filename    string                `json:"filename"`
-}
-
-func actionStatusFromLock(
-	cmd *cobra.Command,
-	longOutput bool,
-	logoMode terminal.StatusLogoMode,
-) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
-	}
-
-	lock, err := lockfile.Read(workDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf(
-				"no %s to render; run lucy install first",
-				lockfile.Filename,
-			)
-		}
-		return fmt.Errorf("read %s: %w", lockfile.Filename, err)
-	}
-
-	// The manifest declares the server identity; the lock records the
-	// resolved facts. Reading the manifest is best-effort because a lock can
-	// outlive its manifest, and the lock alone still describes the installed
-	// state.
-	declared, _ := manifest.Read(workDir)
-	document := newLockStatusDocument(workDir, lock, declared)
-	switch JSONMode(cmd) {
-	case JSONPretty:
-		if err := style.WriteJSON(cmd.OutOrStdout(), document, false); err != nil {
-			return err
-		}
-		return nil
-	case JSONCompact:
-		if err := style.WriteJSON(cmd.OutOrStdout(), document, true); err != nil {
-			return err
-		}
-		return nil
-	}
-	terminal.Flush(
-		cmd.OutOrStdout(),
-		generateLockStatusOutput(
-			document,
-			longOutput,
-			style.ColorsEnabled(),
-			logoMode,
-		),
-	)
-	return nil
-}
-
-func newLockStatusDocument(
-	workDir string,
-	lock *lockfile.Document,
-	declared *manifest.Document,
-) lockStatusDocument {
-	document := lockStatusDocument{
-		Root: workDir,
-		Server: lockStatusServer{
-			Product:      lock.Server.Product,
-			Minecraft:    lock.Server.Minecraft,
-			CoreVersion:  lock.Server.CoreVersion,
-			Ecosystem:    ecosystemFromLock(lock),
-			Directory:    lock.Server.Directory,
-			Bootstrapper: lock.Server.Bootstrapper,
-		},
-		Packages: make([]lockStatusPackageView, 0, len(lock.Packages)),
-	}
-	if declared != nil {
-		// The resolved lock wins on exact values; the manifest identifies
-		// the server that the lock was generated for.
-		if product, ok := serverpkg.ParseProduct(
-			declared.Server.Core.Product.String(),
-		); ok {
-			document.Server.Product = product
-		}
-		if declared.Server.Minecraft != "" {
-			document.Server.Minecraft = declared.Server.Minecraft
-		}
-		if declared.Server.Directory != "" {
-			document.Server.Directory = declared.Server.Directory
-		}
-	}
-	if lock.MCDR != nil {
-		document.MCDR = &lockStatusMCDR{
-			Directory: lock.MCDR.Directory,
-			Version:   lock.MCDR.Version,
-			Python:    lock.MCDR.Python,
-			Target:    lock.MCDR.Target,
-		}
-	}
-	for _, pkg := range lock.Packages {
-		document.Packages = append(
-			document.Packages,
-			lockStatusPackageView{
-				ID:          pkg.Provider.String() + ":" + pkg.ProjectID,
-				Name:        catalog.Name(pkg.ProjectID),
-				Provider:    pkg.Provider,
-				ProjectID:   pkg.ProjectID,
-				Ecosystem:   pkg.Ecosystem,
-				Environment: pkg.Environment,
-				Version:     pkg.Version,
-				Filename:    pkg.Filename,
-			},
-		)
-	}
-	return document
-}
-
-func generateLockStatusOutput(
-	document lockStatusDocument,
-	longOutput bool,
-	colorsEnabled bool,
-	logoMode terminal.StatusLogoMode,
-) *terminal.Data {
-	output := &terminal.Data{Fields: []terminal.Field{}, LogoMode: logoMode}
-
-	if logoMode != terminal.StatusLogoNone &&
-		document.Server.Product != serverpkg.ProductUnknown &&
-		terminal.GetLogo(
-			document.Server.Product,
-			document.Server.Ecosystem,
-			document.Server.Minecraft,
-			terminal.LogoSmallPlain,
-		) != "" {
-		output.Fields = append(
-			output.Fields,
-			&terminal.FieldLogo{
-				Product:   document.Server.Product,
-				Ecosystem: document.Server.Ecosystem,
-				Version:   document.Server.Minecraft,
-				NoColor:   !colorsEnabled,
-				Mode:      logoMode,
-			},
-		)
-	}
-
-	output.Fields = append(
-		output.Fields,
-		&terminal.FieldAnnotatedShortText{
-			Title:      "Minecraft",
-			Text:       document.Server.Minecraft.String(),
-			Annotation: document.Server.Directory,
-		},
-	)
-
-	serverNames := make([]string, 0, len(document.Packages))
-	mcdrNames := make([]string, 0, len(document.Packages))
-	for _, pkg := range document.Packages {
-		label := fmt.Sprintf(
-			"%s@%s",
-			pkg.ID,
-			pkg.Version.String(),
-		)
-		if longOutput {
-			label += " (" + pkg.Filename + ")"
-		}
-		if pkg.Environment == serverpkg.EnvironmentMCDR {
-			mcdrNames = append(mcdrNames, label)
-			continue
-		}
-		serverNames = append(serverNames, label)
-	}
-
-	serverChildren := []terminal.TreeNode{
-		{
-			Title: "Packages",
-			Field: statusPackageListField(serverNames, nil, false),
-		},
-	}
-	output.Fields = append(
-		output.Fields,
-		&terminal.FieldTree{
-			Title:      "Server product",
-			Text:       document.Server.Product.Title(),
-			Annotation: document.Server.CoreVersion.String(),
-			Children:   serverChildren,
-		},
-	)
-
-	if document.MCDR != nil {
-		version := document.MCDR.Version.String()
-		if longOutput {
-			version += " (" + document.MCDR.Python + ")"
-		}
-		output.Fields = append(
-			output.Fields,
-			&terminal.FieldTree{
-				Title: "MCDR",
-				Text:  version,
-				Children: []terminal.TreeNode{
-					{
-						Title: "Plugins",
-						Field: statusPackageListField(mcdrNames, nil, false),
-					},
-				},
-			},
-		)
-	}
-
-	return output
 }
