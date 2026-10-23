@@ -1,6 +1,7 @@
 package operation
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
@@ -38,7 +39,6 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 	if len(present) == 0 {
 		return nil, fmt.Errorf("no lucy workspace found in %s", root)
 	}
-	markerExisted := slices.Contains(present, fsutil.WorkspaceMarker)
 
 	writer, err := workspacewrite.Lock(root)
 	if err != nil {
@@ -52,6 +52,8 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 	if err != nil {
 		return nil, err
 	}
+	// State that only a pending transaction would touch is about to be
+	// deleted, so a damaged history alone must not block deinitialization.
 	if pending {
 		if err := filetrack.RecoverPending(root); err != nil {
 			return nil, err
@@ -80,18 +82,17 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 		log.Debug("workspace state removed", "path", name)
 	}
 
-	if err := clearWorkspaceState(root); err != nil {
+	detached, err := detachWorkspaceState(root)
+	if err != nil {
 		return result, err
 	}
 	if err := writer.Close(); err != nil {
 		return result, err
 	}
-	if err := removeWorkspaceMarker(root); err != nil {
+	if err := removeDetachedState(root, detached); err != nil {
 		return result, err
 	}
-	if markerExisted {
-		result.Removed = append(result.Removed, fsutil.WorkspaceMarker)
-	}
+	result.Removed = append(result.Removed, fsutil.WorkspaceMarker)
 	log.Info("workspace deinitialized", "root", root, "removed", len(result.Removed))
 	return result, nil
 }
@@ -134,43 +135,29 @@ func presentWorkspacePaths(root string) ([]string, error) {
 	return present, nil
 }
 
-// clearWorkspaceState removes the contents of the state directory while the
-// writer lock is held. The lock file stays until the lock is released.
-func clearWorkspaceState(root string) (resultErr error) {
-	directory, err := os.OpenRoot(filepath.Join(root, fsutil.WorkspaceMarker))
-	if err != nil {
-		return err
+// detachWorkspaceState moves the state directory aside while the writer lock
+// is held. A writer that acquires the lock after this rename creates a new
+// directory and a new lock file, so removing the detached one cannot pull the
+// inode out from under it.
+func detachWorkspaceState(root string) (string, error) {
+	detached := fsutil.WorkspaceMarker + "-removed-" + rand.Text()
+	if err := os.Rename(
+		filepath.Join(root, fsutil.WorkspaceMarker),
+		filepath.Join(root, detached),
+	); err != nil {
+		return "", err
 	}
-	defer func() { resultErr = errors.Join(resultErr, directory.Close()) }()
-	opened, err := directory.Open(".")
-	if err != nil {
-		return err
-	}
-	entries, readErr := opened.ReadDir(-1)
-	if closeErr := opened.Close(); readErr != nil || closeErr != nil {
-		return errors.Join(readErr, closeErr)
-	}
-	for _, entry := range entries {
-		if entry.Name() == workspacewrite.LockFileName {
-			continue
-		}
-		if err := directory.RemoveAll(entry.Name()); err != nil {
-			return err
-		}
-	}
-	return nil
+	return detached, nil
 }
 
-// removeWorkspaceMarker deletes the empty state directory after the writer
-// lock is released.
-func removeWorkspaceMarker(root string) error {
-	stateDirectory := filepath.Join(root, fsutil.WorkspaceMarker)
-	if err := os.Remove(filepath.Join(stateDirectory, workspacewrite.LockFileName)); err != nil &&
-		!errors.Is(err, os.ErrNotExist) {
+// removeDetachedState deletes the detached state directory after the writer
+// lock is released. Root-confined removal keeps a symlink inside it from
+// redirecting the deletion.
+func removeDetachedState(root, detached string) (resultErr error) {
+	files, err := os.OpenRoot(root)
+	if err != nil {
 		return err
 	}
-	if err := os.Remove(stateDirectory); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
+	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
+	return files.RemoveAll(detached)
 }
