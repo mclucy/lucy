@@ -12,6 +12,7 @@ import (
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 const (
@@ -54,63 +55,72 @@ func (o *Output) SetJSONRendering(mode JSONRendering) {
 	o.json = mode
 }
 
-// SelectJSONRendering reports how the actual invocation asked to render.
-// Parsed flags and the raw command line are both considered, so a parse or
-// validation failure still honors --json and --json-compact. Compact output
-// wins whenever the invocation selected it.
-func SelectJSONRendering(cmd *cobra.Command, args []string) JSONRendering {
-	scanned := JSONModeFromArgs(args)
-	parsed := JSONNone
-	if cmd != nil {
-		parsed = JSONMode(cmd)
-	}
-	switch {
-	case scanned == JSONCompact || parsed == JSONCompact:
-		return JSONCompact
-	case scanned == JSONPretty || parsed == JSONPretty:
-		return JSONPretty
-	default:
-		return JSONNone
-	}
-}
-
-// JSONModeFromArgs reports the machine rendering an unparsed command line
-// requests. --json-compact wins over --json. An explicit false value keeps
-// the human rendering.
-func JSONModeFromArgs(args []string) JSONRendering {
+// JSONModeFromArgs finds output flags without mistaking another flag's value
+// for an output option. It also works when Cobra stops parsing on an error.
+func JSONModeFromArgs(cmd *cobra.Command, args []string) JSONRendering {
 	pretty, compact := false, false
+	flagSets := [3]*pflag.FlagSet{cmd.Flags(), cmd.InheritedFlags(), cmd.PersistentFlags()}
+	findFlag := func(name string, shorthand bool) *pflag.Flag {
+		for _, flags := range flagSets {
+			if shorthand {
+				if flag := flags.ShorthandLookup(name); flag != nil {
+					return flag
+				}
+			} else if flag := flags.Lookup(name); flag != nil {
+				return flag
+			}
+		}
+		return nil
+	}
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
 		if arg == "--" {
 			break
 		}
-		switch arg {
-		case "--json":
-			pretty = true
-		case "--json-compact":
-			compact = true
-		case "--log-file", "--log-level":
-			// Root flags that take a separate value: the next token belongs
-			// to the flag, not to output selection.
-			index++
-		default:
-			if value, ok := strings.CutPrefix(arg, "--json-compact="); ok {
-				compact = boolValue(value)
+		if name, long := strings.CutPrefix(arg, "--"); long {
+			name, value, assigned := strings.Cut(name, "=")
+			flag := findFlag(name, false)
+			if flag != nil && flag.NoOptDefVal == "" && !assigned {
+				index++
 				continue
 			}
-			if value, ok := strings.CutPrefix(arg, "--json="); ok {
+			if !assigned {
+				value = "true"
+			}
+			switch name {
+			case FlagJSON:
 				pretty = boolValue(value)
+			case FlagJSONCompact:
+				compact = boolValue(value)
+			}
+			continue
+		}
+		if shorthand, short := strings.CutPrefix(arg, "-"); short {
+			for len(shorthand) > 0 {
+				flag := findFlag(shorthand[:1], true)
+				if flag == nil {
+					break
+				}
+				shorthand = shorthand[1:]
+				if flag.NoOptDefVal == "" {
+					if shorthand == "" {
+						index++
+					}
+					break
+				}
+				if strings.HasPrefix(shorthand, "=") {
+					break
+				}
 			}
 		}
 	}
-	switch {
-	case compact:
+	if compact {
 		return JSONCompact
-	case pretty:
-		return JSONPretty
-	default:
-		return JSONNone
 	}
+	if pretty {
+		return JSONPretty
+	}
+	return JSONNone
 }
 
 func boolValue(value string) bool {

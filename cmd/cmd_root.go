@@ -21,13 +21,14 @@ import (
 )
 
 var (
-	version          string
-	commit           string
-	executingCommand *cobra.Command
-	loggingReady     bool
-	selectedJSON     cli.JSONRendering
-	machineResult    bytes.Buffer
-	resultWriter     io.Writer
+	version           string
+	commit            string
+	executingCommand  *cobra.Command
+	loggingReady      bool
+	selectedJSON      cli.JSONRendering
+	machineResult     bytes.Buffer
+	resultWriter      io.Writer
+	flagParsingFailed bool
 )
 
 var rootCmd = &cobra.Command{
@@ -178,7 +179,10 @@ func init() {
 // so a failure that happens before Cobra parses flags still honors --json and
 // --json-compact.
 func effectiveRendering(cmd *cobra.Command) cli.JSONRendering {
-	return cli.SelectJSONRendering(cmd, os.Args[1:])
+	if cmd.Flags().Parsed() && !flagParsingFailed {
+		return cli.JSONMode(cmd)
+	}
+	return cli.JSONModeFromArgs(cmd, os.Args[1:])
 }
 
 // invocationCommand finds the command the raw command line addresses, even
@@ -256,7 +260,13 @@ func FlushOutput() error {
 func Execute() error {
 	executingCommand = nil
 	loggingReady = false
-	selectedJSON = cli.JSONModeFromArgs(os.Args[1:])
+	flagParsingFailed = false
+	command := invocationCommand()
+	selectedJSON = cli.JSONModeFromArgs(command, os.Args[1:])
+	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		flagParsingFailed = true
+		return err
+	})
 	machineResult.Reset()
 	resultWriter = nil
 	if JSONSelected() {
@@ -264,13 +274,23 @@ func Execute() error {
 		rootCmd.SetOut(&machineResult)
 		defer rootCmd.SetOut(resultWriter)
 	}
-	err := fang.Execute(
-		context.Background(),
-		rootCmd,
-		fang.WithVersion(version),
-		fang.WithCommit(commit),
-		fang.WithErrorHandler(renderError),
-	)
+	var err error
+	if JSONSelected() {
+		// Fang probes terminal colors before invoking its error handler.
+		// Machine mode must not emit those queries on the real stdout.
+		rootCmd.SilenceErrors = true
+		rootCmd.SilenceUsage = true
+		rootCmd.Version = version
+		_, err = rootCmd.ExecuteContextC(context.Background())
+	} else {
+		err = fang.Execute(
+			context.Background(),
+			rootCmd,
+			fang.WithVersion(version),
+			fang.WithCommit(commit),
+			fang.WithErrorHandler(renderError),
+		)
+	}
 	if err != nil {
 		command := executingCommand
 		if command == nil {
