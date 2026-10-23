@@ -44,7 +44,10 @@ func streamWidth(fd int) int {
 }
 
 func TermHeight() int {
-	_, height, _ := term.GetSize(0)
+	_, height, _ := term.GetSize(int(os.Stdout.Fd()))
+	if height <= 0 {
+		return 24
+	}
 	return height
 }
 
