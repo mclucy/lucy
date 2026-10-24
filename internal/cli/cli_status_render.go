@@ -3,6 +3,7 @@ package cli
 import (
 	"cmp"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -58,10 +59,14 @@ func renderStatus(
 	infoWidth := max(1, layout.InfoWidth-2)
 	packages := statusViewPackageGroups(document.Packages)
 	facts := statusViewFacts(document, packages, long, infoWidth)
-	info := terminal.RenderFactGroups(facts, infoWidth, style.Muted)
+	info := terminal.RenderFactGroups(facts, infoWidth, style.Key)
 	if long {
-		for _, group := range packages {
-			info += "\n\n" + group.title + " " + style.Muted(fmt.Sprintf("(%d)", len(group.packages)))
+		for index, group := range packages {
+			separator := "\n\n"
+			if index == 0 && len(facts) > 1 && len(facts[1]) > 0 {
+				separator = "\n"
+			}
+			info += separator + group.title + " " + style.Muted(fmt.Sprintf("(%d)", len(group.packages)))
 			info += "\n" + statusViewPackageTable(document.Root, group.packages, infoWidth)
 		}
 	}
@@ -448,7 +453,7 @@ func statusViewServer(root string, server *statusServer, width int) string {
 	product := terminal.TruncateMiddle(statusViewProduct(server.Product), width)
 	value := product
 	if server.EntryPoint != "" {
-		filename := filepath.Base(terminal.DisplayPath(root, server.EntryPoint))
+		filename := statusViewLauncher(root, server.EntryPoint)
 		remaining := width - ansi.StringWidth(product) - 3
 		if remaining >= min(8, ansi.StringWidth(filename)) {
 			value += "   " + style.Muted(terminal.TruncateMiddle(filename, remaining))
@@ -460,6 +465,21 @@ func statusViewServer(root string, server *statusServer, width int) string {
 		value += "\n" + style.Muted(components)
 	}
 	return value
+}
+
+// Loader installs expose runtime arguments as their entry point. Operators
+// start the server through the generated launch script, so show that instead.
+func statusViewLauncher(root, entryPoint string) string {
+	filename := filepath.Base(terminal.DisplayPath(root, entryPoint))
+	if filename != "unix_args.txt" && filename != "win_args.txt" {
+		return filename
+	}
+	for _, candidate := range []string{"run.sh", "run.bat", "start.sh", "start.bat"} {
+		if _, err := os.Stat(filepath.Join(root, candidate)); err == nil {
+			return candidate
+		}
+	}
+	return filename
 }
 
 func statusViewProduct(product statusProduct) string {
@@ -588,8 +608,8 @@ func statusViewPackageTable(root string, packages []statusPackage, width int) st
 		nameWidth = max(nameWidth, ansi.StringWidth(statusViewPackageName(pkg)))
 		versionWidth = max(versionWidth, ansi.StringWidth(pkg.Version))
 	}
-	nameWidth = min(nameWidth, max(1, width/3))
-	versionWidth = min(versionWidth, max(1, width/4))
+	nameWidth = min(nameWidth, max(1, width*2/5))
+	versionWidth = min(versionWidth, max(7, width/6))
 	gap := statusViewColumnGap
 	if width < 12 {
 		gap = 1
@@ -630,9 +650,10 @@ func statusViewPackageGrid(packages []statusPackage, width int) string {
 		return ""
 	}
 
+	cellBudget := max(18, (width-2*statusViewColumnGap)/3)
 	longest := 0
 	for i, label := range labels {
-		labels[i] = terminal.TruncateMiddle(label, max(1, min(width, 20)))
+		labels[i] = terminal.TruncateMiddle(label, max(1, min(width, cellBudget)))
 		longest = max(longest, ansi.StringWidth(labels[i]))
 	}
 	columnWidth := longest + statusViewColumnGap
