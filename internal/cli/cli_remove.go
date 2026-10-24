@@ -17,9 +17,10 @@ const (
 )
 
 var removeCmd = &cobra.Command{
-	Use:   "remove",
-	Short: help.RemoveShort,
-	Args:  cobra.MinimumNArgs(1),
+	Use:     "remove",
+	Short:   help.RemoveShort,
+	Args:    cobra.MinimumNArgs(1),
+	Aliases: []string{"rm"},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
 		if ecosystem != "" && !catalog.Ecosystem(ecosystem).Valid() {

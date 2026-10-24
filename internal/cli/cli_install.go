@@ -23,10 +23,11 @@ const (
 )
 
 var installCmd = &cobra.Command{
-	Use:   "install",
-	Short: help.InstallShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionInstall,
+	Use:     "install",
+	Short:   help.InstallShort,
+	Args:    cobra.NoArgs,
+	Aliases: []string{"i"},
+	RunE:    actionInstall,
 }
 
 func NewInstallCommand() *cobra.Command {

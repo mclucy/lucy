@@ -18,9 +18,10 @@ const (
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add",
-	Short: help.AddShort,
-	Args:  cobra.MinimumNArgs(1),
+	Use:     "add",
+	Short:   help.AddShort,
+	Args:    cobra.MinimumNArgs(1),
+	Aliases: []string{"a"},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
 		if ecosystem != "" && !catalog.Ecosystem(ecosystem).Valid() {

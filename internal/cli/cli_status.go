@@ -23,9 +23,10 @@ import (
 const flagStatusFromLockName = "from-lock"
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: help.StatusShort,
-	Args:  cobra.NoArgs,
+	Use:     "status",
+	Short:   help.StatusShort,
+	Args:    cobra.NoArgs,
+	Aliases: []string{"s"},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		logo, _ := cmd.Flags().GetString(FlagLogo)
 		if _, ok := terminal.ParseStatusLogoMode(logo); !ok {

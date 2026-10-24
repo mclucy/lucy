@@ -7,9 +7,10 @@ import (
 )
 
 var upgradeCmd = &cobra.Command{
-	Use:   "upgrade",
-	Short: help.UpgradeShort,
-	RunE:  NotImplementedRun,
+	Use:     "upgrade",
+	Short:   help.UpgradeShort,
+	Aliases: []string{"up", "update"},
+	RunE:    NotImplementedRun,
 }
 
 func NewUpgradeCommand() *cobra.Command {
