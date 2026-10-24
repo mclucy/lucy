@@ -13,6 +13,7 @@ type Dependency struct {
 	Ref        catalog.VersionedRef
 	Constraint version.Expr
 	Mandatory  bool
+	Kind       catalog.DependencyKind
 	Origin     catalog.DependencyOrigin
 }
 
