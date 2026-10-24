@@ -3,20 +3,15 @@ package info
 import (
 	"context"
 	"fmt"
-	"os"
+	"sort"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/table"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
-	"github.com/mclucy/lucy/terminal/style"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
 )
@@ -51,100 +46,57 @@ func NewCommand() *cobra.Command {
 }
 
 func actionInfo(cmd *cobra.Command, args []string) error {
-	isArtifact, err := isArtifactPath(args[0])
+	ctx, stop := cli.CommandContext(cmd)
+	defer stop()
+
+	output := cli.NewQueryOutput(cmd)
+	long, _ := cmd.Flags().GetBool(cli.FlagLong)
+
+	root, err := infoWorkingDirectory()
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return infoCancellation(err)
+	}
+
+	isArtifact, err := isArtifactPath(root, args[0])
 	if err != nil {
 		return err
 	}
 	if isArtifact {
-		return actionArtifactInfo(cmd, args[0])
+		return actionArtifactInfo(ctx, output, long, root, args[0])
 	}
 
 	request, err := input.Parse(args[0])
 	if err != nil {
-		return err
+		return infoReferenceFailure(args[0], err)
 	}
-
-	request, err = resolveAgainstLock(request)
+	request, err = resolveAgainstLock(root, request)
 	if err != nil {
 		return err
 	}
-
-	providers, err := routing.ResolveInfoProviders(request.Ecosystem, request.Provider)
-	if err != nil {
-		errArg := request.Ecosystem.String()
-		if request.Provider != catalog.ProviderUnspecified {
-			errArg = request.Provider.String()
-		}
-		return fmt.Errorf("%w: %s", err, errArg)
-	}
-
-	meta, providerErrors, err := routing.GetInfoFirstSuccess(providers, request.Ref)
-	if err != nil {
-		return fmt.Errorf("failed to get information: %w", err)
-	}
-
-	var noResultSources []string
-	for _, providerErr := range providerErrors {
-		if strings.Contains(providerErr.Err.Error(), "not found") {
-			noResultSources = append(
-				noResultSources,
-				providerErr.Provider.Title(),
-			)
-			continue
-		}
-		providerWarn := fmt.Errorf(
-			"info on %s failed: %w",
-			providerErr.Provider.Title(),
-			providerErr.Err,
-		)
-		log.Warn(providerWarn)
-		report.Warn(providerWarn)
-	}
-
-	long, _ := cmd.Flags().GetBool(cli.FlagLong)
-
-	switch cli.JSONMode(cmd) {
-	case cli.JSONPretty:
-		if err := style.WriteJSON(cmd.OutOrStdout(), meta.Metadata, false); err != nil {
-			return err
-		}
-	case cli.JSONCompact:
-		if err := style.WriteJSON(cmd.OutOrStdout(), meta.Metadata, true); err != nil {
-			return err
-		}
-	default:
-		installID := meta.Ref.StringBase()
-		output := renderInfo(meta.Metadata, installID, long)
-		if len(noResultSources) > 0 {
-			output += style.Muted(
-				"  Not found on "+strings.Join(
-					noResultSources,
-					", ",
-				),
-			) + "\n"
-		}
-		fmt.Print(output)
-	}
-	return nil
+	return actionProjectInfo(ctx, output, long, root, request)
 }
 
 // resolveAgainstLock expands a bare package name into the explicit
-// "provider:project" reference the current lock binds it to. It only runs for
-// a provider-unspecified request: an explicit provider is always honored, and
-// nothing is cached or remembered beyond this call.
-func resolveAgainstLock(request catalog.VersionedRef) (catalog.VersionedRef, error) {
+// "provider:project" reference the current lock binds it to. An explicit
+// provider is always honored, and the requested version survives the
+// expansion.
+func resolveAgainstLock(
+	root string,
+	request catalog.VersionedRef,
+) (catalog.VersionedRef, error) {
 	if request.Provider != catalog.ProviderUnspecified {
 		return request, nil
 	}
 
-	root, err := os.Getwd()
+	reference, err := cli.ResolveLockReference(root, request.Name.String())
 	if err != nil {
-		return request, nil
-	}
-
-	reference, err := cli.ResolveLockReference(root, string(request.Name))
-	if err != nil {
-		return request, err
+		return catalog.VersionedRef{}, infoAmbiguousReferenceFailure(
+			request.Name.String(),
+			err,
+		)
 	}
 	if reference == "" {
 		return request, nil
@@ -154,217 +106,211 @@ func resolveAgainstLock(request catalog.VersionedRef) (catalog.VersionedRef, err
 	if err != nil {
 		return request, nil
 	}
-
 	request.Provider = resolved.Provider
 	request.Name = resolved.Name
 	return request, nil
 }
 
-func renderInfo(
-	data catalog.Metadata,
-	installID string,
-	longOutput bool,
-) string {
-	var out strings.Builder
-
-	out.WriteString(style.Accent(data.Title))
-	out.WriteString("\n")
-	out.WriteString(style.Muted(installID))
-	out.WriteString("\n")
-	briefWidth := min(80, style.TermWidth()) - 2
-	briefWrapped := lipgloss.Wrap(data.Brief, briefWidth, "")
-	out.WriteString(briefWrapped)
-	out.WriteString("\n")
-
-	if metadataLine := renderInfoMetadataLine(data); metadataLine != "" {
-		out.WriteString("\n")
-		out.WriteString(metadataLine)
-		out.WriteString("\n")
-	}
-
-	if readme := renderInfoReadme(data, longOutput); readme != "" {
-		out.WriteString("\n")
-		out.WriteString(readme)
-		out.WriteString("\n")
-	}
-
-	if links := renderInfoLinks(data); links != "" {
-		out.WriteString("\n")
-		out.WriteString(links)
-		out.WriteString("\n")
-	}
-
-	return out.String()
+type infoFetchResult struct {
+	info           upstream.Info
+	providerErrors []routing.ProviderError
+	err            error
 }
 
-func renderInfoMetadataLine(data catalog.Metadata) string {
-	parts := make([]string, 0, 2)
-	if data.License != "" {
-		parts = append(parts, data.License)
-	}
-	if authors := renderInfoAuthors(data.Authors); authors != "" {
-		parts = append(parts, "by "+authors)
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return style.Muted(strings.Join(parts, " | "))
-}
-
-func renderInfoAuthors(authors []catalog.Person) string {
-	names := make([]string, 0, len(authors))
-	for _, author := range authors {
-		if author.Name == "" {
-			continue
-		}
-		names = append(names, author.Name)
-	}
-	if len(names) == 0 {
-		return ""
-	}
-	if len(names) <= 3 {
-		return strings.Join(names, ", ")
-	}
-	return fmt.Sprintf("%s, %s, +%d more", names[0], names[1], len(names)-2)
-}
-
-func renderInfoReadme(data catalog.Metadata, longOutput bool) string {
-	description := strings.TrimSpace(data.Description)
-	if description == "" {
-		return ""
-	}
-
-	maxWidth := min(style.TermWidth()*8/10, 100)
-	maxLines := 0
-	if !longOutput {
-		maxLines = style.TermHeight() * 3 / 2
-	}
-
-	var displayText string
-	if data.DescriptionIsMarkdown {
-		displayText = style.MarkdownToAnsi(description, maxWidth)
-	} else {
-		displayText = lipgloss.Wrap(description, maxWidth, "")
-	}
-
-	truncatedText, truncated := truncateInfoText(displayText, maxLines)
-	totalLines := len(strings.Split(displayText, "\n"))
-	displayedLines := len(strings.Split(truncatedText, "\n"))
-	truncatedLines := totalLines - displayedLines
-
-	var out strings.Builder
-	out.WriteString(
-		renderInfoSectionHeader(
-			"README",
-			displayedLines,
-			totalLines,
-			maxWidth,
-			truncated,
-		),
+func actionProjectInfo(
+	ctx context.Context,
+	output *cli.Output,
+	long bool,
+	root string,
+	request catalog.VersionedRef,
+) error {
+	providers, err := routing.ResolveInfoProviders(
+		request.Ecosystem,
+		request.Provider,
 	)
-	out.WriteString("\n\n")
-	out.WriteString(indentInfoBlock(truncatedText))
-	if truncated {
-		out.WriteString("\n\n")
-		out.WriteString(
-			style.Muted(
-				fmt.Sprintf("  [... %d lines truncated]", truncatedLines),
-			),
+	if err != nil {
+		return infoProviderSelectionFailure(request, err)
+	}
+
+	result, awaitErr := infoAwait(ctx, func() infoFetchResult {
+		info, providerErrors, fetchErr := routing.GetInfoFirstSuccess(
+			providers,
+			request.Ref,
 		)
-		out.WriteString("\n")
-		out.WriteString("  ")
-		if data.DescriptionURL != "" {
-			out.WriteString(style.Muted("Full README -> "))
-			out.WriteString(style.Link(data.DescriptionURL))
-		} else {
-			out.WriteString(
-				style.Muted(
-					fmt.Sprintf(
-						"(%d more lines, use --long to expand)",
-						totalLines-displayedLines,
-					),
-				),
-			)
+		return infoFetchResult{
+			info:           info,
+			providerErrors: providerErrors,
+			err:            fetchErr,
 		}
+	})
+	if awaitErr != nil {
+		if failure := infoOperationFailure(ctx, awaitErr); failure != nil {
+			return failure
+		}
+		return awaitErr
 	}
-	return out.String()
-}
+	if result.err != nil {
+		if failure := infoOperationFailure(ctx, result.err); failure != nil {
+			return failure
+		}
+		return infoProviderFailure(request, result.providerErrors, result.err)
+	}
+	if failure := infoOperationFailure(ctx, ctx.Err()); failure != nil {
+		return failure
+	}
 
-func truncateInfoText(text string, maxLines int) (string, bool) {
-	if maxLines <= 0 {
-		return text, false
-	}
-	lines := strings.Split(text, "\n")
-	if len(lines) <= maxLines {
-		return text, false
-	}
-	return strings.Join(lines[:maxLines], "\n"), true
-}
+	warnings := infoProviderWarnings(result.providerErrors)
+	observed := infoObserveWorkspace(root)
+	lock := infoReadLock(root)
 
-func renderInfoSectionHeader(
-	title string,
-	lineCount int,
-	totalLines int,
-	maxWidth int,
-	truncated bool,
-) string {
-	lineCountText := fn.Ternary(
-		truncated,
-		fmt.Sprintf("(%d/%d lines)", lineCount, totalLines),
-		fmt.Sprintf("(%d lines)", lineCount),
+	resolvedVersion, versionWarnings, err := infoResolveProjectVersion(
+		ctx,
+		request,
+		result.info.Ref.Provider,
+		observed,
+		lock,
 	)
-	label := fmt.Sprintf("  ─── %s %s ", title, lineCountText)
-	if maxWidth <= 0 {
-		maxWidth = style.TermWidth()
+	if err != nil {
+		return err
 	}
-	labelWidth := lipgloss.Width(label)
-	if labelWidth >= maxWidth {
-		return style.Muted(label)
-	}
-	return style.Muted(label) + style.Muted(
-		strings.Repeat(
-			"─",
-			maxWidth-labelWidth,
-		),
+	warnings = append(warnings, versionWarnings...)
+
+	entry := infoProjectEntry(
+		result.info.Metadata,
+		result.info.Ref,
+		resolvedVersion,
 	)
+	entry.Installed = infoInstalledAt(
+		root,
+		request.Ref,
+		observed,
+		lock,
+	)
+
+	document := newInfoDocument(infoKindProject, "")
+	document.Entries = append(document.Entries, entry)
+	return infoWriteDocument(ctx, output, document, warnings, long)
 }
 
-func indentInfoBlock(text string) string {
-	if text == "" {
-		return ""
-	}
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		lines[i] = "  " + line
-	}
-	return strings.Join(lines, "\n")
-}
-
-func renderInfoLinks(data catalog.Metadata) string {
-	rows := make([][]string, 0, len(data.URLs))
-	for _, url := range data.URLs {
-		if url.URL == "" {
+// infoProviderWarnings reports partial provider failures. A successful
+// document still carries every partial failure; none of them are written to
+// stderr directly.
+func infoProviderWarnings(
+	providerErrors []routing.ProviderError,
+) []string {
+	warnings := make([]string, 0, len(providerErrors)+1)
+	notFound := make([]string, 0, len(providerErrors))
+	for _, providerErr := range providerErrors {
+		if infoIsNotFound(providerErr.Err) {
+			notFound = append(notFound, providerErr.Provider.Title())
 			continue
 		}
-		linked := ansi.SetHyperlink(url.URL) + url.URL + ansi.ResetHyperlink()
-		rows = append(rows, []string{url.Name, linked})
+		warnings = append(warnings, fmt.Sprintf(
+			"information from %s failed: %v",
+			providerErr.Provider.Title(),
+			providerErr.Err,
+		))
 	}
-	if len(rows) == 0 {
-		return ""
+	sort.Strings(warnings)
+	sort.Strings(notFound)
+	if len(notFound) > 0 {
+		warnings = append(
+			warnings,
+			"not found on "+strings.Join(notFound, ", "),
+		)
 	}
+	return warnings
+}
 
-	return table.New().
-		Border(lipgloss.HiddenBorder()).
-		Rows(rows...).
-		StyleFunc(
-			func(_ int, col int) lipgloss.Style {
-				switch col {
-				case 0:
-					return lipgloss.NewStyle().Bold(true)
-				default:
-					return lipgloss.NewStyle()
-				}
-			},
-		).
-		Render()
+func infoProviderFailure(
+	request catalog.VersionedRef,
+	providerErrors []routing.ProviderError,
+	err error,
+) error {
+	name := infoCleanLine(request.Name.String())
+	if name == "" {
+		name = "the requested project"
+	}
+	lines := make([]string, 0, len(providerErrors))
+	allNotFound := len(providerErrors) > 0
+	for _, providerErr := range providerErrors {
+		if !infoIsNotFound(providerErr.Err) {
+			allNotFound = false
+		}
+		lines = append(lines, infoCleanLine(fmt.Sprintf(
+			"%s: %v",
+			providerErr.Provider.Title(),
+			providerErr.Err,
+		)))
+	}
+	if len(lines) == 0 {
+		lines = append(lines, infoCleanLine(err.Error()))
+	}
+	sort.Strings(lines)
+
+	code := infoErrorProvider
+	title := "cannot retrieve information for " + name
+	hint := "Check the project reference, or pass provider:project to choose a source."
+	if allNotFound {
+		code = infoErrorNotFound
+		title = "project not found: " + name
+		hint = "Check the project name, or pass provider:project to choose a source."
+	}
+	return &report.Detail{
+		Title: title,
+		Lines: lines,
+		Hint:  hint,
+		Code:  code,
+		Cause: err,
+	}
+}
+
+func infoProviderSelectionFailure(
+	request catalog.VersionedRef,
+	err error,
+) error {
+	requested := "automatic"
+	if infoProviderUsable(request.Provider) {
+		requested = request.Provider.String()
+	}
+	return &report.Detail{
+		Title: "cannot select an information source",
+		Lines: []string{
+			infoCleanLine(err.Error()),
+			"Requested provider: " + requested,
+		},
+		Hint:  "Pass provider:project to choose a source, for example modrinth:project.",
+		Code:  infoErrorProviderPick,
+		Cause: err,
+	}
+}
+
+func infoReferenceFailure(reference string, err error) error {
+	return &report.Detail{
+		Title: "cannot parse package reference",
+		Lines: []string{
+			infoCleanLine(reference),
+			infoCleanLine(err.Error()),
+		},
+		Hint:  "Use provider:project@version, for example modrinth:fabric-api.",
+		Code:  infoErrorReference,
+		Cause: err,
+	}
+}
+
+func infoAmbiguousReferenceFailure(name string, err error) error {
+	return &report.Detail{
+		Title: "cannot resolve " + infoCleanLine(name) + " in the current lock",
+		Lines: []string{infoCleanLine(err.Error())},
+		Hint:  "Pass an explicit provider:project reference.",
+		Code:  infoErrorAmbiguous,
+		Cause: err,
+	}
+}
+
+func infoIsNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "not found")
 }

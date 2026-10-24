@@ -67,10 +67,10 @@ func (r *neoforgeReader) Read(
 			Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(mod.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemNeoForge, Version: version},
 			FilePath: filePath,
 			Metadata: catalog.Metadata{
-				Title:   mod.DisplayName,
-				Brief:   mod.Description,
-				Authors: []catalog.Person{{Name: mod.Authors}},
-				License: modIdentifier.License,
+				Title:       mod.DisplayName,
+				Description: mod.Description,
+				Authors:     []catalog.Person{{Name: mod.Authors}},
+				License:     modIdentifier.License,
 				URLs: []catalog.URL{
 					{
 						Name: "URL",

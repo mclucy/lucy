@@ -72,19 +72,17 @@ func translateFabricArtifact(
 	)
 	for _, group := range []struct {
 		dependencies map[string]fn.SingleOrSlice[string]
-		mandatory    bool
-		inverse      bool
+		kind         catalog.DependencyKind
 	}{
-		{modInfo.Depends, true, false},
-		{modInfo.Recommends, false, false},
-		{modInfo.Suggests, false, false},
-		{modInfo.Breaks, false, true},
-		{modInfo.Conflicts, false, true},
+		{modInfo.Depends, catalog.DependencyKindRequired},
+		{modInfo.Recommends, catalog.DependencyKindRecommended},
+		{modInfo.Suggests, catalog.DependencyKindSuggested},
+		{modInfo.Breaks, catalog.DependencyKindIncompatible},
+		{modInfo.Conflicts, catalog.DependencyKindConflict},
 	} {
 		translated, err := translateFabricArtifactDependencyMap(
 			group.dependencies,
-			group.mandatory,
-			group.inverse,
+			group.kind,
 			embeddedNames,
 		)
 		if err != nil {
@@ -116,8 +114,7 @@ func translateFabricArtifact(
 
 func translateFabricArtifactDependencyMap(
 	deps map[string]fn.SingleOrSlice[string],
-	mandatory bool,
-	inverse bool,
+	kind catalog.DependencyKind,
 	embeddedNames map[string]struct{},
 ) ([]Dependency, error) {
 	translated := make([]Dependency, 0, len(deps))
@@ -136,10 +133,15 @@ func translateFabricArtifactDependencyMap(
 				}, Ecosystem: catalog.EcosystemFabric,
 			},
 			Constraint: constraint,
-			Mandatory:  mandatory,
+			Mandatory:  kind == catalog.DependencyKindRequired,
+			Kind:       kind,
 			Origin:     dependencyOriginForEmbedded(embedded),
 		}
-		if inverse {
+		switch id {
+		case "minecraft", "java", "fabricloader":
+			dep.Origin = catalog.DependencyServerProvided
+		}
+		if kind == catalog.DependencyKindIncompatible || kind == catalog.DependencyKindConflict {
 			dep.Constraint = dep.Constraint.Negate()
 		}
 		translated = append(translated, dep)
