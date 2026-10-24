@@ -519,7 +519,10 @@ func (w workspace) fileResult(t *testing.T, args ...string) fileResultView {
 func (w workspace) fileList(t *testing.T) []fileStatusView {
 	t.Helper()
 	run := w.lucyOK(t, "file", "list", "--json")
-	return decodeJSON[[]fileStatusView](t, run.stdout)
+	document := decodeJSON[struct {
+		Statuses []fileStatusView `json:"statuses"`
+	}](t, run.stdout)
+	return document.Statuses
 }
 
 func (w workspace) statusOf(t *testing.T, path string) fileStatusView {
