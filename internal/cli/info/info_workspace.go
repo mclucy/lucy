@@ -117,6 +117,21 @@ func infoInstalledAt(
 	if len(matches) == 0 {
 		return nil
 	}
+	if len(matches) > 1 {
+		identityMatches := make([]workspace.DiscoveredPackage, 0, len(matches))
+		identityLocks := make([]*lockfile.Package, 0, len(matches))
+		for index, match := range matches {
+			if !infoInstalledNameMatches(request, match.ID) {
+				continue
+			}
+			identityMatches = append(identityMatches, match)
+			identityLocks = append(identityLocks, matchedLock[index])
+		}
+		if len(identityMatches) > 0 {
+			matches = identityMatches
+			matchedLock = identityLocks
+		}
+	}
 
 	best := 0
 	for index := 1; index < len(matches); index++ {
@@ -125,11 +140,18 @@ func infoInstalledAt(
 		}
 	}
 	installed := matches[best]
+	versionText := infoVersionText(installed.ID.Version)
+	for _, match := range matches {
+		if infoVersionText(match.ID.Version) != versionText {
+			versionText = ""
+			break
+		}
+	}
 	lockedPackage := matchedLock[best]
 
 	return &infoInstalled{
 		Ref:     infoInstalledRef(installed, lockedPackage, request),
-		Version: infoVersionText(installed.ID.Version),
+		Version: versionText,
 		Path:    infoCleanPath(terminal.DisplayPath(root, installed.Path)),
 	}
 }
