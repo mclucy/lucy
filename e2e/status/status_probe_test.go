@@ -50,7 +50,7 @@ func (want probeExpectation) check(t *testing.T, got statusOutput) {
 		}
 		t.Errorf("%s: got %q, want %q", name, versions, version)
 	}
-	primary := got.Server.Primary
+	primary := got.Server.Product
 	equal("identity.eco", primary.Ecosystem, want.eco)
 	equal("identity.name", primary.Name, want.name)
 	equal("identity.version", primary.Version, want.version)
@@ -58,13 +58,14 @@ func (want probeExpectation) check(t *testing.T, got statusOutput) {
 		component("loader.version", want.loaderEco, want.loaderVersion)
 	}
 	component("minecraft.version", "minecraft", want.minecraftVersion)
-	if want.packageDirs && len(got.PackageDirs) == 0 {
-		t.Error("package_dirs.present: no package paths")
+	directories := got.Server.PackageDirectories
+	if want.packageDirs && len(directories) == 0 {
+		t.Error("package directories: no package paths")
 	}
 	if want.packageDirsSuffix != "" {
 		first := ""
-		if len(got.PackageDirs) > 0 {
-			first = filepath.ToSlash(got.PackageDirs[0])
+		if len(directories) > 0 {
+			first = "/" + strings.TrimPrefix(filepath.ToSlash(directories[0]), "/")
 		}
 		if !strings.HasSuffix(first, want.packageDirsSuffix) {
 			t.Errorf("%s: got %q, want suffix %q", want.packageDirsCheck, first, want.packageDirsSuffix)

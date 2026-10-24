@@ -1,3 +1,4 @@
+// Package terminal renders human-facing status and fact views.
 package terminal
 
 import (

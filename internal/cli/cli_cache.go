@@ -54,30 +54,28 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 		return b.CreatedAt.Compare(a.CreatedAt)
 	})
 
-	out := &terminal.Data{
-		Fields: []terminal.Field{
-			&terminal.FieldAnnotation{
-				Annotation: fmt.Sprintf("(%d entries)", len(entries)),
-			},
-		},
-	}
-
+	facts := make([]terminal.Fact, 0, len(entries)+1)
+	facts = append(facts, terminal.Fact{
+		Key:   "Cache",
+		Value: fmt.Sprintf("%d entries", len(entries)),
+	})
 	for _, entry := range entries {
-		out.Fields = append(
-			out.Fields, &terminal.FieldAnnotatedShortText{
-				Title: entry.Key,
-				Text: fmt.Sprintf(
-					"%s  %s",
-					entry.Kind,
-					style.FormatBytesBinary(entry.Size),
-				),
-				Annotation: style.FormatTTL(entry.Expiration),
-			},
-		)
+		facts = append(facts, terminal.Fact{
+			Key: entry.Key,
+			Value: fmt.Sprintf(
+				"%s  %s  %s",
+				entry.Kind,
+				style.FormatBytesBinary(entry.Size),
+				style.Muted(style.FormatTTL(entry.Expiration)),
+			),
+		})
 	}
 
-	terminal.Flush(output.Human(), out)
-	return nil
+	_, err := fmt.Fprintln(
+		output.Human(),
+		terminal.RenderFacts(facts, style.TermWidth()),
+	)
+	return err
 }
 
 func actionCacheClear(cmd *cobra.Command, _ []string) error {

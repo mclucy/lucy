@@ -114,8 +114,8 @@ func statusLayoutAuto(
 
 // NegotiateStatusLayout decides which layout mode to use given the terminal
 // width, the widths of the two logo variants, TTY detection, and logo mode.
-// It returns the mode together with column budgets so that the compositor
-// can render without further arithmetic.
+// It returns the mode together with column budgets so the status renderer can
+// compose the view without further arithmetic.
 func NegotiateStatusLayout(
 	termWidth int,
 	logoLargeWidth int,
