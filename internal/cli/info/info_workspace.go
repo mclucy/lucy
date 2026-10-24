@@ -11,7 +11,6 @@ import (
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/report"
-	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -117,6 +116,7 @@ func infoInstalledAt(
 	if len(matches) == 0 {
 		return nil
 	}
+
 	if len(matches) > 1 {
 		identityMatches := make([]workspace.DiscoveredPackage, 0, len(matches))
 		identityLocks := make([]*lockfile.Package, 0, len(matches))
@@ -140,6 +140,7 @@ func infoInstalledAt(
 		}
 	}
 	installed := matches[best]
+	lockedPackage := matchedLock[best]
 	versionText := infoVersionText(installed.ID.Version)
 	for _, match := range matches {
 		if infoVersionText(match.ID.Version) != versionText {
@@ -147,7 +148,6 @@ func infoInstalledAt(
 			break
 		}
 	}
-	lockedPackage := matchedLock[best]
 
 	return &infoInstalled{
 		Ref:     infoInstalledRef(installed, lockedPackage, request),
@@ -394,24 +394,55 @@ func infoResolveProjectVersion(
 }
 
 func infoWorkspaceLoader(observed *workspace.Workspace, lock *lockfile.Document) catalog.Ecosystem {
-	if selection := infoRuntimeSelection(observed); selection != nil {
-		return selection.Ecosystem()
+	if observed != nil {
+		if loader := infoLoaderFromOffers(observed.ServedEcosystems()); loader != catalog.EcosystemUnspecified {
+			return loader
+		}
 	}
 	if lock == nil {
 		return catalog.EcosystemUnspecified
 	}
+	components := make([]catalog.VersionedRef, 0)
 	for _, input := range lock.Server.Inputs {
 		for _, module := range input.Modules {
-			if module.Ecosystem.IsModding() {
-				return module.Ecosystem
-			}
+			components = append(components, catalog.VersionedRef{
+				Name:      catalog.Name(module.ID),
+				Version:   module.Version,
+				Ecosystem: module.Ecosystem,
+			})
 		}
 	}
-	match, ok := serverpkg.NormalizeProduct(catalog.VersionedRef{
-		Name: catalog.Name(lock.Server.Product.String()),
-	})
-	if ok {
-		return match.Ecosystem
+	offers := workspace.ProductServedEcosystems(
+		catalog.VersionedRef{
+			Name:    catalog.Name(lock.Server.Product.String()),
+			Version: lock.Server.CoreVersion,
+		},
+		components,
+	)
+	if loader := infoLoaderFromOffers(offers); loader != catalog.EcosystemUnspecified {
+		return loader
+	}
+	for _, module := range components {
+		if module.Ecosystem.IsModding() {
+			return module.Ecosystem
+		}
+	}
+	return catalog.EcosystemUnspecified
+}
+
+func infoLoaderFromOffers(offers []workspace.ServedEcosystem) catalog.Ecosystem {
+	for _, offer := range offers {
+		if offer.Compatibility == workspace.CompatFull &&
+			offer.Ecosystem != catalog.EcosystemMinecraft &&
+			offer.Ecosystem != catalog.EcosystemUnspecified {
+			return offer.Ecosystem
+		}
+	}
+	for _, offer := range offers {
+		if offer.Ecosystem != catalog.EcosystemMinecraft &&
+			offer.Ecosystem != catalog.EcosystemUnspecified {
+			return offer.Ecosystem
+		}
 	}
 	return catalog.EcosystemUnspecified
 }
