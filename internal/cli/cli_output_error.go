@@ -283,6 +283,9 @@ func joinedDetails(err error, primary *report.Detail) []string {
 		if errors.As(child, &detail) && detail == primary {
 			continue
 		}
+		if primary.Cause != nil && errors.Is(child, primary.Cause) {
+			continue
+		}
 		lines = append(lines, errorLines(child)...)
 	}
 	return lines
