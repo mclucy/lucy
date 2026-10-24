@@ -45,8 +45,7 @@ func infoOperationFailure(ctx context.Context, err error) error {
 	if ctx != nil && ctx.Err() != nil {
 		return infoCancellation(ctx.Err())
 	}
-	if errors.Is(err, context.Canceled) ||
-		errors.Is(err, context.DeadlineExceeded) {
+	if errors.Is(err, context.Canceled) {
 		return infoCancellation(err)
 	}
 	return nil
