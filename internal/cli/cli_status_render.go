@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"cmp"
 	"fmt"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -52,8 +55,17 @@ func renderStatus(
 		layout.InfoWidth = width
 	}
 
-	facts := statusViewFacts(document, long, layout.InfoWidth)
-	info := terminal.RenderFacts(facts, layout.InfoWidth)
+	infoWidth := max(1, layout.InfoWidth-2)
+	packages := statusViewPackageGroups(document.Packages)
+	facts := statusViewFacts(document, packages, long, infoWidth)
+	info := terminal.RenderFactGroups(facts, infoWidth, style.Muted)
+	if long {
+		for _, group := range packages {
+			info += "\n\n" + group.title + " " + style.Muted(fmt.Sprintf("(%d)", len(group.packages)))
+			info += "\n" + statusViewPackageTable(document.Root, group.packages, infoWidth)
+		}
+	}
+	info = "  " + strings.ReplaceAll(info, "\n", "\n  ")
 	return statusViewCompose(info, logo, layout, logoMode)
 }
 
@@ -373,148 +385,81 @@ func statusViewClipLines(lines []string, width int) []string {
 
 func statusViewFacts(
 	document statusDocument,
+	packages []statusViewPackageGroup,
 	long bool,
 	width int,
-) []terminal.Fact {
-	facts := []terminal.Fact{
-		{Key: "Source", Value: statusViewSource(document.Source)},
-		{Key: "Root", Value: statusViewRoot(document.Root)},
-	}
-
+) [][]terminal.Fact {
+	runtime := []terminal.Fact{}
+	serverRow := -1
 	if server := document.Server; server != nil {
-		facts = append(facts, terminal.Fact{
-			Key:   "Server",
-			Value: statusViewProduct(server.Product),
-		})
 		if server.Minecraft != "" {
-			facts = append(facts, terminal.Fact{
-				Key:   "Minecraft",
-				Value: server.Minecraft,
-			})
+			runtime = append(runtime, terminal.Fact{Key: "Minecraft", Value: server.Minecraft})
 		}
-		if server.EntryPoint != "" {
-			facts = append(facts, terminal.Fact{
-				Key:   "Entry point",
-				Value: terminal.DisplayPath(document.Root, server.EntryPoint),
-			})
-		}
-		facts = append(facts, terminal.Fact{
-			Key:   "Activity",
-			Value: statusViewActivity(document.Source, server.Activity),
-		})
-		if components := statusViewComponents(server, long); components != "" {
-			facts = append(facts, terminal.Fact{
-				Key:   "Components",
-				Value: components,
-			})
-		}
-		if len(server.CompatibleEcosystems) > 0 {
-			facts = append(facts, terminal.Fact{
-				Key:   "Compatible",
-				Value: statusViewCompatibility(server.CompatibleEcosystems),
-			})
-		}
+		serverRow = len(runtime)
+		runtime = append(runtime,
+			terminal.Fact{Key: "Server"},
+			terminal.Fact{Key: "Activity", Value: statusViewActivity(document.Source, server.Activity)},
+		)
 	} else {
-		facts = append(facts, terminal.Fact{
-			Key:   "Server",
-			Value: style.Muted("(no server found)"),
-		})
+		runtime = append(runtime, terminal.Fact{Key: "Server", Value: style.Muted("no server found")})
 	}
-
-	groups := statusViewPackageGroups(document.Packages)
-	tail := make([]terminal.Fact, 0, 3)
 	if document.MCDR != nil {
-		tail = append(tail, statusViewMCDRFact(document.Root, document.MCDR))
+		runtime = append(runtime, statusViewMCDRFact(document.MCDR))
 	}
-	if document.Server != nil && len(document.Server.PackageDirectories) > 0 {
-		tail = append(tail, terminal.Fact{
-			Key: "Package dirs",
-			Value: statusViewPackageDirectories(
-				document.Root,
-				document.Server.PackageDirectories,
-			),
+
+	contents := []terminal.Fact{}
+	if document.Server != nil && len(document.Server.CompatibleEcosystems) > 0 {
+		contents = append(contents, terminal.Fact{
+			Key:   "Ecosystems",
+			Value: statusViewCompatibility(document.Server.CompatibleEcosystems),
 		})
 	}
-
-	keys := make([]string, 0, len(facts)+len(groups)+len(tail)+1)
-	for _, fact := range facts {
-		keys = append(keys, fact.Key)
-	}
-	keys = append(keys, "Packages")
-	for _, group := range groups {
-		keys = append(keys, statusViewPackageGroupKey(group))
-	}
-	for _, fact := range tail {
-		keys = append(keys, fact.Key)
-	}
-	valueWidth := statusViewValueWidth(keys, width)
-
-	if len(document.Packages) == 0 {
-		facts = append(facts, terminal.Fact{Key: "Packages", Value: "none"})
-	} else {
-		facts = append(facts, terminal.Fact{
-			Key:   "Packages",
-			Value: fmt.Sprintf("%d total", len(document.Packages)),
-		})
-		for _, group := range groups {
-			facts = append(facts, terminal.Fact{
-				Key: statusViewPackageGroupKey(group),
-				Value: statusViewPackageGroupValue(
-					document.Root,
-					group,
-					long,
-					valueWidth,
-				),
-			})
+	packageStart := len(contents)
+	if !long {
+		for _, group := range packages {
+			contents = append(contents, terminal.Fact{Key: statusViewPackageGroupKey(group)})
 		}
 	}
-
-	facts = append(facts, tail...)
-	for i := range facts {
-		switch facts[i].Key {
-		case "Root", "Entry point", "Package dirs":
-			paths := strings.Split(facts[i].Value, "\n")
-			for j, path := range paths {
-				if long {
-					paths[j] = strings.Join(statusViewWrap(path, valueWidth, "/"), "\n")
-				} else {
-					paths[j] = terminal.TruncateMiddle(path, valueWidth)
-				}
-			}
-			facts[i].Value = strings.Join(paths, "\n")
+	groups := [][]terminal.Fact{runtime, contents}
+	valueWidth := statusViewValueWidth(groups, width)
+	if serverRow >= 0 {
+		runtime[serverRow].Value = statusViewServer(document.Root, document.Server, valueWidth)
+	}
+	if !long {
+		for i, group := range packages {
+			contents[packageStart+i].Value = statusViewPackageGrid(group.packages, valueWidth)
 		}
 	}
-	return facts
+	return groups
 }
 
-// statusViewValueWidth mirrors RenderFacts' width arithmetic so package cells
-// and long references are wrapped before RenderFacts has to hard-wrap them.
-func statusViewValueWidth(keys []string, width int) int {
+func statusViewValueWidth(groups [][]terminal.Fact, width int) int {
 	keyWidth := 0
-	for _, key := range keys {
-		keyWidth = max(keyWidth, ansi.StringWidth(key))
+	for _, group := range groups {
+		for _, fact := range group {
+			keyWidth = max(keyWidth, ansi.StringWidth(fact.Key))
+		}
 	}
 	keyWidth = min(keyWidth, max(1, width/3))
 	return max(1, width-keyWidth-2)
 }
 
-func statusViewSource(source string) string {
-	source = strings.ToLower(strings.TrimSpace(source))
-	switch source {
-	case statusSourceLive, statusSourceLock:
-		return source
-	case "":
-		return "unknown"
-	default:
-		return source
+func statusViewServer(root string, server *statusServer, width int) string {
+	product := terminal.TruncateMiddle(statusViewProduct(server.Product), width)
+	value := product
+	if server.EntryPoint != "" {
+		filename := filepath.Base(terminal.DisplayPath(root, server.EntryPoint))
+		remaining := width - ansi.StringWidth(product) - 3
+		if remaining >= min(8, ansi.StringWidth(filename)) {
+			value += "   " + style.Muted(terminal.TruncateMiddle(filename, remaining))
+		} else {
+			value += "\n" + style.Muted(terminal.TruncateMiddle(filename, width))
+		}
 	}
-}
-
-func statusViewRoot(root string) string {
-	if root == "" {
-		return "."
+	if components := statusViewComponents(server); components != "" {
+		value += "\n" + style.Muted(components)
 	}
-	return terminal.DisplayPath("", root)
+	return value
 }
 
 func statusViewProduct(product statusProduct) string {
@@ -541,7 +486,7 @@ func statusViewProduct(product statusProduct) string {
 func statusViewActivity(source string, activity string) string {
 	activity = strings.ToLower(strings.TrimSpace(activity))
 	if strings.EqualFold(strings.TrimSpace(source), statusSourceLock) {
-		return style.Muted("unobserved (lock)")
+		return style.Muted("not observed")
 	}
 	switch activity {
 	case statusActivityRunning:
@@ -563,31 +508,20 @@ func statusViewProvider(provider string) string {
 	return provider
 }
 
-func statusViewComponents(server *statusServer, long bool) string {
+func statusViewComponents(server *statusServer) string {
 	lines := make([]string, 0, len(server.Components))
 	for _, component := range server.Components {
 		minecraft := component.Ecosystem == "minecraft" && component.Version == server.Minecraft
 		primary := component.Ecosystem == server.Product.Ecosystem && component.Version == server.Product.Version
-		if !long && (minecraft || primary) {
+		if minecraft || primary {
 			continue
 		}
-		name := strings.TrimSpace(component.Name)
-		if name == "" {
-			name = "unknown"
-		}
-		reference := name
-		if provider := statusViewProvider(component.Provider); provider != "" {
-			reference = provider + ":" + name
-		}
-		if version := strings.TrimSpace(component.Version); version != "" {
-			reference += "@" + version
-		}
-		if ecosystem := strings.TrimSpace(component.Ecosystem); long && ecosystem != "" {
-			reference += " (" + ecosystem + ")"
-		}
-		lines = append(lines, reference)
+		lines = append(lines, statusViewProduct(statusProduct{
+			Name:    component.Name,
+			Version: component.Version,
+		}))
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, ", ")
 }
 
 func statusViewCompatibility(ecosystems []statusEcosystem) string {
@@ -601,7 +535,7 @@ func statusViewCompatibility(ecosystems []statusEcosystem) string {
 			title = parsed.Title()
 		}
 		if compatibility := strings.TrimSpace(offer.Compatibility); compatibility != "" {
-			title += " (" + compatibility + ")"
+			title += " " + style.Muted("("+compatibility+")")
 		}
 		labels = append(labels, title)
 	}
@@ -631,9 +565,12 @@ func statusViewPackageGroups(packages []statusPackage) []statusViewPackageGroup 
 	for _, group := range []statusViewPackageGroup{
 		{title: "Mods", packages: mods},
 		{title: "Plugins", packages: plugins},
-		{title: "MCDR", packages: mcdr},
+		{title: "MCDR plugins", packages: mcdr},
 	} {
 		if len(group.packages) > 0 {
+			slices.SortFunc(group.packages, func(a, b statusPackage) int {
+				return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Path, b.Path))
+			})
 			groups = append(groups, group)
 		}
 	}
@@ -644,57 +581,47 @@ func statusViewPackageGroupKey(group statusViewPackageGroup) string {
 	return fmt.Sprintf("%s (%d)", group.title, len(group.packages))
 }
 
-func statusViewPackageGroupValue(
-	root string,
-	group statusViewPackageGroup,
-	long bool,
-	width int,
-) string {
-	if long {
-		return statusViewLongPackages(root, group.packages, width)
-	}
-	return statusViewPackageGrid(group.packages, width)
-}
-
-func statusViewLongPackages(
-	root string,
-	packages []statusPackage,
-	width int,
-) string {
-	lines := make([]string, 0, len(packages)*2)
+func statusViewPackageTable(root string, packages []statusPackage, width int) string {
+	width = max(1, width-2)
+	nameWidth, versionWidth := 1, 1
 	for _, pkg := range packages {
-		reference := statusViewPackageReference(pkg)
+		nameWidth = max(nameWidth, ansi.StringWidth(statusViewPackageName(pkg)))
+		versionWidth = max(versionWidth, ansi.StringWidth(pkg.Version))
+	}
+	nameWidth = min(nameWidth, max(1, width/3))
+	versionWidth = min(versionWidth, max(1, width/4))
+	gap := statusViewColumnGap
+	if width < 12 {
+		gap = 1
+	}
+	pathWidth := max(1, width-nameWidth-versionWidth-2*gap)
+	var table strings.Builder
+	for i, pkg := range packages {
+		if i > 0 {
+			table.WriteByte('\n')
+		}
+		table.WriteString("  ")
+		name := terminal.TruncateMiddle(statusViewPackageName(pkg), nameWidth)
+		if width < 5 {
+			table.WriteString(terminal.TruncateMiddle(name, width))
+			continue
+		}
+		version := strings.TrimSpace(pkg.Version)
+		if version == "" {
+			version = "—"
+		}
+		version = terminal.TruncateMiddle(version, versionWidth)
 		path := terminal.DisplayPath(root, pkg.Path)
 		if path == "" {
-			lines = append(lines, statusViewWrap(reference, width, ":@-")...)
-			continue
+			path = "—"
 		}
-		if ansi.StringWidth(reference)+statusViewColumnGap+
-			ansi.StringWidth(path) <= width {
-			lines = append(lines, reference+"  "+path)
-			continue
-		}
-
-		lines = append(lines, statusViewWrap(reference, width, ":@-")...)
-		indent := strings.Repeat(" ", statusViewColumnGap)
-		pathWidth := width - statusViewColumnGap
-		if pathWidth < 1 {
-			indent = ""
-			pathWidth = width
-		}
-		for _, pathLine := range statusViewWrap(path, pathWidth, "/-_.") {
-			lines = append(lines, indent+pathLine)
-		}
+		table.WriteString(name)
+		table.WriteString(strings.Repeat(" ", nameWidth-ansi.StringWidth(name)+gap))
+		table.WriteString(version)
+		table.WriteString(strings.Repeat(" ", versionWidth-ansi.StringWidth(version)+gap))
+		table.WriteString(style.Muted(terminal.TruncateMiddle(path, pathWidth)))
 	}
-	return strings.Join(lines, "\n")
-}
-
-// statusViewWrap wraps on separators first while preserving every character.
-func statusViewWrap(value string, width int, breakpoints string) []string {
-	if width < 1 {
-		return []string{value}
-	}
-	return strings.Split(ansi.Wrap(value, width, breakpoints), "\n")
+	return table.String()
 }
 
 func statusViewPackageGrid(packages []statusPackage, width int) string {
@@ -704,8 +631,9 @@ func statusViewPackageGrid(packages []statusPackage, width int) string {
 	}
 
 	longest := 0
-	for _, label := range labels {
-		longest = max(longest, ansi.StringWidth(label))
+	for i, label := range labels {
+		labels[i] = terminal.TruncateMiddle(label, max(1, min(width, 20)))
+		longest = max(longest, ansi.StringWidth(labels[i]))
 	}
 	columnWidth := longest + statusViewColumnGap
 	columns := (width + statusViewColumnGap) / max(columnWidth, 1)
@@ -766,51 +694,13 @@ func statusViewPackageName(pkg statusPackage) string {
 	return "unknown"
 }
 
-func statusViewPackageReference(pkg statusPackage) string {
-	name := strings.TrimSpace(pkg.Name)
-	if name == "" {
-		name = statusViewPackageName(pkg)
-	}
-	reference := name
-	if provider := statusViewProvider(pkg.Provider); provider != "" {
-		reference = provider + ":" + name
-	} else if ecosystem := strings.TrimSpace(pkg.Ecosystem); ecosystem != "" {
-		reference = ecosystem + ":" + name
-	}
-	if version := strings.TrimSpace(pkg.Version); version != "" {
-		reference += "@" + version
-	}
-	return reference
-}
-
-func statusViewMCDRFact(root string, mcdr *statusMCDR) terminal.Fact {
-	parts := make([]string, 0, 3)
-	if version := strings.TrimSpace(mcdr.Version); version != "" {
-		parts = append(parts, version)
+func statusViewMCDRFact(mcdr *statusMCDR) terminal.Fact {
+	value := strings.TrimSpace(mcdr.Version)
+	if value == "" {
+		value = "installed"
 	}
 	if python := strings.TrimSpace(mcdr.Python); python != "" {
-		parts = append(parts, "Python "+python)
-	}
-	if target := strings.TrimSpace(mcdr.Target); target != "" {
-		parts = append(parts, "target "+target)
-	}
-
-	value := "installed"
-	if len(parts) > 0 {
-		value = strings.Join(parts, " · ")
-	}
-	if directory := terminal.DisplayPath(root, mcdr.Directory); directory != "" {
-		value += "\ndirectory " + directory
+		value += "   " + style.Muted("Python "+python)
 	}
 	return terminal.Fact{Key: "MCDR", Value: value}
-}
-
-func statusViewPackageDirectories(root string, directories []string) string {
-	paths := make([]string, 0, len(directories))
-	for _, directory := range directories {
-		if path := terminal.DisplayPath(root, directory); path != "" {
-			paths = append(paths, path)
-		}
-	}
-	return strings.Join(paths, ", ")
 }
