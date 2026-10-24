@@ -1,10 +1,7 @@
 package style
 
 import (
-	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -69,22 +66,6 @@ func noColorMarkdownStyle() ansi.StyleConfig {
 	cfg.Emph = ansi.StylePrimitive{Italic: &italic}
 	cfg.Strikethrough = ansi.StylePrimitive{CrossedOut: &crossedOut}
 	return cfg
-}
-
-// WriteJSON encodes v as the command's machine-readable output.
-func WriteJSON(w io.Writer, v any, compact bool) error {
-	var data []byte
-	var err error
-	if compact {
-		data, err = json.Marshal(v)
-	} else {
-		data, err = json.Marshal(v, jsontext.Multiline(true), jsontext.WithIndent("  "))
-	}
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(w, string(data))
-	return err
 }
 
 func Capitalize(v any) string {
