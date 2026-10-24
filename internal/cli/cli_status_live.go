@@ -15,6 +15,7 @@ type liveStatusDocument struct {
 	Server      *liveStatusServer       `json:"server,omitempty"`
 	Activity    *liveStatusActivity     `json:"activity,omitempty"`
 	Wrappers    workspace.WrapperInfo   `json:"wrappers"`
+	Warnings    []string                `json:"warnings"`
 }
 
 // liveStatusServer is the explicit CLI projection of the selected runtime.
@@ -36,13 +37,14 @@ type liveStatusActivity struct {
 	Running bool `json:"active"`
 }
 
-func newLiveStatusDocument(observed *workspace.Workspace) liveStatusDocument {
+func newLiveStatusDocument(observed *workspace.Workspace, warnings []string) liveStatusDocument {
 	document := liveStatusDocument{
 		ServerDir:   observed.ServerDir,
 		SavePath:    observed.SaveDir(),
 		PackageDirs: observed.PackageDirs(),
 		Packages:    make([]liveStatusPackageView, len(observed.Packages)),
 		Wrappers:    observed.Wrappers,
+		Warnings:    warnings,
 	}
 	for i, pkg := range observed.Packages {
 		document.Packages[i] = liveStatusPackageView{

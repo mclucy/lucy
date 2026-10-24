@@ -76,15 +76,17 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 		workDir,
 		discovery.Request{Policy: discovery.PolicyPreferModified},
 	))
-	reportObservationFindings(ws, NewQueryOutput(cmd))
+	output := NewQueryOutput(cmd)
+	reportObservationFindings(ws, output)
+	document := newLiveStatusDocument(ws, output.Warnings())
 	switch JSONMode(cmd) {
 	case JSONPretty:
-		if err := style.WriteJSON(cmd.OutOrStdout(), newLiveStatusDocument(ws), false); err != nil {
+		if err := style.WriteJSON(cmd.OutOrStdout(), document, false); err != nil {
 			return err
 		}
 		return nil
 	case JSONCompact:
-		if err := style.WriteJSON(cmd.OutOrStdout(), newLiveStatusDocument(ws), true); err != nil {
+		if err := style.WriteJSON(cmd.OutOrStdout(), document, true); err != nil {
 			return err
 		}
 		return nil
