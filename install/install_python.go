@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
@@ -160,7 +161,13 @@ func preparePython(ctx context.Context, root, stage string, d *lockfile.Document
 		return err
 	}
 	sum := sha256.Sum256(encoded)
-	env := filepath.Join(root, ".lucy", "python", hex.EncodeToString(sum[:]))
+	// The environment sits beside the launcher that calls it, not in .lucy,
+	// because run-mcdr.sh must keep working when the workspace state is gone.
+	environment := filepath.Join(m.Directory, ".python")
+	if err := workspacewrite.SafePath(root, environment); err != nil {
+		return err
+	}
+	env := filepath.Join(root, environment, hex.EncodeToString(sum[:]))
 	python := filepath.Join(env, "bin", "python")
 	if runtime.GOOS == "windows" {
 		python = filepath.Join(env, "Scripts", "python.exe")

@@ -14,7 +14,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const InstallJournalName = ".lucy/commit.yaml"
+const (
+	InstallJournalName = ".lucy/commit.yaml"
+
+	// LockFileName names the writer lock inside the workspace state directory.
+	LockFileName = "writer.lock"
+)
 
 // InstallJournal preserves the existing installation rollback record format.
 type InstallJournal struct {
@@ -33,10 +38,10 @@ func Lock(root string) (*fsutil.FileLock, error) {
 	if err := fsutil.MkdirAllPrivate(filepath.Join(root, ".lucy")); err != nil {
 		return nil, err
 	}
-	if err := SafePath(root, ".lucy/writer.lock"); err != nil {
+	if err := SafePath(root, ".lucy/"+LockFileName); err != nil {
 		return nil, err
 	}
-	lock, err := fsutil.TryLockFile(filepath.Join(root, ".lucy", "writer.lock"))
+	lock, err := fsutil.TryLockFile(filepath.Join(root, ".lucy", LockFileName))
 	if err != nil {
 		if errors.Is(err, fsutil.ErrLocked) {
 			return nil, fmt.Errorf("another Lucy operation owns this workspace: %w", err)

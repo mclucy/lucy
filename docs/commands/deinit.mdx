@@ -1,0 +1,39 @@
+---
+title: "lucy deinit"
+description: "Stop managing a server and remove lucy's files from its directory"
+---
+
+`lucy deinit` removes lucy's files from the current server directory:
+
+- `lucy.yaml`, the manifest that records what you want.
+- `lucy-lock.yaml`, the lock that records the exact resolved server.
+- `lucy.local.yaml`, the settings that apply to this machine only.
+- `.lucy`, the directory that holds installation records, tracked-file backups, downloads, and transaction journals.
+
+<Warning>
+  `.lucy` is the only local copy of tracked-file backups and revision history. `lucy deinit` deletes them permanently.
+</Warning>
+
+```bash
+lucy deinit
+```
+
+It does not delete the server. The server software, mods, plugins, worlds, and configuration stay where they are, so the server keeps running without lucy. On a server that runs MCDReforged, the isolated Python environment that `run-mcdr.sh` starts also stays in the server directory, so the launcher keeps working. Files that lucy installed become unmanaged: later lucy commands no longer know about them, and nothing removes them automatically.
+
+Run it from the server directory. If the directory has no lucy files, `lucy deinit` fails instead of reporting success, so a wrong working directory cannot silently delete nothing.
+
+Before removing anything, `lucy deinit` completes or rolls back an installation or tracked-file operation that was interrupted. It fails when another lucy process is writing to the workspace.
+
+`lucy deinit` does not stop a running server, uninstall Java, clear the global download cache, or modify the world. Use [`lucy cache clear`](/commands/install#download-cache) to clear the global download cache separately.
+
+## Output
+
+The command lists each path it removed and confirms that lucy no longer manages the server.
+
+`--json` prints the removed paths as an object whose `removed` field lists them in removal order. `--json-compact` prints it on one line.
+
+## Flags
+
+No flags are specific to `lucy deinit`. It accepts the [Global Flags](/commands/global-flags).
+
+See also [`lucy init`](/commands/init) and [`lucy install`](/commands/install).

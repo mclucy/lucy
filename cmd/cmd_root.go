@@ -131,6 +131,7 @@ func init() {
 		cli.NewBisectCommand(),
 		cli.NewCacheCommand(),
 		cli.NewCreateCommand(),
+		cli.NewDeinitCommand(),
 		cli.NewDoctorCommand(),
 		file.NewCommand(),
 		cli.NewExportCommand(),
