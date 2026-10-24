@@ -25,15 +25,63 @@ These flags work with every `lucy` subcommand. The root command also exposes ver
   Same as `--no-color --no-interactive`.
 </ParamField>
 
-`--json` and `--json-compact` are inherited by every command and render on the ones that produce machine-readable output. `--json-compact` wins when both are set.
+`--json` and `--json-compact` are inherited by every command. Commands that produce machine-readable output render it; every command uses the same failure document. `--json-compact` wins when both are set.
+
+`compile` does not provide a JSON result. It rejects these flags before starting a build.
 
 <ParamField query="--json" type="boolean" default="false">
-  Print JSON indented with 2 spaces.
+  Print JSON indented with 2 spaces. Success documents go to stdout; failure documents go to stderr.
 </ParamField>
 
 <ParamField query="--json-compact" type="boolean" default="false">
   Print JSON without indentation; wins over `--json`.
 </ParamField>
+
+## Streams
+
+Human output follows the kind of command:
+
+- Query results stay on stdout so they can be piped.
+- Operation summaries, progress, prompts, warnings, and errors go to stderr.
+- The pre-alpha notice goes to stderr.
+
+Machine output owns the streams instead:
+
+- On success, stdout carries exactly one JSON document and stderr stays empty. Progress, warnings, prompts, and the pre-alpha notice are suppressed. Warnings that belong to a result travel inside its document when the command supports them.
+- On failure, stdout stays empty and stderr carries exactly one JSON failure document. The human error is not repeated.
+- Invalid commands, flags, and arguments follow the same failure contract.
+
+Terminal log mirroring is disabled in JSON mode, even with `--print-logs`. Diagnostics still go to the log file.
+
+## Failure documents
+
+Every machine-mode failure writes one document with this shape:
+
+```json
+{
+  "schema": 1,
+  "kind": "error",
+  "code": "usage.invalid_invocation",
+  "title": "unknown command \"instal\" for \"lucy\"",
+  "details": [],
+  "hint": "Run --help for usage.",
+  "log": "/path/to/lucy.log"
+}
+```
+
+Use `code` for automation; `title` and `details` are human-readable explanations. `hint` is optional, and `log` points to diagnostic details.
+
+Results are published only after cleanup succeeds.
+
+## Exit status
+
+| Code | Meaning |
+| --- | --- |
+| 0 | The command completed successfully. |
+| 1 | The command failed, including invalid invocations and a diagnostic log that could not be written or closed. |
+| 130 | The command was interrupted (Ctrl-C or termination request) after cleanup. |
+
+Check the exit status before consuming the result. On failure, read the error document from stderr.
 
 ## Logging
 
@@ -50,7 +98,7 @@ Diagnostic logs record action boundaries and internal decisions. Command results
 </ParamField>
 
 <ParamField query="--print-logs" type="boolean" default="false">
-  Mirror diagnostic records to stderr at the level set by `--log-level`. The log file keeps receiving the same records, plus debug detail. User reports remain independent. When an event is both logged and reported, both representations appear.
+  Mirror diagnostic records to stderr at the level set by `--log-level`. The log file keeps receiving the same records, plus debug detail. User reports remain independent. In machine mode the terminal mirror is suppressed so stdout and stderr keep their single-document contract; read the log file instead.
 </ParamField>
 
 ## Network

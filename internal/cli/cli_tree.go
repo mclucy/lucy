@@ -7,7 +7,6 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -39,25 +38,26 @@ func actionTree(cmd *cobra.Command, args []string) error {
 	}
 
 	forceLive, _ := cmd.Flags().GetBool("live")
-	graph, origin, _, err := LoadDependencyData(workDir, forceLive)
+	output := NewQueryOutput(cmd)
+	graph, origin, _, err := LoadDependencyData(workDir, forceLive, output)
 	if err != nil {
 		return err
 	}
 
-	mode := JSONMode(cmd)
-	if mode != JSONNone {
-		return outputTreeJSON(cmd.OutOrStdout(), graph, origin, mode)
+	if output.JSON() {
+		return output.WriteJSON(treeDocument(graph, origin, output.Warnings()))
 	}
 
 	maxDepth, _ := cmd.Flags().GetInt("depth")
-	fmt.Fprintf(cmd.OutOrStdout(), "Using data from: %s\n\n", origin.String())
+	human := output.Human()
+	fmt.Fprintf(human, "Using data from: %s\n\n", origin.String())
 
 	roots := graph.GetRoots()
 	for i, root := range roots {
-		printTree(root, 0, i == len(roots)-1, "", make(map[string]bool), maxDepth)
+		printTree(human, root, 0, i == len(roots)-1, "", make(map[string]bool), maxDepth)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\n(from %s)\n", origin.String())
+	fmt.Fprintf(human, "\n(from %s)\n", origin.String())
 	return nil
 }
 
@@ -76,6 +76,7 @@ func nodeLabel(node *GraphNode) string {
 }
 
 func printTree(
+	w io.Writer,
 	node *GraphNode,
 	depth int,
 	isLast bool,
@@ -92,11 +93,11 @@ func printTree(
 	key := node.key()
 
 	if visited[key] {
-		fmt.Printf("%s%s%s [shown above]\n", prefix, branch, label)
+		fmt.Fprintf(w, "%s%s%s [shown above]\n", prefix, branch, label)
 		return
 	}
 
-	fmt.Printf("%s%s%s\n", prefix, branch, label)
+	fmt.Fprintf(w, "%s%s%s\n", prefix, branch, label)
 
 	if maxDepth > 0 && depth >= maxDepth {
 		return
@@ -110,7 +111,7 @@ func printTree(
 	}
 
 	for i, child := range node.Children {
-		printTree(child, depth+1, i == len(node.Children)-1, childPrefix, visited, maxDepth)
+		printTree(w, child, depth+1, i == len(node.Children)-1, childPrefix, visited, maxDepth)
 	}
 
 	delete(visited, key)
@@ -130,12 +131,11 @@ type treeNode struct {
 	Children    []*treeNode `json:"children,omitempty"`
 }
 
-func outputTreeJSON(
-	w io.Writer,
+func treeDocument(
 	graph *DependencyGraph,
 	origin GraphOrigin,
-	mode JSONRendering,
-) error {
+	warnings []string,
+) map[string]any {
 	visited := make(map[string]bool)
 	roots := graph.GetRoots()
 	jsonRoots := make([]*treeNode, 0, len(roots))
@@ -143,15 +143,14 @@ func outputTreeJSON(
 		jsonRoots = append(jsonRoots, buildJSONNode(root, visited))
 	}
 
-	output := map[string]any{
+	document := map[string]any{
 		"origin": origin.String(),
 		"roots":  jsonRoots,
 	}
-	compact := mode == JSONCompact
-	if err := style.WriteJSON(w, output, compact); err != nil {
-		return err
+	if len(warnings) > 0 {
+		document["warnings"] = warnings
 	}
-	return nil
+	return document
 }
 
 func buildJSONNode(node *GraphNode, visited map[string]bool) *treeNode {

@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/x/term"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/javaruntime"
@@ -91,7 +90,7 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
-	ctx, stop := commandContext(cmd)
+	ctx, stop := CommandContext(cmd)
 	defer stop()
 	requirement, err := lockedJavaRequirement(root)
 	if err != nil {
@@ -116,10 +115,11 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 			view.Selection.Runtime.Home == runtime.Home
 		view.Runtimes = append(view.Runtimes, entry)
 	}
-	if mode := JSONMode(cmd); mode != JSONNone {
-		return style.WriteJSON(cmd.OutOrStdout(), view, mode == JSONCompact)
+	output := NewQueryOutput(cmd)
+	if output.JSON() {
+		return output.WriteJSON(view)
 	}
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	if requirement == nil {
 		fmt.Fprintf(
 			out,
@@ -193,14 +193,14 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
-	ctx, stop := commandContext(cmd)
+	ctx, stop := CommandContext(cmd)
 	defer stop()
 	change, err := javaChangeFromFlags(cmd, args)
 	if err != nil {
 		return err
 	}
 	if change == (operation.JavaChange{}) {
-		if !javaPromptAvailable(cmd) {
+		if !NewPromptGate(cmd).Available() {
 			return fmt.Errorf(
 				"specify a Java version or auto, --%s, or --%s; choosing interactively needs a terminal",
 				flagJavaDistributionName,
@@ -215,10 +215,11 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if mode := JSONMode(cmd); mode != JSONNone {
-		return style.WriteJSON(cmd.OutOrStdout(), result, mode == JSONCompact)
+	output := NewOperationOutput(cmd)
+	if output.JSON() {
+		return output.WriteJSON(result)
 	}
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	fmt.Fprintf(out, "%s: %s\n", manifest.Filename, javaOverrideLabel(result.Java))
 	if result.Home != "" {
 		fmt.Fprintf(out, "%s: %s\n", manifest.LocalFilename, result.Home)
@@ -293,11 +294,6 @@ func parseJavaMajor(raw string) (int, error) {
 	return version, nil
 }
 
-func javaPromptAvailable(cmd *cobra.Command) bool {
-	file, ok := cmd.InOrStdin().(*os.File)
-	return ok && term.IsTerminal(file.Fd()) && style.InteractiveEnabled()
-}
-
 // promptJavaChange asks for the Java version and distribution that lucy.yaml
 // pins. Each answer starts at the current value.
 func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, error) {
@@ -352,10 +348,7 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 				Value(&distribution),
 		),
 	)
-	if err := form.Run(); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return operation.JavaChange{}, errors.New("java selection cancelled")
-		}
+	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
 		return operation.JavaChange{}, err
 	}
 	return operation.JavaChange{

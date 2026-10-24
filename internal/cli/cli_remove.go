@@ -67,7 +67,7 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 	output := newInstallOutput(cmd)
 	defer output.Close()
 	opts.Trace = output.Trace()
-	ctx, stop := commandContext(cmd)
+	ctx, stop := CommandContext(cmd)
 	defer stop()
 	result, err := operation.Remove(ctx, workDir, args, ecosystem, opts)
 	if err != nil {

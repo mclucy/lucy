@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/buildrepo"
@@ -39,9 +37,23 @@ func NewCommand() *cobra.Command {
 		Long:  help.CompileLong,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			if cli.JSONMode(cmd) != cli.JSONNone {
+				return &report.Detail{
+					Code:  "usage.unsupported_output",
+					Title: "compile does not support JSON output",
+					Hint:  "Run without --json or --json-compact.",
+				}
+			}
+			ctx, stop := cli.CommandContext(cmd)
 			defer stop()
-			return run(ctx, args[0], &opts, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			return run(
+				ctx,
+				args[0],
+				&opts,
+				cli.NewPromptGate(cmd),
+				cmd.OutOrStdout(),
+				cmd.ErrOrStderr(),
+			)
 		},
 	}
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Write the compiled mod JAR to PATH, or to a directory under the project's artifact name")
@@ -55,7 +67,7 @@ func NewCommand() *cobra.Command {
 
 // run compiles source and writes the resulting JAR. Progress is narrated on
 // stderr; stdout carries only the artifact path so the command stays pipeable.
-func run(ctx context.Context, source string, opts *options, stdout, stderr io.Writer) (err error) {
+func run(ctx context.Context, source string, opts *options, gate cli.PromptGate, stdout, stderr io.Writer) (err error) {
 	remote, err := parseRemote(source)
 	if err != nil {
 		return err
@@ -146,7 +158,7 @@ func run(ctx context.Context, source string, opts *options, stdout, stderr io.Wr
 	if err != nil {
 		return err
 	}
-	project, err := selectProject(model, opts)
+	project, err := selectProject(ctx, model, opts, gate)
 	if err != nil {
 		return err
 	}
@@ -166,7 +178,7 @@ func run(ctx context.Context, source string, opts *options, stdout, stderr io.Wr
 	if err != nil {
 		return err
 	}
-	project, err = selectProject(model, opts)
+	project, err = selectProject(ctx, model, opts, gate)
 	if err != nil {
 		return err
 	}

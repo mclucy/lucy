@@ -52,7 +52,7 @@ type ServerEnvironment struct {
 //
 // It also reports the server environment, derived from the manifest or lock
 // when available and from the workspace probe otherwise.
-func LoadDependencyData(workDir string, forceLive bool) (
+func LoadDependencyData(workDir string, forceLive bool, output *Output) (
 	*DependencyGraph,
 	GraphOrigin,
 	ServerEnvironment,
@@ -86,7 +86,7 @@ func LoadDependencyData(workDir string, forceLive bool) (
 
 	origin = OriginLive
 	info, _ := identify.Packages(workspace.Observe(workDir, discovery.Request{}))
-	reportObservationFindings(info)
+	reportObservationFindings(info, output)
 	graph, err := BuildGraphFromObservation(info)
 	if err != nil {
 		return nil, 0, env, fmt.Errorf("failed to build graph from observation: %w", err)
@@ -95,20 +95,20 @@ func LoadDependencyData(workDir string, forceLive bool) (
 }
 
 // reportObservationFindings renders each consumed observation once.
-func reportObservationFindings(observed *workspace.Workspace) {
+func reportObservationFindings(observed *workspace.Workspace, output *Output) {
 	if observed == nil {
 		return
 	}
 	for _, warning := range observed.Warnings {
-		report.Warn(warning)
+		output.Warn(warning)
 	}
-	reportDiscoveryFindings(&observed.Discovery)
+	reportDiscoveryFindings(&observed.Discovery, output)
 }
 
 // reportDiscoveryFindings presents one discovery result. A resolved layout
 // never reports a failure: automatic choices are warnings, and unmanaged or
 // alternative entry points stay informational.
-func reportDiscoveryFindings(observed *discovery.Result) {
+func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 	if observed == nil {
 		return
 	}
@@ -120,43 +120,48 @@ func reportDiscoveryFindings(observed *discovery.Result) {
 	for finding := range observed.Findings() {
 		switch finding.Kind {
 		case discovery.FindingAutomaticSelection:
-			report.Warn(automaticSelectionMessage(observed, finding))
+			output.Warn(automaticSelectionMessage(observed, finding))
 		case discovery.FindingUnreadableFile:
 			key := unreadableFindingKey(finding)
 			if unreadableReported[key] {
 				continue
 			}
 			unreadableReported[key] = true
-			report.Warn(unreadableFindingError(finding))
+			output.Warn(unreadableFindingError(finding))
 		case discovery.FindingAlternativeEntryPoint,
 			discovery.FindingUnmanagedInstallation:
-			report.Info(entryPointFindingMessage(finding))
+			message := entryPointFindingMessage(finding)
+			if output.JSON() {
+				output.Warn(errors.New(message))
+			} else {
+				report.Info(message)
+			}
 		case discovery.FindingMissingDeclaredInstallation:
-			report.Warn(errors.New(
+			output.Warn(errors.New(
 				"declared server installation is missing; run lucy install --locked",
 			))
 		case discovery.FindingOwnershipError:
-			report.Warn(fmt.Errorf(
+			output.Warn(fmt.Errorf(
 				"cannot verify ownership of %s: %w",
 				finding.Path,
 				finding.Cause,
 			))
 		case discovery.FindingModifiedFile:
-			report.Warn(fmt.Errorf(
+			output.Warn(fmt.Errorf(
 				"managed file %s was modified; it stays unmanaged",
 				finding.Path,
 			))
 		case discovery.FindingReceiptError:
 			if finding.Cause != nil {
-				report.Warn(fmt.Errorf(
+				output.Warn(fmt.Errorf(
 					"cannot verify installation ownership: %w",
 					finding.Cause,
 				))
 			} else {
-				report.Warn(errors.New("cannot verify installation ownership"))
+				output.Warn(errors.New("cannot verify installation ownership"))
 			}
 		case discovery.FindingInvalidIdentity:
-			report.Warn(fmt.Errorf(
+			output.Warn(fmt.Errorf(
 				"cannot identify the server in %s: %v",
 				finding.Path,
 				finding.Cause,
@@ -166,7 +171,12 @@ func reportDiscoveryFindings(observed *discovery.Result) {
 			if resolved || automatic || unresolvedReported {
 				continue
 			}
-			report.Error(unresolvedRuntimeMessage(observed, finding))
+			message := unresolvedRuntimeMessage(observed, finding)
+			if output.JSON() {
+				output.Warn(message)
+			} else {
+				report.Error(message)
+			}
 			unresolvedReported = true
 		}
 	}

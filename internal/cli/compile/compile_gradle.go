@@ -20,6 +20,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/mclucy/lucy/internal/buildrepo"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
 )
@@ -264,7 +265,7 @@ func nameProject(path string) string {
 	return path
 }
 
-func selectProject(model gradleModel, opts *options) (gradleProject, error) {
+func selectProject(ctx context.Context, model gradleModel, opts *options, gate cli.PromptGate) (gradleProject, error) {
 	candidates := make([]gradleProject, 0, len(model.Projects))
 	ecosystem := catalog.Ecosystem(opts.ecosystem)
 	for _, project := range model.Projects {
@@ -290,8 +291,8 @@ func selectProject(model gradleModel, opts *options) (gradleProject, error) {
 	if len(candidates) > 1 {
 		// An explicit --project never reaches this branch, so the prompt only
 		// ever replaces an absent flag.
-		if opts.project == "" && promptAvailable() {
-			picked, err := promptModProject(candidates)
+		if opts.project == "" && gate.Available() {
+			picked, err := promptModProject(ctx, candidates)
 			if err != nil {
 				return gradleProject{}, err
 			}

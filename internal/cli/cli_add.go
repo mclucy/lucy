@@ -73,7 +73,7 @@ func actionAdd(cmd *cobra.Command, args []string) error {
 	output := newInstallOutput(cmd)
 	defer output.Close()
 	opts.Trace = output.Trace()
-	ctx, stop := commandContext(cmd)
+	ctx, stop := CommandContext(cmd)
 	defer stop()
 	result, err := operation.Add(ctx, workDir, args, catalog.Ecosystem(ecosystem), opts)
 	if err != nil {

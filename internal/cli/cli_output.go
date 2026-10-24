@@ -4,27 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/resolve"
-	"github.com/mclucy/lucy/terminal/progress"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
-// installOutput presents one add, remove, install, or init operation: live
-// progress on stderr while it runs, then its summary or machine-readable
-// result. It owns every decision about how the facts look.
+// installOutput adapts operation traces and results to the command presenter.
 type installOutput struct {
-	cmd      *cobra.Command
-	renderer progress.Renderer
-	json     JSONRendering
+	*Output
 
 	phase           string
 	resolved        int
@@ -36,16 +28,10 @@ type installOutput struct {
 }
 
 func newInstallOutput(cmd *cobra.Command) *installOutput {
-	mode := JSONMode(cmd)
-	renderer := progress.Discard()
-	if mode == JSONNone {
-		renderer = progress.New(cmd.ErrOrStderr())
-	}
-	return &installOutput{cmd: cmd, renderer: renderer, json: mode}
+	output := NewOperationOutput(cmd)
+	output.Progress()
+	return &installOutput{Output: output}
 }
-
-// Close stops the renderer after the command's work is done.
-func (o *installOutput) Close() { o.renderer.Close() }
 
 // Trace returns the hooks the operation reports through.
 func (o *installOutput) Trace() *install.Trace {
@@ -144,8 +130,8 @@ func (o *installOutput) Render(result *install.Result) error {
 	}
 	result.Warnings = append(result.Warnings, javaWarnings(result.Java)...)
 	result.WarningMessages = warningMessages(result.Warnings)
-	if o.json != JSONNone {
-		return style.WriteJSON(o.cmd.OutOrStdout(), result, o.json == JSONCompact)
+	if o.JSON() {
+		return o.WriteJSON(result)
 	}
 	if !result.Changed() {
 		if !result.PublishedManifest && !result.PublishedLock {
@@ -171,10 +157,10 @@ func (o *installOutput) Render(result *install.Result) error {
 	// Flush the summary before warnings so the two surfaces cannot interleave.
 	o.renderer.Close()
 	for _, warning := range result.Warnings {
-		report.Warn(warning)
+		o.Warn(warning)
 	}
 	for _, diagnostic := range result.Diagnostics {
-		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+		o.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
 	}
 	return nil
 }
@@ -225,12 +211,6 @@ type processLog struct{ o *installOutput }
 
 func (l processLog) Write(data []byte) (int, error) {
 	return l.o.renderer.LogWriter().Write(data)
-}
-
-// commandContext cancels the operation on the first interrupt, so deferred
-// cleanup and the install journal rollback run instead of a hard exit.
-func commandContext(cmd *cobra.Command) (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 }
 
 func warningMessages(warnings []error) []string {

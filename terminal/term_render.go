@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -66,8 +67,8 @@ func clipLines(s string, maxWidth int) string {
 	return strings.Join(lines, "\n")
 }
 
-// Flush renders all fields in data and prints the composed output.
-func Flush(data *Data) {
+// Flush renders all fields in data to w.
+func Flush(w io.Writer, data *Data) {
 	var logoField *FieldLogo
 	for _, field := range data.Fields {
 		if fl, ok := field.(*FieldLogo); ok {
@@ -79,7 +80,7 @@ func Flush(data *Data) {
 	if logoField == nil {
 		keyWidth := keyColumnWidth(data.Fields)
 		infoBlock := renderSegments(buildSegments(data.Fields, 0, keyWidth), 0, keyWidth)
-		fmt.Println(infoBlock)
+		fmt.Fprintln(w, infoBlock)
 		return
 	}
 
@@ -135,8 +136,8 @@ func Flush(data *Data) {
 	default:
 		output = infoBlock
 	}
-	fmt.Print(output)
-	fmt.Println()
+	fmt.Fprint(w, output)
+	fmt.Fprintln(w)
 }
 
 func fieldsWithoutLogo(fields []Field) []Field {

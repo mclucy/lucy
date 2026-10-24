@@ -2,11 +2,9 @@ package cli
 
 import (
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
 )
@@ -34,28 +32,29 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 	}
 
 	forceLive, _ := cmd.Flags().GetBool("live")
-	graph, origin, _, err := LoadDependencyData(workDir, forceLive)
+	output := NewQueryOutput(cmd)
+	graph, origin, _, err := LoadDependencyData(workDir, forceLive, output)
 	if err != nil {
 		return err
 	}
 
-	mode := JSONMode(cmd)
-	if mode != JSONNone {
-		return outputLeavesJSON(cmd.OutOrStdout(), graph, origin, mode)
+	if output.JSON() {
+		return output.WriteJSON(leavesDocument(graph, origin, output.Warnings()))
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Using data from: %s\n\n", origin.String())
+	human := output.Human()
+	fmt.Fprintf(human, "Using data from: %s\n\n", origin.String())
 
 	leaves := graph.GetLeaves()
 	if len(leaves) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No leaf packages found")
+		fmt.Fprintln(human, "No leaf packages found")
 	} else {
 		for _, leaf := range leaves {
-			fmt.Fprintln(cmd.OutOrStdout(), nodeLabel(leaf))
+			fmt.Fprintln(human, nodeLabel(leaf))
 		}
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\n(from %s)\n", origin.String())
+	fmt.Fprintf(human, "\n(from %s)\n", origin.String())
 	return nil
 }
 
@@ -69,12 +68,11 @@ type leafNode struct {
 	Ecosystem   string `json:"ecosystem"`
 }
 
-func outputLeavesJSON(
-	w io.Writer,
+func leavesDocument(
 	graph *DependencyGraph,
 	origin GraphOrigin,
-	mode JSONRendering,
-) error {
+	warnings []string,
+) map[string]any {
 	leaves := graph.GetLeaves()
 	jsonLeaves := make([]leafNode, 0, len(leaves))
 	for _, leaf := range leaves {
@@ -91,13 +89,12 @@ func outputLeavesJSON(
 		)
 	}
 
-	output := map[string]any{
+	document := map[string]any{
 		"origin": origin.String(),
 		"leaves": jsonLeaves,
 	}
-	compact := mode == JSONCompact
-	if err := style.WriteJSON(w, output, compact); err != nil {
-		return err
+	if len(warnings) > 0 {
+		document["warnings"] = warnings
 	}
-	return nil
+	return document
 }

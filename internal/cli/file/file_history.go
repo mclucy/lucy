@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/cli"
 
 	"github.com/spf13/cobra"
 )
@@ -37,11 +38,12 @@ func actionFileHistory(cmd *cobra.Command, args []string) error {
 		events = []filetrack.Event{}
 	}
 
-	if machineOutputRequested(cmd) {
-		return writeJSON(cmd, events)
+	output := cli.NewQueryOutput(cmd)
+	if output.JSON() {
+		return output.WriteJSON(events)
 	}
 
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	if len(events) == 0 {
 		fmt.Fprintln(out, "No file tracking history.")
 		return nil

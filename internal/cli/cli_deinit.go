@@ -6,7 +6,6 @@ import (
 
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -28,6 +27,7 @@ type deinitDocument struct {
 }
 
 func actionDeinit(cmd *cobra.Command, _ []string) error {
+	output := NewOperationOutput(cmd)
 	workDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("could not determine working directory: %w", err)
@@ -37,13 +37,10 @@ func actionDeinit(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	document := deinitDocument{Removed: result.Removed}
-	switch JSONMode(cmd) {
-	case JSONPretty:
-		return style.WriteJSON(cmd.OutOrStdout(), document, false)
-	case JSONCompact:
-		return style.WriteJSON(cmd.OutOrStdout(), document, true)
+	if output.JSON() {
+		return output.WriteJSON(document)
 	}
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	for _, name := range result.Removed {
 		if _, err := fmt.Fprintf(out, "removed %s\n", name); err != nil {
 			return err

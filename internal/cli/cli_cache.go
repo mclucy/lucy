@@ -39,23 +39,14 @@ func NewCacheCommand() *cobra.Command {
 }
 
 func actionCacheLs(cmd *cobra.Command, _ []string) error {
+	output := NewQueryOutput(cmd)
 	entries := cache.Network().All()
-
-	switch JSONMode(cmd) {
-	case JSONPretty:
-		if err := style.WriteJSON(cmd.OutOrStdout(), entries, false); err != nil {
-			return err
-		}
-		return nil
-	case JSONCompact:
-		if err := style.WriteJSON(cmd.OutOrStdout(), entries, true); err != nil {
-			return err
-		}
-		return nil
+	if output.JSON() {
+		return output.WriteJSON(entries)
 	}
 
 	if len(entries) == 0 {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Cache is empty")
+		_, err := fmt.Fprintln(output.Human(), "Cache is empty")
 		return err
 	}
 
@@ -85,19 +76,24 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 		)
 	}
 
-	terminal.Flush(out)
+	terminal.Flush(output.Human(), out)
 	return nil
 }
 
 func actionCacheClear(cmd *cobra.Command, _ []string) error {
+	output := NewOperationOutput(cmd)
 	cleared, err := cache.Network().ClearAll()
 	if err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
 
+	if output.JSON() {
+		return output.WriteJSON(cleared)
+	}
+
 	// The cache backend only collects the successful removals; the command
 	// presents them, in the order the reset walked the cache directory.
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	for _, removed := range cleared.Removed {
 		if _, err := fmt.Fprintf(out, "removed %s\n", removed); err != nil {
 			return err

@@ -1,21 +1,19 @@
 package cli
 
 import (
-	"bufio"
+	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/x/term"
+	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
-	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/spf13/cobra"
 )
@@ -55,45 +53,67 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
+	ctx, stop := CommandContext(cmd)
+	defer stop()
 	opts := operation.InitOptions{
 		MCDRVersion: flagStringInit(cmd, flagInitMCDRVersionName),
 		EntryPoint:  flagStringInit(cmd, flagInitEntryPointName),
 		Force:       flagBoolInit(cmd, flagInitForceName),
 		Detect:      true,
 	}
-	return initializeWorkspace(cmd, workDir, opts)
+	return initializeWorkspace(ctx, cmd, workDir, opts)
 }
 
 // initializeWorkspace initializes one workspace and owns its presentation.
 // Warnings observed during initialization surface on stderr once, failures
 // return to the command framework, and success reports the files written from
 // the returned document instead of rereading them.
-func initializeWorkspace(cmd *cobra.Command, workDir string, opts operation.InitOptions) error {
+func initializeWorkspace(ctx context.Context, cmd *cobra.Command, workDir string, opts operation.InitOptions) error {
 	output := newInstallOutput(cmd)
 	defer output.Close()
 	opts.Trace = output.Trace()
 	opts.PromptRuntime = func(observed discovery.Result) (string, error) {
 		output.Close()
-		return promptRuntime(cmd, observed)
+		return promptRuntime(ctx, cmd, observed)
 	}
-	ctx, stop := commandContext(cmd)
-	defer stop()
 	result, err := operation.Initialize(ctx, workDir, opts)
 	if err != nil {
 		return output.Failure(initializationFailure(err, result))
 	}
 	output.Close()
 	for _, warning := range result.Warnings {
-		report.Warn(warning)
+		output.Warn(warning)
 	}
-	reportDiscoveryFindings(&result.Discovery)
+	reportDiscoveryFindings(&result.Discovery, output.Output)
+	if output.JSON() {
+		return output.WriteJSON(&install.Result{
+			Schema: install.ResultSchema,
+			Kind:   "install",
+			Mode:   install.ModeResolve,
+			Server: install.ServerChange{
+				Product:   result.Lock.Server.Product,
+				Minecraft: result.Lock.Server.Minecraft,
+				Version:   result.Lock.Server.CoreVersion,
+			},
+			Packages:          []install.PackageChange{},
+			Phases:            []install.Phase{},
+			TotalPackages:     len(result.Lock.Packages),
+			PublishedManifest: true,
+			PublishedLock:     result.PublishedLock,
+			WarningMessages:   output.Warnings(),
+		})
+	}
+	written := manifest.Filename
+	if result.PublishedLock {
+		written += " and " + lockfile.Filename
+	}
 	fmt.Fprintf(
-		cmd.OutOrStdout(),
-		"Wrote %s and %s for Minecraft %s (%s)\n",
-		manifest.Filename,
-		lockfile.Filename,
+		output.Human(),
+		"Wrote %s for Minecraft %s (%s) · %d packages\n",
+		written,
 		result.Document.Server.Minecraft,
 		result.Document.Server.Core.Product,
+		len(result.Lock.Packages),
 	)
 	return nil
 }
@@ -151,9 +171,10 @@ func entryPointCommands(installations []discovery.Installation) []string {
 	return commands
 }
 
-func promptRuntime(cmd *cobra.Command, observed discovery.Result) (string, error) {
-	stdin, ok := cmd.InOrStdin().(*os.File)
-	if !ok || !term.IsTerminal(stdin.Fd()) || !style.InteractiveEnabled() {
+func promptRuntime(ctx context.Context, cmd *cobra.Command, observed discovery.Result) (string, error) {
+	// A closed gate returns no selection, so Initialize reports the typed
+	// ambiguous-selection error whose commands name --entry-point exactly.
+	if !NewPromptGate(cmd).Available() {
 		return "", nil
 	}
 	options := make([]huh.Option[string], 0, len(observed.Installations))
@@ -181,33 +202,31 @@ func promptRuntime(cmd *cobra.Command, observed discovery.Result) (string, error
 		Description("Use --entry-point <entry-point> to make this selection without a prompt.").
 		Options(options...).Value(&selected))).
 		WithInput(cmd.InOrStdin()).WithOutput(cmd.ErrOrStderr())
-	if err := form.Run(); err != nil {
+	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
 		return "", fmt.Errorf("server selection cancelled: %w", err)
 	}
 	return selected, nil
 }
 
 // promptMinecraft returns the interactive Minecraft-version prompt for
-// Initialize. It requires a terminal stdin with interactive mode enabled,
-// echoes the question on stderr, and returns the trimmed answer.
-func promptMinecraft(cmd *cobra.Command) func() (string, error) {
+// Initialize. It asks only while the command's prompt gate is open and
+// otherwise fails with the flag that carries the same answer, so a JSON or
+// non-interactive run never waits on stdin.
+func promptMinecraft(ctx context.Context, cmd *cobra.Command) func() (string, error) {
 	return func() (string, error) {
-		stdin := cmd.InOrStdin()
-		file, isFile := stdin.(*os.File)
-		if !isFile || !term.IsTerminal(file.Fd()) || !style.InteractiveEnabled() {
-			return "", errors.New("a concrete --minecraft version is required")
+		if !NewPromptGate(cmd).Available() {
+			return "", errors.New(
+				"specify --minecraft <version>; choosing interactively needs a terminal",
+			)
 		}
-		fmt.Fprint(cmd.ErrOrStderr(), "Minecraft version: ")
-		// Piped answers may end without a newline, so a final line behind
-		// io.EOF is still a valid answer.
-		text, err := bufio.NewReader(stdin).ReadString('\n')
-		if err == io.EOF && strings.TrimSpace(text) != "" {
-			err = nil
-		}
-		if err != nil {
+		var answer string
+		form := huh.NewForm(huh.NewGroup(
+			huh.NewInput().Title("Minecraft version").Value(&answer),
+		)).WithInput(cmd.InOrStdin()).WithOutput(cmd.ErrOrStderr())
+		if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
 			return "", err
 		}
-		answer := strings.TrimSpace(text)
+		answer = strings.TrimSpace(answer)
 		if answer == "" {
 			return "", errors.New("a concrete --minecraft version is required")
 		}

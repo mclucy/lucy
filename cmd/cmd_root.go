@@ -1,12 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"charm.land/fang/v2"
 	"github.com/mclucy/lucy/internal/cli"
@@ -21,10 +21,14 @@ import (
 )
 
 var (
-	version          string
-	commit           string
-	executingCommand *cobra.Command
-	loggingReady     bool
+	version           string
+	commit            string
+	executingCommand  *cobra.Command
+	loggingReady      bool
+	selectedJSON      cli.JSONRendering
+	machineResult     bytes.Buffer
+	resultWriter      io.Writer
+	flagParsingFailed bool
 )
 
 var rootCmd = &cobra.Command{
@@ -32,11 +36,19 @@ var rootCmd = &cobra.Command{
 	Short: "The Minecraft server package manager",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		executingCommand = cmd
+		mode := effectiveRendering(cmd)
+		selectedJSON = mode
+		if mode == cli.JSONNone {
+			report.SetOutput(cmd.ErrOrStderr())
+		} else {
+			// Machine mode owns the streams: no human notice may join the
+			// result or error document.
+			report.SetOutput(io.Discard)
+		}
 		if err := configureLogging(cmd); err != nil {
 			return err
 		}
 		loggingReady = true
-		report.SetOutput(cmd.ErrOrStderr())
 		if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 			style.TurnOffStyles()
 			report.TurnOffColors()
@@ -48,15 +60,22 @@ var rootCmd = &cobra.Command{
 		if noInteractive, _ := cmd.Flags().GetBool(cli.FlagNoInteractive); noInteractive {
 			style.TurnOffInteractivity()
 		}
+		if mode != cli.JSONNone {
+			// Machine mode has no interactive surface: prompts fail and
+			// progress renderers stay off.
+			style.TurnOffInteractivity()
+		}
 		if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
 			directory, err := os.Getwd()
 			if err != nil {
 				log.Debug("action working directory unavailable", "error", err)
 			}
 			log.Info("action invoked", "action", cmd.CommandPath(), "directory", directory)
-			report.Warn(fmt.Errorf(
-				"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
-			))
+			if mode == cli.JSONNone {
+				report.Warn(fmt.Errorf(
+					"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
+				))
+			}
 		}
 		return nil
 	},
@@ -76,6 +95,12 @@ func configureLogging(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	// stderr carries exactly one document in machine mode, so terminal log
+	// mirroring stays off even when the caller passed --print-logs. The log
+	// file keeps recording everything.
+	if effectiveRendering(cmd) != cli.JSONNone {
+		printLogs = false
+	}
 	return log.Configure(path, level, printLogs)
 }
 
@@ -93,7 +118,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool(
 		cli.FlagPrintLogs,
 		false,
-		"Mirror diagnostic logs to stderr",
+		"Mirror diagnostic logs to stderr; machine output keeps stderr clean",
 	)
 	rootCmd.PersistentFlags().Bool(
 		cli.FlagJSON,
@@ -149,17 +174,51 @@ func init() {
 	)
 }
 
-// renderError keeps failures readable: structured details render their own
-// multi-line explanation, ordinary errors render on one line, and usage
-// mistakes keep the framework's format with its --help hint.
+// effectiveRendering reports the rendering requested by the actual
+// invocation. Parsed flags win; otherwise the raw command line is inspected,
+// so a failure that happens before Cobra parses flags still honors --json and
+// --json-compact.
+func effectiveRendering(cmd *cobra.Command) cli.JSONRendering {
+	if cmd.Flags().Parsed() && !flagParsingFailed {
+		return cli.JSONMode(cmd)
+	}
+	return cli.JSONModeFromArgs(cmd, os.Args[1:])
+}
+
+// invocationCommand finds the command the raw command line addresses, even
+// when Cobra stopped before setting executingCommand.
+func invocationCommand() *cobra.Command {
+	if executingCommand != nil {
+		return executingCommand
+	}
+	command, _, _ := rootCmd.Find(os.Args[1:])
+	if command != nil {
+		return command
+	}
+	return rootCmd
+}
+
+// renderError keeps human failures readable: structured details render their
+// own multi-line explanation, ordinary errors render on one line, and usage
+// mistakes keep the framework's format with its --help hint. Machine mode
+// defers rendering to the CLI boundary so the log file can close first and a
+// close failure joins the same document.
 func renderError(w io.Writer, styles fang.Styles, err error) {
+	if err == nil {
+		return
+	}
+	command := invocationCommand()
+	if mode := effectiveRendering(command); mode != cli.JSONNone {
+		selectedJSON = mode
+		return
+	}
 	var detail *report.Detail
-	if errors.As(err, &detail) {
+	if errors.As(err, &detail) && detail != nil {
 		report.RenderDetail(w, detail)
 		fmt.Fprintf(w, "  %s %s\n", style.Muted("log:"), log.FilePath())
 		return
 	}
-	if isUsageError(err) {
+	if cli.IsFrameworkUsageError(err) {
 		fang.DefaultErrorHandler(w, styles, err)
 		return
 	}
@@ -167,49 +226,91 @@ func renderError(w io.Writer, styles fang.Styles, err error) {
 	fmt.Fprintf(w, "  %s %s\n", style.Muted("log:"), log.FilePath())
 }
 
-// isUsageError keeps flag-parsing mistakes on the framework's surface, where
-// they come with the --help hint.
-func isUsageError(err error) bool {
-	message := err.Error()
-	for _, prefix := range []string{
-		"flag needs an argument:",
-		"unknown flag:",
-		"unknown shorthand flag:",
-		"unknown command",
-		"invalid argument",
-	} {
-		if strings.HasPrefix(message, prefix) {
-			return true
-		}
+// WriteError renders a failure through the same mode-aware funnel outside
+// command execution. main uses it for a log file that fails to close.
+func WriteError(err error) {
+	if err == nil {
+		return
 	}
-	return false
+	command := invocationCommand()
+	if mode := effectiveRendering(command); mode != cli.JSONNone {
+		selectedJSON = mode
+	}
+	output := cli.NewOperationOutput(command)
+	output.SetJSONRendering(selectedJSON)
+	output.WriteError(err, log.FilePath())
+}
+
+// JSONSelected reports whether the actual invocation selected machine output.
+func JSONSelected() bool {
+	return selectedJSON != cli.JSONNone
+}
+
+// FlushOutput publishes a machine result only after command cleanup succeeds.
+func FlushOutput() error {
+	if !JSONSelected() || resultWriter == nil {
+		return nil
+	}
+	if _, err := machineResult.WriteTo(resultWriter); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+	return nil
 }
 
 func Execute() error {
 	executingCommand = nil
 	loggingReady = false
-	err := fang.Execute(
-		context.Background(),
-		rootCmd,
-		fang.WithVersion(version),
-		fang.WithCommit(commit),
-		fang.WithErrorHandler(renderError),
-	)
+	flagParsingFailed = false
+	command := invocationCommand()
+	selectedJSON = cli.JSONModeFromArgs(command, os.Args[1:])
+	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		flagParsingFailed = true
+		return err
+	})
+	machineResult.Reset()
+	resultWriter = nil
+	if JSONSelected() {
+		resultWriter = rootCmd.OutOrStdout()
+		rootCmd.SetOut(&machineResult)
+		defer rootCmd.SetOut(resultWriter)
+	}
+	var err error
+	if JSONSelected() {
+		// Fang probes terminal colors before invoking its error handler.
+		// Machine mode must not emit those queries on the real stdout.
+		rootCmd.SilenceErrors = true
+		rootCmd.SilenceUsage = true
+		rootCmd.Version = version
+		_, err = rootCmd.ExecuteContextC(context.Background())
+	} else {
+		err = fang.Execute(
+			context.Background(),
+			rootCmd,
+			fang.WithVersion(version),
+			fang.WithCommit(commit),
+			fang.WithErrorHandler(renderError),
+		)
+	}
 	if err != nil {
 		command := executingCommand
 		if command == nil {
 			var findErr error
 			command, _, findErr = rootCmd.Find(os.Args[1:])
-			if findErr != nil {
+			if command == nil {
 				command = rootCmd
-				// Unknown commands fail before Cobra parses the persistent flags.
+			}
+			if findErr != nil {
+				// Unknown commands fail before Cobra parses the persistent
+				// flags. Keep the flag failure for the log without rendering a
+				// second human error.
 				if flagErr := rootCmd.ParseFlags(os.Args[1:]); flagErr != nil {
-					report.Error(flagErr)
 					err = errors.Join(err, flagErr)
 				}
 			}
 			if configureErr := configureLogging(command); configureErr != nil {
-				report.Error(configureErr)
+				if !JSONSelected() {
+					report.Error(configureErr)
+				}
 				return errors.Join(err, configureErr)
 			}
 			loggingReady = true
