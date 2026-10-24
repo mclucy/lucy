@@ -11,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/report"
+	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -310,7 +311,10 @@ func infoResolveProjectVersion(
 		minecraft = lock.Server.Minecraft.String()
 	}
 
-	loader := catalog.EcosystemUnspecified
+	loader := request.Ecosystem
+	if loader == catalog.EcosystemUnspecified {
+		loader = infoWorkspaceLoader(observed, lock)
+	}
 	if provider == catalog.ProviderMCDR {
 		loader = catalog.EcosystemMCDR
 	}
@@ -365,6 +369,29 @@ func infoResolveProjectVersion(
 		)}, nil
 	}
 	return selected, nil, nil
+}
+
+func infoWorkspaceLoader(observed *workspace.Workspace, lock *lockfile.Document) catalog.Ecosystem {
+	if selection := infoRuntimeSelection(observed); selection != nil {
+		return selection.Ecosystem()
+	}
+	if lock == nil {
+		return catalog.EcosystemUnspecified
+	}
+	for _, input := range lock.Server.Inputs {
+		for _, module := range input.Modules {
+			if module.Ecosystem.IsModding() {
+				return module.Ecosystem
+			}
+		}
+	}
+	match, ok := serverpkg.NormalizeProduct(catalog.VersionedRef{
+		Name: catalog.Name(lock.Server.Product.String()),
+	})
+	if ok {
+		return match.Ecosystem
+	}
+	return catalog.EcosystemUnspecified
 }
 
 func infoCandidateRegistry(
