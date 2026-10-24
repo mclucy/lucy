@@ -66,7 +66,21 @@ func TruncateMiddle(text string, width int) string {
 	}
 	left := (width - 1) / 2
 	right := width - 1 - left
-	return ansi.Cut(text, 0, left) + "…" + ansi.Cut(text, length-right, length)
+	prefix := ansi.Cut(text, 0, left)
+	suffix := ansi.Cut(text, length-right, length)
+	prefixWidth, suffixWidth := ansi.StringWidth(prefix), ansi.StringWidth(suffix)
+	for prefixWidth+1+suffixWidth > width {
+		if left > 0 {
+			left--
+			prefix = ansi.Cut(text, 0, left)
+			prefixWidth = ansi.StringWidth(prefix)
+		} else {
+			right--
+			suffix = ansi.Cut(text, length-right, length)
+			suffixWidth = ansi.StringWidth(suffix)
+		}
+	}
+	return prefix + "…" + suffix
 }
 
 // DisplayPath uses workspace-relative paths, then the user's home shorthand.
