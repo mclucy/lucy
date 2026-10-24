@@ -107,9 +107,9 @@ func translateSpongePlugin(
 		Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(plugin.ID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemSponge, Version: version.Version(v)},
 		FilePath: localPath,
 		Metadata: catalog.Metadata{
-			Title:   fn.Ternary(plugin.Name != "", plugin.Name, plugin.ID),
-			Brief:   plugin.Description,
-			License: metadata.License,
+			Title:       fn.Ternary(plugin.Name != "", plugin.Name, plugin.ID),
+			Description: plugin.Description,
+			License:     metadata.License,
 			Authors: translateSpongeContributors(
 				resolveSpongePluginContributors(metadata, plugin),
 			),

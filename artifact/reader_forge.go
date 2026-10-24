@@ -95,7 +95,6 @@ func readForgeModsToml(
 				Dependencies: dependencies,
 				Metadata: catalog.Metadata{
 					Title:       mod.DisplayName,
-					Brief:       mod.Description,
 					Description: mod.Description,
 					Authors:     []catalog.Person{{Name: mod.Authors}},
 					License:     modIdentifier.License,
