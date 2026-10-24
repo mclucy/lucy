@@ -348,9 +348,12 @@ func statusLockCompatibleEcosystems(
 			Compatibility: string(compatibility),
 		})
 	}
+	native := statusLockNativeEcosystems(lock)
+	for _, offer := range native {
+		add(offer.Ecosystem, offer.Compatibility)
+	}
 	productEcosystem := statusLockProductEcosystem(lock)
 	connectorBridge := statusLockHasConnectorBridge(lock)
-	add(productEcosystem, workspace.CompatFull)
 	for i := range lock.Packages {
 		pkg := &lock.Packages[i]
 		if !pkg.Enabled() || pkg.Environment != serverpkg.EnvironmentServer {
@@ -519,6 +522,26 @@ func statusConcreteVersion(version versionpkg.Version) bool {
 }
 
 // Native product support must not narrow to the packages currently declared.
+func statusLockNativeEcosystems(lock *lockfile.Document) []workspace.ServedEcosystem {
+	components := make([]catalog.VersionedRef, 0)
+	for _, input := range lock.Server.Inputs {
+		for _, module := range input.Modules {
+			components = append(components, catalog.VersionedRef{
+				Name:      catalog.Name(module.ID),
+				Version:   module.Version,
+				Ecosystem: module.Ecosystem,
+			})
+		}
+	}
+	return workspace.ProductServedEcosystems(
+		catalog.VersionedRef{
+			Name:    catalog.Name(lock.Server.Product.String()),
+			Version: lock.Server.CoreVersion,
+		},
+		components,
+	)
+}
+
 func statusLockProductEcosystem(lock *lockfile.Document) catalog.Ecosystem {
 	match, ok := serverpkg.NormalizeProduct(catalog.VersionedRef{
 		Name: catalog.Name(lock.Server.Product.String()),

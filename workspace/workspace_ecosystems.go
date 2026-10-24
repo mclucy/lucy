@@ -48,6 +48,15 @@ func (ws *Workspace) ServedEcosystems() []ServedEcosystem {
 	return offers
 }
 
+// ProductServedEcosystems derives native offers from a server product and its
+// loader components, independent of installed packages.
+func ProductServedEcosystems(
+	product catalog.VersionedRef,
+	components []catalog.VersionedRef,
+) []ServedEcosystem {
+	return productServedEcosystems(product.Name.String(), product, components)
+}
+
 // selectionServedEcosystems derives offers from the selected installation
 // identity only; installed packages never contribute.
 func selectionServedEcosystems(
@@ -57,11 +66,21 @@ func selectionServedEcosystems(
 		return nil
 	}
 
-	offers := make([]ServedEcosystem, 0, 3)
 	identity := selection.Installation.Identity
-	primary := identity.Primary
-	components := identity.Components
-	name := strings.ToLower(strings.TrimSpace(primary.Name.String()))
+	return productServedEcosystems(
+		identity.Primary.Name.String(),
+		identity.Primary,
+		identity.Components,
+	)
+}
+
+func productServedEcosystems(
+	name string,
+	primary catalog.VersionedRef,
+	components []catalog.VersionedRef,
+) []ServedEcosystem {
+	offers := make([]ServedEcosystem, 0, 3)
+	name = strings.ToLower(strings.TrimSpace(name))
 
 	switch name {
 	case "fabric":
@@ -94,15 +113,18 @@ func selectionServedEcosystems(
 			catalog.EcosystemBukkit,
 			CompatFull,
 		)
-	case "arclight":
-		for _, ecosystem := range selectedLoaderEcosystems(
-			components,
-		) {
-			offers = appendServedEcosystem(
-				offers,
-				ecosystem,
-				CompatFull,
-			)
+	case "arclight", "arclight-forge", "arclight-neoforge", "arclight-fabric":
+		switch name {
+		case "arclight-forge":
+			offers = appendServedEcosystem(offers, catalog.EcosystemForge, CompatFull)
+		case "arclight-neoforge":
+			offers = appendServedEcosystem(offers, catalog.EcosystemNeoForge, CompatFull)
+		case "arclight-fabric":
+			offers = appendServedEcosystem(offers, catalog.EcosystemFabric, CompatFull)
+		default:
+			for _, ecosystem := range selectedLoaderEcosystems(components) {
+				offers = appendServedEcosystem(offers, ecosystem, CompatFull)
+			}
 		}
 		if len(offers) > 0 {
 			offers = appendServedEcosystem(
