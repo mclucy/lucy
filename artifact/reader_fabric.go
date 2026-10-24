@@ -139,6 +139,10 @@ func translateFabricArtifactDependencyMap(
 			Mandatory:  mandatory,
 			Origin:     dependencyOriginForEmbedded(embedded),
 		}
+		switch id {
+		case "minecraft", "java", "fabricloader":
+			dep.Origin = catalog.DependencyServerProvided
+		}
 		if inverse {
 			dep.Constraint = dep.Constraint.Negate()
 		}
