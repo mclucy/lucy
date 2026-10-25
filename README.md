@@ -6,7 +6,7 @@
 **The package manager for Minecraft servers.**
 
 [![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml)
-[![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html)
+[![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/badge/coverage.html)
 [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE)
 
 [Documentation](https://lucy.lc/docs) | [English](README.md) | [中文](README_CN.md)

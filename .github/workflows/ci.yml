@@ -16,7 +16,7 @@ jobs:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:')) && !(github.event_name == 'pull_request' && github.event.action == 'labeled')"
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       code-quality: write
     steps:
       - uses: actions/checkout@v7
@@ -44,6 +44,15 @@ jobs:
           file: coverage.xml
           language: Go
           label: code-coverage/go
+
+      - name: Generate coverage badge
+        if: github.event_name != 'pull_request'
+        uses: ncruces/go-coverage-report@v0
+        with:
+          output-dir: badge
+          coverage-file: cover.out
+          badge-title: Coverage
+          amend: true
 
   build:
     if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:')) && !(github.event_name == 'pull_request' && github.event.action == 'labeled')"
