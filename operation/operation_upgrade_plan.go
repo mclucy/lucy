@@ -80,6 +80,18 @@ func resolveUpgradeOption(
 		if selected == nil {
 			return UpgradeOption{}, fmt.Errorf("resolution did not select %s", root.Reference)
 		}
+		if atLeast, comparable := upgradeVersionAtLeast(
+			selected.Version,
+			root.Previous.Version,
+			upgradeArtifactDialect(root.Ecosystem),
+		); comparable && !atLeast {
+			return UpgradeOption{}, fmt.Errorf(
+				"selected %s %s downgrades locked %s",
+				root.Reference,
+				selected.Version,
+				root.Previous.Version,
+			)
+		}
 		if root.Requirement.Selector.CanInfer() || root.Requirement.Selector == "" {
 			continue
 		}

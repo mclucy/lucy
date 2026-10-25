@@ -23,14 +23,83 @@ import (
 // intact.
 func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem) ([]catalog.DescriptorModule, error) {
 	if strings.EqualFold(filepath.Ext(filename), ".py") {
-		return inspectPython(ctx, filename)
+		modules, err := inspectPython(ctx, filename)
+		if err != nil {
+			return nil, err
+		}
+		return normalizeModules(modules), nil
 	}
 	z, err := zip.OpenReader(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer z.Close()
-	return inspectArchive(&z.Reader, loader, "", 0)
+	modules, err := inspectArchive(&z.Reader, loader, "", 0)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeModules(modules), nil
+}
+
+// normalizeModules makes descriptor order independent of map iteration. The
+// lock and plan hashes depend on this order.
+func normalizeModules(modules []catalog.DescriptorModule) []catalog.DescriptorModule {
+	for i := range modules {
+		slices.Sort(modules[i].Provides)
+		slices.SortFunc(modules[i].Dependencies, compareDescriptorDependency)
+	}
+	slices.SortFunc(modules, compareDescriptorModule)
+	return modules
+}
+
+func compareDescriptorModule(a, b catalog.DescriptorModule) int {
+	if n := strings.Compare(a.NestedPath, b.NestedPath); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.DescriptorPath, b.DescriptorPath); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.ID, b.ID); n != 0 {
+		return n
+	}
+	if n := strings.Compare(string(a.Version), string(b.Version)); n != 0 {
+		return n
+	}
+	return strings.Compare(string(a.Ecosystem), string(b.Ecosystem))
+}
+
+func compareDescriptorDependency(a, b catalog.DescriptorDependency) int {
+	if n := strings.Compare(string(a.Kind), string(b.Kind)); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.ID, b.ID); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.Constraint, b.Constraint); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.Ordering, b.Ordering); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.Phase, b.Phase); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.Load, b.Load); n != 0 {
+		return n
+	}
+	if a.JoinClasspath != b.JoinClasspath {
+		if a.JoinClasspath {
+			return 1
+		}
+		return -1
+	}
+	if n := strings.Compare(string(a.Provider), string(b.Provider)); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.ProjectID, b.ProjectID); n != 0 {
+		return n
+	}
+	return strings.Compare(a.ModuleID, b.ModuleID)
 }
 
 func nativeEntry(z *zip.Reader, name string) ([]byte, error) {

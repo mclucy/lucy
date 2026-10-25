@@ -118,3 +118,25 @@ func TestUpgradeBuildSelectorPrefersReleaseID(t *testing.T) {
 		t.Fatalf("upgradeBuildSelector() = %q, want the version fallback", selector)
 	}
 }
+
+func TestUpgradeVersionAtLeast(t *testing.T) {
+	atLeast, comparable := upgradeVersionAtLeast(
+		"0.3.1.3.0+1.21.4",
+		"0.3.2+alpha.0.30+1.21.4",
+		versionpkg.DialectMaven,
+	)
+	if !comparable {
+		t.Fatal("c2me-style versions were not comparable")
+	}
+	if atLeast {
+		t.Fatal("older release counted as at least the locked alpha")
+	}
+	atLeast, comparable = upgradeVersionAtLeast(
+		"0.3.2+alpha.0.45+1.21.4",
+		"0.3.2+alpha.0.30+1.21.4",
+		versionpkg.DialectMaven,
+	)
+	if !comparable || !atLeast {
+		t.Fatalf("newer alpha = %v, %v, want at least and comparable", atLeast, comparable)
+	}
+}

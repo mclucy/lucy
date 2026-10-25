@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -34,23 +35,10 @@ func upgradeVersions(
 		return nil, 0, 0, err
 	}
 	selector := root.Requirement.Selector
-	hasRelease := false
+	artifactEligible := make([]upstream.Candidate, 0, len(list))
 	for _, candidate := range list {
-		if candidate.Channel == upstream.ReleaseChannelRelease {
-			hasRelease = true
-			break
-		}
-	}
-	eligible := make([]upstream.Candidate, 0, len(list))
-	for _, candidate := range list {
-		locked := candidate.ReleaseID == root.Previous.ReleaseID &&
-			candidate.FileID == root.Previous.FileID
-		if !locked && selector == versionpkg.Stable && candidate.Channel != upstream.ReleaseChannelRelease {
-			continue
-		}
-		if !locked &&
-			(selector == versionpkg.Any || selector == "" || !selector.CanInfer()) &&
-			hasRelease && candidate.Channel != upstream.ReleaseChannelRelease {
+		if upgradeLockedBuild(candidate, root.Previous) {
+			artifactEligible = append(artifactEligible, candidate)
 			continue
 		}
 		if root.Requirement.FilePattern != "" {
@@ -62,6 +50,53 @@ func upgradeVersions(
 				continue
 			}
 		} else if !candidate.PrimaryFile {
+			continue
+		}
+		artifactEligible = append(artifactEligible, candidate)
+	}
+	var lockedCandidate *upstream.Candidate
+	for i := range artifactEligible {
+		if upgradeLockedBuild(artifactEligible[i], root.Previous) {
+			lockedCandidate = &artifactEligible[i]
+			break
+		}
+	}
+	if lockedCandidate == nil {
+		return nil, 0, 0, fmt.Errorf("locked version %s is no longer listed", root.Previous.Version)
+	}
+	dialect := upgradeArtifactDialect(root.Ecosystem)
+	withoutDowngrades := make([]upstream.Candidate, 0, len(artifactEligible))
+	for _, candidate := range artifactEligible {
+		if upgradeLockedBuild(candidate, root.Previous) {
+			withoutDowngrades = append(withoutDowngrades, candidate)
+			continue
+		}
+		if atLeast, comparable := upgradeVersionAtLeast(candidate.Version, lockedCandidate.Version, dialect); comparable {
+			if !atLeast {
+				continue
+			}
+		} else if !candidate.PublishedAt.IsZero() && !lockedCandidate.PublishedAt.IsZero() &&
+			candidate.PublishedAt.Before(lockedCandidate.PublishedAt) {
+			continue
+		}
+		withoutDowngrades = append(withoutDowngrades, candidate)
+	}
+	hasRelease := false
+	for _, candidate := range withoutDowngrades {
+		if candidate.Channel == upstream.ReleaseChannelRelease {
+			hasRelease = true
+			break
+		}
+	}
+	eligible := make([]upstream.Candidate, 0, len(withoutDowngrades))
+	for _, candidate := range withoutDowngrades {
+		locked := upgradeLockedBuild(candidate, root.Previous)
+		if !locked && selector == versionpkg.Stable && candidate.Channel != upstream.ReleaseChannelRelease {
+			continue
+		}
+		if !locked &&
+			(selector == versionpkg.Any || selector == "" || !selector.CanInfer()) &&
+			hasRelease && candidate.Channel != upstream.ReleaseChannelRelease {
 			continue
 		}
 		eligible = append(eligible, candidate)
@@ -174,4 +209,45 @@ func upgradeCombinations(roots []upgradeRoot, active []int, limit int) [][]int {
 		return 0
 	})
 	return combos
+}
+
+func upgradeLockedBuild(candidate upstream.Candidate, previous *lockfile.Package) bool {
+	if previous == nil {
+		return false
+	}
+	if previous.ReleaseID != "" || previous.FileID != "" {
+		return candidate.ReleaseID == previous.ReleaseID && candidate.FileID == previous.FileID
+	}
+	return candidate.Version == previous.Version
+}
+
+func upgradeArtifactDialect(ecosystem catalog.Ecosystem) versionpkg.Dialect {
+	switch ecosystem {
+	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
+		return versionpkg.DialectOpaque
+	default:
+		return versionpkg.DialectMaven
+	}
+}
+
+func upgradeVersionAtLeast(
+	candidate, locked versionpkg.Version,
+	dialect versionpkg.Dialect,
+) (bool, bool) {
+	if !dialect.Valid() || dialect == versionpkg.DialectOpaque {
+		return false, false
+	}
+	parsedCandidate, err := versionpkg.ParseVersion(candidate, dialect)
+	if err != nil {
+		return false, false
+	}
+	parsedLocked, err := versionpkg.ParseVersion(locked, dialect)
+	if err != nil {
+		return false, false
+	}
+	comparison, comparable := versionpkg.Compare(parsedCandidate, parsedLocked)
+	if !comparable {
+		return false, false
+	}
+	return comparison >= 0, true
 }
