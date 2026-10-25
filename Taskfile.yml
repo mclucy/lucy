@@ -272,7 +272,7 @@ tasks:
       - go run ./tools/gendocs {{.CLI_ARGS}}
 
   docs:check:
-    desc: Fail when the committed docs/docs.tar.gz differs from docs/*.mdx content
+    desc: Fail when the committed docs/docs.tar.gz differs from non-draft docs/*.mdx content
     cmds:
       - go run ./tools/gendocs -check
 
