@@ -13,6 +13,10 @@ import (
 )
 
 type (
+	requestOrigin uint8
+	releaseHint   struct {
+		releaseID string
+	}
 	projectKey struct {
 		environment serverpkg.Environment
 		ecosystem   catalog.Ecosystem
@@ -22,10 +26,30 @@ type (
 	projectRequest struct {
 		key          projectKey
 		display      string
+		origin       requestOrigin
 		requirements []lockfile.RequirementBinding
-		releaseIDs   []string
+		// releaseHints come from remote dependency metadata. Resolution
+		// currently treats them as exact pins; upgrades will use them as
+		// ordering preferences instead.
+		releaseHints []releaseHint
 	}
 )
+
+const (
+	originManifest requestOrigin = iota
+	originDependency
+)
+
+func (o requestOrigin) String() string {
+	switch o {
+	case originManifest:
+		return "manifest"
+	case originDependency:
+		return "dependency"
+	default:
+		return "unknown"
+	}
+}
 
 // Target identifies the server runtime whose compatibility rules package
 // resolution enforces.
