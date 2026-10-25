@@ -107,17 +107,17 @@ tasks:
             fi
           fi
         fi
-        GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-arm64
-        GOOS=windows GOARCH=amd64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-arm64
+        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-arm64
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
+      - "./docs/docs.tar.gz"
       - "./go.mod"
       - "./go.sum"
-
   clean:
     desc: Remove all generated build artifacts
     deps:
