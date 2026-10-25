@@ -18,18 +18,6 @@ on:
     secrets:
       CF_API_KEY:
         required: false
-  workflow_dispatch:
-    inputs:
-      force:
-        description: Run every domain regardless of changed paths.
-        required: false
-        type: boolean
-        default: true
-      compile-full:
-        description: Run every compile fixture instead of the smoke layer.
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read

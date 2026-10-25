@@ -1,13 +1,7 @@
 name: manifest-schema
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "manifest/*"
-      - .github/workflows/manifest-schema.yml
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: write
@@ -18,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - uses: actions/setup-go@v7
         with:
@@ -36,6 +30,6 @@ jobs:
             echo "Manifest schema is up to date."
           else
             git commit -m "chore(manifest): regenerate schema"
-            git push origin HEAD:main
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 

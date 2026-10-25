@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [main, master]
     types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -111,6 +112,8 @@ jobs:
       contents: read
       pull-requests: read
     uses: ./.github/workflows/e2e.yml
+    with:
+      force: ${{ github.event_name == 'workflow_dispatch' }}
     secrets:
       CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
@@ -126,6 +129,14 @@ jobs:
     secrets:
       CF_API_KEY: ${{ secrets.CF_API_KEY }}
 
+  manifest-schema:
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && (github.ref_name == 'main' || github.ref_name == 'master')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/manifest-schema.yml
+
   wiki:
     needs: test
     if: >-
@@ -133,6 +144,7 @@ jobs:
       && (
         (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
         || github.event_name == 'pull_request'
+        || github.event_name == 'workflow_dispatch'
       )
     permissions:
       contents: write
