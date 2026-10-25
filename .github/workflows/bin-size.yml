@@ -56,8 +56,7 @@ jobs:
           mkdir -p /tmp/pr-bins /tmp/main-bins
 
           python3 - <<'EOF'
-          import os, subprocess
-
+          import os, subprocess, textwrap
           targets = [
               ("linux-amd64", "linux", "amd64", ""),
               ("linux-arm64", "linux", "arm64", ""),
@@ -69,13 +68,14 @@ jobs:
           for name, goos, goarch, ext in targets:
               out = f"/tmp/pr-bins/lucy-{name}{ext}"
               cmd = ["go", "build", "-trimpath", "-ldflags=-w -s", "-tags=release,nethttpomithttp2", "-o", out]
-              subprocess.run(cmd, cwd="pr", check=True)
+              env = dict(os.environ, GOOS=goos, GOARCH=goarch)
+              subprocess.run(cmd, cwd="pr", env=env, check=True)
 
           for name, goos, goarch, ext in targets:
               out = f"/tmp/main-bins/lucy-{name}{ext}"
               cmd = ["go", "build", "-trimpath", "-ldflags=-w -s", "-tags=release,nethttpomithttp2", "-o", out]
-              subprocess.run(cmd, cwd="main", check=True)
-
+              env = dict(os.environ, GOOS=goos, GOARCH=goarch)
+              subprocess.run(cmd, cwd="main", env=env, check=True)
           def fmt(b):
               if abs(b) >= 1024 * 1024:
                   return f"{b / (1024*1024):.2f} MB"
@@ -94,7 +94,8 @@ jobs:
               rows.append(f"| `{name}` | {fmt(m_sz)} ({m_sz:,} B) | {fmt(p_sz)} ({p_sz:,} B) | **{sign}{fmt(diff)} ({sign}{pct:.2f}%)** {indicator} |")
 
           table = "\n".join(rows)
-          body = f"""### 📦 Binary Size Report (compared against `main`)
+          body = textwrap.dedent(f"""\
+          ### 📦 Binary Size Report (compared against `main`)
 
           | Target | `main` | PR | Change |
           | :--- | :--- | :--- | :--- |
@@ -102,8 +103,7 @@ jobs:
 
           *Automated check triggered by changes to `go.mod` / `go.sum`.*
           <!-- lucy-binary-size-report -->
-          """
-
+          """)
           with open("/tmp/report.md", "w") as f:
               f.write(body)
           EOF
