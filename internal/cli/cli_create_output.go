@@ -8,6 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/shell"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	serverpkg "github.com/mclucy/lucy/server"
@@ -221,14 +222,7 @@ func createInstallCommand(workspace string) string {
 	if path == "." || path == "" {
 		return "lucy install"
 	}
-	return "cd " + quoteCreatePath(path) + " && lucy install"
-}
-
-func quoteCreatePath(path string) string {
-	if !strings.ContainsAny(path, " \t'\"\\$`") {
-		return path
-	}
-	return "'" + strings.ReplaceAll(path, "'", "'\\''") + "'"
+	return "cd " + shell.Quote(path) + " && lucy install"
 }
 
 func fileCountLabel(count int) string {

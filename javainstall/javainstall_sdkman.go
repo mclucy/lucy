@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/internal/shell"
 	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
 )
@@ -96,8 +97,8 @@ func (sdkman) plans(ctx context.Context, req Request) ([]Plan, error) {
 			Args: []string{
 				"bash",
 				"-c",
-				"source " + shellQuote(initScript) +
-					" && sdk install java " + shellQuote(id),
+				"source " + shell.Quote(initScript) +
+					" && sdk install java " + shell.Quote(id),
 			},
 			Elevation: ElevationNone,
 			// "n" keeps SDKMAN from making the new candidate the default.
