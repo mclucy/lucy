@@ -11,187 +11,322 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-// finalizeModules checks module requirements against the target and prunes
+// moduleKey scopes a module identity so identically named modules in
+// different environments or ecosystems stay distinct.
+type moduleKey struct {
+	environment serverpkg.Environment
+	ecosystem   catalog.Ecosystem
+	id          string
+}
+
+// moduleSource names the artifact a module came from. The offsets identify the
+// declaration inside its package; runtime modules have no package.
+type moduleSource struct {
+	packageIndex int
+	moduleIndex  int
+}
+
+func (s moduleSource) owns(packageIndex, moduleIndex int) bool {
+	return s.packageIndex == packageIndex && s.moduleIndex == moduleIndex
+}
+
+func (s moduleSource) runtime() bool {
+	return s.packageIndex < 0
+}
+
+// moduleProvider is the module that answers one identity, together with the
+// coordinates a dependency binds to.
+type moduleProvider struct {
+	source    moduleSource
+	module    catalog.DescriptorModule
+	provider  catalog.Provider
+	projectID string
+}
+
+// finalizeModules checks module requirements against the target and drops
 // modules that lose to another selected module with the same identity. It
 // returns the problems it found; only an unparsable or ambiguous module
 // identity is an error.
 func finalizeModules(packages []lockfile.Package, target Target) ([]ModuleProblem, error) {
-	type selected struct{ packageIndex, moduleIndex int }
-	index := map[struct {
-		environment serverpkg.Environment
-		ecosystem   catalog.Ecosystem
-		id          string
-	}]selected{}
+	index, err := buildModuleIndex(packages)
+	if err != nil {
+		return nil, err
+	}
+	runtime := runtimeModules(target)
 	var problems []ModuleProblem
+	surviving := make([][]catalog.DescriptorModule, len(packages))
+	for pi := range packages {
+		p := &packages[pi]
+		if !p.Enabled() {
+			continue
+		}
+		for mi := range p.Modules {
+			m := p.Modules[mi]
+			key := moduleKey{
+				p.Environment,
+				p.Ecosystem,
+				normalizeModuleID(m.Ecosystem, m.ID),
+			}
+			if owner, ok := index[key]; !ok || !owner.source.owns(pi, mi) {
+				continue
+			}
+			problems = append(
+				problems,
+				checkModuleDependencies(p, m, target, index, runtime)...,
+			)
+			surviving[pi] = append(surviving[pi], m)
+		}
+	}
+	// Assignment happens only after every package has been checked, so a
+	// lookup never observes a compacted module list.
+	for pi := range packages {
+		if !packages[pi].Enabled() {
+			continue
+		}
+		packages[pi].Modules = surviving[pi]
+	}
+	return problems, nil
+}
+
+// buildModuleIndex resolves every module identity to the declaration that
+// answers it. A native module outranks a bundled copy of the same identity;
+// two bundled copies compare versions. Two native modules in different
+// packages are ambiguous.
+func buildModuleIndex(packages []lockfile.Package) (map[moduleKey]moduleProvider, error) {
+	index := map[moduleKey]moduleProvider{}
 	for pi := range packages {
 		p := &packages[pi]
 		if !p.Enabled() {
 			continue
 		}
 		for mi, m := range p.Modules {
+			candidate := moduleProvider{
+				source:    moduleSource{packageIndex: pi, moduleIndex: mi},
+				module:    m,
+				provider:  p.Provider,
+				projectID: p.ProjectID,
+			}
 			names := append([]string{m.ID}, m.Provides...)
 			for _, name := range names {
-				if m.Ecosystem == catalog.EcosystemBukkit || m.Ecosystem == catalog.EcosystemPaper {
-					name = strings.ToLower(name)
+				key := moduleKey{
+					p.Environment,
+					p.Ecosystem,
+					normalizeModuleID(m.Ecosystem, name),
 				}
-				key := struct {
-					environment serverpkg.Environment
-					ecosystem   catalog.Ecosystem
-					id          string
-				}{p.Environment, p.Ecosystem, name}
-				if old, ok := index[key]; ok {
-					previous := packages[old.packageIndex].Modules[old.moduleIndex]
-					if m.NestedPath == "" && previous.NestedPath == "" && pi != old.packageIndex {
-						return nil, fmt.Errorf("duplicate native module %s in %s and %s", name, p.Filename, packages[old.packageIndex].Filename)
-					}
-					if previous.NestedPath == "" {
-						continue
-					}
-					if m.NestedPath != "" {
-						a, err := versionpkg.ParseVersion(
-							previous.Version,
-							previous.VersionDialect,
-						)
-						if err != nil {
-							return nil, err
-						}
-						b, err := versionpkg.ParseVersion(
-							m.Version,
-							m.VersionDialect,
-						)
-						if err != nil {
-							return nil, err
-						}
-						comparison, isComparable := versionpkg.Compare(a, b)
-						if !isComparable {
-							return nil, fmt.Errorf("incomparable nested module versions %s and %s", previous.Version, m.Version)
-						}
-						if comparison >= 0 {
-							continue
-						}
-					}
-				}
-				index[key] = selected{pi, mi}
-			}
-		}
-	}
-	for pi := range packages {
-		p := &packages[pi]
-		if !p.Enabled() {
-			continue
-		}
-		var selectedModules []catalog.DescriptorModule
-		for mi := range p.Modules {
-			m := p.Modules[mi]
-			id := m.ID
-			if m.Ecosystem == catalog.EcosystemBukkit || m.Ecosystem == catalog.EcosystemPaper {
-				id = strings.ToLower(id)
-			}
-			key := struct {
-				environment serverpkg.Environment
-				ecosystem   catalog.Ecosystem
-				id          string
-			}{p.Environment, p.Ecosystem, id}
-			if match := index[key]; match.packageIndex != pi || match.moduleIndex != mi {
-				continue
-			}
-			for di := range m.Dependencies {
-				dep := &m.Dependencies[di]
-				// A Java requirement is checked against the Java runtime that
-				// runs the server, and only warns.
-				if dep.Kind == catalog.DependencyKindPython || dep.ID == "java" {
+				previous, ok := index[key]
+				if !ok {
+					index[key] = candidate
 					continue
 				}
-				value := ""
-				builtin := true
-				switch dep.ID {
-				case "minecraft":
-					value = string(target.Minecraft)
-				case "fabricloader":
-					if target.Product == serverpkg.ProductFabric {
-						value = string(target.CoreVersion)
-					}
-				case "forge", "neoforge":
-					if dep.ID == target.Product.String() {
-						value = string(target.CoreVersion)
-					}
-				case "mcdreforged":
-					value = target.MCDRVersion
-				default:
-					builtin = false
+				keep, err := moduleWins(
+					previous,
+					candidate,
+					packages[previous.source.packageIndex].Filename,
+					p.Filename,
+					name,
+				)
+				if err != nil {
+					return nil, err
 				}
-				var owner *lockfile.Package
-				var ownerModule *catalog.DescriptorModule
-				if !builtin {
-					name := dep.ID
-					if p.Ecosystem == catalog.EcosystemBukkit || p.Ecosystem == catalog.EcosystemPaper {
-						name = strings.ToLower(name)
-					}
-					if match, ok := index[struct {
-						environment serverpkg.Environment
-						ecosystem   catalog.Ecosystem
-						id          string
-					}{p.Environment, p.Ecosystem, name}]; ok {
-						owner = &packages[match.packageIndex]
-						ownerModule = &owner.Modules[match.moduleIndex]
-						value = string(ownerModule.Version)
-					}
-				}
-				matched := value != ""
-				invalid := false
-				if fmlLoader(target) && value == "0.0NONE" {
-					// FMLLoader treats the 0.0NONE sentinel as satisfying every range.
-					matched = true
-				} else if matched && dep.Constraint != "" {
-					var err error
-					matched, err = versionpkg.Match(
-						dep.Constraint,
-						versionpkg.Version(value),
-						m.VersionDialect,
-					)
-					if err != nil {
-						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
-						invalid = true
-					}
-				}
-				if !invalid && dep.Constraint != "" && !matched {
-					compatible, err := matchesLoaderCompatibility(
-						dep.Constraint,
-						dep.ID,
-						target,
-						m.VersionDialect,
-					)
-					if err != nil {
-						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
-						invalid = true
-					} else {
-						matched = compatible
-					}
-				}
-				requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
-				if !invalid && dep.Kind == catalog.DependencyKindRequired && !matched {
-					if value == "" {
-						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s, which no selected package provides", m.ID, requirement)))
-					} else {
-						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s (selected %s)", m.ID, requirement, value)))
-					}
-				}
-				if !invalid && dep.Kind == catalog.DependencyKindIncompatible && matched {
-					problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s breaks %s %s", m.ID, dep.ID, value)))
-				}
-				if matched {
-					if owner != nil {
-						dep.Provider = owner.Provider
-						dep.ProjectID = owner.ProjectID
-						dep.ModuleID = ownerModule.ID
-					} else {
-						dep.ModuleID = dep.ID
-					}
+				if !keep {
+					index[key] = candidate
 				}
 			}
-			selectedModules = append(selectedModules, m)
 		}
-		p.Modules = selectedModules
 	}
-	return problems, nil
+	return index, nil
+}
+
+// moduleWins reports whether the module already indexed keeps the identity.
+func moduleWins(
+	previous moduleProvider,
+	candidate moduleProvider,
+	previousFile string,
+	candidateFile string,
+	name string,
+) (bool, error) {
+	previousNative := previous.module.NestedPath == ""
+	candidateNative := candidate.module.NestedPath == ""
+	if previousNative && candidateNative {
+		if previous.source.packageIndex == candidate.source.packageIndex {
+			return true, nil
+		}
+		return false, fmt.Errorf(
+			"duplicate native module %s in %s and %s",
+			name,
+			candidateFile,
+			previousFile,
+		)
+	}
+	if previousNative {
+		return true, nil
+	}
+	if candidateNative {
+		return false, nil
+	}
+	a, err := versionpkg.ParseVersion(
+		previous.module.Version,
+		previous.module.VersionDialect,
+	)
+	if err != nil {
+		return false, err
+	}
+	b, err := versionpkg.ParseVersion(
+		candidate.module.Version,
+		candidate.module.VersionDialect,
+	)
+	if err != nil {
+		return false, err
+	}
+	comparison, comparable := versionpkg.Compare(a, b)
+	if !comparable {
+		return false, fmt.Errorf(
+			"incomparable nested module versions %s and %s",
+			previous.module.Version,
+			candidate.module.Version,
+		)
+	}
+	return comparison >= 0, nil
+}
+
+// runtimeModules reports the modules the runtime itself provides. They answer
+// requirements before any package does, the same way a loader resolves its own
+// modules before the package graph.
+func runtimeModules(target Target) map[string]catalog.DescriptorModule {
+	modules := map[string]catalog.DescriptorModule{}
+	add := func(module catalog.DescriptorModule) {
+		id := normalizeModuleID(module.Ecosystem, module.ID)
+		if id == "" {
+			return
+		}
+		if _, ok := modules[id]; ok {
+			return
+		}
+		modules[id] = module
+	}
+	add(catalog.DescriptorModule{
+		ID:        "minecraft",
+		Version:   target.Minecraft,
+		Ecosystem: catalog.EcosystemMinecraft,
+	})
+	switch target.Product {
+	case serverpkg.ProductFabric:
+		add(catalog.DescriptorModule{
+			ID:        "fabricloader",
+			Version:   target.CoreVersion,
+			Ecosystem: catalog.EcosystemFabric,
+		})
+	case serverpkg.ProductForge:
+		add(catalog.DescriptorModule{
+			ID:        "forge",
+			Version:   target.CoreVersion,
+			Ecosystem: catalog.EcosystemForge,
+		})
+	case serverpkg.ProductNeoForge:
+		add(catalog.DescriptorModule{
+			ID:        "neoforge",
+			Version:   target.CoreVersion,
+			Ecosystem: catalog.EcosystemNeoForge,
+		})
+	}
+	if target.MCDRVersion != "" {
+		add(catalog.DescriptorModule{
+			ID:        "mcdreforged",
+			Version:   versionpkg.Version(target.MCDRVersion),
+			Ecosystem: catalog.EcosystemMCDR,
+		})
+	}
+	return modules
+}
+
+func normalizeModuleID(ecosystem catalog.Ecosystem, id string) string {
+	if ecosystem == catalog.EcosystemBukkit || ecosystem == catalog.EcosystemPaper {
+		return strings.ToLower(id)
+	}
+	return id
+}
+
+func checkModuleDependencies(
+	p *lockfile.Package,
+	m catalog.DescriptorModule,
+	target Target,
+	index map[moduleKey]moduleProvider,
+	runtime map[string]catalog.DescriptorModule,
+) []ModuleProblem {
+	var problems []ModuleProblem
+	for di := range m.Dependencies {
+		dep := &m.Dependencies[di]
+		// A Java requirement is checked against the Java runtime that runs
+		// the server, and only warns.
+		if dep.Kind == catalog.DependencyKindPython || dep.ID == "java" {
+			continue
+		}
+		value := ""
+		var owner *moduleProvider
+		if module, ok := runtime[normalizeModuleID(p.Ecosystem, dep.ID)]; ok {
+			value = string(module.Version)
+		} else {
+			key := moduleKey{
+				p.Environment,
+				p.Ecosystem,
+				normalizeModuleID(p.Ecosystem, dep.ID),
+			}
+			if provider, ok := index[key]; ok {
+				owner = &provider
+				value = string(provider.module.Version)
+			}
+		}
+		matched := value != ""
+		invalid := false
+		if fmlLoader(target) && value == "0.0NONE" {
+			// FMLLoader treats the 0.0NONE sentinel as satisfying every range.
+			matched = true
+		} else if matched && dep.Constraint != "" {
+			var err error
+			matched, err = versionpkg.Match(
+				dep.Constraint,
+				versionpkg.Version(value),
+				m.VersionDialect,
+			)
+			if err != nil {
+				problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
+				invalid = true
+			}
+		}
+		if !invalid && dep.Constraint != "" && !matched {
+			compatible, err := matchesLoaderCompatibility(
+				dep.Constraint,
+				dep.ID,
+				target,
+				m.VersionDialect,
+			)
+			if err != nil {
+				problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
+				invalid = true
+			} else {
+				matched = compatible
+			}
+		}
+		requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
+		if !invalid && dep.Kind == catalog.DependencyKindRequired && !matched {
+			if value == "" {
+				problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s, which no selected package provides", m.ID, requirement)))
+			} else {
+				problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s (selected %s)", m.ID, requirement, value)))
+			}
+		}
+		if !invalid && dep.Kind == catalog.DependencyKindIncompatible && matched {
+			problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s breaks %s %s", m.ID, dep.ID, value)))
+		}
+		if matched {
+			if owner != nil && !owner.source.runtime() {
+				dep.Provider = owner.provider
+				dep.ProjectID = owner.projectID
+				dep.ModuleID = owner.module.ID
+			} else {
+				dep.ModuleID = dep.ID
+			}
+		}
+	}
+	return problems
 }
