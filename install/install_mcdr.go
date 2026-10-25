@@ -64,9 +64,10 @@ func latestMCDRVersion(ctx context.Context) (version.Version, error) {
 // mcdrPythonRequirements returns the pip requirements that the locked MCDR
 // package set needs. The interpreter resolves and downloads wheels on the
 // machine that runs install, so no Python version or wheel is recorded in the
-// portable lock.
+// portable lock. The isolated environment is keyed by this list, so a changed
+// list provisions a fresh environment.
 func mcdrPythonRequirements(d *lockfile.Document) []string {
-	if d.MCDR == nil {
+	if d == nil || d.MCDR == nil {
 		return nil
 	}
 	requirements := []string{"mcdreforged==" + string(d.MCDR.Version)}
