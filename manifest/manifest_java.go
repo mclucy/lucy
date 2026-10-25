@@ -127,8 +127,10 @@ func normalizeJava(s *Server) error {
 	if s.Java.Version != 0 && s.Java.Version < MinimumJava {
 		return fmt.Errorf("server.java.version must be %d or later", MinimumJava)
 	}
-	if _, ok := java.ParseDistribution(string(s.Java.Distribution)); !ok {
+	distribution, ok := java.ParseDistribution(string(s.Java.Distribution))
+	if !ok {
 		return fmt.Errorf("unknown Java distribution %q", s.Java.Distribution)
 	}
+	s.Java.Distribution = distribution
 	return nil
 }
