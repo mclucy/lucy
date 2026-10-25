@@ -83,8 +83,6 @@ type statusPackage struct {
 type statusMCDR struct {
 	Directory string `json:"directory"`
 	Version   string `json:"version"`
-	Python    string `json:"python"`
-	Target    string `json:"target"`
 }
 
 func newStatusDocument(source, root string) statusDocument {
@@ -276,8 +274,6 @@ func newLockStatusDocument(
 		document.MCDR = &statusMCDR{
 			Directory: statusRelativePath(root, lock.MCDR.Directory),
 			Version:   lock.MCDR.Version.String(),
-			Python:    lock.MCDR.Python,
-			Target:    lock.MCDR.Target,
 		}
 	}
 	document.Packages = make([]statusPackage, 0, len(lock.Packages))

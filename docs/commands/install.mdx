@@ -49,6 +49,12 @@ Lucy stores each downloaded file once, keyed by its SHA-256 hash. If several req
 
 `lucy cache clear` removes the global download cache but not files in the current project. Run an online installation to refill the cache before relying on `--offline`.
 
+### MCDReforged
+
+By default, `lucy install` runs the MCDReforged executable already on `PATH` and requires Python 3.8 or newer there. If either is missing, installation fails and names `--mcdr-venv` as the alternative.
+
+`lucy install --mcdr-venv` creates an isolated environment under the server directory instead. It prefers `uv` when available and otherwise uses `python3` or the interpreter named by `LUCY_PYTHON`. Python versions and wheels are not recorded in the lock, so the same lock can be installed on another operating system. An offline installation into a new machine needs the isolated environment to have been provisioned online once; a global MCDReforged installation needs no network.
+
 ## Lock file shape
 
 The lock has top-level `lock_version`, `manifest_fingerprint`, `server`, an optional `mcdr`, a flat `packages` list, and optional `files` declarations.
@@ -183,4 +189,8 @@ When resolution cannot satisfy a package, the error names the package, how many 
 
 <ParamField query="--add-java-repository" type="boolean" default="false">
   Let `--java` add the Java vendor's package repository to the system package manager. Requires `--java`.
+</ParamField>
+
+<ParamField query="--mcdr-venv" type="boolean" default="false">
+  Create an isolated MCDReforged environment instead of using the global `mcdreforged` executable. Uses `uv` when available, otherwise `python3` or `LUCY_PYTHON`.
 </ParamField>

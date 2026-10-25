@@ -20,6 +20,7 @@ const (
 	flagInstallForceName        = "force"
 	flagInstallJavaName         = "java"
 	flagInstallJavaRepoName     = "add-java-repository"
+	flagInstallMCDRVenvName     = "mcdr-venv"
 )
 
 var installCmd = &cobra.Command{
@@ -72,6 +73,11 @@ func NewInstallCommand() *cobra.Command {
 		false,
 		"Let --java add the Java vendor's package repository to the system package manager",
 	)
+	installCmd.Flags().Bool(
+		flagInstallMCDRVenvName,
+		false,
+		"Create an isolated MCDReforged Python environment instead of using the global MCDReforged executable",
+	)
 	return installCmd
 }
 
@@ -89,6 +95,7 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 	force, _ := cmd.Flags().GetBool(flagInstallForceName)
 	installJava, _ := cmd.Flags().GetBool(flagInstallJavaName)
 	addJavaRepository, _ := cmd.Flags().GetBool(flagInstallJavaRepoName)
+	mcdrVenv, _ := cmd.Flags().GetBool(flagInstallMCDRVenvName)
 	if addJavaRepository && !installJava {
 		return fmt.Errorf("--%s needs --%s", flagInstallJavaRepoName, flagInstallJavaName)
 	}
@@ -99,6 +106,7 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 		AcceptBroken:    acceptBroken || force,
 		Overwrite:       overwrite || force,
 		WithOptional:    withOptional,
+		MCDRVenv:        mcdrVenv,
 		PublishManifest: false,
 	}
 

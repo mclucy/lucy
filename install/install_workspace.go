@@ -31,6 +31,9 @@ type (
 		Overwrite       bool
 		PublishManifest bool
 		WithOptional    bool
+		// MCDRVenv creates an isolated MCDReforged environment instead of
+		// requiring a global executable.
+		MCDRVenv bool
 		// ExpectedManifest pins the manifest fingerprint the caller selected
 		// packages from, so a concurrent edit fails instead of being
 		// overwritten.
@@ -216,6 +219,11 @@ func stageInstall(
 		if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 			return nil, err
 		}
+		if resolved.MCDR != nil {
+			if err := ensureMCDRRuntime(ctx, root, resolved, store, opts.MCDRVenv); err != nil {
+				return nil, err
+			}
+		}
 		if opts.publishLock {
 			if err := lockfile.Write(root, resolved); err != nil {
 				return nil, err
@@ -314,7 +322,7 @@ func stageInstall(
 	}
 	log.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
 	if resolved.MCDR != nil {
-		if err := preparePython(ctx, root, stage, resolved, store); err != nil {
+		if err := preparePython(ctx, root, stage, resolved, store, opts.MCDRVenv); err != nil {
 			return nil, err
 		}
 	}

@@ -75,20 +75,15 @@ func detectMCDRWrapper(dir string, wrappers *WrapperInfo) []error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	version := versionpkg.Unknown
-	output, err := exec.CommandContext(ctx, "mcdreforged", "--version").Output()
-	if err != nil {
-		warnErr := fmt.Errorf(
-			"cannot execute mcdr, is it in your $PATH?: %w",
-			err,
-		)
-		log.Warn(warnErr)
-		warnings = append(warnings, warnErr)
-	} else if fields := strings.Fields(string(output)); len(fields) > 1 {
-		version = versionpkg.Version(fields[1])
-	} else {
-		warnErr := fmt.Errorf("cannot parse mcdr version output")
-		log.Warn(warnErr)
-		warnings = append(warnings, warnErr)
+	// MCDReforged is provisioned by install, so absence from PATH is normal.
+	if output, err := exec.CommandContext(ctx, "mcdreforged", "--version").Output(); err == nil {
+		if fields := strings.Fields(string(output)); len(fields) > 1 {
+			version = versionpkg.Version(fields[1])
+		} else {
+			warnErr := fmt.Errorf("cannot parse mcdr version output")
+			log.Warn(warnErr)
+			warnings = append(warnings, warnErr)
+		}
 	}
 
 	wrappers.MCDR = &MCDREnv{

@@ -319,18 +319,6 @@ func TestFileRootRelativeMCDRWrapperLayout(t *testing.T) {
 		MCDR: &lockfile.MCDR{
 			Directory: ".",
 			Version:   "2.14.0",
-			Python:    "3.12.4",
-			Target:    "linux-x86_64",
-			Inputs: []server.BootstrapInput{{
-				Path: "mcdreforged.pyz",
-				Artifact: catalog.Artifact{
-					Provider: "mcdr",
-					Version:  "2.14.0",
-					Filename: "mcdreforged.pyz",
-					URL:      "https://example.invalid/mcdreforged.pyz",
-					Hashes:   map[string]string{"sha256": digestHex([]byte("wrapper runtime"))},
-				},
-			}},
 		},
 	}
 	w.writeLock(t, lock)

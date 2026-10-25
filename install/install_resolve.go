@@ -7,7 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
@@ -160,17 +159,15 @@ func resolveInstall(
 		if old != nil && old.MCDR != nil && isFloating(request) {
 			request = old.MCDR.Version
 		}
-		opts.Trace.phaseStarted("python environment")
-		start := time.Now()
-		environment, err := prepareMCDR(ctx, root, d.MCDR.Directory, request, nil, store)
+		resolvedVersion, err := resolveMCDRVersion(ctx, request, old, opts.Offline)
 		if err != nil {
 			return nil, err
 		}
-		elapsed := time.Since(start)
-		result.addPhase("python environment", elapsed)
-		opts.Trace.phaseDone(PhaseInfo{Name: "python environment", Elapsed: elapsed})
-		resolved.MCDR = environment
-		mcdrVersion = string(environment.Version)
+		resolved.MCDR = &lockfile.MCDR{
+			Directory: d.MCDR.Directory,
+			Version:   resolvedVersion,
+		}
+		mcdrVersion = string(resolvedVersion)
 	}
 	opts.Trace.phaseStarted("packages")
 	start := time.Now()
@@ -234,23 +231,6 @@ func resolveInstall(
 			return nil, err
 		}
 		opts.PublishManifest = true
-	}
-	if d.MCDR != nil {
-		var requirements []string
-		for _, p := range packages {
-			for _, m := range p.Modules {
-				for _, dep := range m.Dependencies {
-					if dep.Kind == catalog.DependencyKindPython {
-						requirements = append(requirements, dep.ID)
-					}
-				}
-			}
-		}
-		environment, err := prepareMCDR(ctx, root, d.MCDR.Directory, resolved.MCDR.Version, requirements, store)
-		if err != nil {
-			return nil, err
-		}
-		resolved.MCDR = environment
 	}
 	return resolved, nil
 }

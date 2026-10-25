@@ -49,7 +49,7 @@ mcdr:
 - Package keys use the form `modrinth:project`, `curseforge:project`, or `mcdr:project`, grouped by mod or plugin type. The groups in `server.packages` are `fabric`, `forge`, `neoforge`, `bukkit`, and `paper`; MCDR plugins live under `mcdr.packages`. Put Bukkit-only plugins under `bukkit` and Paper-specific plugins under `paper`.
 - A package value is either a version rule (`any`, `stable`, `beta`, a tag, or an exact version) or an object with `selector`, `file_pattern`, and `enabled`. The default version rule is `any`.
 
-`mcdr.version` refers to MCDReforged itself, not a plugin. When present, `lucy` provisions an isolated Python environment for it and keeps MCDR plugins in their own section.
+`mcdr.version` refers to MCDReforged itself, not a plugin. When present, `lucy install` uses the global MCDReforged executable, or provisions an isolated environment with `--mcdr-venv`, and keeps MCDR plugins in their own section. `lucy init` records the version without touching Python.
 
 ## Minecraft and server version are validated together
 

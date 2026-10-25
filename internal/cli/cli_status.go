@@ -97,6 +97,18 @@ func actionStatusLive(
 	}
 
 	document := newLiveStatusDocument(observed, root)
+	if document.MCDR == nil ||
+		document.MCDR.Version == "" ||
+		document.MCDR.Version == versionpkg.Unknown.String() {
+		// MCDReforged is provisioned locally, so a missing global executable
+		// leaves the observation unknown. The lock carries the managed version.
+		if lock, err := lockfile.Read(root); err == nil && lock.MCDR != nil {
+			document.MCDR = &statusMCDR{
+				Directory: statusRelativePath(root, lock.MCDR.Directory),
+				Version:   lock.MCDR.Version.String(),
+			}
+		}
+	}
 	document.Warnings = append(document.Warnings, output.Warnings()...)
 	return writeStatusDocument(output, document, long, logoMode)
 }

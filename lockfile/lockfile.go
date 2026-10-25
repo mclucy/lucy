@@ -72,11 +72,8 @@ func NewJava(advisory int, override *manifest.Java) Java {
 }
 
 type MCDR struct {
-	Directory string                  `yaml:"directory" json:"directory"`
-	Version   version.Version         `yaml:"version" json:"version"`
-	Python    string                  `yaml:"python" json:"python"`
-	Target    string                  `yaml:"target" json:"target"`
-	Inputs    []server.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
+	Directory string          `yaml:"directory" json:"directory"`
+	Version   version.Version `yaml:"version" json:"version"`
 }
 
 func (d *Document) Validate() error {
@@ -122,12 +119,6 @@ func (d *Document) Validate() error {
 		}
 		if err := validateVersion("mcdr.version", d.MCDR.Version, false); err != nil {
 			return err
-		}
-		if d.MCDR.Python == "" {
-			return fmt.Errorf("mcdr.python is required")
-		}
-		if d.MCDR.Target == "" {
-			return fmt.Errorf("mcdr.target is required")
 		}
 	}
 	for i := range d.Packages {

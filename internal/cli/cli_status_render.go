@@ -720,8 +720,5 @@ func statusViewMCDRFact(mcdr *statusMCDR) terminal.Fact {
 	if value == "" {
 		value = "installed"
 	}
-	if python := strings.TrimSpace(mcdr.Python); python != "" {
-		value += "   " + style.Muted("Python "+python)
-	}
 	return terminal.Fact{Key: "MCDR", Value: value}
 }
