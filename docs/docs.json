@@ -18,6 +18,7 @@
         "group": "Commands",
         "pages": [
           "commands/global-flags",
+          "commands/create",
           "commands/init",
           "commands/install",
           "commands/java",

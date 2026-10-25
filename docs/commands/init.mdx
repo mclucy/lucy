@@ -85,7 +85,7 @@ lucy init --entry-point fabric-server-launch.jar
 
 In a declared workspace, Lucy keeps the server selected by the matching manifest and lock. If one launcher disappears, another recognized launcher for the same server can take its place, whether or not Lucy installed that file. Conflicting server software or known versions do not satisfy the saved choice. If the selected installation is missing or several installations still match, init refuses to choose. Use `--force --entry-point <path>` to adopt a different installed server.
 
-If no server is detected, `lucy init` errors. To write a manifest for a server that does not exist yet, use `lucy create` instead.
+If no server is detected, `lucy init` errors. To create a new server, use [`lucy create`](/commands/create). It writes the manifest and lock and can install the server files in the same step.
 
 An existing `lucy.yaml` is never overwritten silently — `lucy init` stops and tells you to pass `--force`.
 
