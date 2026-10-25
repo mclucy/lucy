@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"charm.land/fang/v2"
@@ -358,7 +359,32 @@ func FlushOutput() error {
 	return nil
 }
 
-func Execute() error {
+// panicError reports an unexpected panic through the ordinary failure
+// funnel. The message stays stable for machine output; the stack goes to the
+// diagnostic log.
+type panicError struct {
+	value any
+	stack []byte
+}
+
+func (e *panicError) Error() string {
+	return fmt.Sprintf("internal error: %v", e.value)
+}
+
+func Execute() (err error) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			return
+		}
+		stack := debug.Stack()
+		err = &panicError{value: recovered, stack: stack}
+		path := rootCmd.CommandPath()
+		if executingCommand != nil {
+			path = executingCommand.CommandPath()
+		}
+		log.Error(fmt.Errorf("%s panicked: %v\n%s", path, recovered, stack))
+	}()
 	displayVersion, displayCommit := buildVersion()
 	executingCommand = nil
 	loggingReady = false
@@ -387,7 +413,6 @@ func Execute() error {
 		rootCmd.SetOut(&machineResult)
 		defer rootCmd.SetOut(resultWriter)
 	}
-	var err error
 	if JSONSelected() {
 		// Fang probes terminal colors before invoking its error handler.
 		// Machine mode must not emit those queries on the real stdout.
