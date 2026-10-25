@@ -104,7 +104,7 @@ Java distribution names in the lock are case-insensitive: `TEMURIN` and `temurin
 
 `environment` is `server` or `mcdr`, which is how one flat list covers the server and MCDR without nesting. `ecosystem` is the mod or plugin type. The `requirements` list records which package in `lucy.yaml` a locked file satisfies, with the version rule and file pattern that were applied; a package with no requirements is present because a dependency needed it.
 
-A package selected as a dependency records `dependency: true`. It remains installed even if its own direct declaration has `enabled: false`; disabling a declaration does not prevent another selected package from requiring it.
+A required dependency records `dependency: true` while selected, and lists its dependents in `dependency_of`. An enabled dependent keeps it installed even when its own direct declaration is disabled. With no enabled declaration or dependent, it stays pinned but is not installed. Removing its final declaration and dependent removes the unused pin.
 
 ## Removing old files
 

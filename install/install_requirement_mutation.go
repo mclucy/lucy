@@ -75,7 +75,7 @@ func bindRequirement(p *lockfile.Package, ref string, requirement manifest.Requi
 		p.Requirements[i] = binding
 		return
 	}
-	if binding.Enabled || p.Dependency {
+	if binding.Enabled || len(p.DependencyOf) > 0 {
 		p.Requirements = append(p.Requirements, binding)
 	}
 }
@@ -110,31 +110,91 @@ func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error
 	return nil
 }
 
-// retainDeclared keeps packages that remain declared, dependency-selected, or
-// ambient. Removed direct bindings do not remove a package needed as a dependency.
+// retainDeclared keeps pins reachable from remaining declarations or ambient
+// packages. Disabled declarations retain pins without activating their dependencies.
 func retainDeclared(
 	packages []lockfile.Package,
 	declared map[string]manifest.Requirement,
 ) []lockfile.Package {
-	retained := make([]lockfile.Package, 0, len(packages))
-	for _, p := range packages {
-		if len(p.Requirements) == 0 {
-			retained = append(retained, p)
-			continue
+	type identity struct {
+		environment string
+		ecosystem   catalog.Ecosystem
+		reference   catalog.Ref
+	}
+	identityOf := func(p *lockfile.Package) identity {
+		return identity{
+			string(p.Environment),
+			p.Ecosystem,
+			catalog.Ref{Provider: p.Provider, Name: catalog.Name(p.ProjectID)},
 		}
-		bindings := make([]lockfile.RequirementBinding, 0, len(p.Requirements))
+	}
+	indices := make(map[identity]int, len(packages))
+	retained := make([]bool, len(packages))
+	enabled := make([]bool, len(packages))
+	for i := range packages {
+		p := &packages[i]
+		indices[identityOf(p)] = i
+		ambient := len(p.Requirements) == 0 && len(p.DependencyOf) == 0
+		retained[i], enabled[i] = ambient, ambient
+		bindings := p.Requirements[:0]
 		for _, binding := range p.Requirements {
 			if _, ok := declared[binding.Reference]; ok {
 				bindings = append(bindings, binding)
+				retained[i] = true
+				enabled[i] = enabled[i] || binding.Enabled
 			}
 		}
-		if len(bindings) == 0 && !p.Dependency {
+		p.Requirements = bindings
+	}
+	children := make([][]int, len(packages))
+	for i := range packages {
+		p := &packages[i]
+		key := identityOf(p)
+		for _, source := range p.DependencyOf {
+			key.reference = source
+			if parent, ok := indices[key]; ok {
+				children[parent] = append(children[parent], i)
+			}
+		}
+	}
+	queue := make([]int, 0, len(packages))
+	propagate := func(reached []bool) {
+		queue = queue[:0]
+		for i, yes := range reached {
+			if yes {
+				queue = append(queue, i)
+			}
+		}
+		for next := 0; next < len(queue); next++ {
+			for _, child := range children[queue[next]] {
+				if !reached[child] {
+					reached[child] = true
+					queue = append(queue, child)
+				}
+			}
+		}
+	}
+	propagate(retained)
+	propagate(enabled)
+	out := packages[:0]
+	for i, p := range packages {
+		if !retained[i] {
 			continue
 		}
-		p.Requirements = bindings
-		retained = append(retained, p)
+		p.Dependency = false
+		sources := p.DependencyOf[:0]
+		key := identityOf(&p)
+		for _, source := range p.DependencyOf {
+			key.reference = source
+			if parent, ok := indices[key]; ok && retained[parent] {
+				sources = append(sources, source)
+				p.Dependency = p.Dependency || enabled[parent]
+			}
+		}
+		p.DependencyOf = sources
+		out = append(out, p)
 	}
-	return retained
+	return out
 }
 
 // mutateLock produces the lock a locked mutation commits. Only requirements,
@@ -149,6 +209,7 @@ func mutateLock(d *manifest.Document, old *lockfile.Document, fingerprint string
 	for i, p := range old.Packages {
 		resolved.Packages[i] = p
 		resolved.Packages[i].Requirements = slices.Clone(p.Requirements)
+		resolved.Packages[i].DependencyOf = slices.Clone(p.DependencyOf)
 	}
 	if err := rebindRequirements(d, &resolved); err != nil {
 		return nil, err

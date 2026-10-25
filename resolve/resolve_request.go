@@ -28,6 +28,7 @@ type (
 		display      string
 		origin       requestOrigin
 		requirements []lockfile.RequirementBinding
+		dependencyOf catalog.Ref
 		// releaseHints come from remote dependency metadata. They order
 		// candidates but do not by themselves reject another build.
 		releaseHints []releaseHint
