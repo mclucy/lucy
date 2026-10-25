@@ -14,6 +14,11 @@ var detectors = []func() bool{
 	func() bool {
 		return exact("PI_CODING_AGENT", "true") || value("AI_AGENT") == "pi"
 	},
+	func() bool {
+		return exact("OMPCODE", "1") ||
+			value("PI_SESSION_FILE") != "" ||
+			value("PI_SESSION_ID") != ""
+	},
 	func() bool { return exact("CURSOR_AGENT", "1") },
 	func() bool { return exact("CLAUDECODE", "1") },
 	func() bool { return value("CODEX_THREAD_ID") != "" },
