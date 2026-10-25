@@ -64,19 +64,9 @@ func PlanInstall(
 	}
 	result.PublishedManifest = opts.PublishManifest
 	result.PublishedLock = opts.publishLock
-	baseManifest := opts.ExpectedManifest
-	if baseManifest == "" && d != nil {
-		baseManifest, err = manifest.Fingerprint(d)
-		if err != nil {
-			return nil, err
-		}
-	}
-	baseLock := ""
-	if old != nil {
-		baseLock, err = lockfile.Fingerprint(old)
-		if err != nil {
-			return nil, err
-		}
+	baseManifest, baseLock, err := workspaceFingerprints(root)
+	if err != nil {
+		return nil, err
 	}
 	return &Plan{
 		Manifest:                d,
@@ -135,47 +125,64 @@ func ApplyPlan(
 }
 
 func checkPlannedState(root string, plan *Plan) error {
+	manifestFingerprint, lockFingerprint, err := workspaceFingerprints(root)
+	if err != nil {
+		return err
+	}
+	if err := comparePlannedFingerprint(
+		"manifest",
+		plan.BaseManifestFingerprint,
+		manifestFingerprint,
+		"intent",
+	); err != nil {
+		return err
+	}
+	return comparePlannedFingerprint(
+		"lock",
+		plan.BaseLockFingerprint,
+		lockFingerprint,
+		"state",
+	)
+}
+
+// workspaceFingerprints reports the fingerprints of the manifest and lock a
+// workspace currently holds. An absent document yields an empty fingerprint,
+// so planning and applying share one description of the state a plan answers.
+func workspaceFingerprints(root string) (manifestFingerprint, lockFingerprint string, err error) {
 	currentManifest, err := manifest.Read(root)
 	switch {
 	case err == nil:
-		if plan.BaseManifestFingerprint == "" {
-			return fmt.Errorf("manifest appeared after planning; retry from current intent")
+		if manifestFingerprint, err = manifest.Fingerprint(currentManifest); err != nil {
+			return "", "", err
 		}
-		fingerprint, err := manifest.Fingerprint(currentManifest)
-		if err != nil {
-			return err
-		}
-		if fingerprint != plan.BaseManifestFingerprint {
-			return fmt.Errorf("manifest changed after planning; retry from current intent")
-		}
-	case errors.Is(err, os.ErrNotExist):
-		if plan.BaseManifestFingerprint != "" {
-			return fmt.Errorf("manifest disappeared after planning; retry from current intent")
-		}
-	default:
-		return err
+	case !errors.Is(err, os.ErrNotExist):
+		return "", "", err
 	}
 	currentLock, err := lockfile.Read(root)
 	switch {
 	case err == nil:
-		if plan.BaseLockFingerprint == "" {
-			return fmt.Errorf("lock appeared after planning; retry from current state")
+		if lockFingerprint, err = lockfile.Fingerprint(currentLock); err != nil {
+			return "", "", err
 		}
-		fingerprint, err := lockfile.Fingerprint(currentLock)
-		if err != nil {
-			return err
-		}
-		if fingerprint != plan.BaseLockFingerprint {
-			return fmt.Errorf("lock changed after planning; retry from current state")
-		}
-	case errors.Is(err, os.ErrNotExist):
-		if plan.BaseLockFingerprint != "" {
-			return fmt.Errorf("lock disappeared after planning; retry from current state")
-		}
-	default:
-		return err
+	case !errors.Is(err, os.ErrNotExist):
+		return "", "", err
 	}
-	return nil
+	return manifestFingerprint, lockFingerprint, nil
+}
+
+// comparePlannedFingerprint reports how a workspace document drifted from the
+// state the plan recorded. An empty fingerprint means the document was absent.
+func comparePlannedFingerprint(name, planned, current, retry string) error {
+	switch {
+	case planned == current:
+		return nil
+	case current == "":
+		return fmt.Errorf("%s disappeared after planning; retry from current %s", name, retry)
+	case planned == "":
+		return fmt.Errorf("%s appeared after planning; retry from current %s", name, retry)
+	default:
+		return fmt.Errorf("%s changed after planning; retry from current %s", name, retry)
+	}
 }
 
 // preflightLocked validates the state both planning and applying depend on.
