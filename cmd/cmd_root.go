@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"charm.land/fang/v2"
+	"github.com/mclucy/lucy/internal/agent"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/compile"
+	docscli "github.com/mclucy/lucy/internal/cli/docs"
 	"github.com/mclucy/lucy/internal/cli/file"
 	"github.com/mclucy/lucy/internal/cli/info"
 	"github.com/mclucy/lucy/internal/cli/search"
@@ -29,7 +32,14 @@ var (
 	machineResult     bytes.Buffer
 	resultWriter      io.Writer
 	flagParsingFailed bool
+	agentHelpInjected bool
 )
+
+const agentInstructions = "Instructions for agents:\n" +
+	"The --help flag is human-oriented. Use `lucy docs list` to view all available documentation,\n" +
+	"`lucy docs grep` to search, and `lucy docs view` to read articles. `--json-compact` and\n" +
+	"`--no-interactive` will be on by default for you. You can use tools like `jq` to process\n" +
+	"command outputs."
 
 var rootCmd = &cobra.Command{
 	Use:   "lucy",
@@ -71,7 +81,7 @@ var rootCmd = &cobra.Command{
 				log.Debug("action working directory unavailable", "error", err)
 			}
 			log.Info("action invoked", "action", cmd.CommandPath(), "directory", directory)
-			if mode == cli.JSONNone {
+			if mode == cli.JSONNone && !docsCommand(cmd) {
 				report.Warn(fmt.Errorf(
 					"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
 				))
@@ -157,6 +167,7 @@ func init() {
 		cli.NewCacheCommand(),
 		cli.NewCreateCommand(),
 		cli.NewDeinitCommand(),
+		docscli.NewCommand(),
 		cli.NewDoctorCommand(),
 		file.NewCommand(),
 		cli.NewExportCommand(),
@@ -174,15 +185,101 @@ func init() {
 	)
 }
 
+// applyAgentDefaults makes the non-interactive and compact-JSON behaviors
+// implicit for detected agents. Explicit flags still win because parsing runs
+// after these defaults are installed.
+func applyAgentDefaults() {
+	setPersistentBoolDefault(cli.FlagNoInteractive, false)
+	setPersistentBoolDefault(cli.FlagJSONCompact, false)
+	if !agent.Detected() {
+		return
+	}
+	setPersistentBoolDefault(cli.FlagNoInteractive, true)
+	if !jsonDefaultSupported(invocationCommand()) {
+		return
+	}
+	if cli.JSONFlagsPresent(os.Args[1:]) {
+		return
+	}
+	setPersistentBoolDefault(cli.FlagJSONCompact, true)
+}
+
+func setPersistentBoolDefault(name string, value bool) {
+	flag := rootCmd.PersistentFlags().Lookup(name)
+	if flag == nil {
+		return
+	}
+	text := "false"
+	if value {
+		text = "true"
+	}
+	_ = flag.Value.Set(text)
+	flag.DefValue = text
+}
+
+func docsCommand(cmd *cobra.Command) bool {
+	commandPath := cmd.CommandPath()
+	return commandPath == "lucy docs" ||
+		strings.HasPrefix(commandPath, "lucy docs ")
+}
+
+// jsonDefaultSupported excludes commands that reject or ignore JSON output.
+func jsonDefaultSupported(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	switch cmd.Name() {
+	case "__complete", "__completeNoDesc", "completion", "help", "man":
+		return false
+	}
+	commandPath := cmd.CommandPath()
+	if commandPath == "lucy" || commandPath == "lucy compile" {
+		return false
+	}
+	return !strings.HasPrefix(commandPath, "lucy docs")
+}
+
+// injectAgentInstructions adds the agent notice to every help text. Help is
+// rendered from Long, so this works for both fang and Cobra help paths.
+func injectAgentInstructions() {
+	if agentHelpInjected || !agent.Detected() {
+		return
+	}
+	agentHelpInjected = true
+	block := "\n\n" + agentInstructions
+	var walk func(*cobra.Command)
+	walk = func(cmd *cobra.Command) {
+		switch {
+		case cmd.Long != "":
+			cmd.Long += block
+		case cmd.Short != "":
+			cmd.Long = cmd.Short + block
+		}
+		for _, child := range cmd.Commands() {
+			walk(child)
+		}
+	}
+	walk(rootCmd)
+}
+
 // effectiveRendering reports the rendering requested by the actual
 // invocation. Parsed flags win; otherwise the raw command line is inspected,
 // so a failure that happens before Cobra parses flags still honors --json and
 // --json-compact.
 func effectiveRendering(cmd *cobra.Command) cli.JSONRendering {
+	if docsCommand(cmd) {
+		return cli.JSONNone
+	}
 	if cmd.Flags().Parsed() && !flagParsingFailed {
 		return cli.JSONMode(cmd)
 	}
-	return cli.JSONModeFromArgs(cmd, os.Args[1:])
+	mode := cli.JSONModeFromArgs(cmd, os.Args[1:])
+	if mode == cli.JSONNone && !cli.JSONFlagsPresent(os.Args[1:]) {
+		if compact, _ := cmd.Root().PersistentFlags().GetBool(cli.FlagJSONCompact); compact {
+			return cli.JSONCompact
+		}
+	}
+	return mode
 }
 
 // invocationCommand finds the command the raw command line addresses, even
@@ -205,6 +302,10 @@ func invocationCommand() *cobra.Command {
 // close failure joins the same document.
 func renderError(w io.Writer, styles fang.Styles, err error) {
 	if err == nil {
+		return
+	}
+	var exitErr *cli.ExitError
+	if errors.As(err, &exitErr) && exitErr.Silent {
 		return
 	}
 	command := invocationCommand()
@@ -262,8 +363,19 @@ func Execute() error {
 	executingCommand = nil
 	loggingReady = false
 	flagParsingFailed = false
+	applyAgentDefaults()
+	injectAgentInstructions()
 	command := invocationCommand()
-	selectedJSON = cli.JSONModeFromArgs(command, os.Args[1:])
+	if docsCommand(command) {
+		selectedJSON = cli.JSONNone
+	} else {
+		selectedJSON = cli.JSONModeFromArgs(command, os.Args[1:])
+		if selectedJSON == cli.JSONNone && !cli.JSONFlagsPresent(os.Args[1:]) {
+			if compact, _ := rootCmd.PersistentFlags().GetBool(cli.FlagJSONCompact); compact {
+				selectedJSON = cli.JSONCompact
+			}
+		}
+	}
 	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		flagParsingFailed = true
 		return err
@@ -317,7 +429,10 @@ func Execute() error {
 			loggingReady = true
 		}
 		if loggingReady {
-			log.Error(fmt.Errorf("%s failed: %w", command.CommandPath(), err))
+			var exitErr *cli.ExitError
+			if !errors.As(err, &exitErr) || !exitErr.Silent {
+				log.Error(fmt.Errorf("%s failed: %w", command.CommandPath(), err))
+			}
 		}
 		return err
 	}

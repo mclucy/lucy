@@ -38,6 +38,14 @@ const (
 		"worlds, and configuration stay in place, so it keeps running without " +
 		"lucy. Files that lucy installed become unmanaged."
 
+	DocsShort     = "Read the documentation"
+	DocsListShort = "List documentation pages"
+	DocsGrepShort = "Search documentation pages"
+	DocsGrepLong  = "Search embedded documentation pages. Patterns use Go regular " +
+		"expressions unless --fixed-strings is set. Exit status is 0 when a line " +
+		"matches, 1 when no line matches, and 2 on error."
+	DocsViewShort = "Print a documentation page"
+
 	DoctorShort = "Diagnose the server environment"
 
 	ExportShort = "Export server configuration, or generate client"
