@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"unicode"
@@ -31,9 +30,6 @@ func promptCreate(
 	if values.Product == "" {
 		values.Product = createProductMinecraft
 	}
-	if values.CoreName == "" {
-		values.CoreName = customCoreName(values.Repository)
-	}
 	directory := huh.NewInput().
 		Key("directory").
 		Title("Directory").
@@ -49,7 +45,7 @@ func promptCreate(
 		Key("product").
 		Title("Server software").
 		Description("Choose the server implementation to create.").
-		Options(createProductOptions()...).
+		Options(createProductOptions(values.Product)...).
 		Value(&values.Product)
 	var minecraftVersions atomic.Value
 	go func() {
@@ -92,33 +88,6 @@ func promptCreate(
 			return createCoreVersionDescription(values.Product)
 		}, &values.Product).
 		Value(&values.CoreVersion)
-	coreName := huh.NewInput().
-		Key("core-name").
-		Title("Server name").
-		Description("The name Lucy records for this server, for example my-fork.").
-		Placeholder("my-fork").
-		Value(&values.CoreName).
-		Validate(func(value string) error {
-			return validateCreateCoreName(value)
-		})
-	repository := huh.NewInput().
-		Key("repository").
-		Title("GitHub repository").
-		Description("Owner and repository that publish a Paperclip server JAR in a release.").
-		Placeholder("owner/repo").
-		Value(&values.Repository).
-		Validate(func(value string) error {
-			return validateCreateRepository(value)
-		})
-	filePattern := huh.NewInput().
-		Key("file-pattern").
-		Title("Release asset pattern").
-		Description("Optional glob for the server JAR, for example server-*.jar.").
-		Placeholder("server-*.jar").
-		Value(&values.FilePattern).
-		Validate(func(value string) error {
-			return validateCreateFilePattern(value)
-		})
 
 	groups := []*huh.Group{
 		huh.NewGroup(directory, product, minecraft).
@@ -129,12 +98,6 @@ func promptCreate(
 			Description("Pick an exact build or let Lucy choose the latest.").
 			WithHideFunc(func() bool {
 				return values.Product == createProductMinecraft
-			}),
-		huh.NewGroup(coreName, repository, filePattern).
-			Title("GitHub-hosted server").
-			Description("Lucy downloads the server JAR from a GitHub release. It must be a Paperclip-based fork.").
-			WithHideFunc(func() bool {
-				return values.Product != createProductCustom
 			}),
 	}
 	summary := huh.NewNote().
@@ -215,40 +178,33 @@ func promptCreate(
 	}
 	values.Minecraft = strings.TrimSpace(values.Minecraft)
 	values.CoreVersion = strings.TrimSpace(values.CoreVersion)
-	values.Repository = strings.TrimSpace(values.Repository)
-	values.FilePattern = strings.TrimSpace(values.FilePattern)
-	if values.Product == createProductCustom {
-		values.CoreName = strings.ToLower(strings.TrimSpace(values.CoreName))
-		if values.CoreName == "" {
-			values.CoreName = customCoreName(values.Repository)
-		}
-	} else {
-		values.CoreName = ""
-		values.Repository = ""
-		values.FilePattern = ""
-		if values.Product == createProductMinecraft {
-			values.CoreVersion = ""
-		}
+	if values.Product == createProductMinecraft {
+		values.CoreVersion = ""
 	}
 	return values, nil
 }
 
-func createProductOptions() []huh.Option[string] {
-	return []huh.Option[string]{
+// createProductOptions lists what the wizard offers. A product that flags
+// settled outside that list stays offered so the flag survives the form.
+func createProductOptions(selected string) []huh.Option[string] {
+	options := []huh.Option[string]{
 		huh.NewOption("Minecraft (vanilla)", createProductMinecraft),
-		huh.NewOption("Paper", string(serverpkg.ProductPaper)),
-		huh.NewOption("Purpur", string(serverpkg.ProductPurpur)),
 		huh.NewOption("Fabric", string(serverpkg.ProductFabric)),
 		huh.NewOption("Forge", string(serverpkg.ProductForge)),
 		huh.NewOption("NeoForge", string(serverpkg.ProductNeoForge)),
-		huh.NewOption("Custom Paper fork (GitHub)", createProductCustom),
 	}
+	for _, option := range options {
+		if option.Value == selected {
+			return options
+		}
+	}
+	if selected == "" || selected == createProductMinecraft {
+		return options
+	}
+	return append(options, huh.NewOption(createProductTitle(selected), selected))
 }
 
 func createProductTitle(product string) string {
-	if product == createProductCustom {
-		return "Custom"
-	}
 	if parsed, known := serverpkg.ParseProduct(product); known {
 		return parsed.Title()
 	}
@@ -272,8 +228,6 @@ func createCoreVersionDescription(product string) string {
 		return "Forge version such as 47.3.0, or any for the latest."
 	case string(serverpkg.ProductNeoForge):
 		return "NeoForge version such as 21.1.233, or any for the latest."
-	case createProductCustom:
-		return "Release tag, or any for the latest release."
 	default:
 		return "Leave empty to let Lucy choose the latest version."
 	}
@@ -291,8 +245,6 @@ func createCoreVersionPlaceholder(product string) string {
 		return "47.3.0"
 	case string(serverpkg.ProductNeoForge):
 		return "21.1.233"
-	case createProductCustom:
-		return "v1.0.0"
 	default:
 		return "any"
 	}
@@ -306,23 +258,10 @@ func createFormSummary(values createChoices) string {
 		serverVersion = "any (latest)"
 	}
 	server := createProductTitle(values.Product)
-	if values.Product == createProductCustom {
-		coreName := strings.TrimSpace(values.CoreName)
-		if coreName == "" {
-			coreName = customCoreName(values.Repository)
-		}
-		server = coreName + " (GitHub)"
-	}
 	lines := []string{
 		"Directory: " + displayCreateLocation(values.Directory),
 		"Server: " + server + " for Minecraft " + values.Minecraft,
 		"Server version: " + serverVersion,
-	}
-	if values.Product == createProductCustom {
-		lines = append(lines, "Repository: "+values.Repository)
-		if values.FilePattern != "" {
-			lines = append(lines, "Asset pattern: "+values.FilePattern)
-		}
 	}
 	install := "not yet"
 	if values.Install {
@@ -400,35 +339,4 @@ func validateCreateDirectory(path string) error {
 	}
 	_, err := operation.InspectCreateTarget(path)
 	return err
-}
-
-func validateCreateRepository(value string) error {
-	value = strings.TrimSpace(value)
-	owner, name, found := strings.Cut(value, "/")
-	if !found || owner == "" || name == "" || strings.Contains(name, "/") {
-		return errors.New("use owner/repo")
-	}
-	return nil
-}
-
-func validateCreateCoreName(value string) error {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
-		return nil
-	}
-	if strings.ContainsAny(value, " /\\") {
-		return errors.New("use one word, for example my-fork")
-	}
-	return nil
-}
-
-func validateCreateFilePattern(value string) error {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil
-	}
-	if _, err := filepath.Match(value, "server.jar"); err != nil {
-		return errors.New("enter a valid glob, for example server-*.jar")
-	}
-	return nil
 }

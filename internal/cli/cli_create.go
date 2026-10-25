@@ -22,15 +22,12 @@ const (
 	flagCreateCoreName        = "core"
 	flagCreateCoreVersionName = "core-version"
 	flagCreateMcName          = "minecraft"
-	flagCreateRepositoryName  = "repository"
-	flagCreateFilePatternName = "file-pattern"
 	flagCreateMCDRVersionName = "mcdr-version"
 	flagCreateDirectoryName   = "directory"
 	flagCreateInstallName     = "install"
 	flagCreateNoInstallName   = "no-install"
 	flagCreateJavaName        = "java"
 	flagCreateJavaRepoName    = "add-java-repository"
-	createProductCustom       = "custom"
 	createProductMinecraft    = "minecraft"
 )
 
@@ -70,16 +67,6 @@ func NewCreateCommand() *cobra.Command {
 		"Target Minecraft version (e.g. 1.21.4)",
 	)
 	createCmd.Flags().String(
-		flagCreateRepositoryName,
-		"",
-		"Repository on GitHub serving a Paperclip-based server JAR (owner/repo)",
-	)
-	createCmd.Flags().String(
-		flagCreateFilePatternName,
-		"",
-		"Release asset glob for a Paperclip server JAR (e.g. server-*.jar)",
-	)
-	createCmd.Flags().String(
 		flagCreateMCDRVersionName,
 		"",
 		"Record this MCDReforged version",
@@ -114,16 +101,12 @@ func NewCreateCommand() *cobra.Command {
 }
 
 // createChoices carries the values the command has settled before the form or
-// the operation. Product is the selector value; CoreName is the manifest
-// product used for a GitHub-hosted core.
+// the operation. Product is the selector value.
 type createChoices struct {
 	Directory         string
 	Product           string
-	CoreName          string
 	Minecraft         string
 	CoreVersion       string
-	Repository        string
-	FilePattern       string
 	MCDRVersion       string
 	Force             bool
 	Install           bool
@@ -218,27 +201,10 @@ func choicesFromCreateFlags(cmd *cobra.Command) (createChoices, error) {
 		}
 		inlineVersion = explicitVersion
 	}
-	repository := strings.TrimSpace(flagStringCreate(cmd, flagCreateRepositoryName))
-	filePattern := strings.TrimSpace(flagStringCreate(cmd, flagCreateFilePatternName))
-	if filePattern != "" && repository == "" {
-		return createChoices{}, fmt.Errorf("--%s needs --%s", flagCreateFilePatternName, flagCreateRepositoryName)
-	}
-	if repository != "" {
-		if err := validateCreateRepository(repository); err != nil {
-			return createChoices{}, fmt.Errorf("--%s: %w", flagCreateRepositoryName, err)
-		}
-	}
-	if filePattern != "" {
-		if err := validateCreateFilePattern(filePattern); err != nil {
-			return createChoices{}, fmt.Errorf("--%s: %w", flagCreateFilePatternName, err)
-		}
-	}
 	choices := createChoices{
 		Directory:         flagStringCreate(cmd, flagCreateDirectoryName),
 		Minecraft:         strings.TrimSpace(flagStringCreate(cmd, flagCreateMcName)),
 		CoreVersion:       strings.TrimSpace(inlineVersion),
-		Repository:        repository,
-		FilePattern:       filePattern,
 		MCDRVersion:       strings.TrimSpace(flagStringCreate(cmd, flagCreateMCDRVersionName)),
 		Force:             flagBoolCreate(cmd, flagCreateForceName),
 		Install:           install,
@@ -247,58 +213,30 @@ func choicesFromCreateFlags(cmd *cobra.Command) (createChoices, error) {
 		AddJavaRepository: javaRepository,
 	}
 	productName = strings.TrimSpace(productName)
-	switch {
-	case repository != "":
-		if productName != "" {
-			if product, known := serverpkg.ParseProduct(productName); known && product == serverpkg.ProductMinecraft {
-				return createChoices{}, errors.New(
-					"--repository cannot be used with the Minecraft core; name the custom core with --core",
-				)
-			}
-		}
-		choices.Product = createProductCustom
-		choices.CoreName = productName
-		if choices.CoreName == "" {
-			choices.CoreName = customCoreName(repository)
-		}
-	case productName == "":
+	if productName == "" {
 		if choices.CoreVersion != "" {
 			return createChoices{}, fmt.Errorf("--%s needs --%s", flagCreateCoreVersionName, flagCreateCoreName)
 		}
 		choices.Product = createProductMinecraft
-	case strings.EqualFold(productName, createProductMinecraft):
+		return choices, nil
+	}
+	product, known := serverpkg.ParseProduct(productName)
+	if !known || !createProductSupported(product) {
+		return createChoices{}, fmt.Errorf(
+			"server software %q is not supported by create; choose minecraft, paper, purpur, fabric, forge, or neoforge",
+			productName,
+		)
+	}
+	if product == serverpkg.ProductMinecraft {
 		if choices.CoreVersion != "" && choices.CoreVersion != choices.Minecraft {
 			return createChoices{}, fmt.Errorf(
 				"--%s does not apply to the Minecraft core; the Minecraft version is the server version",
 				flagCreateCoreVersionName,
 			)
 		}
-		choices.Product = createProductMinecraft
 		choices.CoreVersion = ""
-	default:
-		if product, known := serverpkg.ParseProduct(productName); known {
-			if !createProductSupported(product) {
-				return createChoices{}, fmt.Errorf(
-					"server software %q is not supported by create; use --repository owner/repo for a GitHub-hosted fork",
-					productName,
-				)
-			}
-			choices.Product = string(product)
-			if product == serverpkg.ProductMinecraft {
-				if choices.CoreVersion != "" && choices.CoreVersion != choices.Minecraft {
-					return createChoices{}, fmt.Errorf(
-						"--%s does not apply to the Minecraft core; the Minecraft version is the server version",
-						flagCreateCoreVersionName,
-					)
-				}
-				choices.Product = createProductMinecraft
-				choices.CoreVersion = ""
-			}
-		} else {
-			choices.Product = createProductCustom
-			choices.CoreName = strings.ToLower(productName)
-		}
 	}
+	choices.Product = string(product)
 	return choices, nil
 }
 
@@ -309,23 +247,6 @@ func validateCreateChoices(choices createChoices) error {
 	if err := validateCreateMinecraft(choices.Minecraft); err != nil {
 		return fmt.Errorf("--%s: %w", flagCreateMcName, err)
 	}
-	if choices.Product == createProductCustom {
-		if choices.Repository == "" {
-			return errors.New("a custom server needs --repository owner/repo")
-		}
-		if err := validateCreateRepository(choices.Repository); err != nil {
-			return fmt.Errorf("--%s: %w", flagCreateRepositoryName, err)
-		}
-		if strings.TrimSpace(choices.CoreName) == "" {
-			return errors.New("a custom server needs a core name; pass --core <name>")
-		}
-		if err := validateCreateCoreName(choices.CoreName); err != nil {
-			return fmt.Errorf("--%s: %w", flagCreateCoreName, err)
-		}
-		if err := validateCreateFilePattern(choices.FilePattern); err != nil {
-			return fmt.Errorf("--%s: %w", flagCreateFilePatternName, err)
-		}
-	}
 	if choices.Java && !choices.Install {
 		return errors.New("--java needs installation; omit --no-install or choose Install")
 	}
@@ -334,9 +255,6 @@ func validateCreateChoices(choices createChoices) error {
 
 func createOperationOptions(choices createChoices) operation.CreateOptions {
 	product := choices.Product
-	if choices.Product == createProductCustom {
-		product = choices.CoreName
-	}
 	if product == "" {
 		product = createProductMinecraft
 	}
@@ -345,8 +263,6 @@ func createOperationOptions(choices createChoices) operation.CreateOptions {
 		Minecraft:      choices.Minecraft,
 		Product:        product,
 		ProductVersion: choices.CoreVersion,
-		Repository:     choices.Repository,
-		FilePattern:    choices.FilePattern,
 		MCDRVersion:    choices.MCDRVersion,
 		Force:          choices.Force,
 		Install:        choices.Install,
@@ -406,29 +322,6 @@ func flagStringCreate(cmd *cobra.Command, name string) string {
 func flagBoolCreate(cmd *cobra.Command, name string) bool {
 	value, _ := cmd.Flags().GetBool(name)
 	return value
-}
-
-// customCoreName derives a manifest product from a repository name so the
-// interactive custom path needs one less question.
-func customCoreName(repository string) string {
-	repository = strings.TrimSuffix(strings.TrimSpace(repository), "/")
-	if _, name, found := strings.Cut(repository, "/"); found {
-		repository = name
-	}
-	repository = strings.ToLower(repository)
-	name := strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
-			return r
-		default:
-			return '-'
-		}
-	}, repository)
-	name = strings.Trim(name, "-_")
-	if name == "" {
-		return createProductCustom
-	}
-	return name
 }
 
 func createProductSupported(product serverpkg.Product) bool {

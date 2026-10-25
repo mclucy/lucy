@@ -30,8 +30,6 @@ type CreateOptions struct {
 	Minecraft      string
 	Product        string
 	ProductVersion string
-	Repository     string
-	FilePattern    string
 	MCDRVersion    string
 	Force          bool
 	Install        bool
@@ -67,13 +65,11 @@ type CreateResult struct {
 // written. Workspace may already exist because resolution needs its download
 // store.
 type CreateResolveError struct {
-	Workspace   string
-	Product     serverpkg.Product
-	Minecraft   version.Version
-	Selector    version.Version
-	Repository  string
-	FilePattern string
-	Err         error
+	Workspace string
+	Product   serverpkg.Product
+	Minecraft version.Version
+	Selector  version.Version
+	Err       error
 }
 
 func (e *CreateResolveError) Error() string { return e.Err.Error() }
@@ -334,13 +330,11 @@ func newCreateResolveError(
 	err error,
 ) *CreateResolveError {
 	return &CreateResolveError{
-		Workspace:   root,
-		Product:     document.Server.Core.Product,
-		Minecraft:   document.Server.Minecraft,
-		Selector:    document.Server.Core.ProductVersion,
-		Repository:  document.Server.Core.Repository,
-		FilePattern: document.Server.Core.FilePattern,
-		Err:         err,
+		Workspace: root,
+		Product:   document.Server.Core.Product,
+		Minecraft: document.Server.Minecraft,
+		Selector:  document.Server.Core.ProductVersion,
+		Err:       err,
 	}
 }
 
@@ -361,8 +355,6 @@ func newCreateDocument(opts CreateOptions) *manifest.Document {
 			Core: manifest.Core{
 				Product:        product,
 				ProductVersion: version.Version(strings.TrimSpace(opts.ProductVersion)),
-				Repository:     strings.TrimSpace(opts.Repository),
-				FilePattern:    strings.TrimSpace(opts.FilePattern),
 			},
 			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{},
 		},

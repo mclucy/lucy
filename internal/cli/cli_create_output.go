@@ -71,12 +71,6 @@ func (o *createOutput) Failure(err error) error {
 			},
 			Cause: err,
 		}
-		if resolveErr.Repository != "" {
-			detail.Lines = append(detail.Lines, "Repository: "+resolveErr.Repository)
-		}
-		if resolveErr.FilePattern != "" {
-			detail.Lines = append(detail.Lines, "Asset pattern: "+resolveErr.FilePattern)
-		}
 		if inner := createErrorDetail(o, resolveErr.Err); inner != nil {
 			detail.Lines = append(detail.Lines, inner.Lines...)
 			detail.Hint = inner.Hint
@@ -85,8 +79,6 @@ func (o *createOutput) Failure(err error) error {
 		}
 		if detail.Hint == "" {
 			switch {
-			case resolveErr.Repository != "":
-				detail.Hint = "Check that the repository publishes a Paperclip server JAR for this Minecraft version, and check the asset pattern."
 			case resolveErr.Product == serverpkg.ProductPaper:
 				detail.Hint = "Paper versions are build numbers; try 232, stable, or any."
 			case resolveErr.Product == serverpkg.ProductPurpur:
