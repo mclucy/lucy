@@ -54,7 +54,7 @@ var (
 // portablePath models a file path grammar, not the normalizer's parsing steps.
 func portablePath(value string) (string, bool) {
 	cleaned := path.Clean(value)
-	safe := cleaned != "." && fs.ValidPath(cleaned) &&
+	safe := cleaned != "." && fs.ValidPath(cleaned) && filepath.IsLocal(value) &&
 		!strings.ContainsAny(value, "\\:\x00") &&
 		!reservedDirectory.MatchString(value) && !reservedFilename.MatchString(cleaned)
 	return cleaned, safe
@@ -108,6 +108,8 @@ func FuzzManifestPersistence(f *testing.F) {
 	f.Add("server", ".git/config", "", "", uint8(0))
 	f.Add("server", "LUCY.LOCAL.YAML/runtime", "", "", uint8(0))
 	f.Add("server", "mods/\x00.jar", "", "", uint8(0))
+	f.Add(".", "NUL", "1.0.0", "", uint8(0))
+	f.Add(".", "COM1.txt", "1.0.0", "", uint8(0))
 
 	base := f.TempDir()
 	f.Fuzz(func(t *testing.T, directory, tracked, selector, filePattern string, enabledMode uint8) {
