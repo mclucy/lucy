@@ -104,3 +104,15 @@ jobs:
     uses: ./.github/workflows/e2e.yml
     secrets:
       CF_API_KEY: ${{ secrets.CF_API_KEY }}
+
+  bin-size:
+    if: >-
+      github.event_name == 'pull_request'
+      && !startsWith(github.event.pull_request.title, 'docs:')
+      && github.event.action != 'labeled'
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/bin-size.yml
+    secrets:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
