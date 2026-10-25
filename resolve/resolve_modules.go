@@ -139,7 +139,10 @@ func finalizeModules(packages []lockfile.Package, target Target) ([]ModuleProble
 				}
 				matched := value != ""
 				invalid := false
-				if matched && dep.Constraint != "" {
+				if fmlLoader(target) && value == "0.0NONE" {
+					// FMLLoader treats the 0.0NONE sentinel as satisfying every range.
+					matched = true
+				} else if matched && dep.Constraint != "" {
 					var err error
 					matched, err = versionpkg.Match(
 						dep.Constraint,
@@ -149,6 +152,20 @@ func finalizeModules(packages []lockfile.Package, target Target) ([]ModuleProble
 					if err != nil {
 						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
 						invalid = true
+					}
+				}
+				if !invalid && dep.Constraint != "" && !matched {
+					compatible, err := matchesLoaderCompatibility(
+						dep.Constraint,
+						dep.ID,
+						target,
+						m.VersionDialect,
+					)
+					if err != nil {
+						problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
+						invalid = true
+					} else {
+						matched = compatible
 					}
 				}
 				requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
