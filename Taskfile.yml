@@ -51,9 +51,9 @@ tasks:
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
+      - "./docs/docs.tar.gz"
       - "./go.mod"
       - "./go.sum"
-    generates:
       - "{{.DEV_BINARY}}"
       - "{{.DEV_SYMLINK}}"
 
@@ -265,6 +265,15 @@ tasks:
     desc: Fail when the committed status logos differ from what terminal/assets/logos.yaml generates
     cmds:
       - go run ./tools/genlogo -check
+  docs:pack:
+    desc: "Pack the site pages into docs/docs.tar.gz"
+    cmds:
+      - go run ./tools/gendocs {{.CLI_ARGS}}
+
+  docs:check:
+    desc: Fail when the committed docs/docs.tar.gz differs from docs/*.mdx content
+    cmds:
+      - go run ./tools/gendocs -check
 
   e2e:status:
     desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
