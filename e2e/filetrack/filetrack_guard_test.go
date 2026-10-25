@@ -70,7 +70,7 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 
 	for _, args := range [][]string{
 		{"install"},
-		{"create", "--force", "--minecraft", "1.21.4", "--core", "vanilla", "--core-version", "1.21.4", "--directory", "server"},
+		{"create", "--force", "--minecraft", "1.21.4", "--core", "vanilla", "--core-version", "1.21.4", "--no-install"},
 		{"add", "modrinth:sodium"},
 	} {
 		w.lucyFail(t, args...)
