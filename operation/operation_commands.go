@@ -33,20 +33,17 @@ import (
 	"github.com/mclucy/lucy/workspace/identify"
 )
 
-// InitOptions describes a new manifest declaration.
+// InitOptions describes adoption of the server already present in a
+// directory.
 type InitOptions struct {
-	Minecraft, Product, ProductVersion, Repository, MCDRVersion, Directory string
-	Force, AllowEmpty, Detect                                              bool
+	MCDRVersion string
+	Force       bool
 	// EntryPoint selects the runtime observation uses for this
 	// initialization only; it is never persisted.
 	EntryPoint string
 	// PromptRuntime asks which entry point to use when observation finds
 	// several equally valid runtimes. Nil keeps the strict failure.
 	PromptRuntime func(discovery.Result) (string, error)
-	// PromptMinecraft asks for a concrete Minecraft version when
-	// initialization lacks one and returns the trimmed response. Nil keeps
-	// the concrete-version-required error and never prompts.
-	PromptMinecraft func() (string, error)
 	// Trace receives progress for the lock resolution initialization runs.
 	Trace *install.Trace
 }
@@ -293,122 +290,102 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if _, err := os.Stat(filepath.Join(root, manifest.Filename)); err == nil && !opts.Force {
 		return nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
 	}
-	product := serverpkg.ProductUnknown
-	if opts.Product != "" {
-		if parsed, known := serverpkg.ParseProduct(opts.Product); known {
-			product = parsed
-		} else {
-			product = serverpkg.Product(opts.Product)
+	d := &manifest.Document{
+		SchemaVersion: manifest.SchemaVersion,
+		Server: manifest.Server{
+			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{},
+		},
+	}
+	observed := workspace.Observe(root, discovery.Request{EntryPoint: opts.EntryPoint})
+	if opts.EntryPoint == "" && observed.Runtime() == nil && opts.PromptRuntime != nil {
+		var selectionErr *discovery.SelectionError
+		if errors.As(observed.SelectionError(), &selectionErr) &&
+			selectionErr.State == discovery.SelectionAmbiguous {
+			entryPoint, promptErr := opts.PromptRuntime(observed.Discovery)
+			if promptErr != nil {
+				return initResult(observed), promptErr
+			}
+			if entryPoint != "" {
+				if !filepath.IsAbs(entryPoint) {
+					entryPoint = filepath.Join(root, entryPoint)
+				}
+				if err := observed.Select(discovery.Request{EntryPoint: entryPoint}); err != nil {
+					return initResult(observed), err
+				}
+				observed.ObservePackages()
+			}
 		}
 	}
-	d := &manifest.Document{SchemaVersion: manifest.SchemaVersion, Server: manifest.Server{
-		Minecraft: version.Version(opts.Minecraft), Directory: opts.Directory,
-		Core:     manifest.Core{Product: product, ProductVersion: version.Version(opts.ProductVersion), Repository: opts.Repository},
-		Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{},
-	}}
-	var observed *workspace.Workspace
-	if opts.Detect {
-		observed = workspace.Observe(root, discovery.Request{EntryPoint: opts.EntryPoint})
-		if opts.EntryPoint == "" && observed.Runtime() == nil && opts.PromptRuntime != nil {
-			var selectionErr *discovery.SelectionError
-			if errors.As(observed.SelectionError(), &selectionErr) &&
-				selectionErr.State == discovery.SelectionAmbiguous {
-				entryPoint, promptErr := opts.PromptRuntime(observed.Discovery)
-				if promptErr != nil {
-					return initResult(observed), promptErr
-				}
-				if entryPoint != "" {
-					if !filepath.IsAbs(entryPoint) {
-						entryPoint = filepath.Join(root, entryPoint)
-					}
-					if err := observed.Select(discovery.Request{EntryPoint: entryPoint}); err != nil {
-						return initResult(observed), err
-					}
-					observed.ObservePackages()
-				}
-			}
+	if selection := observed.Runtime(); selection != nil {
+		identity := selection.Installation.Identity
+		d.Server.Minecraft = selection.MinecraftVersion()
+		if detected := selection.Product(); detected != serverpkg.ProductUnknown {
+			d.Server.Core.Product = detected
+		} else {
+			d.Server.Core.Product = serverpkg.Product(identity.Primary.Name.String())
 		}
-		if selection := observed.Runtime(); selection != nil {
-			identity := selection.Installation.Identity
-			if d.Server.Minecraft != "" && d.Server.Minecraft != selection.MinecraftVersion() {
-				return initResult(observed), fmt.Errorf("detected Minecraft %s, requested %s", selection.MinecraftVersion(), d.Server.Minecraft)
+		if identity.Primary.Version != "" &&
+			!identity.Primary.Version.IsInvalid() &&
+			!identity.Primary.Version.CanInfer() {
+			d.Server.Core.ProductVersion = identity.Primary.Version
+		}
+		if paperLineageProduct(d.Server.Core.Product) &&
+			!concreteVersion(d.Server.Core.ProductVersion) {
+			build, found, err := identifyInstalledCoreBuild(
+				ctx,
+				root,
+				selection,
+				d.Server.Core.Product,
+			)
+			if err != nil {
+				return initResult(observed), err
 			}
-			d.Server.Minecraft = selection.MinecraftVersion()
-			if d.Server.Core.Product == serverpkg.ProductUnknown {
-				if detected := selection.Product(); detected != serverpkg.ProductUnknown {
-					d.Server.Core.Product = detected
-				} else {
-					d.Server.Core.Product = serverpkg.Product(identity.Primary.Name.String())
-				}
-			}
-			if d.Server.Core.ProductVersion == "" && identity.Primary.Version != "" && !identity.Primary.Version.IsInvalid() && !identity.Primary.Version.CanInfer() {
-				d.Server.Core.ProductVersion = identity.Primary.Version
-			}
-			if paperLineageProduct(d.Server.Core.Product) &&
-				!concreteVersion(d.Server.Core.ProductVersion) {
-				build, found, err := identifyInstalledCoreBuild(
-					ctx,
-					root,
-					selection,
+			if !found {
+				return initResult(observed), fmt.Errorf(
+					"cannot identify the installed %s build; restore the "+
+						"published %s-<minecraft>-<build>.jar name or pin "+
+						"the core version in lucy.yaml",
+					d.Server.Core.Product,
 					d.Server.Core.Product,
 				)
-				if err != nil {
-					return initResult(observed), err
-				}
-				if !found {
-					return initResult(observed), fmt.Errorf(
-						"cannot identify the installed %s build; restore the "+
-							"published %s-<minecraft>-<build>.jar name or pin "+
-							"the core version in lucy.yaml",
-						d.Server.Core.Product,
-						d.Server.Core.Product,
-					)
-				}
-				d.Server.Core.ProductVersion = build
 			}
-			if d.Server.Directory == "" {
-				relative, err := filepath.Rel(root, observed.ServerDir)
-				if err != nil {
-					return initResult(observed), err
-				}
-				d.Server.Directory = filepath.ToSlash(relative)
-			}
-			log.Debug(
-				"detected server runtime",
-				"minecraft", d.Server.Minecraft,
-				"product", d.Server.Core.Product,
-				"core-version", d.Server.Core.ProductVersion,
-				"directory", d.Server.Directory,
-			)
-		} else if !opts.AllowEmpty {
-			if selectionErr := observed.SelectionError(); selectionErr != nil {
-				var typed *discovery.SelectionError
-				noServer := errors.As(selectionErr, &typed) &&
-					(typed.State == discovery.SelectionNone ||
-						(typed.State == discovery.SelectionInvalid && typed.Path == ""))
-				if !noServer {
-					return initResult(observed), selectionErr
-				}
-			}
-			return initResult(observed), fmt.Errorf("no server detected; use `lucy create` to generate a new server")
+			d.Server.Core.ProductVersion = build
+		}
+		if observed.ServerDir == "" {
+			d.Server.Directory = "."
 		} else {
-			log.Debug(
-				"no server detected; building a complete declaration",
-				"reason", "--allow-empty",
-			)
+			relative, err := filepath.Rel(root, observed.ServerDir)
+			if err != nil {
+				return initResult(observed), err
+			}
+			d.Server.Directory = filepath.ToSlash(relative)
 		}
-		observed, _ = identify.Packages(observed)
+		log.Debug(
+			"detected server runtime",
+			"minecraft", d.Server.Minecraft,
+			"product", d.Server.Core.Product,
+			"core-version", d.Server.Core.ProductVersion,
+			"directory", d.Server.Directory,
+		)
+	} else {
+		if selectionErr := observed.SelectionError(); selectionErr != nil {
+			var typed *discovery.SelectionError
+			noServer := errors.As(selectionErr, &typed) &&
+				(typed.State == discovery.SelectionNone ||
+					(typed.State == discovery.SelectionInvalid && typed.Path == ""))
+			if !noServer {
+				return initResult(observed), selectionErr
+			}
+		}
+		return initResult(observed), fmt.Errorf(
+			"no server detected; use `lucy create` to generate a new server",
+		)
 	}
+	observed, _ = identify.Packages(observed)
 	if d.Server.Minecraft == "" || d.Server.Minecraft.IsInvalid() {
-		if opts.PromptMinecraft == nil {
-			return initResult(observed), fmt.Errorf("a concrete --minecraft version is required")
-		}
-		text, err := opts.PromptMinecraft()
-		if err != nil {
-			return initResult(observed), err
-		}
-		d.Server.Minecraft = version.Version(text)
-		log.Debug("minecraft version supplied interactively", "version", text)
+		return initResult(observed), fmt.Errorf(
+			"the detected server has no concrete Minecraft version",
+		)
 	}
 	if d.Server.Core.Product == serverpkg.ProductUnknown {
 		d.Server.Core.Product = serverpkg.ProductMinecraft
