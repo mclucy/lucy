@@ -13,6 +13,7 @@ import (
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
 	"github.com/spf13/cobra"
 )
@@ -29,6 +30,15 @@ const (
 	flagCreateJavaName        = "java"
 	flagCreateJavaRepoName    = "add-java-repository"
 	createProductMinecraft    = "minecraft"
+)
+
+// Keywords accepted for the Minecraft version of a new server. Release and
+// snapshot name Mojang's channels; latest asks the chosen product which
+// version it serves.
+const (
+	createMinecraftLatest   = "latest"
+	createMinecraftRelease  = "release"
+	createMinecraftSnapshot = "snapshot"
 )
 
 var createCmd = &cobra.Command{
@@ -64,7 +74,7 @@ func NewCreateCommand() *cobra.Command {
 		flagCreateMcName,
 		"m",
 		"",
-		"Target Minecraft version (e.g. 1.21.4)",
+		"Target Minecraft version (e.g. 1.21.4), release, snapshot, or latest",
 	)
 	createCmd.Flags().String(
 		flagCreateMCDRVersionName,
@@ -146,6 +156,14 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 		if err := warnCreateTarget(choices); err != nil {
 			return err
 		}
+	}
+	choices.Minecraft, err = resolveCreateMinecraft(
+		ctx,
+		createProduct(choices.Product),
+		choices.Minecraft,
+	)
+	if err != nil {
+		return err
 	}
 	opts := createOperationOptions(choices)
 
@@ -244,7 +262,10 @@ func validateCreateChoices(choices createChoices) error {
 	if strings.TrimSpace(choices.Directory) == "" {
 		return errors.New("choose a directory with --directory")
 	}
-	if err := validateCreateMinecraft(choices.Minecraft); err != nil {
+	if err := validateCreateMinecraft(
+		choices.Minecraft,
+		createProduct(choices.Product),
+	); err != nil {
 		return fmt.Errorf("--%s: %w", flagCreateMcName, err)
 	}
 	if choices.Java && !choices.Install {
@@ -338,20 +359,99 @@ func createProductSupported(product serverpkg.Product) bool {
 	}
 }
 
-func validateCreateMinecraft(value string) error {
+// createProduct names the server product a choice selects, defaulting to
+// vanilla.
+func createProduct(name string) serverpkg.Product {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return serverpkg.ProductMinecraft
+	}
+	if parsed, known := serverpkg.ParseProduct(trimmed); known {
+		return parsed
+	}
+	return serverpkg.Product(strings.ToLower(trimmed))
+}
+
+// createMinecraftKeyword maps a floating game version request, including the
+// loader channel spellings, to its canonical keyword.
+func createMinecraftKeyword(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case createMinecraftLatest:
+		return createMinecraftLatest, true
+	case createMinecraftRelease, string(version.Stable):
+		return createMinecraftRelease, true
+	case createMinecraftSnapshot, string(version.Beta):
+		return createMinecraftSnapshot, true
+	default:
+		return "", false
+	}
+}
+
+func validateCreateMinecraft(value string, product serverpkg.Product) error {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return errors.New("enter a Minecraft version")
 	}
+	if keyword, ok := createMinecraftKeyword(value); ok {
+		if keyword != createMinecraftLatest && !productFollowsMinecraftReleases(product) {
+			return fmt.Errorf(
+				"%s builds for Minecraft releases only and lags behind them; "+
+					"name an exact version or use latest",
+				product,
+			)
+		}
+		return nil
+	}
 	parsed := version.Version(value)
 	if parsed.CanInfer() || parsed.IsInvalid() {
-		return errors.New("enter an exact Minecraft version, e.g. 1.21.4")
-	}
-	switch strings.ToLower(value) {
-	case "latest", "snapshot":
-		return errors.New("enter an exact Minecraft version, e.g. 1.21.4")
+		return errors.New(
+			"enter a Minecraft version, e.g. 1.21.4, release, snapshot, or latest",
+		)
 	}
 	return nil
+}
+
+// productFollowsMinecraftReleases reports whether the product publishes builds
+// as Minecraft versions ship. Vanilla always does, and Fabric tracks both
+// releases and snapshots. Forge, NeoForge, Paper, and Purpur build releases
+// only and lag behind them, so a channel keyword would name a version they do
+// not serve yet.
+func productFollowsMinecraftReleases(product serverpkg.Product) bool {
+	switch product {
+	case serverpkg.ProductMinecraft, serverpkg.ProductFabric:
+		return true
+	default:
+		return false
+	}
+}
+
+// resolveCreateMinecraft turns a floating keyword into the version the
+// manifest records. The interactive form and the flags share this step.
+func resolveCreateMinecraft(
+	ctx context.Context,
+	product serverpkg.Product,
+	value string,
+) (string, error) {
+	keyword, ok := createMinecraftKeyword(value)
+	if !ok {
+		return strings.TrimSpace(value), nil
+	}
+	var (
+		resolved version.Version
+		err      error
+	)
+	switch keyword {
+	case createMinecraftLatest:
+		resolved, err = routing.LatestMinecraftVersion(ctx, product)
+	case createMinecraftRelease:
+		resolved, err = routing.LatestMojangMinecraft(false)
+	case createMinecraftSnapshot:
+		resolved, err = routing.LatestMojangMinecraft(true)
+	}
+	if err != nil {
+		return "", fmt.Errorf("--%s: %w", flagCreateMcName, err)
+	}
+	return resolved.String(), nil
 }
 
 // displayCreatePath keeps the form and the final summary short when the

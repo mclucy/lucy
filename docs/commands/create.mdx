@@ -71,7 +71,7 @@ lucy create --minecraft 1.21.4 --core paper --no-install --no-interactive
 </ParamField>
 
 <ParamField query="--minecraft, -m" type="string">
-  Exact Minecraft release or snapshot ID, for example `1.21.4`.
+  Minecraft release or snapshot ID, for example `1.21.4`. `release` selects Mojang's newest release and `snapshot` the newest snapshot; both are accepted only for Minecraft and Fabric, which publish builds as versions ship. `latest` selects the newest version the chosen server software supports, which can lag the release channel. `stable` and `beta` are aliases of `release` and `snapshot`. The manifest records the resolved ID.
 </ParamField>
 
 <ParamField query="--mcdr-version" type="string">

@@ -69,14 +69,14 @@ func promptCreate(
 		Key("minecraft").
 		Title("Minecraft version").
 		Placeholder("1.21.4").
-		Description("An exact release or snapshot ID, for example 1.21.4. Start typing for known versions.").
+		Description("A release or snapshot ID such as 1.21.4, or release, snapshot, or latest. Start typing for known versions.").
 		Value(&values.Minecraft).
 		SuggestionsFunc(func() []string {
 			versions, _ := minecraftVersions.Load().([]string)
 			return versions
 		}, &values.Minecraft).
 		Validate(func(value string) error {
-			return validateCreateMinecraft(value)
+			return validateCreateMinecraft(value, createProduct(values.Product))
 		})
 	coreVersion := huh.NewInput().
 		Key("core-version").

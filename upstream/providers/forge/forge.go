@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
@@ -29,6 +30,30 @@ func (provider) Provider() catalog.Provider {
 
 type promotions struct {
 	Promos map[string]string `json:"promos"`
+}
+
+// LatestMinecraftVersion reports the newest Minecraft version the promotions
+// list a build for. Forge publishes release builds only.
+func LatestMinecraftVersion() (version.Version, error) {
+	body, err := cache.CachedGetBytes(
+		promotionsURL,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
+	if err != nil {
+		return "", fmt.Errorf("fetch forge promotions failed: %w", err)
+	}
+	var data promotions
+	if err := json.Unmarshal(body, &data); err != nil {
+		return "", fmt.Errorf("parse forge promotions failed: %w", err)
+	}
+	versions := make([]version.Version, 0, len(data.Promos))
+	for key := range data.Promos {
+		minecraft, _, found := strings.Cut(key, "-")
+		if found && minecraft != "" {
+			versions = append(versions, version.Version(minecraft))
+		}
+	}
+	return version.NewestMinecraft(versions)
 }
 
 func (p provider) ResolveVersionSelector(

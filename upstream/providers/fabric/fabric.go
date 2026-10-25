@@ -32,6 +32,11 @@ type loaderVersionEntry struct {
 	Stable  bool   `json:"stable"`
 }
 
+type gameVersionEntry struct {
+	Version string `json:"version"`
+	Stable  bool   `json:"stable"`
+}
+
 func (p provider) ResolveVersionSelector(
 	_ upstream.LocalContext,
 	id catalog.VersionedRef,
@@ -88,6 +93,22 @@ func (p provider) Fetch(
 			installerVer,
 		),
 	}, nil
+}
+
+// LatestGameVersion reports the newest Minecraft release the loader publishes
+// builds for. Fabric tracks Minecraft releases, so the entry is normally the
+// current release.
+func LatestGameVersion() (version.Version, error) {
+	var versions []gameVersionEntry
+	if err := fetchVersionsMeta("game", &versions); err != nil {
+		return "", err
+	}
+	for _, entry := range versions {
+		if entry.Stable {
+			return version.Version(entry.Version), nil
+		}
+	}
+	return "", errors.New("no stable Minecraft version in fabric metadata")
 }
 
 func loaderVersion(selector version.Version) (string, error) {

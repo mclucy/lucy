@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
@@ -33,6 +34,80 @@ type mavenMetadata struct {
 		Release  string   `xml:"release"`
 		Versions []string `xml:"versions>version"`
 	} `xml:"versioning"`
+}
+
+// LatestMinecraftVersion reports the newest Minecraft version the metadata
+// lists a build for. NeoForge encodes the Minecraft version in the loader
+// version prefix.
+func LatestMinecraftVersion() (versionpkg.Version, error) {
+	body, err := cache.CachedGetBytes(
+		metadataURL,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
+	if err != nil {
+		return "", fmt.Errorf("fetch NeoForge metadata failed: %w", err)
+	}
+	var meta mavenMetadata
+	if err := xml.Unmarshal(body, &meta); err != nil {
+		return "", fmt.Errorf("parse NeoForge metadata failed: %w", err)
+	}
+	versions := make([]versionpkg.Version, 0, len(meta.Versioning.Versions))
+	for _, loader := range meta.Versioning.Versions {
+		if minecraft, ok := minecraftVersionOf(loader); ok {
+			versions = append(versions, minecraft)
+		}
+	}
+	return versionpkg.NewestMinecraft(versions)
+}
+
+// neoForgePrefix names the loader version prefix for a Minecraft version. A
+// 1.x release drops the leading 1 (1.21.4 → 21.4.), while a year-based
+// release keeps its full version (26.3 → 26.3.).
+func neoForgePrefix(gameVersion versionpkg.Version) (string, bool) {
+	parts := strings.Split(gameVersion.String(), ".")
+	if len(parts) < 2 {
+		return "", false
+	}
+	year, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return "", false
+	}
+	if year >= 26 {
+		return gameVersion.String() + ".", true
+	}
+	return strings.Join(parts[1:], ".") + ".", true
+}
+
+// minecraftVersionOf inverts the loader version prefix: 21.4.16 belongs to
+// Minecraft 1.21.4, 21.1.66 to 1.21.1, and 26.3.0.98 to 26.3.
+func minecraftVersionOf(loader string) (versionpkg.Version, bool) {
+	base, _, _ := strings.Cut(loader, "-")
+	parts := strings.Split(base, ".")
+	if len(parts) < 3 {
+		return "", false
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return "", false
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", false
+	}
+	if major >= 26 {
+		patch, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return "", false
+		}
+		if patch != 0 {
+			return versionpkg.Version(fmt.Sprintf("%d.%d.%d", major, minor, patch)), true
+		}
+		return versionpkg.Version(fmt.Sprintf("%d.%d", major, minor)), true
+	}
+	if minor == 0 {
+		return versionpkg.Version(fmt.Sprintf("1.%d", major)), true
+	}
+	return versionpkg.Version(fmt.Sprintf("1.%d.%d", major, minor)), true
 }
 
 func (p provider) ResolveVersionSelector(
@@ -123,15 +198,13 @@ func fetchVersion(
 		return "", fmt.Errorf("parse NeoForge metadata failed: %w", err)
 	}
 
-	mcStr := gameVersion.String()
-	parts := strings.SplitN(mcStr, ".", 3)
-	if len(parts) < 2 {
+	neoPrefix, ok := neoForgePrefix(gameVersion)
+	if !ok {
 		return "", fmt.Errorf(
 			"cannot derive NeoForge version prefix from Minecraft version %s",
 			gameVersion,
 		)
 	}
-	neoPrefix := strings.Join(parts[1:], ".") + "."
 
 	matching := make([]string, 0, len(meta.Versioning.Versions))
 	for _, v := range meta.Versioning.Versions {
