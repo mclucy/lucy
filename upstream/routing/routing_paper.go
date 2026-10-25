@@ -29,17 +29,18 @@ type paperBuild struct {
 	} `json:"downloads"`
 }
 
-// IdentifyPaperBuild matches a Paper jar digest against the published builds
-// for a Minecraft version. Init uses it when a Paper jar was renamed and its
-// filename no longer carries the build number.
-func IdentifyPaperBuild(
+// IdentifyFillBuild matches a server jar digest against the published builds
+// of a PaperMC fill project. Init uses it when a renamed jar no longer carries
+// its build number.
+func IdentifyFillBuild(
 	ctx context.Context,
+	project string,
 	minecraft version.Version,
 	sha256 string,
 ) (version.Version, bool, error) {
 	var builds []paperBuild
-	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" +
-		minecraft.String() + "/builds"
+	endpoint := "https://fill.papermc.io/v3/projects/" + project +
+		"/versions/" + minecraft.String() + "/builds"
 	if err := Metadata(ctx, endpoint, &builds); err != nil {
 		return "", false, err
 	}

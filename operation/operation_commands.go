@@ -2,6 +2,7 @@ package operation
 
 import (
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -343,17 +344,24 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			if d.Server.Core.ProductVersion == "" && identity.Primary.Version != "" && !identity.Primary.Version.IsInvalid() && !identity.Primary.Version.CanInfer() {
 				d.Server.Core.ProductVersion = identity.Primary.Version
 			}
-			if d.Server.Core.Product == serverpkg.ProductPaper &&
+			if paperLineageProduct(d.Server.Core.Product) &&
 				!concreteVersion(d.Server.Core.ProductVersion) {
-				build, found, err := identifyPaperBuild(ctx, root, selection)
+				build, found, err := identifyInstalledCoreBuild(
+					ctx,
+					root,
+					selection,
+					d.Server.Core.Product,
+				)
 				if err != nil {
 					return initResult(observed), err
 				}
 				if !found {
 					return initResult(observed), fmt.Errorf(
-						"cannot identify the installed Paper build; restore the " +
-							"published paper-<minecraft>-<build>.jar name or pin " +
+						"cannot identify the installed %s build; restore the "+
+							"published %s-<minecraft>-<build>.jar name or pin "+
 							"the core version in lucy.yaml",
+						d.Server.Core.Product,
+						d.Server.Core.Product,
 					)
 				}
 				d.Server.Core.ProductVersion = build
@@ -562,10 +570,20 @@ func concreteVersion(v version.Version) bool {
 	return v != "" && !v.IsInvalid() && !v.CanInfer()
 }
 
-func identifyPaperBuild(
+func paperLineageProduct(product serverpkg.Product) bool {
+	switch product {
+	case serverpkg.ProductPaper, serverpkg.ProductPurpur, serverpkg.ProductFolia:
+		return true
+	default:
+		return false
+	}
+}
+
+func identifyInstalledCoreBuild(
 	ctx context.Context,
 	root string,
 	selection *discovery.Selection,
+	product serverpkg.Product,
 ) (version.Version, bool, error) {
 	if selection == nil || selection.EntryPoint == nil || selection.EntryPoint.Path == "" {
 		return "", false, nil
@@ -576,10 +594,11 @@ func identifyPaperBuild(
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return "", false, fmt.Errorf("read Paper jar: %w", err)
+		return "", false, fmt.Errorf("read %s jar: %w", product, err)
 	}
-	sum := sha256.New()
-	_, copyErr := io.Copy(sum, file)
+	sha := sha256.New()
+	md := md5.New()
+	_, copyErr := io.Copy(io.MultiWriter(sha, md), file)
 	closeErr := file.Close()
 	if copyErr != nil {
 		return "", false, copyErr
@@ -587,13 +606,32 @@ func identifyPaperBuild(
 	if closeErr != nil {
 		return "", false, closeErr
 	}
-	build, found, err := routing.IdentifyPaperBuild(
-		ctx,
-		selection.MinecraftVersion(),
-		hex.EncodeToString(sum.Sum(nil)),
-	)
+	var build version.Version
+	var found bool
+	switch product {
+	case serverpkg.ProductPaper:
+		build, found, err = routing.IdentifyFillBuild(
+			ctx,
+			"paper",
+			selection.MinecraftVersion(),
+			hex.EncodeToString(sha.Sum(nil)),
+		)
+	case serverpkg.ProductFolia:
+		build, found, err = routing.IdentifyFillBuild(
+			ctx,
+			"folia",
+			selection.MinecraftVersion(),
+			hex.EncodeToString(sha.Sum(nil)),
+		)
+	case serverpkg.ProductPurpur:
+		build, found, err = routing.IdentifyPurpurBuild(
+			ctx,
+			selection.MinecraftVersion(),
+			hex.EncodeToString(md.Sum(nil)),
+		)
+	}
 	if err != nil {
-		return "", false, fmt.Errorf("identify installed Paper build: %w", err)
+		return "", false, fmt.Errorf("identify installed %s build: %w", product, err)
 	}
 	return build, found, nil
 }
