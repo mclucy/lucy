@@ -1,6 +1,7 @@
 package install
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -8,12 +9,30 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
+	serverpkg "github.com/mclucy/lucy/server"
 )
 
+// requirementKey names one manifest declaration. A reference alone does not
+// identify a declaration because the same project can be declared for two
+// ecosystems or environments.
+type requirementKey struct {
+	environment serverpkg.Environment
+	ecosystem   catalog.Ecosystem
+	reference   string
+}
+
+func compareRequirementKeys(a, b requirementKey) int {
+	return cmp.Or(
+		cmp.Compare(a.environment, b.environment),
+		cmp.Compare(a.ecosystem, b.ecosystem),
+		cmp.Compare(a.reference, b.reference),
+	)
+}
+
 // declaredRequirements collects every requirement the manifest declares for a
-// package, keyed by the reference that names it.
-func declaredRequirements(d *manifest.Document) map[string]manifest.Requirement {
-	declared := map[string]manifest.Requirement{}
+// package, keyed by the location and reference that name it.
+func declaredRequirements(d *manifest.Document) map[requirementKey]manifest.Requirement {
+	declared := map[requirementKey]manifest.Requirement{}
 	var loaders []catalog.Ecosystem
 	for loader := range d.Server.Packages {
 		loaders = append(loaders, loader)
@@ -26,13 +45,15 @@ func declaredRequirements(d *manifest.Document) map[string]manifest.Requirement 
 		}
 		slices.Sort(refs)
 		for _, ref := range refs {
-			declared[ref] = d.Server.Packages[loader][ref]
+			key := requirementKey{serverpkg.EnvironmentServer, loader, ref}
+			declared[key] = d.Server.Packages[loader][ref]
 		}
 	}
 	if d.MCDR != nil {
 		refs := slices.Sorted(maps.Keys(d.MCDR.Packages))
 		for _, ref := range refs {
-			declared[ref] = d.MCDR.Packages[ref]
+			key := requirementKey{serverpkg.EnvironmentMCDR, catalog.EcosystemMCDR, ref}
+			declared[key] = d.MCDR.Packages[ref]
 		}
 	}
 	return declared
@@ -88,21 +109,29 @@ func bindRequirement(p *lockfile.Package, ref string, requirement manifest.Requi
 // removal uninstalls the package instead of leaving the lock pinning it.
 func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error {
 	declared := declaredRequirements(d)
-	for _, ref := range slices.Sorted(maps.Keys(declared)) {
-		requirement := declared[ref]
+	keys := make([]requirementKey, 0, len(declared))
+	for key := range declared {
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, compareRequirementKeys)
+	for _, key := range keys {
+		requirement := declared[key]
 		pinned := false
 		for i := range resolved.Packages {
 			p := &resolved.Packages[i]
-			if !lockPackageFor(ref, *p) {
+			if p.Environment != key.environment || p.Ecosystem != key.ecosystem {
+				continue
+			}
+			if !lockPackageFor(key.reference, *p) {
 				continue
 			}
 			pinned = true
-			bindRequirement(p, ref, requirement)
+			bindRequirement(p, key.reference, requirement)
 		}
 		if !pinned && requirement.IsEnabled() {
 			return fmt.Errorf(
 				"lucy-lock.yaml does not pin %s; install it without --locked first",
-				ref,
+				key.reference,
 			)
 		}
 	}
@@ -114,7 +143,7 @@ func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error
 // packages. Disabled declarations retain pins without activating their dependencies.
 func retainDeclared(
 	packages []lockfile.Package,
-	declared map[string]manifest.Requirement,
+	declared map[requirementKey]manifest.Requirement,
 ) []lockfile.Package {
 	type identity struct {
 		environment string
@@ -138,7 +167,8 @@ func retainDeclared(
 		retained[i], enabled[i] = ambient, ambient
 		bindings := p.Requirements[:0]
 		for _, binding := range p.Requirements {
-			if _, ok := declared[binding.Reference]; ok {
+			key := requirementKey{p.Environment, p.Ecosystem, binding.Reference}
+			if _, ok := declared[key]; ok {
 				bindings = append(bindings, binding)
 				retained[i] = true
 				enabled[i] = enabled[i] || binding.Enabled
