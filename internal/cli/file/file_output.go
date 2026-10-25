@@ -103,7 +103,7 @@ func displacedBytes(change filetrack.Change) bool {
 }
 
 // pathOrAllArgs enforces the selection shared by update and recover: --all
-// replaces every positional path instead of combining with one.
+// replaces every positional path instead of combining with them.
 func pathOrAllArgs(cmd *cobra.Command, args []string) error {
 	all, _ := cmd.Flags().GetBool(flagAll)
 	if all {
@@ -112,7 +112,7 @@ func pathOrAllArgs(cmd *cobra.Command, args []string) error {
 		}
 		return nil
 	}
-	if len(args) != 1 {
+	if len(args) == 0 {
 		return fmt.Errorf("requires a path argument or --%s", flagAll)
 	}
 	return nil

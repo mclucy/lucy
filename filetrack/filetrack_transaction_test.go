@@ -55,7 +55,7 @@ func TestInterruptedFileTransactionRecovery(t *testing.T) {
 			if _, err := History(root, ""); err == nil {
 				t.Fatal("read-only history accepted a pending transaction")
 			}
-			_, err = Run(t.Context(), root, Request{Operation: Unlock, Path: "a.cfg"})
+			_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 			requireTransaction(t, err)
 			document, err := manifest.Read(root)
 			requireTransaction(t, err)
@@ -128,7 +128,7 @@ func TestRecoveryPreservesPostInterruptionEdits(t *testing.T) {
 	interrupted := snapshotTransactionFiles(t, root)
 	journal, err := os.ReadFile(filepath.Join(root, transactionName))
 	requireTransaction(t, err)
-	if _, err := Run(t.Context(), root, Request{Operation: Unlock, Path: "a.cfg"}); err == nil {
+	if _, err := Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}}); err == nil {
 		t.Fatalf("expected protected third state, got %v", err)
 	}
 	for name, data := range interrupted {
@@ -136,7 +136,7 @@ func TestRecoveryPreservesPostInterruptionEdits(t *testing.T) {
 	}
 	requireTransactionBytes(t, filepath.Join(root, transactionName), journal)
 	requireTransaction(t, os.WriteFile(filepath.Join(root, "b.cfg"), original["b.cfg"], 0o640))
-	_, err = Run(t.Context(), root, Request{Operation: Unlock, Path: "a.cfg"})
+	_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
 	for _, name := range []string{"a.cfg", "b.cfg", manifest.Filename, lockfile.Filename} {
 		requireTransactionBytes(t, filepath.Join(root, name), original[name])
@@ -155,7 +155,7 @@ func TestFileHistoryTailRepairAndMiddleCorruption(t *testing.T) {
 		t.Fatal("read-only history silently repaired an incomplete event")
 	}
 	requireTransactionBytes(t, path, incomplete)
-	_, err = Run(t.Context(), root, Request{Operation: Unlock, Path: "a.cfg"})
+	_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
 	events, err := History(root, "")
 	requireTransaction(t, err)
@@ -171,7 +171,7 @@ func TestFileHistoryTailRepairAndMiddleCorruption(t *testing.T) {
 	corrupt = append(corrupt, repaired[len(original):]...)
 	requireTransaction(t, os.WriteFile(path, corrupt, 0o600))
 	before := snapshotTransactionFiles(t, root)
-	if _, err := Run(t.Context(), root, Request{Operation: Update, Path: "a.cfg"}); err == nil {
+	if _, err := Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}}); err == nil {
 		t.Fatal("mutation ignored complete middle corruption")
 	}
 	for name, data := range before {
@@ -289,7 +289,7 @@ func TestWorkspaceWriterExcludesIndependentProcess(t *testing.T) {
 	root := transactionWorkspace(t)
 	original := snapshotTransactionFiles(t, root)
 	stop := startTransactionProcess(t, root, "hold-workspace")
-	_, err := Run(t.Context(), root, Request{Operation: Update, Path: "a.cfg"})
+	_, err := Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}})
 	if !errors.Is(err, fsutil.ErrLocked) {
 		t.Fatalf("another process did not own the workspace: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestWorkspaceWriterExcludesIndependentProcess(t *testing.T) {
 		requireTransactionBytes(t, filepath.Join(root, name), data)
 	}
 	stop()
-	_, err = Run(t.Context(), root, Request{Operation: Update, Path: "a.cfg"})
+	_, err = Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
 	events, err := History(root, "")
 	requireTransaction(t, err)
@@ -328,7 +328,7 @@ func TestRecoveryWaitsForDeclaredRunningServer(t *testing.T) {
 		t.Fatal("fixture did not expose a live native session lock")
 	}
 	before := snapshotTransactionFiles(t, root)
-	if _, err := Run(t.Context(), root, Request{Operation: Unlock, Path: "a.cfg"}); err == nil {
+	if _, err := Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}}); err == nil {
 		t.Fatalf("recovery ignored a live server: %v", err)
 	}
 	for name, data := range before {
@@ -338,7 +338,7 @@ func TestRecoveryWaitsForDeclaredRunningServer(t *testing.T) {
 		t.Fatal("activity guard removed the journal")
 	}
 	stopWorld()
-	_, err = Run(t.Context(), root, Request{Operation: Unlock, Path: "a.cfg"})
+	_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
 	requireTransactionBytes(t, filepath.Join(root, "a.cfg"), []byte("initial-a.cfg"))
 }
@@ -577,7 +577,7 @@ func transactionWorkspace(t *testing.T) string {
 	requireTransaction(t, lockfile.Write(root, locked))
 	for _, name := range []string{"a.cfg", "b.cfg"} {
 		requireTransaction(t, os.WriteFile(filepath.Join(root, name), []byte("initial-"+name), 0o640))
-		_, err := Run(t.Context(), root, Request{Operation: Track, Path: name})
+		_, err := Run(t.Context(), root, Request{Operation: Track, Paths: []string{name}})
 		requireTransaction(t, err)
 	}
 	return root

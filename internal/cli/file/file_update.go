@@ -9,7 +9,7 @@ import (
 )
 
 var updateCmd = &cobra.Command{
-	Use:   "update [path]",
+	Use:   "update [path...]",
 	Short: UpdateShort,
 	Long:  UpdateLong,
 	Args:  pathOrAllArgs,
@@ -17,7 +17,7 @@ var updateCmd = &cobra.Command{
 }
 
 var recoverCmd = &cobra.Command{
-	Use:   "recover [path]",
+	Use:   "recover [path...]",
 	Short: RecoverShort,
 	Long:  RecoverLong,
 	Args:  pathOrAllArgs,
@@ -65,17 +65,13 @@ func actionFileUpdate(cmd *cobra.Command, args []string) error {
 
 	fromSource, _ := cmd.Flags().GetBool(flagFromSource)
 	all, _ := cmd.Flags().GetBool(flagAll)
-	path := ""
-	if len(args) == 1 {
-		path = args[0]
-	}
 
 	result, err := filetrack.Run(
 		cmd.Context(),
 		root,
 		filetrack.Request{
 			Operation:  filetrack.Update,
-			Path:       path,
+			Paths:      args,
 			All:        all,
 			FromSource: fromSource,
 		},
@@ -93,17 +89,13 @@ func actionFileRecover(cmd *cobra.Command, args []string) error {
 	}
 
 	all, _ := cmd.Flags().GetBool(flagAll)
-	path := ""
-	if len(args) == 1 {
-		path = args[0]
-	}
 
 	result, err := filetrack.Run(
 		cmd.Context(),
 		root,
 		filetrack.Request{
 			Operation: filetrack.Recover,
-			Path:      path,
+			Paths:     args,
 			All:       all,
 		},
 	)
@@ -133,7 +125,7 @@ func actionFileRevert(cmd *cobra.Command, args []string) error {
 		root,
 		filetrack.Request{
 			Operation: filetrack.Revert,
-			Path:      args[0],
+			Paths:     args[:1],
 			Hash:      hash,
 			Revision:  revision,
 		},

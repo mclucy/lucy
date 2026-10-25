@@ -13,6 +13,14 @@ lucy file track config/example.json
 
 `lucy file track` requires that the file already exists on disk. By default, it creates a mutable declaration, snapshots file contents into local CAS backups, and records the accepted hash using the `sha256:<64 lowercase hex>` format in `lucy.yaml` and `lucy-lock.yaml`. Paths are relative to the directory containing `lucy.yaml`. If a path is already tracked, `track` fails rather than overwriting the declaration.
 
+Pass several paths to declare them in one atomic step:
+
+```bash
+lucy file track server.properties eula.txt config/carpet.conf
+```
+
+The same applies to `untrack`, `update`, `recover`, `lock`, and `unlock`: one invocation records one event, and a failure on any path leaves every declaration unchanged.
+
 You can also set flags at track time:
 
 - `--immutable`: Track the file as immutable with an accepted hash.
@@ -35,9 +43,10 @@ lucy file update config/example.json
 
 This updates the accepted hash in `lucy.yaml` and `lucy-lock.yaml`, records a new accepted revision in `.lucy/history/files.jsonl`, and leaves `immutable` and `recover_url` unchanged.
 
-To accept all tracked files at once:
+To accept several files, list them; to accept all tracked files at once, use `--all`:
 
 ```bash
+lucy file update config/example.json server.properties
 lucy file update --all
 ```
 

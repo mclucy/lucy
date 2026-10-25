@@ -16,15 +16,15 @@ Every subcommand supports the inherited machine-readable JSON output flags (`--j
 ## Track
 
 ```bash
-lucy file track <path>
-lucy file track --immutable <path>
-lucy file track --recover-url <url> <path>
-lucy file track --no-hash <path>
+lucy file track <path>...
+lucy file track --immutable <path>...
+lucy file track --recover-url <url> <path>...
+lucy file track --no-hash <path>...
 ```
 
-Add a regular file to `lucy.yaml` and snapshot its current contents into the local content-addressed store. By default, `track` creates a mutable entry with an accepted hash (`sha256:<64 lowercase hex>`).
+Add one or more regular files to `lucy.yaml` and snapshot their current contents into the local content-addressed store. By default, `track` creates a mutable entry with an accepted hash (`sha256:<64 lowercase hex>`). One invocation accepts every path atomically and records one event.
 
-Tracking an already tracked path fails rather than implicitly updating it.
+Tracking an already tracked path fails rather than implicitly updating it. Flags apply to every path in the invocation.
 
 <ParamField query="--immutable" type="boolean" default="false">
   Mark the file immutable. Immutable files require an accepted hash and produce warnings when working content deviates. Conflicts with `--no-hash`.
@@ -41,21 +41,21 @@ Tracking an already tracked path fails rather than implicitly updating it.
 ## Untrack
 
 ```bash
-lucy file untrack <path>
+lucy file untrack <path>...
 ```
 
-Remove the file declaration from `lucy.yaml`. Working files and historical backups are preserved.
+Remove the file declarations from `lucy.yaml`. Working files and historical backups are preserved.
 
 ## Update
 
 ```bash
-lucy file update <path>
-lucy file update --from-source <path>
+lucy file update <path>...
+lucy file update --from-source <path>...
 lucy file update --all
 lucy file update --all --from-source
 ```
 
-Snapshot and accept current bytes for mutable or immutable tracked files. Leave the change policy and `recover_url` unchanged.
+Snapshot and accept current bytes for one or more mutable or immutable tracked files. Leave the change policy and `recover_url` unchanged.
 
 <ParamField query="--from-source" type="boolean" default="false">
   Fetch fresh bytes from `recover_url`, preserve displaced working bytes, replace the working file, and accept the new digest. Requests bypass stale network caches. Does not require matching the prior digest.
@@ -68,11 +68,11 @@ Snapshot and accept current bytes for mutable or immutable tracked files. Leave 
 ## Recover
 
 ```bash
-lucy file recover <path>
+lucy file recover <path>...
 lucy file recover --all
 ```
 
-Restore the working file to its accepted digest without accepting a new revision. Verify local CAS blobs first. If no valid local blob is available, fetch directly from `recover_url` and verify the exact accepted digest. Preserve displaced working bytes without accepting them. If recovery is unavailable or invalid, fail without changing destinations.
+Restore one or more working files to their accepted digests without accepting a new revision. Verify local CAS blobs first. If no valid local blob is available, fetch directly from `recover_url` and verify the exact accepted digest. Preserve displaced working bytes without accepting them. If recovery is unavailable or invalid, fail without changing destinations.
 
 <ParamField query="--all" type="boolean" default="false">
   Atomically restore all tracked entries that have an accepted hash. Presence-only entries without hashes are reported as skipped. Conflicts with positional paths.
@@ -101,8 +101,8 @@ Omitting a target follows the accepted revision's parent in history, so repeated
 ## Lock and unlock
 
 ```bash
-lucy file lock <path>
-lucy file unlock <path>
+lucy file lock <path>...
+lucy file unlock <path>...
 ```
 
 `lock` snapshots and accepts current working bytes, then sets `immutable: true`.

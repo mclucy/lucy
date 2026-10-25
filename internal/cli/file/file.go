@@ -36,25 +36,27 @@ const (
 	FileLong = "Run from a server workspace. Paths are relative to the " +
 		"directory containing lucy.yaml."
 
-	TrackLong = "Snapshot the current contents of an existing regular file " +
-		"into the local content store and declare it in lucy.yaml. By " +
-		"default the entry is mutable with an accepted hash; --immutable " +
-		"requires an accepted hash and raises warnings on deviation, " +
-		"--no-hash tracks presence only, and --recover-url records an " +
-		"explicit recovery source. An already tracked path fails rather " +
-		"than being implicitly updated."
+	TrackLong = "Snapshot the current contents of existing regular files " +
+		"into the local content store and declare them in lucy.yaml. One " +
+		"invocation accepts every path atomically. By default each entry " +
+		"is mutable with an accepted hash; --immutable requires an " +
+		"accepted hash and raises warnings on deviation, --no-hash tracks " +
+		"presence only, and --recover-url records an explicit recovery " +
+		"source. An already tracked path fails rather than being " +
+		"implicitly updated."
 
-	UntrackLong = "Remove the declaration from lucy.yaml. Working content " +
+	UntrackLong = "Remove the declarations from lucy.yaml. Working content " +
 		"and historical backups are preserved."
 
-	UpdateLong = "Snapshot and accept current bytes for a tracked file, or " +
-		"accept every tracked file at once with --all. The change policy " +
-		"and recover_url stay unchanged. --from-source fetches fresh bytes " +
-		"from recover_url, preserves the displaced working bytes, and " +
-		"accepts the new digest without requiring a match on the old one."
+	UpdateLong = "Snapshot and accept current bytes for one or more tracked " +
+		"files, or accept every tracked file at once with --all. The " +
+		"change policy and recover_url stay unchanged. --from-source " +
+		"fetches fresh bytes from recover_url, preserves the displaced " +
+		"working bytes, and accepts the new digest without requiring a " +
+		"match on the old one."
 
-	RecoverLong = "Restore a tracked file to its accepted digest without " +
-		"accepting a new revision. Local content-addressed blobs are " +
+	RecoverLong = "Restore one or more tracked files to their accepted " +
+		"digests without accepting a new revision. Local content-addressed blobs are " +
 		"verified first; when none is available the recover_url is " +
 		"fetched directly and checked against the accepted digest. " +
 		"Displaced working bytes are preserved without being accepted. " +
@@ -67,11 +69,12 @@ const (
 		"toggling. A hash selects a digest, --revision selects one exact " +
 		"historical sequence."
 
-	LockLong = "Snapshot and accept the current bytes, then warn about any " +
-		"future deviation without restoring or replacing them."
+	LockLong = "Snapshot and accept the current bytes of one or more files, " +
+		"then warn about any future deviation without restoring or " +
+		"replacing them."
 
-	UnlockLong = "Accept the existing hash and recover_url but stop warning " +
-		"about deviation."
+	UnlockLong = "Accept the existing hashes and recover_urls but stop " +
+		"warning about deviation."
 
 	ListLong = "Read-only inspection of every tracked file. Mutable files " +
 		"may deviate without warning; immutable files warn during " +

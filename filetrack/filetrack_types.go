@@ -22,7 +22,7 @@ const (
 // Request contains explicit user choices for one recoverable workspace operation.
 type Request struct {
 	Operation  Operation
-	Path       string
+	Paths      []string
 	All        bool
 	FromSource bool
 	Immutable  bool

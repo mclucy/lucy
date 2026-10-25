@@ -7,34 +7,34 @@ import (
 )
 
 var trackCmd = &cobra.Command{
-	Use:   "track <path>",
+	Use:   "track <path>...",
 	Short: TrackShort,
 	Long:  TrackLong,
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  actionFileTrack,
 }
 
 var untrackCmd = &cobra.Command{
-	Use:   "untrack <path>",
+	Use:   "untrack <path>...",
 	Short: UntrackShort,
 	Long:  UntrackLong,
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  actionFileUntrack,
 }
 
 var lockCmd = &cobra.Command{
-	Use:   "lock <path>",
+	Use:   "lock <path>...",
 	Short: LockShort,
 	Long:  LockLong,
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  actionFileLock,
 }
 
 var unlockCmd = &cobra.Command{
-	Use:   "unlock <path>",
+	Use:   "unlock <path>...",
 	Short: UnlockShort,
 	Long:  UnlockLong,
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  actionFileUnlock,
 }
 
@@ -71,7 +71,7 @@ func actionFileTrack(cmd *cobra.Command, args []string) error {
 		root,
 		filetrack.Request{
 			Operation:  filetrack.Track,
-			Path:       args[0],
+			Paths:      args,
 			Immutable:  immutable,
 			NoHash:     noHash,
 			RecoverURL: recoverURL,
@@ -94,7 +94,7 @@ func actionFileUntrack(cmd *cobra.Command, args []string) error {
 		root,
 		filetrack.Request{
 			Operation: filetrack.Untrack,
-			Path:      args[0],
+			Paths:     args,
 		},
 	)
 	if err != nil {
@@ -114,7 +114,7 @@ func actionFileLock(cmd *cobra.Command, args []string) error {
 		root,
 		filetrack.Request{
 			Operation: filetrack.Lock,
-			Path:      args[0],
+			Paths:     args,
 		},
 	)
 	if err != nil {
@@ -134,7 +134,7 @@ func actionFileUnlock(cmd *cobra.Command, args []string) error {
 		root,
 		filetrack.Request{
 			Operation: filetrack.Unlock,
-			Path:      args[0],
+			Paths:     args,
 		},
 	)
 	if err != nil {

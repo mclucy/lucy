@@ -224,10 +224,10 @@ func validateRequest(request Request) error {
 		return fmt.Errorf("unknown file operation %q", request.Operation)
 	}
 	if request.All {
-		if request.Path != "" || (request.Operation != Update && request.Operation != Recover) {
+		if len(request.Paths) > 0 || (request.Operation != Update && request.Operation != Recover) {
 			return fmt.Errorf("--all requires update or recover without a path")
 		}
-	} else if request.Path == "" {
+	} else if len(request.Paths) == 0 {
 		return fmt.Errorf("file operation requires a path")
 	}
 	if request.FromSource && request.Operation != Update {
@@ -250,18 +250,25 @@ func validateRequest(request Request) error {
 
 func selectFiles(files []manifest.TrackedFile, request Request) ([]string, []string, error) {
 	if !request.All {
-		path, err := input.TrackedPath(request.Path)
-		if err != nil {
-			return nil, nil, err
+		selected := make([]string, 0, len(request.Paths))
+		for _, raw := range request.Paths {
+			path, err := input.TrackedPath(raw)
+			if err != nil {
+				return nil, nil, err
+			}
+			if slices.Contains(selected, path) {
+				continue
+			}
+			index := slices.IndexFunc(files, func(file manifest.TrackedFile) bool { return file.Path == path })
+			if request.Operation == Track && index >= 0 {
+				return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
+			}
+			if request.Operation != Track && index < 0 {
+				return nil, nil, fmt.Errorf("file %s is not tracked", path)
+			}
+			selected = append(selected, path)
 		}
-		index := slices.IndexFunc(files, func(file manifest.TrackedFile) bool { return file.Path == path })
-		if request.Operation == Track && index >= 0 {
-			return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
-		}
-		if request.Operation != Track && index < 0 {
-			return nil, nil, fmt.Errorf("file %s is not tracked", path)
-		}
-		return []string{path}, nil, nil
+		return selected, nil, nil
 	}
 	selected, skipped := make([]string, 0, len(files)), make([]string, 0)
 	for _, file := range files {
