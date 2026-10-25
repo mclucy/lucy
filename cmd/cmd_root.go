@@ -258,6 +258,7 @@ func FlushOutput() error {
 }
 
 func Execute() error {
+	displayVersion, displayCommit := buildVersion()
 	executingCommand = nil
 	loggingReady = false
 	flagParsingFailed = false
@@ -280,14 +281,14 @@ func Execute() error {
 		// Machine mode must not emit those queries on the real stdout.
 		rootCmd.SilenceErrors = true
 		rootCmd.SilenceUsage = true
-		rootCmd.Version = version
+		rootCmd.Version = displayVersion
 		_, err = rootCmd.ExecuteContextC(context.Background())
 	} else {
 		err = fang.Execute(
 			context.Background(),
 			rootCmd,
-			fang.WithVersion(version),
-			fang.WithCommit(commit),
+			fang.WithVersion(displayVersion),
+			fang.WithCommit(displayCommit),
 			fang.WithErrorHandler(renderError),
 		)
 	}
