@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fsutil"
@@ -218,9 +219,15 @@ func Decode(reader io.Reader) (*Document, error) {
 	return d, nil
 }
 
+// Fingerprint returns the identity of a lock's content. It validates a copy
+// first, so the fingerprint describes what the lock says and not how it was
+// spelled.
 func Fingerprint(d *Document) (string, error) {
-	d = cloneForFingerprint(d)
-	data, err := json.Marshal(d, json.Deterministic(true))
+	canonical, err := canonicalDocument(d)
+	if err != nil {
+		return "", err
+	}
+	data, err := json.Marshal(canonical, json.Deterministic(true))
 	if err != nil {
 		return "", err
 	}
@@ -228,13 +235,16 @@ func Fingerprint(d *Document) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-func cloneForFingerprint(d *Document) *Document {
+func canonicalDocument(d *Document) (*Document, error) {
 	if d == nil {
-		return nil
+		return nil, nil
 	}
 	clone := *d
-	clone.ManifestFingerprint = d.ManifestFingerprint
-	return &clone
+	clone.Files = slices.Clone(d.Files)
+	if err := clone.Validate(); err != nil {
+		return nil, err
+	}
+	return &clone, nil
 }
 
 // Snapshot returns the canonical bytes of the document. It writes nothing. A
