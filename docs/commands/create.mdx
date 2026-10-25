@@ -74,7 +74,7 @@ lucy create --minecraft 1.21.4 --core paper --no-install --no-interactive
   Directory to create the server in. Lucy creates it when it does not exist. The manifest and lock live there, and the server occupies that directory directly.
 </ParamField>
 
-<ParamField query="--core, -c" type="string" default="minecraft">
+<ParamField query="--core, -c" type="string">
   Server software, optionally with a version. Examples: `paper`, `paper@232`, `fabric@0.16.9`, `purpur@latest`.
 </ParamField>
 
@@ -95,10 +95,10 @@ lucy create --minecraft 1.21.4 --core paper --no-install --no-interactive
 </ParamField>
 
 <ParamField query="--mcdr-version" type="string">
-  Record MCDReforged as the server wrapper. The isolated Python environment is prepared during installation.
+  Record MCDReforged at this version as the server wrapper.
 </ParamField>
 
-<ParamField query="--install" type="boolean" default="true">
+<ParamField query="--install" type="boolean">
   Install the server after writing the manifest and lock. This is the default.
 </ParamField>
 
