@@ -2,6 +2,7 @@ package resolve_test
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -52,7 +53,8 @@ type selectionAssignment [3]int
 // FuzzPackagesProjectSelection drives the public resolver with generated
 // requirement, dependency, and incompatibility graphs. The oracle enumerates
 // every candidate assignment and checks manifest satisfaction, required
-// dependency closure, incompatibility, primary-file rules, and reachability.
+// dependency closure, incompatibility, primary-file rules, reachability, and
+// the dependency provenance the lock must record.
 func FuzzPackagesProjectSelection(f *testing.F) {
 	// A required dependency overrides a disabled direct binding: beta is
 	// declared enabled:false but alpha requires it, so the selected beta must
@@ -503,7 +505,86 @@ func selectionAssignmentFromResult(
 	if !slices.IsSortedFunc(out, comparePackageOrder) {
 		return chosen, fmt.Errorf("selected packages are not sorted by identity")
 	}
+	if err := selectionProvenance(scenario, chosen, out); err != nil {
+		return chosen, err
+	}
 	return chosen, nil
+}
+
+// selectionProvenance checks the persisted dependency provenance against the
+// generated graph: the required dependents of every selected package and
+// whether another package selected it.
+func selectionProvenance(
+	scenario selectionScenario,
+	chosen selectionAssignment,
+	out []lockfile.Package,
+) error {
+	byProject := make(map[int]*lockfile.Package, len(out))
+	for index := range out {
+		project := slices.Index(fuzzProjectNames[:], out[index].ProjectID)
+		byProject[project] = &out[index]
+	}
+	for project := range fuzzProjectNames {
+		pkg, selected := byProject[project]
+		if !selected {
+			continue
+		}
+		var wantSources []catalog.Ref
+		if scenario.expand {
+			for parent := range fuzzProjectNames {
+				if parent == project || chosen[parent] < 0 {
+					continue
+				}
+				if scenario.projects[parent].candidates[chosen[parent]].deps[project] != depKindRequired {
+					continue
+				}
+				wantSources = append(wantSources, catalog.Ref{
+					Name:     catalog.Name(fuzzProjectNames[parent]),
+					Provider: catalog.ProviderModrinth,
+				})
+			}
+		}
+		if !sameRefSet(pkg.DependencyOf, wantSources) {
+			return fmt.Errorf(
+				"selected %s DependencyOf = %#v, want %#v",
+				pkg.ProjectID,
+				pkg.DependencyOf,
+				wantSources,
+			)
+		}
+		if wantDependency := len(wantSources) > 0; pkg.Dependency != wantDependency {
+			return fmt.Errorf(
+				"selected %s Dependency = %v, want %v; dependents = %#v",
+				pkg.ProjectID,
+				pkg.Dependency,
+				wantDependency,
+				wantSources,
+			)
+		}
+		if scenario.projects[project].rootMode == rootAbsent && len(pkg.Requirements) != 0 {
+			return fmt.Errorf(
+				"selected %s has requirement bindings without a declaration: %#v",
+				pkg.ProjectID,
+				pkg.Requirements,
+			)
+		}
+	}
+	return nil
+}
+
+func sameRefSet(actual, want []catalog.Ref) bool {
+	if len(actual) != len(want) {
+		return false
+	}
+	actualSet := make(map[catalog.Ref]int, len(actual))
+	for _, ref := range actual {
+		actualSet[ref]++
+	}
+	wantSet := make(map[catalog.Ref]int, len(want))
+	for _, ref := range want {
+		wantSet[ref]++
+	}
+	return maps.Equal(actualSet, wantSet)
 }
 
 func selectionRequirementMatches(scenario selectionScenario, project int, pkg lockfile.Package) error {
