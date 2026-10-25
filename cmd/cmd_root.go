@@ -267,6 +267,9 @@ func injectAgentInstructions() {
 // so a failure that happens before Cobra parses flags still honors --json and
 // --json-compact.
 func effectiveRendering(cmd *cobra.Command) cli.JSONRendering {
+	if docsCommand(cmd) {
+		return cli.JSONNone
+	}
 	if cmd.Flags().Parsed() && !flagParsingFailed {
 		return cli.JSONMode(cmd)
 	}
@@ -363,10 +366,14 @@ func Execute() error {
 	applyAgentDefaults()
 	injectAgentInstructions()
 	command := invocationCommand()
-	selectedJSON = cli.JSONModeFromArgs(command, os.Args[1:])
-	if selectedJSON == cli.JSONNone && !cli.JSONFlagsPresent(os.Args[1:]) {
-		if compact, _ := rootCmd.PersistentFlags().GetBool(cli.FlagJSONCompact); compact {
-			selectedJSON = cli.JSONCompact
+	if docsCommand(command) {
+		selectedJSON = cli.JSONNone
+	} else {
+		selectedJSON = cli.JSONModeFromArgs(command, os.Args[1:])
+		if selectedJSON == cli.JSONNone && !cli.JSONFlagsPresent(os.Args[1:]) {
+			if compact, _ := rootCmd.PersistentFlags().GetBool(cli.FlagJSONCompact); compact {
+				selectedJSON = cli.JSONCompact
+			}
 		}
 	}
 	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
