@@ -27,6 +27,10 @@ const (
 	ConfigShort = "Manage lucy's configurations"
 
 	CreateShort = "Create a new server"
+	CreateLong  = "Create a new server in a directory. The interactive form asks " +
+		"where the server lives, which software it runs, its Minecraft and " +
+		"software versions, and whether to install it now. Use --no-install " +
+		"to write only the manifest and lock for a later lucy install."
 
 	DeinitShort = "Remove lucy from the current server directory"
 	DeinitLong  = "Delete lucy.yaml, lucy-lock.yaml, lucy.local.yaml, and the " +
