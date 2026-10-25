@@ -38,6 +38,19 @@ func moduleProblem(owner *lockfile.Package, message string) ModuleProblem {
 	}
 }
 
+// SearchLimitError reports that resolution stopped before it settled a graph.
+// The failure it produces keeps the rejection ledger for the command layer.
+type SearchLimitError struct {
+	Attempts int
+}
+
+func (e *SearchLimitError) Error() string {
+	return fmt.Sprintf(
+		"package resolution exceeded %d candidate combinations",
+		e.Attempts,
+	)
+}
+
 // RejectionKind names why one candidate was discarded.
 type RejectionKind string
 
@@ -74,6 +87,10 @@ type Failure struct {
 	Candidates int
 	Groups     []RejectionGroup
 	Cause      error
+	// Aborted marks a search that stopped before it settled a graph. Project
+	// and Groups describe the candidate it rejected most often; Cause names
+	// the stop.
+	Aborted bool
 }
 
 // Error reports the failure on one line. It is the fallback for surfaces that
@@ -81,6 +98,12 @@ type Failure struct {
 func (f *Failure) Error() string {
 	if f == nil {
 		return ""
+	}
+	if f.Aborted {
+		if f.Cause != nil {
+			return f.Cause.Error()
+		}
+		return "package resolution stopped before it settled"
 	}
 	var parts []string
 	for _, group := range f.Groups {

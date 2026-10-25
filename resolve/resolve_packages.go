@@ -20,6 +20,10 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
+// searchAttemptLimit bounds how many candidate combinations one resolution
+// may explore before it reports the stop together with the rejection ledger.
+const searchAttemptLimit = 10000
+
 // catalogueRegistry names the registry that serves a package provider. Only a
 // provider backing a registry can answer catalogue queries.
 func catalogueRegistry(provider catalog.Provider) catalog.Registry {
@@ -148,8 +152,8 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			return hardFail(err)
 		}
 		attempts++
-		if attempts > 10000 {
-			return hardFail(fmt.Errorf("package resolution exceeded 10000 candidate combinations"))
+		if attempts > searchAttemptLimit {
+			return hardFail(&SearchLimitError{Attempts: searchAttemptLimit})
 		}
 		trace.state(len(chosen), len(pending))
 		if len(pending) == 0 {
@@ -469,6 +473,18 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			return err
 		}
 		if operational {
+			var limit *SearchLimitError
+			if errors.As(lastErr, &limit) {
+				// The search stopped early, so keep the rejection ledger the
+				// command layer renders instead of the bare stop message.
+				summary := ledger.summary(target.Minecraft, limit)
+				if summary == nil {
+					summary = &Failure{Minecraft: target.Minecraft}
+				}
+				summary.Cause = limit
+				summary.Aborted = true
+				return summary
+			}
 			return lastErr
 		}
 		return resolutionFailure(ledger.summary(target.Minecraft, lastErr), lastErr)

@@ -314,6 +314,9 @@ func errorCode(err error) string {
 	}
 	var failure *resolve.Failure
 	if errors.As(err, &failure) && failure != nil {
+		if failure.Aborted {
+			return CodeCommandFailed
+		}
 		if len(failure.Groups) == 1 &&
 			failure.Groups[0].Kind == resolve.RejectionVersionMismatch {
 			return CodeResolveNoMatchingBuild

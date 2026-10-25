@@ -372,6 +372,20 @@ func publicationLine(result *install.Result) string {
 
 func resolutionDetail(failure *resolve.Failure) *report.Detail {
 	detail := &report.Detail{Cause: failure}
+	if failure.Aborted {
+		detail.Title = failure.Error()
+		if failure.Project != "" {
+			detail.Lines = append(detail.Lines, fmt.Sprintf(
+				"%s rejected %d builds for Minecraft %s on %s before the search stopped",
+				failure.Project,
+				failure.Candidates,
+				failure.Minecraft,
+				failure.Ecosystem,
+			))
+			appendRejectionGroups(detail, failure)
+		}
+		return detail
+	}
 	versionOnly := len(failure.Groups) == 1 &&
 		failure.Groups[0].Kind == resolve.RejectionVersionMismatch
 	if versionOnly {
@@ -402,6 +416,12 @@ func resolutionDetail(failure *resolve.Failure) *report.Detail {
 			failure.Ecosystem,
 		))
 	}
+	appendRejectionGroups(detail, failure)
+	return detail
+}
+
+// appendRejectionGroups reports each aggregated rejection on its own line.
+func appendRejectionGroups(detail *report.Detail, failure *resolve.Failure) {
 	for _, group := range failure.Groups {
 		switch group.Kind {
 		case resolve.RejectionEmpty:
@@ -416,5 +436,4 @@ func resolutionDetail(failure *resolve.Failure) *report.Detail {
 			detail.Lines = append(detail.Lines, pluralBuilds(group.Count)+": "+group.Detail)
 		}
 	}
-	return detail
 }
