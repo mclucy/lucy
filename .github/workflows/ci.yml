@@ -125,3 +125,15 @@ jobs:
     uses: ./.github/workflows/bin-size.yml
     secrets:
       CF_API_KEY: ${{ secrets.CF_API_KEY }}
+
+  wiki:
+    needs: test
+    if: >-
+      always()
+      && (
+        (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+        || github.event_name == 'pull_request'
+      )
+    permissions:
+      contents: write
+    uses: ./.github/workflows/wiki.yml

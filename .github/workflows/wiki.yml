@@ -1,0 +1,60 @@
+# The GitHub wiki is generated from the Mintlify pages under docs/. Never edit
+# wiki pages in the browser: the next synchronization deletes them.
+name: Wiki
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Render wiki pages
+        run: go run ./tools/genwiki -out "$RUNNER_TEMP/wiki"
+
+      - name: Publish wiki mirror
+        if: >-
+          github.event_name == 'push'
+          || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'master'))
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          wiki="$RUNNER_TEMP/lucy.wiki"
+          git clone --depth 1 "https://github.com/${GITHUB_REPOSITORY}.wiki.git" "$wiki"
+
+          # How to publish the coverage badge is outside this mirror: README.md
+          # links to badge/coverage.svg in the wiki.
+          find "$wiki" -mindepth 1 -maxdepth 1 ! -name .git ! -name badge -exec rm -rf {} +
+          cp -R "$RUNNER_TEMP/wiki/." "$wiki/"
+
+          cd "$wiki"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Wiki is already up to date."
+            exit 0
+          fi
+          git commit -m "docs: mirror documentation from ${GITHUB_SHA::7}"
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" HEAD:master
