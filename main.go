@@ -22,19 +22,23 @@ func run() (exitCode int) {
 	}
 	var exitErr *cli.ExitError
 	if errors.As(executeErr, &exitErr) {
+		if closeErr != nil {
+			if cmd.JSONSelected() {
+				cmd.WriteError(errors.Join(exitErr.Err, closeErr))
+			} else {
+				cmd.WriteError(closeErr)
+			}
+			return 1
+		}
 		if exitErr.Silent {
-			if closeErr == nil {
-				if flushErr := cmd.FlushOutput(); flushErr != nil {
-					cmd.WriteError(flushErr)
-					return 2
-				}
+			if flushErr := cmd.FlushOutput(); flushErr != nil {
+				cmd.WriteError(flushErr)
+				return 2
 			}
 			return exitErr.Code
 		}
 		if cmd.JSONSelected() {
-			if err := errors.Join(exitErr.Err, closeErr); err != nil {
-				cmd.WriteError(err)
-			}
+			cmd.WriteError(exitErr.Err)
 		}
 		return exitErr.Code
 	}
