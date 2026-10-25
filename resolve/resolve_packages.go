@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -562,16 +563,17 @@ func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
 // sortPackages orders packages by their persisted identity so validation
 // reports findings in a stable order.
 func sortPackages(packages []lockfile.Package) {
-	slices.SortFunc(packages, func(a, b lockfile.Package) int {
+	sort.Slice(packages, func(i, j int) bool {
+		a, b := &packages[i], &packages[j]
 		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {
-			return n
+			return n < 0
 		}
 		if n := strings.Compare(string(a.Ecosystem), string(b.Ecosystem)); n != 0 {
-			return n
+			return n < 0
 		}
 		if n := strings.Compare(string(a.Provider), string(b.Provider)); n != 0 {
-			return n
+			return n < 0
 		}
-		return strings.Compare(a.ProjectID, b.ProjectID)
+		return strings.Compare(a.ProjectID, b.ProjectID) < 0
 	})
 }

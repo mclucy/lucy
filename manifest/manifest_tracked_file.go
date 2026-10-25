@@ -1,10 +1,9 @@
 package manifest
 
 import (
-	"cmp"
 	"fmt"
 	"net/url"
-	"slices"
+	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/input"
@@ -56,6 +55,6 @@ func NormalizeTrackedFiles(files []TrackedFile) error {
 			}
 		}
 	}
-	slices.SortFunc(files, func(a, b TrackedFile) int { return cmp.Compare(a.Path, b.Path) })
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return nil
 }

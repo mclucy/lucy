@@ -3,6 +3,7 @@ package discovery
 import (
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/server"
@@ -77,7 +78,9 @@ func reconcileInstallations(
 	installations = dropEmptyInstallations(installations)
 	findings = append(findings, conflictingClaims(installations)...)
 	findings = append(findings, unknownArtifacts(installations, scan)...)
-	slices.SortFunc(installations, compareInstallations)
+	sort.Slice(installations, func(i, j int) bool {
+		return compareInstallations(installations[i], installations[j]) < 0
+	})
 	return installations, findings
 }
 

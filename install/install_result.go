@@ -3,6 +3,7 @@ package install
 import (
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -292,14 +293,12 @@ func packageChanges(
 		}
 		changes = append(changes, change)
 	}
-	slices.SortStableFunc(changes, func(a, b PackageChange) int {
+	sort.SliceStable(changes, func(i, j int) bool {
+		a, b := &changes[i], &changes[j]
 		if a.Direct != b.Direct {
-			if a.Direct {
-				return -1
-			}
-			return 1
+			return a.Direct
 		}
-		return strings.Compare(a.Name, b.Name)
+		return a.Name < b.Name
 	})
 	return changes
 }

@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
+	"sort"
 	"strings"
 
 	catalogpkg "github.com/mclucy/lucy/catalog"
@@ -171,8 +171,9 @@ func (f *findingList) add(file string, line int, msg string) {
 }
 
 func (f findingList) sorted() []Finding {
-	slices.SortStableFunc(f, func(a, b Finding) int {
-		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Message, b.Message))
+	sort.SliceStable(f, func(i, j int) bool {
+		a, b := &f[i], &f[j]
+		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Message, b.Message)) < 0
 	})
 	return f
 }

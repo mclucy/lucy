@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -46,9 +47,14 @@ func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem)
 func normalizeModules(modules []catalog.DescriptorModule) []catalog.DescriptorModule {
 	for i := range modules {
 		slices.Sort(modules[i].Provides)
-		slices.SortFunc(modules[i].Dependencies, compareDescriptorDependency)
+		deps := modules[i].Dependencies
+		sort.Slice(deps, func(a, b int) bool {
+			return compareDescriptorDependency(deps[a], deps[b]) < 0
+		})
 	}
-	slices.SortFunc(modules, compareDescriptorModule)
+	sort.Slice(modules, func(i, j int) bool {
+		return compareDescriptorModule(modules[i], modules[j]) < 0
+	})
 	return modules
 }
 
