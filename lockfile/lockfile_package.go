@@ -21,12 +21,14 @@ type Package struct {
 	Ecosystem        catalog.Ecosystem  `yaml:"ecosystem" json:"ecosystem"`
 	catalog.Artifact `yaml:",inline"`
 	Requirements     []RequirementBinding `yaml:"requirements,omitempty" json:"requirements,omitempty"`
+	// Dependency records selection through another package's dependency.
+	Dependency bool `yaml:"dependency,omitempty" json:"dependency,omitzero"`
 }
 
-// Enabled reports whether p is selected for installation. A package with no
-// requirement bindings is ambient; otherwise, one binding must be enabled.
+// Enabled reports whether p is selected for installation. Dependency demand
+// overrides disabled direct bindings; packages without bindings are ambient.
 func (p *Package) Enabled() bool {
-	if len(p.Requirements) == 0 {
+	if p.Dependency || len(p.Requirements) == 0 {
 		return true
 	}
 	for _, r := range p.Requirements {

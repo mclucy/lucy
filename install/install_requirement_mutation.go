@@ -75,7 +75,7 @@ func bindRequirement(p *lockfile.Package, ref string, requirement manifest.Requi
 		p.Requirements[i] = binding
 		return
 	}
-	if binding.Enabled {
+	if binding.Enabled || p.Dependency {
 		p.Requirements = append(p.Requirements, binding)
 	}
 }
@@ -110,9 +110,8 @@ func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error
 	return nil
 }
 
-// retainDeclared keeps the packages a locked mutation still justifies. A
-// package bound only to requirements the manifest no longer declares is
-// dropped; packages with no bindings of their own are ambient and survive.
+// retainDeclared keeps packages that remain declared, dependency-selected, or
+// ambient. Removed direct bindings do not remove a package needed as a dependency.
 func retainDeclared(
 	packages []lockfile.Package,
 	declared map[string]manifest.Requirement,
@@ -129,7 +128,7 @@ func retainDeclared(
 				bindings = append(bindings, binding)
 			}
 		}
-		if len(bindings) == 0 {
+		if len(bindings) == 0 && !p.Dependency {
 			continue
 		}
 		p.Requirements = bindings

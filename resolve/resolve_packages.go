@@ -214,7 +214,8 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			r.key = canonicalKey
 		}
 		ledger.noteDisplay(r.key, r.display)
-		active := len(r.requirements) == 0
+		dependencyDemand := len(r.requirements) == 0
+		active := dependencyDemand
 		for _, req := range r.requirements {
 			active = active || req.Enabled
 		}
@@ -224,12 +225,15 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		// package that no file can satisfy.
 		if previous, ok := chosen[r.key]; ok && (!active || previous.Artifact.Filename != "") {
 			before := previous.Requirements
+			wasDependency := previous.Dependency
 			previous.Requirements = append(previous.Requirements, r.requirements...)
+			previous.Dependency = previous.Dependency || dependencyDemand
 			chosen[r.key] = previous
 			if backtrack(rest) {
 				return true
 			}
 			previous.Requirements = before
+			previous.Dependency = wasDependency
 			chosen[r.key] = previous
 			log.Debug(
 				"resolve: backtracking requirement merge",
@@ -384,6 +388,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 				Ecosystem:    r.key.ecosystem,
 				Artifact:     a,
 				Requirements: requirements,
+				Dependency:   dependencyDemand,
 			}
 			if declared := conflictDependencies(candidate); len(declared) > 0 {
 				conflicts[r.key] = declared
@@ -552,6 +557,7 @@ func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
 		}
 		if i, ok := index[k]; ok {
 			out[i].Requirements = append(out[i].Requirements, p.Requirements...)
+			out[i].Dependency = out[i].Dependency || p.Dependency
 			continue
 		}
 		index[k] = len(out)
