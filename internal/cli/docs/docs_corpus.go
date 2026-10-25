@@ -27,6 +27,9 @@ func loadPages() ([]page, error) {
 			if entry.IsDir() {
 				return nil
 			}
+			if strings.HasSuffix(filePath, ".draft.mdx") {
+				return nil
+			}
 			content, err := fs.ReadFile(docscontent.Files, filePath)
 			if err != nil {
 				return err
