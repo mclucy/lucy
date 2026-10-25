@@ -417,7 +417,11 @@ func createAbsolute(path string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		path = filepath.Join(home, strings.TrimPrefix(path, "~/"))
+		if path == "~" {
+			path = home
+		} else {
+			path = filepath.Join(home, strings.TrimPrefix(path, "~/"))
+		}
 	}
 	return filepath.Abs(path)
 }
