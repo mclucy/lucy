@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -88,8 +89,9 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 			inventory.Java = append(inventory.Java, java)
 		}
 	}
-	slices.SortFunc(inventory.Java, func(a, b JavaInstallation) int {
-		return cmp.Or(cmp.Compare(b.Major, a.Major), cmp.Compare(a.Home, b.Home))
+	sort.Slice(inventory.Java, func(i, j int) bool {
+		a, b := &inventory.Java[i], &inventory.Java[j]
+		return cmp.Or(cmp.Compare(b.Major, a.Major), cmp.Compare(a.Home, b.Home)) < 0
 	})
 	inventory.Gradle, err = probeGradle(ctx)
 	if err != nil {

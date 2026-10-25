@@ -20,12 +20,15 @@ vars:
     sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
   # SECURITY: cipher fragments must NOT live in this var — Task expands vars into command logs.
   LUCY_LDFLAGS: -X github.com/mclucy/lucy/cmd.version={{.LUCY_VERSION}} -X github.com/mclucy/lucy/cmd.commit={{.LUCY_COMMIT}}
+  # HTTP/1.1 covers every provider; omitting HTTP/2 keeps binaries smaller.
+  LUCY_STDLIB_TAGS: nethttpomithttp2
 
 tasks:
   build:
     desc: Build the local development binary for the host platform
     deps:
       - check:cf-api-key
+      - docs:pack
     cmds:
       - |
         set -euo pipefail
@@ -44,11 +47,12 @@ tasks:
               -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
           fi
         fi
-        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug -o {{.DEV_BINARY}}
+        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug,{{.LUCY_STDLIB_TAGS}} -o {{.DEV_BINARY}}
         ln -sf lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}} {{.DEV_SYMLINK}}
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
+      - "./docs/docs.tar.gz"
       - "./go.mod"
       - "./go.sum"
     generates:
@@ -73,6 +77,7 @@ tasks:
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
+      - "./docs/**/*.mdx"
       - "./go.mod"
       - "./go.sum"
     method: timestamp
@@ -82,6 +87,7 @@ tasks:
     deps:
       - clean:release
       - check:cf-api-key
+      - docs:pack
     cmds:
       - |
         set -euo pipefail
@@ -105,17 +111,17 @@ tasks:
             fi
           fi
         fi
-        GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-arm64
-        GOOS=windows GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-arm64
+        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-arm64
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
+      - "./docs/docs.tar.gz"
       - "./go.mod"
       - "./go.sum"
-
   clean:
     desc: Remove all generated build artifacts
     deps:
@@ -136,6 +142,8 @@ tasks:
     silent: true
     dir: "{{.USER_WORKING_DIR}}"
     desc: Run the local latest codebase with the provided arguments
+    deps:
+      - docs:pack
     cmds:
       - go run {{.TASKFILE_DIR}} {{.CLI_ARGS}}
 
@@ -209,26 +217,36 @@ tasks:
 
   test:
     desc: Run the Go test suite
+    deps:
+      - docs:pack
     cmds:
       - go test ./...
 
   test:race:
     desc: Run the Go test suite with the race detector
+    deps:
+      - docs:pack
     cmds:
       - go test -race ./...
 
   test:integration:
     desc: Run hermetic CAS, cache, file transaction, and CLI integration scenarios
+    deps:
+      - docs:pack
     cmds:
       - go test -tags integration ./...
 
   test:integration:race:
     desc: Run integration scenarios with the race detector
+    deps:
+      - docs:pack
     cmds:
       - go test -race -tags integration ./...
 
   test:coverage:
     desc: Run the Go test suite with a coverage profile
+    deps:
+      - docs:pack
     cmds:
       - go test -coverprofile=cover.out ./...
       - go tool gocover-cobertura < cover.out > coverage.xml
@@ -263,34 +281,57 @@ tasks:
     desc: Fail when the committed status logos differ from what terminal/assets/logos.yaml generates
     cmds:
       - go run ./tools/genlogo -check
+  docs:pack:
+    desc: "Pack the site pages into docs/docs.tar.gz"
+    dir: "{{.TASKFILE_DIR}}"
+    cmds:
+      - go run ./tools/gendocs {{.CLI_ARGS}}
+
+  docs:check:
+    desc: Verify the generated documentation archive matches the source pages
+    dir: "{{.TASKFILE_DIR}}"
+    cmds:
+      - go run ./tools/gendocs -check
 
   e2e:status:
     desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
+    deps:
+      - docs:pack
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/status {{.CLI_ARGS}}
 
   e2e:init:
     desc: "Initialize modpack manifests from sandboxes (args: -run 'TestInitialize/<modpack id>')"
+    deps:
+      - docs:pack
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/init {{.CLI_ARGS}}
 
   e2e:compile:
     desc: "Compile pinned repository fixtures (args: -run 'TestCompile/<fixture id>')"
+    deps:
+      - docs:pack
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
   e2e:compile:smoke:
     desc: "Compile the fixtures marked smoke (args: -run 'TestCompile/<fixture id>')"
+    deps:
+      - docs:pack
     cmds:
       - LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 0 ./e2e/compile {{.CLI_ARGS}}
 
   e2e:install:
     desc: "Run fresh and init-then-install scenarios (args: -run 'Test(Init)?Install/<scenario id>')"
+    deps:
+      - docs:pack
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
 
   e2e:filetrack:
     desc: "Run the hermetic file tracking and CLI transaction scenarios"
+    deps:
+      - docs:pack
     cmds:
       - go test -tags integration -count=1 -timeout 0 ./e2e/filetrack ./filetrack {{.CLI_ARGS}}
 

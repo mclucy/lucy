@@ -62,4 +62,5 @@ for file in "${files[@]}"; do
   cp "$index_file" "$file"
 done
 
+go run ./tools/gendocs
 gotestsum -- ./...

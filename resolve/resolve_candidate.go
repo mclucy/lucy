@@ -3,6 +3,7 @@ package resolve
 import (
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -89,8 +90,8 @@ func orderCandidates(
 	request projectRequest,
 ) []upstream.Candidate {
 	ordered := slices.Clone(list)
-	slices.SortStableFunc(ordered, func(a, b upstream.Candidate) int {
-		return b.PublishedAt.Compare(a.PublishedAt)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return ordered[i].PublishedAt.After(ordered[j].PublishedAt)
 	})
 	for _, p := range previous {
 		if p.Environment != request.key.environment ||

@@ -42,6 +42,7 @@ launch.json
 dist
 release
 .sandboxes
+/docs/docs.tar.gz
 
 # Local testing environments
 test_*

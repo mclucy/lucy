@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
@@ -246,17 +247,18 @@ func upgradePlanHash(
 		"final-manifest:" + finalManifest,
 	}
 	sorted := slices.Clone(packages)
-	slices.SortFunc(sorted, func(a, b lockfile.Package) int {
+	sort.Slice(sorted, func(i, j int) bool {
+		a, b := &sorted[i], &sorted[j]
 		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {
-			return n
+			return n < 0
 		}
 		if n := strings.Compare(string(a.Ecosystem), string(b.Ecosystem)); n != 0 {
-			return n
+			return n < 0
 		}
 		if n := strings.Compare(string(a.Provider), string(b.Provider)); n != 0 {
-			return n
+			return n < 0
 		}
-		return strings.Compare(a.ProjectID, b.ProjectID)
+		return strings.Compare(a.ProjectID, b.ProjectID) < 0
 	})
 	for _, p := range sorted {
 		lines = append(lines, strings.Join([]string{
@@ -275,14 +277,15 @@ func upgradePlanHash(
 }
 
 func paretoFrontier(options []UpgradeOption) []UpgradeOption {
-	slices.SortFunc(options, func(a, b UpgradeOption) int {
+	sort.Slice(options, func(i, j int) bool {
+		a, b := &options[i], &options[j]
 		if a.Metrics.UpgradedRoots != b.Metrics.UpgradedRoots {
-			return b.Metrics.UpgradedRoots - a.Metrics.UpgradedRoots
+			return b.Metrics.UpgradedRoots < a.Metrics.UpgradedRoots
 		}
 		if a.Metrics.VersionBumps != b.Metrics.VersionBumps {
-			return b.Metrics.VersionBumps - a.Metrics.VersionBumps
+			return b.Metrics.VersionBumps < a.Metrics.VersionBumps
 		}
-		return strings.Compare(a.Hash, b.Hash)
+		return strings.Compare(a.Hash, b.Hash) < 0
 	})
 	frontier := make([]UpgradeOption, 0, len(options))
 	maxBumps := -1

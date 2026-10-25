@@ -2,7 +2,7 @@ package workspace
 
 import (
 	"cmp"
-	"slices"
+	"sort"
 
 	"github.com/mclucy/lucy/catalog"
 )
@@ -52,16 +52,15 @@ func (idx *PackageIndex) Packages() []DiscoveredPackage {
 		result = append(result, pkg)
 	}
 
-	slices.SortFunc(result, func(a, b DiscoveredPackage) int {
-		pi, pj := a.ID, b.ID
-
+	sort.Slice(result, func(i, j int) bool {
+		pi, pj := result[i].ID, result[j].ID
 		if c := cmp.Compare(pi.Ecosystem.String(), pj.Ecosystem.String()); c != 0 {
-			return c
+			return c < 0
 		}
 		if c := cmp.Compare(pi.Name.String(), pj.Name.String()); c != 0 {
-			return c
+			return c < 0
 		}
-		return cmp.Compare(pi.Version.String(), pj.Version.String())
+		return cmp.Compare(pi.Version.String(), pj.Version.String()) < 0
 	})
 
 	return result
@@ -94,8 +93,8 @@ func (idx *PackageIndex) LookupByEcosystemName(
 		return nil
 	}
 
-	slices.SortFunc(matches, func(a, b DiscoveredPackage) int {
-		return cmp.Compare(a.ID.Version.String(), b.ID.Version.String())
+	sort.Slice(matches, func(i, j int) bool {
+		return cmp.Compare(matches[i].ID.Version.String(), matches[j].ID.Version.String()) < 0
 	})
 
 	return matches

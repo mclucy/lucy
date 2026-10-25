@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -158,14 +159,15 @@ func Installed(ctx context.Context) ([]Runtime, error) {
 // oldest major version, then the newest update. runtimes must not be empty.
 func Choose(req Requirement, runtimes []Runtime) *Runtime {
 	ranked := slices.Clone(runtimes)
-	slices.SortStableFunc(ranked, func(a, b Runtime) int {
+	sort.SliceStable(ranked, func(i, j int) bool {
+		a, b := &ranked[i], &ranked[j]
 		return cmp.Or(
-			cmp.Compare(len(req.Misses(&a)), len(req.Misses(&b))),
+			cmp.Compare(len(req.Misses(a)), len(req.Misses(b))),
 			compareBool(a.Major < req.Advisory, b.Major < req.Advisory),
 			cmp.Compare(a.Major, b.Major),
 			compareVersions(b.Version, a.Version),
 			cmp.Compare(a.Home, b.Home),
-		)
+		) < 0
 	})
 	return &ranked[0]
 }

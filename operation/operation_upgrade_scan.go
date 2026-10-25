@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -110,14 +111,15 @@ func upgradeVersions(
 	}
 	versions := make([]upgradeVersion, 0, len(byVersion))
 	for version, builds := range byVersion {
-		slices.SortStableFunc(builds, func(a, b upstream.Candidate) int {
+		sort.SliceStable(builds, func(i, j int) bool {
+			a, b := &builds[i], &builds[j]
 			if n := b.PublishedAt.Compare(a.PublishedAt); n != 0 {
-				return n
+				return n < 0
 			}
 			if n := strings.Compare(a.ReleaseID, b.ReleaseID); n != 0 {
-				return n
+				return n < 0
 			}
-			return strings.Compare(a.FileID, b.FileID)
+			return a.FileID < b.FileID
 		})
 		versions = append(versions, upgradeVersion{
 			Version:     version,
@@ -125,11 +127,12 @@ func upgradeVersions(
 			PublishedAt: builds[0].PublishedAt,
 		})
 	}
-	slices.SortFunc(versions, func(a, b upgradeVersion) int {
+	sort.Slice(versions, func(i, j int) bool {
+		a, b := &versions[i], &versions[j]
 		if n := b.PublishedAt.Compare(a.PublishedAt); n != 0 {
-			return n
+			return n < 0
 		}
-		return strings.Compare(string(b.Version), string(a.Version))
+		return string(b.Version) < string(a.Version)
 	})
 	lockedRank := -1
 	for i := range versions {

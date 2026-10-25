@@ -3,6 +3,7 @@ package discovery
 import (
 	"iter"
 	"slices"
+	"sort"
 )
 
 // FindingKind is a typed observation condition. Presentation severity and CLI
@@ -220,7 +221,9 @@ func selectableInstallation(installation *Installation) bool {
 // uniqueIdentities sorts the caller-owned slice and compacts equal canonical
 // identities in place.
 func uniqueIdentities(identities []Identity) []Identity {
-	slices.SortStableFunc(identities, compareIdentities)
+	sort.SliceStable(identities, func(i, j int) bool {
+		return compareIdentities(identities[i], identities[j]) < 0
+	})
 	unique := identities[:0]
 	last := ""
 	for _, identity := range identities {

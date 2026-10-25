@@ -1,10 +1,13 @@
 package docs
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"fmt"
-	"io/fs"
+	"io"
 	"path"
-	"slices"
+	"sort"
 	"strings"
 
 	docscontent "github.com/mclucy/lucy/docs"
@@ -16,39 +19,36 @@ type page struct {
 }
 
 func loadPages() ([]page, error) {
-	pages := make([]page, 0, 18)
-	err := fs.WalkDir(
-		docscontent.Files,
-		".",
-		func(filePath string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() {
-				return nil
-			}
-			if strings.HasSuffix(filePath, ".draft.mdx") {
-				return nil
-			}
-			content, err := fs.ReadFile(docscontent.Files, filePath)
-			if err != nil {
-				return err
-			}
-			pages = append(
-				pages,
-				page{
-					slug:    strings.TrimSuffix(filePath, ".mdx"),
-					content: content,
-				},
-			)
-			return nil
-		},
-	)
+	gz, err := gzip.NewReader(bytes.NewReader(docscontent.Archive))
 	if err != nil {
 		return nil, err
 	}
-	slices.SortFunc(pages, func(a, b page) int {
-		return strings.Compare(a.slug, b.slug)
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	pages := make([]page, 0, 18)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+		content, err := io.ReadAll(tr)
+		if err != nil {
+			return nil, err
+		}
+		pages = append(pages, page{
+			slug:    strings.TrimSuffix(header.Name, ".mdx"),
+			content: content,
+		})
+	}
+	sort.Slice(pages, func(i, j int) bool {
+		return pages[i].slug < pages[j].slug
 	})
 	return pages, nil
 }

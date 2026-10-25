@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -74,14 +75,14 @@ func upgradeRoots(d *manifest.Document, old *lockfile.Document) ([]upgradeRoot, 
 			roots = append(roots, root)
 		}
 	}
-	slices.SortFunc(roots, func(a, b upgradeRoot) int {
-		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {
-			return n
+	sort.Slice(roots, func(i, j int) bool {
+		if n := strings.Compare(string(roots[i].Environment), string(roots[j].Environment)); n != 0 {
+			return n < 0
 		}
-		if n := strings.Compare(string(a.Ecosystem), string(b.Ecosystem)); n != 0 {
-			return n
+		if n := strings.Compare(string(roots[i].Ecosystem), string(roots[j].Ecosystem)); n != 0 {
+			return n < 0
 		}
-		return strings.Compare(a.Reference, b.Reference)
+		return roots[i].Reference < roots[j].Reference
 	})
 	return roots, nil
 }

@@ -3,6 +3,10 @@ version: 2
 
 project_name: lucy
 
+before:
+  hooks:
+    - go run ./tools/gendocs
+
 builds:
   - id: lucy
     main: .
@@ -23,6 +27,7 @@ builds:
       - -trimpath
     tags:
       - release
+      - nethttpomithttp2
     ldflags:
       - -s -w
       - -X github.com/mclucy/lucy/cmd.version={{.Version}}
