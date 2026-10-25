@@ -73,8 +73,13 @@ func newRegexpMatcher(patterns []string, opts *grepOptions) (lineMatcher, error)
 	expressions := make([]*regexp.Regexp, 0, len(patterns))
 	for _, pattern := range patterns {
 		expression := pattern
-		if opts.wholeLine {
+		switch {
+		case opts.wholeLine:
 			expression = `^(?:` + expression + `)$`
+		case opts.word:
+			// Boundary matching is part of the regexp so alternatives are
+			// retried when a shorter match fails a boundary.
+			expression = `(?:^|\W)(?:` + expression + `)(?:\W|$)`
 		}
 		if opts.ignoreCase {
 			expression = `(?i)` + expression
@@ -87,27 +92,10 @@ func newRegexpMatcher(patterns []string, opts *grepOptions) (lineMatcher, error)
 	}
 	return func(line string) bool {
 		for _, compiled := range expressions {
-			if !opts.word {
-				if compiled.MatchString(line) {
-					return true
-				}
-				continue
-			}
-			for _, match := range compiled.FindAllStringIndex(line, -1) {
-				if opts.wholeLine && (match[0] != 0 || match[1] != len(line)) {
-					continue
-				}
-				if wordBoundaries(line, match[0], match[1]) {
-					return true
-				}
+			if compiled.MatchString(line) {
+				return true
 			}
 		}
 		return false
 	}, nil
-}
-
-func wordBoundaries(line string, start, end int) bool {
-	before := start == 0 || !isWordByte(line[start-1])
-	after := end == len(line) || !isWordByte(line[end])
-	return before && after
 }
