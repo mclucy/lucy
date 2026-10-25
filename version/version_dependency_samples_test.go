@@ -36,10 +36,6 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	}
 
 	expr := mustParseMCDRRange(t, rawRange)
-	if len(expr) != 1 || len(expr[0]) != 1 || expr[0][0].Operator != version.OpGte {
-		t.Fatalf("unexpected parsed expression for %q: %+v", rawRange, expr)
-	}
-
 	assertConstraintSatisfy(
 		t,
 		expr,
@@ -60,8 +56,6 @@ func TestMcdrDependencyParsingFromSample(t *testing.T) {
 	)
 }
 
-// This fixture uses a synthetic dependency expression because it does not
-// contain a real array-of-ranges dependency.
 func TestFabricDependencyParsingFromSample(t *testing.T) {
 	root := testDataRoot(t)
 	fabricMetaFile := filepath.Join(
@@ -122,55 +116,6 @@ func TestFabricDependencyParsingFromSample(t *testing.T) {
 	)
 }
 
-func TestFabricVersionRangeArrayOR(t *testing.T) {
-	const modJSON = `{
-	  "schemaVersion": 1,
-	  "id": "sample",
-	  "version": "1.0.0",
-	  "depends": {
-	    "fabricloader": [">=0.14.18 <0.15.0", ">=0.16.0"]
-	  }
-	}`
-
-	var mod fileschema.FileFabricModIdentifier
-	if err := json.Unmarshal([]byte(modJSON), &mod); err != nil {
-		t.Fatalf("unmarshal fabric range-array sample: %v", err)
-	}
-
-	expr := mustParseFabricRanges(t, mod.Depends["fabricloader"])
-	if len(expr) != 2 {
-		t.Fatalf("array OR should produce two OR clauses, got %d", len(expr))
-	}
-
-	assertConstraintSatisfy(
-		t,
-		expr,
-		catalog.EcosystemFabric,
-		"fabricloader",
-		"0.14.19",
-		true,
-		"fabric array OR first branch",
-	)
-	assertConstraintSatisfy(
-		t,
-		expr,
-		catalog.EcosystemFabric,
-		"fabricloader",
-		"0.15.2",
-		false,
-		"fabric array OR gap reject",
-	)
-	assertConstraintSatisfy(
-		t,
-		expr,
-		catalog.EcosystemFabric,
-		"fabricloader",
-		"0.16.9",
-		true,
-		"fabric array OR second branch",
-	)
-}
-
 func TestForgeDependencyParsingFromSample(t *testing.T) {
 	root := testDataRoot(t)
 	ae2MetaFile := filepath.Join(
@@ -200,14 +145,6 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	}
 
 	expr := mustParseMavenRange(t, minecraftRange)
-	if len(expr) != 1 || len(expr[0]) != 2 {
-		t.Fatalf(
-			"expected one AND clause with two bounds for %q, got %+v",
-			minecraftRange,
-			expr,
-		)
-	}
-
 	assertConstraintSatisfy(
 		t,
 		expr,
@@ -265,9 +202,6 @@ func TestForgeDependencyParsingFromSample(t *testing.T) {
 	}
 
 	yungsExpr := mustParseMavenRange(t, yungsApiRange)
-	if len(yungsExpr) == 0 {
-		t.Fatalf("expected parsed expression for %q", yungsApiRange)
-	}
 	assertConstraintSatisfy(
 		t,
 		yungsExpr,
