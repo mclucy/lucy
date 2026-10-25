@@ -100,7 +100,11 @@ packages:
 
 Each entry records where the file came from: provider, project, release, file, filename, URL, and hashes. A locked package needs a concrete version, a filename without path separators, and a SHA-256 hash. The `server` section uses `product` and `core_version`, and records how to launch the server (`bootstrapper`) plus any supporting files (`inputs`). Its `java` entry records the Java version that Mojang recommends (`advisory`) and, when `lucy.yaml` pins them, the `version` and `distribution`.
 
+Java distribution names in the lock are case-insensitive: `TEMURIN` and `temurin` select the same builds. Writing the lock stores the lowercase name; `any` leaves the distribution unpinned.
+
 `environment` is `server` or `mcdr`, which is how one flat list covers the server and MCDR without nesting. `ecosystem` is the mod or plugin type. The `requirements` list records which package in `lucy.yaml` a locked file satisfies, with the version rule and file pattern that were applied; a package with no requirements is present because a dependency needed it.
+
+A required dependency records `dependency: true` while selected, and lists its dependents in `dependency_of`. An enabled dependent keeps it installed even when its own direct declaration is disabled. With no enabled declaration or dependent, it stays pinned but is not installed. Removing its final declaration and dependent removes the unused pin.
 
 ## Removing old files
 

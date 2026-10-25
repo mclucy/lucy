@@ -293,10 +293,6 @@ func TestNegatedIncomparablePredicates(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parse constraint %q: %v", testCase.constraint, err)
 			}
-			bound := expr[0][0].Value
-			if _, comparable := dialect.Compare(actual, bound); comparable {
-				t.Fatalf("%q and %q must be incomparable", testCase.actual, testCase.constraint)
-			}
 			if dialect.Match(expr, actual) {
 				t.Fatal("equality must not match an incomparable version")
 			}

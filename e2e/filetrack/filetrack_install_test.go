@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/server"
@@ -124,9 +125,17 @@ func TestFileInstallWarnsImmutableDeviationWithoutRestoring(t *testing.T) {
 	drifted := []byte("drifted rules v3\n")
 	w.write(t, "config/rules.txt", drifted, 0o644)
 
-	run := w.lucyOK(t, "install")
-	if !strings.Contains(run.stderr, "config/rules.txt") {
-		t.Errorf("install did not warn about the immutable deviation:\n%s", run.stderr)
+	run := w.lucyOK(t, "install", "--json")
+	result := decodeJSON[install.Result](t, run.stdout)
+	warned := false
+	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Path == "config/rules.txt" {
+			warned = true
+			break
+		}
+	}
+	if !warned {
+		t.Errorf("install omitted the immutable deviation diagnostic: %+v", result.Diagnostics)
 	}
 	w.requireBytes(t, "config/rules.txt", drifted)
 	if !w.modTime(t, "server/server.jar").Equal(coreMtime) {

@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -214,6 +215,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			r.key = canonicalKey
 		}
 		ledger.noteDisplay(r.key, r.display)
+		dependencyDemand := r.dependencyOf.Name != ""
 		active := len(r.requirements) == 0
 		for _, req := range r.requirements {
 			active = active || req.Enabled
@@ -224,12 +226,20 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		// package that no file can satisfy.
 		if previous, ok := chosen[r.key]; ok && (!active || previous.Artifact.Filename != "") {
 			before := previous.Requirements
+			wasDependency := previous.Dependency
+			beforeDependencyOf := previous.DependencyOf
 			previous.Requirements = append(previous.Requirements, r.requirements...)
+			previous.Dependency = previous.Dependency || dependencyDemand
+			if dependencyDemand && !slices.Contains(previous.DependencyOf, r.dependencyOf) {
+				previous.DependencyOf = append(previous.DependencyOf, r.dependencyOf)
+			}
 			chosen[r.key] = previous
 			if backtrack(rest) {
 				return true
 			}
 			previous.Requirements = before
+			previous.Dependency = wasDependency
+			previous.DependencyOf = beforeDependencyOf
 			chosen[r.key] = previous
 			log.Debug(
 				"resolve: backtracking requirement merge",
@@ -298,6 +308,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 					display:      r.display,
 					origin:       r.origin,
 					requirements: r.requirements,
+					dependencyOf: r.dependencyOf,
 					releaseHints: r.releaseHints,
 				}}, rest...))
 			}
@@ -379,11 +390,17 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			if replacingArtifactless {
 				requirements = append(slices.Clone(artifactless.Requirements), r.requirements...)
 			}
+			var dependencyOf []catalog.Ref
+			if dependencyDemand {
+				dependencyOf = []catalog.Ref{r.dependencyOf}
+			}
 			chosen[r.key] = lockfile.Package{
 				Environment:  r.key.environment,
 				Ecosystem:    r.key.ecosystem,
 				Artifact:     a,
 				Requirements: requirements,
+				Dependency:   dependencyDemand,
+				DependencyOf: dependencyOf,
 			}
 			if declared := conflictDependencies(candidate); len(declared) > 0 {
 				conflicts[r.key] = declared
@@ -416,6 +433,12 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 							},
 							origin:       originDependency,
 							releaseHints: hints,
+						}
+						if dep.Kind == catalog.DependencyKindRequired {
+							dependency.dependencyOf = catalog.Ref{
+								Provider: r.key.provider,
+								Name:     catalog.Name(r.key.project),
+							}
 						}
 						if dep.Kind == catalog.DependencyKindOptional {
 							dependency.requirements = []lockfile.RequirementBinding{
@@ -514,6 +537,11 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	}
 	out = mergeArtifactSelections(out)
 	sortPackages(out)
+	for i := range out {
+		slices.SortFunc(out[i].DependencyOf, func(a, b catalog.Ref) int {
+			return cmp.Or(cmp.Compare(a.Provider, b.Provider), cmp.Compare(a.Name, b.Name))
+		})
+	}
 	problems, err := finalizeModules(out, target)
 	if err != nil {
 		return nil, nil, err
@@ -552,6 +580,12 @@ func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
 		}
 		if i, ok := index[k]; ok {
 			out[i].Requirements = append(out[i].Requirements, p.Requirements...)
+			out[i].Dependency = out[i].Dependency || p.Dependency
+			for _, source := range p.DependencyOf {
+				if !slices.Contains(out[i].DependencyOf, source) {
+					out[i].DependencyOf = append(out[i].DependencyOf, source)
+				}
+			}
 			continue
 		}
 		index[k] = len(out)
