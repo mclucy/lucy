@@ -19,6 +19,7 @@ var detectors = []func() bool{
 			value("PI_SESSION_FILE") != "" ||
 			value("PI_SESSION_ID") != ""
 	},
+	func() bool { return exact("DSH_SHELL", "1") },
 	func() bool { return exact("CURSOR_AGENT", "1") },
 	func() bool { return exact("CLAUDECODE", "1") },
 	func() bool { return value("CODEX_THREAD_ID") != "" },
