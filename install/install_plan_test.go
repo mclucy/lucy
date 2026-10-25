@@ -130,6 +130,72 @@ func TestPlanInstallAcceptsExpectedFingerprints(t *testing.T) {
 	}
 }
 
+// A plan answers the workspace, not the documents the caller passed: planning
+// for a publication keeps the on-disk state as its baseline, so ApplyPlan does
+// not mistake the intended edit for drift.
+func TestPlanInstallFingerprintsWorkspaceState(t *testing.T) {
+	t.Run("manifest edited in memory", func(t *testing.T) {
+		root, d, lock := testWorkspace(t)
+		onDisk, err := manifest.Read(root)
+		if err != nil {
+			t.Fatalf("manifest.Read() error = %v", err)
+		}
+		baseFingerprint, err := manifest.Fingerprint(onDisk)
+		if err != nil {
+			t.Fatalf("manifest.Fingerprint() error = %v", err)
+		}
+		d.Server.Java = &manifest.Java{Version: 17}
+		plan, err := PlanInstall(
+			context.Background(),
+			root,
+			d,
+			lock,
+			Options{PublishManifest: true},
+		)
+		if err != nil {
+			t.Fatalf("PlanInstall() error = %v", err)
+		}
+		if plan.BaseManifestFingerprint != baseFingerprint {
+			t.Fatalf(
+				"PlanInstall() base manifest fingerprint = %q, want on-disk %q",
+				plan.BaseManifestFingerprint,
+				baseFingerprint,
+			)
+		}
+		if err := checkPlannedState(root, plan); err != nil {
+			t.Fatalf("checkPlannedState() error = %v, want a plan the workspace satisfies", err)
+		}
+	})
+
+	t.Run("lock differs from workspace", func(t *testing.T) {
+		root, d, lock := testWorkspace(t)
+		onDisk, err := lockfile.Read(root)
+		if err != nil {
+			t.Fatalf("lockfile.Read() error = %v", err)
+		}
+		baseFingerprint, err := lockfile.Fingerprint(onDisk)
+		if err != nil {
+			t.Fatalf("lockfile.Fingerprint() error = %v", err)
+		}
+		stale := *lock
+		stale.Files = []manifest.TrackedFile{{Path: "server.properties"}}
+		plan, err := PlanInstall(context.Background(), root, d, &stale, Options{})
+		if err != nil {
+			t.Fatalf("PlanInstall() error = %v", err)
+		}
+		if plan.BaseLockFingerprint != baseFingerprint {
+			t.Fatalf(
+				"PlanInstall() base lock fingerprint = %q, want on-disk %q",
+				plan.BaseLockFingerprint,
+				baseFingerprint,
+			)
+		}
+		if err := checkPlannedState(root, plan); err != nil {
+			t.Fatalf("checkPlannedState() error = %v, want a plan the workspace satisfies", err)
+		}
+	})
+}
+
 func TestResolveLockRejectsForceWithLocked(t *testing.T) {
 	root, d, lock := testWorkspace(t)
 	_, err := resolveLock(
