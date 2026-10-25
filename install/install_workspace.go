@@ -20,7 +20,6 @@ import (
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
-	"github.com/mclucy/lucy/workspace"
 )
 
 type (
@@ -38,6 +37,12 @@ type (
 		// packages from, so a concurrent edit fails instead of being
 		// overwritten.
 		ExpectedManifest string
+		// ExpectedLock pins the lock fingerprint the caller planned from.
+		ExpectedLock string
+		// ForceResolve resolves even when the manifest fingerprint matches the
+		// lock. Upgrade uses it because a lock can answer the manifest while
+		// still being older than the eligible versions.
+		ForceResolve bool
 		// RequirementChange records that the caller edited declared package
 		// requirements, so a lock whose fingerprint no longer matches is
 		// expected rather than stale.
@@ -72,117 +77,19 @@ func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lo
 	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
 		return nil, err
 	}
-	if d == nil && old == nil {
-		return nil, fmt.Errorf("lucy.yaml or lucy-lock.yaml is required")
-	}
 	writer, err := workspacewrite.Lock(root)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := preflightLocked(root, d, old, opts, true); err != nil {
 		return nil, err
 	}
-	serverDirectory := ""
-	if d != nil {
-		serverDirectory = d.Server.Directory
-	} else if old != nil {
-		serverDirectory = old.Server.Directory
-	}
-	if workspace.RunningAt(filepath.Join(root, serverDirectory)) ||
-		(serverDirectory != "." && workspace.RunningAt(root)) {
-		return nil, fmt.Errorf("stop the running Minecraft server before installation")
-	}
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	store := newDownloadStore(ctx, root, opts, result)
+	resolved, err := resolveLock(ctx, root, d, old, &opts, store, result)
+	if err != nil {
 		return nil, err
 	}
-	if opts.ExpectedManifest != "" {
-		current, err := manifest.Read(root)
-		if err != nil {
-			return nil, err
-		}
-		fingerprint, err := manifest.Fingerprint(current)
-		if err != nil {
-			return nil, err
-		}
-		if fingerprint != opts.ExpectedManifest {
-			return nil, fmt.Errorf("manifest changed during package selection; retry from current intent")
-		}
-	}
-	store := &downloadStore{
-		ctx:     ctx,
-		dir:     filepath.Join(root, ".lucy", "downloads"),
-		offline: opts.Offline,
-		trace:   opts.Trace,
-		fetch:   &result.Fetch,
-	}
-	resolved := old
-	fingerprint := ""
-	if d != nil {
-		var err error
-		fingerprint, err = manifest.Fingerprint(d)
-		if err != nil {
-			return nil, err
-		}
-	}
-	switch {
-	case old == nil:
-		result.Mode = ModeResolve
-		result.Reason = "no lock file to replay"
-	case opts.WithOptional:
-		result.Mode = ModeResolve
-		result.Reason = "optional packages requested"
-	case d != nil && old.ManifestFingerprint != fingerprint:
-		result.Mode = ModeResolve
-		result.Reason = "manifest changed since lock"
-	default:
-		result.Mode = ModeReplay
-		result.Reason = "manifest unchanged; lock replays exactly"
-	}
-	log.Debug(
-		"installation decision",
-		"mode", string(result.Mode),
-		"reason", result.Reason,
-	)
-	if old == nil || opts.WithOptional || (d != nil && old.ManifestFingerprint != fingerprint) {
-		if opts.Locked {
-			if !opts.RequirementChange || old == nil || d == nil {
-				return nil, fmt.Errorf("locked installation requires a current lucy-lock.yaml")
-			}
-			reusable, err := coreReusable(ctx, d, old, opts.Offline)
-			if err != nil {
-				return nil, err
-			}
-			if !reusable {
-				return nil, fmt.Errorf("manifest core no longer matches lucy-lock.yaml; install without --locked")
-			}
-			log.Debug(
-				"locked installation reuses core",
-				"reason", "manifest core still matches lock; requirements rebind in place",
-			)
-			resolved, err = mutateLock(d, old, fingerprint)
-			if err != nil {
-				return nil, err
-			}
-			if err := resolved.Validate(); err != nil {
-				return nil, err
-			}
-			result.Mode = ModeLocked
-			result.Reason = "manifest core matches; requirements rebind in place"
-			opts.publishLock = true
-			result.applyChanges(old, resolved, d)
-			return stageInstall(ctx, root, d, resolved, store, opts, result)
-		}
-		resolved, err = resolveInstall(ctx, root, d, old, fingerprint, &opts, store, result)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if err := resolved.Validate(); err != nil {
-		return nil, err
-	}
-	opts.publishLock = resolved != old
-	result.applyChanges(old, resolved, d)
 	return stageInstall(ctx, root, d, resolved, store, opts, result)
 }
 
