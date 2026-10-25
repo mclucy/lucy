@@ -15,7 +15,7 @@ import (
 type initInstallScenario struct {
 	product     string
 	minecraft   string
-	coreVersion string // Empty accepts any concrete version that upstream resolves.
+	coreVersion string
 	minPackages int
 	// coreOutput names the installed file that holds the locked server artifact.
 	// Installer-based products generate their core files, so they leave it empty.
@@ -65,6 +65,7 @@ var initInstallScenarios = map[string]initInstallScenario{
 	"paper": {
 		product:        "paper",
 		minecraft:      "1.21.11",
+		coreVersion:    "130",
 		coreOutput:     "server.jar",
 		requiredFiles:  []string{"server.jar", "versions/1.21.11/paper-1.21.11.jar"},
 		requiredInputs: []string{"cache/mojang_1.21.11.jar"},
@@ -72,6 +73,7 @@ var initInstallScenarios = map[string]initInstallScenario{
 	"purpur": {
 		product:        "purpur",
 		minecraft:      "1.21.11",
+		coreVersion:    "2568",
 		coreOutput:     "server.jar",
 		requiredFiles:  []string{"server.jar", "versions/1.21.11/purpur-1.21.11.jar"},
 		requiredInputs: []string{"cache/mojang_1.21.11.jar"},
@@ -82,11 +84,20 @@ func (scenario initInstallScenario) verifyInitialized(
 	declared manifestIntent,
 	locked lockDocument,
 ) error {
+	if scenario.coreVersion == "" {
+		return fmt.Errorf("init-install scenario must pin the exact core version")
+	}
 	server := declared.Server
 	if server.Minecraft != scenario.minecraft || server.Core.Product != scenario.product {
 		return fmt.Errorf(
 			"manifest identity: got %s/%s, want %s/%s",
 			server.Minecraft, server.Core.Product, scenario.minecraft, scenario.product,
+		)
+	}
+	if server.Core.ProductVersion != scenario.coreVersion {
+		return fmt.Errorf(
+			"manifest core version: got %s, want %s",
+			server.Core.ProductVersion, scenario.coreVersion,
 		)
 	}
 	lockedServer := locked.Server
@@ -96,7 +107,7 @@ func (scenario initInstallScenario) verifyInitialized(
 			lockedServer.Minecraft, lockedServer.Product, scenario.minecraft, scenario.product,
 		)
 	}
-	if scenario.coreVersion != "" && lockedServer.CoreVersion != scenario.coreVersion {
+	if lockedServer.CoreVersion != scenario.coreVersion {
 		return fmt.Errorf(
 			"lock core version: got %s, want %s",
 			lockedServer.CoreVersion, scenario.coreVersion,

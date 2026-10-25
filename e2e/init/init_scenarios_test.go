@@ -79,10 +79,7 @@ type initializeScenario struct {
 	minecraft   string
 	product     string
 	coreVersion string
-	// requireConcreteCore requires a concrete lock core version when
-	// coreVersion does not pin the exact value.
-	requireConcreteCore bool
-	minPackages         int
+	minPackages int
 	// packages maps a loader to the references that the initializer must write.
 	packages map[string]map[string]string
 	// absent lists references that the initializer must omit because their jars

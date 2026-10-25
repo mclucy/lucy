@@ -168,6 +168,9 @@ func verifyInitialized(
 	scenario initializeScenario,
 ) {
 	t.Helper()
+	if scenario.coreVersion == "" {
+		t.Fatalf("init scenario must pin the exact core version")
+	}
 	data, err := os.ReadFile(filepath.Join(root, manifest.Filename))
 	if err != nil {
 		t.Fatalf("read generated manifest: %v", err)
@@ -185,7 +188,7 @@ func verifyInitialized(
 			scenario.minecraft, scenario.product,
 		)
 	}
-	if scenario.coreVersion != "" && server.Core.ProductVersion != scenario.coreVersion {
+	if server.Core.ProductVersion != scenario.coreVersion {
 		t.Errorf(
 			"manifest core version: got %s, want %s",
 			server.Core.ProductVersion, scenario.coreVersion,
@@ -224,18 +227,11 @@ func verifyInitialized(
 			scenario.minecraft, scenario.product,
 		)
 	}
-	if scenario.coreVersion != "" {
-		if locked.Server.CoreVersion.String() != scenario.coreVersion {
-			t.Errorf(
-				"lock core version: got %s, want %s",
-				locked.Server.CoreVersion, scenario.coreVersion,
-			)
-		}
-	} else if scenario.requireConcreteCore {
-		core := locked.Server.CoreVersion
-		if core.String() == "" || core.CanInfer() || core.IsInvalid() {
-			t.Errorf("lock core version = %q, want a concrete version", core)
-		}
+	if locked.Server.CoreVersion.String() != scenario.coreVersion {
+		t.Errorf(
+			"lock core version: got %s, want %s",
+			locked.Server.CoreVersion, scenario.coreVersion,
+		)
 	}
 	if len(locked.Packages) < scenario.minPackages {
 		t.Errorf(

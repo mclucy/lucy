@@ -171,9 +171,12 @@ var probeScenarios = map[string]probeExpectation{
 		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
 	},
 	"folia": {
-		name: "folia", minecraftVersion: "1.21.11", packageDirs: true,
+		name: "folia", version: "14", minecraftVersion: "1.21.11", packageDirs: true,
 		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
 	},
+	// Purpur's fixture is renamed to server.jar, and neither product carries a
+	// build number in its metadata. Live status cannot derive one without an
+	// upstream lookup.
 	"purpur": {
 		name: "purpur", minecraftVersion: "1.21.11", packageDirs: true,
 		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
