@@ -153,6 +153,9 @@ func upgradeOptionSummary(option operation.UpgradeOption) string {
 			break
 		}
 	}
+	if len(result.ManifestChanges) > 0 {
+		changes = append(changes, fmt.Sprintf("%d manifest repins", len(result.ManifestChanges)))
+	}
 	if len(changes) == 0 {
 		changes = append(changes, "no package changes")
 	}

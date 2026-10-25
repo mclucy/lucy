@@ -136,6 +136,28 @@ func PlanUpgrade(
 	if err := workspacewrite.RecoverInstall(root); err != nil {
 		return nil, err
 	}
+	currentManifest, err := manifest.Read(root)
+	if err != nil {
+		return nil, err
+	}
+	currentManifestFingerprint, err := manifest.Fingerprint(currentManifest)
+	if err != nil {
+		return nil, err
+	}
+	if currentManifestFingerprint != baseManifest {
+		return nil, fmt.Errorf("manifest changed during upgrade planning; retry")
+	}
+	currentLock, err := lockfile.Read(root)
+	if err != nil {
+		return nil, err
+	}
+	currentLockFingerprint, err := lockfile.Fingerprint(currentLock)
+	if err != nil {
+		return nil, err
+	}
+	if currentLockFingerprint != baseLock {
+		return nil, fmt.Errorf("lock changed during upgrade planning; retry")
+	}
 	roots, err := upgradeRoots(d, old)
 	if err != nil {
 		return nil, err
@@ -542,10 +564,13 @@ func upgradeVersions(
 	}
 	eligible := make([]upstream.Candidate, 0, len(list))
 	for _, candidate := range list {
-		if selector == versionpkg.Stable && candidate.Channel != upstream.ReleaseChannelRelease {
+		locked := candidate.ReleaseID == root.Previous.ReleaseID &&
+			candidate.FileID == root.Previous.FileID
+		if !locked && selector == versionpkg.Stable && candidate.Channel != upstream.ReleaseChannelRelease {
 			continue
 		}
-		if (selector == versionpkg.Any || selector == "" || !selector.CanInfer()) &&
+		if !locked &&
+			(selector == versionpkg.Any || selector == "" || !selector.CanInfer()) &&
 			hasRelease && candidate.Channel != upstream.ReleaseChannelRelease {
 			continue
 		}

@@ -72,6 +72,8 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--%s cannot be combined with package arguments", flagUpgradeAllName)
 	case all && interactive:
 		return fmt.Errorf("--%s cannot be combined with --%s", flagUpgradeAllName, flagUpgradeInteractiveName)
+	case interactive && len(args) > 0:
+		return fmt.Errorf("--%s cannot be combined with package arguments", flagUpgradeInteractiveName)
 	case interactive && noInteractive:
 		return fmt.Errorf("--%s cannot be combined with --%s", flagUpgradeInteractiveName, FlagNoInteractive)
 	case policySet && !all:
