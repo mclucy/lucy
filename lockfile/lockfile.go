@@ -107,9 +107,11 @@ func (d *Document) Validate() error {
 	if d.Server.Java.Advisory <= 0 {
 		return fmt.Errorf("server.java.advisory must be positive")
 	}
-	if _, ok := javapkg.ParseDistribution(string(d.Server.Java.Distribution)); !ok {
+	distribution, ok := javapkg.ParseDistribution(string(d.Server.Java.Distribution))
+	if !ok {
 		return fmt.Errorf("unknown server.java.distribution %q", d.Server.Java.Distribution)
 	}
+	d.Server.Java.Distribution = distribution
 	if d.MCDR != nil {
 		if d.MCDR.Directory == "" {
 			return fmt.Errorf("mcdr.directory is required")
