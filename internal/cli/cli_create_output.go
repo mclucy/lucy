@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
@@ -213,6 +214,9 @@ func createInstallCommand(workspace string) string {
 	path := displayCreatePath(workspace)
 	if path == "." || path == "" {
 		return "lucy install"
+	}
+	if !filepath.IsAbs(path) {
+		path = "./" + path
 	}
 	return "cd " + shell.Quote(path) + " && lucy install"
 }
