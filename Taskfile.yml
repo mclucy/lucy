@@ -20,6 +20,8 @@ vars:
     sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
   # SECURITY: cipher fragments must NOT live in this var — Task expands vars into command logs.
   LUCY_LDFLAGS: -X github.com/mclucy/lucy/cmd.version={{.LUCY_VERSION}} -X github.com/mclucy/lucy/cmd.commit={{.LUCY_COMMIT}}
+  # HTTP/1.1 covers every provider; omitting HTTP/2 keeps binaries smaller.
+  LUCY_STDLIB_TAGS: nethttpomithttp2
 
 tasks:
   build:
@@ -44,7 +46,7 @@ tasks:
               -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
           fi
         fi
-        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug -o {{.DEV_BINARY}}
+        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug,{{.LUCY_STDLIB_TAGS}} -o {{.DEV_BINARY}}
         ln -sf lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}} {{.DEV_SYMLINK}}
     sources:
       - "./**/*.go"
@@ -105,11 +107,11 @@ tasks:
             fi
           fi
         fi
-        GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-arm64
-        GOOS=windows GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-arm64
+        GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-arm64
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"

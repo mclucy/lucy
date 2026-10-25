@@ -23,6 +23,7 @@ builds:
       - -trimpath
     tags:
       - release
+      - nethttpomithttp2
     ldflags:
       - -s -w
       - -X github.com/mclucy/lucy/cmd.version={{.Version}}

@@ -176,7 +176,7 @@ jobs:
             fi
             task build:dev
           else
-            go build -o dist/lucy .
+            go build -tags nethttpomithttp2 -o dist/lucy .
           fi
 
       - name: Run suite
