@@ -2,8 +2,11 @@ package operation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"path/filepath"
@@ -340,6 +343,21 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			if d.Server.Core.ProductVersion == "" && identity.Primary.Version != "" && !identity.Primary.Version.IsInvalid() && !identity.Primary.Version.CanInfer() {
 				d.Server.Core.ProductVersion = identity.Primary.Version
 			}
+			if d.Server.Core.Product == serverpkg.ProductPaper &&
+				!concreteVersion(d.Server.Core.ProductVersion) {
+				build, found, err := identifyPaperBuild(ctx, root, selection)
+				if err != nil {
+					return initResult(observed), err
+				}
+				if !found {
+					return initResult(observed), fmt.Errorf(
+						"cannot identify the installed Paper build; restore the " +
+							"published paper-<minecraft>-<build>.jar name or pin " +
+							"the core version in lucy.yaml",
+					)
+				}
+				d.Server.Core.ProductVersion = build
+			}
 			if d.Server.Directory == "" {
 				relative, err := filepath.Rel(root, observed.ServerDir)
 				if err != nil {
@@ -538,4 +556,44 @@ func initResult(observed *workspace.Workspace) *InitResult {
 		Warnings:  observed.Warnings,
 		Discovery: observed.Discovery,
 	}
+}
+
+func concreteVersion(v version.Version) bool {
+	return v != "" && !v.IsInvalid() && !v.CanInfer()
+}
+
+func identifyPaperBuild(
+	ctx context.Context,
+	root string,
+	selection *discovery.Selection,
+) (version.Version, bool, error) {
+	if selection == nil || selection.EntryPoint == nil || selection.EntryPoint.Path == "" {
+		return "", false, nil
+	}
+	path := selection.EntryPoint.Path
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", false, fmt.Errorf("read Paper jar: %w", err)
+	}
+	sum := sha256.New()
+	_, copyErr := io.Copy(sum, file)
+	closeErr := file.Close()
+	if copyErr != nil {
+		return "", false, copyErr
+	}
+	if closeErr != nil {
+		return "", false, closeErr
+	}
+	build, found, err := routing.IdentifyPaperBuild(
+		ctx,
+		selection.MinecraftVersion(),
+		hex.EncodeToString(sum.Sum(nil)),
+	)
+	if err != nil {
+		return "", false, fmt.Errorf("identify installed Paper build: %w", err)
+	}
+	return build, found, nil
 }

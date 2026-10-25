@@ -502,9 +502,8 @@ var initializeScenarios = map[string]initializeScenario{
 
 	// A real Paper jar and a server.jar symlink alias are one physical
 	// installation. Explicit selection through the alias records the Paper
-	// identity; live status reports the canonical file for that identity. The
-	// observed build is unknown, which is noncontradictory with the resolved
-	// lock core rather than proof of a mismatch.
+	// identity and the installed build; live status reports the canonical file
+	// for that identity with the same build.
 	"paper-symlink-alias": {
 		sandbox: "paper",
 		symlinks: []initializeSymlink{{
@@ -512,10 +511,9 @@ var initializeScenarios = map[string]initializeScenario{
 			link:   "server.jar",
 		}},
 		selectEntryPoint: "server.jar",
-		minecraft:        "1.21.11", product: "paper",
-		requireConcreteCore: true,
+		minecraft:        "1.21.11", product: "paper", coreVersion: "130",
 		status: &statusExpectation{
-			name: "paper", version: "unknown",
+			name: "paper", version: "130",
 			path: paperJar,
 			components: map[string]string{
 				"minecraft:minecraft": "1.21.11",
@@ -523,12 +521,9 @@ var initializeScenarios = map[string]initializeScenario{
 		},
 	},
 
-	// Two physically distinct copies of the same real Paper jar are two
-	// installations: an unknown primary version was never proven concrete, so
-	// they cannot merge. After init recorded the Paper identity, both remain
-	// compatible with the declaration. Status and init must stay unresolved
-	// instead of picking one lexically; an explicitly selected path is not
-	// persisted, so the twin cannot be resolved permanently.
+	// Two physically distinct copies of the same real Paper jar carry the same
+	// build, so they describe one runtime. Init adopts the build instead of
+	// treating a missing version as proof that they cannot merge.
 	"paper-declared-ambiguous-twins": {
 		sandbox: "paper",
 		prepare: []initializeCommand{{
@@ -538,13 +533,15 @@ var initializeScenarios = map[string]initializeScenario{
 			source: paperJar,
 			dest:   "paper-1.21.11-130-copy.jar",
 		}},
-		force:         true,
-		expectFailure: true,
-		guidance:      []string{paperJar, "paper-1.21.11-130-copy.jar"},
-		minecraft:     "1.21.11", product: "paper",
-		requireConcreteCore: true,
+		force:     true,
+		minecraft: "1.21.11", product: "paper", coreVersion: "130",
+		informational: []string{paperJar},
 		status: &statusExpectation{
-			ambiguous: []string{paperJar, "paper-1.21.11-130-copy.jar"},
+			name: "paper", version: "130",
+			path: "paper-1.21.11-130-copy.jar",
+			components: map[string]string{
+				"minecraft:minecraft": "1.21.11",
+			},
 		},
 	},
 

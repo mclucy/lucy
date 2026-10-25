@@ -412,12 +412,41 @@ func newPaperInstallation(
 			Primary: catalog.VersionedRef{
 				Ecosystem: paperLineageEcosystem(lineage),
 				Name:      input.ToProjectName(lineage),
-				Version:   version.Unknown,
+				Version:   paperBuildFromFilename(filePath, lineage, components),
 			},
 			Components: cloneComponents(components),
 		},
 		filePath,
 	)
+}
+
+// paperBuildFromFilename recovers the build number that the paperclip jar
+// itself does not carry. The convention is <lineage>-<minecraft>-<build>.jar;
+// a renamed jar falls back to the published-build digest in init.
+func paperBuildFromFilename(
+	filePath string,
+	lineage string,
+	components []catalog.VersionedRef,
+) version.Version {
+	gameVersion := version.Unknown
+	for _, component := range components {
+		if component.Ecosystem == catalog.EcosystemMinecraft {
+			gameVersion = component.Version
+			break
+		}
+	}
+	if gameVersion == version.Unknown {
+		return version.Unknown
+	}
+	pattern := regexp.MustCompile(
+		`^` + regexp.QuoteMeta(lineage) +
+			`-(\d+(?:\.\d+)*)-(\d+)(?:[-+].*)?\.jar$`,
+	)
+	match := pattern.FindStringSubmatch(filepath.Base(filePath))
+	if len(match) != 3 || match[1] != gameVersion.String() {
+		return version.Unknown
+	}
+	return version.Version(match[2])
 }
 
 func paperLineageEcosystem(lineage string) catalog.Ecosystem {

@@ -333,6 +333,7 @@ func stageInstall(
 	if err != nil {
 		return nil, err
 	}
+	removeSupersededPaperCore(root, resolved)
 	result.Files = counts
 	result.PublishedManifest = opts.PublishManifest
 	result.PublishedLock = opts.publishLock || opts.PublishManifest

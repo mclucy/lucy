@@ -29,6 +29,32 @@ type paperBuild struct {
 	} `json:"downloads"`
 }
 
+// IdentifyPaperBuild matches a Paper jar digest against the published builds
+// for a Minecraft version. Init uses it when a Paper jar was renamed and its
+// filename no longer carries the build number.
+func IdentifyPaperBuild(
+	ctx context.Context,
+	minecraft version.Version,
+	sha256 string,
+) (version.Version, bool, error) {
+	var builds []paperBuild
+	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" +
+		minecraft.String() + "/builds"
+	if err := Metadata(ctx, endpoint, &builds); err != nil {
+		return "", false, err
+	}
+	for _, build := range builds {
+		asset, ok := build.Downloads["server:default"]
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(asset.Checksums["sha256"], sha256) {
+			return version.Version(strconv.Itoa(build.ID)), true, nil
+		}
+	}
+	return "", false, nil
+}
+
 func resolvePaper(ctx context.Context, req ServerProductRequest, out *ServerProductResolution) error {
 	var builds []paperBuild
 	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" + req.Minecraft.String() + "/builds"

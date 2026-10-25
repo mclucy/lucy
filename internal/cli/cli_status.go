@@ -97,6 +97,15 @@ func actionStatusLive(
 	}
 
 	document := newLiveStatusDocument(observed, root)
+	if document.Server != nil &&
+		(document.Server.Product.Version == "" ||
+			document.Server.Product.Version == versionpkg.Unknown.String()) {
+		// Paperclip carries no build number in its metadata, and an installed
+		// core may be renamed. The lock records the adopted build.
+		if lock, err := lockfile.Read(root); err == nil && lock.Server.CoreVersion != "" {
+			document.Server.Product.Version = lock.Server.CoreVersion.String()
+		}
+	}
 	if document.MCDR == nil ||
 		document.MCDR.Version == "" ||
 		document.MCDR.Version == versionpkg.Unknown.String() {

@@ -167,7 +167,7 @@ var probeScenarios = map[string]probeExpectation{
 		},
 	},
 	"paper": {
-		name: "paper", minecraftVersion: "1.21.11", packageDirs: true,
+		name: "paper", version: "130", minecraftVersion: "1.21.11", packageDirs: true,
 		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
 	},
 	"folia": {
