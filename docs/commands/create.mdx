@@ -14,9 +14,9 @@ lucy create
 The form prefills values supplied on the command line, so flags and the form can be mixed.
 
 1. **Directory.** Defaults to the current directory. The form creates it when it does not exist.
-2. **Server software.** Minecraft, Paper, Purpur, Fabric, Forge, NeoForge, or a custom Paper fork hosted on GitHub.
+2. **Server software.** Minecraft, Fabric, Forge, or NeoForge.
 3. **Minecraft version.** An exact release or snapshot ID, for example `1.21.4`.
-4. **Server software version.** A Paper build number, a loader or installer version, or a release tag. Leave it empty to let Lucy choose the latest. The form shows the expected form for the selected software.
+4. **Server software version.** A loader or installer version. Leave it empty to let Lucy choose the latest. The form shows the expected form for the selected software.
 5. **Install now.** The last choice. Install writes the server files; Not yet writes only the manifest and lock.
 
 ## Directories that already contain files
@@ -43,19 +43,7 @@ When no install is requested, the success message names the command that finishe
 ```text
 ✓ Created Paper 232 for Minecraft 1.21.4 in server
   Wrote lucy.yaml and lucy-lock.yaml
-  Next: cd server && lucy install
-```
-
-## Custom Paper forks
-
-A GitHub-hosted Paper fork needs a core name, a repository, and usually an asset pattern. The release asset must be a Paperclip-based server JAR for the selected Minecraft version.
-
-```bash
-lucy create \
-  --minecraft 1.21.3 \
-  --core plazma \
-  --repository PlazmaMC/Plazma \
-  --file-pattern 'plazma-paperclip-*.jar'
+  Next: cd ./server && lucy install
 ```
 
 ## Non-interactive use
@@ -75,23 +63,15 @@ lucy create --minecraft 1.21.4 --core paper --no-install --no-interactive
 </ParamField>
 
 <ParamField query="--core, -c" type="string">
-  Server software, optionally with a version. Examples: `paper`, `paper@232`, `fabric@0.16.9`, `purpur@latest`.
+  Server software, optionally with a version. Examples: `paper`, `paper@232`, `fabric@0.16.9`, `purpur@latest`. Paper and Purpur are available here even though the interactive form does not list them.
 </ParamField>
 
 <ParamField query="--core-version" type="string">
-  Server software version or version rule. Use it instead of the `@version` suffix. Paper and Purpur use build numbers; Fabric, Forge, and NeoForge use their loader or installer versions; a custom fork uses a release tag. Leave it empty for the latest.
+  Server software version or version rule. Use it instead of the `@version` suffix. Paper and Purpur use build numbers; Fabric, Forge, and NeoForge use their loader or installer versions. Leave it empty for the latest.
 </ParamField>
 
 <ParamField query="--minecraft, -m" type="string">
   Exact Minecraft release or snapshot ID, for example `1.21.4`.
-</ParamField>
-
-<ParamField query="--repository" type="string">
-  GitHub repository that publishes a Paperclip-based server JAR, in `owner/repo` form. Use it with `--core` naming the fork.
-</ParamField>
-
-<ParamField query="--file-pattern" type="string">
-  Release asset glob for a GitHub-hosted server, for example `server-*.jar`. It narrows the asset that Lucy downloads.
 </ParamField>
 
 <ParamField query="--mcdr-version" type="string">
