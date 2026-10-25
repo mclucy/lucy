@@ -22,6 +22,9 @@ const ResultSchema = 1
 // ResultKind identifies the machine-readable install result document.
 const ResultKind = "install"
 
+// ResultKindUpgrade identifies a result produced by the upgrade command.
+const ResultKindUpgrade = "upgrade"
+
 // Mode records how the operation produced its lock.
 type Mode string
 
@@ -35,23 +38,42 @@ const (
 type Change string
 
 const (
-	ChangeAdded    Change = "added"
-	ChangeRemoved  Change = "removed"
-	ChangeUpgraded Change = "upgraded"
+	ChangeAdded      Change = "added"
+	ChangeRemoved    Change = "removed"
+	ChangeUpgraded   Change = "upgraded"
+	ChangeDowngraded Change = "downgraded"
+	ChangeRebuilt    Change = "rebuilt"
+	ChangeChanged    Change = "changed"
 )
 
 // PackageChange is one difference between the previous lock and the committed
 // one, or between no lock and the first one.
 type PackageChange struct {
-	Reference  string             `json:"reference,omitempty"`
-	Name       string             `json:"name"`
-	Provider   catalog.Provider   `json:"provider"`
-	ProjectID  string             `json:"project_id,omitempty"`
-	Version    versionpkg.Version `json:"version,omitempty"`
-	Previous   versionpkg.Version `json:"previous,omitempty"`
-	Change     Change             `json:"change"`
-	Direct     bool               `json:"direct"`
-	RequiredBy []string           `json:"required_by,omitempty"`
+	Reference         string             `json:"reference,omitempty"`
+	Name              string             `json:"name"`
+	Provider          catalog.Provider   `json:"provider"`
+	ProjectID         string             `json:"project_id,omitempty"`
+	Version           versionpkg.Version `json:"version,omitempty"`
+	Previous          versionpkg.Version `json:"previous,omitempty"`
+	ReleaseID         string             `json:"release_id,omitempty"`
+	PreviousReleaseID string             `json:"previous_release_id,omitempty"`
+	Change            Change             `json:"change"`
+	Direct            bool               `json:"direct"`
+	RequiredBy        []string           `json:"required_by,omitempty"`
+}
+
+// ManifestChange records a declared selector that the operation rewrites.
+type ManifestChange struct {
+	Reference        string             `json:"reference"`
+	PreviousSelector versionpkg.Version `json:"previous_selector"`
+	Selector         versionpkg.Version `json:"selector"`
+}
+
+// MCDRChange reports a refreshed Python environment for MCDR.
+type MCDRChange struct {
+	Version        versionpkg.Version `json:"version"`
+	Inputs         int                `json:"inputs"`
+	PreviousInputs int                `json:"previous_inputs"`
 }
 
 // ServerChange reports a new or changed server core.
@@ -91,15 +113,19 @@ type Result struct {
 	// Kind names the machine-readable document. Results created by this
 	// package default it to ResultKind; projections from other operations
 	// set it explicitly.
-	Kind        string                 `json:"kind"`
-	Mode        Mode                   `json:"mode"`
-	Reason      string                 `json:"reason,omitempty"`
-	Server      ServerChange           `json:"server"`
-	Packages    []PackageChange        `json:"packages"`
-	Files       FileChanges            `json:"files"`
-	Fetch       FetchSummary           `json:"fetch"`
-	Phases      []Phase                `json:"phases"`
-	Diagnostics []filetrack.Diagnostic `json:"diagnostics,omitempty"`
+	Kind            string                 `json:"kind"`
+	Mode            Mode                   `json:"mode"`
+	Reason          string                 `json:"reason,omitempty"`
+	Policy          string                 `json:"policy,omitempty"`
+	PlanHash        string                 `json:"plan_hash,omitempty"`
+	Server          ServerChange           `json:"server"`
+	Packages        []PackageChange        `json:"packages"`
+	ManifestChanges []ManifestChange       `json:"manifest_changes,omitempty"`
+	MCDR            *MCDRChange            `json:"mcdr,omitempty"`
+	Files           FileChanges            `json:"files"`
+	Fetch           FetchSummary           `json:"fetch"`
+	Phases          []Phase                `json:"phases"`
+	Diagnostics     []filetrack.Diagnostic `json:"diagnostics,omitempty"`
 	// Java reports the Java runtime that the server runs on. It is nil when
 	// the operation stopped before it selected one.
 	Java     *javaruntime.Check `json:"java,omitempty"`
@@ -143,6 +169,10 @@ func (r *Result) Changed() bool {
 	}
 	return r.Server.Change != "" ||
 		len(r.Packages) > 0 ||
+		len(r.ManifestChanges) > 0 ||
+		r.MCDR != nil ||
+		r.PublishedManifest ||
+		r.PublishedLock ||
 		r.Files.Created > 0 ||
 		r.Files.Replaced > 0 ||
 		r.Files.Removed > 0
@@ -178,9 +208,12 @@ func serverChange(before, after *lockfile.Document) ServerChange {
 }
 
 type packageView struct {
-	name    string
-	direct  bool
-	version versionpkg.Version
+	name      string
+	direct    bool
+	version   versionpkg.Version
+	releaseID string
+	fileID    string
+	dialect   versionpkg.Dialect
 }
 
 func packageChanges(
@@ -203,6 +236,7 @@ func packageChanges(
 			Direct:     current.direct,
 			RequiredBy: dependents[id],
 			Version:    current.version,
+			ReleaseID:  current.releaseID,
 		}
 		if pkg := findPackage(after, id); pkg != nil {
 			change.Reference = declaredReference(pkg, declared)
@@ -210,11 +244,29 @@ func packageChanges(
 			change.ProjectID = pkg.ProjectID
 		}
 		if existed {
-			if previous.version == current.version {
-				continue
+			switch {
+			case previous.version == current.version:
+				if previous.releaseID == current.releaseID && previous.fileID == current.fileID {
+					continue
+				}
+				change.Change = ChangeRebuilt
+				change.Previous = previous.version
+				change.PreviousReleaseID = previous.releaseID
+			default:
+				change.Previous = previous.version
+				change.PreviousReleaseID = previous.releaseID
+				comparison, comparable := comparePackageVersions(previous, current)
+				switch {
+				case !comparable:
+					change.Change = ChangeChanged
+				case comparison < 0:
+					change.Change = ChangeUpgraded
+				case comparison > 0:
+					change.Change = ChangeDowngraded
+				default:
+					change.Change = ChangeChanged
+				}
 			}
-			change.Change = ChangeUpgraded
-			change.Previous = previous.version
 		}
 		changes = append(changes, change)
 	}
@@ -223,11 +275,12 @@ func packageChanges(
 			continue
 		}
 		change := PackageChange{
-			Name:     previous.name,
-			Change:   ChangeRemoved,
-			Direct:   previous.direct,
-			Version:  previous.version,
-			Previous: previous.version,
+			Name:              previous.name,
+			Change:            ChangeRemoved,
+			Direct:            previous.direct,
+			Version:           previous.version,
+			Previous:          previous.version,
+			PreviousReleaseID: previous.releaseID,
 		}
 		if pkg := findPackage(before, id); pkg != nil {
 			change.Provider = pkg.Provider
@@ -276,9 +329,12 @@ func packageViews(
 			direct = len(p.Requirements) > 0
 		}
 		views[id] = packageView{
-			name:    name,
-			direct:  direct,
-			version: p.Version,
+			name:      name,
+			direct:    direct,
+			version:   p.Version,
+			releaseID: p.ReleaseID,
+			fileID:    p.FileID,
+			dialect:   packageVersionDialect(p),
 		}
 	}
 	return views
@@ -485,4 +541,43 @@ func countDeclared(d *manifest.Document) int {
 		}
 	}
 	return count
+}
+
+func packageVersionDialect(p *lockfile.Package) versionpkg.Dialect {
+	for _, module := range p.Modules {
+		if module.VersionDialect.Valid() {
+			return module.VersionDialect
+		}
+	}
+	switch p.Ecosystem {
+	case catalog.EcosystemFabric:
+		return versionpkg.DialectFabric
+	case catalog.EcosystemForge, catalog.EcosystemNeoForge:
+		return versionpkg.DialectMaven
+	case catalog.EcosystemMCDR:
+		return versionpkg.DialectMCDR
+	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
+		return versionpkg.DialectOpaque
+	default:
+		return versionpkg.DialectUnknown
+	}
+}
+
+func comparePackageVersions(previous, current packageView) (int, bool) {
+	dialect := current.dialect
+	if !dialect.Valid() {
+		dialect = previous.dialect
+	}
+	if !dialect.Valid() {
+		return 0, false
+	}
+	before, err := versionpkg.ParseVersion(previous.version, dialect)
+	if err != nil {
+		return 0, false
+	}
+	after, err := versionpkg.ParseVersion(current.version, dialect)
+	if err != nil {
+		return 0, false
+	}
+	return versionpkg.Compare(before, after)
 }

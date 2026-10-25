@@ -124,6 +124,8 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	candidates := map[projectKey][]upstream.Candidate{}
 	canonical := map[projectKey]projectKey{}
 	chosen := map[projectKey]lockfile.Package{}
+	conflicts := map[projectKey][]upstream.ProjectDependency{}
+	cache := request.Cache
 	attempts := 0
 	strict := true
 	var lastErr error
@@ -216,11 +218,6 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		// the binding, so the artifact resolves instead of merging into a
 		// package that no file can satisfy.
 		if previous, ok := chosen[r.key]; ok && (!active || previous.Artifact.Filename != "") {
-			for _, hint := range r.releaseHints {
-				if hint.releaseID != "" && previous.ReleaseID != hint.releaseID {
-					return hardFail(fmt.Errorf("conflicting exact releases for %s:%s", r.key.provider, r.key.project))
-				}
-			}
 			before := previous.Requirements
 			previous.Requirements = append(previous.Requirements, r.requirements...)
 			chosen[r.key] = previous
@@ -250,6 +247,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 				return true
 			}
 			delete(chosen, r.key)
+			delete(conflicts, r.key)
 			return false
 		}
 		// A disabled direct binding may already hold an artifact-less entry
@@ -303,6 +301,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			ledger.record(r.key, r.display, "", "no published builds match this server", RejectionEmpty)
 		}
 		list = preferReleaseBuilds(list, r.requirements)
+		list = preferReleaseHints(list, r.releaseHints)
 		for _, candidate := range list {
 			decision, err := decideCandidate(candidate, r)
 			if err != nil {
@@ -322,15 +321,46 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 				)
 				continue
 			}
-			a := candidate.Artifact
-			materialized, err := materialize(&a)
-			if err != nil {
-				return hardFail(err)
+			if detail, conflicting := metadataConflict(candidate, r, chosen, conflicts); conflicting {
+				reason := describeRejection(RejectionMetadataConflict, detail)
+				ledger.record(r.key, r.display, string(candidate.Version), detail, RejectionMetadataConflict)
+				trace.rejected(r.display, string(candidate.Version), reason)
+				log.Debug(
+					"resolve: candidate rejected",
+					"provider", r.key.provider,
+					"project", r.key.project,
+					"origin", r.origin.String(),
+					"candidate", candidate.Version,
+					"file", candidate.Filename,
+					"reason", reason,
+				)
+				continue
 			}
-			a.Hashes = materialized.Hashes
-			modules, err := artifact.ReadModules(ctx, materialized.Path, r.key.ecosystem)
-			if err != nil {
-				return hardFail(err)
+			a := candidate.Artifact
+			var modules []catalog.DescriptorModule
+			entry, cached := analysisEntry{}, false
+			if cache != nil {
+				entry, cached = cache.get(candidateAnalysisKey(candidate))
+			}
+			if cached {
+				a.Hashes = entry.hashes
+				modules = entry.modules
+			} else {
+				materialized, err := materialize(&a)
+				if err != nil {
+					return hardFail(err)
+				}
+				a.Hashes = materialized.Hashes
+				modules, err = artifact.ReadModules(ctx, materialized.Path, r.key.ecosystem)
+				if err != nil {
+					return hardFail(err)
+				}
+				if cache != nil && len(modules) > 0 {
+					cache.put(candidateAnalysisKey(candidate), analysisEntry{
+						modules: modules,
+						hashes:  a.Hashes,
+					})
+				}
 			}
 			if len(modules) == 0 {
 				message := fmt.Sprintf("artifact %s has no server-visible %s modules", a.Filename, r.key.ecosystem)
@@ -349,6 +379,11 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 				Ecosystem:    r.key.ecosystem,
 				Artifact:     a,
 				Requirements: requirements,
+			}
+			if declared := conflictDependencies(candidate); len(declared) > 0 {
+				conflicts[r.key] = declared
+			} else {
+				delete(conflicts, r.key)
 			}
 			log.Debug(
 				"resolve: candidate selected",
@@ -398,6 +433,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			} else {
 				delete(chosen, r.key)
 			}
+			delete(conflicts, r.key)
 			log.Debug(
 				"resolve: backtracking candidate",
 				"provider", r.key.provider,

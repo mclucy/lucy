@@ -20,6 +20,9 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 	}
 	var out []upstream.Candidate
 	for _, v := range versions {
+		if v.Status != "" && v.Status != "listed" {
+			continue
+		}
 		if !slices.Contains(v.GameVersions, minecraft) || !versionSupportsLoader(v, loader) {
 			continue
 		}

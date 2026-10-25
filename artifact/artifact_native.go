@@ -23,14 +23,83 @@ import (
 // intact.
 func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem) ([]catalog.DescriptorModule, error) {
 	if strings.EqualFold(filepath.Ext(filename), ".py") {
-		return inspectPython(ctx, filename)
+		modules, err := inspectPython(ctx, filename)
+		if err != nil {
+			return nil, err
+		}
+		return normalizeModules(modules), nil
 	}
 	z, err := zip.OpenReader(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer z.Close()
-	return inspectArchive(&z.Reader, loader, "", 0)
+	modules, err := inspectArchive(&z.Reader, loader, "", 0)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeModules(modules), nil
+}
+
+// normalizeModules makes descriptor order independent of map iteration. The
+// lock and plan hashes depend on this order.
+func normalizeModules(modules []catalog.DescriptorModule) []catalog.DescriptorModule {
+	for i := range modules {
+		slices.Sort(modules[i].Provides)
+		slices.SortFunc(modules[i].Dependencies, compareDescriptorDependency)
+	}
+	slices.SortFunc(modules, compareDescriptorModule)
+	return modules
+}
+
+func compareDescriptorModule(a, b catalog.DescriptorModule) int {
+	if n := strings.Compare(a.NestedPath, b.NestedPath); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.DescriptorPath, b.DescriptorPath); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.ID, b.ID); n != 0 {
+		return n
+	}
+	if n := strings.Compare(string(a.Version), string(b.Version)); n != 0 {
+		return n
+	}
+	return strings.Compare(string(a.Ecosystem), string(b.Ecosystem))
+}
+
+func compareDescriptorDependency(a, b catalog.DescriptorDependency) int {
+	if n := strings.Compare(string(a.Kind), string(b.Kind)); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.ID, b.ID); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.Constraint, b.Constraint); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.Ordering, b.Ordering); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.Phase, b.Phase); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.Load, b.Load); n != 0 {
+		return n
+	}
+	if a.JoinClasspath != b.JoinClasspath {
+		if a.JoinClasspath {
+			return 1
+		}
+		return -1
+	}
+	if n := strings.Compare(string(a.Provider), string(b.Provider)); n != 0 {
+		return n
+	}
+	if n := strings.Compare(a.ProjectID, b.ProjectID); n != 0 {
+		return n
+	}
+	return strings.Compare(a.ModuleID, b.ModuleID)
 }
 
 func nativeEntry(z *zip.Reader, name string) ([]byte, error) {
@@ -345,18 +414,23 @@ func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, dept
 		if raw == nil {
 			return nil, nil
 		}
-		return nativeMCDR(raw, member)
+		return nativeMCDR(z, raw, member)
 	default:
 		return nil, fmt.Errorf("unsupported native loader %s", loader)
 	}
 }
 
-func nativeMCDR(raw []byte, member string) ([]catalog.DescriptorModule, error) {
+func nativeMCDR(
+	z *zip.Reader,
+	raw []byte,
+	member string,
+) ([]catalog.DescriptorModule, error) {
 	var d struct {
-		ID           string            `json:"id"`
-		Version      string            `json:"version"`
-		Dependencies map[string]string `json:"dependencies"`
-		Requirements []string          `json:"requirements"`
+		ID               string            `json:"id"`
+		Version          string            `json:"version"`
+		Dependencies     map[string]string `json:"dependencies"`
+		Requirements     []string          `json:"requirements"`
+		RequirementsFile jsontext.Value    `json:"requirements_file"`
 	}
 	if err := json.Unmarshal(raw, &d); err != nil {
 		return nil, err
@@ -383,7 +457,61 @@ func nativeMCDR(raw []byte, member string) ([]catalog.DescriptorModule, error) {
 			Kind: catalog.DependencyKindPython,
 		})
 	}
+	if z != nil {
+		files, err := mcdrRequirementFiles(d.RequirementsFile)
+		if err != nil {
+			return nil, err
+		}
+		if len(files) == 0 {
+			files = []string{"requirements.txt"}
+		}
+		for _, name := range files {
+			content, err := nativeEntry(z, name)
+			if err != nil {
+				return nil, err
+			}
+			if content == nil {
+				continue
+			}
+			for _, requirement := range mcdrRequirements(content) {
+				m.Dependencies = append(m.Dependencies, catalog.DescriptorDependency{
+					ID:   requirement,
+					Kind: catalog.DependencyKindPython,
+				})
+			}
+		}
+	}
 	return []catalog.DescriptorModule{m}, nil
+}
+
+func mcdrRequirementFiles(raw jsontext.Value) ([]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var one string
+	if err := json.Unmarshal(raw, &one); err == nil {
+		if strings.TrimSpace(one) == "" {
+			return nil, nil
+		}
+		return []string{one}, nil
+	}
+	var many []string
+	if err := json.Unmarshal(raw, &many); err != nil {
+		return nil, fmt.Errorf("invalid MCDR requirements_file: %w", err)
+	}
+	return many, nil
+}
+
+func mcdrRequirements(content []byte) []string {
+	var requirements []string
+	for line := range strings.SplitSeq(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") {
+			continue
+		}
+		requirements = append(requirements, line)
+	}
+	return requirements
 }
 
 func inspectPython(ctx context.Context, p string) ([]catalog.DescriptorModule, error) {
@@ -397,7 +525,7 @@ else: raise ValueError("missing static PLUGIN_METADATA")`
 	if err != nil {
 		return nil, fmt.Errorf("inspect Python plugin metadata: %w", err)
 	}
-	return nativeMCDR(data, "")
+	return nativeMCDR(nil, data, "")
 }
 
 func ModuleProvides(m catalog.DescriptorModule, id string) bool {

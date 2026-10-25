@@ -299,8 +299,15 @@ func packageChangeLines(changes []install.PackageChange) []string {
 	lines := make([]string, 0, len(changes))
 	for _, change := range changes {
 		version := string(change.Version)
-		if change.Change == install.ChangeUpgraded {
+		switch change.Change {
+		case install.ChangeUpgraded, install.ChangeDowngraded, install.ChangeChanged:
 			version = fmt.Sprintf("%s → %s", change.Previous, change.Version)
+		case install.ChangeRebuilt:
+			if change.PreviousReleaseID != "" && change.ReleaseID != "" && change.PreviousReleaseID != change.ReleaseID {
+				version = fmt.Sprintf("%s (build %s → %s)", change.Version, change.PreviousReleaseID, change.ReleaseID)
+			} else {
+				version = fmt.Sprintf("%s (build changed)", change.Version)
+			}
 		}
 		line := fmt.Sprintf(
 			"  %s %-*s  %s",
@@ -325,6 +332,12 @@ func changeGlyph(change install.Change) string {
 		return style.Failure("-")
 	case install.ChangeUpgraded:
 		return style.Warning("~")
+	case install.ChangeDowngraded:
+		return style.Failure("v")
+	case install.ChangeRebuilt:
+		return style.Warning("r")
+	case install.ChangeChanged:
+		return style.Warning("!")
 	default:
 		return " "
 	}

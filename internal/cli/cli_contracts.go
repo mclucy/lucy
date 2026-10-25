@@ -53,6 +53,24 @@ var (
 		},
 	}
 
+	upgradeContract = CommandContract{
+		Name:            "upgrade",
+		Summary:         "Advance declared package roots to newer eligible builds and reconcile the lock.",
+		MutatesManifest: true,
+		MutatesLockfile: true,
+		MutatesRuntime:  true,
+		ObservesRuntime: true,
+		ManifestEffect:  "Rewrite exact selectors of upgraded roots to the selected version; leave ambiguous selectors unchanged.",
+		LockfileEffect:  "Resolve the full closure with targeted roots advanced and non-target roots held at their locked builds.",
+		RuntimeEffect:   "Apply the resolved lock through the install transaction. Game, server core, and MCDR runtime changes belong to migration.",
+		Guardrails: []string{
+			"Must not change the game version, server core, loaders, or MCDR runtime.",
+			"Must not move a manifest root below its locked version.",
+			"Must not special-case package names in resolution.",
+			"Must not mutate ignored or unmanaged content.",
+		},
+	}
+
 	installContract = CommandContract{
 		Name:            "install",
 		Summary:         "Synchronize managed runtime state to manifest intent using exact lockfile facts.",
@@ -76,5 +94,6 @@ func CommandContracts() map[string]CommandContract {
 		addContract.Name:     addContract,
 		removeContract.Name:  removeContract,
 		installContract.Name: installContract,
+		upgradeContract.Name: upgradeContract,
 	}
 }

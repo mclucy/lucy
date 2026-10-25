@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
+	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/workspacewrite"
+	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
@@ -110,6 +114,23 @@ func ApplyPlan(
 	}
 	if err := checkPlannedState(root, plan); err != nil {
 		return nil, err
+	}
+	// The isolated MCDReforged environment is keyed by its Python requirements,
+	// so staging provisions a fresh environment whenever this list changes.
+	if previous := plan.Previous; previous != nil && previous.MCDR != nil &&
+		plan.Resolved.MCDR != nil {
+		before := mcdrPythonRequirements(previous)
+		after := mcdrPythonRequirements(plan.Resolved)
+		if !slices.Equal(before, after) {
+			if plan.Result == nil {
+				plan.Result = newResult()
+			}
+			plan.Result.MCDR = &MCDRChange{
+				Version:        plan.Resolved.MCDR.Version,
+				Inputs:         len(after),
+				PreviousInputs: len(before),
+			}
+		}
 	}
 	result = plan.Result
 	if result == nil {
@@ -350,4 +371,81 @@ func newDownloadStore(
 		trace:   opts.Trace,
 		fetch:   &result.Fetch,
 	}
+}
+
+// PlanFromResolution builds a plan from a lock another resolver produced. The
+// caller must set the final manifest and the lock's manifest fingerprint, so a
+// plan can never publish a lock that answers a different intent.
+func PlanFromResolution(
+	d *manifest.Document,
+	previous *lockfile.Document,
+	resolved *lockfile.Document,
+	baseManifestFingerprint string,
+	publishManifest bool,
+) (*Plan, error) {
+	if d == nil || resolved == nil {
+		return nil, fmt.Errorf("manifest and resolved lock are required")
+	}
+	fingerprint, err := manifest.Fingerprint(d)
+	if err != nil {
+		return nil, err
+	}
+	if resolved.ManifestFingerprint != fingerprint {
+		return nil, fmt.Errorf("resolved lock answers a different manifest")
+	}
+	if err := resolved.Validate(); err != nil {
+		return nil, err
+	}
+	baseLock := ""
+	if previous != nil {
+		baseLock, err = lockfile.Fingerprint(previous)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result := newResult()
+	result.Kind = ResultKindUpgrade
+	result.Mode = ModeResolve
+	result.Reason = "package upgrade"
+	result.applyChanges(previous, resolved, d)
+	result.PublishedManifest = publishManifest
+	result.PublishedLock = previous == nil || resolved != previous
+	return &Plan{
+		Manifest:                d,
+		Previous:                previous,
+		Resolved:                resolved,
+		PublishManifest:         publishManifest,
+		PublishLock:             result.PublishedLock,
+		BaseManifestFingerprint: baseManifestFingerprint,
+		BaseLockFingerprint:     baseLock,
+		Result:                  result,
+	}, nil
+}
+
+// Materializer returns a verified artifact materializer and the fetch summary
+// it updates. Callers must hold the workspace writer lock while resolving.
+func Materializer(
+	ctx context.Context,
+	root string,
+	opts Options,
+) (func(*catalog.Artifact) (artifact.MaterializedFile, error), *FetchSummary) {
+	summary := &FetchSummary{}
+	store := &downloadStore{
+		ctx:     ctx,
+		dir:     filepath.Join(root, ".lucy", "downloads"),
+		offline: opts.Offline,
+		trace:   opts.Trace,
+		fetch:   summary,
+	}
+	return store.materialize, summary
+}
+
+// CheckJava reports whether an installed Java runtime satisfies the lock. It
+// never installs or modifies a runtime.
+func CheckJava(
+	ctx context.Context,
+	root string,
+	locked *lockfile.Document,
+) (*javaruntime.Check, error) {
+	return javaruntime.Select(ctx, root, javaruntime.RequirementOf(locked))
 }

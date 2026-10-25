@@ -3,7 +3,9 @@ package resolve
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
 
 	"github.com/mclucy/lucy/lockfile"
@@ -34,11 +36,8 @@ func decideCandidate(
 			decision.detail = detail
 		}
 	}
-	for _, hint := range request.releaseHints {
-		if hint.releaseID != "" && candidate.ReleaseID != hint.releaseID {
-			reject(RejectionReleaseMismatch, hint.releaseID)
-		}
-	}
+	// Remote release hints are advisory. They order candidates, but a build
+	// the dependent did not name can still satisfy the dependency.
 	constrained := false
 	for _, requirement := range request.requirements {
 		if !requirement.Enabled {
@@ -145,4 +144,164 @@ func preferReleaseBuilds(
 		}
 	}
 	return ordered
+}
+
+// preferReleaseHints moves candidates named by remote dependency metadata to
+// the front of the candidate list. The hints are advisory: a different build
+// can still satisfy the dependency.
+func preferReleaseHints(
+	list []upstream.Candidate,
+	hints []releaseHint,
+) []upstream.Candidate {
+	hinted := map[string]bool{}
+	for _, hint := range hints {
+		if hint.releaseID != "" {
+			hinted[hint.releaseID] = true
+		}
+	}
+	if len(hinted) == 0 {
+		return list
+	}
+	ordered := make([]upstream.Candidate, 0, len(list))
+	for _, candidate := range list {
+		if hinted[candidate.ReleaseID] {
+			ordered = append(ordered, candidate)
+		}
+	}
+	for _, candidate := range list {
+		if !hinted[candidate.ReleaseID] {
+			ordered = append(ordered, candidate)
+		}
+	}
+	return ordered
+}
+
+// conflictDependencies returns the candidate's incompatibility declarations.
+func conflictDependencies(candidate upstream.Candidate) []upstream.ProjectDependency {
+	var out []upstream.ProjectDependency
+	for _, dep := range candidate.Dependencies {
+		switch dep.Kind {
+		case catalog.DependencyKindIncompatible, catalog.DependencyKindConflict:
+			out = append(out, dep)
+		}
+	}
+	return out
+}
+
+// metadataConflict reports the first metadata-declared incompatibility between
+// candidate and the selected packages. It checks both directions so a one-sided
+// declaration is not selection-order dependent.
+func metadataConflict(
+	candidate upstream.Candidate,
+	request projectRequest,
+	chosen map[projectKey]lockfile.Package,
+	conflicts map[projectKey][]upstream.ProjectDependency,
+) (string, bool) {
+	best := ""
+	note := func(detail string) {
+		if best == "" || strings.Compare(detail, best) < 0 {
+			best = detail
+		}
+	}
+	for _, dep := range conflictDependencies(candidate) {
+		if dep.Provider == candidate.Provider && dep.ProjectID == candidate.ProjectID {
+			continue
+		}
+		for key, selected := range chosen {
+			if key.environment != request.key.environment || key.ecosystem != request.key.ecosystem {
+				continue
+			}
+			if selected.Artifact.Filename == "" ||
+				selected.Provider != dep.Provider ||
+				selected.ProjectID != dep.ProjectID {
+				continue
+			}
+			if dep.ReleaseID != "" && selected.ReleaseID != dep.ReleaseID {
+				continue
+			}
+			note(conflictDetail(dep))
+		}
+	}
+	for key, selectedConflicts := range conflicts {
+		if key.environment != request.key.environment || key.ecosystem != request.key.ecosystem {
+			continue
+		}
+		for _, dep := range selectedConflicts {
+			if dep.Provider != candidate.Provider || dep.ProjectID != candidate.ProjectID {
+				continue
+			}
+			if dep.ReleaseID != "" && candidate.ReleaseID != dep.ReleaseID {
+				continue
+			}
+			note(conflictDetail(dep))
+		}
+	}
+	return best, best != ""
+}
+
+func conflictDetail(dep upstream.ProjectDependency) string {
+	detail := dep.Provider.String() + ":" + dep.ProjectID
+	if dep.ReleaseID != "" {
+		detail += "@" + dep.ReleaseID
+	}
+	return detail
+}
+
+type analysisEntry struct {
+	modules []catalog.DescriptorModule
+	hashes  map[string]string
+}
+
+// AnalysisCache reuses artifact analysis within one resolution session.
+type AnalysisCache struct {
+	entries map[string]analysisEntry
+}
+
+func NewAnalysisCache() *AnalysisCache {
+	return &AnalysisCache{entries: map[string]analysisEntry{}}
+}
+
+func (c *AnalysisCache) get(key string) (analysisEntry, bool) {
+	if c == nil {
+		return analysisEntry{}, false
+	}
+	entry, ok := c.entries[key]
+	if !ok {
+		return analysisEntry{}, false
+	}
+	return analysisEntry{
+		modules: cloneModules(entry.modules),
+		hashes:  entry.hashes,
+	}, true
+}
+
+func (c *AnalysisCache) put(key string, entry analysisEntry) {
+	if c == nil {
+		return
+	}
+	c.entries[key] = analysisEntry{
+		modules: cloneModules(entry.modules),
+		hashes:  entry.hashes,
+	}
+}
+
+func candidateAnalysisKey(candidate upstream.Candidate) string {
+	return string(candidate.Provider) + "|" +
+		candidate.ProjectID + "|" +
+		candidate.ReleaseID + "|" +
+		candidate.FileID + "|" +
+		candidate.URL
+}
+
+func cloneModules(modules []catalog.DescriptorModule) []catalog.DescriptorModule {
+	if len(modules) == 0 {
+		return nil
+	}
+	out := make([]catalog.DescriptorModule, len(modules))
+	for i, module := range modules {
+		out[i] = module
+		out[i].Provides = slices.Clone(module.Provides)
+		out[i].Dependencies = slices.Clone(module.Dependencies)
+	}
+	return out
 }

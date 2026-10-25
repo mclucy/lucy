@@ -42,14 +42,15 @@ func moduleProblem(owner *lockfile.Package, message string) ModuleProblem {
 type RejectionKind string
 
 const (
-	RejectionVersionMismatch RejectionKind = "version-mismatch"
-	RejectionReleaseMismatch RejectionKind = "release-mismatch"
-	RejectionFilePattern     RejectionKind = "file-pattern"
-	RejectionPrimaryFile     RejectionKind = "not-primary-file"
-	RejectionChannel         RejectionKind = "not-a-release"
-	RejectionModules         RejectionKind = "modules"
-	RejectionNested          RejectionKind = "nested"
-	RejectionEmpty           RejectionKind = "empty"
+	RejectionVersionMismatch  RejectionKind = "version-mismatch"
+	RejectionReleaseMismatch  RejectionKind = "release-mismatch"
+	RejectionFilePattern      RejectionKind = "file-pattern"
+	RejectionPrimaryFile      RejectionKind = "not-primary-file"
+	RejectionChannel          RejectionKind = "not-a-release"
+	RejectionModules          RejectionKind = "modules"
+	RejectionMetadataConflict RejectionKind = "metadata-conflict"
+	RejectionNested           RejectionKind = "nested"
+	RejectionEmpty            RejectionKind = "empty"
 )
 
 // RejectionGroup aggregates identical rejections of one project's candidates.
@@ -328,6 +329,8 @@ func describeRejection(kind RejectionKind, detail string) string {
 		return "not the primary file"
 	case RejectionChannel:
 		return "not a release build"
+	case RejectionMetadataConflict:
+		return "conflicts with " + detail
 	default:
 		return detail
 	}
