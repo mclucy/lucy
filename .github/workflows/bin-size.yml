@@ -22,14 +22,16 @@ jobs:
       - name: Check out PR
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           path: pr
 
       - name: Check out main
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.base_ref || 'main' }}
+          ref: ${{ github.event.pull_request.base.sha || github.base_ref || 'main' }}
+          persist-credentials: false
           path: main
-
       - name: Check for go.mod changes
         id: check_gomod
         run: |
@@ -46,12 +48,10 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version: "1.27"
+          cache-dependency-path: pr/go.sum
 
-      - name: Compare binary sizes and report
+      - name: Compare binary sizes
         if: steps.check_gomod.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p /tmp/pr-bins /tmp/main-bins
 
@@ -107,15 +107,19 @@ jobs:
           with open("/tmp/report.md", "w") as f:
               f.write(body)
           EOF
-
-          if [ -n "$PR_NUMBER" ]; then
-            COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-              --jq '.[] | select(.body | contains("<!-- lucy-binary-size-report -->")) | .id' | head -n 1 || true)
-            if [ -n "$COMMENT_ID" ]; then
-              gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" -F body=@/tmp/report.md || true
-            else
-              gh pr comment "$PR_NUMBER" --body-file /tmp/report.md || true
-            fi
-          fi
-
           cat /tmp/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish report to pull request
+        if: (steps.check_gomod.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') && github.event.pull_request.number != ''
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          COMMENT_ID=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.body | contains("<!-- lucy-binary-size-report -->")) | .id' | head -n 1 || true)
+          if [ -n "$COMMENT_ID" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$COMMENT_ID" -F body=@/tmp/report.md || true
+          else
+            gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body-file /tmp/report.md || true
+          fi
