@@ -20,44 +20,55 @@ import (
 // committing the server tree. It records the declared packages alone, because
 // the workspace the manifest describes already holds a working set that
 // catalogue dependencies must not extend. Artifact bytes still enter the
-// workspace download store because the lock pins their hashes. The caller must
-// hold the workspace writer lock.
-func Resolve(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (*lockfile.Document, []error, error) {
+// workspace download store because the lock pins their hashes. It returns the
+// resolution facts alongside the lock. The caller must hold the workspace
+// writer lock.
+func Resolve(
+	ctx context.Context,
+	root string,
+	d *manifest.Document,
+	old *lockfile.Document,
+	opts Options,
+) (*lockfile.Document, *Result, error) {
+	result := newResult()
+	result.Mode = ModeResolve
+	result.Reason = "lock resolved"
 	absolute, err := filepath.Abs(root)
 	if err != nil {
-		return nil, nil, err
+		return nil, result, err
 	}
 	if d == nil {
-		return nil, nil, fmt.Errorf("manifest required to resolve a lock")
+		return nil, result, fmt.Errorf("manifest required to resolve a lock")
 	}
 	opts.declaredOnly = true
 	if err := workspacewrite.SafePath(absolute, ".lucy"); err != nil {
-		return nil, nil, err
+		return nil, result, err
 	}
 	fingerprint, err := manifest.Fingerprint(d)
 	if err != nil {
-		return nil, nil, err
+		return nil, result, err
 	}
 	if old != nil && !opts.WithOptional && old.ManifestFingerprint == fingerprint {
 		log.Debug("lock resolution reused current lock", "reason", "manifest unchanged")
-		return old, nil, nil
+		result.Mode = ModeReplay
+		result.Reason = "manifest unchanged; lock reused"
+		return old, result, nil
 	}
 	store := &downloadStore{
 		ctx:     ctx,
 		dir:     filepath.Join(absolute, ".lucy", "downloads"),
 		offline: opts.Offline,
 		trace:   opts.Trace,
-		fetch:   &FetchSummary{},
+		fetch:   &result.Fetch,
 	}
-	result := newResult()
 	resolved, err := resolveInstall(ctx, absolute, d, old, fingerprint, &opts, store, result)
 	if err != nil {
-		return nil, result.Warnings, err
+		return nil, result, err
 	}
 	if err := resolved.Validate(); err != nil {
-		return nil, result.Warnings, err
+		return nil, result, err
 	}
-	return resolved, result.Warnings, nil
+	return resolved, result, nil
 }
 
 // resolveInstall resolves d into a new lock document. The caller decides when

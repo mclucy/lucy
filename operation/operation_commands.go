@@ -527,9 +527,15 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	// Adoption records the set the server already runs, so module
 	// requirements that the installed jars report but the catalogue metadata
 	// cannot satisfy become warnings instead of a refusal.
-	resolved, resolveWarnings, err := install.Resolve(ctx, root, d, old, install.Options{AcceptBroken: true, Trace: opts.Trace})
-	if observed != nil {
-		observed.Warnings = append(observed.Warnings, resolveWarnings...)
+	resolved, resolution, err := install.Resolve(
+		ctx,
+		root,
+		d,
+		old,
+		install.Options{AcceptBroken: true, Trace: opts.Trace},
+	)
+	if observed != nil && resolution != nil {
+		observed.Warnings = append(observed.Warnings, resolution.Warnings...)
 	}
 	if err != nil {
 		return initResult(observed), err
