@@ -128,6 +128,7 @@ A new interactive surface ships with its flag equivalent in the same change. Use
 2. `go run ./e2e/sandbox` materializes real server sandboxes into `.sandboxes/` from `e2e/testdata/sandboxes/sandboxes.yaml`. There's brief explanation for each sandbox family in `e2e/testdata/sandboxes/docs/*.md`.
 3. You may create temporary testing environments under project root with paths prefixed with `test_`. They are git ignored.
 4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
+5. Never assume the current code is correct. You must not refer to any output while writing a test.
 
 The e2e domain suites are Go tests behind the `e2e` build tag, and the
 filetrack suite is behind `integration`, so `go test ./...` stays unit-only.
