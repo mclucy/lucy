@@ -54,6 +54,7 @@ tasks:
       - "./docs/docs.tar.gz"
       - "./go.mod"
       - "./go.sum"
+    generates:
       - "{{.DEV_BINARY}}"
       - "{{.DEV_SYMLINK}}"
 
