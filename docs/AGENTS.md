@@ -3,6 +3,7 @@
 ## About this project
 
 - The documentation site is built with [Mintlify](https://mintlify.com).
+- The GitHub wiki mirrors this directory. `tools/genwiki` renders the pages and CI publishes them; never edit wiki pages in the browser.
 - Pages are MDX files with YAML frontmatter.
 - Navigation and site configuration live in `docs.json`.
 - Preview with `npm i -g mint` and `mint dev` from this directory.

@@ -293,6 +293,12 @@ tasks:
     cmds:
       - go run ./tools/gendocs -check
 
+  docs:wiki:
+    desc: "Render the GitHub wiki mirror into dist/wiki"
+    dir: "{{.TASKFILE_DIR}}"
+    cmds:
+      - go run ./tools/genwiki -out dist/wiki
+
   e2e:status:
     desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
     deps:
