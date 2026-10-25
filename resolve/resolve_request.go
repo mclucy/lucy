@@ -28,9 +28,8 @@ type (
 		display      string
 		origin       requestOrigin
 		requirements []lockfile.RequirementBinding
-		// releaseHints come from remote dependency metadata. Resolution
-		// currently treats them as exact pins; upgrades will use them as
-		// ordering preferences instead.
+		// releaseHints come from remote dependency metadata. They order
+		// candidates but do not by themselves reject another build.
 		releaseHints []releaseHint
 	}
 )
@@ -92,5 +91,8 @@ type PackagesRequest struct {
 	WithOptional       bool
 	AcceptBroken       bool
 	ExpandDependencies bool
-	Trace              Trace
+	// Cache reuses artifact analysis across candidate combinations. A nil
+	// cache analyzes every candidate from scratch.
+	Cache *AnalysisCache
+	Trace Trace
 }

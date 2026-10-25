@@ -148,11 +148,10 @@ func TestDecideCandidate(t *testing.T) {
 			wantDetail: "",
 		},
 		{
-			name:       "release hint mismatch rejects",
-			candidate:  release,
-			request:    projectRequest{origin: originDependency, releaseHints: []releaseHint{{releaseID: "r9"}}},
-			wantKind:   RejectionReleaseMismatch,
-			wantDetail: "r9",
+			name:      "release hint does not reject",
+			candidate: release,
+			request:   projectRequest{origin: originDependency, releaseHints: []releaseHint{{releaseID: "r9"}}},
+			want:      true,
 		},
 		{
 			name:      "disabled requirement does not constrain",
@@ -170,9 +169,9 @@ func TestDecideCandidate(t *testing.T) {
 		{
 			name:       "first rejection wins",
 			candidate:  beta,
-			request:    projectRequest{origin: originManifest, releaseHints: []releaseHint{{releaseID: "r9"}}, requirements: testRequest(versionpkg.Stable, "").requirements},
-			wantKind:   RejectionReleaseMismatch,
-			wantDetail: "r9",
+			request:    projectRequest{origin: originManifest, requirements: testRequest(versionpkg.Stable, "").requirements},
+			wantKind:   RejectionChannel,
+			wantDetail: "requested a release build",
 		},
 		{
 			name:      "invalid file pattern is an error",
@@ -286,5 +285,78 @@ func TestOrderCandidatesLockedBetaStillYieldsToRelease(t *testing.T) {
 	)
 	if got[0].ReleaseID != "r1" {
 		t.Fatalf("ordered candidates [0] = %q, want the older release under current behavior", got[0].ReleaseID)
+	}
+}
+
+func TestPreferReleaseHints(t *testing.T) {
+	older := testCandidate("1.0.0", "r1", "f1", "demo-1.0.0.jar", time.Unix(1, 0), upstream.ReleaseChannelRelease, true)
+	newer := testCandidate("1.1.0", "r2", "f2", "demo-1.1.0.jar", time.Unix(2, 0), upstream.ReleaseChannelRelease, true)
+
+	got := preferReleaseHints(
+		[]upstream.Candidate{newer, older},
+		[]releaseHint{{releaseID: "r1"}},
+	)
+	if got[0].ReleaseID != "r1" {
+		t.Fatalf("preferReleaseHints()[0] = %q, want the hinted release", got[0].ReleaseID)
+	}
+}
+
+func TestMetadataConflict(t *testing.T) {
+	request := testRequest(versionpkg.Any, "")
+	candidate := testCandidate("2.0.0", "r2", "f2", "demo-2.0.0.jar", time.Unix(2, 0), upstream.ReleaseChannelRelease, true)
+	candidate.Provider = catalog.ProviderModrinth
+	candidate.ProjectID = "demo"
+	candidate.Dependencies = []upstream.ProjectDependency{{
+		Provider:  catalog.ProviderModrinth,
+		ProjectID: "target",
+		ReleaseID: "r1",
+		Kind:      catalog.DependencyKindIncompatible,
+	}}
+	selected := lockfile.Package{
+		Environment: serverpkg.EnvironmentServer,
+		Ecosystem:   catalog.EcosystemFabric,
+		Artifact: catalog.Artifact{
+			Provider:  catalog.ProviderModrinth,
+			ProjectID: "target",
+			ReleaseID: "r1",
+			Filename:  "target.jar",
+		},
+	}
+	chosen := map[projectKey]lockfile.Package{{
+		environment: serverpkg.EnvironmentServer,
+		ecosystem:   catalog.EcosystemFabric,
+		provider:    catalog.ProviderModrinth,
+		project:     "target",
+	}: selected}
+
+	if detail, conflicting := metadataConflict(candidate, request, chosen, nil); !conflicting || detail != "modrinth:target@r1" {
+		t.Fatalf("metadataConflict() = %q, %v, want the selected release conflict", detail, conflicting)
+	}
+
+	selected.ReleaseID = "r0"
+	chosen[projectKey{
+		environment: serverpkg.EnvironmentServer,
+		ecosystem:   catalog.EcosystemFabric,
+		provider:    catalog.ProviderModrinth,
+		project:     "target",
+	}] = selected
+	if _, conflicting := metadataConflict(candidate, request, chosen, nil); conflicting {
+		t.Fatal("metadataConflict() reported a conflict against a different release")
+	}
+
+	chosen = map[projectKey]lockfile.Package{}
+	conflicts := map[projectKey][]upstream.ProjectDependency{{
+		environment: serverpkg.EnvironmentServer,
+		ecosystem:   catalog.EcosystemFabric,
+		provider:    catalog.ProviderModrinth,
+		project:     "source",
+	}: {{
+		Provider:  catalog.ProviderModrinth,
+		ProjectID: "demo",
+		ReleaseID: "r2",
+		Kind:      catalog.DependencyKindConflict,
+	}}}
+	if detail, conflicting := metadataConflict(candidate, request, chosen, conflicts); !conflicting || detail != "modrinth:demo@r2" {
+		t.Fatalf("metadataConflict() reverse = %q, %v, want the selected package conflict", detail, conflicting)
 	}
 }
