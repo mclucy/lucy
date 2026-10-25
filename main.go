@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/cmd"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/log"
 )
 
@@ -18,6 +19,15 @@ func run() (exitCode int) {
 	closeErr := log.Close()
 	if executeErr == nil && closeErr == nil {
 		executeErr = cmd.FlushOutput()
+	}
+	var exitErr *cli.ExitError
+	if errors.As(executeErr, &exitErr) {
+		if !exitErr.Silent && cmd.JSONSelected() {
+			if err := errors.Join(exitErr.Err, closeErr); err != nil {
+				cmd.WriteError(err)
+			}
+		}
+		return exitErr.Code
 	}
 	switch {
 	case cmd.JSONSelected():
