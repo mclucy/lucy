@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -70,6 +69,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 				project,
 			},
 			display: display,
+			origin:  originManifest,
 			requirements: []lockfile.RequirementBinding{
 				{
 					Reference:   ref,
@@ -216,8 +216,8 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		// the binding, so the artifact resolves instead of merging into a
 		// package that no file can satisfy.
 		if previous, ok := chosen[r.key]; ok && (!active || previous.Artifact.Filename != "") {
-			for _, release := range r.releaseIDs {
-				if release != "" && previous.ReleaseID != release {
+			for _, hint := range r.releaseHints {
+				if hint.releaseID != "" && previous.ReleaseID != hint.releaseID {
 					return hardFail(fmt.Errorf("conflicting exact releases for %s:%s", r.key.provider, r.key.project))
 				}
 			}
@@ -268,17 +268,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			if err != nil {
 				return hardFail(err)
 			}
-			slices.SortStableFunc(list, func(a, b upstream.Candidate) int { return b.PublishedAt.Compare(a.PublishedAt) })
-			for _, p := range previous {
-				if p.Environment == r.key.environment && p.Ecosystem == r.key.ecosystem && p.Provider == r.key.provider && p.ProjectID == r.key.project {
-					for i, c := range list {
-						if c.ReleaseID == p.ReleaseID && c.FileID == p.FileID {
-							list = append([]upstream.Candidate{c}, append(list[:i], list[i+1:]...)...)
-							break
-						}
-					}
-				}
-			}
+			list = orderCandidates(list, previous, r)
 			candidates[r.key] = list
 			ledger.setCandidates(r.key, r.display, len(list))
 		}
@@ -303,8 +293,9 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 				return backtrack(append([]projectRequest{{
 					key:          canonicalKey,
 					display:      r.display,
+					origin:       r.origin,
 					requirements: r.requirements,
-					releaseIDs:   r.releaseIDs,
+					releaseHints: r.releaseHints,
 				}}, rest...))
 			}
 		}
@@ -313,69 +304,21 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		}
 		list = preferReleaseBuilds(list, r.requirements)
 		for _, candidate := range list {
-			eligible := true
-			reason := ""
-			var rejectKind RejectionKind
-			var rejectDetail string
-			reject := func(kind RejectionKind, detail string) {
-				eligible = false
-				if reason == "" {
-					reason = describeRejection(kind, detail)
-					rejectKind = kind
-					rejectDetail = detail
-				}
+			decision, err := decideCandidate(candidate, r)
+			if err != nil {
+				return hardFail(err)
 			}
-			for _, release := range r.releaseIDs {
-				if release != "" && candidate.ReleaseID != release {
-					reject(RejectionReleaseMismatch, release)
-				}
-			}
-			constrained := false
-			for _, req := range r.requirements {
-				if !req.Enabled {
-					continue
-				}
-				constrained = true
-				switch req.Selector {
-				case versionpkg.Stable:
-					if candidate.Channel != upstream.ReleaseChannelRelease {
-						reject(RejectionChannel, "requested a release build")
-					}
-				case versionpkg.Any, versionpkg.Beta, "":
-				default:
-					if candidate.Version != req.Selector && candidate.ReleaseID != string(req.Selector) && candidate.FileID != string(req.Selector) && candidate.Filename != string(req.Selector) {
-						reject(RejectionVersionMismatch, string(req.Selector))
-					}
-				}
-				if req.FilePattern != "" {
-					match, err := filepath.Match(req.FilePattern, candidate.Filename)
-					if err != nil {
-						return hardFail(err)
-					}
-					if !match {
-						reject(RejectionFilePattern, req.FilePattern)
-					}
-				} else if !candidate.PrimaryFile {
-					reject(RejectionPrimaryFile, "")
-				}
-			}
-			// A dependency request carries no requirement of its own, so no
-			// enabled binding rejects the extra files a release publishes: the
-			// sources and dev jars carry a readable descriptor and would
-			// otherwise win the version race on publication date alone.
-			if !constrained && !candidate.PrimaryFile {
-				reject(RejectionPrimaryFile, "")
-			}
-			if !eligible {
-				ledger.record(r.key, r.display, string(candidate.Version), rejectDetail, rejectKind)
-				trace.rejected(r.display, string(candidate.Version), reason)
+			if !decision.eligible {
+				ledger.record(r.key, r.display, string(candidate.Version), decision.detail, decision.kind)
+				trace.rejected(r.display, string(candidate.Version), decision.reason)
 				log.Debug(
 					"resolve: candidate rejected",
 					"provider", r.key.provider,
 					"project", r.key.project,
+					"origin", r.origin.String(),
 					"candidate", candidate.Version,
 					"file", candidate.Filename,
-					"reason", reason,
+					"reason", decision.reason,
 				)
 				continue
 			}
@@ -420,9 +363,9 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			if expandDependencies {
 				for _, dep := range candidate.Dependencies {
 					if dep.Kind == catalog.DependencyKindRequired || (withOptional && dep.Kind == catalog.DependencyKindOptional) {
-						var ids []string
+						var hints []releaseHint
 						if dep.ReleaseID != "" {
-							ids = append(ids, dep.ReleaseID)
+							hints = append(hints, releaseHint{releaseID: dep.ReleaseID})
 						}
 						dependency := projectRequest{
 							key: projectKey{
@@ -430,7 +373,9 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 								r.key.ecosystem,
 								dep.Provider,
 								dep.ProjectID,
-							}, releaseIDs: ids,
+							},
+							origin:       originDependency,
+							releaseHints: hints,
 						}
 						if dep.Kind == catalog.DependencyKindOptional {
 							dependency.requirements = []lockfile.RequirementBinding{
@@ -532,37 +477,6 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		"packages", len(out),
 	)
 	return out, warnings, nil
-}
-
-// preferReleaseBuilds applies the default selector's preference: `any` takes
-// the newest build but prefers a release over a prerelease when both exist.
-// `beta` keeps publication order because it accepts prereleases outright, and
-// `stable` rejects prereleases in the candidate loop.
-func preferReleaseBuilds(list []upstream.Candidate, requirements []lockfile.RequirementBinding) []upstream.Candidate {
-	prefer := false
-	for _, req := range requirements {
-		if !req.Enabled {
-			continue
-		}
-		if req.Selector == versionpkg.Any || req.Selector == "" {
-			prefer = true
-		}
-	}
-	if !prefer {
-		return list
-	}
-	ordered := make([]upstream.Candidate, 0, len(list))
-	for _, candidate := range list {
-		if candidate.Channel == upstream.ReleaseChannelRelease {
-			ordered = append(ordered, candidate)
-		}
-	}
-	for _, candidate := range list {
-		if candidate.Channel != upstream.ReleaseChannelRelease {
-			ordered = append(ordered, candidate)
-		}
-	}
-	return ordered
 }
 
 func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
