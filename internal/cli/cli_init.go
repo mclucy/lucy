@@ -59,7 +59,6 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 		MCDRVersion: flagStringInit(cmd, flagInitMCDRVersionName),
 		EntryPoint:  flagStringInit(cmd, flagInitEntryPointName),
 		Force:       flagBoolInit(cmd, flagInitForceName),
-		Detect:      true,
 	}
 	return initializeWorkspace(ctx, cmd, workDir, opts)
 }
@@ -206,32 +205,6 @@ func promptRuntime(ctx context.Context, cmd *cobra.Command, observed discovery.R
 		return "", fmt.Errorf("server selection cancelled: %w", err)
 	}
 	return selected, nil
-}
-
-// promptMinecraft returns the interactive Minecraft-version prompt for
-// Initialize. It asks only while the command's prompt gate is open and
-// otherwise fails with the flag that carries the same answer, so a JSON or
-// non-interactive run never waits on stdin.
-func promptMinecraft(ctx context.Context, cmd *cobra.Command) func() (string, error) {
-	return func() (string, error) {
-		if !NewPromptGate(cmd).Available() {
-			return "", errors.New(
-				"specify --minecraft <version>; choosing interactively needs a terminal",
-			)
-		}
-		var answer string
-		form := huh.NewForm(huh.NewGroup(
-			huh.NewInput().Title("Minecraft version").Value(&answer),
-		)).WithInput(cmd.InOrStdin()).WithOutput(cmd.ErrOrStderr())
-		if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
-			return "", err
-		}
-		answer = strings.TrimSpace(answer)
-		if answer == "" {
-			return "", errors.New("a concrete --minecraft version is required")
-		}
-		return answer, nil
-	}
 }
 
 func flagStringInit(cmd *cobra.Command, name string) string {

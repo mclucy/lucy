@@ -49,8 +49,11 @@ Pre-built binaries are available on [Releases](https://github.com/mclucy/lucy/re
 ## Quickstart
 
 ```bash
-# Generate lucy.yaml for an existing server directory
-lucy init
+# Create a new server
+lucy create
+
+# Or, instead of create, adopt an existing server directory:
+# lucy init
 
 # Add packages with dependency resolution
 lucy add modrinth:fabric-api modrinth:lithium
@@ -70,6 +73,7 @@ apart.
 
 | Command                | Usage                                                                                              |
 |------------------------|----------------------------------------------------------------------------------------------------|
+| `lucy create`          | Create a new server in a directory and install it; `--no-install` writes only the manifest and lock |
 | `lucy init`            | Generate `lucy.yaml` and `lucy-lock.yaml` from an existing server directory                       |
 | `lucy add <pkg>...`    | Record requirements, resolve the closure, update the lock, and sync                                |
 | `lucy remove <pkg>...` | Drop requirements, re-resolve, and prune artifacts nothing needs                                   |

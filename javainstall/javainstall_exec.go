@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mclucy/lucy/internal/shell"
 	"github.com/mclucy/lucy/log"
 )
 
@@ -92,7 +93,7 @@ func (s Step) String() string {
 	}
 	quoted := make([]string, len(args))
 	for i, arg := range args {
-		quoted[i] = shellQuote(arg)
+		quoted[i] = shell.Quote(arg)
 	}
 	return strings.Join(quoted, " ")
 }
@@ -184,10 +185,3 @@ var passwordlessSudo = sync.OnceValue(func() bool {
 	defer cancel()
 	return exec.CommandContext(ctx, "sudo", "-n", "true").Run() == nil
 })
-
-func shellQuote(arg string) string {
-	if arg != "" && !strings.ContainsAny(arg, " \t\n'\"\\$`!*?[]{}()<>|&;#~") {
-		return arg
-	}
-	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
-}

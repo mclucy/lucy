@@ -155,7 +155,7 @@ var installationOutputPaths = []string{
 func runtimeInstallPreparation(minecraft, core string) []initializeCommand {
 	return []initializeCommand{
 		{args: []string{
-			"create", "--minecraft", minecraft, "--core", core, "--no-interactive",
+			"create", "--minecraft", minecraft, "--core", core, "--no-install", "--no-interactive",
 		}},
 		{args: []string{"install", "--locked", "--overwrite", "--no-interactive"}},
 	}
