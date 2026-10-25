@@ -12,9 +12,11 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
@@ -56,11 +58,20 @@ func resolveUpgradeOption(
 	if err := manifest.Normalize(resolutionManifest); err != nil {
 		return UpgradeOption{}, err
 	}
+	coreModules, moduleErr := routing.CoreModules(
+		ctx,
+		old.Server.Product,
+		old.Server.Artifact,
+		materialize,
+	)
+	if moduleErr != nil {
+		log.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
+	}
 	packages, _, err := resolve.Packages(resolve.PackagesRequest{
 		Context:            ctx,
 		Manifest:           resolutionManifest,
 		Previous:           old.Packages,
-		Target:             upgradeTarget(old),
+		Target:             upgradeTarget(old, coreModules),
 		Materialize:        materialize,
 		ExpandDependencies: true,
 		Cache:              cache,

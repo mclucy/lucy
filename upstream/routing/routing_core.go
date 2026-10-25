@@ -20,6 +20,28 @@ import (
 	"github.com/mclucy/lucy/version"
 )
 
+// CoreModules reports the descriptor modules the server core artifact ships.
+// A lock may predate module recording, so the artifact is read when the lock
+// carries none. Only Fabric bundles mods inside its loader.
+func CoreModules(
+	ctx context.Context,
+	product server.Product,
+	core catalog.Artifact,
+	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
+) ([]catalog.DescriptorModule, error) {
+	if product != server.ProductFabric {
+		return nil, nil
+	}
+	if len(core.Modules) > 0 {
+		return core.Modules, nil
+	}
+	materialized, err := acquire(&core)
+	if err != nil {
+		return nil, err
+	}
+	return artifact.ReadModules(ctx, materialized.Path, catalog.EcosystemFabric)
+}
+
 func Metadata(ctx context.Context, endpoint string, target any) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -184,6 +206,15 @@ func ResolveServerProduct(
 				return out, e
 			}
 			out.Artifact.Hashes = materialized.Hashes
+			modules, e := artifact.ReadModules(
+				ctx,
+				materialized.Path,
+				catalog.EcosystemFabric,
+			)
+			if e != nil {
+				return out, e
+			}
+			out.Artifact.Modules = modules
 			for _, lib := range profile.Libraries {
 				input, downloadable, e := libraryInput(
 					lib,

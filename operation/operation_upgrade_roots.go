@@ -194,7 +194,7 @@ func pinCoreAndMCDR(d *manifest.Document, old *lockfile.Document) {
 	}
 }
 
-func upgradeTarget(old *lockfile.Document) resolve.Target {
+func upgradeTarget(old *lockfile.Document, coreModules []catalog.DescriptorModule) resolve.Target {
 	mcdrVersion := ""
 	if old.MCDR != nil {
 		mcdrVersion = string(old.MCDR.Version)
@@ -205,6 +205,7 @@ func upgradeTarget(old *lockfile.Document) resolve.Target {
 		Minecraft:    old.Server.Minecraft,
 		CoreVersion:  old.Server.CoreVersion,
 		MCDRVersion:  mcdrVersion,
+		CoreModules:  coreModules,
 	}
 }
 

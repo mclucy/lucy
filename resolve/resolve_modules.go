@@ -236,6 +236,9 @@ func runtimeModules(target Target) map[string]catalog.DescriptorModule {
 			Ecosystem: catalog.EcosystemMCDR,
 		})
 	}
+	for _, module := range target.CoreModules {
+		add(module)
+	}
 	return modules
 }
 

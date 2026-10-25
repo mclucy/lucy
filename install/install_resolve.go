@@ -182,6 +182,17 @@ func resolveInstall(
 	}
 	opts.Trace.phaseStarted("packages")
 	start := time.Now()
+	coreModules, moduleErr := routing.CoreModules(
+		ctx,
+		resolved.Server.Product,
+		resolved.Server.Artifact,
+		store.materialize,
+	)
+	if moduleErr != nil {
+		log.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
+	} else {
+		resolved.Server.Artifact.Modules = coreModules
+	}
 	var previousPackages []lockfile.Package
 	if old != nil {
 		previousPackages = old.Packages
@@ -196,6 +207,7 @@ func resolveInstall(
 			Minecraft:    resolved.Server.Minecraft,
 			CoreVersion:  resolved.Server.CoreVersion,
 			MCDRVersion:  mcdrVersion,
+			CoreModules:  resolved.Server.Artifact.Modules,
 		},
 		Materialize:        store.materialize,
 		WithOptional:       opts.WithOptional,

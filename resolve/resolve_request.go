@@ -58,6 +58,10 @@ type Target struct {
 	Minecraft    versionpkg.Version
 	CoreVersion  versionpkg.Version
 	MCDRVersion  string
+	// CoreModules are the descriptor modules the server core artifact ships.
+	// Fabric's loader bundles mods as nested jars, so these satisfy package
+	// requirements that no package provides.
+	CoreModules []catalog.DescriptorModule
 }
 
 // SupportsPackages reports whether the target product loads packages from
