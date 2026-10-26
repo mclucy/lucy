@@ -24,7 +24,11 @@ func NewSchemaCommand(contracts *JSONContracts) *cobra.Command {
 			failure, _ := cmd.Flags().GetBool("error")
 			if failure {
 				if len(args) != 0 {
-					return fmt.Errorf("--error describes shared failures and does not accept a command path")
+					return &report.Detail{
+						Title: "--error describes shared failures and does not accept a command path",
+						Code:  CodeInvalidInvocation,
+						Hint:  "Run lucy schema --error without a command path.",
+					}
 				}
 				schema := reflectJSONSchema([]reflect.Type{reflect.TypeFor[ErrorDocument]()})
 				schema.Title = "Lucy JSON failure"
