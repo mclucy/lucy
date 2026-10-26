@@ -31,10 +31,10 @@ type mutationScenario struct {
 // FuzzPlanInstallLockedRequirementMutation exercises locked requirement
 // mutations over a generated dependency graph. The oracle derives retained and
 // active packages by enumerating simple paths from declared and enabled
-// packages respectively. It does not inspect provenance fields in results; it
-// constructs persisted provenance on the input lock and asserts only the
-// replay behavior consumers observe: retained identities, Enabled, direct
-// binding intent, and unchanged pins.
+// packages respectively, and derives the dependency provenance the lock must
+// persist from the retained edges. It asserts the replay behavior consumers
+// observe: retained identities, Enabled, dependency provenance, direct binding
+// intent, and unchanged pins.
 //
 // Round one mutates every initial direct root. Round two mutates only packages
 // retained by round one, including adding a disabled binding to a dormant,
@@ -304,6 +304,14 @@ func runLockedMutation(
 	if lockBefore != lockAfter {
 		t.Fatalf("PlanInstall() mutated its input lock; %s states=%v", scenario.describe(), states)
 	}
+	if got := plan.Resolved.ManifestFingerprint; got != manifestBefore {
+		t.Fatalf(
+			"resolved lock answers manifest %q, want %q; %s",
+			got,
+			manifestBefore,
+			scenario.describe(),
+		)
+	}
 	return plan
 }
 
@@ -477,6 +485,32 @@ func checkMutationPlan(
 		if !reflect.DeepEqual(pkg.Artifact, mutationArtifact(index)) {
 			t.Fatalf("selected %s changed its artifact pin: %#v; %s", pkg.ProjectID, pkg.Artifact, description)
 		}
+		parents := retainedParents(scenario, retained, index)
+		if want := mutationSources(parents); !sameSources(pkg.DependencyOf, want) {
+			t.Fatalf(
+				"selected %s DependencyOf = %#v, want %#v; %s states=%v",
+				pkg.ProjectID,
+				pkg.DependencyOf,
+				want,
+				description,
+				states,
+			)
+		}
+		wantDependency := false
+		for _, parent := range parents {
+			wantDependency = wantDependency || active[parent]
+		}
+		if pkg.Dependency != wantDependency {
+			t.Fatalf(
+				"selected %s Dependency = %v, want %v; parents=%v; %s states=%v",
+				pkg.ProjectID,
+				pkg.Dependency,
+				wantDependency,
+				parents,
+				description,
+				states,
+			)
+		}
 		ownReference := "modrinth:" + pkg.ProjectID
 		ownBindings := 0
 		for _, binding := range pkg.Requirements {
@@ -540,6 +574,43 @@ func checkMutationPlan(
 			t.Fatalf("retained package %s is missing; %s states=%v", mutationNames[index], description, states)
 		}
 	}
+}
+
+// retainedParents lists the retained packages whose dependency edges point at
+// node. It is the independent expectation for the provenance a locked mutation
+// must persist.
+func retainedParents(scenario mutationScenario, retained map[int]bool, node int) []int {
+	var parents []int
+	for _, edge := range scenario.edges {
+		if edge[1] == node && retained[edge[0]] {
+			parents = append(parents, edge[0])
+		}
+	}
+	return parents
+}
+
+func mutationSources(parents []int) []catalog.Ref {
+	sources := make([]catalog.Ref, 0, len(parents))
+	for _, parent := range parents {
+		sources = append(sources, catalog.Ref{
+			Name:     catalog.Name(mutationNames[parent]),
+			Provider: catalog.ProviderModrinth,
+		})
+	}
+	return sources
+}
+
+func sameSources(actual, want []catalog.Ref) bool {
+	return len(actual) == len(want) &&
+		reflect.DeepEqual(mutationSourceSet(actual), mutationSourceSet(want))
+}
+
+func mutationSourceSet(sources []catalog.Ref) map[catalog.Ref]int {
+	set := make(map[catalog.Ref]int, len(sources))
+	for _, source := range sources {
+		set[source]++
+	}
+	return set
 }
 
 func declaredReferences(states []int) map[string]bool {

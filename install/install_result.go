@@ -221,7 +221,7 @@ func packageChanges(
 	before, after *lockfile.Document,
 	d *manifest.Document,
 ) []PackageChange {
-	declared := map[string]manifest.Requirement{}
+	declared := map[requirementKey]manifest.Requirement{}
 	if d != nil {
 		declared = declaredRequirements(d)
 	}
@@ -305,7 +305,7 @@ func packageChanges(
 
 func packageViews(
 	doc *lockfile.Document,
-	declared map[string]manifest.Requirement,
+	declared map[requirementKey]manifest.Requirement,
 ) map[string]packageView {
 	views := map[string]packageView{}
 	if doc == nil {
@@ -502,10 +502,11 @@ func findPackage(doc *lockfile.Document, id string) *lockfile.Package {
 
 func declaredReference(
 	p *lockfile.Package,
-	declared map[string]manifest.Requirement,
+	declared map[requirementKey]manifest.Requirement,
 ) string {
 	for _, binding := range p.Requirements {
-		if _, ok := declared[binding.Reference]; ok {
+		key := requirementKey{p.Environment, p.Ecosystem, binding.Reference}
+		if _, ok := declared[key]; ok {
 			return binding.Reference
 		}
 	}
