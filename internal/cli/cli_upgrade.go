@@ -159,6 +159,11 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 	output.RenderUpgradePlan(*selected, policy, false)
 	if !selected.Plan.Result.Changed() {
 		printUpgradeWarnings(output, result.Warnings)
+		if jsonMode {
+			document := selected.Plan.Result
+			document.WarningMessages = append(warningMessages(document.Warnings), warningMessages(result.Warnings)...)
+			return installJSON.Write(output.Output, document)
+		}
 		return nil
 	}
 	if !noInteractive && !jsonMode {
