@@ -197,7 +197,7 @@ func fabricNestedModInfo(
 	zipRdr *zip.Reader,
 	filePath string,
 ) (*fileschema.FileFabricModIdentifier, error) {
-	raw, err := readZipEntry(zipRdr, filePath)
+	raw, err := readZipEntryBytes(zipRdr, filePath)
 	if err != nil || raw == nil {
 		return nil, err
 	}

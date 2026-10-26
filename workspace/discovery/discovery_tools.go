@@ -35,23 +35,5 @@ func mojangVersionFromJSON(data []byte) (version.Version, bool, error) {
 }
 
 func readArchiveEntry(zipReader *zip.Reader, name string) ([]byte, bool, error) {
-	for _, file := range zipReader.File {
-		if file.Name != name {
-			continue
-		}
-
-		r, err := file.Open()
-		if err != nil {
-			return nil, false, err
-		}
-		defer r.Close()
-
-		data, err := fsutil.CopyBytes(r, fsutil.MaxZipEntryBytes)
-		if err != nil {
-			return nil, false, err
-		}
-		return data, true, nil
-	}
-
-	return nil, false, nil
+	return fsutil.ReadZipEntry(zipReader, name, fsutil.MaxZipEntryBytes)
 }

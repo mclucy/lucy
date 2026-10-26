@@ -127,12 +127,12 @@ func readNeoforgeModsToml(zipRdr *zip.Reader) ([]byte, error) {
 	// Docs: https://docs.neoforged.net/docs/gettingstarted/modfiles/
 	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
 	// Rename note: https://neoforged.net/news/20.5release/
-	raw, err := readZipEntry(zipRdr, neoforgeModsTomlPath)
+	raw, err := readZipEntryBytes(zipRdr, neoforgeModsTomlPath)
 	if err != nil || raw != nil {
 		return raw, err
 	}
 
-	raw, err = readZipEntry(zipRdr, legacyNeoforgeModsTomlPath)
+	raw, err = readZipEntryBytes(zipRdr, legacyNeoforgeModsTomlPath)
 	if err != nil || raw == nil {
 		return raw, err
 	}
@@ -169,7 +169,7 @@ func hasLoaderDependency(
 }
 
 func readNeoforgeManifestVersion(zipRdr *zip.Reader) versionpkg.Version {
-	raw, err := readZipEntry(zipRdr, "META-INF/MANIFEST.MF")
+	raw, err := readZipEntryBytes(zipRdr, "META-INF/MANIFEST.MF")
 	if err != nil || raw == nil {
 		return versionpkg.Unknown
 	}
@@ -186,7 +186,7 @@ func readNeoforgeManifestVersion(zipRdr *zip.Reader) versionpkg.Version {
 }
 
 func readNeoforgeJarjarMeta(zipRdr *zip.Reader) *fileschema.FileNeoforgeJarjar {
-	raw, err := readZipEntry(zipRdr, "META-INF/jarjar/metadata.json")
+	raw, err := readZipEntryBytes(zipRdr, "META-INF/jarjar/metadata.json")
 	if err != nil || raw == nil {
 		return nil
 	}

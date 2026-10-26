@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/lockfile"
 	manifestpkg "github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -142,26 +143,25 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 
 func extractLockedEntry(z *zip.Reader, name, dst string) error {
 	for _, f := range z.File {
-		if f.Name == name {
-			r, err := f.Open()
-			if err != nil {
-				return err
-			}
-			defer r.Close()
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-				return err
-			}
-			out, err := os.Create(dst)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(out, r)
-			closeErr := out.Close()
-			if err != nil {
-				return err
-			}
-			return closeErr
+		if f.Name != name {
+			continue
 		}
+		r, err := f.Open()
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return errors.Join(err, r.Close())
+		}
+		out, err := os.Create(dst)
+		if err != nil {
+			return errors.Join(err, r.Close())
+		}
+		_, err = io.Copy(out, r)
+		if err != nil {
+			return errors.Join(err, r.Close(), out.Close())
+		}
+		return errors.Join(r.Close(), out.Close())
 	}
 	return fmt.Errorf("missing pinned installer entry %s", name)
 }
@@ -192,17 +192,18 @@ func requireJava(java, step string) error {
 }
 
 func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
-	for _, f := range z.File {
-		if f.Name == name {
-			r, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer r.Close()
-			return io.ReadAll(io.LimitReader(r, 128<<20))
-		}
+	raw, found, err := fsutil.ReadZipEntry(
+		z,
+		name,
+		fsutil.MaxNestedZipEntryBytes,
+	)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("missing installer metadata %s", name)
+	if !found {
+		return nil, fmt.Errorf("missing installer metadata %s", name)
+	}
+	return raw, nil
 }
 
 func executeServerProfile(ctx context.Context, root string, server lockfile.Server, corePath string, z *zip.Reader, java string, output io.Writer) error {

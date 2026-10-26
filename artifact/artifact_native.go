@@ -7,7 +7,6 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
-	"io"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -15,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml"
 	"gopkg.in/yaml.v3"
@@ -109,20 +109,12 @@ func compareDescriptorDependency(a, b catalog.DescriptorDependency) int {
 }
 
 func nativeEntry(z *zip.Reader, name string) ([]byte, error) {
-	for _, f := range z.File {
-		if f.Name == name {
-			if f.UncompressedSize64 > 128<<20 {
-				return nil, fmt.Errorf("oversized native descriptor or nested JAR %s", name)
-			}
-			r, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer r.Close()
-			return io.ReadAll(io.LimitReader(r, 128<<20))
-		}
-	}
-	return nil, nil
+	raw, _, err := fsutil.ReadZipEntry(
+		z,
+		name,
+		fsutil.MaxNestedZipEntryBytes,
+	)
+	return raw, err
 }
 
 func inspectArchive(z *zip.Reader, loader catalog.Ecosystem, member string, depth int) ([]catalog.DescriptorModule, error) {

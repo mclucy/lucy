@@ -38,7 +38,6 @@ func parseForgeManifest(
 		if err != nil {
 			continue
 		}
-		defer fn.CloseReader(r, log.Warn)
 
 		var inForgeSection bool
 		var pendingImplVersion string
@@ -93,6 +92,7 @@ func parseForgeManifest(
 				}
 			}
 		}
+		fn.CloseReader(r, log.Warn)
 		switch {
 		case minecraftGameVersion != versionpkg.Unknown:
 			gameVersion = minecraftGameVersion

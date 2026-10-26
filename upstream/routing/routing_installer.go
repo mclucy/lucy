@@ -7,11 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json/v2"
 	"fmt"
-	"io"
 	"path"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/server"
 
 	"github.com/mclucy/lucy/log"
@@ -95,17 +95,12 @@ func MavenPath(coordinate string) (string, error) {
 }
 
 func zipBytes(z *zip.Reader, name string) ([]byte, error) {
-	for _, f := range z.File {
-		if f.Name == name {
-			r, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer r.Close()
-			return io.ReadAll(io.LimitReader(r, 128<<20))
-		}
-	}
-	return nil, nil
+	raw, _, err := fsutil.ReadZipEntry(
+		z,
+		name,
+		fsutil.MaxNestedZipEntryBytes,
+	)
+	return raw, err
 }
 
 func resolveInstaller(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, installer string) error {

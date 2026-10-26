@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/internal/fsutil"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
@@ -449,39 +448,18 @@ func verifyNeoForgeUniversalManifest(
 	reader *zip.Reader,
 	loaderVersion versionpkg.Version,
 ) (bool, error) {
-	manifest, ok, err := readZipFile(reader, "META-INF/MANIFEST.MF")
+	manifest, ok, err := readArchiveEntry(reader, "META-INF/MANIFEST.MF")
 	if err != nil || !ok {
 		return false, err
 	}
 
-	if strings.Contains(manifest, "FML-System-Mods: neoforge") {
+	if strings.Contains(string(manifest), "FML-System-Mods: neoforge") {
 		return true, nil
 	}
 
 	classpathEntry := "libraries/net/neoforged/neoforge/" +
 		string(loaderVersion) + "/"
-	return strings.Contains(manifest, classpathEntry), nil
-}
-
-func readZipFile(reader *zip.Reader, name string) (string, bool, error) {
-	for _, file := range reader.File {
-		if file.Name != name {
-			continue
-		}
-		r, err := file.Open()
-		if err != nil {
-			return "", false, err
-		}
-		defer func() { _ = r.Close() }()
-
-		data, err := fsutil.CopyBytes(r, fsutil.MaxZipEntryBytes)
-		if err != nil {
-			return "", false, err
-		}
-		return string(data), true, nil
-	}
-
-	return "", false, nil
+	return strings.Contains(string(manifest), classpathEntry), nil
 }
 
 func neoForgeIdentity(
