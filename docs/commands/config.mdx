@@ -1,0 +1,74 @@
+---
+title: "lucy config"
+description: "Read and write lucy settings for one machine"
+---
+
+`lucy config` manages the settings that are true for one machine, not for the server definition. [`lucy.yaml`](/commands/init) records the server you want and travels with it; configuration records local choices such as which Java runtime to use. Configuration never rewrites the manifest or the lock, and changing it does not change their fingerprints.
+
+Lucy reads two configuration files with the same keys:
+
+- `.lucy/config.yaml` in the workspace.
+- `config.yaml` in the per-user configuration directory: `~/Library/Application Support/lucy/config.yaml` on macOS, `$XDG_CONFIG_HOME/lucy/config.yaml` (usually `~/.config/lucy/config.yaml`) on Linux, or `%APPDATA%\lucy\config.yaml` on Windows.
+
+A workspace value overrides the global value for the same key, and built-in defaults fill the rest. `--global` targets the global file only, so workspace values are ignored.
+
+```bash
+lucy config get
+lucy config get java.home
+lucy config set java.home /opt/homebrew/opt/openjdk@21
+lucy config set --global java.home /usr/lib/jvm/temurin-21
+lucy config create
+lucy config create --global --force
+```
+
+Without `--global`, `lucy config` uses `.lucy/config.yaml` in the current workspace directory. You can create that file with `set` or `create` before running [`lucy init`](/commands/init). Use `--global` to read or write the global file anywhere.
+
+## Keys
+
+`java.home` chooses the Java runtime that `lucy` uses on this machine. Set it to a Java home directory or a `java` executable. A relative path resolves from the workspace root for workspace configuration, and from the global configuration directory for global configuration. An empty value explicitly selects automatic runtime selection and masks a `java.home` inherited from the global file.
+
+A non-empty configured runtime overrides automatic selection, whether it comes from workspace or global configuration. If the runtime misses a requirement, `lucy` warns and still uses it. If it is not a working Java runtime, `lucy` warns and does not silently choose another. Java runtime selection merges whichever configuration files exist, so a missing file is not an error there. See [`lucy java`](/commands/java).
+
+## lucy config get
+
+Without a key, `lucy config get` prints the effective configuration as YAML. With a key, it prints that effective value. `--global` excludes workspace overrides and reads the global file with built-in defaults.
+
+`lucy config get` requires the file for the scope you select and does not fall back to the other scope. A missing workspace file is an error even when the global file exists; with `--global`, a missing global file is an error even when a workspace file exists. Only the selected file must exist, so a workspace get with no global file still uses built-in defaults. The error names `lucy config create`, adding `--global` for the global file. Outside a workspace, pass `--global`.
+
+`--json` and `--json-compact` print the same result as JSON.
+
+## lucy config set
+
+`lucy config set <key> <value>` writes one value to `.lucy/config.yaml` in the current workspace directory, or to the global file with `--global`. It writes only that key: values inherited from the other layer or from built-in defaults are never copied into the file.
+
+Lucy checks the key and the value before writing. An unknown key or an invalid value fails without changing any file. Writing a value preserves the comments and the entries for keys you did not set. If the selected file does not exist, `lucy config set` creates it from the commented template and reports that it created the file.
+
+```bash
+lucy config set java.home /opt/homebrew/opt/openjdk@21
+lucy config set java.home ""   # choose the runtime automatically
+lucy config set --global java.home /usr/lib/jvm/temurin-21
+```
+
+## lucy config create
+
+`lucy config create` writes a fresh configuration file for the selected scope. Every supported key appears in the file, commented out with an explanation, so the file is never empty even before you set a value.
+
+An existing file is never replaced without `--force` (`-f`). Forcing a create discards the values and comments already in that file. Without `--global`, it writes `.lucy/config.yaml` in the current workspace directory, including before `lucy init`; the global file can be created anywhere.
+
+[`lucy init`](/commands/init) creates the workspace file when it is missing and leaves an existing file unchanged. [`lucy deinit`](/commands/deinit) removes the workspace file with the rest of `.lucy`, but never removes global configuration.
+
+## Output
+
+In human mode, `set` and `create` report the file they wrote and say when the file was created. `--json` and `--json-compact` return the path and whether the file was created.
+
+## Flags
+
+<ParamField query="--global" type="boolean" default="false">
+  Read or write the global configuration file instead of the workspace one. For `get`, exclude workspace overrides from the result.
+</ParamField>
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Replace an existing file when used with `create`.
+</ParamField>
+
+See also [`lucy java`](/commands/java), [`lucy init`](/commands/init), and [Global Flags](/commands/global-flags).

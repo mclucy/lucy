@@ -24,7 +24,10 @@ const (
 		"Compilation executes repository build scripts and can download build " +
 		"dependencies. Run this command only on the repository you trust."
 
-	ConfigShort = "Manage lucy's configurations"
+	ConfigShort       = "Manage lucy's configurations"
+	ConfigGetShort    = "Show a configuration value or the effective configuration"
+	ConfigSetShort    = "Set a configuration value"
+	ConfigCreateShort = "Create a commented configuration file"
 
 	CreateShort = "Create a new server"
 	CreateLong  = "Create a new server in a directory. The interactive form asks " +
@@ -33,8 +36,8 @@ const (
 		"to write only the manifest and lock for a later lucy install."
 
 	DeinitShort = "Remove lucy from the current server directory"
-	DeinitLong  = "Delete lucy.yaml, lucy-lock.yaml, lucy.local.yaml, and the " +
-		".lucy directory from the current directory. The server, its packages, " +
+	DeinitLong  = "Delete lucy.yaml, lucy-lock.yaml, and the .lucy directory " +
+		"from the current directory, including workspace configuration. The server, its packages, " +
 		"worlds, and configuration stay in place, so it keeps running without " +
 		"lucy. Files that lucy installed become unmanaged."
 
@@ -60,14 +63,12 @@ const (
 
 	JavaShort     = "Show and choose the Java runtime of the server"
 	JavaListShort = "List installed Java runtimes and the Java the server asks for"
-	JavaUseShort  = "Pin a Java version or distribution, or use a Java runtime on this machine"
-	JavaUseLong   = "A version or --distribution pins the Java of the server in lucy.yaml. " +
+	JavaUseShort  = "Declare a Java version or distribution"
+	JavaUseLong   = "A version or --distribution pins the Java requirements in lucy.yaml. " +
 		"auto returns that part to the default: the Java version that Mojang " +
-		"recommends for the Minecraft version, from any distribution. --path " +
-		"uses one Java home or java executable on this machine only and records " +
-		"it in lucy.local.yaml, which takes precedence over lucy.yaml; " +
-		"--path auto lets Lucy choose again. Without arguments, an " +
-		"interactive form asks for the version and the distribution."
+		"recommends for the Minecraft version, from any distribution. " +
+		"Without arguments, an interactive form asks for the version and distribution. " +
+		"Run lucy config set java.home <home> to select a runtime on this machine."
 
 	LeavesShort = "List packages with no dependencies"
 

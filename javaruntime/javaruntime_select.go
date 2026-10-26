@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mclucy/lucy/config"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/java"
@@ -19,8 +20,8 @@ import (
 type Source string
 
 const (
-	// SourceLocal means the local settings select the runtime.
-	SourceLocal Source = "local"
+	// SourceConfigured means configuration selects the runtime.
+	SourceConfigured Source = "configured"
 	// SourceInstalled means Lucy picked the runtime among the installed ones.
 	SourceInstalled Source = "installed"
 )
@@ -53,9 +54,9 @@ type Check struct {
 	// Runtime is nil when no usable runtime exists.
 	Runtime *Runtime `json:"runtime,omitempty"`
 	Source  Source   `json:"source,omitempty"`
-	// LocalHome is the home that the local settings select, also when it is
-	// not usable.
-	LocalHome string `json:"local_home,omitempty"`
+	// ConfiguredHome names the selected home, even when it is not usable.
+	ConfiguredHome string `json:"configured_home,omitempty"`
+	ConfigPath     string `json:"config_path,omitempty"`
 	// Target is the major version that meets the requirement.
 	Target       int               `json:"target"`
 	Distribution java.Distribution `json:"distribution,omitempty"`
@@ -77,23 +78,26 @@ func (c *Check) Executable() string {
 	return c.Runtime.Executable
 }
 
-// Select chooses the Java runtime that the server in root runs on. The local
-// settings take precedence; an unusable local selection is a problem, never a
-// reason to fall back to another runtime. Otherwise Select picks the
-// installed runtime that misses the fewest constraints, preferring the
-// oldest major version that meets the Mojang advisory.
+// Select honors a configured Java home without fallback. Otherwise it picks the
+// installed runtime that misses the fewest constraints, preferring the oldest
+// major version that meets the Mojang advisory.
 func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 	check := &Check{
 		Target:       req.Target(),
 		Distribution: req.Distribution,
 	}
-	local, err := document.ReadLocal(root)
+	settings, err := config.New(root)
 	if err != nil {
 		return nil, err
 	}
-	if home := local.JavaHome(root); home != "" {
-		check.Source = SourceLocal
-		check.LocalHome = home
+	home, sourcePath, err := settings.JavaHome()
+	if err != nil {
+		return nil, err
+	}
+	if home != "" {
+		check.Source = SourceConfigured
+		check.ConfiguredHome = home
+		check.ConfigPath = sourcePath
 		installation, err := toolchain.ProbeJava(ctx, home)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -101,7 +105,7 @@ func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 			}
 			check.Problems = append(check.Problems, fmt.Sprintf(
 				"%s selects %s, which is not a usable Java runtime: %v",
-				document.LocalFilename,
+				sourcePath,
 				home,
 				err,
 			))
@@ -113,7 +117,7 @@ func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 			"java selected",
 			"home", check.Runtime.Home,
 			"major", check.Runtime.Major,
-			"reason", "local settings select it",
+			"reason", "configuration selects it",
 		)
 		return check, nil
 	}

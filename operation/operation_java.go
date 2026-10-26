@@ -3,19 +3,14 @@ package operation
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
 )
 
-// JavaChange edits the Java selection of a workspace. A nil field leaves that
-// part unchanged.
+// JavaChange edits declared Java requirements. A nil field stays unchanged.
 type JavaChange struct {
 	// Version is the major version that lucy.yaml pins; zero returns it to
 	// auto.
@@ -23,27 +18,16 @@ type JavaChange struct {
 	// Distribution is the distribution that lucy.yaml pins; the unspecified
 	// distribution returns it to auto.
 	Distribution *java.Distribution
-	// Path is a Java home or java executable to use on this machine; empty
-	// lets Lucy choose again.
-	Path *string
 }
 
-// JavaChangeResult reports the Java selection after a change.
+// JavaChangeResult reports the declared Java requirements after a change.
 type JavaChangeResult struct {
 	// Java is the override in lucy.yaml; nil means auto.
-	Java *document.ManifestJava `json:"java,omitempty"`
-	// Home is the Java home that the local settings select; empty means Lucy
-	// chooses.
-	Home              string `json:"home,omitempty"`
-	PublishedManifest bool   `json:"published_manifest"`
-	PublishedLock     bool   `json:"published_lock"`
-	PublishedLocal    bool   `json:"published_local"`
+	Java              *document.ManifestJava `json:"java,omitempty"`
+	PublishedManifest bool                   `json:"published_manifest"`
 }
 
-// SetJava applies change to the workspace in root. The local Java path is
-// probed first, so an unusable path leaves lucy.yaml unchanged. A lock that
-// matched the manifest before the change records the new override and stays
-// current, because the Java override changes no locked artifact.
+// SetJava changes only the manifest. Installation reconciles the lock.
 func SetJava(ctx context.Context, root string, change JavaChange) (result *JavaChangeResult, resultErr error) {
 	writer, err := workspacewrite.Lock(root)
 	if err != nil {
@@ -57,24 +41,13 @@ func SetJava(ctx context.Context, root string, change JavaChange) (result *JavaC
 	if err != nil {
 		return nil, err
 	}
-	local, err := document.ReadLocal(root)
-	if err != nil {
-		return nil, err
-	}
 	result = &JavaChangeResult{}
-	if change.Path != nil {
-		if err := setLocalJava(ctx, root, local, *change.Path); err != nil {
-			return nil, err
-		}
-		result.PublishedLocal = true
-	}
 	if change.Version != nil || change.Distribution != nil {
 		if err := setJavaOverride(root, d, change, result); err != nil {
 			return nil, err
 		}
 	}
 	result.Java = d.Server.Java
-	result.Home = local.JavaHome(root)
 	return result, nil
 }
 
@@ -111,53 +84,5 @@ func setJavaOverride(root string, d *document.Manifest, change JavaChange, resul
 		"version", override.Version,
 		"distribution", override.Distribution.String(),
 	)
-	lock, err := document.LockFile(root).Read()
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if lock.ManifestFingerprint != before {
-		log.Debug("lock left stale", "reason", "lock did not match the manifest before the change")
-		return nil
-	}
-	lock.ManifestFingerprint = after
-	lock.Server.Java = document.NewLockedJava(lock.Server.Java.Advisory, d.Server.Java)
-	if err := document.LockFile(root).Write(lock); err != nil {
-		return err
-	}
-	result.PublishedLock = true
 	return nil
-}
-
-// setLocalJava records path in the local settings after it proves to be a
-// usable Java runtime. The home keeps the spelling of path rather than its
-// resolved target, so a package manager link such as
-// /opt/homebrew/opt/openjdk@21 survives upgrades. A home inside the workspace
-// is stored relative to it, so a bundled runtime keeps working after a move.
-func setLocalJava(ctx context.Context, root string, local *document.Local, path string) error {
-	if path == "" {
-		local.Java = nil
-		return document.WriteLocal(root, local)
-	}
-	home, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-	if info, err := os.Stat(home); err == nil && !info.IsDir() {
-		// An executable path names <home>/bin/java.
-		home = filepath.Dir(filepath.Dir(home))
-	}
-	installation, err := toolchain.ProbeJava(ctx, home)
-	if err != nil {
-		return err
-	}
-	if relative, err := filepath.Rel(root, home); err == nil &&
-		relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		home = relative
-	}
-	local.Java = &document.LocalJava{Home: home}
-	log.Info("local java selected", "home", home, "version", installation.Version)
-	return document.WriteLocal(root, local)
 }

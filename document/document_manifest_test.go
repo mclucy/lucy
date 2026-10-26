@@ -48,7 +48,7 @@ func relativeDirectory(value string) (string, bool) {
 
 var (
 	reservedDirectory = regexp.MustCompile(`(?i)(^|/)(\.\.|\.(git|lucy))(/|$)`)
-	reservedFilename  = regexp.MustCompile(`(?i)^lucy(-lock|\.local)?\.yaml(/|$)`)
+	reservedFilename  = regexp.MustCompile(`(?i)^lucy(-lock)?\.yaml(/|$)`)
 )
 
 // portablePath models a file path grammar, not the normalizer's parsing steps.
@@ -106,7 +106,7 @@ func FuzzManifestPersistence(f *testing.F) {
 	f.Add("server", "mods/a:b.jar", "", "", uint8(0))
 	f.Add("server", "mods/../escape.jar", "", "", uint8(0))
 	f.Add("server", ".git/config", "", "", uint8(0))
-	f.Add("server", "LUCY.LOCAL.YAML/runtime", "", "", uint8(0))
+	f.Add("server", ".LUCY/config.yaml", "", "", uint8(0))
 	f.Add("server", "mods/\x00.jar", "", "", uint8(0))
 	f.Add(".", "NUL", "1.0.0", "", uint8(0))
 	f.Add(".", "COM1.txt", "1.0.0", "", uint8(0))

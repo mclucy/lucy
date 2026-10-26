@@ -170,6 +170,7 @@ func init() {
 		cli.NewAddCommand(jsonContracts),
 		cli.NewBisectCommand(jsonContracts),
 		cli.NewCacheCommand(jsonContracts),
+		cli.NewConfigCommand(jsonContracts),
 		cli.NewCreateCommand(jsonContracts),
 		cli.NewDeinitCommand(jsonContracts),
 		docs,

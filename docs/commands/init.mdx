@@ -68,7 +68,7 @@ The Minecraft version and the server version are not independent knobs. `lucy` r
 </ParamField>
 
 <ParamField query="--force, -f" type="boolean" default="false">
-  Replace an existing `lucy.yaml`. Without it, `lucy init` refuses to touch a manifest that already exists.
+  Replace an existing `lucy.yaml`. Without it, `lucy init` refuses to touch a manifest that already exists. It never replaces `.lucy/config.yaml`.
 </ParamField>
 
 See also [Global Flags](/commands/global-flags).
@@ -89,6 +89,6 @@ If no server is detected, `lucy init` errors. To create a new server, use [`lucy
 
 An existing `lucy.yaml` is never overwritten silently — `lucy init` stops and tells you to pass `--force`.
 
-`lucy init` writes `lucy.yaml` and resolves `lucy-lock.yaml` from it. The lock records the packages already present instead of pulling new dependencies. Resolution downloads the artifacts whose hashes it records into `.lucy`; it does not stage or install them. A package whose catalogue metadata offers no matching release for the detected Minecraft and loader stays unmanaged and is reported as a warning, as are module requirements that the installed jars declare but the selected set cannot satisfy.
+`lucy init` writes `lucy.yaml` and resolves `lucy-lock.yaml` from it. It also writes the workspace configuration file `.lucy/config.yaml` with every supported setting commented out; an existing configuration file is left unchanged. See [`lucy config`](/commands/config). The lock records the packages already present instead of pulling new dependencies. Resolution downloads the artifacts whose hashes it records into `.lucy`; it does not stage or install them. A package whose catalogue metadata offers no matching release for the detected Minecraft and loader stays unmanaged and is reported as a warning, as are module requirements that the installed jars declare but the selected set cannot satisfy.
 
 `lucy init` does not migrate worlds, rewrite server configuration, accept the Minecraft EULA, or start the server.

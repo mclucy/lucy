@@ -114,14 +114,16 @@ A required dependency records `dependency: true` while selected, and lists its d
 
 Java is never a gate for an installation. `lucy install` picks the Java runtime that runs the server and warns when it misses a requirement. Three things set the requirement: the Java version that Mojang recommends for your Minecraft version, the `server.java` pin in `lucy.yaml`, and the Java version that your packages declare.
 
-`lucy` picks the runtime in this order:
+`lucy` picks the runtime in this order. It merges whichever configuration files exist; a missing configuration file is not an error.
 
-1. The runtime that `lucy.local.yaml` selects. It applies to this machine only and takes precedence over `lucy.yaml`. If it is not a working Java runtime, `lucy` warns and does not fall back to another one.
+1. The runtime selected by a non-empty `java.home` in `.lucy/config.yaml` or the global configuration file. Workspace configuration takes precedence over global configuration. This setting applies on this machine only and overrides automatic selection. If it is not a working Java runtime, `lucy` warns and does not fall back to another one.
 2. The installed runtime that misses the fewest requirements. Among equal runtimes, `lucy` prefers the oldest major version that meets Mojang's recommendation, then the newest update. `JAVA_HOME` is only one of the places `lucy` looks.
 
 Steps that run Java, such as Paper patching and the Forge and NeoForge installers, use the selected runtime. They fail when no Java runtime is installed, and the error suggests `--java`.
 
-Add `--java` to install the runtime the server asks for when no installed runtime meets it. A runtime that already fits is reused, and nothing is installed when `lucy.local.yaml` selects one. `lucy` tries these methods in order and uses the first one that works:
+Changing the Java requirement with [`lucy java use`](/commands/java) writes only `lucy.yaml`. The next `lucy install` resolves the new requirement into the lock.
+
+Add `--java` to install the runtime the server asks for when no installed runtime meets it. A runtime that already fits is reused. `lucy` tries these methods in order and uses the first one that works:
 
 1. A Java version manager that already installed a Java runtime on this machine: SDKMAN, mise, asdf, Homebrew, or Scoop.
 2. Any other of those managers that is installed.
