@@ -14,6 +14,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// installJSON is the machine-readable result shared by every operation that
+// resolves, publishes, and installs: add, remove, install, init, and upgrade.
+var installJSON JSONResult[*install.Result]
+
 // installOutput adapts operation traces and results to the command presenter.
 type installOutput struct {
 	*Output
@@ -131,7 +135,7 @@ func (o *installOutput) Render(result *install.Result) error {
 	result.Warnings = append(result.Warnings, javaWarnings(result.Java)...)
 	result.WarningMessages = warningMessages(result.Warnings)
 	if o.JSON() {
-		return o.WriteJSON(result)
+		return installJSON.Write(o.Output, result)
 	}
 	if !result.Changed() {
 		if !result.PublishedManifest && !result.PublishedLock {

@@ -98,7 +98,7 @@ func (o *installOutput) RenderUpgradeApplied(
 	result.Warnings = append(result.Warnings, javaWarnings(result.Java)...)
 	result.WarningMessages = warningMessages(result.Warnings)
 	if o.JSON() {
-		return o.WriteJSON(result)
+		return installJSON.Write(o.Output, result)
 	}
 	if result.MCDR != nil {
 		fmt.Fprintf(

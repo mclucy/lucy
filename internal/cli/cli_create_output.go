@@ -24,6 +24,9 @@ type createOutput struct {
 	*installOutput
 }
 
+// createJSON is the machine-readable result of one creation.
+var createJSON JSONResult[*operation.CreateResult]
+
 func newCreateOutput(cmd *cobra.Command) *createOutput {
 	return &createOutput{installOutput: newInstallOutput(cmd)}
 }
@@ -35,7 +38,7 @@ func (o *createOutput) Render(result *operation.CreateResult) error {
 		return nil
 	}
 	if o.JSON() {
-		return o.WriteJSON(result)
+		return createJSON.Write(o.Output, result)
 	}
 	lines := createSummaryLines(result)
 	o.renderer.Println(append([]string{""}, lines...)...)

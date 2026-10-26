@@ -31,7 +31,8 @@ var installCmd = &cobra.Command{
 	RunE:    actionInstall,
 }
 
-func NewInstallCommand() *cobra.Command {
+func NewInstallCommand(contracts *JSONContracts) *cobra.Command {
+	installJSON.Bind(contracts, installCmd)
 	installCmd.Flags().Bool(
 		flagInstallLockedName,
 		false,

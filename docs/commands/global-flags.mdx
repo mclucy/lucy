@@ -37,6 +37,21 @@ These flags work with every `lucy` subcommand. The root command also exposes ver
   Print JSON without indentation; wins over `--json`.
 </ParamField>
 
+## Output schemas
+
+For automation, use `lucy schema` to list command paths with JSON results. Supply a command path to read its JSON Schema:
+
+```sh
+lucy schema status
+lucy schema file history --json-compact
+lucy schema upgrade
+lucy schema --error
+```
+
+Schemas describe the running Lucy version and require no server workspace or network access. When flags select different result shapes, the schema includes all alternatives. Failure documents have a separate schema because they go to stderr.
+
+`lucy schema` always returns JSON; `--json-compact` selects compact formatting. A command group, such as `lucy schema file`, lists its supported descendants. Commands without JSON results, such as `compile` and `docs`, have no result schema.
+
 ## Streams
 
 Human output follows the kind of command:

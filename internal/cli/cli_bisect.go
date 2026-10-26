@@ -64,7 +64,16 @@ var bisectResetCmd = &cobra.Command{
 	RunE:  actionBisectReset,
 }
 
-func NewBisectCommand() *cobra.Command {
+// bisectJSON is the shared machine-readable result of every bisect leaf: they
+// all report progress through bisectOutput.
+var bisectJSON JSONResult[bisectOutput]
+
+func NewBisectCommand(contracts *JSONContracts) *cobra.Command {
+	bisectJSON.Bind(contracts, bisectStartCmd)
+	bisectJSON.Bind(contracts, bisectGoodCmd)
+	bisectJSON.Bind(contracts, bisectBadCmd)
+	bisectJSON.Bind(contracts, bisectStatusCmd)
+	bisectJSON.Bind(contracts, bisectResetCmd)
 	bisectCmd.AddCommand(
 		bisectStartCmd,
 		bisectGoodCmd,
@@ -318,7 +327,7 @@ func outputBisect(cmd *cobra.Command, view bisectOutput) error {
 		output = NewQueryOutput(cmd)
 	}
 	if output.JSON() {
-		return output.WriteJSON(view)
+		return bisectJSON.Write(output, view)
 	}
 	if _, err := fmt.Fprintln(output.Human(), formatBisectOutput(view)); err != nil {
 		return err

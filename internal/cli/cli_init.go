@@ -31,7 +31,8 @@ var initCmd = &cobra.Command{
 	RunE:  actionInit,
 }
 
-func NewInitCommand() *cobra.Command {
+func NewInitCommand(contracts *JSONContracts) *cobra.Command {
+	installJSON.Bind(contracts, initCmd)
 	initCmd.Flags().BoolP(
 		flagInitForceName,
 		"f",
@@ -85,7 +86,7 @@ func initializeWorkspace(ctx context.Context, cmd *cobra.Command, workDir string
 	}
 	reportDiscoveryFindings(&result.Discovery, output.Output)
 	if output.JSON() {
-		return output.WriteJSON(&install.Result{
+		return installJSON.Write(output.Output, &install.Result{
 			Schema: install.ResultSchema,
 			Kind:   "install",
 			Mode:   install.ModeResolve,

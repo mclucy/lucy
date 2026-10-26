@@ -1,5 +1,7 @@
 package info
 
+import "github.com/mclucy/lucy/internal/cli"
+
 const (
 	infoDocumentSchema = 1
 
@@ -44,6 +46,8 @@ type infoDocument struct {
 	Entries  []infoEntry `json:"entries"`
 	Warnings []string    `json:"warnings"`
 }
+
+var infoJSON cli.JSONResult[infoDocument]
 
 type infoEntry struct {
 	Title             string           `json:"title"`

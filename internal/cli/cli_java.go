@@ -56,7 +56,13 @@ var javaUseCmd = &cobra.Command{
 	RunE:  actionJavaUse,
 }
 
-func NewJavaCommand() *cobra.Command {
+var javaListJSON JSONResult[javaListView]
+
+var javaUseJSON JSONResult[*operation.JavaChangeResult]
+
+func NewJavaCommand(contracts *JSONContracts) *cobra.Command {
+	javaListJSON.Bind(contracts, javaListCmd)
+	javaUseJSON.Bind(contracts, javaUseCmd)
 	javaUseCmd.Flags().String(
 		flagJavaDistributionName,
 		"",
@@ -117,7 +123,7 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 	}
 	output := NewQueryOutput(cmd)
 	if output.JSON() {
-		return output.WriteJSON(view)
+		return javaListJSON.Write(output, view)
 	}
 	out := output.Human()
 	if requirement == nil {
@@ -216,7 +222,7 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 	}
 	output := NewOperationOutput(cmd)
 	if output.JSON() {
-		return output.WriteJSON(result)
+		return javaUseJSON.Write(output, result)
 	}
 	out := output.Human()
 	fmt.Fprintf(out, "%s: %s\n", manifest.Filename, javaOverrideLabel(result.Java))

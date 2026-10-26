@@ -27,6 +27,8 @@ type fileResultView struct {
 	Reclaimed filetrack.Reclaimed `json:"reclaimed,omitzero"`
 }
 
+var fileResultJSON cli.JSONResult[fileResultView]
+
 func newFileResultView(result filetrack.Result) fileResultView {
 	return fileResultView{
 		Operation: result.Event.Operation,
@@ -49,7 +51,7 @@ var resultVerbs = map[filetrack.Operation]string{
 func reportFileResult(cmd *cobra.Command, result filetrack.Result) error {
 	output := cli.NewOperationOutput(cmd)
 	if output.JSON() {
-		return output.WriteJSON(newFileResultView(result))
+		return fileResultJSON.Write(output, newFileResultView(result))
 	}
 
 	out := output.Human()

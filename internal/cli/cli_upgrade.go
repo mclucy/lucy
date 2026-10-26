@@ -29,7 +29,11 @@ var upgradeCmd = &cobra.Command{
 	RunE:    actionUpgrade,
 }
 
-func NewUpgradeCommand() *cobra.Command {
+var upgradeFrontierJSON JSONResult[upgradeFrontierDocument]
+
+func NewUpgradeCommand(contracts *JSONContracts) *cobra.Command {
+	upgradeFrontierJSON.Bind(contracts, upgradeCmd)
+	installJSON.Bind(contracts, upgradeCmd)
 	upgradeCmd.Flags().BoolP(
 		flagUpgradeAllName,
 		"a",
@@ -116,7 +120,7 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 			}
 			selectedHash = selected.Hash
 		}
-		return output.WriteJSON(upgradeFrontierDocument{
+		return upgradeFrontierJSON.Write(output.Output, upgradeFrontierDocument{
 			Schema:                  1,
 			Kind:                    "upgrade-frontier",
 			Policy:                  policy,
@@ -174,7 +178,7 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if jsonMode {
-		return output.WriteJSON(applied)
+		return installJSON.Write(output.Output, applied)
 	}
 	return nil
 }

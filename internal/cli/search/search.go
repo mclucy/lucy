@@ -54,7 +54,8 @@ var searchCmd = &cobra.Command{
 	RunE: actionSearch,
 }
 
-func NewCommand() *cobra.Command {
+func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+	searchJSON.Bind(contracts, searchCmd)
 	searchCmd.Flags().String(
 		flagSortName,
 		"relevance",
@@ -181,7 +182,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	if output.JSON() {
-		return output.WriteJSON(results)
+		return searchJSON.Write(output, newSearchResultDocuments(results))
 	}
 
 	var sb strings.Builder

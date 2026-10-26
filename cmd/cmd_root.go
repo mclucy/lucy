@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"runtime/debug"
-	"strings"
 
 	"charm.land/fang/v2"
 	"github.com/mclucy/lucy/internal/agent"
@@ -40,7 +39,10 @@ const agentInstructions = "Instructions for agents:\n" +
 	"The --help flag is human-oriented. Use `lucy docs list` to view all available documentation,\n" +
 	"`lucy docs grep` to search, and `lucy docs view` to read articles. `--json-compact` and\n" +
 	"`--no-interactive` will be on by default for you. You can use tools like `jq` to process\n" +
-	"command outputs."
+	"command outputs. Use `lucy schema` to list JSON result contracts, `lucy schema COMMAND` to\n" +
+	"read a result schema, and `lucy schema --error` to read the shared failure schema."
+
+var jsonContracts = cli.NewJSONContracts()
 
 var rootCmd = &cobra.Command{
 	Use:   "lucy",
@@ -82,7 +84,7 @@ var rootCmd = &cobra.Command{
 				log.Debug("action working directory unavailable", "error", err)
 			}
 			log.Info("action invoked", "action", cmd.CommandPath(), "directory", directory)
-			if mode == cli.JSONNone && !docsCommand(cmd) {
+			if mode == cli.JSONNone && !jsonContracts.Ignores(cmd) {
 				report.Warn(fmt.Errorf(
 					"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
 				))
@@ -162,27 +164,30 @@ func init() {
 		"Use the GitHub release mirror for eligible downloads",
 	)
 
+	docs := docscli.NewCommand()
+	jsonContracts.Ignore(docs)
 	rootCmd.AddCommand(
-		cli.NewAddCommand(),
-		cli.NewBisectCommand(),
-		cli.NewCacheCommand(),
-		cli.NewCreateCommand(),
-		cli.NewDeinitCommand(),
-		docscli.NewCommand(),
+		cli.NewAddCommand(jsonContracts),
+		cli.NewBisectCommand(jsonContracts),
+		cli.NewCacheCommand(jsonContracts),
+		cli.NewCreateCommand(jsonContracts),
+		cli.NewDeinitCommand(jsonContracts),
+		docs,
 		cli.NewDoctorCommand(),
-		file.NewCommand(),
+		file.NewCommand(jsonContracts),
 		cli.NewExportCommand(),
-		cli.NewInitCommand(),
-		cli.NewInstallCommand(),
-		cli.NewJavaCommand(),
-		cli.NewLeavesCommand(),
-		cli.NewRemoveCommand(),
-		cli.NewTreeCommand(),
-		cli.NewUpgradeCommand(),
+		cli.NewInitCommand(jsonContracts),
+		cli.NewInstallCommand(jsonContracts),
+		cli.NewJavaCommand(jsonContracts),
+		cli.NewLeavesCommand(jsonContracts),
+		cli.NewRemoveCommand(jsonContracts),
+		cli.NewTreeCommand(jsonContracts),
+		cli.NewUpgradeCommand(jsonContracts),
 		compile.NewCommand(),
-		info.NewCommand(),
-		cli.NewStatusCommand(),
-		search.NewCommand(),
+		info.NewCommand(jsonContracts),
+		cli.NewStatusCommand(jsonContracts),
+		search.NewCommand(jsonContracts),
+		cli.NewSchemaCommand(jsonContracts),
 	)
 }
 
@@ -196,7 +201,7 @@ func applyAgentDefaults() {
 		return
 	}
 	setPersistentBoolDefault(cli.FlagNoInteractive, true)
-	if !jsonDefaultSupported(invocationCommand()) {
+	if !jsonContracts.Supports(invocationCommand()) {
 		return
 	}
 	if cli.JSONFlagsPresent(os.Args[1:]) {
@@ -216,28 +221,6 @@ func setPersistentBoolDefault(name string, value bool) {
 	}
 	_ = flag.Value.Set(text)
 	flag.DefValue = text
-}
-
-func docsCommand(cmd *cobra.Command) bool {
-	commandPath := cmd.CommandPath()
-	return commandPath == "lucy docs" ||
-		strings.HasPrefix(commandPath, "lucy docs ")
-}
-
-// jsonDefaultSupported excludes commands that reject or ignore JSON output.
-func jsonDefaultSupported(cmd *cobra.Command) bool {
-	if cmd == nil {
-		return false
-	}
-	switch cmd.Name() {
-	case "__complete", "__completeNoDesc", "completion", "help", "man":
-		return false
-	}
-	commandPath := cmd.CommandPath()
-	if commandPath == "lucy" || commandPath == "lucy compile" {
-		return false
-	}
-	return !strings.HasPrefix(commandPath, "lucy docs")
 }
 
 // injectAgentInstructions adds the agent notice to every help text. Help is
@@ -268,17 +251,19 @@ func injectAgentInstructions() {
 // so a failure that happens before Cobra parses flags still honors --json and
 // --json-compact.
 func effectiveRendering(cmd *cobra.Command) cli.JSONRendering {
-	if docsCommand(cmd) {
+	if jsonContracts.Ignores(cmd) {
 		return cli.JSONNone
 	}
-	if cmd.Flags().Parsed() && !flagParsingFailed {
-		return cli.JSONMode(cmd)
-	}
 	mode := cli.JSONModeFromArgs(cmd, os.Args[1:])
-	if mode == cli.JSONNone && !cli.JSONFlagsPresent(os.Args[1:]) {
+	if cmd.Flags().Parsed() && !flagParsingFailed {
+		mode = cli.JSONMode(cmd)
+	} else if mode == cli.JSONNone && !cli.JSONFlagsPresent(os.Args[1:]) {
 		if compact, _ := cmd.Root().PersistentFlags().GetBool(cli.FlagJSONCompact); compact {
-			return cli.JSONCompact
+			mode = cli.JSONCompact
 		}
+	}
+	if mode == cli.JSONNone && jsonContracts.IsNative(cmd) {
+		return cli.JSONPretty
 	}
 	return mode
 }
@@ -392,16 +377,7 @@ func Execute() (err error) {
 	applyAgentDefaults()
 	injectAgentInstructions()
 	command := invocationCommand()
-	if docsCommand(command) {
-		selectedJSON = cli.JSONNone
-	} else {
-		selectedJSON = cli.JSONModeFromArgs(command, os.Args[1:])
-		if selectedJSON == cli.JSONNone && !cli.JSONFlagsPresent(os.Args[1:]) {
-			if compact, _ := rootCmd.PersistentFlags().GetBool(cli.FlagJSONCompact); compact {
-				selectedJSON = cli.JSONCompact
-			}
-		}
-	}
+	selectedJSON = effectiveRendering(command)
 	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		flagParsingFailed = true
 		return err

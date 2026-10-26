@@ -33,7 +33,15 @@ var cacheClearCmd = &cobra.Command{
 	RunE:    actionCacheClear,
 }
 
-func NewCacheCommand() *cobra.Command {
+// cacheLsJSON is the machine-readable `cache ls` result: every cached entry.
+var cacheLsJSON JSONResult[[]*cache.Entry]
+
+// cacheClearJSON is the machine-readable `cache clear` result.
+var cacheClearJSON JSONResult[cache.ResetReport]
+
+func NewCacheCommand(contracts *JSONContracts) *cobra.Command {
+	cacheLsJSON.Bind(contracts, cacheLsCmd)
+	cacheClearJSON.Bind(contracts, cacheClearCmd)
 	cacheCmd.AddCommand(cacheLsCmd, cacheClearCmd)
 	return cacheCmd
 }
@@ -42,7 +50,7 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 	output := NewQueryOutput(cmd)
 	entries := cache.Network().All()
 	if output.JSON() {
-		return output.WriteJSON(entries)
+		return cacheLsJSON.Write(output, entries)
 	}
 
 	if len(entries) == 0 {
@@ -86,7 +94,7 @@ func actionCacheClear(cmd *cobra.Command, _ []string) error {
 	}
 
 	if output.JSON() {
-		return output.WriteJSON(cleared)
+		return cacheClearJSON.Write(output, cleared)
 	}
 
 	// The cache backend only collects the successful removals; the command

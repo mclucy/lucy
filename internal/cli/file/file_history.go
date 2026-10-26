@@ -19,6 +19,8 @@ var historyCmd = &cobra.Command{
 	RunE:  actionFileHistory,
 }
 
+var historyJSON cli.JSONResult[[]filetrack.Event]
+
 func actionFileHistory(cmd *cobra.Command, args []string) error {
 	root, err := workRoot()
 	if err != nil {
@@ -40,7 +42,7 @@ func actionFileHistory(cmd *cobra.Command, args []string) error {
 
 	output := cli.NewQueryOutput(cmd)
 	if output.JSON() {
-		return output.WriteJSON(events)
+		return historyJSON.Write(output, events)
 	}
 
 	out := output.Human()

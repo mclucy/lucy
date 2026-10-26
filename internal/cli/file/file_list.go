@@ -23,6 +23,8 @@ type fileListDocument struct {
 	Warnings []string           `json:"warnings"`
 }
 
+var listJSON cli.JSONResult[fileListDocument]
+
 func actionFileList(cmd *cobra.Command, _ []string) error {
 	root, err := workRoot()
 	if err != nil {
@@ -49,7 +51,7 @@ func actionFileList(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	if output.JSON() {
-		return output.WriteJSON(fileListDocument{
+		return listJSON.Write(output, fileListDocument{
 			Statuses: statuses,
 			Warnings: output.Warnings(),
 		})

@@ -104,7 +104,7 @@ func infoWriteDocument(
 	}
 
 	if output.JSON() {
-		if err := output.WriteJSON(document); err != nil {
+		if err := infoJSON.Write(output, document); err != nil {
 			return infoWriteFailure(err)
 		}
 		return nil
