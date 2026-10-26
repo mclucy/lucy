@@ -61,6 +61,8 @@ func NewSchemaCommand(contracts *JSONContracts) *cobra.Command {
 		},
 	}
 	cmd.Flags().Bool("error", false, "Describe the shared JSON failure document on stderr")
+	JSONResult[*jsonschema.Schema]{}.Bind(contracts, cmd)
+	JSONResult[[]string]{}.Bind(contracts, cmd)
 	contracts.Native(cmd)
 	return cmd
 }
