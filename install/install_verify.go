@@ -29,6 +29,7 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 		return err
 	}
 	seenDirectories := map[string]bool{}
+	lockedDestinations := lockedPackageDestinations(d)
 	for _, planned := range d.Packages {
 		if !planned.Enabled() {
 			continue
@@ -57,6 +58,15 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 			filename := filepath.Join(relative, entry.Name())
 			if owned[filepath.ToSlash(filename)] {
 				continue
+			}
+			if expected, ok := lockedDestinations[filepath.Clean(filename)]; ok {
+				if _, err := DigestFile(filepath.Join(root, filename), expected); err == nil {
+					log.Debug(
+						"locked package already occupies its destination",
+						"path", filename,
+					)
+					continue
+				}
 			}
 			mods, err := artifact.ReadModules(ctx, filepath.Join(root, filename), planned.Ecosystem)
 			if err != nil {
@@ -87,6 +97,26 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 		"packages", len(d.Packages),
 	)
 	return nil
+}
+
+// lockedPackageDestinations maps every enabled package destination to the
+// digests the lock pins for it. A destination that already holds those bytes
+// belongs to the locked installation even when no receipt records it, which is
+// the state initialization leaves behind.
+func lockedPackageDestinations(d *lockfile.Document) map[string]map[string]string {
+	destinations := make(map[string]map[string]string, len(d.Packages))
+	for i := range d.Packages {
+		p := &d.Packages[i]
+		if !p.Enabled() {
+			continue
+		}
+		destination, err := packageDestination(d, p)
+		if err != nil {
+			continue
+		}
+		destinations[filepath.Clean(destination)] = p.Artifact.Hashes
+	}
+	return destinations
 }
 
 // unmanagedConflict reports the selected package whose module an unmanaged

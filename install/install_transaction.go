@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/workspace/discovery"
 	"gopkg.in/yaml.v3"
 )
 
@@ -32,13 +33,44 @@ type (
 	}
 )
 
-func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths map[string]bool) (FileChanges, error) {
+// adoptedOutputPaths reports the workspace-relative members of the runtime the
+// lock names, when observation selects that runtime. Installation replaces
+// these files instead of refusing them: they belong to the installation that
+// initialization adopted, not to unrelated work.
+func adoptedOutputPaths(root string, server lockfile.Server) map[string]bool {
+	serverDir := filepath.Join(root, filepath.FromSlash(server.Directory))
+	observed := discovery.Discover(serverDir)
+	declaration := &discovery.Declaration{
+		Product:     server.Product,
+		Minecraft:   server.Minecraft,
+		CoreVersion: server.CoreVersion,
+	}
+	if err := observed.Select(discovery.Request{Declared: declaration}); err != nil {
+		log.Debug("no adopted installation to reconcile", "reason", err)
+		return nil
+	}
+	selected := observed.Selected()
+	if selected == nil || selected.Installation == nil {
+		return nil
+	}
+	paths := make(map[string]bool, len(selected.Installation.Files))
+	for _, file := range selected.Installation.Files {
+		relative, err := filepath.Rel(root, file.Path)
+		if err != nil || !filepath.IsLocal(relative) {
+			continue
+		}
+		paths[filepath.ToSlash(relative)] = true
+	}
+	return paths
+}
+
+func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths, adoptedPaths map[string]bool) (FileChanges, error) {
 	var counts FileChanges
-	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, &counts)
+	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, adoptedPaths, &counts)
 	return counts, resultErr
 }
 
-func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths map[string]bool, counts *FileChanges) (resultErr error) {
+func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths, adoptedPaths map[string]bool, counts *FileChanges) (resultErr error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	previous := installReceipt{}
 	raw, err := os.ReadFile(receiptPath)
@@ -111,14 +143,22 @@ func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Docu
 			}
 			occupantHashes[relative] = actual["sha256"]
 			if actual["sha256"] != hashes["sha256"] && actual["sha256"] != owned[relative] {
-				if !overwritePaths[relative] {
+				switch {
+				case overwritePaths[relative]:
+					log.Debug(
+						"overwriting occupied output",
+						"path", relative,
+						"reason", "overwrite requested",
+					)
+				case adoptedPaths[relative]:
+					log.Debug(
+						"adopting occupied output",
+						"path", relative,
+						"reason", "occupied by the adopted installation",
+					)
+				default:
 					return fmt.Errorf("unowned or modified output conflict: %s", relative)
 				}
-				log.Debug(
-					"overwriting occupied output",
-					"path", relative,
-					"reason", "overwrite requested",
-				)
 			}
 		} else if !os.IsNotExist(err) {
 			return err

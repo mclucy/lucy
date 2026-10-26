@@ -21,6 +21,9 @@ import (
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
+// CopyLockedFile writes src to dst with mode, replacing dst through a
+// temporary file. An interrupted copy never leaves a partial file, and other
+// links to the previous dst keep their bytes.
 func CopyLockedFile(src, dst string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
@@ -30,20 +33,28 @@ func CopyLockedFile(src, dst string, mode os.FileMode) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	out, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*")
 	if err != nil {
 		return err
 	}
+	temporary := out.Name()
+	defer func() {
+		if out != nil {
+			out.Close()
+			os.Remove(temporary)
+		}
+	}()
 	if err := out.Chmod(mode); err != nil {
-		out.Close()
 		return err
 	}
-	_, copyErr := io.Copy(out, in)
-	closeErr := out.Close()
-	if copyErr != nil {
-		return copyErr
+	if _, err := io.Copy(out, in); err != nil {
+		return err
 	}
-	return closeErr
+	if err := out.Close(); err != nil {
+		return err
+	}
+	out = nil
+	return os.Rename(temporary, dst)
 }
 
 // PrepareLocked builds the server tree of a locked server in stage. java is the

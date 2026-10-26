@@ -236,7 +236,11 @@ func stageInstall(
 	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 		return nil, err
 	}
-	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths)
+	adoptedPaths := map[string]bool{}
+	if _, err := os.Stat(filepath.Join(root, ".lucy", "install.yaml")); os.IsNotExist(err) {
+		adoptedPaths = adoptedOutputPaths(root, resolved.Server)
+	}
+	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths, adoptedPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +260,7 @@ func isFloating(v version.Version) bool {
 	return v == "latest"
 }
 
-// coreReusable reports whether a lock's server record still answers the
+// coreReusable reports whether a lock's server record answers the
 // manifest's core request. Resolution reuses the pin when it does; a locked
 // mutation treats a negative answer as a stale lock, because rebinding
 // requirements must never re-target the server.
