@@ -88,6 +88,7 @@ To run the built binary against a test server directory:
     ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
     ├── fn/                 Generic helpers: Ternary, slice utilities
     ├── fsutil/             Filesystem helpers: CloseReader, path utilities
+    ├── telemetry/          Diagnostic collection, privacy filtering, and upload handoff
     └── toolchain/          Local Git, Java, and Gradle discovery
 ```
 

@@ -17,6 +17,10 @@ This directory contains the Mintlify documentation site. Site configuration and 
   - [`lucy info`](commands/info.mdx)
   - [`lucy status`](commands/status.mdx)
 
+Privacy
+
+- [Telemetry](telemetry.mdx)
+
 Shared operational notes live in [shared/cipher-key-operations.md](shared/cipher-key-operations.md).
 
 ## Contributing

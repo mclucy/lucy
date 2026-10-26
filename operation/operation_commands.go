@@ -76,6 +76,8 @@ func commandDocuments(root string) (document *manifest.Document, locked *lockfil
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, nil, err
 	}
+	observeManifest(d)
+	observeLock(old)
 	return d, old, nil
 }
 
@@ -269,6 +271,13 @@ func Remove(ctx context.Context, root string, args []string, ecosystem catalog.E
 }
 
 func Initialize(ctx context.Context, root string, opts InitOptions) (result *InitResult, resultErr error) {
+	defer func() {
+		if result == nil {
+			return
+		}
+		observeManifest(result.Document)
+		observeLock(result.Lock)
+	}()
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err

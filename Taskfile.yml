@@ -18,8 +18,10 @@ vars:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
   LUCY_COMMIT:
     sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+  LUCY_TELEMETRY_ENDPOINT:
+    sh: printf '%s' "${LUCY_TELEMETRY_ENDPOINT:-}"
   # SECURITY: cipher fragments must NOT live in this var — Task expands vars into command logs.
-  LUCY_LDFLAGS: -X github.com/mclucy/lucy/cmd.version={{.LUCY_VERSION}} -X github.com/mclucy/lucy/cmd.commit={{.LUCY_COMMIT}}
+  LUCY_LDFLAGS: -X github.com/mclucy/lucy/cmd.version={{.LUCY_VERSION}} -X github.com/mclucy/lucy/cmd.commit={{.LUCY_COMMIT}} -X github.com/mclucy/lucy/internal/telemetry.endpoint={{.LUCY_TELEMETRY_ENDPOINT}}
   # HTTP/1.1 covers every provider; omitting HTTP/2 keeps binaries smaller.
   LUCY_STDLIB_TAGS: nethttpomithttp2
 

@@ -9,6 +9,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	serverpkg "github.com/mclucy/lucy/server"
 
+	"github.com/mclucy/lucy/internal/telemetry"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/report"
@@ -81,6 +82,7 @@ func LoadDependencyData(workDir string, forceLive bool, output *Output) (
 				err,
 			)
 		}
+		observeServerEnvironment(env)
 		return graph, origin, env, nil
 	}
 
@@ -91,7 +93,13 @@ func LoadDependencyData(workDir string, forceLive bool, output *Output) (
 	if err != nil {
 		return nil, 0, env, fmt.Errorf("failed to build graph from observation: %w", err)
 	}
-	return graph, origin, environmentFromWorkspace(info, env), nil
+	env = environmentFromWorkspace(info, env)
+	observeServerEnvironment(env)
+	return graph, origin, env, nil
+}
+
+func observeServerEnvironment(env ServerEnvironment) {
+	telemetry.ObserveServer(env.Core, env.GameVersion)
 }
 
 // reportObservationFindings renders each consumed observation once.

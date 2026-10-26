@@ -77,6 +77,12 @@ const (
 
 	StatusShort = "Display basic information of the current server"
 
+	TelemetryShort       = "Control diagnostic telemetry"
+	TelemetryOnShort     = "Enable telemetry"
+	TelemetryOffShort    = "Disable telemetry and cancel pending uploads"
+	TelemetryReportShort = "Submit an agent report"
+	TelemetryUploadShort = "Upload one queued telemetry handoff"
+
 	TreeShort = "Show all packages and their dependencies"
 
 	UpgradeShort = "Upgrade installed packages"

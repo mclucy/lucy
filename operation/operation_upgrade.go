@@ -82,6 +82,8 @@ func PlanUpgrade(
 		}
 		return nil, err
 	}
+	observeManifest(d)
+	observeLock(old)
 	baseManifest, err := manifest.Fingerprint(d)
 	if err != nil {
 		return nil, err

@@ -1,0 +1,67 @@
+---
+title: "Telemetry"
+description: "Diagnostic data that Alpha and Beta builds send, and how to control it"
+---
+
+Lucy sends a small diagnostic record after most commands so the maintainers can find failures and broken server environments during Alpha and Beta testing. Official Alpha and Beta builds have it on by default. Development builds start with it off.
+
+Telemetry is diagnostic, not analytics. It supports troubleshooting and is never sold or used for advertising.
+
+## What a command sends
+
+One record per business command, at most, with these fields:
+
+- A random participant identifier created for this installation. It is not derived from your hardware, account, or paths.
+- The Lucy version and build commit.
+- Your operating system, its version when available, and the CPU architecture of the Lucy process.
+- The server product and Minecraft version that the command actually used, when the command worked on a server.
+- The command name, without arguments or aliases, and whether it succeeded, failed, or was cancelled.
+- For a failure, a filtered error description and the filtered diagnostics from that Lucy process. Diagnostics include debug detail even when the terminal shows less.
+- Whether the caller is a human, an agent, or unknown, plus the detected agent harness.
+
+Help, version, documentation, shell completion, telemetry management, and the internal upload process never produce a record.
+
+## What it does not collect
+
+It does not send raw command arguments, package or directory listings, your environment variables, hardware identifiers, full agent sessions, tool transcripts, Minecraft server logs, other programs' logs, or unrelated files. It never reads your server logs to build a record.
+
+Before anything leaves the machine, Lucy filters known tokens, authorization headers, secret-like values, URL query values, user names, and local absolute paths. A replacement marker keeps the surrounding diagnostic structure. Filtering is best effort: it cannot recognize every sensitive value, so review any text you submit as an agent report.
+
+A failed command keeps at most the last 256 KiB of its own diagnostics, cut on a valid character boundary. A larger agent report is rejected instead of truncated.
+
+## Identity, delivery, and retention
+
+The participant identifier can link records from the same installation. The receiving service stores the network address it sees, and maintainers know which person received which token, so telemetry is not anonymous. The address is used for troubleshooting and abuse prevention only, not for geographic profiling.
+
+Uploads use the fixed address built into your Lucy binary. A failed upload is not retried, and a later command never resends an older record. Turning telemetry off cancels uploads that are still pending.
+
+Received records stay queryable for 30 days and are deleted from the active database by the next daily cleanup, at most by day 31. Service backups and platform logs may keep additional copies for their own retention windows. Records are not read through a public API.
+
+## Controls
+
+Official Alpha and Beta builds start enabled but cannot upload until you provide the token your maintainer gives you.
+
+```sh
+lucy telemetry on --token-stdin < token.txt
+lucy telemetry off
+```
+
+`on --token-stdin` reads the token from standard input, stores it privately for your operating system user, and replaces any previous token. `on` without a saved token fails and explains the flag. Turning telemetry off keeps the token, removes the participant identifier, cancels pending uploads, and starts a new identifier if you enable it again. The token can still connect the two identities.
+
+Without a terminal to read from, use input redirection; Lucy never accepts a token as a command-line argument.
+
+## Notices
+
+With human output, each business command shows a short notice when telemetry is enabled, and each upload announces itself on stderr before it starts. It never asks for confirmation. A started upload is not a completed upload, and a background upload never writes to your terminal after the command exits.
+
+With `--json` or `--json-compact`, telemetry notices go to the diagnostic log instead. Machine output keeps its single result or error document.
+
+## Agent reports
+
+When telemetry is uploadable and Lucy detects an agent harness, the agent instructions ask for one report after a failed business command. The report carries the goal, the failing step, expected and actual results, and a necessary diagnostic excerpt. It must not include a full session, full tool log, unrelated files, or known sensitive values.
+
+```sh
+lucy telemetry agent-report --model MODEL --harness HARNESS < report.md
+```
+
+The command waits for the receiver to confirm that the report is stored. A network failure exits non-zero and reports that delivery may be unknown; Lucy does not submit a second report about that failure. When telemetry is off or has no token, the command fails locally without reading standard input or contacting the network.

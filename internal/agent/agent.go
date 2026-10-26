@@ -8,42 +8,53 @@ import (
 
 // Agent environment detection took reference from Cloudflare's CLI
 // https://github.com/cloudflare/cf/blob/main/packages/cli/src/lib/agent-context.ts
-var detectors = []func() bool{
-	func() bool { return exact("OPENCODE", "1") },
-	func() bool { return value("QWEN_CODE_SESSION_ID") != "" },
-	func() bool {
+type detector struct {
+	name   string
+	detect func() bool
+}
+
+var detectors = []detector{
+	{"opencode", func() bool { return exact("OPENCODE", "1") }},
+	{"qwen-code", func() bool { return value("QWEN_CODE_SESSION_ID") != "" }},
+	{"pi", func() bool {
 		return exact("PI_CODING_AGENT", "true") || value("AI_AGENT") == "pi"
-	},
-	func() bool {
+	}},
+	{"omp", func() bool {
 		return exact("OMPCODE", "1") ||
 			value("PI_SESSION_FILE") != "" ||
 			value("PI_SESSION_ID") != ""
-	},
-	func() bool { return exact("DSH_SHELL", "1") },
-	func() bool { return exact("CURSOR_AGENT", "1") },
-	func() bool { return exact("CLAUDECODE", "1") },
-	func() bool { return value("CODEX_THREAD_ID") != "" },
-	func() bool { return value("AMP_CURRENT_THREAD_ID") != "" },
-	func() bool { return exact("GEMINI_CLI", "1") },
-	func() bool { return exact("AUGMENT_AGENT", "1") },
-	func() bool {
+	}},
+	{"dsh", func() bool { return exact("DSH_SHELL", "1") }},
+	{"cursor", func() bool { return exact("CURSOR_AGENT", "1") }},
+	{"claude", func() bool { return exact("CLAUDECODE", "1") }},
+	{"codex", func() bool { return value("CODEX_THREAD_ID") != "" }},
+	{"amp", func() bool { return value("AMP_CURRENT_THREAD_ID") != "" }},
+	{"gemini", func() bool { return exact("GEMINI_CLI", "1") }},
+	{"augment", func() bool { return exact("AUGMENT_AGENT", "1") }},
+	{"crush", func() bool {
 		return exact("CRUSH", "1") || value("AI_AGENT") == "crush"
-	},
-	func() bool {
+	}},
+	{"github-copilot", func() bool {
 		return value("AI_AGENT") == "github_copilot_vscode_agent" ||
 			exact("COPILOT_AGENT", "1")
-	},
-	func() bool { return value("OZ_RUN_ID") != "" },
+	}},
+	{"oz", func() bool { return value("OZ_RUN_ID") != "" }},
+}
+
+// Harness reports the detected harness name, or the empty string. The first
+// matching detector wins so concurrent signals select the same name every run.
+func Harness() string {
+	for _, candidate := range detectors {
+		if candidate.detect() {
+			return candidate.name
+		}
+	}
+	return ""
 }
 
 // Detected reports whether any supported agent harness is present.
 func Detected() bool {
-	for _, detect := range detectors {
-		if detect() {
-			return true
-		}
-	}
-	return false
+	return Harness() != ""
 }
 
 func value(name string) string {

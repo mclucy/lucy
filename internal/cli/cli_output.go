@@ -8,6 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/internal/telemetry"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/terminal/style"
@@ -128,6 +129,10 @@ func (o *installOutput) Render(result *install.Result) error {
 	if result == nil {
 		return nil
 	}
+	telemetry.ObserveServer(
+		result.Server.Product.String(),
+		result.Server.Minecraft.String(),
+	)
 	result.Warnings = append(result.Warnings, javaWarnings(result.Java)...)
 	result.WarningMessages = warningMessages(result.Warnings)
 	if o.JSON() {

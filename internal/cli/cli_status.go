@@ -9,6 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/internal/telemetry"
 	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
@@ -97,6 +98,9 @@ func actionStatusLive(
 	}
 
 	document := newLiveStatusDocument(observed, root)
+	if document.Server != nil {
+		telemetry.ObserveServer(document.Server.Product.Name, document.Server.Minecraft)
+	}
 	if document.Server != nil &&
 		(document.Server.Product.Version == "" ||
 			document.Server.Product.Version == versionpkg.Unknown.String()) {
@@ -154,6 +158,10 @@ func actionStatusFromLock(
 			Cause: err,
 		}
 	}
+	telemetry.ObserveServer(
+		lock.Server.Product.String(),
+		lock.Server.Minecraft.String(),
+	)
 	return writeStatusDocument(
 		output,
 		newLockStatusDocument(root, lock),

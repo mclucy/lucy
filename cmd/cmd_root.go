@@ -18,6 +18,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli/file"
 	"github.com/mclucy/lucy/internal/cli/info"
 	"github.com/mclucy/lucy/internal/cli/search"
+	"github.com/mclucy/lucy/internal/telemetry"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
@@ -36,17 +37,33 @@ var (
 	agentHelpInjected bool
 )
 
-const agentInstructions = "Instructions for agents:\n" +
+const agentInstructionsBase = "Instructions for agents:\n" +
 	"The --help flag is human-oriented. Use `lucy docs list` to view all available documentation,\n" +
 	"`lucy docs grep` to search, and `lucy docs view` to read articles. `--json-compact` and\n" +
 	"`--no-interactive` will be on by default for you. You can use tools like `jq` to process\n" +
 	"command outputs."
+
+func agentInstructions() string {
+	text := agentInstructionsBase
+	if guidance, ok := telemetry.ReportGuidance(); ok {
+		text += "\n\n" + guidance
+	}
+	return text
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "lucy",
 	Short: "The Minecraft server package manager",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		executingCommand = cmd
+		if internalUploadCommand(cmd) {
+			report.SetOutput(io.Discard)
+			style.TurnOffInteractivity()
+			if err := configureLogging(cmd); err == nil {
+				loggingReady = true
+			}
+			return nil
+		}
 		mode := effectiveRendering(cmd)
 		selectedJSON = mode
 		if mode == cli.JSONNone {
@@ -82,6 +99,9 @@ var rootCmd = &cobra.Command{
 				log.Debug("action working directory unavailable", "error", err)
 			}
 			log.Info("action invoked", "action", cmd.CommandPath(), "directory", directory)
+			if _, business := telemetryBusinessCommand(cmd); business {
+				telemetry.NotifyCommand(mode != cli.JSONNone)
+			}
 			if mode == cli.JSONNone && !docsCommand(cmd) {
 				report.Warn(fmt.Errorf(
 					"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
@@ -183,6 +203,7 @@ func init() {
 		info.NewCommand(),
 		cli.NewStatusCommand(),
 		search.NewCommand(),
+		cli.NewTelemetryCommand(),
 	)
 }
 
@@ -224,6 +245,66 @@ func docsCommand(cmd *cobra.Command) bool {
 		strings.HasPrefix(commandPath, "lucy docs ")
 }
 
+func internalUploadCommand(cmd *cobra.Command) bool {
+	return cmd != nil && cmd.CommandPath() == "lucy telemetry upload"
+}
+
+// telemetryInvocation names the business command one event may describe.
+// Unknown commands use a fixed label so user input never leaves the machine.
+func telemetryInvocation() (string, bool) {
+	command := executingCommand
+	if command == nil {
+		found, _, _ := rootCmd.Find(os.Args[1:])
+		command = found
+	}
+	if command == nil {
+		command = rootCmd
+	}
+	return telemetryBusinessCommand(command)
+}
+
+func telemetryBusinessCommand(command *cobra.Command) (string, bool) {
+	if command == nil {
+		return "", false
+	}
+	path := command.CommandPath()
+	switch path {
+	case "lucy", "lucy help", "lucy completion", "lucy man":
+		if path == "lucy" && unknownCommandInvocation(command) {
+			return "lucy unknown", true
+		}
+		return "", false
+	}
+	for _, prefix := range []string{
+		"lucy docs",
+		"lucy telemetry",
+		"lucy __complete",
+	} {
+		if path == prefix || strings.HasPrefix(path, prefix+" ") {
+			return "", false
+		}
+	}
+	return path, true
+}
+
+// unknownCommandInvocation reports a first non-flag argument that no command
+// accepted. Flags alone mean the root help or version surface.
+func unknownCommandInvocation(command *cobra.Command) bool {
+	if executingCommand != nil && executingCommand != command.Root() {
+		return false
+	}
+	_, args, _ := command.Root().Find(os.Args[1:])
+	for _, arg := range args {
+		if arg == "--" {
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			return true
+		}
+	}
+	return false
+}
+
 // jsonDefaultSupported excludes commands that reject or ignore JSON output.
 func jsonDefaultSupported(cmd *cobra.Command) bool {
 	if cmd == nil {
@@ -247,7 +328,7 @@ func injectAgentInstructions() {
 		return
 	}
 	agentHelpInjected = true
-	block := "\n\n" + agentInstructions
+	block := "\n\n" + agentInstructions()
 	var walk func(*cobra.Command)
 	walk = func(cmd *cobra.Command) {
 		switch {
@@ -373,6 +454,24 @@ func (e *panicError) Error() string {
 
 func Execute() (err error) {
 	defer func() {
+		name, business := telemetryInvocation()
+		if !business {
+			return
+		}
+		outcome := telemetry.OutcomeSuccess
+		if err != nil {
+			outcome = telemetry.OutcomeFailure
+			if errors.Is(err, context.Canceled) {
+				outcome = telemetry.OutcomeCancelled
+			}
+			var exitErr *cli.ExitError
+			if errors.As(err, &exitErr) && exitErr.Silent {
+				outcome = telemetry.OutcomeSuccess
+			}
+		}
+		telemetry.FinishCommand(name, outcome, err, JSONSelected())
+	}()
+	defer func() {
 		recovered := recover()
 		if recovered == nil {
 			return
@@ -386,6 +485,7 @@ func Execute() (err error) {
 		log.Error(fmt.Errorf("%s panicked: %v\n%s", path, recovered, stack))
 	}()
 	displayVersion, displayCommit := buildVersion()
+	telemetry.SetBuild(displayVersion, displayCommit)
 	executingCommand = nil
 	loggingReady = false
 	flagParsingFailed = false

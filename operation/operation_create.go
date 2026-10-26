@@ -150,6 +150,13 @@ func InspectCreateTarget(path string) (CreateTarget, error) {
 // Create writes a new manifest and lock in opts.Directory, then optionally
 // installs the server. It does not prompt; the command boundary owns choices.
 func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resultErr error) {
+	defer func() {
+		if result == nil {
+			return
+		}
+		observeManifest(result.Manifest)
+		observeLock(result.Lock)
+	}()
 	root, err := createAbsolute(opts.Directory)
 	if err != nil {
 		return nil, err
@@ -213,6 +220,7 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	}
 	document := newCreateDocument(opts)
 	if err := manifest.Normalize(document); err != nil {
+		observeManifest(document)
 		return nil, newCreateResolveError(root, document, err)
 	}
 	resolved, resolution, err := install.Resolve(
@@ -223,6 +231,7 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 		install.Options{AcceptBroken: false, Trace: opts.Trace},
 	)
 	if err != nil {
+		observeManifest(document)
 		return nil, newCreateResolveError(root, document, err)
 	}
 	if err := manifest.Write(root, document); err != nil {

@@ -48,7 +48,8 @@ func Configure(path, level string, printLogs bool) error {
 	defer mu.Unlock()
 	previous := output
 	output = &fileOutput{path: path, file: file}
-	diagnostic = newLogger(output, log.DebugLevel)
+	sessionCapture.reset()
+	diagnostic = newLogger(io.MultiWriter(&sessionCapture, output), log.DebugLevel)
 	mirror = nil
 	if printLogs {
 		mirror = newLogger(os.Stderr, threshold)

@@ -27,5 +27,7 @@ func Sync(ctx context.Context, root string, opts install.Options) (*install.Resu
 	if errors.Is(err, os.ErrNotExist) {
 		old = nil
 	}
+	observeManifest(d)
+	observeLock(old)
 	return install.Sync(ctx, root, d, old, opts)
 }

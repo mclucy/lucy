@@ -39,6 +39,10 @@
           "file-tracking/tracking",
           "file-tracking/recovery"
         ]
+      },
+      {
+        "group": "Privacy",
+        "pages": ["telemetry"]
       }
     ],
     "global": {
