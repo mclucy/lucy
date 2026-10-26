@@ -38,6 +38,7 @@ import (
 type InitOptions struct {
 	MCDRVersion string
 	Force       bool
+	NoComments  bool
 	// EntryPoint selects the runtime observation uses for this
 	// initialization only; it is never persisted.
 	EntryPoint string
@@ -527,7 +528,12 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if configErr != nil && !publishedConfig {
 		return initResult(observed), configErr
 	}
-	if err := documentpkg.ManifestFile(root).Write(d); err != nil {
+	manifestFile := documentpkg.ManifestFile(root)
+	if opts.NoComments {
+		manifestFile = manifestFile.WithEncoder((*documentpkg.Manifest).PlainBytes)
+		configuration = configuration.WithEncoder((*config.Values).PlainBytes)
+	}
+	if err := manifestFile.Write(d); err != nil {
 		return initResult(observed), err
 	}
 	if resolved != old {

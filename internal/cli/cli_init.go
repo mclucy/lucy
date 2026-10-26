@@ -22,6 +22,7 @@ const (
 	flagInitForceName       = "force"
 	flagInitMCDRVersionName = "mcdr-version"
 	flagInitEntryPointName  = "entry-point"
+	flagInitNoCommentsName  = "no-comments"
 )
 
 var initCmd = &cobra.Command{
@@ -56,6 +57,11 @@ func NewInitCommand(contracts *JSONContracts) *cobra.Command {
 	)
 	initCmd.Flags().String(flagInitEntryPointName, "", "Server entry point to adopt when several runtimes are present")
 	_ = initCmd.MarkFlagFilename(flagInitEntryPointName, "jar")
+	initCmd.Flags().Bool(
+		flagInitNoCommentsName,
+		false,
+		"Write generated manifests and configuration without explanatory comments",
+	)
 	return initCmd
 }
 
@@ -70,6 +76,7 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 		MCDRVersion: flagStringInit(cmd, flagInitMCDRVersionName),
 		EntryPoint:  flagStringInit(cmd, flagInitEntryPointName),
 		Force:       flagBoolInit(cmd, flagInitForceName),
+		NoComments:  flagBoolInit(cmd, flagInitNoCommentsName),
 	}
 	return initializeWorkspace(ctx, cmd, workDir, opts)
 }

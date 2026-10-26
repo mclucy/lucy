@@ -8,13 +8,14 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/mclucy/lucy/document"
 	"gopkg.in/yaml.v3"
 )
 
 // Values describes one configuration layer. A nil scalar inherits from the
 // previous layer; an explicit empty Java home requests automatic selection.
 type Values struct {
-	Java Java `yaml:"java" json:"java" description:"Java runtime selection."`
+	Java Java `yaml:"java,omitempty" json:"java" description:"Java runtime selection."`
 
 	node *yaml.Node
 }
@@ -65,11 +66,7 @@ func decodeValues(reader io.Reader) (*Values, error) {
 func encodeValues(values *Values) ([]byte, error) {
 	value := reflect.ValueOf(values).Elem()
 	if values.node == nil || !hasValue(value) {
-		var output strings.Builder
-		if err := renderFields(&output, value, "", false); err != nil {
-			return nil, err
-		}
-		return []byte(output.String()), nil
+		return document.RenderYAML(values, document.YAMLOptions{})
 	}
 	syncNode(values.node.Content[0], value)
 	var output bytes.Buffer
@@ -77,6 +74,10 @@ func encodeValues(values *Values) ([]byte, error) {
 	encoder.SetIndent(2)
 	encodeErr := encoder.Encode(values.node)
 	return output.Bytes(), errors.Join(encodeErr, encoder.Close())
+}
+
+func (values *Values) PlainBytes() ([]byte, error) {
+	return document.RenderYAML(values, document.YAMLOptions{NoComments: true})
 }
 
 func schemaField(t reflect.Type, name string) (reflect.StructField, bool) {
@@ -128,48 +129,6 @@ func validateFields(node *yaml.Node, t reflect.Type, prefix string) error {
 		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" {
 			return fmt.Errorf("config %s must be a string", prefix+key.Value)
 		}
-	}
-	return nil
-}
-
-// Field metadata drives both the live schema and the commented representation.
-func renderFields(output *strings.Builder, value reflect.Value, indent string, commented bool) error {
-	for i := range value.Type().NumField() {
-		field := value.Type().Field(i)
-		if !field.IsExported() {
-			continue
-		}
-		name := yamlName(field)
-		description := field.Tag.Get("description")
-		if name == "" || description == "" {
-			return fmt.Errorf("config field %s requires a YAML name and description", field.Name)
-		}
-		current := value.FieldByIndex(field.Index)
-		inactive := commented || !hasValue(current)
-		output.WriteString(indent + "# " + description + "\n")
-		prefix := indent
-		if inactive {
-			prefix += "# "
-		}
-		if current.Kind() == reflect.Struct {
-			output.WriteString(prefix + name + ":\n")
-			if err := renderFields(output, current, indent+"  ", inactive); err != nil {
-				return err
-			}
-			continue
-		}
-		if current.Kind() != reflect.Pointer || current.Type().Elem().Kind() != reflect.String {
-			return fmt.Errorf("unsupported config schema field %s", field.Name)
-		}
-		text := field.Tag.Get("example")
-		if !inactive {
-			text = current.Elem().String()
-		}
-		scalar, err := yaml.Marshal(text)
-		if err != nil {
-			return err
-		}
-		output.WriteString(prefix + name + ": " + strings.TrimSuffix(string(scalar), "\n") + "\n")
 	}
 	return nil
 }

@@ -11,10 +11,10 @@ import (
 
 // TrackedFile declares accepted contents and a change policy, not an observed file state.
 type TrackedFile struct {
-	Path       string `yaml:"path" json:"path"`
-	Immutable  bool   `yaml:"immutable,omitempty" json:"immutable,omitzero"`
-	Hash       string `yaml:"hash,omitempty" json:"hash,omitempty"`
-	RecoverURL string `yaml:"recover_url,omitempty" json:"recover_url,omitempty"`
+	Path       string `yaml:"path" json:"path" description:"Workspace-relative forward-slash path to the tracked file" example:"server.jar"`
+	Immutable  bool   `yaml:"immutable,omitempty" json:"immutable,omitzero" description:"Whether deviation from the accepted digest produces a warning" example:"true"`
+	Hash       string `yaml:"hash,omitempty" json:"hash,omitempty" description:"Accepted SHA-256 digest in sha256:hex form" example:"sha256:64 lowercase hexadecimal characters"`
+	RecoverURL string `yaml:"recover_url,omitempty" json:"recover_url,omitempty" description:"HTTP(S) URL used to restore missing file contents" example:"https://example.com/server.jar"`
 }
 
 // NormalizeTrackedFiles makes declaration order irrelevant to manifest fingerprints.

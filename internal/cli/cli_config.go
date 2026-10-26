@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	flagConfigGlobalName = "global"
-	flagConfigForceName  = "force"
+	flagConfigGlobalName     = "global"
+	flagConfigForceName      = "force"
+	flagConfigNoCommentsName = "no-comments"
 )
 
 var configCmd = &cobra.Command{
@@ -70,6 +71,11 @@ func NewConfigCommand(contracts *JSONContracts) *cobra.Command {
 		"f",
 		false,
 		"Overwrite an existing configuration file",
+	)
+	configCreateCmd.Flags().Bool(
+		flagConfigNoCommentsName,
+		false,
+		"Write the configuration without explanatory comments",
 	)
 	configCmd.AddCommand(configGetCmd, configSetCmd, configCreateCmd)
 	return configCmd
@@ -142,7 +148,14 @@ func actionConfigCreate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	result, err := service.Create(configScope(cmd), force)
+	noComments, err := cmd.Flags().GetBool(flagConfigNoCommentsName)
+	if err != nil {
+		return err
+	}
+	result, err := service.Create(
+		configScope(cmd),
+		config.CreateOptions{Force: force, NoComments: noComments},
+	)
 	if err != nil {
 		return err
 	}

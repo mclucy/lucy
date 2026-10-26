@@ -53,6 +53,8 @@ lucy config set --global java.home /usr/lib/jvm/temurin-21
 
 `lucy config create` writes a fresh configuration file for the selected scope. Every supported key appears in the file, commented out with an explanation, so the file is never empty even before you set a value.
 
+Use `--no-comments` to create a plain empty mapping instead. It still inherits global settings and built-in defaults; it does not write explicit values for those defaults. For example, `lucy config create --global --no-comments` creates a comment-free global file, and `lucy config create -f --no-comments` replaces workspace configuration with a fresh comment-free file.
+
 An existing file is never replaced without `--force` (`-f`). Forcing a create discards the values and comments already in that file. Without `--global`, it writes `.lucy/config.yaml` in the current workspace directory, including before `lucy init`; the global file can be created anywhere.
 
 [`lucy init`](/commands/init) creates the workspace file when it is missing and leaves an existing file unchanged. [`lucy deinit`](/commands/deinit) removes the workspace file with the rest of `.lucy`, but never removes global configuration.
@@ -69,6 +71,10 @@ In human mode, `set` and `create` report the file they wrote and say when the fi
 
 <ParamField query="--force, -f" type="boolean" default="false">
   Replace an existing file when used with `create`.
+</ParamField>
+
+<ParamField query="--no-comments" type="boolean" default="false">
+  Omit explanations and commented examples when used with `create`. This choice applies only to this invocation.
 </ParamField>
 
 See also [`lucy java`](/commands/java), [`lucy init`](/commands/init), and [Global Flags](/commands/global-flags).

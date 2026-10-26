@@ -39,6 +39,11 @@ func (s Service[T]) WithMode(mode os.FileMode) Service[T] {
 	return s
 }
 
+func (s Service[T]) WithEncoder(encode func(*T) ([]byte, error)) Service[T] {
+	s.codec.Encode = encode
+	return s
+}
+
 func (s Service[T]) Path() string { return s.path }
 
 func (s Service[T]) Read() (*T, error) {

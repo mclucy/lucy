@@ -13,7 +13,9 @@ lucy init
 
 ## Manifest shape
 
-The manifest has three top-level keys: `manifest_version`, `server`, and an optional `mcdr`.
+Generated manifests explain each field and show omitted optional fields as commented examples. These comments do not change the declared server or package requirements. Use `lucy init --no-comments` to omit comments from `lucy.yaml` and from a newly created workspace config. This also omits the YAML schema header; it never edits an existing `.lucy/config.yaml`.
+
+The required top-level keys are `manifest_version` and `server`. The optional `mcdr` and `files` sections declare MCDReforged and tracked files.
 
 ```yaml
 manifest_version: 1
@@ -69,6 +71,10 @@ The Minecraft version and the server version are not independent knobs. `lucy` r
 
 <ParamField query="--force, -f" type="boolean" default="false">
   Replace an existing `lucy.yaml`. Without it, `lucy init` refuses to touch a manifest that already exists. It never replaces `.lucy/config.yaml`.
+</ParamField>
+
+<ParamField query="--no-comments" type="boolean" default="false">
+  Omit generated comments and examples from `lucy.yaml` and any new `.lucy/config.yaml`. Existing workspace configuration is left unchanged.
 </ParamField>
 
 See also [Global Flags](/commands/global-flags).

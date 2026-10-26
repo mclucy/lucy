@@ -21,37 +21,37 @@ const (
 )
 
 type Manifest struct {
-	SchemaVersion int            `yaml:"manifest_version" json:"manifest_version"`
-	Server        ManifestServer `yaml:"server" json:"server"`
-	MCDR          *ManifestMCDR  `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
-	Files         []TrackedFile  `yaml:"files,omitempty" json:"files,omitempty"`
+	SchemaVersion int            `yaml:"manifest_version" json:"manifest_version" description:"Manifest schema version" example:"1"`
+	Server        ManifestServer `yaml:"server" json:"server" description:"Declared Minecraft server"`
+	MCDR          *ManifestMCDR  `yaml:"mcdr,omitempty" json:"mcdr,omitempty" description:"Optional MCDReforged installation"`
+	Files         []TrackedFile  `yaml:"files,omitempty" json:"files,omitempty" description:"Tracked files with an accepted digest and change policy" example:"[]"`
 }
 
 type ManifestCore struct {
-	Product        server.Product  `yaml:"product" json:"product"`
-	ProductVersion version.Version `yaml:"product_version,omitempty" json:"product_version"`
-	Repository     string          `yaml:"repository,omitempty" json:"repository,omitempty"`
-	FilePattern    string          `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty"`
+	Product        server.Product  `yaml:"product" json:"product" description:"Server implementation product" example:"paper"`
+	ProductVersion version.Version `yaml:"product_version,omitempty" json:"product_version" description:"Server product version selector" example:"any"`
+	Repository     string          `yaml:"repository,omitempty" json:"repository,omitempty" description:"GitHub owner/repository for a product without built-in resolution" example:"owner/repository"`
+	FilePattern    string          `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty" description:"Glob pattern matching the server artifact filename" example:"'*.jar'"`
 }
 
 type ManifestServer struct {
-	Minecraft version.Version                              `yaml:"minecraft" json:"minecraft"`
-	Directory string                                       `yaml:"directory,omitempty" json:"directory"`
-	Core      ManifestCore                                 `yaml:"core" json:"core"`
-	Java      *ManifestJava                                `yaml:"java,omitempty" json:"java,omitempty"`
-	Packages  map[catalog.Ecosystem]map[string]Requirement `yaml:"packages" json:"packages"`
+	Minecraft version.Version                              `yaml:"minecraft" json:"minecraft" description:"Minecraft version the server runs" example:"1.21.4"`
+	Directory string                                       `yaml:"directory,omitempty" json:"directory" description:"Workspace-relative server directory" example:"."`
+	Core      ManifestCore                                 `yaml:"core" json:"core" description:"Server implementation declaration"`
+	Java      *ManifestJava                                `yaml:"java,omitempty" json:"java,omitempty" description:"Java version and distribution requirements"`
+	Packages  map[catalog.Ecosystem]map[string]Requirement `yaml:"packages" json:"packages" description:"Package requirements grouped by ecosystem" example:"{}"`
 }
 
 type ManifestMCDR struct {
-	Directory string                 `yaml:"directory,omitempty" json:"directory"`
-	Version   version.Version        `yaml:"version,omitempty" json:"version"`
-	Packages  map[string]Requirement `yaml:"packages" json:"packages"`
+	Directory string                 `yaml:"directory,omitempty" json:"directory" description:"Workspace-relative MCDReforged directory" example:"."`
+	Version   version.Version        `yaml:"version,omitempty" json:"version" description:"MCDReforged version selector" example:"latest"`
+	Packages  map[string]Requirement `yaml:"packages" json:"packages" description:"MCDReforged plugin requirements by provider:project reference" example:"{}"`
 }
 
 type Requirement struct {
-	Selector    version.Version `yaml:"selector,omitempty" json:"selector"`
-	FilePattern string          `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty"`
-	Enabled     *bool           `yaml:"enabled,omitempty" json:"enabled"`
+	Selector    version.Version `yaml:"selector,omitempty" json:"selector" description:"Version selector such as any, stable, beta, a tag, or an exact version" example:"stable"`
+	FilePattern string          `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty" description:"Glob pattern matching the upstream artifact filename" example:"'*.jar'"`
+	Enabled     *bool           `yaml:"enabled,omitempty" json:"enabled" description:"Whether the requirement is active in the resolved environment" example:"true"`
 }
 
 func (r Requirement) IsEnabled() bool { return r.Enabled == nil || *r.Enabled }
@@ -248,15 +248,25 @@ func (m *Manifest) Fingerprint() (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-// CanonicalBytes returns the canonical YAML bytes of the document, including
-// the schema header. It writes nothing.
+// CanonicalBytes includes field documentation and the YAML schema header.
 func (m *Manifest) CanonicalBytes() ([]byte, error) {
+	return m.yamlBytes(YAMLOptions{})
+}
+
+func (m *Manifest) PlainBytes() ([]byte, error) {
+	return m.yamlBytes(YAMLOptions{NoComments: true})
+}
+
+func (m *Manifest) yamlBytes(options YAMLOptions) ([]byte, error) {
 	if err := m.Normalize(); err != nil {
 		return nil, err
 	}
-	data, err := yaml.Marshal(m)
+	data, err := RenderYAML(m, options)
 	if err != nil {
 		return nil, err
+	}
+	if options.NoComments {
+		return data, nil
 	}
 	return append([]byte("# yaml-language-server: $schema="+ManifestSchemaURL+"\n"), data...), nil
 }

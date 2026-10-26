@@ -37,7 +37,12 @@ func (s *Service) lock(scope Scope) (*fsutil.FileLock, error) {
 	return fsutil.TryLockFile(filepath.Join(directory, "writer.lock"))
 }
 
-func (s *Service) Create(scope Scope, force bool) (result *WriteResult, resultErr error) {
+type CreateOptions struct {
+	Force      bool
+	NoComments bool
+}
+
+func (s *Service) Create(scope Scope, options CreateOptions) (result *WriteResult, resultErr error) {
 	writer, err := s.lock(scope)
 	if err != nil {
 		return nil, err
@@ -47,15 +52,18 @@ func (s *Service) Create(scope Scope, force bool) (result *WriteResult, resultEr
 	if err != nil {
 		return nil, err
 	}
+	if options.NoComments {
+		file = file.WithEncoder((*Values).PlainBytes)
+	}
 	_, err = os.Lstat(file.Path())
 	created := errors.Is(err, os.ErrNotExist)
 	if err != nil && !created {
 		return nil, err
 	}
-	if !created && !force {
+	if !created && !options.Force {
 		return nil, fmt.Errorf("config %s already exists; use --force to replace it with a fresh config", file.Path())
 	}
-	if force {
+	if options.Force {
 		err = file.Write(&Values{})
 	} else {
 		err = file.Create(&Values{})
