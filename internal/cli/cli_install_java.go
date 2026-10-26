@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/javainstall"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/progress"
 	"github.com/mclucy/lucy/terminal/style"
@@ -23,7 +23,7 @@ func (o *installOutput) provisionJava(host javainstall.Host, offline bool) func(
 		if check.Source == javaruntime.SourceLocal {
 			log.Info(
 				"java installation skipped",
-				"reason", manifest.LocalFilename+" selects the Java runtime",
+				"reason", document.LocalFilename+" selects the Java runtime",
 				"home", check.LocalHome,
 			)
 			return nil

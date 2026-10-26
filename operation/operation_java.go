@@ -7,12 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 )
 
 // JavaChange edits the Java selection of a workspace. A nil field leaves that
@@ -32,7 +31,7 @@ type JavaChange struct {
 // JavaChangeResult reports the Java selection after a change.
 type JavaChangeResult struct {
 	// Java is the override in lucy.yaml; nil means auto.
-	Java *manifest.Java `json:"java,omitempty"`
+	Java *document.ManifestJava `json:"java,omitempty"`
 	// Home is the Java home that the local settings select; empty means Lucy
 	// chooses.
 	Home              string `json:"home,omitempty"`
@@ -54,11 +53,11 @@ func SetJava(ctx context.Context, root string, change JavaChange) (result *JavaC
 	if err := workspacewrite.RecoverInstall(root); err != nil {
 		return nil, err
 	}
-	d, err := manifest.Read(root)
+	d, err := document.ManifestFile(root).Read()
 	if err != nil {
 		return nil, err
 	}
-	local, err := manifest.ReadLocal(root)
+	local, err := document.ReadLocal(root)
 	if err != nil {
 		return nil, err
 	}
@@ -79,12 +78,12 @@ func SetJava(ctx context.Context, root string, change JavaChange) (result *JavaC
 	return result, nil
 }
 
-func setJavaOverride(root string, d *manifest.Document, change JavaChange, result *JavaChangeResult) error {
-	before, err := manifest.Fingerprint(d)
+func setJavaOverride(root string, d *document.Manifest, change JavaChange, result *JavaChangeResult) error {
+	before, err := d.Fingerprint()
 	if err != nil {
 		return err
 	}
-	override := manifest.Java{}
+	override := document.ManifestJava{}
 	if d.Server.Java != nil {
 		override = *d.Server.Java
 	}
@@ -95,7 +94,7 @@ func setJavaOverride(root string, d *manifest.Document, change JavaChange, resul
 		override.Distribution = *change.Distribution
 	}
 	d.Server.Java = &override
-	after, err := manifest.Fingerprint(d)
+	after, err := d.Fingerprint()
 	if err != nil {
 		return err
 	}
@@ -103,7 +102,7 @@ func setJavaOverride(root string, d *manifest.Document, change JavaChange, resul
 		log.Debug("java override unchanged", "reason", "lucy.yaml already declares it")
 		return nil
 	}
-	if err := manifest.Write(root, d); err != nil {
+	if err := document.ManifestFile(root).Write(d); err != nil {
 		return err
 	}
 	result.PublishedManifest = true
@@ -112,7 +111,7 @@ func setJavaOverride(root string, d *manifest.Document, change JavaChange, resul
 		"version", override.Version,
 		"distribution", override.Distribution.String(),
 	)
-	lock, err := lockfile.Read(root)
+	lock, err := document.LockFile(root).Read()
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -124,8 +123,8 @@ func setJavaOverride(root string, d *manifest.Document, change JavaChange, resul
 		return nil
 	}
 	lock.ManifestFingerprint = after
-	lock.Server.Java = lockfile.NewJava(lock.Server.Java.Advisory, d.Server.Java)
-	if err := lockfile.Write(root, lock); err != nil {
+	lock.Server.Java = document.NewLockedJava(lock.Server.Java.Advisory, d.Server.Java)
+	if err := document.LockFile(root).Write(lock); err != nil {
 		return err
 	}
 	result.PublishedLock = true
@@ -137,10 +136,10 @@ func setJavaOverride(root string, d *manifest.Document, change JavaChange, resul
 // resolved target, so a package manager link such as
 // /opt/homebrew/opt/openjdk@21 survives upgrades. A home inside the workspace
 // is stored relative to it, so a bundled runtime keeps working after a move.
-func setLocalJava(ctx context.Context, root string, local *manifest.Local, path string) error {
+func setLocalJava(ctx context.Context, root string, local *document.Local, path string) error {
 	if path == "" {
 		local.Java = nil
-		return manifest.WriteLocal(root, local)
+		return document.WriteLocal(root, local)
 	}
 	home, err := filepath.Abs(path)
 	if err != nil {
@@ -158,7 +157,7 @@ func setLocalJava(ctx context.Context, root string, local *manifest.Local, path 
 		relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		home = relative
 	}
-	local.Java = &manifest.LocalJava{Home: home}
+	local.Java = &document.LocalJava{Home: home}
 	log.Info("local java selected", "home", home, "version", installation.Version)
-	return manifest.WriteLocal(root, local)
+	return document.WriteLocal(root, local)
 }

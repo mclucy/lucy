@@ -7,13 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/server"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/filetrack"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
@@ -180,8 +179,8 @@ func (r *Result) Changed() bool {
 }
 
 func (r *Result) applyChanges(
-	before, after *lockfile.Document,
-	d *manifest.Document,
+	before, after *document.Lock,
+	d *document.Manifest,
 ) {
 	if r == nil || after == nil {
 		return
@@ -191,7 +190,7 @@ func (r *Result) applyChanges(
 	r.Packages = packageChanges(before, after, d)
 }
 
-func serverChange(before, after *lockfile.Document) ServerChange {
+func serverChange(before, after *document.Lock) ServerChange {
 	current := ServerChange{
 		Product:   after.Server.Product,
 		Minecraft: after.Server.Minecraft,
@@ -218,10 +217,10 @@ type packageView struct {
 }
 
 func packageChanges(
-	before, after *lockfile.Document,
-	d *manifest.Document,
+	before, after *document.Lock,
+	d *document.Manifest,
 ) []PackageChange {
-	declared := map[requirementKey]manifest.Requirement{}
+	declared := map[requirementKey]document.Requirement{}
 	if d != nil {
 		declared = declaredRequirements(d)
 	}
@@ -304,8 +303,8 @@ func packageChanges(
 }
 
 func packageViews(
-	doc *lockfile.Document,
-	declared map[requirementKey]manifest.Requirement,
+	doc *document.Lock,
+	declared map[requirementKey]document.Requirement,
 ) map[string]packageView {
 	views := map[string]packageView{}
 	if doc == nil {
@@ -342,7 +341,7 @@ func packageViews(
 // enabledReference returns the reference a package records for itself. A
 // package the current manifest no longer names, such as one being removed,
 // still carries the requirement that declared it.
-func enabledReference(p *lockfile.Package) string {
+func enabledReference(p *document.Package) string {
 	for _, binding := range p.Requirements {
 		if binding.Enabled {
 			return binding.Reference
@@ -356,7 +355,7 @@ func enabledReference(p *lockfile.Package) string {
 
 // packageNames resolves the display name of packages that no requirement
 // declares: the module that dependents refer to, else the project identity.
-func packageNames(doc *lockfile.Document) map[string]string {
+func packageNames(doc *document.Lock) map[string]string {
 	names := map[string]string{}
 	if doc == nil {
 		return names
@@ -393,7 +392,7 @@ func packageNames(doc *lockfile.Document) map[string]string {
 }
 
 func dependencyNames(
-	doc *lockfile.Document,
+	doc *document.Lock,
 	views map[string]packageView,
 ) map[string][]string {
 	dependents := map[string][]string{}
@@ -423,7 +422,7 @@ func dependencyNames(
 	return dependents
 }
 
-func moduleOwners(doc *lockfile.Document) map[string]string {
+func moduleOwners(doc *document.Lock) map[string]string {
 	owners := map[string]string{}
 	if doc == nil {
 		return owners
@@ -441,15 +440,15 @@ func moduleOwners(doc *lockfile.Document) map[string]string {
 	return owners
 }
 
-func moduleLookupKey(p *lockfile.Package, moduleID string) string {
+func moduleLookupKey(p *document.Package, moduleID string) string {
 	return string(p.Environment) + "|" + string(p.Ecosystem) + "|" + strings.ToLower(moduleID)
 }
 
 func dependencyTarget(
-	source *lockfile.Package,
+	source *document.Package,
 	dependency catalog.DescriptorDependency,
 	moduleOwner map[string]string,
-	doc *lockfile.Document,
+	doc *document.Lock,
 ) string {
 	if dependency.Provider != "" && dependency.ProjectID != "" {
 		for i := range doc.Packages {
@@ -472,7 +471,7 @@ func dependencyTarget(
 	return moduleOwner[moduleLookupKey(source, moduleID)]
 }
 
-func lockedPackageKey(p *lockfile.Package) string {
+func lockedPackageKey(p *document.Package) string {
 	identity := p.ProjectID
 	if identity == "" {
 		identity = p.Filename
@@ -488,7 +487,7 @@ func lockedPackageKey(p *lockfile.Package) string {
 	)
 }
 
-func findPackage(doc *lockfile.Document, id string) *lockfile.Package {
+func findPackage(doc *document.Lock, id string) *document.Package {
 	if doc == nil {
 		return nil
 	}
@@ -501,8 +500,8 @@ func findPackage(doc *lockfile.Document, id string) *lockfile.Package {
 }
 
 func declaredReference(
-	p *lockfile.Package,
-	declared map[requirementKey]manifest.Requirement,
+	p *document.Package,
+	declared map[requirementKey]document.Requirement,
 ) string {
 	for _, binding := range p.Requirements {
 		key := requirementKey{p.Environment, p.Ecosystem, binding.Reference}
@@ -514,14 +513,14 @@ func declaredReference(
 }
 
 func referenceName(reference string) string {
-	_, project, err := manifest.ParseReference(reference)
+	_, project, err := document.ParseReference(reference)
 	if err != nil {
 		return reference
 	}
 	return project
 }
 
-func countDeclared(d *manifest.Document) int {
+func countDeclared(d *document.Manifest) int {
 	if d == nil {
 		return 0
 	}
@@ -543,7 +542,7 @@ func countDeclared(d *manifest.Document) int {
 	return count
 }
 
-func packageVersionDialect(p *lockfile.Package) versionpkg.Dialect {
+func packageVersionDialect(p *document.Package) versionpkg.Dialect {
 	for _, module := range p.Modules {
 		if module.VersionDialect.Valid() {
 			return module.VersionDialect

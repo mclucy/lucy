@@ -8,13 +8,13 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
 
-func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Document, overwrite bool) error {
+func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lock, overwrite bool) error {
 	raw, err := os.ReadFile(filepath.Join(root, ".lucy", "install.yaml"))
 	owned := map[string]bool{}
 	if err == nil {
@@ -103,7 +103,7 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 // digests the lock pins for it. A destination that already holds those bytes
 // belongs to the locked installation even when no receipt records it, which is
 // the state initialization leaves behind.
-func lockedPackageDestinations(d *lockfile.Document) map[string]map[string]string {
+func lockedPackageDestinations(d *document.Lock) map[string]map[string]string {
 	destinations := make(map[string]map[string]string, len(d.Packages))
 	for i := range d.Packages {
 		p := &d.Packages[i]
@@ -123,10 +123,10 @@ func lockedPackageDestinations(d *lockfile.Document) map[string]map[string]strin
 // artifact duplicates. Environment and ecosystem must match, because one
 // module identity may exist independently on the server and in MCDR.
 func unmanagedConflict(
-	d *lockfile.Document,
-	planned *lockfile.Package,
+	d *document.Lock,
+	planned *document.Package,
 	discovered []catalog.DescriptorModule,
-) (*lockfile.Package, string) {
+) (*document.Package, string) {
 	for i := range d.Packages {
 		other := &d.Packages[i]
 		if other.Environment != planned.Environment || other.Ecosystem != planned.Ecosystem {

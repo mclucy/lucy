@@ -7,8 +7,7 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/cas"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	documentpkg "github.com/mclucy/lucy/document"
 )
 
 // Reclaimed counts content store objects that a sweep removed because no
@@ -70,9 +69,9 @@ func references(root string, files *os.Root) (map[cas.Digest]struct{}, error) {
 	}
 	if err := addDocumentReferences(
 		files,
-		manifest.Filename,
-		func(reader io.Reader) ([]manifest.TrackedFile, error) {
-			document, err := manifest.Decode(reader)
+		documentpkg.ManifestFilename,
+		func(reader io.Reader) ([]documentpkg.TrackedFile, error) {
+			document, err := documentpkg.DecodeManifest(reader)
 			if err != nil {
 				return nil, err
 			}
@@ -84,9 +83,9 @@ func references(root string, files *os.Root) (map[cas.Digest]struct{}, error) {
 	}
 	if err := addDocumentReferences(
 		files,
-		lockfile.Filename,
-		func(reader io.Reader) ([]manifest.TrackedFile, error) {
-			document, err := lockfile.Decode(reader)
+		documentpkg.LockFilename,
+		func(reader io.Reader) ([]documentpkg.TrackedFile, error) {
+			document, err := documentpkg.DecodeLock(reader)
 			if err != nil {
 				return nil, err
 			}
@@ -129,7 +128,7 @@ func addPendingReferences(files *os.Root, referenced map[cas.Digest]struct{}) er
 func addDocumentReferences(
 	files *os.Root,
 	name string,
-	decode func(io.Reader) ([]manifest.TrackedFile, error),
+	decode func(io.Reader) ([]documentpkg.TrackedFile, error),
 	referenced map[cas.Digest]struct{},
 ) error {
 	reader, err := files.Open(name)
@@ -154,7 +153,7 @@ func addDocumentReferences(
 
 func addChangeReferences(referenced map[cas.Digest]struct{}, changes []Change) error {
 	for _, change := range changes {
-		for _, state := range []*manifest.TrackedFile{change.Before, change.After} {
+		for _, state := range []*documentpkg.TrackedFile{change.Before, change.After} {
 			if state == nil {
 				continue
 			}

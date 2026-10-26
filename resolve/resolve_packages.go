@@ -10,12 +10,11 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/upstream"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 
@@ -36,7 +35,7 @@ func catalogueRegistry(provider catalog.Provider) catalog.Registry {
 	return registry
 }
 
-func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
+func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	ctx := request.Context
 	if ctx == nil {
 		ctx = context.Background()
@@ -50,8 +49,8 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	expandDependencies := request.ExpandDependencies
 	trace := request.Trace
 	var requests []projectRequest
-	appendRequest := func(environment serverpkg.Environment, ecosystem catalog.Ecosystem, ref string, r manifest.Requirement) error {
-		provider, project, err := manifest.ParseReference(ref)
+	appendRequest := func(environment serverpkg.Environment, ecosystem catalog.Ecosystem, ref string, r document.Requirement) error {
+		provider, project, err := document.ParseReference(ref)
 		if err != nil {
 			return err
 		}
@@ -76,7 +75,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			},
 			display: display,
 			origin:  originManifest,
-			requirements: []lockfile.RequirementBinding{
+			requirements: []document.RequirementBinding{
 				{
 					Reference:   ref,
 					Selector:    r.Selector,
@@ -129,7 +128,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	}
 	candidates := map[projectKey][]upstream.Candidate{}
 	canonical := map[projectKey]projectKey{}
-	chosen := map[projectKey]lockfile.Package{}
+	chosen := map[projectKey]document.Package{}
 	conflicts := map[projectKey][]upstream.ProjectDependency{}
 	cache := request.Cache
 	attempts := 0
@@ -159,7 +158,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		}
 		trace.state(len(chosen), len(pending))
 		if len(pending) == 0 {
-			all := make([]lockfile.Package, 0, len(chosen))
+			all := make([]document.Package, 0, len(chosen))
 			for _, p := range chosen {
 				all = append(all, p)
 			}
@@ -250,7 +249,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			return false
 		}
 		if !active {
-			p := lockfile.Package{
+			p := document.Package{
 				Environment:  r.key.environment,
 				Ecosystem:    r.key.ecosystem,
 				Provider:     r.key.provider,
@@ -269,7 +268,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		// here, because a real demand outranks it. Selecting a file replaces
 		// the entry, so the binding's requirements have to travel into the
 		// selection and back out again when the selection does not resolve.
-		var artifactless lockfile.Package
+		var artifactless document.Package
 		replacingArtifactless := false
 		if prior, ok := chosen[r.key]; ok && prior.Artifact.Filename == "" {
 			artifactless, replacingArtifactless = prior, true
@@ -394,7 +393,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			if dependencyDemand {
 				dependencyOf = []catalog.Ref{r.dependencyOf}
 			}
-			chosen[r.key] = lockfile.Package{
+			chosen[r.key] = document.Package{
 				Environment:  r.key.environment,
 				Ecosystem:    r.key.ecosystem,
 				Artifact:     a,
@@ -441,7 +440,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 							}
 						}
 						if dep.Kind == catalog.DependencyKindOptional {
-							dependency.requirements = []lockfile.RequirementBinding{
+							dependency.requirements = []document.RequirementBinding{
 								{
 									Reference: dep.Provider.String() + ":" + dep.ProjectID,
 									Selector:  versionpkg.Stable,
@@ -484,7 +483,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 		return false
 	}
 	search := func(allowBroken bool) bool {
-		chosen = map[projectKey]lockfile.Package{}
+		chosen = map[projectKey]document.Package{}
 		attempts = 0
 		strict = !allowBroken
 		lastErr = nil
@@ -525,7 +524,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 			return nil, nil, finalFailure()
 		}
 	}
-	var out []lockfile.Package
+	var out []document.Package
 	for _, p := range chosen {
 		// A requirement the manifest disables and nothing demands pins no
 		// artifact, so recording it would leave the lock claiming a package
@@ -560,7 +559,7 @@ func Packages(request PackagesRequest) ([]lockfile.Package, []error, error) {
 	return out, warnings, nil
 }
 
-func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
+func mergeArtifactSelections(packages []document.Package) []document.Package {
 	type key struct {
 		environment            serverpkg.Environment
 		ecosystem              catalog.Ecosystem
@@ -568,7 +567,7 @@ func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
 		project, release, file string
 	}
 	index := map[key]int{}
-	out := make([]lockfile.Package, 0, len(packages))
+	out := make([]document.Package, 0, len(packages))
 	for _, p := range packages {
 		k := key{
 			p.Environment,
@@ -596,7 +595,7 @@ func mergeArtifactSelections(packages []lockfile.Package) []lockfile.Package {
 
 // sortPackages orders packages by their persisted identity so validation
 // reports findings in a stable order.
-func sortPackages(packages []lockfile.Package) {
+func sortPackages(packages []document.Package) {
 	sort.Slice(packages, func(i, j int) bool {
 		a, b := &packages[i], &packages[j]
 		if n := strings.Compare(string(a.Environment), string(b.Environment)); n != 0 {

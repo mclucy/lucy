@@ -11,10 +11,10 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/server"
 	"github.com/spf13/cobra"
@@ -99,7 +99,7 @@ type bisectMod struct {
 // to re-enable entries one by one.
 type bisectState struct {
 	Mods     []bisectMod        `json:"mods"`
-	Original *manifest.Document `json:"original"`
+	Original *document.Manifest `json:"original"`
 	L        int                `json:"l"`
 	R        int                `json:"r"`
 }
@@ -197,7 +197,7 @@ func validateBisectState(session *bisectState) error {
 // back as warnings so the command can fold them into its result instead of
 // writing them past a JSON document.
 func applyBisectRange(ctx context.Context, workDir string, mods []bisectMod, mid int) (enabled, disabled int, warnings []string, err error) {
-	doc, err := manifest.Read(workDir)
+	doc, err := document.ManifestFile(workDir).Read()
 	if err != nil {
 		return 0, 0, nil, err
 	}
@@ -215,7 +215,7 @@ func applyBisectRange(ctx context.Context, workDir string, mods []bisectMod, mid
 	if changed == 0 {
 		return 0, 0, nil, nil
 	}
-	if err := manifest.Write(workDir, doc); err != nil {
+	if err := document.ManifestFile(workDir).Write(doc); err != nil {
 		return 0, 0, nil, fmt.Errorf("write manifest: %w", err)
 	}
 	result, err := operation.Sync(ctx, workDir, install.Options{})
@@ -227,8 +227,8 @@ func applyBisectRange(ctx context.Context, workDir string, mods []bisectMod, mid
 
 // setRequirementEnabled flips one manifest requirement and reports whether
 // the entry was present.
-func setRequirementEnabled(doc *manifest.Document, mod bisectMod, enabled bool) bool {
-	var packages map[string]manifest.Requirement
+func setRequirementEnabled(doc *document.Manifest, mod bisectMod, enabled bool) bool {
+	var packages map[string]document.Requirement
 	switch mod.Environment {
 	case server.EnvironmentServer:
 		if doc.Server.Packages == nil {
@@ -256,11 +256,11 @@ func setRequirementEnabled(doc *manifest.Document, mod bisectMod, enabled bool) 
 // restoreBisectManifest writes back the manifest captured at session start
 // and reports how many requirement entries that restored. As with applying a
 // range, sync facts travel with the result.
-func restoreBisectManifest(ctx context.Context, workDir string, original *manifest.Document) (restored int, warnings []string, err error) {
+func restoreBisectManifest(ctx context.Context, workDir string, original *document.Manifest) (restored int, warnings []string, err error) {
 	if original == nil {
 		return 0, nil, nil
 	}
-	if err := manifest.Write(workDir, original); err != nil {
+	if err := document.ManifestFile(workDir).Write(original); err != nil {
 		return 0, nil, fmt.Errorf("restore manifest: %w", err)
 	}
 	result, err := operation.Sync(ctx, workDir, install.Options{})
@@ -295,7 +295,7 @@ func syncWarnings(result *install.Result) []string {
 // countRequirements counts every declared requirement entry across the
 // server and MCDR manifests, so the reported restore covers every runtime
 // rather than one loader map.
-func countRequirements(doc *manifest.Document) int {
+func countRequirements(doc *document.Manifest) int {
 	total := 0
 	for _, packages := range doc.Server.Packages {
 		total += len(packages)
@@ -399,7 +399,7 @@ func bisectModLabel(mod bisectMod) string {
 // bisectCandidates returns the manifest requirements a session may toggle,
 // ordered so a package always follows the packages it depends on.
 func bisectCandidates(workDir string, output *Output) ([]bisectMod, []string, error) {
-	doc, err := manifest.Read(workDir)
+	doc, err := document.ManifestFile(workDir).Read()
 	if err != nil {
 		return nil, nil, fmt.Errorf("read manifest: %w", err)
 	}
@@ -445,12 +445,12 @@ func bisectCandidates(workDir string, output *Output) ([]bisectMod, []string, er
 // requirementEnabled reports whether the manifest still enables the given
 // requirement entry.
 func requirementEnabled(
-	doc *manifest.Document,
+	doc *document.Manifest,
 	environment server.Environment,
 	ecosystem catalog.Ecosystem,
 	reference string,
 ) bool {
-	var packages map[string]manifest.Requirement
+	var packages map[string]document.Requirement
 	switch environment {
 	case server.EnvironmentServer:
 		if doc.Server.Packages == nil {
@@ -493,7 +493,7 @@ func actionBisectStart(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	original, err := manifest.Read(workDir)
+	original, err := document.ManifestFile(workDir).Read()
 	if err != nil {
 		return fmt.Errorf("read manifest: %w", err)
 	}

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/server"
 )
 
@@ -34,9 +34,9 @@ func TestFileTrackRejectsForbiddenAndNonRegularPaths(t *testing.T) {
 			if err := mkdirIfMissing(w.path("server")); err != nil {
 				t.Fatal(err)
 			}
-			before := w.read(t, manifest.Filename)
+			before := w.read(t, document.ManifestFilename)
 			w.lucyFail(t, "file", "track", test.path)
-			w.requireBytes(t, manifest.Filename, before)
+			w.requireBytes(t, document.ManifestFilename, before)
 			w.requireBytes(t, "config/retained.txt", []byte("retained\n"))
 			w.requireAbsent(t, ".lucy/history/files.jsonl")
 		})
@@ -49,12 +49,12 @@ func TestFileTrackRejectsTraversalToExistingFile(t *testing.T) {
 	outside := []byte("outside the workspace\n")
 	w.write(t, "../outside.txt", outside, 0o644)
 	w.requireBytes(t, "../outside.txt", outside)
-	before := w.read(t, manifest.Filename)
+	before := w.read(t, document.ManifestFilename)
 
 	w.lucyFail(t, "file", "track", "../outside.txt")
 
 	w.requireBytes(t, "../outside.txt", outside)
-	w.requireBytes(t, manifest.Filename, before)
+	w.requireBytes(t, document.ManifestFilename, before)
 	w.requireAbsent(t, ".lucy/history/files.jsonl")
 }
 
@@ -88,14 +88,14 @@ func TestFileListReportsSymlinkedDeclarationAsError(t *testing.T) {
 		t.Fatalf("write symlink target: %v", err)
 	}
 	w.symlink(t, outsideDirectory, "outside")
-	w.writeManifest(t, &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+	w.writeManifest(t, &document.Manifest{
+		SchemaVersion: document.ManifestSchemaVersion,
+		Server: document.ManifestServer{
 			Minecraft: "1.21.4",
 			Directory: "server",
-			Core:      manifest.Core{Product: server.ProductMinecraft},
+			Core:      document.ManifestCore{Product: server.ProductMinecraft},
 		},
-		Files: []manifest.TrackedFile{manifestTrackedFile("outside/inside.txt", acceptedHash(inside))},
+		Files: []document.TrackedFile{manifestTrackedFile("outside/inside.txt", acceptedHash(inside))},
 	})
 
 	status := w.statusOf(t, "outside/inside.txt")
@@ -109,17 +109,17 @@ func TestFileManifestRejectsDuplicateNormalizedPaths(t *testing.T) {
 	duplicateHash := acceptedHash([]byte("shared\n"))
 
 	w := newWorkspace(t)
-	w.write(t, manifest.Filename, []byte(sameShape+
+	w.write(t, document.ManifestFilename, []byte(sameShape+
 		"  - path: ./config/a.txt\n    hash: "+duplicateHash+"\n"+
 		"  - path: config/a.txt\n    hash: "+duplicateHash+"\n"), 0o644)
-	before := w.read(t, manifest.Filename)
+	before := w.read(t, document.ManifestFilename)
 	w.lucyFail(t, "file", "list")
 	w.lucyFail(t, "file", "track", "config/b.txt")
-	w.requireBytes(t, manifest.Filename, before)
+	w.requireBytes(t, document.ManifestFilename, before)
 	w.requireAbsent(t, ".lucy/history/files.jsonl")
 
 	casing := newWorkspace(t)
-	casing.write(t, manifest.Filename, []byte(sameShape+
+	casing.write(t, document.ManifestFilename, []byte(sameShape+
 		"  - path: config/A.txt\n    hash: "+duplicateHash+"\n"+
 		"  - path: config/a.txt\n    hash: "+duplicateHash+"\n"), 0o644)
 	casing.lucyFail(t, "file", "list")
@@ -128,7 +128,7 @@ func TestFileManifestRejectsDuplicateNormalizedPaths(t *testing.T) {
 
 func TestFileManifestRejectsImmutableWithoutHash(t *testing.T) {
 	w := newWorkspace(t)
-	w.write(t, manifest.Filename, []byte(
+	w.write(t, document.ManifestFilename, []byte(
 		"manifest_version: 1\nserver:\n  minecraft: 1.21.4\n  directory: server\n  core:\n    distribution: vanilla\nfiles:\n"+
 			"  - path: config/rules.txt\n    immutable: true\n"), 0o644)
 	w.lucyFail(t, "file", "list")
@@ -148,13 +148,13 @@ func TestFileTrackRejectsConflictingChoices(t *testing.T) {
 	w.requireBytes(t, path, []byte("rules\n"))
 	w.requireAbsent(t, ".lucy/history/files.jsonl")
 	w.lucyOK(t, "file", "track", path)
-	beforeManifest := w.read(t, manifest.Filename)
+	beforeManifest := w.read(t, document.ManifestFilename)
 	beforeHistory := w.read(t, ".lucy/history/files.jsonl")
 	w.lucyFail(t, "file", "update", path, "--from-source")
 	w.lucyFail(t, "file", "update", "--all", path)
 	w.lucyFail(t, "file", "recover", "--all", path)
 	w.lucyFail(t, "file", "update")
-	w.requireBytes(t, manifest.Filename, beforeManifest)
+	w.requireBytes(t, document.ManifestFilename, beforeManifest)
 	w.requireBytes(t, ".lucy/history/files.jsonl", beforeHistory)
 	w.requireBytes(t, path, []byte("rules\n"))
 	if files := w.readManifest(t).Files; len(files) != 1 || files[0].Hash == "" {

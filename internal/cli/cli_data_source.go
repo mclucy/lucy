@@ -7,10 +7,9 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/report"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
@@ -60,12 +59,12 @@ func LoadDependencyData(workDir string, forceLive bool, output *Output) (
 ) {
 	var (
 		env    ServerEnvironment
-		lock   *lockfile.Document
+		lock   *document.Lock
 		origin = OriginLock
 	)
 
 	if !forceLive {
-		doc, err := lockfile.Read(workDir)
+		doc, err := document.LockFile(workDir).Read()
 		if err == nil {
 			lock = doc
 			env = environmentFromLock(doc)
@@ -308,7 +307,7 @@ func competingEntryPoints(
 
 // environmentFromLock reads the server identity from the lock's explicit
 // fields. The lock always records exact versions, so nothing is inferred.
-func environmentFromLock(lock *lockfile.Document) ServerEnvironment {
+func environmentFromLock(lock *document.Lock) ServerEnvironment {
 	return ServerEnvironment{
 		Core:             lock.Server.Product.String(),
 		GameVersion:      lock.Server.Minecraft.String(),
@@ -321,7 +320,7 @@ func environmentFromLock(lock *lockfile.Document) ServerEnvironment {
 // Server packages come first; the bootstrap inputs name the loader when the
 // runtime has no packages of its own. It returns EcosystemUnspecified when
 // the evidence disagrees.
-func ecosystemFromLock(lock *lockfile.Document) catalog.Ecosystem {
+func ecosystemFromLock(lock *document.Lock) catalog.Ecosystem {
 	var found catalog.Ecosystem
 	for _, pkg := range lock.Packages {
 		if pkg.Environment != serverpkg.EnvironmentServer ||
@@ -350,7 +349,7 @@ func ecosystemFromLock(lock *lockfile.Document) catalog.Ecosystem {
 	return found
 }
 
-func ecosystemVersionFromLock(lock *lockfile.Document) string {
+func ecosystemVersionFromLock(lock *document.Lock) string {
 	ecosystem := ecosystemFromLock(lock)
 	if ecosystem == catalog.EcosystemUnspecified {
 		return ""
@@ -373,7 +372,7 @@ func environmentFromWorkspace(ws *workspace.Workspace, env ServerEnvironment) Se
 	}
 	if env.Core == "" || env.GameVersion == "" ||
 		env.Ecosystem == catalog.EcosystemUnspecified {
-		if doc, err := manifest.Read(ws.ServerDir); err == nil {
+		if doc, err := document.ManifestFile(ws.ServerDir).Read(); err == nil {
 			if env.Core == "" {
 				env.Core = doc.Server.Core.Product.String()
 			}

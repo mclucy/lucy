@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/server"
 
 	// ModuleProblem names the module requirement that a candidate cannot satisfy,
@@ -28,7 +28,7 @@ type ModuleProblem struct {
 
 func (p ModuleProblem) Error() string { return p.Message }
 
-func moduleProblem(owner *lockfile.Package, message string) ModuleProblem {
+func moduleProblem(owner *document.Package, message string) ModuleProblem {
 	return ModuleProblem{
 		Environment: owner.Environment,
 		Ecosystem:   owner.Ecosystem,

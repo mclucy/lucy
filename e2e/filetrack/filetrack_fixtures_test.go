@@ -6,18 +6,18 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/server"
 )
 
-func baseManifest(t *testing.T) *manifest.Document {
+func baseManifest(t *testing.T) *document.Manifest {
 	t.Helper()
-	return &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+	return &document.Manifest{
+		SchemaVersion: document.ManifestSchemaVersion,
+		Server: document.ManifestServer{
 			Minecraft: "1.21.4",
 			Directory: "server",
-			Core:      manifest.Core{Product: server.ProductMinecraft},
+			Core:      document.ManifestCore{Product: server.ProductMinecraft},
 		},
 	}
 }
@@ -75,9 +75,9 @@ func TestFileTrackRejectsAlreadyTrackedPath(t *testing.T) {
 	w.write(t, "config/rules.txt", rules, 0o644)
 	w.lucyOK(t, "file", "track", "config/rules.txt")
 
-	manifestBytes := w.read(t, manifest.Filename)
+	manifestBytes := w.read(t, document.ManifestFilename)
 	w.lucyFail(t, "file", "track", "config/rules.txt")
-	w.requireBytes(t, manifest.Filename, manifestBytes)
+	w.requireBytes(t, document.ManifestFilename, manifestBytes)
 	if events := w.persistedHistory(t); len(events) != 1 {
 		t.Errorf("rejected track left %d history events, want 1", len(events))
 	}
@@ -199,14 +199,14 @@ func TestFileRevertTargetsSelectRevisionAndSequence(t *testing.T) {
 		t.Errorf("sequence revert accepted %s", declared.Hash)
 	}
 
-	beforeManifest := w.read(t, manifest.Filename)
+	beforeManifest := w.read(t, document.ManifestFilename)
 	beforeHistory := w.read(t, ".lucy/history/files.jsonl")
 	w.lucyFail(t, "file", "revert", path, acceptedHash(alpha), "--revision", "2")
 	w.lucyFail(t, "file", "revert", path, "--revision", "99")
 	w.lucyFail(t, "file", "revert", path, acceptedHash([]byte("never accepted")))
 	w.lucyFail(t, "file", "revert", path, "--revision", "0")
 	w.requireBytes(t, path, beta)
-	w.requireBytes(t, manifest.Filename, beforeManifest)
+	w.requireBytes(t, document.ManifestFilename, beforeManifest)
 	w.requireBytes(t, ".lucy/history/files.jsonl", beforeHistory)
 
 	fresh := "config/fresh.txt"
@@ -410,9 +410,9 @@ func TestFileUpdateAllFailsAtomicallyThenSucceeds(t *testing.T) {
 		t.Fatalf("remove tracked file: %v", err)
 	}
 
-	manifestBytes := w.read(t, manifest.Filename)
+	manifestBytes := w.read(t, document.ManifestFilename)
 	w.lucyFail(t, "file", "update", "--all")
-	w.requireBytes(t, manifest.Filename, manifestBytes)
+	w.requireBytes(t, document.ManifestFilename, manifestBytes)
 	w.requireBytes(t, "config/a.txt", newA)
 	if events := w.persistedHistory(t); len(events) != 2 {
 		t.Fatalf("a failed bulk update left %d history events, want 2", len(events))

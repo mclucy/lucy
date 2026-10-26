@@ -6,7 +6,7 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -82,7 +82,7 @@ func artifactCoordinate(provider catalog.Provider, projectID string) string {
 // Module dependency edges come from each artifact's native module
 // descriptors. The server core and bootstrap inputs are lock inputs, not
 // packages, so they never become graph nodes.
-func BuildGraphFromLock(lock *lockfile.Document) (*DependencyGraph, error) {
+func BuildGraphFromLock(lock *document.Lock) (*DependencyGraph, error) {
 	graph := &DependencyGraph{
 		Nodes: make(map[string]*GraphNode),
 	}

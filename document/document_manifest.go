@@ -1,52 +1,48 @@
-package manifest
+package document
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	Filename      = "lucy.yaml"
-	SchemaVersion = 1
+	ManifestFilename      = "lucy.yaml"
+	ManifestSchemaVersion = 1
 )
 
-type Document struct {
-	SchemaVersion int           `yaml:"manifest_version" json:"manifest_version"`
-	Server        Server        `yaml:"server" json:"server"`
-	MCDR          *MCDR         `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
-	Files         []TrackedFile `yaml:"files,omitempty" json:"files,omitempty"`
+type Manifest struct {
+	SchemaVersion int            `yaml:"manifest_version" json:"manifest_version"`
+	Server        ManifestServer `yaml:"server" json:"server"`
+	MCDR          *ManifestMCDR  `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Files         []TrackedFile  `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
-type Core struct {
+type ManifestCore struct {
 	Product        server.Product  `yaml:"product" json:"product"`
 	ProductVersion version.Version `yaml:"product_version,omitempty" json:"product_version"`
 	Repository     string          `yaml:"repository,omitempty" json:"repository,omitempty"`
 	FilePattern    string          `yaml:"file_pattern,omitempty" json:"file_pattern,omitempty"`
 }
 
-type Server struct {
+type ManifestServer struct {
 	Minecraft version.Version                              `yaml:"minecraft" json:"minecraft"`
 	Directory string                                       `yaml:"directory,omitempty" json:"directory"`
-	Core      Core                                         `yaml:"core" json:"core"`
-	Java      *Java                                        `yaml:"java,omitempty" json:"java,omitempty"`
+	Core      ManifestCore                                 `yaml:"core" json:"core"`
+	Java      *ManifestJava                                `yaml:"java,omitempty" json:"java,omitempty"`
 	Packages  map[catalog.Ecosystem]map[string]Requirement `yaml:"packages" json:"packages"`
 }
 
-type MCDR struct {
+type ManifestMCDR struct {
 	Directory string                 `yaml:"directory,omitempty" json:"directory"`
 	Version   version.Version        `yaml:"version,omitempty" json:"version"`
 	Packages  map[string]Requirement `yaml:"packages" json:"packages"`
@@ -125,40 +121,40 @@ func SafeRelativePath(path string) error {
 	return nil
 }
 
-func Normalize(d *Document) error {
-	if d.SchemaVersion != SchemaVersion {
-		return fmt.Errorf("unsupported manifest version %d", d.SchemaVersion)
+func (m *Manifest) Normalize() error {
+	if m.SchemaVersion != ManifestSchemaVersion {
+		return fmt.Errorf("unsupported manifest version %d", m.SchemaVersion)
 	}
-	d.Server.Minecraft = version.Version(strings.TrimSpace(d.Server.Minecraft.String()))
-	if declared := d.Server.Minecraft; declared == "" || declared.CanInfer() || declared.IsInvalid() {
+	m.Server.Minecraft = version.Version(strings.TrimSpace(m.Server.Minecraft.String()))
+	if declared := m.Server.Minecraft; declared == "" || declared.CanInfer() || declared.IsInvalid() {
 		return fmt.Errorf("server.minecraft must specify a concrete Minecraft version")
 	}
-	d.Server.Core.Product = server.Product(strings.ToLower(strings.TrimSpace(d.Server.Core.Product.String())))
-	if d.Server.Core.Product == server.ProductUnknown {
+	m.Server.Core.Product = server.Product(strings.ToLower(strings.TrimSpace(m.Server.Core.Product.String())))
+	if m.Server.Core.Product == server.ProductUnknown {
 		return fmt.Errorf("server core product is required")
 	}
-	if product, known := server.ParseProduct(d.Server.Core.Product.String()); known {
-		d.Server.Core.Product = product
-	} else if d.Server.Core.Repository == "" {
-		return fmt.Errorf("unsupported server product %q; GitHub forks require core.repository", d.Server.Core.Product)
+	if product, known := server.ParseProduct(m.Server.Core.Product.String()); known {
+		m.Server.Core.Product = product
+	} else if m.Server.Core.Repository == "" {
+		return fmt.Errorf("unsupported server product %q; GitHub forks require core.repository", m.Server.Core.Product)
 	}
-	if d.Server.Core.ProductVersion == "" {
-		d.Server.Core.ProductVersion = version.Any
+	if m.Server.Core.ProductVersion == "" {
+		m.Server.Core.ProductVersion = version.Any
 	}
-	if d.Server.Directory == "" {
-		d.Server.Directory = "."
+	if m.Server.Directory == "" {
+		m.Server.Directory = "."
 	}
-	if err := SafeRelativePath(d.Server.Directory); err != nil {
+	if err := SafeRelativePath(m.Server.Directory); err != nil {
 		return err
 	}
-	d.Server.Directory = filepath.ToSlash(filepath.Clean(d.Server.Directory))
-	if err := normalizeJava(&d.Server); err != nil {
+	m.Server.Directory = filepath.ToSlash(filepath.Clean(m.Server.Directory))
+	if err := normalizeJava(&m.Server); err != nil {
 		return err
 	}
-	if d.Server.Packages == nil {
-		d.Server.Packages = map[catalog.Ecosystem]map[string]Requirement{}
+	if m.Server.Packages == nil {
+		m.Server.Packages = map[catalog.Ecosystem]map[string]Requirement{}
 	}
-	for ecosystem, packages := range d.Server.Packages {
+	for ecosystem, packages := range m.Server.Packages {
 		switch ecosystem {
 		case catalog.EcosystemFabric,
 			catalog.EcosystemForge,
@@ -175,31 +171,31 @@ func Normalize(d *Document) error {
 			packages[ref] = requirement
 		}
 		if len(packages) == 0 {
-			delete(d.Server.Packages, ecosystem)
+			delete(m.Server.Packages, ecosystem)
 		}
 	}
-	if d.MCDR != nil {
-		if d.MCDR.Directory == "" {
-			d.MCDR.Directory = "."
+	if m.MCDR != nil {
+		if m.MCDR.Directory == "" {
+			m.MCDR.Directory = "."
 		}
-		if err := SafeRelativePath(d.MCDR.Directory); err != nil {
+		if err := SafeRelativePath(m.MCDR.Directory); err != nil {
 			return err
 		}
-		d.MCDR.Directory = filepath.ToSlash(filepath.Clean(d.MCDR.Directory))
-		if d.MCDR.Version == "" {
-			d.MCDR.Version = version.Any
+		m.MCDR.Directory = filepath.ToSlash(filepath.Clean(m.MCDR.Directory))
+		if m.MCDR.Version == "" {
+			m.MCDR.Version = version.Any
 		}
-		if d.MCDR.Packages == nil {
-			d.MCDR.Packages = map[string]Requirement{}
+		if m.MCDR.Packages == nil {
+			m.MCDR.Packages = map[string]Requirement{}
 		}
-		for ref, requirement := range d.MCDR.Packages {
+		for ref, requirement := range m.MCDR.Packages {
 			if err := normalizeRequirement(ref, &requirement); err != nil {
 				return err
 			}
-			d.MCDR.Packages[ref] = requirement
+			m.MCDR.Packages[ref] = requirement
 		}
 	}
-	if err := NormalizeTrackedFiles(d.Files); err != nil {
+	if err := NormalizeTrackedFiles(m.Files); err != nil {
 		return err
 	}
 	return nil
@@ -219,21 +215,12 @@ func normalizeRequirement(ref string, requirement *Requirement) error {
 	return nil
 }
 
-func Read(root string) (*Document, error) {
-	file, err := os.Open(filepath.Join(root, Filename))
-	if err != nil {
-		return nil, err
-	}
-	d, decodeErr := Decode(file)
-	return d, errors.Join(decodeErr, file.Close())
-}
-
-// Decode validates manifest bytes from a reader.
-func Decode(reader io.Reader) (*Document, error) {
-	d := &Document{}
+// DecodeManifest validates manifest bytes from a reader.
+func DecodeManifest(reader io.Reader) (*Manifest, error) {
+	m := &Manifest{}
 	decoder := yaml.NewDecoder(reader)
 	decoder.KnownFields(true)
-	if err := decoder.Decode(d); err != nil {
+	if err := decoder.Decode(m); err != nil {
 		return nil, fmt.Errorf("decode manifest: %w", err)
 	}
 	var extra any
@@ -243,17 +230,17 @@ func Decode(reader io.Reader) (*Document, error) {
 		}
 		return nil, fmt.Errorf("decode manifest tail: %w", err)
 	}
-	if err := Normalize(d); err != nil {
+	if err := m.Normalize(); err != nil {
 		return nil, err
 	}
-	return d, nil
+	return m, nil
 }
 
-func Fingerprint(d *Document) (string, error) {
-	if err := Normalize(d); err != nil {
+func (m *Manifest) Fingerprint() (string, error) {
+	if err := m.Normalize(); err != nil {
 		return "", err
 	}
-	data, err := json.Marshal(d, json.Deterministic(true))
+	data, err := json.Marshal(m, json.Deterministic(true))
 	if err != nil {
 		return "", err
 	}
@@ -263,31 +250,13 @@ func Fingerprint(d *Document) (string, error) {
 
 // CanonicalBytes returns the canonical YAML bytes of the document, including
 // the schema header. It writes nothing.
-func CanonicalBytes(d *Document) ([]byte, error) {
-	if err := Normalize(d); err != nil {
+func (m *Manifest) CanonicalBytes() ([]byte, error) {
+	if err := m.Normalize(); err != nil {
 		return nil, err
 	}
-	data, err := yaml.Marshal(d)
+	data, err := yaml.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
-	return append([]byte("# yaml-language-server: $schema="+SchemaURL+"\n"), data...), nil
-}
-
-// Write publishes the canonical bytes at the manifest location of root.
-func Write(root string, d *Document) error {
-	data, err := CanonicalBytes(d)
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(root, Filename)
-	if err := fsutil.AtomicWrite(path, data, 0o644); err != nil {
-		return err
-	}
-	log.Info(
-		"manifest written",
-		"path", path,
-		"version", d.SchemaVersion,
-	)
-	return nil
+	return append([]byte("# yaml-language-server: $schema="+ManifestSchemaURL+"\n"), data...), nil
 }

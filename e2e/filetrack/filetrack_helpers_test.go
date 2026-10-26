@@ -24,10 +24,9 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/catalog"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
@@ -151,12 +150,12 @@ func (w workspace) symlink(t *testing.T, target, relative string) {
 	}
 }
 
-func (w workspace) writeManifest(t *testing.T, doc *manifest.Document) string {
+func (w workspace) writeManifest(t *testing.T, doc *documentpkg.Manifest) string {
 	t.Helper()
-	if err := manifest.Normalize(doc); err != nil {
+	if err := doc.Normalize(); err != nil {
 		t.Fatalf("fixture manifest is invalid: %v", err)
 	}
-	fingerprint, err := manifest.Fingerprint(doc)
+	fingerprint, err := doc.Fingerprint()
 	if err != nil {
 		t.Fatalf("fingerprint fixture manifest: %v", err)
 	}
@@ -164,13 +163,13 @@ func (w workspace) writeManifest(t *testing.T, doc *manifest.Document) string {
 	if err != nil {
 		t.Fatalf("marshal fixture manifest: %v", err)
 	}
-	w.write(t, manifest.Filename, data, 0o644)
+	w.write(t, documentpkg.ManifestFilename, data, 0o644)
 	return fingerprint
 }
 
-func (w workspace) readManifest(t *testing.T) *manifest.Document {
+func (w workspace) readManifest(t *testing.T) *documentpkg.Manifest {
 	t.Helper()
-	doc, err := manifest.Read(w.root)
+	doc, err := documentpkg.ManifestFile(w.root).Read()
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
@@ -180,14 +179,14 @@ func (w workspace) readManifest(t *testing.T) *manifest.Document {
 // manifestFingerprint is the fingerprint Lucy stores in a current lockfile.
 func (w workspace) manifestFingerprint(t *testing.T) string {
 	t.Helper()
-	fingerprint, err := manifest.Fingerprint(w.readManifest(t))
+	fingerprint, err := w.readManifest(t).Fingerprint()
 	if err != nil {
 		t.Fatalf("fingerprint manifest: %v", err)
 	}
 	return fingerprint
 }
 
-func (w workspace) writeLock(t *testing.T, doc *lockfile.Document) {
+func (w workspace) writeLock(t *testing.T, doc *documentpkg.Lock) {
 	t.Helper()
 	if err := doc.Validate(); err != nil {
 		t.Fatalf("fixture lock is invalid: %v", err)
@@ -196,12 +195,12 @@ func (w workspace) writeLock(t *testing.T, doc *lockfile.Document) {
 	if err != nil {
 		t.Fatalf("marshal fixture lock: %v", err)
 	}
-	w.write(t, lockfile.Filename, data, 0o644)
+	w.write(t, documentpkg.LockFilename, data, 0o644)
 }
 
-func (w workspace) readLock(t *testing.T) *lockfile.Document {
+func (w workspace) readLock(t *testing.T) *documentpkg.Lock {
 	t.Helper()
-	doc, err := lockfile.Read(w.root)
+	doc, err := documentpkg.LockFile(w.root).Read()
 	if err != nil {
 		t.Fatalf("read lock: %v", err)
 	}
@@ -221,7 +220,7 @@ type receiptDocument struct {
 }
 
 // receiptProjection is the digest a fixture receipt must pin to stay current.
-func receiptProjection(t *testing.T, lock *lockfile.Document) string {
+func receiptProjection(t *testing.T, lock *documentpkg.Lock) string {
 	t.Helper()
 	fingerprint, err := install.ResolutionFingerprint(lock)
 	if err != nil {
@@ -230,7 +229,7 @@ func receiptProjection(t *testing.T, lock *lockfile.Document) string {
 	return fingerprint
 }
 
-func (w workspace) writeReceipt(t *testing.T, lock *lockfile.Document, entries ...receiptEntry) {
+func (w workspace) writeReceipt(t *testing.T, lock *documentpkg.Lock, entries ...receiptEntry) {
 	t.Helper()
 	doc := receiptDocument{
 		Version:         1,
@@ -282,24 +281,24 @@ func (w workspace) requireReceiptEntries(t *testing.T, want ...receiptEntry) {
 // receipt over real core bytes, so a following installation is a no-op instead of
 // a fresh resolve. The declared tracked files take part in the lock and the
 // receipt stays pinned to the runtime only.
-func (w workspace) seedNativeRuntime(t *testing.T, files ...manifest.TrackedFile) (*manifest.Document, *lockfile.Document, []byte) {
+func (w workspace) seedNativeRuntime(t *testing.T, files ...documentpkg.TrackedFile) (*documentpkg.Manifest, *documentpkg.Lock, []byte) {
 	t.Helper()
-	doc := &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+	doc := &documentpkg.Manifest{
+		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Server: documentpkg.ManifestServer{
 			Minecraft: "1.21.4",
 			Directory: "server",
-			Core:      manifest.Core{Product: serverpkg.ProductMinecraft},
+			Core:      documentpkg.ManifestCore{Product: serverpkg.ProductMinecraft},
 		},
 		Files: files,
 	}
 	fingerprint := w.writeManifest(t, doc)
 	core := []byte("miniature server core bytes\n")
 	w.write(t, "server/server.jar", core, 0o644)
-	lock := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	lock := &documentpkg.Lock{
+		SchemaVersion:       documentpkg.LockSchemaVersion,
 		ManifestFingerprint: fingerprint,
-		Server: lockfile.Server{
+		Server: documentpkg.LockedServer{
 			Minecraft:   "1.21.4",
 			Directory:   "server",
 			Product:     serverpkg.ProductMinecraft,
@@ -311,9 +310,9 @@ func (w workspace) seedNativeRuntime(t *testing.T, files ...manifest.TrackedFile
 				URL:      "https://example.invalid/server.jar",
 				Hashes:   map[string]string{"sha256": digestHex(core)},
 			},
-			Java: lockfile.Java{Advisory: 21},
+			Java: documentpkg.LockedJava{Advisory: 21},
 		},
-		Packages: []lockfile.Package{},
+		Packages: []documentpkg.Package{},
 		Files:    files,
 	}
 	w.writeLock(t, lock)
@@ -369,8 +368,8 @@ func acceptedHash(data []byte) string {
 	return "sha256:" + digestHex(data)
 }
 
-func manifestTrackedFile(path, hash string) manifest.TrackedFile {
-	return manifest.TrackedFile{Path: path, Hash: hash}
+func manifestTrackedFile(path, hash string) documentpkg.TrackedFile {
+	return documentpkg.TrackedFile{Path: path, Hash: hash}
 }
 
 // lucyRun is one subprocess outcome. stdout carries command output; warnings

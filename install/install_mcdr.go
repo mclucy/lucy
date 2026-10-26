@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
 )
@@ -20,7 +20,7 @@ const mcdrPyPIURL = "https://pypi.org/pypi/mcdreforged/json"
 func resolveMCDRVersion(
 	ctx context.Context,
 	request version.Version,
-	previous *lockfile.Document,
+	previous *documentpkg.Lock,
 	offline bool,
 ) (version.Version, error) {
 	if !isFloating(request) {
@@ -66,7 +66,7 @@ func latestMCDRVersion(ctx context.Context) (version.Version, error) {
 // machine that runs install, so no Python version or wheel is recorded in the
 // portable lock. The isolated environment is keyed by this list, so a changed
 // list provisions a fresh environment.
-func mcdrPythonRequirements(d *lockfile.Document) []string {
+func mcdrPythonRequirements(d *documentpkg.Lock) []string {
 	if d == nil || d.MCDR == nil {
 		return nil
 	}

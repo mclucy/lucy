@@ -7,9 +7,8 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/upstream"
-
-	"github.com/mclucy/lucy/lockfile"
 
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -86,7 +85,7 @@ func decideCandidate(
 // request's selectors, so the caller applies it after reading the cache.
 func orderCandidates(
 	list []upstream.Candidate,
-	previous []lockfile.Package,
+	previous []document.Package,
 	request projectRequest,
 ) []upstream.Candidate {
 	ordered := slices.Clone(list)
@@ -119,7 +118,7 @@ func orderCandidates(
 // `stable` rejects prereleases in the candidate loop.
 func preferReleaseBuilds(
 	list []upstream.Candidate,
-	requirements []lockfile.RequirementBinding,
+	requirements []document.RequirementBinding,
 ) []upstream.Candidate {
 	prefer := false
 	for _, requirement := range requirements {
@@ -195,7 +194,7 @@ func conflictDependencies(candidate upstream.Candidate) []upstream.ProjectDepend
 func metadataConflict(
 	candidate upstream.Candidate,
 	request projectRequest,
-	chosen map[projectKey]lockfile.Package,
+	chosen map[projectKey]document.Package,
 	conflicts map[projectKey][]upstream.ProjectDependency,
 ) (string, bool) {
 	best := ""

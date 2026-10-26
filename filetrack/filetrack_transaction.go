@@ -11,11 +11,10 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/cas"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 )
 
 type image struct {
@@ -323,7 +322,7 @@ func recoverTransaction(root string, files *os.Root, store *cas.Store) error {
 		return fmt.Errorf("file history changed after an interrupted transaction")
 	}
 	for _, change := range txn.Mutations {
-		if change.Path != manifest.Filename && change.Path != lockfile.Filename {
+		if change.Path != document.ManifestFilename && change.Path != document.LockFilename {
 			if normalized, err := input.TrackedPath(change.Path); err != nil || normalized != change.Path {
 				return fmt.Errorf("invalid pending file transaction path")
 			}

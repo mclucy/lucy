@@ -1,4 +1,4 @@
-package manifest_test
+package document_test
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/manifest"
+	documentpkg "github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
@@ -67,17 +67,17 @@ func manifestDirectory(value string) (string, bool) {
 	return relativeDirectory(value)
 }
 
-func manifestDocument(directory, tracked, selector, filePattern string, enabled *bool) *manifest.Document {
-	return &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+func manifestDocument(directory, tracked, selector, filePattern string, enabled *bool) *documentpkg.Manifest {
+	return &documentpkg.Manifest{
+		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Server: documentpkg.ManifestServer{
 			Minecraft: "1.21.4",
 			Directory: directory,
-			Core: manifest.Core{
+			Core: documentpkg.ManifestCore{
 				Product:        serverpkg.ProductPaper,
 				ProductVersion: "1.21.4",
 			},
-			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{
+			Packages: map[catalog.Ecosystem]map[string]documentpkg.Requirement{
 				catalog.EcosystemFabric: {
 					"modrinth:sodium": {
 						Selector:    versionpkg.Version(selector),
@@ -87,7 +87,7 @@ func manifestDocument(directory, tracked, selector, filePattern string, enabled 
 				},
 			},
 		},
-		Files: []manifest.TrackedFile{{Path: tracked}},
+		Files: []documentpkg.TrackedFile{{Path: tracked}},
 	}
 }
 
@@ -137,26 +137,26 @@ func FuzzManifestPersistence(f *testing.F) {
 		defer func() { _ = os.RemoveAll(root) }()
 
 		if !directoryOK || !pathOK {
-			if err := manifest.Write(root, document); err == nil {
+			if err := documentpkg.ManifestFile(root).Write(document); err == nil {
 				t.Fatalf("wrote unsafe declaration: directory=%q tracked=%q", directory, tracked)
 			}
-			if _, err := os.Stat(filepath.Join(root, manifest.Filename)); !os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(root, documentpkg.ManifestFilename)); !os.IsNotExist(err) {
 				t.Fatalf("unsafe declaration left a manifest: %v", err)
 			}
 			raw, err := yaml.Marshal(document)
 			if err != nil {
 				t.Fatalf("marshal unsafe declaration: %v", err)
 			}
-			if _, err := manifest.Decode(bytes.NewReader(raw)); err == nil {
+			if _, err := documentpkg.DecodeManifest(bytes.NewReader(raw)); err == nil {
 				t.Fatalf("decoded unsafe declaration: directory=%q tracked=%q", directory, tracked)
 			}
 			return
 		}
 
-		if err := manifest.Write(root, document); err != nil {
+		if err := documentpkg.ManifestFile(root).Write(document); err != nil {
 			t.Fatalf("write accepted declaration: %v", err)
 		}
-		decoded, err := manifest.Read(root)
+		decoded, err := documentpkg.ManifestFile(root).Read()
 		if err != nil {
 			t.Fatalf("read accepted declaration: %v", err)
 		}
@@ -185,9 +185,9 @@ func FuzzManifestPersistence(f *testing.F) {
 			t.Fatalf("files = %+v, want one %q", decoded.Files, wantPath)
 		}
 
-		fingerprint := func(document *manifest.Document) string {
+		fingerprint := func(document *documentpkg.Manifest) string {
 			t.Helper()
-			value, err := manifest.Fingerprint(document)
+			value, err := document.Fingerprint()
 			if err != nil {
 				t.Fatalf("fingerprint declaration: %v", err)
 			}

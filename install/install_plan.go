@@ -10,11 +10,10 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/workspace"
 )
 
@@ -22,9 +21,9 @@ import (
 // documents the commit will publish and the fingerprints it was planned from,
 // so applying it cannot silently consume a concurrent edit.
 type Plan struct {
-	Manifest        *manifest.Document
-	Previous        *lockfile.Document
-	Resolved        *lockfile.Document
+	Manifest        *document.Manifest
+	Previous        *document.Lock
+	Resolved        *document.Lock
 	PublishManifest bool
 	PublishLock     bool
 	// BaseManifestFingerprint and BaseLockFingerprint describe the workspace
@@ -40,8 +39,8 @@ type Plan struct {
 func PlanInstall(
 	ctx context.Context,
 	root string,
-	d *manifest.Document,
-	old *lockfile.Document,
+	d *document.Manifest,
+	old *document.Lock,
 	opts Options,
 ) (plan *Plan, resultErr error) {
 	absolute, err := filepath.Abs(root)
@@ -170,19 +169,19 @@ func checkPlannedState(root string, plan *Plan) error {
 // workspace currently holds. An absent document yields an empty fingerprint,
 // so planning and applying share one description of the state a plan answers.
 func workspaceFingerprints(root string) (manifestFingerprint, lockFingerprint string, err error) {
-	currentManifest, err := manifest.Read(root)
+	currentManifest, err := document.ManifestFile(root).Read()
 	switch {
 	case err == nil:
-		if manifestFingerprint, err = manifest.Fingerprint(currentManifest); err != nil {
+		if manifestFingerprint, err = currentManifest.Fingerprint(); err != nil {
 			return "", "", err
 		}
 	case !errors.Is(err, os.ErrNotExist):
 		return "", "", err
 	}
-	currentLock, err := lockfile.Read(root)
+	currentLock, err := document.LockFile(root).Read()
 	switch {
 	case err == nil:
-		if lockFingerprint, err = lockfile.Fingerprint(currentLock); err != nil {
+		if lockFingerprint, err = currentLock.Fingerprint(); err != nil {
 			return "", "", err
 		}
 	case !errors.Is(err, os.ErrNotExist):
@@ -211,8 +210,8 @@ func comparePlannedFingerprint(name, planned, current, retry string) error {
 // runtime tree.
 func preflightLocked(
 	root string,
-	d *manifest.Document,
-	old *lockfile.Document,
+	d *document.Manifest,
+	old *document.Lock,
 	opts Options,
 	mutating bool,
 ) error {
@@ -238,11 +237,11 @@ func preflightLocked(
 		}
 	}
 	if opts.ExpectedManifest != "" {
-		current, err := manifest.Read(root)
+		current, err := document.ManifestFile(root).Read()
 		if err != nil {
 			return err
 		}
-		fingerprint, err := manifest.Fingerprint(current)
+		fingerprint, err := current.Fingerprint()
 		if err != nil {
 			return err
 		}
@@ -254,7 +253,7 @@ func preflightLocked(
 		if old == nil {
 			return fmt.Errorf("expected lock fingerprint but no lock was read")
 		}
-		fingerprint, err := lockfile.Fingerprint(old)
+		fingerprint, err := old.Fingerprint()
 		if err != nil {
 			return err
 		}
@@ -270,17 +269,17 @@ func preflightLocked(
 func resolveLock(
 	ctx context.Context,
 	root string,
-	d *manifest.Document,
-	old *lockfile.Document,
+	d *document.Manifest,
+	old *document.Lock,
 	opts *Options,
 	store *downloadStore,
 	result *Result,
-) (*lockfile.Document, error) {
+) (*document.Lock, error) {
 	resolved := old
 	fingerprint := ""
 	if d != nil {
 		var err error
-		fingerprint, err = manifest.Fingerprint(d)
+		fingerprint, err = d.Fingerprint()
 		if err != nil {
 			return nil, err
 		}
@@ -377,16 +376,16 @@ func newDownloadStore(
 // caller must set the final manifest and the lock's manifest fingerprint, so a
 // plan can never publish a lock that answers a different intent.
 func PlanFromResolution(
-	d *manifest.Document,
-	previous *lockfile.Document,
-	resolved *lockfile.Document,
+	d *document.Manifest,
+	previous *document.Lock,
+	resolved *document.Lock,
 	baseManifestFingerprint string,
 	publishManifest bool,
 ) (*Plan, error) {
 	if d == nil || resolved == nil {
 		return nil, fmt.Errorf("manifest and resolved lock are required")
 	}
-	fingerprint, err := manifest.Fingerprint(d)
+	fingerprint, err := d.Fingerprint()
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +397,7 @@ func PlanFromResolution(
 	}
 	baseLock := ""
 	if previous != nil {
-		baseLock, err = lockfile.Fingerprint(previous)
+		baseLock, err = previous.Fingerprint()
 		if err != nil {
 			return nil, err
 		}
@@ -445,7 +444,7 @@ func Materializer(
 func CheckJava(
 	ctx context.Context,
 	root string,
-	locked *lockfile.Document,
+	locked *document.Lock,
 ) (*javaruntime.Check, error) {
 	return javaruntime.Select(ctx, root, javaruntime.RequirementOf(locked))
 }

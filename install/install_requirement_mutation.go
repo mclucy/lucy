@@ -7,8 +7,7 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 )
 
@@ -31,8 +30,8 @@ func compareRequirementKeys(a, b requirementKey) int {
 
 // declaredRequirements collects every requirement the manifest declares for a
 // package, keyed by the location and reference that name it.
-func declaredRequirements(d *manifest.Document) map[requirementKey]manifest.Requirement {
-	declared := map[requirementKey]manifest.Requirement{}
+func declaredRequirements(d *document.Manifest) map[requirementKey]document.Requirement {
+	declared := map[requirementKey]document.Requirement{}
 	var loaders []catalog.Ecosystem
 	for loader := range d.Server.Packages {
 		loaders = append(loaders, loader)
@@ -60,8 +59,8 @@ func declaredRequirements(d *manifest.Document) map[requirementKey]manifest.Requ
 }
 
 // lockPackageFor reports whether a reference names one locked package.
-func lockPackageFor(ref string, p lockfile.Package) bool {
-	provider, name, err := manifest.ParseReference(ref)
+func lockPackageFor(ref string, p document.Package) bool {
+	provider, name, err := document.ParseReference(ref)
 	if err != nil {
 		return false
 	}
@@ -82,8 +81,8 @@ func lockPackageFor(ref string, p lockfile.Package) bool {
 // bindRequirement records the manifest's current state of one requirement on
 // the package that satisfies it. A requirement the lock has never seen is
 // added, so a package resolved only as a dependency becomes declared.
-func bindRequirement(p *lockfile.Package, ref string, requirement manifest.Requirement) {
-	binding := lockfile.RequirementBinding{
+func bindRequirement(p *document.Package, ref string, requirement document.Requirement) {
+	binding := document.RequirementBinding{
 		Reference:   ref,
 		Selector:    requirement.Selector,
 		FilePattern: requirement.FilePattern,
@@ -107,7 +106,7 @@ func bindRequirement(p *lockfile.Package, ref string, requirement manifest.Requi
 // lock does not satisfy is reported rather than resolved. Packages left bound
 // only to requirements the manifest no longer declares are dropped, so a locked
 // removal uninstalls the package instead of leaving the lock pinning it.
-func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error {
+func rebindRequirements(d *document.Manifest, resolved *document.Lock) error {
 	declared := declaredRequirements(d)
 	keys := make([]requirementKey, 0, len(declared))
 	for key := range declared {
@@ -142,15 +141,15 @@ func rebindRequirements(d *manifest.Document, resolved *lockfile.Document) error
 // retainDeclared keeps pins reachable from remaining declarations or ambient
 // packages. Disabled declarations retain pins without activating their dependencies.
 func retainDeclared(
-	packages []lockfile.Package,
-	declared map[requirementKey]manifest.Requirement,
-) []lockfile.Package {
+	packages []document.Package,
+	declared map[requirementKey]document.Requirement,
+) []document.Package {
 	type identity struct {
 		environment string
 		ecosystem   catalog.Ecosystem
 		reference   catalog.Ref
 	}
-	identityOf := func(p *lockfile.Package) identity {
+	identityOf := func(p *document.Package) identity {
 		return identity{
 			string(p.Environment),
 			p.Ecosystem,
@@ -230,12 +229,12 @@ func retainDeclared(
 // mutateLock produces the lock a locked mutation commits. Only requirements,
 // the Java override, and the manifest fingerprint move; every artifact pin is
 // copied as recorded.
-func mutateLock(d *manifest.Document, old *lockfile.Document, fingerprint string) (*lockfile.Document, error) {
+func mutateLock(d *document.Manifest, old *document.Lock, fingerprint string) (*document.Lock, error) {
 	resolved := *old
 	resolved.ManifestFingerprint = fingerprint
 	resolved.Files = slices.Clone(d.Files)
-	resolved.Server.Java = lockfile.NewJava(old.Server.Java.Advisory, d.Server.Java)
-	resolved.Packages = make([]lockfile.Package, len(old.Packages))
+	resolved.Server.Java = document.NewLockedJava(old.Server.Java.Advisory, d.Server.Java)
+	resolved.Packages = make([]document.Package, len(old.Packages))
 	for i, p := range old.Packages {
 		resolved.Packages[i] = p
 		resolved.Packages[i].Requirements = slices.Clone(p.Requirements)

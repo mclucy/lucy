@@ -10,11 +10,10 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 )
@@ -53,12 +52,12 @@ type CreateTarget struct {
 // surrounding fields describe the workspace itself.
 type CreateResult struct {
 	install.Result
-	Workspace        string             `json:"workspace"`
-	NonEmpty         bool               `json:"non_empty"`
-	ReplacedManifest bool               `json:"replaced_manifest,omitempty"`
-	Installed        bool               `json:"installed"`
-	Manifest         *manifest.Document `json:"-"`
-	Lock             *lockfile.Document `json:"-"`
+	Workspace        string                `json:"workspace"`
+	NonEmpty         bool                  `json:"non_empty"`
+	ReplacedManifest bool                  `json:"replaced_manifest,omitempty"`
+	Installed        bool                  `json:"installed"`
+	Manifest         *documentpkg.Manifest `json:"-"`
+	Lock             *documentpkg.Lock     `json:"-"`
 }
 
 // CreateResolveError reports a failure before any workspace document was
@@ -133,11 +132,11 @@ func InspectCreateTarget(path string) (CreateTarget, error) {
 	for _, entry := range entries {
 		target.Entries = append(target.Entries, entry.Name())
 	}
-	_, err = os.Stat(filepath.Join(absolute, manifest.Filename))
+	_, err = os.Stat(filepath.Join(absolute, documentpkg.ManifestFilename))
 	switch {
 	case err == nil:
 		target.ManifestExists = true
-		if document, readErr := manifest.Read(absolute); readErr == nil {
+		if document, readErr := documentpkg.ManifestFile(absolute).Read(); readErr == nil {
 			target.DeclaredPackages = declaredPackageCount(document)
 		}
 	case errors.Is(err, os.ErrNotExist):
@@ -187,7 +186,7 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 		return nil, err
 	}
 	manifestExisted := false
-	switch _, err := os.Stat(filepath.Join(root, manifest.Filename)); {
+	switch _, err := os.Stat(filepath.Join(root, documentpkg.ManifestFilename)); {
 	case err == nil:
 		manifestExisted = true
 		if !opts.Force {
@@ -200,11 +199,11 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	default:
 		return nil, err
 	}
-	var replaced *manifest.Document
+	var replaced *documentpkg.Manifest
 	if opts.Force && manifestExisted {
-		replaced, _ = manifest.Read(root)
+		replaced, _ = documentpkg.ManifestFile(root).Read()
 	}
-	old, err := lockfile.Read(root)
+	old, err := documentpkg.LockFile(root).Read()
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -212,7 +211,7 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 		old = nil
 	}
 	document := newCreateDocument(opts)
-	if err := manifest.Normalize(document); err != nil {
+	if err := document.Normalize(); err != nil {
 		return nil, newCreateResolveError(root, document, err)
 	}
 	resolved, resolution, err := install.Resolve(
@@ -225,12 +224,12 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	if err != nil {
 		return nil, newCreateResolveError(root, document, err)
 	}
-	if err := manifest.Write(root, document); err != nil {
+	if err := documentpkg.ManifestFile(root).Write(document); err != nil {
 		return nil, &CreatePublishError{Workspace: root, Err: err}
 	}
 	publishedLock := resolved != old
 	if publishedLock {
-		if err := lockfile.Write(root, resolved); err != nil {
+		if err := documentpkg.LockFile(root).Write(resolved); err != nil {
 			return nil, &CreatePublishError{
 				Workspace:       root,
 				ManifestWritten: true,
@@ -326,7 +325,7 @@ func (r *CreateResult) finalizeWarnings() {
 
 func newCreateResolveError(
 	root string,
-	document *manifest.Document,
+	document *documentpkg.Manifest,
 	err error,
 ) *CreateResolveError {
 	return &CreateResolveError{
@@ -338,7 +337,7 @@ func newCreateResolveError(
 	}
 }
 
-func newCreateDocument(opts CreateOptions) *manifest.Document {
+func newCreateDocument(opts CreateOptions) *documentpkg.Manifest {
 	product := serverpkg.ProductMinecraft
 	if productName := strings.TrimSpace(opts.Product); productName != "" {
 		if parsed, known := serverpkg.ParseProduct(productName); known {
@@ -347,29 +346,29 @@ func newCreateDocument(opts CreateOptions) *manifest.Document {
 			product = serverpkg.Product(strings.ToLower(productName))
 		}
 	}
-	document := &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+	document := &documentpkg.Manifest{
+		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Server: documentpkg.ManifestServer{
 			Minecraft: version.Version(strings.TrimSpace(opts.Minecraft)),
 			Directory: ".",
-			Core: manifest.Core{
+			Core: documentpkg.ManifestCore{
 				Product:        product,
 				ProductVersion: version.Version(strings.TrimSpace(opts.ProductVersion)),
 			},
-			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{},
+			Packages: map[catalog.Ecosystem]map[string]documentpkg.Requirement{},
 		},
 	}
 	if opts.MCDRVersion != "" {
-		document.MCDR = &manifest.MCDR{
+		document.MCDR = &documentpkg.ManifestMCDR{
 			Directory: ".",
 			Version:   version.Version(strings.TrimSpace(opts.MCDRVersion)),
-			Packages:  map[string]manifest.Requirement{},
+			Packages:  map[string]documentpkg.Requirement{},
 		}
 	}
 	return document
 }
 
-func declaredPackageCount(document *manifest.Document) int {
+func declaredPackageCount(document *documentpkg.Manifest) int {
 	if document == nil {
 		return 0
 	}

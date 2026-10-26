@@ -6,8 +6,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
@@ -23,10 +22,10 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 	core := miniVanillaJar(t, "1.21.4")
 	w.write(t, "server/server.jar", core, 0o644)
 	w.write(t, "server/server.properties", []byte("level-name=world\n"), 0o644)
-	lock := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	lock := &documentpkg.Lock{
+		SchemaVersion:       documentpkg.LockSchemaVersion,
 		ManifestFingerprint: "sha256:" + digestHex([]byte("a manifest fingerprint")),
-		Server: lockfile.Server{
+		Server: documentpkg.LockedServer{
 			Minecraft:   "1.21.4",
 			Directory:   "server",
 			Product:     server.ProductMinecraft,
@@ -38,9 +37,9 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 				URL:      "https://example.invalid/server.jar",
 				Hashes:   map[string]string{"sha256": digestHex(core)},
 			},
-			Java: lockfile.Java{Advisory: 21},
+			Java: documentpkg.LockedJava{Advisory: 21},
 		},
-		Packages: []lockfile.Package{},
+		Packages: []documentpkg.Package{},
 	}
 	w.writeLock(t, lock)
 
@@ -64,8 +63,8 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 	w.write(t, ".lucy/commit.yaml", journal, 0o600)
 
 	hold := w.holdWorldSession(t, "server")
-	manifestBytes := w.read(t, manifest.Filename)
-	lockBytes := w.read(t, lockfile.Filename)
+	manifestBytes := w.read(t, documentpkg.ManifestFilename)
+	lockBytes := w.read(t, documentpkg.LockFilename)
 	journalBytes := w.read(t, ".lucy/commit.yaml")
 
 	for _, args := range [][]string{
@@ -81,8 +80,8 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 	w.requireBytes(t, "config.txt", working)
 	w.requireBytes(t, ".lucy/commit.yaml", journalBytes)
 	w.requireBytes(t, ".lucy/"+backup+"/config.txt", beforeImage)
-	w.requireBytes(t, manifest.Filename, manifestBytes)
-	w.requireBytes(t, lockfile.Filename, lockBytes)
+	w.requireBytes(t, documentpkg.ManifestFilename, manifestBytes)
+	w.requireBytes(t, documentpkg.LockFilename, lockBytes)
 	w.requireAbsent(t, ".lucy/history/files.jsonl")
 
 	hold.release()
@@ -110,14 +109,14 @@ func TestRunningServerBlocksFileOverwriteWithoutPendingJournal(t *testing.T) {
 	w.write(t, "config/rules.txt", drifted, 0o644)
 	w.requireAbsent(t, ".lucy/commit.yaml")
 	w.requireAbsent(t, ".lucy/file-commit.json")
-	manifestBytes := w.read(t, manifest.Filename)
+	manifestBytes := w.read(t, documentpkg.ManifestFilename)
 	historyBytes := w.read(t, ".lucy/history/files.jsonl")
 	hold := w.holdWorldSession(t, "server")
 
 	w.lucyFail(t, "file", "recover", "config/rules.txt")
 	w.lucyFail(t, "file", "update", "config/rules.txt", "--from-source")
 	w.requireBytes(t, "config/rules.txt", drifted)
-	w.requireBytes(t, manifest.Filename, manifestBytes)
+	w.requireBytes(t, documentpkg.ManifestFilename, manifestBytes)
 	w.requireBytes(t, ".lucy/history/files.jsonl", historyBytes)
 	if source.hits() != 0 {
 		t.Fatal("running-server rejection fetched a recovery source")
@@ -144,10 +143,10 @@ func TestStaleLockRuntimeBlocksFileWritesWhileActive(t *testing.T) {
 	replacement := []byte("replacement rules\n")
 	source := newSourceServer(t, replacement)
 	w.write(t, "config/rules.txt", accepted, 0o644)
-	lock := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	lock := &documentpkg.Lock{
+		SchemaVersion:       documentpkg.LockSchemaVersion,
 		ManifestFingerprint: fingerprint,
-		Server: lockfile.Server{
+		Server: documentpkg.LockedServer{
 			Minecraft:   "1.21.4",
 			Directory:   "server-lock",
 			Product:     server.ProductMinecraft,
@@ -159,9 +158,9 @@ func TestStaleLockRuntimeBlocksFileWritesWhileActive(t *testing.T) {
 				URL:      "https://example.invalid/server.jar",
 				Hashes:   map[string]string{"sha256": digestHex(core)},
 			},
-			Java: lockfile.Java{Advisory: 21},
+			Java: documentpkg.LockedJava{Advisory: 21},
 		},
-		Packages: []lockfile.Package{},
+		Packages: []documentpkg.Package{},
 	}
 	w.writeLock(t, lock)
 	w.fileResult(t, "track", "config/rules.txt", "--recover-url", source.url("rules.txt"))
@@ -178,16 +177,16 @@ func TestStaleLockRuntimeBlocksFileWritesWhileActive(t *testing.T) {
 	w.requireAbsent(t, ".lucy/file-commit.json")
 
 	hold := w.holdWorldSession(t, "server-lock")
-	manifestBytes := w.read(t, manifest.Filename)
-	lockBytes := w.read(t, lockfile.Filename)
+	manifestBytes := w.read(t, documentpkg.ManifestFilename)
+	lockBytes := w.read(t, documentpkg.LockFilename)
 	historyBytes := w.read(t, ".lucy/history/files.jsonl")
 
 	w.lucyFail(t, "file", "recover", "config/rules.txt")
 	w.lucyFail(t, "file", "revert", "config/rules.txt")
 	w.lucyFail(t, "file", "update", "config/rules.txt", "--from-source")
 	w.requireBytes(t, "config/rules.txt", drifted)
-	w.requireBytes(t, manifest.Filename, manifestBytes)
-	w.requireBytes(t, lockfile.Filename, lockBytes)
+	w.requireBytes(t, documentpkg.ManifestFilename, manifestBytes)
+	w.requireBytes(t, documentpkg.LockFilename, lockBytes)
 	w.requireBytes(t, ".lucy/history/files.jsonl", historyBytes)
 	if source.hits() != 0 {
 		t.Fatal("stale-lock rejection fetched a recovery source")

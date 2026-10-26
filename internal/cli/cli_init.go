@@ -8,10 +8,9 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -103,9 +102,9 @@ func initializeWorkspace(ctx context.Context, cmd *cobra.Command, workDir string
 			WarningMessages:   output.Warnings(),
 		})
 	}
-	written := manifest.Filename
+	written := document.ManifestFilename
 	if result.PublishedLock {
-		written += " and " + lockfile.Filename
+		written += " and " + document.LockFilename
 	}
 	fmt.Fprintf(
 		output.Human(),

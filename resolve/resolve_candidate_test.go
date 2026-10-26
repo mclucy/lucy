@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
 
@@ -41,7 +41,7 @@ func testRequest(selector versionpkg.Version, pattern string) projectRequest {
 		},
 		display: "demo",
 		origin:  originManifest,
-		requirements: []lockfile.RequirementBinding{{
+		requirements: []document.RequirementBinding{{
 			Reference:   "modrinth:demo",
 			Selector:    selector,
 			FilePattern: pattern,
@@ -158,7 +158,7 @@ func TestDecideCandidate(t *testing.T) {
 			candidate: release,
 			request: projectRequest{
 				origin: originManifest,
-				requirements: []lockfile.RequirementBinding{{
+				requirements: []document.RequirementBinding{{
 					Reference: "modrinth:demo",
 					Selector:  "9.9.9",
 					Enabled:   false,
@@ -226,7 +226,7 @@ func TestOrderCandidatesNewestFirst(t *testing.T) {
 func TestOrderCandidatesKeepsLockedBuildFirst(t *testing.T) {
 	locked := testCandidate("1.0.0", "r1", "f1", "demo-1.0.0.jar", time.Unix(1, 0), upstream.ReleaseChannelBeta, true)
 	newer := testCandidate("1.1.0", "r2", "f2", "demo-1.1.0.jar", time.Unix(2, 0), upstream.ReleaseChannelBeta, true)
-	previous := []lockfile.Package{{
+	previous := []document.Package{{
 		Environment: serverpkg.EnvironmentServer,
 		Ecosystem:   catalog.EcosystemFabric,
 		Artifact: catalog.Artifact{
@@ -267,7 +267,7 @@ func TestPreferReleaseBuildsForAny(t *testing.T) {
 func TestOrderCandidatesLockedBetaStillYieldsToRelease(t *testing.T) {
 	beta := testCandidate("1.2.0", "r2", "f2", "demo-1.2.0-beta.jar", time.Unix(2, 0), upstream.ReleaseChannelBeta, true)
 	release := testCandidate("1.0.0", "r1", "f1", "demo-1.0.0.jar", time.Unix(1, 0), upstream.ReleaseChannelRelease, true)
-	previous := []lockfile.Package{{
+	previous := []document.Package{{
 		Environment: serverpkg.EnvironmentServer,
 		Ecosystem:   catalog.EcosystemFabric,
 		Artifact: catalog.Artifact{
@@ -312,7 +312,7 @@ func TestMetadataConflict(t *testing.T) {
 		ReleaseID: "r1",
 		Kind:      catalog.DependencyKindIncompatible,
 	}}
-	selected := lockfile.Package{
+	selected := document.Package{
 		Environment: serverpkg.EnvironmentServer,
 		Ecosystem:   catalog.EcosystemFabric,
 		Artifact: catalog.Artifact{
@@ -322,7 +322,7 @@ func TestMetadataConflict(t *testing.T) {
 			Filename:  "target.jar",
 		},
 	}
-	chosen := map[projectKey]lockfile.Package{{
+	chosen := map[projectKey]document.Package{{
 		environment: serverpkg.EnvironmentServer,
 		ecosystem:   catalog.EcosystemFabric,
 		provider:    catalog.ProviderModrinth,
@@ -344,7 +344,7 @@ func TestMetadataConflict(t *testing.T) {
 		t.Fatal("metadataConflict() reported a conflict against a different release")
 	}
 
-	chosen = map[projectKey]lockfile.Package{}
+	chosen = map[projectKey]document.Package{}
 	conflicts := map[projectKey][]upstream.ProjectDependency{{
 		environment: serverpkg.EnvironmentServer,
 		ecosystem:   catalog.EcosystemFabric,

@@ -1,10 +1,10 @@
-package manifest_test
+package document_test
 
 import (
 	"testing"
 
+	documentpkg "github.com/mclucy/lucy/document"
 	javapkg "github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -15,29 +15,29 @@ import (
 func TestJavaDistributionNormalizes(t *testing.T) {
 	for _, spelling := range []string{"TEMURIN", "Temurin", " temurin "} {
 		document := manifestWithJavaDistribution(spelling)
-		if err := manifest.Normalize(document); err != nil {
+		if err := document.Normalize(); err != nil {
 			t.Fatalf("Normalize(%q) error = %v", spelling, err)
 		}
 		if got := document.Server.Java.Distribution; got != javapkg.DistributionTemurin {
 			t.Fatalf("Normalize(%q) distribution = %q, want %q", spelling, got, javapkg.DistributionTemurin)
 		}
-		normalized, err := manifest.Fingerprint(document)
+		normalized, err := document.Fingerprint()
 		if err != nil {
 			t.Fatalf("Fingerprint(%q) error = %v", spelling, err)
 		}
 
 		root := t.TempDir()
-		if err := manifest.Write(root, document); err != nil {
+		if err := documentpkg.ManifestFile(root).Write(document); err != nil {
 			t.Fatalf("Write(%q) error = %v", spelling, err)
 		}
-		decoded, err := manifest.Read(root)
+		decoded, err := documentpkg.ManifestFile(root).Read()
 		if err != nil {
 			t.Fatalf("Read(%q) error = %v", spelling, err)
 		}
 		if got := decoded.Server.Java.Distribution; got != javapkg.DistributionTemurin {
 			t.Fatalf("Read(%q) distribution = %q, want %q", spelling, got, javapkg.DistributionTemurin)
 		}
-		persisted, err := manifest.Fingerprint(decoded)
+		persisted, err := decoded.Fingerprint()
 		if err != nil {
 			t.Fatalf("Fingerprint of read manifest for %q: %v", spelling, err)
 		}
@@ -52,17 +52,17 @@ func TestJavaDistributionNormalizes(t *testing.T) {
 	}
 }
 
-func manifestWithJavaDistribution(distribution string) *manifest.Document {
-	return &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+func manifestWithJavaDistribution(distribution string) *documentpkg.Manifest {
+	return &documentpkg.Manifest{
+		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Server: documentpkg.ManifestServer{
 			Minecraft: versionpkg.Version("1.21.4"),
 			Directory: ".",
-			Core: manifest.Core{
+			Core: documentpkg.ManifestCore{
 				Product:        serverpkg.ProductFabric,
 				ProductVersion: versionpkg.Version("0.16.9"),
 			},
-			Java: &manifest.Java{
+			Java: &documentpkg.ManifestJava{
 				Version:      21,
 				Distribution: javapkg.Distribution(distribution),
 			},

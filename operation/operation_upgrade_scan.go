@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
@@ -18,7 +18,7 @@ import (
 func upgradeVersions(
 	ctx context.Context,
 	root upgradeRoot,
-	old *lockfile.Document,
+	old *document.Lock,
 	maxVersions int,
 ) ([]upgradeVersion, int, int, error) {
 	registry, ok := root.Provider.Registry()
@@ -214,7 +214,7 @@ func upgradeCombinations(roots []upgradeRoot, active []int, limit int) [][]int {
 	return combos
 }
 
-func upgradeLockedBuild(candidate upstream.Candidate, previous *lockfile.Package) bool {
+func upgradeLockedBuild(candidate upstream.Candidate, previous *document.Package) bool {
 	if previous == nil {
 		return false
 	}

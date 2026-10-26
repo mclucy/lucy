@@ -4,7 +4,7 @@ package filetrack
 import (
 	"time"
 
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 )
 
 type Operation string
@@ -35,8 +35,8 @@ type Request struct {
 // Change separates displaced bytes from accepted revision navigation.
 type Change struct {
 	Path       string                `json:"path"`
-	Before     *manifest.TrackedFile `json:"before,omitempty"`
-	After      *manifest.TrackedFile `json:"after,omitempty"`
+	Before     *document.TrackedFile `json:"before,omitempty"`
+	After      *document.TrackedFile `json:"after,omitempty"`
 	BackupHash string                `json:"backup_hash,omitempty"`
 	BackupMode uint32                `json:"backup_mode,omitzero"`
 	Revision   uint64                `json:"revision,omitzero"`

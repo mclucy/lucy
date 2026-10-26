@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 )
 
 // Source names how a Java runtime was selected.
@@ -87,7 +87,7 @@ func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 		Target:       req.Target(),
 		Distribution: req.Distribution,
 	}
-	local, err := manifest.ReadLocal(root)
+	local, err := document.ReadLocal(root)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 			}
 			check.Problems = append(check.Problems, fmt.Sprintf(
 				"%s selects %s, which is not a usable Java runtime: %v",
-				manifest.LocalFilename,
+				document.LocalFilename,
 				home,
 				err,
 			))
@@ -197,7 +197,7 @@ func (r Requirement) Misses(runtime *Runtime) []string {
 			runtime.Home,
 			runtime.Build(),
 			r.Distribution.Title(),
-			manifest.Filename,
+			document.ManifestFilename,
 		))
 	}
 	return found

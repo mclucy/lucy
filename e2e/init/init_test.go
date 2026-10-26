@@ -22,9 +22,8 @@ import (
 	"testing"
 	"time"
 
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/e2e/internal/testkit"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,7 +47,7 @@ func TestInitialize(t *testing.T) {
 			}
 			// A local sandbox may carry intent from an earlier run; init must
 			// start from the server workspace alone.
-			removePaths(t, root, []string{manifest.Filename, lockfile.Filename, ".lucy"})
+			removePaths(t, root, []string{documentpkg.ManifestFilename, documentpkg.LockFilename, ".lucy"})
 			// Composition cases start from the files the modpack itself ships,
 			// not from a previous installation left in the generated sandbox.
 			removePaths(t, root, scenario.prune)
@@ -171,7 +170,7 @@ func verifyInitialized(
 	if scenario.coreVersion == "" {
 		t.Fatalf("init scenario must pin the exact core version")
 	}
-	data, err := os.ReadFile(filepath.Join(root, manifest.Filename))
+	data, err := os.ReadFile(filepath.Join(root, documentpkg.ManifestFilename))
 	if err != nil {
 		t.Fatalf("read generated manifest: %v", err)
 	}
@@ -246,7 +245,7 @@ func verifyInitialized(
 // alias, and the assertion must not depend on the Go struct that decodes it.
 func requireLockOmitsEntryPoint(t *testing.T, root string) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, lockfile.Filename))
+	data, err := os.ReadFile(filepath.Join(root, documentpkg.LockFilename))
 	if err != nil {
 		t.Fatalf("read generated lock: %v", err)
 	}
@@ -280,7 +279,7 @@ func verifyStatus(
 	informational []string,
 ) {
 	t.Helper()
-	guarded := []string{manifest.Filename, lockfile.Filename, ".lucy/install.yaml"}
+	guarded := []string{documentpkg.ManifestFilename, documentpkg.LockFilename, ".lucy/install.yaml"}
 	before := fileFingerprints(t, root, guarded)
 	defer verifyFileFingerprints(t, root, guarded, before)
 	stdout, stderr, err := runner.execute(t, root, "status", "--json-compact")
@@ -371,13 +370,13 @@ func componentVersion(components []statusRef, ecosystem, name string) string {
 	return ""
 }
 
-func readLock(t *testing.T, root string) lockfile.Document {
+func readLock(t *testing.T, root string) documentpkg.Lock {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, lockfile.Filename))
+	data, err := os.ReadFile(filepath.Join(root, documentpkg.LockFilename))
 	if err != nil {
 		t.Fatalf("read generated lock: %v", err)
 	}
-	locked, err := lockfile.Decode(bytes.NewReader(data))
+	locked, err := documentpkg.DecodeLock(bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("decode generated lock: %v", err)
 	}

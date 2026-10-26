@@ -9,18 +9,17 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/cas"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 )
 
 // DeclaredFiles prefers the manifest declarations and falls back to the lock
 // when only an installed workspace remains, so read-only commands also work
 // without a manifest. A present but unreadable state file is an error, never an
 // empty result set.
-func DeclaredFiles(root string) ([]manifest.TrackedFile, error) {
-	document, manifestErr := manifest.Read(root)
+func DeclaredFiles(root string) ([]documentpkg.TrackedFile, error) {
+	document, manifestErr := documentpkg.ManifestFile(root).Read()
 	switch {
 	case manifestErr == nil:
 		return document.Files, nil
@@ -28,7 +27,7 @@ func DeclaredFiles(root string) ([]manifest.TrackedFile, error) {
 		return nil, fmt.Errorf("read manifest: %w", manifestErr)
 	}
 
-	locked, lockErr := lockfile.Read(root)
+	locked, lockErr := documentpkg.LockFile(root).Read()
 	switch {
 	case lockErr == nil:
 		return locked.Files, nil
@@ -38,18 +37,18 @@ func DeclaredFiles(root string) ([]manifest.TrackedFile, error) {
 
 	return nil, fmt.Errorf(
 		"no %s or %s in this workspace; run lucy init to create a manifest",
-		manifest.Filename,
-		lockfile.Filename,
+		documentpkg.ManifestFilename,
+		documentpkg.LockFilename,
 	)
 }
 
 // Inspect makes no state directories and never contacts a recovery source.
-func Inspect(root string, declarations []manifest.TrackedFile) (statuses []Status, resultErr error) {
+func Inspect(root string, declarations []documentpkg.TrackedFile) (statuses []Status, resultErr error) {
 	if err := noPending(root); err != nil {
 		return nil, err
 	}
 	declarations = slices.Clone(declarations)
-	if err := manifest.NormalizeTrackedFiles(declarations); err != nil {
+	if err := documentpkg.NormalizeTrackedFiles(declarations); err != nil {
 		return nil, err
 	}
 	files, err := os.OpenRoot(root)
@@ -94,12 +93,12 @@ func Inspect(root string, declarations []manifest.TrackedFile) (statuses []Statu
 
 // Provision requires shared workspace ownership and preserves every existing working file.
 // Availability failures are diagnostics; unsafe state and incomplete transactions are errors.
-func Provision(ctx context.Context, root string, declarations []manifest.TrackedFile, offline bool) (diagnostics []Diagnostic, resultErr error) {
+func Provision(ctx context.Context, root string, declarations []documentpkg.TrackedFile, offline bool) (diagnostics []Diagnostic, resultErr error) {
 	if err := noPending(root); err != nil {
 		return nil, err
 	}
 	declarations = slices.Clone(declarations)
-	if err := manifest.NormalizeTrackedFiles(declarations); err != nil {
+	if err := documentpkg.NormalizeTrackedFiles(declarations); err != nil {
 		return nil, err
 	}
 	if len(declarations) == 0 {
