@@ -108,11 +108,11 @@ func initializeWorkspace(ctx context.Context, cmd *cobra.Command, workDir string
 	}
 	fmt.Fprintf(
 		output.Human(),
-		"Wrote %s for Minecraft %s (%s) · %d packages\n",
+		"Wrote %s for Minecraft %s (%s)\n  Recorded %s\n",
 		written,
 		result.Document.Server.Minecraft,
 		result.Document.Server.Core.Product,
-		len(result.Lock.Packages),
+		packageCountLabel(len(result.Lock.Packages)),
 	)
 	return nil
 }

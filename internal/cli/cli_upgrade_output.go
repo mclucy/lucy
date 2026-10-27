@@ -76,12 +76,12 @@ func (o *installOutput) RenderUpgradePlan(
 		)
 	}
 	fmt.Fprintln(o.Human(), style.Muted(fmt.Sprintf(
-		"%d roots upgraded · %d version bumps · policy %s · plan %s",
+		"%d roots upgraded, %d version bumps",
 		option.Metrics.UpgradedRoots,
 		option.Metrics.VersionBumps,
-		policy,
-		option.Hash,
 	)))
+	fmt.Fprintln(o.Human(), style.Muted("Policy: "+policy))
+	fmt.Fprintln(o.Human(), style.Muted("Plan: "+option.Hash))
 	if dryRun {
 		fmt.Fprintln(o.Human(), style.Muted("No files were changed."))
 	}
@@ -109,13 +109,12 @@ func (o *installOutput) RenderUpgradeApplied(
 			result.MCDR.Inputs,
 		)
 	}
-	line := style.Success("✓") + " Upgrade applied"
-	changed := result.Files.Created + result.Files.Replaced + result.Files.Removed
-	if changed > 0 {
-		line += fmt.Sprintf(" · %d files changed", changed)
+	fmt.Fprintln(o.Human(), style.Success("✓")+" Upgrade applied")
+	if changed := result.Files.Created + result.Files.Replaced + result.Files.Removed; changed > 0 {
+		fmt.Fprintln(o.Human(), style.Muted("  "+fileCountLabel(changed)+" changed"))
 	}
-	line += style.Muted(fmt.Sprintf(" · %s · %s", policy, hash))
-	fmt.Fprintln(o.Human(), line)
+	fmt.Fprintln(o.Human(), style.Muted("  Policy: "+policy))
+	fmt.Fprintln(o.Human(), style.Muted("  Plan: "+hash))
 	if trailer := publicationLine(result); trailer != "" {
 		fmt.Fprintln(o.Human(), trailer)
 	}
@@ -133,15 +132,16 @@ func printUpgradeWarnings(output *installOutput, warnings []error) {
 }
 
 func upgradeOptionSummary(option operation.UpgradeOption) string {
+	metrics := fmt.Sprintf(
+		"%d roots upgraded, %d version bumps",
+		option.Metrics.UpgradedRoots,
+		option.Metrics.VersionBumps,
+	)
 	result := option.Plan.Result
-	parts := []string{
-		fmt.Sprintf("%d roots upgraded", option.Metrics.UpgradedRoots),
-		fmt.Sprintf("%d version bumps", option.Metrics.VersionBumps),
-	}
 	if result == nil {
-		return strings.Join(parts, " · ")
+		return metrics
 	}
-	changes := make([]string, 0, 3)
+	changes := make([]string, 0, 4)
 	for _, change := range result.Packages {
 		name := change.Name
 		if change.Previous != "" {
@@ -159,5 +159,5 @@ func upgradeOptionSummary(option operation.UpgradeOption) string {
 	if len(changes) == 0 {
 		changes = append(changes, "no package changes")
 	}
-	return strings.Join(parts, " · ") + " — " + strings.Join(changes, ", ")
+	return strings.Join(changes, ", ") + " (" + metrics + ")"
 }

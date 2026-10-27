@@ -606,7 +606,7 @@ func statusViewPackageTable(root string, packages []statusPackage, width int) st
 	nameWidth, versionWidth := 1, 1
 	for _, pkg := range packages {
 		nameWidth = max(nameWidth, ansi.StringWidth(statusViewPackageName(pkg)))
-		versionWidth = max(versionWidth, ansi.StringWidth(pkg.Version))
+		versionWidth = max(versionWidth, ansi.StringWidth(statusViewPackageVersion(pkg)))
 	}
 	nameWidth = min(nameWidth, max(1, width*2/5))
 	versionWidth = min(versionWidth, max(7, width/6))
@@ -626,15 +626,8 @@ func statusViewPackageTable(root string, packages []statusPackage, width int) st
 			table.WriteString(terminal.TruncateMiddle(name, width))
 			continue
 		}
-		version := strings.TrimSpace(pkg.Version)
-		if version == "" {
-			version = "—"
-		}
-		version = terminal.TruncateMiddle(version, versionWidth)
+		version := terminal.TruncateMiddle(statusViewPackageVersion(pkg), versionWidth)
 		path := terminal.DisplayPath(root, pkg.Path)
-		if path == "" {
-			path = "—"
-		}
 		table.WriteString(name)
 		table.WriteString(strings.Repeat(" ", nameWidth-ansi.StringWidth(name)+gap))
 		table.WriteString(version)
@@ -642,6 +635,15 @@ func statusViewPackageTable(root string, packages []statusPackage, width int) st
 		table.WriteString(style.Muted(terminal.TruncateMiddle(path, pathWidth)))
 	}
 	return table.String()
+}
+
+// statusViewPackageVersion names a missing version instead of leaving the
+// column empty, so the path column keeps its alignment and meaning.
+func statusViewPackageVersion(pkg statusPackage) string {
+	if version := strings.TrimSpace(pkg.Version); version != "" {
+		return version
+	}
+	return "unknown"
 }
 
 func statusViewPackageGrid(packages []statusPackage, width int) string {

@@ -201,7 +201,7 @@ tasks:
     cmds:
       - |
         if [ -z "${CF_API_KEY:-}" ]; then
-          printf "[WARN] CF_API_KEY is not set — CurseForge API calls will fail\n"
+          printf "[WARN] CF_API_KEY is not set, so CurseForge API calls will fail\n"
           exit 0
         fi
         STATUS=$(curl -s -o /dev/null -w "%{http_code}" \

@@ -118,9 +118,9 @@ func (o *installOutput) statusText() string {
 		parts = append(parts, style.FormatBytesDecimal(fetched)+" fetched")
 	}
 	if o.rejectedProject != "" {
-		parts = append(parts, fmt.Sprintf("%s: %d builds rejected", o.rejectedProject, o.rejected))
+		parts = append(parts, fmt.Sprintf("%d builds of %s rejected", o.rejected, o.rejectedProject))
 	}
-	return strings.Join(parts, " · ")
+	return strings.Join(parts, ", ")
 }
 
 // Render prints the result. Human output goes to stderr; JSON goes to stdout.
@@ -137,7 +137,7 @@ func (o *installOutput) Render(result *install.Result) error {
 		if !result.PublishedManifest && !result.PublishedLock {
 			line := style.Success("✓") + " Already up to date"
 			if result.TotalPackages > 0 {
-				line += style.Muted(fmt.Sprintf(" · %d packages", result.TotalPackages))
+				line = style.Success("✓") + " " + packageCountLabel(result.TotalPackages) + " already up to date"
 			}
 			o.renderer.Println(line)
 		}
@@ -355,6 +355,13 @@ func pluralBuilds(count int) string {
 		return "1 build"
 	}
 	return fmt.Sprintf("%d builds", count)
+}
+
+func packageCountLabel(count int) string {
+	if count == 1 {
+		return "1 package"
+	}
+	return fmt.Sprintf("%d packages", count)
 }
 
 func publicationLine(result *install.Result) string {

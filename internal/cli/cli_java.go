@@ -151,10 +151,9 @@ func writeJavaRequirement(out io.Writer, requirement *javaruntime.Requirement) {
 	target := strconv.Itoa(requirement.Target())
 	fmt.Fprintf(
 		out,
-		"%s Java %s · %s\n",
+		"%s %s\n",
 		style.Accent("Requires"),
-		target,
-		javaDistributionLabel(requirement.Distribution),
+		javaSpecLabel(target, requirement.Distribution),
 	)
 	width := 0
 	for _, c := range requirement.Constraints {
@@ -404,13 +403,17 @@ func javaDistributionLabel(distribution java.Distribution) string {
 	return distribution.Title()
 }
 
+func javaSpecLabel(version string, distribution java.Distribution) string {
+	return "Java " + version + " from " + javaDistributionLabel(distribution)
+}
+
 func javaOverrideLabel(override *manifest.Java) string {
 	if override.IsAuto() {
-		return "Java auto · any distribution"
+		return javaSpecLabel(manifest.JavaAuto, java.DistributionAny)
 	}
 	version := manifest.JavaAuto
 	if override.Version != 0 {
 		version = strconv.Itoa(override.Version)
 	}
-	return "Java " + version + " · " + javaDistributionLabel(override.Distribution)
+	return javaSpecLabel(version, override.Distribution)
 }

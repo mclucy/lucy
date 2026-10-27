@@ -240,12 +240,12 @@ func (m *liveModel) View() tea.View {
 		frame := spinnerRunes[m.frame%len(spinnerRunes)]
 		head := style.Note(string(frame)) + " " + style.Accent(m.state.phase)
 		if m.state.status != "" {
-			available := width - lipgloss.Width(head) - 3
+			available := width - lipgloss.Width(head) - 2
 			status := m.state.status
 			if available >= 0 && lipgloss.Width(status) > available {
 				status = ansi.Truncate(status, available, "…")
 			}
-			head += style.Muted(" · " + status)
+			head += style.Muted(": " + status)
 		}
 		lines = append(lines, clip(head, width))
 	}

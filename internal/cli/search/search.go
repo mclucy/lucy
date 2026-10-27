@@ -347,14 +347,19 @@ func searchSectionHeader(res upstream.SearchResponse) string {
 }
 
 func searchStatsLine(item upstream.SearchResult) string {
-	parts := make([]string, 0, 2)
+	var sb strings.Builder
 	if item.Downloads > 0 {
-		parts = append(parts, formatDownloads(item.Downloads)+" downloads")
+		sb.WriteString(formatDownloads(item.Downloads) + " downloads")
 	}
 	if !item.LastUpdated.IsZero() {
-		parts = append(parts, "updated "+timeAgo(item.LastUpdated))
+		if sb.Len() > 0 {
+			sb.WriteString(", last updated ")
+		} else {
+			sb.WriteString("Last updated ")
+		}
+		sb.WriteString(timeAgo(item.LastUpdated))
 	}
-	return strings.Join(parts, " · ")
+	return sb.String()
 }
 
 func formatDownloads(n int64) string {
