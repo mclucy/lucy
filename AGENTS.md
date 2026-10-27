@@ -205,11 +205,21 @@ Clarify before naming. A name is a contract, not a label.
 
 ## Documentation
 
-The following rules applies to README and `docs/`:
+Documentation has two audiences. Choose the layer before writing:
 
-- They are user-oriented. Never edit them if your change is not worth notifying for the user.
-- Never name a go module, internal terminology, or code symbol.
-- The scope is strictly what the user sees. No mechanism behind it should be exposed.
+### Human-facing documentation
+
+- The README and published pages outside `docs/agents/` are for users. Change them when a user-facing change is worth documenting.
+- Write concise, task-oriented tutorials in natural language. Preserve useful examples, prerequisites, safety warnings, and decisions; do not enumerate obvious behavior or restate command help or source code.
+- Describe only what users need to see or do. Do not expose implementation mechanisms, internal terminology, Go packages, or code symbols.
+- Respect existing human prose and structure. Improve unclear language without replacing it with generic or repetitive text.
+
+### Agent-facing documentation
+
+- Put agent pages in `docs/agents/*.mdx`. Keep them accessible by direct Mintlify URL and searchable through `lucy docs grep`, but do not add them to site navigation or other user-interface entry points.
+- Explain Lucy's actual internal architecture and domain models: ownership, state, boundaries, data flow, invariants, and failure or recovery semantics. Ground claims in the current source and name relevant packages or entry points when useful.
+- Do not duplicate human tutorials, command reference material, or agent-specific usage workflows. Agents learn how to use Lucy from the human documentation.
+- Keep both layers consistent with the implementation. When agent pages change, regenerate the embedded documentation, rebuild Lucy, and verify that the new pages can be found with `lucy docs grep`.
 
 ## Comments
 
