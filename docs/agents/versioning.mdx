@@ -1,0 +1,26 @@
+---
+title: "Versions and module constraints"
+description: "Version dialects, package selectors, and descriptor dependency checks"
+---
+
+Lucy handles two different questions: selecting a registry artifact for a declared package, and checking whether the modules in the selected artifacts satisfy loader metadata. A package selector may name a version, release ID, file ID, or filename. A module dependency instead names a loader-visible module and a constraint written in that descriptor's dialect. A registry project name and the module ID it provides can differ.
+
+## Dialects
+
+`version.Engine` binds parsing, ordering, and matching to one dialect. Fabric descriptors use the Fabric grammar; MCDReforged plugin metadata uses MCDR; Forge and NeoForge `mods.toml` use Maven; Minecraft has its own release and snapshot grammar; opaque identifiers use equality semantics. Versions from different dialects are not comparable.
+
+A `version.Version` can hold a floating selector such as `any`, `stable`, or `beta` during selection. Parsing a concrete version rejects those selectors. An empty constraint or `*` accepts any version; an invalid expression is an error rather than an unconstrained match. Constraint expressions are alternatives of conjunctions: one alternative must have all its terms satisfied. For Fabric version arrays, each array element is an alternative. Fabric non-semantic versions have special equality-based matching rather than ordinary numerical ordering.
+
+## Candidate selection
+
+`resolve` scopes project requests by environment, ecosystem, provider, and project. Enabled requirement bindings apply hard filters to candidates, including selector, channel, and file pattern; without a file pattern Lucy selects primary files. Release hints supplied by upstream dependency metadata affect candidate ordering, not eligibility by themselves. Previous pins can be preferred when they still satisfy the request.
+
+Candidate resolution and descriptor validation are related but distinct. Registry dependency metadata can identify other projects to select; descriptors establish module IDs, dependency constraints, and bundled modules in the actual artifact. A release that appears suitable at the registry layer can therefore fail when its modules are checked against the selected runtime and other artifacts.
+
+## Module graph
+
+`resolve` indexes modules by environment, ecosystem, and normalized module ID, including aliases declared through `provides`. Native modules take precedence over bundled copies; two native modules from different packages claiming the same identity are ambiguous. Competing bundled copies are compared by their version dialect, and incomparable versions cannot be arbitrarily ordered.
+
+The runtime can provide modules itself, including Minecraft and loader components. Module dependency checks consider those runtime modules and selected package modules. Required dependencies and incompatibilities produce problems when unsatisfied; Java is handled separately by [Java runtime architecture](/agents/java-runtime). Module problems can lead the resolver to reject candidate combinations. A rejection ledger groups candidate failures by project and reason; a search limit is not proof that every possible combination was explored.
+
+Source entry points: `version/version_dialect.go`, `version/version_types.go`, `resolve/resolve_candidate.go`, `resolve/resolve_modules.go`, and `resolve/resolve_failure.go`.
