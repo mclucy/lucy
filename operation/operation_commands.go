@@ -519,11 +519,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if err != nil {
 		return initResult(observed), err
 	}
-	configuration := config.WorkspaceFile(root)
+	configurationPath := filepath.Join(root, filepath.FromSlash(config.WorkspaceFilename))
 	if err := workspacewrite.SafePath(root, config.WorkspaceFilename); err != nil {
 		return initResult(observed), err
 	}
-	_, configErr := os.Lstat(configuration.Path())
+	_, configErr := os.Lstat(configurationPath)
 	publishedConfig := errors.Is(configErr, os.ErrNotExist)
 	if configErr != nil && !publishedConfig {
 		return initResult(observed), configErr
@@ -531,7 +531,6 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	manifestFile := documentpkg.ManifestFile(root)
 	if opts.NoComments {
 		manifestFile = manifestFile.WithEncoder((*documentpkg.Manifest).PlainBytes)
-		configuration = configuration.WithEncoder((*config.Values).PlainBytes)
 	}
 	if err := manifestFile.Write(d); err != nil {
 		return initResult(observed), err
@@ -542,11 +541,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 		}
 	}
 	if publishedConfig {
-		if err := configuration.Create(&config.Values{}); errors.Is(err, os.ErrExist) {
-			publishedConfig = false
-		} else if err != nil {
+		created, err := config.CreateWorkspace(root, opts.NoComments)
+		if err != nil {
 			return initResult(observed), err
 		}
+		publishedConfig = created
 	}
 	result = &InitResult{
 		Document:        d,

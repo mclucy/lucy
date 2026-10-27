@@ -23,6 +23,7 @@ const (
 type Service struct {
 	root       string
 	globalPath string
+	globalErr  error
 }
 
 type WriteResult struct {
@@ -30,23 +31,22 @@ type WriteResult struct {
 	Created bool   `json:"created"`
 }
 
+// New builds the service for root. An unavailable user configuration directory
+// only fails requests for the global scope, so Java selection still works in
+// environments without a home directory.
 func New(root string) (*Service, error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace directory: %w", err)
 	}
+	service := &Service{root: absolute}
 	directory, err := os.UserConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("locate global config directory: %w", err)
+		service.globalErr = fmt.Errorf("locate global config directory: %w", err)
+		return service, nil
 	}
-	return &Service{
-		root:       absolute,
-		globalPath: filepath.Join(directory, "lucy", "config.yaml"),
-	}, nil
-}
-
-func WorkspaceFile(root string) document.Service[Values] {
-	return configFile(filepath.Join(root, filepath.FromSlash(WorkspaceFilename)))
+	service.globalPath = filepath.Join(directory, "lucy", "config.yaml")
+	return service, nil
 }
 
 func configFile(path string) document.Service[Values] {
@@ -59,8 +59,11 @@ func configFile(path string) document.Service[Values] {
 func (s *Service) file(scope Scope) (document.Service[Values], error) {
 	switch scope {
 	case WorkspaceScope:
-		return WorkspaceFile(s.root), nil
+		return configFile(filepath.Join(s.root, filepath.FromSlash(WorkspaceFilename))), nil
 	case GlobalScope:
+		if s.globalErr != nil {
+			return document.Service[Values]{}, s.globalErr
+		}
 		return configFile(s.globalPath), nil
 	default:
 		return document.Service[Values]{}, fmt.Errorf("unknown config scope")
@@ -70,6 +73,9 @@ func (s *Service) file(scope Scope) (document.Service[Values], error) {
 func (s *Service) read(scope Scope, required bool) (*Values, error) {
 	file, err := s.file(scope)
 	if err != nil {
+		if scope == GlobalScope && !required {
+			return &Values{}, nil
+		}
 		return nil, err
 	}
 	values, err := file.Read()
