@@ -16,7 +16,10 @@ var leavesCmd = &cobra.Command{
 	RunE:  actionLeaves,
 }
 
-func NewLeavesCommand() *cobra.Command {
+var leavesJSON JSONResult[leavesOutput]
+
+func NewLeavesCommand(contracts *JSONContracts) *cobra.Command {
+	leavesJSON.Bind(contracts, leavesCmd)
 	leavesCmd.Flags().Bool(
 		"live",
 		false,
@@ -39,7 +42,7 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 	}
 
 	if output.JSON() {
-		return output.WriteJSON(leavesDocument(graph, origin, output.Warnings()))
+		return leavesJSON.Write(output, leavesDocument(graph, origin, output.Warnings()))
 	}
 
 	human := output.Human()
@@ -68,11 +71,18 @@ type leafNode struct {
 	Ecosystem   string `json:"ecosystem"`
 }
 
+// leavesOutput is the complete machine-readable `leaves` result.
+type leavesOutput struct {
+	Leaves   []leafNode `json:"leaves"`
+	Origin   string     `json:"origin"`
+	Warnings []string   `json:"warnings,omitempty"`
+}
+
 func leavesDocument(
 	graph *DependencyGraph,
 	origin GraphOrigin,
 	warnings []string,
-) map[string]any {
+) leavesOutput {
 	leaves := graph.GetLeaves()
 	jsonLeaves := make([]leafNode, 0, len(leaves))
 	for _, leaf := range leaves {
@@ -89,12 +99,9 @@ func leavesDocument(
 		)
 	}
 
-	document := map[string]any{
-		"origin": origin.String(),
-		"leaves": jsonLeaves,
+	return leavesOutput{
+		Leaves:   jsonLeaves,
+		Origin:   origin.String(),
+		Warnings: warnings,
 	}
-	if len(warnings) > 0 {
-		document["warnings"] = warnings
-	}
-	return document
 }

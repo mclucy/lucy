@@ -37,7 +37,10 @@ var statusCmd = &cobra.Command{
 	RunE: actionStatus,
 }
 
-func NewStatusCommand() *cobra.Command {
+var statusJSON JSONResult[statusDocument]
+
+func NewStatusCommand(contracts *JSONContracts) *cobra.Command {
+	statusJSON.Bind(contracts, statusCmd)
 	AddLongFlag(statusCmd)
 	AddLogoFlag(statusCmd)
 	statusCmd.Flags().Bool(
@@ -222,7 +225,7 @@ func writeStatusDocument(
 	logoMode terminal.StatusLogoMode,
 ) error {
 	if output.JSON() {
-		return output.WriteJSON(document)
+		return statusJSON.Write(output, document)
 	}
 	_, err := fmt.Fprintln(
 		output.Human(),

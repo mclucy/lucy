@@ -17,7 +17,10 @@ var treeCmd = &cobra.Command{
 	RunE:  actionTree,
 }
 
-func NewTreeCommand() *cobra.Command {
+var treeJSON JSONResult[treeOutput]
+
+func NewTreeCommand(contracts *JSONContracts) *cobra.Command {
+	treeJSON.Bind(contracts, treeCmd)
 	treeCmd.Flags().Bool(
 		"live",
 		false,
@@ -45,7 +48,7 @@ func actionTree(cmd *cobra.Command, args []string) error {
 	}
 
 	if output.JSON() {
-		return output.WriteJSON(treeDocument(graph, origin, output.Warnings()))
+		return treeJSON.Write(output, treeDocument(graph, origin, output.Warnings()))
 	}
 
 	maxDepth, _ := cmd.Flags().GetInt("depth")
@@ -131,11 +134,18 @@ type treeNode struct {
 	Children    []*treeNode `json:"children,omitempty"`
 }
 
+// treeOutput is the complete machine-readable `tree` result.
+type treeOutput struct {
+	Origin   string      `json:"origin"`
+	Roots    []*treeNode `json:"roots"`
+	Warnings []string    `json:"warnings,omitempty"`
+}
+
 func treeDocument(
 	graph *DependencyGraph,
 	origin GraphOrigin,
 	warnings []string,
-) map[string]any {
+) treeOutput {
 	visited := make(map[string]bool)
 	roots := graph.GetRoots()
 	jsonRoots := make([]*treeNode, 0, len(roots))
@@ -143,14 +153,11 @@ func treeDocument(
 		jsonRoots = append(jsonRoots, buildJSONNode(root, visited))
 	}
 
-	document := map[string]any{
-		"origin": origin.String(),
-		"roots":  jsonRoots,
+	return treeOutput{
+		Origin:   origin.String(),
+		Roots:    jsonRoots,
+		Warnings: warnings,
 	}
-	if len(warnings) > 0 {
-		document["warnings"] = warnings
-	}
-	return document
 }
 
 func buildJSONNode(node *GraphNode, visited map[string]bool) *treeNode {

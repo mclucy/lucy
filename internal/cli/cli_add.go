@@ -32,7 +32,8 @@ var addCmd = &cobra.Command{
 	RunE: actionAdd,
 }
 
-func NewAddCommand() *cobra.Command {
+func NewAddCommand(contracts *JSONContracts) *cobra.Command {
+	installJSON.Bind(contracts, addCmd)
 	addCmd.Flags().Bool(
 		flagWithOptionalName,
 		false,

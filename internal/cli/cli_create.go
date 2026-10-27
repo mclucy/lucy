@@ -52,7 +52,8 @@ var createCmd = &cobra.Command{
 	RunE: actionCreate,
 }
 
-func NewCreateCommand() *cobra.Command {
+func NewCreateCommand(contracts *JSONContracts) *cobra.Command {
+	createJSON.Bind(contracts, createCmd)
 	createCmd.Flags().BoolP(
 		flagCreateForceName,
 		"f",

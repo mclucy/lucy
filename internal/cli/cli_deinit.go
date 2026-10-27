@@ -17,13 +17,16 @@ var deinitCmd = &cobra.Command{
 	RunE:  actionDeinit,
 }
 
-func NewDeinitCommand() *cobra.Command {
-	return deinitCmd
-}
-
 // deinitDocument is the machine-readable outcome of one deinitialization.
 type deinitDocument struct {
 	Removed []string `json:"removed"`
+}
+
+var deinitJSON JSONResult[deinitDocument]
+
+func NewDeinitCommand(contracts *JSONContracts) *cobra.Command {
+	deinitJSON.Bind(contracts, deinitCmd)
+	return deinitCmd
 }
 
 func actionDeinit(cmd *cobra.Command, _ []string) error {
@@ -38,7 +41,7 @@ func actionDeinit(cmd *cobra.Command, _ []string) error {
 	}
 	document := deinitDocument{Removed: result.Removed}
 	if output.JSON() {
-		return output.WriteJSON(document)
+		return deinitJSON.Write(output, document)
 	}
 	out := output.Human()
 	for _, name := range result.Removed {

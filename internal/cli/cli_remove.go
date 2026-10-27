@@ -31,7 +31,8 @@ var removeCmd = &cobra.Command{
 	RunE: actionRemove,
 }
 
-func NewRemoveCommand() *cobra.Command {
+func NewRemoveCommand(contracts *JSONContracts) *cobra.Command {
+	installJSON.Bind(contracts, removeCmd)
 	removeCmd.Flags().Bool(
 		flagRemoveLockedName,
 		false,

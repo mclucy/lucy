@@ -41,10 +41,6 @@ func (o *Output) Human() io.Writer {
 	return o.human
 }
 
-func (o *Output) WriteJSON(value any) error {
-	return o.writeJSON(o.cmd.OutOrStdout(), value)
-}
-
 func (o *Output) writeJSON(w io.Writer, value any) error {
 	var options []json.Options
 	if o.json != JSONCompact {

@@ -40,7 +40,8 @@ var infoCmd = &cobra.Command{
 	RunE: actionInfo,
 }
 
-func NewCommand() *cobra.Command {
+func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+	infoJSON.Bind(contracts, infoCmd)
 	cli.AddLongFlag(infoCmd)
 	return infoCmd
 }

@@ -5,7 +5,10 @@
 // content-address storage logic of its own.
 package file
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/mclucy/lucy/internal/cli"
+	"github.com/spf13/cobra"
+)
 
 // Flag names of the file subcommands. Output flags come from the root
 // persistent flags and are read through their shared constants.
@@ -98,7 +101,17 @@ var fileCmd = &cobra.Command{
 
 // NewCommand returns the file command tree. Output flags are inherited from
 // the root command and are never registered again here.
-func NewCommand() *cobra.Command {
+func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+	fileResultJSON.Bind(contracts, trackCmd)
+	fileResultJSON.Bind(contracts, untrackCmd)
+	fileResultJSON.Bind(contracts, updateCmd)
+	fileResultJSON.Bind(contracts, recoverCmd)
+	fileResultJSON.Bind(contracts, revertCmd)
+	fileResultJSON.Bind(contracts, lockCmd)
+	fileResultJSON.Bind(contracts, unlockCmd)
+	listJSON.Bind(contracts, listCmd)
+	historyJSON.Bind(contracts, historyCmd)
+
 	fileCmd.AddCommand(
 		trackCmd,
 		untrackCmd,
