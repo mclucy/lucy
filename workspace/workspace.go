@@ -20,8 +20,7 @@ import (
 	"errors"
 	"path/filepath"
 
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace/discovery"
 )
@@ -152,12 +151,12 @@ func (ws *Workspace) ObservePackages() {
 // Package-only intent changes do not invalidate runtime authority.
 func applicableDeclaration(
 	root string,
-) (*discovery.Declaration, *lockfile.Document) {
-	declared, err := manifest.Read(root)
+) (*discovery.Declaration, *document.Lock) {
+	declared, err := document.ManifestFile(root).Read()
 	if err != nil {
 		return nil, nil
 	}
-	locked, err := lockfile.Read(root)
+	locked, err := document.LockFile(root).Read()
 	if err != nil {
 		return nil, nil
 	}

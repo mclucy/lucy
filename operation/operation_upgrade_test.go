@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
@@ -49,7 +49,7 @@ func TestSelectUpgradeOption(t *testing.T) {
 }
 
 func TestUpgradePlanHashIsOrderIndependent(t *testing.T) {
-	packages := []lockfile.Package{
+	packages := []document.Package{
 		{
 			Environment: serverpkg.EnvironmentServer,
 			Ecosystem:   catalog.EcosystemFabric,
@@ -74,7 +74,7 @@ func TestUpgradePlanHashIsOrderIndependent(t *testing.T) {
 		},
 	}
 	first := upgradePlanHash("manifest", "lock", "final", packages)
-	reverse := []lockfile.Package{packages[1], packages[0]}
+	reverse := []document.Package{packages[1], packages[0]}
 	second := upgradePlanHash("manifest", "lock", "final", reverse)
 	if first != second {
 		t.Fatalf("plan hash depends on package order: %q != %q", first, second)

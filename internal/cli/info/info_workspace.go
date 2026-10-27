@@ -8,8 +8,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/upstream"
@@ -56,11 +55,11 @@ func infoObserveWorkspace(root string) *workspace.Workspace {
 
 // infoReadLock reports the workspace lock when one is readable. A missing or
 // invalid lock only removes lock-derived matching; it never fails info.
-func infoReadLock(root string) *lockfile.Document {
+func infoReadLock(root string) *document.Lock {
 	if root == "" {
 		return nil
 	}
-	lock, err := lockfile.Read(root)
+	lock, err := document.LockFile(root).Read()
 	if err != nil {
 		return nil
 	}
@@ -74,7 +73,7 @@ func infoInstalledAt(
 	root string,
 	request catalog.Ref,
 	observed *workspace.Workspace,
-	lock *lockfile.Document,
+	lock *document.Lock,
 ) *infoInstalled {
 	if observed == nil || len(observed.Packages) == 0 {
 		return nil
@@ -82,7 +81,7 @@ func infoInstalledAt(
 
 	locked := infoLockProjectPackages(lock, request)
 	matches := make([]workspace.DiscoveredPackage, 0, len(observed.Packages))
-	matchedLock := make([]*lockfile.Package, 0, len(observed.Packages))
+	matchedLock := make([]*document.Package, 0, len(observed.Packages))
 
 	// A lock binding names the project; the recorded filename ties that
 	// binding to an observed file even when the descriptor uses another id.
@@ -101,7 +100,7 @@ func infoInstalledAt(
 	}
 
 	if len(matches) == 0 {
-		var identityLock *lockfile.Package
+		var identityLock *document.Package
 		if len(locked) > 0 {
 			identityLock = locked[0]
 		}
@@ -119,7 +118,7 @@ func infoInstalledAt(
 
 	if len(matches) > 1 {
 		identityMatches := make([]workspace.DiscoveredPackage, 0, len(matches))
-		identityLocks := make([]*lockfile.Package, 0, len(matches))
+		identityLocks := make([]*document.Package, 0, len(matches))
 		for index, match := range matches {
 			if !infoInstalledNameMatches(request, match.ID) {
 				continue
@@ -162,7 +161,7 @@ func infoInstalledAt(
 // attribution the ref stays an honest, unqualified local identity.
 func infoInstalledRef(
 	installed workspace.DiscoveredPackage,
-	lockedPackage *lockfile.Package,
+	lockedPackage *document.Package,
 	request catalog.Ref,
 ) string {
 	if lockedPackage != nil {
@@ -186,13 +185,13 @@ func infoInstalledRef(
 }
 
 func infoLockProjectPackages(
-	lock *lockfile.Document,
+	lock *document.Lock,
 	request catalog.Ref,
-) []*lockfile.Package {
+) []*document.Package {
 	if lock == nil {
 		return nil
 	}
-	matches := make([]*lockfile.Package, 0, len(lock.Packages))
+	matches := make([]*document.Package, 0, len(lock.Packages))
 	for index := range lock.Packages {
 		lockedPackage := &lock.Packages[index]
 		if infoLockPackageMatches(lockedPackage, request) {
@@ -203,11 +202,11 @@ func infoLockProjectPackages(
 }
 
 func infoLockPackageMatches(
-	lockedPackage *lockfile.Package,
+	lockedPackage *document.Package,
 	request catalog.Ref,
 ) bool {
 	for _, binding := range lockedPackage.Requirements {
-		provider, project, err := manifest.ParseReference(binding.Reference)
+		provider, project, err := document.ParseReference(binding.Reference)
 		if err != nil {
 			continue
 		}
@@ -260,14 +259,14 @@ func infoInstalledNameMatches(
 }
 
 func infoLockPackageProvider(
-	lockedPackage *lockfile.Package,
+	lockedPackage *document.Package,
 ) catalog.Provider {
 	if infoProviderUsable(lockedPackage.Provider) {
 		return lockedPackage.Provider
 	}
 	provider := catalog.ProviderUnspecified
 	for _, binding := range lockedPackage.Requirements {
-		candidate, _, err := manifest.ParseReference(binding.Reference)
+		candidate, _, err := document.ParseReference(binding.Reference)
 		if err != nil || !infoProviderUsable(candidate) {
 			continue
 		}
@@ -283,11 +282,11 @@ func infoLockPackageProvider(
 // satisfies for the request. A binding that names the request wins over the
 // package's opaque provider project id.
 func infoLockPackageIdentity(
-	lockedPackage *lockfile.Package,
+	lockedPackage *document.Package,
 	request catalog.Ref,
 ) (catalog.Provider, string) {
 	for _, binding := range lockedPackage.Requirements {
-		provider, project, err := manifest.ParseReference(binding.Reference)
+		provider, project, err := document.ParseReference(binding.Reference)
 		if err != nil {
 			continue
 		}
@@ -306,7 +305,7 @@ func infoResolveProjectVersion(
 	request catalog.VersionedRef,
 	provider catalog.Provider,
 	observed *workspace.Workspace,
-	lock *lockfile.Document,
+	lock *document.Lock,
 ) (version.Version, []string, error) {
 	if request.Version == "" || request.Version == version.Any {
 		return version.Any, nil, nil
@@ -393,7 +392,7 @@ func infoResolveProjectVersion(
 	return selected, nil, nil
 }
 
-func infoWorkspaceLoader(observed *workspace.Workspace, lock *lockfile.Document) catalog.Ecosystem {
+func infoWorkspaceLoader(observed *workspace.Workspace, lock *document.Lock) catalog.Ecosystem {
 	if observed != nil {
 		if loader := infoLoaderFromOffers(observed.ServedEcosystems()); loader != catalog.EcosystemUnspecified {
 			return loader

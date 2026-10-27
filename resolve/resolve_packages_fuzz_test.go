@@ -9,8 +9,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/resolve"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
@@ -263,44 +262,44 @@ func selectionFixture(t *testing.T, scenario selectionScenario) *catalogueFixtur
 	return fixture
 }
 
-func selectionManifest(scenario selectionScenario) *manifest.Document {
-	packages := make(map[string]manifest.Requirement)
+func selectionManifest(scenario selectionScenario) *document.Manifest {
+	packages := make(map[string]document.Requirement)
 	for p, name := range fuzzProjectNames {
 		if requirement, ok := selectionRootRequirement(name, scenario.projects[p].rootMode); ok {
 			packages["modrinth:"+name] = requirement
 		}
 	}
-	return &manifest.Document{
-		Server: manifest.Server{
+	return &document.Manifest{
+		Server: document.ManifestServer{
 			Minecraft: versionpkg.Version(fuzzMinecraft),
-			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{
+			Packages: map[catalog.Ecosystem]map[string]document.Requirement{
 				catalog.EcosystemFabric: packages,
 			},
 		},
 	}
 }
 
-func selectionRootRequirement(name string, mode int) (manifest.Requirement, bool) {
+func selectionRootRequirement(name string, mode int) (document.Requirement, bool) {
 	disabled := false
 	switch mode {
 	case rootAbsent:
-		return manifest.Requirement{}, false
+		return document.Requirement{}, false
 	case rootAny:
-		return manifest.Requirement{Selector: versionpkg.Any}, true
+		return document.Requirement{Selector: versionpkg.Any}, true
 	case rootStable:
-		return manifest.Requirement{Selector: versionpkg.Stable}, true
+		return document.Requirement{Selector: versionpkg.Stable}, true
 	case rootExactVersion:
-		return manifest.Requirement{Selector: versionpkg.Version("1.0.0")}, true
+		return document.Requirement{Selector: versionpkg.Version("1.0.0")}, true
 	case rootMissingVersion:
-		return manifest.Requirement{Selector: versionpkg.Version("9.9.9")}, true
+		return document.Requirement{Selector: versionpkg.Version("9.9.9")}, true
 	case rootDisabled:
-		return manifest.Requirement{Selector: versionpkg.Any, Enabled: &disabled}, true
+		return document.Requirement{Selector: versionpkg.Any, Enabled: &disabled}, true
 	case rootReleaseID:
-		return manifest.Requirement{Selector: versionpkg.Version(selectionReleaseID(name, 0))}, true
+		return document.Requirement{Selector: versionpkg.Version(selectionReleaseID(name, 0))}, true
 	case rootFilePattern:
-		return manifest.Requirement{Selector: versionpkg.Any, FilePattern: "*-0.jar"}, true
+		return document.Requirement{Selector: versionpkg.Any, FilePattern: "*-0.jar"}, true
 	default:
-		return manifest.Requirement{}, false
+		return document.Requirement{}, false
 	}
 }
 
@@ -435,7 +434,7 @@ func selectionHasSolution(scenario selectionScenario) bool {
 
 func selectionAssignmentFromResult(
 	scenario selectionScenario,
-	out []lockfile.Package,
+	out []document.Package,
 ) (selectionAssignment, error) {
 	chosen := selectionAssignment{-1, -1, -1}
 	for _, pkg := range out {
@@ -517,9 +516,9 @@ func selectionAssignmentFromResult(
 func selectionProvenance(
 	scenario selectionScenario,
 	chosen selectionAssignment,
-	out []lockfile.Package,
+	out []document.Package,
 ) error {
-	byProject := make(map[int]*lockfile.Package, len(out))
+	byProject := make(map[int]*document.Package, len(out))
 	for index := range out {
 		project := slices.Index(fuzzProjectNames[:], out[index].ProjectID)
 		byProject[project] = &out[index]
@@ -587,14 +586,14 @@ func sameRefSet(actual, want []catalog.Ref) bool {
 	return maps.Equal(actualSet, wantSet)
 }
 
-func selectionRequirementMatches(scenario selectionScenario, project int, pkg lockfile.Package) error {
+func selectionRequirementMatches(scenario selectionScenario, project int, pkg document.Package) error {
 	mode := scenario.projects[project].rootMode
 	name := fuzzProjectNames[project]
 	if mode == rootDisabled {
 		// The disabled direct declaration stays on the package alongside the
 		// dependency demand that selected it. Enabled() below is the
 		// installation contract; do not pin any additional demand bindings.
-		direct := lockfile.RequirementBinding{
+		direct := document.RequirementBinding{
 			Reference: "modrinth:" + name,
 			Selector:  versionpkg.Any,
 			Enabled:   false,
@@ -612,7 +611,7 @@ func selectionRequirementMatches(scenario selectionScenario, project int, pkg lo
 		return nil
 	}
 	requirement, _ := selectionRootRequirement(name, mode)
-	direct := lockfile.RequirementBinding{
+	direct := document.RequirementBinding{
 		Reference:   "modrinth:" + name,
 		Selector:    requirement.Selector,
 		FilePattern: requirement.FilePattern,
@@ -629,7 +628,7 @@ func selectionRequirementMatches(scenario selectionScenario, project int, pkg lo
 	return nil
 }
 
-func comparePackageOrder(a, b lockfile.Package) int {
+func comparePackageOrder(a, b document.Package) int {
 	if order := strings.Compare(string(a.Environment), string(b.Environment)); order != 0 {
 		return order
 	}

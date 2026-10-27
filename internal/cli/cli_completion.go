@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	"github.com/spf13/cobra"
 )
 
@@ -106,7 +106,7 @@ func StaticVersionCandidates() []CompletionCandidate {
 // their versions. It is the only source of workspace package suggestions;
 // nothing is inferred from outside the lock.
 func LockCandidates(root string) []CompletionCandidate {
-	lock, err := lockfile.Read(root)
+	lock, err := document.LockFile(root).Read()
 	if err != nil {
 		return nil
 	}
@@ -127,7 +127,7 @@ func LockCandidates(root string) []CompletionCandidate {
 // resolves no such package; an error means the name is ambiguous and the
 // caller must supply an explicit "provider:project".
 func ResolveLockReference(root, name string) (string, error) {
-	lock, err := lockfile.Read(root)
+	lock, err := document.LockFile(root).Read()
 	if err != nil {
 		return "", nil
 	}

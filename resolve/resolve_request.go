@@ -5,8 +5,7 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 
 	versionpkg "github.com/mclucy/lucy/version"
@@ -27,7 +26,7 @@ type (
 		key          projectKey
 		display      string
 		origin       requestOrigin
-		requirements []lockfile.RequirementBinding
+		requirements []document.RequirementBinding
 		dependencyOf catalog.Ref
 		// releaseHints come from remote dependency metadata. They order
 		// candidates but do not by themselves reject another build.
@@ -88,8 +87,8 @@ func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
 // default to their zero values, which report nothing and never cancel.
 type PackagesRequest struct {
 	Context  context.Context
-	Manifest *manifest.Document
-	Previous []lockfile.Package
+	Manifest *document.Manifest
+	Previous []document.Package
 	Target   Target
 	// Materialize must leave its input unchanged and return verified local bytes.
 	Materialize        func(*catalog.Artifact) (artifact.MaterializedFile, error)

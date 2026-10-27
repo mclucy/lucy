@@ -8,12 +8,11 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 )
 
 // DeinitResult reports the Lucy state that deinitialization removed. Paths are
@@ -68,9 +67,9 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 	}
 	result = &DeinitResult{}
 	for _, name := range []string{
-		manifest.Filename,
-		lockfile.Filename,
-		manifest.LocalFilename,
+		document.ManifestFilename,
+		document.LockFilename,
+		document.LocalFilename,
 	} {
 		if !slices.Contains(present, name) {
 			continue
@@ -100,9 +99,9 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 // workspaceStatePaths names every top-level path that marks a Lucy workspace.
 func workspaceStatePaths() []string {
 	return []string{
-		manifest.Filename,
-		lockfile.Filename,
-		manifest.LocalFilename,
+		document.ManifestFilename,
+		document.LockFilename,
+		document.LocalFilename,
 		fsutil.WorkspaceMarker,
 	}
 }

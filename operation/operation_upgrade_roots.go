@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
@@ -22,10 +21,10 @@ type upgradeRoot struct {
 	Environment serverpkg.Environment
 	Ecosystem   catalog.Ecosystem
 	Reference   string
-	Requirement manifest.Requirement
+	Requirement document.Requirement
 	Provider    catalog.Provider
 	Project     string
-	Previous    *lockfile.Package
+	Previous    *document.Package
 	Versions    []upgradeVersion
 	LockedIndex int
 	LockedRank  int
@@ -49,7 +48,7 @@ func upgradeFloating(v versionpkg.Version) bool {
 	}
 }
 
-func upgradeRoots(d *manifest.Document, old *lockfile.Document) ([]upgradeRoot, error) {
+func upgradeRoots(d *document.Manifest, old *document.Lock) ([]upgradeRoot, error) {
 	var roots []upgradeRoot
 	for _, ecosystem := range sortedEcosystems(d.Server.Packages) {
 		for ref, requirement := range d.Server.Packages[ecosystem] {
@@ -91,10 +90,10 @@ func newUpgradeRoot(
 	environment serverpkg.Environment,
 	ecosystem catalog.Ecosystem,
 	ref string,
-	requirement manifest.Requirement,
-	old *lockfile.Document,
+	requirement document.Requirement,
+	old *document.Lock,
 ) (upgradeRoot, error) {
-	provider, project, err := manifest.ParseReference(ref)
+	provider, project, err := document.ParseReference(ref)
 	if err != nil {
 		return upgradeRoot{}, err
 	}
@@ -114,13 +113,13 @@ func newUpgradeRoot(
 }
 
 func previousRootPackage(
-	old *lockfile.Document,
+	old *document.Lock,
 	environment serverpkg.Environment,
 	ecosystem catalog.Ecosystem,
 	ref string,
 	provider catalog.Provider,
 	project string,
-) *lockfile.Package {
+) *document.Package {
 	for i := range old.Packages {
 		p := &old.Packages[i]
 		if p.Environment != environment || p.Ecosystem != ecosystem {
@@ -186,7 +185,7 @@ func upgradeTargets(roots []upgradeRoot, opts UpgradeOptions) (map[string]bool, 
 	return targets, nil
 }
 
-func pinCoreAndMCDR(d *manifest.Document, old *lockfile.Document) {
+func pinCoreAndMCDR(d *document.Manifest, old *document.Lock) {
 	d.Server.Minecraft = old.Server.Minecraft
 	d.Server.Core.Product = old.Server.Product
 	d.Server.Core.ProductVersion = old.Server.CoreVersion
@@ -195,7 +194,7 @@ func pinCoreAndMCDR(d *manifest.Document, old *lockfile.Document) {
 	}
 }
 
-func upgradeTarget(old *lockfile.Document, coreModules []catalog.DescriptorModule) resolve.Target {
+func upgradeTarget(old *document.Lock, coreModules []catalog.DescriptorModule) resolve.Target {
 	mcdrVersion := ""
 	if old.MCDR != nil {
 		mcdrVersion = string(old.MCDR.Version)
@@ -210,8 +209,8 @@ func upgradeTarget(old *lockfile.Document, coreModules []catalog.DescriptorModul
 	}
 }
 
-func rootRequirements(d *manifest.Document) map[string]manifest.Requirement {
-	requirements := map[string]manifest.Requirement{}
+func rootRequirements(d *document.Manifest) map[string]document.Requirement {
+	requirements := map[string]document.Requirement{}
 	for _, ecosystem := range sortedEcosystems(d.Server.Packages) {
 		for ref, requirement := range d.Server.Packages[ecosystem] {
 			requirements[ref] = requirement
@@ -225,7 +224,7 @@ func rootRequirements(d *manifest.Document) map[string]manifest.Requirement {
 	return requirements
 }
 
-func setRootSelector(d *manifest.Document, root upgradeRoot, selector versionpkg.Version) error {
+func setRootSelector(d *document.Manifest, root upgradeRoot, selector versionpkg.Version) error {
 	if root.Environment == serverpkg.EnvironmentMCDR {
 		if d.MCDR == nil {
 			return fmt.Errorf("manifest has no MCDR runtime")
@@ -251,15 +250,15 @@ func setRootSelector(d *manifest.Document, root upgradeRoot, selector versionpkg
 	return nil
 }
 
-func cloneManifest(d *manifest.Document) (*manifest.Document, error) {
-	data, err := manifest.CanonicalBytes(d)
+func cloneManifest(d *document.Manifest) (*document.Manifest, error) {
+	data, err := d.CanonicalBytes()
 	if err != nil {
 		return nil, err
 	}
-	return manifest.Decode(bytes.NewReader(data))
+	return document.DecodeManifest(bytes.NewReader(data))
 }
 
-func sortedEcosystems(packages map[catalog.Ecosystem]map[string]manifest.Requirement) []catalog.Ecosystem {
+func sortedEcosystems(packages map[catalog.Ecosystem]map[string]document.Requirement) []catalog.Ecosystem {
 	ecosystems := make([]catalog.Ecosystem, 0, len(packages))
 	for ecosystem := range packages {
 		ecosystems = append(ecosystems, ecosystem)

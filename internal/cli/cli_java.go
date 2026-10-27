@@ -11,11 +11,10 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
@@ -130,13 +129,13 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintf(
 			out,
 			"No %s; run lucy install to resolve the Java the server asks for.\n",
-			lockfile.Filename,
+			document.LockFilename,
 		)
 	} else {
 		writeJavaRequirement(out, requirement)
 	}
 	if view.Selection != nil && view.Selection.Source == javaruntime.SourceLocal {
-		fmt.Fprintf(out, "%s selects %s\n", manifest.LocalFilename, view.Selection.LocalHome)
+		fmt.Fprintf(out, "%s selects %s\n", document.LocalFilename, view.Selection.LocalHome)
 	}
 	fmt.Fprintln(out)
 	if len(view.Runtimes) == 0 {
@@ -225,18 +224,18 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 		return javaUseJSON.Write(output, result)
 	}
 	out := output.Human()
-	fmt.Fprintf(out, "%s: %s\n", manifest.Filename, javaOverrideLabel(result.Java))
+	fmt.Fprintf(out, "%s: %s\n", document.ManifestFilename, javaOverrideLabel(result.Java))
 	if result.Home != "" {
-		fmt.Fprintf(out, "%s: %s\n", manifest.LocalFilename, result.Home)
+		fmt.Fprintf(out, "%s: %s\n", document.LocalFilename, result.Home)
 	} else if result.PublishedLocal {
-		fmt.Fprintf(out, "%s: Lucy chooses the Java runtime\n", manifest.LocalFilename)
+		fmt.Fprintf(out, "%s: Lucy chooses the Java runtime\n", document.LocalFilename)
 	}
 	requirement, err := lockedJavaRequirement(root)
 	if err != nil || requirement == nil {
 		return err
 	}
 	if !result.PublishedLock && result.PublishedManifest {
-		fmt.Fprintf(out, "Run lucy install to update %s.\n", lockfile.Filename)
+		fmt.Fprintf(out, "Run lucy install to update %s.\n", document.LockFilename)
 		return nil
 	}
 	check, err := javaruntime.Select(ctx, root, *requirement)
@@ -263,7 +262,7 @@ func javaChangeFromFlags(cmd *cobra.Command, args []string) (operation.JavaChang
 	}
 	if cmd.Flags().Changed(flagJavaDistributionName) {
 		raw, _ := cmd.Flags().GetString(flagJavaDistributionName)
-		distribution, err := manifest.ParseJavaDistribution(raw)
+		distribution, err := document.ParseJavaDistribution(raw)
 		if err != nil {
 			return change, err
 		}
@@ -275,7 +274,7 @@ func javaChangeFromFlags(cmd *cobra.Command, args []string) (operation.JavaChang
 		if path == "" {
 			return change, fmt.Errorf("--%s needs a Java home, a java executable, or auto", flagJavaPathName)
 		}
-		if path == manifest.JavaAuto {
+		if path == document.JavaAuto {
 			path = ""
 		}
 		change.Path = &path
@@ -285,15 +284,15 @@ func javaChangeFromFlags(cmd *cobra.Command, args []string) (operation.JavaChang
 
 func parseJavaMajor(raw string) (int, error) {
 	raw = strings.TrimSpace(raw)
-	if strings.EqualFold(raw, manifest.JavaAuto) {
+	if strings.EqualFold(raw, document.JavaAuto) {
 		return 0, nil
 	}
 	version, err := strconv.Atoi(raw)
-	if err != nil || version < manifest.MinimumJava {
+	if err != nil || version < document.MinimumJava {
 		return 0, fmt.Errorf(
 			"%q is not a Java major version of %d or later, or auto",
 			raw,
-			manifest.MinimumJava,
+			document.MinimumJava,
 		)
 	}
 	return version, nil
@@ -302,7 +301,7 @@ func parseJavaMajor(raw string) (int, error) {
 // promptJavaChange asks for the Java version and distribution that lucy.yaml
 // pins. Each answer starts at the current value.
 func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, error) {
-	d, err := manifest.Read(root)
+	d, err := document.ManifestFile(root).Read()
 	if err != nil {
 		return operation.JavaChange{}, err
 	}
@@ -310,7 +309,7 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 	if err != nil {
 		return operation.JavaChange{}, err
 	}
-	current := manifest.Java{}
+	current := document.ManifestJava{}
 	if d.Server.Java != nil {
 		current = *d.Server.Java
 	}
@@ -344,11 +343,11 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[int]().
-				Title("Java version in "+manifest.Filename).
+				Title("Java version in "+document.ManifestFilename).
 				Options(versionOptions...).
 				Value(&version),
 			huh.NewSelect[java.Distribution]().
-				Title("Java distribution in "+manifest.Filename).
+				Title("Java distribution in "+document.ManifestFilename).
 				Options(distributionOptions...).
 				Value(&distribution),
 		),
@@ -365,7 +364,7 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 // lockedJavaRequirement returns the Java requirement of the lock in root, or
 // nil when the workspace has no lock.
 func lockedJavaRequirement(root string) (*javaruntime.Requirement, error) {
-	lock, err := lockfile.Read(root)
+	lock, err := document.LockFile(root).Read()
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -413,11 +412,11 @@ func javaSpecLabel(version string, distribution java.Distribution) string {
 	return "Java " + version + " from " + javaDistributionLabel(distribution)
 }
 
-func javaOverrideLabel(override *manifest.Java) string {
+func javaOverrideLabel(override *document.ManifestJava) string {
 	if override.IsAuto() {
-		return javaSpecLabel(manifest.JavaAuto, java.DistributionAny)
+		return javaSpecLabel(document.JavaAuto, java.DistributionAny)
 	}
-	version := manifest.JavaAuto
+	version := document.JavaAuto
 	if override.Version != 0 {
 		version = strconv.Itoa(override.Version)
 	}

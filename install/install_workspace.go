@@ -11,12 +11,11 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
@@ -61,14 +60,14 @@ type (
 	}
 )
 
-func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (*Result, error) {
+func Sync(ctx context.Context, root string, d *document.Manifest, old *document.Lock, opts Options) (*Result, error) {
 	result := newResult()
 	diagnostics, resultErr := syncInstall(ctx, root, d, old, opts, result)
 	result.Diagnostics = diagnostics
 	return result, resultErr
 }
 
-func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options, result *Result) (diagnostics []filetrack.Diagnostic, resultErr error) {
+func syncInstall(ctx context.Context, root string, d *document.Manifest, old *document.Lock, opts Options, result *Result) (diagnostics []filetrack.Diagnostic, resultErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -99,8 +98,8 @@ func syncInstall(ctx context.Context, root string, d *manifest.Document, old *lo
 func stageInstall(
 	ctx context.Context,
 	root string,
-	d *manifest.Document,
-	resolved *lockfile.Document,
+	d *document.Manifest,
+	resolved *document.Lock,
 	store *downloadStore,
 	opts Options,
 	result *Result,
@@ -132,7 +131,7 @@ func stageInstall(
 			}
 		}
 		if opts.publishLock {
-			if err := lockfile.Write(root, resolved); err != nil {
+			if err := document.LockFile(root).Write(resolved); err != nil {
 				return nil, err
 			}
 			result.PublishedLock = true
@@ -264,7 +263,7 @@ func isFloating(v version.Version) bool {
 // manifest's core request. Resolution reuses the pin when it does; a locked
 // mutation treats a negative answer as a stale lock, because rebinding
 // requirements must never re-target the server.
-func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Document, offline bool) (bool, error) {
+func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock, offline bool) (bool, error) {
 	request := routing.ServerProductRequest{
 		Minecraft:      d.Server.Minecraft,
 		Product:        d.Server.Core.Product,
@@ -359,7 +358,7 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 // destination two active packages both claim must fail before anything is
 // written. Left unguarded the later copy silently replaces the earlier one, so
 // the workspace diverges from a lock that still reports itself as current.
-func rejectSharedDestinations(resolved *lockfile.Document) error {
+func rejectSharedDestinations(resolved *document.Lock) error {
 	claimed := map[string]string{}
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
@@ -395,7 +394,7 @@ func packageFolder(environment server.Environment, ecosystem catalog.Ecosystem) 
 
 // packageDestination reports where an enabled package lands inside the staged
 // server tree.
-func packageDestination(resolved *lockfile.Document, p *lockfile.Package) (string, error) {
+func packageDestination(resolved *document.Lock, p *document.Package) (string, error) {
 	directory := resolved.Server.Directory
 	folder := packageFolder(p.Environment, p.Ecosystem)
 	if p.Environment == server.EnvironmentMCDR {
@@ -409,7 +408,7 @@ func packageDestination(resolved *lockfile.Document, p *lockfile.Package) (strin
 
 // provisionCommitted provisions tracked files after the lock is published. A
 // failure here leaves the committed installation in place, so it is marked.
-func provisionCommitted(ctx context.Context, root string, resolved *lockfile.Document, opts Options) ([]filetrack.Diagnostic, error) {
+func provisionCommitted(ctx context.Context, root string, resolved *document.Lock, opts Options) ([]filetrack.Diagnostic, error) {
 	diagnostics, err := filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
 	if err != nil {
 		err = &CommittedError{Err: err}

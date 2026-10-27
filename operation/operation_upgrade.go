@@ -9,11 +9,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
 )
 
@@ -71,18 +70,18 @@ func PlanUpgrade(
 		return nil, err
 	}
 	root = absolute
-	d, err := manifest.Read(root)
+	d, err := document.ManifestFile(root).Read()
 	if err != nil {
 		return nil, err
 	}
-	old, err := lockfile.Read(root)
+	old, err := document.LockFile(root).Read()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("lucy-lock.yaml is required; run lucy install first")
 		}
 		return nil, err
 	}
-	baseManifest, err := manifest.Fingerprint(d)
+	baseManifest, err := d.Fingerprint()
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +91,7 @@ func PlanUpgrade(
 	if err := upgradePreflight(ctx, root, d, old); err != nil {
 		return nil, err
 	}
-	baseLock, err := lockfile.Fingerprint(old)
+	baseLock, err := old.Fingerprint()
 	if err != nil {
 		return nil, err
 	}
@@ -104,22 +103,22 @@ func PlanUpgrade(
 	if err := workspacewrite.RecoverInstall(root); err != nil {
 		return nil, err
 	}
-	currentManifest, err := manifest.Read(root)
+	currentManifest, err := document.ManifestFile(root).Read()
 	if err != nil {
 		return nil, err
 	}
-	currentManifestFingerprint, err := manifest.Fingerprint(currentManifest)
+	currentManifestFingerprint, err := currentManifest.Fingerprint()
 	if err != nil {
 		return nil, err
 	}
 	if currentManifestFingerprint != baseManifest {
 		return nil, fmt.Errorf("manifest changed during upgrade planning; retry")
 	}
-	currentLock, err := lockfile.Read(root)
+	currentLock, err := document.LockFile(root).Read()
 	if err != nil {
 		return nil, err
 	}
-	currentLockFingerprint, err := lockfile.Fingerprint(currentLock)
+	currentLockFingerprint, err := currentLock.Fingerprint()
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +295,7 @@ func SelectUpgradeOption(result *UpgradeResult, policy string) (*UpgradeOption, 
 
 // ListUpgradeRoots returns the enabled manifest roots a user can select.
 func ListUpgradeRoots(root string) ([]string, error) {
-	d, err := manifest.Read(root)
+	d, err := document.ManifestFile(root).Read()
 	if err != nil {
 		return nil, err
 	}
@@ -322,8 +321,8 @@ func ListUpgradeRoots(root string) ([]string, error) {
 func upgradePreflight(
 	ctx context.Context,
 	root string,
-	d *manifest.Document,
-	old *lockfile.Document,
+	d *document.Manifest,
+	old *document.Lock,
 ) error {
 	if d.Server.Minecraft != old.Server.Minecraft {
 		return fmt.Errorf("Minecraft %s differs from locked %s; run lucy migrate", d.Server.Minecraft, old.Server.Minecraft)

@@ -1,4 +1,4 @@
-package lockfile
+package document
 
 import (
 	"github.com/mclucy/lucy/catalog"

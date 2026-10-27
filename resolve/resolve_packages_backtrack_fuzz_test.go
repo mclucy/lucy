@@ -5,9 +5,8 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
@@ -36,16 +35,16 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 			return entry
 		}
 		roots := make([]string, 0, count+1)
-		declarations := make(map[string]manifest.Requirement, count+1)
+		declarations := make(map[string]documentpkg.Requirement, count+1)
 		for i := range count {
 			name := fmt.Sprintf("m%02d", i)
 			roots = append(roots, name)
-			declarations["modrinth:"+name] = manifest.Requirement{Selector: version.Any}
+			declarations["modrinth:"+name] = documentpkg.Requirement{Selector: version.Any}
 			fixture.addVersions(t, name, []stubVersion{build(name, 0, "b", "")})
 		}
 		// This root is last, so three or more B demands precede A's candidate search.
 		roots = append(roots, "zz-wrapper")
-		declarations["modrinth:zz-wrapper"] = manifest.Requirement{Selector: version.Any}
+		declarations["modrinth:zz-wrapper"] = documentpkg.Requirement{Selector: version.Any}
 		fixture.addVersions(t, "zz-wrapper", []stubVersion{build("zz-wrapper", 0, "a", "")})
 		fixture.addVersions(t, "a", []stubVersion{
 			build("a", 0, "b", "missing-module"),
@@ -53,12 +52,12 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 		})
 		fixture.addVersions(t, "b", []stubVersion{build("b", 0, "", "")})
 		fixture.install(t)
-		document := &manifest.Document{
-			SchemaVersion: manifest.SchemaVersion,
-			Server: manifest.Server{
+		document := &documentpkg.Manifest{
+			SchemaVersion: documentpkg.ManifestSchemaVersion,
+			Server: documentpkg.ManifestServer{
 				Directory: ".", Minecraft: fuzzMinecraft,
-				Core:     manifest.Core{Product: server.ProductFabric, ProductVersion: fuzzLoaderVersion},
-				Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{catalog.EcosystemFabric: declarations},
+				Core:     documentpkg.ManifestCore{Product: server.ProductFabric, ProductVersion: fuzzLoaderVersion},
+				Packages: map[catalog.Ecosystem]map[string]documentpkg.Requirement{catalog.EcosystemFabric: declarations},
 			},
 		}
 		packages, warnings, err := resolve.Packages(resolve.PackagesRequest{
@@ -68,31 +67,31 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 		if err != nil || len(warnings) != 0 {
 			t.Fatalf("resolve graph with valid fallback: %v; warnings=%v", err, warnings)
 		}
-		if err := manifest.Write(fixture.dir, document); err != nil {
+		if err := documentpkg.ManifestFile(fixture.dir).Write(document); err != nil {
 			t.Fatal(err)
 		}
-		fingerprint, err := manifest.Fingerprint(document)
+		fingerprint, err := document.Fingerprint()
 		if err != nil {
 			t.Fatal(err)
 		}
-		locked := &lockfile.Document{
-			SchemaVersion: lockfile.SchemaVersion, ManifestFingerprint: fingerprint,
-			Server: lockfile.Server{
+		locked := &documentpkg.Lock{
+			SchemaVersion: documentpkg.LockSchemaVersion, ManifestFingerprint: fingerprint,
+			Server: documentpkg.LockedServer{
 				Directory: ".", Minecraft: fuzzMinecraft, Product: server.ProductFabric,
 				CoreVersion: fuzzLoaderVersion, Version: fuzzLoaderVersion,
-				Filename: "fabric.jar", Java: lockfile.Java{Advisory: 21},
+				Filename: "fabric.jar", Java: documentpkg.LockedJava{Advisory: 21},
 			},
 			Packages: packages,
 		}
-		if err := lockfile.Write(fixture.dir, locked); err != nil {
+		if err := documentpkg.LockFile(fixture.dir).Write(locked); err != nil {
 			t.Fatal(err)
 		}
-		replayed, err := lockfile.Read(fixture.dir)
+		replayed, err := documentpkg.LockFile(fixture.dir).Read()
 		if err != nil {
 			t.Fatal(err)
 		}
 		keep := roots[int(survivor)%len(roots)]
-		document.Server.Packages[catalog.EcosystemFabric] = map[string]manifest.Requirement{
+		document.Server.Packages[catalog.EcosystemFabric] = map[string]documentpkg.Requirement{
 			"modrinth:" + keep: {Selector: version.Any},
 		}
 		plan, err := install.PlanInstall(t.Context(), fixture.dir, document, replayed, install.Options{

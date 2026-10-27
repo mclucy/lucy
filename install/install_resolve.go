@@ -7,10 +7,9 @@ import (
 	"slices"
 	"time"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -26,10 +25,10 @@ import (
 func Resolve(
 	ctx context.Context,
 	root string,
-	d *manifest.Document,
-	old *lockfile.Document,
+	d *document.Manifest,
+	old *document.Lock,
 	opts Options,
-) (*lockfile.Document, *Result, error) {
+) (*document.Lock, *Result, error) {
 	result := newResult()
 	result.Mode = ModeResolve
 	result.Reason = "lock resolved"
@@ -44,7 +43,7 @@ func Resolve(
 	if err := workspacewrite.SafePath(absolute, ".lucy"); err != nil {
 		return nil, result, err
 	}
-	fingerprint, err := manifest.Fingerprint(d)
+	fingerprint, err := d.Fingerprint()
 	if err != nil {
 		return nil, result, err
 	}
@@ -77,13 +76,13 @@ func Resolve(
 func resolveInstall(
 	ctx context.Context,
 	root string,
-	d *manifest.Document,
-	old *lockfile.Document,
+	d *document.Manifest,
+	old *document.Lock,
 	fingerprint string,
 	opts *Options,
 	store *downloadStore,
 	result *Result,
-) (*lockfile.Document, error) {
+) (*document.Lock, error) {
 	if d == nil {
 		return nil, fmt.Errorf("manifest required to resolve a lock")
 	}
@@ -148,10 +147,10 @@ func resolveInstall(
 			Minecraft: core.Minecraft,
 		})
 	}
-	resolved := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	resolved := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
 		ManifestFingerprint: fingerprint,
-		Server: lockfile.Server{
+		Server: document.LockedServer{
 			Minecraft:    core.Minecraft,
 			Directory:    d.Server.Directory,
 			Product:      core.Product,
@@ -159,9 +158,9 @@ func resolveInstall(
 			Artifact:     core.Artifact,
 			Bootstrapper: core.Bootstrapper,
 			Inputs:       core.Inputs,
-			Java:         lockfile.NewJava(core.JavaAdvisory, d.Server.Java),
+			Java:         document.NewLockedJava(core.JavaAdvisory, d.Server.Java),
 		},
-		Packages: []lockfile.Package{},
+		Packages: []document.Package{},
 		Files:    slices.Clone(d.Files),
 	}
 	mcdrVersion := ""
@@ -174,7 +173,7 @@ func resolveInstall(
 		if err != nil {
 			return nil, err
 		}
-		resolved.MCDR = &lockfile.MCDR{
+		resolved.MCDR = &document.LockedMCDR{
 			Directory: d.MCDR.Directory,
 			Version:   resolvedVersion,
 		}
@@ -193,7 +192,7 @@ func resolveInstall(
 	} else {
 		resolved.Server.Artifact.Modules = coreModules
 	}
-	var previousPackages []lockfile.Package
+	var previousPackages []document.Package
 	if old != nil {
 		previousPackages = old.Packages
 	}
@@ -232,16 +231,16 @@ func resolveInstall(
 		for _, p := range packages {
 			for _, request := range p.Requirements {
 				if p.Environment == server.EnvironmentMCDR {
-					d.MCDR.Packages[request.Reference] = manifest.Requirement{
+					d.MCDR.Packages[request.Reference] = document.Requirement{
 						Selector:    request.Selector,
 						FilePattern: request.FilePattern,
 						Enabled:     new(request.Enabled),
 					}
 				} else {
 					if d.Server.Packages[p.Ecosystem] == nil {
-						d.Server.Packages[p.Ecosystem] = map[string]manifest.Requirement{}
+						d.Server.Packages[p.Ecosystem] = map[string]document.Requirement{}
 					}
-					d.Server.Packages[p.Ecosystem][request.Reference] = manifest.Requirement{
+					d.Server.Packages[p.Ecosystem][request.Reference] = document.Requirement{
 						Selector:    request.Selector,
 						FilePattern: request.FilePattern,
 						Enabled:     new(request.Enabled),
@@ -249,7 +248,7 @@ func resolveInstall(
 				}
 			}
 		}
-		resolved.ManifestFingerprint, err = manifest.Fingerprint(d)
+		resolved.ManifestFingerprint, err = d.Fingerprint()
 		if err != nil {
 			return nil, err
 		}

@@ -15,11 +15,10 @@ import (
 
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/catalog"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
@@ -62,14 +61,14 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err != nil {
 		return result, err
 	}
-	beforeManifest, err := capture(root, files, store, manifest.Filename)
+	beforeManifest, err := capture(root, files, store, documentpkg.ManifestFilename)
 	if err != nil {
 		return result, err
 	}
 	if !beforeManifest.Exists {
-		return result, fmt.Errorf("no %s in this workspace; run lucy init first", manifest.Filename)
+		return result, fmt.Errorf("no %s in this workspace; run lucy init first", documentpkg.ManifestFilename)
 	}
-	beforeLock, err := capture(root, files, store, lockfile.Filename)
+	beforeLock, err := capture(root, files, store, documentpkg.LockFilename)
 	if err != nil {
 		return result, err
 	}
@@ -77,7 +76,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err != nil {
 		return result, err
 	}
-	document, decodeErr := manifest.Decode(reader)
+	document, decodeErr := documentpkg.DecodeManifest(reader)
 	closeErr := reader.Close()
 	if decodeErr != nil {
 		return result, errors.Join(decodeErr, closeErr)
@@ -110,14 +109,14 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err := workspacewrite.CheckInactive(root, "changing tracked files"); err != nil {
 		return result, err
 	}
-	var locked *lockfile.Document
+	var locked *documentpkg.Lock
 	currentLock := false
 	if beforeLock.Exists {
 		reader, err := imageReader(store, beforeLock)
 		if err != nil {
 			return result, err
 		}
-		locked, decodeErr = lockfile.Decode(reader)
+		locked, decodeErr = documentpkg.DecodeLock(reader)
 		closeErr := reader.Close()
 		if decodeErr != nil {
 			return result, errors.Join(decodeErr, closeErr)
@@ -125,7 +124,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err := closeErr; err != nil {
 			return result, err
 		}
-		fingerprint, err := manifest.Fingerprint(document)
+		fingerprint, err := document.Fingerprint()
 		if err != nil {
 			return result, err
 		}
@@ -150,8 +149,8 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err != nil {
 			return result, err
 		}
-		index := slices.IndexFunc(nextFiles, func(file manifest.TrackedFile) bool { return file.Path == path })
-		var previous *manifest.TrackedFile
+		index := slices.IndexFunc(nextFiles, func(file documentpkg.TrackedFile) bool { return file.Path == path })
+		var previous *documentpkg.TrackedFile
 		if index >= 0 {
 			copy := nextFiles[index]
 			previous = &copy
@@ -171,13 +170,13 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		}
 	}
 	document.Files = nextFiles
-	if err := manifest.Normalize(document); err != nil {
+	if err := document.Normalize(); err != nil {
 		return result, err
 	}
 	if err := ValidateOwnership(root, document.Files, locked); err != nil {
 		return result, err
 	}
-	raw, err := manifest.CanonicalBytes(document)
+	raw, err := document.CanonicalBytes()
 	if err != nil {
 		return result, err
 	}
@@ -186,11 +185,11 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		return result, err
 	}
 	record(afterManifest)
-	txn.Mutations = append(txn.Mutations, mutation{Path: manifest.Filename, Before: beforeManifest, After: afterManifest})
+	txn.Mutations = append(txn.Mutations, mutation{Path: documentpkg.ManifestFilename, Before: beforeManifest, After: afterManifest})
 	if locked != nil {
 		locked.Files = slices.Clone(document.Files)
 		if currentLock {
-			locked.ManifestFingerprint, err = manifest.Fingerprint(document)
+			locked.ManifestFingerprint, err = document.Fingerprint()
 			if err != nil {
 				return result, err
 			}
@@ -198,7 +197,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err := locked.Validate(); err != nil {
 			return result, err
 		}
-		raw, err := lockfile.Snapshot(locked)
+		raw, err := locked.Snapshot()
 		if err != nil {
 			return result, err
 		}
@@ -207,7 +206,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 			return result, err
 		}
 		record(afterLock)
-		txn.Mutations = append(txn.Mutations, mutation{Path: lockfile.Filename, Before: beforeLock, After: afterLock})
+		txn.Mutations = append(txn.Mutations, mutation{Path: documentpkg.LockFilename, Before: beforeLock, After: afterLock})
 	}
 	txn.Event = event
 	if err := commit(root, files, store, txn); err != nil {
@@ -248,7 +247,7 @@ func validateRequest(request Request) error {
 	return nil
 }
 
-func selectFiles(files []manifest.TrackedFile, request Request) ([]string, []string, error) {
+func selectFiles(files []documentpkg.TrackedFile, request Request) ([]string, []string, error) {
 	if !request.All {
 		selected := make([]string, 0, len(request.Paths))
 		for _, raw := range request.Paths {
@@ -259,7 +258,7 @@ func selectFiles(files []manifest.TrackedFile, request Request) ([]string, []str
 			if slices.Contains(selected, path) {
 				continue
 			}
-			index := slices.IndexFunc(files, func(file manifest.TrackedFile) bool { return file.Path == path })
+			index := slices.IndexFunc(files, func(file documentpkg.TrackedFile) bool { return file.Path == path })
 			if request.Operation == Track && index >= 0 {
 				return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
 			}
@@ -281,10 +280,10 @@ func selectFiles(files []manifest.TrackedFile, request Request) ([]string, []str
 	return selected, skipped, nil
 }
 
-func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uint64, request Request, path string, previous *manifest.TrackedFile, before image) (Change, image, error) {
+func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uint64, request Request, path string, previous *documentpkg.TrackedFile, before image) (Change, image, error) {
 	change := Change{Path: path, Before: previous}
 	after := before
-	file := manifest.TrackedFile{Path: path}
+	file := documentpkg.TrackedFile{Path: path}
 	if previous != nil {
 		file = *previous
 		change.Revision = currentRevision(events, path, file.Hash).sequence
@@ -408,7 +407,7 @@ func (c *cappedReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func sourceImage(ctx context.Context, store *cas.Store, file manifest.TrackedFile, update, offline bool) (result image, resultErr error) {
+func sourceImage(ctx context.Context, store *cas.Store, file documentpkg.TrackedFile, update, offline bool) (result image, resultErr error) {
 	if !update {
 		if err := verifyObject(store, file.Hash); err == nil {
 			return image{Exists: true, Hash: file.Hash, Mode: 0o600}, nil
@@ -456,7 +455,7 @@ func sourceImage(ctx context.Context, store *cas.Store, file manifest.TrackedFil
 }
 
 // ValidateOwnership includes generated outputs retained by the runtime receipt.
-func ValidateOwnership(root string, files []manifest.TrackedFile, locked *lockfile.Document) error {
+func ValidateOwnership(root string, files []documentpkg.TrackedFile, locked *documentpkg.Lock) error {
 	if len(files) == 0 {
 		return nil
 	}

@@ -11,10 +11,9 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -24,8 +23,8 @@ import (
 func resolveUpgradeOption(
 	ctx context.Context,
 	root string,
-	d *manifest.Document,
-	old *lockfile.Document,
+	d *document.Manifest,
+	old *document.Lock,
 	baseManifest string,
 	baseLock string,
 	roots []upgradeRoot,
@@ -56,7 +55,7 @@ func resolveUpgradeOption(
 			return UpgradeOption{}, err
 		}
 	}
-	if err := manifest.Normalize(resolutionManifest); err != nil {
+	if err := resolutionManifest.Normalize(); err != nil {
 		return UpgradeOption{}, err
 	}
 	coreModules, moduleErr := routing.CoreModules(
@@ -119,7 +118,7 @@ func resolveUpgradeOption(
 			Selector:         selected.Version,
 		})
 	}
-	if err := manifest.Normalize(finalManifest); err != nil {
+	if err := finalManifest.Normalize(); err != nil {
 		return UpgradeOption{}, err
 	}
 	requirements := rootRequirements(finalManifest)
@@ -132,12 +131,12 @@ func resolveUpgradeOption(
 			}
 		}
 	}
-	finalFingerprint, err := manifest.Fingerprint(finalManifest)
+	finalFingerprint, err := finalManifest.Fingerprint()
 	if err != nil {
 		return UpgradeOption{}, err
 	}
-	resolved := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	resolved := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
 		ManifestFingerprint: finalFingerprint,
 		Server:              old.Server,
 		MCDR:                old.MCDR,
@@ -147,7 +146,7 @@ func resolveUpgradeOption(
 	if err := resolved.Validate(); err != nil {
 		return UpgradeOption{}, err
 	}
-	if fingerprint, err := lockfile.Fingerprint(resolved); err == nil && fingerprint == baseLock {
+	if fingerprint, err := resolved.Fingerprint(); err == nil && fingerprint == baseLock {
 		resolved = old
 	}
 	metrics := UpgradeMetrics{}
@@ -201,7 +200,7 @@ func upgradeResolveTrace(trace *install.Trace) resolve.Trace {
 	return trace.Resolve
 }
 
-func selectedRootPackage(packages []lockfile.Package, root upgradeRoot) *lockfile.Package {
+func selectedRootPackage(packages []document.Package, root upgradeRoot) *document.Package {
 	for i := range packages {
 		p := &packages[i]
 		if p.Environment != root.Environment || p.Ecosystem != root.Ecosystem {
@@ -217,8 +216,8 @@ func selectedRootPackage(packages []lockfile.Package, root upgradeRoot) *lockfil
 }
 
 func noopUpgradeOption(
-	d *manifest.Document,
-	old *lockfile.Document,
+	d *document.Manifest,
+	old *document.Lock,
 	baseManifest string,
 	baseLock string,
 ) (UpgradeOption, error) {
@@ -238,7 +237,7 @@ func upgradePlanHash(
 	baseManifest string,
 	baseLock string,
 	finalManifest string,
-	packages []lockfile.Package,
+	packages []document.Package,
 ) string {
 	lines := []string{
 		"v1",

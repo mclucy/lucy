@@ -9,10 +9,9 @@ import (
 	"strconv"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -85,7 +84,7 @@ type Requirement struct {
 // RequirementOf combines the Java inputs that lock records: the Mojang
 // advisory, the manifest pin, and the Java requirements of the enabled
 // packages.
-func RequirementOf(lock *lockfile.Document) Requirement {
+func RequirementOf(lock *document.Lock) Requirement {
 	settings := lock.Server.Java
 	r := Requirement{
 		Advisory:     settings.Advisory,
@@ -101,7 +100,7 @@ func RequirementOf(lock *lockfile.Document) Requirement {
 	})
 	if pinned := settings.Version; pinned != 0 {
 		r.Constraints = append(r.Constraints, Constraint{
-			Source:     manifest.Filename,
+			Source:     document.ManifestFilename,
 			Expression: strconv.Itoa(pinned),
 			kind:       constraintPin,
 			accepts:    func(major int) bool { return major == pinned },
@@ -180,7 +179,7 @@ func (r Requirement) Unmet(major int) []Constraint {
 // Lowest returns the oldest major version that meets every constraint, and
 // false when no version does.
 func (r Requirement) Lowest() (int, bool) {
-	for major := manifest.MinimumJava; major <= newestJava; major++ {
+	for major := document.MinimumJava; major <= newestJava; major++ {
 		if len(r.Unmet(major)) == 0 {
 			return major, true
 		}

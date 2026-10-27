@@ -9,9 +9,8 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/server"
 )
 
@@ -40,8 +39,8 @@ func TestFileCommandsAndInstallPreserveRuntimePinsAndCoreBytes(t *testing.T) {
 		t.Errorf("the lock did not publish the declaration: %+v", fresh.Files)
 	}
 
-	manifestBytes := w.read(t, manifest.Filename)
-	lockBytes := w.read(t, lockfile.Filename)
+	manifestBytes := w.read(t, document.ManifestFilename)
+	lockBytes := w.read(t, document.LockFilename)
 	receipt := w.readReceipt(t)
 	if len(receipt.Entries) != 1 || receipt.Entries[0].Path != "server/server.jar" {
 		t.Fatalf("unexpected fixture receipt %+v", receipt)
@@ -52,21 +51,21 @@ func TestFileCommandsAndInstallPreserveRuntimePinsAndCoreBytes(t *testing.T) {
 		t.Error("a no-op install touched the installed core")
 	}
 	w.requireBytes(t, "server/server.jar", core)
-	w.requireBytes(t, lockfile.Filename, lockBytes)
-	w.requireBytes(t, manifest.Filename, manifestBytes)
+	w.requireBytes(t, document.LockFilename, lockBytes)
+	w.requireBytes(t, document.ManifestFilename, manifestBytes)
 	w.requireReceiptEntries(t, receiptEntry{Path: "server/server.jar", SHA256: digestHex(core), Mode: 0o644})
 
 	// The file commands rewrite the manifest and the lock. The permissions a
 	// user chose for them must survive that rewrite.
-	w.chmod(t, manifest.Filename, 0o640)
-	w.chmod(t, lockfile.Filename, 0o640)
+	w.chmod(t, document.ManifestFilename, 0o640)
+	w.chmod(t, document.LockFilename, 0o640)
 
 	// A manifest-only files edit republishes the lock without reinstalling,
 	// because the receipt never measured the tracked files.
 	w.write(t, "config/extra.txt", []byte("extra note\n"), 0o644)
 	w.lucyOK(t, "file", "track", "config/extra.txt")
-	w.requireMode(t, manifest.Filename, 0o640)
-	w.requireMode(t, lockfile.Filename, 0o640)
+	w.requireMode(t, document.ManifestFilename, 0o640)
+	w.requireMode(t, document.LockFilename, 0o640)
 	fresh = w.readLock(t)
 	if len(fresh.Files) != 2 || fresh.ManifestFingerprint != w.manifestFingerprint(t) {
 		t.Errorf("the manifest-only edit did not publish a current lock: %+v", fresh.Files)
@@ -185,10 +184,10 @@ func TestFileLockOnlyWorkspaceServesReadOnlyCommands(t *testing.T) {
 	w.write(t, "server/server.jar", core, 0o644)
 	rules := []byte("rules v1\n")
 	w.write(t, "config/rules.txt", rules, 0o644)
-	lock := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	lock := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
 		ManifestFingerprint: "sha256:" + digestHex([]byte("a manifest that is gone")),
-		Server: lockfile.Server{
+		Server: document.LockedServer{
 			Minecraft:   "1.21.4",
 			Directory:   "server",
 			Product:     server.ProductMinecraft,
@@ -200,13 +199,13 @@ func TestFileLockOnlyWorkspaceServesReadOnlyCommands(t *testing.T) {
 				URL:      "https://example.invalid/server.jar",
 				Hashes:   map[string]string{"sha256": digestHex(core)},
 			},
-			Java: lockfile.Java{Advisory: 21},
+			Java: document.LockedJava{Advisory: 21},
 		},
-		Packages: []lockfile.Package{},
-		Files:    []manifest.TrackedFile{manifestTrackedFile("config/rules.txt", acceptedHash(rules))},
+		Packages: []document.Package{},
+		Files:    []document.TrackedFile{manifestTrackedFile("config/rules.txt", acceptedHash(rules))},
 	}
 	w.writeLock(t, lock)
-	w.requireAbsent(t, manifest.Filename)
+	w.requireAbsent(t, document.ManifestFilename)
 
 	if status := w.statusOf(t, "config/rules.txt"); status.State != "matching" || status.Hash != acceptedHash(rules) {
 		t.Errorf("the lock-only workspace does not replay the declaration: %+v", status)
@@ -229,7 +228,7 @@ func TestFileTrackRejectsManagedCorePackageAndReceiptCollisions(t *testing.T) {
 		w.writeManifest(t, baseManifest(t))
 		notes := []byte("generated note\n")
 		w.write(t, "generated/notes.txt", notes, 0o644)
-		w.writeReceipt(t, &lockfile.Document{}, receiptEntry{Path: "generated/notes.txt", SHA256: digestHex(notes), Mode: 0o644})
+		w.writeReceipt(t, &document.Lock{}, receiptEntry{Path: "generated/notes.txt", SHA256: digestHex(notes), Mode: 0o644})
 
 		w.lucyFail(t, "file", "track", "generated/notes.txt")
 		w.requireBytes(t, "generated/notes.txt", notes)
@@ -253,11 +252,11 @@ func TestFileTrackRejectsManagedCorePackageAndReceiptCollisions(t *testing.T) {
 		_, nativeLock, _ := w.seedNativeRuntime(t)
 		jar := []byte("package jar bytes\n")
 		w.write(t, "server/mods/sodium.jar", jar, 0o644)
-		lock := &lockfile.Document{
-			SchemaVersion:       lockfile.SchemaVersion,
+		lock := &document.Lock{
+			SchemaVersion:       document.LockSchemaVersion,
 			ManifestFingerprint: "sha256:" + digestHex([]byte("stale")),
 			Server:              nativeLock.Server,
-			Packages: []lockfile.Package{{
+			Packages: []document.Package{{
 				Environment: server.EnvironmentServer,
 				Ecosystem:   catalog.EcosystemFabric,
 				Artifact: catalog.Artifact{
@@ -282,11 +281,11 @@ func TestFileTrackRejectsManagedCorePackageAndReceiptCollisions(t *testing.T) {
 func TestFileDisabledPackagePlaceholderDoesNotClaimModsFolder(t *testing.T) {
 	w := newWorkspace(t)
 	_, nativeLock, _ := w.seedNativeRuntime(t)
-	lock := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	lock := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
 		ManifestFingerprint: "sha256:" + digestHex([]byte("stale")),
 		Server:              nativeLock.Server,
-		Packages: []lockfile.Package{{
+		Packages: []document.Package{{
 			Environment: server.EnvironmentServer,
 			Ecosystem:   catalog.EcosystemFabric,
 			Artifact: catalog.Artifact{
@@ -297,7 +296,7 @@ func TestFileDisabledPackagePlaceholderDoesNotClaimModsFolder(t *testing.T) {
 				URL:       "https://example.invalid/sodium.jar",
 				Hashes:    map[string]string{"sha256": digestHex([]byte("disabled sodium"))},
 			},
-			Requirements: []lockfile.RequirementBinding{{
+			Requirements: []document.RequirementBinding{{
 				Reference: "modrinth:sodium",
 				Selector:  "stable",
 				Enabled:   false,
@@ -320,12 +319,12 @@ func TestFileDisabledPackagePlaceholderDoesNotClaimModsFolder(t *testing.T) {
 func TestFileRootRelativeMCDRWrapperLayout(t *testing.T) {
 	w := newWorkspace(t)
 	_, nativeLock, _ := w.seedNativeRuntime(t)
-	lock := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	lock := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
 		ManifestFingerprint: "sha256:" + digestHex([]byte("stale")),
 		Server:              nativeLock.Server,
-		Packages:            []lockfile.Package{},
-		MCDR: &lockfile.MCDR{
+		Packages:            []document.Package{},
+		MCDR: &document.LockedMCDR{
 			Directory: ".",
 			Version:   "2.14.0",
 		},

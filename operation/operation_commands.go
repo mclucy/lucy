@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 
@@ -22,9 +23,7 @@ import (
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/resolve"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -52,14 +51,14 @@ type InitOptions struct {
 // is the written manifest; warnings and discovery carry the observations
 // that the command boundary presents.
 type InitResult struct {
-	Document      *manifest.Document
-	Lock          *lockfile.Document
+	Document      *documentpkg.Manifest
+	Lock          *documentpkg.Lock
 	PublishedLock bool
 	Warnings      []error
 	Discovery     discovery.Result
 }
 
-func commandDocuments(root string) (document *manifest.Document, locked *lockfile.Document, resultErr error) {
+func commandDocuments(root string) (document *documentpkg.Manifest, locked *documentpkg.Lock, resultErr error) {
 	writer, err := workspacewrite.Lock(root)
 	if err != nil {
 		return nil, nil, err
@@ -68,18 +67,18 @@ func commandDocuments(root string) (document *manifest.Document, locked *lockfil
 	if err := workspacewrite.RecoverInstall(root); err != nil {
 		return nil, nil, err
 	}
-	d, err := manifest.Read(root)
+	d, err := documentpkg.ManifestFile(root).Read()
 	if err != nil {
 		return nil, nil, err
 	}
-	old, err := lockfile.Read(root)
+	old, err := documentpkg.LockFile(root).Read()
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, nil, err
 	}
 	return d, old, nil
 }
 
-func selectedEcosystem(d *manifest.Document, requested catalog.Ecosystem) catalog.Ecosystem {
+func selectedEcosystem(d *documentpkg.Manifest, requested catalog.Ecosystem) catalog.Ecosystem {
 	if requested != catalog.EcosystemUnspecified {
 		return requested
 	}
@@ -106,7 +105,7 @@ func selectedEcosystem(d *manifest.Document, requested catalog.Ecosystem) catalo
 // can load. A probed runtime also reports bridged ecosystems, such as Fabric
 // through Sinytra Connector. Only ecosystems the declared product loads enter
 // the set. Without a probe, the declared product decides.
-func servedEcosystemSet(d *manifest.Document, observed *workspace.Workspace) map[catalog.Ecosystem]struct{} {
+func servedEcosystemSet(d *documentpkg.Manifest, observed *workspace.Workspace) map[catalog.Ecosystem]struct{} {
 	target := resolve.Target{Product: d.Server.Core.Product}
 	served := map[catalog.Ecosystem]struct{}{}
 	if observed != nil {
@@ -163,7 +162,7 @@ func loaderSpecificDescriptor(module catalog.DescriptorModule) bool {
 	})
 }
 
-func commandReference(d *manifest.Document, old *lockfile.Document, raw string, ecosystem catalog.Ecosystem) (string, version.Version, error) {
+func commandReference(d *documentpkg.Manifest, old *documentpkg.Lock, raw string, ecosystem catalog.Ecosystem) (string, version.Version, error) {
 	request, err := input.Parse(raw)
 	if err != nil {
 		return "", "", err
@@ -176,7 +175,7 @@ func commandReference(d *manifest.Document, old *lockfile.Document, raw string, 
 				return "", "", err
 			}
 			if ref != "" {
-				provider, name, err = manifest.ParseReference(ref)
+				provider, name, err = documentpkg.ParseReference(ref)
 				if err != nil {
 					return "", "", err
 				}
@@ -190,7 +189,7 @@ func commandReference(d *manifest.Document, old *lockfile.Document, raw string, 
 		}
 	}
 	ref := provider.String() + ":" + name
-	if _, _, err := manifest.ParseReference(ref); err != nil {
+	if _, _, err := documentpkg.ParseReference(ref); err != nil {
 		return "", "", err
 	}
 	selector := request.Version
@@ -205,7 +204,7 @@ func Add(ctx context.Context, root string, args []string, ecosystem catalog.Ecos
 	if err != nil {
 		return nil, err
 	}
-	opts.ExpectedManifest, err = manifest.Fingerprint(d)
+	opts.ExpectedManifest, err = d.Fingerprint()
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +218,7 @@ func Add(ctx context.Context, root string, args []string, ecosystem catalog.Ecos
 		if err != nil {
 			return nil, err
 		}
-		r := manifest.Requirement{Selector: selector, Enabled: new(true)}
+		r := documentpkg.Requirement{Selector: selector, Enabled: new(true)}
 		if ecosystem == catalog.EcosystemMCDR {
 			if d.MCDR == nil {
 				return nil, fmt.Errorf("manifest has no MCDR runtime")
@@ -227,7 +226,7 @@ func Add(ctx context.Context, root string, args []string, ecosystem catalog.Ecos
 			d.MCDR.Packages[ref] = r
 		} else {
 			if d.Server.Packages[ecosystem] == nil {
-				d.Server.Packages[ecosystem] = map[string]manifest.Requirement{}
+				d.Server.Packages[ecosystem] = map[string]documentpkg.Requirement{}
 			}
 			d.Server.Packages[ecosystem][ref] = r
 		}
@@ -241,7 +240,7 @@ func Remove(ctx context.Context, root string, args []string, ecosystem catalog.E
 	if err != nil {
 		return nil, err
 	}
-	opts.ExpectedManifest, err = manifest.Fingerprint(d)
+	opts.ExpectedManifest, err = d.Fingerprint()
 	if err != nil {
 		return nil, err
 	}
@@ -287,13 +286,13 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if err := filetrack.RecoverPending(root); err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(filepath.Join(root, manifest.Filename)); err == nil && !opts.Force {
+	if _, err := os.Stat(filepath.Join(root, documentpkg.ManifestFilename)); err == nil && !opts.Force {
 		return nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
 	}
-	d := &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
-			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{},
+	d := &documentpkg.Manifest{
+		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Server: documentpkg.ManifestServer{
+			Packages: map[catalog.Ecosystem]map[string]documentpkg.Requirement{},
 		},
 	}
 	observed := workspace.Observe(root, discovery.Request{EntryPoint: opts.EntryPoint})
@@ -401,9 +400,9 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 		log.Debug("MCDR version from workspace detection", "version", mcdrVersion)
 	}
 	if mcdrVersion != "" {
-		d.MCDR = &manifest.MCDR{Directory: ".", Version: version.Version(mcdrVersion), Packages: map[string]manifest.Requirement{}}
+		d.MCDR = &documentpkg.ManifestMCDR{Directory: ".", Version: version.Version(mcdrVersion), Packages: map[string]documentpkg.Requirement{}}
 	}
-	if err := manifest.Normalize(d); err != nil {
+	if err := d.Normalize(); err != nil {
 		return initResult(observed), err
 	}
 	modrinthMapper, hasModrinthMapper, err := routing.GetArtifactMapper(catalog.ProviderModrinth)
@@ -444,7 +443,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 					continue
 				}
 				if _, err := install.DigestFile(p.Path, candidate.Hashes); err == nil {
-					d.MCDR.Packages["mcdr:"+candidate.ProjectID] = manifest.Requirement{Selector: candidate.Version}
+					d.MCDR.Packages["mcdr:"+candidate.ProjectID] = documentpkg.Requirement{Selector: candidate.Version}
 					recognized++
 					break
 				}
@@ -484,9 +483,9 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			continue
 		}
 		if d.Server.Packages[ecosystem] == nil {
-			d.Server.Packages[ecosystem] = map[string]manifest.Requirement{}
+			d.Server.Packages[ecosystem] = map[string]documentpkg.Requirement{}
 		}
-		d.Server.Packages[ecosystem]["modrinth:"+ref.Name.String()] = manifest.Requirement{Selector: ref.Version}
+		d.Server.Packages[ecosystem]["modrinth:"+ref.Name.String()] = documentpkg.Requirement{Selector: ref.Version}
 		recognized++
 	}
 	log.Debug(
@@ -494,7 +493,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 		"count", recognized,
 		"present", len(packages),
 	)
-	old, err := lockfile.Read(root)
+	old, err := documentpkg.LockFile(root).Read()
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return initResult(observed), err
 	}
@@ -517,11 +516,11 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if err != nil {
 		return initResult(observed), err
 	}
-	if err := manifest.Write(root, d); err != nil {
+	if err := documentpkg.ManifestFile(root).Write(d); err != nil {
 		return initResult(observed), err
 	}
 	if resolved != old {
-		if err := lockfile.Write(root, resolved); err != nil {
+		if err := documentpkg.LockFile(root).Write(resolved); err != nil {
 			return initResult(observed), err
 		}
 	}

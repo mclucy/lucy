@@ -1,41 +1,35 @@
-package lockfile
+package document
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/internal/fsutil"
 	javapkg "github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	Filename      = "lucy-lock.yaml"
-	SchemaVersion = 1
+	LockFilename      = "lucy-lock.yaml"
+	LockSchemaVersion = 1
 )
 
-type Document struct {
-	SchemaVersion       int                    `yaml:"lock_version" json:"lock_version"`
-	ManifestFingerprint string                 `yaml:"manifest_fingerprint" json:"manifest_fingerprint"`
-	Server              Server                 `yaml:"server" json:"server"`
-	MCDR                *MCDR                  `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
-	Packages            []Package              `yaml:"packages" json:"packages"`
-	Files               []manifest.TrackedFile `yaml:"files,omitempty" json:"files,omitempty"`
+type Lock struct {
+	SchemaVersion       int           `yaml:"lock_version" json:"lock_version"`
+	ManifestFingerprint string        `yaml:"manifest_fingerprint" json:"manifest_fingerprint"`
+	Server              LockedServer  `yaml:"server" json:"server"`
+	MCDR                *LockedMCDR   `yaml:"mcdr,omitempty" json:"mcdr,omitempty"`
+	Packages            []Package     `yaml:"packages" json:"packages"`
+	Files               []TrackedFile `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
-type Server struct {
+type LockedServer struct {
 	Directory        string          `yaml:"directory,omitempty" json:"directory"`
 	Minecraft        version.Version `yaml:"minecraft" json:"minecraft"`
 	Product          server.Product  `yaml:"product" json:"product"`
@@ -43,13 +37,13 @@ type Server struct {
 	catalog.Artifact `yaml:",inline" json:",inline"`
 	Bootstrapper     string                  `yaml:"bootstrapper" json:"bootstrapper"`
 	Inputs           []server.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
-	Java             Java                    `yaml:"java" json:"java"`
+	Java             LockedJava              `yaml:"java" json:"java"`
 }
 
-// Java records the inputs of the Java requirement. Package requirements on
-// Java stay in the package modules, so commands combine the inputs when they
-// check a Java runtime.
-type Java struct {
+// LockedJava records the inputs of the Java requirement. Package requirements
+// on Java stay in the package modules, so commands combine the inputs when
+// they check a Java runtime.
+type LockedJava struct {
 	// Advisory is the Java major version that Mojang recommends for the
 	// Minecraft version. Lucy treats it as a minimum.
 	Advisory int `yaml:"advisory" json:"advisory"`
@@ -61,10 +55,10 @@ type Java struct {
 	Distribution javapkg.Distribution `yaml:"distribution,omitempty" json:"distribution,omitempty"`
 }
 
-// NewJava records the Mojang advisory with the override that the manifest
-// declares.
-func NewJava(advisory int, override *manifest.Java) Java {
-	java := Java{Advisory: advisory}
+// NewLockedJava records the Mojang advisory with the override that the
+// manifest declares.
+func NewLockedJava(advisory int, override *ManifestJava) LockedJava {
+	java := LockedJava{Advisory: advisory}
 	if override != nil {
 		java.Version = override.Version
 		java.Distribution = override.Distribution
@@ -72,64 +66,64 @@ func NewJava(advisory int, override *manifest.Java) Java {
 	return java
 }
 
-type MCDR struct {
+type LockedMCDR struct {
 	Directory string          `yaml:"directory" json:"directory"`
 	Version   version.Version `yaml:"version" json:"version"`
 }
 
-func (d *Document) Validate() error {
-	if d.SchemaVersion != SchemaVersion {
-		return fmt.Errorf("unsupported lock version %d", d.SchemaVersion)
+func (l *Lock) Validate() error {
+	if l.SchemaVersion != LockSchemaVersion {
+		return fmt.Errorf("unsupported lock version %d", l.SchemaVersion)
 	}
-	if d.ManifestFingerprint == "" {
+	if l.ManifestFingerprint == "" {
 		return fmt.Errorf("manifest_fingerprint is required")
 	}
-	if d.Server.Directory == "" {
+	if l.Server.Directory == "" {
 		return fmt.Errorf("server.directory is required")
 	}
-	if err := manifest.SafeRelativePath(d.Server.Directory); err != nil {
+	if err := SafeRelativePath(l.Server.Directory); err != nil {
 		return err
 	}
-	if err := validateVersion("server.minecraft", d.Server.Minecraft, false); err != nil {
+	if err := validateVersion("server.minecraft", l.Server.Minecraft, false); err != nil {
 		return err
 	}
-	if d.Server.Product == server.ProductUnknown {
+	if l.Server.Product == server.ProductUnknown {
 		return fmt.Errorf("server.product is required")
 	}
-	if err := validateVersion("server.core_version", d.Server.CoreVersion, true); err != nil {
+	if err := validateVersion("server.core_version", l.Server.CoreVersion, true); err != nil {
 		return err
 	}
-	if d.Server.Artifact.Version == "" {
+	if l.Server.Artifact.Version == "" {
 		return fmt.Errorf("server.artifact.version is required")
 	}
-	if d.Server.Artifact.Filename == "" {
+	if l.Server.Artifact.Filename == "" {
 		return fmt.Errorf("server.artifact.filename is required")
 	}
-	if d.Server.Java.Advisory <= 0 {
+	if l.Server.Java.Advisory <= 0 {
 		return fmt.Errorf("server.java.advisory must be positive")
 	}
-	distribution, ok := javapkg.ParseDistribution(string(d.Server.Java.Distribution))
+	distribution, ok := javapkg.ParseDistribution(string(l.Server.Java.Distribution))
 	if !ok {
-		return fmt.Errorf("unknown server.java.distribution %q", d.Server.Java.Distribution)
+		return fmt.Errorf("unknown server.java.distribution %q", l.Server.Java.Distribution)
 	}
-	d.Server.Java.Distribution = distribution
-	if d.MCDR != nil {
-		if d.MCDR.Directory == "" {
+	l.Server.Java.Distribution = distribution
+	if l.MCDR != nil {
+		if l.MCDR.Directory == "" {
 			return fmt.Errorf("mcdr.directory is required")
 		}
-		if err := manifest.SafeRelativePath(d.MCDR.Directory); err != nil {
+		if err := SafeRelativePath(l.MCDR.Directory); err != nil {
 			return err
 		}
-		if err := validateVersion("mcdr.version", d.MCDR.Version, false); err != nil {
-			return err
-		}
-	}
-	for i := range d.Packages {
-		if err := validateLockedPackage(&d.Packages[i]); err != nil {
+		if err := validateVersion("mcdr.version", l.MCDR.Version, false); err != nil {
 			return err
 		}
 	}
-	if err := manifest.NormalizeTrackedFiles(d.Files); err != nil {
+	for i := range l.Packages {
+		if err := validateLockedPackage(&l.Packages[i]); err != nil {
+			return err
+		}
+	}
+	if err := NormalizeTrackedFiles(l.Files); err != nil {
 		return err
 	}
 	return nil
@@ -189,21 +183,12 @@ func validateLockedPackage(pkg *Package) error {
 	return nil
 }
 
-func Read(root string) (*Document, error) {
-	file, err := os.Open(filepath.Join(root, Filename))
-	if err != nil {
-		return nil, err
-	}
-	d, decodeErr := Decode(file)
-	return d, errors.Join(decodeErr, file.Close())
-}
-
-// Decode validates lock bytes from a reader.
-func Decode(reader io.Reader) (*Document, error) {
-	d := &Document{}
+// DecodeLock validates lock bytes from a reader.
+func DecodeLock(reader io.Reader) (*Lock, error) {
+	l := &Lock{}
 	decoder := yaml.NewDecoder(reader)
 	decoder.KnownFields(true)
-	if err := decoder.Decode(d); err != nil {
+	if err := decoder.Decode(l); err != nil {
 		return nil, fmt.Errorf("decode lock: %w", err)
 	}
 	var extra any
@@ -213,17 +198,17 @@ func Decode(reader io.Reader) (*Document, error) {
 		}
 		return nil, fmt.Errorf("decode lock tail: %w", err)
 	}
-	if err := d.Validate(); err != nil {
+	if err := l.Validate(); err != nil {
 		return nil, err
 	}
-	return d, nil
+	return l, nil
 }
 
 // Fingerprint returns the identity of a lock's content. It validates a copy
 // first, so the fingerprint describes what the lock says and not how it was
 // spelled.
-func Fingerprint(d *Document) (string, error) {
-	canonical, err := canonicalDocument(d)
+func (l *Lock) Fingerprint() (string, error) {
+	canonical, err := l.canonical()
 	if err != nil {
 		return "", err
 	}
@@ -235,12 +220,12 @@ func Fingerprint(d *Document) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-func canonicalDocument(d *Document) (*Document, error) {
-	if d == nil {
+func (l *Lock) canonical() (*Lock, error) {
+	if l == nil {
 		return nil, nil
 	}
-	clone := *d
-	clone.Files = slices.Clone(d.Files)
+	clone := *l
+	clone.Files = slices.Clone(l.Files)
 	if err := clone.Validate(); err != nil {
 		return nil, err
 	}
@@ -249,33 +234,20 @@ func canonicalDocument(d *Document) (*Document, error) {
 
 // Snapshot returns the canonical bytes of the document. It writes nothing. A
 // publisher that decides when and where the bytes land takes a snapshot first;
-// Write takes one and publishes it.
-func Snapshot(d *Document) ([]byte, error) {
-	if err := d.Validate(); err != nil {
+// Service.Write takes one and publishes it.
+func (l *Lock) Snapshot() ([]byte, error) {
+	if err := l.Validate(); err != nil {
 		return nil, err
 	}
-	return yaml.Marshal(d)
-}
-
-func Write(root string, d *Document) error {
-	data, err := Snapshot(d)
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(root, Filename)
-	if err := fsutil.AtomicWrite(path, data, 0o644); err != nil {
-		return err
-	}
-	log.Info("lock written", "path", path)
-	return nil
+	return yaml.Marshal(l)
 }
 
 // LookupReference expands a bare name against the package names in this lock.
 // It returns an empty string when no package matches and an error when the
 // name is ambiguous.
-func (d *Document) LookupReference(input string) (string, error) {
+func (l *Lock) LookupReference(input string) (string, error) {
 	var match string
-	for _, pkg := range d.Packages {
+	for _, pkg := range l.Packages {
 		if pkg.Artifact.ProjectID != input {
 			continue
 		}

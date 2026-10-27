@@ -5,14 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/log"
 )
 
 // removeSupersededPaperCore deletes the adopted paperclip jar after the
 // installer has materialized the canonical server.jar. Leaving both files in
 // the workspace makes discovery report two identical runtimes.
-func removeSupersededPaperCore(root string, d *lockfile.Document) {
+func removeSupersededPaperCore(root string, d *document.Lock) {
 	if d == nil || d.Server.Bootstrapper != "paperclip" {
 		return
 	}

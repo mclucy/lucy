@@ -8,38 +8,37 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-func testWorkspace(t *testing.T) (string, *manifest.Document, *lockfile.Document) {
+func testWorkspace(t *testing.T) (string, *document.Manifest, *document.Lock) {
 	t.Helper()
 	root := t.TempDir()
-	d := &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+	d := &document.Manifest{
+		SchemaVersion: document.ManifestSchemaVersion,
+		Server: document.ManifestServer{
 			Minecraft: versionpkg.Version("1.21.4"),
 			Directory: ".",
-			Core: manifest.Core{
+			Core: document.ManifestCore{
 				Product:        serverpkg.ProductFabric,
 				ProductVersion: versionpkg.Version("0.16.9"),
 			},
-			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{},
+			Packages: map[catalog.Ecosystem]map[string]document.Requirement{},
 		},
 	}
-	if err := manifest.Write(root, d); err != nil {
+	if err := document.ManifestFile(root).Write(d); err != nil {
 		t.Fatalf("manifest.Write() error = %v", err)
 	}
-	fingerprint, err := manifest.Fingerprint(d)
+	fingerprint, err := d.Fingerprint()
 	if err != nil {
 		t.Fatalf("manifest.Fingerprint() error = %v", err)
 	}
-	lock := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	lock := &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
 		ManifestFingerprint: fingerprint,
-		Server: lockfile.Server{
+		Server: document.LockedServer{
 			Directory:   ".",
 			Minecraft:   versionpkg.Version("1.21.4"),
 			Product:     serverpkg.ProductFabric,
@@ -48,11 +47,11 @@ func testWorkspace(t *testing.T) (string, *manifest.Document, *lockfile.Document
 				Version:  versionpkg.Version("0.16.9"),
 				Filename: "fabric-loader-0.16.9.jar",
 			},
-			Java: lockfile.Java{Advisory: 21},
+			Java: document.LockedJava{Advisory: 21},
 		},
-		Packages: []lockfile.Package{},
+		Packages: []document.Package{},
 	}
-	if err := lockfile.Write(root, lock); err != nil {
+	if err := document.LockFile(root).Write(lock); err != nil {
 		t.Fatalf("lockfile.Write() error = %v", err)
 	}
 	return root, d, lock
@@ -108,11 +107,11 @@ func TestPlanInstallRejectsExpectedLockMismatch(t *testing.T) {
 
 func TestPlanInstallAcceptsExpectedFingerprints(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	manifestFingerprint, err := manifest.Fingerprint(d)
+	manifestFingerprint, err := d.Fingerprint()
 	if err != nil {
 		t.Fatalf("manifest.Fingerprint() error = %v", err)
 	}
-	lockFingerprint, err := lockfile.Fingerprint(lock)
+	lockFingerprint, err := lock.Fingerprint()
 	if err != nil {
 		t.Fatalf("lockfile.Fingerprint() error = %v", err)
 	}
@@ -136,15 +135,15 @@ func TestPlanInstallAcceptsExpectedFingerprints(t *testing.T) {
 func TestPlanInstallFingerprintsWorkspaceState(t *testing.T) {
 	t.Run("manifest edited in memory", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		onDisk, err := manifest.Read(root)
+		onDisk, err := document.ManifestFile(root).Read()
 		if err != nil {
 			t.Fatalf("manifest.Read() error = %v", err)
 		}
-		baseFingerprint, err := manifest.Fingerprint(onDisk)
+		baseFingerprint, err := onDisk.Fingerprint()
 		if err != nil {
 			t.Fatalf("manifest.Fingerprint() error = %v", err)
 		}
-		d.Server.Java = &manifest.Java{Version: 17}
+		d.Server.Java = &document.ManifestJava{Version: 17}
 		plan, err := PlanInstall(
 			context.Background(),
 			root,
@@ -169,16 +168,16 @@ func TestPlanInstallFingerprintsWorkspaceState(t *testing.T) {
 
 	t.Run("lock differs from workspace", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		onDisk, err := lockfile.Read(root)
+		onDisk, err := document.LockFile(root).Read()
 		if err != nil {
 			t.Fatalf("lockfile.Read() error = %v", err)
 		}
-		baseFingerprint, err := lockfile.Fingerprint(onDisk)
+		baseFingerprint, err := onDisk.Fingerprint()
 		if err != nil {
 			t.Fatalf("lockfile.Fingerprint() error = %v", err)
 		}
 		stale := *lock
-		stale.Files = []manifest.TrackedFile{{Path: "server.properties"}}
+		stale.Files = []document.TrackedFile{{Path: "server.properties"}}
 		plan, err := PlanInstall(context.Background(), root, d, &stale, Options{})
 		if err != nil {
 			t.Fatalf("PlanInstall() error = %v", err)
@@ -231,7 +230,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 			t.Fatalf("PlanInstall() error = %v", err)
 		}
 		d.Server.Core.ProductVersion = versionpkg.Version("0.16.10")
-		if err := manifest.Write(root, d); err != nil {
+		if err := document.ManifestFile(root).Write(d); err != nil {
 			t.Fatalf("manifest.Write() error = %v", err)
 		}
 		if err := checkPlannedState(root, plan); err == nil {
@@ -245,7 +244,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 		if err != nil {
 			t.Fatalf("PlanInstall() error = %v", err)
 		}
-		if err := os.Remove(filepath.Join(root, manifest.Filename)); err != nil {
+		if err := os.Remove(filepath.Join(root, document.ManifestFilename)); err != nil {
 			t.Fatalf("remove manifest: %v", err)
 		}
 		if err := checkPlannedState(root, plan); err == nil {
@@ -260,7 +259,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 			t.Fatalf("PlanInstall() error = %v", err)
 		}
 		lock.ManifestFingerprint = "sha256:different"
-		if err := lockfile.Write(root, lock); err != nil {
+		if err := document.LockFile(root).Write(lock); err != nil {
 			t.Fatalf("lockfile.Write() error = %v", err)
 		}
 		if err := checkPlannedState(root, plan); err == nil {
@@ -271,7 +270,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 	t.Run("manifest appeared", func(t *testing.T) {
 		root, _, _ := testWorkspace(t)
 		plan := &Plan{
-			Resolved:            &lockfile.Document{},
+			Resolved:            &document.Lock{},
 			BaseLockFingerprint: "sha256:base",
 		}
 		if err := checkPlannedState(root, plan); err == nil {

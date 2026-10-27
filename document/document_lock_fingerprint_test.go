@@ -1,20 +1,19 @@
-package lockfile_test
+package document_test
 
 import (
 	"testing"
 
+	documentpkg "github.com/mclucy/lucy/document"
 	javapkg "github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 )
 
 // TestFingerprintIsCanonical covers the inputs that validation normalizes.
 // Fingerprint identifies a lock's content, so two spellings of one lock must
 // fingerprint alike, just as the lock a publisher writes does.
 func TestFingerprintIsCanonical(t *testing.T) {
-	fingerprint := func(document *lockfile.Document) string {
+	fingerprint := func(document *documentpkg.Lock) string {
 		t.Helper()
-		value, err := lockfile.Fingerprint(document)
+		value, err := document.Fingerprint()
 		if err != nil {
 			t.Fatalf("lockfile.Fingerprint() error = %v", err)
 		}
@@ -33,9 +32,9 @@ func TestFingerprintIsCanonical(t *testing.T) {
 	}
 
 	ordered := lockDocument(".", "config/server.properties", "1.0.0", ">=1.0", true)
-	ordered.Files = []manifest.TrackedFile{{Path: "config/a.txt"}, {Path: "config/b.txt"}}
+	ordered.Files = []documentpkg.TrackedFile{{Path: "config/a.txt"}, {Path: "config/b.txt"}}
 	reordered := lockDocument(".", "config/server.properties", "1.0.0", ">=1.0", true)
-	reordered.Files = []manifest.TrackedFile{{Path: "config/b.txt"}, {Path: "config/a.txt"}}
+	reordered.Files = []documentpkg.TrackedFile{{Path: "config/b.txt"}, {Path: "config/a.txt"}}
 	if fingerprint(ordered) != fingerprint(reordered) {
 		t.Fatal("file declaration order changed the lock fingerprint")
 	}
@@ -44,10 +43,10 @@ func TestFingerprintIsCanonical(t *testing.T) {
 	unspelled := lockDocument(".", "config/server.properties", "1.0.0", ">=1.0", true)
 	unspelled.Server.Java.Distribution = javapkg.Distribution("TEMURIN")
 	before := fingerprint(unspelled)
-	if err := lockfile.Write(root, unspelled); err != nil {
+	if err := documentpkg.LockFile(root).Write(unspelled); err != nil {
 		t.Fatalf("lockfile.Write() error = %v", err)
 	}
-	decoded, err := lockfile.Read(root)
+	decoded, err := documentpkg.LockFile(root).Read()
 	if err != nil {
 		t.Fatalf("lockfile.Read() error = %v", err)
 	}

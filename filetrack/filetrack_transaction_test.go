@@ -26,10 +26,9 @@ import (
 
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/catalog"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/workspace"
 	"gopkg.in/yaml.v3"
@@ -48,7 +47,7 @@ func TestInterruptedFileTransactionRecovery(t *testing.T) {
 				requireTransaction(t, err)
 				modes[name] = info.Mode().Perm()
 			}
-			locked, err := lockfile.Read(root)
+			locked, err := documentpkg.LockFile(root).Read()
 			requireTransaction(t, err)
 			stop := startTransactionProcess(t, root, mode)
 			stop()
@@ -57,9 +56,9 @@ func TestInterruptedFileTransactionRecovery(t *testing.T) {
 			}
 			_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 			requireTransaction(t, err)
-			document, err := manifest.Read(root)
+			document, err := documentpkg.ManifestFile(root).Read()
 			requireTransaction(t, err)
-			current, err := lockfile.Read(root)
+			current, err := documentpkg.LockFile(root).Read()
 			requireTransaction(t, err)
 			if !reflect.DeepEqual(current.Server, locked.Server) || !reflect.DeepEqual(current.Packages, locked.Packages) {
 				t.Fatal("recovery changed runtime pins")
@@ -138,7 +137,7 @@ func TestRecoveryPreservesPostInterruptionEdits(t *testing.T) {
 	requireTransaction(t, os.WriteFile(filepath.Join(root, "b.cfg"), original["b.cfg"], 0o640))
 	_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
-	for _, name := range []string{"a.cfg", "b.cfg", manifest.Filename, lockfile.Filename} {
+	for _, name := range []string{"a.cfg", "b.cfg", documentpkg.ManifestFilename, documentpkg.LockFilename} {
 		requireTransactionBytes(t, filepath.Join(root, name), original[name])
 	}
 }
@@ -193,24 +192,24 @@ func TestPreparedBatchRejectsConcurrentWorkingEdit(t *testing.T) {
 		_, _ = io.WriteString(w, "initial-"+strings.TrimPrefix(r.URL.Path, "/")+".cfg")
 	}))
 	defer server.Close()
-	document, err := manifest.Read(root)
+	document, err := documentpkg.ManifestFile(root).Read()
 	requireTransaction(t, err)
 	for i := range document.Files {
 		document.Files[i].RecoverURL = server.URL + "/" + strings.TrimSuffix(document.Files[i].Path, ".cfg")
 	}
-	requireTransaction(t, manifest.Write(root, document))
-	locked, err := lockfile.Read(root)
+	requireTransaction(t, documentpkg.ManifestFile(root).Write(document))
+	locked, err := documentpkg.LockFile(root).Read()
 	requireTransaction(t, err)
 	locked.Files = document.Files
-	locked.ManifestFingerprint, err = manifest.Fingerprint(document)
+	locked.ManifestFingerprint, err = document.Fingerprint()
 	requireTransaction(t, err)
-	requireTransaction(t, lockfile.Write(root, locked))
+	requireTransaction(t, documentpkg.LockFile(root).Write(locked))
 	before := snapshotTransactionFiles(t, root)
 	if _, err := Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true}); err == nil {
 		t.Fatalf("expected readset rejection, got %v", err)
 	}
 	requireTransactionBytes(t, filepath.Join(root, "a.cfg"), []byte("external during preparation"))
-	for _, name := range []string{"b.cfg", manifest.Filename, lockfile.Filename, historyName} {
+	for _, name := range []string{"b.cfg", documentpkg.ManifestFilename, documentpkg.LockFilename, historyName} {
 		requireTransactionBytes(t, filepath.Join(root, name), before[name])
 	}
 	if _, err := os.Stat(filepath.Join(root, transactionName)); !errors.Is(err, os.ErrNotExist) {
@@ -231,17 +230,17 @@ func TestPreparedBatchPreservesConcurrentManifestIntent(t *testing.T) {
 	var edited atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/b" && edited.CompareAndSwap(false, true) {
-			document, err := manifest.Read(root)
+			document, err := documentpkg.ManifestFile(root).Read()
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
 			document.Files[0].Immutable = true
-			if err := manifest.Write(root, document); err != nil {
+			if err := documentpkg.ManifestFile(root).Write(document); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			data, err := os.ReadFile(filepath.Join(root, manifest.Filename))
+			data, err := os.ReadFile(filepath.Join(root, documentpkg.ManifestFilename))
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
@@ -251,32 +250,32 @@ func TestPreparedBatchPreservesConcurrentManifestIntent(t *testing.T) {
 		_, _ = io.WriteString(w, "initial-"+strings.TrimPrefix(r.URL.Path, "/")+".cfg")
 	}))
 	defer server.Close()
-	document, err := manifest.Read(root)
+	document, err := documentpkg.ManifestFile(root).Read()
 	requireTransaction(t, err)
 	for i := range document.Files {
 		document.Files[i].RecoverURL = server.URL + "/" + strings.TrimSuffix(document.Files[i].Path, ".cfg")
 	}
-	requireTransaction(t, manifest.Write(root, document))
-	locked, err := lockfile.Read(root)
+	requireTransaction(t, documentpkg.ManifestFile(root).Write(document))
+	locked, err := documentpkg.LockFile(root).Read()
 	requireTransaction(t, err)
 	locked.Files = document.Files
-	locked.ManifestFingerprint, err = manifest.Fingerprint(document)
+	locked.ManifestFingerprint, err = document.Fingerprint()
 	requireTransaction(t, err)
-	requireTransaction(t, lockfile.Write(root, locked))
+	requireTransaction(t, documentpkg.LockFile(root).Write(locked))
 	before := snapshotTransactionFiles(t, root)
 	if _, err := Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true}); err == nil {
 		t.Fatalf("expected intent conflict, got %v", err)
 	}
 	select {
 	case data := <-external:
-		requireTransactionBytes(t, filepath.Join(root, manifest.Filename), data)
+		requireTransactionBytes(t, filepath.Join(root, documentpkg.ManifestFilename), data)
 	default:
 		t.Fatal("fixture did not commit its external manifest edit")
 	}
-	for _, name := range []string{"a.cfg", "b.cfg", lockfile.Filename, historyName} {
+	for _, name := range []string{"a.cfg", "b.cfg", documentpkg.LockFilename, historyName} {
 		requireTransactionBytes(t, filepath.Join(root, name), before[name])
 	}
-	requireTransaction(t, os.WriteFile(filepath.Join(root, manifest.Filename), before[manifest.Filename], 0o600))
+	requireTransaction(t, os.WriteFile(filepath.Join(root, documentpkg.ManifestFilename), before[documentpkg.ManifestFilename], 0o600))
 	result, err := Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true})
 	requireTransaction(t, err)
 	if result.Event.Operation != Update || len(result.Event.Changes) != 2 {
@@ -424,11 +423,11 @@ func prepareInterruptedTransaction(root, mode string) (resultErr error) {
 	if err != nil {
 		return err
 	}
-	document, err := manifest.Read(root)
+	document, err := documentpkg.ManifestFile(root).Read()
 	if err != nil {
 		return err
 	}
-	locked, err := lockfile.Read(root)
+	locked, err := documentpkg.LockFile(root).Read()
 	if err != nil {
 		return err
 	}
@@ -449,14 +448,14 @@ func prepareInterruptedTransaction(root, mode string) (resultErr error) {
 		txn.Mutations = append(txn.Mutations, mutation{Path: declaration.Path, Before: before, After: after})
 	}
 	locked.Files = document.Files
-	locked.ManifestFingerprint, err = manifest.Fingerprint(document)
+	locked.ManifestFingerprint, err = document.Fingerprint()
 	if err != nil {
 		return err
 	}
 	for _, item := range []struct {
 		name  string
 		value any
-	}{{manifest.Filename, document}, {lockfile.Filename, locked}} {
+	}{{documentpkg.ManifestFilename, document}, {documentpkg.LockFilename, locked}} {
 		before, err := capture(root, files, store, item.name)
 		if err != nil {
 			return err
@@ -540,30 +539,30 @@ func startTransactionProcess(t *testing.T, root, mode string) func() {
 func transactionWorkspace(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	document := &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+	document := &documentpkg.Manifest{
+		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Server: documentpkg.ManifestServer{
 			Minecraft: "1.21.4",
 			Directory: "native",
-			Core: manifest.Core{
+			Core: documentpkg.ManifestCore{
 				Product:        serverpkg.ProductMinecraft,
 				ProductVersion: "1.21.4",
 			},
 		},
 	}
-	requireTransaction(t, manifest.Write(root, document))
-	fingerprint, err := manifest.Fingerprint(document)
+	requireTransaction(t, documentpkg.ManifestFile(root).Write(document))
+	fingerprint, err := document.Fingerprint()
 	requireTransaction(t, err)
 	coreHash := sha256.Sum256([]byte("native core"))
-	locked := &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	locked := &documentpkg.Lock{
+		SchemaVersion:       documentpkg.LockSchemaVersion,
 		ManifestFingerprint: fingerprint,
-		Server: lockfile.Server{
+		Server: documentpkg.LockedServer{
 			Minecraft:   "1.21.4",
 			Directory:   "native",
 			Product:     serverpkg.ProductMinecraft,
 			CoreVersion: "1.21.4",
-			Java:        lockfile.Java{Advisory: 21},
+			Java:        documentpkg.LockedJava{Advisory: 21},
 			Artifact: catalog.Artifact{
 				Provider: "mojang",
 				Version:  "1.21.4",
@@ -572,9 +571,9 @@ func transactionWorkspace(t *testing.T) string {
 				Hashes:   map[string]string{"sha256": fmt.Sprintf("%x", coreHash)},
 			},
 		},
-		Packages: []lockfile.Package{},
+		Packages: []documentpkg.Package{},
 	}
-	requireTransaction(t, lockfile.Write(root, locked))
+	requireTransaction(t, documentpkg.LockFile(root).Write(locked))
 	for _, name := range []string{"a.cfg", "b.cfg"} {
 		requireTransaction(t, os.WriteFile(filepath.Join(root, name), []byte("initial-"+name), 0o640))
 		_, err := Run(t.Context(), root, Request{Operation: Track, Paths: []string{name}})
@@ -591,7 +590,7 @@ func transactionDigest(data []byte) string {
 func snapshotTransactionFiles(t *testing.T, root string) map[string][]byte {
 	t.Helper()
 	result := map[string][]byte{}
-	for _, name := range []string{"a.cfg", "b.cfg", manifest.Filename, lockfile.Filename, historyName} {
+	for _, name := range []string{"a.cfg", "b.cfg", documentpkg.ManifestFilename, documentpkg.LockFilename, historyName} {
 		data, err := os.ReadFile(filepath.Join(root, name))
 		requireTransaction(t, err)
 		result[name] = data

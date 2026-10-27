@@ -7,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/resolve"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -370,20 +369,20 @@ func moduleFixture(t *testing.T, scenario moduleScenario, demand bool) *catalogu
 	return fixture
 }
 
-func moduleManifest(demand bool) *manifest.Document {
+func moduleManifest(demand bool) *document.Manifest {
 	disabled := false
-	packages := make(map[string]manifest.Requirement, len(fuzzProjectNames))
+	packages := make(map[string]document.Requirement, len(fuzzProjectNames))
 	for p, name := range fuzzProjectNames {
-		requirement := manifest.Requirement{Selector: versionpkg.Any}
+		requirement := document.Requirement{Selector: versionpkg.Any}
 		if demand && p == 1 {
 			requirement.Enabled = &disabled
 		}
 		packages["modrinth:"+name] = requirement
 	}
-	return &manifest.Document{
-		Server: manifest.Server{
+	return &document.Manifest{
+		Server: document.ManifestServer{
 			Minecraft: versionpkg.Version(fuzzMinecraft),
-			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{
+			Packages: map[catalog.Ecosystem]map[string]document.Requirement{
 				catalog.EcosystemFabric: packages,
 			},
 		},
@@ -630,7 +629,7 @@ func collectModuleProblems(err error) []resolve.ModuleProblem {
 	return problems
 }
 
-func validateModuleBindings(demand bool, out []lockfile.Package) error {
+func validateModuleBindings(demand bool, out []document.Package) error {
 	for _, pkg := range out {
 		project := slices.Index(fuzzProjectNames[:], pkg.ProjectID)
 		if project < 0 {
@@ -647,7 +646,7 @@ func validateModuleBindings(demand bool, out []lockfile.Package) error {
 		if demand && project == 1 {
 			// The disabled direct declaration stays on the package alongside
 			// the dependency demand that selected it.
-			direct := lockfile.RequirementBinding{
+			direct := document.RequirementBinding{
 				Reference: "modrinth:" + name,
 				Selector:  versionpkg.Any,
 				Enabled:   false,
@@ -661,7 +660,7 @@ func validateModuleBindings(demand bool, out []lockfile.Package) error {
 			}
 			continue
 		}
-		want := lockfile.RequirementBinding{
+		want := document.RequirementBinding{
 			Reference: "modrinth:" + name,
 			Selector:  versionpkg.Any,
 			Enabled:   true,
@@ -678,7 +677,7 @@ func validateModuleBindings(demand bool, out []lockfile.Package) error {
 	return nil
 }
 
-func validateModuleOutput(out []lockfile.Package, expected map[int][]moduleKey) error {
+func validateModuleOutput(out []document.Package, expected map[int][]moduleKey) error {
 	seen := make(map[int]bool, len(fuzzProjectNames))
 	for _, pkg := range out {
 		project := slices.Index(fuzzProjectNames[:], pkg.ProjectID)

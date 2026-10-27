@@ -1,20 +1,16 @@
-package lockfile_test
+package document_test
 
 import (
 	"bytes"
-	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
+	documentpkg "github.com/mclucy/lucy/document"
 	javapkg "github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
@@ -22,24 +18,9 @@ import (
 
 var acceptedDigest = strings.Repeat("0123456789abcdef", 4)
 
-func printable(value string) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\t':
-			return ' '
-		case r < 0x20, r >= 0x7f && r <= 0x9f:
-			return -1
-		case r == 0x2028, r == 0x2029, r == 0xfeff:
-			return -1
-		default:
-			return r
-		}
-	}, strings.ToValidUTF8(value, ""))
-}
-
-// relativeDirectory is the platform-local confinement rule applied to lock
-// directories. Unlike the manifest, a lock requires an explicit directory.
-func relativeDirectory(value string) bool {
+// lockRelativeDirectory is the platform-local confinement rule applied to
+// lock directories. Unlike the manifest, a lock requires an explicit directory.
+func lockRelativeDirectory(value string) bool {
 	if value == "" || filepath.IsAbs(value) {
 		return false
 	}
@@ -47,25 +28,11 @@ func relativeDirectory(value string) bool {
 	return cleaned != ".." && !strings.HasPrefix(cleaned, ".."+string(filepath.Separator))
 }
 
-var (
-	reservedDirectory = regexp.MustCompile(`(?i)(^|/)(\.\.|\.(git|lucy))(/|$)`)
-	reservedFilename  = regexp.MustCompile(`(?i)^lucy(-lock|\.local)?\.yaml(/|$)`)
-)
-
-// portablePath models a file path grammar, not the normalizer's parsing steps.
-func portablePath(value string) (string, bool) {
-	cleaned := path.Clean(value)
-	safe := cleaned != "." && fs.ValidPath(cleaned) && filepath.IsLocal(value) &&
-		!strings.ContainsAny(value, "\\:\x00") &&
-		!reservedDirectory.MatchString(value) && !reservedFilename.MatchString(cleaned)
-	return cleaned, safe
-}
-
-func lockDocument(directory, tracked, pinVersion, selector string, enabled bool) *lockfile.Document {
-	return &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+func lockDocument(directory, tracked, pinVersion, selector string, enabled bool) *documentpkg.Lock {
+	return &documentpkg.Lock{
+		SchemaVersion:       documentpkg.LockSchemaVersion,
 		ManifestFingerprint: "sha256:manifest",
-		Server: lockfile.Server{
+		Server: documentpkg.LockedServer{
 			Directory:   directory,
 			Minecraft:   "1.21.4",
 			Product:     serverpkg.ProductPaper,
@@ -77,9 +44,9 @@ func lockDocument(directory, tracked, pinVersion, selector string, enabled bool)
 				Filename:  "paper.jar",
 				Hashes:    map[string]string{"sha256": acceptedDigest},
 			},
-			Java: lockfile.Java{Advisory: 21},
+			Java: documentpkg.LockedJava{Advisory: 21},
 		},
-		Packages: []lockfile.Package{{
+		Packages: []documentpkg.Package{{
 			Environment: serverpkg.EnvironmentServer,
 			Ecosystem:   catalog.EcosystemFabric,
 			Artifact: catalog.Artifact{
@@ -89,13 +56,13 @@ func lockDocument(directory, tracked, pinVersion, selector string, enabled bool)
 				Filename:  "sodium.jar",
 				Hashes:    map[string]string{"sha256": acceptedDigest},
 			},
-			Requirements: []lockfile.RequirementBinding{{
+			Requirements: []documentpkg.RequirementBinding{{
 				Reference: "modrinth:sodium",
 				Selector:  versionpkg.Version(selector),
 				Enabled:   enabled,
 			}},
 		}},
-		Files: []manifest.TrackedFile{{Path: tracked}},
+		Files: []documentpkg.TrackedFile{{Path: tracked}},
 	}
 }
 
@@ -130,7 +97,7 @@ func FuzzLockReplayPersistence(f *testing.F) {
 		wantPath, pathOK := portablePath(tracked)
 		pin := versionpkg.Version(pinVersion)
 		concretePin := pinVersion != "" && !pin.CanInfer() && !pin.IsInvalid()
-		wantAccept := relativeDirectory(directory) && pathOK && concretePin && selector != ""
+		wantAccept := lockRelativeDirectory(directory) && pathOK && concretePin && selector != ""
 
 		root, err := os.MkdirTemp(base, "case-")
 		if err != nil {
@@ -139,26 +106,26 @@ func FuzzLockReplayPersistence(f *testing.F) {
 		defer func() { _ = os.RemoveAll(root) }()
 
 		if !wantAccept {
-			if err := lockfile.Write(root, document); err == nil {
+			if err := documentpkg.LockFile(root).Write(document); err == nil {
 				t.Fatalf("wrote unsafe lock: directory=%q tracked=%q pin=%q selector=%q", directory, tracked, pinVersion, selector)
 			}
-			if _, err := os.Stat(filepath.Join(root, lockfile.Filename)); !os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(root, documentpkg.LockFilename)); !os.IsNotExist(err) {
 				t.Fatalf("unsafe lock left a file: %v", err)
 			}
 			raw, err := yaml.Marshal(document)
 			if err != nil {
 				t.Fatalf("marshal unsafe lock: %v", err)
 			}
-			if _, err := lockfile.Decode(bytes.NewReader(raw)); err == nil {
+			if _, err := documentpkg.DecodeLock(bytes.NewReader(raw)); err == nil {
 				t.Fatalf("decoded unsafe lock: directory=%q tracked=%q pin=%q selector=%q", directory, tracked, pinVersion, selector)
 			}
 			return
 		}
 
-		if err := lockfile.Write(root, document); err != nil {
+		if err := documentpkg.LockFile(root).Write(document); err != nil {
 			t.Fatalf("write accepted lock: %v", err)
 		}
-		decoded, err := lockfile.Read(root)
+		decoded, err := documentpkg.LockFile(root).Read()
 		if err != nil {
 			t.Fatalf("read accepted lock: %v", err)
 		}
@@ -192,9 +159,9 @@ func FuzzLockReplayPersistence(f *testing.F) {
 			t.Fatalf("files = %+v, want one %q", decoded.Files, wantPath)
 		}
 
-		fingerprint := func(document *lockfile.Document) string {
+		fingerprint := func(document *documentpkg.Lock) string {
 			t.Helper()
-			value, err := lockfile.Fingerprint(document)
+			value, err := document.Fingerprint()
 			if err != nil {
 				t.Fatalf("fingerprint lock: %v", err)
 			}
@@ -237,7 +204,7 @@ func FuzzLockJavaDistributionReplay(f *testing.F) {
 		if err != nil {
 			t.Fatalf("marshal lock with distribution %q: %v", spelling, err)
 		}
-		decoded, err := lockfile.Decode(bytes.NewReader(raw))
+		decoded, err := documentpkg.DecodeLock(bytes.NewReader(raw))
 		if !supported {
 			if err == nil {
 				t.Fatalf("lock accepted unknown Java distribution %q", spelling)
@@ -254,11 +221,11 @@ func FuzzLockJavaDistributionReplay(f *testing.F) {
 			)
 		}
 
-		snapshot, err := lockfile.Snapshot(decoded)
+		snapshot, err := decoded.Snapshot()
 		if err != nil {
 			t.Fatalf("snapshot decoded lock: %v", err)
 		}
-		replayed, err := lockfile.Decode(bytes.NewReader(snapshot))
+		replayed, err := documentpkg.DecodeLock(bytes.NewReader(snapshot))
 		if err != nil {
 			t.Fatalf("decode lock snapshot: %v", err)
 		}

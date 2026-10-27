@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/terminal/style"
@@ -105,7 +105,7 @@ func actionStatusLive(
 			document.Server.Product.Version == versionpkg.Unknown.String()) {
 		// Paperclip carries no build number in its metadata, and an installed
 		// core may be renamed. The lock records the adopted build.
-		if lock, err := lockfile.Read(root); err == nil && lock.Server.CoreVersion != "" {
+		if lock, err := documentpkg.LockFile(root).Read(); err == nil && lock.Server.CoreVersion != "" {
 			document.Server.Product.Version = lock.Server.CoreVersion.String()
 		}
 	}
@@ -114,7 +114,7 @@ func actionStatusLive(
 		document.MCDR.Version == versionpkg.Unknown.String() {
 		// MCDReforged is provisioned locally, so a missing global executable
 		// leaves the observation unknown. The lock carries the managed version.
-		if lock, err := lockfile.Read(root); err == nil && lock.MCDR != nil {
+		if lock, err := documentpkg.LockFile(root).Read(); err == nil && lock.MCDR != nil {
 			document.MCDR = &statusMCDR{
 				Directory: statusRelativePath(root, lock.MCDR.Directory),
 				Version:   lock.MCDR.Version.String(),
@@ -137,11 +137,11 @@ func actionStatusFromLock(
 	if err != nil {
 		return err
 	}
-	lock, err := lockfile.Read(root)
+	lock, err := documentpkg.LockFile(root).Read()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &report.Detail{
-				Title: fmt.Sprintf("no %s to render", lockfile.Filename),
+				Title: fmt.Sprintf("no %s to render", documentpkg.LockFilename),
 				Lines: []string{
 					"The workspace has no lock file yet.",
 				},
@@ -151,7 +151,7 @@ func actionStatusFromLock(
 			}
 		}
 		return &report.Detail{
-			Title: "cannot read " + lockfile.Filename,
+			Title: "cannot read " + documentpkg.LockFilename,
 			Lines: []string{err.Error()},
 			Code:  statusErrorReadFailed,
 			Cause: err,

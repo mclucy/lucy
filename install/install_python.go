@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
 	"gopkg.in/yaml.v3"
 )
@@ -118,7 +118,7 @@ func mcdrEnvironmentKey(mcdrVersion string, requirements []string) string {
 func provisionMCDR(
 	ctx context.Context,
 	root string,
-	d *lockfile.Document,
+	d *document.Lock,
 	store *downloadStore,
 	useVenv bool,
 ) (mcdrRuntime, error) {
@@ -310,7 +310,7 @@ func preparePython(
 	ctx context.Context,
 	root string,
 	stage string,
-	d *lockfile.Document,
+	d *document.Lock,
 	store *downloadStore,
 	useVenv bool,
 ) error {
@@ -330,7 +330,7 @@ func preparePython(
 func ensureMCDRRuntime(
 	ctx context.Context,
 	root string,
-	d *lockfile.Document,
+	d *document.Lock,
 	store *downloadStore,
 	useVenv bool,
 ) error {
@@ -346,7 +346,7 @@ func ensureMCDRRuntime(
 
 func writeMCDRWrapper(
 	base string,
-	d *lockfile.Document,
+	d *document.Lock,
 	mcdr mcdrRuntime,
 	replaceConfig bool,
 ) error {

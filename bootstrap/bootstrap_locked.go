@@ -15,9 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/lockfile"
-	manifestpkg "github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
@@ -60,8 +59,8 @@ func CopyLockedFile(src, dst string, mode os.FileMode) error {
 // PrepareLocked builds the server tree of a locked server in stage. java is the
 // Java executable for the bootstrap steps that run Java; it may be empty when
 // no runtime is installed, and only those steps fail then.
-func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, corePath string, inputs map[string]string, java string, output io.Writer) error {
-	if err := manifestpkg.SafeRelativePath(server.Directory); err != nil {
+func PrepareLocked(ctx context.Context, stage string, server document.LockedServer, corePath string, inputs map[string]string, java string, output io.Writer) error {
+	if err := document.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
 	root := filepath.Join(stage, server.Directory)
@@ -78,7 +77,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		defer installer.Close()
 	}
 	for _, input := range server.Inputs {
-		if err := manifestpkg.SafeRelativePath(input.Path); err != nil {
+		if err := document.SafeRelativePath(input.Path); err != nil {
 			return err
 		}
 		dst := filepath.Join(root, filepath.FromSlash(input.Path))
@@ -217,7 +216,7 @@ func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
 	return raw, nil
 }
 
-func executeServerProfile(ctx context.Context, root string, server lockfile.Server, corePath string, z *zip.Reader, java string, output io.Writer) error {
+func executeServerProfile(ctx context.Context, root string, server document.LockedServer, corePath string, z *zip.Reader, java string, output io.Writer) error {
 	raw, err := readLockedEntry(z, "install_profile.json")
 	if err != nil {
 		return err

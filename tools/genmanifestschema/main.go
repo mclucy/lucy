@@ -12,15 +12,15 @@ import (
 	stdjson "encoding/json"
 
 	"github.com/invopop/jsonschema"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 
 	orderedmap "github.com/pb33f/ordered-map/v2"
 )
 
-const schemaURL = "https://raw.githubusercontent.com/mclucy/lucy/main/manifest/manifest.schema.json"
+const schemaURL = "https://raw.githubusercontent.com/mclucy/lucy/main/document/document_manifest.schema.json"
 
 func main() {
-	path := "manifest/manifest.schema.json"
+	path := "document/document_manifest.schema.json"
 
 	requirementSchema := &jsonschema.Schema{
 		OneOf: []*jsonschema.Schema{
@@ -116,17 +116,17 @@ func main() {
 		major := func() *jsonschema.Schema {
 			return &jsonschema.Schema{
 				Type:    "integer",
-				Minimum: stdjson.Number(fmt.Sprint(manifest.MinimumJava)),
+				Minimum: stdjson.Number(fmt.Sprint(document.MinimumJava)),
 			}
 		}
 		version := &jsonschema.Schema{
 			OneOf: []*jsonschema.Schema{
 				major(),
-				{Const: manifest.JavaAuto},
+				{Const: document.JavaAuto},
 			},
 			Description: "The Java major version, or auto.",
 		}
-		distributions := []any{manifest.JavaAuto, "any"}
+		distributions := []any{document.JavaAuto, "any"}
 		for _, distribution := range java.Distributions {
 			distributions = append(distributions, string(distribution))
 		}
@@ -143,7 +143,7 @@ func main() {
 			OneOf: []*jsonschema.Schema{
 				short,
 				{
-					Const:       manifest.JavaAuto,
+					Const:       document.JavaAuto,
 					Description: "Follow the Java version Mojang recommends.",
 				},
 				{
@@ -160,18 +160,18 @@ func main() {
 		BaseSchemaID:   jsonschema.ID(schemaURL),
 		Mapper: func(t reflect.Type) *jsonschema.Schema {
 			switch t {
-			case reflect.TypeFor[manifest.Requirement]():
+			case reflect.TypeFor[document.Requirement]():
 				return requirementSchema
-			case reflect.TypeFor[manifest.Java]():
+			case reflect.TypeFor[document.ManifestJava]():
 				return javaSchema
-			case reflect.TypeFor[manifest.TrackedFile]():
+			case reflect.TypeFor[document.TrackedFile]():
 				return trackedFileSchema
 			default:
 				return nil
 			}
 		},
 	}
-	schema := r.Reflect(&manifest.Document{})
+	schema := r.Reflect(&document.Manifest{})
 	schema.Version = jsonschema.Version
 	schema.ID = schemaURL
 	schema.Title = "Lucy manifest"

@@ -1,4 +1,4 @@
-package manifest
+package document
 
 import (
 	"fmt"
@@ -17,24 +17,25 @@ const JavaAuto = "auto"
 // release runs on.
 const MinimumJava = 8
 
-// Java overrides the Java runtime that the server runs on. A nil Java or a zero
-// field keeps that part on auto: the version follows the Mojang advisory for
-// the Minecraft version, and every distribution is accepted.
-type Java struct {
+// ManifestJava overrides the Java runtime that the server runs on. A nil
+// ManifestJava or a zero field keeps that part on auto: the version follows
+// the Mojang advisory for the Minecraft version, and every distribution is
+// accepted.
+type ManifestJava struct {
 	Version      int               `yaml:"version,omitempty" json:"version,omitempty"`
 	Distribution java.Distribution `yaml:"distribution,omitempty" json:"distribution,omitempty"`
 }
 
 // IsAuto reports whether j leaves both the version and the distribution on
 // auto.
-func (j *Java) IsAuto() bool {
-	return j == nil || *j == Java{}
+func (j *ManifestJava) IsAuto() bool {
+	return j == nil || *j == ManifestJava{}
 }
 
 // UnmarshalYAML accepts a major version or "auto" as a scalar, or a mapping
 // with version and distribution keys.
-func (j *Java) UnmarshalYAML(n *yaml.Node) error {
-	*j = Java{}
+func (j *ManifestJava) UnmarshalYAML(n *yaml.Node) error {
+	*j = ManifestJava{}
 	switch n.Kind {
 	case yaml.ScalarNode:
 		version, err := parseJavaVersion(n.Value)
@@ -73,11 +74,11 @@ func (j *Java) UnmarshalYAML(n *yaml.Node) error {
 }
 
 // MarshalYAML writes the short form when only the version is set.
-func (j Java) MarshalYAML() (any, error) {
+func (j ManifestJava) MarshalYAML() (any, error) {
 	if j.Distribution == java.DistributionAny {
 		return j.Version, nil
 	}
-	type plain Java
+	type plain ManifestJava
 	return plain(j), nil
 }
 
@@ -119,7 +120,7 @@ func parseJavaVersion(s string) (int, error) {
 
 // normalizeJava drops an override that leaves everything on auto, so the
 // manifest and its fingerprint stay the same as without the field.
-func normalizeJava(s *Server) error {
+func normalizeJava(s *ManifestServer) error {
 	if s.Java.IsAuto() {
 		s.Java = nil
 		return nil

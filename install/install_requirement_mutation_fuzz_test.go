@@ -6,9 +6,8 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -239,17 +238,17 @@ func writeInitialWorkspace(t *testing.T, root string, scenario mutationScenario)
 		initial[index] = mutationEnabled
 	}
 	m := mutationManifest(initial)
-	if err := manifest.Write(root, m); err != nil {
+	if err := document.ManifestFile(root).Write(m); err != nil {
 		t.Fatalf("manifest.Write() error = %v", err)
 	}
-	fingerprint, err := manifest.Fingerprint(m)
+	fingerprint, err := m.Fingerprint()
 	if err != nil {
 		t.Fatalf("manifest.Fingerprint() error = %v", err)
 	}
-	if err := lockfile.Write(root, initialLock(scenario, fingerprint)); err != nil {
+	if err := document.LockFile(root).Write(initialLock(scenario, fingerprint)); err != nil {
 		t.Fatalf("lockfile.Write() error = %v", err)
 	}
-	if _, err := lockfile.Read(root); err != nil {
+	if _, err := document.LockFile(root).Read(); err != nil {
 		t.Fatalf("lockfile.Read() error = %v", err)
 	}
 }
@@ -261,22 +260,22 @@ func runLockedMutation(
 	states []int,
 ) *install.Plan {
 	t.Helper()
-	if err := manifest.Write(root, mutationManifest(states)); err != nil {
+	if err := document.ManifestFile(root).Write(mutationManifest(states)); err != nil {
 		t.Fatalf("manifest.Write() error = %v", err)
 	}
-	d, err := manifest.Read(root)
+	d, err := document.ManifestFile(root).Read()
 	if err != nil {
 		t.Fatalf("manifest.Read() error = %v", err)
 	}
-	old, err := lockfile.Read(root)
+	old, err := document.LockFile(root).Read()
 	if err != nil {
 		t.Fatalf("lockfile.Read() error = %v", err)
 	}
-	manifestBefore, err := manifest.Fingerprint(d)
+	manifestBefore, err := d.Fingerprint()
 	if err != nil {
 		t.Fatalf("manifest.Fingerprint() error = %v", err)
 	}
-	lockBefore, err := lockfile.Fingerprint(old)
+	lockBefore, err := old.Fingerprint()
 	if err != nil {
 		t.Fatalf("lockfile.Fingerprint() error = %v", err)
 	}
@@ -290,11 +289,11 @@ func runLockedMutation(
 	if err != nil {
 		t.Fatalf("PlanInstall() error = %v; %s states=%v", err, scenario.describe(), states)
 	}
-	manifestAfter, err := manifest.Fingerprint(d)
+	manifestAfter, err := d.Fingerprint()
 	if err != nil {
 		t.Fatalf("manifest.Fingerprint() error = %v", err)
 	}
-	lockAfter, err := lockfile.Fingerprint(old)
+	lockAfter, err := old.Fingerprint()
 	if err != nil {
 		t.Fatalf("lockfile.Fingerprint() error = %v", err)
 	}
@@ -315,47 +314,47 @@ func runLockedMutation(
 	return plan
 }
 
-func writeResolvedLock(t *testing.T, root string, resolved *lockfile.Document) {
+func writeResolvedLock(t *testing.T, root string, resolved *document.Lock) {
 	t.Helper()
 	if resolved == nil {
 		t.Fatal("PlanInstall() returned a plan without a resolved lock")
 	}
-	if err := lockfile.Write(root, resolved); err != nil {
+	if err := document.LockFile(root).Write(resolved); err != nil {
 		t.Fatalf("lockfile.Write() error = %v", err)
 	}
 }
 
-func mutationManifest(states []int) *manifest.Document {
-	packages := make(map[string]manifest.Requirement)
+func mutationManifest(states []int) *document.Manifest {
+	packages := make(map[string]document.Requirement)
 	for index, state := range states {
 		if state == mutationAbsent {
 			continue
 		}
-		requirement := manifest.Requirement{Selector: versionpkg.Any}
+		requirement := document.Requirement{Selector: versionpkg.Any}
 		if state == mutationDisabled {
 			requirement.Enabled = new(false)
 		}
 		packages["modrinth:"+mutationNames[index]] = requirement
 	}
-	return &manifest.Document{
-		SchemaVersion: manifest.SchemaVersion,
-		Server: manifest.Server{
+	return &document.Manifest{
+		SchemaVersion: document.ManifestSchemaVersion,
+		Server: document.ManifestServer{
 			Minecraft: versionpkg.Version("1.21.4"),
 			Directory: ".",
-			Core: manifest.Core{
+			Core: document.ManifestCore{
 				Product:        serverpkg.ProductFabric,
 				ProductVersion: versionpkg.Version("0.16.9"),
 			},
-			Packages: map[catalog.Ecosystem]map[string]manifest.Requirement{
+			Packages: map[catalog.Ecosystem]map[string]document.Requirement{
 				catalog.EcosystemFabric: packages,
 			},
 		},
 	}
 }
 
-func initialLock(scenario mutationScenario, fingerprint string) *lockfile.Document {
+func initialLock(scenario mutationScenario, fingerprint string) *document.Lock {
 	incoming := incomingSources(scenario)
-	packages := make([]lockfile.Package, 0, scenario.nodes)
+	packages := make([]document.Package, 0, scenario.nodes)
 	for index := range scenario.nodes {
 		name := mutationNames[index]
 		sources := make([]catalog.Ref, 0, len(incoming[index]))
@@ -365,11 +364,11 @@ func initialLock(scenario mutationScenario, fingerprint string) *lockfile.Docume
 				Provider: catalog.ProviderModrinth,
 			})
 		}
-		packages = append(packages, lockfile.Package{
+		packages = append(packages, document.Package{
 			Environment: serverpkg.EnvironmentServer,
 			Ecosystem:   catalog.EcosystemFabric,
 			Artifact:    mutationArtifact(index),
-			Requirements: []lockfile.RequirementBinding{{
+			Requirements: []document.RequirementBinding{{
 				Reference: "modrinth:" + name,
 				Selector:  versionpkg.Any,
 				Enabled:   true,
@@ -378,10 +377,10 @@ func initialLock(scenario mutationScenario, fingerprint string) *lockfile.Docume
 			DependencyOf: sources,
 		})
 	}
-	return &lockfile.Document{
-		SchemaVersion:       lockfile.SchemaVersion,
+	return &document.Lock{
+		SchemaVersion:       document.LockSchemaVersion,
 		ManifestFingerprint: fingerprint,
-		Server: lockfile.Server{
+		Server: document.LockedServer{
 			Directory:   ".",
 			Minecraft:   versionpkg.Version("1.21.4"),
 			Product:     serverpkg.ProductFabric,
@@ -394,7 +393,7 @@ func initialLock(scenario mutationScenario, fingerprint string) *lockfile.Docume
 				Hashes:    map[string]string{"sha256": packageHash(100)},
 			},
 			Bootstrapper: "fabric",
-			Java:         lockfile.Java{Advisory: 21},
+			Java:         document.LockedJava{Advisory: 21},
 		},
 		Packages: packages,
 	}

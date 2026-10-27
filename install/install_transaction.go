@@ -11,11 +11,10 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
 	"github.com/mclucy/lucy/workspace/discovery"
 	"gopkg.in/yaml.v3"
 )
@@ -37,7 +36,7 @@ type (
 // lock names, when observation selects that runtime. Installation replaces
 // these files instead of refusing them: they belong to the installation that
 // initialization adopted, not to unrelated work.
-func adoptedOutputPaths(root string, server lockfile.Server) map[string]bool {
+func adoptedOutputPaths(root string, server document.LockedServer) map[string]bool {
 	serverDir := filepath.Join(root, filepath.FromSlash(server.Directory))
 	observed := discovery.Discover(serverDir)
 	declaration := &discovery.Declaration{
@@ -64,13 +63,13 @@ func adoptedOutputPaths(root string, server lockfile.Server) map[string]bool {
 	return paths
 }
 
-func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths, adoptedPaths map[string]bool) (FileChanges, error) {
+func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool) (FileChanges, error) {
 	var counts FileChanges
 	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, adoptedPaths, &counts)
 	return counts, resultErr
 }
 
-func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool, overwritePaths, adoptedPaths map[string]bool, counts *FileChanges) (resultErr error) {
+func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, counts *FileChanges) (resultErr error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	previous := installReceipt{}
 	raw, err := os.ReadFile(receiptPath)
@@ -109,7 +108,7 @@ func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Docu
 		if strings.Contains(relative, "/.bootstrap-data/") || strings.HasPrefix(relative, ".bootstrap-data/") {
 			return nil
 		}
-		if err := manifest.SafeRelativePath(relative); err != nil {
+		if err := document.SafeRelativePath(relative); err != nil {
 			return err
 		}
 		target := filepath.Join(root, relative)
@@ -212,9 +211,9 @@ func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Docu
 			names = append(names, entry.Path)
 		}
 	}
-	names = append(names, lockfile.Filename, ".lucy/install.yaml")
+	names = append(names, document.LockFilename, ".lucy/install.yaml")
 	if publish {
-		names = append(names, manifest.Filename)
+		names = append(names, document.ManifestFilename)
 	}
 	slices.Sort(names)
 	names = slices.Compact(names)
@@ -298,11 +297,11 @@ func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Docu
 		counts.Removed = pruned
 	}
 	if publish {
-		if err := manifest.Write(root, d); err != nil {
+		if err := document.ManifestFile(root).Write(d); err != nil {
 			return err
 		}
 	}
-	if err := lockfile.Write(root, l); err != nil {
+	if err := document.LockFile(root).Write(l); err != nil {
 		return err
 	}
 	receiptBytes, err := yaml.Marshal(next)
@@ -333,13 +332,13 @@ func applyCommitFiles(root, stage string, d *manifest.Document, l *lockfile.Docu
 // with: the server, MCDR and package fields only. Tracked files, the manifest
 // fingerprint, and Java requirement stay out. Changing these fields does not
 // change installed files or invalidate the receipt.
-func ResolutionFingerprint(l *lockfile.Document) (string, error) {
+func ResolutionFingerprint(l *document.Lock) (string, error) {
 	server := l.Server
-	server.Java = lockfile.Java{}
+	server.Java = document.LockedJava{}
 	data, err := yaml.Marshal(struct {
-		Server   lockfile.Server    `yaml:"server"`
-		MCDR     *lockfile.MCDR     `yaml:"mcdr,omitempty"`
-		Packages []lockfile.Package `yaml:"packages"`
+		Server   document.LockedServer `yaml:"server"`
+		MCDR     *document.LockedMCDR  `yaml:"mcdr,omitempty"`
+		Packages []document.Package    `yaml:"packages"`
 	}{server, l.MCDR, l.Packages})
 	if err != nil {
 		return "", err
@@ -348,7 +347,7 @@ func ResolutionFingerprint(l *lockfile.Document) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func installationCurrent(root string, l *lockfile.Document) (bool, error) {
+func installationCurrent(root string, l *document.Lock) (bool, error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	raw, err := os.ReadFile(receiptPath)
 	if os.IsNotExist(err) {
@@ -400,7 +399,7 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 	return true, nil
 }
 
-func trackedPaths(l *lockfile.Document) map[string]bool {
+func trackedPaths(l *document.Lock) map[string]bool {
 	paths := make(map[string]bool, len(l.Files))
 	for _, file := range l.Files {
 		paths[strings.ToLower(file.Path)] = true

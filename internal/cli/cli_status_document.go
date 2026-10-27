@@ -5,8 +5,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	documentpkg "github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
@@ -251,7 +250,7 @@ func statusMCDRFromObservation(
 
 func newLockStatusDocument(
 	root string,
-	lock *lockfile.Document,
+	lock *documentpkg.Lock,
 ) statusDocument {
 	document := newStatusDocument(statusSourceLock, root)
 	if lock == nil {
@@ -294,7 +293,7 @@ func newLockStatusDocument(
 // statusLockComponents reports the runtime components the lock proves. The
 // lock records the core version and the Minecraft version, so loader cores
 // contribute their loader component exactly as live selection does.
-func statusLockComponents(lock *lockfile.Document) []statusComponent {
+func statusLockComponents(lock *documentpkg.Lock) []statusComponent {
 	components := make([]statusComponent, 0, 2)
 	components = append(components, statusComponent{
 		Name:      "minecraft",
@@ -327,7 +326,7 @@ func statusLockComponents(lock *lockfile.Document) []statusComponent {
 
 // Only enabled packages can contribute compatibility evidence.
 func statusLockCompatibleEcosystems(
-	lock *lockfile.Document,
+	lock *documentpkg.Lock,
 ) []statusEcosystem {
 	result := make([]statusEcosystem, 0, 3)
 	seen := make(map[catalog.Ecosystem]bool, 3)
@@ -378,7 +377,7 @@ func statusLockCompatibleEcosystems(
 // statusLockHasConnectorBridge reports the same package roster the live
 // workspace uses to offer degraded Fabric compatibility. Locked packages may
 // name the project through a binding or only expose the module identity.
-func statusLockHasConnectorBridge(lock *lockfile.Document) bool {
+func statusLockHasConnectorBridge(lock *documentpkg.Lock) bool {
 	for i := range lock.Packages {
 		pkg := &lock.Packages[i]
 		if !pkg.Enabled() || pkg.Environment != serverpkg.EnvironmentServer {
@@ -414,7 +413,7 @@ func statusIsConnectorName(name string) bool {
 // that directory even when the lock selects no packages.
 func statusLockPackageDirectories(
 	root string,
-	lock *lockfile.Document,
+	lock *documentpkg.Lock,
 ) []string {
 	result := make([]string, 0, 4)
 	seen := make(map[string]bool, 4)
@@ -447,15 +446,15 @@ func statusLockPackageDirectories(
 // packages under the MCDR wrapper's plugins/ directory.
 func statusLockPackagePath(
 	root string,
-	lock *lockfile.Document,
-	pkg *lockfile.Package,
+	lock *documentpkg.Lock,
+	pkg *documentpkg.Package,
 ) string {
 	return statusRelativePath(root, statusLockPackageDestination(lock, pkg))
 }
 
 func statusLockPackageDirectory(
-	lock *lockfile.Document,
-	pkg *lockfile.Package,
+	lock *documentpkg.Lock,
+	pkg *documentpkg.Package,
 ) string {
 	destination := statusLockPackageDestination(lock, pkg)
 	if destination == "" {
@@ -465,8 +464,8 @@ func statusLockPackageDirectory(
 }
 
 func statusLockPackageDestination(
-	lock *lockfile.Document,
-	pkg *lockfile.Package,
+	lock *documentpkg.Lock,
+	pkg *documentpkg.Package,
 ) string {
 	directory := lock.Server.Directory
 	folder := "mods"
@@ -490,10 +489,10 @@ func statusLockPackageDestination(
 // statusLockPackageName prefers the project a lock binding names. The lock's
 // ProjectID is the opaque provider identity and stays the fallback when no
 // binding reference is readable.
-func statusLockPackageName(pkg *lockfile.Package) string {
+func statusLockPackageName(pkg *documentpkg.Package) string {
 	var fallback string
 	for _, binding := range pkg.Requirements {
-		_, project, err := manifest.ParseReference(binding.Reference)
+		_, project, err := documentpkg.ParseReference(binding.Reference)
 		if err != nil || project == "" {
 			continue
 		}
@@ -518,7 +517,7 @@ func statusConcreteVersion(version versionpkg.Version) bool {
 }
 
 // Native product support must not narrow to the packages currently declared.
-func statusLockNativeEcosystems(lock *lockfile.Document) []workspace.ServedEcosystem {
+func statusLockNativeEcosystems(lock *documentpkg.Lock) []workspace.ServedEcosystem {
 	components := make([]catalog.VersionedRef, 0)
 	for _, input := range lock.Server.Inputs {
 		for _, module := range input.Modules {
@@ -538,7 +537,7 @@ func statusLockNativeEcosystems(lock *lockfile.Document) []workspace.ServedEcosy
 	)
 }
 
-func statusLockProductEcosystem(lock *lockfile.Document) catalog.Ecosystem {
+func statusLockProductEcosystem(lock *documentpkg.Lock) catalog.Ecosystem {
 	match, ok := serverpkg.NormalizeProduct(catalog.VersionedRef{
 		Name: catalog.Name(lock.Server.Product.String()),
 	})

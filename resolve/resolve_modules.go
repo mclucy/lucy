@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 
 	versionpkg "github.com/mclucy/lucy/version"
@@ -47,7 +47,7 @@ type moduleProvider struct {
 // modules that lose to another selected module with the same identity. It
 // returns the problems it found; only an unparsable or ambiguous module
 // identity is an error.
-func finalizeModules(packages []lockfile.Package, target Target) ([]ModuleProblem, error) {
+func finalizeModules(packages []document.Package, target Target) ([]ModuleProblem, error) {
 	index, err := buildModuleIndex(packages)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func finalizeModules(packages []lockfile.Package, target Target) ([]ModuleProble
 // answers it. A native module outranks a bundled copy of the same identity;
 // two bundled copies compare versions. Two native modules in different
 // packages are ambiguous.
-func buildModuleIndex(packages []lockfile.Package) (map[moduleKey]moduleProvider, error) {
+func buildModuleIndex(packages []document.Package) (map[moduleKey]moduleProvider, error) {
 	index := map[moduleKey]moduleProvider{}
 	for pi := range packages {
 		p := &packages[pi]
@@ -250,7 +250,7 @@ func normalizeModuleID(ecosystem catalog.Ecosystem, id string) string {
 }
 
 func checkModuleDependencies(
-	p *lockfile.Package,
+	p *document.Package,
 	m catalog.DescriptorModule,
 	target Target,
 	index map[moduleKey]moduleProvider,

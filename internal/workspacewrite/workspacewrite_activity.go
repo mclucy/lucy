@@ -6,8 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -17,7 +16,7 @@ import (
 // tells the user which command the server must stop for.
 func CheckInactive(root string, during string) error {
 	directories := map[string]bool{root: true}
-	for _, name := range []string{manifest.Filename, lockfile.Filename} {
+	for _, name := range []string{document.ManifestFilename, document.LockFilename} {
 		if err := SafePath(root, name); err != nil {
 			return err
 		}
