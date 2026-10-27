@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"github.com/mclucy/lucy/document"
 )
@@ -149,9 +150,18 @@ func (s *Service) Setting(key string) (string, error) {
 }
 
 // GitHubProxy returns the configured prefix proxy for GitHub release
-// downloads. An empty prefix downloads directly.
+// downloads. An empty prefix downloads directly. A hand-edited value that is
+// not an absolute HTTP(S) URL is an error rather than a broken download.
 func (s *Service) GitHubProxy() (string, error) {
-	return s.Setting("github.proxy")
+	value, err := s.Setting("github.proxy")
+	if err != nil {
+		return "", err
+	}
+	value = strings.TrimSpace(value)
+	if err := validateProxyURL(value); err != nil {
+		return "", err
+	}
+	return value, nil
 }
 
 // CurseForgeAPIKey returns the configured CurseForge API key. An empty key

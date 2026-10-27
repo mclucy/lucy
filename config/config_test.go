@@ -283,6 +283,32 @@ func TestSetPreservesHandWrittenComments(t *testing.T) {
 	}
 }
 
+func TestGitHubProxyValidatesHandEditedValue(t *testing.T) {
+	service, root := newService(t)
+	path := workspacePath(root)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create config directory: %v", err)
+	}
+
+	if err := os.WriteFile(path, []byte("github:\n  proxy: not-a-url\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if _, err := service.GitHubProxy(); err == nil {
+		t.Error("GitHubProxy accepted a hand-edited invalid value")
+	}
+
+	if err := os.WriteFile(path, []byte("github:\n  proxy: \" https://mirror.example/ \"\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	value, err := service.GitHubProxy()
+	if err != nil {
+		t.Fatalf("GitHubProxy: %v", err)
+	}
+	if value != "https://mirror.example/" {
+		t.Errorf("GitHubProxy = %q, want trimmed value", value)
+	}
+}
+
 func TestSettingRejectsUnknownKeys(t *testing.T) {
 	service, _ := newService(t)
 	if _, err := service.Setting("unknown.key"); err == nil {
