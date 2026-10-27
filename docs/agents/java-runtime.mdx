@@ -1,0 +1,28 @@
+---
+title: "Java runtime architecture"
+description: "Requirements, runtime selection, and provisioning for a locked server"
+---
+
+Lucy separates the Java requirement of a server from the runtime available on a particular machine. The lock records Mojang's advisory and the manifest's optional version and distribution overrides. Java dependencies declared by enabled package modules remain on those modules; `javaruntime.RequirementOf` combines them when evaluating a lock. A local `java.home` selects an installation, but is not part of portable server intent.
+
+## Requirement construction
+
+The advisory is treated as a minimum major version. A manifest version pin is an exact major version, and a named distribution requires that specific distribution. Required and incompatible Java constraints from enabled modules are interpreted using the descriptor's version dialect. Other Java dependency kinds do not become runtime constraints. A constraint that cannot be parsed is ignored for Java selection and logged at debug level.
+
+`Requirement.Lowest` searches for a major satisfying all constraints. The provisioning target is the pinned major when present, otherwise the lowest satisfying major, or the advisory if no major satisfies all constraints. A conflict is reported as a problem; it does not make Java compatibility a hard installation gate. This differs from a bootstrap step that actually requires a Java executable: that step fails if none is usable.
+
+## Selecting an installed runtime
+
+`config.JavaHome` merges the global and workspace values. A present workspace value masks the global one, including an explicit empty value. Relative paths are resolved against their configuration scope. A non-empty selection is probed and honored without fallback, even if it does not meet the requirement; an unusable selection produces a problem and no selected runtime.
+
+Without a configured home, `internal/toolchain` discovers installed runtimes and `javaruntime.Choose` ranks them by the number of unmet conditions. Ties prefer a runtime meeting the advisory, then the oldest major, then the newest update. A named distribution cannot be satisfied by an unbranded build. Selection returns a `Check` containing the chosen runtime, its source, and problems; the check is evidence about this machine, not a new lock pin.
+
+## Provisioning boundary
+
+Before staging, `install.selectJava` selects a runtime and may call the provisioning callback supplied by the command layer. After successful provisioning it repeats selection; the installer itself does not decide how a prompt is presented. A configured home remains authoritative.
+
+`javainstall` builds candidate plans from detected version managers, system package managers, optional vendor repositories, and a direct-download fallback. Plans are ranked toward managers already owning a local Java, then other user managers, system managers, repository additions, and downloads. Host interactivity, elevation availability, and repository consent can make a plan unavailable. Download plans require a verifiable SHA-256 checksum.
+
+Gradle compilation has a separate JVM and compiler selection process: see [Compilation architecture](/agents/compilation). Server runtime selection should not be used to infer which JDK runs or compiles a Gradle build.
+
+Source entry points: `javaruntime/javaruntime_requirement.go`, `javaruntime/javaruntime_select.go`, `config/config.go`, `install/install_java.go`, and `javainstall`.
