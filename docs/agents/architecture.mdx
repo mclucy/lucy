@@ -21,7 +21,15 @@ The command layer translates CLI input into operations and renders their results
 
 `catalog` holds package identities, artifacts, and dependencies without owning workspace state. `server` describes server products and environments. `upstream` defines capabilities for obtaining metadata and artifacts; `upstream/routing` selects implementations, and `upstream/providers` contains provider-specific adapters. `resolve` chooses packages and validates their descriptor modules. `bootstrap` prepares server products from the locked inputs. Java requirements and runtime observation belong to `javaruntime`, while machine settings belong to `config`.
 
-For the detailed state transitions, see [Resolution and installation](/agents/resolution). For discovery and tracked files, see [Workspace state](/agents/workspace).
+Related domain models:
+
+- [Resolution and installation](/agents/resolution): pins, staging, and publication.
+- [Workspace state](/agents/workspace): discovery, selection, and tracked files.
+- [Server bootstrap](/agents/bootstrap): product inputs and preparation adapters.
+- [Versions and module constraints](/agents/versioning): dialects and dependency checks.
+- [Java runtime](/agents/java-runtime): requirements, selection, and provisioning.
+- [Network cache and content storage](/agents/cache): request indexing and object lifecycles.
+- [Compilation](/agents/compilation): Gradle probing, toolchains, and artifact selection.
 
 ## Package identity is not module identity
 
