@@ -25,11 +25,33 @@ const (
 	flagInitNoCommentsName  = "no-comments"
 )
 
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: help.InitShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionInit,
+func NewInitCommand(contracts *JSONContracts) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: help.InitShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionInit,
+	}
+	initJSON.Bind(contracts, cmd)
+	cmd.Flags().BoolP(
+		flagInitForceName,
+		"f",
+		false,
+		"Overwrite an existing manifest without asking",
+	)
+	cmd.Flags().String(
+		flagInitMCDRVersionName,
+		"",
+		"MCDReforged version to record",
+	)
+	cmd.Flags().String(flagInitEntryPointName, "", "Server entry point to adopt when several runtimes are present")
+	_ = cmd.MarkFlagFilename(flagInitEntryPointName, "jar")
+	cmd.Flags().Bool(
+		flagInitNoCommentsName,
+		false,
+		"Write generated manifests and configuration without explanatory comments",
+	)
+	return cmd
 }
 
 // initJSON is the machine-readable result of `lucy init`.
@@ -40,29 +62,6 @@ var initJSON JSONResult[*initResult]
 type initResult struct {
 	*install.Result
 	PublishedConfig bool `json:"published_config"`
-}
-
-func NewInitCommand(contracts *JSONContracts) *cobra.Command {
-	initJSON.Bind(contracts, initCmd)
-	initCmd.Flags().BoolP(
-		flagInitForceName,
-		"f",
-		false,
-		"Overwrite an existing manifest without asking",
-	)
-	initCmd.Flags().String(
-		flagInitMCDRVersionName,
-		"",
-		"MCDReforged version to record",
-	)
-	initCmd.Flags().String(flagInitEntryPointName, "", "Server entry point to adopt when several runtimes are present")
-	_ = initCmd.MarkFlagFilename(flagInitEntryPointName, "jar")
-	initCmd.Flags().Bool(
-		flagInitNoCommentsName,
-		false,
-		"Write generated manifests and configuration without explanatory comments",
-	)
-	return initCmd
 }
 
 func actionInit(cmd *cobra.Command, _ []string) error {

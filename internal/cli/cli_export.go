@@ -6,12 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var exportCmd = &cobra.Command{
-	Use:   "export",
-	Short: help.ExportShort,
-	RunE:  NotImplementedRun,
-}
-
 func NewExportCommand() *cobra.Command {
-	return exportCmd
+	return &cobra.Command{
+		Use:   "export",
+		Short: help.ExportShort,
+		RunE:  NotImplementedRun,
+	}
 }

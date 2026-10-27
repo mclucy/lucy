@@ -21,17 +21,16 @@ const (
 	flagUpgradePolicyName      = "policy"
 )
 
-var upgradeCmd = &cobra.Command{
-	Use:     "upgrade [packages...]",
-	Short:   help.UpgradeShort,
-	Aliases: []string{"up", "update"},
-	Args:    cobra.ArbitraryArgs,
-	RunE:    actionUpgrade,
-}
-
 var upgradeFrontierJSON JSONResult[upgradeFrontierDocument]
 
 func NewUpgradeCommand(contracts *JSONContracts) *cobra.Command {
+	upgradeCmd := &cobra.Command{
+		Use:     "upgrade [packages...]",
+		Short:   help.UpgradeShort,
+		Aliases: []string{"up", "update"},
+		Args:    cobra.ArbitraryArgs,
+		RunE:    actionUpgrade,
+	}
 	upgradeFrontierJSON.Bind(contracts, upgradeCmd)
 	installJSON.Bind(contracts, upgradeCmd)
 	upgradeCmd.Flags().BoolP(

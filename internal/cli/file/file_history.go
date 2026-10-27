@@ -11,12 +11,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var historyCmd = &cobra.Command{
-	Use:   "history [path]",
-	Short: HistoryShort,
-	Long:  HistoryLong,
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  actionFileHistory,
+func newHistoryCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "history [path]",
+		Short: HistoryShort,
+		Long:  HistoryLong,
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  actionFileHistory,
+	}
 }
 
 var historyJSON cli.JSONResult[[]filetrack.Event]

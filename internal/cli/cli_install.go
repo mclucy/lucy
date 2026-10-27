@@ -23,63 +23,62 @@ const (
 	flagInstallMCDRVenvName     = "mcdr-venv"
 )
 
-var installCmd = &cobra.Command{
-	Use:     "install",
-	Short:   help.InstallShort,
-	Args:    cobra.NoArgs,
-	Aliases: []string{"i"},
-	RunE:    actionInstall,
-}
-
 func NewInstallCommand(contracts *JSONContracts) *cobra.Command {
-	installJSON.Bind(contracts, installCmd)
-	installCmd.Flags().Bool(
+	cmd := &cobra.Command{
+		Use:     "install",
+		Short:   help.InstallShort,
+		Args:    cobra.NoArgs,
+		Aliases: []string{"i"},
+		RunE:    actionInstall,
+	}
+	installJSON.Bind(contracts, cmd)
+	cmd.Flags().Bool(
 		flagInstallLockedName,
 		false,
 		"Do not resolve new versions; fail when the lock cannot satisfy",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallOfflineName,
 		false,
 		"Disallow network acquisition; fail if any file is missing or mismatched",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallWithOptionalName,
 		false,
 		"Also install optional dependencies and record them as explicit packages",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallAcceptBrokenName,
 		false,
 		"Complete the installation even when required modules are missing or versions do not satisfy their constraints",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallOverwriteName,
 		false,
 		"Replace files already present at package destinations",
 	)
-	installCmd.Flags().BoolP(
+	cmd.Flags().BoolP(
 		flagInstallForceName,
 		"f",
 		false,
 		"Combine --accept-broken and --overwrite",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallJavaName,
 		false,
 		"Also install the Java runtime the server asks for when no installed runtime meets it",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallJavaRepoName,
 		false,
 		"Let --java add the Java vendor's package repository to the system package manager",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallMCDRVenvName,
 		false,
 		"Create an isolated MCDReforged Python environment instead of using the global MCDReforged executable",
 	)
-	return installCmd
+	return cmd
 }
 
 func actionInstall(cmd *cobra.Command, _ []string) error {

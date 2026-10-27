@@ -16,35 +16,34 @@ const (
 	flagRemoveOfflineName = "offline"
 )
 
-var removeCmd = &cobra.Command{
-	Use:     "remove",
-	Short:   help.RemoveShort,
-	Args:    cobra.MinimumNArgs(1),
-	Aliases: []string{"rm"},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
-		if ecosystem != "" && !catalog.Ecosystem(ecosystem).Valid() {
-			return fmt.Errorf("invalid ecosystem %q", ecosystem)
-		}
-		return nil
-	},
-	RunE: actionRemove,
-}
-
 func NewRemoveCommand(contracts *JSONContracts) *cobra.Command {
-	installJSON.Bind(contracts, removeCmd)
-	removeCmd.Flags().Bool(
+	cmd := &cobra.Command{
+		Use:     "remove",
+		Short:   help.RemoveShort,
+		Args:    cobra.MinimumNArgs(1),
+		Aliases: []string{"rm"},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
+			if ecosystem != "" && !catalog.Ecosystem(ecosystem).Valid() {
+				return fmt.Errorf("invalid ecosystem %q", ecosystem)
+			}
+			return nil
+		},
+		RunE: actionRemove,
+	}
+	installJSON.Bind(contracts, cmd)
+	cmd.Flags().Bool(
 		flagRemoveLockedName,
 		false,
 		"Do not resolve new versions; fail when the lock cannot satisfy",
 	)
-	removeCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagRemoveOfflineName,
 		false,
 		"Disallow network acquisition for any re-resolution this triggers",
 	)
-	AddEcosystemFlag(removeCmd)
-	return removeCmd
+	AddEcosystemFlag(cmd)
+	return cmd
 }
 
 func actionRemove(cmd *cobra.Command, args []string) error {

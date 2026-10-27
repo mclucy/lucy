@@ -9,13 +9,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var listCmd = &cobra.Command{
-	Use:     "list",
-	Aliases: []string{"ls"},
-	Short:   ListShort,
-	Long:    ListLong,
-	Args:    cobra.NoArgs,
-	RunE:    actionFileList,
+func newListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   ListShort,
+		Long:    ListLong,
+		Args:    cobra.NoArgs,
+		RunE:    actionFileList,
+	}
 }
 
 type fileListDocument struct {

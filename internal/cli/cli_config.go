@@ -17,32 +17,6 @@ const (
 	flagConfigNoCommentsName = "no-comments"
 )
 
-var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: help.ConfigShort,
-}
-
-var configGetCmd = &cobra.Command{
-	Use:   "get [key]",
-	Short: help.ConfigGetShort,
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  actionConfigGet,
-}
-
-var configSetCmd = &cobra.Command{
-	Use:   "set <key> <value>",
-	Short: help.ConfigSetShort,
-	Args:  cobra.ExactArgs(2),
-	RunE:  actionConfigSet,
-}
-
-var configCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: help.ConfigCreateShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionConfigCreate,
-}
-
 // configValuesJSON, configJavaJSON, and configStringJSON are the shapes
 // `lucy config get` prints: a whole layer, a section, or a scalar leaf.
 var (
@@ -56,6 +30,28 @@ var (
 var configWriteJSON JSONResult[*config.WriteResult]
 
 func NewConfigCommand(contracts *JSONContracts) *cobra.Command {
+	configGetCmd := &cobra.Command{
+		Use:   "get [key]",
+		Short: help.ConfigGetShort,
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  actionConfigGet,
+	}
+	configSetCmd := &cobra.Command{
+		Use:   "set <key> <value>",
+		Short: help.ConfigSetShort,
+		Args:  cobra.ExactArgs(2),
+		RunE:  actionConfigSet,
+	}
+	configCreateCmd := &cobra.Command{
+		Use:   "create",
+		Short: help.ConfigCreateShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionConfigCreate,
+	}
+	configCmd := &cobra.Command{
+		Use:   "config",
+		Short: help.ConfigShort,
+	}
 	configValuesJSON.Bind(contracts, configGetCmd)
 	configJavaJSON.Bind(contracts, configGetCmd)
 	configStringJSON.Bind(contracts, configGetCmd)

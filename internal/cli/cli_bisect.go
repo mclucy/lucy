@@ -20,55 +20,49 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var bisectCmd = &cobra.Command{
-	Use:   "bisect",
-	Short: help.BisectShort,
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
-	},
-}
-
-var bisectStartCmd = &cobra.Command{
-	Use:   "start",
-	Short: help.BisectStartShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionBisectStart,
-}
-
-var bisectGoodCmd = &cobra.Command{
-	Use:   "good",
-	Short: help.BisectGoodShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionBisectGood,
-}
-
-var bisectBadCmd = &cobra.Command{
-	Use:   "bad",
-	Short: help.BisectBadShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionBisectBad,
-}
-
-var bisectStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: help.BisectStatusShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionBisectStatus,
-}
-
-var bisectResetCmd = &cobra.Command{
-	Use:   "reset",
-	Short: help.BisectResetShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionBisectReset,
-}
-
 // bisectJSON is the shared machine-readable result of every bisect leaf: they
 // all report progress through bisectOutput.
 var bisectJSON JSONResult[bisectOutput]
 
 func NewBisectCommand(contracts *JSONContracts) *cobra.Command {
+	bisectStartCmd := &cobra.Command{
+		Use:   "start",
+		Short: help.BisectStartShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionBisectStart,
+	}
+	bisectGoodCmd := &cobra.Command{
+		Use:   "good",
+		Short: help.BisectGoodShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionBisectGood,
+	}
+	bisectBadCmd := &cobra.Command{
+		Use:   "bad",
+		Short: help.BisectBadShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionBisectBad,
+	}
+	bisectStatusCmd := &cobra.Command{
+		Use:   "status",
+		Short: help.BisectStatusShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionBisectStatus,
+	}
+	bisectResetCmd := &cobra.Command{
+		Use:   "reset",
+		Short: help.BisectResetShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionBisectReset,
+	}
+	bisectCmd := &cobra.Command{
+		Use:   "bisect",
+		Short: help.BisectShort,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
 	bisectJSON.Bind(contracts, bisectStartCmd)
 	bisectJSON.Bind(contracts, bisectGoodCmd)
 	bisectJSON.Bind(contracts, bisectBadCmd)

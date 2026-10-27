@@ -41,74 +41,73 @@ const (
 	createMinecraftSnapshot = "snapshot"
 )
 
-var createCmd = &cobra.Command{
-	Use:   "create",
-	Short: help.CreateShort,
-	Long:  help.CreateLong,
-	Example: "  lucy create\n" +
-		"  lucy create --minecraft 1.21.4 --core paper\n" +
-		"  lucy create --directory server --minecraft 1.21.4 --core paper --no-install",
-	Args: cobra.NoArgs,
-	RunE: actionCreate,
-}
-
 func NewCreateCommand(contracts *JSONContracts) *cobra.Command {
-	createJSON.Bind(contracts, createCmd)
-	createCmd.Flags().BoolP(
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: help.CreateShort,
+		Long:  help.CreateLong,
+		Example: "  lucy create\n" +
+			"  lucy create --minecraft 1.21.4 --core paper\n" +
+			"  lucy create --directory server --minecraft 1.21.4 --core paper --no-install",
+		Args: cobra.NoArgs,
+		RunE: actionCreate,
+	}
+	createJSON.Bind(contracts, cmd)
+	cmd.Flags().BoolP(
 		flagCreateForceName,
 		"f",
 		false,
 		"Replace an existing manifest in the target directory",
 	)
-	createCmd.Flags().StringP(
+	cmd.Flags().StringP(
 		flagCreateCoreName,
 		"c",
 		"",
 		"Server software, optionally with a version (e.g. paper@232, fabric@0.16.9)",
 	)
-	createCmd.Flags().String(
+	cmd.Flags().String(
 		flagCreateCoreVersionName,
 		"",
 		"Server software version or version rule",
 	)
-	createCmd.Flags().StringP(
+	cmd.Flags().StringP(
 		flagCreateMcName,
 		"m",
 		"",
 		"Target Minecraft version (e.g. 1.21.4), release, snapshot, or latest",
 	)
-	createCmd.Flags().String(
+	cmd.Flags().String(
 		flagCreateMCDRVersionName,
 		"",
 		"Record this MCDReforged version",
 	)
-	createCmd.Flags().StringP(
+	cmd.Flags().StringP(
 		flagCreateDirectoryName,
 		"d",
 		".",
 		"Directory to create the server in",
 	)
-	createCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagCreateInstallName,
 		false,
 		"Install the server after writing the manifest and lock (default)",
 	)
-	createCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagCreateNoInstallName,
 		false,
 		"Only write lucy.yaml and lucy-lock.yaml; install later",
 	)
-	createCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagCreateJavaName,
 		false,
 		"Also install the Java runtime the server asks for when no installed runtime meets it",
 	)
-	createCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagCreateJavaRepoName,
 		false,
 		"Let --java add the Java vendor's package repository to the system package manager",
 	)
-	return createCmd
+	return cmd
 }
 
 // createChoices carries the values the command has settled before the form or

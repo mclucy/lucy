@@ -27,34 +27,33 @@ const (
 	flagRegistryName      = "registry"
 )
 
-var searchCmd = &cobra.Command{
-	Use:   "search",
-	Short: help.SearchShort,
-	Args:  cobra.ExactArgs(1),
-	ValidArgsFunction: func(
-		cmd *cobra.Command,
-		args []string,
-		toComplete string,
-	) ([]string, cobra.ShellCompDirective) {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		sort, _ := cmd.Flags().GetString(flagSortName)
-		if !Sort(sort).Valid() {
-			return errors.New("--sort must be one of \"relevance\", \"downloads\", \"newest\"")
-		}
-		ecosystem, _ := cmd.Flags().GetString(flagEcosystemName)
-		if _, err := searchEcosystem(ecosystem); err != nil {
-			return err
-		}
-		registry, _ := cmd.Flags().GetString(flagRegistryName)
-		_, err := searchRegistry(registry)
-		return err
-	},
-	RunE: actionSearch,
-}
-
 func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+	searchCmd := &cobra.Command{
+		Use:   "search",
+		Short: help.SearchShort,
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(
+			cmd *cobra.Command,
+			args []string,
+			toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			sort, _ := cmd.Flags().GetString(flagSortName)
+			if !Sort(sort).Valid() {
+				return errors.New("--sort must be one of \"relevance\", \"downloads\", \"newest\"")
+			}
+			ecosystem, _ := cmd.Flags().GetString(flagEcosystemName)
+			if _, err := searchEcosystem(ecosystem); err != nil {
+				return err
+			}
+			registry, _ := cmd.Flags().GetString(flagRegistryName)
+			_, err := searchRegistry(registry)
+			return err
+		},
+		RunE: actionSearch,
+	}
 	searchJSON.Bind(contracts, searchCmd)
 	searchCmd.Flags().String(
 		flagSortName,
