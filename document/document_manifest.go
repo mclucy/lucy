@@ -8,6 +8,8 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/server"
@@ -22,6 +24,7 @@ const (
 
 type Manifest struct {
 	SchemaVersion int            `yaml:"manifest_version" json:"manifest_version" description:"Manifest schema version" example:"1"`
+	Name          string         `yaml:"name,omitempty" json:"name,omitempty" description:"Server name used to select and register the workspace" example:"survival"`
 	Server        ManifestServer `yaml:"server" json:"server" description:"Declared Minecraft server"`
 	MCDR          *ManifestMCDR  `yaml:"mcdr,omitempty" json:"mcdr,omitempty" description:"Optional MCDReforged installation"`
 	Files         []TrackedFile  `yaml:"files,omitempty" json:"files,omitempty" description:"Tracked files with an accepted digest and change policy" example:"[]"`
@@ -108,6 +111,26 @@ func isPackageProvider(provider catalog.Provider) bool {
 	}
 }
 
+// NormalizeName trims and validates the user-facing name of a workspace.
+// Names are visible selectors: printable text with normal interior spaces,
+// without terminal control or format characters. The registry keys entries by
+// canonical path, not by name.
+func NormalizeName(value string) (string, error) {
+	name := strings.TrimSpace(value)
+	if name == "" {
+		return "", fmt.Errorf("server name must not be empty")
+	}
+	if !utf8.ValidString(name) {
+		return "", fmt.Errorf("server name must be valid UTF-8")
+	}
+	for _, character := range name {
+		if !unicode.IsPrint(character) {
+			return "", fmt.Errorf("server name must contain only printable characters")
+		}
+	}
+	return name, nil
+}
+
 // SafeRelativePath reports whether path is a workspace-relative path that
 // stays inside the workspace.
 func SafeRelativePath(path string) error {
@@ -124,6 +147,13 @@ func SafeRelativePath(path string) error {
 func (m *Manifest) Normalize() error {
 	if m.SchemaVersion != ManifestSchemaVersion {
 		return fmt.Errorf("unsupported manifest version %d", m.SchemaVersion)
+	}
+	if m.Name != "" {
+		name, err := NormalizeName(m.Name)
+		if err != nil {
+			return err
+		}
+		m.Name = name
 	}
 	m.Server.Minecraft = version.Version(strings.TrimSpace(m.Server.Minecraft.String()))
 	if declared := m.Server.Minecraft; declared == "" || declared.CanInfer() || declared.IsInvalid() {
@@ -240,7 +270,11 @@ func (m *Manifest) Fingerprint() (string, error) {
 	if err := m.Normalize(); err != nil {
 		return "", err
 	}
-	data, err := json.Marshal(m, json.Deterministic(true))
+	// Name is user-facing metadata: renaming a workspace must not force a
+	// dependency resolution. Copy shallowly so normalization still applies.
+	canonical := *m
+	canonical.Name = ""
+	data, err := json.Marshal(&canonical, json.Deterministic(true))
 	if err != nil {
 		return "", err
 	}

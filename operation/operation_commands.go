@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/upstream"
@@ -36,6 +37,7 @@ import (
 // InitOptions describes adoption of the server already present in a
 // directory.
 type InitOptions struct {
+	Name        string
 	MCDRVersion string
 	Force       bool
 	NoComments  bool
@@ -292,8 +294,20 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if _, err := os.Stat(filepath.Join(root, documentpkg.ManifestFilename)); err == nil && !opts.Force {
 		return nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
 	}
+	name := strings.TrimSpace(opts.Name)
+	if name == "" && opts.Force {
+		// Replacing a declaration keeps the name the user already chose; an
+		// unreadable or nameless manifest falls back to the directory name.
+		if existing, err := documentpkg.ManifestFile(root).Read(); err == nil {
+			name = existing.Name
+		}
+	}
+	if name == "" {
+		name = filepath.Base(root)
+	}
 	d := &documentpkg.Manifest{
 		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Name:          name,
 		Server: documentpkg.ManifestServer{
 			Packages: map[catalog.Ecosystem]map[string]documentpkg.Requirement{},
 		},
@@ -535,28 +549,28 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if err := manifestFile.Write(d); err != nil {
 		return initResult(observed), err
 	}
-	if resolved != old {
-		if err := documentpkg.LockFile(root).Write(resolved); err != nil {
-			return initResult(observed), err
-		}
-	}
-	if publishedConfig {
-		created, err := config.CreateWorkspace(root, opts.NoComments)
-		if err != nil {
-			return initResult(observed), err
-		}
-		publishedConfig = created
-	}
-	result = &InitResult{
-		Document:        d,
-		Lock:            resolved,
-		PublishedLock:   resolved != old,
-		PublishedConfig: publishedConfig,
-	}
+	// Once lucy.yaml exists, later publication failures still report the
+	// written document so callers can register the workspace.
+	result = &InitResult{Document: d}
 	if observed != nil {
 		result.Warnings = observed.Warnings
 		result.Discovery = observed.Discovery
 	}
+	if resolved != old {
+		if err := documentpkg.LockFile(root).Write(resolved); err != nil {
+			return result, err
+		}
+		result.PublishedLock = true
+	}
+	result.Lock = resolved
+	if publishedConfig {
+		created, err := config.CreateWorkspace(root, opts.NoComments)
+		if err != nil {
+			return result, err
+		}
+		publishedConfig = created
+	}
+	result.PublishedConfig = publishedConfig
 	return result, nil
 }
 

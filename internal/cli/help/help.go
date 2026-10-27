@@ -31,13 +31,15 @@ const (
 
 	CreateShort = "Create a new server"
 	CreateLong  = "Create a new server in a directory. The interactive form asks " +
-		"where the server lives, which software it runs, its Minecraft and " +
-		"software versions, and whether to install it now. Use --no-install " +
-		"to write only the manifest and lock for a later lucy install."
+		"where the server lives, its name, which software it runs, its Minecraft " +
+		"and software versions, and whether to install it now. The server is " +
+		"registered in the known-server list. Use --no-install to write only the " +
+		"manifest and lock for a later lucy install."
 
 	DeinitShort = "Remove lucy from the current server directory"
 	DeinitLong  = "Delete lucy.yaml, lucy-lock.yaml, and the .lucy directory " +
-		"from the current directory, including workspace configuration. The server, its packages, " +
+		"from the current directory, including workspace configuration. Remove " +
+		"the server from the known-server list. The server, its packages, " +
 		"worlds, and configuration stay in place, so it keeps running without " +
 		"lucy. Files that lucy installed become unmanaged."
 
@@ -75,6 +77,10 @@ const (
 	RemoveShort = "Remove packages"
 
 	SearchShort = "Search for mods and plugins"
+
+	ServerShort       = "Manage servers known to lucy"
+	ServerListShort   = "List servers known to lucy"
+	ServerRenameShort = "Rename a server known to lucy"
 
 	StatusShort = "Display basic information of the current server"
 

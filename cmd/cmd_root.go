@@ -51,6 +51,7 @@ type Runner struct {
 	resultWriter      io.Writer
 	flagParsingFailed bool
 	agentHelpInjected bool
+	restoreDirectory  func() error
 }
 
 // NewRunner prepares an isolated invocation with a fresh command tree, fresh
@@ -80,6 +81,7 @@ func NewRootCommand(contracts *cli.JSONContracts) *cobra.Command {
 		Use:   "lucy",
 		Short: "The Minecraft server package manager",
 	}
+	cli.RegisterServerSelection(root)
 	root.PersistentFlags().String(
 		cli.FlagLogLevel,
 		"info",
@@ -144,6 +146,7 @@ func NewRootCommand(contracts *cli.JSONContracts) *cobra.Command {
 		cli.NewJavaCommand(contracts),
 		cli.NewLeavesCommand(contracts),
 		cli.NewRemoveCommand(contracts),
+		cli.NewServerCommand(contracts),
 		cli.NewTreeCommand(contracts),
 		cli.NewUpgradeCommand(contracts),
 		compile.NewCommand(),
@@ -186,6 +189,11 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 		// progress renderers stay off.
 		style.TurnOffInteractivity()
 	}
+	restore, err := cli.SelectServer(cmd)
+	if err != nil {
+		return err
+	}
+	r.restoreDirectory = restore
 	if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
 		directory, err := os.Getwd()
 		if err != nil {
@@ -397,6 +405,13 @@ func (e *panicError) Error() string {
 // Execute runs the invocation. Per-run state is reset first, so a runner
 // always starts from a clean parse result and output buffer.
 func (r *Runner) Execute() (err error) {
+	r.restoreDirectory = nil
+	defer func() {
+		if r.restoreDirectory != nil {
+			err = errors.Join(err, r.restoreDirectory())
+			r.restoreDirectory = nil
+		}
+	}()
 	defer func() {
 		recovered := recover()
 		if recovered == nil {

@@ -26,6 +26,7 @@ const CreateKind = "create"
 // that directory directly.
 type CreateOptions struct {
 	Directory      string
+	Name           string
 	Minecraft      string
 	Product        string
 	ProductVersion string
@@ -210,7 +211,11 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	if errors.Is(err, os.ErrNotExist) {
 		old = nil
 	}
-	document := newCreateDocument(opts)
+	name := strings.TrimSpace(opts.Name)
+	if name == "" {
+		name = filepath.Base(root)
+	}
+	document := newCreateDocument(opts, name)
 	if err := document.Normalize(); err != nil {
 		return nil, newCreateResolveError(root, document, err)
 	}
@@ -337,7 +342,7 @@ func newCreateResolveError(
 	}
 }
 
-func newCreateDocument(opts CreateOptions) *documentpkg.Manifest {
+func newCreateDocument(opts CreateOptions, name string) *documentpkg.Manifest {
 	product := serverpkg.ProductMinecraft
 	if productName := strings.TrimSpace(opts.Product); productName != "" {
 		if parsed, known := serverpkg.ParseProduct(productName); known {
@@ -348,6 +353,7 @@ func newCreateDocument(opts CreateOptions) *documentpkg.Manifest {
 	}
 	document := &documentpkg.Manifest{
 		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Name:          name,
 		Server: documentpkg.ManifestServer{
 			Minecraft: version.Version(strings.TrimSpace(opts.Minecraft)),
 			Directory: ".",

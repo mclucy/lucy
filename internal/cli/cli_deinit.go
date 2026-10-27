@@ -11,7 +11,8 @@ import (
 
 // deinitDocument is the machine-readable outcome of one deinitialization.
 type deinitDocument struct {
-	Removed []string `json:"removed"`
+	Removed  []string `json:"removed"`
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 var deinitJSON JSONResult[deinitDocument]
@@ -38,7 +39,10 @@ func actionDeinit(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	document := deinitDocument{Removed: result.Removed}
+	for _, warning := range result.Warnings {
+		output.Warn(warning)
+	}
+	document := deinitDocument{Removed: result.Removed, Warnings: output.Warnings()}
 	if output.JSON() {
 		return deinitJSON.Write(output, document)
 	}
