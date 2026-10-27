@@ -373,9 +373,10 @@ func describeYAML(node *yaml.Node, t reflect.Type, examples bool) error {
 			if len(node.Content) == 0 {
 				node.FootComment = strings.TrimRight(pending.String(), "\n")
 			} else {
-				// Mapping foot comments escape the indentation of their fields.
+				// A mapping's own foot comment escapes the indentation of its
+				// fields, while a key's foot comment stays in the mapping.
 				key := node.Content[len(node.Content)-2]
-				key.HeadComment = pending.String() + key.HeadComment
+				key.FootComment = strings.TrimRight(pending.String(), "\n")
 			}
 		}
 	case reflect.Map:
