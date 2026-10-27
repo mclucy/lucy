@@ -123,7 +123,7 @@ Steps that run Java, such as Paper patching and the Forge and NeoForge installer
 
 Changing the Java requirement with [`lucy java use`](/commands/java) writes only `lucy.yaml`. The next `lucy install` resolves the new requirement into the lock.
 
-Add `--java` to install the runtime the server asks for when no installed runtime meets it. A runtime that already fits is reused. `lucy` tries these methods in order and uses the first one that works:
+Add `--java` to install the runtime the server asks for when no installed runtime meets it. A runtime that already fits is reused. When a non-empty `java.home` selects the runtime, `--java` installs nothing, because `lucy` treats that setting as your choice. `lucy` tries these methods in order and uses the first one that works:
 
 1. A Java version manager that already installed a Java runtime on this machine: SDKMAN, mise, asdf, Homebrew, or Scoop.
 2. Any other of those managers that is installed.
