@@ -9,18 +9,17 @@ import (
 // Output style flag names. The whole family is registered once as root
 // persistent flags and applies to every subcommand.
 const (
-	FlagJSON            = "json"
-	FlagJSONCompact     = "json-compact"
-	FlagLong            = "long"
-	FlagNoColor         = "no-color"
-	FlagNoInteractive   = "no-interactive"
-	FlagNoStyle         = "no-style"
-	FlagLogo            = "logo"
-	FlagLogFile         = "log-file"
-	FlagPrintLogs       = "print-logs"
-	FlagLogLevel        = "log-level"
-	FlagEcosystem       = "ecosystem"
-	FlagUseGitHubMirror = "use-github-mirror"
+	FlagJSON          = "json"
+	FlagJSONCompact   = "json-compact"
+	FlagLong          = "long"
+	FlagNoColor       = "no-color"
+	FlagNoInteractive = "no-interactive"
+	FlagNoStyle       = "no-style"
+	FlagLogo          = "logo"
+	FlagLogFile       = "log-file"
+	FlagPrintLogs     = "print-logs"
+	FlagLogLevel      = "log-level"
+	FlagEcosystem     = "ecosystem"
 )
 
 // JSONRendering names the machine-readable rendering of a command result.

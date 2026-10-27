@@ -23,6 +23,12 @@ lucy config set java.home ""
 
 Lucy uses the configured runtime even when it does not meet the server's requirements, and warns if it cannot use it. See [`lucy java`](/commands/java) to set requirements for the server itself.
 
+## Choose a release mirror and API key
+
+`github.proxy` prefixes GitHub release download URLs with a mirror, for example `https://ghfast.top/`. An empty value downloads from GitHub directly. Only release asset URLs are rewritten; API and metadata requests keep their canonical address. Cached artifacts stay keyed by the canonical URL, so switching the proxy does not redownload verified bytes.
+
+`curseforge.api_key` supplies a CurseForge API key for this machine. A non-empty key overrides the key embedded in this Lucy build. An empty value keeps the embedded key.
+
 ## Configuration files
 
 Workspace settings live in `.lucy/config.yaml`. Global settings live in `~/Library/Application Support/lucy/config.yaml` on macOS, `$XDG_CONFIG_HOME/lucy/config.yaml` (usually `~/.config/lucy/config.yaml`) on Linux, or `%APPDATA%\lucy\config.yaml` on Windows. Relative Java paths are resolved from the directory of the relevant configuration scope.
@@ -34,7 +40,9 @@ lucy config create
 lucy config create --global
 ```
 
-`lucy config get` shows the effective settings; add `--global` to inspect global settings without workspace overrides. The selected configuration file must exist. `lucy config set` creates it when needed.
+`lucy config get` shows the effective settings; add `--global` to inspect global settings without workspace overrides. The selected configuration file must exist. `lucy config set` creates it when needed, and writes only that key.
+
+Explanations are generated from the configuration definitions. Lucy adds an explanation where a key has none and never replaces a comment that is already in the file, so rewriting a configuration keeps everything you wrote.
 
 Use `lucy config create --force` to replace an existing file, discarding its settings and comments. Add `--no-comments` if you do not want the commented examples.
 

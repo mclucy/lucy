@@ -10,6 +10,8 @@ import (
 	"runtime/debug"
 
 	"charm.land/fang/v2"
+	"github.com/mclucy/lucy/config"
+	"github.com/mclucy/lucy/github"
 	"github.com/mclucy/lucy/internal/agent"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/compile"
@@ -20,6 +22,7 @@ import (
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
+	"github.com/mclucy/lucy/upstream/providers/curseforge"
 	"github.com/spf13/cobra"
 )
 
@@ -122,11 +125,6 @@ func NewRootCommand(contracts *cli.JSONContracts) *cobra.Command {
 		false,
 		"Same as --no-color --no-interactive",
 	)
-	root.PersistentFlags().Bool(
-		cli.FlagUseGitHubMirror,
-		false,
-		"Use the GitHub release mirror for eligible downloads",
-	)
 
 	docs := docscli.NewCommand()
 	contracts.Ignore(docs)
@@ -173,6 +171,7 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	r.loggingReady = true
+	configureProviders()
 	if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 		style.TurnOffStyles()
 		report.TurnOffColors()
@@ -207,6 +206,39 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return nil
+}
+
+// configureProviders applies machine settings to packages that cannot read the
+// workspace themselves. A malformed configuration is logged and leaves the
+// embedded defaults active, so a config command can still repair the file.
+func configureProviders() {
+	root, err := os.Getwd()
+	if err != nil {
+		log.Debug("provider settings unavailable", "error", err)
+		return
+	}
+	settings, err := config.New(root)
+	if err != nil {
+		log.Warn(fmt.Errorf("read machine settings: %w", err))
+		return
+	}
+	proxy, err := settings.GitHubProxy()
+	if err != nil {
+		log.Warn(fmt.Errorf("read github.proxy: %w", err))
+	} else {
+		github.SetReleaseProxy(proxy)
+	}
+	key, err := settings.CurseForgeAPIKey()
+	if err != nil {
+		log.Warn(fmt.Errorf("read curseforge.api_key: %w", err))
+	} else {
+		curseforge.SetUserAPIKey(key)
+	}
+	log.Debug(
+		"machine settings applied",
+		"github_proxy", proxy,
+		"curseforge_key_configured", key != "",
+	)
 }
 
 func (r *Runner) configureLogging(cmd *cobra.Command) error {

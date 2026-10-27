@@ -16,11 +16,21 @@ import (
 // previous layer; an explicit empty value selects that setting's automatic
 // behavior and masks an inherited value.
 type Values struct {
-	Java Java `yaml:"java,omitempty" json:"java" description:"Java runtime selection."`
+	Java       Java       `yaml:"java,omitempty" json:"java" description:"Java runtime selection."`
+	GitHub     GitHub     `yaml:"github,omitempty" json:"github" description:"GitHub access."`
+	CurseForge CurseForge `yaml:"curseforge,omitempty" json:"curseforge" description:"CurseForge access."`
 }
 
 type Java struct {
 	Home *string `yaml:"home,omitempty" json:"home" description:"Java home or executable. An empty value lets Lucy choose a runtime." example:"/path/to/java-home"`
+}
+
+type GitHub struct {
+	Proxy *string `yaml:"proxy,omitempty" json:"proxy" description:"Prefix proxy for GitHub release downloads. An empty value downloads directly." example:"https://ghfast.top/"`
+}
+
+type CurseForge struct {
+	APIKey *string `yaml:"api_key,omitempty" json:"api_key" description:"CurseForge API key. An empty value uses the key built into this Lucy build." example:"$2a$10$example"`
 }
 
 func decodeValues(reader io.Reader) (*Values, error) {
