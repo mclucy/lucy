@@ -19,6 +19,7 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/config"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/install"
@@ -37,6 +38,7 @@ import (
 type InitOptions struct {
 	MCDRVersion string
 	Force       bool
+	NoComments  bool
 	// EntryPoint selects the runtime observation uses for this
 	// initialization only; it is never persisted.
 	EntryPoint string
@@ -51,11 +53,12 @@ type InitOptions struct {
 // is the written manifest; warnings and discovery carry the observations
 // that the command boundary presents.
 type InitResult struct {
-	Document      *documentpkg.Manifest
-	Lock          *documentpkg.Lock
-	PublishedLock bool
-	Warnings      []error
-	Discovery     discovery.Result
+	Document        *documentpkg.Manifest
+	Lock            *documentpkg.Lock
+	PublishedLock   bool
+	PublishedConfig bool
+	Warnings        []error
+	Discovery       discovery.Result
 }
 
 func commandDocuments(root string) (document *documentpkg.Manifest, locked *documentpkg.Lock, resultErr error) {
@@ -516,7 +519,20 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if err != nil {
 		return initResult(observed), err
 	}
-	if err := documentpkg.ManifestFile(root).Write(d); err != nil {
+	configurationPath := filepath.Join(root, filepath.FromSlash(config.WorkspaceFilename))
+	if err := workspacewrite.SafePath(root, config.WorkspaceFilename); err != nil {
+		return initResult(observed), err
+	}
+	_, configErr := os.Lstat(configurationPath)
+	publishedConfig := errors.Is(configErr, os.ErrNotExist)
+	if configErr != nil && !publishedConfig {
+		return initResult(observed), configErr
+	}
+	manifestFile := documentpkg.ManifestFile(root)
+	if opts.NoComments {
+		manifestFile = manifestFile.WithEncoder((*documentpkg.Manifest).PlainBytes)
+	}
+	if err := manifestFile.Write(d); err != nil {
 		return initResult(observed), err
 	}
 	if resolved != old {
@@ -524,10 +540,18 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			return initResult(observed), err
 		}
 	}
+	if publishedConfig {
+		created, err := config.CreateWorkspace(root, opts.NoComments)
+		if err != nil {
+			return initResult(observed), err
+		}
+		publishedConfig = created
+	}
 	result = &InitResult{
-		Document:      d,
-		Lock:          resolved,
-		PublishedLock: resolved != old,
+		Document:        d,
+		Lock:            resolved,
+		PublishedLock:   resolved != old,
+		PublishedConfig: publishedConfig,
 	}
 	if observed != nil {
 		result.Warnings = observed.Warnings

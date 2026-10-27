@@ -22,6 +22,7 @@
           "commands/init",
           "commands/install",
           "commands/java",
+          "commands/config",
           "commands/add",
           "commands/remove",
           "commands/deinit",

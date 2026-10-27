@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/javainstall"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/log"
@@ -14,17 +13,16 @@ import (
 	"github.com/mclucy/lucy/terminal/style"
 )
 
-// provisionJava returns the install hook for --java. It installs the first
-// usable plan, most native first. A Java runtime that the local settings
-// select is the user's choice, so the hook installs nothing then. Every
-// installation method needs the network, so the hook fails when offline.
+// provisionJava installs the first usable plan, most native first. A configured
+// runtime is the user's choice, so the hook leaves it unchanged. Installation
+// needs network access.
 func (o *installOutput) provisionJava(host javainstall.Host, offline bool) func(context.Context, javaruntime.Requirement, *javaruntime.Check) error {
 	return func(ctx context.Context, _ javaruntime.Requirement, check *javaruntime.Check) error {
-		if check.Source == javaruntime.SourceLocal {
+		if check.Source == javaruntime.SourceConfigured {
 			log.Info(
 				"java installation skipped",
-				"reason", document.LocalFilename+" selects the Java runtime",
-				"home", check.LocalHome,
+				"reason", check.ConfigPath+" selects the Java runtime",
+				"home", check.ConfiguredHome,
 			)
 			return nil
 		}
@@ -35,7 +33,7 @@ func (o *installOutput) provisionJava(host javainstall.Host, offline bool) func(
 					"no installed runtime meets the requirement for Java %d, and every installation method needs network access",
 					check.Target,
 				)},
-				Hint: "Run lucy install --java without --offline, or select a runtime with lucy java use --path.",
+				Hint: "Run lucy install --java without --offline, or select a runtime with lucy config set java.home <home>.",
 			}
 		}
 		request := javainstall.Request{Major: check.Target, Distribution: check.Distribution}
@@ -100,7 +98,7 @@ func noJavaPlanDetail(request javainstall.Request, skipped []javainstall.Skipped
 		detail.Lines = append(detail.Lines, skipText(s))
 	}
 	if len(skipped) == 0 {
-		detail.Hint = "Install the Java runtime manually, then run lucy java use --path <home>."
+		detail.Hint = "Install the Java runtime manually, then run lucy config set java.home <home>."
 	}
 	return detail
 }

@@ -39,6 +39,11 @@ func (s Service[T]) WithMode(mode os.FileMode) Service[T] {
 	return s
 }
 
+func (s Service[T]) WithEncoder(encode func(*T) ([]byte, error)) Service[T] {
+	s.codec.Encode = encode
+	return s
+}
+
 func (s Service[T]) Path() string { return s.path }
 
 func (s Service[T]) Read() (*T, error) {
@@ -91,6 +96,62 @@ func (s Service[T]) Create(value *T) error {
 		return err
 	}
 	log.Info(s.kind+" created", "path", s.path)
+	return nil
+}
+
+// ReadRoot reads relative inside root. The root confines every path component
+// to root, so a replaced parent cannot redirect the read.
+func (s Service[T]) ReadRoot(root *os.Root, relative string) (*T, error) {
+	file, err := root.Open(relative)
+	if err != nil {
+		return nil, err
+	}
+	value, decodeErr := s.codec.Decode(file)
+	return value, errors.Join(decodeErr, file.Close())
+}
+
+// WriteRoot replaces relative inside root with value and retains the
+// permissions of the file it replaces.
+func (s Service[T]) WriteRoot(root *os.Root, relative string, value *T) error {
+	return s.publishRoot(root, relative, value, true)
+}
+
+// CreateRoot publishes value at relative inside root only while the name is
+// absent. A file that appears after the caller's check survives.
+func (s Service[T]) CreateRoot(root *os.Root, relative string, value *T) error {
+	return s.publishRoot(root, relative, value, false)
+}
+
+// publishRoot keeps every operation of one publish on the same root handle.
+// Callers use it while they hold the writer lock that SafePath checked.
+func (s Service[T]) publishRoot(root *os.Root, relative string, value *T, replace bool) error {
+	data, err := s.Snapshot(value)
+	if err != nil {
+		return err
+	}
+	mode := s.mode
+	info, statErr := root.Lstat(relative)
+	switch {
+	case statErr == nil:
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("write destination must be a regular file")
+		}
+		mode = info.Mode().Perm()
+	case !errors.Is(statErr, os.ErrNotExist):
+		return statErr
+	}
+	err = fsutil.WriteRoot(root, relative, bytes.NewReader(data), fsutil.WriteOptions{
+		Mode:    mode,
+		Replace: replace,
+	})
+	if err != nil {
+		return err
+	}
+	verb := "written"
+	if !replace {
+		verb = "created"
+	}
+	log.Info(s.kind+" "+verb, "path", filepath.Join(root.Name(), relative))
 	return nil
 }
 

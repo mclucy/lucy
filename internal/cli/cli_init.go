@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
+	"github.com/mclucy/lucy/config"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -21,6 +22,7 @@ const (
 	flagInitForceName       = "force"
 	flagInitMCDRVersionName = "mcdr-version"
 	flagInitEntryPointName  = "entry-point"
+	flagInitNoCommentsName  = "no-comments"
 )
 
 var initCmd = &cobra.Command{
@@ -30,8 +32,18 @@ var initCmd = &cobra.Command{
 	RunE:  actionInit,
 }
 
+// initJSON is the machine-readable result of `lucy init`.
+var initJSON JSONResult[*initResult]
+
+// initResult adds workspace configuration publication to the install result
+// that other operations share.
+type initResult struct {
+	*install.Result
+	PublishedConfig bool `json:"published_config"`
+}
+
 func NewInitCommand(contracts *JSONContracts) *cobra.Command {
-	installJSON.Bind(contracts, initCmd)
+	initJSON.Bind(contracts, initCmd)
 	initCmd.Flags().BoolP(
 		flagInitForceName,
 		"f",
@@ -45,6 +57,11 @@ func NewInitCommand(contracts *JSONContracts) *cobra.Command {
 	)
 	initCmd.Flags().String(flagInitEntryPointName, "", "Server entry point to adopt when several runtimes are present")
 	_ = initCmd.MarkFlagFilename(flagInitEntryPointName, "jar")
+	initCmd.Flags().Bool(
+		flagInitNoCommentsName,
+		false,
+		"Write generated manifests and configuration without explanatory comments",
+	)
 	return initCmd
 }
 
@@ -59,6 +76,7 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 		MCDRVersion: flagStringInit(cmd, flagInitMCDRVersionName),
 		EntryPoint:  flagStringInit(cmd, flagInitEntryPointName),
 		Force:       flagBoolInit(cmd, flagInitForceName),
+		NoComments:  flagBoolInit(cmd, flagInitNoCommentsName),
 	}
 	return initializeWorkspace(ctx, cmd, workDir, opts)
 }
@@ -85,36 +103,50 @@ func initializeWorkspace(ctx context.Context, cmd *cobra.Command, workDir string
 	}
 	reportDiscoveryFindings(&result.Discovery, output.Output)
 	if output.JSON() {
-		return installJSON.Write(output.Output, &install.Result{
-			Schema: install.ResultSchema,
-			Kind:   "install",
-			Mode:   install.ModeResolve,
-			Server: install.ServerChange{
-				Product:   result.Lock.Server.Product,
-				Minecraft: result.Lock.Server.Minecraft,
-				Version:   result.Lock.Server.CoreVersion,
+		return initJSON.Write(output.Output, &initResult{
+			Result: &install.Result{
+				Schema: install.ResultSchema,
+				Kind:   "install",
+				Mode:   install.ModeResolve,
+				Server: install.ServerChange{
+					Product:   result.Lock.Server.Product,
+					Minecraft: result.Lock.Server.Minecraft,
+					Version:   result.Lock.Server.CoreVersion,
+				},
+				Packages:          []install.PackageChange{},
+				Phases:            []install.Phase{},
+				TotalPackages:     len(result.Lock.Packages),
+				PublishedManifest: true,
+				PublishedLock:     result.PublishedLock,
+				WarningMessages:   output.Warnings(),
 			},
-			Packages:          []install.PackageChange{},
-			Phases:            []install.Phase{},
-			TotalPackages:     len(result.Lock.Packages),
-			PublishedManifest: true,
-			PublishedLock:     result.PublishedLock,
-			WarningMessages:   output.Warnings(),
+			PublishedConfig: result.PublishedConfig,
 		})
 	}
-	written := document.ManifestFilename
+	written := []string{document.ManifestFilename}
 	if result.PublishedLock {
-		written += " and " + document.LockFilename
+		written = append(written, document.LockFilename)
+	}
+	if result.PublishedConfig {
+		written = append(written, config.WorkspaceFilename)
 	}
 	fmt.Fprintf(
 		output.Human(),
 		"Wrote %s for Minecraft %s (%s)\n  Recorded %s\n",
-		written,
+		writtenFilesLabel(written),
 		result.Document.Server.Minecraft,
 		result.Document.Server.Core.Product,
 		packageCountLabel(len(result.Lock.Packages)),
 	)
 	return nil
+}
+
+// writtenFilesLabel names the files a command wrote in running prose.
+func writtenFilesLabel(paths []string) string {
+	if len(paths) < 2 {
+		return strings.Join(paths, "")
+	}
+	return strings.Join(paths[:len(paths)-1], ", ") + " and " + paths[len(paths)-1]
 }
 
 // initializationFailure turns a typed selection failure into an actionable

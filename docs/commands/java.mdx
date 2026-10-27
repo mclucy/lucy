@@ -8,7 +8,7 @@ description: "Show and choose the Java runtime of the server"
 ```bash
 lucy java list
 lucy java use 21 --distribution temurin
-lucy java use --path /opt/homebrew/opt/openjdk@21
+lucy config set java.home /opt/homebrew/opt/openjdk@21
 ```
 
 ## What the server asks for
@@ -41,14 +41,17 @@ A runtime without a vendor name in its `release` file, such as a Homebrew or Deb
   A distribution name, or `auto` to accept any. Writes `server.java` in `lucy.yaml`. Valid names are `temurin`, `zulu`, `corretto`, `liberica`, `microsoft`, `oracle`, `oracle_open_jdk`, `graalvm`, `graalvm_community`, `semeru`, `sap_machine`, `dragonwell`, `kona`, `redhat`, and `jetbrains`.
 </ParamField>
 
-<ParamField query="--path" type="string">
-  A Java home directory or a `java` executable. Writes `lucy.local.yaml`, which applies to this machine only. `auto` removes the setting so that `lucy` chooses again. You cannot combine it with a version or `--distribution`.
-</ParamField>
+Without arguments, `lucy java use` opens a form that asks for the version and the distribution. Each question starts at the value in `lucy.yaml`, and the version list includes the major versions of the runtimes that `lucy` found. To choose a runtime on this machine, set `java.home` with [`lucy config`](/commands/config) instead:
 
-Without arguments, `lucy java use` opens a form that asks for the version and the distribution. Each question starts at the value in `lucy.yaml`, and the version list includes the major versions of the runtimes that `lucy` found. To choose a runtime on this machine, pass `--path`. With `--no-interactive` and no arguments, `lucy java use` fails and names the flags.
+```bash
+lucy config set java.home /opt/homebrew/opt/openjdk@21
+lucy config set --global java.home /usr/lib/jvm/temurin-21
+```
 
-`lucy.local.yaml` takes precedence over `lucy.yaml`. If the runtime it selects misses a requirement, `lucy` warns and still uses it. `lucy` stores a path inside the workspace relative to it, so a bundled runtime survives a move. Do not commit `lucy.local.yaml`: its path is true only on your machine.
+With `--no-interactive` and no arguments, `lucy java use` fails and names the flags.
 
-When `lucy-lock.yaml` matched `lucy.yaml` before the change, the lock records the new pin too and stays current. Otherwise run [`lucy install`](/commands/install) to update the lock.
+`lucy java use` changes only `lucy.yaml`. It does not rewrite `lucy-lock.yaml`, even when the lock was current before the change; run [`lucy install`](/commands/install) to resolve the new requirement into the lock.
+
+A non-empty `java.home` overrides the runtime that `lucy` otherwise picks. Workspace configuration takes precedence over global configuration. If the configured runtime misses a requirement, `lucy` warns and still uses it; if it is not a working Java runtime, `lucy` warns and does not silently choose another. Java runtime selection merges whichever configuration files exist, so a missing file is not an error. A relative path resolves from the workspace root in workspace configuration, and from the global configuration directory in global configuration. An empty value explicitly selects automatic runtime selection, including over a `java.home` inherited from the global file.
 
 See also [`lucy install`](/commands/install#java) and [Global Flags](/commands/global-flags).

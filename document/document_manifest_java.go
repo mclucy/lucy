@@ -22,8 +22,8 @@ const MinimumJava = 8
 // the Mojang advisory for the Minecraft version, and every distribution is
 // accepted.
 type ManifestJava struct {
-	Version      int               `yaml:"version,omitempty" json:"version,omitempty"`
-	Distribution java.Distribution `yaml:"distribution,omitempty" json:"distribution,omitempty"`
+	Version      int               `yaml:"version,omitempty" json:"version,omitempty" description:"Java major version or auto to follow the Mojang advisory" example:"auto"`
+	Distribution java.Distribution `yaml:"distribution,omitempty" json:"distribution,omitempty" description:"Java distribution or auto to accept any distribution" example:"auto"`
 }
 
 // IsAuto reports whether j leaves both the version and the distribution on

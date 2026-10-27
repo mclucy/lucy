@@ -7,8 +7,7 @@ description: "Stop managing a server and remove lucy's files from its directory"
 
 - `lucy.yaml`, the manifest that records what you want.
 - `lucy-lock.yaml`, the lock that records the exact resolved server.
-- `lucy.local.yaml`, the settings that apply to this machine only.
-- `.lucy`, the directory that holds installation records, tracked-file backups, downloads, and transaction journals.
+- `.lucy`, the directory that holds workspace configuration (`.lucy/config.yaml`), installation records, tracked-file backups, downloads, and transaction journals.
 
 <Warning>
   `.lucy` is the only local copy of tracked-file backups and revision history. `lucy deinit` deletes them permanently.
@@ -24,7 +23,7 @@ Run it from the server directory. If the directory has no lucy files, `lucy dein
 
 Before removing anything, `lucy deinit` completes or rolls back an installation or tracked-file operation that was interrupted. It fails when another lucy process is writing to the workspace.
 
-`lucy deinit` does not stop a running server, uninstall Java, clear the global download cache, or modify the world. Use [`lucy cache clear`](/commands/install#download-cache) to clear the global download cache separately.
+`lucy deinit` removes the workspace configuration with `.lucy`, but never global configuration. It does not stop a running server, uninstall Java, clear the global download cache, or modify the world. Use [`lucy cache clear`](/commands/install#download-cache) to clear the global download cache separately.
 
 ## Output
 

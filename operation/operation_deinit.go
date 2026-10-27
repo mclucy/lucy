@@ -69,7 +69,6 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 	for _, name := range []string{
 		document.ManifestFilename,
 		document.LockFilename,
-		document.LocalFilename,
 	} {
 		if !slices.Contains(present, name) {
 			continue
@@ -101,7 +100,6 @@ func workspaceStatePaths() []string {
 	return []string{
 		document.ManifestFilename,
 		document.LockFilename,
-		document.LocalFilename,
 		fsutil.WorkspaceMarker,
 	}
 }

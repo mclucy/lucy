@@ -21,10 +21,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	flagJavaDistributionName = "distribution"
-	flagJavaPathName         = "path"
-)
+const flagJavaDistributionName = "distribution"
 
 // javaChoices lists the long-term support releases that the interactive form
 // offers next to the installed major versions.
@@ -67,12 +64,6 @@ func NewJavaCommand(contracts *JSONContracts) *cobra.Command {
 		"",
 		"Pin a Java distribution in lucy.yaml, or auto to accept any",
 	)
-	javaUseCmd.Flags().String(
-		flagJavaPathName,
-		"",
-		"Use this Java home or java executable on this machine, or auto to let Lucy choose",
-	)
-	javaUseCmd.MarkFlagsMutuallyExclusive(flagJavaPathName, flagJavaDistributionName)
 	javaCmd.AddCommand(javaListCmd, javaUseCmd)
 	return javaCmd
 }
@@ -134,8 +125,8 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 	} else {
 		writeJavaRequirement(out, requirement)
 	}
-	if view.Selection != nil && view.Selection.Source == javaruntime.SourceLocal {
-		fmt.Fprintf(out, "%s selects %s\n", document.LocalFilename, view.Selection.LocalHome)
+	if view.Selection != nil && view.Selection.Source == javaruntime.SourceConfigured {
+		fmt.Fprintf(out, "%s selects %s\n", view.Selection.ConfigPath, view.Selection.ConfiguredHome)
 	}
 	fmt.Fprintln(out)
 	if len(view.Runtimes) == 0 {
@@ -206,9 +197,9 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 	if change == (operation.JavaChange{}) {
 		if !NewPromptGate(cmd).Available() {
 			return fmt.Errorf(
-				"specify a Java version or auto, --%s, or --%s; choosing interactively needs a terminal",
+				"specify a Java version, auto, or --%s; interactive selection is unavailable "+
+					"with --no-interactive or without a terminal",
 				flagJavaDistributionName,
-				flagJavaPathName,
 			)
 		}
 		if change, err = promptJavaChange(ctx, root); err != nil {
@@ -225,25 +216,8 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 	}
 	out := output.Human()
 	fmt.Fprintf(out, "%s: %s\n", document.ManifestFilename, javaOverrideLabel(result.Java))
-	if result.Home != "" {
-		fmt.Fprintf(out, "%s: %s\n", document.LocalFilename, result.Home)
-	} else if result.PublishedLocal {
-		fmt.Fprintf(out, "%s: Lucy chooses the Java runtime\n", document.LocalFilename)
-	}
-	requirement, err := lockedJavaRequirement(root)
-	if err != nil || requirement == nil {
-		return err
-	}
-	if !result.PublishedLock && result.PublishedManifest {
+	if result.PublishedManifest {
 		fmt.Fprintf(out, "Run lucy install to update %s.\n", document.LockFilename)
-		return nil
-	}
-	check, err := javaruntime.Select(ctx, root, *requirement)
-	if err != nil {
-		return err
-	}
-	for _, warning := range javaWarnings(check) {
-		report.Warn(warning)
 	}
 	return nil
 }
@@ -251,9 +225,6 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 func javaChangeFromFlags(cmd *cobra.Command, args []string) (operation.JavaChange, error) {
 	var change operation.JavaChange
 	if len(args) == 1 {
-		if cmd.Flags().Changed(flagJavaPathName) {
-			return change, fmt.Errorf("a Java version and --%s cannot be used together", flagJavaPathName)
-		}
 		version, err := parseJavaMajor(args[0])
 		if err != nil {
 			return change, err
@@ -267,17 +238,6 @@ func javaChangeFromFlags(cmd *cobra.Command, args []string) (operation.JavaChang
 			return change, err
 		}
 		change.Distribution = &distribution
-	}
-	if cmd.Flags().Changed(flagJavaPathName) {
-		path, _ := cmd.Flags().GetString(flagJavaPathName)
-		path = strings.TrimSpace(path)
-		if path == "" {
-			return change, fmt.Errorf("--%s needs a Java home, a java executable, or auto", flagJavaPathName)
-		}
-		if path == document.JavaAuto {
-			path = ""
-		}
-		change.Path = &path
 	}
 	return change, nil
 }
@@ -385,11 +345,10 @@ func javaWarnings(check *javaruntime.Check) []error {
 	for _, problem := range check.Problems {
 		warnings = append(warnings, errors.New(problem))
 	}
-	if check.Source == javaruntime.SourceLocal {
-		warnings = append(warnings, fmt.Errorf(
-			"run lucy java use --%s <home> to select another Java runtime, or --%s auto to let Lucy choose",
-			flagJavaPathName,
-			flagJavaPathName,
+	if check.Source == javaruntime.SourceConfigured {
+		warnings = append(warnings, errors.New(
+			"run lucy config set java.home <home> to select another Java runtime, "+
+				"or lucy config set java.home '' to let Lucy choose",
 		))
 		return warnings
 	}
