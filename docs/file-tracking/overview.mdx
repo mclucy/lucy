@@ -1,128 +1,33 @@
 ---
 title: "File tracking"
-description: "Choose which files to track and which contents to recover"
+description: "Keep track of server configuration files and scripts"
 ---
 
-You can use `lucy file` and its subcommands to track independent files, such as configuration files and scripts.
-
-## When to use
-
-File tracking is useful when you distribute a server pack or manage server configuration. You can declare files that must exist or files that must match accepted contents. Tracking adds a guardrail against accidental modification and lets you restore accepted contents if changes break the server.
-
-Tracking files also protects important settings. Lucy stores backups locally in a content-addressed store (CAS) so you can revert to an earlier accepted revision. See [Recover and revert files](/file-tracking/recovery) for details on backups, recovery, and reverts.
-
-## Accepted content and observed content
-
-Lucy distinguishes between accepted content and observed content:
-
-- **Accepted content**: The snapshot recorded in `lucy.yaml` and `lucy-lock.yaml`. The accepted hash uses the format `sha256:<64 lowercase hexadecimal characters>`.
-- **Observed content**: The current file bytes on disk in your server workspace.
-
-`lucy-lock.yaml` records exact declared requirements from `lucy.yaml`. It does not store observed hashes or deviation flags.
-
-<Note>
-  File-only changes preserve runtime package pins. A missing or already stale lock is not marked current by a file command. Run `lucy install` to resolve it.
-</Note>
-
-## Mutable and immutable files
-
-A file declaration has four fields:
-
-- `path`: File path relative to the directory containing `lucy.yaml`. Non-regular files, directory traversal, symlinks, `.git`, `.lucy`, and Lucy manifest and lock files are rejected.
-- `immutable`: Boolean flag (`default: false`). Immutable files require an accepted hash.
-- `hash`: Optional for mutable files, required for immutable files. Syntax: `sha256:<64 lowercase hexadecimal characters>`.
-- `recover_url`: Optional source URL. Setting `recover_url` requires an accepted hash.
-
-| Declaration | Checks | Recovery target |
-| --- | --- | --- |
-| Mutable without a hash (presence-only) | Existence | None |
-| Mutable with an accepted hash | Existence | Accepted snapshot |
-| Immutable with an accepted hash | Existence and content deviation | Accepted snapshot |
-
-### Presence-only vs CLI hashed defaults
-
-By default, `lucy file track` snapshots the existing regular file and writes a mutable declaration with an accepted hash:
+Track files when you want to check that server configuration and scripts are present, or restore an earlier version after an unwanted change. Paths are relative to the directory containing `lucy.yaml`.
 
 ```bash
 lucy file track server.properties
+lucy file track scripts/start.sh
 ```
 
-The declaration has this form. Its hash depends on the file contents:
+Lucy saves the current contents locally as an accepted revision. For a file that only needs to exist, use `lucy file track --no-hash <path>`; Lucy cannot restore its contents without a saved revision.
 
-```yaml
-# lucy.yaml
-files:
-  - path: server.properties
-    hash: sha256:2da9eeead0999df06fc9a986498c6ebebe6eb09ac2174b889d603223e47c6216
-```
+## Choose what to check
 
-If you only want to verify that a file exists without pinning its contents, you can manually declare a presence-only file in `lucy.yaml`, or pass `--no-hash` to `lucy file track`:
+Tracked files are mutable by default: you can edit them without a warning. To be warned when a file differs from its accepted revision, lock it:
 
 ```bash
-lucy file track server.properties --no-hash
-```
-
-This writes a declaration without a hash:
-
-```yaml
-# lucy.yaml
-files:
-  - path: server.properties
-```
-
-Presence-only files cannot be recovered or reverted because no accepted digest is recorded.
-
-### Immutable files
-
-An immutable file requires an accepted hash. In `lucy.yaml`:
-
-```yaml
-# lucy.yaml
-files:
-  - path: server.properties
-    immutable: true
-    hash: sha256:2da9eeead0999df06fc9a986498c6ebebe6eb09ac2174b889d603223e47c6216
-```
-
-You can track an immutable file directly or change the policy with `lock` and `unlock`:
-
-```bash
-lucy file track server.properties --immutable
 lucy file lock server.properties
-lucy file unlock server.properties
 ```
 
-`lucy file lock` snapshots and accepts current working bytes, then sets `immutable: true`. `lucy file unlock` sets `immutable: false` while retaining the accepted hash and any configured `recover_url`.
+Locking accepts the current contents. It does not change file permissions or prevent edits. After an intentional change, accept the new contents with `lucy file update server.properties`. Use `lucy file unlock server.properties` to stop checking for changes.
 
-<Note>
-  An immutable policy does not change filesystem permissions (`chmod`) or make the file read-only on disk. It tells Lucy to warn when observed bytes deviate from accepted bytes.
-</Note>
+## Restore files
 
-## Accepting updates
-
-```bash
-lucy file update server.properties
-```
-
-`lucy file update` snapshots current working bytes and accepts them as the new revision in `lucy.yaml` and `lucy-lock.yaml`. It leaves policy flags and `recover_url` unchanged. For mutable files, updating is optional. For immutable files, run `update` when you intentionally change file contents and want to silence deviation warnings.
-
-## Local backups
-
-Lucy stores backup blobs in a content-addressed store under `.lucy/objects/sha256/` and logs event history in `.lucy/history/files.jsonl`.
-
-Backups are local to the workspace. They are not off-machine backups.
+Lucy keeps captured revisions in the workspace. These copies are not off-machine backups. A missing file can also be recovered from a configured recovery URL; see [Recover and revert files](/file-tracking/recovery).
 
 <Warning>
-  The object store keeps every revision Lucy captured, including working bytes you never accepted for distribution. When you package a server yourself, include only the blobs whose digests appear as accepted `hash` values you intend to distribute — never `.lucy/objects/` as a whole.
+  Local revisions can include unaccepted changes and secrets. Do not distribute the entire `.lucy/objects/` directory with a server pack. Lucy does not yet provide an export command.
 </Warning>
 
-<Note>
-  Distribution is not implemented yet: there is no `lucy export` and no archive import. Track the packaging work in [issue #129](https://github.com/mclucy/lucy/issues/129).
-</Note>
-
-## Tutorials
-
-- [Track files and accept revisions](/file-tracking/tracking)
-- [Recover and revert files](/file-tracking/recovery)
-
-For command syntax, see [`lucy file`](/commands/file).
+Continue with [Track files and accept revisions](/file-tracking/tracking), or see [`lucy file`](/commands/file) for the available commands.

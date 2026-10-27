@@ -1,57 +1,33 @@
 ---
 title: "lucy java"
-description: "Show and choose the Java runtime of the server"
+description: "Inspect and choose Java for your server"
 ---
 
-`lucy java` shows the Java runtimes on your machine, checks them against what the server asks for, and records your choice. Java is never a gate: every mismatch is a warning, and you can always start the server with your own `java` command or start script.
+List the Java runtimes Lucy finds and check them against your server's requirements:
 
 ```bash
 lucy java list
-lucy java use 21 --distribution temurin
-lucy config set java.home /opt/homebrew/opt/openjdk@21
 ```
 
-## What the server asks for
+With a lock file, the list shows the requirements and which runtime Lucy selected. Without one, it lists available runtimes. Lucy warns about mismatches; you can still start the server with your own Java command or script.
 
-Three sources combine into the requirement:
+## Set a server requirement
 
-- The Java version that Mojang recommends for your Minecraft version. Lucy treats it as a minimum.
-- The `server.java` pin in `lucy.yaml`, if you set one.
-- The Java version that each installed package declares.
+Choose a Java version and optionally a distribution for the server:
 
-Without a pin, the version is `auto` and the distribution is any. `lucy java list` names the source of each requirement, so a warning always tells you who asked.
+```bash
+lucy java use 21 --distribution temurin
+lucy install
+```
 
-## lucy java list
+`lucy java use` updates `lucy.yaml`; `lucy install` resolves the new requirement into the lock. Run `lucy java use` without arguments to choose interactively, or use `auto` to return to automatic version or distribution selection. Package requirements and Mojang's recommended Java version also affect compatibility.
 
-`lucy java list` prints the requirement and every Java runtime that `lucy` finds. A check mark means the runtime meets every requirement, and `(selected)` marks the runtime that `lucy` uses. `lucy` looks in `JAVA_HOME`, your `PATH`, SDKMAN, mise, asdf, Jabba, Homebrew, Scoop, Gradle's JDK folder, the system JVM folders, and the folder where `lucy install --java` downloads runtimes.
+## Select a runtime on this machine
 
-The command needs `lucy-lock.yaml` to show a requirement. Without one it lists the runtimes only. `--json` prints the requirement, the selection, and each runtime with its problems.
-
-A runtime without a vendor name in its `release` file, such as a Homebrew or Debian build, counts as unbranded. It satisfies a pin of `auto` but never a named distribution.
-
-## lucy java use
-
-`lucy java use` changes what `lucy` uses.
-
-<ParamField query="version" type="string">
-  A Java major version of 8 or later, or `auto`. Writes `server.java` in `lucy.yaml`. `auto` returns the version to the Mojang recommendation.
-</ParamField>
-
-<ParamField query="--distribution" type="string">
-  A distribution name, or `auto` to accept any. Writes `server.java` in `lucy.yaml`. Valid names are `temurin`, `zulu`, `corretto`, `liberica`, `microsoft`, `oracle`, `oracle_open_jdk`, `graalvm`, `graalvm_community`, `semeru`, `sap_machine`, `dragonwell`, `kona`, `redhat`, and `jetbrains`.
-</ParamField>
-
-Without arguments, `lucy java use` opens a form that asks for the version and the distribution. Each question starts at the value in `lucy.yaml`, and the version list includes the major versions of the runtimes that `lucy` found. To choose a runtime on this machine, set `java.home` with [`lucy config`](/commands/config) instead:
+To use a specific installation locally, set `java.home` with [`lucy config`](/commands/config):
 
 ```bash
 lucy config set java.home /opt/homebrew/opt/openjdk@21
-lucy config set --global java.home /usr/lib/jvm/temurin-21
 ```
 
-With `--no-interactive` and no arguments, `lucy java use` fails and names the flags.
-
-`lucy java use` changes only `lucy.yaml`. It does not rewrite `lucy-lock.yaml`, even when the lock was current before the change; run [`lucy install`](/commands/install) to resolve the new requirement into the lock.
-
-A non-empty `java.home` overrides the runtime that `lucy` otherwise picks. Workspace configuration takes precedence over global configuration. If the configured runtime misses a requirement, `lucy` warns and still uses it; if it is not a working Java runtime, `lucy` warns and does not silently choose another. Java runtime selection merges whichever configuration files exist, so a missing file is not an error. A relative path resolves from the workspace root in workspace configuration, and from the global configuration directory in global configuration. An empty value explicitly selects automatic runtime selection, including over a `java.home` inherited from the global file.
-
-See also [`lucy install`](/commands/install#java) and [Global Flags](/commands/global-flags).
+This local choice overrides automatic runtime selection. Lucy warns if it does not meet the requirements or is unusable. To install a suitable runtime when needed, see [`lucy install --java`](/commands/install#java).

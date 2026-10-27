@@ -3,75 +3,50 @@ title: "lucy create"
 description: "Create a new server directory"
 ---
 
-`lucy create` creates a new server in a directory. It writes `lucy.yaml` and `lucy-lock.yaml` and, by default, installs the server files. The interactive form asks where the server lives, which software it runs, which Minecraft and software versions to use, and whether to install it now. When neither install flag is given, the installation question is the last step of the form.
+`lucy create` creates a new server, writes `lucy.yaml` and `lucy-lock.yaml`, and installs the server files. Use an empty directory; to adopt files that already exist, use [`lucy init`](/commands/init).
 
 ```bash
-lucy create
+lucy create --directory survival --minecraft 1.21.4 --core paper
 ```
 
-## The interactive form
+Without flags, lucy asks for the directory, server software, Minecraft version, software version, and whether to install now. The form prefills anything you passed as a flag.
 
-The form prefills values supplied on the command line, so flags and the form can be mixed.
+In a script or CI, pass `--no-interactive`; `--minecraft` is then required. The directory defaults to the current one, the software to vanilla Minecraft, and installation to on.
 
-1. **Directory.** Defaults to the current directory. The form creates it when it does not exist.
-2. **Server software.** Minecraft, Fabric, Forge, or NeoForge.
-3. **Minecraft version.** An exact release or snapshot ID, for example `1.21.4`.
-4. **Server software version.** A loader or installer version. Leave it empty to let Lucy choose the latest. The form shows the expected form for the selected software.
-5. **Install now.** The last choice. Install writes the server files; Not yet writes only the manifest and lock.
+## Choose versions
 
-## Directories that already contain files
+`--core` takes the server software and optionally a version, for example `paper`, `paper@232`, `fabric@0.16.9`, or `purpur@latest`. Use `--core-version` instead of the `@version` suffix.
 
-Lucy warns when the chosen directory is not empty and then continues. Existing files are left in place, but the installation can conflict with files it does not own. Use an empty directory for a clean server.
+`--minecraft` takes an exact release or snapshot ID, such as `1.21.4`. `latest` selects the newest version the chosen software supports. Minecraft and Fabric also accept `release` and `snapshot` for Mojang's newest channels. The manifest records the resolved ID.
 
-An existing `lucy.yaml` is never replaced silently. The interactive form asks for confirmation before replacing it. In a non-interactive run, pass `--force`. Replacing a manifest discards the package declarations it contained; the installation can remove files that only those declarations required.
+## Prepare without installing
 
-Creating a server directly in an existing server directory is not the same as adopting it. Use [`lucy init`](/commands/init) to adopt the software and packages that are already installed.
+`--no-install` writes only the manifest and lock. Run `lucy install` in the directory later to place the server files.
 
-## Install or write only
+`lucy create` does not accept the Minecraft EULA, start the server, or migrate an existing world.
 
-The default is to install the server immediately. Use `--no-install` to create only `lucy.yaml` and `lucy-lock.yaml`, for example when preparing a directory for a later [`lucy install`](/commands/install).
+## Existing files
 
-```bash
-lucy create --directory server --minecraft 1.21.4 --core paper --no-interactive
-lucy create --directory server --minecraft 1.21.4 --core paper --no-install
-```
+Lucy warns when the directory is not empty and continues, leaving existing files in place. The installation can still conflict with files it does not own, so prefer an empty directory.
 
-Resolution stores the verified artifacts whose hashes the lock records in `.lucy`; installation places the server files in the chosen directory. `lucy create` does not accept the Minecraft EULA, start the server, or migrate an existing world.
-
-When no install is requested, the success message names the command that finishes the work:
-
-```text
-✓ Created Paper 232 for Minecraft 1.21.4 in server
-  Wrote lucy.yaml and lucy-lock.yaml
-  Next: cd ./server && lucy install
-```
-
-## Non-interactive use
-
-Without a terminal, or with `--no-interactive` or `--json`, Lucy does not ask questions. `--minecraft` is then required. `--directory` defaults to the current directory, the software defaults to Minecraft, and installation defaults to on.
-
-```bash
-lucy create --minecraft 1.21.4 --core paper --no-install --no-interactive
-```
-
-`--json` prints one machine-readable result on stdout. Progress and warnings stay off stderr in that mode.
+An existing `lucy.yaml` is never replaced silently: the interactive form asks first, and non-interactive runs need `--force`. Replacing a manifest discards its package declarations, and the installation can remove files that only those declarations required.
 
 ## Flags
 
 <ParamField query="--directory, -d" type="path" default=".">
-  Directory to create the server in. Lucy creates it when it does not exist. The manifest and lock live there, and the server occupies that directory directly.
+  Directory to create the server in. Lucy creates it when it does not exist.
 </ParamField>
 
 <ParamField query="--core, -c" type="string">
-  Server software, optionally with a version. Examples: `paper`, `paper@232`, `fabric@0.16.9`, `purpur@latest`. Paper and Purpur are available here even though the interactive form does not list them.
+  Server software, optionally with a version, for example `paper@232` or `fabric@0.16.9`. Paper and Purpur are available here even though the interactive form does not list them.
 </ParamField>
 
 <ParamField query="--core-version" type="string">
-  Server software version or version rule. Use it instead of the `@version` suffix. Paper and Purpur use build numbers; Fabric, Forge, and NeoForge use their loader or installer versions. Leave it empty for the latest.
+  Server software version or version rule, used instead of the `@version` suffix. Leave it empty for the latest.
 </ParamField>
 
 <ParamField query="--minecraft, -m" type="string">
-  Minecraft release or snapshot ID, for example `1.21.4`. `release` selects Mojang's newest release and `snapshot` the newest snapshot; both are accepted only for Minecraft and Fabric, which publish builds as versions ship. `latest` selects the newest version the chosen server software supports, which can lag the release channel. `stable` and `beta` are aliases of `release` and `snapshot`. The manifest records the resolved ID.
+  Minecraft release or snapshot ID. `release`, `snapshot`, and `latest` are accepted as described above.
 </ParamField>
 
 <ParamField query="--mcdr-version" type="string">
@@ -83,11 +58,11 @@ lucy create --minecraft 1.21.4 --core paper --no-install --no-interactive
 </ParamField>
 
 <ParamField query="--no-install" type="boolean" default="false">
-  Write only `lucy.yaml` and `lucy-lock.yaml`. Run `lucy install` later to place the server files.
+  Write only `lucy.yaml` and `lucy-lock.yaml`.
 </ParamField>
 
 <ParamField query="--force, -f" type="boolean" default="false">
-  Replace an existing `lucy.yaml` without asking. The interactive form asks separately, so this flag is for non-interactive runs.
+  Replace an existing `lucy.yaml` without asking. Use it in non-interactive runs.
 </ParamField>
 
 <ParamField query="--java" type="boolean" default="false">
