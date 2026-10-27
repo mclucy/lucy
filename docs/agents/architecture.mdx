@@ -1,0 +1,34 @@
+---
+title: "Lucy architecture"
+description: "How declared intent, resolution, installation, and observation fit together"
+---
+
+Lucy maintains several views of a server. They answer different questions and are not interchangeable:
+
+| View | Authority | Meaning |
+| --- | --- | --- |
+| Declaration | `lucy.yaml` | Desired server and package requirements, including tracked-file policy. |
+| Resolution | `lucy-lock.yaml` | Concrete server inputs and package artifacts selected for a declaration. |
+| Installation receipt | `.lucy/install.yaml` | Runtime outputs Lucy recorded as installed, their hashes, and the resolution they answer. |
+| Observation | Files in the workspace | What discovery can establish about the local runtime and package files now. |
+| Machine configuration | Global and workspace config | Local runtime preferences, separate from portable server intent. |
+
+A lock can describe files that are absent or modified locally; an observed file is not necessarily owned by Lucy or identified with a registry project. A manifest change does not itself establish a new lock or installed state. Local configuration does not change the manifest fingerprint.
+
+## Boundaries
+
+The command layer translates CLI input into operations and renders their results. `operation` coordinates use cases and document changes. `install` resolves or replays a lock, stages and commits runtime files, and returns facts and warnings to the command layer. `workspace` observes local state without contacting upstreams; identification against upstream hashes is an explicit separate step.
+
+`catalog` holds package identities, artifacts, and dependencies without owning workspace state. `server` describes server products and environments. `upstream` defines capabilities for obtaining metadata and artifacts; `upstream/routing` selects implementations, and `upstream/providers` contains provider-specific adapters. `resolve` chooses packages and validates their descriptor modules. `bootstrap` prepares server products from the locked inputs. Java requirements and runtime observation belong to `javaruntime`, while machine settings belong to `config`.
+
+For the detailed state transitions, see [Resolution and installation](/agents/resolution). For discovery and tracked files, see [Workspace state](/agents/workspace).
+
+## Package identity is not module identity
+
+A registry project and release identify an artifact to download. A descriptor inside that artifact identifies one or more modules that the Minecraft loader sees. Descriptor dependency constraints refer to those module IDs, not necessarily the registry project name. Artifact metadata alone does not establish its registry provenance; hash identification can associate local bytes with an upstream project when a provider supports it.
+
+A locked package combines an artifact pin with its environment, ecosystem, and requirement bindings. Multiple declarations may bind to the same artifact. A dependency can keep a package enabled even when a direct binding is disabled. Consequently a row in the lock is not, by itself, proof that the file is installed.
+
+## Scope of this documentation
+
+These pages describe the current internal model. For command syntax and user-visible choices, use the [human documentation](/quickstart) or the command's help. The source packages named here are entry points for examining version-specific behavior.
