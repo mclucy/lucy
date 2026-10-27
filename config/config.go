@@ -53,6 +53,7 @@ func configFile(path string) document.Service[Values] {
 	return document.NewService(path, document.Codec[Values]{
 		Decode: decodeValues,
 		Encode: encodeValues,
+		Merge:  mergeConfigBytes,
 	}).WithMode(0o600)
 }
 

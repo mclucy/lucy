@@ -16,6 +16,10 @@ import (
 type Codec[T any] struct {
 	Decode func(io.Reader) (*T, error)
 	Encode func(*T) ([]byte, error)
+	// Merge writes value into an existing encoded document. It preserves the
+	// comments the existing document carries, so a write never replaces user
+	// comments. A nil Merge replaces the document with Encode.
+	Merge func(existing []byte, value *T) ([]byte, error)
 }
 
 // Service reads and writes one document path. It does not lock; callers that
@@ -39,8 +43,18 @@ func (s Service[T]) WithMode(mode os.FileMode) Service[T] {
 	return s
 }
 
+// WithEncoder replaces the encoder. The encoder also replaces any existing
+// document, because a caller that chooses its own bytes, such as a plain
+// comment-free write, does not ask to preserve the previous document.
 func (s Service[T]) WithEncoder(encode func(*T) ([]byte, error)) Service[T] {
 	s.codec.Encode = encode
+	s.codec.Merge = nil
+	return s
+}
+
+// WithoutMerge returns a copy that always writes a fresh document.
+func (s Service[T]) WithoutMerge() Service[T] {
+	s.codec.Merge = nil
 	return s
 }
 
@@ -60,7 +74,7 @@ func (s Service[T]) Snapshot(value *T) ([]byte, error) {
 }
 
 func (s Service[T]) Write(value *T) error {
-	data, err := s.Snapshot(value)
+	data, err := s.writeBytes(value)
 	if err != nil {
 		return err
 	}
@@ -69,6 +83,43 @@ func (s Service[T]) Write(value *T) error {
 	}
 	log.Info(s.kind+" written", "path", s.path)
 	return nil
+}
+
+// writeBytes merges value into the document the path already holds. A missing
+// document is encoded fresh.
+func (s Service[T]) writeBytes(value *T) ([]byte, error) {
+	if s.codec.Merge == nil {
+		return s.Snapshot(value)
+	}
+	existing, err := os.ReadFile(s.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return s.Snapshot(value)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.codec.Merge(existing, value)
+}
+
+// writeRootBytes merges value into the document relative names inside root. A
+// missing document is encoded fresh.
+func (s Service[T]) writeRootBytes(root *os.Root, relative string, value *T) ([]byte, error) {
+	if s.codec.Merge == nil {
+		return s.Snapshot(value)
+	}
+	file, err := root.Open(relative)
+	if errors.Is(err, os.ErrNotExist) {
+		return s.Snapshot(value)
+	}
+	if err != nil {
+		return nil, err
+	}
+	existing, readErr := io.ReadAll(file)
+	closeErr := file.Close()
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return nil, err
+	}
+	return s.codec.Merge(existing, value)
 }
 
 // Create publishes value only while the destination is still absent. A file
@@ -125,7 +176,13 @@ func (s Service[T]) CreateRoot(root *os.Root, relative string, value *T) error {
 // publishRoot keeps every operation of one publish on the same root handle.
 // Callers use it while they hold the writer lock that SafePath checked.
 func (s Service[T]) publishRoot(root *os.Root, relative string, value *T, replace bool) error {
-	data, err := s.Snapshot(value)
+	var data []byte
+	var err error
+	if replace {
+		data, err = s.writeRootBytes(root, relative, value)
+	} else {
+		data, err = s.Snapshot(value)
+	}
 	if err != nil {
 		return err
 	}
@@ -160,6 +217,9 @@ func ManifestFile(root string) Service[Manifest] {
 	service := NewService(filepath.Join(root, ManifestFilename), Codec[Manifest]{
 		Decode: DecodeManifest,
 		Encode: (*Manifest).CanonicalBytes,
+		Merge: func(existing []byte, m *Manifest) ([]byte, error) {
+			return m.MergeBytes(existing)
+		},
 	})
 	service.kind = "manifest"
 	return service
@@ -170,6 +230,9 @@ func LockFile(root string) Service[Lock] {
 	service := NewService(filepath.Join(root, LockFilename), Codec[Lock]{
 		Decode: DecodeLock,
 		Encode: (*Lock).Snapshot,
+		Merge: func(existing []byte, l *Lock) ([]byte, error) {
+			return l.MergeBytes(existing)
+		},
 	})
 	service.kind = "lock"
 	return service

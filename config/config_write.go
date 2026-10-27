@@ -136,6 +136,9 @@ func (s *Service) Create(scope Scope, options CreateOptions) (result *WriteResul
 	if options.NoComments {
 		file = file.WithEncoder((*Values).PlainBytes)
 	}
+	// Create replaces the file by definition: a forced create must not merge
+	// its empty template into the values it is discarding.
+	file = file.WithoutMerge()
 	root, err := s.workspaceRoot(scope)
 	if err != nil {
 		return nil, err

@@ -1,6 +1,7 @@
 package filetrack
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -76,12 +77,13 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err != nil {
 		return result, err
 	}
-	document, decodeErr := documentpkg.DecodeManifest(reader)
+	existingManifest, readErr := io.ReadAll(reader)
 	closeErr := reader.Close()
-	if decodeErr != nil {
-		return result, errors.Join(decodeErr, closeErr)
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return result, err
 	}
-	if err := closeErr; err != nil {
+	document, err := documentpkg.DecodeManifest(bytes.NewReader(existingManifest))
+	if err != nil {
 		return result, err
 	}
 	own := make(map[string]struct{})
@@ -111,17 +113,19 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	}
 	var locked *documentpkg.Lock
 	currentLock := false
+	existingLock := []byte{}
 	if beforeLock.Exists {
 		reader, err := imageReader(store, beforeLock)
 		if err != nil {
 			return result, err
 		}
-		locked, decodeErr = documentpkg.DecodeLock(reader)
+		existingLock, readErr = io.ReadAll(reader)
 		closeErr := reader.Close()
-		if decodeErr != nil {
-			return result, errors.Join(decodeErr, closeErr)
+		if err := errors.Join(readErr, closeErr); err != nil {
+			return result, err
 		}
-		if err := closeErr; err != nil {
+		locked, err = documentpkg.DecodeLock(bytes.NewReader(existingLock))
+		if err != nil {
 			return result, err
 		}
 		fingerprint, err := document.Fingerprint()
@@ -176,7 +180,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err := ValidateOwnership(root, document.Files, locked); err != nil {
 		return result, err
 	}
-	raw, err := document.CanonicalBytes()
+	raw, err := document.MergeBytes(existingManifest)
 	if err != nil {
 		return result, err
 	}
@@ -197,7 +201,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err := locked.Validate(); err != nil {
 			return result, err
 		}
-		raw, err := locked.Snapshot()
+		raw, err := locked.MergeBytes(existingLock)
 		if err != nil {
 			return result, err
 		}

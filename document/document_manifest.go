@@ -1,6 +1,7 @@
 package document
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
@@ -284,7 +285,7 @@ func (m *Manifest) Fingerprint() (string, error) {
 
 // CanonicalBytes includes field documentation and the YAML schema header.
 func (m *Manifest) CanonicalBytes() ([]byte, error) {
-	return m.yamlBytes(YAMLOptions{})
+	return m.yamlBytes(YAMLOptions{SchemaURL: ManifestSchemaURL})
 }
 
 func (m *Manifest) PlainBytes() ([]byte, error) {
@@ -295,12 +296,20 @@ func (m *Manifest) yamlBytes(options YAMLOptions) ([]byte, error) {
 	if err := m.Normalize(); err != nil {
 		return nil, err
 	}
-	data, err := RenderYAML(m, options)
-	if err != nil {
+	return NewCommenter(options).Render(m)
+}
+
+// MergeBytes writes m into existing. Comments the existing manifest carries
+// survive, so a rewrite never replaces what a user wrote.
+func (m *Manifest) MergeBytes(existing []byte) ([]byte, error) {
+	if len(bytes.TrimSpace(existing)) == 0 {
+		return m.CanonicalBytes()
+	}
+	if _, err := DecodeManifest(bytes.NewReader(existing)); err != nil {
 		return nil, err
 	}
-	if options.NoComments {
-		return data, nil
+	if err := m.Normalize(); err != nil {
+		return nil, err
 	}
-	return append([]byte("# yaml-language-server: $schema="+ManifestSchemaURL+"\n"), data...), nil
+	return NewCommenter(YAMLOptions{SchemaURL: ManifestSchemaURL}).Merge(existing, m)
 }
