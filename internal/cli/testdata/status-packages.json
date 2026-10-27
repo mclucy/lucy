@@ -1,0 +1,894 @@
+{
+  "schema": 1,
+  "kind": "status",
+  "source": "live",
+  "root": ".",
+  "server": {
+    "product": {
+      "name": "neoforge",
+      "version": "21.1.233",
+      "ecosystem": "neoforge"
+    },
+    "minecraft": "1.21.1",
+    "entry_point": "libraries/net/neoforged/neoforge/21.1.233/unix_args.txt",
+    "activity": "stopped",
+    "components": [
+      {
+        "name": "minecraft",
+        "version": "1.21.1",
+        "provider": "any",
+        "ecosystem": "minecraft"
+      },
+      {
+        "name": "neoforge",
+        "version": "21.1.233",
+        "provider": "any",
+        "ecosystem": "neoforge"
+      }
+    ],
+    "compatible_ecosystems": [
+      {
+        "ecosystem": "neoforge",
+        "compatibility": "full"
+      },
+      {
+        "ecosystem": "fabric",
+        "compatibility": "degraded"
+      }
+    ],
+    "package_directories": [
+      "mods"
+    ]
+  },
+  "packages": [
+    {
+      "name": "kotlin-for-forge",
+      "version": "5.11.0",
+      "provider": "modrinth",
+      "ecosystem": "forge",
+      "environment": "server",
+      "path": "mods/kotlinforforge-5.11.0-all.jar"
+    },
+    {
+      "name": "aeroencasedpipe",
+      "version": "1.0.7",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/aeroencasedpipe-1.0.7.jar"
+    },
+    {
+      "name": "aeronautics-bundled",
+      "version": "1.3.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/create-aeronautics-bundled-1.21.1-1.3.0.jar"
+    },
+    {
+      "name": "aileron",
+      "version": "1.21.1-neoforge-1.1.4",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/aileron-1.21.1-neoforge-1.1.4.jar"
+    },
+    {
+      "name": "alloyed",
+      "version": "3.0.9+1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/alloyed-3.0.9+1.21.1-neoforge.jar"
+    },
+    {
+      "name": "amendments",
+      "version": "1.21-2.0.15",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/amendments-1.21-2.0.15-neoforge.jar"
+    },
+    {
+      "name": "another-furniture",
+      "version": "4.0.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/another_furniture-neoforge-4.0.2.jar"
+    },
+    {
+      "name": "appleskin",
+      "version": "3.0.9+mc1.21",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/appleskin-neoforge-mc1.21-3.0.9.jar"
+    },
+    {
+      "name": "architectury",
+      "version": "13.0.8",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/architectury-13.0.8-neoforge.jar"
+    },
+    {
+      "name": "armorstatues",
+      "version": "21.1.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/ArmorStatues-v21.1.0-1.21.1-NeoForge.jar"
+    },
+    {
+      "name": "axesareweapons",
+      "version": "1.10.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/AxesAreWeapons-1.10.2-neoforge-1.21.jar"
+    },
+    {
+      "name": "ballastmod",
+      "version": "0.1.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/ballastmod-0.1.0.jar"
+    },
+    {
+      "name": "balm",
+      "version": "21.0.58",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/balm-neoforge-1.21.1-21.0.58.jar"
+    },
+    {
+      "name": "bellsandwhistles",
+      "version": "0.4.7-1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/bellsandwhistles-0.4.7-1.21.1.jar"
+    },
+    {
+      "name": "betterdeserttemples",
+      "version": "1.21.1-NeoForge-4.1.5",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/YungsBetterDesertTemples-1.21.1-NeoForge-4.1.5.jar"
+    },
+    {
+      "name": "betterdungeons",
+      "version": "1.21.1-NeoForge-5.1.4",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/YungsBetterDungeons-1.21.1-NeoForge-5.1.4.jar"
+    },
+    {
+      "name": "betterfortresses",
+      "version": "1.21.1-NeoForge-3.1.5",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/YungsBetterNetherFortresses-1.21.1-NeoForge-3.1.5.jar"
+    },
+    {
+      "name": "betteroceanmonuments",
+      "version": "1.21.1-NeoForge-4.1.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/YungsBetterOceanMonuments-1.21.1-NeoForge-4.1.2.jar"
+    },
+    {
+      "name": "betterstrongholds",
+      "version": "1.21.1-NeoForge-5.1.3",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/YungsBetterStrongholds-1.21.1-NeoForge-5.1.3.jar"
+    },
+    {
+      "name": "bits-n-bobs",
+      "version": "0.0.44",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/bits_n_bobs-0.0.44.jar"
+    },
+    {
+      "name": "bookshelf",
+      "version": "21.1.81",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/bookshelf-neoforge-1.21.1-21.1.81.jar"
+    },
+    {
+      "name": "brick-and-mortar",
+      "version": "1.1.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/brick_and_mortar-neoforge-1.21.1-1.1.0.jar"
+    },
+    {
+      "name": "c2me",
+      "version": "0.3.0+alpha.0.93+1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/c2me-neoforge-mc1.21.1-0.3.0+alpha.0.93.jar"
+    },
+    {
+      "name": "cardboarded-conveynience",
+      "version": "1.0.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/create-cardboarded-conveynience-1.21.1-neoforge-1.0.0.jar"
+    },
+    {
+      "name": "carryon",
+      "version": "2.2.4",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/carryon-neoforge-1.21.1-2.2.4.4.jar"
+    },
+    {
+      "name": "carryonaerocompat",
+      "version": "1.1.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/CarryOnAeroCompat-1.21.1-1.1.1.jar"
+    },
+    {
+      "name": "cerulean",
+      "version": "1.0.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/cerulean-neoforge-1.0.0-1.21.1.jar"
+    },
+    {
+      "name": "cloth-config",
+      "version": "15.0.140",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/cloth-config-15.0.140-neoforge.jar"
+    },
+    {
+      "name": "companion",
+      "version": "unknown",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/Companion-1.21.1-NeoForge-6.2.1.jar"
+    },
+    {
+      "name": "configureddefaults",
+      "version": "21.1.3",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/ConfiguredDefaults-v21.1.3-1.21.1-NeoForge.jar"
+    },
+    {
+      "name": "connectiblechains",
+      "version": "2.1.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/connectiblechains-neoforge-1.21.1-2.1.0.jar"
+    },
+    {
+      "name": "connector",
+      "version": "2.0.0-beta.14+1.21.1",
+      "provider": "modrinth",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/connector-2.0.0-beta.14+1.21.1-full.jar"
+    },
+    {
+      "name": "connectorextras",
+      "version": "1.12.1+1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/ConnectorExtras-1.12.1+1.21.1.jar"
+    },
+    {
+      "name": "coroutil",
+      "version": "1.21.0-1.3.8",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/coroutil-neoforge-1.21.0-1.3.8.jar"
+    },
+    {
+      "name": "create",
+      "version": "6.0.10",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/create-1.21.1-6.0.10.jar"
+    },
+    {
+      "name": "create-ca",
+      "version": "2.3",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/Create Components and Additions 2.3.jar"
+    },
+    {
+      "name": "create-dragons-plus",
+      "version": "1.11.2b",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/CreateDragonsPlus-1.11.2b.jar"
+    },
+    {
+      "name": "create-enchantment-industry",
+      "version": "2.4.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/create-enchantment-industry-2.4.2.jar"
+    },
+    {
+      "name": "create-factory",
+      "version": "0.7a-1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/create_factory-0.7a-1.21.1.jar"
+    },
+    {
+      "name": "create-pattern-schematics",
+      "version": "2.0.10",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/create_pattern_schematics-2.0.10.jar"
+    },
+    {
+      "name": "createbigcannons",
+      "version": "5.11.6",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/createbigcannons-5.11.6+mc.1.21.1.jar"
+    },
+    {
+      "name": "createframed",
+      "version": "1.7.3",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/createframed-1.21.1-1.7.3.jar"
+    },
+    {
+      "name": "createprism",
+      "version": "1.2.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/createprism-1.2.2.jar"
+    },
+    {
+      "name": "createshufflefilter",
+      "version": "2.1.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/create-shufflefilter-2.1.0-neo.jar"
+    },
+    {
+      "name": "distractingtrims",
+      "version": "21.1.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/distractingtrims-neoforge-1.21.1-21.1.1.jar"
+    },
+    {
+      "name": "e4mc",
+      "version": "6.1.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/e4mc-neoforge-6.1.2.jar"
+    },
+    {
+      "name": "easyanvils",
+      "version": "21.1.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/EasyAnvils-v21.1.0-1.21.1-NeoForge.jar"
+    },
+    {
+      "name": "ecologics",
+      "version": "2.3.6",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/ecologics-1.21.1-2.3.6.jar"
+    },
+    {
+      "name": "emi",
+      "version": "1.1.24+1.21.1+neoforge",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/emi-1.1.24+1.21.1+neoforge.jar"
+    },
+    {
+      "name": "emi-loot",
+      "version": "0.7.9+1.21+neoforge",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/emi_loot-0.7.9+1.21+neoforge.jar"
+    },
+    {
+      "name": "ends-delight",
+      "version": "2.6+neoforge.1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/ends_delight-2.6+neoforge.1.21.1.jar"
+    },
+    {
+      "name": "extendedwrenches",
+      "version": "2.0.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/create-extended-wrenches-1.21.1-2.0.2.jar"
+    },
+    {
+      "name": "fabric-api",
+      "version": "0.116.7+2.2.4+1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar"
+    },
+    {
+      "name": "farmersdelight",
+      "version": "1.3.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/FarmersDelight-1.21.1-1.3.2.jar"
+    },
+    {
+      "name": "fastpaintings",
+      "version": "1.21-1.3.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/fastpaintings-1.21-1.3.0-neoforge.jar"
+    },
+    {
+      "name": "ferritecore",
+      "version": "7.0.3",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/ferritecore-7.0.3-neoforge.jar"
+    },
+    {
+      "name": "forgified-fabric-api",
+      "version": "0.116.7+2.2.4+1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar"
+    },
+    {
+      "name": "fzzy-config",
+      "version": "0.7.6+1.21+neoforge",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/fzzy_config-0.7.6+1.21+neoforge.jar"
+    },
+    {
+      "name": "ichunutil",
+      "version": "1.0.3",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/iChunUtil-1.21-NeoForge-1.0.3.jar"
+    },
+    {
+      "name": "kiwi",
+      "version": "15.8.4+neoforge",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/Kiwi-1.21.1-NeoForge-15.8.4.jar"
+    },
+    {
+      "name": "konkrete",
+      "version": "1.9.9",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/konkrete_neoforge_1.9.9_MC_1.21.jar"
+    },
+    {
+      "name": "lithium",
+      "version": "0.15.3+mc1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/lithium-neoforge-0.15.3+mc1.21.1.jar"
+    },
+    {
+      "name": "lodestone",
+      "version": "1.8.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/lodestone-1.21.1-1.8.2.jar"
+    },
+    {
+      "name": "lootr",
+      "version": "1.21.1-1.11.37.120",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/lootr-neoforge-1.21.1-1.11.37.120.jar"
+    },
+    {
+      "name": "map-atlases",
+      "version": "1.21-6.6.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/map_atlases-neoforge-1.21-6.6.0.jar"
+    },
+    {
+      "name": "minersdelight",
+      "version": "1.4.5",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/minersdelight-1.21.1-1.4.5.jar"
+    },
+    {
+      "name": "modernfix",
+      "version": "5.27.12+mc1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/modernfix-neoforge-5.27.12+mc1.21.1.jar"
+    },
+    {
+      "name": "moonlight",
+      "version": "1.21.1-3.0.17",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/moonlight-neoforge-1.21.1-3.0.17.jar"
+    },
+    {
+      "name": "more-sounds",
+      "version": "1.21.x-0.3.0-beta",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/more_sounds-1.21.x-0.3.0-beta.jar"
+    },
+    {
+      "name": "mru",
+      "version": "1.0.19+LTS+1.21.1+neoforge",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/mru-1.0.19+LTS+1.21.1+neoforge.jar"
+    },
+    {
+      "name": "mynethersdelight",
+      "version": "1.10.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/MyNethersDelight-1.21.1-1.10.2.jar"
+    },
+    {
+      "name": "neobeefix",
+      "version": "2.0.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/neobeefix-1.21.1-2.0.1.jar"
+    },
+    {
+      "name": "nerb",
+      "version": "0.4.3",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/Not Enough Recipe Book-NEOFORGE-0.4.3+1.21.jar"
+    },
+    {
+      "name": "netherite-horse-armor",
+      "version": "1.21.1-2.0a",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/netherite_horse_armor-neoforge-1.21.1-2.0a.jar"
+    },
+    {
+      "name": "netherportalfix",
+      "version": "21.1.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/netherportalfix-neoforge-1.21.1-21.1.1.jar"
+    },
+    {
+      "name": "octolib",
+      "version": "0.6.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/OctoLib-NEOFORGE-0.6.2+1.21.jar"
+    },
+    {
+      "name": "potionstacks",
+      "version": "1.0.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/potionstacks-1.0.0.jar"
+    },
+    {
+      "name": "prickle",
+      "version": "21.1.11",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/prickle-neoforge-1.21.1-21.1.11.jar"
+    },
+    {
+      "name": "puzzleslib",
+      "version": "21.1.51",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/PuzzlesLib-v21.1.51-1.21.1-NeoForge.jar"
+    },
+    {
+      "name": "quark",
+      "version": "4.1-480",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/Quark-4.1-480.jar"
+    },
+    {
+      "name": "quick-pack",
+      "version": "1.3.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/quick-pack-neoforge-1.3.2+1.21.8.jar"
+    },
+    {
+      "name": "railways",
+      "version": "0.2.1+neoforge-mc1.21.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/railways-0.2.1+neoforge-mc1.21.1.jar"
+    },
+    {
+      "name": "reliable-advancements",
+      "version": "4.0.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/reliable_advancements-neoforge-1.21.1-4.0.0.jar"
+    },
+    {
+      "name": "resourcefulconfig",
+      "version": "3.0.11",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/resourcefulconfig-neoforge-1.21-3.0.11.jar"
+    },
+    {
+      "name": "ritchiesprojectilelib",
+      "version": "2.1.2",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/ritchiesprojectilelib-2.1.2+mc.1.21.1-neoforge.jar"
+    },
+    {
+      "name": "sable",
+      "version": "2.0.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/sable-neoforge-1.21.1-2.0.1.jar"
+    },
+    {
+      "name": "sable-beyond",
+      "version": "0.4.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/sablebeyond-neoforge-1.21.1-v0.4.1.jar"
+    },
+    {
+      "name": "sablephysicscompat",
+      "version": "1.3.0",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/sablephysicscompat-1.3.0.jar"
+    },
+    {
+      "name": "scholar",
+      "version": "1.1.16",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/scholar-neoforge-1.21.1-1.1.16.jar"
+    },
+    {
+      "name": "seamlesssleep",
+      "version": "2.5.3",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/seamlesssleep-neoforge-1.21-2.5.3.jar"
+    },
+    {
+      "name": "sliceanddice",
+      "version": "4.2.4",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/sliceanddice-forge-4.2.4.jar"
+    },
+    {
+      "name": "smarterfarmers",
+      "version": "1.21-2.2.4",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/smarterfarmers-1.21-2.2.4-neoforge.jar"
+    },
+    {
+      "name": "sophisticatedbackpacks",
+      "version": "3.25.63",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/sophisticatedbackpacks-1.21.1-3.25.63.1912.jar"
+    },
+    {
+      "name": "sophisticatedcore",
+      "version": "1.4.58",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/sophisticatedcore-1.21.1-1.4.58.2026.jar"
+    },
+    {
+      "name": "structure-layout-optimizer",
+      "version": "1.0.12",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/structure_layout_optimizer-neoforge-1.0.12.jar"
+    },
+    {
+      "name": "supplementaries",
+      "version": "1.21.1-3.6.8",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/supplementaries-neoforge-1.21.1-3.6.8.jar"
+    },
+    {
+      "name": "trashslot",
+      "version": "21.1.11",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/trashslot-neoforge-1.21.1-21.1.11.jar"
+    },
+    {
+      "name": "txnilib",
+      "version": "1.0.24",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/txnilib-neoforge-1.0.24-1.21.1.jar"
+    },
+    {
+      "name": "updatingworldicon",
+      "version": "1.0.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/Updating World Icon-neoforge-1.21.1-1.0.1.jar"
+    },
+    {
+      "name": "voicechat",
+      "version": "1.21.1-2.6.18",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/voicechat-neoforge-1.21.1-2.6.18.jar"
+    },
+    {
+      "name": "voicechat-api",
+      "version": "2.6.13",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/voicechat-neoforge-1.21.1-2.6.18.jar"
+    },
+    {
+      "name": "yet-another-config-lib-v3",
+      "version": "3.8.2+1.21.1-neoforge",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/yet_another_config_lib_v3-3.8.2+1.21.1-neoforge.jar"
+    },
+    {
+      "name": "yungsapi",
+      "version": "1.21.1-NeoForge-5.1.6",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/YungsApi-1.21.1-NeoForge-5.1.6.jar"
+    },
+    {
+      "name": "yungsextras",
+      "version": "1.21.1-NeoForge-5.1.1",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/YungsExtras-1.21.1-NeoForge-5.1.1.jar"
+    },
+    {
+      "name": "zeta",
+      "version": "1.1-40",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/Zeta-1.1-40.jar"
+    },
+    {
+      "name": "zfastnoise",
+      "version": "1.0.11+2+1.21.1+neoforge",
+      "provider": "unknown",
+      "ecosystem": "neoforge",
+      "environment": "server",
+      "path": "mods/zfastnoise-1.0.11+2+1.21.1+neoforge.jar"
+    }
+  ],
+  "warnings": []
+}

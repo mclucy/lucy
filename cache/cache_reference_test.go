@@ -156,7 +156,7 @@ func TestCacheEvictionCountsSharedObjectsOnce(t *testing.T) {
 	}
 }
 
-func TestCacheClearReportsUniqueObjectsAndLeavesProjectStoreIntact(t *testing.T) {
+func TestCacheClearKeepsProjectStore(t *testing.T) {
 	fixture := newCacheFixture(t)
 	h := installNetworkCache(t, DefaultCacheConfig())
 	for _, url := range []string{

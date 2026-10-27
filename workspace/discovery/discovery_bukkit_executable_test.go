@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestCraftBukkitFamilyDetector_PaperFixtureClassifiesAsPaper(t *testing.T) {
+func TestBukkitDetectorClassifiesPaper(t *testing.T) {
 	t.Parallel()
 
 	fixtureRoot := paperFamilyFixtureRoot(t)
@@ -24,7 +24,7 @@ func TestCraftBukkitFamilyDetector_PaperFixtureClassifiesAsPaper(t *testing.T) {
 	}
 }
 
-func TestCraftBukkitFamilyDetector_RuntimeProjection(t *testing.T) {
+func TestBukkitDetectorProjectsRuntime(t *testing.T) {
 	t.Parallel()
 
 	fixtureRoot := paperFamilyFixtureRoot(t)
@@ -81,7 +81,7 @@ func TestCraftBukkitFamilyDetector_RuntimeProjection(t *testing.T) {
 	}
 }
 
-func TestCraftBukkitFamilyDetector_KnownPaperForkLineages(t *testing.T) {
+func TestBukkitDetectorRecognizesForkLineages(t *testing.T) {
 	t.Parallel()
 
 	fixtureRoot := paperFamilyFixtureRoot(t)
@@ -107,7 +107,7 @@ func TestCraftBukkitFamilyDetector_KnownPaperForkLineages(t *testing.T) {
 	}
 }
 
-func TestCraftBukkitFamilyDetector_RequiresBukkitConfirmation(t *testing.T) {
+func TestBukkitDetectorRequiresConfirmation(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -126,7 +126,7 @@ func TestCraftBukkitFamilyDetector_RequiresBukkitConfirmation(t *testing.T) {
 	}
 }
 
-func TestCraftBukkitFamilyDetector_SkipsFastPathBeforeBukkitConfirmation(t *testing.T) {
+func TestBukkitDetectorDefersToConfirmation(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -157,7 +157,7 @@ func TestCraftBukkitFamilyDetector_SkipsFastPathBeforeBukkitConfirmation(t *test
 	}
 }
 
-func TestCraftBukkitFamilyDetector_LauncherOnlyEvidenceNotSufficient(t *testing.T) {
+func TestBukkitDetectorRejectsLauncherOnly(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -181,7 +181,7 @@ func TestCraftBukkitFamilyDetector_LauncherOnlyEvidenceNotSufficient(t *testing.
 	}
 }
 
-func TestCraftBukkitFamilyDetector_Youer(t *testing.T) {
+func TestBukkitDetectorRecognizesYouer(t *testing.T) {
 	t.Parallel()
 
 	fixtureRoot := paperFamilyFixtureRoot(t)
@@ -213,7 +213,7 @@ func TestCraftBukkitFamilyDetector_Youer(t *testing.T) {
 	}
 }
 
-func TestCraftBukkitFamilyDetector_Reaper(t *testing.T) {
+func TestBukkitDetectorRecognizesReaper(t *testing.T) {
 	t.Parallel()
 
 	fixtureRoot := paperFamilyFixtureRoot(t)
@@ -244,7 +244,7 @@ func TestCraftBukkitFamilyDetector_Reaper(t *testing.T) {
 	}
 }
 
-func TestCraftBukkitFamilyDetector_FamilyMissStillRunsLineageRules(t *testing.T) {
+func TestBukkitDetectorRunsLineageOnMiss(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -279,7 +279,7 @@ func TestCraftBukkitFamilyDetector_FamilyMissStillRunsLineageRules(t *testing.T)
 	}
 }
 
-func TestCraftBukkitFamilyDetector_ContradictoryEvidenceFailsClosed(t *testing.T) {
+func TestBukkitDetectorFailsClosed(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()

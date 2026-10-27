@@ -54,7 +54,7 @@ func TestPackageIndex_AddLocalPathEnrichment(t *testing.T) {
 	}
 }
 
-func TestPackageIndex_AddLocalPathNotOverwrittenByRemote(t *testing.T) {
+func TestPackageIndexKeepsLocalPath(t *testing.T) {
 	idx := NewPackageIndex()
 	local := makeDiscoveredPackage(
 		t,
@@ -142,7 +142,7 @@ func TestPackageIndex_LookupByID_NotFound(t *testing.T) {
 	}
 }
 
-func TestPackageIndex_LookupByEcosystemName_MultipleVersions(t *testing.T) {
+func TestPackageIndexFindsAllVersions(t *testing.T) {
 	idx := NewPackageIndex()
 	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.6.0", ""))
 	idx.Add(makeDiscoveredPackage(t, catalog.EcosystemFabric, "sodium", "0.5.0", ""))

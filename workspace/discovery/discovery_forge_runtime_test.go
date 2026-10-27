@@ -477,7 +477,7 @@ func writeFile(t *testing.T, path string, data []byte) {
 	}
 }
 
-func TestPropertiesValueSupportsJavaSeparatorsAndLastAssignment(t *testing.T) {
+func TestPropertiesParsingSupportsJavaFormats(t *testing.T) {
 	t.Parallel()
 
 	data := []byte("serverJar: first.jar\nserverJar second.jar\nserverJar=custom.jar\n")
@@ -486,7 +486,7 @@ func TestPropertiesValueSupportsJavaSeparatorsAndLastAssignment(t *testing.T) {
 	}
 }
 
-func TestFabricLauncherServerJarPathPreservesAbsolutePath(t *testing.T) {
+func TestFabricLauncherKeepsAbsolutePath(t *testing.T) {
 	t.Parallel()
 
 	primary := filepath.Join(
