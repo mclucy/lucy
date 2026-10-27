@@ -3,15 +3,21 @@ title: "lucy create"
 description: "Create a new server directory"
 ---
 
-`lucy create` creates a new server, writes `lucy.yaml` and `lucy-lock.yaml`, and installs the server files. Use an empty directory; to adopt files that already exist, use [`lucy init`](/commands/init).
+`lucy create` creates a new server, writes `lucy.yaml` and `lucy-lock.yaml`, and installs the server files. Creating a server also registers it in your user's [known-server list](/commands/install#known-servers), even when installation is deferred with `--no-install`. Use an empty directory; to adopt files that already exist, use [`lucy init`](/commands/init).
 
 ```bash
 lucy create --directory survival --minecraft 1.21.4 --core paper
 ```
 
-Without flags, lucy asks for the directory, server software, Minecraft version, software version, and whether to install now. The form prefills anything you passed as a flag.
+Without flags, lucy asks for the directory and server name, the server software, the Minecraft version, the software version, and whether to install now. The form prefills anything you passed as a flag.
 
-In a script or CI, pass `--no-interactive`; `--minecraft` is then required. The directory defaults to the current one, the software to vanilla Minecraft, and installation to on.
+In a script or CI, pass `--no-interactive`; `--minecraft` is then required. The directory defaults to the current one, the name to the target directory's base name, the software to vanilla Minecraft, and installation to on.
+
+## Server name
+
+The name is stored as the top-level `name` in `lucy.yaml`, outside the server definition. It is trimmed and must be non-empty and printable. Pass `--name`, or edit it in the form, where it follows the directory until you change it.
+
+Registration warns when another registered server already uses the name. Both servers stay listed, but `--server` cannot select an ambiguous name until you change one manifest's `name` directly. A failure to write the known-server list is also a warning: the manifest, lock, and installed files are kept, and the next `create`, `init`, or `install` registers the server once the list is fixed.
 
 ## Choose versions
 
@@ -32,6 +38,10 @@ Lucy warns when the directory is not empty and continues, leaving existing files
 An existing `lucy.yaml` is never replaced silently: the interactive form asks first, and non-interactive runs need `--force`. Replacing a manifest discards its package declarations, and the installation can remove files that only those declarations required.
 
 ## Flags
+
+<ParamField query="--name" type="string">
+  Server name stored as the top-level `name` in `lucy.yaml` and used in the known-server list. Defaults to the target directory's base name. Names are trimmed and must be non-empty and printable.
+</ParamField>
 
 <ParamField query="--directory, -d" type="path" default=".">
   Directory to create the server in. Lucy creates it when it does not exist.
@@ -73,4 +83,4 @@ An existing `lucy.yaml` is never replaced silently: the interactive form asks fi
   Let `--java` add the Java vendor's package repository to the system package manager.
 </ParamField>
 
-See also [Global Flags](/commands/global-flags), [`lucy init`](/commands/init), and [`lucy install`](/commands/install).
+See also [Global Flags](/commands/global-flags), [known servers](/commands/install#known-servers), [`lucy init`](/commands/init), and [`lucy install`](/commands/install).

@@ -22,12 +22,28 @@ Lucy writes diagnostic logs to `~/Library/Logs/lucy/lucy.log` on macOS, `~/.loca
 
 Use `--use-github-mirror` if you need the GitHub release mirror for eligible downloads. Run `lucy --version` to check the installed version.
 
+## Server selection
+
+`lucy --server NAME COMMAND` runs the invocation in a registered server's directory, so relative paths in the command's arguments resolve there. Place the flag before the subcommand:
+
+```bash
+lucy --server survival status
+```
+
+The value must be an available name from [`lucy server list`](/commands/install#known-servers), not a filesystem path. A name that matches no available server, or several, fails before the command runs; an ambiguous name lists the matching paths. Without the flag, commands keep their normal working-directory behavior.
+
 ## Flags
 
 ### Meta
 
 <ParamField query="--version, -v" type="boolean">
   Print the current `lucy` version and exit. This flag belongs to the root command; use `lucy --version`, not `lucy <command> --version`.
+</ParamField>
+
+### Server selection
+
+<ParamField query="--server" type="string">
+  Run this invocation in the server registered under this name. The value must be a name shown by `lucy server list`. Missing, unreadable, invalid, and ambiguous names fail before the command runs.
 </ParamField>
 
 ### Output style

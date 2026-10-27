@@ -41,6 +41,60 @@ Java version mismatches are warnings, not install errors. If a step needs a runt
 
 `--add-java-repository` lets `--java` add the Java vendor's package repository to your system package manager. Under `--no-interactive`, methods that need a password are skipped.
 
+## Known servers
+
+Lucy keeps a list of servers for your user account in your user data directory. The list is shared by every shell and project and records locations only. A server appears after [`lucy create`](/commands/create), [`lucy init`](/commands/init), or `lucy install` registers it; [`lucy deinit`](/commands/deinit) removes the entry.
+
+Every install that completes, changes nothing, or commits its changes before reporting a later problem refreshes the workspace's entry under the manifest's `name`. A manifest without a name still installs but is not registered. Registration warns when another server already uses the name, and a failure to write the list is a warning: the installation is not rolled back. The next install after fixing the cause registers the server.
+
+### lucy server list
+
+```bash
+lucy server list
+lucy server ls
+```
+
+Lists each registered server's name, state, and path. `list` and `ls` are the same command.
+
+|State|Meaning|
+|---|---|
+|`available`|The path exists and its manifest and name can be read and validated.|
+|`missing`|The path no longer exists, for example because a drive is disconnected.|
+|`unreadable`|The path or manifest exists, but lucy cannot inspect it, usually because of permissions or an I/O error.|
+|`invalid`|The path exists but does not contain a valid lucy manifest, or the manifest does not declare a valid name.|
+
+The listing checks each registered target without changing it. A missing server stays in the list; lucy never removes an entry because a target is unavailable. Reconnect the drive and list again to see it as `available`. Only `lucy deinit` removes an entry.
+
+An empty name is shown as `-`. Missing, unreadable, and invalid entries cannot be selected with `--server` until their manifest is fixed.
+
+### lucy server rename
+
+```bash
+lucy server rename <server> <name>
+```
+
+Renames a registered server. `<server>` must match exactly one available name; when several servers share it, the command fails, lists the matching paths, and changes nothing.
+
+`<name>` becomes the top-level `name` in that server's `lucy.yaml`. It is trimmed and must be non-empty and printable. Renaming to a name another server already uses is allowed with a warning; selecting that name then fails until you change one manifest's `name` directly. Renaming to the current name changes nothing and still refreshes the registration.
+
+Only the name changes. The installed server, packages, worlds, configuration, and directory stay in place. The name is not part of what the lock compares, so renaming does not make `lucy-lock.yaml` stale.
+
+### Machine-readable output
+
+`lucy server list --json` prints one array. Each entry has `name`, `path`, and `state`, plus `problem` when there is a problem.
+
+```json
+[
+  {
+    "name": "survival",
+    "path": "/srv/minecraft/survival",
+    "state": "available"
+  }
+]
+```
+
+`lucy server rename --json` prints the previous name, the new `name`, and the server `path`, plus `warnings` from registration, for example when the new name is already in use.
+
 ## Flags
 
 <ParamField query="--locked" type="boolean" default="false">

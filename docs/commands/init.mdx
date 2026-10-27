@@ -5,6 +5,8 @@ description: "Adopt an existing server directory"
 
 `lucy init` turns an existing server directory into a lucy workspace. It writes `lucy.yaml`, which records the server you want, and resolves `lucy-lock.yaml`, which records the exact files that satisfy it. Later commands read the manifest as the source of truth.
 
+The generated manifest names the server and registers it in your user's [known-server list](/commands/install#known-servers). The name defaults to the current directory's base name, or to the existing name when `--force` replaces a manifest. Pass `--name` to store a different one.
+
 ```bash
 cd path/to/server
 lucy init
@@ -24,7 +26,9 @@ If no server is detected, init fails.
 
 ## What gets recorded
 
-Init records the server software, Minecraft version, server directory, and the installed mods and plugins it recognizes. A package without a matching release stays unmanaged and produces a warning, so you can decide whether to add it yourself.
+Init records the server name, software, Minecraft version, server directory, and the installed mods and plugins it recognizes. A package without a matching release stays unmanaged and produces a warning, so you can decide whether to add it yourself.
+
+The name is metadata: changing it does not alter the server definition, the installed files, or the lock's manifest match. A manifest without a name still works for local commands but is not registered. Registration warns when another registered server already uses the name, and a failure to write the list is a warning rather than an init failure; `--server` cannot select the server until the list is fixed and `init` or `install` registers it again.
 
 The generated `lucy.yaml` explains each field inline. Pass `--no-comments` to omit those comments and the schema header. Init also creates `.lucy/config.yaml` with every setting commented out, unless that file already exists; see [`lucy config`](/commands/config).
 
@@ -37,6 +41,10 @@ Pass `--mcdr-version` to record MCDReforged as the server wrapper when lucy cann
 The Minecraft version and the server version are validated together. A combination the software never published is rejected rather than producing a server that cannot boot, and the manifest stores concrete versions so installs stay reproducible.
 
 ## Flags
+
+<ParamField query="--name" type="string">
+  Server name stored as the top-level `name` in `lucy.yaml` and used in the known-server list. Defaults to the current directory's base name, or to the existing name when `--force` replaces a manifest. The name is trimmed and must be non-empty and printable.
+</ParamField>
 
 <ParamField query="--mcdr-version" type="string">
   Record MCDReforged at this version as the server wrapper.
@@ -54,4 +62,4 @@ The Minecraft version and the server version are validated together. A combinati
   Omit generated comments and examples from `lucy.yaml` and any new `.lucy/config.yaml`.
 </ParamField>
 
-See also [Global Flags](/commands/global-flags), [`lucy create`](/commands/create), and [`lucy install`](/commands/install).
+See also [Global Flags](/commands/global-flags), [known servers](/commands/install#known-servers), [`lucy create`](/commands/create), and [`lucy install`](/commands/install).

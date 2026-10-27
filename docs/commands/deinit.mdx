@@ -5,6 +5,8 @@ description: "Stop managing a server and remove lucy's files"
 
 `lucy deinit` removes lucy from the current server directory: `lucy.yaml`, `lucy-lock.yaml`, and `.lucy/`. The server itself stays, including its software, mods, plugins, worlds, and configuration, so it keeps running without lucy.
 
+It also removes the server from your user's [known-server list](/commands/install#known-servers), so `lucy --server` no longer selects it. A failure to remove the entry is a warning and does not stop the removal.
+
 <Warning>
   `.lucy/` holds the only local backups and revision history for tracked files. `lucy deinit` deletes them permanently.
 </Warning>
@@ -23,6 +25,6 @@ Run it from the server directory. The command fails when there is nothing to rem
 
 `lucy deinit` does not stop a running server or uninstall Java. Use [`lucy cache clear`](/commands/install#download-cache) to empty the shared download cache separately.
 
-`--json` prints the removed paths. It accepts the [Global Flags](/commands/global-flags).
+`--json` prints the removed paths and any warning about the known-server entry. It accepts the [Global Flags](/commands/global-flags).
 
-See also [`lucy init`](/commands/init) and [`lucy install`](/commands/install).
+See also [known servers](/commands/install#known-servers), [`lucy init`](/commands/init), and [`lucy install`](/commands/install).
