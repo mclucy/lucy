@@ -234,9 +234,13 @@ func mergeMappingNode(existing, incoming *yaml.Node) {
 	existing.Content = kept
 }
 
-// mergeSequenceNode pairs entries by position. YAML gives a sequence no
-// identity beyond order, so comments stay with the slot they were written on.
+// mergeSequenceNode merges entries by a stable path key when both sequences
+// have one, and by position otherwise. Declarations such as tracked files
+// keep their comments when an entry is inserted or removed.
 func mergeSequenceNode(existing, incoming *yaml.Node) {
+	if mergeSequenceByPath(existing, incoming) {
+		return
+	}
 	count := min(len(existing.Content), len(incoming.Content))
 	for i := range count {
 		mergeYAMLNode(existing.Content[i], incoming.Content[i])
@@ -248,6 +252,74 @@ func mergeSequenceNode(existing, incoming *yaml.Node) {
 		return
 	}
 	existing.Content = existing.Content[:count]
+}
+
+// mergeSequenceByPath reports whether it merged the sequences. It requires
+// every entry on both sides to be a mapping with a unique, non-empty string
+// path, which is the identity tracked files and lock entries declare.
+func mergeSequenceByPath(existing, incoming *yaml.Node) bool {
+	if _, ok := sequencePathIndex(existing); !ok {
+		return false
+	}
+	incomingIndex, ok := sequencePathIndex(incoming)
+	if !ok {
+		return false
+	}
+	kept := make([]*yaml.Node, 0, len(existing.Content))
+	for _, entry := range existing.Content {
+		path, _ := sequenceEntryPath(entry)
+		position, ok := incomingIndex[path]
+		if !ok {
+			continue
+		}
+		mergeYAMLNode(entry, incoming.Content[position])
+		kept = append(kept, entry)
+		delete(incomingIndex, path)
+	}
+	for _, entry := range incoming.Content {
+		path, _ := sequenceEntryPath(entry)
+		if _, ok := incomingIndex[path]; !ok {
+			continue
+		}
+		kept = append(kept, cloneYAMLNode(entry))
+	}
+	existing.Content = kept
+	return true
+}
+
+func sequencePathIndex(node *yaml.Node) (map[string]int, bool) {
+	if node.Kind != yaml.SequenceNode {
+		return nil, false
+	}
+	index := make(map[string]int, len(node.Content))
+	for i, entry := range node.Content {
+		path, ok := sequenceEntryPath(entry)
+		if !ok {
+			return nil, false
+		}
+		if _, exists := index[path]; exists {
+			return nil, false
+		}
+		index[path] = i
+	}
+	return index, true
+}
+
+func sequenceEntryPath(entry *yaml.Node) (string, bool) {
+	if entry.Kind != yaml.MappingNode {
+		return "", false
+	}
+	for i := 0; i+1 < len(entry.Content); i += 2 {
+		key, value := entry.Content[i], entry.Content[i+1]
+		if key.Value != "path" {
+			continue
+		}
+		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" || value.Value == "" {
+			return "", false
+		}
+		return value.Value, true
+	}
+	return "", false
 }
 
 func fillComments(existing, incoming *yaml.Node) {
