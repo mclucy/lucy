@@ -29,12 +29,24 @@ func promptCreate(
 	if values.Directory == "" {
 		values.Directory = "."
 	}
-	if values.Name == "" {
-		values.Name = defaultCreateName(values.Directory)
+	// The name follows the directory until the operator supplies one, so the
+	// prefilled default never outlives the directory it was derived from.
+	derivedName := defaultCreateName(values.Directory)
+	nameFromFlag := values.Name != ""
+	if !nameFromFlag {
+		values.Name = derivedName
 	}
 	if values.Product == "" {
 		values.Product = createProductMinecraft
 	}
+	nameAccessor := huh.NewPointerAccessor(&values.Name)
+	name := huh.NewInput().
+		Key("name").
+		Title("Name").
+		Description("Select this server by name with --server. Defaults to the target directory name.").
+		Placeholder("survival").
+		Accessor(nameAccessor).
+		Validate(validateCreateName)
 	directory := huh.NewInput().
 		Key("directory").
 		Title("Directory").
@@ -44,15 +56,19 @@ func promptCreate(
 		Placeholder(".").
 		Value(&values.Directory).
 		Validate(func(path string) error {
-			return validateCreateDirectory(path)
+			if err := validateCreateDirectory(path); err != nil {
+				return err
+			}
+			if nameFromFlag || values.Name != derivedName {
+				return nil
+			}
+			derivedName = defaultCreateName(path)
+			values.Name = derivedName
+			// huh reads the text field, not the accessor, while editing, so
+			// reattaching the accessor is what shows the new default.
+			name.Accessor(nameAccessor)
+			return nil
 		})
-	name := huh.NewInput().
-		Key("name").
-		Title("Name").
-		Description("Select this server by name with --server. Defaults to the target directory name.").
-		Placeholder("survival").
-		Value(&values.Name).
-		Validate(validateCreateName)
 	product := huh.NewSelect[string]().
 		Key("product").
 		Title("Server software").
