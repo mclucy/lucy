@@ -114,7 +114,7 @@ func (p *Provider) DependencyToPackage(
 		if err != nil {
 			return pkg, fmt.Errorf("resolve dependency project: %w", err)
 		}
-		version, err = p.latestVersion(
+		_, err = p.latestVersion(
 			ctx,
 			input.ToProjectName(project.Slug),
 			dependent.Ecosystem,
