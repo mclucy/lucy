@@ -16,15 +16,15 @@ import (
 const baseUrl = "https://api.curseforge.com"
 
 var (
-	ApiKey     string
-	userAPIKey string
+	embeddedAPIKey string
+	userAPIKey     string
 
 	loadApiKey = sync.OnceValue(func() error {
 		key, err := cipher.Decode()
 		if err != nil {
 			return fmt.Errorf("curseforge: decode embedded api key: %w", err)
 		}
-		ApiKey = strings.TrimSpace(key)
+		embeddedAPIKey = strings.TrimSpace(key)
 		return nil
 	})
 )
@@ -42,7 +42,7 @@ func effectiveAPIKey() (string, error) {
 	if err := loadApiKey(); err != nil {
 		return "", err
 	}
-	return ApiKey, nil
+	return embeddedAPIKey, nil
 }
 
 // get performs an authenticated GET request to the CurseForge API and
