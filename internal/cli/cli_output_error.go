@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -189,6 +190,79 @@ func IsFrameworkUsageError(err error) bool {
 	return false
 }
 
+// UsageHint names the flags this command accepts when the framework rejected
+// an unknown flag or shorthand before the command ran. Mistaking a sibling
+// command's flag for this one is the common failure, and the flag list answers
+// it without a second round trip to --help. It returns an empty string for
+// every other failure.
+func UsageHint(cmd *cobra.Command, err error) string {
+	if _, ok := unknownFlagName(err); !ok {
+		return ""
+	}
+	names := localFlagNames(cmd)
+	if len(names) == 0 {
+		return ""
+	}
+	return cmd.CommandPath() + " accepts " + strings.Join(names, ", ") + "."
+}
+
+// unknownFlagName reports the rejected flag, spelled as the caller wrote it.
+func unknownFlagName(err error) (string, bool) {
+	if err == nil {
+		return "", false
+	}
+	message := err.Error()
+	if name, ok := strings.CutPrefix(message, "unknown flag: "); ok {
+		return name, true
+	}
+	rest, ok := strings.CutPrefix(message, "unknown shorthand flag: ")
+	if !ok || len(rest) < 3 || rest[0] != '\'' {
+		return "", false
+	}
+	end := strings.Index(rest[1:], "'")
+	if end <= 0 {
+		return "", false
+	}
+	return "-" + rest[1:1+end], true
+}
+
+// localFlagNames lists the flags this command answers to, sorted for a stable
+// message: everything it declares itself, plus the persistent flags of the
+// command groups above it, such as `lucy config --global`. The root's
+// persistent set stays out because it is identical for every command and does
+// not explain this rejection, and so do the framework's --help and --version.
+func localFlagNames(cmd *cobra.Command) []string {
+	if cmd == nil {
+		return nil
+	}
+	collected := map[string]bool{}
+	collect := func(flags *pflag.FlagSet) {
+		flags.VisitAll(func(flag *pflag.Flag) {
+			switch flag.Name {
+			case "help", "version":
+				return
+			}
+			if flag.Hidden {
+				return
+			}
+			collected["--"+flag.Name] = true
+		})
+	}
+	collect(cmd.LocalNonPersistentFlags())
+	if root := cmd.Root(); cmd != root {
+		collect(cmd.PersistentFlags())
+		for parent := cmd.Parent(); parent != nil && parent != root; parent = parent.Parent() {
+			collect(parent.PersistentFlags())
+		}
+	}
+	names := make([]string, 0, len(collected))
+	for name := range collected {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // WriteError renders one failure. Machine mode writes a single document to
 // stderr; human mode keeps the structured detail formatting and names the log
 // file. The command boundary calls it exactly once per failure.
@@ -197,7 +271,7 @@ func (o *Output) WriteError(err error, logPath string) {
 		return
 	}
 	if o.JSON() {
-		_ = o.writeJSON(o.cmd.ErrOrStderr(), newErrorDocument(err, logPath))
+		_ = o.writeJSON(o.cmd.ErrOrStderr(), newErrorDocument(o.cmd, err, logPath))
 		return
 	}
 	o.writeHumanError(err, logPath)
@@ -210,7 +284,11 @@ func (o *Output) writeHumanError(err error, logPath string) {
 		report.RenderDetail(writer, detail)
 	} else if IsUsageError(err) {
 		fmt.Fprintln(writer, style.Failure("error:")+" "+err.Error())
-		fmt.Fprintln(writer, "  "+style.Note("hint:")+" Run --help for usage.")
+		hint := UsageHint(o.cmd, err)
+		if hint == "" {
+			hint = "Run --help for usage."
+		}
+		fmt.Fprintln(writer, "  "+style.Note("hint:")+" "+hint)
 	} else {
 		report.Error(err)
 	}
@@ -219,7 +297,7 @@ func (o *Output) writeHumanError(err error, logPath string) {
 	}
 }
 
-func newErrorDocument(err error, logPath string) ErrorDocument {
+func newErrorDocument(cmd *cobra.Command, err error, logPath string) ErrorDocument {
 	document := ErrorDocument{
 		Schema:  ErrorSchema,
 		Kind:    ErrorKind,
@@ -252,7 +330,10 @@ func newErrorDocument(err error, logPath string) ErrorDocument {
 		document.Code = errorCode(err)
 	}
 	if document.Hint == "" && document.Code == CodeInvalidInvocation {
-		document.Hint = "Run --help for usage."
+		document.Hint = UsageHint(cmd, err)
+		if document.Hint == "" {
+			document.Hint = "Run --help for usage."
+		}
 	}
 	return document
 }

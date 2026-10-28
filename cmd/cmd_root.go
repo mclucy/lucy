@@ -308,6 +308,11 @@ func renderError(w io.Writer, styles fang.Styles, err error) {
 	}
 	if cli.IsFrameworkUsageError(err) {
 		fang.DefaultErrorHandler(w, styles, err)
+		// The framework names the rejected flag but never what this command
+		// accepts, which is the fact the caller needs to retry.
+		if hint := cli.UsageHint(command, err); hint != "" {
+			fmt.Fprintf(w, "  %s %s\n", style.Note("hint:"), hint)
+		}
 		return
 	}
 	report.Error(err)
