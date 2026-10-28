@@ -13,12 +13,14 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/serverregistry"
 )
 
 // DeinitResult reports the Lucy state that deinitialization removed. Paths are
 // relative to the server root and listed in removal order.
 type DeinitResult struct {
-	Removed []string
+	Removed  []string
+	Warnings []error
 }
 
 // Deinitialize removes every path that marks root as a Lucy workspace and
@@ -78,6 +80,13 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 		}
 		result.Removed = append(result.Removed, name)
 		log.Debug("workspace state removed", "path", name)
+	}
+	registry, err := serverregistry.New()
+	if err == nil {
+		err = registry.Unregister(root)
+	}
+	if err != nil {
+		result.Warnings = append(result.Warnings, fmt.Errorf("server unregistration failed: %w", err))
 	}
 
 	detached, err := detachWorkspaceState(root)

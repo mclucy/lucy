@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/javainstall"
 	"github.com/mclucy/lucy/operation"
@@ -25,6 +26,7 @@ const (
 	flagCreateMcName          = "minecraft"
 	flagCreateMCDRVersionName = "mcdr-version"
 	flagCreateDirectoryName   = "directory"
+	flagCreateNameName        = "name"
 	flagCreateInstallName     = "install"
 	flagCreateNoInstallName   = "no-install"
 	flagCreateJavaName        = "java"
@@ -87,6 +89,11 @@ func NewCreateCommand(contracts *JSONContracts) *cobra.Command {
 		".",
 		"Directory to create the server in",
 	)
+	cmd.Flags().String(
+		flagCreateNameName,
+		"",
+		"Server name to record (default: the target directory name)",
+	)
 	cmd.Flags().Bool(
 		flagCreateInstallName,
 		false,
@@ -114,6 +121,7 @@ func NewCreateCommand(contracts *JSONContracts) *cobra.Command {
 // the operation. Product is the selector value.
 type createChoices struct {
 	Directory         string
+	Name              string
 	Product           string
 	Minecraft         string
 	CoreVersion       string
@@ -180,6 +188,11 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 		)
 	}
 	result, err := operation.Create(ctx, opts)
+	if result != nil && result.PublishedManifest {
+		registerWorkspace(result.Workspace, output.Output)
+	} else if published, ok := errors.AsType[*operation.CreatePublishError](err); ok && published.ManifestWritten {
+		registerWorkspace(published.Workspace, output.Output)
+	}
 	if err != nil {
 		return output.Failure(err)
 	}
@@ -207,6 +220,12 @@ func choicesFromCreateFlags(cmd *cobra.Command) (createChoices, error) {
 	if javaRepository && !javaFlag {
 		return createChoices{}, fmt.Errorf("--%s needs --%s", flagCreateJavaRepoName, flagCreateJavaName)
 	}
+	name := strings.TrimSpace(flagStringCreate(cmd, flagCreateNameName))
+	if cmd.Flags().Changed(flagCreateNameName) {
+		if _, err := document.NormalizeName(name); err != nil {
+			return createChoices{}, fmt.Errorf("--%s: %w", flagCreateNameName, err)
+		}
+	}
 	coreRaw := flagStringCreate(cmd, flagCreateCoreName)
 	productName, inlineVersion := parseCoreDistributionCreate(coreRaw)
 	if explicitVersion := flagStringCreate(cmd, flagCreateCoreVersionName); explicitVersion != "" {
@@ -221,6 +240,7 @@ func choicesFromCreateFlags(cmd *cobra.Command) (createChoices, error) {
 	}
 	choices := createChoices{
 		Directory:         flagStringCreate(cmd, flagCreateDirectoryName),
+		Name:              name,
 		Minecraft:         strings.TrimSpace(flagStringCreate(cmd, flagCreateMcName)),
 		CoreVersion:       strings.TrimSpace(inlineVersion),
 		MCDRVersion:       strings.TrimSpace(flagStringCreate(cmd, flagCreateMCDRVersionName)),
@@ -262,6 +282,11 @@ func validateCreateChoices(choices createChoices) error {
 	if strings.TrimSpace(choices.Directory) == "" {
 		return errors.New("choose a directory with --directory")
 	}
+	if choices.Name != "" {
+		if _, err := document.NormalizeName(choices.Name); err != nil {
+			return fmt.Errorf("--%s: %w", flagCreateNameName, err)
+		}
+	}
 	if err := validateCreateMinecraft(
 		choices.Minecraft,
 		createProduct(choices.Product),
@@ -281,6 +306,7 @@ func createOperationOptions(choices createChoices) operation.CreateOptions {
 	}
 	return operation.CreateOptions{
 		Directory:      choices.Directory,
+		Name:           choices.Name,
 		Minecraft:      choices.Minecraft,
 		Product:        product,
 		ProductVersion: choices.CoreVersion,

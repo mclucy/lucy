@@ -133,7 +133,7 @@ func (o *installOutput) Render(result *install.Result) error {
 		return nil
 	}
 	result.Warnings = append(result.Warnings, javaWarnings(result.Java)...)
-	result.WarningMessages = warningMessages(result.Warnings)
+	result.WarningMessages = append(warningMessages(result.Warnings), o.Warnings()...)
 	if o.JSON() {
 		return installJSON.Write(o.Output, result)
 	}

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -122,6 +123,10 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 	ctx, stop := CommandContext(cmd)
 	defer stop()
 	result, err := operation.Sync(ctx, workDir, opts)
+	_, committed := errors.AsType[*install.CommittedError](err)
+	if err == nil || committed || result != nil && (result.PublishedLock || result.PublishedManifest) {
+		registerWorkspace(workDir, output.Output)
+	}
 	if err != nil {
 		return output.Failure(err)
 	}
