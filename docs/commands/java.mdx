@@ -3,7 +3,7 @@ title: "lucy java"
 description: "Inspect and choose Java for your server"
 ---
 
-List the Java runtimes Lucy finds and check them against your server's requirements:
+List the Java runtimes Lucy finds, the Java requirement the server declares, and the runtime Lucy selected:
 
 ```bash
 lucy java list
@@ -20,7 +20,7 @@ lucy java use 21 --distribution temurin
 lucy install
 ```
 
-`lucy java use` updates `lucy.yaml`; `lucy install` resolves the new requirement into the lock. Run `lucy java use` without arguments to choose interactively, or use `auto` to return to automatic version or distribution selection. Package requirements and Mojang's recommended Java version also affect compatibility.
+`lucy java use` updates `lucy.yaml`; `lucy install` resolves the new requirement into the lock. Run `lucy java use` without arguments to choose interactively, or use `auto` to remove the version or distribution pin. Without a pin, the requirement is the lowest major that satisfies both Mojang's advisory and every package requirement, so a package can raise it above the advisory.
 
 ## Select a runtime on this machine
 
@@ -37,7 +37,7 @@ This local choice overrides automatic runtime selection. Lucy warns if it does n
 ### lucy java use
 
 <ParamField query="version" type="string">
-  A Java major version of 8 or later, or `auto`. Writes `server.java` in `lucy.yaml`. `auto` returns the version to the Mojang recommendation.
+  A Java major version of 8 or later, or `auto`. Writes `server.java` in `lucy.yaml`. `auto` removes the pin; the requirement then follows Mojang's advisory and the enabled packages.
 </ParamField>
 
 <ParamField query="--distribution" type="string">
