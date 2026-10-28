@@ -171,12 +171,6 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	r.loggingReady = true
-	if err := configureProviders(); err != nil {
-		if !canRepairSettings(cmd) {
-			return fmt.Errorf("%w\nrun `lucy config` to inspect or repair machine settings", err)
-		}
-		log.Warn(err)
-	}
 	if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 		style.TurnOffStyles()
 		report.TurnOffColors()
@@ -198,6 +192,14 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	r.restoreDirectory = restore
+	// Provider settings belong to the workspace the command runs in, so they
+	// follow server selection.
+	if err := configureProviders(); err != nil {
+		if !canRepairSettings(cmd) {
+			return fmt.Errorf("%w\nrun `lucy config` to inspect or repair machine settings", err)
+		}
+		log.Warn(err)
+	}
 	if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
 		directory, err := os.Getwd()
 		if err != nil {
