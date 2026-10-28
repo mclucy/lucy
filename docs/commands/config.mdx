@@ -32,7 +32,13 @@ Lucy uses the configured runtime even when it does not meet the server's require
 ```bash
 lucy config set github.proxy https://ghfast.top/
 lucy config set github.proxy ""   # download from GitHub directly
-lucy config set --global curseforge.api_key 'your-curseforge-key'
+```
+
+Set `curseforge.api_key` in the global configuration file, so the key stays out of your shell history:
+
+```yaml
+curseforge:
+  api_key: your-curseforge-key
 ```
 
 `lucy config get` masks a secret in section and whole-configuration output. Read one with `lucy config get curseforge.api_key`.
