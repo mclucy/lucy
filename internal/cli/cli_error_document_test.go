@@ -84,7 +84,7 @@ func TestErrorDocumentCodes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			document := newErrorDocument(test.err, "lucy.log")
+			document := newErrorDocument(nil, test.err, "lucy.log")
 			if document.Code != test.want {
 				t.Fatalf("code = %q, want %q", document.Code, test.want)
 			}
