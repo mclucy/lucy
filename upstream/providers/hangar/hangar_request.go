@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
@@ -102,20 +103,34 @@ func listVersions(name catalog.Name) ([]hangarVersion, error) {
 		return nil, err
 	}
 
-	params := url.Values{}
-	params.Set("limit", "25")
+	// Hangar caps a versions page at 25 entries, so walk every page to keep
+	// both resolution and build listing complete.
+	const pageSize = 25
+	var versions []hangarVersion
+	for offset := 0; ; {
+		params := url.Values{}
+		params.Set("limit", strconv.Itoa(pageSize))
+		params.Set("offset", strconv.Itoa(offset))
 
-	res := &VersionListResponse{}
-	if err := getJSON(
-		hangarVersionsURL(project.ProjectRef(), params),
-		res,
-	); err != nil {
-		return nil, err
+		res := &VersionListResponse{}
+		if err := getJSON(
+			hangarVersionsURL(project.ProjectRef(), params),
+			res,
+		); err != nil {
+			return nil, err
+		}
+
+		versions = append(versions, res.Result...)
+		offset += len(res.Result)
+		if len(res.Result) == 0 || offset >= res.Pagination.Count {
+			break
+		}
 	}
-	if len(res.Result) == 0 {
+
+	if len(versions) == 0 {
 		return nil, ErrNoVersion
 	}
-	return res.Result, nil
+	return versions, nil
 }
 
 func getJSON(rawURL string, out any) error {

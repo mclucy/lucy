@@ -27,10 +27,7 @@ func (provider) Candidates(ctx context.Context, project, _ string, loader catalo
 		if rel.Asset.HashSha256 != "" {
 			hashes["sha256"] = rel.Asset.HashSha256
 		}
-		channel := upstream.ReleaseChannelRelease
-		if rel.Prerelease {
-			channel = upstream.ReleaseChannelBeta
-		}
+		channel := rel.Channel()
 		projectID := history.ID
 		if projectID == "" {
 			projectID = project

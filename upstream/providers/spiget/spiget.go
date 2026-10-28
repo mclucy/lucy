@@ -1,6 +1,7 @@
 package spiget
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -16,6 +17,28 @@ var Provider provider
 
 func (provider) Provider() catalog.Provider {
 	return catalog.ProviderSpiget
+}
+
+// Builds lists every published resource version. Spiget exposes no per-version
+// game versions, loaders, or channel, so those stay unknown.
+func (p provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	resource, err := resolveResourceByProjectName(catalog.Name(project))
+	if err != nil {
+		return nil, err
+	}
+	versions, err := listVersions(resource.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	builds := make([]upstream.Build, 0, len(versions))
+	for _, v := range versions {
+		builds = append(builds, v.ToBuild())
+	}
+	return builds, nil
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {

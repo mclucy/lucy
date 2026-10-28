@@ -4,6 +4,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
@@ -108,6 +109,60 @@ func (p *hangarProject) ToProjectInformation() catalog.Metadata {
 	}
 
 	return info
+}
+
+// ToBuilds maps one Hangar version to one build entry per declared platform.
+// Game versions stay attached to the platform that declared them.
+func (v *hangarVersion) ToBuilds() []upstream.Build {
+	channel := strings.ToLower(strings.TrimSpace(v.Channel.Name))
+	published := hangarPublishedAt(v.CreatedAt)
+
+	platforms := make(map[string]struct{})
+	for platform := range v.PlatformDependencies {
+		platforms[strings.ToLower(platform)] = struct{}{}
+	}
+	for platform := range v.Downloads {
+		platforms[strings.ToLower(platform)] = struct{}{}
+	}
+
+	if len(platforms) == 0 {
+		return []upstream.Build{{
+			Version:   v.Name,
+			Channel:   channel,
+			Published: published,
+		}}
+	}
+
+	builds := make([]upstream.Build, 0, len(platforms))
+	for _, platform := range sortedMapKeys(platforms) {
+		builds = append(
+			builds, upstream.Build{
+				Version:      v.Name,
+				GameVersions: v.platformGameVersions(platform),
+				Loaders:      []string{platform},
+				Channel:      channel,
+				Published:    published,
+			},
+		)
+	}
+	return builds
+}
+
+func (v *hangarVersion) platformGameVersions(platform string) []string {
+	for key, versions := range v.PlatformDependencies {
+		if strings.EqualFold(key, platform) {
+			return versions
+		}
+	}
+	return nil
+}
+
+func hangarPublishedAt(raw string) time.Time {
+	published, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}
+	}
+	return published
 }
 
 func (v *hangarVersion) ToPackageRemote() upstream.ResolvedPackage {

@@ -14,26 +14,14 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	id, err := strconv.ParseInt(project, 10, 32)
+	id, err := resolveProjectID(project)
 	if err != nil {
-		mod, e := resolveSlug(catalog.Name(project))
-		if e != nil {
-			return nil, e
-		}
-		id = int64(mod.ID)
+		return nil, err
 	}
 	// Pagination is required: exact older files are not necessarily on page one.
-	var files []fileResponse
-	for offset := 0; ; offset += 50 {
-		endpoint := modFilesUrl(int32(id), minecraft, modLoaderType(loader)) + "&index=" + strconv.Itoa(offset)
-		var page filesResponse
-		if err := get(endpoint, &page); err != nil {
-			return nil, err
-		}
-		files = append(files, page.Data...)
-		if len(page.Data) < 50 {
-			break
-		}
+	files, err := listAllFiles(id, minecraft, modLoaderType(loader))
+	if err != nil {
+		return nil, err
 	}
 	var out []upstream.Candidate
 	for _, f := range files {
@@ -48,7 +36,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 		}
 		c := upstream.Candidate{
 			Provider:     catalog.ProviderCurseForge,
-			ProjectID:    strconv.FormatInt(id, 10),
+			ProjectID:    strconv.FormatInt(int64(id), 10),
 			ReleaseID:    strconv.Itoa(int(f.ID)),
 			FileID:       strconv.Itoa(int(f.ID)),
 			Version:      version.Version(f.DisplayName),

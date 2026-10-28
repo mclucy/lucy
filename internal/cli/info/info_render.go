@@ -1,6 +1,7 @@
 package info
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"regexp"
@@ -23,6 +24,8 @@ const (
 	infoRenderFallbackHeight      = 24
 	infoRenderDefaultLinks        = 4
 	infoRenderDefaultDependencies = 5
+	infoRenderDefaultBuilds       = 5
+	infoRenderLongBuilds          = 10
 	infoRenderDescriptionMinLines = 3
 	infoRenderDescriptionMaxLines = 24
 	infoRenderEntryMinHeight      = 8
@@ -165,6 +168,7 @@ func infoRenderEntryFacts(
 	if long {
 		upstream = infoRenderUpstream(entry.Upstream)
 	}
+	builds := infoRenderBuilds(entry, long)
 
 	needs := infoRenderActionableDependencies(entry.Needs, long)
 	optional := infoRenderActionableDependencies(entry.Optional, long)
@@ -194,6 +198,9 @@ func infoRenderEntryFacts(
 	}
 	if upstream != "" {
 		keys = append(keys, "Upstream")
+	}
+	if builds != "" {
+		keys = append(keys, "Builds")
 	}
 	keys = append(keys, "Needs")
 	if len(optional) > 0 {
@@ -248,6 +255,9 @@ func infoRenderEntryFacts(
 	}
 	if upstream != "" {
 		facts = append(facts, terminal.Fact{Key: "Upstream", Value: upstream})
+	}
+	if builds != "" {
+		facts = append(facts, terminal.Fact{Key: "Builds", Value: builds})
 	}
 	needsNote := ""
 	if !entry.DependenciesKnown {
@@ -518,6 +528,90 @@ func infoRenderDependencyValue(
 		lines = append(lines, terminal.FoldHint(hidden))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// infoRenderBuilds bounds the human view, even with --long, and applies the
+// lock's declared runtime. Builds whose source omitted compatibility metadata
+// stay visible and say so.
+func infoRenderBuilds(entry infoEntry, long bool) string {
+	if len(entry.Builds) == 0 {
+		return ""
+	}
+
+	compatible := make([]infoBuild, 0, len(entry.Builds))
+	for _, build := range entry.Builds {
+		if infoBuildCompatible(build, entry.buildCriteria) {
+			compatible = append(compatible, build)
+		}
+	}
+	filtered := len(entry.Builds) - len(compatible)
+	criteria := infoBuildCriteriaText(entry.buildCriteria)
+	if len(compatible) == 0 {
+		return style.Muted("none compatible with " + criteria)
+	}
+
+	compatible = infoBuildsNewestFirst(compatible)
+	limit := infoRenderDefaultBuilds
+	if long {
+		limit = infoRenderLongBuilds
+	}
+	hidden := 0
+	if len(compatible) > limit {
+		hidden = len(compatible) - limit
+		compatible = compatible[:limit]
+	}
+
+	lines := make([]string, 0, len(compatible)+2)
+	for _, build := range compatible {
+		lines = append(lines, infoRenderBuildLine(build))
+	}
+	if filtered > 0 {
+		lines = append(lines, style.Muted("filtered to "+criteria))
+	}
+	if hidden > 0 {
+		if long {
+			lines = append(lines, style.Muted(fmt.Sprintf(
+				"… %d more builds, see --json for the complete list",
+				hidden,
+			)))
+		} else {
+			lines = append(lines, terminal.FoldHint(hidden))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func infoRenderBuildLine(build infoBuild) string {
+	version := infoRenderInline(build.Version)
+	if version == "" {
+		version = "unknown version"
+	}
+	notes := make([]string, 0, 4)
+	if channel := infoRenderInline(build.Channel); channel != "" {
+		notes = append(notes, channel)
+	}
+	if len(build.GameVersions) > 0 {
+		notes = append(notes, infoRenderInline(strings.Join(
+			build.GameVersions,
+			", ",
+		)))
+	} else {
+		notes = append(notes, "Minecraft version unknown")
+	}
+	if len(build.Loaders) > 0 {
+		notes = append(notes, infoRenderInline(strings.Join(
+			build.Loaders,
+			", ",
+		)))
+	} else {
+		notes = append(notes, "loaders unknown")
+	}
+	if build.Published.IsZero() {
+		notes = append(notes, "published unknown")
+	} else {
+		notes = append(notes, build.Published.Format("2006-01-02"))
+	}
+	return version + " (" + strings.Join(notes, ", ") + ")"
 }
 
 func infoRenderDependency(dependency infoDependency, long bool) string {

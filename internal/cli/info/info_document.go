@@ -1,6 +1,10 @@
 package info
 
-import "github.com/mclucy/lucy/internal/cli"
+import (
+	"time"
+
+	"github.com/mclucy/lucy/internal/cli"
+)
 
 const (
 	infoDocumentSchema = 1
@@ -65,6 +69,22 @@ type infoEntry struct {
 	Upstream          *infoUpstream    `json:"upstream,omitempty"`
 	Dependencies      []infoDependency `json:"dependencies"`
 	DependenciesKnown bool             `json:"dependencies_known"`
+
+	// Builds preserves every build the source reported, in source order.
+	Builds []infoBuild `json:"builds"`
+
+	// buildCriteria is presentation context, never document data.
+	buildCriteria *infoBuildCriteria
+}
+
+// infoBuild mirrors one published project version as reported upstream.
+// Empty metadata means the source did not report it.
+type infoBuild struct {
+	Version      string    `json:"version"`
+	GameVersions []string  `json:"game_versions"`
+	Loaders      []string  `json:"loaders"`
+	Channel      string    `json:"channel"`
+	Published    time.Time `json:"published,omitzero"`
 }
 
 type infoInstalled struct {
@@ -122,5 +142,6 @@ func newInfoEntry() infoEntry {
 		Links:        []infoLink{},
 		Authors:      []infoAuthor{},
 		Dependencies: []infoDependency{},
+		Builds:       []infoBuild{},
 	}
 }

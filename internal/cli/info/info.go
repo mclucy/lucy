@@ -176,11 +176,19 @@ func actionProjectInfo(
 	}
 	warnings = append(warnings, versionWarnings...)
 
+	builds, buildWarnings, err := infoProjectBuilds(ctx, result.info.Ref)
+	if err != nil {
+		return err
+	}
+	warnings = append(warnings, buildWarnings...)
+
 	entry := infoProjectEntry(
 		result.info.Metadata,
 		result.info.Ref,
 		resolvedVersion,
 	)
+	entry.Builds = append(entry.Builds, builds...)
+	entry.buildCriteria = infoBuildCriteriaFromLock(lock)
 	entry.Installed = infoInstalledAt(
 		root,
 		request.Ref,

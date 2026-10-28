@@ -1,6 +1,8 @@
 package curseforge
 
 import (
+	"strconv"
+
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
@@ -16,6 +18,36 @@ func listFiles(modId int32, gameVersion string, loaderType int) (
 		return nil, err
 	}
 	return resp.Data, nil
+}
+
+// listAllFiles pages through every file of a mod for the given compatibility
+// filter. An empty gameVersion and zero loaderType list all files unfiltered.
+func listAllFiles(
+	modID int32,
+	gameVersion string,
+	loaderType int,
+) ([]fileResponse, error) {
+	// Must match the pageSize set by modFilesUrl.
+	const pageSize = 50
+
+	var files []fileResponse
+	for offset := 0; ; offset += pageSize {
+		u := modFilesUrl(modID, gameVersion, loaderType) +
+			"&index=" + strconv.Itoa(offset)
+		var page filesResponse
+		if err := get(u, &page); err != nil {
+			return nil, err
+		}
+		files = append(files, page.Data...)
+		if len(page.Data) < pageSize {
+			break
+		}
+		if page.Pagination.TotalCount > 0 &&
+			int32(len(files)) >= page.Pagination.TotalCount {
+			break
+		}
+	}
+	return files, nil
 }
 
 // latestFile finds the latest file compatible with local runtime facts and

@@ -1,6 +1,7 @@
 package hangar
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/mclucy/lucy/catalog"
@@ -14,6 +15,24 @@ var Provider provider
 
 func (provider) Provider() catalog.Provider {
 	return catalog.ProviderHangar
+}
+
+// Builds lists every published version. Hangar versions declare supported
+// platforms independently, so each platform becomes its own build entry.
+func (p provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	versions, err := listVersions(catalog.Name(project))
+	if err != nil {
+		return nil, err
+	}
+
+	var builds []upstream.Build
+	for i := range versions {
+		builds = append(builds, versions[i].ToBuilds()...)
+	}
+	return builds, nil
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {

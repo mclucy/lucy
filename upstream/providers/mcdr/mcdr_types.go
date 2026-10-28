@@ -57,6 +57,24 @@ func (r release) ToPackageRemote() upstream.ResolvedPackage {
 	return remote
 }
 
+// Channel reports the stability channel from the release's prerelease flag.
+func (r release) Channel() upstream.ReleaseChannel {
+	if r.Prerelease {
+		return upstream.ReleaseChannelBeta
+	}
+	return upstream.ReleaseChannelRelease
+}
+
+// ToBuild maps a catalogue release to its MCDR compatibility.
+func (r release) ToBuild() upstream.Build {
+	return upstream.Build{
+		Version:   r.Meta.Version,
+		Loaders:   []string{"mcdr"},
+		Channel:   string(r.Channel()),
+		Published: r.CreatedAt,
+	}
+}
+
 type asset struct {
 	ID                 int       `json:"id"`
 	Name               string    `json:"name"`

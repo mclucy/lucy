@@ -1,6 +1,7 @@
 package mcdr
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/mclucy/lucy/catalog"
@@ -17,6 +18,23 @@ func (s provider) Provider() catalog.Provider {
 }
 
 var Provider provider
+
+// Builds lists every release in the plugin catalogue release history.
+func (s provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	history, err := getReleaseHistory(catalog.Name(project).PythonName())
+	if err != nil {
+		return nil, err
+	}
+
+	builds := make([]upstream.Build, 0, len(history.Releases))
+	for _, rel := range history.Releases {
+		builds = append(builds, rel.ToBuild())
+	}
+	return builds, nil
+}
 
 type mcdrSearchResult []string
 

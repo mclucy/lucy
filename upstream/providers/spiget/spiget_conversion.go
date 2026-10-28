@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/mclucy/lucy/catalog"
@@ -109,6 +110,20 @@ func NewResolvedVersion(
 		ExternalURL: resource.File.ExternalURL,
 		UUID:        version.UUID,
 	}
+}
+
+// ToBuild maps one Spiget resource version to a build. Spiget version records
+// carry no game versions, loaders, or channel; resource-level tested versions
+// are not build-specific and stay out of the build.
+func (v versionResponse) ToBuild() upstream.Build {
+	build := upstream.Build{Version: v.Name}
+	if build.Version == "" && v.ID != 0 {
+		build.Version = strconv.FormatInt(v.ID, 10)
+	}
+	if v.ReleaseDate > 0 {
+		build.Published = time.Unix(v.ReleaseDate, 0).UTC()
+	}
+	return build
 }
 
 func (r resolvedVersion) LucyVersion() versionpkg.Version {
