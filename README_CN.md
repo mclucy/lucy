@@ -77,11 +77,6 @@ lucy install
 
 完整指南、配置与参数说明： **[lucy.lc/docs](https://lucy.lc/docs)**
 
-## 面向智能体
-
-Lucy 的[智能体文档](https://lucy.lc/agents/architecture)介绍其内部架构。
-文档可通过 `https://lucy.lc/agents/` 在线访问，也可以使用 `lucy docs grep` 搜索。
-
 ---
 
 > [!NOTE]

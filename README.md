@@ -84,11 +84,6 @@ apart.
 
 Full guides, configuration, and flags: **[lucy.lc/docs](https://lucy.lc/docs)**
 
-## For agents
-
-Lucy’s [agent-facing documentation](https://lucy.lc/agents/architecture) describes its internal architecture.
-The pages are available online under `https://lucy.lc/agents/` and can also be searched with `lucy docs grep`.
-
 ---
 
 > [!NOTE]
