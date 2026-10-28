@@ -20,7 +20,7 @@ Tracked files are mutable by default: you can edit them without a warning. To be
 lucy file lock server.properties
 ```
 
-Locking accepts the current contents. It does not change file permissions or prevent edits. After an intentional change, accept the new contents with `lucy file update server.properties`. Use `lucy file unlock server.properties` to stop checking for changes.
+Locking accepts the current contents. It does not change file permissions or prevent edits. After an intentional change, accept the new contents with `lucy file update server.properties`. Use `lucy file unlock server.properties` to stop warnings about changes; Lucy still reports the difference when you list tracked files.
 
 ## Restore files
 
