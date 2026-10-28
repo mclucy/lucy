@@ -30,7 +30,7 @@ type GitHub struct {
 }
 
 type CurseForge struct {
-	APIKey *string `yaml:"api_key,omitempty" json:"api_key" description:"CurseForge API key. An empty value uses the key built into this Lucy build." example:"$2a$10$example"`
+	APIKey *string `yaml:"api_key,omitempty" json:"api_key" secret:"true" description:"CurseForge API key. An empty value uses the key built into this Lucy build." example:"$2a$10$example"`
 }
 
 func decodeValues(reader io.Reader) (*Values, error) {

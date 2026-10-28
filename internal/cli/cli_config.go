@@ -95,6 +95,9 @@ func actionConfigGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if !config.Secret(key) {
+		value = config.Redacted(value)
+	}
 	output := NewQueryOutput(cmd)
 	if output.JSON() {
 		return writeConfigJSON(output, value)
@@ -140,7 +143,11 @@ func actionConfigSet(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	_, err = fmt.Fprintf(out, "Set %s to %s\n", key, value)
+	shown := value
+	if config.Secret(key) && shown != "" {
+		shown = config.RedactedValue
+	}
+	_, err = fmt.Fprintf(out, "Set %s to %s\n", key, shown)
 	return err
 }
 

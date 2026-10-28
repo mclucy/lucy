@@ -35,6 +35,8 @@ lucy config set github.proxy ""   # download from GitHub directly
 lucy config set --global curseforge.api_key 'your-curseforge-key'
 ```
 
+`lucy config get` masks a secret in section and whole-configuration output. Read one with `lucy config get curseforge.api_key`.
+
 ## Configuration files
 
 Workspace settings live in `.lucy/config.yaml`. Global settings live in `~/Library/Application Support/lucy/config.yaml` on macOS, `$XDG_CONFIG_HOME/lucy/config.yaml` (usually `~/.config/lucy/config.yaml`) on Linux, or `%APPDATA%\lucy\config.yaml` on Windows. Relative Java paths are resolved from the directory of the relevant configuration scope.
