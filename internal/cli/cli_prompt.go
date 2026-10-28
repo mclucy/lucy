@@ -25,6 +25,17 @@ func NewPromptGate(cmd *cobra.Command) PromptGate {
 // Available reports whether a prompt may read the terminal. A caller that
 // still needs the selection fails with the flag that carries the same choice.
 func (g PromptGate) Available() bool {
+	if !g.flagsAllow() {
+		return false
+	}
+	stdin, ok := g.cmd.InOrStdin().(*os.File)
+	return ok && term.IsTerminal(stdin.Fd()) && style.InteractiveEnabled()
+}
+
+// flagsAllow reports whether the command's switches leave prompting enabled.
+// Keeping it apart from the terminal test makes the switch behavior verifiable
+// without a terminal.
+func (g PromptGate) flagsAllow() bool {
 	if g.cmd == nil || JSONMode(g.cmd) != JSONNone {
 		return false
 	}
@@ -34,8 +45,7 @@ func (g PromptGate) Available() bool {
 	if noStyle, _ := g.cmd.Flags().GetBool(FlagNoStyle); noStyle {
 		return false
 	}
-	stdin, ok := g.cmd.InOrStdin().(*os.File)
-	return ok && term.IsTerminal(stdin.Fd()) && style.InteractiveEnabled()
+	return true
 }
 
 // Huh can report a cancelled context as a timeout instead of its cause.

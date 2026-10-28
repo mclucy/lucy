@@ -11,7 +11,7 @@ import (
 )
 
 // TestCacheFallbackProcess is the helper half of
-// TestDisabledCacheMetadataFallbackWithUnusableTempDir. It blocks the cache
+// TestMetadataFallbackWithoutTempDir. It blocks the cache
 // root with a regular file so the real handler starts disabled, and points
 // TMPDIR at a path whose parent does not exist.
 func TestCacheFallbackProcess(t *testing.T) {
@@ -60,7 +60,7 @@ func TestCacheFallbackProcess(t *testing.T) {
 	)
 }
 
-func TestDisabledCacheMetadataFallbackWithUnusableTempDir(t *testing.T) {
+func TestMetadataFallbackWithoutTempDir(t *testing.T) {
 	root := t.TempDir()
 	fixture := newCacheFixture(t)
 	home := filepath.Join(root, "home")

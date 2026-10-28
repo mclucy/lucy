@@ -14,7 +14,7 @@ import (
 	"github.com/mclucy/lucy/server"
 )
 
-func TestFileCommandsAndInstallPreserveRuntimePinsAndCoreBytes(t *testing.T) {
+func TestInstallPreservesRuntimePinsAndCoreBytes(t *testing.T) {
 	w := newWorkspace(t)
 	_, lock, core := w.seedNativeRuntime(t)
 	rules := []byte("server rules v1\n")
@@ -85,7 +85,7 @@ func TestFileCommandsAndInstallPreserveRuntimePinsAndCoreBytes(t *testing.T) {
 	}
 }
 
-func TestFileInstallProvisionsMissingAcceptedFileFromCAS(t *testing.T) {
+func TestInstallProvisionsMissingFileFromCAS(t *testing.T) {
 	w := newWorkspace(t)
 	_, _, core := w.seedNativeRuntime(t)
 	rules := []byte("server rules v2\n")
@@ -113,7 +113,7 @@ func TestFileInstallProvisionsMissingAcceptedFileFromCAS(t *testing.T) {
 	}
 }
 
-func TestFileInstallWarnsImmutableDeviationWithoutRestoring(t *testing.T) {
+func TestFileInstallWarnsImmutableDriftWithoutRestoring(t *testing.T) {
 	w := newWorkspace(t)
 	w.seedNativeRuntime(t)
 	rules := []byte("server rules v3\n")
@@ -222,7 +222,7 @@ func TestFileLockOnlyWorkspaceServesReadOnlyCommands(t *testing.T) {
 	}
 }
 
-func TestFileTrackRejectsManagedCorePackageAndReceiptCollisions(t *testing.T) {
+func TestFileTrackRejectsCoreAndReceiptCollisions(t *testing.T) {
 	t.Run("generated receipt output", func(t *testing.T) {
 		w := newWorkspace(t)
 		w.writeManifest(t, baseManifest(t))
@@ -278,7 +278,7 @@ func TestFileTrackRejectsManagedCorePackageAndReceiptCollisions(t *testing.T) {
 	})
 }
 
-func TestFileDisabledPackagePlaceholderDoesNotClaimModsFolder(t *testing.T) {
+func TestDisabledPackageLeavesModsFolderAvailable(t *testing.T) {
 	w := newWorkspace(t)
 	_, nativeLock, _ := w.seedNativeRuntime(t)
 	lock := &document.Lock{

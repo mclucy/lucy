@@ -342,7 +342,7 @@ func TestRecoveryWaitsForDeclaredRunningServer(t *testing.T) {
 	requireTransactionBytes(t, filepath.Join(root, "a.cfg"), []byte("initial-a.cfg"))
 }
 
-func TestProvisionPublicationDoesNotReplaceConcurrentFile(t *testing.T) {
+func TestProvisionKeepsConcurrentFile(t *testing.T) {
 	t.Parallel()
 	root := transactionWorkspace(t)
 	store, err := cas.New(filepath.Join(root, ".lucy"))

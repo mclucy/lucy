@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "kind": "status",
+  "source": "live",
+  "root": ".",
+  "server": {
+    "product": {
+      "name": "fabric",
+      "version": "0.16.9",
+      "ecosystem": "fabric"
+    },
+    "minecraft": "1.21.4",
+    "entry_point": "fabric-server-launch.jar",
+    "activity": "stopped",
+    "components": [
+      {
+        "name": "fabric-loader",
+        "version": "0.16.9",
+        "provider": "any",
+        "ecosystem": "fabric"
+      },
+      {
+        "name": "minecraft",
+        "version": "1.21.4",
+        "provider": "any",
+        "ecosystem": "minecraft"
+      }
+    ],
+    "compatible_ecosystems": [
+      {
+        "ecosystem": "fabric",
+        "compatibility": "full"
+      }
+    ],
+    "package_directories": [
+      "mods"
+    ]
+  },
+  "packages": [
+    {
+      "name": "carpet",
+      "version": "1.4.161+v241203",
+      "provider": "unknown",
+      "ecosystem": "fabric",
+      "environment": "server",
+      "path": "mods/fabric-carpet-1.21.4-1.4.161+v241203.jar"
+    },
+    {
+      "name": "ferritecore",
+      "version": "7.1.3",
+      "provider": "unknown",
+      "ecosystem": "fabric",
+      "environment": "server",
+      "path": "mods/ferritecore-7.1.3-fabric.jar"
+    },
+    {
+      "name": "lithium",
+      "version": "0.15.3+mc1.21.4",
+      "provider": "unknown",
+      "ecosystem": "fabric",
+      "environment": "server",
+      "path": "mods/lithium-fabric-0.15.3+mc1.21.4.jar"
+    },
+    {
+      "name": "modernfix",
+      "version": "5.20.1+mc1.21.4",
+      "provider": "unknown",
+      "ecosystem": "fabric",
+      "environment": "server",
+      "path": "mods/modernfix-fabric-5.20.1+mc1.21.4.jar"
+    }
+  ],
+  "warnings": [
+    "unmanaged entry point ./fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar; left unchanged"
+  ]
+}

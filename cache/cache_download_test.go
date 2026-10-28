@@ -346,7 +346,7 @@ func TestCacheIndexRetainsFileMode(t *testing.T) {
 	}
 }
 
-func TestCachedDownloadCorruptObjectIsRefetchedAndRepaired(t *testing.T) {
+func TestCacheRepairsCorruptObject(t *testing.T) {
 	fixture := newCacheFixture(t)
 	h := installNetworkCache(t, DefaultCacheConfig())
 	url := fixture.artifactURL("tool.jar")

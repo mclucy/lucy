@@ -50,7 +50,7 @@ func TestSelectLatestVersionForSelector(t *testing.T) {
 	}
 }
 
-func TestSelectLatestVersionForSelector_StableRejectsPrereleaseOnly(t *testing.T) {
+func TestStableSelectorRejectsPrereleaseOnly(t *testing.T) {
 	beta := &versionResponse{
 		VersionNumber: "1.1.0-beta",
 		VersionType:   "beta",

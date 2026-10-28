@@ -7,7 +7,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 )
 
-func TestSpongeServerDetector_UsesSpecificationTitleOverImplementationTitle(t *testing.T) {
+func TestSpongeDetectorPrefersSpecification(t *testing.T) {
 	t.Parallel()
 
 	files := map[string]string{

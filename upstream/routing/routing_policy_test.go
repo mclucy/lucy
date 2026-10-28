@@ -87,7 +87,7 @@ func TestProviderSourcesFromEcosystems_MCDR(t *testing.T) {
 	}
 }
 
-func TestProviderSourcesFromEcosystems_UnsupportedAndProxy(t *testing.T) {
+func TestProviderSourcesHandleUnsupportedAndProxy(t *testing.T) {
 	unsupported := providersFromEcosystems(
 		[]catalog.Ecosystem{catalog.EcosystemSponge},
 	)

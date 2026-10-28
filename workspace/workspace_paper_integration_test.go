@@ -11,7 +11,7 @@ import (
 	"github.com/mclucy/lucy/workspace/discovery"
 )
 
-func TestPaperDiscoveryIntegration_PaperFixtureDetectsRuntime(t *testing.T) {
+func TestPaperDiscoveryDetectsRuntime(t *testing.T) {
 	workDir := t.TempDir()
 	paperJar := writeProbeFixtureJar(
 		t,
@@ -36,7 +36,7 @@ func TestPaperDiscoveryIntegration_PaperFixtureDetectsRuntime(t *testing.T) {
 	}
 }
 
-func TestPaperDiscoveryIntegration_ContradictoryEvidenceDoesNotProducePaperRuntime(t *testing.T) {
+func TestPaperDiscoveryRejectsContradictions(t *testing.T) {
 	fixtureDir := t.TempDir()
 	writeProbeFixtureFile(
 		t,

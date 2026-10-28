@@ -12,7 +12,7 @@ import (
 	"github.com/mclucy/lucy/version"
 )
 
-func TestPaperObservationCollector_PaperFixtureSupportsTreeAndJar(t *testing.T) {
+func TestPaperObservationSupportsTreeAndJar(t *testing.T) {
 	t.Parallel()
 
 	fixtureRoot := paperFamilyFixturePath(t, "test_paper", "paper")
@@ -55,7 +55,7 @@ func TestPaperObservationCollector_PaperFixtureSupportsTreeAndJar(t *testing.T) 
 	}
 }
 
-func TestPaperObservationCollector_ForkFixturesExposeRawEvidence(t *testing.T) {
+func TestPaperObservationExposesForkEvidence(t *testing.T) {
 	t.Parallel()
 
 	t.Run(
@@ -178,7 +178,7 @@ func TestPaperObservationCollector_ForkFixturesExposeRawEvidence(t *testing.T) {
 	)
 }
 
-func TestPaperObservationCollector_MissingOptionalFilesGracefullyDegrades(t *testing.T) {
+func TestPaperObservationToleratesMissingFiles(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()

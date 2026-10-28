@@ -11,12 +11,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestWorkspaceActivityGuardBlocksSharedReplayEntries runs one workspace whose
+// TestActivityGuardBlocksSharedReplays runs one workspace whose
 // native server reports itself as running while an installation journal is
 // still pending. Every entry point that replays workspace state must refuse to
 // change anything, and the first mutation after the server stops must replay
 // the journal before it touches a declaration.
-func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
+func TestActivityGuardBlocksSharedReplays(t *testing.T) {
 	w := newWorkspace(t)
 	w.writeManifest(t, baseManifest(t))
 	core := miniVanillaJar(t, "1.21.4")
@@ -95,7 +95,7 @@ func TestWorkspaceActivityGuardBlocksSharedReplayEntries(t *testing.T) {
 	}
 }
 
-func TestRunningServerBlocksFileOverwriteWithoutPendingJournal(t *testing.T) {
+func TestRunningServerBlocksOverwriteWithoutJournal(t *testing.T) {
 	w := newWorkspace(t)
 	w.writeManifest(t, baseManifest(t))
 	w.write(t, "server/server.jar", miniVanillaJar(t, "1.21.4"), 0o644)

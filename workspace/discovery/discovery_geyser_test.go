@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestGeyserStandaloneDetectorDetectsStandaloneBootstrapJar(t *testing.T) {
+func TestGeyserDetectorFindsStandaloneJar(t *testing.T) {
 	t.Parallel()
 
 	jarPath := writeRootJar(

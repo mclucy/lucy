@@ -34,7 +34,7 @@ func TestSearchResponseToSearchResults(t *testing.T) {
 	}
 }
 
-func TestResourceResponseToProjectInformation(t *testing.T) {
+func TestProjectInfoConversion(t *testing.T) {
 	resource := resourceResponse{
 		ID:            6245,
 		Name:          "PlaceholderAPI",
@@ -94,7 +94,7 @@ func TestResourceResponseToProjectInformation(t *testing.T) {
 	)
 }
 
-func TestResourceResponseToProjectInformation_NormalizesRelativeAndMiscLinks(t *testing.T) {
+func TestProjectInfoNormalizesLinks(t *testing.T) {
 	resource := resourceResponse{
 		Name: "PlaceholderAPI",
 		Links: map[string]string{
@@ -122,7 +122,7 @@ func TestResourceResponseToProjectInformation_NormalizesRelativeAndMiscLinks(t *
 	)
 }
 
-func TestResourceResponseToProjectInformation_InvalidBase64IsDropped(t *testing.T) {
+func TestProjectInfoDropsInvalidBase64(t *testing.T) {
 	resource := resourceResponse{
 		Name:          "Broken",
 		Description:   "%%%not-base64%%%",
@@ -176,7 +176,7 @@ func TestResolvedVersionToPackageRemote(t *testing.T) {
 	}
 }
 
-func TestResolvedVersion_ToPackageRemote_UsesExternalDownload(t *testing.T) {
+func TestResolvedVersionUsesExternalDownload(t *testing.T) {
 	remote := resolvedVersion{
 		ResourceID:  10,
 		VersionID:   20,
