@@ -171,7 +171,12 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	r.loggingReady = true
-	configureProviders()
+	if err := configureProviders(); err != nil {
+		if !canRepairSettings(cmd) {
+			return fmt.Errorf("%w\nrun `lucy config` to inspect or repair machine settings", err)
+		}
+		log.Warn(err)
+	}
 	if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
 		style.TurnOffStyles()
 		report.TurnOffColors()
@@ -209,36 +214,45 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 }
 
 // configureProviders applies machine settings to packages that cannot read the
-// workspace themselves. A malformed configuration is logged and leaves the
-// embedded defaults active, so a config command can still repair the file.
-func configureProviders() {
+// workspace themselves. It resets the package state first, so an unreadable
+// configuration leaves the embedded defaults active instead of the settings of
+// a previous run in this process.
+func configureProviders() error {
+	github.SetReleaseProxy("")
+	curseforge.SetUserAPIKey("")
 	root, err := os.Getwd()
 	if err != nil {
 		log.Debug("provider settings unavailable", "error", err)
-		return
+		return nil
 	}
 	settings, err := config.New(root)
 	if err != nil {
-		log.Warn(fmt.Errorf("read machine settings: %w", err))
-		return
+		return err
 	}
-	proxy, err := settings.GitHubProxy()
-	if err != nil {
-		log.Warn(fmt.Errorf("read github.proxy: %w", err))
-	} else {
-		github.SetReleaseProxy(proxy)
-	}
-	key, err := settings.CurseForgeAPIKey()
-	if err != nil {
-		log.Warn(fmt.Errorf("read curseforge.api_key: %w", err))
-	} else {
-		curseforge.SetUserAPIKey(key)
-	}
+	proxy, proxyErr := settings.GitHubProxy()
+	key, keyErr := settings.CurseForgeAPIKey()
+	github.SetReleaseProxy(proxy)
+	curseforge.SetUserAPIKey(key)
 	log.Debug(
 		"machine settings applied",
-		"github_proxy", proxy,
+		"github_proxy_configured", proxy != "",
 		"curseforge_key_configured", key != "",
 	)
+	return errors.Join(proxyErr, keyErr)
+}
+
+// canRepairSettings reports whether cmd belongs to the surfaces that stay
+// runnable while machine settings are unreadable, so the user can inspect and
+// repair the configuration that fails the other commands.
+func canRepairSettings(cmd *cobra.Command) bool {
+	for current := cmd; current != nil; current = current.Parent() {
+		switch current.Name() {
+		case "config", "docs", "doctor", "schema",
+			"__complete", "__completeNoDesc":
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Runner) configureLogging(cmd *cobra.Command) error {
