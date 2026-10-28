@@ -23,12 +23,37 @@ func nonTerminalInput(t *testing.T) *os.File {
 	return file
 }
 
-func TestPromptGateDenials(t *testing.T) {
+// promptProbeRoot builds a root whose only command reports the gate state.
+func promptProbeRoot(t *testing.T, stdin *os.File, visit func(*cobra.Command)) *cobra.Command {
+	t.Helper()
+
+	root := &cobra.Command{Use: "lucy"}
+	root.SilenceErrors = true
+	root.SilenceUsage = true
+	root.PersistentFlags().Bool(FlagJSON, false, "Print JSON")
+	root.PersistentFlags().Bool(FlagJSONCompact, false, "Print compact JSON")
+	root.PersistentFlags().Bool(FlagNoInteractive, false, "Disable prompts")
+	root.PersistentFlags().Bool(FlagNoStyle, false, "Disable styling")
+	root.AddCommand(&cobra.Command{
+		Use: "probe",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			visit(cmd)
+			return nil
+		},
+	})
+	root.SetIn(stdin)
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+	return root
+}
+
+func TestPromptGateFlags(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
+		want bool
 	}{
-		{name: "plain", args: nil},
+		{name: "plain", want: true},
 		{name: "json", args: []string{"--json"}},
 		{name: "compact", args: []string{"--json-compact"}},
 		{name: "no interactive", args: []string{"--no-interactive"}},
@@ -44,39 +69,51 @@ func TestPromptGateDenials(t *testing.T) {
 		},
 	}
 
+	if (PromptGate{}).flagsAllow() {
+		t.Fatal("a gate without a command must not allow prompts")
+	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var opened []bool
-
-			root := &cobra.Command{Use: "lucy"}
-			root.SilenceErrors = true
-			root.SilenceUsage = true
-			root.PersistentFlags().Bool(FlagJSON, false, "Print JSON")
-			root.PersistentFlags().Bool(FlagJSONCompact, false, "Print compact JSON")
-			root.PersistentFlags().Bool(FlagNoInteractive, false, "Disable prompts")
-			root.PersistentFlags().Bool(FlagNoStyle, false, "Disable styling")
-			root.AddCommand(&cobra.Command{
-				Use: "probe",
-				RunE: func(cmd *cobra.Command, _ []string) error {
-					opened = append(opened, NewPromptGate(cmd).Available())
-					return nil
-				},
+			var allowed []bool
+			root := promptProbeRoot(t, nonTerminalInput(t), func(cmd *cobra.Command) {
+				allowed = append(allowed, NewPromptGate(cmd).flagsAllow())
 			})
-			root.SetIn(nonTerminalInput(t))
-			root.SetOut(io.Discard)
-			root.SetErr(io.Discard)
 			root.SetArgs(append([]string{"probe"}, test.args...))
 
 			if err := root.Execute(); err != nil {
 				t.Fatalf("execute probe: %v", err)
 			}
-			if len(opened) != 1 {
-				t.Fatalf("probe ran %d times, want 1", len(opened))
+			if len(allowed) != 1 {
+				t.Fatalf("probe ran %d times, want 1", len(allowed))
 			}
-			if opened[0] {
-				t.Fatalf("prompt gate opened with %q", test.args)
+			if allowed[0] != test.want {
+				t.Fatalf("flagsAllow() with %q = %t, want %t",
+					test.args, allowed[0], test.want)
 			}
 		})
+	}
+}
+
+// TestPromptGateWithoutTerminal pins the terminal half: the switches may
+// allow prompting, but stdin that no terminal backs still denies it.
+func TestPromptGateWithoutTerminal(t *testing.T) {
+	var allowed, available bool
+	root := promptProbeRoot(t, nonTerminalInput(t), func(cmd *cobra.Command) {
+		gate := NewPromptGate(cmd)
+		allowed = gate.flagsAllow()
+		available = gate.Available()
+	})
+	root.SetArgs([]string{"probe"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute probe: %v", err)
+	}
+	if !allowed {
+		t.Fatal("plain switches must allow prompting")
+	}
+	if available {
+		t.Fatal("a prompt gate opened on stdin that no terminal backs")
 	}
 }
 
