@@ -20,6 +20,7 @@ import (
 
 const (
 	flagInitForceName       = "force"
+	flagInitNameName        = "name"
 	flagInitMCDRVersionName = "mcdr-version"
 	flagInitEntryPointName  = "entry-point"
 	flagInitNoCommentsName  = "no-comments"
@@ -38,6 +39,11 @@ func NewInitCommand(contracts *JSONContracts) *cobra.Command {
 		"f",
 		false,
 		"Overwrite an existing manifest without asking",
+	)
+	cmd.Flags().String(
+		flagInitNameName,
+		"",
+		"Server name to record (default: the directory name, or the existing name with --force)",
 	)
 	cmd.Flags().String(
 		flagInitMCDRVersionName,
@@ -71,7 +77,14 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 	}
 	ctx, stop := CommandContext(cmd)
 	defer stop()
+	name := flagStringInit(cmd, flagInitNameName)
+	if cmd.Flags().Changed(flagInitNameName) {
+		if _, err := document.NormalizeName(name); err != nil {
+			return fmt.Errorf("--%s: %w", flagInitNameName, err)
+		}
+	}
 	opts := operation.InitOptions{
+		Name:        name,
 		MCDRVersion: flagStringInit(cmd, flagInitMCDRVersionName),
 		EntryPoint:  flagStringInit(cmd, flagInitEntryPointName),
 		Force:       flagBoolInit(cmd, flagInitForceName),
@@ -93,6 +106,9 @@ func initializeWorkspace(ctx context.Context, cmd *cobra.Command, workDir string
 		return promptRuntime(ctx, cmd, observed)
 	}
 	result, err := operation.Initialize(ctx, workDir, opts)
+	if result != nil && result.Document != nil {
+		registerWorkspace(workDir, output.Output)
+	}
 	if err != nil {
 		return output.Failure(initializationFailure(err, result))
 	}

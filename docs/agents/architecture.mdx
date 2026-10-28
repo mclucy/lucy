@@ -7,7 +7,7 @@ Lucy maintains several views of a server. They answer different questions and ar
 
 | View | Authority | Meaning |
 | --- | --- | --- |
-| Declaration | `lucy.yaml` | Desired server and package requirements, including tracked-file policy. |
+| Declaration | `lucy.yaml` | Desired server and package requirements, including tracked-file policy and the optional registry name. |
 | Resolution | `lucy-lock.yaml` | Concrete server inputs and package artifacts selected for a declaration. |
 | Installation receipt | `.lucy/install.yaml` | Runtime outputs Lucy recorded as installed, their hashes, and the resolution they answer. |
 | Observation | Files in the workspace | What discovery can establish about the local runtime and package files now. |
@@ -19,7 +19,7 @@ A lock can describe files that are absent or modified locally; an observed file 
 
 The command layer translates CLI input into operations and renders their results. `operation` coordinates use cases and document changes. `install` resolves or replays a lock, stages and commits runtime files, and returns facts and warnings to the command layer. `workspace` observes local state without contacting upstreams; identification against upstream hashes is an explicit separate step.
 
-`catalog` holds package identities, artifacts, and dependencies without owning workspace state. `server` describes server products and environments. `upstream` defines capabilities for obtaining metadata and artifacts; `upstream/routing` selects implementations, and `upstream/providers` contains provider-specific adapters. `resolve` chooses packages and validates their descriptor modules. `bootstrap` prepares server products from the locked inputs. Java requirements and runtime observation belong to `javaruntime`, while machine settings belong to `config`.
+`catalog` holds package identities, artifacts, and dependencies without owning workspace state. `server` describes server products and environments. `serverregistry` maps the user's server names to workspace directories through links in the user data directory; it records locations, not server contents, and reads each registered manifest on demand. `upstream` defines capabilities for obtaining metadata and artifacts; `upstream/routing` selects implementations, and `upstream/providers` contains provider-specific adapters. `resolve` chooses packages and validates their descriptor modules. `bootstrap` prepares server products from the locked inputs. Java requirements and runtime observation belong to `javaruntime`, while machine settings belong to `config`.
 
 Related domain models:
 

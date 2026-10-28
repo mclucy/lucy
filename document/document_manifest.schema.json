@@ -5,6 +5,9 @@
     "manifest_version": {
       "type": "integer"
     },
+    "name": {
+      "type": "string"
+    },
     "server": {
       "properties": {
         "minecraft": {

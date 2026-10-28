@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"unicode"
 
 	"charm.land/huh/v2"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/operation"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
@@ -27,9 +29,24 @@ func promptCreate(
 	if values.Directory == "" {
 		values.Directory = "."
 	}
+	// The name follows the directory until the operator supplies one, so the
+	// prefilled default never outlives the directory it was derived from.
+	derivedName := defaultCreateName(values.Directory)
+	nameFromFlag := values.Name != ""
+	if !nameFromFlag {
+		values.Name = derivedName
+	}
 	if values.Product == "" {
 		values.Product = createProductMinecraft
 	}
+	nameAccessor := huh.NewPointerAccessor(&values.Name)
+	name := huh.NewInput().
+		Key("name").
+		Title("Name").
+		Description("Select this server by name with --server. Defaults to the target directory name.").
+		Placeholder("survival").
+		Accessor(nameAccessor).
+		Validate(validateCreateName)
 	directory := huh.NewInput().
 		Key("directory").
 		Title("Directory").
@@ -39,7 +56,18 @@ func promptCreate(
 		Placeholder(".").
 		Value(&values.Directory).
 		Validate(func(path string) error {
-			return validateCreateDirectory(path)
+			if err := validateCreateDirectory(path); err != nil {
+				return err
+			}
+			if nameFromFlag || values.Name != derivedName {
+				return nil
+			}
+			derivedName = defaultCreateName(path)
+			values.Name = derivedName
+			// huh reads the text field, not the accessor, while editing, so
+			// reattaching the accessor is what shows the new default.
+			name.Accessor(nameAccessor)
+			return nil
 		})
 	product := huh.NewSelect[string]().
 		Key("product").
@@ -90,9 +118,9 @@ func promptCreate(
 		Value(&values.CoreVersion)
 
 	groups := []*huh.Group{
-		huh.NewGroup(directory, product, minecraft).
+		huh.NewGroup(directory, name, product, minecraft).
 			Title("New server").
-			Description("Choose where the server lives and what it runs."),
+			Description("Choose where the server lives, what it is called, and what it runs."),
 		huh.NewGroup(coreVersion).
 			Title("Server version").
 			Description("Pick an exact build or let Lucy choose the latest.").
@@ -175,6 +203,10 @@ func promptCreate(
 	values.Directory = strings.TrimSpace(values.Directory)
 	if values.Directory == "" {
 		values.Directory = "."
+	}
+	values.Name = strings.TrimSpace(values.Name)
+	if values.Name == "" {
+		values.Name = defaultCreateName(values.Directory)
 	}
 	values.Minecraft = strings.TrimSpace(values.Minecraft)
 	values.CoreVersion = strings.TrimSpace(values.CoreVersion)
@@ -259,6 +291,7 @@ func createFormSummary(values createChoices) string {
 	}
 	server := createProductTitle(values.Product)
 	lines := []string{
+		"Name: " + values.Name,
 		"Directory: " + displayCreateLocation(values.Directory),
 		"Server: " + server + " for Minecraft " + values.Minecraft,
 		"Server version: " + serverVersion,
@@ -338,5 +371,25 @@ func validateCreateDirectory(path string) error {
 		path = "."
 	}
 	_, err := operation.InspectCreateTarget(path)
+	return err
+}
+
+// defaultCreateName names a new server after the directory it occupies. The
+// name is not slugged: an unusable directory name leaves the input empty so
+// the form asks for an explicit name.
+func defaultCreateName(directory string) string {
+	target, err := operation.InspectCreateTarget(directory)
+	if err != nil {
+		return ""
+	}
+	name, err := document.NormalizeName(filepath.Base(target.Path))
+	if err != nil {
+		return ""
+	}
+	return name
+}
+
+func validateCreateName(value string) error {
+	_, err := document.NormalizeName(value)
 	return err
 }
