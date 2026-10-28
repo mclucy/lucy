@@ -77,9 +77,6 @@ jobs:
           go-version: "1.27"
           cache: true
 
-      - name: Generate embedded documentation
-        run: go run ./tools/gendocs
-
       - name: Set up Task
         if: ${{ inputs.task }}
         uses: go-task/setup-task@v2

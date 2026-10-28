@@ -219,7 +219,8 @@ Documentation has two audiences. Choose the layer before writing:
 - Put agent pages in `docs/agents/*.mdx`. Keep them accessible by direct Mintlify URL and searchable through `lucy docs grep`, but do not add them to site navigation or other user-interface entry points.
 - Explain Lucy's actual internal architecture and domain models: ownership, state, boundaries, data flow, invariants, and failure or recovery semantics. Ground claims in the current source and name relevant packages or entry points when useful.
 - Do not duplicate human tutorials, command reference material, or agent-specific usage workflows. Agents learn how to use Lucy from the human documentation.
-- Keep both layers consistent with the implementation. When agent pages change, regenerate the embedded documentation, rebuild Lucy, and verify that the new pages can be found with `lucy docs grep`.
+- Keep both layers consistent with the implementation. When agent pages change, rebuild Lucy and verify that the new pages can be found with `lucy docs grep`.
+- Default builds embed the tracked `.mdx` pages, while release builds embed the archive packed by `task docs:pack`. Add a new page directory to the embed patterns in `docs/embed_pages.go`, or that directory's pages reach release binaries only.
 
 ## Comments
 

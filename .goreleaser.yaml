@@ -27,6 +27,7 @@ builds:
       - -trimpath
     tags:
       - release
+      - docsarchive
       - nethttpomithttp2
     ldflags:
       - -s -w

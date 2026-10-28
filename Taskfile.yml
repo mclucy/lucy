@@ -28,7 +28,6 @@ tasks:
     desc: Build the local development binary for the host platform
     deps:
       - check:cf-api-key
-      - docs:pack
     cmds:
       - |
         set -euo pipefail
@@ -52,7 +51,7 @@ tasks:
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
-      - "./docs/docs.tar.gz"
+      - "./docs/**/*.mdx"
       - "./go.mod"
       - "./go.sum"
     generates:
@@ -111,15 +110,15 @@ tasks:
             fi
           fi
         fi
-        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-arm64
-        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-arm64
+        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-arm64
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
-      - "./docs/docs.tar.gz"
+      - "./docs/**/*.mdx"
       - "./go.mod"
       - "./go.sum"
   clean:
@@ -142,8 +141,6 @@ tasks:
     silent: true
     dir: "{{.USER_WORKING_DIR}}"
     desc: Run the local latest codebase with the provided arguments
-    deps:
-      - docs:pack
     cmds:
       - go run {{.TASKFILE_DIR}} {{.CLI_ARGS}}
 
@@ -217,36 +214,26 @@ tasks:
 
   test:
     desc: Run the Go test suite
-    deps:
-      - docs:pack
     cmds:
       - go test ./...
 
   test:race:
     desc: Run the Go test suite with the race detector
-    deps:
-      - docs:pack
     cmds:
       - go test -race ./...
 
   test:integration:
     desc: Run hermetic CAS, cache, file transaction, and CLI integration scenarios
-    deps:
-      - docs:pack
     cmds:
       - go test -tags integration ./...
 
   test:integration:race:
     desc: Run integration scenarios with the race detector
-    deps:
-      - docs:pack
     cmds:
       - go test -race -tags integration ./...
 
   test:coverage:
     desc: Run the Go test suite with a coverage profile
-    deps:
-      - docs:pack
     cmds:
       - go test -coverprofile=cover.out ./...
       - go tool gocover-cobertura < cover.out > coverage.xml
@@ -287,12 +274,6 @@ tasks:
     cmds:
       - go run ./tools/gendocs {{.CLI_ARGS}}
 
-  docs:check:
-    desc: Verify the generated documentation archive matches the source pages
-    dir: "{{.TASKFILE_DIR}}"
-    cmds:
-      - go run ./tools/gendocs -check
-
   docs:wiki:
     desc: "Render the GitHub wiki mirror into dist/wiki"
     dir: "{{.TASKFILE_DIR}}"
@@ -301,43 +282,31 @@ tasks:
 
   e2e:status:
     desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
-    deps:
-      - docs:pack
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/status {{.CLI_ARGS}}
 
   e2e:init:
     desc: "Initialize modpack manifests from sandboxes (args: -run 'TestInitialize/<modpack id>')"
-    deps:
-      - docs:pack
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/init {{.CLI_ARGS}}
 
   e2e:compile:
     desc: "Compile pinned repository fixtures (args: -run 'TestCompile/<fixture id>')"
-    deps:
-      - docs:pack
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
   e2e:compile:smoke:
     desc: "Compile the fixtures marked smoke (args: -run 'TestCompile/<fixture id>')"
-    deps:
-      - docs:pack
     cmds:
       - LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 0 ./e2e/compile {{.CLI_ARGS}}
 
   e2e:install:
     desc: "Run fresh and init-then-install scenarios (args: -run 'Test(Init)?Install/<scenario id>')"
-    deps:
-      - docs:pack
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
 
   e2e:filetrack:
     desc: "Run the hermetic file tracking and CLI transaction scenarios"
-    deps:
-      - docs:pack
     cmds:
       - go test -tags integration -count=1 -timeout 0 ./e2e/filetrack ./filetrack {{.CLI_ARGS}}
 

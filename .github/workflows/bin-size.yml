@@ -69,13 +69,13 @@ jobs:
 
           for name, goos, goarch, ext in targets:
               out = f"/tmp/pr-bins/lucy-{name}{ext}"
-              cmd = ["go", "build", "-trimpath", "-ldflags=-w -s", "-tags=release,nethttpomithttp2", "-o", out]
+              cmd = ["go", "build", "-trimpath", "-ldflags=-w -s", "-tags=release,docsarchive,nethttpomithttp2", "-o", out]
               env = dict(os.environ, GOOS=goos, GOARCH=goarch)
               subprocess.run(cmd, cwd="pr", env=env, check=True)
 
           for name, goos, goarch, ext in targets:
               out = f"/tmp/main-bins/lucy-{name}{ext}"
-              cmd = ["go", "build", "-trimpath", "-ldflags=-w -s", "-tags=release,nethttpomithttp2", "-o", out]
+              cmd = ["go", "build", "-trimpath", "-ldflags=-w -s", "-tags=release,docsarchive,nethttpomithttp2", "-o", out]
               env = dict(os.environ, GOOS=goos, GOARCH=goarch)
               subprocess.run(cmd, cwd="main", env=env, check=True)
           def fmt(b):
