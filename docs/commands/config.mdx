@@ -25,14 +25,14 @@ Lucy uses the configured runtime even when it does not meet the server's require
 
 ## Choose a release mirror and API key
 
-`github.proxy` prefixes GitHub release download URLs with a mirror, for example `https://ghfast.top/`. The value must be an absolute HTTP(S) URL. An empty value downloads from GitHub directly. Only release asset URLs are rewritten; API and metadata requests keep their canonical address. Cached artifacts stay keyed by the canonical URL, so switching the proxy does not redownload verified bytes.
+`github.proxy` prefixes GitHub release download URLs with a mirror, for example `https://ghfast.top/`. The value must be an absolute HTTP(S) URL without a query or fragment. An empty value downloads from GitHub directly. Only release asset downloads use the mirror; API and metadata requests go to GitHub directly. Changing the proxy does not download artifacts you already have.
 
 `curseforge.api_key` supplies a CurseForge API key for this machine. A non-empty key overrides the key embedded in this Lucy build. An empty value keeps the embedded key.
 
 ```bash
 lucy config set github.proxy https://ghfast.top/
 lucy config set github.proxy ""   # download from GitHub directly
-lucy config set curseforge.api_key "your-curseforge-key"
+lucy config set --global curseforge.api_key 'your-curseforge-key'
 ```
 
 ## Configuration files
