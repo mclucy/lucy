@@ -2,23 +2,37 @@
 package identify
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 )
 
+// HashLookup resolves an artifact fingerprint through the configured
+// upstream catalogue. Callers inject the routing capability they own.
+type HashLookup func(
+	ctx context.Context,
+	artifact upstream.ArtifactFingerprint,
+) routing.ArtifactLookup
+
 // Packages adds upstream identities for observed.UnidentifiedPackageFiles.
 // It preserves descriptor-derived packages and dependencies, updates the same
 // observation, and returns it. Unmatched paths remain. Provider failures
 // include file context and are returned even when a later provider identifies
-// the file.
-func Packages(observed *workspace.Workspace) (*workspace.Workspace, []error) {
+// the file. A non-empty candidate set requires lookup.
+func Packages(
+	ctx context.Context,
+	observed *workspace.Workspace,
+	lookup HashLookup,
+) (*workspace.Workspace, []error) {
 	if observed == nil {
 		return nil, nil
 	}
@@ -26,13 +40,16 @@ func Packages(observed *workspace.Workspace) (*workspace.Workspace, []error) {
 	if len(candidates) == 0 {
 		return observed, nil
 	}
+	if lookup == nil {
+		return observed, []error{errors.New("package identification requires a hash lookup")}
+	}
 
 	// Each worker owns one slot. Merge in candidate order after all lookups finish.
 	lookups := make([]routing.ArtifactLookup, len(candidates))
 	var wg sync.WaitGroup
 	for i, path := range candidates {
 		wg.Go(func() {
-			lookups[i] = routing.ResolveArtifactByHash(artifact.File{Path: path})
+			lookups[i] = lookup(ctx, artifact.File{Path: path})
 		})
 	}
 	wg.Wait()

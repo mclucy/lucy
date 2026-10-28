@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/log"
 )
 
 // Codec decodes and encodes one persisted document type.
@@ -27,14 +26,13 @@ type Codec[T any] struct {
 type Service[T any] struct {
 	path  string
 	codec Codec[T]
-	kind  string
 	mode  os.FileMode
 }
 
 // NewService binds a codec to a path. New files use 0644 unless WithMode says
 // otherwise.
 func NewService[T any](path string, codec Codec[T]) Service[T] {
-	return Service[T]{path: path, codec: codec, kind: "document", mode: 0o644}
+	return Service[T]{path: path, codec: codec, mode: 0o644}
 }
 
 // WithMode returns a copy of the service that creates new files with mode.
@@ -81,7 +79,6 @@ func (s Service[T]) Write(value *T) error {
 	if err := fsutil.AtomicWrite(s.path, data, s.mode); err != nil {
 		return err
 	}
-	log.Info(s.kind+" written", "path", s.path)
 	return nil
 }
 
@@ -146,7 +143,6 @@ func (s Service[T]) Create(value *T) error {
 	if err := errors.Join(writeErr, root.Close()); err != nil {
 		return err
 	}
-	log.Info(s.kind+" created", "path", s.path)
 	return nil
 }
 
@@ -204,11 +200,6 @@ func (s Service[T]) publishRoot(root *os.Root, relative string, value *T, replac
 	if err != nil {
 		return err
 	}
-	verb := "written"
-	if !replace {
-		verb = "created"
-	}
-	log.Info(s.kind+" "+verb, "path", filepath.Join(root.Name(), relative))
 	return nil
 }
 
@@ -221,7 +212,6 @@ func ManifestFile(root string) Service[Manifest] {
 			return m.MergeBytes(existing)
 		},
 	})
-	service.kind = "manifest"
 	return service
 }
 
@@ -234,6 +224,5 @@ func LockFile(root string) Service[Lock] {
 			return l.MergeBytes(existing)
 		},
 	})
-	service.kind = "lock"
 	return service
 }

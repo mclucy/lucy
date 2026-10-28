@@ -38,10 +38,13 @@ func parseOutputDestination(value string) outputDestination {
 // resolve returns the absolute destination for the artifact Gradle built as
 // artifactName. A directory destination stores the JAR under that name, while
 // an explicit destination keeps the file name the user asked for.
-func (d outputDestination) resolve(artifactName string) (string, error) {
+func (d outputDestination) resolve(base, artifactName string) (string, error) {
 	target := d.file
 	if d.directory != "" {
 		target = filepath.Join(d.directory, artifactName)
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(base, target)
 	}
 	resolved, err := filepath.Abs(target)
 	if err != nil {

@@ -15,8 +15,6 @@ import (
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
-
-	"github.com/mclucy/lucy/log"
 )
 
 // repositoryKeyMaxBytes is the largest key file Lucy accepts. A vendor key is
@@ -26,10 +24,12 @@ const repositoryKeyMaxBytes = 1 << 20
 func addRepositoryKey(
 	ctx context.Context,
 	key *RepositoryKey,
-	host Host,
+	policy Policy,
+	host *Host,
+	input io.Reader,
 	out io.Writer,
 ) error {
-	entity, err := fetchRepositoryKey(ctx, key)
+	entity, err := fetchRepositoryKey(ctx, key, host)
 	if err != nil {
 		return err
 	}
@@ -37,7 +37,7 @@ func addRepositoryKey(
 	if err != nil {
 		return err
 	}
-	return writeRootFile(ctx, key.Path, data, host, out)
+	return writeRootFile(ctx, key.Path, data, policy, host, input, out)
 }
 
 // fetchRepositoryKey downloads and verifies the pinned key. A key URL must
@@ -45,6 +45,7 @@ func addRepositoryKey(
 func fetchRepositoryKey(
 	ctx context.Context,
 	key *RepositoryKey,
+	host *Host,
 ) (*openpgp.Entity, error) {
 	address, err := url.Parse(key.URL)
 	if err != nil {
@@ -56,13 +57,10 @@ func fetchRepositoryKey(
 			key.URL,
 		)
 	}
-	log.Debug("fetching repository key", "url", key.URL)
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, key.URL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create repository key request: %w", err)
-	}
-	client := &http.Client{Timeout: probeTimeout}
-	response, err := client.Do(request)
+	host.logger.Debug("fetching repository key", "url", key.URL)
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	response, err := host.request(probeCtx, key.URL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch repository key: %w", err)
 	}

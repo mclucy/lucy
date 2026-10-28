@@ -4,17 +4,23 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/cli"
 
 	"github.com/spf13/cobra"
 )
 
-func newUpdateCmd() *cobra.Command {
+func newUpdateCmd(
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update [path...]",
 		Short: UpdateShort,
 		Long:  UpdateLong,
 		Args:  pathOrAllArgs,
-		RunE:  actionFileUpdate,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileUpdate(cmd, inv, deps, args)
+		},
 	}
 	cmd.Flags().Bool(
 		flagFromSource,
@@ -29,13 +35,18 @@ func newUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-func newRecoverCmd() *cobra.Command {
+func newRecoverCmd(
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "recover [path...]",
 		Short: RecoverShort,
 		Long:  RecoverLong,
 		Args:  pathOrAllArgs,
-		RunE:  actionFileRecover,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileRecover(cmd, inv, deps, args)
+		},
 	}
 	cmd.Flags().Bool(
 		flagAll,
@@ -45,13 +56,18 @@ func newRecoverCmd() *cobra.Command {
 	return cmd
 }
 
-func newRevertCmd() *cobra.Command {
+func newRevertCmd(
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "revert <path> [hash]",
 		Short: RevertShort,
 		Long:  RevertLong,
 		Args:  revertArgs,
-		RunE:  actionFileRevert,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileRevert(cmd, inv, deps, args)
+		},
 	}
 	cmd.Flags().Uint64(
 		flagRevision,
@@ -61,18 +77,18 @@ func newRevertCmd() *cobra.Command {
 	return cmd
 }
 
-func actionFileUpdate(cmd *cobra.Command, args []string) error {
-	root, err := workRoot()
-	if err != nil {
-		return err
-	}
-
+func actionFileUpdate(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
 	fromSource, _ := cmd.Flags().GetBool(flagFromSource)
 	all, _ := cmd.Flags().GetBool(flagAll)
 
-	result, err := filetrack.Run(
+	result, err := deps.Files.Run(
 		cmd.Context(),
-		root,
+		inv.Directory,
 		filetrack.Request{
 			Operation:  filetrack.Update,
 			Paths:      args,
@@ -83,20 +99,20 @@ func actionFileUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return reportFileResult(cmd, result)
+	return reportFileResult(cmd, inv, result)
 }
 
-func actionFileRecover(cmd *cobra.Command, args []string) error {
-	root, err := workRoot()
-	if err != nil {
-		return err
-	}
-
+func actionFileRecover(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
 	all, _ := cmd.Flags().GetBool(flagAll)
 
-	result, err := filetrack.Run(
+	result, err := deps.Files.Run(
 		cmd.Context(),
-		root,
+		inv.Directory,
 		filetrack.Request{
 			Operation: filetrack.Recover,
 			Paths:     args,
@@ -106,15 +122,15 @@ func actionFileRecover(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return reportFileResult(cmd, result)
+	return reportFileResult(cmd, inv, result)
 }
 
-func actionFileRevert(cmd *cobra.Command, args []string) error {
-	root, err := workRoot()
-	if err != nil {
-		return err
-	}
-
+func actionFileRevert(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
 	hash := ""
 	if len(args) == 2 {
 		hash = args[1]
@@ -124,9 +140,9 @@ func actionFileRevert(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--revision requires a positive history sequence")
 	}
 
-	result, err := filetrack.Run(
+	result, err := deps.Files.Run(
 		cmd.Context(),
-		root,
+		inv.Directory,
 		filetrack.Request{
 			Operation: filetrack.Revert,
 			Paths:     args[:1],
@@ -137,5 +153,5 @@ func actionFileRevert(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return reportFileResult(cmd, result)
+	return reportFileResult(cmd, inv, result)
 }

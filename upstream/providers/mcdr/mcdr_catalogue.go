@@ -10,14 +10,14 @@ import (
 	"github.com/mclucy/lucy/version"
 )
 
-func (provider) Candidates(ctx context.Context, project, _ string, loader catalog.Ecosystem) ([]upstream.Candidate, error) {
+func (p *Provider) Candidates(ctx context.Context, project, _ string, loader catalog.Ecosystem) ([]upstream.Candidate, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if loader != catalog.EcosystemMCDR {
 		return nil, fmt.Errorf("MCDR catalogue requires the mcdr loader")
 	}
-	history, err := getReleaseHistory(project)
+	history, err := p.getReleaseHistory(ctx, project)
 	if err != nil {
 		return nil, err
 	}

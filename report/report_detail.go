@@ -33,17 +33,18 @@ func (d *Detail) Unwrap() error {
 	return d.Cause
 }
 
-// RenderDetail writes one detail to w. Every surface that reports failures
-// uses it, so a failure reads the same wherever it appears.
-func RenderDetail(w io.Writer, detail *Detail) {
+// RenderDetail writes one detail to w with the supplied theme. Every surface
+// that reports failures uses it, so a failure reads the same wherever it
+// appears.
+func RenderDetail(w io.Writer, detail *Detail, theme style.Theme) {
 	if detail == nil {
 		return
 	}
-	_, _ = fmt.Fprintf(w, "%s %s\n", style.Failure("error:"), detail.Title)
+	_, _ = fmt.Fprintf(w, "%s %s\n", theme.Failure("error:"), detail.Title)
 	for _, line := range detail.Lines {
-		_, _ = fmt.Fprintf(w, "  %s %s\n", style.Muted("│"), line)
+		_, _ = fmt.Fprintf(w, "  %s %s\n", theme.Muted("│"), line)
 	}
 	if detail.Hint != "" {
-		_, _ = fmt.Fprintf(w, "  %s %s\n", style.Note("hint:"), detail.Hint)
+		_, _ = fmt.Fprintf(w, "  %s %s\n", theme.Note("hint:"), detail.Hint)
 	}
 }

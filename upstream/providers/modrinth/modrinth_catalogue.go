@@ -10,11 +10,11 @@ import (
 	"github.com/mclucy/lucy/version"
 )
 
-func (provider) Candidates(ctx context.Context, project, minecraft string, loader catalog.Ecosystem) ([]upstream.Candidate, error) {
+func (p *Provider) Candidates(ctx context.Context, project, minecraft string, loader catalog.Ecosystem) ([]upstream.Candidate, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	versions, err := listVersions(catalog.Name(project))
+	versions, err := p.listVersions(ctx, catalog.Name(project))
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 			for _, d := range v.Dependencies {
 				projectID := d.ProjectId
 				if projectID == "" && d.VersionId != "" {
-					pinned, e := getVersionById(d.VersionId)
+					pinned, e := p.getVersionById(ctx, d.VersionId)
 					if e != nil {
 						return nil, e
 					}

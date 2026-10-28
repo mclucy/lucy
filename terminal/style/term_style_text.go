@@ -14,20 +14,25 @@ import (
 
 const CRLF = "\r\n"
 
-func MarkdownToAnsi(md string, maxWidth int) string {
+// Markdown renders Markdown with the theme's color choice and the output
+// stream's capabilities. A width of zero falls back to the terminal width.
+func (t Theme) Markdown(md string, maxWidth int, terminal Terminal) string {
 	trimmed := strings.TrimSpace(md)
 	if trimmed == "" {
 		return ""
 	}
 	if maxWidth <= 0 {
-		maxWidth = TermWidth()
+		maxWidth = terminal.Width
+	}
+	if maxWidth <= 0 {
+		maxWidth = DefaultTerminalWidth
 	}
 
 	options := []glamour.TermRendererOption{
 		glamour.WithWordWrap(maxWidth),
 	}
-	if ColorsEnabled() {
-		if HasDarkBackground() {
+	if t.colors {
+		if terminal.Dark {
 			options = append(options, glamour.WithStandardStyle(styles.DarkStyle))
 		} else {
 			options = append(options, glamour.WithStandardStyle(styles.LightStyle))

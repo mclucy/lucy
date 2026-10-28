@@ -6,7 +6,9 @@ import (
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/log"
 	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -83,13 +85,27 @@ func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
 	}
 }
 
-// PackagesRequest describes one package resolution. Trace and Context
-// default to their zero values, which report nothing and never cancel.
+// CandidateSource lists the published builds of one project. Callers inject
+// the routing capability that serves their configured providers; resolution
+// never selects a provider on its own.
+type CandidateSource func(
+	ctx context.Context,
+	registry catalog.Registry,
+	project, minecraft string,
+	ecosystem catalog.Ecosystem,
+) ([]upstream.Candidate, error)
+
+// PackagesRequest describes one package resolution. Trace, Logger, and Context
+// default to their zero values, which report nothing and never cancel. A
+// resolution that needs candidates fails when Candidates is nil.
 type PackagesRequest struct {
 	Context  context.Context
 	Manifest *document.Manifest
 	Previous []document.Package
 	Target   Target
+	// Candidates lists the builds a direct or dependency requirement may
+	// select. It is required for every non-empty resolution.
+	Candidates CandidateSource
 	// Materialize must leave its input unchanged and return verified local bytes.
 	Materialize        func(*catalog.Artifact) (artifact.MaterializedFile, error)
 	WithOptional       bool
@@ -98,5 +114,7 @@ type PackagesRequest struct {
 	// Cache reuses artifact analysis across candidate combinations. A nil
 	// cache analyzes every candidate from scratch.
 	Cache *AnalysisCache
-	Trace Trace
+	// Logger records resolution diagnostics. A nil Logger records nothing.
+	Logger *log.Logger
+	Trace  Trace
 }

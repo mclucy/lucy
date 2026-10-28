@@ -10,13 +10,8 @@ import (
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/providers/fabric"
-	"github.com/mclucy/lucy/upstream/providers/forge"
-	"github.com/mclucy/lucy/upstream/providers/mojang"
-	"github.com/mclucy/lucy/upstream/providers/neoforge"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -42,12 +37,21 @@ func CoreModules(
 	return artifact.ReadModules(ctx, materialized.Path, catalog.EcosystemFabric)
 }
 
-func Metadata(ctx context.Context, endpoint string, target any) error {
+// Metadata fetches JSON metadata through the router's configured network.
+func (r *Router) Metadata(
+	ctx context.Context,
+	endpoint string,
+	target any,
+) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	log.Debug("routing: metadata request", "endpoint", endpoint)
-	data, err := cache.CachedGetBytes(endpoint, cache.BytesRequestOptions{Kind: cache.KindMetadata})
+	r.logger.Debug("routing: metadata request", "endpoint", endpoint)
+	data, err := r.network.CachedGetBytes(
+		ctx,
+		endpoint,
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
 	if err != nil {
 		return err
 	}
@@ -60,11 +64,18 @@ func Metadata(ctx context.Context, endpoint string, target any) error {
 // checksum would pin unverified bytes in the lock. The repository sidecar is
 // that source, and an unavailable one fails the resolution rather than
 // lowering the guarantee.
-func trustMavenChecksum(ctx context.Context, a *catalog.Artifact) error {
+func (r *Router) trustMavenChecksum(
+	ctx context.Context,
+	a *catalog.Artifact,
+) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	data, err := cache.CachedGetBytes(a.URL+".sha256", cache.BytesRequestOptions{Kind: cache.KindMetadata})
+	data, err := r.network.CachedGetBytes(
+		ctx,
+		a.URL+".sha256",
+		cache.BytesRequestOptions{Kind: cache.KindMetadata},
+	)
 	if err != nil {
 		return fmt.Errorf("no trusted checksum for %s: %w", a.Filename, err)
 	}
@@ -73,7 +84,7 @@ func trustMavenChecksum(ctx context.Context, a *catalog.Artifact) error {
 		return fmt.Errorf("malformed checksum for %s", a.Filename)
 	}
 	a.Hashes["sha256"] = sum
-	log.Debug(
+	r.logger.Debug(
 		"routing: trusted checksum adopted",
 		"artifact", a.Filename,
 		"sha256", sum,
@@ -85,7 +96,7 @@ func trustMavenChecksum(ctx context.Context, a *catalog.Artifact) error {
 // inputs, and the Java advisory for the requested Minecraft version. The
 // advisory comes from Mojang's per-version metadata. It always acquires the
 // selected core because the lock records the bytes it pins.
-func ResolveServerProduct(
+func (r *Router) ResolveServerProduct(
 	ctx context.Context,
 	req ServerProductRequest,
 	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
@@ -95,7 +106,7 @@ func ResolveServerProduct(
 		Product:        req.Product,
 		ProductVersion: req.ProductVersion,
 	}
-	advisory, err := mojang.JavaAdvisory(req.Minecraft)
+	advisory, err := r.mojang.JavaAdvisory(ctx, req.Minecraft)
 	if err != nil {
 		return out, err
 	}
@@ -104,7 +115,8 @@ func ResolveServerProduct(
 		Ecosystem:        catalog.EcosystemMinecraft,
 		MinecraftVersion: req.Minecraft,
 	}
-	vanilla, err := mojang.Provider.Fetch(
+	vanilla, err := r.mojang.Fetch(
+		ctx,
 		local,
 		catalog.VersionedRef{
 			Name:      "minecraft",
@@ -124,7 +136,7 @@ func ResolveServerProduct(
 		Hashes:    map[string]string{"sha1": vanilla.Hash},
 	}
 	if req.Product == server.ProductMinecraft {
-		log.Debug(
+		r.logger.Debug(
 			"routing: server product route selected",
 			"product", req.Product,
 			"provider", catalog.ProviderMojang,
@@ -145,17 +157,18 @@ func ResolveServerProduct(
 		},
 	}
 	if req.Repository != "" {
-		log.Debug(
+		r.logger.Debug(
 			"routing: server product route selected",
 			"product", req.Product,
 			"provider", catalog.ProviderGitHub,
 			"repository", req.Repository,
 		)
-		err = resolveGithubProduct(ctx, req, &out, acquire)
+		err = r.resolveGithubProduct(ctx, req, &out, acquire)
 	} else {
 		switch req.Product {
 		case server.ProductFabric:
-			selected, e := fabric.Provider.ResolveVersionSelector(
+			selected, e := r.fabric.ResolveVersionSelector(
+				ctx,
 				local,
 				catalog.VersionedRef{
 					Name:      "fabric",
@@ -168,7 +181,7 @@ func ResolveServerProduct(
 			}
 			out.ProductVersion = selected.Version
 			out.Bootstrapper = "fabric"
-			log.Debug(
+			r.logger.Debug(
 				"routing: server product route selected",
 				"product", req.Product,
 				"provider", catalog.ProviderFabric,
@@ -178,7 +191,7 @@ func ResolveServerProduct(
 				MainClass string         `json:"mainClass"`
 				Libraries []mavenLibrary `json:"libraries"`
 			}
-			if e := Metadata(
+			if e := r.Metadata(
 				ctx,
 				"https://meta.fabricmc.net/v2/versions/loader/"+
 					url.PathEscape(req.Minecraft.String())+"/"+
@@ -198,7 +211,7 @@ func ResolveServerProduct(
 					out.ProductVersion.String() + ".jar",
 				Hashes: map[string]string{},
 			}
-			if e := trustMavenChecksum(ctx, &out.Artifact); e != nil {
+			if e := r.trustMavenChecksum(ctx, &out.Artifact); e != nil {
 				return out, e
 			}
 			materialized, e := acquire(&out.Artifact)
@@ -236,7 +249,8 @@ func ResolveServerProduct(
 			)
 			if req.Product == server.ProductForge {
 				provider = catalog.ProviderForge
-				remote, err = forge.Provider.Fetch(
+				remote, err = r.forge.Fetch(
+					ctx,
 					local,
 					catalog.VersionedRef{
 						Name:      "forge",
@@ -246,7 +260,8 @@ func ResolveServerProduct(
 				)
 			} else {
 				provider = catalog.ProviderNeoForge
-				remote, err = neoforge.Provider.Fetch(
+				remote, err = r.neoforge.Fetch(
+					ctx,
 					local,
 					catalog.VersionedRef{
 						Name:      "neoforge",
@@ -271,17 +286,17 @@ func ResolveServerProduct(
 				return out, e
 			}
 			out.Artifact.Hashes = materialized.Hashes
-			if err := resolveInstaller(ctx, req, &out, materialized.Path); err != nil {
+			if err := r.resolveInstaller(ctx, req, &out, materialized.Path); err != nil {
 				return out, err
 			}
-			log.Debug(
+			r.logger.Debug(
 				"routing: server product route selected",
 				"product", req.Product,
 				"provider", provider,
 				"version", out.ProductVersion,
 			)
 		case server.ProductPaper:
-			err = resolvePaper(ctx, req, &out)
+			err = r.resolvePaper(ctx, req, &out)
 		case server.ProductPurpur:
 			build := req.ProductVersion
 			if floating(build) {
@@ -292,7 +307,7 @@ func ResolveServerProduct(
 				Version string `json:"version"`
 				MD5     string `json:"md5"`
 			}
-			if e := Metadata(
+			if e := r.Metadata(
 				ctx,
 				"https://api.purpurmc.org/v2/purpur/"+
 					req.Minecraft.String()+"/"+build.String(),
@@ -320,14 +335,14 @@ func ResolveServerProduct(
 				Hashes: map[string]string{"md5": info.MD5},
 			}
 			out.Bootstrapper = "paperclip"
-			log.Debug(
+			r.logger.Debug(
 				"routing: server product route selected",
 				"product", req.Product,
 				"provider", catalog.ProviderPurpur,
 				"build", info.Build,
 			)
 		default:
-			log.Debug(
+			r.logger.Debug(
 				"routing: server product route rejected",
 				"product", req.Product,
 				"reason", "unsupported server product",

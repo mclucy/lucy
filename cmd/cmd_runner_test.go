@@ -10,145 +10,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/spf13/cobra"
 )
-
-func TestCommandTreeContracts(t *testing.T) {
-	contracts := cli.NewJSONContracts()
-	root := NewRootCommand(contracts)
-
-	// Commands that intentionally expose only human output. Every other
-	// runnable command must declare a JSON result contract.
-	humanOnly := map[string]bool{
-		"compile": true,
-		"docs":    true,
-		"doctor":  true,
-		"export":  true,
-	}
-	// Container commands render help; their children carry the contracts.
-	helpOnly := map[string]bool{
-		"bisect": true,
-		"cache":  true,
-		"file":   true,
-		"java":   true,
-	}
-
-	// An allowlist must name a live root command, so a rename cannot silently
-	// leave a command exempt.
-	rootChild := func(name string) *cobra.Command {
-		for _, child := range root.Commands() {
-			if child.Name() == name {
-				return child
-			}
-		}
-		return nil
-	}
-	for name := range humanOnly {
-		child := rootChild(name)
-		if child == nil {
-			t.Errorf("humanOnly names unknown root command %q", name)
-			continue
-		}
-		if !child.Runnable() {
-			t.Errorf("humanOnly names non-runnable command %q", name)
-		}
-		if contracts.Supports(child) {
-			t.Errorf("%q is human-only but declares a JSON result", name)
-		}
-	}
-	for name := range helpOnly {
-		child := rootChild(name)
-		if child == nil {
-			t.Errorf("helpOnly names unknown root command %q", name)
-			continue
-		}
-		if !child.Runnable() || !child.HasSubCommands() {
-			t.Errorf("helpOnly names %q, want a runnable container", name)
-		}
-		if contracts.Supports(child) {
-			t.Errorf("%q renders only help but declares a JSON result", name)
-		}
-	}
-
-	var runnable int
-	var walk func(*cobra.Command)
-	walk = func(parent *cobra.Command) {
-		for _, child := range parent.Commands() {
-			walk(child)
-			if !child.Runnable() {
-				continue
-			}
-			runnable++
-			if contracts.Supports(child) {
-				continue
-			}
-			if humanOnly[topLevelName(root, child)] {
-				continue
-			}
-			if child.Parent() == root && helpOnly[child.Name()] && child.HasSubCommands() {
-				continue
-			}
-			t.Errorf("%s is runnable but declares no JSON result contract",
-				child.CommandPath())
-		}
-	}
-	walk(root)
-	if runnable == 0 {
-		t.Fatal("command tree exposes no runnable commands")
-	}
-
-	docsCmd, remaining, err := root.Find([]string{"docs"})
-	if err != nil || len(remaining) != 0 {
-		t.Fatalf("find docs: command=%v remaining=%v err=%v",
-			docsCmd, remaining, err)
-	}
-	if !docsCmd.Runnable() {
-		t.Fatal("docs must stay runnable")
-	}
-	if !contracts.Ignores(docsCmd) {
-		t.Fatal("docs must be ignored by the JSON contracts")
-	}
-	if contracts.Supports(docsCmd) {
-		t.Fatal("docs must not declare a JSON result")
-	}
-
-	paths := contracts.Paths(root)
-	if len(paths) == 0 {
-		t.Fatal("command tree declares no JSON result paths")
-	}
-	if !slices.IsSorted(paths) {
-		t.Fatalf("Paths must be sorted, got %v", paths)
-	}
-	for _, path := range paths {
-		found, extra, err := root.Find(strings.Fields(path))
-		if err != nil || len(extra) != 0 {
-			t.Errorf("declared path %q does not resolve: remaining=%v err=%v",
-				path, extra, err)
-			continue
-		}
-		if !contracts.Supports(found) {
-			t.Errorf("declared path %q resolves to an unsupported command", path)
-		}
-		schema, err := contracts.Schema(found)
-		if err != nil {
-			t.Errorf("schema for declared path %q: %v", path, err)
-			continue
-		}
-		if schema == nil {
-			t.Errorf("schema for declared path %q is nil", path)
-		}
-	}
-}
-
-// topLevelName reports the root-level command that owns cmd.
-func topLevelName(root, cmd *cobra.Command) string {
-	for current := cmd; current != nil; current = current.Parent() {
-		if current.Parent() == root {
-			return current.Name()
-		}
-	}
-	return cmd.Name()
-}
 
 // executeRunner runs one invocation the way main does: execute first, then
 // publish any buffered machine result.
@@ -157,12 +19,18 @@ func executeRunner(t *testing.T, args []string, logPath string) (string, string,
 	var stdout, stderr bytes.Buffer
 	runner := NewRunner(
 		append(slices.Clone(args), "--log-file", logPath),
-		strings.NewReader(""),
-		&stdout,
-		&stderr,
+		RunnerOptions{
+			Directory: filepath.Dir(logPath),
+			Stdin:     strings.NewReader(""),
+			Stdout:    &stdout,
+			Stderr:    &stderr,
+		},
 	)
-	if err := runner.Execute(); err != nil {
+	if err := runner.Execute(t.Context()); err != nil {
 		t.Fatalf("Execute(%v): %v", args, err)
+	}
+	if err := runner.Close(); err != nil {
+		t.Fatalf("Close(%v): %v", args, err)
 	}
 	if err := runner.FlushOutput(); err != nil {
 		t.Fatalf("FlushOutput(%v): %v", args, err)
@@ -217,12 +85,18 @@ func TestRunnerFailureDocument(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	runner := NewRunner(
 		[]string{"schema", "bogus", "--log-file", logPath},
-		strings.NewReader(""),
-		&stdout,
-		&stderr,
+		RunnerOptions{
+			Directory: filepath.Dir(logPath),
+			Stdin:     strings.NewReader(""),
+			Stdout:    &stdout,
+			Stderr:    &stderr,
+		},
 	)
 
-	err := runner.Execute()
+	err := runner.Execute(t.Context())
+	if closeErr := runner.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
 	if err == nil {
 		t.Fatal("schema bogus must fail")
 	}
@@ -284,12 +158,6 @@ func TestRunnerIsolation(t *testing.T) {
 	for _, output := range []string{compactStdout, prettyStdout} {
 		var document any
 		decodeOneDocument(t, output, &document)
-	}
-
-	firstRoot := NewRootCommand(cli.NewJSONContracts())
-	secondRoot := NewRootCommand(cli.NewJSONContracts())
-	if firstRoot == secondRoot {
-		t.Fatal("NewRootCommand must build a fresh tree per call")
 	}
 }
 

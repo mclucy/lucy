@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // apt installs Java from the configured APT sources.
@@ -16,15 +15,15 @@ func (apt) method() Method { return MethodApt }
 
 func (apt) system() bool { return true }
 
-func (apt) ownsJava() bool { return false }
+func (apt) ownsJava(context.Context, *Host) bool { return false }
 
-func (apt) plans(ctx context.Context, req Request) ([]Plan, error) {
-	if req.Major <= 0 || !systemToolAvailable("apt-get", "apt-cache") {
+func (apt) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
+	if req.Major <= 0 || !host.systemToolAvailable("apt-get", "apt-cache") {
 		return nil, nil
 	}
 	if req.Distribution == java.DistributionAny {
 		pkg := fmt.Sprintf("openjdk-%d-jre-headless", req.Major)
-		if !aptPackageAvailable(ctx, pkg) {
+		if !aptPackageAvailable(ctx, host, pkg) {
 			return nil, nil
 		}
 		return []Plan{
@@ -36,13 +35,13 @@ func (apt) plans(ctx context.Context, req Request) ([]Plan, error) {
 		return nil, nil
 	}
 	for _, pkg := range packages {
-		if aptPackageAvailable(ctx, pkg) {
+		if aptPackageAvailable(ctx, host, pkg) {
 			return []Plan{
 				aptPlan(pkg, req.Distribution, req.Major, nil),
 			}, nil
 		}
 	}
-	repository := aptRepository(req.Distribution)
+	repository := aptRepository(req.Distribution, host)
 	if repository == nil {
 		return nil, nil
 	}
@@ -83,10 +82,14 @@ func aptPlan(
 
 // aptPackageAvailable reports whether the configured sources offer pkg. The
 // probe never changes the package index.
-func aptPackageAvailable(ctx context.Context, pkg string) bool {
-	output, err := systemProbe(ctx, "apt-cache", "policy", pkg)
+func aptPackageAvailable(
+	ctx context.Context,
+	host *Host,
+	pkg string,
+) bool {
+	output, err := host.systemProbe(ctx, "apt-cache", "policy", pkg)
 	if err != nil {
-		log.Debug("apt package probe failed", "package", pkg, "reason", err)
+		host.logger.Debug("apt package probe failed", "package", pkg, "reason", err)
 		return false
 	}
 	for line := range strings.Lines(string(output)) {
@@ -131,10 +134,10 @@ func aptBrandedPackages(
 
 // aptRepository returns the vendor APT source for a build. It returns nil
 // when the vendor documents no source for this host.
-func aptRepository(distribution java.Distribution) *Repository {
+func aptRepository(distribution java.Distribution, host *Host) *Repository {
 	switch distribution {
 	case java.DistributionTemurin:
-		release := systemRelease()
+		release := host.systemRelease()
 		suite := release["VERSION_CODENAME"]
 		if suite == "" {
 			suite = release["UBUNTU_CODENAME"]

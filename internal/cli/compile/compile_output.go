@@ -21,15 +21,21 @@ const excerptLines = 20
 // os/exec copies a child's stdout and stderr on separate goroutines, so every
 // method is guarded.
 type processLog struct {
-	tool string
+	tool     string
+	logger   *log.Logger
+	reporter *report.Reporter
 
 	mu      sync.Mutex
 	partial string
 	recent  []string
 }
 
-func newProcessLog(tool string) *processLog {
-	return &processLog{tool: tool}
+func newProcessLog(
+	tool string,
+	logger *log.Logger,
+	reporter *report.Reporter,
+) *processLog {
+	return &processLog{tool: tool, logger: logger, reporter: reporter}
 }
 
 // Write forwards a raw chunk, splitting complete lines off for the log file
@@ -57,7 +63,7 @@ func (l *processLog) consume(chunk []byte) {
 	l.mu.Unlock()
 
 	if len(complete) > 0 {
-		log.Debug("external tool output", "tool", l.tool, "lines", complete)
+		l.logger.Debug("external tool output", "tool", l.tool, "lines", complete)
 	}
 }
 
@@ -83,7 +89,9 @@ func (l *processLog) excerpt() string {
 // a run of raw lines would be reflowed into a single paragraph.
 func reportFailure(output *processLog, err error) error {
 	if excerpt := output.excerpt(); excerpt != "" {
-		report.Error(errors.New(output.tool + " reported:\n" + indent(excerpt)))
+		output.reporter.Error(
+			errors.New(output.tool + " reported:\n" + indent(excerpt)),
+		)
 	}
 	return err
 }

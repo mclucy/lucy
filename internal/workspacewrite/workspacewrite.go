@@ -31,7 +31,7 @@ type InstallJournal struct {
 // Lock is shared by installation and explicit file operations. It reclaims
 // staging that a killed publisher abandoned, which is safe only under the
 // writer lock it takes, because that lock proves no publisher is live.
-func Lock(root string) (*fsutil.FileLock, error) {
+func Lock(root string, logger *log.Logger) (*fsutil.FileLock, error) {
 	if err := SafePath(root, ".lucy"); err != nil {
 		return nil, err
 	}
@@ -55,10 +55,10 @@ func Lock(root string) (*fsutil.FileLock, error) {
 	removed, sweepErr := fsutil.SweepStaging(files)
 	closeErr := files.Close()
 	if sweepErr != nil {
-		log.Warn(fmt.Errorf("reclaim stale staging files: %w", sweepErr))
+		logger.Warn(fmt.Errorf("reclaim stale staging files: %w", sweepErr))
 	}
 	for _, name := range removed {
-		log.Debug("removed stale staging file", "path", name)
+		logger.Debug("removed stale staging file", "path", name)
 	}
 	if closeErr != nil {
 		return nil, errors.Join(closeErr, lock.Close())
@@ -112,7 +112,7 @@ func RemoveRoot(root *os.Root, relative string) error {
 }
 
 // RecoverInstall must run with workspace ownership before reading state for a new mutation.
-func RecoverInstall(root string) (resultErr error) {
+func RecoverInstall(root string, logger *log.Logger) (resultErr error) {
 	if err := SafePath(root, InstallJournalName); err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func RecoverInstall(root string) (resultErr error) {
 		return err
 	}
 	journalPath := filepath.Join(root, InstallJournalName)
-	log.Warn(
+	logger.Warn(
 		fmt.Errorf(
 			"recovering interrupted installation transaction %s: %d created outputs to remove, %d changed outputs to restore",
 			journalPath, len(journal.Created), len(journal.Changed),
@@ -183,7 +183,7 @@ func RecoverInstall(root string) (resultErr error) {
 	if err := files.RemoveAll(filepath.Join(".lucy", relativeBackup)); err != nil {
 		return err
 	}
-	log.Info(
+	logger.Info(
 		"installation transaction recovered",
 		"root", root,
 		"journal", journalPath,

@@ -7,7 +7,6 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // JavaChange edits declared Java requirements. A nil field stays unchanged.
@@ -28,13 +27,13 @@ type JavaChangeResult struct {
 }
 
 // SetJava changes only the manifest. Installation reconciles the lock.
-func SetJava(ctx context.Context, root string, change JavaChange) (result *JavaChangeResult, resultErr error) {
-	writer, err := workspacewrite.Lock(root)
+func (s *Service) SetJava(ctx context.Context, root string, change JavaChange) (result *JavaChangeResult, resultErr error) {
+	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
 		return nil, err
 	}
 	d, err := document.ManifestFile(root).Read()
@@ -43,7 +42,7 @@ func SetJava(ctx context.Context, root string, change JavaChange) (result *JavaC
 	}
 	result = &JavaChangeResult{}
 	if change.Version != nil || change.Distribution != nil {
-		if err := setJavaOverride(root, d, change, result); err != nil {
+		if err := s.setJavaOverride(root, d, change, result); err != nil {
 			return nil, err
 		}
 	}
@@ -51,7 +50,7 @@ func SetJava(ctx context.Context, root string, change JavaChange) (result *JavaC
 	return result, nil
 }
 
-func setJavaOverride(root string, d *document.Manifest, change JavaChange, result *JavaChangeResult) error {
+func (s *Service) setJavaOverride(root string, d *document.Manifest, change JavaChange, result *JavaChangeResult) error {
 	before, err := d.Fingerprint()
 	if err != nil {
 		return err
@@ -72,14 +71,14 @@ func setJavaOverride(root string, d *document.Manifest, change JavaChange, resul
 		return err
 	}
 	if after == before {
-		log.Debug("java override unchanged", "reason", "lucy.yaml already declares it")
+		s.logger.Debug("java override unchanged", "reason", "lucy.yaml already declares it")
 		return nil
 	}
 	if err := document.ManifestFile(root).Write(d); err != nil {
 		return err
 	}
 	result.PublishedManifest = true
-	log.Info(
+	s.logger.Info(
 		"java override changed",
 		"version", override.Version,
 		"distribution", override.Distribution.String(),

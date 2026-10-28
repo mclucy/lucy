@@ -1,6 +1,7 @@
 package mojang
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -16,11 +17,19 @@ import (
 
 const VersionManifestURL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 
-type provider struct{}
+// Provider resolves Mojang's version manifest and per-version metadata over
+// the shared network cache.
+type Provider struct {
+	network *cache.Client
+}
 
-var Provider provider
+// New constructs a Mojang installer provider. network supplies the cached HTTP
+// transport; construction performs no requests.
+func New(network *cache.Client) *Provider {
+	return &Provider{network: network}
+}
 
-func (provider) Provider() catalog.Provider {
+func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderMojang
 }
 
@@ -36,11 +45,12 @@ type versionDetail struct {
 	} `json:"downloads"`
 }
 
-func FetchVersionManifest() (
+func (p *Provider) VersionManifest(ctx context.Context) (
 	*fileschema.ApiMojangMinecraftVersionManifest,
 	error,
 ) {
-	data, err := cache.CachedGetBytes(
+	data, err := p.network.CachedGetBytes(
+		ctx,
 		VersionManifestURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)
@@ -85,11 +95,12 @@ func ResolveVersionEntry(
 	)
 }
 
-func (p provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (catalog.VersionedRef, error) {
-	manifest, err := FetchVersionManifest()
+	manifest, err := p.VersionManifest(ctx)
 	if err != nil {
 		return id, err
 	}
@@ -106,11 +117,12 @@ func (p provider) ResolveVersionSelector(
 	}, nil
 }
 
-func (p provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
-	manifest, err := FetchVersionManifest()
+	manifest, err := p.VersionManifest(ctx)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -120,7 +132,7 @@ func (p provider) Fetch(
 		return upstream.ResolvedPackage{}, err
 	}
 
-	detail, err := fetchVersionDetail(versionURL)
+	detail, err := p.fetchVersionDetail(ctx, versionURL)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -150,8 +162,11 @@ const legacyJavaAdvisory = 8
 // Versions from 13w24a through 1.6.4 carry no javaVersion block. That metadata
 // field arrived later, and Mojang pairs the versions on both sides of the gap
 // with JRE 8, so those versions fall back to 8.
-func JavaAdvisory(minecraft version.Version) (int, error) {
-	manifest, err := FetchVersionManifest()
+func (p *Provider) JavaAdvisory(
+	ctx context.Context,
+	minecraft version.Version,
+) (int, error) {
+	manifest, err := p.VersionManifest(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -161,7 +176,7 @@ func JavaAdvisory(minecraft version.Version) (int, error) {
 		return 0, err
 	}
 
-	detail, err := fetchVersionDetail(versionURL)
+	detail, err := p.fetchVersionDetail(ctx, versionURL)
 	if err != nil {
 		return 0, err
 	}
@@ -180,8 +195,12 @@ func JavaAdvisory(minecraft version.Version) (int, error) {
 	return detail.JavaVersion.MajorVersion, nil
 }
 
-func fetchVersionDetail(versionURL string) (*versionDetail, error) {
-	data, err := cache.CachedGetBytes(
+func (p *Provider) fetchVersionDetail(
+	ctx context.Context,
+	versionURL string,
+) (*versionDetail, error) {
+	data, err := p.network.CachedGetBytes(
+		ctx,
 		versionURL,
 		cache.BytesRequestOptions{
 			Kind: cache.KindMetadata,

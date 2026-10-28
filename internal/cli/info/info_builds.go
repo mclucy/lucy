@@ -25,36 +25,24 @@ type infoBuildCriteria struct {
 // project document survives a listing failure; the failure becomes a warning.
 func infoProjectBuilds(
 	ctx context.Context,
+	router *routing.Router,
 	ref catalog.Ref,
 ) ([]infoBuild, []string, error) {
 	if !infoProviderUsable(ref.Provider) {
 		return nil, nil, nil
 	}
-	type buildFetchResult struct {
-		builds []upstream.Build
-		err    error
-	}
-	result, awaitErr := infoAwait(ctx, func() buildFetchResult {
-		builds, err := routing.Builds(ctx, ref)
-		return buildFetchResult{builds: builds, err: err}
-	})
-	if awaitErr != nil {
-		if failure := infoOperationFailure(ctx, awaitErr); failure != nil {
-			return nil, nil, failure
-		}
-		return nil, nil, awaitErr
-	}
-	if result.err != nil {
-		if failure := infoOperationFailure(ctx, result.err); failure != nil {
+	builds, err := router.Builds(ctx, ref)
+	if err != nil {
+		if failure := infoOperationFailure(ctx, err); failure != nil {
 			return nil, nil, failure
 		}
 		return nil, []string{fmt.Sprintf(
 			"could not list builds from %s: %v",
 			infoProviderLabel(ref.Provider),
-			result.err,
+			err,
 		)}, nil
 	}
-	return infoBuildsFromUpstream(result.builds), nil, nil
+	return infoBuildsFromUpstream(builds), nil, nil
 }
 
 func infoBuildsFromUpstream(builds []upstream.Build) []infoBuild {

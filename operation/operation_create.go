@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
@@ -35,6 +36,9 @@ type CreateOptions struct {
 	Install        bool
 	InstallOptions install.Options
 	Trace          *install.Trace
+	// Materialize supplies artifact bytes for planning and the optional
+	// installation. Nil uses the configured cache and network.
+	Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
 }
 
 // CreateTarget is the result of observing a directory before creation. It
@@ -149,7 +153,7 @@ func InspectCreateTarget(path string) (CreateTarget, error) {
 
 // Create writes a new manifest and lock in opts.Directory, then optionally
 // installs the server. It does not prompt; the command boundary owns choices.
-func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resultErr error) {
+func (s *Service) Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resultErr error) {
 	root, err := createAbsolute(opts.Directory)
 	if err != nil {
 		return nil, err
@@ -167,7 +171,7 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err
 	}
-	writer, err := workspacewrite.Lock(root)
+	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +184,7 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 		return closeErr
 	}
 	defer func() { resultErr = errors.Join(resultErr, releaseWriter()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
 		return nil, err
 	}
 	if err := filetrack.RecoverPending(root); err != nil {
@@ -219,12 +223,16 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	if err := document.Normalize(); err != nil {
 		return nil, newCreateResolveError(root, document, err)
 	}
-	resolved, resolution, err := install.Resolve(
+	resolved, resolution, err := s.install.Resolve(
 		ctx,
 		root,
 		document,
 		old,
-		install.Options{AcceptBroken: false, Trace: opts.Trace},
+		install.Options{
+			AcceptBroken: false,
+			Trace:        opts.Trace,
+			Materialize:  opts.Materialize,
+		},
 	)
 	if err != nil {
 		return nil, newCreateResolveError(root, document, err)
@@ -288,8 +296,11 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 		}
 		installOptions := opts.InstallOptions
 		installOptions.Trace = opts.Trace
+		if opts.Materialize != nil {
+			installOptions.Materialize = opts.Materialize
+		}
 		installOptions.ExpectedManifest = resolved.ManifestFingerprint
-		installed, installErr := install.Sync(
+		installed, installErr := s.install.Sync(
 			ctx,
 			root,
 			document,

@@ -27,8 +27,8 @@ type createOutput struct {
 // createJSON is the machine-readable result of one creation.
 var createJSON JSONResult[*operation.CreateResult]
 
-func newCreateOutput(cmd *cobra.Command) *createOutput {
-	return &createOutput{installOutput: newInstallOutput(cmd)}
+func newCreateOutput(cmd *cobra.Command, inv *Invocation) *createOutput {
+	return &createOutput{installOutput: newInstallOutput(cmd, inv)}
 }
 
 // Render prints one creation outcome. JSON goes to stdout; human output goes
@@ -41,7 +41,7 @@ func (o *createOutput) Render(result *operation.CreateResult) error {
 	if o.JSON() {
 		return createJSON.Write(o.Output, result)
 	}
-	lines := createSummaryLines(result)
+	lines := createSummaryLines(result, o.inv.Theme, o.inv.Directory)
 	o.renderer.Println(append([]string{""}, lines...)...)
 	o.Close()
 	for _, warning := range result.Warnings {
@@ -70,7 +70,7 @@ func (o *createOutput) Failure(err error) error {
 		detail := &report.Detail{
 			Title: "could not create the " + createProductTitle(string(resolveErr.Product)) + " server",
 			Lines: []string{
-				"Directory: " + displayCreateLocation(resolveErr.Workspace),
+				"Directory: " + displayCreateLocation(resolveErr.Workspace, o.inv.Directory),
 				"Minecraft: " + versionLabel(resolveErr.Minecraft),
 				"Server version: " + versionLabel(resolveErr.Selector),
 			},
@@ -97,12 +97,12 @@ func (o *createOutput) Failure(err error) error {
 	if publishErr, ok := errors.AsType[*operation.CreatePublishError](err); ok {
 		detail := &report.Detail{
 			Title: "could not write the server directory",
-			Lines: []string{"Directory: " + displayCreatePath(publishErr.Workspace)},
+			Lines: []string{"Directory: " + displayCreatePath(publishErr.Workspace, o.inv.Directory)},
 			Cause: err,
 		}
 		if publishErr.ManifestWritten {
 			detail.Lines = append(detail.Lines, "lucy.yaml was written, but lucy-lock.yaml was not.")
-			detail.Hint = "Run " + createInstallCommand(publishErr.Workspace) + " to finish resolving the lock."
+			detail.Hint = "Run " + createInstallCommand(publishErr.Workspace, o.inv.Directory) + " to finish resolving the lock."
 		} else {
 			detail.Lines = append(detail.Lines, "No manifest or lock was written.")
 			detail.Hint = "Check that the directory is writable and try again."
@@ -114,7 +114,7 @@ func (o *createOutput) Failure(err error) error {
 		detail := &report.Detail{
 			Title: "the server directory was created but installation failed",
 			Lines: []string{
-				"Directory: " + displayCreateLocation(installErr.Workspace),
+				"Directory: " + displayCreateLocation(installErr.Workspace, o.inv.Directory),
 				"lucy.yaml and lucy-lock.yaml were written.",
 			},
 			Cause: err,
@@ -134,17 +134,17 @@ func (o *createOutput) Failure(err error) error {
 			detail.Lines = append(detail.Lines, installErr.Err.Error())
 		}
 		if detail.Hint == "" {
-			detail.Hint = "Run " + createInstallCommand(installErr.Workspace) + " to finish."
+			detail.Hint = "Run " + createInstallCommand(installErr.Workspace, o.inv.Directory) + " to finish."
 		}
 		message := installErr.Err.Error()
 		switch {
 		case errors.Is(installErr.Err, bootstrap.ErrNoJava):
-			detail.Hint = "Run " + createInstallCommand(installErr.Workspace) +
+			detail.Hint = "Run " + createInstallCommand(installErr.Workspace, o.inv.Directory) +
 				" --java to install the Java runtime the server asks for."
 		case strings.Contains(message, "unowned or modified output conflict"):
 			detail.Hint = "Move the existing file out of the way, or run lucy init to adopt the existing server."
 		case strings.Contains(message, "stop the running Minecraft server"):
-			detail.Hint = "Stop the server, then run " + createInstallCommand(installErr.Workspace) + "."
+			detail.Hint = "Stop the server, then run " + createInstallCommand(installErr.Workspace, o.inv.Directory) + "."
 		}
 		return detail
 	}
@@ -158,8 +158,12 @@ func (o *createOutput) Failure(err error) error {
 	return o.installOutput.Failure(err)
 }
 
-func createSummaryLines(result *operation.CreateResult) []string {
-	path := displayCreateLocation(result.Workspace)
+func createSummaryLines(
+	result *operation.CreateResult,
+	theme style.Theme,
+	base string,
+) []string {
+	path := displayCreateLocation(result.Workspace, base)
 	title := createProductTitle(string(result.Server.Product))
 	minecraft := string(result.Server.Minecraft)
 	coreVersion := string(result.Server.Version)
@@ -170,12 +174,12 @@ func createSummaryLines(result *operation.CreateResult) []string {
 	custom := result.Manifest != nil && result.Manifest.Server.Core.Repository != ""
 	switch {
 	case result.Server.Product == serverpkg.ProductMinecraft:
-		headline = style.Success("✓") + " Created a Minecraft " + minecraft + " server"
+		headline = theme.Success("✓") + " Created a Minecraft " + minecraft + " server"
 	case custom:
-		headline = style.Success("✓") + " Created " + title + " " +
+		headline = theme.Success("✓") + " Created " + title + " " +
 			coreVersion + " for Minecraft " + minecraft
 	default:
-		headline = style.Success("✓") + " Created " + title + " " + coreVersion +
+		headline = theme.Success("✓") + " Created " + title + " " + coreVersion +
 			" for Minecraft " + minecraft
 	}
 	if path != "" {
@@ -192,30 +196,30 @@ func createSummaryLines(result *operation.CreateResult) []string {
 	}
 	lines := []string{
 		headline,
-		style.Muted("  " + written),
+		theme.Muted("  " + written),
 	}
 	if result.Installed {
 		files := result.Files.Created + result.Files.Replaced
 		switch {
 		case files > 0:
-			lines = append(lines, style.Muted("  Installed "+fileCountLabel(files)))
+			lines = append(lines, theme.Muted("  Installed "+fileCountLabel(files)))
 		default:
-			lines = append(lines, style.Muted("  Server files are current"))
+			lines = append(lines, theme.Muted("  Server files are current"))
 		}
 		if result.Files.Removed > 0 {
-			lines = append(lines, style.Muted("  Removed "+fileCountLabel(result.Files.Removed)))
+			lines = append(lines, theme.Muted("  Removed "+fileCountLabel(result.Files.Removed)))
 		}
 	} else {
 		lines = append(
 			lines,
-			"  "+style.Note("Next:")+" "+createInstallCommand(result.Workspace),
+			"  "+theme.Note("Next:")+" "+createInstallCommand(result.Workspace, base),
 		)
 	}
 	return lines
 }
 
-func createInstallCommand(workspace string) string {
-	path := displayCreatePath(workspace)
+func createInstallCommand(workspace, base string) string {
+	path := displayCreatePath(workspace, base)
 	if path == "." || path == "" {
 		return "lucy install"
 	}

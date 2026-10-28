@@ -13,14 +13,13 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-func resolveUpgradeOption(
+func (s *Service) resolveUpgradeOption(
 	ctx context.Context,
 	root string,
 	d *document.Manifest,
@@ -65,16 +64,18 @@ func resolveUpgradeOption(
 		materialize,
 	)
 	if moduleErr != nil {
-		log.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
+		s.logger.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
 	}
 	packages, _, err := resolve.Packages(resolve.PackagesRequest{
 		Context:            ctx,
 		Manifest:           resolutionManifest,
 		Previous:           old.Packages,
 		Target:             upgradeTarget(old, coreModules),
+		Candidates:         s.source.Candidates,
 		Materialize:        materialize,
 		ExpandDependencies: true,
 		Cache:              cache,
+		Logger:             s.logger,
 		Trace:              upgradeResolveTrace(trace),
 	})
 	if err != nil {

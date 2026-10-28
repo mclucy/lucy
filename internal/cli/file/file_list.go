@@ -9,14 +9,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newListCmd() *cobra.Command {
+func newListCmd(
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   ListShort,
 		Long:    ListLong,
 		Args:    cobra.NoArgs,
-		RunE:    actionFileList,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileList(cmd, inv, deps, args)
+		},
 	}
 }
 
@@ -27,18 +32,18 @@ type fileListDocument struct {
 
 var listJSON cli.JSONResult[fileListDocument]
 
-func actionFileList(cmd *cobra.Command, _ []string) error {
-	root, err := workRoot()
+func actionFileList(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	_ *cli.Dependencies,
+	_ []string,
+) error {
+	files, err := filetrack.DeclaredFiles(inv.Directory)
 	if err != nil {
 		return err
 	}
 
-	files, err := filetrack.DeclaredFiles(root)
-	if err != nil {
-		return err
-	}
-
-	statuses, err := filetrack.Inspect(root, files)
+	statuses, err := filetrack.Inspect(inv.Directory, files)
 	if err != nil {
 		return err
 	}
@@ -46,7 +51,7 @@ func actionFileList(cmd *cobra.Command, _ []string) error {
 		statuses = []filetrack.Status{}
 	}
 
-	output := cli.NewQueryOutput(cmd)
+	output := cli.NewQueryOutput(cmd, inv)
 	for _, status := range statuses {
 		if status.Immutable && status.State == "modified" {
 			output.Warn(fmt.Errorf("%s: immutable contents differ; use lucy file update to accept them or lucy file recover to restore the accepted revision", status.Path))

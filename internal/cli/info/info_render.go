@@ -3,7 +3,6 @@ package info
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 
@@ -18,6 +17,12 @@ import (
 var infoRenderHyperlink = regexp.MustCompile(
 	"\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)",
 )
+
+// infoRenderContext carries the presentation state of one info rendering.
+type infoRenderContext struct {
+	theme    style.Theme
+	terminal style.Terminal
+}
 
 const (
 	infoRenderDefaultWidth        = 80
@@ -41,9 +46,10 @@ const (
 func renderInfoDocument(
 	document infoDocument,
 	long bool,
-	width int,
-	tty bool,
+	root string,
+	presentation infoRenderContext,
 ) string {
+	width := presentation.terminal.Width
 	if width <= 0 {
 		width = infoRenderDefaultWidth
 	}
@@ -51,13 +57,12 @@ func renderInfoDocument(
 		return ""
 	}
 
-	height := style.TermHeight()
-	if !tty || height <= 0 {
+	height := presentation.terminal.Height
+	if !presentation.terminal.IsTTY || height <= 0 {
 		height = infoRenderFallbackHeight
 	}
 	share := max(infoRenderEntryMinHeight, height/len(document.Entries))
 
-	root, _ := os.Getwd()
 	file := ""
 	if document.File != "" {
 		file = terminal.DisplayPath(
@@ -73,7 +78,16 @@ func renderInfoDocument(
 		}
 		blocks = append(
 			blocks,
-			renderInfoEntry(entry, long, width, tty, share, root, entryFile),
+			renderInfoEntry(
+				entry,
+				long,
+				width,
+				presentation.terminal.IsTTY,
+				share,
+				root,
+				entryFile,
+				presentation,
+			),
 		)
 	}
 	return infoRenderTrim(strings.Join(blocks, "\n\n"))
@@ -87,6 +101,7 @@ func renderInfoEntry(
 	height int,
 	root string,
 	file string,
+	presentation infoRenderContext,
 ) string {
 	title := infoRenderInline(entry.Title)
 	if title == "" {
@@ -100,7 +115,7 @@ func renderInfoEntry(
 	}
 	titleLines := strings.Split(lipgloss.Wrap(title, width, ""), "\n")
 	for i := range titleLines {
-		titleLines[i] = style.Accent(titleLines[i])
+		titleLines[i] = presentation.theme.Accent(titleLines[i])
 	}
 
 	summary := infoRenderInline(entry.Summary)
@@ -109,7 +124,15 @@ func renderInfoEntry(
 		summaryLines = strings.Split(lipgloss.Wrap(summary, width, ""), "\n")
 	}
 
-	facts := infoRenderEntryFacts(entry, long, width, tty, root, file)
+	facts := infoRenderEntryFacts(
+		entry,
+		long,
+		width,
+		tty,
+		root,
+		file,
+		presentation,
+	)
 	factWidth := width
 	if !tty {
 		keyWidth, valueWidth := 0, 0
@@ -121,7 +144,7 @@ func renderInfoEntry(
 		}
 		factWidth = max(factWidth, keyWidth+2+valueWidth)
 	}
-	factsText := terminal.RenderFacts(facts, factWidth)
+	factsText := terminal.RenderFacts(facts, factWidth, presentation.theme)
 	var factLines []string
 	if factsText != "" {
 		factLines = strings.Split(factsText, "\n")
@@ -135,9 +158,15 @@ func renderInfoEntry(
 		lines = append(lines, factLines...)
 	}
 
-	description := infoRenderDescription(entry, width, long, height-len(lines)-2)
+	description := infoRenderDescription(
+		entry,
+		width,
+		long,
+		height-len(lines)-2,
+		presentation,
+	)
 	if description != "" {
-		lines = append(lines, "", style.Accent("About"))
+		lines = append(lines, "", presentation.theme.Accent("About"))
 		lines = append(lines, infoRenderIndentLines(description)...)
 	}
 	return strings.Join(lines, "\n")
@@ -150,6 +179,7 @@ func infoRenderEntryFacts(
 	tty bool,
 	root string,
 	file string,
+	presentation infoRenderContext,
 ) []terminal.Fact {
 	ref := infoRenderInline(entry.Ref)
 	license := ""
@@ -158,7 +188,7 @@ func infoRenderEntryFacts(
 	}
 	authors := ""
 	if long {
-		authors = infoRenderAuthors(entry.Authors, tty)
+		authors = infoRenderAuthors(entry.Authors, tty, presentation)
 	}
 	identity := ""
 	if long {
@@ -168,7 +198,7 @@ func infoRenderEntryFacts(
 	if long {
 		upstream = infoRenderUpstream(entry.Upstream)
 	}
-	builds := infoRenderBuilds(entry, long)
+	builds := infoRenderBuilds(entry, long, presentation)
 
 	needs := infoRenderActionableDependencies(entry.Needs, long)
 	optional := infoRenderActionableDependencies(entry.Optional, long)
@@ -268,37 +298,43 @@ func infoRenderEntryFacts(
 	}
 	needsValue := "none"
 	if len(needs) > 0 || needsNote != "" {
-		needsValue = infoRenderDependencyValue(needs, long, needsNote)
+		needsValue = infoRenderDependencyValue(needs, long, needsNote, presentation)
 	}
 	facts = append(facts, terminal.Fact{Key: "Needs", Value: needsValue})
 	if len(optional) > 0 {
 		facts = append(facts, terminal.Fact{
 			Key:   "Optional",
-			Value: infoRenderDependencyValue(optional, long, ""),
+			Value: infoRenderDependencyValue(optional, long, "", presentation),
 		})
 	}
 	if len(bundled) > 0 {
 		facts = append(facts, terminal.Fact{
 			Key:   "Bundled",
-			Value: infoRenderDependencyValue(bundled, true, ""),
+			Value: infoRenderDependencyValue(bundled, true, "", presentation),
 		})
 	}
 	if len(server) > 0 {
 		facts = append(facts, terminal.Fact{
 			Key:   "Server",
-			Value: infoRenderDependencyValue(server, true, ""),
+			Value: infoRenderDependencyValue(server, true, "", presentation),
 		})
 	}
 	if len(leftover) > 0 {
 		facts = append(facts, terminal.Fact{
 			Key:   "Dependencies",
-			Value: infoRenderDependencyValue(leftover, true, ""),
+			Value: infoRenderDependencyValue(leftover, true, "", presentation),
 		})
 	}
 	if len(links) > 0 {
 		facts = append(facts, terminal.Fact{
-			Key:   "Links",
-			Value: infoRenderLinks(links, long, valueWidth, tty),
+			Key: "Links",
+			Value: infoRenderLinks(
+				links,
+				long,
+				valueWidth,
+				tty,
+				presentation,
+			),
 		})
 	}
 	return facts
@@ -391,7 +427,11 @@ func infoRenderUpstream(upstream *infoUpstream) string {
 	}
 }
 
-func infoRenderAuthors(authors []infoAuthor, tty bool) string {
+func infoRenderAuthors(
+	authors []infoAuthor,
+	tty bool,
+	presentation infoRenderContext,
+) string {
 	lines := make([]string, 0, len(authors))
 	for _, author := range authors {
 		name := infoRenderInline(author.Name)
@@ -406,7 +446,7 @@ func infoRenderAuthors(authors []infoAuthor, tty bool) string {
 			link := raw
 			if safe, ok := infoRenderSafeURL(raw); ok && tty {
 				link = ansi.SetHyperlink(safe) +
-					style.Link(raw) +
+					presentation.theme.Link(raw) +
 					ansi.ResetHyperlink()
 			}
 			line += "  " + link
@@ -511,6 +551,7 @@ func infoRenderDependencyValue(
 	dependencies []infoDependency,
 	long bool,
 	note string,
+	presentation infoRenderContext,
 ) string {
 	lines := make([]string, 0, len(dependencies)+2)
 	for _, dependency := range dependencies {
@@ -522,10 +563,10 @@ func infoRenderDependencyValue(
 		lines = lines[:infoRenderDefaultDependencies]
 	}
 	if note != "" {
-		lines = append(lines, style.Muted(note))
+		lines = append(lines, presentation.theme.Muted(note))
 	}
 	if hidden > 0 {
-		lines = append(lines, terminal.FoldHint(hidden))
+		lines = append(lines, terminal.FoldHint(hidden, presentation.theme))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -533,7 +574,11 @@ func infoRenderDependencyValue(
 // infoRenderBuilds bounds the human view, even with --long, and applies the
 // lock's declared runtime. Builds whose source omitted compatibility metadata
 // stay visible and say so.
-func infoRenderBuilds(entry infoEntry, long bool) string {
+func infoRenderBuilds(
+	entry infoEntry,
+	long bool,
+	presentation infoRenderContext,
+) string {
 	if len(entry.Builds) == 0 {
 		return ""
 	}
@@ -547,7 +592,7 @@ func infoRenderBuilds(entry infoEntry, long bool) string {
 	filtered := len(entry.Builds) - len(compatible)
 	criteria := infoBuildCriteriaText(entry.buildCriteria)
 	if len(compatible) == 0 {
-		return style.Muted("none compatible with " + criteria)
+		return presentation.theme.Muted("none compatible with " + criteria)
 	}
 
 	compatible = infoBuildsNewestFirst(compatible)
@@ -566,16 +611,19 @@ func infoRenderBuilds(entry infoEntry, long bool) string {
 		lines = append(lines, infoRenderBuildLine(build))
 	}
 	if filtered > 0 {
-		lines = append(lines, style.Muted("filtered to "+criteria))
+		lines = append(
+			lines,
+			presentation.theme.Muted("filtered to "+criteria),
+		)
 	}
 	if hidden > 0 {
 		if long {
-			lines = append(lines, style.Muted(fmt.Sprintf(
+			lines = append(lines, presentation.theme.Muted(fmt.Sprintf(
 				"… %d more builds, see --json for the complete list",
 				hidden,
 			)))
 		} else {
-			lines = append(lines, terminal.FoldHint(hidden))
+			lines = append(lines, terminal.FoldHint(hidden, presentation.theme))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -665,6 +713,7 @@ func infoRenderLinks(
 	long bool,
 	valueWidth int,
 	tty bool,
+	presentation infoRenderContext,
 ) string {
 	visible := links
 	hidden := 0
@@ -674,15 +723,23 @@ func infoRenderLinks(
 	}
 	lines := make([]string, 0, len(visible)+1)
 	for _, link := range visible {
-		lines = append(lines, infoRenderLinkLine(link, valueWidth, tty))
+		lines = append(
+			lines,
+			infoRenderLinkLine(link, valueWidth, tty, presentation),
+		)
 	}
 	if hidden > 0 {
-		lines = append(lines, terminal.FoldHint(hidden))
+		lines = append(lines, terminal.FoldHint(hidden, presentation.theme))
 	}
 	return strings.Join(lines, "\n")
 }
 
-func infoRenderLinkLine(link infoLink, width int, tty bool) string {
+func infoRenderLinkLine(
+	link infoLink,
+	width int,
+	tty bool,
+	presentation infoRenderContext,
+) string {
 	label := infoRenderInline(link.Label)
 	raw := infoRenderInline(link.URL)
 	if label == raw {
@@ -706,7 +763,7 @@ func infoRenderLinkLine(link infoLink, width int, tty bool) string {
 		display = terminal.TruncateMiddle(display, budget)
 		if safe {
 			display = ansi.SetHyperlink(target) +
-				style.Link(display) +
+				presentation.theme.Link(display) +
 				ansi.ResetHyperlink()
 		}
 	}
@@ -741,6 +798,7 @@ func infoRenderDescription(
 	width int,
 	long bool,
 	budget int,
+	presentation infoRenderContext,
 ) string {
 	description := strings.TrimSpace(infoRenderText(entry.Description))
 	if description == "" {
@@ -751,7 +809,11 @@ func infoRenderDescription(
 	var rendered string
 	switch strings.ToLower(infoRenderInline(entry.DescriptionFormat)) {
 	case "markdown":
-		rendered = style.MarkdownToAnsi(description, contentWidth)
+		rendered = presentation.theme.Markdown(
+			description,
+			contentWidth,
+			presentation.terminal,
+		)
 		rendered = infoRenderHyperlink.ReplaceAllString(rendered, "")
 	default:
 		rendered = lipgloss.Wrap(description, contentWidth, "")
@@ -764,7 +826,7 @@ func infoRenderDescription(
 			max(budget, infoRenderDescriptionMinLines),
 			infoRenderDescriptionMaxLines,
 		)
-		rendered = terminal.CenterElide(rendered, budget)
+		rendered = terminal.CenterElide(rendered, budget, presentation.theme)
 	}
 	return infoRenderTrim(rendered)
 }

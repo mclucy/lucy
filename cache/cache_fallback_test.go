@@ -3,8 +3,10 @@
 package cache
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +26,7 @@ func TestCacheFallbackProcess(t *testing.T) {
 		t.Fatal("TMPDIR accepted a temporary directory, so the fallback is untested")
 	}
 
-	blocked := setDir("network")
+	blocked := DefaultRoot()
 	if err := os.MkdirAll(filepath.Dir(blocked), 0o700); err != nil {
 		t.Fatalf("prepare the unusable cache root: %v", err)
 	}
@@ -32,7 +34,8 @@ func TestCacheFallbackProcess(t *testing.T) {
 		t.Fatalf("block the cache root %s: %v", blocked, err)
 	}
 
-	h := Network()
+	client := New(blocked, DefaultCacheConfig(), http.DefaultClient, nil)
+	h := client.cache()
 	if h.on {
 		t.Fatalf("cache handler started in the blocked root %s", h.dir)
 	}
@@ -41,7 +44,7 @@ func TestCacheFallbackProcess(t *testing.T) {
 	if server == "" {
 		t.Fatalf("%s is not set", cacheChildServer)
 	}
-	data, err := CachedGetBytes(server, BytesRequestOptions{Kind: KindMetadata})
+	data, err := client.CachedGetBytes(context.Background(), server, BytesRequestOptions{Kind: KindMetadata})
 	if err != nil {
 		t.Fatalf("metadata fetch without a usable cache: %v", err)
 	}

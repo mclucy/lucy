@@ -1,6 +1,7 @@
 package neoforge
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -20,11 +21,19 @@ var (
 	docsURL      = "https://docs.neoforged.net/user/docs/server/"
 )
 
-type provider struct{}
+// Provider resolves NeoForge Maven metadata and installer artifacts over the
+// shared network cache.
+type Provider struct {
+	network *cache.Client
+}
 
-var Provider provider
+// New constructs a NeoForge installer provider. network supplies the cached
+// HTTP transport; construction performs no requests.
+func New(network *cache.Client) *Provider {
+	return &Provider{network: network}
+}
 
-func (provider) Provider() catalog.Provider {
+func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderNeoForge
 }
 
@@ -39,8 +48,12 @@ type mavenMetadata struct {
 // LatestMinecraftVersion reports the newest Minecraft version the metadata
 // lists a build for. NeoForge encodes the Minecraft version in the loader
 // version prefix.
-func LatestMinecraftVersion() (versionpkg.Version, error) {
-	body, err := cache.CachedGetBytes(
+func (p *Provider) LatestMinecraftVersion(ctx context.Context) (
+	versionpkg.Version,
+	error,
+) {
+	body, err := p.network.CachedGetBytes(
+		ctx,
 		metadataURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)
@@ -110,7 +123,8 @@ func minecraftVersionOf(loader string) (versionpkg.Version, bool) {
 	return versionpkg.Version(fmt.Sprintf("1.%d.%d", major, minor)), true
 }
 
-func (p provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (catalog.VersionedRef, error) {
@@ -119,7 +133,7 @@ func (p provider) ResolveVersionSelector(
 		return id, err
 	}
 
-	neoForgeVersion, err := neoForgeVersionFromPackageRef(id, gameVersion)
+	neoForgeVersion, err := p.neoForgeVersionFromPackageRef(ctx, id, gameVersion)
 	if err != nil {
 		return id, err
 	}
@@ -131,7 +145,8 @@ func (p provider) ResolveVersionSelector(
 	}, nil
 }
 
-func (p provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
@@ -140,7 +155,7 @@ func (p provider) Fetch(
 		return upstream.ResolvedPackage{}, err
 	}
 
-	neoForgeVersion, err := neoForgeVersionFromPackageRef(id, gameVersion)
+	neoForgeVersion, err := p.neoForgeVersionFromPackageRef(ctx, id, gameVersion)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -165,27 +180,30 @@ func minecraftVersionForInstall(local upstream.LocalContext) (versionpkg.Version
 	return local.MinecraftVersion, nil
 }
 
-func neoForgeVersionFromPackageRef(
-	p catalog.VersionedRef,
+func (p *Provider) neoForgeVersionFromPackageRef(
+	ctx context.Context,
+	ref catalog.VersionedRef,
 	gameVersion versionpkg.Version,
 ) (string, error) {
-	if p.Version != versionpkg.Beta &&
-		p.Version != versionpkg.Stable &&
-		p.Version != versionpkg.Any &&
-		p.Version != versionpkg.Unknown {
-		return p.Version.String(), nil
+	if ref.Version != versionpkg.Beta &&
+		ref.Version != versionpkg.Stable &&
+		ref.Version != versionpkg.Any &&
+		ref.Version != versionpkg.Unknown {
+		return ref.Version.String(), nil
 	}
-	return fetchVersion(gameVersion, p.Version)
+	return p.fetchVersion(ctx, gameVersion, ref.Version)
 }
 
 // fetchVersion selects the newest NeoForge version for the Minecraft
 // version. stable excludes prerelease builds; beta accepts any build; any
 // prefers a release and falls back to a prerelease.
-func fetchVersion(
+func (p *Provider) fetchVersion(
+	ctx context.Context,
 	gameVersion versionpkg.Version,
 	selector versionpkg.Version,
 ) (string, error) {
-	body, err := cache.CachedGetBytes(
+	body, err := p.network.CachedGetBytes(
+		ctx,
 		metadataURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)

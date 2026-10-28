@@ -14,17 +14,18 @@ import (
 type byteStage struct {
 	writer *cas.Writer
 	hasher hash.Hash
+	logger *log.Logger
 }
 
-func newByteStage() *byteStage {
-	writer, err := Network().newWriter()
+func (c *Client) newByteStage() *byteStage {
+	writer, err := c.cache().newWriter()
 	if err == nil {
-		return &byteStage{writer: writer}
+		return &byteStage{writer: writer, logger: c.logger}
 	}
 	if !errors.Is(err, ErrDisabled) {
-		log.Warn(fmt.Errorf("cache staging unavailable: %w", err))
+		c.logger.Warn(fmt.Errorf("cache staging unavailable: %w", err))
 	}
-	return &byteStage{hasher: sha256.New()}
+	return &byteStage{hasher: sha256.New(), logger: c.logger}
 }
 
 func (s *byteStage) detach() error {
@@ -33,7 +34,7 @@ func (s *byteStage) detach() error {
 		return err
 	}
 	if err := s.writer.Abort(); err != nil {
-		log.Warn(fmt.Errorf("remove failed cache stage: %w", err))
+		s.logger.Warn(fmt.Errorf("remove failed cache stage: %w", err))
 	}
 	s.hasher = hasher
 	s.writer = nil
@@ -48,7 +49,7 @@ func (s *byteStage) Write(data []byte) (int, error) {
 	if err == nil {
 		return count, nil
 	}
-	log.Warn(fmt.Errorf("cache write failed, retaining buffered response: %w", err))
+	s.logger.Warn(fmt.Errorf("cache write failed, retaining buffered response: %w", err))
 	if err := s.detach(); err != nil {
 		return count, err
 	}
@@ -62,7 +63,7 @@ func (s *byteStage) seal() (cas.Object, error) {
 		if err == nil {
 			return object, nil
 		}
-		log.Warn(fmt.Errorf("cache sync failed, retaining buffered response: %w", err))
+		s.logger.Warn(fmt.Errorf("cache sync failed, retaining buffered response: %w", err))
 		if err := s.detach(); err != nil {
 			return cas.Object{}, err
 		}

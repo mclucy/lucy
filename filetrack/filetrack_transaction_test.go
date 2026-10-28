@@ -34,6 +34,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func testFileService() *Service {
+	return NewService(&http.Client{}, nil)
+}
+
 func TestInterruptedFileTransactionRecovery(t *testing.T) {
 	for _, test := range []struct{ name, mode string }{{"uncommitted partial application", "partial"}, {"committed completion", "committed"}} {
 		t.Run(test.name, func(t *testing.T) {
@@ -54,7 +58,7 @@ func TestInterruptedFileTransactionRecovery(t *testing.T) {
 			if _, err := History(root, ""); err == nil {
 				t.Fatal("read-only history accepted a pending transaction")
 			}
-			_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
+			_, err = testFileService().Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 			requireTransaction(t, err)
 			document, err := documentpkg.ManifestFile(root).Read()
 			requireTransaction(t, err)
@@ -106,7 +110,7 @@ func TestInterruptedFileTransactionRecovery(t *testing.T) {
 				t.Fatalf("pending record remains: %v", err)
 			}
 			recovered := snapshotTransactionFiles(t, root)
-			writer, err := workspacewrite.Lock(root)
+			writer, err := workspacewrite.Lock(root, nil)
 			requireTransaction(t, err)
 			requireTransaction(t, RecoverPending(root))
 			requireTransaction(t, writer.Close())
@@ -127,7 +131,7 @@ func TestRecoveryPreservesPostInterruptionEdits(t *testing.T) {
 	interrupted := snapshotTransactionFiles(t, root)
 	journal, err := os.ReadFile(filepath.Join(root, transactionName))
 	requireTransaction(t, err)
-	if _, err := Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}}); err == nil {
+	if _, err := testFileService().Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}}); err == nil {
 		t.Fatalf("expected protected third state, got %v", err)
 	}
 	for name, data := range interrupted {
@@ -135,7 +139,7 @@ func TestRecoveryPreservesPostInterruptionEdits(t *testing.T) {
 	}
 	requireTransactionBytes(t, filepath.Join(root, transactionName), journal)
 	requireTransaction(t, os.WriteFile(filepath.Join(root, "b.cfg"), original["b.cfg"], 0o640))
-	_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
+	_, err = testFileService().Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
 	for _, name := range []string{"a.cfg", "b.cfg", documentpkg.ManifestFilename, documentpkg.LockFilename} {
 		requireTransactionBytes(t, filepath.Join(root, name), original[name])
@@ -154,7 +158,7 @@ func TestFileHistoryTailRepairAndMiddleCorruption(t *testing.T) {
 		t.Fatal("read-only history silently repaired an incomplete event")
 	}
 	requireTransactionBytes(t, path, incomplete)
-	_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
+	_, err = testFileService().Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
 	events, err := History(root, "")
 	requireTransaction(t, err)
@@ -170,7 +174,7 @@ func TestFileHistoryTailRepairAndMiddleCorruption(t *testing.T) {
 	corrupt = append(corrupt, repaired[len(original):]...)
 	requireTransaction(t, os.WriteFile(path, corrupt, 0o600))
 	before := snapshotTransactionFiles(t, root)
-	if _, err := Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}}); err == nil {
+	if _, err := testFileService().Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}}); err == nil {
 		t.Fatal("mutation ignored complete middle corruption")
 	}
 	for name, data := range before {
@@ -205,7 +209,7 @@ func TestPreparedBatchRejectsConcurrentWorkingEdit(t *testing.T) {
 	requireTransaction(t, err)
 	requireTransaction(t, documentpkg.LockFile(root).Write(locked))
 	before := snapshotTransactionFiles(t, root)
-	if _, err := Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true}); err == nil {
+	if _, err := testFileService().Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true}); err == nil {
 		t.Fatalf("expected readset rejection, got %v", err)
 	}
 	requireTransactionBytes(t, filepath.Join(root, "a.cfg"), []byte("external during preparation"))
@@ -216,7 +220,7 @@ func TestPreparedBatchRejectsConcurrentWorkingEdit(t *testing.T) {
 		t.Fatalf("failed preparation published a transaction: %v", err)
 	}
 	requireTransaction(t, os.WriteFile(filepath.Join(root, "a.cfg"), before["a.cfg"], 0o640))
-	result, err := Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true})
+	result, err := testFileService().Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true})
 	requireTransaction(t, err)
 	if result.Event.Operation != Update || len(result.Event.Changes) != 2 {
 		t.Fatalf("valid preparation did not resume after removing the conflict: %+v", result)
@@ -263,7 +267,7 @@ func TestPreparedBatchPreservesConcurrentManifestIntent(t *testing.T) {
 	requireTransaction(t, err)
 	requireTransaction(t, documentpkg.LockFile(root).Write(locked))
 	before := snapshotTransactionFiles(t, root)
-	if _, err := Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true}); err == nil {
+	if _, err := testFileService().Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true}); err == nil {
 		t.Fatalf("expected intent conflict, got %v", err)
 	}
 	select {
@@ -276,7 +280,7 @@ func TestPreparedBatchPreservesConcurrentManifestIntent(t *testing.T) {
 		requireTransactionBytes(t, filepath.Join(root, name), before[name])
 	}
 	requireTransaction(t, os.WriteFile(filepath.Join(root, documentpkg.ManifestFilename), before[documentpkg.ManifestFilename], 0o600))
-	result, err := Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true})
+	result, err := testFileService().Run(t.Context(), root, Request{Operation: Update, All: true, FromSource: true})
 	requireTransaction(t, err)
 	if result.Event.Operation != Update || len(result.Event.Changes) != 2 {
 		t.Fatalf("valid intent did not resume after removing the conflict: %+v", result)
@@ -288,7 +292,7 @@ func TestWorkspaceWriterExcludesIndependentProcess(t *testing.T) {
 	root := transactionWorkspace(t)
 	original := snapshotTransactionFiles(t, root)
 	stop := startTransactionProcess(t, root, "hold-workspace")
-	_, err := Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}})
+	_, err := testFileService().Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}})
 	if !errors.Is(err, fsutil.ErrLocked) {
 		t.Fatalf("another process did not own the workspace: %v", err)
 	}
@@ -296,7 +300,7 @@ func TestWorkspaceWriterExcludesIndependentProcess(t *testing.T) {
 		requireTransactionBytes(t, filepath.Join(root, name), data)
 	}
 	stop()
-	_, err = Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}})
+	_, err = testFileService().Run(t.Context(), root, Request{Operation: Update, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
 	events, err := History(root, "")
 	requireTransaction(t, err)
@@ -327,7 +331,7 @@ func TestRecoveryWaitsForDeclaredRunningServer(t *testing.T) {
 		t.Fatal("fixture did not expose a live native session lock")
 	}
 	before := snapshotTransactionFiles(t, root)
-	if _, err := Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}}); err == nil {
+	if _, err := testFileService().Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}}); err == nil {
 		t.Fatalf("recovery ignored a live server: %v", err)
 	}
 	for name, data := range before {
@@ -337,7 +341,7 @@ func TestRecoveryWaitsForDeclaredRunningServer(t *testing.T) {
 		t.Fatal("activity guard removed the journal")
 	}
 	stopWorld()
-	_, err = Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
+	_, err = testFileService().Run(t.Context(), root, Request{Operation: Unlock, Paths: []string{"a.cfg"}})
 	requireTransaction(t, err)
 	requireTransactionBytes(t, filepath.Join(root, "a.cfg"), []byte("initial-a.cfg"))
 }
@@ -394,7 +398,7 @@ func TestFileTransactionProcess(t *testing.T) {
 	if mode == "hold-world" {
 		lock, err = fsutil.LockFile(filepath.Join(root, "native", "world", "session.lock"))
 	} else {
-		lock, err = workspacewrite.Lock(root)
+		lock, err = workspacewrite.Lock(root, nil)
 	}
 	requireTransaction(t, err)
 	defer lock.Close()
@@ -576,7 +580,7 @@ func transactionWorkspace(t *testing.T) string {
 	requireTransaction(t, documentpkg.LockFile(root).Write(locked))
 	for _, name := range []string{"a.cfg", "b.cfg"} {
 		requireTransaction(t, os.WriteFile(filepath.Join(root, name), []byte("initial-"+name), 0o640))
-		_, err := Run(t.Context(), root, Request{Operation: Track, Paths: []string{name}})
+		_, err := testFileService().Run(t.Context(), root, Request{Operation: Track, Paths: []string{name}})
 		requireTransaction(t, err)
 	}
 	return root

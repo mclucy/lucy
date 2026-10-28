@@ -10,14 +10,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewSchemaCommand(contracts *JSONContracts) *cobra.Command {
+func NewSchemaCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "schema [COMMAND...]",
 		Short:  "Describe a command's JSON result",
 		Hidden: true,
 		Args:   cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			output := NewQueryOutput(cmd)
+			output := NewQueryOutput(cmd, inv)
 			if !output.JSON() {
 				output.SetJSONRendering(JSONPretty)
 			}

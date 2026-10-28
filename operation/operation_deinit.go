@@ -12,8 +12,6 @@ import (
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/serverregistry"
 )
 
 // DeinitResult reports the Lucy state that deinitialization removed. Paths are
@@ -28,7 +26,7 @@ type DeinitResult struct {
 // and configuration stay untouched. An interrupted installation or file
 // transaction is recovered before state is removed, and the writer lock keeps
 // another Lucy process from writing while the state disappears.
-func Deinitialize(root string) (result *DeinitResult, resultErr error) {
+func (s *Service) Deinitialize(root string) (result *DeinitResult, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -41,12 +39,12 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 		return nil, fmt.Errorf("no lucy workspace found in %s", root)
 	}
 
-	writer, err := workspacewrite.Lock(root)
+	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
 		return nil, err
 	}
 	pending, err := filetrack.HasPendingTransaction(root)
@@ -79,13 +77,16 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 			return result, err
 		}
 		result.Removed = append(result.Removed, name)
-		log.Debug("workspace state removed", "path", name)
+		s.logger.Debug("workspace state removed", "path", name)
 	}
-	registry, err := serverregistry.New()
-	if err == nil {
-		err = registry.Unregister(root)
-	}
-	if err != nil {
+	if s.registry == nil {
+		result.Warnings = append(
+			result.Warnings,
+			errors.New(
+				"server unregistration unavailable: no server registry was supplied; registered links for this workspace may remain",
+			),
+		)
+	} else if err := s.registry.Unregister(root); err != nil {
 		result.Warnings = append(result.Warnings, fmt.Errorf("server unregistration failed: %w", err))
 	}
 
@@ -100,7 +101,7 @@ func Deinitialize(root string) (result *DeinitResult, resultErr error) {
 		return result, err
 	}
 	result.Removed = append(result.Removed, fsutil.WorkspaceMarker)
-	log.Info("workspace deinitialized", "root", root, "removed", len(result.Removed))
+	s.logger.Info("workspace deinitialized", "root", root, "removed", len(result.Removed))
 	return result, nil
 }
 

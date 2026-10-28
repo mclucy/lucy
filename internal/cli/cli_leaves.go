@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/internal/cli/help"
 
@@ -11,12 +10,18 @@ import (
 
 var leavesJSON JSONResult[leavesOutput]
 
-func NewLeavesCommand(contracts *JSONContracts) *cobra.Command {
+func NewLeavesCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	leavesCmd := &cobra.Command{
 		Use:   "leaves",
 		Short: help.LeavesShort,
 		Args:  cobra.NoArgs,
-		RunE:  actionLeaves,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionLeaves(cmd, inv, deps, args)
+		},
 	}
 	leavesJSON.Bind(contracts, leavesCmd)
 	leavesCmd.Flags().Bool(
@@ -27,15 +32,23 @@ func NewLeavesCommand(contracts *JSONContracts) *cobra.Command {
 	return leavesCmd
 }
 
-func actionLeaves(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
-	}
-
+func actionLeaves(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
+	ctx, stop := CommandContext(cmd)
+	defer stop()
 	forceLive, _ := cmd.Flags().GetBool("live")
-	output := NewQueryOutput(cmd)
-	graph, origin, _, err := LoadDependencyData(workDir, forceLive, output)
+	output := NewQueryOutput(cmd, inv)
+	graph, origin, _, err := LoadDependencyData(
+		ctx,
+		inv.Directory,
+		forceLive,
+		deps.Router.ResolveArtifactByHash,
+		output,
+	)
 	if err != nil {
 		return err
 	}

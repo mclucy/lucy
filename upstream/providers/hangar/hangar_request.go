@@ -1,6 +1,7 @@
 package hangar
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
 )
 
 const hangarAPIBaseURL = "https://hangar.papermc.io/api/v1"
@@ -23,43 +23,57 @@ var (
 	ErrNoDownload         = errors.New("hangar: download not found")
 )
 
-func getProject(name catalog.Name) (*hangarProject, error) {
-	if project, err := getProjectByPath(string(name)); err == nil {
+func (p *Provider) getProject(
+	ctx context.Context,
+	name catalog.Name,
+) (*hangarProject, error) {
+	if project, err := p.getProjectByPath(ctx, string(name)); err == nil {
 		if project.ProjectRef().CanonicalName() == name {
 			return project, nil
 		}
 	}
 
-	search, err := searchProjects(string(name), catalog.EcosystemUnspecified)
+	search, err := p.searchProjects(
+		ctx,
+		string(name),
+		catalog.EcosystemUnspecified,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, project := range search.Result {
 		if project.ProjectRef().CanonicalName() == name {
-			return getProjectByRef(project.ProjectRef())
+			return p.getProjectByRef(ctx, project.ProjectRef())
 		}
 	}
 
 	return nil, ErrNoProject
 }
 
-func getProjectByRef(ref hangarProjectRef) (*hangarProject, error) {
+func (p *Provider) getProjectByRef(
+	ctx context.Context,
+	ref hangarProjectRef,
+) (*hangarProject, error) {
 	if ref.Owner == "" || ref.Slug == "" {
 		return nil, ErrNoProject
 	}
-	return getProjectByPath(ref.LookupPath())
+	return p.getProjectByPath(ctx, ref.LookupPath())
 }
 
-func getProjectByPath(path string) (*hangarProject, error) {
+func (p *Provider) getProjectByPath(
+	ctx context.Context,
+	path string,
+) (*hangarProject, error) {
 	project := &hangarProject{}
-	if err := getJSON(hangarProjectURL(path), project); err != nil {
+	if err := p.getJSON(ctx, hangarProjectURL(path), project); err != nil {
 		return nil, err
 	}
 	return project, nil
 }
 
-func searchProjects(
+func (p *Provider) searchProjects(
+	ctx context.Context,
 	query string,
 	ecosystem catalog.Ecosystem,
 ) (*projectSearchResponse, error) {
@@ -73,20 +87,24 @@ func searchProjects(
 	}
 
 	res := &projectSearchResponse{}
-	if err := getJSON(hangarProjectsURL(params), res); err != nil {
+	if err := p.getJSON(ctx, hangarProjectsURL(params), res); err != nil {
 		return nil, err
 	}
 	return res, nil
 }
 
-func getVersion(id catalog.VersionedRef) (*hangarVersion, error) {
-	project, err := getProject(id.Name)
+func (p *Provider) getVersion(
+	ctx context.Context,
+	id catalog.VersionedRef,
+) (*hangarVersion, error) {
+	project, err := p.getProject(ctx, id.Name)
 	if err != nil {
 		return nil, err
 	}
 
 	version := &hangarVersion{}
-	if err := getJSON(
+	if err := p.getJSON(
+		ctx,
 		hangarVersionURL(
 			project.ProjectRef(),
 			id.Version.String(),
@@ -97,8 +115,11 @@ func getVersion(id catalog.VersionedRef) (*hangarVersion, error) {
 	return version, nil
 }
 
-func listVersions(name catalog.Name) ([]hangarVersion, error) {
-	project, err := getProject(name)
+func (p *Provider) listVersions(
+	ctx context.Context,
+	name catalog.Name,
+) ([]hangarVersion, error) {
+	project, err := p.getProject(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +134,8 @@ func listVersions(name catalog.Name) ([]hangarVersion, error) {
 		params.Set("offset", strconv.Itoa(offset))
 
 		res := &VersionListResponse{}
-		if err := getJSON(
+		if err := p.getJSON(
+			ctx,
 			hangarVersionsURL(project.ProjectRef(), params),
 			res,
 		); err != nil {
@@ -133,9 +155,14 @@ func listVersions(name catalog.Name) ([]hangarVersion, error) {
 	return versions, nil
 }
 
-func getJSON(rawURL string, out any) error {
-	log.Debug("hangar request: " + rawURL)
-	res, err := cache.CachedGetRequest(
+func (p *Provider) getJSON(
+	ctx context.Context,
+	rawURL string,
+	out any,
+) error {
+	p.logger.Debug("hangar request: " + rawURL)
+	res, err := p.network.CachedGetRequest(
+		ctx,
 		rawURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)

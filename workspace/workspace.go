@@ -140,10 +140,12 @@ func (ws *Workspace) ObservePackages() {
 	if ws == nil {
 		return
 	}
-	ws.Packages, ws.UnidentifiedPackageFiles = discoverPackages(
+	packages, unidentified, warnings := discoverPackages(
 		ws.PackageDirs(),
 		mcdrPluginDirs(ws.Wrappers),
 	)
+	ws.Packages, ws.UnidentifiedPackageFiles = packages, unidentified
+	ws.Warnings = append(ws.Warnings, warnings...)
 }
 
 // applicableDeclaration builds the runtime declaration from a readable

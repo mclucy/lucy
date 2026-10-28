@@ -16,15 +16,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 const (
@@ -35,10 +31,6 @@ const (
 	// the latest build current without a network read on every plan.
 	foojayCacheTTL = 12 * time.Hour
 )
-
-// managedJavaRoot names the directory that holds downloaded runtimes. It is a
-// variable so a test can redirect the root.
-var managedJavaRoot = toolchain.ManagedJavaRoot
 
 type download struct {
 	url          string
@@ -80,12 +72,12 @@ var anyDistributionOrder = []java.Distribution{
 	java.DistributionLiberica,
 }
 
-func downloadPlan(ctx context.Context, req Request) (*Plan, error) {
-	architecture, ok := downloadArchitecture()
+func (h *Host) downloadPlan(ctx context.Context, req Request) (*Plan, error) {
+	architecture, ok := downloadArchitecture(h.goarch)
 	if !ok {
 		return nil, nil
 	}
-	operatingSystem, ok := downloadOperatingSystem()
+	operatingSystem, ok := downloadOperatingSystem(h.goos)
 	if !ok {
 		return nil, nil
 	}
@@ -94,7 +86,7 @@ func downloadPlan(ctx context.Context, req Request) (*Plan, error) {
 		distributions = anyDistributionOrder
 	}
 	for _, distribution := range distributions {
-		plan, err := downloadPlanFor(ctx, req.Major, distribution, architecture, operatingSystem)
+		plan, err := h.downloadPlanFor(ctx, req.Major, distribution, architecture, operatingSystem)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +99,7 @@ func downloadPlan(ctx context.Context, req Request) (*Plan, error) {
 
 // downloadPlanFor finds a verifiable download of one distribution. A runtime
 // without the compiler is enough to run a server, so it asks for a JRE first.
-func downloadPlanFor(
+func (h *Host) downloadPlanFor(
 	ctx context.Context,
 	major int,
 	distribution java.Distribution,
@@ -115,7 +107,7 @@ func downloadPlanFor(
 	operatingSystem string,
 ) (*Plan, error) {
 	for _, packageType := range []string{"jre", "jdk"} {
-		packages, err := fetchDownloadPackages(
+		packages, err := h.fetchDownloadPackages(
 			ctx,
 			major,
 			distribution,
@@ -130,9 +122,9 @@ func downloadPlanFor(
 			if pkg.ID == "" {
 				continue
 			}
-			build, err := fetchDownloadBuild(ctx, pkg.ID)
+			build, err := h.fetchDownloadBuild(ctx, pkg.ID)
 			if err != nil {
-				log.Debug(
+				h.logger.Debug(
 					"java download package unavailable",
 					"id", pkg.ID,
 					"reason", err,
@@ -140,9 +132,9 @@ func downloadPlanFor(
 				continue
 			}
 			if build.Checksum == "" && build.ChecksumURI != "" {
-				build.Checksum, err = fetchChecksumFile(ctx, build.ChecksumURI)
+				build.Checksum, err = h.fetchChecksumFile(ctx, build.ChecksumURI)
 				if err != nil {
-					log.Debug(
+					h.logger.Debug(
 						"java download checksum unavailable",
 						"id", pkg.ID,
 						"reason", err,
@@ -154,11 +146,17 @@ func downloadPlanFor(
 			if !ok {
 				continue
 			}
+			root, err := h.managedRoot()
+			if err != nil {
+				return nil, fmt.Errorf("find the Java runtime directory: %w", err)
+			}
 			return &Plan{
 				Method:       MethodDownload,
 				Package:      download.filename,
 				Distribution: distribution,
 				Major:        major,
+				root:         h.isRoot(),
+				managedRoot:  root,
 				download:     download,
 			}, nil
 		}
@@ -228,7 +226,7 @@ func newDownload(
 	}, true
 }
 
-func fetchDownloadPackages(
+func (h *Host) fetchDownloadPackages(
 	ctx context.Context,
 	major int,
 	distribution java.Distribution,
@@ -241,7 +239,8 @@ func fetchDownloadPackages(
 	query.Set("distribution", string(distribution))
 	query.Set("architecture", architecture)
 	query.Set("operating_system", operatingSystem)
-	query.Set("lib_c_type", downloadLibC(operatingSystem))
+	musl := operatingSystem == "linux" && h.usesMusl()
+	query.Set("lib_c_type", downloadLibC(musl, operatingSystem))
 	query.Add("archive_type", "tar.gz")
 	query.Add("archive_type", "zip")
 	query.Set("package_type", packageType)
@@ -249,11 +248,11 @@ func fetchDownloadPackages(
 	query.Set("latest", "available")
 	query.Set("javafx_bundled", "false")
 	query.Set("directly_downloadable", "true")
-	return fetchFoojay(ctx, foojayPackagesURL+"?"+query.Encode())
+	return h.fetchFoojay(ctx, foojayPackagesURL+"?"+query.Encode())
 }
 
-func fetchDownloadBuild(ctx context.Context, id string) (foojayPackage, error) {
-	builds, err := fetchFoojay(ctx, foojayIDURL+url.PathEscape(id))
+func (h *Host) fetchDownloadBuild(ctx context.Context, id string) (foojayPackage, error) {
+	builds, err := h.fetchFoojay(ctx, foojayIDURL+url.PathEscape(id))
 	if err != nil {
 		return foojayPackage{}, err
 	}
@@ -263,17 +262,14 @@ func fetchDownloadBuild(ctx context.Context, id string) (foojayPackage, error) {
 	return builds[0], nil
 }
 
-func fetchFoojay(ctx context.Context, address string) ([]foojayPackage, error) {
+func (h *Host) fetchFoojay(
+	ctx context.Context,
+	address string,
+) ([]foojayPackage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	data, err := cache.CachedGetBytes(
-		address,
-		cache.BytesRequestOptions{
-			Kind: cache.KindMetadata,
-			TTL:  foojayCacheTTL,
-		},
-	)
+	data, err := h.fetchMetadata(ctx, address, foojayCacheTTL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", address, err)
 	}
@@ -288,20 +284,14 @@ func fetchFoojay(ctx context.Context, address string) ([]foojayPackage, error) {
 // vendor publishes next to its archive. The file is "<digest>" or
 // "<digest>  <filename>". The digest then comes from the same origin as the
 // archive, so it detects a damaged download but not a replaced release.
-func fetchChecksumFile(ctx context.Context, address string) (string, error) {
+func (h *Host) fetchChecksumFile(ctx context.Context, address string) (string, error) {
 	if !strings.HasPrefix(address, "https://") {
 		return "", fmt.Errorf("checksum file %s is not served over HTTPS", address)
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	data, err := cache.CachedGetBytes(
-		address,
-		cache.BytesRequestOptions{
-			Kind: cache.KindMetadata,
-			TTL:  foojayCacheTTL,
-		},
-	)
+	data, err := h.fetchMetadata(ctx, address, foojayCacheTTL)
 	if err != nil {
 		return "", fmt.Errorf("fetch %s: %w", address, err)
 	}
@@ -316,8 +306,8 @@ func fetchChecksumFile(ctx context.Context, address string) (string, error) {
 	return strings.ToLower(fields[0]), nil
 }
 
-func downloadArchitecture() (string, bool) {
-	switch runtime.GOARCH {
+func downloadArchitecture(goarch string) (string, bool) {
+	switch goarch {
 	case "amd64":
 		return "x64", true
 	case "arm64":
@@ -327,8 +317,8 @@ func downloadArchitecture() (string, bool) {
 	}
 }
 
-func downloadOperatingSystem() (string, bool) {
-	switch runtime.GOOS {
+func downloadOperatingSystem(goos string) (string, bool) {
+	switch goos {
 	case "linux":
 		return "linux", true
 	case "darwin":
@@ -342,36 +332,18 @@ func downloadOperatingSystem() (string, bool) {
 
 // downloadLibC returns the libc that the download must match. Windows has no
 // libc, but the API still expects a value.
-func downloadLibC(operatingSystem string) string {
+func downloadLibC(musl bool, operatingSystem string) string {
 	switch operatingSystem {
 	case "macos":
 		return "libc"
 	case "windows":
 		return "c_std_lib"
 	default:
-		if usesMusl() {
+		if musl {
 			return "musl"
 		}
 		return "glibc"
 	}
-}
-
-// usesMusl reports whether the host runs musl instead of glibc.
-func usesMusl() bool {
-	if _, err := os.Stat("/etc/alpine-release"); err == nil {
-		return true
-	}
-	for _, pattern := range []string{
-		"/lib/ld-musl-*.so.1",
-		"/usr/lib/ld-musl-*.so.1",
-		"/lib64/ld-musl-*.so.1",
-	} {
-		matches, err := filepath.Glob(pattern)
-		if err == nil && len(matches) > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func downloadArchiveType(filename string) string {
@@ -413,9 +385,9 @@ func downloadDirectoryName(
 	return result
 }
 
-func (d *download) describe() []string {
+func (d *download) describe(root string) []string {
 	directory := d.destination
-	if root, err := managedJavaRoot(); err == nil {
+	if root != "" {
 		directory = filepath.Join(root, d.destination)
 	}
 	return []string{
@@ -426,14 +398,20 @@ func (d *download) describe() []string {
 }
 
 // runDownload downloads, verifies, and extracts the archive under the
-// per-user root. A directory that already exists is a finished installation.
-func runDownload(ctx context.Context, d *download, out io.Writer) error {
+// per-user root captured by the plan. A directory that already exists is a
+// finished installation.
+func runDownload(
+	ctx context.Context,
+	host *Host,
+	d *download,
+	root string,
+	out io.Writer,
+) error {
 	if d == nil || d.url == "" || d.checksum == "" {
 		return errors.New("incomplete java download")
 	}
-	root, err := managedJavaRoot()
-	if err != nil {
-		return err
+	if root == "" {
+		return errors.New("java runtime directory is unknown")
 	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return fmt.Errorf("create java runtime directory: %w", err)
@@ -459,7 +437,7 @@ func runDownload(ctx context.Context, d *download, out io.Writer) error {
 		d.filename,
 		downloadSize(d.size),
 	)
-	if err := fetchDownloadArchive(ctx, d, archive); err != nil {
+	if err := fetchDownloadArchive(ctx, host, d, archive); err != nil {
 		archive.Close()
 		return err
 	}
@@ -513,12 +491,14 @@ func downloadTargetExists(path string) (bool, error) {
 
 // fetchDownloadArchive streams the archive into dst and verifies the sha256
 // checksum while the bytes arrive. A mismatch leaves dst incomplete.
-func fetchDownloadArchive(ctx context.Context, d *download, dst io.Writer) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, d.url, nil)
-	if err != nil {
-		return err
-	}
-	response, err := http.DefaultClient.Do(request)
+// The request uses the invocation's configured HTTP client and context.
+func fetchDownloadArchive(
+	ctx context.Context,
+	host *Host,
+	d *download,
+	dst io.Writer,
+) error {
+	response, err := host.request(ctx, d.url)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", d.filename, err)
 	}

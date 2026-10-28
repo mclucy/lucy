@@ -4,6 +4,7 @@ package cache
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -91,41 +92,29 @@ func writeFixtureArtifact(w http.ResponseWriter, name, payload string) {
 	_, _ = io.WriteString(w, payload)
 }
 
-// installNetworkCache points the package network cache at a real private cache
-// directory and restores the previous singleton on cleanup. The package cache
-// singleton is process-wide, so these tests stay sequential.
-func installNetworkCache(t *testing.T, cfg Config) *handler {
+// installNetworkCache points a private cache client at a real cache directory.
+func installNetworkCache(t *testing.T, cfg Config) *Client {
 	t.Helper()
 	return installNetworkCacheAt(t, t.TempDir(), cfg)
 }
 
-// installNetworkCacheAt roots the network cache in home, which lets a test
+// installNetworkCacheAt roots the cache client in root, which lets a test
 // share one real cache root with helper processes.
-func installNetworkCacheAt(t *testing.T, home string, cfg Config) *handler {
+func installNetworkCacheAt(t *testing.T, root string, cfg Config) *Client {
 	t.Helper()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
-	t.Setenv("LOCALAPPDATA", filepath.Join(home, ".cache"))
-	h := newHandler("network", cfg)
+	client := New(root, cfg, http.DefaultClient, nil)
+	h := client.cache()
 	if !h.on {
 		t.Fatalf("cache handler did not start in %s", h.dir)
 	}
-	previous := networkHandler
-	networkHandler = func() *handler { return h }
-	t.Cleanup(
-		func() {
-			// Restoring the lazily built singleton keeps later lookups from
-			// reaching this test's cache root after HOME is restored.
-			networkHandler = previous
-		},
-	)
 	t.Cleanup(func() { _ = h.store.Close() })
-	return h
+	return client
 }
 
 // cacheObjects lists the physical objects the cache store holds.
-func cacheObjects(t *testing.T, h *handler) []cas.Object {
+func cacheObjects(t *testing.T, client *Client) []cas.Object {
 	t.Helper()
+	h := client.cache()
 	var objects []cas.Object
 	err := h.store.Walk(
 		func(object cas.Object) error {
@@ -234,7 +223,8 @@ func TestCachedDownloadMissThenHitKeepsIndexedFilename(t *testing.T) {
 	payload := []byte(fixturePayload("tool.jar"))
 
 	first := t.TempDir()
-	result, err := CachedDownload(
+	result, err := h.CachedDownload(
+		context.Background(),
 		url,
 		first,
 		DownloadOptions{
@@ -269,7 +259,8 @@ func TestCachedDownloadMissThenHitKeepsIndexedFilename(t *testing.T) {
 	}
 
 	second := t.TempDir()
-	again, err := CachedDownload(
+	again, err := h.CachedDownload(
+		context.Background(),
 		url,
 		second,
 		DownloadOptions{
@@ -305,9 +296,10 @@ func TestCachedDownloadMissThenHitKeepsIndexedFilename(t *testing.T) {
 func TestCacheIndexRetainsFileMode(t *testing.T) {
 	fixture := newCacheFixture(t)
 	h := installNetworkCache(t, DefaultCacheConfig())
-	indexPath := filepath.Join(h.dir, manifestFilename)
+	indexPath := filepath.Join(h.cache().dir, manifestFilename)
 
-	first, err := CachedDownload(
+	first, err := h.CachedDownload(
+		context.Background(),
 		fixture.artifactURL("first.jar"),
 		t.TempDir(),
 		DownloadOptions{Kind: KindArtifact},
@@ -322,7 +314,8 @@ func TestCacheIndexRetainsFileMode(t *testing.T) {
 		t.Fatalf("chmod cache index: %v", err)
 	}
 
-	second, err := CachedDownload(
+	second, err := h.CachedDownload(
+		context.Background(),
 		fixture.artifactURL("second.jar"),
 		t.TempDir(),
 		DownloadOptions{Kind: KindArtifact},
@@ -353,13 +346,15 @@ func TestCacheRepairsCorruptObject(t *testing.T) {
 	payload := []byte(fixturePayload("tool.jar"))
 
 	first := t.TempDir()
-	result, err := CachedDownload(url, first, DownloadOptions{Kind: KindArtifact})
+	result, err := h.CachedDownload(
+		context.Background(), url, first, DownloadOptions{Kind: KindArtifact},
+	)
 	if err != nil {
 		t.Fatalf("first download: %v", err)
 	}
 	_ = result.File.Close()
 
-	paths := cacheObjectPaths(t, h.dir, cacheObjects(t, h))
+	paths := cacheObjectPaths(t, h.cache().dir, cacheObjects(t, h))
 	if len(paths) != 1 {
 		t.Fatalf("found %d object files, want 1", len(paths))
 	}
@@ -371,7 +366,9 @@ func TestCacheRepairsCorruptObject(t *testing.T) {
 	}
 
 	second := t.TempDir()
-	again, err := CachedDownload(url, second, DownloadOptions{Kind: KindArtifact})
+	again, err := h.CachedDownload(
+		context.Background(), url, second, DownloadOptions{Kind: KindArtifact},
+	)
 	if err != nil {
 		t.Fatalf("download after corruption: %v", err)
 	}
@@ -409,21 +406,23 @@ func TestDownloadsSurviveUnavailableCacheStorage(t *testing.T) {
 			t.Setenv("TMPDIR", temporary)
 			t.Setenv("TMP", temporary)
 			t.Setenv("TEMP", temporary)
-			if err := os.RemoveAll(h.dir); err != nil {
+			if err := os.RemoveAll(h.cache().dir); err != nil {
 				t.Fatal(err)
 			}
 			blocked := []byte("cache storage is not a directory\n")
-			if err := os.WriteFile(h.dir, blocked, 0o600); err != nil {
+			if err := os.WriteFile(h.cache().dir, blocked, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			if test.artifact {
 				destination := t.TempDir()
 				payload := []byte(fixturePayload("tool.jar"))
-				result, err := CachedDownload(fixture.artifactURL("tool.jar"), destination, DownloadOptions{
-					Kind:          KindArtifact,
-					ExpectedHash:  digestHex(t, HashSHA256, payload),
-					HashAlgorithm: HashSHA256,
-				})
+				result, err := h.CachedDownload(
+					context.Background(), fixture.artifactURL("tool.jar"), destination, DownloadOptions{
+						Kind:          KindArtifact,
+						ExpectedHash:  digestHex(t, HashSHA256, payload),
+						HashAlgorithm: HashSHA256,
+					},
+				)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -435,7 +434,7 @@ func TestDownloadsSurviveUnavailableCacheStorage(t *testing.T) {
 				}
 				requireFileBytes(t, filepath.Join(destination, "indexed-tool.jar"), payload)
 			} else {
-				data, err := CachedGetBytes(fixture.artifactURL("metadata.json"), BytesRequestOptions{Kind: KindMetadata})
+				data, err := h.CachedGetBytes(context.Background(), fixture.artifactURL("metadata.json"), BytesRequestOptions{Kind: KindMetadata})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -446,7 +445,7 @@ func TestDownloadsSurviveUnavailableCacheStorage(t *testing.T) {
 			if fixture.downloads() != 1 {
 				t.Fatal("storage failure repeated the upstream fetch")
 			}
-			requireFileBytes(t, h.dir, blocked)
+			requireFileBytes(t, h.cache().dir, blocked)
 			requireDirEntries(t, temporary)
 		})
 	}
@@ -467,7 +466,8 @@ func TestCachedDownloadUpstreamMismatchPublishesNothing(t *testing.T) {
 
 				wrong := digestHex(t, algorithm, []byte("unrelated artifact bytes"))
 				rejected := t.TempDir()
-				_, err := CachedDownload(
+				_, err := h.CachedDownload(
+					context.Background(),
 					url,
 					rejected,
 					DownloadOptions{
@@ -501,7 +501,8 @@ func TestCachedDownloadUpstreamMismatchPublishesNothing(t *testing.T) {
 
 				accepted := t.TempDir()
 				expected := digestHex(t, algorithm, payload)
-				verified, err := CachedDownload(
+				verified, err := h.CachedDownload(
+					context.Background(),
 					url,
 					accepted,
 					DownloadOptions{

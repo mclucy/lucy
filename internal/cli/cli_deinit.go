@@ -2,10 +2,8 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/operation"
 	"github.com/spf13/cobra"
 )
 
@@ -17,25 +15,23 @@ type deinitDocument struct {
 
 var deinitJSON JSONResult[deinitDocument]
 
-func NewDeinitCommand(contracts *JSONContracts) *cobra.Command {
+func NewDeinitCommand(contracts *JSONContracts, inv *Invocation, deps *Dependencies) *cobra.Command {
 	deinitCmd := &cobra.Command{
 		Use:   "deinit",
 		Short: help.DeinitShort,
 		Long:  help.DeinitLong,
 		Args:  cobra.NoArgs,
-		RunE:  actionDeinit,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return actionDeinit(cmd, inv, deps)
+		},
 	}
 	deinitJSON.Bind(contracts, deinitCmd)
 	return deinitCmd
 }
 
-func actionDeinit(cmd *cobra.Command, _ []string) error {
-	output := NewOperationOutput(cmd)
-	workDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
-	}
-	result, err := operation.Deinitialize(workDir)
+func actionDeinit(cmd *cobra.Command, inv *Invocation, deps *Dependencies) error {
+	output := NewOperationOutput(cmd, inv)
+	result, err := deps.Operations.Deinitialize(inv.Directory)
 	if err != nil {
 		return err
 	}

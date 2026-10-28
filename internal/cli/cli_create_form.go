@@ -13,7 +13,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/operation"
 	serverpkg "github.com/mclucy/lucy/server"
-	"github.com/mclucy/lucy/upstream/providers/mojang"
+	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +22,8 @@ import (
 func promptCreate(
 	ctx context.Context,
 	cmd *cobra.Command,
+	router *routing.Router,
+	base string,
 	defaults createChoices,
 ) (createChoices, error) {
 	values := defaults
@@ -31,7 +33,7 @@ func promptCreate(
 	}
 	// The name follows the directory until the operator supplies one, so the
 	// prefilled default never outlives the directory it was derived from.
-	derivedName := defaultCreateName(values.Directory)
+	derivedName := defaultCreateName(values.Directory, base)
 	nameFromFlag := values.Name != ""
 	if !nameFromFlag {
 		values.Name = derivedName
@@ -51,18 +53,18 @@ func promptCreate(
 		Key("directory").
 		Title("Directory").
 		DescriptionFunc(func() string {
-			return describeCreateDirectory(values.Directory, values.Force)
+			return describeCreateDirectory(values.Directory, values.Force, base)
 		}, &values.Directory).
 		Placeholder(".").
 		Value(&values.Directory).
 		Validate(func(path string) error {
-			if err := validateCreateDirectory(path); err != nil {
+			if err := validateCreateDirectory(path, base); err != nil {
 				return err
 			}
 			if nameFromFlag || values.Name != derivedName {
 				return nil
 			}
-			derivedName = defaultCreateName(path)
+			derivedName = defaultCreateName(path, base)
 			values.Name = derivedName
 			// huh reads the text field, not the accessor, while editing, so
 			// reattaching the accessor is what shows the new default.
@@ -77,16 +79,13 @@ func promptCreate(
 		Value(&values.Product)
 	var minecraftVersions atomic.Value
 	go func() {
-		manifest, err := mojang.FetchVersionManifest()
+		releases, err := router.MinecraftReleases(ctx)
 		if err != nil {
 			return
 		}
-		versions := make([]string, 0, 100)
-		for _, entry := range manifest.Versions {
-			if entry.Type != "release" {
-				continue
-			}
-			versions = append(versions, entry.ID)
+		versions := make([]string, 0, min(len(releases), 100))
+		for _, release := range releases {
+			versions = append(versions, release.String())
 			if len(versions) == 100 {
 				break
 			}
@@ -131,7 +130,7 @@ func promptCreate(
 	summary := huh.NewNote().
 		Title("Review").
 		DescriptionFunc(func() string {
-			return createFormSummary(values)
+			return createFormSummary(values, base)
 		}, &values)
 	if values.InstallChosen {
 		summary = summary.Next(true).NextLabel("Create")
@@ -163,7 +162,9 @@ func promptCreate(
 			Key("replace").
 			Title("Replace existing manifest?").
 			DescriptionFunc(func() string {
-				target, err := operation.InspectCreateTarget(values.Directory)
+				target, err := operation.InspectCreateTarget(
+					resolveInvocationPath(base, values.Directory),
+				)
 				if err != nil || !target.ManifestExists {
 					return ""
 				}
@@ -190,7 +191,9 @@ func promptCreate(
 			if forceFromFlag {
 				return true
 			}
-			target, err := operation.InspectCreateTarget(values.Directory)
+			target, err := operation.InspectCreateTarget(
+				resolveInvocationPath(base, values.Directory),
+			)
 			return err != nil || !target.ManifestExists
 		})
 	groups = append([]*huh.Group{groups[0], replaceGroup}, groups[1:]...)
@@ -206,7 +209,7 @@ func promptCreate(
 	}
 	values.Name = strings.TrimSpace(values.Name)
 	if values.Name == "" {
-		values.Name = defaultCreateName(values.Directory)
+		values.Name = defaultCreateName(values.Directory, base)
 	}
 	values.Minecraft = strings.TrimSpace(values.Minecraft)
 	values.CoreVersion = strings.TrimSpace(values.CoreVersion)
@@ -282,7 +285,7 @@ func createCoreVersionPlaceholder(product string) string {
 	}
 }
 
-func createFormSummary(values createChoices) string {
+func createFormSummary(values createChoices, base string) string {
 	serverVersion := strings.TrimSpace(values.CoreVersion)
 	if values.Product == createProductMinecraft {
 		serverVersion = "the Minecraft version"
@@ -292,7 +295,7 @@ func createFormSummary(values createChoices) string {
 	server := createProductTitle(values.Product)
 	lines := []string{
 		"Name: " + values.Name,
-		"Directory: " + displayCreateLocation(values.Directory),
+		"Directory: " + displayCreateLocation(values.Directory, base),
 		"Server: " + server + " for Minecraft " + values.Minecraft,
 		"Server version: " + serverVersion,
 	}
@@ -301,7 +304,9 @@ func createFormSummary(values createChoices) string {
 		install = "yes"
 	}
 	lines = append(lines, "Install after creation: "+install)
-	if target, err := operation.InspectCreateTarget(values.Directory); err == nil {
+	if target, err := operation.InspectCreateTarget(
+		resolveInvocationPath(base, values.Directory),
+	); err == nil {
 		if target.NonEmpty {
 			lines = append(lines, "Warning: the directory is not empty.")
 		}
@@ -317,12 +322,12 @@ func createFormSummary(values createChoices) string {
 	return strings.Join(lines, "\n")
 }
 
-func describeCreateDirectory(path string, force bool) string {
+func describeCreateDirectory(path string, force bool, base string) string {
 	usingCurrent := strings.TrimSpace(path) == ""
 	if usingCurrent {
 		path = "."
 	}
-	target, err := operation.InspectCreateTarget(path)
+	target, err := operation.InspectCreateTarget(resolveInvocationPath(base, path))
 	if err != nil {
 		return err.Error()
 	}
@@ -366,19 +371,21 @@ func createPackageCountLabel(count int) string {
 	return fmt.Sprintf("%d packages", count)
 }
 
-func validateCreateDirectory(path string) error {
+func validateCreateDirectory(path, base string) error {
 	if strings.TrimSpace(path) == "" {
 		path = "."
 	}
-	_, err := operation.InspectCreateTarget(path)
+	_, err := operation.InspectCreateTarget(resolveInvocationPath(base, path))
 	return err
 }
 
 // defaultCreateName names a new server after the directory it occupies. The
 // name is not slugged: an unusable directory name leaves the input empty so
 // the form asks for an explicit name.
-func defaultCreateName(directory string) string {
-	target, err := operation.InspectCreateTarget(directory)
+func defaultCreateName(directory, base string) string {
+	target, err := operation.InspectCreateTarget(
+		resolveInvocationPath(base, directory),
+	)
 	if err != nil {
 		return ""
 	}

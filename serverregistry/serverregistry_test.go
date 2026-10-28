@@ -47,7 +47,7 @@ func writeManifest(t *testing.T, root, name string) {
 
 func register(t *testing.T, registry *Registry, root string) []Entry {
 	t.Helper()
-	writer, err := workspacewrite.Lock(root)
+	writer, err := workspacewrite.Lock(root, nil)
 	if err != nil {
 		t.Fatalf("lock workspace %s: %v", root, err)
 	}
@@ -64,7 +64,7 @@ func register(t *testing.T, registry *Registry, root string) []Entry {
 
 func unregister(t *testing.T, registry *Registry, root string) {
 	t.Helper()
-	writer, err := workspacewrite.Lock(root)
+	writer, err := workspacewrite.Lock(root, nil)
 	if err != nil {
 		t.Fatalf("lock workspace %s: %v", root, err)
 	}

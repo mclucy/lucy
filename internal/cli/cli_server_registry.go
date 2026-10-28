@@ -2,13 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/spf13/cobra"
 )
@@ -20,35 +18,39 @@ func RegisterServerSelection(root *cobra.Command) {
 	_ = root.RegisterFlagCompletionFunc(FlagServer, completeServerNames)
 }
 
-// SelectServer returns a restoration function only when it changes directories.
-func SelectServer(cmd *cobra.Command) (func() error, error) {
+// ResolveServer applies the parsed --server selection to inv. It resolves the
+// registered name to its absolute directory; the process working directory is
+// never changed. Completion commands are not server selections.
+func ResolveServer(
+	cmd *cobra.Command,
+	registry *serverregistry.Registry,
+	inv *Invocation,
+) error {
 	if cmd.Name() == "__complete" || cmd.Name() == "__completeNoDesc" {
-		return nil, nil
+		return nil
 	}
 	flags := cmd.Root().PersistentFlags()
 	if !flags.Changed(FlagServer) {
-		return nil, nil
+		return nil
 	}
 	name, err := flags.GetString(FlagServer)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	registry, err := serverregistry.New()
-	if err != nil {
-		return nil, err
+	if registry == nil {
+		return fmt.Errorf("select server %q: server registry is unavailable", name)
 	}
 	entry, err := registry.Resolve(name)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	original, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("determine invocation directory: %w", err)
-	}
-	if err := os.Chdir(entry.Path); err != nil {
-		return nil, fmt.Errorf("select server %q: %w", name, err)
-	}
-	return func() error { return os.Chdir(original) }, nil
+	inv.Directory = entry.Path
+	inv.Logger.Debug(
+		"server selected",
+		"name", name,
+		"directory", entry.Path,
+	)
+	return nil
 }
 
 func completeServerNames(_ *cobra.Command, _ []string, prefix string) ([]string, cobra.ShellCompDirective) {
@@ -72,7 +74,12 @@ func completeServerNames(_ *cobra.Command, _ []string, prefix string) ([]string,
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
-func registerWorkspace(root string, output *Output) {
+func registerWorkspace(
+	root string,
+	output *Output,
+	inv *Invocation,
+	deps *Dependencies,
+) {
 	if err := workspacewrite.SafePath(root, ".lucy/"+workspacewrite.LockFileName); err != nil {
 		output.Warn(fmt.Errorf("server registration failed: %w", err))
 		return
@@ -88,9 +95,9 @@ func registerWorkspace(root string, output *Output) {
 			output.Warn(fmt.Errorf("release server registration lock: %w", err))
 		}
 	}()
-	registry, err := serverregistry.New()
+	registry, err := deps.ServerRegistry()
 	if err != nil {
-		output.Warn(err)
+		output.Warn(fmt.Errorf("server registration skipped: %w", err))
 		return
 	}
 	duplicates, err := registry.Register(root)
@@ -98,7 +105,7 @@ func registerWorkspace(root string, output *Output) {
 		output.Warn(fmt.Errorf("server registration failed: %w", err))
 		return
 	}
-	log.Debug("server registration checked", "directory", root)
+	inv.Logger.Debug("server registration checked", "directory", root)
 	for _, duplicate := range duplicates {
 		output.Warn(fmt.Errorf(
 			"server name %q is also registered at %s; --server cannot select an ambiguous name",

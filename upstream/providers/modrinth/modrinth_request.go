@@ -1,24 +1,33 @@
 package modrinth
 
 import (
+	"context"
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/log"
 )
 
-func requestBytes(rawURL string) (*cache.BytesResponse, error) {
-	log.Debug("modrinth api: GET " + rawURL)
-	return cache.CachedGetRequest(
+func (p *Provider) requestBytes(
+	ctx context.Context,
+	rawURL string,
+) (*cache.BytesResponse, error) {
+	p.logger.Debug("modrinth api: GET " + rawURL)
+	return p.network.CachedGetRequest(
+		ctx,
 		rawURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)
 }
 
-func requestJSON(rawURL string, out any, notFound error) error {
-	res, err := requestBytes(rawURL)
+func (p *Provider) requestJSON(
+	ctx context.Context,
+	rawURL string,
+	out any,
+	notFound error,
+) error {
+	res, err := p.requestBytes(ctx, rawURL)
 	if err != nil {
 		return fmt.Errorf("modrinth: request failed: %w", err)
 	}

@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/log"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
@@ -92,7 +90,7 @@ func parseForgeManifest(
 				}
 			}
 		}
-		fn.CloseReader(r, log.Warn)
+		_ = r.Close()
 		switch {
 		case minecraftGameVersion != versionpkg.Unknown:
 			gameVersion = minecraftGameVersion

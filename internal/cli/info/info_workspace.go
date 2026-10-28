@@ -3,13 +3,11 @@ package info
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
@@ -17,28 +15,6 @@ import (
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
 )
-
-func infoWorkingDirectory() (string, error) {
-	root, err := os.Getwd()
-	if err != nil {
-		return "", &report.Detail{
-			Title: "cannot determine the working directory",
-			Lines: []string{err.Error()},
-			Code:  infoErrorWorkspace,
-			Cause: err,
-		}
-	}
-	absolute, err := filepath.Abs(root)
-	if err != nil {
-		return "", &report.Detail{
-			Title: "cannot resolve the working directory",
-			Lines: []string{err.Error()},
-			Code:  infoErrorWorkspace,
-			Cause: err,
-		}
-	}
-	return filepath.Clean(absolute), nil
-}
 
 // infoObserveWorkspace is a read-only observation used for installed facts and
 // for the version-resolution context. Failure to observe is not an info
@@ -302,6 +278,7 @@ func infoLockPackageIdentity(
 // stays unpinned and produces a warning.
 func infoResolveProjectVersion(
 	ctx context.Context,
+	router *routing.Router,
 	request catalog.VersionedRef,
 	provider catalog.Provider,
 	observed *workspace.Workspace,
@@ -346,43 +323,30 @@ func infoResolveProjectVersion(
 		)}, nil
 	}
 
-	type candidateResult struct {
-		candidates []upstream.Candidate
-		err        error
-	}
 	projectName := request.Name.String()
 	if provider == catalog.ProviderMCDR {
 		projectName = request.Name.PythonName()
 	}
-	result, err := infoAwait(ctx, func() candidateResult {
-		candidates, lookupErr := routing.Candidates(
-			ctx,
-			registry,
-			projectName,
-			minecraft,
-			loader,
-		)
-		return candidateResult{candidates: candidates, err: lookupErr}
-	})
-	if err != nil {
-		if failure := infoOperationFailure(ctx, err); failure != nil {
-			return version.Any, nil, failure
-		}
-		return version.Any, nil, err
-	}
-	if result.err != nil {
-		if failure := infoOperationFailure(ctx, result.err); failure != nil {
+	candidates, lookupErr := router.Candidates(
+		ctx,
+		registry,
+		projectName,
+		minecraft,
+		loader,
+	)
+	if lookupErr != nil {
+		if failure := infoOperationFailure(ctx, lookupErr); failure != nil {
 			return version.Any, nil, failure
 		}
 		return version.Any, []string{fmt.Sprintf(
 			"could not resolve version %s on %s: %v; the project ref stays unpinned",
 			request.Version.String(),
 			infoProviderLabel(provider),
-			result.err,
+			lookupErr,
 		)}, nil
 	}
 
-	selected := infoSelectCandidate(result.candidates, request.Version)
+	selected := infoSelectCandidate(candidates, request.Version)
 	if infoVersionText(selected) == "" {
 		return version.Any, []string{fmt.Sprintf(
 			"version %s was not found among the builds available for this workspace, so the project ref stays unpinned",

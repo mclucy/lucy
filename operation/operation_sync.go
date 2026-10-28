@@ -11,7 +11,7 @@ import (
 
 // Sync converges the workspace to its manifest and lock. A missing manifest or
 // lock is allowed only when the other document can drive the operation.
-func Sync(ctx context.Context, root string, opts install.Options) (*install.Result, error) {
+func (s *Service) Sync(ctx context.Context, root string, opts install.Options) (*install.Result, error) {
 	d, err := document.ManifestFile(root).Read()
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -26,5 +26,5 @@ func Sync(ctx context.Context, root string, opts install.Options) (*install.Resu
 	if errors.Is(err, os.ErrNotExist) {
 		old = nil
 	}
-	return install.Sync(ctx, root, d, old, opts)
+	return s.install.Sync(ctx, root, d, old, opts)
 }

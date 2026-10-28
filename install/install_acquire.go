@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
@@ -22,11 +24,15 @@ import (
 )
 
 type downloadStore struct {
-	ctx     context.Context
-	dir     string
-	offline bool
-	trace   *Trace
-	fetch   *FetchSummary
+	ctx         context.Context
+	dir         string
+	offline     bool
+	trace       *Trace
+	fetch       *FetchSummary
+	network     *cache.Client
+	logger      *log.Logger
+	githubProxy string
+	injected    func(*catalog.Artifact) (artifact.MaterializedFile, error)
 }
 
 func (s *downloadStore) cacheHit() {
@@ -93,6 +99,9 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedF
 	if a.Filename == "" || filepath.Base(a.Filename) != a.Filename || strings.ContainsAny(a.Filename, "/\\") {
 		return artifact.MaterializedFile{}, fmt.Errorf("invalid artifact filename %q", a.Filename)
 	}
+	if s.injected != nil {
+		return s.injectedMaterialize(a)
+	}
 	key := sha256.Sum256([]byte(a.URL))
 	dir := filepath.Join(s.dir, hex.EncodeToString(key[:]))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -124,13 +133,40 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedF
 	} else {
 		s.cacheHit()
 	}
-	log.Debug(
+	s.logger.Debug(
 		"artifact verified",
 		"file", a.Filename,
 		"sha256", hashes["sha256"],
 		"source", source,
 	)
 	return artifact.MaterializedFile{Path: destination, Hashes: hashes}, nil
+}
+
+// injectedMaterialize verifies bytes another operation supplied. Digests are
+// recomputed from the returned file, so an injected materializer cannot lower
+// the hash guarantee. It does not touch the fetch summary, which describes the
+// configured cache's transfers.
+func (s *downloadStore) injectedMaterialize(a *catalog.Artifact) (artifact.MaterializedFile, error) {
+	expected := maps.Clone(a.Hashes)
+	input := *a
+	input.Hashes = maps.Clone(a.Hashes)
+	input.Modules = slices.Clone(a.Modules)
+	for i := range input.Modules {
+		input.Modules[i].Provides = slices.Clone(a.Modules[i].Provides)
+		input.Modules[i].Dependencies = slices.Clone(a.Modules[i].Dependencies)
+	}
+	materialized, err := s.injected(&input)
+	if err != nil {
+		return artifact.MaterializedFile{}, err
+	}
+	if materialized.Path == "" {
+		return artifact.MaterializedFile{}, fmt.Errorf("injected artifact %s has no path", a.Filename)
+	}
+	hashes, err := DigestFile(materialized.Path, expected)
+	if err != nil {
+		return artifact.MaterializedFile{}, err
+	}
+	return artifact.MaterializedFile{Path: materialized.Path, Hashes: hashes}, nil
 }
 
 // materializeFile materializes the artifact at destination from the network or
@@ -143,7 +179,7 @@ func (s *downloadStore) materializeFile(a *catalog.Artifact, dir, destination st
 	defer os.Remove(staged)
 
 	if s.offline {
-		hit, cached, _, err := cache.Network().Get(a.URL)
+		hit, cached, _, err := s.network.Get(a.URL)
 		if err != nil {
 			return err
 		}
@@ -172,10 +208,9 @@ func (s *downloadStore) materializeFile(a *catalog.Artifact, dir, destination st
 		var read int64
 		var total int64
 		options := cache.DownloadOptions{
-			Context:    s.ctx,
 			Kind:       cache.KindArtifact,
 			Filename:   a.Filename,
-			RequestURL: github.DownloadURL(a.URL),
+			RequestURL: github.ProxiedDownloadURL(a.URL, s.githubProxy),
 		}
 		options.WrapReader = func(reader io.Reader, size int64) io.Reader {
 			total = size
@@ -188,7 +223,7 @@ func (s *downloadStore) materializeFile(a *catalog.Artifact, dir, destination st
 				store:  s,
 			}
 		}
-		result, err := cache.CachedDownload(a.URL, dir, options)
+		result, err := s.network.CachedDownload(s.ctx, a.URL, dir, options)
 		if err != nil {
 			return err
 		}

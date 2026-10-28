@@ -14,7 +14,6 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/server"
 
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -103,7 +102,7 @@ func zipBytes(z *zip.Reader, name string) ([]byte, error) {
 	return raw, err
 }
 
-func resolveInstaller(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, installer string) error {
+func (r *Router) resolveInstaller(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, installer string) error {
 	z, err := zip.OpenReader(installer)
 	if err != nil {
 		return err
@@ -157,7 +156,7 @@ func resolveInstaller(ctx context.Context, req ServerProductRequest, out *Server
 			return e
 		}
 		if !downloadable {
-			log.Debug(
+			r.logger.Debug(
 				"routing: installer library skipped",
 				"library", lib.Name,
 				"reason", "no downloadable artifact",
@@ -165,7 +164,7 @@ func resolveInstaller(ctx context.Context, req ServerProductRequest, out *Server
 			continue
 		}
 		if seen[input.Path] {
-			log.Debug(
+			r.logger.Debug(
 				"routing: installer library skipped",
 				"library", lib.Name,
 				"path", input.Path,
@@ -183,7 +182,7 @@ func resolveInstaller(ctx context.Context, req ServerProductRequest, out *Server
 			URL string `json:"url"`
 		} `json:"versions"`
 	}
-	if err := Metadata(ctx, mojang.VersionManifestURL, &index); err != nil {
+	if err := r.Metadata(ctx, mojang.VersionManifestURL, &index); err != nil {
 		return err
 	}
 	for _, v := range index.Versions {
@@ -194,7 +193,7 @@ func resolveInstaller(ctx context.Context, req ServerProductRequest, out *Server
 					SHA1 string `json:"sha1"`
 				} `json:"downloads"`
 			}
-			if err := Metadata(ctx, v.URL, &detail); err != nil {
+			if err := r.Metadata(ctx, v.URL, &detail); err != nil {
 				return err
 			}
 			if mapping, ok := detail.Downloads["server_mappings"]; ok {
@@ -203,7 +202,7 @@ func resolveInstaller(ctx context.Context, req ServerProductRequest, out *Server
 			break
 		}
 	}
-	log.Debug(
+	r.logger.Debug(
 		"routing: installer inputs resolved",
 		"product", req.Product,
 		"version", out.ProductVersion,

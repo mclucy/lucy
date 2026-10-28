@@ -1,67 +1,31 @@
 package curseforge
 
 import (
+	"context"
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
-	"strings"
-	"sync"
 
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/internal/cipher"
-	"github.com/mclucy/lucy/log"
 )
 
 // Docs: https://docs.curseforge.com/rest-api/
 const baseUrl = "https://api.curseforge.com"
 
-var (
-	embeddedAPIKey string
-	userAPIKey     string
-
-	loadApiKey = sync.OnceValue(func() error {
-		key, err := cipher.Decode()
-		if err != nil {
-			return fmt.Errorf("curseforge: decode embedded api key: %w", err)
-		}
-		embeddedAPIKey = strings.TrimSpace(key)
-		return nil
-	})
-)
-
-// SetUserAPIKey configures the key from machine configuration. An empty key
-// keeps the key embedded in the build.
-func SetUserAPIKey(key string) {
-	userAPIKey = strings.TrimSpace(key)
-}
-
-func effectiveAPIKey() (string, error) {
-	if userAPIKey != "" {
-		return userAPIKey, nil
-	}
-	if err := loadApiKey(); err != nil {
-		return "", err
-	}
-	return embeddedAPIKey, nil
-}
-
 // get performs an authenticated GET request to the CurseForge API and
 // unmarshals the JSON response into dest.
-func get(url string, dest any) error {
-	key, err := effectiveAPIKey()
-	if err != nil {
-		return err
-	}
-	if key == "" {
+func (p *Provider) get(ctx context.Context, url string, dest any) error {
+	if p.apiKey == "" {
 		return ErrNoApiKey
 	}
 
-	log.Debug("curseforge api: GET " + url)
+	p.logger.Debug("curseforge api: GET " + url)
 
 	headers := http.Header{}
-	headers.Set("x-api-key", key)
+	headers.Set("x-api-key", p.apiKey)
 	headers.Set("Accept", "application/json")
-	res, err := cache.CachedGetRequest(
+	res, err := p.network.CachedGetRequest(
+		ctx,
 		url,
 		cache.BytesRequestOptions{
 			Kind:    cache.KindMetadata,

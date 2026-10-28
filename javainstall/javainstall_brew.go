@@ -3,15 +3,11 @@ package javainstall
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // homebrewCasks maps a branded distribution to the base token of its macOS
@@ -32,14 +28,14 @@ type homebrew struct{}
 func (homebrew) method() Method { return MethodHomebrew }
 func (homebrew) system() bool   { return false }
 
-func (homebrew) ownsJava() bool {
-	if os.Geteuid() == 0 {
+func (homebrew) ownsJava(ctx context.Context, host *Host) bool {
+	if host.isRoot() {
 		return false
 	}
-	if _, err := exec.LookPath("brew"); err != nil {
+	if _, err := host.lookPath("brew"); err != nil {
 		return false
 	}
-	formulae, err := homebrewList(context.Background(), "--formula")
+	formulae, err := homebrewList(ctx, host, "--formula")
 	if err == nil {
 		for _, token := range strings.Fields(formulae) {
 			if strings.HasPrefix(token, "openjdk") {
@@ -47,7 +43,7 @@ func (homebrew) ownsJava() bool {
 			}
 		}
 	}
-	casks, err := homebrewList(context.Background(), "--cask")
+	casks, err := homebrewList(ctx, host, "--cask")
 	if err != nil {
 		return false
 	}
@@ -59,31 +55,31 @@ func (homebrew) ownsJava() bool {
 	return false
 }
 
-func (homebrew) plans(ctx context.Context, req Request) ([]Plan, error) {
-	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+func (homebrew) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
+	if host.goos != "darwin" && host.goos != "linux" {
 		return nil, nil
 	}
-	if os.Geteuid() == 0 {
+	if host.isRoot() {
 		return nil, nil
 	}
-	if _, err := exec.LookPath("brew"); err != nil {
+	if _, err := host.lookPath("brew"); err != nil {
 		return nil, nil
 	}
 	if req.Distribution == java.DistributionAny {
-		token, ok := homebrewFormula(ctx, req.Major)
+		token, ok := homebrewFormula(ctx, host, req.Major)
 		if !ok {
 			return nil, nil
 		}
 		return []Plan{homebrewPlan(token, req.Major, java.DistributionAny, false)}, nil
 	}
-	if runtime.GOOS != "darwin" {
+	if host.goos != "darwin" {
 		return nil, nil
 	}
 	base, ok := homebrewCasks[req.Distribution]
 	if !ok {
 		return nil, nil
 	}
-	token, ok := homebrewCask(ctx, base, req.Major)
+	token, ok := homebrewCask(ctx, host, base, req.Major)
 	if !ok {
 		return nil, nil
 	}
@@ -93,12 +89,12 @@ func (homebrew) plans(ctx context.Context, req Request) ([]Plan, error) {
 // homebrewFormula returns the formula that installs the requested major. The
 // versioned formula is preferred; the unversioned openjdk formula qualifies
 // only when its current major matches.
-func homebrewFormula(ctx context.Context, major int) (string, bool) {
+func homebrewFormula(ctx context.Context, host *Host, major int) (string, bool) {
 	token := "openjdk@" + strconv.Itoa(major)
-	if version, ok := homebrewBottledFormulaVersion(ctx, token); ok && homebrewMajor(version) == major {
+	if version, ok := homebrewBottledFormulaVersion(ctx, host, token); ok && homebrewMajor(version) == major {
 		return token, true
 	}
-	version, ok := homebrewBottledFormulaVersion(ctx, "openjdk")
+	version, ok := homebrewBottledFormulaVersion(ctx, host, "openjdk")
 	if !ok || homebrewMajor(version) != major {
 		return "", false
 	}
@@ -108,9 +104,9 @@ func homebrewFormula(ctx context.Context, major int) (string, bool) {
 // homebrewCask returns the cask that installs the requested major. A versioned
 // cask is preferred; the base cask qualifies only when its current major
 // matches.
-func homebrewCask(ctx context.Context, base string, major int) (string, bool) {
+func homebrewCask(ctx context.Context, host *Host, base string, major int) (string, bool) {
 	for _, token := range []string{base + "@" + strconv.Itoa(major), base} {
-		version, ok := homebrewCaskVersion(ctx, token)
+		version, ok := homebrewCaskVersion(ctx, host, token)
 		if ok && homebrewMajor(version) == major {
 			return token, true
 		}
@@ -121,11 +117,11 @@ func homebrewCask(ctx context.Context, base string, major int) (string, bool) {
 // homebrewBottledFormulaVersion returns the stable version of a formula that
 // has a bottle. A formula without one compiles the JDK from source, which
 // takes long and is not a native install.
-func homebrewBottledFormulaVersion(ctx context.Context, token string) (string, bool) {
-	output, err := homebrewInfo(ctx, "--formula", token)
+func homebrewBottledFormulaVersion(ctx context.Context, host *Host, token string) (string, bool) {
+	output, err := homebrewInfo(ctx, host, "--formula", token)
 	if err != nil {
 		if ctx.Err() == nil {
-			log.Debug("homebrew formula info unavailable", "formula", token, "reason", err)
+			host.logger.Debug("homebrew formula info unavailable", "formula", token, "reason", err)
 		}
 		return "", false
 	}
@@ -146,7 +142,7 @@ func homebrewBottledFormulaVersion(ctx context.Context, token string) (string, b
 	}
 	formula := info.Formulae[0]
 	if len(formula.Bottle.Stable.Files) == 0 {
-		log.Debug(
+		host.logger.Debug(
 			"homebrew formula skipped",
 			"formula", token,
 			"reason", "no bottle, so it would build from source",
@@ -156,11 +152,11 @@ func homebrewBottledFormulaVersion(ctx context.Context, token string) (string, b
 	return formula.Versions.Stable, true
 }
 
-func homebrewCaskVersion(ctx context.Context, token string) (string, bool) {
-	output, err := homebrewInfo(ctx, "--cask", token)
+func homebrewCaskVersion(ctx context.Context, host *Host, token string) (string, bool) {
+	output, err := homebrewInfo(ctx, host, "--cask", token)
 	if err != nil {
 		if ctx.Err() == nil {
-			log.Debug("homebrew cask info unavailable", "cask", token, "reason", err)
+			host.logger.Debug("homebrew cask info unavailable", "cask", token, "reason", err)
 		}
 		return "", false
 	}
@@ -176,18 +172,13 @@ func homebrewCaskVersion(ctx context.Context, token string) (string, bool) {
 }
 
 // homebrewInfo reads local Homebrew metadata without updating taps.
-func homebrewInfo(ctx context.Context, kind, token string) ([]byte, error) {
-	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	command := exec.CommandContext(probeCtx, "brew", "info", "--json=v2", kind, token)
-	command.Env = append(os.Environ(), "HOMEBREW_NO_AUTO_UPDATE=1")
-	return command.Output()
+func homebrewInfo(ctx context.Context, host *Host, kind, token string) ([]byte, error) {
+	environment := append(host.environ(), "HOMEBREW_NO_AUTO_UPDATE=1")
+	return host.probe(ctx, 30*time.Second, environment, "brew", "info", "--json=v2", kind, token)
 }
 
-func homebrewList(ctx context.Context, kind string) (string, error) {
-	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	output, err := exec.CommandContext(probeCtx, "brew", "list", kind).Output()
+func homebrewList(ctx context.Context, host *Host, kind string) (string, error) {
+	output, err := host.probe(ctx, 20*time.Second, nil, "brew", "list", kind)
 	return string(output), err
 }
 

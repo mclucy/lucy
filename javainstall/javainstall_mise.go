@@ -3,14 +3,12 @@ package javainstall
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // miseVendors maps each distribution to the vendor prefix of its mise java
@@ -38,8 +36,8 @@ type mise struct{}
 func (mise) method() Method { return MethodMise }
 func (mise) system() bool   { return false }
 
-func (mise) ownsJava() bool {
-	dir := miseDataDir()
+func (mise) ownsJava(_ context.Context, host *Host) bool {
+	dir := miseDataDir(host)
 	if dir == "" {
 		return false
 	}
@@ -47,8 +45,8 @@ func (mise) ownsJava() bool {
 	return err == nil && len(entries) > 0
 }
 
-func (mise) plans(ctx context.Context, req Request) ([]Plan, error) {
-	if _, err := exec.LookPath("mise"); err != nil {
+func (mise) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
+	if _, err := host.lookPath("mise"); err != nil {
 		return nil, nil
 	}
 	prefix, distribution, ok := miseVendor(req.Distribution)
@@ -56,12 +54,12 @@ func (mise) plans(ctx context.Context, req Request) ([]Plan, error) {
 		return nil, nil
 	}
 	spec := prefix + "-" + strconv.Itoa(req.Major)
-	output, err := miseCommand(ctx, "ls-remote", "java", spec)
+	output, err := miseCommand(ctx, host, "ls-remote", "java", spec)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		log.Debug("mise java versions unavailable", "spec", spec, "reason", err)
+		host.logger.Debug("mise java versions unavailable", "spec", spec, "reason", err)
 		return nil, nil
 	}
 	if strings.TrimSpace(output) == "" {
@@ -89,11 +87,11 @@ func miseVendor(dist java.Distribution) (string, java.Distribution, bool) {
 	return prefix, dist, ok
 }
 
-func miseDataDir() string {
-	if dir := os.Getenv("MISE_DATA_DIR"); dir != "" {
+func miseDataDir(host *Host) string {
+	if dir := host.getenv("MISE_DATA_DIR"); dir != "" {
 		return dir
 	}
-	home, err := os.UserHomeDir()
+	home, err := host.userHomeDir()
 	if err != nil {
 		return ""
 	}
@@ -101,9 +99,11 @@ func miseDataDir() string {
 }
 
 // miseCommand runs a read-only mise query with a bounded wait.
-func miseCommand(ctx context.Context, args ...string) (string, error) {
-	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	output, err := exec.CommandContext(probeCtx, "mise", args...).Output()
+func miseCommand(
+	ctx context.Context,
+	host *Host,
+	args ...string,
+) (string, error) {
+	output, err := host.probe(ctx, 20*time.Second, nil, "mise", args...)
 	return string(output), err
 }

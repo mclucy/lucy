@@ -126,12 +126,12 @@ func FuzzPackagesProjectSelection(f *testing.F) {
 	f.Fuzz(func(t *testing.T, expand bool, p0, p1, p2 []byte) {
 		scenario := decodeSelectionScenario(expand, [3][]byte{p0, p1, p2})
 		fixture := selectionFixture(t, scenario)
-		fixture.install(t)
 
 		out, warnings, err := resolve.Packages(resolve.PackagesRequest{
 			Context:            t.Context(),
 			Manifest:           selectionManifest(scenario),
 			Target:             fuzzTarget,
+			Candidates:         fixture.candidates,
 			Materialize:        fixture.materialize,
 			ExpandDependencies: scenario.expand,
 		})

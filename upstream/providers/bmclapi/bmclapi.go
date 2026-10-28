@@ -1,6 +1,7 @@
 package bmclapi
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -19,44 +20,65 @@ const (
 	neoForgeMavenBaseURL = "https://maven.neoforged.net/releases/"
 )
 
-type provider struct{}
+// Provider maps official server artifacts onto the BMCLAPI mirror. It resolves
+// versions through the official providers it was constructed with, so
+// floating selectors and published digests keep their canonical meaning.
+type Provider struct {
+	mojang   *mojang.Provider
+	forge    *forge.Provider
+	neoforge *neoforge.Provider
+}
 
-var Provider provider
+// New constructs a BMCLAPI mirror provider over the official providers whose
+// artifacts it mirrors.
+func New(
+	mojangProvider *mojang.Provider,
+	forgeProvider *forge.Provider,
+	neoForgeProvider *neoforge.Provider,
+) *Provider {
+	return &Provider{
+		mojang:   mojangProvider,
+		forge:    forgeProvider,
+		neoforge: neoForgeProvider,
+	}
+}
 
-func (provider) Provider() catalog.Provider {
+func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderBMCLAPI
 }
 
-func (p provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (catalog.VersionedRef, error) {
 	switch id.Ecosystem {
 	case catalog.EcosystemMinecraft:
-		return mojang.Provider.ResolveVersionSelector(local, id)
+		return p.mojang.ResolveVersionSelector(ctx, local, id)
 	case catalog.EcosystemForge:
-		return forge.Provider.ResolveVersionSelector(local, id)
+		return p.forge.ResolveVersionSelector(ctx, local, id)
 	case catalog.EcosystemNeoForge:
-		return neoforge.Provider.ResolveVersionSelector(local, id)
+		return p.neoforge.ResolveVersionSelector(ctx, local, id)
 	default:
 		return id, unsupportedEcosystem(id.Ecosystem)
 	}
 }
 
-func (p provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
 	switch id.Ecosystem {
 	case catalog.EcosystemMinecraft:
-		resolved, err := mojang.Provider.Fetch(local, id)
+		resolved, err := p.mojang.Fetch(ctx, local, id)
 		if err != nil {
 			return upstream.ResolvedPackage{}, fmt.Errorf("bmclapi: fetch minecraft metadata: %w", err)
 		}
 		resolved.FileURL = minecraftBaseURL + id.Version.String() + "/server"
 		return resolved, nil
 	case catalog.EcosystemForge:
-		resolved, err := forge.Provider.Fetch(local, id)
+		resolved, err := p.forge.Fetch(ctx, local, id)
 		if err != nil {
 			return upstream.ResolvedPackage{}, fmt.Errorf("bmclapi: fetch forge artifact: %w", err)
 		}
@@ -66,7 +88,7 @@ func (p provider) Fetch(
 		}
 		return resolved, nil
 	case catalog.EcosystemNeoForge:
-		resolved, err := neoforge.Provider.Fetch(local, id)
+		resolved, err := p.neoforge.Fetch(ctx, local, id)
 		if err != nil {
 			return upstream.ResolvedPackage{}, fmt.Errorf("bmclapi: fetch neoforge artifact: %w", err)
 		}

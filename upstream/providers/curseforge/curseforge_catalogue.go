@@ -10,16 +10,16 @@ import (
 	"github.com/mclucy/lucy/version"
 )
 
-func (provider) Candidates(ctx context.Context, project, minecraft string, loader catalog.Ecosystem) ([]upstream.Candidate, error) {
+func (p *Provider) Candidates(ctx context.Context, project, minecraft string, loader catalog.Ecosystem) ([]upstream.Candidate, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	id, err := resolveProjectID(project)
+	id, err := p.resolveProjectID(ctx, project)
 	if err != nil {
 		return nil, err
 	}
 	// Pagination is required: exact older files are not necessarily on page one.
-	files, err := listAllFiles(id, minecraft, modLoaderType(loader))
+	files, err := p.listAllFiles(ctx, id, minecraft, modLoaderType(loader))
 	if err != nil {
 		return nil, err
 	}

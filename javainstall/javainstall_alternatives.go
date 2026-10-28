@@ -4,15 +4,12 @@ import (
 	"context"
 	"io"
 	"path/filepath"
-	"runtime"
-
-	"github.com/mclucy/lucy/log"
 )
 
 // systemDefaultJava returns the resolved target of /usr/bin/java, or an empty
 // string when the host has no default Java.
-func systemDefaultJava() string {
-	if runtime.GOOS != "linux" {
+func systemDefaultJava(host *Host) string {
+	if host.goos != "linux" {
 		return ""
 	}
 	target, err := filepath.EvalSymlinks("/usr/bin/java")
@@ -23,21 +20,24 @@ func systemDefaultJava() string {
 }
 
 // restoreSystemDefault points the java alternative back at previous when a
-// package moved it. It does nothing when the default did not change.
+// package moved it. It does nothing when the default did not change, and it
+// uses the invocation's elevation facts.
 func restoreSystemDefault(
 	ctx context.Context,
 	previous string,
-	host Host,
+	policy Policy,
+	host *Host,
+	input io.Reader,
 	out io.Writer,
 ) error {
-	if runtime.GOOS != "linux" || previous == "" {
+	if host.goos != "linux" || previous == "" {
 		return nil
 	}
-	current := systemDefaultJava()
+	current := systemDefaultJava(host)
 	if filepath.Clean(current) == filepath.Clean(previous) {
 		return nil
 	}
-	log.Info("restoring system default java", "path", previous)
+	host.logger.Info("restoring system default java", "path", previous)
 	return runStep(
 		ctx,
 		Step{
@@ -49,7 +49,9 @@ func restoreSystemDefault(
 			},
 			Elevation: ElevationRoot,
 		},
+		policy,
 		host,
+		input,
 		out,
 	)
 }

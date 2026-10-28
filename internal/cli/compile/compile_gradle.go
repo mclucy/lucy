@@ -23,6 +23,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 )
 
 //go:embed compile_model.gradle
@@ -37,6 +38,8 @@ type gradleRunner struct {
 	modelPath  string
 	daemon     toolchain.JavaInstallation
 	progress   io.Writer
+	logger     *log.Logger
+	reporter   *report.Reporter
 }
 
 type gradleModel struct {
@@ -73,11 +76,15 @@ func newGradleRunner(
 	inventory toolchain.Inventory,
 	temporary string,
 	progress io.Writer,
+	logger *log.Logger,
+	reporter *report.Reporter,
 ) (gradleRunner, error) {
 	runner := gradleRunner{
 		dir:      build.Dir,
 		version:  "unknown",
 		progress: progress,
+		logger:   logger,
+		reporter: reporter,
 	}
 	version := ""
 	if build.Wrapper != nil {
@@ -139,14 +146,15 @@ func newGradleRunner(
 		return runner, errors.Join(err, errors.Join(inventory.Problems...))
 	}
 	runner.daemon = daemon
-	log.Debug("Gradle JVMs selected", "launcher", launcher.Java, "daemon", daemon.Java,
+	logger.Debug("Gradle JVMs selected", "launcher", launcher.Java, "daemon", daemon.Java,
 		"reason", "Gradle compatibility and project toolchain requirements")
 	initPath := filepath.Join(temporary, "lucy-init.gradle")
 	if err := os.WriteFile(initPath, []byte(inspectionScript), 0o600); err != nil {
 		return runner, fmt.Errorf("write Gradle inspection script: %w", err)
 	}
 	runner.modelPath = filepath.Join(temporary, "gradle-model.json")
-	runner.arguments = append(runner.arguments,
+	runner.arguments = append(
+		runner.arguments,
 		"--no-daemon", "--console=plain", "--no-configure-on-demand", "--init-script", initPath,
 		"-Dorg.gradle.java.installations.auto-download=false",
 	)
@@ -223,7 +231,7 @@ func (r gradleRunner) execute(ctx context.Context, label string, tasks ...string
 	arguments := make([]string, 0, len(r.arguments)+len(tasks))
 	arguments = append(arguments, r.arguments...)
 	arguments = append(arguments, tasks...)
-	output := newProcessLog("gradle")
+	output := newProcessLog("gradle", r.logger, r.reporter)
 	cmd := exec.CommandContext(ctx, r.executable, arguments...)
 	cmd.Dir = r.dir
 	cmd.Env = r.env
@@ -231,8 +239,8 @@ func (r gradleRunner) execute(ctx context.Context, label string, tasks ...string
 	cmd.Stderr = output
 	cmd.WaitDelay = 5 * time.Second
 	configureProcess(cmd)
-	log.Info("Gradle stage started", "stage", label, "version", r.version)
-	log.Debug("Gradle invocation prepared", "executable", r.executable, "tasks", tasks, "directory", r.dir)
+	r.logger.Info("Gradle stage started", "stage", label, "version", r.version)
+	r.logger.Debug("Gradle invocation prepared", "executable", r.executable, "tasks", tasks, "directory", r.dir)
 	err := cmd.Run()
 	output.flush()
 	if err != nil {
@@ -252,7 +260,7 @@ func (r gradleRunner) execute(ctx context.Context, label string, tasks ...string
 	if err := json.Unmarshal(data, &model); err != nil {
 		return model, fmt.Errorf("decode evaluated Gradle model: %w", err)
 	}
-	log.Info("Gradle stage completed", "stage", label, "projects", len(model.Projects))
+	r.logger.Info("Gradle stage completed", "stage", label, "projects", len(model.Projects))
 	return model, nil
 }
 
@@ -292,7 +300,7 @@ func selectProject(ctx context.Context, model gradleModel, opts *options, gate c
 		// An explicit --project never reaches this branch, so the prompt only
 		// ever replaces an absent flag.
 		if opts.project == "" && gate.Available() {
-			picked, err := promptModProject(ctx, candidates)
+			picked, err := promptModProject(ctx, candidates, gate)
 			if err != nil {
 				return gradleProject{}, err
 			}

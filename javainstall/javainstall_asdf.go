@@ -3,14 +3,12 @@ package javainstall
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // asdfVendors maps each distribution to the vendor prefix of its asdf-java
@@ -37,8 +35,8 @@ type asdf struct{}
 func (asdf) method() Method { return MethodAsdf }
 func (asdf) system() bool   { return false }
 
-func (asdf) ownsJava() bool {
-	dir := asdfDataDir()
+func (asdf) ownsJava(_ context.Context, host *Host) bool {
+	dir := asdfDataDir(host)
 	if dir == "" {
 		return false
 	}
@@ -46,16 +44,16 @@ func (asdf) ownsJava() bool {
 	return err == nil && len(entries) > 0
 }
 
-func (asdf) plans(ctx context.Context, req Request) ([]Plan, error) {
-	if _, err := exec.LookPath("asdf"); err != nil {
+func (asdf) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
+	if _, err := host.lookPath("asdf"); err != nil {
 		return nil, nil
 	}
-	plugins, err := asdfCommand(ctx, "plugin", "list")
+	plugins, err := asdfCommand(ctx, host, "plugin", "list")
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		log.Debug("asdf plugins unavailable", "reason", err)
+		host.logger.Debug("asdf plugins unavailable", "reason", err)
 		return nil, nil
 	}
 	if !asdfHasJavaPlugin(plugins) {
@@ -66,12 +64,12 @@ func (asdf) plans(ctx context.Context, req Request) ([]Plan, error) {
 		return nil, nil
 	}
 	spec := prefix + "-" + strconv.Itoa(req.Major)
-	versions, err := asdfCommand(ctx, "list", "all", "java", spec)
+	versions, err := asdfCommand(ctx, host, "list", "all", "java", spec)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		log.Debug("asdf java versions unavailable", "spec", spec, "reason", err)
+		host.logger.Debug("asdf java versions unavailable", "spec", spec, "reason", err)
 		return nil, nil
 	}
 	if strings.TrimSpace(versions) == "" {
@@ -99,11 +97,11 @@ func asdfVendor(dist java.Distribution) (string, java.Distribution, bool) {
 	return prefix, dist, ok
 }
 
-func asdfDataDir() string {
-	if dir := os.Getenv("ASDF_DATA_DIR"); dir != "" {
+func asdfDataDir(host *Host) string {
+	if dir := host.getenv("ASDF_DATA_DIR"); dir != "" {
 		return dir
 	}
-	home, err := os.UserHomeDir()
+	home, err := host.userHomeDir()
 	if err != nil {
 		return ""
 	}
@@ -122,9 +120,11 @@ func asdfHasJavaPlugin(output string) bool {
 }
 
 // asdfCommand runs a read-only asdf query with a bounded wait.
-func asdfCommand(ctx context.Context, args ...string) (string, error) {
-	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	output, err := exec.CommandContext(probeCtx, "asdf", args...).Output()
+func asdfCommand(
+	ctx context.Context,
+	host *Host,
+	args ...string,
+) (string, error) {
+	output, err := host.probe(ctx, 20*time.Second, nil, "asdf", args...)
 	return string(output), err
 }

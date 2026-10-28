@@ -81,12 +81,12 @@ func (c *Check) Executable() string {
 // Select honors a configured Java home without fallback. Otherwise it picks the
 // installed runtime that misses the fewest constraints, preferring the oldest
 // major version that meets the Mojang advisory.
-func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
+func Select(ctx context.Context, root string, req Requirement, logger *log.Logger, additionalHomes ...string) (*Check, error) {
 	check := &Check{
 		Target:       req.Target(),
 		Distribution: req.Distribution,
 	}
-	settings, err := config.New(root)
+	settings, err := config.New(root, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 		}
 		check.Runtime = runtimeOf(installation)
 		check.Problems = append(conflicts(req), req.Misses(check.Runtime)...)
-		log.Debug(
+		logger.Debug(
 			"java selected",
 			"home", check.Runtime.Home,
 			"major", check.Runtime.Major,
@@ -121,7 +121,7 @@ func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 		)
 		return check, nil
 	}
-	runtimes, err := Installed(ctx)
+	runtimes, err := Installed(ctx, logger, additionalHomes...)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 	check.Source = SourceInstalled
 	check.Runtime = Choose(req, runtimes)
 	check.Problems = append(conflicts(req), req.Misses(check.Runtime)...)
-	log.Debug(
+	logger.Debug(
 		"java selected",
 		"home", check.Runtime.Home,
 		"major", check.Runtime.Major,
@@ -142,14 +142,14 @@ func Select(ctx context.Context, root string, req Requirement) (*Check, error) {
 	return check, nil
 }
 
-// Installed lists the usable Java runtimes on this machine.
-func Installed(ctx context.Context) ([]Runtime, error) {
-	inventory, err := toolchain.Discover(ctx)
+// Installed includes explicitly supplied homes in ordinary machine discovery.
+func Installed(ctx context.Context, logger *log.Logger, additionalHomes ...string) ([]Runtime, error) {
+	inventory, err := toolchain.Discover(ctx, additionalHomes...)
 	if err != nil {
 		return nil, err
 	}
 	for _, problem := range inventory.Problems {
-		log.Debug("java candidate unusable", "reason", problem)
+		logger.Debug("java candidate unusable", "reason", problem)
 	}
 	runtimes := make([]Runtime, 0, len(inventory.Java))
 	for _, installation := range inventory.Java {

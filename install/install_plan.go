@@ -6,13 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 
-	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -32,116 +28,6 @@ type Plan struct {
 	BaseManifestFingerprint string
 	BaseLockFingerprint     string
 	Result                  *Result
-}
-
-// PlanInstall resolves a lock without staging or committing the server tree.
-// It holds the workspace writer lock only while reading and resolving.
-func PlanInstall(
-	ctx context.Context,
-	root string,
-	d *document.Manifest,
-	old *document.Lock,
-	opts Options,
-) (plan *Plan, resultErr error) {
-	absolute, err := filepath.Abs(root)
-	if err != nil {
-		return nil, err
-	}
-	root = absolute
-	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
-		return nil, err
-	}
-	writer, err := workspacewrite.Lock(root)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := preflightLocked(root, d, old, opts, false); err != nil {
-		return nil, err
-	}
-	result := newResult()
-	store := newDownloadStore(ctx, root, opts, result)
-	resolved, err := resolveLock(ctx, root, d, old, &opts, store, result)
-	if err != nil {
-		return nil, err
-	}
-	result.PublishedManifest = opts.PublishManifest
-	result.PublishedLock = opts.publishLock
-	baseManifest, baseLock, err := workspaceFingerprints(root)
-	if err != nil {
-		return nil, err
-	}
-	return &Plan{
-		Manifest:                d,
-		Previous:                old,
-		Resolved:                resolved,
-		PublishManifest:         opts.PublishManifest,
-		PublishLock:             opts.publishLock,
-		BaseManifestFingerprint: baseManifest,
-		BaseLockFingerprint:     baseLock,
-		Result:                  result,
-	}, nil
-}
-
-// ApplyPlan stages and commits a previously resolved plan. It rechecks the
-// workspace state before staging, so a plan cannot overwrite a concurrent
-// manifest or lock edit.
-func ApplyPlan(
-	ctx context.Context,
-	root string,
-	plan *Plan,
-	opts Options,
-) (result *Result, resultErr error) {
-	if plan == nil || plan.Resolved == nil {
-		return nil, fmt.Errorf("installation plan is required")
-	}
-	absolute, err := filepath.Abs(root)
-	if err != nil {
-		return nil, err
-	}
-	root = absolute
-	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
-		return nil, err
-	}
-	writer, err := workspacewrite.Lock(root)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := preflightLocked(root, plan.Manifest, plan.Previous, opts, true); err != nil {
-		return nil, err
-	}
-	if err := checkPlannedState(root, plan); err != nil {
-		return nil, err
-	}
-	// The isolated MCDReforged environment is keyed by its Python requirements,
-	// so staging provisions a fresh environment whenever this list changes.
-	if previous := plan.Previous; previous != nil && previous.MCDR != nil &&
-		plan.Resolved.MCDR != nil {
-		before := mcdrPythonRequirements(previous)
-		after := mcdrPythonRequirements(plan.Resolved)
-		if !slices.Equal(before, after) {
-			if plan.Result == nil {
-				plan.Result = newResult()
-			}
-			plan.Result.MCDR = &MCDRChange{
-				Version:        plan.Resolved.MCDR.Version,
-				Inputs:         len(after),
-				PreviousInputs: len(before),
-			}
-		}
-	}
-	result = plan.Result
-	if result == nil {
-		result = newResult()
-		result.applyChanges(plan.Previous, plan.Resolved, plan.Manifest)
-	}
-	store := newDownloadStore(ctx, root, opts, result)
-	opts.PublishManifest = plan.PublishManifest
-	opts.publishLock = plan.PublishLock
-	diagnostics, err := stageInstall(ctx, root, plan.Manifest, plan.Resolved, store, opts, result)
-	result.Diagnostics = diagnostics
-	return result, err
 }
 
 func checkPlannedState(root string, plan *Plan) error {
@@ -214,11 +100,12 @@ func preflightLocked(
 	old *document.Lock,
 	opts Options,
 	mutating bool,
+	logger *log.Logger,
 ) error {
 	if d == nil && old == nil {
 		return fmt.Errorf("lucy.yaml or lucy-lock.yaml is required")
 	}
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, logger); err != nil {
 		return err
 	}
 	if mutating {
@@ -232,7 +119,7 @@ func preflightLocked(
 			(serverDirectory != "." && workspace.RunningAt(root)) {
 			return fmt.Errorf("stop the running Minecraft server before installation")
 		}
-		if err := workspacewrite.RecoverInstall(root); err != nil {
+		if err := workspacewrite.RecoverInstall(root, logger); err != nil {
 			return err
 		}
 	}
@@ -266,7 +153,7 @@ func preflightLocked(
 
 // resolveLock performs the installation mode decision and resolution. The
 // caller must hold the workspace writer lock.
-func resolveLock(
+func (s *Service) resolveLock(
 	ctx context.Context,
 	root string,
 	d *document.Manifest,
@@ -306,7 +193,7 @@ func resolveLock(
 		result.Mode = ModeReplay
 		result.Reason = "manifest unchanged; lock replays exactly"
 	}
-	log.Debug(
+	s.logger.Debug(
 		"installation decision",
 		"mode", string(result.Mode),
 		"reason", result.Reason,
@@ -319,14 +206,14 @@ func resolveLock(
 			if !opts.RequirementChange || old == nil || d == nil {
 				return nil, fmt.Errorf("locked installation requires a current lucy-lock.yaml")
 			}
-			reusable, err := coreReusable(ctx, d, old, opts.Offline)
+			reusable, err := s.coreReusable(ctx, d, old, opts.Offline)
 			if err != nil {
 				return nil, err
 			}
 			if !reusable {
 				return nil, fmt.Errorf("manifest core no longer matches lucy-lock.yaml; install without --locked")
 			}
-			log.Debug(
+			s.logger.Debug(
 				"locked installation reuses core",
 				"reason", "manifest core still matches lock; requirements rebind in place",
 			)
@@ -344,7 +231,7 @@ func resolveLock(
 			return resolved, nil
 		}
 		var err error
-		resolved, err = resolveInstall(ctx, root, d, old, fingerprint, opts, store, result)
+		resolved, err = s.resolveInstall(ctx, root, d, old, fingerprint, opts, store, result)
 		if err != nil {
 			return nil, err
 		}
@@ -357,18 +244,22 @@ func resolveLock(
 	return resolved, nil
 }
 
-func newDownloadStore(
+func (s *Service) newDownloadStore(
 	ctx context.Context,
 	root string,
 	opts Options,
 	result *Result,
 ) *downloadStore {
 	return &downloadStore{
-		ctx:     ctx,
-		dir:     filepath.Join(root, ".lucy", "downloads"),
-		offline: opts.Offline,
-		trace:   opts.Trace,
-		fetch:   &result.Fetch,
+		ctx:         ctx,
+		dir:         filepath.Join(root, ".lucy", "downloads"),
+		offline:     opts.Offline,
+		trace:       opts.Trace,
+		fetch:       &result.Fetch,
+		network:     s.network,
+		logger:      s.logger,
+		githubProxy: s.githubProxy,
+		injected:    opts.Materialize,
 	}
 }
 
@@ -419,32 +310,4 @@ func PlanFromResolution(
 		BaseLockFingerprint:     baseLock,
 		Result:                  result,
 	}, nil
-}
-
-// Materializer returns a verified artifact materializer and the fetch summary
-// it updates. Callers must hold the workspace writer lock while resolving.
-func Materializer(
-	ctx context.Context,
-	root string,
-	opts Options,
-) (func(*catalog.Artifact) (artifact.MaterializedFile, error), *FetchSummary) {
-	summary := &FetchSummary{}
-	store := &downloadStore{
-		ctx:     ctx,
-		dir:     filepath.Join(root, ".lucy", "downloads"),
-		offline: opts.Offline,
-		trace:   opts.Trace,
-		fetch:   summary,
-	}
-	return store.materialize, summary
-}
-
-// CheckJava reports whether an installed Java runtime satisfies the lock. It
-// never installs or modifies a runtime.
-func CheckJava(
-	ctx context.Context,
-	root string,
-	locked *document.Lock,
-) (*javaruntime.Check, error) {
-	return javaruntime.Select(ctx, root, javaruntime.RequirementOf(locked))
 }

@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/mclucy/lucy/config"
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -32,24 +31,34 @@ var (
 // `lucy config create`.
 var configWriteJSON JSONResult[*config.WriteResult]
 
-func NewConfigCommand(contracts *JSONContracts) *cobra.Command {
+func NewConfigCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	_ *Dependencies,
+) *cobra.Command {
 	configGetCmd := &cobra.Command{
 		Use:   "get [key]",
 		Short: help.ConfigGetShort,
 		Args:  cobra.MaximumNArgs(1),
-		RunE:  actionConfigGet,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionConfigGet(cmd, inv, args)
+		},
 	}
 	configSetCmd := &cobra.Command{
 		Use:   "set <key> <value>",
 		Short: help.ConfigSetShort,
 		Args:  cobra.ExactArgs(2),
-		RunE:  actionConfigSet,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionConfigSet(cmd, inv, args)
+		},
 	}
 	configCreateCmd := &cobra.Command{
 		Use:   "create",
 		Short: help.ConfigCreateShort,
 		Args:  cobra.NoArgs,
-		RunE:  actionConfigCreate,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return actionConfigCreate(cmd, inv)
+		},
 	}
 	configCmd := &cobra.Command{
 		Use:   "config",
@@ -82,8 +91,12 @@ func NewConfigCommand(contracts *JSONContracts) *cobra.Command {
 	return configCmd
 }
 
-func actionConfigGet(cmd *cobra.Command, args []string) error {
-	service, err := newConfigService()
+func actionConfigGet(
+	cmd *cobra.Command,
+	inv *Invocation,
+	args []string,
+) error {
+	service, err := newConfigService(inv)
 	if err != nil {
 		return err
 	}
@@ -98,7 +111,7 @@ func actionConfigGet(cmd *cobra.Command, args []string) error {
 	if !config.Secret(key) {
 		value = config.Redacted(value)
 	}
-	output := NewQueryOutput(cmd)
+	output := NewQueryOutput(cmd, inv)
 	if output.JSON() {
 		return writeConfigJSON(output, value)
 	}
@@ -123,8 +136,12 @@ func writeConfigJSON(output *Output, value any) error {
 	}
 }
 
-func actionConfigSet(cmd *cobra.Command, args []string) error {
-	service, err := newConfigService()
+func actionConfigSet(
+	cmd *cobra.Command,
+	inv *Invocation,
+	args []string,
+) error {
+	service, err := newConfigService(inv)
 	if err != nil {
 		return err
 	}
@@ -133,7 +150,14 @@ func actionConfigSet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	output := NewOperationOutput(cmd)
+	inv.Logger.Info(
+		"configuration updated",
+		"path", result.Path,
+		"key", key,
+		"scope", configScopeLabel(cmd),
+		"created", result.Created,
+	)
+	output := NewOperationOutput(cmd, inv)
 	if output.JSON() {
 		return configWriteJSON.Write(output, result)
 	}
@@ -151,8 +175,8 @@ func actionConfigSet(cmd *cobra.Command, args []string) error {
 	return err
 }
 
-func actionConfigCreate(cmd *cobra.Command, _ []string) error {
-	service, err := newConfigService()
+func actionConfigCreate(cmd *cobra.Command, inv *Invocation) error {
+	service, err := newConfigService(inv)
 	if err != nil {
 		return err
 	}
@@ -171,7 +195,13 @@ func actionConfigCreate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	output := NewOperationOutput(cmd)
+	inv.Logger.Info(
+		"configuration written",
+		"path", result.Path,
+		"scope", configScopeLabel(cmd),
+		"created", result.Created,
+	)
+	output := NewOperationOutput(cmd, inv)
 	if output.JSON() {
 		return configWriteJSON.Write(output, result)
 	}
@@ -183,12 +213,15 @@ func actionConfigCreate(cmd *cobra.Command, _ []string) error {
 	return err
 }
 
-func newConfigService() (*config.Service, error) {
-	root, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("could not determine working directory: %w", err)
+func newConfigService(inv *Invocation) (*config.Service, error) {
+	return config.New(inv.Directory, inv.Logger)
+}
+
+func configScopeLabel(cmd *cobra.Command) string {
+	if configScope(cmd) == config.GlobalScope {
+		return "global"
 	}
-	return config.New(root)
+	return "workspace"
 }
 
 func configScope(cmd *cobra.Command) config.Scope {

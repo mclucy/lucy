@@ -3,7 +3,6 @@ package file
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/cli"
@@ -11,14 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-func workRoot() (string, error) {
-	root, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get working directory: %w", err)
-	}
-	return root, nil
-}
 
 type fileResultView struct {
 	Operation filetrack.Operation `json:"operation"`
@@ -48,8 +39,12 @@ var resultVerbs = map[filetrack.Operation]string{
 	filetrack.Unlock:  "unlocked",
 }
 
-func reportFileResult(cmd *cobra.Command, result filetrack.Result) error {
-	output := cli.NewOperationOutput(cmd)
+func reportFileResult(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	result filetrack.Result,
+) error {
+	output := cli.NewOperationOutput(cmd, inv)
 	if output.JSON() {
 		return fileResultJSON.Write(output, newFileResultView(result))
 	}

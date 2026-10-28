@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/resolve"
-	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -281,19 +280,19 @@ func (o *Output) writeHumanError(err error, logPath string) {
 	writer := o.cmd.ErrOrStderr()
 	var detail *report.Detail
 	if errors.As(err, &detail) && detail != nil {
-		report.RenderDetail(writer, detail)
+		report.RenderDetail(writer, detail, o.inv.Theme)
 	} else if IsUsageError(err) {
-		fmt.Fprintln(writer, style.Failure("error:")+" "+err.Error())
+		fmt.Fprintln(writer, o.inv.Theme.Failure("error:")+" "+err.Error())
 		hint := UsageHint(o.cmd, err)
 		if hint == "" {
 			hint = "Run --help for usage."
 		}
-		fmt.Fprintln(writer, "  "+style.Note("hint:")+" "+hint)
+		fmt.Fprintln(writer, "  "+o.inv.Theme.Note("hint:")+" "+hint)
 	} else {
-		report.Error(err)
+		report.New(writer, o.inv.Theme).Error(err)
 	}
 	if logPath != "" {
-		fmt.Fprintf(writer, "  %s %s\n", style.Muted("log:"), logPath)
+		fmt.Fprintf(writer, "  %s %s\n", o.inv.Theme.Muted("log:"), logPath)
 	}
 }
 

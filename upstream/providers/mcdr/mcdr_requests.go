@@ -1,6 +1,7 @@
 package mcdr
 
 import (
+	"context"
 	"encoding/json/v2"
 	"fmt"
 
@@ -16,9 +17,12 @@ const (
 	branchMeta                  = "?ref=meta"
 )
 
-func search(query string) (mcdrSearchResult, error) {
+func (p *Provider) search(
+	ctx context.Context,
+	query string,
+) (mcdrSearchResult, error) {
 	ghEndpoint := pluginCatalogueRepoEndpoint + "plugins/" + branchCatalogue
-	err, msg, items := github.GetDirectoryFromGitHub(ghEndpoint)
+	err, msg, items := p.githubClient.GetDirectoryFromGitHub(ctx, ghEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -39,10 +43,13 @@ func search(query string) (mcdrSearchResult, error) {
 	return result, nil
 }
 
-func getInfo(id string) (*pluginInfo, error) {
+func (p *Provider) getInfo(
+	ctx context.Context,
+	id string,
+) (*pluginInfo, error) {
 	ghEndpoint := pluginCatalogueRepoEndpoint + "plugins/" + id + "/plugin_info.json" + branchMaster
 	var data []byte
-	err, msg, data := github.GetFileFromGitHub(ghEndpoint)
+	err, msg, data := p.githubClient.GetFileFromGitHub(ctx, ghEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +74,12 @@ func getInfo(id string) (*pluginInfo, error) {
 	return &info, nil
 }
 
-func getMeta(id string) (*pluginMeta, error) {
+func (p *Provider) getMeta(
+	ctx context.Context,
+	id string,
+) (*pluginMeta, error) {
 	ghEndpoint := pluginCatalogueRepoEndpoint + id + "/meta.json" + branchMeta
-	err, msg, data := github.GetFileFromGitHub(ghEndpoint)
+	err, msg, data := p.githubClient.GetFileFromGitHub(ctx, ghEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +98,12 @@ func getMeta(id string) (*pluginMeta, error) {
 	return &meta, nil
 }
 
-func getRelease(id string, version versionpkg.Version) (*release, error) {
-	history, err := getReleaseHistory(id)
+func (p *Provider) getRelease(
+	ctx context.Context,
+	id string,
+	version versionpkg.Version,
+) (*release, error) {
+	history, err := p.getReleaseHistory(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +120,11 @@ func getRelease(id string, version versionpkg.Version) (*release, error) {
 	return nil, ErrVersionNotFound(id, version.String())
 }
 
-func getLatestRelease(id string) (*release, error) {
-	history, err := getReleaseHistory(id)
+func (p *Provider) getLatestRelease(
+	ctx context.Context,
+	id string,
+) (*release, error) {
+	history, err := p.getReleaseHistory(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -118,11 +135,12 @@ func getLatestRelease(id string) (*release, error) {
 	return rel, nil
 }
 
-func getLatestCompatibleRelease(
+func (p *Provider) getLatestCompatibleRelease(
+	ctx context.Context,
 	id string,
 	localMcdrVersion versionpkg.Version,
 ) (*release, error) {
-	history, err := getReleaseHistory(id)
+	history, err := p.getReleaseHistory(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -137,9 +155,12 @@ func getLatestCompatibleRelease(
 	return nil, ErrVersionNotFound(id, "latest compatible")
 }
 
-func getReleaseHistory(id string) (*pluginRelease, error) {
+func (p *Provider) getReleaseHistory(
+	ctx context.Context,
+	id string,
+) (*pluginRelease, error) {
 	ghEndpoint := pluginCatalogueRepoEndpoint + id + "/release.json" + branchMeta
-	err, msg, data := github.GetFileFromGitHub(ghEndpoint)
+	err, msg, data := p.githubClient.GetFileFromGitHub(ctx, ghEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -158,9 +179,12 @@ func getReleaseHistory(id string) (*pluginRelease, error) {
 	return &releaseHistory, nil
 }
 
-func getRepository(id string) (*pluginRepo, error) {
+func (p *Provider) getRepository(
+	ctx context.Context,
+	id string,
+) (*pluginRepo, error) {
 	ghEndpoint := pluginCatalogueRepoEndpoint + id + "/repository.json" + branchMeta
-	err, msg, data := github.GetFileFromGitHub(ghEndpoint)
+	err, msg, data := p.githubClient.GetFileFromGitHub(ctx, ghEndpoint)
 	if err != nil {
 		return nil, err
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -43,7 +42,11 @@ const (
 	createMinecraftSnapshot = "snapshot"
 )
 
-func NewCreateCommand(contracts *JSONContracts) *cobra.Command {
+func NewCreateCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: help.CreateShort,
@@ -52,7 +55,9 @@ func NewCreateCommand(contracts *JSONContracts) *cobra.Command {
 			"  lucy create --minecraft 1.21.4 --core paper\n" +
 			"  lucy create --directory server --minecraft 1.21.4 --core paper --no-install",
 		Args: cobra.NoArgs,
-		RunE: actionCreate,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionCreate(cmd, inv, deps, args)
+		},
 	}
 	createJSON.Bind(contracts, cmd)
 	cmd.Flags().BoolP(
@@ -133,7 +138,12 @@ type createChoices struct {
 	AddJavaRepository bool
 }
 
-func actionCreate(cmd *cobra.Command, _ []string) error {
+func actionCreate(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
 	ctx, stop := CommandContext(cmd)
 	defer stop()
 
@@ -141,9 +151,9 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	interactive := NewPromptGate(cmd).Available()
+	interactive := NewPromptGate(cmd, inv).Available()
 	if interactive {
-		choices, err = promptCreate(ctx, cmd, choices)
+		choices, err = promptCreate(ctx, cmd, deps.Router, inv.Directory, choices)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return &report.Detail{
@@ -161,37 +171,39 @@ func actionCreate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if !interactive {
-		if err := warnCreateTarget(choices); err != nil {
+		if err := warnCreateTarget(cmd, inv, choices); err != nil {
 			return err
 		}
 	}
 	choices.Minecraft, err = resolveCreateMinecraft(
 		ctx,
+		deps.Router,
 		createProduct(choices.Product),
 		choices.Minecraft,
 	)
 	if err != nil {
 		return err
 	}
-	opts := createOperationOptions(choices)
+	opts := createOperationOptions(choices, inv.Directory)
 
-	output := newCreateOutput(cmd)
+	output := newCreateOutput(cmd, inv)
 	defer output.Close()
 	opts.Trace = output.Trace()
 	if choices.Java && choices.Install {
 		opts.InstallOptions.ProvisionJava = output.provisionJava(
-			javainstall.Host{
-				Interactive:     NewPromptGate(cmd).Available(),
+			deps.JavaHost,
+			javainstall.Policy{
+				Interactive:     NewPromptGate(cmd, inv).Available(),
 				AllowRepository: choices.AddJavaRepository,
 			},
 			false,
 		)
 	}
-	result, err := operation.Create(ctx, opts)
+	result, err := deps.Operations.Create(ctx, opts)
 	if result != nil && result.PublishedManifest {
-		registerWorkspace(result.Workspace, output.Output)
+		registerWorkspace(result.Workspace, output.Output, inv, deps)
 	} else if published, ok := errors.AsType[*operation.CreatePublishError](err); ok && published.ManifestWritten {
-		registerWorkspace(published.Workspace, output.Output)
+		registerWorkspace(published.Workspace, output.Output, inv, deps)
 	}
 	if err != nil {
 		return output.Failure(err)
@@ -299,13 +311,16 @@ func validateCreateChoices(choices createChoices) error {
 	return nil
 }
 
-func createOperationOptions(choices createChoices) operation.CreateOptions {
+func createOperationOptions(
+	choices createChoices,
+	base string,
+) operation.CreateOptions {
 	product := choices.Product
 	if product == "" {
 		product = createProductMinecraft
 	}
 	return operation.CreateOptions{
-		Directory:      choices.Directory,
+		Directory:      resolveInvocationPath(base, choices.Directory),
 		Name:           choices.Name,
 		Minecraft:      choices.Minecraft,
 		Product:        product,
@@ -316,8 +331,14 @@ func createOperationOptions(choices createChoices) operation.CreateOptions {
 	}
 }
 
-func warnCreateTarget(choices createChoices) error {
-	target, err := operation.InspectCreateTarget(choices.Directory)
+func warnCreateTarget(
+	cmd *cobra.Command,
+	inv *Invocation,
+	choices createChoices,
+) error {
+	target, err := operation.InspectCreateTarget(
+		resolveInvocationPath(inv.Directory, choices.Directory),
+	)
 	if err != nil {
 		return err
 	}
@@ -330,7 +351,7 @@ func warnCreateTarget(choices createChoices) error {
 	if !target.NonEmpty {
 		return nil
 	}
-	location := displayCreatePath(target.Path)
+	location := displayCreatePath(target.Path, inv.Directory)
 	message := "the current directory is not empty"
 	if location != "." {
 		message = "directory " + location + " is not empty"
@@ -346,7 +367,9 @@ func warnCreateTarget(choices createChoices) error {
 				" declared; installation may remove their files)"
 		}
 	}
-	report.Warn(errors.New(message))
+	if JSONMode(cmd) == JSONNone {
+		report.New(cmd.ErrOrStderr(), inv.Theme).Warn(errors.New(message))
+	}
 	return nil
 }
 
@@ -455,6 +478,7 @@ func productFollowsMinecraftReleases(product serverpkg.Product) bool {
 // manifest records. The interactive form and the flags share this step.
 func resolveCreateMinecraft(
 	ctx context.Context,
+	router *routing.Router,
 	product serverpkg.Product,
 	value string,
 ) (string, error) {
@@ -468,11 +492,11 @@ func resolveCreateMinecraft(
 	)
 	switch keyword {
 	case createMinecraftLatest:
-		resolved, err = routing.LatestMinecraftVersion(ctx, product)
+		resolved, err = router.LatestMinecraftVersion(ctx, product)
 	case createMinecraftRelease:
-		resolved, err = routing.LatestMojangMinecraft(false)
+		resolved, err = router.LatestMojangMinecraft(ctx, false)
 	case createMinecraftSnapshot:
-		resolved, err = routing.LatestMojangMinecraft(true)
+		resolved, err = router.LatestMojangMinecraft(ctx, true)
 	}
 	if err != nil {
 		return "", fmt.Errorf("--%s: %w", flagCreateMcName, err)
@@ -482,16 +506,9 @@ func resolveCreateMinecraft(
 
 // displayCreatePath keeps the form and the final summary short when the
 // target is below the current directory.
-func displayCreatePath(path string) string {
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return path
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return absolute
-	}
-	relative, err := filepath.Rel(cwd, absolute)
+func displayCreatePath(path, base string) string {
+	absolute := resolveInvocationPath(base, path)
+	relative, err := filepath.Rel(base, absolute)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return absolute
 	}
@@ -500,8 +517,21 @@ func displayCreatePath(path string) string {
 
 // displayCreateLocation names the current directory in prose instead of
 // leaving a bare dot in a sentence.
-func displayCreateLocation(path string) string {
-	display := displayCreatePath(path)
+// resolveInvocationPath anchors a user-supplied path at the invocation
+// directory. Handlers never rely on the process working directory.
+func resolveInvocationPath(base, path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return filepath.Clean(base)
+	}
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(base, path)
+}
+
+func displayCreateLocation(path, base string) string {
+	display := displayCreatePath(path, base)
 	if display == "." {
 		return "the current directory"
 	}

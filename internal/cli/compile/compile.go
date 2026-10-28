@@ -29,7 +29,7 @@ type options struct {
 	tag       string
 }
 
-func NewCommand() *cobra.Command {
+func NewCommand(inv *cli.Invocation) *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
 		Use:   "compile <url|owner/repo>",
@@ -50,7 +50,8 @@ func NewCommand() *cobra.Command {
 				ctx,
 				args[0],
 				&opts,
-				cli.NewPromptGate(cmd),
+				inv,
+				cli.NewPromptGate(cmd, inv),
 				cmd.OutOrStdout(),
 				cmd.ErrOrStderr(),
 			)
@@ -67,7 +68,16 @@ func NewCommand() *cobra.Command {
 
 // run compiles source and writes the resulting JAR. Progress is narrated on
 // stderr; stdout carries only the artifact path so the command stays pipeable.
-func run(ctx context.Context, source string, opts *options, gate cli.PromptGate, stdout, stderr io.Writer) (err error) {
+func run(
+	ctx context.Context,
+	source string,
+	opts *options,
+	inv *cli.Invocation,
+	gate cli.PromptGate,
+	stdout, stderr io.Writer,
+) (err error) {
+	reporter := report.New(stderr, inv.Theme)
+	logger := inv.Logger
 	remote, err := parseRemote(source)
 	if err != nil {
 		return err
@@ -86,7 +96,7 @@ func run(ctx context.Context, source string, opts *options, gate cli.PromptGate,
 	}
 	output := ""
 	if destination.file != "" {
-		if output, err = destination.resolve(""); err != nil {
+		if output, err = destination.resolve(inv.Directory, ""); err != nil {
 			return err
 		}
 		if err := ensureAbsent(output); err != nil {
@@ -105,27 +115,34 @@ func run(ctx context.Context, source string, opts *options, gate cli.PromptGate,
 	}()
 	checkout := filepath.Join(temporary, "repository")
 	ref := refSuffix(branch, tag)
-	log.Info("compilation checkout started", "branch", branch, "tag", tag)
+	logger.Info("compilation checkout started", "branch", branch, "tag", tag)
 	writeProgress(stderr, "Cloning "+source+ref)
-	if err := clone(ctx, remote, checkout, branch, tag, newProcessLog("git")); err != nil {
+	if err := clone(
+		ctx,
+		remote,
+		checkout,
+		branch,
+		tag,
+		newProcessLog("git", logger, reporter),
+	); err != nil {
 		return err
 	}
-	log.Info("compilation checkout completed", "directory", checkout)
+	logger.Info("compilation checkout completed", "directory", checkout)
 	writeProgress(stderr, "Cloned "+source+ref)
 
-	log.Info("compilation repository inspection started", "directory", checkout)
+	logger.Info("compilation repository inspection started", "directory", checkout)
 	layout, err := buildrepo.Probe(ctx, checkout)
 	if err != nil {
 		return fmt.Errorf("probe repository: %w", err)
 	}
-	reportFindings(layout.Root, layout.Findings)
+	reportFindings(layout.Root, layout.Findings, logger, reporter)
 	build, err := selectBuild(layout, opts.buildDir)
 	if err != nil {
 		return err
 	}
-	log.Debug("Gradle build selected", "directory", build.Dir, "requested", opts.buildDir,
+	logger.Debug("Gradle build selected", "directory", build.Dir, "requested", opts.buildDir,
 		"reason", "requested directory or root/unique Gradle build")
-	log.Info("compilation toolchain preparation started", "directory", build.Dir)
+	logger.Info("compilation toolchain preparation started", "directory", build.Dir)
 
 	writeProgress(stderr, "Preparing the Gradle build")
 	gradleUserHome := os.Getenv("GRADLE_USER_HOME")
@@ -147,10 +164,17 @@ func run(ctx context.Context, source string, opts *options, gate cli.PromptGate,
 	}
 	for _, warning := range toolchainWarnings(build, inventory) {
 		warnErr := errors.New(warning)
-		log.Warn(warnErr)
-		report.Warn(warnErr)
+		logger.Warn(warnErr)
+		reporter.Warn(warnErr)
 	}
-	runner, err := newGradleRunner(build, inventory, temporary, stderr)
+	runner, err := newGradleRunner(
+		build,
+		inventory,
+		temporary,
+		stderr,
+		logger,
+		reporter,
+	)
 	if err != nil {
 		return err
 	}
@@ -162,7 +186,7 @@ func run(ctx context.Context, source string, opts *options, gate cli.PromptGate,
 	if err != nil {
 		return err
 	}
-	log.Debug("compilation project selected", "project", project.Path, "task", project.BuildTask,
+	logger.Debug("compilation project selected", "project", project.Path, "task", project.BuildTask,
 		"reason", "project selection and supported mod artifact metadata")
 	// selectProject runs again on the rebuilt model; pin the pick so the
 	// second pass keeps the same project instead of listing candidates anew.
@@ -187,7 +211,7 @@ func run(ctx context.Context, source string, opts *options, gate cli.PromptGate,
 		return err
 	}
 	if output == "" {
-		if output, err = destination.resolve(filepath.Base(artifactPath)); err != nil {
+		if output, err = destination.resolve(inv.Directory, filepath.Base(artifactPath)); err != nil {
 			return err
 		}
 		if err := ensureAbsent(output); err != nil {
@@ -197,7 +221,7 @@ func run(ctx context.Context, source string, opts *options, gate cli.PromptGate,
 	if err := publishArtifact(ctx, artifactPath, output); err != nil {
 		return err
 	}
-	log.Info("compiled artifact published", "path", output, "project", project.Path)
+	logger.Info("compiled artifact published", "path", output, "project", project.Path)
 	writeProgress(stderr, "Compiled "+filepath.Base(output))
 	if _, err := fmt.Fprintln(stdout, output); err != nil {
 		return fmt.Errorf("report output: %w", err)
@@ -215,7 +239,12 @@ func writeProgress(writer io.Writer, line string) {
 // None of them stops a build, but each marks a decision left to Gradle, and
 // silently discarding one would leave the user with a wrong model of what Lucy
 // verified before running an untrusted build.
-func reportFindings(root string, findings []buildrepo.Finding) {
+func reportFindings(
+	root string,
+	findings []buildrepo.Finding,
+	logger *log.Logger,
+	reporter *report.Reporter,
+) {
 	for _, finding := range findings {
 		location := finding.File
 		if relative, err := filepath.Rel(root, finding.File); err == nil {
@@ -225,8 +254,8 @@ func reportFindings(root string, findings []buildrepo.Finding) {
 			location += ":" + strconv.Itoa(finding.Line)
 		}
 		warning := fmt.Errorf("%s: %s", location, finding.Message)
-		log.Warn(warning)
-		report.Warn(warning)
+		logger.Warn(warning)
+		reporter.Warn(warning)
 	}
 }
 

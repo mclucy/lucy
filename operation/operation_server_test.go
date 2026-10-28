@@ -104,7 +104,7 @@ func TestRenameServerChangesOnlyManifestName(t *testing.T) {
 	}
 	lockBytes := writeReplayLock(t, root, fingerprintBefore)
 
-	previous, err := RenameServer(root, "  survival-2  ")
+	previous, err := NewService(nil, nil, nil, nil).RenameServer(root, "  survival-2  ")
 	if err != nil {
 		t.Fatalf("RenameServer() error = %v", err)
 	}
@@ -168,7 +168,7 @@ func TestRenameServerRejectsInvalidNameWithoutWriting(t *testing.T) {
 				t.Fatalf("read manifest = %v", err)
 			}
 
-			if _, err := RenameServer(root, tt.requested); err == nil {
+			if _, err := NewService(nil, nil, nil, nil).RenameServer(root, tt.requested); err == nil {
 				t.Fatal("RenameServer() error = nil, want a name validation error")
 			}
 
@@ -191,7 +191,7 @@ func TestRenameServerRejectsBusyWorkspaceWithoutWriting(t *testing.T) {
 		t.Fatalf("read manifest = %v", err)
 	}
 
-	writer, err := workspacewrite.Lock(root)
+	writer, err := workspacewrite.Lock(root, nil)
 	if err != nil {
 		t.Fatalf("workspacewrite.Lock() error = %v", err)
 	}
@@ -201,7 +201,7 @@ func TestRenameServerRejectsBusyWorkspaceWithoutWriting(t *testing.T) {
 		}
 	}()
 
-	if _, err := RenameServer(root, "survival-2"); err == nil {
+	if _, err := NewService(nil, nil, nil, nil).RenameServer(root, "survival-2"); err == nil {
 		t.Fatal("RenameServer() error = nil, want a busy-workspace error")
 	}
 

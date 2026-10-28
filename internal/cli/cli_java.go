@@ -15,6 +15,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/java"
 	"github.com/mclucy/lucy/javaruntime"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
@@ -31,7 +32,11 @@ var javaListJSON JSONResult[javaListView]
 
 var javaUseJSON JSONResult[*operation.JavaChangeResult]
 
-func NewJavaCommand(contracts *JSONContracts) *cobra.Command {
+func NewJavaCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	javaCmd := &cobra.Command{
 		Use:   "java <subcommand>",
 		Short: help.JavaShort,
@@ -45,14 +50,18 @@ func NewJavaCommand(contracts *JSONContracts) *cobra.Command {
 		Aliases: []string{"ls"},
 		Short:   help.JavaListShort,
 		Args:    cobra.NoArgs,
-		RunE:    actionJavaList,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionJavaList(cmd, inv, deps, args)
+		},
 	}
 	javaUseCmd := &cobra.Command{
 		Use:   "use [version|auto]",
 		Short: help.JavaUseShort,
 		Long:  help.JavaUseLong,
 		Args:  cobra.MaximumNArgs(1),
-		RunE:  actionJavaUse,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionJavaUse(cmd, inv, deps, args)
+		},
 	}
 	javaListJSON.Bind(contracts, javaListCmd)
 	javaUseJSON.Bind(contracts, javaUseCmd)
@@ -78,24 +87,31 @@ type javaRuntimeView struct {
 	Problems []string `json:"problems,omitempty"`
 }
 
-func actionJavaList(cmd *cobra.Command, _ []string) error {
-	root, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
-	}
+func actionJavaList(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
+	root := inv.Directory
 	ctx, stop := CommandContext(cmd)
 	defer stop()
-	requirement, err := lockedJavaRequirement(root)
+	requirement, err := lockedJavaRequirement(root, inv)
 	if err != nil {
 		return err
 	}
-	runtimes, err := javaruntime.Installed(ctx)
+	runtimes, err := javaruntime.Installed(ctx, inv.Logger)
 	if err != nil {
 		return err
 	}
 	view := javaListView{Requirement: requirement, Runtimes: []javaRuntimeView{}}
 	if requirement != nil {
-		if view.Selection, err = javaruntime.Select(ctx, root, *requirement); err != nil {
+		if view.Selection, err = javaruntime.Select(
+			ctx,
+			root,
+			*requirement,
+			inv.Logger,
+		); err != nil {
 			return err
 		}
 	}
@@ -108,7 +124,7 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 			view.Selection.Runtime.Home == runtime.Home
 		view.Runtimes = append(view.Runtimes, entry)
 	}
-	output := NewQueryOutput(cmd)
+	output := NewQueryOutput(cmd, inv)
 	if output.JSON() {
 		return javaListJSON.Write(output, view)
 	}
@@ -120,7 +136,7 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 			document.LockFilename,
 		)
 	} else {
-		writeJavaRequirement(out, requirement)
+		writeJavaRequirement(out, requirement, inv.Theme)
 	}
 	if view.Selection != nil && view.Selection.Source == javaruntime.SourceConfigured {
 		fmt.Fprintf(out, "%s selects %s\n", view.Selection.ConfigPath, view.Selection.ConfiguredHome)
@@ -130,22 +146,27 @@ func actionJavaList(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintln(out, "No Java runtime found.")
 	}
 	for _, entry := range view.Runtimes {
-		writeJavaRuntime(out, entry, requirement != nil)
+		writeJavaRuntime(out, entry, requirement != nil, inv.Theme)
 	}
 	if view.Selection != nil {
+		reporter := report.New(cmd.ErrOrStderr(), inv.Theme)
 		for _, warning := range javaWarnings(view.Selection) {
-			report.Warn(warning)
+			reporter.Warn(warning)
 		}
 	}
 	return nil
 }
 
-func writeJavaRequirement(out io.Writer, requirement *javaruntime.Requirement) {
+func writeJavaRequirement(
+	out io.Writer,
+	requirement *javaruntime.Requirement,
+	theme style.Theme,
+) {
 	target := strconv.Itoa(requirement.Target())
 	fmt.Fprintf(
 		out,
 		"%s %s\n",
-		style.Accent("Requires"),
+		theme.Accent("Requires"),
 		javaSpecLabel(target, requirement.Distribution),
 	)
 	width := 0
@@ -153,18 +174,29 @@ func writeJavaRequirement(out io.Writer, requirement *javaruntime.Requirement) {
 		width = max(width, len(c.Source))
 	}
 	for _, c := range requirement.Constraints {
-		fmt.Fprintf(out, "  %-*s  %s\n", width, c.Source, style.Muted(c.Expression))
+		fmt.Fprintf(
+			out,
+			"  %-*s  %s\n",
+			width,
+			c.Source,
+			theme.Muted(c.Expression),
+		)
 	}
 }
 
-func writeJavaRuntime(out io.Writer, entry javaRuntimeView, checked bool) {
+func writeJavaRuntime(
+	out io.Writer,
+	entry javaRuntimeView,
+	checked bool,
+	theme style.Theme,
+) {
 	marker := " "
 	switch {
 	case !checked:
 	case len(entry.Problems) == 0:
-		marker = style.Success("✓")
+		marker = theme.Success("✓")
 	default:
-		marker = style.Failure("✗")
+		marker = theme.Failure("✗")
 	}
 	line := fmt.Sprintf(
 		"%s %-3d %-12s %-22s %s",
@@ -172,19 +204,21 @@ func writeJavaRuntime(out io.Writer, entry javaRuntimeView, checked bool) {
 		entry.Major,
 		entry.Version,
 		entry.Build(),
-		style.Muted(entry.Home),
+		theme.Muted(entry.Home),
 	)
 	if entry.Selected {
-		line += " " + style.Accent("(selected)")
+		line += " " + theme.Accent("(selected)")
 	}
 	fmt.Fprintln(out, line)
 }
 
-func actionJavaUse(cmd *cobra.Command, args []string) error {
-	root, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
-	}
+func actionJavaUse(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	args []string,
+) error {
+	root := inv.Directory
 	ctx, stop := CommandContext(cmd)
 	defer stop()
 	change, err := javaChangeFromFlags(cmd, args)
@@ -192,22 +226,22 @@ func actionJavaUse(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if change == (operation.JavaChange{}) {
-		if !NewPromptGate(cmd).Available() {
+		if !NewPromptGate(cmd, inv).Available() {
 			return fmt.Errorf(
 				"specify a Java version, auto, or --%s; interactive selection is unavailable "+
 					"with --no-interactive or without a terminal",
 				flagJavaDistributionName,
 			)
 		}
-		if change, err = promptJavaChange(ctx, root); err != nil {
+		if change, err = promptJavaChange(ctx, root, NewPromptGate(cmd, inv), inv.Logger); err != nil {
 			return err
 		}
 	}
-	result, err := operation.SetJava(ctx, root, change)
+	result, err := deps.Operations.SetJava(ctx, root, change)
 	if err != nil {
 		return err
 	}
-	output := NewOperationOutput(cmd)
+	output := NewOperationOutput(cmd, inv)
 	if output.JSON() {
 		return javaUseJSON.Write(output, result)
 	}
@@ -257,12 +291,17 @@ func parseJavaMajor(raw string) (int, error) {
 
 // promptJavaChange asks for the Java version and distribution that lucy.yaml
 // pins. Each answer starts at the current value.
-func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, error) {
+func promptJavaChange(
+	ctx context.Context,
+	root string,
+	gate PromptGate,
+	logger *log.Logger,
+) (operation.JavaChange, error) {
 	d, err := document.ManifestFile(root).Read()
 	if err != nil {
 		return operation.JavaChange{}, err
 	}
-	runtimes, err := javaruntime.Installed(ctx)
+	runtimes, err := javaruntime.Installed(ctx, logger)
 	if err != nil {
 		return operation.JavaChange{}, err
 	}
@@ -308,7 +347,9 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 				Options(distributionOptions...).
 				Value(&distribution),
 		),
-	)
+	).
+		WithInput(gate.Input()).
+		WithOutput(gate.Output())
 	if err := NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
 		return operation.JavaChange{}, err
 	}
@@ -320,7 +361,7 @@ func promptJavaChange(ctx context.Context, root string) (operation.JavaChange, e
 
 // lockedJavaRequirement returns the Java requirement of the lock in root, or
 // nil when the workspace has no lock.
-func lockedJavaRequirement(root string) (*javaruntime.Requirement, error) {
+func lockedJavaRequirement(root string, inv *Invocation) (*javaruntime.Requirement, error) {
 	lock, err := document.LockFile(root).Read()
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -328,7 +369,7 @@ func lockedJavaRequirement(root string) (*javaruntime.Requirement, error) {
 	if err != nil {
 		return nil, err
 	}
-	requirement := javaruntime.RequirementOf(lock)
+	requirement := javaruntime.RequirementOf(lock, inv.Logger)
 	return &requirement, nil
 }
 
