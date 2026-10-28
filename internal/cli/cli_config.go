@@ -17,12 +17,15 @@ const (
 	flagConfigNoCommentsName = "no-comments"
 )
 
-// configValuesJSON, configJavaJSON, and configStringJSON are the shapes
-// `lucy config get` prints: a whole layer, a section, or a scalar leaf.
+// configValuesJSON, configJavaJSON, configGitHubJSON, configCurseForgeJSON,
+// and configStringJSON are the shapes `lucy config get` prints: a whole layer,
+// a section, or a scalar leaf.
 var (
-	configValuesJSON JSONResult[*config.Values]
-	configJavaJSON   JSONResult[config.Java]
-	configStringJSON JSONResult[string]
+	configValuesJSON     JSONResult[*config.Values]
+	configJavaJSON       JSONResult[config.Java]
+	configGitHubJSON     JSONResult[config.GitHub]
+	configCurseForgeJSON JSONResult[config.CurseForge]
+	configStringJSON     JSONResult[string]
 )
 
 // configWriteJSON is the machine-readable result of `lucy config set` and
@@ -54,6 +57,8 @@ func NewConfigCommand(contracts *JSONContracts) *cobra.Command {
 	}
 	configValuesJSON.Bind(contracts, configGetCmd)
 	configJavaJSON.Bind(contracts, configGetCmd)
+	configGitHubJSON.Bind(contracts, configGetCmd)
+	configCurseForgeJSON.Bind(contracts, configGetCmd)
 	configStringJSON.Bind(contracts, configGetCmd)
 	configWriteJSON.Bind(contracts, configSetCmd)
 	configWriteJSON.Bind(contracts, configCreateCmd)
@@ -90,6 +95,9 @@ func actionConfigGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if !config.Secret(key) {
+		value = config.Redacted(value)
+	}
 	output := NewQueryOutput(cmd)
 	if output.JSON() {
 		return writeConfigJSON(output, value)
@@ -104,6 +112,10 @@ func writeConfigJSON(output *Output, value any) error {
 		return configValuesJSON.Write(output, value)
 	case config.Java:
 		return configJavaJSON.Write(output, value)
+	case config.GitHub:
+		return configGitHubJSON.Write(output, value)
+	case config.CurseForge:
+		return configCurseForgeJSON.Write(output, value)
 	case string:
 		return configStringJSON.Write(output, value)
 	default:
@@ -131,7 +143,11 @@ func actionConfigSet(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	_, err = fmt.Fprintf(out, "Set %s to %s\n", key, value)
+	shown := value
+	if config.Secret(key) && shown != "" {
+		shown = config.RedactedValue
+	}
+	_, err = fmt.Fprintf(out, "Set %s to %s\n", key, shown)
 	return err
 }
 

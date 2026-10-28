@@ -3,18 +3,42 @@ package github
 import (
 	"net/url"
 	"strings"
+	"sync"
 )
 
-const mirrorBaseURL = "https://ghfast.top/"
+var (
+	proxyMutex   sync.RWMutex
+	releaseProxy string
+)
 
-// DownloadURL returns the URL to request for a GitHub release asset.
-// The original URL is returned unless useMirror is enabled and rawURL is an
-// HTTPS URL hosted on github.com under /owner/repository/releases/download/.
-func DownloadURL(rawURL string, useMirror bool) string {
-	if !useMirror || !isReleaseAssetURL(rawURL) {
+// SetReleaseProxy configures the prefix that mirrors GitHub release assets.
+// An empty prefix downloads from the canonical URL.
+func SetReleaseProxy(prefix string) {
+	proxyMutex.Lock()
+	releaseProxy = strings.TrimSpace(prefix)
+	proxyMutex.Unlock()
+}
+
+// DownloadURL returns the URL to request for a GitHub release asset. The
+// canonical URL is returned when no release proxy is configured or rawURL is
+// not an HTTPS URL hosted on github.com under /owner/repository/releases/download/.
+func DownloadURL(rawURL string) string {
+	proxyMutex.RLock()
+	prefix := releaseProxy
+	proxyMutex.RUnlock()
+	return ProxiedDownloadURL(rawURL, prefix)
+}
+
+// ProxiedDownloadURL prefixes a release asset URL with proxy. A proxy without
+// a trailing slash still separates the asset URL from its prefix.
+func ProxiedDownloadURL(rawURL, proxy string) string {
+	if proxy == "" || !isReleaseAssetURL(rawURL) {
 		return rawURL
 	}
-	return mirrorBaseURL + rawURL
+	if !strings.HasSuffix(proxy, "/") {
+		proxy += "/"
+	}
+	return proxy + rawURL
 }
 
 func isReleaseAssetURL(rawURL string) bool {

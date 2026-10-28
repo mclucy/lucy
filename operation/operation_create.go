@@ -229,7 +229,11 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	if err != nil {
 		return nil, newCreateResolveError(root, document, err)
 	}
-	if err := documentpkg.ManifestFile(root).Write(document); err != nil {
+	manifestFile := documentpkg.ManifestFile(root)
+	if opts.Force {
+		manifestFile = manifestFile.WithoutMerge()
+	}
+	if err := manifestFile.Write(document); err != nil {
 		return nil, &CreatePublishError{Workspace: root, Err: err}
 	}
 	publishedLock := resolved != old

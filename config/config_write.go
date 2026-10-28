@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -136,6 +137,9 @@ func (s *Service) Create(scope Scope, options CreateOptions) (result *WriteResul
 	if options.NoComments {
 		file = file.WithEncoder((*Values).PlainBytes)
 	}
+	// Create replaces the file by definition: a forced create must not merge
+	// its empty template into the values it is discarding.
+	file = file.WithoutMerge()
 	root, err := s.workspaceRoot(scope)
 	if err != nil {
 		return nil, err
@@ -157,6 +161,31 @@ func (s *Service) Create(scope Scope, options CreateOptions) (result *WriteResul
 	return &WriteResult{Path: file.Path(), Created: created}, nil
 }
 
+// validateSetting rejects values that the field's meaning cannot accept.
+func validateSetting(key, text string) error {
+	switch key {
+	case "github.proxy":
+		return validateProxyURL(text)
+	default:
+		return nil
+	}
+}
+
+func validateProxyURL(text string) error {
+	if text == "" {
+		return nil
+	}
+	parsed, err := url.Parse(text)
+	if err != nil ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.Host == "" ||
+		parsed.RawQuery != "" ||
+		parsed.Fragment != "" {
+		return fmt.Errorf("config github.proxy must be an absolute HTTP(S) URL without a query or fragment")
+	}
+	return nil
+}
+
 func (s *Service) Set(key, text string, scope Scope) (result *WriteResult, resultErr error) {
 	probe, err := fieldValue(&Values{}, key)
 	if err != nil {
@@ -167,6 +196,9 @@ func (s *Service) Set(key, text string, scope Scope) (result *WriteResult, resul
 	}
 	if strings.ContainsRune(text, '\x00') {
 		return nil, fmt.Errorf("config %s cannot contain a null character", key)
+	}
+	if err := validateSetting(key, text); err != nil {
+		return nil, err
 	}
 	writer, err := s.lock(scope)
 	if err != nil {

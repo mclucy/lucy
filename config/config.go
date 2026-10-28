@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"github.com/mclucy/lucy/document"
 )
@@ -53,6 +54,7 @@ func configFile(path string) document.Service[Values] {
 	return document.NewService(path, document.Codec[Values]{
 		Decode: decodeValues,
 		Encode: encodeValues,
+		Merge:  mergeConfigBytes,
 	}).WithMode(0o600)
 }
 
@@ -120,6 +122,52 @@ func (s *Service) Get(key string, scope Scope) (any, error) {
 		return value.Elem().Interface(), nil
 	}
 	return value.Interface(), nil
+}
+
+// Setting returns one effective string setting. Missing layers are empty, and
+// a workspace value overrides a global one.
+func (s *Service) Setting(key string) (string, error) {
+	global, err := s.read(GlobalScope, false)
+	if err != nil {
+		return "", err
+	}
+	workspace, err := s.read(WorkspaceScope, false)
+	if err != nil {
+		return "", err
+	}
+	merged := mergeValues(global, workspace)
+	value, err := fieldValue(merged, key)
+	if err != nil {
+		return "", err
+	}
+	if value.Kind() != reflect.Pointer {
+		return "", fmt.Errorf("config key %q is not a string", key)
+	}
+	if value.IsNil() {
+		return "", nil
+	}
+	return value.Elem().String(), nil
+}
+
+// GitHubProxy returns the configured prefix proxy for GitHub release
+// downloads. An empty prefix downloads directly. A hand-edited value that is
+// not an absolute HTTP(S) URL is an error rather than a broken download.
+func (s *Service) GitHubProxy() (string, error) {
+	value, err := s.Setting("github.proxy")
+	if err != nil {
+		return "", err
+	}
+	value = strings.TrimSpace(value)
+	if err := validateProxyURL(value); err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+// CurseForgeAPIKey returns the configured CurseForge API key. An empty key
+// lets the provider use the key embedded in this build.
+func (s *Service) CurseForgeAPIKey() (string, error) {
+	return s.Setting("curseforge.api_key")
 }
 
 // JavaHome resolves the selected path against the directory of its source

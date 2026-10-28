@@ -17,6 +17,7 @@ import (
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/github"
 	"github.com/mclucy/lucy/log"
 )
 
@@ -171,9 +172,10 @@ func (s *downloadStore) materializeFile(a *catalog.Artifact, dir, destination st
 		var read int64
 		var total int64
 		options := cache.DownloadOptions{
-			Context:  s.ctx,
-			Kind:     cache.KindArtifact,
-			Filename: a.Filename,
+			Context:    s.ctx,
+			Kind:       cache.KindArtifact,
+			Filename:   a.Filename,
+			RequestURL: github.DownloadURL(a.URL),
 		}
 		options.WrapReader = func(reader io.Reader, size int64) io.Reader {
 			total = size

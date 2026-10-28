@@ -13,15 +13,24 @@ import (
 )
 
 // Values describes one configuration layer. A nil scalar inherits from the
-// previous layer; an explicit empty Java home requests automatic selection.
+// previous layer; an explicit empty value selects that setting's automatic
+// behavior and masks an inherited value.
 type Values struct {
-	Java Java `yaml:"java,omitempty" json:"java" description:"Java runtime selection."`
-
-	node *yaml.Node
+	Java       Java       `yaml:"java,omitempty" json:"java" description:"Java runtime selection."`
+	GitHub     GitHub     `yaml:"github,omitempty" json:"github" description:"GitHub access."`
+	CurseForge CurseForge `yaml:"curseforge,omitempty" json:"curseforge" description:"CurseForge access."`
 }
 
 type Java struct {
 	Home *string `yaml:"home,omitempty" json:"home" description:"Java home or executable. An empty value lets Lucy choose a runtime." example:"/path/to/java-home"`
+}
+
+type GitHub struct {
+	Proxy *string `yaml:"proxy,omitempty" json:"proxy" description:"Prefix proxy for GitHub release downloads. An empty value downloads directly." example:"https://ghfast.top/"`
+}
+
+type CurseForge struct {
+	APIKey *string `yaml:"api_key,omitempty" json:"api_key" secret:"true" description:"CurseForge API key. An empty value uses the key built into this Lucy build." example:"$2a$10$example"`
 }
 
 func decodeValues(reader io.Reader) (*Values, error) {
@@ -32,14 +41,7 @@ func decodeValues(reader io.Reader) (*Values, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	var node yaml.Node
 	if err := decoder.Decode(&node); errors.Is(err, io.EOF) {
-		return &Values{node: &yaml.Node{
-			Kind: yaml.DocumentNode,
-			Content: []*yaml.Node{{
-				Kind:        yaml.MappingNode,
-				Tag:         "!!map",
-				HeadComment: string(data),
-			}},
-		}}, nil
+		return &Values{}, nil
 	} else if err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
@@ -56,7 +58,7 @@ func decodeValues(reader io.Reader) (*Values, error) {
 	if err := validateFields(node.Content[0], reflect.TypeFor[Values](), ""); err != nil {
 		return nil, err
 	}
-	values := &Values{node: &node}
+	values := &Values{}
 	if err := node.Decode(values); err != nil {
 		return nil, fmt.Errorf("decode config values: %w", err)
 	}
@@ -64,20 +66,24 @@ func decodeValues(reader io.Reader) (*Values, error) {
 }
 
 func encodeValues(values *Values) ([]byte, error) {
-	value := reflect.ValueOf(values).Elem()
-	if values.node == nil || !hasValue(value) {
-		return document.RenderYAML(values, document.YAMLOptions{})
-	}
-	syncNode(values.node.Content[0], value)
-	var output bytes.Buffer
-	encoder := yaml.NewEncoder(&output)
-	encoder.SetIndent(2)
-	encodeErr := encoder.Encode(values.node)
-	return output.Bytes(), errors.Join(encodeErr, encoder.Close())
+	return document.NewCommenter(document.YAMLOptions{}).Render(values)
 }
 
 func (values *Values) PlainBytes() ([]byte, error) {
-	return document.RenderYAML(values, document.YAMLOptions{NoComments: true})
+	return document.NewCommenter(document.YAMLOptions{NoComments: true}).Render(values)
+}
+
+// mergeConfigBytes writes values into the configuration the file already
+// holds. Comments the user wrote survive, and new keys arrive with the
+// documentation declared by the config types.
+func mergeConfigBytes(existing []byte, values *Values) ([]byte, error) {
+	if len(bytes.TrimSpace(existing)) == 0 {
+		return encodeValues(values)
+	}
+	if _, err := decodeValues(bytes.NewReader(existing)); err != nil {
+		return nil, err
+	}
+	return document.NewCommenter(document.YAMLOptions{}).Merge(existing, values)
 }
 
 func schemaField(t reflect.Type, name string) (reflect.StructField, bool) {
@@ -131,19 +137,6 @@ func validateFields(node *yaml.Node, t reflect.Type, prefix string) error {
 		}
 	}
 	return nil
-}
-
-func hasValue(value reflect.Value) bool {
-	if value.Kind() == reflect.Pointer {
-		return !value.IsNil()
-	}
-	for i := range value.Type().NumField() {
-		field := value.Type().Field(i)
-		if field.IsExported() && hasValue(value.FieldByIndex(field.Index)) {
-			return true
-		}
-	}
-	return false
 }
 
 func fieldValue(values *Values, key string) (reflect.Value, error) {

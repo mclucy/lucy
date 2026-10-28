@@ -20,8 +20,6 @@ lucy schema status
 
 Lucy writes diagnostic logs to `~/Library/Logs/lucy/lucy.log` on macOS, `~/.local/share/lucy/logs/lucy.log` on Linux, or `%APPDATA%/lucy/logs/lucy.log` on Windows. Use `--log-file <path>` to choose another location and `--print-logs` to show logs in the terminal. `--log-level` controls the displayed severity (`debug`, `info`, `warn`, `error`, or `fatal`); the file retains debug details.
 
-Use `--use-github-mirror` if you need the GitHub release mirror for eligible downloads. Run `lucy --version` to check the installed version.
-
 ## Server selection
 
 `lucy --server NAME COMMAND` runs the invocation in a registered server's directory, so relative paths in the command's arguments resolve there. Place the flag before the subcommand:
@@ -31,7 +29,6 @@ lucy --server survival status
 ```
 
 The value must be an available name from [`lucy server list`](/commands/install#known-servers), not a filesystem path. A name that matches no available server, or several, fails before the command runs; an ambiguous name lists the matching paths. Without the flag, commands keep their normal working-directory behavior.
-
 ## Flags
 
 ### Meta
@@ -86,6 +83,4 @@ The value must be an available name from [`lucy server list`](/commands/install#
 
 ### Network
 
-<ParamField query="--use-github-mirror" type="boolean" default="false">
-  Route eligible downloads through the GitHub release mirror instead of the canonical upstream URL. This is useful for users in regions with limited access to GitHub. The mirror is `https://ghfast.top`.
-</ParamField>
+GitHub release downloads can use a mirror. Set `github.proxy` with `lucy config set`; see [`lucy config`](/commands/config).

@@ -543,6 +543,9 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 		return initResult(observed), configErr
 	}
 	manifestFile := documentpkg.ManifestFile(root)
+	if opts.Force {
+		manifestFile = manifestFile.WithoutMerge()
+	}
 	if opts.NoComments {
 		manifestFile = manifestFile.WithEncoder((*documentpkg.Manifest).PlainBytes)
 	}

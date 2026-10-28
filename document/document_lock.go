@@ -1,6 +1,7 @@
 package document
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
@@ -239,7 +240,22 @@ func (l *Lock) Snapshot() ([]byte, error) {
 	if err := l.Validate(); err != nil {
 		return nil, err
 	}
-	return yaml.Marshal(l)
+	return NewCommenter(YAMLOptions{NoComments: true}).Render(l)
+}
+
+// MergeBytes writes l into existing and keeps the comments the existing lock
+// carries. The lock declares no generated comments of its own.
+func (l *Lock) MergeBytes(existing []byte) ([]byte, error) {
+	if len(bytes.TrimSpace(existing)) == 0 {
+		return l.Snapshot()
+	}
+	if _, err := DecodeLock(bytes.NewReader(existing)); err != nil {
+		return nil, err
+	}
+	if err := l.Validate(); err != nil {
+		return nil, err
+	}
+	return NewCommenter(YAMLOptions{NoComments: true}).Merge(existing, l)
 }
 
 // LookupReference expands a bare name against the package names in this lock.
