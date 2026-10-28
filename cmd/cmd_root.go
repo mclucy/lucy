@@ -37,7 +37,7 @@ var (
 
 const agentInstructions = "Instructions for agents:\n" +
 	"The --help flag is human-oriented. Use `lucy docs list` to view all available documentation,\n" +
-	"`lucy docs grep` to search, and `lucy docs view` to read articles. `--json-compact` and\n" +
+	"`lucy docs grep` to search, and `lucy docs read` to read one or more articles. `--json-compact` and\n" +
 	"`--no-interactive` will be on by default for you. You can use tools like `jq` to process\n" +
 	"command outputs. Use `lucy schema` to list JSON result contracts, `lucy schema COMMAND` to\n" +
 	"read a result schema, and `lucy schema --error` to read the shared failure schema."

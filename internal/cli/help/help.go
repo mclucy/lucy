@@ -47,7 +47,7 @@ const (
 	DocsGrepLong  = "Search embedded documentation pages. Patterns use Go regular " +
 		"expressions unless --fixed-strings is set. Exit status is 0 when a line " +
 		"matches, 1 when no line matches, and 2 on error."
-	DocsViewShort = "Print a documentation page"
+	DocsReadShort = "Print documentation pages"
 
 	DoctorShort = "Diagnose the server environment"
 

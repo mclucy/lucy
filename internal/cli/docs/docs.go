@@ -19,7 +19,7 @@ func NewCommand() *cobra.Command {
 	cmd.AddCommand(
 		newListCommand(),
 		newGrepCommand(),
-		newViewCommand(),
+		newReadCommand(),
 	)
 	return cmd
 }
