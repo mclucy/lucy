@@ -12,11 +12,11 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-// TestLockedMutationBindsToLocation covers a
+// TestLockedMutationBindsEachDeclarationToLocation covers a
 // reference declared for two ecosystems. Each locked package must receive its
 // own declaration instead of the last one applied to every package that names
 // the same reference.
-func TestLockedMutationBindsToLocation(t *testing.T) {
+func TestLockedMutationBindsEachDeclarationToLocation(t *testing.T) {
 	root := t.TempDir()
 	initial := lockedMutationManifest(t, "modrinth:shared", versionpkg.Any)
 	if err := document.ManifestFile(root).Write(initial); err != nil {

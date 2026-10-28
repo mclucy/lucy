@@ -95,7 +95,7 @@ func TestActivityGuardBlocksSharedReplays(t *testing.T) {
 	}
 }
 
-func TestRunningServerBlocksOverwrite(t *testing.T) {
+func TestRunningServerBlocksOverwriteWithoutJournal(t *testing.T) {
 	w := newWorkspace(t)
 	w.writeManifest(t, baseManifest(t))
 	w.write(t, "server/server.jar", miniVanillaJar(t, "1.21.4"), 0o644)

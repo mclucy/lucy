@@ -48,7 +48,7 @@ func TestVanillaDetectorRejectsForgeInstallerJson(t *testing.T) {
 	}
 }
 
-func TestVanillaDetectorRejectsForgeInstaller(t *testing.T) {
+func TestVanillaDetectorRejectsForgeInstallerEmptyComment(t *testing.T) {
 	t.Parallel()
 
 	files := map[string]string{

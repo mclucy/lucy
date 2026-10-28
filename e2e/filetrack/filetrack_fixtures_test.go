@@ -22,7 +22,7 @@ func baseManifest(t *testing.T) *document.Manifest {
 	}
 }
 
-func TestFileTrackSnapshotsBytes(t *testing.T) {
+func TestFileTrackSnapshotsBytesAndRevision(t *testing.T) {
 	w := newWorkspace(t)
 	w.writeManifest(t, baseManifest(t))
 	rules := []byte("keep the world border at 3000\n")
@@ -264,7 +264,7 @@ func TestFileLockAndUnlockControlDriftWarnings(t *testing.T) {
 	}
 }
 
-func TestFileListKeepsUntrackedEvents(t *testing.T) {
+func TestFileListIsReadOnlyAndKeepsUntrackedEvents(t *testing.T) {
 	w := newWorkspace(t)
 	w.writeManifest(t, baseManifest(t))
 	w.write(t, "config/rules.txt", []byte("rules\n"), 0o644)
@@ -325,7 +325,7 @@ func TestFileRecoverPrefersLocalCASBeforeURL(t *testing.T) {
 	w.requireCASObject(t, digestHex(drifted), drifted)
 }
 
-func TestFileRecoverKeepsMismatchedTarget(t *testing.T) {
+func TestFileRecoverKeepsMismatchedTargetAndDeclaration(t *testing.T) {
 	w := newWorkspace(t)
 	w.writeManifest(t, baseManifest(t))
 	source := newSourceServer(t, []byte("published rules\n"))
@@ -349,7 +349,7 @@ func TestFileRecoverKeepsMismatchedTarget(t *testing.T) {
 	}
 }
 
-func TestFileUpdateRetainsBackup(t *testing.T) {
+func TestFileUpdateAcceptsBytesAndRetainsBackup(t *testing.T) {
 	w := newWorkspace(t)
 	w.writeManifest(t, baseManifest(t))
 	first, second := []byte("published rules 1\n"), []byte("published rules 2\n")

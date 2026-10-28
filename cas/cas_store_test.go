@@ -229,7 +229,7 @@ func TestCASConcurrentProcessPutsDeduplicatePhysically(t *testing.T) {
 	}
 }
 
-func TestCASCleanupSparesActiveWriters(t *testing.T) {
+func TestCASCleanupSparesLiveAndReclaimsCrashedStages(t *testing.T) {
 	root := t.TempDir()
 	store := casNewStore(t, root)
 	payload := []byte("bytes of a stage a live process still owns\n")
