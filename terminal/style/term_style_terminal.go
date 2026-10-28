@@ -3,6 +3,7 @@ package style
 import (
 	"io"
 	"os"
+	"sync"
 
 	"charm.land/lipgloss/v2"
 	"golang.org/x/term"
@@ -18,16 +19,31 @@ const (
 // renders to a stream derives its geometry and terminal state from that
 // stream alone, never from a package-level snapshot.
 type Terminal struct {
-	Width  int
-	Height int
-	IsTTY  bool
-	Dark   bool
+	Width      int
+	Height     int
+	IsTTY      bool
+	Dark       bool
+	background func() bool
 }
 
-// DetectTerminal derives the capabilities of w. Non-terminal output uses
-// conventional geometry. Background queries use only the supplied terminal
-// input; nil input leaves the dark-background default without reading anything.
-func DetectTerminal(input io.Reader, w io.Writer) Terminal {
+// DetectTerminals detects geometry immediately and queries the background only
+// when colored Markdown needs it. Streams on the same terminal share a query.
+func DetectTerminals(input io.Reader, stdout, stderr io.Writer) (Terminal, Terminal) {
+	out := detectTerminal(input, stdout)
+	errOut := detectTerminal(input, stderr)
+	if out.background != nil && errOut.background != nil {
+		outFile := stdout.(*os.File)
+		errFile := stderr.(*os.File)
+		outInfo, outErr := outFile.Stat()
+		errInfo, errErr := errFile.Stat()
+		if outErr == nil && errErr == nil && os.SameFile(outInfo, errInfo) {
+			errOut.background = out.background
+		}
+	}
+	return out, errOut
+}
+
+func detectTerminal(input io.Reader, w io.Writer) Terminal {
 	detected := Terminal{
 		Width:  DefaultTerminalWidth,
 		Height: DefaultTerminalHeight,
@@ -47,7 +63,9 @@ func DetectTerminal(input io.Reader, w io.Writer) Terminal {
 		}
 	}
 	if terminalInput, ok := input.(*os.File); ok && term.IsTerminal(int(terminalInput.Fd())) {
-		detected.Dark = lipgloss.HasDarkBackground(terminalInput, file)
+		detected.background = sync.OnceValue(func() bool {
+			return lipgloss.HasDarkBackground(terminalInput, file)
+		})
 	}
 	return detected
 }

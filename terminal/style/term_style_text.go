@@ -32,7 +32,11 @@ func (t Theme) Markdown(md string, maxWidth int, terminal Terminal) string {
 		glamour.WithWordWrap(maxWidth),
 	}
 	if t.colors {
-		if terminal.Dark {
+		dark := terminal.Dark
+		if terminal.background != nil {
+			dark = terminal.background()
+		}
+		if dark {
 			options = append(options, glamour.WithStandardStyle(styles.DarkStyle))
 		} else {
 			options = append(options, glamour.WithStandardStyle(styles.LightStyle))

@@ -227,8 +227,7 @@ func (r *Runner) configurePresentation(cmd *cobra.Command) {
 		if r.invocation.Interactive {
 			input = r.stdin
 		}
-		r.invocation.Stdout = style.DetectTerminal(input, r.stdout)
-		r.invocation.Stderr = style.DetectTerminal(input, r.stderr)
+		r.invocation.Stdout, r.invocation.Stderr = style.DetectTerminals(input, r.stdout, r.stderr)
 	}
 }
 
