@@ -13,3 +13,25 @@ lucy remove modrinth:fabric-api modrinth:lithium
 A dependency stays installed while another package needs it. Lucy removes files it installed that are no longer needed, but leaves your manually placed files, worlds, and server configuration alone. If removal fails, the manifest and lock remain unchanged.
 
 Lucy normally infers the mod or plugin type from the server; use `--ecosystem` to select it explicitly. `--locked` prevents new version resolution, and `--offline` prevents network access. See [`lucy add`](/commands/add) to add a package again; specify a version if you want to pin it.
+
+## Flags
+
+### Arguments
+
+<ParamField path="package" type="string" required>
+  One or more package references, in the same `modrinth:project`, `curseforge:project`, or `mcdr:project` form accepted by [`lucy add`](/commands/add). Bare names resolve as the same shortcuts: a unique match in the current lock, otherwise Modrinth (or the MCDR catalogue for MCDR plugins). Only packages declared directly in the manifest can be removed — naming something the manifest never declared is an error, and dependencies remain installed while another package still needs them.
+</ParamField>
+
+<ParamField query="--ecosystem" type="string">
+  Remove the package from this mod or plugin type: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`. When omitted, it is inferred from the declared server.
+</ParamField>
+
+<ParamField query="--locked" type="boolean" default="false">
+  Do not resolve new versions; fail when the lock cannot satisfy the remaining packages.
+</ParamField>
+
+<ParamField query="--offline" type="boolean" default="false">
+  Disallow network acquisition for any re-resolution this triggers. Removal changes the manifest, so a removal that requires re-resolution fails under `--offline`; combine it with `--locked` to reuse the existing lock without going upstream.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags) and [`lucy add`](/commands/add).

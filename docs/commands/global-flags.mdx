@@ -21,3 +21,55 @@ lucy schema status
 Lucy writes diagnostic logs to `~/Library/Logs/lucy/lucy.log` on macOS, `~/.local/share/lucy/logs/lucy.log` on Linux, or `%APPDATA%/lucy/logs/lucy.log` on Windows. Use `--log-file <path>` to choose another location and `--print-logs` to show logs in the terminal. `--log-level` controls the displayed severity (`debug`, `info`, `warn`, `error`, or `fatal`); the file retains debug details.
 
 Use `--use-github-mirror` if you need the GitHub release mirror for eligible downloads. Run `lucy --version` to check the installed version.
+
+## Flags
+
+### Meta
+
+<ParamField query="--version, -v" type="boolean">
+  Print the current `lucy` version and exit. This flag belongs to the root command; use `lucy --version`, not `lucy <command> --version`.
+</ParamField>
+
+### Output style
+
+<ParamField query="--no-color" type="boolean" default="false">
+  Disable ANSI colors. Text attributes such as bold or underline survive, so output stays readable in environments that do not support color or when piping output to another program.
+</ParamField>
+
+<ParamField query="--no-interactive" type="boolean" default="false">
+  Disable interactive effects such as progress bars, spinners, and prompts. A command that would have to ask for input fails instead, naming the flag that carries the same choice — every interactive selection has one.
+</ParamField>
+
+<ParamField query="--no-style" type="boolean" default="false">
+  Same as `--no-color --no-interactive`.
+</ParamField>
+
+<ParamField query="--json" type="boolean" default="false">
+  Print JSON indented with 2 spaces. Success documents go to stdout; failure documents go to stderr.
+</ParamField>
+
+<ParamField query="--json-compact" type="boolean" default="false">
+  Print JSON without indentation; wins over `--json`.
+</ParamField>
+
+### Logging
+
+<ParamField query="--log-level" type="string" default="info">
+  Set the minimum severity that `--print-logs` mirrors to the terminal: `debug`, `info`, `warn`, `error`, or `fatal`. The log file always receives debug records regardless of this setting.
+</ParamField>
+
+<ParamField query="--log-file" type="string" default="platform-specific">
+  Append diagnostic logs to this file. Parent directories are created when needed. The command fails before its action if the destination cannot be opened.
+
+  The default is `lucy.log` under `~/Library/Logs/lucy` on macOS, `~/.local/share/lucy/logs` on Linux, or `%APPDATA%/lucy/logs` on Windows.
+</ParamField>
+
+<ParamField query="--print-logs" type="boolean" default="false">
+  Mirror diagnostic records to stderr at the level set by `--log-level`. The log file keeps receiving the same records, plus debug detail. User reports remain independent. In machine mode the terminal mirror is suppressed so stdout and stderr keep their single-document contract; read the log file instead.
+</ParamField>
+
+### Network
+
+<ParamField query="--use-github-mirror" type="boolean" default="false">
+  Route eligible downloads through the GitHub release mirror instead of the canonical upstream URL. This is useful for users in regions with limited access to GitHub. The mirror is `https://ghfast.top`.
+</ParamField>

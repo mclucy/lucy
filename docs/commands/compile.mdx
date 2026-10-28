@@ -25,3 +25,37 @@ lucy compile owner/multi-platform-mod -o ./dist --build-dir fabric --project :fa
 ```
 
 `--ecosystem` accepts `fabric`, `forge`, or `neoforge`. For detailed Git and Gradle logs, add `--log-level=debug --print-logs`.
+
+## Flags
+
+### Arguments
+
+<ParamField path="url|owner/repo" type="string" required>
+  GitHub shorthand (`owner/repo`) or a Git repository URL to clone. Lucy checks out the repository's default branch unless `--branch` or `--tag` is set.
+</ParamField>
+
+<ParamField query="--output, -o" type="string">
+  Destination for the compiled mod JAR, resolved relative to the current directory. A path ending in `.jar` names the destination file; any other value names a directory that receives the project's artifact name. Defaults to the current directory. Missing directories are created. The destination must not already exist; `lucy compile` does not overwrite files.
+</ParamField>
+
+<ParamField query="--ecosystem" type="string">
+  Restrict project selection to one mod type. Accepted values: `fabric`, `forge`, `neoforge`.
+</ParamField>
+
+<ParamField query="--build-dir" type="string">
+  Select a Gradle build directory relative to the cloned repository. Use this when the repository has multiple independent Gradle builds. The path must stay inside the checkout.
+</ParamField>
+
+<ParamField query="--project" type="string">
+  Select a Gradle project path, such as `:fabric`, when a build contains multiple mod projects.
+</ParamField>
+
+<ParamField query="--branch" type="string">
+  Checkout Git branch `BRANCH` after cloning, before compiling. Mutually exclusive with `--tag`.
+</ParamField>
+
+<ParamField query="--tag" type="string">
+  Checkout Git tag `TAG` after cloning, before compiling. Mutually exclusive with `--branch`.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags).

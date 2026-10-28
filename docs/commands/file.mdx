@@ -20,3 +20,47 @@ Use `lucy file lock <path>` to accept the current contents and warn about future
 `lucy file recover` restores the current accepted revision; `lucy file revert` restores an earlier one. Both preserve a local copy of the contents they replace. Pass several paths to `track`, `untrack`, `update`, `recover`, `lock`, or `unlock`; use `--all` with `update` or `recover` to select all applicable files.
 
 For step-by-step examples, see [File tracking](/file-tracking/overview) and [Recover and revert files](/file-tracking/recovery).
+
+## Flags
+
+### Track
+
+<ParamField query="--immutable" type="boolean" default="false">
+  Mark the file immutable. Immutable files require an accepted hash and produce warnings when working content deviates. Conflicts with `--no-hash`.
+</ParamField>
+
+<ParamField query="--recover-url" type="string">
+  Record an explicit remote recovery source URL for the file. Requires an accepted hash. Conflicts with `--no-hash`.
+</ParamField>
+
+<ParamField query="--no-hash" type="boolean" default="false">
+  Track the file for presence only without recording an accepted hash. Presence-only files cannot be recovered. Conflicts with `--immutable` and `--recover-url`.
+</ParamField>
+
+### Update
+
+<ParamField query="--from-source" type="boolean" default="false">
+  Fetch fresh bytes from `recover_url`, preserve displaced working bytes, replace the working file, and accept the new digest. Requests bypass stale network caches. Does not require matching the prior digest.
+</ParamField>
+
+<ParamField query="--all" type="boolean" default="false">
+  Atomically update all tracked files. When combined with `--from-source`, selects all tracked entries that declare a `recover_url`. Conflicts with positional paths.
+</ParamField>
+
+### Recover
+
+<ParamField query="--all" type="boolean" default="false">
+  Atomically restore all tracked entries that have an accepted hash. Presence-only entries without hashes are reported as skipped. Conflicts with positional paths.
+</ParamField>
+
+### Revert
+
+<ParamField query="<hash>" type="string">
+  Positional accepted hash (`sha256:<64 lowercase hex>`) to restore and accept.
+</ParamField>
+
+<ParamField query="--revision" type="integer">
+  Revision number of a recorded event to restore and accept, as shown by `lucy file history`: `#36` is the workspace event sequence, `revision 34` the revision that event activated, and the two numbers differ. Revisions are workspace-wide: one transaction activates one revision for every file it touched, and a revert reactivates an older revision instead of minting a new one. Use this to disambiguate recurrent digests. Conflicts with the positional hash argument.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags) and [File tracking](/file-tracking/overview).

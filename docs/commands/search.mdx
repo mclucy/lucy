@@ -19,3 +19,39 @@ lucy search luckperms --registry hangar --long
 `--ecosystem` accepts `fabric`, `forge`, `neoforge`, `bukkit`, or `paper`; `--registry` accepts `modrinth`, `curseforge`, `hangar`, `spiget`, or `mcdr`. Sort by `relevance`, `downloads`, or `newest`. Add `--include-client` to include client-only mods.
 
 Use [`lucy info`](/commands/info) to inspect a result before adding it.
+
+## Flags
+
+### Arguments
+
+<ParamField path="query" type="string" required>
+  The search term. It is passed directly to each selected source.
+</ParamField>
+
+<ParamField query="--ecosystem" type="string">
+  Filter results to a mod or plugin type. Accepted values: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`. The filter also restricts which sources are queried.
+</ParamField>
+
+<ParamField query="--registry, -s" type="string">
+  Restrict the search to one source instead of querying all applicable ones. Accepted values: `modrinth`, `curseforge`, `hangar`, `spiget`, `mcdr`.
+</ParamField>
+
+<ParamField query="--sort" type="string" default="relevance">
+  Sort order for each source's results. Sorting is applied after those results are returned.
+
+  | Value | Description |
+  |---|---|
+  | `relevance` | Preserve the order returned by the source (default) |
+  | `downloads` | Sort by total download count, descending |
+  | `newest` | Sort by last-updated date, descending |
+</ParamField>
+
+<ParamField query="--include-client, -c" type="boolean" default="false">
+  Include client-only mods in results. By default, packages marked as client-side only are filtered out.
+</ParamField>
+
+<ParamField query="--long, -l" type="boolean" default="false">
+  Use the expanded output format. Shows the description, download count, last-updated time, and package reference for each result instead of the compact table.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags) and [`lucy info`](/commands/info).

@@ -22,3 +22,35 @@ lucy add mcdr:synced --ecosystem mcdr
 ```
 
 Add `--with-optional` to include optional dependencies; they are recorded as explicit packages for future installations. See [`lucy remove`](/commands/remove) to remove a package.
+
+## Flags
+
+### Arguments
+
+<ParamField path="package" type="string" required>
+  One or more package references.
+
+  References include the package source, such as `modrinth:lithium`, `curseforge:238222`, or `mcdr:synced`. An `@` suffix pins a version — `modrinth:fabric-api@0.100.8`. Without `@`, the recorded version rule is `any`.
+
+  A bare name such as `lithium` works as a shortcut. `lucy` first looks for a unique match among the package names the current lock already records; if nothing matches, it falls back to Modrinth, or to the MCDR catalogue when adding an MCDR plugin. A name matching more than one locked package is an error asking for a `modrinth:project`-style reference rather than a guess.
+
+  Lucy does not rename the IDs inside a mod or plugin. The manifest stores the `modrinth:`, `curseforge:`, or `mcdr:` reference; the ID stays whatever the server loads.
+</ParamField>
+
+<ParamField query="--ecosystem" type="string">
+  Target mod or plugin type for the request: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`.
+</ParamField>
+
+<ParamField query="--with-optional" type="boolean" default="false">
+  Also pull in optional dependencies that would otherwise be skipped. Anything selected this way is written back into `lucy.yaml` as an explicit package, so it is included when the server is reconstructed later — not just for this run.
+</ParamField>
+
+<ParamField query="--locked" type="boolean" default="false">
+  Do not resolve new versions; fail when the lock cannot satisfy the request.
+</ParamField>
+
+<ParamField query="--offline" type="boolean" default="false">
+  Disallow network access. Adding a package changes the manifest, so a package that needs re-resolution fails under `--offline`; the flag is useful only when the lock already pins the result.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags) and [`lucy remove`](/commands/remove).

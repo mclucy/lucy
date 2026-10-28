@@ -37,3 +37,19 @@ lucy config create --global
 `lucy config get` shows the effective settings; add `--global` to inspect global settings without workspace overrides. The selected configuration file must exist. `lucy config set` creates it when needed.
 
 Use `lucy config create --force` to replace an existing file, discarding its settings and comments. Add `--no-comments` if you do not want the commented examples.
+
+## Flags
+
+<ParamField query="--global" type="boolean" default="false">
+  Read or write the global configuration file instead of the workspace one. For `get`, exclude workspace overrides from the result.
+</ParamField>
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Replace an existing file when used with `create`.
+</ParamField>
+
+<ParamField query="--no-comments" type="boolean" default="false">
+  Omit explanations and commented examples when used with `create`. This choice applies only to this invocation.
+</ParamField>
+
+See also [`lucy java`](/commands/java), [`lucy init`](/commands/init), and [Global Flags](/commands/global-flags).
