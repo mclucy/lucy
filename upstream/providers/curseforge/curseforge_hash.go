@@ -93,6 +93,13 @@ type fingerprintMatchResult struct {
 
 func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
 	var zero fingerprintMatchResult
+	key, err := effectiveAPIKey()
+	if err != nil {
+		return zero, err
+	}
+	if key == "" {
+		return zero, ErrNoApiKey
+	}
 	body, _ := json.Marshal(fingerprintRequest{Fingerprints: []uint32{fp}})
 	req, err := http.NewRequest(
 		http.MethodPost,
@@ -102,7 +109,7 @@ func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
 	if err != nil {
 		return zero, err
 	}
-	req.Header.Set("x-api-key", ApiKey)
+	req.Header.Set("x-api-key", key)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
