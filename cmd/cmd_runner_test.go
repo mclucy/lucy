@@ -33,6 +33,43 @@ func TestCommandTreeContracts(t *testing.T) {
 		"java":   true,
 	}
 
+	// An allowlist must name a live root command, so a rename cannot silently
+	// leave a command exempt.
+	rootChild := func(name string) *cobra.Command {
+		for _, child := range root.Commands() {
+			if child.Name() == name {
+				return child
+			}
+		}
+		return nil
+	}
+	for name := range humanOnly {
+		child := rootChild(name)
+		if child == nil {
+			t.Errorf("humanOnly names unknown root command %q", name)
+			continue
+		}
+		if !child.Runnable() {
+			t.Errorf("humanOnly names non-runnable command %q", name)
+		}
+		if contracts.Supports(child) {
+			t.Errorf("%q is human-only but declares a JSON result", name)
+		}
+	}
+	for name := range helpOnly {
+		child := rootChild(name)
+		if child == nil {
+			t.Errorf("helpOnly names unknown root command %q", name)
+			continue
+		}
+		if !child.Runnable() || !child.HasSubCommands() {
+			t.Errorf("helpOnly names %q, want a runnable container", name)
+		}
+		if contracts.Supports(child) {
+			t.Errorf("%q renders only help but declares a JSON result", name)
+		}
+	}
+
 	var runnable int
 	var walk func(*cobra.Command)
 	walk = func(parent *cobra.Command) {
@@ -48,7 +85,7 @@ func TestCommandTreeContracts(t *testing.T) {
 			if humanOnly[topLevelName(root, child)] {
 				continue
 			}
-			if helpOnly[child.Name()] && child.HasSubCommands() {
+			if child.Parent() == root && helpOnly[child.Name()] && child.HasSubCommands() {
 				continue
 			}
 			t.Errorf("%s is runnable but declares no JSON result contract",
@@ -219,15 +256,34 @@ func TestRunnerFailureDocument(t *testing.T) {
 func TestRunnerIsolation(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "lucy.log")
 
-	firstStdout, firstStderr, _ := executeRunner(t, []string{"schema"}, logPath)
-	secondStdout, secondStderr, _ := executeRunner(t, []string{"schema"}, logPath)
+	compactStdout, compactStderr, compactRunner := executeRunner(
+		t,
+		[]string{"schema", "--json-compact"},
+		logPath,
+	)
+	prettyStdout, prettyStderr, prettyRunner := executeRunner(
+		t,
+		[]string{"schema", "--json-compact=false"},
+		logPath,
+	)
 
-	for _, output := range []string{firstStdout, secondStdout} {
+	if !compactRunner.JSONSelected() || !prettyRunner.JSONSelected() {
+		t.Fatal("schema must select machine output in both invocations")
+	}
+	if compactStderr != "" || prettyStderr != "" {
+		t.Fatalf("stderr must stay clean, got %q and %q", compactStderr, prettyStderr)
+	}
+	compact := strings.TrimSuffix(compactStdout, "\n")
+	if strings.Contains(compact, "\n") {
+		t.Fatalf("--json-compact output spans lines: %q", compactStdout)
+	}
+	pretty := strings.TrimSuffix(prettyStdout, "\n")
+	if !strings.Contains(pretty, "\n") {
+		t.Fatalf("a later invocation inherited compact output: %q", prettyStdout)
+	}
+	for _, output := range []string{compactStdout, prettyStdout} {
 		var document any
 		decodeOneDocument(t, output, &document)
-	}
-	if firstStderr != "" || secondStderr != "" {
-		t.Fatalf("stderr must stay clean, got %q and %q", firstStderr, secondStderr)
 	}
 
 	firstRoot := NewRootCommand(cli.NewJSONContracts())

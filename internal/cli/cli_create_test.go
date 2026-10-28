@@ -44,41 +44,39 @@ func assertCreateTargetUntouched(t *testing.T, directory string) {
 }
 
 func TestCreateRequiresMinecraft(t *testing.T) {
-	t.Run("missing minecraft version", func(t *testing.T) {
-		directory := t.TempDir()
-		err := runCreateCommand(
-			t,
-			"create",
-			"--directory", directory,
-			"--no-interactive",
-		)
-		if err == nil {
-			t.Fatal("create succeeded without a Minecraft version")
-		}
-		if !strings.Contains(err.Error(), "--minecraft") {
-			t.Fatalf("error %q does not name --minecraft", err)
-		}
-		assertCreateTargetUntouched(t, directory)
-	})
+	directory := t.TempDir()
+	err := runCreateCommand(
+		t,
+		"create",
+		"--directory", directory,
+		"--no-interactive",
+	)
+	if err == nil {
+		t.Fatal("create succeeded without a Minecraft version")
+	}
+	if !strings.Contains(err.Error(), "--minecraft") {
+		t.Fatalf("error %q does not name --minecraft", err)
+	}
+	assertCreateTargetUntouched(t, directory)
+}
 
-	t.Run("install contradiction", func(t *testing.T) {
-		directory := t.TempDir()
-		err := runCreateCommand(
-			t,
-			"create",
-			"--directory", directory,
-			"--no-interactive",
-			"--install",
-			"--no-install",
-		)
-		if err == nil {
-			t.Fatal("create accepted --install together with --no-install")
+func TestCreateRejectsInstallContradiction(t *testing.T) {
+	directory := t.TempDir()
+	err := runCreateCommand(
+		t,
+		"create",
+		"--directory", directory,
+		"--no-interactive",
+		"--install",
+		"--no-install",
+	)
+	if err == nil {
+		t.Fatal("create accepted --install together with --no-install")
+	}
+	for _, flag := range []string{"--install", "--no-install"} {
+		if !strings.Contains(err.Error(), flag) {
+			t.Fatalf("error %q does not name %s", err, flag)
 		}
-		for _, flag := range []string{"--install", "--no-install"} {
-			if !strings.Contains(err.Error(), flag) {
-				t.Fatalf("error %q does not name %s", err, flag)
-			}
-		}
-		assertCreateTargetUntouched(t, directory)
-	})
+	}
+	assertCreateTargetUntouched(t, directory)
 }

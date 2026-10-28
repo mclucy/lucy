@@ -95,6 +95,14 @@ func TestJSONFlagsPresent(t *testing.T) {
 			want: false,
 		},
 		{
+			// JSONFlagsPresent scans raw arguments and cannot know that
+			// --ecosystem takes a value, so a swallowed --json still counts.
+			// JSONModeFromArgs is the value-aware parser.
+			name: "consumed by a value-taking flag",
+			args: []string{"--ecosystem", "--json"},
+			want: true,
+		},
+		{
 			name: "value of another flag",
 			args: []string{"--ecosystem", "-json"},
 			want: false,

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/resolve"
 )
 
 func TestErrorDocumentCodes(t *testing.T) {
@@ -32,6 +33,42 @@ func TestErrorDocumentCodes(t *testing.T) {
 			err:      errors.New("unknown flag: --bogus"),
 			want:     CodeInvalidInvocation,
 			wantHint: "Run --help for usage.",
+		},
+		{
+			name: "resolve no matching build",
+			err: &resolve.Failure{
+				Project:    "demo",
+				Candidates: 3,
+				Groups: []resolve.RejectionGroup{{
+					Kind:         resolve.RejectionVersionMismatch,
+					Detail:       "1.20",
+					Count:        3,
+					FirstVersion: "1.19",
+					LastVersion:  "1.21",
+				}},
+			},
+			want:     CodeResolveNoMatchingBuild,
+			wantHint: "lucy add demo@1.19",
+		},
+		{
+			name: "resolve no compatible build",
+			err: &resolve.Failure{
+				Project: "demo",
+				Groups: []resolve.RejectionGroup{{
+					Kind:   resolve.RejectionFilePattern,
+					Detail: "*.jar",
+					Count:  2,
+				}},
+			},
+			want: CodeResolveNoCompatibleBuild,
+		},
+		{
+			name: "resolve aborted",
+			err: &resolve.Failure{
+				Aborted: true,
+				Cause:   errors.New("graph stopped"),
+			},
+			want: CodeCommandFailed,
 		},
 		{
 			name: "cancelled",

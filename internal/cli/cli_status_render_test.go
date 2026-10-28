@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mclucy/lucy/catalog"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/terminal"
+	terminalstyle "github.com/mclucy/lucy/terminal/style"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +41,17 @@ func loadStatusFixture(t *testing.T, name string) statusDocument {
 	return document
 }
 
+// setStdoutTerminal pins the process-global terminal probe so the renderer
+// takes the same layout branch wherever the test runs.
+func setStdoutTerminal(t *testing.T, isTerminal bool) {
+	t.Helper()
+	previous := terminalstyle.StdoutIsTerminal
+	terminalstyle.StdoutIsTerminal = isTerminal
+	t.Cleanup(func() { terminalstyle.StdoutIsTerminal = previous })
+}
+
 func TestStatusRenderLineWidths(t *testing.T) {
+	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
 	modes := []terminal.StatusLogoMode{
 		terminal.StatusLogoNone,
@@ -67,6 +77,7 @@ func TestStatusRenderLineWidths(t *testing.T) {
 }
 
 func TestStatusRenderZeroWidth(t *testing.T) {
+	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
 
 	for _, long := range []bool{false, true} {
@@ -84,15 +95,29 @@ func TestStatusRenderZeroWidth(t *testing.T) {
 }
 
 func TestStatusRenderLongPackages(t *testing.T) {
+	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
 	short := renderStatus(document, false, terminal.StatusLogoNone, 120)
 	long := renderStatus(document, true, terminal.StatusLogoNone, 120)
 
-	const packagePath = "mods/create-1.21.1-6.0.10.jar"
+	if len(document.Server.PackageDirectories) == 0 {
+		t.Fatal("fixture declares no package directory")
+	}
+	directory := document.Server.PackageDirectories[0] + "/"
+	packagePath := ""
+	for _, pkg := range document.Packages {
+		if strings.HasPrefix(pkg.Path, directory) {
+			packagePath = pkg.Path
+			break
+		}
+	}
+	if packagePath == "" {
+		t.Fatalf("fixture holds no package under %s", directory)
+	}
 	if !strings.Contains(long, packagePath) {
 		t.Fatalf("long output omits package path %q:\n%s", packagePath, long)
 	}
-	if strings.Contains(short, "mods/") {
+	if strings.Contains(short, directory) {
 		t.Fatalf("folded output should omit package paths:\n%s", short)
 	}
 	if !strings.Contains(short, "use --long") {
@@ -101,6 +126,7 @@ func TestStatusRenderLongPackages(t *testing.T) {
 }
 
 func TestStatusRenderLogoNone(t *testing.T) {
+	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
 	rendered := renderStatus(document, false, terminal.StatusLogoNone, 80)
 
@@ -115,23 +141,50 @@ func TestStatusRenderLogoNone(t *testing.T) {
 		}
 	}
 
+	plain := ansi.Strip(rendered)
 	for _, variant := range []terminal.LogoVariant{
 		terminal.LogoSmallPlain,
 		terminal.LogoLargePlain,
 	} {
-		signature := statusRenderLogoSignature(variant)
-		if signature != "" && strings.Contains(rendered, signature) {
-			t.Fatalf("logo mode none rendered %q from variant %v", signature, variant)
+		lines := statusRenderLogoLines(document, variant)
+		if len(lines) == 0 {
+			t.Fatalf("variant %v has no logo art to check", variant)
+		}
+		for _, line := range lines {
+			line = strings.TrimSpace(ansi.Strip(line))
+			if line == "" {
+				continue
+			}
+			if strings.Contains(plain, line) {
+				t.Fatalf("logo mode none rendered %q from variant %v", line, variant)
+			}
 		}
 	}
 }
 
-func TestStatusWarningSurfaced(t *testing.T) {
-	document := loadStatusFixture(t, statusWarningsFixture)
-	if len(document.Warnings) == 0 {
-		t.Fatal("warning fixture has no warnings")
+func TestStatusRenderLogoModes(t *testing.T) {
+	setStdoutTerminal(t, true)
+	document := loadStatusFixture(t, statusPackagesFixture)
+
+	none := renderStatus(document, false, terminal.StatusLogoNone, 120)
+	small := renderStatus(document, false, terminal.StatusLogoSmall, 120)
+	large := renderStatus(document, false, terminal.StatusLogoLarge, 120)
+
+	if small == none {
+		t.Fatal("logo mode small did not compose a logo")
 	}
-	warning := document.Warnings[0]
+	if large == none {
+		t.Fatal("logo mode large did not compose a logo")
+	}
+	if large == small {
+		t.Fatal("logo mode large rendered the small logo")
+	}
+}
+
+func TestStatusWarningPrecedesFrame(t *testing.T) {
+	setStdoutTerminal(t, true)
+	document := loadStatusFixture(t, statusWarningsFixture)
+	const warning = "unmanaged entry point ./fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar; left unchanged"
 
 	var stream bytes.Buffer
 	command := &cobra.Command{Use: "status"}
@@ -151,26 +204,33 @@ func TestStatusWarningSurfaced(t *testing.T) {
 	}
 
 	rendered := stream.String()
-	if !strings.Contains(rendered, warning) {
+	warningAt := strings.Index(rendered, warning)
+	if warningAt < 0 {
 		t.Fatalf("rendered status omits warning %q:\n%s", warning, rendered)
 	}
-	if !strings.Contains(rendered, "Fabric") {
+	frameAt := strings.Index(rendered, "Fabric")
+	if frameAt < 0 {
 		t.Fatalf("rendered status frame missing after warning:\n%s", rendered)
+	}
+	if frameAt < warningAt {
+		t.Fatalf("status frame precedes its warning:\n%s", rendered)
 	}
 }
 
-func statusRenderLogoSignature(variant terminal.LogoVariant) string {
+// statusRenderLogoLines reports the logo art the document selects.
+func statusRenderLogoLines(document statusDocument, variant terminal.LogoVariant) []string {
+	if document.Server == nil {
+		return nil
+	}
+	product, ok := serverpkg.ParseProduct(document.Server.Product.Name)
+	if !ok {
+		return nil
+	}
 	raw := terminal.GetLogo(
-		serverpkg.ProductNeoForge,
-		catalog.EcosystemNeoForge,
-		versionpkg.Version("1.21.1"),
+		product,
+		statusViewLogoEcosystem(document.Server),
+		versionpkg.Version(document.Server.Minecraft),
 		variant,
 	)
-	for _, line := range strings.Split(raw, "\n") {
-		line = strings.TrimSpace(ansi.Strip(line))
-		if len(line) >= 12 && strings.ContainsAny(line, "{}[]%@#") {
-			return line
-		}
-	}
-	return ""
+	return statusViewLogoLines(raw)
 }
