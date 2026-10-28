@@ -25,7 +25,7 @@ Files tracked with [`lucy file`](/commands/file) are not overwritten. If an immu
 
 ## Offline
 
-`lucy install --offline` uses only files already present or cached. It works when replaying a lock you have installed before; a first install or a newly resolved package fails. A file whose contents do not match the lock counts as missing, even if it exists.
+`lucy install --offline` uses only files already present or cached. It replays a current lock in a new workspace when every required artifact is in the shared cache and the required local prerequisites are available, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is not cached, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists.
 
 ### Download cache
 
