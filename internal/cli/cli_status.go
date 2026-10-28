@@ -22,24 +22,23 @@ import (
 
 const flagStatusFromLockName = "from-lock"
 
-var statusCmd = &cobra.Command{
-	Use:     "status",
-	Short:   help.StatusShort,
-	Args:    cobra.NoArgs,
-	Aliases: []string{"s"},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		logo, _ := cmd.Flags().GetString(FlagLogo)
-		if _, ok := terminal.ParseStatusLogoMode(logo); !ok {
-			return fmt.Errorf("--logo must be one of none, small, large")
-		}
-		return nil
-	},
-	RunE: actionStatus,
-}
-
 var statusJSON JSONResult[statusDocument]
 
 func NewStatusCommand(contracts *JSONContracts) *cobra.Command {
+	statusCmd := &cobra.Command{
+		Use:     "status",
+		Short:   help.StatusShort,
+		Args:    cobra.NoArgs,
+		Aliases: []string{"s"},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			logo, _ := cmd.Flags().GetString(FlagLogo)
+			if _, ok := terminal.ParseStatusLogoMode(logo); !ok {
+				return fmt.Errorf("--logo must be one of none, small, large")
+			}
+			return nil
+		},
+		RunE: actionStatus,
+	}
 	statusJSON.Bind(contracts, statusCmd)
 	AddLongFlag(statusCmd)
 	AddLogoFlag(statusCmd)

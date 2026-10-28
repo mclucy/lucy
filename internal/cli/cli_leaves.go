@@ -9,16 +9,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var leavesCmd = &cobra.Command{
-	Use:   "leaves",
-	Short: help.LeavesShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionLeaves,
-}
-
 var leavesJSON JSONResult[leavesOutput]
 
 func NewLeavesCommand(contracts *JSONContracts) *cobra.Command {
+	leavesCmd := &cobra.Command{
+		Use:   "leaves",
+		Short: help.LeavesShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionLeaves,
+	}
 	leavesJSON.Bind(contracts, leavesCmd)
 	leavesCmd.Flags().Bool(
 		"live",

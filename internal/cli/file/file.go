@@ -89,19 +89,19 @@ const (
 		"that is no longer tracked. No network access happens."
 )
 
-var fileCmd = &cobra.Command{
-	Use:   "file <subcommand>",
-	Short: FileShort,
-	Long:  FileLong,
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		return cmd.Help()
-	},
-}
-
 // NewCommand returns the file command tree. Output flags are inherited from
 // the root command and are never registered again here.
 func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+	trackCmd := newTrackCmd()
+	untrackCmd := newUntrackCmd()
+	updateCmd := newUpdateCmd()
+	recoverCmd := newRecoverCmd()
+	revertCmd := newRevertCmd()
+	lockCmd := newLockCmd()
+	unlockCmd := newUnlockCmd()
+	listCmd := newListCmd()
+	historyCmd := newHistoryCmd()
+
 	fileResultJSON.Bind(contracts, trackCmd)
 	fileResultJSON.Bind(contracts, untrackCmd)
 	fileResultJSON.Bind(contracts, updateCmd)
@@ -112,6 +112,15 @@ func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
 	listJSON.Bind(contracts, listCmd)
 	historyJSON.Bind(contracts, historyCmd)
 
+	fileCmd := &cobra.Command{
+		Use:   "file <subcommand>",
+		Short: FileShort,
+		Long:  FileLong,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
+	}
 	fileCmd.AddCommand(
 		trackCmd,
 		untrackCmd,

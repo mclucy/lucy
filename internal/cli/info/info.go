@@ -16,31 +16,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var infoCmd = &cobra.Command{
-	Use:   "info <package|file>",
-	Short: help.InfoShort,
-	Long:  help.InfoLong,
-	Args:  cobra.ExactArgs(1),
-	ValidArgsFunction: func(
-		cmd *cobra.Command,
-		args []string,
-		toComplete string,
-	) ([]string, cobra.ShellCompDirective) {
-		if len(args) >= 1 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		candidates, _ := cli.CompletePackageIDSuggestions(
-			context.Background(),
-			"info",
-			toComplete,
-		)
-		return candidates, cobra.ShellCompDirectiveDefault
-	},
-
-	RunE: actionInfo,
-}
-
 func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+	infoCmd := &cobra.Command{
+		Use:   "info <package|file>",
+		Short: help.InfoShort,
+		Long:  help.InfoLong,
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(
+			cmd *cobra.Command,
+			args []string,
+			toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			if len(args) >= 1 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			candidates, _ := cli.CompletePackageIDSuggestions(
+				context.Background(),
+				"info",
+				toComplete,
+			)
+			return candidates, cobra.ShellCompDirectiveDefault
+		},
+
+		RunE: actionInfo,
+	}
 	infoJSON.Bind(contracts, infoCmd)
 	cli.AddLongFlag(infoCmd)
 	return infoCmd

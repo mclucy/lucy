@@ -27,36 +27,33 @@ const flagJavaDistributionName = "distribution"
 // offers next to the installed major versions.
 var javaChoices = []int{8, 11, 17, 21, 25}
 
-var javaCmd = &cobra.Command{
-	Use:   "java <subcommand>",
-	Short: help.JavaShort,
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		return cmd.Help()
-	},
-}
-
-var javaListCmd = &cobra.Command{
-	Use:     "list",
-	Aliases: []string{"ls"},
-	Short:   help.JavaListShort,
-	Args:    cobra.NoArgs,
-	RunE:    actionJavaList,
-}
-
-var javaUseCmd = &cobra.Command{
-	Use:   "use [version|auto]",
-	Short: help.JavaUseShort,
-	Long:  help.JavaUseLong,
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  actionJavaUse,
-}
-
 var javaListJSON JSONResult[javaListView]
 
 var javaUseJSON JSONResult[*operation.JavaChangeResult]
 
 func NewJavaCommand(contracts *JSONContracts) *cobra.Command {
+	javaCmd := &cobra.Command{
+		Use:   "java <subcommand>",
+		Short: help.JavaShort,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
+	}
+	javaListCmd := &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   help.JavaListShort,
+		Args:    cobra.NoArgs,
+		RunE:    actionJavaList,
+	}
+	javaUseCmd := &cobra.Command{
+		Use:   "use [version|auto]",
+		Short: help.JavaUseShort,
+		Long:  help.JavaUseLong,
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  actionJavaUse,
+	}
 	javaListJSON.Bind(contracts, javaListCmd)
 	javaUseJSON.Bind(contracts, javaUseCmd)
 	javaUseCmd.Flags().String(

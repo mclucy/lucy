@@ -8,53 +8,57 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var updateCmd = &cobra.Command{
-	Use:   "update [path...]",
-	Short: UpdateShort,
-	Long:  UpdateLong,
-	Args:  pathOrAllArgs,
-	RunE:  actionFileUpdate,
-}
-
-var recoverCmd = &cobra.Command{
-	Use:   "recover [path...]",
-	Short: RecoverShort,
-	Long:  RecoverLong,
-	Args:  pathOrAllArgs,
-	RunE:  actionFileRecover,
-}
-
-var revertCmd = &cobra.Command{
-	Use:   "revert <path> [hash]",
-	Short: RevertShort,
-	Long:  RevertLong,
-	Args:  revertArgs,
-	RunE:  actionFileRevert,
-}
-
-func init() {
-	updateCmd.Flags().Bool(
+func newUpdateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update [path...]",
+		Short: UpdateShort,
+		Long:  UpdateLong,
+		Args:  pathOrAllArgs,
+		RunE:  actionFileUpdate,
+	}
+	cmd.Flags().Bool(
 		flagFromSource,
 		false,
 		"Fetch fresh bytes from recover_url instead of the working file",
 	)
-	updateCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagAll,
 		false,
 		"Update every tracked file atomically",
 	)
+	return cmd
+}
 
-	recoverCmd.Flags().Bool(
+func newRecoverCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "recover [path...]",
+		Short: RecoverShort,
+		Long:  RecoverLong,
+		Args:  pathOrAllArgs,
+		RunE:  actionFileRecover,
+	}
+	cmd.Flags().Bool(
 		flagAll,
 		false,
 		"Restore every tracked file with an accepted hash atomically",
 	)
+	return cmd
+}
 
-	revertCmd.Flags().Uint64(
+func newRevertCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "revert <path> [hash]",
+		Short: RevertShort,
+		Long:  RevertLong,
+		Args:  revertArgs,
+		RunE:  actionFileRevert,
+	}
+	cmd.Flags().Uint64(
 		flagRevision,
 		0,
 		"Restore one exact historical revision sequence",
 	)
+	return cmd
 }
 
 func actionFileUpdate(cmd *cobra.Command, args []string) error {

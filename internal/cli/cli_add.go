@@ -17,40 +17,39 @@ const (
 	flagOfflineName      = "offline"
 )
 
-var addCmd = &cobra.Command{
-	Use:     "add",
-	Short:   help.AddShort,
-	Args:    cobra.MinimumNArgs(1),
-	Aliases: []string{"a"},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
-		if ecosystem != "" && !catalog.Ecosystem(ecosystem).Valid() {
-			return fmt.Errorf("invalid ecosystem %q", ecosystem)
-		}
-		return nil
-	},
-	RunE: actionAdd,
-}
-
 func NewAddCommand(contracts *JSONContracts) *cobra.Command {
-	installJSON.Bind(contracts, addCmd)
-	addCmd.Flags().Bool(
+	cmd := &cobra.Command{
+		Use:     "add",
+		Short:   help.AddShort,
+		Args:    cobra.MinimumNArgs(1),
+		Aliases: []string{"a"},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			ecosystem, _ := cmd.Flags().GetString(FlagEcosystem)
+			if ecosystem != "" && !catalog.Ecosystem(ecosystem).Valid() {
+				return fmt.Errorf("invalid ecosystem %q", ecosystem)
+			}
+			return nil
+		},
+		RunE: actionAdd,
+	}
+	installJSON.Bind(contracts, cmd)
+	cmd.Flags().Bool(
 		flagWithOptionalName,
 		false,
 		"Also install optional upstream dependencies",
 	)
-	addCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagLockedName,
 		false,
 		"Do not resolve new versions; fail when the lock cannot satisfy",
 	)
-	addCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagOfflineName,
 		false,
 		"Disallow network access; fail if a needed file is not already available locally",
 	)
-	AddEcosystemFlag(addCmd)
-	return addCmd
+	AddEcosystemFlag(cmd)
+	return cmd
 }
 
 func actionAdd(cmd *cobra.Command, args []string) error {

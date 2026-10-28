@@ -10,16 +10,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var treeCmd = &cobra.Command{
-	Use:   "tree",
-	Short: help.TreeShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionTree,
-}
-
 var treeJSON JSONResult[treeOutput]
 
 func NewTreeCommand(contracts *JSONContracts) *cobra.Command {
+	treeCmd := &cobra.Command{
+		Use:   "tree",
+		Short: help.TreeShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionTree,
+	}
 	treeJSON.Bind(contracts, treeCmd)
 	treeCmd.Flags().Bool(
 		"live",

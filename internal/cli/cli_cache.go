@@ -11,28 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cacheCmd = &cobra.Command{
-	Use:   "cache",
-	Short: help.CacheShort,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
-	},
-}
-
-var cacheLsCmd = &cobra.Command{
-	Use:     "ls",
-	Aliases: []string{"list"},
-	Short:   help.CacheLsShort,
-	RunE:    actionCacheLs,
-}
-
-var cacheClearCmd = &cobra.Command{
-	Use:     "clear",
-	Aliases: []string{"rm"},
-	Short:   help.CacheClearShort,
-	RunE:    actionCacheClear,
-}
-
 // cacheLsJSON is the machine-readable `cache ls` result: every cached entry.
 var cacheLsJSON JSONResult[[]*cache.Entry]
 
@@ -40,6 +18,25 @@ var cacheLsJSON JSONResult[[]*cache.Entry]
 var cacheClearJSON JSONResult[cache.ResetReport]
 
 func NewCacheCommand(contracts *JSONContracts) *cobra.Command {
+	cacheLsCmd := &cobra.Command{
+		Use:     "ls",
+		Aliases: []string{"list"},
+		Short:   help.CacheLsShort,
+		RunE:    actionCacheLs,
+	}
+	cacheClearCmd := &cobra.Command{
+		Use:     "clear",
+		Aliases: []string{"rm"},
+		Short:   help.CacheClearShort,
+		RunE:    actionCacheClear,
+	}
+	cacheCmd := &cobra.Command{
+		Use:   "cache",
+		Short: help.CacheShort,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
 	cacheLsJSON.Bind(contracts, cacheLsCmd)
 	cacheClearJSON.Bind(contracts, cacheClearCmd)
 	cacheCmd.AddCommand(cacheLsCmd, cacheClearCmd)

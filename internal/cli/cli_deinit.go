@@ -9,14 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var deinitCmd = &cobra.Command{
-	Use:   "deinit",
-	Short: help.DeinitShort,
-	Long:  help.DeinitLong,
-	Args:  cobra.NoArgs,
-	RunE:  actionDeinit,
-}
-
 // deinitDocument is the machine-readable outcome of one deinitialization.
 type deinitDocument struct {
 	Removed []string `json:"removed"`
@@ -25,6 +17,13 @@ type deinitDocument struct {
 var deinitJSON JSONResult[deinitDocument]
 
 func NewDeinitCommand(contracts *JSONContracts) *cobra.Command {
+	deinitCmd := &cobra.Command{
+		Use:   "deinit",
+		Short: help.DeinitShort,
+		Long:  help.DeinitLong,
+		Args:  cobra.NoArgs,
+		RunE:  actionDeinit,
+	}
 	deinitJSON.Bind(contracts, deinitCmd)
 	return deinitCmd
 }
