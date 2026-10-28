@@ -1,17 +1,36 @@
 ---
-title: "Global Flags"
-description: "Flags shared by lucy commands"
+title: "Global flags"
+description: "Common output and diagnostic options"
 ---
 
-These flags work with every `lucy` subcommand. The root command also exposes version information.
+## Output and automation
 
-## Meta
+Use `--no-color` to disable colors, or `--no-interactive` to disable prompts and animated progress. If a command needs a choice, `--no-interactive` fails with the flag to use instead. `--no-style` combines both options.
+
+Commands that support machine-readable output accept `--json` or `--json-compact`. For example:
+
+```bash
+lucy status --json
+lucy schema status
+```
+
+`lucy schema` lists supported commands and describes their JSON results. `lucy compile` does not support JSON output. See a command's help for its options.
+
+## Diagnostics
+
+Lucy writes diagnostic logs to `~/Library/Logs/lucy/lucy.log` on macOS, `~/.local/share/lucy/logs/lucy.log` on Linux, or `%APPDATA%/lucy/logs/lucy.log` on Windows. Use `--log-file <path>` to choose another location and `--print-logs` to show logs in the terminal. `--log-level` controls the displayed severity (`debug`, `info`, `warn`, `error`, or `fatal`); the file retains debug details.
+
+Use `--use-github-mirror` if you need the GitHub release mirror for eligible downloads. Run `lucy --version` to check the installed version.
+
+## Flags
+
+### Meta
 
 <ParamField query="--version, -v" type="boolean">
   Print the current `lucy` version and exit. This flag belongs to the root command; use `lucy --version`, not `lucy <command> --version`.
 </ParamField>
 
-## Output style
+### Output style
 
 <ParamField query="--no-color" type="boolean" default="false">
   Disable ANSI colors. Text attributes such as bold or underline survive, so output stays readable in environments that do not support color or when piping output to another program.
@@ -25,10 +44,6 @@ These flags work with every `lucy` subcommand. The root command also exposes ver
   Same as `--no-color --no-interactive`.
 </ParamField>
 
-`--json` and `--json-compact` are inherited by every command. Commands that produce machine-readable output render it; every command uses the same failure document. `--json-compact` wins when both are set.
-
-`compile` does not provide a JSON result. It rejects these flags before starting a build.
-
 <ParamField query="--json" type="boolean" default="false">
   Print JSON indented with 2 spaces. Success documents go to stdout; failure documents go to stderr.
 </ParamField>
@@ -37,70 +52,7 @@ These flags work with every `lucy` subcommand. The root command also exposes ver
   Print JSON without indentation; wins over `--json`.
 </ParamField>
 
-## Output schemas
-
-For automation, use `lucy schema` to list command paths with JSON results. Supply a command path to read its JSON Schema:
-
-```sh
-lucy schema status
-lucy schema file history --json-compact
-lucy schema upgrade
-lucy schema --error
-```
-
-Schemas describe the running Lucy version and require no server workspace or network access. When flags select different result shapes, the schema includes all alternatives. Failure documents have a separate schema because they go to stderr.
-
-`lucy schema` always returns JSON; `--json-compact` selects compact formatting. A command group, such as `lucy schema file`, lists its supported descendants. Commands without JSON results, such as `compile` and `docs`, have no result schema.
-
-## Streams
-
-Human output follows the kind of command:
-
-- Query results stay on stdout so they can be piped.
-- Operation summaries, progress, prompts, warnings, and errors go to stderr.
-- The pre-alpha notice goes to stderr.
-
-Machine output owns the streams instead:
-
-- On success, stdout carries exactly one JSON document and stderr stays empty. Progress, warnings, prompts, and the pre-alpha notice are suppressed. Warnings that belong to a result travel inside its document when the command supports them.
-- On failure, stdout stays empty and stderr carries exactly one JSON failure document. The human error is not repeated.
-- Invalid commands, flags, and arguments follow the same failure contract.
-
-Terminal log mirroring is disabled in JSON mode, even with `--print-logs`. Diagnostics still go to the log file.
-
-## Failure documents
-
-Every machine-mode failure writes one document with this shape:
-
-```json
-{
-  "schema": 1,
-  "kind": "error",
-  "code": "usage.invalid_invocation",
-  "title": "unknown command \"instal\" for \"lucy\"",
-  "details": [],
-  "hint": "Run --help for usage.",
-  "log": "/path/to/lucy.log"
-}
-```
-
-Use `code` for automation; `title` and `details` are human-readable explanations. `hint` is optional, and `log` points to diagnostic details.
-
-Results are published only after cleanup succeeds.
-
-## Exit status
-
-| Code | Meaning |
-| --- | --- |
-| 0 | The command completed successfully. |
-| 1 | The command failed, including invalid invocations and a diagnostic log that could not be written or closed. |
-| 130 | The command was interrupted (Ctrl-C or termination request) after cleanup. |
-
-Check the exit status before consuming the result. On failure, read the error document from stderr.
-
-## Logging
-
-Diagnostic logs record action boundaries and internal decisions. Command results and user reports remain independent of these settings. The log file always records everything, including debug detail, so a failed run can be inspected afterwards; the level below only affects what is mirrored.
+### Logging
 
 <ParamField query="--log-level" type="string" default="info">
   Set the minimum severity that `--print-logs` mirrors to the terminal: `debug`, `info`, `warn`, `error`, or `fatal`. The log file always receives debug records regardless of this setting.
@@ -116,7 +68,7 @@ Diagnostic logs record action boundaries and internal decisions. Command results
   Mirror diagnostic records to stderr at the level set by `--log-level`. The log file keeps receiving the same records, plus debug detail. User reports remain independent. In machine mode the terminal mirror is suppressed so stdout and stderr keep their single-document contract; read the log file instead.
 </ParamField>
 
-## Network
+### Network
 
 <ParamField query="--use-github-mirror" type="boolean" default="false">
   Route eligible downloads through the GitHub release mirror instead of the canonical upstream URL. This is useful for users in regions with limited access to GitHub. The mirror is `https://ghfast.top`.

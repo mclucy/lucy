@@ -1,27 +1,32 @@
 ---
 title: "lucy search"
-description: "Search for mods and plugins across package sources"
+description: "Find mods and plugins"
 ---
 
-`lucy search` queries one or more package sources and prints matching mods and plugins. By default it searches all sources that support the selected mod or plugin type, and shows the results grouped by source.
+Search for a package by name:
 
 ```bash
-lucy search <query>
+lucy search worldedit
 ```
+
+Narrow the search to a mod or plugin type, sort the results, or choose a source:
 
 ```bash
-lucy search "litematica"
-lucy search "worldedit" --ecosystem fabric --sort downloads
-lucy search "luckperms" --registry hangar --long
+lucy search worldedit --ecosystem fabric --sort downloads
+lucy search luckperms --registry hangar --long
 ```
 
-## Arguments
+`--ecosystem` accepts `fabric`, `forge`, `neoforge`, `bukkit`, or `paper`; `--registry` accepts `modrinth`, `curseforge`, `hangar`, `spiget`, or `mcdr`. Sort by `relevance`, `downloads`, or `newest`. Add `--include-client` to include client-only mods.
+
+Use [`lucy info`](/commands/info) to inspect a result before adding it.
+
+## Flags
+
+### Arguments
 
 <ParamField path="query" type="string" required>
   The search term. It is passed directly to each selected source.
 </ParamField>
-
-## Flags
 
 <ParamField query="--ecosystem" type="string">
   Filter results to a mod or plugin type. Accepted values: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`. The filter also restricts which sources are queried.

@@ -1,19 +1,31 @@
 ---
 title: "lucy add"
-description: "Add packages to the manifest and install them"
+description: "Add mods and plugins to a server"
 ---
 
-`lucy add` records a new package in `lucy.yaml`, resolves it against the lock, and installs the result. The manifest change and the lock update are one transaction: if resolution fails, `lucy.yaml` is left exactly as it was.
+Add a package by its source and project name. Lucy records it in `lucy.yaml` and installs it with its required dependencies.
 
 ```bash
 lucy add modrinth:lithium
-lucy add curseforge:238222
 lucy add modrinth:fabric-api@0.100.8
 lucy add modrinth:fabric-api modrinth:lithium
+```
+
+Use [`lucy search`](/commands/search) to find packages. A bare name can also work: Lucy checks the current lock first, then uses Modrinth (or the MCDR catalogue for an MCDR plugin). If the name is ambiguous, use the full source-qualified reference.
+
+An `@version` suffix pins a version. Without one, Lucy prefers a release and may select a prerelease if necessary. Existing package pins are preserved. If resolution fails, the manifest and lock remain unchanged.
+
+Lucy normally infers the mod or plugin type from the server. Use `--ecosystem` when it needs help, for example:
+
+```bash
 lucy add mcdr:synced --ecosystem mcdr
 ```
 
-## Arguments
+Add `--with-optional` to include optional dependencies; they are recorded as explicit packages for future installations. See [`lucy remove`](/commands/remove) to remove a package.
+
+## Flags
+
+### Arguments
 
 <ParamField path="package" type="string" required>
   One or more package references.
@@ -24,31 +36,6 @@ lucy add mcdr:synced --ecosystem mcdr
 
   Lucy does not rename the IDs inside a mod or plugin. The manifest stores the `modrinth:`, `curseforge:`, or `mcdr:` reference; the ID stays whatever the server loads.
 </ParamField>
-
-Without a pin, the recorded version rule is `any`: Lucy prefers release builds and may fall back to a prerelease when no release satisfies. `stable` requires a release build with no prerelease fallback, and `beta` also accepts prereleases. To hold a version, add it with `@` or edit the package's `selector` afterwards. Adding a package does not float the rest — existing pins are pins, and the new package resolves against them.
-
-The mod or plugin type is inferred from the declared server when `--ecosystem` is omitted: Fabric, Forge, and NeoForge servers select their matching type, Paper and Purpur select `paper`, and MCDR selects `mcdr`. Pass `--ecosystem` when the manifest does not make the target clear.
-
-## Output
-
-`lucy add` reports progress on stderr while it resolves and installs, then lists what changed. Added packages are marked `+`, and a dependency pulled in by the new package is attributed to it. When the package is already installed at the same version, no package line is printed; only the document update is announced.
-
-```text
-✓ Resolved 3 packages in 0.8s
-✓ Installed 3 files in 0.2s
-
-  + fabric-api    0.119.4+1.21.4
-  + ferrite-core  7.1.3-fabric
-  + lithium       mc1.21.4-0.15.3-fabric
-
-Updated lucy.yaml and lucy-lock.yaml
-```
-
-When the version you asked for does not exist, the error lists the builds that do exist and suggests a concrete `@` pin. When every build is rejected for a shared reason, the error states that reason once with the number of builds it covers. A failed `add` writes nothing, so the manifest and lock stay as they were.
-
-`--json` prints the result as a machine-readable object on stdout, including the package changes, file counts, and fetch counts. `--no-interactive` (and `--no-style`) replace the animated display with append-only lines for CI logs.
-
-## Flags
 
 <ParamField query="--ecosystem" type="string">
   Target mod or plugin type for the request: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`.

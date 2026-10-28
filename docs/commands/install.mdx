@@ -1,202 +1,84 @@
 ---
 title: "lucy install"
-description: "Sync the server with the manifest and lock file"
+description: "Install a server from its manifest and lock file"
 ---
 
-`lucy install` syncs the directory with the resolved state recorded in `lucy-lock.yaml`. It never invents versions: every file it places is pinned by the lock. Some launcher files are generated from the locked server JAR and its inputs. When the manifest has changed, `lucy` resolves a new lock from [`lucy.yaml`](/commands/init) first, then syncs the server.
+`lucy install` makes the current directory match `lucy.yaml` and `lucy-lock.yaml`. Run it after changing the manifest, on a fresh machine, or in CI to reproduce a server exactly.
 
 ```bash
 lucy install
 ```
 
-Running `lucy install` in a server directory is the normal way to reproduce a server elsewhere — a CI job, a fresh VPS, a teammate's machine. It is not append-only: files that the new lock no longer lists are removed, as long as `lucy` installed them.
+If `lucy.yaml` changed, lucy resolves a new lock before installing. Versions you pinned stay pinned, so adding one package does not upgrade the others. With only `lucy-lock.yaml` present, lucy rebuilds from the lock alone; commit both files to keep that option.
 
-## Replay or resolve
+For CI, `lucy install --locked` fails when the lock is missing or out of date instead of resolving new versions.
 
-`lucy install` compares the lock's `manifest_fingerprint` with the manifest. That comparison, together with the flags, decides what happens.
+## What install changes
 
-| Manifest | Lock | Flags | What happens |
-|---|---|---|---|
-| unchanged | present | none | Exact replay. Every locked file is checked against its recorded hash. No resolution, no catalogue lookup. |
-| unchanged | present | `--with-optional` | Re-resolves so optional dependencies can be selected, then records them as explicit packages. |
-| changed | present | none | The lock is stale for this manifest. `lucy` resolves again, rewrites the lock, and syncs. |
-| absent | present | none | Lock-only replay. The lock describes the complete server. |
-| present | absent | none | `lucy` resolves the manifest, writes the lock, and syncs. |
-| absent | absent | none | Fails: a manifest or a lock is required. |
-| any | any | `--locked` with a missing or stale lock | Fails: `--locked` requires a current lock. |
-| any | any | any re-resolution with `--offline` | Fails: selecting new metadata requires a network. |
-| any | any | `--with-optional --locked` | Fails: optional selection forces a re-resolution. |
+Install places the files the lock lists. It removes files it installed earlier that the lock no longer lists; files you placed in `mods/` or `plugins/` yourself are left alone.
 
-Two consequences are worth internalizing.
+Installation stops when a destination file already exists. Pass `--overwrite` to replace it, including jars from a manual setup. It also refuses a server whose mod dependencies cannot be satisfied; `--accept-broken` installs the declared packages anyway.
 
-**Stale locks re-resolve, but pins win.** When the lock no longer matches the manifest, `lucy` resolves the manifest again — and any version you pinned is still pinned. If the Minecraft version and server software are unchanged and the server version selector is floating, the previously locked server JAR is reused rather than chased to a newer build. Adding a package does not float your other packages.
+`--with-optional` adds optional dependencies and writes them into `lucy.yaml`, so they remain part of the server on later installs. It resolves again even when the lock is current.
 
-**`--locked` is a promise, not a hint.** Under `--locked`, a missing or stale lock is an error, never a silent re-resolve. If your pipeline depends on failing when the lock drifts, that is the flag.
-
-### Lock-only replay
-
-If the manifest is gone but `lucy-lock.yaml` remains, `lucy install` replays the lock as-is. The lock records the Minecraft version, server software, server version, launcher files, and full download details, so a lock alone is enough to reconstruct the server. This is what makes the lock the file worth publishing.
+Files tracked with [`lucy file`](/commands/file) are not overwritten. If an immutable tracked file differs from its accepted contents, lucy warns and leaves your copy in place.
 
 ## Offline
 
-`--offline` forbids network acquisition. Anything already present and hash-correct is left alone; anything that would need a download fails.
-
-The rule is byte-level, not name-level: a file that exists but whose hash differs from the lock is a mismatch, and `--offline` will not paper over it by keeping the old copy. In practice `--offline` works for replaying a current lock after a warm run; it does not work for first-time installs or for anything requiring a new resolution.
+`lucy install --offline` uses only files already present or cached. It replays a current lock in a new workspace when every required artifact is in the shared cache and the required local prerequisites are available, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is not cached, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists.
 
 ### Download cache
 
-Lucy stores each downloaded file once, keyed by its SHA-256 hash. If several requests need the same file, they share one copy. Lucy checks the stored copy before use and replaces a damaged copy on the next normal download.
+Lucy keeps one downloaded copy of each file and reuses it across servers. `lucy cache clear` empties that shared cache without touching the files in a server directory. Run an online install before relying on `--offline`.
 
-`lucy cache clear` removes the global download cache but not files in the current project. Run an online installation to refill the cache before relying on `--offline`.
+## MCDReforged
 
-### MCDReforged
-
-By default, `lucy install` runs the MCDReforged executable already on `PATH` and requires Python 3.8 or newer there. If either is missing, installation fails and names `--mcdr-venv` as the alternative.
-
-`lucy install --mcdr-venv` creates an isolated environment under the server directory instead. It prefers `uv` when available and otherwise uses `python3` or the interpreter named by `LUCY_PYTHON`. Python versions and wheels are not recorded in the lock, so the same lock can be installed on another operating system. An offline installation into a new machine needs the isolated environment to have been provisioned online once; a global MCDReforged installation needs no network.
-
-## Lock file shape
-
-The lock has top-level `lock_version`, `manifest_fingerprint`, `server`, an optional `mcdr`, a flat `packages` list, and optional `files` declarations.
-
-```yaml
-lock_version: 1
-manifest_fingerprint: "sha256:<digest of the manifest>"
-server:
-  directory: "."
-  minecraft: "1.21.4"
-  product: paper
-  core_version: "<build id>"
-  provider: papermc
-  project_id: paper
-  release_id: "1.21.4/<build id>"
-  file_id: "server:default"
-  version: "<build id>"
-  filename: "paper-1.21.4-<build id>.jar"
-  url: "<upstream download URL>"
-  hashes:
-    sha256: "<64 hex characters>"
-  bootstrapper: paperclip
-  java:
-    advisory: 21
-
-packages:
-  - environment: server
-    ecosystem: bukkit
-    provider: modrinth
-    project_id: "<project id>"
-    release_id: "<version id>"
-    file_id: "<file id>"
-    version: "<resolved version>"
-    filename: "<filename>"
-    url: "<upstream download URL>"
-    hashes:
-      sha256: "<64 hex characters>"
-    requirements:
-      - reference: modrinth:luckperms
-        selector: stable
-        enabled: true
-```
-
-Each entry records where the file came from: provider, project, release, file, filename, URL, and hashes. A locked package needs a concrete version, a filename without path separators, and a SHA-256 hash. The `server` section uses `product` and `core_version`, and records how to launch the server (`bootstrapper`) plus any supporting files (`inputs`). Its `java` entry records the Java version that Mojang recommends (`advisory`) and, when `lucy.yaml` pins them, the `version` and `distribution`.
-
-Java distribution names in the lock are case-insensitive: `TEMURIN` and `temurin` select the same builds. Writing the lock stores the lowercase name; `any` leaves the distribution unpinned.
-
-`environment` is `server` or `mcdr`, which is how one flat list covers the server and MCDR without nesting. `ecosystem` is the mod or plugin type. The `requirements` list records which package in `lucy.yaml` a locked file satisfies, with the version rule and file pattern that were applied; a package with no requirements is present because a dependency needed it.
-
-A required dependency records `dependency: true` while selected, and lists its dependents in `dependency_of`. An enabled dependent keeps it installed even when its own direct declaration is disabled. With no enabled declaration or dependent, it stays pinned but is not installed. Removing its final declaration and dependent removes the unused pin.
-
-## Removing old files
-
-`lucy install` syncs the directory to the lock: files the lock no longer lists are removed, but only when `lucy` can prove it installed them. Lucy records the files it installs in `.lucy/install.yaml` and only removes paths in that record. Untracked files in `mods/` or `plugins/` — your own jars, backups, anything you dropped in by hand — are left alone rather than deleted on a guess.
+By default, install runs the `mcdreforged` command on your `PATH`, which needs Python 3.8 or newer. Pass `--mcdr-venv` to create an isolated environment under the server directory instead. The isolated environment needs one online install before it can be used offline; a global MCDReforged installation does not.
 
 ## Java
 
-Java is never a gate for an installation. `lucy install` picks the Java runtime that runs the server and warns when it misses a requirement. Three things set the requirement: the Java version that Mojang recommends for your Minecraft version, the `server.java` pin in `lucy.yaml`, and the Java version that your packages declare.
+Java version mismatches are warnings, not install errors. If a step needs a runtime and none is installed, the command stops and suggests `--java`. That flag installs a suitable runtime without changing your default Java. If you selected a runtime with `java.home` in [`lucy config`](/commands/config), `--java` installs nothing and your choice is used. Under `--offline`, `--java` fails instead of downloading.
 
-`lucy` picks the runtime in this order. It merges whichever configuration files exist; a missing configuration file is not an error.
-
-1. The runtime selected by a non-empty `java.home` in `.lucy/config.yaml` or the global configuration file. Workspace configuration takes precedence over global configuration. This setting applies on this machine only and overrides automatic selection. If it is not a working Java runtime, `lucy` warns and does not fall back to another one.
-2. The installed runtime that misses the fewest requirements. Among equal runtimes, `lucy` prefers the oldest major version that meets Mojang's recommendation, then the newest update. `JAVA_HOME` is only one of the places `lucy` looks.
-
-Steps that run Java, such as Paper patching and the Forge and NeoForge installers, use the selected runtime. They fail when no Java runtime is installed, and the error suggests `--java`.
-
-Changing the Java requirement with [`lucy java use`](/commands/java) writes only `lucy.yaml`. The next `lucy install` resolves the new requirement into the lock.
-
-Add `--java` to install the runtime the server asks for when no installed runtime meets it. A runtime that already fits is reused. When a non-empty `java.home` selects the runtime, `--java` installs nothing, because `lucy` treats that setting as your choice. `lucy` tries these methods in order and uses the first one that works:
-
-1. A Java version manager that already installed a Java runtime on this machine: SDKMAN, mise, asdf, Homebrew, or Scoop.
-2. Any other of those managers that is installed.
-3. Your system package manager: `apt`, `dnf`, `zypper`, `pacman`, `apk`, or `winget`. `lucy` installs a headless runtime where one exists.
-4. A vendor package repository, only when you also pass `--add-java-repository`. This includes the Scoop `java` bucket. `lucy` shows the vendor and URL, and checks a signing key against a fingerprint it already knows before it trusts the key. `lucy` never removes a repository it added.
-5. A download into your user data directory. `lucy` verifies the SHA-256 digest before it unpacks the archive.
-
-`lucy` runs Homebrew as you, never with `sudo`. A Homebrew cask or `winget` package that needs your password asks for it itself, so those methods need an interactive terminal and `--no-interactive` skips them. Package managers that need root run directly when you are root, and through `sudo` otherwise. With `--no-interactive`, `sudo` must work without a password, or `lucy` skips the method. When `lucy` skips a method, it says why. `lucy` never changes your default Java.
-
-## Tracked working files
-
-Top-level `files` paths are relative to the directory containing `lucy.yaml`, not `server.directory`. Installation preserves existing working files. An immutable digest mismatch produces a warning; it does not overwrite the file or change its permissions.
-
-Missing hashed files are provisioned from verified project-local CAS objects, or from `recover_url` when online. Missing presence-only files and unavailable or mismatched recovery sources produce diagnostics. For offline replay, place the accepted contents in the workspace beforehand; packaged distribution is not implemented yet (see [issue #129](https://github.com/mclucy/lucy/issues/129)).
-
-These checks run even when the native runtime is already current. Tracked files are excluded from runtime ownership receipts and pruning. File commands preserve exact runtime pins; accepted file changes do not reinstall an unchanged native runtime.
-
-Use [`lucy file`](/commands/file) to accept, recover, or revert contents explicitly.
-
-See also [Global Flags](/commands/global-flags), [`lucy add`](/commands/add), and [`lucy remove`](/commands/remove).
-
-## Output
-
-Resolution and installation report progress on stderr while they run, then a summary of what changed. Packages are marked `+` (added), `-` (removed), or `~` (version changed), and a dependency is attributed to the package that needs it. When the lock already matches and nothing is published, the command says so and does nothing.
-
-```text
-✓ Resolved 24 packages (22 requested, 2 dependencies) in 1.6s
-✓ Installed 37 files in 0.8s
-
-  + cobblemon   1.8.2
-  + mezzconfig  0.6.8   dependency of jei
-```
-
-When resolution cannot satisfy a package, the error names the package, how many builds were checked, and why they were rejected. Nothing is written in that case: the manifest and the lock stay as they were.
-
-`--json` prints the same result as a machine-readable object on stdout: the resolution mode, server identity, package changes, file counts, fetch counts, and phase timings. Progress stays off stderr in that mode.
-
-`--no-interactive` (and `--no-style`) replace the animated display with append-only lines suitable for CI logs.
+`--add-java-repository` lets `--java` add the Java vendor's package repository to your system package manager. Under `--no-interactive`, methods that need a password are skipped.
 
 ## Flags
 
 <ParamField query="--locked" type="boolean" default="false">
-  Do not resolve new versions; fail when the lock cannot satisfy the manifest.
+  Do not resolve new versions; fail when the lock is missing or cannot satisfy the manifest.
 </ParamField>
 
 <ParamField query="--offline" type="boolean" default="false">
-  Disallow network acquisition. Hash-correct files are kept; anything missing or mismatched fails.
+  Disallow network access. Missing files must already be available in the cache.
 </ParamField>
 
 <ParamField query="--with-optional" type="boolean" default="false">
-  Also install optional upstream dependencies. It forces a new resolution even when the lock already matches the manifest, and every optional package selected this way is written back into `lucy.yaml` as an explicit package — so it is part of the declared server from then on, not just of this run. Cannot be combined with `--locked`.
+  Also install optional dependencies and record them in `lucy.yaml` as explicit packages. Cannot be combined with `--locked`.
 </ParamField>
 
 <ParamField query="--accept-broken" type="boolean" default="false">
-  Install the packages the manifest declares even when a module requirement cannot be satisfied: a required module is missing, a selected version falls outside its declared range, or a version string cannot be parsed. Each unresolved requirement is reported as a warning. Without this flag, such a server is refused because it would not start.
+  Install the declared packages even when a mod dependency is missing or a version falls outside its required range. Each problem is reported as a warning.
 </ParamField>
 
 <ParamField query="--overwrite" type="boolean" default="false">
-  Replace files already present at the destinations the lock selects, including unowned jars from an earlier manual setup and files whose contents were modified. Only the selected destination paths are replaced; unrelated files are left alone. Without this flag, an occupied destination stops the installation.
+  Replace files already present at the destinations the lock selects. Other files are left alone.
 </ParamField>
 
 <ParamField query="--force, -f" type="boolean" default="false">
-  Combine `--accept-broken` and `--overwrite` in one flag.
+  Combine `--accept-broken` and `--overwrite`.
 </ParamField>
 
 <ParamField query="--java" type="boolean" default="false">
-  Also install the Java runtime the server asks for when no installed runtime meets it. With `--offline`, the command fails instead of installing. See [Java](#java).
+  Install the Java runtime the server asks for when no installed runtime meets it.
 </ParamField>
 
 <ParamField query="--add-java-repository" type="boolean" default="false">
-  Let `--java` add the Java vendor's package repository to the system package manager. Requires `--java`.
+  Let `--java` add the Java vendor's package repository to the system package manager.
 </ParamField>
 
 <ParamField query="--mcdr-venv" type="boolean" default="false">
-  Create an isolated MCDReforged environment instead of using the global `mcdreforged` executable. Uses `uv` when available, otherwise `python3` or `LUCY_PYTHON`.
+  Create an isolated MCDReforged environment under the server directory instead of using the global `mcdreforged` command.
 </ParamField>
+
+`--json` prints a machine-readable result, and `--no-interactive` produces append-only output for CI logs. See [Global Flags](/commands/global-flags).
+
+See also [`lucy add`](/commands/add), [`lucy remove`](/commands/remove), and [`lucy file`](/commands/file).

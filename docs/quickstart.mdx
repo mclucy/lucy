@@ -1,65 +1,39 @@
 ---
 title: "Quickstart"
-description: "Install and start using `lucy`"
+description: "Install Lucy and manage an existing server"
 ---
 
-Currently, we are in pre-beta stage; there will be more distribution methods in the future.
+<Warning>Lucy is pre-beta software. Avoid using it in production; it may cause permanent data loss.</Warning>
 
-## Prerequisites
+## Install Lucy
 
-Before you begin, you must have:
+Install with Go:
 
-- A terminal and basic knowledge of command line usage
+```bash
+go install github.com/mclucy/lucy@latest
+```
 
-## Get started
+On macOS, you can instead use Homebrew:
 
-<Warning>Pre-beta versions are not recommended for production use and may lead to permanent data loss.</Warning>
+```bash
+brew install --HEAD mclucy/tap/lucy
+```
 
-<Steps>
-  <Step title="Install">
-    The current recommended way to install `lucy` is via Go's toolchain natively.
+## Adopt a server
 
-    ```bash
-    go install github.com/mclucy/lucy@latest
-    ```
+In an existing server directory, inspect the server and create its manifest:
 
-    For macOS users, you can also use `brew` to install `lucy`:
+```bash
+cd path/to/your/server
+lucy status
+lucy init
+```
 
-    ```bash
-    brew install --HEAD mclucy/tap/lucy
-    ```
+The example package below needs a server that loads mods: vanilla Minecraft cannot run it. On a Fabric, Forge, or NeoForge server, add a package and install the declared server:
 
-    The following distribution methods are planned for the future:
+```bash
+lucy add modrinth:lithium
+lucy install
+```
 
-    - A `curl` install script
-    - A Nix flake
-    - AUR
-  </Step>
-  <Step title="Usage">
-    After installation, you can run `lucy --help` in your terminal to see the available commands.
-
-    ```bash
-    lucy --help
-    ```
-
-    Every command also has its own help page, for example `lucy install --help`.
-  </Step>
-  <Step title="Run it">
-    Get a comprehensive overview of your server with `lucy status`:
-
-    ```bash
-    cd path/to/your/server
-    lucy status
-    ```
-
-    To manage an existing server directory, adopt it into a manifest first, then add packages and sync:
-
-    ```bash
-    lucy init
-    lucy add modrinth:lithium
-    lucy install
-    ```
-
-    `lucy install` syncs the directory with the lock file, resolving a new lock first when the manifest has changed. Use `lucy status` to inspect the live server, or `lucy status --from-lock` to render the lock.
-  </Step>
-</Steps>
+To start a new server instead, see [`lucy create`](/commands/create). Run `lucy --help` or append `--help` to a command to see its options.
