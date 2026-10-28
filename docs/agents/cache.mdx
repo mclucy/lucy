@@ -7,6 +7,8 @@ description: "Request indexing, artifact verification, expiration, and distinct 
 
 Metadata and artifacts have separate policy limits and lifetimes. The default metadata refresh period is four hours and the artifact retention period is seven days; request-specific metadata can choose a different TTL. Expiration affects whether an indexed response can be reused, not the meaning of a lock or receipt. Non-success HTTP responses are not stored as successful metadata responses.
 
+`cache.Client` owns its HTTP client, policy, and diagnostic logger. Command composition supplies the disk root explicitly. Each instance initializes its index lazily; separate invocations can share cached objects without sharing transport or provider configuration. Metadata and artifact requests receive the caller's context, including cache-hit reads and copies. Configured TTL policy governs requests without an explicit override. `Close` waits for cache operations and releases an opened store without initializing an unused one.
+
 ## Publication and verification
 
 A download is staged while its content digest and any supplied upstream integrity expectation are checked. Failed integrity checks do not publish the new destination or cache entry. On a cache hit, bytes are copied from the indexed object; installation then verifies the materialized artifact against the hashes recorded in the lock. A corrupt or unreadable cached object can be treated as a miss during an online download.
@@ -15,7 +17,7 @@ Installation also has workspace-local materialization under `.lucy/downloads`, o
 
 ## Separate stores
 
-The global network cache and the workspace-local tracked-file store both use content-addressed storage but have different owners and retention rules. The network cache index represents reusable request results. `.lucy/objects/sha256/` contains captured working-file contents referenced by declarations, history, and pending transactions. Clearing network cache does not clear tracked-file history or workspace-local materialized downloads.
+The shared network cache and the workspace-local tracked-file store both use content-addressed storage but have different owners and retention rules. The network cache index represents reusable request results. `.lucy/objects/sha256/` contains captured working-file contents referenced by declarations, history, and pending transactions. Clearing network cache does not clear tracked-file history or workspace-local materialized downloads.
 
 An object digest identifies content; it does not by itself assert upstream provenance. A verified lock hash ties expected bytes to an artifact record, while cache integrity metadata records what was checked when the response was acquired.
 

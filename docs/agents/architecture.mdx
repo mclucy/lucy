@@ -31,6 +31,14 @@ Related domain models:
 - [Network cache and content storage](/agents/cache): request indexing and object lifecycles.
 - [Compilation](/agents/compilation): Gradle probing, toolchains, and artifact selection.
 
+## Invocation ownership
+
+`cmd.Runner` owns a fresh command tree, streams, presentation values, and diagnostic logger. `Execute` receives the caller's context; the executable owns signal handling, and `Runner.Close` releases the cache store, diagnostics, and owned HTTP connections. Server selection changes `cli.Invocation.Directory`, not the process working directory. Command paths and machine settings resolve against that directory.
+
+The command boundary constructs configured `cache.Client`, `routing.Router`, `install.Service`, and `operation.Service` instances after parsing flags and selecting the workspace. The CLI's typed dependency assembly stays in the command layer; backend services receive their own narrow dependencies. Provider catalog assembly performs no HTTP requests or credential decoding. Reports, themes, and progress renderers use invocation-owned streams and terminal capabilities.
+
+`.golangci.yml` enforces the package boundaries through depguard. `task lint` is part of local and CI checks. Concrete provider imports stay in provider adapters and routing composition; resolution consumes candidate lookup and materialization capabilities, while workspace observation remains upstream-free.
+
 ## Package identity is not module identity
 
 A registry project and release identify an artifact to download. A descriptor inside that artifact identifies one or more modules that the Minecraft loader sees. Descriptor dependency constraints refer to those module IDs, not necessarily the registry project name. Artifact metadata alone does not establish its registry provenance; hash identification can associate local bytes with an upstream project when a provider supports it.

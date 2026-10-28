@@ -13,9 +13,11 @@ Server resolution in `upstream/routing` determines the product, artifact, bootst
 
 Upstream interfaces separate search, information, version selection, fetching, dependencies, and hash identification. A provider need not implement every capability. Routing maps the requested provider or ecosystem to the relevant implementations; it passes local runtime facts as `upstream.LocalContext`, rather than giving providers access to workspace discovery or prompting.
 
+The resolver receives candidate lookup separately from artifact materialization and descriptor-analysis memoization. It does not select a provider or open the network cache. `install.Service` and `operation.Service` receive configured capabilities at construction; operation options can supply prefetched artifact bytes without changing catalogue selection. Installation verifies supplied bytes against the artifact's pinned hashes.
+
 ## From pins to installed files
 
-`install.Sync` acquires the workspace writer lock, performs preflight checks and interrupted-install recovery, decides the resolution mode, and passes the resulting lock to staging. `install.PlanInstall` separates resolution from application: the plan records manifest and lock fingerprints, and `ApplyPlan` checks them before staging so a concurrent document edit cannot be silently overwritten.
+`install.Service.Sync` acquires the workspace writer lock, performs preflight checks and interrupted-install recovery, decides the resolution mode, and passes the resulting lock to staging. `install.Service.PlanInstall` separates resolution from application: the plan records manifest and lock fingerprints, and `ApplyPlan` checks them before staging so a concurrent document edit cannot be silently overwritten.
 
 Staging materializes locked server inputs and enabled package artifacts, selects Java, and calls `bootstrap` to prepare the server tree. Once destinations have been checked, installation commits staged files and documents with a rollback journal. The receipt records owned runtime outputs and a fingerprint of the server, MCDReforged, and package resolution. It is distinct from the manifest fingerprint: tracked-file declarations and Java requirements do not invalidate that runtime receipt.
 
