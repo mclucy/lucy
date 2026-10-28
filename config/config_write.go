@@ -178,8 +178,10 @@ func validateProxyURL(text string) error {
 	parsed, err := url.Parse(text)
 	if err != nil ||
 		(parsed.Scheme != "http" && parsed.Scheme != "https") ||
-		parsed.Host == "" {
-		return fmt.Errorf("config github.proxy must be an absolute HTTP(S) URL")
+		parsed.Host == "" ||
+		parsed.RawQuery != "" ||
+		parsed.Fragment != "" {
+		return fmt.Errorf("config github.proxy must be an absolute HTTP(S) URL without a query or fragment")
 	}
 	return nil
 }
