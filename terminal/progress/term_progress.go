@@ -7,12 +7,23 @@ package progress
 
 import (
 	"io"
-	"os"
 	"time"
 
 	"github.com/mclucy/lucy/terminal/style"
-	"golang.org/x/term"
 )
+
+// Options carries the presentation state a renderer needs. The caller owns
+// every value: a renderer never reads process streams or global styles.
+type Options struct {
+	// Writer receives every permanent line and, when animated, the live area.
+	Writer io.Writer
+	// Theme styles progress text.
+	Theme style.Theme
+	// Terminal describes the capabilities of Writer.
+	Terminal style.Terminal
+	// Interactive allows an animated area when Terminal is a terminal.
+	Interactive bool
+}
 
 // Renderer presents one command's progress.
 type Renderer interface {
@@ -36,16 +47,18 @@ type Renderer interface {
 	Close()
 }
 
-// New returns the renderer that suits w. Animated output requires w to be a
-// terminal and interactive mode to be enabled; anything else receives
-// append-only lines.
-func New(w io.Writer) Renderer {
-	if file, ok := w.(*os.File); ok &&
-		style.InteractiveEnabled() &&
-		term.IsTerminal(int(file.Fd())) {
-		return newLive(w)
+// New returns the renderer that suits options: an animated area only when the
+// caller allows interactivity and Writer is a terminal, append-only lines
+// otherwise. A nil Writer yields Discard, which suits machine-readable
+// commands that must keep stderr free of progress.
+func New(options Options) Renderer {
+	if options.Writer == nil {
+		return Discard()
 	}
-	return newPlain(w)
+	if options.Interactive && options.Terminal.IsTTY {
+		return newLive(options)
+	}
+	return newPlain(options.Writer, options.Theme)
 }
 
 // Discard drops every update. It suits machine-readable commands, which must

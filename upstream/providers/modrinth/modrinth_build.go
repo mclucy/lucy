@@ -11,7 +11,7 @@ import (
 // either a slug or a project ID; the project version endpoint resolves both.
 // The list is unfiltered: no game version, loader, channel, or status is
 // excluded.
-func (provider) Builds(
+func (p *Provider) Builds(
 	ctx context.Context,
 	project string,
 ) ([]upstream.Build, error) {
@@ -19,7 +19,7 @@ func (provider) Builds(
 		return nil, err
 	}
 
-	versions, err := listVersions(catalog.Name(project))
+	versions, err := p.listVersions(ctx, catalog.Name(project))
 	if err != nil {
 		return nil, err
 	}

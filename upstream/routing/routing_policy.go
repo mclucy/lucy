@@ -1,9 +1,6 @@
 package routing
 
-import (
-	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
-)
+import "github.com/mclucy/lucy/catalog"
 
 var searchProvidersInPriorityOrder = []catalog.Provider{
 	catalog.ProviderModrinth,
@@ -12,60 +9,53 @@ var searchProvidersInPriorityOrder = []catalog.Provider{
 	catalog.ProviderSpiget,
 }
 
-func autoProviders() []catalog.Provider {
-	return append(modProviders(), catalog.ProviderMCDR)
+// autoProviders is the default candidate list for an unspecified platform.
+// curseforge reports whether the configured provider instances include it.
+func autoProviders(curseforge bool) []catalog.Provider {
+	return append(modProviders(curseforge), catalog.ProviderMCDR)
 }
 
-func modProviders() []catalog.Provider {
+func modProviders(curseforge bool) []catalog.Provider {
 	providers := []catalog.Provider{catalog.ProviderModrinth}
-	if curseforgeAvailable() {
+	if curseforge {
 		providers = append(providers, catalog.ProviderCurseForge)
 	}
 	return providers
 }
 
-func providersForEcosystem(ecosystem catalog.Ecosystem) (
-	[]catalog.Provider,
-	error,
-) {
+func providersForEcosystem(
+	ecosystem catalog.Ecosystem,
+	curseforge bool,
+) ([]catalog.Provider, error) {
 	switch ecosystem {
 	case catalog.EcosystemUnspecified:
-		return autoProviders(), nil
+		return autoProviders(curseforge), nil
 	case catalog.EcosystemMCDR:
 		return []catalog.Provider{catalog.ProviderMCDR}, nil
 	case catalog.EcosystemForge, catalog.EcosystemFabric, catalog.EcosystemNeoForge,
 		catalog.EcosystemBukkit, catalog.EcosystemPaper:
-		return searchProvidersForEcosystem(ecosystem), nil
+		return searchProvidersForEcosystem(ecosystem, curseforge), nil
 	default:
 		return nil, ErrInvalidEcosystem
 	}
 }
 
-func searchProvidersForEcosystem(ecosystem catalog.Ecosystem) []catalog.Provider {
+func searchProvidersForEcosystem(
+	ecosystem catalog.Ecosystem,
+	curseforge bool,
+) []catalog.Provider {
 	providers := make(
 		[]catalog.Provider,
 		0,
 		len(searchProvidersInPriorityOrder),
 	)
 	for _, provider := range searchProvidersInPriorityOrder {
-		if provider == catalog.ProviderCurseForge && !curseforgeAvailable() {
-			log.Debug(
-				"routing: ecosystem candidate skipped",
-				"provider", provider,
-				"platform", ecosystem,
-				"reason", "provider unavailable",
-			)
+		if provider == catalog.ProviderCurseForge && !curseforge {
 			continue
 		}
 
 		support, ok := EcosystemSupportedBy(provider, ecosystem)
 		if !ok || !support.Supported {
-			log.Debug(
-				"routing: ecosystem candidate skipped",
-				"provider", provider,
-				"platform", ecosystem,
-				"reason", "provider does not support platform",
-			)
 			continue
 		}
 
@@ -80,7 +70,10 @@ type providerSelection struct {
 	empty     bool
 }
 
-func providersFromEcosystems(ecosystems []catalog.Ecosystem) providerSelection {
+func providersFromEcosystems(
+	ecosystems []catalog.Ecosystem,
+	curseforge bool,
+) providerSelection {
 	selection := providerSelection{}
 	seen := map[catalog.Provider]struct{}{}
 	sawKnownCapability := false
@@ -88,11 +81,6 @@ func providersFromEcosystems(ecosystems []catalog.Ecosystem) providerSelection {
 
 	appendProvider := func(provider catalog.Provider) {
 		if _, ok := seen[provider]; ok {
-			log.Debug(
-				"routing: runtime candidate skipped",
-				"provider", provider,
-				"reason", "provider already selected for runtime",
-			)
 			return
 		}
 		seen[provider] = struct{}{}
@@ -106,7 +94,7 @@ func providersFromEcosystems(ecosystems []catalog.Ecosystem) providerSelection {
 			catalog.EcosystemNeoForge:
 			sawKnownCapability = true
 			appendProvider(catalog.ProviderModrinth)
-			if curseforgeAvailable() {
+			if curseforge {
 				appendProvider(catalog.ProviderCurseForge)
 			}
 		case catalog.EcosystemBukkit,

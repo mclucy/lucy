@@ -46,6 +46,9 @@ func testWorkspace(t *testing.T) (string, *document.Manifest, *document.Lock) {
 			Artifact: catalog.Artifact{
 				Version:  versionpkg.Version("0.16.9"),
 				Filename: "fabric-loader-0.16.9.jar",
+				Modules: []catalog.DescriptorModule{
+					{ID: "fabricloader", Version: versionpkg.Version("0.16.9")},
+				},
 			},
 			Java: document.LockedJava{Advisory: 21},
 		},
@@ -57,9 +60,13 @@ func testWorkspace(t *testing.T) (string, *document.Manifest, *document.Lock) {
 	return root, d, lock
 }
 
+func testInstallService() *Service {
+	return &Service{}
+}
+
 func TestPlanInstallReplaysMatchingLock(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	plan, err := PlanInstall(context.Background(), root, d, lock, Options{})
+	plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
 	if err != nil {
 		t.Fatalf("PlanInstall() error = %v", err)
 	}
@@ -79,7 +86,7 @@ func TestPlanInstallReplaysMatchingLock(t *testing.T) {
 
 func TestPlanInstallRejectsExpectedManifestMismatch(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	_, err := PlanInstall(
+	_, err := testInstallService().PlanInstall(
 		context.Background(),
 		root,
 		d,
@@ -93,7 +100,7 @@ func TestPlanInstallRejectsExpectedManifestMismatch(t *testing.T) {
 
 func TestPlanInstallRejectsExpectedLockMismatch(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	_, err := PlanInstall(
+	_, err := testInstallService().PlanInstall(
 		context.Background(),
 		root,
 		d,
@@ -115,7 +122,7 @@ func TestPlanInstallAcceptsExpectedFingerprints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lockfile.Fingerprint() error = %v", err)
 	}
-	if _, err := PlanInstall(
+	if _, err := testInstallService().PlanInstall(
 		context.Background(),
 		root,
 		d,
@@ -144,7 +151,7 @@ func TestPlanInstallFingerprintsWorkspaceState(t *testing.T) {
 			t.Fatalf("manifest.Fingerprint() error = %v", err)
 		}
 		d.Server.Java = &document.ManifestJava{Version: 17}
-		plan, err := PlanInstall(
+		plan, err := testInstallService().PlanInstall(
 			context.Background(),
 			root,
 			d,
@@ -178,7 +185,7 @@ func TestPlanInstallFingerprintsWorkspaceState(t *testing.T) {
 		}
 		stale := *lock
 		stale.Files = []document.TrackedFile{{Path: "server.properties"}}
-		plan, err := PlanInstall(context.Background(), root, d, &stale, Options{})
+		plan, err := testInstallService().PlanInstall(context.Background(), root, d, &stale, Options{})
 		if err != nil {
 			t.Fatalf("PlanInstall() error = %v", err)
 		}
@@ -197,7 +204,7 @@ func TestPlanInstallFingerprintsWorkspaceState(t *testing.T) {
 
 func TestResolveLockRejectsForceWithLocked(t *testing.T) {
 	root, d, lock := testWorkspace(t)
-	_, err := resolveLock(
+	_, err := testInstallService().resolveLock(
 		context.Background(),
 		root,
 		d,
@@ -214,7 +221,7 @@ func TestResolveLockRejectsForceWithLocked(t *testing.T) {
 func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 	t.Run("unchanged", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		plan, err := PlanInstall(context.Background(), root, d, lock, Options{})
+		plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
 		if err != nil {
 			t.Fatalf("PlanInstall() error = %v", err)
 		}
@@ -225,7 +232,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 
 	t.Run("manifest changed", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		plan, err := PlanInstall(context.Background(), root, d, lock, Options{})
+		plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
 		if err != nil {
 			t.Fatalf("PlanInstall() error = %v", err)
 		}
@@ -240,7 +247,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 
 	t.Run("manifest removed", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		plan, err := PlanInstall(context.Background(), root, d, lock, Options{})
+		plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
 		if err != nil {
 			t.Fatalf("PlanInstall() error = %v", err)
 		}
@@ -254,7 +261,7 @@ func TestCheckPlannedStateRejectsChanges(t *testing.T) {
 
 	t.Run("lock changed", func(t *testing.T) {
 		root, d, lock := testWorkspace(t)
-		plan, err := PlanInstall(context.Background(), root, d, lock, Options{})
+		plan, err := testInstallService().PlanInstall(context.Background(), root, d, lock, Options{})
 		if err != nil {
 			t.Fatalf("PlanInstall() error = %v", err)
 		}

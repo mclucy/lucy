@@ -41,17 +41,25 @@ func loadStatusFixture(t *testing.T, name string) statusDocument {
 	return document
 }
 
-// setStdoutTerminal pins the process-global terminal probe so the renderer
-// takes the same layout branch wherever the test runs.
-func setStdoutTerminal(t *testing.T, isTerminal bool) {
-	t.Helper()
-	previous := terminalstyle.StdoutIsTerminal
-	terminalstyle.StdoutIsTerminal = isTerminal
-	t.Cleanup(func() { terminalstyle.StdoutIsTerminal = previous })
+// renderStatusForTest exercises the renderer with explicit terminal
+// capabilities instead of the process streams.
+func renderStatusForTest(
+	document statusDocument,
+	long bool,
+	mode terminal.StatusLogoMode,
+	width int,
+	isTerminal bool,
+) string {
+	return renderStatus(
+		document,
+		long,
+		mode,
+		terminalstyle.Terminal{Width: width, Height: 24, IsTTY: isTerminal},
+		terminalstyle.New(false),
+	)
 }
 
 func TestStatusRenderLineWidths(t *testing.T) {
-	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
 	modes := []terminal.StatusLogoMode{
 		terminal.StatusLogoNone,
@@ -62,7 +70,7 @@ func TestStatusRenderLineWidths(t *testing.T) {
 	for _, long := range []bool{false, true} {
 		for _, width := range []int{40, 80, 120} {
 			for _, mode := range modes {
-				rendered := renderStatus(document, long, mode, width)
+				rendered := renderStatusForTest(document, long, mode, width, true)
 				for _, line := range strings.Split(rendered, "\n") {
 					if columns := ansi.StringWidth(line); columns > width {
 						t.Fatalf(
@@ -77,13 +85,12 @@ func TestStatusRenderLineWidths(t *testing.T) {
 }
 
 func TestStatusRenderZeroWidth(t *testing.T) {
-	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
 
 	for _, long := range []bool{false, true} {
-		want := renderStatus(document, long, terminal.StatusLogoNone, 80)
+		want := renderStatusForTest(document, long, terminal.StatusLogoNone, 80, true)
 		for _, width := range []int{0, -12} {
-			got := renderStatus(document, long, terminal.StatusLogoNone, width)
+			got := renderStatusForTest(document, long, terminal.StatusLogoNone, width, true)
 			if got != want {
 				t.Fatalf(
 					"long=%t width=%d differs from width 80:\n%q\n%q",
@@ -95,10 +102,9 @@ func TestStatusRenderZeroWidth(t *testing.T) {
 }
 
 func TestStatusRenderLongPackages(t *testing.T) {
-	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
-	short := renderStatus(document, false, terminal.StatusLogoNone, 120)
-	long := renderStatus(document, true, terminal.StatusLogoNone, 120)
+	short := renderStatusForTest(document, false, terminal.StatusLogoNone, 120, true)
+	long := renderStatusForTest(document, true, terminal.StatusLogoNone, 120, true)
 
 	if len(document.Server.PackageDirectories) == 0 {
 		t.Fatal("fixture declares no package directory")
@@ -126,9 +132,8 @@ func TestStatusRenderLongPackages(t *testing.T) {
 }
 
 func TestStatusRenderLogoNone(t *testing.T) {
-	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
-	rendered := renderStatus(document, false, terminal.StatusLogoNone, 80)
+	rendered := renderStatusForTest(document, false, terminal.StatusLogoNone, 80, true)
 
 	for _, want := range []string{
 		"Minecraft",
@@ -163,12 +168,11 @@ func TestStatusRenderLogoNone(t *testing.T) {
 }
 
 func TestStatusRenderLogoModes(t *testing.T) {
-	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusPackagesFixture)
 
-	none := renderStatus(document, false, terminal.StatusLogoNone, 120)
-	small := renderStatus(document, false, terminal.StatusLogoSmall, 120)
-	large := renderStatus(document, false, terminal.StatusLogoLarge, 120)
+	none := renderStatusForTest(document, false, terminal.StatusLogoNone, 120, true)
+	small := renderStatusForTest(document, false, terminal.StatusLogoSmall, 120, true)
+	large := renderStatusForTest(document, false, terminal.StatusLogoLarge, 120, true)
 
 	if small == none {
 		t.Fatal("logo mode small did not compose a logo")
@@ -182,7 +186,6 @@ func TestStatusRenderLogoModes(t *testing.T) {
 }
 
 func TestStatusWarningPrecedesFrame(t *testing.T) {
-	setStdoutTerminal(t, true)
 	document := loadStatusFixture(t, statusWarningsFixture)
 	const warning = "unmanaged entry point ./fabric-server-mc.1.21.4-loader.0.16.9-launcher.1.0.1.jar; left unchanged"
 
@@ -191,11 +194,14 @@ func TestStatusWarningPrecedesFrame(t *testing.T) {
 	command.SetOut(&stream)
 	command.SetErr(&stream)
 
-	output := NewQueryOutput(command)
+	inv := newTestInvocation()
+	output := NewQueryOutput(command, inv)
 	output.Warn(errors.New(warning))
 
 	if err := writeStatusDocument(
+		t.Context(),
 		output,
+		inv,
 		document,
 		false,
 		terminal.StatusLogoNone,

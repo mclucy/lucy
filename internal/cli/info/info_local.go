@@ -21,7 +21,8 @@ func isArtifactPath(root, path string) (bool, error) {
 		return false, nil
 	}
 
-	info, err := os.Stat(path)
+	resolved := resolveInfoPath(root, path)
+	info, err := os.Stat(resolved)
 	if err != nil {
 		return true, infoArtifactPathFailure(root, path, err)
 	}
@@ -40,6 +41,8 @@ func isArtifactPath(root, path string) (bool, error) {
 func actionArtifactInfo(
 	ctx context.Context,
 	output *cli.Output,
+	inv *cli.Invocation,
+	router *routing.Router,
 	long bool,
 	root string,
 	filePath string,
@@ -57,6 +60,7 @@ func actionArtifactInfo(
 
 	document, warnings, err := buildArtifactDocument(
 		ctx,
+		router,
 		root,
 		filePath,
 		infos,
@@ -64,7 +68,7 @@ func actionArtifactInfo(
 	if err != nil {
 		return err
 	}
-	return infoWriteDocument(ctx, output, document, warnings, long)
+	return infoWriteDocument(ctx, output, inv, document, warnings, long)
 }
 
 // artifactLookup is the upstream result for one artifact file. Ref is the
@@ -83,17 +87,16 @@ func (l artifactLookup) Matched() bool {
 
 func lookupArtifactUpstream(
 	ctx context.Context,
+	router *routing.Router,
 	filePath string,
 ) (artifactLookup, error) {
 	result := artifactLookup{}
-	hashLookup, err := infoAwait(ctx, func() routing.ArtifactLookup {
-		return routing.ResolveArtifactByHash(artifact.File{Path: filePath})
-	})
-	if err != nil {
-		if failure := infoOperationFailure(ctx, err); failure != nil {
-			return result, failure
-		}
-		return result, err
+	hashLookup := router.ResolveArtifactByHash(
+		ctx,
+		artifact.File{Path: filePath},
+	)
+	if err := ctx.Err(); err != nil {
+		return result, infoCancellation(err)
 	}
 
 	for _, providerErr := range hashLookup.Errors {
@@ -121,7 +124,7 @@ func lookupArtifactUpstream(
 	ref := hashLookup.Ref
 	result.Ref = &ref
 
-	providers, err := routing.ResolveInfoProviders(ref.Ecosystem, ref.Provider)
+	providers, err := router.ResolveInfoProviders(ref.Ecosystem, ref.Provider)
 	if err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf(
 			"cannot retrieve upstream metadata for %s: %v",
@@ -131,62 +134,46 @@ func lookupArtifactUpstream(
 		return result, nil
 	}
 
-	type lookupResult struct {
-		info           upstream.Info
-		providerErrors []routing.ProviderError
-		err            error
+	info, providerErrors, lookupErr := router.GetInfoFirstSuccess(
+		ctx,
+		providers,
+		ref.Ref,
+	)
+	if err := ctx.Err(); err != nil {
+		return result, infoCancellation(err)
 	}
-	metadata, awaitErr := infoAwait(ctx, func() lookupResult {
-		info, providerErrors, lookupErr := routing.GetInfoFirstSuccess(
-			providers,
-			ref.Ref,
-		)
-		return lookupResult{
-			info:           info,
-			providerErrors: providerErrors,
-			err:            lookupErr,
-		}
-	})
-	if awaitErr != nil {
-		if failure := infoOperationFailure(ctx, awaitErr); failure != nil {
-			return result, failure
-		}
-		return result, awaitErr
-	}
-	for _, providerErr := range metadata.providerErrors {
+	for _, providerErr := range providerErrors {
 		result.Warnings = append(result.Warnings, fmt.Sprintf(
 			"could not retrieve metadata from %s: %v",
 			providerErr.Provider.Title(),
 			providerErr.Err,
 		))
 	}
-	if metadata.err != nil {
-		if failure := infoOperationFailure(
-			ctx,
-			metadata.err,
-		); failure != nil {
+	if lookupErr != nil {
+		if failure := infoOperationFailure(ctx, lookupErr); failure != nil {
 			return result, failure
 		}
-		if len(metadata.providerErrors) == 0 {
+		if len(providerErrors) == 0 {
 			result.Warnings = append(result.Warnings, fmt.Sprintf(
 				"cannot retrieve upstream metadata for %s: %v",
 				ref.StringBase(),
-				metadata.err,
+				lookupErr,
 			))
 		}
 		return result, nil
 	}
-	result.Info = &metadata.info
+	result.Info = &info
 	return result, nil
 }
 
 func buildArtifactDocument(
 	ctx context.Context,
+	router *routing.Router,
 	root string,
 	filePath string,
 	infos []artifact.PackageInfo,
 ) (infoDocument, []string, error) {
-	lookup, err := lookupArtifactUpstream(ctx, filePath)
+	lookup, err := lookupArtifactUpstream(ctx, router, filePath)
 	if err != nil {
 		return infoDocument{}, nil, err
 	}
@@ -261,9 +248,14 @@ func infoArtifactEmptyFailure(root, path string) *report.Detail {
 // infoDisplayPath keeps the document's file field and error labels stable
 // without exposing an absolute workspace path.
 func infoDisplayPath(root, path string) string {
-	absolute, err := filepath.Abs(path)
-	if err == nil {
-		path = absolute
+	return infoCleanPath(terminal.DisplayPath(root, resolveInfoPath(root, path)))
+}
+
+// resolveInfoPath anchors a user-supplied artifact path at the invocation
+// directory; absolute paths pass through unchanged.
+func resolveInfoPath(root, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
 	}
-	return infoCleanPath(terminal.DisplayPath(root, path))
+	return filepath.Join(root, path)
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/log"
 )
 
 const WorkspaceFilename = ".lucy/config.yaml"
@@ -25,6 +26,7 @@ type Service struct {
 	root       string
 	globalPath string
 	globalErr  error
+	logger     *log.Logger
 }
 
 type WriteResult struct {
@@ -35,12 +37,12 @@ type WriteResult struct {
 // New builds the service for root. An unavailable user configuration directory
 // only fails requests for the global scope, so Java selection still works in
 // environments without a home directory.
-func New(root string) (*Service, error) {
+func New(root string, logger *log.Logger) (*Service, error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace directory: %w", err)
 	}
-	service := &Service{root: absolute}
+	service := &Service{root: absolute, logger: logger}
 	directory, err := os.UserConfigDir()
 	if err != nil {
 		service.globalErr = fmt.Errorf("locate global config directory: %w", err)

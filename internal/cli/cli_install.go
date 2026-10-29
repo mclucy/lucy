@@ -1,14 +1,11 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/javainstall"
-	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/server"
 	"github.com/spf13/cobra"
 )
 
@@ -24,13 +21,19 @@ const (
 	flagInstallMCDRVenvName     = "mcdr-venv"
 )
 
-func NewInstallCommand(contracts *JSONContracts) *cobra.Command {
+func NewInstallCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "install",
 		Short:   help.InstallShort,
 		Args:    cobra.NoArgs,
 		Aliases: []string{"i"},
-		RunE:    actionInstall,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionInstall(cmd, inv, deps, args)
+		},
 	}
 	installJSON.Bind(contracts, cmd)
 	cmd.Flags().Bool(
@@ -82,8 +85,8 @@ func NewInstallCommand(contracts *JSONContracts) *cobra.Command {
 	return cmd
 }
 
-func actionInstall(cmd *cobra.Command, _ []string) error {
-	target, err := ResolveCommandTarget(cmd)
+func actionInstall(cmd *cobra.Command, inv *Invocation, deps *Dependencies, _ []string) error {
+	target, err := ResolveCommandTarget(cmd, inv)
 	if err != nil {
 		return fmt.Errorf("could not determine working directory: %w", err)
 	}
@@ -91,15 +94,17 @@ func actionInstall(cmd *cobra.Command, _ []string) error {
 		if addRepo, _ := cmd.Flags().GetBool(flagInstallJavaRepoName); addRepo {
 			return fmt.Errorf("--%s requires a direct administrative invocation, not a daemon package task", flagInstallJavaRepoName)
 		}
-		return DispatchPackageTask(cmd, target, server.PackageTaskRequest{Name: server.TaskInstall})
+		return DispatchPackageTask(cmd, inv, target, PackageTaskRequest{Name: TaskInstall})
 	}
-	return RunInTargetWorkDir(target, func() error { return RunInstallTask(cmd, target) })
+	return RunInstallTask(cmd, inv, deps)
 }
 
 // RunInstallTask retains all install options and output contracts in daemon children.
-func RunInstallTask(cmd *cobra.Command, target CommandTarget) error {
-	workDir := target.WorkDir
-
+func RunInstallTask(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+) error {
 	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
 	offline, _ := cmd.Flags().GetBool(flagInstallOfflineName)
 	withOptional, _ := cmd.Flags().GetBool(flagInstallWithOptionalName)
@@ -123,22 +128,22 @@ func RunInstallTask(cmd *cobra.Command, target CommandTarget) error {
 		PublishManifest: false,
 	}
 
-	output := newInstallOutput(cmd)
+	output := newInstallOutput(cmd, inv)
 	defer output.Close()
 	opts.Trace = output.Trace()
 	if installJava {
-		opts.ProvisionJava = output.provisionJava(javainstall.Host{
-			Interactive:     NewPromptGate(cmd).Available(),
-			AllowRepository: addJavaRepository,
-		}, offline)
+		opts.ProvisionJava = output.provisionJava(
+			deps.JavaHost,
+			javainstall.Policy{
+				Interactive:     NewPromptGate(cmd, inv).Available(),
+				AllowRepository: addJavaRepository,
+			},
+			offline,
+		)
 	}
 	ctx, stop := CommandContext(cmd)
 	defer stop()
-	result, err := operation.Sync(ctx, workDir, opts)
-	_, committed := errors.AsType[*install.CommittedError](err)
-	if err == nil || committed || result != nil && (result.PublishedLock || result.PublishedManifest) {
-		registerWorkspace(workDir, output.Output)
-	}
+	result, err := deps.Operations.Sync(ctx, inv.Directory, opts)
 	if err != nil {
 		return output.Failure(err)
 	}

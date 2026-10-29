@@ -6,20 +6,22 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/mclucy/lucy/internal/shell"
-	"github.com/mclucy/lucy/log"
 )
 
-// Execute runs plan. Command output goes to out. A step without input reads
-// the terminal, so a tool that asks for a password or an agreement can prompt.
-func Execute(ctx context.Context, plan Plan, host Host, out io.Writer) error {
-	log.Info(
+// Execute runs plan, using input for interactive steps and out for output.
+// It returns the installed Java home for a managed download.
+func (h *Host) Execute(
+	ctx context.Context,
+	plan Plan,
+	policy Policy,
+	input io.Reader,
+	out io.Writer,
+) (string, error) {
+	h.logger.Info(
 		"installing java",
 		"method", plan.Method,
 		"package", plan.Package,
@@ -27,41 +29,49 @@ func Execute(ctx context.Context, plan Plan, host Host, out io.Writer) error {
 		"distribution", plan.Distribution.String(),
 	)
 	if plan.download != nil {
-		if err := runDownload(ctx, plan.download, out); err != nil {
-			return err
+		if err := runDownload(ctx, h, plan.download, plan.managedRoot, out); err != nil {
+			return "", err
 		}
-		log.Info("java installed", "method", plan.Method, "package", plan.Package)
-		return nil
+		h.logger.Info("java installed", "method", plan.Method, "package", plan.Package)
+		home := filepath.Join(plan.managedRoot, plan.download.destination)
+		if info, err := os.Stat(filepath.Join(home, "Contents", "Home")); err == nil && info.IsDir() {
+			home = filepath.Join(home, "Contents", "Home")
+		}
+		return home, nil
 	}
 	if plan.Repository != nil {
-		if err := addRepository(ctx, plan.Repository, host, out); err != nil {
-			return fmt.Errorf("add %s: %w", plan.Repository.Name, err)
+		if err := addRepository(ctx, plan.Repository, policy, h, input, out); err != nil {
+			return "", fmt.Errorf("add %s: %w", plan.Repository.Name, err)
 		}
-		log.Info("java repository added", "repository", plan.Repository.Name, "url", plan.Repository.URL)
+		h.logger.Info(
+			"java repository added",
+			"repository", plan.Repository.Name,
+			"url", plan.Repository.URL,
+		)
 	}
 	previous := ""
 	if plan.KeepDefault {
-		previous = systemDefaultJava()
+		previous = systemDefaultJava(h)
 	}
 	for _, step := range plan.Steps {
-		if err := runStep(ctx, step, host, out); err != nil {
-			return err
+		if err := runStep(ctx, step, policy, h, input, out); err != nil {
+			return "", err
 		}
 	}
 	if plan.KeepDefault && previous != "" {
-		if err := restoreSystemDefault(ctx, previous, host, out); err != nil {
-			return fmt.Errorf("restore the system default Java %s: %w", previous, err)
+		if err := restoreSystemDefault(ctx, previous, policy, h, input, out); err != nil {
+			return "", fmt.Errorf("restore the system default Java %s: %w", previous, err)
 		}
 	}
-	log.Info("java installed", "method", plan.Method, "package", plan.Package)
-	return nil
+	h.logger.Info("java installed", "method", plan.Method, "package", plan.Package)
+	return "", nil
 }
 
 // Commands describes what Execute runs, one shell-like line per action, in
 // the order Execute runs them.
 func (p Plan) Commands() []string {
 	if p.download != nil {
-		return p.download.describe()
+		return p.download.describe(p.managedRoot)
 	}
 	var lines []string
 	if r := p.Repository; r != nil {
@@ -69,26 +79,27 @@ func (p Plan) Commands() []string {
 			lines = append(
 				lines,
 				fmt.Sprintf("download %s and verify fingerprint %s", r.Key.URL, r.Key.Fingerprint),
-				rootPrefix()+"write "+r.Key.Path,
+				rootPrefix(p.root)+"write "+r.Key.Path,
 			)
 		}
 		for _, file := range r.Files {
-			lines = append(lines, rootPrefix()+"write "+file.Path)
+			lines = append(lines, rootPrefix(p.root)+"write "+file.Path)
 		}
 		for _, step := range r.Steps {
-			lines = append(lines, step.String())
+			lines = append(lines, step.command(p.root))
 		}
 	}
 	for _, step := range p.Steps {
-		lines = append(lines, step.String())
+		lines = append(lines, step.command(p.root))
 	}
 	return lines
 }
 
-// String renders the step as a command line a user can run.
-func (s Step) String() string {
+// command renders the step as a command line a user can run. root reports
+// whether the plan was made as root.
+func (s Step) command(root bool) string {
 	args := s.Args
-	if s.Elevation == ElevationRoot && !isRoot() {
+	if s.Elevation == ElevationRoot && !root {
 		args = append([]string{"sudo"}, args...)
 	}
 	quoted := make([]string, len(args))
@@ -98,50 +109,71 @@ func (s Step) String() string {
 	return strings.Join(quoted, " ")
 }
 
-// elevated returns the arguments that run the step as root from a non-root
-// process. Without a terminal, sudo must fail instead of prompting.
-func (s Step) elevated(interactive bool) []string {
-	prefix := []string{"sudo"}
-	if !interactive {
-		prefix = append(prefix, "-n")
-	}
-	return append(append(prefix, "--"), s.Args...)
-}
-
-func rootPrefix() string {
-	if isRoot() {
+func rootPrefix(root bool) string {
+	if root {
 		return ""
 	}
 	return "sudo "
 }
 
-func runStep(ctx context.Context, step Step, host Host, out io.Writer) error {
+func runStep(
+	ctx context.Context,
+	step Step,
+	policy Policy,
+	host *Host,
+	input io.Reader,
+	out io.Writer,
+) error {
 	if len(step.Args) == 0 {
 		return errors.New("empty install step")
 	}
-	args := step.Args
-	if step.Elevation == ElevationRoot && !isRoot() {
-		args = step.elevated(host.Interactive)
+	args := append([]string(nil), step.Args...)
+	path, err := host.lookPath(args[0])
+	if err != nil {
+		return fmt.Errorf("%s: %w", step.command(host.isRoot()), err)
 	}
-	log.Info("running java install step", "command", strings.Join(args, " "))
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Stdout = out
-	cmd.Stderr = out
+	args[0] = path
+	root := host.isRoot()
+	if step.Elevation == ElevationRoot && !root {
+		sudo, err := host.lookPath("sudo")
+		if err != nil {
+			return fmt.Errorf("%s: %w", step.command(root), err)
+		}
+		prefix := []string{sudo}
+		if !policy.Interactive {
+			prefix = append(prefix, "-n")
+		}
+		args = append(append(prefix, "--"), args...)
+	}
+	host.logger.Info("running java install step", "command", strings.Join(args, " "))
+	stdin := input
 	if step.Input != "" {
-		cmd.Stdin = strings.NewReader(step.Input)
-	} else {
-		cmd.Stdin = os.Stdin
+		stdin = strings.NewReader(step.Input)
 	}
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s: %w", step.String(), err)
+	if err := host.system.Run(ctx, Command{
+		Args:   args,
+		Env:    host.environ(),
+		Stdin:  stdin,
+		Stdout: out,
+		Stderr: out,
+	}); err != nil {
+		return fmt.Errorf("%s: %w", step.command(root), err)
 	}
 	return nil
 }
 
 // writeRootFile writes data at path as root. A non-root process stages the
 // bytes in a temporary file and copies them with install(1) through sudo.
-func writeRootFile(ctx context.Context, path string, data []byte, host Host, out io.Writer) error {
-	if isRoot() {
+func writeRootFile(
+	ctx context.Context,
+	path string,
+	data []byte,
+	policy Policy,
+	host *Host,
+	input io.Reader,
+	out io.Writer,
+) error {
+	if host.isRoot() {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
@@ -161,27 +193,5 @@ func writeRootFile(ctx context.Context, path string, data []byte, host Host, out
 	return runStep(ctx, Step{
 		Args:      []string{"install", "-D", "-m", "0644", staged.Name(), path},
 		Elevation: ElevationRoot,
-	}, host, out)
+	}, policy, host, input, out)
 }
-
-func isRoot() bool {
-	return os.Geteuid() == 0
-}
-
-// rootAvailable reports whether a step that needs root can run. Without a
-// terminal, sudo can only run when it does not ask for a password.
-func rootAvailable(host Host) bool {
-	if isRoot() {
-		return true
-	}
-	if _, err := exec.LookPath("sudo"); err != nil {
-		return false
-	}
-	return host.Interactive || passwordlessSudo()
-}
-
-var passwordlessSudo = sync.OnceValue(func() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return exec.CommandContext(ctx, "sudo", "-n", "true").Run() == nil
-})

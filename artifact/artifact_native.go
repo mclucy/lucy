@@ -32,6 +32,14 @@ func ReadModules(ctx context.Context, filename string, loader catalog.Ecosystem)
 	}
 	z, err := zip.OpenReader(filename)
 	if err != nil {
+		// Content-addressed storage names an object by its digest, not the
+		// artifact's filename. An MCDR plugin source is not an archive, so
+		// fall back to its static metadata when the extension is absent.
+		if loader == catalog.EcosystemMCDR {
+			if modules, pythonErr := inspectPython(ctx, filename); pythonErr == nil {
+				return normalizeModules(modules), nil
+			}
+		}
 		return nil, err
 	}
 	defer z.Close()

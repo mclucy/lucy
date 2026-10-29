@@ -3,13 +3,13 @@ package artifact
 import (
 	"archive/zip"
 	"encoding/json/v2"
+	"errors"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -37,9 +37,8 @@ func (r *spongeReader) Read(
 
 		var metadata fileschema.FileSpongePluginsIdentifier
 		decodeErr := json.UnmarshalRead(rc, &metadata)
-		fn.CloseReader(rc, log.Warn)
-		if decodeErr != nil {
-			return nil, decodeErr
+		if err := errors.Join(decodeErr, rc.Close()); err != nil {
+			return nil, err
 		}
 
 		if !validSpongeMetadata(&metadata) {

@@ -14,9 +14,7 @@ import (
 	"github.com/mclucy/lucy/upstream"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/log"
 	serverpkg "github.com/mclucy/lucy/server"
-	"github.com/mclucy/lucy/upstream/routing"
 
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -37,6 +35,8 @@ func catalogueRegistry(provider catalog.Provider) catalog.Registry {
 
 func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	ctx := request.Context
+	logger := request.Logger
+	candidatesFor := request.Candidates
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -135,7 +135,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	strict := true
 	var lastErr error
 	ledger := newRejectionLedger()
-	log.Info(
+	logger.Info(
 		"resolve: resolving package requirements",
 		"requests", len(requests),
 	)
@@ -166,7 +166,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			sortPackages(all)
 			problems, err := finalizeModules(all, target)
 			if err != nil {
-				log.Debug(
+				logger.Debug(
 					"resolve: settled graph invalid",
 					"attempt", attempts,
 					"reason", err,
@@ -174,7 +174,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				return hardFail(err)
 			}
 			if len(problems) > 0 && strict {
-				log.Debug(
+				logger.Debug(
 					"resolve: settled graph rejected",
 					"attempt", attempts,
 					"reason", problems[0],
@@ -240,7 +240,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			previous.Dependency = wasDependency
 			previous.DependencyOf = beforeDependencyOf
 			chosen[r.key] = previous
-			log.Debug(
+			logger.Debug(
 				"resolve: backtracking requirement merge",
 				"provider", r.key.provider,
 				"project", r.key.project,
@@ -275,8 +275,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 		list, ok := candidates[r.key]
 		if !ok {
+			if candidatesFor == nil {
+				return hardFail(errors.New("resolution requires a candidate source"))
+			}
 			var err error
-			list, err = routing.Candidates(ctx, catalogueRegistry(r.key.provider), r.key.project, string(target.Minecraft), r.key.ecosystem)
+			list, err = candidatesFor(ctx, catalogueRegistry(r.key.provider), r.key.project, string(target.Minecraft), r.key.ecosystem)
 			if err != nil {
 				return hardFail(err)
 			}
@@ -296,7 +299,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					candidates[canonicalKey] = list
 				}
 				ledger.setCandidates(canonicalKey, r.display, len(list))
-				log.Debug(
+				logger.Debug(
 					"resolve: project identity canonicalized",
 					"provider", r.key.provider,
 					"reference", r.key.project,
@@ -325,7 +328,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			if !decision.eligible {
 				ledger.record(r.key, r.display, string(candidate.Version), decision.detail, decision.kind)
 				trace.rejected(r.display, string(candidate.Version), decision.reason)
-				log.Debug(
+				logger.Debug(
 					"resolve: candidate rejected",
 					"provider", r.key.provider,
 					"project", r.key.project,
@@ -340,7 +343,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				reason := describeRejection(RejectionMetadataConflict, detail)
 				ledger.record(r.key, r.display, string(candidate.Version), detail, RejectionMetadataConflict)
 				trace.rejected(r.display, string(candidate.Version), reason)
-				log.Debug(
+				logger.Debug(
 					"resolve: candidate rejected",
 					"provider", r.key.provider,
 					"project", r.key.project,
@@ -406,7 +409,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			} else {
 				delete(conflicts, r.key)
 			}
-			log.Debug(
+			logger.Debug(
 				"resolve: candidate selected",
 				"provider", r.key.provider,
 				"project", r.key.project,
@@ -461,7 +464,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				delete(chosen, r.key)
 			}
 			delete(conflicts, r.key)
-			log.Debug(
+			logger.Debug(
 				"resolve: backtracking candidate",
 				"provider", r.key.provider,
 				"project", r.key.project,
@@ -516,7 +519,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		if !acceptBroken {
 			return nil, nil, finalFailure()
 		}
-		log.Debug(
+		logger.Debug(
 			"resolve: retrying with broken graphs",
 			"reason", lastErr,
 		)
@@ -552,7 +555,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 		warnings = problemErrors(problems)
 	}
-	log.Info(
+	logger.Info(
 		"resolve: selected packages",
 		"packages", len(out),
 	)

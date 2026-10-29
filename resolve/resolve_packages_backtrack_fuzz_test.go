@@ -51,7 +51,6 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 			build("a", 1, "", ""),
 		})
 		fixture.addVersions(t, "b", []stubVersion{build("b", 0, "", "")})
-		fixture.install(t)
 		document := &documentpkg.Manifest{
 			SchemaVersion: documentpkg.ManifestSchemaVersion,
 			Server: documentpkg.ManifestServer{
@@ -62,6 +61,7 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 		}
 		packages, warnings, err := resolve.Packages(resolve.PackagesRequest{
 			Context: t.Context(), Manifest: document, Target: fuzzTarget,
+			Candidates:  fixture.candidates,
 			Materialize: fixture.materialize, ExpandDependencies: true,
 		})
 		if err != nil || len(warnings) != 0 {
@@ -94,7 +94,7 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 		document.Server.Packages[catalog.EcosystemFabric] = map[string]documentpkg.Requirement{
 			"modrinth:" + keep: {Selector: version.Any},
 		}
-		plan, err := install.PlanInstall(t.Context(), fixture.dir, document, replayed, install.Options{
+		plan, err := install.NewService(nil, nil, nil, nil, nil, nil, "").PlanInstall(t.Context(), fixture.dir, document, replayed, install.Options{
 			Locked: true, RequirementChange: true,
 		})
 		if err != nil {

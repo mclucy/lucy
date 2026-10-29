@@ -8,7 +8,6 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -17,7 +16,7 @@ const mcdrPyPIURL = "https://pypi.org/pypi/mcdreforged/json"
 // resolveMCDRVersion picks the MCDReforged version recorded in the lock. A
 // floating selector keeps the locked version; otherwise the latest stable
 // release comes from PyPI metadata, without touching the local Python.
-func resolveMCDRVersion(
+func (s *Service) resolveMCDRVersion(
 	ctx context.Context,
 	request version.Version,
 	previous *documentpkg.Lock,
@@ -35,16 +34,16 @@ func resolveMCDRVersion(
 			request,
 		)
 	}
-	return latestMCDRVersion(ctx)
+	return s.latestMCDRVersion(ctx)
 }
 
-func latestMCDRVersion(ctx context.Context) (version.Version, error) {
+func (s *Service) latestMCDRVersion(ctx context.Context) (version.Version, error) {
 	var document struct {
 		Info struct {
 			Version string `json:"version"`
 		} `json:"info"`
 	}
-	if err := routing.Metadata(ctx, mcdrPyPIURL, &document); err != nil {
+	if err := s.source.Metadata(ctx, mcdrPyPIURL, &document); err != nil {
 		return "", fmt.Errorf("look up MCDReforged releases: %w", err)
 	}
 	raw := strings.TrimSpace(document.Info.Version)

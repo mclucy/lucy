@@ -185,12 +185,12 @@ func FuzzPackagesModuleGraph(f *testing.F) {
 		claims := moduleClaims(declarations)
 		duplicateIdentity, duplicate := moduleDuplicateNative(declarations, claims)
 		fixture := moduleFixture(t, scenario, demand)
-		fixture.install(t)
 
 		out, warnings, err := resolve.Packages(resolve.PackagesRequest{
 			Context:            t.Context(),
 			Manifest:           moduleManifest(demand),
 			Target:             fuzzModuleTarget,
+			Candidates:         fixture.candidates,
 			Materialize:        fixture.materialize,
 			AcceptBroken:       scenario.acceptBroken,
 			ExpandDependencies: demand,

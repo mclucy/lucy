@@ -1,17 +1,12 @@
 package modrinth
 
 import (
-	"crypto/sha1"
+	"context"
 	"encoding/hex"
 	"encoding/json/v2"
 	"fmt"
-	"io"
-	"net/url"
-	"os"
-	"strings"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -27,108 +22,10 @@ type versionFileResponse struct {
 	Loaders       []string `json:"loaders"`
 }
 
-// SlugFromFilePathWithHint resolves the slug for a local artifact file by
-// SHA-1. The optional urlHint slug is verified against the project's version
-// file hashes before falling back to the authoritative hash lookup path.
-func SlugFromFilePathWithHint(filePath, urlHint string) (
-	slug string,
-	err error,
-) {
-	sha1hex, err := sha1File(filePath)
-	if err != nil {
-		return "", fmt.Errorf("modrinth hash: %w", err)
-	}
-
-	if urlHint != "" && verifySlugBySha1(urlHint, sha1hex) {
-		return urlHint, nil
-	}
-
-	return SlugFromHash(sha1hex)
-}
-
-func verifySlugBySha1(hintSlug, sha1hex string) bool {
-	u, err := url.JoinPath(projectUrlPrefix, hintSlug, "version")
-	if err != nil {
-		return false
-	}
-	u += "?include_changelog=false"
-
-	log.Debug("modrinth hint verification: " + u)
-	res, err := requestBytes(u)
-	if err != nil {
-		return false
-	}
-
-	if res.StatusCode != 200 {
-		return false
-	}
-
-	var versions []versionResponse
-	if err := json.Unmarshal(res.Data, &versions); err != nil {
-		return false
-	}
-
-	for _, version := range versions {
-		for _, file := range version.Files {
-			if strings.EqualFold(file.Hashes.Sha1, sha1hex) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// SlugFromHash queries Modrinth for a project by SHA-1 hash using the
-// single-file endpoint GET /v2/version_file/{hash}?algorithm=sha1.
-func SlugFromHash(sha1hex string) (slug string, err error) {
-	u := versionFileURLPrefix + sha1hex + "?algorithm=sha1"
-
-	log.Debug("modrinth hash lookup: " + u)
-	res, err := requestBytes(u)
-	if err != nil {
-		return "", err
-	}
-
-	if res.StatusCode == 404 {
-		return "", ErrNoProject
-	}
-	if res.StatusCode != 200 {
-		return "", fmt.Errorf(
-			"modrinth: hash lookup returned status %d",
-			res.StatusCode,
-		)
-	}
-
-	var version versionFileResponse
-	if err := json.Unmarshal(
-		res.Data,
-		&version,
-	); err != nil || version.ProjectId == "" {
-		return "", ErrNoProject
-	}
-
-	project, err := getProjectById(version.ProjectId)
-	if err != nil {
-		return "", err
-	}
-	return project.Slug, nil
-}
-
-func sha1File(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha1.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func (s provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
+func (p *Provider) PackageByHash(
+	ctx context.Context,
+	hashable upstream.ArtifactFingerprint,
+) (
 	ref catalog.VersionedRef,
 	hash string,
 	ok bool,
@@ -141,9 +38,9 @@ func (s provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
 	hash = hex.EncodeToString(hashBytes[:])
 	u := versionFileURLPrefix + hash + "?algorithm=sha1"
 
-	log.Debug("modrinth hash lookup: " + u)
+	p.logger.Debug("modrinth hash lookup: " + u)
 
-	res, err := requestBytes(u)
+	res, err := p.requestBytes(ctx, u)
 	if err != nil {
 		return ref, hash, false, err
 	}
@@ -164,14 +61,14 @@ func (s provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
 		return ref, hash, false, nil
 	}
 
-	project, err := getProjectById(version.ProjectId)
+	project, err := p.getProjectById(ctx, version.ProjectId)
 	if err != nil {
 		return ref, hash, false, err
 	}
 
 	ref = catalog.VersionedRef{
 		Name:      catalog.Name(project.Slug),
-		Provider:  s.Provider(),
+		Provider:  p.Provider(),
 		Ecosystem: ecosystemFromModrinthLoaders(version.Loaders),
 		Version:   versionpkg.Version(version.VersionNumber),
 	}

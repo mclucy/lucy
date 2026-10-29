@@ -2,6 +2,7 @@ package cache
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -25,20 +26,27 @@ type handler struct {
 	store  *cas.Store
 	index  *index
 	policy Policy
+	logger *log.Logger
 }
 
-func newHandler(name string, cfg Config) *handler {
-	h := &handler{on: cfg.Enabled, dir: setDir(name), policy: cfg.toPolicy()}
+func newHandler(root string, cfg Config, logger *log.Logger) *handler {
+	h := &handler{
+		on:     cfg.Enabled,
+		dir:    root,
+		policy: cfg.toPolicy(),
+		logger: logger,
+	}
 	if !h.on {
 		return h
 	}
 	if err := h.initialize(cfg); err != nil {
-		log.Warn(fmt.Errorf("disable %s cache: %w", name, err))
+		logger.Warn(fmt.Errorf("disable cache at %s: %w", root, err))
 		h.on = false
 		if h.store != nil {
 			if err := h.store.Close(); err != nil {
-				log.Warn(err)
+				logger.Warn(err)
 			}
+			h.store = nil
 		}
 	}
 	return h
@@ -106,11 +114,11 @@ func (h *handler) newWriter() (*cas.Writer, error) {
 	return h.store.NewWriter()
 }
 
-func (h *handler) Add(data []byte, filename, k string, expiration time.Duration) error {
-	return h.AddEntry(data, filename, k, KindArtifact, Integrity{State: IntegrityUnverified}, expiration)
+func (h *handler) add(data []byte, filename, k string, expiration time.Duration) error {
+	return h.addEntry(data, filename, k, KindArtifact, Integrity{State: IntegrityUnverified}, expiration)
 }
 
-func (h *handler) AddEntry(data []byte, filename, k string, kind EntryKind, integrity Integrity, expiration time.Duration) (resultErr error) {
+func (h *handler) addEntry(data []byte, filename, k string, kind EntryKind, integrity Integrity, expiration time.Duration) (resultErr error) {
 	writer, err := h.newWriter()
 	if errors.Is(err, ErrDisabled) {
 		return nil
@@ -125,11 +133,15 @@ func (h *handler) AddEntry(data []byte, filename, k string, kind EntryKind, inte
 	if _, err := writer.Seal(nil); err != nil {
 		return err
 	}
-	return h.CommitEntry(writer, filename, k, kind, integrity, expiration)
+	return h.commitEntry(writer, filename, k, kind, integrity, expiration)
 }
 
-// CommitEntry publishes bytes before their reference and reclaims only after the index commits.
-func (h *handler) CommitEntry(writer *cas.Writer, filename, k string, kind EntryKind, integrity Integrity, expiration time.Duration) (resultErr error) {
+// commitEntry publishes bytes before their reference and reclaims only after the index commits.
+func (h *handler) commitEntry(writer *cas.Writer, filename, k string, kind EntryKind, integrity Integrity, expiration time.Duration) (resultErr error) {
+	return h.commitEntryContext(context.Background(), writer, filename, k, kind, integrity, expiration)
+}
+
+func (h *handler) commitEntryContext(ctx context.Context, writer *cas.Writer, filename, k string, kind EntryKind, integrity Integrity, expiration time.Duration) (resultErr error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	lock, err := h.lockIndex()
@@ -137,6 +149,9 @@ func (h *handler) CommitEntry(writer *cas.Writer, filename, k string, kind Entry
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, lock.Close()) }()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	object, err := writer.Commit(nil)
 	if err != nil {
 		return err
@@ -179,7 +194,7 @@ func (h *handler) CommitEntry(writer *cas.Writer, filename, k string, kind Entry
 	return h.collectCandidatesLocked(removed)
 }
 
-func (h *handler) Flush() (resultErr error) {
+func (h *handler) flush() (resultErr error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.on {
@@ -193,23 +208,23 @@ func (h *handler) Flush() (resultErr error) {
 	return h.index.flush()
 }
 
-func (h *handler) Exist(k string) bool {
-	hit, reader, _, err := h.Get(k)
+func (h *handler) exist(k string) bool {
+	hit, reader, _, err := h.get(k)
 	if err != nil {
-		log.Warn(err)
+		h.logger.Warn(err)
 		return false
 	}
 	if reader != nil {
 		if err := reader.Close(); err != nil {
-			log.Warn(err)
+			h.logger.Warn(err)
 			return false
 		}
 	}
 	return hit
 }
 
-// Get keeps a reader alive independently of later index replacements. The caller must Close it.
-func (h *handler) Get(k string) (hit bool, reader io.ReadCloser, filename string, resultErr error) {
+// get keeps a reader alive independently of later index replacements. The caller must Close it.
+func (h *handler) get(k string) (hit bool, reader io.ReadCloser, filename string, resultErr error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.on {
@@ -241,20 +256,24 @@ func (h *handler) Get(k string) (hit bool, reader io.ReadCloser, filename string
 	return true, reader, entry.Filename, nil
 }
 
-func (h *handler) GetBytes(k string) (hit bool, data []byte, resultErr error) {
-	hit, reader, _, err := h.Get(k)
+func (h *handler) getBytes(k string) (hit bool, data []byte, resultErr error) {
+	return h.getBytesContext(context.Background(), k)
+}
+
+func (h *handler) getBytesContext(ctx context.Context, k string) (hit bool, data []byte, resultErr error) {
+	hit, reader, _, err := h.get(k)
 	if err != nil || !hit {
 		return false, nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, reader.Close()) }()
-	data, err = io.ReadAll(reader)
+	data, err = io.ReadAll(contextReader{ctx, reader})
 	if err != nil {
 		return false, nil, err
 	}
 	return true, data, nil
 }
 
-func (h *handler) Remove(k string) (resultErr error) {
+func (h *handler) remove(k string) (resultErr error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.on {
@@ -280,7 +299,7 @@ func (h *handler) Remove(k string) (resultErr error) {
 	return h.collectCandidatesLocked([]cas.Digest{digest})
 }
 
-func (h *handler) All() []*Entry {
+func (h *handler) all() []*Entry {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.on {
@@ -288,12 +307,12 @@ func (h *handler) All() []*Entry {
 	}
 	lock, err := h.lockIndex()
 	if err != nil {
-		log.Warn(err)
+		h.logger.Warn(err)
 		return nil
 	}
 	defer func() {
 		if err := lock.Close(); err != nil {
-			log.Warn(err)
+			h.logger.Warn(err)
 		}
 	}()
 	keys := slices.Sorted(maps.Keys(h.index.entries))
@@ -305,7 +324,7 @@ func (h *handler) All() []*Entry {
 	return entries
 }
 
-func (h *handler) ClearAll() (report ResetReport, resultErr error) {
+func (h *handler) clearAll() (report ResetReport, resultErr error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.on {

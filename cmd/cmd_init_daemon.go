@@ -3,23 +3,25 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/mclucy/lucy/report"
-	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/spf13/cobra"
 )
 
 const flagInitDaemonBinaryName = "binary"
 
 // newDaemonCommands creates independent daemon installation entry points.
-func newDaemonCommands() []*cobra.Command {
-	var initDaemonCmd = &cobra.Command{
+func newDaemonCommands(inv *cli.Invocation) []*cobra.Command {
+	install := func(cmd *cobra.Command, args []string) error {
+		return actionInitDaemon(cmd, inv, args)
+	}
+	initDaemonCmd := &cobra.Command{
 		Use:   "init-daemon",
 		Short: "Install and start the Lucy daemon service",
 		Args:  cobra.NoArgs,
-		RunE:  actionInitDaemon,
+		RunE:  install,
 	}
 
-	var daemonCmd = &cobra.Command{
+	daemonCmd := &cobra.Command{
 		Use:    "daemon",
 		Short:  "Manage the Lucy daemon",
 		Hidden: true,
@@ -28,16 +30,15 @@ func newDaemonCommands() []*cobra.Command {
 		},
 	}
 
-	var daemonInitCmd = &cobra.Command{
+	daemonInitCmd := &cobra.Command{
 		Use:    "init",
 		Short:  "Install and start the Lucy daemon service",
 		Hidden: true,
 		Args:   cobra.NoArgs,
-		RunE:   actionInitDaemon,
+		RunE:   install,
 	}
 
-	// init registers init-daemon and its hidden daemon init alias with an optional
-	// binary path for native service installation.
+	// Both entry points accept the binary used by native services.
 	initDaemonCmd.Flags().String(
 		flagInitDaemonBinaryName,
 		"",
@@ -54,18 +55,19 @@ func newDaemonCommands() []*cobra.Command {
 
 // actionInitDaemon ensures the administration group and installs, enables and
 // starts the daemon service, returning failures before reporting success.
-func actionInitDaemon(cmd *cobra.Command, _ []string) error {
+func actionInitDaemon(cmd *cobra.Command, inv *cli.Invocation, _ []string) error {
 	binary, _ := cmd.Flags().GetString(flagInitDaemonBinaryName)
 	if binary == "" {
-		binary = server.CurrentBinary()
+		binary = cli.CurrentBinary()
 	}
-	if err := server.EnsureAdminGroup(); err != nil {
+	if err := cli.EnsureAdminGroup(); err != nil {
 		return err
 	}
-	if err := server.NewServiceManager().(server.DaemonInstaller).InstallDaemon(binary); err != nil {
+	if err := cli.NewServiceManager().(cli.DaemonInstaller).InstallDaemon(binary); err != nil {
 		return fmt.Errorf("install Lucy daemon: %w", err)
 	}
-	report.Info("Lucy daemon service installed, enabled, and started")
-	report.Info("No Minecraft server instances were started; add one with `lucy server add <name> <path>`")
+	output := cli.NewOperationOutput(cmd, inv)
+	output.Info("Lucy daemon service installed, enabled, and started")
+	output.Info("No Minecraft server instances were started; add one with `lucy server add <name> <path>`")
 	return nil
 }

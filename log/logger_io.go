@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync"
 )
 
 func DefaultFile() string {
@@ -21,38 +20,6 @@ func DefaultFile() string {
 		directory = "logs"
 	}
 	return filepath.Join(directory, "lucy.log")
-}
-
-// fileOutput opens the default destination lazily for callers outside the CLI.
-// CLI configuration opens its destination before an action can run.
-type fileOutput struct {
-	mu   sync.Mutex
-	path string
-	file *os.File
-}
-
-func (output *fileOutput) Write(content []byte) (int, error) {
-	output.mu.Lock()
-	defer output.mu.Unlock()
-	if output.file == nil {
-		file, err := openLogFile(output.path)
-		if err != nil {
-			return 0, err
-		}
-		output.file = file
-	}
-	return output.file.Write(content)
-}
-
-func (output *fileOutput) close() error {
-	output.mu.Lock()
-	defer output.mu.Unlock()
-	if output.file == nil {
-		return nil
-	}
-	file := output.file
-	output.file = nil
-	return file.Close()
 }
 
 func openLogFile(path string) (*os.File, error) {

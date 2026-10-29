@@ -9,10 +9,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
 )
 
@@ -31,6 +33,9 @@ type UpgradeOptions struct {
 	// versions offline, so this is only useful when it fails early.
 	Offline bool
 	Trace   *install.Trace
+	// Materialize supplies artifact bytes for frontier planning. Nil uses the
+	// configured cache and network.
+	Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
 	// MaxCombinations and MaxVersions bound the frontier search. Zero uses
 	// the package defaults.
 	MaxCombinations int
@@ -60,7 +65,7 @@ type UpgradeResult struct {
 	Warnings                []error
 }
 
-func PlanUpgrade(
+func (s *Service) PlanUpgrade(
 	ctx context.Context,
 	root string,
 	opts UpgradeOptions,
@@ -88,19 +93,24 @@ func PlanUpgrade(
 	if old.ManifestFingerprint != baseManifest {
 		return nil, fmt.Errorf("manifest changed since the lock; run lucy install first")
 	}
-	if err := upgradePreflight(ctx, root, d, old); err != nil {
+	if err := s.upgradePreflight(ctx, root, d, old); err != nil {
 		return nil, err
 	}
 	baseLock, err := old.Fingerprint()
 	if err != nil {
 		return nil, err
 	}
-	writer, err := workspacewrite.Lock(root)
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
+	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
 		return nil, err
 	}
 	currentManifest, err := document.ManifestFile(root).Read()
@@ -134,9 +144,10 @@ func PlanUpgrade(
 		return nil, err
 	}
 	warnings := []error{}
-	materialize, fetch := install.Materializer(ctx, root, install.Options{
-		Offline: opts.Offline,
-		Trace:   opts.Trace,
+	materialize, fetch := s.install.Materializer(ctx, install.Options{
+		Offline:     opts.Offline,
+		Trace:       opts.Trace,
+		Materialize: opts.Materialize,
 	})
 	cache := resolve.NewAnalysisCache()
 	maxVersions := opts.MaxVersions
@@ -145,11 +156,20 @@ func PlanUpgrade(
 	}
 	active := make([]int, 0, len(roots))
 	for i := range roots {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if !targets[roots[i].Reference] {
 			continue
 		}
-		versions, lockedIndex, lockedRank, err := upgradeVersions(ctx, roots[i], old, maxVersions)
+		versions, lockedIndex, lockedRank, err := s.upgradeVersions(ctx, roots[i], old, maxVersions)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
 			if opts.All {
 				warnings = append(warnings, fmt.Errorf(
 					"keep %s at %s: %w",
@@ -168,9 +188,15 @@ func PlanUpgrade(
 			active = append(active, i)
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(active) == 0 {
 		option, err := noopUpgradeOption(d, old, baseManifest, baseLock)
 		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		return &UpgradeResult{
@@ -188,7 +214,10 @@ func PlanUpgrade(
 	seen := map[string]UpgradeOption{}
 	failures := []error{}
 	for _, combo := range combos {
-		option, err := resolveUpgradeOption(
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		option, err := s.resolveUpgradeOption(
 			ctx,
 			root,
 			d,
@@ -203,13 +232,22 @@ func PlanUpgrade(
 			opts.Trace,
 		)
 		if err != nil {
-			log.Debug("upgrade: candidate combination failed", "error", err)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
+			s.logger.Debug("upgrade: candidate combination failed", "error", err)
 			if len(failures) < maxUpgradeFailures {
 				failures = append(failures, err)
 			}
 			continue
 		}
 		seen[option.Hash] = option
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if len(seen) == 0 {
 		if len(failures) == 0 {
@@ -230,6 +268,9 @@ func PlanUpgrade(
 			len(failures),
 		))
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return &UpgradeResult{
 		BaseManifestFingerprint: baseManifest,
 		BaseLockFingerprint:     baseLock,
@@ -239,7 +280,7 @@ func PlanUpgrade(
 }
 
 // ApplyUpgrade applies one selected option through the install transaction.
-func ApplyUpgrade(
+func (s *Service) ApplyUpgrade(
 	ctx context.Context,
 	root string,
 	option UpgradeOption,
@@ -251,7 +292,7 @@ func ApplyUpgrade(
 	}
 	option.Plan.Result.Policy = policy
 	option.Plan.Result.PlanHash = option.Hash
-	return install.ApplyPlan(ctx, root, option.Plan, opts)
+	return s.install.ApplyPlan(ctx, root, option.Plan, opts)
 }
 
 // SelectUpgradeOption picks a frontier point for a policy value. A policy that
@@ -318,7 +359,7 @@ func ListUpgradeRoots(root string) ([]string, error) {
 	return refs, nil
 }
 
-func upgradePreflight(
+func (s *Service) upgradePreflight(
 	ctx context.Context,
 	root string,
 	d *document.Manifest,
@@ -342,7 +383,7 @@ func upgradePreflight(
 		!upgradeFloating(d.MCDR.Version) && d.MCDR.Version != old.MCDR.Version:
 		return fmt.Errorf("MCDR %s differs from locked %s; run lucy migrate", d.MCDR.Version, old.MCDR.Version)
 	}
-	check, err := install.CheckJava(ctx, root, old)
+	check, err := s.install.CheckJava(ctx, root, old)
 	if err != nil {
 		return err
 	}

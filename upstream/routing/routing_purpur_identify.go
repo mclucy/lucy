@@ -24,14 +24,14 @@ type purpurBuildInfo struct {
 // IdentifyPurpurBuild matches a Purpur jar digest against the published builds
 // for a Minecraft version. The Purpur API exposes only MD5 digests, so init
 // walks builds from newest to oldest until one matches.
-func IdentifyPurpurBuild(
+func (r *Router) IdentifyPurpurBuild(
 	ctx context.Context,
 	minecraft version.Version,
 	md5 string,
 ) (version.Version, bool, error) {
 	base := "https://api.purpurmc.org/v2/purpur/" + minecraft.String()
 	var listed purpurVersionInfo
-	if err := Metadata(ctx, base, &listed); err != nil {
+	if err := r.Metadata(ctx, base, &listed); err != nil {
 		return "", false, err
 	}
 	builds := listed.Builds.All
@@ -41,7 +41,7 @@ func IdentifyPurpurBuild(
 	for index := len(builds) - 1; index >= 0; index-- {
 		build := builds[index]
 		var detail purpurBuildInfo
-		if err := Metadata(ctx, base+"/"+build, &detail); err != nil {
+		if err := r.Metadata(ctx, base+"/"+build, &detail); err != nil {
 			return "", false, fmt.Errorf("Purpur build %s: %w", build, err)
 		}
 		if detail.Version != "" && detail.Version != minecraft.String() {

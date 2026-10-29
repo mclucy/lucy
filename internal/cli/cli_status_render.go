@@ -32,18 +32,20 @@ func renderStatus(
 	document statusDocument,
 	long bool,
 	logoMode terminal.StatusLogoMode,
-	width int,
+	term style.Terminal,
+	theme style.Theme,
 ) string {
+	width := term.Width
 	if width <= 0 {
 		width = 80
 	}
 
-	logo := resolveStatusViewLogo(document)
+	logo := resolveStatusViewLogo(document, theme)
 	layout := terminal.NegotiateStatusLayout(
 		width,
 		logo.largeWidth(),
 		logo.smallWidth(),
-		style.StdoutIsTerminal,
+		term.IsTTY,
 		logoMode,
 	)
 	if logo.empty() {
@@ -58,16 +60,22 @@ func renderStatus(
 
 	infoWidth := max(1, layout.InfoWidth-2)
 	packages := statusViewPackageGroups(document.Packages)
-	facts := statusViewFacts(document, packages, long, infoWidth)
-	info := terminal.RenderFactGroups(facts, infoWidth, style.Key)
+	facts := statusViewFacts(document, packages, long, infoWidth, theme)
+	info := terminal.RenderFactGroups(facts, infoWidth, theme)
 	if long {
 		for index, group := range packages {
 			separator := "\n\n"
 			if index == 0 && len(facts) > 1 && len(facts[1]) > 0 {
 				separator = "\n"
 			}
-			info += separator + group.title + " " + style.Muted(fmt.Sprintf("(%d)", len(group.packages)))
-			info += "\n" + statusViewPackageTable(document.Root, group.packages, infoWidth)
+			info += separator + group.title + " " +
+				theme.Muted(fmt.Sprintf("(%d)", len(group.packages)))
+			info += "\n" + statusViewPackageTable(
+				document.Root,
+				group.packages,
+				infoWidth,
+				theme,
+			)
 		}
 	}
 	info = "  " + strings.ReplaceAll(info, "\n", "\n  ")
@@ -106,7 +114,10 @@ func statusViewBlockWidth(lines []string) int {
 	return lipgloss.Width(lines[0])
 }
 
-func resolveStatusViewLogo(document statusDocument) statusViewLogo {
+func resolveStatusViewLogo(
+	document statusDocument,
+	theme style.Theme,
+) statusViewLogo {
 	if document.Server != nil {
 		product, ok := serverpkg.ParseProduct(document.Server.Product.Name)
 		if ok {
@@ -135,7 +146,7 @@ func resolveStatusViewLogo(document statusDocument) statusViewLogo {
 					logo.ecosystem = fallback
 				}
 			}
-			return statusViewLogoAssets(logo)
+			return statusViewLogoAssets(logo, theme)
 		}
 	}
 	if document.MCDR != nil {
@@ -143,7 +154,7 @@ func resolveStatusViewLogo(document statusDocument) statusViewLogo {
 			product:   serverpkg.ProductMCDReforged,
 			ecosystem: catalog.EcosystemMCDR,
 			version:   versionpkg.Unknown,
-		})
+		}, theme)
 	}
 	return statusViewLogo{}
 }
@@ -174,7 +185,7 @@ func statusViewLogoEcosystem(server *statusServer) catalog.Ecosystem {
 	return fallback
 }
 
-func statusViewLogoAssets(logo statusViewLogo) statusViewLogo {
+func statusViewLogoAssets(logo statusViewLogo, theme style.Theme) statusViewLogo {
 	if terminal.GetLogo(
 		logo.product,
 		logo.ecosystem,
@@ -186,7 +197,7 @@ func statusViewLogoAssets(logo statusViewLogo) statusViewLogo {
 
 	smallVariant := terminal.LogoSmallPlain
 	largeVariant := terminal.LogoLargePlain
-	if style.ColorsEnabled() {
+	if theme.Colors() {
 		if terminal.GetLogo(
 			logo.product,
 			logo.ecosystem,
@@ -393,6 +404,7 @@ func statusViewFacts(
 	packages []statusViewPackageGroup,
 	long bool,
 	width int,
+	theme style.Theme,
 ) [][]terminal.Fact {
 	runtime := []terminal.Fact{}
 	serverRow := -1
@@ -401,12 +413,19 @@ func statusViewFacts(
 			runtime = append(runtime, terminal.Fact{Key: "Minecraft", Value: server.Minecraft})
 		}
 		serverRow = len(runtime)
-		runtime = append(runtime,
+		runtime = append(
+			runtime,
 			terminal.Fact{Key: "Server"},
-			terminal.Fact{Key: "Activity", Value: statusViewActivity(document.Source, server.Activity)},
+			terminal.Fact{
+				Key:   "Activity",
+				Value: statusViewActivity(document.Source, server.Activity, theme),
+			},
 		)
 	} else {
-		runtime = append(runtime, terminal.Fact{Key: "Server", Value: style.Muted("no server found")})
+		runtime = append(runtime, terminal.Fact{
+			Key:   "Server",
+			Value: theme.Muted("no server found"),
+		})
 	}
 	if document.MCDR != nil {
 		runtime = append(runtime, statusViewMCDRFact(document.MCDR))
@@ -415,8 +434,11 @@ func statusViewFacts(
 	contents := []terminal.Fact{}
 	if document.Server != nil && len(document.Server.CompatibleEcosystems) > 0 {
 		contents = append(contents, terminal.Fact{
-			Key:   "Ecosystems",
-			Value: statusViewCompatibility(document.Server.CompatibleEcosystems),
+			Key: "Ecosystems",
+			Value: statusViewCompatibility(
+				document.Server.CompatibleEcosystems,
+				theme,
+			),
 		})
 	}
 	packageStart := len(contents)
@@ -428,11 +450,20 @@ func statusViewFacts(
 	groups := [][]terminal.Fact{runtime, contents}
 	valueWidth := statusViewValueWidth(groups, width)
 	if serverRow >= 0 {
-		runtime[serverRow].Value = statusViewServer(document.Root, document.Server, valueWidth)
+		runtime[serverRow].Value = statusViewServer(
+			document.Root,
+			document.Server,
+			valueWidth,
+			theme,
+		)
 	}
 	if !long {
 		for i, group := range packages {
-			contents[packageStart+i].Value = statusViewPackageGrid(group.packages, valueWidth)
+			contents[packageStart+i].Value = statusViewPackageGrid(
+				group.packages,
+				valueWidth,
+				theme,
+			)
 		}
 	}
 	return groups
@@ -449,20 +480,29 @@ func statusViewValueWidth(groups [][]terminal.Fact, width int) int {
 	return max(1, width-keyWidth-2)
 }
 
-func statusViewServer(root string, server *statusServer, width int) string {
+func statusViewServer(
+	root string,
+	server *statusServer,
+	width int,
+	theme style.Theme,
+) string {
 	product := terminal.TruncateMiddle(statusViewProduct(server.Product), width)
 	value := product
 	if server.EntryPoint != "" {
 		filename := statusViewLauncher(root, server.EntryPoint)
 		remaining := width - ansi.StringWidth(product) - 3
 		if remaining >= min(8, ansi.StringWidth(filename)) {
-			value += "   " + style.Muted(terminal.TruncateMiddle(filename, remaining))
+			value += "   " + theme.Muted(
+				terminal.TruncateMiddle(filename, remaining),
+			)
 		} else {
-			value += "\n" + style.Muted(terminal.TruncateMiddle(filename, width))
+			value += "\n" + theme.Muted(
+				terminal.TruncateMiddle(filename, width),
+			)
 		}
 	}
 	if components := statusViewComponents(server); components != "" {
-		value += "\n" + style.Muted(components)
+		value += "\n" + theme.Muted(components)
 	}
 	return value
 }
@@ -503,18 +543,22 @@ func statusViewProduct(product statusProduct) string {
 	return strings.Join(parts, " ")
 }
 
-func statusViewActivity(source string, activity string) string {
+func statusViewActivity(
+	source string,
+	activity string,
+	theme style.Theme,
+) string {
 	activity = strings.ToLower(strings.TrimSpace(activity))
 	if strings.EqualFold(strings.TrimSpace(source), statusSourceLock) {
-		return style.Muted("not observed")
+		return theme.Muted("not observed")
 	}
 	switch activity {
 	case statusActivityRunning:
-		return style.Success("● running")
+		return theme.Success("● running")
 	case statusActivityStopped:
-		return style.Muted("○ stopped")
+		return theme.Muted("○ stopped")
 	case "", statusActivityUnknown:
-		return style.Muted("unknown")
+		return theme.Muted("unknown")
 	default:
 		return "○ " + activity
 	}
@@ -544,7 +588,10 @@ func statusViewComponents(server *statusServer) string {
 	return strings.Join(lines, ", ")
 }
 
-func statusViewCompatibility(ecosystems []statusEcosystem) string {
+func statusViewCompatibility(
+	ecosystems []statusEcosystem,
+	theme style.Theme,
+) string {
 	labels := make([]string, 0, len(ecosystems))
 	for _, offer := range ecosystems {
 		title := strings.TrimSpace(offer.Ecosystem)
@@ -555,7 +602,7 @@ func statusViewCompatibility(ecosystems []statusEcosystem) string {
 			title = parsed.Title()
 		}
 		if compatibility := strings.TrimSpace(offer.Compatibility); compatibility != "" {
-			title += " " + style.Muted("("+compatibility+")")
+			title += " " + theme.Muted("("+compatibility+")")
 		}
 		labels = append(labels, title)
 	}
@@ -601,7 +648,12 @@ func statusViewPackageGroupKey(group statusViewPackageGroup) string {
 	return fmt.Sprintf("%s (%d)", group.title, len(group.packages))
 }
 
-func statusViewPackageTable(root string, packages []statusPackage, width int) string {
+func statusViewPackageTable(
+	root string,
+	packages []statusPackage,
+	width int,
+	theme style.Theme,
+) string {
 	width = max(1, width-2)
 	nameWidth, versionWidth := 1, 1
 	for _, pkg := range packages {
@@ -632,7 +684,7 @@ func statusViewPackageTable(root string, packages []statusPackage, width int) st
 		table.WriteString(strings.Repeat(" ", nameWidth-ansi.StringWidth(name)+gap))
 		table.WriteString(version)
 		table.WriteString(strings.Repeat(" ", versionWidth-ansi.StringWidth(version)+gap))
-		table.WriteString(style.Muted(terminal.TruncateMiddle(path, pathWidth)))
+		table.WriteString(theme.Muted(terminal.TruncateMiddle(path, pathWidth)))
 	}
 	return table.String()
 }
@@ -646,7 +698,11 @@ func statusViewPackageVersion(pkg statusPackage) string {
 	return "unknown"
 }
 
-func statusViewPackageGrid(packages []statusPackage, width int) string {
+func statusViewPackageGrid(
+	packages []statusPackage,
+	width int,
+	theme style.Theme,
+) string {
 	labels := statusViewPackageLabels(packages)
 	if len(labels) == 0 {
 		return ""
@@ -677,7 +733,7 @@ func statusViewPackageGrid(packages []statusPackage, width int) string {
 		lines = append(lines, row.String())
 	}
 	if hidden := len(labels) - visible; hidden > 0 {
-		lines = append(lines, terminal.FoldHint(hidden))
+		lines = append(lines, terminal.FoldHint(hidden, theme))
 	}
 	return strings.Join(lines, "\n")
 }

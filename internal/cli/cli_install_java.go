@@ -7,27 +7,28 @@ import (
 
 	"github.com/mclucy/lucy/javainstall"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
-	"github.com/mclucy/lucy/terminal/progress"
-	"github.com/mclucy/lucy/terminal/style"
 )
 
 // provisionJava installs the first usable plan, most native first. A configured
 // runtime is the user's choice, so the hook leaves it unchanged. Installation
 // needs network access.
-func (o *installOutput) provisionJava(host javainstall.Host, offline bool) func(context.Context, javaruntime.Requirement, *javaruntime.Check) error {
-	return func(ctx context.Context, _ javaruntime.Requirement, check *javaruntime.Check) error {
+func (o *installOutput) provisionJava(
+	host *javainstall.Host,
+	policy javainstall.Policy,
+	offline bool,
+) func(context.Context, javaruntime.Requirement, *javaruntime.Check) (string, error) {
+	return func(ctx context.Context, _ javaruntime.Requirement, check *javaruntime.Check) (string, error) {
 		if check.Source == javaruntime.SourceConfigured {
-			log.Info(
+			o.inv.Logger.Info(
 				"java installation skipped",
 				"reason", check.ConfigPath+" selects the Java runtime",
 				"home", check.ConfiguredHome,
 			)
-			return nil
+			return "", nil
 		}
 		if offline {
-			return &report.Detail{
+			return "", &report.Detail{
 				Title: "cannot install Java while offline",
 				Lines: []string{fmt.Sprintf(
 					"no installed runtime meets the requirement for Java %d, and every installation method needs network access",
@@ -37,40 +38,44 @@ func (o *installOutput) provisionJava(host javainstall.Host, offline bool) func(
 			}
 		}
 		request := javainstall.Request{Major: check.Target, Distribution: check.Distribution}
-		plans, skipped, err := javainstall.Plans(ctx, request, host)
+		plans, skipped, err := host.Plans(ctx, request, policy)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if len(plans) == 0 {
-			return noJavaPlanDetail(request, skipped)
+			return "", noJavaPlanDetail(request, skipped)
 		}
 		plan := plans[0]
-		log.Info(
+		o.inv.Logger.Info(
 			"java install plan selected",
 			"method", plan.Method,
 			"package", plan.Package,
 			"alternatives", len(plans)-1,
 			"skipped", len(skipped),
 		)
-		return o.suspend(func(w io.Writer) error {
+		var home string
+		err = o.suspend(func(w io.Writer) error {
 			fmt.Fprintf(
 				w,
 				"%s Java %d (%s) with %s\n",
-				style.Accent("Installing"),
+				o.inv.Theme.Accent("Installing"),
 				request.Major,
 				javaDistributionLabel(plan.Distribution),
 				plan.Method,
 			)
 			for _, line := range plan.Commands() {
-				fmt.Fprintln(w, "  "+style.Muted(line))
+				fmt.Fprintln(w, "  "+o.inv.Theme.Muted(line))
 			}
 			if plan.Method == javainstall.MethodDownload {
 				for _, s := range skipped {
-					fmt.Fprintln(w, "  "+style.Muted(skipText(s)))
+					fmt.Fprintln(w, "  "+o.inv.Theme.Muted(skipText(s)))
 				}
 			}
-			return javainstall.Execute(ctx, plan, host, w)
+			var executeErr error
+			home, executeErr = host.Execute(ctx, plan, policy, o.input, w)
+			return executeErr
 		})
+		return home, err
 	}
 }
 
@@ -78,11 +83,7 @@ func (o *installOutput) provisionJava(host javainstall.Host, offline bool) func(
 // manager can prompt for a password, then starts a new progress area.
 func (o *installOutput) suspend(run func(io.Writer) error) error {
 	o.renderer.Close()
-	defer func() {
-		if o.json == JSONNone {
-			o.renderer = progress.New(o.cmd.ErrOrStderr())
-		}
-	}()
+	defer o.RestartProgress()
 	return run(o.Human())
 }
 

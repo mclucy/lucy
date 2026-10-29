@@ -1,12 +1,26 @@
 package github
 
 import (
+	"context"
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/log"
 )
+
+// Client fetches GitHub metadata through one configured network cache.
+type Client struct {
+	network *cache.Client
+	logger  *log.Logger
+}
+
+// New constructs a GitHub metadata client. network supplies the cached HTTP
+// transport; logger may be nil, which records nothing.
+func New(network *cache.Client, logger *log.Logger) *Client {
+	return &Client{network: network, logger: logger}
+}
 
 // checkGitHubMessage returns the parsed error message when data is a GitHub
 // API error envelope, nil otherwise.
@@ -19,12 +33,15 @@ func checkGitHubMessage(data []byte) *GhApiMessage {
 	return nil
 }
 
-func GetFileFromGitHub(apiEndpoint string) (
+func (c *Client) GetFileFromGitHub(
+	ctx context.Context,
+	apiEndpoint string,
+) (
 	err error,
 	msg *GhApiMessage,
 	data []byte,
 ) {
-	res, err := cachedGithubGet(apiEndpoint)
+	res, err := c.get(ctx, apiEndpoint)
 	if err != nil {
 		return err, nil, nil
 	}
@@ -42,7 +59,7 @@ func GetFileFromGitHub(apiEndpoint string) (
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrCannotDecode, err), nil, nil
 	}
-	res, err = cachedGithubGet(item.DownloadUrl)
+	res, err = c.get(ctx, item.DownloadUrl)
 	if err != nil {
 		return err, nil, nil
 	}
@@ -54,12 +71,15 @@ func GetFileFromGitHub(apiEndpoint string) (
 	return nil, nil, data
 }
 
-func GetDirectoryFromGitHub(apiEndpoint string) (
+func (c *Client) GetDirectoryFromGitHub(
+	ctx context.Context,
+	apiEndpoint string,
+) (
 	err error,
 	msg *GhApiMessage,
 	items []GhItem,
 ) {
-	res, err := cachedGithubGet(apiEndpoint)
+	res, err := c.get(ctx, apiEndpoint)
 	if err != nil {
 		return err, nil, nil
 	}
@@ -80,8 +100,13 @@ func GetDirectoryFromGitHub(apiEndpoint string) (
 	return nil, nil, decodedItems
 }
 
-func cachedGithubGet(rawURL string) (*cache.BytesResponse, error) {
-	return cache.CachedGetRequest(
+func (c *Client) get(
+	ctx context.Context,
+	rawURL string,
+) (*cache.BytesResponse, error) {
+	c.logger.Debug("github api: GET " + rawURL)
+	return c.network.CachedGetRequest(
+		ctx,
 		rawURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)

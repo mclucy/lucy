@@ -3,77 +3,19 @@ package install
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"time"
 
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
-// Resolve builds the lock document that answers d without staging or
-// committing the server tree. It records the declared packages alone, because
-// the workspace the manifest describes already holds a working set that
-// catalogue dependencies must not extend. Artifact bytes still enter the
-// workspace download store because the lock pins their hashes. It returns the
-// resolution facts alongside the lock. The caller must hold the workspace
-// writer lock.
-func Resolve(
-	ctx context.Context,
-	root string,
-	d *document.Manifest,
-	old *document.Lock,
-	opts Options,
-) (*document.Lock, *Result, error) {
-	result := newResult()
-	result.Mode = ModeResolve
-	result.Reason = "lock resolved"
-	absolute, err := filepath.Abs(root)
-	if err != nil {
-		return nil, result, err
-	}
-	if d == nil {
-		return nil, result, fmt.Errorf("manifest required to resolve a lock")
-	}
-	opts.declaredOnly = true
-	if err := workspacewrite.SafePath(absolute, ".lucy"); err != nil {
-		return nil, result, err
-	}
-	fingerprint, err := d.Fingerprint()
-	if err != nil {
-		return nil, result, err
-	}
-	if old != nil && !opts.WithOptional && old.ManifestFingerprint == fingerprint {
-		log.Debug("lock resolution reused current lock", "reason", "manifest unchanged")
-		result.Mode = ModeReplay
-		result.Reason = "manifest unchanged; lock reused"
-		return old, result, nil
-	}
-	store := &downloadStore{
-		ctx:     ctx,
-		dir:     filepath.Join(absolute, ".lucy", "downloads"),
-		offline: opts.Offline,
-		trace:   opts.Trace,
-		fetch:   &result.Fetch,
-	}
-	resolved, err := resolveInstall(ctx, absolute, d, old, fingerprint, &opts, store, result)
-	if err != nil {
-		return nil, result, err
-	}
-	if err := resolved.Validate(); err != nil {
-		return nil, result, err
-	}
-	return resolved, result, nil
-}
-
 // resolveInstall resolves d into a new lock document. The caller decides when
-// a lock may be reused, so this function always resolves. The download store
+// a lock may be reused, so this function always resolves. The artifact store
 // receives every artifact whose hash the lock records.
-func resolveInstall(
+func (s *Service) resolveInstall(
 	ctx context.Context,
 	root string,
 	d *document.Manifest,
@@ -89,7 +31,7 @@ func resolveInstall(
 	if opts.Offline {
 		return nil, fmt.Errorf("offline resolution requires a current lock; metadata selection is unavailable")
 	}
-	log.Info(
+	s.logger.Info(
 		"resolving installation",
 		"minecraft", d.Server.Minecraft,
 		"product", d.Server.Core.Product,
@@ -106,14 +48,14 @@ func resolveInstall(
 	var core routing.ServerProductResolution
 	canReuse := false
 	if old != nil {
-		reusable, err := coreReusable(ctx, d, old, opts.Offline)
+		reusable, err := s.coreReusable(ctx, d, old, opts.Offline)
 		if err != nil {
 			return nil, err
 		}
 		canReuse = reusable
 	}
 	if canReuse {
-		log.Debug(
+		s.logger.Debug(
 			"reusing locked core resolution",
 			"reason", "manifest core still matches lock",
 			"minecraft", old.Server.Minecraft,
@@ -133,7 +75,7 @@ func resolveInstall(
 		opts.Trace.phaseStarted("server")
 		start := time.Now()
 		var err error
-		core, err = routing.ResolveServerProduct(ctx, coreReq, store.materialize)
+		core, err = s.source.ResolveServerProduct(ctx, coreReq, store.materialize)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +111,7 @@ func resolveInstall(
 		if old != nil && old.MCDR != nil && isFloating(request) {
 			request = old.MCDR.Version
 		}
-		resolvedVersion, err := resolveMCDRVersion(ctx, request, old, opts.Offline)
+		resolvedVersion, err := s.resolveMCDRVersion(ctx, request, old, opts.Offline)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +130,7 @@ func resolveInstall(
 		store.materialize,
 	)
 	if moduleErr != nil {
-		log.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
+		s.logger.Warn(fmt.Errorf("read server core modules: %w", moduleErr))
 	} else {
 		resolved.Server.Artifact.Modules = coreModules
 	}
@@ -196,7 +138,7 @@ func resolveInstall(
 	if old != nil {
 		previousPackages = old.Packages
 	}
-	packages, moduleWarnings, err := resolve.Packages(resolve.PackagesRequest{
+	packageRequest := resolve.PackagesRequest{
 		Context:  ctx,
 		Manifest: d,
 		Previous: previousPackages,
@@ -212,8 +154,13 @@ func resolveInstall(
 		WithOptional:       opts.WithOptional,
 		AcceptBroken:       opts.AcceptBroken,
 		ExpandDependencies: !opts.declaredOnly,
+		Logger:             s.logger,
 		Trace:              opts.Trace.resolveTrace(),
-	})
+	}
+	if s.source != nil {
+		packageRequest.Candidates = s.source.Candidates
+	}
+	packages, moduleWarnings, err := resolve.Packages(packageRequest)
 	if err != nil {
 		return nil, err
 	}

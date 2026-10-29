@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // pacman installs Java from the configured Pacman sources.
@@ -17,17 +16,17 @@ func (pacman) method() Method { return MethodPacman }
 
 func (pacman) system() bool { return true }
 
-func (pacman) ownsJava() bool { return false }
+func (pacman) ownsJava(context.Context, *Host) bool { return false }
 
-func (pacman) plans(ctx context.Context, req Request) ([]Plan, error) {
+func (pacman) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
 	if req.Major <= 0 ||
 		req.Distribution != java.DistributionAny ||
-		!systemToolAvailable("pacman") {
+		!host.systemToolAvailable("pacman") {
 		return nil, nil
 	}
 	pkg := fmt.Sprintf("jre%d-openjdk-headless", req.Major)
-	if !pacmanPackageAvailable(ctx, pkg) {
-		info, ok := pacmanPackageInfo(ctx, "jre-openjdk-headless")
+	if !pacmanPackageAvailable(ctx, host, pkg) {
+		info, ok := pacmanPackageInfo(ctx, host, "jre-openjdk-headless")
 		if !ok || !pacmanProvidesMajor(info, req.Major) {
 			return nil, nil
 		}
@@ -57,17 +56,21 @@ func (pacman) plans(ctx context.Context, req Request) ([]Plan, error) {
 
 // pacmanPackageInfo returns the repository metadata of pkg, or false when the
 // configured sources do not offer it.
-func pacmanPackageInfo(ctx context.Context, pkg string) (string, bool) {
-	output, err := systemProbe(ctx, "pacman", "-Si", pkg)
+func pacmanPackageInfo(
+	ctx context.Context,
+	host *Host,
+	pkg string,
+) (string, bool) {
+	output, err := host.systemProbe(ctx, "pacman", "-Si", pkg)
 	if err != nil {
-		log.Debug("pacman package probe failed", "package", pkg, "reason", err)
+		host.logger.Debug("pacman package probe failed", "package", pkg, "reason", err)
 		return "", false
 	}
 	return string(output), true
 }
 
-func pacmanPackageAvailable(ctx context.Context, pkg string) bool {
-	_, ok := pacmanPackageInfo(ctx, pkg)
+func pacmanPackageAvailable(ctx context.Context, host *Host, pkg string) bool {
+	_, ok := pacmanPackageInfo(ctx, host, pkg)
 	return ok
 }
 

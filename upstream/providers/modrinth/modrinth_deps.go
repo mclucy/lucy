@@ -1,11 +1,12 @@
 package modrinth
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -13,16 +14,22 @@ import (
 // modrinthDependencies wraps a Modrinth versionResponse for dependency
 // normalization.
 type modrinthDependencies struct {
+	provider *Provider
 	version  *versionResponse
 	platform catalog.Ecosystem
 }
 
-func (m *modrinthDependencies) ToDependencySet() upstream.DependencySet {
+func (m *modrinthDependencies) ToDependencySet(
+	ctx context.Context,
+) (upstream.DependencySet, error) {
 	result := upstream.DependencySet{
 		FromArtifact: false,
 	}
 
 	for _, dep := range m.version.Dependencies {
+		if err := ctx.Err(); err != nil {
+			return upstream.DependencySet{}, err
+		}
 		if dep.DependencyType == incompatible {
 			continue
 		}
@@ -33,9 +40,15 @@ func (m *modrinthDependencies) ToDependencySet() upstream.DependencySet {
 			Version:   versionpkg.Version(m.version.VersionNumber),
 		}
 
-		depId, err := DependencyToPackage(parentId, &dep)
+		depId, err := m.provider.DependencyToPackage(ctx, parentId, &dep)
 		if err != nil {
-			log.Warn(
+			if ctx.Err() != nil {
+				return upstream.DependencySet{}, ctx.Err()
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return upstream.DependencySet{}, err
+			}
+			m.provider.logger.Warn(
 				fmt.Errorf(
 					"modrinth: skipping dependency with resolution error: %w",
 					err,
@@ -53,5 +66,8 @@ func (m *modrinthDependencies) ToDependencySet() upstream.DependencySet {
 		)
 	}
 
-	return result
+	if err := ctx.Err(); err != nil {
+		return upstream.DependencySet{}, err
+	}
+	return result, nil
 }

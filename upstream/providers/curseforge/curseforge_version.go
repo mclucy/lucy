@@ -1,6 +1,7 @@
 package curseforge
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/mclucy/lucy/catalog"
@@ -9,12 +10,15 @@ import (
 )
 
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-files
-func listFiles(modId int32, gameVersion string, loaderType int) (
-	[]fileResponse, error,
-) {
+func (p *Provider) listFiles(
+	ctx context.Context,
+	modId int32,
+	gameVersion string,
+	loaderType int,
+) ([]fileResponse, error) {
 	u := modFilesUrl(modId, gameVersion, loaderType)
 	var resp filesResponse
-	if err := get(u, &resp); err != nil {
+	if err := p.get(ctx, u, &resp); err != nil {
 		return nil, err
 	}
 	return resp.Data, nil
@@ -22,7 +26,8 @@ func listFiles(modId int32, gameVersion string, loaderType int) (
 
 // listAllFiles pages through every file of a mod for the given compatibility
 // filter. An empty gameVersion and zero loaderType list all files unfiltered.
-func listAllFiles(
+func (p *Provider) listAllFiles(
+	ctx context.Context,
 	modID int32,
 	gameVersion string,
 	loaderType int,
@@ -35,7 +40,7 @@ func listAllFiles(
 		u := modFilesUrl(modID, gameVersion, loaderType) +
 			"&index=" + strconv.Itoa(offset)
 		var page filesResponse
-		if err := get(u, &page); err != nil {
+		if err := p.get(ctx, u, &page); err != nil {
 			return nil, err
 		}
 		files = append(files, page.Data...)
@@ -53,13 +58,15 @@ func listAllFiles(
 // latestFile finds the latest file compatible with local runtime facts and
 // the requested selector. stable accepts releases only; beta accepts any
 // channel; any prefers a release and falls back to a prerelease.
-func latestFile(
+func (p *Provider) latestFile(
+	ctx context.Context,
 	modId int32,
 	local upstream.LocalContext,
 	platform catalog.Ecosystem,
 	selector versionpkg.Version,
 ) (*fileResponse, error) {
-	files, err := listFiles(
+	files, err := p.listFiles(
+		ctx,
 		modId,
 		curseForgeGameVersion(local),
 		modLoaderType(platform),
@@ -77,13 +84,15 @@ func latestFile(
 	return latest, nil
 }
 
-func getFileByDisplayName(
+func (p *Provider) getFileByDisplayName(
+	ctx context.Context,
 	modId int32,
 	version string,
 	local upstream.LocalContext,
 	platform catalog.Ecosystem,
 ) (*fileResponse, error) {
-	files, err := listFiles(
+	files, err := p.listFiles(
+		ctx,
 		modId,
 		curseForgeGameVersion(local),
 		modLoaderType(platform),
@@ -112,10 +121,13 @@ type modFileDataResponse struct {
 	Data fileResponse `json:"data"`
 }
 
-func getModFileById(modId, fileId int32) (*fileResponse, error) {
+func (p *Provider) getModFileById(
+	ctx context.Context,
+	modId, fileId int32,
+) (*fileResponse, error) {
 	u := modFileURL(modId, fileId)
 	var resp modFileDataResponse
-	if err := get(u, &resp); err != nil {
+	if err := p.get(ctx, u, &resp); err != nil {
 		return nil, err
 	}
 	return &resp.Data, nil

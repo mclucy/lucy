@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
@@ -21,6 +22,7 @@ var installJSON JSONResult[*install.Result]
 // installOutput adapts operation traces and results to the command presenter.
 type installOutput struct {
 	*Output
+	input io.Reader
 
 	phase           string
 	resolved        int
@@ -31,10 +33,10 @@ type installOutput struct {
 	fetchedCurrent  int64
 }
 
-func newInstallOutput(cmd *cobra.Command) *installOutput {
-	output := NewOperationOutput(cmd)
+func newInstallOutput(cmd *cobra.Command, inv *Invocation) *installOutput {
+	output := NewOperationOutput(cmd, inv)
 	output.Progress()
-	return &installOutput{Output: output}
+	return &installOutput{Output: output, input: cmd.InOrStdin()}
 }
 
 // Trace returns the hooks the operation reports through.
@@ -139,23 +141,24 @@ func (o *installOutput) Render(result *install.Result) error {
 	}
 	if !result.Changed() {
 		if !result.PublishedManifest && !result.PublishedLock {
-			line := style.Success("✓") + " Already up to date"
+			line := o.inv.Theme.Success("✓") + " Already up to date"
 			if result.TotalPackages > 0 {
-				line = style.Success("✓") + " " + packageCountLabel(result.TotalPackages) + " already up to date"
+				line = o.inv.Theme.Success("✓") + " " +
+					packageCountLabel(result.TotalPackages) + " already up to date"
 			}
 			o.renderer.Println(line)
 		}
 	} else {
 		var changes []string
 		if result.Server.Change == install.ChangeUpgraded {
-			changes = append(changes, serverChangeLine(result.Server))
+			changes = append(changes, serverChangeLine(result.Server, o.inv.Theme))
 		}
-		changes = append(changes, packageChangeLines(result.Packages)...)
+		changes = append(changes, packageChangeLines(result.Packages, o.inv.Theme)...)
 		if len(changes) > 0 {
 			o.renderer.Println(append([]string{""}, changes...)...)
 		}
 	}
-	if trailer := publicationLine(result); trailer != "" {
+	if trailer := publicationLine(result, o.inv.Theme); trailer != "" {
 		o.renderer.Println("", trailer)
 	}
 	// Flush the summary before warnings so the two surfaces cannot interleave.
@@ -282,20 +285,20 @@ func phaseText(phase install.PhaseInfo) string {
 	}
 }
 
-func serverChangeLine(change install.ServerChange) string {
+func serverChangeLine(change install.ServerChange, theme style.Theme) string {
 	version := string(change.Version)
 	if change.Change == install.ChangeUpgraded {
 		version = fmt.Sprintf("%s → %s", change.Previous, change.Version)
 	}
 	return fmt.Sprintf(
 		"  %s %s %s",
-		changeGlyph(change.Change),
+		changeGlyph(change.Change, theme),
 		change.Product,
 		version,
 	)
 }
 
-func packageChangeLines(changes []install.PackageChange) []string {
+func packageChangeLines(changes []install.PackageChange, theme style.Theme) []string {
 	width := 0
 	for _, change := range changes {
 		width = max(width, len(change.Name))
@@ -315,33 +318,33 @@ func packageChangeLines(changes []install.PackageChange) []string {
 		}
 		line := fmt.Sprintf(
 			"  %s %-*s  %s",
-			changeGlyph(change.Change),
+			changeGlyph(change.Change, theme),
 			width,
 			change.Name,
 			version,
 		)
 		if change.Change == install.ChangeAdded && !change.Direct && len(change.RequiredBy) > 0 {
-			line += "   " + style.Muted("dependency of "+joinLimited(change.RequiredBy, 2))
+			line += "   " + theme.Muted("dependency of "+joinLimited(change.RequiredBy, 2))
 		}
 		lines = append(lines, line)
 	}
 	return lines
 }
 
-func changeGlyph(change install.Change) string {
+func changeGlyph(change install.Change, theme style.Theme) string {
 	switch change {
 	case install.ChangeAdded:
-		return style.Success("+")
+		return theme.Success("+")
 	case install.ChangeRemoved:
-		return style.Failure("-")
+		return theme.Failure("-")
 	case install.ChangeUpgraded:
-		return style.Warning("~")
+		return theme.Warning("~")
 	case install.ChangeDowngraded:
-		return style.Failure("v")
+		return theme.Failure("v")
 	case install.ChangeRebuilt:
-		return style.Warning("r")
+		return theme.Warning("r")
 	case install.ChangeChanged:
-		return style.Warning("!")
+		return theme.Warning("!")
 	default:
 		return " "
 	}
@@ -368,14 +371,14 @@ func packageCountLabel(count int) string {
 	return fmt.Sprintf("%d packages", count)
 }
 
-func publicationLine(result *install.Result) string {
+func publicationLine(result *install.Result, theme style.Theme) string {
 	switch {
 	case result.PublishedManifest && result.PublishedLock:
-		return style.Muted("Updated lucy.yaml and lucy-lock.yaml")
+		return theme.Muted("Updated lucy.yaml and lucy-lock.yaml")
 	case result.PublishedManifest:
-		return style.Muted("Updated lucy.yaml")
+		return theme.Muted("Updated lucy.yaml")
 	case result.PublishedLock:
-		return style.Muted("Updated lucy-lock.yaml")
+		return theme.Muted("Updated lucy-lock.yaml")
 	default:
 		return ""
 	}

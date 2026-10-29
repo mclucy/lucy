@@ -17,7 +17,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/invopop/jsonschema v0.14.0
-	github.com/muesli/termenv v0.16.0
 	github.com/pb33f/ordered-map/v2 v2.3.2
 	github.com/pelletier/go-toml v1.9.5
 	github.com/sahilm/fuzzy v0.1.3
@@ -104,11 +103,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.3 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/awslabs/amazon-ecr-credential-helper/ecr-login v0.12.0 // indirect
-	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
-	github.com/bits-and-blooms/bitset v1.24.6 // indirect
 	github.com/blacktop/go-dwarf v1.0.14 // indirect
 	github.com/blacktop/go-macho v1.1.263 // indirect
 	github.com/blakesmith/ar v0.0.0-20190502131153-809d4375e1fb // indirect

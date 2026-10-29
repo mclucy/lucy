@@ -2,14 +2,17 @@ package cli
 
 import (
 	"context"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/spf13/cobra"
 )
 
-// CommandContext lets deferred cleanup finish after an interrupt.
+// CommandContext derives the command's context. Signal handling belongs to
+// the process boundary, which cancels the context the root was executed
+// with; commands only propagate cancellation into their work.
 func CommandContext(cmd *cobra.Command) (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithCancel(ctx)
 }

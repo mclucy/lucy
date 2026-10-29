@@ -7,9 +7,9 @@ import "github.com/spf13/cobra"
 // The daemon serializer still validates which options belong to each task.
 func RegisterPackageTaskFlags(cmd *cobra.Command, contracts *JSONContracts) {
 	prototypes := []*cobra.Command{
-		NewAddCommand(NewJSONContracts()),
-		NewInstallCommand(NewJSONContracts()),
-		NewRemoveCommand(NewJSONContracts()),
+		NewAddCommand(NewJSONContracts(), nil, nil),
+		NewInstallCommand(NewJSONContracts(), nil, nil),
+		NewRemoveCommand(NewJSONContracts(), nil, nil),
 	}
 	for _, prototype := range prototypes {
 		cmd.Flags().AddFlagSet(prototype.Flags())

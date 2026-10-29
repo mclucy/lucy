@@ -15,16 +15,21 @@ type downloadStage struct {
 	cacheable bool
 	temporary *cas.Store
 	directory string
+	logger    *log.Logger
 }
 
-func newDownloadStage() (*downloadStage, error) {
-	writer, err := Network().newWriter()
-	stage := &downloadStage{writer: writer, cacheable: err == nil}
+func (c *Client) newDownloadStage() (*downloadStage, error) {
+	writer, err := c.cache().newWriter()
+	stage := &downloadStage{
+		writer:    writer,
+		cacheable: err == nil,
+		logger:    c.logger,
+	}
 	if err == nil {
 		return stage, nil
 	}
 	if !errors.Is(err, ErrDisabled) {
-		log.Warn(fmt.Errorf("cache staging unavailable: %w", err))
+		c.logger.Warn(fmt.Errorf("cache staging unavailable: %w", err))
 	}
 	if err := stage.fallback(); err != nil {
 		return nil, err
@@ -52,7 +57,7 @@ func (s *downloadStage) fallback() error {
 	}
 	if s.writer != nil {
 		if err := s.writer.Abort(); err != nil {
-			log.Warn(fmt.Errorf("remove failed cache stage: %w", err))
+			s.logger.Warn(fmt.Errorf("remove failed cache stage: %w", err))
 		}
 	}
 	s.writer = writer
@@ -67,7 +72,7 @@ func (s *downloadStage) Write(data []byte) (int, error) {
 	if err == nil || !s.cacheable {
 		return count, err
 	}
-	log.Warn(fmt.Errorf("cache stage write failed, retaining uncached download: %w", err))
+	s.logger.Warn(fmt.Errorf("cache stage write failed, retaining uncached download: %w", err))
 	if err := s.fallback(); err != nil {
 		return count, err
 	}
@@ -80,7 +85,7 @@ func (s *downloadStage) seal() (cas.Object, error) {
 	if err == nil || !s.cacheable {
 		return object, err
 	}
-	log.Warn(fmt.Errorf("cache stage sync failed, retaining uncached download: %w", err))
+	s.logger.Warn(fmt.Errorf("cache stage sync failed, retaining uncached download: %w", err))
 	if err := s.fallback(); err != nil {
 		return cas.Object{}, err
 	}

@@ -279,7 +279,7 @@ func runLockedMutation(
 	if err != nil {
 		t.Fatalf("lockfile.Fingerprint() error = %v", err)
 	}
-	plan, err := install.PlanInstall(
+	plan, err := install.NewService(nil, nil, nil, nil, nil, nil, "").PlanInstall(
 		t.Context(),
 		root,
 		d,

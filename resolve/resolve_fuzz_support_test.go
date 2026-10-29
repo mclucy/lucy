@@ -3,14 +3,14 @@ package resolve_test
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -18,6 +18,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/resolve"
 	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
@@ -147,10 +148,6 @@ func stubVersionEntry(
 	}
 }
 
-func versionsPath(project string) string {
-	return "/v2/project/" + project + "/version"
-}
-
 type fixtureArchive struct {
 	path   string
 	hashes map[string]string
@@ -159,7 +156,7 @@ type fixtureArchive struct {
 type catalogueFixture struct {
 	dir       string
 	artifacts map[string]fixtureArchive
-	bodies    map[string][]byte
+	versions  map[string][]stubVersion
 }
 
 func newCatalogueFixture(t *testing.T) *catalogueFixture {
@@ -167,20 +164,16 @@ func newCatalogueFixture(t *testing.T) *catalogueFixture {
 	return &catalogueFixture{
 		dir:       t.TempDir(),
 		artifacts: map[string]fixtureArchive{},
-		bodies:    map[string][]byte{},
+		versions:  map[string][]stubVersion{},
 	}
 }
 
 func (f *catalogueFixture) addVersions(t *testing.T, project string, versions []stubVersion) {
 	t.Helper()
-	data, err := json.Marshal(versions)
-	if err != nil {
-		t.Fatalf("marshal fixture catalogue for %s: %v", project, err)
-	}
-	if _, exists := f.bodies[versionsPath(project)]; exists {
+	if _, exists := f.versions[project]; exists {
 		t.Fatalf("duplicate fixture catalogue for %s", project)
 	}
-	f.bodies[versionsPath(project)] = data
+	f.versions[project] = slices.Clone(versions)
 }
 
 func (f *catalogueFixture) addArchive(t *testing.T, fileID string, data []byte) {
@@ -210,32 +203,70 @@ func (f *catalogueFixture) materialize(a *catalog.Artifact) (artifact.Materializ
 	}, nil
 }
 
-func (f *catalogueFixture) install(t *testing.T) {
-	t.Helper()
-	stub := &stubRoundTripper{bodies: f.bodies}
-	previous := http.DefaultClient
-	http.DefaultClient = &http.Client{Transport: stub}
-	t.Cleanup(func() {
-		http.DefaultClient = previous
-	})
-}
-
-type stubRoundTripper struct {
-	bodies map[string][]byte
-}
-
-func (s *stubRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	body, ok := s.bodies[request.URL.Path]
-	if !ok {
-		return nil, fmt.Errorf("unexpected catalogue request %q", request.URL.String())
+// candidates answers the resolver's injected catalogue capability directly
+// from the fixture, mirroring the Modrinth fields resolution consumes.
+func (f *catalogueFixture) candidates(
+	_ context.Context,
+	registry catalog.Registry,
+	project, minecraft string,
+	ecosystem catalog.Ecosystem,
+) ([]upstream.Candidate, error) {
+	if registry != catalog.RegistryModrinth {
+		return nil, fmt.Errorf("fixture has no %s catalogue", registry)
 	}
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Status:     "200 OK",
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Body:       io.NopCloser(bytes.NewReader(body)),
-		Request:    request,
-	}, nil
+	var out []upstream.Candidate
+	for _, v := range f.versions[project] {
+		if v.Status != "" && v.Status != "listed" {
+			continue
+		}
+		if !slices.Contains(v.GameVersions, minecraft) ||
+			!slices.Contains(v.Loaders, ecosystem.String()) {
+			continue
+		}
+		unmarked := !slices.ContainsFunc(v.Files, func(file stubFile) bool { return file.Primary })
+		for i, file := range v.Files {
+			if file.FileType != "" {
+				continue
+			}
+			hashes := map[string]string{}
+			if file.Hashes.SHA512 != "" {
+				hashes["sha512"] = file.Hashes.SHA512
+			}
+			if file.Hashes.SHA1 != "" {
+				hashes["sha1"] = file.Hashes.SHA1
+			}
+			candidate := upstream.Candidate{
+				Artifact: catalog.Artifact{
+					Provider:  catalog.ProviderModrinth,
+					ProjectID: v.ProjectID,
+					ReleaseID: v.ID,
+					FileID:    file.ID,
+					Version:   versionpkg.Version(v.VersionNumber),
+					Filename:  file.Filename,
+					URL:       file.URL,
+					Hashes:    hashes,
+				},
+				Channel:     upstream.ParseReleaseChannel(v.VersionType),
+				PublishedAt: v.DatePublished,
+				PrimaryFile: file.Primary || (unmarked && i == 0),
+			}
+			for _, dependency := range v.Dependencies {
+				if dependency.ProjectID == "" {
+					continue
+				}
+				candidate.Dependencies = append(candidate.Dependencies, upstream.ProjectDependency{
+					Provider:  catalog.ProviderModrinth,
+					ProjectID: dependency.ProjectID,
+					Kind:      catalog.ParseDependencyKind(dependency.DependencyType),
+				})
+			}
+			out = append(out, candidate)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("fixture project %s has no %s release for Minecraft %s", project, ecosystem, minecraft)
+	}
+	return out, nil
 }
 
 // fabricModuleSpec describes one descriptor module. Depends and Breaks name

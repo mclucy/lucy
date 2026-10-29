@@ -93,7 +93,7 @@ func Inspect(root string, declarations []documentpkg.TrackedFile) (statuses []St
 
 // Provision requires shared workspace ownership and preserves every existing working file.
 // Availability failures are diagnostics; unsafe state and incomplete transactions are errors.
-func Provision(ctx context.Context, root string, declarations []documentpkg.TrackedFile, offline bool) (diagnostics []Diagnostic, resultErr error) {
+func (s *Service) Provision(ctx context.Context, root string, declarations []documentpkg.TrackedFile, offline bool) (diagnostics []Diagnostic, resultErr error) {
 	if err := noPending(root); err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func Provision(ctx context.Context, root string, declarations []documentpkg.Trac
 			diagnostics = append(diagnostics, Diagnostic{Path: file.Path, Message: "file is missing and has no accepted hash; distribute its contents or track an accepted revision"})
 			continue
 		}
-		accepted, err := sourceImage(ctx, store, file, false, offline)
+		accepted, err := sourceImage(ctx, s.client, store, file, false, offline)
 		if err != nil {
 			diagnostics = append(diagnostics, Diagnostic{Path: file.Path, Message: err.Error() + "; distribute the accepted contents or configure a source serving that digest"})
 			continue

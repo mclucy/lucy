@@ -6,7 +6,6 @@ import (
 	"text/template"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
 )
 
 const projectUrlPrefix = "https://api.modrinth.com/v2/project/"
@@ -48,7 +47,9 @@ func searchUrl(
 ) (urlString string) {
 	urlTemplate, _ := template.New("modrinth_search_url").Parse(searchUrlTemplate)
 	urlBuilder := strings.Builder{}
-	err := urlTemplate.Execute(
+	// The template is a static constant; execution only fails on a writer
+	// error, which strings.Builder cannot produce.
+	_ = urlTemplate.Execute(
 		&urlBuilder,
 		map[string]any{
 			"query":  url.QueryEscape(query),
@@ -56,9 +57,6 @@ func searchUrl(
 			"facets": url.QueryEscape(serializeFacet(option.facets...)),
 		},
 	)
-	if err != nil {
-		log.Error(err)
-	}
 
 	urlString = urlBuilder.String()
 	return urlString

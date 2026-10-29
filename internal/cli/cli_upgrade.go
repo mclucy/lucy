@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -23,13 +22,19 @@ const (
 
 var upgradeFrontierJSON JSONResult[upgradeFrontierDocument]
 
-func NewUpgradeCommand(contracts *JSONContracts) *cobra.Command {
+func NewUpgradeCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	upgradeCmd := &cobra.Command{
 		Use:     "upgrade [packages...]",
 		Short:   help.UpgradeShort,
 		Aliases: []string{"up", "update"},
 		Args:    cobra.ArbitraryArgs,
-		RunE:    actionUpgrade,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionUpgrade(cmd, inv, deps, args)
+		},
 	}
 	upgradeFrontierJSON.Bind(contracts, upgradeCmd)
 	installJSON.Bind(contracts, upgradeCmd)
@@ -57,11 +62,12 @@ func NewUpgradeCommand(contracts *JSONContracts) *cobra.Command {
 	return upgradeCmd
 }
 
-func actionUpgrade(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
-	}
+func actionUpgrade(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	args []string,
+) error {
 	all, _ := cmd.Flags().GetBool(flagUpgradeAllName)
 	interactive, _ := cmd.Flags().GetBool(flagUpgradeInteractiveName)
 	dryRun, _ := cmd.Flags().GetBool(flagUpgradeDryRunName)
@@ -93,18 +99,22 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 	defer stop()
 	targets := args
 	if interactive {
-		selected, err := promptUpgradeRoots(ctx, cmd, workDir)
+		selected, err := promptUpgradeRoots(ctx, cmd, inv, inv.Directory)
 		if err != nil {
 			return err
 		}
 		targets = selected
 	}
-	output := newInstallOutput(cmd)
-	result, err := operation.PlanUpgrade(ctx, workDir, operation.UpgradeOptions{
-		All:     all,
-		Targets: targets,
-		Trace:   output.Trace(),
-	})
+	output := newInstallOutput(cmd, inv)
+	result, err := deps.Operations.PlanUpgrade(
+		ctx,
+		inv.Directory,
+		operation.UpgradeOptions{
+			All:     all,
+			Targets: targets,
+			Trace:   output.Trace(),
+		},
+	)
 	if err != nil {
 		return output.Failure(err)
 	}
@@ -136,14 +146,14 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 			printUpgradeWarnings(output, result.Warnings)
 			return nil
 		}
-		index, err := promptUpgradeChoice(ctx, cmd, result.Options)
+		index, err := promptUpgradeChoice(ctx, cmd, inv, result.Options)
 		if err != nil {
 			return err
 		}
 		option := result.Options[index]
 		output.RenderUpgradePlan(option, "options", false)
 		printUpgradeWarnings(output, result.Warnings)
-		_, err = applyUpgradeOption(ctx, cmd, workDir, option, "options", result.Warnings)
+		_, err = applyUpgradeOption(ctx, cmd, inv, deps, option, "options", result.Warnings)
 		return err
 	}
 	selected, err := operation.SelectUpgradeOption(result, policy)
@@ -166,7 +176,7 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	if !noInteractive && !jsonMode {
-		if !NewPromptGate(cmd).Available() {
+		if !NewPromptGate(cmd, inv).Available() {
 			return fmt.Errorf("apply without a prompt with --%s", FlagNoInteractive)
 		}
 		confirmed, err := promptUpgradeConfirm(ctx, cmd)
@@ -177,7 +187,7 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 	}
-	applied, err := applyUpgradeOption(ctx, cmd, workDir, *selected, policy, result.Warnings)
+	applied, err := applyUpgradeOption(ctx, cmd, inv, deps, *selected, policy, result.Warnings)
 	if err != nil {
 		return err
 	}
@@ -190,7 +200,8 @@ func actionUpgrade(cmd *cobra.Command, args []string) error {
 func applyUpgradeOption(
 	ctx context.Context,
 	cmd *cobra.Command,
-	root string,
+	inv *Invocation,
+	deps *Dependencies,
 	option operation.UpgradeOption,
 	policy string,
 	warnings []error,
@@ -199,18 +210,30 @@ func applyUpgradeOption(
 		option.Plan.Result.Warnings = append(option.Plan.Result.Warnings, warnings...)
 	}
 	if JSONMode(cmd) != JSONNone {
-		output := newInstallOutput(cmd)
+		output := newInstallOutput(cmd, inv)
 		defer output.Close()
-		result, err := operation.ApplyUpgrade(ctx, root, option, policy, install.Options{Trace: output.Trace()})
+		result, err := deps.Operations.ApplyUpgrade(
+			ctx,
+			inv.Directory,
+			option,
+			policy,
+			install.Options{Trace: output.Trace()},
+		)
 		if err != nil {
 			return nil, output.Failure(err)
 		}
 		result.WarningMessages = warningMessages(result.Warnings)
 		return result, nil
 	}
-	output := newInstallOutput(cmd)
+	output := newInstallOutput(cmd, inv)
 	defer output.Close()
-	result, err := operation.ApplyUpgrade(ctx, root, option, policy, install.Options{Trace: output.Trace()})
+	result, err := deps.Operations.ApplyUpgrade(
+		ctx,
+		inv.Directory,
+		option,
+		policy,
+		install.Options{Trace: output.Trace()},
+	)
 	if err != nil {
 		return nil, output.Failure(err)
 	}
@@ -220,8 +243,13 @@ func applyUpgradeOption(
 	return result, nil
 }
 
-func promptUpgradeRoots(ctx context.Context, cmd *cobra.Command, root string) ([]string, error) {
-	if !NewPromptGate(cmd).Available() {
+func promptUpgradeRoots(
+	ctx context.Context,
+	cmd *cobra.Command,
+	inv *Invocation,
+	root string,
+) ([]string, error) {
+	if !NewPromptGate(cmd, inv).Available() {
 		return nil, errors.New("interactive selection needs a terminal; use --all or name packages")
 	}
 	refs, err := operation.ListUpgradeRoots(root)
@@ -254,9 +282,10 @@ func promptUpgradeRoots(ctx context.Context, cmd *cobra.Command, root string) ([
 func promptUpgradeChoice(
 	ctx context.Context,
 	cmd *cobra.Command,
+	inv *Invocation,
 	options []operation.UpgradeOption,
 ) (int, error) {
-	if !NewPromptGate(cmd).Available() {
+	if !NewPromptGate(cmd, inv).Available() {
 		return 0, errors.New("interactive selection needs a terminal; use --policy <hash>")
 	}
 	huhOptions := make([]huh.Option[int], 0, len(options))

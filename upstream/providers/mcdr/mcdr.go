@@ -4,27 +4,43 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/github"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
-type provider struct{}
+// Provider resolves MCDR plugin catalogue entries through one configured
+// network cache and GitHub client. logger may be nil, which records nothing.
+type Provider struct {
+	network      *cache.Client
+	logger       *log.Logger
+	githubClient *github.Client
+}
 
-func (s provider) Provider() catalog.Provider {
+// New constructs an MCDR provider. network supplies the cached HTTP transport;
+// construction performs no requests.
+func New(network *cache.Client, logger *log.Logger) *Provider {
+	return &Provider{
+		network:      network,
+		logger:       logger,
+		githubClient: github.New(network, logger),
+	}
+}
+
+func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderMCDR
 }
 
-var Provider provider
-
 // Builds lists every release in the plugin catalogue release history.
-func (s provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
+func (p *Provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	history, err := getReleaseHistory(catalog.Name(project).PythonName())
+	history, err := p.getReleaseHistory(ctx, catalog.Name(project).PythonName())
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +70,7 @@ func (m mcdrSearchResult) ToSearchResults(source catalog.Provider) upstream.Sear
 // Search returns the provider's default result set; tags and limit are not
 // applied.
 
-func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
+func (p *Provider) Search(ctx context.Context, q upstream.Query) (upstream.SearchResponse, error) {
 	// MCDR publishes server plugins only; IncludeClient needs no filter.
 	if q.FilterEcosystem != catalog.EcosystemMCDR && q.FilterEcosystem != catalog.EcosystemUnspecified {
 		return upstream.SearchResponse{}, fmt.Errorf(
@@ -63,18 +79,19 @@ func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 			q.FilterEcosystem,
 		)
 	}
-	res, err := search(q.Keyword)
+	res, err := p.search(ctx, q.Keyword)
 	if err != nil {
 		return upstream.SearchResponse{}, err
 	}
-	return res.ToSearchResults(s.Provider()), nil
+	return res.ToSearchResults(p.Provider()), nil
 }
 
-func (s provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
-	rel, err := getRelease(id.Name.PythonName(), id.Version)
+	rel, err := p.getRelease(ctx, id.Name.PythonName(), id.Version)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -87,17 +104,17 @@ func (s provider) Fetch(
 	}, nil
 }
 
-func (s provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
+func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata, error) {
 	name := ref.Name.PythonName()
-	plugin, err := getInfo(name)
+	plugin, err := p.getInfo(ctx, name)
 	if err != nil {
 		return catalog.Metadata{}, err
 	}
-	meta, err := getMeta(name)
+	meta, err := p.getMeta(ctx, name)
 	if err != nil {
 		return catalog.Metadata{}, err
 	}
-	repo, err := getRepository(name)
+	repo, err := p.getRepository(ctx, name)
 	if err != nil {
 		return catalog.Metadata{}, err
 	}
@@ -110,19 +127,20 @@ func (s provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
 	return info, nil
 }
 
-func (s provider) Dependencies(
+func (p *Provider) Dependencies(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (*upstream.DependencySet, error) {
 	if id.Version == "" || id.Version.CanInfer() {
-		resolved, err := s.ResolveVersionSelector(local, id)
+		resolved, err := p.ResolveVersionSelector(ctx, local, id)
 		if err != nil {
 			return nil, err
 		}
 		id = resolved
 	}
 
-	rel, err := getRelease(id.Name.PythonName(), id.Version)
+	rel, err := p.getRelease(ctx, id.Name.PythonName(), id.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -165,19 +183,21 @@ func mcdrDependenciesFromMeta(meta pluginMeta) (upstream.DependencySet, error) {
 	return deps, nil
 }
 
-func (s provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (parsed catalog.VersionedRef, err error) {
 	var rel *release
 	switch id.Version {
 	case version.Stable:
-		rel, err = getLatestCompatibleRelease(
+		rel, err = p.getLatestCompatibleRelease(
+			ctx,
 			id.Name.PythonName(),
 			local.MCDRVersion,
 		)
 	case version.Beta, version.Any:
-		rel, err = getLatestRelease(id.Name.PythonName())
+		rel, err = p.getLatestRelease(ctx, id.Name.PythonName())
 		if err != nil {
 			return id, err
 		}
@@ -196,6 +216,6 @@ func (s provider) ResolveVersionSelector(
 		Name:      id.Name,
 		Version:   version.Version(rel.Meta.Version),
 	}
-	log.Debug("parsed from" + id.StringQualified() + " to " + parsed.StringQualified())
+	p.logger.Debug("parsed from" + id.StringQualified() + " to " + parsed.StringQualified())
 	return parsed, nil
 }

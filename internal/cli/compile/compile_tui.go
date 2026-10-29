@@ -10,7 +10,11 @@ import (
 // promptModProject asks which of several mod projects to compile. `huh` renders
 // on stderr, so stdout keeps carrying only the artifact path. Aborting the
 // selection cancels the compilation; there is no default to fall back to.
-func promptModProject(ctx context.Context, candidates []gradleProject) (gradleProject, error) {
+func promptModProject(
+	ctx context.Context,
+	candidates []gradleProject,
+	gate cli.PromptGate,
+) (gradleProject, error) {
 	// gradleProject is not comparable (it holds slices), so the select carries
 	// the candidate index instead of the struct.
 	options := make([]huh.Option[int], 0, len(candidates))
@@ -25,7 +29,9 @@ func promptModProject(ctx context.Context, candidates []gradleProject) (gradlePr
 			Options(options...).
 			Filtering(true).
 			Value(&picked),
-	))
+	)).
+		WithInput(gate.Input()).
+		WithOutput(gate.Output())
 	if err := cli.NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
 		return gradleProject{}, err
 	}

@@ -12,7 +12,7 @@ import (
 // removeSupersededPaperCore deletes the adopted paperclip jar after the
 // installer has materialized the canonical server.jar. Leaving both files in
 // the workspace makes discovery report two identical runtimes.
-func removeSupersededPaperCore(root string, d *document.Lock) {
+func removeSupersededPaperCore(root string, d *document.Lock, logger *log.Logger) {
 	if d == nil || d.Server.Bootstrapper != "paperclip" {
 		return
 	}
@@ -34,15 +34,15 @@ func removeSupersededPaperCore(root string, d *document.Lock) {
 	}
 	hashes, err := DigestFile(path, map[string]string{"sha256": expected})
 	if err != nil {
-		log.Warn(err)
+		logger.Warn(err)
 		return
 	}
 	if !strings.EqualFold(hashes["sha256"], expected) {
 		return
 	}
 	if err := os.Remove(path); err != nil {
-		log.Warn(err)
+		logger.Warn(err)
 		return
 	}
-	log.Debug("removed superseded Paper core", "path", path)
+	logger.Debug("removed superseded Paper core", "path", path)
 }

@@ -13,14 +13,6 @@ import (
 
 func newTestRegistry(t *testing.T) *Registry {
 	t.Helper()
-	probe := t.TempDir()
-	target := filepath.Join(probe, "target")
-	if err := os.Mkdir(target, 0o755); err != nil {
-		t.Fatalf("create symlink probe target: %v", err)
-	}
-	if err := os.Symlink(target, filepath.Join(probe, "link")); err != nil {
-		t.Skipf("platform cannot create the directory links the registry requires: %v", err)
-	}
 	return &Registry{directory: t.TempDir()}
 }
 
@@ -47,7 +39,7 @@ func writeManifest(t *testing.T, root, name string) {
 
 func register(t *testing.T, registry *Registry, root string) []Entry {
 	t.Helper()
-	writer, err := workspacewrite.Lock(root)
+	writer, err := workspacewrite.Lock(root, nil)
 	if err != nil {
 		t.Fatalf("lock workspace %s: %v", root, err)
 	}
@@ -64,7 +56,7 @@ func register(t *testing.T, registry *Registry, root string) []Entry {
 
 func unregister(t *testing.T, registry *Registry, root string) {
 	t.Helper()
-	writer, err := workspacewrite.Lock(root)
+	writer, err := workspacewrite.Lock(root, nil)
 	if err != nil {
 		t.Fatalf("lock workspace %s: %v", root, err)
 	}
@@ -263,5 +255,40 @@ func TestListKeepsMissingTargetsAndReloadsNames(t *testing.T) {
 	}
 	if entry.Path != renamedPath {
 		t.Fatalf("Resolve(after) = %s, want %s", entry.Path, renamedPath)
+	}
+}
+
+func TestRegisterUnnamedManifest(t *testing.T) {
+	t.Parallel()
+	registry := newTestRegistry(t)
+	root := filepath.Join(t.TempDir(), "server")
+	writeManifest(t, root, "")
+	register(t, registry, root)
+
+	entries, err := registry.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := entryAt(t, entries, resolvedPath(t, root))
+	if entry.State != StateAvailable || entry.Name != "" {
+		t.Fatalf("unnamed server entry = %+v", entry)
+	}
+}
+
+func TestListReportsMalformedEntry(t *testing.T) {
+	t.Parallel()
+	registry := newTestRegistry(t)
+	entryPath := filepath.Join(registry.directory, "broken")
+	if err := os.WriteFile(entryPath, nil, 0o600); err != nil {
+		t.Fatalf("write malformed entry: %v", err)
+	}
+
+	entries, err := registry.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Path != entryPath ||
+		entries[0].State != StateInvalid || entries[0].Problem == "" {
+		t.Fatalf("List = %+v, want one diagnosed invalid entry at %s", entries, entryPath)
 	}
 }

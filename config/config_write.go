@@ -12,7 +12,6 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/log"
 )
 
 func (s *Service) lock(scope Scope) (*fsutil.FileLock, error) {
@@ -20,11 +19,11 @@ func (s *Service) lock(scope Scope) (*fsutil.FileLock, error) {
 		if err := workspacewrite.SafePath(s.root, WorkspaceFilename); err != nil {
 			return nil, err
 		}
-		writer, err := workspacewrite.Lock(s.root)
+		writer, err := workspacewrite.Lock(s.root, s.logger)
 		if err != nil {
 			return nil, err
 		}
-		if err := workspacewrite.RecoverInstall(s.root); err != nil {
+		if err := workspacewrite.RecoverInstall(s.root, s.logger); err != nil {
 			return nil, errors.Join(err, writer.Close())
 		}
 		return writer, nil
@@ -157,7 +156,6 @@ func (s *Service) Create(scope Scope, options CreateOptions) (result *WriteResul
 	if err := writeValues(file, root, &Values{}, options.Force); err != nil {
 		return nil, err
 	}
-	log.Info("config created", "path", file.Path(), "replaced", !created)
 	return &WriteResult{Path: file.Path(), Created: created}, nil
 }
 
@@ -231,6 +229,5 @@ func (s *Service) Set(key, text string, scope Scope) (result *WriteResult, resul
 	if err := writeValues(file, root, values, !created); err != nil {
 		return nil, err
 	}
-	log.Info("config updated", "path", file.Path(), "key", key, "created", created)
 	return &WriteResult{Path: file.Path(), Created: created}, nil
 }

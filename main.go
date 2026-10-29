@@ -3,22 +3,38 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/mclucy/lucy/cmd"
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/log"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	directory, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "determine invocation directory: %v\n", err)
+		stop()
+		os.Exit(1)
+	}
+	code := run(ctx, os.Args[1:], directory, os.Stdin, os.Stdout, os.Stderr)
+	stop()
+	os.Exit(code)
 }
 
-func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (exitCode int) {
-	runner := cmd.NewRunner(args, stdin, stdout, stderr)
-	executeErr := runner.Execute()
-	closeErr := log.Close()
+func run(ctx context.Context, args []string, directory string, stdin io.Reader, stdout, stderr io.Writer) (exitCode int) {
+	runner := cmd.NewRunner(args, cmd.RunnerOptions{
+		Directory: directory,
+		Stdin:     stdin,
+		Stdout:    stdout,
+		Stderr:    stderr,
+	})
+	executeErr := runner.Execute(ctx)
+	closeErr := runner.Close()
 	if executeErr == nil && closeErr == nil {
 		executeErr = runner.FlushOutput()
 	}

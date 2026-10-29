@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -26,12 +25,18 @@ const (
 	flagInitNoCommentsName  = "no-comments"
 )
 
-func NewInitCommand(contracts *JSONContracts) *cobra.Command {
+func NewInitCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: help.InitShort,
 		Args:  cobra.NoArgs,
-		RunE:  actionInit,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionInit(cmd, inv, deps, args)
+		},
 	}
 	initJSON.Bind(contracts, cmd)
 	cmd.Flags().BoolP(
@@ -70,11 +75,12 @@ type initResult struct {
 	PublishedConfig bool `json:"published_config"`
 }
 
-func actionInit(cmd *cobra.Command, _ []string) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
-	}
+func actionInit(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
 	ctx, stop := CommandContext(cmd)
 	defer stop()
 	name := flagStringInit(cmd, flagInitNameName)
@@ -90,25 +96,28 @@ func actionInit(cmd *cobra.Command, _ []string) error {
 		Force:       flagBoolInit(cmd, flagInitForceName),
 		NoComments:  flagBoolInit(cmd, flagInitNoCommentsName),
 	}
-	return initializeWorkspace(ctx, cmd, workDir, opts)
+	return initializeWorkspace(ctx, cmd, inv, deps, opts)
 }
 
 // initializeWorkspace initializes one workspace and owns its presentation.
 // Warnings observed during initialization surface on stderr once, failures
 // return to the command framework, and success reports the files written from
 // the returned document instead of rereading them.
-func initializeWorkspace(ctx context.Context, cmd *cobra.Command, workDir string, opts operation.InitOptions) error {
-	output := newInstallOutput(cmd)
+func initializeWorkspace(
+	ctx context.Context,
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	opts operation.InitOptions,
+) error {
+	output := newInstallOutput(cmd, inv)
 	defer output.Close()
 	opts.Trace = output.Trace()
 	opts.PromptRuntime = func(observed discovery.Result) (string, error) {
 		output.Close()
-		return promptRuntime(ctx, cmd, observed)
+		return promptRuntime(ctx, cmd, inv, observed)
 	}
-	result, err := operation.Initialize(ctx, workDir, opts)
-	if result != nil && result.Document != nil {
-		registerWorkspace(workDir, output.Output)
-	}
+	result, err := deps.Operations.Initialize(ctx, inv.Directory, opts)
 	if err != nil {
 		return output.Failure(initializationFailure(err, result))
 	}
@@ -217,10 +226,15 @@ func entryPointCommands(installations []discovery.Installation) []string {
 	return commands
 }
 
-func promptRuntime(ctx context.Context, cmd *cobra.Command, observed discovery.Result) (string, error) {
+func promptRuntime(
+	ctx context.Context,
+	cmd *cobra.Command,
+	inv *Invocation,
+	observed discovery.Result,
+) (string, error) {
 	// A closed gate returns no selection, so Initialize reports the typed
 	// ambiguous-selection error whose commands name --entry-point exactly.
-	if !NewPromptGate(cmd).Available() {
+	if !NewPromptGate(cmd, inv).Available() {
 		return "", nil
 	}
 	options := make([]huh.Option[string], 0, len(observed.Installations))

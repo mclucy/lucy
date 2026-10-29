@@ -4,21 +4,11 @@ import (
 	"cmp"
 	"maps"
 	"net/url"
-	"os"
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 )
-
-func setDir(name string) string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "lucy", name)
-}
 
 func expiredEntries(entries map[key]*Entry, now time.Time) []key {
 	var expired []key

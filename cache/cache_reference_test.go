@@ -4,6 +4,7 @@ package cache
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"path/filepath"
 	"strings"
@@ -20,7 +21,8 @@ func TestAliasKeysShareBlobUntilTheLastReferenceGoes(t *testing.T) {
 	second := fixture.duplicateURL("b.jar")
 	payload := []byte(duplicatePayload)
 
-	firstResult, err := CachedDownload(
+	firstResult, err := h.CachedDownload(
+		context.Background(),
 		first,
 		t.TempDir(),
 		DownloadOptions{Kind: KindArtifact},
@@ -29,7 +31,8 @@ func TestAliasKeysShareBlobUntilTheLastReferenceGoes(t *testing.T) {
 		t.Fatalf("download the first alias: %v", err)
 	}
 	_ = firstResult.File.Close()
-	secondResult, err := CachedDownload(
+	secondResult, err := h.CachedDownload(
+		context.Background(),
 		second,
 		t.TempDir(),
 		DownloadOptions{Kind: KindArtifact},
@@ -63,7 +66,7 @@ func TestAliasKeysShareBlobUntilTheLastReferenceGoes(t *testing.T) {
 	}
 
 	// Dropping one reference must leave the blob for the surviving alias.
-	if err := Network().Remove(first); err != nil {
+	if err := h.Remove(first); err != nil {
 		t.Fatalf("remove the first alias: %v", err)
 	}
 	remaining := h.All()
@@ -78,7 +81,8 @@ func TestAliasKeysShareBlobUntilTheLastReferenceGoes(t *testing.T) {
 	}
 
 	surviving := t.TempDir()
-	hit, err := CachedDownload(
+	hit, err := h.CachedDownload(
+		context.Background(),
 		second,
 		surviving,
 		DownloadOptions{Kind: KindArtifact},
@@ -99,7 +103,7 @@ func TestAliasKeysShareBlobUntilTheLastReferenceGoes(t *testing.T) {
 	requireFileBytes(t, filepath.Join(surviving, "indexed-b.jar"), payload)
 
 	// The last reference releases the blob.
-	if err := Network().Remove(second); err != nil {
+	if err := h.Remove(second); err != nil {
 		t.Fatalf("remove the surviving alias: %v", err)
 	}
 	if objects := cacheObjects(t, h); len(objects) != 0 {
@@ -118,11 +122,11 @@ func TestCacheEvictionCountsSharedObjectsOnce(t *testing.T) {
 	unique := bytes.Repeat([]byte("unique"), 20)
 
 	for i, key := range []string{"key-shared-a", "key-shared-b", "key-shared-c"} {
-		if err := h.Add(shared, "shared.jar", key, time.Duration(i+1)*time.Hour); err != nil {
+		if err := h.cache().add(shared, "shared.jar", key, time.Duration(i+1)*time.Hour); err != nil {
 			t.Fatalf("add alias %s: %v", key, err)
 		}
 	}
-	if err := h.Add(unique, "unique.jar", "key-unique", 5*time.Hour); err != nil {
+	if err := h.cache().add(unique, "unique.jar", "key-unique", 5*time.Hour); err != nil {
 		t.Fatalf("add the unique entry: %v", err)
 	}
 	for _, key := range []string{"key-shared-a", "key-shared-b", "key-shared-c"} {
@@ -133,7 +137,7 @@ func TestCacheEvictionCountsSharedObjectsOnce(t *testing.T) {
 	}
 
 	newest := bytes.Repeat([]byte("newest"), 20)
-	if err := h.Add(newest, "newest.jar", "key-newest", 6*time.Hour); err != nil {
+	if err := h.cache().add(newest, "newest.jar", "key-newest", 6*time.Hour); err != nil {
 		t.Fatalf("add the entry exceeding physical quota: %v", err)
 	}
 	for _, key := range []string{"key-shared-a", "key-shared-b", "key-shared-c"} {
@@ -165,7 +169,9 @@ func TestCacheClearReportsUniqueObjectsAndKeepsProjectStore(t *testing.T) {
 		fixture.artifactURL("unique.jar"),
 		fixture.artifactURL("empty.jar"),
 	} {
-		result, err := CachedDownload(url, t.TempDir(), DownloadOptions{Kind: KindArtifact})
+		result, err := h.CachedDownload(
+			context.Background(), url, t.TempDir(), DownloadOptions{Kind: KindArtifact},
+		)
 		if err != nil {
 			t.Fatalf("download %s: %v", url, err)
 		}
@@ -198,9 +204,9 @@ func TestCacheClearReportsUniqueObjectsAndKeepsProjectStore(t *testing.T) {
 	if err := project.Close(); err != nil {
 		t.Fatalf("close the project store: %v", err)
 	}
-	if rel, err := filepath.Rel(h.dir, projectRoot); err == nil &&
+	if rel, err := filepath.Rel(h.cache().dir, projectRoot); err == nil &&
 		!strings.HasPrefix(rel, "..") {
-		t.Fatalf("project store %s lives inside the cache root %s", projectRoot, h.dir)
+		t.Fatalf("project store %s lives inside the cache root %s", projectRoot, h.cache().dir)
 	}
 
 	report, err := h.ClearAll()

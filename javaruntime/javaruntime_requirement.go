@@ -84,7 +84,7 @@ type Requirement struct {
 // RequirementOf combines the Java inputs that lock records: the Mojang
 // advisory, the manifest pin, and the Java requirements of the enabled
 // packages.
-func RequirementOf(lock *document.Lock) Requirement {
+func RequirementOf(lock *document.Lock, logger *log.Logger) Requirement {
 	settings := lock.Server.Java
 	r := Requirement{
 		Advisory:     settings.Advisory,
@@ -113,7 +113,7 @@ func RequirementOf(lock *document.Lock) Requirement {
 		}
 		for _, m := range p.Modules {
 			for _, dep := range m.Dependencies {
-				if c, ok := packageConstraint(m, dep, advisory); ok &&
+				if c, ok := packageConstraint(m, dep, advisory, logger); ok &&
 					!slices.ContainsFunc(r.Constraints, func(known Constraint) bool {
 						return known.Source == c.Source && known.Expression == c.Expression && known.kind == c.kind
 					}) {
@@ -129,6 +129,7 @@ func packageConstraint(
 	m catalog.DescriptorModule,
 	dep catalog.DescriptorDependency,
 	advisory int,
+	logger *log.Logger,
 ) (Constraint, bool) {
 	if dep.ID != dependencyID || dep.Constraint == "" {
 		return Constraint{}, false
@@ -146,7 +147,7 @@ func packageConstraint(
 		return version.Match(expression, version.Version(strconv.Itoa(major)), dialect)
 	}
 	if _, err := match(advisory); err != nil {
-		log.Debug(
+		logger.Debug(
 			"java requirement ignored",
 			"module", m.ID,
 			"constraint", expression,

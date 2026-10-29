@@ -11,9 +11,11 @@ import (
 func TestJSONContractsResolve(t *testing.T) {
 	contracts := NewJSONContracts()
 	root := &cobra.Command{Use: "lucy"}
-	add := NewAddCommand(contracts)
-	status := NewStatusCommand(contracts)
-	config := NewConfigCommand(contracts)
+	inv := newTestInvocation()
+	deps := &Dependencies{}
+	add := NewAddCommand(contracts, inv, deps)
+	status := NewStatusCommand(contracts, inv, deps)
+	config := NewConfigCommand(contracts, inv, deps)
 	root.AddCommand(add, status, config)
 
 	if !contracts.Supports(add) || !contracts.Supports(status) {

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
@@ -35,6 +37,9 @@ type CreateOptions struct {
 	Install        bool
 	InstallOptions install.Options
 	Trace          *install.Trace
+	// Materialize supplies artifact bytes for planning and the optional
+	// installation. Nil uses the configured cache and network.
+	Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
 }
 
 // CreateTarget is the result of observing a directory before creation. It
@@ -86,6 +91,18 @@ type CreatePublishError struct {
 func (e *CreatePublishError) Error() string { return e.Err.Error() }
 
 func (e *CreatePublishError) Unwrap() error { return e.Err }
+
+// CreateRegistrationError reports that the manifest and lock were published
+// but the workspace could not be recorded for the artifact store's retention
+// sweep. The documents stay in place so a later attempt can register them.
+type CreateRegistrationError struct {
+	Workspace string
+	Err       error
+}
+
+func (e *CreateRegistrationError) Error() string { return e.Err.Error() }
+
+func (e *CreateRegistrationError) Unwrap() error { return e.Err }
 
 // CreateInstallError reports a failure after the workspace was published. The
 // manifest and lock stay in place so the installation can be retried.
@@ -149,7 +166,7 @@ func InspectCreateTarget(path string) (CreateTarget, error) {
 
 // Create writes a new manifest and lock in opts.Directory, then optionally
 // installs the server. It does not prompt; the command boundary owns choices.
-func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resultErr error) {
+func (s *Service) Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resultErr error) {
 	root, err := createAbsolute(opts.Directory)
 	if err != nil {
 		return nil, err
@@ -167,7 +184,12 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err
 	}
-	writer, err := workspacewrite.Lock(root)
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
+	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +202,7 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 		return closeErr
 	}
 	defer func() { resultErr = errors.Join(resultErr, releaseWriter()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
 		return nil, err
 	}
 	if err := filetrack.RecoverPending(root); err != nil {
@@ -219,12 +241,16 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 	if err := document.Normalize(); err != nil {
 		return nil, newCreateResolveError(root, document, err)
 	}
-	resolved, resolution, err := install.Resolve(
+	resolved, resolution, err := s.install.Resolve(
 		ctx,
 		root,
 		document,
 		old,
-		install.Options{AcceptBroken: false, Trace: opts.Trace},
+		install.Options{
+			AcceptBroken: false,
+			Trace:        opts.Trace,
+			Materialize:  opts.Materialize,
+		},
 	)
 	if err != nil {
 		return nil, newCreateResolveError(root, document, err)
@@ -281,6 +307,21 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 			))
 		}
 	}
+	duplicates, err := s.registerWorkspace(root)
+	if err != nil {
+		result.finalizeWarnings()
+		return result, &CreateRegistrationError{
+			Workspace: root,
+			Err:       fmt.Errorf("register server: %w", err),
+		}
+	}
+	for _, duplicate := range duplicates {
+		result.Warnings = append(result.Warnings, fmt.Errorf(
+			"server name %q is also registered at %s; --server cannot select an ambiguous name",
+			duplicate.Name,
+			duplicate.Path,
+		))
+	}
 	if opts.Install {
 		// Installation acquires the workspace writer lock itself.
 		if err := releaseWriter(); err != nil {
@@ -288,8 +329,11 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 		}
 		installOptions := opts.InstallOptions
 		installOptions.Trace = opts.Trace
+		if opts.Materialize != nil {
+			installOptions.Materialize = opts.Materialize
+		}
 		installOptions.ExpectedManifest = resolved.ManifestFingerprint
-		installed, installErr := install.Sync(
+		installed, installErr := s.install.Sync(
 			ctx,
 			root,
 			document,
@@ -323,6 +367,16 @@ func Create(ctx context.Context, opts CreateOptions) (result *CreateResult, resu
 }
 
 func (r *CreateResult) finalizeWarnings() {
+	seen := make(map[string]struct{}, len(r.Warnings))
+	unique := r.Warnings[:0]
+	for _, warning := range r.Warnings {
+		if _, duplicate := seen[warning.Error()]; duplicate {
+			continue
+		}
+		seen[warning.Error()] = struct{}{}
+		unique = append(unique, warning)
+	}
+	r.Warnings = unique
 	r.WarningMessages = warningStrings(r.Warnings)
 	if r.NonEmpty {
 		r.WarningMessages = append(

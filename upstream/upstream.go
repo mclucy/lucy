@@ -14,14 +14,16 @@
 package upstream
 
 import (
+	"context"
 	"fmt"
 )
 
 func Search(
+	ctx context.Context,
 	searcher Searcher,
 	query Query,
 ) (res SearchResponse, err error) {
-	res, err = searcher.Search(query)
+	res, err = searcher.Search(ctx, query)
 	if err != nil {
 		return res, err
 	}

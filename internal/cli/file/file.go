@@ -91,16 +91,20 @@ const (
 
 // NewCommand returns the file command tree. Output flags are inherited from
 // the root command and are never registered again here.
-func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
-	trackCmd := newTrackCmd()
-	untrackCmd := newUntrackCmd()
-	updateCmd := newUpdateCmd()
-	recoverCmd := newRecoverCmd()
-	revertCmd := newRevertCmd()
-	lockCmd := newLockCmd()
-	unlockCmd := newUnlockCmd()
-	listCmd := newListCmd()
-	historyCmd := newHistoryCmd()
+func NewCommand(
+	contracts *cli.JSONContracts,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
+	trackCmd := newTrackCmd(inv, deps)
+	untrackCmd := newUntrackCmd(inv, deps)
+	updateCmd := newUpdateCmd(inv, deps)
+	recoverCmd := newRecoverCmd(inv, deps)
+	revertCmd := newRevertCmd(inv, deps)
+	lockCmd := newLockCmd(inv, deps)
+	unlockCmd := newUnlockCmd(inv, deps)
+	listCmd := newListCmd(inv, deps)
+	historyCmd := newHistoryCmd(inv, deps)
 
 	fileResultJSON.Bind(contracts, trackCmd)
 	fileResultJSON.Bind(contracts, untrackCmd)

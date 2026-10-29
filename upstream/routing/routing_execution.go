@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -30,7 +31,8 @@ func (e ProviderError) Unwrap() error {
 //
 // Default behavior is non-aggregated: each provider contributes one
 // upstream.SearchResponse item in the returned slice.
-func SearchMany(
+func (r *Router) SearchMany(
+	ctx context.Context,
 	providers []upstream.SearchProvider,
 	query upstream.Query,
 ) ([]upstream.SearchResponse, []ProviderError) {
@@ -50,7 +52,7 @@ func SearchMany(
 
 	for i, provider := range providers {
 		wg.Go(func() {
-			res, err := upstream.Search(provider, query)
+			res, err := upstream.Search(ctx, provider, query)
 			if err != nil {
 				slots[i] = slot{
 					failed: true,
@@ -86,7 +88,8 @@ func SearchMany(
 
 // FetchMany executes fetch on all providers in parallel and returns all
 // successful results.
-func FetchMany(
+func (r *Router) FetchMany(
+	ctx context.Context,
 	local upstream.LocalContext,
 	providers []upstream.PackageProvider,
 	id catalog.VersionedRef,
@@ -107,7 +110,7 @@ func FetchMany(
 
 	for i, provider := range providers {
 		wg.Go(func() {
-			resolvedID, err := provider.ResolveVersionSelector(local, id)
+			resolvedID, err := provider.ResolveVersionSelector(ctx, local, id)
 			if err != nil {
 				slots[i] = slot{
 					failed: true,
@@ -119,7 +122,7 @@ func FetchMany(
 				return
 			}
 
-			remoteData, err := provider.Fetch(local, resolvedID)
+			remoteData, err := provider.Fetch(ctx, local, resolvedID)
 			if err != nil {
 				slots[i] = slot{
 					failed: true,
@@ -160,12 +163,16 @@ func FetchMany(
 
 // GetInfoFirstSuccess executes info on all providers in parallel and returns the
 // first successful result. Ref.Provider records the provider that answered.
-func GetInfoFirstSuccess(
+func (r *Router) GetInfoFirstSuccess(
+	ctx context.Context,
 	providers []upstream.InfoProvider,
 	ref catalog.Ref,
 ) (upstream.Info, []ProviderError, error) {
 	if len(providers) == 0 {
 		return upstream.Info{}, nil, ErrNoProviderSucceeded
+	}
+	if err := ctx.Err(); err != nil {
+		return upstream.Info{}, nil, err
 	}
 
 	resChan := make(chan upstream.Info, len(providers))
@@ -173,7 +180,7 @@ func GetInfoFirstSuccess(
 
 	for _, provider := range providers {
 		go func(provider upstream.InfoProvider) {
-			metadata, err := provider.Info(ref)
+			metadata, err := provider.Info(ctx, ref)
 			if err != nil {
 				errChan <- ProviderError{Provider: provider.Provider(), Err: fmt.Errorf("information failed: %w", err)}
 				return
@@ -195,6 +202,8 @@ func GetInfoFirstSuccess(
 		case providerErr := <-errChan:
 			providerErrors = append(providerErrors, providerErr)
 			pending--
+		case <-ctx.Done():
+			return upstream.Info{}, providerErrors, ctx.Err()
 		}
 	}
 
@@ -218,10 +227,13 @@ func (l ArtifactLookup) Complete() bool { return len(l.Errors) == 0 }
 // ResolveArtifactByHash resolves an artifact's canonical upstream reference.
 // Mappers run in policy order; a failed or missing match does not stop later
 // mappers. Provider failures are returned for callers that surface warnings.
-func ResolveArtifactByHash(artifact upstream.ArtifactFingerprint) ArtifactLookup {
+func (r *Router) ResolveArtifactByHash(
+	ctx context.Context,
+	artifact upstream.ArtifactFingerprint,
+) ArtifactLookup {
 	result := ArtifactLookup{}
-	for _, mapper := range artifactMappers() {
-		ref, _, ok, err := mapper.PackageByHash(artifact)
+	for _, mapper := range r.artifactMappers() {
+		ref, _, ok, err := mapper.PackageByHash(ctx, artifact)
 		if err != nil {
 			result.Errors = append(result.Errors, ProviderError{
 				Provider: mapper.Provider(),
@@ -240,7 +252,8 @@ func ResolveArtifactByHash(artifact upstream.ArtifactFingerprint) ArtifactLookup
 // DependenciesMany executes Dependencies on all providers in parallel and
 // returns all successful results. An error is returned only when every provider
 // fails; partial failures are collected in the returned []ProviderError slice.
-func DependenciesMany(
+func (r *Router) DependenciesMany(
+	ctx context.Context,
 	local upstream.LocalContext,
 	providers []upstream.PackageProvider,
 	id catalog.VersionedRef,
@@ -261,7 +274,7 @@ func DependenciesMany(
 
 	for i, provider := range providers {
 		wg.Go(func() {
-			deps, err := provider.Dependencies(local, id)
+			deps, err := provider.Dependencies(ctx, local, id)
 			if err != nil {
 				slots[i] = slot{
 					failed: true,

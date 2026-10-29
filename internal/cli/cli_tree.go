@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli/help"
@@ -12,12 +11,18 @@ import (
 
 var treeJSON JSONResult[treeOutput]
 
-func NewTreeCommand(contracts *JSONContracts) *cobra.Command {
+func NewTreeCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	treeCmd := &cobra.Command{
 		Use:   "tree",
 		Short: help.TreeShort,
 		Args:  cobra.NoArgs,
-		RunE:  actionTree,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionTree(cmd, inv, deps, args)
+		},
 	}
 	treeJSON.Bind(contracts, treeCmd)
 	treeCmd.Flags().Bool(
@@ -33,15 +38,23 @@ func NewTreeCommand(contracts *JSONContracts) *cobra.Command {
 	return treeCmd
 }
 
-func actionTree(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
-	}
-
+func actionTree(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
+	ctx, stop := CommandContext(cmd)
+	defer stop()
 	forceLive, _ := cmd.Flags().GetBool("live")
-	output := NewQueryOutput(cmd)
-	graph, origin, _, err := LoadDependencyData(workDir, forceLive, output)
+	output := NewQueryOutput(cmd, inv)
+	graph, origin, _, err := LoadDependencyData(
+		ctx,
+		inv.Directory,
+		forceLive,
+		deps.Router.ResolveArtifactByHash,
+		output,
+	)
 	if err != nil {
 		return err
 	}

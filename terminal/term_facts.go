@@ -16,12 +16,12 @@ type Fact struct {
 }
 
 // RenderFacts uses one label column for the entire document.
-func RenderFacts(facts []Fact, width int) string {
-	return RenderFactGroups([][]Fact{facts}, width, style.Key)
+func RenderFacts(facts []Fact, width int, theme style.Theme) string {
+	return RenderFactGroups([][]Fact{facts}, width, theme)
 }
 
 // RenderFactGroups separates groups without shifting the shared label column.
-func RenderFactGroups(groups [][]Fact, width int, keyStyle func(any) string) string {
+func RenderFactGroups(groups [][]Fact, width int, theme style.Theme) string {
 	keyWidth := 0
 	for _, group := range groups {
 		for _, fact := range group {
@@ -45,7 +45,7 @@ func RenderFactGroups(groups [][]Fact, width int, keyStyle func(any) string) str
 			for i, line := range strings.Split(value, "\n") {
 				prefix := indent
 				if i == 0 {
-					prefix = keyStyle(key) + strings.Repeat(" ", keyWidth-ansi.StringWidth(key)+2)
+					prefix = theme.Key(key) + strings.Repeat(" ", keyWidth-ansi.StringWidth(key)+2)
 				}
 				if output.Len() > 0 {
 					output.WriteByte('\n')

@@ -18,15 +18,12 @@ import (
 
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/log"
 )
 
 // DownloadOptions controls artifact caching and downloading. The URL passed to
 // CachedDownload is the cache identity; RequestURL, when set, is used only for
 // the network request.
 type DownloadOptions struct {
-	// Context cancels the network request. Nil never cancels.
-	Context            context.Context
 	Kind               EntryKind
 	ExpectedHash       string
 	HashAlgorithm      HashAlgorithm
@@ -66,10 +63,16 @@ type DownloadResult struct {
 // streamed once through an optional WrapReader (for progress tracking) into
 // a cache stage, verified, and only then written to the destination and
 // published to the cache.
-func CachedDownload(url, dir string, opts DownloadOptions) (
-	*DownloadResult,
-	error,
-) {
+func (c *Client) CachedDownload(
+	ctx context.Context,
+	url, dir string,
+	opts DownloadOptions,
+) (*DownloadResult, error) {
+	c.lifetime.RLock()
+	defer c.lifetime.RUnlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := validateDownloadURL(url); err != nil {
 		return nil, err
 	}
@@ -83,9 +86,9 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	if opts.FileMode == 0 {
 		opts.FileMode = 0o640
 	}
-	hit, cachedReader, cachedFilename, err := Network().Get(url)
+	hit, cachedReader, cachedFilename, err := c.cache().get(url)
 	if err != nil {
-		log.Warn(
+		c.logger.Warn(
 			fmt.Errorf(
 				"cache lookup failed, proceeding with download: %w",
 				err,
@@ -94,6 +97,7 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 	}
 	if hit && cachedReader != nil {
 		result, copyErr := copyCachedFile(
+			ctx,
 			cachedReader,
 			cachedFilename,
 			dir,
@@ -111,7 +115,7 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 			!errors.Is(copyErr, cas.ErrRead) {
 			return nil, copyErr
 		}
-		log.Warn(
+		c.logger.Warn(
 			fmt.Errorf(
 				"cached contents unreadable, refetching %s: %w",
 				url,
@@ -120,13 +124,14 @@ func CachedDownload(url, dir string, opts DownloadOptions) (
 		)
 	}
 
-	return downloadAndCache(url, requestURL, dir, opts)
+	return c.downloadAndCache(ctx, url, requestURL, dir, opts)
 }
 
 // copyCachedFile materializes a cache hit under dir. cas.ErrCorrupt and
 // cas.ErrRead mean the stored bytes are unusable and the caller must treat
 // the hit as a miss; the atomic copy leaves the destination untouched.
 func copyCachedFile(
+	ctx context.Context,
 	reader io.Reader,
 	cachedFilename string,
 	dir string,
@@ -143,7 +148,7 @@ func copyCachedFile(
 			resolvedName,
 		)
 	}
-	destFile, err := fsutil.CopyFileAtomic(reader, destPath, opts.FileMode)
+	destFile, err := copyFileContext(ctx, reader, destPath, opts.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to copy cached file to destination: %w",
@@ -153,6 +158,9 @@ func copyCachedFile(
 	if opts.OnCacheHit != nil {
 		opts.OnCacheHit()
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(err, destFile.Close())
+	}
 	return &DownloadResult{
 		File:     destFile,
 		CacheHit: true,
@@ -160,12 +168,50 @@ func copyCachedFile(
 	}, nil
 }
 
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	n, err := r.reader.Read(p)
+	if ctxErr := r.ctx.Err(); ctxErr != nil {
+		return n, ctxErr
+	}
+	return n, err
+}
+
+func copyFileContext(ctx context.Context, reader io.Reader, path string, mode os.FileMode) (file *os.File, resultErr error) {
+	dir := filepath.Dir(path)
+	if err := fsutil.MkdirAllPrivate(dir); err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
+	if err := fsutil.WriteRoot(root, filepath.Base(path), contextReader{ctx, reader}, fsutil.WriteOptions{
+		Mode: mode, Replace: true, Check: ctx.Err,
+	}); err != nil {
+		return nil, err
+	}
+	return os.Open(path)
+}
+
 // CachedGetBytes fetches bytes from url, using the cache for deduplication.
 // On cache hit the bytes are returned directly. On miss the response body is
 // read into memory with a size limit, staged for content addressing, verified
 // against the optional upstream digest, and then cached.
-func CachedGetBytes(url string, opts BytesRequestOptions) ([]byte, error) {
-	res, err := CachedGetRequest(url, opts)
+func (c *Client) CachedGetBytes(
+	ctx context.Context,
+	url string,
+	opts BytesRequestOptions,
+) ([]byte, error) {
+	res, err := c.CachedGetRequest(ctx, url, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -178,17 +224,26 @@ func CachedGetBytes(url string, opts BytesRequestOptions) ([]byte, error) {
 // CachedGetRequest fetches bytes from url and returns the HTTP status code
 // separately from transport/read/cache errors. Non-2xx responses are not
 // cached.
-func CachedGetRequest(url string, opts BytesRequestOptions) (
-	*BytesResponse,
-	error,
-) {
+func (c *Client) CachedGetRequest(
+	ctx context.Context,
+	url string,
+	opts BytesRequestOptions,
+) (*BytesResponse, error) {
+	c.lifetime.RLock()
+	defer c.lifetime.RUnlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := validateDownloadURL(url); err != nil {
 		return nil, err
 	}
 
-	hit, data, err := Network().GetBytes(url)
+	hit, data, err := c.cache().getBytesContext(ctx, url)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err != nil {
-		log.Warn(
+		c.logger.Warn(
 			fmt.Errorf(
 				"cache lookup failed, proceeding with fetch: %w",
 				err,
@@ -208,7 +263,7 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (
 		maxBytes = 50 * 1024 * 1024
 	}
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create fetch request failed: %w", err)
 	}
@@ -218,24 +273,27 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (
 		}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, err := readLimitedBytes(resp.Body, maxBytes)
+		body, err := readLimitedBytes(contextReader{ctx, resp.Body}, maxBytes)
 		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		return &BytesResponse{StatusCode: resp.StatusCode, Data: body}, nil
 	}
 
-	stage := newByteStage()
+	stage := c.newByteStage()
 	defer func() {
 		if err := stage.Close(); err != nil {
-			log.Warn(fmt.Errorf("remove download stage: %w", err))
+			c.logger.Warn(fmt.Errorf("remove download stage: %w", err))
 		}
 	}()
 	writers := []io.Writer{stage}
@@ -246,7 +304,7 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (
 
 	var bodyBuf bytes.Buffer
 	writers = append(writers, &bodyBuf)
-	limitedReader := io.LimitReader(resp.Body, maxBytes)
+	limitedReader := io.LimitReader(contextReader{ctx, resp.Body}, maxBytes)
 	if _, err := io.Copy(io.MultiWriter(writers...), limitedReader); err != nil {
 		return nil, fmt.Errorf("read failed: %w", err)
 	}
@@ -265,7 +323,7 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (
 	}
 	contentDigest := object.Digest
 
-	integrity, _, err := verifyIntegrity(
+	integrity, _, err := c.verifyIntegrity(
 		integrityActual(opts.HashAlgorithm, contentDigest, integrityHasher),
 		opts.HashAlgorithm,
 		opts.ExpectedHash,
@@ -274,14 +332,23 @@ func CachedGetRequest(url string, opts BytesRequestOptions) (
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	if stage.writer != nil {
-		if err := Network().CommitEntry(
-			stage.writer, "", url, opts.Kind, integrity,
-			resolveTTL(opts.Kind, opts.TTL),
+		if err := c.cache().commitEntryContext(
+			ctx,
+			stage.writer, "", url, opts.Kind, integrity, opts.TTL,
 		); err != nil {
-			log.Warn(fmt.Errorf("failed to cache bytes: %w", err))
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			c.logger.Warn(fmt.Errorf("failed to cache bytes: %w", err))
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return &BytesResponse{
@@ -302,10 +369,11 @@ func readLimitedBytes(reader io.Reader, maxBytes int64) ([]byte, error) {
 // downloadAndCache streams requestURL into dir. The destination write and
 // the cache commit happen only after the staged SHA-256 digest and any
 // upstream integrity check pass, so a rejected response reaches neither.
-func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
-	*DownloadResult,
-	error,
-) {
+func (c *Client) downloadAndCache(
+	ctx context.Context,
+	url, requestURL, dir string,
+	opts DownloadOptions,
+) (*DownloadResult, error) {
 	if err := validateDownloadURL(url); err != nil {
 		return nil, err
 	}
@@ -313,15 +381,11 @@ func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 		return nil, err
 	}
 
-	ctx := opts.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(request)
+	resp, err := c.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}
@@ -340,13 +404,13 @@ func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 		opts.OnResolvedFilename(filename)
 	}
 
-	stage, err := newDownloadStage()
+	stage, err := c.newDownloadStage()
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err := stage.Close(); err != nil {
-			log.Warn(fmt.Errorf("remove download stage: %w", err))
+			c.logger.Warn(fmt.Errorf("remove download stage: %w", err))
 		}
 	}()
 	writers := []io.Writer{stage}
@@ -360,7 +424,7 @@ func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 		reader = opts.WrapReader(reader, resp.ContentLength)
 	}
 
-	if _, err := io.Copy(io.MultiWriter(writers...), reader); err != nil {
+	if _, err := io.Copy(io.MultiWriter(writers...), contextReader{ctx, reader}); err != nil {
 		return nil, fmt.Errorf("download stream failed: %w", err)
 	}
 
@@ -370,7 +434,7 @@ func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 	}
 	contentDigest := object.Digest
 
-	integrity, verified, err := verifyIntegrity(
+	integrity, verified, err := c.verifyIntegrity(
 		integrityActual(opts.HashAlgorithm, contentDigest, integrityHasher),
 		opts.HashAlgorithm,
 		opts.ExpectedHash,
@@ -393,18 +457,27 @@ func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 	if err := stage.writer.Rewind(); err != nil {
 		return nil, fmt.Errorf("rewind staged download: %w", err)
 	}
-	destFile, err := fsutil.CopyFileAtomic(stage.writer, destPath, opts.FileMode)
+	destFile, err := copyFileContext(ctx, stage.writer, destPath, opts.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf("write downloaded file: %w", err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(err, destFile.Close())
+	}
 	if stage.cacheable {
-		if err := Network().CommitEntry(
-			stage.writer, filename, url, opts.Kind, integrity,
-			resolveTTL(opts.Kind, opts.TTL),
+		if err := c.cache().commitEntryContext(
+			ctx,
+			stage.writer, filename, url, opts.Kind, integrity, opts.TTL,
 		); err != nil {
-			log.Warn(fmt.Errorf("failed to cache downloaded file: %w", err))
+			if ctx.Err() != nil {
+				return nil, errors.Join(ctx.Err(), destFile.Close())
+			}
+			c.logger.Warn(fmt.Errorf("failed to cache downloaded file: %w", err))
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(err, destFile.Close())
 	}
 
 	return &DownloadResult{
@@ -412,17 +485,6 @@ func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 		CacheHit: false,
 		Verified: verified,
 	}, nil
-}
-
-func resolveTTL(kind EntryKind, customTTL time.Duration) time.Duration {
-	ttl := DefaultCacheConfig().DownloadKeepFor
-	if kind == KindMetadata {
-		ttl = DefaultCacheConfig().IndexRefreshAfter
-	}
-	if customTTL > 0 {
-		ttl = customTTL
-	}
-	return ttl
 }
 
 // newIntegrityHasher creates the hasher for an upstream digest, or nil when
@@ -457,7 +519,7 @@ func integrityActual(
 	return ""
 }
 
-func verifyIntegrity(
+func (c *Client) verifyIntegrity(
 	actualHash string,
 	algorithm HashAlgorithm,
 	expectedHash string,
@@ -480,7 +542,7 @@ func verifyIntegrity(
 			State:     IntegrityVerified,
 		}
 		verified = true
-		log.Debug(
+		c.logger.Debug(
 			fmt.Sprintf(
 				"integrity verified (%s): %s",
 				algorithm,

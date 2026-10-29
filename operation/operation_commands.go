@@ -19,6 +19,7 @@ import (
 	"github.com/mclucy/lucy/version"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/config"
 	"github.com/mclucy/lucy/filetrack"
@@ -28,7 +29,6 @@ import (
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/resolve"
 	serverpkg "github.com/mclucy/lucy/server"
-	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/mclucy/lucy/workspace/identify"
@@ -49,6 +49,9 @@ type InitOptions struct {
 	PromptRuntime func(discovery.Result) (string, error)
 	// Trace receives progress for the lock resolution initialization runs.
 	Trace *install.Trace
+	// Materialize supplies artifact bytes for adoption planning. Nil uses the
+	// configured cache and network.
+	Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
 }
 
 // InitResult is the structured outcome of one initialization. The document
@@ -63,13 +66,13 @@ type InitResult struct {
 	Discovery       discovery.Result
 }
 
-func commandDocuments(root string) (document *documentpkg.Manifest, locked *documentpkg.Lock, resultErr error) {
-	writer, err := workspacewrite.Lock(root)
+func commandDocuments(root string, logger *log.Logger) (document *documentpkg.Manifest, locked *documentpkg.Lock, resultErr error) {
+	writer, err := workspacewrite.Lock(root, logger)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, logger); err != nil {
 		return nil, nil, err
 	}
 	d, err := documentpkg.ManifestFile(root).Read()
@@ -204,8 +207,8 @@ func commandReference(d *documentpkg.Manifest, old *documentpkg.Lock, raw string
 	return ref, selector, nil
 }
 
-func Add(ctx context.Context, root string, args []string, ecosystem catalog.Ecosystem, opts install.Options) (*install.Result, error) {
-	d, old, err := commandDocuments(root)
+func (s *Service) Add(ctx context.Context, root string, args []string, ecosystem catalog.Ecosystem, opts install.Options) (*install.Result, error) {
+	d, old, err := commandDocuments(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -237,11 +240,11 @@ func Add(ctx context.Context, root string, args []string, ecosystem catalog.Ecos
 		}
 	}
 	opts.PublishManifest = true
-	return install.Sync(ctx, root, d, old, opts)
+	return s.install.Sync(ctx, root, d, old, opts)
 }
 
-func Remove(ctx context.Context, root string, args []string, ecosystem catalog.Ecosystem, opts install.Options) (*install.Result, error) {
-	d, old, err := commandDocuments(root)
+func (s *Service) Remove(ctx context.Context, root string, args []string, ecosystem catalog.Ecosystem, opts install.Options) (*install.Result, error) {
+	d, old, err := commandDocuments(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -269,10 +272,10 @@ func Remove(ctx context.Context, root string, args []string, ecosystem catalog.E
 		delete(packages, ref)
 	}
 	opts.PublishManifest = true
-	return install.Sync(ctx, root, d, old, opts)
+	return s.install.Sync(ctx, root, d, old, opts)
 }
 
-func Initialize(ctx context.Context, root string, opts InitOptions) (result *InitResult, resultErr error) {
+func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions) (result *InitResult, resultErr error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -280,12 +283,17 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err
 	}
-	writer, err := workspacewrite.Lock(root)
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
+	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
 		return nil, err
 	}
 	if err := filetrack.RecoverPending(root); err != nil {
@@ -347,7 +355,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 		}
 		if paperLineageProduct(d.Server.Core.Product) &&
 			!concreteVersion(d.Server.Core.ProductVersion) {
-			build, found, err := identifyInstalledCoreBuild(
+			build, found, err := s.identifyInstalledCoreBuild(
 				ctx,
 				root,
 				selection,
@@ -376,7 +384,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			}
 			d.Server.Directory = filepath.ToSlash(relative)
 		}
-		log.Debug(
+		s.logger.Debug(
 			"detected server runtime",
 			"minecraft", d.Server.Minecraft,
 			"product", d.Server.Core.Product,
@@ -397,7 +405,16 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			"no server detected; use `lucy create` to generate a new server",
 		)
 	}
-	observed, _ = identify.Packages(observed)
+	var identificationErrors []error
+	observed, identificationErrors = identify.Packages(ctx, observed, s.source.ResolveArtifactByHash)
+	if err := ctx.Err(); err != nil {
+		return initResult(observed), err
+	}
+	for _, err := range identificationErrors {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return initResult(observed), err
+		}
+	}
 	if d.Server.Minecraft == "" || d.Server.Minecraft.IsInvalid() {
 		return initResult(observed), fmt.Errorf(
 			"the detected server has no concrete Minecraft version",
@@ -405,7 +422,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	}
 	if d.Server.Core.Product == serverpkg.ProductUnknown {
 		d.Server.Core.Product = serverpkg.ProductMinecraft
-		log.Debug("core product defaulted", "product", d.Server.Core.Product)
+		s.logger.Debug("core product defaulted", "product", d.Server.Core.Product)
 	}
 	mcdrVersion := opts.MCDRVersion
 	if mcdrVersion == "" && observed != nil && observed.Wrappers.MCDR != nil {
@@ -414,7 +431,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			return initResult(observed), fmt.Errorf("MCDR detected without an exact app version; specify --mcdr-version")
 		}
 		mcdrVersion = string(v)
-		log.Debug("MCDR version from workspace detection", "version", mcdrVersion)
+		s.logger.Debug("MCDR version from workspace detection", "version", mcdrVersion)
 	}
 	if mcdrVersion != "" {
 		d.MCDR = &documentpkg.ManifestMCDR{Directory: ".", Version: version.Version(mcdrVersion), Packages: map[string]documentpkg.Requirement{}}
@@ -422,7 +439,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if err := d.Normalize(); err != nil {
 		return initResult(observed), err
 	}
-	modrinthMapper, hasModrinthMapper, err := routing.GetArtifactMapper(catalog.ProviderModrinth)
+	modrinthMapper, hasModrinthMapper, err := s.source.GetArtifactMapper(catalog.ProviderModrinth)
 	if err != nil {
 		return initResult(observed), err
 	}
@@ -451,7 +468,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 			continue
 		}
 		if ecosystem == catalog.EcosystemMCDR && d.MCDR != nil {
-			candidates, err := routing.Candidates(ctx, catalog.RegistryMCDR, modules[0].ID, string(d.Server.Minecraft), ecosystem)
+			candidates, err := s.source.Candidates(ctx, catalog.RegistryMCDR, modules[0].ID, string(d.Server.Minecraft), ecosystem)
 			if err != nil {
 				continue
 			}
@@ -473,14 +490,14 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 		if !hasModrinthMapper {
 			continue
 		}
-		ref, _, matched, err := modrinthMapper.PackageByHash(artifact.File{Path: p.Path})
+		ref, _, matched, err := modrinthMapper.PackageByHash(ctx, artifact.File{Path: p.Path})
 		if err != nil || !matched || ref.Name == "" {
 			continue
 		}
 		// A manifest entry that resolution cannot select blocks every later
 		// command, so an installed package whose catalogue metadata offers no
 		// matching release for this server stays unmanaged.
-		candidates, candidateErr := routing.Candidates(
+		candidates, candidateErr := s.source.Candidates(
 			ctx, catalog.RegistryModrinth, ref.Name.String(),
 			string(d.Server.Minecraft), ecosystem,
 		)
@@ -505,7 +522,7 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 		d.Server.Packages[ecosystem]["modrinth:"+ref.Name.String()] = documentpkg.Requirement{Selector: ref.Version}
 		recognized++
 	}
-	log.Debug(
+	s.logger.Debug(
 		"recognized existing packages",
 		"count", recognized,
 		"present", len(packages),
@@ -520,12 +537,12 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	// Adoption records the set the server already runs, so module
 	// requirements that the installed jars report but the catalogue metadata
 	// cannot satisfy become warnings instead of a refusal.
-	resolved, resolution, err := install.Resolve(
+	resolved, resolution, err := s.install.Resolve(
 		ctx,
 		root,
 		d,
 		old,
-		install.Options{AcceptBroken: true, Trace: opts.Trace},
+		install.Options{AcceptBroken: true, Trace: opts.Trace, Materialize: opts.Materialize},
 	)
 	if observed != nil && resolution != nil {
 		observed.Warnings = append(observed.Warnings, resolution.Warnings...)
@@ -549,15 +566,30 @@ func Initialize(ctx context.Context, root string, opts InitOptions) (result *Ini
 	if opts.NoComments {
 		manifestFile = manifestFile.WithEncoder((*documentpkg.Manifest).PlainBytes)
 	}
+	if err := ctx.Err(); err != nil {
+		return initResult(observed), err
+	}
 	if err := manifestFile.Write(d); err != nil {
 		return initResult(observed), err
 	}
 	// Once lucy.yaml exists, later publication failures still report the
-	// written document so callers can register the workspace.
+	// written document. Registration precedes lock publication so a successful
+	// initialization is visible to the artifact store's sweep.
 	result = &InitResult{Document: d}
 	if observed != nil {
 		result.Warnings = observed.Warnings
 		result.Discovery = observed.Discovery
+	}
+	duplicates, err := s.registerWorkspace(root)
+	if err != nil {
+		return result, fmt.Errorf("register server: %w", err)
+	}
+	for _, duplicate := range duplicates {
+		result.Warnings = append(result.Warnings, fmt.Errorf(
+			"server name %q is also registered at %s; --server cannot select an ambiguous name",
+			duplicate.Name,
+			duplicate.Path,
+		))
 	}
 	if resolved != old {
 		if err := documentpkg.LockFile(root).Write(resolved); err != nil {
@@ -602,7 +634,7 @@ func paperLineageProduct(product serverpkg.Product) bool {
 	}
 }
 
-func identifyInstalledCoreBuild(
+func (s *Service) identifyInstalledCoreBuild(
 	ctx context.Context,
 	root string,
 	selection *discovery.Selection,
@@ -633,21 +665,21 @@ func identifyInstalledCoreBuild(
 	var found bool
 	switch product {
 	case serverpkg.ProductPaper:
-		build, found, err = routing.IdentifyFillBuild(
+		build, found, err = s.source.IdentifyFillBuild(
 			ctx,
 			"paper",
 			selection.MinecraftVersion(),
 			hex.EncodeToString(sha.Sum(nil)),
 		)
 	case serverpkg.ProductFolia:
-		build, found, err = routing.IdentifyFillBuild(
+		build, found, err = s.source.IdentifyFillBuild(
 			ctx,
 			"folia",
 			selection.MinecraftVersion(),
 			hex.EncodeToString(sha.Sum(nil)),
 		)
 	case serverpkg.ProductPurpur:
-		build, found, err = routing.IdentifyPurpurBuild(
+		build, found, err = s.source.IdentifyPurpurBuild(
 			ctx,
 			selection.MinecraftVersion(),
 			hex.EncodeToString(md.Sum(nil)),
