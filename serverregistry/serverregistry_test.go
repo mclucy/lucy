@@ -1,7 +1,6 @@
 package serverregistry
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -273,34 +272,6 @@ func TestRegisterUnnamedManifest(t *testing.T) {
 	entry := entryAt(t, entries, resolvedPath(t, root))
 	if entry.State != StateAvailable || entry.Name != "" {
 		t.Fatalf("unnamed server entry = %+v", entry)
-	}
-}
-
-func TestLegacySymlinkEntryStaysUsable(t *testing.T) {
-	t.Parallel()
-	registry := newTestRegistry(t)
-	root := filepath.Join(t.TempDir(), "server")
-	writeManifest(t, root, "legacy")
-	path := resolvedPath(t, root)
-	entryPath := filepath.Join(registry.directory, pathKey(path))
-	if err := os.Symlink(path, entryPath); err != nil {
-		t.Skipf("create legacy symlink entry: %v", err)
-	}
-
-	entries, err := registry.List()
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	entry := entryAt(t, entries, path)
-	if entry.State != StateAvailable || entry.Name != "legacy" {
-		t.Fatalf("legacy symlink entry = %+v, want available legacy", entry)
-	}
-
-	register(t, registry, root)
-
-	unregister(t, registry, root)
-	if _, err := os.Lstat(entryPath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("legacy entry after Unregister: %v, want removed", err)
 	}
 }
 

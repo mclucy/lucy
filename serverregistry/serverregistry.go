@@ -1,7 +1,5 @@
 // Package serverregistry locates named workspaces through per-user registry
-// entries. An entry is a regular file that records a canonical workspace path,
-// so registration needs no symlink privilege; symlink entries written by
-// earlier versions remain readable and removable.
+// entries that record canonical workspace paths.
 package serverregistry
 
 import (
@@ -122,7 +120,7 @@ func (r *Registry) List() ([]Entry, error) {
 			})
 			continue
 		}
-		entries = append(entries, observe(entryTarget(r.directory, target)))
+		entries = append(entries, observe(target))
 	}
 	slices.SortFunc(entries, func(a, b Entry) int {
 		return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.Path, b.Path))
@@ -211,7 +209,7 @@ func (r *Registry) registerEntry(root string, entry Entry) ([]Entry, error) {
 	target, err := readEntry(entryPath)
 	switch {
 	case err == nil:
-		if !samePath(entryTarget(r.directory, target), root) {
+		if !samePath(target, root) {
 			return nil, fmt.Errorf("server registry entry %s does not point to %s", entryPath, root)
 		}
 	case errors.Is(err, os.ErrNotExist):
@@ -262,7 +260,7 @@ func (r *Registry) Unregister(root string) error {
 	if err != nil {
 		return fmt.Errorf("read server registry entry: %w", err)
 	}
-	if !samePath(entryTarget(r.directory, target), root) {
+	if !samePath(target, root) {
 		return fmt.Errorf("server registry entry %s does not point to %s", entryPath, root)
 	}
 	if err := os.Remove(entryPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -325,19 +323,13 @@ func observe(root string) Entry {
 	return entry
 }
 
-// readEntry returns the target recorded by one registry entry. Registration
-// writes a regular file, so no symlink privilege is required; an entry created
-// by an earlier version is a symlink and stays readable.
 func readEntry(path string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return "", err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return os.Readlink(path)
-	}
 	if !info.Mode().IsRegular() {
-		return "", errors.New("registry entry is neither a target file nor a directory link")
+		return "", errors.New("registry entry is not a regular file")
 	}
 	if info.Size() > maxEntrySize {
 		return "", fmt.Errorf("registry entry exceeds %d bytes", maxEntrySize)
@@ -346,8 +338,8 @@ func readEntry(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(data) == 0 {
-		return "", errors.New("registry entry is empty")
+	if !filepath.IsAbs(string(data)) {
+		return "", errors.New("registry entry does not contain an absolute path")
 	}
 	return string(data), nil
 }
@@ -379,15 +371,6 @@ func writeEntry(path, target string) (resultErr error) {
 		return fmt.Errorf("publish server registry entry: %w", err)
 	}
 	return nil
-}
-
-// entryTarget interprets a recorded target. Earlier versions could record a
-// relative link target; such a target names a sibling of the entry.
-func entryTarget(directory, target string) string {
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(directory, target)
-	}
-	return filepath.Clean(target)
 }
 
 func canonical(root string) (string, error) {
