@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -53,8 +54,8 @@ func cliTestInstallation(
 func TestInitializationFailureNamesSelectionCommands(t *testing.T) {
 	t.Parallel()
 
-	fabricPath := "/srv/fabric-server-launch.jar"
-	vanillaPath := "/srv/server.jar"
+	fabricPath := filepath.FromSlash("/srv/fabric-server-launch.jar")
+	vanillaPath := filepath.FromSlash("/srv/server.jar")
 	candidates := []discovery.Installation{
 		cliTestInstallation(cliTestFabricIdentity("0.19.5", "1.21.1"), fabricPath),
 		cliTestInstallation(cliTestVanillaIdentity("1.21.1"), vanillaPath),
@@ -125,12 +126,13 @@ func TestInitializationFailureNamesSelectionCommands(t *testing.T) {
 func TestEntryPointCommandsQuotePaths(t *testing.T) {
 	t.Parallel()
 
+	path := filepath.FromSlash("/srv/it's server.jar")
 	installation := cliTestInstallation(
 		cliTestFabricIdentity("0.19.5", "1.21.1"),
-		"/srv/it's server.jar",
+		path,
 	)
 	commands := entryPointCommands([]discovery.Installation{installation})
-	want := []string{"lucy init --entry-point '/srv/it'\\''s server.jar'"}
+	want := []string{"lucy init --entry-point '" + filepath.FromSlash("/srv/it") + "'\\''s server.jar'"}
 	if len(commands) != 1 || commands[0] != want[0] {
 		t.Fatalf("commands = %q, want %q", commands, want)
 	}
@@ -177,9 +179,9 @@ func TestInitializationFailureKeepsUnreadableEvidence(t *testing.T) {
 func TestReportDiscoveryFindingsPresentsSelectionOutcomes(t *testing.T) {
 	t.Parallel()
 
-	fabricPath := "/srv/fabric-server-launch.jar"
-	shimPath := "/srv/fabric-server-shim.jar"
-	vanillaPath := "/srv/server.jar"
+	fabricPath := filepath.FromSlash("/srv/fabric-server-launch.jar")
+	shimPath := filepath.FromSlash("/srv/fabric-server-shim.jar")
+	vanillaPath := filepath.FromSlash("/srv/server.jar")
 
 	t.Run("automatic selection warns with competitors", func(t *testing.T) {
 		t.Parallel()
