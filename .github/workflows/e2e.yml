@@ -30,7 +30,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      domains: ${{ inputs.force && '["status","init","install","compile","filetrack"]' || steps.filter.outputs.changes }}
+      domains: ${{ inputs.force && '["status","init","install","compile"]' || steps.filter.outputs.changes }}
       compile-full: ${{ inputs.compile-full || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full')) }}
     steps:
       - name: Check out repository
@@ -127,27 +127,6 @@ jobs:
               - '.github/workflows/ci.yml'
               - '.github/workflows/e2e.yml'
               - '.github/workflows/e2e-run.yml'
-            filetrack:
-              - 'e2e/filetrack/**'
-              - 'artifact/**'
-              - 'filetrack/**'
-              - 'install/**'
-              - 'document/**'
-              - 'config/**'
-              - 'types/**'
-              - 'operation/**'
-              - 'workspace/**'
-              - 'cas/**'
-              - 'internal/fsutil/**'
-              - 'internal/workspacewrite/**'
-              - 'internal/cli/file/**'
-              - 'internal/cli/*.go'
-              - 'cmd/*.go'
-              - 'go.mod'
-              - 'go.sum'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/e2e.yml'
-              - '.github/workflows/e2e-run.yml'
 
   plan:
     name: Plan suites
@@ -241,20 +220,6 @@ jobs:
               "cache-pattern": "",
               "build": true,
               "task": true
-            },
-            {
-              "domain": "filetrack",
-              "group": "filetrack",
-              "suite": "filetrack",
-              "command": "go test -tags integration -count=1 -timeout 20m ./e2e/filetrack",
-              "timeout": 20,
-              "sandboxes": "",
-              "java": "",
-              "gradle": false,
-              "cache-key": "",
-              "cache-pattern": "",
-              "build": false,
-              "task": false
             }
           ]
           EOF

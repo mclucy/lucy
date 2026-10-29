@@ -15,9 +15,7 @@
 - `task build` builds a dev artifact under `dist/`.
 - `task build:watch` updates the build when codebase changes.
 - `task run -- [args]` runs the codebase without building.
-- `task test` runs the default Go test suite, including the hermetic CAS, HTTP cache, and file transaction scenarios. They use temporary directories, local HTTP servers, and self-executed helper processes; no external server downloads are required.
-- `task test:integration` runs the file tracking CLI integration suite. The CLI fixture builds without race instrumentation.
-- `task test:integration:race` runs that suite with the race detector. The CLI fixture also builds a race-enabled binary.
+- `task test` runs the default Go test suite, including the hermetic CAS, HTTP cache, file transaction, and CLI file tracking guard scenarios. They use temporary directories, local HTTP servers, and self-executed helper processes; no external server downloads are required.
 
 See [The taskfile](Taskfile.yml) for all scripts.
 

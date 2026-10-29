@@ -1,12 +1,9 @@
-//go:build integration
-
-package filetrack_test
+package cmd
 
 import (
 	"archive/zip"
 	"bufio"
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -69,6 +66,10 @@ func newWorkspace(t *testing.T) workspace {
 			t.Fatalf("create private home %s: %v", directory, err)
 		}
 	}
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "appdata"))
+	t.Setenv("TMPDIR", filepath.Join(home, "tmp"))
 	return workspace{root: root, home: home}
 }
 
@@ -181,25 +182,23 @@ type lucyRun struct {
 
 func (w workspace) lucy(t *testing.T, args ...string) lucyRun {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
-	defer cancel()
 	argv := append(append([]string{}, args...), "--no-style")
-	command := exec.CommandContext(ctx, lucyBinary, argv...)
-	command.Dir = w.root
-	command.Env = lucySubprocessEnv(w.home)
-	command.WaitDelay = 10 * time.Second
 	var stdout, stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	err := command.Run()
+	runner := NewRunner(argv, RunnerOptions{
+		Directory:  w.root,
+		Stdin:      strings.NewReader(""),
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+		HTTPClient: http.DefaultClient,
+	})
+	executeErr := runner.Execute(t.Context())
+	closeErr := runner.Close()
+	if executeErr == nil && closeErr == nil {
+		executeErr = runner.FlushOutput()
+	}
 	run := lucyRun{stdout: stdout.String(), stderr: stderr.String()}
-	var exitErr *exec.ExitError
-	switch {
-	case err == nil:
-	case errors.As(err, &exitErr):
-		run.exitCode = exitErr.ExitCode()
-	default:
-		t.Fatalf("run lucy %v: %v\nstdout:\n%s\nstderr:\n%s", args, err, run.stdout, run.stderr)
+	if executeErr != nil || closeErr != nil {
+		run.exitCode = 1
 	}
 	return run
 }
@@ -220,31 +219,6 @@ func (w workspace) lucyFail(t *testing.T, args ...string) lucyRun {
 		t.Fatalf("lucy %v unexpectedly succeeded\nstdout:\n%s\nstderr:\n%s", args, run.stdout, run.stderr)
 	}
 	return run
-}
-
-// lucySubprocessEnv keeps every subprocess inside a private home, cache and
-// temporary root. The inherited environment is otherwise shared so tools the
-// command needs stay reachable.
-func lucySubprocessEnv(home string) []string {
-	overrides := map[string]string{
-		"HOME":           home,
-		"XDG_CACHE_HOME": filepath.Join(home, "cache"),
-		"LOCALAPPDATA":   filepath.Join(home, "appdata"),
-		"TMPDIR":         filepath.Join(home, "tmp"),
-		"GORACE":         "atexit_sleep_ms=0",
-	}
-	environment := make([]string, 0, len(os.Environ())+len(overrides))
-	for _, entry := range os.Environ() {
-		key, _, _ := strings.Cut(entry, "=")
-		if _, shadowed := overrides[strings.ToUpper(key)]; shadowed {
-			continue
-		}
-		environment = append(environment, entry)
-	}
-	for key, value := range overrides {
-		environment = append(environment, key+"="+value)
-	}
-	return environment
 }
 
 func decodeJSON[T any](t *testing.T, raw string) T {
