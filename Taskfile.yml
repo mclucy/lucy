@@ -223,14 +223,14 @@ tasks:
       - go test -race ./...
 
   test:integration:
-    desc: Run hermetic CAS, cache, file transaction, and CLI integration scenarios
+    desc: Run the file tracking CLI integration suite
     cmds:
-      - go test -tags integration ./...
+      - go test -tags integration -count=1 ./e2e/filetrack
 
   test:integration:race:
-    desc: Run integration scenarios with the race detector
+    desc: Run the file tracking CLI integration suite with the race detector
     cmds:
-      - go test -race -tags integration ./...
+      - go test -race -tags integration -count=1 ./e2e/filetrack
 
   test:coverage:
     desc: Run the Go test suite with a coverage profile
@@ -315,9 +315,9 @@ tasks:
       - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
 
   e2e:filetrack:
-    desc: "Run the hermetic file tracking and CLI transaction scenarios"
+    desc: "Run the hermetic file tracking CLI scenarios"
     cmds:
-      - go test -tags integration -count=1 -timeout 0 ./e2e/filetrack ./filetrack {{.CLI_ARGS}}
+      - go test -tags integration -count=1 -timeout 0 ./e2e/filetrack {{.CLI_ARGS}}
 
   ci:test:
     desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher material then runs checks

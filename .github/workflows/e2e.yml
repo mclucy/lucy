@@ -246,7 +246,7 @@ jobs:
               "domain": "filetrack",
               "group": "filetrack",
               "suite": "filetrack",
-              "command": "go test -tags integration -count=1 -timeout 20m ./e2e/filetrack ./filetrack",
+              "command": "go test -tags integration -count=1 -timeout 20m ./e2e/filetrack",
               "timeout": 20,
               "sandboxes": "",
               "java": "",
