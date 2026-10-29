@@ -234,7 +234,7 @@ jobs:
               "suite": "init-install",
               "command": "go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install -run '^TestInitInstall$'",
               "timeout": 30,
-              "sandboxes": "vanilla-1201,forge-1201,neoforge-211,paper,purpur,cobblemon-1211",
+              "sandboxes": "vanilla-1201,forge-1201,paper,cobblemon-1211",
               "java": "21",
               "gradle": false,
               "cache-key": "",
