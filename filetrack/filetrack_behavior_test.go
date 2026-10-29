@@ -812,9 +812,15 @@ func TestFileTrackRejectsSymlinkedPaths(t *testing.T) {
 		t.Fatalf("create config directory: %v", err)
 	}
 	if err := os.Symlink(filepath.Join(outside, "inside.txt"), filepath.Join(root, "config/linked.txt")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("file symlinks unavailable: %v", err)
+		}
 		t.Fatalf("symlink file: %v", err)
 	}
 	if err := os.Symlink(outside, filepath.Join(root, "outside")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("directory symlinks unavailable: %v", err)
+		}
 		t.Fatalf("symlink directory: %v", err)
 	}
 	behaviorWrite(t, root, "real/inside.txt", []byte("inside\n"), 0o644)
@@ -840,6 +846,9 @@ func TestFileInspectReportsSymlinkedDeclarationAsError(t *testing.T) {
 		t.Fatalf("write symlink target: %v", err)
 	}
 	if err := os.Symlink(outside, filepath.Join(root, "outside")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("directory symlinks unavailable: %v", err)
+		}
 		t.Fatalf("symlink directory: %v", err)
 	}
 	declared := behaviorManifest()

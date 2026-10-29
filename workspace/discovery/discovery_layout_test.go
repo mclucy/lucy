@@ -3,6 +3,7 @@ package discovery
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -88,6 +89,9 @@ func TestDiscoverResolvesPaperSymlinkAlias(t *testing.T) {
 	}
 	aliasPath := filepath.Join(root, "server.jar")
 	if err := os.Symlink(paperPath, aliasPath); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("file symlinks unavailable: %v", err)
+		}
 		t.Fatalf("create alias: %v", err)
 	}
 
