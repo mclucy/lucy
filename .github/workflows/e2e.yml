@@ -67,6 +67,9 @@ jobs:
             init:
               - 'e2e/init/**'
               - 'artifact/**'
+              - 'artifactstore/**'
+              - 'cas/**'
+              - 'serverregistry/**'
               - 'e2e/sandbox/**'
               - 'e2e/internal/**'
               - 'e2e/testdata/sandboxes/**'
@@ -87,6 +90,9 @@ jobs:
             install:
               - 'e2e/install/**'
               - 'artifact/**'
+              - 'artifactstore/**'
+              - 'cas/**'
+              - 'serverregistry/**'
               - 'e2e/sandbox/**'
               - 'e2e/internal/**'
               - 'e2e/testdata/sandboxes/**'
