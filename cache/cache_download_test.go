@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -540,5 +541,179 @@ func TestCachedDownloadUpstreamMismatchPublishesNothing(t *testing.T) {
 				}
 			},
 		)
+	}
+}
+
+func TestValidateDownloadURL(t *testing.T) {
+	t.Parallel()
+	for _, value := range []string{
+		"http://example.com/artifact.jar",
+		"https://example.com/artifact.jar?x=1",
+	} {
+		if err := validateDownloadURL(value); err != nil {
+			t.Fatalf("validateDownloadURL(%q) = %v", value, err)
+		}
+	}
+	for _, value := range []string{
+		"",
+		"example.com/artifact.jar",
+		"file:///tmp/artifact.jar",
+		"ftp://example.com/artifact.jar",
+		"://",
+	} {
+		if err := validateDownloadURL(value); err == nil {
+			t.Fatalf("validateDownloadURL(%q) accepted a non-HTTP URL", value)
+		}
+	}
+}
+
+func TestReadLimitedBytesEnforcesLimit(t *testing.T) {
+	t.Parallel()
+	content := []byte("1234")
+	tests := []struct {
+		name     string
+		maximum  int64
+		wantData []byte
+		wantErr  bool
+	}{
+		{name: "under limit", maximum: 5, wantData: content},
+		{name: "at limit", maximum: 4, wantData: content},
+		{name: "over limit", maximum: 3, wantErr: true},
+		{name: "unlimited", maximum: 0, wantData: content},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			data, err := readLimitedBytes(bytes.NewReader(content), test.maximum)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("readLimitedBytes accepted %d bytes with a %d byte limit", len(content), test.maximum)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("readLimitedBytes: %v", err)
+			}
+			if !bytes.Equal(data, test.wantData) {
+				t.Fatalf("readLimitedBytes = %q, want %q", data, test.wantData)
+			}
+		})
+	}
+}
+
+func TestCachedGetRequestDoesNotCacheNon2xx(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, "missing")
+	}))
+	t.Cleanup(server.Close)
+	client := installNetworkCache(t, DefaultCacheConfig())
+	for attempt := range 2 {
+		response, err := client.CachedGetRequest(
+			context.Background(),
+			server.URL+"/missing",
+			BytesRequestOptions{Kind: KindMetadata},
+		)
+		if err != nil {
+			t.Fatalf("attempt %d: %v", attempt, err)
+		}
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("attempt %d status = %d, want 404", attempt, response.StatusCode)
+		}
+		if string(response.Data) != "missing" {
+			t.Fatalf("attempt %d data = %q, want missing", attempt, response.Data)
+		}
+		if response.CacheHit {
+			t.Fatalf("attempt %d reported a cache hit for a non-2xx response", attempt)
+		}
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("server served %d non-2xx responses, want 2", got)
+	}
+	if entries := client.All(); len(entries) != 0 {
+		t.Fatalf("non-2xx responses produced %d entries", len(entries))
+	}
+}
+
+func TestCachedGetRequestRejectsOversizeResponse(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "0123456789")
+	}))
+	t.Cleanup(server.Close)
+	client := installNetworkCache(t, DefaultCacheConfig())
+	if _, err := client.CachedGetRequest(
+		context.Background(),
+		server.URL+"/large",
+		BytesRequestOptions{Kind: KindMetadata, MaxBytes: 5},
+	); err == nil {
+		t.Fatal("oversize response was accepted")
+	}
+	if entries := client.All(); len(entries) != 0 {
+		t.Fatalf("oversize response produced %d entries", len(entries))
+	}
+}
+
+func TestCachedGetBytesRejectsNon2xx(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, "failure")
+	}))
+	t.Cleanup(server.Close)
+	client := installNetworkCache(t, DefaultCacheConfig())
+	if _, err := client.CachedGetBytes(
+		context.Background(),
+		server.URL+"/failure",
+		BytesRequestOptions{Kind: KindMetadata},
+	); err == nil {
+		t.Fatal("CachedGetBytes accepted a 500 response")
+	}
+}
+
+func TestCachedGetRequestHonorsPreCanceledContext(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = io.WriteString(w, "unexpected")
+	}))
+	t.Cleanup(server.Close)
+	client := installNetworkCache(t, DefaultCacheConfig())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := client.CachedGetRequest(
+		ctx,
+		server.URL+"/artifact",
+		BytesRequestOptions{Kind: KindMetadata},
+	); !errors.Is(err, context.Canceled) {
+		t.Fatalf("CachedGetRequest with a canceled context = %v", err)
+	}
+	if got := hits.Load(); got != 0 {
+		t.Fatalf("canceled request reached the server %d times", got)
+	}
+}
+
+func TestNewIntegrityHasherSelectsAlgorithm(t *testing.T) {
+	t.Parallel()
+	if hasher := newIntegrityHasher(HashNone, "digest"); hasher != nil {
+		t.Fatal("HashNone selected a hasher")
+	}
+	if hasher := newIntegrityHasher(HashSHA256, "digest"); hasher != nil {
+		t.Fatal("SHA-256 reused a separate hasher")
+	}
+	if hasher := newIntegrityHasher(HashSHA1, ""); hasher != nil {
+		t.Fatal("empty expected hash selected a hasher")
+	}
+	if hasher := newIntegrityHasher(HashSHA1, "digest"); hasher == nil ||
+		hasher.Size() != sha1.Size {
+		t.Fatal("SHA-1 did not select a SHA-1 hasher")
+	}
+	if hasher := newIntegrityHasher(HashSHA512, "digest"); hasher == nil ||
+		hasher.Size() != sha512.Size {
+		t.Fatal("SHA-512 did not select a SHA-512 hasher")
 	}
 }
