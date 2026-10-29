@@ -29,6 +29,7 @@ import (
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/serverregistry"
+	"github.com/mclucy/lucy/telemetry"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
@@ -44,7 +45,9 @@ const agentInstructions = "Instructions for agents:\n" +
 	"`lucy docs grep` to search, and `lucy docs read` to read one or more articles. `--json-compact` and\n" +
 	"`--no-interactive` will be on by default for you. You can use tools like `jq` to process\n" +
 	"command outputs. Use `lucy schema` to list JSON result contracts, `lucy schema COMMAND` to\n" +
-	"read a result schema, and `lucy schema --error` to read the shared failure schema."
+	"read a result schema, and `lucy schema --error` to read the shared failure schema.\n" +
+	"If telemetry is off, a rejected agent report is not an error to repair. Never turn telemetry on\n" +
+	"without an explicit instruction from the user."
 
 // RunnerOptions supplies the invocation directory, streams, and network transport.
 // Directory must be absolute. A nil HTTPClient creates a client owned by the run.
@@ -77,6 +80,8 @@ type Runner struct {
 	httpClient        *http.Client
 	ownsHTTPClient    bool
 	directory         string
+	telemetry         *telemetry.Client
+	telemetryErr      error
 }
 
 // NewRunner prepares an isolated invocation with a fresh command tree, fresh
@@ -102,6 +107,7 @@ func NewRunner(args []string, options RunnerOptions) *Runner {
 		r.ownsHTTPClient = true
 	}
 	r.root = NewRootCommand(r.contracts, r.invocation, r.dependencies)
+	r.registerTelemetryCommands()
 	r.root.SetArgs(r.args)
 	r.root.SetIn(r.stdin)
 	r.root.SetOut(r.stdout)
@@ -199,6 +205,9 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 	if !filepath.IsAbs(r.directory) {
 		return fmt.Errorf("invocation directory must be absolute")
 	}
+	if isTelemetryCommand(cmd) {
+		return nil
+	}
 	if err := r.configureLogging(cmd); err != nil {
 		return err
 	}
@@ -212,6 +221,11 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 			report.New(cmd.ErrOrStderr(), r.invocation.Theme).Warn(fmt.Errorf(
 				"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
 			))
+			if r.invocation.TelemetryEnabled {
+				report.New(cmd.ErrOrStderr(), r.invocation.Theme).Info(
+					"Lucy collects opt-out telemetry. Use `lucy telemetry off` to disable it; see `lucy docs read commands/telemetry` for details.",
+				)
+			}
 		}
 	}
 	return nil
@@ -323,6 +337,12 @@ func (r *Runner) configureLogging(cmd *cobra.Command) error {
 		return err
 	}
 	r.invocation.Logger, err = log.New(path, level, mirror)
+	if err == nil && r.telemetry != nil && !isTelemetryCommand(cmd) {
+		if enabled, stateErr := r.telemetry.Enabled(cmd.Context()); stateErr == nil && enabled {
+			r.invocation.TelemetryEnabled = true
+			r.invocation.Logger.CaptureStages()
+		}
+	}
 	return err
 }
 
@@ -366,6 +386,11 @@ func (r *Runner) injectAgentInstructions() {
 	}
 	r.agentHelpInjected = true
 	block := "\n\n" + agentInstructions
+	if r.telemetry != nil {
+		if enabled, err := r.telemetry.Enabled(context.Background()); err == nil && enabled {
+			block += "\nIf you encounter Lucy failures or friction, use `lucy agent-report` to send a privacy-filtered report."
+		}
+	}
 	var walk func(*cobra.Command)
 	walk = func(cmd *cobra.Command) {
 		switch {
@@ -517,6 +542,8 @@ func (e *panicError) Error() string {
 // Execute runs the invocation. Per-run state is reset first, so a runner
 // always starts from a clean parse result and output buffer.
 func (r *Runner) Execute(ctx context.Context) (err error) {
+	started := r.startTelemetry()
+	defer func() { r.finishTelemetry(started, err) }()
 	defer func() {
 		recovered := recover()
 		if recovered == nil {

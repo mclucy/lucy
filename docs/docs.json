@@ -23,6 +23,7 @@
           "commands/install",
           "commands/java",
           "commands/config",
+          "commands/telemetry",
           "commands/add",
           "commands/remove",
           "commands/deinit",
