@@ -265,3 +265,20 @@ func TestListKeepsMissingTargetsAndReloadsNames(t *testing.T) {
 		t.Fatalf("Resolve(after) = %s, want %s", entry.Path, renamedPath)
 	}
 }
+
+func TestRegisterUnnamedManifest(t *testing.T) {
+	t.Parallel()
+	registry := newTestRegistry(t)
+	root := filepath.Join(t.TempDir(), "server")
+	writeManifest(t, root, "")
+	register(t, registry, root)
+
+	entries, err := registry.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := entryAt(t, entries, resolvedPath(t, root))
+	if entry.State != StateAvailable || entry.Name != "" {
+		t.Fatalf("unnamed server entry = %+v", entry)
+	}
+}
