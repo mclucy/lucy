@@ -23,13 +23,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/fsutil"
 	serverpkg "github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
+
+// baseManifest is the declaration every process-level file tracking case
+// starts from.
+func baseManifest(t *testing.T) *documentpkg.Manifest {
+	t.Helper()
+	return &documentpkg.Manifest{
+		SchemaVersion: documentpkg.ManifestSchemaVersion,
+		Server: documentpkg.ManifestServer{
+			Minecraft: "1.21.4",
+			Directory: "server",
+			Core:      documentpkg.ManifestCore{Product: serverpkg.ProductMinecraft},
+		},
+	}
+}
 
 // workspace is one hermetic server directory plus the private home every
 // subprocess runs under, so no test can observe another test's state.
@@ -112,44 +124,6 @@ func (w workspace) requireBytes(t *testing.T, relative string, want []byte) {
 	}
 }
 
-func (w workspace) modTime(t *testing.T, relative string) time.Time {
-	t.Helper()
-	info, err := os.Lstat(w.path(relative))
-	if err != nil {
-		t.Fatalf("stat %s: %v", relative, err)
-	}
-	return info.ModTime()
-}
-
-func (w workspace) chmod(t *testing.T, relative string, mode os.FileMode) {
-	t.Helper()
-	if err := os.Chmod(w.path(relative), mode); err != nil {
-		t.Fatalf("chmod %s: %v", relative, err)
-	}
-}
-
-// requireMode proves the command left the permissions a user chose alone.
-func (w workspace) requireMode(t *testing.T, relative string, want os.FileMode) {
-	t.Helper()
-	info, err := os.Lstat(w.path(relative))
-	if err != nil {
-		t.Fatalf("stat %s: %v", relative, err)
-	}
-	if got := info.Mode().Perm(); got != want {
-		t.Fatalf("%s holds mode %04o, want %04o", relative, got, want)
-	}
-}
-
-func (w workspace) symlink(t *testing.T, target, relative string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(w.path(relative)), 0o755); err != nil {
-		t.Fatalf("create parent of %s: %v", relative, err)
-	}
-	if err := os.Symlink(target, w.path(relative)); err != nil {
-		t.Fatalf("symlink %s: %v", relative, err)
-	}
-}
-
 func (w workspace) writeManifest(t *testing.T, doc *documentpkg.Manifest) string {
 	t.Helper()
 	if err := doc.Normalize(); err != nil {
@@ -164,25 +138,6 @@ func (w workspace) writeManifest(t *testing.T, doc *documentpkg.Manifest) string
 		t.Fatalf("marshal fixture manifest: %v", err)
 	}
 	w.write(t, documentpkg.ManifestFilename, data, 0o644)
-	return fingerprint
-}
-
-func (w workspace) readManifest(t *testing.T) *documentpkg.Manifest {
-	t.Helper()
-	doc, err := documentpkg.ManifestFile(w.root).Read()
-	if err != nil {
-		t.Fatalf("read manifest: %v", err)
-	}
-	return doc
-}
-
-// manifestFingerprint is the fingerprint Lucy stores in a current lockfile.
-func (w workspace) manifestFingerprint(t *testing.T) string {
-	t.Helper()
-	fingerprint, err := w.readManifest(t).Fingerprint()
-	if err != nil {
-		t.Fatalf("fingerprint manifest: %v", err)
-	}
 	return fingerprint
 }
 
@@ -207,169 +162,13 @@ func (w workspace) readLock(t *testing.T) *documentpkg.Lock {
 	return doc
 }
 
-type receiptEntry struct {
-	Path   string `yaml:"path"`
-	SHA256 string `yaml:"sha256"`
-	Mode   uint32 `yaml:"mode"`
-}
-
-type receiptDocument struct {
-	Version         int            `yaml:"version"`
-	LockFingerprint string         `yaml:"lock_fingerprint"`
-	Entries         []receiptEntry `yaml:"entries"`
-}
-
-// receiptProjection is the digest a fixture receipt must pin to stay current.
-func receiptProjection(t *testing.T, lock *documentpkg.Lock) string {
-	t.Helper()
-	fingerprint, err := install.ResolutionFingerprint(lock)
-	if err != nil {
-		t.Fatalf("fingerprint lock resolution: %v", err)
-	}
-	return fingerprint
-}
-
-func (w workspace) writeReceipt(t *testing.T, lock *documentpkg.Lock, entries ...receiptEntry) {
-	t.Helper()
-	doc := receiptDocument{
-		Version:         1,
-		LockFingerprint: receiptProjection(t, lock),
-		Entries:         entries,
-	}
-	data, err := yaml.Marshal(doc)
-	if err != nil {
-		t.Fatalf("marshal fixture receipt: %v", err)
-	}
-	w.write(t, ".lucy/install.yaml", data, 0o644)
-}
-
-func (w workspace) readReceipt(t *testing.T) receiptDocument {
-	t.Helper()
-	var doc receiptDocument
-	if err := yaml.Unmarshal(w.read(t, ".lucy/install.yaml"), &doc); err != nil {
-		t.Fatalf("decode installation receipt: %v", err)
-	}
-	return doc
-}
-
-func (w workspace) requireReceiptEntries(t *testing.T, want ...receiptEntry) {
-	t.Helper()
-	doc := w.readReceipt(t)
-	if len(doc.Entries) != len(want) {
-		t.Fatalf("receipt holds %d entries, want %d", len(doc.Entries), len(want))
-	}
-	for _, entry := range want {
-		found := false
-		for _, actual := range doc.Entries {
-			if actual.Path == entry.Path {
-				found = true
-				if actual.SHA256 != entry.SHA256 {
-					t.Errorf("receipt %s pins %s, want %s", entry.Path, actual.SHA256, entry.SHA256)
-				}
-				if actual.Mode != entry.Mode {
-					t.Errorf("receipt %s pins mode %d, want %d", entry.Path, actual.Mode, entry.Mode)
-				}
-			}
-		}
-		if !found {
-			t.Errorf("receipt lost its entry for %s", entry.Path)
-		}
-	}
-}
-
-// seedNativeRuntime writes a manifest, a current lock and an installation
-// receipt over real core bytes, so a following installation is a no-op instead of
-// a fresh resolve. The declared tracked files take part in the lock and the
-// receipt stays pinned to the runtime only.
-func (w workspace) seedNativeRuntime(t *testing.T, files ...documentpkg.TrackedFile) (*documentpkg.Manifest, *documentpkg.Lock, []byte) {
-	t.Helper()
-	doc := &documentpkg.Manifest{
-		SchemaVersion: documentpkg.ManifestSchemaVersion,
-		Server: documentpkg.ManifestServer{
-			Minecraft: "1.21.4",
-			Directory: "server",
-			Core:      documentpkg.ManifestCore{Product: serverpkg.ProductMinecraft},
-		},
-		Files: files,
-	}
-	fingerprint := w.writeManifest(t, doc)
-	core := []byte("miniature server core bytes\n")
-	w.write(t, "server/server.jar", core, 0o644)
-	lock := &documentpkg.Lock{
-		SchemaVersion:       documentpkg.LockSchemaVersion,
-		ManifestFingerprint: fingerprint,
-		Server: documentpkg.LockedServer{
-			Minecraft:   "1.21.4",
-			Directory:   "server",
-			Product:     serverpkg.ProductMinecraft,
-			CoreVersion: "1.21.4",
-			Artifact: catalog.Artifact{
-				Provider: catalog.ProviderMojang,
-				Version:  "1.21.4",
-				Filename: "server.jar",
-				URL:      "https://example.invalid/server.jar",
-				Hashes:   map[string]string{"sha256": digestHex(core)},
-			},
-			Java: documentpkg.LockedJava{Advisory: 21},
-		},
-		Packages: []documentpkg.Package{},
-		Files:    files,
-	}
-	w.writeLock(t, lock)
-	w.writeReceipt(t, lock, receiptEntry{
-		Path:   "server/server.jar",
-		SHA256: digestHex(core),
-		Mode:   0o644,
-	})
-	return doc, lock, core
-}
-
-func casObjectName(hexDigest string) string {
-	return filepath.Join(".lucy", "objects", "sha256", hexDigest[:2], hexDigest)
-}
-
-func (w workspace) requireCASObject(t *testing.T, hexDigest string, want []byte) {
-	t.Helper()
-	data, err := os.ReadFile(w.path(casObjectName(hexDigest)))
-	if err != nil {
-		t.Fatalf("read cas object %s: %v", hexDigest, err)
-	}
-	if !bytes.Equal(data, want) {
-		t.Fatalf("cas object %s holds %q, want %q", hexDigest, data, want)
-	}
-}
-
-func (w workspace) dropCASObject(t *testing.T, hexDigest string) {
-	t.Helper()
-	if err := os.Remove(w.path(casObjectName(hexDigest))); err != nil {
-		t.Fatalf("drop cas object %s: %v", hexDigest, err)
-	}
-}
-
 func digestHex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
 
-// writeFileBytes and mkdirIfMissing seed paths outside the workspace, which
-// only a fixture helper may touch.
-func writeFileBytes(target string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(target, data, mode)
-}
-
-func mkdirIfMissing(target string) error {
-	return os.MkdirAll(target, 0o755)
-}
-
 func acceptedHash(data []byte) string {
 	return "sha256:" + digestHex(data)
-}
-
-func manifestTrackedFile(path, hash string) documentpkg.TrackedFile {
-	return documentpkg.TrackedFile{Path: path, Hash: hash}
 }
 
 // lucyRun is one subprocess outcome. stdout carries command output; warnings
@@ -490,21 +289,6 @@ type fileStatusView struct {
 	Error      string `json:"error"`
 }
 
-type historyChangeView struct {
-	Path       string               `json:"path"`
-	After      *fileDeclarationView `json:"after"`
-	BackupHash string               `json:"backup_hash"`
-	Revision   uint64               `json:"revision"`
-	Parent     uint64               `json:"parent"`
-	Accepted   bool                 `json:"accepted"`
-}
-
-type historyEventView struct {
-	Sequence  uint64              `json:"sequence"`
-	Operation string              `json:"operation"`
-	Changes   []historyChangeView `json:"changes"`
-}
-
 func (w workspace) fileResult(t *testing.T, args ...string) fileResultView {
 	t.Helper()
 	argv := make([]string, len(args)+2)
@@ -535,57 +319,6 @@ func (w workspace) statusOf(t *testing.T, path string) fileStatusView {
 	return fileStatusView{}
 }
 
-// lucyHistory runs the read-only history command and decodes its events.
-func (w workspace) lucyHistory(t *testing.T, path string) []historyEventView {
-	t.Helper()
-	args := []string{"file", "history", "--json"}
-	if path != "" {
-		args = append(args, path)
-	}
-	run := w.lucyOK(t, args...)
-	return decodeJSON[[]historyEventView](t, run.stdout)
-}
-
-// persistedHistory decodes the durable JSONL history directly, so sequence
-// numbering is asserted against the bytes Lucy wrote rather than a rendering.
-func (w workspace) persistedHistory(t *testing.T) []historyEventView {
-	t.Helper()
-	raw, err := os.ReadFile(w.path(".lucy", "history", "files.jsonl"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		t.Fatalf("read persisted file history: %v", err)
-	}
-	events := []historyEventView{}
-	for _, line := range strings.Split(string(raw), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		event := decodeJSON[historyEventView](t, line)
-		events = append(events, event)
-	}
-	return events
-}
-
-func changeFor(event historyEventView, path string) (historyChangeView, bool) {
-	for _, change := range event.Changes {
-		if change.Path == path {
-			return change, true
-		}
-	}
-	return historyChangeView{}, false
-}
-
-func requireChange(t *testing.T, event historyEventView, path string) historyChangeView {
-	t.Helper()
-	change, ok := changeFor(event, path)
-	if !ok {
-		t.Fatalf("history event #%d has no change for %s", event.Sequence, path)
-	}
-	return change
-}
-
 // sourceServer serves recovery bytes and counts the requests it answers, so
 // tests prove when Lucy fetches a URL instead of using local storage.
 type sourceServer struct {
@@ -614,13 +347,6 @@ func newSourceServer(t *testing.T, initial []byte) *sourceServer {
 
 func (s *sourceServer) url(name string) string {
 	return s.server.URL + "/" + name
-}
-
-func (s *sourceServer) publish(t *testing.T, content []byte) {
-	t.Helper()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.content = content
 }
 
 func (s *sourceServer) hits() int {

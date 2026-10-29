@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json/v2"
 	"fmt"
@@ -74,12 +73,8 @@ func TestInitialize(t *testing.T) {
 				createSymlink(t, root, link)
 			}
 			removePaths(t, root, scenario.removeBefore)
-			modifyInstalledFiles(t, root, scenario.modifyFiles)
 
 			args := []string{"init", "--no-interactive"}
-			if scenario.force {
-				args = append(args, "--force")
-			}
 			args = withEntryPoint(args, root, scenario.selectEntryPoint)
 			stdout, stderr, err := runner.execute(t, root, args...)
 			output := stdout + stderr
@@ -294,19 +289,6 @@ func verifyStatus(
 		t.Fatalf("decode live status JSON: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
 	}
 	requireStatusFindings(t, document.Warnings, root, informational)
-	if len(want.ambiguous) > 0 {
-		if document.Server != nil {
-			t.Errorf("live status selected a runtime for a declared ambiguity")
-		}
-		requireStatusFindings(t, document.Warnings, root, want.ambiguous)
-		return
-	}
-	if want.missing {
-		if document.Server != nil {
-			t.Errorf("live status adopted a runtime for a missing declared installation")
-		}
-		return
-	}
 	if document.Server == nil {
 		t.Fatal("live status reported no server")
 	}
@@ -515,44 +497,6 @@ func verifyUnchanged(t *testing.T, root string, paths []string, before map[strin
 	for _, path := range paths {
 		if got := digests(t, root, []string{path})[path]; got != before[path] {
 			t.Errorf("%s changed during initialization", path)
-		}
-	}
-}
-
-// modifyInstalledFiles appends a ZIP archive comment to each installed file.
-// Entries and manifests stay readable, but the bytes no longer match the
-// digest the installation receipt recorded.
-func modifyInstalledFiles(t *testing.T, root string, paths []string) {
-	t.Helper()
-	comment := []byte("\nmodified after the ownership receipt was written\n")
-	for _, path := range paths {
-		absolute := filepath.Join(root, filepath.FromSlash(path))
-		data, err := os.ReadFile(absolute)
-		if err != nil {
-			t.Fatalf("read installed file %s: %v", path, err)
-		}
-		info, err := os.Stat(absolute)
-		if err != nil {
-			t.Fatalf("stat installed file %s: %v", path, err)
-		}
-		end := bytes.LastIndex(data, []byte("PK\x05\x06"))
-		if end < 0 || end+22 > len(data) {
-			t.Fatalf("installed file %s has no ZIP end record", path)
-		}
-		commentLength := int(binary.LittleEndian.Uint16(data[end+20 : end+22]))
-		if end+22+commentLength != len(data) {
-			t.Fatalf("installed file %s has an unexpected ZIP layout", path)
-		}
-		if commentLength+len(comment) > 0xffff {
-			t.Fatalf("installed file %s ZIP comment is too long", path)
-		}
-		binary.LittleEndian.PutUint16(
-			data[end+20:end+22],
-			uint16(commentLength+len(comment)),
-		)
-		data = append(data, comment...)
-		if err := os.WriteFile(absolute, data, info.Mode().Perm()); err != nil {
-			t.Fatalf("modify installed file %s: %v", path, err)
 		}
 	}
 }

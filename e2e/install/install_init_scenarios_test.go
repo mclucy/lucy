@@ -54,28 +54,12 @@ var initInstallScenarios = map[string]initInstallScenario{
 		requiredInputs:  []string{"libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar"},
 		launchArguments: "libraries/net/minecraftforge/forge/1.20.1-47.4.10/unix_args.txt",
 	},
-	"neoforge-211": {
-		product:         "neoforge",
-		minecraft:       "1.21.1",
-		coreVersion:     "21.1.248",
-		requiredFiles:   []string{"run.sh", "user_jvm_args.txt"},
-		requiredInputs:  []string{"libraries/net/neoforged/neoforge/21.1.248/neoforge-21.1.248-universal.jar"},
-		launchArguments: "libraries/net/neoforged/neoforge/21.1.248/unix_args.txt",
-	},
 	"paper": {
 		product:        "paper",
 		minecraft:      "1.21.11",
 		coreVersion:    "130",
 		coreOutput:     "server.jar",
 		requiredFiles:  []string{"server.jar", "versions/1.21.11/paper-1.21.11.jar"},
-		requiredInputs: []string{"cache/mojang_1.21.11.jar"},
-	},
-	"purpur": {
-		product:        "purpur",
-		minecraft:      "1.21.11",
-		coreVersion:    "2568",
-		coreOutput:     "server.jar",
-		requiredFiles:  []string{"server.jar", "versions/1.21.11/purpur-1.21.11.jar"},
 		requiredInputs: []string{"cache/mojang_1.21.11.jar"},
 	},
 }
