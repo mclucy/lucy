@@ -82,14 +82,15 @@ func renderLaunchdDaemon(binary string) string {
 // renderLaunchdInstance renders a server job that starts when explicitly loaded.
 func renderLaunchdInstance(inst Instance, binary string) string {
 	return plist(map[string]any{
-		"Label":             inst.LaunchdLabel,
-		"ProgramArguments":  []string{binary, "run-server", inst.Name},
-		"WorkingDirectory":  inst.Root,
-		"UserName":          inst.RunUser,
+		"Label":            inst.LaunchdLabel,
+		"ProgramArguments": []string{binary, "run-server", inst.Name},
+		"WorkingDirectory": inst.Root,
+		// Like systemd, the supervisor creates protected IPC as root and drops
+		// only the Minecraft child's credentials in prepareManagedProcess.
 		"RunAtLoad":         true,
 		"KeepAlive":         map[string]any{"SuccessfulExit": false},
-		"StandardOutPath":   inst.Root + "/logs/lucy-service.out.log",
-		"StandardErrorPath": inst.Root + "/logs/lucy-service.err.log",
+		"StandardOutPath":   LogDir() + "/" + inst.Name + ".out.log",
+		"StandardErrorPath": LogDir() + "/" + inst.Name + ".err.log",
 	})
 }
 

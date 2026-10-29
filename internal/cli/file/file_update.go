@@ -8,53 +8,57 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var updateCmd = &cobra.Command{
-	Use:   "update [path]",
-	Short: UpdateShort,
-	Long:  UpdateLong,
-	Args:  pathOrAllArgs,
-	RunE:  actionFileUpdate,
-}
-
-var recoverCmd = &cobra.Command{
-	Use:   "recover [path]",
-	Short: RecoverShort,
-	Long:  RecoverLong,
-	Args:  pathOrAllArgs,
-	RunE:  actionFileRecover,
-}
-
-var revertCmd = &cobra.Command{
-	Use:   "revert <path> [hash]",
-	Short: RevertShort,
-	Long:  RevertLong,
-	Args:  revertArgs,
-	RunE:  actionFileRevert,
-}
-
-func init() {
-	updateCmd.Flags().Bool(
+func newUpdateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update [path...]",
+		Short: UpdateShort,
+		Long:  UpdateLong,
+		Args:  pathOrAllArgs,
+		RunE:  actionFileUpdate,
+	}
+	cmd.Flags().Bool(
 		flagFromSource,
 		false,
 		"Fetch fresh bytes from recover_url instead of the working file",
 	)
-	updateCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagAll,
 		false,
 		"Update every tracked file atomically",
 	)
+	return cmd
+}
 
-	recoverCmd.Flags().Bool(
+func newRecoverCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "recover [path...]",
+		Short: RecoverShort,
+		Long:  RecoverLong,
+		Args:  pathOrAllArgs,
+		RunE:  actionFileRecover,
+	}
+	cmd.Flags().Bool(
 		flagAll,
 		false,
 		"Restore every tracked file with an accepted hash atomically",
 	)
+	return cmd
+}
 
-	revertCmd.Flags().Uint64(
+func newRevertCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "revert <path> [hash]",
+		Short: RevertShort,
+		Long:  RevertLong,
+		Args:  revertArgs,
+		RunE:  actionFileRevert,
+	}
+	cmd.Flags().Uint64(
 		flagRevision,
 		0,
 		"Restore one exact historical revision sequence",
 	)
+	return cmd
 }
 
 func actionFileUpdate(cmd *cobra.Command, args []string) error {
@@ -65,17 +69,13 @@ func actionFileUpdate(cmd *cobra.Command, args []string) error {
 
 	fromSource, _ := cmd.Flags().GetBool(flagFromSource)
 	all, _ := cmd.Flags().GetBool(flagAll)
-	path := ""
-	if len(args) == 1 {
-		path = args[0]
-	}
 
 	result, err := filetrack.Run(
 		cmd.Context(),
 		root,
 		filetrack.Request{
 			Operation:  filetrack.Update,
-			Path:       path,
+			Paths:      args,
 			All:        all,
 			FromSource: fromSource,
 		},
@@ -93,17 +93,13 @@ func actionFileRecover(cmd *cobra.Command, args []string) error {
 	}
 
 	all, _ := cmd.Flags().GetBool(flagAll)
-	path := ""
-	if len(args) == 1 {
-		path = args[0]
-	}
 
 	result, err := filetrack.Run(
 		cmd.Context(),
 		root,
 		filetrack.Request{
 			Operation: filetrack.Recover,
-			Path:      path,
+			Paths:     args,
 			All:       all,
 		},
 	)
@@ -133,7 +129,7 @@ func actionFileRevert(cmd *cobra.Command, args []string) error {
 		root,
 		filetrack.Request{
 			Operation: filetrack.Revert,
-			Path:      args[0],
+			Paths:     args[:1],
 			Hash:      hash,
 			Revision:  revision,
 		},

@@ -1,25 +1,49 @@
 package spiget
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 )
 
 type provider struct{}
 
 var Provider provider
 
-func (provider) Provider() types.Provider {
-	return types.ProviderSpiget
+func (provider) Provider() catalog.Provider {
+	return catalog.ProviderSpiget
+}
+
+// Builds lists every published resource version. Spiget exposes no per-version
+// game versions, loaders, or channel, so those stay unknown.
+func (p provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	resource, err := resolveResourceByProjectName(catalog.Name(project))
+	if err != nil {
+		return nil, err
+	}
+	versions, err := listVersions(resource.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	builds := make([]upstream.Build, 0, len(versions))
+	for _, v := range versions {
+		builds = append(builds, v.ToBuild())
+	}
+	return builds, nil
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	// Spiget publishes server resources only; IncludeClient needs no filter.
-	if q.FilterEcosystem == types.EcosystemBukkit || q.FilterEcosystem == types.EcosystemPaper {
+	if q.FilterEcosystem == catalog.EcosystemBukkit || q.FilterEcosystem == catalog.EcosystemPaper {
 		log.Debug("spiget: platform filter is not supported upstream; search will run without a platform query parameter")
 	}
 
@@ -32,20 +56,20 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 
 func (p provider) Fetch(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
 	resource, err := resolveResourceByProjectName(id.Name)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	resolved, err := resolveVersion(resource, id.Version)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	r := resolved.ToPackageRemote()
-	return types.ResolvedPackage{
+	return upstream.ResolvedPackage{
 		FileURL:       r.FileURL,
 		Filename:      r.Filename,
 		Hash:          r.Hash,
@@ -53,10 +77,10 @@ func (p provider) Fetch(
 	}, nil
 }
 
-func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
+func (p provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
 	resource, err := resolveResourceByProjectName(ref.Name)
 	if err != nil {
-		return types.Metadata{}, err
+		return catalog.Metadata{}, err
 	}
 	info := resource.ToProjectInformation()
 	return info, nil
@@ -64,18 +88,18 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 
 func (p provider) Dependencies(
 	_ upstream.LocalContext,
-	_ types.VersionedPackageRef,
-) (*types.DependencySet, error) {
-	return &types.DependencySet{FromArtifact: false}, nil
+	_ catalog.VersionedRef,
+) (*upstream.DependencySet, error) {
+	return &upstream.DependencySet{FromArtifact: false}, nil
 }
 
 func (p provider) ResolveVersionSelector(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (parsed types.VersionedPackageRef, err error) {
+	id catalog.VersionedRef,
+) (parsed catalog.VersionedRef, err error) {
 	parsed = id
 	switch id.Version {
-	case "", types.VersionAny, types.VersionBeta, types.VersionStable:
+	case "", version.Any, version.Beta, version.Stable:
 	default:
 		return id, nil
 	}

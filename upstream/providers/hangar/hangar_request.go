@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 const hangarAPIBaseURL = "https://hangar.papermc.io/api/v1"
@@ -22,14 +23,14 @@ var (
 	ErrNoDownload         = errors.New("hangar: download not found")
 )
 
-func getProject(name types.PackageName) (*hangarProject, error) {
+func getProject(name catalog.Name) (*hangarProject, error) {
 	if project, err := getProjectByPath(string(name)); err == nil {
 		if project.ProjectRef().CanonicalName() == name {
 			return project, nil
 		}
 	}
 
-	search, err := searchProjects(string(name), types.EcosystemUnspecified)
+	search, err := searchProjects(string(name), catalog.EcosystemUnspecified)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ func getProjectByPath(path string) (*hangarProject, error) {
 
 func searchProjects(
 	query string,
-	ecosystem types.Ecosystem,
+	ecosystem catalog.Ecosystem,
 ) (*projectSearchResponse, error) {
 	params := url.Values{}
 	if query != "" {
@@ -78,7 +79,7 @@ func searchProjects(
 	return res, nil
 }
 
-func getVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
+func getVersion(id catalog.VersionedRef) (*hangarVersion, error) {
 	project, err := getProject(id.Name)
 	if err != nil {
 		return nil, err
@@ -96,26 +97,40 @@ func getVersion(id types.VersionedPackageRef) (*hangarVersion, error) {
 	return version, nil
 }
 
-func listVersions(name types.PackageName) ([]hangarVersion, error) {
+func listVersions(name catalog.Name) ([]hangarVersion, error) {
 	project, err := getProject(name)
 	if err != nil {
 		return nil, err
 	}
 
-	params := url.Values{}
-	params.Set("limit", "25")
+	// Hangar caps a versions page at 25 entries, so walk every page to keep
+	// both resolution and build listing complete.
+	const pageSize = 25
+	var versions []hangarVersion
+	for offset := 0; ; {
+		params := url.Values{}
+		params.Set("limit", strconv.Itoa(pageSize))
+		params.Set("offset", strconv.Itoa(offset))
 
-	res := &VersionListResponse{}
-	if err := getJSON(
-		hangarVersionsURL(project.ProjectRef(), params),
-		res,
-	); err != nil {
-		return nil, err
+		res := &VersionListResponse{}
+		if err := getJSON(
+			hangarVersionsURL(project.ProjectRef(), params),
+			res,
+		); err != nil {
+			return nil, err
+		}
+
+		versions = append(versions, res.Result...)
+		offset += len(res.Result)
+		if len(res.Result) == 0 || offset >= res.Pagination.Count {
+			break
+		}
 	}
-	if len(res.Result) == 0 {
+
+	if len(versions) == 0 {
 		return nil, ErrNoVersion
 	}
-	return res.Result, nil
+	return versions, nil
 }
 
 func getJSON(rawURL string, out any) error {
@@ -164,11 +179,11 @@ func withQuery(base string, params url.Values) string {
 	return base + "?" + params.Encode()
 }
 
-func searchEcosystem(ecosystem types.Ecosystem) string {
+func searchEcosystem(ecosystem catalog.Ecosystem) string {
 	switch ecosystem {
-	case types.EcosystemBukkit, types.EcosystemPaper:
+	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 		return hangarPreferredPlatform
-	case types.EcosystemUnspecified:
+	case catalog.EcosystemUnspecified:
 		return hangarPreferredPlatform
 	default:
 		return ""

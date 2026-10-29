@@ -5,19 +5,20 @@ import (
 	"os"
 
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/terminal/style"
 
 	"github.com/spf13/cobra"
 )
 
-var leavesCmd = &cobra.Command{
-	Use:   "leaves",
-	Short: help.LeavesShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionLeaves,
-}
+var leavesJSON JSONResult[leavesOutput]
 
-func NewLeavesCommand() *cobra.Command {
+func NewLeavesCommand(contracts *JSONContracts) *cobra.Command {
+	leavesCmd := &cobra.Command{
+		Use:   "leaves",
+		Short: help.LeavesShort,
+		Args:  cobra.NoArgs,
+		RunE:  actionLeaves,
+	}
+	leavesJSON.Bind(contracts, leavesCmd)
 	leavesCmd.Flags().Bool(
 		"live",
 		false,
@@ -33,28 +34,29 @@ func actionLeaves(cmd *cobra.Command, args []string) error {
 	}
 
 	forceLive, _ := cmd.Flags().GetBool("live")
-	graph, origin, _, err := LoadDependencyData(workDir, forceLive)
+	output := NewQueryOutput(cmd)
+	graph, origin, _, err := LoadDependencyData(workDir, forceLive, output)
 	if err != nil {
 		return err
 	}
 
-	mode := JSONMode(cmd)
-	if mode != JSONNone {
-		return outputLeavesJSON(graph, origin, mode)
+	if output.JSON() {
+		return leavesJSON.Write(output, leavesDocument(graph, origin, output.Warnings()))
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Using data from: %s\n\n", origin.String())
+	human := output.Human()
+	fmt.Fprintf(human, "Using data from: %s\n\n", origin.String())
 
 	leaves := graph.GetLeaves()
 	if len(leaves) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No leaf packages found")
+		fmt.Fprintln(human, "No leaf packages found")
 	} else {
 		for _, leaf := range leaves {
-			fmt.Fprintln(cmd.OutOrStdout(), nodeLabel(leaf))
+			fmt.Fprintln(human, nodeLabel(leaf))
 		}
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\n(from %s)\n", origin.String())
+	fmt.Fprintf(human, "\n(from %s)\n", origin.String())
 	return nil
 }
 
@@ -68,11 +70,18 @@ type leafNode struct {
 	Ecosystem   string `json:"ecosystem"`
 }
 
-func outputLeavesJSON(
+// leavesOutput is the complete machine-readable `leaves` result.
+type leavesOutput struct {
+	Leaves   []leafNode `json:"leaves"`
+	Origin   string     `json:"origin"`
+	Warnings []string   `json:"warnings,omitempty"`
+}
+
+func leavesDocument(
 	graph *DependencyGraph,
 	origin GraphOrigin,
-	mode JSONRendering,
-) error {
+	warnings []string,
+) leavesOutput {
 	leaves := graph.GetLeaves()
 	jsonLeaves := make([]leafNode, 0, len(leaves))
 	for _, leaf := range leaves {
@@ -89,15 +98,9 @@ func outputLeavesJSON(
 		)
 	}
 
-	output := map[string]any{
-		"origin": origin.String(),
-		"leaves": jsonLeaves,
+	return leavesOutput{
+		Leaves:   jsonLeaves,
+		Origin:   origin.String(),
+		Warnings: warnings,
 	}
-	switch mode {
-	case JSONCompact:
-		style.PrintAsJsonCompact(output)
-	default:
-		style.PrintAsJson(output)
-	}
-	return nil
 }

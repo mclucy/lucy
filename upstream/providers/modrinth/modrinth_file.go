@@ -1,11 +1,11 @@
 package modrinth
 
 import (
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
 )
 
-func GetFile(id types.VersionedPackageRef) (
+func GetFile(id catalog.VersionedRef) (
 	url string,
 	filename string,
 	err error,

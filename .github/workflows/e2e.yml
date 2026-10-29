@@ -1,65 +1,324 @@
+# Layer 2: pick the e2e domains whose inputs changed and hand the resulting
+# matrix to the reusable runner. The top-level CI calls this workflow.
 name: E2E
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - e2e/**
-      - workspace/**
-      - internal/cli/**
-      - .github/workflows/e2e.yml
-  pull_request:
-    paths:
-      - e2e/**
-      - workspace/**
-      - internal/cli/**
-      - .github/workflows/e2e.yml
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      force:
+        description: Run every domain regardless of changed paths.
+        required: false
+        type: boolean
+        default: false
+      compile-full:
+        description: Run every compile fixture instead of the smoke layer.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      CF_API_KEY:
+        required: false
 
 permissions:
   contents: read
 
 jobs:
-  # Environment probe: generate each fetchable sandbox from pinned artifacts
-  # and verify Lucy's CLI output against native assertions in e2e/.
-  #
-  # Manual-artifact environments (fabric-installed-1214, fabric-installed-262,
-  # fabric-installed-114, divinemc, leaf, reaper, youer, mohist) are excluded:
-  # their pinned jars cannot be fetched in CI.
-  probe:
-    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
+  changes:
+    name: Detect changed domains
     runs-on: ubuntu-latest
-    env:
-      SANDBOXES: arclight-fabric,arclight-forge,arclight-neoforge,cobblemon-1211,create-plus-1211,fabric-executable-1214,fabric-executable-262,fabric-kilt,folia,forge-1201,forge-12111,leaves,mcdr-fabric,mcdr-forge,mcdr-neoforge,neoforge-211,neoforge-262,neoforge-connector,paper,purpur
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      domains: ${{ inputs.force && '["status","init","install","compile","filetrack"]' || steps.filter.outputs.changes }}
+      compile-full: ${{ inputs.compile-full || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full')) }}
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          go-version: "1.27"
-          cache: true
+          persist-credentials: false
 
-      - name: Set up Task
-        uses: go-task/setup-task@v2
-
-      - name: Cache sandbox downloads
-        uses: actions/cache@v6
+      # The filters mirror the paths each suite is built from. A change that
+      # matches no filter runs no e2e domain, as before the split.
+      - name: Filter changed domains
+        id: filter
+        if: ${{ !inputs.force }}
+        uses: dorny/paths-filter@v4
         with:
-          path: ~/.cache/lucy-sandbox
-          key: sandbox-${{ hashFiles('e2e/testdata/sandboxes/sandboxes.yaml') }}
+          filters: |
+            status:
+              - 'e2e/status/**'
+              - 'artifact/**'
+              - 'e2e/sandbox/**'
+              - 'e2e/internal/**'
+              - 'e2e/testdata/sandboxes/**'
+              - 'workspace/**'
+              - 'document/**'
+              - 'config/**'
+              - 'operation/**'
+              - 'cmd/*.go'
+              - 'internal/cli/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Taskfile.yml'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/e2e.yml'
+              - '.github/workflows/e2e-run.yml'
+            init:
+              - 'e2e/init/**'
+              - 'artifact/**'
+              - 'e2e/sandbox/**'
+              - 'e2e/internal/**'
+              - 'e2e/testdata/sandboxes/**'
+              - 'operation/**'
+              - 'document/**'
+              - 'config/**'
+              - 'workspace/**'
+              - 'resolve/**'
+              - 'upstream/**'
+              - 'cmd/*.go'
+              - 'internal/cli/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Taskfile.yml'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/e2e.yml'
+              - '.github/workflows/e2e-run.yml'
+            install:
+              - 'e2e/install/**'
+              - 'artifact/**'
+              - 'e2e/sandbox/**'
+              - 'e2e/internal/**'
+              - 'e2e/testdata/sandboxes/**'
+              - 'install/**'
+              - 'bootstrap/**'
+              - 'document/**'
+              - 'config/**'
+              - 'resolve/**'
+              - 'upstream/**'
+              - 'operation/**'
+              - 'workspace/**'
+              - 'cmd/*.go'
+              - 'internal/cli/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Taskfile.yml'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/e2e.yml'
+              - '.github/workflows/e2e-run.yml'
+            compile:
+              - 'e2e/compile/**'
+              - 'e2e/internal/**'
+              - 'e2e/testdata/repo/**'
+              - 'internal/cli/compile/**'
+              - 'internal/buildrepo/**'
+              - 'internal/toolchain/**'
+              - 'cmd/*.go'
+              - 'internal/cli/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Taskfile.yml'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/e2e.yml'
+              - '.github/workflows/e2e-run.yml'
+            filetrack:
+              - 'e2e/filetrack/**'
+              - 'artifact/**'
+              - 'filetrack/**'
+              - 'install/**'
+              - 'document/**'
+              - 'config/**'
+              - 'types/**'
+              - 'operation/**'
+              - 'workspace/**'
+              - 'cas/**'
+              - 'internal/fsutil/**'
+              - 'internal/workspacewrite/**'
+              - 'internal/cli/file/**'
+              - 'internal/cli/*.go'
+              - 'cmd/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/e2e.yml'
+              - '.github/workflows/e2e-run.yml'
 
-      - name: Generate sandboxes
-        run: task sandboxes:gen -- --only ${{ env.SANDBOXES }}
+  plan:
+    name: Plan suites
+    needs: changes
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - name: Build lucy
+      # The suite derives its cases from the same manifests, so this matrix and
+      # a local `go test ./e2e/compile` can never disagree about which fixtures
+      # exist.
+      - name: Collect compile fixtures
+        id: fixtures
+        if: ${{ needs.changes.outputs.compile-full == 'true' }}
         run: |
-          if [ -n "${CF_API_KEY:-}" ]; then
-            task cipher:generate
+          set -euo pipefail
+          ids="$(find e2e/testdata/repo -maxdepth 1 -type f -name '*.yaml' -exec basename {} .yaml \; | sort | jq -Rsc 'split("\n") | map(select(length > 0))')"
+          if [ "$(jq 'length' <<<"$ids")" -eq 0 ]; then
+            echo "no compile fixtures found" >&2
+            exit 1
           fi
-          task build:dev
-        env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          echo "ids=$ids" >> "$GITHUB_OUTPUT"
 
-      - name: Verify probe and initialization (e2e)
-        run: go test -tags e2e -count=1 -v ./e2e/status -run "(TestProbe|TestInitialize)/(${SANDBOXES//,/|})"
+      - name: Build suite matrix
+        id: plan
+        env:
+          DOMAINS: ${{ needs.changes.outputs.domains }}
+          COMPILE_FULL: ${{ needs.changes.outputs.compile-full }}
+          FIXTURES: ${{ steps.fixtures.outputs.ids }}
+        run: |
+          set -euo pipefail
+          suites="$(cat <<'EOF'
+          [
+            {
+              "domain": "status",
+              "group": "status",
+              "suite": "status",
+              "command": "go test -tags e2e -count=1 -v ./e2e/status -run 'TestProbe/(arclight-fabric|arclight-forge|arclight-neoforge|cobblemon-1211|create-plus-1211|fabric-executable-1214|fabric-executable-262|fabric-kilt|folia|forge-1201|forge-12111|leaves|mcdr-fabric|mcdr-forge|mcdr-neoforge|neoforge-211|neoforge-262|neoforge-connector|paper|purpur)'",
+              "timeout": 45,
+              "sandboxes": "arclight-fabric,arclight-forge,arclight-neoforge,cobblemon-1211,create-plus-1211,fabric-executable-1214,fabric-executable-262,fabric-kilt,folia,forge-1201,forge-12111,leaves,mcdr-fabric,mcdr-forge,mcdr-neoforge,neoforge-211,neoforge-262,neoforge-connector,paper,purpur",
+              "java": "",
+              "gradle": false,
+              "cache-key": "",
+              "cache-pattern": "",
+              "build": true,
+              "task": true
+            },
+            {
+              "domain": "init",
+              "group": "init",
+              "suite": "init",
+              "command": "go test -tags e2e -count=1 -v ./e2e/init -run 'TestInitialize/(cobblemon-1211|create-plus-1211)'",
+              "timeout": 30,
+              "sandboxes": "cobblemon-1211,create-plus-1211",
+              "java": "",
+              "gradle": false,
+              "cache-key": "",
+              "cache-pattern": "",
+              "build": true,
+              "task": true
+            },
+            {
+              "domain": "install",
+              "group": "install",
+              "suite": "install",
+              "command": "go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install -run '^TestInstall$'",
+              "timeout": 30,
+              "sandboxes": "vanilla-1201,forge-1201,neoforge-211,paper,purpur,cobblemon-1211",
+              "java": "21",
+              "gradle": false,
+              "cache-key": "",
+              "cache-pattern": "",
+              "build": true,
+              "task": true
+            },
+            {
+              "domain": "install",
+              "group": "init-install",
+              "suite": "init-install",
+              "command": "go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install -run '^TestInitInstall$'",
+              "timeout": 30,
+              "sandboxes": "vanilla-1201,forge-1201,neoforge-211,paper,purpur,cobblemon-1211",
+              "java": "21",
+              "gradle": false,
+              "cache-key": "",
+              "cache-pattern": "",
+              "build": true,
+              "task": true
+            },
+            {
+              "domain": "filetrack",
+              "group": "filetrack",
+              "suite": "filetrack",
+              "command": "go test -tags integration -count=1 -timeout 20m ./e2e/filetrack ./filetrack",
+              "timeout": 20,
+              "sandboxes": "",
+              "java": "",
+              "gradle": false,
+              "cache-key": "",
+              "cache-pattern": "",
+              "build": false,
+              "task": false
+            }
+          ]
+          EOF
+          )"
+          matrix="$(jq -c \
+            --argjson domains "$DOMAINS" \
+            --argjson fixtures "${FIXTURES:-[]}" \
+            --argjson full "${COMPILE_FULL:-false}" \
+            '[
+              .[] | select(.domain as $domain | $domains | index($domain)) | del(.domain)
+            ] + (
+              if (($domains | index("compile")) != null) or $full then
+                if $full then
+                  [
+                    $fixtures[] | . as $fixture | {
+                      "group": "compile",
+                      "suite": $fixture,
+                      "command": ("go test -tags e2e -count=1 -timeout 40m ./e2e/compile -run \"^TestCompile/" + $fixture + "$\""),
+                      "timeout": 45,
+                      "sandboxes": "",
+                      "java": "",
+                      "gradle": true,
+                      "cache-key": $fixture,
+                      "cache-pattern": ("e2e/testdata/repo/" + $fixture + ".yaml"),
+                      "build": true,
+                      "task": false
+                    }
+                  ]
+                else
+                  [
+                    {
+                      "group": "compile",
+                      "suite": "smoke",
+                      "command": "LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 55m -parallel 3 ./e2e/compile",
+                      "timeout": 60,
+                      "sandboxes": "",
+                      "java": "",
+                      "gradle": true,
+                      "cache-key": "smoke",
+                      "cache-pattern": "e2e/testdata/repo/*.yaml",
+                      "build": true,
+                      "task": false
+                    }
+                  ]
+                end
+              else
+                []
+              end
+            )' <<<"$suites")"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  run:
+    name: ${{ matrix.group }}
+    needs: [changes, plan]
+    if: ${{ needs.plan.outputs.matrix != '' && needs.plan.outputs.matrix != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/e2e-run.yml
+    with:
+      suite: ${{ matrix.suite }}
+      command: ${{ matrix.command }}
+      timeout-minutes: ${{ matrix.timeout }}
+      sandboxes: ${{ matrix.sandboxes }}
+      java-version: ${{ matrix.java }}
+      gradle: ${{ matrix.gradle }}
+      cache-key: ${{ matrix.cache-key }}
+      cache-pattern: ${{ matrix.cache-pattern }}
+      build: ${{ matrix.build }}
+      task: ${{ matrix.task }}
+    secrets:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}

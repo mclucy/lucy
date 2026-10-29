@@ -1,107 +1,55 @@
 ---
 title: "Track files and accept revisions"
-description: "Back up a file, choose its change policy, and accept new contents"
+description: "Choose a file's change policy and accept new contents"
 ---
 
-## Track a file
+## Track files
 
-To track an existing regular file:
-
-```bash
-lucy file track config/example.json
-```
-
-`lucy file track` requires that the file already exists on disk. By default, it creates a mutable declaration, snapshots file contents into local CAS backups, and records the accepted hash using the `sha256:<64 lowercase hex>` format in `lucy.yaml` and `lucy-lock.yaml`. Paths are relative to the directory containing `lucy.yaml`. If a path is already tracked, `track` fails rather than overwriting the declaration.
-
-You can also set flags at track time:
-
-- `--immutable`: Track the file as immutable with an accepted hash.
-- `--no-hash`: Create a mutable presence-only declaration without a hash. Conflicts with `--immutable` and `--recover-url`.
-- `--recover-url <url>`: Record an explicit recovery source URL.
-
-For example, to track with an explicit recovery source:
+Run `lucy file track` for files that already exist. You can list several paths at once:
 
 ```bash
-lucy file track config/example.json --recover-url https://files.example.com/config/example.json
+lucy file track server.properties config/example.json
 ```
 
-## Record an edited file
+Lucy saves their current contents as accepted revisions. Add `--immutable` to warn about later changes, or `--no-hash` to check only that the files exist. A presence-only file cannot be recovered.
 
-If you edit `config/example.json`, mutable files do not emit deviation warnings, but their current bytes differ from the accepted digest. Use `update` to snapshot and accept the working file:
+To provide a recovery source when tracking a file, pass its URL:
+
+```bash
+lucy file track --recover-url https://example.com/config.json config/example.json
+```
+
+## Accept changes
+
+After editing a tracked file, save its current contents as the accepted revision:
 
 ```bash
 lucy file update config/example.json
 ```
 
-This updates the accepted hash in `lucy.yaml` and `lucy-lock.yaml`, records a new accepted revision in `.lucy/history/files.jsonl`, and leaves `immutable` and `recover_url` unchanged.
+You can list several paths or use `lucy file update --all`. For an immutable file, accepting the change stops warnings about the new contents.
 
-To accept all tracked files at once:
-
-```bash
-lucy file update --all
-```
-
-## Fetch fresh content from a source URL
-
-When a file has a configured `recover_url`, you can fetch fresh bytes from that source instead of snapshotting local edits:
+To download and accept the current contents from a configured recovery URL, use:
 
 ```bash
 lucy file update --from-source config/example.json
 ```
 
-`update --from-source` bypasses stale network caches, downloads fresh bytes from the remote URL, preserves displaced working bytes in local backups, replaces the working file, and accepts the new digest. Unlike recovery, it does not require matching the previously accepted digest.
+This replaces the working file; Lucy keeps a local copy of the displaced contents. Unlike recovery, the downloaded contents do not have to match the previous revision.
 
-To update all files that have a configured `recover_url`:
+## Change the policy
 
-```bash
-lucy file update --all --from-source
-```
-
-## Configure a remote recovery source
-
-You can also define `recover_url` directly in `lucy.yaml`. Any entry with a `recover_url` requires an accepted hash:
-
-```yaml
-files:
-  - path: config/example.json
-    hash: sha256:2da9eeead0999df06fc9a986498c6ebebe6eb09ac2174b889d603223e47c6216
-    recover_url: https://raw.githubusercontent.com/username/repo/main/config/example.json
-```
-
-Lucy does not poll this URL. It is accessed when the accepted blob is unavailable locally (installation and `lucy file recover`), and always by `lucy file update --from-source`.
-
-## Mark a file immutable
-
-To turn a mutable file into an immutable file:
+Locking a file accepts its current contents and warns about later changes. Unlocking allows changes without warnings while keeping the accepted revision.
 
 ```bash
 lucy file lock config/example.json
-```
-
-`lock` snapshots and accepts current working bytes, records the new hash, and sets `immutable: true`. Later unaccepted changes produce deviation warnings during `lucy file list` and installation checks.
-
-If an immutable change is intentional, accept it:
-
-```bash
-lucy file update config/example.json
-```
-
-The file remains immutable and records the new contents as its accepted revision.
-
-To allow changes without deviation warnings, unlock the file:
-
-```bash
 lucy file unlock config/example.json
 ```
 
-`unlock` sets `immutable: false` while retaining the accepted hash and any configured `recover_url`.
-
-## Stop tracking a file
+To stop tracking a file without deleting it, run:
 
 ```bash
 lucy file untrack config/example.json
 ```
-
-`untrack` removes the file declaration from `lucy.yaml` and `lucy-lock.yaml`. Untracking retains the working file on disk as well as historical backups and event history in `.lucy/`.
 
 Continue with [Recover and revert files](/file-tracking/recovery).

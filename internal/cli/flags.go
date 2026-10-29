@@ -1,23 +1,25 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"strings"
+
+	"github.com/spf13/cobra"
+)
 
 // Output style flag names. The whole family is registered once as root
 // persistent flags and applies to every subcommand.
 const (
-	FlagJSON            = "json"
-	FlagJSONCompact     = "json-compact"
-	FlagLong            = "long"
-	FlagNoColor         = "no-color"
-	FlagNoInteractive   = "no-interactive"
-	FlagNoStyle         = "no-style"
-	FlagLogo            = "logo"
-	FlagLogFile         = "log-file"
-	FlagPrintLogs       = "print-logs"
-	FlagLogLevel        = "log-level"
-	FlagEcosystem       = "ecosystem"
-	FlagUseGitHubMirror = "use-github-mirror"
-	FlagServer          = "server"
+	FlagJSON          = "json"
+	FlagJSONCompact   = "json-compact"
+	FlagLong          = "long"
+	FlagNoColor       = "no-color"
+	FlagNoInteractive = "no-interactive"
+	FlagNoStyle       = "no-style"
+	FlagLogo          = "logo"
+	FlagLogFile       = "log-file"
+	FlagPrintLogs     = "print-logs"
+	FlagLogLevel      = "log-level"
+	FlagEcosystem     = "ecosystem"
 )
 
 // JSONRendering names the machine-readable rendering of a command result.
@@ -31,6 +33,23 @@ const (
 	// JSONCompact prints JSON on a single line.
 	JSONCompact
 )
+
+// JSONFlagsPresent reports whether the raw command line names a JSON flag.
+// The parser is not involved, so this works before flag parsing fails.
+func JSONFlagsPresent(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if arg == "--json" ||
+			strings.HasPrefix(arg, "--json=") ||
+			arg == "--json-compact" ||
+			strings.HasPrefix(arg, "--json-compact=") {
+			return true
+		}
+	}
+	return false
+}
 
 // JSONMode reports the JSON rendering a command's flags select.
 // --json-compact wins over --json when both are set.

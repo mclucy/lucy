@@ -17,15 +17,17 @@ import (
 
 // Runner owns one Minecraft process, its console streams, and its control socket.
 type Runner struct {
-	name      string
-	inst      Instance
-	cfg       RuntimeConfig
-	cmd       *exec.Cmd
-	stdin     io.WriteCloser
-	logFile   *os.File
-	startedAt string
-	graceful  bool
-	mu        sync.Mutex
+	name          string
+	inst          Instance
+	cfg           RuntimeConfig
+	cmd           *exec.Cmd
+	stdin         io.WriteCloser
+	logFile       *os.File
+	startedAt     string
+	graceful      bool
+	exited        bool
+	directSignals bool
+	mu            sync.Mutex
 }
 
 // RunServer loads a registered instance and supervises it until exit or cancellation.
@@ -107,7 +109,21 @@ func (r *Runner) run(ctx context.Context) (err error) {
 
 	waitErr := make(chan error, 1)
 	go func() {
-		waitErr <- cmd.Wait()
+		// Wait for exit without reaping: retaining the zombie reserves its PID
+		// until group signaling has been disabled under the same mutex.
+		waitableErr := awaitManagedExit(cmd)
+		r.mu.Lock()
+		if waitableErr == nil {
+			r.exited = true
+		} else {
+			r.directSignals = true
+		}
+		r.mu.Unlock()
+		werr := cmd.Wait()
+		r.mu.Lock()
+		r.exited = true
+		r.mu.Unlock()
+		waitErr <- werr
 	}()
 	select {
 	case err = <-waitErr:
@@ -156,7 +172,7 @@ func (r *Runner) openConsoleLog() (*os.File, error) {
 			return nil, fmt.Errorf("create console log directory: %w", err)
 		}
 	}
-	logFile, err := root.OpenFile(rel, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	logFile, err := root.OpenFile(rel, consoleOpenFlags(), 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("open console log: %w", err)
 	}
@@ -165,9 +181,9 @@ func (r *Runner) openConsoleLog() (*os.File, error) {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("stat console log: %w", err)
 	}
-	if !info.Mode().IsRegular() {
+	if !info.Mode().IsRegular() || !singleConsoleLink(info) {
 		_ = logFile.Close()
-		return nil, fmt.Errorf("console log is not a regular file: %s", logPath)
+		return nil, fmt.Errorf("console log must be a regular file with one link: %s", logPath)
 	}
 	r.cfg.Logs.ConsolePath = logPath
 	return logFile, nil
@@ -319,10 +335,13 @@ func (r *Runner) forwardSignals() {
 // signalIfRunning delivers a process-group signal only while the child is active.
 func (r *Runner) signalIfRunning(signal os.Signal) error {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	cmd := r.cmd
-	r.mu.Unlock()
-	if cmd == nil || cmd.Process == nil || cmd.ProcessState != nil {
+	if cmd == nil || cmd.Process == nil || r.exited {
 		return nil
+	}
+	if r.directSignals {
+		return cmd.Process.Signal(signal)
 	}
 	return signalManagedProcess(cmd, signal)
 }

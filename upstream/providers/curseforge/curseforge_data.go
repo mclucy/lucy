@@ -3,8 +3,8 @@ package curseforge
 import (
 	"time"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -16,7 +16,7 @@ type searchResponse struct {
 	Pagination pagination    `json:"pagination"`
 }
 
-func (s *searchResponse) ToSearchResults(source types.Provider) upstream.SearchResponse {
+func (s *searchResponse) ToSearchResults(source catalog.Provider) upstream.SearchResponse {
 	res := upstream.SearchResponse{
 		Provider: source,
 		Items:    make([]upstream.SearchResult, 0, len(s.Data)),
@@ -90,53 +90,53 @@ type rawProjectInformation struct {
 	description string
 }
 
-func (m *modResponse) ToProjectInformation() types.Metadata {
+func (m *modResponse) ToProjectInformation() catalog.Metadata {
 	return rawProjectInformation{mod: m}.ToProjectInformation()
 }
 
-func (r rawProjectInformation) ToProjectInformation() types.Metadata {
+func (r rawProjectInformation) ToProjectInformation() catalog.Metadata {
 	m := r.mod
-	info := types.Metadata{
+	info := catalog.Metadata{
 		Title:                 m.Name,
 		Brief:                 m.Summary,
 		Description:           r.description,
 		DescriptionIsMarkdown: upstream.LooksLikeMarkdown(r.description),
-		URLs:                  make([]types.URL, 0),
-		Authors:               make([]types.Person, 0, len(m.Authors)),
+		URLs:                  make([]catalog.URL, 0),
+		Authors:               make([]catalog.Person, 0, len(m.Authors)),
 	}
 
 	if m.Links.WebsiteUrl != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Website",
-				Type: types.URLHome,
+				Type: catalog.URLHome,
 				URL:  m.Links.WebsiteUrl,
 			},
 		)
 	}
 	if m.Links.WikiUrl != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Wiki",
-				Type: types.URLWiki,
+				Type: catalog.URLWiki,
 				URL:  m.Links.WikiUrl,
 			},
 		)
 	}
 	if m.Links.IssuesUrl != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Issues",
-				Type: types.URLIssues,
+				Type: catalog.URLIssues,
 				URL:  m.Links.IssuesUrl,
 			},
 		)
 	}
 	if m.Links.SourceUrl != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Source",
-				Type: types.URLSource,
+				Type: catalog.URLSource,
 				URL:  m.Links.SourceUrl,
 			},
 		)
@@ -144,7 +144,7 @@ func (r rawProjectInformation) ToProjectInformation() types.Metadata {
 
 	for _, author := range m.Authors {
 		info.Authors = append(
-			info.Authors, types.Person{
+			info.Authors, catalog.Person{
 				Name: author.Name,
 				URL:  author.URL,
 			},
@@ -206,9 +206,9 @@ type fileResponse struct {
 	ServerPackFileId *int32           `json:"serverPackFileId"`
 }
 
-func (f *fileResponse) ToPackageRemote() types.ResolvedPackage {
-	remote := types.ResolvedPackage{
-		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderCurseForge}},
+func (f *fileResponse) ToPackageRemote() upstream.ResolvedPackage {
+	remote := upstream.ResolvedPackage{
+		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderCurseForge}},
 		Filename: f.FileName,
 	}
 

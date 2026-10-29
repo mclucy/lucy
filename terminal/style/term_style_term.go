@@ -9,7 +9,13 @@ import (
 	"golang.org/x/term"
 )
 
-var IsTerminal = term.IsTerminal(int(os.Stdout.Fd()))
+// The two streams answer different questions: data output may be piped while
+// diagnostics still reach a terminal, and the reverse. Presentation that
+// renders to a stream must consult that stream's terminal state.
+var (
+	StdoutIsTerminal = term.IsTerminal(int(os.Stdout.Fd()))
+	StderrIsTerminal = term.IsTerminal(int(os.Stderr.Fd()))
+)
 
 var ensureTermColorsOnce = sync.OnceFunc(getTermProfileColors)
 
@@ -19,8 +25,18 @@ func EnsureTermColors() {
 	ensureTermColorsOnce()
 }
 
+// TermWidth reports the terminal width for data rendered on stdout.
 func TermWidth() int {
-	width, _, _ := term.GetSize(0)
+	return streamWidth(int(os.Stdout.Fd()))
+}
+
+// StderrWidth reports the terminal width for progress and diagnostics.
+func StderrWidth() int {
+	return streamWidth(int(os.Stderr.Fd()))
+}
+
+func streamWidth(fd int) int {
+	width, _, _ := term.GetSize(fd)
 	if width <= 0 {
 		return 80
 	}
@@ -28,7 +44,10 @@ func TermWidth() int {
 }
 
 func TermHeight() int {
-	_, height, _ := term.GetSize(0)
+	_, height, _ := term.GetSize(int(os.Stdout.Fd()))
+	if height <= 0 {
+		return 24
+	}
 	return height
 }
 

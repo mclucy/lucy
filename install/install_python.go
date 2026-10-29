@@ -1,212 +1,423 @@
 package install
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json/v2"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/workspacewrite"
+	"github.com/mclucy/lucy/log"
 	"gopkg.in/yaml.v3"
 )
 
-// pythonTarget names the platform whose wheels a lock pins. Python wheels are
-// platform-specific, so a lock resolved on another operating system or
-// architecture cannot be materialized locally.
-func pythonTarget() string {
-	return runtime.GOOS + "/" + runtime.GOARCH
+type mcdrRuntime struct {
+	// venv reports whether the launcher uses the isolated environment.
+	venv bool
+	// key names the isolated environment. It is empty for a global runtime.
+	key string
 }
 
-func prepareMCDR(ctx context.Context, root, directory string, selector types.Version, requirements []string, store *downloadStore) (*lockfile.MCDR, error) {
-	if store.offline {
-		return nil, fmt.Errorf("offline Python resolution needs a locked environment")
-	}
-	temp, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "python-resolve-*")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(temp)
-	if output, err := exec.CommandContext(ctx, "python3", "-m", "venv", temp).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("create Python environment: %w\n%s", err, output)
-	}
-	python := filepath.Join(temp, "bin", "python")
-	if runtime.GOOS == "windows" {
-		python = filepath.Join(temp, "Scripts", "python.exe")
-	}
-	versionBytes, err := exec.CommandContext(ctx, python, "-c", "import sys;print(str(sys.version_info.major)+'.'+str(sys.version_info.minor))").Output()
-	if err != nil {
-		return nil, err
-	}
-	reportPath := filepath.Join(temp, "report.json")
-	request := "mcdreforged"
-	if !isFloating(selector) {
-		request += "==" + selector.String()
-	}
-	args := []string{
-		"-m",
-		"pip",
-		"install",
-		"--dry-run",
-		"--ignore-installed",
-		"--only-binary=:all:",
-		"--report",
-		reportPath,
-		request,
-	}
-	for _, requirement := range requirements {
-		if strings.HasPrefix(requirement, "-") {
-			return nil, fmt.Errorf("invalid Python requirement %q", requirement)
-		}
-		args = append(args, requirement)
-	}
-	if output, err := exec.CommandContext(ctx, python, args...).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("resolve MCDR Python inputs: %w\n%s", err, output)
-	}
-	raw, err := os.ReadFile(reportPath)
-	if err != nil {
-		return nil, err
-	}
-	var report struct {
-		Install []struct {
-			Download struct {
-				URL     string `json:"url"`
-				Archive struct {
-					Hashes map[string]string `json:"hashes"`
-				} `json:"archive_info"`
-			} `json:"download_info"`
-			Metadata struct {
-				Name    string `json:"name"`
-				Version string `json:"version"`
-			} `json:"metadata"`
-		} `json:"install"`
-	}
-	if err := json.Unmarshal(raw, &report); err != nil {
-		return nil, err
-	}
-	out := &lockfile.MCDR{
-		Directory: directory,
-		Python:    strings.TrimSpace(string(versionBytes)),
-		Target:    pythonTarget(),
-		Inputs:    []types.BootstrapInput{},
-	}
-	for _, pkg := range report.Install {
-		filename := filepath.Base(strings.Split(pkg.Download.URL, "?")[0])
-		a := types.Artifact{
-			Provider:  types.ProviderPyPI,
-			ProjectID: pkg.Metadata.Name,
-			Version:   types.Version(pkg.Metadata.Version),
-			Filename:  filename,
-			URL:       pkg.Download.URL,
-			Hashes:    pkg.Download.Archive.Hashes,
-		}
-		if _, err := store.materialize(&a); err != nil {
-			return nil, err
-		}
-		out.Inputs = append(out.Inputs, types.BootstrapInput{
-			Path:     "wheels/" + filename,
-			Artifact: a,
-		})
-		if strings.EqualFold(pkg.Metadata.Name, "mcdreforged") {
-			out.Version = types.Version(pkg.Metadata.Version)
-		}
-	}
-	if out.Version == "" {
-		return nil, fmt.Errorf("python resolution omitted mcdreforged")
-	}
-	return out, nil
+func mcdrFlagHint() string {
+	return "pass --mcdr-venv to create an isolated environment"
 }
 
-func preparePython(ctx context.Context, root, stage string, d *lockfile.Document, store *downloadStore) error {
+func mcdrGlobalError(missing string) error {
+	return fmt.Errorf(
+		"MCDReforged is required for this workspace, but %s was not found "+
+			"on PATH. Install MCDReforged and Python 3.8+ globally, or %s",
+		missing,
+		mcdrFlagHint(),
+	)
+}
+
+func pythonInterpreter(ctx context.Context) (string, string, error) {
+	name := strings.TrimSpace(os.Getenv("LUCY_PYTHON"))
+	if name == "" {
+		name = "python3"
+	}
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return "", "", fmt.Errorf("Python interpreter %q was not found", name)
+	}
+	out, err := exec.CommandContext(
+		ctx,
+		path,
+		"-c",
+		"import sys;print('%d.%d.%d' % sys.version_info[:3])",
+	).Output()
+	if err != nil {
+		return "", "", fmt.Errorf(
+			"Python interpreter %s could not run: %w",
+			path,
+			err,
+		)
+	}
+	value := strings.TrimSpace(string(out))
+	parts := strings.Split(value, ".")
+	if len(parts) < 2 {
+		return "", "", fmt.Errorf(
+			"Python interpreter %s reported %q",
+			path,
+			value,
+		)
+	}
+	major, _ := strconv.Atoi(parts[0])
+	minor, _ := strconv.Atoi(parts[1])
+	if major < 3 || (major == 3 && minor < 8) {
+		return "", "", fmt.Errorf(
+			"Python interpreter %s is %s; MCDReforged needs 3.8 or newer",
+			path,
+			value,
+		)
+	}
+	if major > 3 || minor > 13 {
+		log.Warn(fmt.Errorf(
+			"MCDReforged is tested through Python 3.13; %s is Python %s and "+
+				"some dependencies may not publish wheels for it",
+			path,
+			value,
+		))
+	}
+	return path, value, nil
+}
+
+func mcdrProvisionError(cause error) error {
+	return fmt.Errorf(
+		"%w\n"+
+			"MCDReforged needs Python 3.8+ or uv to create an isolated "+
+			"environment. Install Python 3 or uv, then rerun "+
+			"`lucy install --mcdr-venv`",
+		cause,
+	)
+}
+
+func mcdrEnvironmentKey(mcdrVersion string, requirements []string) string {
+	hash := sha256.New()
+	for _, part := range append(
+		[]string{mcdrVersion, runtime.GOOS, runtime.GOARCH, "venv"},
+		requirements...,
+	) {
+		io.WriteString(hash, part)
+		hash.Write([]byte{0})
+	}
+	return hex.EncodeToString(hash.Sum(nil))[:32]
+}
+
+// provisionMCDR selects the runtime that will launch MCDReforged. The default
+// requires a global executable; --mcdr-venv creates an isolated environment.
+func provisionMCDR(
+	ctx context.Context,
+	root string,
+	d *document.Lock,
+	store *downloadStore,
+	useVenv bool,
+) (mcdrRuntime, error) {
 	m := d.MCDR
-	if m.Target != pythonTarget() {
-		return fmt.Errorf("locked %s environment targets %s, current target is %s", types.EnvironmentMCDR, m.Target, pythonTarget())
+	if m == nil {
+		return mcdrRuntime{}, nil
 	}
-	pyVersion, err := exec.CommandContext(ctx, "python3", "-c", "import sys;print(str(sys.version_info.major)+'.'+str(sys.version_info.minor))").Output()
+	if !useVenv {
+		path, err := exec.LookPath("mcdreforged")
+		if err != nil {
+			return mcdrRuntime{}, mcdrGlobalError(`"mcdreforged"`)
+		}
+		if _, _, err := pythonInterpreter(ctx); err != nil {
+			return mcdrRuntime{}, fmt.Errorf(
+				"MCDReforged requires Python 3.8+ on PATH: %w. "+
+					"Install Python 3, or %s",
+				err,
+				mcdrFlagHint(),
+			)
+		}
+		if output, err := exec.CommandContext(
+			ctx,
+			path,
+			"--version",
+		).CombinedOutput(); err != nil {
+			return mcdrRuntime{}, fmt.Errorf(
+				"global MCDReforged at %s could not run: %w\n%s\n"+
+					"Repair it, or %s",
+				path,
+				err,
+				output,
+				mcdrFlagHint(),
+			)
+		}
+		return mcdrRuntime{}, nil
+	}
+	requirements := mcdrPythonRequirements(d)
+	key := mcdrEnvironmentKey(string(m.Version), requirements)
+	relative := filepath.Join(m.Directory, ".python", key)
+	if err := workspacewrite.SafePath(root, relative); err != nil {
+		return mcdrRuntime{}, err
+	}
+	environment := filepath.Join(root, relative)
+	complete := filepath.Join(environment, ".complete")
+	if _, err := os.Stat(complete); err == nil {
+		return mcdrRuntime{venv: true, key: key}, nil
+	} else if !os.IsNotExist(err) {
+		return mcdrRuntime{}, err
+	}
+	if store.offline {
+		return mcdrRuntime{}, fmt.Errorf(
+			"MCDReforged isolated environment is not provisioned; run " +
+				"`lucy install --mcdr-venv` once with network access",
+		)
+	}
+	if err := os.RemoveAll(environment); err != nil {
+		return mcdrRuntime{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(environment), 0o755); err != nil {
+		return mcdrRuntime{}, err
+	}
+	backend, err := createMCDREnvironment(ctx, environment, store)
 	if err != nil {
-		return err
+		return mcdrRuntime{}, mcdrProvisionError(err)
 	}
-	if strings.TrimSpace(string(pyVersion)) != m.Python {
-		return fmt.Errorf("locked MCDR requires Python %s", m.Python)
+	requirementsPath := filepath.Join(environment, "requirements.txt")
+	if err := os.WriteFile(
+		requirementsPath,
+		[]byte(strings.Join(requirements, "\n")+"\n"),
+		0o600,
+	); err != nil {
+		return mcdrRuntime{}, err
 	}
-	encoded, err := json.Marshal(m, json.Deterministic(true))
+	if err := installMCDRRequirements(
+		ctx,
+		environment,
+		backend,
+		requirementsPath,
+		store,
+	); err != nil {
+		os.RemoveAll(environment)
+		return mcdrRuntime{}, mcdrProvisionError(err)
+	}
+	if err := os.WriteFile(complete, nil, 0o600); err != nil {
+		return mcdrRuntime{}, err
+	}
+	return mcdrRuntime{venv: true, key: key}, nil
+}
+
+func createMCDREnvironment(
+	ctx context.Context,
+	environment string,
+	store *downloadStore,
+) (string, error) {
+	var uvError error
+	if uv, err := exec.LookPath("uv"); err == nil {
+		command := exec.CommandContext(ctx, uv, "venv", "--seed", environment)
+		if captured, err := runProcess(
+			command,
+			store.trace.processOutput(),
+		); err == nil {
+			return "uv", nil
+		} else {
+			uvError = fmt.Errorf("uv venv: %w\n%s", err, captured)
+			log.Warn(uvError)
+		}
+	}
+	python, _, err := pythonInterpreter(ctx)
 	if err != nil {
-		return err
+		if uvError != nil {
+			return "", fmt.Errorf(
+				"no usable Python or uv: %w; %w",
+				err,
+				uvError,
+			)
+		}
+		return "", err
 	}
-	sum := sha256.Sum256(encoded)
-	env := filepath.Join(root, ".lucy", "python", hex.EncodeToString(sum[:]))
-	python := filepath.Join(env, "bin", "python")
+	command := exec.CommandContext(ctx, python, "-m", "venv", environment)
+	if captured, err := runProcess(
+		command,
+		store.trace.processOutput(),
+	); err != nil {
+		return "", fmt.Errorf(
+			"create Python environment with %s: %w\n%s",
+			python,
+			err,
+			captured,
+		)
+	}
+	return "python", nil
+}
+
+func installMCDRRequirements(
+	ctx context.Context,
+	environment string,
+	backend string,
+	requirementsPath string,
+	store *downloadStore,
+) error {
+	environmentPython := filepath.Join(environment, "bin", "python")
 	if runtime.GOOS == "windows" {
-		python = filepath.Join(env, "Scripts", "python.exe")
+		environmentPython = filepath.Join(environment, "Scripts", "python.exe")
 	}
-	if _, err := os.Stat(filepath.Join(env, ".complete")); os.IsNotExist(err) {
-		if output, err := exec.CommandContext(ctx, "python3", "-m", "venv", env).CombinedOutput(); err != nil {
-			return fmt.Errorf("create locked MCDR environment: %w\n%s", err, output)
-		}
-		var requirements []string
-		for i := range m.Inputs {
-			input := &m.Inputs[i]
-			p, err := store.materialize(&input.Artifact)
-			if err != nil {
-				return err
-			}
-			requirements = append(requirements, p+" --hash=sha256:"+input.Hashes["sha256"])
-		}
-		requirementsPath := filepath.Join(env, "locked.txt")
-		if err := os.WriteFile(requirementsPath, []byte(strings.Join(requirements, "\n")+"\n"), 0o600); err != nil {
+	var command *exec.Cmd
+	if backend == "uv" {
+		uv, err := exec.LookPath("uv")
+		if err != nil {
 			return err
 		}
-		cmd := exec.CommandContext(ctx, python, "-m", "pip", "install", "--no-index", "--no-deps", "--require-hashes", "-r", requirementsPath)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			os.RemoveAll(env)
-			return fmt.Errorf("materialize locked MCDR environment: %w\n%s", err, output)
-		}
-		if err := os.WriteFile(filepath.Join(env, ".complete"), nil, 0o600); err != nil {
-			return err
-		}
+		command = exec.CommandContext(
+			ctx,
+			uv,
+			"pip",
+			"install",
+			"--python",
+			environmentPython,
+			"--requirement",
+			requirementsPath,
+		)
+	} else {
+		command = exec.CommandContext(
+			ctx,
+			environmentPython,
+			"-m",
+			"pip",
+			"install",
+			"--requirement",
+			requirementsPath,
+		)
 	}
-	wrapper := filepath.Join(stage, m.Directory)
+	if captured, err := runProcess(
+		command,
+		store.trace.processOutput(),
+	); err != nil {
+		return fmt.Errorf(
+			"install Python requirements with %s: %w\n%s",
+			backend,
+			err,
+			captured,
+		)
+	}
+	return nil
+}
+
+// preparePython selects the MCDReforged runtime and writes its wrapper into
+// the stage. It runs while the installation is staged, before commit.
+func preparePython(
+	ctx context.Context,
+	root string,
+	stage string,
+	d *document.Lock,
+	store *downloadStore,
+	useVenv bool,
+) error {
+	runtime, err := provisionMCDR(ctx, root, d, store, useVenv)
+	if err != nil {
+		return err
+	}
+	if d.MCDR == nil {
+		return nil
+	}
+	return writeMCDRWrapper(stage, d, runtime, true)
+}
+
+// ensureMCDRRuntime repairs the MCDReforged launcher when the rest of the
+// installation is already current. The generated config is preserved unless
+// it is missing.
+func ensureMCDRRuntime(
+	ctx context.Context,
+	root string,
+	d *document.Lock,
+	store *downloadStore,
+	useVenv bool,
+) error {
+	runtime, err := provisionMCDR(ctx, root, d, store, useVenv)
+	if err != nil {
+		return err
+	}
+	if d.MCDR == nil {
+		return nil
+	}
+	return writeMCDRWrapper(root, d, runtime, false)
+}
+
+func writeMCDRWrapper(
+	base string,
+	d *document.Lock,
+	mcdr mcdrRuntime,
+	replaceConfig bool,
+) error {
+	m := d.MCDR
+	wrapper := filepath.Join(base, m.Directory)
 	if err := os.MkdirAll(wrapper, 0o755); err != nil {
 		return err
 	}
-	entry := "java -jar server.jar nogui"
-	if d.Server.Bootstrapper == "fabric" || d.Server.Bootstrapper == "forge-installer" {
-		entry = "sh run.sh"
+	configPath := filepath.Join(wrapper, "config.yml")
+	_, configErr := os.Stat(configPath)
+	if replaceConfig || os.IsNotExist(configErr) {
+		entry := "java -jar server.jar nogui"
+		if d.Server.Bootstrapper == "fabric" || d.Server.Bootstrapper == "forge-installer" {
+			entry = "sh run.sh"
+		}
+		relativeServer, err := filepath.Rel(m.Directory, d.Server.Directory)
+		if err != nil {
+			return err
+		}
+		// MCDReforged parses the server log stream through a handler that
+		// matches the launcher, so a Bukkit-family server needs its own parser
+		// to report start-up and player events at all.
+		launchHandler := "vanilla_handler"
+		switch d.Server.Bootstrapper {
+		case "forge-installer":
+			launchHandler = "forge_handler"
+		case "paperclip":
+			launchHandler = "bukkit_handler"
+		}
+		config := map[string]any{
+			"working_directory": filepath.ToSlash(relativeServer),
+			"start_command":     entry,
+			"handler":           launchHandler,
+		}
+		data, err := yaml.Marshal(config)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(configPath, data, 0o644); err != nil {
+			return err
+		}
+	} else if configErr != nil {
+		return configErr
 	}
-	relative, err := filepath.Rel(m.Directory, d.Server.Directory)
-	if err != nil {
-		return err
+	launcher := "mcdreforged"
+	if mcdr.venv {
+		pythonPath := filepath.Join(".python", mcdr.key, "bin", "python")
+		if runtime.GOOS == "windows" {
+			pythonPath = filepath.Join(".python", mcdr.key, "Scripts", "python.exe")
+		}
+		launcher = "'" + filepath.ToSlash(pythonPath) + "' -m mcdreforged"
 	}
-	// MCDReforged parses the server log stream through a handler that matches
-	// the launcher, so a Bukkit-family server needs its own parser to report
-	// start-up and player events at all.
-	launchHandler := "vanilla_handler"
-	switch d.Server.Bootstrapper {
-	case "forge-installer":
-		launchHandler = "forge_handler"
-	case "paperclip":
-		launchHandler = "bukkit_handler"
+	script := "#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec " +
+		launcher + " \"$@\"\n"
+	return os.WriteFile(
+		filepath.Join(wrapper, "run-mcdr.sh"),
+		[]byte(script),
+		0o755,
+	)
+}
+
+// runProcess streams a subprocess's combined output to output while retaining
+// it for the error message.
+func runProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
+	if output == nil {
+		output = io.Discard
 	}
-	config := map[string]any{
-		"working_directory": filepath.ToSlash(relative),
-		"start_command":     entry,
-		"handler":           launchHandler,
-	}
-	data, err := yaml.Marshal(config)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(wrapper, "config.yml"), data, 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(wrapper, "run-mcdr.sh"), []byte("#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec '"+python+"' -m mcdreforged \"$@\"\n"), 0o755); err != nil {
-		return err
-	}
-	return nil
+	var captured bytes.Buffer
+	writer := io.MultiWriter(output, &captured)
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+	err := cmd.Run()
+	return captured.Bytes(), err
 }

@@ -6,10 +6,10 @@ import (
 	"encoding/json/v2"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -70,64 +70,39 @@ func translateFabricArtifact(
 		len(modInfo.Depends)+len(modInfo.Recommends)+len(modInfo.Suggests)+
 			len(modInfo.Breaks)+len(modInfo.Conflicts),
 	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Depends,
-			true,
-			false,
+	for _, group := range []struct {
+		dependencies map[string]fn.SingleOrSlice[string]
+		kind         catalog.DependencyKind
+	}{
+		{modInfo.Depends, catalog.DependencyKindRequired},
+		{modInfo.Recommends, catalog.DependencyKindRecommended},
+		{modInfo.Suggests, catalog.DependencyKindSuggested},
+		{modInfo.Breaks, catalog.DependencyKindIncompatible},
+		{modInfo.Conflicts, catalog.DependencyKindConflict},
+	} {
+		translated, err := translateFabricArtifactDependencyMap(
+			group.dependencies,
+			group.kind,
 			embeddedNames,
-		)...,
-	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Recommends,
-			false,
-			false,
-			embeddedNames,
-		)...,
-	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Suggests,
-			false,
-			false,
-			embeddedNames,
-		)...,
-	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Breaks,
-			false,
-			true,
-			embeddedNames,
-		)...,
-	)
-	dependencies = append(
-		dependencies,
-		translateFabricArtifactDependencyMap(
-			modInfo.Conflicts,
-			false,
-			true,
-			embeddedNames,
-		)...,
-	)
+		)
+		if err != nil {
+			return PackageInfo{}, err
+		}
+		dependencies = append(dependencies, translated...)
+	}
 
 	return PackageInfo{
-		Ref: types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
+		Ref: catalog.VersionedRef{
+			Ref: catalog.Ref{
 				Name:     input.ToProjectName(modInfo.ID),
-				Provider: types.ProviderUnknown,
+				Provider: catalog.ProviderUnknown,
 			},
-			Ecosystem: types.EcosystemFabric,
-			Version:   types.Version(modInfo.Version),
+			Ecosystem: catalog.EcosystemFabric,
+			Version:   version.Version(modInfo.Version),
 		},
 		FilePath:     filePath,
 		Dependencies: dependencies,
-		Metadata: types.Metadata{
+		Metadata: catalog.Metadata{
 			Title:       modInfo.Name,
 			Description: modInfo.Description,
 			License:     modInfo.License,
@@ -139,41 +114,45 @@ func translateFabricArtifact(
 
 func translateFabricArtifactDependencyMap(
 	deps map[string]fn.SingleOrSlice[string],
-	mandatory bool,
-	inverse bool,
+	kind catalog.DependencyKind,
 	embeddedNames map[string]struct{},
-) []Dependency {
+) ([]Dependency, error) {
 	translated := make([]Dependency, 0, len(deps))
 	for id, ranges := range deps {
 		name := input.ToProjectName(id)
 		_, embedded := embeddedNames[string(name)]
+		constraint, err := parseFabricArtifactVersionRanges(ranges)
+		if err != nil {
+			return nil, err
+		}
 		dep := Dependency{
-			Ref: types.VersionedPackageRef{
-				PackageRef: types.PackageRef{
+			Ref: catalog.VersionedRef{
+				Ref: catalog.Ref{
 					Name:     name,
-					Provider: types.ProviderUnknown,
-				}, Ecosystem: types.EcosystemFabric,
+					Provider: catalog.ProviderUnknown,
+				}, Ecosystem: catalog.EcosystemFabric,
 			},
-			Constraint: parseFabricArtifactVersionRanges(ranges),
-			Mandatory:  mandatory,
+			Constraint: constraint,
+			Mandatory:  kind == catalog.DependencyKindRequired,
+			Kind:       kind,
 			Origin:     dependencyOriginForEmbedded(embedded),
 		}
-		if inverse {
-			dep.Constraint.Inverse()
+		switch id {
+		case "minecraft", "java", "fabricloader":
+			dep.Origin = catalog.DependencyServerProvided
+		}
+		if kind == catalog.DependencyKindIncompatible || kind == catalog.DependencyKindConflict {
+			dep.Constraint = dep.Constraint.Negate()
 		}
 		translated = append(translated, dep)
 	}
-	return translated
+	return translated, nil
 }
 
 func parseFabricArtifactVersionRanges(
 	ranges fn.SingleOrSlice[string],
-) types.VersionExpr {
-	return version.ParseRanges(
-		ranges,
-		version.InferRangeDialect(types.EcosystemFabric),
-		types.VersionSchemeSemver,
-	)
+) (version.Expr, error) {
+	return version.ParseConstraints(ranges, version.DialectFabric)
 }
 
 func fabricArtifactEmbeddedModNames(
@@ -218,7 +197,7 @@ func fabricNestedModInfo(
 	zipRdr *zip.Reader,
 	filePath string,
 ) (*fileschema.FileFabricModIdentifier, error) {
-	raw, err := readZipEntry(zipRdr, filePath)
+	raw, err := readZipEntryBytes(zipRdr, filePath)
 	if err != nil || raw == nil {
 		return nil, err
 	}
@@ -258,33 +237,33 @@ func fabricRecordEmbeddedName(names map[string]struct{}, id string) {
 	names[string(input.ToProjectName(id))] = struct{}{}
 }
 
-func fabricArtifactAuthors(authors []fileschema.FabricAuthor) []types.Person {
-	translated := make([]types.Person, len(authors))
+func fabricArtifactAuthors(authors []fileschema.FabricAuthor) []catalog.Person {
+	translated := make([]catalog.Person, len(authors))
 	for i, author := range authors {
-		translated[i] = types.Person{Name: string(author)}
+		translated[i] = catalog.Person{Name: string(author)}
 	}
 	return translated
 }
 
-func fabricArtifactURLs(contact map[string]string) []types.URL {
+func fabricArtifactURLs(contact map[string]string) []catalog.URL {
 	urlSpecs := []struct {
 		key     string
 		name    string
-		urlType types.URLType
+		urlType catalog.URLType
 	}{
-		{key: "homepage", name: "Homepage", urlType: types.URLHome},
-		{key: "sources", name: "Source", urlType: types.URLSource},
-		{key: "issues", name: "Issues", urlType: types.URLIssues},
+		{key: "homepage", name: "Homepage", urlType: catalog.URLHome},
+		{key: "sources", name: "Source", urlType: catalog.URLSource},
+		{key: "issues", name: "Issues", urlType: catalog.URLIssues},
 	}
 
-	urls := make([]types.URL, 0, len(urlSpecs))
+	urls := make([]catalog.URL, 0, len(urlSpecs))
 	for _, spec := range urlSpecs {
 		url := contact[spec.key]
 		if url == "" {
 			continue
 		}
 		urls = append(
-			urls, types.URL{
+			urls, catalog.URL{
 				Name: spec.name,
 				Type: spec.urlType,
 				URL:  url,

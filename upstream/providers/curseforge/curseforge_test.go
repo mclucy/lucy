@@ -3,7 +3,7 @@ package curseforge
 import (
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 func TestSearchResponseToSearchResults(t *testing.T) {
@@ -15,9 +15,9 @@ func TestSearchResponseToSearchResults(t *testing.T) {
 		},
 	}
 
-	results := resp.ToSearchResults(types.ProviderCurseForge)
+	results := resp.ToSearchResults(catalog.ProviderCurseForge)
 
-	if results.Provider != types.ProviderCurseForge {
+	if results.Provider != catalog.ProviderCurseForge {
 		t.Errorf("expected source CurseForge, got %v", results.Provider)
 	}
 	if len(results.Items) != 3 {
@@ -42,9 +42,9 @@ func TestSearchResponseToSearchResults_Empty(t *testing.T) {
 		Data: []modResponse{},
 	}
 
-	results := resp.ToSearchResults(types.ProviderCurseForge)
+	results := resp.ToSearchResults(catalog.ProviderCurseForge)
 
-	if results.Provider != types.ProviderCurseForge {
+	if results.Provider != catalog.ProviderCurseForge {
 		t.Errorf("expected source CurseForge, got %v", results.Provider)
 	}
 	if len(results.Items) != 0 {
@@ -125,7 +125,7 @@ func TestModResponseToProjectInformation_PartialLinks(t *testing.T) {
 	if len(info.URLs) != 1 {
 		t.Errorf("expected 1 URL, got %d", len(info.URLs))
 	}
-	if info.URLs[0].Type != types.URLHome {
+	if info.URLs[0].Type != catalog.URLHome {
 		t.Errorf("expected UrlHome, got %v", info.URLs[0].Type)
 	}
 }
@@ -165,7 +165,7 @@ func TestFileResponseToPackageRemote_PrefersSha1(t *testing.T) {
 
 	remote := f.ToPackageRemote()
 
-	if remote.ID.Provider != types.ProviderCurseForge {
+	if remote.ID.Provider != catalog.ProviderCurseForge {
 		t.Errorf("expected source CurseForge, got %v", remote.ID.Provider)
 	}
 	if remote.FileURL != downloadUrl {
@@ -245,14 +245,14 @@ func TestFileResponseToPackageRemote_NoHashes(t *testing.T) {
 
 func TestModLoaderType(t *testing.T) {
 	tests := []struct {
-		platform types.Ecosystem
+		platform catalog.Ecosystem
 		expected int
 	}{
-		{types.EcosystemForge, 1},
-		{types.EcosystemFabric, 4},
-		{types.EcosystemNeoForge, 6},
-		{types.EcosystemUnspecified, 0},
-		{types.EcosystemMCDR, 0},
+		{catalog.EcosystemForge, 1},
+		{catalog.EcosystemFabric, 4},
+		{catalog.EcosystemNeoForge, 6},
+		{catalog.EcosystemUnspecified, 0},
+		{catalog.EcosystemMCDR, 0},
 	}
 
 	for _, tt := range tests {
@@ -267,7 +267,7 @@ func TestModLoaderType(t *testing.T) {
 }
 
 func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
-	u := searchUrl("fabric-api", types.EcosystemFabric)
+	u := searchUrl("fabric-api", catalog.EcosystemFabric)
 
 	mustContain := []string{
 		"gameId=432",
@@ -286,7 +286,7 @@ func TestSearchUrl_ContainsRequiredParams(t *testing.T) {
 }
 
 func TestSearchURLNoLoaderForUnspecifiedEcosystem(t *testing.T) {
-	u := searchUrl("test", types.EcosystemUnspecified)
+	u := searchUrl("test", catalog.EcosystemUnspecified)
 
 	if containsSubstring(u, "modLoaderType") {
 		t.Errorf(

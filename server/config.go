@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -103,9 +102,9 @@ func NewInstance(name, root, runUser string) (Instance, error) {
 	}, nil
 }
 
-// GuessRuntimeConfig derives a launch command from the detected server artifact,
-// falling back to Java and server.jar when detection provides no entry point.
-func GuessRuntimeConfig(root string) RuntimeConfig {
+// GuessRuntimeConfig derives a launch command from an optional selected entry
+// point supplied by the CLI, falling back to Java and server.jar otherwise.
+func GuessRuntimeConfig(root string, entryPoint ...string) RuntimeConfig {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		absRoot = root
@@ -115,7 +114,7 @@ func GuessRuntimeConfig(root string) RuntimeConfig {
 		FormatVersion: FormatVersion,
 		WorkingDir:    absRoot,
 		Command:       "java",
-		Args:          []string{"-jar", "server.jar", "nogui"},
+		Args:          []string{"-Xms1G", "-Xmx4G", "-jar", "server.jar", "nogui"},
 		Java:          JavaConfig{Path: "java"},
 		Memory:        MemoryConfig{Min: "1G", Max: "4G"},
 		Env:           map[string]string{},
@@ -129,13 +128,11 @@ func GuessRuntimeConfig(root string) RuntimeConfig {
 		Restart: RestartConfig{Policy: "on-failure"},
 	}
 
-	ws := workspace.NewAt(absRoot)
-	server := ws.Runtime()
-	if server == nil || server.PrimaryPath == "" {
+	if len(entryPoint) == 0 || entryPoint[0] == "" {
 		return cfg
 	}
 
-	entrance := server.PrimaryPath
+	entrance := entryPoint[0]
 	if !filepath.IsAbs(entrance) {
 		entrance = filepath.Join(absRoot, entrance)
 	}

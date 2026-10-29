@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 func requestJSON(requestURL string, out any, notFound error) error {
@@ -69,16 +69,26 @@ func getLatestVersion(resourceID int64) (*versionResponse, error) {
 	return resp, nil
 }
 
+const spigetVersionPageSize = 1000
+
 func listVersions(resourceID int64) ([]versionResponse, error) {
-	var resp []versionResponse
-	if err := requestJSON(
-		versionsURL(resourceID),
-		&resp,
-		ErrNoVersion,
-	); err != nil {
-		return nil, err
+	var versions []versionResponse
+	for page := 1; ; page++ {
+		var resp []versionResponse
+		if err := requestJSON(
+			versionsURL(resourceID, page),
+			&resp,
+			ErrNoVersion,
+		); err != nil {
+			return nil, err
+		}
+
+		versions = append(versions, resp...)
+		if len(resp) < spigetVersionPageSize {
+			break
+		}
 	}
-	return resp, nil
+	return versions, nil
 }
 
 func searchResourcesURL(query string) string {
@@ -95,14 +105,15 @@ func latestVersionURL(resourceID int64) string {
 	return resourceURL(resourceID) + "/versions/latest"
 }
 
-func versionsURL(resourceID int64) string {
+func versionsURL(resourceID int64, page int) string {
 	values := url.Values{}
-	values.Set("size", "1000")
+	values.Set("size", strconv.Itoa(spigetVersionPageSize))
+	values.Set("page", strconv.Itoa(page))
 	values.Set("sort", "-releaseDate")
 	return resourceURL(resourceID) + "/versions?" + values.Encode()
 }
 
-func parseNumericResourceID(name types.PackageName) (int64, bool) {
+func parseNumericResourceID(name catalog.Name) (int64, bool) {
 	trimmed := strings.TrimSpace(name.String())
 	if trimmed == "" {
 		return 0, false

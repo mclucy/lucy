@@ -6,48 +6,68 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
+	"time"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/resolve"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
-	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/version"
 )
 
 type (
 	Options struct {
 		Locked          bool
 		Offline         bool
+		AcceptBroken    bool
+		Overwrite       bool
 		PublishManifest bool
 		WithOptional    bool
+		// MCDRVenv creates an isolated MCDReforged environment instead of
+		// requiring a global executable.
+		MCDRVenv bool
 		// ExpectedManifest pins the manifest fingerprint the caller selected
 		// packages from, so a concurrent edit fails instead of being
 		// overwritten.
 		ExpectedManifest string
+		// ExpectedLock pins the lock fingerprint the caller planned from.
+		ExpectedLock string
+		// ForceResolve resolves even when the manifest fingerprint matches the
+		// lock. Upgrade uses it because a lock can answer the manifest while
+		// still being older than the eligible versions.
+		ForceResolve bool
 		// RequirementChange records that the caller edited declared package
 		// requirements, so a lock whose fingerprint no longer matches is
 		// expected rather than stale.
 		RequirementChange bool
-		publishLock       bool
-	}
-	InitOptions struct {
-		Minecraft, Distribution, CoreVersion, Repository, MCDRVersion, Directory string
-		Force, AllowEmpty, Detect                                                bool
-		// PromptMinecraft asks for a concrete Minecraft version when
-		// initialization lacks one and returns the trimmed response. Nil keeps
-		// the concrete-version-required error and never prompts.
-		PromptMinecraft func() (string, error)
+		// declaredOnly records the manifest's packages without adding their
+		// catalogue dependencies. Adoption sets it because the workspace
+		// already holds a working set that resolution must not extend.
+		declaredOnly bool
+		publishLock  bool
+		// Trace receives operation facts for the command layer to present.
+		Trace *Trace
+		// ProvisionJava runs before staging when the selected Java runtime
+		// misses the requirement of the lock. It must leave a runtime installed
+		// or fail; the runtime is selected again afterwards.
+		ProvisionJava func(ctx context.Context, requirement javaruntime.Requirement, check *javaruntime.Check) error
 	}
 )
 
-func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.Document, opts Options) (diagnostics []filetrack.Diagnostic, resultErr error) {
+func Sync(ctx context.Context, root string, d *document.Manifest, old *document.Lock, opts Options) (*Result, error) {
+	result := newResult()
+	diagnostics, resultErr := syncInstall(ctx, root, d, old, opts, result)
+	result.Diagnostics = diagnostics
+	return result, resultErr
+}
+
+func syncInstall(ctx context.Context, root string, d *document.Manifest, old *document.Lock, opts Options, result *Result) (diagnostics []filetrack.Diagnostic, resultErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -56,241 +76,20 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
 		return nil, err
 	}
-	if d == nil && old == nil {
-		return nil, fmt.Errorf("lucy.yaml or lucy-lock.yaml is required")
-	}
 	writer, err := workspacewrite.Lock(root)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := preflightLocked(root, d, old, opts, true); err != nil {
 		return nil, err
 	}
-	serverDirectory := ""
-	if d != nil {
-		serverDirectory = d.Server.Directory
-	} else if old != nil {
-		serverDirectory = old.Server.Directory
-	}
-	if workspace.RunningAt(filepath.Join(root, serverDirectory)) ||
-		(serverDirectory != "." && workspace.RunningAt(root)) {
-		return nil, fmt.Errorf("stop the running Minecraft server before installation")
-	}
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	store := newDownloadStore(ctx, root, opts, result)
+	resolved, err := resolveLock(ctx, root, d, old, &opts, store, result)
+	if err != nil {
 		return nil, err
 	}
-	if opts.ExpectedManifest != "" {
-		current, err := manifest.Read(root)
-		if err != nil {
-			return nil, err
-		}
-		fingerprint, err := manifest.Fingerprint(current)
-		if err != nil {
-			return nil, err
-		}
-		if fingerprint != opts.ExpectedManifest {
-			return nil, fmt.Errorf("manifest changed during package selection; retry from current intent")
-		}
-	}
-	store := &downloadStore{
-		ctx:     ctx,
-		dir:     filepath.Join(root, ".lucy", "downloads"),
-		offline: opts.Offline,
-	}
-	resolved := old
-	fingerprint := ""
-	if d != nil {
-		var err error
-		fingerprint, err = manifest.Fingerprint(d)
-		if err != nil {
-			return nil, err
-		}
-	}
-	switch {
-	case old == nil:
-		log.Debug("installation decision", "mode", "resolve", "reason", "no lock file to replay")
-	case opts.WithOptional:
-		log.Debug("installation decision", "mode", "resolve", "reason", "optional packages requested")
-	case d != nil && old.ManifestFingerprint != fingerprint:
-		log.Debug(
-			"installation decision",
-			"mode", "resolve",
-			"reason", "manifest changed since lock",
-			"manifest", fingerprint,
-			"lock", old.ManifestFingerprint,
-		)
-	default:
-		log.Debug(
-			"installation decision",
-			"mode", "replay",
-			"reason", "manifest unchanged; lock replays exactly",
-			"manifest", fingerprint,
-		)
-	}
-	if old == nil || opts.WithOptional || (d != nil && old.ManifestFingerprint != fingerprint) {
-		if opts.Locked {
-			if !opts.RequirementChange || old == nil || d == nil {
-				return nil, fmt.Errorf("locked installation requires a current lucy-lock.yaml")
-			}
-			reusable, err := coreReusable(ctx, d, old, opts.Offline)
-			if err != nil {
-				return nil, err
-			}
-			if !reusable {
-				return nil, fmt.Errorf("manifest core no longer matches lucy-lock.yaml; install without --locked")
-			}
-			log.Debug(
-				"locked installation reuses core",
-				"reason", "manifest core still matches lock; requirements rebind in place",
-			)
-			resolved, err = mutateLock(d, old, fingerprint)
-			if err != nil {
-				return nil, err
-			}
-			if err := resolved.Validate(); err != nil {
-				return nil, err
-			}
-			opts.publishLock = true
-			return stageInstall(ctx, root, d, resolved, store, opts)
-		}
-		if d == nil {
-			return nil, fmt.Errorf("manifest required to resolve installation")
-		}
-		if opts.Offline {
-			return nil, fmt.Errorf("offline resolution requires a current lock; metadata selection is unavailable")
-		}
-		log.Info(
-			"resolving installation",
-			"minecraft", d.Server.Minecraft,
-			"product", d.Server.Core.Product,
-			"core", d.Server.Core.ProductVersion,
-			"mcdr", d.MCDR != nil,
-		)
-		coreReq := types.ServerProductRequest{
-			Minecraft:      d.Server.Minecraft,
-			Product:        d.Server.Core.Product,
-			ProductVersion: d.Server.Core.ProductVersion,
-			Repository:     d.Server.Core.Repository,
-			FilePattern:    d.Server.Core.FilePattern,
-		}
-		var core types.ServerProductResolution
-		canReuse := false
-		if old != nil {
-			reusable, err := coreReusable(ctx, d, old, opts.Offline)
-			if err != nil {
-				return nil, err
-			}
-			canReuse = reusable
-		}
-		if canReuse {
-			log.Debug(
-				"reusing locked core resolution",
-				"reason", "manifest core still matches lock",
-				"minecraft", old.Server.Minecraft,
-				"product", old.Server.Product,
-				"core-version", old.Server.CoreVersion,
-			)
-			core = types.ServerProductResolution{
-				Minecraft:      old.Server.Minecraft,
-				Product:        old.Server.Product,
-				ProductVersion: old.Server.CoreVersion,
-				Artifact:       old.Server.Artifact,
-				Bootstrapper:   old.Server.Bootstrapper,
-				Inputs:         old.Server.Inputs,
-				Java:           old.Server.Java,
-			}
-		} else {
-			var err error
-			core, err = routing.ResolveServerProduct(ctx, coreReq, store.materialize)
-			if err != nil {
-				return nil, err
-			}
-		}
-		resolved = &lockfile.Document{
-			SchemaVersion:       lockfile.SchemaVersion,
-			ManifestFingerprint: fingerprint,
-			Server: lockfile.Server{
-				Minecraft:    core.Minecraft,
-				Directory:    d.Server.Directory,
-				Product:      core.Product,
-				CoreVersion:  core.ProductVersion,
-				Artifact:     core.Artifact,
-				Bootstrapper: core.Bootstrapper,
-				Inputs:       core.Inputs,
-				Java:         core.Java,
-			},
-			Packages: []types.LockedPackage{},
-			Files:    slices.Clone(d.Files),
-		}
-		mcdrVersion := ""
-		if d.MCDR != nil {
-			request := d.MCDR.Version
-			if old != nil && old.MCDR != nil && isFloating(request) {
-				request = old.MCDR.Version
-			}
-			environment, err := prepareMCDR(ctx, root, d.MCDR.Directory, request, nil, store)
-			if err != nil {
-				return nil, err
-			}
-			resolved.MCDR = environment
-			mcdrVersion = string(environment.Version)
-		}
-		packages, err := resolve.Packages(ctx, d, old, resolved.Server, mcdrVersion, store.materialize, opts.WithOptional)
-		if err != nil {
-			return nil, err
-		}
-		resolved.Packages = packages
-		if opts.WithOptional {
-			for _, p := range packages {
-				for _, request := range p.Requirements {
-					if p.Environment == types.EnvironmentMCDR {
-						d.MCDR.Packages[request.Reference] = manifest.Requirement{
-							Selector:    request.Selector,
-							FilePattern: request.FilePattern,
-							Enabled:     new(request.Enabled),
-						}
-					} else {
-						if d.Server.Packages[p.Ecosystem] == nil {
-							d.Server.Packages[p.Ecosystem] = map[string]manifest.Requirement{}
-						}
-						d.Server.Packages[p.Ecosystem][request.Reference] = manifest.Requirement{
-							Selector:    request.Selector,
-							FilePattern: request.FilePattern,
-							Enabled:     new(request.Enabled),
-						}
-					}
-				}
-			}
-			resolved.ManifestFingerprint, err = manifest.Fingerprint(d)
-			if err != nil {
-				return nil, err
-			}
-			opts.PublishManifest = true
-		}
-		if d.MCDR != nil {
-			var requirements []string
-			for _, p := range packages {
-				for _, m := range p.Modules {
-					for _, dep := range m.Dependencies {
-						if dep.Kind == types.DependencyKindPython {
-							requirements = append(requirements, dep.ID)
-						}
-					}
-				}
-			}
-			environment, err := prepareMCDR(ctx, root, d.MCDR.Directory, resolved.MCDR.Version, requirements, store)
-			if err != nil {
-				return nil, err
-			}
-			resolved.MCDR = environment
-		}
-	}
-	if err := resolved.Validate(); err != nil {
-		return nil, err
-	}
-	opts.publishLock = resolved != old
-	return stageInstall(ctx, root, d, resolved, store, opts)
+	return stageInstall(ctx, root, d, resolved, store, opts, result)
 }
 
 // stageInstall materializes a resolved lock in the server directory and commits
@@ -299,14 +98,20 @@ func Sync(ctx context.Context, root string, d *manifest.Document, old *lockfile.
 func stageInstall(
 	ctx context.Context,
 	root string,
-	d *manifest.Document,
-	resolved *lockfile.Document,
+	d *document.Manifest,
+	resolved *document.Lock,
 	store *downloadStore,
 	opts Options,
+	result *Result,
 ) ([]filetrack.Diagnostic, error) {
 	if err := filetrack.ValidateOwnership(root, resolved.Files, resolved); err != nil {
 		return nil, err
 	}
+	check, err := selectJava(ctx, root, resolved, opts)
+	if err != nil {
+		return nil, err
+	}
+	result.Java = check
 	current, err := installationCurrent(root, resolved)
 	if err != nil {
 		return nil, err
@@ -317,13 +122,20 @@ func stageInstall(
 			"root", root,
 			"packages", len(resolved.Packages),
 		)
-		if err := validateUnmanagedArtifacts(ctx, root, resolved); err != nil {
+		if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 			return nil, err
 		}
-		if opts.publishLock {
-			if err := lockfile.Write(root, resolved); err != nil {
+		if resolved.MCDR != nil {
+			if err := ensureMCDRRuntime(ctx, root, resolved, store, opts.MCDRVenv); err != nil {
 				return nil, err
 			}
+		}
+		if opts.publishLock {
+			if err := document.LockFile(root).Write(resolved); err != nil {
+				return nil, err
+			}
+			result.PublishedLock = true
+			return provisionCommitted(ctx, root, resolved, opts)
 		}
 		return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
 	}
@@ -332,12 +144,21 @@ func stageInstall(
 		reason = "manifest publication forces re-staging"
 	}
 	log.Debug("staging installation", "root", root, "reason", reason)
-	// Every path past here installs or replaces files, so the server the lock
-	// describes must be runnable. A no-op replay never runs the server, so
-	// demanding a local JVM earlier would fail installs that change nothing.
-	if err := checkJava(ctx, resolved.Server.Java); err != nil {
-		return nil, err
-	}
+	opts.Trace.phaseStarted("install")
+	start := time.Now()
+	installed := false
+	defer func() {
+		if !installed {
+			return
+		}
+		elapsed := time.Since(start)
+		result.addPhase("install", elapsed)
+		opts.Trace.phaseDone(PhaseInfo{
+			Name:    "install",
+			Elapsed: elapsed,
+			Count:   result.Files.Created + result.Files.Replaced,
+		})
+	}()
 	stage, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "stage-*")
 	if err != nil {
 		return nil, err
@@ -347,19 +168,29 @@ func stageInstall(
 	if err != nil {
 		return nil, err
 	}
+	resolved.Server.Artifact.Hashes = core.Hashes
 	inputs := map[string]string{}
 	for i := range resolved.Server.Inputs {
 		input := &resolved.Server.Inputs[i]
 		if input.Embedded != "" {
 			continue
 		}
-		p, err := store.materialize(&input.Artifact)
+		materialized, err := store.materialize(&input.Artifact)
 		if err != nil {
 			return nil, err
 		}
-		inputs[input.Path] = p
+		input.Artifact.Hashes = materialized.Hashes
+		inputs[input.Path] = materialized.Path
 	}
-	if err := bootstrap.PrepareLocked(ctx, stage, resolved.Server, core, inputs); err != nil {
+	if err := bootstrap.PrepareLocked(
+		ctx,
+		stage,
+		resolved.Server,
+		core.Path,
+		inputs,
+		check.Executable(),
+		opts.Trace.processOutput(),
+	); err != nil {
 		return nil, err
 	}
 	log.Debug(
@@ -372,53 +203,68 @@ func stageInstall(
 		return nil, err
 	}
 	staged := 0
+	overwritePaths := map[string]bool{}
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
-		if !packageEnabled(p) {
+		if !p.Enabled() {
 			continue
 		}
 		destination, err := packageDestination(resolved, p)
 		if err != nil {
 			return nil, err
 		}
+		if opts.Overwrite {
+			overwritePaths[filepath.ToSlash(destination)] = true
+		}
 		source, err := store.materialize(&p.Artifact)
 		if err != nil {
 			return nil, err
 		}
-		if err := bootstrap.CopyLockedFile(source, filepath.Join(stage, destination), 0o644); err != nil {
+		p.Artifact.Hashes = source.Hashes
+		if err := bootstrap.CopyLockedFile(source.Path, filepath.Join(stage, destination), 0o644); err != nil {
 			return nil, err
 		}
 		staged++
 	}
 	log.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
 	if resolved.MCDR != nil {
-		if err := preparePython(ctx, root, stage, resolved, store); err != nil {
+		if err := preparePython(ctx, root, stage, resolved, store, opts.MCDRVenv); err != nil {
 			return nil, err
 		}
 	}
-	if err := validateUnmanagedArtifacts(ctx, root, resolved); err != nil {
+	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
 		return nil, err
 	}
-	if err := applyCommit(root, stage, d, resolved, opts.PublishManifest); err != nil {
+	adoptedPaths := map[string]bool{}
+	if _, err := os.Stat(filepath.Join(root, ".lucy", "install.yaml")); os.IsNotExist(err) {
+		adoptedPaths = adoptedOutputPaths(root, resolved.Server)
+	}
+	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths, adoptedPaths)
+	if err != nil {
 		return nil, err
 	}
-	return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
+	removeSupersededPaperCore(root, resolved)
+	result.Files = counts
+	result.PublishedManifest = opts.PublishManifest
+	result.PublishedLock = opts.publishLock || opts.PublishManifest
+	installed = true
+	return provisionCommitted(ctx, root, resolved, opts)
 }
 
-func isFloating(v types.Version) bool {
+func isFloating(v version.Version) bool {
 	switch v {
-	case "", types.VersionStable, types.VersionBeta, types.VersionAny:
+	case "", version.Stable, version.Beta, version.Any:
 		return true
 	}
 	return v == "latest"
 }
 
-// coreReusable reports whether a lock's server record still answers the
+// coreReusable reports whether a lock's server record answers the
 // manifest's core request. Resolution reuses the pin when it does; a locked
 // mutation treats a negative answer as a stale lock, because rebinding
 // requirements must never re-target the server.
-func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Document, offline bool) (bool, error) {
-	request := types.ServerProductRequest{
+func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock, offline bool) (bool, error) {
+	request := routing.ServerProductRequest{
 		Minecraft:      d.Server.Minecraft,
 		Product:        d.Server.Core.Product,
 		ProductVersion: d.Server.Core.ProductVersion,
@@ -457,7 +303,7 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 	// Dropping the repository override retargets the server at its official
 	// distribution, so a locked GitHub artifact no longer satisfies the request
 	// even though every pinned field still matches.
-	if request.Repository == "" && old.Server.Provider == types.ProviderGitHub {
+	if request.Repository == "" && old.Server.Provider == catalog.ProviderGitHub {
 		log.Debug(
 			"core pin not reusable",
 			"reason", "repository override dropped while pin came from a GitHub fork",
@@ -479,7 +325,7 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 		if err := routing.Metadata(ctx, "https://api.github.com/repos/"+request.Repository, &repository); err != nil {
 			return false, err
 		}
-		if old.Server.Provider != types.ProviderGitHub || old.Server.ProjectID != strconv.FormatInt(repository.ID, 10) {
+		if old.Server.Provider != catalog.ProviderGitHub || old.Server.ProjectID != strconv.FormatInt(repository.ID, 10) {
 			log.Debug(
 				"core pin not reusable",
 				"reason", "repository identity changed",
@@ -512,11 +358,11 @@ func coreReusable(ctx context.Context, d *manifest.Document, old *lockfile.Docum
 // destination two active packages both claim must fail before anything is
 // written. Left unguarded the later copy silently replaces the earlier one, so
 // the workspace diverges from a lock that still reports itself as current.
-func rejectSharedDestinations(resolved *lockfile.Document) error {
+func rejectSharedDestinations(resolved *document.Lock) error {
 	claimed := map[string]string{}
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
-		if !packageEnabled(p) {
+		if !p.Enabled() {
 			continue
 		}
 		destination, err := packageDestination(resolved, p)
@@ -534,12 +380,12 @@ func rejectSharedDestinations(resolved *lockfile.Document) error {
 
 // packageFolder returns the directory that serves a package's environment and
 // ecosystem.
-func packageFolder(environment types.Environment, ecosystem types.Ecosystem) string {
-	if environment == types.EnvironmentMCDR {
+func packageFolder(environment server.Environment, ecosystem catalog.Ecosystem) string {
+	if environment == server.EnvironmentMCDR {
 		return "plugins"
 	}
 	switch ecosystem {
-	case types.EcosystemBukkit, types.EcosystemPaper:
+	case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 		return "plugins"
 	default:
 		return "mods"
@@ -548,10 +394,10 @@ func packageFolder(environment types.Environment, ecosystem types.Ecosystem) str
 
 // packageDestination reports where an enabled package lands inside the staged
 // server tree.
-func packageDestination(resolved *lockfile.Document, p *types.LockedPackage) (string, error) {
+func packageDestination(resolved *document.Lock, p *document.Package) (string, error) {
 	directory := resolved.Server.Directory
 	folder := packageFolder(p.Environment, p.Ecosystem)
-	if p.Environment == types.EnvironmentMCDR {
+	if p.Environment == server.EnvironmentMCDR {
 		if resolved.MCDR == nil {
 			return "", fmt.Errorf("MCDR package has no wrapper runtime")
 		}
@@ -560,14 +406,12 @@ func packageDestination(resolved *lockfile.Document, p *types.LockedPackage) (st
 	return filepath.Join(directory, folder, p.Filename), nil
 }
 
-func packageEnabled(p *types.LockedPackage) bool {
-	if len(p.Requirements) == 0 {
-		return true
+// provisionCommitted provisions tracked files after the lock is published. A
+// failure here leaves the committed installation in place, so it is marked.
+func provisionCommitted(ctx context.Context, root string, resolved *document.Lock, opts Options) ([]filetrack.Diagnostic, error) {
+	diagnostics, err := filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
+	if err != nil {
+		err = &CommittedError{Err: err}
 	}
-	for _, r := range p.Requirements {
-		if r.Enabled {
-			return true
-		}
-	}
-	return false
+	return diagnostics, err
 }

@@ -6,7 +6,7 @@
 **The package manager for Minecraft servers.**
 
 [![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml)
-[![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html)
+[![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/badge/coverage.html)
 [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE)
 
 [Documentation](https://lucy.lc/docs) | [English](README.md) | [中文](README_CN.md)
@@ -49,8 +49,11 @@ Pre-built binaries are available on [Releases](https://github.com/mclucy/lucy/re
 ## Quickstart
 
 ```bash
-# Generate lucy.yaml for an existing server directory
-lucy init
+# Create a new server
+lucy create
+
+# Or, instead of create, adopt an existing server directory:
+# lucy init
 
 # Add packages with dependency resolution
 lucy add modrinth:fabric-api modrinth:lithium
@@ -70,9 +73,11 @@ apart.
 
 | Command                | Usage                                                                                              |
 |------------------------|----------------------------------------------------------------------------------------------------|
-| `lucy init`            | Generate `lucy.yaml` from an existing server directory                                             |
+| `lucy create`          | Create a new server in a directory and install it; `--no-install` writes only the manifest and lock |
+| `lucy init`            | Generate `lucy.yaml` and `lucy-lock.yaml` from an existing server directory                       |
 | `lucy add <pkg>...`    | Record requirements, resolve the closure, update the lock, and sync                                |
 | `lucy remove <pkg>...` | Drop requirements, re-resolve, and prune artifacts nothing needs                                   |
+| `lucy deinit`          | Remove lucy's manifest, lock, and local state from a server directory                              |
 | `lucy install`         | Converge the server with the lock; re-resolve when stale, with `--locked` and `--offline` controls |
 | `lucy status`          | Show the live server identity, files, and packages; `--from-lock` renders the lock                 |
 | `lucy search <query>`  | Search Modrinth, CurseForge, Hangar, Spiget, and the MCDReforged catalogue                         |

@@ -1,17 +1,49 @@
 ---
-title: "Global Flags"
-description: "Flags shared by lucy commands"
+title: "Global flags"
+description: "Common output and diagnostic options"
 ---
 
-These flags work with every `lucy` subcommand. The root command also exposes version information.
+## Output and automation
 
-## Meta
+Use `--no-color` to disable colors, or `--no-interactive` to disable prompts and animated progress. If a command needs a choice, `--no-interactive` fails with the flag to use instead. `--no-style` combines both options.
+
+Commands that support machine-readable output accept `--json` or `--json-compact`. For example:
+
+```bash
+lucy status --json
+lucy schema status
+```
+
+`lucy schema` lists supported commands and describes their JSON results. `lucy compile` does not support JSON output. See a command's help for its options.
+
+## Diagnostics
+
+Lucy writes diagnostic logs to `~/Library/Logs/lucy/lucy.log` on macOS, `~/.local/share/lucy/logs/lucy.log` on Linux, or `%APPDATA%/lucy/logs/lucy.log` on Windows. Use `--log-file <path>` to choose another location and `--print-logs` to show logs in the terminal. `--log-level` controls the displayed severity (`debug`, `info`, `warn`, `error`, or `fatal`); the file retains debug details.
+
+## Server selection
+
+`lucy --server NAME COMMAND` runs the invocation in a registered server's directory, so relative paths in the command's arguments resolve there. Place the flag before the subcommand:
+
+```bash
+lucy --server survival status
+```
+
+The value must be an available name from [`lucy server list`](/commands/install#known-servers), not a filesystem path. A name that matches no available server, or several, fails before the command runs; an ambiguous name lists the matching paths. Without the flag, commands keep their normal working-directory behavior.
+## Flags
+
+### Meta
 
 <ParamField query="--version, -v" type="boolean">
   Print the current `lucy` version and exit. This flag belongs to the root command; use `lucy --version`, not `lucy <command> --version`.
 </ParamField>
 
-## Output style
+### Server selection
+
+<ParamField query="--server" type="string">
+  Run this invocation in the server registered under this name. The value must be a name shown by `lucy server list`. Missing, unreadable, invalid, and ambiguous names fail before the command runs.
+</ParamField>
+
+### Output style
 
 <ParamField query="--no-color" type="boolean" default="false">
   Disable ANSI colors. Text attributes such as bold or underline survive, so output stays readable in environments that do not support color or when piping output to another program.
@@ -25,22 +57,18 @@ These flags work with every `lucy` subcommand. The root command also exposes ver
   Same as `--no-color --no-interactive`.
 </ParamField>
 
-`--json` and `--json-compact` are inherited by every command and render on the ones that produce machine-readable output. `--json-compact` wins when both are set.
-
 <ParamField query="--json" type="boolean" default="false">
-  Print JSON indented with 2 spaces.
+  Print JSON indented with 2 spaces. Success documents go to stdout; failure documents go to stderr.
 </ParamField>
 
 <ParamField query="--json-compact" type="boolean" default="false">
   Print JSON without indentation; wins over `--json`.
 </ParamField>
 
-## Logging
-
-Diagnostic logs record action boundaries and internal decisions. Command results and user reports remain independent of these settings.
+### Logging
 
 <ParamField query="--log-level" type="string" default="info">
-  Set the minimum diagnostic severity: `debug`, `info`, `warn`, `error`, or `fatal`. This setting does not filter user reports.
+  Set the minimum severity that `--print-logs` mirrors to the terminal: `debug`, `info`, `warn`, `error`, or `fatal`. The log file always receives debug records regardless of this setting.
 </ParamField>
 
 <ParamField query="--log-file" type="string" default="platform-specific">
@@ -50,11 +78,9 @@ Diagnostic logs record action boundaries and internal decisions. Command results
 </ParamField>
 
 <ParamField query="--print-logs" type="boolean" default="false">
-  Write the same filtered, timestamped diagnostic records to the log file and stderr. User reports remain independent. When an event is both logged and reported, both representations appear.
+  Mirror diagnostic records to stderr at the level set by `--log-level`. The log file keeps receiving the same records, plus debug detail. User reports remain independent. In machine mode the terminal mirror is suppressed so stdout and stderr keep their single-document contract; read the log file instead.
 </ParamField>
 
-## Network
+### Network
 
-<ParamField query="--use-github-mirror" type="boolean" default="false">
-  Route eligible downloads through the GitHub release mirror instead of the canonical upstream URL. This is useful for users in regions with limited access to GitHub. The mirror is `https://ghfast.top`.
-</ParamField>
+GitHub release downloads can use a mirror. Set `github.proxy` with `lucy config set`; see [`lucy config`](/commands/config).

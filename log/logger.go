@@ -27,4 +27,7 @@ func write(level log.Level, content any, fields ...any) {
 	mu.RLock()
 	defer mu.RUnlock()
 	diagnostic.Log(level, content, fields...)
+	if mirror != nil {
+		mirror.Log(level, content, fields...)
+	}
 }

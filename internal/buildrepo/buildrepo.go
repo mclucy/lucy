@@ -15,10 +15,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
+	"sort"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	catalogpkg "github.com/mclucy/lucy/catalog"
 )
 
 type Layout struct {
@@ -42,7 +42,7 @@ type Project struct {
 	Path       string
 	Dir        string
 	BuildFile  string
-	Ecosystems []types.Ecosystem
+	Ecosystems []catalogpkg.Ecosystem
 	Java       JavaRequirements
 }
 
@@ -127,7 +127,7 @@ func Probe(ctx context.Context, root string) (layout Layout, err error) {
 	}, nil
 }
 
-// skippedDirs never contain hand written Gradle configuration.
+// skippedDirs never contain handwritten Gradle configuration.
 var skippedDirs = map[string]bool{
 	".git": true, ".gradle": true, ".idea": true, ".kotlin": true,
 	"build": true, "out": true, "target": true, "node_modules": true,
@@ -171,8 +171,9 @@ func (f *findingList) add(file string, line int, msg string) {
 }
 
 func (f findingList) sorted() []Finding {
-	slices.SortStableFunc(f, func(a, b Finding) int {
-		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Message, b.Message))
+	sort.SliceStable(f, func(i, j int) bool {
+		a, b := &f[i], &f[j]
+		return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Message, b.Message)) < 0
 	})
 	return f
 }

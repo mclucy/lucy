@@ -1,6 +1,7 @@
 package filetrack
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -14,12 +15,12 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/cas"
+	"github.com/mclucy/lucy/catalog"
+	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	serverpkg "github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
 
@@ -61,14 +62,14 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err != nil {
 		return result, err
 	}
-	beforeManifest, err := capture(root, files, store, manifest.Filename)
+	beforeManifest, err := capture(root, files, store, documentpkg.ManifestFilename)
 	if err != nil {
 		return result, err
 	}
 	if !beforeManifest.Exists {
-		return result, fmt.Errorf("no %s in this workspace; run lucy init first", manifest.Filename)
+		return result, fmt.Errorf("no %s in this workspace; run lucy init first", documentpkg.ManifestFilename)
 	}
-	beforeLock, err := capture(root, files, store, lockfile.Filename)
+	beforeLock, err := capture(root, files, store, documentpkg.LockFilename)
 	if err != nil {
 		return result, err
 	}
@@ -76,12 +77,13 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err != nil {
 		return result, err
 	}
-	document, decodeErr := manifest.Decode(reader)
+	existingManifest, readErr := io.ReadAll(reader)
 	closeErr := reader.Close()
-	if decodeErr != nil {
-		return result, errors.Join(decodeErr, closeErr)
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return result, err
 	}
-	if err := closeErr; err != nil {
+	document, err := documentpkg.DecodeManifest(bytes.NewReader(existingManifest))
+	if err != nil {
 		return result, err
 	}
 	own := make(map[string]struct{})
@@ -109,22 +111,24 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err := workspacewrite.CheckInactive(root, "changing tracked files"); err != nil {
 		return result, err
 	}
-	var locked *lockfile.Document
+	var locked *documentpkg.Lock
 	currentLock := false
+	existingLock := []byte{}
 	if beforeLock.Exists {
 		reader, err := imageReader(store, beforeLock)
 		if err != nil {
 			return result, err
 		}
-		locked, decodeErr = lockfile.Decode(reader)
+		existingLock, readErr = io.ReadAll(reader)
 		closeErr := reader.Close()
-		if decodeErr != nil {
-			return result, errors.Join(decodeErr, closeErr)
-		}
-		if err := closeErr; err != nil {
+		if err := errors.Join(readErr, closeErr); err != nil {
 			return result, err
 		}
-		fingerprint, err := manifest.Fingerprint(document)
+		locked, err = documentpkg.DecodeLock(bytes.NewReader(existingLock))
+		if err != nil {
+			return result, err
+		}
+		fingerprint, err := document.Fingerprint()
 		if err != nil {
 			return result, err
 		}
@@ -149,8 +153,8 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err != nil {
 			return result, err
 		}
-		index := slices.IndexFunc(nextFiles, func(file types.TrackedFile) bool { return file.Path == path })
-		var previous *types.TrackedFile
+		index := slices.IndexFunc(nextFiles, func(file documentpkg.TrackedFile) bool { return file.Path == path })
+		var previous *documentpkg.TrackedFile
 		if index >= 0 {
 			copy := nextFiles[index]
 			previous = &copy
@@ -170,13 +174,13 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		}
 	}
 	document.Files = nextFiles
-	if err := manifest.Normalize(document); err != nil {
+	if err := document.Normalize(); err != nil {
 		return result, err
 	}
 	if err := ValidateOwnership(root, document.Files, locked); err != nil {
 		return result, err
 	}
-	raw, err := manifest.CanonicalBytes(document)
+	raw, err := document.MergeBytes(existingManifest)
 	if err != nil {
 		return result, err
 	}
@@ -185,11 +189,11 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		return result, err
 	}
 	record(afterManifest)
-	txn.Mutations = append(txn.Mutations, mutation{Path: manifest.Filename, Before: beforeManifest, After: afterManifest})
+	txn.Mutations = append(txn.Mutations, mutation{Path: documentpkg.ManifestFilename, Before: beforeManifest, After: afterManifest})
 	if locked != nil {
 		locked.Files = slices.Clone(document.Files)
 		if currentLock {
-			locked.ManifestFingerprint, err = manifest.Fingerprint(document)
+			locked.ManifestFingerprint, err = document.Fingerprint()
 			if err != nil {
 				return result, err
 			}
@@ -197,7 +201,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		if err := locked.Validate(); err != nil {
 			return result, err
 		}
-		raw, err := lockfile.Snapshot(locked)
+		raw, err := locked.MergeBytes(existingLock)
 		if err != nil {
 			return result, err
 		}
@@ -206,7 +210,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 			return result, err
 		}
 		record(afterLock)
-		txn.Mutations = append(txn.Mutations, mutation{Path: lockfile.Filename, Before: beforeLock, After: afterLock})
+		txn.Mutations = append(txn.Mutations, mutation{Path: documentpkg.LockFilename, Before: beforeLock, After: afterLock})
 	}
 	txn.Event = event
 	if err := commit(root, files, store, txn); err != nil {
@@ -223,10 +227,10 @@ func validateRequest(request Request) error {
 		return fmt.Errorf("unknown file operation %q", request.Operation)
 	}
 	if request.All {
-		if request.Path != "" || (request.Operation != Update && request.Operation != Recover) {
+		if len(request.Paths) > 0 || (request.Operation != Update && request.Operation != Recover) {
 			return fmt.Errorf("--all requires update or recover without a path")
 		}
-	} else if request.Path == "" {
+	} else if len(request.Paths) == 0 {
 		return fmt.Errorf("file operation requires a path")
 	}
 	if request.FromSource && request.Operation != Update {
@@ -247,20 +251,27 @@ func validateRequest(request Request) error {
 	return nil
 }
 
-func selectFiles(files []types.TrackedFile, request Request) ([]string, []string, error) {
+func selectFiles(files []documentpkg.TrackedFile, request Request) ([]string, []string, error) {
 	if !request.All {
-		path, err := input.TrackedPath(request.Path)
-		if err != nil {
-			return nil, nil, err
+		selected := make([]string, 0, len(request.Paths))
+		for _, raw := range request.Paths {
+			path, err := input.TrackedPath(raw)
+			if err != nil {
+				return nil, nil, err
+			}
+			if slices.Contains(selected, path) {
+				continue
+			}
+			index := slices.IndexFunc(files, func(file documentpkg.TrackedFile) bool { return file.Path == path })
+			if request.Operation == Track && index >= 0 {
+				return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
+			}
+			if request.Operation != Track && index < 0 {
+				return nil, nil, fmt.Errorf("file %s is not tracked", path)
+			}
+			selected = append(selected, path)
 		}
-		index := slices.IndexFunc(files, func(file types.TrackedFile) bool { return file.Path == path })
-		if request.Operation == Track && index >= 0 {
-			return nil, nil, fmt.Errorf("file %s is already tracked; use update", path)
-		}
-		if request.Operation != Track && index < 0 {
-			return nil, nil, fmt.Errorf("file %s is not tracked", path)
-		}
-		return []string{path}, nil, nil
+		return selected, nil, nil
 	}
 	selected, skipped := make([]string, 0, len(files)), make([]string, 0)
 	for _, file := range files {
@@ -273,10 +284,10 @@ func selectFiles(files []types.TrackedFile, request Request) ([]string, []string
 	return selected, skipped, nil
 }
 
-func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uint64, request Request, path string, previous *types.TrackedFile, before image) (Change, image, error) {
+func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uint64, request Request, path string, previous *documentpkg.TrackedFile, before image) (Change, image, error) {
 	change := Change{Path: path, Before: previous}
 	after := before
-	file := types.TrackedFile{Path: path}
+	file := documentpkg.TrackedFile{Path: path}
 	if previous != nil {
 		file = *previous
 		change.Revision = currentRevision(events, path, file.Hash).sequence
@@ -400,7 +411,7 @@ func (c *cappedReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func sourceImage(ctx context.Context, store *cas.Store, file types.TrackedFile, update, offline bool) (result image, resultErr error) {
+func sourceImage(ctx context.Context, store *cas.Store, file documentpkg.TrackedFile, update, offline bool) (result image, resultErr error) {
 	if !update {
 		if err := verifyObject(store, file.Hash); err == nil {
 			return image{Exists: true, Hash: file.Hash, Mode: 0o600}, nil
@@ -448,7 +459,7 @@ func sourceImage(ctx context.Context, store *cas.Store, file types.TrackedFile, 
 }
 
 // ValidateOwnership includes generated outputs retained by the runtime receipt.
-func ValidateOwnership(root string, files []types.TrackedFile, locked *lockfile.Document) error {
+func ValidateOwnership(root string, files []documentpkg.TrackedFile, locked *documentpkg.Lock) error {
 	if len(files) == 0 {
 		return nil
 	}
@@ -496,18 +507,14 @@ func ValidateOwnership(root string, files []types.TrackedFile, locked *lockfile.
 			add(locked.MCDR.Directory, "run-mcdr.sh")
 		}
 		for _, pkg := range locked.Packages {
-			active := len(pkg.Requirements) == 0
-			for _, requirement := range pkg.Requirements {
-				active = active || requirement.Enabled
-			}
-			if !active {
+			if !pkg.Enabled() {
 				continue
 			}
 			directory, folder := server.Directory, "mods"
-			if pkg.Ecosystem == types.EcosystemBukkit || pkg.Ecosystem == types.EcosystemPaper {
+			if pkg.Ecosystem == catalog.EcosystemBukkit || pkg.Ecosystem == catalog.EcosystemPaper {
 				folder = "plugins"
 			}
-			if pkg.Environment == types.EnvironmentMCDR {
+			if pkg.Environment == serverpkg.EnvironmentMCDR {
 				if locked.MCDR == nil {
 					return fmt.Errorf("MCDR package has no wrapper runtime")
 				}

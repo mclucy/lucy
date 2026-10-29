@@ -1,26 +1,44 @@
 package mcdr
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
 type provider struct{}
 
-func (s provider) Provider() types.Provider {
-	return types.ProviderMCDR
+func (s provider) Provider() catalog.Provider {
+	return catalog.ProviderMCDR
 }
 
 var Provider provider
 
+// Builds lists every release in the plugin catalogue release history.
+func (s provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	history, err := getReleaseHistory(catalog.Name(project).PythonName())
+	if err != nil {
+		return nil, err
+	}
+
+	builds := make([]upstream.Build, 0, len(history.Releases))
+	for _, rel := range history.Releases {
+		builds = append(builds, rel.ToBuild())
+	}
+	return builds, nil
+}
+
 type mcdrSearchResult []string
 
-func (m mcdrSearchResult) ToSearchResults(source types.Provider) upstream.SearchResponse {
+func (m mcdrSearchResult) ToSearchResults(source catalog.Provider) upstream.SearchResponse {
 	res := upstream.SearchResponse{Provider: source}
 	for _, id := range m {
 		res.Items = append(
@@ -38,10 +56,10 @@ func (m mcdrSearchResult) ToSearchResults(source types.Provider) upstream.Search
 
 func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 	// MCDR publishes server plugins only; IncludeClient needs no filter.
-	if q.FilterEcosystem != types.EcosystemMCDR && q.FilterEcosystem != types.EcosystemUnspecified {
+	if q.FilterEcosystem != catalog.EcosystemMCDR && q.FilterEcosystem != catalog.EcosystemUnspecified {
 		return upstream.SearchResponse{}, fmt.Errorf(
 			"invalid search platform: expected %s, got %s",
-			types.EcosystemMCDR,
+			catalog.EcosystemMCDR,
 			q.FilterEcosystem,
 		)
 	}
@@ -54,14 +72,14 @@ func (s provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 
 func (s provider) Fetch(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
 	rel, err := getRelease(id.Name.PythonName(), id.Version)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 	r := rel.ToPackageRemote()
-	return types.ResolvedPackage{
+	return upstream.ResolvedPackage{
 		FileURL:       r.FileURL,
 		Filename:      r.Filename,
 		Hash:          r.Hash,
@@ -69,19 +87,19 @@ func (s provider) Fetch(
 	}, nil
 }
 
-func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
+func (s provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
 	name := ref.Name.PythonName()
 	plugin, err := getInfo(name)
 	if err != nil {
-		return types.Metadata{}, err
+		return catalog.Metadata{}, err
 	}
 	meta, err := getMeta(name)
 	if err != nil {
-		return types.Metadata{}, err
+		return catalog.Metadata{}, err
 	}
 	repo, err := getRepository(name)
 	if err != nil {
-		return types.Metadata{}, err
+		return catalog.Metadata{}, err
 	}
 
 	info := rawProjectInformation{
@@ -94,8 +112,8 @@ func (s provider) Info(ref types.PackageRef) (types.Metadata, error) {
 
 func (s provider) Dependencies(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (*types.DependencySet, error) {
+	id catalog.VersionedRef,
+) (*upstream.DependencySet, error) {
 	if id.Version == "" || id.Version.CanInfer() {
 		resolved, err := s.ResolveVersionSelector(local, id)
 		if err != nil {
@@ -108,50 +126,57 @@ func (s provider) Dependencies(
 	if err != nil {
 		return nil, err
 	}
-	return new(mcdrDependenciesFromMeta(rel.Meta)), nil
+	dependencies, err := mcdrDependenciesFromMeta(rel.Meta)
+	if err != nil {
+		return nil, err
+	}
+	return new(dependencies), nil
 }
 
-func mcdrDependenciesFromMeta(meta pluginMeta) types.DependencySet {
-	deps := types.DependencySet{FromArtifact: true}
+func mcdrDependenciesFromMeta(meta pluginMeta) (upstream.DependencySet, error) {
+	deps := upstream.DependencySet{FromArtifact: true}
 	if len(meta.Dependencies) == 0 {
-		return deps
+		return deps, nil
 	}
 
-	deps.Dependencies = make([]types.Dependency, 0, len(meta.Dependencies))
+	deps.Dependencies = make([]catalog.Dependency, 0, len(meta.Dependencies))
 	for name, constraint := range meta.Dependencies {
+		parsed, err := version.ParseConstraint(
+			constraint,
+			version.DialectMCDR,
+		)
+		if err != nil {
+			return upstream.DependencySet{}, err
+		}
 		deps.Dependencies = append(
-			deps.Dependencies, types.Dependency{
-				ID: types.VersionedPackageRef{
-					PackageRef: types.PackageRef{
+			deps.Dependencies, catalog.Dependency{
+				ID: catalog.VersionedRef{
+					Ref: catalog.Ref{
 						Name:     input.ToProjectName(name),
-						Provider: types.ProviderMCDR,
+						Provider: catalog.ProviderMCDR,
 					},
-					Ecosystem: types.EcosystemMCDR,
+					Ecosystem: catalog.EcosystemMCDR,
 				},
-				Constraint: version.ParseRange(
-					constraint,
-					version.InferRangeDialect(types.EcosystemMCDR),
-					types.VersionSchemeSemver,
-				),
-				Mandatory: true,
+				Constraint: parsed,
+				Mandatory:  true,
 			},
 		)
 	}
-	return deps
+	return deps, nil
 }
 
 func (s provider) ResolveVersionSelector(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (parsed types.VersionedPackageRef, err error) {
+	id catalog.VersionedRef,
+) (parsed catalog.VersionedRef, err error) {
 	var rel *release
 	switch id.Version {
-	case types.VersionStable:
+	case version.Stable:
 		rel, err = getLatestCompatibleRelease(
 			id.Name.PythonName(),
 			local.MCDRVersion,
 		)
-	case types.VersionBeta, types.VersionAny:
+	case version.Beta, version.Any:
 		rel, err = getLatestRelease(id.Name.PythonName())
 		if err != nil {
 			return id, err
@@ -166,10 +191,10 @@ func (s provider) ResolveVersionSelector(
 	if err != nil {
 		return id, err
 	}
-	parsed = types.VersionedPackageRef{
-		Ecosystem: types.EcosystemMCDR,
+	parsed = catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemMCDR,
 		Name:      id.Name,
-		Version:   types.Version(rel.Meta.Version),
+		Version:   version.Version(rel.Meta.Version),
 	}
 	log.Debug("parsed from" + id.StringQualified() + " to " + parsed.StringQualified())
 	return parsed, nil

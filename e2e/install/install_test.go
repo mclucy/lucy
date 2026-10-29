@@ -1,6 +1,7 @@
 //go:build e2e
 
-// Package install verifies fresh installs against pinned server fixtures.
+// Package install verifies fresh installs against pinned server fixtures and
+// installs driven by initialized workspaces.
 package install
 
 import (

@@ -1,0 +1,77 @@
+---
+title: "lucy config"
+description: "Set machine-specific preferences"
+---
+
+Use `lucy config` for settings specific to your machine, such as the Java runtime to use. Server requirements belong in `lucy.yaml` so they can travel with the server.
+
+## Choose a Java runtime
+
+Set a Java home directory or executable for the current workspace:
+
+```bash
+lucy config set java.home /opt/homebrew/opt/openjdk@21
+lucy config get java.home
+```
+
+Use `--global` to set a preference for all workspaces. A workspace setting takes precedence. Set an empty workspace value to return to automatic selection, even if a global value is set:
+
+```bash
+lucy config set --global java.home /usr/lib/jvm/temurin-21
+lucy config set java.home ""
+```
+
+Lucy uses the configured runtime even when it does not meet the server's requirements, and warns if it cannot use it. See [`lucy java`](/commands/java) to set requirements for the server itself.
+
+## Choose a release mirror and API key
+
+`github.proxy` prefixes GitHub release download URLs with a mirror, for example `https://ghfast.top/`. The value must be an absolute HTTP(S) URL without a query or fragment. An empty value downloads from GitHub directly. Only release asset downloads use the mirror; API and metadata requests go to GitHub directly. Changing the proxy does not download artifacts you already have.
+
+`curseforge.api_key` supplies a CurseForge API key for this machine. A non-empty key overrides the key embedded in this Lucy build. An empty value keeps the embedded key.
+
+```bash
+lucy config set github.proxy https://ghfast.top/
+lucy config set github.proxy ""   # download from GitHub directly
+```
+
+Set `curseforge.api_key` in the global configuration file, so the key stays out of your shell history:
+
+```yaml
+curseforge:
+  api_key: your-curseforge-key
+```
+
+`lucy config get` masks a secret in section and whole-configuration output. Read one with `lucy config get curseforge.api_key`.
+
+## Configuration files
+
+Workspace settings live in `.lucy/config.yaml`. Global settings live in `~/Library/Application Support/lucy/config.yaml` on macOS, `$XDG_CONFIG_HOME/lucy/config.yaml` (usually `~/.config/lucy/config.yaml`) on Linux, or `%APPDATA%\lucy\config.yaml` on Windows. Relative Java paths are resolved from the directory of the relevant configuration scope.
+
+`lucy init` creates a workspace configuration if one does not exist. You can also create one yourself, including before initialization:
+
+```bash
+lucy config create
+lucy config create --global
+```
+
+`lucy config get` shows the effective settings; add `--global` to inspect global settings without workspace overrides. The selected configuration file must exist. `lucy config set` creates it when needed, and writes only that key.
+
+Lucy adds an explanation where a key has none and never replaces a comment that is already in the file, so rewriting a configuration keeps everything you wrote.
+
+Use `lucy config create --force` to replace an existing file, discarding its settings and comments. Add `--no-comments` if you do not want the commented examples.
+
+## Flags
+
+<ParamField query="--global" type="boolean" default="false">
+  Read or write the global configuration file instead of the workspace one. For `get`, exclude workspace overrides from the result.
+</ParamField>
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Replace an existing file when used with `create`.
+</ParamField>
+
+<ParamField query="--no-comments" type="boolean" default="false">
+  Omit explanations and commented examples when used with `create`. This choice applies only to this invocation.
+</ParamField>
+
+See also [`lucy java`](/commands/java), [`lucy init`](/commands/init), and [Global Flags](/commands/global-flags).

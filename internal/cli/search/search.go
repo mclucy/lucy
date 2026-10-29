@@ -9,12 +9,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
@@ -27,34 +27,34 @@ const (
 	flagRegistryName      = "registry"
 )
 
-var searchCmd = &cobra.Command{
-	Use:   "search",
-	Short: help.SearchShort,
-	Args:  cobra.ExactArgs(1),
-	ValidArgsFunction: func(
-		cmd *cobra.Command,
-		args []string,
-		toComplete string,
-	) ([]string, cobra.ShellCompDirective) {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	},
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		sort, _ := cmd.Flags().GetString(flagSortName)
-		if !Sort(sort).Valid() {
-			return errors.New("--sort must be one of \"relevance\", \"downloads\", \"newest\"")
-		}
-		ecosystem, _ := cmd.Flags().GetString(flagEcosystemName)
-		if _, err := searchEcosystem(ecosystem); err != nil {
+func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+	searchCmd := &cobra.Command{
+		Use:   "search",
+		Short: help.SearchShort,
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(
+			cmd *cobra.Command,
+			args []string,
+			toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			sort, _ := cmd.Flags().GetString(flagSortName)
+			if !Sort(sort).Valid() {
+				return errors.New("--sort must be one of \"relevance\", \"downloads\", \"newest\"")
+			}
+			ecosystem, _ := cmd.Flags().GetString(flagEcosystemName)
+			if _, err := searchEcosystem(ecosystem); err != nil {
+				return err
+			}
+			registry, _ := cmd.Flags().GetString(flagRegistryName)
+			_, err := searchRegistry(registry)
 			return err
-		}
-		registry, _ := cmd.Flags().GetString(flagRegistryName)
-		_, err := searchRegistry(registry)
-		return err
-	},
-	RunE: actionSearch,
-}
-
-func NewCommand() *cobra.Command {
+		},
+		RunE: actionSearch,
+	}
+	searchJSON.Bind(contracts, searchCmd)
 	searchCmd.Flags().String(
 		flagSortName,
 		"relevance",
@@ -144,7 +144,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 	)
 	if err != nil {
 		errArg := query.FilterEcosystem.String()
-		if specifiedRegistry != types.RegistryUnspecified {
+		if specifiedRegistry != catalog.RegistryUnspecified {
 			errArg = specifiedRegistry.String()
 		}
 		return fmt.Errorf("%w: %s", err, errArg)
@@ -152,6 +152,12 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 
 	results, errs := routing.SearchMany(providers, query)
 	applySearchSort(results, Sort(sortOrder))
+
+	if err := searchResultError(results, errs); err != nil {
+		return err
+	}
+
+	output := cli.NewQueryOutput(cmd)
 
 	var noResultSources []string
 	for _, err := range errs {
@@ -164,23 +170,18 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			err.Provider.Title(),
 			err.Err,
 		)
+		if output.JSON() {
+			log.Warn(providerWarn)
+			continue
+		}
 		if len(results) > 0 {
 			log.Warn(providerWarn)
 		}
 		report.Warn(providerWarn)
 	}
 
-	if err := searchResultError(results, errs); err != nil {
-		return err
-	}
-
-	switch cli.JSONMode(cmd) {
-	case cli.JSONPretty:
-		style.PrintAsJson(results)
-		return nil
-	case cli.JSONCompact:
-		style.PrintAsJsonCompact(results)
-		return nil
+	if output.JSON() {
+		return searchJSON.Write(output, newSearchResultDocuments(results))
 	}
 
 	var sb strings.Builder
@@ -201,30 +202,30 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			) + "\n",
 		)
 	}
-	fmt.Print(sb.String())
+	fmt.Fprint(output.Human(), sb.String())
 	return nil
 }
 
-func searchEcosystem(value string) (types.Ecosystem, error) {
+func searchEcosystem(value string) (catalog.Ecosystem, error) {
 	if value == "" {
-		return types.EcosystemUnspecified, nil
+		return catalog.EcosystemUnspecified, nil
 	}
 
-	ecosystem := types.Ecosystem(strings.ToLower(strings.TrimSpace(value)))
+	ecosystem := catalog.Ecosystem(strings.ToLower(strings.TrimSpace(value)))
 	if !ecosystem.IsSearchable() {
-		return types.EcosystemUnspecified, fmt.Errorf("invalid --ecosystem %q", value)
+		return catalog.EcosystemUnspecified, fmt.Errorf("invalid --ecosystem %q", value)
 	}
 	return ecosystem, nil
 }
 
-func searchRegistry(value string) (types.Registry, error) {
+func searchRegistry(value string) (catalog.Registry, error) {
 	if value == "" {
-		return types.RegistryUnspecified, nil
+		return catalog.RegistryUnspecified, nil
 	}
 
-	registry, ok := types.ParseRegistry(value)
+	registry, ok := catalog.ParseRegistry(value)
 	if !ok {
-		return types.RegistryUnknown, fmt.Errorf("invalid --registry %q", value)
+		return catalog.RegistryUnknown, fmt.Errorf("invalid --registry %q", value)
 	}
 	return registry, nil
 }
@@ -339,21 +340,26 @@ func searchSectionHeader(res upstream.SearchResponse) string {
 	)
 	var sb strings.Builder
 	sb.WriteString(header + "\n")
-	if res.Provider == types.ProviderModrinth && len(res.Items) == 100 {
+	if res.Provider == catalog.ProviderModrinth && len(res.Items) == 100 {
 		sb.WriteString(style.Muted("* only showing the top 100") + "\n")
 	}
 	return sb.String()
 }
 
 func searchStatsLine(item upstream.SearchResult) string {
-	parts := make([]string, 0, 2)
+	var sb strings.Builder
 	if item.Downloads > 0 {
-		parts = append(parts, formatDownloads(item.Downloads)+" downloads")
+		sb.WriteString(formatDownloads(item.Downloads) + " downloads")
 	}
 	if !item.LastUpdated.IsZero() {
-		parts = append(parts, "updated "+timeAgo(item.LastUpdated))
+		if sb.Len() > 0 {
+			sb.WriteString(", last updated ")
+		} else {
+			sb.WriteString("Last updated ")
+		}
+		sb.WriteString(timeAgo(item.LastUpdated))
 	}
-	return strings.Join(parts, " · ")
+	return sb.String()
 }
 
 func formatDownloads(n int64) string {

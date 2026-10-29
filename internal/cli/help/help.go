@@ -24,9 +24,32 @@ const (
 		"Compilation executes repository build scripts and can download build " +
 		"dependencies. Run this command only on the repository you trust."
 
-	ConfigShort = "Manage lucy's configurations"
+	ConfigShort       = "Manage lucy's configurations"
+	ConfigGetShort    = "Show a configuration value or the effective configuration"
+	ConfigSetShort    = "Set a configuration value"
+	ConfigCreateShort = "Create a commented configuration file"
 
 	CreateShort = "Create a new server"
+	CreateLong  = "Create a new server in a directory. The interactive form asks " +
+		"where the server lives, its name, which software it runs, its Minecraft " +
+		"and software versions, and whether to install it now. The server is " +
+		"registered in the known-server list. Use --no-install to write only the " +
+		"manifest and lock for a later lucy install."
+
+	DeinitShort = "Remove lucy from the current server directory"
+	DeinitLong  = "Delete lucy.yaml, lucy-lock.yaml, and the .lucy directory " +
+		"from the current directory, including workspace configuration. Remove " +
+		"the server from the known-server list. The server, its packages, " +
+		"worlds, and configuration stay in place, so it keeps running without " +
+		"lucy. Files that lucy installed become unmanaged."
+
+	DocsShort     = "Read the documentation"
+	DocsListShort = "List documentation pages"
+	DocsGrepShort = "Search documentation pages"
+	DocsGrepLong  = "Search embedded documentation pages. Patterns use Go regular " +
+		"expressions unless --fixed-strings is set. Exit status is 0 when a line " +
+		"matches, 1 when no line matches, and 2 on error."
+	DocsReadShort = "Print documentation pages"
 
 	DoctorShort = "Diagnose the server environment"
 
@@ -40,11 +63,24 @@ const (
 
 	InstallShort = "Sync the server with the manifest and lock"
 
+	JavaShort     = "Show and choose the Java runtime of the server"
+	JavaListShort = "List installed Java runtimes and the Java the server asks for"
+	JavaUseShort  = "Declare a Java version or distribution"
+	JavaUseLong   = "A version or --distribution pins the Java requirements in lucy.yaml. " +
+		"auto returns that part to the default: the Java version that Mojang " +
+		"recommends for the Minecraft version, from any distribution. " +
+		"Without arguments, an interactive form asks for the version and distribution. " +
+		"Run lucy config set java.home <home> to select a runtime on this machine."
+
 	LeavesShort = "List packages with no dependencies"
 
 	RemoveShort = "Remove packages"
 
 	SearchShort = "Search for mods and plugins"
+
+	ServerShort       = "Manage servers known to lucy"
+	ServerListShort   = "List servers known to lucy"
+	ServerRenameShort = "Rename a server known to lucy"
 
 	StatusShort = "Display basic information of the current server"
 

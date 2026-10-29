@@ -4,11 +4,11 @@ import (
 	"archive/zip"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/version"
 
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml"
 )
 
@@ -23,12 +23,19 @@ func (r *forgeReader) Read(
 	filePath string,
 ) ([]PackageInfo, error) {
 	_ = r
+	neoforgeLayout := false
+	for _, file := range zipRdr.File {
+		if file.Name == neoforgeModsTomlPath {
+			neoforgeLayout = true
+			break
+		}
+	}
 	for _, file := range zipRdr.File {
 		if file.Name != "META-INF/mods.toml" {
 			continue
 		}
 
-		return readForgeModsToml(zipRdr, file, filePath)
+		return readForgeModsToml(zipRdr, file, filePath, neoforgeLayout)
 	}
 
 	return nil, nil
@@ -38,6 +45,7 @@ func readForgeModsToml(
 	zipRdr *zip.Reader,
 	file *zip.File,
 	filePath string,
+	neoforgeLayout bool,
 ) ([]PackageInfo, error) {
 	reader, err := file.Open()
 	if err != nil {
@@ -56,12 +64,12 @@ func readForgeModsToml(
 	}
 	// Forge and legacy NeoForge share META-INF/mods.toml. Forge docs identify the
 	// loader with modId="forge"; legacy NeoForge uses modId="neoforge" instead.
+	// Modern NeoForge ships META-INF/neoforge.mods.toml beside the shared file,
+	// so that file alone decides the loader unless the shared file names Forge.
 	// Docs: https://docs.minecraftforge.net/en/1.21.x/gettingstarted/modfiles/
 	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
-	if isNeoforgeModIdentifier(modIdentifier) && !hasLoaderDependency(
-		modIdentifier,
-		"forge",
-	) {
+	if !hasLoaderDependency(modIdentifier, "forge") &&
+		(neoforgeLayout || isNeoforgeModIdentifier(modIdentifier)) {
 		return nil, nil
 	}
 
@@ -71,31 +79,34 @@ func readForgeModsToml(
 			continue
 		}
 
-		version := types.Version(mod.Version)
+		version := versionpkg.Version(mod.Version)
 		if version == "${file.jarVersion}" {
 			version = forgeJarVersion(zipRdr)
 		}
 
+		dependencies, err := forgeDependencies(modIdentifier, mod.ModID)
+		if err != nil {
+			return nil, err
+		}
 		infos = append(
 			infos, PackageInfo{
-				Ref:          types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.PackageName(mod.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge, Version: version},
+				Ref:          catalog.VersionedRef{Ref: catalog.Ref{Name: catalog.Name(mod.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemForge, Version: version},
 				FilePath:     filePath,
-				Dependencies: forgeDependencies(modIdentifier, mod.ModID),
-				Metadata: types.Metadata{
+				Dependencies: dependencies,
+				Metadata: catalog.Metadata{
 					Title:       mod.DisplayName,
-					Brief:       mod.Description,
 					Description: mod.Description,
-					Authors:     []types.Person{{Name: mod.Authors}},
+					Authors:     []catalog.Person{{Name: mod.Authors}},
 					License:     modIdentifier.License,
-					URLs: []types.URL{
+					URLs: []catalog.URL{
 						{
 							Name: "URL",
-							Type: types.URLHome,
+							Type: catalog.URLHome,
 							URL:  mod.DisplayURL,
 						},
 						{
 							Name: "Issue Tracker",
-							Type: types.URLIssues,
+							Type: catalog.URLIssues,
 							URL:  modIdentifier.IssueTrackerURL,
 						},
 					},
@@ -110,30 +121,30 @@ func readForgeModsToml(
 func forgeDependencies(
 	modIdentifier fileschema.FileModLoaderIdentifier,
 	modID string,
-) []Dependency {
+) ([]Dependency, error) {
 	deps := modIdentifier.Dependencies[modID]
 	translated := make([]Dependency, 0, len(deps))
 	for _, dep := range deps {
+		constraint, err := forgeVersionRange(dep.VersionRange)
+		if err != nil {
+			return nil, err
+		}
 		translated = append(
 			translated, Dependency{
-				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: types.PackageName(dep.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemForge},
-				Constraint: forgeVersionRange(dep.VersionRange),
+				Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: catalog.Name(dep.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemForge},
+				Constraint: constraint,
 				Mandatory:  dep.Mandatory,
 			},
 		)
 	}
-	return translated
+	return translated, nil
 }
 
-func forgeVersionRange(versionRange string) types.VersionExpr {
-	return version.ParseRange(
-		versionRange,
-		version.InferRangeDialect(types.EcosystemForge),
-		types.VersionSchemeMaven,
-	)
+func forgeVersionRange(versionRange string) (versionpkg.Expr, error) {
+	return versionpkg.ParseConstraint(versionRange, versionpkg.DialectMaven)
 }
 
-func forgeJarVersion(zipRdr *zip.Reader) types.Version {
+func forgeJarVersion(zipRdr *zip.Reader) versionpkg.Version {
 	for _, file := range zipRdr.File {
 		if file.Name != "META-INF/MANIFEST.MF" {
 			continue
@@ -141,35 +152,35 @@ func forgeJarVersion(zipRdr *zip.Reader) types.Version {
 
 		reader, err := file.Open()
 		if err != nil {
-			return types.VersionUnknown
+			return versionpkg.Unknown
 		}
 
 		data, err := fsutil.CopyBytes(reader, fsutil.MaxZipEntryBytes)
 		closeErr := reader.Close()
 		if err != nil {
-			return types.VersionUnknown
+			return versionpkg.Unknown
 		}
 		if closeErr != nil {
-			return types.VersionUnknown
+			return versionpkg.Unknown
 		}
 
 		return forgeManifestVersion(string(data))
 	}
 
-	return types.VersionUnknown
+	return versionpkg.Unknown
 }
 
-func forgeManifestVersion(manifest string) types.Version {
+func forgeManifestVersion(manifest string) versionpkg.Version {
 	const versionField = "Implementation-Version: "
 	version, found := strings.CutPrefix(manifest, versionField)
 	if !found {
 		_, version, found = strings.Cut(manifest, "\n"+versionField)
 	}
 	if !found {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 
 	version = strings.Split(version, "\r")[0]
 	version = strings.Split(version, "\n")[0]
-	return types.Version(version)
+	return versionpkg.Version(version)
 }

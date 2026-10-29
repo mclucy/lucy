@@ -1,114 +1,65 @@
 ---
 title: "lucy init"
-description: "Generate a manifest file for an existing server directory"
+description: "Adopt an existing server directory"
 ---
 
-`lucy init` inspects a server directory and writes the manifest `lucy.yaml`. Every later command — [`lucy add`](/commands/add), [`lucy remove`](/commands/remove), and [`lucy install`](/commands/install) — reads that manifest as the source of truth for what you want. `add`, `remove`, and `install` write the lock file `lucy-lock.yaml` next to it; read-only commands such as `lucy status` do not.
+`lucy init` turns an existing server directory into a lucy workspace. It writes `lucy.yaml`, which records the server you want, and resolves `lucy-lock.yaml`, which records the exact files that satisfy it. Later commands read the manifest as the source of truth.
 
-Use `lucy init` to adopt an existing server. It detects what is installed, recognizes supported installed mods and plugins by their file contents, and checks the requested Minecraft and server versions against the official version lists before writing the manifest. It may download server files into `.lucy`, but does not install them into the live server.
+The generated manifest names the server and registers it in your user's [known-server list](/commands/install#known-servers). The name defaults to the current directory's base name, or to the existing name when `--force` replaces a manifest. Pass `--name` to store a different one.
 
 ```bash
+cd path/to/server
 lucy init
 ```
 
-```bash
-lucy init --minecraft 1.21.4 --core paper
-lucy init --minecraft 1.21.4 --core fabric@0.16.9
-lucy init --allow-empty --minecraft 1.21.4 --core vanilla
-```
+Init detects the installed server software, Minecraft version, and supported mods and plugins, and checks the versions against the official release lists. It may download server files into `.lucy`, but it does not install or start the server, accept the EULA, or migrate a world. To create a new server instead, use [`lucy create`](/commands/create).
 
-## Manifest shape
+## Choose a server
 
-The manifest has three top-level keys: `manifest_version`, `server`, and an optional `mcdr`.
+If the directory holds more than one server, lucy asks which one to adopt. Select one directly with `--entry-point <jar-or-script>`; without a terminal, lucy fails and prints the command to use. In a workspace that already has a manifest, `--force --entry-point` switches to a different installed server.
 
-```yaml
-manifest_version: 1
-server:
-  minecraft: "1.21.4"
-  directory: "."
-  core:
-    product: paper
-    product_version: stable
-  packages:
-    bukkit:
-      "modrinth:luckperms": stable
-      "modrinth:worldedit":
-        selector: any
-        file_pattern: "worldedit-bukkit-*.jar"
-        enabled: true
+If no server is detected, init fails.
 
-mcdr:
-  directory: "."
-  version: any
-  packages:
-    "mcdr:primebackup": any
-```
+## Existing manifest
 
-- `server.minecraft` is required and must be a concrete version. `latest` or other inferable placeholders are rejected — the manifest is what makes installs reproducible.
-- `server.core.product` names the server software. Lucy can download `minecraft` (vanilla), `fabric`, `forge`, `neoforge`, `paper`, and `purpur` directly. For any other server software, set `core.repository` to a GitHub `owner/repo`.
-- `server.core.product_version` is the server version or version rule. It defaults to `any`. Use `stable` for release builds only, or `beta` to allow prereleases. `core.file_pattern` optionally narrows release assets for a GitHub-hosted server.
-- `server.directory` and `mcdr.directory` are relative to the directory containing `lucy.yaml`. Absolute paths and `..` escapes are rejected.
-- Package keys use the form `modrinth:project`, `curseforge:project`, or `mcdr:project`, grouped by mod or plugin type. The groups in `server.packages` are `fabric`, `forge`, `neoforge`, `bukkit`, and `paper`; MCDR plugins live under `mcdr.packages`. Put Bukkit-only plugins under `bukkit` and Paper-specific plugins under `paper`.
-- A package value is either a version rule (`any`, `stable`, `beta`, a tag, or an exact version) or an object with `selector`, `file_pattern`, and `enabled`. The default version rule is `any`.
+`lucy init` never overwrites `lucy.yaml` without `--force`. Replacing a manifest discards the package declarations it contained.
 
-`mcdr.version` refers to MCDReforged itself, not a plugin. When present, `lucy` provisions an isolated Python environment for it and keeps MCDR plugins in their own section.
+## What gets recorded
 
-## Minecraft and server version are validated together
+Init records the server name, software, Minecraft version, server directory, and the installed mods and plugins it recognizes. A package without a matching release stays unmanaged and produces a warning, so you can decide whether to add it yourself.
 
-The Minecraft version and the server version are not independent knobs. `lucy` resolves them as one pair against the versions the software actually published, so a combination the software never published — a Fabric build for a Minecraft version Fabric never shipped, for example — fails at manifest validation rather than producing a server that cannot boot. If you change one, expect the other to be checked too.
+The name is metadata: changing it does not alter the server definition, the installed files, or the lock's manifest match. A manifest without a name still works for local commands but is not registered. Registration warns when another registered server already uses the name, and a failure to write the list is a warning rather than an init failure; `--server` cannot select the server until the list is fixed and `init` or `install` registers it again.
 
-`lucy init` has no positional arguments and operates on the current directory. `--directory` records the server subdirectory; it does not change the command's working directory.
+The generated `lucy.yaml` explains each field inline. Pass `--no-comments` to omit those comments and the schema header. Init also creates `.lucy/config.yaml` with every setting commented out, unless that file already exists; see [`lucy config`](/commands/config).
+
+## MCDReforged
+
+Pass `--mcdr-version` to record MCDReforged as the server wrapper when lucy cannot detect the version you want. Installation can then use your global MCDReforged or an isolated environment.
+
+## Versions
+
+The Minecraft version and the server version are validated together. A combination the software never published is rejected rather than producing a server that cannot boot, and the manifest stores concrete versions so installs stay reproducible.
 
 ## Flags
 
-<ParamField query="--minecraft" type="string">
-  The concrete Minecraft version to record (e.g. `1.21.4`). Required when no server is detected. `--game-version` is an alias for the same flag.
-</ParamField>
-
-<ParamField query="--core" type="string">
-  The server software to record, optionally with a version: `paper`, `fabric@0.16.9`. Lucy downloads `minecraft`, `fabric`, `forge`, `neoforge`, `paper`, and `purpur` directly; other software needs `--repository`.
-</ParamField>
-
-<ParamField query="--core-version" type="string">
-  The server version or version rule to record, overriding any version given in `--core`. Checked together with `--minecraft`.
-</ParamField>
-
-<ParamField query="--repository" type="string">
-  GitHub `owner/repo` serving the server JAR. Used for server software that is not built in.
+<ParamField query="--name" type="string">
+  Server name stored as the top-level `name` in `lucy.yaml` and used in the known-server list. Defaults to the current directory's base name, or to the existing name when `--force` replaces a manifest. The name is trimmed and must be non-empty and printable.
 </ParamField>
 
 <ParamField query="--mcdr-version" type="string">
-  MCDReforged version to record. Presence adds the `mcdr` section and an isolated Python environment for it.
+  Record MCDReforged at this version as the server wrapper.
 </ParamField>
 
-<ParamField query="--directory, -d" type="string">
-  Directory relative to the current directory that holds the server.
-</ParamField>
-
-<ParamField query="--detect" type="boolean" default="true">
-  Detect the server from the server directory. Pass `--detect=false` to skip detection and record only what you pass explicitly.
+<ParamField query="--entry-point" type="path">
+  Select an installed launcher or jar when several servers share the directory. The path may be relative to the current directory or absolute.
 </ParamField>
 
 <ParamField query="--force, -f" type="boolean" default="false">
-  Replace an existing `lucy.yaml`. Without it, `lucy init` refuses to touch a manifest that already exists.
+  Replace an existing `lucy.yaml`.
 </ParamField>
 
-<ParamField query="--allow-empty" type="boolean" default="false">
-  Record a server when nothing is detected, instead of reporting that there is nothing to adopt. A concrete Minecraft version is still required.
+<ParamField query="--no-comments" type="boolean" default="false">
+  Omit generated comments and examples from `lucy.yaml` and any new `.lucy/config.yaml`.
 </ParamField>
 
-See also [Global Flags](/commands/global-flags).
-
-## Behavior
-
-Detection is on by default. With `--detect`, `lucy init` reads the server out of the directory and refuses to guess when the evidence is ambiguous — an ambiguous server is an error, not a coin flip. Whatever detection finds fills in what you did not pass explicitly: the Minecraft version, the server software and version, and the server's directory. Passing a value that contradicts what is installed is an error too.
-
-If no server is detected, `lucy init` errors unless `--allow-empty` records the declaration anyway. With `--allow-empty` and nothing detected, the Minecraft version must come from `--minecraft` (or the prompt in an interactive terminal). When no server software is declared or detected, `minecraft` is recorded.
-
-With `--detect=false`, no probing happens and nothing is inferred: what you declare is what gets written. The Minecraft version and server version are still checked together, so an impossible pair fails here rather than at install time.
-
-An existing `lucy.yaml` is never overwritten silently — `lucy init` stops and tells you to pass `--force`.
-
-`lucy init` writes `lucy.yaml` only. The lock file is produced by the first `lucy install` or `lucy add`.
-
-`lucy init` does not migrate worlds, rewrite server configuration, accept the Minecraft EULA, or start the server.
+See also [Global Flags](/commands/global-flags), [known servers](/commands/install#known-servers), [`lucy create`](/commands/create), and [`lucy install`](/commands/install).

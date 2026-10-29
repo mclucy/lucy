@@ -29,7 +29,10 @@ func signalManagedProcess(cmd *exec.Cmd, signal os.Signal) error {
 		return cmd.Process.Signal(signal)
 	}
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
-	if err == nil {
+	if err != nil {
+		return nil
+	}
+	if pgid == cmd.Process.Pid {
 		return syscall.Kill(-pgid, sysSignal)
 	}
 	return cmd.Process.Signal(signal)

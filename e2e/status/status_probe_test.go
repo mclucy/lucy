@@ -50,7 +50,7 @@ func (want probeExpectation) check(t *testing.T, got statusOutput) {
 		}
 		t.Errorf("%s: got %q, want %q", name, versions, version)
 	}
-	primary := got.Server.Primary
+	primary := got.Server.Product
 	equal("identity.eco", primary.Ecosystem, want.eco)
 	equal("identity.name", primary.Name, want.name)
 	equal("identity.version", primary.Version, want.version)
@@ -58,13 +58,14 @@ func (want probeExpectation) check(t *testing.T, got statusOutput) {
 		component("loader.version", want.loaderEco, want.loaderVersion)
 	}
 	component("minecraft.version", "minecraft", want.minecraftVersion)
-	if want.packageDirs && len(got.PackageDirs) == 0 {
-		t.Error("package_dirs.present: no package paths")
+	directories := got.Server.PackageDirectories
+	if want.packageDirs && len(directories) == 0 {
+		t.Error("package directories: no package paths")
 	}
 	if want.packageDirsSuffix != "" {
 		first := ""
-		if len(got.PackageDirs) > 0 {
-			first = filepath.ToSlash(got.PackageDirs[0])
+		if len(directories) > 0 {
+			first = "/" + strings.TrimPrefix(filepath.ToSlash(directories[0]), "/")
 		}
 		if !strings.HasSuffix(first, want.packageDirsSuffix) {
 			t.Errorf("%s: got %q, want suffix %q", want.packageDirsCheck, first, want.packageDirsSuffix)
@@ -153,8 +154,10 @@ var probeScenarios = map[string]probeExpectation{
 	"neoforge-211": {
 		eco: "neoforge", version: "21.1.248", minecraftVersion: "1.21.1", packageDirs: true,
 	},
+	// NeoForge 26.2.0.67 installs declare Minecraft 26.2 in install_profile.json
+	// and version.json; the loader tuple does not imply a 1.26.2 game version.
 	"neoforge-262": {
-		eco: "neoforge", version: "26.2.0.67", minecraftVersion: "1.26.2", packageDirs: true,
+		eco: "neoforge", version: "26.2.0.67", minecraftVersion: "26.2", packageDirs: true,
 	},
 	"neoforge-connector": {
 		eco: "neoforge", version: "21.1.248", minecraftVersion: "1.21.1", packageDirs: true,
@@ -164,13 +167,16 @@ var probeScenarios = map[string]probeExpectation{
 		},
 	},
 	"paper": {
-		name: "paper", minecraftVersion: "1.21.11", packageDirs: true,
+		name: "paper", version: "130", minecraftVersion: "1.21.11", packageDirs: true,
 		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
 	},
 	"folia": {
-		name: "folia", minecraftVersion: "1.21.11", packageDirs: true,
+		name: "folia", version: "14", minecraftVersion: "1.21.11", packageDirs: true,
 		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",
 	},
+	// Purpur's fixture is renamed to server.jar, and neither product carries a
+	// build number in its metadata. Live status cannot derive one without an
+	// upstream lookup.
 	"purpur": {
 		name: "purpur", minecraftVersion: "1.21.11", packageDirs: true,
 		packageDirsSuffix: "/plugins", packageDirsCheck: "package_dirs.plugins",

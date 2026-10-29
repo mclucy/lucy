@@ -99,7 +99,7 @@ type Integrity struct {
 	State     IntegrityState `json:"state"`
 }
 
-// CacheEntry is the metadata record for one cached blob. ContentHash
+// Entry is the metadata record for one cached blob. ContentHash
 // (always SHA-256) addresses the blob in the store; Integrity carries the
 // upstream-provided digest, which may use a different algorithm (see
 // HashAlgorithm).

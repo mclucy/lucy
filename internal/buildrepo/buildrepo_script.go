@@ -8,24 +8,24 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	catalogpkg "github.com/mclucy/lucy/catalog"
 )
 
 var pluginEcosystems = []struct {
 	id    string
-	ecos  []types.Ecosystem
+	ecos  []catalogpkg.Ecosystem
 	multi bool
 }{
 	{id: "dev.architectury.loom", multi: true},
 	{id: "architectury.loom", multi: true},
 	{id: "architectury-plugin", multi: true},
-	{id: "net.fabricmc.fabric-loom", ecos: []types.Ecosystem{types.EcosystemFabric}},
-	{id: "net.fabricmc.fabric-loom-remap", ecos: []types.Ecosystem{types.EcosystemFabric}},
-	{id: "fabric-loom", ecos: []types.Ecosystem{types.EcosystemFabric}},
-	{id: "net.minecraftforge.gradle", ecos: []types.Ecosystem{types.EcosystemForge}},
-	{id: "net.neoforged.moddev.legacyforge", ecos: []types.Ecosystem{types.EcosystemForge}},
-	{id: "net.neoforged.moddev", ecos: []types.Ecosystem{types.EcosystemNeoForge}},
-	{id: "net.neoforged.gradle.userdev", ecos: []types.Ecosystem{types.EcosystemNeoForge}},
+	{id: "net.fabricmc.fabric-loom", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemFabric}},
+	{id: "net.fabricmc.fabric-loom-remap", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemFabric}},
+	{id: "fabric-loom", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemFabric}},
+	{id: "net.minecraftforge.gradle", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemForge}},
+	{id: "net.neoforged.moddev.legacyforge", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemForge}},
+	{id: "net.neoforged.moddev", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemNeoForge}},
+	{id: "net.neoforged.gradle.userdev", ecos: []catalogpkg.Ecosystem{catalogpkg.EcosystemNeoForge}},
 }
 
 var (
@@ -72,8 +72,8 @@ type appliedPlugin struct {
 	source string
 }
 
-func (p *prober) scriptEcosystems(file string, plugins []appliedPlugin) []types.Ecosystem {
-	var out []types.Ecosystem
+func (p *prober) scriptEcosystems(file string, plugins []appliedPlugin) []catalogpkg.Ecosystem {
+	var out []catalogpkg.Ecosystem
 	for _, plugin := range plugins {
 		entry, ok := pluginByID(plugin.id)
 		if !ok {
@@ -81,9 +81,9 @@ func (p *prober) scriptEcosystems(file string, plugins []appliedPlugin) []types.
 		}
 		if entry.multi {
 			value, _ := p.propertyValue(filepath.Dir(file), "loom.platform")
-			platform := types.Ecosystem(value)
+			platform := catalogpkg.Ecosystem(value)
 			switch platform {
-			case types.EcosystemFabric, types.EcosystemForge, types.EcosystemNeoForge:
+			case catalogpkg.EcosystemFabric, catalogpkg.EcosystemForge, catalogpkg.EcosystemNeoForge:
 				if !slices.Contains(out, platform) {
 					out = append(out, platform)
 				}
@@ -103,7 +103,7 @@ func (p *prober) scriptEcosystems(file string, plugins []appliedPlugin) []types.
 
 func pluginByID(id string) (struct {
 	id    string
-	ecos  []types.Ecosystem
+	ecos  []catalogpkg.Ecosystem
 	multi bool
 }, bool,
 ) {

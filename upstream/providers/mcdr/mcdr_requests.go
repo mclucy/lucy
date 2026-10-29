@@ -5,8 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/github"
-	"github.com/mclucy/lucy/types"
-
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -89,13 +88,13 @@ func getMeta(id string) (*pluginMeta, error) {
 	return &meta, nil
 }
 
-func getRelease(id string, version types.Version) (*release, error) {
+func getRelease(id string, version versionpkg.Version) (*release, error) {
 	history, err := getReleaseHistory(id)
 	if err != nil {
 		return nil, err
 	}
 
-	if version == types.VersionAny || version == types.VersionBeta {
+	if version == versionpkg.Any || version == versionpkg.Beta {
 		return &history.Releases[history.LatestVersionIndex], nil
 	}
 
@@ -114,14 +113,14 @@ func getLatestRelease(id string) (*release, error) {
 	}
 	rel := selectLatestRelease(history)
 	if rel == nil {
-		return nil, ErrVersionNotFound(id, types.VersionAny.String())
+		return nil, ErrVersionNotFound(id, versionpkg.Any.String())
 	}
 	return rel, nil
 }
 
 func getLatestCompatibleRelease(
 	id string,
-	localMcdrVersion types.Version,
+	localMcdrVersion versionpkg.Version,
 ) (*release, error) {
 	history, err := getReleaseHistory(id)
 	if err != nil {

@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/cas"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/types"
 )
 
 const (
@@ -140,12 +140,12 @@ func validateEvent(previous []Event, event Event) error {
 			return fmt.Errorf("invalid change for %s", change.Path)
 		}
 		paths[path] = true
-		for _, declaration := range []*types.TrackedFile{change.Before, change.After} {
+		for _, declaration := range []*document.TrackedFile{change.Before, change.After} {
 			if declaration == nil {
 				continue
 			}
-			copy := []types.TrackedFile{*declaration}
-			if err := input.NormalizeTrackedFiles(copy); err != nil || copy[0] != *declaration || declaration.Path != path {
+			copy := []document.TrackedFile{*declaration}
+			if err := document.NormalizeTrackedFiles(copy); err != nil || copy[0] != *declaration || declaration.Path != path {
 				return fmt.Errorf("invalid declaration for %s", path)
 			}
 		}

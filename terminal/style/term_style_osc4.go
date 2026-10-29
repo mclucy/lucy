@@ -111,7 +111,7 @@ func shouldQueryOSC4(profile termenv.Profile) bool {
 }
 
 func parseOSC4Response(index uint8, data []byte) color.Color {
-	// Response: ESC ] 4 ; <i> ; rgb:rrrr/gggg/bbbb ESC \. Some terminals
+	// Response: `ESC ] 4 ; <i> ; rgb:rrrr/gggg/bbbb ESC \`. Some terminals
 	// return "#"-hex; only rgb:.... is handled here.
 	re := regexp.MustCompile(`\x1b\]4;` + strconv.Itoa(int(index)) + `;rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})`)
 	m := re.FindSubmatch(data)

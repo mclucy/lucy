@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 func (p *prober) analyzeBuilds() error {
@@ -226,12 +226,12 @@ func (p *prober) inheritJava(project *Project, broadcast JavaRequirements, broad
 
 var modMetadata = []struct {
 	file string
-	eco  types.Ecosystem
+	eco  catalog.Ecosystem
 }{
-	{file: filepath.Join("src", "main", "resources", "fabric.mod.json"), eco: types.EcosystemFabric},
+	{file: filepath.Join("src", "main", "resources", "fabric.mod.json"), eco: catalog.EcosystemFabric},
 
-	{file: filepath.Join("src", "main", "resources", "META-INF", "mods.toml"), eco: types.EcosystemForge},
-	{file: filepath.Join("src", "main", "resources", "META-INF", "neoforge.mods.toml"), eco: types.EcosystemNeoForge},
+	{file: filepath.Join("src", "main", "resources", "META-INF", "mods.toml"), eco: catalog.EcosystemForge},
+	{file: filepath.Join("src", "main", "resources", "META-INF", "neoforge.mods.toml"), eco: catalog.EcosystemNeoForge},
 }
 
 // corroborate fills ecosystems from loader metadata when no modding plugin was

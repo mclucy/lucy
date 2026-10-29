@@ -6,11 +6,13 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 const (
@@ -36,7 +38,7 @@ type resolvedVersion struct {
 	UUID        string
 }
 
-func (s searchResponse) ToSearchResults(source types.Provider) upstream.SearchResponse {
+func (s searchResponse) ToSearchResults(source catalog.Provider) upstream.SearchResponse {
 	results := upstream.SearchResponse{
 		Provider: source,
 		Items:    make([]upstream.SearchResult, 0, len(s)),
@@ -57,34 +59,34 @@ func (s searchResponse) ToSearchResults(source types.Provider) upstream.SearchRe
 	return results
 }
 
-func (r resourceResponse) ToProjectInformation() types.Metadata {
+func (r resourceResponse) ToProjectInformation() catalog.Metadata {
 	description := combineHTMLSections(
 		decodeBase64HTML(r.Description),
 		decodeBase64HTML(r.Documentation),
 	)
 
-	info := types.Metadata{
+	info := catalog.Metadata{
 		Title:                 r.Name,
 		Brief:                 r.Tag,
 		Description:           description,
 		DescriptionIsMarkdown: false,
-		URLs:                  make([]types.URL, 0, len(r.Links)+2),
+		URLs:                  make([]catalog.URL, 0, len(r.Links)+2),
 	}
 
 	appendLinkURLs(&info, r.Links)
 	if r.SourceCodeLink != "" {
 		info.URLs = append(
 			info.URLs,
-			types.URL{
-				Name: "Source", Type: types.URLSource, URL: r.SourceCodeLink,
+			catalog.URL{
+				Name: "Source", Type: catalog.URLSource, URL: r.SourceCodeLink,
 			},
 		)
 	}
 	if r.DonationLink != "" {
 		info.URLs = append(
 			info.URLs,
-			types.URL{
-				Name: "Donate", Type: types.URLSponsor, URL: r.DonationLink,
+			catalog.URL{
+				Name: "Donate", Type: catalog.URLSponsor, URL: r.DonationLink,
 			},
 		)
 	}
@@ -110,19 +112,33 @@ func NewResolvedVersion(
 	}
 }
 
-func (r resolvedVersion) LucyVersion() types.Version {
-	if r.VersionName != "" {
-		return types.Version(r.VersionName)
+// ToBuild maps one Spiget resource version to a build. Spiget version records
+// carry no game versions, loaders, or channel; resource-level tested versions
+// are not build-specific and stay out of the build.
+func (v versionResponse) ToBuild() upstream.Build {
+	build := upstream.Build{Version: v.Name}
+	if build.Version == "" && v.ID != 0 {
+		build.Version = strconv.FormatInt(v.ID, 10)
 	}
-	if r.VersionID != 0 {
-		return types.Version(strconv.FormatInt(r.VersionID, 10))
+	if v.ReleaseDate > 0 {
+		build.Published = time.Unix(v.ReleaseDate, 0).UTC()
 	}
-	return types.VersionUnknown
+	return build
 }
 
-func (r resolvedVersion) Matches(version types.Version) bool {
+func (r resolvedVersion) LucyVersion() versionpkg.Version {
+	if r.VersionName != "" {
+		return versionpkg.Version(r.VersionName)
+	}
+	if r.VersionID != 0 {
+		return versionpkg.Version(strconv.FormatInt(r.VersionID, 10))
+	}
+	return versionpkg.Unknown
+}
+
+func (r resolvedVersion) Matches(version versionpkg.Version) bool {
 	requested := strings.TrimSpace(version.String())
-	if requested == "" || requested == types.VersionAny.String() {
+	if requested == "" || requested == versionpkg.Any.String() {
 		return false
 	}
 	if requested == string(r.LucyVersion()) {
@@ -131,9 +147,9 @@ func (r resolvedVersion) Matches(version types.Version) bool {
 	return r.VersionID != 0 && requested == strconv.FormatInt(r.VersionID, 10)
 }
 
-func (r resolvedVersion) ToPackageRemote() types.ResolvedPackage {
-	return types.ResolvedPackage{
-		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderSpiget}},
+func (r resolvedVersion) ToPackageRemote() upstream.ResolvedPackage {
+	return upstream.ResolvedPackage{
+		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderSpiget}},
 		FileURL:  r.downloadURL(),
 		Filename: r.filename(),
 	}
@@ -208,7 +224,7 @@ func combineHTMLSections(description, documentation decodedHTML) string {
 	}
 }
 
-func appendLinkURLs(info *types.Metadata, links map[string]string) {
+func appendLinkURLs(info *catalog.Metadata, links map[string]string) {
 	for key, rawValue := range links {
 		value := normalizeSpigetURL(rawValue)
 		if value == "" {
@@ -217,7 +233,7 @@ func appendLinkURLs(info *types.Metadata, links map[string]string) {
 		name, kind := classifySpigetLink(key)
 		info.URLs = append(
 			info.URLs,
-			types.URL{Name: name, Type: kind, URL: value},
+			catalog.URL{Name: name, Type: kind, URL: value},
 		)
 	}
 }
@@ -242,25 +258,25 @@ func normalizeSpigetURL(raw string) string {
 	return raw
 }
 
-func classifySpigetLink(key string) (string, types.URLType) {
+func classifySpigetLink(key string) (string, catalog.URLType) {
 	switch key {
 	case "additionalInformation":
-		return "Additional information", types.URLHome
+		return "Additional information", catalog.URLHome
 	case "alternativeSupport":
-		return "Support", types.URLForum
+		return "Support", catalog.URLForum
 	case "discussion":
-		return "Discussion", types.URLForum
+		return "Discussion", catalog.URLForum
 	}
 
 	decoded := decodeBase64HTML(key)
 	if decoded.Valid {
 		if _, err := url.ParseRequestURI(decoded.Text); err == nil {
-			return "Link", types.URLMisc
+			return "Link", catalog.URLMisc
 		}
-		return prettifyLinkName(decoded.Text), types.URLMisc
+		return prettifyLinkName(decoded.Text), catalog.URLMisc
 	}
 
-	return prettifyLinkName(key), types.URLMisc
+	return prettifyLinkName(key), catalog.URLMisc
 }
 
 func prettifyLinkName(name string) string {
@@ -273,7 +289,7 @@ func prettifyLinkName(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
 
-func normalizedProjectName(name string) types.PackageName {
+func normalizedProjectName(name string) catalog.Name {
 	name = input.ToProjectName(name).String()
 	var b strings.Builder
 	b.Grow(len(name))
@@ -290,5 +306,5 @@ func normalizedProjectName(name string) types.PackageName {
 		}
 	}
 
-	return types.PackageName(strings.Trim(b.String(), "-"))
+	return catalog.Name(strings.Trim(b.String(), "-"))
 }

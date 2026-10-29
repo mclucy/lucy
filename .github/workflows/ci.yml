@@ -5,16 +5,19 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   test:
-    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
+    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:')) && !(github.event_name == 'pull_request' && github.event.action == 'labeled')"
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       code-quality: write
     steps:
       - uses: actions/checkout@v7
@@ -43,8 +46,17 @@ jobs:
           language: Go
           label: code-coverage/go
 
+      - name: Generate coverage badge
+        if: github.event_name != 'pull_request'
+        uses: ncruces/go-coverage-report@v0
+        with:
+          output-dir: badge
+          coverage-file: cover.out
+          badge-title: Coverage
+          amend: true
+
   build:
-    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))"
+    if: "!startsWith(github.event.head_commit.message, 'docs:') && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:')) && !(github.event_name == 'pull_request' && github.event.action == 'labeled')"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -87,3 +99,53 @@ jobs:
         with:
           name: lucy-darwin-arm64
           path: release/lucy-darwin-arm64.gz
+
+  e2e:
+    if: >-
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:compile-full'))
+      || (
+        !startsWith(github.event.head_commit.message, 'docs:')
+        && !(github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'docs:'))
+        && !(github.event_name == 'pull_request' && github.event.action == 'labeled')
+      )
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      force: ${{ github.event_name == 'workflow_dispatch' }}
+    secrets:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+
+  bin-size:
+    if: >-
+      github.event_name == 'pull_request'
+      && !startsWith(github.event.pull_request.title, 'docs:')
+      && github.event.action != 'labeled'
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/bin-size.yml
+    secrets:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+
+  manifest-schema:
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && (github.ref_name == 'main' || github.ref_name == 'master')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/manifest-schema.yml
+
+  wiki:
+    needs: test
+    if: >-
+      always()
+      && (
+        (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+        || github.event_name == 'pull_request'
+        || github.event_name == 'workflow_dispatch'
+      )
+    permissions:
+      contents: write
+    uses: ./.github/workflows/wiki.yml

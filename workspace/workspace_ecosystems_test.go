@@ -3,43 +3,53 @@ package workspace
 import (
 	"testing"
 
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/workspace/internal/detector"
+	"github.com/mclucy/lucy/catalog"
+	versionpkg "github.com/mclucy/lucy/version"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
-// compatWorkspace builds an observation whose probe names exactly one
-// runtime, as a scanner would have produced it.
+// compatWorkspace builds an observation whose discovery selected exactly one
+// runtime, as the scanner would have produced it.
 func compatWorkspace(
-	primary types.VersionedPackageRef,
-	components ...types.VersionedPackageRef,
-) Workspace {
-	return Workspace{
-		Probe: Probe{
-			Candidates: []IdentifiedRuntime{{
-				JarPath: "server.jar",
-				Evidence: &detector.RuntimeEvidence{
-					PrimaryRuntime:    &primary,
-					PrimaryPath:       "server.jar",
-					RuntimeComponents: components,
-				},
-			}},
+	primary catalog.VersionedRef,
+	components ...catalog.VersionedRef,
+) *Workspace {
+	installations := []discovery.Installation{
+		discovery.NewInstallation(
+			discovery.Identity{Primary: primary, Components: components},
+			"/server.jar",
+		),
+	}
+	selection := discovery.Selection{
+		State:        discovery.SelectionSelected,
+		Source:       discovery.SourceInferred,
+		Installation: &installations[0],
+	}
+	for file := range installations[0].EntryPoints() {
+		selection.EntryPoint = file
+		break
+	}
+	return &Workspace{
+		Discovery: discovery.Result{
+			Installations: installations,
+			Selection:     selection,
 		},
 	}
 }
 
 func compatTestCore(
-	ecosystem types.Ecosystem,
+	ecosystem catalog.Ecosystem,
 	name string,
-) types.VersionedPackageRef {
-	return types.VersionedPackageRef{
+) catalog.VersionedRef {
+	return catalog.VersionedRef{
 		Ecosystem: ecosystem,
-		Name:      types.PackageName(name),
+		Name:      catalog.Name(name),
 		Version:   "1.0.0",
 	}
 }
 
-func offerSet(offers []ServedEcosystem) map[types.Ecosystem]types.Compatibility {
-	set := make(map[types.Ecosystem]types.Compatibility, len(offers))
+func offerSet(offers []ServedEcosystem) map[catalog.Ecosystem]Compatibility {
+	set := make(map[catalog.Ecosystem]Compatibility, len(offers))
 	for _, offer := range offers {
 		set[offer.Ecosystem] = offer.Compatibility
 	}
@@ -47,12 +57,12 @@ func offerSet(offers []ServedEcosystem) map[types.Ecosystem]types.Compatibility 
 }
 
 func TestSupports_FullAndMissing(t *testing.T) {
-	ws := compatWorkspace(compatTestCore(types.EcosystemFabric, "fabric"))
+	ws := compatWorkspace(compatTestCore(catalog.EcosystemFabric, "fabric"))
 
 	offered, level, ok := ws.Supports(
-		compatTestCore(types.EcosystemFabric, "lithium"),
+		compatTestCore(catalog.EcosystemFabric, "lithium"),
 	)
-	if !ok || level != types.CompatFull || offered != types.EcosystemFabric {
+	if !ok || level != CompatFull || offered != catalog.EcosystemFabric {
 		t.Errorf(
 			"expected full Fabric support, got %q/%q/%v",
 			offered,
@@ -62,27 +72,27 @@ func TestSupports_FullAndMissing(t *testing.T) {
 	}
 
 	if _, _, ok := ws.Supports(
-		compatTestCore(types.EcosystemForge, "luckperms"),
+		compatTestCore(catalog.EcosystemForge, "luckperms"),
 	); ok {
 		t.Errorf("expected no Forge support on a Fabric runtime")
 	}
 }
 
 func TestSupports_ConnectorIsDegraded(t *testing.T) {
-	ws := compatWorkspace(compatTestCore(types.EcosystemNeoForge, "neoforge"))
-	ws.Packages = []types.DiscoveredPackage{
+	ws := compatWorkspace(compatTestCore(catalog.EcosystemNeoForge, "neoforge"))
+	ws.Packages = []DiscoveredPackage{
 		{
 			ID: compatTestCore(
-				types.EcosystemNeoForge,
+				catalog.EcosystemNeoForge,
 				"sinytra-connector",
 			),
 		},
 	}
 
 	offered, level, ok := ws.Supports(
-		compatTestCore(types.EcosystemFabric, "lithium"),
+		compatTestCore(catalog.EcosystemFabric, "lithium"),
 	)
-	if !ok || level != types.CompatDegraded || offered != types.EcosystemFabric {
+	if !ok || level != CompatDegraded || offered != catalog.EcosystemFabric {
 		t.Fatalf(
 			"expected degraded Fabric support through the bridge, got %q/%q/%v",
 			offered,
@@ -93,24 +103,24 @@ func TestSupports_ConnectorIsDegraded(t *testing.T) {
 }
 
 func TestSupports_PaperSatisfiesBukkit(t *testing.T) {
-	ws := compatWorkspace(compatTestCore(types.EcosystemPaper, "paper"))
-	_, level, ok := ws.Supports(compatTestCore(types.EcosystemBukkit, "essentials"))
-	if !ok || level != types.CompatFull {
+	ws := compatWorkspace(compatTestCore(catalog.EcosystemPaper, "paper"))
+	_, level, ok := ws.Supports(compatTestCore(catalog.EcosystemBukkit, "essentials"))
+	if !ok || level != CompatFull {
 		t.Errorf("expected full Bukkit support on Paper, got %q/%v", level, ok)
 	}
 }
 
 func TestSupports_HybridCoreOffersBothEcosystems(t *testing.T) {
 	ws := compatWorkspace(
-		compatTestCore(types.EcosystemUnspecified, "arclight"),
-		compatTestCore(types.EcosystemNeoForge, "neoforge"),
+		compatTestCore(catalog.EcosystemUnspecified, "arclight"),
+		compatTestCore(catalog.EcosystemNeoForge, "neoforge"),
 	)
-	for _, ecosystem := range []types.Ecosystem{
-		types.EcosystemNeoForge,
-		types.EcosystemBukkit,
+	for _, ecosystem := range []catalog.Ecosystem{
+		catalog.EcosystemNeoForge,
+		catalog.EcosystemBukkit,
 	} {
 		_, level, ok := ws.Supports(compatTestCore(ecosystem, "pkg"))
-		if !ok || level != types.CompatFull {
+		if !ok || level != CompatFull {
 			t.Errorf(
 				"expected full %s support, got %q/%v",
 				ecosystem,
@@ -124,91 +134,87 @@ func TestSupports_HybridCoreOffersBothEcosystems(t *testing.T) {
 func TestServedEcosystems(t *testing.T) {
 	tests := []struct {
 		name       string
-		primary    types.VersionedPackageRef
-		components []types.VersionedPackageRef
-		want       map[types.Ecosystem]types.Compatibility
+		primary    catalog.VersionedRef
+		components []catalog.VersionedRef
+		want       map[catalog.Ecosystem]Compatibility
 	}{
 		{
 			name:    "vanilla offers nothing",
-			primary: compatTestCore(types.EcosystemMinecraft, "minecraft"),
-			want:    map[types.Ecosystem]types.Compatibility{},
+			primary: compatTestCore(catalog.EcosystemMinecraft, "minecraft"),
+			want:    map[catalog.Ecosystem]Compatibility{},
 		},
 		{
 			name:    "purpur is a paper fork",
-			primary: compatTestCore(types.EcosystemUnspecified, "purpur"),
-			want: map[types.Ecosystem]types.Compatibility{
-				types.EcosystemPaper:  types.CompatFull,
-				types.EcosystemBukkit: types.CompatFull,
+			primary: compatTestCore(catalog.EcosystemUnspecified, "purpur"),
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemPaper:  CompatFull,
+				catalog.EcosystemBukkit: CompatFull,
 			},
 		},
 		{
 			name:    "youer offers neoforge paper bukkit",
-			primary: compatTestCore(types.EcosystemUnspecified, "youer"),
-			want: map[types.Ecosystem]types.Compatibility{
-				types.EcosystemNeoForge: types.CompatFull,
-				types.EcosystemPaper:    types.CompatFull,
-				types.EcosystemBukkit:   types.CompatFull,
+			primary: compatTestCore(catalog.EcosystemUnspecified, "youer"),
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemNeoForge: CompatFull,
+				catalog.EcosystemPaper:    CompatFull,
+				catalog.EcosystemBukkit:   CompatFull,
 			},
 		},
 		{
 			name:    "catserver offers forge and bukkit",
-			primary: compatTestCore(types.EcosystemUnspecified, "catserver"),
-			want: map[types.Ecosystem]types.Compatibility{
-				types.EcosystemForge:  types.CompatFull,
-				types.EcosystemBukkit: types.CompatFull,
+			primary: compatTestCore(catalog.EcosystemUnspecified, "catserver"),
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemForge:  CompatFull,
+				catalog.EcosystemBukkit: CompatFull,
 			},
 		},
 		{
 			name:    "arclight without loader component offers nothing",
-			primary: compatTestCore(types.EcosystemUnspecified, "arclight"),
-			want:    map[types.Ecosystem]types.Compatibility{},
+			primary: compatTestCore(catalog.EcosystemUnspecified, "arclight"),
+			want:    map[catalog.Ecosystem]Compatibility{},
 		},
 		{
 			name:    "arclight with forge component",
-			primary: compatTestCore(types.EcosystemUnspecified, "arclight"),
-			components: []types.VersionedPackageRef{
-				compatTestCore(types.EcosystemForge, "forge"),
+			primary: compatTestCore(catalog.EcosystemUnspecified, "arclight"),
+			components: []catalog.VersionedRef{
+				compatTestCore(catalog.EcosystemForge, "forge"),
 			},
-			want: map[types.Ecosystem]types.Compatibility{
-				types.EcosystemForge:  types.CompatFull,
-				types.EcosystemBukkit: types.CompatFull,
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemForge:  CompatFull,
+				catalog.EcosystemBukkit: CompatFull,
 			},
 		},
 		{
 			name:    "spongeforge offers sponge and forge",
-			primary: compatTestCore(types.EcosystemSponge, "spongeforge"),
-			components: []types.VersionedPackageRef{
-				compatTestCore(types.EcosystemForge, "forge"),
+			primary: compatTestCore(catalog.EcosystemSponge, "spongeforge"),
+			components: []catalog.VersionedRef{
+				compatTestCore(catalog.EcosystemForge, "forge"),
 			},
-			want: map[types.Ecosystem]types.Compatibility{
-				types.EcosystemSponge: types.CompatFull,
-				types.EcosystemForge:  types.CompatFull,
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemSponge: CompatFull,
+				catalog.EcosystemForge:  CompatFull,
 			},
 		},
 		{
 			name:    "velocity proxy",
-			primary: compatTestCore(types.EcosystemVelocity, "velocity"),
-			want: map[types.Ecosystem]types.Compatibility{
-				types.EcosystemVelocity: types.CompatFull,
+			primary: compatTestCore(catalog.EcosystemVelocity, "velocity"),
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemVelocity: CompatFull,
 			},
 		},
 		{
 			name:    "waterfall proxy",
-			primary: compatTestCore(types.EcosystemBungeeCord, "waterfall"),
-			want: map[types.Ecosystem]types.Compatibility{
-				types.EcosystemBungeeCord: types.CompatFull,
+			primary: compatTestCore(catalog.EcosystemBungeeCord, "waterfall"),
+			want: map[catalog.Ecosystem]Compatibility{
+				catalog.EcosystemBungeeCord: CompatFull,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := buildServerRuntime(&detector.RuntimeEvidence{
-				PrimaryRuntime:    &tt.primary,
-				PrimaryPath:       "server.jar",
-				RuntimeComponents: tt.components,
-			})
-			got := offerSet(server.servedEcosystems())
+			ws := compatWorkspace(tt.primary, tt.components...)
+			got := offerSet(selectionServedEcosystems(ws.Runtime()))
 			if len(got) != len(tt.want) {
 				t.Fatalf(
 					"offers = %v, want %v",
@@ -232,18 +238,18 @@ func TestServedEcosystems(t *testing.T) {
 
 func makeDiscoveredPackage(
 	t *testing.T,
-	platform types.Ecosystem,
+	platform catalog.Ecosystem,
 	name, version, path string,
-) types.DiscoveredPackage {
+) DiscoveredPackage {
 	t.Helper()
-	return types.DiscoveredPackage{
-		ID: types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Name:     types.PackageName(name),
-				Provider: types.ProviderUnknown,
+	return DiscoveredPackage{
+		ID: catalog.VersionedRef{
+			Ref: catalog.Ref{
+				Name:     catalog.Name(name),
+				Provider: catalog.ProviderUnknown,
 			},
 			Ecosystem: platform,
-			Version:   types.Version(version),
+			Version:   versionpkg.Version(version),
 		},
 		Path: path,
 	}

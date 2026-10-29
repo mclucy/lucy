@@ -1,4 +1,4 @@
-// Package workspace probes a Minecraft server directory (i.e., a workspace).
+// Package workspace observes a Minecraft server directory (i.e., a workspace).
 //
 // The package collects the following information:
 //
@@ -7,23 +7,22 @@
 //   - the content packages that are installed
 //   - the running state of the server process
 //
-// New, NewAt, and Refresh return a Workspace value. A Workspace is an
-// immutable observation. Five members store facts: ServerDir, Wrappers,
-// Probe, Packages, and Warnings. Every other member is a method over these
-// facts.
+// Observe returns a Workspace pointer. A Workspace is one local observation:
+// ServerDir, Wrappers, Discovery, Packages, UnidentifiedPackageFiles, and
+// Warnings store the facts, and every other member is a method over them.
 //
-// The package holds one cached observation of the current working
-// directory. Only Rebuild, Invalidate, and Refresh change it; no other
-// function keeps state between calls.
+// Observation is local-only: the package reads the server directory and the
+// installed artifacts, and never contacts upstream services. Resolving the
+// upstream identity of a package is a separate step.
 package workspace
 
 import (
-	"encoding/json/v2"
-	"os"
+	"errors"
 	"path/filepath"
-	"sync"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/document"
+	versionpkg "github.com/mclucy/lucy/version"
+	"github.com/mclucy/lucy/workspace/discovery"
 )
 
 const sessionLockName = "session.lock"
@@ -33,8 +32,8 @@ type Workspace struct {
 	// ServerDir is the server directory that the observation describes.
 	// If MCDR manages the anchor, then ServerDir is the MCDR working
 	// directory.
-	ServerDir string            `json:"root"`
-	Wrappers  types.WrapperInfo `json:"wrappers"`
+	ServerDir string      `json:"root"`
+	Wrappers  WrapperInfo `json:"wrappers"`
 
 	// Warnings records the recoverable problems seen while observing the
 	// directory, such as MCDR version-detection failures. It stays out of
@@ -42,150 +41,143 @@ type Workspace struct {
 	// consumed observation.
 	Warnings []error `json:"-"`
 
-	// Probe holds the scan results before interpretation. The Probe type
-	// documents the bucket invariant; read Probe when the single
-	// interpreted server is not enough.
-	Probe Probe `json:"-"`
+	// Discovery holds the observed installations, ownership diagnostics,
+	// and the runtime selected from the request and the applicable
+	// declaration. Presentation projects this result explicitly.
+	Discovery discovery.Result `json:"-"`
 
-	// Packages lists the discovered content packages, derived once during
-	// observe.
-	Packages []types.DiscoveredPackage `json:"packages"`
+	// Packages contains identities associated with installed package files.
+	// Observation fills it from descriptors; identification can add hash matches.
+	Packages []DiscoveredPackage `json:"packages"`
+
+	// UnidentifiedPackageFiles lists JAR paths without a known package identity.
+	// A missing or unreadable descriptor does not establish that a file is a
+	// valid package.
+	UnidentifiedPackageFiles []string `json:"-"`
+
+	// declared is the applicable declaration derived from the manifest and
+	// lock, if any. Later selections keep its authority.
+	declared *discovery.Declaration
+
+	// selectionErr records why the current selection is not valid. A nil
+	// error means the observation selected a runtime.
+	selectionErr error
 }
 
-// MarshalJSON writes the wire format of an observation: the stored facts
-// and the derived method values. Consumers of `lucy status --json` read
-// this format. Probe is omitted; the raw scan is internal to this process.
-func (ws Workspace) MarshalJSON() ([]byte, error) {
-	projection := struct {
-		ServerDir   string                    `json:"root"`
-		SavePath    string                    `json:"save_path"`
-		PackageDirs []string                  `json:"package_dirs"`
-		Packages    []types.DiscoveredPackage `json:"packages"`
-		Server      *ServerRuntime            `json:"server,omitempty"`
-		Activity    *wireActivity             `json:"activity,omitempty"`
-		Wrappers    types.WrapperInfo         `json:"wrappers"`
-	}{
-		ServerDir:   ws.ServerDir,
-		SavePath:    ws.SaveDir(),
-		PackageDirs: ws.PackageDirs(),
-		Packages:    ws.Packages,
-		Wrappers:    ws.Wrappers,
-	}
-	if server := ws.Runtime(); server != nil {
-		projection.Server = server
-		projection.Activity = &wireActivity{Running: ws.Running()}
-	}
-	return json.Marshal(projection)
+// Observe builds one observation of root. The request carries an explicit
+// entry point and the selection policy. Observe derives the applicable
+// declaration from the local manifest and lock itself, discovers
+// installations, verifies receipt ownership, selects a runtime, and then
+// observes the package directories of the selected runtime.
+//
+// Selection happens before package observation so package directories always
+// belong to the runtime that the observation reports.
+func Observe(root string, request discovery.Request) *Workspace {
+	return observe(root, request, true)
 }
 
-type wireActivity struct {
-	Running bool `json:"active"`
-}
-
-var (
-	mu    sync.RWMutex
-	cache Workspace
-	ready bool
-)
-
-// New returns the observation of the process working directory. New builds
-// the observation on the first call. Later calls read the cache.
-func New() Workspace {
-	mu.RLock()
-	if ready {
-		cached := cache
-		mu.RUnlock()
-		return cached
-	}
-	mu.RUnlock()
-
-	root, err := os.Getwd()
+// observe is the shared observation pipeline. withPackages is false only for
+// activity checks, which need the selected runtime but not package files.
+func observe(root string, request discovery.Request, withPackages bool) *Workspace {
+	anchor, err := filepath.Abs(root)
 	if err != nil {
-		return Workspace{}
+		return &Workspace{}
 	}
-	return rebuild(root)
-}
+	wrappers, warnings := detectWrappers(anchor)
+	declaration, locked := applicableDeclaration(anchor)
 
-// Rebuild builds the observation of the process working directory again.
-// Readers wait until the build finishes.
-func Rebuild() {
-	root, err := os.Getwd()
-	if err != nil {
-		return
-	}
-	rebuild(root)
-}
-
-func rebuild(root string) Workspace {
-	observed := observe(root)
-	mu.Lock()
-	cache = observed
-	ready = true
-	mu.Unlock()
-	return observed
-}
-
-// Invalidate marks the cached observation as stale. The next New call
-// probes the directory again.
-func Invalidate() {
-	mu.Lock()
-	ready = false
-	mu.Unlock()
-}
-
-// NewAt observes the directory workDir. NewAt does not read or write the
-// process-global cache. Concurrent calls are safe.
-func NewAt(workDir string) Workspace {
-	target, err := filepath.Abs(workDir)
-	if err != nil {
-		return Workspace{}
-	}
-	return observe(target)
-}
-
-// Refresh observes the directory workDir again. If workDir resolves to the
-// current working directory, Refresh replaces the cached observation.
-// Otherwise Refresh returns a new observation and does not change the
-// cache.
-func Refresh(workDir string) Workspace {
-	target, err := filepath.Abs(workDir)
-	if err != nil {
-		return Workspace{}
-	}
-	observed := observe(target)
-
-	if current, err := os.Getwd(); err == nil && sameProbePath(target, current) {
-		mu.Lock()
-		cache = observed
-		ready = true
-		mu.Unlock()
-	}
-	return observed
-}
-
-// observe collects one snapshot of the server directory at dir. MCDR can
-// move the server directory away from dir; the probe and package scan then
-// run against that directory.
-func observe(dir string) Workspace {
-	wrappers, warnings := detectWrappers(dir)
-
-	ws := Workspace{
-		ServerDir: resolveServerDir(dir, wrappers),
+	ws := &Workspace{
+		ServerDir: resolveServerDir(anchor, wrappers),
 		Wrappers:  wrappers,
 		Warnings:  warnings,
+		declared:  declaration,
 	}
-	ws.Probe = probeDirectory(ws.ServerDir)
-	ws.Packages = discoverPackages(
-		ws.PackageDirs(),
-		mcdrPluginDirs(wrappers),
-	)
+	if locked != nil {
+		ws.ServerDir = filepath.Join(anchor, filepath.FromSlash(locked.Server.Directory))
+	}
+	ws.Discovery = discovery.Discover(ws.ServerDir)
+	ws.Discovery.ObserveOwnership(anchor)
+
+	request.Declared = declaration
+	if request.EntryPoint != "" && !filepath.IsAbs(request.EntryPoint) {
+		request.EntryPoint = filepath.Join(anchor, request.EntryPoint)
+	}
+	ws.selectionErr = ws.Discovery.Select(request)
+
+	if withPackages {
+		ws.ObservePackages()
+	}
 	return ws
+}
+
+// Select changes the runtime selection of this observation. It preserves the
+// declaration derived during observation and never rescans installations.
+func (ws *Workspace) Select(request discovery.Request) error {
+	if ws == nil {
+		return errors.New("workspace: no observation")
+	}
+	if request.Declared == nil {
+		request.Declared = ws.declared
+	}
+	ws.selectionErr = ws.Discovery.Select(request)
+	return ws.selectionErr
+}
+
+// SelectionError reports why this observation has no valid runtime selection.
+// It is nil when a runtime was selected.
+func (ws *Workspace) SelectionError() error {
+	if ws == nil {
+		return nil
+	}
+	return ws.selectionErr
+}
+
+// ObservePackages observes the package directories of the selected runtime
+// and replaces Packages and UnidentifiedPackageFiles. Callers use it after an
+// interactive selection to finish package observation without scanning the
+// runtime again.
+func (ws *Workspace) ObservePackages() {
+	if ws == nil {
+		return
+	}
+	ws.Packages, ws.UnidentifiedPackageFiles = discoverPackages(
+		ws.PackageDirs(),
+		mcdrPluginDirs(ws.Wrappers),
+	)
+}
+
+// applicableDeclaration builds the runtime declaration from a readable
+// manifest and a valid lock whose runtime identity agrees with the manifest.
+// Package-only intent changes do not invalidate runtime authority.
+func applicableDeclaration(
+	root string,
+) (*discovery.Declaration, *document.Lock) {
+	declared, err := document.ManifestFile(root).Read()
+	if err != nil {
+		return nil, nil
+	}
+	locked, err := document.LockFile(root).Read()
+	if err != nil {
+		return nil, nil
+	}
+	if declared.Server.Directory != locked.Server.Directory ||
+		declared.Server.Minecraft != locked.Server.Minecraft ||
+		declared.Server.Core.Product != locked.Server.Product ||
+		(concreteRuntimeVersion(declared.Server.Core.ProductVersion) &&
+			declared.Server.Core.ProductVersion != locked.Server.CoreVersion) {
+		return nil, nil
+	}
+	return &discovery.Declaration{
+		Product:     locked.Server.Product,
+		Minecraft:   locked.Server.Minecraft,
+		CoreVersion: locked.Server.CoreVersion,
+	}, locked
 }
 
 // resolveServerDir returns the directory that holds the server. Only MCDR
 // moves the server away from the anchor. MCDR uses its configured working
 // directory.
-func resolveServerDir(anchor string, wrappers types.WrapperInfo) string {
+func resolveServerDir(anchor string, wrappers WrapperInfo) string {
 	if wrappers.MCDR != nil {
 		wd := wrappers.MCDR.Config.WorkingDirectory
 		if filepath.IsAbs(wd) {
@@ -196,32 +188,38 @@ func resolveServerDir(anchor string, wrappers types.WrapperInfo) string {
 	return anchor
 }
 
-func mcdrPluginDirs(wrappers types.WrapperInfo) []string {
+func concreteRuntimeVersion(version versionpkg.Version) bool {
+	switch version {
+	case "", versionpkg.None, versionpkg.Unknown, versionpkg.Any,
+		versionpkg.Stable, versionpkg.Beta:
+		return false
+	default:
+		return true
+	}
+}
+
+func mcdrPluginDirs(wrappers WrapperInfo) []string {
 	if wrappers.MCDR == nil {
 		return nil
 	}
 	return wrappers.MCDR.Config.PluginDirectories
 }
 
-// Runtime returns the single bootable runtime of the directory. Runtime
-// returns nil in these cases:
-//
-//   - the scan found no runtime
-//   - the scan found more than one runtime
-//   - two or more detectors claim one jar
-//
-// Every non-nil result satisfies IsValid.
-func (ws Workspace) Runtime() *ServerRuntime {
-	server, _ := ws.Probe.Single()
-	return server
+// Runtime returns the selected runtime, or nil when the observation did not
+// settle on one. Every non-nil result satisfies IsValid.
+func (ws *Workspace) Runtime() *discovery.Selection {
+	if ws == nil {
+		return nil
+	}
+	return ws.Discovery.Selected()
 }
 
 // Running reports whether the server runs at this moment. The check probes
 // an exclusive lock on the session file. Running performs I/O on every call,
 // because activity changes over time. Running returns false when no single
 // runtime exists, or when the save location is unknown.
-func (ws Workspace) Running() bool {
-	if ws.Runtime() == nil {
+func (ws *Workspace) Running() bool {
+	if ws == nil || ws.Runtime() == nil {
 		return false
 	}
 	saveDir := ws.SaveDir()
@@ -229,18 +227,4 @@ func (ws Workspace) Running() bool {
 		return false
 	}
 	return checkSessionLock(filepath.Join(saveDir, sessionLockName))
-}
-
-// sameProbePath compares two directories after symlink resolution,
-// treating unresolvable paths literally.
-func sameProbePath(left, right string) bool {
-	leftEval, leftErr := filepath.EvalSymlinks(left)
-	if leftErr != nil {
-		leftEval = left
-	}
-	rightEval, rightErr := filepath.EvalSymlinks(right)
-	if rightErr != nil {
-		rightEval = right
-	}
-	return leftEval == rightEval
 }

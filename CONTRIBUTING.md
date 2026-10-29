@@ -19,7 +19,7 @@
 - `task test:integration` runs tagged integration scenarios for CAS, the HTTP cache, file transactions, and the actual CLI. The CLI fixture builds without race instrumentation. Fixtures use temporary directories and local HTTP servers; no external server downloads are required.
 - `task test:integration:race` runs those scenarios with the race detector. The CLI fixture also builds a race-enabled binary.
 
-See [The Taskfile](Taskfile.yml) for all scripts.
+See [The taskfile](Taskfile.yml) for all scripts.
 
 CI includes testing and building. However, testing locally helps us merging your contribution faster.
 
@@ -28,9 +28,9 @@ CI includes testing and building. However, testing locally helps us merging your
 We do not reject AI-written code. However, you have the duty to:
 
 - Disclose the model and agent client used.
-- Dislcose how did you use agents (generate code, understand the codebase, etc.).
+- Disclose how did you use agents (generate code, understand the codebase, etc.).
 - If possible, share your prompts.
-- Setup your agent according to the [following section](#agents-setup).
+- Set up your agent according to the [following section](#agents-setup).
 
 You must not:
 

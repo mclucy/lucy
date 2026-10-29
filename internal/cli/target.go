@@ -7,7 +7,6 @@ import (
 
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
-	"github.com/mclucy/lucy/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -23,18 +22,22 @@ type CommandTarget struct {
 func ResolveCommandTarget(cmd *cobra.Command) (CommandTarget, error) {
 	selected, _ := cmd.Flags().GetString(FlagServer)
 	if selected != "" {
-		inst, err := server.ReadInstance(selected)
+		var inst *server.Instance
+		var err error
+		if server.ValidateInstanceName(selected) == nil {
+			inst, err = server.ReadInstance(selected)
+		}
 		if err != nil {
 			return CommandTarget{}, err
 		}
-		if inst == nil {
-			return CommandTarget{}, fmt.Errorf("server %q is not registered", selected)
+		if inst != nil {
+			return CommandTarget{
+				WorkDir:    inst.Root,
+				Instance:   inst,
+				Registered: true,
+			}, nil
 		}
-		return CommandTarget{
-			WorkDir:    inst.Root,
-			Instance:   inst,
-			Registered: true,
-		}, nil
+		// The root command has already selected ordinary serverregistry entries.
 	}
 
 	wd, err := os.Getwd()
@@ -83,7 +86,6 @@ func RunInTargetWorkDirUnlocked(target CommandTarget, fn func() error) error {
 		return err
 	}
 	if targetDir == currentDir {
-		workspace.Invalidate()
 		return fn()
 	}
 	if err := os.Chdir(targetDir); err != nil {
@@ -91,9 +93,7 @@ func RunInTargetWorkDirUnlocked(target CommandTarget, fn func() error) error {
 	}
 	defer func() {
 		_ = os.Chdir(current)
-		workspace.Invalidate()
 	}()
-	workspace.Invalidate()
 	return fn()
 }
 
@@ -121,6 +121,19 @@ func DispatchPackageTask(
 	if target.Instance == nil {
 		return fmt.Errorf("registered server target is missing instance data")
 	}
+	task.Options = make(map[string]string)
+	for _, name := range server.PackageTaskFlagNames(task.Name) {
+		flag := cmd.Flags().Lookup(name)
+		if flag != nil && flag.Changed {
+			task.Options[name] = flag.Value.String()
+		}
+	}
+	// Preserve implicit agent defaults as well as explicitly supplied flags.
+	for _, name := range []string{FlagJSON, FlagJSONCompact, FlagNoInteractive, FlagNoColor, FlagNoStyle} {
+		if value, err := cmd.Flags().GetBool(name); err == nil && value {
+			task.Options[name] = "true"
+		}
+	}
 	var result server.PackageTaskResult
 	if err := CallDaemonWithAutoStart(
 		cmd.Context(),
@@ -134,7 +147,13 @@ func DispatchPackageTask(
 		return err
 	}
 	if result.Output != "" {
-		fmt.Fprint(os.Stderr, result.Output)
+		if _, err := fmt.Fprint(cmd.OutOrStdout(), result.Output); err != nil {
+			return err
+		}
+	}
+	if result.Stderr != "" {
+		_, err := fmt.Fprint(cmd.ErrOrStderr(), result.Stderr)
+		return err
 	}
 	return nil
 }

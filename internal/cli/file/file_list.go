@@ -4,19 +4,28 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/filetrack"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/internal/cli"
 
 	"github.com/spf13/cobra"
 )
 
-var listCmd = &cobra.Command{
-	Use:     "list",
-	Aliases: []string{"ls"},
-	Short:   ListShort,
-	Long:    ListLong,
-	Args:    cobra.NoArgs,
-	RunE:    actionFileList,
+func newListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   ListShort,
+		Long:    ListLong,
+		Args:    cobra.NoArgs,
+		RunE:    actionFileList,
+	}
 }
+
+type fileListDocument struct {
+	Statuses []filetrack.Status `json:"statuses"`
+	Warnings []string           `json:"warnings"`
+}
+
+var listJSON cli.JSONResult[fileListDocument]
 
 func actionFileList(cmd *cobra.Command, _ []string) error {
 	root, err := workRoot()
@@ -36,17 +45,21 @@ func actionFileList(cmd *cobra.Command, _ []string) error {
 	if statuses == nil {
 		statuses = []filetrack.Status{}
 	}
+
+	output := cli.NewQueryOutput(cmd)
 	for _, status := range statuses {
 		if status.Immutable && status.State == "modified" {
-			report.Warn(fmt.Errorf("%s: immutable contents differ; use lucy file update to accept them or lucy file recover to restore the accepted revision", status.Path))
+			output.Warn(fmt.Errorf("%s: immutable contents differ; use lucy file update to accept them or lucy file recover to restore the accepted revision", status.Path))
 		}
 	}
-
-	if machineOutputRequested(cmd) {
-		return writeJSON(cmd, statuses)
+	if output.JSON() {
+		return listJSON.Write(output, fileListDocument{
+			Statuses: statuses,
+			Warnings: output.Warnings(),
+		})
 	}
 
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	if len(statuses) == 0 {
 		fmt.Fprintln(out, "No tracked files.")
 		return nil

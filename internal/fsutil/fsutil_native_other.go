@@ -8,6 +8,10 @@ import (
 	"runtime"
 )
 
+func openLockFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+}
+
 func lockFile(file *os.File, wait bool) error {
 	return unsupportedNative("file locking")
 }

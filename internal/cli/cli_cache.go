@@ -11,47 +11,47 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cacheCmd = &cobra.Command{
-	Use:   "cache",
-	Short: help.CacheShort,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
-	},
-}
+// cacheLsJSON is the machine-readable `cache ls` result: every cached entry.
+var cacheLsJSON JSONResult[[]*cache.Entry]
 
-var cacheLsCmd = &cobra.Command{
-	Use:     "ls",
-	Aliases: []string{"list"},
-	Short:   help.CacheLsShort,
-	RunE:    actionCacheLs,
-}
+// cacheClearJSON is the machine-readable `cache clear` result.
+var cacheClearJSON JSONResult[cache.ResetReport]
 
-var cacheClearCmd = &cobra.Command{
-	Use:     "clear",
-	Aliases: []string{"rm"},
-	Short:   help.CacheClearShort,
-	RunE:    actionCacheClear,
-}
-
-func NewCacheCommand() *cobra.Command {
+func NewCacheCommand(contracts *JSONContracts) *cobra.Command {
+	cacheLsCmd := &cobra.Command{
+		Use:     "ls",
+		Aliases: []string{"list"},
+		Short:   help.CacheLsShort,
+		RunE:    actionCacheLs,
+	}
+	cacheClearCmd := &cobra.Command{
+		Use:     "clear",
+		Aliases: []string{"rm"},
+		Short:   help.CacheClearShort,
+		RunE:    actionCacheClear,
+	}
+	cacheCmd := &cobra.Command{
+		Use:   "cache",
+		Short: help.CacheShort,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+	cacheLsJSON.Bind(contracts, cacheLsCmd)
+	cacheClearJSON.Bind(contracts, cacheClearCmd)
 	cacheCmd.AddCommand(cacheLsCmd, cacheClearCmd)
 	return cacheCmd
 }
 
 func actionCacheLs(cmd *cobra.Command, _ []string) error {
+	output := NewQueryOutput(cmd)
 	entries := cache.Network().All()
-
-	switch JSONMode(cmd) {
-	case JSONPretty:
-		style.PrintAsJson(entries)
-		return nil
-	case JSONCompact:
-		style.PrintAsJsonCompact(entries)
-		return nil
+	if output.JSON() {
+		return cacheLsJSON.Write(output, entries)
 	}
 
 	if len(entries) == 0 {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Cache is empty")
+		_, err := fmt.Fprintln(output.Human(), "Cache is empty")
 		return err
 	}
 
@@ -59,41 +59,44 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 		return b.CreatedAt.Compare(a.CreatedAt)
 	})
 
-	out := &terminal.Data{
-		Fields: []terminal.Field{
-			&terminal.FieldAnnotation{
-				Annotation: fmt.Sprintf("(%d entries)", len(entries)),
-			},
-		},
-	}
-
+	facts := make([]terminal.Fact, 0, len(entries)+1)
+	facts = append(facts, terminal.Fact{
+		Key:   "Cache",
+		Value: fmt.Sprintf("%d entries", len(entries)),
+	})
 	for _, entry := range entries {
-		out.Fields = append(
-			out.Fields, &terminal.FieldAnnotatedShortText{
-				Title: entry.Key,
-				Text: fmt.Sprintf(
-					"%s  %s",
-					entry.Kind,
-					style.FormatBytesBinary(entry.Size),
-				),
-				Annotation: style.FormatDuration(entry.Expiration),
-			},
-		)
+		facts = append(facts, terminal.Fact{
+			Key: entry.Key,
+			Value: fmt.Sprintf(
+				"%s  %s  %s",
+				entry.Kind,
+				style.FormatBytesBinary(entry.Size),
+				style.Muted(style.FormatTTL(entry.Expiration)),
+			),
+		})
 	}
 
-	terminal.Flush(out)
-	return nil
+	_, err := fmt.Fprintln(
+		output.Human(),
+		terminal.RenderFacts(facts, style.TermWidth()),
+	)
+	return err
 }
 
 func actionCacheClear(cmd *cobra.Command, _ []string) error {
+	output := NewOperationOutput(cmd)
 	cleared, err := cache.Network().ClearAll()
 	if err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
 
+	if output.JSON() {
+		return cacheClearJSON.Write(output, cleared)
+	}
+
 	// The cache backend only collects the successful removals; the command
 	// presents them, in the order the reset walked the cache directory.
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	for _, removed := range cleared.Removed {
 		if _, err := fmt.Fprintf(out, "removed %s\n", removed); err != nil {
 			return err

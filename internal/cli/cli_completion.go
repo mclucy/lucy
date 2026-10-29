@@ -5,9 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/types"
-
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/spf13/cobra"
 )
 
@@ -52,14 +51,14 @@ func ToCobraCompletions(candidates []CompletionCandidate) []string {
 func StaticEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
 		{
-			Value:       types.EcosystemMinecraft.String(),
+			Value:       catalog.EcosystemMinecraft.String(),
 			Description: "Vanilla / Bukkit / Paper plugins",
 		},
-		{Value: types.EcosystemFabric.String(), Description: "Fabric mods"},
-		{Value: types.EcosystemForge.String(), Description: "Forge mods"},
-		{Value: types.EcosystemNeoForge.String(), Description: "NeoForge mods"},
+		{Value: catalog.EcosystemFabric.String(), Description: "Fabric mods"},
+		{Value: catalog.EcosystemForge.String(), Description: "Forge mods"},
+		{Value: catalog.EcosystemNeoForge.String(), Description: "NeoForge mods"},
 		{
-			Value:       types.EcosystemMCDR.String(),
+			Value:       catalog.EcosystemMCDR.String(),
 			Description: "MCDR controller / plugin framework",
 		},
 	}
@@ -77,21 +76,21 @@ func StaticStatusLogoCandidates() []CompletionCandidate {
 // ecosystem set.
 func StaticSearchEcosystemCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.EcosystemFabric.String(), Description: "Fabric mods"},
-		{Value: types.EcosystemForge.String(), Description: "Forge mods"},
-		{Value: types.EcosystemNeoForge.String(), Description: "NeoForge mods"},
-		{Value: types.EcosystemBukkit.String(), Description: "Bukkit/Spigot plugins"},
-		{Value: types.EcosystemPaper.String(), Description: "Paper plugins"},
+		{Value: catalog.EcosystemFabric.String(), Description: "Fabric mods"},
+		{Value: catalog.EcosystemForge.String(), Description: "Forge mods"},
+		{Value: catalog.EcosystemNeoForge.String(), Description: "NeoForge mods"},
+		{Value: catalog.EcosystemBukkit.String(), Description: "Bukkit/Spigot plugins"},
+		{Value: catalog.EcosystemPaper.String(), Description: "Paper plugins"},
 	}
 }
 
 func StaticSearchRegistryCandidates() []CompletionCandidate {
 	return []CompletionCandidate{
-		{Value: types.RegistryModrinth.String(), Description: "Modrinth"},
-		{Value: types.RegistryCurseForge.String(), Description: "CurseForge"},
-		{Value: types.RegistryHangar.String(), Description: "Hangar"},
-		{Value: types.RegistrySpiget.String(), Description: "Spiget"},
-		{Value: types.RegistryMCDR.String(), Description: "MCDR Plugin Catalogue"},
+		{Value: catalog.RegistryModrinth.String(), Description: "Modrinth"},
+		{Value: catalog.RegistryCurseForge.String(), Description: "CurseForge"},
+		{Value: catalog.RegistryHangar.String(), Description: "Hangar"},
+		{Value: catalog.RegistrySpiget.String(), Description: "Spiget"},
+		{Value: catalog.RegistryMCDR.String(), Description: "MCDR Plugin Catalogue"},
 	}
 }
 
@@ -107,7 +106,7 @@ func StaticVersionCandidates() []CompletionCandidate {
 // their versions. It is the only source of workspace package suggestions;
 // nothing is inferred from outside the lock.
 func LockCandidates(root string) []CompletionCandidate {
-	lock, err := lockfile.Read(root)
+	lock, err := document.LockFile(root).Read()
 	if err != nil {
 		return nil
 	}
@@ -128,7 +127,7 @@ func LockCandidates(root string) []CompletionCandidate {
 // resolves no such package; an error means the name is ambiguous and the
 // caller must supply an explicit "provider:project".
 func ResolveLockReference(root, name string) (string, error) {
-	lock, err := lockfile.Read(root)
+	lock, err := document.LockFile(root).Read()
 	if err != nil {
 		return "", nil
 	}

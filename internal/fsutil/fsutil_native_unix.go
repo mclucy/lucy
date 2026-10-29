@@ -11,6 +11,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func openLockFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+}
+
 func lockFile(file *os.File, wait bool) error {
 	flags := unix.LOCK_EX
 	if !wait {

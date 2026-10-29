@@ -10,11 +10,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"al.essio.dev/pkg/shellescape"
 	"charm.land/huh/v2"
+	"github.com/google/shlex"
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/server"
-	"github.com/mclucy/lucy/terminal/style"
+	"github.com/mclucy/lucy/workspace"
+	"github.com/mclucy/lucy/workspace/discovery"
 	"github.com/spf13/cobra"
 )
 
@@ -31,119 +34,120 @@ type instanceRegistrar interface {
 	server.InstanceEnabler
 }
 
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Manage registered Minecraft server instances",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
-	},
-}
+// newManagedServerCommand builds native lifecycle actions for one invocation.
+// Its children are attached to the workspace registry's server command.
+func newManagedServerCommand() *cobra.Command {
+	var serverCmd = &cobra.Command{
+		Use:   "server",
+		Short: "Manage registered Minecraft server instances",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
 
-var serverAddCmd = &cobra.Command{
-	Use:   "add <name> <path>",
-	Short: "Register a Minecraft server instance",
-	Args:  cobra.ExactArgs(2),
-	RunE:  actionServerAdd,
-}
+	var serverAddCmd = &cobra.Command{
+		Use:   "add <name> <path>",
+		Short: "Register a Minecraft server instance",
+		Args:  cobra.ExactArgs(2),
+		RunE:  actionServerAdd,
+	}
 
-var serverListCmd = &cobra.Command{
-	Use:     "list",
-	Aliases: []string{"ls"},
-	Short:   "List registered server instances",
-	Args:    cobra.NoArgs,
-	RunE:    actionServerList,
-}
+	var serverListCmd = &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List registered server instances",
+		Args:    cobra.NoArgs,
+		RunE:    actionServerList,
+	}
 
-var serverStatusCmd = &cobra.Command{
-	Use:   "status <name>",
-	Short: "Show a registered server instance status",
-	Args:  cobra.ExactArgs(1),
-	RunE:  actionServerStatus,
-}
+	var serverStatusCmd = &cobra.Command{
+		Use:   "status <name>",
+		Short: "Show a registered server instance status",
+		Args:  cobra.ExactArgs(1),
+		RunE:  actionServerStatus,
+	}
 
-var serverStartCmd = &cobra.Command{
-	Use:   "start <name>",
-	Short: "Start a registered server instance",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStart, Instance: args[0]}, nil)
-	},
-}
+	var serverStartCmd = &cobra.Command{
+		Use:   "start <name>",
+		Short: "Start a registered server instance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStart, Instance: args[0]}, nil)
+		},
+	}
 
-var serverStopCmd = &cobra.Command{
-	Use:   "stop <name>",
-	Short: "Gracefully stop a registered server instance",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStop, Instance: args[0]}, nil)
-	},
-}
+	var serverStopCmd = &cobra.Command{
+		Use:   "stop <name>",
+		Short: "Gracefully stop a registered server instance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpStop, Instance: args[0]}, nil)
+		},
+	}
 
-var serverRestartCmd = &cobra.Command{
-	Use:   "restart <name>",
-	Short: "Restart a registered server instance",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpRestart, Instance: args[0]}, nil)
-	},
-}
+	var serverRestartCmd = &cobra.Command{
+		Use:   "restart <name>",
+		Short: "Restart a registered server instance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpRestart, Instance: args[0]}, nil)
+		},
+	}
 
-var serverEnableCmd = &cobra.Command{
-	Use:   "enable <name>",
-	Short: "Enable a server instance at boot",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpEnable, Instance: args[0]}, nil)
-	},
-}
+	var serverEnableCmd = &cobra.Command{
+		Use:   "enable <name>",
+		Short: "Enable a server instance at boot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpEnable, Instance: args[0]}, nil)
+		},
+	}
 
-var serverDisableCmd = &cobra.Command{
-	Use:   "disable <name>",
-	Short: "Disable a server instance at boot",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpDisable, Instance: args[0]}, nil)
-	},
-}
+	var serverDisableCmd = &cobra.Command{
+		Use:   "disable <name>",
+		Short: "Disable a server instance at boot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.CallDaemonWithAutoStart(cmd.Context(), server.Request{Op: server.OpDisable, Instance: args[0]}, nil)
+		},
+	}
 
-var serverSendCmd = &cobra.Command{
-	Use:   "send <name> <command>",
-	Short: "Send one command to a server console",
-	Args:  cobra.MinimumNArgs(2),
-	RunE:  actionServerSend,
-}
+	var serverSendCmd = &cobra.Command{
+		Use:   "send <name> <command>",
+		Short: "Send one command to a server console",
+		Args:  cobra.MinimumNArgs(2),
+		RunE:  actionServerSend,
+	}
 
-var serverLogsCmd = &cobra.Command{
-	Use:   "logs <name>",
-	Short: "Show a server console log",
-	Args:  cobra.ExactArgs(1),
-	RunE:  actionServerLogs,
-}
+	var serverLogsCmd = &cobra.Command{
+		Use:   "logs <name>",
+		Short: "Show a server console log",
+		Args:  cobra.ExactArgs(1),
+		RunE:  actionServerLogs,
+	}
 
-var serverAttachCmd = &cobra.Command{
-	Use:   "attach <name>",
-	Short: "Attach to a server console",
-	Args:  cobra.ExactArgs(1),
-	RunE:  actionServerAttach,
-}
+	var serverAttachCmd = &cobra.Command{
+		Use:   "attach <name>",
+		Short: "Attach to a server console",
+		Args:  cobra.ExactArgs(1),
+		RunE:  actionServerAttach,
+	}
 
-var serverEditCmd = &cobra.Command{
-	Use:   "edit <name>",
-	Short: "Edit a server runtime configuration",
-	Args:  cobra.ExactArgs(1),
-	RunE:  actionServerEdit,
-}
+	var serverEditCmd = &cobra.Command{
+		Use:   "edit <name>",
+		Short: "Edit a server runtime configuration",
+		Args:  cobra.ExactArgs(1),
+		RunE:  actionServerEdit,
+	}
 
-var serverRemoveCmd = &cobra.Command{
-	Use:   "remove <name>",
-	Short: "Unregister a server instance",
-	Args:  cobra.ExactArgs(1),
-	RunE:  actionServerRemove,
-}
+	var serverRemoveCmd = &cobra.Command{
+		Use:   "remove <name>",
+		Short: "Unregister a server instance",
+		Args:  cobra.ExactArgs(1),
+		RunE:  actionServerRemove,
+	}
 
-// init registers server lifecycle and console commands with their output,
-// runtime-user and configuration-editing flags.
-func init() {
+	// Register runtime-user and configuration-editing flags.
 	serverAddCmd.Flags().String(
 		flagServerRunUserName,
 		server.DefaultRunUser,
@@ -172,7 +176,7 @@ func init() {
 		serverRemoveCmd,
 		serverEditCmd,
 	)
-	rootCmd.AddCommand(serverCmd)
+	return serverCmd
 }
 
 // actionServerAdd writes the instance registry, creates launch settings if absent,
@@ -190,7 +194,7 @@ func actionServerAdd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg := server.GuessRuntimeConfig(inst.Root)
+	cfg := guessRuntimeConfig(inst.Root)
 	if _, err := os.Stat(inst.RuntimeConfig); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("stat runtime config: %w", err)
@@ -209,8 +213,8 @@ func actionServerAdd(cmd *cobra.Command, args []string) error {
 	if err := manager.EnableInstance(inst); err != nil {
 		return fmt.Errorf("enable instance service: %w", err)
 	}
-	log.Info(fmt.Sprintf("registered server %q at %s", inst.Name, inst.Root))
-	log.Info("service enabled for boot; it will not start until the next boot or `lucy server start`")
+	report.Info(fmt.Sprintf("registered server %q at %s", inst.Name, inst.Root))
+	report.Info("service enabled for boot; it will not start until the next boot or `lucy server start`")
 	return nil
 }
 
@@ -223,20 +227,18 @@ func actionServerList(cmd *cobra.Command, _ []string) error {
 	}
 	switch cli.JSONMode(cmd) {
 	case cli.JSONCompact:
-		style.PrintAsJsonCompact(instances)
-		return nil
+		return (cli.JSONResult[[]server.Instance]{}).Write(cli.NewQueryOutput(cmd), instances)
 	case cli.JSONPretty:
-		style.PrintAsJson(instances)
-		return nil
+		return (cli.JSONResult[[]server.Instance]{}).Write(cli.NewQueryOutput(cmd), instances)
 	}
 	if len(instances) == 0 {
-		log.Info("no registered servers")
+		fmt.Fprintln(cmd.OutOrStdout(), "no registered servers")
 		return nil
 	}
 	manager := server.NewServiceManager().(server.InstanceStatusReader)
 	for _, inst := range instances {
 		st := manager.StatusInstance(inst)
-		log.Info(fmt.Sprintf("%s  %s  enabled=%t running=%t", inst.Name, inst.Root, st.Enabled, st.Running))
+		fmt.Fprintf(cmd.OutOrStdout(), "%s  %s  enabled=%t running=%t\n", inst.Name, inst.Root, st.Enabled, st.Running)
 	}
 	return nil
 }
@@ -266,20 +268,17 @@ func actionServerStatus(cmd *cobra.Command, args []string) error {
 	}
 	switch cli.JSONMode(cmd) {
 	case cli.JSONCompact:
-		style.PrintAsJsonCompact(status)
-		return nil
+		return (cli.JSONResult[server.InstanceStatus]{}).Write(cli.NewQueryOutput(cmd), status)
 	case cli.JSONPretty:
-		style.PrintAsJson(status)
-		return nil
+		return (cli.JSONResult[server.InstanceStatus]{}).Write(cli.NewQueryOutput(cmd), status)
 	}
-	log.Info(fmt.Sprintf("Server: %s", status.Instance.Name))
-	log.Info(fmt.Sprintf("Root: %s", status.Instance.Root))
-	log.Info(fmt.Sprintf("Service: %s enabled=%t running=%t", status.Service.NativeID, status.Service.Enabled, status.Service.Running))
-	log.Info(fmt.Sprintf("Runner: connected=%t pid=%d", status.Runner.Connected, status.Runner.Pid))
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Server: %s\nRoot: %s\nService: %s enabled=%t running=%t\nRunner: connected=%t pid=%d\n",
+		status.Instance.Name, status.Instance.Root, status.Service.NativeID, status.Service.Enabled, status.Service.Running, status.Runner.Connected, status.Runner.Pid)
 	if status.PendingRestart {
-		log.Info(fmt.Sprintf("Pending restart: yes (%s)", status.PendingReason))
+		fmt.Fprintf(out, "Pending restart: yes (%s)\n", status.PendingReason)
 	} else {
-		log.Info("Pending restart: no")
+		fmt.Fprintln(out, "Pending restart: no")
 	}
 	return nil
 }
@@ -309,6 +308,9 @@ func actionServerLogs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if cfg == nil {
+		return fmt.Errorf("runtime config %s is missing; restore it before reading logs", inst.RuntimeConfig)
+	}
 	follow, _ := cmd.Flags().GetBool(flagServerFollowName)
 	return server.StreamLog(cmd.Context(), cfg.Logs.ConsolePath, follow, os.Stdout)
 }
@@ -327,12 +329,15 @@ func actionServerAttach(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if cfg == nil {
+		return fmt.Errorf("runtime config %s is missing; restore it before attaching", inst.RuntimeConfig)
+	}
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 	go func() {
 		_ = server.StreamLog(ctx, cfg.Logs.ConsolePath, true, os.Stdout)
 	}()
-	log.Info("attached; use /detach or Ctrl+D to detach without stopping the server")
+	report.Info("attached; use /detach or Ctrl+D to detach without stopping the server")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -368,8 +373,12 @@ func actionServerEdit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if cfg == nil {
+		fallback := guessRuntimeConfig(inst.Root)
+		cfg = &fallback
+	}
 	command := cfg.Command
-	argsText := strings.Join(cfg.Args, " ")
+	argsText := shellescape.QuoteCommand(cfg.Args)
 	maxMemory := cfg.Memory.Max
 	stopTimeout := cfg.Stop.Timeout
 	form := huh.NewForm(
@@ -383,9 +392,19 @@ func actionServerEdit(cmd *cobra.Command, args []string) error {
 	if err := form.Run(); err != nil {
 		return err
 	}
+	parsedArgs, err := shlex.Split(argsText)
+	if err != nil {
+		return fmt.Errorf("parse launch arguments: %w", err)
+	}
+	newMemory := strings.TrimSpace(maxMemory)
+	if newMemory != cfg.Memory.Max {
+		if err := updateMaxMemory(parsedArgs, newMemory); err != nil {
+			return err
+		}
+	}
 	cfg.Command = strings.TrimSpace(command)
-	cfg.Args = strings.Fields(argsText)
-	cfg.Memory.Max = strings.TrimSpace(maxMemory)
+	cfg.Args = parsedArgs
+	cfg.Memory.Max = newMemory
 	cfg.Stop.Timeout = strings.TrimSpace(stopTimeout)
 	return server.WriteRuntimeConfig(inst.RuntimeConfig, cfg)
 }
@@ -407,7 +426,7 @@ func actionServerRemove(_ *cobra.Command, args []string) error {
 	if err := server.RemoveInstance(inst.Name); err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("unregistered server %q", inst.Name))
+	report.Info(fmt.Sprintf("unregistered server %q", inst.Name))
 	return nil
 }
 
@@ -418,9 +437,50 @@ func openEditor(path string) error {
 	if editor == "" {
 		editor = "vi"
 	}
-	cmd := exec.Command(editor, filepath.Clean(path))
+	words, err := shlex.Split(editor)
+	if err != nil || len(words) == 0 {
+		return fmt.Errorf("invalid EDITOR %q: expected a program and optional quoted arguments", editor)
+	}
+	cmd := exec.Command(words[0], append(words[1:], filepath.Clean(path))...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// guessRuntimeConfig keeps observation above the server product model, which
+// must remain independent of workspace and document packages.
+func guessRuntimeConfig(root string) server.RuntimeConfig {
+	ws := workspace.Observe(root, discovery.Request{Policy: discovery.PolicyPreferModified})
+	if ws.SelectionError() == nil && ws.Discovery.Selection.EntryPoint != nil {
+		return server.GuessRuntimeConfig(root, ws.Discovery.Selection.EntryPoint.Path)
+	}
+	return server.GuessRuntimeConfig(root)
+}
+
+// updateMaxMemory changes only an existing JVM heap option; custom launchers
+// without one fail explicitly instead of silently saving an unused setting.
+func updateMaxMemory(args []string, value string) error {
+	if len(value) < 2 {
+		return fmt.Errorf("max memory must be a positive integer followed by K, M or G")
+	}
+	if !strings.ContainsRune("kKmMgG", rune(value[len(value)-1])) || value[0] == '0' {
+		return fmt.Errorf("invalid max memory %q", value)
+	}
+	for _, c := range value[:len(value)-1] {
+		if c < '0' || c > '9' {
+			return fmt.Errorf("invalid max memory %q", value)
+		}
+	}
+	updated := false
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "-Xmx") {
+			args[i] = "-Xmx" + value
+			updated = true
+		}
+	}
+	if updated {
+		return nil
+	}
+	return fmt.Errorf("this launcher has no -Xmx argument; edit its launcher memory settings directly")
 }

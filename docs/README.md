@@ -10,6 +10,8 @@ This directory contains the Mintlify documentation site. Site configuration and 
   - [Global flags](commands/global-flags.mdx)
   - [`lucy init`](commands/init.mdx)
   - [`lucy install`](commands/install.mdx)
+  - [`lucy java`](commands/java.mdx)
+  - [`lucy config`](commands/config.mdx)
   - [`lucy add`](commands/add.mdx)
   - [`lucy remove`](commands/remove.mdx)
   - [`lucy search`](commands/search.mdx)

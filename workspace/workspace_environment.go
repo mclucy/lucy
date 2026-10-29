@@ -10,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	versionpkg "github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,8 +21,8 @@ const mcdrConfigFileName = "config.yml"
 // recoverable warnings seen while reading them. These wrappers do not come
 // from jars. An MCDR installation manages a server directory from outside
 // the directory.
-func detectWrappers(dir string) (types.WrapperInfo, []error) {
-	var wrappers types.WrapperInfo
+func detectWrappers(dir string) (WrapperInfo, []error) {
+	var wrappers WrapperInfo
 	warnings := detectMCDRWrapper(dir, &wrappers)
 	return wrappers, warnings
 }
@@ -36,7 +35,7 @@ func detectWrappers(dir string) (types.WrapperInfo, []error) {
 // MCDR changes the server directory, so later consumers will not depend on
 // pwd. Warnings are diagnostics for CLI presentation; the wrapper detection
 // itself only logs them.
-func detectMCDRWrapper(dir string, wrappers *types.WrapperInfo) []error {
+func detectMCDRWrapper(dir string, wrappers *WrapperInfo) []error {
 	var warnings []error
 	configPath := filepath.Join(dir, mcdrConfigFileName)
 
@@ -58,7 +57,7 @@ func detectMCDRWrapper(dir string, wrappers *types.WrapperInfo) []error {
 		}
 	}(configFile)
 
-	config := &fileschema.FileMcdrConfig{}
+	config := &MCDRConfig{}
 	if err := yaml.NewDecoder(configFile).Decode(config); err != nil {
 		warnErr := fmt.Errorf("cannot decode %s: %w", configPath, err)
 		log.Warn(warnErr)
@@ -75,24 +74,19 @@ func detectMCDRWrapper(dir string, wrappers *types.WrapperInfo) []error {
 	// A hung mcdreforged must not block workspace observation.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	version := types.VersionUnknown
-	output, err := exec.CommandContext(ctx, "mcdreforged", "--version").Output()
-	if err != nil {
-		warnErr := fmt.Errorf(
-			"cannot execute mcdr, is it in your $PATH?: %w",
-			err,
-		)
-		log.Warn(warnErr)
-		warnings = append(warnings, warnErr)
-	} else if fields := strings.Fields(string(output)); len(fields) > 1 {
-		version = types.Version(fields[1])
-	} else {
-		warnErr := fmt.Errorf("cannot parse mcdr version output")
-		log.Warn(warnErr)
-		warnings = append(warnings, warnErr)
+	version := versionpkg.Unknown
+	// MCDReforged is provisioned by install, so absence from PATH is normal.
+	if output, err := exec.CommandContext(ctx, "mcdreforged", "--version").Output(); err == nil {
+		if fields := strings.Fields(string(output)); len(fields) > 1 {
+			version = versionpkg.Version(fields[1])
+		} else {
+			warnErr := fmt.Errorf("cannot parse mcdr version output")
+			log.Warn(warnErr)
+			warnings = append(warnings, warnErr)
+		}
 	}
 
-	wrappers.MCDR = &types.MCDREnv{
+	wrappers.MCDR = &MCDREnv{
 		Version: version,
 		Config:  config,
 	}

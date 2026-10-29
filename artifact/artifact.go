@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 // SupportsPath reports whether path has a supported artifact archive
@@ -92,17 +92,17 @@ func ReadInfo(filePath string, opts ...Option) ([]PackageInfo, error) {
 //	serverFamily – bukkit, paper
 //	modFamily    – fabric, forge, neoforge
 //
-// Artifacts whose ecosystem is types.EcosystemUnspecified are excluded from
+// Artifacts whose ecosystem is catalog.EcosystemUnspecified are excluded from
 // the conflict check.
 func jarEcosystemsConflict(infos []PackageInfo) bool {
 	var hasProxy, hasServer, hasMod bool
 	for _, info := range infos {
 		switch info.Ref.Ecosystem {
-		case types.EcosystemVelocity, types.EcosystemBungeeCord:
+		case catalog.EcosystemVelocity, catalog.EcosystemBungeeCord:
 			hasProxy = true
-		case types.EcosystemBukkit, types.EcosystemPaper:
+		case catalog.EcosystemBukkit, catalog.EcosystemPaper:
 			hasServer = true
-		case types.EcosystemFabric, types.EcosystemForge, types.EcosystemNeoForge:
+		case catalog.EcosystemFabric, catalog.EcosystemForge, catalog.EcosystemNeoForge:
 			hasMod = true
 		}
 	}

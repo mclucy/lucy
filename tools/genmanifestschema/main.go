@@ -7,31 +7,35 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/mclucy/lucy/java"
+
+	stdjson "encoding/json"
+
 	"github.com/invopop/jsonschema"
-	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/document"
+
 	orderedmap "github.com/pb33f/ordered-map/v2"
 )
 
-const schemaURL = "https://raw.githubusercontent.com/mclucy/lucy/main/manifest/manifest.schema.json"
+const schemaURL = "https://raw.githubusercontent.com/mclucy/lucy/main/document/document_manifest.schema.json"
 
 func main() {
-	path := "manifest/manifest.schema.json"
+	path := "document/document_manifest.schema.json"
 
 	requirementSchema := &jsonschema.Schema{
 		OneOf: []*jsonschema.Schema{
 			{
 				Type:        "string",
-				Description: "A version selector: stable, a tag, or an exact version.",
+				Description: "A version selector: any, stable, beta, a tag, or an exact version.",
 			},
 			func() *jsonschema.Schema {
-				version := &jsonschema.Schema{
+				selector := &jsonschema.Schema{
 					Type:        "string",
-					Description: "A version selector: stable, a tag, or an exact version.",
+					Description: "A version selector: any, stable, beta, a tag, or an exact version.",
 				}
-				file := &jsonschema.Schema{
+				filePattern := &jsonschema.Schema{
 					Type:        "string",
-					Description: "Workspace-relative path to a local package artifact.",
+					Description: "Glob pattern matching the upstream artifact filename.",
 				}
 				enabled := &jsonschema.Schema{
 					Type:        "boolean",
@@ -39,8 +43,8 @@ func main() {
 					Description: "Whether the requirement is active in the resolved environment.",
 				}
 				properties := orderedmap.New[string, *jsonschema.Schema]()
-				properties.Set("version", version)
-				properties.Set("file", file)
+				properties.Set("selector", selector)
+				properties.Set("file_pattern", filePattern)
 				properties.Set("enabled", enabled)
 				return &jsonschema.Schema{
 					Type:                 "object",
@@ -108,21 +112,66 @@ func main() {
 		}
 	}()
 
+	javaSchema := func() *jsonschema.Schema {
+		major := func() *jsonschema.Schema {
+			return &jsonschema.Schema{
+				Type:    "integer",
+				Minimum: stdjson.Number(fmt.Sprint(document.MinimumJava)),
+			}
+		}
+		version := &jsonschema.Schema{
+			OneOf: []*jsonschema.Schema{
+				major(),
+				{Const: document.JavaAuto},
+			},
+			Description: "The Java major version, or auto.",
+		}
+		distributions := []any{document.JavaAuto, "any"}
+		for _, distribution := range java.Distributions {
+			distributions = append(distributions, string(distribution))
+		}
+		distribution := &jsonschema.Schema{
+			Enum:        distributions,
+			Description: "The Java distribution. Omit it to accept any distribution.",
+		}
+		properties := orderedmap.New[string, *jsonschema.Schema]()
+		properties.Set("version", version)
+		properties.Set("distribution", distribution)
+		short := major()
+		short.Description = "The Java major version."
+		return &jsonschema.Schema{
+			OneOf: []*jsonschema.Schema{
+				short,
+				{
+					Const:       document.JavaAuto,
+					Description: "Follow the Java version Mojang recommends.",
+				},
+				{
+					Type:                 "object",
+					Properties:           properties,
+					AdditionalProperties: jsonschema.FalseSchema,
+				},
+			},
+		}
+	}()
+
 	r := &jsonschema.Reflector{
 		DoNotReference: true,
 		BaseSchemaID:   jsonschema.ID(schemaURL),
 		Mapper: func(t reflect.Type) *jsonschema.Schema {
 			switch t {
-			case reflect.TypeFor[manifest.Requirement]():
+			case reflect.TypeFor[document.Requirement]():
 				return requirementSchema
-			case reflect.TypeFor[types.TrackedFile]():
+			case reflect.TypeFor[document.ManifestJava]():
+				return javaSchema
+			case reflect.TypeFor[document.TrackedFile]():
 				return trackedFileSchema
 			default:
 				return nil
 			}
 		},
 	}
-	schema := r.Reflect(&manifest.Document{})
+	schema := r.Reflect(&document.Manifest{})
 	schema.Version = jsonschema.Version
 	schema.ID = schemaURL
 	schema.Title = "Lucy manifest"

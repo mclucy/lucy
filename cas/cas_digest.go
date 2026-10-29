@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-// Digest is a SHA-256 address. Its serialized form includes the algorithm name.
+// Digest is an SHA-256 address. Its serialized form includes the algorithm name.
 type Digest [sha256.Size]byte
 
 // ParseDigest accepts only the canonical sha256:<lowercase-hex> representation.

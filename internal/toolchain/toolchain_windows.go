@@ -25,6 +25,34 @@ func systemJavaRoots() []string {
 			roots = append(roots, filepath.Join(base, vendor))
 		}
 	}
+	for _, scoop := range scoopRoots() {
+		roots = append(roots, filepath.Join(scoop, "apps"))
+	}
+	return roots
+}
+
+// scoopRoots returns the per-user and global Scoop roots. Each installed app
+// exposes its Java home as <apps>/<app>/current.
+func scoopRoots() []string {
+	roots := make([]string, 0, 2)
+	scoop := os.Getenv("SCOOP")
+	if scoop == "" {
+		if profile := os.Getenv("USERPROFILE"); profile != "" {
+			scoop = filepath.Join(profile, "scoop")
+		}
+	}
+	if scoop != "" {
+		roots = append(roots, scoop)
+	}
+	global := os.Getenv("SCOOP_GLOBAL")
+	if global == "" {
+		if data := os.Getenv("ProgramData"); data != "" {
+			global = filepath.Join(data, "scoop")
+		}
+	}
+	if global != "" {
+		roots = append(roots, global)
+	}
 	return roots
 }
 

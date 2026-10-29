@@ -3,7 +3,7 @@ package terminal
 import "strings"
 
 // StatusLogoMode selects how the status command shows the ASCII platform logo.
-// The zero value leaves the mode unset for direct FieldLogo callers.
+// The zero value leaves the mode unset for automatic layout selection.
 type StatusLogoMode int
 
 const (

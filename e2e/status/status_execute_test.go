@@ -14,19 +14,15 @@ import (
 // Keeping the runner independent makes it verify the binary's public output.
 type statusOutput struct {
 	Server struct {
-		Primary    runtimeRef   `json:"primary_runtime"`
-		Components []runtimeRef `json:"runtime_components"`
+		Product            runtimeRef   `json:"product"`
+		Components         []runtimeRef `json:"components"`
+		PackageDirectories []string     `json:"package_directories"`
 	} `json:"server"`
-	PackageDirs []string            `json:"package_dirs"`
-	Packages    []discoveredPackage `json:"packages"`
+	Packages []runtimeRef `json:"packages"`
 }
 
-type discoveredPackage struct {
-	ID runtimeRef `json:"ID"`
-}
-
-func (p discoveredPackage) identifier() string {
-	return p.ID.Ecosystem + ":" + p.ID.Name + "@" + p.ID.Version
+func (p runtimeRef) identifier() string {
+	return p.Ecosystem + ":" + p.Name + "@" + p.Version
 }
 
 type runtimeRef struct {

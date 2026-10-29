@@ -1,0 +1,86 @@
+---
+title: "lucy create"
+description: "Create a new server directory"
+---
+
+`lucy create` creates a new server, writes `lucy.yaml` and `lucy-lock.yaml`, and installs the server files. Creating a server also registers it in your user's [known-server list](/commands/install#known-servers), even when installation is deferred with `--no-install`. Use an empty directory; to adopt files that already exist, use [`lucy init`](/commands/init).
+
+```bash
+lucy create --directory survival --minecraft 1.21.4 --core paper
+```
+
+Without flags, lucy asks for the directory and server name, the server software, the Minecraft version, the software version, and whether to install now. The form prefills anything you passed as a flag.
+
+In a script or CI, pass `--no-interactive`; `--minecraft` is then required. The directory defaults to the current one, the name to the target directory's base name, the software to vanilla Minecraft, and installation to on.
+
+## Server name
+
+The name is stored as the top-level `name` in `lucy.yaml`, outside the server definition. It is trimmed and must be non-empty and printable. Pass `--name`, or edit it in the form, where it follows the directory until you change it.
+
+Registration warns when another registered server already uses the name. Both servers stay listed, but `--server` cannot select an ambiguous name until you change one manifest's `name` directly. A failure to write the known-server list is also a warning: the manifest, lock, and installed files are kept, and the next `create`, `init`, or `install` registers the server once the list is fixed.
+
+## Choose versions
+
+`--core` takes the server software and optionally a version, for example `paper`, `paper@232`, `fabric@0.16.9`, or `purpur@latest`. Use `--core-version` instead of the `@version` suffix.
+
+`--minecraft` takes an exact release or snapshot ID, such as `1.21.4`. `latest` selects the newest version the chosen software supports. Minecraft and Fabric also accept `release` and `snapshot` for Mojang's newest channels. The manifest records the resolved ID.
+
+## Prepare without installing
+
+`--no-install` writes only the manifest and lock. Run `lucy install` in the directory later to place the server files.
+
+`lucy create` does not accept the Minecraft EULA, start the server, or migrate an existing world.
+
+## Existing files
+
+Lucy warns when the directory is not empty and continues, leaving existing files in place. The installation can still conflict with files it does not own, so prefer an empty directory.
+
+An existing `lucy.yaml` is never replaced silently: the interactive form asks first, and non-interactive runs need `--force`. Replacing a manifest discards its package declarations, and the installation can remove files that only those declarations required.
+
+## Flags
+
+<ParamField query="--name" type="string">
+  Server name stored as the top-level `name` in `lucy.yaml` and used in the known-server list. Defaults to the target directory's base name. Names are trimmed and must be non-empty and printable.
+</ParamField>
+
+<ParamField query="--directory, -d" type="path" default=".">
+  Directory to create the server in. Lucy creates it when it does not exist.
+</ParamField>
+
+<ParamField query="--core, -c" type="string">
+  Server software, optionally with a version, for example `paper@232` or `fabric@0.16.9`. Paper and Purpur are available here even though the interactive form does not list them.
+</ParamField>
+
+<ParamField query="--core-version" type="string">
+  Server software version or version rule, used instead of the `@version` suffix. Leave it empty for the latest.
+</ParamField>
+
+<ParamField query="--minecraft, -m" type="string">
+  Minecraft release or snapshot ID. `release`, `snapshot`, and `latest` are accepted as described above.
+</ParamField>
+
+<ParamField query="--mcdr-version" type="string">
+  Record MCDReforged at this version as the server wrapper.
+</ParamField>
+
+<ParamField query="--install" type="boolean">
+  Install the server after writing the manifest and lock. This is the default.
+</ParamField>
+
+<ParamField query="--no-install" type="boolean" default="false">
+  Write only `lucy.yaml` and `lucy-lock.yaml`.
+</ParamField>
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Replace an existing `lucy.yaml` without asking. Use it in non-interactive runs.
+</ParamField>
+
+<ParamField query="--java" type="boolean" default="false">
+  With installation, also install the Java runtime the server asks for when no installed runtime meets it.
+</ParamField>
+
+<ParamField query="--add-java-repository" type="boolean" default="false">
+  Let `--java` add the Java vendor's package repository to the system package manager.
+</ParamField>
+
+See also [Global Flags](/commands/global-flags), [known servers](/commands/install#known-servers), [`lucy init`](/commands/init), and [`lucy install`](/commands/install).

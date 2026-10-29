@@ -1,0 +1,30 @@
+---
+title: "Resolution and installation architecture"
+description: "How Lucy chooses artifacts, reuses pins, stages server files, and commits workspace changes"
+---
+
+## From requirements to pins
+
+`document` decodes and normalizes the manifest before calculating its fingerprint. The lock records that fingerprint alongside the resolved server, optional MCDReforged runtime, flattened package artifacts, and tracked-file declarations. Package records retain bindings to direct requirements and dependency provenance. Lock validation requires concrete package versions, filenames, and SHA-256 hashes.
+
+`install` compares the declaration with the existing lock to decide whether it can replay the lock or must resolve. A lock can also be replayed without a manifest. When resolution is needed, an existing compatible server or package pin can be reused; a changed declaration does not automatically mean every artifact is upgraded. Offline mode cannot perform fresh metadata resolution. Upgrade can request a fresh resolution even if the lock matches the manifest.
+
+Server resolution in `upstream/routing` determines the product, artifact, bootstrap profile, inputs, and Java advisory. `resolve.Packages` selects package candidates against the target runtime, prior pins, declared requirements, and dependency metadata. `artifact` reads loader-specific descriptors; `version` interprets their constraint dialects. The resolver merges declarations that select the same artifact while retaining their requirement bindings and dependency relationships.
+
+Upstream interfaces separate search, information, version selection, fetching, dependencies, and hash identification. A provider need not implement every capability. Routing maps the requested provider or ecosystem to the relevant implementations; it passes local runtime facts as `upstream.LocalContext`, rather than giving providers access to workspace discovery or prompting.
+
+## From pins to installed files
+
+`install.Sync` acquires the workspace writer lock, performs preflight checks and interrupted-install recovery, decides the resolution mode, and passes the resulting lock to staging. `install.PlanInstall` separates resolution from application: the plan records manifest and lock fingerprints, and `ApplyPlan` checks them before staging so a concurrent document edit cannot be silently overwritten.
+
+Staging materializes locked server inputs and enabled package artifacts, selects Java, and calls `bootstrap` to prepare the server tree. Once destinations have been checked, installation commits staged files and documents with a rollback journal. The receipt records owned runtime outputs and a fingerprint of the server, MCDReforged, and package resolution. It is distinct from the manifest fingerprint: tracked-file declarations and Java requirements do not invalidate that runtime receipt.
+
+An existing output is not automatically safe to replace. Ownership, matching contents, explicit overwrite selection, and an installation adopted through discovery affect the commit decision. A previously owned output that was modified cannot simply be pruned. Tracked working files are excluded from runtime ownership and pruning.
+
+If the receipt and owned outputs are current, Lucy can skip runtime staging. It still checks unmanaged artifacts and handles MCDReforged and tracked-file provisioning where applicable. After a successful installation commit, tracked-file provisioning may report diagnostics or fail; the result may therefore describe a failure after the runtime was committed.
+
+## Downloads and state
+
+The installation download store uses workspace staging under `.lucy/downloads` and a shared content-addressed download cache. Locked hashes identify expected bytes; the cache is not the manifest, lock, or ownership receipt. `filetrack` has a separate workspace-local object store for tracked-file revisions. Confusing these stores can lead to incorrect assumptions about what a lock can restore on another machine.
+
+Relevant entry points: `install/install_plan.go`, `install/install_resolve.go`, `install/install_workspace.go`, `install/install_transaction.go`, `resolve/resolve_packages.go`, and `upstream/routing`.

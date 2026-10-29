@@ -10,9 +10,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // https://docs.modrinth.com/api/operations/versionfromhash/
@@ -128,7 +129,7 @@ func sha1File(path string) (string, error) {
 }
 
 func (s provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
-	ref types.VersionedPackageRef,
+	ref catalog.VersionedRef,
 	hash string,
 	ok bool,
 	err error,
@@ -168,24 +169,24 @@ func (s provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
 		return ref, hash, false, err
 	}
 
-	ref = types.VersionedPackageRef{
-		Name:      types.PackageName(project.Slug),
+	ref = catalog.VersionedRef{
+		Name:      catalog.Name(project.Slug),
 		Provider:  s.Provider(),
 		Ecosystem: ecosystemFromModrinthLoaders(version.Loaders),
-		Version:   types.Version(version.VersionNumber),
+		Version:   versionpkg.Version(version.VersionNumber),
 	}
 	return ref, hash, true, nil
 }
 
-func ecosystemFromModrinthLoaders(loaders []string) types.Ecosystem {
+func ecosystemFromModrinthLoaders(loaders []string) catalog.Ecosystem {
 	for _, loader := range loaders {
-		p := types.Ecosystem(loader)
-		if p.IsModding() || p == types.EcosystemBukkit || p == types.EcosystemPaper {
+		p := catalog.Ecosystem(loader)
+		if p.IsModding() || p == catalog.EcosystemBukkit || p == catalog.EcosystemPaper {
 			return p
 		}
 	}
 	if len(loaders) > 0 {
-		return types.Ecosystem(loaders[0])
+		return catalog.Ecosystem(loaders[0])
 	}
-	return types.EcosystemUnspecified
+	return catalog.EcosystemUnspecified
 }

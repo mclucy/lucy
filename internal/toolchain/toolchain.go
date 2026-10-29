@@ -8,21 +8,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	javapkg "github.com/mclucy/lucy/java"
 )
 
 const probeTimeout = 20 * time.Second
 
 type JavaInstallation struct {
-	Home    string
-	Java    string
-	Javac   string
-	Version string
-	Major   int
-	Vendor  string
-	Arch    string
+	Home         string
+	Java         string
+	Javac        string
+	Version      string
+	Major        int
+	Vendor       string
+	Arch         string
+	Distribution javapkg.Distribution
+	Implementor  string
 }
 
 type GradleInstallation struct {
@@ -84,8 +89,9 @@ func Discover(ctx context.Context, homes ...string) (Inventory, error) {
 			inventory.Java = append(inventory.Java, java)
 		}
 	}
-	slices.SortFunc(inventory.Java, func(a, b JavaInstallation) int {
-		return cmp.Or(cmp.Compare(b.Major, a.Major), cmp.Compare(a.Home, b.Home))
+	sort.Slice(inventory.Java, func(i, j int) bool {
+		a, b := &inventory.Java[i], &inventory.Java[j]
+		return cmp.Or(cmp.Compare(b.Major, a.Major), cmp.Compare(a.Home, b.Home)) < 0
 	})
 	inventory.Gradle, err = probeGradle(ctx)
 	if err != nil {

@@ -3,6 +3,7 @@ package buildrepo
 import (
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml"
@@ -36,7 +37,7 @@ func (p *prober) indexCatalogs() {
 	}
 }
 
-// readCatalog parses one libs.versions.toml into the alias to plugin id map.
+// readCatalog parses libs.versions.toml into the alias to plugin id map.
 func (p *prober) readCatalog(path string) {
 	if _, seen := p.catalogs[path]; seen {
 		return
@@ -124,8 +125,8 @@ func pluginIDOfEntry(entry catalogEntry) string {
 // sortBuild orders the derived collections of a build so that repeated probes
 // of the same repository produce identical output.
 func sortBuild(build *GradleBuild) {
-	slices.SortFunc(build.Projects, func(a, b Project) int {
-		return strings.Compare(a.Path, b.Path)
+	sort.Slice(build.Projects, func(i, j int) bool {
+		return build.Projects[i].Path < build.Projects[j].Path
 	})
 	slices.Sort(build.IncludedBuilds)
 	for i := range build.Projects {

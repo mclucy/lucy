@@ -4,7 +4,8 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/version"
 )
 
 func TestSearchResponseToSearchResults(t *testing.T) {
@@ -13,12 +14,12 @@ func TestSearchResponseToSearchResults(t *testing.T) {
 		{ID: 3031, Name: "ClearChat 3.2"},
 	}
 
-	results := resp.ToSearchResults(types.ProviderSpiget)
+	results := resp.ToSearchResults(catalog.ProviderSpiget)
 
-	if results.Provider != types.ProviderSpiget {
+	if results.Provider != catalog.ProviderSpiget {
 		t.Fatalf(
 			"expected source %v, got %v",
-			types.ProviderSpiget,
+			catalog.ProviderSpiget,
 			results.Provider,
 		)
 	}
@@ -33,7 +34,7 @@ func TestSearchResponseToSearchResults(t *testing.T) {
 	}
 }
 
-func TestResourceResponseToProjectInformation(t *testing.T) {
+func TestProjectInfoConversion(t *testing.T) {
 	resource := resourceResponse{
 		ID:            6245,
 		Name:          "PlaceholderAPI",
@@ -67,33 +68,33 @@ func TestResourceResponseToProjectInformation(t *testing.T) {
 		t,
 		info.URLs,
 		"Additional information",
-		types.URLHome,
+		catalog.URLHome,
 		"https://wiki.placeholderapi.com/",
 	)
 	assertHasURL(
 		t,
 		info.URLs,
 		"Discussion",
-		types.URLForum,
+		catalog.URLForum,
 		"https://www.spigotmc.org/threads/placeholderapi.61918/",
 	)
 	assertHasURL(
 		t,
 		info.URLs,
 		"Source",
-		types.URLSource,
+		catalog.URLSource,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI",
 	)
 	assertHasURL(
 		t,
 		info.URLs,
 		"Donate",
-		types.URLSponsor,
+		catalog.URLSponsor,
 		"https://github.com/sponsors/PlaceholderAPI",
 	)
 }
 
-func TestResourceResponseToProjectInformation_NormalizesRelativeAndMiscLinks(t *testing.T) {
+func TestProjectInfoNormalizesLinks(t *testing.T) {
 	resource := resourceResponse{
 		Name: "PlaceholderAPI",
 		Links: map[string]string{
@@ -109,19 +110,19 @@ func TestResourceResponseToProjectInformation_NormalizesRelativeAndMiscLinks(t *
 		t,
 		info.URLs,
 		"Support",
-		types.URLForum,
+		catalog.URLForum,
 		"https://www.spigotmc.org/threads/placeholderapi.61918/",
 	)
 	assertHasURL(
 		t,
 		info.URLs,
 		"Custom docs",
-		types.URLMisc,
+		catalog.URLMisc,
 		"https://www.spigotmc.org/resources/placeholderapi.6245/",
 	)
 }
 
-func TestResourceResponseToProjectInformation_InvalidBase64IsDropped(t *testing.T) {
+func TestProjectInfoDropsInvalidBase64(t *testing.T) {
 	resource := resourceResponse{
 		Name:          "Broken",
 		Description:   "%%%not-base64%%%",
@@ -153,10 +154,10 @@ func TestResolvedVersionToPackageRemote(t *testing.T) {
 		versionResponse{ID: 625258, Name: "2.12.2"},
 	).ToPackageRemote()
 
-	if remote.ID.Provider != types.ProviderSpiget {
+	if remote.ID.Provider != catalog.ProviderSpiget {
 		t.Fatalf(
 			"expected source %v, got %v",
-			types.ProviderSpiget,
+			catalog.ProviderSpiget,
 			remote.ID.Provider,
 		)
 	}
@@ -175,7 +176,7 @@ func TestResolvedVersionToPackageRemote(t *testing.T) {
 	}
 }
 
-func TestResolvedVersion_ToPackageRemote_UsesExternalDownload(t *testing.T) {
+func TestResolvedVersionUsesExternalDownload(t *testing.T) {
 	remote := resolvedVersion{
 		ResourceID:  10,
 		VersionID:   20,
@@ -215,13 +216,13 @@ func TestResolvedVersionIdentityPolicy(t *testing.T) {
 	if resolved.Matches("2.12.1") {
 		t.Fatalf("did not expect mismatched version to match")
 	}
-	if resolved.Matches(types.VersionAny) {
+	if resolved.Matches(version.Any) {
 		t.Fatalf("did not expect any alias to count as an exact resolved version")
 	}
-	if resolved.Matches(types.VersionBeta) {
+	if resolved.Matches(version.Beta) {
 		t.Fatalf("did not expect beta alias to count as an exact resolved version")
 	}
-	if resolved.Matches(types.VersionStable) {
+	if resolved.Matches(version.Stable) {
 		t.Fatalf("did not expect stable alias to count as an exact resolved version")
 	}
 }
@@ -256,9 +257,9 @@ func TestResolvedVersionIDFallbackPolicy(t *testing.T) {
 
 func assertHasURL(
 	t *testing.T,
-	urls []types.URL,
+	urls []catalog.URL,
 	name string,
-	kind types.URLType,
+	kind catalog.URLType,
 	value string,
 ) {
 	t.Helper()

@@ -11,11 +11,10 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/cas"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
 )
 
 type image struct {
@@ -226,6 +225,22 @@ func commit(root string, files *os.Root, store *cas.Store, txn transaction) (res
 	return workspacewrite.RemoveRoot(files, transactionName)
 }
 
+// HasPendingTransaction reports whether a file transaction has not committed.
+// It must run under the shared workspace writer lock.
+func HasPendingTransaction(root string) (bool, error) {
+	if err := workspacewrite.SafePath(root, transactionName); err != nil {
+		return false, err
+	}
+	_, err := os.Stat(filepath.Join(root, transactionName))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // RecoverPending must run under the shared workspace writer lock.
 func RecoverPending(root string) (resultErr error) {
 	if err := workspacewrite.SafePath(root, transactionName); err != nil {
@@ -307,7 +322,7 @@ func recoverTransaction(root string, files *os.Root, store *cas.Store) error {
 		return fmt.Errorf("file history changed after an interrupted transaction")
 	}
 	for _, change := range txn.Mutations {
-		if change.Path != manifest.Filename && change.Path != lockfile.Filename {
+		if change.Path != document.ManifestFilename && change.Path != document.LockFilename {
 			if normalized, err := input.TrackedPath(change.Path); err != nil || normalized != change.Path {
 				return fmt.Errorf("invalid pending file transaction path")
 			}

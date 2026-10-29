@@ -6,7 +6,7 @@
 **Minecraft 服务器的包管理器。**
 
 [![CI](https://github.com/mclucy/lucy/actions/workflows/ci.yml/badge.svg)](https://github.com/mclucy/lucy/actions/workflows/ci.yml)
-[![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/dev/coverage.html)
+[![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/badge/coverage.html)
 [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE)
 
 [文档](https://lucy.lc/docs) | [English](README.md) | [中文](README_CN.md)
@@ -70,6 +70,7 @@ lucy install
 | `lucy init`            | 从已有服务器目录生成 `lucy.yaml`                              |
 | `lucy add <pkg>...`    | 记录包、解析依赖、更新 lock 并同步                            |
 | `lucy remove <pkg>...` | 删除包、重新解析，并清理不再需要的文件                        |
+| `lucy deinit`          | 从服务器目录移除 lucy 的 manifest、lock 与本地状态            |
 | `lucy install`         | 将服务器同步到 manifest 与 lock；lock 过期时重新解析          |
 | `lucy status`          | 显示实时服务器与包；`--from-lock` 渲染 lock                   |
 | `lucy search <query>`  | 搜索 Modrinth、CurseForge、Hangar、Spiget 和 MCDReforged 目录 |

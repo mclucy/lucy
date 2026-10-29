@@ -1,0 +1,47 @@
+---
+title: "lucy java"
+description: "Inspect and choose Java for your server"
+---
+
+List the Java runtimes Lucy finds, the Java requirement the server declares, and the runtime Lucy selected:
+
+```bash
+lucy java list
+```
+
+With a lock file, the list shows the requirements and which runtime Lucy selected. Without one, it lists available runtimes. Lucy warns about mismatches; you can still start the server with your own Java command or script.
+
+## Set a server requirement
+
+Choose a Java version and optionally a distribution for the server:
+
+```bash
+lucy java use 21 --distribution temurin
+lucy install
+```
+
+`lucy java use` updates `lucy.yaml`; `lucy install` resolves the new requirement into the lock. Run `lucy java use` without arguments to choose interactively, or use `auto` to remove the version or distribution pin. Without a pin, the requirement is the lowest major that satisfies both Mojang's advisory and every package requirement, so a package can raise it above the advisory.
+
+## Select a runtime on this machine
+
+To use a specific installation locally, set `java.home` with [`lucy config`](/commands/config):
+
+```bash
+lucy config set java.home /opt/homebrew/opt/openjdk@21
+```
+
+This local choice overrides automatic runtime selection. Lucy warns if it does not meet the requirements or is unusable. To install a suitable runtime when needed, see [`lucy install --java`](/commands/install#java).
+
+## Flags
+
+### lucy java use
+
+<ParamField query="version" type="string">
+  A Java major version of 8 or later, or `auto`. Writes `server.java` in `lucy.yaml`. `auto` removes the pin; the requirement then follows Mojang's advisory and the enabled packages.
+</ParamField>
+
+<ParamField query="--distribution" type="string">
+  A distribution name, or `auto` to accept any. Writes `server.java` in `lucy.yaml`. Valid names are `temurin`, `zulu`, `corretto`, `liberica`, `microsoft`, `oracle`, `oracle_open_jdk`, `graalvm`, `graalvm_community`, `semeru`, `sap_machine`, `dragonwell`, `kona`, `redhat`, and `jetbrains`.
+</ParamField>
+
+See also [`lucy install`](/commands/install#java) and [Global Flags](/commands/global-flags).

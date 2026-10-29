@@ -1,26 +1,16 @@
 package compile
 
 import (
-	"errors"
-	"os"
+	"context"
 
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/x/term"
-	"github.com/mclucy/lucy/terminal/style"
+	"github.com/mclucy/lucy/internal/cli"
 )
 
-// promptAvailable reports whether a select prompt can talk to the user. The
-// form needs a terminal on stdin; piped or closed stdin, or a run under
-// --no-interactive, must fail with the flag guidance instead of waiting on
-// input that never comes.
-func promptAvailable() bool {
-	return term.IsTerminal(os.Stdin.Fd()) && style.InteractiveEnabled()
-}
-
-// promptModProject asks which of several mod projects to compile. huh renders
+// promptModProject asks which of several mod projects to compile. `huh` renders
 // on stderr, so stdout keeps carrying only the artifact path. Aborting the
-// selection cancels the compile; there is no default to fall back to.
-func promptModProject(candidates []gradleProject) (gradleProject, error) {
+// selection cancels the compilation; there is no default to fall back to.
+func promptModProject(ctx context.Context, candidates []gradleProject) (gradleProject, error) {
 	// gradleProject is not comparable (it holds slices), so the select carries
 	// the candidate index instead of the struct.
 	options := make([]huh.Option[int], 0, len(candidates))
@@ -36,10 +26,7 @@ func promptModProject(candidates []gradleProject) (gradleProject, error) {
 			Filtering(true).
 			Value(&picked),
 	))
-	if err := form.Run(); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return gradleProject{}, errors.New("compile cancelled")
-		}
+	if err := cli.NormalizePromptError(ctx, form.RunWithContext(ctx)); err != nil {
 		return gradleProject{}, err
 	}
 	return candidates[picked], nil

@@ -94,14 +94,14 @@ func writeFixtureArtifact(w http.ResponseWriter, name, payload string) {
 // installNetworkCache points the package network cache at a real private cache
 // directory and restores the previous singleton on cleanup. The package cache
 // singleton is process-wide, so these tests stay sequential.
-func installNetworkCache(t *testing.T, cfg CacheConfig) *handler {
+func installNetworkCache(t *testing.T, cfg Config) *handler {
 	t.Helper()
 	return installNetworkCacheAt(t, t.TempDir(), cfg)
 }
 
 // installNetworkCacheAt roots the network cache in home, which lets a test
 // share one real cache root with helper processes.
-func installNetworkCacheAt(t *testing.T, home string, cfg CacheConfig) *handler {
+func installNetworkCacheAt(t *testing.T, home string, cfg Config) *handler {
 	t.Helper()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
@@ -346,7 +346,7 @@ func TestCacheIndexRetainsFileMode(t *testing.T) {
 	}
 }
 
-func TestCachedDownloadCorruptObjectIsRefetchedAndRepaired(t *testing.T) {
+func TestCacheRepairsCorruptObject(t *testing.T) {
 	fixture := newCacheFixture(t)
 	h := installNetworkCache(t, DefaultCacheConfig())
 	url := fixture.artifactURL("tool.jar")

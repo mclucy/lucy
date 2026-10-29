@@ -24,12 +24,22 @@ func CallDaemonWithAutoStart(ctx context.Context, req server.Request, out any) e
 	if startErr := server.NewServiceManager().(server.DaemonStarter).StartDaemon(); startErr != nil {
 		return fmt.Errorf("start Lucy daemon: %w (original request failed: %v)", startErr, err)
 	}
-	timer := time.NewTimer(500 * time.Millisecond)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
+	readiness, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-readiness.Done():
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("daemon did not become ready within 10 seconds: %w", err)
+		case <-ticker.C:
+		}
+		err = server.CallDaemon(ctx, req, out)
+		if err == nil || !errors.Is(err, server.ErrIPCUnavailable) {
+			return err
+		}
 	}
-	return server.CallDaemon(ctx, req, out)
 }

@@ -6,7 +6,6 @@ interval: 700ms
 dotenv:
   - ".env"
   - ".cipher_key"
-  - ".cipher_ciphertext"
 
 vars:
   DEV_GOOS:
@@ -21,6 +20,8 @@ vars:
     sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
   # SECURITY: cipher fragments must NOT live in this var — Task expands vars into command logs.
   LUCY_LDFLAGS: -X github.com/mclucy/lucy/cmd.version={{.LUCY_VERSION}} -X github.com/mclucy/lucy/cmd.commit={{.LUCY_COMMIT}}
+  # HTTP/1.1 covers every provider; omitting HTTP/2 keeps binaries smaller.
+  LUCY_STDLIB_TAGS: nethttpomithttp2
 
 tasks:
   build:
@@ -37,10 +38,6 @@ tasks:
           KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
           CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
           CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
-            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
           if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
             ldflags="$ldflags \
               -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
@@ -49,11 +46,12 @@ tasks:
               -X github.com/mclucy/lucy/internal/cipher.ciphertextB=$CT_B"
           fi
         fi
-        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug -o {{.DEV_BINARY}}
+        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug,{{.LUCY_STDLIB_TAGS}} -o {{.DEV_BINARY}}
         ln -sf lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}} {{.DEV_SYMLINK}}
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
+      - "./docs/**/*.mdx"
       - "./go.mod"
       - "./go.sum"
     generates:
@@ -78,6 +76,7 @@ tasks:
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
+      - "./docs/**/*.mdx"
       - "./go.mod"
       - "./go.sum"
     method: timestamp
@@ -87,6 +86,7 @@ tasks:
     deps:
       - clean:release
       - check:cf-api-key
+      - docs:pack
     cmds:
       - |
         set -euo pipefail
@@ -97,10 +97,6 @@ tasks:
           KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
           CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
           CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$CT_A" ] && [ -f .cipher_ciphertext ]; then
-            CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
           if [ -n "$KEY_A" ] && [ -n "$KEY_B" ] && [ -n "$CT_A" ] && [ -n "$CT_B" ]; then
             ldflags="$ldflags \
               -X github.com/mclucy/lucy/internal/cipher.keyA=$KEY_A \
@@ -114,17 +110,17 @@ tasks:
             fi
           fi
         fi
-        GOOS=linux GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-linux-arm64
-        GOOS=windows GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -ldflags="$ldflags" -tags release -o release/lucy-darwin-arm64
+        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-arm64
     sources:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
+      - "./docs/**/*.mdx"
       - "./go.mod"
       - "./go.sum"
-
   clean:
     desc: Remove all generated build artifacts
     deps:
@@ -192,15 +188,9 @@ tasks:
           printf 'cipher_ciphertext_a=%s\n' "$CT_A"
           printf 'cipher_ciphertext_b=%s\n' "$CT_B"
         } > .cipher_key
-        # Keep companion file for dotenv compatibility; ciphertext halves live with key file.
-        {
-          printf 'cipher_ciphertext_a=%s\n' "$CT_A"
-          printf 'cipher_ciphertext_b=%s\n' "$CT_B"
-        } > .cipher_ciphertext
-        printf "[OK] Wrote .cipher_key and .cipher_ciphertext (four fragments)\n"
+        printf "[OK] Wrote .cipher_key (four fragments)\n"
     generates:
       - .cipher_key
-      - .cipher_ciphertext
 
   check:cf-api-key:
     silent: true
@@ -208,7 +198,7 @@ tasks:
     cmds:
       - |
         if [ -z "${CF_API_KEY:-}" ]; then
-          printf "[WARN] CF_API_KEY is not set — CurseForge API calls will fail\n"
+          printf "[WARN] CF_API_KEY is not set, so CurseForge API calls will fail\n"
           exit 0
         fi
         STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -269,23 +259,59 @@ tasks:
     cmds:
       - rm -rf .sandboxes
 
+  logos:gen:
+    desc: "Generate the status logos from terminal/assets/logos.yaml (args: -- -only papermc -preview test_logos)"
+    cmds:
+      - go run ./tools/genlogo {{.CLI_ARGS}}
+
+  logos:check:
+    desc: Fail when the committed status logos differ from what terminal/assets/logos.yaml generates
+    cmds:
+      - go run ./tools/genlogo -check
+  docs:pack:
+    desc: "Pack the site pages into docs/docs.tar.gz"
+    dir: "{{.TASKFILE_DIR}}"
+    cmds:
+      - go run ./tools/gendocs {{.CLI_ARGS}}
+
+  docs:wiki:
+    desc: "Render the GitHub wiki mirror into dist/wiki"
+    dir: "{{.TASKFILE_DIR}}"
+    cmds:
+      - go run ./tools/genwiki -out dist/wiki
+
   e2e:status:
-    desc: "Probe sandboxes and initialize modpack manifests (args: -run 'TestProbe/<sandbox id>')"
+    desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/status {{.CLI_ARGS}}
+
+  e2e:init:
+    desc: "Initialize modpack manifests from sandboxes (args: -run 'TestInitialize/<modpack id>')"
+    cmds:
+      - go test -tags e2e -count=1 -timeout 0 ./e2e/init {{.CLI_ARGS}}
 
   e2e:compile:
     desc: "Compile pinned repository fixtures (args: -run 'TestCompile/<fixture id>')"
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
+  e2e:compile:smoke:
+    desc: "Compile the fixtures marked smoke (args: -run 'TestCompile/<fixture id>')"
+    cmds:
+      - LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 0 ./e2e/compile {{.CLI_ARGS}}
+
   e2e:install:
-    desc: "Run fresh install scenarios (args: -run 'TestInstall/<scenario id>')"
+    desc: "Run fresh and init-then-install scenarios (args: -run 'Test(Init)?Install/<scenario id>')"
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
 
+  e2e:filetrack:
+    desc: "Run the hermetic file tracking and CLI transaction scenarios"
+    cmds:
+      - go test -tags integration -count=1 -timeout 0 ./e2e/filetrack ./filetrack {{.CLI_ARGS}}
+
   ci:test:
-    desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher files then runs checks
+    desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher material then runs checks
     cmds:
       - |
         if [ -n "${CF_API_KEY:-}" ]; then
@@ -296,7 +322,7 @@ tasks:
       - task: test:coverage
 
   ci:build:
-    desc: Build release artifacts for CI (for GitHub Actions); conditionally generates cipher files
+    desc: Build release artifacts for CI (for GitHub Actions); conditionally generates cipher material
     cmds:
       - |
         if [ -n "${CF_API_KEY:-}" ]; then
@@ -319,7 +345,7 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        # Prefer four-fragment cipher files, then CIPHER_* env, then dotenv-loaded vars.
+        # Prefer the four-fragment .cipher_key file, then CIPHER_* env, then dotenv-loaded vars.
         # Never put these in Task vars — Task expands vars into command logs.
         # Snapshot identity is empty in .goreleaser.yaml so material must be unbound.
         if [ -f .cipher_key ]; then
@@ -332,10 +358,6 @@ tasks:
           CIPHER_KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
           CIPHER_CIPHERTEXT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
           CIPHER_CIPHERTEXT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$CIPHER_CIPHERTEXT_A" ] && [ -f .cipher_ciphertext ]; then
-            CIPHER_CIPHERTEXT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_ciphertext)
-            CIPHER_CIPHERTEXT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_ciphertext)
-          fi
         elif [ -n "${CIPHER_KEY_A:-}" ] && [ -n "${CIPHER_KEY_B:-}" ] \
           && [ -n "${CIPHER_CIPHERTEXT_A:-}" ] && [ -n "${CIPHER_CIPHERTEXT_B:-}" ]; then
           :

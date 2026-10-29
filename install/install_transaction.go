@@ -11,12 +11,11 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/bootstrap"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
-	"github.com/mclucy/lucy/lockfile"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/manifest"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/workspace/discovery"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,7 +32,44 @@ type (
 	}
 )
 
-func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document, publish bool) (resultErr error) {
+// adoptedOutputPaths reports the workspace-relative members of the runtime the
+// lock names, when observation selects that runtime. Installation replaces
+// these files instead of refusing them: they belong to the installation that
+// initialization adopted, not to unrelated work.
+func adoptedOutputPaths(root string, server document.LockedServer) map[string]bool {
+	serverDir := filepath.Join(root, filepath.FromSlash(server.Directory))
+	observed := discovery.Discover(serverDir)
+	declaration := &discovery.Declaration{
+		Product:     server.Product,
+		Minecraft:   server.Minecraft,
+		CoreVersion: server.CoreVersion,
+	}
+	if err := observed.Select(discovery.Request{Declared: declaration}); err != nil {
+		log.Debug("no adopted installation to reconcile", "reason", err)
+		return nil
+	}
+	selected := observed.Selected()
+	if selected == nil || selected.Installation == nil {
+		return nil
+	}
+	paths := make(map[string]bool, len(selected.Installation.Files))
+	for _, file := range selected.Installation.Files {
+		relative, err := filepath.Rel(root, file.Path)
+		if err != nil || !filepath.IsLocal(relative) {
+			continue
+		}
+		paths[filepath.ToSlash(relative)] = true
+	}
+	return paths
+}
+
+func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool) (FileChanges, error) {
+	var counts FileChanges
+	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, adoptedPaths, &counts)
+	return counts, resultErr
+}
+
+func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, counts *FileChanges) (resultErr error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	previous := installReceipt{}
 	raw, err := os.ReadFile(receiptPath)
@@ -45,6 +81,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		return err
 	}
 	owned := map[string]string{}
+	occupantHashes := map[string]string{}
 	for _, entry := range previous.Entries {
 		owned[entry.Path] = entry.SHA256
 	}
@@ -71,7 +108,7 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 		if strings.Contains(relative, "/.bootstrap-data/") || strings.HasPrefix(relative, ".bootstrap-data/") {
 			return nil
 		}
-		if err := manifest.SafeRelativePath(relative); err != nil {
+		if err := document.SafeRelativePath(relative); err != nil {
 			return err
 		}
 		target := filepath.Join(root, relative)
@@ -103,8 +140,24 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 			if err != nil {
 				return err
 			}
+			occupantHashes[relative] = actual["sha256"]
 			if actual["sha256"] != hashes["sha256"] && actual["sha256"] != owned[relative] {
-				return fmt.Errorf("unowned or modified output conflict: %s", relative)
+				switch {
+				case overwritePaths[relative]:
+					log.Debug(
+						"overwriting occupied output",
+						"path", relative,
+						"reason", "overwrite requested",
+					)
+				case adoptedPaths[relative]:
+					log.Debug(
+						"adopting occupied output",
+						"path", relative,
+						"reason", "occupied by the adopted installation",
+					)
+				default:
+					return fmt.Errorf("unowned or modified output conflict: %s", relative)
+				}
 			}
 		} else if !os.IsNotExist(err) {
 			return err
@@ -158,9 +211,9 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 			names = append(names, entry.Path)
 		}
 	}
-	names = append(names, lockfile.Filename, ".lucy/install.yaml")
+	names = append(names, document.LockFilename, ".lucy/install.yaml")
 	if publish {
-		names = append(names, manifest.Filename)
+		names = append(names, document.ManifestFilename)
 	}
 	slices.Sort(names)
 	names = slices.Compact(names)
@@ -207,13 +260,23 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 	}()
 	for name, source := range sources {
 		mode := os.FileMode(0o644)
+		hash := ""
 		for _, entry := range next.Entries {
 			if entry.Path == name {
 				mode = os.FileMode(entry.Mode)
+				hash = entry.SHA256
 				break
 			}
 		}
-		if err := bootstrap.CopyLockedFile(source, filepath.Join(root, name), mode); err != nil {
+		target := filepath.Join(root, name)
+		_, statErr := os.Lstat(target)
+		exists := statErr == nil
+		if !exists {
+			counts.Created++
+		} else if occupantHashes[name] != hash {
+			counts.Replaced++
+		}
+		if err := bootstrap.CopyLockedFile(source, target, mode); err != nil {
 			return err
 		}
 	}
@@ -231,13 +294,14 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 			}
 			pruned++
 		}
+		counts.Removed = pruned
 	}
 	if publish {
-		if err := manifest.Write(root, d); err != nil {
+		if err := document.ManifestFile(root).Write(d); err != nil {
 			return err
 		}
 	}
-	if err := lockfile.Write(root, l); err != nil {
+	if err := document.LockFile(root).Write(l); err != nil {
 		return err
 	}
 	receiptBytes, err := yaml.Marshal(next)
@@ -265,14 +329,17 @@ func applyCommit(root, stage string, d *manifest.Document, l *lockfile.Document,
 }
 
 // ResolutionFingerprint digests the fields an installation receipt pins a lock
-// with: the server, MCDR and package fields only. Tracked files and the
-// manifest fingerprint stay out, so file-only changes keep a receipt current.
-func ResolutionFingerprint(l *lockfile.Document) (string, error) {
+// with: the server, MCDR and package fields only. Tracked files, the manifest
+// fingerprint, and Java requirement stay out. Changing these fields does not
+// change installed files or invalidate the receipt.
+func ResolutionFingerprint(l *document.Lock) (string, error) {
+	server := l.Server
+	server.Java = document.LockedJava{}
 	data, err := yaml.Marshal(struct {
-		Server   lockfile.Server       `yaml:"server"`
-		MCDR     *lockfile.MCDR        `yaml:"mcdr,omitempty"`
-		Packages []types.LockedPackage `yaml:"packages"`
-	}{l.Server, l.MCDR, l.Packages})
+		Server   document.LockedServer `yaml:"server"`
+		MCDR     *document.LockedMCDR  `yaml:"mcdr,omitempty"`
+		Packages []document.Package    `yaml:"packages"`
+	}{server, l.MCDR, l.Packages})
 	if err != nil {
 		return "", err
 	}
@@ -280,25 +347,7 @@ func ResolutionFingerprint(l *lockfile.Document) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// legacyResolutionFingerprint reproduces the whole-document fingerprint that
-// receipts recorded before the resolved runtime was separated from the lock
-// identity, so such a receipt stays current instead of re-staging once.
-func legacyResolutionFingerprint(l *lockfile.Document) (string, error) {
-	data, err := yaml.Marshal(struct {
-		Version             int                   `yaml:"lock_version"`
-		ManifestFingerprint string                `yaml:"manifest_fingerprint"`
-		Server              lockfile.Server       `yaml:"server"`
-		MCDR                *lockfile.MCDR        `yaml:"mcdr,omitempty"`
-		Packages            []types.LockedPackage `yaml:"packages"`
-	}{l.SchemaVersion, l.ManifestFingerprint, l.Server, l.MCDR, l.Packages})
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
-}
-
-func installationCurrent(root string, l *lockfile.Document) (bool, error) {
+func installationCurrent(root string, l *document.Lock) (bool, error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	raw, err := os.ReadFile(receiptPath)
 	if os.IsNotExist(err) {
@@ -317,20 +366,13 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 		return false, err
 	}
 	if receipt.LockFingerprint != expected {
-		legacy, err := legacyResolutionFingerprint(l)
-		if err != nil {
-			return false, err
-		}
-		if receipt.LockFingerprint != legacy {
-			log.Debug(
-				"installation not current",
-				"reason", "lock fingerprint changed",
-				"receipt", receipt.LockFingerprint,
-				"expected", expected,
-			)
-			return false, nil
-		}
-		log.Debug("accepting a pre-file-tracking installation receipt", "receipt", receiptPath)
+		log.Debug(
+			"installation not current",
+			"reason", "lock fingerprint changed",
+			"receipt", receipt.LockFingerprint,
+			"expected", expected,
+		)
+		return false, nil
 	}
 	tracked := trackedPaths(l)
 	for _, entry := range receipt.Entries {
@@ -357,7 +399,7 @@ func installationCurrent(root string, l *lockfile.Document) (bool, error) {
 	return true, nil
 }
 
-func trackedPaths(l *lockfile.Document) map[string]bool {
+func trackedPaths(l *document.Lock) map[string]bool {
 	paths := make(map[string]bool, len(l.Files))
 	for _, file := range l.Files {
 		paths[strings.ToLower(file.Path)] = true

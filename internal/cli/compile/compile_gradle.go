@@ -2,7 +2,6 @@ package compile
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -15,11 +14,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/catalog"
+
+	_ "embed"
+
 	"github.com/Masterminds/semver/v3"
 	"github.com/mclucy/lucy/internal/buildrepo"
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 )
 
 //go:embed compile_model.gradle
@@ -43,11 +46,11 @@ type gradleModel struct {
 type gradleProject struct {
 	Path string `json:"path"`
 
-	Ecosystems     []types.Ecosystem `json:"ecosystems"`
-	HasModMetadata bool              `json:"hasModMetadata"`
-	BuildTask      string            `json:"buildTask"`
-	Compilers      []compiler        `json:"compilers"`
-	Archives       []archive         `json:"archives"`
+	Ecosystems     []catalog.Ecosystem `json:"ecosystems"`
+	HasModMetadata bool                `json:"hasModMetadata"`
+	BuildTask      string              `json:"buildTask"`
+	Compilers      []compiler          `json:"compilers"`
+	Archives       []archive           `json:"archives"`
 }
 
 type compiler struct {
@@ -262,9 +265,9 @@ func nameProject(path string) string {
 	return path
 }
 
-func selectProject(model gradleModel, opts *options) (gradleProject, error) {
+func selectProject(ctx context.Context, model gradleModel, opts *options, gate cli.PromptGate) (gradleProject, error) {
 	candidates := make([]gradleProject, 0, len(model.Projects))
-	ecosystem := types.Ecosystem(opts.ecosystem)
+	ecosystem := catalog.Ecosystem(opts.ecosystem)
 	for _, project := range model.Projects {
 		if opts.project != "" && project.Path != opts.project {
 			continue
@@ -288,8 +291,8 @@ func selectProject(model gradleModel, opts *options) (gradleProject, error) {
 	if len(candidates) > 1 {
 		// An explicit --project never reaches this branch, so the prompt only
 		// ever replaces an absent flag.
-		if opts.project == "" && promptAvailable() {
-			picked, err := promptModProject(candidates)
+		if opts.project == "" && gate.Available() {
+			picked, err := promptModProject(ctx, candidates)
 			if err != nil {
 				return gradleProject{}, err
 			}
@@ -310,7 +313,7 @@ func selectProject(model gradleModel, opts *options) (gradleProject, error) {
 	return project, nil
 }
 
-func joinEcosystems(ecosystems []types.Ecosystem) string {
+func joinEcosystems(ecosystems []catalog.Ecosystem) string {
 	values := make([]string, 0, len(ecosystems))
 	for _, ecosystem := range ecosystems {
 		values = append(values, string(ecosystem))

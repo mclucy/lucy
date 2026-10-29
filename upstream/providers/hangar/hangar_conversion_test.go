@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 func TestProjectSearchResponseToSearchResults(t *testing.T) {
@@ -24,9 +24,9 @@ func TestProjectSearchResponseToSearchResults(t *testing.T) {
 		},
 	}
 
-	results := resp.ToSearchResults(types.ProviderHangar)
+	results := resp.ToSearchResults(catalog.ProviderHangar)
 
-	if results.Provider != types.ProviderHangar {
+	if results.Provider != catalog.ProviderHangar {
 		t.Fatalf("expected Hangar source, got %v", results.Provider)
 	}
 	if len(results.Items) != 2 {
@@ -125,35 +125,35 @@ func TestHangarProjectToProjectInformation(t *testing.T) {
 		t,
 		info.URLs,
 		"Hangar",
-		types.URLHome,
+		catalog.URLHome,
 		"https://hangar.papermc.io/HelpChat/PlaceholderAPI",
 	)
 	assertHasHangarURL(
 		t,
 		info.URLs,
 		"Issues",
-		types.URLIssues,
+		catalog.URLIssues,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI/issues",
 	)
 	assertHasHangarURL(
 		t,
 		info.URLs,
 		"Source",
-		types.URLSource,
+		catalog.URLSource,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI",
 	)
 	assertHasHangarURL(
 		t,
 		info.URLs,
 		"Support",
-		types.URLForum,
+		catalog.URLForum,
 		"https://helpch.at/discord",
 	)
 	assertHasHangarURL(
 		t,
 		info.URLs,
 		"Wiki",
-		types.URLWiki,
+		catalog.URLWiki,
 		"https://github.com/PlaceholderAPI/PlaceholderAPI/wiki",
 	)
 }
@@ -180,7 +180,7 @@ func TestHangarVersionToPackageRemote(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected PAPER download to resolve")
 	}
-	if remote.ID.Provider != types.ProviderHangar {
+	if remote.ID.Provider != catalog.ProviderHangar {
 		t.Fatalf("expected Hangar source, got %v", remote.ID.Provider)
 	}
 	if remote.FileURL != version.Downloads["PAPER"].DownloadURL {
@@ -283,14 +283,14 @@ func TestHangarVersionRemoteSelectionPolicy(t *testing.T) {
 
 func assertHasHangarURL(
 	t *testing.T,
-	urls []types.URL,
+	urls []catalog.URL,
 	name string,
-	kind types.URLType,
+	kind catalog.URLType,
 	value string,
 ) {
 	t.Helper()
 	if slices.ContainsFunc(
-		urls, func(u types.URL) bool {
+		urls, func(u catalog.URL) bool {
 			if u.Name == name && u.Type == kind && u.URL == value {
 				return true
 			}

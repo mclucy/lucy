@@ -24,6 +24,11 @@ func ReadInstance(name string) (*Instance, error) {
 	if err := yaml.Unmarshal(data, &inst); err != nil {
 		return nil, fmt.Errorf("parse server registry %q: %w", name, err)
 	}
+	if inst.Name == "" {
+		inst.Name = name
+	} else if inst.Name != name {
+		return nil, fmt.Errorf("server registry %q contains mismatched name %q", name, inst.Name)
+	}
 	normalizeInstance(&inst)
 	return &inst, nil
 }

@@ -4,7 +4,7 @@ package filetrack
 import (
 	"time"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/document"
 )
 
 type Operation string
@@ -22,7 +22,7 @@ const (
 // Request contains explicit user choices for one recoverable workspace operation.
 type Request struct {
 	Operation  Operation
-	Path       string
+	Paths      []string
 	All        bool
 	FromSource bool
 	Immutable  bool
@@ -34,15 +34,15 @@ type Request struct {
 
 // Change separates displaced bytes from accepted revision navigation.
 type Change struct {
-	Path       string             `json:"path"`
-	Before     *types.TrackedFile `json:"before,omitempty"`
-	After      *types.TrackedFile `json:"after,omitempty"`
-	BackupHash string             `json:"backup_hash,omitempty"`
-	BackupMode uint32             `json:"backup_mode,omitzero"`
-	Revision   uint64             `json:"revision,omitzero"`
-	Parent     uint64             `json:"parent,omitzero"`
-	Accepted   bool               `json:"accepted,omitzero"`
-	Mode       uint32             `json:"mode,omitzero"`
+	Path       string                `json:"path"`
+	Before     *document.TrackedFile `json:"before,omitempty"`
+	After      *document.TrackedFile `json:"after,omitempty"`
+	BackupHash string                `json:"backup_hash,omitempty"`
+	BackupMode uint32                `json:"backup_mode,omitzero"`
+	Revision   uint64                `json:"revision,omitzero"`
+	Parent     uint64                `json:"parent,omitzero"`
+	Accepted   bool                  `json:"accepted,omitzero"`
+	Mode       uint32                `json:"mode,omitzero"`
 }
 
 // Event is the commit receipt for a transaction. Sequence order is independent of wall clocks.

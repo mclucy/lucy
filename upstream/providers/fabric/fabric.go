@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"charm.land/huh/v2"
 	"github.com/mclucy/lucy/cache"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 )
 
 const metaBaseURL = "https://meta.fabricmc.net"
@@ -18,8 +18,8 @@ type provider struct{}
 
 var Provider provider
 
-func (provider) Provider() types.Provider {
-	return types.ProviderFabric
+func (provider) Provider() catalog.Provider {
+	return catalog.ProviderFabric
 }
 
 type installerVersion struct {
@@ -32,41 +32,40 @@ type loaderVersionEntry struct {
 	Stable  bool   `json:"stable"`
 }
 
+type gameVersionEntry struct {
+	Version string `json:"version"`
+	Stable  bool   `json:"stable"`
+}
+
 func (p provider) ResolveVersionSelector(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.VersionedPackageRef, error) {
+	id catalog.VersionedRef,
+) (catalog.VersionedRef, error) {
 	loaderVersion, err := loaderVersion(id.Version)
 	if err != nil {
 		return id, err
 	}
-	return types.VersionedPackageRef{
-		Ecosystem: types.EcosystemFabric,
+	return catalog.VersionedRef{
+		Ecosystem: catalog.EcosystemFabric,
 		Name:      "fabric",
-		Version:   types.Version(loaderVersion),
+		Version:   version.Version(loaderVersion),
 	}, nil
 }
 
 func (p provider) Fetch(
 	local upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
-	var gameVersionID string
-	switch local.Ecosystem {
-	case types.EcosystemVanilla:
-		gameVersionID = local.MinecraftVersion.String()
-	case types.EcosystemUnspecified:
-		gameVersionID = promptSelectMinecraftVersion()
-	default:
-		return types.ResolvedPackage{}, fmt.Errorf(
-			"unsupported server platform %s for fabric bootstrap",
-			local.Ecosystem.Title(),
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
+	if !local.HasMinecraftVersion() {
+		return upstream.ResolvedPackage{}, errors.New(
+			"fabric bootstrap requires a concrete Minecraft version",
 		)
 	}
+	gameVersionID := local.MinecraftVersion.String()
 
 	loaderVer, err := loaderVersion(id.Version)
 	if err != nil {
-		return types.ResolvedPackage{}, fmt.Errorf(
+		return upstream.ResolvedPackage{}, fmt.Errorf(
 			"resolve fabric loader version failed: %w",
 			err,
 		)
@@ -74,7 +73,7 @@ func (p provider) Fetch(
 
 	installerVer, err := latestInstallerVersion()
 	if err != nil {
-		return types.ResolvedPackage{}, fmt.Errorf(
+		return upstream.ResolvedPackage{}, fmt.Errorf(
 			"resolve fabric installer version failed: %w",
 			err,
 		)
@@ -85,7 +84,7 @@ func (p provider) Fetch(
 		gameVersionID, loaderVer, installerVer,
 	)
 
-	return types.ResolvedPackage{
+	return upstream.ResolvedPackage{
 		FileURL: url,
 		Filename: fmt.Sprintf(
 			"fabric-server-mc%s-loader%s-launcher%s.jar",
@@ -96,8 +95,24 @@ func (p provider) Fetch(
 	}, nil
 }
 
-func loaderVersion(selector types.Version) (string, error) {
-	if selector == types.VersionUnknown {
+// LatestGameVersion reports the newest Minecraft release the loader publishes
+// builds for. Fabric tracks Minecraft releases, so the entry is normally the
+// current release.
+func LatestGameVersion() (version.Version, error) {
+	var versions []gameVersionEntry
+	if err := fetchVersionsMeta("game", &versions); err != nil {
+		return "", err
+	}
+	for _, entry := range versions {
+		if entry.Stable {
+			return version.Version(entry.Version), nil
+		}
+	}
+	return "", errors.New("no stable Minecraft version in fabric metadata")
+}
+
+func loaderVersion(selector version.Version) (string, error) {
+	if selector == version.Unknown {
 		return "", errors.New("unknown game version, cannot resolve fabric loader version")
 	}
 
@@ -110,14 +125,14 @@ func loaderVersion(selector types.Version) (string, error) {
 	}
 
 	switch selector {
-	case types.VersionStable:
+	case version.Stable:
 		for _, v := range versions {
 			if v.Stable {
 				return v.Version, nil
 			}
 		}
 		return "", errors.New("no stable fabric loader version available")
-	case types.VersionBeta, types.VersionAny:
+	case version.Beta, version.Any:
 		return versions[0].Version, nil
 	}
 
@@ -149,14 +164,6 @@ func fetchLoaderVersions() (
 	err error,
 ) {
 	err = fetchVersionsMeta("loader", &loaderVersions)
-	return
-}
-
-func fetchGameVersions() (
-	gameVersions []installerVersion,
-	err error,
-) {
-	err = fetchVersionsMeta("game", &gameVersions)
 	return
 }
 
@@ -192,50 +199,5 @@ func fetchVersionsMeta(endpoint string, target any) (err error) {
 		)
 	}
 
-	return
-}
-
-func promptSelectMinecraftVersion() (version string) {
-	versions, err := fetchGameVersions()
-	if err != nil || len(versions) == 0 {
-		return "error"
-	}
-
-	gameVersions := make([]string, len(versions))
-	for i, v := range versions {
-		gameVersions[i] = v.Version
-	}
-
-	var installLatest bool
-	options := huh.NewOptions[string](gameVersions...)
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("No current Minecraft installation found.").
-				Description("Do you want to install fabric with its latest supported Minecraft version?").
-				Affirmative("Yes, proceed").
-				Negative("No, select a game version").
-				Value(&installLatest),
-		),
-	).Run()
-	if err != nil {
-		return "none"
-	}
-	if installLatest {
-		return gameVersions[0]
-	}
-	err = huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a Minecraft installation").
-				Options(options...).
-				Filtering(true).
-				Height(10).
-				Value(&version),
-		).WithHide(installLatest),
-	).Run()
-	if err != nil {
-		return "none"
-	}
 	return
 }

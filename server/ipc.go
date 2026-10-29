@@ -92,21 +92,15 @@ type InstanceStatus struct {
 
 // PackageTaskRequest preserves package-command options across the privilege boundary.
 type PackageTaskRequest struct {
-	Name       string             `json:"name"`
-	Args       []string           `json:"args,omitempty"`
-	AddOptions PackageTaskAddOpts `json:"add_options,omitempty"`
-}
-
-// PackageTaskAddOpts preserves add-only conflict and dependency selection flags.
-type PackageTaskAddOpts struct {
-	Force        bool `json:"force,omitempty"`
-	WithOptional bool `json:"with_optional,omitempty"`
-	NoOptional   bool `json:"no_optional,omitempty"`
+	Name    string            `json:"name"`
+	Args    []string          `json:"args,omitempty"`
+	Options map[string]string `json:"options,omitempty"`
 }
 
 // PackageTaskResult carries the child command's already formatted console output.
 type PackageTaskResult struct {
 	Output string `json:"output,omitempty"`
+	Stderr string `json:"stderr,omitempty"`
 }
 
 // CallDaemon sends one operation to the daemon; callers must not retry failures

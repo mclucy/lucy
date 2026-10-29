@@ -1,41 +1,26 @@
 ---
 title: "lucy info"
-description: "Display information about a package or local artifact file"
+description: "Inspect a package or local mod/plugin archive"
 ---
-
-`lucy info` fetches and displays metadata for a mod or plugin from a package source, or reads a local file's embedded metadata.
-
-```bash
-lucy info <package|file>
-```
 
 ```bash
 lucy info modrinth:fabric-api
 lucy info modrinth:lithium@0.12.4
 lucy info ./mods/worldedit-7.3.0.jar
-lucy info ./plugins/luckperms.jar
 ```
 
-## Arguments
+Use a package reference or a local `.jar`, `.pyz`, or `.mcdr` file. Bare package names use the current lock when possible; otherwise Lucy searches the applicable sources. No workspace is required.
 
-<ParamField path="package|file" type="string" required>
-  Either a package reference or a path to a local file.
+To check builds for your server, run `lucy info` from its directory with a lock file present. Use `--json` to inspect the complete build history, including builds for other servers.
 
-  **Remote reference** — a `modrinth:project` or `curseforge:project` identifier such as `modrinth:lithium` or `curseforge:238222`, optionally with an exact version: `modrinth:fabric-api@0.100.8`. Without a prefix, `lucy` queries the applicable package sources and returns the first match. No `lucy-lock.yaml` is required.
+Local files are inspected even when no upstream project matches. The optional upstream lookup uses the network. Archives containing several packages show each one separately.
 
-  **Local file** — a path to a `.jar`, `.pyz`, or `.mcdr` file. Lucy reads the embedded mod or plugin descriptor (`fabric.mod.json`, `mods.toml`, `plugin.yml`, MCDR metadata, and so on) and displays the declared metadata: name, version, description, authors, dependencies, and links.
-</ParamField>
+Some sources provide only project-level information. Lucy warns when it cannot apply a requested version.
 
 ## Flags
 
 <ParamField query="--long, -l" type="boolean" default="false">
-  Show the full README instead of a truncated preview, and expand any collapsed sections.
+  Show full descriptions, dependency constraints, and all project details.
 </ParamField>
 
-## Local file inspection
-
-Local inspection works without a lock file or a running server. Lucy opens the archive, reads each recognized descriptor, and reports what the file declares.
-
-When the file matches a project in an upstream source, Lucy may merge that project's metadata over the local descriptor and show the `modrinth:project` reference you would use with [`lucy add`](/commands/add). That lookup is best-effort and makes network requests. A file that matches nothing upstream is reported from its own descriptor, with a warning.
-
-See also [Global Flags](/commands/global-flags) and [`lucy search`](/commands/search).
+See [Global Flags](/commands/global-flags) for JSON and output options.

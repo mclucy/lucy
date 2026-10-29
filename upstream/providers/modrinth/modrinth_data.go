@@ -3,7 +3,7 @@ package modrinth
 import (
 	"time"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
 )
 
@@ -61,21 +61,21 @@ type projectResponse struct {
 	MonetizationStatus string `json:"monetization_status"`
 }
 
-func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
-	info = types.Metadata{
+func (p *projectResponse) ToProjectInformation() (info catalog.Metadata) {
+	info = catalog.Metadata{
 		Title:                 p.Title,
 		Brief:                 p.Description,
 		Description:           p.Body,
 		DescriptionIsMarkdown: upstream.LooksLikeMarkdown(p.Body),
 		License:               p.License.Name,
-		URLs:                  make([]types.URL, 0),
+		URLs:                  make([]catalog.URL, 0),
 	}
 
 	if p.DiscordUrl != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Discord",
-				Type: types.URLForum,
+				Type: catalog.URLForum,
 				URL:  p.DiscordUrl,
 			},
 		)
@@ -83,9 +83,9 @@ func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
 
 	if p.IssuesUrl != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Issues",
-				Type: types.URLSource,
+				Type: catalog.URLSource,
 				URL:  "",
 			},
 		)
@@ -93,9 +93,9 @@ func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
 
 	if p.SourceUrl != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Source",
-				Type: types.URLSource,
+				Type: catalog.URLSource,
 				URL:  p.SourceUrl,
 			},
 		)
@@ -103,9 +103,9 @@ func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
 
 	if p.WikiUrl != "" {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: "Wiki",
-				Type: types.URLWiki,
+				Type: catalog.URLWiki,
 				URL:  p.WikiUrl,
 			},
 		)
@@ -113,9 +113,9 @@ func (p *projectResponse) ToProjectInformation() (info types.Metadata) {
 
 	for _, donationUrl := range p.DonationUrls {
 		info.URLs = append(
-			info.URLs, types.URL{
+			info.URLs, catalog.URL{
 				Name: donationUrl.Platform,
-				Type: types.URLSponsor,
+				Type: catalog.URLSponsor,
 				URL:  donationUrl.URL,
 			},
 		)
@@ -189,9 +189,9 @@ type versionResponse struct {
 	Dependencies    []dependenciesResponse `json:"dependencies"`
 }
 
-func (v versionResponse) ToPackageRemote() types.ResolvedPackage {
-	remote := types.ResolvedPackage{
-		ID:       types.VersionedPackageRef{PackageRef: types.PackageRef{Provider: types.ProviderModrinth}},
+func (v versionResponse) ToPackageRemote() upstream.ResolvedPackage {
+	remote := upstream.ResolvedPackage{
+		ID:       catalog.VersionedRef{Ref: catalog.Ref{Provider: catalog.ProviderModrinth}},
 		FileURL:  v.Files[0].URL,
 		Filename: v.Files[0].Filename,
 	}
@@ -207,7 +207,7 @@ func (v versionResponse) ToPackageRemote() types.ResolvedPackage {
 	return remote
 }
 
-func resolvedPackageFromVersion(v versionResponse) types.ResolvedPackage {
+func resolvedPackageFromVersion(v versionResponse) upstream.ResolvedPackage {
 	return v.ToPackageRemote()
 }
 

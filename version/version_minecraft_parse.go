@@ -3,18 +3,23 @@ package version
 import (
 	"strconv"
 	"strings"
-
-	"github.com/mclucy/lucy/types"
 )
 
-func parseMinecraftSnapshot(s types.Version) types.ResolvableVersion {
+func parseMinecraftVersion(s Version) ResolvableVersion {
+	if v := parseMinecraftRelease(s); v != nil {
+		return v
+	}
+	return parseMinecraftSnapshot(s)
+}
+
+func parseMinecraftSnapshot(s Version) ResolvableVersion {
 	if v := parsePre26WeekSnapshot(s); v != nil {
 		return v
 	}
 	return parsePost26MinecraftSnapshot(s)
 }
 
-func parsePre26WeekSnapshot(s types.Version) types.ResolvableVersion {
+func parsePre26WeekSnapshot(s Version) ResolvableVersion {
 	if len(s) < 4 {
 		return nil
 	}
@@ -33,7 +38,7 @@ func parsePre26WeekSnapshot(s types.Version) types.ResolvableVersion {
 	return v
 }
 
-func parseSnapshotWorkCycle(s types.Version) *Pre26MinecraftSnapshotVersion {
+func parseSnapshotWorkCycle(s Version) *Pre26MinecraftSnapshotVersion {
 	tokens := strings.Split(string(s), "w")
 	if len(tokens) != 2 {
 		return nil
@@ -53,7 +58,7 @@ func parseSnapshotWorkCycle(s types.Version) *Pre26MinecraftSnapshotVersion {
 	}
 }
 
-func parsePost26MinecraftSnapshot(s types.Version) types.ResolvableVersion {
+func parsePost26MinecraftSnapshot(s Version) ResolvableVersion {
 	str := string(s)
 	if !strings.Contains(str, "-snapshot-") {
 		return nil
@@ -89,14 +94,14 @@ func parsePost26MinecraftSnapshot(s types.Version) types.ResolvableVersion {
 	return v
 }
 
-func parseMinecraftRelease(s types.Version) types.ResolvableVersion {
+func parseMinecraftRelease(s Version) ResolvableVersion {
 	if v := parsePost26MinecraftRelease(s); v != nil {
 		return v
 	}
 	return parsePre26MinecraftRelease(s)
 }
 
-func parsePost26MinecraftRelease(s types.Version) types.ResolvableVersion {
+func parsePost26MinecraftRelease(s Version) ResolvableVersion {
 	str := string(s)
 	if str == "" || strings.Contains(str, "-snapshot-") {
 		return nil
@@ -141,7 +146,7 @@ func parsePost26MinecraftRelease(s types.Version) types.ResolvableVersion {
 	return v
 }
 
-func parsePre26MinecraftRelease(s types.Version) types.ResolvableVersion {
+func parsePre26MinecraftRelease(s Version) ResolvableVersion {
 	str := string(s)
 	if str == "" {
 		return nil

@@ -1,30 +1,29 @@
 ---
 title: "lucy file"
-description: "Track files, accept revisions, and restore recorded content"
+description: "Track and restore server files"
 ---
 
-```bash
-lucy file <subcommand>
-```
-
-Run the command from your server workspace. Use a path relative to `lucy.yaml`.
-
-Stop running servers before changing tracked files. Lucy checks the workspace root and the server directories declared in both `lucy.yaml` and `lucy-lock.yaml`, including a stale lock's directory.
-
-Every subcommand supports the inherited machine-readable JSON output flags (`--json` and `--json-compact`). Mutating commands emit the event payload that `lucy file history` records, and delete stored contents that no revision, manifest entry, lock entry, or pending transaction names. A run that reclaims anything reports how many objects and bytes it removed.
-
-## Track
+Run file commands from the server workspace, using paths relative to `lucy.yaml`. Stop the server before changing tracked files.
 
 ```bash
-lucy file track <path>
-lucy file track --immutable <path>
-lucy file track --recover-url <url> <path>
-lucy file track --no-hash <path>
+lucy file track server.properties
+lucy file list
+lucy file update server.properties
+lucy file history server.properties
+lucy file recover server.properties
 ```
 
-Add a regular file to `lucy.yaml` and snapshot its current contents into the local content-addressed store. By default, `track` creates a mutable entry with an accepted hash (`sha256:<64 lowercase hex>`).
+Tracking saves the current file as an accepted revision. Use `--immutable` to warn about changes, `--no-hash` to check presence only, or `--recover-url <url>` to provide a recovery source. Presence-only files cannot be recovered.
 
-Tracking an already tracked path fails rather than implicitly updating it.
+Use `lucy file lock <path>` to accept the current contents and warn about future changes, and `lucy file unlock <path>` to allow changes without warnings. `lucy file untrack <path>` stops tracking without deleting the file.
+
+`lucy file recover` restores the current accepted revision; `lucy file revert` restores an earlier one. Both preserve a local copy of the contents they replace. Pass several paths to `track`, `untrack`, `update`, `recover`, `lock`, or `unlock`; use `--all` with `update` or `recover` to select all applicable files.
+
+For step-by-step examples, see [File tracking](/file-tracking/overview) and [Recover and revert files](/file-tracking/recovery).
+
+## Flags
+
+### Track
 
 <ParamField query="--immutable" type="boolean" default="false">
   Mark the file immutable. Immutable files require an accepted hash and produce warnings when working content deviates. Conflicts with `--no-hash`.
@@ -38,24 +37,7 @@ Tracking an already tracked path fails rather than implicitly updating it.
   Track the file for presence only without recording an accepted hash. Presence-only files cannot be recovered. Conflicts with `--immutable` and `--recover-url`.
 </ParamField>
 
-## Untrack
-
-```bash
-lucy file untrack <path>
-```
-
-Remove the file declaration from `lucy.yaml`. Working files and historical backups are preserved.
-
-## Update
-
-```bash
-lucy file update <path>
-lucy file update --from-source <path>
-lucy file update --all
-lucy file update --all --from-source
-```
-
-Snapshot and accept current bytes for mutable or immutable tracked files. Leave the change policy and `recover_url` unchanged.
+### Update
 
 <ParamField query="--from-source" type="boolean" default="false">
   Fetch fresh bytes from `recover_url`, preserve displaced working bytes, replace the working file, and accept the new digest. Requests bypass stale network caches. Does not require matching the prior digest.
@@ -65,30 +47,13 @@ Snapshot and accept current bytes for mutable or immutable tracked files. Leave 
   Atomically update all tracked files. When combined with `--from-source`, selects all tracked entries that declare a `recover_url`. Conflicts with positional paths.
 </ParamField>
 
-## Recover
-
-```bash
-lucy file recover <path>
-lucy file recover --all
-```
-
-Restore the working file to its accepted digest without accepting a new revision. Verify local CAS blobs first. If no valid local blob is available, fetch directly from `recover_url` and verify the exact accepted digest. Preserve displaced working bytes without accepting them. If recovery is unavailable or invalid, fail without changing destinations.
+### Recover
 
 <ParamField query="--all" type="boolean" default="false">
   Atomically restore all tracked entries that have an accepted hash. Presence-only entries without hashes are reported as skipped. Conflicts with positional paths.
 </ParamField>
 
-## Revert
-
-```bash
-lucy file revert <path>
-lucy file revert <path> <hash>
-lucy file revert --revision <sequence> <path>
-```
-
-Restore and accept a backed-up historical accepted revision of a tracked file. History and displaced working bytes are preserved.
-
-Omitting a target follows the accepted revision's parent in history, so repeated reverts navigate backward (for example, C -> B -> A) rather than toggling between two states.
+### Revert
 
 <ParamField query="<hash>" type="string">
   Positional accepted hash (`sha256:<64 lowercase hex>`) to restore and accept.
@@ -98,33 +63,4 @@ Omitting a target follows the accepted revision's parent in history, so repeated
   Revision number of a recorded event to restore and accept, as shown by `lucy file history`: `#36` is the workspace event sequence, `revision 34` the revision that event activated, and the two numbers differ. Revisions are workspace-wide: one transaction activates one revision for every file it touched, and a revert reactivates an older revision instead of minting a new one. Use this to disambiguate recurrent digests. Conflicts with the positional hash argument.
 </ParamField>
 
-## Lock and unlock
-
-```bash
-lucy file lock <path>
-lucy file unlock <path>
-```
-
-`lock` snapshots and accepts current working bytes, then sets `immutable: true`.
-
-`unlock` sets `immutable: false` while retaining the existing accepted hash and `recover_url`.
-
-For workflows and manifest examples, see [File tracking](/file-tracking/overview).
-
-## List tracked files
-
-```bash
-lucy file list
-lucy file ls
-```
-
-Read-only inspection of tracked files. Displays status for each tracked file: missing, matching, modified, or presence-only. A modified mutable file is normal status and does not raise an immutable deviation warning.
-
-## History
-
-```bash
-lucy file history
-lucy file history <path>
-```
-
-List file tracking events and revisions from `.lucy/history/files.jsonl` in chronological order, including sequence number, timestamp, digest, and operation. Run locally without network checks. Optionally filter events to one workspace-relative path, including a path that is no longer tracked.
+See also [Global Flags](/commands/global-flags) and [File tracking](/file-tracking/overview).

@@ -4,22 +4,22 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 )
 
 func TestProviderSourcesFromEcosystems_BukkitFamily(t *testing.T) {
-	for _, ecosystem := range []types.Ecosystem{
-		types.EcosystemBukkit,
-		types.EcosystemPaper,
+	for _, ecosystem := range []catalog.Ecosystem{
+		catalog.EcosystemBukkit,
+		catalog.EcosystemPaper,
 	} {
 		t.Run(ecosystem.String(), func(t *testing.T) {
 			resolution := providersFromEcosystems(
-				[]types.Ecosystem{ecosystem},
+				[]catalog.Ecosystem{ecosystem},
 			)
-			want := []types.Provider{
-				types.ProviderModrinth,
-				types.ProviderHangar,
-				types.ProviderSpiget,
+			want := []catalog.Provider{
+				catalog.ProviderModrinth,
+				catalog.ProviderHangar,
+				catalog.ProviderSpiget,
 			}
 			if resolution.fallback || resolution.empty {
 				t.Fatalf(
@@ -36,14 +36,14 @@ func TestProviderSourcesFromEcosystems_BukkitFamily(t *testing.T) {
 }
 
 func TestProviderSourcesFromEcosystems_ModLoaders(t *testing.T) {
-	for _, ecosystem := range []types.Ecosystem{
-		types.EcosystemFabric,
-		types.EcosystemForge,
-		types.EcosystemNeoForge,
+	for _, ecosystem := range []catalog.Ecosystem{
+		catalog.EcosystemFabric,
+		catalog.EcosystemForge,
+		catalog.EcosystemNeoForge,
 	} {
 		t.Run(ecosystem.String(), func(t *testing.T) {
 			resolution := providersFromEcosystems(
-				[]types.Ecosystem{ecosystem},
+				[]catalog.Ecosystem{ecosystem},
 			)
 			if resolution.fallback || resolution.empty {
 				t.Fatalf(
@@ -52,12 +52,12 @@ func TestProviderSourcesFromEcosystems_ModLoaders(t *testing.T) {
 					resolution.empty,
 				)
 			}
-			if !slices.Contains(resolution.providers, types.ProviderModrinth) {
+			if !slices.Contains(resolution.providers, catalog.ProviderModrinth) {
 				t.Errorf("expected Modrinth, got %v", resolution.providers)
 			}
 			hasCurseForge := slices.Contains(
 				resolution.providers,
-				types.ProviderCurseForge,
+				catalog.ProviderCurseForge,
 			)
 			if hasCurseForge != curseforgeAvailable() {
 				t.Errorf(
@@ -65,8 +65,8 @@ func TestProviderSourcesFromEcosystems_ModLoaders(t *testing.T) {
 					resolution.providers,
 				)
 			}
-			if slices.Contains(resolution.providers, types.ProviderHangar) ||
-				slices.Contains(resolution.providers, types.ProviderSpiget) {
+			if slices.Contains(resolution.providers, catalog.ProviderHangar) ||
+				slices.Contains(resolution.providers, catalog.ProviderSpiget) {
 				t.Errorf(
 					"Bukkit providers must not route mod packages: %v",
 					resolution.providers,
@@ -78,25 +78,25 @@ func TestProviderSourcesFromEcosystems_ModLoaders(t *testing.T) {
 
 func TestProviderSourcesFromEcosystems_MCDR(t *testing.T) {
 	resolution := providersFromEcosystems(
-		[]types.Ecosystem{types.EcosystemMCDR},
+		[]catalog.Ecosystem{catalog.EcosystemMCDR},
 	)
-	want := []types.Provider{types.ProviderMCDR}
+	want := []catalog.Provider{catalog.ProviderMCDR}
 	if resolution.fallback || resolution.empty ||
 		!slices.Equal(resolution.providers, want) {
 		t.Fatalf("got %+v, want providers %v", resolution, want)
 	}
 }
 
-func TestProviderSourcesFromEcosystems_UnsupportedAndProxy(t *testing.T) {
+func TestProviderSourcesHandleUnsupportedAndProxy(t *testing.T) {
 	unsupported := providersFromEcosystems(
-		[]types.Ecosystem{types.EcosystemSponge},
+		[]catalog.Ecosystem{catalog.EcosystemSponge},
 	)
 	if !unsupported.fallback || !unsupported.empty {
 		t.Fatalf("unsupported ecosystem should fall back, got %+v", unsupported)
 	}
 
 	proxy := providersFromEcosystems(
-		[]types.Ecosystem{types.EcosystemVelocity},
+		[]catalog.Ecosystem{catalog.EcosystemVelocity},
 	)
 	if proxy.fallback || !proxy.empty {
 		t.Fatalf("known proxy ecosystem should resolve empty, got %+v", proxy)
@@ -105,19 +105,19 @@ func TestProviderSourcesFromEcosystems_UnsupportedAndProxy(t *testing.T) {
 
 func TestProviderSourcesFromEcosystems_MixedRuntime(t *testing.T) {
 	resolution := providersFromEcosystems(
-		[]types.Ecosystem{types.EcosystemPaper, types.EcosystemFabric},
+		[]catalog.Ecosystem{catalog.EcosystemPaper, catalog.EcosystemFabric},
 	)
-	for _, provider := range []types.Provider{
-		types.ProviderModrinth,
-		types.ProviderHangar,
-		types.ProviderSpiget,
+	for _, provider := range []catalog.Provider{
+		catalog.ProviderModrinth,
+		catalog.ProviderHangar,
+		catalog.ProviderSpiget,
 	} {
 		if !slices.Contains(resolution.providers, provider) {
 			t.Errorf("expected provider %s, got %v", provider, resolution.providers)
 		}
 	}
 	if curseforgeAvailable() &&
-		!slices.Contains(resolution.providers, types.ProviderCurseForge) {
+		!slices.Contains(resolution.providers, catalog.ProviderCurseForge) {
 		t.Errorf("expected CurseForge when available, got %v", resolution.providers)
 	}
 }

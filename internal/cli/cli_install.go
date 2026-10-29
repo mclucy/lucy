@@ -1,12 +1,13 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/javainstall"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/server"
 	"github.com/spf13/cobra"
 )
@@ -15,71 +16,131 @@ const (
 	flagInstallLockedName       = "locked"
 	flagInstallOfflineName      = "offline"
 	flagInstallWithOptionalName = "with-optional"
+	flagInstallAcceptBrokenName = "accept-broken"
+	flagInstallOverwriteName    = "overwrite"
+	flagInstallForceName        = "force"
+	flagInstallJavaName         = "java"
+	flagInstallJavaRepoName     = "add-java-repository"
+	flagInstallMCDRVenvName     = "mcdr-venv"
 )
 
-var installCmd = &cobra.Command{
-	Use:   "install",
-	Short: help.InstallShort,
-	Args:  cobra.NoArgs,
-	RunE:  actionInstall,
-}
-
-func NewInstallCommand() *cobra.Command {
-	installCmd.Flags().Bool(
+func NewInstallCommand(contracts *JSONContracts) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "install",
+		Short:   help.InstallShort,
+		Args:    cobra.NoArgs,
+		Aliases: []string{"i"},
+		RunE:    actionInstall,
+	}
+	installJSON.Bind(contracts, cmd)
+	cmd.Flags().Bool(
 		flagInstallLockedName,
 		false,
 		"Do not resolve new versions; fail when the lock cannot satisfy",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallOfflineName,
 		false,
 		"Disallow network acquisition; fail if any file is missing or mismatched",
 	)
-	installCmd.Flags().Bool(
+	cmd.Flags().Bool(
 		flagInstallWithOptionalName,
 		false,
 		"Also install optional dependencies and record them as explicit packages",
 	)
-	return installCmd
+	cmd.Flags().Bool(
+		flagInstallAcceptBrokenName,
+		false,
+		"Complete the installation even when required modules are missing or versions do not satisfy their constraints",
+	)
+	cmd.Flags().Bool(
+		flagInstallOverwriteName,
+		false,
+		"Replace files already present at package destinations",
+	)
+	cmd.Flags().BoolP(
+		flagInstallForceName,
+		"f",
+		false,
+		"Combine --accept-broken and --overwrite",
+	)
+	cmd.Flags().Bool(
+		flagInstallJavaName,
+		false,
+		"Also install the Java runtime the server asks for when no installed runtime meets it",
+	)
+	cmd.Flags().Bool(
+		flagInstallJavaRepoName,
+		false,
+		"Let --java add the Java vendor's package repository to the system package manager",
+	)
+	cmd.Flags().Bool(
+		flagInstallMCDRVenvName,
+		false,
+		"Create an isolated MCDReforged Python environment instead of using the global MCDReforged executable",
+	)
+	return cmd
 }
 
 func actionInstall(cmd *cobra.Command, _ []string) error {
 	target, err := ResolveCommandTarget(cmd)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not determine working directory: %w", err)
 	}
 	if target.Registered {
-		return DispatchPackageTask(
-			cmd,
-			target,
-			server.PackageTaskRequest{Name: server.TaskInstall},
-		)
+		if addRepo, _ := cmd.Flags().GetBool(flagInstallJavaRepoName); addRepo {
+			return fmt.Errorf("--%s requires a direct administrative invocation, not a daemon package task", flagInstallJavaRepoName)
+		}
+		return DispatchPackageTask(cmd, target, server.PackageTaskRequest{Name: server.TaskInstall})
 	}
-	return RunInTargetWorkDir(target, func() error {
-		return RunInstallTask(cmd, target)
-	})
+	return RunInTargetWorkDir(target, func() error { return RunInstallTask(cmd, target) })
 }
 
-// RunInstallTask executes the install action for a daemon-dispatched package task.
+// RunInstallTask retains all install options and output contracts in daemon children.
 func RunInstallTask(cmd *cobra.Command, target CommandTarget) error {
+	workDir := target.WorkDir
+
 	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
 	offline, _ := cmd.Flags().GetBool(flagInstallOfflineName)
 	withOptional, _ := cmd.Flags().GetBool(flagInstallWithOptionalName)
+	acceptBroken, _ := cmd.Flags().GetBool(flagInstallAcceptBrokenName)
+	overwrite, _ := cmd.Flags().GetBool(flagInstallOverwriteName)
+	force, _ := cmd.Flags().GetBool(flagInstallForceName)
+	installJava, _ := cmd.Flags().GetBool(flagInstallJavaName)
+	addJavaRepository, _ := cmd.Flags().GetBool(flagInstallJavaRepoName)
+	mcdrVenv, _ := cmd.Flags().GetBool(flagInstallMCDRVenvName)
+	if addJavaRepository && !installJava {
+		return fmt.Errorf("--%s needs --%s", flagInstallJavaRepoName, flagInstallJavaName)
+	}
 
 	opts := install.Options{
 		Locked:          locked,
 		Offline:         offline,
+		AcceptBroken:    acceptBroken || force,
+		Overwrite:       overwrite || force,
 		WithOptional:    withOptional,
+		MCDRVenv:        mcdrVenv,
 		PublishManifest: false,
 	}
 
-	diagnostics, err := operation.Sync(cmd.Context(), target.WorkDir, opts)
-	for _, diagnostic := range diagnostics {
-		report.Warn(fmt.Errorf("%s: %s", diagnostic.Path, diagnostic.Message))
+	output := newInstallOutput(cmd)
+	defer output.Close()
+	opts.Trace = output.Trace()
+	if installJava {
+		opts.ProvisionJava = output.provisionJava(javainstall.Host{
+			Interactive:     NewPromptGate(cmd).Available(),
+			AllowRepository: addJavaRepository,
+		}, offline)
+	}
+	ctx, stop := CommandContext(cmd)
+	defer stop()
+	result, err := operation.Sync(ctx, workDir, opts)
+	_, committed := errors.AsType[*install.CommittedError](err)
+	if err == nil || committed || result != nil && (result.PublishedLock || result.PublishedManifest) {
+		registerWorkspace(workDir, output.Output)
 	}
 	if err != nil {
-		return err
+		return output.Failure(err)
 	}
-	MarkPendingRestartIfRunning(target, "install changed runtime files")
-	return nil
+	return output.Render(result)
 }

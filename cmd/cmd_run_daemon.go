@@ -11,72 +11,50 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var runDaemonCmd = &cobra.Command{
-	Use:    "run-daemon",
-	Short:  "Run the Lucy daemon",
-	Hidden: true,
-	Args:   cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, stop := signal.NotifyContext(
-			cmd.Context(),
-			syscall.SIGINT,
-			syscall.SIGTERM,
-		)
-		defer stop()
-		return server.RunDaemon(ctx)
-	},
-}
+// newSupervisorCommands builds private native-service entry points per invocation.
+func newSupervisorCommands(contracts *cli.JSONContracts) []*cobra.Command {
+	var runDaemonCmd = &cobra.Command{
+		Use:    "run-daemon",
+		Short:  "Run the Lucy daemon",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, stop := signal.NotifyContext(
+				cmd.Context(),
+				syscall.SIGINT,
+				syscall.SIGTERM,
+			)
+			defer stop()
+			return server.RunDaemon(ctx)
+		},
+	}
 
-var runServerCmd = &cobra.Command{
-	Use:    "run-server <name>",
-	Short:  "Run a Lucy-managed Minecraft server instance",
-	Hidden: true,
-	Args:   cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, stop := signal.NotifyContext(
-			context.Background(),
-			syscall.SIGINT,
-			syscall.SIGTERM,
-		)
-		defer stop()
-		return server.RunServer(ctx, args[0])
-	},
-}
+	var runServerCmd = &cobra.Command{
+		Use:    "run-server <name>",
+		Short:  "Run a Lucy-managed Minecraft server instance",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, stop := signal.NotifyContext(
+				context.Background(),
+				syscall.SIGINT,
+				syscall.SIGTERM,
+			)
+			defer stop()
+			return server.RunServer(ctx, args[0])
+		},
+	}
 
-var runTaskCmd = &cobra.Command{
-	Use:    "run-task <server> <task> [args...]",
-	Short:  "Run a Lucy server package task",
-	Hidden: true,
-	Args:   cobra.MinimumNArgs(2),
-	RunE:   actionRunTask,
-}
+	var runTaskCmd = &cobra.Command{
+		Use:    "run-task <server> <task> [args...]",
+		Short:  "Run a Lucy server package task",
+		Hidden: true,
+		Args:   cobra.MinimumNArgs(2),
+		RunE:   actionRunTask,
+	}
 
-const (
-	flagForceName        = "force"
-	flagWithOptionalName = "with-optional"
-	flagNoOptionalName   = "no-optional"
-)
-
-// init exposes hidden daemon, runner and package-task entry points used by native
-// services and subprocesses, including add-task and platform flags.
-func init() {
-	runTaskCmd.Flags().BoolP(
-		flagForceName,
-		"f",
-		false,
-		"Ignore version, dependency, and platform warnings",
-	)
-	runTaskCmd.Flags().Bool(
-		flagWithOptionalName,
-		false,
-		"Also install optional upstream dependencies",
-	)
-	runTaskCmd.Flags().Bool(
-		flagNoOptionalName,
-		false,
-		"Skip optional upstream dependencies",
-	)
-	rootCmd.AddCommand(runDaemonCmd, runServerCmd, runTaskCmd)
+	cli.RegisterPackageTaskFlags(runTaskCmd, contracts)
+	return []*cobra.Command{runDaemonCmd, runServerCmd, runTaskCmd}
 }
 
 // actionRunTask dispatches a supported package operation in the registered root
@@ -92,7 +70,7 @@ func actionRunTask(cmd *cobra.Command, args []string) error {
 	target := cli.CommandTarget{
 		WorkDir:    inst.Root,
 		Instance:   inst,
-		Registered: true,
+		Registered: false,
 	}
 	task := args[1]
 	taskArgs := args[2:]

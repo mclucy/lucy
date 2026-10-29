@@ -1,8 +1,6 @@
 package file
 
 import (
-	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"fmt"
 	"io"
 	"os"
@@ -22,45 +20,14 @@ func workRoot() (string, error) {
 	return root, nil
 }
 
-func machineOutputRequested(cmd *cobra.Command) bool {
-	json, _ := cmd.Flags().GetBool(cli.FlagJSON)
-	jsonCompact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
-	return json || jsonCompact
-}
-
-func writeJSON(cmd *cobra.Command, value any) error {
-	compact, _ := cmd.Flags().GetBool(cli.FlagJSONCompact)
-
-	var (
-		data []byte
-		err  error
-	)
-	if compact {
-		data, err = json.Marshal(value)
-	} else {
-		data, err = json.Marshal(
-			value,
-			jsontext.Multiline(true),
-			jsontext.WithIndent("  "),
-		)
-	}
-	if err != nil {
-		return err
-	}
-
-	out := cmd.OutOrStdout()
-	if _, err := out.Write(append(data, '\n')); err != nil {
-		return fmt.Errorf("write output: %w", err)
-	}
-	return nil
-}
-
 type fileResultView struct {
 	Operation filetrack.Operation `json:"operation"`
 	Changes   []filetrack.Change  `json:"changes,omitempty"`
 	Skipped   []string            `json:"skipped,omitempty"`
 	Reclaimed filetrack.Reclaimed `json:"reclaimed,omitzero"`
 }
+
+var fileResultJSON cli.JSONResult[fileResultView]
 
 func newFileResultView(result filetrack.Result) fileResultView {
 	return fileResultView{
@@ -82,11 +49,12 @@ var resultVerbs = map[filetrack.Operation]string{
 }
 
 func reportFileResult(cmd *cobra.Command, result filetrack.Result) error {
-	if machineOutputRequested(cmd) {
-		return writeJSON(cmd, newFileResultView(result))
+	output := cli.NewOperationOutput(cmd)
+	if output.JSON() {
+		return fileResultJSON.Write(output, newFileResultView(result))
 	}
 
-	out := cmd.OutOrStdout()
+	out := output.Human()
 	for _, change := range result.Event.Changes {
 		writeChangeLine(out, result.Event.Operation, change)
 	}
@@ -137,7 +105,7 @@ func displacedBytes(change filetrack.Change) bool {
 }
 
 // pathOrAllArgs enforces the selection shared by update and recover: --all
-// replaces every positional path instead of combining with one.
+// replaces every positional path instead of combining with them.
 func pathOrAllArgs(cmd *cobra.Command, args []string) error {
 	all, _ := cmd.Flags().GetBool(flagAll)
 	if all {
@@ -146,7 +114,7 @@ func pathOrAllArgs(cmd *cobra.Command, args []string) error {
 		}
 		return nil
 	}
-	if len(args) != 1 {
+	if len(args) == 0 {
 		return fmt.Errorf("requires a path argument or --%s", flagAll)
 	}
 	return nil

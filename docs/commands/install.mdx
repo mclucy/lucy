@@ -1,126 +1,138 @@
 ---
 title: "lucy install"
-description: "Sync the server with the manifest and lock file"
+description: "Install a server from its manifest and lock file"
 ---
 
-`lucy install` syncs the directory with the resolved state recorded in `lucy-lock.yaml`. It never invents versions: every file it places is pinned by the lock. Some launcher files are generated from the locked server JAR and its inputs. When the manifest has changed, `lucy` resolves a new lock from [`lucy.yaml`](/commands/init) first, then syncs the server.
+`lucy install` makes the current directory match `lucy.yaml` and `lucy-lock.yaml`. Run it after changing the manifest, on a fresh machine, or in CI to reproduce a server exactly.
 
 ```bash
 lucy install
 ```
 
-Running `lucy install` in a server directory is the normal way to reproduce a server elsewhere — a CI job, a fresh VPS, a teammate's machine. It is not append-only: files that the new lock no longer lists are removed, as long as `lucy` installed them.
+If `lucy.yaml` changed, lucy resolves a new lock before installing. Versions you pinned stay pinned, so adding one package does not upgrade the others. With only `lucy-lock.yaml` present, lucy rebuilds from the lock alone; commit both files to keep that option.
 
-## Replay or resolve
+For CI, `lucy install --locked` fails when the lock is missing or out of date instead of resolving new versions.
 
-`lucy install` compares the lock's `manifest_fingerprint` with the manifest. That comparison, together with the flags, decides what happens.
+## What install changes
 
-| Manifest | Lock | Flags | What happens |
-|---|---|---|---|
-| unchanged | present | none | Exact replay. Every locked file is checked against its recorded hash. No resolution, no catalogue lookup. |
-| unchanged | present | `--with-optional` | Re-resolves so optional dependencies can be selected, then records them as explicit packages. |
-| changed | present | none | The lock is stale for this manifest. `lucy` resolves again, rewrites the lock, and syncs. |
-| absent | present | none | Lock-only replay. The lock describes the complete server. |
-| present | absent | none | `lucy` resolves the manifest, writes the lock, and syncs. |
-| absent | absent | none | Fails: a manifest or a lock is required. |
-| any | any | `--locked` with a missing or stale lock | Fails: `--locked` requires a current lock. |
-| any | any | any re-resolution with `--offline` | Fails: selecting new metadata requires a network. |
-| any | any | `--with-optional --locked` | Fails: optional selection forces a re-resolution. |
+Install places the files the lock lists. It removes files it installed earlier that the lock no longer lists; files you placed in `mods/` or `plugins/` yourself are left alone.
 
-Two consequences are worth internalizing.
+Installation stops when a destination file already exists. Pass `--overwrite` to replace it, including jars from a manual setup. It also refuses a server whose mod dependencies cannot be satisfied; `--accept-broken` installs the declared packages anyway.
 
-**Stale locks re-resolve, but pins win.** When the lock no longer matches the manifest, `lucy` resolves the manifest again — and any version you pinned is still pinned. If the Minecraft version and server software are unchanged and the server version selector is floating, the previously locked server JAR is reused rather than chased to a newer build. Adding a package does not float your other packages.
+`--with-optional` adds optional dependencies and writes them into `lucy.yaml`, so they remain part of the server on later installs. It resolves again even when the lock is current.
 
-**`--locked` is a promise, not a hint.** Under `--locked`, a missing or stale lock is an error, never a silent re-resolve. If your pipeline depends on failing when the lock drifts, that is the flag.
-
-### Lock-only replay
-
-If the manifest is gone but `lucy-lock.yaml` remains, `lucy install` replays the lock as-is. The lock records the Minecraft version, server software, server version, launcher files, and full download details, so a lock alone is enough to reconstruct the server. This is what makes the lock the file worth publishing.
+Files tracked with [`lucy file`](/commands/file) are not overwritten. If an immutable tracked file differs from its accepted contents, lucy warns and leaves your copy in place.
 
 ## Offline
 
-`--offline` forbids network acquisition. Anything already present and hash-correct is left alone; anything that would need a download fails.
-
-The rule is byte-level, not name-level: a file that exists but whose hash differs from the lock is a mismatch, and `--offline` will not paper over it by keeping the old copy. In practice `--offline` works for replaying a current lock after a warm run; it does not work for first-time installs or for anything requiring a new resolution.
+`lucy install --offline` uses only files already present or cached. It replays a current lock in a new workspace when every required artifact is in the shared cache and the required local prerequisites are available, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is not cached, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists.
 
 ### Download cache
 
-Lucy stores each downloaded file once, keyed by its SHA-256 hash. If several requests need the same file, they share one copy. Lucy checks the stored copy before use and replaces a damaged copy on the next normal download.
+Lucy keeps one downloaded copy of each file and reuses it across servers. `lucy cache clear` empties that shared cache without touching the files in a server directory. Run an online install before relying on `--offline`.
 
-`lucy cache clear` removes the global download cache but not files in the current project. Run an online installation to refill the cache before relying on `--offline`.
+## MCDReforged
 
-## Lock file shape
+By default, install runs the `mcdreforged` command on your `PATH`, which needs Python 3.8 or newer. Pass `--mcdr-venv` to create an isolated environment under the server directory instead. The isolated environment needs one online install before it can be used offline; a global MCDReforged installation does not.
 
-The lock has top-level `lock_version`, `manifest_fingerprint`, `server`, an optional `mcdr`, a flat `packages` list, and optional `files` declarations.
+## Java
 
-```yaml
-lock_version: 1
-manifest_fingerprint: "sha256:<digest of the manifest>"
-server:
-  directory: "."
-  minecraft: "1.21.4"
-  product: paper
-  core_version: "<build id>"
-  provider: papermc
-  project_id: paper
-  release_id: "1.21.4/<build id>"
-  file_id: "server:default"
-  version: "<build id>"
-  filename: "paper-1.21.4-<build id>.jar"
-  url: "<upstream download URL>"
-  hashes:
-    sha256: "<64 hex characters>"
-  bootstrapper: paperclip
-  java: 21
+Java version mismatches are warnings, not install errors. If a step needs a runtime and none is installed, the command stops and suggests `--java`. That flag installs a suitable runtime without changing your default Java. If you selected a runtime with `java.home` in [`lucy config`](/commands/config), `--java` installs nothing and your choice is used. Under `--offline`, `--java` fails instead of downloading.
 
-packages:
-  - environment: server
-    ecosystem: bukkit
-    provider: modrinth
-    project_id: "<project id>"
-    release_id: "<version id>"
-    file_id: "<file id>"
-    version: "<resolved version>"
-    filename: "<filename>"
-    url: "<upstream download URL>"
-    hashes:
-      sha256: "<64 hex characters>"
-    requirements:
-      - reference: modrinth:luckperms
-        selector: stable
-        enabled: true
+`--add-java-repository` lets `--java` add the Java vendor's package repository to your system package manager. Under `--no-interactive`, methods that need a password are skipped.
+
+## Known servers
+
+Lucy keeps a list of servers for your user account in your user data directory. The list is shared by every shell and project and records locations only. A server appears after [`lucy create`](/commands/create), [`lucy init`](/commands/init), or `lucy install` registers it; [`lucy deinit`](/commands/deinit) removes the entry.
+
+Every install that completes, changes nothing, or commits its changes before reporting a later problem refreshes the workspace's entry under the manifest's `name`. A manifest without a name still installs but is not registered. Registration warns when another server already uses the name, and a failure to write the list is a warning: the installation is not rolled back. The next install after fixing the cause registers the server.
+
+### lucy server list
+
+```bash
+lucy server list
+lucy server ls
 ```
 
-Each entry records where the file came from: provider, project, release, file, filename, URL, and hashes. A locked package needs a concrete version, a filename without path separators, and a SHA-256 hash. The `server` section uses `product` and `core_version`, and records how to launch the server (`bootstrapper`) plus any supporting files (`inputs`).
+Lists each registered server's name, state, and path. `list` and `ls` are the same command.
 
-`environment` is `server` or `mcdr`, which is how one flat list covers the server and MCDR without nesting. `ecosystem` is the mod or plugin type. The `requirements` list records which package in `lucy.yaml` a locked file satisfies, with the version rule and file pattern that were applied; a package with no requirements is present because a dependency needed it.
+|State|Meaning|
+|---|---|
+|`available`|The path exists and its manifest and name can be read and validated.|
+|`missing`|The path no longer exists, for example because a drive is disconnected.|
+|`unreadable`|The path or manifest exists, but lucy cannot inspect it, usually because of permissions or an I/O error.|
+|`invalid`|The path exists but does not contain a valid lucy manifest, or the manifest does not declare a valid name.|
 
-## Removing old files
+The listing checks each registered target without changing it. A missing server stays in the list; lucy never removes an entry because a target is unavailable. Reconnect the drive and list again to see it as `available`. Only `lucy deinit` removes an entry.
 
-`lucy install` syncs the directory to the lock: files the lock no longer lists are removed, but only when `lucy` can prove it installed them. Lucy records the files it installs in `.lucy/install.yaml` and only removes paths in that record. Untracked files in `mods/` or `plugins/` — your own jars, backups, anything you dropped in by hand — are left alone rather than deleted on a guess.
+An empty name is shown as `-`. Missing, unreadable, and invalid entries cannot be selected with `--server` until their manifest is fixed.
 
-## Tracked working files
+### lucy server rename
 
-Top-level `files` paths are relative to the directory containing `lucy.yaml`, not `server.directory`. Installation preserves existing working files. An immutable digest mismatch produces a warning; it does not overwrite the file or change its permissions.
+```bash
+lucy server rename <server> <name>
+```
 
-Missing hashed files are provisioned from verified project-local CAS objects, or from `recover_url` when online. Missing presence-only files and unavailable or mismatched recovery sources produce diagnostics. For offline replay, place the accepted contents in the workspace beforehand; packaged distribution is not implemented yet (see [issue #129](https://github.com/mclucy/lucy/issues/129)).
+Renames a registered server. `<server>` must match exactly one available name; when several servers share it, the command fails, lists the matching paths, and changes nothing.
 
-These checks run even when the native runtime is already current. Tracked files are excluded from runtime ownership receipts and pruning. File commands preserve exact runtime pins; accepted file changes do not reinstall an unchanged native runtime.
+`<name>` becomes the top-level `name` in that server's `lucy.yaml`. It is trimmed and must be non-empty and printable. Renaming to a name another server already uses is allowed with a warning; selecting that name then fails until you change one manifest's `name` directly. Renaming to the current name changes nothing and still refreshes the registration.
 
-Use [`lucy file`](/commands/file) to accept, recover, or revert contents explicitly.
+Only the name changes. The installed server, packages, worlds, configuration, and directory stay in place. The name is not part of what the lock compares, so renaming does not make `lucy-lock.yaml` stale.
 
-See also [Global Flags](/commands/global-flags), [`lucy add`](/commands/add), and [`lucy remove`](/commands/remove).
+### Machine-readable output
+
+`lucy server list --json` prints one array. Each entry has `name`, `path`, and `state`, plus `problem` when there is a problem.
+
+```json
+[
+  {
+    "name": "survival",
+    "path": "/srv/minecraft/survival",
+    "state": "available"
+  }
+]
+```
+
+`lucy server rename --json` prints the previous name, the new `name`, and the server `path`, plus `warnings` from registration, for example when the new name is already in use.
 
 ## Flags
 
 <ParamField query="--locked" type="boolean" default="false">
-  Do not resolve new versions; fail when the lock cannot satisfy the manifest.
+  Do not resolve new versions; fail when the lock is missing or cannot satisfy the manifest.
 </ParamField>
 
 <ParamField query="--offline" type="boolean" default="false">
-  Disallow network acquisition. Hash-correct files are kept; anything missing or mismatched fails.
+  Disallow network access. Missing files must already be available in the cache.
 </ParamField>
 
 <ParamField query="--with-optional" type="boolean" default="false">
-  Also install optional upstream dependencies. It forces a new resolution even when the lock already matches the manifest, and every optional package selected this way is written back into `lucy.yaml` as an explicit package — so it is part of the declared server from then on, not just of this run. Cannot be combined with `--locked`.
+  Also install optional dependencies and record them in `lucy.yaml` as explicit packages. Cannot be combined with `--locked`.
 </ParamField>
+
+<ParamField query="--accept-broken" type="boolean" default="false">
+  Install the declared packages even when a mod dependency is missing or a version falls outside its required range. Each problem is reported as a warning.
+</ParamField>
+
+<ParamField query="--overwrite" type="boolean" default="false">
+  Replace files already present at the destinations the lock selects. Other files are left alone.
+</ParamField>
+
+<ParamField query="--force, -f" type="boolean" default="false">
+  Combine `--accept-broken` and `--overwrite`.
+</ParamField>
+
+<ParamField query="--java" type="boolean" default="false">
+  Install the Java runtime the server asks for when no installed runtime meets it.
+</ParamField>
+
+<ParamField query="--add-java-repository" type="boolean" default="false">
+  Let `--java` add the Java vendor's package repository to the system package manager.
+</ParamField>
+
+<ParamField query="--mcdr-venv" type="boolean" default="false">
+  Create an isolated MCDReforged environment under the server directory instead of using the global `mcdreforged` command.
+</ParamField>
+
+`--json` prints a machine-readable result, and `--no-interactive` produces append-only output for CI logs. See [Global Flags](/commands/global-flags).
+
+See also [`lucy add`](/commands/add), [`lucy remove`](/commands/remove), and [`lucy file`](/commands/file).

@@ -1,8 +1,6 @@
 package style
 
 import (
-	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"fmt"
 	"strings"
 	"time"
@@ -57,8 +55,8 @@ func MarkdownToAnsi(md string, maxWidth int) string {
 	return strings.Join(lines, "\n")
 }
 
-// noColorMarkdownStyle renders markdown without color while keeping emphasis
-// as terminal attributes. The stock NoTTY style falls back to literal
+// noColorMarkdownStyle renders Markdown without color while keeping emphasis
+// as terminal attributes. The stock notty style falls back to literal
 // `**bold**` and `*italic*` markers, which contradicts --no-color keeping
 // text attributes.
 func noColorMarkdownStyle() ansi.StyleConfig {
@@ -68,24 +66,6 @@ func noColorMarkdownStyle() ansi.StyleConfig {
 	cfg.Emph = ansi.StylePrimitive{Italic: &italic}
 	cfg.Strikethrough = ansi.StylePrimitive{CrossedOut: &crossedOut}
 	return cfg
-}
-
-func PrintAsJson(v any) {
-	data, err := json.Marshal(v, jsontext.Multiline(true), jsontext.WithIndent("  "))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(string(data))
-}
-
-func PrintAsJsonCompact(v any) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(string(data))
 }
 
 func Capitalize(v any) string {
@@ -135,7 +115,7 @@ func FormatBytesDecimal(bytes int64) string {
 	}
 }
 
-func FormatDuration(t time.Time) string {
+func FormatTTL(t time.Time) string {
 	remaining := time.Until(t)
 	if remaining <= 0 {
 		return "expired"

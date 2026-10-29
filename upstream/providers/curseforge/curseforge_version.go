@@ -1,8 +1,11 @@
 package curseforge
 
 import (
-	"github.com/mclucy/lucy/types"
+	"strconv"
+
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 // Docs: https://docs.curseforge.com/rest-api/#get-mod-files
@@ -17,14 +20,44 @@ func listFiles(modId int32, gameVersion string, loaderType int) (
 	return resp.Data, nil
 }
 
+// listAllFiles pages through every file of a mod for the given compatibility
+// filter. An empty gameVersion and zero loaderType list all files unfiltered.
+func listAllFiles(
+	modID int32,
+	gameVersion string,
+	loaderType int,
+) ([]fileResponse, error) {
+	// Must match the pageSize set by modFilesUrl.
+	const pageSize = 50
+
+	var files []fileResponse
+	for offset := 0; ; offset += pageSize {
+		u := modFilesUrl(modID, gameVersion, loaderType) +
+			"&index=" + strconv.Itoa(offset)
+		var page filesResponse
+		if err := get(u, &page); err != nil {
+			return nil, err
+		}
+		files = append(files, page.Data...)
+		if len(page.Data) < pageSize {
+			break
+		}
+		if page.Pagination.TotalCount > 0 &&
+			int32(len(files)) >= page.Pagination.TotalCount {
+			break
+		}
+	}
+	return files, nil
+}
+
 // latestFile finds the latest file compatible with local runtime facts and
 // the requested selector. stable accepts releases only; beta accepts any
 // channel; any prefers a release and falls back to a prerelease.
 func latestFile(
 	modId int32,
 	local upstream.LocalContext,
-	platform types.Ecosystem,
-	selector types.Version,
+	platform catalog.Ecosystem,
+	selector versionpkg.Version,
 ) (*fileResponse, error) {
 	files, err := listFiles(
 		modId,
@@ -48,7 +81,7 @@ func getFileByDisplayName(
 	modId int32,
 	version string,
 	local upstream.LocalContext,
-	platform types.Ecosystem,
+	platform catalog.Ecosystem,
 ) (*fileResponse, error) {
 	files, err := listFiles(
 		modId,

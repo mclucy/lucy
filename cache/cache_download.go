@@ -2,6 +2,7 @@ package cache
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"crypto/sha512"
 	"encoding/hex"
@@ -24,6 +25,8 @@ import (
 // CachedDownload is the cache identity; RequestURL, when set, is used only for
 // the network request.
 type DownloadOptions struct {
+	// Context cancels the network request. Nil never cancels.
+	Context            context.Context
 	Kind               EntryKind
 	ExpectedHash       string
 	HashAlgorithm      HashAlgorithm
@@ -310,7 +313,15 @@ func downloadAndCache(url, requestURL, dir string, opts DownloadOptions) (
 		return nil, err
 	}
 
-	resp, err := http.Get(requestURL)
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}

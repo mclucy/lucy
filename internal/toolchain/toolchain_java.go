@@ -2,6 +2,7 @@ package toolchain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,13 +40,28 @@ func javaCandidates(environment envVars, hints []string) []javaCandidate {
 		}
 	}
 	roots := systemJavaRoots()
+	sdkman := os.Getenv("SDKMAN_DIR")
+	if sdkman == "" {
+		sdkman = filepath.Join(environment.home, ".sdkman")
+	}
+	mise := os.Getenv("MISE_DATA_DIR")
+	if mise == "" {
+		mise = filepath.Join(environment.home, ".local", "share", "mise")
+	}
+	asdf := os.Getenv("ASDF_DATA_DIR")
+	if asdf == "" {
+		asdf = filepath.Join(environment.home, ".asdf")
+	}
 	roots = append(roots,
-		filepath.Join(environment.home, ".sdkman", "candidates", "java"),
-		filepath.Join(environment.home, ".asdf", "installs", "java"),
-		filepath.Join(environment.home, ".local", "share", "mise", "installs", "java"),
+		filepath.Join(sdkman, "candidates", "java"),
+		filepath.Join(mise, "installs", "java"),
+		filepath.Join(asdf, "installs", "java"),
 		filepath.Join(environment.home, ".jabba", "jdk"),
 		filepath.Join(environment.gradleUserHome, "jdks"),
 	)
+	if managed, err := ManagedJavaRoot(); err == nil {
+		roots = append(roots, managed)
+	}
 	for _, root := range roots {
 		for _, home := range javaHomesUnder(root) {
 			add(filepath.Join(home, "bin", javaExecutableName), root)
@@ -76,6 +92,9 @@ func javaHomesUnder(root string) []string {
 	for _, entry := range entries {
 		child := filepath.Join(root, entry.Name())
 		if add(child) {
+			continue
+		}
+		if add(filepath.Join(child, "current")) {
 			continue
 		}
 		if filepath.Base(root) != "jdks" {
@@ -117,10 +136,13 @@ func probeJava(ctx context.Context, candidate javaCandidate) (JavaInstallation, 
 			home = parent
 		}
 	}
+	release := releaseProperties(home)
 	installation := JavaInstallation{
 		Home: home, Java: filepath.Join(home, "bin", javaExecutableName),
 		Version: properties["java.version"], Major: majorVersion(properties["java.version"]),
 		Vendor: properties["java.vendor"], Arch: properties["os.arch"],
+		Distribution: distributionFromRelease(release),
+		Implementor:  release["IMPLEMENTOR"],
 	}
 	if installation.Major == 0 || !isExecutable(installation.Java) {
 		return JavaInstallation{}, fmt.Errorf("java %q reported an unusable installation", candidate.java)
@@ -132,6 +154,33 @@ func probeJava(ctx context.Context, candidate javaCandidate) (JavaInstallation, 
 		}
 	}
 	return installation, nil
+}
+
+// ProbeJava inspects the Java installation at path. path is a Java home or a
+// java executable, and symlinks are allowed. An invalid path yields an error
+// that names the defect.
+func ProbeJava(ctx context.Context, path string) (JavaInstallation, error) {
+	if strings.TrimSpace(path) == "" {
+		return JavaInstallation{}, errors.New("probe Java: path is empty")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return JavaInstallation{}, fmt.Errorf("probe Java %q: %w", path, err)
+	}
+	executable := path
+	if info.IsDir() {
+		executable = filepath.Join(path, "bin", javaExecutableName)
+		if !isExecutable(executable) {
+			executable = filepath.Join(path, "Contents", "Home", "bin", javaExecutableName)
+		}
+		if !isExecutable(executable) {
+			return JavaInstallation{}, fmt.Errorf(
+				"probe Java home %q: no java executable under bin or Contents/Home/bin", path)
+		}
+	} else if !isExecutable(path) {
+		return JavaInstallation{}, fmt.Errorf("probe Java %q: not an executable file", path)
+	}
+	return probeJava(ctx, javaCandidate{java: executable, source: "requested path"})
 }
 
 func majorVersion(version string) int {

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -49,5 +50,18 @@ func applyRunUser(cmd *exec.Cmd, runUser string) error {
 		Gid:    uint32(gid),
 		Groups: groups,
 	}
+	// In particular, package-task Lucy children must not try to open root's
+	// default log/config directories after credentials have been dropped.
+	env := cmd.Environ()
+	filtered := env[:0]
+	for _, value := range env {
+		key, _, _ := strings.Cut(value, "=")
+		switch key {
+		case "HOME", "USER", "LOGNAME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME":
+			continue
+		}
+		filtered = append(filtered, value)
+	}
+	cmd.Env = append(filtered, "HOME="+u.HomeDir, "USER="+u.Username, "LOGNAME="+u.Username)
 	return nil
 }

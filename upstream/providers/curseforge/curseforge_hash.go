@@ -9,11 +9,12 @@ import (
 	"strconv"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 )
 
 // fingerprintRequest is the body for POST /v1/fingerprints/432.
@@ -49,7 +50,7 @@ func SlugFromFilePathWithHint(filePath, urlHint string) (
 }
 
 func (p provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
-	ref types.VersionedPackageRef,
+	ref catalog.VersionedRef,
 	hash string,
 	ok bool,
 	err error,
@@ -76,11 +77,11 @@ func (p provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
 		return ref, hash, false, err
 	}
 
-	ref = types.VersionedPackageRef{
-		Name:      types.PackageName(mod.Slug),
+	ref = catalog.VersionedRef{
+		Name:      catalog.Name(mod.Slug),
 		Provider:  p.Provider(),
 		Ecosystem: platformFromCurseForgeFile(mod, file),
-		Version:   types.Version(file.DisplayName),
+		Version:   version.Version(file.DisplayName),
 	}
 	return ref, hash, true, nil
 }
@@ -92,6 +93,13 @@ type fingerprintMatchResult struct {
 
 func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
 	var zero fingerprintMatchResult
+	key, err := effectiveAPIKey()
+	if err != nil {
+		return zero, err
+	}
+	if key == "" {
+		return zero, ErrNoApiKey
+	}
 	body, _ := json.Marshal(fingerprintRequest{Fingerprints: []uint32{fp}})
 	req, err := http.NewRequest(
 		http.MethodPost,
@@ -101,7 +109,7 @@ func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
 	if err != nil {
 		return zero, err
 	}
-	req.Header.Set("x-api-key", ApiKey)
+	req.Header.Set("x-api-key", key)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
@@ -155,24 +163,24 @@ func slugFromFingerprint(fp uint32) (string, error) {
 func platformFromCurseForgeFile(
 	mod *modResponse,
 	file *fileResponse,
-) types.Ecosystem {
+) catalog.Ecosystem {
 	for _, idx := range mod.LatestFilesIndexes {
 		if idx.FileId == file.ID && idx.ModLoader != nil {
 			return platformFromCurseForgeModLoader(*idx.ModLoader)
 		}
 	}
-	return types.EcosystemUnspecified
+	return catalog.EcosystemUnspecified
 }
 
-func platformFromCurseForgeModLoader(loader int32) types.Ecosystem {
+func platformFromCurseForgeModLoader(loader int32) catalog.Ecosystem {
 	switch loader {
 	case 1:
-		return types.EcosystemForge
+		return catalog.EcosystemForge
 	case 4:
-		return types.EcosystemFabric
+		return catalog.EcosystemFabric
 	case 6:
-		return types.EcosystemNeoForge
+		return catalog.EcosystemNeoForge
 	default:
-		return types.EcosystemUnspecified
+		return catalog.EcosystemUnspecified
 	}
 }

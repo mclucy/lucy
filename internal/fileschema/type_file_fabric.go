@@ -78,8 +78,3 @@ type FileFabricModIdentifier struct {
 
 	Custom any `json:"-"`
 }
-
-type FileFabricModIdentifierOld struct {
-	// FileFabricModIdentifierOld represents pre-0.4.0 metadata, where the schema
-	// version is absent or zero.
-}

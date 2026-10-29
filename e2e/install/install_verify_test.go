@@ -55,15 +55,17 @@ type lockedModule struct {
 	} `yaml:"dependencies"`
 }
 
+type lockedRequirement struct {
+	Reference string `yaml:"reference"`
+	Selector  string `yaml:"selector"`
+	Enabled   bool   `yaml:"enabled"`
+}
+
 type lockedPackage struct {
 	Environment    string `yaml:"environment"`
 	Ecosystem      string `yaml:"ecosystem"`
 	lockedArtifact `yaml:",inline"`
-	Requirements   []struct {
-		Reference string `yaml:"reference"`
-		Selector  string `yaml:"selector"`
-		Enabled   bool   `yaml:"enabled"`
-	} `yaml:"requirements"`
+	Requirements   []lockedRequirement `yaml:"requirements"`
 }
 
 type lockedInput struct {
@@ -82,7 +84,6 @@ type lockDocument struct {
 		Bootstrapper   string `yaml:"bootstrapper"`
 		lockedArtifact `yaml:",inline"`
 		Inputs         []lockedInput `yaml:"inputs"`
-		Java           int           `yaml:"java"`
 	} `yaml:"server"`
 	Packages []lockedPackage `yaml:"packages"`
 }
@@ -242,12 +243,7 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 			return fmt.Errorf("project %s has incorrect filename", pkg.ProjectID)
 		}
 		if selector, ok := declared.Server.Packages[loader][want.Reference]; ok {
-			if pkg.Version != selector || !slices.ContainsFunc(pkg.Requirements, func(req struct {
-				Reference string `yaml:"reference"`
-				Selector  string `yaml:"selector"`
-				Enabled   bool   `yaml:"enabled"`
-			},
-			) bool {
+			if pkg.Version != selector || !slices.ContainsFunc(pkg.Requirements, func(req lockedRequirement) bool {
 				return req.Reference == want.Reference && req.Selector == selector && req.Enabled
 			}) {
 				return fmt.Errorf("project %s lost its exact manifest selector %q", pkg.ProjectID, selector)

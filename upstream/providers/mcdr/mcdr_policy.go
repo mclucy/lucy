@@ -1,7 +1,6 @@
 package mcdr
 
 import (
-	"github.com/mclucy/lucy/types"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -14,18 +13,17 @@ func selectLatestRelease(history *pluginRelease) *release {
 
 func selectLatestCompatibleRelease(
 	history *pluginRelease,
-	localMcdrVersion types.Version,
+	localMcdrVersion version.Version,
 ) (*release, error) {
 	if history == nil {
 		return nil, nil
 	}
 
-	mcdrPackage := types.VersionedPackageRef{
-		Ecosystem: types.EcosystemMCDR,
-		Name:      "mcdreforged",
-		Version:   localMcdrVersion,
+	dialect, err := version.NewEngine(version.DialectMCDR)
+	if err != nil {
+		return nil, err
 	}
-	localVersion, err := version.Parse(localMcdrVersion, types.VersionSchemeSemver)
+	localVersion, err := dialect.ParseVersion(localMcdrVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -39,16 +37,11 @@ func selectLatestCompatibleRelease(
 		if !ok {
 			continue
 		}
-		dep := types.Dependency{
-			ID: mcdrPackage,
-			Constraint: version.ParseRange(
-				rangeExpr,
-				version.DialectNpmSemver,
-				types.VersionSchemeSemver,
-			),
-			Mandatory: true,
+		constraint, err := dialect.ParseConstraint(rangeExpr)
+		if err != nil {
+			return nil, err
 		}
-		if dep.Satisfy(mcdrPackage, localVersion) {
+		if dialect.Match(constraint, localVersion) {
 			return rel, nil
 		}
 	}

@@ -1,14 +1,29 @@
 package curseforge
 
 import (
+	"strconv"
+
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
-	"github.com/mclucy/lucy/types"
 )
+
+// resolveProjectID resolves a project identity to a CurseForge mod ID. A
+// numeric string is treated as an ID; anything else is resolved as a slug.
+func resolveProjectID(project string) (int32, error) {
+	if id, err := strconv.ParseInt(project, 10, 32); err == nil {
+		return int32(id), nil
+	}
+	mod, err := resolveSlug(catalog.Name(project))
+	if err != nil {
+		return 0, err
+	}
+	return mod.ID, nil
+}
 
 // resolveSlug resolves a project slug to its mod data. CurseForge has no
 // get-by-slug endpoint, so it searches by slug and requires an exact match.
 // Docs: https://docs.curseforge.com/rest-api/#search-mods
-func resolveSlug(slug types.PackageName) (*modResponse, error) {
+func resolveSlug(slug catalog.Name) (*modResponse, error) {
 	u := slugSearchUrl(slug)
 	var resp searchResponse
 	if err := get(u, &resp); err != nil {

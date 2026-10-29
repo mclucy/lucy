@@ -1,18 +1,22 @@
 package curseforge
 
-import "github.com/mclucy/lucy/types"
+import (
+	"github.com/mclucy/lucy/upstream"
 
-// selectLatestFile applies issue 60 selector semantics. stable accepts
-// releases only; beta accepts any channel; any prefers a release and falls
-// back to a prerelease.
+	// selectLatestFile applies issue 60 selector semantics. stable accepts
+	// releases only; beta accepts any channel; any prefers a release and falls
+	// back to a prerelease.
+	versionpkg "github.com/mclucy/lucy/version"
+)
+
 func selectLatestFile(
 	files []fileResponse,
-	selector types.Version,
+	selector versionpkg.Version,
 ) *fileResponse {
 	switch selector {
-	case types.VersionStable:
+	case versionpkg.Stable:
 		return selectLatestReleaseFile(files)
-	case types.VersionBeta:
+	case versionpkg.Beta:
 		return selectLatestAnyFile(files)
 	default:
 		if latest := selectLatestReleaseFile(files); latest != nil {
@@ -52,16 +56,16 @@ func selectLatestReleaseFile(files []fileResponse) *fileResponse {
 
 // curseForgeChannel maps the CurseForge releaseType enum (1=Release,
 // 2=Beta, 3=Alpha) to a typed release channel.
-func curseForgeChannel(releaseType int32) types.ReleaseChannel {
+func curseForgeChannel(releaseType int32) upstream.ReleaseChannel {
 	switch releaseType {
 	case 1:
-		return types.ReleaseChannelRelease
+		return upstream.ReleaseChannelRelease
 	case 2:
-		return types.ReleaseChannelBeta
+		return upstream.ReleaseChannelBeta
 	case 3:
-		return types.ReleaseChannelAlpha
+		return upstream.ReleaseChannelAlpha
 	default:
-		return types.ReleaseChannelUnknown
+		return upstream.ReleaseChannelUnknown
 	}
 }
 

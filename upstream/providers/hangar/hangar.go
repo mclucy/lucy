@@ -1,18 +1,38 @@
 package hangar
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
+	versionpkg "github.com/mclucy/lucy/version"
 )
 
 type provider struct{}
 
 var Provider provider
 
-func (provider) Provider() types.Provider {
-	return types.ProviderHangar
+func (provider) Provider() catalog.Provider {
+	return catalog.ProviderHangar
+}
+
+// Builds lists every published version. Hangar versions declare supported
+// platforms independently, so each platform becomes its own build entry.
+func (p provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	versions, err := listVersions(catalog.Name(project))
+	if err != nil {
+		return nil, err
+	}
+
+	var builds []upstream.Build
+	for i := range versions {
+		builds = append(builds, versions[i].ToBuilds()...)
+	}
+	return builds, nil
 }
 
 func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
@@ -26,16 +46,16 @@ func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
 
 func (p provider) Fetch(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (types.ResolvedPackage, error) {
+	id catalog.VersionedRef,
+) (upstream.ResolvedPackage, error) {
 	version, err := getVersion(id)
 	if err != nil {
-		return types.ResolvedPackage{}, err
+		return upstream.ResolvedPackage{}, err
 	}
 
 	preferredPlatform := preferredDownloadPlatform(id.Ecosystem)
 	if remote, ok := version.ToPackageRemoteForPlatform(preferredPlatform); ok {
-		return types.ResolvedPackage{
+		return upstream.ResolvedPackage{
 			FileURL:       remote.FileURL,
 			Filename:      remote.Filename,
 			Hash:          remote.Hash,
@@ -43,20 +63,20 @@ func (p provider) Fetch(
 		}, nil
 	}
 	if remote := version.ToPackageRemote(); remote.FileURL != "" {
-		return types.ResolvedPackage{
+		return upstream.ResolvedPackage{
 			FileURL:       remote.FileURL,
 			Filename:      remote.Filename,
 			Hash:          remote.Hash,
 			HashAlgorithm: remote.HashAlgorithm,
 		}, nil
 	}
-	return types.ResolvedPackage{}, ErrNoDownload
+	return upstream.ResolvedPackage{}, ErrNoDownload
 }
 
-func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
+func (p provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
 	project, err := getProject(ref.Name)
 	if err != nil {
-		return types.Metadata{}, err
+		return catalog.Metadata{}, err
 	}
 	info := project.ToProjectInformation()
 	return info, nil
@@ -64,8 +84,8 @@ func (p provider) Info(ref types.PackageRef) (types.Metadata, error) {
 
 func (p provider) Dependencies(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (*types.DependencySet, error) {
+	id catalog.VersionedRef,
+) (*upstream.DependencySet, error) {
 	version, err := getVersion(id)
 	if err != nil {
 		return nil, fmt.Errorf("hangar: dependencies fetch failed: %w", err)
@@ -80,10 +100,10 @@ func (p provider) Dependencies(
 
 func (p provider) ResolveVersionSelector(
 	_ upstream.LocalContext,
-	id types.VersionedPackageRef,
-) (parsed types.VersionedPackageRef, err error) {
+	id catalog.VersionedRef,
+) (parsed catalog.VersionedRef, err error) {
 	if id.Ecosystem.IsUnspecified() {
-		id.Ecosystem = types.EcosystemUnspecified
+		id.Ecosystem = catalog.EcosystemUnspecified
 	}
 
 	if !id.Version.CanInfer() {
@@ -96,6 +116,6 @@ func (p provider) ResolveVersionSelector(
 	}
 
 	parsed = id
-	parsed.Version = types.Version(version.Name)
+	parsed.Version = versionpkg.Version(version.Name)
 	return parsed, nil
 }

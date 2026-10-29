@@ -25,7 +25,9 @@ the server.
 ## Sinytra Connector
 
 Connector is a NeoForge mod that loads Fabric mods inside a NeoForge instance.
-The fixture pins NeoForge 21.1.248 and these mods:
+The fixture pins NeoForge 21.1.248, materializes its installer output with
+`--installServer`, and launches through
+`libraries/net/neoforged/neoforge/21.1.248/unix_args.txt`. It pins these mods:
 
 - Connector 2.0.0-beta.17, the bridge itself
 - Forgified Fabric API, the Fabric API port that Connector needs

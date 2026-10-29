@@ -1,19 +1,31 @@
 ---
 title: "lucy add"
-description: "Add packages to the manifest and install them"
+description: "Add mods and plugins to a server"
 ---
 
-`lucy add` records a new package in `lucy.yaml`, resolves it against the lock, and installs the result. The manifest change and the lock update are one transaction: if resolution fails, `lucy.yaml` is left exactly as it was.
+Add a package by its source and project name. Lucy records it in `lucy.yaml` and installs it with its required dependencies.
 
 ```bash
 lucy add modrinth:lithium
-lucy add curseforge:238222
-lucy add modrinth:fabric-api@0.100.8
+lucy add modrinth:fabric-api@0.165.1+26.4
 lucy add modrinth:fabric-api modrinth:lithium
+```
+
+Use [`lucy search`](/commands/search) to find packages. A bare name can also work: Lucy checks the current lock first, then uses Modrinth (or the MCDR catalogue for an MCDR plugin). If the name is ambiguous, use the full source-qualified reference.
+
+An `@version` suffix pins a version. Without one, Lucy prefers a release and may select a prerelease if necessary. Existing package pins are preserved. If resolution fails, the manifest and lock remain unchanged.
+
+Lucy normally infers the mod or plugin type from the server. Use `--ecosystem` when it needs help, for example:
+
+```bash
 lucy add mcdr:synced --ecosystem mcdr
 ```
 
-## Arguments
+Add `--with-optional` to include optional dependencies; they are recorded as explicit packages for future installations. See [`lucy remove`](/commands/remove) to remove a package.
+
+## Flags
+
+### Arguments
 
 <ParamField path="package" type="string" required>
   One or more package references.
@@ -24,12 +36,6 @@ lucy add mcdr:synced --ecosystem mcdr
 
   Lucy does not rename the IDs inside a mod or plugin. The manifest stores the `modrinth:`, `curseforge:`, or `mcdr:` reference; the ID stays whatever the server loads.
 </ParamField>
-
-Without a pin, the recorded version rule is `any`: Lucy prefers release builds and may fall back to a prerelease when no release satisfies. `stable` requires a release build with no prerelease fallback, and `beta` also accepts prereleases. To hold a version, add it with `@` or edit the package's `selector` afterwards. Adding a package does not float the rest — existing pins are pins, and the new package resolves against them.
-
-The mod or plugin type is inferred from the declared server when `--ecosystem` is omitted: Fabric, Forge, and NeoForge servers select their matching type, Paper and Purpur select `paper`, and MCDR selects `mcdr`. Pass `--ecosystem` when the manifest does not make the target clear.
-
-## Flags
 
 <ParamField query="--ecosystem" type="string">
   Target mod or plugin type for the request: `fabric`, `forge`, `neoforge`, `bukkit`, `paper`, or `mcdr`.

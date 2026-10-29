@@ -14,24 +14,33 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/cache"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/github"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream/routing"
 )
 
 type downloadStore struct {
 	ctx     context.Context
 	dir     string
 	offline bool
+	trace   *Trace
+	fetch   *FetchSummary
 }
 
-// MaterializeServerProduct resolves and downloads the declared server product
-// into the workspace download store.
-func MaterializeServerProduct(ctx context.Context, root string, request types.ServerProductRequest) error {
-	store := &downloadStore{ctx: ctx, dir: filepath.Join(root, ".lucy", "downloads")}
-	_, err := routing.ResolveServerProduct(ctx, request, store.materialize)
-	return err
+func (s *downloadStore) cacheHit() {
+	if s.fetch != nil {
+		s.fetch.Cached++
+	}
+}
+
+func (s *downloadStore) downloaded(bytes int64) {
+	if s.fetch == nil {
+		return
+	}
+	s.fetch.Downloaded++
+	s.fetch.Bytes += bytes
 }
 
 func DigestFile(filename string, algorithms map[string]string) (map[string]string, error) {
@@ -71,20 +80,23 @@ func DigestFile(filename string, algorithms map[string]string) (map[string]strin
 	return out, nil
 }
 
-func (s *downloadStore) materialize(a *types.Artifact) (string, error) {
+// materialize returns the verified local file and the digests computed while
+// verifying it. The artifact is an input only; callers attach the returned
+// hashes when the artifact becomes part of a lock.
+func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedFile, error) {
 	if err := s.ctx.Err(); err != nil {
-		return "", err
+		return artifact.MaterializedFile{}, err
 	}
 	if a.Embedded != "" {
-		return "", fmt.Errorf("embedded artifacts are extracted from their pinned parent")
+		return artifact.MaterializedFile{}, fmt.Errorf("embedded artifacts are extracted from their pinned parent")
 	}
 	if a.Filename == "" || filepath.Base(a.Filename) != a.Filename || strings.ContainsAny(a.Filename, "/\\") {
-		return "", fmt.Errorf("invalid artifact filename %q", a.Filename)
+		return artifact.MaterializedFile{}, fmt.Errorf("invalid artifact filename %q", a.Filename)
 	}
 	key := sha256.Sum256([]byte(a.URL))
 	dir := filepath.Join(s.dir, hex.EncodeToString(key[:]))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return artifact.MaterializedFile{}, err
 	}
 	destination := filepath.Join(dir, a.Filename)
 	source := "cache"
@@ -94,7 +106,7 @@ func (s *downloadStore) materialize(a *types.Artifact) (string, error) {
 			// A destination that fails verification would be reused by every
 			// later attempt, so discard it instead of leaving bad bytes.
 			if err := os.Remove(destination); err != nil {
-				return "", err
+				return artifact.MaterializedFile{}, err
 			}
 		}
 		if s.offline {
@@ -103,21 +115,22 @@ func (s *downloadStore) materialize(a *types.Artifact) (string, error) {
 			source = "download"
 		}
 		if err := s.materializeFile(a, dir, destination); err != nil {
-			return "", err
+			return artifact.MaterializedFile{}, err
 		}
 		if hashes, err = DigestFile(destination, a.Hashes); err != nil {
 			os.Remove(destination)
-			return "", err
+			return artifact.MaterializedFile{}, err
 		}
+	} else {
+		s.cacheHit()
 	}
-	a.Hashes = hashes
 	log.Debug(
 		"artifact verified",
 		"file", a.Filename,
 		"sha256", hashes["sha256"],
 		"source", source,
 	)
-	return destination, nil
+	return artifact.MaterializedFile{Path: destination, Hashes: hashes}, nil
 }
 
 // materializeFile materializes the artifact at destination from the network or
@@ -125,7 +138,7 @@ func (s *downloadStore) materialize(a *types.Artifact) (string, error) {
 // place only after they verify, so an interrupted copy can never be mistaken
 // for a completed download and a failed verification can never poison the
 // store.
-func (s *downloadStore) materializeFile(a *types.Artifact, dir, destination string) error {
+func (s *downloadStore) materializeFile(a *catalog.Artifact, dir, destination string) error {
 	staged := destination + ".partial"
 	defer os.Remove(staged)
 
@@ -154,8 +167,28 @@ func (s *downloadStore) materializeFile(a *types.Artifact, dir, destination stri
 		if cachedErr != nil {
 			return cachedErr
 		}
+		s.cacheHit()
 	} else {
-		result, err := cache.CachedDownload(a.URL, dir, cache.DownloadOptions{Kind: cache.KindArtifact, Filename: a.Filename})
+		var read int64
+		var total int64
+		options := cache.DownloadOptions{
+			Context:    s.ctx,
+			Kind:       cache.KindArtifact,
+			Filename:   a.Filename,
+			RequestURL: github.DownloadURL(a.URL),
+		}
+		options.WrapReader = func(reader io.Reader, size int64) io.Reader {
+			total = size
+			s.trace.fetchStarted(a.Filename, size)
+			return &fetchReader{
+				reader: reader,
+				name:   a.Filename,
+				total:  size,
+				read:   &read,
+				store:  s,
+			}
+		}
+		result, err := cache.CachedDownload(a.URL, dir, options)
 		if err != nil {
 			return err
 		}
@@ -168,9 +201,32 @@ func (s *downloadStore) materializeFile(a *types.Artifact, dir, destination stri
 				return err
 			}
 		}
+		if result.CacheHit {
+			s.cacheHit()
+		} else {
+			s.downloaded(read)
+			s.trace.fetchProgress(a.Filename, read, total)
+			s.trace.fetchDone(a.Filename, false)
+		}
 	}
 	if _, err := DigestFile(staged, a.Hashes); err != nil {
 		return err
 	}
 	return os.Rename(staged, destination)
+}
+
+// fetchReader reports download byte progress through the operation trace.
+type fetchReader struct {
+	reader io.Reader
+	name   string
+	total  int64
+	read   *int64
+	store  *downloadStore
+}
+
+func (r *fetchReader) Read(buffer []byte) (int, error) {
+	count, err := r.reader.Read(buffer)
+	*r.read += int64(count)
+	r.store.trace.fetchProgress(r.name, *r.read, r.total)
+	return count, err
 }

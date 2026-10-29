@@ -16,33 +16,50 @@ import (
 const baseUrl = "https://api.curseforge.com"
 
 var (
-	ApiKey string
+	embeddedAPIKey string
+	userAPIKey     string
 
 	loadApiKey = sync.OnceValue(func() error {
 		key, err := cipher.Decode()
 		if err != nil {
 			return fmt.Errorf("curseforge: decode embedded api key: %w", err)
 		}
-		ApiKey = strings.TrimSpace(key)
+		embeddedAPIKey = strings.TrimSpace(key)
 		return nil
 	})
 )
 
+// SetUserAPIKey configures the key from machine configuration. An empty key
+// keeps the key embedded in the build.
+func SetUserAPIKey(key string) {
+	userAPIKey = strings.TrimSpace(key)
+}
+
+func effectiveAPIKey() (string, error) {
+	if userAPIKey != "" {
+		return userAPIKey, nil
+	}
+	if err := loadApiKey(); err != nil {
+		return "", err
+	}
+	return embeddedAPIKey, nil
+}
+
 // get performs an authenticated GET request to the CurseForge API and
 // unmarshals the JSON response into dest.
 func get(url string, dest any) error {
-	if err := loadApiKey(); err != nil {
+	key, err := effectiveAPIKey()
+	if err != nil {
 		return err
 	}
-
-	if ApiKey == "" {
+	if key == "" {
 		return ErrNoApiKey
 	}
 
 	log.Debug("curseforge api: GET " + url)
 
 	headers := http.Header{}
-	headers.Set("x-api-key", ApiKey)
+	headers.Set("x-api-key", key)
 	headers.Set("Accept", "application/json")
 	res, err := cache.CachedGetRequest(
 		url,

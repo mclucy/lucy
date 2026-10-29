@@ -5,19 +5,24 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/version"
 )
 
-func (provider) Candidates(ctx context.Context, project, minecraft string, loader types.Ecosystem) ([]types.CatalogueCandidate, error) {
+func (provider) Candidates(ctx context.Context, project, minecraft string, loader catalog.Ecosystem) ([]upstream.Candidate, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	versions, err := listVersions(types.PackageName(project))
+	versions, err := listVersions(catalog.Name(project))
 	if err != nil {
 		return nil, err
 	}
-	var out []types.CatalogueCandidate
+	var out []upstream.Candidate
 	for _, v := range versions {
+		if v.Status != "" && v.Status != "listed" {
+			continue
+		}
 		if !slices.Contains(v.GameVersions, minecraft) || !versionSupportsLoader(v, loader) {
 			continue
 		}
@@ -37,19 +42,19 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 			if f.Hashes.Sha1 != "" {
 				hashes["sha1"] = f.Hashes.Sha1
 			}
-			c := types.CatalogueCandidate{
-				Provider:     types.ProviderModrinth,
+			c := upstream.Candidate{
+				Provider:     catalog.ProviderModrinth,
 				ProjectID:    v.ProjectId,
 				ReleaseID:    v.ID,
 				FileID:       f.ID,
-				Version:      types.Version(v.VersionNumber),
+				Version:      version.Version(v.VersionNumber),
 				Filename:     f.Filename,
 				URL:          f.URL,
 				Hashes:       hashes,
-				Channel:      types.ParseReleaseChannel(v.VersionType),
+				Channel:      upstream.ParseReleaseChannel(v.VersionType),
 				PublishedAt:  v.DatePublished,
 				PrimaryFile:  f.IsPrimary || (unmarked && i == 0),
-				Dependencies: []types.ProjectDependency{},
+				Dependencies: []upstream.ProjectDependency{},
 			}
 			for _, d := range v.Dependencies {
 				projectID := d.ProjectId
@@ -61,11 +66,11 @@ func (provider) Candidates(ctx context.Context, project, minecraft string, loade
 					projectID = pinned.ProjectId
 				}
 				if projectID != "" {
-					c.Dependencies = append(c.Dependencies, types.ProjectDependency{
-						Provider:  types.ProviderModrinth,
+					c.Dependencies = append(c.Dependencies, upstream.ProjectDependency{
+						Provider:  catalog.ProviderModrinth,
 						ProjectID: projectID,
 						ReleaseID: d.VersionId,
-						Kind:      types.ParseDependencyKind(string(d.DependencyType)),
+						Kind:      catalog.ParseDependencyKind(string(d.DependencyType)),
 					})
 				}
 			}

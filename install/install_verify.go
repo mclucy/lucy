@@ -4,19 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/mclucy/lucy/artifact"
-	"github.com/mclucy/lucy/lockfile"
+	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
+	"github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
 
-func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Document) error {
+func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lock, overwrite bool) error {
 	raw, err := os.ReadFile(filepath.Join(root, ".lucy", "install.yaml"))
 	owned := map[string]bool{}
 	if err == nil {
@@ -31,16 +29,13 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 		return err
 	}
 	seenDirectories := map[string]bool{}
+	lockedDestinations := lockedPackageDestinations(d)
 	for _, planned := range d.Packages {
-		enabled := len(planned.Requirements) == 0
-		for _, r := range planned.Requirements {
-			enabled = enabled || r.Enabled
-		}
-		if !enabled {
+		if !planned.Enabled() {
 			continue
 		}
 		directory, folder := d.Server.Directory, packageFolder(planned.Environment, planned.Ecosystem)
-		if planned.Environment == types.EnvironmentMCDR {
+		if planned.Environment == server.EnvironmentMCDR {
 			directory = d.MCDR.Directory
 		}
 		relative := filepath.Join(directory, folder)
@@ -64,22 +59,35 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 			if owned[filepath.ToSlash(filename)] {
 				continue
 			}
+			if expected, ok := lockedDestinations[filepath.Clean(filename)]; ok {
+				if _, err := DigestFile(filepath.Join(root, filename), expected); err == nil {
+					log.Debug(
+						"locked package already occupies its destination",
+						"path", filename,
+					)
+					continue
+				}
+			}
 			mods, err := artifact.ReadModules(ctx, filepath.Join(root, filename), planned.Ecosystem)
 			if err != nil {
 				continue
 			}
-			for _, other := range d.Packages {
-				if other.Environment != planned.Environment || other.Ecosystem != planned.Ecosystem {
+			conflict, moduleID := unmanagedConflict(d, &planned, mods)
+			if conflict == nil {
+				continue
+			}
+			if overwrite {
+				destination, err := packageDestination(d, conflict)
+				if err == nil && filepath.Clean(filename) == filepath.Clean(destination) {
+					log.Debug(
+						"overwriting unmanaged artifact",
+						"path", filename,
+						"module", moduleID,
+					)
 					continue
 				}
-				for _, discovered := range mods {
-					for _, selected := range other.Modules {
-						if artifact.ModuleProvides(discovered, selected.ID) || artifact.ModuleProvides(selected, discovered.ID) {
-							return fmt.Errorf("unmanaged artifact %s conflicts with selected module %s; adopt or move it explicitly", filename, selected.ID)
-						}
-					}
-				}
 			}
+			return fmt.Errorf("unmanaged artifact %s conflicts with selected module %s; adopt or move it explicitly", filename, moduleID)
 		}
 	}
 	log.Debug(
@@ -91,24 +99,46 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *lockfile.Do
 	return nil
 }
 
-func checkJava(ctx context.Context, minimum int) error {
-	raw, err := exec.CommandContext(ctx, "java", "-version").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("java %d or later is required: %w", minimum, err)
+// lockedPackageDestinations maps every enabled package destination to the
+// digests the lock pins for it. A destination that already holds those bytes
+// belongs to the locked installation even when no receipt records it, which is
+// the state initialization leaves behind.
+func lockedPackageDestinations(d *document.Lock) map[string]map[string]string {
+	destinations := make(map[string]map[string]string, len(d.Packages))
+	for i := range d.Packages {
+		p := &d.Packages[i]
+		if !p.Enabled() {
+			continue
+		}
+		destination, err := packageDestination(d, p)
+		if err != nil {
+			continue
+		}
+		destinations[filepath.Clean(destination)] = p.Artifact.Hashes
 	}
-	text := string(raw)
-	_, after, ok := strings.Cut(text, "\"")
-	if !ok {
-		return fmt.Errorf("cannot identify Java version: %s", text)
+	return destinations
+}
+
+// unmanagedConflict reports the selected package whose module an unmanaged
+// artifact duplicates. Environment and ecosystem must match, because one
+// module identity may exist independently on the server and in MCDR.
+func unmanagedConflict(
+	d *document.Lock,
+	planned *document.Package,
+	discovered []catalog.DescriptorModule,
+) (*document.Package, string) {
+	for i := range d.Packages {
+		other := &d.Packages[i]
+		if other.Environment != planned.Environment || other.Ecosystem != planned.Ecosystem {
+			continue
+		}
+		for _, found := range discovered {
+			for _, selected := range other.Modules {
+				if artifact.ModuleProvides(found, selected.ID) || artifact.ModuleProvides(selected, found.ID) {
+					return other, selected.ID
+				}
+			}
+		}
 	}
-	v, _, _ := strings.Cut(after, "\"")
-	majorText, _, _ := strings.Cut(v, ".")
-	if majorText == "1" && strings.Contains(v, ".") {
-		majorText = strings.Split(v, ".")[1]
-	}
-	major, err := strconv.Atoi(majorText)
-	if err != nil || major < minimum {
-		return fmt.Errorf("java %d or later required, found %s", minimum, v)
-	}
-	return nil
+	return nil, ""
 }

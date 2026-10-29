@@ -2,10 +2,12 @@ package bootstrap
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,11 +15,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mclucy/lucy/lockfile"
-	"github.com/mclucy/lucy/manifest"
+	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
+// CopyLockedFile writes src to dst with mode, replacing dst through a
+// temporary file. An interrupted copy never leaves a partial file, and other
+// links to the previous dst keep their bytes.
 func CopyLockedFile(src, dst string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
@@ -27,24 +32,35 @@ func CopyLockedFile(src, dst string, mode os.FileMode) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	out, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*")
 	if err != nil {
 		return err
 	}
+	temporary := out.Name()
+	defer func() {
+		if out != nil {
+			out.Close()
+			os.Remove(temporary)
+		}
+	}()
 	if err := out.Chmod(mode); err != nil {
-		out.Close()
 		return err
 	}
-	_, copyErr := io.Copy(out, in)
-	closeErr := out.Close()
-	if copyErr != nil {
-		return copyErr
+	if _, err := io.Copy(out, in); err != nil {
+		return err
 	}
-	return closeErr
+	if err := out.Close(); err != nil {
+		return err
+	}
+	out = nil
+	return os.Rename(temporary, dst)
 }
 
-func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, corePath string, inputs map[string]string) error {
-	if err := manifest.SafeRelativePath(server.Directory); err != nil {
+// PrepareLocked builds the server tree of a locked server in stage. java is the
+// Java executable for the bootstrap steps that run Java; it may be empty when
+// no runtime is installed, and only those steps fail then.
+func PrepareLocked(ctx context.Context, stage string, server document.LockedServer, corePath string, inputs map[string]string, java string, output io.Writer) error {
+	if err := document.SafeRelativePath(server.Directory); err != nil {
 		return err
 	}
 	root := filepath.Join(stage, server.Directory)
@@ -61,7 +77,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		defer installer.Close()
 	}
 	for _, input := range server.Inputs {
-		if err := manifest.SafeRelativePath(input.Path); err != nil {
+		if err := document.SafeRelativePath(input.Path); err != nil {
 			return err
 		}
 		dst := filepath.Join(root, filepath.FromSlash(input.Path))
@@ -89,11 +105,14 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		if err := CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644); err != nil {
 			return err
 		}
-		cmd := exec.CommandContext(ctx, "java", "-Dpaperclip.patchonly=true", "-jar", "server.jar")
+		if err := requireJava(java, "Paperclip patching"); err != nil {
+			return err
+		}
+		cmd := exec.CommandContext(ctx, java, "-Dpaperclip.patchonly=true", "-jar", "server.jar")
 		cmd.Dir = root
-		output, err := cmd.CombinedOutput()
+		captured, err := runLockedProcess(cmd, output)
 		if err != nil {
-			return fmt.Errorf("Paperclip patching: %w\n%s", err, output)
+			return fmt.Errorf("Paperclip patching: %w\n%s", err, captured)
 		}
 		return nil
 	case "fabric":
@@ -126,7 +145,7 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 		}
 		return nil
 	case "forge-installer":
-		return executeServerProfile(ctx, root, server, corePath, &installer.Reader)
+		return executeServerProfile(ctx, root, server, corePath, &installer.Reader, java, output)
 	default:
 		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrapper)
 	}
@@ -134,45 +153,70 @@ func PrepareLocked(ctx context.Context, stage string, server lockfile.Server, co
 
 func extractLockedEntry(z *zip.Reader, name, dst string) error {
 	for _, f := range z.File {
-		if f.Name == name {
-			r, err := f.Open()
-			if err != nil {
-				return err
-			}
-			defer r.Close()
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-				return err
-			}
-			out, err := os.Create(dst)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(out, r)
-			closeErr := out.Close()
-			if err != nil {
-				return err
-			}
-			return closeErr
+		if f.Name != name {
+			continue
 		}
+		r, err := f.Open()
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return errors.Join(err, r.Close())
+		}
+		out, err := os.Create(dst)
+		if err != nil {
+			return errors.Join(err, r.Close())
+		}
+		_, err = io.Copy(out, r)
+		if err != nil {
+			return errors.Join(err, r.Close(), out.Close())
+		}
+		return errors.Join(r.Close(), out.Close())
 	}
 	return fmt.Errorf("missing pinned installer entry %s", name)
 }
 
-func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
-	for _, f := range z.File {
-		if f.Name == name {
-			r, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer r.Close()
-			return io.ReadAll(io.LimitReader(r, 128<<20))
-		}
+// runLockedProcess streams a subprocess's combined output to output while
+// retaining it for the error message. It returns the captured output.
+func runLockedProcess(cmd *exec.Cmd, output io.Writer) ([]byte, error) {
+	if output == nil {
+		output = io.Discard
 	}
-	return nil, fmt.Errorf("missing installer metadata %s", name)
+	var captured bytes.Buffer
+	writer := io.MultiWriter(output, &captured)
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+	err := cmd.Run()
+	return captured.Bytes(), err
 }
 
-func executeServerProfile(ctx context.Context, root string, server lockfile.Server, corePath string, z *zip.Reader) error {
+// ErrNoJava reports a bootstrap step that runs Java when no Java runtime is
+// installed.
+var ErrNoJava = errors.New("no Java runtime is installed")
+
+func requireJava(java, step string) error {
+	if java == "" {
+		return fmt.Errorf("%s needs a Java runtime: %w", step, ErrNoJava)
+	}
+	return nil
+}
+
+func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
+	raw, found, err := fsutil.ReadZipEntry(
+		z,
+		name,
+		fsutil.MaxNestedZipEntryBytes,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("missing installer metadata %s", name)
+	}
+	return raw, nil
+}
+
+func executeServerProfile(ctx context.Context, root string, server document.LockedServer, corePath string, z *zip.Reader, java string, output io.Writer) error {
 	raw, err := readLockedEntry(z, "install_profile.json")
 	if err != nil {
 		return err
@@ -308,11 +352,14 @@ func executeServerProfile(ctx context.Context, root string, server lockfile.Serv
 			main,
 		}
 		commandArgs = append(commandArgs, args...)
-		cmd := exec.CommandContext(ctx, "java", commandArgs...)
+		if err := requireJava(java, "installer processor "+proc.Jar); err != nil {
+			return err
+		}
+		cmd := exec.CommandContext(ctx, java, commandArgs...)
 		cmd.Dir = root
-		output, err := cmd.CombinedOutput()
+		captured, err := runLockedProcess(cmd, output)
 		if err != nil {
-			return fmt.Errorf("installer processor %s: %w\n%s", proc.Jar, err, output)
+			return fmt.Errorf("installer processor %s: %w\n%s", proc.Jar, err, captured)
 		}
 		for name, expected := range proc.Outputs {
 			destination, err := expand(name)

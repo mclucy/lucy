@@ -272,7 +272,7 @@ func (systemdManager) StatusInstance(inst Instance) ServiceState {
 // systemdStatus combines native status, enablement and activity probes for a unit.
 func systemdStatus(unit string) ServiceState {
 	return ServiceState{
-		Installed: systemctlOK("status", unit),
+		Installed: systemctlText("show", "--property=LoadState", "--value", unit) == "loaded",
 		Enabled:   systemctlOK("is-enabled", unit),
 		Running:   systemctlOK("is-active", unit),
 		NativeID:  unit,
@@ -335,6 +335,9 @@ func (launchdManager) InstallInstance(inst Instance, binary string) error {
 	binary, err := resolveServiceBinary(binary)
 	if err != nil {
 		return err
+	}
+	if err := os.MkdirAll(LogDir(), 0o755); err != nil {
+		return fmt.Errorf("create native service log directory: %w", err)
 	}
 	if err := os.MkdirAll(launchdDir(), 0o755); err != nil {
 		return fmt.Errorf("create launchd directory: %w", err)

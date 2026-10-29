@@ -1,492 +1,393 @@
 package version
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/mclucy/lucy/types"
 )
 
-type caretMode uint8
+// parseFabricConstraint parses fabric.mod.json dependency predicates. Each
+// entry of a VersionRange array is an alternative, which ParseConstraints
+// merges into OR clauses.
+//
+// Reference: https://wiki.fabricmc.net/documentation:fabric_mod_json_spec
+func parseFabricConstraint(raw string) (Expr, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || isWildcardExpression(raw) {
+		return nil, nil
+	}
 
-const (
-	caretModeNpm caretMode = iota
-	caretModeSameMajor
-)
-
-type semverRangeOptions struct {
-	caretMode caretMode
+	parts := strings.Split(raw, "||")
+	result := make(Expr, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil, fmt.Errorf("empty alternative in Fabric range %q", raw)
+		}
+		terms, err := parseFabricClause(part)
+		if err != nil {
+			return nil, err
+		}
+		if len(terms) == 0 {
+			return nil, nil
+		}
+		result = append(result, terms)
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result, nil
 }
 
-// parseMcdrSemverRange parses MCDR dependency range expressions strictly by
-// metadata docs: space-separated criteria (AND) with operators
-// >=, >, <=, <, =, ==, ^, ~ and wildcard base versions.
-// Reference: https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
-func parseMcdrSemverRange(raw string) types.VersionExpr {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || isWildcardToken(raw) {
-		return nil
+func parseFabricClause(raw string) ([]SubExpr, error) {
+	if strings.Contains(raw, " - ") {
+		return parseFabricHyphenRange(raw)
 	}
 
 	tokens := strings.Fields(raw)
-	if len(tokens) == 0 {
-		return nil
-	}
-
-	andConstraints := make([]types.VersionSubExpr, 0, len(tokens))
+	terms := make([]SubExpr, 0, len(tokens))
 	for _, token := range tokens {
-		constraints, ok := parseMcdrSemverCriterion(token)
-		if !ok {
-			return nil
+		parsed, err := parseFabricToken(token)
+		if err != nil {
+			return nil, err
 		}
-		andConstraints = append(andConstraints, constraints...)
+		terms = append(terms, parsed...)
 	}
-
-	if len(andConstraints) == 0 {
-		return nil
-	}
-	return types.VersionExpr{andConstraints}
+	return terms, nil
 }
 
-func parseMcdrSemverCriterion(raw string) ([]types.VersionSubExpr, bool) {
+func parseFabricHyphenRange(raw string) ([]SubExpr, error) {
+	tokens := strings.SplitN(raw, " - ", 2)
+	if len(tokens) != 2 {
+		return nil, fmt.Errorf("invalid Fabric range %q", raw)
+	}
+	lower := parseFabricVersion(Version(strings.TrimSpace(tokens[0])))
+	upper := parseFabricVersion(Version(strings.TrimSpace(tokens[1])))
+	if lower == nil || upper == nil {
+		return nil, fmt.Errorf("invalid Fabric range %q", raw)
+	}
+	return []SubExpr{
+		{Value: lower, Operator: OpGte},
+		{Value: upper, Operator: OpLte},
+	}, nil
+}
+
+func parseFabricToken(raw string) ([]SubExpr, error) {
 	raw = strings.TrimSpace(raw)
-	if raw == "" || isWildcardToken(raw) {
-		return nil, true
+	if raw == "" || isWildcardExpression(raw) {
+		return nil, nil
+	}
+
+	// Comma-separated comparators are an AND group.
+	if strings.Contains(raw, ",") {
+		parts := strings.Split(raw, ",")
+		terms := make([]SubExpr, 0, len(parts))
+		for _, part := range parts {
+			parsed, err := parseFabricToken(part)
+			if err != nil {
+				return nil, err
+			}
+			terms = append(terms, parsed...)
+		}
+		return terms, nil
 	}
 
 	operator := ""
 	versionToken := raw
-	for _, op := range []string{">=", "<=", "==", ">", "<", "=", "^", "~"} {
-		if strings.HasPrefix(raw, op) {
-			operator = op
-			versionToken = strings.TrimSpace(strings.TrimPrefix(raw, op))
+	for _, candidate := range []string{
+		">=", "<=", "!=", "==", ">", "<", "=", "^", "~",
+	} {
+		if after, ok := strings.CutPrefix(raw, candidate); ok {
+			operator = candidate
+			versionToken = strings.TrimSpace(after)
 			break
 		}
 	}
 	if versionToken == "" {
-		return nil, false
+		return nil, fmt.Errorf("invalid Fabric predicate %q", raw)
 	}
 
-	if strings.ContainsAny(versionToken, "xX*") {
+	if hasWildcardComponent(versionToken) {
 		switch operator {
 		case "", "=", "==":
-			constraints := parseXRange(versionToken)
-			if constraints == nil {
-				return nil, false
-			}
-			return constraints, true
+			return parseFabricWildcardRange(versionToken)
 		default:
-			// Keep implementation strict to documented examples.
-			return nil, false
+			return nil, fmt.Errorf(
+				"Fabric wildcard predicate %q requires equality",
+				raw,
+			)
 		}
 	}
 
-	lower := parseSemver(types.Version(versionToken))
+	lower := parseFabricVersion(Version(versionToken))
 	if lower == nil {
-		return nil, false
+		return nil, fmt.Errorf("invalid Fabric version %q", versionToken)
+	}
+
+	if _, semantic := lower.(*SemverVersion); !semantic {
+		switch operator {
+		case ">", "<", "!=":
+			return nil, fmt.Errorf(
+				"Fabric predicate %q needs a semantic version",
+				raw,
+			)
+		default:
+			// Fabric reduces inclusive predicates on plain strings to equality.
+			return []SubExpr{
+				{Value: lower, Operator: OpEq},
+			}, nil
+		}
 	}
 
 	switch operator {
 	case "", "=", "==":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpEq,
-			},
-		}, true
-	case ">":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpGt,
-			},
-		}, true
-	case ">=":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpGte,
-			},
-		}, true
-	case "<":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpLt,
-			},
-		}, true
-	case "<=":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpLte,
-			},
-		}, true
-	case "^":
-		constraints := parseCaretRangeFromSemver(lower, caretModeSameMajor)
-		return constraints, len(constraints) > 0
-	case "~":
-		constraints := parseTildeRangeFromSemver(lower, versionToken)
-		return constraints, len(constraints) > 0
-	default:
-		return nil, false
-	}
-}
-
-func parseSemverRange(
-	raw string,
-	options semverRangeOptions,
-) types.VersionExpr {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || isWildcardToken(raw) {
-		return nil
-	}
-
-	orParts := strings.Split(raw, "||")
-	result := make(types.VersionExpr, 0, len(orParts))
-
-	for _, part := range orParts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-
-		if strings.Contains(part, " - ") {
-			rangeConstraints := parseSemverHyphenRange(part)
-			if len(rangeConstraints) == 0 {
-				continue
-			}
-			result = append(result, rangeConstraints)
-			continue
-		}
-
-		tokens := strings.Fields(part)
-		if len(tokens) == 0 {
-			continue
-		}
-
-		andConstraints := make([]types.VersionSubExpr, 0, len(tokens))
-		valid := true
-		for _, token := range tokens {
-			tokenConstraints, ok := parseSemverToken(token, options)
-			if !ok {
-				valid = false
-				break
-			}
-			andConstraints = append(andConstraints, tokenConstraints...)
-		}
-		if !valid {
-			continue
-		}
-
-		if len(andConstraints) == 0 {
-			// all wildcard/no-op constraints => no constraint for the whole range
-			return nil
-		}
-		result = append(result, andConstraints)
-	}
-
-	if len(result) == 0 {
-		return nil
-	}
-	return result
-}
-
-func parseSemverHyphenRange(raw string) []types.VersionSubExpr {
-	tokens := strings.SplitN(raw, " - ", 2)
-	if len(tokens) != 2 {
-		return nil
-	}
-	left := parseSemver(types.Version(strings.TrimSpace(tokens[0])))
-	right := parseSemver(types.Version(strings.TrimSpace(tokens[1])))
-	if left == nil || right == nil {
-		return nil
-	}
-	return []types.VersionSubExpr{
-		{Value: left, Operator: types.OpGte},
-		{Value: right, Operator: types.OpLte},
-	}
-}
-
-func parseSemverToken(
-	raw string,
-	options semverRangeOptions,
-) ([]types.VersionSubExpr, bool) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || isWildcardToken(raw) {
-		return nil, true
-	}
-
-	// comma-separated comparators within one token are treated as AND
-	if strings.Contains(raw, ",") {
-		parts := strings.Split(raw, ",")
-		all := make([]types.VersionSubExpr, 0, len(parts))
-		for _, part := range parts {
-			constraints, ok := parseSemverToken(part, options)
-			if !ok {
-				return nil, false
-			}
-			all = append(all, constraints...)
-		}
-		return all, true
-	}
-
-	for _, op := range []string{
-		">=", "<=", "!=", "==", ">", "<", "=", "^", "~",
-	} {
-		if after, ok := strings.CutPrefix(raw, op); ok {
-			versionToken := strings.TrimSpace(after)
-			if versionToken == "" {
-				return nil, false
-			}
-			return parseSemverOperator(op, versionToken, options)
-		}
-	}
-
-	if strings.ContainsAny(raw, "xX*") {
-		constraints := parseXRange(raw)
-		if constraints == nil && !isWildcardToken(raw) {
-			return nil, false
-		}
-		return constraints, true
-	}
-
-	v := parseSemver(types.Version(raw))
-	if v == nil {
-		return nil, false
-	}
-	return []types.VersionSubExpr{{Value: v, Operator: types.OpEq}}, true
-}
-
-func parseSemverOperator(
-	op string,
-	versionToken string,
-	options semverRangeOptions,
-) ([]types.VersionSubExpr, bool) {
-	if strings.ContainsAny(versionToken, "xX*") {
-		switch op {
-		case "=":
-			constraints := parseXRange(versionToken)
-			if constraints == nil {
-				return nil, false
-			}
-			return constraints, true
-		case "!=":
-			// This desugars to an OR expression and is intentionally unsupported in
-			// the single-token operator parser.
-			return nil, false
-		}
-	}
-
-	lower := parseSemver(types.Version(versionToken))
-	if lower == nil && strings.ContainsAny(versionToken, "xX*") {
-		lower = parseSemverLowerBoundFromWildcard(versionToken)
-	}
-	if lower == nil {
-		return nil, false
-	}
-
-	switch op {
-	case "==":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpEq,
-			},
-		}, true
-	case "=":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpEq,
-			},
-		}, true
+		return []SubExpr{{Value: lower, Operator: OpEq}}, nil
 	case "!=":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpNeq,
-			},
-		}, true
+		return []SubExpr{{Value: lower, Operator: OpNeq}}, nil
 	case ">":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpGt,
-			},
-		}, true
+		return []SubExpr{{Value: lower, Operator: OpGt}}, nil
 	case ">=":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpGte,
-			},
-		}, true
+		return []SubExpr{{Value: lower, Operator: OpGte}}, nil
 	case "<":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpLt,
-			},
-		}, true
+		return []SubExpr{{Value: lower, Operator: OpLt}}, nil
 	case "<=":
-		return []types.VersionSubExpr{
-			{
-				Value: lower, Operator: types.OpLte,
-			},
-		}, true
-	case "^":
-		return parseCaretRangeFromSemver(lower, options.caretMode), true
-	case "~":
-		return parseTildeRangeFromSemver(lower, versionToken), true
+		return []SubExpr{{Value: lower, Operator: OpLte}}, nil
+	case "^", "~":
+		upper := semverUpperBound(lower.(*SemverVersion), operator)
+		if upper == nil {
+			return nil, fmt.Errorf("invalid Fabric predicate %q", raw)
+		}
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
+		}, nil
 	default:
-		return nil, false
+		return nil, fmt.Errorf("invalid Fabric predicate %q", raw)
 	}
 }
 
-func parseCaretRangeFromSemver(
-	lower types.ResolvableVersion,
-	mode caretMode,
-) []types.VersionSubExpr {
-	sv, ok := lower.(*SemverVersion)
-	if !ok {
-		return nil
+// parseFabricWildcardRange expands a Fabric X-range. Fabric includes
+// prereleases at the lower boundary and excludes them at the next component.
+func parseFabricWildcardRange(raw string) ([]SubExpr, error) {
+	core := raw
+	if index := strings.IndexByte(core, '+'); index >= 0 {
+		core = core[:index]
+	}
+	if strings.Contains(core, "-") {
+		return nil, fmt.Errorf(
+			"Fabric wildcard %q cannot carry a prerelease",
+			raw,
+		)
 	}
 
-	major := sv.Major()
-	minor := sv.Minor()
-	patch := sv.Patch()
-
-	var upper types.ResolvableVersion
-	if mode == caretModeNpm {
-		if major > 0 {
-			upper = NewSemver(major+1, 0, 0)
-		} else if minor > 0 {
-			upper = NewSemver(0, minor+1, 0)
-		} else {
-			upper = NewSemver(0, 0, patch+1)
+	parts := strings.Split(core, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid Fabric wildcard %q", raw)
+	}
+	wildcardIndex := -1
+	for index, part := range parts {
+		if isWildcardComponent(part) {
+			wildcardIndex = index
+			break
 		}
-	} else {
-		upper = NewSemver(major+1, 0, 0)
+	}
+	if wildcardIndex <= 0 {
+		return nil, fmt.Errorf("invalid Fabric wildcard %q", raw)
+	}
+	for _, part := range parts[wildcardIndex:] {
+		if !isWildcardComponent(part) {
+			return nil, fmt.Errorf("invalid Fabric wildcard %q", raw)
+		}
+	}
+	parts = parts[:wildcardIndex+1]
+
+	numbers := make([]uint64, 0, wildcardIndex)
+	for _, part := range parts[:wildcardIndex] {
+		number, err := strconv.ParseUint(part, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Fabric wildcard %q", raw)
+		}
+		numbers = append(numbers, number)
 	}
 
-	if upper == nil {
-		return nil
-	}
-
-	return []types.VersionSubExpr{
-		{Value: lower, Operator: types.OpGte},
-		{Value: upper, Operator: types.OpLt},
+	switch wildcardIndex {
+	case 1: // a.x behaves as ^a-
+		lower := newSemverBoundary(DialectFabric, numbers[0])
+		upper := newSemverBoundary(DialectFabric, numbers[0]+1)
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
+		}, nil
+	case 2: // a.b.x behaves as ~a.b-
+		lower := newSemverBoundary(
+			DialectFabric,
+			numbers[0],
+			numbers[1],
+		)
+		upper := newSemverBoundary(
+			DialectFabric,
+			numbers[0],
+			numbers[1]+1,
+		)
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
+		}, nil
+	default: // a.b.c.x increments the last numeric component.
+		lower := newSemverBoundary(DialectFabric, numbers...)
+		incremented := append([]uint64(nil), numbers...)
+		incremented[len(incremented)-1]++
+		upper := newSemverBoundary(DialectFabric, incremented...)
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
+		}, nil
 	}
 }
 
-func parseTildeRangeFromSemver(
-	lower types.ResolvableVersion,
-	raw string,
-) []types.VersionSubExpr {
-	sv, ok := lower.(*SemverVersion)
-	if !ok {
+func semverUpperBound(
+	lower *SemverVersion,
+	operator string,
+) ResolvableVersion {
+	switch operator {
+	case "^":
+		return newSemverBoundary(
+			lower.Dialect(),
+			lower.Major()+1,
+		)
+	case "~":
+		return newSemverBoundary(
+			lower.Dialect(),
+			lower.Major(),
+			lower.Minor()+1,
+		)
+	default:
 		return nil
-	}
-
-	parts := strings.Split(strings.TrimSpace(raw), ".")
-	hasMinorSpecified := len(parts) >= 2 && !isWildcardToken(parts[1])
-
-	var upper types.ResolvableVersion
-	if !hasMinorSpecified {
-		upper = NewSemver(sv.Major()+1, 0, 0)
-	} else {
-		upper = NewSemver(sv.Major(), sv.Minor()+1, 0)
-	}
-	if upper == nil {
-		return nil
-	}
-
-	return []types.VersionSubExpr{
-		{Value: lower, Operator: types.OpGte},
-		{Value: upper, Operator: types.OpLt},
 	}
 }
 
-func parseXRange(raw string) []types.VersionSubExpr {
+// parseMCDRConstraint parses metadata dependency requirements. Criterions are
+// space-separated and combined with AND.
+//
+// References:
+//   - https://docs.mcdreforged.com/en/latest/plugin_dev/metadata.html
+//   - https://github.com/MCDReforged/MCDReforged/blob/master/mcdreforged/plugin/meta/version.py
+func parseMCDRConstraint(raw string) (Expr, error) {
 	raw = strings.TrimSpace(raw)
-	if isWildcardToken(raw) {
-		return nil
+	if raw == "" || isWildcardExpression(raw) {
+		return nil, nil
 	}
 
-	parts := strings.Split(raw, ".")
-	if len(parts) == 0 {
-		return nil
-	}
-
-	if len(parts) >= 1 && isWildcardToken(parts[0]) {
-		return nil
-	}
-
-	major, ok := parseUint64(parts[0])
-	if !ok {
-		return nil
-	}
-
-	if len(parts) == 1 {
-		return nil
-	}
-
-	if len(parts) >= 2 && isWildcardToken(parts[1]) {
-		lower := NewSemver(major, 0, 0)
-		upper := NewSemver(major+1, 0, 0)
-		if lower == nil || upper == nil {
-			return nil
+	tokens := strings.Fields(raw)
+	terms := make([]SubExpr, 0, len(tokens))
+	for _, token := range tokens {
+		parsed, err := parseMCDRCriterion(token)
+		if err != nil {
+			return nil, err
 		}
-		return []types.VersionSubExpr{
-			{Value: lower, Operator: types.OpGte},
-			{Value: upper, Operator: types.OpLt},
-		}
+		terms = append(terms, parsed...)
 	}
-
-	minor, ok := parseUint64(parts[1])
-	if !ok {
-		return nil
+	if len(terms) == 0 {
+		return nil, nil
 	}
-	if len(parts) >= 3 && isWildcardToken(parts[2]) {
-		lower := NewSemver(major, minor, 0)
-		upper := NewSemver(major, minor+1, 0)
-		if lower == nil || upper == nil {
-			return nil
-		}
-		return []types.VersionSubExpr{
-			{Value: lower, Operator: types.OpGte},
-			{Value: upper, Operator: types.OpLt},
-		}
-	}
-
-	return nil
+	return Expr{terms}, nil
 }
 
-func parseSemverLowerBoundFromWildcard(raw string) types.ResolvableVersion {
-	parts := strings.Split(strings.TrimSpace(raw), ".")
-	if len(parts) == 0 {
-		return nil
+func parseMCDRCriterion(raw string) ([]SubExpr, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || isWildcardExpression(raw) {
+		return nil, nil
 	}
-	for i := range parts {
-		if isWildcardToken(parts[i]) {
-			parts[i] = "0"
+
+	operator := ""
+	versionToken := raw
+	for _, candidate := range []string{
+		">=", "<=", "==", ">", "<", "=", "^", "~",
+	} {
+		if after, ok := strings.CutPrefix(raw, candidate); ok {
+			operator = candidate
+			versionToken = strings.TrimSpace(after)
+			break
 		}
 	}
-	for len(parts) < 3 {
-		parts = append(parts, "0")
+	if versionToken == "" {
+		return nil, fmt.Errorf("invalid MCDR criterion %q", raw)
 	}
-	if len(parts) > 3 {
-		parts = parts[:3]
+
+	lower := parseMCDRVersion(versionToken, true)
+	if lower == nil {
+		return nil, fmt.Errorf("invalid MCDR version %q", versionToken)
 	}
-	return parseSemver(types.Version(strings.Join(parts, ".")))
+	semantic, ok := lower.(*SemverVersion)
+	if !ok {
+		return nil, fmt.Errorf("invalid MCDR version %q", versionToken)
+	}
+
+	switch operator {
+	case "", "=", "==":
+		return []SubExpr{{Value: lower, Operator: OpEq}}, nil
+	case ">":
+		return []SubExpr{{Value: lower, Operator: OpGt}}, nil
+	case ">=":
+		return []SubExpr{{Value: lower, Operator: OpGte}}, nil
+	case "<":
+		return []SubExpr{{Value: lower, Operator: OpLt}}, nil
+	case "<=":
+		return []SubExpr{{Value: lower, Operator: OpLte}}, nil
+	case "^":
+		if semantic.wildcardAt(0) {
+			return []SubExpr{{Operator: OpNever}}, nil
+		}
+		upper := newSemverBoundary(
+			DialectMCDR,
+			semantic.Major()+1,
+		)
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
+		}, nil
+	case "~":
+		if semantic.wildcardAt(0) || semantic.wildcardAt(1) {
+			return []SubExpr{{Operator: OpNever}}, nil
+		}
+		upper := newSemverBoundary(
+			DialectMCDR,
+			semantic.Major(),
+			semantic.Minor()+1,
+		)
+		return []SubExpr{
+			{Value: lower, Operator: OpGte},
+			{Value: upper, Operator: OpLt},
+		}, nil
+	default:
+		return nil, fmt.Errorf("invalid MCDR criterion %q", raw)
+	}
 }
 
-func isWildcardToken(token string) bool {
+func hasWildcardComponent(raw string) bool {
+	core := raw
+	if index := strings.IndexByte(core, '+'); index >= 0 {
+		core = core[:index]
+	}
+	if index := strings.IndexByte(core, '-'); index >= 0 {
+		core = core[:index]
+	}
+	for _, part := range strings.Split(core, ".") {
+		if isWildcardComponent(part) {
+			return true
+		}
+	}
+	return false
+}
+
+func isWildcardExpression(token string) bool {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return true
 	}
-	return token == "*" || token == "x" || token == "X"
+	return isWildcardComponent(token)
 }
 
-func parseUint64(token string) (uint64, bool) {
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return 0, false
-	}
-	v, err := strconv.ParseUint(token, 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return v, true
+func isWildcardComponent(token string) bool {
+	return token == "*" || token == "x" || token == "X"
 }

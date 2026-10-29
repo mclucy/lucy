@@ -1,48 +1,32 @@
 package workspace
 
 import (
-	"strings"
+	"os"
+	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/providers/curseforge"
-	"github.com/mclucy/lucy/upstream/providers/modrinth"
 )
-
-// resolveUpstream resolves the upstream of an artifact by hash,
-// Modrinth first.
-func resolveUpstream(
-	path string,
-) (types.VersionedPackageRef, bool) {
-	mappers := []upstream.ArtifactMapProvider{modrinth.Provider}
-	if curseforge.Enabled() {
-		mappers = append(mappers, curseforge.Provider)
-	}
-
-	for _, mapper := range mappers {
-		ref, _, ok, err := mapper.PackageByHash(
-			artifact.File{Path: path},
-		)
-		if err != nil || !ok || ref.Name == "" {
-			continue
-		}
-		return ref, true
-	}
-	return types.VersionedPackageRef{}, false
-}
 
 // discoverPackages inventories the packages under searchPaths and
 // mcdrPluginDirs, when the MCDR wrapper exists. Deduplication and
 // local-path enrichment follow the PackageIndex.Add policy.
+//
+// The scan is local-only. It returns the discovered packages together with
+// the sorted, deduplicated paths of jar files whose descriptor could not be
+// read. Identifying those packages is a separate step.
 func discoverPackages(
 	searchPaths []string,
 	mcdrPluginDirs []string,
-) []types.DiscoveredPackage {
+) ([]DiscoveredPackage, []string) {
 	idx := NewPackageIndex()
-	var mu sync.Mutex
+	var (
+		mu           sync.Mutex
+		unidentified []string
+	)
 
 	for _, searchPath := range searchPaths {
 		jarFiles, err := findJar(searchPath)
@@ -58,13 +42,12 @@ func discoverPackages(
 				analyzed, err := artifact.ReadInfo(jarPath)
 
 				if err != nil || len(analyzed) == 0 {
-					// Only a jar without a readable descriptor needs its upstream
-					// identity, since anything else describes itself.
-					if upstreamRef, hit := resolveUpstream(jarPath); hit {
-						mu.Lock()
-						idx.Add(discoveredFromUpstream(jarPath, upstreamRef))
-						mu.Unlock()
-					}
+					// An unreadable descriptor leaves the package
+					// unidentified; the path is retained for a later
+					// identify step.
+					mu.Lock()
+					unidentified = append(unidentified, jarPath)
+					mu.Unlock()
 					return
 				}
 				pkgs := artifactInfoToDiscoveredPackage(analyzed)
@@ -93,73 +76,75 @@ func discoverPackages(
 		}
 	}
 
-	return idx.Packages()
+	return idx.Packages(), sortUniquePaths(unidentified)
 }
 
-func artifactInfoToDiscoveredPackage(infos []artifact.PackageInfo) []types.DiscoveredPackage {
+// sortUniquePaths returns paths in ascending order without duplicates. A
+// nil or single-element input is returned as is.
+func sortUniquePaths(paths []string) []string {
+	if len(paths) < 2 {
+		return paths
+	}
+	slices.Sort(paths)
+	return slices.Compact(paths)
+}
+
+// findJar lists regular files with a .jar extension directly inside each
+// given directory. It does not walk subdirectories. Servers keep their
+// runtime jars at shallow locations with known names.
+func findJar(dir ...string) ([]string, error) {
+	return findFileWithExt(dir, ".jar")
+}
+
+func findFileWithExt(dirs []string, ext ...string) ([]string, error) {
+	var files []string
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			if slices.Contains(ext, filepath.Ext(entry.Name())) {
+				files = append(files, filepath.Join(dir, entry.Name()))
+			}
+		}
+	}
+	return files, nil
+}
+
+func artifactInfoToDiscoveredPackage(infos []artifact.PackageInfo) []DiscoveredPackage {
 	if len(infos) == 0 {
 		return nil
 	}
-	pkgs := make([]types.DiscoveredPackage, 0, len(infos))
+	pkgs := make([]DiscoveredPackage, 0, len(infos))
 	for _, info := range infos {
-		pkg := types.DiscoveredPackage{
-			ID: types.VersionedPackageRef{
-				PackageRef: info.Ref.PackageRef,
-				Ecosystem:  info.Ref.Ecosystem,
-				Version:    info.Ref.Version,
+		pkg := DiscoveredPackage{
+			ID: catalog.VersionedRef{
+				Ref:       info.Ref.Ref,
+				Ecosystem: info.Ref.Ecosystem,
+				Version:   info.Ref.Version,
 			},
 			Path: info.FilePath,
 		}
 		if len(info.Dependencies) > 0 {
-			deps := make([]types.Dependency, 0, len(info.Dependencies))
+			deps := make([]catalog.Dependency, 0, len(info.Dependencies))
 			for _, dep := range info.Dependencies {
-				deps = append(deps, types.Dependency{
-					ID: types.VersionedPackageRef{
-						PackageRef: dep.Ref.PackageRef,
-						Ecosystem:  dep.Ref.Ecosystem,
+				deps = append(deps, catalog.Dependency{
+					ID: catalog.VersionedRef{
+						Ref:       dep.Ref.Ref,
+						Ecosystem: dep.Ref.Ecosystem,
 					},
 					Constraint: dep.Constraint,
 					Mandatory:  dep.Mandatory,
-					Origin:     types.NormalizeDependencyOrigin(dep.Origin),
+					Origin:     catalog.NormalizeDependencyOrigin(dep.Origin),
 				})
 			}
-			pkg.Dependencies = types.DependencySet{Dependencies: deps}
+			pkg.Dependencies = deps
 		}
 		pkgs = append(pkgs, pkg)
 	}
 	return pkgs
-}
-
-// discoveredFromUpstream builds a discovered package from an injected
-// upstream identity alone. It covers artifacts whose contents carry no
-// readable manifest.
-func discoveredFromUpstream(
-	path string,
-	ref types.VersionedPackageRef,
-) types.DiscoveredPackage {
-	ecosystem := ref.Ecosystem
-	if ecosystem == types.EcosystemUnspecified {
-		ecosystem = types.EcosystemForge
-	}
-	version := ref.Version
-	if version == "" {
-		version = types.VersionUnknown
-	}
-	pkgName := ref.Name
-	if ref.Provider == types.ProviderMCDR {
-		pkgName = types.PackageName(
-			strings.ReplaceAll(string(ref.Name), "_", "-"),
-		)
-	}
-	return types.DiscoveredPackage{
-		ID: types.VersionedPackageRef{
-			PackageRef: types.PackageRef{
-				Name:     pkgName,
-				Provider: ref.Provider,
-			},
-			Ecosystem: ecosystem,
-			Version:   version,
-		},
-		Path: path,
-	}
 }

@@ -6,12 +6,12 @@ import (
 	"encoding/json/v2"
 	"strings"
 
+	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fileschema"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/types"
-	"github.com/mclucy/lucy/version"
 
+	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/pelletier/go-toml"
 )
 
@@ -47,7 +47,10 @@ func (r *neoforgeReader) Read(
 
 	jarjarMeta := readNeoforgeJarjarMeta(zipRdr)
 	embeddedModIds := neoforgeJarjarEmbeddedModIds(zipRdr, jarjarMeta)
-	embeddedDeps := neoforgeJarjarEmbeddedDeps(jarjarMeta)
+	embeddedDeps, err := neoforgeJarjarEmbeddedDeps(jarjarMeta)
+	if err != nil {
+		return nil, err
+	}
 
 	infos := make([]PackageInfo, 0, len(modIdentifier.Mods))
 	for _, mod := range modIdentifier.Mods {
@@ -55,28 +58,28 @@ func (r *neoforgeReader) Read(
 			continue
 		}
 
-		version := types.Version(mod.Version)
+		version := versionpkg.Version(mod.Version)
 		if version == "${file.jarVersion}" {
 			version = readNeoforgeManifestVersion(zipRdr)
 		}
 
 		info := PackageInfo{
-			Ref:      types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(mod.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemNeoForge, Version: version},
+			Ref:      catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(mod.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemNeoForge, Version: version},
 			FilePath: filePath,
-			Metadata: types.Metadata{
-				Title:   mod.DisplayName,
-				Brief:   mod.Description,
-				Authors: []types.Person{{Name: mod.Authors}},
-				License: modIdentifier.License,
-				URLs: []types.URL{
+			Metadata: catalog.Metadata{
+				Title:       mod.DisplayName,
+				Description: mod.Description,
+				Authors:     []catalog.Person{{Name: mod.Authors}},
+				License:     modIdentifier.License,
+				URLs: []catalog.URL{
 					{
 						Name: "URL",
-						Type: types.URLHome,
+						Type: catalog.URLHome,
 						URL:  mod.DisplayURL,
 					},
 					{
 						Name: "Issue Tracker",
-						Type: types.URLIssues,
+						Type: catalog.URLIssues,
 						URL:  modIdentifier.IssueTrackerURL,
 					},
 				},
@@ -97,10 +100,14 @@ func (r *neoforgeReader) Read(
 				continue
 			}
 
+			constraint, err := parseNeoforgeMavenVersionRange(dep.VersionRange)
+			if err != nil {
+				return nil, err
+			}
 			info.Dependencies = append(
 				info.Dependencies, Dependency{
-					Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(dep.ModID), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemNeoForge},
-					Constraint: parseNeoforgeMavenVersionRange(dep.VersionRange),
+					Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(dep.ModID), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemNeoForge},
+					Constraint: constraint,
 					Mandatory:  dep.Type == "required" || dep.Mandatory,
 					Origin:     dependencyOriginForEmbedded(embeddedModIds[dep.ModID]),
 				},
@@ -120,12 +127,12 @@ func readNeoforgeModsToml(zipRdr *zip.Reader) ([]byte, error) {
 	// Docs: https://docs.neoforged.net/docs/gettingstarted/modfiles/
 	// Docs: https://docs.neoforged.net/docs/1.20.4/gettingstarted/modfiles/
 	// Rename note: https://neoforged.net/news/20.5release/
-	raw, err := readZipEntry(zipRdr, neoforgeModsTomlPath)
+	raw, err := readZipEntryBytes(zipRdr, neoforgeModsTomlPath)
 	if err != nil || raw != nil {
 		return raw, err
 	}
 
-	raw, err = readZipEntry(zipRdr, legacyNeoforgeModsTomlPath)
+	raw, err = readZipEntryBytes(zipRdr, legacyNeoforgeModsTomlPath)
 	if err != nil || raw == nil {
 		return raw, err
 	}
@@ -161,25 +168,25 @@ func hasLoaderDependency(
 	return false
 }
 
-func readNeoforgeManifestVersion(zipRdr *zip.Reader) types.Version {
-	raw, err := readZipEntry(zipRdr, "META-INF/MANIFEST.MF")
+func readNeoforgeManifestVersion(zipRdr *zip.Reader) versionpkg.Version {
+	raw, err := readZipEntryBytes(zipRdr, "META-INF/MANIFEST.MF")
 	if err != nil || raw == nil {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 
 	manifest := string(raw)
 	const versionField = "Implementation-Version: "
 	_, version, ok := strings.Cut(manifest, versionField)
 	if !ok {
-		return types.VersionUnknown
+		return versionpkg.Unknown
 	}
 	version = strings.Split(version, "\r")[0]
 	version = strings.Split(version, "\n")[0]
-	return types.Version(version)
+	return versionpkg.Version(version)
 }
 
 func readNeoforgeJarjarMeta(zipRdr *zip.Reader) *fileschema.FileNeoforgeJarjar {
-	raw, err := readZipEntry(zipRdr, "META-INF/jarjar/metadata.json")
+	raw, err := readZipEntryBytes(zipRdr, "META-INF/jarjar/metadata.json")
 	if err != nil || raw == nil {
 		return nil
 	}
@@ -248,29 +255,29 @@ func neoforgeJarjarEmbeddedModIds(
 	return modIds
 }
 
-func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) []Dependency {
+func neoforgeJarjarEmbeddedDeps(meta *fileschema.FileNeoforgeJarjar) ([]Dependency, error) {
 	if meta == nil {
-		return nil
+		return nil, nil
 	}
 
 	deps := make([]Dependency, 0, len(meta.Jars))
 	for _, entry := range meta.Jars {
+		constraint, err := parseNeoforgeMavenVersionRange(entry.Version.Range)
+		if err != nil {
+			return nil, err
+		}
 		deps = append(
 			deps, Dependency{
-				Ref:        types.VersionedPackageRef{PackageRef: types.PackageRef{Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact), Provider: types.ProviderUnknown}, Ecosystem: types.EcosystemUnspecified},
-				Constraint: parseNeoforgeMavenVersionRange(entry.Version.Range),
+				Ref:        catalog.VersionedRef{Ref: catalog.Ref{Name: input.ToProjectName(entry.Identifier.Group + ":" + entry.Identifier.Artifact), Provider: catalog.ProviderUnknown}, Ecosystem: catalog.EcosystemUnspecified},
+				Constraint: constraint,
 				Mandatory:  true,
-				Origin:     types.DependencyEmbedded,
+				Origin:     catalog.DependencyEmbedded,
 			},
 		)
 	}
-	return deps
+	return deps, nil
 }
 
-func parseNeoforgeMavenVersionRange(interval string) types.VersionExpr {
-	return version.ParseRange(
-		interval,
-		version.InferRangeDialect(types.EcosystemForge),
-		types.VersionSchemeMaven,
-	)
+func parseNeoforgeMavenVersionRange(interval string) (versionpkg.Expr, error) {
+	return versionpkg.ParseConstraint(interval, versionpkg.DialectMaven)
 }
