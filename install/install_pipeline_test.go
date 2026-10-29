@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/mclucy/lucy/artifact"
@@ -466,7 +467,7 @@ func TestAdoptionReplacesOwnedLauncherAndPreservesAmbientFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat generated launcher script: %v", err)
 	}
-	if run.Mode().Perm()&0o111 == 0 {
+	if runtime.GOOS != "windows" && run.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("generated launcher %s is not executable", run.Mode().Perm())
 	}
 	if _, err := os.Stat(filepath.Join(root, "server", "libraries/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar")); err != nil {

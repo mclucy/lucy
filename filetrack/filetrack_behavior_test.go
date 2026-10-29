@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -1054,9 +1055,18 @@ func TestFileCommandsPreserveDocumentModes(t *testing.T) {
 		t.Fatalf("write lock: %v", err)
 	}
 	behaviorRun(t, root, Request{Operation: Track, Paths: []string{"config/rules.txt"}})
+	modes := make(map[string]os.FileMode)
 	for _, name := range []string{documentpkg.ManifestFilename, documentpkg.LockFilename} {
 		if err := os.Chmod(filepath.Join(root, name), 0o640); err != nil {
 			t.Fatalf("chmod %s: %v", name, err)
+		}
+		info, err := os.Stat(filepath.Join(root, name))
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		modes[name] = info.Mode().Perm()
+		if runtime.GOOS != "windows" && modes[name] != 0o640 {
+			t.Fatalf("%s mode = %v, want 0640", name, modes[name])
 		}
 	}
 	behaviorWrite(t, root, "config/extra.txt", []byte("extra note\n"), 0o644)
@@ -1066,8 +1076,8 @@ func TestFileCommandsPreserveDocumentModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stat %s: %v", name, err)
 		}
-		if info.Mode().Perm() != 0o640 {
-			t.Fatalf("%s mode = %v, want 0640", name, info.Mode().Perm())
+		if info.Mode().Perm() != modes[name] {
+			t.Fatalf("%s mode = %v, want %v", name, info.Mode().Perm(), modes[name])
 		}
 	}
 }
