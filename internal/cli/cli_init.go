@@ -118,9 +118,6 @@ func initializeWorkspace(
 		return promptRuntime(ctx, cmd, inv, observed)
 	}
 	result, err := deps.Operations.Initialize(ctx, inv.Directory, opts)
-	if result != nil && result.Document != nil {
-		registerWorkspace(inv.Directory, output.Output, inv, deps)
-	}
 	if err != nil {
 		return output.Failure(initializationFailure(err, result))
 	}

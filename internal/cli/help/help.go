@@ -84,6 +84,10 @@ const (
 
 	StatusShort = "Display basic information of the current server"
 
+	StoreShort     = "Manage the global artifact store"
+	StoreListShort = "List stored artifacts"
+	StoreGCShort   = "Reclaim artifacts no registered server's lock references"
+
 	TreeShort = "Show all packages and their dependencies"
 
 	UpgradeShort = "Upgrade installed packages"

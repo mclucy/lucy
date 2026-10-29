@@ -246,13 +246,11 @@ func (s *Service) resolveLock(
 
 func (s *Service) newDownloadStore(
 	ctx context.Context,
-	root string,
 	opts Options,
 	result *Result,
 ) *downloadStore {
 	return &downloadStore{
 		ctx:         ctx,
-		dir:         filepath.Join(root, ".lucy", "downloads"),
 		offline:     opts.Offline,
 		trace:       opts.Trace,
 		fetch:       &result.Fetch,

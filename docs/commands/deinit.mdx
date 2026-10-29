@@ -21,9 +21,9 @@ Run it from the server directory. The command fails when there is nothing to rem
 
 - Files lucy installed stay on disk but become unmanaged; later lucy commands no longer know about them.
 - An isolated MCDReforged environment stays in the server directory, so its launcher keeps working.
-- Your global configuration, the download cache, Java, and all worlds are untouched.
+- Your global configuration, Java, all worlds, the network cache, and the global artifact store are untouched.
 
-`lucy deinit` does not stop a running server or uninstall Java. Use [`lucy cache clear`](/commands/install#download-cache) to empty the shared download cache separately.
+`lucy deinit` does not stop a running server or uninstall Java. Use [`lucy cache clear`](/commands/install#artifact-store-and-download-cache) to empty the shared network cache separately. Deinitialization removes the server's registry entry, so `lucy store gc` may reclaim the artifacts only that lock referenced.
 
 `--json` prints the removed paths and any warning about the known-server entry. It accepts the [Global Flags](/commands/global-flags).
 

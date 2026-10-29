@@ -71,7 +71,7 @@ func TestLockedMutationBindsEachDeclarationToLocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lockfile.Read() error = %v", err)
 	}
-	plan, err := install.NewService(nil, nil, nil, nil, nil, "").PlanInstall(
+	plan, err := install.NewService(nil, nil, nil, nil, nil, nil, "").PlanInstall(
 		t.Context(),
 		root,
 		onDiskManifest,

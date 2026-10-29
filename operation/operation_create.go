@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
@@ -91,6 +92,18 @@ func (e *CreatePublishError) Error() string { return e.Err.Error() }
 
 func (e *CreatePublishError) Unwrap() error { return e.Err }
 
+// CreateRegistrationError reports that the manifest and lock were published
+// but the workspace could not be recorded for the artifact store's retention
+// sweep. The documents stay in place so a later attempt can register them.
+type CreateRegistrationError struct {
+	Workspace string
+	Err       error
+}
+
+func (e *CreateRegistrationError) Error() string { return e.Err.Error() }
+
+func (e *CreateRegistrationError) Unwrap() error { return e.Err }
+
 // CreateInstallError reports a failure after the workspace was published. The
 // manifest and lock stay in place so the installation can be retried.
 type CreateInstallError struct {
@@ -171,6 +184,11 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (result *Creat
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err
 	}
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
 	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
@@ -289,6 +307,21 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (result *Creat
 			))
 		}
 	}
+	duplicates, err := s.registerWorkspace(root)
+	if err != nil {
+		result.finalizeWarnings()
+		return result, &CreateRegistrationError{
+			Workspace: root,
+			Err:       fmt.Errorf("register server: %w", err),
+		}
+	}
+	for _, duplicate := range duplicates {
+		result.Warnings = append(result.Warnings, fmt.Errorf(
+			"server name %q is also registered at %s; --server cannot select an ambiguous name",
+			duplicate.Name,
+			duplicate.Path,
+		))
+	}
 	if opts.Install {
 		// Installation acquires the workspace writer lock itself.
 		if err := releaseWriter(); err != nil {
@@ -334,6 +367,16 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (result *Creat
 }
 
 func (r *CreateResult) finalizeWarnings() {
+	seen := make(map[string]struct{}, len(r.Warnings))
+	unique := r.Warnings[:0]
+	for _, warning := range r.Warnings {
+		if _, duplicate := seen[warning.Error()]; duplicate {
+			continue
+		}
+		seen[warning.Error()] = struct{}{}
+		unique = append(unique, warning)
+	}
+	r.Warnings = unique
 	r.WarningMessages = warningStrings(r.Warnings)
 	if r.NonEmpty {
 		r.WarningMessages = append(

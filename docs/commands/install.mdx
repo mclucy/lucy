@@ -9,7 +9,7 @@ description: "Install a server from its manifest and lock file"
 lucy install
 ```
 
-If `lucy.yaml` changed, lucy resolves a new lock before installing. Versions you pinned stay pinned, so adding one package does not upgrade the others. With only `lucy-lock.yaml` present, lucy rebuilds from the lock alone; commit both files to keep that option.
+If `lucy.yaml` changed, lucy resolves a new lock before installing. Versions you pinned stay pinned, so adding one package does not upgrade the others. With only `lucy-lock.yaml` present, lucy rebuilds from the lock alone and registers the workspace as a lock-only entry; commit both files to keep the named-server option.
 
 For CI, `lucy install --locked` fails when the lock is missing or out of date instead of resolving new versions.
 
@@ -25,11 +25,13 @@ Files tracked with [`lucy file`](/commands/file) are not overwritten. If an immu
 
 ## Offline
 
-`lucy install --offline` uses only files already present or cached. It replays a current lock in a new workspace when every required artifact is in the shared cache and the required local prerequisites are available, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is not cached, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists.
+`lucy install --offline` uses only files already present in the global artifact store or the shared network cache. It replays a current lock in a new workspace when every required artifact is available and the required local prerequisites are present, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is unavailable, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists.
 
-### Download cache
+### Artifact store and download cache
 
-Lucy keeps one downloaded copy of each file and reuses it across servers. `lucy cache clear` empties that shared cache without touching the files in a server directory. Run an online install before relying on `--offline`.
+Lucy keeps one verified copy of each artifact in a per-user artifact store shared by every server. The lock pins the objects a server needs, so clearing the network cache does not remove installed artifacts. `lucy store list` shows the stored objects; `lucy store gc` reclaims objects that no registered server's lock references.
+
+The network cache remains a separate, expiring copy of upstream responses and downloads. `lucy cache clear` empties it without touching the artifact store or the files in a server directory. Run an online install before relying on `--offline` when the artifact is not already in the store.
 
 ## MCDReforged
 
@@ -45,7 +47,7 @@ Java version mismatches are warnings, not install errors. If a step needs a runt
 
 Lucy keeps a list of servers for your user account in your user data directory. The list is shared by every shell and project and records locations only. A server appears after [`lucy create`](/commands/create), [`lucy init`](/commands/init), or `lucy install` registers it; [`lucy deinit`](/commands/deinit) removes the entry.
 
-Every install that completes, changes nothing, or commits its changes before reporting a later problem refreshes the workspace's entry under the manifest's `name`. A manifest without a name still installs but is not registered. Registration warns when another server already uses the name, and a failure to write the list is a warning: the installation is not rolled back. The next install after fixing the cause registers the server.
+Every install registers the workspace under the manifest's `name` before it acquires artifacts. A lock-only installation with no manifest is registered as a `lock-only` entry, so collection can retain its lock's artifacts even though `--server` cannot select it by name. Registration failure fails the installation instead of reporting success, because `lucy store gc` cannot retain artifacts for a server it cannot find. A manifest without a usable name cannot be registered as an available server; remove the manifest to install from the lock alone or fix its name. Registration warns when another server already uses the name.
 
 ### lucy server list
 
@@ -59,13 +61,14 @@ Lists each registered server's name, state, and path. `list` and `ls` are the sa
 |State|Meaning|
 |---|---|
 |`available`|The path exists and its manifest and name can be read and validated.|
+|`lock-only`|The path exists and holds a valid `lucy-lock.yaml`, but no manifest. Collection retains its lock's artifacts; `--server` cannot select it.|
 |`missing`|The path no longer exists, for example because a drive is disconnected.|
 |`unreadable`|The path or manifest exists, but lucy cannot inspect it, usually because of permissions or an I/O error.|
 |`invalid`|The path exists but does not contain a valid lucy manifest, or the manifest does not declare a valid name.|
 
 The listing checks each registered target without changing it. A missing server stays in the list; lucy never removes an entry because a target is unavailable. Reconnect the drive and list again to see it as `available`. Only `lucy deinit` removes an entry.
 
-An empty name is shown as `-`. Missing, unreadable, and invalid entries cannot be selected with `--server` until their manifest is fixed.
+An empty name is shown as `-`. Lock-only, missing, unreadable, and invalid entries cannot be selected with `--server` until a manifest with a valid name is present.
 
 ### lucy server rename
 

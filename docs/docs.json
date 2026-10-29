@@ -30,7 +30,8 @@
           "commands/search",
           "commands/compile",
           "commands/info",
-          "commands/status"
+          "commands/status",
+          "commands/store"
         ]
       },
       {

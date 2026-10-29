@@ -19,6 +19,7 @@ import (
 
 const (
 	StateAvailable  = "available"
+	StateLockOnly   = "lock-only"
 	StateMissing    = "missing"
 	StateUnreadable = "unreadable"
 	StateInvalid    = "invalid"
@@ -37,19 +38,32 @@ type Registry struct {
 	directory string
 }
 
+const registryLockName = "registry.lock"
+
 // New locates durable per-user data without creating or changing the registry.
 func New() (*Registry, error) {
+	root, err := DataRoot()
+	if err != nil {
+		return nil, err
+	}
+	return &Registry{directory: filepath.Join(root, "servers")}, nil
+}
+
+// DataRoot reports the per-user directory Lucy owns for durable machine state.
+// It matches the platform's local application data conventions. It never
+// creates the directory.
+func DataRoot() (string, error) {
 	var base string
 	switch runtime.GOOS {
 	case "windows":
 		base = os.Getenv("LOCALAPPDATA")
 		if base == "" {
-			return nil, errors.New("locate server registry: LOCALAPPDATA is not set")
+			return "", errors.New("locate lucy data directory: LOCALAPPDATA is not set")
 		}
 	case "darwin":
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, fmt.Errorf("locate server registry: %w", err)
+			return "", fmt.Errorf("locate lucy data directory: %w", err)
 		}
 		base = filepath.Join(home, "Library", "Application Support")
 	default:
@@ -57,12 +71,12 @@ func New() (*Registry, error) {
 		if !filepath.IsAbs(base) {
 			home, err := os.UserHomeDir()
 			if err != nil {
-				return nil, fmt.Errorf("locate server registry: %w", err)
+				return "", fmt.Errorf("locate lucy data directory: %w", err)
 			}
 			base = filepath.Join(home, ".local", "share")
 		}
 	}
-	return &Registry{directory: filepath.Join(base, "lucy", "servers")}, nil
+	return filepath.Join(base, "lucy"), nil
 }
 
 // List checks every target on each call. It does not prune entries: a missing
@@ -77,6 +91,9 @@ func (r *Registry) List() ([]Entry, error) {
 	}
 	entries := make([]Entry, 0, len(links))
 	for _, link := range links {
+		if link.Name() == registryLockName {
+			continue
+		}
 		path := filepath.Join(r.directory, link.Name())
 		target, err := os.Readlink(path)
 		if errors.Is(err, os.ErrNotExist) {
@@ -138,9 +155,10 @@ func (r *Registry) Resolve(name string) (Entry, error) {
 	}
 }
 
-// Register creates one link per canonical workspace path. The caller must hold
-// the workspace writer lock so deinitialization cannot remove a newer entry.
-// Other available entries with the same name are returned for presentation.
+// Register creates one link per canonical workspace path for a workspace with
+// a readable manifest. The caller must hold the workspace writer lock so
+// deinitialization cannot remove a newer entry. Other available entries with
+// the same name are returned for presentation.
 func (r *Registry) Register(root string) ([]Entry, error) {
 	root, err := canonical(root)
 	if err != nil {
@@ -150,9 +168,34 @@ func (r *Registry) Register(root string) ([]Entry, error) {
 	if entry.State != StateAvailable {
 		return nil, fmt.Errorf("register server %s: %s", root, entry.Problem)
 	}
-	if err := fsutil.MkdirAllPrivate(r.directory); err != nil {
-		return nil, fmt.Errorf("create server registry: %w", err)
+	return r.registerEntry(root, entry)
+}
+
+// RegisterInstallation records a workspace whose installation completed. A
+// workspace with a readable manifest is registered by name. A lock-only
+// installation has no manifest name but still pins artifacts, so it is
+// recorded as a lock-only entry that collection tracks and --server does not
+// select. The caller must hold the workspace writer lock.
+func (r *Registry) RegisterInstallation(root string) ([]Entry, error) {
+	root, err := canonical(root)
+	if err != nil {
+		return nil, err
 	}
+	entry := observe(root)
+	switch entry.State {
+	case StateAvailable, StateLockOnly:
+	default:
+		return nil, fmt.Errorf("register server %s: %s", root, entry.Problem)
+	}
+	return r.registerEntry(root, entry)
+}
+
+func (r *Registry) registerEntry(root string, entry Entry) ([]Entry, error) {
+	lock, err := r.lock()
+	if err != nil {
+		return nil, fmt.Errorf("lock server registry: %w", err)
+	}
+	defer func() { _ = lock.Close() }()
 	link := filepath.Join(r.directory, pathKey(root))
 	if err := os.Symlink(root, link); err != nil {
 		if !errors.Is(err, os.ErrExist) {
@@ -166,6 +209,9 @@ func (r *Registry) Register(root string) ([]Entry, error) {
 	entries, err := r.List()
 	if err != nil {
 		return nil, err
+	}
+	if entry.Name == "" {
+		return nil, nil
 	}
 	duplicates := entries[:0]
 	for _, other := range entries {
@@ -183,6 +229,16 @@ func (r *Registry) Unregister(root string) error {
 	if err != nil {
 		return err
 	}
+	if _, err := os.Stat(r.directory); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect server registry: %w", err)
+	}
+	lock, err := r.lock()
+	if err != nil {
+		return fmt.Errorf("lock server registry: %w", err)
+	}
+	defer func() { _ = lock.Close() }()
 	link := filepath.Join(r.directory, pathKey(root))
 	target, err := os.Readlink(link)
 	if errors.Is(err, os.ErrNotExist) {
@@ -198,6 +254,21 @@ func (r *Registry) Unregister(root string) error {
 		return fmt.Errorf("unregister server: %w", err)
 	}
 	return nil
+}
+
+// Lock holds the registry mutation lock. Registration and unregistration use
+// the same lock, so a caller can observe a stable registered set while it
+// holds this lock. The lock file lives beside the links and is skipped by
+// List.
+func (r *Registry) Lock() (*fsutil.FileLock, error) {
+	return r.lock()
+}
+
+func (r *Registry) lock() (*fsutil.FileLock, error) {
+	if err := fsutil.MkdirAllPrivate(r.directory); err != nil {
+		return nil, fmt.Errorf("create server registry: %w", err)
+	}
+	return fsutil.LockFile(filepath.Join(r.directory, registryLockName))
 }
 
 func observe(root string) Entry {
@@ -218,6 +289,16 @@ func observe(root string) Entry {
 	}
 	manifest, err := document.ManifestFile(root).Read()
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if _, lockErr := document.LockFile(root).Read(); lockErr == nil {
+				entry.State = StateLockOnly
+				return entry
+			} else if !errors.Is(lockErr, os.ErrNotExist) {
+				entry.State = StateUnreadable
+				entry.Problem = "read lockfile: " + lockErr.Error()
+				return entry
+			}
+		}
 		entry.State = StateInvalid
 		if _, pathError := errors.AsType[*os.PathError](err); pathError && !errors.Is(err, os.ErrNotExist) {
 			entry.State = StateUnreadable

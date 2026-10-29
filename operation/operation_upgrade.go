@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/install"
@@ -99,6 +100,11 @@ func (s *Service) PlanUpgrade(
 	if err != nil {
 		return nil, err
 	}
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
 	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
@@ -138,7 +144,7 @@ func (s *Service) PlanUpgrade(
 		return nil, err
 	}
 	warnings := []error{}
-	materialize, fetch := s.install.Materializer(ctx, root, install.Options{
+	materialize, fetch := s.install.Materializer(ctx, install.Options{
 		Offline:     opts.Offline,
 		Trace:       opts.Trace,
 		Materialize: opts.Materialize,

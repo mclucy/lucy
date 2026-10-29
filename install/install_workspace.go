@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
@@ -73,6 +74,11 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 		return nil, err
 	}
 	root = absolute
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
 	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
 		return nil, err
 	}
@@ -84,7 +90,10 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 	if err := preflightLocked(root, d, old, opts, true, s.logger); err != nil {
 		return nil, err
 	}
-	store := s.newDownloadStore(ctx, root, opts, result)
+	if err := s.registerServer(root, result); err != nil {
+		return nil, err
+	}
+	store := s.newDownloadStore(ctx, opts, result)
 	resolved, err := s.resolveLock(ctx, root, d, old, &opts, store, result)
 	if err != nil {
 		return nil, err

@@ -2,6 +2,7 @@ package operation
 
 import (
 	"context"
+	"errors"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/install"
@@ -64,4 +65,14 @@ func NewService(
 		registry: registry,
 		logger:   logger,
 	}
+}
+
+// registerWorkspace records root for the artifact store's retention sweep.
+// Operations that publish a lock must not report success when the entry is
+// missing, because the sweep could otherwise reclaim that lock's artifacts.
+func (s *Service) registerWorkspace(root string) ([]serverregistry.Entry, error) {
+	if s.registry == nil {
+		return nil, errors.New("server registry is unavailable; cannot record this workspace for artifact retention")
+	}
+	return s.registry.Register(root)
 }

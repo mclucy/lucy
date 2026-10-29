@@ -70,8 +70,9 @@ To run the built binary against a test server directory:
 ├── bootstrap/              Pinned server product bootstrap profiles
 ├── resolve/                Catalogue selection and descriptor dependency validation
 ├── input/                  Trust boundary for external input, package ref parsing
+├── artifactstore/          Durable per-user artifact store and conservative reclamation
 ├── cache/                  Network cache request metadata and expiration policy
-├── cas/                    Content-addressed storage for cached bytes
+├── cas/                    Content-addressed storage primitives
 ├── version/                Version values, dialects, constraint expressions, and parsing
 ├── artifact/               Archive metadata analysis: fabric.mod.json, mods.toml, plugin.yml
 ├── log/                    Operational diagnostics
