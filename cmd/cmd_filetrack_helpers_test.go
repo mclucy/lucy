@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -41,7 +42,7 @@ func baseManifest(t *testing.T) *documentpkg.Manifest {
 }
 
 // workspace is one hermetic server directory plus the private home every
-// subprocess runs under, so no test can observe another test's state.
+// invocation runs under, so no test can observe another test's state.
 type workspace struct {
 	root string
 	home string
@@ -172,7 +173,7 @@ func acceptedHash(data []byte) string {
 	return "sha256:" + digestHex(data)
 }
 
-// lucyRun is one subprocess outcome. stdout carries command output; warnings
+// lucyRun is one invocation outcome. stdout carries command output; warnings
 // and logs arrive on stderr.
 type lucyRun struct {
 	stdout   string
@@ -191,7 +192,12 @@ func (w workspace) lucy(t *testing.T, args ...string) lucyRun {
 		Stderr:     &stderr,
 		HTTPClient: http.DefaultClient,
 	})
-	executeErr := runner.Execute(t.Context())
+	// Bound each invocation: the runner carries no deadline of its own, so a
+	// stalled network operation would otherwise hold this test until the
+	// package timeout expires.
+	executeCtx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	executeErr := runner.Execute(executeCtx)
 	closeErr := runner.Close()
 	if executeErr == nil && closeErr == nil {
 		executeErr = runner.FlushOutput()
