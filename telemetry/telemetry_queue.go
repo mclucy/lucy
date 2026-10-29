@@ -123,33 +123,77 @@ func (c *Client) enqueue(ctx context.Context, kind recordType, build payloadBuil
 // the server's per-record bound. Event payloads are already bounded strictly
 // enough that they must fit without adjustment.
 func (c *Client) fitRecord(kind recordType, id string, payload any, data []byte, bodyBytes int64, truncated bool) ([]byte, int64, bool, error) {
-	for range 8 {
-		encoded, err := marshalCanonical(wireRecord{ID: id, Type: kind, Payload: jsontext.Value(data)})
+	encoded, err := marshalRecord(id, kind, data)
+	if err != nil {
+		return nil, 0, truncated, err
+	}
+	if len(encoded) <= c.limits.MaxRecordBytes {
+		return data, bodyBytes, truncated, nil
+	}
+	report, ok := payload.(reportPayload)
+	if !ok {
+		return nil, 0, truncated, fmt.Errorf("%w: serialized record is %d bytes, limit %d", ErrInvalidEvent, len(encoded), c.limits.MaxRecordBytes)
+	}
+	report, data, err = c.trimReportToRecord(id, kind, report)
+	if err != nil {
+		return nil, 0, truncated, err
+	}
+	return data, int64(len(report.Body)), true, nil
+}
+
+// trimReportToRecord keeps the longest body prefix whose serialized record
+// fits the per-record bound. Escaping makes a body's serialized size differ
+// from its length, so every candidate is measured on the encoded envelope.
+// Serialized size never shrinks as the body grows, which turns the search into
+// a bisection over body length.
+func (c *Client) trimReportToRecord(id string, kind recordType, report reportPayload) (reportPayload, []byte, error) {
+	trimmed := report
+	trimmed.Body = ""
+	trimmedData, err := marshalCanonical(trimmed)
+	if err != nil {
+		return reportPayload{}, nil, fmt.Errorf("telemetry: encode report: %w", err)
+	}
+	encoded, err := marshalRecord(id, kind, trimmedData)
+	if err != nil {
+		return reportPayload{}, nil, err
+	}
+	if len(encoded) > c.limits.MaxRecordBytes {
+		return reportPayload{}, nil, fmt.Errorf("%w: record metadata exceeds %d bytes", ErrInvalidReport, c.limits.MaxRecordBytes)
+	}
+	var best reportPayload
+	var bestData []byte
+	for low, high := 1, len(report.Body); low <= high; {
+		middle := low + (high-low)/2
+		candidate := report
+		candidate.Body = truncateUTF8(report.Body, middle)
+		data, err := marshalCanonical(candidate)
 		if err != nil {
-			return nil, 0, truncated, fmt.Errorf("telemetry: encode record envelope: %w", err)
+			return reportPayload{}, nil, fmt.Errorf("telemetry: encode report: %w", err)
+		}
+		encoded, err := marshalRecord(id, kind, data)
+		if err != nil {
+			return reportPayload{}, nil, err
 		}
 		if len(encoded) <= c.limits.MaxRecordBytes {
-			return data, bodyBytes, truncated, nil
+			best, bestData = candidate, data
+			low = middle + 1
+		} else {
+			high = middle - 1
 		}
-		report, ok := payload.(reportPayload)
-		if !ok {
-			return nil, 0, truncated, fmt.Errorf("%w: serialized record is %d bytes, limit %d", ErrInvalidEvent, len(encoded), c.limits.MaxRecordBytes)
-		}
-		overflow := len(encoded) - c.limits.MaxRecordBytes
-		newLength := len(report.Body) - overflow - 32
-		if newLength <= 0 {
-			return nil, 0, truncated, fmt.Errorf("%w: record metadata exceeds %d bytes", ErrInvalidReport, c.limits.MaxRecordBytes)
-		}
-		report.Body = truncateUTF8(report.Body, min(newLength, len(report.Body)-1))
-		payload = report
-		data, err = marshalCanonical(report)
-		if err != nil {
-			return nil, 0, truncated, fmt.Errorf("telemetry: encode report: %w", err)
-		}
-		bodyBytes = int64(len(report.Body))
-		truncated = true
 	}
-	return nil, 0, truncated, fmt.Errorf("%w: report does not fit the record bound", ErrInvalidReport)
+	if len(best.Body) == 0 {
+		return reportPayload{}, nil, fmt.Errorf("%w: record metadata leaves no room for a body", ErrInvalidReport)
+	}
+	return best, bestData, nil
+}
+
+// marshalRecord encodes the wire envelope around an already encoded payload.
+func marshalRecord(id string, kind recordType, data []byte) ([]byte, error) {
+	encoded, err := marshalCanonical(wireRecord{ID: id, Type: kind, Payload: jsontext.Value(data)})
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: encode record envelope: %w", err)
+	}
+	return encoded, nil
 }
 
 func (c *Client) writeQueueRecord(record queuedRecord) error {
