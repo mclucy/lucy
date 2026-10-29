@@ -422,3 +422,294 @@ func TestCASExpectedMismatchNeverPublishes(t *testing.T) {
 	}
 	casReadObject(t, store, object.Digest, content)
 }
+
+func TestCASNewRejectsNonDirectoryRoot(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	path := filepath.Join(root, "store")
+	if err := os.WriteFile(path, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("prepare file root: %v", err)
+	}
+	if _, err := New(path); err == nil {
+		t.Fatal("New accepted a regular file as its root")
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "not a directory" {
+		t.Fatalf("rejected root changed: %q, %v", data, err)
+	}
+}
+
+func TestCASNewRejectsSymlinkRoot(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatalf("prepare symlink target: %v", err)
+	}
+	link := filepath.Join(root, "store")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("create symlink: %v", err)
+	}
+	if _, err := New(link); err == nil {
+		t.Fatal("New accepted a symlinked root")
+	}
+}
+
+func TestCASNewRejectsInvalidNamespace(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(root, "objects"),
+		[]byte("not a directory"),
+		0o600,
+	); err != nil {
+		t.Fatalf("prepare invalid namespace: %v", err)
+	}
+	if _, err := New(root); err == nil {
+		t.Fatal("New accepted a regular file as the object namespace")
+	}
+}
+
+func TestCASStorePathTracksPublishedObject(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "store")
+	store := casNewStore(t, root)
+	content := []byte("path-addressed object\n")
+	object, err := store.Put(bytes.NewReader(content), nil)
+	if err != nil {
+		t.Fatalf("put object: %v", err)
+	}
+	hex := object.Digest.Hex()
+	want := filepath.Join(root, "objects", "sha256", hex[:2], hex)
+	if got := store.Path(object.Digest); got != want {
+		t.Fatalf("Path() = %q, want %q", got, want)
+	}
+	if data, err := os.ReadFile(store.Path(object.Digest)); err != nil ||
+		!bytes.Equal(data, content) {
+		t.Fatalf("published object at Path(): %q, %v", data, err)
+	}
+
+	absent := casDigestOf([]byte("never published"))
+	absentPath := store.Path(absent)
+	if _, err := os.Stat(absentPath); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("Path() created or found an absent object: %v", err)
+	}
+}
+
+func TestCASOpenVerifiesObjectAtEOF(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "store")
+	store := casNewStore(t, root)
+
+	absent := casDigestOf([]byte("absent object"))
+	if _, err := store.Open(absent); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("open absent object: %v", err)
+	}
+
+	content := []byte("object that will be corrupted\n")
+	object, err := store.Put(bytes.NewReader(content), nil)
+	if err != nil {
+		t.Fatalf("put object: %v", err)
+	}
+	path := store.Path(object.Digest)
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatalf("make object writable: %v", err)
+	}
+	tampered := bytes.Repeat([]byte("x"), len(content))
+	if err := os.WriteFile(path, tampered, 0o600); err != nil {
+		t.Fatalf("corrupt object: %v", err)
+	}
+	reader, err := store.Open(object.Digest)
+	if err != nil {
+		t.Fatalf("open corrupted object: %v", err)
+	}
+	if _, err := io.ReadAll(reader); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("read corrupted object: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("close corrupted reader: %v", err)
+	}
+
+	if err := os.WriteFile(path, content[:len(content)/2], 0o600); err != nil {
+		t.Fatalf("truncate object: %v", err)
+	}
+	reader, err = store.Open(object.Digest)
+	if err != nil {
+		t.Fatalf("open truncated object: %v", err)
+	}
+	if _, err := io.ReadAll(reader); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("read truncated object: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("close truncated reader: %v", err)
+	}
+
+	nonRegular := casDigestOf([]byte("object replaced by a directory"))
+	if err := os.MkdirAll(store.Path(nonRegular), 0o700); err != nil {
+		t.Fatalf("replace object with a directory: %v", err)
+	}
+	if _, err := store.Open(nonRegular); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("open non-regular object: %v", err)
+	}
+}
+
+type failingReader struct {
+	data []byte
+	read bool
+}
+
+func (r *failingReader) Read(p []byte) (int, error) {
+	if r.read {
+		return 0, errors.New("source failed")
+	}
+	r.read = true
+	return copy(p, r.data), nil
+}
+
+func TestCASPutPropagatesReaderErrorWithoutPublishing(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "store")
+	store := casNewStore(t, root)
+	reader := &failingReader{data: []byte("partial contents")}
+	if _, err := store.Put(reader, nil); err == nil {
+		t.Fatal("Put accepted a stream that failed")
+	}
+	count := 0
+	if err := store.Walk(func(Object) error {
+		count++
+		return nil
+	}); err != nil {
+		t.Fatalf("walk after failed put: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("failed put published %d objects", count)
+	}
+	if names := casStagingNames(t, root); len(names) != 0 {
+		t.Fatalf("failed put left staging %v", names)
+	}
+}
+
+func TestCASWalkPropagatesVisitorError(t *testing.T) {
+	t.Parallel()
+	store := casNewStore(t, filepath.Join(t.TempDir(), "store"))
+	if _, err := store.Put(bytes.NewReader([]byte("visited object")), nil); err != nil {
+		t.Fatalf("put object: %v", err)
+	}
+	stop := errors.New("stop walking")
+	if err := store.Walk(func(Object) error { return stop }); !errors.Is(err, stop) {
+		t.Fatalf("Walk() = %v, want the visitor error", err)
+	}
+}
+
+func TestCASRemoveIsIdempotentAndRejectsNonRegular(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "store")
+	store := casNewStore(t, root)
+	absent := casDigestOf([]byte("never stored"))
+	if size, err := store.Remove(absent); err != nil || size != 0 {
+		t.Fatalf("remove absent object = %d, %v", size, err)
+	}
+
+	content := []byte("removable object")
+	object, err := store.Put(bytes.NewReader(content), nil)
+	if err != nil {
+		t.Fatalf("put object: %v", err)
+	}
+	if size, err := store.Remove(object.Digest); err != nil || size != int64(len(content)) {
+		t.Fatalf("remove object = %d, %v", size, err)
+	}
+	if size, err := store.Remove(object.Digest); err != nil || size != 0 {
+		t.Fatalf("second remove = %d, %v", size, err)
+	}
+
+	nonRegular := casDigestOf([]byte("directory masquerading as an object"))
+	if err := os.MkdirAll(store.Path(nonRegular), 0o700); err != nil {
+		t.Fatalf("create non-regular object: %v", err)
+	}
+	if _, err := store.Remove(nonRegular); err == nil {
+		t.Fatal("Remove accepted a non-regular object")
+	}
+}
+
+func TestCASSweepRejectsNilInputsAndRunsRelease(t *testing.T) {
+	t.Parallel()
+	store := casNewStore(t, filepath.Join(t.TempDir(), "store"))
+	if _, _, err := store.Sweep(nil); err == nil {
+		t.Fatal("Sweep accepted a nil plan")
+	}
+	keep, err := store.Put(bytes.NewReader([]byte("keep")), nil)
+	if err != nil {
+		t.Fatalf("put retained object: %v", err)
+	}
+	discard, err := store.Put(bytes.NewReader([]byte("discard")), nil)
+	if err != nil {
+		t.Fatalf("put discarded object: %v", err)
+	}
+	if _, _, err := store.Sweep(func() (map[Digest]struct{}, func() error, error) {
+		return nil, nil, nil
+	}); err == nil {
+		t.Fatal("Sweep accepted a nil reference set")
+	}
+	if _, err := store.Open(discard.Digest); err != nil {
+		t.Fatalf("nil reference set changed an object: %v", err)
+	}
+
+	released := false
+	removed, _, err := store.Sweep(
+		func() (map[Digest]struct{}, func() error, error) {
+			return map[Digest]struct{}{keep.Digest: {}},
+				func() error {
+					released = true
+					return nil
+				},
+				nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("sweep with a plan: %v", err)
+	}
+	if !released {
+		t.Fatal("Sweep did not run the plan release function")
+	}
+	if removed != 1 {
+		t.Fatalf("sweep removed %d objects, want 1", removed)
+	}
+	if _, err := store.Open(discard.Digest); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("sweep kept the unreferenced object: %v", err)
+	}
+
+	released = false
+	if _, _, err := store.Sweep(
+		func() (map[Digest]struct{}, func() error, error) {
+			return nil,
+				func() error {
+					released = true
+					return nil
+				},
+				errors.New("plan failed")
+		},
+	); err == nil {
+		t.Fatal("Sweep accepted a failing plan")
+	}
+	if !released {
+		t.Fatal("Sweep did not release a failing plan")
+	}
+	if _, err := store.Open(keep.Digest); err != nil {
+		t.Fatalf("failing plan changed a retained object: %v", err)
+	}
+}
+
+func TestCASCleanupIgnoresUnknownTemporaryEntries(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "store")
+	store := casNewStore(t, root)
+	unknown := filepath.Join(root, "tmp", "notes.txt")
+	if err := os.WriteFile(unknown, []byte("keep me"), 0o600); err != nil {
+		t.Fatalf("prepare unknown temporary entry: %v", err)
+	}
+	if err := store.Cleanup(); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if data, err := os.ReadFile(unknown); err != nil || string(data) != "keep me" {
+		t.Fatalf("cleanup changed an unknown entry: %q, %v", data, err)
+	}
+}

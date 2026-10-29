@@ -137,3 +137,168 @@ func TestCASWriterMoveToContinuesPrefixAndHash(t *testing.T) {
 		t.Fatalf("abort the moved writer twice: %v", err)
 	}
 }
+
+func TestCASWriterReadRequiresSeal(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "store")
+	store := casNewStore(t, root)
+	writer, err := store.NewWriter()
+	if err != nil {
+		t.Fatalf("lease writer: %v", err)
+	}
+	if _, err := writer.Read(make([]byte, 1)); err == nil {
+		t.Fatal("unsealed writer accepted a read")
+	}
+	if err := writer.Rewind(); err == nil {
+		t.Fatal("unsealed writer accepted a rewind")
+	}
+
+	content := []byte("sealed stage contents\n")
+	if _, err := writer.Write(content); err != nil {
+		t.Fatalf("write stage: %v", err)
+	}
+	if _, err := writer.Seal(nil); err != nil {
+		t.Fatalf("seal stage: %v", err)
+	}
+	if err := writer.Rewind(); err != nil {
+		t.Fatalf("rewind sealed stage: %v", err)
+	}
+	read, err := io.ReadAll(writer)
+	if err != nil {
+		t.Fatalf("read sealed stage: %v", err)
+	}
+	if !bytes.Equal(read, content) {
+		t.Fatalf("sealed stage read %q, want %q", read, content)
+	}
+
+	if err := writer.Abort(); err != nil {
+		t.Fatalf("abort writer: %v", err)
+	}
+	if _, err := writer.Read(make([]byte, 1)); err == nil {
+		t.Fatal("aborted writer accepted a read")
+	}
+	if err := writer.Rewind(); err == nil {
+		t.Fatal("aborted writer accepted a rewind")
+	}
+}
+
+func TestCASWriterCommitIsFinal(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "store")
+	store := casNewStore(t, root)
+	writer, err := store.NewWriter()
+	if err != nil {
+		t.Fatalf("lease writer: %v", err)
+	}
+	content := []byte("committed once\n")
+	if _, err := writer.Write(content); err != nil {
+		t.Fatalf("write stage: %v", err)
+	}
+	object, err := writer.Commit(nil)
+	if err != nil {
+		t.Fatalf("commit stage: %v", err)
+	}
+	if _, err := writer.Commit(nil); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("second commit = %v, want os.ErrClosed", err)
+	}
+	if err := writer.Abort(); err != nil {
+		t.Fatalf("abort after commit: %v", err)
+	}
+	if names := casStagingNames(t, root); len(names) != 0 {
+		t.Fatalf("commit left staging %v", names)
+	}
+	casReadObject(t, store, object.Digest, content)
+}
+
+func TestCASWriterDetachHashTransfersState(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "store")
+	store := casNewStore(t, root)
+	writer, err := store.NewWriter()
+	if err != nil {
+		t.Fatalf("lease writer: %v", err)
+	}
+	prefix := []byte("prefix bytes already staged\n")
+	suffix := []byte("suffix bytes retained in memory\n")
+	if _, err := writer.Write(prefix); err != nil {
+		t.Fatalf("write stage prefix: %v", err)
+	}
+	hasher, err := writer.DetachHash()
+	if err != nil {
+		t.Fatalf("detach hash: %v", err)
+	}
+	if hasher == nil {
+		t.Fatal("DetachHash returned a nil hasher")
+	}
+	if _, err := writer.Write(suffix); err == nil {
+		t.Fatal("detached writer accepted another write")
+	}
+	if _, err := writer.Seal(nil); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("detached writer seal = %v, want os.ErrClosed", err)
+	}
+	if _, err := writer.DetachHash(); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("second detach = %v, want os.ErrClosed", err)
+	}
+	if _, err := hasher.Write(suffix); err != nil {
+		t.Fatalf("continue detached hash: %v", err)
+	}
+	var actual Digest
+	hasher.Sum(actual[:0])
+	if want := casDigestOf(append(append([]byte{}, prefix...), suffix...)); actual != want {
+		t.Fatalf("detached hash = %s, want %s", actual, want)
+	}
+	if err := writer.Abort(); err != nil {
+		t.Fatalf("abort detached writer: %v", err)
+	}
+	if names := casStagingNames(t, root); len(names) != 0 {
+		t.Fatalf("detached writer left staging %v", names)
+	}
+}
+
+func TestCASWriterMoveToRejectsUnsupportedStores(t *testing.T) {
+	t.Parallel()
+	source := casNewStore(t, filepath.Join(t.TempDir(), "source"))
+	destination := casNewStore(t, filepath.Join(t.TempDir(), "destination"))
+
+	writer, err := source.NewWriter()
+	if err != nil {
+		t.Fatalf("lease writer: %v", err)
+	}
+	if _, err := writer.MoveTo(source); err == nil {
+		t.Fatal("MoveTo accepted the writer's own store")
+	}
+	if err := writer.Abort(); err != nil {
+		t.Fatalf("abort writer: %v", err)
+	}
+
+	writer, err = source.NewWriter()
+	if err != nil {
+		t.Fatalf("lease writer: %v", err)
+	}
+	if _, err := writer.Write([]byte("detached stage")); err != nil {
+		t.Fatalf("write stage: %v", err)
+	}
+	if _, err := writer.DetachHash(); err != nil {
+		t.Fatalf("detach hash: %v", err)
+	}
+	if _, err := writer.MoveTo(destination); err == nil {
+		t.Fatal("MoveTo accepted a detached writer")
+	}
+	if err := writer.Abort(); err != nil {
+		t.Fatalf("abort detached writer: %v", err)
+	}
+
+	writer, err = source.NewWriter()
+	if err != nil {
+		t.Fatalf("lease writer: %v", err)
+	}
+	if _, err := writer.Write([]byte("committed stage")); err != nil {
+		t.Fatalf("write stage: %v", err)
+	}
+	if _, err := writer.Commit(nil); err != nil {
+		t.Fatalf("commit stage: %v", err)
+	}
+	if _, err := writer.MoveTo(destination); err == nil {
+		t.Fatal("MoveTo accepted a committed writer")
+	}
+}
