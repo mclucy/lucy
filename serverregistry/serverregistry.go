@@ -1,4 +1,7 @@
-// Package serverregistry locates named workspaces through per-user directory links.
+// Package serverregistry locates named workspaces through per-user registry
+// entries. An entry is a regular file that records a canonical workspace path,
+// so registration needs no symlink privilege; symlink entries written by
+// earlier versions remain readable and removable.
 package serverregistry
 
 import (
@@ -40,6 +43,14 @@ type Registry struct {
 
 const registryLockName = "registry.lock"
 
+const (
+	// entryTempPrefix names the staged file a registration publishes. List
+	// ignores it, so an abandoned stage is inert debris rather than an entry.
+	entryTempPrefix = ".tmp-"
+	// maxEntrySize bounds how much of an entry file List will read.
+	maxEntrySize = 64 << 10
+)
+
 // New locates durable per-user data without creating or changing the registry.
 func New() (*Registry, error) {
 	root, err := DataRoot()
@@ -80,7 +91,9 @@ func DataRoot() (string, error) {
 }
 
 // List checks every target on each call. It does not prune entries: a missing
-// target can be an unmounted volume, and deletion could race registration.
+// target can be an unmounted volume, and deletion could race registration. An
+// entry that cannot be interpreted is reported as invalid, which makes
+// collection refuse to run.
 func (r *Registry) List() ([]Entry, error) {
 	links, err := os.ReadDir(r.directory)
 	if errors.Is(err, os.ErrNotExist) {
@@ -91,11 +104,12 @@ func (r *Registry) List() ([]Entry, error) {
 	}
 	entries := make([]Entry, 0, len(links))
 	for _, link := range links {
-		if link.Name() == registryLockName {
+		if link.Name() == registryLockName ||
+			strings.HasPrefix(link.Name(), entryTempPrefix) {
 			continue
 		}
 		path := filepath.Join(r.directory, link.Name())
-		target, err := os.Readlink(path)
+		target, err := readEntry(path)
 		if errors.Is(err, os.ErrNotExist) {
 			// A concurrent deinitialization removed this entry.
 			continue
@@ -108,10 +122,7 @@ func (r *Registry) List() ([]Entry, error) {
 			})
 			continue
 		}
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(r.directory, target)
-		}
-		entries = append(entries, observe(filepath.Clean(target)))
+		entries = append(entries, observe(entryTarget(r.directory, target)))
 	}
 	slices.SortFunc(entries, func(a, b Entry) int {
 		return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.Path, b.Path))
@@ -155,7 +166,7 @@ func (r *Registry) Resolve(name string) (Entry, error) {
 	}
 }
 
-// Register creates one link per canonical workspace path for a workspace with
+// Register creates one entry per canonical workspace path for a workspace with
 // a readable manifest. The caller must hold the workspace writer lock so
 // deinitialization cannot remove a newer entry. Other available entries with
 // the same name are returned for presentation.
@@ -196,15 +207,19 @@ func (r *Registry) registerEntry(root string, entry Entry) ([]Entry, error) {
 		return nil, fmt.Errorf("lock server registry: %w", err)
 	}
 	defer func() { _ = lock.Close() }()
-	link := filepath.Join(r.directory, pathKey(root))
-	if err := os.Symlink(root, link); err != nil {
-		if !errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("register server directory link: %w", err)
+	entryPath := filepath.Join(r.directory, pathKey(root))
+	target, err := readEntry(entryPath)
+	switch {
+	case err == nil:
+		if !samePath(entryTarget(r.directory, target), root) {
+			return nil, fmt.Errorf("server registry entry %s does not point to %s", entryPath, root)
 		}
-		target, readErr := os.Readlink(link)
-		if readErr != nil || !samePath(target, root) {
-			return nil, fmt.Errorf("server registry entry %s does not link to %s", link, root)
+	case errors.Is(err, os.ErrNotExist):
+		if err := writeEntry(entryPath, root); err != nil {
+			return nil, fmt.Errorf("register server directory entry: %w", err)
 		}
+	default:
+		return nil, fmt.Errorf("read server registry entry %s: %w", entryPath, err)
 	}
 	entries, err := r.List()
 	if err != nil {
@@ -222,8 +237,8 @@ func (r *Registry) registerEntry(root string, entry Entry) ([]Entry, error) {
 	return duplicates, nil
 }
 
-// Unregister removes only this path's link, never the target directory. It must
-// run while the caller still holds the workspace's original writer lock.
+// Unregister removes only this path's entry, never the target directory. It
+// must run while the caller still holds the workspace's original writer lock.
 func (r *Registry) Unregister(root string) error {
 	root, err := canonical(root)
 	if err != nil {
@@ -239,18 +254,18 @@ func (r *Registry) Unregister(root string) error {
 		return fmt.Errorf("lock server registry: %w", err)
 	}
 	defer func() { _ = lock.Close() }()
-	link := filepath.Join(r.directory, pathKey(root))
-	target, err := os.Readlink(link)
+	entryPath := filepath.Join(r.directory, pathKey(root))
+	target, err := readEntry(entryPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("read server registry entry: %w", err)
 	}
-	if !samePath(target, root) {
-		return fmt.Errorf("server registry entry %s does not link to %s", link, root)
+	if !samePath(entryTarget(r.directory, target), root) {
+		return fmt.Errorf("server registry entry %s does not point to %s", entryPath, root)
 	}
-	if err := os.Remove(link); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(entryPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("unregister server: %w", err)
 	}
 	return nil
@@ -258,7 +273,7 @@ func (r *Registry) Unregister(root string) error {
 
 // Lock holds the registry mutation lock. Registration and unregistration use
 // the same lock, so a caller can observe a stable registered set while it
-// holds this lock. The lock file lives beside the links and is skipped by
+// holds this lock. The lock file lives beside the entries and is skipped by
 // List.
 func (r *Registry) Lock() (*fsutil.FileLock, error) {
 	return r.lock()
@@ -308,6 +323,71 @@ func observe(root string) Entry {
 	}
 	entry.Name = manifest.Name
 	return entry
+}
+
+// readEntry returns the target recorded by one registry entry. Registration
+// writes a regular file, so no symlink privilege is required; an entry created
+// by an earlier version is a symlink and stays readable.
+func readEntry(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return os.Readlink(path)
+	}
+	if !info.Mode().IsRegular() {
+		return "", errors.New("registry entry is neither a target file nor a directory link")
+	}
+	if info.Size() > maxEntrySize {
+		return "", fmt.Errorf("registry entry exceeds %d bytes", maxEntrySize)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if len(data) == 0 {
+		return "", errors.New("registry entry is empty")
+	}
+	return string(data), nil
+}
+
+// writeEntry publishes a complete entry in one rename, so an unlocked List
+// observes either the previous entry or the full target, never a partial file.
+// An abandoned stage keeps the prefix List ignores.
+func writeEntry(path, target string) (resultErr error) {
+	staged, err := os.CreateTemp(filepath.Dir(path), entryTempPrefix)
+	if err != nil {
+		return fmt.Errorf("stage server registry entry: %w", err)
+	}
+	stagedPath := staged.Name()
+	defer func() {
+		if resultErr != nil {
+			_ = os.Remove(stagedPath)
+		}
+	}()
+	if _, err := staged.WriteString(target); err != nil {
+		return errors.Join(err, staged.Close())
+	}
+	if err := staged.Sync(); err != nil {
+		return errors.Join(err, staged.Close())
+	}
+	if err := staged.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(stagedPath, path); err != nil {
+		return fmt.Errorf("publish server registry entry: %w", err)
+	}
+	return nil
+}
+
+// entryTarget interprets a recorded target. Earlier versions could record a
+// relative link target; such a target names a sibling of the entry.
+func entryTarget(directory, target string) string {
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(directory, target)
+	}
+	return filepath.Clean(target)
 }
 
 func canonical(root string) (string, error) {

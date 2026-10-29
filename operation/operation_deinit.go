@@ -83,7 +83,7 @@ func (s *Service) Deinitialize(root string) (result *DeinitResult, resultErr err
 		result.Warnings = append(
 			result.Warnings,
 			errors.New(
-				"server unregistration unavailable: no server registry was supplied; registered links for this workspace may remain",
+				"server unregistration unavailable: no server registry was supplied; registered entries for this workspace may remain",
 			),
 		)
 	} else if err := s.registry.Unregister(root); err != nil {

@@ -64,7 +64,7 @@ Lists each registered server's name, state, and path. `list` and `ls` are the sa
 |`lock-only`|The path exists and holds a valid `lucy-lock.yaml`, but no manifest. Collection retains its lock's artifacts; `--server` cannot select it.|
 |`missing`|The path no longer exists, for example because a drive is disconnected.|
 |`unreadable`|The path or manifest exists, but lucy cannot inspect it, usually because of permissions or an I/O error.|
-|`invalid`|The path exists but does not contain a valid lucy manifest.|
+|`invalid`|The path exists but does not contain a valid lucy manifest, or the registry entry itself cannot be interpreted.|
 
 The listing checks each registered target without changing it. A missing server stays in the list; lucy never removes an entry because a target is unavailable. Reconnect the drive and list again to see it as `available`. Only `lucy deinit` removes an entry.
 
