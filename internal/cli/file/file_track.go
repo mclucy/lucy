@@ -2,17 +2,23 @@ package file
 
 import (
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/cli"
 
 	"github.com/spf13/cobra"
 )
 
-func newTrackCmd() *cobra.Command {
+func newTrackCmd(
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "track <path>...",
 		Short: TrackShort,
 		Long:  TrackLong,
 		Args:  cobra.MinimumNArgs(1),
-		RunE:  actionFileTrack,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileTrack(cmd, inv, deps, args)
+		},
 	}
 	cmd.Flags().Bool(
 		flagImmutable,
@@ -32,49 +38,64 @@ func newTrackCmd() *cobra.Command {
 	return cmd
 }
 
-func newUntrackCmd() *cobra.Command {
+func newUntrackCmd(
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	return &cobra.Command{
 		Use:   "untrack <path>...",
 		Short: UntrackShort,
 		Long:  UntrackLong,
 		Args:  cobra.MinimumNArgs(1),
-		RunE:  actionFileUntrack,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileUntrack(cmd, inv, deps, args)
+		},
 	}
 }
 
-func newLockCmd() *cobra.Command {
+func newLockCmd(
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	return &cobra.Command{
 		Use:   "lock <path>...",
 		Short: LockShort,
 		Long:  LockLong,
 		Args:  cobra.MinimumNArgs(1),
-		RunE:  actionFileLock,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileLock(cmd, inv, deps, args)
+		},
 	}
 }
 
-func newUnlockCmd() *cobra.Command {
+func newUnlockCmd(
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	return &cobra.Command{
 		Use:   "unlock <path>...",
 		Short: UnlockShort,
 		Long:  UnlockLong,
 		Args:  cobra.MinimumNArgs(1),
-		RunE:  actionFileUnlock,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileUnlock(cmd, inv, deps, args)
+		},
 	}
 }
 
-func actionFileTrack(cmd *cobra.Command, args []string) error {
-	root, err := workRoot()
-	if err != nil {
-		return err
-	}
-
+func actionFileTrack(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
 	immutable, _ := cmd.Flags().GetBool(flagImmutable)
 	noHash, _ := cmd.Flags().GetBool(flagNoHash)
 	recoverURL, _ := cmd.Flags().GetString(flagRecoverURL)
 
-	result, err := filetrack.Run(
+	result, err := deps.Files.Run(
 		cmd.Context(),
-		root,
+		inv.Directory,
 		filetrack.Request{
 			Operation:  filetrack.Track,
 			Paths:      args,
@@ -86,18 +107,18 @@ func actionFileTrack(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return reportFileResult(cmd, result)
+	return reportFileResult(cmd, inv, result)
 }
 
-func actionFileUntrack(cmd *cobra.Command, args []string) error {
-	root, err := workRoot()
-	if err != nil {
-		return err
-	}
-
-	result, err := filetrack.Run(
+func actionFileUntrack(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
+	result, err := deps.Files.Run(
 		cmd.Context(),
-		root,
+		inv.Directory,
 		filetrack.Request{
 			Operation: filetrack.Untrack,
 			Paths:     args,
@@ -106,18 +127,18 @@ func actionFileUntrack(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return reportFileResult(cmd, result)
+	return reportFileResult(cmd, inv, result)
 }
 
-func actionFileLock(cmd *cobra.Command, args []string) error {
-	root, err := workRoot()
-	if err != nil {
-		return err
-	}
-
-	result, err := filetrack.Run(
+func actionFileLock(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
+	result, err := deps.Files.Run(
 		cmd.Context(),
-		root,
+		inv.Directory,
 		filetrack.Request{
 			Operation: filetrack.Lock,
 			Paths:     args,
@@ -126,18 +147,18 @@ func actionFileLock(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return reportFileResult(cmd, result)
+	return reportFileResult(cmd, inv, result)
 }
 
-func actionFileUnlock(cmd *cobra.Command, args []string) error {
-	root, err := workRoot()
-	if err != nil {
-		return err
-	}
-
-	result, err := filetrack.Run(
+func actionFileUnlock(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
+	result, err := deps.Files.Run(
 		cmd.Context(),
-		root,
+		inv.Directory,
 		filetrack.Request{
 			Operation: filetrack.Unlock,
 			Paths:     args,
@@ -146,5 +167,5 @@ func actionFileUnlock(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return reportFileResult(cmd, result)
+	return reportFileResult(cmd, inv, result)
 }

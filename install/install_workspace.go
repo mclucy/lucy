@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
@@ -53,21 +53,21 @@ type (
 		publishLock  bool
 		// Trace receives operation facts for the command layer to present.
 		Trace *Trace
-		// ProvisionJava runs before staging when the selected Java runtime
-		// misses the requirement of the lock. It must leave a runtime installed
-		// or fail; the runtime is selected again afterwards.
-		ProvisionJava func(ctx context.Context, requirement javaruntime.Requirement, check *javaruntime.Check) error
+		// ProvisionJava runs before staging when the selected runtime misses
+		// the requirement. It returns the installed home when ordinary
+		// discovery cannot find it; selection then verifies the runtime again.
+		ProvisionJava func(ctx context.Context, requirement javaruntime.Requirement, check *javaruntime.Check) (string, error)
+		// Materialize, when non-nil, supplies artifact bytes for this
+		// operation instead of the configured cache and network. The returned
+		// path must exist; installation recomputes its digests and verifies
+		// them against the artifact's expected hashes before use. Injected
+		// bytes stay outside the operation's FetchSummary, which describes
+		// transfers the configured cache performed.
+		Materialize func(*catalog.Artifact) (artifact.MaterializedFile, error)
 	}
 )
 
-func Sync(ctx context.Context, root string, d *document.Manifest, old *document.Lock, opts Options) (*Result, error) {
-	result := newResult()
-	diagnostics, resultErr := syncInstall(ctx, root, d, old, opts, result)
-	result.Diagnostics = diagnostics
-	return result, resultErr
-}
-
-func syncInstall(ctx context.Context, root string, d *document.Manifest, old *document.Lock, opts Options, result *Result) (diagnostics []filetrack.Diagnostic, resultErr error) {
+func (s *Service) syncInstall(ctx context.Context, root string, d *document.Manifest, old *document.Lock, opts Options, result *Result) (diagnostics []filetrack.Diagnostic, resultErr error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -76,26 +76,26 @@ func syncInstall(ctx context.Context, root string, d *document.Manifest, old *do
 	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
 		return nil, err
 	}
-	writer, err := workspacewrite.Lock(root)
+	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := preflightLocked(root, d, old, opts, true); err != nil {
+	if err := preflightLocked(root, d, old, opts, true, s.logger); err != nil {
 		return nil, err
 	}
-	store := newDownloadStore(ctx, root, opts, result)
-	resolved, err := resolveLock(ctx, root, d, old, &opts, store, result)
+	store := s.newDownloadStore(ctx, root, opts, result)
+	resolved, err := s.resolveLock(ctx, root, d, old, &opts, store, result)
 	if err != nil {
 		return nil, err
 	}
-	return stageInstall(ctx, root, d, resolved, store, opts, result)
+	return s.stageInstall(ctx, root, d, resolved, store, opts, result)
 }
 
 // stageInstall materializes a resolved lock in the server directory and commits
 // it with the manifest it was resolved from. Resolution paths differ in how they
 // build the lock; every one of them lands here.
-func stageInstall(
+func (s *Service) stageInstall(
 	ctx context.Context,
 	root string,
 	d *document.Manifest,
@@ -107,26 +107,26 @@ func stageInstall(
 	if err := filetrack.ValidateOwnership(root, resolved.Files, resolved); err != nil {
 		return nil, err
 	}
-	check, err := selectJava(ctx, root, resolved, opts)
+	check, err := s.selectJava(ctx, root, resolved, opts)
 	if err != nil {
 		return nil, err
 	}
 	result.Java = check
-	current, err := installationCurrent(root, resolved)
+	current, err := installationCurrent(root, resolved, s.logger)
 	if err != nil {
 		return nil, err
 	}
 	if current && !opts.PublishManifest {
-		log.Info(
+		s.logger.Info(
 			"installation already current",
 			"root", root,
 			"packages", len(resolved.Packages),
 		)
-		if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
+		if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite, s.logger); err != nil {
 			return nil, err
 		}
 		if resolved.MCDR != nil {
-			if err := ensureMCDRRuntime(ctx, root, resolved, store, opts.MCDRVenv); err != nil {
+			if err := ensureMCDRRuntime(ctx, root, resolved, store, s.python, opts.MCDRVenv); err != nil {
 				return nil, err
 			}
 		}
@@ -135,15 +135,15 @@ func stageInstall(
 				return nil, err
 			}
 			result.PublishedLock = true
-			return provisionCommitted(ctx, root, resolved, opts)
+			return s.provisionCommitted(ctx, root, resolved, opts)
 		}
-		return filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
+		return s.tracker.Provision(ctx, root, resolved.Files, opts.Offline)
 	}
 	reason := "installation missing or stale"
 	if current {
 		reason = "manifest publication forces re-staging"
 	}
-	log.Debug("staging installation", "root", root, "reason", reason)
+	s.logger.Debug("staging installation", "root", root, "reason", reason)
 	opts.Trace.phaseStarted("install")
 	start := time.Now()
 	installed := false
@@ -193,7 +193,7 @@ func stageInstall(
 	); err != nil {
 		return nil, err
 	}
-	log.Debug(
+	s.logger.Debug(
 		"server tree prepared",
 		"stage", stage,
 		"core", resolved.Server.Filename,
@@ -226,29 +226,29 @@ func stageInstall(
 		}
 		staged++
 	}
-	log.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
+	s.logger.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
 	if resolved.MCDR != nil {
-		if err := preparePython(ctx, root, stage, resolved, store, opts.MCDRVenv); err != nil {
+		if err := preparePython(ctx, root, stage, resolved, store, s.python, opts.MCDRVenv); err != nil {
 			return nil, err
 		}
 	}
-	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite); err != nil {
+	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite, s.logger); err != nil {
 		return nil, err
 	}
 	adoptedPaths := map[string]bool{}
 	if _, err := os.Stat(filepath.Join(root, ".lucy", "install.yaml")); os.IsNotExist(err) {
-		adoptedPaths = adoptedOutputPaths(root, resolved.Server)
+		adoptedPaths = adoptedOutputPaths(root, resolved.Server, s.logger)
 	}
-	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths, adoptedPaths)
+	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths, adoptedPaths, s.logger)
 	if err != nil {
 		return nil, err
 	}
-	removeSupersededPaperCore(root, resolved)
+	removeSupersededPaperCore(root, resolved, s.logger)
 	result.Files = counts
 	result.PublishedManifest = opts.PublishManifest
 	result.PublishedLock = opts.publishLock || opts.PublishManifest
 	installed = true
-	return provisionCommitted(ctx, root, resolved, opts)
+	return s.provisionCommitted(ctx, root, resolved, opts)
 }
 
 func isFloating(v version.Version) bool {
@@ -263,7 +263,7 @@ func isFloating(v version.Version) bool {
 // manifest's core request. Resolution reuses the pin when it does; a locked
 // mutation treats a negative answer as a stale lock, because rebinding
 // requirements must never re-target the server.
-func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock, offline bool) (bool, error) {
+func (s *Service) coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock, offline bool) (bool, error) {
 	request := routing.ServerProductRequest{
 		Minecraft:      d.Server.Minecraft,
 		Product:        d.Server.Core.Product,
@@ -272,7 +272,7 @@ func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock,
 		FilePattern:    d.Server.Core.FilePattern,
 	}
 	if old.Server.Directory != d.Server.Directory {
-		log.Debug(
+		s.logger.Debug(
 			"core pin not reusable",
 			"reason", "server directory changed",
 			"locked", old.Server.Directory,
@@ -281,7 +281,7 @@ func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock,
 		return false, nil
 	}
 	if old.Server.Minecraft != request.Minecraft || old.Server.Product != request.Product {
-		log.Debug(
+		s.logger.Debug(
 			"core pin not reusable",
 			"reason", "pinned minecraft or product changed",
 			"minecraft", old.Server.Minecraft,
@@ -292,7 +292,7 @@ func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock,
 		return false, nil
 	}
 	if !isFloating(request.ProductVersion) && old.Server.CoreVersion != request.ProductVersion {
-		log.Debug(
+		s.logger.Debug(
 			"core pin not reusable",
 			"reason", "core version changed",
 			"locked", old.Server.CoreVersion,
@@ -304,7 +304,7 @@ func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock,
 	// distribution, so a locked GitHub artifact no longer satisfies the request
 	// even though every pinned field still matches.
 	if request.Repository == "" && old.Server.Provider == catalog.ProviderGitHub {
-		log.Debug(
+		s.logger.Debug(
 			"core pin not reusable",
 			"reason", "repository override dropped while pin came from a GitHub fork",
 		)
@@ -312,7 +312,7 @@ func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock,
 	}
 	if request.Repository != "" {
 		if offline {
-			log.Debug(
+			s.logger.Debug(
 				"core pin not reusable",
 				"reason", "repository override needs upstream confirmation while offline",
 				"repository", request.Repository,
@@ -322,11 +322,11 @@ func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock,
 		var repository struct {
 			ID int64 `json:"id"`
 		}
-		if err := routing.Metadata(ctx, "https://api.github.com/repos/"+request.Repository, &repository); err != nil {
+		if err := s.source.Metadata(ctx, "https://api.github.com/repos/"+request.Repository, &repository); err != nil {
 			return false, err
 		}
 		if old.Server.Provider != catalog.ProviderGitHub || old.Server.ProjectID != strconv.FormatInt(repository.ID, 10) {
-			log.Debug(
+			s.logger.Debug(
 				"core pin not reusable",
 				"reason", "repository identity changed",
 				"requested-repository", request.Repository,
@@ -342,7 +342,7 @@ func coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock,
 			return false, err
 		}
 		if !matched {
-			log.Debug(
+			s.logger.Debug(
 				"core pin not reusable",
 				"reason", "artifact filename no longer matches pattern",
 				"locked", old.Server.Filename,
@@ -408,8 +408,8 @@ func packageDestination(resolved *document.Lock, p *document.Package) (string, e
 
 // provisionCommitted provisions tracked files after the lock is published. A
 // failure here leaves the committed installation in place, so it is marked.
-func provisionCommitted(ctx context.Context, root string, resolved *document.Lock, opts Options) ([]filetrack.Diagnostic, error) {
-	diagnostics, err := filetrack.Provision(ctx, root, resolved.Files, opts.Offline)
+func (s *Service) provisionCommitted(ctx context.Context, root string, resolved *document.Lock, opts Options) ([]filetrack.Diagnostic, error) {
+	diagnostics, err := s.tracker.Provision(ctx, root, resolved.Files, opts.Offline)
 	if err != nil {
 		err = &CommittedError{Err: err}
 	}

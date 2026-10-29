@@ -2,17 +2,16 @@ package curseforge
 
 import (
 	"bytes"
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fn"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
@@ -35,21 +34,10 @@ type fingerprintResponse struct {
 	} `json:"data"`
 }
 
-// SlugFromFilePathWithHint resolves the slug for a local artifact file,
-// optionally using a urlHint slug. URL hint is never trusted on its own —
-// fingerprint always wins.
-func SlugFromFilePathWithHint(filePath, urlHint string) (
-	slug string,
-	err error,
-) {
-	fp, err := artifact.File{Path: filePath}.MurmurHash()
-	if err != nil {
-		return "", fmt.Errorf("curseforge hash: %w", err)
-	}
-	return slugFromFingerprint(fp)
-}
-
-func (p provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
+func (p *Provider) PackageByHash(
+	ctx context.Context,
+	hashable upstream.ArtifactFingerprint,
+) (
 	ref catalog.VersionedRef,
 	hash string,
 	ok bool,
@@ -60,7 +48,7 @@ func (p provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
 		return ref, hash, false, err
 	}
 	hash = strconv.FormatUint(uint64(fingerprint), 10)
-	match, err := fingerprintMatch(fingerprint)
+	match, err := p.fingerprintMatch(ctx, fingerprint)
 	if err != nil {
 		if errors.Is(err, ErrProjectNotFound) {
 			return ref, hash, false, nil
@@ -68,11 +56,11 @@ func (p provider) PackageByHash(hashable upstream.ArtifactFingerprint) (
 		return ref, hash, false, err
 	}
 
-	mod, err := getModById(match.ModId)
+	mod, err := p.getModById(ctx, match.ModId)
 	if err != nil {
 		return ref, hash, false, err
 	}
-	file, err := getModFileById(match.ModId, match.FileId)
+	file, err := p.getModFileById(ctx, match.ModId, match.FileId)
 	if err != nil {
 		return ref, hash, false, err
 	}
@@ -91,17 +79,17 @@ type fingerprintMatchResult struct {
 	FileId int32
 }
 
-func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
+func (p *Provider) fingerprintMatch(
+	ctx context.Context,
+	fp uint32,
+) (fingerprintMatchResult, error) {
 	var zero fingerprintMatchResult
-	key, err := effectiveAPIKey()
-	if err != nil {
-		return zero, err
-	}
-	if key == "" {
+	if p.apiKey == "" {
 		return zero, ErrNoApiKey
 	}
 	body, _ := json.Marshal(fingerprintRequest{Fingerprints: []uint32{fp}})
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodPost,
 		baseUrl+"/v1/fingerprints/432",
 		bytes.NewReader(body),
@@ -109,16 +97,16 @@ func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
 	if err != nil {
 		return zero, err
 	}
-	req.Header.Set("x-api-key", key)
+	req.Header.Set("x-api-key", p.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	log.Debug("curseforge fingerprint lookup")
-	resp, err := http.DefaultClient.Do(req)
+	p.logger.Debug("curseforge fingerprint lookup")
+	resp, err := p.network.Do(req)
 	if err != nil {
 		return zero, err
 	}
-	defer fn.CloseReader(resp.Body, log.Warn)
+	defer fn.CloseReader(resp.Body, p.logger.Warn)
 
 	if resp.StatusCode != http.StatusOK {
 		return zero, fmt.Errorf(
@@ -146,18 +134,6 @@ func fingerprintMatch(fp uint32) (fingerprintMatchResult, error) {
 		ModId:  m.File.ModId,
 		FileId: int32(m.ID),
 	}, nil
-}
-
-func slugFromFingerprint(fp uint32) (string, error) {
-	match, err := fingerprintMatch(fp)
-	if err != nil {
-		return "", err
-	}
-	mod, err := getModById(match.ModId)
-	if err != nil {
-		return "", err
-	}
-	return mod.Slug, nil
 }
 
 func platformFromCurseForgeFile(

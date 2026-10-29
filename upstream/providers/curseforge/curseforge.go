@@ -3,50 +3,81 @@
 // CurseForge identifies mods by numeric modId, not by slug. Slug resolution
 // is done via the search endpoint with the slug query parameter.
 //
-// All API requests require an x-api-key header. The key is decoded on first use
-// from linker-injected cipher fragments.
+// All API requests require an x-api-key header. The key is supplied once to
+// New and never read from ambient global state.
 package curseforge
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
-type provider struct{}
+// Provider is one configured CurseForge API client. Every request it performs
+// shares the network cache, logger, and API key it was constructed with.
+type Provider struct {
+	network *cache.Client
+	logger  *log.Logger
+	apiKey  string
+}
 
-var Provider provider
+// New constructs a CurseForge provider over network, logger, and apiKey.
+// Construction performs no network requests and decodes no key.
+func New(
+	network *cache.Client,
+	logger *log.Logger,
+	apiKey string,
+) *Provider {
+	return &Provider{
+		network: network,
+		logger:  logger,
+		apiKey:  strings.TrimSpace(apiKey),
+	}
+}
 
-func (provider) Provider() catalog.Provider {
+func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderCurseForge
 }
 
-func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
+func (p *Provider) Search(
+	ctx context.Context,
+	q upstream.Query,
+) (upstream.SearchResponse, error) {
 	// CurseForge exposes no client/server search facet; IncludeClient cannot
 	// be applied upstream and is left to post-filtering.
 	u := searchUrl(catalog.Name(q.Keyword), q.FilterEcosystem)
-	log.Debug("searching via curseforge api: " + u)
+	p.logger.Debug("searching via curseforge api: " + u)
 
 	resp := &searchResponse{}
-	if err := get(u, resp); err != nil {
+	if err := p.get(ctx, u, resp); err != nil {
 		return upstream.SearchResponse{}, err
 	}
 	return resp.ToSearchResults(p.Provider()), nil
 }
 
-func (p provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
-	mod, err := resolveSlug(id.Name)
+	mod, err := p.resolveSlug(ctx, id.Name)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
 
-	file, err := getFileByDisplayName(mod.ID, string(id.Version), local, id.Ecosystem)
+	file, err := p.getFileByDisplayName(
+		ctx,
+		mod.ID,
+		string(id.Version),
+		local,
+		id.Ecosystem,
+	)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -57,12 +88,15 @@ func (p provider) Fetch(
 	return resolved, nil
 }
 
-func (p provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
-	mod, err := resolveSlug(ref.Name)
+func (p *Provider) Info(
+	ctx context.Context,
+	ref catalog.Ref,
+) (catalog.Metadata, error) {
+	mod, err := p.resolveSlug(ctx, ref.Name)
 	if err != nil {
 		return catalog.Metadata{}, err
 	}
-	description, err := getModDescription(mod.ID)
+	description, err := p.getModDescription(ctx, mod.ID)
 	if err != nil {
 		return catalog.Metadata{}, err
 	}
@@ -72,16 +106,23 @@ func (p provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
 	return info, nil
 }
 
-func (p provider) Dependencies(
+func (p *Provider) Dependencies(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (*upstream.DependencySet, error) {
-	mod, err := resolveSlug(id.Name)
+	mod, err := p.resolveSlug(ctx, id.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	file, err := getFileByDisplayName(mod.ID, string(id.Version), local, id.Ecosystem)
+	file, err := p.getFileByDisplayName(
+		ctx,
+		mod.ID,
+		string(id.Version),
+		local,
+		id.Ecosystem,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +193,8 @@ func (c *curseforgeDependencies) ToDependencySet() upstream.DependencySet {
 
 // ResolveVersionSelector resolves abstract version specifiers (any, stable,
 // beta) to a concrete version by querying the CurseForge API.
-func (p provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (parsed catalog.VersionedRef, err error) {
@@ -162,7 +204,7 @@ func (p provider) ResolveVersionSelector(
 	parsed.Ecosystem = id.Ecosystem
 	parsed.Name = id.Name
 
-	mod, err := resolveSlug(id.Name)
+	mod, err := p.resolveSlug(ctx, id.Name)
 	if err != nil {
 		return id, err
 	}
@@ -170,7 +212,7 @@ func (p provider) ResolveVersionSelector(
 	var file *fileResponse
 	switch id.Version {
 	case version.Stable, version.Beta, version.Any:
-		file, err = latestFile(mod.ID, local, id.Ecosystem, id.Version)
+		file, err = p.latestFile(ctx, mod.ID, local, id.Ecosystem, id.Version)
 	default:
 		return id, nil
 	}

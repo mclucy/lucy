@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"context"
 	"crypto/sha1"
 	"strings"
 	"time"
@@ -37,14 +38,18 @@ func (c LocalContext) HasMinecraftVersion() bool {
 }
 
 type Fetcher interface {
-	Fetch(local LocalContext, id catalog.VersionedRef) (ResolvedPackage, error)
+	Fetch(ctx context.Context, local LocalContext, id catalog.VersionedRef) (
+		ResolvedPackage,
+		error,
+	)
 }
 
 type DependencyResolver interface {
-	Dependencies(local LocalContext, id catalog.VersionedRef) (
-		*DependencySet,
-		error,
-	)
+	Dependencies(
+		ctx context.Context,
+		local LocalContext,
+		id catalog.VersionedRef,
+	) (*DependencySet, error)
 }
 
 type PackageResolver interface {
@@ -81,7 +86,10 @@ type InstallerProvider interface {
 }
 
 type ArtifactMapper interface {
-	PackageByHash(artifact ArtifactFingerprint) (
+	PackageByHash(
+		ctx context.Context,
+		artifact ArtifactFingerprint,
+	) (
 		ref catalog.VersionedRef,
 		hash string,
 		ok bool,
@@ -95,14 +103,18 @@ type ArtifactFingerprint interface {
 }
 
 type VersionSelectorResolver interface {
-	ResolveVersionSelector(local LocalContext, ref catalog.VersionedRef) (
+	ResolveVersionSelector(
+		ctx context.Context,
+		local LocalContext,
+		ref catalog.VersionedRef,
+	) (
 		resolved catalog.VersionedRef,
 		err error,
 	)
 }
 
 type Searcher interface {
-	Search(q Query) (resp SearchResponse, err error)
+	Search(ctx context.Context, q Query) (resp SearchResponse, err error)
 }
 
 type Query struct {
@@ -121,7 +133,7 @@ type SearchResponse struct {
 }
 
 type Informer interface {
-	Info(ref catalog.Ref) (info catalog.Metadata, err error)
+	Info(ctx context.Context, ref catalog.Ref) (info catalog.Metadata, err error)
 }
 
 // Info is a project description from one upstream. Ref identifies the

@@ -36,7 +36,7 @@ type (
 // lock names, when observation selects that runtime. Installation replaces
 // these files instead of refusing them: they belong to the installation that
 // initialization adopted, not to unrelated work.
-func adoptedOutputPaths(root string, server document.LockedServer) map[string]bool {
+func adoptedOutputPaths(root string, server document.LockedServer, logger *log.Logger) map[string]bool {
 	serverDir := filepath.Join(root, filepath.FromSlash(server.Directory))
 	observed := discovery.Discover(serverDir)
 	declaration := &discovery.Declaration{
@@ -45,7 +45,7 @@ func adoptedOutputPaths(root string, server document.LockedServer) map[string]bo
 		CoreVersion: server.CoreVersion,
 	}
 	if err := observed.Select(discovery.Request{Declared: declaration}); err != nil {
-		log.Debug("no adopted installation to reconcile", "reason", err)
+		logger.Debug("no adopted installation to reconcile", "reason", err)
 		return nil
 	}
 	selected := observed.Selected()
@@ -63,13 +63,13 @@ func adoptedOutputPaths(root string, server document.LockedServer) map[string]bo
 	return paths
 }
 
-func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool) (FileChanges, error) {
+func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, logger *log.Logger) (FileChanges, error) {
 	var counts FileChanges
-	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, adoptedPaths, &counts)
+	resultErr := applyCommitFiles(root, stage, d, l, publish, overwritePaths, adoptedPaths, &counts, logger)
 	return counts, resultErr
 }
 
-func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, counts *FileChanges) (resultErr error) {
+func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, counts *FileChanges, logger *log.Logger) (resultErr error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	previous := installReceipt{}
 	raw, err := os.ReadFile(receiptPath)
@@ -144,13 +144,13 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			if actual["sha256"] != hashes["sha256"] && actual["sha256"] != owned[relative] {
 				switch {
 				case overwritePaths[relative]:
-					log.Debug(
+					logger.Debug(
 						"overwriting occupied output",
 						"path", relative,
 						"reason", "overwrite requested",
 					)
 				case adoptedPaths[relative]:
-					log.Debug(
+					logger.Debug(
 						"adopting occupied output",
 						"path", relative,
 						"reason", "occupied by the adopted installation",
@@ -245,7 +245,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	if err := fsutil.AtomicWrite(journalPath, journalBytes, 0o600); err != nil {
 		return err
 	}
-	log.Debug(
+	logger.Debug(
 		"installation transaction journaled",
 		"journal", journalPath,
 		"backup", backup,
@@ -255,7 +255,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	failed := true
 	defer func() {
 		if failed {
-			resultErr = errors.Join(resultErr, workspacewrite.RecoverInstall(root))
+			resultErr = errors.Join(resultErr, workspacewrite.RecoverInstall(root, logger))
 		}
 	}()
 	for name, source := range sources {
@@ -318,7 +318,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	if err := os.RemoveAll(backup); err != nil {
 		return err
 	}
-	log.Info(
+	logger.Info(
 		"installation committed",
 		"root", root,
 		"files", len(sources),
@@ -347,11 +347,11 @@ func ResolutionFingerprint(l *document.Lock) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func installationCurrent(root string, l *document.Lock) (bool, error) {
+func installationCurrent(root string, l *document.Lock, logger *log.Logger) (bool, error) {
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	raw, err := os.ReadFile(receiptPath)
 	if os.IsNotExist(err) {
-		log.Debug("installation not current", "reason", "no install receipt")
+		logger.Debug("installation not current", "reason", "no install receipt")
 		return false, nil
 	}
 	if err != nil {
@@ -366,7 +366,7 @@ func installationCurrent(root string, l *document.Lock) (bool, error) {
 		return false, err
 	}
 	if receipt.LockFingerprint != expected {
-		log.Debug(
+		logger.Debug(
 			"installation not current",
 			"reason", "lock fingerprint changed",
 			"receipt", receipt.LockFingerprint,
@@ -384,18 +384,18 @@ func installationCurrent(root string, l *document.Lock) (bool, error) {
 		}
 		actual, err := DigestFile(filepath.Join(root, entry.Path), nil)
 		if os.IsNotExist(err) {
-			log.Debug("installation not current", "reason", "owned output missing", "path", entry.Path)
+			logger.Debug("installation not current", "reason", "owned output missing", "path", entry.Path)
 			return false, nil
 		}
 		if err != nil {
 			return false, err
 		}
 		if actual["sha256"] != entry.SHA256 {
-			log.Debug("installation not current", "reason", "owned output modified", "path", entry.Path)
+			logger.Debug("installation not current", "reason", "owned output modified", "path", entry.Path)
 			return false, nil
 		}
 	}
-	log.Debug("installation current", "reason", "receipt matches lock and every owned output", "receipt", receiptPath)
+	logger.Debug("installation current", "reason", "receipt matches lock and every owned output", "receipt", receiptPath)
 	return true, nil
 }
 

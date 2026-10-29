@@ -1,0 +1,137 @@
+version: "2"
+
+run:
+  relative-path-mode: gomod
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - depguard
+  settings:
+    depguard:
+      rules:
+        catalog:
+          list-mode: strict
+          files:
+            - "**/catalog/*.go"
+          allow:
+            - $gostd
+            - github.com/mclucy/lucy/version$
+
+        server-values:
+          list-mode: strict
+          files:
+            - "**/server/*.go"
+          allow:
+            - $gostd
+            - github.com/mclucy/lucy/catalog$
+
+        java-values:
+          list-mode: strict
+          files:
+            - "**/java/*.go"
+          allow:
+            - $gostd
+
+        version-values:
+          list-mode: strict
+          files:
+            - "**/version/*.go"
+            - "!**/version/version_dependency_samples_test.go"
+          allow:
+            - $gostd
+            - github.com/mclucy/lucy/version$
+
+        # This external test reads real loader descriptors to check version rules.
+        version-descriptor-fixtures:
+          list-mode: strict
+          files:
+            - "**/version/version_dependency_samples_test.go"
+          allow:
+            - $gostd
+            - github.com/mclucy/lucy/version$
+            - github.com/mclucy/lucy/catalog$
+            - github.com/mclucy/lucy/internal/fileschema$
+            - github.com/mclucy/lucy/internal/fn$
+            - github.com/pelletier/go-toml$
+
+        backend-presentation:
+          list-mode: lax
+          files:
+            - "**/{artifact,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,resolve,serverregistry,upstream,workspace}/*.go"
+            - "**/{artifact,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,resolve,serverregistry,upstream,workspace}/**/*.go"
+            - "**/internal/{buildrepo,toolchain,workspacewrite}/*.go"
+            - "**/internal/{buildrepo,toolchain,workspacewrite}/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/cmd$
+              desc: Return facts to the command boundary instead of importing command wiring.
+            - pkg: github.com/mclucy/lucy/internal/cli
+              desc: CLI invocation and output ownership stay at the command boundary.
+            - pkg: github.com/mclucy/lucy/report$
+              desc: Return warnings or use the supplied diagnostic logger.
+            - pkg: github.com/mclucy/lucy/terminal
+              desc: Render returned facts at the command boundary.
+            - pkg: github.com/spf13/cobra$
+              desc: Backend capabilities must not depend on CLI commands.
+            - pkg: charm.land/
+              desc: Backend capabilities must not depend on terminal presentation.
+
+        workspace-observation:
+          list-mode: lax
+          files:
+            - "**/workspace/*.go"
+            - "**/workspace/discovery/*.go"
+            - "**/workspace/discovery/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/upstream
+              desc: Keep observation local; perform upstream lookup explicitly through workspace/identify.
+            - pkg: github.com/mclucy/lucy/cache$
+              desc: Local observation does not own network acquisition.
+            - pkg: github.com/mclucy/lucy/github$
+              desc: Local observation does not contact upstreams.
+            - pkg: github.com/mclucy/lucy/install$
+              desc: Observation must not orchestrate installation.
+            - pkg: github.com/mclucy/lucy/operation$
+              desc: Observation returns facts to application operations.
+
+        provider-composition:
+          list-mode: lax
+          files:
+            - $all
+            - "!**/upstream/providers/**/*.go"
+            - "!**/upstream/routing/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/upstream/providers/
+              desc: Consume configured capabilities; concrete providers are assembled by upstream/routing.
+
+        network-adapters:
+          list-mode: lax
+          files:
+            - "**/{cache,github,upstream}/*.go"
+            - "**/{cache,github,upstream}/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/config$
+              desc: Receive effective settings from invocation composition.
+            - pkg: github.com/mclucy/lucy/operation$
+              desc: Network adapters implement capabilities consumed by application operations.
+            - pkg: github.com/mclucy/lucy/install$
+              desc: Network adapters must not depend on convergence orchestration.
+            - pkg: github.com/mclucy/lucy/workspace
+              desc: Receive local facts explicitly instead of observing a workspace.
+
+        resolver-effects:
+          list-mode: lax
+          files:
+            - "**/resolve/*.go"
+          deny:
+            - pkg: net/http$
+              desc: Receive candidate lookup and materialization capabilities from the caller.
+            - pkg: github.com/mclucy/lucy/cache$
+              desc: Resolution owns analysis memoization, not the network cache.
+            - pkg: github.com/mclucy/lucy/upstream/routing$
+              desc: Inject candidate lookup instead of selecting global infrastructure.
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

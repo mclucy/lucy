@@ -1,6 +1,7 @@
 package spiget
 
 import (
+	"context"
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
@@ -10,13 +11,18 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
 )
 
-func requestJSON(requestURL string, out any, notFound error) error {
-	log.Debug("spiget api: GET " + requestURL)
+func (p *Provider) requestJSON(
+	ctx context.Context,
+	requestURL string,
+	out any,
+	notFound error,
+) error {
+	p.logger.Debug("spiget api: GET " + requestURL)
 
-	resp, err := cache.CachedGetRequest(
+	resp, err := p.network.CachedGetRequest(
+		ctx,
 		requestURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)
@@ -37,29 +43,39 @@ func requestJSON(requestURL string, out any, notFound error) error {
 	return nil
 }
 
-func searchResources(query string) (
+func (p *Provider) searchResources(
+	ctx context.Context,
+	query string,
+) (
 	searchResponse,
 	error,
 ) {
 	u := searchResourcesURL(query)
 	resp := searchResponse{}
-	if err := requestJSON(u, &resp, nil); err != nil {
+	if err := p.requestJSON(ctx, u, &resp, nil); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
-func getResource(id int64) (*resourceResponse, error) {
+func (p *Provider) getResource(
+	ctx context.Context,
+	id int64,
+) (*resourceResponse, error) {
 	resp := &resourceResponse{}
-	if err := requestJSON(resourceURL(id), resp, ErrNoProject); err != nil {
+	if err := p.requestJSON(ctx, resourceURL(id), resp, ErrNoProject); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
-func getLatestVersion(resourceID int64) (*versionResponse, error) {
+func (p *Provider) getLatestVersion(
+	ctx context.Context,
+	resourceID int64,
+) (*versionResponse, error) {
 	resp := &versionResponse{}
-	if err := requestJSON(
+	if err := p.requestJSON(
+		ctx,
 		latestVersionURL(resourceID),
 		resp,
 		ErrNoVersion,
@@ -71,11 +87,15 @@ func getLatestVersion(resourceID int64) (*versionResponse, error) {
 
 const spigetVersionPageSize = 1000
 
-func listVersions(resourceID int64) ([]versionResponse, error) {
+func (p *Provider) listVersions(
+	ctx context.Context,
+	resourceID int64,
+) ([]versionResponse, error) {
 	var versions []versionResponse
 	for page := 1; ; page++ {
 		var resp []versionResponse
-		if err := requestJSON(
+		if err := p.requestJSON(
+			ctx,
 			versionsURL(resourceID, page),
 			&resp,
 			ErrNoVersion,

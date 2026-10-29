@@ -1,6 +1,7 @@
 package fabric
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -14,11 +15,19 @@ import (
 
 const metaBaseURL = "https://meta.fabricmc.net"
 
-type provider struct{}
+// Provider resolves Fabric loader, installer, and game metadata over the shared
+// network cache.
+type Provider struct {
+	network *cache.Client
+}
 
-var Provider provider
+// New constructs a Fabric installer provider. network supplies the cached HTTP
+// transport; construction performs no requests.
+func New(network *cache.Client) *Provider {
+	return &Provider{network: network}
+}
 
-func (provider) Provider() catalog.Provider {
+func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderFabric
 }
 
@@ -37,22 +46,24 @@ type gameVersionEntry struct {
 	Stable  bool   `json:"stable"`
 }
 
-func (p provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (catalog.VersionedRef, error) {
-	loaderVersion, err := loaderVersion(id.Version)
+	loaderVer, err := p.loaderVersion(ctx, id.Version)
 	if err != nil {
 		return id, err
 	}
 	return catalog.VersionedRef{
 		Ecosystem: catalog.EcosystemFabric,
 		Name:      "fabric",
-		Version:   version.Version(loaderVersion),
+		Version:   version.Version(loaderVer),
 	}, nil
 }
 
-func (p provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
@@ -63,7 +74,7 @@ func (p provider) Fetch(
 	}
 	gameVersionID := local.MinecraftVersion.String()
 
-	loaderVer, err := loaderVersion(id.Version)
+	loaderVer, err := p.loaderVersion(ctx, id.Version)
 	if err != nil {
 		return upstream.ResolvedPackage{}, fmt.Errorf(
 			"resolve fabric loader version failed: %w",
@@ -71,7 +82,7 @@ func (p provider) Fetch(
 		)
 	}
 
-	installerVer, err := latestInstallerVersion()
+	installerVer, err := p.latestInstallerVersion(ctx)
 	if err != nil {
 		return upstream.ResolvedPackage{}, fmt.Errorf(
 			"resolve fabric installer version failed: %w",
@@ -98,9 +109,9 @@ func (p provider) Fetch(
 // LatestGameVersion reports the newest Minecraft release the loader publishes
 // builds for. Fabric tracks Minecraft releases, so the entry is normally the
 // current release.
-func LatestGameVersion() (version.Version, error) {
+func (p *Provider) LatestGameVersion(ctx context.Context) (version.Version, error) {
 	var versions []gameVersionEntry
-	if err := fetchVersionsMeta("game", &versions); err != nil {
+	if err := p.fetchVersionsMeta(ctx, "game", &versions); err != nil {
 		return "", err
 	}
 	for _, entry := range versions {
@@ -111,12 +122,15 @@ func LatestGameVersion() (version.Version, error) {
 	return "", errors.New("no stable Minecraft version in fabric metadata")
 }
 
-func loaderVersion(selector version.Version) (string, error) {
+func (p *Provider) loaderVersion(
+	ctx context.Context,
+	selector version.Version,
+) (string, error) {
 	if selector == version.Unknown {
 		return "", errors.New("unknown game version, cannot resolve fabric loader version")
 	}
 
-	versions, err := fetchLoaderVersions()
+	versions, err := p.fetchLoaderVersions(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -148,8 +162,8 @@ func loaderVersion(selector version.Version) (string, error) {
 	)
 }
 
-func latestInstallerVersion() (string, error) {
-	versions, err := fetchInstallerVersions()
+func (p *Provider) latestInstallerVersion(ctx context.Context) (string, error) {
+	versions, err := p.fetchInstallerVersions(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -159,25 +173,30 @@ func latestInstallerVersion() (string, error) {
 	return versions[0].Version, nil
 }
 
-func fetchLoaderVersions() (
+func (p *Provider) fetchLoaderVersions(ctx context.Context) (
 	loaderVersions []loaderVersionEntry,
 	err error,
 ) {
-	err = fetchVersionsMeta("loader", &loaderVersions)
+	err = p.fetchVersionsMeta(ctx, "loader", &loaderVersions)
 	return
 }
 
-func fetchInstallerVersions() (
+func (p *Provider) fetchInstallerVersions(ctx context.Context) (
 	installerVersions []installerVersion,
 	err error,
 ) {
-	err = fetchVersionsMeta("installer", &installerVersions)
+	err = p.fetchVersionsMeta(ctx, "installer", &installerVersions)
 	return
 }
 
-func fetchVersionsMeta(endpoint string, target any) (err error) {
+func (p *Provider) fetchVersionsMeta(
+	ctx context.Context,
+	endpoint string,
+	target any,
+) (err error) {
 	apiEndpoint := metaBaseURL + "/v2/versions/" + endpoint
-	data, err := cache.CachedGetBytes(
+	data, err := p.network.CachedGetBytes(
+		ctx,
 		apiEndpoint,
 		cache.BytesRequestOptions{
 			Kind: cache.KindMetadata,

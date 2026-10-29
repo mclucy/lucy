@@ -240,7 +240,7 @@ func FuzzLockJavaDistributionReplay(f *testing.F) {
 		if runtimeDistribution == javapkg.DistributionAny {
 			runtimeDistribution = javapkg.DistributionTemurin
 		}
-		misses := javaruntime.RequirementOf(replayed).Misses(&javaruntime.Runtime{
+		misses := javaruntime.RequirementOf(replayed, nil).Misses(&javaruntime.Runtime{
 			Home:         "/opt/java",
 			Version:      "21.0.1",
 			Major:        21,

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -10,7 +11,8 @@ import (
 	"github.com/mclucy/lucy/document"
 	serverpkg "github.com/mclucy/lucy/server"
 
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/upstream"
+	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -51,7 +53,13 @@ type ServerEnvironment struct {
 //
 // It also reports the server environment, derived from the manifest or lock
 // when available and from the workspace probe otherwise.
-func LoadDependencyData(workDir string, forceLive bool, output *Output) (
+func LoadDependencyData(
+	ctx context.Context,
+	workDir string,
+	forceLive bool,
+	lookup func(context.Context, upstream.ArtifactFingerprint) routing.ArtifactLookup,
+	output *Output,
+) (
 	*DependencyGraph,
 	GraphOrigin,
 	ServerEnvironment,
@@ -62,6 +70,9 @@ func LoadDependencyData(workDir string, forceLive bool, output *Output) (
 		lock   *document.Lock
 		origin = OriginLock
 	)
+	if err := ctx.Err(); err != nil {
+		return nil, 0, env, err
+	}
 
 	if !forceLive {
 		doc, err := document.LockFile(workDir).Read()
@@ -80,15 +91,28 @@ func LoadDependencyData(workDir string, forceLive bool, output *Output) (
 				err,
 			)
 		}
+		if err := ctx.Err(); err != nil {
+			return nil, 0, env, err
+		}
 		return graph, origin, env, nil
 	}
 
 	origin = OriginLive
-	info, _ := identify.Packages(workspace.Observe(workDir, discovery.Request{}))
+	info, _ := identify.Packages(
+		ctx,
+		workspace.Observe(workDir, discovery.Request{}),
+		lookup,
+	)
+	if err := ctx.Err(); err != nil {
+		return nil, 0, env, err
+	}
 	reportObservationFindings(info, output)
 	graph, err := BuildGraphFromObservation(info)
 	if err != nil {
 		return nil, 0, env, fmt.Errorf("failed to build graph from observation: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, 0, env, err
 	}
 	return graph, origin, environmentFromWorkspace(info, env), nil
 }
@@ -133,7 +157,7 @@ func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 			if output.JSON() {
 				output.Warn(errors.New(message))
 			} else {
-				report.Info(message)
+				output.Info(message)
 			}
 		case discovery.FindingMissingDeclaredInstallation:
 			output.Warn(errors.New(
@@ -174,7 +198,7 @@ func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 			if output.JSON() {
 				output.Warn(message)
 			} else {
-				report.Error(message)
+				output.Error(message)
 			}
 			unresolvedReported = true
 		}

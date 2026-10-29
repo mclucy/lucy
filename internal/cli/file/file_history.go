@@ -11,30 +11,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newHistoryCmd() *cobra.Command {
+func newHistoryCmd(
+	inv *cli.Invocation,
+	_ *cli.Dependencies,
+) *cobra.Command {
 	return &cobra.Command{
 		Use:   "history [path]",
 		Short: HistoryShort,
 		Long:  HistoryLong,
 		Args:  cobra.MaximumNArgs(1),
-		RunE:  actionFileHistory,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionFileHistory(cmd, inv, args)
+		},
 	}
 }
 
 var historyJSON cli.JSONResult[[]filetrack.Event]
 
-func actionFileHistory(cmd *cobra.Command, args []string) error {
-	root, err := workRoot()
-	if err != nil {
-		return err
-	}
-
+func actionFileHistory(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	args []string,
+) error {
 	path := ""
 	if len(args) == 1 {
 		path = args[0]
 	}
 
-	events, err := filetrack.History(root, path)
+	events, err := filetrack.History(inv.Directory, path)
 	if err != nil {
 		return err
 	}
@@ -42,7 +46,7 @@ func actionFileHistory(cmd *cobra.Command, args []string) error {
 		events = []filetrack.Event{}
 	}
 
-	output := cli.NewQueryOutput(cmd)
+	output := cli.NewQueryOutput(cmd, inv)
 	if output.JSON() {
 		return historyJSON.Write(output, events)
 	}

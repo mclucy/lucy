@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -179,11 +180,13 @@ func TestCacheProcessWriter(t *testing.T) {
 		Scenario: scenario,
 		Keys:     make([]string, 0, count),
 	}
+	client := New(DefaultRoot(), DefaultCacheConfig(), http.DefaultClient, nil)
 	for i := range count {
 		name := scenario + "-" + strconv.Itoa(i) + ".jar"
 		download := server + artifactRoute + name
 		directory := cacheChildDestination(t, name)
-		result, err := CachedDownload(
+		result, err := client.CachedDownload(
+			context.Background(),
 			download,
 			directory,
 			DownloadOptions{Kind: KindArtifact},
@@ -211,7 +214,7 @@ func TestCacheProcessWritesAreVisibleAcrossProcesses(t *testing.T) {
 	shared := t.TempDir()
 	t.Setenv("HOME", shared)
 	fixture := newCacheFixture(t)
-	h := installNetworkCacheAt(t, shared, DefaultCacheConfig())
+	h := installNetworkCacheAt(t, DefaultRoot(), DefaultCacheConfig())
 	const workers = 6
 	const perWorker = 3
 

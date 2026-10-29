@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -134,86 +133,25 @@ func ResolveLockReference(root, name string) (string, error) {
 	return lock.LookupReference(name)
 }
 
-type PackageIDSuggestionContext struct {
-	Command  string
-	Token    string
-	Provider string
-	Name     string
-	Version  string
-	Segment  string
-}
-
-type PackageIDSuggestionProvider interface {
-	Name() string
-	Priority() int
-	SuggestPackageIDs(
-		context.Context,
-		PackageIDSuggestionContext,
-	) ([]CompletionCandidate, error)
-}
-
-var packageIDSuggestionProviders []PackageIDSuggestionProvider
-
 // CompletePackageIDSuggestions completes a "provider:project@version" token
-// for the current workspace. Workspace suggestions come from that
+// for the invocation workspace. Workspace suggestions come from that
 // workspace's lock, which is the only evidence of what it contains.
 func CompletePackageIDSuggestions(
-	ctx context.Context,
-	commandName string,
-	token string,
-) ([]string, cobra.ShellCompDirective) {
-	root, err := os.Getwd()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	return CompletePackageIDSuggestionsIn(ctx, root, commandName, token)
-}
-
-// CompletePackageIDSuggestionsIn completes a token against a specific
-// workspace root.
-func CompletePackageIDSuggestionsIn(
-	ctx context.Context,
+	_ context.Context,
 	root string,
-	commandName string,
 	token string,
 ) ([]string, cobra.ShellCompDirective) {
-	provider, name, version, segment := ParseCompletionToken(token)
-
-	if segment == "version" {
+	_, name, version, segment := ParseCompletionToken(token)
+	switch segment {
+	case "version":
 		candidates := FilterByPrefix(StaticVersionCandidates(), version)
 		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+	case "name":
+		candidates := FilterByPrefix(LockCandidates(root), name)
+		return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
+	default:
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-
-	request := PackageIDSuggestionContext{
-		Command:  commandName,
-		Token:    token,
-		Provider: provider,
-		Name:     name,
-		Version:  version,
-		Segment:  segment,
-	}
-
-	candidates := collectPackageIDSuggestionCandidates(ctx, root, request)
-	return ToCobraCompletions(candidates), cobra.ShellCompDirectiveNoFileComp
-}
-
-func collectPackageIDSuggestionCandidates(
-	ctx context.Context,
-	root string,
-	request PackageIDSuggestionContext,
-) []CompletionCandidate {
-	out := make([]CompletionCandidate, 0)
-	if request.Segment == "name" {
-		out = append(out, FilterByPrefix(LockCandidates(root), request.Name)...)
-	}
-	for _, provider := range packageIDSuggestionProviders {
-		candidates, err := provider.SuggestPackageIDs(ctx, request)
-		if err != nil {
-			continue
-		}
-		out = append(out, candidates...)
-	}
-	return out
 }
 
 // ParseCompletionToken parses a partial "provider:project@version" completion

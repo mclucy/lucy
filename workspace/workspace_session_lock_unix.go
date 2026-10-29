@@ -26,9 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/log"
 )
 
 // checkSessionLock reports whether another process holds session.lock. A
@@ -43,26 +40,19 @@ func checkSessionLock(lockPath string) bool {
 	}
 
 	file, err := os.OpenFile(lockPath, os.O_RDWR|os.O_APPEND, 0o666)
-	defer fn.CloseReader(file, log.Warn)
 	if err != nil {
 		return false
 	}
+	defer file.Close()
 
-	log.Debug("checking lock on: " + file.Name())
 	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	if err != nil && errors.Is(err, syscall.EWOULDBLOCK) {
-		log.Debug("found a lock on the file: " + err.Error())
 		return true
 	} else if err != nil {
 		return false
 	}
 
-	log.Debug("no lock found on the file: " + file.Name())
-	err = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-	if err != nil {
-		log.Warn(err)
-	}
-
+	_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
 	return false
 }
 
@@ -75,8 +65,6 @@ func sessionLockHeldByLsof(filePath string) bool {
 	if err := cmd.Run(); err != nil {
 		return false
 	}
-	log.Debug("got output from lsof:\n" + out.String())
-
 	lines := strings.Split(out.String(), "\n")
 	outputBegin := 0
 	for i, line := range lines {

@@ -11,6 +11,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// newTestInvocation returns the presentation state a test command runs with.
+func newTestInvocation() *Invocation {
+	return NewInvocation(".", nil)
+}
+
 // newStreamCommand returns a leaf command whose output streams are buffers.
 func newStreamCommand() (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
 	cmd := &cobra.Command{Use: "leaf"}
@@ -32,7 +37,7 @@ func selectJSON(t *testing.T, cmd *cobra.Command, flag string) {
 func TestOutputRouting(t *testing.T) {
 	t.Run("query writes to stdout", func(t *testing.T) {
 		cmd, stdout, stderr := newStreamCommand()
-		output := NewQueryOutput(cmd)
+		output := NewQueryOutput(cmd, newTestInvocation())
 		if _, err := fmt.Fprint(output.Human(), "result\n"); err != nil {
 			t.Fatalf("write human output: %v", err)
 		}
@@ -46,7 +51,7 @@ func TestOutputRouting(t *testing.T) {
 
 	t.Run("operation writes to stderr", func(t *testing.T) {
 		cmd, stdout, stderr := newStreamCommand()
-		output := NewOperationOutput(cmd)
+		output := NewOperationOutput(cmd, newTestInvocation())
 		if _, err := fmt.Fprint(output.Human(), "installing\n"); err != nil {
 			t.Fatalf("write human output: %v", err)
 		}
@@ -61,7 +66,7 @@ func TestOutputRouting(t *testing.T) {
 	t.Run("machine mode discards human output", func(t *testing.T) {
 		cmd, stdout, stderr := newStreamCommand()
 		selectJSON(t, cmd, FlagJSON)
-		output := NewQueryOutput(cmd)
+		output := NewQueryOutput(cmd, newTestInvocation())
 		if !output.JSON() {
 			t.Fatal("output does not report machine mode")
 		}
@@ -79,7 +84,7 @@ func TestOutputRouting(t *testing.T) {
 	t.Run("machine mode keeps warnings out of stderr", func(t *testing.T) {
 		cmd, stdout, stderr := newStreamCommand()
 		selectJSON(t, cmd, FlagJSONCompact)
-		output := NewOperationOutput(cmd)
+		output := NewOperationOutput(cmd, newTestInvocation())
 		output.Warn(errors.New("first warning"))
 		output.Warn(errors.New("second warning"))
 		output.Warn(nil)
@@ -110,7 +115,7 @@ func TestWriteErrorUsesStderr(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cmd, stdout, stderr := newStreamCommand()
 			selectJSON(t, cmd, test.flag)
-			output := NewOperationOutput(cmd)
+			output := NewOperationOutput(cmd, newTestInvocation())
 			output.WriteError(errors.New("boom"), "lucy.log")
 
 			if got := stdout.String(); got != "" {

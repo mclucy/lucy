@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewExportCommand() *cobra.Command {
+func NewExportCommand(_ *Invocation) *cobra.Command {
 	return &cobra.Command{
 		Use:   "export",
 		Short: help.ExportShort,

@@ -1,21 +1,25 @@
 package spiget
 
 import (
+	"context"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-func resolveResourceByProjectName(name catalog.Name) (
+func (p *Provider) resolveResourceByProjectName(
+	ctx context.Context,
+	name catalog.Name,
+) (
 	*resourceResponse,
 	error,
 ) {
 	if id, ok := parseNumericResourceID(name); ok {
-		return getResource(id)
+		return p.getResource(ctx, id)
 	}
 
-	results, err := searchResources(name.String())
+	results, err := p.searchResources(ctx, name.String())
 	if err != nil {
 		return nil, err
 	}
@@ -25,31 +29,32 @@ func resolveResourceByProjectName(name catalog.Name) (
 			candidate.Name,
 			name.String(),
 		) {
-			return getResource(candidate.ID)
+			return p.getResource(ctx, candidate.ID)
 		}
 	}
 
 	if len(results) == 1 {
-		return getResource(results[0].ID)
+		return p.getResource(ctx, results[0].ID)
 	}
 
 	return nil, ErrNoProject
 }
 
-func resolveVersion(
+func (p *Provider) resolveVersion(
+	ctx context.Context,
 	resource *resourceResponse,
 	requested versionpkg.Version,
 ) (resolvedVersion, error) {
 	switch requested {
 	case "", versionpkg.Any, versionpkg.Beta, versionpkg.Stable:
-		latest, err := getLatestVersion(resource.ID)
+		latest, err := p.getLatestVersion(ctx, resource.ID)
 		if err != nil {
 			return resolvedVersion{}, err
 		}
 		return NewResolvedVersion(*resource, *latest), nil
 	}
 
-	versions, err := listVersions(resource.ID)
+	versions, err := p.listVersions(ctx, resource.ID)
 	if err != nil {
 		return resolvedVersion{}, err
 	}

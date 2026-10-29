@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // dnf installs Java from the configured DNF sources.
@@ -16,15 +15,15 @@ func (dnf) method() Method { return MethodDnf }
 
 func (dnf) system() bool { return true }
 
-func (dnf) ownsJava() bool { return false }
+func (dnf) ownsJava(context.Context, *Host) bool { return false }
 
-func (dnf) plans(ctx context.Context, req Request) ([]Plan, error) {
-	if req.Major <= 0 || !systemToolAvailable("dnf") {
+func (dnf) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
+	if req.Major <= 0 || !host.systemToolAvailable("dnf") {
 		return nil, nil
 	}
 	if req.Distribution == java.DistributionAny {
 		pkg := fmt.Sprintf("java-%d-openjdk-headless", req.Major)
-		if !dnfPackageAvailable(ctx, pkg) {
+		if !dnfPackageAvailable(ctx, host, pkg) {
 			return nil, nil
 		}
 		return []Plan{
@@ -36,13 +35,13 @@ func (dnf) plans(ctx context.Context, req Request) ([]Plan, error) {
 		return nil, nil
 	}
 	for _, pkg := range packages {
-		if dnfPackageAvailable(ctx, pkg) {
+		if dnfPackageAvailable(ctx, host, pkg) {
 			return []Plan{
 				dnfPlan(pkg, req.Distribution, req.Major, nil),
 			}, nil
 		}
 	}
-	repository := dnfRepository(req.Distribution)
+	repository := dnfRepository(req.Distribution, host)
 	if repository == nil {
 		return nil, nil
 	}
@@ -75,10 +74,14 @@ func dnfPlan(
 
 // dnfPackageAvailable reports whether the configured sources offer pkg. The
 // probe never installs or changes repository data.
-func dnfPackageAvailable(ctx context.Context, pkg string) bool {
-	output, err := systemProbe(ctx, "dnf", "--quiet", "list", "--available", pkg)
+func dnfPackageAvailable(
+	ctx context.Context,
+	host *Host,
+	pkg string,
+) bool {
+	output, err := host.systemProbe(ctx, "dnf", "--quiet", "list", "--available", pkg)
 	if err != nil {
-		log.Debug("dnf package probe failed", "package", pkg, "reason", err)
+		host.logger.Debug("dnf package probe failed", "package", pkg, "reason", err)
 		return false
 	}
 	for line := range strings.Lines(string(output)) {
@@ -118,10 +121,10 @@ func dnfBrandedPackages(
 
 // dnfRepository returns the vendor DNF source for a build. It returns nil when
 // the vendor documents no source for this host.
-func dnfRepository(distribution java.Distribution) *Repository {
+func dnfRepository(distribution java.Distribution, host *Host) *Repository {
 	switch distribution {
 	case java.DistributionTemurin:
-		repositoryURL := adoptiumRPMRepository()
+		repositoryURL := adoptiumRPMRepository(host)
 		if repositoryURL == "" {
 			return nil
 		}
@@ -149,15 +152,15 @@ func dnfRepository(distribution java.Distribution) *Repository {
 
 // adoptiumRPMRepository returns the Adoptium RPM base URL for this host. The
 // vendor publishes a directory per distribution and major version.
-func adoptiumRPMRepository() string {
-	release := systemRelease()
+func adoptiumRPMRepository(host *Host) string {
+	release := host.systemRelease()
 	switch release["ID"] {
 	case "centos", "rhel", "fedora":
 	default:
 		return ""
 	}
 	major := systemVersionMajor(release["VERSION_ID"])
-	arch := systemRPMArch()
+	arch := systemRPMArch(host.goarch)
 	if major == "" || arch == "" {
 		return ""
 	}

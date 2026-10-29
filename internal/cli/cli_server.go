@@ -6,7 +6,6 @@ import (
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/terminal"
 	"github.com/mclucy/lucy/terminal/style"
@@ -27,20 +26,28 @@ type serverRenameDocument struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
-func NewServerCommand(contracts *JSONContracts) *cobra.Command {
+func NewServerCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	serverListCmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   help.ServerListShort,
 		Args:    cobra.NoArgs,
-		RunE:    actionServerList,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionServerList(cmd, inv, deps, args)
+		},
 	}
 	serverRenameCmd := &cobra.Command{
 		Use:               "rename <server> <name>",
 		Short:             help.ServerRenameShort,
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completeServerRenameArguments,
-		RunE:              actionServerRename,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionServerRename(cmd, inv, deps, args)
+		},
 	}
 	serverCmd := &cobra.Command{
 		Use:   "server",
@@ -66,9 +73,14 @@ func completeServerRenameArguments(
 
 // actionServerList reports the registry as it is. Unavailable targets stay in
 // the listing with their state and problem instead of being pruned or hidden.
-func actionServerList(cmd *cobra.Command, _ []string) error {
-	output := NewQueryOutput(cmd)
-	registry, err := serverregistry.New()
+func actionServerList(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
+	output := NewQueryOutput(cmd, inv)
+	registry, err := deps.ServerRegistry()
 	if err != nil {
 		return err
 	}
@@ -82,13 +94,18 @@ func actionServerList(cmd *cobra.Command, _ []string) error {
 		}
 		return serverListJSON.Write(output, entries)
 	}
-	return writeServerList(output.Human(), entries)
+	return writeServerList(output.Human(), entries, inv.Theme, inv.Stdout.Width)
 }
 
 // writeServerList renders one aligned row per entry. A name column that is
 // empty in the registry stays visible as "-", and a problem wraps below the
 // entry instead of hiding the path.
-func writeServerList(out io.Writer, entries []serverregistry.Entry) error {
+func writeServerList(
+	out io.Writer,
+	entries []serverregistry.Entry,
+	theme style.Theme,
+	width int,
+) error {
 	if len(entries) == 0 {
 		_, err := fmt.Fprintln(out, "No servers registered")
 		return err
@@ -101,20 +118,25 @@ func writeServerList(out io.Writer, entries []serverregistry.Entry) error {
 		}
 		value := entry.State + "  " + entry.Path
 		if entry.Problem != "" {
-			value += "\n" + style.Muted(entry.Problem)
+			value += "\n" + theme.Muted(entry.Problem)
 		}
 		facts = append(facts, terminal.Fact{Key: name, Value: value})
 	}
-	_, err := fmt.Fprintln(out, terminal.RenderFacts(facts, style.TermWidth()))
+	_, err := fmt.Fprintln(out, terminal.RenderFacts(facts, width, theme))
 	return err
 }
 
 // actionServerRename changes the manifest name of one registered server. The
 // new name may already be in use; registration reports that ambiguity as a
 // warning instead of rejecting the rename.
-func actionServerRename(cmd *cobra.Command, args []string) error {
-	output := NewOperationOutput(cmd)
-	registry, err := serverregistry.New()
+func actionServerRename(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	args []string,
+) error {
+	output := NewOperationOutput(cmd, inv)
+	registry, err := deps.ServerRegistry()
 	if err != nil {
 		return err
 	}
@@ -126,11 +148,11 @@ func actionServerRename(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	previous, err := operation.RenameServer(entry.Path, name)
+	previous, err := deps.Operations.RenameServer(entry.Path, name)
 	if err != nil {
 		return err
 	}
-	registerWorkspace(entry.Path, output)
+	registerWorkspace(entry.Path, output, inv, deps)
 
 	result := serverRenameDocument{
 		Previous: previous,

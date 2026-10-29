@@ -18,7 +18,11 @@ func runCreateCommand(t *testing.T, args ...string) error {
 	root.SilenceErrors = true
 	root.SilenceUsage = true
 	root.PersistentFlags().Bool(FlagNoInteractive, false, "Disable prompts")
-	root.AddCommand(NewCreateCommand(NewJSONContracts()))
+	root.AddCommand(NewCreateCommand(
+		NewJSONContracts(),
+		NewInvocation(".", nil),
+		&Dependencies{},
+	))
 	root.SetIn(nonTerminalInput(t))
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)

@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/internal/fileschema"
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/log"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
@@ -65,7 +63,7 @@ func parseFabricInstallProperties(zipReader *zip.Reader) (
 			}
 		}
 		scanErr := scanner.Err()
-		fn.CloseReader(r, log.Warn)
+		_ = r.Close()
 		if scanErr == nil && loaderVersion != versionpkg.Unknown &&
 			gameVersion != versionpkg.Unknown {
 			return loaderVersion, gameVersion, true

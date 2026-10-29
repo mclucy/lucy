@@ -11,23 +11,12 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // Request names the Java runtime to install.
 type Request struct {
 	Major        int
 	Distribution java.Distribution
-}
-
-// Host carries the choices the command boundary makes for the planner.
-type Host struct {
-	// Interactive reports that a terminal can answer password and agreement
-	// prompts.
-	Interactive bool
-	// AllowRepository records the user's consent to add a vendor package
-	// repository to the system package manager.
-	AllowRepository bool
 }
 
 // Method names the mechanism that performs an installation.
@@ -117,12 +106,18 @@ type Plan struct {
 	Distribution java.Distribution
 	Major        int
 	// Repository is added before the steps. A plan with a repository needs
-	// Host.AllowRepository.
+	// Policy.AllowRepository.
 	Repository *Repository
 	Steps      []Step
 	// KeepDefault restores the system default Java after the steps, because
 	// the package manager can move it to the new installation.
 	KeepDefault bool
+	// root is the elevation fact captured while planning, so Commands renders
+	// the same sudo prefixes that execution uses.
+	root bool
+	// managedRoot is the per-user runtime directory captured while planning a
+	// download, so Commands and execution name the same destination.
+	managedRoot string
 	download    *download
 }
 
@@ -149,6 +144,7 @@ type Skipped struct {
 }
 
 // manager is one package manager or Java version manager.
+// Managers are stateless; the Host carries the invocation's facts.
 type manager interface {
 	method() Method
 	// system reports that the manager installs for the whole system rather
@@ -156,10 +152,10 @@ type manager interface {
 	system() bool
 	// ownsJava reports that the manager already installed a Java runtime on
 	// this host.
-	ownsJava() bool
+	ownsJava(ctx context.Context, host *Host) bool
 	// plans returns the ways the manager can install req. It returns nil when
 	// the manager is absent or offers no matching package.
-	plans(ctx context.Context, req Request) ([]Plan, error)
+	plans(ctx context.Context, req Request, host *Host) ([]Plan, error)
 }
 
 func managers() []manager {
@@ -189,19 +185,23 @@ const (
 // Plans lists the usable ways to install req, most native first, and the
 // plans that this run cannot use. A manager that fails to answer is skipped,
 // because another method can still install the request.
-func Plans(ctx context.Context, req Request, host Host) ([]Plan, []Skipped, error) {
+func (h *Host) Plans(
+	ctx context.Context,
+	req Request,
+	policy Policy,
+) ([]Plan, []Skipped, error) {
 	type ranked struct {
 		plan Plan
 		tier int
 	}
 	var candidates []ranked
 	for _, m := range managers() {
-		plans, err := m.plans(ctx, req)
+		plans, err := m.plans(ctx, req, h)
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
 		if err != nil {
-			log.Debug(
+			h.logger.Debug(
 				"java install method unavailable",
 				"method", m.method(),
 				"reason", err,
@@ -212,10 +212,11 @@ func Plans(ctx context.Context, req Request, host Host) ([]Plan, []Skipped, erro
 		switch {
 		case m.system():
 			tier = tierSystem
-		case m.ownsJava():
+		case m.ownsJava(ctx, h):
 			tier = tierOwningUser
 		}
 		for _, plan := range plans {
+			plan.root = h.isRoot()
 			planTier := tier
 			if plan.Repository != nil {
 				planTier = tierRepository
@@ -223,12 +224,12 @@ func Plans(ctx context.Context, req Request, host Host) ([]Plan, []Skipped, erro
 			candidates = append(candidates, ranked{plan: plan, tier: planTier})
 		}
 	}
-	download, err := downloadPlan(ctx, req)
+	download, err := h.downloadPlan(ctx, req)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
-		log.Debug("java download unavailable", "reason", err)
+		h.logger.Debug("java download unavailable", "reason", err)
 	} else if download != nil {
 		candidates = append(candidates, ranked{plan: *download, tier: tierDownload})
 	}
@@ -238,9 +239,12 @@ func Plans(ctx context.Context, req Request, host Host) ([]Plan, []Skipped, erro
 	var usable []Plan
 	var skipped []Skipped
 	for _, candidate := range candidates {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		plan := candidate.plan
 		if plan.Major != req.Major || !req.Distribution.Accepts(plan.Distribution) {
-			log.Debug(
+			h.logger.Debug(
 				"java install plan rejected",
 				"method", plan.Method,
 				"package", plan.Package,
@@ -248,36 +252,54 @@ func Plans(ctx context.Context, req Request, host Host) ([]Plan, []Skipped, erro
 			)
 			continue
 		}
-		if reason := skipReason(plan, host); reason != 0 {
+		reason, err := skipReason(ctx, plan, policy, h)
+		if err != nil {
+			return nil, nil, err
+		}
+		if reason != 0 {
 			skipped = append(skipped, Skipped{Plan: plan, Reason: reason})
 			continue
 		}
 		usable = append(usable, plan)
 	}
-	return usable, skipped, nil
+	return usable, skipped, ctx.Err()
 }
 
-func skipReason(plan Plan, host Host) SkipReason {
-	if plan.Repository != nil && !host.AllowRepository {
-		return SkipNeedsRepositoryConsent
+func skipReason(
+	ctx context.Context,
+	plan Plan,
+	policy Policy,
+	host *Host,
+) (SkipReason, error) {
+	if plan.Repository != nil && !policy.AllowRepository {
+		return SkipNeedsRepositoryConsent, nil
 	}
 	for _, step := range plan.allSteps() {
 		switch step.Elevation {
 		case ElevationRoot:
-			if !rootAvailable(host) {
-				return SkipNeedsRoot
+			available, err := host.rootAvailable(ctx, policy)
+			if err != nil {
+				return 0, err
+			}
+			if !available {
+				return SkipNeedsRoot, nil
 			}
 		case ElevationSelf:
-			if !host.Interactive {
-				return SkipNeedsTerminal
+			if !policy.Interactive {
+				return SkipNeedsTerminal, nil
 			}
 		}
 	}
-	if plan.Repository != nil && (plan.Repository.Key != nil || len(plan.Repository.Files) > 0) &&
-		!rootAvailable(host) {
-		return SkipNeedsRoot
+	if plan.Repository != nil && (plan.Repository.Key != nil || len(plan.Repository.Files) > 0) {
+		available, err := host.rootAvailable(ctx, policy)
+		if err != nil {
+			return 0, err
+		}
+		if !available {
+			return SkipNeedsRoot, nil
+		}
 	}
-	return 0
+	return 0, nil
 }
 
 // allSteps returns the repository steps followed by the install steps.

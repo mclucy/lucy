@@ -4,26 +4,37 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
+	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-type provider struct{}
+// Provider resolves Hangar projects and versions through one configured
+// network cache. logger may be nil, which records nothing.
+type Provider struct {
+	network *cache.Client
+	logger  *log.Logger
+}
 
-var Provider provider
+// New constructs a Hangar provider. network supplies the cached HTTP
+// transport; construction performs no requests.
+func New(network *cache.Client, logger *log.Logger) *Provider {
+	return &Provider{network: network, logger: logger}
+}
 
-func (provider) Provider() catalog.Provider {
+func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderHangar
 }
 
 // Builds lists every published version. Hangar versions declare supported
 // platforms independently, so each platform becomes its own build entry.
-func (p provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
+func (p *Provider) Builds(ctx context.Context, project string) ([]upstream.Build, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	versions, err := listVersions(catalog.Name(project))
+	versions, err := p.listVersions(ctx, catalog.Name(project))
 	if err != nil {
 		return nil, err
 	}
@@ -35,20 +46,21 @@ func (p provider) Builds(ctx context.Context, project string) ([]upstream.Build,
 	return builds, nil
 }
 
-func (p provider) Search(q upstream.Query) (upstream.SearchResponse, error) {
+func (p *Provider) Search(ctx context.Context, q upstream.Query) (upstream.SearchResponse, error) {
 	// Hangar publishes server plugins only; IncludeClient needs no filter.
-	res, err := searchProjects(q.Keyword, q.FilterEcosystem)
+	res, err := p.searchProjects(ctx, q.Keyword, q.FilterEcosystem)
 	if err != nil {
 		return upstream.SearchResponse{}, err
 	}
 	return res.ToSearchResults(p.Provider()), nil
 }
 
-func (p provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
-	version, err := getVersion(id)
+	version, err := p.getVersion(ctx, id)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -73,8 +85,8 @@ func (p provider) Fetch(
 	return upstream.ResolvedPackage{}, ErrNoDownload
 }
 
-func (p provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
-	project, err := getProject(ref.Name)
+func (p *Provider) Info(ctx context.Context, ref catalog.Ref) (catalog.Metadata, error) {
+	project, err := p.getProject(ctx, ref.Name)
 	if err != nil {
 		return catalog.Metadata{}, err
 	}
@@ -82,11 +94,12 @@ func (p provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
 	return info, nil
 }
 
-func (p provider) Dependencies(
+func (p *Provider) Dependencies(
+	ctx context.Context,
 	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (*upstream.DependencySet, error) {
-	version, err := getVersion(id)
+	version, err := p.getVersion(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("hangar: dependencies fetch failed: %w", err)
 	}
@@ -98,7 +111,8 @@ func (p provider) Dependencies(
 	), nil
 }
 
-func (p provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	_ upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (parsed catalog.VersionedRef, err error) {
@@ -110,7 +124,7 @@ func (p provider) ResolveVersionSelector(
 		return id, nil
 	}
 
-	version, err := resolveVersion(id)
+	version, err := p.resolveVersion(ctx, id)
 	if err != nil {
 		return id, err
 	}

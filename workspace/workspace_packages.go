@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
 )
 
 // discoverPackages inventories the packages under searchPaths and
@@ -21,18 +21,23 @@ import (
 func discoverPackages(
 	searchPaths []string,
 	mcdrPluginDirs []string,
-) ([]DiscoveredPackage, []string) {
+) ([]DiscoveredPackage, []string, []error) {
 	idx := NewPackageIndex()
 	var (
 		mu           sync.Mutex
 		unidentified []string
+		warnings     []error
 	)
+	addWarning := func(err error) {
+		mu.Lock()
+		warnings = append(warnings, err)
+		mu.Unlock()
+	}
 
 	for _, searchPath := range searchPaths {
 		jarFiles, err := findJar(searchPath)
 		if err != nil {
-			log.Warn(err)
-			log.Info("cannot read the mod directory")
+			addWarning(fmt.Errorf("cannot read the mod directory: %w", err))
 			continue
 		}
 
@@ -63,8 +68,7 @@ func discoverPackages(
 	for _, dir := range mcdrPluginDirs {
 		pluginFiles, err := findFileWithExt([]string{dir}, ".pyz", ".mcdr")
 		if err != nil {
-			log.Warn(err)
-			log.Info("cannot read the MCDR plugin directory")
+			addWarning(fmt.Errorf("cannot read the MCDR plugin directory: %w", err))
 			continue
 		}
 		for _, pluginFile := range pluginFiles {
@@ -76,7 +80,7 @@ func discoverPackages(
 		}
 	}
 
-	return idx.Packages(), sortUniquePaths(unidentified)
+	return idx.Packages(), sortUniquePaths(unidentified), warnings
 }
 
 // sortUniquePaths returns paths in ascending order without duplicates. A

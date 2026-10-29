@@ -77,7 +77,7 @@ func TestPromptGateFlags(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var allowed []bool
 			root := promptProbeRoot(t, nonTerminalInput(t), func(cmd *cobra.Command) {
-				allowed = append(allowed, NewPromptGate(cmd).flagsAllow())
+				allowed = append(allowed, NewPromptGate(cmd, newTestInvocation()).flagsAllow())
 			})
 			root.SetArgs(append([]string{"probe"}, test.args...))
 
@@ -100,7 +100,9 @@ func TestPromptGateFlags(t *testing.T) {
 func TestPromptGateWithoutTerminal(t *testing.T) {
 	var allowed, available bool
 	root := promptProbeRoot(t, nonTerminalInput(t), func(cmd *cobra.Command) {
-		gate := NewPromptGate(cmd)
+		inv := newTestInvocation()
+		inv.Interactive = true
+		gate := NewPromptGate(cmd, inv)
 		allowed = gate.flagsAllow()
 		available = gate.Available()
 	})

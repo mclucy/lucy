@@ -2,12 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/operation"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +14,11 @@ const (
 	flagRemoveOfflineName = "offline"
 )
 
-func NewRemoveCommand(contracts *JSONContracts) *cobra.Command {
+func NewRemoveCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "remove",
 		Short:   help.RemoveShort,
@@ -29,7 +31,9 @@ func NewRemoveCommand(contracts *JSONContracts) *cobra.Command {
 			}
 			return nil
 		},
-		RunE: actionRemove,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionRemove(cmd, inv, deps, args)
+		},
 	}
 	installJSON.Bind(contracts, cmd)
 	cmd.Flags().Bool(
@@ -46,12 +50,12 @@ func NewRemoveCommand(contracts *JSONContracts) *cobra.Command {
 	return cmd
 }
 
-func actionRemove(cmd *cobra.Command, args []string) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("could not determine working directory: %w", err)
-	}
-
+func actionRemove(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	args []string,
+) error {
 	locked, _ := cmd.Flags().GetBool(flagRemoveLockedName)
 	offline, _ := cmd.Flags().GetBool(flagRemoveOfflineName)
 
@@ -65,12 +69,12 @@ func actionRemove(cmd *cobra.Command, args []string) error {
 		PublishManifest: false,
 	}
 
-	output := newInstallOutput(cmd)
+	output := newInstallOutput(cmd, inv)
 	defer output.Close()
 	opts.Trace = output.Trace()
 	ctx, stop := CommandContext(cmd)
 	defer stop()
-	result, err := operation.Remove(ctx, workDir, args, ecosystem, opts)
+	result, err := deps.Operations.Remove(ctx, inv.Directory, args, ecosystem, opts)
 	if err != nil {
 		return output.Failure(err)
 	}

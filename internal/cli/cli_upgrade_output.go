@@ -6,7 +6,6 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/terminal/style"
 )
 
 type upgradeFrontierDocument struct {
@@ -58,32 +57,32 @@ func (o *installOutput) RenderUpgradePlan(
 		return
 	}
 	if !result.Changed() {
-		fmt.Fprintln(o.Human(), style.Success("✓")+" Already up to date")
+		fmt.Fprintln(o.Human(), o.inv.Theme.Success("✓")+" Already up to date")
 		return
 	}
 	fmt.Fprintln(o.Human(), "Plan:")
-	for _, line := range packageChangeLines(result.Packages) {
+	for _, line := range packageChangeLines(result.Packages, o.inv.Theme) {
 		fmt.Fprintln(o.Human(), line)
 	}
 	for _, change := range result.ManifestChanges {
 		fmt.Fprintf(
 			o.Human(),
 			"  %s manifest %s  %s → %s\n",
-			style.Warning("~"),
+			o.inv.Theme.Warning("~"),
 			change.Reference,
 			change.PreviousSelector,
 			change.Selector,
 		)
 	}
-	fmt.Fprintln(o.Human(), style.Muted(fmt.Sprintf(
+	fmt.Fprintln(o.Human(), o.inv.Theme.Muted(fmt.Sprintf(
 		"%d roots upgraded, %d version bumps",
 		option.Metrics.UpgradedRoots,
 		option.Metrics.VersionBumps,
 	)))
-	fmt.Fprintln(o.Human(), style.Muted("Policy: "+policy))
-	fmt.Fprintln(o.Human(), style.Muted("Plan: "+option.Hash))
+	fmt.Fprintln(o.Human(), o.inv.Theme.Muted("Policy: "+policy))
+	fmt.Fprintln(o.Human(), o.inv.Theme.Muted("Plan: "+option.Hash))
 	if dryRun {
-		fmt.Fprintln(o.Human(), style.Muted("No files were changed."))
+		fmt.Fprintln(o.Human(), o.inv.Theme.Muted("No files were changed."))
 	}
 }
 
@@ -104,18 +103,18 @@ func (o *installOutput) RenderUpgradeApplied(
 		fmt.Fprintf(
 			o.Human(),
 			"  %s mcdr python inputs  %d → %d\n",
-			style.Warning("~"),
+			o.inv.Theme.Warning("~"),
 			result.MCDR.PreviousInputs,
 			result.MCDR.Inputs,
 		)
 	}
-	fmt.Fprintln(o.Human(), style.Success("✓")+" Upgrade applied")
+	fmt.Fprintln(o.Human(), o.inv.Theme.Success("✓")+" Upgrade applied")
 	if changed := result.Files.Created + result.Files.Replaced + result.Files.Removed; changed > 0 {
-		fmt.Fprintln(o.Human(), style.Muted("  "+fileCountLabel(changed)+" changed"))
+		fmt.Fprintln(o.Human(), o.inv.Theme.Muted("  "+fileCountLabel(changed)+" changed"))
 	}
-	fmt.Fprintln(o.Human(), style.Muted("  Policy: "+policy))
-	fmt.Fprintln(o.Human(), style.Muted("  Plan: "+hash))
-	if trailer := publicationLine(result); trailer != "" {
+	fmt.Fprintln(o.Human(), o.inv.Theme.Muted("  Policy: "+policy))
+	fmt.Fprintln(o.Human(), o.inv.Theme.Muted("  Plan: "+hash))
+	if trailer := publicationLine(result, o.inv.Theme); trailer != "" {
 		fmt.Fprintln(o.Human(), trailer)
 	}
 	o.Close()

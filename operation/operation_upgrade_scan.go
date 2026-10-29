@@ -11,11 +11,10 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-func upgradeVersions(
+func (s *Service) upgradeVersions(
 	ctx context.Context,
 	root upgradeRoot,
 	old *document.Lock,
@@ -25,7 +24,7 @@ func upgradeVersions(
 	if !ok {
 		return nil, 0, 0, fmt.Errorf("provider %s has no package catalogue", root.Provider)
 	}
-	list, err := routing.Candidates(
+	list, err := s.source.Candidates(
 		ctx,
 		registry,
 		root.Project,

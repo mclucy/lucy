@@ -6,7 +6,6 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fileschema"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/workspace/discovery"
 	"gopkg.in/ini.v1"
 )
@@ -66,11 +65,6 @@ func (ws *Workspace) SaveDir() string {
 	}
 	properties := parseServerProperties(ws.ServerDir)
 	if properties == nil {
-		// Write one note when a known runtime has no properties file. Do not
-		// write notes for empty or ambiguous directories.
-		if ws.Runtime() != nil {
-			log.Info("this server is missing a server.properties")
-		}
 		return ""
 	}
 	return filepath.Join(ws.ServerDir, properties["level-name"])

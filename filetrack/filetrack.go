@@ -24,8 +24,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Service executes file tracking with an explicit HTTP client and diagnostic
+// logger. The client is used only for declared recovery sources; tracking,
+// storage, and transaction safety stay local.
+type Service struct {
+	client *http.Client
+	logger *log.Logger
+}
+
+// NewService constructs a file tracking service. client performs recovery
+// downloads; logger records reclamation and recovery diagnostics.
+func NewService(client *http.Client, logger *log.Logger) *Service {
+	return &Service{client: client, logger: logger}
+}
+
 // Run prepares every selected file before making any accepted-state change.
-func Run(ctx context.Context, root string, request Request) (result Result, resultErr error) {
+func (s *Service) Run(ctx context.Context, root string, request Request) (result Result, resultErr error) {
 	if err := validateRequest(request); err != nil {
 		return result, err
 	}
@@ -34,12 +48,12 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	if err != nil {
 		return result, err
 	}
-	lock, err := workspacewrite.Lock(root)
+	lock, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, lock.Close()) }()
-	if err := workspacewrite.RecoverInstall(root); err != nil {
+	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
 		return result, err
 	}
 	if err := RecoverPending(root); err != nil {
@@ -97,11 +111,11 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 	defer func() {
 		reclaimed, sweepErr := reclaimObjects(root, files, store, own)
 		if sweepErr != nil {
-			log.Warn(sweepErr)
+			s.logger.Warn(sweepErr)
 		}
 		result.Reclaimed = reclaimed
 		if reclaimed.Objects > 0 {
-			log.Info(
+			s.logger.Info(
 				"reclaimed unreferenced objects",
 				"objects", reclaimed.Objects,
 				"bytes", reclaimed.Bytes,
@@ -159,7 +173,7 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 			copy := nextFiles[index]
 			previous = &copy
 		}
-		change, after, err := prepare(ctx, store, events, event.Sequence, request, path, previous, before)
+		change, after, err := prepare(ctx, s.client, store, events, event.Sequence, request, path, previous, before)
 		if err != nil {
 			return result, err
 		}
@@ -213,6 +227,9 @@ func Run(ctx context.Context, root string, request Request) (result Result, resu
 		txn.Mutations = append(txn.Mutations, mutation{Path: documentpkg.LockFilename, Before: beforeLock, After: afterLock})
 	}
 	txn.Event = event
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	if err := commit(root, files, store, txn); err != nil {
 		return result, err
 	}
@@ -284,7 +301,7 @@ func selectFiles(files []documentpkg.TrackedFile, request Request) ([]string, []
 	return selected, skipped, nil
 }
 
-func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uint64, request Request, path string, previous *documentpkg.TrackedFile, before image) (Change, image, error) {
+func prepare(ctx context.Context, client *http.Client, store *cas.Store, events []Event, sequence uint64, request Request, path string, previous *documentpkg.TrackedFile, before image) (Change, image, error) {
 	change := Change{Path: path, Before: previous}
 	after := before
 	file := documentpkg.TrackedFile{Path: path}
@@ -309,7 +326,7 @@ func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uin
 	case Update:
 		if request.FromSource {
 			var err error
-			after, err = sourceImage(ctx, store, file, true, false)
+			after, err = sourceImage(ctx, client, store, file, true, false)
 			if err != nil {
 				return change, after, err
 			}
@@ -325,7 +342,7 @@ func prepare(ctx context.Context, store *cas.Store, events []Event, sequence uin
 			return change, after, fmt.Errorf("file %s has no accepted hash to recover", path)
 		}
 		var err error
-		after, err = sourceImage(ctx, store, file, false, false)
+		after, err = sourceImage(ctx, client, store, file, false, false)
 		if err != nil {
 			return change, after, err
 		}
@@ -391,9 +408,6 @@ const recoveryTimeout = 5 * time.Minute
 // files, so a longer stream is a misconfigured or hostile source.
 const maxRecoveryBytes = 64 << 20
 
-// recoveryClient carries the timeout for declared recovery sources.
-var recoveryClient = &http.Client{Timeout: recoveryTimeout}
-
 // cappedReader fails a stream that exceeds its byte budget. Truncating instead
 // would store short content, which commits as an object when no accepted digest
 // pins the contents.
@@ -411,7 +425,7 @@ func (c *cappedReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func sourceImage(ctx context.Context, store *cas.Store, file documentpkg.TrackedFile, update, offline bool) (result image, resultErr error) {
+func sourceImage(ctx context.Context, client *http.Client, store *cas.Store, file documentpkg.TrackedFile, update, offline bool) (result image, resultErr error) {
 	if !update {
 		if err := verifyObject(store, file.Hash); err == nil {
 			return image{Exists: true, Hash: file.Hash, Mode: 0o600}, nil
@@ -420,11 +434,16 @@ func sourceImage(ctx context.Context, store *cas.Store, file documentpkg.Tracked
 	if offline || file.RecoverURL == "" {
 		return result, fmt.Errorf("no verified local backup or recovery source for %s", file.Path)
 	}
+	if client == nil {
+		return result, fmt.Errorf("recovery source for %s requires an HTTP client", file.Path)
+	}
+	ctx, cancel := context.WithTimeout(ctx, recoveryTimeout)
+	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, file.RecoverURL, nil)
 	if err != nil {
 		return result, err
 	}
-	response, err := recoveryClient.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return result, fmt.Errorf("fetch recovery source for %s: %w", file.Path, err)
 	}

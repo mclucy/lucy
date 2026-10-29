@@ -14,7 +14,8 @@ const plainHeartbeat = 10 * time.Second
 // plain writes append-only lines. It suits pipes, logs, and CI, where a
 // redrawn area would only add noise.
 type plain struct {
-	out io.Writer
+	out   io.Writer
+	theme style.Theme
 
 	mu         sync.Mutex
 	phase      string
@@ -27,8 +28,8 @@ type plain struct {
 	done       chan struct{}
 }
 
-func newPlain(out io.Writer) *plain {
-	p := &plain{out: out, stop: make(chan struct{}), done: make(chan struct{})}
+func newPlain(out io.Writer, theme style.Theme) *plain {
+	p := &plain{out: out, theme: theme, stop: make(chan struct{}), done: make(chan struct{})}
 	go p.heartbeat()
 	return p
 }
@@ -63,7 +64,7 @@ func (p *plain) elapsedSuffix() string {
 	if p.phaseStart.IsZero() {
 		return ""
 	}
-	return style.Muted(" (" + FormatElapsed(time.Since(p.phaseStart)) + ")")
+	return p.theme.Muted(" (" + FormatElapsed(time.Since(p.phaseStart)) + ")")
 }
 
 func (p *plain) PhaseStarted(text string) {
@@ -82,7 +83,7 @@ func (p *plain) PhaseDone(text string, elapsed time.Duration) {
 	p.status = ""
 	p.lastStatus = ""
 	p.mu.Unlock()
-	p.println(phaseLine(text, elapsed))
+	p.println(phaseLine(text, elapsed, p.theme))
 }
 
 func (p *plain) Status(text string) {
@@ -134,7 +135,7 @@ func (w plainLogWriter) Write(data []byte) (int, error) {
 		return io.Discard.Write(data)
 	}
 	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
-		_, _ = io.WriteString(w.renderer.out, style.Muted("  │ "+line)+"\n")
+		_, _ = io.WriteString(w.renderer.out, w.renderer.theme.Muted("  │ "+line)+"\n")
 	}
 	return len(data), nil
 }

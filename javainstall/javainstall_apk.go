@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // apk installs Java from the configured APK sources.
@@ -16,16 +15,16 @@ func (apk) method() Method { return MethodApk }
 
 func (apk) system() bool { return true }
 
-func (apk) ownsJava() bool { return false }
+func (apk) ownsJava(context.Context, *Host) bool { return false }
 
-func (apk) plans(ctx context.Context, req Request) ([]Plan, error) {
+func (apk) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
 	if req.Major <= 0 ||
 		req.Distribution != java.DistributionAny ||
-		!systemToolAvailable("apk") {
+		!host.systemToolAvailable("apk") {
 		return nil, nil
 	}
 	pkg := fmt.Sprintf("openjdk%d-jre-headless", req.Major)
-	if !apkPackageAvailable(ctx, pkg) {
+	if !apkPackageAvailable(ctx, host, pkg) {
 		return nil, nil
 	}
 	return []Plan{
@@ -51,10 +50,14 @@ func (apk) plans(ctx context.Context, req Request) ([]Plan, error) {
 
 // apkPackageAvailable reports whether the configured sources offer pkg. The
 // probe never changes the package index.
-func apkPackageAvailable(ctx context.Context, pkg string) bool {
-	output, err := systemProbe(ctx, "apk", "search", "--exact", pkg)
+func apkPackageAvailable(
+	ctx context.Context,
+	host *Host,
+	pkg string,
+) bool {
+	output, err := host.systemProbe(ctx, "apk", "search", "--exact", pkg)
 	if err != nil {
-		log.Debug("apk package probe failed", "package", pkg, "reason", err)
+		host.logger.Debug("apk package probe failed", "package", pkg, "reason", err)
 		return false
 	}
 	for line := range strings.Lines(string(output)) {

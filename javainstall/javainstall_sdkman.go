@@ -5,15 +5,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/internal/shell"
 	"github.com/mclucy/lucy/java"
-	"github.com/mclucy/lucy/log"
 )
 
 // sdkmanVendors maps the vendor suffix of an SDKMAN candidate identifier to the
@@ -39,8 +36,8 @@ type sdkman struct{}
 func (sdkman) method() Method { return MethodSDKMAN }
 func (sdkman) system() bool   { return false }
 
-func (sdkman) ownsJava() bool {
-	home, ok := sdkmanHome()
+func (sdkman) ownsJava(_ context.Context, host *Host) bool {
+	home, ok := sdkmanHome(host)
 	if !ok {
 		return false
 	}
@@ -56,11 +53,11 @@ func (sdkman) ownsJava() bool {
 	return false
 }
 
-func (sdkman) plans(ctx context.Context, req Request) ([]Plan, error) {
-	if runtime.GOOS == "windows" {
+func (sdkman) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
+	if host.goos == "windows" {
 		return nil, nil
 	}
-	home, ok := sdkmanHome()
+	home, ok := sdkmanHome(host)
 	if !ok {
 		return nil, nil
 	}
@@ -68,13 +65,13 @@ func (sdkman) plans(ctx context.Context, req Request) ([]Plan, error) {
 	if _, err := os.Stat(initScript); err != nil {
 		return nil, nil
 	}
-	platform, ok := sdkmanPlatform()
+	platform, ok := sdkmanPlatform(host.goos, host.goarch)
 	if !ok {
 		return nil, nil
 	}
-	versions, err := sdkmanVersions(platform)
+	versions, err := sdkmanVersions(ctx, host, platform)
 	if err != nil {
-		log.Debug(
+		host.logger.Debug(
 			"sdkman java versions unavailable",
 			"platform", platform,
 			"reason", err,
@@ -109,11 +106,11 @@ func (sdkman) plans(ctx context.Context, req Request) ([]Plan, error) {
 
 // sdkmanHome returns the SDKMAN directory. It is unavailable when neither
 // SDKMAN_DIR nor the home directory names one.
-func sdkmanHome() (string, bool) {
-	if dir := os.Getenv("SDKMAN_DIR"); dir != "" {
+func sdkmanHome(host *Host) (string, bool) {
+	if dir := host.getenv("SDKMAN_DIR"); dir != "" {
 		return dir, true
 	}
-	home, err := os.UserHomeDir()
+	home, err := host.userHomeDir()
 	if err != nil {
 		return "", false
 	}
@@ -121,8 +118,8 @@ func sdkmanHome() (string, bool) {
 }
 
 // sdkmanPlatform returns the SDKMAN platform segment for this host.
-func sdkmanPlatform() (string, bool) {
-	switch runtime.GOOS + "/" + runtime.GOARCH {
+func sdkmanPlatform(goos, goarch string) (string, bool) {
+	switch goos + "/" + goarch {
 	case "darwin/arm64":
 		return "darwinarm64", true
 	case "darwin/amd64":
@@ -136,13 +133,15 @@ func sdkmanPlatform() (string, bool) {
 	}
 }
 
-func sdkmanVersions(platform string) ([]string, error) {
-	data, err := cache.CachedGetBytes(
+func sdkmanVersions(
+	ctx context.Context,
+	host *Host,
+	platform string,
+) ([]string, error) {
+	data, err := host.fetchMetadata(
+		ctx,
 		"https://api.sdkman.io/2/candidates/java/"+platform+"/versions/all",
-		cache.BytesRequestOptions{
-			Kind: cache.KindMetadata,
-			TTL:  time.Hour,
-		},
+		time.Hour,
 	)
 	if err != nil {
 		return nil, err

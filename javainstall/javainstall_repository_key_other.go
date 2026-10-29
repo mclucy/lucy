@@ -13,7 +13,9 @@ import (
 func addRepositoryKey(
 	_ context.Context,
 	_ *RepositoryKey,
-	_ Host,
+	_ Policy,
+	_ *Host,
+	_ io.Reader,
 	_ io.Writer,
 ) error {
 	return errors.New("repository keys are installed on Linux only")

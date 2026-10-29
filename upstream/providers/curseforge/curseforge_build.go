@@ -10,7 +10,7 @@ import (
 // Builds lists every file published by a CurseForge project. project accepts
 // either a numeric mod ID or a slug. The list is unfiltered: no game version,
 // loader, channel, availability flag, or download URL state is excluded.
-func (provider) Builds(
+func (p *Provider) Builds(
 	ctx context.Context,
 	project string,
 ) ([]upstream.Build, error) {
@@ -18,12 +18,12 @@ func (provider) Builds(
 		return nil, err
 	}
 
-	modID, err := resolveProjectID(project)
+	modID, err := p.resolveProjectID(ctx, project)
 	if err != nil {
 		return nil, err
 	}
 
-	files, err := listAllFiles(modID, "", 0)
+	files, err := p.listAllFiles(ctx, modID, "", 0)
 	if err != nil {
 		return nil, err
 	}

@@ -3,14 +3,12 @@ package workspace
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/mclucy/lucy/log"
 	versionpkg "github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
@@ -46,21 +44,14 @@ func detectMCDRWrapper(dir string, wrappers *WrapperInfo) []error {
 	configFile, err := os.Open(configPath)
 	if err != nil {
 		warnErr := fmt.Errorf("cannot open %s: %w", configPath, err)
-		log.Warn(warnErr)
 		warnings = append(warnings, warnErr)
 		return warnings
 	}
-	defer func(configFile io.ReadCloser) {
-		err := configFile.Close()
-		if err != nil {
-			log.Warn(err)
-		}
-	}(configFile)
+	defer configFile.Close()
 
 	config := &MCDRConfig{}
 	if err := yaml.NewDecoder(configFile).Decode(config); err != nil {
 		warnErr := fmt.Errorf("cannot decode %s: %w", configPath, err)
-		log.Warn(warnErr)
 		warnings = append(warnings, warnErr)
 		return warnings
 	}
@@ -81,7 +72,6 @@ func detectMCDRWrapper(dir string, wrappers *WrapperInfo) []error {
 			version = versionpkg.Version(fields[1])
 		} else {
 			warnErr := fmt.Errorf("cannot parse mcdr version output")
-			log.Warn(warnErr)
 			warnings = append(warnings, warnErr)
 		}
 	}

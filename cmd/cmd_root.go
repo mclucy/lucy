@@ -6,23 +6,31 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"net/http"
+	"path/filepath"
 	"runtime/debug"
+	"strings"
 
 	"charm.land/fang/v2"
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/config"
-	"github.com/mclucy/lucy/github"
+	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/agent"
+	"github.com/mclucy/lucy/internal/cipher"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/compile"
 	docscli "github.com/mclucy/lucy/internal/cli/docs"
 	"github.com/mclucy/lucy/internal/cli/file"
 	"github.com/mclucy/lucy/internal/cli/info"
 	"github.com/mclucy/lucy/internal/cli/search"
+	"github.com/mclucy/lucy/javainstall"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/terminal/style"
-	"github.com/mclucy/lucy/upstream/providers/curseforge"
+	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
 )
 
@@ -37,6 +45,16 @@ const agentInstructions = "Instructions for agents:\n" +
 	"`--no-interactive` will be on by default for you. You can use tools like `jq` to process\n" +
 	"command outputs. Use `lucy schema` to list JSON result contracts, `lucy schema COMMAND` to\n" +
 	"read a result schema, and `lucy schema --error` to read the shared failure schema."
+
+// RunnerOptions supplies the invocation directory, streams, and network transport.
+// Directory must be absolute. A nil HTTPClient creates a client owned by the run.
+type RunnerOptions struct {
+	Directory  string
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+	HTTPClient *http.Client
+}
 
 // Runner owns one invocation: its command tree, JSON contracts, streams, and
 // output state. Construct a runner per run; nothing is shared between runs.
@@ -54,20 +72,36 @@ type Runner struct {
 	resultWriter      io.Writer
 	flagParsingFailed bool
 	agentHelpInjected bool
-	restoreDirectory  func() error
+	invocation        *cli.Invocation
+	dependencies      *cli.Dependencies
+	httpClient        *http.Client
+	ownsHTTPClient    bool
+	directory         string
 }
 
 // NewRunner prepares an isolated invocation with a fresh command tree, fresh
 // JSON contracts, and the given streams.
-func NewRunner(args []string, stdin io.Reader, stdout, stderr io.Writer) *Runner {
+func NewRunner(args []string, options RunnerOptions) *Runner {
 	r := &Runner{
-		contracts: cli.NewJSONContracts(),
-		args:      args,
-		stdin:     stdin,
-		stdout:    stdout,
-		stderr:    stderr,
+		contracts:    cli.NewJSONContracts(),
+		args:         args,
+		stdin:        options.Stdin,
+		stdout:       options.Stdout,
+		stderr:       options.Stderr,
+		invocation:   cli.NewInvocation(options.Directory, nil),
+		dependencies: &cli.Dependencies{},
+		httpClient:   options.HTTPClient,
+		directory:    options.Directory,
 	}
-	r.root = NewRootCommand(r.contracts)
+	if r.httpClient == nil {
+		transport, ok := http.DefaultTransport.(*http.Transport)
+		if !ok {
+			transport = &http.Transport{Proxy: http.ProxyFromEnvironment}
+		}
+		r.httpClient = &http.Client{Transport: transport.Clone()}
+		r.ownsHTTPClient = true
+	}
+	r.root = NewRootCommand(r.contracts, r.invocation, r.dependencies)
 	r.root.SetArgs(r.args)
 	r.root.SetIn(r.stdin)
 	r.root.SetOut(r.stdout)
@@ -79,7 +113,7 @@ func NewRunner(args []string, stdin io.Reader, stdout, stderr io.Writer) *Runner
 // NewRootCommand builds a fresh root with its persistent flags and
 // subcommands bound to contracts. Agent defaults are applied per run, not
 // here.
-func NewRootCommand(contracts *cli.JSONContracts) *cobra.Command {
+func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, dependencies *cli.Dependencies) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "lucy",
 		Short: "The Minecraft server package manager",
@@ -129,29 +163,29 @@ func NewRootCommand(contracts *cli.JSONContracts) *cobra.Command {
 	docs := docscli.NewCommand()
 	contracts.Ignore(docs)
 	root.AddCommand(
-		cli.NewAddCommand(contracts),
-		cli.NewBisectCommand(contracts),
-		cli.NewCacheCommand(contracts),
-		cli.NewConfigCommand(contracts),
-		cli.NewCreateCommand(contracts),
-		cli.NewDeinitCommand(contracts),
+		cli.NewAddCommand(contracts, invocation, dependencies),
+		cli.NewBisectCommand(contracts, invocation, dependencies),
+		cli.NewCacheCommand(contracts, invocation, dependencies),
+		cli.NewConfigCommand(contracts, invocation, dependencies),
+		cli.NewCreateCommand(contracts, invocation, dependencies),
+		cli.NewDeinitCommand(contracts, invocation, dependencies),
 		docs,
 		cli.NewDoctorCommand(),
-		file.NewCommand(contracts),
-		cli.NewExportCommand(),
-		cli.NewInitCommand(contracts),
-		cli.NewInstallCommand(contracts),
-		cli.NewJavaCommand(contracts),
-		cli.NewLeavesCommand(contracts),
-		cli.NewRemoveCommand(contracts),
-		cli.NewServerCommand(contracts),
-		cli.NewTreeCommand(contracts),
-		cli.NewUpgradeCommand(contracts),
-		compile.NewCommand(),
-		info.NewCommand(contracts),
-		cli.NewStatusCommand(contracts),
-		search.NewCommand(contracts),
-		cli.NewSchemaCommand(contracts),
+		file.NewCommand(contracts, invocation, dependencies),
+		cli.NewExportCommand(invocation),
+		cli.NewInitCommand(contracts, invocation, dependencies),
+		cli.NewInstallCommand(contracts, invocation, dependencies),
+		cli.NewJavaCommand(contracts, invocation, dependencies),
+		cli.NewLeavesCommand(contracts, invocation, dependencies),
+		cli.NewRemoveCommand(contracts, invocation, dependencies),
+		cli.NewServerCommand(contracts, invocation, dependencies),
+		cli.NewTreeCommand(contracts, invocation, dependencies),
+		cli.NewUpgradeCommand(contracts, invocation, dependencies),
+		compile.NewCommand(invocation),
+		info.NewCommand(contracts, invocation, dependencies),
+		cli.NewStatusCommand(contracts, invocation, dependencies),
+		search.NewCommand(contracts, invocation, dependencies),
+		cli.NewSchemaCommand(contracts, invocation),
 	)
 	return root
 }
@@ -160,54 +194,21 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 	r.executing = cmd
 	mode := r.effectiveRendering(cmd)
 	r.selectedJSON = mode
-	if mode == cli.JSONNone {
-		report.SetOutput(cmd.ErrOrStderr())
-	} else {
-		// Machine mode owns the streams: no human notice may join the
-		// result or error document.
-		report.SetOutput(io.Discard)
+	r.configurePresentation(cmd)
+	if !filepath.IsAbs(r.directory) {
+		return fmt.Errorf("invocation directory must be absolute")
 	}
 	if err := r.configureLogging(cmd); err != nil {
 		return err
 	}
 	r.loggingReady = true
-	if noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle); noStyle {
-		style.TurnOffStyles()
-		report.TurnOffColors()
-	}
-	if noColor, _ := cmd.Flags().GetBool(cli.FlagNoColor); noColor {
-		style.TurnOffColors()
-		report.TurnOffColors()
-	}
-	if noInteractive, _ := cmd.Flags().GetBool(cli.FlagNoInteractive); noInteractive {
-		style.TurnOffInteractivity()
-	}
-	if mode != cli.JSONNone {
-		// Machine mode has no interactive surface: prompts fail and
-		// progress renderers stay off.
-		style.TurnOffInteractivity()
-	}
-	restore, err := cli.SelectServer(cmd)
-	if err != nil {
+	if err := r.configureServices(cmd); err != nil {
 		return err
 	}
-	r.restoreDirectory = restore
-	// Provider settings belong to the workspace the command runs in, so they
-	// follow server selection.
-	if err := configureProviders(); err != nil {
-		if !canRepairSettings(cmd) {
-			return fmt.Errorf("%w\nrun `lucy config` to inspect or repair machine settings", err)
-		}
-		log.Warn(err)
-	}
 	if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
-		directory, err := os.Getwd()
-		if err != nil {
-			log.Debug("action working directory unavailable", "error", err)
-		}
-		log.Info("action invoked", "action", cmd.CommandPath(), "directory", directory)
+		r.invocation.Logger.Info("action invoked", "action", cmd.CommandPath(), "directory", r.invocation.Directory)
 		if mode == cli.JSONNone && !r.contracts.Ignores(cmd) {
-			report.Warn(fmt.Errorf(
+			report.New(cmd.ErrOrStderr(), r.invocation.Theme).Warn(fmt.Errorf(
 				"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
 			))
 		}
@@ -215,32 +216,71 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// configureProviders applies machine settings to packages that cannot read the
-// workspace themselves. It resets the package state first, so an unreadable
-// configuration leaves the embedded defaults active instead of the settings of
-// a previous run in this process.
-func configureProviders() error {
-	github.SetReleaseProxy("")
-	curseforge.SetUserAPIKey("")
-	root, err := os.Getwd()
-	if err != nil {
-		log.Debug("provider settings unavailable", "error", err)
-		return nil
+func (r *Runner) configurePresentation(cmd *cobra.Command) {
+	noStyle, _ := cmd.Flags().GetBool(cli.FlagNoStyle)
+	noColor, _ := cmd.Flags().GetBool(cli.FlagNoColor)
+	noInteractive, _ := cmd.Flags().GetBool(cli.FlagNoInteractive)
+	r.invocation.Theme = style.New(!noStyle && !noColor)
+	r.invocation.Interactive = r.effectiveRendering(cmd) == cli.JSONNone && !noStyle && !noInteractive
+	if r.effectiveRendering(cmd) == cli.JSONNone {
+		var input io.Reader
+		if r.invocation.Interactive {
+			input = r.stdin
+		}
+		r.invocation.Stdout, r.invocation.Stderr = style.DetectTerminals(input, r.stdout, r.stderr)
 	}
-	settings, err := config.New(root)
+}
+
+func (r *Runner) configureServices(cmd *cobra.Command) error {
+	registry, registryErr := serverregistry.New()
+	r.dependencies.Registry = registry
+	r.dependencies.RegistryError = registryErr
+	if cmd.Name() != "__complete" && cmd.Name() != "__completeNoDesc" &&
+		cmd.Root().PersistentFlags().Changed(cli.FlagServer) && registryErr != nil {
+		return registryErr
+	}
+	if err := cli.ResolveServer(cmd, registry, r.invocation); err != nil {
+		return err
+	}
+	settings, err := config.New(r.invocation.Directory, r.invocation.Logger)
 	if err != nil {
 		return err
 	}
 	proxy, proxyErr := settings.GitHubProxy()
 	key, keyErr := settings.CurseForgeAPIKey()
-	github.SetReleaseProxy(proxy)
-	curseforge.SetUserAPIKey(key)
-	log.Debug(
+	if err := errors.Join(proxyErr, keyErr); err != nil {
+		if !canRepairSettings(cmd) {
+			return fmt.Errorf("%w\nrun `lucy config` to inspect or repair machine settings", err)
+		}
+		r.invocation.Logger.Warn(err)
+	}
+	key = strings.TrimSpace(key)
+	configuredKey := key != ""
+	if key == "" {
+		embedded, err := cipher.Decode()
+		if err != nil {
+			r.invocation.Logger.Debug("embedded CurseForge key unavailable", "error", err)
+		} else {
+			key = strings.TrimSpace(embedded)
+		}
+	}
+	r.invocation.Logger.Debug(
 		"machine settings applied",
 		"github_proxy_configured", proxy != "",
-		"curseforge_key_configured", key != "",
+		"curseforge_key_configured", configuredKey,
 	)
-	return errors.Join(proxyErr, keyErr)
+	network := cache.New(cache.DefaultRoot(), cache.DefaultCacheConfig(), r.httpClient, r.invocation.Logger)
+	router := routing.New(network, r.invocation.Logger, key)
+	files := filetrack.NewService(r.httpClient, r.invocation.Logger)
+	installer := install.NewService(
+		router, network, files, install.NewPythonHost(r.invocation.Directory, r.invocation.Logger), r.invocation.Logger, proxy,
+	)
+	r.dependencies.Network = network
+	r.dependencies.Router = router
+	r.dependencies.Files = files
+	r.dependencies.Operations = operation.NewService(installer, router, registry, r.invocation.Logger)
+	r.dependencies.JavaHost = javainstall.NewHost(network, javainstall.NewSystem(), r.invocation.Logger)
+	return nil
 }
 
 // canRepairSettings reports whether cmd belongs to the surfaces that stay
@@ -271,13 +311,18 @@ func (r *Runner) configureLogging(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	// stderr carries exactly one document in machine mode, so terminal log
-	// mirroring stays off even when the caller passed --print-logs. The log
-	// file keeps recording everything.
-	if r.effectiveRendering(cmd) != cli.JSONNone {
-		printLogs = false
+	var mirror io.Writer
+	if printLogs && r.effectiveRendering(cmd) == cli.JSONNone {
+		mirror = r.stderr
 	}
-	return log.Configure(path, level, printLogs)
+	if path != "" && !filepath.IsAbs(path) {
+		path = filepath.Join(r.directory, path)
+	}
+	if err := r.invocation.Logger.Close(); err != nil {
+		return err
+	}
+	r.invocation.Logger, err = log.New(path, level, mirror)
+	return err
 }
 
 // applyAgentDefaults makes the non-interactive and compact-JSON behaviors
@@ -390,8 +435,8 @@ func (r *Runner) renderError(w io.Writer, styles fang.Styles, err error) {
 	}
 	var detail *report.Detail
 	if errors.As(err, &detail) && detail != nil {
-		report.RenderDetail(w, detail)
-		fmt.Fprintf(w, "  %s %s\n", style.Muted("log:"), log.FilePath())
+		report.RenderDetail(w, detail, r.invocation.Theme)
+		r.writeLogPath(w)
 		return
 	}
 	if cli.IsFrameworkUsageError(err) {
@@ -399,12 +444,30 @@ func (r *Runner) renderError(w io.Writer, styles fang.Styles, err error) {
 		// The framework names the rejected flag but never what this command
 		// accepts, which is the fact the caller needs to retry.
 		if hint := cli.UsageHint(command, err); hint != "" {
-			fmt.Fprintf(w, "  %s %s\n", style.Note("hint:"), hint)
+			fmt.Fprintf(w, "  %s %s\n", r.invocation.Theme.Note("hint:"), hint)
 		}
 		return
 	}
-	report.Error(err)
-	fmt.Fprintf(w, "  %s %s\n", style.Muted("log:"), log.FilePath())
+	report.New(w, r.invocation.Theme).Error(err)
+	r.writeLogPath(w)
+}
+
+func (r *Runner) writeLogPath(w io.Writer) {
+	if path := r.invocation.Logger.FilePath(); path != "" {
+		fmt.Fprintf(w, "  %s %s\n", r.invocation.Theme.Muted("log:"), path)
+	}
+}
+
+// Close releases the invocation's diagnostics and owned HTTP connections.
+func (r *Runner) Close() error {
+	var cacheErr error
+	if r.dependencies.Network != nil {
+		cacheErr = r.dependencies.Network.Close()
+	}
+	if r.ownsHTTPClient {
+		r.httpClient.CloseIdleConnections()
+	}
+	return errors.Join(cacheErr, r.invocation.Logger.Close())
 }
 
 // WriteError renders a failure through the same mode-aware funnel outside
@@ -417,9 +480,9 @@ func (r *Runner) WriteError(err error) {
 	if mode := r.effectiveRendering(command); mode != cli.JSONNone {
 		r.selectedJSON = mode
 	}
-	output := cli.NewOperationOutput(command)
+	output := cli.NewOperationOutput(command, r.invocation)
 	output.SetJSONRendering(r.selectedJSON)
-	output.WriteError(err, log.FilePath())
+	output.WriteError(err, r.invocation.Logger.FilePath())
 }
 
 // JSONSelected reports whether the actual invocation selected machine output.
@@ -452,14 +515,7 @@ func (e *panicError) Error() string {
 
 // Execute runs the invocation. Per-run state is reset first, so a runner
 // always starts from a clean parse result and output buffer.
-func (r *Runner) Execute() (err error) {
-	r.restoreDirectory = nil
-	defer func() {
-		if r.restoreDirectory != nil {
-			err = errors.Join(err, r.restoreDirectory())
-			r.restoreDirectory = nil
-		}
-	}()
+func (r *Runner) Execute(ctx context.Context) (err error) {
 	defer func() {
 		recovered := recover()
 		if recovered == nil {
@@ -471,7 +527,7 @@ func (r *Runner) Execute() (err error) {
 		if r.executing != nil {
 			path = r.executing.CommandPath()
 		}
-		log.Error(fmt.Errorf("%s panicked: %v\n%s", path, recovered, stack))
+		r.invocation.Logger.Error(fmt.Errorf("%s panicked: %v\n%s", path, recovered, stack))
 	}()
 	displayVersion, displayCommit := buildVersion()
 	r.executing = nil
@@ -498,10 +554,10 @@ func (r *Runner) Execute() (err error) {
 		r.root.SilenceErrors = true
 		r.root.SilenceUsage = true
 		r.root.Version = displayVersion
-		_, err = r.root.ExecuteContextC(context.Background())
+		_, err = r.root.ExecuteContextC(ctx)
 	} else {
 		err = fang.Execute(
-			context.Background(),
+			ctx,
 			r.root,
 			fang.WithVersion(displayVersion),
 			fang.WithCommit(displayCommit),
@@ -526,7 +582,7 @@ func (r *Runner) Execute() (err error) {
 			}
 			if configureErr := r.configureLogging(command); configureErr != nil {
 				if !r.JSONSelected() {
-					report.Error(configureErr)
+					report.New(r.stderr, r.invocation.Theme).Error(configureErr)
 				}
 				return errors.Join(err, configureErr)
 			}
@@ -535,14 +591,14 @@ func (r *Runner) Execute() (err error) {
 		if r.loggingReady {
 			var exitErr *cli.ExitError
 			if !errors.As(err, &exitErr) || !exitErr.Silent {
-				log.Error(fmt.Errorf("%s failed: %w", command.CommandPath(), err))
+				r.invocation.Logger.Error(fmt.Errorf("%s failed: %w", command.CommandPath(), err))
 			}
 		}
 		return err
 	}
 	if r.loggingReady && r.executing != nil {
 		if n := r.executing.Name(); n != "__complete" && n != "__completeNoDesc" {
-			log.Info("action completed", "action", r.executing.CommandPath())
+			r.invocation.Logger.Info("action completed", "action", r.executing.CommandPath())
 		}
 	}
 	return nil

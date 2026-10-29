@@ -16,7 +16,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+func NewCommand(
+	contracts *cli.JSONContracts,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	infoCmd := &cobra.Command{
 		Use:   "info <package|file>",
 		Short: help.InfoShort,
@@ -31,31 +35,35 @@ func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
 			candidates, _ := cli.CompletePackageIDSuggestions(
-				context.Background(),
-				"info",
+				cmd.Context(),
+				inv.Directory,
 				toComplete,
 			)
 			return candidates, cobra.ShellCompDirectiveDefault
 		},
 
-		RunE: actionInfo,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionInfo(cmd, inv, deps, args)
+		},
 	}
 	infoJSON.Bind(contracts, infoCmd)
 	cli.AddLongFlag(infoCmd)
 	return infoCmd
 }
 
-func actionInfo(cmd *cobra.Command, args []string) error {
+func actionInfo(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
 	ctx, stop := cli.CommandContext(cmd)
 	defer stop()
 
-	output := cli.NewQueryOutput(cmd)
+	output := cli.NewQueryOutput(cmd, inv)
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)
 
-	root, err := infoWorkingDirectory()
-	if err != nil {
-		return err
-	}
+	root := inv.Directory
 	if err := ctx.Err(); err != nil {
 		return infoCancellation(err)
 	}
@@ -65,7 +73,15 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if isArtifact {
-		return actionArtifactInfo(ctx, output, long, root, args[0])
+		return actionArtifactInfo(
+			ctx,
+			output,
+			inv,
+			deps.Router,
+			long,
+			root,
+			resolveInfoPath(root, args[0]),
+		)
 	}
 
 	request, err := input.Parse(args[0])
@@ -76,7 +92,7 @@ func actionInfo(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return actionProjectInfo(ctx, output, long, root, request)
+	return actionProjectInfo(ctx, output, inv, deps.Router, long, root, request)
 }
 
 // resolveAgainstLock expands a bare package name into the explicit
@@ -120,11 +136,13 @@ type infoFetchResult struct {
 func actionProjectInfo(
 	ctx context.Context,
 	output *cli.Output,
+	inv *cli.Invocation,
+	router *routing.Router,
 	long bool,
 	root string,
 	request catalog.VersionedRef,
 ) error {
-	providers, err := routing.ResolveInfoProviders(
+	providers, err := router.ResolveInfoProviders(
 		request.Ecosystem,
 		request.Provider,
 	)
@@ -132,23 +150,12 @@ func actionProjectInfo(
 		return infoProviderSelectionFailure(request, err)
 	}
 
-	result, awaitErr := infoAwait(ctx, func() infoFetchResult {
-		info, providerErrors, fetchErr := routing.GetInfoFirstSuccess(
-			providers,
-			request.Ref,
-		)
-		return infoFetchResult{
-			info:           info,
-			providerErrors: providerErrors,
-			err:            fetchErr,
-		}
-	})
-	if awaitErr != nil {
-		if failure := infoOperationFailure(ctx, awaitErr); failure != nil {
-			return failure
-		}
-		return awaitErr
-	}
+	info, providerErrors, fetchErr := router.GetInfoFirstSuccess(
+		ctx,
+		providers,
+		request.Ref,
+	)
+	result := infoFetchResult{info: info, providerErrors: providerErrors, err: fetchErr}
 	if result.err != nil {
 		if failure := infoOperationFailure(ctx, result.err); failure != nil {
 			return failure
@@ -165,6 +172,7 @@ func actionProjectInfo(
 
 	resolvedVersion, versionWarnings, err := infoResolveProjectVersion(
 		ctx,
+		router,
 		request,
 		result.info.Ref.Provider,
 		observed,
@@ -175,7 +183,7 @@ func actionProjectInfo(
 	}
 	warnings = append(warnings, versionWarnings...)
 
-	builds, buildWarnings, err := infoProjectBuilds(ctx, result.info.Ref)
+	builds, buildWarnings, err := infoProjectBuilds(ctx, router, result.info.Ref)
 	if err != nil {
 		return err
 	}
@@ -197,7 +205,7 @@ func actionProjectInfo(
 
 	document := newInfoDocument(infoKindProject, "")
 	document.Entries = append(document.Entries, entry)
-	return infoWriteDocument(ctx, output, document, warnings, long)
+	return infoWriteDocument(ctx, output, inv, document, warnings, long)
 }
 
 // infoProviderWarnings reports partial provider failures. A successful

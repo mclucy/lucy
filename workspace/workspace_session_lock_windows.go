@@ -21,8 +21,6 @@ package workspace
 import (
 	"os"
 
-	"github.com/mclucy/lucy/internal/fn"
-	"github.com/mclucy/lucy/log"
 	"golang.org/x/sys/windows"
 )
 
@@ -31,10 +29,10 @@ import (
 // file. A failed lock attempt means a live server holds the file.
 func checkSessionLock(lockPath string) bool {
 	file, err := os.OpenFile(lockPath, os.O_RDWR, 0o666)
-	defer fn.CloseReader(file, log.Warn)
 	if err != nil {
 		return false
 	}
+	defer file.Close()
 
 	err = windows.LockFileEx(
 		windows.Handle(file.Fd()),
@@ -45,15 +43,13 @@ func checkSessionLock(lockPath string) bool {
 		&windows.Overlapped{},
 	)
 	if err == nil {
-		if unlockErr := windows.UnlockFileEx(
+		_ = windows.UnlockFileEx(
 			windows.Handle(file.Fd()),
 			0,
 			1,
 			0,
 			&windows.Overlapped{},
-		); unlockErr != nil {
-			log.Warn(unlockErr)
-		}
+		)
 		return false
 	}
 	return true

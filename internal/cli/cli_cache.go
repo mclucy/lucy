@@ -17,18 +17,26 @@ var cacheLsJSON JSONResult[[]*cache.Entry]
 // cacheClearJSON is the machine-readable `cache clear` result.
 var cacheClearJSON JSONResult[cache.ResetReport]
 
-func NewCacheCommand(contracts *JSONContracts) *cobra.Command {
+func NewCacheCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	cacheLsCmd := &cobra.Command{
 		Use:     "ls",
 		Aliases: []string{"list"},
 		Short:   help.CacheLsShort,
-		RunE:    actionCacheLs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionCacheLs(cmd, inv, deps, args)
+		},
 	}
 	cacheClearCmd := &cobra.Command{
 		Use:     "clear",
 		Aliases: []string{"rm"},
 		Short:   help.CacheClearShort,
-		RunE:    actionCacheClear,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionCacheClear(cmd, inv, deps, args)
+		},
 	}
 	cacheCmd := &cobra.Command{
 		Use:   "cache",
@@ -43,9 +51,14 @@ func NewCacheCommand(contracts *JSONContracts) *cobra.Command {
 	return cacheCmd
 }
 
-func actionCacheLs(cmd *cobra.Command, _ []string) error {
-	output := NewQueryOutput(cmd)
-	entries := cache.Network().All()
+func actionCacheLs(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
+	output := NewQueryOutput(cmd, inv)
+	entries := deps.Network.All()
 	if output.JSON() {
 		return cacheLsJSON.Write(output, entries)
 	}
@@ -71,21 +84,26 @@ func actionCacheLs(cmd *cobra.Command, _ []string) error {
 				"%s  %s  %s",
 				entry.Kind,
 				style.FormatBytesBinary(entry.Size),
-				style.Muted(style.FormatTTL(entry.Expiration)),
+				inv.Theme.Muted(style.FormatTTL(entry.Expiration)),
 			),
 		})
 	}
 
 	_, err := fmt.Fprintln(
 		output.Human(),
-		terminal.RenderFacts(facts, style.TermWidth()),
+		terminal.RenderFacts(facts, inv.Stdout.Width, inv.Theme),
 	)
 	return err
 }
 
-func actionCacheClear(cmd *cobra.Command, _ []string) error {
-	output := NewOperationOutput(cmd)
-	cleared, err := cache.Network().ClearAll()
+func actionCacheClear(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
+	output := NewOperationOutput(cmd, inv)
+	cleared, err := deps.Network.ClearAll()
 	if err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}

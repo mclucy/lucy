@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -20,11 +21,19 @@ const (
 	neoForgeComparisonURL = "https://docs.neoforged.net/user/docs/server"
 )
 
-type provider struct{}
+// Provider resolves Forge promotions and installer artifacts over the shared
+// network cache.
+type Provider struct {
+	network *cache.Client
+}
 
-var Provider provider
+// New constructs a Forge installer provider. network supplies the cached HTTP
+// transport; construction performs no requests.
+func New(network *cache.Client) *Provider {
+	return &Provider{network: network}
+}
 
-func (provider) Provider() catalog.Provider {
+func (p *Provider) Provider() catalog.Provider {
 	return catalog.ProviderForge
 }
 
@@ -34,8 +43,12 @@ type promotions struct {
 
 // LatestMinecraftVersion reports the newest Minecraft version the promotions
 // list a build for. Forge publishes release builds only.
-func LatestMinecraftVersion() (version.Version, error) {
-	body, err := cache.CachedGetBytes(
+func (p *Provider) LatestMinecraftVersion(ctx context.Context) (
+	version.Version,
+	error,
+) {
+	body, err := p.network.CachedGetBytes(
+		ctx,
 		promotionsURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)
@@ -56,7 +69,8 @@ func LatestMinecraftVersion() (version.Version, error) {
 	return version.NewestMinecraft(versions)
 }
 
-func (p provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (catalog.VersionedRef, error) {
@@ -65,7 +79,7 @@ func (p provider) ResolveVersionSelector(
 		return id, err
 	}
 
-	forgeVersion, err := forgeVersionFromPackageRef(id, gameVersion)
+	forgeVersion, err := p.forgeVersionFromPackageRef(ctx, id, gameVersion)
 	if err != nil {
 		return id, err
 	}
@@ -77,7 +91,8 @@ func (p provider) ResolveVersionSelector(
 	}, nil
 }
 
-func (p provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
@@ -86,7 +101,7 @@ func (p provider) Fetch(
 		return upstream.ResolvedPackage{}, err
 	}
 
-	forgeVersion, err := forgeVersionFromPackageRef(id, gameVersion)
+	forgeVersion, err := p.forgeVersionFromPackageRef(ctx, id, gameVersion)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -112,27 +127,30 @@ func minecraftVersionForInstall(local upstream.LocalContext) (version.Version, e
 	return local.MinecraftVersion, nil
 }
 
-func forgeVersionFromPackageRef(
-	p catalog.VersionedRef,
+func (p *Provider) forgeVersionFromPackageRef(
+	ctx context.Context,
+	ref catalog.VersionedRef,
 	gameVersion version.Version,
 ) (string, error) {
-	if p.Version != version.Beta &&
-		p.Version != version.Stable &&
-		p.Version != version.Any &&
-		p.Version != version.Unknown {
-		return p.Version.String(), nil
+	if ref.Version != version.Beta &&
+		ref.Version != version.Stable &&
+		ref.Version != version.Any &&
+		ref.Version != version.Unknown {
+		return ref.Version.String(), nil
 	}
-	return fetchVersion(gameVersion, p.Version)
+	return p.fetchVersion(ctx, gameVersion, ref.Version)
 }
 
 // fetchVersion selects a Forge version from the `promotions` data. stable
 // accepts the recommended promotion only; beta accepts the latest promotion;
 // any prefers the recommended release and falls back to the latest.
-func fetchVersion(
+func (p *Provider) fetchVersion(
+	ctx context.Context,
 	gameVersion version.Version,
 	selector version.Version,
 ) (string, error) {
-	body, err := cache.CachedGetBytes(
+	body, err := p.network.CachedGetBytes(
+		ctx,
 		promotionsURL,
 		cache.BytesRequestOptions{Kind: cache.KindMetadata},
 	)

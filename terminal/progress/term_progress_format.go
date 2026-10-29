@@ -21,6 +21,6 @@ func FormatElapsed(elapsed time.Duration) string {
 	}
 }
 
-func phaseLine(text string, elapsed time.Duration) string {
-	return style.Success("✓") + " " + text + " " + style.Muted("in "+FormatElapsed(elapsed))
+func phaseLine(text string, elapsed time.Duration, theme style.Theme) string {
+	return theme.Success("✓") + " " + text + " " + theme.Muted("in "+FormatElapsed(elapsed))
 }

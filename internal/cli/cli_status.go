@@ -1,10 +1,10 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/mclucy/lucy/catalog"
@@ -12,7 +12,6 @@ import (
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
-	"github.com/mclucy/lucy/terminal/style"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -24,7 +23,11 @@ const flagStatusFromLockName = "from-lock"
 
 var statusJSON JSONResult[statusDocument]
 
-func NewStatusCommand(contracts *JSONContracts) *cobra.Command {
+func NewStatusCommand(
+	contracts *JSONContracts,
+	inv *Invocation,
+	deps *Dependencies,
+) *cobra.Command {
 	statusCmd := &cobra.Command{
 		Use:     "status",
 		Short:   help.StatusShort,
@@ -37,7 +40,9 @@ func NewStatusCommand(contracts *JSONContracts) *cobra.Command {
 			}
 			return nil
 		},
-		RunE: actionStatus,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionStatus(cmd, inv, deps, args)
+		},
 	}
 	statusJSON.Bind(contracts, statusCmd)
 	AddLongFlag(statusCmd)
@@ -60,17 +65,22 @@ func NewStatusCommand(contracts *JSONContracts) *cobra.Command {
 	return statusCmd
 }
 
-func actionStatus(cmd *cobra.Command, args []string) error {
+func actionStatus(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	_ []string,
+) error {
 	long, _ := cmd.Flags().GetBool(FlagLong)
 	logo, _ := cmd.Flags().GetString(FlagLogo)
 	logoMode, _ := terminal.ParseStatusLogoMode(logo)
-	output := NewQueryOutput(cmd)
+	output := NewQueryOutput(cmd, inv)
 
 	fromLock, _ := cmd.Flags().GetBool(flagStatusFromLockName)
 	if fromLock {
-		return actionStatusFromLock(output, long, logoMode)
+		return actionStatusFromLock(cmd.Context(), output, inv, long, logoMode)
 	}
-	return actionStatusLive(output, long, logoMode)
+	return actionStatusLive(cmd, output, inv, deps, long, logoMode)
 }
 
 // actionStatusLive observes the working directory and reports the runtime and
@@ -78,18 +88,27 @@ func actionStatus(cmd *cobra.Command, args []string) error {
 // command failure: an empty, ambiguous, or declared-missing workspace still
 // prints a useful status.
 func actionStatusLive(
+	cmd *cobra.Command,
 	output *Output,
+	inv *Invocation,
+	deps *Dependencies,
 	long bool,
 	logoMode terminal.StatusLogoMode,
 ) error {
-	root, err := statusWorkingDirectory()
-	if err != nil {
+	ctx, stop := CommandContext(cmd)
+	defer stop()
+	root := inv.Directory
+	observed, identifyWarnings := identify.Packages(
+		ctx,
+		workspace.Observe(
+			root,
+			discovery.Request{Policy: discovery.PolicyPreferModified},
+		),
+		deps.Router.ResolveArtifactByHash,
+	)
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	observed, identifyWarnings := identify.Packages(workspace.Observe(
-		root,
-		discovery.Request{Policy: discovery.PolicyPreferModified},
-	))
 	reportObservationFindings(observed, output)
 	for _, warning := range identifyWarnings {
 		output.Warn(warning)
@@ -121,21 +140,20 @@ func actionStatusLive(
 		}
 	}
 	document.Warnings = append(document.Warnings, output.Warnings()...)
-	return writeStatusDocument(output, document, long, logoMode)
+	return writeStatusDocument(ctx, output, inv, document, long, logoMode)
 }
 
 // actionStatusFromLock reports only the facts persisted in lucy-lock.yaml.
 // The lock cannot prove whether the server is running or which entry point an
 // installation would use, so the document leaves both unobserved.
 func actionStatusFromLock(
+	ctx context.Context,
 	output *Output,
+	inv *Invocation,
 	long bool,
 	logoMode terminal.StatusLogoMode,
 ) error {
-	root, err := statusWorkingDirectory()
-	if err != nil {
-		return err
-	}
+	root := inv.Directory
 	lock, err := documentpkg.LockFile(root).Read()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -157,35 +175,13 @@ func actionStatusFromLock(
 		}
 	}
 	return writeStatusDocument(
+		ctx,
 		output,
+		inv,
 		newLockStatusDocument(root, lock),
 		long,
 		logoMode,
 	)
-}
-
-// statusWorkingDirectory is the document root. Every reported path is
-// relative to it, whether the command observed the directory or read a lock.
-func statusWorkingDirectory() (string, error) {
-	root, err := os.Getwd()
-	if err != nil {
-		return "", &report.Detail{
-			Title: "cannot determine the working directory",
-			Lines: []string{err.Error()},
-			Code:  statusErrorReadFailed,
-			Cause: err,
-		}
-	}
-	absolute, err := filepath.Abs(root)
-	if err != nil {
-		return "", &report.Detail{
-			Title: "cannot resolve the working directory",
-			Lines: []string{err.Error()},
-			Code:  statusErrorReadFailed,
-			Cause: err,
-		}
-	}
-	return filepath.Clean(absolute), nil
 }
 
 // statusSelectionFailure reports only selection outcomes that make the
@@ -218,17 +214,22 @@ func statusSelectionFailure(observed *workspace.Workspace) error {
 }
 
 func writeStatusDocument(
+	ctx context.Context,
 	output *Output,
+	inv *Invocation,
 	document statusDocument,
 	long bool,
 	logoMode terminal.StatusLogoMode,
 ) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if output.JSON() {
 		return statusJSON.Write(output, document)
 	}
 	_, err := fmt.Fprintln(
 		output.Human(),
-		renderStatus(document, long, logoMode, style.TermWidth()),
+		renderStatus(document, long, logoMode, inv.Stdout, inv.Theme),
 	)
 	if err != nil {
 		return fmt.Errorf("write status: %w", err)

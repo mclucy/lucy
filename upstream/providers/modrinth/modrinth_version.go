@@ -1,10 +1,10 @@
 package modrinth
 
 import (
+	"context"
 	"errors"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -16,12 +16,13 @@ var (
 )
 
 // Known crash risk: this path has caused segmentation faults.
-func listVersions(slug catalog.Name) (
-	versions []*versionResponse,
-	err error,
-) {
+func (p *Provider) listVersions(
+	ctx context.Context,
+	slug catalog.Name,
+) (versions []*versionResponse, err error) {
 	var out []*versionResponse
-	if err := requestJSON(
+	if err := p.requestJSON(
+		ctx,
 		versionsUrl(slug),
 		&out,
 		ErrNoProject,
@@ -33,16 +34,18 @@ func listVersions(slug catalog.Name) (
 
 // getVersion is named so because a Lucy package corresponds to a Modrinth
 // version; see the package terminology note.
-func getVersion(
+func (p *Provider) getVersion(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (v *versionResponse, err error) {
-	versions, err := listVersions(id.Name)
+	versions, err := p.listVersions(ctx, id.Name)
 	if err != nil {
 		return nil, err
 	}
 	if id.Version.CanInfer() {
-		v, err = latestVersion(
+		v, err = p.latestVersion(
+			ctx,
 			id.Name,
 			id.Ecosystem,
 			local.MinecraftVersion,
@@ -59,9 +62,12 @@ func getVersion(
 	return nil, ErrNoVersion
 }
 
-func getVersionById(id string) (v *versionResponse, err error) {
+func (p *Provider) getVersionById(
+	ctx context.Context,
+	id string,
+) (v *versionResponse, err error) {
 	v = &versionResponse{}
-	if err := requestJSON(versionUrl(id), v, ErrNoVersion); err != nil {
+	if err := p.requestJSON(ctx, versionUrl(id), v, ErrNoVersion); err != nil {
 		return nil, err
 	}
 	return
@@ -82,13 +88,14 @@ func versionSupportsLoader(
 // latestVersion selects the newest version matching the selector. stable
 // accepts releases only; beta accepts any channel; any prefers a release and
 // falls back to a prerelease.
-func latestVersion(
+func (p *Provider) latestVersion(
+	ctx context.Context,
 	slug catalog.Name,
 	platform catalog.Ecosystem,
 	gameVersion versionpkg.Version,
 	selector versionpkg.Version,
 ) (v *versionResponse, err error) {
-	versions, err := listVersions(slug)
+	versions, err := p.listVersions(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +110,6 @@ func latestVersion(
 	if v == nil {
 		return nil, ErrNoVersion
 	}
-	log.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
+	p.logger.Debug("latest version of " + slug.String() + ": " + v.VersionNumber)
 	return v, nil
 }

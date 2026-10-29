@@ -7,20 +7,37 @@
 package modrinth
 
 import (
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"path"
 
+	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/upstream"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-type provider struct{}
+// Provider is one configured Modrinth API client. Every request it performs
+// shares the network cache and logger it was constructed with.
+type Provider struct {
+	network *cache.Client
+	logger  *log.Logger
+}
 
-func (s provider) Search(q upstream.Query) (
+// New constructs a Modrinth provider over network and logger. Construction
+// performs no network requests.
+func New(network *cache.Client, logger *log.Logger) *Provider {
+	return &Provider{network: network, logger: logger}
+}
+
+func (p *Provider) Provider() catalog.Provider {
+	return catalog.ProviderModrinth
+}
+
+func (p *Provider) Search(ctx context.Context, q upstream.Query) (
 	resp upstream.SearchResponse,
 	err error,
 ) {
@@ -50,8 +67,8 @@ func (s provider) Search(q upstream.Query) (
 	}
 	searchUrl := searchUrl(q.Keyword, internalOptions)
 
-	log.Debug("searching via modrinth api: " + searchUrl)
-	res, err := requestBytes(searchUrl)
+	p.logger.Debug("searching via modrinth api: " + searchUrl)
+	res, err := p.requestBytes(ctx, searchUrl)
 	if err != nil {
 		return resp, fmt.Errorf("modrinth: search request failed: %w", err)
 	}
@@ -72,7 +89,7 @@ func (s provider) Search(q upstream.Query) (
 	for i, hit := range result.Hits {
 		items[i] = upstream.SearchResult{
 			ProjectName: hit.Slug,
-			Provider:    s.Provider(),
+			Provider:    p.Provider(),
 			Title:       hit.Title,
 			Description: hit.Description,
 			Downloads:   int64(hit.Downloads),
@@ -80,7 +97,7 @@ func (s provider) Search(q upstream.Query) (
 		}
 	}
 	resp = upstream.SearchResponse{
-		Provider: s.Provider(),
+		Provider: p.Provider(),
 		Items:    items,
 		Warnings: nil,
 	}
@@ -88,17 +105,12 @@ func (s provider) Search(q upstream.Query) (
 	return
 }
 
-func (s provider) Provider() catalog.Provider {
-	return catalog.ProviderModrinth
-}
-
-var Provider provider
-
-func (s provider) Fetch(
+func (p *Provider) Fetch(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (upstream.ResolvedPackage, error) {
-	version, err := getVersion(local, id)
+	version, err := p.getVersion(ctx, local, id)
 	if err != nil {
 		return upstream.ResolvedPackage{}, err
 	}
@@ -111,8 +123,11 @@ func (s provider) Fetch(
 	return resolved, nil
 }
 
-func (s provider) Info(ref catalog.Ref) (catalog.Metadata, error) {
-	project, err := getProjectByName(ref.Name)
+func (p *Provider) Info(
+	ctx context.Context,
+	ref catalog.Ref,
+) (catalog.Metadata, error) {
+	project, err := p.getProjectByName(ctx, ref.Name)
 	if err != nil {
 		return catalog.Metadata{}, err
 	}
@@ -125,46 +140,52 @@ var ErrInvalidAPIResponse = errors.New("received non-200 code from modrinth api"
 // Modrinth may publish non-JAR files; Lucy accepts only JAR artifacts.
 var ErrUnsupportedFileType = errors.New("modrinth: only .jar files are supported")
 
-func (s provider) Dependencies(
+func (p *Provider) Dependencies(
+	ctx context.Context,
 	local upstream.LocalContext,
 	id catalog.VersionedRef,
 ) (*upstream.DependencySet, error) {
-	version, err := getVersion(local, id)
+	version, err := p.getVersion(ctx, local, id)
 	if err != nil {
 		return nil, fmt.Errorf("modrinth: dependencies fetch failed: %w", err)
 	}
-	return new(
-		(&modrinthDependencies{
-			version:  version,
-			platform: id.Ecosystem,
-		}).ToDependencySet(),
-	), nil
+	dependencies, err := (&modrinthDependencies{
+		provider: p,
+		version:  version,
+		platform: id.Ecosystem,
+	}).ToDependencySet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &dependencies, nil
 }
 
-func (s provider) ResolveVersionSelector(
+func (p *Provider) ResolveVersionSelector(
+	ctx context.Context,
 	local upstream.LocalContext,
-	p catalog.VersionedRef,
+	id catalog.VersionedRef,
 ) (parsed catalog.VersionedRef, err error) {
-	if p.Ecosystem.IsUnspecified() {
-		p.Ecosystem = catalog.EcosystemUnspecified
+	if id.Ecosystem.IsUnspecified() {
+		id.Ecosystem = catalog.EcosystemUnspecified
 	}
-	parsed.Ecosystem = p.Ecosystem
-	parsed.Name = p.Name
+	parsed.Ecosystem = id.Ecosystem
+	parsed.Name = id.Name
 
 	var v *versionResponse
-	switch p.Version {
+	switch id.Version {
 	case versionpkg.Stable, versionpkg.Beta, versionpkg.Any:
-		v, err = latestVersion(
-			p.Name,
-			p.Ecosystem,
+		v, err = p.latestVersion(
+			ctx,
+			id.Name,
+			id.Ecosystem,
 			local.MinecraftVersion,
-			p.Version,
+			id.Version,
 		)
 	default:
-		return p, nil
+		return id, nil
 	}
 	if err != nil {
-		return p, err
+		return id, err
 	}
 	parsed.Version = versionpkg.Version(v.VersionNumber)
 	return parsed, nil

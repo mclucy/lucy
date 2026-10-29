@@ -7,34 +7,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/report"
-	"github.com/mclucy/lucy/terminal/style"
 )
-
-// infoAwait makes a synchronous, legacy upstream read cancel-aware without
-// moving the provider API to contexts. The buffered slot lets the detached
-// read finish and exit even after the command has returned.
-func infoAwait[T any](
-	ctx context.Context,
-	work func() T,
-) (T, error) {
-	var zero T
-	if ctx == nil {
-		return work(), nil
-	}
-	if err := ctx.Err(); err != nil {
-		return zero, err
-	}
-	completed := make(chan T, 1)
-	go func() {
-		completed <- work()
-	}()
-	select {
-	case value := <-completed:
-		return value, nil
-	case <-ctx.Done():
-		return zero, ctx.Err()
-	}
-}
 
 // infoOperationFailure converts an interruption into the shared cancelled
 // failure, including the cause that main maps to exit code 130.
@@ -85,6 +58,7 @@ func infoNormalizeWarnings(warnings []string) []string {
 func infoWriteDocument(
 	ctx context.Context,
 	output *cli.Output,
+	inv *cli.Invocation,
 	document infoDocument,
 	warnings []string,
 	long bool,
@@ -112,8 +86,8 @@ func infoWriteDocument(
 	rendered := renderInfoDocument(
 		document,
 		long,
-		style.TermWidth(),
-		style.StdoutIsTerminal,
+		inv.Directory,
+		infoRenderContext{theme: inv.Theme, terminal: inv.Stdout},
 	)
 	if rendered == "" {
 		return nil

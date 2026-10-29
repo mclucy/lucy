@@ -1,6 +1,8 @@
 package hangar
 
 import (
+	"context"
+
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/upstream"
@@ -36,8 +38,11 @@ func (h *hangarDependencies) ToDependencySet() upstream.DependencySet {
 	return result
 }
 
-func resolveVersion(id catalog.VersionedRef) (*hangarVersion, error) {
-	versions, err := listVersions(id.Name)
+func (p *Provider) resolveVersion(
+	ctx context.Context,
+	id catalog.VersionedRef,
+) (*hangarVersion, error) {
+	versions, err := p.listVersions(ctx, id.Name)
 	if err != nil {
 		return nil, err
 	}

@@ -45,6 +45,7 @@ type livePrint struct {
 // so byte-level progress never floods the renderer.
 type live struct {
 	out     io.Writer
+	theme   style.Theme
 	program *tea.Program
 	done    chan struct{}
 	stop    chan struct{}
@@ -57,16 +58,21 @@ type live struct {
 	partial strings.Builder
 }
 
-func newLive(out io.Writer) *live {
-	l := &live{
-		out:  out,
-		done: make(chan struct{}),
-		stop: make(chan struct{}),
+func newLive(options Options) *live {
+	width := options.Terminal.Width
+	if width <= 0 {
+		width = style.DefaultTerminalWidth
 	}
-	model := &liveModel{width: style.StderrWidth()}
+	l := &live{
+		out:   options.Writer,
+		theme: options.Theme,
+		done:  make(chan struct{}),
+		stop:  make(chan struct{}),
+	}
+	model := &liveModel{width: width, theme: options.Theme}
 	l.program = tea.NewProgram(
 		model,
-		tea.WithOutput(out),
+		tea.WithOutput(options.Writer),
 		tea.WithInput(nil),
 		tea.WithoutSignalHandler(),
 	)
@@ -128,7 +134,7 @@ func (l *live) PhaseDone(text string, elapsed time.Duration) {
 		state.read = 0
 		state.total = 0
 	})
-	l.Println(phaseLine(text, elapsed))
+	l.Println(phaseLine(text, elapsed, l.theme))
 }
 
 func (l *live) Status(text string) {
@@ -207,6 +213,7 @@ type liveModel struct {
 	state liveState
 	frame int
 	width int
+	theme style.Theme
 }
 
 func (m *liveModel) Init() tea.Cmd { return nil }
@@ -230,22 +237,22 @@ func (m *liveModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *liveModel) View() tea.View {
 	width := m.width
 	if width <= 0 {
-		width = style.StderrWidth()
+		width = style.DefaultTerminalWidth
 	}
 	var lines []string
 	for _, line := range m.state.logs {
-		lines = append(lines, "  "+style.Muted("│ "+line))
+		lines = append(lines, "  "+m.theme.Muted("│ "+line))
 	}
 	if m.state.phase != "" {
 		frame := spinnerRunes[m.frame%len(spinnerRunes)]
-		head := style.Note(string(frame)) + " " + style.Accent(m.state.phase)
+		head := m.theme.Note(string(frame)) + " " + m.theme.Accent(m.state.phase)
 		if m.state.status != "" {
 			available := width - lipgloss.Width(head) - 2
 			status := m.state.status
 			if available >= 0 && lipgloss.Width(status) > available {
 				status = ansi.Truncate(status, available, "…")
 			}
-			head += style.Muted(": " + status)
+			head += m.theme.Muted(": " + status)
 		}
 		lines = append(lines, clip(head, width))
 	}
@@ -259,7 +266,7 @@ func (m *liveModel) downloadLine(width int) string {
 	read := style.FormatBytesDecimal(m.state.read)
 	total := style.FormatBytesDecimal(m.state.total)
 	values := read + " / " + total
-	suffix := "  " + style.Muted(values)
+	suffix := "  " + m.theme.Muted(values)
 	prefix := "  " + m.state.download + "  "
 	barWidth := width - lipgloss.Width(prefix) - lipgloss.Width(values) - 2
 	if barWidth < 8 {
@@ -273,8 +280,8 @@ func (m *liveModel) downloadLine(width int) string {
 		}
 	}
 	filled := int(percent * float64(barWidth))
-	bar := style.Note(strings.Repeat("█", filled)) +
-		style.Muted(strings.Repeat("░", barWidth-filled))
+	bar := m.theme.Note(strings.Repeat("█", filled)) +
+		m.theme.Muted(strings.Repeat("░", barWidth-filled))
 	return prefix + bar + suffix
 }
 

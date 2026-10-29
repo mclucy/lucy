@@ -10,17 +10,17 @@ import (
 	"github.com/mclucy/lucy/terminal/style"
 )
 
-func FoldHint(hidden int) string {
-	return style.Muted(fmt.Sprintf("… %d more, use --long to expand", hidden))
+func FoldHint(hidden int, theme style.Theme) string {
+	return theme.Muted(fmt.Sprintf("… %d more, use --long to expand", hidden))
 }
 
-func FoldLinesHint(hidden int) string {
-	return style.Muted(fmt.Sprintf("… %d more lines, use --long to expand", hidden))
+func FoldLinesHint(hidden int, theme style.Theme) string {
+	return theme.Muted(fmt.Sprintf("… %d more lines, use --long to expand", hidden))
 }
 
 // CenterElide keeps both ends of prose and prefers complete paragraphs.
 // The budget includes the omission marker; long output bypasses this function.
-func CenterElide(text string, budget int) string {
+func CenterElide(text string, budget int, theme style.Theme) string {
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	if budget < 3 || len(lines) <= budget {
 		return text
@@ -47,7 +47,7 @@ func CenterElide(text string, budget int) string {
 		tail++
 	}
 	visible := append([]string{}, lines[:head]...)
-	visible = append(visible, FoldLinesHint(tail-head))
+	visible = append(visible, FoldLinesHint(tail-head, theme))
 	visible = append(visible, lines[tail:]...)
 	return strings.Join(visible, "\n")
 }

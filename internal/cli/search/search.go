@@ -12,7 +12,6 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/upstream"
@@ -27,7 +26,11 @@ const (
 	flagRegistryName      = "registry"
 )
 
-func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
+func NewCommand(
+	contracts *cli.JSONContracts,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+) *cobra.Command {
 	searchCmd := &cobra.Command{
 		Use:   "search",
 		Short: help.SearchShort,
@@ -52,7 +55,9 @@ func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
 			_, err := searchRegistry(registry)
 			return err
 		},
-		RunE: actionSearch,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionSearch(cmd, inv, deps, args)
+		},
 	}
 	searchJSON.Bind(contracts, searchCmd)
 	searchCmd.Flags().String(
@@ -117,7 +122,14 @@ func NewCommand(contracts *cli.JSONContracts) *cobra.Command {
 	return searchCmd
 }
 
-func actionSearch(cmd *cobra.Command, args []string) error {
+func actionSearch(
+	cmd *cobra.Command,
+	inv *cli.Invocation,
+	deps *cli.Dependencies,
+	args []string,
+) error {
+	ctx, stop := cli.CommandContext(cmd)
+	defer stop()
 	sortOrder, _ := cmd.Flags().GetString(flagSortName)
 	client, _ := cmd.Flags().GetBool(flagIncludeClientName)
 	long, _ := cmd.Flags().GetBool(cli.FlagLong)
@@ -138,7 +150,7 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		FilterEcosystem: resolvedEcosystem,
 	}
 
-	providers, err := routing.ResolveSearchProviders(
+	providers, err := deps.Router.ResolveSearchProviders(
 		query.FilterEcosystem,
 		specifiedRegistry,
 	)
@@ -150,14 +162,17 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%w: %s", err, errArg)
 	}
 
-	results, errs := routing.SearchMany(providers, query)
+	results, errs := deps.Router.SearchMany(ctx, providers, query)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	applySearchSort(results, Sort(sortOrder))
 
 	if err := searchResultError(results, errs); err != nil {
 		return err
 	}
 
-	output := cli.NewQueryOutput(cmd)
+	output := cli.NewQueryOutput(cmd, inv)
 
 	var noResultSources []string
 	for _, err := range errs {
@@ -171,15 +186,18 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			err.Err,
 		)
 		if output.JSON() {
-			log.Warn(providerWarn)
+			inv.Logger.Warn(providerWarn)
 			continue
 		}
 		if len(results) > 0 {
-			log.Warn(providerWarn)
+			inv.Logger.Warn(providerWarn)
 		}
-		report.Warn(providerWarn)
+		report.New(cmd.ErrOrStderr(), inv.Theme).Warn(providerWarn)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if output.JSON() {
 		return searchJSON.Write(output, newSearchResultDocuments(results))
 	}
@@ -190,17 +208,20 @@ func actionSearch(cmd *cobra.Command, args []string) error {
 			sb.WriteString("\n")
 		}
 		if long {
-			sb.WriteString(renderSearchLong(res))
+			sb.WriteString(renderSearchLong(res, inv.Theme, inv.Stdout))
 		} else {
-			sb.WriteString(renderSearchCompact(res))
+			sb.WriteString(renderSearchCompact(res, inv.Theme))
 		}
 	}
 	if len(noResultSources) > 0 {
 		sb.WriteString(
-			style.Muted(
+			inv.Theme.Muted(
 				"No results from "+strings.Join(noResultSources, ", "),
 			) + "\n",
 		)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	fmt.Fprint(output.Human(), sb.String())
 	return nil
@@ -254,12 +275,12 @@ func isNoResultsError(err error) bool {
 	return err != nil && strings.HasPrefix(err.Error(), "no projects found")
 }
 
-func renderSearchCompact(res upstream.SearchResponse) string {
+func renderSearchCompact(res upstream.SearchResponse, theme style.Theme) string {
 	var sb strings.Builder
-	sb.WriteString(searchSectionHeader(res))
+	sb.WriteString(searchSectionHeader(res, theme))
 
 	if len(res.Items) == 0 {
-		sb.WriteString(style.Muted("  (no results)") + "\n")
+		sb.WriteString(theme.Muted("  (no results)") + "\n")
 		return sb.String()
 	}
 
@@ -293,12 +314,16 @@ func renderSearchCompact(res upstream.SearchResponse) string {
 	return sb.String()
 }
 
-func renderSearchLong(res upstream.SearchResponse) string {
+func renderSearchLong(
+	res upstream.SearchResponse,
+	theme style.Theme,
+	terminal style.Terminal,
+) string {
 	var sb strings.Builder
-	sb.WriteString(searchSectionHeader(res))
+	sb.WriteString(searchSectionHeader(res, theme))
 
 	if len(res.Items) == 0 {
-		sb.WriteString(style.Muted("  (no results)") + "\n")
+		sb.WriteString(theme.Muted("  (no results)") + "\n")
 		return sb.String()
 	}
 
@@ -310,12 +335,12 @@ func renderSearchLong(res upstream.SearchResponse) string {
 		if item.Title != "" && item.Title != item.ProjectName {
 			displayName = item.Title
 		}
-		sb.WriteString("  " + style.Accent(displayName) + "\n")
+		sb.WriteString("  " + theme.Accent(displayName) + "\n")
 
 		if item.Description != "" {
 			desc := strings.ReplaceAll(item.Description, "\n", " ")
 			desc = strings.ReplaceAll(desc, "\r", "")
-			wrapWidth := min(80, style.TermWidth()) - 2
+			wrapWidth := min(80, terminal.Width) - 2
 			wrapped := lipgloss.Wrap(desc, wrapWidth, "")
 			for line := range strings.SplitSeq(wrapped, "\n") {
 				sb.WriteString("  " + line + "\n")
@@ -324,24 +349,27 @@ func renderSearchLong(res upstream.SearchResponse) string {
 
 		stats := searchStatsLine(item)
 		if stats != "" {
-			sb.WriteString("  " + style.Muted(stats) + "\n")
+			sb.WriteString("  " + theme.Muted(stats) + "\n")
 		}
 
 		installID := item.Provider.String() + ":" + item.ProjectName
-		sb.WriteString("  " + style.Muted(installID) + "\n")
+		sb.WriteString("  " + theme.Muted(installID) + "\n")
 	}
 	return sb.String()
 }
 
-func searchSectionHeader(res upstream.SearchResponse) string {
-	header := style.Muted(
+func searchSectionHeader(
+	res upstream.SearchResponse,
+	theme style.Theme,
+) string {
+	header := theme.Muted(
 		"Results from " + res.Provider.Title() +
 			" (" + strconv.Itoa(len(res.Items)) + ")",
 	)
 	var sb strings.Builder
 	sb.WriteString(header + "\n")
 	if res.Provider == catalog.ProviderModrinth && len(res.Items) == 100 {
-		sb.WriteString(style.Muted("* only showing the top 100") + "\n")
+		sb.WriteString(theme.Muted("* only showing the top 100") + "\n")
 	}
 	return sb.String()
 }

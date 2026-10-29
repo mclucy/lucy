@@ -3,8 +3,6 @@ package javainstall
 import (
 	"context"
 	"fmt"
-	"os/exec"
-	"runtime"
 	"slices"
 
 	"github.com/mclucy/lucy/java"
@@ -99,18 +97,18 @@ var wingetJavaPackages = []wingetJavaPackage{
 
 func (winget) method() Method { return MethodWinget }
 
-func (winget) plans(ctx context.Context, req Request) ([]Plan, error) {
-	if runtime.GOOS != "windows" {
+func (winget) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
+	if host.goos != "windows" {
 		return nil, nil
 	}
-	if _, err := exec.LookPath("winget.exe"); err != nil {
+	if _, err := host.lookPath("winget.exe"); err != nil {
 		return nil, nil
 	}
 	return wingetPlans(req), nil
 }
 
-func (winget) system() bool   { return true }
-func (winget) ownsJava() bool { return false }
+func (winget) system() bool                         { return true }
+func (winget) ownsJava(context.Context, *Host) bool { return false }
 
 // wingetPlans returns the plan that winget installs req with. At most one
 // plan results. A request for any build prefers the Temurin JRE.

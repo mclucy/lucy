@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 
@@ -123,14 +121,14 @@ type scoopCandidate struct {
 
 func (scoop) method() Method { return MethodScoop }
 
-func (scoop) plans(ctx context.Context, req Request) ([]Plan, error) {
-	if runtime.GOOS != "windows" {
+func (scoop) plans(ctx context.Context, req Request, host *Host) ([]Plan, error) {
+	if host.goos != "windows" {
 		return nil, nil
 	}
-	if _, err := exec.LookPath("scoop.cmd"); err != nil {
+	if _, err := host.lookPath("scoop.cmd"); err != nil {
 		return nil, nil
 	}
-	hasManifest, err := scoopJavaBucket(ctx)
+	hasManifest, err := scoopJavaBucket(ctx, host)
 	if err != nil {
 		return nil, err
 	}
@@ -141,11 +139,11 @@ func (scoop) system() bool { return false }
 
 // ownsJava reports whether scoop installed a Java runtime. Every scoop app
 // links its active version through a current directory.
-func (scoop) ownsJava() bool {
-	if runtime.GOOS != "windows" {
+func (scoop) ownsJava(_ context.Context, host *Host) bool {
+	if host.goos != "windows" {
 		return false
 	}
-	root := scoopRoot()
+	root := scoopRoot(host)
 	if root == "" {
 		return false
 	}
@@ -249,23 +247,24 @@ func scoopPackageCandidates(pkg scoopJavaPackage, major int) []scoopCandidate {
 
 // scoopJavaBucket returns a manifest check for the installed java bucket. A
 // nil check means the bucket is absent.
-func scoopJavaBucket(ctx context.Context) (func(string) bool, error) {
-	cmd := exec.CommandContext(
+func scoopJavaBucket(ctx context.Context, host *Host) (func(string) bool, error) {
+	output, err := host.probe(
 		ctx,
+		probeTimeout,
+		nil,
 		"cmd.exe",
 		"/d",
 		"/s",
 		"/c",
 		"scoop bucket list",
 	)
-	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("list scoop buckets: %w", err)
 	}
 	if !scoopHasBucket(string(output), "java") {
 		return nil, nil
 	}
-	root := scoopRoot()
+	root := scoopRoot(host)
 	if root == "" {
 		return nil, nil
 	}
@@ -289,11 +288,11 @@ func scoopHasBucket(output, bucket string) bool {
 }
 
 // scoopRoot returns the scoop installation directory.
-func scoopRoot() string {
-	if root := os.Getenv("SCOOP"); root != "" {
+func scoopRoot(host *Host) string {
+	if root := host.getenv("SCOOP"); root != "" {
 		return root
 	}
-	home, err := os.UserHomeDir()
+	home, err := host.userHomeDir()
 	if err != nil {
 		return ""
 	}

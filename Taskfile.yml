@@ -237,12 +237,21 @@ tasks:
     cmds:
       - go test -coverprofile=cover.out ./...
       - go tool gocover-cobertura < cover.out > coverage.xml
+
+  lint:
+    desc: Enforce package dependency boundaries
+    deps:
+      - docs:pack
+    cmds:
+      - go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --config .golangci.yml {{default "./..." .CLI_ARGS}}
+
   check:
     desc: Run the default local verification tasks
     deps:
       - build
       - test
       - test:race
+      - lint
 
   sandboxes:list:
     desc: List sandboxes defined in the manifest
@@ -317,6 +326,7 @@ tasks:
         if [ -n "${CF_API_KEY:-}" ]; then
           task cipher:generate
         fi
+      - task: lint
       - task: build
       - task: test:race
       - task: test:coverage

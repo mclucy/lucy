@@ -3,11 +3,11 @@ package cli
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/term"
-	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -16,20 +16,29 @@ import (
 // prompts off: neither can be steered by terminal input. A confirmation flag
 // such as --yes does not belong here because it answers a question rather
 // than selecting the value the prompt would have selected.
-type PromptGate struct{ cmd *cobra.Command }
-
-func NewPromptGate(cmd *cobra.Command) PromptGate {
-	return PromptGate{cmd: cmd}
+type PromptGate struct {
+	cmd *cobra.Command
+	inv *Invocation
 }
+
+func NewPromptGate(cmd *cobra.Command, inv *Invocation) PromptGate {
+	return PromptGate{cmd: cmd, inv: inv}
+}
+
+// Input is the stream a prompt may read from.
+func (g PromptGate) Input() io.Reader { return g.cmd.InOrStdin() }
+
+// Output is the stream a prompt renders on. Prompts never own stdout.
+func (g PromptGate) Output() io.Writer { return g.cmd.ErrOrStderr() }
 
 // Available reports whether a prompt may read the terminal. A caller that
 // still needs the selection fails with the flag that carries the same choice.
 func (g PromptGate) Available() bool {
-	if !g.flagsAllow() {
+	if !g.flagsAllow() || !g.inv.Interactive {
 		return false
 	}
 	stdin, ok := g.cmd.InOrStdin().(*os.File)
-	return ok && term.IsTerminal(stdin.Fd()) && style.InteractiveEnabled()
+	return ok && term.IsTerminal(stdin.Fd())
 }
 
 // flagsAllow reports whether the command's switches leave prompting enabled.

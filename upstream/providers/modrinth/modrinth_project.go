@@ -1,6 +1,7 @@
 package modrinth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -9,9 +10,13 @@ import (
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
-func getProjectId(slug catalog.Name) (id string, err error) {
+func (p *Provider) getProjectId(
+	ctx context.Context,
+	slug catalog.Name,
+) (id string, err error) {
 	modrinthProject := projectResponse{}
-	if err := requestJSON(
+	if err := p.requestJSON(
+		ctx,
 		projectUrl(string(slug)),
 		&modrinthProject,
 		ErrNoProject,
@@ -22,20 +27,29 @@ func getProjectId(slug catalog.Name) (id string, err error) {
 	return
 }
 
-func getProjectById(id string) (project *projectResponse, err error) {
+func (p *Provider) getProjectById(
+	ctx context.Context,
+	id string,
+) (project *projectResponse, err error) {
 	project = &projectResponse{}
-	if err := requestJSON(projectUrl(id), project, ErrNoProject); err != nil {
+	if err := p.requestJSON(
+		ctx,
+		projectUrl(id),
+		project,
+		ErrNoProject,
+	); err != nil {
 		return nil, err
 	}
 	return
 }
 
-func getProjectByName(slug catalog.Name) (
-	project *projectResponse,
-	err error,
-) {
+func (p *Provider) getProjectByName(
+	ctx context.Context,
+	slug catalog.Name,
+) (project *projectResponse, err error) {
 	project = &projectResponse{}
-	if err := requestJSON(
+	if err := p.requestJSON(
+		ctx,
 		projectUrl(string(slug)),
 		project,
 		ErrNoProject,
@@ -45,11 +59,12 @@ func getProjectByName(slug catalog.Name) (
 	return project, nil
 }
 
-func getProjectMembers(id string) (
-	members []*memberResponse,
-	err error,
-) {
-	if err := requestJSON(
+func (p *Provider) getProjectMembers(
+	ctx context.Context,
+	id string,
+) (members []*memberResponse, err error) {
+	if err := p.requestJSON(
+		ctx,
 		projectMemberUrl(id),
 		&members,
 		ErrNoMember,
@@ -61,11 +76,12 @@ func getProjectMembers(id string) (
 
 var ErrInvalidDependency = errors.New("modrinth: invalid dependency")
 
-func DependencyToPackage(
+func (p *Provider) DependencyToPackage(
+	ctx context.Context,
 	dependent catalog.VersionedRef,
 	dependency *dependenciesResponse,
 ) (
-	p catalog.VersionedRef,
+	pkg catalog.VersionedRef,
 	err error,
 ) {
 	var version *versionResponse
@@ -73,49 +89,50 @@ func DependencyToPackage(
 
 	// Modrinth dependencies do not cross platforms: a dependency's platform
 	// is taken from the dependent package, not from the dependency itself.
-	p.Ecosystem = dependent.Ecosystem
+	pkg.Ecosystem = dependent.Ecosystem
 
 	if dependency.VersionId != "" && dependency.ProjectId != "" {
-		version, err = getVersionById(dependency.VersionId)
+		version, err = p.getVersionById(ctx, dependency.VersionId)
 		if err != nil {
-			return p, fmt.Errorf("resolve dependency version: %w", err)
+			return pkg, fmt.Errorf("resolve dependency version: %w", err)
 		}
-		project, err = getProjectById(dependency.ProjectId)
+		project, err = p.getProjectById(ctx, dependency.ProjectId)
 		if err != nil {
-			return p, fmt.Errorf("resolve dependency project: %w", err)
+			return pkg, fmt.Errorf("resolve dependency project: %w", err)
 		}
 	} else if dependency.VersionId != "" {
-		version, err = getVersionById(dependency.VersionId)
+		version, err = p.getVersionById(ctx, dependency.VersionId)
 		if err != nil {
-			return p, fmt.Errorf("resolve dependency version: %w", err)
+			return pkg, fmt.Errorf("resolve dependency version: %w", err)
 		}
-		project, err = getProjectById(version.ProjectId)
+		project, err = p.getProjectById(ctx, version.ProjectId)
 		if err != nil {
-			return p, fmt.Errorf("resolve dependency project: %w", err)
+			return pkg, fmt.Errorf("resolve dependency project: %w", err)
 		}
 	} else if dependency.ProjectId != "" {
-		project, err = getProjectById(dependency.ProjectId)
+		project, err = p.getProjectById(ctx, dependency.ProjectId)
 		if err != nil {
-			return p, fmt.Errorf("resolve dependency project: %w", err)
+			return pkg, fmt.Errorf("resolve dependency project: %w", err)
 		}
-		version, err = latestVersion(
+		_, err = p.latestVersion(
+			ctx,
 			input.ToProjectName(project.Slug),
 			dependent.Ecosystem,
 			versionpkg.Unknown,
 			versionpkg.Any,
 		)
 		if err != nil {
-			return p, fmt.Errorf("resolve dependency latest version: %w", err)
+			return pkg, fmt.Errorf("resolve dependency latest version: %w", err)
 		}
-		p.Name = input.ToProjectName(project.Slug)
-		p.Version = versionpkg.Any
-		return p, nil
+		pkg.Name = input.ToProjectName(project.Slug)
+		pkg.Version = versionpkg.Any
+		return pkg, nil
 	} else {
-		return p, ErrInvalidDependency
+		return pkg, ErrInvalidDependency
 	}
 
-	p.Name = input.ToProjectName(project.Slug)
-	p.Version = versionpkg.Version(version.VersionNumber)
+	pkg.Name = input.ToProjectName(project.Slug)
+	pkg.Version = versionpkg.Version(version.VersionNumber)
 
-	return p, nil
+	return pkg, nil
 }

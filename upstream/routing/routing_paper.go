@@ -13,7 +13,6 @@ import (
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/version"
 )
@@ -32,7 +31,7 @@ type paperBuild struct {
 // IdentifyFillBuild matches a server jar digest against the published builds
 // of a PaperMC fill project. Init uses it when a renamed jar no longer carries
 // its build number.
-func IdentifyFillBuild(
+func (r *Router) IdentifyFillBuild(
 	ctx context.Context,
 	project string,
 	minecraft version.Version,
@@ -41,7 +40,7 @@ func IdentifyFillBuild(
 	var builds []paperBuild
 	endpoint := "https://fill.papermc.io/v3/projects/" + project +
 		"/versions/" + minecraft.String() + "/builds"
-	if err := Metadata(ctx, endpoint, &builds); err != nil {
+	if err := r.Metadata(ctx, endpoint, &builds); err != nil {
 		return "", false, err
 	}
 	for _, build := range builds {
@@ -56,10 +55,14 @@ func IdentifyFillBuild(
 	return "", false, nil
 }
 
-func resolvePaper(ctx context.Context, req ServerProductRequest, out *ServerProductResolution) error {
+func (r *Router) resolvePaper(
+	ctx context.Context,
+	req ServerProductRequest,
+	out *ServerProductResolution,
+) error {
 	var builds []paperBuild
 	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" + req.Minecraft.String() + "/builds"
-	if err := Metadata(ctx, endpoint, &builds); err != nil {
+	if err := r.Metadata(ctx, endpoint, &builds); err != nil {
 		return err
 	}
 	slices.SortFunc(builds, func(a, b paperBuild) int { return cmp.Compare(b.ID, a.ID) })
@@ -77,7 +80,7 @@ func resolvePaper(ctx context.Context, req ServerProductRequest, out *ServerProd
 			reason = "no server download"
 		}
 		if reason != "" {
-			log.Debug(
+			r.logger.Debug(
 				"routing: paper build skipped",
 				"minecraft", req.Minecraft,
 				"build", v,
@@ -96,7 +99,7 @@ func resolvePaper(ctx context.Context, req ServerProductRequest, out *ServerProd
 			URL:       asset.URL,
 			Hashes:    asset.Checksums,
 		}
-		log.Debug(
+		r.logger.Debug(
 			"routing: paper build selected",
 			"minecraft", req.Minecraft,
 			"build", v,
@@ -108,11 +111,16 @@ func resolvePaper(ctx context.Context, req ServerProductRequest, out *ServerProd
 	return fmt.Errorf("no Paper build %s for Minecraft %s", req.ProductVersion, req.Minecraft)
 }
 
-func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, acquire func(*catalog.Artifact) (artifact.MaterializedFile, error)) error {
+func (r *Router) resolveGithubProduct(
+	ctx context.Context,
+	req ServerProductRequest,
+	out *ServerProductResolution,
+	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
+) error {
 	var repo struct {
 		ID int64 `json:"id"`
 	}
-	if err := Metadata(ctx, "https://api.github.com/repos/"+req.Repository, &repo); err != nil {
+	if err := r.Metadata(ctx, "https://api.github.com/repos/"+req.Repository, &repo); err != nil {
 		return err
 	}
 	var releases []struct {
@@ -127,29 +135,29 @@ func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *Se
 			Digest string `json:"digest"`
 		} `json:"assets"`
 	}
-	if err := Metadata(ctx, "https://api.github.com/repos/"+req.Repository+"/releases?per_page=100", &releases); err != nil {
+	if err := r.Metadata(ctx, "https://api.github.com/repos/"+req.Repository+"/releases?per_page=100", &releases); err != nil {
 		return err
 	}
-	for _, r := range releases {
+	for _, rl := range releases {
 		reason := ""
 		switch {
-		case r.Draft:
+		case rl.Draft:
 			reason = "draft release"
-		case !floating(req.ProductVersion) && r.Tag != req.ProductVersion.String():
+		case !floating(req.ProductVersion) && rl.Tag != req.ProductVersion.String():
 			reason = "release tag mismatch"
-		case req.ProductVersion == version.Stable && r.Prerelease:
+		case req.ProductVersion == version.Stable && rl.Prerelease:
 			reason = "prerelease excluded"
 		}
 		if reason != "" {
-			log.Debug(
+			r.logger.Debug(
 				"routing: github release skipped",
 				"repository", req.Repository,
-				"release", r.Tag,
+				"release", rl.Tag,
 				"reason", reason,
 			)
 			continue
 		}
-		for _, a := range r.Assets {
+		for _, a := range rl.Assets {
 			reason := ""
 			if !strings.HasSuffix(a.Name, ".jar") {
 				reason = "not a jar asset"
@@ -163,10 +171,10 @@ func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *Se
 				}
 			}
 			if reason != "" {
-				log.Debug(
+				r.logger.Debug(
 					"routing: github release asset skipped",
 					"repository", req.Repository,
-					"release", r.Tag,
+					"release", rl.Tag,
 					"asset", a.Name,
 					"reason", reason,
 				)
@@ -179,15 +187,15 @@ func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *Se
 			candidate := catalog.Artifact{
 				Provider:  catalog.ProviderGitHub,
 				ProjectID: strconv.FormatInt(repo.ID, 10),
-				ReleaseID: strconv.FormatInt(r.ID, 10),
+				ReleaseID: strconv.FormatInt(rl.ID, 10),
 				FileID:    strconv.FormatInt(a.ID, 10),
-				Version:   version.Version(r.Tag),
+				Version:   version.Version(rl.Tag),
 				Filename:  a.Name,
 				URL:       a.URL,
 				Hashes:    hashes,
 			}
 			trial := *out
-			trial.ProductVersion = version.Version(r.Tag)
+			trial.ProductVersion = version.Version(rl.Tag)
 			trial.Bootstrapper = "paperclip"
 			materialized, e := acquire(&candidate)
 			if e != nil {
@@ -196,20 +204,20 @@ func resolveGithubProduct(ctx context.Context, req ServerProductRequest, out *Se
 			candidate.Hashes = materialized.Hashes
 			trial.Artifact = candidate
 			if e := paperclipInput(&trial, materialized.Path); e != nil {
-				log.Debug(
+				r.logger.Debug(
 					"routing: github fork candidate rejected",
 					"repository", req.Repository,
-					"release", r.Tag,
+					"release", rl.Tag,
 					"asset", a.Name,
 					"reason", "paperclip download context unusable",
 				)
 				continue
 			}
 			*out = trial
-			log.Debug(
+			r.logger.Debug(
 				"routing: github fork core selected",
 				"repository", req.Repository,
-				"release", r.Tag,
+				"release", rl.Tag,
 				"asset", a.Name,
 			)
 			return nil
