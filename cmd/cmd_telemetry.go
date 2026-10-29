@@ -223,8 +223,8 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 		return
 	}
 	defer r.telemetry.Close()
-	command := r.executing
-	if command == nil || isTelemetryCommand(command) || command.Name() == "__complete" || command.Name() == "__completeNoDesc" {
+	command := r.invocationCommand()
+	if isTelemetryCommand(command) || command.Name() == "__complete" || command.Name() == "__completeNoDesc" {
 		return
 	}
 	outcome := telemetry.Outcome("success")
