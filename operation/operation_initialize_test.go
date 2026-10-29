@@ -124,6 +124,11 @@ func newInitializeTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatalf("create logger: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := logger.Close(); err != nil {
+			t.Errorf("close logger: %v", err)
+		}
+	})
 	installer := install.NewService(
 		initializeInstallSource{},
 		nil,
