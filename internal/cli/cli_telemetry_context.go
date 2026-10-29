@@ -75,7 +75,8 @@ func recordJavaTelemetry(inv *Invocation, selection *javaruntime.Check) {
 }
 
 func telemetryVersion(value string) string {
-	if value == "" || len(value) > 64 || strings.Trim(value, "0123456789.+-_") != "" {
+	if len(value) > 64 || !strings.ContainsAny(value, "0123456789") ||
+		strings.Trim(value, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.+-_") != "" {
 		return ""
 	}
 	return value
