@@ -17,9 +17,6 @@ func TestProbe(t *testing.T) {
 		t.Run(id, func(t *testing.T) {
 			t.Parallel()
 			want := probeScenarios[id]
-			if want.manualSandbox && !testkit.HasSandbox(t, id) {
-				t.Skipf("sandbox %s needs manually supplied artifacts; see e2e/testdata/sandboxes/docs", id)
-			}
 			status, err := executeStatus(binary, testkit.Sandbox(t, id))
 			if err != nil {
 				t.Fatal(err)
