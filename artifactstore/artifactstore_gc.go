@@ -193,6 +193,12 @@ func displayEntry(entry serverregistry.Entry) string {
 func lockReferences(entries []serverregistry.Entry) (map[cas.Digest]struct{}, error) {
 	referenced := make(map[cas.Digest]struct{})
 	for _, entry := range entries {
+		journal := filepath.Join(entry.Path, workspacewrite.InstallJournalName)
+		if _, err := os.Lstat(journal); err == nil {
+			return nil, fmt.Errorf("registered server %s has an interrupted installation; run `lucy install` in that workspace before collecting", displayEntry(entry))
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("inspect installation journal for registered server %s: %w", displayEntry(entry), err)
+		}
 		locked, err := document.LockFile(entry.Path).Read()
 		if errors.Is(err, os.ErrNotExist) {
 			// A registered workspace without a lock pins no artifacts.

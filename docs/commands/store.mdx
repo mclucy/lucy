@@ -31,7 +31,7 @@ Removes objects that no registered server's lock references. A lock retains ever
 Garbage collection is deliberately conservative:
 
 - It reads the lockfile of every [registered server](/commands/install#known-servers) while holding that workspace's writer lock.
-- It refuses to delete anything when another Lucy operation holds an artifact-store acquisition lease, when a registry entry is missing, unreadable, or invalid, when a lock cannot be read, when a lock names an artifact without a usable SHA-256 digest, or when another Lucy operation owns a registered workspace.
+- It refuses to delete anything when another Lucy operation holds an artifact-store acquisition lease, when a registry entry is missing, unreadable, or invalid, when an installation is interrupted, when a lock cannot be read, when a lock names an artifact without a usable SHA-256 digest, or when another Lucy operation owns a registered workspace. Run `lucy install` in an interrupted workspace to recover it before collecting.
 - It holds the operation-lease gate and the store lock from reference collection through deletion, so a concurrent acquisition cannot publish an object into the middle of a sweep.
 
 Run `lucy install` once in a server directory after restoring or moving it so its entry and lock are current before collecting. Collection refuses to run while any other Lucy operation holds the artifact-store operation lease, and it holds the lease gate from its lease check through the last deletion. A command that starts on a registered workspace meanwhile can report that another Lucy operation owns it, so retry after collection.
