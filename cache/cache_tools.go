@@ -10,10 +10,12 @@ import (
 	"time"
 )
 
+// expiredEntries uses the same boundary as cache lookups: an entry is dead
+// once its expiration is reached.
 func expiredEntries(entries map[key]*Entry, now time.Time) []key {
 	var expired []key
 	for k, entry := range entries {
-		if entry.Expiration.Before(now) {
+		if !entry.Expiration.After(now) {
 			expired = append(expired, k)
 		}
 	}
