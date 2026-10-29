@@ -200,11 +200,6 @@ func actionCreate(
 		)
 	}
 	result, err := deps.Operations.Create(ctx, opts)
-	if result != nil && result.PublishedManifest {
-		registerWorkspace(result.Workspace, output.Output, inv, deps)
-	} else if published, ok := errors.AsType[*operation.CreatePublishError](err); ok && published.ManifestWritten {
-		registerWorkspace(published.Workspace, output.Output, inv, deps)
-	}
 	if err != nil {
 		return output.Failure(err)
 	}

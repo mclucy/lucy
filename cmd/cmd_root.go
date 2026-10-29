@@ -179,6 +179,7 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 		cli.NewLeavesCommand(contracts, invocation, dependencies),
 		cli.NewRemoveCommand(contracts, invocation, dependencies),
 		cli.NewServerCommand(contracts, invocation, dependencies),
+		cli.NewStoreCommand(contracts, invocation, dependencies),
 		cli.NewTreeCommand(contracts, invocation, dependencies),
 		cli.NewUpgradeCommand(contracts, invocation, dependencies),
 		compile.NewCommand(invocation),
@@ -273,7 +274,7 @@ func (r *Runner) configureServices(cmd *cobra.Command) error {
 	router := routing.New(network, r.invocation.Logger, key)
 	files := filetrack.NewService(r.httpClient, r.invocation.Logger)
 	installer := install.NewService(
-		router, network, files, install.NewPythonHost(r.invocation.Directory, r.invocation.Logger), r.invocation.Logger, proxy,
+		router, network, files, install.NewPythonHost(r.invocation.Directory, r.invocation.Logger), registry, r.invocation.Logger, proxy,
 	)
 	r.dependencies.Network = network
 	r.dependencies.Router = router

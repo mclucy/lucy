@@ -65,7 +65,7 @@ func completeServerNames(_ *cobra.Command, _ []string, prefix string) ([]string,
 	seen := make(map[string]bool)
 	var names []string
 	for _, entry := range entries {
-		if entry.State != serverregistry.StateAvailable || !strings.HasPrefix(entry.Name, prefix) || seen[entry.Name] {
+		if entry.State != serverregistry.StateAvailable || entry.Name == "" || !strings.HasPrefix(entry.Name, prefix) || seen[entry.Name] {
 			continue
 		}
 		seen[entry.Name] = true

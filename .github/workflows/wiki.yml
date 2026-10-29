@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wiki
+  group: ${{ github.event_name == 'pull_request' && format('wiki-pr-{0}', github.run_id) || 'wiki' }}
   cancel-in-progress: false
 
 jobs:

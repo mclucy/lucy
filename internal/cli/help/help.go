@@ -80,9 +80,14 @@ const (
 
 	ServerShort       = "Manage servers known to lucy"
 	ServerListShort   = "List servers known to lucy"
+	ServerForgetShort = "Remove a registered server whose directory is gone"
 	ServerRenameShort = "Rename a server known to lucy"
 
 	StatusShort = "Display basic information of the current server"
+
+	StoreShort     = "Manage the global artifact store"
+	StoreListShort = "List stored artifacts"
+	StoreGCShort   = "Reclaim artifacts no registered server's lock references"
 
 	TreeShort = "Show all packages and their dependencies"
 

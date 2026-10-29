@@ -110,6 +110,18 @@ func (o *createOutput) Failure(err error) error {
 		detail.Lines = append(detail.Lines, publishErr.Err.Error())
 		return detail
 	}
+	if registrationErr, ok := errors.AsType[*operation.CreateRegistrationError](err); ok {
+		return &report.Detail{
+			Title: "the server directory was created but it was not registered",
+			Lines: []string{
+				"Directory: " + displayCreateLocation(registrationErr.Workspace, o.inv.Directory),
+				"lucy.yaml and lucy-lock.yaml were written.",
+				registrationErr.Err.Error(),
+			},
+			Hint:  "Fix the server registry or the workspace name, then run lucy install again.",
+			Cause: err,
+		}
+	}
 	if installErr, ok := errors.AsType[*operation.CreateInstallError](err); ok {
 		detail := &report.Detail{
 			Title: "the server directory was created but installation failed",

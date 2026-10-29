@@ -59,8 +59,8 @@ linters:
         backend-presentation:
           list-mode: lax
           files:
-            - "**/{artifact,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,resolve,serverregistry,upstream,workspace}/*.go"
-            - "**/{artifact,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,resolve,serverregistry,upstream,workspace}/**/*.go"
+            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,resolve,serverregistry,upstream,workspace}/*.go"
+            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,resolve,serverregistry,upstream,workspace}/**/*.go"
             - "**/internal/{buildrepo,toolchain,workspacewrite}/*.go"
             - "**/internal/{buildrepo,toolchain,workspacewrite}/**/*.go"
           deny:

@@ -1,4 +1,5 @@
-// Package serverregistry locates named workspaces through per-user directory links.
+// Package serverregistry locates named workspaces through per-user registry
+// entries that record canonical workspace paths.
 package serverregistry
 
 import (
@@ -19,13 +20,14 @@ import (
 
 const (
 	StateAvailable  = "available"
+	StateLockOnly   = "lock-only"
 	StateMissing    = "missing"
 	StateUnreadable = "unreadable"
 	StateInvalid    = "invalid"
 )
 
-// Entry describes a registered path and its current declaration. Name is empty
-// when the declaration cannot be read. Unavailable entries remain registered.
+// Entry describes a registered path and its current declaration. An unnamed
+// server has no name selector. Unavailable entries remain registered.
 type Entry struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`
@@ -37,19 +39,48 @@ type Registry struct {
 	directory string
 }
 
+// record is one registry entry file together with the workspace path it
+// records. Target is empty when the entry file cannot be interpreted.
+type record struct {
+	file   string
+	target string
+	entry  Entry
+}
+
+const registryLockName = "registry.lock"
+
+const (
+	// entryTempPrefix names the staged file a registration publishes. List
+	// ignores it, so an abandoned stage is inert debris rather than an entry.
+	entryTempPrefix = ".tmp-"
+	// maxEntrySize bounds how much of an entry file List will read.
+	maxEntrySize = 64 << 10
+)
+
 // New locates durable per-user data without creating or changing the registry.
 func New() (*Registry, error) {
+	root, err := DataRoot()
+	if err != nil {
+		return nil, err
+	}
+	return &Registry{directory: filepath.Join(root, "servers")}, nil
+}
+
+// DataRoot reports the per-user directory Lucy owns for durable machine state.
+// It matches the platform's local application data conventions. It never
+// creates the directory.
+func DataRoot() (string, error) {
 	var base string
 	switch runtime.GOOS {
 	case "windows":
 		base = os.Getenv("LOCALAPPDATA")
 		if base == "" {
-			return nil, errors.New("locate server registry: LOCALAPPDATA is not set")
+			return "", errors.New("locate lucy data directory: LOCALAPPDATA is not set")
 		}
 	case "darwin":
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, fmt.Errorf("locate server registry: %w", err)
+			return "", fmt.Errorf("locate lucy data directory: %w", err)
 		}
 		base = filepath.Join(home, "Library", "Application Support")
 	default:
@@ -57,49 +88,73 @@ func New() (*Registry, error) {
 		if !filepath.IsAbs(base) {
 			home, err := os.UserHomeDir()
 			if err != nil {
-				return nil, fmt.Errorf("locate server registry: %w", err)
+				return "", fmt.Errorf("locate lucy data directory: %w", err)
 			}
 			base = filepath.Join(home, ".local", "share")
 		}
 	}
-	return &Registry{directory: filepath.Join(base, "lucy", "servers")}, nil
+	return filepath.Join(base, "lucy"), nil
 }
 
 // List checks every target on each call. It does not prune entries: a missing
-// target can be an unmounted volume, and deletion could race registration.
+// target can be an unmounted volume, and deletion could race registration. An
+// entry that cannot be interpreted is reported as invalid, which makes
+// collection refuse to run.
 func (r *Registry) List() ([]Entry, error) {
-	links, err := os.ReadDir(r.directory)
-	if errors.Is(err, os.ErrNotExist) {
-		return []Entry{}, nil
-	}
+	records, err := r.records()
 	if err != nil {
-		return nil, fmt.Errorf("read server registry: %w", err)
+		return nil, err
 	}
-	entries := make([]Entry, 0, len(links))
-	for _, link := range links {
-		path := filepath.Join(r.directory, link.Name())
-		target, err := os.Readlink(path)
-		if errors.Is(err, os.ErrNotExist) {
-			// A concurrent deinitialization removed this entry.
-			continue
-		}
-		if err != nil {
-			entries = append(entries, Entry{
-				Path:    path,
-				State:   StateInvalid,
-				Problem: err.Error(),
-			})
-			continue
-		}
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(r.directory, target)
-		}
-		entries = append(entries, observe(filepath.Clean(target)))
+	entries := make([]Entry, 0, len(records))
+	for _, record := range records {
+		entries = append(entries, record.entry)
 	}
 	slices.SortFunc(entries, func(a, b Entry) int {
 		return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.Path, b.Path))
 	})
 	return entries, nil
+}
+
+// records reads every registry entry without locking. Callers that must
+// observe a stable set hold the registry lock while calling it.
+func (r *Registry) records() ([]record, error) {
+	links, err := os.ReadDir(r.directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read server registry: %w", err)
+	}
+	records := make([]record, 0, len(links))
+	for _, link := range links {
+		if link.Name() == registryLockName ||
+			strings.HasPrefix(link.Name(), entryTempPrefix) {
+			continue
+		}
+		file := filepath.Join(r.directory, link.Name())
+		target, err := readEntry(file)
+		if errors.Is(err, os.ErrNotExist) {
+			// A concurrent deinitialization removed this entry.
+			continue
+		}
+		if err != nil {
+			records = append(records, record{
+				file: file,
+				entry: Entry{
+					Path:    file,
+					State:   StateInvalid,
+					Problem: err.Error(),
+				},
+			})
+			continue
+		}
+		records = append(records, record{
+			file:   file,
+			target: target,
+			entry:  observe(target),
+		})
+	}
+	return records, nil
 }
 
 // Resolve requires exactly one available declaration with this name.
@@ -138,9 +193,10 @@ func (r *Registry) Resolve(name string) (Entry, error) {
 	}
 }
 
-// Register creates one link per canonical workspace path. The caller must hold
-// the workspace writer lock so deinitialization cannot remove a newer entry.
-// Other available entries with the same name are returned for presentation.
+// Register creates one entry per canonical workspace path for a workspace with
+// a readable manifest. The caller must hold the workspace writer lock so
+// deinitialization cannot remove a newer entry. Other available entries with
+// the same name are returned for presentation.
 func (r *Registry) Register(root string) ([]Entry, error) {
 	root, err := canonical(root)
 	if err != nil {
@@ -150,22 +206,54 @@ func (r *Registry) Register(root string) ([]Entry, error) {
 	if entry.State != StateAvailable {
 		return nil, fmt.Errorf("register server %s: %s", root, entry.Problem)
 	}
-	if err := fsutil.MkdirAllPrivate(r.directory); err != nil {
-		return nil, fmt.Errorf("create server registry: %w", err)
+	return r.registerEntry(root, entry)
+}
+
+// RegisterInstallation records a workspace whose installation completed. A
+// workspace with a readable manifest is registered by name. A lock-only
+// installation has no manifest name but still pins artifacts, so it is
+// recorded as a lock-only entry that collection tracks and --server does not
+// select. The caller must hold the workspace writer lock.
+func (r *Registry) RegisterInstallation(root string) ([]Entry, error) {
+	root, err := canonical(root)
+	if err != nil {
+		return nil, err
 	}
-	link := filepath.Join(r.directory, pathKey(root))
-	if err := os.Symlink(root, link); err != nil {
-		if !errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("register server directory link: %w", err)
+	entry := observe(root)
+	switch entry.State {
+	case StateAvailable, StateLockOnly:
+	default:
+		return nil, fmt.Errorf("register server %s: %s", root, entry.Problem)
+	}
+	return r.registerEntry(root, entry)
+}
+
+func (r *Registry) registerEntry(root string, entry Entry) ([]Entry, error) {
+	lock, err := r.lock()
+	if err != nil {
+		return nil, fmt.Errorf("lock server registry: %w", err)
+	}
+	defer func() { _ = lock.Close() }()
+	entryPath := filepath.Join(r.directory, pathKey(root))
+	target, err := readEntry(entryPath)
+	switch {
+	case err == nil:
+		if !samePath(target, root) {
+			return nil, fmt.Errorf("server registry entry %s does not point to %s", entryPath, root)
 		}
-		target, readErr := os.Readlink(link)
-		if readErr != nil || !samePath(target, root) {
-			return nil, fmt.Errorf("server registry entry %s does not link to %s", link, root)
+	case errors.Is(err, os.ErrNotExist):
+		if err := writeEntry(entryPath, root); err != nil {
+			return nil, fmt.Errorf("register server directory entry: %w", err)
 		}
+	default:
+		return nil, fmt.Errorf("read server registry entry %s: %w", entryPath, err)
 	}
 	entries, err := r.List()
 	if err != nil {
 		return nil, err
+	}
+	if entry.Name == "" {
+		return nil, nil
 	}
 	duplicates := entries[:0]
 	for _, other := range entries {
@@ -176,15 +264,25 @@ func (r *Registry) Register(root string) ([]Entry, error) {
 	return duplicates, nil
 }
 
-// Unregister removes only this path's link, never the target directory. It must
-// run while the caller still holds the workspace's original writer lock.
+// Unregister removes only this path's entry, never the target directory. It
+// must run while the caller still holds the workspace's original writer lock.
 func (r *Registry) Unregister(root string) error {
 	root, err := canonical(root)
 	if err != nil {
 		return err
 	}
-	link := filepath.Join(r.directory, pathKey(root))
-	target, err := os.Readlink(link)
+	if _, err := os.Stat(r.directory); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect server registry: %w", err)
+	}
+	lock, err := r.lock()
+	if err != nil {
+		return fmt.Errorf("lock server registry: %w", err)
+	}
+	defer func() { _ = lock.Close() }()
+	entryPath := filepath.Join(r.directory, pathKey(root))
+	target, err := readEntry(entryPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -192,12 +290,134 @@ func (r *Registry) Unregister(root string) error {
 		return fmt.Errorf("read server registry entry: %w", err)
 	}
 	if !samePath(target, root) {
-		return fmt.Errorf("server registry entry %s does not link to %s", link, root)
+		return fmt.Errorf("server registry entry %s does not point to %s", entryPath, root)
 	}
-	if err := os.Remove(link); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(entryPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("unregister server: %w", err)
 	}
 	return nil
+}
+
+// Forget removes the single registry entry whose recorded target is path. The
+// target must be confirmed missing; a live, unreadable, or ambiguous target
+// leaves the registry unchanged. The caller passes the path as List reports
+// it, because canonicalizing a missing target cannot succeed. Forget holds the
+// registry mutation lock and removes only the entry file, never the target or
+// any other data.
+func (r *Registry) Forget(path string) (Entry, error) {
+	if strings.TrimSpace(path) == "" {
+		return Entry{}, errors.New("forget server: path is empty")
+	}
+	target, err := filepath.Abs(path)
+	if err != nil {
+		return Entry{}, fmt.Errorf("resolve server directory: %w", err)
+	}
+	target = filepath.Clean(target)
+	if _, err := os.Stat(r.directory); errors.Is(err, os.ErrNotExist) {
+		return Entry{}, fmt.Errorf(
+			"no registered server at %s; run `lucy server ls` to inspect registered paths",
+			target,
+		)
+	} else if err != nil {
+		return Entry{}, fmt.Errorf("inspect server registry: %w", err)
+	}
+	lock, err := r.lock()
+	if err != nil {
+		return Entry{}, fmt.Errorf("lock server registry: %w", err)
+	}
+	defer func() { _ = lock.Close() }()
+	records, err := r.records()
+	if err != nil {
+		return Entry{}, err
+	}
+	matches := make([]record, 0, 1)
+	for _, record := range records {
+		if record.target != "" && samePath(filepath.Clean(record.target), target) {
+			matches = append(matches, record)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return Entry{}, fmt.Errorf(
+			"no registered server at %s; run `lucy server ls` to inspect registered paths",
+			target,
+		)
+	case 1:
+	default:
+		files := make([]string, 0, len(matches))
+		for _, match := range matches {
+			files = append(files, match.file)
+		}
+		return Entry{}, fmt.Errorf(
+			"server registry has %d entries for %s: %s",
+			len(matches), target, strings.Join(files, ", "),
+		)
+	}
+	match := matches[0]
+	if match.entry.State != StateMissing {
+		switch match.entry.State {
+		case StateAvailable, StateLockOnly:
+			return Entry{}, fmt.Errorf(
+				"registered server %s still exists; run `lucy deinit` in that directory to remove it",
+				target,
+			)
+		default:
+			return Entry{}, fmt.Errorf(
+				"cannot confirm registered server %s is missing (%s): %s",
+				target, match.entry.State, match.entry.Problem,
+			)
+		}
+	}
+	current, err := readEntry(match.file)
+	if errors.Is(err, os.ErrNotExist) {
+		return Entry{}, errors.New("server registry entry changed during forget; retry")
+	}
+	if err != nil {
+		return Entry{}, fmt.Errorf("read server registry entry: %w", err)
+	}
+	if !samePath(filepath.Clean(current), target) {
+		return Entry{}, errors.New("registered server changed during forget; retry")
+	}
+	if err := confirmMissing(target); err != nil {
+		return Entry{}, err
+	}
+	if err := os.Remove(match.file); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Entry{}, errors.New("server registry entry changed during forget; retry")
+		}
+		return Entry{}, fmt.Errorf("forget server: %w", err)
+	}
+	return match.entry, nil
+}
+
+// confirmMissing requires the recorded path itself to be absent. Lstat is
+// deliberate: a dangling symlink still occupies the path and is not the
+// directory that registration recorded.
+func confirmMissing(target string) error {
+	if _, err := os.Lstat(target); err == nil {
+		return fmt.Errorf(
+			"registered path %s exists and cannot be confirmed missing",
+			target,
+		)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("cannot confirm registered path %s is missing: %w", target, err)
+	}
+	return nil
+}
+
+// Lock holds the registry mutation lock. Registration, unregistration, and
+// forgetting use the same lock, so a caller can observe a stable registered
+// set while it holds this lock. The lock file lives beside the entries and is
+// skipped by List.
+func (r *Registry) Lock() (*fsutil.FileLock, error) {
+	return r.lock()
+}
+
+func (r *Registry) lock() (*fsutil.FileLock, error) {
+	if err := fsutil.MkdirAllPrivate(r.directory); err != nil {
+		return nil, fmt.Errorf("create server registry: %w", err)
+	}
+	return fsutil.LockFile(filepath.Join(r.directory, registryLockName))
 }
 
 func observe(root string) Entry {
@@ -218,6 +438,16 @@ func observe(root string) Entry {
 	}
 	manifest, err := document.ManifestFile(root).Read()
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if _, lockErr := document.LockFile(root).Read(); lockErr == nil {
+				entry.State = StateLockOnly
+				return entry
+			} else if !errors.Is(lockErr, os.ErrNotExist) {
+				entry.State = StateUnreadable
+				entry.Problem = "read lockfile: " + lockErr.Error()
+				return entry
+			}
+		}
 		entry.State = StateInvalid
 		if _, pathError := errors.AsType[*os.PathError](err); pathError && !errors.Is(err, os.ErrNotExist) {
 			entry.State = StateUnreadable
@@ -225,14 +455,58 @@ func observe(root string) Entry {
 		entry.Problem = err.Error()
 		return entry
 	}
-	name, err := document.NormalizeName(manifest.Name)
-	if err != nil {
-		entry.State = StateInvalid
-		entry.Problem = "manifest name: " + err.Error()
-		return entry
-	}
-	entry.Name = name
+	entry.Name = manifest.Name
 	return entry
+}
+
+func readEntry(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", errors.New("registry entry is not a regular file")
+	}
+	if info.Size() > maxEntrySize {
+		return "", fmt.Errorf("registry entry exceeds %d bytes", maxEntrySize)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if !filepath.IsAbs(string(data)) {
+		return "", errors.New("registry entry does not contain an absolute path")
+	}
+	return string(data), nil
+}
+
+// writeEntry publishes a complete entry in one rename, so an unlocked List
+// observes either the previous entry or the full target, never a partial file.
+// An abandoned stage keeps the prefix List ignores.
+func writeEntry(path, target string) (resultErr error) {
+	staged, err := os.CreateTemp(filepath.Dir(path), entryTempPrefix)
+	if err != nil {
+		return fmt.Errorf("stage server registry entry: %w", err)
+	}
+	stagedPath := staged.Name()
+	defer func() {
+		if resultErr != nil {
+			_ = os.Remove(stagedPath)
+		}
+	}()
+	if _, err := staged.WriteString(target); err != nil {
+		return errors.Join(err, staged.Close())
+	}
+	if err := staged.Sync(); err != nil {
+		return errors.Join(err, staged.Close())
+	}
+	if err := staged.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(stagedPath, path); err != nil {
+		return fmt.Errorf("publish server registry entry: %w", err)
+	}
+	return nil
 }
 
 func canonical(root string) (string, error) {

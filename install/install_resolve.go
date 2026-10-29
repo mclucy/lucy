@@ -13,7 +13,7 @@ import (
 )
 
 // resolveInstall resolves d into a new lock document. The caller decides when
-// a lock may be reused, so this function always resolves. The download store
+// a lock may be reused, so this function always resolves. The artifact store
 // receives every artifact whose hash the lock records.
 func (s *Service) resolveInstall(
 	ctx context.Context,

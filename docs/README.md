@@ -18,6 +18,7 @@ This directory contains the Mintlify documentation site. Site configuration and 
   - [`lucy compile`](commands/compile.mdx)
   - [`lucy info`](commands/info.mdx)
   - [`lucy status`](commands/status.mdx)
+  - [`lucy store`](commands/store.mdx)
 
 Shared operational notes live in [shared/cipher-key-operations.md](shared/cipher-key-operations.md).
 

@@ -94,7 +94,7 @@ func FuzzPackagesBacktrackDemand(f *testing.F) {
 		document.Server.Packages[catalog.EcosystemFabric] = map[string]documentpkg.Requirement{
 			"modrinth:" + keep: {Selector: version.Any},
 		}
-		plan, err := install.NewService(nil, nil, nil, nil, nil, "").PlanInstall(t.Context(), fixture.dir, document, replayed, install.Options{
+		plan, err := install.NewService(nil, nil, nil, nil, nil, nil, "").PlanInstall(t.Context(), fixture.dir, document, replayed, install.Options{
 			Locked: true, RequirementChange: true,
 		})
 		if err != nil {

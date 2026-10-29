@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
@@ -15,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 )
@@ -45,6 +47,7 @@ type Service struct {
 	network     *cache.Client
 	tracker     *filetrack.Service
 	python      *PythonHost
+	registry    *serverregistry.Registry
 	logger      *log.Logger
 	githubProxy string
 }
@@ -52,12 +55,15 @@ type Service struct {
 // NewService constructs the installation service from its explicit
 // dependencies. network performs artifact transfers; tracker provisions
 // tracked files; python supplies interpreter and process capabilities;
-// githubProxy mirrors release asset downloads when non-empty.
+// registry records successful installations for the artifact store's
+// retention sweep; githubProxy mirrors release asset downloads when
+// non-empty.
 func NewService(
 	source Source,
 	network *cache.Client,
 	tracker *filetrack.Service,
 	python *PythonHost,
+	registry *serverregistry.Registry,
 	logger *log.Logger,
 	githubProxy string,
 ) *Service {
@@ -66,16 +72,41 @@ func NewService(
 		network:     network,
 		tracker:     tracker,
 		python:      python,
+		registry:    registry,
 		logger:      logger,
 		githubProxy: githubProxy,
 	}
+}
+
+// registerServer records the workspace before any artifact enters the store.
+// A successful installation therefore always has a registry entry whose lock
+// the artifact store's retention sweep can read. Registration failure fails
+// the installation instead of reporting success that the sweep cannot trace.
+func (s *Service) registerServer(root string, result *Result) error {
+	if s.registry == nil {
+		return errors.New("server registry is unavailable; cannot record this installation for artifact retention")
+	}
+	duplicates, err := s.registry.RegisterInstallation(root)
+	if err != nil {
+		return fmt.Errorf("register server before installation: %w", err)
+	}
+	if result != nil {
+		for _, duplicate := range duplicates {
+			result.Warnings = append(result.Warnings, fmt.Errorf(
+				"server name %q is also registered at %s; --server cannot select an ambiguous name",
+				duplicate.Name,
+				duplicate.Path,
+			))
+		}
+	}
+	return nil
 }
 
 // Resolve builds the lock document that answers d without staging or
 // committing the server tree. It records the declared packages alone, because
 // the workspace the manifest describes already holds a working set that
 // catalogue dependencies must not extend. Artifact bytes still enter the
-// workspace download store because the lock pins their hashes. It returns the
+// artifact store because the lock pins their hashes. It returns the
 // resolution facts alongside the lock. The caller must hold the workspace
 // writer lock.
 func (s *Service) Resolve(
@@ -109,7 +140,7 @@ func (s *Service) Resolve(
 		result.Reason = "manifest unchanged; lock reused"
 		return old, result, nil
 	}
-	store := s.newDownloadStore(ctx, absolute, opts, result)
+	store := s.newDownloadStore(ctx, opts, result)
 	resolved, err := s.resolveInstall(ctx, absolute, d, old, fingerprint, &opts, store, result)
 	if err != nil {
 		return nil, result, err
@@ -121,7 +152,11 @@ func (s *Service) Resolve(
 }
 
 // PlanInstall resolves a lock without staging or committing the server tree.
-// It holds the workspace writer lock only while reading and resolving.
+// It holds the artifact-store operation lease and the workspace writer lock
+// only while reading and resolving, so a collection sweep cannot reclaim bytes
+// the resolution materializes. Both locks are released when planning returns;
+// the plan itself reserves no artifacts, and ApplyPlan acquires the lease
+// again before using it.
 func (s *Service) PlanInstall(
 	ctx context.Context,
 	root string,
@@ -134,6 +169,11 @@ func (s *Service) PlanInstall(
 		return nil, err
 	}
 	root = absolute
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
 	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
 		return nil, err
 	}
@@ -146,7 +186,7 @@ func (s *Service) PlanInstall(
 		return nil, err
 	}
 	result := newResult()
-	store := s.newDownloadStore(ctx, root, opts, result)
+	store := s.newDownloadStore(ctx, opts, result)
 	resolved, err := s.resolveLock(ctx, root, d, old, &opts, store, result)
 	if err != nil {
 		return nil, err
@@ -186,6 +226,11 @@ func (s *Service) ApplyPlan(
 		return nil, err
 	}
 	root = absolute
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
 	if err := workspacewrite.SafePath(root, ".lucy"); err != nil {
 		return nil, err
 	}
@@ -198,6 +243,9 @@ func (s *Service) ApplyPlan(
 		return nil, err
 	}
 	if err := checkPlannedState(root, plan); err != nil {
+		return nil, err
+	}
+	if err := s.registerServer(root, plan.Result); err != nil {
 		return nil, err
 	}
 	// The isolated MCDReforged environment is keyed by its Python requirements,
@@ -222,7 +270,7 @@ func (s *Service) ApplyPlan(
 		result = newResult()
 		result.applyChanges(plan.Previous, plan.Resolved, plan.Manifest)
 	}
-	store := s.newDownloadStore(ctx, root, opts, result)
+	store := s.newDownloadStore(ctx, opts, result)
 	opts.PublishManifest = plan.PublishManifest
 	opts.publishLock = plan.PublishLock
 	diagnostics, err := s.stageInstall(ctx, root, plan.Manifest, plan.Resolved, store, opts, result)
@@ -249,13 +297,11 @@ func (s *Service) Sync(
 // it updates. Callers must hold the workspace writer lock while resolving.
 func (s *Service) Materializer(
 	ctx context.Context,
-	root string,
 	opts Options,
 ) (func(*catalog.Artifact) (artifact.MaterializedFile, error), *FetchSummary) {
 	summary := &FetchSummary{}
 	store := &downloadStore{
 		ctx:         ctx,
-		dir:         filepath.Join(root, ".lucy", "downloads"),
 		offline:     opts.Offline,
 		trace:       opts.Trace,
 		fetch:       summary,

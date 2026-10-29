@@ -22,7 +22,8 @@ var (
 // Store has one private filesystem root and no consumer metadata.
 // Close it after its writers finish; open readers own their file handles.
 type Store struct {
-	root *os.Root
+	root      *os.Root
+	directory string
 }
 
 // New rejects a symlink store root and creates private object and staging namespaces.
@@ -47,11 +48,17 @@ func New(path string) (*Store, error) {
 			return nil, errors.Join(fmt.Errorf("invalid cas namespace %s", name), err, root.Close())
 		}
 	}
-	return &Store{root: root}, nil
+	return &Store{root: root, directory: path}, nil
 }
 
 func (s *Store) Close() error {
 	return s.root.Close()
+}
+
+// Path reports the filesystem path of a published object. It does not check
+// that the object exists; callers open it through their own filesystem view.
+func (s *Store) Path(digest Digest) string {
+	return filepath.Join(s.directory, filepath.FromSlash(objectPath(digest)))
 }
 
 func (s *Store) lock() (*fsutil.FileLock, error) {
@@ -135,6 +142,10 @@ func (s *Store) Remove(digest Digest) (size int64, resultErr error) {
 		return 0, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, lock.Close()) }()
+	return s.removeLocked(digest)
+}
+
+func (s *Store) removeLocked(digest Digest) (int64, error) {
 	name := objectPath(digest)
 	info, err := s.root.Lstat(name)
 	if errors.Is(err, os.ErrNotExist) {
@@ -154,6 +165,56 @@ func (s *Store) Remove(digest Digest) (size int64, resultErr error) {
 		return 0, fmt.Errorf("remove reclaimed cas contents: %w", err)
 	}
 	return info.Size(), nil
+}
+
+// Sweep holds the store lock while plan determines the retained digests and
+// locks the state those references came from, then removes every other object.
+// No writer can publish from the moment the lock is acquired through the last
+// removal, so an object published by an operation that started after plan has
+// not run cannot be collected. plan may return a release function for state it
+// locked; Sweep runs it before releasing the store lock. A nil reference set is
+// rejected rather than read as "delete all", and a plan or enumeration error
+// removes nothing.
+func (s *Store) Sweep(plan func() (map[Digest]struct{}, func() error, error)) (removed int, bytes int64, resultErr error) {
+	if plan == nil {
+		return 0, 0, fmt.Errorf("sweep requires a plan")
+	}
+	lock, err := s.lock()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lock.Close()) }()
+	referenced, release, err := plan()
+	if release != nil {
+		defer func() { resultErr = errors.Join(resultErr, release()) }()
+	}
+	if err != nil {
+		return 0, 0, err
+	}
+	if referenced == nil {
+		return 0, 0, fmt.Errorf("sweep requires a reference set")
+	}
+	var objects []Object
+	if err := s.Walk(func(object Object) error {
+		objects = append(objects, object)
+		return nil
+	}); err != nil {
+		return 0, 0, err
+	}
+	var failures []error
+	for _, object := range objects {
+		if _, kept := referenced[object.Digest]; kept {
+			continue
+		}
+		size, err := s.removeLocked(object.Digest)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		removed++
+		bytes += size
+	}
+	return removed, bytes, errors.Join(failures...)
 }
 
 // Cleanup removes only stages whose lease is no longer held by a writer.

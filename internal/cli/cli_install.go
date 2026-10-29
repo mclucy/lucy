@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/mclucy/lucy/install"
@@ -131,10 +130,6 @@ func actionInstall(
 	ctx, stop := CommandContext(cmd)
 	defer stop()
 	result, err := deps.Operations.Sync(ctx, inv.Directory, opts)
-	_, committed := errors.AsType[*install.CommittedError](err)
-	if err == nil || committed || result != nil && (result.PublishedLock || result.PublishedManifest) {
-		registerWorkspace(inv.Directory, output.Output, inv, deps)
-	}
 	if err != nil {
 		return output.Failure(err)
 	}

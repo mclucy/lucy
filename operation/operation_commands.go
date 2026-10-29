@@ -19,6 +19,7 @@ import (
 	"github.com/mclucy/lucy/version"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/config"
 	"github.com/mclucy/lucy/filetrack"
@@ -282,6 +283,11 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err
 	}
+	lease, err := artifactstore.AcquireOperation()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
 	writer, err := workspacewrite.Lock(root, s.logger)
 	if err != nil {
 		return nil, err
@@ -567,11 +573,23 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		return initResult(observed), err
 	}
 	// Once lucy.yaml exists, later publication failures still report the
-	// written document so callers can register the workspace.
+	// written document. Registration precedes lock publication so a successful
+	// initialization is visible to the artifact store's sweep.
 	result = &InitResult{Document: d}
 	if observed != nil {
 		result.Warnings = observed.Warnings
 		result.Discovery = observed.Discovery
+	}
+	duplicates, err := s.registerWorkspace(root)
+	if err != nil {
+		return result, fmt.Errorf("register server: %w", err)
+	}
+	for _, duplicate := range duplicates {
+		result.Warnings = append(result.Warnings, fmt.Errorf(
+			"server name %q is also registered at %s; --server cannot select an ambiguous name",
+			duplicate.Name,
+			duplicate.Path,
+		))
 	}
 	if resolved != old {
 		if err := documentpkg.LockFile(root).Write(resolved); err != nil {

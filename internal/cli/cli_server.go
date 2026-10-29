@@ -16,8 +16,15 @@ import (
 // registered entry, including entries whose target cannot serve as a server.
 var serverListJSON JSONResult[[]serverregistry.Entry]
 
+// serverForgetJSON is the machine-readable result of forgetting one entry.
+var serverForgetJSON JSONResult[serverForgetDocument]
+
 // serverRenameJSON is the machine-readable result of one rename.
 var serverRenameJSON JSONResult[serverRenameDocument]
+
+type serverForgetDocument struct {
+	Path string `json:"path"`
+}
 
 type serverRenameDocument struct {
 	Previous string   `json:"previous_name"`
@@ -40,6 +47,14 @@ func NewServerCommand(
 			return actionServerList(cmd, inv, deps, args)
 		},
 	}
+	serverForgetCmd := &cobra.Command{
+		Use:   "forget <path>",
+		Short: help.ServerForgetShort,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return actionServerForget(cmd, inv, deps, args)
+		},
+	}
 	serverRenameCmd := &cobra.Command{
 		Use:               "rename <server> <name>",
 		Short:             help.ServerRenameShort,
@@ -55,8 +70,9 @@ func NewServerCommand(
 		Args:  cobra.NoArgs,
 	}
 	serverListJSON.Bind(contracts, serverListCmd)
+	serverForgetJSON.Bind(contracts, serverForgetCmd)
 	serverRenameJSON.Bind(contracts, serverRenameCmd)
-	serverCmd.AddCommand(serverListCmd, serverRenameCmd)
+	serverCmd.AddCommand(serverListCmd, serverForgetCmd, serverRenameCmd)
 	return serverCmd
 }
 
@@ -123,6 +139,31 @@ func writeServerList(
 		facts = append(facts, terminal.Fact{Key: name, Value: value})
 	}
 	_, err := fmt.Fprintln(out, terminal.RenderFacts(facts, width, theme))
+	return err
+}
+
+// actionServerForget removes a registry entry whose recorded server directory
+// is gone. The registry decides whether the target is confirmed missing; the
+// command reports the forgotten path and never deletes server data.
+func actionServerForget(
+	cmd *cobra.Command,
+	inv *Invocation,
+	deps *Dependencies,
+	args []string,
+) error {
+	output := NewOperationOutput(cmd, inv)
+	registry, err := deps.ServerRegistry()
+	if err != nil {
+		return err
+	}
+	entry, err := registry.Forget(args[0])
+	if err != nil {
+		return err
+	}
+	if output.JSON() {
+		return serverForgetJSON.Write(output, serverForgetDocument{Path: entry.Path})
+	}
+	_, err = fmt.Fprintf(output.Human(), "forgot server %s\n", entry.Path)
 	return err
 }
 

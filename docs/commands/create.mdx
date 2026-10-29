@@ -17,7 +17,7 @@ In a script or CI, pass `--no-interactive`; `--minecraft` is then required. The 
 
 The name is stored as the top-level `name` in `lucy.yaml`, outside the server definition. It is trimmed and must be non-empty and printable. Pass `--name`, or edit it in the form, where it follows the directory until you change it.
 
-Registration warns when another registered server already uses the name. Both servers stay listed, but `--server` cannot select an ambiguous name until you change one manifest's `name` directly. A failure to write the known-server list is also a warning: the manifest, lock, and installed files are kept, and the next `create`, `init`, or `install` registers the server once the list is fixed.
+Registration warns when another registered server already uses the name. Both servers stay listed, but `--server` cannot select an ambiguous name until you change one manifest's `name` directly. A failure to register is an error: the manifest and lock remain, but installation is not attempted. Fix the registry or the name, then run `lucy install`.
 
 ## Choose versions
 
