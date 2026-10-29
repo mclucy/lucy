@@ -1,5 +1,3 @@
-//go:build integration
-
 package cache
 
 import (
@@ -23,15 +21,15 @@ import (
 )
 
 const (
-	cacheChildEnvironment = "LUCY_CACHE_INTEGRATION_PROCESS"
-	cacheChildServer      = "LUCY_CACHE_INTEGRATION_SERVER"
-	cacheChildJob         = "LUCY_CACHE_INTEGRATION_JOB"
-	cacheChildCount       = "LUCY_CACHE_INTEGRATION_COUNT"
+	cacheChildEnvironment = "LUCY_CACHE_HELPER_PROCESS"
+	cacheChildServer      = "LUCY_CACHE_HELPER_SERVER"
+	cacheChildJob         = "LUCY_CACHE_HELPER_JOB"
+	cacheChildCount       = "LUCY_CACHE_HELPER_COUNT"
 
 	cacheChildReportPrefix = "cache-child-report "
 )
 
-// cacheChildReport is the helper process side of the integration protocol.
+// cacheChildReport is the helper process side of the child protocol.
 // A helper prints one JSON line so a parent never has to guess its outcome.
 type cacheChildReport struct {
 	Scenario   string   `json:"scenario"`
@@ -46,7 +44,7 @@ type cacheChildReport struct {
 	DataLength int      `json:"data_length,omitempty"`
 }
 
-// cacheChild re-executes the integration test binary as a helper process.
+// cacheChild re-executes the test binary as a helper process.
 type cacheChild struct {
 	command *exec.Cmd
 	output  bytes.Buffer
@@ -55,12 +53,13 @@ type cacheChild struct {
 func startCacheChild(t *testing.T, test string, env map[string]string) *cacheChild {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
-	command := exec.CommandContext(
-		ctx,
-		os.Args[0],
-		"-test.run=^"+test+"$",
-		"-test.timeout=55s",
-	)
+	args := []string{"-test.run=^" + test + "$", "-test.timeout=55s"}
+	if testing.CoverMode() != "" {
+		// The helper runs with an unusable TMPDIR in the fallback scenario, so
+		// coverage teardown needs a directory that does not depend on it.
+		args = append(args, "-test.gocoverdir="+t.TempDir())
+	}
+	command := exec.CommandContext(ctx, os.Args[0], args...)
 	command.Env = append(os.Environ(), cacheChildEnvironment+"=1", "GORACE=atexit_sleep_ms=0")
 	for key, value := range env {
 		command.Env = append(command.Env, key+"="+value)

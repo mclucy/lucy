@@ -1,6 +1,4 @@
-//go:build integration
-
-package filetrack_test
+package cmd
 
 import (
 	"testing"

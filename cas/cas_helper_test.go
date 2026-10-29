@@ -1,5 +1,3 @@
-//go:build integration
-
 package cas
 
 import (
@@ -18,12 +16,12 @@ import (
 	"time"
 )
 
-// Integration tests re-execute this binary as an isolated cas helper process.
+// Cross-process tests re-execute this binary as an isolated cas helper process.
 // The parent sends one JSON request on stdin and reads JSON response lines on
 // stdout, so every handshake is deterministic and no test depends on timing.
 const (
-	casHelperEnvVar    = "CAS_INTEGRATION_HELPER"
-	casHelperOpEnvVar  = "CAS_INTEGRATION_HELPER_OP"
+	casHelperEnvVar    = "CAS_HELPER"
+	casHelperOpEnvVar  = "CAS_HELPER_OP"
 	casHelperCrashCode = 7
 )
 

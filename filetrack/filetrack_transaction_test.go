@@ -1,5 +1,3 @@
-//go:build integration
-
 package filetrack
 
 import (
@@ -615,5 +613,56 @@ func requireTransactionBytes(t *testing.T, path string, wanted []byte) {
 	requireTransaction(t, err)
 	if !bytes.Equal(actual, wanted) {
 		t.Fatalf("%s: got %q, want %q", path, actual, wanted)
+	}
+}
+
+func TestHasPendingTransaction(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	pending, err := HasPendingTransaction(root)
+	requireTransaction(t, err)
+	if pending {
+		t.Fatal("empty workspace reported a pending transaction")
+	}
+	requireTransaction(t, os.MkdirAll(filepath.Join(root, ".lucy"), 0o700))
+	requireTransaction(t, os.WriteFile(filepath.Join(root, transactionName), []byte("{}"), 0o600))
+	pending, err = HasPendingTransaction(root)
+	requireTransaction(t, err)
+	if !pending {
+		t.Fatal("pending transaction was not reported")
+	}
+}
+
+func TestRecoverPendingRejectsInvalidTransactions(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{name: "malformed JSON", payload: "{"},
+		{name: "missing identity", payload: `{"event":{},"mutations":[{"path":"a.txt"}]}`},
+		{
+			name:    "negative history size",
+			payload: `{"event":{"id":"event","sequence":1},"history_size":-1,"mutations":[{"path":"a.txt"}]}`,
+		},
+		{
+			name:    "no mutations",
+			payload: `{"event":{"id":"event","sequence":1},"history_size":0,"mutations":[]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			requireTransaction(t, os.MkdirAll(filepath.Join(root, ".lucy"), 0o700))
+			requireTransaction(t, os.WriteFile(
+				filepath.Join(root, transactionName),
+				[]byte(test.payload),
+				0o600,
+			))
+			if err := RecoverPending(root); err == nil {
+				t.Fatal("RecoverPending accepted an invalid transaction")
+			}
+		})
 	}
 }

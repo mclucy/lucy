@@ -29,7 +29,6 @@ task e2e:init           # Initialize modpack manifests from sandboxes
 task e2e:install        # Run fresh-install scenarios against pinned fixtures
 task e2e:compile        # Compile pinned repository fixtures
 task e2e:compile:smoke  # Compile only the fixtures marked smoke
-task e2e:filetrack      # Run hermetic file tracking scenarios
 task sandboxes:list     # List sandbox definitions
 task sandboxes:gen      # Materialize sandboxes into .sandboxes/
 task logos:gen          # Regenerate status logos from terminal/assets/logos.yaml
@@ -131,16 +130,18 @@ A new interactive surface ships with its flag equivalent in the same change. Use
 4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 5. Never assume the current code is correct. Write unit tests based on logical contracts, not asserting on whatever the current code does.
 
-The e2e domain suites are Go tests behind the `e2e` build tag, and the
-filetrack suite is behind `integration`, so `go test ./...` stays unit-only.
-Build Lucy and generate the sandboxes first, then:
+The e2e domain suites are Go tests behind the `e2e` build tag. The
+`cmd` filetrack guard suite runs in the default suite; it invokes the CLI in
+process and uses a helper process for the world session lock. Package tests in
+`cas`, `cache`, and `filetrack` also run in the default suite; they stay
+hermetic by using temporary directories, local HTTP servers, and self-executed
+helper processes. Build Lucy and generate the sandboxes first, then:
 
 ```bash
 go test -tags e2e -count=1 ./e2e/status    # probe .sandboxes
 go test -tags e2e -count=1 ./e2e/init      # initialize modpack manifests
 go test -tags e2e -count=1 ./e2e/compile   # compile e2e/testdata/repo fixtures
 go test -tags e2e -count=1 ./e2e/install   # fresh and init-then-install scenarios
-go test -tags integration -count=1 ./e2e/filetrack  # hermetic file tracking scenarios
 ```
 
 Select cases with `-run`: `-run 'TestProbe/<sandbox id>'`,
@@ -158,8 +159,8 @@ cannot mask the other. `-count=1`
 disables the test cache, `-parallel N` bounds concurrency, and `-lucy` and
 `-sandboxes` override the `dist/lucy` and `.sandboxes` defaults.
 `e2e/internal/testkit` resolves those paths; `task e2e:status|init|compile|install` wrap
-the same commands. The filetrack suite builds its own debug binary and needs neither
-sandboxes nor a prebuilt CLI. CI selects the domains whose inputs changed from
+the same commands. The `cmd` filetrack guard suite runs the CLI in process and needs
+neither sandboxes nor a prebuilt binary. CI selects the domains whose inputs changed from
 the path filters in `.github/workflows/e2e.yml` and runs each selected domain
 through the reusable runner.
 `TestCompile` runs every fixture by default. Fixtures marked `smoke: true`

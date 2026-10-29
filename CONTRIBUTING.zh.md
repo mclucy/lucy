@@ -15,9 +15,7 @@
 - `task build` 在 `dist/` 下构建开发产物。
 - `task build:watch` 在代码库变更时自动重新构建。
 - `task run -- [args]` 无需构建即可运行代码库。
-- `task test` 运行默认的 Go 测试套件。
-- `task test:integration` 运行 CAS、HTTP 缓存、文件事务和真实 CLI 的集成测试。CLI 测试构建的二进制文件不启用竞态检测。测试使用临时目录和本地 HTTP 服务，无需从外部下载服务器文件。
-- `task test:integration:race` 启用竞态检测运行这些测试。CLI 测试也会构建启用竞态检测的二进制文件。
+- `task test` 运行默认的 Go 测试套件，其中包括使用临时目录、本地 HTTP 服务与自执行辅助进程的 CAS、HTTP 缓存、文件事务和 CLI 文件追踪守卫场景，无需从外部下载服务器文件。
 
 查看 [Taskfile](Taskfile.yml) 了解所有脚本。
 
