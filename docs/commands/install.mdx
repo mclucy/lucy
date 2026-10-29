@@ -47,7 +47,7 @@ Java version mismatches are warnings, not install errors. If a step needs a runt
 
 Lucy keeps a list of servers for your user account in your user data directory. The list is shared by every shell and project and records locations only. A server appears after [`lucy create`](/commands/create), [`lucy init`](/commands/init), or `lucy install` registers it; [`lucy deinit`](/commands/deinit) removes the entry.
 
-Every install registers the workspace under the manifest's `name` before it acquires artifacts. A lock-only installation with no manifest is registered as a `lock-only` entry, so collection can retain its lock's artifacts even though `--server` cannot select it by name. Registration failure fails the installation instead of reporting success, because `lucy store gc` cannot retain artifacts for a server it cannot find. A manifest without a usable name cannot be registered as an available server; remove the manifest to install from the lock alone or fix its name. Registration warns when another server already uses the name.
+Every install registers its workspace before it acquires artifacts. A manifest may omit `name`; the server remains registered but cannot be selected by name. A lock-only installation is registered as a `lock-only` entry. Registration failure fails the installation because `lucy store gc` cannot retain artifacts for a server it cannot find. Registration warns when another server already uses the name.
 
 ### lucy server list
 
@@ -60,15 +60,15 @@ Lists each registered server's name, state, and path. `list` and `ls` are the sa
 
 |State|Meaning|
 |---|---|
-|`available`|The path exists and its manifest and name can be read and validated.|
+|`available`|The path exists and its manifest can be read and validated.|
 |`lock-only`|The path exists and holds a valid `lucy-lock.yaml`, but no manifest. Collection retains its lock's artifacts; `--server` cannot select it.|
 |`missing`|The path no longer exists, for example because a drive is disconnected.|
 |`unreadable`|The path or manifest exists, but lucy cannot inspect it, usually because of permissions or an I/O error.|
-|`invalid`|The path exists but does not contain a valid lucy manifest, or the manifest does not declare a valid name.|
+|`invalid`|The path exists but does not contain a valid lucy manifest.|
 
 The listing checks each registered target without changing it. A missing server stays in the list; lucy never removes an entry because a target is unavailable. Reconnect the drive and list again to see it as `available`. Only `lucy deinit` removes an entry.
 
-An empty name is shown as `-`. Lock-only, missing, unreadable, and invalid entries cannot be selected with `--server` until a manifest with a valid name is present.
+An empty name is shown as `-`. An unnamed server cannot be selected with `--server`. Lock-only, missing, unreadable, and invalid entries also cannot be selected.
 
 ### lucy server rename
 

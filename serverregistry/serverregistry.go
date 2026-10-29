@@ -25,8 +25,8 @@ const (
 	StateInvalid    = "invalid"
 )
 
-// Entry describes a registered path and its current declaration. Name is empty
-// when the declaration cannot be read. Unavailable entries remain registered.
+// Entry describes a registered path and its current declaration. An unnamed
+// server has no name selector. Unavailable entries remain registered.
 type Entry struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`
@@ -306,13 +306,7 @@ func observe(root string) Entry {
 		entry.Problem = err.Error()
 		return entry
 	}
-	name, err := document.NormalizeName(manifest.Name)
-	if err != nil {
-		entry.State = StateInvalid
-		entry.Problem = "manifest name: " + err.Error()
-		return entry
-	}
-	entry.Name = name
+	entry.Name = manifest.Name
 	return entry
 }
 
