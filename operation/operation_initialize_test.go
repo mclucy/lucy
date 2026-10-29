@@ -113,8 +113,13 @@ func (initializeInstallSource) ResolveServerProduct(
 	return resolution, nil
 }
 
+// newInitializeTestService builds the operation service over an isolated home:
+// initialization acquires the per-user artifact store and registers the
+// workspace, so neither may reach the developer's real data directory.
 func newInitializeTestService(t *testing.T) *Service {
 	t.Helper()
+	isolateOperationHome(t)
+	registry := operationTestRegistry(t)
 	logger, err := logpkg.New(filepath.Join(t.TempDir(), "lucy.log"), "debug", nil)
 	if err != nil {
 		t.Fatalf("create logger: %v", err)
@@ -124,10 +129,16 @@ func newInitializeTestService(t *testing.T) *Service {
 		nil,
 		nil,
 		nil,
+		registry,
 		logger,
 		"",
 	)
-	return NewService(installer, initializeTestSource{}, nil, logger)
+	return NewService(
+		installer,
+		initializeTestSource{},
+		registry,
+		logger,
+	)
 }
 
 func writeInitializeTestJar(t *testing.T, path string, files map[string]string) {
@@ -209,8 +220,6 @@ func readFileBytes(t *testing.T, path string) []byte {
 // Initialization derives the server declaration and lock from the directory
 // alone, and never stages an installation receipt.
 func TestInitializeWritesDeclarationForVanillaLayout(t *testing.T) {
-	t.Parallel()
-
 	root := t.TempDir()
 	writeVanillaTestJar(t, root, "server.jar", "1.20.1")
 
@@ -283,8 +292,6 @@ func TestInitializeWritesDeclarationForVanillaLayout(t *testing.T) {
 // Initialization reads the workspace and writes declarations; the files it
 // observed, including an existing receipt, stay byte-for-byte intact.
 func TestInitializePreservesReceiptAndObservedFiles(t *testing.T) {
-	t.Parallel()
-
 	root := t.TempDir()
 	launcherPath := writeFabricTestLauncher(t, root, "0.19.5", "1.21.1")
 	modPath := filepath.Join(root, "mods", "example.jar")
@@ -336,8 +343,6 @@ func TestInitializePreservesReceiptAndObservedFiles(t *testing.T) {
 // ephemeral and never leaks into the lock, while later observation keeps the
 // identity the initialization wrote.
 func TestInitializeRequiresSelectionForCompetingRuntimes(t *testing.T) {
-	t.Parallel()
-
 	root := t.TempDir()
 	launcherPath := writeFabricTestLauncher(t, root, "0.19.5", "1.21.1")
 	writeVanillaTestJar(t, root, "server.jar", "1.21.1")
@@ -407,8 +412,6 @@ func TestInitializeRequiresSelectionForCompetingRuntimes(t *testing.T) {
 // A declaration whose installation is gone refuses replacement, keeps the
 // previous documents, and leaves live observation reporting the loss.
 func TestInitializeRefusesMissingDeclaredInstallation(t *testing.T) {
-	t.Parallel()
-
 	root := t.TempDir()
 	launcherPath := writeFabricTestLauncher(t, root, "0.19.5", "1.21.1")
 	service := newInitializeTestService(t)
@@ -464,8 +467,6 @@ func TestInitializeRefusesMissingDeclaredInstallation(t *testing.T) {
 // An unmanaged copy of the declared runtime keeps the declaration valid even
 // when the originally selected file is gone.
 func TestInitializeKeepsDeclarationForUnmanagedSurvivor(t *testing.T) {
-	t.Parallel()
-
 	root := t.TempDir()
 	launcherPath := writeFabricTestLauncher(t, root, "0.19.5", "1.21.1")
 	service := newInitializeTestService(t)
@@ -514,8 +515,6 @@ func TestInitializeKeepsDeclarationForUnmanagedSurvivor(t *testing.T) {
 // An explicit entry point that names no server fails closed before any
 // document is written.
 func TestInitializeRejectsUnrecognizedExplicitEntryPoint(t *testing.T) {
-	t.Parallel()
-
 	root := t.TempDir()
 	writeVanillaTestJar(t, root, "server.jar", "1.20.1")
 	notesPath := filepath.Join(root, "notes.txt")

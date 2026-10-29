@@ -18,6 +18,7 @@ import (
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
 	serverpkg "github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
@@ -34,6 +35,17 @@ func isolateInstallHome(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "appdata"))
+}
+
+func installTestRegistry(t *testing.T) *serverregistry.Registry {
+	t.Helper()
+	registry, err := serverregistry.New()
+	if err != nil {
+		t.Fatalf("server registry: %v", err)
+	}
+	return registry
 }
 
 func installTestWrite(t *testing.T, root, relative string, data []byte, mode os.FileMode) {
@@ -90,6 +102,7 @@ func installTestService(t *testing.T) *install.Service {
 		nil,
 		filetrack.NewService(&http.Client{}, nil),
 		nil,
+		installTestRegistry(t),
 		nil,
 		"",
 	)
@@ -122,6 +135,7 @@ func installTestReceipt(t *testing.T, root string) map[string]string {
 func installTestManifest(coreVersion string) *document.Manifest {
 	return &document.Manifest{
 		SchemaVersion: document.ManifestSchemaVersion,
+		Name:          "test",
 		Server: document.ManifestServer{
 			Minecraft: "1.21.4",
 			Directory: "server",
@@ -189,7 +203,7 @@ func TestResolveInstallUsesInjectedSourceAndArtifacts(t *testing.T) {
 		Hashes:    map[string]string{"sha256": installTestDigest(core)},
 	}}
 	tracker := filetrack.NewService(&http.Client{}, nil)
-	service := install.NewService(source, nil, tracker, nil, nil, "")
+	service := install.NewService(source, nil, tracker, nil, installTestRegistry(t), nil, "")
 	materialize := installTestMaterializer(t, map[string][]byte{"server.jar": core})
 	result, err := service.Sync(t.Context(), root, manifest, nil, install.Options{Materialize: materialize})
 	if err != nil {

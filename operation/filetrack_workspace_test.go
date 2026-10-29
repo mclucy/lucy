@@ -25,6 +25,7 @@ func compositeWorkspace(t *testing.T) (string, *document.Manifest, *document.Loc
 	root := t.TempDir()
 	manifest := &document.Manifest{
 		SchemaVersion: document.ManifestSchemaVersion,
+		Name:          "test",
 		Server: document.ManifestServer{
 			Minecraft: "1.21.4",
 			Directory: "server",
@@ -101,7 +102,7 @@ func compositeWriteReceipt(t *testing.T, root string, lock *document.Lock) {
 func compositeServices(t *testing.T) (*filetrack.Service, *install.Service, *Service) {
 	t.Helper()
 	tracker := filetrack.NewService(&http.Client{}, nil)
-	installer := install.NewService(nil, nil, tracker, nil, nil, "")
+	installer := install.NewService(nil, nil, tracker, nil, operationTestRegistry(t), nil, "")
 	return tracker, installer, NewService(installer, nil, nil, nil)
 }
 

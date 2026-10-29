@@ -17,6 +17,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
@@ -29,6 +30,17 @@ func isolateOperationHome(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "appdata"))
+}
+
+func operationTestRegistry(t *testing.T) *serverregistry.Registry {
+	t.Helper()
+	registry, err := serverregistry.New()
+	if err != nil {
+		t.Fatalf("server registry: %v", err)
+	}
+	return registry
 }
 
 func operationTestWrite(t *testing.T, root, relative string, data []byte, mode os.FileMode) {
@@ -175,8 +187,9 @@ func TestInitializeThenLockedInstallReplaysInEmptyWorkspace(t *testing.T) {
 		Hashes:    map[string]string{"sha256": operationTestDigest(core)},
 	}}
 	tracker := filetrack.NewService(&http.Client{}, nil)
-	installer := install.NewService(source, nil, tracker, nil, nil, "")
-	service := NewService(installer, source, nil, nil)
+	registry := operationTestRegistry(t)
+	installer := install.NewService(source, nil, tracker, nil, registry, nil, "")
+	service := NewService(installer, source, registry, nil)
 
 	sourceRoot := t.TempDir()
 	operationTestWrite(t, sourceRoot, "server.jar", operationTestMiniVanillaJar(t, "1.21.4"), 0o644)
