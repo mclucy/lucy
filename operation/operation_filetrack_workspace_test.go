@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -151,9 +152,18 @@ func TestFileCommandsPreserveRuntimePinsAndReceipt(t *testing.T) {
 	receiptBytes := operationTestRead(t, root, ".lucy/install.yaml")
 
 	// The permissions a user chose for the documents must survive each rewrite.
+	modes := make(map[string]os.FileMode)
 	for _, name := range []string{document.ManifestFilename, document.LockFilename} {
 		if err := os.Chmod(filepath.Join(root, name), 0o640); err != nil {
 			t.Fatalf("chmod %s: %v", name, err)
+		}
+		info, err := os.Stat(filepath.Join(root, name))
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		modes[name] = info.Mode().Perm()
+		if runtime.GOOS != "windows" && modes[name] != 0o640 {
+			t.Fatalf("%s mode = %v, want 0640", name, modes[name])
 		}
 	}
 	operationTestWrite(t, root, "config/extra.txt", []byte("extra note\n"), 0o644)
@@ -168,8 +178,8 @@ func TestFileCommandsPreserveRuntimePinsAndReceipt(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stat %s: %v", name, err)
 		}
-		if info.Mode().Perm() != 0o640 {
-			t.Fatalf("%s mode = %v, want 0640", name, info.Mode().Perm())
+		if info.Mode().Perm() != modes[name] {
+			t.Fatalf("%s mode = %v, want %v", name, info.Mode().Perm(), modes[name])
 		}
 	}
 	fresh, err := document.LockFile(root).Read()
