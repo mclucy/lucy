@@ -21,3 +21,11 @@ updates:
       actions:
         patterns:
           - "*"
+  - package-ecosystem: "npm"
+    directory: "assets"
+    schedule:
+      interval: "weekly"
+    groups:
+      assets:
+        patterns:
+          - "*"
