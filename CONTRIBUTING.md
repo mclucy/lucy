@@ -30,9 +30,12 @@ using `./node_modules/.bin/cf deploy`. The `manifest-schema` workflow regenerate
 
 The release workflow mirrors every published archive to the `lucy-releases` R2 bucket
 under `v<version>/`, and `/latest.json` resolves the release to install from that
-bucket, preferring stable releases over prereleases. Two repository settings drive
-this: `CLOUDFLARE_ACCOUNT_ID` and a `CLOUDFLARE_API_TOKEN` secret with Workers and R2
-write access plus route management in the `lucy.lc` zone.
+bucket, preferring stable releases over prereleases. The mirror copies the assets
+attached to the GitHub release, so a tag whose mirror step failed can be retried by
+running the `Release` workflow manually with that tag. Two repository settings drive
+this: `CLOUDFLARE_ACCOUNT_ID`, and a `CLOUDFLARE_API_TOKEN` secret with Workers R2
+Storage write access. Worker deployments do not use that secret, because Workers
+Builds deploys from `main` on its own credentials.
 
 To deploy the worker locally, run `npm ci` and `npx cf deploy` in `assets`.
 
