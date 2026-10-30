@@ -55,6 +55,7 @@ func NewStoreCommand(
 			return cmd.Help()
 		},
 	}
+	MarkHelpOnly(storeCmd)
 	storeListJSON.Bind(contracts, storeListCmd)
 	storeGCJSON.Bind(contracts, storeGCCmd)
 	storeCmd.AddCommand(storeListCmd, storeGCCmd)

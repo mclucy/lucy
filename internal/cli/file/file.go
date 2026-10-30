@@ -125,6 +125,7 @@ func NewCommand(
 			return cmd.Help()
 		},
 	}
+	cli.MarkHelpOnly(fileCmd)
 	fileCmd.AddCommand(
 		trackCmd,
 		untrackCmd,

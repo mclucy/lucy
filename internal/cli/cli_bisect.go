@@ -79,6 +79,7 @@ func NewBisectCommand(
 			return cmd.Help()
 		},
 	}
+	MarkHelpOnly(bisectCmd)
 	bisectJSON.Bind(contracts, bisectStartCmd)
 	bisectJSON.Bind(contracts, bisectGoodCmd)
 	bisectJSON.Bind(contracts, bisectBadCmd)

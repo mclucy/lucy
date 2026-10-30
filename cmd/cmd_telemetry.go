@@ -137,7 +137,8 @@ func (r *Runner) telemetryStats(cmd *cobra.Command) error {
 	if destination == "" {
 		destination = "not configured"
 	}
-	_, err = fmt.Fprintf(output.Human(),
+	_, err = fmt.Fprintf(
+		output.Human(),
 		"Telemetry: %s\nClient ID: %s\nStatistics since: %s\n"+
 			"Destination: %s\nAccepted records: %d (events: %d, reports: %d)\n"+
 			"Accepted event payload: %d bytes\nAccepted report content: %d bytes\n"+
@@ -190,7 +191,7 @@ func (r *Runner) submitAgentReport(cmd *cobra.Command, body string) error {
 	message := "Report queued locally; it has not been accepted remotely."
 	if flushErr == nil && flush.WasAccepted(result.RecordID) {
 		state = "accepted"
-		message = "Report accepted remotely; processing may still be pending."
+		message = "Feedback received! Thank you!"
 	} else if flushErr == nil && flush.WasRejected(result.RecordID) {
 		state = "rejected"
 		message = "The service rejected the report; it is no longer queued."
@@ -251,6 +252,9 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	r.recordInvocation(ctx, command, started, commandErr)
+	if noOpExit(command, commandErr) {
+		return
+	}
 	if offline := command.Flags().Lookup("offline"); offline != nil && offline.Value.String() == "true" {
 		return
 	}
@@ -258,6 +262,27 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 	if flushErr == nil && flush.Attempted > 0 && !r.JSONSelected() && r.stderr != nil {
 		fmt.Fprintln(r.stderr, "Telemetry upload attempted; run `lucy telemetry stats` for local totals.")
 	}
+}
+
+// noOpExit reports an invocation that displayed guidance instead of running a
+// command: help for the addressed command, the help command, a version
+// request, or a command group without a subcommand. The event stays queued, so
+// a machine that only reads help sends nothing.
+func noOpExit(command *cobra.Command, commandErr error) bool {
+	if commandErr != nil {
+		return false
+	}
+	if cli.IsHelpOnly(command) || command.Name() == "help" {
+		return true
+	}
+	for current := command; current != nil; current = current.Parent() {
+		for _, name := range []string{"help", "version"} {
+			if flag := current.Flags().Lookup(name); flag != nil && flag.Value.String() == "true" {
+				return true
+			}
+		}
+	}
+	return !command.Runnable()
 }
 
 // recordInvocation records the terminal event and, for failures, a diagnostic

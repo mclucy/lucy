@@ -45,6 +45,7 @@ func NewCacheCommand(
 			return cmd.Help()
 		},
 	}
+	MarkHelpOnly(cacheCmd)
 	cacheLsJSON.Bind(contracts, cacheLsCmd)
 	cacheClearJSON.Bind(contracts, cacheClearCmd)
 	cacheCmd.AddCommand(cacheLsCmd, cacheClearCmd)

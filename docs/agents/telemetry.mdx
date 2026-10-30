@@ -31,6 +31,8 @@ Reports have three kinds: `failure`, `panic`, and `agent_feedback` (from `lucy a
 
 ## Outbox and delivery
 
+Flush runs once at the end of an invocation that performed work. Guidance-only exits record their event but skip the flush: `--help` for any command, `lucy help`, a version request, and a command group invoked without a subcommand (`lucy java`, `lucy file`, and their peers). Reading help therefore never sends traffic; those records wait for the next invocation that performs work.
+
 Enqueue prunes expired records (older than 7 days) and then the oldest records until both bounds hold: 512 records and 4 MiB. A single record larger than the queue budget is refused. The just-enqueued record survives unless it is the one that exceeds the bound, in which case its payload file is removed.
 
 Flush prunes, skips an empty queue, honours a cooldown window, checks `GET /health` with a 2 s budget, clears the cooldown on success, and then uploads at most four batches. Each batch contains up to 50 records within 256 KiB, oldest first; unreadable payload files are dropped locally so they cannot block healthy records. Requests use a 5 s timeout and up to three attempts with 250 ms backoff. Transport failures set a 10-minute cooldown and persist the last error. Flush caps the caller's context at 15 s; the CLI passes 2 s, so a slow service leaves records queued rather than delaying the command.

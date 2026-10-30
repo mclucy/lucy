@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
 	"github.com/spf13/cobra"
 )
@@ -16,6 +17,7 @@ func NewCommand() *cobra.Command {
 			return cmd.Help()
 		},
 	}
+	cli.MarkHelpOnly(cmd)
 	cmd.AddCommand(
 		newListCommand(),
 		newGrepCommand(),

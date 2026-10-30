@@ -45,6 +45,7 @@ func NewJavaCommand(
 			return cmd.Help()
 		},
 	}
+	MarkHelpOnly(javaCmd)
 	javaListCmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
