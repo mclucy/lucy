@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
       - name: Prepare schema
         run: cp document/document_manifest.schema.json assets/public/manifest.json
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
