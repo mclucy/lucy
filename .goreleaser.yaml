@@ -60,6 +60,57 @@ checksum:
 
 release:
   prerelease: auto
+  footer: |
+    ## Installation
+
+    macOS and Linux:
+
+    ```sh
+    curl -fsSL https://lucy.lc/sh | sh
+    ```
+
+    Windows (PowerShell):
+
+    ```powershell
+    irm https://lucy.lc/ps1 | iex
+    ```
+
+    Or install with Homebrew or Go:
+
+    ```sh
+    brew install --HEAD mclucy/tap/lucy
+    go install github.com/mclucy/lucy@latest
+    ```
+
+    Full documentation: <https://lucy.lc/docs>
+
+# Release notes follow the commit convention. Refactors, documentation, tests,
+# CI, and chores describe the repository rather than a user-visible change, so
+# they stay out. Every remaining entry keeps its subject and gains the GitHub
+# handle of its author.
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Breaking changes
+      regexp: '^.*?[a-z]+(\([^)]*\))?!:.+$'
+      order: 0
+    - title: Features
+      regexp: '^.*?feat(\([^)]*\))?!?:.+$'
+      order: 1
+    - title: Bug fixes
+      regexp: '^.*?fix(\([^)]*\))?!?:.+$'
+      order: 2
+    - title: Performance
+      regexp: '^.*?perf(\([^)]*\))?!?:.+$'
+      order: 3
+    - title: Other changes
+      order: 4
+  format: '{{ .Message }}{{ if .AuthorUsername }} (@{{ .AuthorUsername }}){{ else }} ({{ .AuthorName }}){{ end }}'
+  filters:
+    exclude:
+      - '^(refactor|docs|test|ci|chore|style|wip)(\([^)]*\))?!?:'
+      - '^Merge '
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
