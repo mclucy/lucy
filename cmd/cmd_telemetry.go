@@ -203,15 +203,27 @@ func (r *Runner) startTelemetry() time.Time {
 	r.invocation.TelemetryContexts = nil
 	version, commit := buildVersion()
 	r.telemetryUnidentified = version == ""
-	channel := "alpha"
-	if strings.Contains(strings.ToLower(version), "beta") {
-		channel = "beta"
-	}
 	r.telemetry, r.telemetryErr = telemetry.New(telemetry.Config{
-		Endpoint: os.Getenv("LUCY_TELEMETRY_ENDPOINT"), Channel: channel,
+		Endpoint: os.Getenv("LUCY_TELEMETRY_ENDPOINT"), Channel: telemetryChannel(version),
 		LucyVersion: version, LucyCommit: commit, OS: runtime.GOOS, Arch: runtime.GOARCH, HTTPClient: r.httpClient,
 	})
 	return started
+}
+
+// telemetryChannel derives the release channel from the build version. Only
+// alpha and beta channels collect by default, so a stable release must not
+// inherit the alpha default. An unidentified build is a development build; it
+// records nothing, but it still retries records queued by identified builds.
+func telemetryChannel(version string) string {
+	lower := strings.ToLower(version)
+	switch {
+	case strings.Contains(lower, "beta"):
+		return "beta"
+	case lower == "", strings.Contains(lower, "alpha"), lower == "dev", lower == "devel", strings.HasPrefix(lower, "devel-"):
+		return "alpha"
+	default:
+		return "stable"
+	}
 }
 
 func isTelemetryCommand(command *cobra.Command) bool {
