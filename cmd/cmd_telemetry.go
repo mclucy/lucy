@@ -330,16 +330,19 @@ func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, s
 		OccurredAt: started, Contexts: r.invocation.TelemetryContexts,
 	})
 	if reportKind != "" {
-		body := "Command: " + command.CommandPath() + "\nError category: " + code + "\n"
-		if stages := r.invocation.Logger.Stages(); len(stages) > 0 {
-			body += "Stages:\n" + strings.Join(stages, "\n") + "\n"
+		body := cli.ReportBody{
+			Command: command.CommandPath(),
+			Code:    code,
+			Stages:  cli.StageCounts(r.invocation.Logger.Stages()),
+			Facts:   cli.FailureFacts(commandErr),
+		}
+		if commandErr != nil {
+			body.Message = commandErr.Error()
 		}
 		if panicFailure, ok := errors.AsType[*panicError](commandErr); ok && panicFailure != nil {
-			if functions := telemetryPanicFunctions(panicFailure.stack); len(functions) > 0 {
-				body += "Lucy stack functions:\n" + strings.Join(functions, "\n") + "\n"
-			}
+			body.Stack = telemetryPanicFunctions(panicFailure.stack)
 		}
-		_, _ = r.telemetry.SubmitReport(ctx, telemetry.Report{Kind: reportKind, InvocationID: id, Body: body})
+		_, _ = r.telemetry.SubmitReport(ctx, telemetry.Report{Kind: reportKind, InvocationID: id, Body: body.Encode()})
 	}
 }
 
