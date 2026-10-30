@@ -33,6 +33,7 @@ builds:
       - -s -w
       - -X github.com/mclucy/lucy/cmd.version={{.Version}}
       - -X github.com/mclucy/lucy/cmd.commit={{.Commit}}
+      - -X github.com/mclucy/lucy/cmd.telemetryRelease={{ if .IsSnapshot }}false{{ else }}true{{ end }}
       - -X github.com/mclucy/lucy/internal/cipher.keyA={{.Env.CIPHER_KEY_A}}
       - -X github.com/mclucy/lucy/internal/cipher.keyB={{.Env.CIPHER_KEY_B}}
       - -X github.com/mclucy/lucy/internal/cipher.ciphertextA={{.Env.CIPHER_CIPHERTEXT_A}}

@@ -61,7 +61,11 @@ func (r *Runner) registerTelemetryCommands() {
 					return err
 				} else if !enabled {
 					state = "off"
-					message = "The saved preference is on, but telemetry remains off due to the environment."
+					if r.telemetryLocal {
+						message = "The saved preference is on, but telemetry is disabled in local development builds."
+					} else {
+						message = "The saved preference is on, but telemetry remains off due to the environment."
+					}
 				}
 				return r.writeTelemetryAction(cmd, &telemetryAction{Action: setting.name, State: state, Message: message})
 			},
@@ -202,8 +206,9 @@ func (r *Runner) startTelemetry() time.Time {
 	r.invocation.TelemetryEnabled = false
 	r.invocation.TelemetryContexts = nil
 	version, commit := buildVersion()
-	r.telemetryUnidentified = version == ""
+	r.telemetryLocal = !isTelemetryRelease()
 	r.telemetry, r.telemetryErr = telemetry.New(telemetry.Config{
+		Disabled: r.telemetryLocal,
 		Endpoint: os.Getenv("LUCY_TELEMETRY_ENDPOINT"), Channel: telemetryChannel(version),
 		LucyVersion: version, LucyCommit: commit, OS: runtime.GOOS, Arch: runtime.GOARCH, HTTPClient: r.httpClient,
 	})
@@ -212,14 +217,13 @@ func (r *Runner) startTelemetry() time.Time {
 
 // telemetryChannel derives the release channel from the build version. Only
 // alpha and beta channels collect by default, so a stable release must not
-// inherit the alpha default. An unidentified build is a development build; it
-// records nothing, but it still retries records queued by identified builds.
+// inherit the alpha default.
 func telemetryChannel(version string) string {
 	lower := strings.ToLower(version)
 	switch {
 	case strings.Contains(lower, "beta"):
 		return "beta"
-	case lower == "", strings.Contains(lower, "alpha"), lower == "dev", lower == "devel", strings.HasPrefix(lower, "devel-"):
+	case strings.Contains(lower, "alpha"):
 		return "alpha"
 	default:
 		return "stable"
@@ -246,9 +250,7 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if !r.telemetryUnidentified {
-		r.recordInvocation(ctx, command, started, commandErr)
-	}
+	r.recordInvocation(ctx, command, started, commandErr)
 	if offline := command.Flags().Lookup("offline"); offline != nil && offline.Value.String() == "true" {
 		return
 	}

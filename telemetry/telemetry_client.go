@@ -11,6 +11,7 @@ import (
 // Client is a concurrency-safe telemetry client. All state lives beneath its
 // private directory. Create one client per process.
 type Client struct {
+	disabled  bool
 	directory string
 	endpoint  string
 	channel   string
@@ -61,6 +62,7 @@ func New(config Config) (*Client, error) {
 		httpClient = &cloned
 	}
 	return &Client{
+		disabled:  config.Disabled,
 		directory: config.Directory,
 		endpoint:  config.Endpoint,
 		channel:   config.Channel,
@@ -90,7 +92,7 @@ func (c *Client) Close() error {
 // whether an endpoint is configured; Flush handles that separately. An empty
 // endpoint still permits durable local enqueueing.
 func (c *Client) Enabled(ctx context.Context) (bool, error) {
-	if environmentDisabled() {
+	if c.disabled || environmentDisabled() {
 		return false, nil
 	}
 	release, err := c.enterOperation(ctx, c.limits.LockWait)
@@ -290,6 +292,9 @@ func (c *Client) effective(state *persistedState) (bool, CollectionPolicy, SkipR
 	policy := state.Policy
 	if policy == "" {
 		policy = CollectionDefault
+	}
+	if c.disabled {
+		return false, policy, SkipDisabled
 	}
 	if environmentDisabled() {
 		return false, policy, SkipEnvironment

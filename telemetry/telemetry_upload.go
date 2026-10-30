@@ -22,6 +22,11 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 		ctx = context.Background()
 	}
 	result := FlushResult{}
+	if c.disabled {
+		result.Skipped = true
+		result.Reason = SkipDisabled
+		return result, nil
+	}
 	if environmentDisabled() {
 		result.Skipped = true
 		result.Reason = SkipEnvironment

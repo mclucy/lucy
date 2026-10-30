@@ -39,6 +39,9 @@ type payloadResult struct {
 type payloadBuilder func(state *persistedState, id string, now time.Time) (payloadResult, error)
 
 func (c *Client) enqueue(ctx context.Context, kind recordType, build payloadBuilder) (Submission, error) {
+	if c.disabled {
+		return Submission{Reason: SkipDisabled}, nil
+	}
 	release, err := c.enterOperation(ctx, min(c.limits.LockWait, enqueueLockWait))
 	if err != nil {
 		if ignoreLockBusy(err) {

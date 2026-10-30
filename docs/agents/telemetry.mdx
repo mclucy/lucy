@@ -15,15 +15,15 @@ Every mutation runs under two locks: an in-process semaphore and a file lock, so
 
 ## Policy and identity
 
-The effective decision is: `LUCY_TELEMETRY` with a false-like value disables collection regardless of stored policy; otherwise an explicit `opt_in` or `opt_out` wins; otherwise the channel default applies, which is on for alpha and beta. A disabled client reports a skip reason and writes nothing.
+The effective decision is: local development builds disable collection and uploads regardless of stored policy; otherwise `LUCY_TELEMETRY` with a false-like value disables collection; otherwise an explicit `opt_in` or `opt_out` wins; otherwise the channel default applies, which is on for alpha and beta. A disabled client reports a skip reason and writes no records.
 
-The installation UUID is created lazily by the first record or by the first `telemetry on`. Read-only commands still create one when they queue an event; this is not an opt-out. The only build-level guard is the unidentified-build check: a binary with an empty injected version records nothing at all. `reset-id` rotates the UUID and starts a new statistics window; queued records keep their original IDs and payloads, and remote data is untouched. Runtime uploads count in the new window. `off` marks the state `purge_pending`, deletes the queue directory, and clears the index; the marker makes an interrupted purge complete on the next read.
+The installation UUID is created lazily by the first record or by the first `telemetry on`. Read-only commands still create one when they queue an event; this is not an opt-out. `reset-id` rotates the UUID and starts a new statistics window; queued records keep their original IDs and payloads, and remote data is untouched. Runtime uploads count in the new window. `off` marks the state `purge_pending`, deletes the queue directory, and clears the index; the marker makes an interrupted purge complete on the next read.
 
 ## Invocation events and contexts
 
 An event carries invocation ID, identity, occurrence time, command path without the `lucy ` prefix, build version and commit, channel, OS, architecture, duration, outcome, error code, schema version, effective policy, and up to 16 contexts. Contexts come from subsystems that already observed the data: `workspace` and `java` are recorded by `internal/cli` only when observation happened, and `agent` records whether an agent tool was detected. `present`, `absent`, and `failed` distinguish a missing installation from a failed observation. Context data is bounded at 8 KiB per context. Telemetry never triggers discovery, network probes, or workspace reads of its own.
 
-Outcome classification is a CLI-boundary decision: cancellation and deadline become `canceled`, usage errors become `invalid_invocation`, panics and handled exit errors become `failure` with a diagnostic report. Silent exits record an event without a report. `lucy telemetry*`, `lucy agent-report`, and shell-completion commands record nothing. A build with an empty injected version refuses to record at all.
+Outcome classification is a CLI-boundary decision: cancellation and deadline become `canceled`, usage errors become `invalid_invocation`, panics and handled exit errors become `failure` with a diagnostic report. Silent exits record an event without a report. `lucy telemetry*`, `lucy agent-report`, and shell-completion commands do not record invocation events.
 
 ## Reports
 

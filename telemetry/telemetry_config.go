@@ -102,6 +102,7 @@ type Limits struct {
 // platform user data directory, DefaultEndpoint, and alpha. Endpoint must use
 // HTTPS unless it points at a loopback host, which keeps tests hermetic.
 type Config struct {
+	Disabled    bool
 	Directory   string
 	Endpoint    string
 	Channel     string
