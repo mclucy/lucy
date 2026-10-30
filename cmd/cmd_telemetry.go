@@ -240,13 +240,28 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 		return
 	}
 	defer r.telemetry.Close()
-	if r.telemetryUnidentified {
-		return
-	}
 	command := r.invocationCommand()
 	if isTelemetryCommand(command) || command.Name() == "__complete" || command.Name() == "__completeNoDesc" {
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if !r.telemetryUnidentified {
+		r.recordInvocation(ctx, command, started, commandErr)
+	}
+	if offline := command.Flags().Lookup("offline"); offline != nil && offline.Value.String() == "true" {
+		return
+	}
+	flush, flushErr := r.telemetry.Flush(ctx)
+	if flushErr == nil && flush.Attempted > 0 && !r.JSONSelected() && r.stderr != nil {
+		fmt.Fprintln(r.stderr, "Telemetry upload attempted; run `lucy telemetry stats` for local totals.")
+	}
+}
+
+// recordInvocation records the terminal event and, for failures, a diagnostic
+// report. An unidentified build skips this call so harness traffic cannot pass
+// as user activity, but it still flushes records queued by identified builds.
+func (r *Runner) recordInvocation(ctx context.Context, command *cobra.Command, started time.Time, commandErr error) {
 	outcome := telemetry.Outcome("success")
 	code := ""
 	reportKind := telemetry.ReportKind("")
@@ -282,8 +297,6 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 		})
 	}
 	id := telemetry.NewUUID()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
 	_, _ = r.telemetry.RecordEvent(ctx, telemetry.Event{
 		InvocationID: id, Command: strings.TrimPrefix(command.CommandPath(), "lucy "),
 		Duration: time.Since(started), Outcome: outcome, ErrorCode: code,
@@ -300,13 +313,6 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 			}
 		}
 		_, _ = r.telemetry.SubmitReport(ctx, telemetry.Report{Kind: reportKind, InvocationID: id, Body: body})
-	}
-	if offline := command.Flags().Lookup("offline"); offline != nil && offline.Value.String() == "true" {
-		return
-	}
-	flush, flushErr := r.telemetry.Flush(ctx)
-	if flushErr == nil && flush.Attempted > 0 && !r.JSONSelected() && r.stderr != nil {
-		fmt.Fprintln(r.stderr, "Telemetry upload attempted; run `lucy telemetry stats` for local totals.")
 	}
 }
 
