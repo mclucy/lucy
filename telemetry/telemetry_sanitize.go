@@ -11,8 +11,8 @@ import (
 var (
 	bearerPattern         = regexp.MustCompile(`(?i)\bbearer\s+[A-Za-z0-9._~+/\-=]+`)
 	authorizationPattern  = regexp.MustCompile(`(?i)\b([a-z0-9_-]*authorization)\b\s*[:=]\s*[^\r\n]+`)
-	flagCredentialPattern = regexp.MustCompile(`(?i)(--?(?:token|password|passwd|secret|api[_-]?key|access[_-]?key))(\s+|=)("(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s]+)`)
-	credentialPattern     = regexp.MustCompile(`(?i)\b([a-z0-9_]*(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|password|passwd|pwd|authorization|cookie|session[_-]?id)[a-z0-9_]*)\b["']?\s*[:=]\s*("(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s,;]+)`)
+	flagCredentialPattern = regexp.MustCompile(`(?i)(--?(?:token|password|passwd|secret|api[_-]?key|access[_-]?key))(\s+|=)(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s"'])+`)
+	credentialPattern     = regexp.MustCompile(`(?i)\b([a-z0-9_]*(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|password|passwd|pwd|authorization|cookie|session[_-]?id)[a-z0-9_]*)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s,;"'])+`)
 	commonTokenPattern    = regexp.MustCompile(`\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b`)
 	urlCredentialPattern  = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@`)
 	privateKeyPattern     = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)`)
