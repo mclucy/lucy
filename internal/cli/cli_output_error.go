@@ -46,7 +46,11 @@ type ErrorDocument struct {
 	Title   string   `json:"title"`
 	Details []string `json:"details"`
 	Hint    string   `json:"hint,omitempty"`
-	Log     string   `json:"log"`
+	// Facts carries the machine-readable evidence of the error tree. Human
+	// rendering ignores it; the JSON document and the telemetry report body
+	// read it, so both describe a failure with the same data.
+	Facts map[string]any `json:"facts,omitempty"`
+	Log   string         `json:"log"`
 }
 
 // SetJSONRendering overrides the rendering selected when the output was
@@ -334,6 +338,7 @@ func newErrorDocument(cmd *cobra.Command, err error, logPath string) ErrorDocume
 			document.Hint = "Run --help for usage."
 		}
 	}
+	document.Facts = FailureFacts(err)
 	return document
 }
 
