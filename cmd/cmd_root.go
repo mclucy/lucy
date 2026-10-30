@@ -170,6 +170,39 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 
 	docs := docscli.NewCommand()
 	contracts.Ignore(docs)
+	servers := cli.NewServerCommand(contracts, invocation, dependencies)
+	managed := newManagedServerCommand(invocation)
+	for _, child := range managed.Commands() {
+		// Workspace listing/rename retain main's existing contract.
+		if child.Name() == "list" {
+			child.Use = "list-managed"
+			child.Aliases = nil
+		}
+		managed.RemoveCommand(child)
+		servers.AddCommand(child)
+		switch child.Name() {
+		case "status":
+			(cli.JSONResult[cli.InstanceStatus]{}).Bind(contracts, child)
+		case "list-managed":
+			(cli.JSONResult[[]cli.Instance]{}).Bind(contracts, child)
+		default:
+			contracts.Native(child)
+			contracts.Ignore(child)
+		}
+	}
+	supervisorCommands := newSupervisorCommands(contracts, invocation, dependencies)
+	daemonCommands := newDaemonCommands(invocation)
+	for _, command := range append(supervisorCommands, daemonCommands...) {
+		// run-task binds the shared install result; other supervisor actions
+		// keep their native console surface without implicit agent JSON.
+		if command.Name() != "run-task" {
+			contracts.Ignore(command)
+			contracts.Native(command)
+			for _, child := range command.Commands() {
+				contracts.Native(child)
+			}
+		}
+	}
 	root.AddCommand(
 		cli.NewAddCommand(contracts, invocation, dependencies),
 		cli.NewBisectCommand(contracts, invocation, dependencies),
@@ -186,7 +219,7 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 		cli.NewJavaCommand(contracts, invocation, dependencies),
 		cli.NewLeavesCommand(contracts, invocation, dependencies),
 		cli.NewRemoveCommand(contracts, invocation, dependencies),
-		cli.NewServerCommand(contracts, invocation, dependencies),
+		servers,
 		cli.NewStoreCommand(contracts, invocation, dependencies),
 		cli.NewTreeCommand(contracts, invocation, dependencies),
 		cli.NewUpgradeCommand(contracts, invocation, dependencies),
@@ -196,6 +229,8 @@ func NewRootCommand(contracts *cli.JSONContracts, invocation *cli.Invocation, de
 		search.NewCommand(contracts, invocation, dependencies),
 		cli.NewSchemaCommand(contracts, invocation),
 	)
+	root.AddCommand(supervisorCommands...)
+	root.AddCommand(daemonCommands...)
 	return root
 }
 

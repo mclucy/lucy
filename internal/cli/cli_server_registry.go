@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -29,6 +30,23 @@ func ResolveServer(
 	if cmd.Name() == "__complete" || cmd.Name() == "__completeNoDesc" {
 		return nil
 	}
+	// Hidden package children must assemble services for the registered root,
+	// even when invoked from a different directory.
+	if cmd.Name() == "run-task" {
+		args := cmd.Flags().Args()
+		if len(args) < 2 {
+			return fmt.Errorf("run-task needs a server and task name")
+		}
+		inst, err := ReadInstance(args[0])
+		if err != nil {
+			return err
+		}
+		if inst == nil {
+			return fmt.Errorf("server %q is not registered", args[0])
+		}
+		inv.Directory = inst.Root
+		return nil
+	}
 	flags := cmd.Root().PersistentFlags()
 	if !flags.Changed(FlagServer) {
 		return nil
@@ -39,6 +57,39 @@ func ResolveServer(
 	}
 	if registry == nil {
 		return fmt.Errorf("select server %q: server registry is unavailable", name)
+	}
+	// Native registrations select managed instances, but must not silently
+	// shadow a different workspace with the same per-user name.
+	if ValidateInstanceName(name) == nil {
+		inst, readErr := ReadInstance(name)
+		if readErr != nil {
+			return readErr
+		}
+		if inst != nil {
+			entries, err := registry.List()
+			if err != nil {
+				return err
+			}
+			managedInfo, err := os.Stat(inst.Root)
+			if err != nil {
+				return err
+			}
+			for _, entry := range entries {
+				if entry.State != serverregistry.StateAvailable || entry.Name != name {
+					continue
+				}
+				info, err := os.Stat(entry.Path)
+				if err != nil {
+					return err
+				}
+				if !os.SameFile(managedInfo, info) {
+					return fmt.Errorf("server name %q is ambiguous between managed root %s and workspace %s; run in the intended directory or rename the workspace", name, inst.Root, entry.Path)
+				}
+			}
+			inv.Directory = inst.Root
+			inv.Logger.Debug("managed server selected", "name", name, "directory", inst.Root)
+			return nil
+		}
 	}
 	entry, err := registry.Resolve(name)
 	if err != nil {

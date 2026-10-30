@@ -85,11 +85,25 @@ func NewInstallCommand(
 	return cmd
 }
 
-func actionInstall(
+func actionInstall(cmd *cobra.Command, inv *Invocation, deps *Dependencies, _ []string) error {
+	target, err := ResolveCommandTarget(cmd, inv)
+	if err != nil {
+		return fmt.Errorf("could not determine working directory: %w", err)
+	}
+	if target.Registered {
+		if addRepo, _ := cmd.Flags().GetBool(flagInstallJavaRepoName); addRepo {
+			return fmt.Errorf("--%s requires a direct administrative invocation, not a daemon package task", flagInstallJavaRepoName)
+		}
+		return DispatchPackageTask(cmd, inv, target, PackageTaskRequest{Name: TaskInstall})
+	}
+	return RunInstallTask(cmd, inv, deps)
+}
+
+// RunInstallTask retains all install options and output contracts in daemon children.
+func RunInstallTask(
 	cmd *cobra.Command,
 	inv *Invocation,
 	deps *Dependencies,
-	_ []string,
 ) error {
 	locked, _ := cmd.Flags().GetBool(flagInstallLockedName)
 	offline, _ := cmd.Flags().GetBool(flagInstallOfflineName)
