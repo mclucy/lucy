@@ -35,7 +35,7 @@ task logos:gen          # Regenerate status logos from terminal/assets/logos.yam
 task logos:check        # Fail when committed status logos differ from the manifest
 ```
 
-Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/`ciphertextB`) plus optional release identity (`releaseVersion`/`releaseCommit`). Dotenv loads `.env` and the single canonical cipher file `.cipher_key`, which holds all four fragments. See `docs/shared/cipher-key-operations.md`.
+Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/`ciphertextB`) plus optional release identity (`releaseVersion`/`releaseCommit`). Build tasks source the single canonical cipher file `.cipher_key`, which holds all four fragments; dotenv loads `.env` only, so fragments never sit in the environment of unrelated tasks. See `docs/shared/cipher-key-operations.md`.
 
 Status logos under `terminal/assets/{small,large}_{plain,colored}/` are generated; never edit them by hand. Change `terminal/assets/logos.yaml` (pinned source URL + sha256 and per-logo preprocessing), then run `task logos:gen -- -preview test_logos` and review the PNG previews.
 
