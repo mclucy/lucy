@@ -7,7 +7,23 @@ description: "Install Lucy and manage an existing server"
 
 ## Install Lucy
 
-Install with Go:
+On macOS and Linux:
+
+```sh
+curl -fsSL https://lucy.lc/sh | sh
+```
+
+The installer places Lucy in `~/.local/bin`. Add that directory to your `PATH` if needed.
+
+On Windows, run in PowerShell:
+
+```powershell
+irm https://lucy.lc/ps1 | iex
+```
+
+The installer adds `%USERPROFILE%\.local\bin` to your user PATH. Open a new terminal to use it.
+
+You can also install with Go:
 
 ```bash
 go install github.com/mclucy/lucy@latest

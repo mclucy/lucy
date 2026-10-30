@@ -36,6 +36,24 @@ Lucy fetches metadata and artifacts from multiple sources:
 
 ## Installation
 
+macOS and Linux:
+
+```sh
+curl -fsSL https://lucy.lc/sh | sh
+```
+
+The installer places Lucy in `~/.local/bin`; add that directory to your `PATH` if needed.
+
+Windows (PowerShell):
+
+```powershell
+irm https://lucy.lc/ps1 | iex
+```
+
+The installer adds `%USERPROFILE%\.local\bin` to your user PATH. Open a new terminal to use it.
+
+Other installation options:
+
 ```bash
 # Homebrew (macOS / Linux)
 brew install --HEAD mclucy/tap/lucy

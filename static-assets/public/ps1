@@ -1,0 +1,42 @@
+$ErrorActionPreference = 'Stop'
+
+if ($env:OS -ne 'Windows_NT') { throw 'Lucy installer requires Windows.' }
+$architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+if ($architecture -ne 'AMD64') { throw "Unsupported Windows architecture: $architecture" }
+
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$feed = [xml](Invoke-WebRequest -Uri 'https://github.com/mclucy/lucy/releases.atom' -UseBasicParsing).Content
+$entry = @($feed.feed.entry)[0]
+if (-not $entry -or $entry.id -notmatch '^tag:github\.com,2008:Repository/[0-9]+/v([a-zA-Z0-9.+-]+)$') { throw 'Could not find a published release.' }
+$version = $Matches[1]
+$archive = "lucy_${version}_windows_amd64.zip"
+$base = "https://github.com/mclucy/lucy/releases/download/v$version"
+$temp = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $temp | Out-Null
+try {
+    $archivePath = Join-Path $temp $archive
+    $checksumsPath = Join-Path $temp 'checksums.txt'
+    Invoke-WebRequest -Uri "$base/$archive" -OutFile $archivePath -UseBasicParsing
+    Invoke-WebRequest -Uri "$base/checksums.txt" -OutFile $checksumsPath -UseBasicParsing
+    $checksumLine = Get-Content $checksumsPath | Where-Object { $_ -match ('^([a-fA-F0-9]{64})\s+\*?' + [regex]::Escape($archive) + '$') } | Select-Object -First 1
+    if (-not $checksumLine) { throw "Checksum missing for $archive." }
+    $expected = ($checksumLine -split '\s+')[0]
+    if ((Get-FileHash -Algorithm SHA256 $archivePath).Hash -ne $expected) { throw 'Archive checksum mismatch.' }
+    Expand-Archive -Path $archivePath -DestinationPath (Join-Path $temp 'extracted')
+    $binary = Join-Path $temp 'extracted/lucy.exe'
+    if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw 'Archive does not contain lucy.exe.' }
+    $installDir = Join-Path $HOME '.local\bin'
+    New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+    Copy-Item -LiteralPath $binary -Destination (Join-Path $installDir 'lucy.exe') -Force
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if (@($userPath -split ';' | Where-Object { $_.TrimEnd('\') -ieq $installDir.TrimEnd('\') }).Count -eq 0) {
+        $newPath = if ($userPath) { $userPath.TrimEnd(';') + ';' + $installDir } else { $installDir }
+        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+    }
+    if (@($env:Path -split ';' | Where-Object { $_.TrimEnd('\') -ieq $installDir.TrimEnd('\') }).Count -eq 0) {
+        $env:Path += ';' + $installDir
+    }
+    Write-Host "Installed lucy to $installDir\lucy.exe"
+} finally {
+    Remove-Item -LiteralPath $temp -Recurse -Force
+}
