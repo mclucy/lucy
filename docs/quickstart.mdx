@@ -29,10 +29,12 @@ You can also install with Go:
 go install github.com/mclucy/lucy@latest
 ```
 
-On macOS, you can instead use Homebrew:
+On macOS and Linux, you can instead use Homebrew:
 
 ```bash
-brew install --HEAD mclucy/tap/lucy
+brew tap mclucy/tap
+brew trust --tap mclucy/tap
+brew install --cask lucy
 ```
 
 ## Adopt a server

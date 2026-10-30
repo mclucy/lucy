@@ -56,7 +56,9 @@ Other installation options:
 
 ```bash
 # Homebrew (macOS / Linux)
-brew install --HEAD mclucy/tap/lucy
+brew tap mclucy/tap
+brew trust --tap mclucy/tap
+brew install --cask lucy
 
 # Go
 go install github.com/mclucy/lucy@latest

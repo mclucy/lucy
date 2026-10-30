@@ -36,7 +36,9 @@ Lucy 从多个来源获取元数据与文件：
 
 ```bash
 # Homebrew (macOS / Linux)
-brew install --HEAD mclucy/tap/lucy
+brew tap mclucy/tap
+brew trust --tap mclucy/tap
+brew install --cask lucy
 
 # Go
 go install github.com/mclucy/lucy@latest

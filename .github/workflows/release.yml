@@ -70,11 +70,23 @@ jobs:
             printf 'CIPHER_CIPHERTEXT_B=%s\n' "${CT_B}"
           } >> "${GITHUB_ENV}"
 
+      - name: Check Homebrew tap credentials
+        if: github.event_name == 'push'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HOMEBREW_TAP_TOKEN}" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is required to publish the Homebrew cask"
+            exit 1
+          fi
+
       - name: Run GoReleaser
         if: github.event_name == 'push'
         run: go tool goreleaser release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Set up Node
         uses: actions/setup-node@v7

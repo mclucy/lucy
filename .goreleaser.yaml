@@ -58,6 +58,24 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+homebrew_casks:
+  - name: lucy
+    repository:
+      owner: mclucy
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/mclucy/lucy"
+    description: "Minecraft server environment manager"
+    # The archives are not notarized, so Homebrew's quarantine attribute makes
+    # macOS refuse the installed binary. This is GoReleaser's documented
+    # fallback to signing and notarizing the binaries.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/lucy"]
+          end
+
 release:
   prerelease: auto
   footer: |
@@ -78,7 +96,9 @@ release:
     Or install with Homebrew or Go:
 
     ```sh
-    brew install --HEAD mclucy/tap/lucy
+    brew tap mclucy/tap
+    brew trust --tap mclucy/tap
+    brew install --cask lucy
     go install github.com/mclucy/lucy@latest
     ```
 

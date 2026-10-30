@@ -37,6 +37,16 @@ this: `CLOUDFLARE_ACCOUNT_ID`, and a `CLOUDFLARE_API_TOKEN` secret with Workers 
 Storage write access. Worker deployments do not use that secret, because Workers
 Builds deploys from `main` on its own credentials.
 
+The release workflow also publishes `Casks/lucy.rb` to `mclucy/homebrew-tap` with the
+tag's version, archive digests, and download URLs, so Homebrew follows releases instead
+of tracking `main`. The job authenticates with a `HOMEBREW_TAP_TOKEN` secret that can
+write the tap repository's contents; without it the release stops before GoReleaser
+instead of leaving the tap on an older version. The cask clears Homebrew's `quarantine`
+attribute after installation, because the archives are not notarized yet and macOS
+would otherwise refuse to run the downloaded binary. Signing and notarizing the
+archives is the durable fix; GoReleaser documents the attribute removal as the
+fallback.
+
 To deploy the worker locally, run `npm ci` and `npx cf deploy` in `assets`.
 
 ## AI policy
