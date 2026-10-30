@@ -54,7 +54,7 @@ on:
         type: boolean
         default: true
     secrets:
-      CF_API_KEY:
+      CURSEFORGE_API_KEY:
         required: false
 
 permissions:
@@ -166,12 +166,12 @@ jobs:
       - name: Build Lucy
         if: ${{ inputs.build }}
         env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           USE_TASK: ${{ inputs.task }}
         run: |
           set -euo pipefail
           if [ "$USE_TASK" = "true" ]; then
-            if [ -n "${CF_API_KEY:-}" ]; then
+            if [ -n "${CURSEFORGE_API_KEY:-}" ]; then
               task cipher:generate
             fi
             task build:dev
@@ -182,5 +182,5 @@ jobs:
       - name: Run suite
         shell: bash
         env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
         run: ${{ inputs.command }}

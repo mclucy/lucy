@@ -32,7 +32,7 @@ jobs:
 
       - name: Prepare cipher embedding
         env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
         run: |
           set -euo pipefail
           # Tag identity for AD binding: version without leading v and checked-out commit.

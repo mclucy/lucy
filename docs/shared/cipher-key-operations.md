@@ -15,7 +15,7 @@ the CurseForge API without requiring every user to supply their own key.
 ## Per-release material
 
 - Each tagged release generates **fresh** key and ciphertext fragments from
-  `CF_API_KEY` at release time.
+  `CURSEFORGE_API_KEY` at release time.
 - Rebuilds of the same tag are **not** bit-identical for cipher material: a new
   generate step produces a new random seed and nonce.
 - Local/dev builds and GoReleaser snapshots use **unbound** material (empty
@@ -39,7 +39,7 @@ between seal-time and open-time identity fails decryption.
 
 ## Rotation
 
-1. Update the repository secret `CF_API_KEY` to the new CurseForge key.
+1. Update the repository secret `CURSEFORGE_API_KEY` to the new CurseForge key.
 2. Cut a **new** release tag so CI regenerates fragments and publishes binaries
    bound to that tag's version and commit.
 3. Old public binaries retain the previous embedded material until users upgrade.
@@ -49,7 +49,7 @@ between seal-time and open-time identity fails decryption.
 If a key is abused or leaked:
 
 1. Revoke or rotate the key in the CurseForge account/dashboard (provider-side).
-2. Update `CF_API_KEY` in CI secrets.
+2. Update `CURSEFORGE_API_KEY` in CI secrets.
 3. Publish a new Lucy release so new binaries embed the rotated key.
 4. Communicate upgrade guidance as needed; old binaries cannot be remotely wiped.
 
@@ -67,7 +67,7 @@ with CurseForge support before treating them as part of the security posture.
 `cipher_bound` plus all four fragments. Build tasks and CI read only that file.
 
 ```bash
-export CF_API_KEY=...   # never commit; process env only (never argv)
+export CURSEFORGE_API_KEY=...   # never commit; process env only (never argv)
 task cipher:generate    # feeds key on stdin to cmd/cipher -encrypt-stdin
 task build:dev          # injects four fragments; empty release identity
 ```

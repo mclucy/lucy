@@ -3,7 +3,7 @@ name: Binary Size
 on:
   workflow_call:
     secrets:
-      CF_API_KEY:
+      CURSEFORGE_API_KEY:
         required: false
 
 permissions:

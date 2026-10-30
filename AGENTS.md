@@ -21,7 +21,7 @@ task check              # build + test + test:race
 task clean              # Remove dist/ and release/ directories
 task clean:dist         # Remove dist/ only
 task clean:release      # Remove release/ only
-task cipher:generate    # Generate cipher material (.cipher_key) from CF_API_KEY env var
+task cipher:generate    # Generate cipher material (.cipher_key) from CURSEFORGE_API_KEY env var
 task ci:test            # CI checks (optional cipher:generate, then check)
 task ci:build           # CI release build + gzip artifacts
 task e2e:status         # Probe generated sandboxes with the built CLI

@@ -36,7 +36,7 @@ jobs:
       - name: Run CI checks
         run: task ci:test
         env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
 
       - name: Upload coverage report
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -74,7 +74,7 @@ jobs:
       - name: Build release artifacts
         run: task ci:build
         env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
 
       - name: Upload linux-amd64
         uses: actions/upload-artifact@v7
@@ -115,7 +115,7 @@ jobs:
     with:
       force: ${{ github.event_name == 'workflow_dispatch' }}
     secrets:
-      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
 
   bin-size:
     if: >-
@@ -127,7 +127,7 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/bin-size.yml
     secrets:
-      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
 
   manifest-schema:
     if: >-

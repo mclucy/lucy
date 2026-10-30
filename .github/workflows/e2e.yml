@@ -16,7 +16,7 @@ on:
         type: boolean
         default: false
     secrets:
-      CF_API_KEY:
+      CURSEFORGE_API_KEY:
         required: false
 
 permissions:
@@ -292,4 +292,4 @@ jobs:
       build: ${{ matrix.build }}
       task: ${{ matrix.task }}
     secrets:
-      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
