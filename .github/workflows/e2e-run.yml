@@ -174,7 +174,7 @@ jobs:
             if [ -n "${CURSEFORGE_API_KEY:-}" ]; then
               task cipher:generate
             fi
-            task build:dev
+            task dev
           else
             go build -tags nethttpomithttp2 -o dist/lucy .
           fi

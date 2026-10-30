@@ -32,19 +32,19 @@ vars:
 tasks:
   build:
     desc: Build the local development binary for the host platform
-    deps:
-      - check:curseforge-api-key
     cmds:
       - |
         set -euo pipefail
-        mkdir -p dist
         # Dotenv is read once at Task startup, but CI chains cipher:generate before the
         # build in one run, so the canonical file is loaded here instead.
         if [ -f .cipher_key ]; then . ./.cipher_key; fi
-        ldflags="{{.LUCY_LDFLAGS}} {{.LUCY_CIPHER_LDFLAGS}}"
-        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build -ldflags="$ldflags" -tags debug,{{.LUCY_STDLIB_TAGS}} -o {{.DEV_BINARY}}
+        mkdir -p dist
+        GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build \
+          -ldflags="{{.LUCY_LDFLAGS}} {{.LUCY_CIPHER_LDFLAGS}}" \
+          -tags {{.LUCY_STDLIB_TAGS}} \
+          -o {{.DEV_BINARY}}
         ln -sf lucy-{{.DEV_GOOS}}-{{.DEV_GOARCH}} {{.DEV_SYMLINK}}
-    sources:
+    sources: &build_sources
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
       - "./docs/**/*.mdx"
@@ -54,34 +54,24 @@ tasks:
       - "{{.DEV_BINARY}}"
       - "{{.DEV_SYMLINK}}"
 
-  build:dev:
-    desc: Alias for build
-    deps:
-      - build
-
   dev:
     desc: Alias for build
     deps:
       - build
 
   build:watch:
-    desc: Rebuild the local debug binary on Go file changes
+    desc: Rebuild the local development binary on Go and docs changes
     cmds:
       - task build
     watch: true
-    sources:
-      - "./**/*.go"
-      - "./internal/cli/compile/*.gradle"
-      - "./docs/**/*.mdx"
-      - "./go.mod"
-      - "./go.sum"
+    # Anchored to the build source list so the two cannot drift.
+    sources: *build_sources
     method: timestamp
 
   build:release:
     desc: Build release binaries for Windows, Linux, and macOS
     deps:
       - clean:release
-      - check:curseforge-api-key
       - docs:pack
     cmds:
       - |
@@ -89,22 +79,13 @@ tasks:
         if [ -f .cipher_key ]; then . ./.cipher_key; fi
         mkdir -p release
         ldflags="-w -s {{.LUCY_LDFLAGS}} {{.LUCY_CIPHER_LDFLAGS}}"
-        if [ -n "${CIPHER_RELEASE_VERSION:-}" ] && [ -n "${CIPHER_RELEASE_COMMIT:-}" ]; then
-          ldflags="$ldflags \
-            -X github.com/mclucy/lucy/internal/cipher.releaseVersion=${CIPHER_RELEASE_VERSION} \
-            -X github.com/mclucy/lucy/internal/cipher.releaseCommit=${CIPHER_RELEASE_COMMIT}"
-        fi
-        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-linux-arm64
-        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags release,docsarchive,{{.LUCY_STDLIB_TAGS}} -o release/lucy-darwin-arm64
-    sources:
-      - "./**/*.go"
-      - "./internal/cli/compile/*.gradle"
-      - "./docs/**/*.mdx"
-      - "./go.mod"
-      - "./go.sum"
+        tags="release,docsarchive,{{.LUCY_STDLIB_TAGS}}"
+        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-darwin-arm64
+
   clean:
     desc: Remove all generated build artifacts
     deps:
@@ -114,7 +95,7 @@ tasks:
   clean:dist:
     desc: Remove development build artifacts
     cmds:
-      - rm -rf dist {{.DEV_SYMLINK}}
+      - rm -rf dist
 
   clean:release:
     desc: Remove release build artifacts
@@ -130,7 +111,7 @@ tasks:
 
   cipher:generate:
     silent: true
-    desc: Generate unbound local cipher material from CURSEFORGE_API_KEY
+    desc: Generate cipher material from CURSEFORGE_API_KEY (bound when CIPHER_RELEASE_VERSION and CIPHER_RELEASE_COMMIT are set)
     cmds:
       - |
         set -euo pipefail
@@ -176,9 +157,9 @@ tasks:
     generates:
       - .cipher_key
 
-  check:curseforge-api-key:
+  cipher:verify-key:
     silent: true
-    desc: Verify CURSEFORGE_API_KEY against the CurseForge API
+    desc: Report whether CURSEFORGE_API_KEY is accepted by the CurseForge API
     cmds:
       - |
         if [ -z "${CURSEFORGE_API_KEY:-}" ]; then
@@ -214,8 +195,6 @@ tasks:
 
   lint:
     desc: Enforce package dependency boundaries
-    deps:
-      - docs:pack
     cmds:
       - go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run --config .golangci.yml {{default "./..." .CLI_ARGS}}
 
@@ -223,7 +202,6 @@ tasks:
     desc: Run the default local verification tasks
     deps:
       - build
-      - test
       - test:race
       - lint
 
@@ -265,39 +243,47 @@ tasks:
 
   e2e:status:
     desc: "Probe sandboxes with the built CLI (args: -run 'TestProbe/<sandbox id>')"
+    deps:
+      - build
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/status {{.CLI_ARGS}}
 
   e2e:init:
     desc: "Initialize modpack manifests from sandboxes (args: -run 'TestInitialize/<modpack id>')"
+    deps:
+      - build
     cmds:
       - go test -tags e2e -count=1 -timeout 0 ./e2e/init {{.CLI_ARGS}}
 
   e2e:compile:
     desc: "Compile pinned repository fixtures (args: -run 'TestCompile/<fixture id>')"
+    deps:
+      - build
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
   e2e:compile:smoke:
     desc: "Compile the fixtures marked smoke (args: -run 'TestCompile/<fixture id>')"
+    deps:
+      - build
     cmds:
-      - LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 0 ./e2e/compile {{.CLI_ARGS}}
+      - LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 0 -parallel 1 ./e2e/compile {{.CLI_ARGS}}
 
   e2e:install:
     desc: "Run fresh and init-then-install scenarios (args: -run 'Test(Init)?Install/<scenario id>')"
+    deps:
+      - build
     cmds:
       - go test -tags e2e -count=1 -timeout 0 -parallel 2 ./e2e/install {{.CLI_ARGS}}
 
   ci:test:
-    desc: Run the CI test suite (for GitHub Actions); conditionally generates cipher material then runs checks
+    desc: Run the CI verification suite (for GitHub Actions); conditionally generates cipher material
     cmds:
       - |
         if [ -n "${CURSEFORGE_API_KEY:-}" ]; then
           task cipher:generate
         fi
-      - task: lint
-      - task: build
-      - task: test:race
+      - task: check
       - task: test:coverage
 
   ci:build:
@@ -332,3 +318,7 @@ tasks:
           exit 1
         fi
         export CIPHER_KEY_A="${CIPHER_KEY_A:-${cipher_key_a:-}}"
+        export CIPHER_KEY_B="${CIPHER_KEY_B:-${cipher_key_b:-}}"
+        export CIPHER_CIPHERTEXT_A="${CIPHER_CIPHERTEXT_A:-${cipher_ciphertext_a:-}}"
+        export CIPHER_CIPHERTEXT_B="${CIPHER_CIPHERTEXT_B:-${cipher_ciphertext_b:-}}"
+        go tool goreleaser release --snapshot --clean --skip=publish

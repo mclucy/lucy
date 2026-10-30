@@ -71,7 +71,7 @@ injects the fragments.
 ```bash
 export CURSEFORGE_API_KEY=...   # never commit; process env only (never argv)
 task cipher:generate    # feeds key on stdin to cmd/cipher -encrypt-stdin
-task build:dev          # injects four fragments; empty release identity
+task dev                # injects four fragments; empty release identity
 ```
 
 Tagged CI sets `CIPHER_RELEASE_VERSION` (tag without leading `v`) and
