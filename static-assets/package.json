@@ -1,0 +1,10 @@
+{
+  "name": "lucy-static-assets",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.8",
+    "cf": "1.0.0-beta.24",
+    "vite": "8.3.5"
+  }
+}

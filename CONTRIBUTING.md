@@ -21,6 +21,14 @@ See [The taskfile](Taskfile.yml) for all scripts.
 
 CI includes testing and building. However, testing locally helps us merging your contribution faster.
 
+### Static assets
+
+The `static-assets` project publishes the installers and manifest schema to `lucy-static-assets`.
+Its deployment workflow uses `CLOUDFLARE_ACCOUNT_ID` and a `CLOUDFLARE_API_TOKEN` repository
+secret with permission to deploy Workers and manage routes in the `lucy.lc` zone. To deploy
+locally, copy `document/document_manifest.schema.json` to `static-assets/public/manifest.json`,
+then run `npm ci` and `npx cf deploy` in `static-assets`.
+
 ## AI policy
 
 We do not reject AI-written code. However, you have the duty to:
