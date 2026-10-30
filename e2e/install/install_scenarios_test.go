@@ -51,6 +51,10 @@ type packageExpectation struct {
 	FileID    string `yaml:"fileID"`
 	Filename  string `yaml:"filename"`
 	SHA256    string `yaml:"sha256"`
+	// Dependency marks a package the manifest does not declare. Its release is
+	// whatever the requirer's constraint accepts at install time, so the
+	// expectation pins nothing about it beyond its project identity.
+	Dependency bool `yaml:"dependency"`
 }
 
 var installScenarios = map[string]installScenario{

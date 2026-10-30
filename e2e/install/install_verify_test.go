@@ -236,20 +236,29 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 		if pkg.Ecosystem != loader {
 			return fmt.Errorf("project %s has incorrect ecosystem", pkg.ProjectID)
 		}
-		if pkg.ReleaseID != want.ReleaseID || pkg.FileID != want.FileID {
-			return fmt.Errorf("project %s has incorrect release or file identity", pkg.ProjectID)
-		}
-		if pkg.Filename != want.Filename {
-			return fmt.Errorf("project %s has incorrect filename", pkg.ProjectID)
-		}
-		if selector, ok := declared.Server.Packages[loader][want.Reference]; ok {
+		switch selector, declaredInManifest := declared.Server.Packages[loader][want.Reference]; {
+		case declaredInManifest:
+			if pkg.ReleaseID != want.ReleaseID || pkg.FileID != want.FileID {
+				return fmt.Errorf("project %s has incorrect release or file identity", pkg.ProjectID)
+			}
+			if pkg.Filename != want.Filename {
+				return fmt.Errorf("project %s has incorrect filename", pkg.ProjectID)
+			}
 			if pkg.Version != selector || !slices.ContainsFunc(pkg.Requirements, func(req lockedRequirement) bool {
 				return req.Reference == want.Reference && req.Selector == selector && req.Enabled
 			}) {
 				return fmt.Errorf("project %s lost its exact manifest selector %q", pkg.ProjectID, selector)
 			}
-		} else if len(pkg.Requirements) != 0 {
-			return fmt.Errorf("project %s appeared without a manifest requirement", pkg.ProjectID)
+		case want.Dependency:
+			// A dependency advances whenever upstream publishes a version its
+			// requirer's constraint accepts, so the resolved release is not a
+			// stable fact about this workspace. Only its presence without a
+			// manifest requirement and its installed bytes are.
+			if len(pkg.Requirements) != 0 {
+				return fmt.Errorf("dependency %s recorded a manifest requirement", pkg.ProjectID)
+			}
+		default:
+			return fmt.Errorf("project %s is neither declared in the manifest nor marked as a dependency", pkg.ProjectID)
 		}
 		path := filepath.Join(root, "mods", pkg.Filename)
 		switch {
@@ -257,7 +266,7 @@ func verifyPackages(root, oracle string, declared manifestIntent, expected []pac
 			if err := verifyPinnedDigest(path, want.SHA256); err != nil {
 				return fmt.Errorf("project %s: %w", pkg.ProjectID, err)
 			}
-		case oracle != "":
+		case !want.Dependency && oracle != "":
 			if err := verifyOracleFile(filepath.Join(oracle, "mods", pkg.Filename), path); err != nil {
 				return err
 			}

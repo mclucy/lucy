@@ -19,10 +19,7 @@
   sha256: 5f9235d61d8c6e226e7caf21c2ca1b900964a7c79f713d153fb1f5e76c9051c4
 - reference: modrinth:mezzconfig
   projectID: 7tEfOcA7
-  releaseID: YDOPBdPJ
-  fileID: OZ03lXLo
-  filename: mezz_config-1.21.1-fabric-0.6.9.jar
-  sha256: 137faf45ce0881882e4d222dbf8cffc74b9cd85433cfb53f98bf5267884d08ab
+  dependency: true
 - reference: modrinth:cloth-config
   projectID: 9s6osm5g
   releaseID: HpMb5wGb
@@ -91,10 +88,7 @@
   sha256: 49e406cb2872e24a2d2dbe461b93f0c8fbee1748d14c2a941e54f785e3a1e1a7
 - reference: modrinth:prickle
   projectID: aaRl8GiW
-  releaseID: Ef7P6Rb7
-  fileID: AKSrhAA7
-  filename: prickle-fabric-1.21.1-21.1.11.jar
-  sha256: d6d639078aecb72770f287d8253e4634114e2536ac9a2ad6ec5f442eb27dd07f
+  dependency: true
 - reference: modrinth:owo-lib
   projectID: ccKDOlHs
   releaseID: JB1fLQnc
