@@ -85,6 +85,13 @@ func (r *Runner) registerTelemetryCommands() {
 	status.AddCommand(reset)
 	agentReport := &cobra.Command{
 		Use: "agent-report [CONTENT]", Short: "Submit an agent report", Hidden: true, Args: cobra.ExactArgs(1),
+		Long: "Submit one privacy-filtered report about a Lucy failure or friction in this session.\n" +
+			"The argument is the report body. Write one to three sentences: the command, the error code or\n" +
+			"observed behavior, and what you expected instead. Add --agent and --model when you know them.\n" +
+			"Leave out secrets, absolute paths, logs, transcripts, and user data; Lucy also redacts common\n" +
+			"patterns before upload. Skip failures caused by your own wrong directory, wrong flag, or missing\n" +
+			"prerequisite; report unexpected behavior even when a workaround works. Report each distinct\n" +
+			"problem once. The result is queued, accepted, or rejected, and a rejected report needs no repair.",
 		RunE: func(cmd *cobra.Command, args []string) error { return r.submitAgentReport(cmd, args[0]) },
 	}
 	agentReport.Flags().String("agent", "", "Agent name")

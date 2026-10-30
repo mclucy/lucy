@@ -26,7 +26,7 @@ A command event can contain the command name, Lucy version and build, operating 
 
 When a command already observes server or Java information, Lucy may include a limited structured snapshot. It does not scan your workspace or probe your network solely to gather this information. Operational failures can trigger a diagnostic report with invocation-scoped, filtered Lucy diagnostic information. Lucy does not automatically upload Minecraft server logs, configuration files, full package inventories, or complete command lines.
 
-Coding agents may submit a privacy-filtered report about a failure or other friction. Reports can contain agent-written text and optional agent and model names. Lucy rejects these reports when telemetry is off. An agent must not turn telemetry on unless you explicitly instruct it to do so.
+Coding agents may submit a privacy-filtered report about a failure or other friction, not only a command failure. `lucy agent-report` takes the report body as its only argument, and `--agent` and `--model` name the harness and model when known. Lucy tells agents to write one to three sentences: the command, the error code or observed behavior, and the expected result, leaving out secrets, absolute paths, logs, transcripts, and user data. An agent reports each distinct problem once and then continues the task. It skips a failure caused by its own wrong directory, wrong flag, or missing prerequisite, but reports unexpected behavior even when a workaround exists. Lucy also redacts common secret and path patterns and truncates oversized bodies. It rejects reports when telemetry is off. An agent must not turn telemetry on unless you explicitly instruct it to do so.
 
 ## Uploads and statistics
 

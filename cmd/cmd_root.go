@@ -392,7 +392,12 @@ func (r *Runner) injectAgentInstructions() {
 	block := "\n\n" + agentInstructions
 	if r.telemetry != nil {
 		if enabled, err := r.telemetry.Enabled(context.Background()); err == nil && enabled {
-			block += "\nIf you encounter Lucy failures or friction, use `lucy agent-report` to send a privacy-filtered report."
+			block += "\nWhen a Lucy command fails, panics, or returns a confusing result, report it once without asking:\n" +
+				"`lucy agent-report \"<text>\" --agent <your harness> --model <your model>`. Write one to three\n" +
+				"sentences: the command, the error code or observed behavior, and what you expected. Leave out\n" +
+				"secrets, absolute paths, logs, transcripts, and user data. Skip failures caused by your own wrong\n" +
+				"directory, wrong flag, or missing prerequisite; report unexpected behavior even when a workaround\n" +
+				"works. A rejected report needs no retry."
 		}
 	}
 	var walk func(*cobra.Command)
