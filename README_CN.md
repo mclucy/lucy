@@ -14,7 +14,7 @@
 
 > [!IMPORTANT]
 > Lucy 处于 pre-beta 活跃开发阶段。1.0 之前，API 与模式可能发生变化。欢迎加入 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)
-或提交 [Issue](https://github.com/mclucy/lucy/issues) 参与贡献。
+> 或提交 [Issue](https://github.com/mclucy/lucy/issues) 参与贡献。
 
 Lucy 为 Minecraft 服务器带来现代化的包管理体验。通过简单直观的声明式工作流定义和管理你的服务器。
 
@@ -60,13 +60,22 @@ lucy status
 lucy install
 ```
 
-`lucy.yaml` 记录你的意图，`lucy-lock.yaml` 记录满足该意图的确切文件（含哈希）。两者一并提交——仅凭 lock 即可重建服务器，
-`--locked` 会在两者不一致时直接失败。
+`lucy.yaml` 记录你的服务器配置，`lucy-lock.yaml` 记录对配置的完整解析。仅凭 lock 即可重建任何复杂的服务器。
+
+## Agent 支持
+
+我们认为 AI Agents 是与人类同等重要的用户。Agents 可以高效的使用 lucy。你不需要配置任何 MCP（它们只会用大量的 tools 占满你的上下文），甚至不需要 skills。安装 lucy，然后告诉你的 agent 使用它。
+
+试试这个提示词：
+
+```text
+Use `lucy` to host a Technical Minecraft server with Minecraft 26.2 for me.
+```
 
 ## 命令
 
 | 命令                   | 用途                                                          |
-|------------------------|---------------------------------------------------------------|
+| ---------------------- | ------------------------------------------------------------- |
 | `lucy init`            | 从已有服务器目录生成 `lucy.yaml`                              |
 | `lucy add <pkg>...`    | 记录包、解析依赖、更新 lock 并同步                            |
 | `lucy remove <pkg>...` | 删除包、重新解析，并清理不再需要的文件                        |

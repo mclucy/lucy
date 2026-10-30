@@ -3,11 +3,7 @@ title: "Introduction"
 description: "The package manager for Minecraft servers"
 ---
 
-Lucy helps you set up Minecraft servers and manage their mods and plugins. You can create a server or adopt an existing directory, then add packages and reproduce the installation elsewhere.
-
-Lucy also keeps a list of the servers on your machine. `lucy server list` shows them, and `lucy --server NAME COMMAND` runs a command against one by name. Creating, initializing, or installing a server registers it; see [known servers](/commands/install#known-servers).
-
-Verified artifacts live in a per-user store shared by every server; `lucy store list` shows it and `lucy store gc` reclaims objects that no registered lock references. The store is separate from the expiring network cache.
+Lucy helps you set up Minecraft servers, manage them easily, and efficiently reproduce the installation anywhere. From the server hosted among your friends to mass deployments with hundreds of servers.
 
 `lucy.yaml` records your choices; `lucy-lock.yaml` records the resolved files. Keep both with your server configuration to reproduce the installation later.
 

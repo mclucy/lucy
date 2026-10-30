@@ -1,18 +1,39 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "luma",
-  "name": "lucy",
   "colors": {
-    "primary": "#FF3E99",
+    "dark": "#E8166C",
     "light": "#FF75C7",
-    "dark": "#E8166C"
+    "primary": "#FF3E99"
+  },
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude"]
   },
   "favicon": "https://minecraft.wiki/images/Bucket_of_Axolotl_JE1_BE1.png?a9d5c&format=original",
+  "footer": {
+    "socials": {
+      "github": "https://github.com/mclucy/lucy"
+    }
+  },
+  "logo": {
+    "dark": "https://minecraft.wiki/images/Bucket_of_Axolotl_JE1_BE1.png?a9d5c&format=original",
+    "light": "https://minecraft.wiki/images/Bucket_of_Axolotl_JE1_BE1.png?a9d5c&format=original"
+  },
+  "name": "lucy",
+  "navbar": {},
   "navigation": {
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Repository",
+          "href": "https://github.com/mclucy/lucy",
+          "icon": "github"
+        }
+      ]
+    },
     "pages": [
       {
         "group": "Getting Started",
-        "pages": ["index", "quickstart"]
+        "pages": ["index", "quickstart", "agents"]
       },
       {
         "group": "Commands",
@@ -37,34 +58,9 @@
       },
       {
         "group": "File tracking",
-        "pages": [
-          "file-tracking/overview",
-          "file-tracking/tracking",
-          "file-tracking/recovery"
-        ]
+        "pages": ["file-tracking/overview", "file-tracking/tracking", "file-tracking/recovery"]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Repository",
-          "href": "https://github.com/mclucy/lucy",
-          "icon": "github"
-        }
-      ]
-    }
+    ]
   },
-  "logo": {
-    "light": "https://minecraft.wiki/images/Bucket_of_Axolotl_JE1_BE1.png?a9d5c&format=original",
-    "dark": "https://minecraft.wiki/images/Bucket_of_Axolotl_JE1_BE1.png?a9d5c&format=original"
-  },
-  "navbar": {},
-  "contextual": {
-    "options": ["copy", "view", "chatgpt", "claude"]
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/mclucy/lucy"
-    }
-  }
+  "theme": "luma"
 }
