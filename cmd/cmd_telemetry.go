@@ -203,9 +203,6 @@ func (r *Runner) startTelemetry() time.Time {
 		Endpoint: os.Getenv("LUCY_TELEMETRY_ENDPOINT"), Channel: channel,
 		LucyVersion: version, LucyCommit: commit, OS: runtime.GOOS, Arch: runtime.GOARCH, HTTPClient: r.httpClient,
 	})
-	if r.telemetry != nil {
-		_, _ = r.telemetry.InstallationID(context.Background())
-	}
 	return started
 }
 
