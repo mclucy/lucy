@@ -23,11 +23,12 @@ CI includes testing and building. However, testing locally helps us merging your
 
 ### Static assets
 
-The `assets` project publishes the installers and manifest schema to `lucy-static-assets`.
-Its deployment workflow uses `CLOUDFLARE_ACCOUNT_ID` and a `CLOUDFLARE_API_TOKEN` repository
-secret with permission to deploy Workers and manage routes in the `lucy.lc` zone. To deploy
-locally, copy `document/document_manifest.schema.json` to `assets/public/manifest.json`,
-then run `npm ci` and `npx cf deploy` in `assets`.
+The `assets` project publishes the installers and the manifest schema at `lucy.lc`.
+Workers Builds deploys it from `main` whenever `assets/` changes, using
+`./node_modules/.bin/cf deploy`. The `manifest-schema` workflow regenerates
+`assets/public/manifest.schema.json` and commits it, which triggers that deployment.
+
+To deploy the worker locally, run `npm ci` and `npx cf deploy` in `assets`.
 
 ## AI policy
 

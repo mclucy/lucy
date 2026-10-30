@@ -283,6 +283,10 @@ func (m *Manifest) Fingerprint() (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
+// ManifestSchemaURL is the hosted manifest schema. Lucy writes it into the
+// schema header of every manifest it generates.
+const ManifestSchemaURL = "https://lucy.lc/manifest.schema.json"
+
 // CanonicalBytes includes field documentation and the YAML schema header.
 func (m *Manifest) CanonicalBytes() ([]byte, error) {
 	return m.yamlBytes(YAMLOptions{SchemaURL: ManifestSchemaURL})

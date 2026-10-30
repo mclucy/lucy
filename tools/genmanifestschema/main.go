@@ -17,11 +17,9 @@ import (
 	orderedmap "github.com/pb33f/ordered-map/v2"
 )
 
-const schemaURL = "https://raw.githubusercontent.com/mclucy/lucy/main/document/document_manifest.schema.json"
+const schemaURL = "https://lucy.lc/manifest.schema.json"
 
 func main() {
-	path := "document/document_manifest.schema.json"
-
 	requirementSchema := &jsonschema.Schema{
 		OneOf: []*jsonschema.Schema{
 			{
@@ -183,6 +181,7 @@ func main() {
 		os.Exit(1)
 	}
 	raw = append(raw, '\n')
+	path := "assets/public/manifest.schema.json"
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

@@ -7,7 +7,7 @@ export default defineConfig({
     triggers: [
       triggers.fetch({ pattern: "lucy.lc/sh", zone: "lucy.lc" }),
       triggers.fetch({ pattern: "lucy.lc/ps1", zone: "lucy.lc" }),
-      triggers.fetch({ pattern: "lucy.lc/manifest.json", zone: "lucy.lc" }),
+      triggers.fetch({ pattern: "lucy.lc/manifest.schema.json", zone: "lucy.lc" }),
     ],
   },
 });
