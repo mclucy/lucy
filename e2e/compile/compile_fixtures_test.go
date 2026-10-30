@@ -89,9 +89,9 @@ func executeCompile(t *testing.T, binary string, fixture compileFixture) {
 		t.Fatalf("create checkout: %v", err)
 	}
 	environment := slices.DeleteFunc(os.Environ(), func(value string) bool {
-		return strings.HasPrefix(value, "GIT_")
+		return strings.HasPrefix(value, "GIT_") || strings.HasPrefix(value, "LUCY_TELEMETRY=")
 	})
-	environment = append(environment, "GIT_TERMINAL_PROMPT=0")
+	environment = append(environment, "GIT_TERMINAL_PROMPT=0", "LUCY_TELEMETRY=off")
 	fixtureGit(t, checkout, environment, "init", "--quiet", "--object-format=sha1")
 	fixtureGit(t, checkout, environment, "remote", "add", "origin", fixture.URL)
 	fixtureGit(t, checkout, environment, "fetch", "--depth=1", "origin", fixture.Commit)

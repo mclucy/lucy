@@ -535,6 +535,7 @@ func (r commandRunner) execute(t *testing.T, root string, args ...string) (strin
 		"USERPROFILE":     r.home,
 		"XDG_CACHE_HOME":  filepath.Join(r.home, "cache"),
 		"XDG_CONFIG_HOME": filepath.Join(r.home, "config"),
+		"LUCY_TELEMETRY":  "off",
 	}
 	environment := make([]string, 0, len(os.Environ())+len(overrides))
 	for _, entry := range os.Environ() {

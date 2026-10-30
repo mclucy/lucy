@@ -18,7 +18,7 @@ lucy telemetry reset-id # generate a new client ID and reset local statistics
 Turning telemetry off deletes pending local records but keeps the client ID and upload statistics. It does not delete data already received by the service. Resetting the ID does not change or delete remote data or pending records; pending records retain the ID under which they were collected. Uploads of those records count in the new statistics period. Statistics cover this local client only; they are not a statement of what the service still stores.
 
 Set `LUCY_TELEMETRY=off` to disable collection and uploads for a process, such as a CI job. This does not change the saved preference or clear the queue.
-For development, `LUCY_TELEMETRY_ENDPOINT` overrides the upload destination. Use only a trusted HTTPS endpoint; HTTP is permitted only for loopback testing. `lucy telemetry stats` shows the configured destination.
+For development, `LUCY_TELEMETRY_ENDPOINT` overrides the upload destination. Use only a trusted HTTPS endpoint; HTTP is permitted only for loopback testing. `lucy telemetry stats` shows the configured destination. A build without a version, such as a test binary or `go run`, never records an invocation, so test traffic cannot reach the service.
 
 ## What Lucy collects
 

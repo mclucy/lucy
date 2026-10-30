@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"encoding/json/v2"
 	"fmt"
+	"os"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -35,6 +37,10 @@ type runtimeRef struct {
 func executeStatus(binary, dir string) (statusOutput, error) {
 	cmd := exec.Command(binary, "status", "--json", "--no-style")
 	cmd.Dir = dir
+	cmd.Env = slices.DeleteFunc(os.Environ(), func(value string) bool {
+		return strings.HasPrefix(value, "LUCY_TELEMETRY=")
+	})
+	cmd.Env = append(cmd.Env, "LUCY_TELEMETRY=off")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.Output()

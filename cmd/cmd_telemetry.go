@@ -195,6 +195,7 @@ func (r *Runner) startTelemetry() time.Time {
 	r.invocation.TelemetryEnabled = false
 	r.invocation.TelemetryContexts = nil
 	version, commit := buildVersion()
+	r.telemetryUnidentified = version == ""
 	channel := "alpha"
 	if strings.Contains(strings.ToLower(version), "beta") {
 		channel = "beta"
@@ -220,6 +221,9 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 		return
 	}
 	defer r.telemetry.Close()
+	if r.telemetryUnidentified {
+		return
+	}
 	command := r.invocationCommand()
 	if isTelemetryCommand(command) || command.Name() == "__complete" || command.Name() == "__completeNoDesc" {
 		return

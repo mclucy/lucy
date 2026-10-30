@@ -82,6 +82,10 @@ type Runner struct {
 	directory         string
 	telemetry         *telemetry.Client
 	telemetryErr      error
+	// An uninstrumented build has no version, so it is a test binary or a bare
+	// `go run`. It keeps the local client for `lucy telemetry`, but it never
+	// records an invocation: harness traffic must not pass as user activity.
+	telemetryUnidentified bool
 }
 
 // NewRunner prepares an isolated invocation with a fresh command tree, fresh
