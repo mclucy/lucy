@@ -222,9 +222,6 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 	if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
 		r.invocation.Logger.Info("action invoked", "action", cmd.CommandPath(), "directory", r.invocation.Directory)
 		if mode == cli.JSONNone && !r.contracts.Ignores(cmd) {
-			report.New(cmd.ErrOrStderr(), r.invocation.Theme).Warn(fmt.Errorf(
-				"lucy is on pre-alpha, it is not intended to be used in production environments and may break your server",
-			))
 			if r.invocation.TelemetryEnabled {
 				report.New(cmd.ErrOrStderr(), r.invocation.Theme).Info(
 					"Lucy collects opt-out telemetry. Use `lucy telemetry off` to disable it; see `lucy docs read commands/telemetry` for details.",
