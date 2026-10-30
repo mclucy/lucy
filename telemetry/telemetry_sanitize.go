@@ -18,7 +18,7 @@ var (
 	privateKeyPattern     = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)`)
 	ipv4Pattern           = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	ipv6Candidate         = regexp.MustCompile(`\b[0-9A-Fa-f:]{2,39}\b`)
-	unixPathPattern       = regexp.MustCompile(`(^|[\s"'(\\[])(/(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+)`)
+	unixPathPattern       = regexp.MustCompile(`(^|[\s"'(\\[=:,<])(/(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+)`)
 	homePathPattern       = regexp.MustCompile(`~/[^\s"'<>]+`)
 	windowsPathPattern    = regexp.MustCompile(`(?i)\b[A-Z]:\\[^\s"'<>]+`)
 	uncPathPattern        = regexp.MustCompile(`\\\\[A-Za-z0-9._-]+\\[^\s"'<>]+`)
