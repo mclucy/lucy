@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -8,32 +9,50 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/server"
-
-	// ModuleProblem names the module requirement that a candidate cannot satisfy,
-	// together with the package that ships the module. The owner lets the failure
-	// ledger attribute the problem to the package that caused it instead of the
-	// last package that happened to be selected.
-	"fmt"
-
 	versionpkg "github.com/mclucy/lucy/version"
 )
 
+// ModuleProblem names the module requirement that a candidate cannot satisfy,
+// together with the package that ships the module. The owner lets the failure
+// ledger attribute the problem to the package that caused it instead of the
+// last package that happened to be selected.
 type ModuleProblem struct {
 	Environment server.Environment
 	Ecosystem   catalog.Ecosystem
 	Provider    catalog.Provider
 	ProjectID   string
-	Message     string
+	// RequiredBy names the module that states the requirement, Dependency the
+	// module it requires, and Constraint the range that Selected fails.
+	RequiredBy string
+	Dependency string
+	Constraint string
+	Selected   string
+	// Server marks a requirement the server itself answers. No candidate can
+	// change it, so it explains the failure better than any package rejection.
+	Server  bool
+	Message string
 }
 
 func (p ModuleProblem) Error() string { return p.Message }
 
-func moduleProblem(owner *document.Package, message string) ModuleProblem {
+func moduleProblem(
+	owner *document.Package,
+	requiredBy string,
+	dependency catalog.DescriptorDependency,
+	selected string,
+	serverProvided bool,
+	message string,
+) ModuleProblem {
 	return ModuleProblem{
 		Environment: owner.Environment,
 		Ecosystem:   owner.Ecosystem,
 		Provider:    owner.Provider,
 		ProjectID:   owner.ProjectID,
+		RequiredBy:  requiredBy,
+		Dependency:  dependency.ID,
+		Constraint:  dependency.Constraint,
+		Selected:    selected,
+		Server:      serverProvided,
 		Message:     message,
 	}
 }
@@ -55,12 +74,15 @@ func (e *SearchLimitError) Error() string {
 type RejectionKind string
 
 const (
-	RejectionVersionMismatch  RejectionKind = "version-mismatch"
-	RejectionReleaseMismatch  RejectionKind = "release-mismatch"
-	RejectionFilePattern      RejectionKind = "file-pattern"
-	RejectionPrimaryFile      RejectionKind = "not-primary-file"
-	RejectionChannel          RejectionKind = "not-a-release"
-	RejectionModules          RejectionKind = "modules"
+	RejectionVersionMismatch RejectionKind = "version-mismatch"
+	RejectionReleaseMismatch RejectionKind = "release-mismatch"
+	RejectionFilePattern     RejectionKind = "file-pattern"
+	RejectionPrimaryFile     RejectionKind = "not-primary-file"
+	RejectionChannel         RejectionKind = "not-a-release"
+	RejectionModules         RejectionKind = "modules"
+	// RejectionServer is a module requirement the server itself answers, such
+	// as the loader version. No candidate choice can satisfy it.
+	RejectionServer           RejectionKind = "server"
 	RejectionMetadataConflict RejectionKind = "metadata-conflict"
 	RejectionNested           RejectionKind = "nested"
 	RejectionEmpty            RejectionKind = "empty"
@@ -73,6 +95,12 @@ type RejectionGroup struct {
 	Count        int
 	FirstVersion string
 	LastVersion  string
+	// Module facts describe a requirement that rejected the builds. They are
+	// empty for kinds that are not about a module.
+	RequiredBy string
+	Dependency string
+	Constraint string
+	Selected   string
 }
 
 // Failure explains why a project could not be resolved: which project, how
@@ -105,6 +133,16 @@ func (f *Failure) Error() string {
 		}
 		return "package resolution stopped before it settled"
 	}
+	if len(f.Groups) > 0 && f.Groups[0].Kind == RejectionServer {
+		group := f.Groups[0]
+		return fmt.Sprintf(
+			"%s requires %s %s, but this server runs %s",
+			group.RequiredBy,
+			group.Dependency,
+			group.Constraint,
+			group.Selected,
+		)
+	}
 	var parts []string
 	for _, group := range f.Groups {
 		text := group.Detail
@@ -134,6 +172,10 @@ type rejectionGroup struct {
 	versions     map[string]struct{}
 	firstVersion string
 	lastVersion  string
+	requiredBy   string
+	dependency   string
+	constraint   string
+	selected     string
 }
 
 type projectLedger struct {
@@ -215,11 +257,41 @@ func (l *rejectionLedger) record(
 	version, detail string,
 	kind RejectionKind,
 ) {
-	entry := l.project(key, display)
-	groupKey := rejectionKey{kind: kind, detail: detail}
+	l.add(l.project(key, display), version, rejectionKey{kind: kind, detail: detail})
+}
+
+// recordModule records a module requirement rejection. A requirement the
+// server answers becomes a server rejection, which the summary prefers over
+// every package-level reason.
+func (l *rejectionLedger) recordModule(
+	key projectKey,
+	display string,
+	version string,
+	problem ModuleProblem,
+) {
+	kind := RejectionModules
+	if problem.Server {
+		kind = RejectionServer
+	}
+	group := l.add(
+		l.project(key, display),
+		version,
+		rejectionKey{kind: kind, detail: problem.Message},
+	)
+	group.requiredBy = problem.RequiredBy
+	group.dependency = problem.Dependency
+	group.constraint = problem.Constraint
+	group.selected = problem.Selected
+}
+
+func (l *rejectionLedger) add(
+	entry *projectLedger,
+	version string,
+	groupKey rejectionKey,
+) *rejectionGroup {
 	group, ok := entry.groups[groupKey]
 	if !ok {
-		group = &rejectionGroup{kind: kind, detail: detail}
+		group = &rejectionGroup{kind: groupKey.kind, detail: groupKey.detail}
 		entry.groups[groupKey] = group
 		entry.order = append(entry.order, groupKey)
 	}
@@ -234,14 +306,17 @@ func (l *rejectionLedger) record(
 		}
 		group.lastVersion = version
 	}
+	return group
 }
 
-// summary picks the project whose rejection explains the failure best: the
-// one with the most specific reasons, not the request that happened to be
-// processed first. Nested failures only back up a deeper cause.
+// summary picks the project whose rejection explains the failure best: a
+// requirement the server cannot satisfy first, then the most specific reasons,
+// not the request that happened to be processed first. Nested failures only
+// back up a deeper cause.
 func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Failure {
 	var bestKey projectKey
 	var bestEntry *projectLedger
+	bestServer := -1
 	bestScore := -1
 	bestTotal := -1
 	for _, key := range l.order {
@@ -249,10 +324,15 @@ func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Fa
 			continue
 		}
 		entry := l.projects[key]
+		server := 0
 		score := 0
 		total := 0
 		for _, group := range entry.groups {
 			total += group.count
+			if group.kind == RejectionServer {
+				server += group.count
+				continue
+			}
 			if group.kind != RejectionNested {
 				score += group.count
 			}
@@ -260,8 +340,13 @@ func (l *rejectionLedger) summary(minecraft versionpkg.Version, cause error) *Fa
 		if total == 0 {
 			continue
 		}
-		if score > bestScore || (score == bestScore && total > bestTotal) {
-			bestKey, bestEntry, bestScore, bestTotal = key, entry, score, total
+		better := server > bestServer
+		if server == bestServer {
+			better = score > bestScore || (score == bestScore && total > bestTotal)
+		}
+		if better {
+			bestKey, bestEntry = key, entry
+			bestServer, bestScore, bestTotal = server, score, total
 		}
 	}
 	if bestEntry == nil {
@@ -289,6 +374,10 @@ func (l *rejectionLedger) build(
 			Count:        count,
 			FirstVersion: group.firstVersion,
 			LastVersion:  group.lastVersion,
+			RequiredBy:   group.requiredBy,
+			Dependency:   group.dependency,
+			Constraint:   group.constraint,
+			Selected:     group.selected,
 		})
 	}
 	// A nested failure is the parent's summary of a deeper cause. When the
@@ -298,7 +387,14 @@ func (l *rejectionLedger) build(
 			return group.Kind == RejectionNested
 		})
 	}
+	// A server constraint explains the failure better than any package
+	// rejection, so it leads the groups the renderers and reports read.
 	sort.SliceStable(groups, func(i, j int) bool {
+		left := groups[i].Kind == RejectionServer
+		right := groups[j].Kind == RejectionServer
+		if left != right {
+			return left
+		}
 		if groups[i].Count != groups[j].Count {
 			return groups[i].Count > groups[j].Count
 		}

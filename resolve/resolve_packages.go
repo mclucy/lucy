@@ -195,12 +195,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 					if owner, ok := chosen[key]; ok {
 						version = string(owner.Version)
 					}
-					ledger.record(
+					ledger.recordModule(
 						key,
 						display,
 						version,
-						problem.Message,
-						RejectionModules,
+						problem,
 					)
 					ledger.markFailed(key)
 				}

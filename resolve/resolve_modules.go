@@ -279,6 +279,9 @@ func checkModuleDependencies(
 				value = string(provider.module.Version)
 			}
 		}
+		// serverProvided marks a requirement the target satisfies from its own
+		// modules. No candidate can change such a value.
+		serverProvided := owner == nil && value != ""
 		matched := value != ""
 		invalid := false
 		if fmlLoader(target) && value == "0.0NONE" {
@@ -292,7 +295,7 @@ func checkModuleDependencies(
 				m.VersionDialect,
 			)
 			if err != nil {
-				problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
+				problems = append(problems, moduleProblem(p, m.ID, *dep, value, serverProvided, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
 				invalid = true
 			}
 		}
@@ -304,7 +307,7 @@ func checkModuleDependencies(
 				m.VersionDialect,
 			)
 			if err != nil {
-				problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
+				problems = append(problems, moduleProblem(p, m.ID, *dep, value, serverProvided, fmt.Sprintf("module %s requires %s %s: %v", m.ID, dep.ID, dep.Constraint, err)))
 				invalid = true
 			} else {
 				matched = compatible
@@ -313,13 +316,13 @@ func checkModuleDependencies(
 		requirement := strings.TrimSpace(dep.ID + " " + dep.Constraint)
 		if !invalid && dep.Kind == catalog.DependencyKindRequired && !matched {
 			if value == "" {
-				problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s, which no selected package provides", m.ID, requirement)))
+				problems = append(problems, moduleProblem(p, m.ID, *dep, "", false, fmt.Sprintf("module %s requires %s, which no selected package provides", m.ID, requirement)))
 			} else {
-				problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s requires %s (selected %s)", m.ID, requirement, value)))
+				problems = append(problems, moduleProblem(p, m.ID, *dep, value, serverProvided, fmt.Sprintf("module %s requires %s (selected %s)", m.ID, requirement, value)))
 			}
 		}
 		if !invalid && dep.Kind == catalog.DependencyKindIncompatible && matched {
-			problems = append(problems, moduleProblem(p, fmt.Sprintf("module %s breaks %s %s", m.ID, dep.ID, value)))
+			problems = append(problems, moduleProblem(p, m.ID, *dep, value, serverProvided, fmt.Sprintf("module %s breaks %s %s", m.ID, dep.ID, value)))
 		}
 		if matched {
 			if owner != nil && !owner.source.runtime() {

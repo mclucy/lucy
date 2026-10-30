@@ -12,10 +12,12 @@ import (
 	"hash"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/artifactstore"
@@ -169,7 +171,6 @@ func (s *downloadStore) materialize(a *catalog.Artifact) (artifact.MaterializedF
 		"artifact verified",
 		"file", a.Filename,
 		"sha256", hashes["sha256"],
-		"source", "store",
 	)
 	return artifact.MaterializedFile{Path: store.Path(object.Digest), Hashes: hashes}, nil
 }
@@ -302,6 +303,12 @@ func (s *downloadStore) downloadArtifact(a *catalog.Artifact) (string, func(), e
 			store:  s,
 		}
 	}
+	s.logger.Debug(
+		"artifact fetch",
+		"file", a.Filename,
+		"host", downloadHost(options.RequestURL),
+	)
+	started := time.Now()
 	result, err := s.network.CachedDownload(s.ctx, a.URL, directory, options)
 	if err != nil {
 		return "", cleanup, err
@@ -310,14 +317,33 @@ func (s *downloadStore) downloadArtifact(a *catalog.Artifact) (string, func(), e
 	if err := result.File.Close(); err != nil {
 		return "", cleanup, err
 	}
+	origin := "network"
 	if result.CacheHit {
+		origin = "cache"
 		s.cacheHit()
 	} else {
 		s.downloaded(read)
 		s.trace.fetchProgress(a.Filename, read, total)
 		s.trace.fetchDone(a.Filename, false)
 	}
+	s.logger.Debug(
+		"artifact fetched",
+		"file", a.Filename,
+		"source", origin,
+		"bytes", read,
+		"duration", time.Since(started).Round(time.Millisecond),
+	)
 	return source, cleanup, nil
+}
+
+// downloadHost names the host a download goes to, so a slow fetch points at
+// the endpoint rather than at the resolver.
+func downloadHost(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
 }
 
 // fetchReader reports download byte progress through the operation trace.

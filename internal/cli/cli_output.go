@@ -421,6 +421,23 @@ func resolutionDetail(failure *resolve.Failure) *report.Detail {
 		}
 		return detail
 	}
+	if constraint, ok := serverConstraint(failure.Groups); ok {
+		detail.Title = fmt.Sprintf(
+			"%s requires %s %s, but this server runs %s",
+			constraint.RequiredBy,
+			constraint.Dependency,
+			constraint.Constraint,
+			constraint.Selected,
+		)
+		detail.Lines = append(detail.Lines, fmt.Sprintf(
+			"no build of %s for Minecraft %s on %s can change it",
+			failure.Project,
+			failure.Minecraft,
+			failure.Ecosystem,
+		))
+		appendRejectionGroups(detail, failure)
+		return detail
+	}
 	detail.Title = fmt.Sprintf("no build of %s works on this server", failure.Project)
 	if failure.Candidates > 0 {
 		detail.Lines = append(detail.Lines, fmt.Sprintf(
@@ -434,13 +451,24 @@ func resolutionDetail(failure *resolve.Failure) *report.Detail {
 	return detail
 }
 
+// serverConstraint returns the requirement the server itself fails to satisfy.
+// No candidate can change it, so it is the cause of the failure.
+func serverConstraint(groups []resolve.RejectionGroup) (resolve.RejectionGroup, bool) {
+	for _, group := range groups {
+		if group.Kind == resolve.RejectionServer {
+			return group, true
+		}
+	}
+	return resolve.RejectionGroup{}, false
+}
+
 // appendRejectionGroups reports each aggregated rejection on its own line.
 func appendRejectionGroups(detail *report.Detail, failure *resolve.Failure) {
 	for _, group := range failure.Groups {
 		switch group.Kind {
 		case resolve.RejectionEmpty:
 			detail.Lines = append(detail.Lines, group.Detail)
-		case resolve.RejectionModules:
+		case resolve.RejectionModules, resolve.RejectionServer:
 			prefix := pluralBuilds(group.Count)
 			if group.Count == failure.Candidates {
 				prefix = fmt.Sprintf("all %d", group.Count)

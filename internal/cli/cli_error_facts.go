@@ -71,6 +71,10 @@ type rejectionFacts struct {
 	count        int
 	firstVersion string
 	lastVersion  string
+	requiredBy   string
+	dependency   string
+	constraint   string
+	selected     string
 }
 
 func (c *factCollector) walk(err error, depth int) {
@@ -140,6 +144,10 @@ func (c *factCollector) addFailure(failure *resolve.Failure) {
 			count:        group.Count,
 			firstVersion: factText(group.FirstVersion),
 			lastVersion:  factText(group.LastVersion),
+			requiredBy:   factText(group.RequiredBy),
+			dependency:   factText(group.Dependency),
+			constraint:   factText(group.Constraint),
+			selected:     factText(group.Selected),
 		})
 	}
 	c.failures = append(c.failures, entry)
@@ -227,6 +235,18 @@ func (r rejectionFacts) entry() map[string]any {
 	}
 	if r.lastVersion != "" {
 		entry["last_version"] = r.lastVersion
+	}
+	if r.requiredBy != "" {
+		entry["required_by"] = r.requiredBy
+	}
+	if r.dependency != "" {
+		entry["dependency"] = r.dependency
+	}
+	if r.constraint != "" {
+		entry["constraint"] = r.constraint
+	}
+	if r.selected != "" {
+		entry["selected"] = r.selected
 	}
 	return entry
 }
