@@ -1,0 +1,35 @@
+---
+title: "lucy telemetry"
+description: "Control telemetry and inspect local upload statistics"
+---
+
+Lucy alpha and beta builds enable telemetry by default. Telemetry helps maintainers understand command usage and diagnose operational failures. The data is pseudonymous (random and non-identifying UUIDs). Cloudflare processes network addresses when it receives uploads, and privacy filtering cannot guarantee that every sensitive detail is removed.
+
+## Control collection
+
+```bash
+lucy telemetry          # show the current state
+lucy telemetry off      # stop collection and clear pending local records
+lucy telemetry on       # enable collection
+lucy telemetry stats    # show local upload statistics
+lucy telemetry reset-id # generate a new client ID and reset local statistics
+```
+
+Turning telemetry off deletes pending local records but keeps the client ID and upload statistics. It does not delete data already received by the service. Resetting the ID does not change or delete remote data or pending records; pending records retain the ID under which they were collected. Uploads of those records count in the new statistics period. Statistics cover this local client only; they are not a statement of what the service still stores.
+
+Set `LUCY_TELEMETRY=off` to disable collection and uploads for a process, such as a CI job. This does not change the saved preference or clear the queue.
+For development, `LUCY_TELEMETRY_ENDPOINT` overrides the upload destination. Use only a trusted HTTPS endpoint; HTTP is permitted only for loopback testing. `lucy telemetry stats` shows the configured destination. A build without a version, such as a test binary or `go run`, never records an invocation, so test traffic cannot reach the service.
+
+## What Lucy collects
+
+A command event can contain the command name, Lucy version and build, operating system and architecture, duration, outcome, an error category, and whether Lucy detected a coding agent. It does not contain command arguments or search text. A randomly generated client ID links events from this installation; it is not derived from hardware or a workspace path.
+
+When a command already observes server or Java information, Lucy may include a limited structured snapshot. It does not scan your workspace or probe your network solely to gather this information. Operational failures can trigger a diagnostic report with invocation-scoped, filtered Lucy diagnostic information. Lucy does not automatically upload Minecraft server logs, configuration files, full package inventories, or complete command lines.
+
+Coding agents may submit a privacy-filtered report about a failure or other friction, not only a command failure. `lucy agent-report` takes the report body as its only argument, and `--agent` and `--model` name the harness and model when known. Lucy tells agents to write one to three sentences: the command, the error code or observed behavior, and the expected result, leaving out secrets, absolute paths, logs, transcripts, and user data. An agent reports each distinct problem once and then continues the task. It skips a failure caused by its own wrong directory, wrong flag, or missing prerequisite, but reports unexpected behavior even when a workaround exists. Lucy also redacts common secret and path patterns and truncates oversized bodies. It rejects reports when telemetry is off. An agent must not turn telemetry on unless you explicitly instruct it to do so.
+
+## Uploads and statistics
+
+Lucy queues records locally and sends bounded batches when the service is reachable. If the connectivity check or an upload fails, Lucy waits for a cooldown before trying again on a later invocation. It does not run a background service, so an offline record may remain queued until Lucy runs again. Telemetry failure does not change the result of your command.
+
+Statistics start when the client ID is created or reset. They separate accepted event payload and report content sizes from request-body bytes handed to the HTTP transport. Request-body bytes include retries but exclude HTTP and TLS overhead; an interrupted process may not record its final attempt. Accepted totals count each record once and do not guarantee remote retention.

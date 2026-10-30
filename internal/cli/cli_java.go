@@ -102,6 +102,7 @@ func actionJavaList(
 	}
 	runtimes, err := javaruntime.Installed(ctx, inv.Logger)
 	if err != nil {
+		recordJavaTelemetryFailure(inv)
 		return err
 	}
 	view := javaListView{Requirement: requirement, Runtimes: []javaRuntimeView{}}
@@ -112,6 +113,7 @@ func actionJavaList(
 			*requirement,
 			inv.Logger,
 		); err != nil {
+			recordJavaTelemetryFailure(inv)
 			return err
 		}
 	}
@@ -124,6 +126,7 @@ func actionJavaList(
 			view.Selection.Runtime.Home == runtime.Home
 		view.Runtimes = append(view.Runtimes, entry)
 	}
+	recordJavaTelemetry(inv, view.Selection)
 	output := NewQueryOutput(cmd, inv)
 	if output.JSON() {
 		return javaListJSON.Write(output, view)

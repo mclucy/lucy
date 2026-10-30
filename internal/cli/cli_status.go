@@ -114,6 +114,7 @@ func actionStatusLive(
 		output.Warn(warning)
 	}
 	if failure := statusSelectionFailure(observed); failure != nil {
+		recordWorkspaceTelemetryFailure(inv)
 		return failure
 	}
 
@@ -139,6 +140,7 @@ func actionStatusLive(
 			}
 		}
 	}
+	recordWorkspaceTelemetry(inv, observed, document)
 	document.Warnings = append(document.Warnings, output.Warnings()...)
 	return writeStatusDocument(ctx, output, inv, document, long, logoMode)
 }

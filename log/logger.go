@@ -19,6 +19,8 @@ type Logger struct {
 	path       string
 	diagnostic *charm.Logger
 	mirror     *charm.Logger
+	capture    bool
+	stages     []string
 }
 
 // New records all diagnostic levels in path. The level selects which records
@@ -81,11 +83,53 @@ func (l *Logger) write(level charm.Level, content any, fields ...any) {
 	if l == nil {
 		return
 	}
-	l.mu.RLock()
-	defer l.mu.RUnlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.capture && len(l.stages) < 128 {
+		if message, ok := content.(string); ok && diagnosticStage(message) {
+			l.stages = append(l.stages, message)
+		}
+	}
 	l.diagnostic.Log(level, content, fields...)
 	if l.mirror != nil {
 		l.mirror.Log(level, content, fields...)
+	}
+}
+
+// CaptureStages enables the bounded, allowlisted diagnostic record for this
+// invocation. Arbitrary messages and fields remain in the local log only.
+func (l *Logger) CaptureStages() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.capture = true
+}
+
+// Stages returns the captured messages without exposing log fields.
+func (l *Logger) Stages() []string {
+	if l == nil {
+		return nil
+	}
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return append([]string(nil), l.stages...)
+}
+
+func diagnosticStage(message string) bool {
+	switch message {
+	case "action invoked", "action completed",
+		"resolving installation", "installation decision",
+		"installation already current", "installation not current",
+		"installation current", "staging installation", "packages staged",
+		"installation transaction journaled", "installation committed",
+		"lock resolution reused current lock", "core pin not reusable",
+		"installing java", "java installed", "java repository added",
+		"upgrade: candidate combination failed":
+		return true
+	default:
+		return false
 	}
 }
 
