@@ -30,6 +30,6 @@ Coding agents may submit a privacy-filtered report about a failure or other fric
 
 ## Uploads and statistics
 
-Lucy queues records locally and sends bounded batches when the service is reachable. If a quick connectivity check fails, Lucy waits for a cooldown before trying again on a later invocation. It does not run a background service, so an offline record may remain queued until Lucy runs again. Telemetry failure does not change the result of your command.
+Lucy queues records locally and sends bounded batches when the service is reachable. If the connectivity check or an upload fails, Lucy waits for a cooldown before trying again on a later invocation. It does not run a background service, so an offline record may remain queued until Lucy runs again. Telemetry failure does not change the result of your command.
 
 Statistics start when the client ID is created or reset. They separate accepted event payload and report content sizes from request-body bytes handed to the HTTP transport. Request-body bytes include retries but exclude HTTP and TLS overhead; an interrupted process may not record its final attempt. Accepted totals count each record once and do not guarantee remote retention.

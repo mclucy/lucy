@@ -134,6 +134,9 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 				continue
 			}
 			state.LastError = sanitizeErrorText(uploadErr)
+			if !errors.Is(flushContext.Err(), context.Canceled) {
+				state.CooldownUntil = now.Add(c.limits.Cooldown)
+			}
 			if err := c.saveState(state, now); err != nil {
 				return result, err
 			}
