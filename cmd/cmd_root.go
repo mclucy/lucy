@@ -219,15 +219,39 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 	}
 	if n := cmd.Name(); n != "__complete" && n != "__completeNoDesc" {
 		r.invocation.Logger.Info("action invoked", "action", cmd.CommandPath(), "directory", r.invocation.Directory)
-		if mode == cli.JSONNone && !r.contracts.Ignores(cmd) {
-			if r.invocation.TelemetryEnabled {
-				report.New(cmd.ErrOrStderr(), r.invocation.Theme).Info(
-					"Lucy collects opt-out telemetry. Use `lucy telemetry off` to disable it; see `lucy docs read commands/telemetry` for details.",
-				)
-			}
+		if mode == cli.JSONNone && !r.contracts.Ignores(cmd) && r.invocation.TelemetryEnabled {
+			r.announceTelemetry(cmd)
 		}
 	}
 	return nil
+}
+
+// announceTelemetry presents the one-time telemetry notice. The claim is
+// recorded before the notice renders, so a machine presents it once even when
+// several invocations start together, and a claim that cannot render stays
+// claimed.
+func (r *Runner) announceTelemetry(cmd *cobra.Command) {
+	if r.telemetry == nil || r.telemetryErr != nil {
+		return
+	}
+	claimed, err := r.telemetry.ClaimNotice()
+	if err != nil {
+		r.invocation.Logger.Debug("telemetry notice was not shown", "error", err)
+		return
+	}
+	if !claimed {
+		return
+	}
+	identity := "lucy"
+	if displayVersion, _ := buildVersion(); displayVersion != "" {
+		identity += " " + displayVersion
+	}
+	report.New(cmd.ErrOrStderr(), r.invocation.Theme).Info(
+		identity + " comes with opt-out telemetry. You can manage it with `lucy telemetry`. " +
+			"If you are using an agent with telemetry on, they will be instructed to write " +
+			"reports autonomously upon failure or difficulties. Your data will be used for " +
+			"improving lucy only. See <lucy.lc/docs/commands/telemetry> for more info.",
+	)
 }
 
 func (r *Runner) configurePresentation(cmd *cobra.Command) {

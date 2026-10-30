@@ -5,6 +5,8 @@ description: "Control telemetry and inspect local upload statistics"
 
 Lucy alpha and beta builds enable telemetry by default. Telemetry helps maintainers understand command usage and diagnose operational failures. The data is pseudonymous (random and non-identifying UUIDs). Cloudflare processes network addresses when it receives uploads, and privacy filtering cannot guarantee that every sensitive detail is removed.
 
+The first telemetry-enabled command in human-readable mode prints a one-time notice that explains collection and how to opt out. Lucy records that it showed the notice, so it does not appear again on the same machine.
+
 ## Control collection
 
 ```bash

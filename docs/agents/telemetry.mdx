@@ -7,7 +7,9 @@ description: "Local collection state, invocation contexts, bounded outbox delive
 
 ## Local state
 
-The state directory is `telemetry` under the platform user-data root: `LOCALAPPDATA/lucy`, `~/Library/Application Support/lucy`, or `$XDG_DATA_HOME/lucy` with `~/.local/share` as the fallback. It holds three things: `state.json` (identity, policy, counters, and the outbox index), `queue/<id>.json` (one record payload per file), and `state.lock`. Directories are `0700` and files `0600`.
+The state directory is `telemetry` under the platform user-data root: `LOCALAPPDATA/lucy`, `~/Library/Application Support/lucy`, or `$XDG_DATA_HOME/lucy` with `~/.local/share` as the fallback. It holds `state.json` (identity, policy, counters, and the outbox index), `queue/<id>.json` (one record payload per file), `state.lock`, and `.alpha_telemety_notice_shown` (the one-time notice claim). Directories are `0700` and files `0600`.
+
+`ClaimNotice` creates the marker with exclusive creation and reports whether this process won the claim. `cmd` claims before it renders the notice, so one invocation presents the notice per machine; a claim that fails to render stays claimed. A disabled client never claims, so the notice stays available until telemetry is on.
 
 `state.json` is the single source of truth. Accepting a record writes its payload file first, then replaces `state.json` atomically, so a record is queued and counted in one step. Files are encoded deterministically; readers reject an unknown schema version, an invalid policy, or a malformed identity as corrupt, and further mutation is refused until `lucy telemetry off` rewrites the state. Queue pruning and orphan removal keep payload files consistent with the index when a replacement is interrupted.
 
