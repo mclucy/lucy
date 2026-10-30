@@ -24,17 +24,40 @@ else
   fail 'sha256sum or shasum is required'
 fi
 
-feed=$(curl -fsSL https://github.com/mclucy/lucy/releases.atom) || fail 'could not fetch releases'
-tag=$(printf '%s\n' "$feed" | awk '/<id>tag:github.com,2008:Repository\/[0-9]+\/v/ { sub(/^.*\/v/, ""); sub(/<\/id>.*$/, ""); print; exit }')
-version=$tag
-[ -n "$version" ] || fail 'could not find a published release'
+fetch() { curl -fsSL --retry 3 --retry-delay 1 "$1" -o "$2"; }
+
+github="https://github.com/mclucy/lucy/releases/download"
+if [ -n "${LUCY_VERSION:-}" ]; then
+  version=$LUCY_VERSION
+  base="https://lucy.lc/dl/v${version}"
+else
+  manifest=$(curl -fsSL --retry 3 --retry-delay 1 https://lucy.lc/latest.json) ||
+    fail 'could not fetch the release manifest'
+  version=$(printf '%s\n' "$manifest" | sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' | head -n 1)
+  base=$(printf '%s\n' "$manifest" | sed -n 's/^ *"base": *"\([^"]*\)".*/\1/p' | head -n 1)
+  [ -n "$version" ] || fail 'could not find a published release'
+  case "$base" in
+    https://*/) ;;
+    *) base="https://lucy.lc/dl/v${version}" ;;
+  esac
+  base=${base%/}
+fi
 case "$version" in ''|*[!a-zA-Z0-9.+-]*) fail 'invalid release version' ;; esac
+
 archive="lucy_${version}_${os}_${arch}.tar.gz"
-base="https://github.com/mclucy/lucy/releases/download/v${version}"
 tmp=$(mktemp -d) || fail 'could not create a temporary directory'
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
-curl -fsSL "$base/$archive" -o "$tmp/$archive" || fail "could not download $archive"
-curl -fsSL "$base/checksums.txt" -o "$tmp/checksums.txt" || fail 'could not download checksums'
+
+if ! fetch "$base/$archive" "$tmp/$archive"; then
+  base="$github/v${version}"
+  fetch "$base/$archive" "$tmp/$archive" || fail "could not download $archive"
+fi
+
+# The digest from GitHub is independent of the mirror that served the archive.
+if ! fetch "$github/v${version}/checksums.txt" "$tmp/checksums.txt"; then
+  fetch "$base/checksums.txt" "$tmp/checksums.txt" || fail 'could not download checksums'
+fi
+
 expected=$(while read -r digest filename; do
   if [ "$filename" = "$archive" ]; then printf '%s' "$digest"; break; fi
 done < "$tmp/checksums.txt")
@@ -45,6 +68,7 @@ else
   actual=$(shasum -a 256 "$tmp/$archive")
 fi
 [ "${actual%% *}" = "$expected" ] || fail 'archive checksum mismatch'
+
 tar -xzf "$tmp/$archive" -C "$tmp" lucy || fail 'could not extract lucy'
 [ -f "$tmp/lucy" ] || fail 'archive does not contain lucy'
 install_dir="$HOME/.local/bin"

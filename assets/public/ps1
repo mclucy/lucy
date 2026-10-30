@@ -5,23 +5,57 @@ $architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 }
 if ($architecture -ne 'AMD64') { throw "Unsupported Windows architecture: $architecture" }
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$feed = [xml](Invoke-WebRequest -Uri 'https://github.com/mclucy/lucy/releases.atom' -UseBasicParsing).Content
-$entry = @($feed.feed.entry)[0]
-if (-not $entry -or $entry.id -notmatch '^tag:github\.com,2008:Repository/[0-9]+/v([a-zA-Z0-9.+-]+)$') { throw 'Could not find a published release.' }
-$version = $Matches[1]
+
+function Get-File($uri, $path) {
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            Invoke-WebRequest -Uri $uri -OutFile $path -UseBasicParsing
+            return $true
+        } catch {
+            if ($attempt -eq 3) { return $false }
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
+$github = 'https://github.com/mclucy/lucy/releases/download'
+if ($env:LUCY_VERSION) {
+    $version = $env:LUCY_VERSION
+    $base = "https://lucy.lc/dl/v$version"
+} else {
+    try {
+        $manifest = Invoke-RestMethod -Uri 'https://lucy.lc/latest.json' -UseBasicParsing
+    } catch {
+        throw 'Could not fetch the release manifest.'
+    }
+    $version = [string]$manifest.version
+    if (-not $version) { throw 'Could not find a published release.' }
+    $base = if ($manifest.base) { ([string]$manifest.base).TrimEnd('/') } else { "https://lucy.lc/dl/v$version" }
+}
+if ($version -notmatch '^[a-zA-Z0-9.+-]+$') { throw 'Invalid release version.' }
+
 $archive = "lucy_${version}_windows_amd64.zip"
-$base = "https://github.com/mclucy/lucy/releases/download/v$version"
 $temp = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $temp | Out-Null
 try {
     $archivePath = Join-Path $temp $archive
     $checksumsPath = Join-Path $temp 'checksums.txt'
-    Invoke-WebRequest -Uri "$base/$archive" -OutFile $archivePath -UseBasicParsing
-    Invoke-WebRequest -Uri "$base/checksums.txt" -OutFile $checksumsPath -UseBasicParsing
+
+    if (-not (Get-File -uri "$base/$archive" -path $archivePath)) {
+        $base = "$github/v$version"
+        if (-not (Get-File -uri "$base/$archive" -path $archivePath)) { throw "Could not download $archive." }
+    }
+
+    # The digest from GitHub is independent of the mirror that served the archive.
+    if (-not (Get-File -uri "$github/v$version/checksums.txt" -path $checksumsPath)) {
+        if (-not (Get-File -uri "$base/checksums.txt" -path $checksumsPath)) { throw 'Could not download checksums.' }
+    }
+
     $checksumLine = Get-Content $checksumsPath | Where-Object { $_ -match ('^([a-fA-F0-9]{64})\s+\*?' + [regex]::Escape($archive) + '$') } | Select-Object -First 1
     if (-not $checksumLine) { throw "Checksum missing for $archive." }
     $expected = ($checksumLine -split '\s+')[0]
     if ((Get-FileHash -Algorithm SHA256 $archivePath).Hash -ne $expected) { throw 'Archive checksum mismatch.' }
+
     Expand-Archive -Path $archivePath -DestinationPath (Join-Path $temp 'extracted')
     $binary = Join-Path $temp 'extracted/lucy.exe'
     if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw 'Archive does not contain lucy.exe.' }
