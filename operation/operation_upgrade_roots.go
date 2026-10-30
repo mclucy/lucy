@@ -142,17 +142,12 @@ func previousRootPackage(
 }
 
 func upgradeTargets(roots []upgradeRoot, opts UpgradeOptions) (map[string]bool, error) {
-	switch {
-	case opts.All && len(opts.Targets) > 0:
-		return nil, fmt.Errorf("--all cannot be combined with package arguments")
-	case opts.All:
+	if len(opts.Targets) == 0 {
 		targets := make(map[string]bool, len(roots))
 		for _, root := range roots {
 			targets[root.Reference] = true
 		}
 		return targets, nil
-	case len(opts.Targets) == 0:
-		return nil, fmt.Errorf("specify packages or --all")
 	}
 	targets := map[string]bool{}
 	for _, raw := range opts.Targets {

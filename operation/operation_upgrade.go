@@ -25,9 +25,8 @@ const (
 )
 
 // UpgradeOptions selects the manifest roots an upgrade may advance. An empty
-// Targets with All false is an error; callers must say what to upgrade.
+// Targets upgrades every enabled root.
 type UpgradeOptions struct {
-	All     bool
 	Targets []string
 	// Offline disallows network acquisition. Upgrade cannot discover newer
 	// versions offline, so this is only useful when it fails early.
@@ -170,7 +169,7 @@ func (s *Service) PlanUpgrade(
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, ctxErr
 			}
-			if opts.All {
+			if len(opts.Targets) == 0 {
 				warnings = append(warnings, fmt.Errorf(
 					"keep %s at %s: %w",
 					roots[i].Reference,

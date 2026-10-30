@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	flagUpgradeAllName         = "all"
 	flagUpgradeInteractiveName = "interactive"
 	flagUpgradeDryRunName      = "dry-run"
 	flagUpgradePolicyName      = "policy"
@@ -38,12 +37,6 @@ func NewUpgradeCommand(
 	}
 	upgradeFrontierJSON.Bind(contracts, upgradeCmd)
 	installJSON.Bind(contracts, upgradeCmd)
-	upgradeCmd.Flags().BoolP(
-		flagUpgradeAllName,
-		"a",
-		false,
-		"Upgrade every enabled manifest root",
-	)
 	upgradeCmd.Flags().Bool(
 		flagUpgradeInteractiveName,
 		false,
@@ -68,29 +61,19 @@ func actionUpgrade(
 	deps *Dependencies,
 	args []string,
 ) error {
-	all, _ := cmd.Flags().GetBool(flagUpgradeAllName)
 	interactive, _ := cmd.Flags().GetBool(flagUpgradeInteractiveName)
 	dryRun, _ := cmd.Flags().GetBool(flagUpgradeDryRunName)
 	policy, _ := cmd.Flags().GetString(flagUpgradePolicyName)
-	policySet := cmd.Flags().Changed(flagUpgradePolicyName)
 	noInteractive, _ := cmd.Flags().GetBool(FlagNoInteractive)
 	jsonMode := JSONMode(cmd) != JSONNone
 
 	switch {
-	case all && len(args) > 0:
-		return fmt.Errorf("--%s cannot be combined with package arguments", flagUpgradeAllName)
-	case all && interactive:
-		return fmt.Errorf("--%s cannot be combined with --%s", flagUpgradeAllName, flagUpgradeInteractiveName)
 	case interactive && len(args) > 0:
 		return fmt.Errorf("--%s cannot be combined with package arguments", flagUpgradeInteractiveName)
 	case interactive && noInteractive:
 		return fmt.Errorf("--%s cannot be combined with --%s", flagUpgradeInteractiveName, FlagNoInteractive)
-	case policySet && !all:
-		return fmt.Errorf("--%s applies to global upgrades; add --%s", flagUpgradePolicyName, flagUpgradeAllName)
 	case policy != "more" && policy != "later" && policy != "options" && !isUpgradeHash(policy):
 		return fmt.Errorf("unknown upgrade policy %q", policy)
-	case !all && !interactive && len(args) == 0:
-		return fmt.Errorf("specify packages, --%s, or --%s", flagUpgradeAllName, flagUpgradeInteractiveName)
 	case policy == "options" && noInteractive && !dryRun && !jsonMode:
 		return fmt.Errorf("--%s options needs a selection; use --%s <hash>", flagUpgradePolicyName, flagUpgradePolicyName)
 	}
@@ -110,7 +93,6 @@ func actionUpgrade(
 		ctx,
 		inv.Directory,
 		operation.UpgradeOptions{
-			All:     all,
 			Targets: targets,
 			Trace:   output.Trace(),
 		},
@@ -250,7 +232,7 @@ func promptUpgradeRoots(
 	root string,
 ) ([]string, error) {
 	if !NewPromptGate(cmd, inv).Available() {
-		return nil, errors.New("interactive selection needs a terminal; use --all or name packages")
+		return nil, errors.New("interactive selection needs a terminal; name packages instead")
 	}
 	refs, err := operation.ListUpgradeRoots(root)
 	if err != nil {
