@@ -43,7 +43,9 @@ type Renderer interface {
 	// LogWriter returns a writer whose complete lines appear in the live area.
 	// A subprocess uses it to stream its output without owning the terminal.
 	LogWriter() io.Writer
-	// Close stops the renderer. It is safe to call more than once.
+	// Close stops the renderer. It is safe to call more than once. An animated
+	// renderer emits a subprocess line still waiting for its newline before it
+	// stops.
 	Close()
 }
 
