@@ -1,0 +1,19 @@
+---
+title: "lucy bisect"
+description: "Find a package that breaks the server with binary search"
+---
+
+Use `lucy bisect` to narrow down an enabled package that breaks your server. Stop the server before changing packages.
+
+1. Run `lucy bisect start` to select the first group of packages.
+2. Start the server and check whether the problem occurs. Stop the server, then run `lucy bisect bad` if the problem occurred, or `lucy bisect good` if it did not.
+3. Repeat the check until Lucy identifies a package or reports that no candidate remains. Use `lucy bisect status` to see the current selection.
+4. Run `lucy bisect reset` to finish the session and restore the original manifest and installation.
+
+Lucy syncs the installation after each selection. If a command fails during a sync, rerun the same command before recording another result. You can also run `lucy bisect reset` to restore the original configuration. A session, including a completed one, must be reset before starting another. Concurrent session commands wait for each other, including `status`, which only reads the session once it owns the lock.
+
+If `lucy.yaml` changes outside the session, Lucy refuses to overwrite those changes; a server rename observed while a step finishes is kept because installation does not depend on the name. Restore the session's expected manifest before continuing, or recover the original manually from the session file.
+
+The session stores the original manifest in `bisect.json` in the server directory. The file is created with mode 0600 because it contains a copy of your manifest. Keep this file until reset succeeds. If the file is damaged, incompatible, or was written by another Lucy version, Lucy does not migrate it: restore `lucy.yaml` manually from its `original` field, then delete `bisect.json`.
+
+All subcommands support JSON output; see [Global Flags](/commands/global-flags).

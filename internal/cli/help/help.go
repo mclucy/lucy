@@ -12,8 +12,8 @@ const (
 	BisectStartShort  = "Start a binary-search session"
 	BisectGoodShort   = "Mark current midpoint as good"
 	BisectBadShort    = "Mark current midpoint as bad"
-	BisectStatusShort = "Show the active bisect session"
-	BisectResetShort  = "Abort the active bisect session and restore the manifest"
+	BisectStatusShort = "Show the bisect session"
+	BisectResetShort  = "Restore the original manifest and end the bisect session"
 
 	CacheShort      = "Manage the network cache"
 	CacheLsShort    = "List cache entries"
