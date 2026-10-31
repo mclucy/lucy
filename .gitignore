@@ -68,3 +68,6 @@ bisect.json
 
 # Secrets
 .env.local
+
+# Nix
+result

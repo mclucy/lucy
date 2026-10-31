@@ -42,9 +42,14 @@ brew install --cask lucy
 
 # Go
 go install github.com/mclucy/lucy@latest
+
+# Nix（flake）
+nix run github:mclucy/lucy
 ```
 
 也可在 [Releases](https://github.com/mclucy/lucy/releases) 下载预编译二进制文件。
+
+在 NixOS 或 home-manager 中，把该 flake 作为输入引入，导入 `nixosModules.default` 或 `homeManagerModules.default`，并设置 `programs.lucy.enable = true;`。
 
 ## 快速上手
 
