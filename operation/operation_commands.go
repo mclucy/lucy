@@ -72,7 +72,7 @@ func commandDocuments(root string, logger *log.Logger) (document *documentpkg.Ma
 		return nil, nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root, logger); err != nil {
+	if err := filetrack.RecoverLocked(root, logger); err != nil {
 		return nil, nil, err
 	}
 	d, err := documentpkg.ManifestFile(root).Read()
@@ -84,6 +84,28 @@ func commandDocuments(root string, logger *log.Logger) (document *documentpkg.Ma
 		return nil, nil, err
 	}
 	return d, old, nil
+}
+
+// pinWorkspaceDocuments fills the state an operation selected from when the
+// caller did not already pin it. The installation re-locks the workspace, so a
+// recovery or concurrent edit in between fails instead of being overwritten.
+func pinWorkspaceDocuments(opts *install.Options, d *documentpkg.Manifest, old *documentpkg.Lock) error {
+	if d != nil && opts.ExpectedManifest == "" {
+		fingerprint, err := d.Fingerprint()
+		if err != nil {
+			return err
+		}
+		opts.ExpectedManifest = fingerprint
+	}
+	if old == nil || opts.ExpectedLock != "" {
+		return nil
+	}
+	fingerprint, err := old.Fingerprint()
+	if err != nil {
+		return err
+	}
+	opts.ExpectedLock = fingerprint
+	return nil
 }
 
 func selectedEcosystem(d *documentpkg.Manifest, requested catalog.Ecosystem) catalog.Ecosystem {
@@ -212,8 +234,7 @@ func (s *Service) Add(ctx context.Context, root string, args []string, ecosystem
 	if err != nil {
 		return nil, err
 	}
-	opts.ExpectedManifest, err = d.Fingerprint()
-	if err != nil {
+	if err := pinWorkspaceDocuments(&opts, d, old); err != nil {
 		return nil, err
 	}
 	opts.RequirementChange = true
@@ -248,8 +269,7 @@ func (s *Service) Remove(ctx context.Context, root string, args []string, ecosys
 	if err != nil {
 		return nil, err
 	}
-	opts.ExpectedManifest, err = d.Fingerprint()
-	if err != nil {
+	if err := pinWorkspaceDocuments(&opts, d, old); err != nil {
 		return nil, err
 	}
 	opts.RequirementChange = true
@@ -293,10 +313,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
-		return nil, err
-	}
-	if err := filetrack.RecoverPending(root); err != nil {
+	if err := filetrack.RecoverLocked(root, s.logger); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(filepath.Join(root, documentpkg.ManifestFilename)); err == nil && !opts.Force {

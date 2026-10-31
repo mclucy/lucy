@@ -53,10 +53,7 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, lock.Close()) }()
-	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
-		return result, err
-	}
-	if err := RecoverPending(root); err != nil {
+	if err := RecoverLocked(root, s.logger); err != nil {
 		return result, err
 	}
 	files, err := os.OpenRoot(root)

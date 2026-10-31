@@ -182,29 +182,39 @@ func (s *Service) PlanInstall(
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := preflightLocked(root, d, old, opts, false, s.logger); err != nil {
+	_, baseLock, err := preflightLocked(root, d, old, opts, false, s.logger)
+	if err != nil {
+		return nil, err
+	}
+	previous, err := recoveredLock(old, baseLock)
+	if err != nil {
 		return nil, err
 	}
 	result := newResult()
 	store := s.newDownloadStore(ctx, opts, result)
-	resolved, err := s.resolveLock(ctx, root, d, old, &opts, store, result)
+	// The plan answers the recovered workspace: the previous lock is always the
+	// recovered one, so a caller that read documents before recovery cannot
+	// hand the resolver a stale base. The manifest stays the caller's document
+	// because a publish plan carries an intended edit; ApplyPlan rejects a
+	// non-publishing plan whose manifest does not match the recorded base.
+	resolved, err := s.resolveLock(ctx, root, d, previous, &opts, store, result)
 	if err != nil {
 		return nil, err
 	}
 	result.PublishedManifest = opts.PublishManifest
 	result.PublishedLock = opts.publishLock
-	baseManifest, baseLock, err := workspaceFingerprints(root)
+	baseManifestFingerprint, baseLockFingerprint, err := workspaceFingerprints(root)
 	if err != nil {
 		return nil, err
 	}
 	return &Plan{
 		Manifest:                d,
-		Previous:                old,
+		Previous:                previous,
 		Resolved:                resolved,
 		PublishManifest:         opts.PublishManifest,
 		PublishLock:             opts.publishLock,
-		BaseManifestFingerprint: baseManifest,
-		BaseLockFingerprint:     baseLock,
+		BaseManifestFingerprint: baseManifestFingerprint,
+		BaseLockFingerprint:     baseLockFingerprint,
 		Result:                  result,
 	}, nil
 }
@@ -239,7 +249,12 @@ func (s *Service) ApplyPlan(
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := preflightLocked(root, plan.Manifest, plan.Previous, opts, true, s.logger); err != nil {
+	preflightOptions := opts
+	preflightOptions.PublishManifest = plan.PublishManifest
+	if _, _, err := preflightLocked(root, plan.Manifest, plan.Previous, preflightOptions, true, s.logger); err != nil {
+		return nil, err
+	}
+	if err := checkPlannedDocuments(plan); err != nil {
 		return nil, err
 	}
 	if err := checkPlannedState(root, plan); err != nil {

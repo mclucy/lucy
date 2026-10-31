@@ -1,16 +1,18 @@
 package install
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
-	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
@@ -183,7 +185,8 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	previous := installReceipt{}
 	raw, err := os.ReadFile(receiptPath)
-	if err == nil {
+	receiptExisted := err == nil
+	if receiptExisted {
 		if err := yaml.Unmarshal(raw, &previous); err != nil {
 			return err
 		}
@@ -203,6 +206,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	next.LockFingerprint = lockFingerprint
 	tracked := trackedPaths(l)
 	sources := map[string]string{}
+	sourceImages := map[string]workspacewrite.InstallImage{}
 	err = filepath.WalkDir(stage, func(p string, e os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -272,12 +276,18 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		} else if !os.IsNotExist(err) {
 			return err
 		}
+		mode := os.FileMode(0o644)
 		if !mutableDefault {
+			mode = info.Mode().Perm()
 			next.Entries = append(next.Entries, receiptEntry{
 				Path:   relative,
 				SHA256: hashes["sha256"],
-				Mode:   uint32(info.Mode().Perm()),
+				Mode:   uint32(mode),
 			})
+		}
+		sourceImages[relative] = workspacewrite.InstallImage{
+			SHA256: hashes["sha256"],
+			Mode:   effectiveInstallMode(mode),
 		}
 		sources[relative] = p
 		return nil
@@ -285,6 +295,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	if err != nil {
 		return err
 	}
+	pruneExpected := map[string]string{}
 	for _, old := range previous.Entries {
 		if tracked[strings.ToLower(old.Path)] {
 			continue
@@ -303,49 +314,209 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		if actual["sha256"] != old.SHA256 {
 			return fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
 		}
+		pruneExpected[old.Path] = old.SHA256
+	}
+	receiptBytes, err := yaml.Marshal(next)
+	if err != nil {
+		return err
+	}
+	lockPlan, err := installDocumentPlanFor(
+		root,
+		document.LockFilename,
+		0o644,
+		func() ([]byte, error) { return document.LockFile(root).Snapshot(l) },
+		l.MergeBytes,
+	)
+	if err != nil {
+		return err
+	}
+	var manifestPlan *installDocumentPlan
+	if publish {
+		manifestPlan, err = installDocumentPlanFor(
+			root,
+			document.ManifestFilename,
+			0o644,
+			func() ([]byte, error) { return document.ManifestFile(root).Snapshot(d) },
+			d.MergeBytes,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	receiptMode, err := installFileMode(receiptPath, 0o600)
+	if err != nil {
+		return err
+	}
+	receiptAfter := installBytesImage(receiptBytes, receiptMode)
+	var receiptBase *workspacewrite.InstallImage
+	if receiptExisted {
+		receiptBase = installBytesImage(raw, receiptMode)
+	}
+	afterImages := make(map[string]*workspacewrite.InstallImage, len(sources)+3)
+	for name, image := range sourceImages {
+		if installPathReserved(root, name) {
+			return fmt.Errorf("staged output %s is reserved", name)
+		}
+		image := image
+		afterImages[name] = &image
+	}
+	planAfter := func(name string, image *workspacewrite.InstallImage) error {
+		if installPathMatchesReserved(
+			root, name, workspacewrite.InstallJournalName,
+		) {
+			return fmt.Errorf("installation path %s is reserved", name)
+		}
+		if _, exists := afterImages[name]; exists {
+			return fmt.Errorf("installation path %s has conflicting owners", name)
+		}
+		afterImages[name] = image
+		return nil
+	}
+	if err := planAfter(document.LockFilename, &lockPlan.Image); err != nil {
+		return err
+	}
+	if publish {
+		if err := planAfter(document.ManifestFilename, &manifestPlan.Image); err != nil {
+			return err
+		}
+	}
+	if err := planAfter(".lucy/install.yaml", receiptAfter); err != nil {
+		return err
+	}
+	baseImages := map[string]*workspacewrite.InstallImage{
+		document.LockFilename: lockPlan.Base,
+		".lucy/install.yaml":  receiptBase,
+	}
+	documentAfter := map[string]*workspacewrite.InstallImage{
+		document.LockFilename: &lockPlan.Image,
+		".lucy/install.yaml":  receiptAfter,
+	}
+	if publish {
+		baseImages[document.ManifestFilename] = manifestPlan.Base
+		documentAfter[document.ManifestFilename] = &manifestPlan.Image
+	}
+	for _, old := range previous.Entries {
+		if tracked[strings.ToLower(old.Path)] {
+			continue
+		}
+		if _, ok := sources[old.Path]; ok {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(root, old.Path)); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		if installPathMatchesReserved(
+			root, old.Path, document.ManifestFilename,
+		) {
+			return fmt.Errorf("installation receipt path %s is reserved", old.Path)
+		}
+		if err := planAfter(old.Path, nil); err != nil {
+			return err
+		}
+	}
+	names := make([]string, 0, len(afterImages))
+	for name := range afterImages {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	if err := rejectInstallPathAliases(root, names); err != nil {
+		return err
 	}
 	backup, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "rollback-*")
 	if err != nil {
 		return err
 	}
-	journal := workspacewrite.InstallJournal{Backup: backup, Changed: []string{}, Created: []string{}}
-	names := []string{}
-	for name := range sources {
-		names = append(names, name)
-	}
-	for _, entry := range previous.Entries {
-		if tracked[strings.ToLower(entry.Path)] {
-			continue
+	journalPublished := false
+	defer func() {
+		if journalPublished {
+			return
 		}
-		if _, ok := sources[entry.Path]; !ok {
-			names = append(names, entry.Path)
+		if err := os.RemoveAll(backup); err != nil {
+			logger.Warn(fmt.Errorf("remove unused installation backup: %w", err))
 		}
+	}()
+	backupRelative := filepath.ToSlash(
+		filepath.Join(".lucy", filepath.Base(backup)),
+	)
+	journal := workspacewrite.InstallJournal{
+		Backup:  backupRelative,
+		Entries: make([]workspacewrite.InstallJournalEntry, 0, len(names)),
 	}
-	names = append(names, document.LockFilename, ".lucy/install.yaml")
-	if publish {
-		names = append(names, document.ManifestFilename)
-	}
-	slices.Sort(names)
-	names = slices.Compact(names)
-	for _, name := range names {
-		if err := workspacewrite.SafePath(root, name); err != nil {
+	prepareErr := func() (resultErr error) {
+		files, err := os.OpenRoot(root)
+		if err != nil {
 			return err
 		}
-		target := filepath.Join(root, name)
-		if _, err := os.Stat(target); err == nil {
-			info, err := os.Stat(target)
-			if err != nil {
+		defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
+		for _, name := range names {
+			if err := workspacewrite.SafePath(root, name); err != nil {
 				return err
 			}
-			if err := bootstrap.CopyLockedFile(target, filepath.Join(backup, name), info.Mode().Perm()); err != nil {
+			target := filepath.Join(root, name)
+			entry := workspacewrite.InstallJournalEntry{
+				Path:  name,
+				After: afterImages[name],
+			}
+			info, err := files.Lstat(name)
+			switch {
+			case err == nil:
+				if !info.Mode().IsRegular() {
+					return fmt.Errorf("installation target %s is not a regular file", name)
+				}
+				hashes, err := DigestFile(target, nil)
+				if err != nil {
+					return err
+				}
+				before := workspacewrite.InstallImage{
+					SHA256: hashes["sha256"],
+					Mode:   effectiveInstallMode(info.Mode().Perm()),
+				}
+				entry.Before = &before
+			case errors.Is(err, os.ErrNotExist):
+			default:
 				return err
 			}
-			journal.Changed = append(journal.Changed, name)
-		} else if os.IsNotExist(err) {
-			journal.Created = append(journal.Created, name)
-		} else {
-			return err
+			if base, planned := baseImages[name]; planned {
+				if !workspacewrite.InstallImagesEqual(entry.Before, base) {
+					return fmt.Errorf(
+						"installation path %s changed while planning",
+						name,
+					)
+				}
+			}
+			if entry.Before == nil && entry.After == nil {
+				continue
+			}
+			if entry.After == nil {
+				expected, validated := pruneExpected[name]
+				if !validated || entry.Before == nil ||
+					entry.Before.SHA256 != expected {
+					return fmt.Errorf(
+						"modified or unowned output cannot be pruned: %s",
+						name,
+					)
+				}
+			}
+			if entry.Before != nil && entry.After != nil &&
+				workspacewrite.InstallImagesEqual(entry.Before, entry.After) {
+				continue
+			}
+			if entry.Before != nil {
+				if err := preserveInstallPreImage(
+					files, backup, backupRelative, *entry.Before, target,
+				); err != nil {
+					return err
+				}
+			}
+			journal.Entries = append(journal.Entries, entry)
 		}
+		return nil
+	}()
+	if prepareErr != nil {
+		return prepareErr
 	}
 	journalBytes, err := yaml.Marshal(journal)
 	if err != nil {
@@ -353,88 +524,479 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	}
 	journalPath := filepath.Join(root, workspacewrite.InstallJournalName)
 	if err := fsutil.AtomicWrite(journalPath, journalBytes, 0o600); err != nil {
+		// AtomicWrite can return a sync error after the journal replacement was
+		// published. Keep the backup while any journal remains, so recovery can
+		// still verify and remove it.
+		if _, statErr := os.Lstat(journalPath); statErr == nil {
+			journalPublished = true
+		}
 		return err
 	}
+	journalPublished = true
 	logger.Debug(
 		"installation transaction journaled",
 		"journal", journalPath,
-		"backup", backup,
-		"created", len(journal.Created),
-		"changed", len(journal.Changed),
+		"backup", journal.Backup,
+		"paths", len(journal.Entries),
 	)
+	mutations := make(map[string]workspacewrite.InstallJournalEntry, len(journal.Entries))
+	for _, entry := range journal.Entries {
+		mutations[entry.Path] = entry
+	}
 	failed := true
 	defer func() {
-		if failed {
-			resultErr = errors.Join(resultErr, workspacewrite.RecoverInstall(root, logger))
+		if !failed {
+			return
+		}
+		committed, _ := workspacewrite.InstallJournalCommitted(root)
+		resultErr = errors.Join(resultErr, workspacewrite.RecoverInstall(root, logger))
+		if committed && resultErr != nil {
+			resultErr = &CommittedError{Err: fmt.Errorf(
+				"installation committed; %w", resultErr,
+			)}
 		}
 	}()
-	for name, source := range sources {
-		mode := os.FileMode(0o644)
-		hash := ""
-		for _, entry := range next.Entries {
-			if entry.Path == name {
-				mode = os.FileMode(entry.Mode)
-				hash = entry.SHA256
-				break
-			}
-		}
-		target := filepath.Join(root, name)
-		_, statErr := os.Lstat(target)
-		exists := statErr == nil
-		if !exists {
-			counts.Created++
-		} else if occupantHashes[name] != hash {
-			counts.Replaced++
-		}
-		if err := bootstrap.CopyLockedFile(source, target, mode); err != nil {
+	applyErr := func() (resultErr error) {
+		files, err := os.OpenRoot(root)
+		if err != nil {
 			return err
 		}
-	}
-	pruned := 0
-	for _, entry := range previous.Entries {
-		if tracked[strings.ToLower(entry.Path)] {
-			continue
-		}
-		if _, ok := sources[entry.Path]; !ok {
-			if err := os.Remove(filepath.Join(root, entry.Path)); err != nil {
-				if !os.IsNotExist(err) {
+		defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
+		for name, source := range sources {
+			entry, mutated := mutations[name]
+			if !mutated {
+				continue
+			}
+			image := sourceImages[name]
+			_, statErr := files.Lstat(name)
+			exists := statErr == nil
+			if !exists {
+				counts.Created++
+			} else if occupantHashes[name] != image.SHA256 {
+				counts.Replaced++
+			}
+			parent := filepath.Dir(name)
+			if parent != "." {
+				if err := files.MkdirAll(parent, 0o755); err != nil {
 					return err
 				}
+			}
+			input, err := os.Open(source)
+			if err != nil {
+				return err
+			}
+			copyErr := fsutil.WriteRoot(
+				files,
+				name,
+				input,
+				fsutil.WriteOptions{
+					Mode:    os.FileMode(entry.After.Mode),
+					Replace: true,
+					Check:   installBeforeCheck(files, entry),
+				},
+			)
+			closeErr := input.Close()
+			if copyErr != nil || closeErr != nil {
+				return errors.Join(copyErr, closeErr)
+			}
+		}
+		pruned := 0
+		for _, old := range previous.Entries {
+			if tracked[strings.ToLower(old.Path)] {
 				continue
+			}
+			if _, ok := sources[old.Path]; ok {
+				continue
+			}
+			entry, mutated := mutations[old.Path]
+			if !mutated {
+				continue
+			}
+			current, err := observeInstallPath(files, old.Path)
+			if err != nil {
+				return err
+			}
+			if !workspacewrite.InstallImagesEqual(current, entry.Before) {
+				return fmt.Errorf(
+					"installation output %s changed before pruning",
+					old.Path,
+				)
+			}
+			if err := files.Remove(old.Path); err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				return err
 			}
 			pruned++
 		}
 		counts.Removed = pruned
-	}
-	if publish {
-		if err := document.ManifestFile(root).Write(d); err != nil {
-			return err
+		if publish {
+			if entry, mutated := mutations[document.ManifestFilename]; mutated {
+				if err := publishInstallBytes(
+					files,
+					document.ManifestFilename,
+					manifestPlan.Data,
+					&manifestPlan.Image,
+					entry,
+				); err != nil {
+					return err
+				}
+			}
 		}
+		if entry, mutated := mutations[document.LockFilename]; mutated {
+			if err := publishInstallBytes(
+				files,
+				document.LockFilename,
+				lockPlan.Data,
+				&lockPlan.Image,
+				entry,
+			); err != nil {
+				return err
+			}
+		}
+		if entry, mutated := mutations[".lucy/install.yaml"]; mutated {
+			if err := publishInstallBytes(
+				files,
+				".lucy/install.yaml",
+				receiptBytes,
+				receiptAfter,
+				entry,
+			); err != nil {
+				return err
+			}
+		}
+		for name, expected := range documentAfter {
+			current, err := observeInstallPath(files, name)
+			if err != nil {
+				return err
+			}
+			compareMode := baseImages[name] != nil
+			if !installFinalImageMatches(current, expected, compareMode) {
+				return fmt.Errorf(
+					"installation document %s changed before commit",
+					name,
+				)
+			}
+		}
+		for name, expected := range afterImages {
+			if _, mutated := mutations[name]; mutated {
+				continue
+			}
+			if _, document := documentAfter[name]; document {
+				continue
+			}
+			current, err := observeInstallPath(files, name)
+			if err != nil {
+				return err
+			}
+			if !workspacewrite.InstallImagesEqual(current, expected) {
+				return fmt.Errorf(
+					"installation path %s changed before commit",
+					name,
+				)
+			}
+		}
+		return nil
+	}()
+	if applyErr != nil {
+		return applyErr
 	}
-	if err := document.LockFile(root).Write(l); err != nil {
-		return err
-	}
-	receiptBytes, err := yaml.Marshal(next)
+	journal.Committed = true
+	committedBytes, err := yaml.Marshal(journal)
 	if err != nil {
 		return err
 	}
-	if err := fsutil.AtomicWrite(receiptPath, receiptBytes, 0o600); err != nil {
-		return err
-	}
-	if err := os.Remove(filepath.Join(root, workspacewrite.InstallJournalName)); err != nil {
+	if err := fsutil.AtomicWrite(journalPath, committedBytes, 0o600); err != nil {
 		return err
 	}
 	failed = false
 	if err := os.RemoveAll(backup); err != nil {
-		return err
+		return &CommittedError{Err: fmt.Errorf(
+			"installation committed; remove rollback backup: %w", err,
+		)}
+	}
+	if err := os.Remove(journalPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return &CommittedError{Err: fmt.Errorf(
+			"installation committed; remove transaction journal: %w", err,
+		)}
 	}
 	logger.Info(
 		"installation committed",
 		"root", root,
 		"files", len(sources),
-		"pruned", pruned,
+		"pruned", counts.Removed,
 		"manifest-published", publish,
 	)
+	return nil
+}
+
+// installDocumentPlan binds the exact bytes predicted for a document
+// publication to its journaled after image. Publication writes Data verbatim,
+// so a concurrent comment edit cannot make published bytes differ from the
+// journal.
+type installDocumentPlan struct {
+	Data  []byte
+	Base  *workspacewrite.InstallImage
+	Image workspacewrite.InstallImage
+}
+
+// installDocumentPlanFor predicts the bytes and mode a document write
+// publishes. It mirrors document.Service.Write without re-reading the document
+// at publication time.
+func installDocumentPlanFor(
+	root string,
+	name string,
+	defaultMode os.FileMode,
+	snapshot func() ([]byte, error),
+	merge func([]byte) ([]byte, error),
+) (*installDocumentPlan, error) {
+	path := filepath.Join(root, name)
+	existing, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		info, statErr := os.Lstat(path)
+		if statErr != nil {
+			return nil, statErr
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("write destination %s must be a regular file", name)
+		}
+		data, err := merge(existing)
+		if err != nil {
+			return nil, err
+		}
+		return &installDocumentPlan{
+			Data:  data,
+			Base:  installBytesImage(existing, info.Mode().Perm()),
+			Image: *installBytesImage(data, info.Mode().Perm()),
+		}, nil
+	case errors.Is(err, os.ErrNotExist):
+		data, err := snapshot()
+		if err != nil {
+			return nil, err
+		}
+		return &installDocumentPlan{
+			Data:  data,
+			Image: *installBytesImage(data, defaultMode),
+		}, nil
+	default:
+		return nil, err
+	}
+}
+
+func installFileMode(path string, defaultMode os.FileMode) (os.FileMode, error) {
+	info, err := os.Lstat(path)
+	switch {
+	case err == nil:
+		if !info.Mode().IsRegular() {
+			return 0, fmt.Errorf("write destination %s must be a regular file", path)
+		}
+		return info.Mode().Perm(), nil
+	case errors.Is(err, os.ErrNotExist):
+		return defaultMode, nil
+	default:
+		return 0, err
+	}
+}
+
+func installBytesImage(data []byte, mode os.FileMode) *workspacewrite.InstallImage {
+	sum := sha256.Sum256(data)
+	return &workspacewrite.InstallImage{
+		SHA256: hex.EncodeToString(sum[:]),
+		Mode:   effectiveInstallMode(mode),
+	}
+}
+
+// effectiveInstallMode reports the permission bits the platform exposes after
+// a chmod to mode. Windows represents regular files as writable (0666) or
+// read-only (0444); Unix preserves the requested bits.
+func effectiveInstallMode(mode os.FileMode) uint32 {
+	if runtime.GOOS == "windows" {
+		if mode&0o200 != 0 {
+			return 0o666
+		}
+		return 0o444
+	}
+	return uint32(mode.Perm())
+}
+
+func publishInstallBytes(
+	files *os.Root,
+	name string,
+	data []byte,
+	image *workspacewrite.InstallImage,
+	entry workspacewrite.InstallJournalEntry,
+) error {
+	return fsutil.WriteRoot(
+		files,
+		name,
+		bytes.NewReader(data),
+		fsutil.WriteOptions{
+			Mode:    os.FileMode(image.Mode),
+			Replace: true,
+			Check:   installBeforeCheck(files, entry),
+		},
+	)
+}
+
+// installBeforeCheck guards a publication against an edit that happened after
+// the journal captured the before image.
+func installBeforeCheck(
+	files *os.Root,
+	entry workspacewrite.InstallJournalEntry,
+) func() error {
+	return func() error {
+		current, err := observeInstallPath(files, entry.Path)
+		if err != nil {
+			return err
+		}
+		if !workspacewrite.InstallImagesEqual(current, entry.Before) {
+			return fmt.Errorf(
+				"installation output %s changed before publication",
+				entry.Path,
+			)
+		}
+		return nil
+	}
+}
+
+func observeInstallPath(
+	files *os.Root,
+	relative string,
+) (*workspacewrite.InstallImage, error) {
+	info, err := files.Lstat(relative)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf(
+			"installation output %s is not a regular file",
+			relative,
+		)
+	}
+	file, err := files.Open(relative)
+	if err != nil {
+		return nil, err
+	}
+	hasher := sha256.New()
+	_, copyErr := io.Copy(hasher, file)
+	closeErr := file.Close()
+	if copyErr != nil || closeErr != nil {
+		return nil, errors.Join(copyErr, closeErr)
+	}
+	return &workspacewrite.InstallImage{
+		SHA256: hex.EncodeToString(hasher.Sum(nil)),
+		Mode:   effectiveInstallMode(info.Mode().Perm()),
+	}, nil
+}
+
+func installFinalImageMatches(
+	current, expected *workspacewrite.InstallImage,
+	compareMode bool,
+) bool {
+	if current == nil || expected == nil {
+		return current == nil && expected == nil
+	}
+	if current.SHA256 != expected.SHA256 {
+		return false
+	}
+	return !compareMode || current.Mode == expected.Mode
+}
+
+func installPathReserved(root, name string) bool {
+	for _, reserved := range []string{
+		workspacewrite.InstallJournalName,
+		document.LockFilename,
+		document.ManifestFilename,
+	} {
+		if installPathMatchesReserved(root, name, reserved) {
+			return true
+		}
+	}
+	return false
+}
+
+// installPathMatchesReserved rejects an exact reserved path always, and a case
+// variant only when the target filesystem treats the two names as one entry.
+func installPathMatchesReserved(root, name, reserved string) bool {
+	if name == reserved {
+		return true
+	}
+	if !strings.EqualFold(name, reserved) {
+		return false
+	}
+	return workspacewrite.InstallPathsAlias(root, reserved, name)
+}
+
+// rejectInstallPathAliases refuses names that the target filesystem resolves
+// to the same entry. Otherwise one journal entry could overwrite and another
+// could prune the same file. Distinct case-sensitive paths stay valid.
+func rejectInstallPathAliases(root string, names []string) error {
+	aliases := make(map[string][]string, len(names))
+	for _, name := range names {
+		if !filepath.IsLocal(filepath.FromSlash(name)) ||
+			filepath.ToSlash(filepath.Clean(filepath.FromSlash(name))) != name {
+			return fmt.Errorf("installation path %q is not canonical", name)
+		}
+		key := strings.ToLower(name)
+		for _, prior := range aliases[key] {
+			if workspacewrite.InstallPathsAlias(root, prior, name) {
+				return fmt.Errorf(
+					"installation paths %q and %q alias the same filesystem entry",
+					prior, name,
+				)
+			}
+		}
+		aliases[key] = append(aliases[key], name)
+	}
+	return nil
+}
+
+// preserveInstallPreImage stores one complete content-addressed before image
+// through a synced root-confined publish and verifies the copy. A failure here
+// happens before the journal publishes, so the caller removes the unused
+// backup directory.
+func preserveInstallPreImage(
+	files *os.Root,
+	backupPath string,
+	backupRelative string,
+	image workspacewrite.InstallImage,
+	source string,
+) error {
+	relative := filepath.Join(filepath.FromSlash(backupRelative), image.SHA256)
+	if info, err := files.Lstat(relative); err == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("installation pre-image %s is not a regular file", image.SHA256)
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		input, err := os.Open(source)
+		if err != nil {
+			return err
+		}
+		copyErr := fsutil.WriteRoot(
+			files,
+			relative,
+			input,
+			fsutil.WriteOptions{Mode: 0o600, Replace: true},
+		)
+		closeErr := input.Close()
+		if copyErr != nil || closeErr != nil {
+			return errors.Join(copyErr, closeErr)
+		}
+	} else {
+		return err
+	}
+	hashes, err := DigestFile(filepath.Join(backupPath, image.SHA256), nil)
+	if err != nil {
+		return err
+	}
+	if hashes["sha256"] != image.SHA256 {
+		return fmt.Errorf("installation pre-image %s is incomplete", image.SHA256)
+	}
 	return nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
+	"github.com/mclucy/lucy/log"
 )
 
 type image struct {
@@ -239,6 +240,23 @@ func HasPendingTransaction(root string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// RecoverLocked replays the installation journal and then any pending file
+// transaction. The caller must hold the shared workspace writer lock: recovery
+// restores the images both journals describe, so only the lock owner can prove
+// no publisher is live and no later read needs the unreplayed state. History
+// validation is skipped when no file transaction is pending, so recovery never
+// requires writable file history from an otherwise valid workspace.
+func RecoverLocked(root string, logger *log.Logger) error {
+	if err := workspacewrite.RecoverInstall(root, logger); err != nil {
+		return err
+	}
+	pending, err := HasPendingTransaction(root)
+	if err != nil || !pending {
+		return err
+	}
+	return RecoverPending(root)
 }
 
 // RecoverPending must run under the shared workspace writer lock.
