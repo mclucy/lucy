@@ -56,7 +56,19 @@ func NewAddCommand(
 	return cmd
 }
 
-func actionAdd(
+func actionAdd(cmd *cobra.Command, inv *Invocation, deps *Dependencies, args []string) error {
+	target, err := ResolveCommandTarget(cmd, inv)
+	if err != nil {
+		return fmt.Errorf("could not determine working directory: %w", err)
+	}
+	if target.Registered {
+		return DispatchPackageTask(cmd, inv, target, PackageTaskRequest{Name: TaskAdd, Args: args})
+	}
+	return RunAddTask(cmd, inv, deps, args)
+}
+
+// RunAddTask runs the normal command output and operation in a selected workspace.
+func RunAddTask(
 	cmd *cobra.Command,
 	inv *Invocation,
 	deps *Dependencies,

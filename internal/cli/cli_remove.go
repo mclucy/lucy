@@ -50,7 +50,19 @@ func NewRemoveCommand(
 	return cmd
 }
 
-func actionRemove(
+func actionRemove(cmd *cobra.Command, inv *Invocation, deps *Dependencies, args []string) error {
+	target, err := ResolveCommandTarget(cmd, inv)
+	if err != nil {
+		return fmt.Errorf("could not determine working directory: %w", err)
+	}
+	if target.Registered {
+		return DispatchPackageTask(cmd, inv, target, PackageTaskRequest{Name: TaskRemove, Args: args})
+	}
+	return RunRemoveTask(cmd, inv, deps, args)
+}
+
+// RunRemoveTask applies removal with the selected ecosystem and acquisition policy.
+func RunRemoveTask(
 	cmd *cobra.Command,
 	inv *Invocation,
 	deps *Dependencies,
