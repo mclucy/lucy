@@ -37,21 +37,28 @@ type (
 // nothing, so the receipt answers no lock; ownership only lets a later
 // installation replace or prune these files instead of refusing them as
 // unmanaged files. Packages initialization left unidentified stay unowned.
-func RecordAdoptedPackages(root string, paths []string) error {
-	if len(paths) == 0 {
-		return nil
+//
+// A receipt that does not answer the published lock cannot describe the
+// installation either, so its fingerprint is cleared as well; a receipt that
+// still answers the lock keeps it.
+func RecordAdoptedPackages(root string, d *document.Lock, paths []string) error {
+	fingerprint, err := ResolutionFingerprint(d)
+	if err != nil {
+		return err
 	}
 	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
 	receipt := installReceipt{Version: 1, Entries: []receiptEntry{}}
 	raw, err := os.ReadFile(receiptPath)
+	exists := err == nil
 	switch {
-	case err == nil:
+	case exists:
 		if err := yaml.Unmarshal(raw, &receipt); err != nil {
 			return err
 		}
 	case !os.IsNotExist(err):
 		return err
 	}
+	answersLock := exists && receipt.LockFingerprint == fingerprint
 	entries := make(map[string]receiptEntry, len(receipt.Entries)+len(paths))
 	for _, entry := range receipt.Entries {
 		entries[entry.Path] = entry
@@ -86,11 +93,11 @@ func RecordAdoptedPackages(root string, paths []string) error {
 		entries[relative] = entry
 		recorded = true
 	}
-	if !recorded {
+	if !recorded && (receipt.LockFingerprint == "" || answersLock) {
 		return nil
 	}
-	// Ownership recorded here does not answer the published lock, so it cannot
-	// make the installation current.
+	// Initialization staged nothing, so the receipt cannot answer the lock it
+	// publishes.
 	receipt.Version = 1
 	receipt.LockFingerprint = ""
 	receipt.Entries = make([]receiptEntry, 0, len(entries))

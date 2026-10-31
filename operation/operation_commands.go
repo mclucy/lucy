@@ -601,7 +601,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		result.PublishedLock = true
 	}
 	result.Lock = resolved
-	if err := install.RecordAdoptedPackages(root, ownedPackages); err != nil {
+	if err := install.RecordAdoptedPackages(root, resolved, ownedPackages); err != nil {
 		return result, err
 	}
 	if publishedConfig {
