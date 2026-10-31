@@ -102,7 +102,7 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 // lockedPackageDestinations maps every enabled package destination to the
 // digests the lock pins for it. A destination that already holds those bytes
 // belongs to the locked installation even when no receipt records it, which is
-// the state initialization leaves behind.
+// the state a workspace reaches when its receipt is removed.
 func lockedPackageDestinations(d *document.Lock) map[string]map[string]string {
 	destinations := make(map[string]map[string]string, len(d.Packages))
 	for i := range d.Packages {

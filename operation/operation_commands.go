@@ -449,6 +449,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		packages = observed.Packages
 	}
 	recognized := 0
+	ownedPackages := []string{}
 	for _, p := range packages {
 		if !artifact.SupportsPath(p.Path) {
 			continue
@@ -479,6 +480,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 				if _, err := install.DigestFile(p.Path, candidate.Hashes); err == nil {
 					d.MCDR.Packages["mcdr:"+candidate.ProjectID] = documentpkg.Requirement{Selector: candidate.Version}
 					recognized++
+					ownedPackages = append(ownedPackages, p.Path)
 					break
 				}
 			}
@@ -521,6 +523,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		}
 		d.Server.Packages[ecosystem]["modrinth:"+ref.Name.String()] = documentpkg.Requirement{Selector: ref.Version}
 		recognized++
+		ownedPackages = append(ownedPackages, p.Path)
 	}
 	s.logger.Debug(
 		"recognized existing packages",
@@ -598,6 +601,9 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		result.PublishedLock = true
 	}
 	result.Lock = resolved
+	if err := install.RecordAdoptedPackages(root, ownedPackages); err != nil {
+		return result, err
+	}
 	if publishedConfig {
 		created, err := config.CreateWorkspace(root, opts.NoComments)
 		if err != nil {

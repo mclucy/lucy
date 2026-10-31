@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -50,8 +51,8 @@ func executeInitInstall(t *testing.T, binary, id string) {
 	if err != nil {
 		t.Fatalf("read initialized lock: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(source, ".lucy", "install.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("init staged an installation receipt: %v", err)
+	if err := verifyInitializedReceipt(source); err != nil {
+		t.Fatalf("initialized receipt: %v", err)
 	}
 	var declared manifestIntent
 	if err := yaml.Unmarshal(manifestBytes, &declared); err != nil {
@@ -102,6 +103,55 @@ func executeInitInstall(t *testing.T, binary, id string) {
 	if err := scenario.verifyInstalled(root, locked); err != nil {
 		t.Fatalf("installed runtime: %v", err)
 	}
+}
+
+// verifyInitializedReceipt checks that initialization recorded the packages it
+// identified. A workspace without identified packages keeps no receipt.
+func verifyInitializedReceipt(root string) error {
+	locked, err := readLock(root)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(root, ".lucy", "install.yaml")
+	raw, err := os.ReadFile(path)
+	if len(locked.Packages) == 0 {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("init recorded a receipt for a workspace without identified packages")
+	}
+	if err != nil {
+		return fmt.Errorf("read initialized receipt: %w", err)
+	}
+	var receipt struct {
+		Entries []struct {
+			Path   string `yaml:"path"`
+			SHA256 string `yaml:"sha256"`
+		} `yaml:"entries"`
+	}
+	if err := yaml.Unmarshal(raw, &receipt); err != nil {
+		return fmt.Errorf("decode initialized receipt: %w", err)
+	}
+	recorded := make(map[string]bool, len(receipt.Entries))
+	for _, entry := range receipt.Entries {
+		recorded[filepath.Base(filepath.FromSlash(entry.Path))] = true
+		actual, err := fileSHA256(filepath.Join(root, filepath.FromSlash(entry.Path)))
+		if err != nil {
+			return fmt.Errorf("recorded file %s: %w", entry.Path, err)
+		}
+		if actual != entry.SHA256 {
+			return fmt.Errorf("recorded digest for %s does not match the file", entry.Path)
+		}
+	}
+	for _, pkg := range locked.Packages {
+		if !recorded[pkg.Filename] {
+			return fmt.Errorf("receipt records no entry for locked package %s", pkg.Filename)
+		}
+	}
+	return nil
 }
 
 // adoptionScenario describes a generated server directory that is already

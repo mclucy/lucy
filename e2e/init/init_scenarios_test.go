@@ -57,8 +57,8 @@ type initializeScenario struct {
 	// informational lists entry points that init and live status must report
 	// at INFO severity, naming the path.
 	informational []string
-	// wantReceipt keeps the installation receipt assertion; init itself never
-	// stages one.
+	// wantReceipt requires the installation receipt that records the packages
+	// init identified from upstream metadata.
 	wantReceipt bool
 	// status asserts the live server identity after init, including after a
 	// refusal that leaves the declared layout unresolved for observation.
@@ -168,6 +168,7 @@ var initializeScenarios = map[string]initializeScenario{
 		absent: map[string][]string{
 			"fabric": {"modrinth:enchdesc", "modrinth:tipsmod"},
 		},
+		wantReceipt: true,
 		status: &statusExpectation{
 			ecosystem: "fabric", name: "fabric", version: "0.19.5",
 			components: map[string]string{
@@ -187,6 +188,7 @@ var initializeScenarios = map[string]initializeScenario{
 				"modrinth:txnilib":          "neoforge-1.21.1-1.0.24",
 			},
 		},
+		wantReceipt: true,
 		status: &statusExpectation{
 			ecosystem: "neoforge", version: "21.1.233",
 			components: map[string]string{
