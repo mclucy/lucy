@@ -237,9 +237,7 @@ func (c *Client) finishDisabledPurge(state *persistedState, now time.Time) error
 	if err := os.RemoveAll(c.queueDirectory()); err != nil {
 		return fmt.Errorf("telemetry is off, but pending records could not be deleted: %w", err)
 	}
-	state.Queue = nil
-	state.QueueBytes = 0
-	state.PurgePending = false
+	state.completePurge()
 	return c.saveState(state, now)
 }
 
@@ -267,12 +265,7 @@ func (c *Client) pruneQueue(state *persistedState, now time.Time) []queueEntry {
 		removed = append(removed, entry)
 	}
 	state.QueueBytes = totalBytes
-	if len(removed) > 0 {
-		state.Dropped.Records += int64(len(removed))
-		for _, entry := range removed {
-			state.Dropped.Bytes += entry.PayloadBytes
-		}
-	}
+	state.countDropped(removed)
 	return removed
 }
 

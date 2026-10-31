@@ -21,6 +21,8 @@ The effective decision is: local development builds disable collection and uploa
 
 The installation UUID is created lazily by the first record or by the first `telemetry on`. Read-only commands still create one when they queue an event; this is not an opt-out. `reset-id` rotates the UUID and starts a new statistics window; queued records keep their original IDs and payloads, and remote data is untouched. Runtime uploads count in the new window. `off` marks the state `purge_pending`, deletes the queue directory, and clears the index; the marker makes an interrupted purge complete on the next read.
 
+Policy changes and identity reset clear upload backoff. A failed health check or non-canceled upload records its retry deadline with the error; purge completion clears the index only after the queue directory is removed.
+
 ## Invocation events and contexts
 
 An event carries invocation ID, identity, occurrence time, command path without the `lucy ` prefix, build version and commit, channel, OS, architecture, duration, outcome, error code, schema version, effective policy, and up to 16 contexts. Contexts come from subsystems that already observed the data: `workspace` and `java` are recorded by `internal/cli` only when observation happened, and `agent` records whether an agent tool was detected. `present`, `absent`, and `failed` distinguish a missing installation from a failed observation. Context data is bounded at 8 KiB per context. Telemetry never triggers discovery, network probes, or workspace reads of its own.
