@@ -449,6 +449,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		packages = observed.Packages
 	}
 	recognized := 0
+	ownedPackages := []string{}
 	for _, p := range packages {
 		if !artifact.SupportsPath(p.Path) {
 			continue
@@ -468,6 +469,14 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 			continue
 		}
 		if ecosystem == catalog.EcosystemMCDR && d.MCDR != nil {
+			pluginDirectory := filepath.Join(root, d.MCDR.Directory, "plugins")
+			if filepath.Clean(filepath.Dir(p.Path)) != filepath.Clean(pluginDirectory) {
+				observed.Warnings = append(observed.Warnings, fmt.Errorf(
+					"plugin %s left unmanaged: MCDReforged loads it outside the default plugins directory",
+					filepath.Base(p.Path),
+				))
+				continue
+			}
 			candidates, err := s.source.Candidates(ctx, catalog.RegistryMCDR, modules[0].ID, string(d.Server.Minecraft), ecosystem)
 			if err != nil {
 				continue
@@ -479,6 +488,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 				if _, err := install.DigestFile(p.Path, candidate.Hashes); err == nil {
 					d.MCDR.Packages["mcdr:"+candidate.ProjectID] = documentpkg.Requirement{Selector: candidate.Version}
 					recognized++
+					ownedPackages = append(ownedPackages, p.Path)
 					break
 				}
 			}
@@ -521,6 +531,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		}
 		d.Server.Packages[ecosystem]["modrinth:"+ref.Name.String()] = documentpkg.Requirement{Selector: ref.Version}
 		recognized++
+		ownedPackages = append(ownedPackages, p.Path)
 	}
 	s.logger.Debug(
 		"recognized existing packages",
@@ -598,6 +609,9 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		result.PublishedLock = true
 	}
 	result.Lock = resolved
+	if err := install.RecordAdoptedPackages(root, resolved, ownedPackages); err != nil {
+		return result, err
+	}
 	if publishedConfig {
 		created, err := config.CreateWorkspace(root, opts.NoComments)
 		if err != nil {

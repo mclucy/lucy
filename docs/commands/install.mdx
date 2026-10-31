@@ -15,7 +15,7 @@ For CI, `lucy install --locked` fails when the lock is missing or out of date in
 
 ## What install changes
 
-Install places the files the lock lists. It removes files it installed earlier that the lock no longer lists; files you placed in `mods/` or `plugins/` yourself are left alone.
+Install places the files the lock lists. It removes files it installed or took over earlier that the lock no longer lists, including the previous version of a package it upgrades; files it does not recognize are left alone.
 
 Installation stops when a destination file already exists. Pass `--overwrite` to replace it, including jars from a manual setup. It also refuses a server whose mod dependencies cannot be satisfied; `--accept-broken` installs the declared packages anyway.
 

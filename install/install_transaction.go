@@ -32,6 +32,116 @@ type (
 	}
 )
 
+// RecordAdoptedPackages records package files that initialization identified
+// from upstream metadata as owned runtime outputs. Initialization stages
+// nothing, so the receipt answers no lock; ownership only lets a later
+// installation replace or prune these files instead of refusing them as
+// unmanaged files. Packages initialization left unidentified, files outside
+// the workspace, and paths that traverse symlinks stay unowned.
+//
+// A receipt that does not answer the published lock cannot describe the
+// installation either, so its fingerprint is cleared as well; a receipt that
+// still answers the lock keeps it.
+func RecordAdoptedPackages(root string, d *document.Lock, paths []string) error {
+	fingerprint, err := ResolutionFingerprint(d)
+	if err != nil {
+		return err
+	}
+	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
+	receipt := installReceipt{Version: 1, Entries: []receiptEntry{}}
+	raw, err := os.ReadFile(receiptPath)
+	exists := err == nil
+	switch {
+	case exists:
+		if err := yaml.Unmarshal(raw, &receipt); err != nil {
+			return err
+		}
+	case !os.IsNotExist(err):
+		return err
+	}
+	answersLock := exists && receipt.LockFingerprint == fingerprint
+	entries := make(map[string]receiptEntry, len(receipt.Entries)+len(paths))
+	for _, entry := range receipt.Entries {
+		entries[entry.Path] = entry
+	}
+	recorded := false
+	for _, path := range paths {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, absolute)
+		if err != nil {
+			continue
+		}
+		if err := workspacewrite.SafePath(root, relative); err != nil {
+			// Lucy does not own files outside the workspace, and installation
+			// refuses to prune through symlinks.
+			continue
+		}
+		relative = filepath.ToSlash(relative)
+		info, err := os.Stat(absolute)
+		if err != nil {
+			return err
+		}
+		hashes, err := DigestFile(absolute, nil)
+		if err != nil {
+			return err
+		}
+		entry := receiptEntry{
+			Path:   relative,
+			SHA256: hashes["sha256"],
+			Mode:   uint32(info.Mode().Perm()),
+		}
+		if entries[relative] == entry {
+			continue
+		}
+		entries[relative] = entry
+		recorded = true
+	}
+	if !recorded && (receipt.LockFingerprint == "" || answersLock) {
+		return nil
+	}
+	// Initialization staged nothing, so the receipt cannot answer the lock it
+	// publishes.
+	receipt.Version = 1
+	receipt.LockFingerprint = ""
+	receipt.Entries = make([]receiptEntry, 0, len(entries))
+	for _, entry := range entries {
+		receipt.Entries = append(receipt.Entries, entry)
+	}
+	slices.SortFunc(receipt.Entries, func(a, b receiptEntry) int {
+		return strings.Compare(a.Path, b.Path)
+	})
+	receiptBytes, err := yaml.Marshal(receipt)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
+		return err
+	}
+	return fsutil.AtomicWrite(receiptPath, receiptBytes, 0o600)
+}
+
+// receiptAdoptsRuntime reports whether the observed runtime stays adoptable. A
+// receipt that answers a lock owns the runtime it installed. Initialization
+// writes a receipt without a lock fingerprint, so it records the packages it
+// identified while the observed runtime remains the installation to adopt.
+func receiptAdoptsRuntime(root string) (bool, error) {
+	raw, err := os.ReadFile(filepath.Join(root, ".lucy", "install.yaml"))
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var receipt installReceipt
+	if err := yaml.Unmarshal(raw, &receipt); err != nil {
+		return false, err
+	}
+	return receipt.LockFingerprint == "", nil
+}
+
 // adoptedOutputPaths reports the workspace-relative members of the runtime the
 // lock names, when observation selects that runtime. Installation replaces
 // these files instead of refusing them: they belong to the installation that

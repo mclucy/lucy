@@ -254,15 +254,49 @@ func requireLockOmitsEntryPoint(t *testing.T, root string) {
 	}
 }
 
+// verifyReceipt checks the installation receipt against the packages init
+// identified. Every locked package file must be recorded so a later upgrade
+// may replace it, and every recorded file must exist with the recorded digest.
+// A workspace whose packages all stayed unidentified keeps no receipt.
 func verifyReceipt(t *testing.T, root string, want bool) {
 	t.Helper()
 	path := filepath.Join(root, ".lucy", "install.yaml")
-	_, err := os.Stat(path)
-	switch {
-	case want && err != nil:
-		t.Errorf("expected the installation receipt to survive init: %v", err)
-	case !want && !os.IsNotExist(err):
-		t.Errorf("init staged an installation receipt: %v", err)
+	raw, err := os.ReadFile(path)
+	if !want {
+		if !os.IsNotExist(err) {
+			t.Errorf("init recorded an installation receipt: %v", err)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("expected an installation receipt: %v", err)
+	}
+	var receipt struct {
+		Entries []struct {
+			Path   string `yaml:"path"`
+			SHA256 string `yaml:"sha256"`
+		} `yaml:"entries"`
+	}
+	if err := yaml.Unmarshal(raw, &receipt); err != nil {
+		t.Fatalf("decode installation receipt: %v", err)
+	}
+	recorded := make(map[string]bool, len(receipt.Entries))
+	for _, entry := range receipt.Entries {
+		recorded[filepath.Base(filepath.FromSlash(entry.Path))] = true
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(entry.Path)))
+		if err != nil {
+			t.Errorf("receipt records a missing file: %v", err)
+			continue
+		}
+		sum := sha256.Sum256(data)
+		if got := hex.EncodeToString(sum[:]); got != entry.SHA256 {
+			t.Errorf("receipt digest for %s = %q, want %q", entry.Path, entry.SHA256, got)
+		}
+	}
+	for _, pkg := range readLock(t, root).Packages {
+		if !recorded[pkg.Filename] {
+			t.Errorf("receipt records no entry for locked package %s", pkg.Filename)
+		}
 	}
 }
 

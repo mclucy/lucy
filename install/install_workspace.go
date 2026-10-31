@@ -245,7 +245,11 @@ func (s *Service) stageInstall(
 		return nil, err
 	}
 	adoptedPaths := map[string]bool{}
-	if _, err := os.Stat(filepath.Join(root, ".lucy", "install.yaml")); os.IsNotExist(err) {
+	adoption, err := receiptAdoptsRuntime(root)
+	if err != nil {
+		return nil, err
+	}
+	if adoption {
 		adoptedPaths = adoptedOutputPaths(root, resolved.Server, s.logger)
 	}
 	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths, adoptedPaths, s.logger)

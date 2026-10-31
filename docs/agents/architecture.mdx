@@ -9,7 +9,7 @@ Lucy maintains several views of a server. They answer different questions and ar
 | --- | --- | --- |
 | Declaration | `lucy.yaml` | Desired server and package requirements, including tracked-file policy and the optional registry name. |
 | Resolution | `lucy-lock.yaml` | Concrete server inputs and package artifacts selected for a declaration. |
-| Installation receipt | `.lucy/install.yaml` | Runtime outputs Lucy recorded as installed, their hashes, and the resolution they answer. |
+| Installation receipt | `.lucy/install.yaml` | Runtime outputs Lucy recorded as installed or as identified during initialization, their hashes, and the resolution they answer. |
 | Observation | Files in the workspace | What discovery can establish about the local runtime and package files now. |
 | Artifacts | Per-user artifact store | Verified bytes pinned by the locks of registered servers; the network cache is separate and expires. |
 | Machine configuration | Global and workspace config | Local runtime preferences, separate from portable server intent. |

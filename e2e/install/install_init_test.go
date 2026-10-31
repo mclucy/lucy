@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -50,8 +51,8 @@ func executeInitInstall(t *testing.T, binary, id string) {
 	if err != nil {
 		t.Fatalf("read initialized lock: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(source, ".lucy", "install.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("init staged an installation receipt: %v", err)
+	if err := verifyInitializedReceipt(source); err != nil {
+		t.Fatalf("initialized receipt: %v", err)
 	}
 	var declared manifestIntent
 	if err := yaml.Unmarshal(manifestBytes, &declared); err != nil {
@@ -102,6 +103,123 @@ func executeInitInstall(t *testing.T, binary, id string) {
 	if err := scenario.verifyInstalled(root, locked); err != nil {
 		t.Fatalf("installed runtime: %v", err)
 	}
+}
+
+// TestInitUpgrade initializes a real modpack directory and upgrades it in
+// place. Init records the packages it identifies, so the upgrade replaces the
+// jar of a package whose version changes instead of refusing it as unmanaged.
+func TestInitUpgrade(t *testing.T) {
+	binary := testkit.Lucy(t)
+	runner := commandRunner{binary: binary, home: filepath.Join(t.TempDir(), "home")}
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Minute)
+	defer cancel()
+
+	root, err := filepath.EvalSymlinks(testkit.CloneSandbox(t, "cobblemon-1211"))
+	if err != nil {
+		t.Fatalf("resolve clone root: %v", err)
+	}
+	for _, name := range []string{"lucy.yaml", "lucy-lock.yaml", ".lucy"} {
+		if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
+			t.Fatalf("remove %s: %v", name, err)
+		}
+	}
+	if _, err := runner.execute(ctx, root, "init", "--no-interactive"); err != nil {
+		t.Fatalf("initialize sandbox: %v", err)
+	}
+	initialized, err := readLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyInitializedReceipt(root); err != nil {
+		t.Fatalf("initialized receipt: %v", err)
+	}
+
+	if _, err := runner.execute(ctx, root, "up", "--no-interactive"); err != nil {
+		t.Fatalf("upgrade initialized sandbox: %v", err)
+	}
+	upgraded, err := readLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mods := filepath.Join(root, filepath.FromSlash(upgraded.Server.Directory), "mods")
+	current := make(map[string]string, len(upgraded.Packages))
+	for _, pkg := range upgraded.Packages {
+		if pkg.Environment != "server" {
+			continue
+		}
+		current[pkg.Filename] = pkg.Hashes["sha256"]
+		actual, err := fileSHA256(filepath.Join(mods, pkg.Filename))
+		if err != nil {
+			t.Errorf("locked package %s: %v", pkg.Filename, err)
+			continue
+		}
+		if actual != pkg.Hashes["sha256"] {
+			t.Errorf("installed package %s does not match its lock digest", pkg.Filename)
+		}
+	}
+	superseded := 0
+	for _, pkg := range initialized.Packages {
+		if _, kept := current[pkg.Filename]; kept {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(mods, pkg.Filename)); !os.IsNotExist(err) {
+			t.Errorf("superseded package file %s survived the upgrade: %v", pkg.Filename, err)
+			continue
+		}
+		superseded++
+	}
+	if superseded == 0 {
+		t.Fatal("upgrade superseded no initialized package")
+	}
+}
+
+// verifyInitializedReceipt checks that initialization recorded the packages it
+// identified. A workspace without identified packages keeps no receipt.
+func verifyInitializedReceipt(root string) error {
+	locked, err := readLock(root)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(root, ".lucy", "install.yaml")
+	raw, err := os.ReadFile(path)
+	if len(locked.Packages) == 0 {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("init recorded a receipt for a workspace without identified packages")
+	}
+	if err != nil {
+		return fmt.Errorf("read initialized receipt: %w", err)
+	}
+	var receipt struct {
+		Entries []struct {
+			Path   string `yaml:"path"`
+			SHA256 string `yaml:"sha256"`
+		} `yaml:"entries"`
+	}
+	if err := yaml.Unmarshal(raw, &receipt); err != nil {
+		return fmt.Errorf("decode initialized receipt: %w", err)
+	}
+	recorded := make(map[string]bool, len(receipt.Entries))
+	for _, entry := range receipt.Entries {
+		recorded[filepath.Base(filepath.FromSlash(entry.Path))] = true
+		actual, err := fileSHA256(filepath.Join(root, filepath.FromSlash(entry.Path)))
+		if err != nil {
+			return fmt.Errorf("recorded file %s: %w", entry.Path, err)
+		}
+		if actual != entry.SHA256 {
+			return fmt.Errorf("recorded digest for %s does not match the file", entry.Path)
+		}
+	}
+	for _, pkg := range locked.Packages {
+		if !recorded[pkg.Filename] {
+			return fmt.Errorf("receipt records no entry for locked package %s", pkg.Filename)
+		}
+	}
+	return nil
 }
 
 // adoptionScenario describes a generated server directory that is already
