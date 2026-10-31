@@ -44,11 +44,12 @@ type livePrint struct {
 // live renders one animated area on stderr. Updates are coalesced by a ticker
 // so byte-level progress never floods the renderer.
 type live struct {
-	out     io.Writer
-	theme   style.Theme
-	program *tea.Program
-	done    chan struct{}
-	stop    chan struct{}
+	out       io.Writer
+	theme     style.Theme
+	program   *tea.Program
+	done      chan struct{}
+	flushDone chan struct{}
+	stop      chan struct{}
 
 	mu      sync.Mutex
 	state   liveState
@@ -64,10 +65,11 @@ func newLive(options Options) *live {
 		width = style.DefaultTerminalWidth
 	}
 	l := &live{
-		out:   options.Writer,
-		theme: options.Theme,
-		done:  make(chan struct{}),
-		stop:  make(chan struct{}),
+		out:       options.Writer,
+		theme:     options.Theme,
+		done:      make(chan struct{}),
+		flushDone: make(chan struct{}),
+		stop:      make(chan struct{}),
 	}
 	model := &liveModel{width: width, theme: options.Theme}
 	l.program = tea.NewProgram(
@@ -162,17 +164,20 @@ func (l *live) Println(lines ...string) {
 		return
 	}
 	text := strings.Join(lines, "\n")
-	// The lock stays held until the model acknowledges the line, so Close
-	// cannot quit the program while a permanent line is still in flight.
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	if l.closed {
-		// The program owns the terminal until it stops. Writing past it while
-		// the final frame is still being erased would interleave the two.
-		<-l.done
+		l.mu.Unlock()
+		// The caller that closed the renderer may still emit a trailing
+		// subprocess line. Wait for it before writing past the program.
+		<-l.flushDone
+		l.mu.Lock()
+		defer l.mu.Unlock()
 		_, _ = io.WriteString(l.out, text+"\n")
 		return
 	}
+	// The lock stays held until the model acknowledges the line, so Close
+	// cannot quit the program while a permanent line is still in flight.
+	defer l.mu.Unlock()
 	done := make(chan struct{})
 	// Send, unlike Program.Println, returns when the program has stopped, so a
 	// late line cannot block shutdown.
@@ -198,9 +203,9 @@ func (l *live) Close() {
 	l.mu.Lock()
 	if l.closed {
 		l.mu.Unlock()
-		// Another caller is already stopping the program. Waiting for it keeps
-		// later output from racing with its final frame.
-		<-l.done
+		// Another caller owns the final frame and the trailing line. Waiting
+		// for it keeps later output behind both.
+		<-l.flushDone
 		return
 	}
 	l.closed = true
@@ -220,6 +225,7 @@ func (l *live) Close() {
 		_, _ = io.WriteString(l.out, liveLogLine(l.theme, partial)+"\n")
 		l.mu.Unlock()
 	}
+	close(l.flushDone)
 }
 
 // liveLogLine formats one subprocess line the way the animated area shows it,
