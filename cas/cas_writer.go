@@ -13,6 +13,16 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 )
 
+type writerState uint8
+
+const (
+	writerOpen writerState = iota
+	writerSealed
+	writerTransferred
+	writerClosedStage
+	writerFinished
+)
+
 // Writer has one owner. Seal prevents further writes; Abort releases an unpublished stage.
 type Writer struct {
 	store     *Store
@@ -22,9 +32,7 @@ type Writer struct {
 	leaseName string
 	hash      hash.Hash
 	size      int64
-	sealed    bool
-	done      bool
-	detached  bool
+	state     writerState
 	object    Object
 }
 
@@ -57,7 +65,7 @@ func (s *Store) newWriter(hasher hash.Hash) (writer *Writer, resultErr error) {
 }
 
 func (w *Writer) Write(data []byte) (int, error) {
-	if w.done || w.sealed {
+	if w.state != writerOpen {
 		return 0, fmt.Errorf("cas writer is closed for writes")
 	}
 	count, err := w.file.Write(data)
@@ -72,17 +80,17 @@ func (w *Writer) Write(data []byte) (int, error) {
 
 // Seal checks an optional expected digest and makes the stage readable without publishing it.
 func (w *Writer) Seal(expected *Digest) (Object, error) {
-	if w.done || w.detached {
+	if w.state != writerOpen && w.state != writerSealed {
 		return Object{}, os.ErrClosed
 	}
-	if !w.sealed {
+	if w.state == writerOpen {
 		var digest Digest
 		w.hash.Sum(digest[:0])
 		w.object = Object{Digest: digest, Size: w.size}
 		if err := w.file.Sync(); err != nil {
 			return Object{}, fmt.Errorf("sync cas stage: %w", err)
 		}
-		w.sealed = true
+		w.state = writerSealed
 	}
 	if expected != nil && w.object.Digest != *expected {
 		return Object{}, fmt.Errorf("%w: expected %s, got %s", ErrCorrupt, expected.String(), w.object.Digest.String())
@@ -92,7 +100,7 @@ func (w *Writer) Seal(expected *Digest) (Object, error) {
 
 // Rewind is available only after Seal; reading does not hash or copy the stage again.
 func (w *Writer) Rewind() error {
-	if !w.sealed || w.done {
+	if w.state != writerSealed && w.state != writerTransferred {
 		return fmt.Errorf("cas stage must be sealed before reading")
 	}
 	_, err := w.file.Seek(0, io.SeekStart)
@@ -100,7 +108,7 @@ func (w *Writer) Rewind() error {
 }
 
 func (w *Writer) Read(data []byte) (int, error) {
-	if !w.sealed || w.done {
+	if w.state != writerSealed && w.state != writerTransferred {
 		return 0, fmt.Errorf("cas stage must be sealed before reading")
 	}
 	return w.file.Read(data)
@@ -134,6 +142,7 @@ func (w *Writer) Commit(expected *Digest) (object Object, resultErr error) {
 	if err := w.file.Sync(); err != nil {
 		return Object{}, err
 	}
+	w.state = writerClosedStage
 	if err := w.file.Close(); err != nil {
 		w.file = nil
 		return Object{}, err
@@ -147,7 +156,7 @@ func (w *Writer) Commit(expected *Digest) (object Object, resultErr error) {
 
 // Abort is idempotent, including after a successful Commit.
 func (w *Writer) Abort() (resultErr error) {
-	if w.done {
+	if w.state == writerFinished {
 		return nil
 	}
 	lock, err := w.store.lock()
@@ -159,7 +168,7 @@ func (w *Writer) Abort() (resultErr error) {
 }
 
 func (w *Writer) closeFiles() error {
-	w.done = true
+	w.state = writerFinished
 	var result error
 	if w.file != nil {
 		result = w.file.Close()
@@ -181,7 +190,7 @@ func (w *Writer) cleanup() error {
 // MoveTo preserves a written prefix and its hash state when staging must change filesystems.
 // The original writer becomes read-only and must still be aborted by its owner.
 func (w *Writer) MoveTo(destination *Store) (replacement *Writer, resultErr error) {
-	if w.done || w.detached || w.file == nil || destination == w.store {
+	if (w.state != writerOpen && w.state != writerSealed) || destination == w.store {
 		return nil, fmt.Errorf("cas writer cannot move to that store")
 	}
 	replacement, err := destination.newWriter(w.hash)
@@ -205,8 +214,7 @@ func (w *Writer) MoveTo(destination *Store) (replacement *Writer, resultErr erro
 	var digest Digest
 	w.hash.Sum(digest[:0])
 	w.object = Object{Digest: digest, Size: w.size}
-	w.sealed = true
-	w.detached = true
+	w.state = writerTransferred
 	replacement.size = w.size
 	complete = true
 	return replacement, nil
@@ -215,10 +223,9 @@ func (w *Writer) MoveTo(destination *Store) (replacement *Writer, resultErr erro
 // DetachHash transfers a partial stream's hash state for a consumer's memory-only fallback.
 // The original writer can only be aborted after this call.
 func (w *Writer) DetachHash() (hash.Hash, error) {
-	if w.done || w.detached {
+	if w.state != writerOpen && w.state != writerSealed {
 		return nil, os.ErrClosed
 	}
-	w.sealed = true
-	w.detached = true
+	w.state = writerTransferred
 	return w.hash, nil
 }
