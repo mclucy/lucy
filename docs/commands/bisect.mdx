@@ -10,6 +10,8 @@ Use `lucy bisect` to narrow down an enabled package that breaks your server. Sto
 3. Repeat the check until Lucy identifies a package or reports that no candidate remains. Use `lucy bisect status` to see the current selection.
 4. Run `lucy bisect reset` to finish the session and restore the original manifest and installation.
 
+Lucy orders dependencies before their dependents when choosing each group. If the dependency graph contains a cycle, it uses a stable order instead.
+
 Lucy syncs the installation after each selection. If a command fails during a sync, rerun the same command before recording another result. You can also run `lucy bisect reset` to restore the original configuration. A session, including a completed one, must be reset before starting another. Concurrent session commands wait for each other, including `status`, which only reads the session once it owns the lock.
 
 If `lucy.yaml` changes outside the session, Lucy refuses to overwrite those changes; a server rename observed while a step finishes is kept because installation does not depend on the name. Restore the session's expected manifest before continuing, or recover the original manually from the session file.

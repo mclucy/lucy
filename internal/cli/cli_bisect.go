@@ -1014,30 +1014,110 @@ func bisectCandidates(
 // bisectOrderedArtifacts returns every artifact node in dependency-first
 // order. Root selection is not enough: in a live observation, a directly
 // declared requirement can also be another package's dependency.
+//
+// The order is computed on the artifact graph. Sorting the mixed graph and
+// dropping modules afterwards is not enough: an artifact only becomes ready
+// after every module it ships, while a dependent only waits for the module it
+// needs, so a package shipping several modules can follow its own dependent.
+// Collapsing each module onto its artifact first keeps the edge from that
+// dependent to the package that provides the required module.
 func bisectOrderedArtifacts(graph *DependencyGraph) []*GraphNode {
-	ordered := graph.TopologicalSort()
-	if ordered == nil {
-		ordered = make([]*GraphNode, 0, len(graph.Nodes))
-		for _, node := range graph.Nodes {
-			if !node.Module {
-				ordered = append(ordered, node)
-			}
-		}
-		slices.SortFunc(ordered, func(a, b *GraphNode) int {
-			if c := cmp.Compare(a.ID, b.ID); c != 0 {
-				return c
-			}
-			return cmp.Compare(a.key(), b.key())
-		})
-		return ordered
-	}
-	artifacts := make([]*GraphNode, 0, len(ordered))
-	for _, node := range ordered {
+	artifacts := make([]*GraphNode, 0, len(graph.Nodes))
+	for _, node := range graph.Nodes {
 		if !node.Module {
 			artifacts = append(artifacts, node)
 		}
 	}
-	return artifacts
+	compare := func(a, b *GraphNode) int {
+		if c := cmp.Compare(a.ID, b.ID); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.key(), b.key())
+	}
+	byID := func() []*GraphNode {
+		slices.SortFunc(artifacts, compare)
+		return artifacts
+	}
+
+	// A module is represented by the artifact that ships it.
+	owner := make(map[string]*GraphNode, len(graph.Nodes))
+	for _, node := range graph.Nodes {
+		if !node.Module {
+			owner[node.key()] = node
+			continue
+		}
+		artifact, ok := graph.Nodes[nodeKey(
+			node.Environment,
+			node.Ecosystem,
+			node.Artifact,
+		)]
+		if ok {
+			owner[node.key()] = artifact
+		}
+	}
+
+	// Lift edges onto owning artifacts, dropping the tree-only
+	// artifact-to-own-module self edges.
+	dependencies := make(map[string]map[string]bool, len(artifacts))
+	dependents := make(map[string][]*GraphNode, len(artifacts))
+	for _, node := range graph.Nodes {
+		dependent := owner[node.key()]
+		if dependent == nil {
+			continue
+		}
+		dependentKey := dependent.key()
+		for _, child := range node.Children {
+			dependency := owner[child.key()]
+			if dependency == nil || dependency == dependent {
+				continue
+			}
+			dependencyKey := dependency.key()
+			if dependencies[dependentKey] == nil {
+				dependencies[dependentKey] = make(map[string]bool)
+			}
+			if dependencies[dependentKey][dependencyKey] {
+				continue
+			}
+			dependencies[dependentKey][dependencyKey] = true
+			dependents[dependencyKey] = append(dependents[dependencyKey], dependent)
+		}
+	}
+
+	remaining := make(map[string]int, len(artifacts))
+	queue := make([]*GraphNode, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		key := artifact.key()
+		remaining[key] = len(dependencies[key])
+		if remaining[key] == 0 {
+			queue = append(queue, artifact)
+		}
+	}
+	slices.SortFunc(queue, compare)
+
+	// Each artifact enters the queue at most once, so insertion reuses the
+	// preallocated capacity.
+	ordered := make([]*GraphNode, 0, len(artifacts))
+	for head := 0; head < len(queue); head++ {
+		artifact := queue[head]
+		ordered = append(ordered, artifact)
+		for _, dependent := range dependents[artifact.key()] {
+			dependentKey := dependent.key()
+			remaining[dependentKey]--
+			if remaining[dependentKey] != 0 {
+				continue
+			}
+			index, _ := slices.BinarySearchFunc(
+				queue[head+1:],
+				dependent,
+				compare,
+			)
+			queue = slices.Insert(queue, head+1+index, dependent)
+		}
+	}
+	if len(ordered) != len(artifacts) {
+		return byID()
+	}
+	return ordered
 }
 
 // bisectNodeReferences returns the manifest requirement references that select
