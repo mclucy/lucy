@@ -169,7 +169,7 @@ func TestInitUpgrade(t *testing.T) {
 		superseded++
 	}
 	if superseded == 0 {
-		t.Log("the upgrade kept every initialized package version")
+		t.Fatal("upgrade superseded no initialized package")
 	}
 }
 
