@@ -105,6 +105,74 @@ func executeInitInstall(t *testing.T, binary, id string) {
 	}
 }
 
+// TestInitUpgrade initializes a real modpack directory and upgrades it in
+// place. Init records the packages it identifies, so the upgrade replaces the
+// jar of a package whose version changes instead of refusing it as unmanaged.
+func TestInitUpgrade(t *testing.T) {
+	binary := testkit.Lucy(t)
+	runner := commandRunner{binary: binary, home: filepath.Join(t.TempDir(), "home")}
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Minute)
+	defer cancel()
+
+	root, err := filepath.EvalSymlinks(testkit.CloneSandbox(t, "cobblemon-1211"))
+	if err != nil {
+		t.Fatalf("resolve clone root: %v", err)
+	}
+	for _, name := range []string{"lucy.yaml", "lucy-lock.yaml", ".lucy"} {
+		if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
+			t.Fatalf("remove %s: %v", name, err)
+		}
+	}
+	if _, err := runner.execute(ctx, root, "init", "--no-interactive"); err != nil {
+		t.Fatalf("initialize sandbox: %v", err)
+	}
+	initialized, err := readLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyInitializedReceipt(root); err != nil {
+		t.Fatalf("initialized receipt: %v", err)
+	}
+
+	if _, err := runner.execute(ctx, root, "up", "--no-interactive"); err != nil {
+		t.Fatalf("upgrade initialized sandbox: %v", err)
+	}
+	upgraded, err := readLock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mods := filepath.Join(root, filepath.FromSlash(upgraded.Server.Directory), "mods")
+	current := make(map[string]string, len(upgraded.Packages))
+	for _, pkg := range upgraded.Packages {
+		if pkg.Environment != "server" {
+			continue
+		}
+		current[pkg.Filename] = pkg.Hashes["sha256"]
+		actual, err := fileSHA256(filepath.Join(mods, pkg.Filename))
+		if err != nil {
+			t.Errorf("locked package %s: %v", pkg.Filename, err)
+			continue
+		}
+		if actual != pkg.Hashes["sha256"] {
+			t.Errorf("installed package %s does not match its lock digest", pkg.Filename)
+		}
+	}
+	superseded := 0
+	for _, pkg := range initialized.Packages {
+		if _, kept := current[pkg.Filename]; kept {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(mods, pkg.Filename)); !os.IsNotExist(err) {
+			t.Errorf("superseded package file %s survived the upgrade: %v", pkg.Filename, err)
+			continue
+		}
+		superseded++
+	}
+	if superseded == 0 {
+		t.Log("the upgrade kept every initialized package version")
+	}
+}
+
 // verifyInitializedReceipt checks that initialization recorded the packages it
 // identified. A workspace without identified packages keeps no receipt.
 func verifyInitializedReceipt(root string) error {
