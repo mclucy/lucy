@@ -91,8 +91,7 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 		if errors.Is(flushContext.Err(), context.Canceled) {
 			return result, nil
 		}
-		state.CooldownUntil = now.Add(c.limits.Cooldown)
-		state.LastError = "health check: " + sanitizeErrorText(err)
+		state.deferRetry(now, c.limits.Cooldown, "health check: "+sanitizeErrorText(err))
 		if saveErr := c.saveState(state, now); saveErr != nil {
 			return result, saveErr
 		}
@@ -138,9 +137,11 @@ func (c *Client) Flush(ctx context.Context) (FlushResult, error) {
 				c.deleteQueuePayloads(rejectedEntries)
 				continue
 			}
-			state.LastError = sanitizeErrorText(uploadErr)
-			if !errors.Is(flushContext.Err(), context.Canceled) {
-				state.CooldownUntil = now.Add(c.limits.Cooldown)
+			message := sanitizeErrorText(uploadErr)
+			if errors.Is(flushContext.Err(), context.Canceled) {
+				state.LastError = message
+			} else {
+				state.deferRetry(now, c.limits.Cooldown, message)
 			}
 			if err := c.saveState(state, now); err != nil {
 				return result, err
@@ -227,10 +228,7 @@ func (c *Client) dropEntries(state *persistedState, entries []queueEntry) {
 		drop[entry.ID] = struct{}{}
 	}
 	c.removeQueueIDs(state, drop)
-	for _, entry := range entries {
-		state.Dropped.Records++
-		state.Dropped.Bytes += entry.PayloadBytes
-	}
+	state.countDropped(entries)
 }
 
 func (c *Client) applyUploadResult(state *persistedState, prepared []preparedRecord, upload uploadResult, skipped map[string]struct{}, now time.Time) ([]queueEntry, []queueEntry) {
@@ -269,8 +267,7 @@ func (c *Client) applyUploadResult(state *persistedState, prepared []preparedRec
 		if _, ok := rejectedIDs[item.entry.ID]; ok {
 			remove[item.entry.ID] = struct{}{}
 			rejected = append(rejected, item.entry)
-			state.Rejected.Records++
-			state.Rejected.PayloadBytes += int64(len(item.record.Payload))
+			state.countRejected(int64(len(item.record.Payload)))
 			continue
 		}
 		skipped[item.entry.ID] = struct{}{}
@@ -286,8 +283,7 @@ func (c *Client) applyRejectedBatch(state *persistedState, prepared []preparedRe
 	for _, item := range prepared {
 		remove[item.entry.ID] = struct{}{}
 		rejected = append(rejected, item.entry)
-		state.Rejected.Records++
-		state.Rejected.PayloadBytes += int64(len(item.record.Payload))
+		state.countRejected(int64(len(item.record.Payload)))
 	}
 	c.removeQueueIDs(state, remove)
 	return rejected

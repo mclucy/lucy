@@ -13,6 +13,7 @@ import (
 	"github.com/mclucy/lucy/artifactstore"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/resolve"
@@ -109,7 +110,7 @@ func (s *Service) PlanUpgrade(
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
+	if err := filetrack.RecoverLocked(root, s.logger); err != nil {
 		return nil, err
 	}
 	currentManifest, err := document.ManifestFile(root).Read()

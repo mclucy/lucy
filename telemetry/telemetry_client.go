@@ -191,15 +191,9 @@ func (c *Client) SetEnabled(ctx context.Context, enabled bool) error {
 		state = newState(now)
 	}
 	if enabled {
-		state.Policy = CollectionOptIn
-		state.ensureIdentity(now)
-		state.CooldownUntil = time.Time{}
-		state.LastError = ""
+		state.optIn(now)
 	} else {
-		state.Policy = CollectionOptOut
-		state.PurgePending = true
-		state.CooldownUntil = time.Time{}
-		state.LastError = ""
+		state.optOut()
 	}
 	if err := c.saveState(state, now); err != nil {
 		return err
@@ -224,17 +218,7 @@ func (c *Client) ResetIdentity(ctx context.Context) (Identity, error) {
 	if err != nil {
 		return Identity{}, err
 	}
-	state.InstallationID = NewUUID()
-	state.IdentityCreatedAt = now.UTC()
-	state.PeriodStart = now.UTC()
-	state.Accepted = acceptedState{}
-	state.Rejected = rejectedState{}
-	state.Dropped = droppedState{}
-	state.Transport = transportState{}
-	state.AcceptedIDs = nil
-	state.CooldownUntil = time.Time{}
-	state.LastError = ""
-	state.LastUploadAt = time.Time{}
+	state.resetIdentity(now)
 	if err := c.saveState(state, now); err != nil {
 		return Identity{}, err
 	}

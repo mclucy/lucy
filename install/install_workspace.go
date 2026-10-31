@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mclucy/lucy/artifact"
@@ -34,10 +35,12 @@ type (
 		// requiring a global executable.
 		MCDRVenv bool
 		// ExpectedManifest pins the manifest fingerprint the caller selected
-		// packages from, so a concurrent edit fails instead of being
+		// packages from. Preflight checks it after replaying interrupted
+		// journals, so a concurrent or recovered edit fails instead of being
 		// overwritten.
 		ExpectedManifest string
 		// ExpectedLock pins the lock fingerprint the caller planned from.
+		// Preflight checks it against the recovered lock for the same reason.
 		ExpectedLock string
 		// ForceResolve resolves even when the manifest fingerprint matches the
 		// lock. Upgrade uses it because a lock can answer the manifest while
@@ -87,18 +90,25 @@ func (s *Service) syncInstall(ctx context.Context, root string, d *document.Mani
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := preflightLocked(root, d, old, opts, true, s.logger); err != nil {
+	baseManifest, baseLock, err := preflightLocked(root, d, old, opts, true, s.logger)
+	if err != nil {
 		return nil, err
 	}
 	if err := s.registerServer(root, result); err != nil {
 		return nil, err
 	}
+	// Resolution and staging must start from the recovered documents. A
+	// publishing caller still supplies the manifest it intends to write.
+	manifest := baseManifest
+	if opts.PublishManifest {
+		manifest = d
+	}
 	store := s.newDownloadStore(ctx, opts, result)
-	resolved, err := s.resolveLock(ctx, root, d, old, &opts, store, result)
+	resolved, err := s.resolveLock(ctx, root, manifest, baseLock, &opts, store, result)
 	if err != nil {
 		return nil, err
 	}
-	return s.stageInstall(ctx, root, d, resolved, store, opts, result)
+	return s.stageInstall(ctx, root, manifest, resolved, store, opts, result)
 }
 
 // stageInstall materializes a resolved lock in the server directory and commits
@@ -208,7 +218,7 @@ func (s *Service) stageInstall(
 		"core", resolved.Server.Filename,
 		"inputs", len(inputs),
 	)
-	if err := rejectSharedDestinations(resolved); err != nil {
+	if err := rejectSharedDestinations(root, resolved); err != nil {
 		return nil, err
 	}
 	staged := 0
@@ -368,11 +378,16 @@ func (s *Service) coreReusable(ctx context.Context, d *document.Manifest, old *d
 }
 
 // rejectSharedDestinations enforces the lock's installability guarantee: a
-// destination two active packages both claim must fail before anything is
-// written. Left unguarded the later copy silently replaces the earlier one, so
-// the workspace diverges from a lock that still reports itself as current.
-func rejectSharedDestinations(resolved *document.Lock) error {
-	claimed := map[string]string{}
+// destination two active packages both claim, or two destinations the target
+// filesystem resolves to one entry, must fail before anything is written. Left
+// unguarded the later copy silently replaces the earlier one, so the workspace
+// diverges from a lock that still reports itself as current.
+func rejectSharedDestinations(root string, resolved *document.Lock) error {
+	type claim struct {
+		path     string
+		identity string
+	}
+	claimed := make(map[string][]claim)
 	for i := range resolved.Packages {
 		p := &resolved.Packages[i]
 		if !p.Enabled() {
@@ -383,10 +398,25 @@ func rejectSharedDestinations(resolved *document.Lock) error {
 			return err
 		}
 		identity := p.Artifact.Provider.String() + ":" + p.Artifact.ProjectID
-		if claimedBy, taken := claimed[destination]; taken {
-			return fmt.Errorf("packages %s and %s both install to %s", claimedBy, identity, destination)
+		key := strings.ToLower(destination)
+		for _, prior := range claimed[key] {
+			if prior.path == destination {
+				return fmt.Errorf(
+					"packages %s and %s both install to %s",
+					prior.identity, identity, destination,
+				)
+			}
+			if workspacewrite.InstallPathsAlias(root, prior.path, destination) {
+				return fmt.Errorf(
+					"packages %s and %s install to aliasing destinations %s and %s",
+					prior.identity, identity, prior.path, destination,
+				)
+			}
 		}
-		claimed[destination] = identity
+		claimed[key] = append(claimed[key], claim{
+			path:     destination,
+			identity: identity,
+		})
 	}
 	return nil
 }

@@ -105,13 +105,16 @@ func observe(root string, request discovery.Request, withPackages bool) *Workspa
 	ws.selectionErr = ws.Discovery.Select(request)
 
 	if withPackages {
-		ws.ObservePackages()
+		ws.observePackages()
 	}
 	return ws
 }
 
-// Select changes the runtime selection of this observation. It preserves the
-// declaration derived during observation and never rescans installations.
+// Select changes the runtime selection of this observation and replaces the
+// package observation with the directories that the resulting selection names.
+// Package data therefore never describes another selection, including when the
+// attempt selects no runtime. Select preserves the declaration derived during
+// observation and never rescans installations.
 func (ws *Workspace) Select(request discovery.Request) error {
 	if ws == nil {
 		return errors.New("workspace: no observation")
@@ -120,6 +123,7 @@ func (ws *Workspace) Select(request discovery.Request) error {
 		request.Declared = ws.declared
 	}
 	ws.selectionErr = ws.Discovery.Select(request)
+	ws.observePackages()
 	return ws.selectionErr
 }
 
@@ -132,11 +136,10 @@ func (ws *Workspace) SelectionError() error {
 	return ws.selectionErr
 }
 
-// ObservePackages observes the package directories of the selected runtime
-// and replaces Packages and UnidentifiedPackageFiles. Callers use it after an
-// interactive selection to finish package observation without scanning the
-// runtime again.
-func (ws *Workspace) ObservePackages() {
+// observePackages observes the package directories of the current selection
+// and replaces Packages and UnidentifiedPackageFiles. An unresolved selection
+// leaves only the wrapper-owned package directories.
+func (ws *Workspace) observePackages() {
 	if ws == nil {
 		return
 	}

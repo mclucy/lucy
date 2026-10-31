@@ -43,6 +43,13 @@ type Command struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+	// InterruptOnCancel asks Run to stop the process gracefully on
+	// cancellation and wait for it to exit. On Unix it sends an interrupt;
+	// a wrapper such as sudo relays the interrupt to the command it runs
+	// and waits for it, so Run returns only after that child has stopped.
+	// Platforms without process interrupts kill the direct process and
+	// still wait for it.
+	InterruptOnCancel bool
 }
 
 // System is the process and discovery boundary that one Java host uses. The
@@ -55,7 +62,8 @@ type System struct {
 	GOARCH string
 	// LookPath resolves an executable name on PATH.
 	LookPath func(name string) (string, error)
-	// Run executes one command and waits for it.
+	// Run executes one command and waits for it. Cancellation follows
+	// Command.InterruptOnCancel.
 	Run func(ctx context.Context, command Command) error
 	// Getenv reads one environment variable.
 	Getenv func(name string) string
@@ -70,6 +78,8 @@ type System struct {
 	Release func() (map[string]string, error)
 	// IsRoot reports whether Lucy runs as root.
 	IsRoot func() bool
+	// EvalSymlinks resolves a symbolic link to its target.
+	EvalSymlinks func(path string) (string, error)
 	// UsesMusl reports whether the host runs musl instead of glibc.
 	UsesMusl func() bool
 }
@@ -77,17 +87,18 @@ type System struct {
 // NewSystem returns the real process and discovery boundary.
 func NewSystem() System {
 	return System{
-		GOOS:        runtime.GOOS,
-		GOARCH:      runtime.GOARCH,
-		LookPath:    exec.LookPath,
-		Run:         runCommand,
-		Getenv:      os.Getenv,
-		Environ:     os.Environ,
-		UserHomeDir: os.UserHomeDir,
-		ManagedRoot: toolchain.ManagedJavaRoot,
-		Release:     readSystemRelease,
-		IsRoot:      func() bool { return os.Geteuid() == 0 },
-		UsesMusl:    detectMusl,
+		GOOS:         runtime.GOOS,
+		GOARCH:       runtime.GOARCH,
+		LookPath:     exec.LookPath,
+		Run:          runCommand,
+		Getenv:       os.Getenv,
+		Environ:      os.Environ,
+		UserHomeDir:  os.UserHomeDir,
+		ManagedRoot:  toolchain.ManagedJavaRoot,
+		Release:      readSystemRelease,
+		IsRoot:       func() bool { return os.Geteuid() == 0 },
+		EvalSymlinks: filepath.EvalSymlinks,
+		UsesMusl:     detectMusl,
 	}
 }
 
@@ -105,7 +116,28 @@ func runCommand(ctx context.Context, command Command) error {
 	process.Stdin = command.Stdin
 	process.Stdout = command.Stdout
 	process.Stderr = command.Stderr
-	return process.Run()
+	if command.InterruptOnCancel {
+		process.Cancel = func() error {
+			if process.Process == nil {
+				return os.ErrProcessDone
+			}
+			return interruptCommand(process.Process)
+		}
+		// WaitDelay stays zero on purpose: killing the process before it
+		// exits would orphan the child the interrupt mode exists to wait for.
+	}
+	err := process.Run()
+	if err == nil {
+		return nil
+	}
+	ctxErr := ctx.Err()
+	if ctxErr != nil && !errors.Is(err, ctxErr) {
+		err = fmt.Errorf("%w: %w", err, ctxErr)
+	}
+	if command.InterruptOnCancel && commandExitUnconfirmed(process.ProcessState, ctxErr != nil) {
+		return fmt.Errorf("%w: %w", errChildUnconfirmed, err)
+	}
+	return err
 }
 
 func readSystemRelease() (map[string]string, error) {

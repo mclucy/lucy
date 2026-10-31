@@ -44,11 +44,12 @@ type livePrint struct {
 // live renders one animated area on stderr. Updates are coalesced by a ticker
 // so byte-level progress never floods the renderer.
 type live struct {
-	out     io.Writer
-	theme   style.Theme
-	program *tea.Program
-	done    chan struct{}
-	stop    chan struct{}
+	out       io.Writer
+	theme     style.Theme
+	program   *tea.Program
+	done      chan struct{}
+	flushDone chan struct{}
+	stop      chan struct{}
 
 	mu      sync.Mutex
 	state   liveState
@@ -64,10 +65,11 @@ func newLive(options Options) *live {
 		width = style.DefaultTerminalWidth
 	}
 	l := &live{
-		out:   options.Writer,
-		theme: options.Theme,
-		done:  make(chan struct{}),
-		stop:  make(chan struct{}),
+		out:       options.Writer,
+		theme:     options.Theme,
+		done:      make(chan struct{}),
+		flushDone: make(chan struct{}),
+		stop:      make(chan struct{}),
 	}
 	model := &liveModel{width: width, theme: options.Theme}
 	l.program = tea.NewProgram(
@@ -162,14 +164,20 @@ func (l *live) Println(lines ...string) {
 		return
 	}
 	text := strings.Join(lines, "\n")
-	// The lock stays held until the model acknowledges the line, so Close
-	// cannot quit the program while a permanent line is still in flight.
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	if l.closed {
+		l.mu.Unlock()
+		// The caller that closed the renderer may still emit a trailing
+		// subprocess line. Wait for it before writing past the program.
+		<-l.flushDone
+		l.mu.Lock()
+		defer l.mu.Unlock()
 		_, _ = io.WriteString(l.out, text+"\n")
 		return
 	}
+	// The lock stays held until the model acknowledges the line, so Close
+	// cannot quit the program while a permanent line is still in flight.
+	defer l.mu.Unlock()
 	done := make(chan struct{})
 	// Send, unlike Program.Println, returns when the program has stopped, so a
 	// late line cannot block shutdown.
@@ -195,18 +203,35 @@ func (l *live) Close() {
 	l.mu.Lock()
 	if l.closed {
 		l.mu.Unlock()
+		// Another caller owns the final frame and the trailing line. Waiting
+		// for it keeps later output behind both.
+		<-l.flushDone
 		return
 	}
 	l.closed = true
-	if l.partial.Len() > 0 {
-		line := l.partial.String()
-		l.partial.Reset()
-		l.state.logs = append(l.state.logs, line)
-	}
+	partial := l.partial.String()
+	l.partial.Reset()
 	l.mu.Unlock()
+
 	close(l.stop)
 	l.program.Quit()
 	<-l.done
+
+	// The model learns log lines only from snapshots, so a trailing line
+	// without its newline terminator has no frame left to appear in. Emit it
+	// once as permanent output now that the program released the terminal.
+	if strings.TrimSpace(partial) != "" {
+		l.mu.Lock()
+		_, _ = io.WriteString(l.out, liveLogLine(l.theme, partial)+"\n")
+		l.mu.Unlock()
+	}
+	close(l.flushDone)
+}
+
+// liveLogLine formats one subprocess line the way the animated area shows it,
+// so a line flushed at shutdown keeps the same shape.
+func liveLogLine(theme style.Theme, line string) string {
+	return "  " + theme.Muted("│ "+line)
 }
 
 type liveModel struct {
@@ -241,7 +266,7 @@ func (m *liveModel) View() tea.View {
 	}
 	var lines []string
 	for _, line := range m.state.logs {
-		lines = append(lines, "  "+m.theme.Muted("│ "+line))
+		lines = append(lines, liveLogLine(m.theme, line))
 	}
 	if m.state.phase != "" {
 		frame := spinnerRunes[m.frame%len(spinnerRunes)]
@@ -296,24 +321,30 @@ func clip(line string, width int) string {
 type logTail struct{ renderer *live }
 
 func (w logTail) Write(data []byte) (int, error) {
-	w.renderer.mu.Lock()
-	w.renderer.partial.Write(data)
-	text := w.renderer.partial.String()
-	var lines []string
-	if index := strings.LastIndexByte(text, '\n'); index >= 0 {
-		lines = strings.Split(text[:index], "\n")
-		w.renderer.partial.Reset()
-		w.renderer.partial.WriteString(text[index+1:])
-	}
-	if len(lines) > 0 {
-		w.renderer.mu.Unlock()
-		for _, line := range lines {
-			if strings.TrimSpace(line) != "" {
-				w.renderer.appendLog(line)
-			}
+	for _, line := range w.renderer.bufferLog(data) {
+		if strings.TrimSpace(line) != "" {
+			w.renderer.appendLog(line)
 		}
-		return len(data), nil
 	}
-	w.renderer.mu.Unlock()
 	return len(data), nil
+}
+
+// bufferLog appends a subprocess chunk and returns the whole lines it
+// completed. A closed renderer drops the chunk, as plain output does, so a
+// late write cannot reach the terminal after the final frame.
+func (l *live) bufferLog(data []byte) []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return nil
+	}
+	l.partial.Write(data)
+	complete, remainder, found := strings.CutLast(l.partial.String(), "\n")
+	if !found {
+		return nil
+	}
+	lines := strings.Split(complete, "\n")
+	l.partial.Reset()
+	l.partial.WriteString(remainder)
+	return lines
 }

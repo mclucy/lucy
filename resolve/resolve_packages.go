@@ -33,6 +33,80 @@ func catalogueRegistry(provider catalog.Provider) catalog.Registry {
 	return registry
 }
 
+// selectionState owns the branch-local graph of the package search: the
+// chosen packages and the incompatibilities their metadata declares. An
+// artifact and its declarations form one selection, so the maps change
+// together. Canonical identities, candidate lists, and artifact analysis are
+// session-scoped caches and deliberately live outside this state.
+type selectionState struct {
+	chosen    map[projectKey]document.Package
+	conflicts map[projectKey][]upstream.ProjectDependency
+}
+
+type selectionBranch struct {
+	key          projectKey
+	previous     document.Package
+	hadPrevious  bool
+	conflicts    []upstream.ProjectDependency
+	hadConflicts bool
+}
+
+func newSelectionState() selectionState {
+	return selectionState{
+		chosen:    map[projectKey]document.Package{},
+		conflicts: map[projectKey][]upstream.ProjectDependency{},
+	}
+}
+
+func (s *selectionState) reset() {
+	clear(s.chosen)
+	clear(s.conflicts)
+}
+
+func (s *selectionState) selection(key projectKey) (document.Package, bool) {
+	p, ok := s.chosen[key]
+	return p, ok
+}
+
+func (s *selectionState) extend(key projectKey, p document.Package) selectionBranch {
+	return s.install(key, p, s.conflicts[key])
+}
+
+func (s *selectionState) install(
+	key projectKey,
+	p document.Package,
+	declared []upstream.ProjectDependency,
+) selectionBranch {
+	previous, hadPrevious := s.chosen[key]
+	conflicts, hadConflicts := s.conflicts[key]
+	s.chosen[key] = p
+	if len(declared) > 0 {
+		s.conflicts[key] = declared
+	} else {
+		delete(s.conflicts, key)
+	}
+	return selectionBranch{
+		key:          key,
+		previous:     previous,
+		hadPrevious:  hadPrevious,
+		conflicts:    conflicts,
+		hadConflicts: hadConflicts,
+	}
+}
+
+func (s *selectionState) restore(branch selectionBranch) {
+	if branch.hadPrevious {
+		s.chosen[branch.key] = branch.previous
+	} else {
+		delete(s.chosen, branch.key)
+	}
+	if branch.hadConflicts {
+		s.conflicts[branch.key] = branch.conflicts
+	} else {
+		delete(s.conflicts, branch.key)
+	}
+}
+
 func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	ctx := request.Context
 	logger := request.Logger
@@ -128,8 +202,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 	}
 	candidates := map[projectKey][]upstream.Candidate{}
 	canonical := map[projectKey]projectKey{}
-	chosen := map[projectKey]document.Package{}
-	conflicts := map[projectKey][]upstream.ProjectDependency{}
+	state := newSelectionState()
 	cache := request.Cache
 	attempts := 0
 	strict := true
@@ -156,10 +229,10 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		if attempts > searchAttemptLimit {
 			return hardFail(&SearchLimitError{Attempts: searchAttemptLimit})
 		}
-		trace.state(len(chosen), len(pending))
+		trace.state(len(state.chosen), len(pending))
 		if len(pending) == 0 {
-			all := make([]document.Package, 0, len(chosen))
-			for _, p := range chosen {
+			all := make([]document.Package, 0, len(state.chosen))
+			for _, p := range state.chosen {
 				all = append(all, p)
 			}
 			all = mergeArtifactSelections(all)
@@ -192,7 +265,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 						display = problem.ProjectID
 					}
 					version := ""
-					if owner, ok := chosen[key]; ok {
+					if owner, ok := state.selection(key); ok {
 						version = string(owner.Version)
 					}
 					ledger.recordModule(
@@ -222,23 +295,18 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		// something else in the graph needs the package, that demand outranks
 		// the binding, so the artifact resolves instead of merging into a
 		// package that no file can satisfy.
-		if previous, ok := chosen[r.key]; ok && (!active || previous.Artifact.Filename != "") {
-			before := previous.Requirements
-			wasDependency := previous.Dependency
-			beforeDependencyOf := previous.DependencyOf
+		if previous, ok := state.selection(r.key); ok &&
+			(!active || previous.Artifact.Filename != "") {
 			previous.Requirements = append(previous.Requirements, r.requirements...)
 			previous.Dependency = previous.Dependency || dependencyDemand
 			if dependencyDemand && !slices.Contains(previous.DependencyOf, r.dependencyOf) {
 				previous.DependencyOf = append(previous.DependencyOf, r.dependencyOf)
 			}
-			chosen[r.key] = previous
+			branch := state.extend(r.key, previous)
 			if backtrack(rest) {
 				return true
 			}
-			previous.Requirements = before
-			previous.Dependency = wasDependency
-			previous.DependencyOf = beforeDependencyOf
-			chosen[r.key] = previous
+			state.restore(branch)
 			logger.Debug(
 				"resolve: backtracking requirement merge",
 				"provider", r.key.provider,
@@ -255,12 +323,11 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				ProjectID:    r.key.project,
 				Requirements: r.requirements,
 			}
-			chosen[r.key] = p
+			branch := state.install(r.key, p, nil)
 			if backtrack(rest) {
 				return true
 			}
-			delete(chosen, r.key)
-			delete(conflicts, r.key)
+			state.restore(branch)
 			return false
 		}
 		// A disabled direct binding may already hold an artifact-less entry
@@ -269,7 +336,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		// selection and back out again when the selection does not resolve.
 		var artifactless document.Package
 		replacingArtifactless := false
-		if prior, ok := chosen[r.key]; ok && prior.Artifact.Filename == "" {
+		if prior, ok := state.selection(r.key); ok && prior.Artifact.Filename == "" {
 			artifactless, replacingArtifactless = prior, true
 		}
 		list, ok := candidates[r.key]
@@ -338,7 +405,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 				)
 				continue
 			}
-			if detail, conflicting := metadataConflict(candidate, r, chosen, conflicts); conflicting {
+			if detail, conflicting := metadataConflict(candidate, r, state.chosen, state.conflicts); conflicting {
 				reason := describeRejection(RejectionMetadataConflict, detail)
 				ledger.record(r.key, r.display, string(candidate.Version), detail, RejectionMetadataConflict)
 				trace.rejected(r.display, string(candidate.Version), reason)
@@ -395,19 +462,14 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			if dependencyDemand {
 				dependencyOf = []catalog.Ref{r.dependencyOf}
 			}
-			chosen[r.key] = document.Package{
+			branch := state.install(r.key, document.Package{
 				Environment:  r.key.environment,
 				Ecosystem:    r.key.ecosystem,
 				Artifact:     a,
 				Requirements: requirements,
 				Dependency:   dependencyDemand,
 				DependencyOf: dependencyOf,
-			}
-			if declared := conflictDependencies(candidate); len(declared) > 0 {
-				conflicts[r.key] = declared
-			} else {
-				delete(conflicts, r.key)
-			}
+			}, conflictDependencies(candidate))
 			logger.Debug(
 				"resolve: candidate selected",
 				"provider", r.key.provider,
@@ -457,12 +519,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 			if backtrack(next) {
 				return true
 			}
-			if replacingArtifactless {
-				chosen[r.key] = artifactless
-			} else {
-				delete(chosen, r.key)
-			}
-			delete(conflicts, r.key)
+			state.restore(branch)
 			logger.Debug(
 				"resolve: backtracking candidate",
 				"provider", r.key.provider,
@@ -485,7 +542,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		return false
 	}
 	search := func(allowBroken bool) bool {
-		chosen = map[projectKey]document.Package{}
+		state.reset()
 		attempts = 0
 		strict = !allowBroken
 		lastErr = nil
@@ -527,7 +584,7 @@ func Packages(request PackagesRequest) ([]document.Package, []error, error) {
 		}
 	}
 	var out []document.Package
-	for _, p := range chosen {
+	for _, p := range state.chosen {
 		// A requirement the manifest disables and nothing demands pins no
 		// artifact, so recording it would leave the lock claiming a package
 		// that has no file to install.

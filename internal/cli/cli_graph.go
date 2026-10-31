@@ -27,6 +27,9 @@ type GraphNode struct {
 	// artifact recorded in Artifact.
 	Provider  catalog.Provider
 	ProjectID string
+	// Requirements lists the manifest requirement references bound to this
+	// artifact. One artifact can satisfy several declared references.
+	Requirements []string
 
 	// Artifact is the coordinate node that ships this module. It is empty
 	// for artifact nodes themselves.
@@ -123,6 +126,12 @@ func BuildGraphFromLock(lock *document.Lock) (*DependencyGraph, error) {
 			dependencies[moduleKey] = module.Dependencies
 		}
 
+		for _, binding := range pkg.Requirements {
+			if binding.Reference != "" &&
+				!slices.Contains(node.Requirements, binding.Reference) {
+				node.Requirements = append(node.Requirements, binding.Reference)
+			}
+		}
 		for _, binding := range pkg.Requirements {
 			if !binding.Enabled {
 				continue

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/mclucy/lucy/document"
-	"github.com/mclucy/lucy/internal/workspacewrite"
+	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -30,6 +31,38 @@ type Plan struct {
 	Result                  *Result
 }
 
+// checkPlannedDocuments verifies that a plan carries the documents it recorded
+// as its base. Plans built from documents that journal recovery later replaced
+// would otherwise publish state the recovered workspace never answered.
+func checkPlannedDocuments(plan *Plan) error {
+	manifestFingerprint := ""
+	if plan.Manifest != nil {
+		fingerprint, err := plan.Manifest.Fingerprint()
+		if err != nil {
+			return err
+		}
+		manifestFingerprint = fingerprint
+	}
+	if !plan.PublishManifest && manifestFingerprint != plan.BaseManifestFingerprint {
+		return fmt.Errorf("plan manifest does not match its recorded base; replan from current intent")
+	}
+	lockFingerprint := ""
+	if plan.Previous != nil {
+		fingerprint, err := plan.Previous.Fingerprint()
+		if err != nil {
+			return err
+		}
+		lockFingerprint = fingerprint
+	}
+	if lockFingerprint != plan.BaseLockFingerprint {
+		return fmt.Errorf("plan lock does not match its recorded base; replan from current state")
+	}
+	return nil
+}
+
+// checkPlannedState rejects a workspace whose documents no longer match the
+// fingerprints the plan recorded. An empty fingerprint means the document was
+// absent.
 func checkPlannedState(root string, plan *Plan) error {
 	manifestFingerprint, lockFingerprint, err := workspaceFingerprints(root)
 	if err != nil {
@@ -55,23 +88,19 @@ func checkPlannedState(root string, plan *Plan) error {
 // workspace currently holds. An absent document yields an empty fingerprint,
 // so planning and applying share one description of the state a plan answers.
 func workspaceFingerprints(root string) (manifestFingerprint, lockFingerprint string, err error) {
-	currentManifest, err := document.ManifestFile(root).Read()
-	switch {
-	case err == nil:
+	currentManifest, currentLock, err := workspaceDocuments(root)
+	if err != nil {
+		return "", "", err
+	}
+	if currentManifest != nil {
 		if manifestFingerprint, err = currentManifest.Fingerprint(); err != nil {
 			return "", "", err
 		}
-	case !errors.Is(err, os.ErrNotExist):
-		return "", "", err
 	}
-	currentLock, err := document.LockFile(root).Read()
-	switch {
-	case err == nil:
+	if currentLock != nil {
 		if lockFingerprint, err = currentLock.Fingerprint(); err != nil {
 			return "", "", err
 		}
-	case !errors.Is(err, os.ErrNotExist):
-		return "", "", err
 	}
 	return manifestFingerprint, lockFingerprint, nil
 }
@@ -91,9 +120,53 @@ func comparePlannedFingerprint(name, planned, current, retry string) error {
 	}
 }
 
-// preflightLocked validates the state both planning and applying depend on.
-// The running-server check only applies when the operation will mutate the
-// runtime tree.
+// workspaceDocuments reads the documents a workspace currently holds. An
+// absent document is nil, not an error.
+func workspaceDocuments(root string) (*document.Manifest, *document.Lock, error) {
+	currentManifest, err := document.ManifestFile(root).Read()
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		currentManifest = nil
+	case err != nil:
+		return nil, nil, err
+	}
+	currentLock, err := document.LockFile(root).Read()
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		currentLock = nil
+	case err != nil:
+		return nil, nil, err
+	}
+	return currentManifest, currentLock, nil
+}
+
+// recoveredLock prefers the caller's lock when it still describes the recovered
+// lock, so a replay returns the document the caller already holds. A stale
+// caller lock is replaced by the recovered one; a caller lock whose recovered
+// counterpart disappeared is discarded.
+func recoveredLock(caller, recovered *document.Lock) (*document.Lock, error) {
+	if caller == nil || recovered == nil {
+		return recovered, nil
+	}
+	callerFingerprint, err := caller.Fingerprint()
+	if err != nil {
+		return nil, err
+	}
+	recoveredFingerprint, err := recovered.Fingerprint()
+	if err != nil {
+		return nil, err
+	}
+	if callerFingerprint == recoveredFingerprint {
+		return caller, nil
+	}
+	return recovered, nil
+}
+
+// preflightLocked replays interrupted journals before anything reads the
+// documents they describe, then validates the state both planning and applying
+// depend on. It returns the recovered documents, which are the only safe base
+// for resolution and staging. The running-server check only applies when the
+// operation will mutate the runtime tree.
 func preflightLocked(
 	root string,
 	d *document.Manifest,
@@ -101,54 +174,81 @@ func preflightLocked(
 	opts Options,
 	mutating bool,
 	logger *log.Logger,
-) error {
+) (*document.Manifest, *document.Lock, error) {
 	if d == nil && old == nil {
-		return fmt.Errorf("lucy.yaml or lucy-lock.yaml is required")
+		return nil, nil, fmt.Errorf("lucy.yaml or lucy-lock.yaml is required")
 	}
-	if err := workspacewrite.RecoverInstall(root, logger); err != nil {
-		return err
+	// A pending file transaction is rolled back unless its event reached the
+	// history. Reading, resolving, or publishing the manifest, lock, or tracked
+	// files before that replay can invalidate the pre-images recovery needs.
+	if err := filetrack.RecoverLocked(root, logger); err != nil {
+		return nil, nil, err
+	}
+	baseManifest, baseLock, err := workspaceDocuments(root)
+	if err != nil {
+		return nil, nil, err
 	}
 	if mutating {
-		serverDirectory := ""
-		if d != nil {
-			serverDirectory = d.Server.Directory
-		} else if old != nil {
-			serverDirectory = old.Server.Directory
+		// Recovery may restore a different runtime location than the caller
+		// requested. Both the recovered locations and a manifest being
+		// published must be stopped before staging rewrites their files.
+		directories := make([]string, 0, 3)
+		add := func(directory string) {
+			if !slices.Contains(directories, directory) {
+				directories = append(directories, directory)
+			}
 		}
-		if workspace.RunningAt(filepath.Join(root, serverDirectory)) ||
-			(serverDirectory != "." && workspace.RunningAt(root)) {
-			return fmt.Errorf("stop the running Minecraft server before installation")
+		if baseManifest != nil {
+			add(baseManifest.Server.Directory)
 		}
-		if err := workspacewrite.RecoverInstall(root, logger); err != nil {
-			return err
+		if baseLock != nil {
+			add(baseLock.Server.Directory)
+		}
+		if opts.PublishManifest && d != nil {
+			add(d.Server.Directory)
+		}
+		if baseManifest == nil && baseLock == nil {
+			switch {
+			case d != nil:
+				add(d.Server.Directory)
+			case old != nil:
+				add(old.Server.Directory)
+			}
+		}
+		for _, directory := range directories {
+			if workspace.RunningAt(filepath.Join(root, directory)) ||
+				(directory != "." && workspace.RunningAt(root)) {
+				return nil, nil, fmt.Errorf("stop the running Minecraft server before installation")
+			}
 		}
 	}
+	// Callers that read the documents before the writer lock pin what they
+	// read, so recovery or a concurrent edit fails instead of being overwritten.
 	if opts.ExpectedManifest != "" {
-		current, err := document.ManifestFile(root).Read()
-		if err != nil {
-			return err
-		}
-		fingerprint, err := current.Fingerprint()
-		if err != nil {
-			return err
+		fingerprint := ""
+		if baseManifest != nil {
+			fingerprint, err = baseManifest.Fingerprint()
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		if fingerprint != opts.ExpectedManifest {
-			return fmt.Errorf("manifest changed during package selection; retry from current intent")
+			return nil, nil, fmt.Errorf("manifest changed during package selection; retry from current intent")
 		}
 	}
 	if opts.ExpectedLock != "" {
-		if old == nil {
-			return fmt.Errorf("expected lock fingerprint but no lock was read")
-		}
-		fingerprint, err := old.Fingerprint()
-		if err != nil {
-			return err
+		fingerprint := ""
+		if baseLock != nil {
+			fingerprint, err = baseLock.Fingerprint()
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		if fingerprint != opts.ExpectedLock {
-			return fmt.Errorf("lock changed during package selection; retry from current state")
+			return nil, nil, fmt.Errorf("lock changed during package selection; retry from current state")
 		}
 	}
-	return nil
+	return baseManifest, baseLock, nil
 }
 
 // resolveLock performs the installation mode decision and resolution. The

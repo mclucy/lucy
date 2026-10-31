@@ -202,10 +202,7 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (result *Creat
 		return closeErr
 	}
 	defer func() { resultErr = errors.Join(resultErr, releaseWriter()) }()
-	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
-		return nil, err
-	}
-	if err := filetrack.RecoverPending(root); err != nil {
+	if err := filetrack.RecoverLocked(root, s.logger); err != nil {
 		return nil, err
 	}
 	manifestExisted := false
@@ -332,7 +329,9 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (result *Creat
 		if opts.Materialize != nil {
 			installOptions.Materialize = opts.Materialize
 		}
-		installOptions.ExpectedManifest = resolved.ManifestFingerprint
+		if err := pinWorkspaceDocuments(&installOptions, document, resolved); err != nil {
+			return result, err
+		}
 		installed, installErr := s.install.Sync(
 			ctx,
 			root,

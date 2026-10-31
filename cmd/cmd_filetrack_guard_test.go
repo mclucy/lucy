@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
@@ -43,17 +45,31 @@ func TestActivityGuardBlocksSharedReplays(t *testing.T) {
 
 	backup := "rollback-activity"
 	beforeImage := []byte("journal before-image\n")
-	w.write(t, ".lucy/"+backup+"/config.txt", beforeImage, 0o644)
+	backupObject := ".lucy/" + backup + "/" + digestHex(beforeImage)
+	w.write(t, backupObject, beforeImage, 0o644)
+	beforeInfo, err := os.Stat(w.path(backupObject))
+	if err != nil {
+		t.Fatalf("stat fixture pre-image: %v", err)
+	}
 	working := []byte("working bytes\n")
 	w.write(t, "config.txt", working, 0o644)
-	journal, err := yaml.Marshal(struct {
-		Backup  string   `yaml:"backup"`
-		Changed []string `yaml:"changed"`
-		Created []string `yaml:"created"`
-	}{
-		Backup:  w.path(".lucy", backup),
-		Changed: []string{"config.txt"},
-		Created: []string{},
+	workingInfo, err := os.Stat(w.path("config.txt"))
+	if err != nil {
+		t.Fatalf("stat fixture working file: %v", err)
+	}
+	journal, err := yaml.Marshal(workspacewrite.InstallJournal{
+		Backup: ".lucy/" + backup,
+		Entries: []workspacewrite.InstallJournalEntry{{
+			Path: "config.txt",
+			Before: &workspacewrite.InstallImage{
+				SHA256: digestHex(beforeImage),
+				Mode:   uint32(beforeInfo.Mode().Perm()),
+			},
+			After: &workspacewrite.InstallImage{
+				SHA256: digestHex(working),
+				Mode:   uint32(workingInfo.Mode().Perm()),
+			},
+		}},
 	})
 	if err != nil {
 		t.Fatalf("marshal fixture journal: %v", err)
@@ -77,7 +93,7 @@ func TestActivityGuardBlocksSharedReplays(t *testing.T) {
 
 	w.requireBytes(t, "config.txt", working)
 	w.requireBytes(t, ".lucy/commit.yaml", journalBytes)
-	w.requireBytes(t, ".lucy/"+backup+"/config.txt", beforeImage)
+	w.requireBytes(t, backupObject, beforeImage)
 	w.requireBytes(t, documentpkg.ManifestFilename, manifestBytes)
 	w.requireBytes(t, documentpkg.LockFilename, lockBytes)
 	w.requireAbsent(t, ".lucy/history/files.jsonl")

@@ -256,6 +256,20 @@ func (state *persistedState) rememberAccepted(id string) bool {
 	return true
 }
 
+// countDropped adds records discarded locally without a server decision.
+func (state *persistedState) countDropped(entries []queueEntry) {
+	state.Dropped.Records += int64(len(entries))
+	for _, entry := range entries {
+		state.Dropped.Bytes += entry.PayloadBytes
+	}
+}
+
+// countRejected adds one record the server permanently rejected.
+func (state *persistedState) countRejected(payloadBytes int64) {
+	state.Rejected.Records++
+	state.Rejected.PayloadBytes += payloadBytes
+}
+
 func (state *persistedState) ensureIdentity(now time.Time) {
 	if state.InstallationID != "" {
 		return
@@ -265,6 +279,58 @@ func (state *persistedState) ensureIdentity(now time.Time) {
 	if state.Accepted == (acceptedState{}) && state.Rejected == (rejectedState{}) && state.Dropped == (droppedState{}) {
 		state.PeriodStart = now.UTC()
 	}
+}
+
+// clearBackoff forgets a pending retry deadline and its diagnostic. Explicit
+// policy changes and identity resets supersede an earlier transport failure.
+func (state *persistedState) clearBackoff() {
+	state.CooldownUntil = time.Time{}
+	state.LastError = ""
+}
+
+// deferRetry records a failed attempt and blocks uploads until the cooldown
+// elapses. A failure that must not defer retries records LastError directly.
+func (state *persistedState) deferRetry(now time.Time, cooldown time.Duration, message string) {
+	state.CooldownUntil = now.Add(cooldown)
+	state.LastError = message
+}
+
+// optIn records an explicit opt-in and creates an identity when none exists.
+func (state *persistedState) optIn(now time.Time) {
+	state.Policy = CollectionOptIn
+	state.ensureIdentity(now)
+	state.clearBackoff()
+}
+
+// optOut records an explicit opt-out. PurgePending makes the queue purge
+// resumable; the queue index is cleared only after its payloads are gone.
+func (state *persistedState) optOut() {
+	state.Policy = CollectionOptOut
+	state.PurgePending = true
+	state.clearBackoff()
+}
+
+// completePurge clears the queue index and the purge marker after the payload
+// directory has been removed.
+func (state *persistedState) completePurge() {
+	state.Queue = nil
+	state.QueueBytes = 0
+	state.PurgePending = false
+}
+
+// resetIdentity rotates the installation UUID and restarts the statistics
+// window. Queued records keep their IDs and payloads.
+func (state *persistedState) resetIdentity(now time.Time) {
+	state.InstallationID = NewUUID()
+	state.IdentityCreatedAt = now.UTC()
+	state.PeriodStart = now.UTC()
+	state.Accepted = acceptedState{}
+	state.Rejected = rejectedState{}
+	state.Dropped = droppedState{}
+	state.Transport = transportState{}
+	state.AcceptedIDs = nil
+	state.clearBackoff()
+	state.LastUploadAt = time.Time{}
 }
 
 func marshalCanonical(value any) ([]byte, error) {
