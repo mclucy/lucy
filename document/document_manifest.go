@@ -27,8 +27,8 @@ type Manifest struct {
 	SchemaVersion int            `yaml:"manifest_version" json:"manifest_version" description:"Manifest schema version" example:"1"`
 	Name          string         `yaml:"name,omitempty" json:"name,omitempty" description:"Server name used to select and register the workspace" example:"survival"`
 	Server        ManifestServer `yaml:"server" json:"server" description:"Declared Minecraft server"`
-	MCDR          *ManifestMCDR  `yaml:"mcdr,omitempty" json:"mcdr,omitempty" description:"Optional MCDReforged installation"`
-	Files         []TrackedFile  `yaml:"files,omitempty" json:"files,omitempty" description:"Tracked files with an accepted digest and change policy" example:"[]"`
+	MCDR          *ManifestMCDR  `yaml:"mcdr,omitempty" json:"mcdr,omitempty" description:"Optional MCDReforged installation" example:"-"`
+	Files         []TrackedFile  `yaml:"files,omitempty" json:"files,omitempty" description:"Tracked files with an accepted digest and change policy" example:"-"`
 }
 
 type ManifestCore struct {

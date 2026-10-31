@@ -422,6 +422,9 @@ func describeYAML(node *yaml.Node, t reflect.Type, examples bool) error {
 				if err != nil {
 					return err
 				}
+				if example == nil {
+					continue
+				}
 				mapping := &yaml.Node{
 					Kind:    yaml.MappingNode,
 					Content: []*yaml.Node{{Kind: yaml.ScalarNode, Tag: "!!str", Value: name}, example},
@@ -480,8 +483,14 @@ func yamlKeyIndex(node *yaml.Node, name string) int {
 	return -1
 }
 
+// yamlFieldExample builds the commented example a template shows for an
+// omitted field. An example tag of "-" suppresses that example, so the field
+// appears only once the document carries it.
 func yamlFieldExample(field reflect.StructField) (*yaml.Node, error) {
 	if example, ok := field.Tag.Lookup("example"); ok {
+		if example == "-" {
+			return nil, nil
+		}
 		var node yaml.Node
 		if err := yaml.Unmarshal([]byte(example), &node); err != nil {
 			return nil, fmt.Errorf("yaml example for %s: %w", field.Name, err)
@@ -506,6 +515,9 @@ func yamlFieldExample(field reflect.StructField) (*yaml.Node, error) {
 			example, err := yamlFieldExample(child)
 			if err != nil {
 				return nil, err
+			}
+			if example == nil {
+				continue
 			}
 			node.Content = append(node.Content, &yaml.Node{
 				Kind:        yaml.ScalarNode,
