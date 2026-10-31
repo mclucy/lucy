@@ -9,7 +9,7 @@
 [![Coverage](https://github.com/mclucy/lucy/wiki/badge/coverage.svg)](https://raw.githack.com/wiki/mclucy/lucy/badge/coverage.html)
 [![License](https://img.shields.io/github/license/mclucy/lucy)](LICENSE)
 
-[文档](https://lucy.lc/docs) | [English](README.md) | [中文](README_CN.md)
+[文档](https://lucy.lc/docs) | [English](README.md) | [中文](README.zh.md)
 </div>
 
 > [!IMPORTANT]
