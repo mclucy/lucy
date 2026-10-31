@@ -11,6 +11,8 @@ Compilation is separate from server convergence. It clones a repository into a t
 
 The Gradle wrapper is preferred when complete; otherwise Lucy uses an installed Gradle. Lucy chooses a compatible launcher JVM and then a daemon JVM, respecting daemon requirements or configured Gradle Java home when present. The daemon JVM, compiler toolchain, and target bytecode version are separate facts. Compiler inspection uses the selected task's dry-run graph before the actual build; it checks the effective compiler and that the target does not exceed its Java major. Lucy disables Gradle toolchain auto-provisioning, so the required toolchain must be available locally.
 
+Git and Gradle output is buffered by line for diagnostic logging and failure excerpts. At the end of each process, any unterminated line is finalized before its result is reported; it cannot be carried into the next Git invocation.
+
 ## Artifact selection
 
 After the build, Lucy examines enabled JAR outputs from the selected project. It excludes development classifiers such as sources, Javadoc, and test artifacts, then reads each candidate's archive metadata to establish a supported mod ecosystem. If any candidates are marked as published by Gradle, the choice is restricted to those. Exactly one eligible artifact must remain; ambiguity is an error rather than an arbitrary selection.

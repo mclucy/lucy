@@ -41,25 +41,29 @@ func newProcessLog(
 // Write forwards a raw chunk, splitting complete lines off for the log file
 // and the excerpt while the trailing partial line waits for its terminator.
 func (l *processLog) Write(chunk []byte) (int, error) {
-	l.consume(chunk)
+	l.consume(chunk, false)
 	return len(chunk), nil
 }
 
 // flush records a trailing line that arrived without a newline terminator.
 func (l *processLog) flush() {
-	l.consume(nil)
+	l.consume(nil, true)
 }
 
-func (l *processLog) consume(chunk []byte) {
+func (l *processLog) consume(chunk []byte, flush bool) {
 	l.mu.Lock()
 	l.partial += string(chunk)
 	lines := strings.Split(l.partial, "\n")
 	l.partial = lines[len(lines)-1]
-	l.recent = append(l.recent, lines[:len(lines)-1]...)
+	complete := lines[:len(lines)-1]
+	if flush && l.partial != "" {
+		complete = append(complete, l.partial)
+		l.partial = ""
+	}
+	l.recent = append(l.recent, complete...)
 	if len(l.recent) > excerptLines {
 		l.recent = l.recent[len(l.recent)-excerptLines:]
 	}
-	complete := lines[:len(lines)-1]
 	l.mu.Unlock()
 
 	if len(complete) > 0 {
