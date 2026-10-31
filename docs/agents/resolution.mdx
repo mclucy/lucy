@@ -1,6 +1,6 @@
 ---
 title: "Resolution and installation architecture"
-description: "How Lucy chooses artifacts, reuses pins, stages server files, and commits workspace changes"
+description: "How lucy chooses artifacts, reuses pins, stages server files, and commits workspace changes"
 ---
 
 ## From requirements to pins
@@ -29,7 +29,7 @@ The installation journal records before and after content and permission images 
 
 An existing output is not automatically safe to replace. Ownership, matching contents, explicit overwrite selection, and an installation adopted through discovery affect the commit decision. Initialization records ownership for each package it identifies from upstream metadata, so a version change replaces that file and prunes the old destination even though initialization staged nothing. A package initialization leaves unidentified stays unowned. A previously owned output that was modified cannot simply be pruned. Tracked working files are excluded from runtime ownership and pruning.
 
-If the receipt and owned outputs are current, Lucy can skip runtime staging. It still checks unmanaged artifacts and handles MCDReforged and tracked-file provisioning where applicable. After a successful installation commit, tracked-file provisioning may report diagnostics or fail; the result may therefore describe a failure after the runtime was committed.
+If the receipt and owned outputs are current, lucy can skip runtime staging. It still checks unmanaged artifacts and handles MCDReforged and tracked-file provisioning where applicable. After a successful installation commit, tracked-file provisioning may report diagnostics or fail; the result may therefore describe a failure after the runtime was committed.
 
 ## Downloads and state
 

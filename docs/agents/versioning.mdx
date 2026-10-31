@@ -13,7 +13,7 @@ A `version.Version` can hold a floating selector such as `any`, `stable`, or `be
 
 ## Candidate selection
 
-`resolve` scopes project requests by environment, ecosystem, provider, and project. Enabled requirement bindings apply hard filters to candidates, including selector, channel, and file pattern; without a file pattern Lucy selects primary files. Release hints supplied by upstream dependency metadata affect candidate ordering, not eligibility by themselves. Previous pins can be preferred when they still satisfy the request.
+`resolve` scopes project requests by environment, ecosystem, provider, and project. Enabled requirement bindings apply hard filters to candidates, including selector, channel, and file pattern; without a file pattern lucy selects primary files. Release hints supplied by upstream dependency metadata affect candidate ordering, not eligibility by themselves. Previous pins can be preferred when they still satisfy the request.
 
 Candidate resolution and descriptor validation are related but distinct. Registry dependency metadata can identify other projects to select; descriptors establish module IDs, dependency constraints, and bundled modules in the actual artifact. A release that appears suitable at the registry layer can therefore fail when its modules are checked against the selected runtime and other artifacts.
 

@@ -31,10 +31,10 @@ Removes objects that no registered server's lock references. A lock retains ever
 Garbage collection is deliberately conservative:
 
 - It reads the lockfile of every [registered server](/commands/install#known-servers) while holding that workspace's writer lock.
-- It refuses to delete anything when another Lucy operation holds an artifact-store acquisition lease, when a registry entry is missing, unreadable, or invalid, when an installation is interrupted, when a lock cannot be read, when a lock names an artifact without a usable SHA-256 digest, or when another Lucy operation owns a registered workspace. Run `lucy install` in an interrupted workspace to recover it before collecting. If a server directory was deleted, remove its stale entry with [`lucy server forget`](/commands/install#lucy-server-forget); reconnect a temporarily unavailable drive instead.
+- It refuses to delete anything when another lucy operation holds an artifact-store acquisition lease, when a registry entry is missing, unreadable, or invalid, when an installation is interrupted, when a lock cannot be read, when a lock names an artifact without a usable SHA-256 digest, or when another lucy operation owns a registered workspace. Run `lucy install` in an interrupted workspace to recover it before collecting. If a server directory was deleted, remove its stale entry with [`lucy server forget`](/commands/install#lucy-server-forget); reconnect a temporarily unavailable drive instead.
 - It holds the operation gate from the lease check through the last deletion, then takes the workspace writer locks and the registry lock before computing references; the store lock is acquired only for the sweep. An operation that holds an artifact-store lease therefore cannot publish an object into the middle of a sweep. This guarantee applies only to operations that hold a lease.
 
-Run `lucy install` once in a server directory after restoring or moving it so its entry and lock are current before collecting. To reclaim artifacts for a server whose directory was deleted, first remove its stale entry with `lucy server forget <path>`, then run `lucy store gc`. Collection refuses to run while any other Lucy operation holds the artifact-store operation lease, and it holds the lease gate from its lease check through the last deletion. A command that starts on a registered workspace meanwhile can report that another Lucy operation owns it, so retry after collection.
+Run `lucy install` once in a server directory after restoring or moving it so its entry and lock are current before collecting. To reclaim artifacts for a server whose directory was deleted, first remove its stale entry with `lucy server forget <path>`, then run `lucy store gc`. Collection refuses to run while any other lucy operation holds the artifact-store operation lease, and it holds the lease gate from its lease check through the last deletion. A command that starts on a registered workspace meanwhile can report that another lucy operation owns it, so retry after collection.
 
 ```bash
 lucy store gc
@@ -45,7 +45,7 @@ lucy store gc --json
 
 ## Location
 
-The store lives in Lucy's per-user data directory:
+The store lives in lucy's per-user data directory:
 
 |Platform|Directory|
 |---|---|

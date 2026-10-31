@@ -1,11 +1,11 @@
 ---
 title: "Containers"
-description: "Run the Lucy CLI from the official container image"
+description: "Run the lucy CLI from the official container image"
 ---
 
 <Warning>Lucy is pre-beta software. Avoid using it in production; it may cause permanent data loss.</Warning>
 
-`ghcr.io/mclucy/lucy` packages the Lucy CLI for Linux on `amd64` and `arm64`. Use it where installing a binary is inconvenient: CI jobs, Kubernetes init containers, and hosts you prefer to keep untouched. The image converges a server directory and exits; it does not start or supervise the Minecraft server.
+`ghcr.io/mclucy/lucy` packages the `lucy` CLI for Linux on `amd64` and `arm64`. Use it where installing a binary is inconvenient: CI jobs, Kubernetes init containers, and hosts you prefer to keep untouched. The image converges a server directory and exits; it does not start or supervise the Minecraft server.
 
 ## What is inside
 
@@ -38,7 +38,7 @@ docker run --rm --user 1000:1000 \
   ghcr.io/mclucy/lucy install
 ```
 
-Without the volume, a run downloads everything again. A one-off job can skip the volume; when it runs under an arbitrary user ID, add `-e HOME=/tmp` so Lucy can write its cache.
+Without the volume, a run downloads everything again. A one-off job can skip the volume; when it runs under an arbitrary user ID, add `-e HOME=/tmp` so lucy can write its cache.
 
 ## Java
 

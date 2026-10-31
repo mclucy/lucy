@@ -5,7 +5,7 @@ description: "How locked server products become launchable files"
 
 A server product is not always a single runnable JAR. Resolution records a product, Minecraft and core versions, a core artifact, a bootstrapper, and supporting inputs in the locked server. An input has a destination path and either its own artifact metadata or a reference to content embedded in the installer. These are server bootstrap inputs, not mod or plugin requirements.
 
-`upstream/routing` resolves product-specific metadata and prepares that locked description. It can inspect an installer or Paperclip archive to find inputs before installation. For example, Paperclip's download context identifies the expected Mojang JAR and its SHA-256; Lucy checks that the context targets the requested Minecraft version. Forge-family installer metadata describes libraries and processor inputs. Locking these inputs lets installation work from the selected artifacts instead of discovering a new product version while staging.
+`upstream/routing` resolves product-specific metadata and prepares that locked description. It can inspect an installer or Paperclip archive to find inputs before installation. For example, Paperclip's download context identifies the expected Mojang JAR and its SHA-256; lucy checks that the context targets the requested Minecraft version. Forge-family installer metadata describes libraries and processor inputs. Locking these inputs lets installation work from the selected artifacts instead of discovering a new product version while staging.
 
 ## Preparation adapters
 

@@ -15,7 +15,7 @@ A download is staged while its content digest and any supplied upstream integrit
 
 A `cas.Writer` holds a lease on its staging files until commit or abort, so cleanup cannot reclaim an active write.
 
-Installation writes verified artifacts to the per-user artifact store, a `cas.Store` outside every workspace. Objects are addressed by SHA-256 only and carry no consumer filename. A lock hits the store without contacting the network or cache; a miss copies verified bytes from the network cache or the network into the store. Verification always checks every digest the artifact declares, including SHA-256, so a corrupt store object is replaced rather than reused. In offline mode Lucy uses a store hit or a suitable network-cache entry without fetching; an absent object in both cannot supply the bytes.
+Installation writes verified artifacts to the per-user artifact store, a `cas.Store` outside every workspace. Objects are addressed by SHA-256 only and carry no consumer filename. A lock hits the store without contacting the network or cache; a miss copies verified bytes from the network cache or the network into the store. Verification always checks every digest the artifact declares, including SHA-256, so a corrupt store object is replaced rather than reused. In offline mode lucy uses a store hit or a suitable network-cache entry without fetching; an absent object in both cannot supply the bytes.
 
 ## Separate stores
 

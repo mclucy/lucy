@@ -10,7 +10,7 @@ lucy file track server.properties
 lucy file track scripts/start.sh
 ```
 
-Lucy saves the current contents locally as an accepted revision. For a file that only needs to exist, use `lucy file track --no-hash <path>`; Lucy cannot restore its contents without a saved revision.
+Lucy saves the current contents locally as an accepted revision. For a file that only needs to exist, use `lucy file track --no-hash <path>`; lucy cannot restore its contents without a saved revision.
 
 ## Choose what to check
 
@@ -20,7 +20,7 @@ Tracked files are mutable by default: you can edit them without a warning. To be
 lucy file lock server.properties
 ```
 
-Locking accepts the current contents. It does not change file permissions or prevent edits. After an intentional change, accept the new contents with `lucy file update server.properties`. Use `lucy file unlock server.properties` to stop warnings about changes; Lucy still reports the difference when you list tracked files.
+Locking accepts the current contents. It does not change file permissions or prevent edits. After an intentional change, accept the new contents with `lucy file update server.properties`. Use `lucy file unlock server.properties` to stop warnings about changes; lucy still reports the difference when you list tracked files.
 
 ## Restore files
 

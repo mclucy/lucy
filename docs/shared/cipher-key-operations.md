@@ -50,7 +50,7 @@ If a key is abused or leaked:
 
 1. Revoke or rotate the key in the CurseForge account/dashboard (provider-side).
 2. Update `CURSEFORGE_API_KEY` in CI secrets.
-3. Publish a new Lucy release so new binaries embed the rotated key.
+3. Publish a new lucy release so new binaries embed the rotated key.
 4. Communicate upgrade guidance as needed; old binaries cannot be remotely wiped.
 
 ## Provider controls (unverified here)

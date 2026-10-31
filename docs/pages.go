@@ -1,4 +1,4 @@
-// Package docs supplies the documentation pages embedded in Lucy.
+// Package docs supplies the documentation pages embedded in lucy.
 package docs
 
 import (

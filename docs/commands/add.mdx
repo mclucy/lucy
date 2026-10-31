@@ -11,9 +11,9 @@ lucy add modrinth:fabric-api@0.165.1+26.4
 lucy add modrinth:fabric-api modrinth:lithium
 ```
 
-Use [`lucy search`](/commands/search) to find packages. A bare name can also work: Lucy checks the current lock first, then uses Modrinth (or the MCDR catalogue for an MCDR plugin). If the name is ambiguous, use the full source-qualified reference.
+Use [`lucy search`](/commands/search) to find packages. A bare name can also work: lucy checks the current lock first, then uses Modrinth (or the MCDR catalogue for an MCDR plugin). If the name is ambiguous, use the full source-qualified reference.
 
-An `@version` suffix pins a version. Without one, Lucy prefers a release and may select a prerelease if necessary. Existing package pins are preserved. If resolution fails, the manifest and lock remain unchanged.
+An `@version` suffix pins a version. Without one, lucy prefers a release and may select a prerelease if necessary. Existing package pins are preserved. If resolution fails, the manifest and lock remain unchanged.
 
 Lucy normally infers the mod or plugin type from the server. Use `--ecosystem` when it needs help, for example:
 
