@@ -109,8 +109,9 @@ type Plan struct {
 	// Policy.AllowRepository.
 	Repository *Repository
 	Steps      []Step
-	// KeepDefault restores the system default Java after the steps, because
-	// the package manager can move it to the new installation.
+	// KeepDefault restores the system default Java captured before the steps,
+	// because package execution can move it before a later failure or
+	// cancellation.
 	KeepDefault bool
 	// root is the elevation fact captured while planning, so Commands renders
 	// the same sudo prefixes that execution uses.

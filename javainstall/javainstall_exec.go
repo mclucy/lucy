@@ -53,15 +53,25 @@ func (h *Host) Execute(
 	if plan.KeepDefault {
 		previous = systemDefaultJava(h)
 	}
+	var installErr error
 	for _, step := range plan.Steps {
 		if err := runStep(ctx, step, policy, h, input, out); err != nil {
-			return "", err
+			installErr = err
+			break
 		}
 	}
-	if plan.KeepDefault && previous != "" {
+	if plan.KeepDefault && previous != "" && len(plan.Steps) > 0 {
 		if err := restoreSystemDefault(ctx, previous, policy, h, input, out); err != nil {
-			return "", fmt.Errorf("restore the system default Java %s: %w", previous, err)
+			restoreErr := fmt.Errorf("restore the system default Java %s: %w", previous, err)
+			if installErr == nil {
+				installErr = restoreErr
+			} else {
+				installErr = errors.Join(installErr, restoreErr)
+			}
 		}
+	}
+	if installErr != nil {
+		return "", installErr
 	}
 	h.logger.Info("java installed", "method", plan.Method, "package", plan.Package)
 	return "", nil

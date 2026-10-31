@@ -70,6 +70,8 @@ type System struct {
 	Release func() (map[string]string, error)
 	// IsRoot reports whether Lucy runs as root.
 	IsRoot func() bool
+	// EvalSymlinks resolves a symbolic link to its target.
+	EvalSymlinks func(path string) (string, error)
 	// UsesMusl reports whether the host runs musl instead of glibc.
 	UsesMusl func() bool
 }
@@ -77,17 +79,18 @@ type System struct {
 // NewSystem returns the real process and discovery boundary.
 func NewSystem() System {
 	return System{
-		GOOS:        runtime.GOOS,
-		GOARCH:      runtime.GOARCH,
-		LookPath:    exec.LookPath,
-		Run:         runCommand,
-		Getenv:      os.Getenv,
-		Environ:     os.Environ,
-		UserHomeDir: os.UserHomeDir,
-		ManagedRoot: toolchain.ManagedJavaRoot,
-		Release:     readSystemRelease,
-		IsRoot:      func() bool { return os.Geteuid() == 0 },
-		UsesMusl:    detectMusl,
+		GOOS:         runtime.GOOS,
+		GOARCH:       runtime.GOARCH,
+		LookPath:     exec.LookPath,
+		Run:          runCommand,
+		Getenv:       os.Getenv,
+		Environ:      os.Environ,
+		UserHomeDir:  os.UserHomeDir,
+		ManagedRoot:  toolchain.ManagedJavaRoot,
+		Release:      readSystemRelease,
+		IsRoot:       func() bool { return os.Geteuid() == 0 },
+		EvalSymlinks: filepath.EvalSymlinks,
+		UsesMusl:     detectMusl,
 	}
 }
 
