@@ -65,10 +65,7 @@ func (o *Output) Warn(err error) {
 	o.warnings = append(o.warnings, err.Error())
 	if !o.JSON() {
 		o.Close()
-		fmt.Fprintln(
-			o.cmd.ErrOrStderr(),
-			o.inv.Theme.Note("warning:")+" "+err.Error(),
-		)
+		report.New(o.cmd.ErrOrStderr(), o.inv.Theme).Warn(err)
 	}
 }
 

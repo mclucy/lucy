@@ -211,7 +211,7 @@ func TestReportDiscoveryFindingsPresentsSelectionOutcomes(t *testing.T) {
 				t.Fatalf("warning %q does not name %q", warnings[0], fragment)
 			}
 		}
-		if !strings.Contains(stderr.String(), "warning:") {
+		if !strings.Contains(stderr.String(), "WARN") {
 			t.Fatalf("human warning missing from stderr:\n%s", stderr.String())
 		}
 	})
@@ -264,7 +264,7 @@ func TestReportDiscoveryFindingsPresentsSelectionOutcomes(t *testing.T) {
 			!strings.Contains(warnings[0], "declared server installation is missing") {
 			t.Fatalf("warnings = %q, want the missing-declaration warning", warnings)
 		}
-		if !strings.Contains(stderr.String(), "warning:") {
+		if !strings.Contains(stderr.String(), "WARN") {
 			t.Fatalf("human warning missing from stderr:\n%s", stderr.String())
 		}
 	})
