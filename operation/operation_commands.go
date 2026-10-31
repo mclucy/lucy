@@ -469,6 +469,14 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 			continue
 		}
 		if ecosystem == catalog.EcosystemMCDR && d.MCDR != nil {
+			pluginDirectory := filepath.Join(root, d.MCDR.Directory, "plugins")
+			if filepath.Clean(filepath.Dir(p.Path)) != filepath.Clean(pluginDirectory) {
+				observed.Warnings = append(observed.Warnings, fmt.Errorf(
+					"plugin %s left unmanaged: MCDReforged loads it outside the default plugins directory",
+					filepath.Base(p.Path),
+				))
+				continue
+			}
 			candidates, err := s.source.Candidates(ctx, catalog.RegistryMCDR, modules[0].ID, string(d.Server.Minecraft), ecosystem)
 			if err != nil {
 				continue
