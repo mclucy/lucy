@@ -48,11 +48,11 @@ type moduleProvider struct {
 // returns the problems it found; only an unparsable or ambiguous module
 // identity is an error.
 func finalizeModules(packages []document.Package, target Target) ([]ModuleProblem, error) {
-	index, err := buildModuleIndex(packages)
+	runtime := runtimeModules(target)
+	index, err := buildModuleIndex(packages, target, runtime)
 	if err != nil {
 		return nil, err
 	}
-	runtime := runtimeModules(target)
 	var problems []ModuleProblem
 	surviving := make([][]catalog.DescriptorModule, len(packages))
 	for pi := range packages {
@@ -89,10 +89,16 @@ func finalizeModules(packages []document.Package, target Target) ([]ModuleProble
 }
 
 // buildModuleIndex resolves every module identity to the declaration that
-// answers it. A native module outranks a bundled copy of the same identity;
-// two bundled copies compare versions. Two native modules in different
-// packages are ambiguous.
-func buildModuleIndex(packages []document.Package) (map[moduleKey]moduleProvider, error) {
+// answers it. A native module outranks a bundled copy of the same identity.
+// Bundled copies from different packages compare versions; bundled copies from
+// the same package are loader-selected variants, so the one whose requirements
+// the server satisfies wins first. Two native modules in different packages are
+// ambiguous.
+func buildModuleIndex(
+	packages []document.Package,
+	target Target,
+	runtime map[string]catalog.DescriptorModule,
+) (map[moduleKey]moduleProvider, error) {
 	index := map[moduleKey]moduleProvider{}
 	for pi := range packages {
 		p := &packages[pi]
@@ -124,6 +130,8 @@ func buildModuleIndex(packages []document.Package) (map[moduleKey]moduleProvider
 					packages[previous.source.packageIndex].Filename,
 					p.Filename,
 					name,
+					target,
+					runtime,
 				)
 				if err != nil {
 					return nil, err
@@ -144,6 +152,8 @@ func moduleWins(
 	previousFile string,
 	candidateFile string,
 	name string,
+	target Target,
+	runtime map[string]catalog.DescriptorModule,
 ) (bool, error) {
 	previousNative := previous.module.NestedPath == ""
 	candidateNative := candidate.module.NestedPath == ""
@@ -163,6 +173,13 @@ func moduleWins(
 	}
 	if candidateNative {
 		return false, nil
+	}
+	if previous.source.packageIndex == candidate.source.packageIndex {
+		previousServes, previousKnown := servesTarget(previous.module, target, runtime)
+		candidateServes, candidateKnown := servesTarget(candidate.module, target, runtime)
+		if previousKnown && candidateKnown && previousServes != candidateServes {
+			return previousServes, nil
+		}
 	}
 	a, err := versionpkg.ParseVersion(
 		previous.module.Version,
@@ -187,6 +204,51 @@ func moduleWins(
 		)
 	}
 	return comparison >= 0, nil
+}
+
+// servesTarget reports whether the requirements a module places on the modules
+// the server itself provides hold for target. A wrapper that bundles one nested
+// jar per Minecraft line publishes every variant under one identity with
+// disjoint requirements, and the loader loads the variant the running version
+// satisfies. Requirements that another package answers are not part of that
+// decision, because they do not vary with the server.
+//
+// The second result is false when a requirement cannot be evaluated, so the
+// caller keeps its version order instead of guessing.
+func servesTarget(
+	m catalog.DescriptorModule,
+	target Target,
+	runtime map[string]catalog.DescriptorModule,
+) (bool, bool) {
+	for di := range m.Dependencies {
+		dep := &m.Dependencies[di]
+		if dep.Kind != catalog.DependencyKindRequired || dep.ID == "java" {
+			continue
+		}
+		provided, ok := runtime[normalizeModuleID(m.Ecosystem, dep.ID)]
+		if !ok || dep.Constraint == "" {
+			continue
+		}
+		matched := fmlLoader(target) && provided.Version == "0.0NONE"
+		if !matched {
+			var err error
+			matched, err = versionpkg.Match(dep.Constraint, provided.Version, m.VersionDialect)
+			if err != nil {
+				return false, false
+			}
+		}
+		if !matched {
+			var err error
+			matched, err = matchesLoaderCompatibility(dep.Constraint, dep.ID, target, m.VersionDialect)
+			if err != nil {
+				return false, false
+			}
+		}
+		if !matched {
+			return false, true
+		}
+	}
+	return true, true
 }
 
 // runtimeModules reports the modules the runtime itself provides. They answer
