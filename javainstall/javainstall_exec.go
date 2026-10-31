@@ -12,6 +12,12 @@ import (
 	"github.com/mclucy/lucy/internal/shell"
 )
 
+// errChildUnconfirmed reports that a step process ended from a signal other
+// than the SIGINT expected after a relayed cancellation. Such a process could
+// not have waited for the child it started, so a later restore must not
+// assume that child has stopped.
+var errChildUnconfirmed = errors.New("process exited from an unexpected signal; a child it started may still be running")
+
 // Execute runs plan, using input for interactive steps and out for output.
 // It returns the installed Java home for a managed download.
 func (h *Host) Execute(
@@ -54,14 +60,27 @@ func (h *Host) Execute(
 		previous = systemDefaultJava(h)
 	}
 	var installErr error
+	// A step that ended from an unexpected signal may still have a child
+	// running; do not restore over it.
+	restoreSafe := true
+	run := runStep
+	if plan.KeepDefault && previous != "" {
+		run = runStepWaitingForStop
+	}
 	for _, step := range plan.Steps {
-		if err := runStep(ctx, step, policy, h, input, out); err != nil {
+		if err := run(ctx, step, policy, h, input, out); err != nil {
 			installErr = err
+			restoreSafe = !errors.Is(err, errChildUnconfirmed)
 			break
 		}
 	}
 	if plan.KeepDefault && previous != "" && len(plan.Steps) > 0 {
-		if err := restoreSystemDefault(ctx, previous, policy, h, input, out); err != nil {
+		if !restoreSafe {
+			installErr = errors.Join(installErr, fmt.Errorf(
+				"system default Java %s was not restored because an install process exited from an unexpected signal and its child could not be confirmed stopped",
+				previous,
+			))
+		} else if err := restoreSystemDefault(ctx, previous, policy, h, input, out); err != nil {
 			restoreErr := fmt.Errorf("restore the system default Java %s: %w", previous, err)
 			if installErr == nil {
 				installErr = restoreErr
@@ -126,6 +145,8 @@ func rootPrefix(root bool) string {
 	return "sudo "
 }
 
+// runStep runs one step with the ordinary cancellation behavior: a canceled
+// context kills the process.
 func runStep(
 	ctx context.Context,
 	step Step,
@@ -133,6 +154,32 @@ func runStep(
 	host *Host,
 	input io.Reader,
 	out io.Writer,
+) error {
+	return runStepWithCancel(ctx, step, policy, host, input, out, false)
+}
+
+// runStepWaitingForStop runs a step whose completion gates a restore. A
+// canceled context interrupts the process and waits for it to exit, so the
+// restore cannot race an elevated child.
+func runStepWaitingForStop(
+	ctx context.Context,
+	step Step,
+	policy Policy,
+	host *Host,
+	input io.Reader,
+	out io.Writer,
+) error {
+	return runStepWithCancel(ctx, step, policy, host, input, out, true)
+}
+
+func runStepWithCancel(
+	ctx context.Context,
+	step Step,
+	policy Policy,
+	host *Host,
+	input io.Reader,
+	out io.Writer,
+	interruptOnCancel bool,
 ) error {
 	if len(step.Args) == 0 {
 		return errors.New("empty install step")
@@ -161,11 +208,12 @@ func runStep(
 		stdin = strings.NewReader(step.Input)
 	}
 	if err := host.system.Run(ctx, Command{
-		Args:   args,
-		Env:    host.environ(),
-		Stdin:  stdin,
-		Stdout: out,
-		Stderr: out,
+		Args:              args,
+		Env:               host.environ(),
+		Stdin:             stdin,
+		Stdout:            out,
+		Stderr:            out,
+		InterruptOnCancel: interruptOnCancel,
 	}); err != nil {
 		return fmt.Errorf("%s: %w", step.command(root), err)
 	}

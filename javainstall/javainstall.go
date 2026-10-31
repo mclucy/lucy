@@ -111,7 +111,8 @@ type Plan struct {
 	Steps      []Step
 	// KeepDefault restores the system default Java captured before the steps,
 	// because package execution can move it before a later failure or
-	// cancellation.
+	// cancellation. A step that exits from an unexpected signal blocks the
+	// restore because its child cannot be confirmed stopped.
 	KeepDefault bool
 	// root is the elevation fact captured while planning, so Commands renders
 	// the same sudo prefixes that execution uses.
