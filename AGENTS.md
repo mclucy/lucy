@@ -94,18 +94,13 @@ To run the built binary against a test server directory:
     └── toolchain/          Local Git, Java, and Gradle discovery
 ```
 
-`catalog` describes packages; `upstream` obtains package metadata and artifacts.
-Keep `catalog` limited to the standard library and `version`. Shared usage alone
-does not justify placing a type there. Manifest declarations, lock records,
-workspace observations, runtime selection, and presentation stay with their owners.
+`catalog` describes packages; `upstream` obtains package metadata and artifacts. Keep `catalog` limited to the standard library and `version`. Shared usage alone does not justify placing a type there. Manifest declarations, lock records, workspace observations, runtime selection, and presentation stay with their owners.
 
-`workspace` reads local files without upstream access. `workspace/discovery`
-owns installation identity, member ownership, and runtime selection through one
-directory scan; `workspace` assembles that result with wrappers, declarations,
-and package files. `workspace/identify` connects unidentified package files to
-upstream identities through hash lookup. Commands and operations invoke
-identification explicitly; CLI output projections stay outside workspace
-observation.
+`workspace` reads local files without upstream access. `workspace/discovery` owns installation identity, member ownership, and runtime selection through one directory scan; `workspace` assembles that result with wrappers, declarations, and package files. `workspace/identify` connects unidentified package files to upstream identities through hash lookup. Commands and operations invoke identification explicitly; CLI output projections stay outside workspace observation.
+
+## The Fundamental Problem
+
+Mostly about package resolution, identification, and acquisition. See [MATH](./MATH.md).
 
 ## Output Style Flags
 
@@ -133,12 +128,7 @@ A new interactive surface ships with its flag equivalent in the same change. Use
 4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 5. Never assume the current code is correct. Write unit tests based on logical contracts, not asserting on whatever the current code does.
 
-The e2e domain suites are Go tests behind the `e2e` build tag. The
-`cmd` filetrack guard suite runs in the default suite; it invokes the CLI in
-process and uses a helper process for the world session lock. Package tests in
-`cas`, `cache`, and `filetrack` also run in the default suite; they stay
-hermetic by using temporary directories, local HTTP servers, and self-executed
-helper processes. Build Lucy and generate the sandboxes first, then:
+The e2e domain suites are Go tests behind the `e2e` build tag. The `cmd` filetrack guard suite runs in the default suite; it invokes the CLI in process and uses a helper process for the world session lock. Package tests in `cas`, `cache`, and `filetrack` also run in the default suite; they stay hermetic by using temporary directories, local HTTP servers, and self-executed helper processes. Build Lucy and generate the sandboxes first, then:
 
 ```bash
 go test -tags e2e -count=1 ./e2e/status    # probe .sandboxes
@@ -147,30 +137,7 @@ go test -tags e2e -count=1 ./e2e/compile   # compile e2e/testdata/repo fixtures
 go test -tags e2e -count=1 ./e2e/install   # fresh and init-then-install scenarios
 ```
 
-Select cases with `-run`: `-run 'TestProbe/<sandbox id>'`,
-`-run 'TestInitialize/<modpack id>'`, `-run 'TestCompile/<fixture id>'`,
-`-run 'TestInstall/<scenario id>'`, and `-run 'TestInitInstall/<sandbox id>'`.
-A suite
-covers every case in its table and fails when its binary or a sandbox is
-missing; probes that need manually supplied artifacts skip instead.
-`TestInitialize` runs `lucy init` in a clone of each modpack sandbox and
-checks the manifest and lock that the CLI writes. `TestInitInstall` initializes
-each sandbox in the installation suite's table, then installs the generated manifest
-and lock in an empty workspace and verifies the runtime against them. CI runs
-the fresh install and the init-then-install chain as separate jobs so one
-cannot mask the other. `-count=1`
-disables the test cache, `-parallel N` bounds concurrency, and `-lucy` and
-`-sandboxes` override the `dist/lucy` and `.sandboxes` defaults.
-`e2e/internal/testkit` resolves those paths; `task e2e:status|init|compile|install` wrap
-the same commands. The `cmd` filetrack guard suite runs the CLI in process and needs
-neither sandboxes nor a prebuilt binary. CI selects the domains whose inputs changed from
-the path filters in `.github/workflows/e2e.yml` and runs each selected domain
-through the reusable runner.
-`TestCompile` runs every fixture by default. Fixtures marked `smoke: true`
-form the default CI layer; set `LUCY_COMPILE_LAYER=smoke` or run
-`task e2e:compile:smoke` to select only those. CI runs the smoke layer as one
-job and switches to the per-fixture full table when the pull request carries
-the `ci:compile-full` label.
+Select cases with `-run`: `-run 'TestProbe/<sandbox id>'`, `-run 'TestInitialize/<modpack id>'`, `-run 'TestCompile/<fixture id>'`, `-run 'TestInstall/<scenario id>'`, and `-run 'TestInitInstall/<sandbox id>'`. A suite covers every case in its table and fails when its binary or a sandbox is missing; probes that need manually supplied artifacts skip instead. `TestInitialize` runs `lucy init` in a clone of each modpack sandbox and checks the manifest and lock that the CLI writes. `TestInitInstall` initializes each sandbox in the installation suite's table, then installs the generated manifest and lock in an empty workspace and verifies the runtime against them. CI runs the fresh install and the init-then-install chain as separate jobs so one cannot mask the other. `-count=1` disables the test cache, `-parallel N` bounds concurrency, and `-lucy` and `-sandboxes` override the `dist/lucy` and `.sandboxes` defaults. `e2e/internal/testkit` resolves those paths; `task e2e:status|init|compile|install` wrap the same commands. The `cmd` filetrack guard suite runs the CLI in process and needs neither sandboxes nor a prebuilt binary. CI selects the domains whose inputs changed from the path filters in `.github/workflows/e2e.yml` and runs each selected domain through the reusable runner. `TestCompile` runs every fixture by default. Fixtures marked `smoke: true` form the default CI layer; set `LUCY_COMPILE_LAYER=smoke` or run `task e2e:compile:smoke` to select only those. CI runs the smoke layer as one job and switches to the per-fixture full table when the pull request carries the `ci:compile-full` label.
 
 ### Sandbox CLI
 
