@@ -36,8 +36,8 @@ type (
 // from upstream metadata as owned runtime outputs. Initialization stages
 // nothing, so the receipt answers no lock; ownership only lets a later
 // installation replace or prune these files instead of refusing them as
-// unmanaged files. Packages initialization left unidentified, and files outside
-// the workspace, stay unowned.
+// unmanaged files. Packages initialization left unidentified, files outside
+// the workspace, and paths that traverse symlinks stay unowned.
 //
 // A receipt that does not answer the published lock cannot describe the
 // installation either, so its fingerprint is cleared as well; a receipt that
@@ -71,12 +71,15 @@ func RecordAdoptedPackages(root string, d *document.Lock, paths []string) error 
 			return err
 		}
 		relative, err := filepath.Rel(root, absolute)
-		if err != nil || !filepath.IsLocal(relative) {
-			// MCDReforged may load plugins from directories outside the
-			// workspace. Lucy does not own external files.
+		if err != nil {
 			continue
 		}
 		relative = filepath.ToSlash(relative)
+		if err := workspacewrite.SafePath(root, relative); err != nil {
+			// Lucy does not own files outside the workspace, and installation
+			// refuses to prune through symlinks.
+			continue
+		}
 		info, err := os.Stat(absolute)
 		if err != nil {
 			return err
