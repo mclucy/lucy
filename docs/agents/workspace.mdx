@@ -9,9 +9,7 @@ description: "How Lucy discovers installations, identifies packages, and tracks 
 
 Discovery and selection are separate. Discovery does not choose a runtime or read workspace declarations. Selection uses an explicit entry point when supplied, otherwise a declaration when available, otherwise an inference policy. A missing declared installation and an ambiguous selection are distinct outcomes; neither proves that the directory has no server files.
 
-`workspace.Observe` derives the applicable declaration, discovers installations, checks receipt ownership, selects a runtime, then observes package directories for that selected runtime. It assembles wrappers and package observations with the discovery result. An observation is not a lock: the selected entry point, installed files, and running state are local evidence rather than resolved intent.
-
-Reselecting an installation also re-observes its package directories, even when selection fails. Package observations and unidentified paths therefore belong to the current selection outcome; upstream identification must be repeated after reselection.
+`workspace` assembles local observations of installations, wrappers, declarations, and package files. `workspace/discovery` performs the installation scan and owns member ownership and runtime selection. Reselection refreshes package observations; upstream identification must be repeated afterward.
 
 Package descriptors provide local module metadata. `workspace/identify` can additionally associate unidentified files with upstream identities through hash lookup when invoked by an operation or command. The core workspace observation has no upstream dependency, so a missing registry identity does not imply that a local descriptor was unreadable or that the file is absent.
 
@@ -21,7 +19,7 @@ A tracked-file declaration contains a workspace-relative path, optional accepted
 
 `filetrack` stores captured bytes in the workspace-local `.lucy/objects/sha256/` content-addressed store and appends events to `.lucy/history/files.jsonl`. History distinguishes an event sequence from the accepted revision activated by that event. An accepted revision has a parent, so reverting follows that revision chain rather than toggling between the last two events. Captured working bytes can exist without being an accepted revision.
 
-Tracked-file mutations share the workspace writer lock. Their journal is `.lucy/file-commit.json`; it records before and after images and the intended history event. Recovery checks the history to determine whether to restore the before or after images, and refuses to overwrite an unrelated concurrent edit. The installation transaction has a separate journal and recovery path; it records before and after content and permission images per path, refuses paths edited after the interruption, and keeps its rollback directory workspace-relative. Read-only file history refuses an unfinished transaction rather than reporting a partially committed view.
+Tracked-file mutations share the workspace writer lock. Their journal, `.lucy/file-commit.json`, records before and after images and the intended history event. Recovery uses history to choose an image and refuses to overwrite an unrelated edit. [Installation](/agents/resolution) has a separate journal and recovery path. Read-only file history refuses an unfinished transaction.
 
 Tracked files and runtime-owned outputs are different ownership domains. Installation checks for destination conflicts, preserves existing tracked working files, and can provision missing accepted content from a verified local object or recovery URL. A hash in a declaration is an identity for bytes, not a transfer of those bytes.
 

@@ -21,8 +21,6 @@ The effective decision is: local development builds disable collection and uploa
 
 The installation UUID is created lazily by the first record or by the first `telemetry on`. Read-only commands still create one when they queue an event; this is not an opt-out. `reset-id` rotates the UUID and starts a new statistics window; queued records keep their original IDs and payloads, and remote data is untouched. Runtime uploads count in the new window. `off` marks the state `purge_pending`, deletes the queue directory, and clears the index; the marker makes an interrupted purge complete on the next read.
 
-Policy changes and identity reset clear upload backoff. A non-canceled health-check failure or upload failure records a retry deadline with the error, except when the server rejects the batch as invalid. Purge completion clears the index only after the queue directory is removed.
-
 ## Invocation events and contexts
 
 An event carries invocation ID, identity, occurrence time, command path without the `lucy ` prefix, build version and commit, channel, OS, architecture, duration, outcome, error code, schema version, effective policy, and up to 16 contexts. Contexts come from subsystems that already observed the data: `workspace` and `java` are recorded by `internal/cli` only when observation happened, and `agent` records whether an agent tool was detected. `present`, `absent`, and `failed` distinguish a missing installation from a failed observation. Context data is bounded at 8 KiB per context. Telemetry never triggers discovery, network probes, or workspace reads of its own.
@@ -41,7 +39,7 @@ Flush runs once at the end of an invocation that performed work. Guidance-only e
 
 Enqueue prunes expired records (older than 7 days) and then the oldest records until both bounds hold: 512 records and 4 MiB. A single record larger than the queue budget is refused. The just-enqueued record survives unless it is the one that exceeds the bound, in which case its payload file is removed.
 
-Flush prunes, skips an empty queue, honours a cooldown window, checks `GET /health` with a 2 s budget, clears the cooldown on success, and then uploads at most four batches. Each batch contains up to 50 records within 256 KiB, oldest first; unreadable payload files are dropped locally so they cannot block healthy records. Requests use a 5 s timeout and up to three attempts with 250 ms backoff. Transport failures set a 10-minute cooldown and persist the last error. Flush caps the caller's context at 15 s; the CLI passes 2 s, so a slow service leaves records queued rather than delaying the command.
+The uploader runs only when telemetry is enabled and a binding exists. It checks `GET /health` with a 2-second budget, clears cooldown on success, and uploads bounded batches of complete queued events. Non-canceled health-check failures and upload failures, except invalid-batch rejections, set a 10-minute cooldown and persist the last error.
 
 Responses classify records individually. Accepted and rejected IDs are removed and counted; an unacknowledged record stays queued. A batch-level rejection (`batch_invalid`) drops the batch as rejected instead of retrying it. The index remembers the last 2048 accepted IDs so a retried request cannot double-count after a lost response. Records still pending after four batches remain for a later invocation.
 
