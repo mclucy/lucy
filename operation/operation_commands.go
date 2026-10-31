@@ -336,7 +336,6 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 				if err := observed.Select(discovery.Request{EntryPoint: entryPoint}); err != nil {
 					return initResult(observed), err
 				}
-				observed.ObservePackages()
 			}
 		}
 	}
