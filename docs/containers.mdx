@@ -1,0 +1,75 @@
+---
+title: "Containers"
+description: "Run the Lucy CLI from the official container image"
+---
+
+<Warning>Lucy is pre-beta software. Avoid using it in production; it may cause permanent data loss.</Warning>
+
+`ghcr.io/mclucy/lucy` packages the Lucy CLI for Linux on `amd64` and `arm64`. Use it where installing a binary is inconvenient: CI jobs, Kubernetes init containers, and hosts you prefer to keep untouched. The image converges a server directory and exits; it does not start or supervise the Minecraft server.
+
+## What is inside
+
+The image contains the CLI and the tools its commands call directly, including Git for [`lucy compile`](/commands/compile) and Python 3 for MCDReforged provisioning. It contains no Java runtime. Java is selected from the lock and provisioned when a command needs it.
+
+## Converge a server directory
+
+The image works in `/workspace`, so mount the server directory there:
+
+```bash
+docker run --rm -v "$PWD:/workspace" ghcr.io/mclucy/lucy install --locked
+```
+
+`--locked` fails when `lucy-lock.yaml` is missing or out of date instead of resolving new versions.
+
+The image runs as root by default, so on Linux the files it writes into a bind mount belong to root. To keep your own ownership, run as the built-in `lucy` account, which uses UID and GID 1000:
+
+```bash
+docker run --rm --user 1000:1000 -v "$PWD:/workspace" ghcr.io/mclucy/lucy install --locked
+```
+
+## Keep state between runs
+
+Lucy keeps the [artifact store](/commands/install#artifact-store-and-download-cache), provisioned Java runtimes, and global configuration under the home directory. Mount a volume to reuse them:
+
+```bash
+docker run --rm --user 1000:1000 \
+  -v lucy-home:/home/lucy \
+  -v "$PWD:/workspace" \
+  ghcr.io/mclucy/lucy install
+```
+
+Without the volume, a run downloads everything again. A one-off job can skip the volume; when it runs under an arbitrary user ID, add `-e HOME=/tmp` so Lucy can write its cache.
+
+## Java
+
+No runtime is bundled. Let the install provision one:
+
+```bash
+docker run --rm -v "$PWD:/workspace" ghcr.io/mclucy/lucy install --java
+```
+
+Alternatively mount a JDK into the container and point `JAVA_HOME` at it, or select it with `java.home` in [`lucy config`](/commands/config). Under `--offline`, the runtime must already be present because provisioning downloads it.
+
+## MCDReforged
+
+The image has no global `mcdreforged` command. Pass `--mcdr-venv` to [`lucy install`](/commands/install#mcdreforged), which builds the isolated environment inside the server directory for the server process to use.
+
+## Kubernetes init container
+
+```yaml
+initContainers:
+  - name: lucy
+    image: ghcr.io/mclucy/lucy:0.1.0
+    args: ["install", "--locked"]
+    volumeMounts:
+      - name: server
+        mountPath: /workspace
+      - name: lucy-home
+        mountPath: /home/lucy
+```
+
+Pin a released version or digest rather than a moving tag. The `lucy-home` volume holds the artifact store and Java runtimes; without it the init container downloads them again on every start.
+
+## Telemetry
+
+The image sets `LUCY_TELEMETRY=off`, because each container would otherwise report as a separate installation. Enable it for a run with `-e LUCY_TELEMETRY=on` or with [`lucy telemetry`](/commands/telemetry).

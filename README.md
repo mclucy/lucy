@@ -65,9 +65,14 @@ go install github.com/mclucy/lucy@latest
 
 # Nix (flake)
 nix run github:mclucy/lucy
+
+# Docker (CLI only)
+docker pull ghcr.io/mclucy/lucy
 ```
 
 Pre-built binaries are available on [Releases](https://github.com/mclucy/lucy/releases).
+
+The container image runs the CLI against a mounted server directory; it does not start the server. See [Containers](https://lucy.lc/docs/containers).
 
 On NixOS or with home-manager, add the flake as an input, import `nixosModules.default` or `homeManagerModules.default`, and set `programs.lucy.enable = true;`.
 

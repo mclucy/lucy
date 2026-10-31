@@ -33,7 +33,7 @@
     "pages": [
       {
         "group": "Getting Started",
-        "pages": ["index", "quickstart", "agents"]
+        "pages": ["index", "quickstart", "containers", "agents"]
       },
       {
         "group": "Commands",

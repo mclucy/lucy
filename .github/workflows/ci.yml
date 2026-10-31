@@ -76,6 +76,16 @@ jobs:
         env:
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
 
+      - name: Build container image
+        run: |
+          set -euo pipefail
+          mkdir -p image/linux/amd64
+          gunzip -c release/lucy-linux-amd64.gz > image/linux/amd64/lucy
+          chmod 0755 image/linux/amd64/lucy
+          cp Dockerfile image/Dockerfile
+          docker buildx build --platform linux/amd64 --load --tag lucy:ci image
+          docker run --rm lucy:ci --version
+
       - name: Upload linux-amd64
         uses: actions/upload-artifact@v7
         with:

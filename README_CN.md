@@ -45,9 +45,14 @@ go install github.com/mclucy/lucy@latest
 
 # Nix（flake）
 nix run github:mclucy/lucy
+
+# Docker（仅 CLI）
+docker pull ghcr.io/mclucy/lucy
 ```
 
 也可在 [Releases](https://github.com/mclucy/lucy/releases) 下载预编译二进制文件。
+
+该镜像只提供 CLI，用于处理挂载进来的服务器目录，不会启动服务器。详见[容器](https://lucy.lc/docs/containers)。
 
 在 NixOS 或 home-manager 中，把该 flake 作为输入引入，导入 `nixosModules.default` 或 `homeManagerModules.default`，并设置 `programs.lucy.enable = true;`。
 

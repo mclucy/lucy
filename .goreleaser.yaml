@@ -76,6 +76,31 @@ homebrew_casks:
             run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/lucy"]
           end
 
+# The image carries the CLI only; it does not supervise a server. Both platforms
+# are built from the release binaries, so the image and the archives cannot
+# drift apart.
+dockers_v2:
+  - id: lucy
+    ids:
+      - lucy
+    images:
+      - ghcr.io/mclucy/lucy
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    dockerfile: Dockerfile
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.title": "lucy"
+      "org.opencontainers.image.description": "The Minecraft server package manager"
+      "org.opencontainers.image.url": "https://lucy.lc"
+      "org.opencontainers.image.source": "https://github.com/mclucy/lucy"
+      "org.opencontainers.image.version": "{{ .Version }}"
+      "org.opencontainers.image.revision": "{{ .FullCommit }}"
+      "org.opencontainers.image.licenses": "Apache-2.0"
+
 release:
   prerelease: auto
   footer: |
@@ -100,6 +125,12 @@ release:
     brew trust --tap mclucy/tap
     brew install --cask lucy
     go install github.com/mclucy/lucy@latest
+    ```
+
+    To run the CLI from a container:
+
+    ```sh
+    docker pull ghcr.io/mclucy/lucy
     ```
 
     Full documentation: <https://lucy.lc/docs>
