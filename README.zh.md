@@ -13,8 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> Lucy 处于 pre-beta 活跃开发阶段。1.0 之前，API 与模式可能发生变化。欢迎加入 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)
-> 或提交 [Issue](https://github.com/mclucy/lucy/issues) 参与贡献。
+> Lucy 处于 pre-beta 活跃开发阶段。1.0 之前，API 与模式可能发生变化。欢迎加入 [QQ 群](https://qm.qq.com/q/Sf65NVYaAi)或 [Discord 服务器](https://discord.gg/9zxNYvGx4Y)讨论与获取帮助。
 
 Lucy 为 Minecraft 服务器带来现代化的包管理体验。通过简单直观的声明式工作流定义和管理你的服务器。
 

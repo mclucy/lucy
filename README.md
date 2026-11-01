@@ -14,8 +14,7 @@
 
 > [!IMPORTANT]
 > Lucy is in active pre-beta development. APIs and schemas may change before `v0.1.0`. Join
-> the [QQ Group](https://qm.qq.com/q/Sf65NVYaAi) or open an [issue](https://github.com/mclucy/lucy/issues/new) to
-> contribute.
+> the [QQ Group](https://qm.qq.com/q/Sf65NVYaAi) or the [Discord Server](https://discord.gg/9zxNYvGx4Y) to discuss and get help.
 
 Lucy brings modern package management experience to Minecraft servers. Define and manage your server with simple and
 declarative workflows.
