@@ -39,6 +39,7 @@ launch.json
 .DS_Store
 
 # Compiled files
+.build
 dist
 release
 .sandboxes
