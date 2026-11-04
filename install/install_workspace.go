@@ -183,9 +183,54 @@ func (s *Service) stageInstall(
 		return nil, err
 	}
 	defer os.RemoveAll(stage)
-	core, err := store.materialize(&resolved.Server.Artifact)
+	if err := s.stageServerTree(ctx, stage, resolved, check.Executable(), store, opts); err != nil {
+		return nil, err
+	}
+	overwritePaths, err := s.stagePackages(root, stage, resolved, store, opts)
 	if err != nil {
 		return nil, err
+	}
+	if resolved.MCDR != nil {
+		if err := preparePython(ctx, root, stage, resolved, store, s.python, opts.MCDRVenv); err != nil {
+			return nil, err
+		}
+	}
+	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite, s.logger); err != nil {
+		return nil, err
+	}
+	adoptedPaths := map[string]bool{}
+	adoption, err := receiptAdoptsRuntime(root)
+	if err != nil {
+		return nil, err
+	}
+	if adoption {
+		adoptedPaths = adoptedOutputPaths(root, resolved.Server, s.logger)
+	}
+	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths, adoptedPaths, s.logger)
+	if err != nil {
+		return nil, err
+	}
+	removeSupersededPaperCore(root, resolved, s.logger)
+	result.Files = counts
+	result.PublishedManifest = opts.PublishManifest
+	result.PublishedLock = opts.publishLock || opts.PublishManifest
+	installed = true
+	return s.provisionCommitted(ctx, root, resolved, opts)
+}
+
+// stageServerTree materializes the locked core and inputs, then runs the
+// bootstrap that prepares the server tree in stage.
+func (s *Service) stageServerTree(
+	ctx context.Context,
+	stage string,
+	resolved *document.Lock,
+	java string,
+	store *downloadStore,
+	opts Options,
+) error {
+	core, err := store.materialize(&resolved.Server.Artifact)
+	if err != nil {
+		return err
 	}
 	resolved.Server.Artifact.Hashes = core.Hashes
 	inputs := map[string]string{}
@@ -196,7 +241,7 @@ func (s *Service) stageInstall(
 		}
 		materialized, err := store.materialize(&input.Artifact)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		input.Artifact.Hashes = materialized.Hashes
 		inputs[input.Path] = materialized.Path
@@ -207,10 +252,10 @@ func (s *Service) stageInstall(
 		resolved.Server,
 		core.Path,
 		inputs,
-		check.Executable(),
+		java,
 		opts.Trace.processOutput(),
 	); err != nil {
-		return nil, err
+		return err
 	}
 	s.logger.Debug(
 		"server tree prepared",
@@ -218,6 +263,19 @@ func (s *Service) stageInstall(
 		"core", resolved.Server.Filename,
 		"inputs", len(inputs),
 	)
+	return nil
+}
+
+// stagePackages copies every enabled package into stage after rejecting
+// destinations two packages both claim. It returns the destinations an
+// overwrite may replace.
+func (s *Service) stagePackages(
+	root string,
+	stage string,
+	resolved *document.Lock,
+	store *downloadStore,
+	opts Options,
+) (map[string]bool, error) {
 	if err := rejectSharedDestinations(root, resolved); err != nil {
 		return nil, err
 	}
@@ -246,32 +304,7 @@ func (s *Service) stageInstall(
 		staged++
 	}
 	s.logger.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
-	if resolved.MCDR != nil {
-		if err := preparePython(ctx, root, stage, resolved, store, s.python, opts.MCDRVenv); err != nil {
-			return nil, err
-		}
-	}
-	if err := validateUnmanagedArtifacts(ctx, root, resolved, opts.Overwrite, s.logger); err != nil {
-		return nil, err
-	}
-	adoptedPaths := map[string]bool{}
-	adoption, err := receiptAdoptsRuntime(root)
-	if err != nil {
-		return nil, err
-	}
-	if adoption {
-		adoptedPaths = adoptedOutputPaths(root, resolved.Server, s.logger)
-	}
-	counts, err := applyCommit(root, stage, d, resolved, opts.PublishManifest, overwritePaths, adoptedPaths, s.logger)
-	if err != nil {
-		return nil, err
-	}
-	removeSupersededPaperCore(root, resolved, s.logger)
-	result.Files = counts
-	result.PublishedManifest = opts.PublishManifest
-	result.PublishedLock = opts.publishLock || opts.PublishManifest
-	installed = true
-	return s.provisionCommitted(ctx, root, resolved, opts)
+	return overwritePaths, nil
 }
 
 func isFloating(v version.Version) bool {
