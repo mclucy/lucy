@@ -69,6 +69,7 @@ To run the built binary against a test server directory:
 ├── javainstall/            Java runtime acquisition through platform package managers
 ├── operation/              Command orchestration: create, init, add, remove, upgrade, sync, deinit
 ├── install/                Convergence engine: replay, staging, commit, rollback, tracked files
+├── receipt/                Installation receipt: committed outputs and their resolution
 ├── bootstrap/              Staged server tree preparation; ownership and commit stay in install
 ├── resolve/                Catalogue selection and descriptor dependency validation
 ├── upstream/               Atomic capability interfaces
@@ -103,6 +104,7 @@ To run the built binary against a test server directory:
     ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
     ├── fn/                 Generic helpers: Ternary, slice utilities
     ├── fsutil/             Filesystem helpers: atomic writes, locking, path utilities
+    ├── maven/              Maven coordinate to repository path
     ├── shell/              Text formatting for POSIX shell readback
     ├── toolchain/          Local Git, Java, and Gradle discovery
     └── workspacewrite/     Recoverable filesystem writes without runtime ownership policy

@@ -9,7 +9,7 @@ A server product is not always a single runnable JAR. Resolution records a produ
 
 ## Preparation adapters
 
-`bootstrap.PrepareLocked` operates in an installation staging tree. It copies or extracts the locked inputs under the server directory, then dispatches on the bootstrapper:
+`bootstrap.PrepareLocked` operates in an installation staging tree. It copies or extracts the locked inputs under the server directory, then dispatches on the typed bootstrap method:
 
 | Bootstrapper | Preparation |
 | --- | --- |
@@ -19,6 +19,8 @@ A server product is not always a single runnable JAR. Resolution records a produ
 | `forge-installer` | Read the installer's server profile and execute its processors using the locked inputs. |
 
 Paperclip and installer processors execute Java during staging. A missing Java runtime is therefore a bootstrap error even though a Java version mismatch alone is a warning. Processor outputs with expected hashes are checked. The Fabric adapter generates launcher files; it does not simply rename the downloaded loader JAR.
+
+The method identity is typed in `server`, and `bootstrap` also owns the launch command, MCDR log handler, output paths, and superseded core that other packages need. Installation and observation consume those descriptions instead of matching method values themselves.
 
 Bootstrap output becomes subject to installation's ownership and commit checks. The bootstrap stage does not by itself publish a workspace receipt or authorize removal of unrelated files. Runtime discovery later recognizes installations from their actual members; it is not just a reverse reading of the lock.
 
