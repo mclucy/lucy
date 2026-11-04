@@ -17,7 +17,8 @@ import (
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/internal/maven"
+	serverpkg "github.com/mclucy/lucy/server"
 )
 
 // CopyLockedFile writes src to dst with mode, replacing dst through a
@@ -68,7 +69,7 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		return err
 	}
 	var installer *zip.ReadCloser
-	if server.Bootstrapper == "forge-installer" {
+	if server.Bootstrapper == serverpkg.BootstrapMethodForgeInstaller {
 		var err error
 		installer, err = zip.OpenReader(corePath)
 		if err != nil {
@@ -99,9 +100,9 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		}
 	}
 	switch server.Bootstrapper {
-	case "":
+	case serverpkg.BootstrapMethodPlain:
 		return CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644)
-	case "paperclip":
+	case serverpkg.BootstrapMethodPaperclip:
 		if err := CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644); err != nil {
 			return err
 		}
@@ -115,8 +116,8 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 			return fmt.Errorf("Paperclip patching: %w\n%s", err, captured)
 		}
 		return nil
-	case "fabric":
-		p, err := routing.MavenPath("net.fabricmc:fabric-loader:" + server.CoreVersion.String())
+	case serverpkg.BootstrapMethodFabric:
+		p, err := maven.Path("net.fabricmc:fabric-loader:" + server.CoreVersion.String())
 		if err != nil {
 			return err
 		}
@@ -144,7 +145,7 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 			return err
 		}
 		return nil
-	case "forge-installer":
+	case serverpkg.BootstrapMethodForgeInstaller:
 		return executeServerProfile(ctx, root, server, corePath, &installer.Reader, java, output)
 	default:
 		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrapper)
@@ -262,7 +263,7 @@ func executeServerProfile(ctx context.Context, root string, server document.Lock
 			return strings.Trim(value, "'"), nil
 		}
 		if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
-			p, err := routing.MavenPath(value[1 : len(value)-1])
+			p, err := maven.Path(value[1 : len(value)-1])
 			return filepath.Join(root, "libraries", p), err
 		}
 		for range 16 {
@@ -329,7 +330,7 @@ func executeServerProfile(ctx context.Context, root string, server document.Lock
 			}
 			continue
 		}
-		p, err := routing.MavenPath(proc.Jar)
+		p, err := maven.Path(proc.Jar)
 		if err != nil {
 			return err
 		}
@@ -340,7 +341,7 @@ func executeServerProfile(ctx context.Context, root string, server document.Lock
 		}
 		classpath := []string{processorJar}
 		for _, coordinate := range proc.Classpath {
-			p, err := routing.MavenPath(coordinate)
+			p, err := maven.Path(coordinate)
 			if err != nil {
 				return err
 			}

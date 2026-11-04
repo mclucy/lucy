@@ -88,7 +88,7 @@ func (r *Router) resolvePaper(
 			)
 			continue
 		}
-		out.ProductVersion, out.Bootstrapper = version.Version(v), "paperclip"
+		out.ProductVersion, out.Bootstrapper = version.Version(v), server.BootstrapMethodPaperclip
 		out.Artifact = catalog.Artifact{
 			Provider:  catalog.ProviderPaperMC,
 			ProjectID: "paper",
@@ -196,7 +196,7 @@ func (r *Router) resolveGithubProduct(
 			}
 			trial := *out
 			trial.ProductVersion = version.Version(rl.Tag)
-			trial.Bootstrapper = "paperclip"
+			trial.Bootstrapper = server.BootstrapMethodPaperclip
 			materialized, e := acquire(&candidate)
 			if e != nil {
 				return e

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
@@ -472,28 +473,17 @@ func writeMCDRWrapper(
 	configPath := filepath.Join(wrapper, "config.yml")
 	_, configErr := os.Stat(configPath)
 	if replaceConfig || os.IsNotExist(configErr) {
-		entry := "java -jar server.jar nogui"
-		if d.Server.Bootstrapper == "fabric" || d.Server.Bootstrapper == "forge-installer" {
-			entry = "sh run.sh"
-		}
+		launch := bootstrap.LaunchFor(d.Server.Bootstrapper)
 		relativeServer, err := filepath.Rel(m.Directory, d.Server.Directory)
 		if err != nil {
 			return err
 		}
 		// MCDReforged parses the server log stream through a handler that
-		// matches the launcher, so a Bukkit-family server needs its own parser
-		// to report start-up and player events at all.
-		launchHandler := "vanilla_handler"
-		switch d.Server.Bootstrapper {
-		case "forge-installer":
-			launchHandler = "forge_handler"
-		case "paperclip":
-			launchHandler = "bukkit_handler"
-		}
+		// matches the launcher, so the method selects the parser.
 		config := map[string]any{
 			"working_directory": filepath.ToSlash(relativeServer),
-			"start_command":     entry,
-			"handler":           launchHandler,
+			"start_command":     launch.Command,
+			"handler":           launch.Handler,
 		}
 		data, err := yaml.Marshal(config)
 		if err != nil {

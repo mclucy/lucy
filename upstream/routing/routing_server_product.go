@@ -22,7 +22,7 @@ type ServerProductResolution struct {
 	Product        server.Product
 	ProductVersion version.Version
 	Artifact       catalog.Artifact
-	Bootstrapper   string
+	Bootstrapper   server.BootstrapMethod
 	Inputs         []server.BootstrapInput
 	// JavaAdvisory is the Java major version Mojang's launcher ships for the
 	// Minecraft version. Lucy treats it as an advisory minimum.

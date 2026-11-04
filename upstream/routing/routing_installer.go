@@ -12,6 +12,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/internal/maven"
 	"github.com/mclucy/lucy/server"
 
 	"github.com/mclucy/lucy/upstream/providers/mojang"
@@ -42,7 +43,7 @@ func libraryInput(lib mavenLibrary, z *zip.Reader, version versionpkg.Version) (
 	}
 	if p == "" {
 		var err error
-		p, err = MavenPath(lib.Name)
+		p, err = maven.Path(lib.Name)
 		if err != nil {
 			return server.BootstrapInput{}, false, err
 		}
@@ -75,22 +76,6 @@ func libraryInput(lib mavenLibrary, z *zip.Reader, version versionpkg.Version) (
 		a.Hashes["sha1"] = download.SHA1
 	}
 	return server.BootstrapInput{Path: "libraries/" + p, Artifact: a}, true, nil
-}
-
-func MavenPath(coordinate string) (string, error) {
-	base, extension, has := strings.Cut(coordinate, "@")
-	if !has {
-		extension = "jar"
-	}
-	parts := strings.Split(base, ":")
-	if len(parts) < 3 || len(parts) > 4 {
-		return "", fmt.Errorf("invalid Maven coordinate %q", coordinate)
-	}
-	name := parts[1] + "-" + parts[2]
-	if len(parts) == 4 {
-		name += "-" + parts[3]
-	}
-	return path.Join(strings.ReplaceAll(parts[0], ".", "/"), parts[1], parts[2], name+"."+extension), nil
 }
 
 func zipBytes(z *zip.Reader, name string) ([]byte, error) {
@@ -135,7 +120,7 @@ func (r *Router) resolveInstaller(ctx context.Context, req ServerProductRequest,
 		}
 	}
 	out.Artifact.Version = out.ProductVersion
-	out.Bootstrapper = "forge-installer"
+	out.Bootstrapper = server.BootstrapMethodForgeInstaller
 	if profile.JSON != "" {
 		raw, e := zipBytes(&z.Reader, strings.TrimPrefix(profile.JSON, "/"))
 		if e != nil {

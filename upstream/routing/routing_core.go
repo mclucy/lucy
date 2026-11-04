@@ -180,7 +180,7 @@ func (r *Router) ResolveServerProduct(
 				return out, e
 			}
 			out.ProductVersion = selected.Version
-			out.Bootstrapper = "fabric"
+			out.Bootstrapper = server.BootstrapMethodFabric
 			r.logger.Debug(
 				"routing: server product route selected",
 				"product", req.Product,
@@ -334,7 +334,7 @@ func (r *Router) ResolveServerProduct(
 					req.Minecraft.String() + "/" + info.Build + "/download",
 				Hashes: map[string]string{"md5": info.MD5},
 			}
-			out.Bootstrapper = "paperclip"
+			out.Bootstrapper = server.BootstrapMethodPaperclip
 			r.logger.Debug(
 				"routing: server product route selected",
 				"product", req.Product,
@@ -358,7 +358,7 @@ func (r *Router) ResolveServerProduct(
 		return out, err
 	}
 	out.Artifact.Hashes = materialized.Hashes
-	if out.Bootstrapper == "paperclip" {
+	if out.Bootstrapper == server.BootstrapMethodPaperclip {
 		if err := paperclipInput(&out, materialized.Path); err != nil {
 			return out, err
 		}

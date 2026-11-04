@@ -36,7 +36,7 @@ type LockedServer struct {
 	Product          server.Product  `yaml:"product" json:"product"`
 	CoreVersion      version.Version `yaml:"core_version" json:"core_version"`
 	catalog.Artifact `yaml:",inline" json:",inline"`
-	Bootstrapper     string                  `yaml:"bootstrapper" json:"bootstrapper"`
+	Bootstrapper     server.BootstrapMethod  `yaml:"bootstrapper" json:"bootstrapper"`
 	Inputs           []server.BootstrapInput `yaml:"inputs,omitempty" json:"inputs"`
 	Java             LockedJava              `yaml:"java" json:"java"`
 }

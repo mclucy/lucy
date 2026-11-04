@@ -56,7 +56,7 @@ func (o requestOrigin) String() string {
 // resolution enforces.
 type Target struct {
 	Product      serverpkg.Product
-	Bootstrapper string
+	Bootstrapper serverpkg.BootstrapMethod
 	Minecraft    versionpkg.Version
 	CoreVersion  versionpkg.Version
 	MCDRVersion  string
@@ -80,7 +80,7 @@ func SupportsPackages(target Target, ecosystem catalog.Ecosystem) bool {
 	case serverpkg.ProductPaper, serverpkg.ProductPurpur:
 		return ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit
 	default:
-		return target.Bootstrapper == "paperclip" &&
+		return target.Bootstrapper == serverpkg.BootstrapMethodPaperclip &&
 			(ecosystem == catalog.EcosystemPaper || ecosystem == catalog.EcosystemBukkit)
 	}
 }
