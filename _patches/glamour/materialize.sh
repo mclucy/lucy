@@ -45,7 +45,7 @@ cp "$source_dir"/internal/autolink/*.go "$module/internal/autolink/"
 # The selected languages. Adding one also adds its XML and aliases to the
 # embedded registry; every other lexer stays out of the build.
 for name in \
-  bash groovy html ini java javascript json kotlin lua plaintext properties \
+  bash css groovy html ini java javascript json kotlin lua plaintext properties \
   python sql toml typescript xml yaml; do
   cp "$chroma_dir/lexers/embedded/$name.xml" "$module/ansi/lexers/"
 done

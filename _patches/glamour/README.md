@@ -5,12 +5,15 @@ its whole lexer registry during package init. That adds about 4 MB to a release
 binary for fenced-code coloring, which Lucy only shows in package descriptions.
 
 Instead of the full registry, this patch registers only the languages listed in
-`materialize.sh` (17 XML lexers, about 90 KB of data). `highlight.go` tokenizes
-with that subset and applies the colors already declared by the Markdown style;
+`materialize.sh` (18 XML lexers, about 110 KB of data). `highlight.go` registers
+that subset in one chroma registry and applies the colors already declared by
+the Markdown style;
 `codeblock.go` keeps glamour's block layout and styling, and styles without a
 chroma section (notty) keep the plain fallback. Fence tags resolve by lexer
 name, alias, or filename glob (so `yml`, `gradle`, and `kts` work). Unknown
-languages and fences without a language use the plaintext lexer.
+languages and fences without a language use the plaintext lexer. HTML delegates
+script and style blocks to the JavaScript and CSS lexers; both are included and
+share the subset registry so delegated lookups resolve.
 
 `materialize.sh` copies the glamour module pinned in `go.mod` from the module
 cache into `.build/glamour/module`, copies the selected lexer XML from the

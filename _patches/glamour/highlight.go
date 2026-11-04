@@ -4,7 +4,6 @@ import (
 	"embed"
 	"io"
 	"io/fs"
-	"path/filepath"
 	"strings"
 
 	"github.com/alecthomas/chroma/v2"
@@ -17,14 +16,11 @@ import (
 var lexerFiles embed.FS
 
 var (
-	subsetLexers = map[string]chroma.Lexer{}
-	subsetFiles  []fileLexer
+	// subsetRegistry attaches the registry that delegated lexers use for
+	// <using> lookups, such as HTML's script and style blocks.
+	subsetRegistry = chroma.NewLexerRegistry()
+	plaintextLexer chroma.Lexer
 )
-
-type fileLexer struct {
-	lexer     chroma.Lexer
-	filenames []string
-}
 
 func init() {
 	paths, err := fs.Glob(lexerFiles, "lexers/*.xml")
@@ -36,35 +32,18 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
-		config := lexer.Config()
-		subsetLexers[strings.ToLower(config.Name)] = lexer
-		for _, alias := range config.Aliases {
-			subsetLexers[strings.ToLower(alias)] = lexer
-		}
-		subsetFiles = append(subsetFiles, fileLexer{
-			lexer:     lexer,
-			filenames: append(append([]string{}, config.Filenames...), config.AliasFilenames...),
-		})
+		subsetRegistry.Register(lexer)
 	}
+	plaintextLexer = subsetRegistry.Get("plaintext")
 }
 
-// lexerFor resolves a fence language the way chroma's registry does: name,
-// alias, then a filename glob such as *.yml. Unknown languages use plaintext.
+// lexerFor resolves a fence language by name, alias, or filename glob, then
+// falls back to plaintext.
 func lexerFor(language string) chroma.Lexer {
-	language = strings.TrimSpace(language)
-	if lexer := subsetLexers[strings.ToLower(language)]; lexer != nil {
+	if lexer := subsetRegistry.Get(strings.TrimSpace(language)); lexer != nil {
 		return lexer
 	}
-	for _, candidate := range []string{"filename." + language, language} {
-		for _, entry := range subsetFiles {
-			for _, glob := range entry.filenames {
-				if ok, _ := filepath.Match(glob, candidate); ok {
-					return entry.lexer
-				}
-			}
-		}
-	}
-	return subsetLexers["plaintext"]
+	return plaintextLexer
 }
 
 // renderHighlighted writes code with the token colors declared by the Markdown
