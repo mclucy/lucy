@@ -28,10 +28,29 @@ vars:
     -X github.com/mclucy/lucy/internal/cipher.ciphertextB=${cipher_ciphertext_b:-}
   # HTTP/1.1 covers every provider; omitting HTTP/2 keeps binaries smaller.
   LUCY_STDLIB_TAGS: nethttpomithttp2
+  # Syntax highlighting is stripped at build time; see _patches/glamour.
+  GLAMOUR_BUILD_DIR: .build/glamour
+  GLAMOUR_MODFILE: "{{.GLAMOUR_BUILD_DIR}}/build.mod"
 
 tasks:
+  glamour:patch:
+    desc: Materialize the chroma-free glamour module used by size-trimmed builds
+    internal: true
+    cmds:
+      - sh _patches/glamour/materialize.sh
+    sources:
+      - "_patches/glamour/*"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.GLAMOUR_MODFILE}}"
+      - "{{.GLAMOUR_BUILD_DIR}}/build.sum"
+      - "{{.GLAMOUR_BUILD_DIR}}/module/go.mod"
+
   build:
     desc: Build the local development binary for the host platform
+    deps:
+      - glamour:patch
     cmds:
       - |
         set -euo pipefail
@@ -40,6 +59,7 @@ tasks:
         if [ -f .cipher_key ]; then . ./.cipher_key; fi
         mkdir -p dist
         GOOS={{.DEV_GOOS}} GOARCH={{.DEV_GOARCH}} go build \
+          -modfile={{.GLAMOUR_MODFILE}} \
           -ldflags="{{.LUCY_LDFLAGS}} {{.LUCY_CIPHER_LDFLAGS}}" \
           -tags {{.LUCY_STDLIB_TAGS}} \
           -o {{.DEV_BINARY}}
@@ -48,6 +68,7 @@ tasks:
       - "./**/*.go"
       - "./internal/cli/compile/*.gradle"
       - "./docs/**/*.mdx"
+      - "./_patches/glamour/*"
       - "./go.mod"
       - "./go.sum"
     generates:
@@ -73,6 +94,7 @@ tasks:
     deps:
       - clean:release
       - docs:pack
+      - glamour:patch
     cmds:
       - |
         set -euo pipefail
@@ -80,17 +102,23 @@ tasks:
         mkdir -p release
         ldflags="-w -s {{.LUCY_LDFLAGS}} {{.LUCY_CIPHER_LDFLAGS}}"
         tags="release,docsarchive,{{.LUCY_STDLIB_TAGS}}"
-        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-linux-arm64
-        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-windows-amd64.exe
-        GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-darwin-arm64
+        GOOS=linux GOARCH=amd64 go build -modfile={{.GLAMOUR_MODFILE}} -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-linux-amd64
+        GOOS=linux GOARCH=arm64 go build -modfile={{.GLAMOUR_MODFILE}} -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-linux-arm64
+        GOOS=windows GOARCH=amd64 go build -modfile={{.GLAMOUR_MODFILE}} -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-windows-amd64.exe
+        GOOS=darwin GOARCH=amd64 go build -modfile={{.GLAMOUR_MODFILE}} -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-darwin-amd64
+        GOOS=darwin GOARCH=arm64 go build -modfile={{.GLAMOUR_MODFILE}} -trimpath -ldflags="$ldflags" -tags "$tags" -o release/lucy-darwin-arm64
 
   clean:
     desc: Remove all generated build artifacts
     deps:
+      - clean:build
       - clean:dist
       - clean:release
+
+  clean:build:
+    desc: Remove the generated glamour module
+    cmds:
+      - rm -rf .build
 
   clean:dist:
     desc: Remove development build artifacts
@@ -106,8 +134,10 @@ tasks:
     silent: true
     dir: "{{.USER_WORKING_DIR}}"
     desc: Run the local latest codebase with the provided arguments
+    deps:
+      - glamour:patch
     cmds:
-      - go run {{.TASKFILE_DIR}} {{.CLI_ARGS}}
+      - go run -modfile={{.TASKFILE_DIR}}/{{.GLAMOUR_MODFILE}} {{.TASKFILE_DIR}} {{.CLI_ARGS}}
 
   cipher:generate:
     silent: true

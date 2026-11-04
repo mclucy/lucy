@@ -5,6 +5,7 @@ project_name: lucy
 
 before:
   hooks:
+    - sh _patches/glamour/materialize.sh
     - go run ./tools/gendocs
 
 builds:
@@ -25,6 +26,7 @@ builds:
         goarch: arm64
     flags:
       - -trimpath
+      - -modfile=.build/glamour/build.mod
     tags:
       - release
       - docsarchive

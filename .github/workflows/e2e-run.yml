@@ -176,7 +176,8 @@ jobs:
             fi
             task dev
           else
-            go build -tags nethttpomithttp2 -o dist/lucy .
+            sh _patches/glamour/materialize.sh
+            go build -modfile=.build/glamour/build.mod -tags nethttpomithttp2 -o dist/lucy .
           fi
 
       - name: Run suite
