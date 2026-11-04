@@ -14,6 +14,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/receipt"
 	serverpkg "github.com/mclucy/lucy/server"
 	"gopkg.in/yaml.v3"
 )
@@ -71,7 +72,7 @@ func compositeWorkspace(t *testing.T) (string, *document.Manifest, *document.Loc
 
 func compositeWriteReceipt(t *testing.T, root string, lock *document.Lock) {
 	t.Helper()
-	fingerprint, err := install.ResolutionFingerprint(lock)
+	fingerprint, err := receipt.ResolutionFingerprint(lock)
 	if err != nil {
 		t.Fatalf("resolution fingerprint: %v", err)
 	}

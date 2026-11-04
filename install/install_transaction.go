@@ -2,14 +2,10 @@ package install
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 
@@ -17,163 +13,9 @@ import (
 	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/workspace/discovery"
+	"github.com/mclucy/lucy/receipt"
 	"gopkg.in/yaml.v3"
 )
-
-type (
-	receiptEntry struct {
-		Path   string `yaml:"path"`
-		SHA256 string `yaml:"sha256"`
-		Mode   uint32 `yaml:"mode"`
-	}
-	installReceipt struct {
-		Version         int            `yaml:"version"`
-		LockFingerprint string         `yaml:"lock_fingerprint"`
-		Entries         []receiptEntry `yaml:"entries"`
-	}
-)
-
-// RecordAdoptedPackages records package files that initialization identified
-// from upstream metadata as owned runtime outputs. Initialization stages
-// nothing, so the receipt answers no lock; ownership only lets a later
-// installation replace or prune these files instead of refusing them as
-// unmanaged files. Packages initialization left unidentified, files outside
-// the workspace, and paths that traverse symlinks stay unowned.
-//
-// A receipt that does not answer the published lock cannot describe the
-// installation either, so its fingerprint is cleared as well; a receipt that
-// still answers the lock keeps it.
-func RecordAdoptedPackages(root string, d *document.Lock, paths []string) error {
-	fingerprint, err := ResolutionFingerprint(d)
-	if err != nil {
-		return err
-	}
-	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
-	receipt := installReceipt{Version: 1, Entries: []receiptEntry{}}
-	raw, err := os.ReadFile(receiptPath)
-	exists := err == nil
-	switch {
-	case exists:
-		if err := yaml.Unmarshal(raw, &receipt); err != nil {
-			return err
-		}
-	case !os.IsNotExist(err):
-		return err
-	}
-	answersLock := exists && receipt.LockFingerprint == fingerprint
-	entries := make(map[string]receiptEntry, len(receipt.Entries)+len(paths))
-	for _, entry := range receipt.Entries {
-		entries[entry.Path] = entry
-	}
-	recorded := false
-	for _, path := range paths {
-		absolute, err := filepath.Abs(path)
-		if err != nil {
-			return err
-		}
-		relative, err := filepath.Rel(root, absolute)
-		if err != nil {
-			continue
-		}
-		if err := workspacewrite.SafePath(root, relative); err != nil {
-			// Lucy does not own files outside the workspace, and installation
-			// refuses to prune through symlinks.
-			continue
-		}
-		relative = filepath.ToSlash(relative)
-		info, err := os.Stat(absolute)
-		if err != nil {
-			return err
-		}
-		hashes, err := DigestFile(absolute, nil)
-		if err != nil {
-			return err
-		}
-		entry := receiptEntry{
-			Path:   relative,
-			SHA256: hashes["sha256"],
-			Mode:   uint32(info.Mode().Perm()),
-		}
-		if entries[relative] == entry {
-			continue
-		}
-		entries[relative] = entry
-		recorded = true
-	}
-	if !recorded && (receipt.LockFingerprint == "" || answersLock) {
-		return nil
-	}
-	// Initialization staged nothing, so the receipt cannot answer the lock it
-	// publishes.
-	receipt.Version = 1
-	receipt.LockFingerprint = ""
-	receipt.Entries = make([]receiptEntry, 0, len(entries))
-	for _, entry := range entries {
-		receipt.Entries = append(receipt.Entries, entry)
-	}
-	slices.SortFunc(receipt.Entries, func(a, b receiptEntry) int {
-		return strings.Compare(a.Path, b.Path)
-	})
-	receiptBytes, err := yaml.Marshal(receipt)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(receiptPath), 0o755); err != nil {
-		return err
-	}
-	return fsutil.AtomicWrite(receiptPath, receiptBytes, 0o600)
-}
-
-// receiptAdoptsRuntime reports whether the observed runtime stays adoptable. A
-// receipt that answers a lock owns the runtime it installed. Initialization
-// writes a receipt without a lock fingerprint, so it records the packages it
-// identified while the observed runtime remains the installation to adopt.
-func receiptAdoptsRuntime(root string) (bool, error) {
-	raw, err := os.ReadFile(filepath.Join(root, ".lucy", "install.yaml"))
-	if os.IsNotExist(err) {
-		return true, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	var receipt installReceipt
-	if err := yaml.Unmarshal(raw, &receipt); err != nil {
-		return false, err
-	}
-	return receipt.LockFingerprint == "", nil
-}
-
-// adoptedOutputPaths reports the workspace-relative members of the runtime the
-// lock names, when observation selects that runtime. Installation replaces
-// these files instead of refusing them: they belong to the installation that
-// initialization adopted, not to unrelated work.
-func adoptedOutputPaths(root string, server document.LockedServer, logger *log.Logger) map[string]bool {
-	serverDir := filepath.Join(root, filepath.FromSlash(server.Directory))
-	observed := discovery.Discover(serverDir)
-	declaration := &discovery.Declaration{
-		Product:     server.Product,
-		Minecraft:   server.Minecraft,
-		CoreVersion: server.CoreVersion,
-	}
-	if err := observed.Select(discovery.Request{Declared: declaration}); err != nil {
-		logger.Debug("no adopted installation to reconcile", "reason", err)
-		return nil
-	}
-	selected := observed.Selected()
-	if selected == nil || selected.Installation == nil {
-		return nil
-	}
-	paths := make(map[string]bool, len(selected.Installation.Files))
-	for _, file := range selected.Installation.Files {
-		relative, err := filepath.Rel(root, file.Path)
-		if err != nil || !filepath.IsLocal(relative) {
-			continue
-		}
-		paths[filepath.ToSlash(relative)] = true
-	}
-	return paths
-}
 
 func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, logger *log.Logger) (FileChanges, error) {
 	var counts FileChanges
@@ -182,14 +24,16 @@ func applyCommit(root, stage string, d *document.Manifest, l *document.Lock, pub
 }
 
 func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock, publish bool, overwritePaths, adoptedPaths map[string]bool, counts *FileChanges, logger *log.Logger) (resultErr error) {
-	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
-	previous := installReceipt{}
+	receiptPath := filepath.Join(root, receipt.Filename)
+	previous := receipt.New()
 	raw, err := os.ReadFile(receiptPath)
 	receiptExisted := err == nil
 	if receiptExisted {
-		if err := yaml.Unmarshal(raw, &previous); err != nil {
+		parsed, err := receipt.Decode(bytes.NewReader(raw))
+		if err != nil {
 			return err
 		}
+		previous = *parsed
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -198,8 +42,8 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	for _, entry := range previous.Entries {
 		owned[entry.Path] = entry.SHA256
 	}
-	next := installReceipt{Version: 1, Entries: []receiptEntry{}}
-	lockFingerprint, err := ResolutionFingerprint(l)
+	next := receipt.New()
+	lockFingerprint, err := receipt.ResolutionFingerprint(l)
 	if err != nil {
 		return err
 	}
@@ -279,7 +123,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		mode := os.FileMode(0o644)
 		if !mutableDefault {
 			mode = info.Mode().Perm()
-			next.Entries = append(next.Entries, receiptEntry{
+			next.Entries = append(next.Entries, receipt.Entry{
 				Path:   relative,
 				SHA256: hashes["sha256"],
 				Mode:   uint32(mode),
@@ -316,7 +160,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		}
 		pruneExpected[old.Path] = old.SHA256
 	}
-	receiptBytes, err := yaml.Marshal(next)
+	receiptBytes, err := next.Snapshot()
 	if err != nil {
 		return err
 	}
@@ -380,16 +224,16 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			return err
 		}
 	}
-	if err := planAfter(".lucy/install.yaml", receiptAfter); err != nil {
+	if err := planAfter(receipt.Filename, receiptAfter); err != nil {
 		return err
 	}
 	baseImages := map[string]*workspacewrite.InstallImage{
 		document.LockFilename: lockPlan.Base,
-		".lucy/install.yaml":  receiptBase,
+		receipt.Filename:      receiptBase,
 	}
 	documentAfter := map[string]*workspacewrite.InstallImage{
 		document.LockFilename: &lockPlan.Image,
-		".lucy/install.yaml":  receiptAfter,
+		receipt.Filename:      receiptAfter,
 	}
 	if publish {
 		baseImages[document.ManifestFilename] = manifestPlan.Base
@@ -655,10 +499,10 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 				return err
 			}
 		}
-		if entry, mutated := mutations[".lucy/install.yaml"]; mutated {
+		if entry, mutated := mutations[receipt.Filename]; mutated {
 			if err := publishInstallBytes(
 				files,
-				".lucy/install.yaml",
+				receipt.Filename,
 				receiptBytes,
 				receiptAfter,
 				entry,
@@ -729,352 +573,4 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 		"manifest-published", publish,
 	)
 	return nil
-}
-
-// installDocumentPlan binds the exact bytes predicted for a document
-// publication to its journaled after image. Publication writes Data verbatim,
-// so a concurrent comment edit cannot make published bytes differ from the
-// journal.
-type installDocumentPlan struct {
-	Data  []byte
-	Base  *workspacewrite.InstallImage
-	Image workspacewrite.InstallImage
-}
-
-// installDocumentPlanFor predicts the bytes and mode a document write
-// publishes. It mirrors document.Service.Write without re-reading the document
-// at publication time.
-func installDocumentPlanFor(
-	root string,
-	name string,
-	defaultMode os.FileMode,
-	snapshot func() ([]byte, error),
-	merge func([]byte) ([]byte, error),
-) (*installDocumentPlan, error) {
-	path := filepath.Join(root, name)
-	existing, err := os.ReadFile(path)
-	switch {
-	case err == nil:
-		info, statErr := os.Lstat(path)
-		if statErr != nil {
-			return nil, statErr
-		}
-		if !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("write destination %s must be a regular file", name)
-		}
-		data, err := merge(existing)
-		if err != nil {
-			return nil, err
-		}
-		return &installDocumentPlan{
-			Data:  data,
-			Base:  installBytesImage(existing, info.Mode().Perm()),
-			Image: *installBytesImage(data, info.Mode().Perm()),
-		}, nil
-	case errors.Is(err, os.ErrNotExist):
-		data, err := snapshot()
-		if err != nil {
-			return nil, err
-		}
-		return &installDocumentPlan{
-			Data:  data,
-			Image: *installBytesImage(data, defaultMode),
-		}, nil
-	default:
-		return nil, err
-	}
-}
-
-func installFileMode(path string, defaultMode os.FileMode) (os.FileMode, error) {
-	info, err := os.Lstat(path)
-	switch {
-	case err == nil:
-		if !info.Mode().IsRegular() {
-			return 0, fmt.Errorf("write destination %s must be a regular file", path)
-		}
-		return info.Mode().Perm(), nil
-	case errors.Is(err, os.ErrNotExist):
-		return defaultMode, nil
-	default:
-		return 0, err
-	}
-}
-
-func installBytesImage(data []byte, mode os.FileMode) *workspacewrite.InstallImage {
-	sum := sha256.Sum256(data)
-	return &workspacewrite.InstallImage{
-		SHA256: hex.EncodeToString(sum[:]),
-		Mode:   effectiveInstallMode(mode),
-	}
-}
-
-// effectiveInstallMode reports the permission bits the platform exposes after
-// a chmod to mode. Windows represents regular files as writable (0666) or
-// read-only (0444); Unix preserves the requested bits.
-func effectiveInstallMode(mode os.FileMode) uint32 {
-	if runtime.GOOS == "windows" {
-		if mode&0o200 != 0 {
-			return 0o666
-		}
-		return 0o444
-	}
-	return uint32(mode.Perm())
-}
-
-func publishInstallBytes(
-	files *os.Root,
-	name string,
-	data []byte,
-	image *workspacewrite.InstallImage,
-	entry workspacewrite.InstallJournalEntry,
-) error {
-	return fsutil.WriteRoot(
-		files,
-		name,
-		bytes.NewReader(data),
-		fsutil.WriteOptions{
-			Mode:    os.FileMode(image.Mode),
-			Replace: true,
-			Check:   installBeforeCheck(files, entry),
-		},
-	)
-}
-
-// installBeforeCheck guards a publication against an edit that happened after
-// the journal captured the before image.
-func installBeforeCheck(
-	files *os.Root,
-	entry workspacewrite.InstallJournalEntry,
-) func() error {
-	return func() error {
-		current, err := observeInstallPath(files, entry.Path)
-		if err != nil {
-			return err
-		}
-		if !workspacewrite.InstallImagesEqual(current, entry.Before) {
-			return fmt.Errorf(
-				"installation output %s changed before publication",
-				entry.Path,
-			)
-		}
-		return nil
-	}
-}
-
-func observeInstallPath(
-	files *os.Root,
-	relative string,
-) (*workspacewrite.InstallImage, error) {
-	info, err := files.Lstat(relative)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf(
-			"installation output %s is not a regular file",
-			relative,
-		)
-	}
-	file, err := files.Open(relative)
-	if err != nil {
-		return nil, err
-	}
-	hasher := sha256.New()
-	_, copyErr := io.Copy(hasher, file)
-	closeErr := file.Close()
-	if copyErr != nil || closeErr != nil {
-		return nil, errors.Join(copyErr, closeErr)
-	}
-	return &workspacewrite.InstallImage{
-		SHA256: hex.EncodeToString(hasher.Sum(nil)),
-		Mode:   effectiveInstallMode(info.Mode().Perm()),
-	}, nil
-}
-
-func installFinalImageMatches(
-	current, expected *workspacewrite.InstallImage,
-	compareMode bool,
-) bool {
-	if current == nil || expected == nil {
-		return current == nil && expected == nil
-	}
-	if current.SHA256 != expected.SHA256 {
-		return false
-	}
-	return !compareMode || current.Mode == expected.Mode
-}
-
-func installPathReserved(root, name string) bool {
-	for _, reserved := range []string{
-		workspacewrite.InstallJournalName,
-		document.LockFilename,
-		document.ManifestFilename,
-	} {
-		if installPathMatchesReserved(root, name, reserved) {
-			return true
-		}
-	}
-	return false
-}
-
-// installPathMatchesReserved rejects an exact reserved path always, and a case
-// variant only when the target filesystem treats the two names as one entry.
-func installPathMatchesReserved(root, name, reserved string) bool {
-	if name == reserved {
-		return true
-	}
-	if !strings.EqualFold(name, reserved) {
-		return false
-	}
-	return workspacewrite.InstallPathsAlias(root, reserved, name)
-}
-
-// rejectInstallPathAliases refuses names that the target filesystem resolves
-// to the same entry. Otherwise one journal entry could overwrite and another
-// could prune the same file. Distinct case-sensitive paths stay valid.
-func rejectInstallPathAliases(root string, names []string) error {
-	aliases := make(map[string][]string, len(names))
-	for _, name := range names {
-		if !filepath.IsLocal(filepath.FromSlash(name)) ||
-			filepath.ToSlash(filepath.Clean(filepath.FromSlash(name))) != name {
-			return fmt.Errorf("installation path %q is not canonical", name)
-		}
-		key := strings.ToLower(name)
-		for _, prior := range aliases[key] {
-			if workspacewrite.InstallPathsAlias(root, prior, name) {
-				return fmt.Errorf(
-					"installation paths %q and %q alias the same filesystem entry",
-					prior, name,
-				)
-			}
-		}
-		aliases[key] = append(aliases[key], name)
-	}
-	return nil
-}
-
-// preserveInstallPreImage stores one complete content-addressed before image
-// through a synced root-confined publish and verifies the copy. A failure here
-// happens before the journal publishes, so the caller removes the unused
-// backup directory.
-func preserveInstallPreImage(
-	files *os.Root,
-	backupPath string,
-	backupRelative string,
-	image workspacewrite.InstallImage,
-	source string,
-) error {
-	relative := filepath.Join(filepath.FromSlash(backupRelative), image.SHA256)
-	if info, err := files.Lstat(relative); err == nil {
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("installation pre-image %s is not a regular file", image.SHA256)
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		input, err := os.Open(source)
-		if err != nil {
-			return err
-		}
-		copyErr := fsutil.WriteRoot(
-			files,
-			relative,
-			input,
-			fsutil.WriteOptions{Mode: 0o600, Replace: true},
-		)
-		closeErr := input.Close()
-		if copyErr != nil || closeErr != nil {
-			return errors.Join(copyErr, closeErr)
-		}
-	} else {
-		return err
-	}
-	hashes, err := DigestFile(filepath.Join(backupPath, image.SHA256), nil)
-	if err != nil {
-		return err
-	}
-	if hashes["sha256"] != image.SHA256 {
-		return fmt.Errorf("installation pre-image %s is incomplete", image.SHA256)
-	}
-	return nil
-}
-
-// ResolutionFingerprint digests the fields an installation receipt pins a lock
-// with: the server, MCDR and package fields only. Tracked files, the manifest
-// fingerprint, and Java requirement stay out. Changing these fields does not
-// change installed files or invalidate the receipt.
-func ResolutionFingerprint(l *document.Lock) (string, error) {
-	server := l.Server
-	server.Java = document.LockedJava{}
-	data, err := yaml.Marshal(struct {
-		Server   document.LockedServer `yaml:"server"`
-		MCDR     *document.LockedMCDR  `yaml:"mcdr,omitempty"`
-		Packages []document.Package    `yaml:"packages"`
-	}{server, l.MCDR, l.Packages})
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
-}
-
-func installationCurrent(root string, l *document.Lock, logger *log.Logger) (bool, error) {
-	receiptPath := filepath.Join(root, ".lucy", "install.yaml")
-	raw, err := os.ReadFile(receiptPath)
-	if os.IsNotExist(err) {
-		logger.Debug("installation not current", "reason", "no install receipt")
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	var receipt installReceipt
-	if err := yaml.Unmarshal(raw, &receipt); err != nil {
-		return false, err
-	}
-	expected, err := ResolutionFingerprint(l)
-	if err != nil {
-		return false, err
-	}
-	if receipt.LockFingerprint != expected {
-		logger.Debug(
-			"installation not current",
-			"reason", "lock fingerprint changed",
-			"receipt", receipt.LockFingerprint,
-			"expected", expected,
-		)
-		return false, nil
-	}
-	tracked := trackedPaths(l)
-	for _, entry := range receipt.Entries {
-		if tracked[strings.ToLower(entry.Path)] {
-			continue
-		}
-		if err := workspacewrite.SafePath(root, entry.Path); err != nil {
-			return false, err
-		}
-		actual, err := DigestFile(filepath.Join(root, entry.Path), nil)
-		if os.IsNotExist(err) {
-			logger.Debug("installation not current", "reason", "owned output missing", "path", entry.Path)
-			return false, nil
-		}
-		if err != nil {
-			return false, err
-		}
-		if actual["sha256"] != entry.SHA256 {
-			logger.Debug("installation not current", "reason", "owned output modified", "path", entry.Path)
-			return false, nil
-		}
-	}
-	logger.Debug("installation current", "reason", "receipt matches lock and every owned output", "receipt", receiptPath)
-	return true, nil
-}
-
-func trackedPaths(l *document.Lock) map[string]bool {
-	paths := make(map[string]bool, len(l.Files))
-	for _, file := range l.Files {
-		paths[strings.ToLower(file.Path)] = true
-	}
-	return paths
 }

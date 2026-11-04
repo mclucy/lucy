@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,22 +11,18 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/receipt"
 	"github.com/mclucy/lucy/server"
-	"gopkg.in/yaml.v3"
 )
 
 func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lock, overwrite bool, logger *log.Logger) error {
-	raw, err := os.ReadFile(filepath.Join(root, ".lucy", "install.yaml"))
+	recorded, err := receipt.Read(root)
 	owned := map[string]bool{}
 	if err == nil {
-		var receipt installReceipt
-		if err := yaml.Unmarshal(raw, &receipt); err != nil {
-			return err
-		}
-		for _, entry := range receipt.Entries {
+		for _, entry := range recorded.Entries {
 			owned[entry.Path] = true
 		}
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	seenDirectories := map[string]bool{}
