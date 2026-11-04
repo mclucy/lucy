@@ -17,4 +17,4 @@ After the build, lucy examines enabled JAR outputs from the selected project. It
 
 Publishing creates the destination exclusively and removes a partial output if copying fails. The temporary checkout is separate from the workspace installation receipt and the global download cache.
 
-Source entry points: `internal/cli/compile/compile.go`, `compile_gradle.go`, `compile_java.go`, `compile_artifact.go`, `internal/buildrepo`, and `internal/toolchain`.
+Source entry points: `internal/cli/compile` (starting at `compile.go`), `internal/buildrepo`, and `internal/toolchain`.
