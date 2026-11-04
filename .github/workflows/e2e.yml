@@ -175,9 +175,7 @@ jobs:
               "java": "",
               "gradle": false,
               "cache-key": "",
-              "cache-pattern": "",
-              "build": true,
-              "task": true
+              "cache-pattern": ""
             },
             {
               "domain": "init",
@@ -189,9 +187,7 @@ jobs:
               "java": "",
               "gradle": false,
               "cache-key": "",
-              "cache-pattern": "",
-              "build": true,
-              "task": true
+              "cache-pattern": ""
             },
             {
               "domain": "install",
@@ -203,9 +199,7 @@ jobs:
               "java": "21",
               "gradle": false,
               "cache-key": "",
-              "cache-pattern": "",
-              "build": true,
-              "task": true
+              "cache-pattern": ""
             },
             {
               "domain": "install",
@@ -217,9 +211,7 @@ jobs:
               "java": "21",
               "gradle": false,
               "cache-key": "",
-              "cache-pattern": "",
-              "build": true,
-              "task": true
+              "cache-pattern": ""
             }
           ]
           EOF
@@ -243,9 +235,7 @@ jobs:
                       "java": "",
                       "gradle": true,
                       "cache-key": $fixture,
-                      "cache-pattern": ("e2e/testdata/repo/" + $fixture + ".yaml"),
-                      "build": true,
-                      "task": false
+                      "cache-pattern": ("e2e/testdata/repo/" + $fixture + ".yaml")
                     }
                   ]
                 else
@@ -259,9 +249,7 @@ jobs:
                       "java": "",
                       "gradle": true,
                       "cache-key": "smoke",
-                      "cache-pattern": "e2e/testdata/repo/*.yaml",
-                      "build": true,
-                      "task": false
+                      "cache-pattern": "e2e/testdata/repo/*.yaml"
                     }
                   ]
                 end
@@ -271,9 +259,50 @@ jobs:
             )' <<<"$suites")"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
+  build:
+    name: Build Lucy
+    needs: plan
+    if: ${{ needs.plan.outputs.matrix != '' && needs.plan.outputs.matrix != '[]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Set up Task
+        uses: go-task/setup-task@v2
+
+      - name: Build Lucy
+        env:
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CURSEFORGE_API_KEY:-}" ]; then
+            task cipher:generate
+          fi
+          task dev
+
+      - name: Stage binary
+        run: cp "dist/lucy-$(go env GOOS)-$(go env GOARCH)" dist/lucy-e2e-binary
+
+      - name: Upload Lucy
+        uses: actions/upload-artifact@v7
+        with:
+          name: lucy-e2e
+          path: dist/lucy-e2e-binary
+          if-no-files-found: error
+          retention-days: 1
+
   run:
     name: ${{ matrix.group }}
-    needs: [changes, plan]
+    needs: [plan, build]
     if: ${{ needs.plan.outputs.matrix != '' && needs.plan.outputs.matrix != '[]' }}
     strategy:
       fail-fast: false
@@ -289,7 +318,6 @@ jobs:
       gradle: ${{ matrix.gradle }}
       cache-key: ${{ matrix.cache-key }}
       cache-pattern: ${{ matrix.cache-pattern }}
-      build: ${{ matrix.build }}
-      task: ${{ matrix.task }}
+      binary-artifact: lucy-e2e
     secrets:
       CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
