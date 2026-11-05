@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/cas"
-	"github.com/mclucy/lucy/serverregistry"
+	"github.com/mclucy/lucy/internal/appdata"
 )
 
 // DirectoryName is the artifact store's directory inside Lucy's per-user data
@@ -18,7 +18,7 @@ const DirectoryName = "artifacts"
 
 // Directory reports the per-user artifact store directory without creating it.
 func Directory() (string, error) {
-	root, err := serverregistry.DataRoot()
+	root, err := appdata.Root()
 	if err != nil {
 		return "", err
 	}
