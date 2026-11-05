@@ -1,4 +1,6 @@
-package workspacewrite
+// Package workspaceguard enforces runtime inactivity before recovery or
+// mutation rewrites workspace state.
+package workspaceguard
 
 import (
 	"errors"
@@ -7,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -17,7 +20,7 @@ import (
 func CheckInactive(root string, during string) error {
 	directories := map[string]bool{root: true}
 	for _, name := range []string{document.ManifestFilename, document.LockFilename} {
-		if err := SafePath(root, name); err != nil {
+		if err := workspacewrite.SafePath(root, name); err != nil {
 			return err
 		}
 		data, err := os.ReadFile(filepath.Join(root, name))
@@ -37,7 +40,7 @@ func CheckInactive(root string, during string) error {
 		}
 		if state.Server.Directory != "" {
 			directory := filepath.FromSlash(state.Server.Directory)
-			if err := SafePath(root, directory); err != nil {
+			if err := workspacewrite.SafePath(root, directory); err != nil {
 				return err
 			}
 			directories[filepath.Join(root, directory)] = true

@@ -19,6 +19,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
@@ -120,7 +121,7 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 			)
 		}
 	}()
-	if err := workspacewrite.CheckInactive(root, "changing tracked files"); err != nil {
+	if err := workspaceguard.CheckInactive(root, "changing tracked files"); err != nil {
 		return result, err
 	}
 	var locked *documentpkg.Lock

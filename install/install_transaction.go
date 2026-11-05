@@ -11,6 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/receipt"
@@ -393,7 +394,7 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			return
 		}
 		committed, _ := workspacewrite.InstallJournalCommitted(root)
-		resultErr = errors.Join(resultErr, workspacewrite.RecoverInstall(root, logger))
+		resultErr = errors.Join(resultErr, workspaceguard.RecoverInstall(root, logger))
 		if committed && resultErr != nil {
 			resultErr = &CommittedError{Err: fmt.Errorf(
 				"installation committed; %w", resultErr,
