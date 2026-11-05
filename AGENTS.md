@@ -55,71 +55,14 @@ To run the built binary against a test server directory:
 
 ## Architecture
 
-### Package Layout
+Lucy coordinates Minecraft server package management across distinct lifecycle boundaries: translating declarative manifests (`lucy.yaml`) into locked resolutions (`lucy-lock.yaml`), resolving and acquiring package metadata and artifacts from upstreams, staging and converging runtime files into the server workspace, recording committed ownership in the workspace installation receipt (`.lucy/install.yaml`), and observing local workspace state.
 
-```text
-.
-├── cmd/                    Root wiring (cmd_root.go) + thin Cobra subcommands
-├── catalog/                Package identities, artifacts, compatibility metadata, and dependencies
-├── server/                 Server product identities, environments, and bootstrap inputs
-├── document/               lucy.yaml declarations and lucy-lock.yaml resolutions
-├── config/                 Machine-local global and workspace configuration
-├── java/                   Java distribution vocabulary
-├── javaruntime/            Java requirements, installed runtime observation, and selection
-├── operation/              Command orchestration: create, init, add, remove, upgrade, sync, deinit
-├── install/                Convergence engine: replay, staging, commit, rollback, tracked files
-├── receipt/                Installation receipt: committed outputs and their resolution
-├── bootstrap/              Staged server tree preparation; ownership and commit stay in install
-├── resolve/                Catalogue selection and descriptor dependency validation
-├── upstream/               Atomic capability interfaces
-│   ├── internal/
-│   │   └── providers/      Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
-│   └── routing/            Configured provider selection and server product resolution
-├── workspace/              Local runtime, wrapper, and package-file observation
-│   ├── identify/           Associate local package files with upstream identities
-│   └── discovery/          Unified installation discovery, ownership, and runtime selection
-├── artifact/               Archive metadata analysis: fabric.mod.json, mods.toml, plugin.yml
-├── artifactstore/          Durable per-user artifact store and conservative reclamation
-├── cache/                  Network request metadata and expiration over reusable CAS contents
-├── cas/                    Immutable content-addressed storage primitives
-├── filetrack/              Accepted workspace file revisions over per-workspace CAS storage
-├── serverregistry/         Per-user registry mapping server names to workspace paths
-├── input/                  Trust boundary for external input and package reference parsing
-├── version/                Version values, dialects, constraint expressions, and parsing
-├── log/                    Operational diagnostics
-├── terminal/               Terminal rendering via the Charm stack
-│   └── report/             User-facing messages
-├── e2e/                    Domain suites behind the e2e tag, and the sandbox materializer
-├── tools/                  Repository generators: docs archive, logos, manifest schema, wiki
-└── internal/
-    ├── agent/              Coding-agent harness detection from the process environment
-    ├── buildrepo/          Gradle build and project discovery for compile
-    ├── cli/                Shared CLI plumbing: flags,
-    │   │                   dependency graph/data source, shell completion,
-    │   │                   lock-context shorthand
-    │   └── <command>/      Large subcommands (compile, info, search), each exposing NewCommand()
-    ├── cipher/             ChaCha20Poly1305 decryption for embedded secrets
-    ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
-    ├── fn/                 Generic helpers: Ternary, slice utilities
-    ├── fsutil/             Filesystem helpers: atomic writes, locking, path utilities
-    ├── github/             Shared GitHub API infrastructure
-    ├── javainstall/        Java runtime acquisition through platform package managers
-    ├── maven/              Maven coordinate to repository path
-    ├── shell/              Text formatting for POSIX shell readback
-    ├── telemetry/          Opt-out usage telemetry client
-    ├── toolchain/          Local Git, Java, and Gradle discovery
-    └── workspacewrite/     Recoverable filesystem writes without runtime ownership policy
-```
+### Navigation and Package Guides
 
-`catalog` describes packages; `upstream` obtains package metadata and artifacts. Keep `catalog` limited to the standard library and `version`. Shared usage alone does not justify placing a type there.
+Package-specific architecture, responsibilities, invariants, and test instructions are defined locally within packages. Before making changes in any package or subsystem:
 
-`document` owns the persisted views of a server: the manifest declaration, the lock resolution, and their YAML codec. Installation state lives in the workspace receipt under `.lucy`, not in the lock. Workspace observations, runtime selection, and presentation stay with their owners.
-
-`bootstrap` prepares the locked server tree inside a staging directory; `install` owns verification, ownership, commit, and rollback. Files a staging run produces do not become owned workspace state until the commit records them.
-
-`workspace` reads local files without upstream access. `workspace/discovery` owns installation identity, member ownership, and runtime selection through one directory scan; `workspace` assembles that result with wrappers, declarations, and package files. `workspace/identify` connects unidentified package files to upstream identities through hash lookup. Commands and operations invoke identification explicitly; CLI output projections stay outside workspace observation.
-
-`.golangci.yml` enforces these boundaries through depguard; run `task lint` after changing imports.
+- Read applicable package-local `AGENTS.md` instructions (including parent and nested guides, when present).
+- Follow both local package invariants and root repository rules.
 
 ## The Fundamental Problem
 
@@ -212,7 +155,8 @@ Documentation has two audiences. Choose the layer before writing:
 ### Agent-facing documentation
 
 - Put agent pages in `docs/agents/*.mdx`. Keep them accessible by direct Mintlify URL and searchable through `lucy docs grep`, but do not add them to site navigation or other user-interface entry points.
-- Explain Lucy's actual internal architecture and domain models: ownership, state, boundaries, data flow, invariants, and failure or recovery semantics. Ground claims in the current source and name relevant packages or entry points when useful.
+- Explain Lucy's actual internal architecture and domain models: ownership, state, boundaries, data flow, invariants, and failure or recovery semantics. Ground claims in the current source.
+- Pages in `docs/agents/` may use technical and internal terminology, but mention internal package names or Go symbols only when necessary to explain a concept or help a reader, not exhaustively; preserve their conceptual role and searchability.
 - Do not duplicate human tutorials, command reference material, or agent-specific usage workflows. Agents learn how to use Lucy from the human documentation.
 - Keep both layers consistent with the implementation. When agent pages change, rebuild Lucy and verify that the new pages can be found with `lucy docs grep`.
 - Default builds embed the tracked `.mdx` pages, while release builds embed the archive packed by `task docs:pack`. Add a new page directory to the embed patterns in `docs/embed_pages.go`, or that directory's pages reach release binaries only.
