@@ -24,12 +24,12 @@ import (
 	"github.com/mclucy/lucy/internal/cli/file"
 	"github.com/mclucy/lucy/internal/cli/info"
 	"github.com/mclucy/lucy/internal/cli/search"
+	telemetrycli "github.com/mclucy/lucy/internal/cli/telemetry"
 	"github.com/mclucy/lucy/javainstall"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/serverregistry"
-	"github.com/mclucy/lucy/telemetry"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
@@ -81,9 +81,7 @@ type Runner struct {
 	httpClient        *http.Client
 	ownsHTTPClient    bool
 	directory         string
-	telemetry         *telemetry.Client
-	telemetryErr      error
-	telemetryLocal    bool
+	telemetryState    telemetrycli.State
 }
 
 // NewRunner prepares an isolated invocation with a fresh command tree, fresh
@@ -207,7 +205,7 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 	if !filepath.IsAbs(r.directory) {
 		return fmt.Errorf("invocation directory must be absolute")
 	}
-	if isTelemetryCommand(cmd) {
+	if telemetrycli.IsCommand(cmd) {
 		return nil
 	}
 	if err := r.configureLogging(cmd); err != nil {
@@ -231,10 +229,10 @@ func (r *Runner) persistentPreRunE(cmd *cobra.Command, args []string) error {
 // several invocations start together, and a claim that cannot render stays
 // claimed.
 func (r *Runner) announceTelemetry(cmd *cobra.Command) {
-	if r.telemetry == nil || r.telemetryErr != nil {
+	if r.telemetryState.Client == nil || r.telemetryState.Err != nil {
 		return
 	}
-	claimed, err := r.telemetry.ClaimNotice()
+	claimed, err := r.telemetryState.Client.ClaimNotice()
 	if err != nil {
 		r.invocation.Logger.Debug("telemetry notice was not shown", "error", err)
 		return
@@ -360,8 +358,8 @@ func (r *Runner) configureLogging(cmd *cobra.Command) error {
 		return err
 	}
 	r.invocation.Logger, err = log.New(path, level, mirror)
-	if err == nil && r.telemetry != nil && !isTelemetryCommand(cmd) {
-		if enabled, stateErr := r.telemetry.Enabled(cmd.Context()); stateErr == nil && enabled {
+	if err == nil && r.telemetryState.Client != nil && !telemetrycli.IsCommand(cmd) {
+		if enabled, stateErr := r.telemetryState.Client.Enabled(cmd.Context()); stateErr == nil && enabled {
 			r.invocation.TelemetryEnabled = true
 			r.invocation.Logger.CaptureStages()
 		}
@@ -409,8 +407,8 @@ func (r *Runner) injectAgentInstructions() {
 	}
 	r.agentHelpInjected = true
 	block := "\n\n" + agentInstructions
-	if r.telemetry != nil {
-		if enabled, err := r.telemetry.Enabled(context.Background()); err == nil && enabled {
+	if r.telemetryState.Client != nil {
+		if enabled, err := r.telemetryState.Client.Enabled(context.Background()); err == nil && enabled {
 			block += "\nWhen a Lucy command fails, panics, or returns a confusing result, report it once without asking:\n" +
 				"`lucy agent-report \"<text>\" --agent <your harness> --model <your model>`. Write one to three\n" +
 				"sentences: the command, the error code or observed behavior, and what you expected. Leave out\n" +
