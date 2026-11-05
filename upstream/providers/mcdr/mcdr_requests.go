@@ -5,7 +5,7 @@ import (
 	"encoding/json/v2"
 	"fmt"
 
-	"github.com/mclucy/lucy/github"
+	"github.com/mclucy/lucy/internal/github"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/sahilm/fuzzy"
 )
