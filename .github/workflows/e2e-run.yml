@@ -121,25 +121,13 @@ jobs:
       # Pin majors, not exact patches: Lucy's toolchain selection matches on Java major
       # version only, and Adoptium re-tags LTS releases (e.g. 21.0.8+9 became
       # 21.0.8+9.0.LTS), so exact patch pins silently stop resolving.
-      # Restrict Gradle toolchain resolution to the three pinned JDKs. The runner image's
-      # own JDKs stay in place: setup-java exposes its toolcache entries as symlinks into
-      # /usr/lib/jvm, so hiding that directory from Lucy breaks JAVA_HOME resolution.
       - name: Configure pinned JDK inventory
         if: ${{ inputs.gradle }}
         env:
           JDK17: ${{ steps.java17.outputs.path }}
           JDK21: ${{ steps.java21.outputs.path }}
           JDK25: ${{ steps.java25.outputs.path }}
-        run: |
-          set -euo pipefail
-          export GRADLE_USER_HOME="$RUNNER_TEMP/lucy-gradle"
-          mkdir -p "$GRADLE_USER_HOME"
-          printf '%s\n' \
-            'org.gradle.java.installations.auto-detect=false' \
-            'org.gradle.java.installations.auto-download=false' \
-            "org.gradle.java.installations.paths=$JDK17,$JDK21,$JDK25" \
-            > "$GRADLE_USER_HOME/gradle.properties"
-          echo "GRADLE_USER_HOME=$GRADLE_USER_HOME" >> "$GITHUB_ENV"
+        run: bash scripts/ci-gradle-inventory.sh
 
       - name: Cache sandbox downloads
         if: ${{ inputs.sandboxes != '' }}
