@@ -16,6 +16,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/server"
@@ -298,7 +299,7 @@ func (s *Service) stagePackages(
 			return nil, err
 		}
 		p.Artifact.Hashes = source.Hashes
-		if err := bootstrap.CopyLockedFile(source.Path, filepath.Join(stage, destination), 0o644); err != nil {
+		if err := fsutil.AtomicCopyFile(source.Path, filepath.Join(stage, destination), 0o644); err != nil {
 			return nil, err
 		}
 		staged++

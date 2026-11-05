@@ -21,42 +21,6 @@ import (
 	serverpkg "github.com/mclucy/lucy/server"
 )
 
-// CopyLockedFile writes src to dst with mode, replacing dst through a
-// temporary file. An interrupted copy never leaves a partial file, and other
-// links to the previous dst keep their bytes.
-func CopyLockedFile(src, dst string, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*")
-	if err != nil {
-		return err
-	}
-	temporary := out.Name()
-	defer func() {
-		if out != nil {
-			out.Close()
-			os.Remove(temporary)
-		}
-	}()
-	if err := out.Chmod(mode); err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-	if err := out.Close(); err != nil {
-		return err
-	}
-	out = nil
-	return os.Rename(temporary, dst)
-}
-
 // PrepareLocked builds the server tree of a locked server in stage. java is the
 // Java executable for the bootstrap steps that run Java; it may be empty when
 // no runtime is installed, and only those steps fail then.
@@ -95,15 +59,15 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		if !ok {
 			return fmt.Errorf("missing locked bootstrap input %s", input.Path)
 		}
-		if err := CopyLockedFile(src, dst, 0o644); err != nil {
+		if err := fsutil.AtomicCopyFile(src, dst, 0o644); err != nil {
 			return err
 		}
 	}
 	switch server.Bootstrapper {
 	case serverpkg.BootstrapMethodPlain:
-		return CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644)
+		return fsutil.AtomicCopyFile(corePath, filepath.Join(root, "server.jar"), 0o644)
 	case serverpkg.BootstrapMethodPaperclip:
-		if err := CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644); err != nil {
+		if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, "server.jar"), 0o644); err != nil {
 			return err
 		}
 		if err := requireJava(java, "Paperclip patching"); err != nil {
@@ -121,7 +85,7 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		if err != nil {
 			return err
 		}
-		if err := CopyLockedFile(corePath, filepath.Join(root, "libraries", p), 0o644); err != nil {
+		if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, "libraries", p), 0o644); err != nil {
 			return err
 		}
 		classpath := []string{filepath.ToSlash(filepath.Join("libraries", p))}
@@ -325,7 +289,7 @@ func executeServerProfile(ctx context.Context, root string, server document.Lock
 			if mappingOutput == "" {
 				return fmt.Errorf("mojang mappings processor has no output")
 			}
-			if err := CopyLockedFile(filepath.Join(root, "server-mappings.txt"), mappingOutput, 0o644); err != nil {
+			if err := fsutil.AtomicCopyFile(filepath.Join(root, "server-mappings.txt"), mappingOutput, 0o644); err != nil {
 				return err
 			}
 			continue
