@@ -5,11 +5,11 @@ description: "How locked server products become launchable files"
 
 A server product is not always a single runnable JAR. Resolution records a product, Minecraft and core versions, a core artifact, a bootstrapper, and supporting inputs in the locked server. An input has a destination path and either its own artifact metadata or a reference to content embedded in the installer. These are server bootstrap inputs, not mod or plugin requirements.
 
-`upstream/routing` resolves product-specific metadata and prepares that locked description. It can inspect an installer or Paperclip archive to find inputs before installation. For example, Paperclip's download context identifies the expected Mojang JAR and its SHA-256; lucy checks that the context targets the requested Minecraft version. Forge-family installer metadata describes libraries and processor inputs. Locking these inputs lets installation work from the selected artifacts instead of discovering a new product version while staging.
+Product resolution inspects upstream metadata to construct this locked definition, analyzing installer archives or Paperclip bundles prior to installation. For example, Paperclip download context identifies the expected vanilla Mojang JAR and its SHA-256 hash, allowing verification that the bundle targets the requested Minecraft version. Forge-family installer metadata describes required libraries and execution processors. Locking these inputs allows staging to operate deterministically from selected artifacts instead of discovering a new product version while staging.
 
 ## Preparation adapters
 
-`bootstrap.PrepareLocked` operates in an installation staging tree. It copies or extracts the locked inputs under the server directory, then dispatches on the typed bootstrap method:
+Server preparation operates in an installation staging tree. It copies or extracts locked inputs under the server directory, then dispatches on the declared bootstrap method:
 
 | Bootstrapper | Preparation |
 | --- | --- |
@@ -20,8 +20,6 @@ A server product is not always a single runnable JAR. Resolution records a produ
 
 Paperclip and installer processors execute Java during staging. A missing Java runtime is therefore a bootstrap error even though a Java version mismatch alone is a warning. Processor outputs with expected hashes are checked. The Fabric adapter generates launcher files; it does not simply rename the downloaded loader JAR.
 
-The method identity is typed in `server`, and `bootstrap` also owns the launch command, MCDR log handler, output paths, and superseded core that other packages need. Installation and observation consume those descriptions instead of matching method values themselves.
+Bootstrap adapters also define the launch command, MCDReforged log handlers, output paths, and superseded core metadata that other subsystems require. Installation and workspace observation consume these unified descriptions instead of matching raw bootstrap method values themselves.
 
 Bootstrap output becomes subject to installation's ownership and commit checks. The bootstrap stage does not by itself publish a workspace receipt or authorize removal of unrelated files. Runtime discovery later recognizes installations from their actual members; it is not just a reverse reading of the lock.
-
-Source entry points: `upstream/routing/routing_core.go`, `upstream/routing/routing_paper.go`, `upstream/routing/routing_installer.go`, `bootstrap/bootstrap_locked.go`, and `server`.
