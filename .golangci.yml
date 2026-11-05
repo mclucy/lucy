@@ -76,16 +76,16 @@ linters:
         backend-presentation:
           list-mode: lax
           files:
-            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,receipt,resolve,serverregistry,upstream,workspace}/*.go"
-            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,receipt,resolve,serverregistry,upstream,workspace}/**/*.go"
-            - "**/internal/{bisect,buildrepo,depgraph,toolchain,workspaceguard,workspacewrite}/*.go"
-            - "**/internal/{bisect,buildrepo,depgraph,toolchain,workspaceguard,workspacewrite}/**/*.go"
+            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,install,javaruntime,operation,receipt,resolve,serverregistry,upstream,workspace}/*.go"
+            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,install,javaruntime,operation,receipt,resolve,serverregistry,upstream,workspace}/**/*.go"
+            - "**/internal/{bisect,buildrepo,depgraph,github,javainstall,toolchain,workspaceguard,workspacewrite}/*.go"
+            - "**/internal/{bisect,buildrepo,depgraph,github,javainstall,toolchain,workspaceguard,workspacewrite}/**/*.go"
           deny:
             - pkg: github.com/mclucy/lucy/cmd$
               desc: Return facts to the command boundary instead of importing command wiring.
             - pkg: github.com/mclucy/lucy/internal/cli
               desc: CLI invocation and output ownership stay at the command boundary.
-            - pkg: github.com/mclucy/lucy/report$
+            - pkg: github.com/mclucy/lucy/terminal/report$
               desc: Return warnings or use the supplied diagnostic logger.
             - pkg: github.com/mclucy/lucy/terminal
               desc: Render returned facts at the command boundary.
@@ -118,7 +118,7 @@ linters:
               desc: Inactivity policy consumes journal primitives; the dependency must not cycle back.
             - pkg: github.com/mclucy/lucy/upstream
               desc: Journal replay performs local filesystem recovery without network capabilities.
-            - pkg: github.com/mclucy/lucy/telemetry
+            - pkg: github.com/mclucy/lucy/internal/telemetry
               desc: Journal replay performs local filesystem recovery without telemetry.
             - pkg: github.com/mclucy/lucy/resolve
               desc: Journal replay performs local filesystem recovery without resolution.
@@ -160,7 +160,7 @@ linters:
               desc: Keep observation local; perform upstream lookup explicitly through workspace/identify.
             - pkg: github.com/mclucy/lucy/cache$
               desc: Local observation does not own network acquisition.
-            - pkg: github.com/mclucy/lucy/github$
+            - pkg: github.com/mclucy/lucy/internal/github$
               desc: Local observation does not contact upstreams.
             - pkg: github.com/mclucy/lucy/install$
               desc: Observation must not orchestrate installation.
@@ -180,10 +180,10 @@ linters:
           list-mode: lax
           files:
             - $all
-            - "!**/upstream/providers/**/*.go"
+            - "!**/upstream/internal/providers/**/*.go"
             - "!**/upstream/routing/*.go"
           deny:
-            - pkg: github.com/mclucy/lucy/upstream/providers/
+            - pkg: github.com/mclucy/lucy/upstream/internal/providers/
               desc: Consume configured capabilities; concrete providers are assembled by upstream/routing.
 
         cli-command-wiring:
@@ -223,7 +223,7 @@ linters:
           allow:
             - $gostd
             - github.com/mclucy/lucy/internal/cli$
-            - github.com/mclucy/lucy/telemetry$
+            - github.com/mclucy/lucy/internal/telemetry$
             - github.com/spf13/cobra$
 
         cli-telemetry-wiring:
@@ -239,8 +239,10 @@ linters:
         network-adapters:
           list-mode: lax
           files:
-            - "**/{cache,github,upstream}/*.go"
-            - "**/{cache,github,upstream}/**/*.go"
+            - "**/{cache,upstream}/*.go"
+            - "**/{cache,upstream}/**/*.go"
+            - "**/internal/github/*.go"
+            - "**/internal/github/**/*.go"
           deny:
             - pkg: github.com/mclucy/lucy/config$
               desc: Receive effective settings from invocation composition.
