@@ -16,7 +16,7 @@ import (
 	"github.com/mclucy/lucy/server"
 
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/providers/mojang"
+	"github.com/mclucy/lucy/upstream/internal/providers/mojang"
 	versionpkg "github.com/mclucy/lucy/version"
 )
 

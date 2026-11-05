@@ -7,9 +7,9 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/providers/forge"
-	"github.com/mclucy/lucy/upstream/providers/mojang"
-	"github.com/mclucy/lucy/upstream/providers/neoforge"
+	"github.com/mclucy/lucy/upstream/internal/providers/forge"
+	"github.com/mclucy/lucy/upstream/internal/providers/mojang"
+	"github.com/mclucy/lucy/upstream/internal/providers/neoforge"
 )
 
 const (
