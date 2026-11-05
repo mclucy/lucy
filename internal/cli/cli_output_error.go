@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/resolve"
+	"github.com/mclucy/lucy/terminal/report"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

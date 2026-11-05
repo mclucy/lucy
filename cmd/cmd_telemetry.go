@@ -13,7 +13,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	telemetrycli "github.com/mclucy/lucy/internal/cli/telemetry"
 	"github.com/mclucy/lucy/internal/telemetry"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 	"github.com/spf13/cobra"
 )
 

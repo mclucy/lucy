@@ -23,7 +23,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/toolchain"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 )
 
 //go:embed compile_model.gradle

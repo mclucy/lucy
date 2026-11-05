@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 	"github.com/spf13/cobra"
 )
 

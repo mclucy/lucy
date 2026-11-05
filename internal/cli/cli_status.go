@@ -8,8 +8,8 @@ import (
 
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
+	"github.com/mclucy/lucy/terminal/report"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/internal/cli"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 )
 
 // infoOperationFailure converts an interruption into the shared cancelled

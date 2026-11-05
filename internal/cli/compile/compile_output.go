@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 )
 
 // excerptLines bounds the tail of a failed tool quoted on the console. Git and

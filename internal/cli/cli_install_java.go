@@ -7,7 +7,7 @@ import (
 
 	"github.com/mclucy/lucy/internal/javainstall"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 )
 
 // provisionJava installs the first usable plan, most native first. A configured

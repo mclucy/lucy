@@ -12,7 +12,7 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/spf13/cobra"
