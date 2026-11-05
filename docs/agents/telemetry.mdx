@@ -3,7 +3,7 @@ title: "Telemetry client"
 description: "Local collection state, invocation contexts, bounded outbox delivery, and diagnostic report rules"
 ---
 
-`telemetry` is a self-contained client. It owns identity, policy, counters, an on-disk outbox, and HTTP transport to the ingestion service. It does not know about commands, workspaces, or terminal output. `cmd/cmd_telemetry.go` owns the invocation lifecycle: it builds the client, collects contexts while the command runs, records the terminal event, assembles diagnostic reports, and presents everything through the ordinary command output path. Collection failure never changes a command's exit status.
+`internal/telemetry` is a self-contained client. It owns identity, policy, counters, an on-disk outbox, and HTTP transport to the ingestion service. It does not know about commands, workspaces, or terminal output. `cmd/cmd_telemetry.go` owns the invocation lifecycle: it builds the client and records the terminal event. The CLI collects invocation contexts, and `internal/cli/telemetry` handles diagnostic reports and command output. Collection failure never changes a command's exit status.
 
 ## Local state
 

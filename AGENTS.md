@@ -66,14 +66,14 @@ To run the built binary against a test server directory:
 ├── config/                 Machine-local global and workspace configuration
 ├── java/                   Java distribution vocabulary
 ├── javaruntime/            Java requirements, installed runtime observation, and selection
-├── javainstall/            Java runtime acquisition through platform package managers
 ├── operation/              Command orchestration: create, init, add, remove, upgrade, sync, deinit
 ├── install/                Convergence engine: replay, staging, commit, rollback, tracked files
 ├── receipt/                Installation receipt: committed outputs and their resolution
 ├── bootstrap/              Staged server tree preparation; ownership and commit stay in install
 ├── resolve/                Catalogue selection and descriptor dependency validation
 ├── upstream/               Atomic capability interfaces
-│   ├── providers/          Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
+│   ├── internal/
+│   │   └── providers/      Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
 │   └── routing/            Configured provider selection and server product resolution
 ├── workspace/              Local runtime, wrapper, and package-file observation
 │   ├── identify/           Associate local package files with upstream identities
@@ -87,10 +87,8 @@ To run the built binary against a test server directory:
 ├── input/                  Trust boundary for external input and package reference parsing
 ├── version/                Version values, dialects, constraint expressions, and parsing
 ├── log/                    Operational diagnostics
-├── report/                 User-facing messages
 ├── terminal/               Terminal rendering via the Charm stack
-├── github/                 Shared GitHub API infrastructure
-├── telemetry/              Opt-out usage telemetry client
+│   └── report/             User-facing messages
 ├── e2e/                    Domain suites behind the e2e tag, and the sandbox materializer
 ├── tools/                  Repository generators: docs archive, logos, manifest schema, wiki
 └── internal/
@@ -104,8 +102,11 @@ To run the built binary against a test server directory:
     ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
     ├── fn/                 Generic helpers: Ternary, slice utilities
     ├── fsutil/             Filesystem helpers: atomic writes, locking, path utilities
+    ├── github/             Shared GitHub API infrastructure
+    ├── javainstall/        Java runtime acquisition through platform package managers
     ├── maven/              Maven coordinate to repository path
     ├── shell/              Text formatting for POSIX shell readback
+    ├── telemetry/          Opt-out usage telemetry client
     ├── toolchain/          Local Git, Java, and Gradle discovery
     └── workspacewrite/     Recoverable filesystem writes without runtime ownership policy
 ```
