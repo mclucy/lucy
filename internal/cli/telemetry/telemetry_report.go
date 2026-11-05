@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/mclucy/lucy/internal/cli"
-	telem "github.com/mclucy/lucy/telemetry"
+	telem "github.com/mclucy/lucy/internal/telemetry"
 	"github.com/spf13/cobra"
 )
 
