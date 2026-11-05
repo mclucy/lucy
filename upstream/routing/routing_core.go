@@ -98,10 +98,10 @@ func (r *Router) trustMavenChecksum(
 // selected core because the lock records the bytes it pins.
 func (r *Router) ResolveServerProduct(
 	ctx context.Context,
-	req ServerProductRequest,
+	req upstream.ServerProductRequest,
 	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
-) (ServerProductResolution, error) {
-	out := ServerProductResolution{
+) (upstream.ServerProductResolution, error) {
+	out := upstream.ServerProductResolution{
 		Minecraft:      req.Minecraft,
 		Product:        req.Product,
 		ProductVersion: req.ProductVersion,

@@ -19,7 +19,6 @@ import (
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -143,8 +142,8 @@ func (s *replaySource) IdentifyPurpurBuild(
 func (s *replaySource) ResolveArtifactByHash(
 	_ context.Context,
 	_ upstream.ArtifactFingerprint,
-) routing.ArtifactLookup {
-	return routing.ArtifactLookup{}
+) upstream.ArtifactLookup {
+	return upstream.ArtifactLookup{}
 }
 
 func (s *replaySource) Metadata(_ context.Context, endpoint string, _ any) error {
@@ -153,16 +152,16 @@ func (s *replaySource) Metadata(_ context.Context, endpoint string, _ any) error
 
 func (s *replaySource) ResolveServerProduct(
 	_ context.Context,
-	request routing.ServerProductRequest,
+	request upstream.ServerProductRequest,
 	_ func(*catalog.Artifact) (artifact.MaterializedFile, error),
-) (routing.ServerProductResolution, error) {
+) (upstream.ServerProductResolution, error) {
 	coreVersion := request.ProductVersion
 	if coreVersion == "" || coreVersion.CanInfer() || coreVersion.IsInvalid() {
 		coreVersion = "1.21.4"
 	}
 	artifact := s.core
 	artifact.Version = coreVersion
-	return routing.ServerProductResolution{
+	return upstream.ServerProductResolution{
 		Minecraft:      request.Minecraft,
 		Product:        request.Product,
 		ProductVersion: coreVersion,

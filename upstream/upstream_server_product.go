@@ -1,4 +1,4 @@
-package routing
+package upstream
 
 import (
 	"github.com/mclucy/lucy/catalog"

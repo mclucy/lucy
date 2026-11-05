@@ -129,7 +129,7 @@ func resolveAgainstLock(
 
 type infoFetchResult struct {
 	info           upstream.Info
-	providerErrors []routing.ProviderError
+	providerErrors []upstream.ProviderError
 	err            error
 }
 
@@ -212,7 +212,7 @@ func actionProjectInfo(
 // document still carries every partial failure; none of them are written to
 // stderr directly.
 func infoProviderWarnings(
-	providerErrors []routing.ProviderError,
+	providerErrors []upstream.ProviderError,
 ) []string {
 	warnings := make([]string, 0, len(providerErrors)+1)
 	notFound := make([]string, 0, len(providerErrors))
@@ -240,7 +240,7 @@ func infoProviderWarnings(
 
 func infoProviderFailure(
 	request catalog.VersionedRef,
-	providerErrors []routing.ProviderError,
+	providerErrors []upstream.ProviderError,
 	err error,
 ) error {
 	name := infoCleanLine(request.Name.String())

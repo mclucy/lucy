@@ -9,7 +9,6 @@ import (
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -37,7 +36,7 @@ type Source interface {
 	ResolveArtifactByHash(
 		ctx context.Context,
 		artifact upstream.ArtifactFingerprint,
-	) routing.ArtifactLookup
+	) upstream.ArtifactLookup
 }
 
 // Service executes workspace operations with explicit installation, routing,

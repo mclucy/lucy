@@ -19,7 +19,7 @@ import (
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/server"
-	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -320,7 +320,7 @@ func isFloating(v version.Version) bool {
 // mutation treats a negative answer as a stale lock, because rebinding
 // requirements must never re-target the server.
 func (s *Service) coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock, offline bool) (bool, error) {
-	request := routing.ServerProductRequest{
+	request := upstream.ServerProductRequest{
 		Minecraft:      d.Server.Minecraft,
 		Product:        d.Server.Core.Product,
 		ProductVersion: d.Server.Core.ProductVersion,

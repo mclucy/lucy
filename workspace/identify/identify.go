@@ -11,7 +11,6 @@ import (
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 )
@@ -21,7 +20,7 @@ import (
 type HashLookup func(
 	ctx context.Context,
 	artifact upstream.ArtifactFingerprint,
-) routing.ArtifactLookup
+) upstream.ArtifactLookup
 
 // Packages adds upstream identities for observed.UnidentifiedPackageFiles.
 // It preserves descriptor-derived packages and dependencies, updates the same
@@ -45,7 +44,7 @@ func Packages(
 	}
 
 	// Each worker owns one slot. Merge in candidate order after all lookups finish.
-	lookups := make([]routing.ArtifactLookup, len(candidates))
+	lookups := make([]upstream.ArtifactLookup, len(candidates))
 	var wg sync.WaitGroup
 	for i, path := range candidates {
 		wg.Go(func() {

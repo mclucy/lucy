@@ -15,6 +15,7 @@ import (
 	"github.com/mclucy/lucy/internal/maven"
 	"github.com/mclucy/lucy/server"
 
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/providers/mojang"
 	versionpkg "github.com/mclucy/lucy/version"
 )
@@ -87,7 +88,7 @@ func zipBytes(z *zip.Reader, name string) ([]byte, error) {
 	return raw, err
 }
 
-func (r *Router) resolveInstaller(ctx context.Context, req ServerProductRequest, out *ServerProductResolution, installer string) error {
+func (r *Router) resolveInstaller(ctx context.Context, req upstream.ServerProductRequest, out *upstream.ServerProductResolution, installer string) error {
 	z, err := zip.OpenReader(installer)
 	if err != nil {
 		return err

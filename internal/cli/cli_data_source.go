@@ -12,7 +12,6 @@ import (
 	serverpkg "github.com/mclucy/lucy/server"
 
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -57,7 +56,7 @@ func LoadDependencyData(
 	ctx context.Context,
 	workDir string,
 	forceLive bool,
-	lookup func(context.Context, upstream.ArtifactFingerprint) routing.ArtifactLookup,
+	lookup func(context.Context, upstream.ArtifactFingerprint) upstream.ArtifactLookup,
 	output *Output,
 ) (
 	*DependencyGraph,

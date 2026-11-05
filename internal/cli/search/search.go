@@ -15,7 +15,6 @@ import (
 	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
 )
 
@@ -253,7 +252,7 @@ func searchRegistry(value string) (catalog.Registry, error) {
 
 func searchResultError(
 	results []upstream.SearchResponse,
-	providerErrors []routing.ProviderError,
+	providerErrors []upstream.ProviderError,
 ) error {
 	if len(results) > 0 || len(providerErrors) == 0 {
 		return nil

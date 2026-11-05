@@ -27,7 +27,6 @@ import (
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	"github.com/spf13/cobra"
 )
 
@@ -971,7 +970,7 @@ func bisectModLabel(mod bisectMod) string {
 // may take long enough that start must revalidate the file before publishing.
 func bisectCandidates(
 	ctx context.Context,
-	lookup func(context.Context, upstream.ArtifactFingerprint) routing.ArtifactLookup,
+	lookup func(context.Context, upstream.ArtifactFingerprint) upstream.ArtifactLookup,
 	workDir string,
 	doc *document.Manifest,
 	output *Output,
