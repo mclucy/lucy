@@ -78,9 +78,9 @@ func (r *Receipt) Snapshot() ([]byte, error) {
 	return yaml.Marshal(result)
 }
 
-// WriteAt replaces the receipt at path atomically. A caller that must publish
+// writeAt replaces the receipt at path atomically. A caller that must publish
 // the bytes inside a larger transaction takes a Snapshot instead.
-func (r *Receipt) WriteAt(path string) error {
+func (r *Receipt) writeAt(path string) error {
 	data, err := r.Snapshot()
 	if err != nil {
 		return err
@@ -93,5 +93,5 @@ func (r *Receipt) WriteAt(path string) error {
 
 // Write replaces the receipt of the workspace at root atomically.
 func (r *Receipt) Write(root string) error {
-	return r.WriteAt(filepath.Join(root, Filename))
+	return r.writeAt(filepath.Join(root, Filename))
 }
