@@ -20,7 +20,15 @@ limitations under the License.
 
 MODE="${1:-add}"
 
-cd "$(dirname "$0")" || exit 1
+case "$MODE" in
+    add | remove) ;;
+    *)
+        printf "Usage: %s [add|remove]\n" "$0" >&2
+        exit 2
+        ;;
+esac
+
+cd "$(dirname "$0")/.." || exit 1
 
 header_file="$(mktemp)"
 printf "%s" "$COPYRIGHT" > "$header_file"
@@ -55,16 +63,9 @@ apply_remove() {
 }
 
 find . -name "*.go" -type f -not -path "*/\.*" | while read -r file; do
-    case "$MODE" in
-        add)
-            apply_add "$file"
-            ;;
-        remove)
-            apply_remove "$file"
-            ;;
-        *)
-            echo "Usage: $0 [add|remove]" >&2
-            exit 2
-            ;;
-    esac
+    if [ "$MODE" = "add" ]; then
+        apply_add "$file"
+    else
+        apply_remove "$file"
+    fi
 done
