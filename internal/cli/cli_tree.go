@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/internal/cli/help"
+	"github.com/mclucy/lucy/internal/depgraph"
 	"github.com/spf13/cobra"
 )
 
@@ -48,16 +49,17 @@ func actionTree(
 	defer stop()
 	forceLive, _ := cmd.Flags().GetBool("live")
 	output := NewQueryOutput(cmd, inv)
-	graph, origin, _, err := LoadDependencyData(
+	loaded, err := depgraph.Load(
 		ctx,
 		inv.Directory,
 		forceLive,
 		deps.Router.ResolveArtifactByHash,
-		output,
 	)
+	reportObservationFindings(loaded.Findings.Observation, output)
 	if err != nil {
 		return err
 	}
+	graph, origin := loaded.Graph, loaded.Origin
 
 	if output.JSON() {
 		return treeJSON.Write(output, treeDocument(graph, origin, output.Warnings()))
@@ -67,7 +69,7 @@ func actionTree(
 	human := output.Human()
 	fmt.Fprintf(human, "Using data from: %s\n\n", origin.String())
 
-	roots := graph.GetRoots()
+	roots := graph.Roots
 	for i, root := range roots {
 		printTree(human, root, 0, i == len(roots)-1, "", make(map[string]bool), maxDepth)
 	}
@@ -79,7 +81,7 @@ func actionTree(
 // nodeLabel renders one graph node. Node identity is always an explicit
 // artifact coordinate or a native module ID; nothing is re-derived by
 // parsing the label.
-func nodeLabel(node *GraphNode) string {
+func nodeLabel(node *depgraph.Node) string {
 	label := fmt.Sprintf("%s@%s", node.ID, node.Version)
 	if node.Provider != catalog.ProviderUnspecified {
 		label += fmt.Sprintf(" (%s)", node.Provider)
@@ -92,7 +94,7 @@ func nodeLabel(node *GraphNode) string {
 
 func printTree(
 	w io.Writer,
-	node *GraphNode,
+	node *depgraph.Node,
 	depth int,
 	isLast bool,
 	prefix string,
@@ -105,7 +107,7 @@ func printTree(
 	}
 
 	label := nodeLabel(node)
-	key := node.key()
+	key := node.Key()
 
 	if visited[key] {
 		fmt.Fprintf(w, "%s%s%s [shown above]\n", prefix, branch, label)
@@ -154,12 +156,12 @@ type treeOutput struct {
 }
 
 func treeDocument(
-	graph *DependencyGraph,
-	origin GraphOrigin,
+	graph *depgraph.Graph,
+	origin depgraph.Origin,
 	warnings []string,
 ) treeOutput {
 	visited := make(map[string]bool)
-	roots := graph.GetRoots()
+	roots := graph.Roots
 	jsonRoots := make([]*treeNode, 0, len(roots))
 	for _, root := range roots {
 		jsonRoots = append(jsonRoots, buildJSONNode(root, visited))
@@ -172,7 +174,7 @@ func treeDocument(
 	}
 }
 
-func buildJSONNode(node *GraphNode, visited map[string]bool) *treeNode {
+func buildJSONNode(node *depgraph.Node, visited map[string]bool) *treeNode {
 	provider := ""
 	if node.Provider != catalog.ProviderUnspecified {
 		provider = node.Provider.String()
@@ -190,7 +192,7 @@ func buildJSONNode(node *GraphNode, visited map[string]bool) *treeNode {
 		Root:        node.Root,
 	}
 
-	key := node.key()
+	key := node.Key()
 	if visited[key] {
 		return t
 	}

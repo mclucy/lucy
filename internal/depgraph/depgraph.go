@@ -1,4 +1,6 @@
-package cli
+// Package depgraph models a resolved package graph and traverses it. It
+// returns graph facts only; commands own presentation.
+package depgraph
 
 import (
 	"cmp"
@@ -11,12 +13,12 @@ import (
 	"github.com/mclucy/lucy/workspace"
 )
 
-// GraphNode is one node of a resolved package graph. A node is either an
-// artifact coordinate ("provider:project", taken from the lock's explicit
-// provider fields) or a descriptor module (a module ID declared inside an
-// artifact). Identity is always an explicit field; nothing is recovered by
-// parsing a display string.
-type GraphNode struct {
+// Node is one node of a resolved package graph. A node is either an artifact
+// coordinate ("provider:project", taken from the lock's explicit provider
+// fields) or a descriptor module (a module ID declared inside an artifact).
+// Identity is always an explicit field; nothing is recovered by parsing a
+// display string.
+type Node struct {
 	// ID is the native module ID, or "provider:project" for an artifact.
 	ID string
 
@@ -50,18 +52,20 @@ type GraphNode struct {
 	// Root reports a node that an enabled manifest requirement selects.
 	Root bool
 
-	Children []*GraphNode
+	Children []*Node
 
-	Parents []*GraphNode
+	Parents []*Node
 }
 
-type DependencyGraph struct {
+// Graph is one resolved package universe. Nodes are unique by scoped
+// identity, and Roots are the artifacts an enabled requirement selects.
+type Graph struct {
 	// Nodes are keyed by the scoped node key, so identically named modules
 	// in different environments or ecosystems stay distinct.
-	Nodes map[string]*GraphNode
+	Nodes map[string]*Node
 
 	// Roots are the artifacts an enabled manifest requirement selects.
-	Roots []*GraphNode
+	Roots []*Node
 }
 
 // nodeKey scopes an identity so edges never cross environments or
@@ -74,20 +78,25 @@ func nodeKey(
 	return string(environment) + "|" + string(ecosystem) + "|" + id
 }
 
+// Key returns the scoped identity used to address the node within a graph.
+func (n *Node) Key() string {
+	return nodeKey(n.Environment, n.Ecosystem, n.ID)
+}
+
 // artifactCoordinate renders an artifact's explicit provider coordinates.
 func artifactCoordinate(provider catalog.Provider, projectID string) string {
 	return provider.String() + ":" + projectID
 }
 
-// BuildGraphFromLock builds the graph from a lock's resolved packages.
+// BuildFromLock builds the graph from a lock's resolved packages.
 //
 // Roots are the artifacts selected by an enabled manifest requirement.
 // Module dependency edges come from each artifact's native module
 // descriptors. The server core and bootstrap inputs are lock inputs, not
 // packages, so they never become graph nodes.
-func BuildGraphFromLock(lock *document.Lock) (*DependencyGraph, error) {
-	graph := &DependencyGraph{
-		Nodes: make(map[string]*GraphNode),
+func BuildFromLock(lock *document.Lock) (*Graph, error) {
+	graph := &Graph{
+		Nodes: make(map[string]*Node),
 	}
 
 	dependencies := make(map[string][]catalog.DescriptorDependency)
@@ -98,7 +107,7 @@ func BuildGraphFromLock(lock *document.Lock) (*DependencyGraph, error) {
 
 		node, ok := graph.Nodes[key]
 		if !ok {
-			node = &GraphNode{
+			node = &Node{
 				ID:          coordinate,
 				Version:     pkg.Version.String(),
 				Provider:    pkg.Provider,
@@ -113,7 +122,7 @@ func BuildGraphFromLock(lock *document.Lock) (*DependencyGraph, error) {
 		for _, module := range pkg.Modules {
 			moduleKey := nodeKey(pkg.Environment, pkg.Ecosystem, module.ID)
 			if _, exists := graph.Nodes[moduleKey]; !exists {
-				graph.Nodes[moduleKey] = &GraphNode{
+				graph.Nodes[moduleKey] = &Node{
 					ID:          module.ID,
 					Version:     module.Version.String(),
 					Artifact:    coordinate,
@@ -160,7 +169,7 @@ func BuildGraphFromLock(lock *document.Lock) (*DependencyGraph, error) {
 		if !node.Module {
 			continue
 		}
-		for _, dep := range dependencies[node.key()] {
+		for _, dep := range dependencies[node.Key()] {
 			child := resolveDependencyNode(
 				graph,
 				node.Environment,
@@ -177,28 +186,19 @@ func BuildGraphFromLock(lock *document.Lock) (*DependencyGraph, error) {
 		}
 	}
 
-	slices.SortFunc(graph.Roots, func(a, b *GraphNode) int {
-		if c := cmp.Compare(a.ID, b.ID); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.key(), b.key())
-	})
+	sortNodes(graph.Roots)
 	return graph, nil
-}
-
-func (n *GraphNode) key() string {
-	return nodeKey(n.Environment, n.Ecosystem, n.ID)
 }
 
 // resolveDependencyNode maps a declared dependency onto a graph node. A
 // native dependency names a module ID; when it instead carries upstream
 // project coordinates, it resolves to the artifact that ships them.
 func resolveDependencyNode(
-	graph *DependencyGraph,
+	graph *Graph,
 	environment server.Environment,
 	ecosystem catalog.Ecosystem,
 	dep catalog.DescriptorDependency,
-) *GraphNode {
+) *Node {
 	if dep.ModuleID != "" {
 		if node, ok := graph.Nodes[nodeKey(environment, ecosystem, dep.ModuleID)]; ok {
 			return node
@@ -218,17 +218,17 @@ func resolveDependencyNode(
 	return nil
 }
 
-// BuildGraphFromObservation builds the graph from an observed server's
-// packages. A package that no other package lists as a dependency is a root;
+// BuildFromObservation builds the graph from an observed server's packages.
+// A package that no other package lists as a dependency is a root;
 // parent-child relationships come from each package's Dependencies field.
-func BuildGraphFromObservation(info *workspace.Workspace) (*DependencyGraph, error) {
-	graph := &DependencyGraph{
-		Nodes: make(map[string]*GraphNode),
+func BuildFromObservation(info *workspace.Workspace) (*Graph, error) {
+	graph := &Graph{
+		Nodes: make(map[string]*Node),
 	}
 
 	for _, p := range info.Packages {
 		id := p.ID.StringBase()
-		node := &GraphNode{
+		node := &Node{
 			ID:          id,
 			Version:     p.ID.Version.String(),
 			Provider:    p.ID.Provider,
@@ -237,7 +237,7 @@ func BuildGraphFromObservation(info *workspace.Workspace) (*DependencyGraph, err
 			Environment: server.EnvironmentServer,
 			Ecosystem:   p.ID.Ecosystem,
 		}
-		graph.Nodes[node.key()] = node
+		graph.Nodes[node.Key()] = node
 	}
 
 	// A probe observation has no runtime membership marker, so every node
@@ -270,7 +270,7 @@ func BuildGraphFromObservation(info *workspace.Workspace) (*DependencyGraph, err
 			if !childOK || child == parent {
 				continue
 			}
-			isDependency[child.key()] = true
+			isDependency[child.Key()] = true
 
 			if slices.Contains(parent.Children, child) {
 				continue
@@ -281,134 +281,24 @@ func BuildGraphFromObservation(info *workspace.Workspace) (*DependencyGraph, err
 	}
 
 	for _, node := range graph.Nodes {
-		if !isDependency[node.key()] {
+		if !isDependency[node.Key()] {
 			node.Root = true
 			graph.Roots = append(graph.Roots, node)
 		}
 	}
 
-	slices.SortFunc(graph.Roots, func(a, b *GraphNode) int {
-		if c := cmp.Compare(a.ID, b.ID); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.key(), b.key())
-	})
-
+	sortNodes(graph.Roots)
 	return graph, nil
 }
 
-// GetLeaves returns artifact nodes that declare no dependencies. A lock
-// artifact is a leaf when none of the modules it ships has a dependency
-// child; a probe artifact is a leaf when it has no dependency children.
-// Being selected by a manifest requirement does not disqualify a package:
-// leaves describe the dependency graph, not removability.
-func (g *DependencyGraph) GetLeaves() []*GraphNode {
-	var leaves []*GraphNode
-	for _, node := range g.Nodes {
-		if node.Module || g.artifactHasDependencies(node) {
-			continue
-		}
-		leaves = append(leaves, node)
-	}
-	slices.SortFunc(leaves, func(a, b *GraphNode) int {
-		if c := cmp.Compare(a.ID, b.ID); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.key(), b.key())
-	})
-	return leaves
+// sortNodes orders nodes by identifier, then by scoped identity.
+func sortNodes(nodes []*Node) {
+	slices.SortFunc(nodes, compareNodes)
 }
 
-// artifactHasDependencies reports whether an artifact node has dependency
-// children, either through the modules it ships or, for a probe graph,
-// directly through the artifact's own dependency edges.
-func (g *DependencyGraph) artifactHasDependencies(node *GraphNode) bool {
-	shipped := false
-	for _, candidate := range g.Nodes {
-		if !candidate.Module || candidate.Artifact != node.ID ||
-			candidate.Environment != node.Environment ||
-			candidate.Ecosystem != node.Ecosystem {
-			continue
-		}
-		shipped = true
-		if len(candidate.Children) > 0 {
-			return true
-		}
+func compareNodes(a, b *Node) int {
+	if c := cmp.Compare(a.ID, b.ID); c != 0 {
+		return c
 	}
-	if shipped {
-		return false
-	}
-	return len(node.Children) > 0
-}
-
-func (g *DependencyGraph) GetRoots() []*GraphNode {
-	return g.Roots
-}
-
-// TopologicalSort returns nodes in dependency-first order (dependencies
-// before dependents). It returns nil if a cycle is detected.
-func (g *DependencyGraph) TopologicalSort() []*GraphNode {
-	outDeg := make(map[string]int, len(g.Nodes))
-	for id := range g.Nodes {
-		outDeg[id] = len(g.Nodes[id].Children)
-	}
-
-	queue := make([]string, 0, len(g.Nodes))
-	for id, deg := range outDeg {
-		if deg == 0 {
-			queue = append(queue, id)
-		}
-	}
-	slices.Sort(queue)
-
-	result := make([]*GraphNode, 0, len(g.Nodes))
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
-		result = append(result, g.Nodes[id])
-		for _, parent := range g.Nodes[id].Parents {
-			outDeg[parent.key()]--
-			if outDeg[parent.key()] == 0 {
-				queue = append(queue, parent.key())
-			}
-		}
-	}
-
-	if len(result) != len(g.Nodes) {
-		return nil
-	}
-	return result
-}
-
-// OrderedRoots returns the root artifacts in dependency-first order, falling
-// back to ID order when the graph has a cycle.
-func (g *DependencyGraph) OrderedRoots() []*GraphNode {
-	sorted := g.TopologicalSort()
-	if sorted == nil {
-		ordered := make([]*GraphNode, 0, len(g.Roots))
-		ordered = append(ordered, g.Roots...)
-		slices.SortFunc(ordered, func(a, b *GraphNode) int {
-			if c := cmp.Compare(a.ID, b.ID); c != 0 {
-				return c
-			}
-			return cmp.Compare(a.key(), b.key())
-		})
-		return ordered
-	}
-
-	position := make(map[string]int, len(sorted))
-	for i, node := range sorted {
-		position[node.key()] = i
-	}
-	ordered := make([]*GraphNode, 0, len(g.Roots))
-	for _, root := range g.Roots {
-		if _, ok := position[root.key()]; !ok {
-			return nil
-		}
-		ordered = append(ordered, root)
-	}
-	slices.SortStableFunc(ordered, func(a, b *GraphNode) int {
-		return cmp.Compare(position[a.key()], position[b.key()])
-	})
-	return ordered
+	return cmp.Compare(a.Key(), b.Key())
 }

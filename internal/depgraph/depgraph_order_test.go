@@ -1,4 +1,4 @@
-package cli
+package depgraph
 
 import (
 	"slices"
@@ -8,20 +8,20 @@ import (
 	"github.com/mclucy/lucy/server"
 )
 
-func TestBisectOrderedArtifacts(t *testing.T) {
+func TestOrderedArtifacts(t *testing.T) {
 	const (
 		environment = server.EnvironmentServer
 		ecosystem   = catalog.EcosystemFabric
 	)
-	artifact := func(id string) *GraphNode {
-		return &GraphNode{
+	artifact := func(id string) *Node {
+		return &Node{
 			ID:          id,
 			Environment: environment,
 			Ecosystem:   ecosystem,
 		}
 	}
-	module := func(owner *GraphNode, id string) *GraphNode {
-		return &GraphNode{
+	module := func(owner *Node, id string) *Node {
+		return &Node{
 			ID:          id,
 			Artifact:    owner.ID,
 			Environment: environment,
@@ -29,30 +29,30 @@ func TestBisectOrderedArtifacts(t *testing.T) {
 			Module:      true,
 		}
 	}
-	link := func(parent, child *GraphNode) {
+	link := func(parent, child *Node) {
 		parent.Children = append(parent.Children, child)
 		child.Parents = append(child.Parents, parent)
 	}
-	buildGraph := func(nodes ...*GraphNode) *DependencyGraph {
-		built := &DependencyGraph{Nodes: make(map[string]*GraphNode, len(nodes))}
+	buildGraph := func(nodes ...*Node) *Graph {
+		built := &Graph{Nodes: make(map[string]*Node, len(nodes))}
 		for _, node := range nodes {
-			built.Nodes[node.key()] = node
+			built.Nodes[node.Key()] = node
 		}
 		return built
 	}
-	ids := func(nodes []*GraphNode) []string {
+	ids := func(nodes []*Node) []string {
 		ids := make([]string, 0, len(nodes))
 		for _, node := range nodes {
 			ids = append(ids, node.ID)
 		}
 		return ids
 	}
-	requireOrder := func(t *testing.T, graph *DependencyGraph, want ...string) {
+	requireOrder := func(t *testing.T, graph *Graph, want ...string) {
 		t.Helper()
 		for range 50 {
-			got := ids(bisectOrderedArtifacts(graph))
+			got := ids(graph.OrderedArtifacts())
 			if !slices.Equal(got, want) {
-				t.Fatalf("bisectOrderedArtifacts() = %v, want %v", got, want)
+				t.Fatalf("OrderedArtifacts() = %v, want %v", got, want)
 			}
 		}
 	}
