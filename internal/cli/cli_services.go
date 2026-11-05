@@ -5,7 +5,7 @@ import (
 
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/filetrack"
-	"github.com/mclucy/lucy/javainstall"
+	"github.com/mclucy/lucy/internal/javainstall"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream/routing"

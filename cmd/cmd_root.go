@@ -25,7 +25,7 @@ import (
 	"github.com/mclucy/lucy/internal/cli/info"
 	"github.com/mclucy/lucy/internal/cli/search"
 	telemetrycli "github.com/mclucy/lucy/internal/cli/telemetry"
-	"github.com/mclucy/lucy/javainstall"
+	"github.com/mclucy/lucy/internal/javainstall"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"

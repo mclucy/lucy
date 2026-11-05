@@ -9,7 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/javainstall"
+	"github.com/mclucy/lucy/internal/javainstall"
 	"github.com/mclucy/lucy/operation"
 	"github.com/mclucy/lucy/report"
 	serverpkg "github.com/mclucy/lucy/server"

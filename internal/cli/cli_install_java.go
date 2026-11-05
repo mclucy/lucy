@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/mclucy/lucy/javainstall"
+	"github.com/mclucy/lucy/internal/javainstall"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/report"
 )
