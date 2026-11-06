@@ -25,7 +25,7 @@ The installation UUID is created lazily by the first record or by the first `tel
 
 An event carries invocation ID, identity, occurrence time, command path without the `lucy ` prefix, build version and commit, channel, OS, architecture, duration, outcome, error code, schema version, effective policy, and up to 16 contexts. Contexts come from subsystems that already observed the data: `workspace` and `java` are recorded by the CLI only when observation happened, and `agent` records whether an agent tool was detected. `present`, `absent`, and `failed` distinguish a missing installation from a failed observation. Context data is bounded at 8 KiB per context. Telemetry never triggers discovery, network probes, or workspace reads of its own.
 
-Outcome classification is a CLI-boundary decision: cancellation and deadline become `canceled`, usage errors become `invalid_invocation`, panics and handled exit errors become `failure` with a diagnostic report. Silent exits record an event without a report. `lucy telemetry*`, `lucy agent-report`, and shell-completion commands do not record invocation events.
+Outcome classification is a CLI-boundary decision: cancellation and deadline become `canceled`, usage errors become `invalid_invocation`, panics and handled exit errors become `failure` with a diagnostic report. Silent exits record an event without a report. Invocation policy suppresses automatic collection and upload for telemetry controls, agent reports, generated help and shell integration commands, and successful guidance-only invocations. This does not prevent an explicit `agent-report` from submitting a report and flushing the outbox. Failed guidance invocations remain observable.
 
 ## Reports
 
@@ -35,7 +35,7 @@ Reports have three kinds: `failure`, `panic`, and `agent_feedback` (from `lucy a
 
 ## Outbox and delivery
 
-Flush runs once at the end of an invocation that performed work. Guidance-only exits record their event but skip the flush: `--help` for any command, `lucy help`, a version request, and a command group invoked without a subcommand (`lucy java`, `lucy file`, and their peers). Reading help therefore never sends traffic; those records wait for the next invocation that performs work.
+Flush runs once at the end of an invocation that performed work. Successful guidance-only exits, including `--help`, version requests, and command groups invoked without a subcommand, neither queue an event nor flush existing records.
 
 Enqueue prunes expired records (older than 7 days) and then the oldest records until both bounds hold: 512 records and 4 MiB. A single record larger than the queue budget is refused. The just-enqueued record survives unless it is the one that exceeds the bound, in which case its payload file is removed.
 

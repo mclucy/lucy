@@ -116,6 +116,7 @@ func NewCommand(
 	}
 	actionJSON.Bind(contracts, reset)
 	status.AddCommand(reset)
+	cli.MarkTelemetryExempt(status)
 	return status
 }
 

@@ -69,16 +69,14 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 	}
 	defer client.Close()
 	command := r.invocationCommand()
-	if telemetrycli.IsCommand(command) || command.Name() == "__complete" || command.Name() == "__completeNoDesc" {
+	policy := invocationTelemetryPolicy(command, commandErr)
+	if !policy.collect {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	r.recordInvocation(ctx, command, started, commandErr)
-	if noOpExit(command, commandErr) {
-		return
-	}
-	if offline := command.Flags().Lookup("offline"); offline != nil && offline.Value.String() == "true" {
+	if !policy.flush {
 		return
 	}
 	flush, flushErr := client.Flush(ctx)
@@ -87,25 +85,42 @@ func (r *Runner) finishTelemetry(started time.Time, commandErr error) {
 	}
 }
 
-// noOpExit reports an invocation that displayed guidance instead of running a
-// command: help for the addressed command, the help command, a version
-// request, or a command group without a subcommand. The event stays queued, so
-// a machine that only reads help sends nothing.
-func noOpExit(command *cobra.Command, commandErr error) bool {
-	if commandErr != nil {
-		return false
+type telemetryInvocationPolicy struct {
+	collect bool
+	flush   bool
+}
+
+// invocationTelemetryPolicy governs automatic telemetry, not explicit
+// telemetry commands. Failed guidance invocations remain observable.
+func invocationTelemetryPolicy(command *cobra.Command, commandErr error) telemetryInvocationPolicy {
+	if cli.TelemetryExempt(command) {
+		return telemetryInvocationPolicy{}
 	}
-	if cli.IsHelpOnly(command) || command.Name() == "help" {
-		return true
-	}
-	for current := command; current != nil; current = current.Parent() {
-		for _, name := range []string{"help", "version"} {
-			if flag := current.Flags().Lookup(name); flag != nil && flag.Value.String() == "true" {
-				return true
+	for current := command; current.Parent() != nil; current = current.Parent() {
+		if current.Parent() == current.Root() {
+			switch current.Name() {
+			case "completion", "__complete", "__completeNoDesc", "help", "man":
+				return telemetryInvocationPolicy{}
 			}
 		}
 	}
-	return !command.Runnable()
+	if commandErr == nil {
+		if cli.IsHelpOnly(command) || !command.Runnable() {
+			return telemetryInvocationPolicy{}
+		}
+		for current := command; current != nil; current = current.Parent() {
+			for _, name := range []string{"help", "version"} {
+				if flag := current.Flags().Lookup(name); flag != nil && flag.Value.String() == "true" {
+					return telemetryInvocationPolicy{}
+				}
+			}
+		}
+	}
+	policy := telemetryInvocationPolicy{collect: true, flush: true}
+	if offline := command.Flags().Lookup("offline"); offline != nil && offline.Value.String() == "true" {
+		policy.flush = false
+	}
+	return policy
 }
 
 // recordInvocation records the terminal event and, for failures, a diagnostic

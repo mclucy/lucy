@@ -358,7 +358,7 @@ func (r *Runner) configureLogging(cmd *cobra.Command) error {
 		return err
 	}
 	r.invocation.Logger, err = log.New(path, level, mirror)
-	if err == nil && r.telemetryState.Client != nil && !telemetrycli.IsCommand(cmd) {
+	if err == nil && r.telemetryState.Client != nil && invocationTelemetryPolicy(cmd, nil).collect {
 		if enabled, stateErr := r.telemetryState.Client.Enabled(cmd.Context()); stateErr == nil && enabled {
 			r.invocation.TelemetryEnabled = true
 			r.invocation.Logger.CaptureStages()

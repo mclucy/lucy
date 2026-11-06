@@ -32,6 +32,7 @@ func NewAgentReportCommand(
 	agentReport.Flags().String("agent", "", "Agent name")
 	agentReport.Flags().String("model", "", "Model name")
 	actionJSON.Bind(contracts, agentReport)
+	cli.MarkTelemetryExempt(agentReport)
 	return agentReport
 }
 
