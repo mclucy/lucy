@@ -15,6 +15,8 @@ A version value can hold a floating selector such as `any`, `stable`, or `beta` 
 
 Candidate resolution scopes project requests by environment, ecosystem, provider, and project. Enabled requirement bindings apply hard filters to candidates, including selector, channel, and file pattern; without a file pattern lucy selects primary files. Release hints supplied by upstream dependency metadata affect candidate ordering, not eligibility by themselves. Previous pins can be preferred when they still satisfy the request.
 
+Downgrade orders package labels using the ordering used by upgrade checks, not publication dates or descriptor-module versions. It counts complete labels strictly below the locked version, including each prerelease suffix. Multiple artifacts with the same label count once; the newest publication represents that label, with repository identifiers breaking ties. The chosen artifact is the project's only candidate for that resolution, so neither another label nor another artifact can substitute. The existing file pattern or primary-file rule still filters eligibility, but the old selector's channel restrictions do not. Opaque versions cannot be downgraded, and an unparseable locked version cannot serve as a baseline.
+
 Candidate resolution and descriptor validation are related but distinct. Registry dependency metadata can identify other projects to select; descriptors establish module IDs, dependency constraints, and bundled modules in the actual artifact. A release that appears suitable at the registry layer can therefore fail when its modules are checked against the selected runtime and other artifacts.
 
 ## Module graph

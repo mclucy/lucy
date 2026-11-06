@@ -107,10 +107,16 @@ type PackagesRequest struct {
 	// select. It is required for every non-empty resolution.
 	Candidates CandidateSource
 	// Materialize must leave its input unchanged and return verified local bytes.
-	Materialize        func(*catalog.Artifact) (artifact.MaterializedFile, error)
-	WithOptional       bool
-	AcceptBroken       bool
-	ExpandDependencies bool
+	Materialize  func(*catalog.Artifact) (artifact.MaterializedFile, error)
+	WithOptional bool
+	AcceptBroken bool
+	// AcceptPackageConflicts accepts a graph whose package metadata conflicts
+	// or whose package modules cannot satisfy each other, reporting them as
+	// warnings after the final selection. Requirements the server runtime
+	// itself answers stay fatal. It is separate from AcceptBroken, which
+	// relaxes every module check.
+	AcceptPackageConflicts bool
+	ExpandDependencies     bool
 	// Cache reuses artifact analysis across candidate combinations. A nil
 	// cache analyzes every candidate from scratch.
 	Cache *AnalysisCache
