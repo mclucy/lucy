@@ -93,7 +93,7 @@
           modrinth:c2me-fabric: "any"
           modrinth:vmp-fabric: "any"
           modrinth:packet-fixer: "any"
-          curseforge:fast-ip-ping: "any"
+          modrinth:audioplayer: "any"
           modrinth:spark: "1.10.121-fabric"
           modrinth:view-distance-fix: "any"
           modrinth:chunky: "1.4.27"
@@ -120,7 +120,7 @@
           modrinth:lithium: "any"
           modrinth:ferrite-core: "any"
           modrinth:chunky: "any"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
           modrinth:luckperms: "any"
   args:
     - "--policy"
@@ -171,9 +171,9 @@
           modrinth:krypton: "any"
           modrinth:vmp-fabric: "any"
           modrinth:chunky: "any"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
+          modrinth:carpet: "1.4.161"
           modrinth:view-distance-fix: "any"
-          curseforge:fast-ip-ping: "any"
           modrinth:packet-fixer: "any"
   args:
     - "--policy"
@@ -303,7 +303,7 @@
           modrinth:modernfix: "any"
           modrinth:c2me-fabric: "any"
           modrinth:vmp-fabric: "any"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
           modrinth:audioplayer: "any"
           modrinth:squaremap: "any"
           modrinth:flan: "any"
@@ -350,7 +350,7 @@
         paper:
           modrinth:towny: "any"
           modrinth:chunky: "any"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
           modrinth:squaremap: "1.3.0"
           modrinth:luckperms: "any"
           modrinth:worldedit: "any"
@@ -407,7 +407,7 @@
           modrinth:chunky:
             selector: "any"
             enabled: false
-          modrinth:chunky-border:
+          modrinth:chunkyborder:
             selector: "any"
             enabled: false
           modrinth:servercore:
@@ -446,6 +446,7 @@
 - id: upgrade-all-fabric-mcdr-prime-backup-wrapper
   setup:
     - install
+    - "--mcdr-venv"
   manifest: |
     manifest_version: 1
     server:
@@ -460,7 +461,7 @@
           modrinth:flan: "1.21.4-1.11.7.b-fabric"
           modrinth:ferrite-core: "any"
           modrinth:packet-fixer: "any"
-          curseforge:fast-ip-ping: "any"
+          modrinth:view-distance-fix: "any"
           modrinth:spark: "any"
           modrinth:squaremap: "any"
           modrinth:luckperms: "any"
@@ -515,7 +516,7 @@
           modrinth:servercore: "any"
           modrinth:vmp-fabric: "any"
           modrinth:view-distance-fix: "any"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
           modrinth:ledger: "any"
           modrinth:carpet: "1.4.161"
           modrinth:carpet-extra: "any"
@@ -552,7 +553,7 @@
           curseforge:modernfix: "any"
           curseforge:krypton: "any"
           curseforge:simple-voice-chat: "any"
-          curseforge:fast-ip-ping: "any"
+          modrinth:view-distance-fix: "any"
           modrinth:lithium: "any"
           modrinth:ferrite-core: "any"
           modrinth:spark: "any"
@@ -688,7 +689,7 @@
           modrinth:ledger: "any"
           modrinth:squaremap: "any"
           modrinth:view-distance-fix: "any"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
           modrinth:ferrite-core: "any"
   args:
     - "--dry-run"
@@ -760,7 +761,7 @@
           curseforge:yungs-better-mineshafts-fabric: "any"
           modrinth:waystones: "any"
           modrinth:chunky: "1.4.23"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
           modrinth:vmp-fabric: "any"
           modrinth:ferrite-core: "any"
           modrinth:lithium: "any"
@@ -805,8 +806,8 @@
       packages:
         fabric:
           modrinth:fabric-api: "0.92.12+1.20.1"
-          modrinth:lithium: "mc1.20.1-0.11.4"
-          modrinth:ferrite-core: "6.0.1-fabric"
+          modrinth:lithium: "mc1.20.1-0.11.4-fabric"
+          modrinth:ferrite-core: "6.0.1"
           curseforge:connectivity: "any"
           curseforge:packet-fixer: "any"
           modrinth:servercore: "any"
@@ -859,7 +860,7 @@
           modrinth:ledger: "any"
           curseforge:connectivity: "any"
           modrinth:spark: "1.10.53-fabric"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
           modrinth:luckperms: "any"
   args:
     - "--dry-run"
@@ -882,9 +883,9 @@
           modrinth:cloth-config: "any"
           modrinth:ferrite-core: "any"
           modrinth:architectury-api: "any"
-          modrinth:ftb-library: "any"
-          modrinth:ftb-chunks: "any"
-          modrinth:ftb-teams: "any"
+          curseforge:ftb-library-forge: "any"
+          curseforge:ftb-chunks-forge: "any"
+          curseforge:ftb-teams-forge: "any"
           modrinth:waystones: "any"
           modrinth:chunky: "1.3.146"
   args:
@@ -911,7 +912,7 @@
           modrinth:clumps: "any"
           modrinth:balm: "any"
           modrinth:crafting-tweaks: "any"
-          modrinth:ftb-library: "any"
+          curseforge:ftb-library-forge: "any"
           modrinth:spark: "1.10.53-forge"
   args:
     - "--dry-run"
@@ -983,10 +984,10 @@
           modrinth:modernfix: "any"
           curseforge:connectivity: "any"
           curseforge:packet-fixer: "any"
-          curseforge:fast-ip-ping: "any"
+          modrinth:view-distance-fix: "any"
           modrinth:chunky: "1.3.146"
           modrinth:spark: "1.10.53-forge"
-          modrinth:ftb-library: "any"
+          curseforge:ftb-library-forge: "any"
   args:
     - "--dry-run"
 
@@ -1179,7 +1180,7 @@
           modrinth:ferrite-core: "any"
           modrinth:chunky: "1.4.23"
           modrinth:architectury-api: "any"
-          modrinth:ftb-library: "any"
+          curseforge:ftb-library-forge: "any"
           modrinth:simple-voice-chat: "any"
           modrinth:waystones: "any"
           modrinth:caelus: "any"
@@ -1252,7 +1253,7 @@
           curseforge:chunky-pregenerator-forge: "any"
           curseforge:ferritecore: "any"
           curseforge:modernfix: "any"
-          curseforge:spark: "1.10.124"
+          curseforge:spark: "any"
           curseforge:connectivity: "any"
           modrinth:architectury-api: "any"
           modrinth:cloth-config: "any"
@@ -1276,7 +1277,7 @@
           modrinth:viaversion: "any"
           modrinth:viabackwards: "any"
           modrinth:chunky: "1.4.40"
-          modrinth:chunky-border: "any"
+          modrinth:chunkyborder: "any"
           modrinth:luckperms: "any"
           modrinth:squaremap: "any"
           modrinth:worldedit: "any"
