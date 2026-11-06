@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -639,11 +640,13 @@ func runProcess(t *testing.T, timeout time.Duration, binary string, argv []strin
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	started := time.Now()
-	tree, err := startProcessTree(command)
+	var interrupted atomic.Bool
+	tree, err := startProcessTree(command, &interrupted)
 	if err != nil {
 		t.Fatalf("start %s %v: %v", binary, argv, err)
 	}
 	runErr := command.Wait()
+	timedOut := interrupted.Load() && errors.Is(ctx.Err(), context.DeadlineExceeded)
 	outcome := runOutcome{DurationMS: time.Since(started).Milliseconds()}
 	killed, stopErr := tree.stop()
 	if stopErr != nil {
@@ -657,13 +660,12 @@ func runProcess(t *testing.T, timeout time.Duration, binary string, argv []strin
 		t.Fatalf("wait %s %v: %v", binary, argv, runErr)
 	}
 	switch {
-	case runErr != nil && errors.Is(ctx.Err(), context.DeadlineExceeded):
+	case timedOut:
 		outcome.Status = statusTimeout
 		outcome.Detail = "killed after " + timeout.String()
 		if state.Exited() {
 			code := state.ExitCode()
 			outcome.ExitCode = &code
-			outcome.Detail = "timed out after " + timeout.String() + " although the leader had exited"
 		}
 	case runErr == nil, errors.Is(runErr, exec.ErrWaitDelay), errors.As(runErr, new(*exec.ExitError)):
 		var notes []string
