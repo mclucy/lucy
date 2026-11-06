@@ -10,47 +10,13 @@ Uses **Taskfile** (`task`).
 
 ```bash
 task build              # Build the host development binary → dist/lucy-{os}-{arch} + dist/lucy symlink
-task build:release      # Cross-compile all platforms (-tags release -w -s)
 task build:watch        # Rebuild on Go and docs changes (file watcher)
 task check              # build + test:race + lint
-task ci:build           # CI release build + gzip artifacts
-task ci:test            # CI checks (optional cipher:generate, then check + test:coverage)
-task cipher:generate    # Generate cipher material (.cipher_key) from CURSEFORGE_API_KEY env var
-task cipher:verify-key  # Report whether CURSEFORGE_API_KEY is accepted upstream
 task clean              # Remove dist/ and release/ directories
-task clean:dist         # Remove dist/ only
-task clean:release      # Remove release/ only
-task dev                # Same as build
-task docs:pack          # Pack the site pages into docs/docs.tar.gz
-task docs:wiki          # Render the GitHub wiki mirror into dist/wiki
-task e2e:compile        # Rebuild, then compile pinned repository fixtures
-task e2e:compile:smoke  # Compile only the fixtures marked smoke
-task e2e:init           # Rebuild, then initialize modpack manifests from sandboxes
-task e2e:install        # Rebuild, then run fresh-install scenarios against pinned fixtures
-task e2e:status         # Rebuild, then probe generated sandboxes with the CLI
 task lint               # golangci-lint with the package dependency rules
-task logos:check        # Fail when committed status logos differ from the manifest
-task logos:gen          # Regenerate status logos from terminal/assets/logos.yaml
-task release:check      # Validate .goreleaser.yaml without building or publishing
-task release:snapshot   # Build a local GoReleaser snapshot without publishing
 task run -- [args]      # go run from repo root with CLI args
-task sandboxes:clean    # Remove .sandboxes/
-task sandboxes:gen      # Materialize sandboxes into .sandboxes/
-task sandboxes:list     # List sandbox definitions
 task test               # go test ./...
-task test:coverage      # go test -coverprofile + coverage.xml
 task test:race          # go test -race ./...
-```
-
-Build uses ldflags to inject four cipher fragments (`keyA`/`keyB`/`ciphertextA`/`ciphertextB`) plus optional release identity (`releaseVersion`/`releaseCommit`). Build tasks source the single canonical cipher file `.cipher_key`, which holds all four fragments; dotenv loads `.env` only, so fragments never sit in the environment of unrelated tasks. See `docs/shared/cipher-key-operations.md`.
-
-Status logos under `terminal/assets/{small,large}_{plain,colored}/` are generated; never edit them by hand. Change `terminal/assets/logos.yaml` (pinned source URL + sha256 and per-logo preprocessing), then run `task logos:gen -- -preview test_logos` and review the PNG previews.
-
-To run the built binary against a test server directory:
-
-```bash
-./dist/lucy status
-./dist/lucy create --minecraft 1.21.4 --core fabric@0.16.9
 ```
 
 ## Architecture
