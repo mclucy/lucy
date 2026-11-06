@@ -48,9 +48,11 @@ on:
         required: false
         type: string
         default: lucy-e2e
-    secrets:
-      CURSEFORGE_API_KEY:
+      report-artifact:
+        description: Name of the artifact that keeps heuristic reports. Empty skips the upload.
         required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -155,8 +157,18 @@ jobs:
           chmod +x dist/lucy
           ./dist/lucy --version
 
+      # Reports live under runner.temp, outside the checkout, for the upload step below.
       - name: Run suite
         shell: bash
         env:
-          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          LUCY_HEURISTIC_REPORT_DIR: ${{ runner.temp }}/lucy-heuristic
         run: ${{ inputs.command }}
+
+      - name: Upload heuristic reports
+        if: ${{ always() && inputs.report-artifact != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.report-artifact }}
+          path: ${{ runner.temp }}/lucy-heuristic
+          if-no-files-found: error
+          retention-days: 90

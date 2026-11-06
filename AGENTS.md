@@ -55,6 +55,9 @@ A new interactive surface ships with its flag equivalent in the same change. Use
 ## Testing and Debugging
 
 - Always prefer the project's e2e testing suite for regression testing after implementing features. See [`e2e/AGENTS.md`](./e2e/AGENTS.md) for domain suites, sandbox generation, and runner options.
+- The e2e suite includes a heuristic test set (`e2e/mutation`). Its tests assert no specific behavior; they record each outcome faithfully. Use them to judge whether your change produces more correct and more desirable results than the baseline. See [`e2e/AGENTS.md`](./e2e/AGENTS.md#heuristic-mutation-suite) for the comparison workflow.
+- Judge heuristic results against the expected behavior from the contract, not against the current output or the baseline. Compare baseline and changed builds on the same fixtures and seed, in equivalent environments. Inspect skipped stages, timeouts, and unexpected stdout or stderr, not only exit codes. Judge user experience too: error messages should name the problem and the fix.
+- Promote an invariant into a deterministic regression test only in a separate change, and only after it holds across repeated runs and follows from a logical contract. Never pin unstable observations, such as network-dependent resolution, upstream versions, timing, or timeouts.
 - You may create temporary testing environments under the repository root with paths prefixed with `test_` (git-ignored).
 - Do not write persistent tests when you are implementing a feature (unit tests will be separate tasks).
 - Never assume the current code is correct. Write unit tests based on logical contracts, not asserting on whatever the current code does.

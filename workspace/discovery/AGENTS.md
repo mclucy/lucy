@@ -15,4 +15,3 @@
 ## Testing
 
 - Unit tests: `go test -count=1 ./workspace/discovery`
-- E2E discovery validation: `go test -tags e2e -count=1 ./e2e/status`

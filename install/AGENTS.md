@@ -25,5 +25,3 @@ Convergence engine for workspace runtime files, documents, and receipts.
 ## Relevant Tests
 
 - `go test -count=1 ./install`
-- `go test -tags e2e -count=1 ./e2e/install -run 'TestInstall/<scenario id>'`
-- `go test -tags e2e -count=1 ./e2e/install -run 'TestInitInstall/<sandbox id>'`

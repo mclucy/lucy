@@ -1,0 +1,1285 @@
+- id: smoke-upgrade-all-dry-run
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "mc1.21.4-0.15.3-fabric"
+          modrinth:ferrite-core: "7.1.3-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:chunky: "1.4.27"
+          modrinth:spark: "1.10.121-fabric"
+  args:
+    - "--dry-run"
+
+- id: smoke-upgrade-all-missing-lock
+  smoke: true
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:simple-voice-chat: "any"
+          modrinth:audioplayer: "any"
+          modrinth:luckperms: "any"
+          modrinth:ledger: "any"
+          modrinth:squaremap: "any"
+          modrinth:carpet: "1.4.161"
+  args:
+    - "--dry-run"
+
+- id: smoke-upgrade-all-policy-more
+  smoke: true
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:waystones: "21.4.19+fabric-1.21.4"
+          curseforge:terralith: "any"
+          curseforge:balm: "any"
+          curseforge:clumps: "any"
+          modrinth:c2me-fabric: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:view-distance-fix: "any"
+          modrinth:chunky: "1.4.27"
+  args:
+    - "--policy"
+    - "more"
+    - "--dry-run"
+
+- id: upgrade-all-fabric-superserver-opt
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:servercore: "1.5.8+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:c2me-fabric: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:packet-fixer: "any"
+          curseforge:fast-ip-ping: "any"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:view-distance-fix: "any"
+          modrinth:chunky: "1.4.27"
+  args: []
+
+- id: upgrade-all-fabric-hermitcraft-technical
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:carpet: "1.4.161"
+          modrinth:carpet-extra: "any"
+          modrinth:ledger: "any"
+          modrinth:squaremap: "any"
+          modrinth:lithium: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:chunky: "any"
+          modrinth:chunky-border: "any"
+          modrinth:luckperms: "any"
+  args:
+    - "--policy"
+    - "more"
+
+- id: upgrade-all-fabric-civ-towny
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:waystones: "21.4.19+fabric-1.21.4"
+          modrinth:simple-voice-chat: "any"
+          modrinth:audioplayer: "any"
+          modrinth:luckperms: "any"
+          modrinth:krypton: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:c2me-fabric: "any"
+          modrinth:spark: "any"
+  args:
+    - "--policy"
+    - "later"
+
+- id: upgrade-all-fabric-anarchy-options-dryrun
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "any"
+          modrinth:krypton: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:chunky: "any"
+          modrinth:chunky-border: "any"
+          modrinth:view-distance-fix: "any"
+          curseforge:fast-ip-ping: "any"
+          modrinth:packet-fixer: "any"
+  args:
+    - "--policy"
+    - "options"
+    - "--dry-run"
+
+- id: upgrade-all-fabric-options-noninteractive-gate
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:servercore: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:luckperms: "any"
+          modrinth:ledger: "any"
+          modrinth:squaremap: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:spark: "any"
+          modrinth:audioplayer: "any"
+  args:
+    - "--policy"
+    - "options"
+    - "--no-interactive"
+
+- id: upgrade-all-fabric-invalid-policy-rejection
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          curseforge:balm: "any"
+          curseforge:clumps: "any"
+          curseforge:terralith: "any"
+          modrinth:waystones: "21.4.19+fabric-1.21.4"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:lithium: "any"
+          modrinth:chunky: "any"
+  args:
+    - "--policy"
+    - "unsupported-strategy"
+
+- id: upgrade-all-fabric-json-report-export
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:modernfix: "5.20.3+mc1.21.4"
+          modrinth:krypton: "0.2.8"
+          modrinth:c2me-fabric: "any"
+          modrinth:packet-fixer: "any"
+          modrinth:carpet: "1.4.161"
+          modrinth:carpet-extra: "any"
+          modrinth:spark: "1.10.121-fabric"
+          modrinth:ferrite-core: "any"
+  args:
+    - "--json"
+    - "--dry-run"
+
+- id: upgrade-all-paper-worldguard-rtp-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:worldguard: "any"
+          modrinth:minimal-rtp: "any"
+          modrinth:akropolis: "any"
+          modrinth:chunky: "any"
+          modrinth:luckperms: "any"
+          modrinth:worldedit: "any"
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+  args:
+    - "--json-compact"
+    - "--policy"
+    - "options"
+    - "--dry-run"
+
+- id: upgrade-all-fabric-flexible-any-selectors
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          modrinth:fabric-api: "any"
+          modrinth:lithium: "any"
+          modrinth:modernfix: "any"
+          modrinth:c2me-fabric: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:chunky-border: "any"
+          modrinth:audioplayer: "any"
+          modrinth:squaremap: "any"
+          modrinth:flan: "any"
+          modrinth:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-paper-community-analytics-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: paper
+        product_version: "133"
+      packages:
+        paper:
+          modrinth:plan: "any"
+          modrinth:openinv: "any"
+          modrinth:gsit: "any"
+          modrinth:spark-web-api: "1.0.1"
+          modrinth:luckperms: "any"
+          modrinth:squaremap: "any"
+          modrinth:worldedit: "any"
+          modrinth:chunky: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-purpur-towny-smp-2329
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: purpur
+        product_version: "2329"
+      packages:
+        paper:
+          modrinth:towny: "any"
+          modrinth:chunky: "any"
+          modrinth:chunky-border: "any"
+          modrinth:squaremap: "1.3.0"
+          modrinth:luckperms: "any"
+          modrinth:worldedit: "any"
+          modrinth:coreprotect: "any"
+          modrinth:viaversion: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-disabled-experimental-modules
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:lithium: "any"
+          modrinth:carpet: "1.4.161"
+          modrinth:carpet-extra: "any"
+          modrinth:waystones: "21.4.19+fabric-1.21.4"
+          modrinth:audioplayer: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:c2me-fabric:
+            selector: "any"
+            enabled: false
+          modrinth:vmp-fabric:
+            selector: "any"
+            enabled: false
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-all-roots-disabled-maintenance
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api:
+            selector: "any"
+            enabled: false
+          modrinth:chunky:
+            selector: "any"
+            enabled: false
+          modrinth:chunky-border:
+            selector: "any"
+            enabled: false
+          modrinth:servercore:
+            selector: "any"
+            enabled: false
+          modrinth:krypton:
+            selector: "any"
+            enabled: false
+          modrinth:spark:
+            selector: "any"
+            enabled: false
+          curseforge:balm:
+            selector: "any"
+            enabled: false
+          curseforge:clumps:
+            selector: "any"
+            enabled: false
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-empty-packages-map
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages: {}
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-mcdr-prime-backup-wrapper
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:ferrite-core: "any"
+          modrinth:packet-fixer: "any"
+          curseforge:fast-ip-ping: "any"
+          modrinth:spark: "any"
+          modrinth:squaremap: "any"
+          modrinth:luckperms: "any"
+    mcdr:
+      directory: mcdr
+      version: "2.12.2"
+      packages:
+        mcdr:prime_backup: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-artifact-file-pattern-filter
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api:
+            selector: "0.119.4+1.21.4"
+            file_pattern: "*fabric-api*.jar"
+          modrinth:lithium: "any"
+          modrinth:krypton: "any"
+          modrinth:c2me-fabric: "any"
+          modrinth:chunky: "any"
+          modrinth:waystones: "21.4.19+fabric-1.21.4"
+          modrinth:audioplayer: "any"
+          modrinth:simple-voice-chat: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-production-host-configs
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.119.4+1.21.4"
+          modrinth:servercore: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:view-distance-fix: "any"
+          modrinth:chunky-border: "any"
+          modrinth:ledger: "any"
+          modrinth:carpet: "1.4.161"
+          modrinth:carpet-extra: "any"
+          modrinth:spark: "any"
+  args:
+    - "--dry-run"
+  files:
+    server/server.properties: |
+      server-port=25565
+      difficulty=hard
+      gamemode=survival
+      motd=Dedicated Production Host
+      pvp=true
+      view-distance=12
+      simulation-distance=8
+    server/eula.txt: |
+      eula=true
+
+- id: upgrade-all-fabric-curseforge-hybrid-servercore
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.10"
+      packages:
+        fabric:
+          curseforge:fabric-api: "any"
+          curseforge:servercore: "any"
+          curseforge:modernfix: "any"
+          curseforge:krypton: "any"
+          curseforge:simple-voice-chat: "any"
+          curseforge:fast-ip-ping: "any"
+          modrinth:lithium: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-curseforge-rpg-waystones
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.4"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          curseforge:fabric-api: "any"
+          curseforge:waystones: "any"
+          curseforge:audioplayer: "any"
+          curseforge:simple-voice-chat: "any"
+          curseforge:balm: "any"
+          curseforge:clumps: "any"
+          curseforge:terralith: "any"
+          modrinth:flan: "1.21.4-1.11.7.b-fabric"
+          modrinth:chunky: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-cobblemon-official-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:cobblemon: "1.8.2"
+          modrinth:cloth-config: "any"
+          modrinth:owo-lib: "any"
+          modrinth:bookshelf-lib: "any"
+          modrinth:balm: "any"
+          modrinth:clumps: "any"
+          modrinth:crafting-tweaks: "any"
+          modrinth:open-loader: "any"
+          modrinth:placeholder-api: "any"
+          modrinth:ferrite-core: "7.0.3-fabric"
+          modrinth:lithium: "mc1.21.1-0.15.4-fabric"
+          modrinth:krypton: "0.2.8"
+          modrinth:chunky: "1.4.23"
+  args:
+    - "--policy"
+    - "more"
+
+- id: upgrade-all-fabric-citrus-exploration-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          curseforge:terralith: "any"
+          curseforge:balm: "any"
+          curseforge:clumps: "any"
+          modrinth:farmers-delight-refabricated: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:audioplayer: "any"
+          modrinth:waystones: "any"
+          modrinth:lithium: "any"
+          modrinth:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-better-servers-crossplay-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:geyser: "any"
+          modrinth:floodgate: "any"
+          modrinth:luckperms: "any"
+          modrinth:chunky: "1.4.23"
+          modrinth:c2me-fabric: "any"
+          modrinth:servercore: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:krypton: "any"
+          modrinth:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-roleplay-civilization-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:flan: "any"
+          modrinth:waystones: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:audioplayer: "any"
+          modrinth:ledger: "any"
+          modrinth:squaremap: "any"
+          modrinth:view-distance-fix: "any"
+          modrinth:chunky-border: "any"
+          modrinth:ferrite-core: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-curseforge-heavy-perf-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          curseforge:fabric-api: "any"
+          curseforge:lithium: "any"
+          curseforge:ferritecore-fabric: "any"
+          curseforge:krypton: "any"
+          curseforge:servercore: "any"
+          curseforge:modernfix: "any"
+          curseforge:chunky-pregenerator: "any"
+          curseforge:spark: "any"
+          curseforge:connectivity: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-technical-redstone-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          modrinth:carpet: "any"
+          modrinth:carpet-extra: "any"
+          modrinth:servercore: "any"
+          modrinth:c2me-fabric: "any"
+          modrinth:chunky: "1.4.23"
+          modrinth:packet-fixer: "any"
+          modrinth:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-worldgen-exploration-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          curseforge:terralith: "any"
+          curseforge:yungs-better-mineshafts-fabric: "any"
+          modrinth:waystones: "any"
+          modrinth:chunky: "1.4.23"
+          modrinth:chunky-border: "any"
+          modrinth:vmp-fabric: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:lithium: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-kilt-bridge-server-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.19.5"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.116.17+1.21.1"
+          curseforge:fabric-language-kotlin: "any"
+          modrinth:servercore: "any"
+          modrinth:krypton: "0.2.8"
+          modrinth:c2me-fabric: "any"
+          modrinth:luckperms: "any"
+          modrinth:spark: "any"
+          modrinth:ledger: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-archive-optimization-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.92.12+1.20.1"
+          modrinth:lithium: "mc1.20.1-0.11.4"
+          modrinth:ferrite-core: "6.0.1-fabric"
+          curseforge:connectivity: "any"
+          curseforge:packet-fixer: "any"
+          modrinth:servercore: "any"
+          modrinth:carpet: "any"
+          modrinth:spark: "1.10.53-fabric"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-curseforge-classic-smp-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          curseforge:fabric-api: "any"
+          curseforge:lithium: "any"
+          curseforge:ferritecore-fabric: "any"
+          curseforge:krypton: "any"
+          curseforge:carpet: "any"
+          curseforge:waystones: "any"
+          curseforge:simple-voice-chat: "any"
+          curseforge:spark: "any"
+          curseforge:connectivity: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-fabric-technical-engineering-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: fabric
+        product_version: "0.16.9"
+      packages:
+        fabric:
+          modrinth:fabric-api: "0.92.12+1.20.1"
+          modrinth:carpet: "any"
+          modrinth:carpet-extra: "any"
+          modrinth:ledger: "any"
+          curseforge:connectivity: "any"
+          modrinth:spark: "1.10.53-fabric"
+          modrinth:chunky-border: "any"
+          modrinth:luckperms: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-tech-ae2-automation-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:ae2: "15.3.3"
+          modrinth:curios: "any"
+          modrinth:cloth-config: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:architectury-api: "any"
+          modrinth:ftb-library: "any"
+          modrinth:ftb-chunks: "any"
+          modrinth:ftb-teams: "any"
+          modrinth:waystones: "any"
+          modrinth:chunky: "1.3.146"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-adventure-lore-rpg-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:curios: "any"
+          modrinth:waystones: "any"
+          modrinth:cloth-config: "any"
+          modrinth:caelus: "any"
+          modrinth:bookshelf-lib: "any"
+          modrinth:clumps: "any"
+          modrinth:balm: "any"
+          modrinth:crafting-tweaks: "any"
+          modrinth:ftb-library: "any"
+          modrinth:spark: "1.10.53-forge"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-mekanism-industry-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:mekanism: "any"
+          curseforge:architectury-api: "any"
+          curseforge:cloth-config: "any"
+          curseforge:curios: "any"
+          curseforge:waystones: "any"
+          curseforge:clumps: "any"
+          curseforge:ferritecore: "any"
+          curseforge:modernfix: "any"
+          curseforge:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-wilderness-camping-bop-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:farmers-delight: "any"
+          curseforge:biomes-o-plenty: "any"
+          curseforge:waystones: "any"
+          curseforge:curios: "any"
+          curseforge:crafting-tweaks: "any"
+          curseforge:balm: "any"
+          curseforge:bookshelf: "any"
+          curseforge:ferritecore: "any"
+          curseforge:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-optimization-foundation-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          modrinth:ferrite-core: "any"
+          modrinth:modernfix: "any"
+          curseforge:connectivity: "any"
+          curseforge:packet-fixer: "any"
+          curseforge:fast-ip-ping: "any"
+          modrinth:chunky: "1.3.146"
+          modrinth:spark: "1.10.53-forge"
+          modrinth:ftb-library: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-ftb-server-management-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:ftb-library-forge: "any"
+          curseforge:ftb-chunks-forge: "any"
+          curseforge:ftb-teams-forge: "any"
+          curseforge:architectury-api: "any"
+          curseforge:curios: "any"
+          curseforge:waystones: "any"
+          curseforge:ferritecore: "any"
+          curseforge:modernfix: "any"
+          curseforge:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-twilight-forest-rpg-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:the-twilight-forest: "any"
+          curseforge:alexs-mobs: "any"
+          curseforge:citadel: "any"
+          curseforge:curios: "any"
+          curseforge:patchouli: "any"
+          curseforge:corail-tombstone: "any"
+          curseforge:waystones: "any"
+          curseforge:ferritecore: "any"
+          curseforge:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-thermal-expansion-tech-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:thermal-expansion: "any"
+          curseforge:thermal-foundation: "any"
+          curseforge:cofh-core: "any"
+          curseforge:curios: "any"
+          curseforge:cloth-config: "any"
+          curseforge:ferritecore: "any"
+          curseforge:modernfix: "any"
+          curseforge:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-magic-botania-apotheosis-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:botania: "any"
+          curseforge:apotheosis: "any"
+          curseforge:placebo: "any"
+          curseforge:patchouli: "any"
+          curseforge:curios: "any"
+          curseforge:cloth-config: "any"
+          curseforge:ferritecore: "any"
+          curseforge:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-refined-storage-industry-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:refined-storage: "any"
+          curseforge:industrial-foregoing: "any"
+          curseforge:titanium: "any"
+          curseforge:curios: "any"
+          curseforge:cloth-config: "any"
+          curseforge:ferritecore: "any"
+          curseforge:modernfix: "any"
+          curseforge:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-forge-storage-drawers-security-1201
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.20.1"
+      directory: server
+      core:
+        product: forge
+        product_version: "47.4.10"
+      packages:
+        forge:
+          curseforge:storage-drawers: "any"
+          curseforge:security-craft: "any"
+          curseforge:iron-chests: "any"
+          curseforge:sophisticated-backpacks: "any"
+          curseforge:sophisticated-core: "any"
+          curseforge:curios: "any"
+          curseforge:ferritecore: "any"
+          curseforge:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-neoforge-current-era-262
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "26.2"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "26.2.0.67"
+      packages:
+        neoforge:
+          modrinth:architectury-api: "any"
+          modrinth:cloth-config: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:chunky: "any"
+          modrinth:waystones: "any"
+          modrinth:curios: "any"
+          modrinth:spark: "any"
+          modrinth:luckperms: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-neoforge-create-industrial-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.248"
+      packages:
+        neoforge:
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:modernfix: "any"
+          modrinth:cloth-config: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:chunky: "1.4.23"
+          modrinth:architectury-api: "any"
+          modrinth:ftb-library: "any"
+          modrinth:simple-voice-chat: "any"
+          modrinth:waystones: "any"
+          modrinth:caelus: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-neoforge-savs-warfare-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.248"
+      packages:
+        neoforge:
+          modrinth:create: "1.21.1-6.0.4"
+          modrinth:simple-voice-chat: "any"
+          modrinth:curios: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:modernfix: "any"
+          modrinth:chunky: "1.4.23"
+          modrinth:architectury-api: "any"
+          modrinth:waystones: "any"
+          modrinth:spark: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-neoforge-crazed-vanilla-exploration-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.248"
+      packages:
+        neoforge:
+          curseforge:biomes-o-plenty: "any"
+          curseforge:terralith: "any"
+          curseforge:curios: "any"
+          curseforge:waystones: "any"
+          curseforge:farmers-delight: "any"
+          modrinth:ferrite-core: "any"
+          modrinth:chunky: "1.4.23"
+          modrinth:spark: "any"
+          modrinth:luckperms: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-neoforge-chunky-performance-1211
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.1"
+      directory: server
+      core:
+        product: neoforge
+        product_version: "21.1.248"
+      packages:
+        neoforge:
+          curseforge:chunky-pregenerator-forge: "any"
+          curseforge:ferritecore: "any"
+          curseforge:modernfix: "any"
+          curseforge:spark: "1.10.124"
+          curseforge:connectivity: "any"
+          modrinth:architectury-api: "any"
+          modrinth:cloth-config: "any"
+          modrinth:waystones: "any"
+  args:
+    - "--dry-run"
+
+- id: upgrade-all-paper-proxy-lobby-node-12111
+  setup:
+    - install
+  manifest: |
+    manifest_version: 1
+    server:
+      minecraft: "1.21.11"
+      directory: server
+      core:
+        product: paper
+        product_version: "130"
+      packages:
+        paper:
+          modrinth:viaversion: "any"
+          modrinth:viabackwards: "any"
+          modrinth:chunky: "1.4.40"
+          modrinth:chunky-border: "any"
+          modrinth:luckperms: "any"
+          modrinth:squaremap: "any"
+          modrinth:worldedit: "any"
+          modrinth:essentialsx: "any"
+  args:
+    - "--dry-run"

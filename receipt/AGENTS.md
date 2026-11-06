@@ -25,4 +25,3 @@ Package `receipt` owns the workspace installation receipt (`.lucy/install.yaml`)
 
 - `operation/operation_filetrack_workspace_test.go`: Resolution fingerprinting and tracked file behavior.
 - `install/install_pipeline_test.go`: Staged installation commits and receipt updates.
-- `e2e/install/install_init_test.go`: Installation and adoption receipt verification.
