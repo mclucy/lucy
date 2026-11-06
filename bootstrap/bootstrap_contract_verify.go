@@ -37,6 +37,23 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 		return nil, fmt.Errorf("staged server directory does not exist: %w", err)
 	}
 
+	// A shim-era Forge installer writes its shim at the server root and run.sh
+	// invokes that copy. The file only belongs to the contract when the
+	// generated launcher proves it is that shim, so earlier Forge branches and
+	// unrelated files stay unpermitted.
+	if shimRel := forgeRootShimPath(locked); shimRel != "" &&
+		runScriptReferences(serverRoot, shimRel) {
+		if info, err := os.Lstat(filepath.Join(serverRoot, shimRel)); err == nil &&
+			info.Mode().IsRegular() {
+			exact[shimRel] = OutputSpec{
+				Path:   shimRel,
+				Policy: PolicyManaged,
+				Role:   RoleRuntime,
+				Origin: OriginGenerated,
+			}
+		}
+	}
+
 	var outputs []Output
 	seen := make(map[string]bool)
 	cachedDigests := make(map[string]string)

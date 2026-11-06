@@ -213,6 +213,26 @@ func forgeVersionedPath(product serverpkg.Product, mcVersion, coreVersion, name 
 	return "libraries/" + prefix + version + "/" + name
 }
 
+// forgeRootShimPath returns the server-relative shim a shim-era Forge
+// installer writes at the server root and run.sh invokes for its Java check.
+// NeoForge and earlier Forge branches write no root shim.
+func forgeRootShimPath(locked document.LockedServer) string {
+	if locked.Product != serverpkg.ProductForge {
+		return ""
+	}
+	return "forge-" + locked.Minecraft.String() + "-" + locked.CoreVersion.String() + "-shim.jar"
+}
+
+// runScriptReferences reports whether run.sh exists and names rel. The
+// generated launcher is the evidence that a root shim belongs to the tree.
+func runScriptReferences(serverDir, rel string) bool {
+	data, err := readBoundedFile(filepath.Join(serverDir, "run.sh"), 1<<20)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), filepath.Base(rel))
+}
+
 // isForgeDiscardInput reports whether a locked Forge input exists only for
 // installer processor execution.
 func isForgeDiscardInput(cleanPath string) bool {

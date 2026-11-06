@@ -27,6 +27,9 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 		return err
 	}
 	var profile struct {
+		// Path names the launch artifact the installer extracts from its
+		// bundled Maven tree. Shim-era Forge profiles name the root shim.
+		Path string `json:"path"`
 		Data map[string]struct {
 			Server string `json:"server"`
 		} `json:"data"`
@@ -40,6 +43,11 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 	}
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return err
+	}
+	if profile.Path != "" {
+		if err := extractProfileArtifact(root, z, profile.Path); err != nil {
+			return err
+		}
 	}
 	vars := map[string]string{
 		"SIDE":              "server",
@@ -216,6 +224,25 @@ func prepareForgeInstaller(ctx context.Context, root string, server document.Loc
 		}
 	}
 	return nil
+}
+
+// extractProfileArtifact writes the launch artifact an installer profile
+// names. The installer bundles it under maven/, mirroring the repository path
+// it would otherwise download, and extracts it to the server root under its
+// filename. Shim-era Forge profiles name the root shim here.
+func extractProfileArtifact(root string, z *zip.Reader, coordinate string) error {
+	rel, err := maven.Path(coordinate)
+	if err != nil {
+		return fmt.Errorf("installer profile artifact: %w", err)
+	}
+	if err := document.SafeRelativePath(rel); err != nil || !filepath.IsLocal(rel) {
+		return fmt.Errorf("invalid installer profile artifact %q", coordinate)
+	}
+	return extractLockedEntry(
+		z,
+		"maven/"+rel,
+		filepath.Join(root, filepath.Base(rel)),
+	)
 }
 
 func safeForgeMavenPath(coordinate string) (string, error) {

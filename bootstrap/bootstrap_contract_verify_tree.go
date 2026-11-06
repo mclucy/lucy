@@ -145,6 +145,12 @@ func (v *treeVerifier) verifyForgeInstaller() CheckResult {
 		v.collectRequiredOutput("run.bat", PolicyManaged)
 		v.collectRequiredOutput("user_jvm_args.txt", PolicySeed)
 		v.collectOptionalOutput("README.txt", PolicySeed)
+		// The shim-era installer writes a root shim that run.sh invokes for
+		// its Java check, so the launcher, not the lock, proves it belongs.
+		if shimRel := forgeRootShimPath(v.locked); shimRel != "" &&
+			runScriptReferences(v.serverDir, shimRel) {
+			v.collectRequiredOutput(shimRel, PolicyManaged)
+		}
 	}
 	if v.failed {
 		return v.mismatch()
