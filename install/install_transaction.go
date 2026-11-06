@@ -76,6 +76,67 @@ func prunable(
 	}
 }
 
+// pruneTargets plans the accepted entries a reconcile removes. An entry whose
+// file is already absent maps to nil. That absence stays a precondition: the
+// journal plan and the pre-commit check fail if the path reappears, so a file
+// that appears after planning is never silently dropped from the ledger. A
+// present entry maps to the image observed now, which later steps recheck
+// before the journal captures its before image.
+func pruneTargets(
+	root string,
+	previous []receipt.Entry,
+	tracked map[string]bool,
+	sources map[string]string,
+	stagedOutputs map[string]bootstrap.Output,
+	stagedBootstrap bool,
+) (map[string]*workspacewrite.InstallImage, error) {
+	targets := map[string]*workspacewrite.InstallImage{}
+	for _, old := range previous {
+		shouldPrune, err := prunable(
+			old,
+			tracked,
+			sources,
+			stagedOutputs,
+			stagedBootstrap,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if !shouldPrune {
+			continue
+		}
+		p := filepath.Join(root, old.Path)
+		info, err := os.Lstat(p)
+		if errors.Is(err, os.ErrNotExist) {
+			targets[old.Path] = nil
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("owned output is not a regular file: %s", old.Path)
+		}
+		actual, err := DigestFile(p, nil)
+		if err != nil {
+			return nil, err
+		}
+		observed := workspacewrite.InstallImage{
+			SHA256: actual["sha256"],
+			Mode:   effectiveInstallMode(info.Mode().Perm()),
+		}
+		if !strings.EqualFold(observed.SHA256, old.SHA256) {
+			return nil, fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
+		}
+		if old.Mode != 0 &&
+			effectiveInstallMode(os.FileMode(old.Mode)) != observed.Mode {
+			return nil, fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
+		}
+		targets[old.Path] = &observed
+	}
+	return targets, nil
+}
+
 // applyCommit publishes the staged installation. stagedOutputs classifies
 // every non-package file the stage is allowed to contain, including method
 // bootstrap outputs validated before packages joined the stage and explicit
@@ -337,51 +398,18 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 	if err != nil {
 		return err
 	}
-	pruneExpected := map[string]workspacewrite.InstallImage{}
+	var pruneExpected map[string]*workspacewrite.InstallImage
 	if reconcile {
-		for _, old := range previous.Entries {
-			shouldPrune, err := prunable(
-				old,
-				tracked,
-				sources,
-				stagedOutputs,
-				stagedBootstrap,
-			)
-			if err != nil {
-				return err
-			}
-			if !shouldPrune {
-				continue
-			}
-			p := filepath.Join(root, old.Path)
-			info, err := os.Lstat(p)
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-				return fmt.Errorf("owned output is not a regular file: %s", old.Path)
-			}
-			actual, err := DigestFile(p, nil)
-			if err != nil {
-				return err
-			}
-			observed := workspacewrite.InstallImage{
-				SHA256: actual["sha256"],
-				Mode:   effectiveInstallMode(info.Mode().Perm()),
-			}
-			if !strings.EqualFold(observed.SHA256, old.SHA256) {
-				return fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
-			}
-			if old.Mode != 0 &&
-				effectiveInstallMode(os.FileMode(old.Mode)) != observed.Mode {
-				return fmt.Errorf("modified owned output cannot be pruned: %s", old.Path)
-			}
-			// Record the mode observed at planning time so a later chmod is
-			// still caught before the journal captures its before image.
-			pruneExpected[old.Path] = observed
+		pruneExpected, err = pruneTargets(
+			root,
+			previous.Entries,
+			tracked,
+			sources,
+			stagedOutputs,
+			stagedBootstrap,
+		)
+		if err != nil {
+			return err
 		}
 	}
 	receiptBytes, err := next.Snapshot()
@@ -561,8 +589,11 @@ func applyCommitFiles(root, stage string, d *document.Manifest, l *document.Lock
 			}
 			if entry.After == nil {
 				expected, validated := pruneExpected[name]
+				if validated && expected == nil {
+					return fmt.Errorf("absent owned output %s reappeared before pruning", name)
+				}
 				if !validated || entry.Before == nil ||
-					!workspacewrite.InstallImagesEqual(entry.Before, &expected) {
+					!workspacewrite.InstallImagesEqual(entry.Before, expected) {
 					return fmt.Errorf(
 						"modified or unowned output cannot be pruned: %s",
 						name,
