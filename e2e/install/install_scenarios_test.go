@@ -116,6 +116,30 @@ var installScenarios = map[string]installScenario{
 			runtimeFile: "libraries/net/minecraftforge/forge/1.20.1-47.4.10/forge-1.20.1-47.4.10-universal.jar",
 		}},
 	},
+	"forge-12111": {
+		sandbox:         "forge-12111",
+		product:         "forge",
+		minecraft:       "1.21.11",
+		coreVersion:     "61.2.0",
+		provider:        "forge",
+		projectID:       "forge",
+		filename:        "forge-1.21.11-61.2.0-installer.jar",
+		bootstrap:       "forge-installer",
+		coreFixture:     "forge-1.21.11-61.2.0-installer.jar",
+		requiredFiles:   []string{"run.sh", "user_jvm_args.txt", "forge-1.21.11-61.2.0-shim.jar"},
+		requiredInputs:  []string{"libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar"},
+		launchArguments: "libraries/net/minecraftforge/forge/1.21.11-61.2.0/unix_args.txt",
+		runtimeArtifacts: []runtimeArtifactExpectation{
+			{
+				sandboxFile: "libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar",
+				runtimeFile: "libraries/net/minecraftforge/forge/1.21.11-61.2.0/forge-1.21.11-61.2.0-universal.jar",
+			},
+			{
+				sandboxFile: "forge-1.21.11-61.2.0-shim.jar",
+				runtimeFile: "forge-1.21.11-61.2.0-shim.jar",
+			},
+		},
+	},
 	"neoforge-211": {
 		sandbox:         "neoforge-211",
 		product:         "neoforge",
