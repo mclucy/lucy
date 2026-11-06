@@ -1,25 +1,6 @@
 //go:build e2e
 
-// Package mutation runs heuristic end-to-end cases for the add, remove, and
-// upgrade-all commands against the built Lucy CLI. Command failures, signals,
-// and timeouts are recorded as observations. Fixture errors and harness
-// failures fail the test.
-//
-// A case may name a setup command. It runs first in the same workspace and
-// home. When setup does not exit zero, the case command is skipped and
-// recorded as such.
-//
-// LUCY_HEURISTIC_LAYER=smoke selects the cases marked smoke: true. Unset or
-// "full" selects every case. LUCY_HEURISTIC_REPORT_DIR chooses where reports
-// go; see reportRoot. LUCY_HEURISTIC_COMMAND_TIMEOUT bounds each CLI
-// invocation as a Go duration; see commandTimeout.
-//
-// LUCY_HEURISTIC_SAMPLE=N runs N distinct cases drawn at random from each
-// top-level operation's layer-filtered cases; see resolveSample. An explicit
-// LUCY_HEURISTIC_SEED reproduces a draw. It applies to each operation on its
-// own, so the same seed, count, layer, and fixture bytes select the same cases.
-// A -run subtest filter can still skip sampled cases; index.json lists them as
-// not_executed.
+// Package mutation records heuristic CLI outcomes and checks established contracts.
 package mutation
 
 import (
