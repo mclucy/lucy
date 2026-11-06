@@ -138,11 +138,6 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 	return outputs, nil
 }
 
-// InspectStage is an alias for ValidateStagedOutputs.
-func InspectStage(stageRoot string, locked document.LockedServer) ([]Output, error) {
-	return ValidateStagedOutputs(stageRoot, locked)
-}
-
 // CheckExisting checks whether an existing server directory already satisfies the locked bootstrap contract
 // without executing bootstrap.
 // It shares the single verification path with stage validation, verifying:

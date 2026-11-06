@@ -237,7 +237,7 @@ func (s *Service) stageInstall(
 	stagedBootstrap := !bCurrent
 	if stagedBootstrap {
 		// Bootstrap validation and package staging must not share a view of
-		// the stage. InspectStage walks the server tree and accepts only the
+		// the stage. ValidateStagedOutputs walks the server tree and accepts only the
 		// method's declared outputs, so packages and wrapper files staged
 		// alongside it would be rejected as unpermitted runtime content.
 		bootstrapOutputs, err = s.stageServerTree(
@@ -357,7 +357,7 @@ func (s *Service) stageServerTree(
 	// content in stage. This emits the output classification the commit
 	// uses, including discard and seed policy, without re-walking the tree
 	// after packages and wrapper files join it.
-	stagedOutputs, err := bootstrap.InspectStage(stage, resolved.Server)
+	stagedOutputs, err := bootstrap.ValidateStagedOutputs(stage, resolved.Server)
 	if err != nil {
 		return nil, err
 	}
