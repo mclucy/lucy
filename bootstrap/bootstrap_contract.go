@@ -4,8 +4,10 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -1704,38 +1706,74 @@ func checkPathSafety(root, rel string, checkLeaf bool) error {
 }
 
 func verifyArtifactHashes(path string, expectedHashes map[string]string, cachedSHA256 string) (string, error) {
-	if len(expectedHashes) == 0 {
+	for algorithm := range expectedHashes {
+		switch algorithm {
+		case "md5", "sha1", "sha256", "sha512":
+		default:
+			return "", fmt.Errorf("unsupported artifact digest %s", algorithm)
+		}
+	}
+	checks := [...]struct {
+		name     string
+		expected string
+		digest   hash.Hash
+	}{
+		{name: "md5", expected: expectedHashes["md5"]},
+		{name: "sha1", expected: expectedHashes["sha1"]},
+		{name: "sha256", expected: expectedHashes["sha256"]},
+		{name: "sha512", expected: expectedHashes["sha512"]},
+	}
+	if expectedHashes["md5"] == "" && expectedHashes["sha1"] == "" &&
+		expectedHashes["sha256"] == "" && expectedHashes["sha512"] == "" {
 		return "", errors.New("no expected hashes declared in lock")
 	}
-	exp256 := expectedHashes["sha256"]
-	exp1 := expectedHashes["sha1"]
-	if exp256 == "" && exp1 == "" {
-		return "", errors.New("declared hashes did not contain supported sha256 or sha1")
-	}
-
-	if exp256 != "" && cachedSHA256 != "" && exp1 == "" {
-		if !strings.EqualFold(cachedSHA256, exp256) {
-			return "", fmt.Errorf("SHA256 mismatch: got %s, want %s", cachedSHA256, exp256)
+	var slots [4]io.Writer
+	writers := slots[:0]
+	for i := range checks {
+		check := &checks[i]
+		if check.name == "sha256" && cachedSHA256 != "" {
+			if check.expected != "" && !strings.EqualFold(cachedSHA256, check.expected) {
+				return "", fmt.Errorf("sha256 mismatch: got %s, want %s", cachedSHA256, check.expected)
+			}
+			continue
 		}
-		return cachedSHA256, nil
+		if check.expected == "" && check.name != "sha256" {
+			continue
+		}
+		switch check.name {
+		case "md5":
+			check.digest = md5.New()
+		case "sha1":
+			check.digest = sha1.New()
+		case "sha256":
+			check.digest = sha256.New()
+		case "sha512":
+			check.digest = sha512.New()
+		}
+		writers = append(writers, check.digest)
 	}
-
-	sha256Hex, sha1Hex, err := fileDigests(path, exp256 != "" || cachedSHA256 == "", exp1 != "")
-	if err != nil {
-		return "", err
-	}
-	if exp256 != "" {
-		if !strings.EqualFold(sha256Hex, exp256) {
-			return "", fmt.Errorf("SHA256 mismatch: got %s, want %s", sha256Hex, exp256)
+	if len(writers) > 0 {
+		file, err := os.Open(path)
+		if err != nil {
+			return "", err
+		}
+		_, readErr := io.Copy(io.MultiWriter(writers...), file)
+		if err := errors.Join(readErr, file.Close()); err != nil {
+			return "", err
 		}
 	}
-	if exp1 != "" {
-		if !strings.EqualFold(sha1Hex, exp1) {
-			return "", fmt.Errorf("SHA1 mismatch: got %s, want %s", sha1Hex, exp1)
+	sha256Hex := cachedSHA256
+	for _, check := range checks {
+		if check.digest == nil {
+			continue
 		}
-	}
-	if sha256Hex == "" && cachedSHA256 != "" {
-		sha256Hex = cachedSHA256
+		actual := hex.EncodeToString(check.digest.Sum(nil))
+		if check.expected != "" && !strings.EqualFold(actual, check.expected) {
+			return "", fmt.Errorf("%s mismatch: got %s, want %s", check.name, actual, check.expected)
+		}
+		if check.name == "sha256" {
+			sha256Hex = actual
+		}
 	}
 	return sha256Hex, nil
 }

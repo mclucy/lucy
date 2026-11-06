@@ -31,7 +31,7 @@ Files tracked with [`lucy file`](/commands/file) are not overwritten. If an immu
 
 ## Offline
 
-`lucy install --offline` uses only files already present in the global artifact store or the shared network cache. It replays a current lock in a new workspace when every required artifact is available and the required local prerequisites are present, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is unavailable, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists.
+`lucy install --offline` uses only files already present in the global artifact store or the shared network cache. It replays a current lock in a new workspace when every required artifact is available and the required local prerequisites are present, such as a Java runtime for a step that runs Java. It fails when the manifest needs a new resolution, an artifact is unavailable, or a prerequisite is missing. A file whose contents do not match the lock counts as missing, even if it exists. If the lock records multiple checksums, each must match.
 
 ### Artifact store and download cache
 
