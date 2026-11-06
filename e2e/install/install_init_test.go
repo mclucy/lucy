@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"os"
@@ -102,6 +103,23 @@ func executeInitInstall(t *testing.T, binary, id string) {
 	}
 	if err := scenario.verifyInstalled(root, locked); err != nil {
 		t.Fatalf("installed runtime: %v", err)
+	}
+	output, err := runner.execute(ctx, root, "install", "--locked", "--offline", "--json-compact")
+	if err != nil {
+		t.Fatalf("replay installed runtime offline: %v", err)
+	}
+	var replay struct {
+		Phases []struct {
+			Name string `json:"name"`
+		} `json:"phases"`
+	}
+	if err := json.Unmarshal([]byte(output), &replay); err != nil {
+		t.Fatalf("decode replay result: %v", err)
+	}
+	for _, phase := range replay.Phases {
+		if phase.Name == "install" {
+			t.Fatal("unchanged runtime was staged again")
+		}
 	}
 }
 
@@ -344,6 +362,11 @@ func TestAdoptInstall(t *testing.T) {
 			}
 			if again != generatedShim {
 				t.Error("reinstall regenerated the launcher it already owns")
+			}
+			if scenario.packages > 0 {
+				if _, err := runner.execute(ctx, root, "init", "--force", "--no-interactive"); err != nil {
+					t.Fatalf("reinitialize adopted packages: %v", err)
+				}
 			}
 		})
 	}
