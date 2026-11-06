@@ -246,13 +246,15 @@ func (s *Service) Downgrade(
 	return s.install.ApplyPlan(ctx, root, plan, applyOpts)
 }
 
-// recordResolvedRequirements makes optional dependencies that resolution
-// installed explicit manifest requirements, matching Add's --with-optional
-// behavior so the next resolution sees the same graph.
+// recordResolvedRequirements adds optional dependencies without replacing
+// selectors, file patterns, or enabled state already declared in the manifest.
 func recordResolvedRequirements(d *document.Manifest, packages []document.Package) error {
 	for i := range packages {
 		p := &packages[i]
 		for _, requirement := range p.Requirements {
+			if _, _, declared := downgradeRootRequirement(d, p.Ecosystem, requirement.Reference); declared {
+				continue
+			}
 			recorded := document.Requirement{
 				Selector:    requirement.Selector,
 				FilePattern: requirement.FilePattern,
