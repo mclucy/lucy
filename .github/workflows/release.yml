@@ -78,9 +78,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve GoReleaser version
+        if: github.event_name == 'push'
+        id: goreleaser
+        run: echo "version=$(go list -m -f '{{.Version}}' github.com/goreleaser/goreleaser/v2)" >> "$GITHUB_OUTPUT"
+
       - name: Run GoReleaser
         if: github.event_name == 'push'
-        run: go tool goreleaser release --clean
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: ${{ steps.goreleaser.outputs.version }}
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
