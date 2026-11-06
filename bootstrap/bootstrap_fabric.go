@@ -8,20 +8,19 @@ import (
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/internal/maven"
 )
 
 // prepareFabric places the Fabric loader on the classpath and generates the
 // launch scripts and shim JAR that start it.
 func prepareFabric(root string, server document.LockedServer, corePath string) error {
-	p, err := maven.Path("net.fabricmc:fabric-loader:" + server.CoreVersion.String())
+	loaderPath, err := fabricLoaderPath(server.CoreVersion.String())
 	if err != nil {
 		return err
 	}
-	if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, "libraries", p), 0o644); err != nil {
+	if err := fsutil.AtomicCopyFile(corePath, filepath.Join(root, filepath.FromSlash(loaderPath)), 0o644); err != nil {
 		return err
 	}
-	classpath := []string{filepath.ToSlash(filepath.Join("libraries", p))}
+	classpath := []string{loaderPath}
 	for _, input := range server.Inputs {
 		if strings.HasPrefix(input.Path, "libraries/") {
 			classpath = append(classpath, input.Path)

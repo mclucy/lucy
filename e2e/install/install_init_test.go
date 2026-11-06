@@ -173,8 +173,11 @@ func TestInitUpgrade(t *testing.T) {
 	}
 }
 
-// verifyInitializedReceipt checks that initialization recorded the packages it
-// identified. A workspace without identified packages keeps no receipt.
+// verifyInitializedReceipt checks the receipt initialization wrote. Explicit
+// adoption records the runtime outputs and packages it identified, so a
+// receipt is expected whenever observation established ownership. Every
+// recorded file must still match its digest, and every locked package must be
+// recorded.
 func verifyInitializedReceipt(root string) error {
 	locked, err := readLock(root)
 	if err != nil {
@@ -182,16 +185,10 @@ func verifyInitializedReceipt(root string) error {
 	}
 	path := filepath.Join(root, ".lucy", "install.yaml")
 	raw, err := os.ReadFile(path)
-	if len(locked.Packages) == 0 {
-		if os.IsNotExist(err) {
+	if err != nil {
+		if os.IsNotExist(err) && len(locked.Packages) == 0 {
 			return nil
 		}
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("init recorded a receipt for a workspace without identified packages")
-	}
-	if err != nil {
 		return fmt.Errorf("read initialized receipt: %w", err)
 	}
 	var receipt struct {
@@ -309,7 +306,7 @@ func TestAdoptInstall(t *testing.T) {
 				)
 			}
 			live := filepath.Join(root, filepath.FromSlash(locked.Server.Directory))
-			if err := verifyBootstrapInputs(live, locked.Server.Inputs, nil); err != nil {
+			if err := verifyBootstrapInputs(live, locked.Server.Bootstrapper, locked.Server.Inputs, nil); err != nil {
 				t.Fatalf("bootstrap inputs: %v", err)
 			}
 			for _, relative := range []string{
@@ -325,13 +322,6 @@ func TestAdoptInstall(t *testing.T) {
 			generatedShim, err := fileSHA256(filepath.Join(live, "fabric-server-launch.jar"))
 			if err != nil {
 				t.Fatal(err)
-			}
-			launcherBytes, err := os.ReadFile(filepath.Join(live, "fabric-server-launch.jar"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if bytes.Contains(launcherBytes, adoptedLauncherComment) {
-				t.Error("install kept the adopted launcher instead of generating its own")
 			}
 			for relative, want := range unchanged {
 				actual, err := fileSHA256(filepath.Join(root, filepath.FromSlash(relative)))

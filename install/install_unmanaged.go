@@ -26,7 +26,6 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 		return err
 	}
 	seenDirectories := map[string]bool{}
-	lockedDestinations := lockedPackageDestinations(d)
 	for _, planned := range d.Packages {
 		if !planned.Enabled() {
 			continue
@@ -49,21 +48,15 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 			return err
 		}
 		for _, entry := range entries {
-			if entry.IsDir() {
+			// ReadDir reports the entry type without following links. Only regular
+			// files are opened, so directories, symlinks, FIFOs, sockets and devices
+			// are never handed to a blocking or redirecting open.
+			if !entry.Type().IsRegular() {
 				continue
 			}
 			filename := filepath.Join(relative, entry.Name())
 			if owned[filepath.ToSlash(filename)] {
 				continue
-			}
-			if expected, ok := lockedDestinations[filepath.Clean(filename)]; ok {
-				if _, err := DigestFile(filepath.Join(root, filename), expected); err == nil {
-					logger.Debug(
-						"locked package already occupies its destination",
-						"path", filename,
-					)
-					continue
-				}
 			}
 			mods, err := artifact.ReadModules(ctx, filepath.Join(root, filename), planned.Ecosystem)
 			if err != nil {
@@ -96,29 +89,10 @@ func validateUnmanagedArtifacts(ctx context.Context, root string, d *document.Lo
 	return nil
 }
 
-// lockedPackageDestinations maps every enabled package destination to the
-// digests the lock pins for it. A destination that already holds those bytes
-// belongs to the locked installation even when no receipt records it, which is
-// the state a workspace reaches when its receipt is removed.
-func lockedPackageDestinations(d *document.Lock) map[string]map[string]string {
-	destinations := make(map[string]map[string]string, len(d.Packages))
-	for i := range d.Packages {
-		p := &d.Packages[i]
-		if !p.Enabled() {
-			continue
-		}
-		destination, err := packageDestination(d, p)
-		if err != nil {
-			continue
-		}
-		destinations[filepath.Clean(destination)] = p.Artifact.Hashes
-	}
-	return destinations
-}
-
 // unmanagedConflict reports the selected package whose module an unmanaged
 // artifact duplicates. Environment and ecosystem must match, because one
 // module identity may exist independently on the server and in MCDR.
+// Disabled packages are not selected, so they never report a conflict.
 func unmanagedConflict(
 	d *document.Lock,
 	planned *document.Package,
@@ -126,6 +100,9 @@ func unmanagedConflict(
 ) (*document.Package, string) {
 	for i := range d.Packages {
 		other := &d.Packages[i]
+		if !other.Enabled() {
+			continue
+		}
 		if other.Environment != planned.Environment || other.Ecosystem != planned.Ecosystem {
 			continue
 		}

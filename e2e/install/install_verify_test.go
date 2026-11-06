@@ -155,7 +155,7 @@ func (scenario installScenario) verify(root, oracle string, declared manifestInt
 			return fmt.Errorf("minecraft server input: %w", err)
 		}
 	}
-	if err := verifyBootstrapInputs(live, server.Inputs, scenario.requiredInputs); err != nil {
+	if err := verifyBootstrapInputs(live, server.Bootstrapper, server.Inputs, scenario.requiredInputs); err != nil {
 		return err
 	}
 	if err := verifyRuntimeFiles(live, scenario); err != nil {
@@ -167,21 +167,58 @@ func (scenario installScenario) verify(root, oracle string, declared manifestInt
 	return nil
 }
 
-func verifyBootstrapInputs(root string, inputs []lockedInput, required []string) error {
+func verifyBootstrapInputs(
+	root, bootstrap string,
+	inputs []lockedInput,
+	required []string,
+) error {
 	seen := make(map[string]bool, len(inputs))
 	for _, input := range inputs {
-		seen[input.Path] = true
+		if bootstrap == "forge-installer" && forgeStagingInput(input.Path) {
+			// Forge installer inputs that exist only for processor execution
+			// must not survive installation, and they never satisfy a required
+			// runtime input. Their absence is checked below.
+			continue
+		}
 		path := filepath.Join(root, filepath.FromSlash(input.Path))
 		if err := verifyLockedFile(path, input.lockedArtifact); err != nil {
 			return fmt.Errorf("bootstrap input %s: %w", input.Path, err)
 		}
+		seen[input.Path] = true
 	}
 	for _, path := range required {
 		if !seen[path] {
 			return fmt.Errorf("lock omitted required bootstrap input %s", path)
 		}
 	}
+	if bootstrap == "forge-installer" {
+		for _, staging := range []string{
+			"server.jar",
+			"server-mappings.txt",
+			".bootstrap-data",
+		} {
+			if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(staging))); err == nil {
+				return fmt.Errorf(
+					"staging-only bootstrap material %s was published",
+					staging,
+				)
+			} else if !os.IsNotExist(err) {
+				return fmt.Errorf("inspect staging-only bootstrap material %s: %w", staging, err)
+			}
+		}
+	}
 	return nil
+}
+
+// forgeStagingInput mirrors the Forge installer's bootstrap-only input scopes.
+// Installer execution consumes these files without publishing them as runtime
+// outputs, so the oracle checks that they are absent instead of hash-verifying
+// them in the installed tree.
+func forgeStagingInput(path string) bool {
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(path)))
+	return clean == "server.jar" ||
+		clean == "server-mappings.txt" ||
+		strings.HasPrefix(clean, ".bootstrap-data/")
 }
 
 func verifyRuntimeFiles(root string, scenario installScenario) error {

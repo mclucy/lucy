@@ -17,6 +17,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/install"
+	"github.com/mclucy/lucy/receipt"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
@@ -172,11 +173,12 @@ func (s *replaySource) ResolveServerProduct(
 
 // TestInitializeThenLockedInstallReplaysInEmptyWorkspace chains adoption and
 // installation in process: initialization detects a synthetic vanilla runtime,
-// writes its manifest and lock, and a locked install in an empty destination
-// replays those documents without resolving or rewriting them.
+// writes its manifest and lock, records the runtime it adopted in the receipt,
+// and a locked install in an empty destination replays those documents without
+// resolving or rewriting them.
 func TestInitializeThenLockedInstallReplaysInEmptyWorkspace(t *testing.T) {
 	isolateOperationHome(t)
-	core := []byte("initialized core bytes\n")
+	core := operationTestMiniVanillaJar(t, "1.21.4")
 	source := &replaySource{core: catalog.Artifact{
 		Provider:  catalog.ProviderMojang,
 		ProjectID: "minecraft",
@@ -191,14 +193,23 @@ func TestInitializeThenLockedInstallReplaysInEmptyWorkspace(t *testing.T) {
 	service := NewService(installer, source, registry, nil)
 
 	sourceRoot := t.TempDir()
-	operationTestWrite(t, sourceRoot, "server.jar", operationTestMiniVanillaJar(t, "1.21.4"), 0o644)
+	operationTestWrite(t, sourceRoot, "server.jar", core, 0o644)
 	if _, err := service.Initialize(t.Context(), sourceRoot, InitOptions{}); err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
 	manifestBytes := operationTestRead(t, sourceRoot, document.ManifestFilename)
 	lockBytes := operationTestRead(t, sourceRoot, document.LockFilename)
-	if _, err := os.Stat(filepath.Join(sourceRoot, ".lucy", "install.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("init staged an installation receipt: %v", err)
+	adopted, err := receipt.Read(sourceRoot)
+	if err != nil {
+		t.Fatalf("read adopted receipt: %v", err)
+	}
+	if adopted.BootstrapFingerprint == "" {
+		t.Fatal("initialization did not record the adopted bootstrap identity")
+	}
+	if len(adopted.Entries) != 1 || adopted.Entries[0].Path != "server.jar" ||
+		adopted.Entries[0].Origin != receipt.OriginBootstrap ||
+		adopted.Entries[0].SHA256 != operationTestDigest(core) {
+		t.Fatalf("initialization did not record the adopted runtime: %+v", adopted.Entries)
 	}
 	manifest, err := document.ManifestFile(sourceRoot).Read()
 	if err != nil {

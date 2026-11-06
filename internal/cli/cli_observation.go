@@ -46,7 +46,7 @@ func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 			output.Warn(unreadableFindingError(finding))
 		case discovery.FindingAlternativeEntryPoint,
 			discovery.FindingUnmanagedInstallation:
-			message := entryPointFindingMessage(finding)
+			message := entryPointFindingMessage(observed, finding)
 			if output.JSON() {
 				output.Warn(errors.New(message))
 			} else {
@@ -64,7 +64,7 @@ func reportDiscoveryFindings(observed *discovery.Result, output *Output) {
 			))
 		case discovery.FindingModifiedFile:
 			output.Warn(fmt.Errorf(
-				"managed file %s was modified; it stays unmanaged",
+				"managed file %s was modified",
 				finding.Path,
 			))
 		case discovery.FindingReceiptError:
@@ -144,16 +144,43 @@ func unreadableFindingLines(result *discovery.Result) []string {
 	return lines
 }
 
-func entryPointFindingMessage(finding discovery.Finding) string {
+func entryPointFindingMessage(observed *discovery.Result, finding discovery.Finding) string {
+	ownership := fileOwnershipAt(observed, finding.Path)
 	label := "unmanaged entry point"
 	if finding.Kind == discovery.FindingUnmanagedInstallation {
 		label = "unmanaged server entry point"
 	}
+	switch ownership {
+	case discovery.OwnershipModified:
+		label = "modified entry point"
+		if finding.Kind == discovery.FindingUnmanagedInstallation {
+			label = "modified server entry point"
+		}
+	case discovery.OwnershipUnreadable, discovery.OwnershipUnknown:
+		label = "unreadable entry point"
+		if finding.Kind == discovery.FindingUnmanagedInstallation {
+			label = "unreadable server entry point"
+		}
+	}
 	return fmt.Sprintf("%s %s; left unchanged", label, finding.Path)
 }
 
+func fileOwnershipAt(observed *discovery.Result, path string) discovery.Ownership {
+	if observed == nil || path == "" {
+		return discovery.OwnershipUnknown
+	}
+	for i := range observed.Installations {
+		for _, file := range observed.Installations[i].Files {
+			if file.Path == path {
+				return file.Ownership
+			}
+		}
+	}
+	return discovery.OwnershipUnmanaged
+}
+
 // automaticSelectionMessage names the chosen entry point and every competing
-// entry point. The choice is read-only; the message suggests recording it.
+// entry point. The choice is read-only; the message suggests selecting an explicit server.
 func automaticSelectionMessage(
 	observed *discovery.Result,
 	finding discovery.Finding,
@@ -173,7 +200,7 @@ func automaticSelectionMessage(
 	if len(competitors) > 0 {
 		message += "; competing entry points: " + strings.Join(competitors, ", ")
 	}
-	message += "; run lucy init --entry-point '<path>' to record a choice"
+	message += "; run lucy init --entry-point '<path>' to select one"
 	return errors.New(message)
 }
 

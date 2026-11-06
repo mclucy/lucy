@@ -29,10 +29,11 @@ const (
 type Ownership string
 
 const (
-	OwnershipUnknown   Ownership = ""
-	OwnershipUnmanaged Ownership = "unmanaged"
-	OwnershipManaged   Ownership = "managed"
-	OwnershipModified  Ownership = "modified"
+	OwnershipUnknown    Ownership = ""
+	OwnershipUnmanaged  Ownership = "unmanaged"
+	OwnershipManaged    Ownership = "managed"
+	OwnershipModified   Ownership = "modified"
+	OwnershipUnreadable Ownership = "unreadable"
 )
 
 // File is one member of an installation. It is data, not an open handle.
@@ -516,8 +517,10 @@ func strongerOwnership(left, right Ownership) Ownership {
 	rank := func(value Ownership) int {
 		switch value {
 		case OwnershipManaged:
-			return 3
+			return 4
 		case OwnershipModified:
+			return 3
+		case OwnershipUnreadable:
 			return 2
 		case OwnershipUnmanaged:
 			return 1

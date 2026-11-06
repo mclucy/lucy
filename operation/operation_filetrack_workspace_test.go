@@ -16,7 +16,6 @@ import (
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/receipt"
 	serverpkg "github.com/mclucy/lucy/server"
-	"gopkg.in/yaml.v3"
 )
 
 // compositeWorkspace seeds a current native installation whose receipt owns
@@ -66,39 +65,37 @@ func compositeWorkspace(t *testing.T) (string, *document.Manifest, *document.Loc
 	if err := document.LockFile(root).Write(lock); err != nil {
 		t.Fatalf("write lock: %v", err)
 	}
-	compositeWriteReceipt(t, root, lock)
+	compositeWriteReceipt(t, root)
 	return root, manifest, lock, core
 }
 
-func compositeWriteReceipt(t *testing.T, root string, lock *document.Lock) {
+func compositeWriteReceipt(t *testing.T, root string) {
 	t.Helper()
-	fingerprint, err := receipt.ResolutionFingerprint(lock)
+	lock, err := document.LockFile(root).Read()
 	if err != nil {
-		t.Fatalf("resolution fingerprint: %v", err)
+		t.Fatalf("read lock: %v", err)
+	}
+	bootstrap, err := receipt.BootstrapFingerprint(lock)
+	if err != nil {
+		t.Fatalf("bootstrap fingerprint: %v", err)
+	}
+	packages, err := receipt.PackageFingerprint(lock)
+	if err != nil {
+		t.Fatalf("package fingerprint: %v", err)
 	}
 	core := operationTestRead(t, root, "server/server.jar")
-	receipt := struct {
-		Version         int    `yaml:"version"`
-		LockFingerprint string `yaml:"lock_fingerprint"`
-		Entries         []struct {
-			Path   string `yaml:"path"`
-			SHA256 string `yaml:"sha256"`
-			Mode   uint32 `yaml:"mode"`
-		} `yaml:"entries"`
-	}{
-		Version:         1,
-		LockFingerprint: fingerprint,
+	recorded := receipt.New()
+	recorded.BootstrapFingerprint = bootstrap
+	recorded.PackageFingerprint = packages
+	recorded.Entries = []receipt.Entry{{
+		Path:   "server/server.jar",
+		SHA256: operationTestDigest(core),
+		Mode:   0o644,
+		Origin: receipt.OriginBootstrap,
+	}}
+	if err := recorded.Write(root); err != nil {
+		t.Fatalf("write receipt: %v", err)
 	}
-	receipt.Entries = append(receipt.Entries, struct {
-		Path   string `yaml:"path"`
-		SHA256 string `yaml:"sha256"`
-		Mode   uint32 `yaml:"mode"`
-	}{Path: "server/server.jar", SHA256: operationTestDigest(core), Mode: 0o644})
-	data, err := yaml.Marshal(receipt)
-	if err != nil {
-		t.Fatalf("marshal receipt: %v", err)
-	}
-	operationTestWrite(t, root, ".lucy/install.yaml", data, 0o600)
 }
 
 func compositeServices(t *testing.T) (*filetrack.Service, *install.Service, *Service) {

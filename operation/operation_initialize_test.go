@@ -277,9 +277,6 @@ func TestInitializeWritesDeclarationForVanillaLayout(t *testing.T) {
 			result.PublishedConfig,
 		)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".lucy", "install.yaml")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("initialization staged an installation receipt: %v", err)
-	}
 
 	// The lock records the runtime identity, never an ephemeral selection.
 	data := readFileBytes(t, filepath.Join(root, documentpkg.LockFilename))
@@ -309,7 +306,7 @@ func TestInitializePreservesReceiptAndObservedFiles(t *testing.T) {
 	modSum := sha256.Sum256(readFileBytes(t, modPath))
 	receipt := fmt.Appendf(
 		nil,
-		"version: 1\nentries:\n  - path: mods/example.jar\n    sha256: %x\n",
+		"version: 1\nentries:\n  - path: mods/example.jar\n    sha256: %x\n    origin: package\n    package: modrinth:example\n",
 		modSum,
 	)
 	if err := os.WriteFile(receiptPath, receipt, 0o644); err != nil {

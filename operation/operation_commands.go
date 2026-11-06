@@ -316,6 +316,13 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if err := filetrack.RecoverLocked(root, s.logger); err != nil {
 		return nil, err
 	}
+	// Pin the recovered documents before resolution reads the workspace.
+	// Adoption publishes the manifest, lock, and receipt as one transaction
+	// and refuses to overwrite bytes that changed in between.
+	preconditions, err := install.CaptureAdoptionPreconditions(root)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := os.Stat(filepath.Join(root, documentpkg.ManifestFilename)); err == nil && !opts.Force {
 		return nil, fmt.Errorf("lucy.yaml exists; use --force to replace declared intent")
 	}
@@ -355,6 +362,13 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 				}
 			}
 		}
+	}
+	// Bind the selected runtime bytes before identification performs network
+	// work. Adoption may only record these bytes; verifyRuntimeObservation
+	// rejects a replaced runtime instead of adopting stale membership.
+	runtimeObserved, err := captureRuntimeObservation(observed.Runtime())
+	if err != nil {
+		return initResult(observed), err
 	}
 	if selection := observed.Runtime(); selection != nil {
 		identity := selection.Installation.Identity
@@ -465,7 +479,13 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		packages = observed.Packages
 	}
 	recognized := 0
-	ownedPackages := []string{}
+	adoptedPackages := []install.AdoptedPackage{}
+	// A manifest requirement names one project, so two installed jars that
+	// identify the same Modrinth project cannot both be managed: the key would
+	// otherwise record only the last file while the receipt and fingerprint
+	// claim both. Conflicting projects stay unmanaged.
+	adoptedPackageIndex := make(map[string]int)
+	conflictedPackages := make(map[string]bool)
 	for _, p := range packages {
 		if !artifact.SupportsPath(p.Path) {
 			continue
@@ -502,9 +522,50 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 					continue
 				}
 				if _, err := install.DigestFile(p.Path, candidate.Hashes); err == nil {
-					d.MCDR.Packages["mcdr:"+candidate.ProjectID] = documentpkg.Requirement{Selector: candidate.Version}
+					info, statErr := os.Lstat(p.Path)
+					if statErr != nil {
+						return initResult(observed), fmt.Errorf(
+							"inspect package %s: %w", p.Path, statErr,
+						)
+					}
+					packageID := "mcdr:" + candidate.ProjectID
+					projectKey := string(ecosystem) + "\x00" + packageID
+					if conflictedPackages[projectKey] {
+						if observed != nil {
+							observed.Warnings = append(observed.Warnings, fmt.Errorf(
+								"package %s left unmanaged: several installed plugins identify the same project",
+								candidate.ProjectID,
+							))
+						}
+						break
+					}
+					if index, exists := adoptedPackageIndex[projectKey]; exists {
+						conflictedPackages[projectKey] = true
+						delete(adoptedPackageIndex, projectKey)
+						delete(d.MCDR.Packages, packageID)
+						priorPath := ""
+						if index < len(adoptedPackages) {
+							priorPath = adoptedPackages[index].Path
+							adoptedPackages[index] = install.AdoptedPackage{}
+						}
+						recognized--
+						if observed != nil {
+							observed.Warnings = append(observed.Warnings, fmt.Errorf(
+								"package %s left unmanaged: installed plugins %s and %s identify the same project",
+								candidate.ProjectID, priorPath, p.Path,
+							))
+						}
+						break
+					}
+					d.MCDR.Packages[packageID] = documentpkg.Requirement{Selector: candidate.Version}
 					recognized++
-					ownedPackages = append(ownedPackages, p.Path)
+					adoptedPackageIndex[projectKey] = len(adoptedPackages)
+					adoptedPackages = append(adoptedPackages, install.AdoptedPackage{
+						Path:           p.Path,
+						PackageID:      packageID,
+						ExpectedSHA256: candidate.Hashes["sha256"],
+						ExpectedMode:   uint32(info.Mode().Perm()),
+					})
 					break
 				}
 			}
@@ -515,6 +576,18 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		}
 		if !hasModrinthMapper {
 			continue
+		}
+		fileDigests, digestErr := install.DigestFile(p.Path, nil)
+		if digestErr != nil {
+			return initResult(observed), fmt.Errorf(
+				"digest package %s: %w", p.Path, digestErr,
+			)
+		}
+		fileInfo, statErr := os.Lstat(p.Path)
+		if statErr != nil {
+			return initResult(observed), fmt.Errorf(
+				"inspect package %s: %w", p.Path, statErr,
+			)
 		}
 		ref, _, matched, err := modrinthMapper.PackageByHash(ctx, artifact.File{Path: p.Path})
 		if err != nil || !matched || ref.Name == "" {
@@ -542,13 +615,52 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 			}
 			continue
 		}
+		packageID := "modrinth:" + ref.Name.String()
+		projectKey := string(ecosystem) + "\x00" + packageID
+		if conflictedPackages[projectKey] {
+			if observed != nil {
+				observed.Warnings = append(observed.Warnings, fmt.Errorf(
+					"package %s left unmanaged: several installed jars identify the same project",
+					ref.Name,
+				))
+			}
+			continue
+		}
+		if index, exists := adoptedPackageIndex[projectKey]; exists {
+			conflictedPackages[projectKey] = true
+			delete(adoptedPackageIndex, projectKey)
+			delete(d.Server.Packages[ecosystem], packageID)
+			priorPath := ""
+			if index < len(adoptedPackages) {
+				priorPath = adoptedPackages[index].Path
+				adoptedPackages[index] = install.AdoptedPackage{}
+			}
+			recognized--
+			if observed != nil {
+				observed.Warnings = append(observed.Warnings, fmt.Errorf(
+					"package %s left unmanaged: installed jars %s and %s identify the same project",
+					ref.Name, priorPath, p.Path,
+				))
+			}
+			continue
+		}
 		if d.Server.Packages[ecosystem] == nil {
 			d.Server.Packages[ecosystem] = map[string]documentpkg.Requirement{}
 		}
-		d.Server.Packages[ecosystem]["modrinth:"+ref.Name.String()] = documentpkg.Requirement{Selector: ref.Version}
+		d.Server.Packages[ecosystem][packageID] = documentpkg.Requirement{Selector: ref.Version}
 		recognized++
-		ownedPackages = append(ownedPackages, p.Path)
+		adoptedPackageIndex[projectKey] = len(adoptedPackages)
+		adoptedPackages = append(adoptedPackages, install.AdoptedPackage{
+			Path:           p.Path,
+			PackageID:      packageID,
+			ExpectedSHA256: fileDigests["sha256"],
+			ExpectedMode:   uint32(fileInfo.Mode().Perm()),
+		})
 	}
+	adoptedPackages = slices.DeleteFunc(
+		adoptedPackages,
+		func(pkg install.AdoptedPackage) bool { return pkg.Path == "" },
+	)
 	s.logger.Debug(
 		"recognized existing packages",
 		"count", recognized,
@@ -586,6 +698,30 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if configErr != nil && !publishedConfig {
 		return initResult(observed), configErr
 	}
+	if err := ctx.Err(); err != nil {
+		return initResult(observed), err
+	}
+	var selection *discovery.Selection
+	if observed != nil {
+		selection = observed.Runtime()
+	}
+	if runtimeObserved != nil {
+		// Re-discover from disk instead of trusting the in-memory selection
+		// that may predate the ambiguity prompt or network identification.
+		fresh := workspace.Observe(
+			root,
+			discovery.Request{EntryPoint: runtimeObserved.entryPoint},
+		)
+		freshSelection := fresh.Runtime()
+		if err := runtimeObserved.verify(freshSelection); err != nil {
+			return initResult(observed), err
+		}
+		selection = freshSelection
+	}
+	var runtimeFiles []install.AdoptedRuntimeFile
+	if runtimeObserved != nil {
+		runtimeFiles = runtimeObserved.files
+	}
 	manifestFile := documentpkg.ManifestFile(root)
 	if opts.Force {
 		manifestFile = manifestFile.WithoutMerge()
@@ -593,23 +729,55 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	if opts.NoComments {
 		manifestFile = manifestFile.WithEncoder((*documentpkg.Manifest).PlainBytes)
 	}
-	if err := ctx.Err(); err != nil {
-		return initResult(observed), err
+	var manifestMerge func([]byte) ([]byte, error)
+	if !opts.Force && !opts.NoComments {
+		manifestMerge = d.MergeBytes
 	}
-	if err := manifestFile.Write(d); err != nil {
-		return initResult(observed), err
+	publishLock := resolved != old
+	// Adoption publishes the manifest, lock, and receipt as one workspace
+	// transaction. Registration runs only after that commit because the
+	// registry reads the manifest, and no document is written ahead of the
+	// transaction. The operation lease stays held until registration
+	// completes: the artifact store's sweep cannot reclaim the bytes
+	// resolution materialized while the workspace still had no visible lock.
+	var committedErr *install.CommittedError
+	adoptErr := install.AdoptExistingWorkspace(root, install.AdoptOptions{
+		Manifest:     d,
+		Lock:         resolved,
+		Runtime:      selection,
+		RuntimeFiles: runtimeFiles,
+		Packages:     adoptedPackages,
+		Logger:       s.logger,
+		PublishLock:  publishLock,
+		ManifestSnapshot: func() ([]byte, error) {
+			return manifestFile.Snapshot(d)
+		},
+		ManifestMerge: manifestMerge,
+		Preconditions: preconditions,
+	})
+	if adoptErr != nil && !errors.As(adoptErr, &committedErr) {
+		return initResult(observed), adoptErr
 	}
-	// Once lucy.yaml exists, later publication failures still report the
-	// written document. Registration precedes lock publication so a successful
-	// initialization is visible to the artifact store's sweep.
-	result = &InitResult{Document: d}
+	result = &InitResult{
+		Document:      d,
+		Lock:          resolved,
+		PublishedLock: publishLock,
+	}
 	if observed != nil {
 		result.Warnings = observed.Warnings
 		result.Discovery = observed.Discovery
 	}
-	duplicates, err := s.registerWorkspace(root)
-	if err != nil {
-		return result, fmt.Errorf("register server: %w", err)
+	// Registration is required even when the transaction committed but its
+	// cleanup or post-commit verification failed: the published lock must stay
+	// traceable by the artifact store's sweep. The original committed error is
+	// returned after registration, never replaced by it.
+	duplicates, regErr := s.registerWorkspace(root)
+	if regErr != nil {
+		regErr = fmt.Errorf("register server: %w", regErr)
+		if adoptErr != nil {
+			return result, errors.Join(adoptErr, regErr)
+		}
+		return result, regErr
 	}
 	for _, duplicate := range duplicates {
 		result.Warnings = append(result.Warnings, fmt.Errorf(
@@ -618,15 +786,10 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 			duplicate.Path,
 		))
 	}
-	if resolved != old {
-		if err := documentpkg.LockFile(root).Write(resolved); err != nil {
-			return result, err
-		}
-		result.PublishedLock = true
-	}
-	result.Lock = resolved
-	if err := install.RecordAdoptedPackages(root, resolved, ownedPackages); err != nil {
-		return result, err
+	if adoptErr != nil {
+		// The manifest, lock, and receipt reached the commit point. Do not
+		// publish user configuration past a failed transaction completion.
+		return result, adoptErr
 	}
 	if publishedConfig {
 		created, err := config.CreateWorkspace(root, opts.NoComments)
@@ -637,6 +800,145 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	}
 	result.PublishedConfig = publishedConfig
 	return result, nil
+}
+
+// runtimeObservation binds the selected runtime identity, membership, and
+// regular-file bytes observed before identification performs network work.
+// Adoption may only publish these bytes.
+type runtimeObservation struct {
+	entryPoint  string
+	product     serverpkg.Product
+	minecraft   version.Version
+	coreVersion version.Version
+	members     map[string]discovery.FileRole
+	files       []install.AdoptedRuntimeFile
+}
+
+func captureRuntimeObservation(
+	selection *discovery.Selection,
+) (*runtimeObservation, error) {
+	if selection == nil || selection.Installation == nil {
+		return nil, nil
+	}
+	files, err := adoptedRuntimeFiles(selection)
+	if err != nil {
+		return nil, err
+	}
+	members := make(map[string]discovery.FileRole, len(selection.Installation.Files))
+	for _, file := range selection.Installation.Files {
+		members[file.Path] = file.Role
+	}
+	entryPoint := ""
+	if selection.EntryPoint != nil {
+		entryPoint = selection.EntryPoint.Path
+	}
+	return &runtimeObservation{
+		entryPoint:  entryPoint,
+		product:     selection.Product(),
+		minecraft:   selection.MinecraftVersion(),
+		coreVersion: selection.Installation.Identity.Primary.Version,
+		members:     members,
+		files:       files,
+	}, nil
+}
+
+// verify rejects a runtime that changed after observation. The caller passes a
+// fresh discovery result, and verify rechecks the selected entry point,
+// identity, membership roles, and every observed file's digest and mode, so
+// inconclusive adoption cannot record ownership of a replacement using stale
+// membership.
+func (o *runtimeObservation) verify(selection *discovery.Selection) error {
+	if o == nil {
+		if selection != nil {
+			return errors.New("a runtime appeared after observation; rerun lucy init")
+		}
+		return nil
+	}
+	if selection == nil || selection.Installation == nil {
+		return errors.New("the observed runtime disappeared during initialization")
+	}
+	entryPoint := ""
+	if selection.EntryPoint != nil {
+		entryPoint = selection.EntryPoint.Path
+	}
+	if entryPoint != o.entryPoint ||
+		selection.Product() != o.product ||
+		selection.MinecraftVersion() != o.minecraft ||
+		selection.Installation.Identity.Primary.Version != o.coreVersion {
+		return errors.New("the selected runtime identity changed during initialization")
+	}
+	if len(selection.Installation.Files) != len(o.members) {
+		return errors.New("the selected runtime membership changed during initialization")
+	}
+	for _, file := range selection.Installation.Files {
+		role, ok := o.members[file.Path]
+		if !ok || role != file.Role {
+			return errors.New("the selected runtime membership changed during initialization")
+		}
+	}
+	for _, observed := range o.files {
+		info, err := os.Lstat(observed.Path)
+		if err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf(
+				"runtime file %s changed during initialization",
+				observed.Path,
+			)
+		}
+		hashes, err := install.DigestFile(observed.Path, nil)
+		if err != nil {
+			return fmt.Errorf(
+				"digest runtime file %s: %w",
+				observed.Path,
+				err,
+			)
+		}
+		if hashes["sha256"] != observed.ExpectedSHA256 ||
+			uint32(info.Mode().Perm()) != observed.ExpectedMode {
+			return fmt.Errorf(
+				"runtime file %s changed during initialization",
+				observed.Path,
+			)
+		}
+	}
+	return nil
+}
+
+// adoptedRuntimeFiles captures the digest and mode of every file the selected
+// runtime owns. Adoption records only files with a captured baseline, so an
+// unreadable or replaced file fails initialization instead of being adopted
+// without evidence.
+func adoptedRuntimeFiles(
+	selection *discovery.Selection,
+) ([]install.AdoptedRuntimeFile, error) {
+	if selection == nil || selection.Installation == nil {
+		return nil, nil
+	}
+	files := make([]install.AdoptedRuntimeFile, 0, len(selection.Installation.Files))
+	for _, f := range selection.Installation.Files {
+		info, err := os.Lstat(f.Path)
+		if err != nil {
+			return nil, fmt.Errorf("inspect runtime file %s: %w", f.Path, err)
+		}
+		if !info.Mode().IsRegular() {
+			if info.Mode()&os.ModeSymlink != 0 {
+				// A launcher alias stays unowned; discovery selects the
+				// canonical target when one exists.
+				continue
+			}
+			return nil, fmt.Errorf("runtime file %s is not a regular file", f.Path)
+		}
+		hashes, err := install.DigestFile(f.Path, nil)
+		if err != nil {
+			return nil, fmt.Errorf("digest runtime file %s: %w", f.Path, err)
+		}
+		files = append(files, install.AdoptedRuntimeFile{
+			Path:           f.Path,
+			Role:           f.Role,
+			ExpectedSHA256: hashes["sha256"],
+			ExpectedMode:   uint32(info.Mode().Perm()),
+		})
+	}
+	return files, nil
 }
 
 // initResult carries the observations of a failed initialization so the

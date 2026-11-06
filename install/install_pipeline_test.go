@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/artifact"
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
@@ -352,22 +353,21 @@ func TestLockedReplayInstallsEmptyWorkspaceWithoutRewritingIntent(t *testing.T) 
 	}
 }
 
-func TestAdoptionReplacesOwnedLauncherAndPreservesAmbientFiles(t *testing.T) {
+func TestExplicitAdoptionThenInstallReplacesOwnedRuntimeAndPreservesAmbientFiles(t *testing.T) {
 	isolateInstallHome(t)
 	root := t.TempDir()
 
 	core := []byte("fabric loader core bytes\n")
+	adoptedServerJar := installTestMiniVanillaJar(t, "1.21.4")
 	serverInput := []byte("new server input bytes\n")
 	ambient := []byte("ambient package bytes\n")
 	extra := []byte("unmanaged note\n")
-	adoptedShim := installTestFabricShim(t)
-	adoptedServerJar := installTestMiniVanillaJar(t, "1.21.4")
-
-	installTestWrite(t, root, "server/fabric-server-launch.jar", adoptedShim, 0o644)
-	installTestWrite(t, root, "server/fabric-server-launcher.properties", []byte("serverJar=server.jar\n"), 0o644)
-	installTestWrite(t, root, "server/server.jar", adoptedServerJar, 0o644)
+	loaderRel := "libraries/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar"
 	installTestWrite(t, root, "server/mods/ambient.jar", ambient, 0o644)
 	installTestWrite(t, root, "server/mods/extra.jar", extra, 0o644)
+	if err := os.MkdirAll(filepath.Join(root, ".lucy"), 0o755); err != nil {
+		t.Fatalf("create workspace state directory: %v", err)
+	}
 
 	manifest := installTestManifest("0.16.9")
 	manifest.Server.Core.Product = serverpkg.ProductFabric
@@ -381,7 +381,7 @@ func TestAdoptionReplacesOwnedLauncherAndPreservesAmbientFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fingerprint manifest: %v", err)
 	}
-	lock := &document.Lock{
+	adopted := &document.Lock{
 		SchemaVersion:       document.LockSchemaVersion,
 		ManifestFingerprint: fingerprint,
 		Server: document.LockedServer{
@@ -405,7 +405,7 @@ func TestAdoptionReplacesOwnedLauncherAndPreservesAmbientFiles(t *testing.T) {
 					Version:  "1.21.4",
 					Filename: "server.jar",
 					URL:      "https://example.invalid/server.jar",
-					Hashes:   map[string]string{"sha256": installTestDigest(serverInput)},
+					Hashes:   map[string]string{"sha256": installTestDigest(adoptedServerJar)},
 				},
 			}},
 			Java: document.LockedJava{Advisory: 21},
@@ -428,20 +428,67 @@ func TestAdoptionReplacesOwnedLauncherAndPreservesAmbientFiles(t *testing.T) {
 			}},
 		}},
 	}
-	if err := document.LockFile(root).Write(lock); err != nil {
-		t.Fatalf("write lock: %v", err)
+	sources := t.TempDir()
+	installTestWrite(t, sources, "loader.jar", core, 0o644)
+	installTestWrite(t, sources, "server.jar", adoptedServerJar, 0o644)
+	if err := bootstrap.PrepareLocked(
+		t.Context(), root, adopted.Server,
+		filepath.Join(sources, "loader.jar"),
+		map[string]string{"server.jar": filepath.Join(sources, "server.jar")},
+		"", nil,
+	); err != nil {
+		t.Fatalf("prepare complete Fabric fixture: %v", err)
+	}
+	// Explicit adoption is the only path that grants ownership of the existing
+	// upstream runtime and identified package.
+	if err := install.AdoptExistingWorkspace(root, install.AdoptOptions{
+		Manifest:    manifest,
+		Lock:        adopted,
+		PublishLock: true,
+		Packages: []install.AdoptedPackage{{
+			Path:           filepath.Join(root, "server", "mods", "ambient.jar"),
+			PackageID:      "modrinth:ambient",
+			ExpectedSHA256: installTestDigest(ambient),
+		}},
+	}); err != nil {
+		t.Fatalf("explicit adoption: %v", err)
+	}
+	service := installTestService(t)
+	unchanged, err := service.Sync(t.Context(), root, manifest, adopted, install.Options{Locked: true, Offline: true})
+	if err != nil {
+		t.Fatalf("install after adoption: %v", err)
+	}
+	if unchanged.Mode != install.ModeReplay ||
+		unchanged.Files.Created != 0 || unchanged.Files.Replaced != 0 {
+		t.Fatalf("explicit adoption did not establish a current installation: %+v", unchanged)
+	}
+
+	// A later lock pins a new server input, so installation must replace the
+	// owned runtime outputs while leaving ambient files alone.
+	updated := *adopted
+	updated.Server.Inputs = []serverpkg.BootstrapInput{{
+		Path: "server.jar",
+		Artifact: catalog.Artifact{
+			Provider: catalog.ProviderMojang,
+			Version:  "1.21.4",
+			Filename: "server.jar",
+			URL:      "https://example.invalid/server.jar",
+			Hashes:   map[string]string{"sha256": installTestDigest(serverInput)},
+		},
+	}}
+	if err := document.LockFile(root).Write(&updated); err != nil {
+		t.Fatalf("write updated lock: %v", err)
 	}
 	manifestBytes := installTestRead(t, root, document.ManifestFilename)
 	lockBytes := installTestRead(t, root, document.LockFilename)
 
-	service := installTestService(t)
 	materialize := installTestMaterializer(t, map[string][]byte{
 		"fabric-loader-0.16.9.jar": core,
 		"server.jar":               serverInput,
 		"ambient.jar":              ambient,
 	})
 	options := install.Options{Locked: true, Offline: true, Materialize: materialize}
-	result, err := service.Sync(t.Context(), root, manifest, lock, options)
+	result, err := service.Sync(t.Context(), root, manifest, &updated, options)
 	if err != nil {
 		t.Fatalf("Sync() error = %v", err)
 	}
@@ -450,9 +497,6 @@ func TestAdoptionReplacesOwnedLauncherAndPreservesAmbientFiles(t *testing.T) {
 	}
 
 	launcher := installTestRead(t, root, "server/fabric-server-launch.jar")
-	if bytes.Equal(launcher, adoptedShim) || bytes.Contains(launcher, []byte("written by the upstream installer")) {
-		t.Fatal("install kept the adopted launcher instead of generating its own")
-	}
 	if !bytes.Equal(installTestRead(t, root, "server/server.jar"), serverInput) {
 		t.Fatal("install did not replace the adopted payload it owns")
 	}
@@ -469,7 +513,7 @@ func TestAdoptionReplacesOwnedLauncherAndPreservesAmbientFiles(t *testing.T) {
 	if runtime.GOOS != "windows" && run.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("generated launcher %s is not executable", run.Mode().Perm())
 	}
-	if _, err := os.Stat(filepath.Join(root, "server", "libraries/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "server", loaderRel)); err != nil {
 		t.Fatalf("generated loader library: %v", err)
 	}
 	entries := installTestReceipt(t, root)
@@ -496,7 +540,7 @@ func TestAdoptionReplacesOwnedLauncherAndPreservesAmbientFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat generated launcher: %v", err)
 	}
-	again, err := service.Sync(t.Context(), root, manifest, lock, options)
+	again, err := service.Sync(t.Context(), root, manifest, &updated, options)
 	if err != nil {
 		t.Fatalf("second Sync() error = %v", err)
 	}
@@ -528,41 +572,6 @@ func installTestMiniVanillaJar(t *testing.T, id string) []byte {
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatalf("seal miniature jar: %v", err)
-	}
-	return buffer.Bytes()
-}
-
-// installTestFabricShim builds an upstream-style launch shim whose identity
-// discovery can read. The marker in its embedded properties keeps it distinct
-// from every launcher Lucy generates.
-func installTestFabricShim(t *testing.T) []byte {
-	t.Helper()
-	var buffer bytes.Buffer
-	writer := zip.NewWriter(&buffer)
-	manifest, err := writer.Create("META-INF/MANIFEST.MF")
-	if err != nil {
-		t.Fatalf("create shim manifest: %v", err)
-	}
-	_, err = fmt.Fprint(
-		manifest,
-		"Manifest-Version: 1.0\nClass-Path: libraries/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar libraries/net/fabricmc/intermediary/1.21.4/intermediary-1.21.4.jar\n",
-	)
-	if err != nil {
-		t.Fatalf("write shim manifest: %v", err)
-	}
-	properties, err := writer.Create("fabric-server-launch.properties")
-	if err != nil {
-		t.Fatalf("create shim properties: %v", err)
-	}
-	_, err = fmt.Fprint(
-		properties,
-		"launch.mainClass=net.fabricmc.loader.impl.launch.knot.KnotServer\n# written by the upstream installer\n",
-	)
-	if err != nil {
-		t.Fatalf("write shim properties: %v", err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("seal shim: %v", err)
 	}
 	return buffer.Bytes()
 }

@@ -117,7 +117,7 @@ func (scenario initInstallScenario) verifyInstalled(root string, locked lockDocu
 			return fmt.Errorf("server core: %w", err)
 		}
 	}
-	if err := verifyBootstrapInputs(live, locked.Server.Inputs, scenario.requiredInputs); err != nil {
+	if err := verifyBootstrapInputs(live, locked.Server.Bootstrapper, locked.Server.Inputs, scenario.requiredInputs); err != nil {
 		return err
 	}
 	if err := verifyRuntimeFiles(live, installScenario{

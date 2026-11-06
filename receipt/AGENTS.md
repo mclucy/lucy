@@ -1,22 +1,23 @@
 # receipt
 
-Package `receipt` owns the workspace installation receipt (`.lucy/install.yaml`): the authoritative ledger of committed runtime outputs and the resolution it answers.
+Package `receipt` owns the workspace installation receipt (`.lucy/install.yaml`): the authoritative ledger of committed runtime outputs and the resolutions they answer.
 
 ## Responsibilities & Ownership
 
-- **Committed State Ledger**: Records workspace-relative paths, SHA-256 content hashes, and file modes for outputs committed by installation or package adoption.
-- **Authoritative Ownership**: Lucy owns only files recorded in the receipt. Files produced during staging become owned workspace state only upon commit; unrecorded files are treated as unmanaged.
+- **Committed State Ledger**: Records workspace-relative paths, SHA-256 conflict baseline digests, file modes, and origins (`bootstrap`, `package` with package identity, or `mcdr` for the independently reconciled wrapper runtime) for managed outputs committed by installation or adoption.
+- **Authoritative Ownership**: Lucy owns only files recorded in the receipt. Seed files are initialized when missing but user-owned thereafter, discard files are staging-only, and unrecorded files remain unmanaged.
 - **Atomic Persistence**: Provides atomic file replacement (`Write`) and memory snapshots (`Snapshot`) for transactional commit workflows.
+- **Strict Validation**: Rejects unnormalized or unsafe paths, reserved filenames, path collisions (case-insensitive), and invalid digests. Legacy un-attributed receipts return `ErrLegacyReceipt` giving explicit remediation (`lucy init` or `lucy init --force`).
 
 ## Fingerprint Relationship
 
-- **Resolution Fingerprint**: The receipt records `LockFingerprint`, computed via `ResolutionFingerprint(lock)`.
-- **Targeted Lock Digest**: `ResolutionFingerprint` marshals only the server, MCDR, and package pins of `document.Lock` as YAML and returns an unprefixed hex digest.
-- **Invariance**: Explicitly excludes tracked files, the manifest fingerprint, and Java requirements. Altering those lock fields does not alter installed files and does not invalidate the receipt.
+- **Bootstrap Fingerprint**: `BootstrapFingerprint(lock)` digests the server resolution fields (product, method, core artifact, inputs, directory), strictly excluding Java requirements, tracked files, MCDR, and packages.
+- **Package Fingerprint**: `PackageFingerprint(lock)` digests the package pins and MCDR wrapper directory.
+- **Invariance**: Explicitly excludes tracked files, the manifest fingerprint, and Java requirements. Ordinary package changes do not invalidate an unchanged, satisfied bootstrap.
 
 ## Consumers
 
-- `install`: Checks if the installed state is current against `ResolutionFingerprint`, manages transactions, and commits updated receipts.
+- `install`: Checks if the installed state is current against `BootstrapFingerprint` and `PackageFingerprint`, manages transactions, and commits updated receipts.
 - `workspace/discovery`: Reads the receipt to distinguish managed files from unmanaged workspace entries.
 - `filetrack`: Uses receipt entries to verify file integrity and detect modified files.
 

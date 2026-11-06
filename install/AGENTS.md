@@ -6,8 +6,8 @@ Convergence engine for workspace runtime files, documents, and receipts.
 
 - Executes convergence (`Sync`, `PlanInstall`, `ApplyPlan`): resolves or replays locks, stages runtime trees, and atomically commits changes.
 - Staging vs workspace ownership: materializes locked server inputs and enabled packages into a private staging directory. Staged files never become owned workspace state until committed.
-- Manifest, lock, and receipt semantics: manifest (`lucy.yaml`) defines intent, lock (`lucy-lock.yaml`) pins exact resolutions, and receipt (`.lucy/install.yaml`) records committed outputs, hashes, and modes. Receipt validity keys on `receipt.ResolutionFingerprint` (server, MCDR, packages); Java requirements, tracked files, and manifest fingerprints do not invalidate it.
-- Skipping staging: if receipt and recorded outputs match current resolution, runtime staging is bypassed.
+- Manifest, lock, and receipt semantics: manifest (`lucy.yaml`) defines intent, lock (`lucy-lock.yaml`) pins exact resolutions, and receipt (`.lucy/install.yaml`) records committed outputs, conflict baseline hashes, modes, and origins (`bootstrap`, `package`, or `mcdr`). Receipt validity separates `receipt.BootstrapFingerprint` (server bootstrap resolution and contract satisfaction) from `receipt.PackageFingerprint` (packages and MCDR wrapper). Java requirements, tracked files, and manifest fingerprints do not invalidate it.
+- Skipping staging: if receipt satisfies the bootstrap contract, server bootstrap staging is bypassed; package-only operations retain accepted bootstrap outputs. Manifest publication on a current runtime commits documents without restaging.
 
 ## Invariants & Transaction Safety
 
