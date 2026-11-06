@@ -239,7 +239,7 @@ func (v *treeVerifier) collectOptionalOutput(rel string, policy OutputPolicy) {
 	}
 	digest := v.cached[rel]
 	if digest == "" {
-		digest, _, err = fileDigests(path, true, false)
+		digest, err = fileSHA256(path)
 	}
 	if err != nil {
 		v.fail("reading %s: %v", rel, err)
@@ -263,7 +263,7 @@ func (v *treeVerifier) verifyGeneratedOutput(rel string, policy OutputPolicy) (O
 	}
 	digest := v.cached[rel]
 	if digest == "" {
-		digest, _, err = fileDigests(path, true, false)
+		digest, err = fileSHA256(path)
 	}
 	if err != nil {
 		v.fail("reading %s: %v", rel, err)

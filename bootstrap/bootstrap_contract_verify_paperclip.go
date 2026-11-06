@@ -189,7 +189,7 @@ func (v *treeVerifier) verifyKnownOutput(rel, expectedSHA256, label string) erro
 	}
 	actual := v.cached[rel]
 	if actual == "" {
-		actual, _, err = fileDigests(path, true, false)
+		actual, err = fileSHA256(path)
 	}
 	if err != nil || !strings.EqualFold(actual, expectedSHA256) {
 		return fmt.Errorf("%s %s SHA256 mismatch", label, rel)

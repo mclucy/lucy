@@ -96,36 +96,17 @@ func newDigest(name string) hash.Hash {
 	}
 }
 
-// fileDigests hashes path with the requested algorithms. Asking for neither
-// yields SHA-256, the digest callers always need.
-func fileDigests(path string, needSHA256, needSHA1 bool) (sha256Hex string, sha1Hex string, err error) {
-	if !needSHA256 && !needSHA1 {
-		needSHA256 = true
-	}
+// fileSHA256 returns the hexadecimal SHA-256 digest of the file at path.
+func fileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	defer f.Close()
 
-	var writers []io.Writer
-	var h256, h1 hash.Hash
-	if needSHA256 {
-		h256 = sha256.New()
-		writers = append(writers, h256)
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return "", err
 	}
-	if needSHA1 {
-		h1 = sha1.New()
-		writers = append(writers, h1)
-	}
-	if _, err := io.Copy(io.MultiWriter(writers...), f); err != nil {
-		return "", "", err
-	}
-	if needSHA256 {
-		sha256Hex = hex.EncodeToString(h256.Sum(nil))
-	}
-	if needSHA1 {
-		sha1Hex = hex.EncodeToString(h1.Sum(nil))
-	}
-	return sha256Hex, sha1Hex, nil
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
