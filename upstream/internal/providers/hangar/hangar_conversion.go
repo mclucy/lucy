@@ -23,7 +23,7 @@ func (p hangarProject) ProjectRef() hangarProjectRef {
 }
 
 func (n hangarProjectNamespace) ProjectRef() hangarProjectRef {
-	return hangarProjectRef{Owner: n.Owner, Slug: n.Slug}
+	return hangarProjectRef(n)
 }
 
 func (r hangarProjectRef) CanonicalName() catalog.Name {

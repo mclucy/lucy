@@ -262,9 +262,7 @@ func OutputSpecs(locked document.LockedServer) []OutputSpec {
 	for _, spec := range exact {
 		specs = append(specs, spec)
 	}
-	for _, sc := range scopes {
-		specs = append(specs, sc)
-	}
+	specs = append(specs, scopes...)
 	slices.SortFunc(specs, func(a, b OutputSpec) int {
 		if a.Path != "" && b.Path != "" {
 			return strings.Compare(a.Path, b.Path)
