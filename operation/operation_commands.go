@@ -485,6 +485,7 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 	// otherwise record only the last file while the receipt and fingerprint
 	// claim both. Conflicting projects stay unmanaged.
 	adoptedPackageIndex := make(map[string]int)
+	adoptedReferences := make(map[string]string)
 	conflictedPackages := make(map[string]bool)
 	for _, p := range packages {
 		if !artifact.SupportsPath(p.Path) {
@@ -600,13 +601,13 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 			ctx, catalog.RegistryModrinth, ref.Name.String(),
 			string(d.Server.Minecraft), ecosystem,
 		)
-		usable := candidateErr == nil && slices.ContainsFunc(
-			candidates,
-			func(candidate upstream.Candidate) bool {
+		candidateIndex := -1
+		if candidateErr == nil {
+			candidateIndex = slices.IndexFunc(candidates, func(candidate upstream.Candidate) bool {
 				return candidate.Version == ref.Version && candidate.PrimaryFile
-			},
-		)
-		if !usable {
+			})
+		}
+		if candidateIndex < 0 {
 			if candidateErr == nil {
 				candidateErr = fmt.Errorf("no release provides version %s", ref.Version)
 			}
@@ -615,7 +616,15 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 			}
 			continue
 		}
-		packageID := "modrinth:" + ref.Name.String()
+		projectID := candidates[candidateIndex].ProjectID
+		if projectID == "" {
+			observed.Warnings = append(observed.Warnings, fmt.Errorf(
+				"package %s left unmanaged: matched release has no project ID", ref.Name,
+			))
+			continue
+		}
+		reference := "modrinth:" + ref.Name.String()
+		packageID := "modrinth:" + projectID
 		projectKey := string(ecosystem) + "\x00" + packageID
 		if conflictedPackages[projectKey] {
 			if observed != nil {
@@ -629,7 +638,8 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		if index, exists := adoptedPackageIndex[projectKey]; exists {
 			conflictedPackages[projectKey] = true
 			delete(adoptedPackageIndex, projectKey)
-			delete(d.Server.Packages[ecosystem], packageID)
+			delete(d.Server.Packages[ecosystem], adoptedReferences[projectKey])
+			delete(adoptedReferences, projectKey)
 			priorPath := ""
 			if index < len(adoptedPackages) {
 				priorPath = adoptedPackages[index].Path
@@ -647,7 +657,8 @@ func (s *Service) Initialize(ctx context.Context, root string, opts InitOptions)
 		if d.Server.Packages[ecosystem] == nil {
 			d.Server.Packages[ecosystem] = map[string]documentpkg.Requirement{}
 		}
-		d.Server.Packages[ecosystem][packageID] = documentpkg.Requirement{Selector: ref.Version}
+		d.Server.Packages[ecosystem][reference] = documentpkg.Requirement{Selector: ref.Version}
+		adoptedReferences[projectKey] = reference
 		recognized++
 		adoptedPackageIndex[projectKey] = len(adoptedPackages)
 		adoptedPackages = append(adoptedPackages, install.AdoptedPackage{
