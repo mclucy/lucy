@@ -97,6 +97,7 @@ func publishAdoption(
 	}
 	return publishAdoptionDocuments(
 		root,
+		files,
 		documents,
 		expectations,
 		protected,
@@ -202,6 +203,7 @@ func pinnedPlan(
 
 func publishAdoptionDocuments(
 	root string,
+	files *os.Root,
 	documents []adoptionDocument,
 	expected []adoptionExpectation,
 	protected []adoptionProtected,
@@ -214,11 +216,6 @@ func publishAdoptionDocuments(
 	if err := rejectInstallPathAliases(root, names); err != nil {
 		return err
 	}
-	files, err := os.OpenRoot(root)
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, files.Close()) }()
 	backup, err := os.MkdirTemp(filepath.Join(root, ".lucy"), "rollback-*")
 	if err != nil {
 		return err
