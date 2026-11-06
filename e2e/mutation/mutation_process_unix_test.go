@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -27,10 +28,16 @@ type processTree struct {
 // startProcessTree starts command as the leader of a new process group. Context
 // cancellation and stop SIGKILL that group. A descendant that calls setsid or
 // setpgid leaves the group and is not reached.
-func startProcessTree(command *exec.Cmd) (*processTree, error) {
+func startProcessTree(command *exec.Cmd, interrupted *atomic.Bool) (*processTree, error) {
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	tree := &processTree{command: command}
-	command.Cancel = tree.signal
+	command.Cancel = func() error {
+		err := tree.signal()
+		if err == nil {
+			interrupted.Store(true)
+		}
+		return err
+	}
 	if err := command.Start(); err != nil {
 		return nil, err
 	}
@@ -47,11 +54,15 @@ func (t *processTree) signal() error {
 	return err
 }
 
-// stop SIGKILLs any member still in the group and waits until the group is
-// empty. killed reports whether a member was found. It runs after the leader has
-// been reaped, which is safe because the group id stays reserved while any
-// member lives.
+// stop kills live group members before the workspace is observed.
 func (t *processTree) stop() (killed bool, err error) {
+	live, err := liveProcessGroup(t.command.Process.Pid)
+	if err != nil {
+		return false, fmt.Errorf("inspect process group %d: %w", t.command.Process.Pid, err)
+	}
+	if !live {
+		return false, nil
+	}
 	switch signalErr := t.signal(); {
 	case signalErr == nil:
 		killed = true
@@ -61,18 +72,20 @@ func (t *processTree) stop() (killed bool, err error) {
 	return killed, t.awaitEmpty()
 }
 
-// awaitEmpty waits until the group has no members. A member that has exited but
-// not been reaped still counts, so the wait covers reaping.
 func (t *processTree) awaitEmpty() error {
-	group := -t.command.Process.Pid
+	group := t.command.Process.Pid
 	deadline := time.Now().Add(processTreeDrainTimeout)
 	for {
-		if err := syscall.Kill(group, 0); errors.Is(err, syscall.ESRCH) {
+		live, err := liveProcessGroup(group)
+		if err != nil {
+			return fmt.Errorf("inspect process group %d: %w", group, err)
+		}
+		if !live {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("process group %d still has members %s after SIGKILL",
-				-group, processTreeDrainTimeout)
+			return fmt.Errorf("process group %d still has live members %s after SIGKILL",
+				group, processTreeDrainTimeout)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -107,27 +120,26 @@ func TestProcessTreeKilledOnTimeout(t *testing.T) {
 		t.Fatalf("want a timeout, got %+v\nstderr:\n%s", result.outcome, result.stderr)
 	}
 	pid := descendantPID(t, pidFile)
-	if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Errorf("descendant %d survived the timeout: kill(0) = %v", pid, err)
+	if live, err := liveProcess(pid); err != nil || live {
+		t.Errorf("descendant %d survived the timeout: live=%t, err=%v", pid, live, err)
 	}
 }
 
-// TestProcessTreeKilledAfterNonzeroExit runs a shell whose leader exits with
-// status 3 while a background descendant still holds the output pipes. The exit
-// status must be kept, and the descendant must be gone when runProcess returns.
+// The leader exits before the deadline while its descendant keeps a pipe open
+// beyond it; cleanup must not reclassify the observed exit as a timeout.
 func TestProcessTreeKilledAfterNonzeroExit(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	pidFile := filepath.Join(dir, "descendant.pid")
 	const script = `sleep 60 & echo $! > "$1"; exit 3`
-	result := runProcess(t, 30*time.Second, "/bin/sh",
+	result := runProcess(t, time.Second, "/bin/sh",
 		[]string{"-c", script, "sh", pidFile}, dir, os.Environ())
 	if result.outcome.Status != statusExited ||
 		result.outcome.ExitCode == nil || *result.outcome.ExitCode != 3 {
 		t.Fatalf("want exit status 3, got %+v\nstderr:\n%s", result.outcome, result.stderr)
 	}
 	pid := descendantPID(t, pidFile)
-	if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Errorf("descendant %d survived the nonzero exit: kill(0) = %v", pid, err)
+	if live, err := liveProcess(pid); err != nil || live {
+		t.Errorf("descendant %d survived the nonzero exit: live=%t, err=%v", pid, live, err)
 	}
 }

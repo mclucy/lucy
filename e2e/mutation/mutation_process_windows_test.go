@@ -5,7 +5,9 @@ package mutation
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -39,7 +41,7 @@ type processTree struct {
 // job. Only processes in the job are observed: a child the leader starts before
 // the assignment is outside the job, and a process that breaks away from the job
 // is not reached.
-func startProcessTree(command *exec.Cmd) (*processTree, error) {
+func startProcessTree(command *exec.Cmd, interrupted *atomic.Bool) (*processTree, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create job object: %w", err)
@@ -52,8 +54,21 @@ func startProcessTree(command *exec.Cmd) (*processTree, error) {
 		_ = windows.CloseHandle(job)
 		return nil, fmt.Errorf("configure job object: %w", err)
 	}
+	ready := make(chan struct{})
 	command.Cancel = func() error {
-		return windows.TerminateJobObject(job, 1)
+		<-ready
+		active, err := activeProcesses(job)
+		if err != nil {
+			return err
+		}
+		if active == 0 {
+			return os.ErrProcessDone
+		}
+		err = windows.TerminateJobObject(job, 1)
+		if err == nil {
+			interrupted.Store(true)
+		}
+		return err
 	}
 	if err := command.Start(); err != nil {
 		_ = windows.CloseHandle(job)
@@ -63,6 +78,7 @@ func startProcessTree(command *exec.Cmd) (*processTree, error) {
 	handleErr := command.Process.WithHandle(func(handle uintptr) {
 		assignErr = windows.AssignProcessToJobObject(job, windows.Handle(handle))
 	})
+	close(ready)
 	if err := errors.Join(handleErr, assignErr); err != nil {
 		_ = command.Process.Kill()
 		_ = command.Wait()
