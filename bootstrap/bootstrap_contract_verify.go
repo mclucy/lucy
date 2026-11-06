@@ -1,10 +1,7 @@
 package bootstrap
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -37,20 +34,15 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 		return nil, fmt.Errorf("staged server directory does not exist: %w", err)
 	}
 
-	// A shim-era Forge installer writes its shim at the server root and run.sh
-	// invokes that copy. The file only belongs to the contract when the
-	// generated launcher proves it is that shim, so earlier Forge branches and
-	// unrelated files stay unpermitted.
-	if shimRel := forgeRootShimPath(locked); shimRel != "" &&
-		runScriptReferences(serverRoot, shimRel) {
-		if info, err := os.Lstat(filepath.Join(serverRoot, shimRel)); err == nil &&
-			info.Mode().IsRegular() {
-			exact[shimRel] = OutputSpec{
-				Path:   shimRel,
-				Policy: PolicyManaged,
-				Role:   RoleRuntime,
-				Origin: OriginGenerated,
-			}
+	// The launcher proves whether run.sh invokes the root shim. Only that proof
+	// admits the shim into the contract, so unrelated root files stay unpermitted.
+	launcher := verifyLauncher(serverRoot, locked)
+	if launcher.rootShim != "" {
+		exact[launcher.rootShim] = OutputSpec{
+			Path:   launcher.rootShim,
+			Policy: PolicyManaged,
+			Role:   RoleRuntime,
+			Origin: OriginGenerated,
 		}
 	}
 
@@ -105,17 +97,10 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 			}
 		}
 
-		f, err := os.Open(p)
+		digest, err := fileSHA256(p)
 		if err != nil {
 			return err
 		}
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, f); err != nil {
-			f.Close()
-			return err
-		}
-		f.Close()
-		digest := hex.EncodeToString(hasher.Sum(nil))
 		cachedDigests[rel] = digest
 
 		info, err := d.Info()
@@ -139,7 +124,7 @@ func ValidateStagedOutputs(stageRoot string, locked document.LockedServer) ([]Ou
 
 	// Shared method verification for staging: verify required outputs, pinned hashes, and launcher semantics.
 	// cachedDigests avoids re-reading and re-hashing all files from disk a second time.
-	verification, err := newTreeVerifier(serverRoot, locked, exact, true, cachedDigests).verify()
+	verification, err := newTreeVerifier(serverRoot, locked, exact, true, cachedDigests, launcher).verify()
 	if err != nil {
 		return nil, fmt.Errorf("staged bootstrap verification error: %w", err)
 	}
@@ -181,5 +166,6 @@ func CheckExisting(serverDir string, locked document.LockedServer) (CheckResult,
 			Reason:  fmt.Sprintf("invalid bootstrap contract: %v", err),
 		}, err
 	}
-	return newTreeVerifier(serverDir, locked, exact, false, nil).verify()
+	// Existing trees prove a root shim against the same canonical copy that staging uses.
+	return newTreeVerifier(serverDir, locked, exact, false, nil, verifyLauncher(serverDir, locked)).verify()
 }

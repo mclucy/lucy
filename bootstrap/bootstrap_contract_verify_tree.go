@@ -20,6 +20,7 @@ type treeVerifier struct {
 	contract  map[string]OutputSpec
 	staging   bool
 	cached    map[string]string
+	launcher  launcherCheck
 	outputs   []Output
 	seen      map[string]bool
 	reason    string
@@ -32,6 +33,7 @@ func newTreeVerifier(
 	contract map[string]OutputSpec,
 	staging bool,
 	cachedDigests map[string]string,
+	launcher launcherCheck,
 ) *treeVerifier {
 	return &treeVerifier{
 		serverDir: serverDir,
@@ -39,6 +41,7 @@ func newTreeVerifier(
 		contract:  contract,
 		staging:   staging,
 		cached:    cachedDigests,
+		launcher:  launcher,
 		seen:      make(map[string]bool),
 	}
 }
@@ -117,8 +120,8 @@ func (v *treeVerifier) verifyFabric() CheckResult {
 	}
 	v.verifyInputs()
 
-	if err := verifyLauncherSemantics(v.serverDir, v.locked); err != nil {
-		v.fail("%v", err)
+	if v.launcher.err != nil {
+		v.fail("%v", v.launcher.err)
 	} else {
 		for _, rel := range []string{
 			"run.sh",
@@ -138,18 +141,16 @@ func (v *treeVerifier) verifyFabric() CheckResult {
 func (v *treeVerifier) verifyForgeInstaller() CheckResult {
 	v.verifyInputs()
 
-	if err := verifyLauncherSemantics(v.serverDir, v.locked); err != nil {
-		v.fail("%v", err)
+	if v.launcher.err != nil {
+		v.fail("%v", v.launcher.err)
 	} else {
 		v.collectRequiredOutput("run.sh", PolicyManaged)
 		v.collectRequiredOutput("run.bat", PolicyManaged)
 		v.collectRequiredOutput("user_jvm_args.txt", PolicySeed)
 		v.collectOptionalOutput("README.txt", PolicySeed)
-		// The shim-era installer writes a root shim that run.sh invokes for
-		// its Java check, so the launcher, not the lock, proves it belongs.
-		if shimRel := forgeRootShimPath(v.locked); shimRel != "" &&
-			runScriptReferences(v.serverDir, shimRel) {
-			v.collectRequiredOutput(shimRel, PolicyManaged)
+		// The root shim is admitted only when run.sh names it and it matches the canonical shim.
+		if v.launcher.rootShim != "" {
+			v.collectRequiredOutput(v.launcher.rootShim, PolicyManaged)
 		}
 	}
 	if v.failed {
