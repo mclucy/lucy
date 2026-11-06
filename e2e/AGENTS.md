@@ -45,6 +45,8 @@ go test -tags e2e -count=1 ./e2e/install   # Fresh and init-then-install scenari
 - **Compile (`e2e/compile`)**: Compiles repository fixtures from `e2e/testdata/repo`. Fixtures marked `smoke: true` form the default CI layer (`LUCY_COMPILE_LAYER=smoke` or `task e2e:compile:smoke`). The full table runs when labeled with `ci:compile-full`.
 - **Install (`e2e/install`)**: Tests fresh installation and the init-then-install chain in empty workspaces, verifying runtime state against manifest and lock. CI runs fresh install and init-then-install as separate jobs.
 
+When adding a sandbox-backed install scenario, add its sandbox to the matching suite's `sandboxes` list in `scripts/e2e-plan.sh`. Local fixtures do not establish CI prerequisites.
+
 ## Sandbox CLI
 
 `go run ./e2e/sandbox` materializes server sandboxes into `.sandboxes/` from `e2e/testdata/sandboxes/sandboxes.yaml`. `task sandboxes:*` wraps common commands:
