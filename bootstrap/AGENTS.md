@@ -15,7 +15,7 @@ Prepares runnable server trees inside an installation staging directory.
   - Empty (`""`): copies core artifact as `server.jar`.
   - `paperclip`: copies core JAR as `server.jar` and runs Paperclip in patch-only mode (`-Dpaperclip.patchonly=true`). Requires a working Java runtime (`ErrNoJava`).
   - `fabric`: places loader JAR into Maven layout (`libraries/`), generates launch scripts (`run.sh`, `run.bat`), launcher properties, and shim JAR (`fabric-server-launch.jar`).
-  - `forge-installer`: unpacks installer data, processes profile outputs, and verifies output hashes against expected digests using Java.
+  - `forge-installer`: unpacks installer data, processes profile outputs, and verifies output hashes against expected digests using Java. Shim-era installers also write a version-named root shim that the generated launcher checks for Java; staging accepts it only when the launcher references it.
 - Failure handling: adapter errors or process execution failures return an error without touching workspace state; any staging directory cleanup is owned by the caller.
 
 ## Relevant Tests

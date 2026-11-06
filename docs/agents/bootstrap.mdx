@@ -20,6 +20,8 @@ Server preparation operates in an installation staging tree. It copies or extrac
 
 Paperclip and installer processors execute Java during staging. A missing Java runtime is therefore a bootstrap error even though a Java version mismatch alone is a warning. Processor outputs with expected hashes are checked. The Fabric adapter generates launcher files; it does not simply rename the downloaded loader JAR.
 
+Shim-era Forge installers write a version-named shim at the server root, and the generated `run.sh` invokes it for its Java check. Installation accepts and owns that file only when the launcher names it, so the root shim is never mistaken for a second installation.
+
 Bootstrap adapters also define the launch command, MCDReforged log handlers, output paths, and superseded core metadata that other subsystems require. Installation and workspace observation consume these unified descriptions instead of matching raw bootstrap method values themselves.
 
 Bootstrap output becomes subject to installation's ownership and commit checks. The bootstrap stage does not by itself publish a workspace receipt or authorize removal of unrelated files. Runtime discovery later recognizes installations from their actual members; it is not just a reverse reading of the lock.
