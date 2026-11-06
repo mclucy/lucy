@@ -24,7 +24,7 @@ import (
 	"github.com/mclucy/lucy/cache"
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/github"
+	"github.com/mclucy/lucy/internal/github"
 	"github.com/mclucy/lucy/log"
 )
 

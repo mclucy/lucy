@@ -47,33 +47,7 @@ jobs:
         if: github.event_name == 'push'
         env:
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
-        run: |
-          set -euo pipefail
-          # Tag identity for AD binding: version without leading v and checked-out commit.
-          TAG_NAME="${GITHUB_REF_NAME}"
-          VERSION="${TAG_NAME#v}"
-          COMMIT="$(git rev-parse HEAD)"
-          export CIPHER_RELEASE_VERSION="${VERSION}"
-          export CIPHER_RELEASE_COMMIT="${COMMIT}"
-          task cipher:generate
-          KEY_A=$(sed -n 's/^cipher_key_a=//p' .cipher_key)
-          KEY_B=$(sed -n 's/^cipher_key_b=//p' .cipher_key)
-          CT_A=$(sed -n 's/^cipher_ciphertext_a=//p' .cipher_key)
-          CT_B=$(sed -n 's/^cipher_ciphertext_b=//p' .cipher_key)
-          if [ -z "$KEY_A" ] || [ -z "$KEY_B" ] || [ -z "$CT_A" ] || [ -z "$CT_B" ]; then
-            echo "cipher: incomplete fragments after generate" >&2
-            exit 1
-          fi
-          echo "::add-mask::${KEY_A}"
-          echo "::add-mask::${KEY_B}"
-          echo "::add-mask::${CT_A}"
-          echo "::add-mask::${CT_B}"
-          {
-            printf 'CIPHER_KEY_A=%s\n' "${KEY_A}"
-            printf 'CIPHER_KEY_B=%s\n' "${KEY_B}"
-            printf 'CIPHER_CIPHERTEXT_A=%s\n' "${CT_A}"
-            printf 'CIPHER_CIPHERTEXT_B=%s\n' "${CT_B}"
-          } >> "${GITHUB_ENV}"
+        run: bash scripts/ci-cipher-export.sh
 
       - name: Check Homebrew tap credentials
         if: github.event_name == 'push'
@@ -90,19 +64,7 @@ jobs:
         if: github.event_name == 'push' || github.event.inputs.announce == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          set -euo pipefail
-          case "${DISCORD_WEBHOOK_URL}" in
-            "")
-              echo "::error::DISCORD_WEBHOOK_URL is required to announce the release"
-              exit 1
-              ;;
-            https://discord.com/api/webhooks/* | https://discordapp.com/api/webhooks/*) ;;
-            *)
-              echo "::error::DISCORD_WEBHOOK_URL is not a Discord webhook URL"
-              exit 1
-              ;;
-          esac
+        run: bash scripts/ci-check-discord-webhook.sh
 
       - name: Set up Docker Buildx
         if: github.event_name == 'push'
@@ -136,31 +98,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_TAG: ${{ github.event.inputs.tag }}
-        run: |
-          set -euo pipefail
-          tag="${INPUT_TAG:-${GITHUB_REF_NAME}}"
-          version="${tag#v}"
-          mkdir -p release-assets
-          gh release download "$tag" --repo "${GITHUB_REPOSITORY}" --dir release-assets
-          npm ci --prefix assets --no-audit --no-fund
-          for file in release-assets/*; do
-            name="$(basename "$file")"
-            case "$name" in
-              *.tar.gz) type=application/gzip ;;
-              *.zip) type=application/zip ;;
-              *) type=text/plain ;;
-            esac
-            assets/node_modules/.bin/cf r2 objects put "v${version}/${name}" \
-              --bucket-name lucy-releases --file "$file" --content-type "$type"
-          done
+        run: bash scripts/release-mirror-r2.sh
 
-      # Discord rejects an embed description over 4096 characters, and the
-      # release body repeats installation instructions that the embed already
-      # carries, so the announcement keeps the grouped changelog and links out
-      # for the rest. It runs after the R2 mirror, so the install command in the
-      # message already resolves. A transient Discord failure must not turn a
-      # published release red: the annotation reports it and the `announce`
-      # dispatch input retries it.
+      # It runs after the R2 mirror, so the install command in the message
+      # already resolves. A transient Discord failure must not turn a published
+      # release red: the annotation reports it and the `announce` dispatch input
+      # retries it.
       - name: Announce release to Discord
         if: github.event_name == 'push' || github.event.inputs.announce == 'true'
         continue-on-error: true
@@ -168,54 +111,4 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_TAG: ${{ github.event.inputs.tag }}
-        run: |
-          set -euo pipefail
-          tag="${INPUT_TAG:-${GITHUB_REF_NAME}}"
-          gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" \
-            --json body,url,isPrerelease > "${RUNNER_TEMP}/release.json"
-          jq -r '.body' "${RUNNER_TEMP}/release.json" > "${RUNNER_TEMP}/notes.md"
-          sed -n '/^## Installation$/q;p' \
-            "${RUNNER_TEMP}/notes.md" > "${RUNNER_TEMP}/changelog.md"
-
-          # Mentions stay inert: changelog entries carry author handles, and an
-          # announcement must not ping the channel.
-          jq -n \
-            --arg tag "${tag}" \
-            --arg url "$(jq -r '.url' "${RUNNER_TEMP}/release.json")" \
-            --argjson prerelease "$(jq -r '.isPrerelease' "${RUNNER_TEMP}/release.json")" \
-            --rawfile changelog "${RUNNER_TEMP}/changelog.md" \
-            '{
-              allowed_mentions: { parse: [] },
-              embeds: [{
-                title: (if $prerelease then "lucy \($tag) · pre-release" else "lucy \($tag)" end),
-                url: $url,
-                color: (if $prerelease then 16436250 else 5793266 end),
-                description: (
-                  ($changelog | sub("\\n+$"; ""))
-                  | if . == "" then
-                      "No user-visible changes."
-                    elif length > 3900 then
-                      .[0:3900] | sub("\\n[^\\n]*$"; "") + "\n\n[Full release notes](" + $url + ")"
-                    else . end
-                ),
-                fields: [
-                  { name: "Install", value: "`curl -fsSL https://lucy.lc/sh | sh`" }
-                ],
-                footer: { text: "lucy.lc" }
-              }]
-            }' > "${RUNNER_TEMP}/discord-payload.json"
-
-          status="$(curl -sS -o "${RUNNER_TEMP}/discord-response.txt" \
-            -w '%{http_code}' \
-            -H 'Content-Type: application/json' \
-            --retry 3 --retry-delay 2 \
-            --data-binary "@${RUNNER_TEMP}/discord-payload.json" \
-            "${DISCORD_WEBHOOK_URL}")"
-          case "${status}" in
-            200 | 204) echo "Announced ${tag} to Discord" ;;
-            *)
-              echo "::error::Discord webhook returned HTTP ${status}"
-              cat "${RUNNER_TEMP}/discord-response.txt"
-              exit 1
-              ;;
-          esac
+        run: bash scripts/release-announce-discord.sh

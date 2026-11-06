@@ -4,57 +4,17 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
-	"github.com/mclucy/lucy/upstream/routing"
+	serverpkg "github.com/mclucy/lucy/server"
 )
-
-// CopyLockedFile writes src to dst with mode, replacing dst through a
-// temporary file. An interrupted copy never leaves a partial file, and other
-// links to the previous dst keep their bytes.
-func CopyLockedFile(src, dst string, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*")
-	if err != nil {
-		return err
-	}
-	temporary := out.Name()
-	defer func() {
-		if out != nil {
-			out.Close()
-			os.Remove(temporary)
-		}
-	}()
-	if err := out.Chmod(mode); err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-	if err := out.Close(); err != nil {
-		return err
-	}
-	out = nil
-	return os.Rename(temporary, dst)
-}
 
 // PrepareLocked builds the server tree of a locked server in stage. java is the
 // Java executable for the bootstrap steps that run Java; it may be empty when
@@ -68,7 +28,7 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		return err
 	}
 	var installer *zip.ReadCloser
-	if server.Bootstrapper == "forge-installer" {
+	if server.Bootstrapper == serverpkg.BootstrapMethodForgeInstaller {
 		var err error
 		installer, err = zip.OpenReader(corePath)
 		if err != nil {
@@ -94,58 +54,19 @@ func PrepareLocked(ctx context.Context, stage string, server document.LockedServ
 		if !ok {
 			return fmt.Errorf("missing locked bootstrap input %s", input.Path)
 		}
-		if err := CopyLockedFile(src, dst, 0o644); err != nil {
+		if err := fsutil.AtomicCopyFile(src, dst, 0o644); err != nil {
 			return err
 		}
 	}
 	switch server.Bootstrapper {
-	case "":
-		return CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644)
-	case "paperclip":
-		if err := CopyLockedFile(corePath, filepath.Join(root, "server.jar"), 0o644); err != nil {
-			return err
-		}
-		if err := requireJava(java, "Paperclip patching"); err != nil {
-			return err
-		}
-		cmd := exec.CommandContext(ctx, java, "-Dpaperclip.patchonly=true", "-jar", "server.jar")
-		cmd.Dir = root
-		captured, err := runLockedProcess(cmd, output)
-		if err != nil {
-			return fmt.Errorf("Paperclip patching: %w\n%s", err, captured)
-		}
-		return nil
-	case "fabric":
-		p, err := routing.MavenPath("net.fabricmc:fabric-loader:" + server.CoreVersion.String())
-		if err != nil {
-			return err
-		}
-		if err := CopyLockedFile(corePath, filepath.Join(root, "libraries", p), 0o644); err != nil {
-			return err
-		}
-		classpath := []string{filepath.ToSlash(filepath.Join("libraries", p))}
-		for _, input := range server.Inputs {
-			if strings.HasPrefix(input.Path, "libraries/") {
-				classpath = append(classpath, input.Path)
-			}
-		}
-		unix := strings.Join(classpath, ":")
-		windows := strings.Join(classpath, ";")
-		if err := os.WriteFile(filepath.Join(root, "run.sh"), []byte("#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec java -cp '"+unix+"' net.fabricmc.loader.impl.launch.server.FabricServerLauncher nogui \"$@\"\n"), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(root, "run.bat"), []byte("@echo off\r\ncd /d %~dp0\r\njava -cp \""+windows+"\" net.fabricmc.loader.impl.launch.server.FabricServerLauncher nogui %*\r\n"), 0o644); err != nil {
-			return err
-		}
-		if err := writeFabricShimJar(filepath.Join(root, "fabric-server-launch.jar"), classpath); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(root, "fabric-server-launcher.properties"), []byte("serverJar=server.jar\n"), 0o644); err != nil {
-			return err
-		}
-		return nil
-	case "forge-installer":
-		return executeServerProfile(ctx, root, server, corePath, &installer.Reader, java, output)
+	case serverpkg.BootstrapMethodPlain:
+		return preparePlain(root, corePath)
+	case serverpkg.BootstrapMethodPaperclip:
+		return preparePaperclip(ctx, root, corePath, java, output)
+	case serverpkg.BootstrapMethodFabric:
+		return prepareFabric(root, server, corePath)
+	case serverpkg.BootstrapMethodForgeInstaller:
+		return prepareForgeInstaller(ctx, root, server, corePath, &installer.Reader, java, output)
 	default:
 		return fmt.Errorf("unsupported bootstrap adapter %q", server.Bootstrapper)
 	}
@@ -199,281 +120,4 @@ func requireJava(java, step string) error {
 		return fmt.Errorf("%s needs a Java runtime: %w", step, ErrNoJava)
 	}
 	return nil
-}
-
-func readLockedEntry(z *zip.Reader, name string) ([]byte, error) {
-	raw, found, err := fsutil.ReadZipEntry(
-		z,
-		name,
-		fsutil.MaxNestedZipEntryBytes,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, fmt.Errorf("missing installer metadata %s", name)
-	}
-	return raw, nil
-}
-
-func executeServerProfile(ctx context.Context, root string, server document.LockedServer, corePath string, z *zip.Reader, java string, output io.Writer) error {
-	raw, err := readLockedEntry(z, "install_profile.json")
-	if err != nil {
-		return err
-	}
-	var profile struct {
-		Data map[string]struct {
-			Server string `json:"server"`
-		} `json:"data"`
-		Processors []struct {
-			Sides     []string          `json:"sides"`
-			Jar       string            `json:"jar"`
-			Classpath []string          `json:"classpath"`
-			Args      []string          `json:"args"`
-			Outputs   map[string]string `json:"outputs"`
-		} `json:"processors"`
-	}
-	if err := json.Unmarshal(raw, &profile); err != nil {
-		return err
-	}
-	vars := map[string]string{
-		"SIDE":              "server",
-		"ROOT":              root,
-		"LIBRARY_DIR":       filepath.Join(root, "libraries"),
-		"INSTALLER":         corePath,
-		"MINECRAFT_VERSION": server.Minecraft.String(),
-		"MINECRAFT_JAR":     filepath.Join(root, "server.jar"),
-	}
-	for key, value := range profile.Data {
-		v := value.Server
-		if strings.HasPrefix(v, "/") {
-			destination := filepath.Join(root, ".bootstrap-data", key)
-			if err := extractLockedEntry(z, strings.TrimPrefix(v, "/"), destination); err != nil {
-				return err
-			}
-			vars[key] = destination
-		} else {
-			vars[key] = v
-		}
-	}
-	var expand func(string) (string, error)
-	expand = func(value string) (string, error) {
-		if strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
-			return strings.Trim(value, "'"), nil
-		}
-		if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
-			p, err := routing.MavenPath(value[1 : len(value)-1])
-			return filepath.Join(root, "libraries", p), err
-		}
-		for range 16 {
-			start := strings.IndexByte(value, '{')
-			if start < 0 {
-				return value, nil
-			}
-			end := strings.IndexByte(value[start:], '}')
-			if end < 0 {
-				return "", fmt.Errorf("invalid processor token %q", value)
-			}
-			end += start
-			key := value[start+1 : end]
-			replacement, ok := vars[key]
-			if !ok {
-				return "", fmt.Errorf("unknown processor variable %s", key)
-			}
-			if strings.HasPrefix(replacement, "[") {
-				var err error
-				replacement, err = expand(replacement)
-				if err != nil {
-					return "", err
-				}
-			} else {
-				replacement = strings.Trim(replacement, "'")
-			}
-			value = value[:start] + replacement + value[end+1:]
-		}
-		return "", fmt.Errorf("recursive installer variable expansion")
-	}
-	for _, proc := range profile.Processors {
-		if len(proc.Sides) > 0 {
-			serverSide := false
-			for _, side := range proc.Sides {
-				serverSide = serverSide || side == "server"
-			}
-			if !serverSide {
-				continue
-			}
-		}
-		args := make([]string, len(proc.Args))
-		for i, arg := range proc.Args {
-			args[i], err = expand(arg)
-			if err != nil {
-				return err
-			}
-		}
-		mappingTask := false
-		var mappingOutput string
-		for i, arg := range args {
-			if arg == "DOWNLOAD_MOJMAPS" {
-				mappingTask = true
-			}
-			if arg == "--output" && i+1 < len(args) {
-				mappingOutput = args[i+1]
-			}
-		}
-		if mappingTask {
-			if mappingOutput == "" {
-				return fmt.Errorf("mojang mappings processor has no output")
-			}
-			if err := CopyLockedFile(filepath.Join(root, "server-mappings.txt"), mappingOutput, 0o644); err != nil {
-				return err
-			}
-			continue
-		}
-		p, err := routing.MavenPath(proc.Jar)
-		if err != nil {
-			return err
-		}
-		processorJar := filepath.Join(root, "libraries", p)
-		main, err := jarMain(processorJar)
-		if err != nil {
-			return err
-		}
-		classpath := []string{processorJar}
-		for _, coordinate := range proc.Classpath {
-			p, err := routing.MavenPath(coordinate)
-			if err != nil {
-				return err
-			}
-			classpath = append(classpath, filepath.Join(root, "libraries", p))
-		}
-		commandArgs := []string{
-			"-cp",
-			strings.Join(classpath, string(os.PathListSeparator)),
-			main,
-		}
-		commandArgs = append(commandArgs, args...)
-		if err := requireJava(java, "installer processor "+proc.Jar); err != nil {
-			return err
-		}
-		cmd := exec.CommandContext(ctx, java, commandArgs...)
-		cmd.Dir = root
-		captured, err := runLockedProcess(cmd, output)
-		if err != nil {
-			return fmt.Errorf("installer processor %s: %w\n%s", proc.Jar, err, captured)
-		}
-		for name, expected := range proc.Outputs {
-			destination, err := expand(name)
-			if err != nil {
-				return err
-			}
-			expected, err = expand(expected)
-			if err != nil {
-				return err
-			}
-			if err := checkProcessorOutput(destination, expected); err != nil {
-				return err
-			}
-		}
-	}
-	// Profile extraction processors generate the native server launch scripts.
-	if _, err := os.Stat(filepath.Join(root, "run.sh")); err != nil {
-		prefix := "net/neoforged/neoforge/"
-		if server.Product == "forge" {
-			prefix = "net/minecraftforge/forge/"
-		}
-		version := server.CoreVersion.String()
-		if server.Product == "forge" {
-			version = server.Minecraft.String() + "-" + version
-		}
-		argsPath := "libraries/" + prefix + version + "/unix_args.txt"
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(argsPath))); err != nil {
-			return fmt.Errorf("installer did not generate server launch arguments: %w", err)
-		}
-		if err := os.WriteFile(filepath.Join(root, "run.sh"), []byte("#!/bin/sh\ncd -- \"$(dirname -- \"$0\")\"\nexec java @user_jvm_args.txt @"+argsPath+" \"$@\"\n"), 0o755); err != nil {
-			return err
-		}
-		if _, err := os.Stat(filepath.Join(root, "user_jvm_args.txt")); os.IsNotExist(err) {
-			if err := os.WriteFile(filepath.Join(root, "user_jvm_args.txt"), nil, 0o644); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func jarMain(p string) (string, error) {
-	z, err := zip.OpenReader(p)
-	if err != nil {
-		return "", err
-	}
-	defer z.Close()
-	raw, err := readLockedEntry(&z.Reader, "META-INF/MANIFEST.MF")
-	if err != nil {
-		return "", err
-	}
-	for line := range strings.SplitSeq(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
-		if v, ok := strings.CutPrefix(line, "Main-Class: "); ok {
-			return strings.TrimSpace(v), nil
-		}
-	}
-	return "", fmt.Errorf("processor JAR has no Main-Class")
-}
-
-func checkProcessorOutput(filename, expected string) error {
-	f, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	h := sha1.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return err
-	}
-	if actual := hex.EncodeToString(h.Sum(nil)); actual != expected {
-		return fmt.Errorf("processor output %s: expected sha1 %s, got %s", filename, expected, actual)
-	}
-	return nil
-}
-
-func writeFabricShimJar(path string, classpath []string) error {
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	writer := zip.NewWriter(file)
-	defer writer.Close()
-
-	classpathLine := "Class-Path: " + strings.Join(classpath, " ")
-	manifest := "Manifest-Version: 1.0\nMain-Class: net.fabricmc.loader.impl.launch.server.FabricServerLauncher\n" + wrapLongLine(classpathLine, 70) + "\n"
-	wrapped := manifest
-	manifestEntry, err := writer.Create("META-INF/MANIFEST.MF")
-	if err != nil {
-		return err
-	}
-	if _, err := manifestEntry.Write([]byte(wrapped)); err != nil {
-		return err
-	}
-
-	propertiesEntry, err := writer.Create("fabric-server-launch.properties")
-	if err != nil {
-		return err
-	}
-	_, err = propertiesEntry.Write([]byte("launch.mainClass=net.fabricmc.loader.impl.launch.knot.KnotServer\n"))
-	return err
-}
-
-func wrapLongLine(line string, width int) string {
-	if len(line) <= width {
-		return line
-	}
-	var builder strings.Builder
-	for len(line) > width {
-		builder.WriteString(line[:width])
-		builder.WriteByte('\n')
-		builder.WriteByte(' ')
-		line = line[width:]
-	}
-	builder.WriteString(line)
-	return builder.String()
 }

@@ -38,23 +38,4 @@ jobs:
           || (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'master'))
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          wiki="$RUNNER_TEMP/lucy.wiki"
-          git clone --depth 1 "https://github.com/${GITHUB_REPOSITORY}.wiki.git" "$wiki"
-
-          # How to publish the coverage badge is outside this mirror: README.md
-          # links to badge/coverage.svg in the wiki.
-          find "$wiki" -mindepth 1 -maxdepth 1 ! -name .git ! -name badge -exec rm -rf {} +
-          cp -R "$RUNNER_TEMP/wiki/." "$wiki/"
-
-          cd "$wiki"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "Wiki is already up to date."
-            exit 0
-          fi
-          git commit -m "docs: mirror documentation from ${GITHUB_SHA::7}"
-          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" HEAD:master
+        run: bash scripts/ci-publish-wiki.sh

@@ -17,7 +17,7 @@ import (
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )

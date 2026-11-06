@@ -145,16 +145,29 @@ func RemoveRoot(root *os.Root, relative string) error {
 	return root.Remove(garbage)
 }
 
-// RecoverInstall must run with workspace ownership before reading state for a new mutation.
-func RecoverInstall(root string, logger *log.Logger) (resultErr error) {
-	journal, err := readInstallJournal(root)
-	if err != nil {
-		return err
-	}
+// InactivityCheck reports an error when a server still runs at a workspace
+// location. Recovery supplies one to ReplayInstallJournal so replay cannot
+// mutate state without proving inactivity first.
+type InactivityCheck func(root, during string) error
+
+// ReplayInstallJournal rewrites the state recorded by a previously detected
+// installation journal. The caller must hold the workspace writer lock, and
+// guard is mandatory: replay fails closed on a nil guard and checks inactivity
+// after journal existence and before any mutation.
+// workspaceguard.RecoverInstall is the supported entry point.
+func ReplayInstallJournal(
+	root string,
+	journal *InstallJournal,
+	logger *log.Logger,
+	guard InactivityCheck,
+) (resultErr error) {
 	if journal == nil {
-		return nil
+		return errors.New("installation recovery requires a journal")
 	}
-	if err := CheckInactive(root, "recovering an interrupted installation"); err != nil {
+	if guard == nil {
+		return errors.New("installation recovery requires an inactivity guard")
+	}
+	if err := guard(root, "recovering an interrupted installation"); err != nil {
 		return err
 	}
 	backup, err := installJournalBackup(root, journal.Backup)
@@ -237,14 +250,18 @@ func RecoverInstall(root string, logger *log.Logger) (resultErr error) {
 // whose committed-marker publication reported an error after the atomic
 // replacement may already have happened.
 func InstallJournalCommitted(root string) (bool, error) {
-	journal, err := readInstallJournal(root)
+	journal, err := ReadInstallJournal(root)
 	if err != nil {
 		return false, err
 	}
 	return journal != nil && journal.Committed, nil
 }
 
-func readInstallJournal(root string) (*InstallJournal, error) {
+// ReadInstallJournal strictly decodes the pending installation journal. A nil
+// journal with a nil error means the workspace has no interrupted installation.
+// The caller must hold the workspace writer lock before using it as recovery
+// input.
+func ReadInstallJournal(root string) (*InstallJournal, error) {
 	if err := SafePath(root, InstallJournalName); err != nil {
 		return nil, err
 	}

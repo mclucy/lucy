@@ -8,6 +8,7 @@ import (
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 )
 
@@ -32,7 +33,7 @@ func (s *Service) RenameServer(root string, name string) (previous string, resul
 		return "", err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
+	if err := workspaceguard.RecoverInstall(root, s.logger); err != nil {
 		return "", err
 	}
 	pending, err := filetrack.HasPendingTransaction(root)

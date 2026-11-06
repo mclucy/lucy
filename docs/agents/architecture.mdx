@@ -18,9 +18,15 @@ A lock can describe files that are absent or modified locally; an observed file 
 
 ## Boundaries
 
-The command layer translates CLI input into operations and renders their results. `operation` coordinates use cases and document changes. `install` resolves or replays a lock, stages and commits runtime files, and returns facts and warnings to the command layer. `workspace` observes local state without contacting upstreams; identification against upstream hashes is an explicit separate step.
+The command layer translates CLI input into operations and renders their results. The operation layer coordinates use cases and document changes. Installation resolves or replays a lock, stages and commits runtime files, and returns facts and warnings to the command layer. Workspace observation inspects local state without contacting upstream networks; identifying local files against upstream hashes is an explicit separate step.
 
-`artifactstore` owns the durable per-user content store for installed artifacts and the conservative reclamation sweep over registered servers' locks. It composes `cas` with `serverregistry`; it does not own workspace state. `catalog` holds package identities, artifacts, and dependencies without owning workspace state. `server` describes server products and environments. `serverregistry` maps the user's server names to workspace directories through entry files in the user data directory; it records locations, not server contents, and reads each registered manifest or lock on demand. A lock-only entry has no selectable name but still lets collection find its artifact references. `upstream` defines capabilities for obtaining metadata and artifacts; `upstream/routing` selects implementations, and `upstream/providers` contains provider-specific adapters. `resolve` chooses packages and validates their descriptor modules. `bootstrap` prepares server products from the locked inputs. Java requirements and runtime observation belong to `javaruntime`, while machine settings belong to `config`.
+The artifact store manages the durable per-user content-addressed storage for installed artifacts and runs conservative reclamation sweeps across registered server locks. It does not own workspace state. The installation receipt records committed outputs and answers a specific lock fingerprint; installation, tracked-file verification, and discovery read this document through a single schema decoder. The server registry maps server names to workspace directories through entry files in the user data directory, tracking locations rather than server contents and reading registered manifests or locks on demand. A lock-only registry entry has no selectable name but allows garbage collection to discover its artifact pins.
+
+Upstream capability interfaces define contracts for metadata retrieval, artifact downloads, version discovery, and hash identification. Upstream routing dispatches across multiple provider implementations while keeping provider-specific adapters isolated. Package resolution selects compatible artifacts and validates loader descriptor modules. Server bootstrap prepares launchable server products from locked inputs. Portable Java requirements derived from server products and packages are distinguished from local runtime selection, which discovers host installations and honors local machine configuration.
+
+The dependency graph derives package relationships from a lock, or from a live observation when no valid lock is available, to answer traversal queries such as roots, leaves, and topological ordering. It returns graph facts to the command layer for rendering or to the bisect subsystem, which manages persisted bisection sessions, captured manifests, range toggling, and installation synchronization.
+
+A runtime inactivity guard prevents modifying active servers and serves as the recovery entry point for interrupted installations. It detects pending transactions and verifies that the workspace root and server directories are stopped before initiating journal replay; replay runs this check after detection and before any filesystem mutation. Tracked-file modifications and pending recovery apply the same inactivity check before mutating state.
 
 Related domain models:
 
@@ -34,11 +40,11 @@ Related domain models:
 
 ## Invocation ownership
 
-`cmd.Runner` owns a fresh command tree, streams, presentation values, and diagnostic logger. `Execute` receives the caller's context; the executable owns signal handling, and `Runner.Close` releases the cache store, diagnostics, and owned HTTP connections. Server selection changes `cli.Invocation.Directory`, not the process working directory. Command paths and machine settings resolve against that directory.
+Each CLI execution instantiates a fresh command tree with dedicated output streams, presentation values, and diagnostic logging. The process lifecycle manages signal handling, and execution shutdown cleanly releases cache stores, diagnostics, and open HTTP connections. Server selection targets a specific workspace directory rather than mutating the process working directory; command paths and machine settings resolve against that targeted directory.
 
-The command boundary constructs configured `cache.Client`, `routing.Router`, `install.Service`, and `operation.Service` instances after parsing flags and selecting the workspace. The CLI's typed dependency assembly stays in the command layer; backend services receive their own narrow dependencies. Provider catalog assembly performs no HTTP requests or credential decoding. Reports, themes, and progress renderers use invocation-owned streams and terminal capabilities.
+The command boundary constructs configured caching, upstream routing, installation, and operation services after evaluating flags and selecting the workspace. Service dependencies remain narrow and explicitly assembled; provider catalog assembly performs no network requests or credential decoding. Reports, themes, and progress renderers bind directly to invocation-owned streams and terminal capabilities.
 
-`.golangci.yml` enforces the package boundaries through depguard. `task lint` is part of local and CI checks. Concrete provider imports stay in provider adapters and routing composition; resolution consumes candidate lookup and materialization capabilities, while workspace observation remains upstream-free.
+Architectural boundaries keep concrete provider implementations isolated behind routing composition and capability interfaces. Package resolution consumes abstract candidate lookup and artifact materialization capabilities, while workspace observation remains strictly local and upstream-free.
 
 ## Package identity is not module identity
 
@@ -48,4 +54,4 @@ A locked package combines an artifact pin with its environment, ecosystem, and r
 
 ## Scope of this documentation
 
-These pages describe the current internal model. For command syntax and user-visible choices, use the [human documentation](/quickstart) or the command's help. The source packages named here are entry points for examining version-specific behavior.
+These pages describe the current internal architecture and domain model. For command syntax and user-visible choices, use the [human documentation](/quickstart) or the command's help.

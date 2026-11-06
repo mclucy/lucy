@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -10,20 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/mclucy/lucy/receipt"
 )
-
-const ownershipReceiptPath = ".lucy/install.yaml"
-
-type ownershipReceipt struct {
-	Version int                     `yaml:"version"`
-	Entries []ownershipReceiptEntry `yaml:"entries"`
-}
-
-type ownershipReceiptEntry struct {
-	Path   string `yaml:"path"`
-	SHA256 string `yaml:"sha256"`
-}
 
 // ObserveOwnership verifies the local installation receipt against every
 // observed member. Receipt paths are workspace-anchor-relative even when the
@@ -54,34 +43,34 @@ func (r *Result) ObserveOwnership(workspaceRoot string) {
 	}
 	defer root.Close()
 
-	data, err := root.ReadFile(ownershipReceiptPath)
+	data, err := root.ReadFile(receipt.Filename)
 	if errors.Is(err, os.ErrNotExist) {
 		return
 	}
 	if err != nil {
-		r.appendReceiptError(filepath.Join(absoluteRoot, ownershipReceiptPath), err)
+		r.appendReceiptError(filepath.Join(absoluteRoot, receipt.Filename), err)
 		return
 	}
-	var receipt ownershipReceipt
-	if err := yaml.Unmarshal(data, &receipt); err != nil {
+	current, err := receipt.Decode(bytes.NewReader(data))
+	if err != nil {
 		r.appendReceiptError(
-			filepath.Join(absoluteRoot, ownershipReceiptPath),
+			filepath.Join(absoluteRoot, receipt.Filename),
 			fmt.Errorf("parse installation receipt: %w", err),
 		)
 		return
 	}
-	if receipt.Version != 1 {
+	if current.Version != receipt.Version {
 		r.appendReceiptError(
-			filepath.Join(absoluteRoot, ownershipReceiptPath),
-			fmt.Errorf("unsupported installation receipt version %d", receipt.Version),
+			filepath.Join(absoluteRoot, receipt.Filename),
+			fmt.Errorf("unsupported installation receipt version %d", current.Version),
 		)
 		return
 	}
 
 	// Duplicate receipt entries are kept: a path may carry several recorded
 	// hashes, and any match proves the observed content.
-	recorded := make(map[string][]string, len(receipt.Entries))
-	for _, entry := range receipt.Entries {
+	recorded := make(map[string][]string, len(current.Entries))
+	for _, entry := range current.Entries {
 		relative := filepath.Clean(filepath.FromSlash(entry.Path))
 		if !filepath.IsLocal(relative) || relative == "." {
 			continue

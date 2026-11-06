@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/resolve"
+	"github.com/mclucy/lucy/terminal/report"
 )
 
 func TestErrorDocumentCodes(t *testing.T) {

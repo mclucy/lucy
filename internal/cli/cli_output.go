@@ -9,8 +9,8 @@ import (
 
 	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/install"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/resolve"
+	"github.com/mclucy/lucy/terminal/report"
 	"github.com/mclucy/lucy/terminal/style"
 	"github.com/spf13/cobra"
 )

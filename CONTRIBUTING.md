@@ -17,7 +17,7 @@
 - `task run -- [args]` runs the codebase without building.
 - `task test` runs the default Go test suite, including the hermetic CAS, HTTP cache, file transaction, and CLI file tracking guard scenarios. They use temporary directories, local HTTP servers, and self-executed helper processes; no external server downloads are required.
 
-See [The taskfile](Taskfile.yml) for all scripts.
+See [The taskfile](Taskfile.yml) and the [scripts directory](scripts) for all scripts.
 
 CI includes testing and building. However, testing locally helps us merging your contribution faster.
 

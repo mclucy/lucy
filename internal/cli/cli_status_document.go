@@ -6,6 +6,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
+	"github.com/mclucy/lucy/internal/depgraph"
 	serverpkg "github.com/mclucy/lucy/server"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
@@ -134,7 +135,7 @@ func statusServerFromObservation(
 		Minecraft:            selection.MinecraftVersion().String(),
 		EntryPoint:           entryPoint,
 		Activity:             activity,
-		Components:           statusComponents(selectedRuntimeComponents(selection)),
+		Components:           statusComponents(depgraph.RuntimeComponents(selection)),
 		CompatibleEcosystems: statusCompatibleEcosystems(observed.ServedEcosystems()),
 		PackageDirectories:   statusRelativePaths(root, observed.PackageDirs()),
 	}
@@ -208,7 +209,7 @@ func statusPackagesFromObservation(
 	result := make([]statusPackage, 0, len(packages))
 	runtimeComponents := map[string]struct{}{}
 	if selection != nil {
-		for _, component := range selectedRuntimeComponents(selection) {
+		for _, component := range depgraph.RuntimeComponents(selection) {
 			runtimeComponents[component.StringBase()] = struct{}{}
 		}
 	}
@@ -544,7 +545,7 @@ func statusLockProductEcosystem(lock *documentpkg.Lock) catalog.Ecosystem {
 	if ok && match.Ecosystem != catalog.EcosystemUnspecified {
 		return match.Ecosystem
 	}
-	return ecosystemFromLock(lock)
+	return depgraph.EcosystemFromLock(lock)
 }
 
 // statusRelativePath reports a path relative to the document root. Absolute

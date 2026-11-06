@@ -51,65 +51,7 @@ jobs:
 
       - name: Compare binary sizes
         if: steps.check_gomod.outputs.changed == 'true'
-        run: |
-          mkdir -p /tmp/pr-bins /tmp/main-bins
-
-          python3 - <<'EOF'
-          import os, subprocess, textwrap
-          targets = [
-              ("linux-amd64", "linux", "amd64", ""),
-              ("linux-arm64", "linux", "arm64", ""),
-              ("darwin-arm64", "darwin", "arm64", ""),
-              ("darwin-amd64", "darwin", "amd64", ""),
-              ("windows-amd64", "windows", "amd64", ".exe"),
-          ]
-
-          for checkout in ("pr", "main"):
-              subprocess.run(["go", "run", "./tools/gendocs"], cwd=checkout, check=True)
-
-          for name, goos, goarch, ext in targets:
-              out = f"/tmp/pr-bins/lucy-{name}{ext}"
-              cmd = ["go", "build", "-trimpath", "-ldflags=-w -s", "-tags=release,docsarchive,nethttpomithttp2", "-o", out]
-              env = dict(os.environ, GOOS=goos, GOARCH=goarch)
-              subprocess.run(cmd, cwd="pr", env=env, check=True)
-
-          for name, goos, goarch, ext in targets:
-              out = f"/tmp/main-bins/lucy-{name}{ext}"
-              cmd = ["go", "build", "-trimpath", "-ldflags=-w -s", "-tags=release,docsarchive,nethttpomithttp2", "-o", out]
-              env = dict(os.environ, GOOS=goos, GOARCH=goarch)
-              subprocess.run(cmd, cwd="main", env=env, check=True)
-          def fmt(b):
-              if abs(b) >= 1024 * 1024:
-                  return f"{b / (1024*1024):.2f} MB"
-              elif abs(b) >= 1024:
-                  return f"{b / 1024:.1f} KB"
-              return f"{b} B"
-
-          rows = []
-          for name, goos, goarch, ext in targets:
-              m_sz = os.path.getsize(f"/tmp/main-bins/lucy-{name}{ext}")
-              p_sz = os.path.getsize(f"/tmp/pr-bins/lucy-{name}{ext}")
-              diff = p_sz - m_sz
-              pct = (diff / m_sz) * 100 if m_sz else 0
-              sign = "+" if diff > 0 else ""
-              indicator = "🟢" if diff < 0 else ("🔴" if diff > 0 else "⚪")
-              rows.append(f"| `{name}` | {fmt(m_sz)} ({m_sz:,} B) | {fmt(p_sz)} ({p_sz:,} B) | **{sign}{fmt(diff)} ({sign}{pct:.2f}%)** {indicator} |")
-
-          table = "\n".join(rows)
-          body = textwrap.dedent(f"""\
-          ### 📦 Binary Size Report (compared against `main`)
-
-          | Target | `main` | PR | Change |
-          | :--- | :--- | :--- | :--- |
-          {table}
-
-          *Automated check triggered by changes to `go.mod` / `go.sum`.*
-          <!-- lucy-binary-size-report -->
-          """)
-          with open("/tmp/report.md", "w") as f:
-              f.write(body)
-          EOF
-          cat /tmp/report.md >> "$GITHUB_STEP_SUMMARY"
+        run: bash pr/scripts/ci-bin-size-report.sh
 
       - name: Publish report to pull request
         if: steps.check_gomod.outputs.changed == 'true' && github.event.pull_request.number != ''
@@ -117,11 +59,4 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          COMMENT_ID=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
-            --jq '.[] | select(.body | contains("<!-- lucy-binary-size-report -->")) | .id' | head -n 1 || true)
-          if [ -n "$COMMENT_ID" ]; then
-            gh api -X PATCH "repos/$GH_REPO/issues/comments/$COMMENT_ID" -F body=@/tmp/report.md || true
-          else
-            gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body-file /tmp/report.md || true
-          fi
+        run: bash pr/scripts/ci-publish-bin-size-report.sh

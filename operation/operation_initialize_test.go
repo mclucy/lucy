@@ -17,7 +17,6 @@ import (
 	logpkg "github.com/mclucy/lucy/log"
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -65,8 +64,8 @@ func (initializeTestSource) IdentifyPurpurBuild(
 func (initializeTestSource) ResolveArtifactByHash(
 	context.Context,
 	upstream.ArtifactFingerprint,
-) routing.ArtifactLookup {
-	return routing.ArtifactLookup{}
+) upstream.ArtifactLookup {
+	return upstream.ArtifactLookup{}
 }
 
 // initializeInstallSource resolves the requested runtime into a lock record
@@ -90,10 +89,10 @@ func (initializeInstallSource) Metadata(context.Context, string, any) error {
 
 func (initializeInstallSource) ResolveServerProduct(
 	_ context.Context,
-	request routing.ServerProductRequest,
+	request upstream.ServerProductRequest,
 	_ func(*catalog.Artifact) (artifact.MaterializedFile, error),
-) (routing.ServerProductResolution, error) {
-	resolution := routing.ServerProductResolution{
+) (upstream.ServerProductResolution, error) {
+	resolution := upstream.ServerProductResolution{
 		Minecraft:      request.Minecraft,
 		Product:        request.Product,
 		ProductVersion: request.ProductVersion,

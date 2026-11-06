@@ -5,19 +5,20 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/log"
 )
 
-// removeSupersededPaperCore deletes the adopted paperclip jar after the
+// removeSupersededPaperCore deletes the upstream paperclip jar after the
 // installer has materialized the canonical server.jar. Leaving both files in
 // the workspace makes discovery report two identical runtimes.
 func removeSupersededPaperCore(root string, d *document.Lock, logger *log.Logger) {
-	if d == nil || d.Server.Bootstrapper != "paperclip" {
+	if d == nil {
 		return
 	}
-	filename := d.Server.Artifact.Filename
-	if filename == "" || filename == "server.jar" {
+	filename, superseded := bootstrap.SupersededCore(d.Server)
+	if !superseded {
 		return
 	}
 	expected := strings.ToLower(d.Server.Artifact.Hashes["sha256"])
@@ -44,5 +45,5 @@ func removeSupersededPaperCore(root string, d *document.Lock, logger *log.Logger
 		logger.Warn(err)
 		return
 	}
-	logger.Debug("removed superseded Paper core", "path", path)
+	logger.Debug("removed superseded core", "path", path)
 }

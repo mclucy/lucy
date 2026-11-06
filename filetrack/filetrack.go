@@ -14,14 +14,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mclucy/lucy/bootstrap"
 	"github.com/mclucy/lucy/cas"
 	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
+	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
+	"github.com/mclucy/lucy/receipt"
 	serverpkg "github.com/mclucy/lucy/server"
-	"gopkg.in/yaml.v3"
 )
 
 // Service executes file tracking with an explicit HTTP client and diagnostic
@@ -119,7 +121,7 @@ func (s *Service) Run(ctx context.Context, root string, request Request) (result
 			)
 		}
 	}()
-	if err := workspacewrite.CheckInactive(root, "changing tracked files"); err != nil {
+	if err := workspaceguard.CheckInactive(root, "changing tracked files"); err != nil {
 		return result, err
 	}
 	var locked *documentpkg.Lock
@@ -483,21 +485,12 @@ func ValidateOwnership(root string, files []documentpkg.TrackedFile, locked *doc
 	add := func(directory, name string) {
 		outputs = append(outputs, strings.ToLower(filepath.ToSlash(filepath.Join(directory, name))))
 	}
-	receiptName := ".lucy/install.yaml"
-	if err := workspacewrite.SafePath(root, receiptName); err != nil {
+	if err := workspacewrite.SafePath(root, receipt.Filename); err != nil {
 		return err
 	}
-	raw, err := os.ReadFile(filepath.Join(root, receiptName))
+	recorded, err := receipt.Read(root)
 	if err == nil {
-		var receipt struct {
-			Entries []struct {
-				Path string `yaml:"path"`
-			} `yaml:"entries"`
-		}
-		if err := yaml.Unmarshal(raw, &receipt); err != nil {
-			return err
-		}
-		for _, entry := range receipt.Entries {
+		for _, entry := range recorded.Entries {
 			add(".", entry.Path)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -505,16 +498,8 @@ func ValidateOwnership(root string, files []documentpkg.TrackedFile, locked *doc
 	}
 	if locked != nil {
 		server := locked.Server
-		switch server.Bootstrapper {
-		case "", "paperclip":
-			add(server.Directory, "server.jar")
-		case "fabric":
-			for _, name := range []string{"run.sh", "run.bat", "fabric-server-launch.jar", "fabric-server-launcher.properties", "libraries/net/fabricmc/fabric-loader/" + string(server.CoreVersion) + "/fabric-loader-" + string(server.CoreVersion) + ".jar"} {
-				add(server.Directory, name)
-			}
-		case "forge-installer":
-			add(server.Directory, "run.sh")
-			add(server.Directory, "run.bat")
+		for _, name := range bootstrap.Outputs(server) {
+			add(server.Directory, name)
 		}
 		for _, input := range server.Inputs {
 			add(server.Directory, input.Path)

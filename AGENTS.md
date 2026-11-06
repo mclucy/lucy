@@ -21,6 +21,8 @@ task clean              # Remove dist/ and release/ directories
 task clean:dist         # Remove dist/ only
 task clean:release      # Remove release/ only
 task dev                # Same as build
+task docs:pack          # Pack the site pages into docs/docs.tar.gz
+task docs:wiki          # Render the GitHub wiki mirror into dist/wiki
 task e2e:compile        # Rebuild, then compile pinned repository fixtures
 task e2e:compile:smoke  # Compile only the fixtures marked smoke
 task e2e:init           # Rebuild, then initialize modpack manifests from sandboxes
@@ -29,6 +31,8 @@ task e2e:status         # Rebuild, then probe generated sandboxes with the CLI
 task lint               # golangci-lint with the package dependency rules
 task logos:check        # Fail when committed status logos differ from the manifest
 task logos:gen          # Regenerate status logos from terminal/assets/logos.yaml
+task release:check      # Validate .goreleaser.yaml without building or publishing
+task release:snapshot   # Build a local GoReleaser snapshot without publishing
 task run -- [args]      # go run from repo root with CLI args
 task sandboxes:clean    # Remove .sandboxes/
 task sandboxes:gen      # Materialize sandboxes into .sandboxes/
@@ -51,52 +55,14 @@ To run the built binary against a test server directory:
 
 ## Architecture
 
-### Package Layout
+Lucy coordinates Minecraft server package management across distinct lifecycle boundaries: translating declarative manifests (`lucy.yaml`) into locked resolutions (`lucy-lock.yaml`), resolving and acquiring package metadata and artifacts from upstreams, staging and converging runtime files into the server workspace, recording committed ownership in the workspace installation receipt (`.lucy/install.yaml`), and observing local workspace state.
 
-```text
-.
-├── cmd/                    Root wiring (cmd_root.go) + thin Cobra subcommands
-├── catalog/                Source-independent package identities, metadata, artifacts, and dependencies
-├── server/                 Server product identities, environments, and bootstrap inputs
-├── java/                   Java distribution vocabulary
-├── javaruntime/            Java requirements, installed runtime observation, and selection
-├── manifest/               Declared server intent: Minecraft, server product, requirements
-├── lockfile/               Flattened resolved environment, artifacts, and descriptor modules
-├── operation/              Command orchestration: init, add, remove, sync
-├── install/                Convergence engine: lock replay, staged bootstrap, receipts, rollback
-├── upstream/               Atomic capability interfaces: Searcher, Informer, etc.
-│   └── providers/          Modrinth, CurseForge, Hangar, Spiget, MCDR, Fabric, Forge, NeoForge, Mojang, etc.
-├── workspace/              Local runtime, wrapper, and package-file observation
-│   ├── identify/           Associate local package files with upstream identities
-│   └── discovery/          Unified installation discovery, ownership, and runtime selection
-├── bootstrap/              Pinned server product bootstrap profiles
-├── resolve/                Catalogue selection and descriptor dependency validation
-├── input/                  Trust boundary for external input, package ref parsing
-├── artifactstore/          Durable per-user artifact store and conservative reclamation
-├── cache/                  Network cache request metadata and expiration policy
-├── cas/                    Content-addressed storage primitives
-├── version/                Version values, dialects, constraint expressions, and parsing
-├── artifact/               Archive metadata analysis: fabric.mod.json, mods.toml, plugin.yml
-├── log/                    Operational diagnostics
-├── report/                 User-facing messages
-├── terminal/               Terminal rendering via the Charm stack
-├── github/                 Shared GitHub API infra
-└── internal/
-    ├── buildrepo/           Gradle build and project discovery for compile
-    ├── cli/                Shared CLI plumbing: flags,
-    │   │                   dependency graph/data source, shell completion,
-    │   │                   lock-context shorthand
-    │   └── <command>/      Large subcommands (compile, info, search), each exposing NewCommand()
-    ├── cipher/             ChaCha20Poly1305 encryption for API key embedding
-    ├── fileschema/         Minecraft format definitions: fabric.mod.json, mods.toml, etc.
-    ├── fn/                 Generic helpers: Ternary, slice utilities
-    ├── fsutil/             Filesystem helpers: CloseReader, path utilities
-    └── toolchain/          Local Git, Java, and Gradle discovery
-```
+### Navigation and Package Guides
 
-`catalog` describes packages; `upstream` obtains package metadata and artifacts. Keep `catalog` limited to the standard library and `version`. Shared usage alone does not justify placing a type there. Manifest declarations, lock records, workspace observations, runtime selection, and presentation stay with their owners.
+Package-specific architecture, responsibilities, invariants, and test instructions are defined locally within packages. Before making changes in any package or subsystem:
 
-`workspace` reads local files without upstream access. `workspace/discovery` owns installation identity, member ownership, and runtime selection through one directory scan; `workspace` assembles that result with wrappers, declarations, and package files. `workspace/identify` connects unidentified package files to upstream identities through hash lookup. Commands and operations invoke identification explicitly; CLI output projections stay outside workspace observation.
+- Read applicable package-local `AGENTS.md` instructions (including parent and nested guides, when present).
+- Follow both local package invariants and root repository rules.
 
 ## The Fundamental Problem
 
@@ -128,7 +94,7 @@ A new interactive surface ships with its flag equivalent in the same change. Use
 4. Do not write persistent tests when you are implementing a feature. Unit tests will be separate tasks.
 5. Never assume the current code is correct. Write unit tests based on logical contracts, not asserting on whatever the current code does.
 
-The e2e domain suites are Go tests behind the `e2e` build tag. The `cmd` filetrack guard suite runs in the default suite; it invokes the CLI in process and uses a helper process for the world session lock. Package tests in `cas`, `cache`, and `filetrack` also run in the default suite; they stay hermetic by using temporary directories, local HTTP servers, and self-executed helper processes. Build Lucy and generate the sandboxes first, then:
+The e2e domain suites are Go tests behind the `e2e` build tag. The `cmd` filetrack guard suite runs in the default suite; it invokes the CLI in process and uses a helper process for the world session lock. The default suite stays hermetic through temporary directories, local HTTP servers, and self-executed helper processes. Build Lucy and generate the sandboxes first, then:
 
 ```bash
 go test -tags e2e -count=1 ./e2e/status    # probe .sandboxes
@@ -189,7 +155,8 @@ Documentation has two audiences. Choose the layer before writing:
 ### Agent-facing documentation
 
 - Put agent pages in `docs/agents/*.mdx`. Keep them accessible by direct Mintlify URL and searchable through `lucy docs grep`, but do not add them to site navigation or other user-interface entry points.
-- Explain Lucy's actual internal architecture and domain models: ownership, state, boundaries, data flow, invariants, and failure or recovery semantics. Ground claims in the current source and name relevant packages or entry points when useful.
+- Explain Lucy's actual internal architecture and domain models: ownership, state, boundaries, data flow, invariants, and failure or recovery semantics. Ground claims in the current source.
+- Pages in `docs/agents/` may use technical and internal terminology, but mention internal package names or Go symbols only when necessary to explain a concept or help a reader, not exhaustively; preserve their conceptual role and searchability.
 - Do not duplicate human tutorials, command reference material, or agent-specific usage workflows. Agents learn how to use Lucy from the human documentation.
 - Keep both layers consistent with the implementation. When agent pages change, rebuild Lucy and verify that the new pages can be found with `lucy docs grep`.
 - Default builds embed the tracked `.mdx` pages, while release builds embed the archive packed by `task docs:pack`. Add a new page directory to the embed patterns in `docs/embed_pages.go`, or that directory's pages reach release binaries only.

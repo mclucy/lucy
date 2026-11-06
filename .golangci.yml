@@ -56,19 +56,36 @@ linters:
             - github.com/mclucy/lucy/internal/fn$
             - github.com/pelletier/go-toml$
 
+        appdata-leaf:
+          list-mode: strict
+          files:
+            - "**/internal/appdata/*.go"
+            - "**/internal/appdata/**/*.go"
+          allow:
+            - $gostd
+
+        fsutil-leaf:
+          list-mode: strict
+          files:
+            - "**/internal/fsutil/*.go"
+            - "**/internal/fsutil/**/*.go"
+          allow:
+            - $gostd
+            - golang.org/x/sys/
+
         backend-presentation:
           list-mode: lax
           files:
-            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,resolve,serverregistry,upstream,workspace}/*.go"
-            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,github,install,javaruntime,javainstall,operation,resolve,serverregistry,upstream,workspace}/**/*.go"
-            - "**/internal/{buildrepo,toolchain,workspacewrite}/*.go"
-            - "**/internal/{buildrepo,toolchain,workspacewrite}/**/*.go"
+            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,install,javaruntime,operation,receipt,resolve,serverregistry,upstream,workspace}/*.go"
+            - "**/{artifact,artifactstore,bootstrap,cache,config,document,filetrack,install,javaruntime,operation,receipt,resolve,serverregistry,upstream,workspace}/**/*.go"
+            - "**/internal/{bisect,buildrepo,depgraph,github,javainstall,toolchain,workspaceguard,workspacewrite}/*.go"
+            - "**/internal/{bisect,buildrepo,depgraph,github,javainstall,toolchain,workspaceguard,workspacewrite}/**/*.go"
           deny:
             - pkg: github.com/mclucy/lucy/cmd$
               desc: Return facts to the command boundary instead of importing command wiring.
             - pkg: github.com/mclucy/lucy/internal/cli
               desc: CLI invocation and output ownership stay at the command boundary.
-            - pkg: github.com/mclucy/lucy/report$
+            - pkg: github.com/mclucy/lucy/terminal/report$
               desc: Return warnings or use the supplied diagnostic logger.
             - pkg: github.com/mclucy/lucy/terminal
               desc: Render returned facts at the command boundary.
@@ -76,6 +93,61 @@ linters:
               desc: Backend capabilities must not depend on CLI commands.
             - pkg: charm.land/
               desc: Backend capabilities must not depend on terminal presentation.
+
+        upstream-contract:
+          list-mode: strict
+          files:
+            - "**/upstream/*.go"
+          allow:
+            - $gostd
+            - github.com/mclucy/lucy/catalog$
+            - github.com/mclucy/lucy/server$
+            - github.com/mclucy/lucy/version$
+
+        workspacewrite-mechanism:
+          list-mode: lax
+          files:
+            - "**/internal/workspacewrite/*.go"
+            - "**/internal/workspacewrite/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/document$
+              desc: Journal replay writes workspace files; it does not read document views.
+            - pkg: github.com/mclucy/lucy/workspace
+              desc: Journal replay receives its root explicitly instead of observing workspace state.
+            - pkg: github.com/mclucy/lucy/internal/workspaceguard
+              desc: Inactivity policy consumes journal primitives; the dependency must not cycle back.
+            - pkg: github.com/mclucy/lucy/upstream
+              desc: Journal replay performs local filesystem recovery without network capabilities.
+            - pkg: github.com/mclucy/lucy/internal/telemetry
+              desc: Journal replay performs local filesystem recovery without telemetry.
+            - pkg: github.com/mclucy/lucy/resolve
+              desc: Journal replay performs local filesystem recovery without resolution.
+
+        depgraph-domain:
+          list-mode: lax
+          files:
+            - "**/internal/depgraph/*.go"
+            - "**/internal/depgraph/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/install$
+              desc: Graph loading observes workspace facts; installation orchestration is a higher layer.
+            - pkg: github.com/mclucy/lucy/operation$
+              desc: Graph loading returns facts to application operations.
+            - pkg: github.com/mclucy/lucy/internal/fsutil
+              desc: Graph analysis owns no filesystem mechanism.
+            - pkg: github.com/mclucy/lucy/internal/workspacewrite
+              desc: Graph analysis owns no filesystem writes.
+            - pkg: github.com/mclucy/lucy/upstream/routing
+              desc: Inject candidate lookup through identify.HashLookup instead of selecting global infrastructure.
+
+        bisect-session:
+          list-mode: lax
+          files:
+            - "**/internal/bisect/*.go"
+            - "**/internal/bisect/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/upstream/routing
+              desc: Bisect sessions receive lookup capabilities from the caller; only the CLI assembly selects routing.
 
         workspace-observation:
           list-mode: lax
@@ -88,28 +160,89 @@ linters:
               desc: Keep observation local; perform upstream lookup explicitly through workspace/identify.
             - pkg: github.com/mclucy/lucy/cache$
               desc: Local observation does not own network acquisition.
-            - pkg: github.com/mclucy/lucy/github$
+            - pkg: github.com/mclucy/lucy/internal/github$
               desc: Local observation does not contact upstreams.
             - pkg: github.com/mclucy/lucy/install$
               desc: Observation must not orchestrate installation.
             - pkg: github.com/mclucy/lucy/operation$
               desc: Observation returns facts to application operations.
 
+        workspace-identify:
+          list-mode: lax
+          files:
+            - "**/workspace/identify/*.go"
+            - "**/workspace/identify/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/upstream/routing
+              desc: Identify through injected lookup capabilities; routing is assembled at the command boundary.
+
         provider-composition:
           list-mode: lax
           files:
             - $all
-            - "!**/upstream/providers/**/*.go"
+            - "!**/upstream/internal/providers/**/*.go"
             - "!**/upstream/routing/*.go"
           deny:
-            - pkg: github.com/mclucy/lucy/upstream/providers/
+            - pkg: github.com/mclucy/lucy/upstream/internal/providers/
               desc: Consume configured capabilities; concrete providers are assembled by upstream/routing.
+
+        cli-command-wiring:
+          list-mode: lax
+          files:
+            - "**/internal/cli/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/cmd$
+              desc: Shared CLI plumbing must not depend on process command wiring.
+            - pkg: github.com/mclucy/lucy/internal/cli/compile$
+              desc: Command implementations are registered by cmd; shared CLI plumbing stays independent of them.
+            - pkg: github.com/mclucy/lucy/internal/cli/docs$
+              desc: Command implementations are registered by cmd; shared CLI plumbing stays independent of them.
+            - pkg: github.com/mclucy/lucy/internal/cli/file$
+              desc: Command implementations are registered by cmd; shared CLI plumbing stays independent of them.
+            - pkg: github.com/mclucy/lucy/internal/cli/info$
+              desc: Command implementations are registered by cmd; shared CLI plumbing stays independent of them.
+            - pkg: github.com/mclucy/lucy/internal/cli/search$
+              desc: Command implementations are registered by cmd; shared CLI plumbing stays independent of them.
+            - pkg: github.com/mclucy/lucy/internal/cli/telemetry$
+              desc: Command implementations are registered by cmd; shared CLI plumbing stays independent of them.
+
+        cli-subcommand-isolation:
+          list-mode: lax
+          files:
+            - "**/internal/cli/*/*.go"
+            - "**/internal/cli/*/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/cmd$
+              desc: Command subpackages expose a constructor; cmd assembles the command tree.
+
+        cli-telemetry-seam:
+          list-mode: strict
+          files:
+            - "**/internal/cli/telemetry/*.go"
+            - "**/internal/cli/telemetry/**/*.go"
+          allow:
+            - $gostd
+            - github.com/mclucy/lucy/internal/cli$
+            - github.com/mclucy/lucy/internal/telemetry$
+            - github.com/spf13/cobra$
+
+        cli-telemetry-wiring:
+          list-mode: lax
+          files:
+            - $all
+            - "!**/cmd/*.go"
+            - "!**/cmd/**/*.go"
+          deny:
+            - pkg: github.com/mclucy/lucy/internal/cli/telemetry
+              desc: The telemetry command is wired by cmd; other packages consume the telemetry client instead.
 
         network-adapters:
           list-mode: lax
           files:
-            - "**/{cache,github,upstream}/*.go"
-            - "**/{cache,github,upstream}/**/*.go"
+            - "**/{cache,upstream}/*.go"
+            - "**/{cache,upstream}/**/*.go"
+            - "**/internal/github/*.go"
+            - "**/internal/github/**/*.go"
           deny:
             - pkg: github.com/mclucy/lucy/config$
               desc: Receive effective settings from invocation composition.

@@ -16,10 +16,11 @@ import (
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
+	"github.com/mclucy/lucy/internal/fsutil"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/javaruntime"
 	"github.com/mclucy/lucy/server"
-	"github.com/mclucy/lucy/upstream/routing"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -183,69 +184,13 @@ func (s *Service) stageInstall(
 		return nil, err
 	}
 	defer os.RemoveAll(stage)
-	core, err := store.materialize(&resolved.Server.Artifact)
+	if err := s.stageServerTree(ctx, stage, resolved, check.Executable(), store, opts); err != nil {
+		return nil, err
+	}
+	overwritePaths, err := s.stagePackages(root, stage, resolved, store, opts)
 	if err != nil {
 		return nil, err
 	}
-	resolved.Server.Artifact.Hashes = core.Hashes
-	inputs := map[string]string{}
-	for i := range resolved.Server.Inputs {
-		input := &resolved.Server.Inputs[i]
-		if input.Embedded != "" {
-			continue
-		}
-		materialized, err := store.materialize(&input.Artifact)
-		if err != nil {
-			return nil, err
-		}
-		input.Artifact.Hashes = materialized.Hashes
-		inputs[input.Path] = materialized.Path
-	}
-	if err := bootstrap.PrepareLocked(
-		ctx,
-		stage,
-		resolved.Server,
-		core.Path,
-		inputs,
-		check.Executable(),
-		opts.Trace.processOutput(),
-	); err != nil {
-		return nil, err
-	}
-	s.logger.Debug(
-		"server tree prepared",
-		"stage", stage,
-		"core", resolved.Server.Filename,
-		"inputs", len(inputs),
-	)
-	if err := rejectSharedDestinations(root, resolved); err != nil {
-		return nil, err
-	}
-	staged := 0
-	overwritePaths := map[string]bool{}
-	for i := range resolved.Packages {
-		p := &resolved.Packages[i]
-		if !p.Enabled() {
-			continue
-		}
-		destination, err := packageDestination(resolved, p)
-		if err != nil {
-			return nil, err
-		}
-		if opts.Overwrite {
-			overwritePaths[filepath.ToSlash(destination)] = true
-		}
-		source, err := store.materialize(&p.Artifact)
-		if err != nil {
-			return nil, err
-		}
-		p.Artifact.Hashes = source.Hashes
-		if err := bootstrap.CopyLockedFile(source.Path, filepath.Join(stage, destination), 0o644); err != nil {
-			return nil, err
-		}
-		staged++
-	}
-	s.logger.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
 	if resolved.MCDR != nil {
 		if err := preparePython(ctx, root, stage, resolved, store, s.python, opts.MCDRVenv); err != nil {
 			return nil, err
@@ -274,6 +219,95 @@ func (s *Service) stageInstall(
 	return s.provisionCommitted(ctx, root, resolved, opts)
 }
 
+// stageServerTree materializes the locked core and inputs, then runs the
+// bootstrap that prepares the server tree in stage.
+func (s *Service) stageServerTree(
+	ctx context.Context,
+	stage string,
+	resolved *document.Lock,
+	java string,
+	store *downloadStore,
+	opts Options,
+) error {
+	core, err := store.materialize(&resolved.Server.Artifact)
+	if err != nil {
+		return err
+	}
+	resolved.Server.Artifact.Hashes = core.Hashes
+	inputs := map[string]string{}
+	for i := range resolved.Server.Inputs {
+		input := &resolved.Server.Inputs[i]
+		if input.Embedded != "" {
+			continue
+		}
+		materialized, err := store.materialize(&input.Artifact)
+		if err != nil {
+			return err
+		}
+		input.Artifact.Hashes = materialized.Hashes
+		inputs[input.Path] = materialized.Path
+	}
+	if err := bootstrap.PrepareLocked(
+		ctx,
+		stage,
+		resolved.Server,
+		core.Path,
+		inputs,
+		java,
+		opts.Trace.processOutput(),
+	); err != nil {
+		return err
+	}
+	s.logger.Debug(
+		"server tree prepared",
+		"stage", stage,
+		"core", resolved.Server.Filename,
+		"inputs", len(inputs),
+	)
+	return nil
+}
+
+// stagePackages copies every enabled package into stage after rejecting
+// destinations two packages both claim. It returns the destinations an
+// overwrite may replace.
+func (s *Service) stagePackages(
+	root string,
+	stage string,
+	resolved *document.Lock,
+	store *downloadStore,
+	opts Options,
+) (map[string]bool, error) {
+	if err := rejectSharedDestinations(root, resolved); err != nil {
+		return nil, err
+	}
+	staged := 0
+	overwritePaths := map[string]bool{}
+	for i := range resolved.Packages {
+		p := &resolved.Packages[i]
+		if !p.Enabled() {
+			continue
+		}
+		destination, err := packageDestination(resolved, p)
+		if err != nil {
+			return nil, err
+		}
+		if opts.Overwrite {
+			overwritePaths[filepath.ToSlash(destination)] = true
+		}
+		source, err := store.materialize(&p.Artifact)
+		if err != nil {
+			return nil, err
+		}
+		p.Artifact.Hashes = source.Hashes
+		if err := fsutil.AtomicCopyFile(source.Path, filepath.Join(stage, destination), 0o644); err != nil {
+			return nil, err
+		}
+		staged++
+	}
+	s.logger.Debug("packages staged", "active", staged, "recorded", len(resolved.Packages))
+	return overwritePaths, nil
+}
+
 func isFloating(v version.Version) bool {
 	switch v {
 	case "", version.Stable, version.Beta, version.Any:
@@ -287,7 +321,7 @@ func isFloating(v version.Version) bool {
 // mutation treats a negative answer as a stale lock, because rebinding
 // requirements must never re-target the server.
 func (s *Service) coreReusable(ctx context.Context, d *document.Manifest, old *document.Lock, offline bool) (bool, error) {
-	request := routing.ServerProductRequest{
+	request := upstream.ServerProductRequest{
 		Minecraft:      d.Server.Minecraft,
 		Product:        d.Server.Core.Product,
 		ProductVersion: d.Server.Core.ProductVersion,

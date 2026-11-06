@@ -9,7 +9,7 @@ import (
 
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/operation"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace/discovery"
 )

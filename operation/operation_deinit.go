@@ -11,6 +11,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/filetrack"
 	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 )
 
@@ -44,7 +45,7 @@ func (s *Service) Deinitialize(root string) (result *DeinitResult, resultErr err
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, writer.Close()) }()
-	if err := workspacewrite.RecoverInstall(root, s.logger); err != nil {
+	if err := workspaceguard.RecoverInstall(root, s.logger); err != nil {
 		return nil, err
 	}
 	pending, err := filetrack.HasPendingTransaction(root)

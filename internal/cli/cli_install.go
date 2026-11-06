@@ -5,7 +5,7 @@ import (
 
 	"github.com/mclucy/lucy/install"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/javainstall"
+	"github.com/mclucy/lucy/internal/javainstall"
 	"github.com/spf13/cobra"
 )
 

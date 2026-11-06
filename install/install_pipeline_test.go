@@ -21,7 +21,6 @@ import (
 	serverpkg "github.com/mclucy/lucy/server"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 	versionpkg "github.com/mclucy/lucy/version"
 	"gopkg.in/yaml.v3"
 )
@@ -172,12 +171,12 @@ func (s *pipelineSource) Metadata(context.Context, string, any) error {
 
 func (s *pipelineSource) ResolveServerProduct(
 	_ context.Context,
-	request routing.ServerProductRequest,
+	request upstream.ServerProductRequest,
 	_ func(*catalog.Artifact) (artifact.MaterializedFile, error),
-) (routing.ServerProductResolution, error) {
+) (upstream.ServerProductResolution, error) {
 	core := s.core
 	core.Version = request.ProductVersion
-	return routing.ServerProductResolution{
+	return upstream.ServerProductResolution{
 		Minecraft:      request.Minecraft,
 		Product:        request.Product,
 		ProductVersion: request.ProductVersion,

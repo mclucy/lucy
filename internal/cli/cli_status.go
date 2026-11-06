@@ -5,13 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
-	"github.com/mclucy/lucy/catalog"
 	documentpkg "github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/cli/help"
-	"github.com/mclucy/lucy/report"
 	"github.com/mclucy/lucy/terminal"
+	"github.com/mclucy/lucy/terminal/report"
 	versionpkg "github.com/mclucy/lucy/version"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
@@ -237,81 +235,4 @@ func writeStatusDocument(
 		return fmt.Errorf("write status: %w", err)
 	}
 	return nil
-}
-
-// selectedRuntimeComponents presents the runtime components the status
-// document reports. Discovery keeps the primary identity separate and stores
-// only additional evidence, so a vanilla primary contributes its Minecraft
-// component here, and a loader primary contributes its loader component.
-func selectedRuntimeComponents(
-	selection *discovery.Selection,
-) []catalog.VersionedRef {
-	if selection == nil || !selection.IsValid() {
-		return []catalog.VersionedRef{}
-	}
-	identity := selection.Installation.Identity
-	components := make([]catalog.VersionedRef, 0, len(identity.Components)+2)
-	components = append(components, identity.Components...)
-
-	primary := identity.Primary
-	switch strings.ToLower(primary.Name.String()) {
-	case "minecraft":
-		components = ensureRuntimeComponent(components, catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemMinecraft,
-			Name:      "minecraft",
-			Version:   primary.Version,
-		})
-	case "fabric", "fabric-loader":
-		components = ensureRuntimeComponent(components, catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemFabric,
-			Name:      "fabric-loader",
-			Version:   primary.Version,
-		})
-	case "forge":
-		components = ensureRuntimeComponent(components, catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemForge,
-			Name:      "forge",
-			Version:   primary.Version,
-		})
-	case "neoforge":
-		components = ensureRuntimeComponent(components, catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemNeoForge,
-			Name:      "neoforge",
-			Version:   primary.Version,
-		})
-	}
-	if !hasRuntimeComponent(components, catalog.EcosystemMinecraft, "minecraft") {
-		components = ensureRuntimeComponent(components, catalog.VersionedRef{
-			Ecosystem: catalog.EcosystemMinecraft,
-			Name:      "minecraft",
-			Version:   identity.MinecraftVersion(),
-		})
-	}
-	return components
-}
-
-func ensureRuntimeComponent(
-	components []catalog.VersionedRef,
-	component catalog.VersionedRef,
-) []catalog.VersionedRef {
-	if component.Version == "" || component.Version == versionpkg.Unknown {
-		return components
-	}
-	if hasRuntimeComponent(components, component.Ecosystem, component.Name.String()) {
-		return components
-	}
-	return append(components, component)
-}
-
-func hasRuntimeComponent(
-	components []catalog.VersionedRef,
-	ecosystem catalog.Ecosystem,
-	name string,
-) bool {
-	for _, component := range components {
-		if component.Ecosystem == ecosystem && component.Name == catalog.Name(name) {
-			return true
-		}
-	}
-	return false
 }

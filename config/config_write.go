@@ -11,6 +11,7 @@ import (
 
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 )
 
@@ -23,7 +24,7 @@ func (s *Service) lock(scope Scope) (*fsutil.FileLock, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := workspacewrite.RecoverInstall(s.root, s.logger); err != nil {
+		if err := workspaceguard.RecoverInstall(s.root, s.logger); err != nil {
 			return nil, errors.Join(err, writer.Close())
 		}
 		return writer, nil

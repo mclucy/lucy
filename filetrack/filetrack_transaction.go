@@ -14,6 +14,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/input"
 	"github.com/mclucy/lucy/internal/fsutil"
+	"github.com/mclucy/lucy/internal/workspaceguard"
 	"github.com/mclucy/lucy/internal/workspacewrite"
 	"github.com/mclucy/lucy/log"
 )
@@ -249,7 +250,7 @@ func HasPendingTransaction(root string) (bool, error) {
 // validation is skipped when no file transaction is pending, so recovery never
 // requires writable file history from an otherwise valid workspace.
 func RecoverLocked(root string, logger *log.Logger) error {
-	if err := workspacewrite.RecoverInstall(root, logger); err != nil {
+	if err := workspaceguard.RecoverInstall(root, logger); err != nil {
 		return err
 	}
 	pending, err := HasPendingTransaction(root)
@@ -270,7 +271,7 @@ func RecoverPending(root string) (resultErr error) {
 	} else if err != nil {
 		return err
 	}
-	if err := workspacewrite.CheckInactive(root, "recovering a pending workspace transaction"); err != nil {
+	if err := workspaceguard.CheckInactive(root, "recovering a pending workspace transaction"); err != nil {
 		return err
 	}
 	files, err := os.OpenRoot(root)

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/mclucy/lucy/catalog"
-	"github.com/mclucy/lucy/report"
+	"github.com/mclucy/lucy/terminal/report"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
 )

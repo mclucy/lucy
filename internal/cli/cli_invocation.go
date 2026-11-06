@@ -1,8 +1,8 @@
 package cli
 
 import (
+	"github.com/mclucy/lucy/internal/telemetry"
 	"github.com/mclucy/lucy/log"
-	"github.com/mclucy/lucy/telemetry"
 	"github.com/mclucy/lucy/terminal/style"
 )
 

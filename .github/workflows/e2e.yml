@@ -58,9 +58,12 @@ jobs:
               - 'operation/**'
               - 'cmd/*.go'
               - 'internal/cli/*.go'
+              - 'internal/telemetry/**'
+              - 'terminal/report/**'
               - 'go.mod'
               - 'go.sum'
               - 'Taskfile.yml'
+              - 'scripts/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/e2e.yml'
               - '.github/workflows/e2e-run.yml'
@@ -81,9 +84,13 @@ jobs:
               - 'upstream/**'
               - 'cmd/*.go'
               - 'internal/cli/*.go'
+              - 'internal/github/**'
+              - 'internal/telemetry/**'
+              - 'terminal/report/**'
               - 'go.mod'
               - 'go.sum'
               - 'Taskfile.yml'
+              - 'scripts/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/e2e.yml'
               - '.github/workflows/e2e-run.yml'
@@ -106,9 +113,14 @@ jobs:
               - 'workspace/**'
               - 'cmd/*.go'
               - 'internal/cli/*.go'
+              - 'internal/github/**'
+              - 'internal/javainstall/**'
+              - 'internal/telemetry/**'
+              - 'terminal/report/**'
               - 'go.mod'
               - 'go.sum'
               - 'Taskfile.yml'
+              - 'scripts/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/e2e.yml'
               - '.github/workflows/e2e-run.yml'
@@ -121,9 +133,12 @@ jobs:
               - 'internal/toolchain/**'
               - 'cmd/*.go'
               - 'internal/cli/*.go'
+              - 'internal/telemetry/**'
+              - 'terminal/report/**'
               - 'go.mod'
               - 'go.sum'
               - 'Taskfile.yml'
+              - 'scripts/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/e2e.yml'
               - '.github/workflows/e2e-run.yml'
@@ -140,124 +155,14 @@ jobs:
         with:
           persist-credentials: false
 
-      # The suite derives its cases from the same manifests, so this matrix and
-      # a local `go test ./e2e/compile` can never disagree about which fixtures
-      # exist.
-      - name: Collect compile fixtures
-        id: fixtures
-        if: ${{ needs.changes.outputs.compile-full == 'true' }}
-        run: |
-          set -euo pipefail
-          ids="$(find e2e/testdata/repo -maxdepth 1 -type f -name '*.yaml' -exec basename {} .yaml \; | sort | jq -Rsc 'split("\n") | map(select(length > 0))')"
-          if [ "$(jq 'length' <<<"$ids")" -eq 0 ]; then
-            echo "no compile fixtures found" >&2
-            exit 1
-          fi
-          echo "ids=$ids" >> "$GITHUB_OUTPUT"
-
-      - name: Build suite matrix
+      # The suite derives its cases from the same manifests, so its matrix and a
+      # local `go test ./e2e/compile` can never disagree about which fixtures exist.
+      - name: Plan suite matrix
         id: plan
         env:
           DOMAINS: ${{ needs.changes.outputs.domains }}
           COMPILE_FULL: ${{ needs.changes.outputs.compile-full }}
-          FIXTURES: ${{ steps.fixtures.outputs.ids }}
-        run: |
-          set -euo pipefail
-          suites="$(cat <<'EOF'
-          [
-            {
-              "domain": "status",
-              "group": "status",
-              "suite": "status",
-              "command": "go test -tags e2e -count=1 -v ./e2e/status -run 'TestProbe/(arclight-fabric|arclight-forge|cobblemon-1211|create-plus-1211|fabric-executable-1214|forge-1201|mcdr-fabric|neoforge-262|paper)'",
-              "timeout": 45,
-              "sandboxes": "arclight-fabric,arclight-forge,cobblemon-1211,create-plus-1211,fabric-executable-1214,forge-1201,mcdr-fabric,neoforge-262,paper",
-              "java": "",
-              "gradle": false,
-              "cache-key": "",
-              "cache-pattern": ""
-            },
-            {
-              "domain": "init",
-              "group": "init",
-              "suite": "init",
-              "command": "go test -tags e2e -count=1 -v ./e2e/init -run 'TestInitialize/(cobblemon-1211|create-plus-1211)'",
-              "timeout": 30,
-              "sandboxes": "cobblemon-1211,create-plus-1211",
-              "java": "",
-              "gradle": false,
-              "cache-key": "",
-              "cache-pattern": ""
-            },
-            {
-              "domain": "install",
-              "group": "install",
-              "suite": "install",
-              "command": "go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install -run '^TestInstall$'",
-              "timeout": 30,
-              "sandboxes": "vanilla-1201,forge-1201,neoforge-211,paper,purpur,cobblemon-1211",
-              "java": "21",
-              "gradle": false,
-              "cache-key": "",
-              "cache-pattern": ""
-            },
-            {
-              "domain": "install",
-              "group": "init-install",
-              "suite": "init-install",
-              "command": "go test -tags e2e -count=1 -timeout 28m -parallel 2 -v ./e2e/install -run '^TestInitInstall$'",
-              "timeout": 30,
-              "sandboxes": "vanilla-1201,forge-1201,paper,cobblemon-1211",
-              "java": "21",
-              "gradle": false,
-              "cache-key": "",
-              "cache-pattern": ""
-            }
-          ]
-          EOF
-          )"
-          matrix="$(jq -c \
-            --argjson domains "$DOMAINS" \
-            --argjson fixtures "${FIXTURES:-[]}" \
-            --argjson full "${COMPILE_FULL:-false}" \
-            '[
-              .[] | select(.domain as $domain | $domains | index($domain)) | del(.domain)
-            ] + (
-              if (($domains | index("compile")) != null) or $full then
-                if $full then
-                  [
-                    $fixtures[] | . as $fixture | {
-                      "group": "compile",
-                      "suite": $fixture,
-                      "command": ("go test -tags e2e -count=1 -timeout 40m ./e2e/compile -run \"^TestCompile/" + $fixture + "$\""),
-                      "timeout": 45,
-                      "sandboxes": "",
-                      "java": "",
-                      "gradle": true,
-                      "cache-key": $fixture,
-                      "cache-pattern": ("e2e/testdata/repo/" + $fixture + ".yaml")
-                    }
-                  ]
-                else
-                  [
-                    {
-                      "group": "compile",
-                      "suite": "smoke",
-                      "command": "LUCY_COMPILE_LAYER=smoke go test -tags e2e -count=1 -timeout 55m -parallel 3 ./e2e/compile",
-                      "timeout": 60,
-                      "sandboxes": "",
-                      "java": "",
-                      "gradle": true,
-                      "cache-key": "smoke",
-                      "cache-pattern": "e2e/testdata/repo/*.yaml"
-                    }
-                  ]
-                end
-              else
-                []
-              end
-            )' <<<"$suites")"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+        run: bash scripts/e2e-plan.sh
 
   build:
     name: Build Lucy
@@ -282,12 +187,7 @@ jobs:
       - name: Build Lucy
         env:
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -n "${CURSEFORGE_API_KEY:-}" ]; then
-            task cipher:generate
-          fi
-          task dev
+        run: bash scripts/ci-build-lucy.sh
 
       - name: Stage binary
         run: cp "dist/lucy-$(go env GOOS)-$(go env GOARCH)" dist/lucy-e2e-binary

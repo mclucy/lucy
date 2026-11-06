@@ -14,6 +14,7 @@ import (
 	"github.com/mclucy/lucy/artifact"
 	"github.com/mclucy/lucy/catalog"
 	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/version"
 )
 
@@ -57,8 +58,8 @@ func (r *Router) IdentifyFillBuild(
 
 func (r *Router) resolvePaper(
 	ctx context.Context,
-	req ServerProductRequest,
-	out *ServerProductResolution,
+	req upstream.ServerProductRequest,
+	out *upstream.ServerProductResolution,
 ) error {
 	var builds []paperBuild
 	endpoint := "https://fill.papermc.io/v3/projects/paper/versions/" + req.Minecraft.String() + "/builds"
@@ -88,7 +89,7 @@ func (r *Router) resolvePaper(
 			)
 			continue
 		}
-		out.ProductVersion, out.Bootstrapper = version.Version(v), "paperclip"
+		out.ProductVersion, out.Bootstrapper = version.Version(v), server.BootstrapMethodPaperclip
 		out.Artifact = catalog.Artifact{
 			Provider:  catalog.ProviderPaperMC,
 			ProjectID: "paper",
@@ -113,8 +114,8 @@ func (r *Router) resolvePaper(
 
 func (r *Router) resolveGithubProduct(
 	ctx context.Context,
-	req ServerProductRequest,
-	out *ServerProductResolution,
+	req upstream.ServerProductRequest,
+	out *upstream.ServerProductResolution,
 	acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
 ) error {
 	var repo struct {
@@ -196,7 +197,7 @@ func (r *Router) resolveGithubProduct(
 			}
 			trial := *out
 			trial.ProductVersion = version.Version(rl.Tag)
-			trial.Bootstrapper = "paperclip"
+			trial.Bootstrapper = server.BootstrapMethodPaperclip
 			materialized, e := acquire(&candidate)
 			if e != nil {
 				return e
@@ -226,7 +227,7 @@ func (r *Router) resolveGithubProduct(
 	return fmt.Errorf("no GitHub Paper fork artifact for Minecraft %s in %s", req.Minecraft, req.Repository)
 }
 
-func paperclipInput(out *ServerProductResolution, corePath string) error {
+func paperclipInput(out *upstream.ServerProductResolution, corePath string) error {
 	z, err := zip.OpenReader(corePath)
 	if err != nil {
 		return err

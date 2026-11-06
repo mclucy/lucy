@@ -18,7 +18,6 @@ import (
 	"github.com/mclucy/lucy/log"
 	"github.com/mclucy/lucy/serverregistry"
 	"github.com/mclucy/lucy/upstream"
-	"github.com/mclucy/lucy/upstream/routing"
 )
 
 // Source is the routing capability installation consumes. Configured routing
@@ -34,9 +33,9 @@ type Source interface {
 	Metadata(ctx context.Context, endpoint string, target any) error
 	ResolveServerProduct(
 		ctx context.Context,
-		request routing.ServerProductRequest,
+		request upstream.ServerProductRequest,
 		acquire func(*catalog.Artifact) (artifact.MaterializedFile, error),
-	) (routing.ServerProductResolution, error)
+	) (upstream.ServerProductResolution, error)
 }
 
 // Service owns one installation pipeline: configured routing, the artifact

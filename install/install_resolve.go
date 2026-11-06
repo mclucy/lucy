@@ -9,6 +9,7 @@ import (
 	"github.com/mclucy/lucy/document"
 	"github.com/mclucy/lucy/resolve"
 	"github.com/mclucy/lucy/server"
+	"github.com/mclucy/lucy/upstream"
 	"github.com/mclucy/lucy/upstream/routing"
 )
 
@@ -38,14 +39,14 @@ func (s *Service) resolveInstall(
 		"core", d.Server.Core.ProductVersion,
 		"mcdr", d.MCDR != nil,
 	)
-	coreReq := routing.ServerProductRequest{
+	coreReq := upstream.ServerProductRequest{
 		Minecraft:      d.Server.Minecraft,
 		Product:        d.Server.Core.Product,
 		ProductVersion: d.Server.Core.ProductVersion,
 		Repository:     d.Server.Core.Repository,
 		FilePattern:    d.Server.Core.FilePattern,
 	}
-	var core routing.ServerProductResolution
+	var core upstream.ServerProductResolution
 	canReuse := false
 	if old != nil {
 		reusable, err := s.coreReusable(ctx, d, old, opts.Offline)
@@ -62,7 +63,7 @@ func (s *Service) resolveInstall(
 			"product", old.Server.Product,
 			"core-version", old.Server.CoreVersion,
 		)
-		core = routing.ServerProductResolution{
+		core = upstream.ServerProductResolution{
 			Minecraft:      old.Server.Minecraft,
 			Product:        old.Server.Product,
 			ProductVersion: old.Server.CoreVersion,

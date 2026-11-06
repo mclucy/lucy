@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/mclucy/lucy/internal/cli/help"
-
+	"github.com/mclucy/lucy/internal/depgraph"
 	"github.com/spf13/cobra"
 )
 
@@ -42,16 +42,17 @@ func actionLeaves(
 	defer stop()
 	forceLive, _ := cmd.Flags().GetBool("live")
 	output := NewQueryOutput(cmd, inv)
-	graph, origin, _, err := LoadDependencyData(
+	loaded, err := depgraph.Load(
 		ctx,
 		inv.Directory,
 		forceLive,
 		deps.Router.ResolveArtifactByHash,
-		output,
 	)
+	reportObservationFindings(loaded.Findings.Observation, output)
 	if err != nil {
 		return err
 	}
+	graph, origin := loaded.Graph, loaded.Origin
 
 	if output.JSON() {
 		return leavesJSON.Write(output, leavesDocument(graph, origin, output.Warnings()))
@@ -60,7 +61,7 @@ func actionLeaves(
 	human := output.Human()
 	fmt.Fprintf(human, "Using data from: %s\n\n", origin.String())
 
-	leaves := graph.GetLeaves()
+	leaves := graph.Leaves()
 	if len(leaves) == 0 {
 		fmt.Fprintln(human, "No leaf packages found")
 	} else {
@@ -91,11 +92,11 @@ type leavesOutput struct {
 }
 
 func leavesDocument(
-	graph *DependencyGraph,
-	origin GraphOrigin,
+	graph *depgraph.Graph,
+	origin depgraph.Origin,
 	warnings []string,
 ) leavesOutput {
-	leaves := graph.GetLeaves()
+	leaves := graph.Leaves()
 	jsonLeaves := make([]leafNode, 0, len(leaves))
 	for _, leaf := range leaves {
 		jsonLeaves = append(

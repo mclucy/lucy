@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/mclucy/lucy/internal/telemetry"
 	"github.com/mclucy/lucy/javaruntime"
-	"github.com/mclucy/lucy/telemetry"
 	"github.com/mclucy/lucy/workspace"
 	"github.com/mclucy/lucy/workspace/discovery"
 )
