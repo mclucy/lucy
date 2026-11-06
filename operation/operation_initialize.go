@@ -247,8 +247,9 @@ func (s *Service) applyRuntimeIdentity(
 	return nil
 }
 
-// identificationFailure returns the identification error that must abort
-// initialization. Other identification failures stay warnings.
+// identificationFailure returns only a cancellation error, which aborts
+// initialization. Other identification failures do not abort it and are not
+// returned as warnings; their files stay unidentified.
 func identificationFailure(errs []error) error {
 	for _, err := range errs {
 		if errors.Is(err, context.Canceled) ||
